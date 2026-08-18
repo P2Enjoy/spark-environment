@@ -1085,3 +1085,72 @@ demande reste valide, et l'exploitant n'a pas à décider quoi que ce soit.
 La ressource n'est rendue **qu'à la disparition de la ligne** (§7.7). Un Spark en
 `deleting` compte donc encore. C'est ce qui empêche qu'une suppression lente
 laisse admettre un Spark dans une place pas encore libérée.
+
+## 15. Adressage du réseau privé
+
+Le §5 pose le bridge privé. Cette section fixe **qui attribue les adresses**, ce
+qui n'était écrit nulle part et que le code ne peut pas deviner.
+
+### 15.1 Le registre attribue, Incus épingle
+
+L'adresse d'un Spark est allouée par le **registre**, à la création, avant
+qu'Incus ne soit touché — comme la ligne elle-même (§14.2).
+
+Deux raisons, et la seconde est décisive :
+
+- l'ingress a besoin de l'adresse **avant** que l'instance existe : une route
+  `domaine → spark → port` se déclare sur un Spark encore arrêté ;
+- laisser Incus attribuer par DHCP ferait découvrir une collision au moment de
+  l'application, alors que la ligne est déjà écrite et la capacité déjà
+  comptabilisée. Le refus tomberait trop tard pour être utile.
+
+Incus reçoit ensuite l'adresse par `ipv4.address` sur le périphérique NIC, et
+inscrit une entrée statique dans son dnsmasq. **Mesuré le 2026-08-19** :
+l'adresse est conservée au redémarrage de l'instance, et Incus refuse lui-même
+un doublon — `IP address "10.77.0.50" already defined on another NIC`. Cette
+vérification est une seconde ligne de défense, pas la première.
+
+### 15.2 Plan d'adressage
+
+```
+10.77.0.1                passerelle, portée par sparkbr0
+10.77.0.2   – 10.77.0.15 réservé à l'infrastructure de l'hôte
+10.77.0.16  – 10.77.0.239 attribué par le REGISTRE — 224 Sparks
+10.77.0.240 – 10.77.0.254 DHCP dynamique, hors du produit
+```
+
+La plage dynamique est **disjointe** de la plage du registre, imposée par
+`ipv4.dhcp.ranges` sur le réseau géré. Sans cette restriction, dnsmasq
+distribuerait dans tout le `/24` et pourrait attribuer à une instance non gérée
+une adresse que le registre a déjà promise à un Spark.
+
+**Mesuré le 2026-08-19** : avec `ipv4.dhcp.ranges=10.77.0.240-10.77.0.254`, une
+instance non épinglée reçoit `10.77.0.247`, et un Spark épinglé sur `10.77.0.50`
+— hors plage dynamique — conserve son adresse.
+
+### 15.3 Attribution déterministe, et épuisement explicite
+
+Le registre attribue **la plus petite adresse libre**. Ce n'est pas une
+commodité d'implémentation : c'est ce qui rend l'attribution prévisible, donc
+vérifiable. Un exploitant qui supprime puis recrée un Spark dans un parc
+inchangé retrouve la même adresse, et ses notes restent vraies.
+
+L'épuisement de la plage est **refusé en le nommant**, jamais contourné en
+débordant sur une plage voisine. Une plage qui déborde silencieusement finit par
+recouvrir la passerelle ou le DHCP, et la panne se manifeste alors très loin de
+sa cause.
+
+L'unicité est portée par la base — `ipv4_address TEXT UNIQUE`, `docs/SCHEMA.md`
+§4 — et l'attribution se fait dans la même transaction que la création, pour la
+raison du §14.2 : deux créations concurrentes ne doivent pas obtenir la même
+adresse.
+
+### 15.4 Ce que le plafond réseau garantit, et ce qu'il ne garantit pas
+
+`network.burst` devient `limits.max` sur le NIC, soit une classe `htb` dont
+`rate` égale `ceil` : c'est un **plafond strict**, sans dépassement possible.
+
+`network.reservation` reste une grandeur de comptabilité (§7.6). Le noyau
+n'offre pas de réservation de bande passante avec cette primitive : rien ne
+garantit qu'un Spark obtienne son débit réservé quand les autres saturent le
+lien. La console doit présenter les deux différemment.
