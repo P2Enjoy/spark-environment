@@ -1,0 +1,29 @@
+# @spec docs/BACKLOG.md#SPK-01 · docs/DAT.md §10.1 (Choix des langages)
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sparkd"
+version = "0.0.0"
+description = "Runtime serveur du plan de controle Spark, ecoute exclusivement sur la boucle locale"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+sparkd = "sparkd.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,12 @@
+{
+  "name": "@spark/contract",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Contrat d'API partage entre la console et le runtime serveur",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'contrat non encore genere' && exit 0",
+    "test": "echo 'aucun test — le contrat n est pas encore genere' && exit 0",
+    "typecheck": "echo 'aucune source a verifier' && exit 0"
+  }
+}

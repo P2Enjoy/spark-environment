@@ -1,69 +1,44 @@
-# Prerequisites
-*.d
+# Dependances
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.egg-info/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Build directories
+# Artefacts de build
+dist/
 build/
-Build/
-build-*/
+.vite/
+*.tsbuildinfo
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
+# Caches d'outillage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+coverage/
+.coverage
+htmlcov/
 
-# Temporary files
-*.tmp
+# Sorties de test et captures temporaires
+test-results/
+playwright-report/
+blob-report/
+
+# Etat local, jamais versionne
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
+
+# Journaux et fichiers temporaires
 *.log
+*.tmp
 *.bak
 *.swp
 
-# vcpkg
-vcpkg_installed/
-
-# debug information files
-*.dwo
-
-# test output & cache
-Testing/
-.cache/
+# Systeme
+.DS_Store
+Thumbs.db
