@@ -20,6 +20,7 @@ DEFAULT_DB = "/var/lib/sparkd/spark.db"
 DEFAULT_INCUS_SOCKET = "/var/lib/incus/unix.socket"
 DEFAULT_CADDY_ADMIN = "http://127.0.0.1:2019"
 DEFAULT_DRIVER = "incus"
+DEFAULT_STORAGE_POOL = "spark"
 DEFAULT_LOG_LEVEL = "info"
 
 DRIVERS = ("incus", "fake")
@@ -39,6 +40,7 @@ class Config:
     caddy_admin: str
     driver: str
     log_level: str
+    storage_pool: str
 
     @property
     def bind(self) -> str:
@@ -118,4 +120,5 @@ def load(env: dict[str, str] | None = None) -> Config:
         caddy_admin=source.get("SPARKD_CADDY_ADMIN", DEFAULT_CADDY_ADMIN),
         driver=driver,
         log_level=log_level,
+        storage_pool=source.get("SPARKD_STORAGE_POOL", DEFAULT_STORAGE_POOL),
     )

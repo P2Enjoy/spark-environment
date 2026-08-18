@@ -85,3 +85,32 @@ def test_demarrage_refuse_si_le_schema_a_derive(tmp_path, monkeypatch):
 
     with pytest.raises(migrations.MigrationError, match="autre code"):
         create_app(load({"SPARKD_DB": str(base), "SPARKD_DRIVER": "fake"}))
+
+
+# --- inventaire de l'hote (SPK-07) -----------------------------------------
+
+def test_host_refuse_avant_tout_releve(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-07 · docs/DAT.md §5.3"""
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "a.db"), "SPARKD_DRIVER": "fake"}))
+    reponse = TestClient(app).get("/v1/host")
+    assert reponse.status_code == 409
+    assert reponse.json()["detail"]["remedy"] == "POST /v1/host/sync"
+
+
+def test_sync_puis_host_expose_les_pools(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-07, #SPK-05 — l'admission control devient observable."""
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "b.db"), "SPARKD_DRIVER": "fake"}))
+    client_http = TestClient(app)
+
+    releve = client_http.post("/v1/host/sync")
+    assert releve.status_code == 200
+    assert releve.json()["cpu_cores_total"] == 4
+
+    corps = client_http.get("/v1/host").json()
+    assert corps["cpu"]["cores_total"] == 4
+    assert corps["cpu"]["threads_total"] == 8
+    assert corps["pools"]["cpu"]["capacity"] == 4.0
+    assert corps["pools"]["cpu"]["available"] == 4.0
+    assert corps["pools"]["network"]["capacity"] == 1_000_000_000
+    # docs/DAT.md §7.3 bis : la garantie annoncee reste exacte.
+    assert corps["reservation_guarantee"] == "proportional_between_sparks_only"
