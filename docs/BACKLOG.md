@@ -51,11 +51,17 @@ Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
 
 ## Lot 1 — Registre et admission control
 
-### [ ] SPK-04 · Migrations et registre SQLite
+### [x] SPK-04 · Migrations et registre SQLite
 
-- Spécification : `docs/SCHEMA.md`
-- DoD : migrations appliquées et rejouables, checksum vérifié au démarrage,
-  retour arrière testé.
+- Spécification : `docs/SCHEMA.md` §2 à §12
+- **Clos le 2026-08-18.** `migrations/001_socle_registre.sql` crée les douze
+  tables ; le moteur applique chaque fichier dans une transaction unique
+  englobant l'enregistrement de sa version, et refuse de servir une base dérivée
+  (fichier disparu, checksum divergent, trou dans la séquence).
+- Preuves : 59 tests verts, dont l'atomicité d'une migration en échec, les trois
+  refus, le retour arrière puis la remigration, et les contraintes de la vraie
+  migration. Au démarrage réel : le registre se crée, le second lancement ne
+  rejoue rien, et un checksum falsifié fait sortir `sparkd` en code 3.
 
 ### [ ] SPK-05 · Admission control et comptabilité des pools
 

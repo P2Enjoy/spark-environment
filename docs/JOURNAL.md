@@ -528,3 +528,47 @@ consignée comme telle. La prochaine unité de construction est **SPK-04**,
 migrations et registre SQLite, dont la spécification existe (`docs/SCHEMA.md`) et
 qui ne dépend d'aucune décision en attente. SPK-28, le repartitionnement, reste
 suspendu à un arbitrage du responsable.
+
+
+---
+
+## 2026-08-18 — SPK-04 close : registre SQLite, migrations et vérification au démarrage
+
+**Unité** : SPK-04, désignée par l'entrée précédente. Sa spécification existait
+(`docs/SCHEMA.md`) et n'a pas été réécrite ; seule la **mécanique** des
+migrations manquait — nommage des fichiers, séparation `up`/`down`, checksum,
+transaction, refus au démarrage, pragmas — et a été ajoutée en §12 puis
+committée avant la première ligne de code.
+
+**Livré.** `migrations/001_socle_registre.sql` crée les douze tables. Les règles
+du modèle sont portées par la base et pas seulement écrites : cohérence des
+quatre modes CPU, unicité du domaine, un cœur dédié n'appartenant qu'à un seul
+Spark, rafale jamais inférieure à la réservation, et refus d'une clé privée dans
+`ssh_key`. Le moteur (`migrations.py`) applique, vérifie et redescend ; le point
+d'entrée migre avant d'ouvrir le port et sort en code 3 si le registre a dérivé.
+
+**Défaut trouvé par les tests, corrigé à la cause.** `sqlite3.executescript`
+**valide implicitement la transaction en cours**. Une migration lancée à travers
+lui n'aurait donc pas été atomique, contrairement à ce que §12.3 exige : une
+erreur au milieu aurait laissé les instructions précédentes committées, et le
+schéma à moitié migré sans trace. Le découpage passe désormais par
+`sqlite3.complete_statement`, qui s'appuie sur l'analyseur lexical de SQLite
+plutôt que sur un découpage au point-virgule — lequel casserait sur un `;` dans
+une chaîne ou un trigger. À retenir : la garantie d'atomicité de ce moteur tient
+à ce détail.
+
+**Preuve révisée, pas contournée.** `test_readyz_ne_pretend_pas_etre_pret`
+exigeait que toutes les dépendances soient `unknown`. Le registre existant
+désormais, continuer à le déclarer inconnu serait le mensonge que ce test
+cherche à empêcher. Le motif est écrit dans le fichier de test.
+
+**Vérifié.** 59 tests verts. Au démarrage réel : création et migration au premier
+lancement, rien de rejoué au second, et sortie en code 3 sur checksum falsifié.
+Campagne complète verte.
+
+**Où reprendre.** **SPK-05**, admission control et comptabilité des pools, dont
+la spécification existe (`docs/DAT.md` §7.3 et §7.3 bis) et qui s'appuie
+directement sur les tables `host`, `cpu_core` et `spark` livrées ici. Attention :
+le DAT §7.3 bis établit que la réservation n'est proportionnelle qu'entre Sparks
+et pas absolue — l'admission control doit être écrit en le sachant, et SPK-29
+reste ouverte. SPK-28 reste suspendue à un arbitrage du responsable.

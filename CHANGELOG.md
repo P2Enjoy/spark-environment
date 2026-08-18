@@ -49,9 +49,14 @@
   refusant toute adresse d'écoute routable, sondes `/healthz` et `/readyz`
   distinctes. 19 tests unitaires.
 
+- Registre SQLite : migration socle des douze tables, moteur de migrations avec
+  checksum, retour arrière et refus d'une base dérivée. `sparkd` migre le
+  registre avant d'ouvrir son port.
+
 ### Modifié
 
 - `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
+- `docs/SCHEMA.md` : nouveau §12, mécanique des migrations.
 
 ### Vérifié sur matériel réel
 
