@@ -233,3 +233,133 @@ un système de fichiers racine monté. Deux voies possibles, réinstallation ave
 partitionnement personnalisé ou réduction en mode rescue. Sur une machine vide
 — 2,7 Go utilisés — la réinstallation est la voie la **moins** risquée. La décision
 appartient au responsable : unité SPK-28.
+
+
+---
+
+## 2026-08-18 — Installation d'Incus et première campagne de mesures
+
+### Ce qui a été mis en place
+
+Sur décision du responsable, pool de stockage **sur fichier**, à titre provisoire :
+
+```
+incus 6.0.0 + zfsutils-linux 2.2.2 (module chargé)
+pool ZFS « spark » → /var/lib/incus/disks/spark.img, 200 Gio creux
+bridge « sparkbr0 » → 10.77.0.1/24, NAT actif
+profil default → root sur le pool, eth0 sur le bridge
+premier Spark « spark-test » → 10.77.0.27
+```
+
+Traduction appliquée au Spark de test, telle que la spécifie le DAT §7 :
+`security.nesting=true`, `security.idmap.isolated=true`, `limits.cpu=0-7`,
+`limits.cpu.allowance=13%`, `limits.cpu.priority=5`, `limits.memory=2GiB`
+(`hard`, sans swap), disque racine `size=10GiB`, NIC `limits.max=100Mbit`.
+
+Détail d'outillage à ne pas redécouvrir : `incus init` **lit son YAML sur l'entrée
+standard**. Lancé dans un script lui-même acheminé par `ssh … bash -s`, il avale le
+script et échoue sur `cannot unmarshal !!str`. Toute invocation d'`incus` dans un
+script piloté à distance doit rediriger son entrée : `exec </dev/null` en tête de
+script, ou `</dev/null` sur chaque appel.
+
+### Ce que la mesure a confirmé
+
+- **Reconfiguration du cpuset à chaud.** `limits.cpu` de `0-7` à `0-5` sur un Spark
+  en marche : `cpuset.cpus` suit immédiatement, l'`uptime` du conteneur progresse
+  sans discontinuité (118,77 → 120,05 s), `nproc` interne passe de 8 à 6. La découpe
+  dynamique du pool dédié est donc non disruptive — c'était l'hypothèse la plus
+  risquée de l'architecture, elle tient.
+- **Topologie SMT.** `incus info --resources` rapporte `Core 0 → threads id 0, id 4`,
+  exactement comme `/sys`. La règle « allouer des cœurs entiers, frères inclus » est
+  validée par la mesure.
+- **Cloisonnement des UID/GID.** `volatile.idmap.base=1065536`, table du conteneur
+  `0 1065536 65536`.
+- **Plafond réseau.** `limits.max=100Mbit` pose une classe `htb` `rate 100Mbit
+  ceil 100Mbit` : plafond strict, aucune réservation, comme annoncé.
+- **Mémoire.** `memory.max=2147483648`, `memory.swap.max=0`, et lxcfs présente bien
+  2 Gio à l'intérieur.
+- **Docker dans le Spark.** Docker 29.7.2 et Compose v5.5.0 installés et fonctionnels
+  dans un conteneur **non privilégié** à idmap isolé. Docker choisit `overlayfs`
+  au-dessus du rootfs ZFS, pilote cgroup `systemd`, cgroup v2, `cgroupns` actif.
+  `docker run hello-world` s'exécute.
+
+### Ce que la mesure a infirmé, et qui corrige la spécification
+
+**1. `allowance` et `priority` ne sont pas deux réglages indépendants.** La loi,
+établie sur onze points, est :
+
+```
+cpu.weight = allowance_pct − 10 + limits.cpu.priority
+```
+
+`cpu.max` reste à `max` : le burst est bien réel. Mais présenter la réservation
+comme « la part » et la priorité comme « l'arbitrage » était faux — c'est le même
+bouton. Le DAT §7.2 bis est corrigé.
+
+**2. La mise à l'échelle du poids était inutilisable.** Sur un pool de 4 CPU,
+`réservation / capacité × 100` donne :
+
+```
+0,5  CPU → 12,5 % → poids 8
+0,25 CPU →  6,25 %→ poids 1     plus aucune résolution
+0,2  CPU →  5 %   → poids 0     REFUSÉ : « setting cgroup item for the container failed »
+```
+
+Le refus est explicite, ce qui est heureux. `2000 %` étant accepté (poids 1995),
+le facteur passe à 1000. Corrigé au DAT §7.2 bis.
+
+**3. L'invariant d'admission control ne garantissait pas ce qu'il prétendait.** Un
+Spark n'est pas placé sous un parent qui lui serait réservé : Incus le crée à la
+**racine** de cgroup v2, frère des tranches de l'hôte.
+
+```
+system.slice             cpu.weight = 100
+user.slice               cpu.weight = 100
+init.scope               cpu.weight = 100
+lxc.monitor.spark-test   cpu.weight = 100
+lxc.payload.spark-test   cpu.weight =   8   ← le Spark
+```
+
+Un Spark à poids 8 n'obtient donc pas 12,5 % de la machine sous contention, mais
+`8 / (8 + 100 + 100 + 100 + …)`. L'admission control assure la proportionnalité
+**entre Sparks**, pas la valeur absolue de la réservation. C'est la correction la
+plus importante de cette campagne : elle touche la promesse centrale du produit.
+Trois voies sont posées au DAT §7.3 bis, la seule qui rende la réservation
+littéralement vraie étant de regrouper les Sparks sous un parent unique de poids
+maîtrisé. Unité SPK-29 ouverte.
+
+**4. Un Spark qui remplit son quota verrouille son administration.** `backup.yaml`
+est écrit par Incus à l'intérieur du jeu de données contingenté :
+
+```
+Error: Failed to write backup file: … backup.yaml: disk quota exceeded
+```
+
+Toute reconfiguration devient impossible, y compris l'agrandissement qui
+débloquerait la situation. Le registre devra poser le quota du jeu de données
+au-dessus de la taille vendue, avec une marge de métadonnées invisible du
+locataire. Unité SPK-30 ouverte.
+
+### Un test qui ne prouvait rien, et pourquoi il faut le dire
+
+La première vérification du quota écrivait `/dev/zero`. Elle a « réussi » à écrire
+**20 Gio dans un Spark limité à 10 Gio** sans être refusée. Le quota n'était pas en
+cause : la compression ZFS, active par défaut, avait absorbé les zéros — `used`
+restait à 884 Kio. Rejoué avec `/dev/urandom`, le refus tombe exactement à 10 Gio
+(`available = 0B`).
+
+Deux enseignements. D'abord, un test qui passe sur des données dégénérées ne prouve
+rien : sans le contre-test, cette campagne aurait conclu à un quota inopérant.
+Ensuite et surtout, le quota porte sur les octets **stockés**, pas sur les octets
+écrits — un Spark à 10 Gio peut contenir bien plus de 10 Gio de données
+compressibles. Sémantique à assumer et à documenter, ou compression à désactiver
+par jeu de données. Portée au DAT §8.7 et §13, point 13.
+
+### ARC
+
+Le `c_max` par défaut valait **47,12 Gio**, soit la moitié de la RAM — exactement la
+collision annoncée avec la comptabilité mémoire. Plafonné à **16 Gio** sur décision
+du responsable, les applications hébergées étant petites et liées statiquement, et
+persisté dans `/etc/modprobe.d/zfs.conf`. Reste à vérifier en charge que l'ARC
+demeure sous ce plafond, et que la valeur est bien soustraite via
+`host.memory_reserve_bytes`.

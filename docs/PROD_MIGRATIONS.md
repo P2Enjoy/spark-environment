@@ -19,12 +19,42 @@ n'est appliquée en production sans instruction humaine explicite.
 | Hôte cible | `51.158.54.202` — Dell R320, accès obtenu le 2026-08-18, topologie relevée |
 | Système | Ubuntu 24.04.3, noyau 6.8.0-88, cgroup v2 |
 | Disposition disque | 2 × 6 To en RAID1 mdadm, `md1` 5,44 Tio `ext4` sur `/` — **aucun périphérique bloc libre** |
-| Incus | non installé (`incus` 6.0.0-1ubuntu0.3 disponible dans les dépôts) |
-| Pool de stockage | non créé — repartitionnement requis, voir OP-01 |
-| Bridge `sparkbr0` | non créé |
+| Incus | **7.3** installé depuis le dépôt amont Zabbly. Les dépôts Ubuntu (6.0.0) sont **inutilisables**, voir §2.0 |
+| Pool de stockage | pool ZFS `spark` **sur fichier**, 200 Gio creux dans `/var/lib/incus/disks/spark.img` — provisoire, voir OP-01 |
+| `zfs_arc_max` | **16 Gio**, persisté dans `/etc/modprobe.d/zfs.conf` |
+| Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif |
 | Caddy | non installé |
 | `sparkd` | non déployé |
 | Version de schéma | aucune |
+
+Cette baseline décrit un hôte de **validation**, pas de production : le pool sur
+fichier et l'absence de repartitionnement restent des dettes ouvertes (OP-01).
+
+## 2.0 Contrainte de version : Incus ≥ 6.19, depuis le dépôt amont
+
+**Obligatoire, et non négociable.** Avec Incus 6.0.0 — la version des dépôts
+Ubuntu 24.04 — aucun conteneur Docker ne démarre dans un Spark
+(cf. `docs/DAT.md` §3.1). Le paquet doit venir du dépôt amont :
+
+```
+Enabled: yes
+Types: deb
+URIs: https://pkgs.zabbly.com/incus/stable
+Suites: noble
+Components: main
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/zabbly.asc
+```
+
+Vérification : `incus version` doit rendre au moins `6.19`. Toute installation
+depuis les dépôts Ubuntu est un échec de déploiement, pas une variante acceptable.
+
+**La version suffisante n'est pas encore établie.** Sur l'hôte, la montée en 7.3 n'a
+pas suffi à elle seule : le même échec a persisté sur un Spark dont le profil
+AppArmor avait été produit par 6.0.0. L'hypothèse en cours de vérification est qu'un
+arrêt complet puis redémarrage de chaque Spark est nécessaire après la montée de
+version, le redémarrage du démon ne suffisant pas. À confirmer avant toute mise en
+service (SPK-31).
 
 ## 2. Prérequis humains
 

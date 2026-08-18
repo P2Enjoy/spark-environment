@@ -80,6 +80,40 @@ nativement toutes les primitives nécessaires :
 | instantanés, export, restauration | snapshots et `incus export` |
 | basculer container → VM | même abstraction, `--vm` |
 
+### 3.1 Version minimale d'Incus : une condition de fonctionnement
+
+**Incus ≥ 6.19 est obligatoire.** Ce n'est pas une préférence de version, c'est une
+condition sans laquelle le produit ne fonctionne pas du tout.
+
+Mesuré le 2026-08-18 : avec Incus 6.0.0, la version des dépôts Ubuntu 24.04,
+**aucun** conteneur Docker ne démarre dans un Spark. Depuis le correctif de
+CVE-2025-52881, `runc` ≥ 1.3 écrit ses sysctls à travers un montage procfs
+détaché ; le profil AppArmor qu'Incus applique au Spark interprète cet accès comme
+un accès à `/sys/...` et le refuse :
+
+```
+open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
+```
+
+Le défaut touche **tout** conteneur, avec ou sans publication de port, et
+`--security-opt apparmor=unconfined` posé sur le conteneur Docker ne le contourne
+pas, puisque le profil fautif est celui du Spark et non celui de Docker. Rendre le
+Spark `unconfined` fonctionnerait, mais retirerait une couche de défense qui fait
+partie du modèle d'isolation : ce n'est pas la réponse.
+
+La correction est en amont : le projet Incus annonce le correctif dans la
+version 6.19, ce qui impose de prendre le paquet dans le dépôt amont et non dans
+les dépôts Ubuntu.
+
+**Attention, ce point n'est PAS encore prouvé sur l'hôte.** Incus a été porté de
+6.0.0 à **7.3** depuis le dépôt amont, et le même échec a été observé ensuite. Une
+explication plausible est que le profil AppArmor d'un Spark est produit à son
+démarrage : le Spark tournait encore avec le profil généré par 6.0.0, le
+redémarrage du démon ne redémarrant pas les instances. La vérification par arrêt
+complet puis redémarrage du Spark est en cours (unité SPK-31). Tant qu'elle n'a pas
+abouti, **le nesting Docker doit être considéré comme non fonctionnel**, et c'est un
+risque majeur pour le produit puisqu'il en conditionne l'objet même.
+
 Le mode `vm` n'est pas une fonctionnalité future décorative : il est la réponse
 prévue au jour où des piles non maîtrisées seront hébergées, puisqu'un *system
 container* partage le noyau de l'hôte. Le modèle de données porte donc le champ
@@ -190,41 +224,132 @@ Hors contention, un Spark consomme tout ce qui traîne.
 
 ### 7.2 Les quatre modes CPU
 
-| Mode | Sémantique | Traduction Incus |
-|---|---|---|
-| `shared` | part du pool partagé, burst autorisé | `limits.cpu=<cpuset partagé>` + `limits.cpu.allowance=<n>%` + `limits.cpu.priority` |
-| `capped` | pool partagé, plafond dur, pas de burst | `limits.cpu=<cpuset partagé>` + `limits.cpu.allowance=<t>ms/100ms` |
-| `dedicated` | cœurs physiques exclusifs, retirés du pool partagé | `limits.cpu=<IDs, frères SMT inclus>`, pas d'`allowance` |
-| `shared-pinned` | cœurs imposés mais non exclusifs (localité cache / NUMA) | `limits.cpu=<IDs>` + `allowance` |
+| Mode | Sémantique | Traduction Incus | Effet cgroup v2 mesuré |
+|---|---|---|---|
+| `shared` | part du pool partagé, burst autorisé | `limits.cpu=<cpuset partagé>` + `limits.cpu.allowance=<n>%` | `cpu.weight=<n−10+priorité>`, `cpu.max=max` |
+| `capped` | pool partagé, plafond dur, pas de burst | `limits.cpu=<cpuset partagé>` + `limits.cpu.allowance=<t>ms/100ms` | `cpu.max=<t×1000> 100000` |
+| `dedicated` | cœurs physiques exclusifs, retirés du pool partagé | `limits.cpu=<IDs, frères SMT inclus>`, pas d'`allowance` | `cpuset.cpus=<IDs>` |
+| `shared-pinned` | cœurs imposés mais non exclusifs (localité cache / NUMA) | `limits.cpu=<IDs>` + `allowance` | `cpuset.cpus` + `cpu.weight` |
 
 La documentation Incus recommande de ne pas combiner épinglage et quota temporel
 sans nécessité : `capped` et `shared` épinglent au **cpuset partagé complet**,
 pas à un sous-ensemble.
 
+### 7.2 bis Correspondance mesurée `allowance` → `cpu.weight`
+
+Mesuré le 2026-08-18 sur l'hôte, noyau 6.8, cgroup v2, Incus 6.0 :
+
+```
+allowance    cpu.weight    cpu.max
+6%              1          max 100000
+7%              2          max 100000
+10%             5          max 100000
+13%             8          max 100000
+25%            20          max 100000
+50%            45          max 100000
+100%           95          max 100000
+200%          195          max 100000
+500%          495          max 100000
+1000%         995          max 100000
+2000%        1995          max 100000
+
+priorité (à allowance 50%) :  0 → 40    5 → 45    10 → 50
+forme temporelle :  50ms/100ms → cpu.max = 50000 100000
+```
+
+D'où la loi, vérifiée sur onze points :
+
+```
+cpu.weight = allowance_pct − 10 + limits.cpu.priority
+```
+
+**Deux conséquences corrigent ce document.**
+
+**1. `allowance` et `priority` ne sont pas deux réglages indépendants.** Ils
+s'additionnent dans un unique poids. Présenter la réservation comme « la part » et
+la priorité comme « l'arbitrage » était faux : c'est le même bouton. La priorité
+reste donc constante par défaut, et ne se règle que pour biaiser délibérément un
+Spark par rapport aux autres.
+
+**2. La mise à l'échelle naïve est inutilisable pour les petits Sparks.** Avec
+`pct = réservation / capacité × 100`, sur un pool de 4 CPU :
+
+```
+0,5  CPU → 12,5 %  → poids 8      utilisable
+0,25 CPU →  6,25 % → poids 1      plus aucune résolution
+0,2  CPU →  5 %    → poids 0      REFUSÉ par le noyau
+```
+
+Le refus est explicite — `Error: setting cgroup item for the container failed` —
+et non silencieux, ce qui est heureux. Mais la loi d'échelle doit changer. Comme
+`2000 %` est accepté, il y a de la marge :
+
+```
+allowance_pct = réservation / capacité(pool partagé) × 1000
+```
+
+soit `0,25 CPU → 62,5 % → poids ≈ 57`, et un pool plein totalisant environ
+1000 % de poids. Les rapports sont préservés et la résolution redevient
+exploitable.
+
 ### 7.3 L'invariant qui donne son sens à la réservation
 
-Le mode `shared` repose sur des poids relatifs : Incus traduit un pourcentage en
-poids d'ordonnancement, arbitré entre les instances qui partagent les mêmes CPU.
-Un poids seul ne garantit rien dans l'absolu. Ce qui rend la réservation
-*signifiante*, c'est l'admission control du registre :
+Le mode `shared` repose sur des poids relatifs : `cpu.max` reste à `max`, donc
+aucun plafond n'est posé et le burst est réel. Un poids seul ne garantit rien dans
+l'absolu. Ce qui rend la réservation *signifiante*, c'est l'admission control du
+registre :
 
 ```
 Σ réservations(Sparks partagés) ≤ capacité(pool partagé) × facteur_surengagement
 ```
 
-Tant que cet invariant tient et que le poids de chaque Spark est proportionnel à
-sa réservation, un Spark obtient sous contention totale **au moins** sa
-réservation. C'est le registre, et non le noyau, qui produit la garantie ; le
-noyau ne fait qu'appliquer les proportions.
+Le surengagement devient ainsi un **réglage explicite** (`overcommit_cpu`, par
+défaut `1.0`) et non un effet de bord accidentel.
 
-Conséquence directe : le surengagement devient un **réglage explicite**
-(`overcommit_cpu`, par défaut `1.0`) et non un effet de bord accidentel.
-
-Traduction du poids :
+Traduction du poids, corrigée par la mesure (§7.2 bis) :
 
 ```
-allowance_pct = max(1, round(réservation / capacité_pool_partagé × 100))
+allowance_pct = réservation / capacité(pool partagé) × 1000
 ```
+
+### 7.3 bis Ce que l'invariant ne suffit PAS à garantir
+
+L'énoncé ci-dessus était incomplet, et la mesure du 2026-08-18 le montre. Un Spark
+n'est pas créé sous un parent qui lui serait réservé : Incus le place à la
+**racine** de cgroup v2, où il devient frère des tranches de l'hôte.
+
+```
+/sys/fs/cgroup/
+├── system.slice                 cpu.weight = 100
+├── user.slice                   cpu.weight = 100
+├── init.scope                   cpu.weight = 100
+├── lxc.monitor.spark-test       cpu.weight = 100
+└── lxc.payload.spark-test       cpu.weight =   8   ← le Spark
+```
+
+Le poids d'un Spark est donc arbitré **contre l'hôte**, et pas seulement contre les
+autres Sparks. Sous contention totale, un Spark à poids 8 face à trois tranches
+hôte à 100 n'obtient pas 12,5 % de la machine : il obtient
+`8 / (8 + 100 + 100 + 100 + …)`, soit un ordre de grandeur de moins.
+
+Autrement dit : l'admission control assure la **proportionnalité entre Sparks**,
+mais pas la valeur absolue de la réservation, tant que les Sparks ne sont pas
+regroupés sous un parent commun de poids maîtrisé.
+
+Trois voies possibles, à trancher par mesure (unité SPK-29) :
+
+1. placer tous les Sparks sous un parent unique — par exemple une tranche
+   `spark.slice` — dont le poids représente la part de la machine cédée aux
+   Sparks, les poids individuels n'arbitrant plus qu'à l'intérieur ;
+2. conserver la disposition actuelle et **soustraire explicitement** la part de
+   l'hôte de la capacité annoncée, ce qui revient à admettre que la réservation
+   est une part du reste et non de la machine ;
+3. relever le poids des Sparks pour rendre celui de l'hôte négligeable, ce qui
+   revient à ne plus protéger l'hôte — écarté.
+
+La voie 1 est la seule qui rende la réservation littéralement vraie. Tant qu'elle
+n'est pas mise en œuvre et mesurée, la console ne doit pas présenter la
+réservation comme une garantie absolue.
 
 ### 7.4 Le pool dédié se découpe dynamiquement
 
@@ -251,8 +376,17 @@ spark-pg  = [6,7]
 ```
 
 À la suppression, les cœurs retournent au pool et les Sparks partagés sont
-reconfigurés. `limits.cpu` est modifiable à chaud, ce qui rend l'opération non
-disruptive — **à confirmer par mesure sur l'hôte cible** (§13).
+reconfigurés.
+
+**Mesuré et confirmé le 2026-08-18** : `limits.cpu` passé de `0-7` à `0-5` sur un
+Spark en marche applique immédiatement `cpuset.cpus=0-5`, l'`uptime` du conteneur
+progresse sans discontinuité (118,77 s → 120,05 s) et `nproc` vu de l'intérieur
+passe de 8 à 6. La découpe et la restitution du pool dédié sont donc **non
+disruptives** : aucun Spark partagé n'a besoin d'être redémarré.
+
+Effet de bord à connaître : `nproc` change sous les pieds des processus déjà
+lancés. Une application qui a dimensionné son pool de threads au démarrage ne le
+réajustera pas.
 
 ### 7.5 SMT : un cœur dédié n'est pas un CPU logique
 
@@ -265,6 +399,18 @@ cores: 1   →   limits.cpu=3,11        (et non limits.cpu=3)
 ```
 
 La topologie est lue via `incus info --resources`.
+
+**Mesuré et confirmé le 2026-08-18.** Sur l'hôte, `incus info --resources` rapporte
+bien la structure cœur → threads, et le frèrage concorde exactement avec `/sys` :
+
+```
+Core 0 → threads id 0, id 4        Core 2 → threads id 2, id 6
+Core 1 → threads id 1, id 5        Core 3 → threads id 3, id 7
+```
+
+Un `limits.cpu=0` n'aurait donc donné aucune exclusivité sur le cœur 0, son frère
+`4` restant ordonnançable par les autres. La règle est validée par la mesure, et
+non seulement par le raisonnement.
 
 ### 7.6 Mémoire, réseau, stockage
 
@@ -429,6 +575,49 @@ Point d'exploitation à connaître : `md1` était en resynchronisation au moment
 relevé, à 3,1 % pour environ 8 heures restantes. Toute mesure de débit disque
 conduite avant la fin de cette resynchronisation ne mesure pas la machine.
 
+### 8.7 Ce que la mesure du quota a révélé
+
+Trois faits mesurés le 2026-08-18, dont deux imposent une correction du produit.
+
+**1. Le quota mord, mais sur les octets stockés.** La compression ZFS est active par
+défaut (`compression=on`). Une première tentative a écrit **20 Gio de zéros** dans un
+Spark limité à 10 Gio sans jamais être refusée : la compression les avait absorbés,
+`used` restant à 884 Kio. Rejoué avec des données incompressibles, le quota s'est
+appliqué exactement :
+
+```
+dd if=/dev/urandom … count=12000
+  → 10 237 blocs écrits, 10 734 665 728 octets, puis refus
+  → used = 10.0G   available = 0B   df = 100 %
+```
+
+Le quota est donc réel, mais il porte sur ce qui est **stocké**, pas sur ce que le
+locataire écrit. Un Spark à 10 Gio peut contenir bien plus de 10 Gio de données
+compressibles. Ce n'est pas un défaut, c'est une sémantique à choisir puis à
+énoncer : soit on l'assume et le manuel l'explique, soit la compression est
+désactivée par jeu de données pour que le quota compte les octets logiques.
+
+**2. Incus pose `quota`, pas `refquota`.** Conséquence directe : les instantanés
+d'un Spark sont **imputés à son propre quota**. Un Spark qui prend des instantanés
+réduit l'espace dont il dispose. C'est défendable — l'instantané consomme
+réellement — mais cela doit apparaître dans la console, sans quoi l'espace
+disparaît sans explication.
+
+**3. Un Spark qui remplit son quota verrouille son administration.** C'est le fait
+le plus gênant. `backup.yaml` est écrit par Incus **à l'intérieur** du jeu de
+données contingenté. Disque plein, toute reconfiguration échoue :
+
+```
+Error: Failed to write backup file: … open
+/var/lib/incus/containers/spark-test/backup.yaml: disk quota exceeded
+```
+
+Un locataire qui sature son disque empêche donc le plan de contrôle de modifier ses
+limites — y compris de l'agrandir pour le débloquer. Le remède est de ne jamais
+poser le quota du jeu de données exactement à la valeur annoncée : le registre
+réserve une **marge de métadonnées** (quelques dizaines de mébioctets) au-dessus de
+la taille vendue, invisible du locataire. Unité SPK-30.
+
 ## 9. Ingress
 
 Un unique Caddy sur l'hôte détient l'exposition publique et les certificats. Le
@@ -530,21 +719,44 @@ jamais qu'un quota est appliqué : cette preuve exige un hôte Incus réel.
 
 ## 13. Vérifications dues avant toute déclaration de conformité
 
-Ces points sont **des hypothèses documentées, pas des faits acquis**. Chacun a
-une unité de backlog et sera mesuré sur l'hôte cible :
+Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
 
-1. Traduction exacte du pourcentage `limits.cpu.allowance` en poids
-   d'ordonnancement, et vérification par une mesure de contention réelle que la
-   proportion des réservations est respectée.
-2. Comportement à chaud de la reconfiguration du cpuset partagé lors de la
-   découpe et de la restitution d'un pool dédié.
-3. Prise en charge effective du quota `size` sur le disque racine avec le pilote
-   de stockage retenu, vérifiée par écriture réelle jusqu'au refus.
-4. Nesting Docker complet dans un conteneur non privilégié avec
-   `security.idmap.isolated=true`, y compris le stockage overlay de Docker.
-5. Comportement réel de `limits.max` sur le NIC en charge, et absence de garantie
-   de réservation de bande passante.
-6. Correspondance entre la topologie SMT rapportée par `incus info --resources`
-   et le frèrage `(0,4) (1,5) (2,6) (3,7)` déjà relevé via `/sys`.
-7. Valeur retenue pour `zfs_arc_max` et vérification que la RAM effectivement
-   consommée par l'ARC reste bien à l'intérieur de `host.memory_reserve_bytes`.
+### Confirmées par la mesure
+
+1. **Reconfiguration du cpuset à chaud** — `0-7` → `0-5` appliqué sans redémarrage,
+   `uptime` continu, `nproc` interne suivi. §7.4.
+2. **Topologie SMT** — `incus info --resources` concorde avec `/sys` :
+   `(0,4) (1,5) (2,6) (3,7)`. §7.5.
+3. **Quota du disque racine** — l'écriture de données **incompressibles** s'arrête
+   exactement à 10 Gio, `available` tombe à `0B`. §8.7.
+4. **Plafond réseau** — classe `htb` `rate 100Mbit ceil 100Mbit`. §7.6.
+5. **Cloisonnement des UID/GID** — `volatile.idmap.base=1065536`, table du conteneur
+   `0 1065536 65536`. §10.
+6. **Correspondance `allowance` → poids** — loi `cpu.weight = pct − 10 + priorité`
+   établie sur onze points, et `cpu.max` laissé à `max` donc burst réel. §7.2 bis.
+
+### Infirmées par la mesure, et corrigées dans ce document
+
+7. **`allowance` et `priority` étaient présentés comme indépendants.** Faux : ils
+   s'additionnent dans un unique poids. §7.2 bis.
+8. **La mise à l'échelle du poids était inutilisable.** `réservation / capacité × 100`
+   refuse toute réservation sous 0,25 CPU sur un pool de 4 CPU. Remplacée par un
+   facteur 1000. §7.2 bis.
+9. **L'invariant d'admission control ne suffisait pas.** Les Sparks sont frères des
+   tranches de l'hôte à la racine de cgroup v2 : la réservation n'est proportionnelle
+   qu'entre Sparks, pas absolue. §7.3 bis, unité SPK-29.
+10. **Le quota bloque le plan de contrôle.** Un Spark qui remplit son quota empêche
+    Incus d'écrire son `backup.yaml`, donc toute reconfiguration. §8.7, unité SPK-30.
+
+### Restant à vérifier
+
+11. **Nesting Docker complet** dans un conteneur non privilégié avec
+    `security.idmap.isolated=true`, y compris le pilote de stockage retenu par
+    Docker au-dessus d'un rootfs ZFS.
+12. **`zfs_arc_max`** — plafonné à 16 Gio sur décision du responsable et persisté
+    dans `/etc/modprobe.d/zfs.conf`. Reste à vérifier que la consommation réelle
+    de l'ARC demeure sous ce plafond en charge, et que la valeur est bien
+    soustraite via `host.memory_reserve_bytes`.
+13. **Compression et quota** — la compression étant active, le quota porte sur les
+    octets **stockés**, pas sur les octets logiques. Décision à prendre : documenter
+    l'écart, ou désactiver la compression par jeu de données. §8.7.

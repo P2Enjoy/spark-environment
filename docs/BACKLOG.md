@@ -185,6 +185,55 @@ Les sept points listés au §13 du DAT, chacun mesuré sur l'hôte cible et cons
 - DoD : chaque hypothèse est soit confirmée par une mesure archivée, soit
   infirmée et le DAT corrigé en conséquence.
 
+### [ ] SPK-29 · Regrouper les Sparks sous un parent cgroup de poids maîtrisé
+
+Mesuré le 2026-08-18 : Incus place chaque Spark à la **racine** de cgroup v2, frère
+de `system.slice`, `user.slice` et `init.scope`, tous à `cpu.weight=100`. Le poids
+d'un Spark est donc arbitré contre l'hôte et pas seulement contre les autres
+Sparks : la réservation n'est proportionnelle qu'entre Sparks, jamais absolue.
+
+C'est la correction la plus lourde de la campagne : elle touche la promesse
+centrale du produit.
+
+- Spécification : `docs/DAT.md` §7.3 bis
+- DoD : sous contention totale provoquée, un Spark à réservation *r* obtient
+  effectivement `r / capacité` de la machine, mesuré et archivé. Tant que ce n'est
+  pas prouvé, la console ne présente pas la réservation comme une garantie absolue.
+
+### [ ] SPK-30 · Marge de métadonnées au-dessus du quota vendu
+
+Mesuré le 2026-08-18 : un Spark qui remplit son quota empêche Incus d'écrire son
+`backup.yaml`, situé **dans** le jeu de données contingenté. Toute reconfiguration
+échoue alors, y compris l'agrandissement qui débloquerait la situation.
+
+- Spécification : `docs/DAT.md` §8.7
+- DoD : quota du jeu de données posé au-dessus de la taille vendue, marge invisible
+  du locataire ; un Spark saturé reste reconfigurable, prouvé par un test qui
+  remplit puis agrandit.
+
+### [ ] SPK-31 · Version minimale d'Incus imposée par le nesting Docker
+
+Mesuré le 2026-08-18 : avec Incus 6.0.0 (version d'Ubuntu 24.04), **aucun**
+conteneur Docker ne démarre dans un Spark. `runc` ≥ 1.3 écrit ses sysctls à travers
+un montage procfs détaché depuis le correctif de CVE-2025-52881 ; le profil AppArmor
+qu'Incus applique au Spark interprète cet accès comme un accès à `/sys/...` et le
+refuse :
+
+```
+open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
+```
+
+Le défaut est en amont, pas dans la configuration : il touche tout conteneur, avec
+ou sans publication de port, et `--security-opt apparmor=unconfined` côté Docker ne
+le contourne pas puisque le profil fautif est celui du Spark. Le correctif est dans
+**Incus 6.19**.
+
+- DoD : Incus ≥ 6.19 installé depuis le dépôt amont, AppArmor **actif**, et une pile
+  Compose réelle qui répond depuis l'hôte sur l'IP privée du Spark.
+- Conséquence : `docs/PROD_MIGRATIONS.md` impose Incus ≥ 6.19 et interdit la version
+  des dépôts Ubuntu. Ce n'est pas une préférence, c'est une condition de
+  fonctionnement.
+
 ### [ ] SPK-28 · Décision et exécution du repartitionnement du stockage
 
 Les deux disques sont intégralement consommés par un unique RAID1 `ext4` monté sur
