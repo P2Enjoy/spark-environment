@@ -31,6 +31,8 @@ class IncusClient(Protocol):
 
     def storage_pool_resources(self, pool: str) -> dict[str, Any]: ...
 
+    def server_info(self) -> dict[str, Any]: ...
+
 
 @dataclass
 class UnixSocketIncus:
@@ -64,6 +66,9 @@ class UnixSocketIncus:
     def storage_pool_resources(self, pool: str) -> dict[str, Any]:
         return self._get(f"/1.0/storage-pools/{pool}/resources")
 
+    def server_info(self) -> dict[str, Any]:
+        return self._get("/1.0")
+
 
 @dataclass
 class FakeIncus:
@@ -85,6 +90,9 @@ class FakeIncus:
         if self.pool_payload is not None:
             return self.pool_payload
         return {"space": {"total": 207_030_845_440, "used": 739_906_560}}
+
+    def server_info(self) -> dict[str, Any]:
+        return {"environment": {"server_name": "spark-experiment", "server_version": "7.3"}}
 
 
 # Releve reel de l'hote de validation, 2026-08-18 : Dell R320, Xeon E5-1410 v2,
@@ -118,5 +126,8 @@ _EXEMPLE_HOTE: dict[str, Any] = {
             {"ports": [{"id": "eno2", "link_speed": None, "link_detected": False}]},
         ]
     },
-    "system": {"hostname": "spark-experiment"},
+    # `/1.0/resources` ne porte AUCUN nom d'hote : sa clé « system » decrit le
+    # materiel — chassis, firmware, carte mere, numeros de serie. Le nom vient
+    # de `/1.0` → `environment.server_name`. Les numeros de serie ne sont ni
+    # stockes ni journalises : ils identifient la machine sans servir au produit.
 }

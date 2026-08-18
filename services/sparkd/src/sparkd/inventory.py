@@ -71,6 +71,13 @@ def read_topology(client: IncusClient, pool: str) -> Topology:
     resources = client.resources()
     cpu = resources.get("cpu") or {}
 
+    # Le nom vient de `/1.0`, pas de `/1.0/resources` dont la clé « system »
+    # decrit le materiel (docs/DAT.md §5.2).
+    try:
+        nom = ((client.server_info().get("environment") or {}).get("server_name")) or "inconnu"
+    except Exception:
+        nom = "inconnu"
+
     cores: list[Core] = []
     for socket in cpu.get("sockets") or []:
         socket_id = socket.get("socket", 0)
@@ -108,7 +115,7 @@ def read_topology(client: IncusClient, pool: str) -> Topology:
     espace = (client.storage_pool_resources(pool).get("space") or {}).get("total")
 
     return Topology(
-        hostname=(resources.get("system") or {}).get("hostname") or "inconnu",
+        hostname=nom,
         # `cpu.total` compte les THREADS, jamais les cœurs — docs/DAT.md §5.2.
         cpu_threads_total=int(_require(cpu.get("total"), "cpu.total")),
         memory_total_bytes=int(_require((resources.get("memory") or {}).get("total"), "memory.total")),

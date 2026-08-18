@@ -144,3 +144,12 @@ def test_capacite_reduite_sous_l_allocation_est_appliquee_mais_signalee(db):
     assert "storage" in ligne["message"]
     # Applique malgre tout : le registre ne ment pas sur la machine.
     assert db.execute("SELECT storage_total_bytes FROM host").fetchone()[0] == 1_000_000
+
+
+def test_le_nom_d_hote_vient_de_l_api_serveur_pas_des_ressources():
+    """@verifies docs/DAT.md §5.2
+
+    `/1.0/resources` ne porte aucun nom d'hote : sa cle « system » decrit le
+    materiel. Chercher le nom la rendait « inconnu », mesure sur l'hote reel.
+    """
+    assert read_topology(FakeIncus(), "spark").hostname == "spark-experiment"

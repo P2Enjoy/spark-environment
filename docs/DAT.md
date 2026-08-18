@@ -219,6 +219,7 @@ supposés.
 
 | Grandeur du registre | Source | Unité rendue |
 |---|---|---|
+| `hostname` | `/1.0` → `environment.server_name` | texte |
 | `cpu_threads_total` | `/1.0/resources` → `cpu.total` | threads |
 | `cpu_cores_total` | `/1.0/resources` → somme des `cpu.sockets[].cores[]` | cœurs physiques |
 | topologie `cpu_core` / `cpu_thread` | `cpu.sockets[].cores[].threads[]` | `id`, `thread`, `numa_node`, `online` |
@@ -239,6 +240,12 @@ Trois pièges, tous rencontrés à la mesure :
   l'hôte de validation, le pool sur fichier ne rend que 192,8 Gio là où le disque
   en porte 5,4 Tio. Lire le disque ferait promettre vingt-huit fois la place
   réellement disponible.
+
+Un quatrième piège, plus discret : **`/1.0/resources` ne porte aucun nom
+d'hôte.** Sa clé `system` décrit le *matériel* — châssis, micrologiciel, carte
+mère, et des **numéros de série**. Le nom vient de `/1.0`. Ces numéros de série
+ne sont ni stockés ni journalisés : ils identifient la machine sans rien
+apporter au produit.
 
 Le pool à interroger est nommé par `SPARKD_STORAGE_POOL`.
 
