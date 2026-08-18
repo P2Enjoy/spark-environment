@@ -167,3 +167,86 @@ migration appliquée a un checksum différent de celle présente dans le dépôt
 Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sans
 perte, la migration le documente explicitement dans son en-tête et le contrat de
 déploiement `docs/PROD_MIGRATIONS.md` le signale.
+
+## 12. Mécanique des migrations
+
+Le §11 dit que chaque migration fournit son `down` ; le §10 dit que le démarrage
+échoue sur un checksum divergent. Cette section fixe le reste, qui était
+implicite et que le code ne peut pas inventer.
+
+### 12.1 Fichiers
+
+```
+services/sparkd/migrations/NNN_intitule.sql
+```
+
+`NNN` est la version, entière, sur trois chiffres, à partir de `001`. L'ordre
+d'application est l'ordre numérique. Une version ne se réutilise ni ne se
+renumérote : elle est citée par `schema_migration` dans les bases déjà migrées.
+
+Un fichier porte les deux sens, séparés par des marqueurs sur une ligne :
+
+```sql
+-- @up
+CREATE TABLE ...;
+
+-- @down
+DROP TABLE ...;
+```
+
+`-- @up` est obligatoire. `-- @down` l'est aussi ; lorsqu'un retour arrière est
+impossible sans perte, la section existe quand même et contient uniquement :
+
+```sql
+-- @down
+-- IRREVERSIBLE: <raison>
+```
+
+Le moteur refuse alors le retour arrière au lieu de l'exécuter à moitié, et
+`docs/PROD_MIGRATIONS.md` le signale.
+
+### 12.2 Checksum
+
+`sha256` du contenu intégral du fichier, en hexadécimal. Il couvre les deux
+sections : modifier un `down` déjà appliqué est une dérive au même titre que
+modifier un `up`.
+
+### 12.3 Application
+
+Une migration s'applique dans **une seule transaction**, qui contient à la fois
+ses instructions et l'insertion de sa ligne dans `schema_migration`. Une
+migration interrompue ne laisse donc jamais un schéma à moitié migré sans trace :
+soit la transaction passe entière, soit rien.
+
+### 12.4 Vérification au démarrage
+
+Avant de servir, `sparkd` compare les migrations enregistrées aux fichiers du
+dépôt et **refuse de démarrer** si :
+
+- une migration enregistrée n'a plus de fichier — la base a été migrée par un
+  autre code que celui-ci ;
+- un checksum diverge — le fichier a été modifié après application ;
+- une migration non appliquée précède une migration appliquée — un trou dans la
+  séquence signale des historiques divergents fusionnés.
+
+Ces trois refus disent la même chose : le schéma réel n'est plus celui que le
+code croit. Continuer produirait des erreurs plus loin, plus difficiles à
+rattacher à leur cause.
+
+### 12.5 Pragmas de connexion
+
+Toute connexion pose, dans cet ordre :
+
+```sql
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 5000;
+PRAGMA synchronous = NORMAL;
+```
+
+`foreign_keys` mérite d'être appelé par son nom : **SQLite ne l'active pas par
+défaut**, et le fait par connexion, pas par base. Un modèle aussi riche en clés
+étrangères que celui-ci les verrait silencieusement ignorées — un `spark_id`
+pointant vers rien s'insérerait sans un mot. C'est la valeur par défaut la plus
+coûteuse de SQLite, et la seule ligne de cette liste qui change la correction et
+non la performance.
