@@ -13,17 +13,23 @@ la preuve E2E depuis le parcours canonique.
 
 ## Lot 0 — Socle
 
-### [~] SPK-01 · Socle documentaire et structure du monorepo
+### [x] SPK-01 · Socle documentaire et structure du monorepo
 
 Persister l'idée, l'architecture, le modèle de données et le découpage avant
-toute ligne de code.
+toute ligne de code, puis câbler l'espace de travail.
 
-- Spécification : `docs/DAT.md`, `docs/SCHEMA.md`, `docs/ORIGIN_CONVERSATION.md`
-- DoD : les documents obligatoires de `CLAUDE.md` §5 existent, décrivent le même
-  système, et le squelette du monorepo se construit.
-- Reste : squelette `apps/webui` + `services/sparkd` + `packages/contract`.
+- Spécification : `docs/DAT.md` §10, `docs/SCHEMA.md`, `docs/ORIGIN_CONVERSATION.md`
+- **Clos le 2026-08-18.** Espace de travail conforme au DAT §10 :
+  `apps/webui`, `services/sparkd`, `packages/contract`, `deploy`, `scripts`, avec
+  un `Makefile` comme point d'entrée reproductible. `pnpm -r test`, `build` et
+  `typecheck` traversent les deux paquets TypeScript ; `make sparkd-test` rend
+  **19 tests verts**.
+- `apps/webui` et `packages/contract` sont déclarés sans source, à dessein :
+  `CLAUDE.md` §4 impose la lecture intégrale du design system avant toute
+  écriture d'interface, et cette lecture appartient à l'unité qui construit
+  l'interface (SPK-18), pas au squelette.
 
-### [~] SPK-02 · Accès au serveur cible et relevé de topologie
+### [x] SPK-02 · Accès au serveur cible et relevé de topologie
 
 Accès SSH obtenu le 2026-08-18. Topologie relevée et consignée : Dell R320,
 Xeon E5-1410 v2 (4 cœurs / 8 threads, frères SMT `(0,4) (1,5) (2,6) (3,7)`),
@@ -31,8 +37,9 @@ Xeon E5-1410 v2 (4 cœurs / 8 threads, frères SMT `(0,4) (1,5) (2,6) (3,7)`),
 Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
 
 - Spécification : `docs/DAT.md` §8.1, `docs/JOURNAL.md`
-- Reste : `incus info --resources`, qui exige Incus installé (SPK-03).
-- DoD : le relevé d'Incus concorde avec celui de `/sys`, notamment le frèrage SMT.
+- **Clos le 2026-08-18.** `incus info --resources` rapporte `Core 0 → threads
+  id 0, id 4`, `Core 1 → 1, 5`, `Core 2 → 2, 6`, `Core 3 → 3, 7` : concordance
+  exacte avec `/sys`, frèrage SMT compris.
 
 ### [ ] SPK-03 · Installation Incus, pool de stockage et bridge privé sur l'hôte
 
@@ -72,10 +79,20 @@ reconfiguration du cpuset de tous les Sparks partagés.
 
 ## Lot 2 — Runtime serveur
 
-### [ ] SPK-07 · `sparkd` : service HTTP local, santé, inventaire hôte
+### [~] SPK-07 · `sparkd` : service HTTP local, santé, inventaire hôte
 
+Entamé par le squelette (SPK-01) : le service démarre, `/healthz` et `/readyz`
+sont distincts, et la garde d'adresse d'écoute refuse toute adresse routable au
+démarrage — vérifié par 19 tests et à l'exécution réelle
+(`SPARKD_BIND=0.0.0.0:9876` sort en code 2 ; `ss` confirme l'écoute sur
+`127.0.0.1:9876` seulement).
+
+- Spécification : `docs/DAT.md` §5
+- Reste : l'inventaire de l'hôte, et la preuve d'écoute par un scan **depuis
+  l'extérieur de la machine cible** — celle conduite ici l'a été localement, sur
+  le poste de développement, ce qui ne prouve pas la surface réseau du serveur.
 - DoD : écoute exclusivement sur `127.0.0.1:9876`, prouvé par un scan depuis
-  l'extérieur ; `/healthz` et `/readyz` distincts.
+  l'extérieur ; `/healthz` et `/readyz` distincts ; inventaire de l'hôte exposé.
 
 ### [ ] SPK-08 · Pilote Incus : traduction du manifeste Spark
 

@@ -125,14 +125,17 @@ pas encore sont marquées.
 
 | Commande | Rôle | Disponible |
 |---|---|---|
-| `pnpm install` | dépendances de la console | non |
-| `pnpm dev` | console locale sur `http://127.0.0.1:5173` | non |
-| `pnpm build` | build de production de la console | non |
-| `pnpm test` | tests unitaires de la console | non |
-| `pnpm e2e` | tests Playwright | non |
-| `make runDev` | pile de développement autonome | non |
-| `make seed` | données de démonstration reproductibles | non |
-| `make test` | tests du runtime serveur | non |
+| `make bootstrap` | installe les dépendances des deux livrables | **oui** |
+| `make sparkd-install` | crée le venv et installe le runtime serveur | **oui** |
+| `make sparkd-test` | tests unitaires du runtime serveur | **oui** |
+| `make sparkd-run` | lance `sparkd` sur `127.0.0.1:9876` | **oui** |
+| `make test` | toutes les suites de tests | **oui** |
+| `make build` | build de tous les paquets | **oui** |
+| `pnpm -r test` / `build` / `typecheck` | paquets TypeScript de l'espace de travail | **oui** |
+| `pnpm dev` | console locale sur `http://127.0.0.1:5173` | non — SPK-18 |
+| `pnpm e2e` | tests Playwright | non — SPK-24 |
+| `make runDev` | pile de développement autonome | non — SPK-23 |
+| `make seed` | données de démonstration reproductibles | non — SPK-23 |
 
 ## Variables d'environnement
 
@@ -149,9 +152,10 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_DRIVER` | pilote d'exécution | `incus` \| `fake` | non | `incus` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |
 
-`SPARKD_BIND` ne doit jamais être positionné sur une adresse routable : l'absence
-d'API d'administration exposée au réseau est une propriété de sécurité du produit,
-pas un réglage.
+`SPARKD_BIND` ne peut pas être positionné sur une adresse routable : `sparkd`
+**refuse de démarrer** et sort en code 2. L'absence d'API d'administration exposée
+au réseau est une propriété de sécurité du produit, pas un réglage laissé à la
+vigilance de l'exploitant.
 
 ### `apps/webui`
 

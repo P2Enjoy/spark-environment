@@ -41,6 +41,18 @@
   devenu vide n'est pas conservé dans le dépôt.
 - Mentions de blocage de l'accès au serveur cible : l'accès est obtenu.
 
+### Ajouté — code
+
+- Espace de travail du monorepo : `apps/webui`, `services/sparkd`,
+  `packages/contract`, `deploy`, `scripts`, avec un `Makefile` d'entrée.
+- `services/sparkd` : configuration validée depuis l'environnement, garde
+  refusant toute adresse d'écoute routable, sondes `/healthz` et `/readyz`
+  distinctes. 19 tests unitaires.
+
+### Modifié
+
+- `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
+
 ### Vérifié sur matériel réel
 
 - Une pile Docker Compose réelle tourne dans un Spark non privilégié, à plages

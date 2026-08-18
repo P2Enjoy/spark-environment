@@ -483,3 +483,48 @@ Pour mémoire, afin qu'ils ne soient pas reconsignés comme des défauts du prod
   verrou, suffit. C'est un artefact du harnais de test, pas un fait sur Incus ;
 - `incus init` **lit son YAML sur l'entrée standard** : dans un script acheminé par
   `ssh … bash -s`, il avale le script. Tout appel doit rediriger son entrée.
+
+
+---
+
+## 2026-08-18 — SPK-01 close : squelette du monorepo et runtime sparkd
+
+**Unité de la session** : SPK-01, première `[~]` du plan comportant du code à
+livrer. Sa spécification existait déjà (DAT §10) et couvrait ce qu'il fallait
+écrire : elle n'a pas été réécrite.
+
+**Livré.** Espace de travail conforme au DAT §10 — `apps/webui`,
+`services/sparkd`, `packages/contract`, `deploy`, `scripts` — avec un `Makefile`
+comme point d'entrée reproductible. `services/sparkd` porte du code réel :
+`config.py` refuse toute adresse d'écoute routable, `app.py` expose `/healthz` et
+`/readyz` distincts, `/readyz` déclarant ses dépendances `unknown` tant que les
+pilotes n'existent pas plutôt que d'annoncer une disponibilité que rien ne prouve.
+
+**Vérifié.** 19 tests unitaires verts, dont les refus (`0.0.0.0`, adresse
+publique, bridge privé, nom d'hôte, ports malformés). À l'exécution réelle :
+`SPARKD_BIND=0.0.0.0:9876` sort en code 2 avec un message exploitable, la boucle
+locale sert les deux sondes, et `ss` montre `LISTEN 127.0.0.1:9876` seulement.
+Campagne complète verte : `make sparkd-test`, `pnpm -r test`, `pnpm -r build`,
+`pnpm -r typecheck`.
+
+**Non vérifié, et nommé comme tel.** La preuve d'écoute a été conduite sur le
+poste de développement, pas depuis l'extérieur du serveur cible : elle ne dit
+donc rien de la surface réseau réelle de l'hôte. SPK-07 passe à `[~]` avec ce
+reste explicite.
+
+**Écarté à dessein.** `apps/webui` et `packages/contract` sont déclarés sans
+source. `CLAUDE.md` §4 impose la lecture intégrale de `docs/DESIGN_SYSTEM.md`
+avant toute écriture d'interface ; cette lecture appartient à l'unité qui
+construit l'interface, pas au squelette. Poser des composants d'attente aurait
+livré un écran que personne n'a spécifié.
+
+**Corrigé au passage.** Le `.gitignore` était un gabarit C++ hérité d'un autre
+projet et ignorait `Makefile` : il aurait silencieusement écarté le point
+d'entrée du dépôt. Remplacé par un fichier adapté au monorepo.
+
+**Où reprendre.** SPK-03 — installation d'Incus, du pool et du bridge sur
+l'hôte — est déjà faite en pratique sur le serveur de validation et attend d'être
+consignée comme telle. La prochaine unité de construction est **SPK-04**,
+migrations et registre SQLite, dont la spécification existe (`docs/SCHEMA.md`) et
+qui ne dépend d'aucune décision en attente. SPK-28, le repartitionnement, reste
+suspendu à un arbitrage du responsable.
