@@ -450,6 +450,81 @@ cette primitive. `network.reservation` est un concept de registre servant à
 l'admission control ; `network.burst` est la seule valeur réellement appliquée.
 La console doit présenter cette distinction, pas la masquer.
 
+### 7.7 Admission control : ce qui compte, et contre quoi
+
+Le §7.3 donne l'invariant. Cette section fixe les deux points qu'il laissait
+implicites et que le code ne peut pas deviner.
+
+#### Capacité allouable, par ressource
+
+```
+CPU partagé   (cœurs_physiques − cœurs_dédiés) × overcommit_cpu
+Mémoire       (mémoire_totale − réserve_hôte)  × overcommit_memory
+Réseau        débit_nominal                    × overcommit_network
+Stockage      (stockage_total − réserve_hôte)          ← AUCUN surengagement
+```
+
+La capacité CPU se compte en **cœurs physiques**, jamais en threads : le SMT
+n'ajoute pas de capacité d'exécution, il l'entrelace. Compter 8 threads sur cette
+machine reviendrait à vendre deux fois la même chose.
+
+Le stockage n'a délibérément pas de facteur de surengagement, et `host` n'en
+porte pas de colonne. Un pool CPU saturé se traduit par de la lenteur, qu'un
+ordonnanceur lisse ; un pool de stockage saturé est une panne dure, qu'aucun
+ordonnancement ne rattrape. Surprovisionner du disque, c'est promettre des octets
+qui n'existent pas.
+
+#### Ce que chaque mode CPU consomme
+
+| Mode | Consomme du pool partagé | Retire des cœurs du pool |
+|---|---|---|
+| `shared` | `cpu_reservation` | non |
+| `shared-pinned` | `cpu_reservation` | non — les cœurs sont imposés, pas exclusifs |
+| `capped` | `cpu_max` | non |
+| `dedicated` | rien | **oui**, `cpu_cores` cœurs entiers |
+
+`capped` consomme son **plafond**, pas zéro. Un Spark plafonné à 0,5 CPU peut
+réellement consommer 0,5 CPU en permanence ; ne pas le provisionner reviendrait à
+distribuer de la capacité déjà prise. C'est le seul mode où la grandeur comptée
+n'est pas une réservation, et c'est délibéré : on provisionne ce que le Spark
+peut prendre, pas ce qu'on espère qu'il prendra.
+
+`dedicated` ne consomme pas de réservation : il **réduit la capacité du pool**
+pour tous les autres, ce qui est comptabilisé en amont dans la formule de
+capacité.
+
+#### Quels Sparks comptent
+
+**Tous ceux qui existent dans le registre**, quel que soit leur état — `stopped`,
+`error` et `deleting` compris.
+
+Un Spark arrêté conserve son disque et son adresse ; un Spark en erreur sera
+repris et redémarré ; un Spark en cours de suppression n'a pas encore rendu ses
+ressources. Traiter l'un de ces états comme de la capacité libre ferait admettre
+un nouveau Spark dans une place qu'un simple redémarrage reprendrait — et le
+refus tomberait alors au pire moment, sur le Spark qui existait déjà.
+
+La ressource n'est rendue qu'à la disparition de la ligne.
+
+#### Forme du refus
+
+Un refus nomme **la ressource fautive, la quantité demandée, ce qui reste, et le
+facteur de surengagement en vigueur**. « Capacité insuffisante » n'aide personne :
+l'exploitant doit pouvoir décider, à la lecture, s'il réduit sa demande, libère un
+Spark ou relève le surengagement.
+
+Lorsque plusieurs ressources manquent, **toutes** sont rapportées, pas seulement
+la première. Corriger une demande pour se heurter à la suivante, puis à la
+troisième, est une perte de temps évitable.
+
+#### Ce que cet admission control ne garantit pas
+
+Il garantit que la somme des réservations tient dans la capacité, donc la
+**proportionnalité entre Sparks**. Il ne garantit pas la valeur absolue d'une
+réservation, pour la raison établie au §7.3 bis : les Sparks sont arbitrés contre
+les tranches de l'hôte. Toute présentation de cette garantie — API, console,
+manuel — doit rester exacte sur ce point tant que SPK-29 n'est pas livrée.
+
 ## 8. Hôte cible et stockage
 
 ### 8.1 Ce que la machine est réellement
