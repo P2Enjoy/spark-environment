@@ -211,7 +211,7 @@ Mesuré le 2026-08-18 : un Spark qui remplit son quota empêche Incus d'écrire 
   du locataire ; un Spark saturé reste reconfigurable, prouvé par un test qui
   remplit puis agrandit.
 
-### [ ] SPK-31 · Version minimale d'Incus imposée par le nesting Docker
+### [x] SPK-31 · Version minimale d'Incus imposée par le nesting Docker
 
 Mesuré le 2026-08-18 : avec Incus 6.0.0 (version d'Ubuntu 24.04), **aucun**
 conteneur Docker ne démarre dans un Spark. `runc` ≥ 1.3 écrit ses sysctls à travers
@@ -228,11 +228,14 @@ ou sans publication de port, et `--security-opt apparmor=unconfined` côté Dock
 le contourne pas puisque le profil fautif est celui du Spark. Le correctif est dans
 **Incus 6.19**.
 
-- DoD : Incus ≥ 6.19 installé depuis le dépôt amont, AppArmor **actif**, et une pile
-  Compose réelle qui répond depuis l'hôte sur l'IP privée du Spark.
-- Conséquence : `docs/PROD_MIGRATIONS.md` impose Incus ≥ 6.19 et interdit la version
-  des dépôts Ubuntu. Ce n'est pas une préférence, c'est une condition de
-  fonctionnement.
+- **Vérifié le 2026-08-18.** Incus porté en **7.3** depuis le dépôt amont Zabbly.
+  Dans un Spark non privilégié, à idmap isolé, AppArmor actif et sans aucun
+  `raw.lxc` de contournement : `docker compose up -d` démarre, et `nginx` répond
+  **HTTP 200 depuis l'hôte** sur `10.77.0.38:8080`. Docker retient `overlayfs`
+  au-dessus du rootfs ZFS, cgroup v2.
+- Conséquence portée au contrat de déploiement : Incus ≥ 6.19 obligatoire, version
+  des dépôts Ubuntu interdite, et installation **avant** la création du moindre
+  Spark. Ce n'est pas une préférence, c'est une condition de fonctionnement.
 
 ### [ ] SPK-28 · Décision et exécution du repartitionnement du stockage
 

@@ -39,14 +39,25 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Socle documentaire posé, implémentation non commencée.** L'architecture, le
-modèle de données et le backlog font foi ; aucune fonctionnalité n'est encore
-livrée. L'état réel de chaque unité est dans [docs/BACKLOG.md](docs/BACKLOG.md).
+**Faisabilité prouvée sur matériel réel, plan de contrôle non commencé.**
+L'architecture, le modèle de données et le backlog font foi. L'état réel de chaque
+unité est dans [docs/BACKLOG.md](docs/BACKLOG.md).
 
-L'hôte cible est accessible et sa topologie est relevée (§ *Hôte cible* ci-dessous).
-Sept hypothèses techniques restent **non vérifiées** tant qu'Incus n'est pas
-installé ; elles sont listées au §13 du [DAT](docs/DAT.md) et ne doivent pas être
-tenues pour acquises.
+Ce qui est **établi par la mesure** sur l'hôte, le 2026-08-18 : une pile Docker
+Compose réelle tourne dans un Spark **non privilégié**, à plages UID/GID disjointes,
+sous AppArmor actif et sans aucun contournement, et répond en `HTTP 200` à l'hôte sur
+son IP privée. Le quota disque, le plafond réseau, les limites mémoire et la
+reconfiguration du cpuset à chaud sont vérifiés de la même façon.
+
+Ce que la mesure a **infirmé**, et qui est corrigé dans le [DAT](docs/DAT.md) : la
+sémantique de la réservation CPU. Le poids d'un Spark est arbitré contre les tranches
+de l'hôte et pas seulement contre les autres Sparks, donc la réservation est pour
+l'instant proportionnelle et non absolue. C'est la principale dette ouverte
+([SPK-29](docs/BACKLOG.md)), et la console ne doit pas présenter la réservation comme
+une garantie tant qu'elle n'est pas levée.
+
+Le détail des vérifications, confirmées comme infirmées, est au §13 du
+[DAT](docs/DAT.md).
 
 ## Hôte cible
 
@@ -77,7 +88,7 @@ un pool de stockage natif. Voir le §8 du [DAT](docs/DAT.md).
 | Hôte local de la console | Node (tunnels SSH, proxy) | oui |
 | Runtime serveur | Python 3 + FastAPI | oui |
 | Registre de ressources | SQLite | oui |
-| Isolation et cycle de vie | Incus (Apache-2.0) | non |
+| Isolation et cycle de vie | Incus **≥ 6.19** (Apache-2.0), dépôt amont obligatoire | non |
 | Stockage | pool à quotas et copie sur écriture — voir DAT §8 | non |
 | Ingress et TLS | Caddy | non |
 | Transport d'administration | OpenSSH | non |
@@ -102,7 +113,9 @@ docs/                DAT, schéma, backlog, journal, design system, manuel
 - Node ≥ 22 et pnpm ≥ 9 (console)
 - Python ≥ 3.11 (runtime serveur)
 - Docker et Docker Compose (pile de développement)
-- côté serveur : Incus, un pool de stockage à quotas, Caddy — voir le contrat de déploiement
+- côté serveur : Incus **≥ 6.19** — la version des dépôts Ubuntu (6.0.0) ne permet
+  pas de faire tourner Docker dans un Spark —, un pool de stockage à quotas, Caddy.
+  Voir le contrat de déploiement.
 
 ## Commandes principales
 
@@ -163,8 +176,11 @@ pas un réglage.
 - `runtime: vm` est porté par le modèle de données mais n'est pas implémenté.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique
   qu'un plafond, il n'y a pas de garantie de bande passante.
-- L'hôte cible n'a aucun périphérique bloc libre : la mise en place d'un pool de
-  stockage natif suppose un repartitionnement, décision en attente (DAT §8).
+- L'hôte cible n'a aucun périphérique bloc libre : le pool de stockage est
+  actuellement **sur fichier**, à titre provisoire, et l'exploitation réelle suppose
+  un repartitionnement (DAT §8, SPK-28).
+- La réservation CPU n'est proportionnelle qu'entre Sparks, pas absolue, tant que
+  SPK-29 n'est pas livrée.
 - Les disques de l'hôte sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
 

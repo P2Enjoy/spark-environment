@@ -49,19 +49,32 @@ Signed-By: /etc/apt/keyrings/zabbly.asc
 Vérification : `incus version` doit rendre au moins `6.19`. Toute installation
 depuis les dépôts Ubuntu est un échec de déploiement, pas une variante acceptable.
 
-**La version suffisante n'est pas encore établie.** Sur l'hôte, la montée en 7.3 n'a
-pas suffi à elle seule : le même échec a persisté sur un Spark dont le profil
-AppArmor avait été produit par 6.0.0. L'hypothèse en cours de vérification est qu'un
-arrêt complet puis redémarrage de chaque Spark est nécessaire après la montée de
-version, le redémarrage du démon ne suffisant pas. À confirmer avant toute mise en
-service (SPK-31).
+**Vérifié le 2026-08-18 en 7.3** : pile Compose réelle fonctionnelle dans un Spark
+non privilégié, à idmap isolé, AppArmor actif, sans contournement — `HTTP 200`
+depuis l'hôte sur l'IP privée du Spark.
+
+**Deux règles d'ordre, apprises dans un incident et non négociables :**
+
+1. **Installer la version cible d'Incus AVANT de créer le moindre Spark.** La montée
+   de 6.0.0 vers 7.3 sous une instance en marche l'a laissée « RUNNING » mais
+   injoignable (`Failed to retrieve PID of executing child process`), ses hooks
+   sortant en 127 ; `stop --force` et `delete --force` restaient bloqués et l'arrêt
+   du démon s'est figé en `deactivating`. Il a fallu tuer le démon, démonter les
+   résidus sous `/var/lib/incus` et réinitialiser.
+2. **Un Spark garde le profil AppArmor produit à son démarrage.** Redémarrer le démon
+   ne le régénère pas. Après toute montée de version, arrêter puis redémarrer chaque
+   Spark, sans quoi le correctif ne s'applique pas.
+
+Résidu à connaître : après une réinitialisation, l'interface `sparkbr0` survit dans
+le noyau et empêche la recréation du réseau géré. La supprimer d'abord :
+`ip link delete sparkbr0`.
 
 ## 2. Prérequis humains
 
 L'accès SSH est obtenu : ce prérequis est levé.
 
 1. **Trancher la disposition du stockage** (unité SPK-28). Voir OP-01 : c'est la
-   seule décision qui bloque toute la suite.
+   seule décision qui bloque encore l'exploitation réelle.
 
 2. Confirmer que le serveur est bien dédié à cet usage et qu'aucune donnée
    existante ne doit y être préservée. La création du pool est destructive pour les

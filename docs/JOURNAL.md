@@ -363,3 +363,123 @@ du responsable, les applications hébergées étant petites et liées statiqueme
 persisté dans `/etc/modprobe.d/zfs.conf`. Reste à vérifier en charge que l'ARC
 demeure sous ce plafond, et que la valeur est bien soustraite via
 `host.memory_reserve_bytes`.
+
+
+---
+
+## 2026-08-18 — Nesting Docker : un défaut amont, et une leçon sur la montée de version
+
+### Le défaut
+
+Avec Incus 6.0.0, la version des dépôts Ubuntu 24.04, **aucun** conteneur Docker ne
+démarre dans un Spark :
+
+```
+open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
+```
+
+Isolement de la cause, par élimination :
+
+- le sysctl est **écrivable directement** dans le Spark (`echo 0 > …` réussit), donc
+  ce n'est pas une restriction de montage ni de capacité ;
+- l'échec touche **tout** conteneur — `nginx:alpine`, `traefik/whoami` — avec ou sans
+  publication de port, donc ce n'est pas lié aux ports privilégiés ;
+- `--security-opt apparmor=unconfined` **côté Docker** ne change rien, donc le profil
+  fautif n'est pas `docker-default` ;
+- `lxc.mount.auto=proc:rw sys:rw` ne change rien non plus ;
+- rendre le **Spark** `unconfined` fait disparaître cette erreur — la cause est donc
+  le profil AppArmor externe, celui qu'Incus applique au Spark.
+
+Cause amont, confirmée par le suivi du projet : depuis le correctif de
+CVE-2025-52881, `runc` ≥ 1.3 accède à ses sysctls via un montage procfs détaché, et
+AppArmor interprète cet accès à `/proc/sys/...` comme un accès à `/sys/...` et le
+refuse. Le défaut est connu, il touche Docker sous LXC/LXD/Incus, et le correctif
+est annoncé dans Incus 6.19.
+
+Rendre les Sparks `unconfined` serait un contournement : cela retirerait une couche
+de défense qui fait partie du modèle d'isolation. Ce n'est pas la réponse retenue.
+
+### La leçon opérationnelle, apprise dans l'incident
+
+Incus a été porté de 6.0.0 à **7.3** depuis le dépôt amont, **alors qu'un Spark
+tournait**. Résultat :
+
+- le Spark est resté « RUNNING » mais `incus exec` a cessé de fonctionner —
+  `Failed to retrieve PID of executing child process` ;
+- ses `lxc.hook.stop` et `lxc.hook.post-stop` sortaient en 127, les chemins de
+  l'ancienne version n'existant plus ;
+- `incus stop --force` puis `incus delete --force` restaient bloqués, et l'arrêt du
+  démon lui-même s'est figé en `deactivating`, la procédure d'arrêt attendant une
+  instance qu'elle ne savait plus piloter.
+
+Il a fallu tuer le démon, démonter les résidus sous `/var/lib/incus`, effacer l'état
+et réinitialiser. Le pool ZFS et le bridge ont été recréés ; l'interface `sparkbr0`
+avait survécu dans le noyau et empêchait la recréation du réseau tant qu'elle
+n'était pas supprimée à la main.
+
+**Conséquence pour le contrat de déploiement** : la version cible d'Incus s'installe
+**avant** la création du moindre Spark. Une montée de version majeure ne se fait pas
+sous des instances en marche ; elles s'arrêtent d'abord. Cette règle rejoint
+`docs/PROD_MIGRATIONS.md`.
+
+Détail à ne pas redécouvrir : une instance conserve le profil AppArmor produit **au
+moment de son démarrage**. Redémarrer le démon ne le régénère pas — il faut arrêter
+puis redémarrer l'instance.
+
+
+---
+
+## 2026-08-18 — Nesting Docker prouvé : le contrat central de l'architecture tient
+
+### Résolution
+
+Après remise à zéro de l'état d'Incus et recréation du Spark **sous 7.3**, le nesting
+fonctionne, sans aucune concession sur l'isolation :
+
+```
+Incus                     7.3
+Spark                     non privilégié
+security.idmap.isolated   true        uid_map : 0 1065536 65536
+AppArmor                  ACTIF       raw.lxc vide, aucun contournement
+docker                    29.7.2      compose v5.5.0
+docker compose up -d      Container demo-web-1 Started
+docker ps                 nginx:alpine  Up  0.0.0.0:8080->80/tcp
+curl depuis le Spark      HTTP 200
+curl depuis l'HÔTE        HTTP 200    sur 10.77.0.38:8080
+Storage Driver            overlayfs   Cgroup Version 2
+```
+
+Ce résultat est la **preuve du concept même du produit** : une pile Compose
+ordinaire, non modifiée, tourne dans une cellule contingentée et cloisonnée, et se
+laisse joindre depuis l'hôte sur son IP privée — c'est-à-dire exactement le point de
+raccordement dont Caddy a besoin. La chaîne
+`domaine → Spark → port` est donc réalisable telle que spécifiée.
+
+SPK-31 passe à `[x]`. La version minimale d'Incus devient une contrainte de
+déploiement : ≥ 6.19 selon l'annonce amont, 7.3 mesurée fonctionnelle, 6.0.0 mesurée
+cassée.
+
+### Ce que l'incident de montée de version a coûté, et ce qu'il apprend
+
+Deux règles d'ordre en sont sorties, portées au contrat de déploiement :
+
+1. la version cible d'Incus s'installe **avant** la création du moindre Spark ;
+2. un Spark conserve le profil AppArmor produit **à son démarrage** — après une
+   montée de version, il faut l'arrêter puis le redémarrer, redémarrer le démon ne
+   suffit pas.
+
+Un troisième détail : après réinitialisation, l'interface `sparkbr0` survit dans le
+noyau et bloque la recréation du réseau géré tant qu'elle n'est pas supprimée à la
+main.
+
+### Deux faux problèmes, écartés
+
+Pour mémoire, afin qu'ils ne soient pas reconsignés comme des défauts du produit :
+
+- les paquets Docker sont restés en état `iU` — dépaquetés, non configurés — parce
+  qu'un `apt-get` concurrent tenait le verrou `dpkg` dans le Spark. Le groupe
+  `docker` n'était donc pas créé et `docker.socket` échouait sur
+  `Failed to resolve group docker`. `dpkg --configure -a`, après libération du
+  verrou, suffit. C'est un artefact du harnais de test, pas un fait sur Incus ;
+- `incus init` **lit son YAML sur l'entrée standard** : dans un script acheminé par
+  `ssh … bash -s`, il avale le script. Tout appel doit rediriger son entrée.

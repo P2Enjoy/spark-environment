@@ -41,6 +41,16 @@
   devenu vide n'est pas conservé dans le dépôt.
 - Mentions de blocage de l'accès au serveur cible : l'accès est obtenu.
 
+### Vérifié sur matériel réel
+
+- Une pile Docker Compose réelle tourne dans un Spark non privilégié, à plages
+  UID/GID disjointes, sous AppArmor actif et sans contournement, et répond en
+  `HTTP 200` à l'hôte sur son IP privée. C'est la faisabilité du produit lui-même.
+- Quota disque, plafond réseau `htb`, limites mémoire, cloisonnement des UID/GID,
+  reconfiguration du cpuset à chaud sans redémarrage, topologie SMT.
+- Incus **≥ 6.19** devient une contrainte de déploiement : la version des dépôts
+  Ubuntu (6.0.0) ne permet de démarrer aucun conteneur Docker dans un Spark.
+
 ## [Publié]
 
 _Rien à publier pour le moment._

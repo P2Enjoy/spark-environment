@@ -101,18 +101,33 @@ pas, puisque le profil fautif est celui du Spark et non celui de Docker. Rendre 
 Spark `unconfined` fonctionnerait, mais retirerait une couche de défense qui fait
 partie du modèle d'isolation : ce n'est pas la réponse.
 
-La correction est en amont : le projet Incus annonce le correctif dans la
-version 6.19, ce qui impose de prendre le paquet dans le dépôt amont et non dans
-les dépôts Ubuntu.
+La correction est en amont, et le paquet doit donc venir du dépôt amont et non des
+dépôts Ubuntu. Le projet annonce le correctif en 6.19 ; **la version mesurée comme
+fonctionnelle sur cet hôte est 7.3**.
 
-**Attention, ce point n'est PAS encore prouvé sur l'hôte.** Incus a été porté de
-6.0.0 à **7.3** depuis le dépôt amont, et le même échec a été observé ensuite. Une
-explication plausible est que le profil AppArmor d'un Spark est produit à son
-démarrage : le Spark tournait encore avec le profil généré par 6.0.0, le
-redémarrage du démon ne redémarrant pas les instances. La vérification par arrêt
-complet puis redémarrage du Spark est en cours (unité SPK-31). Tant qu'elle n'a pas
-abouti, **le nesting Docker doit être considéré comme non fonctionnel**, et c'est un
-risque majeur pour le produit puisqu'il en conditionne l'objet même.
+**Vérifié le 2026-08-18, et c'est la preuve du concept même du produit.** Sous Incus
+7.3, dans un Spark **non privilégié**, à `security.idmap.isolated=true`, **AppArmor
+actif** et sans aucun `raw.lxc` de contournement :
+
+```
+uid_map du Spark          0  1065536  65536
+docker --version          29.7.2
+docker compose version    v5.5.0
+docker compose up -d      Container demo-web-1 Started
+docker ps                 nginx:alpine  Up  0.0.0.0:8080->80/tcp
+curl depuis le Spark      HTTP 200
+curl depuis l'HÔTE        HTTP 200   sur 10.77.0.38:8080
+Storage Driver            overlayfs      Cgroup Version 2
+```
+
+Une pile Compose réelle tourne donc dans une cellule contingentée et cloisonnée, et
+répond à l'hôte sur son IP privée — exactement le point de raccordement dont Caddy a
+besoin (§9). Le contrat central de l'architecture est établi par la mesure, pas par
+le raisonnement.
+
+Attention : **un Spark conserve le profil AppArmor produit au moment de son
+démarrage.** Redémarrer le démon ne le régénère pas. Une montée de version d'Incus
+n'a donc d'effet sur un Spark qu'après arrêt puis redémarrage de celui-ci.
 
 Le mode `vm` n'est pas une fonctionnalité future décorative : il est la réponse
 prévue au jour où des piles non maîtrisées seront hébergées, puisqu'un *system
@@ -748,11 +763,15 @@ Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
 10. **Le quota bloque le plan de contrôle.** Un Spark qui remplit son quota empêche
     Incus d'écrire son `backup.yaml`, donc toute reconfiguration. §8.7, unité SPK-30.
 
+### Confirmées, suite
+
+11. **Nesting Docker complet** — pile Compose réelle dans un Spark non privilégié à
+    idmap isolé, AppArmor actif, sans contournement ; `HTTP 200` depuis l'hôte sur
+    l'IP privée. Docker retient `overlayfs` au-dessus du rootfs ZFS. Exige
+    Incus ≥ 6.19 ; mesuré fonctionnel en 7.3, et **cassé en 6.0.0**. §3.1.
+
 ### Restant à vérifier
 
-11. **Nesting Docker complet** dans un conteneur non privilégié avec
-    `security.idmap.isolated=true`, y compris le pilote de stockage retenu par
-    Docker au-dessus d'un rootfs ZFS.
 12. **`zfs_arc_max`** — plafonné à 16 Gio sur décision du responsable et persisté
     dans `/etc/modprobe.d/zfs.conf`. Reste à vérifier que la consommation réelle
     de l'ARC demeure sous ce plafond en charge, et que la valeur est bien
