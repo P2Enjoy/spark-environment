@@ -105,14 +105,20 @@ reconfiguration du cpuset de tous les Sparks partagés.
     `2019`, `80` et `443`. La surface réseau du serveur est celle qu'annonce le
     DAT §5.
 
-### [ ] SPK-08 · Pilote Incus : traduction du manifeste Spark
+### [x] SPK-08 · Pilote Incus : traduction du manifeste Spark
 
 Traduction des quatre modes CPU, mémoire, réseau, stockage, nesting, idmap
 isolé.
 
-- Spécification : `docs/DAT.md` §7
-- DoD : tests unitaires de traduction sur pilote factice + application réelle
-  vérifiée par `incus config show`.
+- Spécification : `docs/DAT.md` §7.2, §7.2 bis, §7.2 ter, §7.5, §7.6
+- **Clos le 2026-08-18.** 31 tests de traduction, et application réelle vérifiée
+  sur l'hôte : `incus config show` rend exactement la configuration produite, et
+  le noyau applique `cpu.weight=120` — soit `125 − 10 + 5`, la loi mesurée —,
+  `cpu.max=max` (burst réel), `memory.max=2 Gio`, une classe `htb`
+  `rate 100Mbit ceil 100Mbit`, un quota disque de 10 Gio effectif, et un idmap
+  `1131072` disjoint de celui du Spark voisin.
+- Reste hors de cette unité : le choix des cœurs dédiés (SPK-06) et la création
+  effective par l'API (SPK-09). Le traducteur ne parle à personne, il transforme.
 
 ### [ ] SPK-09 · Cycle de vie : create, start, stop, restart, delete
 

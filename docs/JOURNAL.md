@@ -670,3 +670,51 @@ spécification est écrite et mesurée (DAT §7.2, §7.2 bis, §7.7), le client 
 et le registre existent, et la loi `cpu.weight = pct − 10 + priorité` est établie.
 C'est l'unité qui rend un Spark réellement créable. SPK-29 et SPK-28 restent
 ouvertes.
+
+
+---
+
+## 2026-08-18 — SPK-08 close : le manifeste Spark se traduit, et la traduction tient
+
+**Unité** : SPK-08, désignée par l'entrée précédente. Spécification complétée
+après mesure — DAT §7.2 ter — puis committée avant la première ligne de code.
+
+**Ce que la mesure a imposé.** Incus refuse ce qui n'est pas entier :
+`limits.cpu.allowance = 62.5%` échoue sur `strconv.Atoi`, `0.5ms/100ms` est
+rejeté, et `1%` fait échouer la pose du cgroup. Les bornes `0..10` de la priorité
+sont confirmées. D'où un plancher `allowance_pct ≥ 11 − priorité`, soit 6 % à la
+priorité par défaut.
+
+Le principe retenu, et appliqué partout dans le traducteur : **quand une valeur
+ne peut pas être rendue fidèlement, on refuse au lieu d'approximer**. Arrondir
+une réservation trop petite vers le haut donnerait au Spark davantage que ce qui
+lui a été comptabilisé, et l'invariant du §7.3 cesserait d'être vrai.
+
+**Livré.** `translate.py` transforme le vocabulaire du produit en celui d'Incus :
+quatre modes CPU, mémoire, réseau, stockage, `security.nesting` et
+`security.idmap.isolated` toujours posés, `security.privileged` jamais. Le module
+ne parle à personne — c'est ce qui le rend éprouvable sans hôte.
+
+**Le défaut que seule l'application réelle pouvait trouver.**
+`limits.disk.priority` est une option **d'instance**, pas de périphérique. Posée
+sur le disque, Incus rejette `Invalid device option` — et comme l'override d'un
+périphérique est **atomique**, le quota `size` du même appel ne s'appliquait pas
+non plus. Le Spark repartait avec le pool entier, 193 Gio au lieu de 10, sans que
+rien ne le signale. Aucun test sur pilote factice ne pouvait le voir : c'est
+précisément la raison d'être de la seconde moitié de la Definition of Done.
+
+**Vérifié sur l'hôte.** `incus config show` rend exactement la configuration
+produite. Le noyau applique `cpu.weight = 120`, soit `125 − 10 + 5` — la loi
+mesurée se vérifie de bout en bout, du manifeste au cgroup. `cpu.max = max`, donc
+le burst est réel. Le locataire voit 2 Gio de RAM et 10 Gio de disque, et l'idmap
+du Spark (`1131072`) est disjoint de celui de son voisin (`1065536`) : le
+cloisonnement des UID est visible, pas seulement déclaré.
+
+135 tests verts, campagne complète verte.
+
+**Où reprendre.** **SPK-09**, cycle de vie : create, start, stop, restart,
+delete. Tout ce dont elle a besoin existe — registre, admission control,
+inventaire, traducteur. C'est l'unité qui relie enfin ces pièces en un geste
+utilisateur : créer un Spark. Elle appellera l'admission control avant d'écrire,
+ce qui lèvera la réserve de SPK-05. SPK-06 (choix des cœurs dédiés), SPK-29 et
+SPK-28 restent ouvertes.

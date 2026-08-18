@@ -60,12 +60,17 @@
 - Inventaire de l'hôte : client de l'API Incus sur socket Unix, `POST
   /v1/host/sync` et `GET /v1/host`. Relevé tracé dans le journal d'audit.
 
+- Traducteur du manifeste Spark vers la configuration Incus : quatre modes CPU,
+  mémoire, réseau, stockage, nesting et idmap isolé. Refuse plutôt qu'approxime
+  lorsqu'une valeur ne peut pas être rendue fidèlement.
+
 ### Modifié
 
 - `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
 - `docs/SCHEMA.md` : nouveau §12, mécanique des migrations.
 - `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi ;
-  nouveaux §5.1 à §5.3, accès à Incus et relevé de l'inventaire.
+  nouveaux §5.1 à §5.3, accès à Incus et relevé de l'inventaire ; nouveau
+  §7.2 ter, rendu exact des valeurs CPU.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel
