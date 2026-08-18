@@ -774,3 +774,52 @@ rien ne garantit qu'ils la retrouvent au redémarrage, et le registre ne la
 stocke pas encore : `ipv4_address` reste NULL. C'est le préalable de l'ingress
 (SPK-12), qui a besoin d'une adresse stable pour pointer dessus. SPK-06, SPK-29
 et SPK-28 restent ouvertes.
+
+
+---
+
+## 2026-08-19 — SPK-10 close : adresse stable et plafond réseau mesuré
+
+**Unité** : SPK-10. Son entrée de backlog ne citait aucune spécification et la
+politique d'adressage n'était écrite nulle part. Le DAT §15 a été écrit **après
+mesure sur l'hôte**, puis committé avant la première ligne de code.
+
+**Ce que la mesure a établi.** Incus accepte `ipv4.address` sur le périphérique
+NIC, inscrit une entrée statique dans son dnsmasq, conserve l'adresse au
+redémarrage, et **refuse lui-même un doublon**. `ipv4.dhcp.ranges` restreint la
+distribution dynamique : une instance non épinglée reçoit alors `10.77.0.247`,
+tandis qu'un Spark épinglé sur `10.77.0.50` — hors plage — garde la sienne.
+
+**Décision.** Le registre attribue, Incus applique. L'ingress a besoin de
+l'adresse **avant** que l'instance existe — une route se déclare sur un Spark
+encore arrêté —, et laisser Incus attribuer ferait découvrir une collision au
+moment de l'application, alors que la ligne est déjà écrite et la capacité
+comptabilisée. La vérification d'unicité d'Incus reste une seconde ligne de
+défense, pas la première.
+
+L'attribution est **déterministe** : la plus petite adresse libre. Ce n'est pas
+une commodité, c'est ce qui la rend prévisible et donc vérifiable — recréer un
+Spark dans un parc inchangé rend la même adresse, et les notes de l'exploitant
+restent vraies. L'épuisement est refusé en le nommant, jamais contourné en
+débordant : déborder recouvrirait la passerelle ou le DHCP, et la panne se
+manifesterait très loin de sa cause.
+
+**Les deux moitiés de la DoD, prouvées sur l'hôte.** `10.77.0.16` attribuée avant
+toute instance, conservée à travers un redémarrage du Spark et un `incus restart`
+direct. Et le plafond réseau **mesuré par transfert réel** — iperf3, 10 s :
+95,6 Mbit/s sous un plafond de 100 Mbit/s, puis 478 Mbit/s après relèvement à
+500 Mbit/s. Le plafond mord et s'ajuste à chaud.
+
+**Une mesure écartée parce qu'elle ne prouvait rien.** Le premier essai de débit,
+avec `nc`, a rendu « 20 Mio en 0,0 s, soit 23 616 Mbit/s ». Ce n'est pas un
+résultat, c'est un transfert qui n'a pas eu lieu. Rejoué avec iperf3. À retenir :
+un chiffre absurde est plus honnête qu'un chiffre plausible et faux — encore
+faut-il le regarder.
+
+**Vérifié.** 252 tests verts, campagne complète verte.
+
+**Où reprendre.** **SPK-12**, ingress Caddy — elle a maintenant ce qui lui
+manquait : une adresse privée stable à laquelle adosser une route
+`domaine → spark → port`. Caddy n'est pas encore installé sur l'hôte. **SPK-11**
+(clés SSH) est l'autre suite naturelle et ne dépend de rien de bloqué. SPK-06,
+SPK-29 et SPK-28 restent ouvertes.

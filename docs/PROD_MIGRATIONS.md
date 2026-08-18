@@ -127,6 +127,22 @@ Risques       : md1 était en resynchronisation au relevé (~8 h). Toute opérat
                 disque menée pendant cette fenêtre est plus lente et plus risquée.
 ```
 
+### OP-02 · Restreindre la plage DHCP dynamique du bridge privé
+
+```
+Objectif      : rendre la plage DHCP disjointe de celle qu'attribue le registre,
+                pour que dnsmasq ne distribue jamais une adresse déjà promise.
+Dépend de     : le bridge sparkbr0 existant
+Commande      : incus network set sparkbr0 ipv4.dhcp.ranges=10.77.0.240-10.77.0.254
+Vérification  : une instance NON gérée par Spark obtient une adresse ≥ .240 ;
+                un Spark épinglé sous .240 conserve la sienne.
+Retour arrière: incus network unset sparkbr0 ipv4.dhcp.ranges
+Risques       : sans cette restriction, une instance non gérée peut recevoir une
+                adresse que le registre a déjà attribuée à un Spark. La collision
+                se manifeste alors comme une panne réseau intermittente, très loin
+                de sa cause.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.

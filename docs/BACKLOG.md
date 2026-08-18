@@ -133,10 +133,18 @@ isolé.
   quatre états transitoires au démarrage, et le refus d'admission de bout en
   bout.
 
-### [ ] SPK-10 · Réseau privé et adressage stable
+### [x] SPK-10 · Réseau privé et adressage stable
 
-- DoD : IP stable au redémarrage, `limits.max` appliqué et mesuré par un
-  transfert réel.
+- Spécification : `docs/DAT.md` §15
+- **Clos le 2026-08-19, les deux moitiés de la DoD prouvées sur l'hôte.**
+  - **Adresse stable** : `10.77.0.16` attribuée par le registre *avant* toute
+    instance Incus, conservée à travers un redémarrage du Spark **et** un
+    `incus restart` direct.
+  - **Plafond réseau mesuré par transfert réel** (iperf3, 10 s) : **95,6 Mbit/s**
+    sous un plafond de 100 Mbit/s, puis **478 Mbit/s** après relèvement à
+    500 Mbit/s. Le plafond mord, et il s'ajuste à chaud.
+- La plage DHCP dynamique est restreinte à `10.77.0.240-254`, disjointe de celle
+  du registre — opération de déploiement, voir `docs/PROD_MIGRATIONS.md`.
 
 ### [ ] SPK-11 · Clés SSH et injection cloud-init
 
