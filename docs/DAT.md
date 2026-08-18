@@ -529,6 +529,59 @@ Effet de bord à connaître : `nproc` change sous les pieds des processus déjà
 lancés. Une application qui a dimensionné son pool de threads au démarrage ne le
 réajustera pas.
 
+### 7.4 bis Ce que « reconfigurer les Sparks partagés » veut dire exactement
+
+Le §7.4 dit de reconfigurer le cpuset de tous les Sparks partagés. Ce n'est que
+la moitié du travail, et c'est l'autre moitié qui compte.
+
+**Le poids dépend de la capacité du pool.** Le §7.2 bis pose
+`allowance_pct = réservation / capacité(pool partagé) × 1000`. Retirer des cœurs
+change la capacité, donc **change le pourcentage de chaque Spark partagé**. Ne
+reconfigurer que le cpuset laisserait à chacun un poids calculé pour un pool qui
+n'existe plus : une réservation de 0,5 CPU sur un pool passé de 4 à 2 cœurs
+vaudrait toujours 125 % au lieu de 250 %, soit la moitié de ce qui a été vendu.
+
+Une découpe recalcule donc, pour chaque Spark partagé, **`limits.cpu` et
+`limits.cpu.allowance`**.
+
+Bonne nouvelle au passage : rétrécir le pool ne peut pas faire passer un Spark
+sous le plancher du §7.2 ter, puisque le pourcentage **augmente** quand la
+capacité diminue. C'est l'élargissement qui pourrait poser problème, et il ne
+survient qu'à la restitution, où les réservations tenaient déjà.
+
+### 7.4 ter Choix des cœurs, et ordre des opérations
+
+**Quels cœurs.** Les cœurs physiques libres de plus petit indice, frères SMT
+compris. Le déterminisme sert la même chose qu'en §15.3 : une découpe reproduite
+sur un parc identique donne le même résultat, donc se vérifie.
+
+Sur un hôte à plusieurs nœuds NUMA, ce choix devrait préférer des cœurs d'un même
+nœud. L'hôte de validation n'en a qu'un ; la règle est notée comme dette plutôt
+qu'implémentée sans pouvoir être éprouvée.
+
+**Dans quel ordre.** L'ordre n'est pas indifférent :
+
+```
+DÉCOUPE                              RESTITUTION
+1. rétrécir le cpuset partagé        1. libérer le Spark dédié
+2. recalculer les poids partagés     2. élargir le cpuset partagé
+3. épingler le Spark dédié           3. recalculer les poids partagés
+```
+
+Rétrécir avant d'épingler évite que le Spark dédié et les Sparks partagés se
+partagent brièvement les mêmes cœurs — ce qui serait exactement ce que
+« dédié » promet d'éviter. À la restitution, libérer avant d'élargir évite le
+symétrique.
+
+**Atomicité.** Le registre écrit l'ensemble de la redistribution dans une seule
+transaction. Une découpe à moitié appliquée laisserait des Sparks avec un poids
+calculé pour une capacité et un cpuset correspondant à une autre — un état que
+rien ne permettrait de distinguer d'un fonctionnement normal.
+
+L'application vers Incus, elle, n'est pas atomique : elle est faite Spark par
+Spark. Si elle échoue en cours de route, le registre reste la référence et une
+réconciliation la rejoue. C'est pourquoi le registre s'écrit d'abord (§14.2).
+
 ### 7.5 SMT : un cœur dédié n'est pas un CPU logique
 
 Si le processeur expose du SMT, attribuer le seul CPU `3` ne donne pas l'exclusivité
