@@ -10,6 +10,8 @@ import sys
 
 from .app import create_app
 from .config import ConfigError, load
+from .db import connect
+from .migrations import MigrationError, upgrade
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,10 +21,29 @@ def main(argv: list[str] | None = None) -> int:
         print(f"sparkd : configuration refusee — {error}", file=sys.stderr)
         return 2
 
+    # Le registre est migre avant que le service n'ouvre son port : servir sur
+    # un schema en retard produirait des erreurs plus loin, moins lisibles.
+    try:
+        connection = connect(config.database)
+        appliquees = upgrade(connection)
+        connection.close()
+        if appliquees:
+            versions = ", ".join(f"{v:03d}" for v in appliquees)
+            print(f"sparkd : migrations appliquees — {versions}")
+    except MigrationError as error:
+        print(f"sparkd : registre refuse — {error}", file=sys.stderr)
+        return 3
+
+    try:
+        application = create_app(config)
+    except MigrationError as error:
+        print(f"sparkd : registre refuse — {error}", file=sys.stderr)
+        return 3
+
     import uvicorn
 
     uvicorn.run(
-        create_app(config),
+        application,
         host=config.host,
         port=config.port,
         log_level=config.log_level,

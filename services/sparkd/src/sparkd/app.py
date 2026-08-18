@@ -18,6 +18,26 @@ from fastapi import FastAPI
 
 from . import __version__
 from .config import Config
+from .db import connect
+from .migrations import applied, verify
+
+
+def open_registry(config: Config):
+    """Ouvre le registre après avoir vérifié qu'il correspond au code.
+
+    `docs/SCHEMA.md` §12.4 : sparkd refuse de servir une base dont le schéma
+    réel n'est plus celui que le code croit. La vérification a lieu ici, avant
+    que la moindre requête ne soit acceptée — plus tard, l'erreur serait
+    découverte au milieu d'une opération et bien plus difficile à rattacher à sa
+    cause.
+    """
+    connection = connect(config.database)
+    try:
+        verify(connection)
+    except Exception:
+        connection.close()
+        raise
+    return connection
 
 
 def create_app(config: Config) -> FastAPI:
@@ -30,6 +50,8 @@ def create_app(config: Config) -> FastAPI:
         ),
     )
     app.state.config = config
+    app.state.registry = open_registry(config)
+    app.state.schema_versions = sorted(applied(app.state.registry))
 
     @app.get("/healthz", tags=["etat"])
     def healthz() -> dict[str, str]:
@@ -44,15 +66,17 @@ def create_app(config: Config) -> FastAPI:
         dependances sont declarees « inconnues » plutot que « pretes ». Annoncer
         une disponibilite non verifiee serait un succes simule (CLAUDE.md §18).
         """
+        versions = app.state.schema_versions
         return {
             "status": "degraded",
             "driver": config.driver,
             "dependencies": {
                 "incus": "unknown",
-                "registry": "unknown",
+                "registry": "ready" if versions else "empty",
                 "caddy": "unknown",
             },
-            "detail": "Pilotes non implementes : unites SPK-07 et SPK-08.",
+            "schema_version": versions[-1] if versions else None,
+            "detail": "Pilotes Incus et Caddy non implementes : unites SPK-08 et SPK-12.",
         }
 
     return app
