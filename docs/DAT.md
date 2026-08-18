@@ -396,6 +396,13 @@ C'est le chemin par défaut d'`incus admin init` et il fonctionne, mais il empil
 deux systèmes de fichiers sur du disque mécanique et prive ZFS de la gestion du
 miroir. Acceptable pour valider la chaîne, pas pour exploiter.
 
+**État au 2026-08-18 : c'est cette voie qui est en place**, sur décision du
+responsable, à titre provisoire. Le pool natif en miroir reste la cible ; la dette
+est inscrite dans `docs/PROD_MIGRATIONS.md` (OP-01) et n'est pas refermée. Deux
+conséquences à ne pas perdre de vue : aucune mesure de débit disque menée sur ce
+pool ne caractérise la machine, et ZFS ne protège pas ici contre la corruption
+silencieuse puisque le miroir reste géré par `md`.
+
 ### 8.6 Disposition de partitions visée
 
 ```

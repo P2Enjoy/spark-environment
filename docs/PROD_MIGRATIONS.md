@@ -49,7 +49,9 @@ L'accès SSH est obtenu : ce prérequis est levé.
 Objectif      : disposer d'une paire de partitions dédiées (~5,2 To) pour un pool
                 ZFS en miroir, le système restant sur un RAID1 réduit (~200 Go).
 Dépend de     : décision du responsable (SPK-28)
-État          : EN ATTENTE DE DÉCISION — aucune commande ne doit être lancée avant
+État          : DÉCIDÉ le 2026-08-18 — VOIE C retenue, à titre PROVISOIRE.
+                Le pool natif reste la cible ; la voie C ne la remplace pas, elle
+                permet de valider la chaîne sans toucher au partitionnement.
 Contexte      : sda4 et sdb4 s'étendent jusqu'à la fin des disques et forment md1,
                 occupé par un ext4 monté sur /. Aucun espace non alloué.
 
@@ -64,12 +66,16 @@ Voie B — réduction en mode rescue
   Coût        : une fenêtre d'indisponibilité
   Risque      : MOYEN — destructif en cas d'erreur de calcul de taille
 
-Voie C — pool sur fichier, provisoire
+Voie C — pool sur fichier, provisoire            ← RETENUE le 2026-08-18
   Étapes      : laisser incus admin init créer un pool sur fichier dans l'ext4
   Coût        : nul
   Risque      : faible pour les données, mais empile deux systèmes de fichiers sur
                 du disque mécanique et prive ZFS de la gestion du miroir
   Usage       : valider la chaîne de bout en bout, pas exploiter
+  Conséquence : l'exploitation réelle exigera une migration vers un pool natif
+                (voie A ou B). Cette dette est ouverte et reste inscrite ici
+                jusqu'à sa résolution. Aucune mesure de débit disque conduite sur
+                ce pool ne caractérise la machine.
 
 Vérification  : lsblk montre une partition libre par disque, ou le pool sur
                 fichier est consigné avec ses conséquences

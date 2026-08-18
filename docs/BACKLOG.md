@@ -37,7 +37,7 @@ Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
 ### [ ] SPK-03 · Installation Incus, pool de stockage et bridge privé sur l'hôte
 
 - Spécification : `docs/DAT.md` §3, §5, §8.5
-- Dépend de : SPK-28
+- Dépend de : rien pour la voie provisoire ; SPK-28 pour l'exploitation réelle
 - DoD : un conteneur de test démarre, obtient une IP sur `sparkbr0`, le quota
   `size` du disque racine est vérifié par écriture réelle jusqu'au refus, et
   `zfs_arc_max` est posé puis reporté dans `host.memory_reserve_bytes`.
@@ -191,11 +191,10 @@ Les deux disques sont intégralement consommés par un unique RAID1 `ext4` mont�
 `/`. Aucun périphérique bloc n'est libre pour un pool de stockage natif.
 
 - Spécification : `docs/DAT.md` §8.2, §8.5, §8.6
-- Décision attendue du responsable : réinstallation avec partitionnement
-  personnalisé, réduction en mode rescue, ou pool sur fichier à titre provisoire.
-- DoD : une paire de partitions dédiées existe et porte le pool, ou le choix du
-  pool sur fichier est consigné avec ses conséquences ; `docs/PROD_MIGRATIONS.md`
-  mis à jour dans le même changement.
+- Décision du responsable, 2026-08-18 : **pool sur fichier, à titre provisoire**.
+  Le pool natif en miroir reste la cible ; l'unité reste donc ouverte.
+- DoD : une paire de partitions dédiées existe et porte le pool. Le pool sur
+  fichier ne clôt pas cette unité, il en diffère l'échéance.
 - Note d'exploitation : `md1` resynchronisait au moment du relevé, pour environ
   8 heures. Aucune mesure de débit disque n'a de valeur avant la fin de cette
   resynchronisation.
