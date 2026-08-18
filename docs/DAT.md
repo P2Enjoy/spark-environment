@@ -198,6 +198,67 @@ Host spark-crm
     IdentityFile ~/.ssh/spark-crm
 ```
 
+### 5.1 Accès à Incus : la socket, pas la ligne de commande
+
+`sparkd` parle à Incus par son **API REST sur la socket Unix**
+`/var/lib/incus/unix.socket`, jamais en lançant le binaire `incus`.
+
+Trois raisons, dans l'ordre d'importance : une sortie de CLI est un format
+d'affichage, qui change sans préavis et se parse mal — `incus info --resources`
+n'accepte d'ailleurs aucun `--format`, mesuré le 2026-08-18 ; lancer un processus
+par requête coûte et ouvre une surface d'injection ; et l'API rend des types,
+là où le texte rend des chaînes à réinterpréter.
+
+La socket appartient au groupe `incus-admin`. L'utilisateur système de `sparkd`
+doit y être, ce que le contrat de déploiement rappelle.
+
+### 5.2 Inventaire de l'hôte : ce qui est lu, et où
+
+Relevé le 2026-08-18 sur l'hôte, ces chemins et ces unités sont **mesurés**, pas
+supposés.
+
+| Grandeur du registre | Source | Unité rendue |
+|---|---|---|
+| `cpu_threads_total` | `/1.0/resources` → `cpu.total` | threads |
+| `cpu_cores_total` | `/1.0/resources` → somme des `cpu.sockets[].cores[]` | cœurs physiques |
+| topologie `cpu_core` / `cpu_thread` | `cpu.sockets[].cores[].threads[]` | `id`, `thread`, `numa_node`, `online` |
+| `memory_total_bytes` | `/1.0/resources` → `memory.total` | octets |
+| `network_total_bps` | `/1.0/resources` → `network.cards[].ports[].link_speed` du port **détecté** | **Mbit/s**, à convertir |
+| `storage_total_bytes` | `/1.0/storage-pools/<pool>/resources` → `space.total` | octets |
+
+Trois pièges, tous rencontrés à la mesure :
+
+- **`cpu.total` compte les threads, pas les cœurs.** Le prendre pour la capacité
+  reviendrait à vendre deux fois la même chose (§7.7). Les cœurs se comptent en
+  parcourant les sockets.
+- **`link_speed` est en Mbit/s.** L'hôte rend `1000` pour un lien 1 Gbit/s. Le
+  registre stocke des bit/s : la conversion est explicite, jamais implicite. Les
+  ports dont `link_detected` est faux sont ignorés — `eno2` n'est pas raccordé et
+  n'ajoute aucune capacité.
+- **La capacité de stockage est celle du POOL Incus, pas celle du disque.** Sur
+  l'hôte de validation, le pool sur fichier ne rend que 192,8 Gio là où le disque
+  en porte 5,4 Tio. Lire le disque ferait promettre vingt-huit fois la place
+  réellement disponible.
+
+Le pool à interroger est nommé par `SPARKD_STORAGE_POOL`.
+
+### 5.3 Le relevé est explicite, jamais implicite
+
+Le registre n'est **pas** rafraîchi à chaque requête. Le relevé de topologie est
+une opération nommée, tracée dans `audit_log`, qui écrit `host`, `cpu_core`,
+`cpu_thread` et met à jour `topology_synced_at`.
+
+Motif : la capacité de l'hôte est la base de tous les calculs d'admission. Si
+elle bougeait silencieusement sous les pieds du plan de contrôle — un lien qui
+tombe, un pool redimensionné —, des Sparks déjà admis deviendraient
+rétroactivement non admissibles sans que personne ne l'ait décidé. Un relevé
+explicite laisse une trace et une date.
+
+Un relevé qui **réduirait** la capacité sous ce qui est déjà alloué est appliqué
+malgré tout — la réalité fait foi — mais il est journalisé en `result=denied`,
+et l'écart doit rester visible dans la console. Refuser d'enregistrer la réalité
+serait pire : le registre mentirait sur la machine.
+
 ## 6. Plan d'administration
 
 ```
