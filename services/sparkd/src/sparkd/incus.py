@@ -10,7 +10,7 @@ qui change sans preavis et se parse mal — la commande n'accepte meme aucun
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
@@ -32,6 +32,14 @@ class IncusClient(Protocol):
     def storage_pool_resources(self, pool: str) -> dict[str, Any]: ...
 
     def server_info(self) -> dict[str, Any]: ...
+
+    def instances(self) -> list[dict[str, Any]]: ...
+
+    def create_instance(self, payload: dict[str, Any]) -> None: ...
+
+    def set_instance_state(self, name: str, action: str) -> None: ...
+
+    def delete_instance(self, name: str) -> None: ...
 
 
 @dataclass
@@ -60,6 +68,39 @@ class UnixSocketIncus:
             raise IncusError(f"Reponse d'Incus sans metadata pour {path}.")
         return metadata
 
+    def _request(self, method: str, path: str, body: dict[str, Any] | None) -> dict[str, Any]:
+        """Envoie une commande et ATTEND son aboutissement.
+
+        Incus rend une operation asynchrone : sans l'attendre, on conclurait au
+        succes avant que quoi que ce soit ne soit fait, et le registre
+        divergerait de la machine.
+        """
+        transport = httpx.HTTPTransport(uds=self.socket_path)
+        try:
+            with httpx.Client(transport=transport, timeout=120.0) as client:
+                response = client.request(method, f"http://incus{path}", json=body)
+                response.raise_for_status()
+                envelope = response.json()
+        except httpx.HTTPError as error:
+            raise IncusError(f"Incus a refuse {method} {path} : {error}") from error
+
+        if envelope.get("error_code"):
+            raise IncusError(f"Incus a refuse {method} {path} : {envelope.get('error')}")
+
+        if envelope.get("type") == "async":
+            operation = envelope.get("operation", "")
+            with httpx.Client(transport=transport, timeout=180.0) as client:
+                attente = client.get(f"http://incus{operation}/wait")
+                attente.raise_for_status()
+                resultat = attente.json().get("metadata") or {}
+            if resultat.get("status_code", 200) >= 400 or resultat.get("err"):
+                raise IncusError(
+                    f"Operation Incus en echec ({method} {path}) : "
+                    f"{resultat.get('err') or resultat.get('status')}"
+                )
+            return resultat
+        return envelope.get("metadata") or {}
+
     def resources(self) -> dict[str, Any]:
         return self._get("/1.0/resources")
 
@@ -68,6 +109,21 @@ class UnixSocketIncus:
 
     def server_info(self) -> dict[str, Any]:
         return self._get("/1.0")
+
+    def instances(self) -> list[dict[str, Any]]:
+        return self._get("/1.0/instances?recursion=1")
+
+    def create_instance(self, payload: dict[str, Any]) -> None:
+        self._request("POST", "/1.0/instances", payload)
+
+    def set_instance_state(self, name: str, action: str) -> None:
+        self._request(
+            "PUT", f"/1.0/instances/{name}/state",
+            {"action": action, "timeout": 60, "force": action == "stop"},
+        )
+
+    def delete_instance(self, name: str) -> None:
+        self._request("DELETE", f"/1.0/instances/{name}", None)
 
 
 @dataclass
@@ -82,6 +138,7 @@ class FakeIncus:
 
     payload: dict[str, Any] | None = None
     pool_payload: dict[str, Any] | None = None
+    created: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def resources(self) -> dict[str, Any]:
         return self.payload if self.payload is not None else _EXEMPLE_HOTE
@@ -93,6 +150,25 @@ class FakeIncus:
 
     def server_info(self) -> dict[str, Any]:
         return {"environment": {"server_name": "spark-experiment", "server_version": "7.3"}}
+
+    def instances(self) -> list[dict[str, Any]]:
+        return list(self.created.values())
+
+    def create_instance(self, payload: dict[str, Any]) -> None:
+        nom = payload["name"]
+        if nom in self.created:
+            raise IncusError(f"Instance « {nom} » deja presente.")
+        self.created[nom] = {"name": nom, "status": "Stopped", "config": payload.get("config", {})}
+
+    def set_instance_state(self, name: str, action: str) -> None:
+        if name not in self.created:
+            raise IncusError(f"Instance « {name} » absente.")
+        self.created[name]["status"] = "Running" if action == "start" else "Stopped"
+
+    def delete_instance(self, name: str) -> None:
+        if name not in self.created:
+            raise IncusError(f"Instance « {name} » absente.")
+        del self.created[name]
 
 
 # Releve reel de l'hote de validation, 2026-08-18 : Dell R320, Xeon E5-1410 v2,

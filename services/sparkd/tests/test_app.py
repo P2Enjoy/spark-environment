@@ -114,3 +114,76 @@ def test_sync_puis_host_expose_les_pools(tmp_path):
     assert corps["pools"]["network"]["capacity"] == 1_000_000_000
     # docs/DAT.md §7.3 bis : la garantie annoncee reste exacte.
     assert corps["reservation_guarantee"] == "proportional_between_sparks_only"
+
+
+# --- cycle de vie par HTTP (SPK-09) ----------------------------------------
+
+def _app(tmp_path):
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "c.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/host/sync")
+    return c
+
+
+def _spec(**champs):
+    base = {
+        "name": "crm-production", "image": "images:debian/13", "cpu_mode": "shared",
+        "cpu_reservation": 0.5, "memory_bytes": 2 * 1024**3,
+        "network_bps": 100_000_000, "storage_bytes": 10 * 1024**3,
+    }
+    base.update(champs)
+    return base
+
+
+def test_parcours_complet_par_http(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-09 — créer, appliquer, démarrer, arrêter, supprimer."""
+    c = _app(tmp_path)
+
+    cree = c.post("/v1/sparks", json=_spec())
+    assert cree.status_code == 201 and cree.json()["state"] == "pending"
+
+    assert c.post("/v1/sparks/crm-production/apply").json()["state"] == "stopped"
+    assert c.post("/v1/sparks/crm-production/start").json()["state"] == "running"
+    assert c.post("/v1/sparks/crm-production/stop").json()["state"] == "stopped"
+    assert c.post("/v1/sparks/crm-production/delete").json() == {"deleted": "crm-production"}
+    assert c.get("/v1/sparks").json()["sparks"] == []
+
+
+def test_refus_d_admission_par_http_nomme_ce_qui_manque(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-05 — le refus arrive jusqu'à l'appelant."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="gros", cpu_reservation=3.5))
+    refus = c.post("/v1/sparks", json=_spec(name="trop", cpu_reservation=1.0))
+    assert refus.status_code == 409
+    detail = refus.json()["detail"]
+    assert detail["error"] == "admission_refused"
+    assert detail["shortfalls"][0]["resource"] == "cpu"
+    assert detail["shortfalls"][0]["missing"] > 0
+
+
+def test_transition_interdite_par_http(tmp_path):
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    refus = c.post("/v1/sparks/crm-production/start")
+    assert refus.status_code == 409
+    assert "pending" in refus.json()["detail"]["message"]
+
+
+def test_commande_inconnue(tmp_path):
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    r = c.post("/v1/sparks/crm-production/exploser")
+    assert r.status_code == 404
+    assert "apply" in r.json()["detail"]["known"]
+
+
+def test_spark_inexistant(tmp_path):
+    assert _app(tmp_path).get("/v1/sparks/fantome").status_code == 404
+
+
+def test_la_capacite_reflete_les_sparks_crees(tmp_path):
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(cpu_reservation=1.5))
+    pools = c.get("/v1/host").json()["pools"]
+    assert pools["cpu"]["allocated"] == 1.5
+    assert pools["cpu"]["available"] == 2.5
