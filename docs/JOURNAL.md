@@ -874,3 +874,55 @@ la topologie et les frères SMT sont dans le registre, la reconfiguration du
 cpuset à chaud est mesurée non disruptive, et le traducteur refuse volontairement
 de choisir les cœurs en attendant cet ordonnanceur. SPK-29 et SPK-28 restent
 ouvertes.
+
+
+---
+
+## 2026-08-19 — SPK-06 close : le pool de cœurs se découpe et se rend, à chaud
+
+**Unité** : SPK-06, désignée par le journal et première `[ ]` du plan.
+
+**Ce que la spécification laissait implicite, et qui était l'essentiel.** Le §7.4
+disait de reconfigurer le cpuset des Sparks partagés. Mais le poids dépend de la
+capacité du pool : `allowance_pct = réservation / capacité × 1000`. Retirer des
+cœurs change la capacité, donc le pourcentage de chacun. Ne reconfigurer que le
+cpuset aurait laissé à chaque Spark un poids calculé pour un pool qui n'existe
+plus — une réservation de 0,5 CPU sur un pool passé de 4 à 2 cœurs aurait valu la
+moitié de ce qui a été vendu. Le §7.4 bis a été écrit et committé avant de coder.
+
+**Prouvé sur l'hôte, et c'est net.** Un Spark partagé à 0,5 CPU tourne avec
+`cpuset 0-7`, poids 120. Découpe de deux cœurs dédiés : le pool tombe à
+`CPU 2,3,6,7`, le dédié prend `0,1,4,5` — frères SMT emportés ensemble —, et le
+partagé passe à `cpuset 2-3,6-7`, poids **245**, soit `250 %`. Sa réservation
+absolue est préservée alors que le pool a été divisé par deux. Restitution :
+retour exact à l'état initial. **Aucun redémarrage** dans les deux sens :
+`uptime` 8,4 → 16,1 → 20,4 s.
+
+**Une décision d'ordre qui compte.** Rétrécir le pool partagé **avant**
+d'épingler le Spark dédié, et libérer **avant** d'élargir à la restitution. Faire
+l'inverse ferait brièvement partager les mêmes cœurs entre le dédié et les
+partagés — exactement ce que « dédié » promet d'éviter.
+
+**Un refus qui tombe plus tôt qu'attendu, et c'est mieux.** Une preuve postulait
+qu'une découpe impossible serait refusée à l'application. En pratique l'admission
+control l'attrape dès la **création** : l'exploitant est refusé avant qu'une
+ligne soit écrite, plutôt que de se retrouver plus tard avec un Spark en erreur.
+La preuve a été révisée pour vérifier ce comportement, le garde-fou de la découpe
+restant éprouvé pour le cas où le pool change entre création et application.
+
+**Détail technique à ne pas redécouvrir** : la reconfiguration d'Incus se fait en
+`PATCH`, jamais en `PUT`. Un `PUT` remplacerait la configuration entière et
+effacerait tout ce qu'on ne renvoie pas.
+
+**Dette assumée.** Le choix des cœurs ignore NUMA. L'hôte de validation n'a qu'un
+nœud : une règle qu'on ne peut pas éprouver ne s'implémente pas. Notée au
+§7.4 ter.
+
+**Vérifié.** 294 tests verts, campagne complète verte.
+
+**Où reprendre.** **SPK-11**, clés SSH et injection cloud-init — première `[ ]`
+du plan désormais, et elle ne dépend de rien de bloqué. Elle rend les Sparks
+réellement utilisables : aujourd'hui on les crée et on les démarre, mais on ne
+peut pas y entrer pour y déployer une pile Compose. Ensuite **SPK-12**, l'ingress
+Caddy, qui a maintenant l'adresse stable qu'il lui fallait. SPK-29 et SPK-28
+restent ouvertes.

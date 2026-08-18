@@ -84,15 +84,24 @@ et le refus motivé.
   « 9 CPU demandés, 3.5 disponibles (capacité 4, alloué 0.5) — il manque
   5.5 CPU », et le refus est journalisé.
 
-### [ ] SPK-06 · Allocation des cœurs dédiés et découpe dynamique du pool
+### [x] SPK-06 · Allocation des cœurs dédiés et découpe dynamique du pool
 
 Retrait de cœurs physiques entiers du pool partagé, frères SMT compris, et
-reconfiguration du cpuset de tous les Sparks partagés.
+reconfiguration du cpuset **et du poids** de tous les Sparks partagés.
 
-- Spécification : `docs/DAT.md` §7.4, §7.5
-- DoD : découpe puis restitution vérifiées sur hôte réel, sans redémarrage des
-  Sparks partagés ; si un redémarrage s'avère nécessaire, le documenter et le
-  rendre explicite dans l'interface.
+- Spécification : `docs/DAT.md` §7.4, §7.4 bis, §7.4 ter, §7.5
+- **Clos le 2026-08-19, prouvé sur l'hôte réel, sans aucun redémarrage.**
+  - Découpe de 2 cœurs : le pool passe de 4 à 2 cœurs (`CPU 2,3,6,7`), le Spark
+    dédié reçoit les cœurs 0 et 1 soit `CPU 0,1,4,5` — frères SMT emportés
+    ensemble.
+  - Le Spark partagé **suit** : `cpuset 0-7 → 2-3,6-7` et poids **120 → 245**,
+    car `0,5 / 2 × 1000 = 250 %`. Sa réservation absolue est préservée alors que
+    le pool a été divisé par deux.
+  - Restitution : retour à 4 cœurs, `cpuset 0-7`, poids 120.
+  - `uptime` du Spark partagé continu dans les deux sens — 8,4 → 16,1 → 20,4 s.
+- Dette notée : le choix des cœurs ignore la topologie NUMA. L'hôte de validation
+  n'a qu'un nœud, et une règle qu'on ne peut pas éprouver ne s'implémente pas
+  (`docs/DAT.md` §7.4 ter).
 
 ## Lot 2 — Runtime serveur
 

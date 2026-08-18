@@ -75,6 +75,10 @@
   réglable sont soustraits du pool mémoire, qui passe de 98,0 à 76,2 Gio
   réellement allouables sur l'hôte de validation.
 
+- Découpe dynamique du pool de cœurs : un Spark dédié retire des cœurs physiques
+  entiers, et les Sparks partagés voient leur cpuset **et leur poids** recalculés
+  à chaud, sans redémarrage.
+
 ### Modifié
 
 - `.gitignore` :
@@ -83,7 +87,8 @@
 - `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi ;
   nouveaux §5.1 à §5.3, accès à Incus et relevé de l'inventaire ; nouveau
   §7.2 ter, rendu exact des valeurs CPU ; nouveau §14, cycle de vie d'un Spark ;
-  nouveau §15, adressage du réseau privé ; nouveau §16, la réserve de l'hôte.
+  nouveau §15, adressage du réseau privé ; nouveau §16, la réserve de l'hôte ;
+  nouveaux §7.4 bis et §7.4 ter, redistribution lors d'une découpe.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel
