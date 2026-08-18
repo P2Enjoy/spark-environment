@@ -978,3 +978,110 @@ Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
 13. **Compression et quota** — la compression étant active, le quota porte sur les
     octets **stockés**, pas sur les octets logiques. Décision à prendre : documenter
     l'écart, ou désactiver la compression par jeu de données. §8.7.
+
+## 14. Cycle de vie d'un Spark
+
+`docs/SCHEMA.md` §4 énumère les états. Cette section fixe les **transitions**, et
+ce qui se passe quand une opération échoue au milieu — que le modèle de données
+ne pouvait pas dire.
+
+### 14.1 Les transitions autorisées
+
+```
+        (néant)
+           │ create
+           ▼
+       ┌────────┐   apply    ┌──────────┐  ok   ┌─────────┐
+       │pending │──────────▶ │ creating │──────▶│ stopped │◀──┐
+       └────────┘            └──────────┘       └─────────┘   │
+           │                       │ échec           │ start   │ ok
+           │                       ▼                 ▼         │
+           │                  ┌───────┐         ┌──────────┐   │
+           └─────────────────▶│ error │         │ starting │   │
+                     échec    └───────┘         └──────────┘   │
+                                │ │ retry            │ ok      │
+                                │ └──────────────────┼─────┐   │
+                                │                    ▼     │   │
+                                │              ┌─────────┐ │   │
+                                │              │ running │ │   │
+                                │              └─────────┘ │   │
+                                │                    │ stop│   │
+                                │                    ▼     │   │
+                                │              ┌──────────┐│   │
+                                │              │ stopping ├┘───┘
+                                │              └──────────┘
+                                ▼
+                          ┌──────────┐
+                          │ deleting │──▶ (néant)
+                          └──────────┘
+```
+
+Tout état **stable** — `pending`, `stopped`, `running`, `error` — peut aller vers
+`deleting`. Aucun état **transitoire** — `creating`, `starting`, `stopping`,
+`deleting` — n'accepte une nouvelle commande : une opération est déjà en cours, et
+en lancer une seconde produirait deux vérités concurrentes sur la même instance.
+
+Un redémarrage n'est pas un état : c'est `running → stopping → stopped →
+starting → running`. Le modéliser autrement cacherait la fenêtre pendant laquelle
+le Spark est réellement arrêté.
+
+Une transition interdite est **refusée en nommant l'état courant et les commandes
+possibles depuis là**. Un refus muet obligerait l'appelant à deviner.
+
+### 14.2 Le registre s'écrit avant Incus, jamais l'inverse
+
+L'ordre de la création est imposé, et il n'est pas symétrique :
+
+```
+1. admission control            ← refuse ici, avant toute écriture
+2. écriture de la ligne         état = pending
+3. création dans Incus          état = creating
+4. confirmation                 état = stopped
+```
+
+Motif : les deux pannes possibles n'ont pas le même coût.
+
+- Écrire d'abord, et mourir avant Incus, laisse **une ligne sans instance**. Le
+  registre surestime l'occupation : c'est visible, réconciliable, et sans danger.
+- Créer d'abord, et mourir avant d'écrire, laisse **une instance sans ligne**.
+  Elle consomme du CPU, de la RAM et du disque réels que la comptabilité ignore.
+  L'admission control admettrait alors des Sparks dans une capacité déjà prise,
+  et le refus tomberait sur un locataire innocent.
+
+Entre surestimer et sous-estimer l'occupation, on surestime toujours.
+
+L'admission control et l'écriture de la ligne se font dans **la même
+transaction**. Sans cela, deux créations concurrentes passeraient toutes deux un
+contrôle qu'aucune n'a encore invalidé.
+
+### 14.3 Reprise après échec : les états transitoires ne survivent pas au démarrage
+
+Un état transitoire décrit une opération **en cours**. Si `sparkd` s'arrête au
+milieu, plus personne ne la mène : l'état ment.
+
+Au démarrage, `sparkd` réconcilie donc chaque Spark en état transitoire avec la
+réalité d'Incus :
+
+| État trouvé | Instance dans Incus | Conclusion |
+|---|---|---|
+| `creating` | absente | retour à `pending` — la création n'a pas eu lieu |
+| `creating` | présente | passe à `stopped` — elle a abouti |
+| `starting` | arrêtée | `stopped` |
+| `starting` | démarrée | `running` |
+| `stopping` | démarrée | `running` |
+| `stopping` | arrêtée | `stopped` |
+| `deleting` | absente | la ligne est supprimée — la suppression a abouti |
+| `deleting` | présente | reste `deleting`, à reprendre |
+
+Chaque réconciliation est journalisée. Un état transitoire retrouvé au démarrage
+n'est pas une anomalie du produit : c'est la trace d'un arrêt, et il doit se lire
+comme tel.
+
+Le retour à `pending` plutôt qu'à `error` est délibéré : rien n'a été créé, la
+demande reste valide, et l'exploitant n'a pas à décider quoi que ce soit.
+
+### 14.4 Ce que la suppression rend, et quand
+
+La ressource n'est rendue **qu'à la disparition de la ligne** (§7.7). Un Spark en
+`deleting` compte donc encore. C'est ce qui empêche qu'une suppression lente
+laisse admettre un Spark dans une place pas encore libérée.
