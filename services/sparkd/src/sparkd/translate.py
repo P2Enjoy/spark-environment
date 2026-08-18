@@ -166,6 +166,11 @@ def translate(
         "limits.memory": str(manifest.memory_bytes),
         "limits.memory.enforce": manifest.memory_enforce,
         "limits.memory.swap": "true" if manifest.memory_swap else "false",
+        # `limits.disk.priority` est une option d'INSTANCE, pas de périphérique.
+        # Posée sur le disque, Incus rejette « Invalid device option » — et,
+        # l'override étant atomique, le quota `size` ne s'appliquait pas non
+        # plus : le Spark repartait avec le pool entier. Mesuré le 2026-08-18.
+        "limits.disk.priority": str(manifest.storage_io_priority),
     }
 
     if manifest.cpu_mode == "shared":
@@ -209,7 +214,6 @@ def translate(
             "type": "disk",
             "path": "/",
             "size": str(manifest.storage_bytes),
-            "limits.disk.priority": str(manifest.storage_io_priority),
         },
         "eth0": {
             "type": "nic",

@@ -558,9 +558,15 @@ network:
   burst: 500Mbit        # device NIC limits.max
 
 storage:
-  size: 10GiB           # device disque racine size
-  io_priority: 5        # limits.disk.priority
+  size: 10GiB           # device disque racine : size
+  io_priority: 5        # option d'INSTANCE : limits.disk.priority
 ```
+
+Attention au placement de `limits.disk.priority` : c'est une option
+**d'instance**, pas de périphérique. Posée sur le disque, Incus rejette
+`Invalid device option` — et comme l'override d'un périphérique est atomique, le
+quota `size` du même appel ne s'applique pas non plus. Le Spark repart alors avec
+le pool entier, sans que rien ne le signale. Mesuré le 2026-08-18.
 
 Honnêteté nécessaire sur le réseau : le noyau n'applique qu'un **plafond**
 (`limits.max`), il n'existe pas de réservation garantie de bande passante avec

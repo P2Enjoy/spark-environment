@@ -177,7 +177,18 @@ def test_reseau_est_un_plafond():
 def test_stockage():
     c = translate(manifeste(storage_bytes=40 * GIO, storage_io_priority=8), SHARED, POOL)
     assert c.devices["root"]["size"] == str(40 * GIO)
-    assert c.devices["root"]["limits.disk.priority"] == "8"
+
+
+def test_priorite_disque_est_une_option_d_instance_pas_de_peripherique():
+    """Mesure : Incus rejette « Invalid device option limits.disk.priority ».
+
+    L'override d'un peripherique etant atomique, la poser au mauvais endroit
+    faisait echouer AUSSI le quota « size » : le Spark repartait avec le pool
+    entier. C'est le genre de defaut qu'aucun test sur pilote factice ne trouve.
+    """
+    c = translate(manifeste(storage_io_priority=8), SHARED, POOL)
+    assert c.config["limits.disk.priority"] == "8"
+    assert "limits.disk.priority" not in c.devices["root"]
 
 
 def test_vm_change_le_type_d_instance():
