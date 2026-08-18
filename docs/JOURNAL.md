@@ -572,3 +572,46 @@ directement sur les tables `host`, `cpu_core` et `spark` livrées ici. Attention
 le DAT §7.3 bis établit que la réservation n'est proportionnelle qu'entre Sparks
 et pas absolue — l'admission control doit être écrit en le sachant, et SPK-29
 reste ouverte. SPK-28 reste suspendue à un arbitrage du responsable.
+
+
+---
+
+## 2026-08-18 — SPK-05 : admission control livré, mais sans appelant
+
+**Unité** : SPK-05, désignée par l'entrée précédente. Sa spécification existait
+(`docs/DAT.md` §7.3 et §7.3 bis). Deux points que le code ne pouvait pas deviner
+manquaient et ont été ajoutés en §7.7 puis committés avant la première ligne de
+code : ce que consomme chaque mode CPU, et quels états de Spark comptent.
+
+**Deux décisions qui méritent d'être retenues.**
+
+`capped` consomme son **plafond**, pas zéro. Un Spark plafonné à 0,5 CPU peut
+réellement consommer 0,5 CPU en permanence ; ne pas le provisionner reviendrait à
+distribuer une capacité déjà prise. C'est le seul mode où la grandeur comptée
+n'est pas une réservation.
+
+**Tous les états comptent**, `stopped`, `error` et `deleting` compris. Un Spark
+arrêté garde son disque, un Spark en erreur sera repris. Traiter l'un de ces
+états comme de la capacité libre ferait admettre un nouveau Spark dans une place
+qu'un simple redémarrage reprendrait — et le refus tomberait alors au pire
+moment, sur le Spark qui existait déjà.
+
+**Livré.** `admission.py` : photographie des pools (capacité, alloué,
+disponible), et décision motivée. Le refus nomme **toutes** les ressources
+fautives, avec demandé, restant, alloué et surengagement. Un Spark dédié est
+refusé s'il asphyxierait les Sparks partagés déjà admis — retirer des cœurs
+réduit le pool pour tout le monde.
+
+**Vérifié.** 84 tests verts, dont 25 dédiés à cette unité. Campagne complète
+verte.
+
+**Non vérifié, et c'est pourquoi SPK-05 reste `[~]`.** Le module n'a **aucun
+appelant** : ni HTTP, ni console. Rien ne le prouve depuis un parcours réel, et
+un admission control jamais appelé ne protège rien. L'exposition appartient à
+SPK-07, son usage à SPK-09.
+
+**Où reprendre.** **SPK-07**, `sparkd` : inventaire de l'hôte. Elle est déjà
+`[~]`, elle donne son appelant à l'admission control, et elle porte la dette
+explicite d'une preuve d'écoute conduite depuis l'extérieur du serveur. Elle a
+besoin de peupler la table `host` depuis `incus info --resources`, ce que le
+serveur de validation permet déjà. SPK-28 reste suspendue à un arbitrage.

@@ -53,10 +53,15 @@
   checksum, retour arrière et refus d'une base dérivée. `sparkd` migre le
   registre avant d'ouvrir son port.
 
+- Admission control : comptabilité des pools, invariant
+  `Σ réservations ≤ capacité × surengagement`, refus motivé nommant toutes les
+  ressources fautives. Pas encore joignable depuis un parcours réel.
+
 ### Modifié
 
 - `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
 - `docs/SCHEMA.md` : nouveau §12, mécanique des migrations.
+- `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi.
 
 ### Vérifié sur matériel réel
 

@@ -63,15 +63,20 @@ Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
   migration. Au démarrage réel : le registre se crée, le second lancement ne
   rejoue rien, et un checksum falsifié fait sortir `sparkd` en code 3.
 
-### [ ] SPK-05 · Admission control et comptabilité des pools
+### [~] SPK-05 · Admission control et comptabilité des pools
 
 L'invariant `Σ réservations ≤ capacité × surengagement`, les réserves de l'hôte,
 et le refus motivé.
 
-- Spécification : `docs/DAT.md` §7.3
-- DoD : tests unitaires sur les cas limites (pool exactement plein, dépassement
-  d'une unité, surengagement > 1, réserve hôte) ; refus renvoyé avec la ressource
-  fautive et la capacité restante.
+- Spécification : `docs/DAT.md` §7.3, §7.3 bis, §7.7
+- **Livré et prouvé en unitaire le 2026-08-18.** `admission.py` calcule les pools
+  et rend une décision motivée. 25 tests dédiés, dont les quatre cas limites de
+  la DoD, la comptabilité de chaque mode CPU, tous les états de Spark, et le
+  refus d'un Spark dédié qui asphyxierait les Sparks partagés déjà admis.
+- **Reste, et c'est pourquoi l'unité n'est pas `[x]`** : aucun appelant. Le module
+  n'est joignable ni par HTTP ni par la console, donc rien ne le prouve depuis un
+  parcours réel. L'exposition appartient à SPK-07 (inventaire de l'hôte) et son
+  usage à SPK-09 (création d'un Spark).
 
 ### [ ] SPK-06 · Allocation des cœurs dédiés et découpe dynamique du pool
 
