@@ -151,6 +151,7 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_CADDY_ADMIN` | API d'administration Caddy | URL | non | `http://127.0.0.1:2019` |
 | `SPARKD_DRIVER` | pilote d'exécution | `incus` \| `fake` | non | `incus` |
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
+| `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour l'hôte lui-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |
 
 `SPARKD_BIND` ne peut pas être positionné sur une adresse routable : `sparkd`

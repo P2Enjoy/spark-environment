@@ -223,7 +223,7 @@ supposés.
 | `cpu_threads_total` | `/1.0/resources` → `cpu.total` | threads |
 | `cpu_cores_total` | `/1.0/resources` → somme des `cpu.sockets[].cores[]` | cœurs physiques |
 | topologie `cpu_core` / `cpu_thread` | `cpu.sockets[].cores[].threads[]` | `id`, `thread`, `numa_node`, `online` |
-| `memory_total_bytes` | `/1.0/resources` → `memory.total` | octets |
+| `memory_total_bytes` | `/proc/meminfo` → `MemTotal` — **pas** `/1.0/resources` | octets |
 | `network_total_bps` | `/1.0/resources` → `network.cards[].ports[].link_speed` du port **détecté** | **Mbit/s**, à convertir |
 | `storage_total_bytes` | `/1.0/storage-pools/<pool>/resources` → `space.total` | octets |
 
@@ -240,6 +240,14 @@ Trois pièges, tous rencontrés à la mesure :
   l'hôte de validation, le pool sur fichier ne rend que 192,8 Gio là où le disque
   en porte 5,4 Tio. Lire le disque ferait promettre vingt-huit fois la place
   réellement disponible.
+
+**Cinquième piège, et il coûte cher : `memory.total` d'Incus est la RAM
+PHYSIQUE, pas celle que le noyau peut allouer.** Mesuré le 2026-08-19 : Incus
+rapporte `105 226 698 752` octets — le total des barrettes, 98,0 Gio — quand
+`/proc/meminfo` rend `MemTotal` à 94,2 Gio. Les quelque 4 Gio d'écart sont
+réservés par le micrologiciel et le noyau : aucun processus ne les obtiendra
+jamais. Promettre le total physique, c'est promettre de la mémoire qui n'existe
+pas pour les locataires. Le registre retient donc `MemTotal`.
 
 Un quatrième piège, plus discret : **`/1.0/resources` ne porte aucun nom
 d'hôte.** Sa clé `system` décrit le *matériel* — châssis, micrologiciel, carte
@@ -1154,3 +1162,45 @@ adresse.
 n'offre pas de réservation de bande passante avec cette primitive : rien ne
 garantit qu'un Spark obtienne son débit réservé quand les autres saturent le
 lien. La console doit présenter les deux différemment.
+
+
+## 16. La réserve de l'hôte
+
+Le §7.7 pose que la capacité allouable n'est jamais la capacité physique. Cette
+section dit **ce qu'on soustrait**, et pourquoi chaque terme est nécessaire.
+
+### 16.1 Trois consommateurs que le registre doit connaître
+
+```
+MemTotal (noyau)                        94,2 Gio   ← base, §5.2
+  − plafond de l'ARC ZFS                16,0 Gio
+  − marge d'exploitation de l'hôte       2,0 Gio   ← réglable
+  ─────────────────────────────────────────────
+  = mémoire réellement allouable        76,2 Gio
+```
+
+**L'ARC.** ZFS peut prendre jusqu'à son plafond à tout instant, sans prévenir et
+sans que rien ne l'en empêche. Une réserve qui l'ignore promet une mémoire que
+le noyau reprendra sous les Sparks. Mesuré le 2026-08-19 : le registre annonçait
+98,0 Gio allouables avec une réserve à zéro, alors que l'ARC était plafonné à
+16 Gio — soit un cinquième du pool promis en trop.
+
+**L'hôte lui-même.** `sparkd`, Incus, dnsmasq, `sshd`, systemd et le noyau
+consomment. Mesuré : 3,1 Gio en marche à vide. Cette part est un **réglage
+explicite** (`SPARKD_MEMORY_RESERVE`) et non une valeur devinée : elle dépend de
+ce que l'exploitant fait tourner à côté, et le produit n'a pas à le supposer.
+
+### 16.2 Lire le plafond, ne jamais le supposer
+
+Le plafond de l'ARC est lu sur `/sys/module/zfs/parameters/zfs_arc_max`, source
+autoritaire et lisible sans privilège (mesuré).
+
+S'il est **illisible** — module absent, pilote de stockage autre que ZFS — la
+réserve retombe sur la seule marge configurée, et le relevé est journalisé en
+`result=denied` avec la raison. On ne suppose **jamais** un ARC nul : c'est
+précisément l'hypothèse qui a produit le défaut ci-dessus, et la supposer en
+silence le reproduirait.
+
+Lorsque `zfs_arc_max` vaut `0`, ZFS applique son propre défaut — la moitié de la
+RAM. Le registre retient alors cette moitié, et non zéro : un plafond non posé
+n'est pas un plafond absent.
