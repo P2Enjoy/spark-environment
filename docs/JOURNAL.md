@@ -615,3 +615,58 @@ SPK-07, son usage à SPK-09.
 explicite d'une preuve d'écoute conduite depuis l'extérieur du serveur. Elle a
 besoin de peupler la table `host` depuis `incus info --resources`, ce que le
 serveur de validation permet déjà. SPK-28 reste suspendue à un arbitrage.
+
+
+---
+
+## 2026-08-18 — SPK-07 close : inventaire de l'hôte, prouvé sur la machine réelle
+
+**Unité** : SPK-07, désignée par l'entrée précédente. Spécification complétée
+avant de coder, **après mesure sur l'hôte** : DAT §5.1 à §5.3.
+
+**Livré.** `sparkd` parle à Incus par l'API REST sur la socket Unix, jamais en
+lançant le binaire. `POST /v1/host/sync` relève la topologie et la trace ;
+`GET /v1/host` expose les pools. L'admission control livré en SPK-05 a enfin un
+appelant.
+
+**Prouvé sur l'hôte réel** — `spark-experiment`, Incus 7.3 : 4 cœurs / 8 threads,
+frères `(0,4) (1,5) (2,6) (3,7)` écrits dans le registre, 105 226 698 752 octets
+de RAM, 1 Gbit/s, 207 030 845 440 octets pour le pool. Et surtout, **le scan
+depuis l'extérieur**, la dette explicite que portait cette unité : pendant que le
+service tournait et servait sur `127.0.0.1:9876`, le port est **refusé** depuis le
+poste de développement, comme `8443`, `2019`, `80` et `443`. Seul `22` est ouvert.
+
+**Quatre défauts, tous invisibles en local, tous révélés par le déploiement.**
+C'est l'enseignement de la session : une suite verte sur le poste de
+développement ne dit rien de ce qui s'installe.
+
+1. **`httpx` déclaré en dépendance de développement** alors que le client Incus
+   l'importe au runtime. Indétectable en local, où pytest l'installe de toute
+   façon.
+2. **Les migrations ne suivaient pas l'installation.** Les fichiers SQL vivaient
+   à côté du paquet ; installés, ils disparaissaient. Ils vivent désormais dans
+   `src/sparkd/schema/`, déclarés en `package-data`.
+3. **`discover` rendait une liste vide quand le dossier manquait.** C'est la
+   pire forme d'échec : `sparkd` démarrait « normalement », puis chaque requête
+   renvoyait 500 sans que rien ne désigne la cause. Un dossier absent est une
+   erreur d'installation, désormais signalée comme telle.
+4. **`/1.0/resources` ne porte aucun nom d'hôte.** Sa clé `system` décrit le
+   matériel — châssis, micrologiciel, numéros de série. Le relevé rendait
+   « inconnu ». Le nom vient de `/1.0`. Les numéros de série ne sont ni stockés
+   ni journalisés.
+
+**Deux défauts trouvés par les tests, corrigés à la cause.** Une connexion SQLite
+est liée à son thread et FastAPI sert les gestionnaires synchrones dans un pool
+de threads : la connexion partagée sur `app.state` cassait au premier appel. Le
+partage est supprimé — une connexion par requête — plutôt que rendu tolérable.
+Et `create_app` supposait des tables que seul le point d'entrée créait : la
+responsabilité était coupée en deux et l'application inutilisable seule.
+
+**Vérifié.** 103 tests verts, campagne complète verte, et les preuves sur hôte
+réel ci-dessus.
+
+**Où reprendre.** **SPK-08**, pilote Incus : traduction du manifeste Spark. Sa
+spécification est écrite et mesurée (DAT §7.2, §7.2 bis, §7.7), le client Incus
+et le registre existent, et la loi `cpu.weight = pct − 10 + priorité` est établie.
+C'est l'unité qui rend un Spark réellement créable. SPK-29 et SPK-28 restent
+ouvertes.

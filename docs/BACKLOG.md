@@ -90,20 +90,20 @@ reconfiguration du cpuset de tous les Sparks partagés.
 
 ## Lot 2 — Runtime serveur
 
-### [~] SPK-07 · `sparkd` : service HTTP local, santé, inventaire hôte
+### [x] SPK-07 · `sparkd` : service HTTP local, santé, inventaire hôte
 
-Entamé par le squelette (SPK-01) : le service démarre, `/healthz` et `/readyz`
-sont distincts, et la garde d'adresse d'écoute refuse toute adresse routable au
-démarrage — vérifié par 19 tests et à l'exécution réelle
-(`SPARKD_BIND=0.0.0.0:9876` sort en code 2 ; `ss` confirme l'écoute sur
-`127.0.0.1:9876` seulement).
-
-- Spécification : `docs/DAT.md` §5
-- Reste : l'inventaire de l'hôte, et la preuve d'écoute par un scan **depuis
-  l'extérieur de la machine cible** — celle conduite ici l'a été localement, sur
-  le poste de développement, ce qui ne prouve pas la surface réseau du serveur.
-- DoD : écoute exclusivement sur `127.0.0.1:9876`, prouvé par un scan depuis
-  l'extérieur ; `/healthz` et `/readyz` distincts ; inventaire de l'hôte exposé.
+- Spécification : `docs/DAT.md` §5, §5.1 à §5.3
+- **Clos le 2026-08-18, prouvé sur l'hôte réel.**
+  - `sparkd` déployé sur `spark-experiment`, relève la topologie via l'API REST
+    d'Incus 7.3 : 4 cœurs / 8 threads, frères `(0,4) (1,5) (2,6) (3,7)` écrits
+    dans `cpu_core`/`cpu_thread`, 105 226 698 752 octets de RAM, 1 Gbit/s,
+    207 030 845 440 octets pour le pool `spark`.
+  - `GET /v1/host` expose les pools — l'admission control a enfin un appelant —
+    et `POST /v1/host/sync` trace le relevé dans `audit_log`.
+  - **Scan depuis l'extérieur** (poste de développement → `51.158.54.202`) pendant
+    que le service tournait : `22` ouvert, **`9876` refusé**, ainsi que `8443`,
+    `2019`, `80` et `443`. La surface réseau du serveur est celle qu'annonce le
+    DAT §5.
 
 ### [ ] SPK-08 · Pilote Incus : traduction du manifeste Spark
 

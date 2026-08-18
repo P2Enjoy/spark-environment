@@ -181,6 +181,8 @@ vigilance de l'exploitant.
 - `runtime: vm` est porté par le modèle de données mais n'est pas implémenté.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique
   qu'un plafond, il n'y a pas de garantie de bande passante.
+- Le relevé de topologie est explicite : la capacité n'est pas rafraîchie à
+  chaque requête, il faut appeler `POST /v1/host/sync`.
 - L'hôte cible n'a aucun périphérique bloc libre : le pool de stockage est
   actuellement **sur fichier**, à titre provisoire, et l'exploitation réelle suppose
   un repartitionnement (DAT §8, SPK-28).

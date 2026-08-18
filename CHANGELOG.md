@@ -57,11 +57,16 @@
   `Σ réservations ≤ capacité × surengagement`, refus motivé nommant toutes les
   ressources fautives. Pas encore joignable depuis un parcours réel.
 
+- Inventaire de l'hôte : client de l'API Incus sur socket Unix, `POST
+  /v1/host/sync` et `GET /v1/host`. Relevé tracé dans le journal d'audit.
+
 ### Modifié
 
 - `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
 - `docs/SCHEMA.md` : nouveau §12, mécanique des migrations.
-- `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi.
+- `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi ;
+  nouveaux §5.1 à §5.3, accès à Incus et relevé de l'inventaire.
+- `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel
 
