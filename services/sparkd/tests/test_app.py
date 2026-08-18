@@ -222,15 +222,39 @@ def test_la_suppression_d_un_dedie_rend_les_coeurs(tmp_path):
     assert rendu["shared"]["capacity"] == 4.0 and rendu["dedicated"] == []
 
 
-def test_decoupe_impossible_refusee_sans_casser_le_spark(tmp_path):
+def test_une_decoupe_impossible_est_refusee_des_la_CREATION(tmp_path):
+    """Revise le 2026-08-19 : le refus tombe plus tot qu'anticipe, et c'est mieux.
+
+    Ce cas attendait un refus au moment de l'application. En pratique
+    l'admission control l'attrape des la creation, parce que retirer ces coeurs
+    laisserait les Sparks partages deja admis sans capacite (docs/DAT.md §7.7).
+    L'exploitant est donc refuse avant qu'une ligne soit ecrite, ce qui vaut
+    mieux que d'echouer plus tard sur un Spark en erreur. La preuve est revisee
+    pour verifier CE comportement, et le garde-fou de la decoupe reste eprouve
+    dans test_cores.py — il couvre le cas ou le pool change entre la creation et
+    l'application.
+    """
     c = _app(tmp_path)
     c.post("/v1/sparks", json=_spec(name="p", cpu_reservation=0.5))
     c.post("/v1/sparks/p/apply")
-    c.post("/v1/sparks", json=_spec(
+
+    refus = c.post("/v1/sparks", json=_spec(
         name="glouton", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=4))
-    refus = c.post("/v1/sparks/glouton/apply")
     assert refus.status_code == 409
-    assert "aucun" in refus.json()["detail"]["message"]
-    # Le pool n'a pas bouge, et le Spark reste reprenable.
+    assert refus.json()["detail"]["error"] == "admission_refused"
+
+    # Aucune ligne ecrite, aucun coeur bouge.
+    assert c.get("/v1/sparks/glouton").status_code == 404
     assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 4.0
-    assert c.get("/v1/sparks/glouton").json()["state"] == "error"
+
+
+def test_un_dedie_qui_tient_est_admis_puis_decoupe(tmp_path):
+    """La contrepartie : ce qui tient dans la capacite restante passe."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="p", cpu_reservation=0.5))
+    c.post("/v1/sparks/p/apply")
+    cree = c.post("/v1/sparks", json=_spec(
+        name="pg", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=2))
+    assert cree.status_code == 201
+    c.post("/v1/sparks/pg/apply")
+    assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 2.0
