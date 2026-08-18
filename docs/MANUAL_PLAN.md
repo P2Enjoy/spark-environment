@@ -22,10 +22,10 @@ Unités : SPK-01.
 
 ## M2 · Installer le serveur
 
-Prérequis matériels, installation d'Incus, du pool ZFS, du bridge privé, de Caddy
-et de `sparkd`. Vérifications d'installation.
+Prérequis matériels, installation d'Incus, du pool de stockage, du bridge privé, de
+Caddy et de `sparkd`. Vérifications d'installation.
 
-Unités : SPK-03, SPK-26.
+Unités : SPK-28, SPK-03, SPK-26.
 
 ## M3 · Ouvrir la console
 

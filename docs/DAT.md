@@ -1,7 +1,7 @@
 # DAT — Dossier d'architecture technique
 
 Projet : **Spark Environment**
-Statut : socle documentaire posé, implémentation non commencée
+Statut : socle documentaire posé, hôte cible relevé, implémentation non commencée
 Dernière mise à jour : 2026-08-18
 
 Ce document fait autorité sur l'architecture. Lorsqu'il diverge du code, c'est un
@@ -87,7 +87,7 @@ container* partage le noyau de l'hôte. Le modèle de données porte donc le cha
 
 Les valeurs et sémantiques ci-dessus ont été relevées dans la documentation Incus
 `main` le 2026-08-18 ; les vérifications restant à faire sur l'hôte cible sont
-listées au §12.
+listées au §13.
 
 ## 4. Ce qui est réellement écrit ici
 
@@ -97,7 +97,7 @@ Runtime serveur (services/sparkd)   ← notre code
 Registre de ressources (SQLite)     ← notre code
 ─────────────────────────────────────────────────
 Incus                               ← existant
-ZFS                                 ← existant
+Pool de stockage (voir §8)          ← existant
 Caddy                               ← existant
 OpenSSH                             ← existant
 Docker / Compose (dans le Spark)    ← existant, propriété du locataire
@@ -252,7 +252,7 @@ spark-pg  = [6,7]
 
 À la suppression, les cœurs retournent au pool et les Sparks partagés sont
 reconfigurés. `limits.cpu` est modifiable à chaud, ce qui rend l'opération non
-disruptive — **à confirmer par mesure sur l'hôte cible** (§12).
+disruptive — **à confirmer par mesure sur l'hôte cible** (§13).
 
 ### 7.5 SMT : un cœur dédié n'est pas un CPU logique
 
@@ -289,7 +289,140 @@ cette primitive. `network.reservation` est un concept de registre servant à
 l'admission control ; `network.burst` est la seule valeur réellement appliquée.
 La console doit présenter cette distinction, pas la masquer.
 
-## 8. Ingress
+## 8. Hôte cible et stockage
+
+### 8.1 Ce que la machine est réellement
+
+Relevé le 2026-08-18 sur `51.158.54.202`, Dell PowerEdge R320 :
+
+```
+CPU        Xeon E5-1410 v2 @ 2.80 GHz — 1 socket, 4 cœurs, 8 threads, SMT actif
+           frères SMT : (0,4) (1,5) (2,6) (3,7)
+           1 seul nœud NUMA — limits.cpu.nodes sans objet ici
+           VT-x présent — runtime: vm techniquement possible
+RAM        94 Gio (4 × 16 Gio DDR3-1600), aucun swap actif
+DISQUES    2 × Toshiba MG08ADA600E, 6 To, 7200 tr/min — MÉCANIQUES
+           RAID1 mdadm : md0 511 Mio → /boot, md1 5,44 Tio ext4 → /
+RÉSEAU     eno1 1 Gbit/s (up), eno2 non raccordé
+SYSTÈME    Ubuntu 24.04.3, noyau 6.8.0-88, cgroup v2
+PAQUETS    incus 6.0.0 et zfsutils-linux 2.2.2 disponibles ; btrfs-progs installé
+```
+
+Les pools réels sont plus petits que ceux imaginés dans la conversation
+d'origine : 94 Gio et non 256, 1 Gbit/s et non 3, 5,4 Tio et non 6 To. Le
+frèrage SMT observé — `(0,4)` et non `(0,1)` — **confirme par la mesure** la règle
+du §7.5 : `dedicated: 1 core` doit produire `limits.cpu=0,4`.
+
+Sur 4 cœurs physiques, un cœur dédié coûte 25 % de la machine. Le mode partagé
+n'est donc pas seulement le défaut : c'est le mode normal ici, et `dedicated`
+devient une exception à justifier.
+
+### 8.2 La contrainte : aucun périphérique bloc libre
+
+`sda4` et `sdb4` s'étendent jusqu'à la fin des disques et forment `md1`, occupé
+par un unique `ext4` monté sur `/`. Il ne reste **ni partition libre, ni espace
+non alloué**. Un pool de stockage natif exige donc un repartitionnement.
+
+### 8.3 Pourquoi un pool à copie sur écriture, et pourquoi ce n'est pas une question de sauvegarde
+
+Le pool de stockage remplit trois fonctions, dont **aucune n'est la sauvegarde** :
+
+1. **Appliquer les quotas.** C'est la promesse même du produit : « 10 Gio pris sur
+   5,4 Tio ». Sans pilote capable de quota, un seul Spark remplit le système de
+   fichiers et emporte tous les autres. Ce point n'est pas négociable.
+2. **Cloner l'image de base à coût nul.** Trente Sparks issus de Debian 13, sans
+   copie sur écriture, sont trente copies complètes de rootfs — sur des disques
+   mécaniques en RAID1, la création d'un Spark passe de quelques secondes à
+   plusieurs minutes.
+3. **Revenir en arrière sur la cellule entière.** Un instantané rend l'état complet
+   du Spark : système, images Docker, fichiers Compose, volumes, configuration.
+
+Une sauvegarde applicative vers S3 protège les **données de l'application**. Elle
+ne restaure ni le système du Spark, ni ses images, ni sa configuration. Les deux
+mécanismes ne se substituent pas : ils ne protègent pas la même chose.
+
+Ce que la sauvegarde applicative externe **rend effectivement superflu**, et qui
+sort donc du périmètre : la planification d'`incus export` comme voie principale de
+reprise, et toute ambition de réplication `send`/`receive` hors machine. L'unité
+SPK-13 s'en trouve réduite aux instantanés locaux, l'export restant une opération
+manuelle.
+
+### 8.4 Capacité des pilotes, relevée dans la documentation Incus
+
+| | dir | btrfs | LVM | ZFS |
+|---|---|---|---|---|
+| quotas de stockage | oui, **seulement** sur ext4/XFS avec quotas de projet activés | oui | oui | oui |
+| image optimisée | non | oui | oui | oui |
+| création d'instance optimisée | non | oui | oui | oui |
+| instantané optimisé | non | oui | oui | oui |
+| copie sur écriture | non | oui | oui | oui |
+| clonage instantané | non | oui | oui | oui |
+
+Le pilote `dir` est écarté : sans copie sur écriture ni clonage instantané, il
+transforme chaque création de Spark en copie intégrale de rootfs sur disque
+mécanique, et chaque instantané en copie complète.
+
+### 8.5 Décision
+
+**ZFS, en miroir natif sur une paire de partitions dédiées.** Les motifs, dans
+l'ordre :
+
+- le quota `refquota` est exact et c'est le chemin le plus éprouvé d'Incus ;
+- ZFS assure lui-même le miroir avec sommes de contrôle : sur des disques de 6 To
+  mécaniques, il détecte et **répare** une corruption silencieuse, ce que
+  `md` RAID1 ne peut pas faire — `md` ignore laquelle des deux copies est la bonne ;
+- l'ARC transforme 94 Gio de RAM en cache de lecture devant des disques à
+  7200 tr/min, ce qui est ici un gain substantiel.
+
+Deux contreparties assumées :
+
+- **Module hors arbre.** Ubuntu 24.04 le fournit et le maintient
+  (`zfsutils-linux` 2.2.2) ; le risque se limite aux mises à jour de noyau.
+- **L'ARC consomme de la RAM hors du registre.** C'est le point le plus important,
+  et il interfère directement avec la comptabilité mémoire du §7 : par défaut
+  l'ARC peut prendre jusqu'à la moitié de la RAM, que le registre croirait
+  allouable. `zfs_arc_max` est donc **posé explicitement** et sa valeur est
+  soustraite du pool via `host.memory_reserve_bytes`. Un pool mémoire qui ignore
+  l'ARC est un pool qui promet ce qu'il n'a pas.
+
+Repli documenté, si le module hors arbre est refusé : **btrfs**, en `raid1`, qui
+apporte aussi sommes de contrôle et réparation, est déjà installé et vit dans le
+noyau. Sa contrepartie est que la comptabilité des quotas repose sur les
+`qgroups`, dont le coût croît avec le nombre d'instantanés — c'est-à-dire
+précisément sur le mécanisme dont dépend la promesse de quota.
+
+Repli sans repartitionnement : pool sur **fichier** posé sur l'`ext4` existant.
+C'est le chemin par défaut d'`incus admin init` et il fonctionne, mais il empile
+deux systèmes de fichiers sur du disque mécanique et prive ZFS de la gestion du
+miroir. Acceptable pour valider la chaîne, pas pour exploiter.
+
+### 8.6 Disposition de partitions visée
+
+```
+sda1 / sdb1   537 Mo   bios_grub
+sda2 / sdb2   4,3 Go   swap            — présent, actuellement inutilisé
+sda3 / sdb3   537 Mo   md0  → /boot
+sda4 / sdb4   ~200 Go  md1  → /  ext4
+sda5 / sdb5   ~5,2 To  zpool miroir    — À CRÉER
+```
+
+Le passage de la disposition actuelle à celle-ci suppose de réduire `md1`, ce que
+`resize2fs` ne sait pas faire à chaud sur un système de fichiers racine monté. Deux
+voies, la décision appartenant au responsable :
+
+| Voie | Coût | Risque |
+|---|---|---|
+| réinstallation avec partitionnement personnalisé | reconfiguration complète de l'hôte | faible — la machine est vide, 2,7 Go utilisés |
+| réduction en mode rescue (`resize2fs` puis `mdadm --grow`) | une fenêtre d'indisponibilité | moyen — opération destructive en cas d'erreur |
+
+Sur une machine vide, la réinstallation est la voie **la moins risquée**, pas la
+plus lourde.
+
+Point d'exploitation à connaître : `md1` était en resynchronisation au moment du
+relevé, à 3,1 % pour environ 8 heures restantes. Toute mesure de débit disque
+conduite avant la fin de cette resynchronisation ne mesure pas la machine.
+
+## 9. Ingress
 
 Un unique Caddy sur l'hôte détient l'exposition publique et les certificats. Le
 contrat est délibérément minimal :
@@ -324,7 +457,7 @@ registre reste la source de vérité ; Caddy en est le reflet, et une commande d
 réconciliation doit pouvoir reconstruire intégralement la configuration Caddy
 depuis le registre.
 
-## 9. Découpage du monorepo
+## 10. Découpage du monorepo
 
 ```
 spark-environment/
@@ -346,7 +479,7 @@ Deux livrables, un contrat entre les deux, conformément à la consigne du
 responsable : « un monorepo, un avec la webui locale et un avec le runtime
 serveur ».
 
-### 9.1 Choix des langages, et leur contrepartie
+### 10.1 Choix des langages, et leur contrepartie
 
 | Paquet | Langage | Motif | Contrepartie assumée |
 |---|---|---|---|
@@ -359,7 +492,7 @@ ce runtime n'est sensible à la latence au point de le justifier. Si une mesure
 montre un jour le contraire, le contrat d'API rend le remplacement de `sparkd`
 possible sans toucher à la console.
 
-## 10. Sécurité
+## 11. Sécurité
 
 - Aucune API d'administration exposée au réseau ; le seul vecteur d'accès est SSH.
 - Les Sparks sont non privilégiés, `security.idmap.isolated=true`, afin que deux
@@ -373,7 +506,7 @@ possible sans toucher à la console.
   réellement multi-locataires, le mode `vm` est la réponse, pas un durcissement du
   mode `container`.
 
-## 11. Développement local
+## 12. Développement local
 
 Le poste de développement ne dispose ni d'Incus ni du serveur cible. La pile de
 développement doit donc rester autonome, sans service payant ni dépendance au
@@ -388,7 +521,7 @@ serveur de production :
 Un pilote factice sert à tester la traduction et l'admission control. Il ne prouve
 jamais qu'un quota est appliqué : cette preuve exige un hôte Incus réel.
 
-## 12. Vérifications dues avant toute déclaration de conformité
+## 13. Vérifications dues avant toute déclaration de conformité
 
 Ces points sont **des hypothèses documentées, pas des faits acquis**. Chacun a
 une unité de backlog et sera mesuré sur l'hôte cible :
@@ -399,10 +532,12 @@ une unité de backlog et sera mesuré sur l'hôte cible :
 2. Comportement à chaud de la reconfiguration du cpuset partagé lors de la
    découpe et de la restitution d'un pool dédié.
 3. Prise en charge effective du quota `size` sur le disque racine avec le pilote
-   de stockage retenu (ZFS attendu).
+   de stockage retenu, vérifiée par écriture réelle jusqu'au refus.
 4. Nesting Docker complet dans un conteneur non privilégié avec
    `security.idmap.isolated=true`, y compris le stockage overlay de Docker.
 5. Comportement réel de `limits.max` sur le NIC en charge, et absence de garantie
    de réservation de bande passante.
 6. Correspondance entre la topologie SMT rapportée par `incus info --resources`
-   et celle du processeur du serveur cible.
+   et le frèrage `(0,4) (1,5) (2,6) (3,7)` déjà relevé via `/sys`.
+7. Valeur retenue pour `zfs_arc_max` et vérification que la RAM effectivement
+   consommée par l'ARC reste bien à l'intérieur de `host.memory_reserve_bytes`.

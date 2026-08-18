@@ -255,6 +255,38 @@ Règles d'application :
   narration de conversation ;
 - pousser le commit immédiatement après sa création (cf. §13).
 
+La documentation suit la réalité, y compris quand la réalité s'améliore (règle non négociable du responsable)
+
+La documentation n'est pas un journal d'intentions : elle décrit l'état réel du
+projet à l'instant du commit. Un document qui a cessé d'être vrai est un défaut,
+au même titre qu'un test faux.
+
+Dès qu'un fait change, le document qui le portait est mis à jour DANS LE MÊME
+CHANGEMENT que le fait. Sans exception, et dans les deux sens :
+
+- lorsqu'une décision est remplacée, le document énonce la nouvelle décision et
+  la raison du changement ; il ne conserve pas les deux versions côte à côte ;
+- lorsqu'un élément noté « bloqué » cesse de l'être, la mention de blocage est
+  RETIRÉE, partout où elle figure, et pas seulement là où on l'a écrite en
+  premier ;
+- lorsqu'une incohérence signalée est résolue, elle est RETIRÉE du rapport
+  d'incohérences ; lorsque le rapport devient vide, le fichier lui-même est
+  supprimé du dépôt ;
+- lorsqu'une hypothèse est vérifiée, elle cesse d'être présentée comme une
+  hypothèse ; lorsqu'elle est infirmée, le document qui s'appuyait dessus est
+  corrigé, pas complété d'une note ;
+- lorsqu'une limite connue disparaît, elle sort de la liste des limites connues ;
+- lorsqu'une commande, une variable ou un chemin change, le README et le contrat
+  de déploiement changent dans le même commit.
+
+Une mention périmée coûte plus cher qu'une absence de mention : elle est lue
+comme vraie. Laisser traîner un « bloqué » levé, une incohérence déjà corrigée ou
+une décision abandonnée fait perdre un temps réel à la personne suivante, et fait
+douter de tout le reste du document.
+
+Avant de conclure un chunk, relire les documents que le changement rend faux et
+les corriger. Cette relecture fait partie de la Definition of Done (§17).
+
 README
 
 Le "README.md" doit documenter au minimum :
@@ -794,6 +826,9 @@ Une tâche n'est terminée que lorsque toutes les conditions applicables sont sa
 - le changelog a été mis à jour sous "[Non publié]" ;
 - le contrat de déploiement a été mis à jour si nécessaire ;
 - le backlog reflète le véritable état ;
+- les documents que le changement rend faux ont été relus et corrigés : mentions
+  de blocage levées retirées, incohérences résolues supprimées du rapport,
+  hypothèses vérifiées requalifiées, limites connues disparues retirées ;
 - chaque fichier et unité d'implémentation possède ses commentaires de
   traçabilité `@spec` / `@verifies` vers le backlog et les chapitres pertinents ;
 - les modifications distantes ont été récupérées ;

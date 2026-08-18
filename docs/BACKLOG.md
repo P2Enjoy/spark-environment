@@ -23,19 +23,24 @@ toute ligne de code.
   système, et le squelette du monorepo se construit.
 - Reste : squelette `apps/webui` + `services/sparkd` + `packages/contract`.
 
-### [ ] SPK-02 · Accès au serveur cible et relevé de topologie
+### [~] SPK-02 · Accès au serveur cible et relevé de topologie
 
-Obtenir l'accès SSH, relever la topologie réelle (CPU, SMT, NUMA, RAM, disque,
-lien réseau), et consigner le relevé dans `docs/JOURNAL.md`.
+Accès SSH obtenu le 2026-08-18. Topologie relevée et consignée : Dell R320,
+Xeon E5-1410 v2 (4 cœurs / 8 threads, frères SMT `(0,4) (1,5) (2,6) (3,7)`),
+94 Gio de RAM, 2 × 6 To mécaniques en RAID1 `ext4` sur `/`, lien 1 Gbit/s,
+Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
 
-- Bloqué par : autorisation de la clé publique du poste sur `ubuntu@51.158.54.202`.
-- DoD : `incus info --resources` capturé et archivé ; §12 du DAT mis à jour.
+- Spécification : `docs/DAT.md` §8.1, `docs/JOURNAL.md`
+- Reste : `incus info --resources`, qui exige Incus installé (SPK-03).
+- DoD : le relevé d'Incus concorde avec celui de `/sys`, notamment le frèrage SMT.
 
-### [ ] SPK-03 · Installation Incus + ZFS + bridge privé sur l'hôte
+### [ ] SPK-03 · Installation Incus, pool de stockage et bridge privé sur l'hôte
 
-- Spécification : `docs/DAT.md` §3, §5
-- DoD : un conteneur de test démarre, obtient une IP sur `sparkbr0`, et le quota
-  `size` du disque racine est vérifié par écriture réelle jusqu'au refus.
+- Spécification : `docs/DAT.md` §3, §5, §8.5
+- Dépend de : SPK-28
+- DoD : un conteneur de test démarre, obtient une IP sur `sparkbr0`, le quota
+  `size` du disque racine est vérifié par écriture réelle jusqu'au refus, et
+  `zfs_arc_max` est posé puis reporté dans `host.memory_reserve_bytes`.
 
 ## Lot 1 — Registre et admission control
 
@@ -103,9 +108,17 @@ isolé.
 - DoD : `domaine → spark → port` appliqué à chaud ; reconstruction complète de la
   configuration Caddy depuis le registre ; conflit de domaine refusé par la base.
 
-### [ ] SPK-13 · Snapshots, backups, restauration
+### [ ] SPK-13 · Instantanés et restauration de cellule
 
-- DoD : restauration d'un Spark après suppression, données retrouvées.
+Périmètre réduit le 2026-08-18 : les applications hébergées sauvegardent déjà leurs
+**données** vers un S3 externe. L'instantané sert donc au retour arrière de la
+**cellule entière** — système, images Docker, Compose, volumes, configuration — ce
+qu'une sauvegarde applicative ne restaure pas. L'export hors machine reste une
+opération manuelle et n'est pas planifié.
+
+- Spécification : `docs/DAT.md` §8.3
+- DoD : instantané puis restauration d'un Spark, état de la cellule retrouvé ;
+  distinction instantané / sauvegarde explicite dans l'interface.
 
 ### [ ] SPK-14 · Métriques d'usage et état temps réel
 
@@ -165,17 +178,35 @@ Afficher la capacité restante avant validation, et le refus motivé du backend.
 
 ### [ ] SPK-26 · Contrat de déploiement et procédure d'installation serveur
 
-### [ ] SPK-27 · Vérification par mesure des hypothèses du DAT §12
+### [ ] SPK-27 · Vérification par mesure des hypothèses du DAT §13
 
-Les six points listés au §12 du DAT, chacun mesuré sur l'hôte cible et consigné.
+Les sept points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné.
 
 - DoD : chaque hypothèse est soit confirmée par une mesure archivée, soit
   infirmée et le DAT corrigé en conséquence.
+
+### [ ] SPK-28 · Décision et exécution du repartitionnement du stockage
+
+Les deux disques sont intégralement consommés par un unique RAID1 `ext4` monté sur
+`/`. Aucun périphérique bloc n'est libre pour un pool de stockage natif.
+
+- Spécification : `docs/DAT.md` §8.2, §8.5, §8.6
+- Décision attendue du responsable : réinstallation avec partitionnement
+  personnalisé, réduction en mode rescue, ou pool sur fichier à titre provisoire.
+- DoD : une paire de partitions dédiées existe et porte le pool, ou le choix du
+  pool sur fichier est consigné avec ses conséquences ; `docs/PROD_MIGRATIONS.md`
+  mis à jour dans le même changement.
+- Note d'exploitation : `md1` resynchronisait au moment du relevé, pour environ
+  8 heures. Aucune mesure de débit disque n'a de valeur avant la fin de cette
+  resynchronisation.
 
 ---
 
 ## Réservé, non planifié
 
-- `runtime: vm` pour charges non maîtrisées.
+- `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc
+  techniquement ouvert.
 - Multi-serveurs.
 - Quotas d'E/S disque par Spark au-delà de la priorité.
+- Export hors machine planifié : écarté, les applications sauvegardent déjà vers un
+  S3 externe par leur propre ordonnanceur.

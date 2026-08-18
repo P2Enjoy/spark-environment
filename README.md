@@ -43,9 +43,31 @@ L'idée d'origine est conservée intégralement dans
 modèle de données et le backlog font foi ; aucune fonctionnalité n'est encore
 livrée. L'état réel de chaque unité est dans [docs/BACKLOG.md](docs/BACKLOG.md).
 
-Six hypothèses techniques restent **non vérifiées** faute d'accès à l'hôte cible ;
-elles sont listées au §12 du [DAT](docs/DAT.md) et ne doivent pas être tenues pour
-acquises.
+L'hôte cible est accessible et sa topologie est relevée (§ *Hôte cible* ci-dessous).
+Sept hypothèses techniques restent **non vérifiées** tant qu'Incus n'est pas
+installé ; elles sont listées au §13 du [DAT](docs/DAT.md) et ne doivent pas être
+tenues pour acquises.
+
+## Hôte cible
+
+Dell PowerEdge R320, relevé le 2026-08-18.
+
+| Ressource | Capacité physique | Remarque |
+|---|---|---|
+| CPU | Xeon E5-1410 v2, **4 cœurs / 8 threads**, 1 socket, 1 nœud NUMA | SMT actif, frères `(0,4) (1,5) (2,6) (3,7)` |
+| RAM | **94 Gio** (4 × 16 Gio DDR3-1600) | aucun swap actif |
+| Stockage | **5,4 Tio** utiles | 2 × 6 To Toshiba MG08 **7200 tr/min**, RAID1 mdadm |
+| Réseau | **1 Gbit/s** (`eno1`) | `eno2` non raccordé |
+| Système | Ubuntu 24.04.3, noyau 6.8, cgroup v2 | VT-x présent, donc `runtime: vm` possible |
+
+Les pools réels sont donc plus petits que ceux évoqués dans la conversation
+d'origine — 94 Gio et non 256, 1 Gbit/s et non 3. Sur 4 cœurs physiques, dédier
+un cœur coûte un quart de la machine : le mode partagé n'est pas seulement le
+défaut, c'est le mode normal sur cette machine.
+
+**Contrainte structurante :** les deux disques sont entièrement consommés par un
+unique RAID1 `ext4` monté sur `/`. Il n'existe aucun périphérique bloc libre pour
+un pool de stockage natif. Voir le §8 du [DAT](docs/DAT.md).
 
 ## Stack
 
@@ -56,7 +78,7 @@ acquises.
 | Runtime serveur | Python 3 + FastAPI | oui |
 | Registre de ressources | SQLite | oui |
 | Isolation et cycle de vie | Incus (Apache-2.0) | non |
-| Stockage | ZFS | non |
+| Stockage | pool à quotas et copie sur écriture — voir DAT §8 | non |
 | Ingress et TLS | Caddy | non |
 | Transport d'administration | OpenSSH | non |
 | Runtime applicatif | Docker + Compose, dans le Spark | non |
@@ -80,7 +102,7 @@ docs/                DAT, schéma, backlog, journal, design system, manuel
 - Node ≥ 22 et pnpm ≥ 9 (console)
 - Python ≥ 3.11 (runtime serveur)
 - Docker et Docker Compose (pile de développement)
-- côté serveur : Incus, ZFS, Caddy — voir le contrat de déploiement
+- côté serveur : Incus, un pool de stockage à quotas, Caddy — voir le contrat de déploiement
 
 ## Commandes principales
 
@@ -141,8 +163,10 @@ pas un réglage.
 - `runtime: vm` est porté par le modèle de données mais n'est pas implémenté.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique
   qu'un plafond, il n'y a pas de garantie de bande passante.
-- L'accès au serveur cible est actuellement bloqué (clé publique non autorisée), ce
-  qui suspend toute vérification sur matériel réel.
+- L'hôte cible n'a aucun périphérique bloc libre : la mise en place d'un pool de
+  stockage natif suppose un repartitionnement, décision en attente (DAT §8).
+- Les disques de l'hôte sont mécaniques (7200 tr/min) : la copie sur écriture n'y
+  est pas un confort mais une condition de temps de création acceptable.
 
 ## Documentation
 
@@ -156,7 +180,6 @@ pas un réglage.
 | [docs/MANUAL_PLAN.md](docs/MANUAL_PLAN.md) | plan du manuel utilisateur |
 | [docs/PROD_MIGRATIONS.md](docs/PROD_MIGRATIONS.md) | contrat de déploiement |
 | [docs/ORIGIN_CONVERSATION.md](docs/ORIGIN_CONVERSATION.md) | conversation fondatrice |
-| [docs/INCONSISTENCY_REPORT.md](docs/INCONSISTENCY_REPORT.md) | contradictions relevées, non résolues |
 
 ## Licence
 

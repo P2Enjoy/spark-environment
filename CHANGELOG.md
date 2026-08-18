@@ -6,15 +6,40 @@
 
 - Socle documentaire du projet : `docs/DAT.md`, `docs/SCHEMA.md`,
   `docs/BACKLOG.md`, `docs/JOURNAL.md`, `docs/MANUAL_PLAN.md`,
-  `docs/PROD_MIGRATIONS.md`, `docs/INCONSISTENCY_REPORT.md`.
+  `docs/PROD_MIGRATIONS.md`.
 - `docs/ORIGIN_CONVERSATION.md` : transcription intégrale de la conversation
   fondatrice, extraite de la charge utile de la page de partage.
 - `README.md` décrivant réellement le projet.
+- Relevé de topologie de l'hôte cible : Dell R320, 4 cœurs / 8 threads, frèrage SMT
+  `(0,4) (1,5) (2,6) (3,7)`, 94 Gio, 2 × 6 To mécaniques en RAID1, lien 1 Gbit/s.
+- `CLAUDE.md` : règle « la documentation suit la réalité » — toute mention devenue
+  fausse est retirée dans le même changement, et non annotée ; ajoutée aussi à la
+  Definition of Done.
+- Unité SPK-28 : décision et exécution du repartitionnement du stockage.
 
 ### Modifié
 
 - `README.md` : remplacement du contenu hérité d'`ollama.cpp`, sans rapport avec
   ce dépôt.
+- `docs/CloudWorker.md` : retrait de toutes les références à un autre produit — nom
+  du dépôt, chemin de seed, scripts de vérification et scripts npm spécifiques,
+  nombre de services, version de Node. Le document redevient générique et renvoie
+  aux commandes que le dépôt documente lui-même.
+- `docs/DAT.md` : nouveau §8 « Hôte cible et stockage » ; le choix du pool de
+  stockage est motivé par le quota, le clonage et le retour arrière de cellule, et
+  non par la sauvegarde. Sections suivantes renumérotées.
+- `docs/BACKLOG.md` : SPK-02 passe à `[~]`, SPK-03 dépend désormais de SPK-28,
+  SPK-13 réduit aux instantanés locaux.
+- `docs/JOURNAL.md`, `docs/PROD_MIGRATIONS.md` : mise en cohérence avec le relevé
+  réel de l'hôte.
+
+### Retiré
+
+- Les trois incohérences relevées sont résolues — référence à un autre dépôt dans
+  `docs/CloudWorker.md`, README hérité d'un autre produit, et injection des clés
+  SSH tranchée en faveur de `cloud-init.user-data`. Le rapport d'incohérences
+  devenu vide n'est pas conservé dans le dépôt.
+- Mentions de blocage de l'accès au serveur cible : l'accès est obtenu.
 
 ## [Publié]
 

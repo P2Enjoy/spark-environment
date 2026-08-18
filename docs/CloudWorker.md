@@ -8,7 +8,13 @@ dépende pas de la seule mémoire de contexte d'un agent.
 
 ---
 
-Tu travailles sur le dépôt "p2enjoy-crm".
+Tu travailles sur le dépôt courant, quel qu'il soit.
+
+Ce document est GÉNÉRIQUE : il décrit la méthode de travail d'une session planifiée, jamais
+la pile d'un produit particulier. Chaque fois qu'il renvoie à une commande — démarrage,
+seed, preuves —, la commande exacte est celle que le dépôt documente dans son "README.md",
+son "Makefile" ou ses scripts. Tu la lis dans le dépôt ; tu ne la supposes pas, et tu ne
+reprends aucune commande d'un autre projet.
 
 ## 0. TU DOIS COMMITTER ET POUSSER, SINON TOUT EST PERDU
 
@@ -432,20 +438,20 @@ peut échouer avec :
 CERTIFICATE_VERIFY_FAILED
 ```
 
-"runDev.sh" s'arrêterait alors avant de démarrer le moindre service.
+Le script de démarrage de la pile s'arrêterait alors avant de démarrer le moindre service.
 
 ### 2.1 bis. NODE 24 : L'HÔTE A "nvm", MAIS PAS LA BONNE VERSION — INSTALLE-LA TOI-MÊME
 
 Comme pour Docker au §2, l'outil est là et rien n'est prêt : c'est à toi de le faire. Ne le
 redécouvre pas, tout ce qui suit est MESURÉ.
 
-L'hôte démarre sur **Node v22.22.2**, la version du système. Or le dépôt exige **Node 24 / npm 11+** :
-`.nvmrc` contient `24`, le "README.md" §7 nomme le couple, et **trente et un des trente-neuf**
-"scripts/verify-*.sh" refusent de s'exécuter sans lui. Leur refus tombe à la PREMIÈRE ligne, avant
-toute lecture du dépôt :
+L'hôte démarre sur **Node v22.22.2**, la version du système. Lorsque le dépôt exige une version
+plus récente — son `.nvmrc` la nomme et son "README.md" la documente —, ses harnais de vérification
+refusent de s'exécuter. Leur refus tombe à la PREMIÈRE ligne, avant toute lecture du dépôt, avec un
+message de cette forme :
 
 ```
-ERREUR : aucun couple Node 24 / npm 11+ Linux n'est utilisable. Exécutez « nvm use » puis relancez.
+ERREUR : aucun couple Node/npm utilisable. Exécutez « nvm use » puis relancez.
 ```
 
 Ce message dit « exécutez nvm use », et c'est trompeur tant que la version n'est pas installée :
@@ -504,12 +510,12 @@ node -v   => v24.x
 npm -v    => 11.x
 ```
 
-**Installe Node 24 AVANT "npm ci"**, et non après : les dépendances installées par une version le
+**Installe la version exigée AVANT "npm ci"**, et non après : les dépendances installées par une version le
 sont pour elle, et changer de version derrière expose à des modules natifs incompatibles.
 
-MESURÉ après l'installation : "scripts/verify-workflows.sh" **franchit la garde de version** et entre
-dans ses étapes, là où il s'arrêtait sur sa première ligne. Les harnais exigent en outre la pile
-debout — ils appellent "docker compose" —, donc §2 puis §2.2 avant eux.
+MESURÉ après l'installation : les harnais de vérification **franchissent la garde de version** et
+entrent dans leurs étapes, là où ils s'arrêtaient sur leur première ligne. Ils exigent en outre la
+pile debout — ils appellent "docker compose" —, donc §2 puis §2.2 avant eux.
 
 ### 2.1 ter. LES `verify-*.sh` SONT EXÉCUTABLES ICI — DEUX CONDITIONS, TOUTES DEUX MESURÉES
 
@@ -524,7 +530,7 @@ avant la moindre assertion, sur un binaire que l'hôte ne porte pas :
 export PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium
 ```
 
-`npm run e2e:ui` reçoit ce chemin ; les harnais ne le posent pas eux-mêmes.
+Les scénarios d'interface reçoivent ce chemin ; les harnais ne le posent pas eux-mêmes.
 
 **2. Libère le port 4173.** La configuration pose `reuseExistingServer: false`. Un `vite preview`
 laissé par une exécution précédente — une série interrompue en laisse un — fait échouer l'étape
@@ -534,12 +540,11 @@ entière sur `http://127.0.0.1:4173 is already used`, ce qui ne dit rien du prod
 pkill -f vite
 ```
 
-**Avec ces deux conditions**, `scripts/verify-administration-arborescence.sh` rend
-`27 contrôles, aucune anomalie` là où il rendait `3 en échec`. Sans elles, un verdict rouge de ces
-harnais ne doit être lu ni comme une régression, ni comme une preuve.
+**Avec ces deux conditions**, les harnais de vérification rendent un verdict qui parle du produit.
+Sans elles, un verdict rouge ne doit être lu ni comme une régression, ni comme une preuve.
 
-**Budget, mesuré aussi.** Ces harnais rejouent des suites E2E complètes : plusieurs dépassent
-quatre minutes chacun, et il y en a **cinquante**. La série entière ne tient pas dans une session
+**Budget.** Ces harnais rejouent des suites E2E complètes : plusieurs dépassent quatre minutes
+chacun, et un dépôt mûr en compte plusieurs dizaines. La série entière ne tient pas dans une session
 d'une heure. Exécute d'abord ceux que ton changement touche, puis autant du reste que le temps le
 permet, et dis exactement ce que tu n'as pas exécuté (§4.3).
 
@@ -547,19 +552,13 @@ permet, et dis exactement ce que tu n'as pas exécuté (§4.3).
 
 Ensuite seulement :
 
-```
-./runDev.sh
-```
+Lance la pile avec la commande de démarrage que le dépôt documente.
 
 Le premier démarrage peut être long, notamment à cause de la construction et du téléchargement des images.
 
-Puis applique obligatoirement le seed :
+Puis applique obligatoirement le seed, avec la commande que le dépôt documente pour cela.
 
-```
-supabase/seed/apply-seed.sh
-```
-
-Le seed n'est PAS appliqué par "runDev.sh".
+Le seed n'est en général PAS appliqué par la commande de démarrage : vérifie-le plutôt que de le supposer.
 
 Sans lui, aucun compte de démonstration ne se connecte.
 
@@ -569,7 +568,7 @@ Vérifie ensuite :
 docker compose ps
 ```
 
-Les 18 services doivent être "healthy" avant de lancer les preuves qui nécessitent la pile.
+Tous les services déclarés doivent être "healthy" avant de lancer les preuves qui nécessitent la pile.
 
 **La pile debout, tu vas directement au §4 pour choisir ton unité, puis au §3.2 pour travailler.**
 Tu ne lances aucune preuve maintenant — voir le §2.3 juste en dessous, qui dit pourquoi.
@@ -588,15 +587,18 @@ modifié. Ce temps appartient au produit (§4.2 bis).
 Les preuves du dépôt sont, pour mémoire, et **elles s'exécutent aux moments définis au §3.2** :
 
 ```
-npm run test:sql        npm run e2e:api        npm run e2e:ui        npm run e2e:mail
-npm run test:unit       npm run typecheck      npm run build         pytest
-scripts/verify-*.sh
+tests de base de données     tests d'API        E2E d'interface       E2E de messagerie
+tests unitaires              typecheck          build                 harnais de vérification
 ```
+
+Les commandes exactes sont celles que le dépôt documente. Tu les relèves dans son "README.md",
+son "Makefile" ou son "package.json" ; tu n'en inventes aucune et tu n'en reprends aucune d'un
+autre projet.
 
 Deux moments, et deux seulement :
 
-- **pendant le travail** — uniquement les preuves de TON unité : sa suite pgTAP, ses scénarios
-  d'API, son harnais dédié. Ciblées, courtes, rejouées autant de fois qu'il le faut ;
+- **pendant le travail** — uniquement les preuves de TON unité : sa suite de tests de base de
+  données, ses scénarios d'API, son harnais dédié. Ciblées, courtes, rejouées autant de fois qu'il le faut ;
 - **en fin de session** — la campagne complète, une seule fois, suivie de la boucle de correction
   du §4.3.
 
@@ -784,8 +786,8 @@ migration qui s'applique, un écran qui rend, un module qui compile —, tu comm
 **Tu n'attends pas d'avoir prouvé pour pousser.** Une session interrompue à la minute 40 doit laisser
 derrière elle du code poussé, pas un arbre de travail perdu (§0).
 
-**6. Tu prouves TON unité, et elle seule, pendant que tu codes.** Sa suite pgTAP, ses scénarios
-d'API, son harnais dédié, ses captures. Ce sont des exécutions courtes et ciblées, que tu rejoues
+**6. Tu prouves TON unité, et elle seule, pendant que tu codes.** Sa suite de tests de base de
+données, ses scénarios d'API, son harnais dédié, ses captures. Ce sont des exécutions courtes et ciblées, que tu rejoues
 autant de fois que nécessaire. **Tu ne lances pas la campagne complète ici.**
 
 **7. En fin de session seulement, tu lances la campagne complète**, une fois — et tu entres dans la
@@ -793,7 +795,7 @@ boucle de correction du §4.3.
 
 **Ce que cette séquence interdit explicitement**, parce que chacune de ces erreurs a été observée :
 
-- lancer `npm run test:sql`, `e2e:*` ou l'ensemble des `verify-*.sh` **avant d'avoir choisi une
+- lancer l'ensemble des suites de tests et des harnais de vérification **avant d'avoir choisi une
   unité** — quarante à soixante-dix minutes dépensées avant le premier geste utile ;
 - attendre que tout soit prouvé pour committer — une session interrompue ne laisse alors rien ;
 - coder une fonctionnalité neuve sans spécification écrite et committée d'abord ;
@@ -904,10 +906,13 @@ committé et poussé (§3.2, point 5) : ce qui suit ne peut donc plus rien te fa
 **1. Lance la campagne complète, une fois :**
 
 ```
-npm run test:sql        npm run e2e:api        npm run e2e:ui        npm run e2e:mail
-npm run test:unit       npm run typecheck      npm run build         pytest
-scripts/verify-*.sh
+tests de base de données     tests d'API        E2E d'interface       E2E de messagerie
+tests unitaires              typecheck          build                 harnais de vérification
 ```
+
+Les commandes exactes sont celles que le dépôt documente. Tu les relèves dans son "README.md",
+son "Makefile" ou son "package.json" ; tu n'en inventes aucune et tu n'en reprends aucune d'un
+autre projet.
 
 **2. Entre dans la BOUCLE DE CORRECTION.** Tant qu'il reste une anomalie **imputable à ton
 changement** :

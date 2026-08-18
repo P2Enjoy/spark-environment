@@ -48,14 +48,15 @@ dans la documentation Incus `main` le 2026-08-18, plutôt que repris de confianc
 - `cloud-init.user-data` pour l'injection à l'initialisation.
 
 Un écart avec la conversation : `cloud-init.ssh-keys` n'apparaît pas dans la page
-de référence des options d'instance. L'injection des clés passe donc par
-`cloud-init.user-data`, et la question sera retranchée lors de SPK-11.
+de référence des options d'instance. **Décision** : l'injection des clés passe par
+`cloud-init.user-data`, qui est documenté pour toutes les versions et couvre le
+besoin. La question est close, pas laissée ouverte.
 
 ### Conséquences
 
 - `docs/DAT.md`, `docs/SCHEMA.md`, `docs/BACKLOG.md` écrits et committés avant tout
   code, conformément à `CLAUDE.md` §5.
-- Le DAT §12 liste six hypothèses **non vérifiées** qui ne seront pas présentées
+- Le DAT §13 liste sept hypothèses **non vérifiées** qui ne seront pas présentées
   comme acquises tant qu'une mesure sur l'hôte cible ne les aura pas tranchées.
 
 ---
@@ -126,20 +127,109 @@ d'outillage et une seule commande de lancement côté poste.
 
 ---
 
-## 2026-08-18 — Accès au serveur cible : bloqué
+## 2026-08-18 — Relevé de l'hôte cible
 
-Le serveur `51.158.54.202` a été mis à disposition. La connexion échoue :
+### Observations
 
-```
-ubuntu@51.158.54.202: Permission denied (publickey).
-root@51.158.54.202: Permission denied (publickey).
-```
-
-La clé publique du poste n'est pas autorisée sur la machine :
+Accès SSH obtenu sur `ubuntu@51.158.54.202` (`spark-experiment`), `sudo` sans mot
+de passe. Relevé :
 
 ```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILklM4dl9E+GCZog4f8+fV4q3fSF4BkFEV5LL5Sl2XoT contact@p2enjoy.studio
+Machine    Dell PowerEdge R320
+CPU        Xeon E5-1410 v2 @ 2.80 GHz — 1 socket, 4 cœurs, 8 threads
+           frères SMT : cpu(0,4) cpu(1,5) cpu(2,6) cpu(3,7)
+           1 nœud NUMA — VT-x présent
+RAM        98 810 556 kio ≈ 94 Gio, 4 × 16 Gio DDR3-1600, aucun swap actif
+DISQUES    2 × Toshiba MG08ADA600E 6 To, 7200 tr/min, ROTA=1
+           md0 511 Mio → /boot ; md1 5,44 Tio ext4 → /
+           md1 en resynchronisation : 3,1 %, ~469 min restantes
+RÉSEAU     eno1 up 1000 Mbit/s ; eno2 down
+SYSTÈME    Ubuntu 24.04.3, noyau 6.8.0-88, cgroup v2
+PAQUETS    incus 6.0.0-1ubuntu0.3 et zfsutils-linux 2.2.2 disponibles
+           btrfs-progs installé ; docker, caddy, incus, zfs absents
 ```
 
-Conséquence : SPK-02 et tout ce qui en dépend (SPK-03, SPK-06, SPK-27) sont
-bloqués par une action humaine. Le travail qui n'en dépend pas se poursuit.
+### Deux constats qui changent la spécification
+
+**Le frèrage SMT est `(0,4)`, pas `(0,1)`.** La règle du DAT §7.5 — allouer des
+cœurs physiques entiers, frères inclus — était un raisonnement ; elle est
+maintenant confirmée par la mesure. Sur cette machine, `dedicated: 1 core` doit
+produire `limits.cpu=0,4`. Un `limits.cpu=0` n'aurait donné aucune exclusivité.
+
+**Les pools réels sont plus petits que ceux de la conversation d'origine.** 94 Gio
+au lieu de 256, 1 Gbit/s au lieu de 3, 5,4 Tio au lieu de 6 To, et surtout
+**4 cœurs physiques**. Dédier un cœur coûte donc 25 % de la machine : le mode
+partagé n'est pas un défaut commode, c'est le seul mode raisonnable ici, et
+`dedicated` devient une exception à justifier. Le DAT et le README sont corrigés en
+conséquence.
+
+### Conséquences
+
+SPK-02 passe à `[~]` : il ne reste que `incus info --resources`, qui exige Incus
+installé. Le blocage humain est levé et la mention correspondante est retirée du
+dépôt.
+
+---
+
+## 2026-08-18 — ZFS : la question posée n'était pas la bonne
+
+### Problème
+
+Le responsable met en doute l'utilité de ZFS, au motif que « toutes nos
+applications ont déjà un ordonnanceur interne qui sauvegarde vers un S3 externe ».
+
+### Observation
+
+L'objection porte sur la sauvegarde, or ce n'est pas la fonction pour laquelle le
+pool de stockage était retenu. Ses trois fonctions réelles sont :
+
+1. **appliquer les quotas** — c'est la promesse « 10 Gio pris sur 5,4 Tio ». Sans
+   pilote capable de quota, un Spark remplit le système de fichiers et emporte tous
+   les autres ;
+2. **cloner l'image de base à coût nul** — sans copie sur écriture, trente Sparks
+   sont trente rootfs complets, sur des disques **mécaniques** : la création passe de
+   quelques secondes à plusieurs minutes ;
+3. **revenir en arrière sur la cellule entière** — système, images Docker, Compose,
+   volumes, configuration.
+
+Une sauvegarde applicative vers S3 protège les **données de l'application**. Elle
+ne restaure ni le système du Spark, ni ses images, ni sa configuration. Les deux
+mécanismes ne protègent pas la même chose et ne se substituent pas.
+
+Relevé dans la documentation Incus : le pilote `dir` n'offre de quota que sur
+ext4/XFS avec quotas de projet activés au niveau du système de fichiers, et n'a ni
+copie sur écriture, ni clonage instantané, ni instantané optimisé. Il est écarté
+sur disque mécanique.
+
+### Décision
+
+Le besoin d'un pool à quotas et à copie sur écriture est **confirmé**. Ce que la
+sauvegarde externe rend effectivement superflu est retiré du périmètre : la
+planification d'`incus export` comme voie de reprise, et toute réplication
+`send`/`receive`. SPK-13 est réduit aux instantanés locaux.
+
+Pilote retenu : **ZFS, en miroir natif**. Motifs : `refquota` exact, chemin le plus
+éprouvé d'Incus, et sommes de contrôle avec réparation — sur des disques de 6 To
+mécaniques, `md` RAID1 détecte une divergence mais ignore laquelle des deux copies
+est la bonne, là où ZFS le sait. L'ARC transforme en outre 94 Gio de RAM en cache
+de lecture devant du 7200 tr/min.
+
+Contrepartie identifiée, et c'est la plus importante : **l'ARC consomme de la RAM
+en dehors du registre**. Par défaut il peut prendre jusqu'à la moitié de la mémoire,
+que l'admission control croirait allouable. `zfs_arc_max` sera donc posé
+explicitement et sa valeur soustraite via `host.memory_reserve_bytes`. Un pool
+mémoire qui ignore l'ARC promet ce qu'il n'a pas. Ajouté au DAT §13 comme septième
+vérification.
+
+Repli documenté : **btrfs** en `raid1`, dans le noyau et déjà installé, au prix
+d'une comptabilité par `qgroups` dont le coût croît avec le nombre d'instantanés —
+c'est-à-dire sur le mécanisme même dont dépend la promesse de quota.
+
+### Conséquence bloquante
+
+Les deux disques sont intégralement consommés par `md1`. Aucun périphérique bloc
+n'est libre : un pool natif exige un repartitionnement, et `resize2fs` ne réduit pas
+un système de fichiers racine monté. Deux voies possibles, réinstallation avec
+partitionnement personnalisé ou réduction en mode rescue. Sur une machine vide
+— 2,7 Go utilisés — la réinstallation est la voie la **moins** risquée. La décision
+appartient au responsable : unité SPK-28.
