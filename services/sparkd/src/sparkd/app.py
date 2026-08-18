@@ -187,7 +187,10 @@ def create_app(config: Config) -> FastAPI:
         """Relève la topologie depuis Incus et l'écrit dans le registre."""
         try:
             with registry() as connection:
-                topology = sync(connection, app.state.incus, config.storage_pool)
+                topology = sync(
+                    connection, app.state.incus, config.storage_pool,
+                    operating_margin=config.memory_reserve_bytes,
+                )
         except (IncusError, InventoryError) as erreur:
             raise HTTPException(
                 status_code=503,
@@ -198,6 +201,8 @@ def create_app(config: Config) -> FastAPI:
             "cpu_cores_total": topology.cpu_cores_total,
             "cpu_threads_total": topology.cpu_threads_total,
             "memory_total_bytes": topology.memory_total_bytes,
+            "memory_reserve_bytes": topology.memory_reserve_bytes,
+            "memory_detail": topology.memory_detail,
             "network_total_bps": topology.network_total_bps,
             "storage_total_bytes": topology.storage_total_bytes,
         }

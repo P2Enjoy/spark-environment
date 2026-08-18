@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .db import transaction
+from .hostmem import HostMemory, measure
 from .incus import IncusClient
 
 MBIT = 1_000_000
@@ -51,6 +52,9 @@ class Topology:
     network_total_bps: int
     storage_total_bytes: int
     cores: tuple[Core, ...]
+    memory_reserve_bytes: int = 0
+    memory_detail: str = ""
+    arc_known: bool = True
 
     @property
     def cpu_cores_total(self) -> int:
@@ -66,7 +70,9 @@ def _require(value: Any, quoi: str) -> Any:
     return value
 
 
-def read_topology(client: IncusClient, pool: str) -> Topology:
+def read_topology(
+    client: IncusClient, pool: str, operating_margin: int = 0
+) -> Topology:
     """Traduit la réponse d'Incus en topologie exploitable."""
     resources = client.resources()
     cpu = resources.get("cpu") or {}
@@ -114,11 +120,26 @@ def read_topology(client: IncusClient, pool: str) -> Topology:
 
     espace = (client.storage_pool_resources(pool).get("space") or {}).get("total")
 
+    # La memoire ne vient PAS d'Incus : « memory.total » est la RAM physique,
+    # dont ~4 Gio sont reserves par le micrologiciel et le noyau et ne seront
+    # jamais alloues. On retient « MemTotal », et on soustrait l'ARC et la marge
+    # d'exploitation (docs/DAT.md §5.2, §16).
+    try:
+        memoire: HostMemory | None = measure(operating_margin)
+    except Exception:
+        memoire = None
+
     return Topology(
         hostname=nom,
         # `cpu.total` compte les THREADS, jamais les cœurs — docs/DAT.md §5.2.
         cpu_threads_total=int(_require(cpu.get("total"), "cpu.total")),
-        memory_total_bytes=int(_require((resources.get("memory") or {}).get("total"), "memory.total")),
+        memory_total_bytes=(
+            memoire.total_bytes if memoire
+            else int(_require((resources.get("memory") or {}).get("total"), "memory.total"))
+        ),
+        memory_reserve_bytes=memoire.reserve_bytes if memoire else 0,
+        memory_detail=memoire.detail if memoire else "/proc/meminfo illisible : total physique d'Incus retenu, réserve inconnue.",
+        arc_known=memoire.arc_known if memoire else False,
         network_total_bps=int(_require(debit_mbit, "un port réseau détecté")) * MBIT,
         # La capacité de stockage est celle du POOL Incus, pas du disque.
         storage_total_bytes=int(_require(espace, f"l'espace du pool « {pool} »")),
@@ -135,6 +156,7 @@ def sync(
     client: IncusClient,
     pool: str,
     actor: str = "sparkd",
+    operating_margin: int = 0,
 ) -> Topology:
     """Écrit le relevé dans le registre, et le trace.
 
@@ -144,7 +166,7 @@ def sync(
     """
     from .admission import pools as lire_pools
 
-    topology = read_topology(client, pool)
+    topology = read_topology(client, pool, operating_margin)
 
     try:
         avant = lire_pools(connection)
@@ -162,8 +184,8 @@ def sync(
             """INSERT INTO host (
                    id, hostname, cpu_threads_total, cpu_cores_total,
                    memory_total_bytes, storage_total_bytes, network_total_bps,
-                   topology_synced_at)
-               VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+                   memory_reserve_bytes, topology_synced_at)
+               VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                    hostname = excluded.hostname,
                    cpu_threads_total = excluded.cpu_threads_total,
@@ -171,6 +193,7 @@ def sync(
                    memory_total_bytes = excluded.memory_total_bytes,
                    storage_total_bytes = excluded.storage_total_bytes,
                    network_total_bps = excluded.network_total_bps,
+                   memory_reserve_bytes = excluded.memory_reserve_bytes,
                    topology_synced_at = excluded.topology_synced_at""",
             (
                 topology.hostname,
@@ -179,6 +202,7 @@ def sync(
                 topology.memory_total_bytes,
                 topology.storage_total_bytes,
                 topology.network_total_bps,
+                topology.memory_reserve_bytes,
                 _now(),
             ),
         )
@@ -233,14 +257,20 @@ def sync(
                     "memory_bytes": topology.memory_total_bytes,
                     "network_bps": topology.network_total_bps,
                     "storage_bytes": topology.storage_total_bytes,
+                    "memory_reserve_bytes": topology.memory_reserve_bytes,
                 }),
-                "denied" if depassements else "ok",
+                "denied" if (depassements or not topology.arc_known) else "ok",
                 (
                     "Capacité relevée inférieure à l'allocation en cours : "
                     + ", ".join(depassements)
                     + ". Le relevé est appliqué — la réalité fait foi — mais "
                       "l'écart doit être résorbé."
-                ) if depassements else "Relevé de topologie appliqué.",
+                ) if depassements else (
+                    f"Relevé appliqué. {topology.memory_detail}"
+                    if topology.arc_known else
+                    f"Relevé appliqué MAIS le pool mémoire est peut-être "
+                    f"surestimé : {topology.memory_detail}"
+                ),
             ),
         )
     return topology

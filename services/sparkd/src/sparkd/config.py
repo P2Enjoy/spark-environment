@@ -21,6 +21,7 @@ DEFAULT_INCUS_SOCKET = "/var/lib/incus/unix.socket"
 DEFAULT_CADDY_ADMIN = "http://127.0.0.1:2019"
 DEFAULT_DRIVER = "incus"
 DEFAULT_STORAGE_POOL = "spark"
+DEFAULT_MEMORY_RESERVE = "2GiB"
 DEFAULT_LOG_LEVEL = "info"
 
 DRIVERS = ("incus", "fake")
@@ -41,6 +42,7 @@ class Config:
     driver: str
     log_level: str
     storage_pool: str
+    memory_reserve_bytes: int
 
     @property
     def bind(self) -> str:
@@ -112,6 +114,15 @@ def load(env: dict[str, str] | None = None) -> Config:
             f"SPARKD_LOG_LEVEL : {log_level!r} inconnu, attendu l'un de {LOG_LEVELS}."
         )
 
+    from .hostmem import parse_size
+
+    try:
+        reserve = parse_size(source.get("SPARKD_MEMORY_RESERVE", DEFAULT_MEMORY_RESERVE))
+    except ValueError as erreur:
+        raise ConfigError(f"SPARKD_MEMORY_RESERVE : {erreur}") from None
+    if reserve < 0:
+        raise ConfigError("SPARKD_MEMORY_RESERVE ne peut pas être négatif.")
+
     return Config(
         host=host,
         port=port,
@@ -121,4 +132,5 @@ def load(env: dict[str, str] | None = None) -> Config:
         driver=driver,
         log_level=log_level,
         storage_pool=source.get("SPARKD_STORAGE_POOL", DEFAULT_STORAGE_POOL),
+        memory_reserve_bytes=reserve,
     )
