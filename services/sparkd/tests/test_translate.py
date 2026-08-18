@@ -204,4 +204,35 @@ def test_charge_utile_rattache_reseau_et_pool():
     assert payload["type"] == "container"
     assert payload["devices"]["eth0"]["network"] == "sparkbr0"
     assert payload["devices"]["root"]["pool"] == "spark"
-    assert payload["source"]["alias"] == "images:debian/13"
+    assert payload["source"]["alias"] == "debian/13"
+
+
+# --- reference d'image ------------------------------------------------------
+
+def test_le_depot_n_est_pas_un_prefixe_d_alias():
+    """Mesure 2026-08-19 : l'API rejette « images:debian/13 ».
+
+    « images: » est un raccourci de la LIGNE DE COMMANDE. Passe tel quel a
+    l'API, il fait echouer la creation de l'instance.
+    """
+    from sparkd.translate import split_image
+    serveur, alias = split_image("images:debian/13")
+    assert alias == "debian/13"
+    assert serveur == "https://images.linuxcontainers.org"
+
+
+def test_depot_par_defaut_si_absent():
+    from sparkd.translate import split_image
+    assert split_image("debian/13")[1] == "debian/13"
+
+
+def test_depot_inconnu_refuse():
+    from sparkd.translate import split_image
+    with pytest.raises(TranslationError, match="inconnu"):
+        split_image("mondepot:debian/13")
+
+
+def test_charge_utile_separe_depot_et_alias():
+    payload = translate(manifeste(), SHARED, POOL).as_payload("sparkbr0", "spark")
+    assert payload["source"]["alias"] == "debian/13"
+    assert payload["source"]["server"] == "https://images.linuxcontainers.org"

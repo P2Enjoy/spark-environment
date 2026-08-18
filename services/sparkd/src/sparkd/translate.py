@@ -31,6 +31,38 @@ ALLOWANCE_SCALE = 1000
 # 100 ms (docs/DAT.md §7.2 ter).
 QUOTA_PERIOD_MS = 100
 
+#: Dépôts d'images connus. Une référence « images:debian/13 » nomme un dépôt et
+#: un alias ; « images: » est un raccourci de la LIGNE DE COMMANDE, que l'API
+#: rejette — mesuré le 2026-08-19. Le traducteur les sépare donc explicitement.
+IMAGE_REMOTES = {
+    "images": "https://images.linuxcontainers.org",
+    "ubuntu": "https://cloud-images.ubuntu.com/releases",
+    "ubuntu-daily": "https://cloud-images.ubuntu.com/daily",
+}
+DEFAULT_REMOTE = "images"
+
+
+def split_image(reference: str) -> tuple[str, str]:
+    """Sépare « dépôt:alias » en URL de serveur et alias.
+
+    L'API d'Incus attend `alias = "debian/13"` et l'URL du serveur à part. Lui
+    passer « images:debian/13 » fait échouer la création : le dépôt n'est pas
+    un préfixe d'alias.
+    """
+    if ":" in reference:
+        depot, _, alias = reference.partition(":")
+    else:
+        depot, alias = DEFAULT_REMOTE, reference
+    if not alias:
+        raise TranslationError(f"Référence d'image vide : {reference!r}.")
+    serveur = IMAGE_REMOTES.get(depot)
+    if serveur is None:
+        connus = ", ".join(sorted(IMAGE_REMOTES))
+        raise TranslationError(
+            f"Dépôt d'images inconnu : « {depot} ». Connus : {connus}."
+        )
+    return serveur, alias
+
 
 class TranslationError(ValueError):
     """La demande ne peut pas être rendue fidèlement en configuration Incus."""
@@ -75,6 +107,7 @@ class IncusConfig:
         devices.setdefault("root", {})["type"] = "disk"
         devices["root"]["path"] = "/"
         devices["root"]["pool"] = pool
+        serveur, alias = split_image(self.image)
         return {
             "name": self.name,
             "type": self.instance_type,
@@ -83,8 +116,8 @@ class IncusConfig:
             "source": {
                 "type": "image",
                 "protocol": "simplestreams",
-                "server": "https://images.linuxcontainers.org",
-                "alias": self.image,
+                "server": serveur,
+                "alias": alias,
             },
         }
 
