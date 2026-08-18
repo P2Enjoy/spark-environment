@@ -375,6 +375,56 @@ soit `0,25 CPU → 62,5 % → poids ≈ 57`, et un pool plein totalisant environ
 1000 % de poids. Les rapports sont préservés et la résolution redevient
 exploitable.
 
+### 7.2 ter Rendu exact des valeurs, mesuré
+
+Incus refuse ce qui n'est pas entier. Mesuré le 2026-08-18 sur l'hôte :
+
+```
+limits.cpu.allowance = 62.5%        REFUSE  strconv.Atoi: parsing "62.5"
+limits.cpu.allowance = 62%          accepte  → cpu.weight 57
+limits.cpu.allowance = 1%           REFUSE   setting cgroup item failed
+limits.cpu.allowance = 0.5ms/100ms  REFUSE
+limits.cpu.allowance = 5ms/100ms    accepte  → cpu.max 5000 100000
+limits.cpu.priority  = -1 ou 11     REFUSE   (bornes 0..10 confirmées)
+```
+
+Trois règles en découlent, et elles ne sont pas cosmétiques.
+
+**1. Le pourcentage est arrondi à l'entier.** L'échelle ×1000 du §7.2 bis produit
+des valeurs fractionnaires — `0,25 CPU` sur 4 cœurs donne `62,5 %` — qu'Incus
+rejette. L'arrondi déplace donc légèrement les rapports entre Sparks. Sur des
+poids de l'ordre de plusieurs dizaines, l'écart reste inférieur au pourcent ; il
+serait inacceptable à l'échelle ×100, où un demi-point de pourcentage pèse
+plusieurs pour cent du poids. C'est une raison de plus de retenir ×1000.
+
+**2. Il existe un plancher, et il dépend de la priorité.** Le noyau refuse un
+poids nul ou négatif, donc :
+
+```
+allowance_pct ≥ 11 − limits.cpu.priority
+```
+
+Soit `6 %` à la priorité par défaut `5`. Une réservation trop petite pour
+atteindre ce plancher **ne doit pas être arrondie vers le haut en silence** : le
+Spark obtiendrait plus que ce qui lui a été comptabilisé, et l'invariant du §7.3
+cesserait d'être vrai. Le pilote refuse la traduction et nomme la réservation
+minimale admissible pour la capacité du pool.
+
+**3. La forme temporelle s'exprime en millisecondes entières.**
+
+```
+limits.cpu.allowance = round(cpu_max × 100) ms / 100ms
+```
+
+`0,5 CPU → 50ms/100ms`. Le plancher est `1ms`, soit `cpu_max ≥ 0,01`. En deçà, le
+pilote refuse plutôt que d'arrondir : plafonner à `1ms` donnerait au Spark le
+double ou le décuple de ce qui a été vendu.
+
+Un principe commun à ces trois règles : **quand la valeur demandée ne peut pas
+être rendue fidèlement, on refuse au lieu d'approximer**. Une approximation
+silencieuse fait diverger le registre de la machine, et c'est précisément ce que
+l'invariant du §7.3 interdit.
+
 ### 7.3 L'invariant qui donne son sens à la réservation
 
 Le mode `shared` repose sur des poids relatifs : `cpu.max` reste à `max`, donc
