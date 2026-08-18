@@ -718,3 +718,59 @@ inventaire, traducteur. C'est l'unité qui relie enfin ces pièces en un geste
 utilisateur : créer un Spark. Elle appellera l'admission control avant d'écrire,
 ce qui lèvera la réserve de SPK-05. SPK-06 (choix des cœurs dédiés), SPK-29 et
 SPK-28 restent ouvertes.
+
+
+---
+
+## 2026-08-19 — SPK-09 close : un Spark se crée, tourne et se rend
+
+**Unité** : SPK-09. Son entrée de backlog ne citait aucune spécification, et les
+**transitions** n'étaient écrites nulle part — seuls les états l'étaient. Le
+DAT §14 a donc été écrit et committé avant la première ligne de code.
+
+**Prouvé de bout en bout sur l'hôte réel**, par HTTP : création → `pending`,
+`apply` → instance Incus créée, `start` → `running` avec `10.77.0.138` sur le
+bridge privé, `stop`, `delete` → instance disparue et **capacité intégralement
+rendue** (`alloué=0`, `dispo=4.0`). Le noyau applique `cpu.weight=120`,
+`memory.max=2 Gio` ; le locataire voit 2 Gio de RAM et 10 Gio de disque.
+
+**SPK-05 est close du même coup.** L'admission control avait été livré sans
+appelant ; il en a un désormais, et le refus a été prouvé sur la machine :
+« 9 CPU demandés, 3.5 disponibles (capacité 4, alloué 0.5) — il manque 5.5 CPU »,
+en `409`, journalisé.
+
+**Deux décisions de conception qui méritent d'être retenues.**
+
+Le registre s'écrit **avant** Incus, et l'ordre n'est pas symétrique. Mourir
+entre les deux laisse au pire une ligne sans instance : le registre surestime
+l'occupation, ce qui est visible et réconciliable. L'inverse laisserait une
+instance sans ligne, consommant des ressources réelles que la comptabilité
+ignore — et le refus tomberait plus tard sur un locataire innocent. Entre
+surestimer et sous-estimer, on surestime toujours.
+
+Un redémarrage n'est pas un état : c'est `running → stopping → stopped →
+starting → running`. Le modéliser autrement cacherait la fenêtre pendant
+laquelle le Spark est réellement arrêté.
+
+**Trois défauts, corrigés à la cause.**
+
+1. **Le refus d'admission était journalisé DANS la transaction**, donc annulé par
+   le rollback. La trace disparaissait précisément quand elle sert — et c'est
+   exactement ce que le commentaire du code prétendait éviter. Trouvé par les
+   tests.
+2. **Le client Incus n'attendait pas ses opérations asynchrones.** On aurait
+   conclu au succès avant que quoi que ce soit ne soit fait.
+3. **`images:` est un raccourci de la ligne de commande, pas un préfixe
+   d'alias.** Passé tel quel à l'API, il fait échouer la création. Le traducteur
+   sépare désormais dépôt et alias. Défaut invisible en local, révélé par la
+   première création réelle.
+
+**Vérifié.** 231 tests verts, campagne complète verte, et le parcours réel
+ci-dessus.
+
+**Où reprendre.** **SPK-10**, réseau privé et adressage stable. Les Sparks
+obtiennent déjà une IP par DHCP sur `sparkbr0` — `10.77.0.138` ci-dessus — mais
+rien ne garantit qu'ils la retrouvent au redémarrage, et le registre ne la
+stocke pas encore : `ipv4_address` reste NULL. C'est le préalable de l'ingress
+(SPK-12), qui a besoin d'une adresse stable pour pointer dessus. SPK-06, SPK-29
+et SPK-28 restent ouvertes.

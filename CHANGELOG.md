@@ -64,13 +64,17 @@
   mémoire, réseau, stockage, nesting et idmap isolé. Refuse plutôt qu'approxime
   lorsqu'une valeur ne peut pas être rendue fidèlement.
 
+- Cycle de vie complet d'un Spark : création avec admission control, application
+  dans Incus, démarrage, arrêt, redémarrage, suppression, et réconciliation des
+  états transitoires au démarrage de `sparkd`.
+
 ### Modifié
 
 - `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
 - `docs/SCHEMA.md` : nouveau §12, mécanique des migrations.
 - `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi ;
   nouveaux §5.1 à §5.3, accès à Incus et relevé de l'inventaire ; nouveau
-  §7.2 ter, rendu exact des valeurs CPU.
+  §7.2 ter, rendu exact des valeurs CPU ; nouveau §14, cycle de vie d'un Spark.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel

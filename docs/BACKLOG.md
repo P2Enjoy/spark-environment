@@ -63,7 +63,7 @@ Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
   migration. Au démarrage réel : le registre se crée, le second lancement ne
   rejoue rien, et un checksum falsifié fait sortir `sparkd` en code 3.
 
-### [~] SPK-05 · Admission control et comptabilité des pools
+### [x] SPK-05 · Admission control et comptabilité des pools
 
 L'invariant `Σ réservations ≤ capacité × surengagement`, les réserves de l'hôte,
 et le refus motivé.
@@ -73,10 +73,11 @@ et le refus motivé.
   et rend une décision motivée. 25 tests dédiés, dont les quatre cas limites de
   la DoD, la comptabilité de chaque mode CPU, tous les états de Spark, et le
   refus d'un Spark dédié qui asphyxierait les Sparks partagés déjà admis.
-- **Reste, et c'est pourquoi l'unité n'est pas `[x]`** : aucun appelant. Le module
-  n'est joignable ni par HTTP ni par la console, donc rien ne le prouve depuis un
-  parcours réel. L'exposition appartient à SPK-07 (inventaire de l'hôte) et son
-  usage à SPK-09 (création d'un Spark).
+- **Clos le 2026-08-19.** L'appelant existe : toute création de Spark traverse
+  l'admission control, dans la même transaction que l'écriture de la ligne.
+  Prouvé sur l'hôte réel — une demande de 9 CPU est refusée en `409` avec
+  « 9 CPU demandés, 3.5 disponibles (capacité 4, alloué 0.5) — il manque
+  5.5 CPU », et le refus est journalisé.
 
 ### [ ] SPK-06 · Allocation des cœurs dédiés et découpe dynamique du pool
 
@@ -120,10 +121,17 @@ isolé.
 - Reste hors de cette unité : le choix des cœurs dédiés (SPK-06) et la création
   effective par l'API (SPK-09). Le traducteur ne parle à personne, il transforme.
 
-### [ ] SPK-09 · Cycle de vie : create, start, stop, restart, delete
+### [x] SPK-09 · Cycle de vie : create, start, stop, restart, delete
 
-- DoD : machine à états testée, y compris les transitions interdites et la
-  reprise après échec en cours de création.
+- Spécification : `docs/DAT.md` §14
+- **Clos le 2026-08-19, prouvé de bout en bout sur l'hôte réel.** Créé par
+  `POST /v1/sparks`, appliqué, démarré — instance Incus obtenant `10.77.0.138`
+  sur le bridge privé —, arrêté, supprimé, et la capacité intégralement rendue
+  (`alloué=0`, `dispo=4.0`). Le noyau applique `cpu.weight=120`,
+  `memory.max=2 Gio`, et le locataire voit 2 Gio de RAM et 10 Gio de disque.
+- 86 tests dédiés : toutes les transitions interdites, la réconciliation des
+  quatre états transitoires au démarrage, et le refus d'admission de bout en
+  bout.
 
 ### [ ] SPK-10 · Réseau privé et adressage stable
 
