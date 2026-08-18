@@ -134,3 +134,21 @@ def test_retour_arriere_refuse_si_irreversible(db, tmp_path):
 
 def test_retour_arriere_sans_migration_appliquee(db, dossier):
     assert migrations.downgrade(db, dossier) == []
+
+
+def test_dossier_absent_est_une_erreur_pas_un_vide(tmp_path):
+    """@verifies docs/SCHEMA.md §12.1
+
+    Rendre une liste vide ferait demarrer sparkd sans schema, et chaque requete
+    echouerait ensuite sans que rien ne designe la cause. Mesure vecue au premier
+    deploiement sur machine propre.
+    """
+    with pytest.raises(migrations.MigrationError, match="introuvable"):
+        migrations.discover(tmp_path / "inexistant")
+
+
+def test_les_migrations_du_paquet_sont_trouvees():
+    """Les fichiers SQL doivent voyager AVEC le paquet installe."""
+    trouvees = migrations.discover()
+    assert [m.version for m in trouvees] == [1]
+    assert trouvees[0].path.parent.name == "schema"

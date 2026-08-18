@@ -20,7 +20,9 @@ from pathlib import Path
 
 from .db import execute_script, transaction
 
-MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
+# Les fichiers SQL vivent DANS le paquet : places a cote du depot, ils ne
+# suivaient pas l'installation, et sparkd demarrait sans aucune migration.
+MIGRATIONS_DIR = Path(__file__).resolve().parent / "schema"
 
 _FILENAME = re.compile(r"^(\d{3})_([a-z0-9_]+)\.sql$")
 _UP = "-- @up"
@@ -83,7 +85,14 @@ def discover(directory: Path | None = None) -> list[Migration]:
     """Lit les migrations du depot, triees par version."""
     folder = MIGRATIONS_DIR if directory is None else directory
     if not folder.is_dir():
-        return []
+        # Ne JAMAIS rendre une liste vide ici. Un dossier absent est une erreur
+        # d'installation ; la traiter comme « aucune migration » ferait demarrer
+        # sparkd sans schema, et chaque requete echouerait ensuite sans que rien
+        # ne designe la cause. Mesure vecue au premier deploiement.
+        raise MigrationError(
+            f"Dossier de migrations introuvable : {folder}. L'installation de "
+            "sparkd est incomplete."
+        )
 
     found: dict[int, Migration] = {}
     for path in sorted(folder.iterdir()):

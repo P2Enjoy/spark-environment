@@ -8,7 +8,7 @@ des projections, reconstructibles. L'inverse n'est jamais vrai : on ne déduit p
 une allocation en interrogeant Incus.
 
 Toute évolution passe par une migration versionnée dans
-`services/sparkd/migrations/`, appliquée dans l'ordre, jamais à la main.
+`services/sparkd/src/sparkd/schema/`, appliquée dans l'ordre, jamais à la main.
 
 ---
 
@@ -177,8 +177,14 @@ implicite et que le code ne peut pas inventer.
 ### 12.1 Fichiers
 
 ```
-services/sparkd/migrations/NNN_intitule.sql
+services/sparkd/src/sparkd/schema/NNN_intitule.sql
 ```
+
+Les fichiers vivent **à l'intérieur du paquet**, et non à côté. Placés hors du
+paquet, ils ne suivent pas l'installation : `sparkd` démarre alors sans aucune
+migration, et chaque requête échoue ensuite sans que rien ne désigne la cause.
+Un dossier de migrations absent est donc une erreur d'installation, signalée
+comme telle au démarrage — jamais interprétée comme « aucune migration ».
 
 `NNN` est la version, entière, sur trois chiffres, à partir de `001`. L'ordre
 d'application est l'ordre numérique. Une version ne se réutilise ni ne se
