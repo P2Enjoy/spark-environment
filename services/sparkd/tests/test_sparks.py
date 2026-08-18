@@ -195,3 +195,35 @@ def test_chaque_reconciliation_est_tracee(db):
         "SELECT * FROM audit_log WHERE action='spark.reconcile'"
     ).fetchone()
     assert ligne is not None and ligne["message"]
+
+
+# --- adressage (SPK-10) -----------------------------------------------------
+
+def test_la_creation_attribue_une_adresse(db):
+    """@verifies docs/DAT.md §15.1 — le registre attribue, avant Incus."""
+    s = sparks.create(db, spec())
+    assert s["ipv4_address"] == "10.77.0.16"
+
+
+def test_deux_sparks_n_obtiennent_pas_la_meme_adresse(db):
+    a = sparks.create(db, spec(name="premier"))
+    b = sparks.create(db, spec(name="second"))
+    assert a["ipv4_address"] != b["ipv4_address"]
+    assert b["ipv4_address"] == "10.77.0.17"
+
+
+def test_l_adresse_est_rendue_a_la_suppression(db):
+    from sparkd.lifecycle import Command
+    a = sparks.create(db, spec(name="premier"))
+    sparks.command(db, a["id"], Command.DELETE)
+    sparks.finish(db, a["id"], success=True)
+    # La plus petite libre redevient celle qui vient d'etre rendue.
+    assert sparks.create(db, spec(name="repris"))["ipv4_address"] == a["ipv4_address"]
+
+
+def test_l_adresse_figure_au_journal_d_audit(db):
+    sparks.create(db, spec())
+    ligne = db.execute(
+        "SELECT * FROM audit_log WHERE action='spark.create' AND result='ok'"
+    ).fetchone()
+    assert "10.77.0.16" in ligne["message"]

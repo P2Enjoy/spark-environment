@@ -19,6 +19,7 @@ from contextlib import contextmanager
 from fastapi import Body, FastAPI, HTTPException
 
 from . import __version__
+from .addressing import DHCP_RANGE, AddressPoolExhausted, usage
 from .admission import HostNotConfigured, pools
 from .config import Config
 from .db import connect
@@ -155,6 +156,8 @@ def create_app(config: Config) -> FastAPI:
                     },
                 ) from erreur
             row = connection.execute("SELECT * FROM host WHERE id = 1").fetchone()
+            connection_usage = connection
+            adresses = usage(connection)
         return {
             "hostname": row["hostname"],
             "cpu": {
@@ -167,6 +170,12 @@ def create_app(config: Config) -> FastAPI:
                 "storage_bytes": row["storage_reserve_bytes"],
             },
             "pools": etat.as_dict(),
+            "addresses": {
+                "capacity": adresses.capacity,
+                "used": adresses.used,
+                "free": adresses.free,
+                "dhcp_dynamic_range": DHCP_RANGE,
+            },
             "topology_synced_at": row["topology_synced_at"],
             # docs/DAT.md §7.3 bis : ne jamais présenter la réservation comme
             # une garantie absolue tant que SPK-29 n'est pas livrée.
@@ -222,6 +231,7 @@ def create_app(config: Config) -> FastAPI:
             memory_swap=bool(spark["memory_swap"]),
             storage_io_priority=spark["storage_io_priority"],
             runtime=spark["runtime"],
+            ipv4_address=spark["ipv4_address"],
         )
         try:
             config = translate(manifest, cpus, capacite)
@@ -263,6 +273,9 @@ def create_app(config: Config) -> FastAPI:
                         for m in refus.decision.shortfalls
                     ],
                 }) from refus
+            except AddressPoolExhausted as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "address_pool_exhausted", "message": str(erreur)}) from erreur
             except service.SparkError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "refused", "message": str(erreur)}) from erreur

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from secrets import token_hex
 
+from .addressing import AddressPoolExhausted, allocate
 from .admission import Request, admit, pools
 from .db import transaction
 from .lifecycle import Command, State, TransitionError, next_state, reconcile, settle
@@ -117,28 +118,33 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "respon
             # l'atomicité exigée au §14.2 reste entière.
             refus = decision
         else:
+            # L'adresse est attribuee dans la MEME transaction que la ligne :
+            # deux creations concurrentes ne doivent pas obtenir la meme
+            # (docs/DAT.md §15.3).
+            adresse = allocate(connection)
             connection.execute(
                 """INSERT INTO spark (
                        id, name, state, runtime, image, cpu_mode, cpu_reservation,
                        cpu_max, cpu_cores, cpu_priority, memory_reservation_bytes,
                        memory_enforce, memory_swap, network_reservation_bps,
                        network_burst_bps, storage_bytes, storage_io_priority,
-                       docker_enabled, created_at, updated_at)
-                   VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       docker_enabled, ipv4_address, created_at, updated_at)
+                   VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     spark_id, spec.name, spec.runtime, spec.image, spec.cpu_mode,
                     spec.cpu_reservation, spec.cpu_max, spec.cpu_cores, spec.cpu_priority,
                     spec.memory_bytes, spec.memory_enforce, 1 if spec.memory_swap else 0,
                     spec.network_bps, spec.network_burst_bps or spec.network_bps,
                     spec.storage_bytes, spec.storage_io_priority,
-                    1 if spec.docker_enabled else 0, _now(), _now(),
+                    1 if spec.docker_enabled else 0, adresse, _now(), _now(),
                 ),
             )
             _audit(
                 connection, actor, "spark.create", spark_id,
                 {"name": spec.name, "cpu_mode": spec.cpu_mode,
-                 "memory_bytes": spec.memory_bytes, "storage_bytes": spec.storage_bytes},
-                "ok", f"Spark « {spec.name} » enregistré, en attente d'application.",
+                 "memory_bytes": spec.memory_bytes, "storage_bytes": spec.storage_bytes,
+                 "ipv4_address": adresse},
+                "ok", f"Spark « {spec.name} » enregistré sur {adresse}, en attente d'application.",
             )
 
     if refus is not None:

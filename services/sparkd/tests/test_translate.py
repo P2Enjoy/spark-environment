@@ -236,3 +236,14 @@ def test_charge_utile_separe_depot_et_alias():
     payload = translate(manifeste(), SHARED, POOL).as_payload("sparkbr0", "spark")
     assert payload["source"]["alias"] == "debian/13"
     assert payload["source"]["server"] == "https://images.linuxcontainers.org"
+
+
+def test_l_adresse_est_epinglee_sur_le_nic():
+    """@verifies docs/DAT.md §15.1 — Incus applique, il n'attribue pas."""
+    c = translate(manifeste(ipv4_address="10.77.0.42"), SHARED, POOL)
+    assert c.devices["eth0"]["ipv4.address"] == "10.77.0.42"
+
+
+def test_sans_adresse_aucun_epinglage():
+    c = translate(manifeste(), SHARED, POOL)
+    assert "ipv4.address" not in c.devices["eth0"]

@@ -86,6 +86,7 @@ class Manifest:
     memory_swap: bool = False
     storage_io_priority: int = 5
     runtime: str = "container"
+    ipv4_address: str | None = None
 
 
 @dataclass(frozen=True)
@@ -256,6 +257,10 @@ def translate(
             "limits.max": str(manifest.network_burst_bps),
         },
     }
+    if manifest.ipv4_address:
+        # Épinglage : c'est le registre qui a attribué, Incus ne fait
+        # qu'appliquer (docs/DAT.md §15.1).
+        devices["eth0"]["ipv4.address"] = manifest.ipv4_address
 
     return IncusConfig(
         name=manifest.name,
