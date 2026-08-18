@@ -19,6 +19,7 @@ from contextlib import contextmanager
 from fastapi import Body, FastAPI, HTTPException
 
 from . import __version__
+from . import cores as core_pool
 from .addressing import DHCP_RANGE, AddressPoolExhausted, usage
 from .admission import HostNotConfigured, pools
 from .config import Config
@@ -207,16 +208,25 @@ def create_app(config: Config) -> FastAPI:
             "storage_total_bytes": topology.storage_total_bytes,
         }
 
-    def _shared_cpuset(connection) -> tuple[list[int], float]:
-        """CPU du pool partagé, et sa capacité en cœurs physiques."""
-        cpus = [
-            r["cpu_id"] for r in connection.execute(
-                "SELECT t.cpu_id FROM cpu_thread t JOIN cpu_core c ON c.id = t.core_id"
-                " WHERE c.pool = 'shared' ORDER BY t.cpu_id"
-            )
-        ]
-        capacite = pools(connection).cpu.capacity
-        return cpus, capacite
+    def _redistribute(connection, redistribution) -> None:
+        """Applique à Incus la reconfiguration des Sparks partagés.
+
+        Le registre a déjà tout écrit dans une transaction (docs/DAT.md
+        §7.4 ter) ; cette application-ci est faite Spark par Spark et n'est pas
+        atomique. Si elle échoue en chemin, le registre reste la référence.
+        """
+        cpuset = ",".join(str(c) for c in redistribution.shared_cpus)
+        for entree in redistribution.reconfigured:
+            config = {"limits.cpu": cpuset}
+            if entree["allowance"] is not None:
+                config["limits.cpu.allowance"] = entree["allowance"]
+            try:
+                app.state.incus.update_instance_config(entree["name"], config)
+            except IncusError:
+                # Ne pas interrompre : les Sparks suivants doivent être
+                # reconfigurés eux aussi. L'écart sera repris à la
+                # réconciliation.
+                continue
 
     def _apply_to_incus(connection, spark: dict) -> None:
         """Crée réellement l'instance, puis conclut la transition.
@@ -224,7 +234,25 @@ def create_app(config: Config) -> FastAPI:
         Le registre a déjà sa ligne (docs/DAT.md §14.2) : ce qui suit ne peut
         donc plus laisser d'instance orpheline.
         """
-        cpus, capacite = _shared_cpuset(connection)
+        if spark["cpu_mode"] in ("dedicated", "shared-pinned"):
+            deja = core_pool.dedicated_cpus(connection, spark["id"])
+            if not deja:
+                try:
+                    redistribution = core_pool.carve(
+                        connection, spark["id"], spark["cpu_cores"]
+                    )
+                except core_pool.CoreAllocationError as erreur:
+                    service.finish(connection, spark["id"], success=False, error=str(erreur))
+                    raise HTTPException(status_code=409, detail={
+                        "error": "core_allocation_failed",
+                        "message": str(erreur)}) from erreur
+                _redistribute(connection, redistribution)
+            epingles = core_pool.dedicated_cpus(connection, spark["id"])
+        else:
+            epingles = None
+
+        cpus = core_pool.shared_cpus(connection)
+        capacite = core_pool.shared_capacity(connection)
         manifest = Manifest(
             name=spark["name"], image=spark["image"], cpu_mode=spark["cpu_mode"],
             memory_bytes=spark["memory_reservation_bytes"],
@@ -239,7 +267,7 @@ def create_app(config: Config) -> FastAPI:
             ipv4_address=spark["ipv4_address"],
         )
         try:
-            config = translate(manifest, cpus, capacite)
+            config = translate(manifest, cpus, capacite, dedicated_cpus=epingles)
             app.state.incus.create_instance(
                 config.as_payload(config_network, config_pool)
             )
@@ -254,6 +282,12 @@ def create_app(config: Config) -> FastAPI:
 
     config_network = "sparkbr0"
     config_pool = config.storage_pool
+
+    @app.get("/v1/host/cores", tags=["hote"])
+    def host_cores() -> dict:
+        """Partage des cœurs entre pool commun et Sparks dédiés."""
+        with registry() as connection:
+            return core_pool.layout(connection)
 
     @app.get("/v1/sparks", tags=["sparks"])
     def list_sparks() -> dict[str, object]:
@@ -335,6 +369,10 @@ def create_app(config: Config) -> FastAPI:
                 try:
                     if apres["incus_name"]:
                         app.state.incus.delete_instance(apres["incus_name"])
+                    if apres["cpu_mode"] in ("dedicated", "shared-pinned"):
+                        # Les cœurs retournent au pool, et les Sparks partagés
+                        # retrouvent un poids calculé sur la capacité élargie.
+                        _redistribute(connection, core_pool.release(connection, apres["id"]))
                 except IncusError as erreur:
                     service.finish(connection, apres["id"], success=False, error=str(erreur))
                     raise HTTPException(status_code=502, detail={

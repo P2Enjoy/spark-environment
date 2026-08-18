@@ -41,6 +41,8 @@ class IncusClient(Protocol):
 
     def delete_instance(self, name: str) -> None: ...
 
+    def update_instance_config(self, name: str, config: dict[str, str]) -> None: ...
+
 
 @dataclass
 class UnixSocketIncus:
@@ -125,6 +127,14 @@ class UnixSocketIncus:
     def delete_instance(self, name: str) -> None:
         self._request("DELETE", f"/1.0/instances/{name}", None)
 
+    def update_instance_config(self, name: str, config: dict[str, str]) -> None:
+        """Fusionne des cles de configuration, sans toucher au reste.
+
+        PATCH et non PUT : un PUT remplacerait la configuration entiere et
+        effacerait tout ce qu'on ne renvoie pas.
+        """
+        self._request("PATCH", f"/1.0/instances/{name}", {"config": config})
+
 
 @dataclass
 class FakeIncus:
@@ -169,6 +179,11 @@ class FakeIncus:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         del self.created[name]
+
+    def update_instance_config(self, name: str, config: dict[str, Any]) -> None:
+        if name not in self.created:
+            raise IncusError(f"Instance « {name} » absente.")
+        self.created[name].setdefault("config", {}).update(config)
 
 
 # Releve reel de l'hote de validation, 2026-08-18 : Dell R320, Xeon E5-1410 v2,

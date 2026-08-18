@@ -187,3 +187,50 @@ def test_la_capacite_reflete_les_sparks_crees(tmp_path):
     pools = c.get("/v1/host").json()["pools"]
     assert pools["cpu"]["allocated"] == 1.5
     assert pools["cpu"]["available"] == 2.5
+
+
+# --- decoupe des coeurs dedies par HTTP (SPK-06) ---------------------------
+
+def test_un_spark_dedie_decoupe_le_pool_et_reconfigure_les_partages(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-06 · docs/DAT.md §7.4 bis"""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="partage", cpu_reservation=0.5))
+    c.post("/v1/sparks/partage/apply")
+
+    avant = c.get("/v1/host/cores").json()
+    assert avant["shared"]["capacity"] == 4.0 and avant["dedicated"] == []
+
+    c.post("/v1/sparks", json=_spec(
+        name="postgres", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=2))
+    c.post("/v1/sparks/postgres/apply")
+
+    apres = c.get("/v1/host/cores").json()
+    assert apres["shared"]["capacity"] == 2.0
+    # Freres SMT emportes ensemble : coeurs 0 et 1 -> CPU 0,4 et 1,5.
+    assert sorted(cpu for d in apres["dedicated"] for cpu in d["cpus"]) == [0, 1, 4, 5]
+    assert apres["shared"]["cpus"] == [2, 3, 6, 7]
+
+
+def test_la_suppression_d_un_dedie_rend_les_coeurs(tmp_path):
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(
+        name="postgres", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=2))
+    c.post("/v1/sparks/postgres/apply")
+    assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 2.0
+    c.post("/v1/sparks/postgres/delete")
+    rendu = c.get("/v1/host/cores").json()
+    assert rendu["shared"]["capacity"] == 4.0 and rendu["dedicated"] == []
+
+
+def test_decoupe_impossible_refusee_sans_casser_le_spark(tmp_path):
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="p", cpu_reservation=0.5))
+    c.post("/v1/sparks/p/apply")
+    c.post("/v1/sparks", json=_spec(
+        name="glouton", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=4))
+    refus = c.post("/v1/sparks/glouton/apply")
+    assert refus.status_code == 409
+    assert "aucun" in refus.json()["detail"]["message"]
+    # Le pool n'a pas bouge, et le Spark reste reprenable.
+    assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 4.0
+    assert c.get("/v1/sparks/glouton").json()["state"] == "error"
