@@ -823,3 +823,54 @@ manquait : une adresse privée stable à laquelle adosser une route
 `domaine → spark → port`. Caddy n'est pas encore installé sur l'hôte. **SPK-11**
 (clés SSH) est l'autre suite naturelle et ne dépend de rien de bloqué. SPK-06,
 SPK-29 et SPK-28 restent ouvertes.
+
+
+---
+
+## 2026-08-19 — SPK-03 close : le registre cesse de promettre l'ARC
+
+**Unité** : SPK-03, première `[ ]` dans l'ordre du plan. Le journal précédent
+désignait SPK-12 et SPK-11, mais deux unités les précèdent au plan et §4.2 fait
+foi. SPK-03 était presque entière : ne manquait que le report de `zfs_arc_max`
+dans `host.memory_reserve_bytes` — et ce « seul » point était un défaut de
+comptabilité sur la promesse centrale du produit.
+
+**Le défaut, chiffré.** Le registre annonçait **98,0 Gio allouables avec une
+réserve à zéro**, alors que l'ARC ZFS était plafonné à 16 Gio qu'il peut prendre
+à tout instant, sans prévenir. Un cinquième du pool était promis en trop.
+
+**Un second écart, découvert en mesurant le premier.** `memory.total` d'Incus est
+la RAM **physique** : 105 226 698 752 octets, soit 98,0 Gio de barrettes, quand
+`/proc/meminfo` rend `MemTotal` à 94,2 Gio. Les 4 Gio d'écart sont réservés par
+le micrologiciel et le noyau — aucun processus ne les obtiendra jamais. Promettre
+le total physique, c'est promettre de la mémoire qui n'existe pas. Le registre
+retient désormais `MemTotal`.
+
+**Résultat sur l'hôte** : `94,2 − (16 ARC + 2 marge) = 76,2 Gio` réellement
+allouables, contre 98,0 annoncés auparavant. L'admission control refuse
+maintenant sur la bonne capacité — une demande de 80 Gio est rejetée avec
+« 81 854 656 512 disponibles ».
+
+**Trois règles posées, toutes contre une supposition silencieuse.** Un ARC
+illisible ne vaut pas zéro : la réserve retombe sur la marge et le relevé est
+journalisé en `denied`. Un `zfs_arc_max` à `0` ne vaut pas zéro non plus — ZFS
+applique son défaut, la moitié de la RAM, et c'est cette moitié qui est retenue.
+Et une réserve qui avale toute la mémoire le **dit**, au lieu d'annoncer
+« 0 allouable » sans explication, ce qui ferait chercher le défaut ailleurs
+longtemps.
+
+**Deux preuves révisées, non contournées.** « `memory.total` nul fait échouer le
+relevé » n'a plus lieu d'être puisque la mémoire ne vient plus d'Incus ; le cas
+vérifie désormais que la valeur d'Incus n'influence plus rien. Et la fixture fige
+`MemTotal` autant que l'ARC : sans cela les tests mesuraient la RAM et la
+présence de ZFS sur la machine qui les exécute, pas le produit.
+
+**Vérifié.** 273 tests verts, campagne complète verte, et le relevé réel
+ci-dessus.
+
+**Où reprendre.** **SPK-06**, allocation des cœurs dédiés et découpe dynamique du
+pool — désormais la première `[ ]` du plan. Tout ce qu'elle demande est établi :
+la topologie et les frères SMT sont dans le registre, la reconfiguration du
+cpuset à chaud est mesurée non disruptive, et le traducteur refuse volontairement
+de choisir les cœurs en attendant cet ordonnanceur. SPK-29 et SPK-28 restent
+ouvertes.

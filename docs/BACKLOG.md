@@ -41,13 +41,18 @@ Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
   id 0, id 4`, `Core 1 → 1, 5`, `Core 2 → 2, 6`, `Core 3 → 3, 7` : concordance
   exacte avec `/sys`, frèrage SMT compris.
 
-### [ ] SPK-03 · Installation Incus, pool de stockage et bridge privé sur l'hôte
+### [x] SPK-03 · Installation Incus, pool de stockage et bridge privé sur l'hôte
 
-- Spécification : `docs/DAT.md` §3, §5, §8.5
-- Dépend de : rien pour la voie provisoire ; SPK-28 pour l'exploitation réelle
-- DoD : un conteneur de test démarre, obtient une IP sur `sparkbr0`, le quota
-  `size` du disque racine est vérifié par écriture réelle jusqu'au refus, et
-  `zfs_arc_max` est posé puis reporté dans `host.memory_reserve_bytes`.
+- Spécification : `docs/DAT.md` §3, §5, §8.5, §16
+- Dépend de : SPK-28 pour l'exploitation réelle — le pool reste sur fichier
+- **Clos le 2026-08-19.** Les quatre exigences sont satisfaites et archivées :
+  Incus 7.3 installé depuis le dépôt amont, pool ZFS et bridge créés, un
+  conteneur démarre et obtient `10.77.0.16` sur `sparkbr0`, le quota `size`
+  s'arrête exactement à 10 Gio sous écriture incompressible, et `zfs_arc_max`
+  est posé à 16 Gio **puis reporté** dans `host.memory_reserve_bytes`.
+- Effet du dernier point : le pool mémoire annoncé passe de **98,0 Gio à
+  76,2 Gio réellement allouables**, et l'admission control refuse désormais sur
+  la capacité corrigée.
 
 ## Lot 1 — Registre et admission control
 

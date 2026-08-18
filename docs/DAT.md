@@ -979,10 +979,11 @@ Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
 
 ### Restant à vérifier
 
-12. **`zfs_arc_max`** — plafonné à 16 Gio sur décision du responsable et persisté
-    dans `/etc/modprobe.d/zfs.conf`. Reste à vérifier que la consommation réelle
-    de l'ARC demeure sous ce plafond en charge, et que la valeur est bien
-    soustraite via `host.memory_reserve_bytes`.
+12. **`zfs_arc_max` soustrait du pool** — **confirmé le 2026-08-19.** Plafonné à
+    16 Gio, lu sur le module et reporté dans `host.memory_reserve_bytes` avec la
+    marge d'exploitation : le pool annoncé passe de 98,0 à 76,2 Gio. Reste à
+    vérifier la seule chose que la mesure statique ne dit pas : que la
+    consommation réelle de l'ARC demeure sous son plafond **en charge**.
 13. **Compression et quota** — la compression étant active, le quota porte sur les
     octets **stockés**, pas sur les octets logiques. Décision à prendre : documenter
     l'écart, ou désactiver la compression par jeu de données. §8.7.

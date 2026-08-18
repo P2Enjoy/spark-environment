@@ -71,14 +71,19 @@
 - Adressage du réseau privé : attribution déterministe par le registre,
   épinglage dans Incus, plage DHCP dynamique disjointe.
 
+- Réserve de l'hôte : le plafond de l'ARC ZFS et une marge d'exploitation
+  réglable sont soustraits du pool mémoire, qui passe de 98,0 à 76,2 Gio
+  réellement allouables sur l'hôte de validation.
+
 ### Modifié
 
-- `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
+- `.gitignore` :
+- `docs/DAT.md` §5.2 : la mémoire totale vient de `/proc/meminfo`, non d'Incus. remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
 - `docs/SCHEMA.md` : nouveau §12, mécanique des migrations.
 - `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi ;
   nouveaux §5.1 à §5.3, accès à Incus et relevé de l'inventaire ; nouveau
   §7.2 ter, rendu exact des valeurs CPU ; nouveau §14, cycle de vie d'un Spark ;
-  nouveau §15, adressage du réseau privé.
+  nouveau §15, adressage du réseau privé ; nouveau §16, la réserve de l'hôte.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel
