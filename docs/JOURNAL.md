@@ -2897,3 +2897,55 @@ sa modale (§6.27), puis le parcours E2E complet de sa DoD. SPK-38 se solde d'un
 parcours E2E — l'onglet de supervision existe et l'ancre s'y voit. SPK-37 se
 solde d'une mesure sur un vrai tunnel ; SPK-30 et SPK-29 sur l'hôte. SPK-28,
 SPK-35, SPK-36, SPK-42, INC-01 et INC-02 attendent votre arbitrage.
+
+## 2026-08-20 — SPK-41 : le catalogue a son écran, et une console sans serveur y mène
+
+**Unité** : SPK-41, reprise là où le journal précédent l'arrêtait — l'écran
+d'administration. Sa spécification existait (§22.4 ter) mais ne disait pas **où**
+l'écran vit : j'ai complété ce seul point (**§22.4.7 bis** et **ter**), committé
+avant la première ligne de code.
+
+**Ce qui est livré.** Une destination **« Serveurs »** au premier degré. Elle gère
+ce qui est *déclaré*, là où le sélecteur au-dessus choisit ce qu'on *regarde* —
+deux sujets, deux surfaces. Elle ne pouvait pas être un onglet sous *Hôte* : un
+catalogue rangé là disparaîtrait avec le tunnel qui le sert, alors qu'il est
+justement ce qui permet d'en choisir un autre.
+
+Le tableau signale le serveur courant, permet d'en changer, et le retrait se
+confirme en **nommant** le serveur et en disant ce qui n'est pas touché. La modale
+d'ajout ne demande que ce que le **genre** exige : un alias ne montre ni
+utilisateur ni port, parce que le produit ne les connaît pas — les afficher serait
+mentir. L'épreuve est un bouton de cette modale, et son verdict ne bloque jamais
+l'enregistrement.
+
+**Deux défauts trouvés par la mesure, pas par la relecture.**
+
+1. En produisant la capture « aucun serveur enregistré » que la DoD exige :
+   sans serveur, la console affichait une **erreur globale** et l'écran du
+   catalogue était **inatteignable** — alors que c'est le seul endroit d'où en
+   déclarer un. C'était exactement le défaut que l'unité nommait en premier. Elle
+   y mène désormais.
+2. Par le parcours E2E : sur un fichier en **forme historique**, où le serveur
+   courant est nul, l'ajout d'un second serveur lui **volait le contexte**, alors
+   que la lecture, elle, montrait le premier. Le test unitaire ne pouvait pas le
+   voir : il part d'un fichier neuf, où le premier enregistrement pose déjà le
+   courant.
+
+**Vérifié.** 617 tests Python, **300 de console** dont 16 propres à cet écran, 88
+de l'hôte console, 6 de contrat, 8 gestes, **25 parcours E2E** dont les deux de
+cette unité, 7 contrôles du manuel, build, contrat sans dérive. Captures 44, 45,
+46 et illustration `m3-serveurs` observées. Manuel M3 réécrit.
+
+**Ce qui reste, et c'est le seul écart.** La **modification** d'une entrée
+existante : le formulaire remplace par le nom — `POST` écrase l'homonyme — mais
+aucun bouton n'ouvre la modale pré-remplie sur un serveur déjà déclaré. Le
+contournement marche et n'est pas dit, ce qui est le pire des deux. Le **seed**
+n'est pas touché : l'inventaire vit sur le poste et non dans le registre, et
+reste à décider si la pile de développement doit en déclarer deux pour montrer le
+sélecteur.
+
+**Où reprendre.** **SPK-41**, pour clore : le bouton « Modifier » qui ouvre la
+modale pré-remplie, et la décision sur le seed. Puis **SPK-42** (nommer la
+machine) ou SPK-43. SPK-38 se solde d'un parcours E2E — l'onglet de supervision
+existe. SPK-37 se solde d'une mesure sur un vrai tunnel ; SPK-30 et SPK-29 sur
+l'hôte. SPK-28, SPK-35, SPK-36, INC-01 et INC-02 attendent votre arbitrage.

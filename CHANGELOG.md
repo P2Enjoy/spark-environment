@@ -203,6 +203,10 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **Écran du catalogue des serveurs** (SPK-41) : destination « Serveurs » au
+  premier degré — ajouter, basculer, retirer depuis la console, avec l'épreuve
+  affichée dans la modale et les `Host` du `ssh_config` proposés. Une console
+  sans serveur y mène désormais, au lieu d'afficher une erreur globale.
 - **Catalogue des serveurs** (SPK-41, socle) : genre `alias` qui délègue la
   connexion à OpenSSH, version du fichier, serveur courant persisté avec son
   sélecteur, retrait qui ferme le tunnel, proposition des `Host` du `ssh_config`,

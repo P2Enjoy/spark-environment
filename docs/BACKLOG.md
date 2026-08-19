@@ -1302,19 +1302,40 @@ l'est pas.** Contrat au §22.4 ter du DAT, écrit et committé avant le code.
   barre latérale de 240 px.
 - Deux preuves **révisées avec leur raison** : le message d'un genre inconnu
   énumère trois genres, et le fichier a un objet à sa racine.
-- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. **l'écran d'administration du catalogue** — ajouter, modifier et retirer un
-     serveur depuis la console, avec l'épreuve affichée et les candidats du
-     `ssh_config` proposés. Les routes existent et sont prouvées ; **aucune
-     surface ne les appelle**, et une entrée s'ajoute donc toujours à la main.
-     Le §6.27 en fait une section avec sa modale ;
-  2. par conséquent, le **parcours E2E** de la DoD — ajouter, voir l'épreuve,
-     basculer, rompre et rouvrir, retirer — n'est pas écrit : la moitié de ses
-     gestes n'a pas d'écran. Ce qui est atteignable aujourd'hui l'est par les
-     routes, et c'est prouvé là ;
-  3. la capture de l'état « aucun serveur enregistré », qui appartient à cet
-     écran ;
-  4. manuel M3 et seed, qui décrivent le catalogue tel qu'il sera administré.
+**L'écran est LIVRÉ le 2026-08-20**, et sa surface est tranchée au §22.4.7 bis.
+
+- Destination **« Serveurs »** au premier degré : elle gère ce qui est **déclaré**,
+  là où le sélecteur au-dessus choisit ce qu'on **regarde**. Elle ne pouvait pas
+  être un onglet sous *Hôte* — un catalogue rangé là disparaîtrait avec le tunnel
+  qui le sert, alors qu'il est ce qui permet d'en choisir un autre.
+- Tableau des serveurs, ligne du courant signalée, bascule, retrait confirmé qui
+  **nomme** le serveur et dit ce qui n'est pas touché.
+- Modale d'ajout dont les **champs suivent le genre** (§22.4.7 ter), candidats du
+  `ssh_config` proposés dans une liste où l'on peut saisir librement, et
+  **épreuve** dont le verdict ne bloque jamais l'enregistrement.
+- **Défaut trouvé en produisant la capture de la DoD** : sans aucun serveur, la
+  console affichait une erreur globale et l'écran du catalogue était
+  **inatteignable** — alors que c'est le seul endroit d'où en déclarer un. Elle y
+  mène désormais.
+- **Défaut trouvé par le parcours E2E** : sur un fichier en forme historique, où
+  le courant est nul, l'ajout d'un second serveur lui **volait le contexte**,
+  alors que la lecture montrait le premier. Le test unitaire ne le voyait pas — il
+  partait d'un fichier neuf.
+- **Preuves** : 300 tests de console dont 16 propres à cet écran, 88 de l'hôte
+  console, 617 Python, **25 parcours E2E** dont les deux de cette unité — le
+  parcours complet de la DoD (ajouter, éprouver, basculer, retirer, avec l'effet
+  constaté sur l'inventaire du poste à chaque étape) et le refus d'un secret ;
+  build ; contrat sans dérive.
+- **Observé** : `e2e/captures/44-serveurs.png`, `45-serveurs-ajout.png`,
+  `46-serveurs-aucun.png` (l'état que la DoD nomme), et
+  `docs/manuel/images/m3-serveurs.png`. Manuel M3 réécrit.
+- **Reste, et c'est le seul écart** : la **modification** d'une entrée existante.
+  Le formulaire ajoute et remplace par le nom — `POST` écrase l'entrée homonyme —
+  mais aucun bouton n'ouvre la modale pré-remplie sur un serveur existant. Le
+  contournement est de le ressaisir sous le même nom, ce qui marche et n'est pas
+  dit. Le **seed** n'est pas touché non plus : l'inventaire vit sur le poste, pas
+  dans le registre, et la pile de développement en écrit déjà un — reste à
+  décider s'il doit en porter deux pour montrer le sélecteur.
 
 ### [ ] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
 
