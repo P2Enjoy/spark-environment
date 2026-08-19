@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from . import __version__
 from . import cores as core_pool
@@ -35,6 +36,7 @@ from . import ingress as ingress_service
 from . import audit as audit_service
 from . import metrics as metrics_service
 from . import snapshots as snapshot_service
+from . import protection as protection_service
 from . import sshkeys
 from .lifecycle import Command
 from .migrations import applied, upgrade, verify
@@ -536,6 +538,7 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "snapshot")
                 return snapshot_service.create(
                     connection, spark, body.get("name", ""), app.state.incus
                 )
@@ -560,6 +563,7 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "snapshot")
                 return snapshot_service.restore(
                     connection, spark, snapshot, app.state.incus,
                     accept_losing_newer=bool((body or {}).get("accept_losing_newer")),
@@ -586,6 +590,7 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "snapshot")
                 snapshot_service.delete(connection, spark, snapshot, app.state.incus)
             except (service.NotFound, snapshot_service.SnapshotError) as erreur:
                 raise HTTPException(status_code=404, detail={
@@ -594,6 +599,65 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
             return {"deleted": snapshot}
+
+    # --- la protection (SPK-34, docs/DAT.md §35.5) --------------------------
+
+    def _refus_protege(erreur: protection_service.SparkProtected) -> HTTPException:
+        """423, et non 409. Confondre « impossible maintenant » et « verrouillé
+        exprès » ferait chercher une cause qui n'existe pas (§35.5)."""
+        return HTTPException(status_code=423, detail={
+            "error": "spark_protected", "message": str(erreur),
+            "spark": erreur.spark, "gesture": erreur.geste,
+        })
+
+    @app.exception_handler(protection_service.SparkProtected)
+    def _protege(request, exc):  # noqa: ANN001 — signature imposée par Starlette
+        refus = _refus_protege(exc)
+        return JSONResponse(status_code=refus.status_code, content=refus.detail)
+
+    @app.get("/v1/sparks/{name}/protection", tags=["protection"])
+    def read_protection(name: str) -> dict:
+        """Un booléen et une date. JAMAIS l'empreinte, le sel ou les paramètres."""
+        with registry() as connection:
+            try:
+                return protection_service.status(connection, name)
+            except protection_service.ProtectionError as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+
+    @app.post("/v1/sparks/{name}/protection", tags=["protection"], status_code=200)
+    def arm_protection(name: str, body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                return protection_service.arm(connection, name,
+                                              str(body.get("password", "")))
+            except protection_service.BadProtectionPassword as erreur:
+                raise HTTPException(status_code=403, detail={
+                    "error": "bad_protection_password",
+                    "message": str(erreur)}) from erreur
+            except protection_service.ProtectionError as erreur:
+                # « Aucun Spark nommé » et « déjà protégé » ne sont pas le même
+                # refus : le premier est un 404, le second un 409.
+                introuvable = "Aucun Spark" in str(erreur)
+                raise HTTPException(
+                    status_code=404 if introuvable else 409,
+                    detail={"error": "not_found" if introuvable else "already_protected",
+                            "message": str(erreur)}) from erreur
+
+    @app.delete("/v1/sparks/{name}/protection", tags=["protection"])
+    def lift_protection(name: str, body: dict = Body(default={})) -> dict:
+        """Lever DÉSARME durablement (§35.4). Il n'y a pas de fenêtre de temps."""
+        with registry() as connection:
+            try:
+                return protection_service.disarm(connection, name,
+                                                 str((body or {}).get("password", "")))
+            except protection_service.BadProtectionPassword as erreur:
+                raise HTTPException(status_code=403, detail={
+                    "error": "bad_protection_password",
+                    "message": str(erreur)}) from erreur
+            except protection_service.ProtectionError as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
 
     @app.get("/v1/audit", tags=["audit"])
     def audit_trail(limit: int = 100, result: str | None = None,
@@ -614,6 +678,7 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             try:
                 spark = service.by_name(connection, body.get("spark", ""))
+                protection_service.ensure_writable(connection, spark["name"], "ingress")
                 route = ingress_service.declare(
                     connection, spark["id"], body.get("domain", ""),
                     int(body.get("port", 0)), bool(body.get("tls", True)),
@@ -641,6 +706,14 @@ def create_app(config: Config) -> FastAPI:
     def remove_route(domain: str) -> dict:
         with registry() as connection:
             try:
+                # §35.2 : « en ajout COMME EN RETRAIT ». Le Spark visé se lit sur
+                # la route, pas sur l'URL — c'est le domaine qui la désigne.
+                vise = ingress_service.by_domain(connection, domain)
+                cible = connection.execute(
+                    "SELECT name FROM spark WHERE id = ?", (vise["spark_id"],)
+                ).fetchone()
+                if cible is not None:
+                    protection_service.ensure_writable(connection, cible["name"], "ingress")
                 ingress_service.withdraw(connection, domain)
             except ingress_service.IngressError as erreur:
                 raise HTTPException(status_code=404, detail={
@@ -683,10 +756,39 @@ def create_app(config: Config) -> FastAPI:
             return {k: v for k, v in cle.items() if k != "public_key"}
 
     @app.delete("/v1/ssh-keys/{label}", tags=["cles"])
-    def remove_key(label: str) -> dict:
+    def remove_key(label: str, body: dict = Body(default={})) -> dict:
+        """Révoquer n'est JAMAIS refusé par la protection (docs/DAT.md §35.2).
+
+        Le jour où l'on retire l'accès d'une personne partie ou d'une clé qui a
+        fui, un refus ne protégerait rien : il laisserait l'accès en place parce
+        qu'un interrupteur a été oublié ailleurs. Ce serait transformer un
+        garde-fou en vulnérabilité.
+
+        Ce qui reste est le devoir d'INFORMER : le premier appel nomme les Sparks
+        protégés touchés, le second porte `accept_protected` et aboutit. Aucun mot
+        de passe n'est demandé, et aucune protection n'est levée. S'il n'y a aucun
+        Spark protégé, il n'y a pas de refus du tout.
+        """
         with registry() as connection:
             try:
-                concernes = sshkeys.forget(connection, label)
+                proteges = sshkeys.affected_sparks(connection, label, protected_only=True)
+            except sshkeys.SshKeyError as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            if proteges and not bool((body or {}).get("accept_protected")):
+                raise HTTPException(status_code=409, detail={
+                    "error": "protected_sparks_affected",
+                    "message": (
+                        f"Révoquer « {label} » retire son accès à "
+                        f"{len(proteges)} Spark(s) protégé(s) : "
+                        f"{', '.join(proteges)}. Aucune protection ne sera levée."
+                    ),
+                    "protected_sparks": proteges,
+                    "override": "Renvoyer avec {\"accept_protected\": true}.",
+                })
+            try:
+                concernes = sshkeys.forget(connection, label,
+                                           protected_affected=proteges)
             except sshkeys.SshKeyError as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
@@ -704,6 +806,8 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
+                # §35.2 : OCTROYER se refuse. Revoquer, non — voir plus bas.
+                protection_service.ensure_writable(connection, name, "ssh-key-grant")
                 sshkeys.grant(connection, spark["id"], label)
                 _apply_keys(connection, spark)
             except (service.NotFound, sshkeys.SshKeyError) as erreur:
@@ -715,10 +819,27 @@ def create_app(config: Config) -> FastAPI:
             return {"spark": name, "granted": label}
 
     @app.delete("/v1/sparks/{name}/ssh-keys/{label}", tags=["cles"])
-    def revoke_key(name: str, label: str) -> dict:
+    def revoke_key(name: str, label: str, body: dict = Body(default={})) -> dict:
+        """Même mécanique que la révocation au registre (§35.5) : retirer un
+        accès passe toujours, mais dit d'abord ce qu'il traverse."""
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            if (protection_service.is_protected(connection, name)
+                    and not bool((body or {}).get("accept_protected"))):
+                raise HTTPException(status_code=409, detail={
+                    "error": "protected_sparks_affected",
+                    "message": (
+                        f"« {name} » est protégé. Révoquer « {label} » y retire "
+                        "un accès ; aucune protection ne sera levée."
+                    ),
+                    "protected_sparks": [name],
+                    "override": "Renvoyer avec {\"accept_protected\": true}.",
+                })
+            try:
                 sshkeys.revoke(connection, spark["id"], label)
                 _apply_keys(connection, spark)
             except (service.NotFound, sshkeys.SshKeyError) as erreur:
@@ -829,6 +950,8 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
+                # §35.2 : les commandes de cycle de vie visent CE Spark.
+                protection_service.ensure_writable(connection, name, "command")
                 apres = service.command(connection, spark["id"], commande)
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={

@@ -599,6 +599,160 @@
         ]
       }
     },
+    "/v1/sparks/{name}/protection": {
+      "delete": {
+        "description": "Lever DÉSARME durablement (§35.4). Il n'y a pas de fenêtre de temps.",
+        "operationId": "lift_protection_v1_sparks__name__protection_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Lift Protection V1 Sparks  Name  Protection Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lift Protection",
+        "tags": [
+          "protection"
+        ]
+      },
+      "get": {
+        "description": "Un booléen et une date. JAMAIS l'empreinte, le sel ou les paramètres.",
+        "operationId": "read_protection_v1_sparks__name__protection_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Protection V1 Sparks  Name  Protection Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Protection",
+        "tags": [
+          "protection"
+        ]
+      },
+      "post": {
+        "operationId": "arm_protection_v1_sparks__name__protection_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Arm Protection V1 Sparks  Name  Protection Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Arm Protection",
+        "tags": [
+          "protection"
+        ]
+      }
+    },
     "/v1/sparks/{name}/snapshots": {
       "get": {
         "operationId": "list_snapshots_v1_sparks__name__snapshots_get",
@@ -863,6 +1017,7 @@
     },
     "/v1/sparks/{name}/ssh-keys/{label}": {
       "delete": {
+        "description": "Même mécanique que la révocation au registre (§35.5) : retirer un\naccès passe toujours, mais dit d'abord ce qu'il traverse.",
         "operationId": "revoke_key_v1_sparks__name__ssh_keys__label__delete",
         "parameters": [
           {
@@ -884,6 +1039,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -1131,6 +1298,7 @@
     },
     "/v1/ssh-keys/{label}": {
       "delete": {
+        "description": "Révoquer n'est JAMAIS refusé par la protection (docs/DAT.md §35.2).\n\nLe jour où l'on retire l'accès d'une personne partie ou d'une clé qui a\nfui, un refus ne protégerait rien : il laisserait l'accès en place parce\nqu'un interrupteur a été oublié ailleurs. Ce serait transformer un\ngarde-fou en vulnérabilité.\n\nCe qui reste est le devoir d'INFORMER : le premier appel nomme les Sparks\nprotégés touchés, le second porte `accept_protected` et aboutit. Aucun mot\nde passe n'est demandé, et aucune protection n'est levée. S'il n'y a aucun\nSpark protégé, il n'y a pas de refus du tout.",
         "operationId": "remove_key_v1_ssh_keys__label__delete",
         "parameters": [
           {
@@ -1143,6 +1311,18 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

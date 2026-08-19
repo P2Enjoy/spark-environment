@@ -148,8 +148,33 @@ def listing(connection: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in connection.execute("SELECT * FROM ssh_key ORDER BY label")]
 
 
-def forget(connection: sqlite3.Connection, label: str, actor: str = "responsable") -> list[str]:
-    """Retire une clé du registre. Rend les Sparks à réconcilier."""
+def affected_sparks(connection: sqlite3.Connection, label: str,
+                    protected_only: bool = False) -> list[str]:
+    """Les Sparks qu'une révocation toucherait, nommés.
+
+    @spec docs/BACKLOG.md#SPK-34 · docs/DAT.md §35.2 (retirer un accès passe
+          toujours), §35.5 (l'ordre refus-puis-acceptation)
+
+    La protection ne retient JAMAIS un geste qui réduit un risque : ce qui reste
+    est le devoir d'INFORMER. Cette liste est ce que le premier appel annonce.
+    """
+    cle = by_label(connection, label)
+    condition = " AND s.protected_at IS NOT NULL" if protected_only else ""
+    return [
+        r["name"] for r in connection.execute(
+            "SELECT s.name FROM spark s JOIN spark_ssh_key k ON k.spark_id = s.id"
+            f" WHERE k.ssh_key_id = ?{condition} ORDER BY s.name", (cle["id"],)
+        )
+    ]
+
+
+def forget(connection: sqlite3.Connection, label: str, actor: str = "responsable",
+           protected_affected: list[str] | None = None) -> list[str]:
+    """Retire une clé du registre. Rend les Sparks à réconcilier.
+
+    `protected_affected` est journalisé avec la révocation : le §35.2 exige que
+    la trace porte les Sparks protégés que le geste a touchés.
+    """
     cle = by_label(connection, label)
     concernes = [
         r["name"] for r in connection.execute(
@@ -161,8 +186,13 @@ def forget(connection: sqlite3.Connection, label: str, actor: str = "responsable
         connection.execute("DELETE FROM ssh_key WHERE id = ?", (cle["id"],))
         _audit(connection, actor, "sshkey.forget", cle["id"],
                {"label": label, "fingerprint": cle["fingerprint"],
-                "sparks": concernes}, "ok",
-               f"Clé « {label} » retirée ; {len(concernes)} Spark(s) à réconcilier.")
+                "sparks": concernes,
+                # §35.2 : la trace nomme les Sparks protégés touchés, pour qu'on
+                # sache après coup ce que la révocation a traversé.
+                "protected_sparks": list(protected_affected or [])}, "ok",
+               f"Clé « {label} » retirée ; {len(concernes)} Spark(s) à réconcilier."
+               + (f" Sparks protégés touchés : {', '.join(protected_affected)}."
+                  if protected_affected else ""))
     return concernes
 
 

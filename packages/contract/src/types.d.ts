@@ -280,6 +280,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/protection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Protection
+         * @description Un booléen et une date. JAMAIS l'empreinte, le sel ou les paramètres.
+         */
+        get: operations["read_protection_v1_sparks__name__protection_get"];
+        put?: never;
+        /** Arm Protection */
+        post: operations["arm_protection_v1_sparks__name__protection_post"];
+        /**
+         * Lift Protection
+         * @description Lever DÉSARME durablement (§35.4). Il n'y a pas de fenêtre de temps.
+         */
+        delete: operations["lift_protection_v1_sparks__name__protection_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/snapshots": {
         parameters: {
             query?: never;
@@ -372,7 +397,11 @@ export interface paths {
         put?: never;
         /** Grant Key */
         post: operations["grant_key_v1_sparks__name__ssh_keys__label__post"];
-        /** Revoke Key */
+        /**
+         * Revoke Key
+         * @description Même mécanique que la révocation au registre (§35.5) : retirer un
+         *     accès passe toujours, mais dit d'abord ce qu'il traverse.
+         */
         delete: operations["revoke_key_v1_sparks__name__ssh_keys__label__delete"];
         options?: never;
         head?: never;
@@ -444,7 +473,20 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove Key */
+        /**
+         * Remove Key
+         * @description Révoquer n'est JAMAIS refusé par la protection (docs/DAT.md §35.2).
+         *
+         *     Le jour où l'on retire l'accès d'une personne partie ou d'une clé qui a
+         *     fui, un refus ne protégerait rien : il laisserait l'accès en place parce
+         *     qu'un interrupteur a été oublié ailleurs. Ce serait transformer un
+         *     garde-fou en vulnérabilité.
+         *
+         *     Ce qui reste est le devoir d'INFORMER : le premier appel nomme les Sparks
+         *     protégés touchés, le second porte `accept_protected` et aboutit. Aucun mot
+         *     de passe n'est demandé, et aucune protection n'est levée. S'il n'y a aucun
+         *     Spark protégé, il n'y a pas de refus du tout.
+         */
         delete: operations["remove_key_v1_ssh_keys__label__delete"];
         options?: never;
         head?: never;
@@ -914,6 +956,117 @@ export interface operations {
             };
         };
     };
+    read_protection_v1_sparks__name__protection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    arm_protection_v1_sparks__name__protection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lift_protection_v1_sparks__name__protection_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_snapshots_v1_sparks__name__snapshots_get: {
         parameters: {
             query?: never;
@@ -1137,7 +1290,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1296,7 +1455,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

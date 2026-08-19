@@ -178,11 +178,21 @@ def decorate(spark: dict) -> dict:
     redériver de son côté ferait diverger deux copies de la même règle.
     """
     etat = State(spark["state"])
-    return {
+    publie = {
         **spark,
         "allowed_commands": sorted(c.value for c in allowed(etat)),
         "transient": etat in TRANSIENT,
+        # SPK-34 · docs/DAT.md §35.4 : l'état protégé est VISIBLE partout où le
+        # Spark est listé, pas seulement dans sa fenêtre — et un Spark désarmé le
+        # dit aussi clairement, pour que l'oubli de réarmement se voie.
+        "protected": spark.get("protected_at") is not None,
     }
+    # L'empreinte, le sel et les paramètres ne sortent JAMAIS du registre
+    # (docs/SCHEMA.md §4.1). Les publier laisserait attaquer hors ligne un
+    # secret que le §35.1 assume déjà comme faible.
+    for secret in ("protection_hash", "protection_salt", "protection_params"):
+        publie.pop(secret, None)
+    return publie
 
 
 def get(connection: sqlite3.Connection, spark_id: str) -> dict:
