@@ -63,15 +63,17 @@ export function renderModale({ ouverte = false, id = 'modale', titre = '',
  * fait pas : entrer le focus dans le premier contrôle, et le rendre au
  * déclencheur à la fermeture.
  *
+ * Le déclencheur est retrouvé par son **identifiant**, jamais par
+ * `document.activeElement` : la fermeture repeint la surface, et l'élément qui
+ * avait le focus est alors détaché du document. Mesuré — le focus retombait sur
+ * `body` et le contrat du §6.27 n'était pas tenu.
+ *
  * Rend une fonction de nettoyage, ou `null` s'il n'y a pas de modale.
  */
 export function brancherModale(racine, { onFermer } = {}) {
   const dialogue = racine.querySelector('dialog.modale');
   if (!dialogue) return null;
-
-  // Le déclencheur est retenu AVANT l'ouverture : une fois le focus déplacé, on
-  // ne saurait plus à qui le rendre.
-  const declencheur = racine.ownerDocument?.activeElement ?? document.activeElement;
+  const id = dialogue.id;
 
   if (!dialogue.open) {
     if (typeof dialogue.showModal === 'function') dialogue.showModal();
@@ -91,8 +93,10 @@ export function brancherModale(racine, { onFermer } = {}) {
   // `Échap` ferme, et la fermeture ÉQUIVAUT À UNE ANNULATION (§6.27).
   const fermer = () => {
     if (dialogue.open && typeof dialogue.close === 'function') dialogue.close();
-    declencheur?.focus?.();
-    onFermer?.();
+    // La surface est repeinte, PUIS le focus est rendu : l'inverse le poserait
+    // sur un élément que le rendu suivant remplace.
+    onFermer?.(id);
+    racine.querySelector(`[data-ouvre="${id}"]`)?.focus();
   };
   const surCancel = (evenement) => { evenement.preventDefault(); fermer(); };
   dialogue.addEventListener('cancel', surCancel);

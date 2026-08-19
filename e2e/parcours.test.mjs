@@ -469,3 +469,64 @@ test('une facette d’un Spark est une DESTINATION rechargeable', async () => {
     assert.equal(await page.$('#titre-routes'), null);
   });
 });
+
+// --- LE CONTRAT DE LA MODALE (SPK-33, DESIGN_SYSTEM.md §6.27) --------------
+
+test('la modale tient son contrat : focus entrant, Échap, focus rendu', async () => {
+  await parcours('modale-contrat', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-routes');
+
+    // Le déclencheur reste visible : c'est lui qui recevra le focus.
+    await page.focus('[data-ouvre="route"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open]', { timeout: 10000 });
+
+    // Le nom accessible est le TITRE DE LA SECTION : c'est ce qui borne la portée.
+    assert.equal(
+      await page.evaluate(() => {
+        const d = document.querySelector('dialog.modale');
+        return document.getElementById(d.getAttribute('aria-labelledby'))?.textContent.trim();
+      }),
+      'Routes publiques');
+
+    // Le focus entre dans le PREMIER contrôle : ouvrir, c'est commencer à saisir.
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'route-domaine');
+
+    // L'arrière-plan est inerte : on ne peut pas atteindre ce qui est derrière.
+    assert.equal(
+      await page.evaluate(() => {
+        const derriere = document.querySelector('[data-ouvre="route"]');
+        derriere?.focus();
+        return document.activeElement === derriere;
+      }),
+      false, 'le focus ne sort pas de la modale');
+
+    // Échap ferme, et la fermeture ÉQUIVAUT À UNE ANNULATION.
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog.modale[open]'),
+                               { timeout: 10000 });
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute('data-ouvre')),
+      'route', 'le focus revient au déclencheur');
+  });
+});
+
+test('un refus s’affiche DANS la modale et n’efface pas la saisie', async () => {
+  await parcours('modale-refus', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.click('[data-ouvre="route"]');
+    await page.waitForSelector('dialog.modale[open]');
+
+    // `crm.example.com` appartient déjà au CRM dans le seed : la base refuse.
+    await page.fill('#route-domaine', 'crm.example.com');
+    await page.fill('#route-port', '8080');
+    await page.click('[data-engage="route"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+
+    // La modale ne se referme pas : elle perdrait le travail et cacherait la raison.
+    assert.ok(await page.$('dialog.modale[open]'));
+    assert.equal(await page.inputValue('#route-domaine'), 'crm.example.com');
+    assert.equal(await page.inputValue('#route-port'), '8080');
+  });
+});
