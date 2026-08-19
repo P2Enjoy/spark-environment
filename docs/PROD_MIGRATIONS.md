@@ -230,6 +230,32 @@ Point d'exploitation : il n'y a AUCUNE récupération d'un mot de passe perdu pa
                 les quatre colonnes à NULL sur la ligne du Spark concerné.
 ```
 
+### OP-06 · Migration `005_journal_acteur` du registre
+
+```
+Objectif      : donner au journal la CLASSE de son acteur, et le verrouiller en
+                écriture seule (SPK-37, docs/DAT.md §21.6). Trois déclencheurs :
+                UPDATE refusé, DELETE refusé, classe hors domaine refusée.
+Dépend de     : 001_socle_registre
+Commande      : appliquée automatiquement au démarrage de sparkd, qui migre son
+                registre lui-même (docs/SCHEMA.md §12).
+Après         : rien. Aucun relevé, aucune reconfiguration.
+Vérification  : GET /v1/audit rend « actor_class » sur chaque entrée, à valeurs
+                dans {human, runtime}. Puis, en base : un UPDATE et un DELETE
+                sur audit_log échouent tous deux.
+Retour arrière: fourni. Colonne et déclencheurs retirés, sans perte : aucune
+                entrée n'est supprimée.
+Risques       : aucun sur l'existant. Les lignes déjà écrites reçoivent
+                « runtime » : leur acteur réel n'est pas connu, et le supposer
+                humain inventerait une attribution.
+Point d'exploitation : À CONNAÎTRE AVANT LA PREMIÈRE MAINTENANCE. Tout script
+                qui corrigeait ou purgeait audit_log échouera désormais, et
+                c'est le but. La purge du §36.5 n'est pas tranchée : le jour où
+                elle le sera, elle passera par une migration qui suspend le
+                déclencheur, scelle le préfixe dans un point de contrôle, et le
+                repose. Ne PAS supprimer les déclencheurs à la main.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.

@@ -203,6 +203,13 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **Un acteur réel dans le journal** (SPK-37) : la constante « responsable »
+  disparaît du dépôt. L'hôte console déclare qui agit — serveur, et empreinte de
+  la clé SSH quand elle est connue —, `sparkd` porte cette déclaration, et chaque
+  entrée dit sa classe : geste humain ou événement du runtime. L'écran l'affiche
+  et dit « déclaré », jamais « signé » : l'identité attribue, elle ne prouve pas.
+  `UPDATE` et `DELETE` sur `audit_log` sont refusés **par la base**. Migration
+  `005_journal_acteur`.
 - **Sparks protégés** (SPK-34) : un interrupteur par Spark, armé et levé par mot
   de passe, dont le **runtime** fait respecter le refus — `423 spark_protected`
   sur les commandes, les routes, l'octroi d'une clé et les instantanés. Empreinte

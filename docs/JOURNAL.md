@@ -2664,3 +2664,68 @@ passe perdu — un `UPDATE` en root sur l'hôte, l'API n'en offrant aucune.
 pnpm 9.15.4 en place. `docs/MASTER_PLAN.md`, que le §4.1 de `CloudWorker.md`
 nomme, n'existe pas dans ce dépôt : l'ordre du plan et les DoD sont portés par
 `docs/BACKLOG.md`, qui a fait foi.
+
+## 2026-08-19 — SPK-37 : le journal cesse d'affirmer une identité qu'il n'avait pas
+
+**Unité** : SPK-37, désignée par l'entrée précédente. Sa spécification donnait le
+principe (§36.7) mais pas de contrat vérifiable : j'ai écrit le **§21.6** et le
+**§9.1 du schéma**, committés avant la première ligne de code.
+
+**Ce que le journal disait de faux.** `actor` valait la chaîne littérale
+« responsable », écrite en dur dans quatorze signatures. Le journal affirmait une
+identité que rien n'établissait. La constante disparaît du dépôt : l'acteur voyage
+par un **contexte de requête**, posé une seule fois à la frontière du service —
+la raison est celle qui avait imposé le chemin d'écriture unique du §21.1, et ce
+qui se passe à quatorze endroits s'oublie au quinzième. Sans déclaration :
+`inconnu` et `runtime`, jamais une identité inventée.
+
+**La distinction qui comptait.** `actor_class` sépare le geste humain de
+l'événement du runtime (§36.4). Elle est **portée**, jamais déduite du nom de
+l'action — deux chemins peuvent écrire la même. Les cinq recalculs globaux se
+déclarent explicitement `runtime` : souvent déclenchés par une requête humaine
+sans être demandés par elle, ils hériteraient sinon du contexte et le journal
+ferait croire qu'une personne les a réclamés.
+
+**Le verrou.** `UPDATE` et `DELETE` sur `audit_log` sont refusés par la base, pas
+par convention de code. Une table qu'on s'interdit d'écraser par discipline est
+une table qu'on écrasera. Il protège de l'erreur, pas de `root` — et le §36 le
+disait déjà : ce qui protège de `root` est l'ancre tenue ailleurs (SPK-38).
+
+**Un défaut trouvé par la preuve, pas par la relecture.** La forme déclarée
+portait « clé » avec son accent, et **un en-tête HTTP ne transporte pas
+d'accent** : la requête échouait à l'encodage avant d'atteindre `sparkd`. Une
+identité qui casse l'appel qu'elle devait attribuer est pire qu'aucune identité.
+La forme devient ASCII, et `sparkd` borne aussi ce qu'il accepte.
+
+**Ce que l'écran ne dira jamais.** Le libellé est « déclaré par », jamais
+« signé ». L'identité attribue, elle ne prouve pas : qui atteint `sparkd` écrit ce
+qu'il veut dans cet en-tête. C'est la première marche, et une preuve interdit de
+la prendre pour l'escalier.
+
+**Vérifié.** 604 tests Python — dont 18 propres à l'unité : `UPDATE` et `DELETE`
+directs **en base**, complétude vérifiée par lecture du code source, distinction
+des deux classes prouvée de bout en bout par l'API —, 232 de console, 6 de
+contrat, 8 gestes, **22 parcours E2E** dont un dédié, 7 contrôles du manuel,
+build, contrat régénéré. Capture `39-journal-auteur.png` observée.
+
+**Ce qui n'est PAS prouvé, et pourquoi l'unité reste `[~]`.** Le relevé de
+l'empreinte SSH n'est éprouvé que sur la **forme documentée** d'OpenSSH, par test
+unitaire. Aucun `sshd` ni agent ne répond sur cette machine — `ss -lntp` ne montre
+aucun port 22, `ssh-add -l` rend « Could not open a connection ». Rien n'établit
+donc ici qu'un vrai tunnel émet bien cette ligne. Le reste du contrat est prouvé.
+
+**INC-02 réexaminé, et NON tranché** : l'arbitrage vous appartient. Ce que l'unité
+change se mesure — un refus porte maintenant l'identité déclarée, ce qui rend deux
+refus consécutifs distinguables par qui les a demandés. L'écart subsiste sur le
+**nom demandé**, toujours absent du message ; un test le constate plutôt que de le
+masquer.
+
+**Où reprendre.** **SPK-41** (catalogue local des serveurs tenu depuis la console)
+ou **SPK-38** (chaîne d'intégrité et ancre), qui suit naturellement celle-ci.
+SPK-37 se solde d'une mesure sur un vrai tunnel. SPK-30 et SPK-29 se soldent sur
+l'hôte ; SPK-12 attend un domaine, SPK-17 une exécution de CI. SPK-28, SPK-35,
+SPK-36, SPK-42 et INC-02 attendent votre arbitrage.
+
+**Point d'exploitation** : `005_journal_acteur` est portée au contrat de
+déploiement (OP-06). Tout script qui corrigeait ou purgeait `audit_log` échouera
+désormais, et c'est le but ; ne pas supprimer les déclencheurs à la main.

@@ -1053,7 +1053,7 @@ Ce que l'unité doit trancher, pas seulement décrire :
   ce dépôt ne déclare pas fait ce qui n'a pas été éprouvé ; les chiffres de reprise
   observés pendant l'exercice remplacent les chiffres espérés.
 
-### [ ] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
+### [~] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
 
 Le champ `actor` vaut aujourd'hui la chaîne littérale « responsable » ou
 « sparkd » : le journal ne sait pas qui agit. Toute idée de signature bute d'abord
@@ -1074,6 +1074,41 @@ là-dessus (§36.7).
   d'un geste passé par la console est distinct de celui d'un événement du runtime,
   prouvé de bout en bout ; INC-02 est réexaminé au passage — un refus de création
   doit-il porter le nom demandé.
+
+**Livrée le 2026-08-19, sauf un point de preuve nommé plus bas.**
+
+- Migration `005_journal_acteur` : colonne `actor_class`, et **trois
+  déclencheurs** — `UPDATE` et `DELETE` refusés, classe hors domaine refusée.
+  SQLite n'ajoutant pas de `CHECK` à une table existante, la contrainte ne peut
+  pas être une colonne. Contrat au §21.6, schéma au §9.1.
+- La constante `"responsable"` **disparaît du dépôt** : elle affirmait une
+  identité que rien n'établissait. L'acteur voyage par un contexte de requête,
+  pour la raison qui avait imposé le chemin d'écriture unique — ce qui se passe
+  à quatorze endroits s'oublie au quinzième. Sans déclaration : `inconnu` et
+  `runtime`.
+- Les cinq recalculs globaux se déclarent explicitement `runtime`, y compris
+  déclenchés par une requête humaine (§36.4).
+- L'hôte console pose `X-Spark-Actor` : le serveur, et l'empreinte de la clé SSH
+  quand OpenSSH la lui dit. Un en-tête venu du navigateur est **écrasé**.
+- La console affiche l'auteur de chaque ligne, et dit « déclaré », jamais
+  « signé » : l'identité attribue, elle ne prouve pas (§21.6.2).
+- **Preuves** : 604 tests Python — dont 18 propres à l'unité : `UPDATE` et
+  `DELETE` directs **en base** qui échouent, `INSERT` qui reste libre, complétude
+  vérifiée par lecture du code source, et la distinction des deux classes prouvée
+  de bout en bout par l'API ; 232 de console ; 22 parcours E2E dont un dédié ;
+  contrat régénéré. Capture `e2e/captures/39-journal-auteur.png` observée.
+- **INC-02 réexaminé, et NON tranché** : l'arbitrage appartient au responsable.
+  Ce que l'unité change se mesure — un refus portait « responsable » et porte
+  maintenant l'identité déclarée, ce qui rend deux refus consécutifs
+  distinguables par qui les a demandés. L'écart subsiste sur le **nom demandé**,
+  toujours absent du message, et un test le constate au lieu de le masquer.
+- **Reste à prouver, et c'est le seul écart** : le relevé de l'empreinte SSH
+  n'est éprouvé que sur la **forme documentée** d'OpenSSH, par test unitaire.
+  Aucun `sshd` ni agent ne répond sur la machine de cette session (`ss -lntp`
+  ne montre aucun port 22, `ssh-add -l` rend « Could not open a connection »),
+  donc rien n'établit ici qu'un vrai tunnel émet bien cette ligne. Tant que ce
+  n'est pas mesuré contre un serveur réel, l'unité reste `[~]`. Le reste du
+  contrat — verrou, classes, contexte, en-tête, affichage — est prouvé.
 
 ### [ ] SPK-38 · Chaîne d'intégrité du journal et ancre tenue par la console
 
