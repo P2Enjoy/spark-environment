@@ -305,6 +305,9 @@ tbody tr:hover { background: var(--color-hover); }
 .evenement:last-child { border-bottom: 0; }
 .evenement__texte { flex: 1; min-width: 12rem; color: var(--color-text-2); }
 .evenement__date { color: var(--color-text-3); }
+/* SPK-37 · docs/DAT.md §36.4 — qui a produit l'entree. Discret comme la date :
+   c'est une precision, pas le sujet de la ligne. */
+.evenement__auteur { color: var(--color-text-3); font-size: var(--text-compact); }
 
 /* --- Formulaire (§6.9) --------------------------------------------------- */
 .champ { display: grid; gap: var(--space-1); }

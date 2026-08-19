@@ -215,6 +215,28 @@ function renderAcces(spark) {
 </section>`;
 }
 
+/**
+ * Qui a produit une entrée du journal (SPK-37, docs/DAT.md §21.6, §36.4).
+ *
+ * Les deux classes ne se confondent pas : les afficher pareillement laisserait
+ * croire que l'événement du runtime a été demandé par quelqu'un — il ne l'est
+ * par personne, et ne le sera jamais.
+ *
+ * L'identité affichée est DÉCLARATIVE. La console ne la présente donc pas comme
+ * une preuve : le libellé dit « déclaré par », jamais « signé par ».
+ */
+export function renderAuteur(entree) {
+  if (entree?.actor_class === 'runtime') {
+    return `<span class="evenement__auteur" title="Événement produit par le`
+      + ` serveur lui-même. Personne ne l’a demandé, et rien ne le signe.">`
+      + `automatique</span>`;
+  }
+  const qui = entree?.actor && entree.actor !== 'inconnu' ? entree.actor : null;
+  return `<span class="evenement__auteur" title="Identité déclarée par la`
+    + ` console à l’appel. Elle attribue, elle ne prouve pas.">${
+      qui ? `déclaré par ${echapper(qui)}` : 'auteur non déclaré'}</span>`;
+}
+
 function renderJournal(entries = []) {
   if (entries.length === 0) return '';
   const lignes = entries.slice(0, 8).map((e) => {
@@ -222,6 +244,7 @@ function renderJournal(entries = []) {
     return `<li class="evenement">
       <span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span>
       <span class="evenement__texte">${echapper(e.message ?? e.action)}</span>
+      ${renderAuteur(e)}
       <span class="technique evenement__date">${echapper((e.ts ?? '').slice(0, 16).replace('T', ' '))}</span>
     </li>`;
   }).join('');

@@ -153,6 +153,53 @@ test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacit
   });
 });
 
+// --- SPK-37 · QUI A AGI (§21.6, §36.4) --------------------------------------
+
+test('le journal distingue un geste de la console d’un événement du serveur', async () => {
+  await parcours('journal-acteur', async () => {
+    // Un geste RÉEL depuis l'écran, qui produit les deux classes d'un coup : la
+    // demande est humaine, la conclusion appartient à la machine.
+    await ouvrir('crm-production', 'instantanes');
+    await page.focus('[data-ouvre="snapshot"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #instantane-nom');
+    await page.fill('#instantane-nom', 'trace-acteur');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 10000 });
+
+    // Ce que le RUNTIME a écrit (§29.3 : on lit pour constater).
+    const { corps } = await pile.lireSparkd('/v1/audit?limit=200');
+    const geste = corps.entries.find(
+      (e) => e.action === 'snapshot.create' && e.message.includes('trace-acteur'));
+    assert.ok(geste, 'le geste a bien laissé une trace');
+    assert.equal(geste.actor_class, 'human', 'prendre un instantané est un geste HUMAIN');
+    assert.match(geste.actor, /^console\//,
+      'l’identité déclarée par la console remplace « responsable »');
+    assert.notEqual(geste.actor, 'responsable');
+    assert.ok(corps.entries.some((e) => e.actor_class === 'runtime'),
+      'le runtime écrit aussi, et se déclare comme tel');
+
+    // Et l'ÉCRAN ne confond pas les deux classes : le journal du Spark porte
+    // l'auteur de chaque ligne, sans jamais parler de signature.
+    await page.click('.onglet[href$="/journal"]');
+    await page.waitForSelector('#titre-journal', { timeout: 10000 });
+    const journal = await page.textContent('#titre-journal ~ .liste-evenements');
+    assert.match(journal, /automatique/, 'un événement du serveur se dit tel quel');
+    assert.ok(!/signé/.test(journal), 'rien ne doit laisser croire à une signature');
+
+    // Ce parcours REND l'état qu'il a trouvé : la pile est partagée, et un
+    // instantané plus récent changerait la fixture du refus de restauration.
+    await page.click('.onglet[href$="/instantanes"]');
+    await page.waitForSelector('[data-supprime-instantane="trace-acteur"]', { timeout: 10000 });
+    await page.click('[data-supprime-instantane="trace-acteur"]');
+    await page.click('[data-confirme-suppression="trace-acteur"]');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-supprime-instantane="trace-acteur"]'),
+      { timeout: 10000 });
+  });
+});
+
 // --- SPK-34 · LES SPARKS PROTÉGÉS (§35) -------------------------------------
 
 /** Le mot de passe du seed. Ce n'est PAS un secret : la protection est un

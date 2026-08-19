@@ -10,7 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderSparkDetail, renderCommands, renderDetailNotFound, renderProtection, COMMANDES,
+  renderSparkDetail, renderCommands, renderDetailNotFound, renderProtection,
+  renderAuteur, COMMANDES,
 } from './spark-detail.js';
 
 const GIO = 1024 ** 3;
@@ -248,4 +249,43 @@ test("l'absence de recuperation est DITE, pas laissee a decouvrir", () => {
   // mecanisme de secours qui n'existe pas.
   const html = renderProtection(PROTEGE, { open: 'protection', values: {} });
   assert.match(html, /aucune récupération/);
+});
+
+
+// --- qui a produit l'entree du journal (SPK-37, docs/DAT.md §36.4) ---------
+
+test('un evenement du RUNTIME ne se confond pas avec un geste humain', () => {
+  // Les afficher pareillement laisserait croire que le second est signe par
+  // quelqu'un — il ne l'est par personne.
+  const machine = renderAuteur({ actor: 'sparkd', actor_class: 'runtime' });
+  const humain = renderAuteur({ actor: 'console/prod', actor_class: 'human' });
+  assert.match(machine, /automatique/);
+  assert.ok(!machine.includes('sparkd'), 'le nom interne n’apporte rien au lecteur');
+  assert.match(humain, /déclaré par console\/prod/);
+});
+
+test("l'identite est presentee comme DECLAREE, jamais comme prouvee", () => {
+  // §21.6.2 : elle attribue, elle ne prouve pas. Le jour ou la signature
+  // existera (SPK-40), le libelle changera — pas avant.
+  const html = renderAuteur({ actor: 'console/prod', actor_class: 'human' });
+  assert.match(html, /déclarée par la console/);
+  assert.ok(!/signé/.test(html), 'rien ne doit laisser croire a une signature');
+});
+
+test("une identite absente le DIT, elle ne s'invente pas", () => {
+  const html = renderAuteur({ actor: 'inconnu', actor_class: 'human' });
+  assert.match(html, /auteur non déclaré/);
+  assert.ok(!html.includes('inconnu'), 'la valeur technique ne remonte pas telle quelle');
+});
+
+test("le journal d'un Spark porte l'auteur de chaque ligne", () => {
+  const html = renderSparkDetail({
+    status: 'ready', spark: SPARK, facette: 'journal',
+    audit: [{ ts: '2026-08-19T10:00:00', action: 'spark.create', result: 'ok',
+              message: 'créé', actor: 'console/prod', actor_class: 'human' },
+            { ts: '2026-08-19T10:00:01', action: 'spark.settle', result: 'ok',
+              message: 'appliqué', actor: 'sparkd', actor_class: 'runtime' }],
+  });
+  assert.match(html, /déclaré par console\/prod/);
+  assert.match(html, /automatique/);
 });
