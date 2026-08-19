@@ -48,7 +48,9 @@ function marquerNavigation() {
 function peindre() {
   marquerNavigation();
   racine.querySelector('.principal').innerHTML =
-    etat.route === 'images'
+    etat.route === 'creation' && etat.status === 'loading'
+      ? '<div class="carte bloc" aria-busy="true"><p class="sr-only" role="status">Chargement…</p></div>'
+      : etat.route === 'images'
       ? renderOngletsHote('#/hote/images') + renderCatalogue(etat.catalogue)
       : etat.route === 'hote'
       ? renderOngletsHote('#/hote') + renderHostView(etat.hote)
@@ -339,7 +341,14 @@ async function api(chemin) {
 
 async function chargerCreation() {
   etat.route = 'creation';
-  etat.status = 'ready';
+  // Le formulaire n'est peint QU'UNE FOIS, une fois les données là.
+  //
+  // Il l'était deux fois : une fois vide, puis une fois les pools reçus. Une
+  // saisie faite entre les deux était effacée par le second rendu, qui repeint
+  // depuis `etat.creation.values` avant que les écouteurs de la première peinture
+  // n'aient pu y écrire. Trouvé par le parcours E2E, la fenêtre s'étant élargie
+  // quand le catalogue a ajouté une seconde requête.
+  etat.status = 'loading';
   peindre();
   try {
     // Le catalogue alimente la liste : seules les images que le dernier relevé
@@ -357,6 +366,7 @@ async function chargerCreation() {
     // Capacité inconnue : l'écran le dit plutôt que d'inventer des chiffres.
     etat.creation.pools = null;
   }
+  etat.status = 'ready';
   peindre();
 }
 
