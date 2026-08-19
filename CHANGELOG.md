@@ -26,6 +26,11 @@
   touchés et se confirme, elle ne se bloque pas.
 - `docs/DAT.md` : nouveau §35, les Sparks protégés — portée du refus, mot de
   passe et son empreinte, ce que la protection n'est pas.
+- Lot 5 « Sécurité et continuité » et deux unités d'instruction : SPK-35, instruire
+  la sécurisation des actions sensibles — modèle de menace d'abord, puis TOTP,
+  signature par la clé SSH, WebAuthn, ré-authentification limitée, et la question
+  de la récupération d'un facteur perdu ; SPK-36, instruire les plans de
+  contingence et les gestes d'urgence, avec un exercice réel exigé avant clôture.
 - `docs/DESIGN_SYSTEM.md` : nouveau §5.4, les trois degrés de navigation — barre
   latérale au premier, onglets au second, fenêtre et modale au troisième ; nouveau
   §6.27, fenêtre d'options et modale de section, avec son contrat d'interaction.

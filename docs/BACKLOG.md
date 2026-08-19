@@ -822,6 +822,114 @@ avec un mot de passe et se lève avec ce même mot de passe.
 
 ---
 
+## Lot 5 — Sécurité et continuité
+
+Deux unités d'**instruction**. Elles ne livrent pas de fonctionnalité : elles
+produisent une décision écrite, des unités de suite, et la liste motivée de ce qui
+est écarté. Une instruction dont il ne sort qu'une intention est une instruction
+ratée.
+
+### [ ] SPK-35 · Instruire la sécurisation des actions sensibles
+
+Le §6.23 du design system impose une confirmation à toute action sensible, et
+SPK-34 ajoute un verrou par Spark. Aucun des deux ne demande de **prouver qui
+agit** : la confirmation ne distingue pas le responsable d'un script qui détient
+sa clé.
+
+L'unité instruit cette question, et elle commence par ce qui manque le plus :
+**écrire le modèle de menace**. Sans lui, chaque option se discute au sentiment.
+
+Menaces à nommer et à hiérarchiser, au minimum :
+
+- une **clé SSH d'accès à l'hôte** volée, copiée ou restée active après un départ ;
+- un **poste de travail compromis** sur lequel la console est ouverte, tunnel établi ;
+- un **script d'exploitation** lancé sur le mauvais nom ou le mauvais serveur ;
+- l'**erreur de main** du responsable lui-même — la seule que SPK-34 traite déjà.
+
+Ce que le produit ne prétendra pas traiter doit être écrit aussi : `root` sur
+l'hôte défait tout mécanisme dont le secret vit sur l'hôte, et le §35.1 l'assume
+déjà pour la protection.
+
+Options à évaluer, chacune contre le modèle de menace, son coût et son mode de
+panne — la liste est ouverte, elle n'est pas un menu à cocher :
+
+| Piste | Ce qu'elle apporte | Ce qu'elle coûte, et où elle casse |
+|---|---|---|
+| **TOTP** (RFC 6238), compatible Google Authenticator, optionnel par Spark ou global | un facteur que la clé SSH volée ne donne pas ; standard, hors ligne, sans matériel | le secret vit dans le registre, donc `root` sur l'hôte le lit ; dérive d'horloge ; enrôlement et **codes de secours** à concevoir, sinon un téléphone perdu enferme le responsable dehors |
+| **Signature par la clé SSH déjà présente** — `sparkd` émet un défi, l'agent le signe | aucun secret nouveau, aucun enrôlement, lie le geste à la clé physique ; réutilise ce que le produit exige déjà | ne protège **pas** du scénario « clé volée », qui est le premier de la liste ; suppose un agent atteignable depuis l'hôte console |
+| **WebAuthn / FIDO2** sur la console locale | facteur non exportable, résistant à l'hameçonnage ; `127.0.0.1` est un contexte sécurisé, donc techniquement ouvert | matériel à acheter et à doubler ; enrôlement, perte, récupération ; la charge de conception la plus lourde des quatre |
+| **Ré-authentification à durée limitée** (« mode sudo ») | ramène le coût sur les seules actions sensibles au lieu de chaque geste | dépend de l'heure, donc du même défaut que le déverrouillage temporaire écarté au §35.4 — à trancher, pas à supposer |
+| **Confirmation par frappe du nom** de l'objet | quasi gratuit, efficace contre l'erreur de main | ne prouve rien sur l'identité ; ne traite que la menace déjà traitée |
+| **Application différée et annulable** d'une action destructive | rattrape l'erreur après coup, y compris celle qu'on n'a pas vue tout de suite | un geste « annulable » invite à moins réfléchir avant ; complique la machine à états du §14 |
+| **Notification hors bande** des actions sensibles | détecte ce qu'aucun verrou n'a arrêté ; peu coûteux | introduit une dépendance sortante que le produit n'a pas aujourd'hui ; **détecte**, ne prévient pas |
+| **Console en lecture seule par défaut**, bascule explicite | supprime la classe entière des clics accidentels | une bascule que l'on laisse active en permanence ne protège plus de rien |
+
+- Spécification produite par l'unité : nouvelle section du `docs/DAT.md`, et
+  extension du §6.23 du design system si une règle réutilisable en sort.
+- Dépend de : SPK-34 pour l'articulation — un second facteur et un verrou ne
+  doivent pas se recouvrir sans qu'on ait dit lequel prime.
+- DoD : le modèle de menace est écrit et hiérarchisé ; chaque piste ci-dessus est
+  soit retenue soit **écartée avec son motif** ; les pistes retenues deviennent des
+  unités `SPK-NN` avec leur DoD propre ; la question de la **récupération** —
+  facteur perdu, téléphone cassé, clé matérielle égarée — est tranchée avant toute
+  implémentation, faute de quoi la première mise en service enferme le responsable
+  dehors ; rien n'est implémenté sous cette unité.
+
+### [ ] SPK-36 · Instruire les plans de contingence et les gestes d'urgence
+
+Le produit n'a **aucun** document d'urgence. Ce qu'il faut faire quand le pool
+disparaît, quand l'hôte ne redémarre pas, quand le registre est corrompu ou
+qu'une clé a fuité n'existe nulle part — et se découvre donc le jour où ça
+arrive, sous pression, sans notes.
+
+Scénarios à instruire, chacun avec **signal, geste immédiat, vérification,
+reprise, et ce qui est perdu** :
+
+- **perte du pool de stockage** — les instantanés vivent dedans (§19) : ils
+  disparaissent avec lui. C'est le trou le plus grave et il doit être écrit tel
+  quel, y compris dans le manuel ;
+- **perte ou corruption du registre** `spark.db` — un fichier, et toute la
+  correspondance Spark ↔ ressources ↔ routes ↔ clés avec lui. Sa sauvegarde est le
+  candidat le plus évident du lot, et le moins coûteux ;
+- **hôte qui ne redémarre pas** — reconstruction depuis `scripts/install-serveur.sh`
+  et le contrat de déploiement : ce chemin est-il réellement praticable de bout en
+  bout, et en combien de temps ;
+- **`spark.slice` absente au démarrage** (§32.4) — la réservation redevient
+  proportionnelle en silence : quel signal, quelle vérification ;
+- **Incus indisponible ou incompatible après mise à jour** — SPK-31 a montré
+  qu'une version en moins suffit à tout arrêter ;
+- **saturation d'un pool** — disque (SPK-30), mémoire, adresses IPv4 (§15) ;
+- **fuite d'une clé SSH** — le geste existe désormais et passe malgré le gel
+  (§35.2) ; reste à écrire l'ordre des opérations et ce qu'on vérifie après ;
+- **mot de passe de protection perdu** (§35.3) — la levée se fait sur l'hôte : la
+  procédure doit être écrite, et journalisée quand elle est employée ;
+- **Spark compromis de l'intérieur** — le locataire est maître de sa pile : que
+  fait-on du Spark, de ses routes, de ses instantanés ;
+- **entrée fantôme au registre** (INC-03) — une ressource comptée pour un Spark
+  qui n'existe plus.
+
+Ce que l'unité doit trancher, pas seulement décrire :
+
+- les objectifs de reprise, **chiffrés** — combien de temps, combien de données
+  perdues, par scénario. Un plan sans chiffre ne se vérifie pas ;
+- ce qui est **sauvegardé** par le produit et ce qui reste à la charge du
+  locataire. Aujourd'hui l'export hors machine est écarté et les applications
+  sauvegardent vers un S3 externe par leurs propres moyens : cette frontière doit
+  être énoncée là où on la lit, pas seulement dans le backlog ;
+- qui exécute, avec quel accès, et ce qu'on fait quand cette personne est
+  indisponible.
+
+- Livrable : un document d'urgence dédié — `docs/CONTINGENCE.md` ou équivalent —
+  lié depuis le README et le manuel, plus les unités de suite qu'il fait
+  apparaître.
+- DoD : chaque scénario ci-dessus a sa fiche complète ; **au moins un exercice
+  réel** est exécuté sur l'hôte de validation et archivé — restauration du registre
+  et reconstruction d'un Spark au minimum. Un plan jamais joué est une fiction, et
+  ce dépôt ne déclare pas fait ce qui n'a pas été éprouvé ; les chiffres de reprise
+  observés pendant l'exercice remplacent les chiffres espérés.
+
+---
+
 ## Réservé, non planifié
 
 - `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc

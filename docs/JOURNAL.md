@@ -2084,3 +2084,72 @@ et surtout **l'écran du catalogue** — l'API date le relevé et distingue les 
 états, mais rien ne les affiche, donc un exploitant ne peut pas voir qu'une image
 a disparu de son dépôt. Puis **SPK-33**, la refonte de navigation, qui aura
 désormais cette liste à placer. SPK-30 reste libre.
+
+## 2026-08-19 — Deux sprints d'instruction ouverts : preuve d'identité, et gestes d'urgence
+
+Deux sujets demandés par le responsable, ouverts comme unités d'**instruction** et
+non de construction : elles produisent une décision écrite et des unités de suite,
+pas une fonctionnalité.
+
+### Pourquoi la question de SPK-35 se pose maintenant
+
+Le §6.23 impose une confirmation à toute action sensible, et SPK-34 ajoute un
+verrou par Spark. Ni l'un ni l'autre ne demande de **prouver qui agit** : une
+confirmation ne distingue pas le responsable d'un script qui détient sa clé. Le
+verrou du §35 traite l'erreur de main ; il ne traite pas la clé volée.
+
+L'unité commence donc par ce qui manque le plus — **écrire le modèle de menace**.
+Sans lui, TOTP, WebAuthn et signature SSH se comparent au sentiment. Quatre
+menaces sont nommées d'emblée : clé SSH volée ou restée active après un départ,
+poste de travail compromis avec tunnel ouvert, script lancé sur le mauvais nom,
+erreur de main.
+
+Huit pistes sont posées avec, pour chacune, ce qu'elle apporte **et où elle
+casse** — c'est cette seconde colonne qui décidera :
+
+- le **TOTP** compatible Google Authenticator apporte un facteur que la clé volée
+  ne donne pas, mais son secret vit dans le registre, donc `root` sur l'hôte le
+  lit — même limite que la protection (§35.1) ;
+- la **signature par la clé SSH déjà présente** est la moins coûteuse — aucun
+  secret nouveau, aucun enrôlement — mais elle ne traite pas le scénario « clé
+  volée », qui est justement le premier de la liste ;
+- **WebAuthn** est techniquement ouvert (`127.0.0.1` est un contexte sécurisé) et
+  résiste à l'hameçonnage, mais c'est la charge de conception la plus lourde ;
+- la **ré-authentification à durée limitée** rencontre exactement le défaut déjà
+  écarté au §35.4 : un comportement qui dépend de l'heure. À trancher, pas à
+  supposer.
+
+Un point est posé comme condition préalable à toute implémentation : **la
+récupération**. Téléphone perdu, clé matérielle égarée — si ce n'est pas tranché
+avant, la première mise en service enferme le responsable dehors.
+
+### SPK-36 : ce qui n'existe nulle part
+
+Le produit n'a aucun document d'urgence. Ce qu'on fait quand le pool disparaît,
+quand l'hôte ne redémarre pas, quand le registre est corrompu ou qu'une clé a
+fuité se découvrirait le jour venu, sous pression.
+
+Dix scénarios sont listés, chacun devant produire signal, geste immédiat,
+vérification, reprise, et **ce qui est perdu**. Deux méritent d'être signalés dès
+maintenant :
+
+- **la perte du pool emporte les instantanés**, puisqu'ils vivent dedans (§19).
+  C'est le trou le plus grave du produit, et il doit être écrit tel quel, manuel
+  compris ;
+- **le registre `spark.db` est un fichier unique** qui porte toute la
+  correspondance Spark ↔ ressources ↔ routes ↔ clés. Sa sauvegarde est le
+  candidat le plus évident et le moins coûteux du lot.
+
+L'unité doit **trancher**, pas décrire : objectifs de reprise chiffrés par
+scénario, frontière entre ce que le produit sauvegarde et ce qui reste au
+locataire, et qui exécute quand la personne habituelle est indisponible.
+
+La DoD exige **au moins un exercice réel** sur l'hôte de validation — restauration
+du registre et reconstruction d'un Spark au minimum —, et les chiffres observés
+pendant l'exercice remplacent les chiffres espérés. Un plan jamais joué est une
+fiction, et ce dépôt ne déclare pas fait ce qui n'a pas été éprouvé.
+
+### Vérifications
+
+Aucun test exécuté : ce chunk n'ajoute que des unités de backlog et leur trace.
+
