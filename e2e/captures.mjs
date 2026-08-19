@@ -39,7 +39,16 @@ const SPARKS = [
     memory_reservation_bytes: GIO, storage_bytes: 5 * GIO,
     ipv4_address: '10.77.0.19', image: 'images:debian/13',
     last_error: "le noyau a refusé de démarrer la cellule : cgroup indisponible" },
-].map((s, i) => ({ ...s, id: `S${i + 1}`, allowed_commands: COMMANDES[s.state] ?? [],
+  // SPK-34 : un Spark PROTÉGÉ. Sans lui, la capture de la liste ne montrerait
+  // pas le badge, que le §35.4 veut visible partout où le Spark est listé.
+  { name: 'analytics', state: 'pending', cpu_mode: 'capped', cpu_max: 0.25,
+    memory_reservation_bytes: GIO / 2, storage_bytes: 5 * GIO,
+    ipv4_address: '10.77.0.20', image: 'images:debian/13',
+    protected: true, protected_at: '2026-08-19T10:00:00' },
+].map((s, i) => ({ ...s, id: `S${i + 1}`,
+                // Un Spark protégé n'accepte AUCUNE commande (§24.1) : c'est le
+                // runtime qui le dit, et le factice doit dire la même chose.
+                allowed_commands: s.protected ? [] : (COMMANDES[s.state] ?? []),
                 transient: ['creating', 'starting', 'stopping', 'deleting'].includes(s.state),
                 network_burst_bps: 100_000_000 }));
 const LONGS = [
@@ -178,6 +187,11 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         message: 'Capacité insuffisante — memory : 68719476736 octets demandés, 4294967296 disponibles (capacité 81854656512, alloué 77559689216) — il manque 64424509440 octets',
         shortfalls: [{ resource: 'memory', requested: 68719476736, available: 4294967296, missing: 64424509440 }],
       } }), { status: 409 });
+      // SPK-34 : la protection, pour que la capture montre le badge, la section
+      // et la confirmation de révocation qui NOMME (docs/DAT.md §35).
+      if (url.includes('/protection')) return new Response(JSON.stringify({
+        name: 'analytics', protected: true, protected_at: '2026-08-19T10:00:00',
+      }), { status: 200 });
       const detail = url.match(/\/v1\/sparks\/([^/?]+)(\?|$)/);
       if (detail) {
         const nom = decodeURIComponent(detail[1]);
@@ -483,6 +497,28 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(150);
 await page.screenshot({ path: join(SORTIE, '35-images-modale-mobile.png') });
 console.log('  35-images-modale-mobile.png');
+ctx.server.close();
+
+// --- Les Sparks protégés (SPK-34) -----------------------------------------
+// docs/DAT.md §35. On ouvre le Spark PAR SON LIEN dans la liste, comme un
+// exploitant, et on ouvre sa modale au clavier.
+ctx = await demarrer();
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.screenshot({ path: join(SORTIE, '36-liste-protege.png') });
+console.log('  36-liste-protege.png');
+
+await page.click('tbody a:has-text("analytics")');
+await page.waitForSelector('#titre-protection', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '37-fenetre-protegee.png') });
+console.log('  37-fenetre-protegee.png');
+
+await page.focus('[data-ouvre="protection"]');
+await page.keyboard.press('Enter');
+await page.waitForSelector('dialog.modale[open] #protection-mot', { timeout: 4000 });
+await page.screenshot({ path: join(SORTIE, '38-protection-modale.png') });
+console.log('  38-protection-modale.png');
 ctx.server.close();
 
 await navigateur.close();
