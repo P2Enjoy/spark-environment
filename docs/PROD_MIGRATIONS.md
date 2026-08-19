@@ -143,6 +143,27 @@ Risques       : sans cette restriction, une instance non gérée peut recevoir u
                 de sa cause.
 ```
 
+### OP-03 · Migration `002_part_arc` du registre
+
+```
+Objectif      : persister séparément le plafond de l'ARC ZFS et la marge
+                d'exploitation, jusqu'ici confondus dans memory_reserve_bytes.
+                La console des pools énonce la soustraction terme à terme, ce
+                qui indique laquelle des deux vannes tourner.
+Dépend de     : 001_socle_registre
+Commande      : appliquée automatiquement au démarrage de sparkd, qui migre son
+                registre lui-même (docs/SCHEMA.md §12).
+Après         : POST /v1/host/sync — sans ce relevé les deux colonnes restent à
+                zéro. La console affiche alors la soustraction sans ses termes,
+                ce qui est exact et non trompeur.
+Vérification  : GET /v1/host rend reserves.arc_bytes et reserves.margin_bytes,
+                dont la somme vaut reserves.memory_bytes.
+Retour arrière: fourni. ALTER TABLE host DROP COLUMN, sans perte : les colonnes
+                retirées sont dérivées d'un relevé reproductible.
+Risques       : aucun sur les données. Deux colonnes ajoutées à zéro ; aucune
+                valeur existante n'est modifiée ni devinée.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.
