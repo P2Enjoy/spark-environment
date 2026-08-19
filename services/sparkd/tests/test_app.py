@@ -374,9 +374,12 @@ def test_supprimer_un_spark_retire_ses_routes_de_caddy(tmp_path):
     c.post("/v1/sparks", json=_spec(name="crm"))
     c.post("/v1/sparks/crm/apply")
     c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
-    assert len(c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]) == 1
+    def servies():
+        return [r for r in c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]
+                if "match" in r]
+    assert len(servies()) == 1
     c.post("/v1/sparks/crm/delete")
-    assert c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"] == []
+    assert servies() == []
 
 
 def test_reconciliation_reconstruit_tout(tmp_path):

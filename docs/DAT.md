@@ -1370,6 +1370,13 @@ attribuée (§15.1), jamais une découverte par Docker ou par étiquettes. C'est
 qui maintient la frontière du §2 : le plan de contrôle ne consulte pas le runtime
 du locataire.
 
+La configuration se termine par une **route terminale sans filtre**, qui rend
+`404`. Sans elle, Caddy répond `200` avec un corps vide à **tout** domaine non
+routé — mesuré le 2026-08-19. L'hôte répondrait alors au nom de domaines qu'il ne
+sert pas, et une erreur de pointage DNS resterait invisible au lieu de se
+manifester tout de suite. Elle vient après les routes nommées, sans quoi elle les
+masquerait.
+
 Seules les routes `enabled` d'un Spark ayant une adresse sont émises. Une route
 déclarée sur un Spark encore `pending` existe dans le registre — c'est voulu, on
 déclare avant de créer — mais n'est pas servie tant qu'il n'y a rien à servir.

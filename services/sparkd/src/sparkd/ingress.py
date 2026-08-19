@@ -182,6 +182,19 @@ def build_config(connection: sqlite3.Connection) -> dict:
             }],
         })
 
+    # Route terminale : sans elle, Caddy rend « 200 » et un corps vide pour
+    # TOUT domaine non routé — mesuré le 2026-08-19. L'hôte répondrait alors
+    # pour des noms qu'il ne sert pas, et une erreur de pointage DNS resterait
+    # invisible au lieu de se voir immédiatement (docs/DAT.md §18.2).
+    routes.append({
+        "handle": [{
+            "handler": "static_response",
+            "status_code": 404,
+            "headers": {"Content-Type": ["text/plain; charset=utf-8"]},
+            "body": "Aucun Spark ne sert ce domaine.\n",
+        }],
+    })
+
     serveur: dict = {"listen": [":80", ":443"], "routes": routes}
     en_clair = [r["domain"] for r in listing(connection) if not r["tls"] and r["enabled"]]
     if en_clair:
@@ -196,7 +209,12 @@ def build_config(connection: sqlite3.Connection) -> dict:
 def reconcile(connection: sqlite3.Connection, caddy, actor: str = "sparkd") -> dict:
     """Régénère et applique. C'est le mécanisme NORMAL, pas une réparation."""
     config = build_config(connection)
-    nb = len(config["apps"]["http"]["servers"][SERVER_NAME]["routes"])
+    # On compte les routes SERVIES : la route terminale de refus n'en est pas
+    # une, et l'annoncer fausserait le nombre que lit l'exploitant.
+    nb = sum(
+        1 for r in config["apps"]["http"]["servers"][SERVER_NAME]["routes"]
+        if "match" in r
+    )
     try:
         caddy.load(config)
     except IngressError as erreur:

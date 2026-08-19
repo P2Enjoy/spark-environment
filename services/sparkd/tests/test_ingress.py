@@ -95,10 +95,25 @@ def test_le_domaine_libere_est_reutilisable(db):
 
 # --- construction de la configuration ---------------------------------------
 
-def test_config_vide_reste_valide(db):
+def test_config_vide_ne_sert_que_le_refus(db):
     serveur = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]
-    assert serveur["routes"] == []
     assert serveur["listen"] == [":80", ":443"]
+    assert len(serveur["routes"]) == 1
+    assert serveur["routes"][0]["handle"][0]["status_code"] == 404
+
+
+def test_un_domaine_non_route_est_refuse_pas_accepte(db):
+    """Mesure : sans route terminale, Caddy rend 200 et un corps vide pour TOUT
+    domaine. L'hote repondrait pour des noms qu'il ne sert pas, et une erreur de
+    pointage DNS resterait invisible."""
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    routes = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"]
+    terminale = routes[-1]
+    assert "match" not in terminale            # elle attrape tout le reste
+    assert terminale["handle"][0]["status_code"] == 404
+    # Et elle vient APRES les routes nommees, sans quoi elle les masquerait.
+    assert routes[0]["match"][0]["host"] == ["crm.example.com"]
 
 
 def test_l_amont_vient_du_registre(db):
@@ -114,14 +129,16 @@ def test_une_route_sur_un_spark_sans_adresse_n_est_pas_servie(db):
     """On declare avant de creer ; rien ne peut la servir encore."""
     poser_spark(db, "S1", "pas-encore", adresse=None)
     ingress.declare(db, "S1", "crm.example.com", 8080)
-    assert ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"] == []
+    routes = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"]
+    assert len(routes) == 1 and "match" not in routes[0]   # seule la terminale
 
 
 def test_une_route_desactivee_n_est_pas_servie(db):
     poser_spark(db, "S1", "crm")
     r = ingress.declare(db, "S1", "crm.example.com", 8080)
     db.execute("UPDATE ingress_route SET enabled = 0 WHERE id = ?", (r["id"],))
-    assert ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"] == []
+    routes = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"]
+    assert len(routes) == 1 and "match" not in routes[0]
 
 
 def test_une_route_en_clair_est_soustraite_au_tls_automatique(db):
@@ -145,6 +162,7 @@ def test_la_reconciliation_applique_et_date(db):
     ingress.declare(db, "S1", "crm.example.com", 8080)
     faux = ingress.FakeCaddy()
     resultat = ingress.reconcile(db, faux)
+    # Le compte annonce les routes SERVIES, la terminale n'en est pas une.
     assert resultat["routes"] == 1
     assert faux.config == resultat["config"]
     assert ingress.by_domain(db, "crm.example.com")["applied_at"] is not None
@@ -157,12 +175,12 @@ def test_la_configuration_est_REGENEREE_pas_rapiecee(db):
     ingress.declare(db, "S1", "b.example.com", 9090)
     faux = ingress.FakeCaddy()
     ingress.reconcile(db, faux)
-    assert len(faux.config["apps"]["http"]["servers"]["spark"]["routes"]) == 2
+    assert len(faux.config["apps"]["http"]["servers"]["spark"]["routes"]) == 3  # 2 + terminale
 
     ingress.withdraw(db, "a.example.com")
     ingress.reconcile(db, faux)
     hotes = [r["match"][0]["host"][0]
-             for r in faux.config["apps"]["http"]["servers"]["spark"]["routes"]]
+             for r in faux.config["apps"]["http"]["servers"]["spark"]["routes"] if "match" in r]
     assert hotes == ["b.example.com"]
 
 
