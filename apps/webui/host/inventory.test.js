@@ -103,7 +103,20 @@ test("un serveur local n'exige ni hote, ni utilisateur, ni port distant", () => 
 });
 
 test('un serveur local accepte un port explicite', () => {
+  // Les deux ecritures doivent marcher, et `port` doit primer : l'aller-retour
+  // rend `port`, donc relire ce qu'on a ecrit doit donner la meme valeur.
   assert.equal(validate({ name: 'dev', kind: 'local', remotePort: 9999 }).port, 9999);
+  assert.equal(validate({ name: 'dev', kind: 'local', port: 38561 }).port, 38561);
+  assert.equal(validate({ name: 'dev', kind: 'local', port: 38561, remotePort: 9876 }).port,
+               38561, 'le port fourni ne doit pas etre jete au profit du defaut');
+});
+
+test('un serveur local survit a un aller-retour sur un port quelconque', () => {
+  // Le defaut trouve par le harnais E2E : `validate` rendait toujours 9876, et
+  // une pile montee sur un port libre pointait sur un sparkd qui n'etait pas le
+  // sien. Le test precedent ne le voyait pas : il utilisait justement 9876.
+  const ecrit = { name: 'dev', kind: 'local', host: '127.0.0.1', port: 44013 };
+  assert.deepEqual(validate(ecrit), ecrit);
 });
 
 test('un genre inconnu est refuse, en nommant ce qui est attendu', () => {

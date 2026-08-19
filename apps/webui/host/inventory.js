@@ -69,15 +69,25 @@ export function validate(server) {
     }
   }
 
-  const port = Number(server.port ?? 22);
+  // Un serveur SSH porte DEUX ports : celui de `sshd` et celui de `sparkd` à
+  // l'autre bout. Un serveur local n'en a qu'un, celui où `sparkd` écoute ici.
+  const local = genre === 'local';
+  const port = local
+    // `port` d'abord, `remotePort` ensuite : l'aller-retour doit rendre ce qui
+    // a été écrit. Lire `remotePort` en premier jetait le port fourni et rendait
+    // toujours 9876 — un harnais qui monte sa pile sur un port libre pointait
+    // alors sur un `sparkd` qui n'était pas le sien.
+    ? Number(server.port ?? server.remotePort ?? 9876)
+    : Number(server.port ?? 22);
   const distant = Number(server.remotePort ?? 9876);
-  for (const [quoi, valeur] of [['port', port], ['remotePort', distant]]) {
+  const bornes = local ? [['port', port]] : [['port', port], ['remotePort', distant]];
+  for (const [quoi, valeur] of bornes) {
     if (!Number.isInteger(valeur) || valeur < 1 || valeur > 65535) {
       throw new InventoryError(`« ${quoi} » hors bornes pour « ${nom} » : ${valeur}.`);
     }
   }
 
-  if (genre === 'local') return { name: nom, kind: genre, host: hote, port: distant };
+  if (local) return { name: nom, kind: genre, host: hote, port };
   return { name: nom, kind: genre, host: hote,
            user: String(server.user ?? 'root'), port, remotePort: distant };
 }
