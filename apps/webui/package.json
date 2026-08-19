@@ -2,12 +2,15 @@
   "name": "@spark/webui",
   "private": true,
   "version": "0.0.0",
-  "description": "Console d'administration locale : SPA React et hote Node porteur des tunnels SSH",
+  "description": "Console d'administration locale : hôte Node porteur des tunnels SSH, et SPA React",
   "type": "module",
   "scripts": {
-    "dev": "echo 'Console non encore implementee — unites SPK-16 et SPK-18' && exit 1",
-    "build": "echo 'rien a construire pour le moment' && exit 0",
-    "test": "echo 'aucun test — la console n a pas encore de source' && exit 0",
-    "typecheck": "echo 'aucune source a verifier' && exit 0"
+    "dev": "node host/main.js",
+    "build": "echo 'SPA non encore implémentée — unité SPK-18' && exit 0",
+    "test": "node --test host/*.test.js",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false host/*.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
   }
 }

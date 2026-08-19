@@ -1,0 +1,176 @@
+/**
+ * @verifies docs/BACKLOG.md#SPK-16 · docs/DAT.md §22.2, §22.3, §22.5
+ *
+ * Le cas qui compte : un processus `ssh` FIGE ne se voit pas. Il vit, la socket
+ * accepte, et chaque requete attend. Ces tests verifient qu'on le detecte quand
+ * meme — sans quoi la console afficherait un tunnel sain devant un service
+ * injoignable.
+ */
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+
+import { Tunnel, TunnelManager, TunnelError, freePort, READY, BROKEN, CLOSED } from './tunnel.js';
+
+const SERVEUR = { name: 'prod', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 };
+
+/** Faux sous-processus `ssh` : vivant, silencieux, exactement comme un vrai. */
+function fauxSsh() {
+  const enfant = new EventEmitter();
+  enfant.stderr = new EventEmitter();
+  enfant.kill = () => { enfant.tue = true; };
+  return enfant;
+}
+
+function tunnel(options = {}) {
+  return new Tunnel(SERVEUR, {
+    spawn: () => fauxSsh(),
+    probe: async () => ({ status: 'ok' }),
+    probeIntervalMs: 3_600_000,
+    ...options,
+  });
+}
+
+// --- port local (§22.5) -----------------------------------------------------
+
+test('le port local est demande au systeme, pas pioche', async () => {
+  const a = await freePort();
+  const b = await freePort();
+  assert.ok(a > 1024 && a < 65536);
+  assert.ok(b > 1024);
+});
+
+// --- la commande ssh (§22.1) ------------------------------------------------
+
+test('la commande ne porte aucun secret et honore la config du poste', () => {
+  const args = tunnel().sshArgs(19876);
+  assert.ok(args.includes('-N'));
+  assert.ok(args.includes('127.0.0.1:19876:127.0.0.1:9876'));
+  assert.ok(args.includes('ubuntu@203.0.113.10'));
+  // Rien qui ressemble a une cle ou un mot de passe.
+  assert.equal(args.some((a) => /-i\b|password|key/i.test(a)), false);
+  // ExitOnForwardFailure : sans lui, ssh reussirait avec un port deja pris.
+  assert.ok(args.includes('ExitOnForwardFailure=yes'));
+});
+
+// --- LE cas dangereux : le tunnel fige (§22.2) ------------------------------
+
+test('un processus ssh VIVANT mais fige est vu comme rompu', async () => {
+  const t = tunnel({
+    probe: async () => { throw new Error('délai dépassé'); },
+  });
+  await t.open();
+  // Le sous-processus n'a jamais emis « exit » : il est bien vivant.
+  assert.equal(t.state, BROKEN);
+  assert.match(t.lastError, /délai dépassé/);
+});
+
+test('un tunnel sain est pret', async () => {
+  const t = tunnel();
+  await t.open();
+  assert.equal(t.state, READY);
+  assert.ok(t.lastHealthyAt !== null);
+});
+
+test('un tunnel devient rompu quand la sonde cesse de repondre', async () => {
+  let sain = true;
+  const t = tunnel({ probe: async () => { if (!sain) throw new Error('injoignable'); } });
+  await t.open();
+  assert.equal(t.state, READY);
+  sain = false;
+  await t.probe();
+  assert.equal(t.state, BROKEN);
+});
+
+// --- la sortie d'erreur de ssh est retenue ----------------------------------
+
+test("l'erreur rapportee par ssh est conservee", async () => {
+  let enfant;
+  const t = tunnel({ spawn: () => (enfant = fauxSsh()) });
+  await t.open();
+  enfant.stderr.emit('data', 'Permission denied (publickey).');
+  enfant.emit('exit', 255);
+  assert.equal(t.state, BROKEN);
+  assert.match(t.lastError, /Permission denied/);
+});
+
+test('un ssh absent du poste est signale clairement', async () => {
+  let enfant;
+  const t = tunnel({ spawn: () => (enfant = fauxSsh()) });
+  await t.open();
+  enfant.emit('error', new Error('spawn ssh ENOENT'));
+  assert.equal(t.state, BROKEN);
+  assert.match(t.lastError, /introuvable/);
+});
+
+// --- une panne se signale, jamais masquee (§22.3) ---------------------------
+
+test('une requete vers un tunnel rompu echoue IMMEDIATEMENT avec le motif', async () => {
+  const gestion = new TunnelManager({
+    spawn: () => fauxSsh(),
+    probe: async () => { throw new Error('connexion refusée'); },
+    probeIntervalMs: 3_600_000,
+  });
+  await gestion.open(SERVEUR);
+
+  const debut = Date.now();
+  assert.throws(
+    () => gestion.require('prod'),
+    (erreur) => {
+      assert.ok(erreur instanceof TunnelError);
+      assert.match(erreur.message, /indisponible/);
+      assert.match(erreur.message, /broken/);
+      assert.match(erreur.message, /connexion refusée/);
+      return true;
+    },
+  );
+  // Immediatement : pas d'attente d'un delai reseau.
+  assert.ok(Date.now() - debut < 100);
+});
+
+test('un tunnel inconnu est refuse sans etre confondu avec un tunnel rompu', () => {
+  assert.throws(() => new TunnelManager().require('fantome'), /Aucun tunnel ouvert/);
+});
+
+test("l'age de la derniere reponse est expose", async () => {
+  const gestion = new TunnelManager({
+    spawn: () => fauxSsh(), probe: async () => ({}), probeIntervalMs: 3_600_000,
+  });
+  await gestion.open(SERVEUR);
+  const [etat] = gestion.list();
+  assert.equal(etat.state, READY);
+  assert.ok(etat.staleSeconds !== null);
+  assert.ok(etat.localPort > 0);
+});
+
+// --- cycle de vie -----------------------------------------------------------
+
+test('fermer un tunnel tue le sous-processus et libere le port', async () => {
+  let enfant;
+  const t = tunnel({ spawn: () => (enfant = fauxSsh()) });
+  await t.open();
+  t.close();
+  assert.equal(t.state, CLOSED);
+  assert.equal(enfant.tue, true);
+  assert.equal(t.localPort, null);
+});
+
+test('les changements d etat sont notifies a la console', async () => {
+  const vus = [];
+  const t = tunnel({ onChange: (e) => vus.push(e.state) });
+  await t.open();
+  t.close();
+  assert.deepEqual(vus, ['connecting', 'ready', 'closed']);
+});
+
+test('ouvrir deux fois le meme serveur ne lance pas deux ssh', async () => {
+  let lances = 0;
+  const gestion = new TunnelManager({
+    spawn: () => { lances += 1; return fauxSsh(); },
+    probe: async () => ({}), probeIntervalMs: 3_600_000,
+  });
+  await gestion.open(SERVEUR);
+  await gestion.open(SERVEUR);
+  assert.equal(lances, 1);
+});
