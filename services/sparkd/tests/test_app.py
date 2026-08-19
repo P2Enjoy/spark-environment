@@ -325,3 +325,19 @@ def test_le_fragment_ssh_passe_par_le_rebond(tmp_path):
     assert "ProxyJump spark-host" in config["config"]
     assert "HostName 10.77.0.16" in config["config"]
     assert "Port 22" not in config["config"]
+
+
+def test_le_demarrage_provisionne_sshd_et_pose_les_cles(tmp_path):
+    """@verifies docs/DAT.md §17.3 — un Spark neuf doit être joignable."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/ssh-keys", json={"label": "poste", "public_key": _CLE})
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/sparks/crm/ssh-keys/poste")
+    c.post("/v1/sparks/crm/start")
+
+    instance = c.app.state.incus.created["crm"]
+    commandes = " ".join(" ".join(cmd) for cmd in instance["commands"])
+    assert "openssh-server" in commandes
+    assert "PasswordAuthentication no" in commandes
+    assert "ssh-ed25519" in instance["files"]["/root/.ssh/authorized_keys"]

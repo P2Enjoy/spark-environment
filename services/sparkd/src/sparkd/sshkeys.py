@@ -219,3 +219,18 @@ def authorized_keys_content(connection: sqlite3.Connection, spark_id: str) -> st
         lignes.append(f"# {cle['label']} — {cle['fingerprint']}")
         lignes.append(cle["public_key"])
     return "\n".join(lignes) + "\n"
+
+
+#: Provisionnement d'un Spark neuf (docs/DAT.md §17.3).
+#: Le mot de passe est désactivé, y compris pour root : un Spark n'a pas de mot
+#: de passe à deviner.
+PROVISION_SSHD = [
+    "sh", "-c",
+    "command -v sshd >/dev/null 2>&1 || { "
+    "DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1; "
+    "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server >/dev/null 2>&1; }; "
+    "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/;"
+    "s/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config; "
+    "systemctl enable --now ssh 2>/dev/null || systemctl enable --now sshd 2>/dev/null; "
+    "systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null",
+]

@@ -280,11 +280,6 @@ def create_app(config: Config) -> FastAPI:
             "UPDATE spark SET incus_name = ? WHERE id = ?", (spark["name"], spark["id"])
         )
         service.finish(connection, spark["id"], success=True)
-        try:
-            _apply_keys(connection, service.get(connection, spark["id"]))
-        except IncusError:
-            # Le Spark existe ; les cles seront posees a la reconciliation.
-            pass
 
     config_network = "sparkbr0"
     config_pool = config.storage_pool
@@ -478,6 +473,19 @@ def create_app(config: Config) -> FastAPI:
                     raise HTTPException(status_code=502, detail={
                         "error": "incus_failed", "message": str(erreur)}) from erreur
                 service.finish(connection, apres["id"], success=True)
+                if commande is Command.START:
+                    # Le provisionnement exige une instance DEMARREE. Il installe
+                    # openssh-server si besoin — environ deux minutes, mesuré —
+                    # puis pose les clés voulues (docs/DAT.md §17.3).
+                    try:
+                        app.state.incus.exec_command(
+                            apres["name"], sshkeys.PROVISION_SSHD
+                        )
+                        _apply_keys(connection, service.by_name(connection, name))
+                    except IncusError:
+                        # Le Spark tourne ; l'écart sera repris à la
+                        # réconciliation plutôt que de faire échouer le démarrage.
+                        pass
                 if commande is Command.RESTART:
                     service.command(connection, apres["id"], Command.START)
                     app.state.incus.set_instance_state(apres["name"], "start")
