@@ -372,6 +372,35 @@ observées.
 
 ### [ ] SPK-22 · Vue des pools de ressources de l'hôte
 
+Écran de l'hôte : rendre l'admission control observable, c'est-à-dire permettre
+de répondre à « pourquoi cette création serait-elle refusée, et de combien ? ».
+
+Spécification : `docs/DAT.md` §27, qui s'appuie sur §7.7 (ce que l'admission
+compte), §16 (la réserve de l'hôte) et §15 (adressage).
+
+- Un écran à part, atteignable depuis la navigation principale : les pools ne
+  dépendent d'aucun Spark et concernent tous les Sparks (§27.1).
+- Chaque ressource montre **trois** grandeurs — capacité, alloué, disponible —
+  jamais deux (§27.2).
+- La soustraction de la mémoire est énoncée terme à terme : `MemTotal`, plafond
+  de l'ARC, marge d'exploitation (§27.3, §16.1).
+- Le CPU se lit à deux endroits : le pool partagé et la carte des cœurs, parce
+  qu'un Spark `dedicated` retire des cœurs au lieu de consommer une réservation
+  (§27.4).
+- Le facteur de surengagement est affiché à côté de la capacité ; l'absence de
+  facteur sur le stockage est nommée, pas laissée en blanc (§27.5).
+- La portée de la réservation est **lue dans la réponse** (`reservation_guarantee`)
+  et non écrite en dur (§27.6).
+- `409 host_not_synced` est présenté comme une action à faire, pas comme une
+  erreur ; `topology_synced_at` accompagne toujours la capacité (§27.8).
+
+DoD : les trois grandeurs par ressource ; la soustraction mémoire visible ; la
+carte des cœurs nomme le Spark propriétaire ; le surengagement affiché et son
+absence sur le stockage expliquée ; `reservation_guarantee` relayée depuis la
+réponse ; `host_not_synced` offre son remède comme bouton ; le relevé ne demande
+aucune confirmation ; états chargement et erreur traités ; navigation clavier ;
+console du navigateur vierge ; captures observées.
+
 ## Lot 4 — Qualité et exploitation
 
 ### [ ] SPK-23 · Pile de développement autonome et seed

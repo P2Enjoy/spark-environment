@@ -1985,3 +1985,100 @@ Ils ne rafraîchissent pas en continu. Après un geste réussi, l'écran relit l
 Spark et ses trois collections — c'est le même choix qu'au §24 : un état relu
 vaut mieux qu'un état deviné, et l'optimisme d'interface (`DESIGN_SYSTEM.md` §7.1)
 n'a pas sa place sur des gestes qui touchent au réseau et au disque.
+
+
+## 27. L'écran des pools : rendre l'admission control observable
+
+Le §7.7 dit ce que l'admission control compte. La route `/v1/host` existe, selon
+ses propres termes, pour que « l'admission control devienne observable : sans
+cette vue, rien ne permet de savoir pourquoi une création serait refusée ». Cette
+section dit comment cela s'affiche.
+
+### 27.1 Celui-là est un écran, et le §26.1 explique pourquoi
+
+Le §26.1 a refusé de faire des écrans séparés pour les routes et les instantanés,
+parce qu'ils n'existent pas sans leur Spark. Les pools sont l'inverse exact : ils
+ne dépendent d'aucun Spark en particulier, et ils concernent **tous** les Sparks
+à la fois. Les loger dans le détail de l'un d'eux obligerait à en choisir un
+arbitrairement pour parler de la machine entière.
+
+**Décision : un écran, atteignable depuis la navigation principale** — au même
+rang que la liste des Sparks, parce qu'on y va pour une autre question.
+
+### 27.2 La question à laquelle l'écran répond
+
+« Pourquoi cette création serait-elle refusée, et de combien ? »
+
+Chaque ressource montre donc les **trois** grandeurs, jamais deux : capacité,
+alloué, disponible. Afficher « 4,0 Gio libres » sans dire sur combien ne permet
+pas de juger s'il faut supprimer un Spark ou agrandir la machine.
+
+### 27.3 La mémoire allouable n'est pas la mémoire de la machine, et cela s'écrit
+
+Le §16.1 soustrait deux termes de `MemTotal`. Un exploitant qui lit « 76,2 Gio »
+sur une machine qu'il sait porter 94 Gio conclura à un défaut s'il ne voit pas
+d'où vient l'écart. **L'écran énonce la soustraction terme à terme**, en nommant
+l'ARC et la marge d'exploitation.
+
+C'est le même principe qu'au §26.5 : ce que le produit retranche doit être
+visible au moment où l'on s'interroge, pas déductible d'une lecture de la
+documentation.
+
+### 27.4 Le CPU se lit à deux endroits, parce que ce sont deux choses
+
+Un Spark `dedicated` ne consomme pas de réservation : il **retire des cœurs** du
+pool commun (§7.7). Une jauge unique masquerait exactement cela — le pool
+rétrécirait sans qu'aucune allocation n'augmente, ce qui est incompréhensible.
+
+L'écran montre donc :
+
+- le **pool partagé**, en CPU, avec son alloué et son disponible ;
+- la **carte des cœurs** (`GET /v1/host/cores`) : quels cœurs physiques sont
+  communs, lesquels sont dédiés et à quel Spark.
+
+### 27.5 Le surengagement s'affiche, il ne se cache pas dans un total
+
+Une capacité CPU de `4 cœurs × 2` n'est pas huit processeurs. Afficher « 8,0 CPU »
+sans le facteur promet du matériel qui n'existe pas.
+
+L'écran affiche donc le facteur à côté de la capacité, pour chaque ressource qui
+en porte un — et **le stockage n'en porte aucun**. Cette asymétrie est délibérée
+(§7.7 : un pool CPU saturé est de la lenteur, un pool de stockage saturé est une
+panne dure) et l'écran la nomme, plutôt que de laisser un blanc inexpliqué là où
+les autres ressources ont un chiffre.
+
+### 27.6 La réservation n'est pas une garantie, et l'écran le relaie
+
+Le runtime publie `reservation_guarantee`, qui vaut aujourd'hui
+`proportional_between_sparks_only` (§7.3 bis). C'est la dette SPK-29. L'écran des
+pools est l'endroit où cette nuance compte le plus : c'est là qu'on lit
+« 2,5 CPU alloués » et qu'on pourrait croire ces 2,5 CPU garantis.
+
+L'écran énonce donc la portée réelle de la réservation, et il la lit dans la
+réponse **plutôt que de l'écrire en dur** : le jour où SPK-29 est livrée, le
+runtime changera cette valeur et l'écran suivra sans qu'on ait à y penser.
+
+### 27.7 Les adresses sont un pool, et il s'épuise en silence
+
+`/v1/host` rend `addresses` avec sa capacité, son usage et sa plage DHCP. Un pool
+d'adresses épuisé refuse la création d'un Spark pour une raison qui n'a rien à
+voir avec le CPU ou la mémoire. Il figure donc avec les autres.
+
+### 27.8 Une topologie non relevée est un état nommé, pas une erreur
+
+`/v1/host` répond `409 host_not_synced` avec un remède explicite quand la
+topologie n'a jamais été relevée. Ce n'est pas une panne : c'est une machine
+qu'on n'a pas encore interrogée. L'écran présente donc le remède **comme une
+action**, pas comme un message d'erreur à décoder.
+
+De même, `topology_synced_at` est affiché avec la capacité : une capacité sans
+date serait crue à jour. Le relevé (`POST /v1/host/sync`) est une action
+réparatrice au sens du §6.24 — elle ne détruit rien, n'a aucun paramètre, et ne
+demande donc aucune confirmation.
+
+### 27.9 Ce que cet écran ne fait pas
+
+Il ne crée rien et ne supprime rien. C'est une surface de **lecture** et de
+relevé. La seule écriture qu'il déclenche est `POST /v1/host/sync`, qui met le
+registre en accord avec la machine et ne touche à aucun Spark.
+
