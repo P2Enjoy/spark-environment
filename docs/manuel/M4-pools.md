@@ -26,6 +26,20 @@ Chaque terme indique le réglage qui le commande : `zfs_arc_max` pour l'ARC,
 `SPARKD_MEMORY_RESERVE` pour la marge. Sans cette décomposition, vous sauriez
 qu'il manque de la mémoire sans savoir quelle vanne tourner.
 
+La ligne de l'ARC indique aussi **ce qu'il consomme à cet instant**, face à son
+plafond. C'est ce qui permet de juger si la réserve est bien dimensionnée :
+
+- mesuré sur l'hôte de validation, l'ARC **atteint** son plafond dès qu'on lui
+  donne assez à lire — la réserve n'est donc pas une précaution, elle est
+  nécessaire : sans elle, ces gigaoctets seraient promis aux Sparks puis repris ;
+- il ne le **dépasse pas** — la réserve est donc suffisante, et l'augmenter ne
+  ferait que retirer de la mémoire aux Sparks.
+
+Un ARC affiché à 100 % de son plafond n'est pas une alerte : c'est son
+fonctionnement normal. Si la consommation n'est pas mesurable, l'écran le dit
+plutôt que d'afficher zéro — un ARC dont on ignore la taille n'est pas un ARC
+vide.
+
 Tant que la topologie n'a pas été relevée depuis la migration qui distingue les
 deux termes, l'écran affiche la somme sans inventer sa répartition.
 

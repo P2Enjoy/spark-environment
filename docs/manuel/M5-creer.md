@@ -34,6 +34,20 @@ En mode **plafonné**, à l'inverse, la valeur saisie est une limite réellement
 appliquée — et elle est provisionnée en entier, parce que vous pouvez la
 consommer en permanence.
 
+## Ce que « 10 Gio » de disque veut dire
+
+**10 Gio stockés, après compression.** Le stockage compresse à la volée, et le
+quota compte ce qui est réellement écrit sur le disque, pas ce que votre pile
+croit avoir écrit.
+
+Mesuré : dans un quota de 2 Gio, 8 Gio de zéros n'ont consommé que 24 Kio,
+tandis que 2 Gio de données incompressibles l'ont épuisé exactement.
+
+L'écart joue donc **toujours en votre faveur** : avec des données compressibles —
+des journaux, du texte, du JSON — vous logez davantage que ce que vous avez
+demandé ; avec des données déjà compressées — images, archives, vidéos — vous
+obtenez exactement votre quota. Vous n'en obtenez jamais moins.
+
 ## Le débit réseau
 
 Seul le **plafond** est appliqué par le noyau. La réservation réseau sert à la
