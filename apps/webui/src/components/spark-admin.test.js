@@ -70,9 +70,14 @@ test('sans bloquant, le bloc de refus de restauration ne rend rien', () => {
 // --- INSTANTANES : ce qui confirme et ce qui ne confirme pas (§26.5) --------
 
 test('prendre un instantane ne demande aucune confirmation', () => {
+  // Revise avec SPK-33 : la saisie est recueillie par une modale (§6.27). Une
+  // modale n'est PAS une confirmation et l'ouvrir n'en tient pas lieu ; ce que
+  // ce test verifie — aucun bloc de confirmation pour un geste qui ne detruit
+  // rien — est inchange.
   const rendu = renderSnapshotsPanel(SPARK, [], ui({ open: 'snapshot' }));
-  assert.ok(rendu.includes('data-formulaire="snapshot"'));
-  assert.ok(!rendu.includes('confirmation'), 'aucune confirmation pour un geste qui ne detruit rien');
+  assert.ok(rendu.includes('data-modale="snapshot"'));
+  assert.ok(!rendu.includes('class="confirmation"'),
+    'aucune confirmation pour un geste qui ne detruit rien');
 });
 
 test('supprimer et restaurer confirment, en nommant l’instantane', () => {
@@ -239,12 +244,23 @@ test('le formulaire avertit qu’une cle privee est refusee par le registre (§1
 
 // --- CONTRAT D'INTERACTION COMMUN (§26.2) -----------------------------------
 
-test('un seul formulaire est ouvert a la fois', () => {
+test('une seule modale a la fois', () => {
+  // Revise avec SPK-33. Les declencheurs ne disparaissent plus : ils restent
+  // visibles parce que ce sont EUX qui recoivent le focus a la fermeture, et un
+  // declencheur disparu n'aurait rien a qui le rendre (§6.27).
+  //
+  // Ce qui reste verifie est l'invariant : une modale n'en ouvre pas une autre.
   const etat = ui({ open: 'route' });
-  assert.ok(renderRoutesPanel(SPARK, [], etat).includes('data-formulaire="route"'));
-  // Les deux autres panneaux n'affichent alors meme plus leur declencheur.
-  assert.ok(!renderKeysPanel(SPARK, { keys: [] }, etat).includes('data-ouvre'));
-  assert.ok(!renderSnapshotsPanel(SPARK, [], etat).includes('data-ouvre'));
+  assert.ok(renderRoutesPanel(SPARK, [], etat).includes('<dialog'));
+  assert.ok(!renderKeysPanel(SPARK, { keys: [] }, etat).includes('<dialog'));
+  assert.ok(!renderSnapshotsPanel(SPARK, [], etat).includes('<dialog'));
+});
+
+test('le declencheur reste visible pendant la saisie', () => {
+  // Il recoit le focus a la fermeture (§6.27) : le faire disparaitre romprait
+  // le contrat.
+  const rendu = renderRoutesPanel(SPARK, [], ui({ open: 'route' }));
+  assert.ok(rendu.includes('data-ouvre="route"'));
 });
 
 test('chaque panneau ferme propose son declencheur', () => {
@@ -253,7 +269,7 @@ test('chaque panneau ferme propose son declencheur', () => {
   assert.ok(renderSnapshotsPanel(SPARK, [], ui()).includes('data-ouvre="snapshot"'));
 });
 
-test('un refus du serveur n’efface pas la saisie (§26.2)', () => {
+test('un refus du serveur n’efface pas la saisie (§6.27)', () => {
   const rendu = renderRoutesPanel(SPARK, [], ui({
     open: 'route',
     values: { domain: 'nouveau.example.com', port: 9000, tls: false },
@@ -264,17 +280,34 @@ test('un refus du serveur n’efface pas la saisie (§26.2)', () => {
   assert.ok(rendu.includes('Ce domaine est déjà pris.'));
 });
 
-test('un refus ne s’affiche que dans le panneau qui l’a recu', () => {
-  const etat = ui({ refusal: { panel: 'route', message: 'Refus de route.' } });
+test('un refus s’affiche DANS la modale qui l’a recu, et nulle part ailleurs', () => {
+  // §6.27 : un refus du serveur s'affiche dans la modale, pres du bouton
+  // d'engagement. Une modale qui se refermerait sur un refus ferait perdre la
+  // saisie et cacherait la raison.
+  const etat = ui({ open: 'route', refusal: { panel: 'route', message: 'Refus de route.' } });
   assert.ok(renderRoutesPanel(SPARK, [], etat).includes('Refus de route.'));
   assert.ok(!renderKeysPanel(SPARK, { keys: [] }, etat).includes('Refus de route.'));
   assert.ok(!renderSnapshotsPanel(SPARK, [], etat).includes('Refus de route.'));
 });
 
-test('pendant l’envoi, le bouton de soumission est desactive et le dit', () => {
+test('pendant l’envoi, le point d’engagement est desactive et le dit', () => {
   const rendu = renderRoutesPanel(SPARK, [], ui({ open: 'route', busy: true }));
   assert.ok(rendu.includes('disabled'));
-  assert.ok(rendu.includes('Déclaration…'));
+  assert.ok(rendu.includes('Envoi…'));
+});
+
+test('le point d’engagement NOMME l’action', () => {
+  // « Enregistrer » ne dit pas ce qu'il couvre ; « Declarer la route » le dit.
+  assert.ok(renderRoutesPanel(SPARK, [], ui({ open: 'route' })).includes('Déclarer la route'));
+  assert.ok(renderSnapshotsPanel(SPARK, [], ui({ open: 'snapshot' })).includes('Prendre l’instantané'));
+});
+
+test('le nom accessible de la modale est le TITRE DE LA SECTION', () => {
+  // §6.27 : c'est ce qui borne sa portee — une modale ouverte depuis « Routes »
+  // ne touche que les routes.
+  const rendu = renderRoutesPanel(SPARK, [], ui({ open: 'route' }));
+  assert.ok(rendu.includes('aria-labelledby="route-titre"'));
+  assert.ok(rendu.includes('id="route-titre">Routes publiques'));
 });
 
 test('les valeurs de l’utilisateur sont echappees', () => {

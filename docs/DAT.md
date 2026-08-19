@@ -1933,28 +1933,41 @@ pour **son** Spark ; l'oubli d'une clé du registre relève d'une surface géné
 qui n'est pas livrée par cette unité, et le panneau le dit plutôt que de le
 laisser deviner.
 
-### 26.2 Un formulaire s'ouvre, il n'occupe pas
+### 26.2 La saisie est recueillie par une modale limitée à la section
 
-Chaque panneau porte un bouton d'ajout qui **révèle** son formulaire à sa place,
-dans le flux (`DESIGN_SYSTEM.md` §6.22). Pas de modale : ni voile, ni piège de
-focus, ni `Échap` global à écrire pour trois formulaires de deux champs.
+Chaque panneau porte une commande — « Ajouter une route », « Autoriser une clé »,
+« Prendre un instantané » — qui ouvre une **modale dont le sujet est cette
+section**, et rien d'autre (`DESIGN_SYSTEM.md` §6.27).
 
-Le contrat d'interaction est celui du §6.22, et il vaut pour les trois :
+**Cette section disait le contraire jusqu'au 2026-08-19**, et l'argument mérite
+d'être rappelé pour qu'on ne le refasse pas : elle refusait la modale par son
+coût — ni voile, ni piège de focus, ni `Échap` à écrire pour trois formulaires de
+deux champs. L'argument était juste tant que la console n'avait aucune modale.
+Il tombe dès qu'elle en porte une : ce qui était trois exceptions à écrire est
+devenu **un composant unique**, dont le contrat est tenu à un seul endroit.
 
-- à l'ouverture, le focus entre dans le premier champ ;
-- l'annulation referme et **rend le focus au bouton déclencheur** ;
-- la saisie survit à un refus du serveur — c'est déjà la règle du §25.2, et elle
-  ne change pas parce que le formulaire est plus petit.
+Ce que le §6.27 impose, et que l'ancien choix obtenait déjà :
 
-Un seul panneau est ouvert à la fois. Deux formulaires ouverts côte à côte
-laisseraient croire qu'on prépare deux gestes qui partiraient ensemble, alors que
-chacun part seul.
+- le focus entre dans le premier contrôle à l'ouverture ;
+- l'annulation — et `Échap` — rendent le focus au déclencheur ;
+- un refus du serveur s'affiche **dans** la surface de saisie et n'efface rien.
 
-**Ce choix est révisé.** La règle de navigation retenue par le responsable fait
-passer la modification d'une section par une modale (`DESIGN_SYSTEM.md` §6.27,
-DAT §34.2). Le paragraphe ci-dessus décrit l'écran réel tant que
-`docs/BACKLOG.md#SPK-33` n'est pas livrée ; il sera réécrit dans le même
-changement que la refonte. Le contrat d'interaction, lui, ne change pas.
+Ce que la modale ajoute, et qui manquait :
+
+- l'arrière-plan est **inerte** et ne défile pas. Le formulaire dans le flux
+  laissait la page derrière lui active : on pouvait tabuler hors de la saisie
+  sans s'en apercevoir ;
+- le nom accessible de la surface est **le titre de la section**, ce qui borne sa
+  portée : une modale ouverte depuis « Routes » ne touche que les routes ;
+- **une seule à la fois**, garanti par le composant plutôt que par une règle que
+  chaque panneau devait respecter de son côté.
+
+Le déclencheur, lui, **reste visible** pendant la saisie : c'est lui qui reçoit le
+focus à la fermeture, et un déclencheur disparu n'aurait rien à qui le rendre.
+
+Les **confirmations** ne changent pas : elles restent dans le flux (§6.22,
+§6.23). Une modale recueille une saisie ; elle ne démontre pas une intention, et
+l'ouvrir ne tient pas lieu de confirmation.
 
 ### 26.3 Routes publiques
 

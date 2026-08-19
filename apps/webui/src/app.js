@@ -14,6 +14,7 @@ import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-cr
 import { ADMIN_VIDE } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
 import { renderCatalogue, renderOngletsHote, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
+import { brancherModale } from './components/modale.js';
 import { tunnelOf } from './components/tokens.js';
 
 const racine = document.getElementById('racine');
@@ -119,6 +120,17 @@ function brancher() {
     });
   }
   brancherPanneaux();
+  // §6.27 : le contrat de la modale est tenu à UN SEUL endroit — focus entrant,
+  // focus retenu, Échap qui vaut annulation, focus rendu au déclencheur.
+  brancherModale(racine, {
+    onFermer: () => {
+      etat.admin.open = null;
+      etat.admin.refusal = null;
+      etat.catalogue.ui.open = false;
+      etat.catalogue.ui.refusal = null;
+      peindre();
+    },
+  });
   racine.querySelector('[data-confirme]')?.addEventListener('click', () => lancer('delete'));
   racine.querySelector('[data-annule]')?.addEventListener('click', () => {
     etat.confirming = null;
@@ -147,16 +159,8 @@ function brancherPanneaux() {
       racine.querySelector('.formulaire-panneau .controle')?.focus();
     });
   }
-  for (const bouton of racine.querySelectorAll('[data-ferme]')) {
-    bouton.addEventListener('click', () => {
-      const panneau = bouton.dataset.ferme;
-      admin.open = null;
-      admin.refusal = null;
-      peindre();
-      // §26.2 : l'annulation rend le focus au bouton déclencheur.
-      racine.querySelector(`[data-ouvre="${panneau}"]`)?.focus();
-    });
-  }
+  // L'annulation et `Échap` sont tenus par `brancherModale` (§6.27) : un seul
+  // endroit pour un seul contrat.
   for (const bouton of racine.querySelectorAll('[data-annule]')) {
     bouton.addEventListener('click', () => {
       admin.confirming = null;
@@ -165,7 +169,7 @@ function brancherPanneaux() {
     });
   }
 
-  const formulaire = racine.querySelector('.formulaire-panneau');
+  const formulaire = racine.querySelector('[data-modale="route"], [data-modale="key"], [data-modale="snapshot"]');
   if (formulaire) {
     for (const controle of formulaire.querySelectorAll('input, select')) {
       controle.addEventListener('input', () => {
@@ -177,7 +181,7 @@ function brancherPanneaux() {
     }
     formulaire.addEventListener('submit', (evenement) => {
       evenement.preventDefault();
-      const quoi = formulaire.dataset.formulaire;
+      const quoi = formulaire.dataset.modale;
       if (quoi === 'route') return declarerRoute();
       if (quoi === 'key') return autoriserCle();
       if (quoi === 'snapshot') return prendreInstantane();

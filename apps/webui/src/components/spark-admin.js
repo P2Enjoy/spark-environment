@@ -5,7 +5,8 @@
  * @spec docs/BACKLOG.md#SPK-21 · docs/DAT.md §26 (les trois surfaces),
  *       §26.2 (un formulaire s'ouvre, il n'occupe pas), §26.3 (routes),
  *       §26.4 (clés), §26.5 (instantanés) · §17, §18, §19 ·
- *       docs/DESIGN_SYSTEM.md §3.1, §6.9, §6.19, §6.22, §6.23, §6.24, §14.7 ·
+ *       docs/DESIGN_SYSTEM.md §3.1, §6.9, §6.19, §6.22, §6.23, §6.24, §6.27
+ *       (la saisie est recueillie par une modale limitée à la section), §14.7 ·
  *       docs/DESIGN_SYSTEM_APP.md
  *
  * Ce sont des panneaux du détail, pas des écrans (§26.1) : une route publique
@@ -13,6 +14,7 @@
  */
 
 import { formatBytes } from './tokens.js';
+import { renderModale } from './modale.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -41,8 +43,14 @@ export const ADMIN_VIDE = {
  * §26.2 : un seul formulaire à la fois. Deux formulaires ouverts laisseraient
  * croire qu'on prépare deux gestes qui partiraient ensemble.
  */
-function declencheur(panneau, libelle, ui) {
-  if (ui.open) return '';
+/**
+ * Commande de section. Elle ouvre une modale dont le sujet est CETTE section
+ * (§6.27) ; elle ne se remplace plus par un formulaire dans le flux.
+ *
+ * Elle reste visible pendant la saisie : c'est elle qui reçoit le focus à la
+ * fermeture, et un déclencheur disparu n'aurait rien à qui le rendre.
+ */
+function declencheur(panneau, libelle) {
   return `<p class="formulaire__actions"><button type="button" class="bouton" ` +
     `data-ouvre="${panneau}">${echapper(libelle)}</button></p>`;
 }
@@ -94,8 +102,11 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
       }).join('')}</ul>`
     : '<p class="absence">Aucune route publique ne pointe vers ce Spark.</p>';
 
-  const formulaire = ui.open === 'route'
-    ? `<form class="formulaire-panneau" data-formulaire="route">
+  const modale = renderModale({
+    ouverte: ui.open === 'route', id: 'route', titre: 'Routes publiques',
+    engagement: 'Déclarer la route', refus: ui.refusal?.panel === 'route' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps: `
          <div class="champ">
            <label for="route-domaine">Domaine</label>
            <input class="controle" id="route-domaine" name="domain" type="text"
@@ -116,21 +127,15 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
            <p class="champ__aide">L’émission suppose que le domaine résolve déjà vers
            cet hôte. Le DNS est extérieur au produit : un domaine mal pointé fait
            échouer l’émission côté Caddy, pas côté plan de contrôle.</p>
-         </div>
-         ${refus(ui, 'route')}
-         <p class="formulaire__actions">
-           <button type="submit" class="bouton bouton--primaire" ${ui.busy ? 'disabled' : ''}>${ui.busy ? 'Déclaration…' : 'Déclarer la route'}</button>
-           <button type="button" class="bouton" data-ferme="route">Annuler</button>
-         </p>
-       </form>`
-    : refus(ui, 'route');
+         </div>`,
+  });
 
   return `
 <section class="carte bloc" aria-labelledby="titre-routes">
   <h2 id="titre-routes">Routes publiques</h2>
   ${lignes}
-  ${formulaire}
-  ${declencheur('route', 'Ajouter une route', ui)}
+  ${declencheur('route', 'Ajouter une route')}
+  ${modale}
 </section>`;
 }
 
@@ -173,8 +178,11 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
        </div>`
     : `<p class="absence">Le registre ne contient aucune clé que ce Spark n’ait déjà.</p>`;
 
-  const formulaire = ui.open === 'key'
-    ? `<form class="formulaire-panneau" data-formulaire="key">
+  const modale = renderModale({
+    ouverte: ui.open === 'key', id: 'key', titre: 'Clés autorisées',
+    engagement: 'Autoriser', refus: ui.refusal?.panel === 'key' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps: `
          ${choixRegistre}
          <p class="note">ou enregistrer une clé nouvelle, qui sera accordée dans la foulée :</p>
          <div class="champ">
@@ -189,14 +197,8 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
                   value="${echapper(ui.values.public_key)}">
            <p class="champ__aide">Seule une clé publique est acceptée. Une clé privée
            collée par erreur est refusée par le registre, pas détectée plus tard.</p>
-         </div>
-         ${refus(ui, 'key')}
-         <p class="formulaire__actions">
-           <button type="submit" class="bouton bouton--primaire" ${ui.busy ? 'disabled' : ''}>${ui.busy ? 'Autorisation…' : 'Autoriser'}</button>
-           <button type="button" class="bouton" data-ferme="key">Annuler</button>
-         </p>
-       </form>`
-    : refus(ui, 'key');
+         </div>`,
+  });
 
   // §17.4 et §26.4 : le fragment vient du serveur, il n'est pas reconstruit ici.
   const fragment = sshConfig?.config
@@ -211,9 +213,9 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
   <h2 id="titre-cles">Clés autorisées</h2>
   ${lignes}
   ${derniere}
-  ${formulaire}
-  ${declencheur('key', 'Autoriser une clé', ui)}
+  ${declencheur('key', 'Autoriser une clé')}
   ${fragment}
+  ${modale}
   <p class="note">Retirer une clé du registre commun — donc de tous les Sparks à la
   fois — ne se fait pas depuis cet écran.</p>
 </section>`;
@@ -288,8 +290,12 @@ export function renderSnapshotsPanel(spark, snapshots = [], ui = ADMIN_VIDE) {
       }).join('')}</ul>`
     : '<p class="absence">Aucun instantané.</p>';
 
-  const formulaire = ui.open === 'snapshot'
-    ? `<form class="formulaire-panneau" data-formulaire="snapshot">
+  const modale = renderModale({
+    ouverte: ui.open === 'snapshot', id: 'snapshot', titre: 'Instantanés',
+    engagement: 'Prendre l’instantané', occupee: ui.busy,
+    refus: (ui.refusal?.panel === 'snapshot' && !ui.refusal.blocking && !ui.refusal.snapshot)
+      ? ui.refusal.message : null,
+    corps: `
          <div class="champ">
            <label for="instantane-nom">Nom de l’instantané</label>
            <input class="controle" id="instantane-nom" name="snapshot" type="text"
@@ -297,21 +303,15 @@ export function renderSnapshotsPanel(spark, snapshots = [], ui = ADMIN_VIDE) {
                   value="${echapper(ui.values.snapshot)}">
            <p class="champ__aide">Un instantané consomme le quota disque du Spark :
            il coûte d’abord zéro, puis grossit à mesure que le Spark s’en écarte.</p>
-         </div>
-         ${ui.refusal?.panel === 'snapshot' && !ui.refusal.blocking ? refus(ui, 'snapshot') : ''}
-         <p class="formulaire__actions">
-           <button type="submit" class="bouton bouton--primaire" ${ui.busy ? 'disabled' : ''}>${ui.busy ? 'Capture…' : 'Prendre l’instantané'}</button>
-           <button type="button" class="bouton" data-ferme="snapshot">Annuler</button>
-         </p>
-       </form>`
-    : (ui.refusal?.panel === 'snapshot' && !ui.refusal.blocking && !ui.refusal.snapshot ? refus(ui, 'snapshot') : '');
+         </div>`,
+  });
 
   return `
 <section class="carte bloc" aria-labelledby="titre-instantanes">
   <h2 id="titre-instantanes">Instantanés</h2>
   ${lignes}
-  ${formulaire}
-  ${declencheur('snapshot', 'Prendre un instantané', ui)}
+  ${declencheur('snapshot', 'Prendre un instantané')}
+  ${modale}
   <p class="note">Un instantané rend l’état complet de la cellule. Il vit dans le
   même pool que le Spark : il ne protège ni de la perte du pool, ni de celle de la
   machine, et consomme le quota disque.</p>
