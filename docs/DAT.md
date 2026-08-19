@@ -2731,8 +2731,21 @@ désignent dans la console, et ce qu'ils changent de l'existant.
 | Degré | Contenu | Forme |
 |---|---|---|
 | 1 | Sparks, Hôte | barre latérale |
-| 2 | sur un Spark : Aperçu, Routes, Clés, Instantanés, Journal | onglets |
-| 3 | sections de l'onglet ouvert | fenêtre en lecture, modale par section |
+| 2 | sous Sparks : Instances · sous Hôte : Pools, Images | onglets |
+| 3 | la fenêtre d'un Spark : Infos, Routes, Clés, Instantanés, Journal | onglets de la fenêtre, sections à l'intérieur |
+| — | modifier une section, ou lui insérer un élément | modale limitée à cette section |
+
+La fenêtre d'un Spark porte ses propres onglets, sous ceux du second degré. Le
+§5.4 du design system l'autorise explicitement : deux rangées d'onglets pour deux
+sujets distincts — ce que l'on regarde, puis quelle facette du Spark ouvert. La
+hiérarchie est une orientation ; ce qu'elle sert à obtenir ne l'est pas :
+
+1. ce qui s'affiche et ce qui se saisit ne partagent pas la même surface ;
+2. une surface a un seul sujet, nommable en une phrase ;
+3. une action sensible se confirme (§6.23 du design system).
+
+L'onglet **Images** est la surface du catalogue (§33) : il décrit l'hôte, pas un
+Spark, et c'est là que s'ajoute et se relève une référence.
 
 Le **sélecteur de serveur** et l'état du tunnel restent au-dessus du premier
 degré. Ce n'est pas une destination : c'est le contexte de toutes les
@@ -2763,7 +2776,10 @@ Ce qui **ne** devient **pas** une modale, et le §6.27 le dit :
   instantané reste **dans le flux** (§6.22, §6.23) ;
 - l'écran de création garde sa destination propre : une création qui mérite une
   URL mérite un écran, pas une fenêtre superposée ;
-- les commandes de cycle de vie (§24) restent des boutons de l'onglet Aperçu.
+- les commandes de cycle de vie (§24) restent des boutons de l'onglet Infos de la
+  fenêtre du Spark ;
+- ouvrir une modale ne vaut pas confirmation : une action sensible engagée depuis
+  une modale demande sa confirmation, rendue dans le flux de cette modale.
 
 Tant que SPK-33 n'est pas livrée, le §26.2 décrit l'écran réel. À la livraison,
 il est réécrit et cesse de dire « pas de modale ».

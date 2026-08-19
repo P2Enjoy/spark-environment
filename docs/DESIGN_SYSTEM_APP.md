@@ -25,23 +25,36 @@ désignent ici :
 | Degré | Contenu de la console | Forme |
 |---|---|---|
 | 1 | **Sparks**, **Hôte** | barre latérale, sélecteur de serveur et état du tunnel en tête |
-| 2 | sur un Spark : *Aperçu*, *Routes*, *Clés*, *Instantanés*, *Journal* | onglets |
-| 3 | les sections de l'onglet ouvert | fenêtre en lecture, modale par section |
+| 2 | sous *Sparks* : *Instances* · sous *Hôte* : *Pools*, *Images* | onglets |
+| 3 | la fenêtre d'un Spark, ouverte depuis la liste : *Infos*, *Routes*, *Clés*, *Instantanés*, *Journal* | onglets de la fenêtre, sections à l'intérieur |
+| — | modifier une section, ou lui insérer un élément | modale limitée à cette section |
 
-Le second degré est porté par les **panneaux** existants du détail (`docs/DAT.md`
-§26). Ce ne sont toujours pas des écrans — une route publique n'existe pas sans
-son Spark — mais des onglets d'une même destination, et non plus des blocs
-empilés dans une page qui s'allonge.
+La fenêtre d'un Spark porte donc **ses propres onglets**, sous ceux du second
+degré. C'est le cas prévu par le §5.4 : deux rangées d'onglets pour deux sujets
+distincts — ce que l'on regarde dans la console, puis quelle facette du Spark
+ouvert. Ce qui serait fautif, ce sont deux rangées côte à côte pour le même sujet.
+
+Les facettes reprennent les **panneaux** existants du détail (`docs/DAT.md` §26).
+Ce ne sont toujours pas des écrans — une route publique n'existe pas sans son
+Spark — mais les onglets de sa fenêtre, et non plus des blocs empilés dans une
+page qui s'allonge.
+
+L'onglet *Images* du second degré est la surface du catalogue d'images
+(`docs/DAT.md` §33) : le catalogue décrit l'hôte, pas un Spark.
 
 Le sélecteur de serveur reste **au-dessus** du premier degré : il ne désigne pas
 une destination mais le contexte de toutes les destinations.
 
 **État réel au 2026-08-19 :** la console rend aujourd'hui une barre horizontale à
 deux liens, les trois panneaux d'administration empilés, et des formulaires
-ouverts dans le flux (`docs/DAT.md` §26.2). La convergence vers les trois degrés
-est l'objet de `docs/BACKLOG.md#SPK-33` ; sa cible est décrite au §34 du
-[DAT](DAT.md). Tant que cette unité n'est pas livrée, ce tableau décrit la cible,
-pas l'écran.
+ouverts dans le flux (`docs/DAT.md` §26.2). La convergence est l'objet de
+`docs/BACKLOG.md#SPK-33` ; sa cible est décrite au §34 du [DAT](DAT.md). Tant que
+cette unité n'est pas livrée, ce tableau décrit la cible, pas l'écran.
+
+Ce qui prime sur le tableau, et qui ne se négocie pas à la livraison : ce qui
+s'affiche et ce qui se saisit ne partagent pas la même surface, chaque surface a
+un seul sujet, et une action sensible se confirme (`DESIGN_SYSTEM.md` §5.4,
+§6.23).
 
 ## 2. Terminologie métier
 

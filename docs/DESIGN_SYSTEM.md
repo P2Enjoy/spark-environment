@@ -285,16 +285,40 @@ Ordre recommandé de sacrifice :
 
 Un libellé nécessaire aux technologies d’assistance peut devenir `sr-only`, mais ne doit pas être supprimé.
 
-## 5.4 Les trois degrés de navigation
+## 5.4 Les degrés de navigation
 
-Une application a trois degrés, et pas quatre. Chacun a une forme, et cette forme
-dit à l’utilisateur *ce qui va changer* quand il clique.
+Chaque degré a une forme, et cette forme dit à l’utilisateur *ce qui va changer*
+quand il clique.
 
 | Degré | Ce qu’il représente | Forme |
 |---|---|---|
 | 1 | destinations principales du produit | barre latérale |
 | 2 | sous-parties d’une même destination | onglets |
-| 3 | contenu de la sous-partie | fenêtre d’options en lecture, modale pour modifier une section (§6.27) |
+| 3 | l’objet ouvert depuis une sous-partie | fenêtre, elle-même découpée en sections — et en onglets lorsque l’objet a plusieurs facettes |
+| — | modifier une section, ou lui insérer un élément | modale limitée à cette section (§6.27) |
+
+**Cette hiérarchie est une orientation, pas une loi.** Elle donne la forme par
+défaut de chaque niveau ; elle n’interdit pas un niveau de plus lorsqu’il rend
+l’écran plus clair. Exemple légitime : barre latérale « Sparks » → onglet
+« Instances » → liste cliquable → fenêtre de l’instance, portant à son tour des
+onglets *Infos*, *Routes*, *Clés*, *Instantanés*, *Journal*.
+
+Ce qui n’est **pas** négociable, en revanche, tient en trois points — et c’est ce
+que la hiérarchie sert à obtenir, pas l’inverse :
+
+1. **Ce qu’on affiche et ce qu’on saisit ne partagent pas la même surface.** Une
+   fenêtre montre ; une modale recueille. Un écran qui mélange les deux ne dit
+   plus ce qui fait foi.
+2. **Une surface a un sujet, et un seul.** Une section, un objet, une modale : à
+   chaque fois, nommable en une phrase. Une surface qu’on ne peut pas nommer est
+   une surface qui en contient deux.
+3. **Une action sensible demande toujours une confirmation explicite** (§6.23).
+   Aucun degré de navigation n’en dispense.
+
+Un niveau de plus n’est jamais gratuit : chacun ajoute un clic, un état à retenir
+et une chose à annoncer. Il se justifie par ce qu’il **sépare**. Un niveau qui ne
+contient qu’un seul panneau ne sépare rien : c’est un clic de plus pour arriver
+au même endroit.
 
 ### Degré 1 — barre latérale
 
@@ -328,11 +352,24 @@ réellement (§5.2) :
 Le critère est l’URL, jamais l’apparence.
 
 Un onglet change ce que l’on regarde. Il ne modifie jamais l’état des données, et
-ne porte donc aucune action.
+ne porte donc aucune action : les actions appartiennent à la section qu’il
+révèle. C’est le point 1 ci-dessus, appliqué à la navigation.
 
-Il n’existe pas de troisième degré de **menu**. Lorsqu’un besoin d’en ajouter un
-apparaît, c’est que la destination doit être scindée, ou que ce qu’on voulait y
-mettre est une section de la fenêtre du degré 3.
+Des onglets peuvent apparaître **deux fois** dans une même arborescence — au
+second degré pour choisir une sous-partie, puis dans la fenêtre d’un objet pour
+choisir une de ses facettes. Ce n’est pas une entorse : ce sont deux sujets
+différents, et chacun est nommable. Ce qui serait une faute, c’est deux rangées
+d’onglets **côte à côte** pour un même sujet.
+
+### Degré 3 — la fenêtre d’un objet
+
+Ouvrir un élément d’une liste ouvre sa **fenêtre** : la surface où cet objet est
+lu, découpée en sections, et découpée en onglets lorsqu’il a plusieurs facettes
+(§6.27).
+
+Une fenêtre est une **destination** dès qu’on peut vouloir la rouvrir, la
+recharger ou en partager l’adresse. Elle a alors une URL, comme n’importe quelle
+destination du §5.2.
 
 ---
 
@@ -924,7 +961,19 @@ Lorsqu’une confirmation s’ouvre :
 * `Échap` peut refermer un panneau réversible lorsque pertinent ;
 * l’annulation rend le focus au déclencheur.
 
-## 6.23 Actions destructives
+## 6.23 Actions sensibles et actions destructives
+
+Une action **sensible** demande toujours une confirmation explicite. Est sensible
+une action qui :
+
+* détruit une donnée ou en rend la récupération incertaine ;
+* est difficilement réversible ;
+* produit un effet **au-delà** de ce que la surface courante montre ;
+* porte sur un objet que le produit signale comme **protégé**.
+
+Le dernier cas ne se règle pas par une confirmation : lorsqu’un objet est
+protégé, la protection se **lève d’abord**, par un geste distinct et explicite.
+Une confirmation qui lèverait la protection au passage ne protégerait de rien.
 
 Une action destructive demande une confirmation explicite lorsqu’elle entraîne une perte ou une modification difficilement réversible.
 
@@ -997,20 +1046,25 @@ Une barre graphique peut l’accompagner, mais ne constitue pas l’unique repr�
 
 Éviter par défaut les visites guidées flottantes et surimpressions lorsque le même objectif peut être atteint par un écran normal, accessible et persistant.
 
-## 6.27 Fenêtre d’options et modale de section
+## 6.27 Fenêtre, sections, et modale limitée à une section
 
-C’est le troisième degré du §5.4 : ce que l’on voit une fois la destination et la
-sous-partie choisies.
+C’est le troisième degré du §5.4 : ce que l’on voit une fois qu’on a ouvert un
+objet.
 
-### La fenêtre
+### La fenêtre et ses sections
 
-Une **fenêtre d’options** est la surface de lecture d’un onglet. Elle présente des
-réglages, des paramètres ou des propriétés groupés en **sections titrées**,
-rendues en paires terme / valeur (§6.4).
+Une **fenêtre** est la surface de lecture d’un objet. Elle porte **plusieurs
+sections titrées** — jamais une seule, sans quoi elle n’avait pas besoin d’être
+une fenêtre —, rendues en paires terme / valeur (§6.4).
 
-Elle est en **lecture**. Une fenêtre ne porte pas de champ de formulaire
-permanent : elle porte des valeurs et, par section, une seule commande de
-modification.
+Lorsque l’objet a plusieurs facettes, la fenêtre les répartit en **onglets**, et
+chaque onglet porte à son tour ses sections. Une facette regroupe ce qui se lit
+ensemble : l’identité et les mesures d’un côté, les éléments liés — routes, clés,
+sauvegardes, journal — de l’autre.
+
+Une fenêtre est en **lecture**. Elle ne porte pas de champ de formulaire
+permanent : elle porte des valeurs, et chaque section porte la ou les commandes
+qui la concernent.
 
 Motif : une fenêtre entièrement éditable ne distingue plus ce qui est *enregistré*
 de ce qui est *en cours de saisie*. Le lecteur ne sait pas ce qui fait foi, et un
@@ -1019,14 +1073,23 @@ de ce qui est *en cours de saisie*. Le lecteur ne sait pas ce qui fait foi, et u
 Les valeurs absentes suivent le §6.4 et le §14.5 : une absence utile est nommée,
 elle n’est pas rendue par un tiret muet.
 
-### La modale de section
+### La modale, limitée à une section
 
-La commande « Modifier » d’une section ouvre une **modale** dont le sujet est
-**cette section**, et rien d’autre.
+Une commande de section — « Modifier », « Ajouter », « Déclarer », « Importer » —
+ouvre une **modale dont le sujet est cette section**, et rien d’autre.
+
+Deux usages, un seul composant :
+
+* **modifier** ce que la section affiche déjà ;
+* **insérer** un élément dans ce que la section liste.
+
+Le choix entre les deux ne change pas la surface, seulement son titre et son
+bouton d’engagement. Ce qui compte est la **portée** : une modale ouverte depuis
+la section « Routes » ne touche que les routes.
 
 Une modale est chère : elle impose un voile, un piège de focus, une gestion
-d’`Échap` et une restitution du focus. Ce prix se paie pour **modifier une
-section**, pas pour afficher une information, pas pour confirmer un geste.
+d’`Échap` et une restitution du focus. Ce prix se paie pour **recueillir une
+saisie**, pas pour afficher une information.
 
 Contrat, non négociable :
 
@@ -1036,7 +1099,7 @@ Contrat, non négociable :
 * à l’ouverture, le focus entre dans le premier contrôle ;
 * le focus reste dans la modale tant qu’elle est ouverte ;
 * `Échap` la ferme, et la fermeture équivaut à une annulation ;
-* à la fermeture, le focus revient à la commande « Modifier » d’origine ;
+* à la fermeture, le focus revient à la commande qui l’a ouverte ;
 * l’arrière-plan est inerte et ne défile pas ;
 * une seule modale à la fois : une modale n’en ouvre pas une autre ;
 * la modale défile dans son propre conteneur ; sous 768 px elle occupe l’écran
@@ -1053,13 +1116,22 @@ Fermer une modale qui contient des modifications non enregistrées demande une
 confirmation, rendue **dans le flux de la modale** (§6.22) — pas dans une seconde
 modale.
 
+### Une action sensible se confirme, même dans une modale
+
+Une modale n’est pas une confirmation, et l’ouvrir n’en tient pas lieu : elle
+recueille une saisie, elle ne démontre pas une intention. Toute action sensible —
+au sens du §6.23 — demande donc sa confirmation explicite, y compris lorsqu’elle
+est engagée depuis une modale.
+
+Cette confirmation est rendue **dans le flux** de la surface qui l’a déclenchée
+(§6.22) : jamais une seconde modale par-dessus la première.
+
 ### Ce qui ne prend pas de modale
 
-* une **confirmation** — elle est intégrée au flux (§6.22), y compris pour une
-  action destructive (§6.23) ;
 * un **champ autosauvegardé** (§6.11) — il n’a pas de point d’engagement à isoler ;
-* la **création d’une entité** lorsqu’elle possède sa propre destination : une
-  création qui mérite une URL mérite un écran ;
+* la **création d’un objet de premier plan** lorsqu’elle possède sa propre
+  destination : une création qui mérite une URL mérite un écran. Insérer un
+  élément **dans** une section reste une modale ;
 * l’**affichage** d’une information — si elle mérite d’être lue, elle mérite une
   section de la fenêtre.
 
@@ -1068,8 +1140,8 @@ modale.
 Le §6.5 conserve son domaine : l’**en-tête d’une entité**, dont plusieurs valeurs
 s’éditent ensemble, bascule globalement entre lecture et édition sur place.
 
-Le §6.27 vaut pour les **sections d’options** d’une fenêtre : chacune est un sujet
-distinct, avec son propre engagement, donc sa propre modale.
+Le §6.27 vaut pour les **sections** d’une fenêtre : chacune est un sujet distinct,
+avec son propre engagement, donc sa propre modale.
 
 Le critère : plusieurs valeurs d’une **même** identité éditées d’un geste → §6.5 ;
 une section autonome parmi d’autres → §6.27.
