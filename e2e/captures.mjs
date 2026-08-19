@@ -72,7 +72,7 @@ function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter()
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
                           uneSeuleCle = false, refusRestauration = false,
-                          hoteNonReleve = false, sansDetailMemoire = false } = {}) {
+                          hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false } = {}) {
   const chemin = join(await mkdtemp(join(tmpdir(), 'spark-cap-')), 'servers.json');
   await writeFile(chemin, JSON.stringify([
     { name: 'validation', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 },
@@ -178,10 +178,15 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
           verified_at: null, is_default: 0, detail: '' },
       ] }), { status: 200 });
       // SPK-39 : la vérification de la chaîne est un relevé explicite.
-      if (url.includes('/v1/audit/verify')) return new Response(JSON.stringify({
-        checked: 128, head: 'a1b2c3', length: 128, intact: true,
-        verified_at: '2026-08-19T15:30:00', break: null,
-      }), { status: 200 });
+      if (url.includes('/v1/audit/verify')) return new Response(JSON.stringify(
+        chaineRompue
+          ? { checked: 42, head: 'a1b2c3', length: 128, intact: false,
+              verified_at: '2026-08-19T15:30:00',
+              break: { id: 42, reason: 'entry_hash', ts: '2026-08-19T11:20:00',
+                       action: 'spark.delete' } }
+          : { checked: 128, head: 'a1b2c3', length: 128, intact: true,
+              verified_at: '2026-08-19T15:30:00', break: null },
+      ), { status: 200 });
       if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
         { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
         { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'crm.example.com → port 8080.' },
@@ -530,6 +535,20 @@ console.log('  41-journal-integrite.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '42-journal-mobile.png'), fullPage: true });
 console.log('  42-journal-mobile.png');
+ctx.server.close();
+
+// La CHAÎNE ROMPUE : l'écran doit désigner la ligne exacte et dire ce qui s'est
+// passé. C'est l'état pour lequel tout ce dispositif existe.
+ctx = await demarrer({ chaineRompue: true });
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.goto(`${ctx.base}/#/hote/journal`, { waitUntil: 'domcontentloaded' });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#titre-integrite', { timeout: 8000 });
+await page.click('[data-action="verifier-chaine"]');
+await page.waitForFunction(
+  () => document.body.innerText.includes('Chaîne rompue'), { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '43-journal-chaine-rompue.png') });
+console.log('  43-journal-chaine-rompue.png');
 ctx.server.close();
 
 // --- Le journal et son auteur (SPK-37) ------------------------------------

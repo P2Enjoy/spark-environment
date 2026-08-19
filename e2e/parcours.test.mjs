@@ -153,6 +153,69 @@ test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacit
   });
 });
 
+// --- SPK-39 · L'ONGLET DE SUPERVISION (§36.8) -------------------------------
+
+test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifie', async () => {
+  await parcours('journal-supervision', async () => {
+    // PAR LA NAVIGATION : accueil, Hôte, onglet Journal (§36.8.1).
+    await accueil();
+    await page.click('nav a[href="#/hote"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/hote/journal"]');
+    await page.waitForSelector('#titre-journal-hote', { timeout: 10000 });
+
+    const toutes = await page.$$eval('tbody tr', (l) => l.length);
+    assert.ok(toutes > 0, 'le seed a écrit au journal');
+
+    // FILTRER : par origine, puisque le seed produit les deux classes.
+    await page.selectOption('#filtre-actor_class', 'runtime');
+    await page.click('[data-filtres="journal"] button[type="submit"]');
+    await page.waitForFunction(
+      (avant) => document.querySelectorAll('tbody tr').length !== avant,
+      toutes, { timeout: 10000 });
+    const auteurs = await page.$$eval('tbody tr td:nth-child(4)',
+      (l) => l.map((c) => c.textContent.trim()));
+    assert.ok(auteurs.length > 0, 'des événements du serveur existent');
+    assert.ok(auteurs.every((a) => a === 'automatique'),
+      'le filtre retient les événements du serveur, et eux seuls');
+
+    // Le filtre est RÉELLEMENT appliqué côté serveur, pas dans la page.
+    const { corps } = await pile.lireSparkd('/v1/audit?actor_class=runtime&limit=200');
+    assert.ok(corps.entries.every((e) => e.actor_class === 'runtime'));
+
+    // « Tout afficher » n'apparaît QUE lorsqu'un filtre est posé (§1.4).
+    await page.click('[data-action="filtres-vides"]');
+    await page.waitForFunction(
+      (avant) => document.querySelectorAll('tbody tr').length === avant,
+      toutes, { timeout: 10000 });
+    assert.equal(await page.$('[data-action="filtres-vides"]'), null,
+      'un « Tout afficher » alors que tout est affiché est un bouton mort');
+
+    // VÉRIFIER la chaîne : un relevé EXPLICITE, déclenché au clavier.
+    assert.match(await page.textContent('#titre-integrite ~ .definitions'),
+      /n’a pas encore été vérifiée/,
+      'avant le relevé, l’écran ne prétend pas que la chaîne est intacte');
+    await page.focus('[data-action="verifier-chaine"]');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Chaîne intacte'), { timeout: 15000 });
+
+    // La chaîne ET l'ancre, jamais résumées en un seul indicateur (§36.8.4).
+    const integrite = await page.textContent('#titre-integrite ~ .definitions');
+    assert.match(integrite, /Chaîne intacte/);
+    assert.match(integrite, /Première comparaison|prolonge|Rien de nouveau/,
+      'le verdict de l’ancre est rendu à part');
+
+    // …et le runtime a réellement vérifié (§29.3 : on lit pour constater).
+    const { corps: etat } = await pile.lireSparkd('/v1/audit/verify');
+    assert.equal(etat.intact, true);
+    assert.ok(etat.checked > 0);
+    // La vérification est elle-même journalisée (§36.7).
+    const { corps: apres } = await pile.lireSparkd('/v1/audit?action=audit.verify&limit=10');
+    assert.ok(apres.entries.length > 0, 'le relevé laisse sa trace');
+  });
+});
+
 // --- SPK-37 · QUI A AGI (§21.6, §36.4) --------------------------------------
 
 test('le journal distingue un geste de la console d’un événement du serveur', async () => {
