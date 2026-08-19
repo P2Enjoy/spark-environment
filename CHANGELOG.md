@@ -203,6 +203,13 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **Sparks protégés** (SPK-34) : un interrupteur par Spark, armé et levé par mot
+  de passe, dont le **runtime** fait respecter le refus — `423 spark_protected`
+  sur les commandes, les routes, l'octroi d'une clé et les instantanés. Empreinte
+  `scrypt` à sel par Spark, jamais le mot de passe en clair, jamais journalisé.
+  L'état est visible partout où le Spark est listé. **Révoquer une clé n'est
+  jamais refusé** : la confirmation nomme les Sparks protégés touchés, et aucune
+  protection n'est levée. Migration `004_protection_spark`.
 - **Marge de métadonnées au-dessus de la taille vendue** (`SPARKD_STORAGE_METADATA_MARGIN`,
   64 MiB par défaut) : le quota posé sur un Spark n'est plus exactement ce qui lui
   a été vendu. Sans elle, un Spark qui remplit son disque empêchait Incus d'écrire

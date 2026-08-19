@@ -873,7 +873,7 @@ lecture avec une modale par section.
   observée à 1440, 1024, 768 et 390 px : centrée, focus dans le premier champ,
   aucun débordement horizontal.
 
-### [ ] SPK-34 · Sparks protégés contre la modification accidentelle
+### [x] SPK-34 · Sparks protégés contre la modification accidentelle
 
 Un interrupteur de protection par Spark. Tant qu'il est armé, **le runtime**
 refuse toute écriture visant ce Spark — donc l'API comme la console. Il s'arme
@@ -912,6 +912,38 @@ avec un mot de passe et se lève avec ce même mot de passe.
   modifier, lever, modifier, réarmer ; puis révoquer une clé malgré le gel en
   passant par la confirmation qui nomme les Sparks ; captures observées ; manuel
   M8 et seed mis à jour ; `@spec` / `@verifies` posés.
+
+**Livrée et intégralement prouvée le 2026-08-19.**
+
+- Migration `004_protection_spark` : quatre colonnes, dont l'invariant — les
+  quatre NULL ou les quatre renseignées — est porté par **deux déclencheurs**,
+  SQLite n'ajoutant pas de `CHECK` à une table existante. Elles naissent NULL :
+  aucune protection n'est armée rétroactivement. `docs/SCHEMA.md` §4.1.
+- `POST` et `DELETE /v1/sparks/{name}/protection`, plus un `GET` qui publie un
+  booléen et une date — jamais l'empreinte, le sel ni les paramètres.
+- Refus `423 spark_protected` sur les cinq familles d'écriture. Le Spark visé par
+  un **retrait** de route se lit sur la route, pas sur l'URL.
+- Le runtime cesse de publier `allowed_commands` sur un Spark protégé (§24.1) :
+  l'écran n'a rien à redériver, et la barre nomme la protection au lieu de
+  laisser croire que c'est l'état qui l'interdit.
+- Révocation : ordre refus-puis-acceptation sur les deux routes, liste **nommée**,
+  aucun mot de passe demandé, aucune protection levée, Sparks touchés consignés
+  au journal.
+- Seed : « analytics » protégé — le seul Spark qu'aucun autre parcours ne pilote,
+  et son état `pending` rend la démonstration plus parlante. La vérification du
+  seed envoie une commande et **exige un 423** : un badge posé sur une protection
+  qui ne mord pas mentirait.
+- **Preuves** : 586 tests Python — dont 20 sur le module, 16 par l'API avec les
+  vrais droits et sans passer par l'interface, couvrant chacune des écritures
+  listées, les deux recalculs globaux, les trois cas de révocation et l'absence
+  de mot de passe au journal ; 224 tests de console ; 8 gestes ; **21 parcours
+  E2E**, dont les deux que la DoD nomme ; 7 contrôles du manuel ; build ; contrat
+  régénéré et sans dérive.
+- **Observé** : `e2e/captures/36-liste-protege.png`, `37-fenetre-protegee.png`,
+  `38-protection-modale.png` et `docs/manuel/images/m8-protection.png`.
+- Deux preuves **révisées avec leur raison** : le seed tronqué, que la protection
+  rendait incapable d'échouer, et la forme du refus `423`, qui sortait sans
+  l'enveloppe `detail` de toutes les autres erreurs du produit.
 
 ---
 

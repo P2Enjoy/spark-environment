@@ -202,6 +202,34 @@ Risques       : aucun sur les données. Deux colonnes ajoutées à zéro ; aucun
                 valeur existante n'est modifiée ni devinée.
 ```
 
+### OP-05 · Migration `004_protection_spark` du registre
+
+```
+Objectif      : donner à chaque Spark un interrupteur de protection (SPK-34,
+                docs/DAT.md §35). Quatre colonnes, plus deux déclencheurs qui
+                portent leur invariant : les quatre NULL, ou les quatre
+                renseignées. SQLite n'ajoutant pas de CHECK à une table
+                existante, la contrainte ne peut PAS être une colonne.
+Dépend de     : 001_socle_registre
+Commande      : appliquée automatiquement au démarrage de sparkd, qui migre son
+                registre lui-même (docs/SCHEMA.md §12).
+Après         : rien. Aucun relevé, aucune reconfiguration.
+Vérification  : GET /v1/sparks rend « protected: false » sur chaque Spark.
+                Puis, sur un Spark de test : POST /v1/sparks/{nom}/protection
+                rend 200, et une commande y répond ensuite 423.
+Retour arrière: fourni. Les quatre colonnes et les deux déclencheurs sont
+                retirés. PERTE ASSUMÉE et documentée : les protections armées
+                disparaissent, et les Sparks concernés redeviennent modifiables.
+                Ce n'est pas une perte de données du locataire.
+Risques       : aucun sur l'existant. Les colonnes naissent NULL : AUCUNE
+                protection n'est armée rétroactivement — l'inverse
+                verrouillerait des Sparks dont personne ne connaîtrait le mot
+                de passe.
+Point d'exploitation : il n'y a AUCUNE récupération d'un mot de passe perdu par
+                l'API (§35.3). Elle se fait ici, en root, par un UPDATE mettant
+                les quatre colonnes à NULL sur la ligne du Spark concerné.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.

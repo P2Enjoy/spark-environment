@@ -2600,3 +2600,67 @@ arbitrage.
 pnpm 9.15.4 en place, les contournements des §2.1 et §2.1 bis de `CloudWorker.md`
 sans objet. Une session concurrente avait poussé la spécification des outils
 d'administration dans le Spark (SPK-43 à SPK-45) ; l'historique est resté linéaire.
+
+## 2026-08-19 — SPK-34 : un interrupteur qui arrête l'erreur, et qui ne retient jamais un geste de sécurité
+
+**Unité** : SPK-34, première `[ ]` avec du comportement livrable — SPK-28 la
+précède dans l'ordre du plan mais exige un repartitionnement de l'hôte, donc une
+action humaine. Le §35 du DAT était complet et vérifiable ligne à ligne ; je ne
+l'ai pas réécrit. Ce qui manquait était le contrat de schéma, écrit et committé
+avant la première ligne de code (`docs/SCHEMA.md` §4.1).
+
+**Ce qui est livré.** Chaque Spark porte un interrupteur, armé et levé par mot de
+passe. Armé, le **runtime** refuse toute écriture qui le vise : commandes de
+cycle de vie, reconfiguration, routes en ajout comme en retrait, octroi d'une
+clé, instantanés y compris leur restauration. Code `423`, distinct des `409`
+d'admission et de transition. Le mot de passe est une empreinte `scrypt` à sel
+par Spark, avec ses paramètres de coût rangés à côté d'elle pour qu'ils évoluent
+sans invalider l'existant ; il n'atteint jamais le journal.
+
+**La décision qui structurait tout : révoquer passe toujours.** Un refus
+laisserait un accès en place parce qu'un interrupteur a été oublié ailleurs —
+un garde-fou devenu vulnérabilité. Le produit informe donc au lieu de refuser :
+il nomme les Sparks protégés touchés, un par un, la console les présente en
+confirmation, et un second appel aboutit sans mot de passe et sans lever aucune
+protection.
+
+**Trois choses que la mesure a corrigées.**
+
+1. L'invariant des quatre colonnes ne pouvait pas être un `CHECK` : SQLite n'en
+   ajoute pas à une table existante. Deux déclencheurs le portent, et j'ai
+   vérifié qu'ils refusent bien un `protected_at` seul.
+2. Le `423` sortait **sans l'enveloppe `detail`** que toutes les autres erreurs
+   du produit portent : la console aurait lu au mauvais endroit. Trouvé par la
+   preuve d'API, pas par la relecture.
+3. Le seed protégeait d'abord `postgres-dedie` — le choix qui avait du sens sur
+   le fond. Mesuré : deux parcours préexistants le pilotent, et leur résultat
+   devenait dépendant de l'ordre d'exécution. La démonstration est passée à
+   `analytics`, seul Spark qu'aucun parcours ne touche, et son état `pending`
+   la rend plus parlante encore.
+
+**Deux preuves révisées avec leur raison, écrite dans le fichier.** Le test du
+seed tronqué retirait la route d'`analytics` : protégé, ce retrait est refusé, la
+fixture restait et le test **ne pouvait plus échouer** — le pire état d'un test.
+Et le runtime cesse de publier `allowed_commands` sur un Spark protégé, ce que le
+§24.1 exigeait : sans cela l'écran aurait redérivé la règle de son côté.
+
+**Vérifié.** 586 tests Python — 20 sur le module, 16 par l'API avec les vrais
+droits et sans passer par l'interface —, 224 de console, 6 de contrat, 8 gestes,
+**21 parcours E2E** dont les deux que la DoD nomme, 7 contrôles du manuel, build,
+contrat régénéré sans dérive. Captures 36, 37, 38 et illustration `m8-protection`
+observées.
+
+**Où reprendre.** **SPK-41** (catalogue local des serveurs tenu depuis la
+console) ou **SPK-37** (un acteur réel dans le journal), toutes deux `[ ]` et
+spécifiées. SPK-30 et SPK-29 se soldent sur l'hôte ; SPK-12 attend un domaine,
+SPK-17 une exécution de CI. SPK-28, SPK-35, SPK-36 et SPK-42 attendent votre
+arbitrage.
+
+**Point d'exploitation** : la migration `004_protection_spark` est portée au
+contrat de déploiement (OP-05), avec la seule voie de récupération d'un mot de
+passe perdu — un `UPDATE` en root sur l'hôte, l'API n'en offrant aucune.
+
+**Environnement.** Machine locale, non `root` : Docker répondait, Node 24.14.1 et
+pnpm 9.15.4 en place. `docs/MASTER_PLAN.md`, que le §4.1 de `CloudWorker.md`
+nomme, n'existe pas dans ce dépôt : l'ordre du plan et les DoD sont portés par
+`docs/BACKLOG.md`, qui a fait foi.
