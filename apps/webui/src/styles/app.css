@@ -362,3 +362,16 @@ tbody tr:hover { background: var(--color-hover); }
 .coeur__id { font-size: var(--text-compact); }
 .coeur__role { font-size: var(--text-compact); color: var(--color-text-2); }
 .coeur--dedie .coeur__role { color: var(--color-brand-on-soft); font-weight: 700; }
+
+/* SPK-32 · docs/DAT.md §34.1 — onglets du second degre.
+   Ce sont de VERITABLES destinations : des liens, jamais un `tablist`. On doit
+   pouvoir recharger la page sur « Images ». */
+.onglets { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--color-border);
+           margin-bottom: var(--space-4); }
+.onglet { padding: var(--space-2) var(--space-4); min-height: var(--size-target);
+          display: inline-flex; align-items: center;
+          color: var(--color-text-2); text-decoration: none;
+          border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.onglet:hover { background: var(--color-hover); color: var(--color-ink); }
+.onglet--courant { color: var(--color-brand); font-weight: 700;
+                   border-bottom-color: var(--color-brand); }

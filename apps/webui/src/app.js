@@ -13,6 +13,7 @@ import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
+import { renderCatalogue, renderOngletsHote, CATALOGUE_VIDE } from './components/host-images.js';
 import { tunnelOf } from './components/tokens.js';
 
 const racine = document.getElementById('racine');
@@ -23,7 +24,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                            pools: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
                hote: { status: 'loading', host: null, cores: null,
-                       sparkNames: {}, error: null, syncing: false } };
+                       sparkNames: {}, error: null, syncing: false },
+               catalogue: { status: 'loading', images: [], error: null,
+                            ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -33,7 +36,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
  * §9.7). Un indicateur qui ment est pire qu'un indicateur absent.
  */
 function marquerNavigation() {
-  const courant = etat.route === 'hote' ? '#/hote' : '#/sparks';
+  // Le premier degré reste « Sparks » quand on est dans une section de l'hôte :
+  // les onglets du second degré portent leur propre `aria-current` (§34.1).
+  const courant = ['hote', 'images'].includes(etat.route) ? '#/hote' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -43,8 +48,10 @@ function marquerNavigation() {
 function peindre() {
   marquerNavigation();
   racine.querySelector('.principal').innerHTML =
-    etat.route === 'hote'
-      ? renderHostView(etat.hote)
+    etat.route === 'images'
+      ? renderOngletsHote('#/hote/images') + renderCatalogue(etat.catalogue)
+      : etat.route === 'hote'
+      ? renderOngletsHote('#/hote') + renderHostView(etat.hote)
       : etat.route === 'creation'
       ? renderSparkCreate(etat.creation)
       : etat.route === 'detail'
@@ -68,6 +75,8 @@ function brancher() {
   racine.querySelector('[data-action="reessayer"]')?.addEventListener('click', router);
   // §27.8 : le relevé ne détruit rien et n'a aucun paramètre — pas de confirmation.
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
+  racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
+  brancherCatalogue();
 
   const formulaire = racine.querySelector('#formulaire-spark');
   if (formulaire) {
@@ -463,7 +472,74 @@ async function relever() {
   await chargerHote();
 }
 
+/** Catalogue d'images (docs/DAT.md §33, §34.1). */
+async function chargerCatalogue() {
+  etat.route = 'images';
+  etat.catalogue.status = 'loading';
+  etat.catalogue.error = null;
+  peindre();
+  try {
+    etat.catalogue.images = (await api('/v1/images')).images;
+    etat.catalogue.status = 'ready';
+  } catch (erreur) {
+    etat.catalogue.error = erreur;
+    etat.catalogue.status = 'error';
+  }
+  peindre();
+}
+
+/** Relevé explicite (§33.3). Il ne détruit rien : aucune confirmation (§6.24). */
+async function releverImages() {
+  etat.catalogue.ui.syncing = true;
+  peindre();
+  try {
+    await fetch(`/api/v1/images/verify?server=${encodeURIComponent(etat.server)}`,
+                { method: 'POST' });
+  } catch { /* l'état réel sera relu ci-dessous */ }
+  etat.catalogue.ui.syncing = false;
+  await chargerCatalogue();
+}
+
+function brancherCatalogue() {
+  const ui = etat.catalogue.ui;
+  racine.querySelector('[data-ouvre="image"]')?.addEventListener('click', () => {
+    ui.open = true; ui.refusal = null;
+    peindre();
+    racine.querySelector('#image-reference')?.focus();
+  });
+  racine.querySelector('[data-ferme="image"]')?.addEventListener('click', () => {
+    ui.open = false; ui.refusal = null;
+    peindre();
+    racine.querySelector('[data-ouvre="image"]')?.focus();
+  });
+  const formulaire = racine.querySelector('[data-formulaire="image"]');
+  if (!formulaire) return;
+  for (const controle of formulaire.querySelectorAll('input')) {
+    controle.addEventListener('input', () => { ui.values[controle.name] = controle.value; });
+  }
+  formulaire.addEventListener('submit', async (evenement) => {
+    evenement.preventDefault();
+    ui.busy = true; ui.refusal = null;
+    peindre();
+    const reponse = await fetch(`/api/v1/images?server=${encodeURIComponent(etat.server)}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reference: ui.values.reference, label: ui.values.label }),
+    }).catch((e) => ({ ok: false, json: async () => ({ detail: { message: e.message } }) }));
+    ui.busy = false;
+    if (!reponse.ok) {
+      // Le refus vient du serveur, et la saisie reste intacte.
+      const rendu = await reponse.json().catch(() => ({}));
+      ui.refusal = rendu?.detail?.message ?? 'Le serveur a refusé cet ajout.';
+      return peindre();
+    }
+    ui.open = false;
+    ui.values = { ...CATALOGUE_VIDE.values };
+    await chargerCatalogue();
+  });
+}
+
 function router() {
+  if (location.hash === '#/hote/images') return chargerCatalogue();
   if (location.hash === '#/hote') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();
   const nom = (location.hash.match(/^#\/sparks\/(.+)$/) || [])[1];
