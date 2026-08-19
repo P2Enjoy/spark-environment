@@ -421,6 +421,12 @@ tbody tr:hover { background: var(--color-hover); }
    `dialog` fournit nativement le voile, l'inertie de l'arriere-plan et Echap ;
    il reste a lui donner sa forme. */
 .modale {
+  /* Le navigateur centre une modale par `margin: auto`. La modale etant rendue
+     DANS une section, la regle d'espacement des blocs (`.bloc > * + *`) ecrasait
+     cette marge et la collait au bord superieur — mesure : margin-top 12px au
+     lieu de auto. Elle vit dans la couche superieure : aucun espacement de flux
+     ne doit la deplacer. */
+  margin: auto;
   border: 0; border-radius: var(--radius-md); padding: 0;
   background: var(--color-surface); color: var(--color-ink);
   width: min(34rem, calc(100vw - 2 * var(--space-4)));
