@@ -66,7 +66,7 @@ function refus(ui, panneau) {
  */
 export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
   const lignes = routes.length
-    ? `<ul class="liste-simple">${routes.map((r) => {
+    ? `<ul class="liste-administrable">${routes.map((r) => {
         const attente = r.applied_at
           ? ''
           : ` <span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>non appliquée</span>`;
@@ -148,7 +148,7 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
   const disponibles = registry.filter((k) => !accordees.has(k.label));
 
   const lignes = keys.length
-    ? `<ul class="liste-simple">${keys.map((k) =>
+    ? `<ul class="liste-administrable">${keys.map((k) =>
         `<li>${echapper(k.label)} <span class="technique">${echapper(k.fingerprint)}</span>` +
         `<span class="actions-ligne"><button type="button" class="bouton bouton--compact" ` +
         `data-revoque="${echapper(k.label)}">Révoquer</button></span></li>`).join('')}</ul>`
@@ -232,8 +232,10 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
 export function renderBlockedRestore(refusal) {
   if (!refusal?.blocking?.length) return '';
   const n = refusal.blocking.length;
+  // Le bouton final est destructif : il doit nommer SA cible, pas seulement le
+  // nombre de victimes. Trois instantanés portent chacun leur « Restaurer ».
   return `<div class="refus" role="alert">
-    <p><strong>Restauration refusée : ${n} instantané${n > 1 ? 's' : ''} plus récent${n > 1 ? 's' : ''} serai${n > 1 ? 'ent' : 't'} détruit${n > 1 ? 's' : ''}.</strong></p>
+    <p><strong>Restauration de « ${echapper(refusal.snapshot)} » refusée : ${n} instantané${n > 1 ? 's' : ''} plus récent${n > 1 ? 's' : ''} serai${n > 1 ? 'ent' : 't'} détruit${n > 1 ? 's' : ''}.</strong></p>
     <ul class="liste-simple">${refusal.blocking.map((b) =>
       `<li><span class="technique">${echapper(b)}</span></li>`).join('')}</ul>
     <p class="confirmation__consequence">Revenir à un point antérieur détruit
@@ -249,7 +251,7 @@ export function renderBlockedRestore(refusal) {
 /** Instantanés. `stateful` n'est pas proposé : il échoue sur cet hôte (§19.3). */
 export function renderSnapshotsPanel(spark, snapshots = [], ui = ADMIN_VIDE) {
   const lignes = snapshots.length
-    ? `<ul class="liste-simple">${snapshots.map((s) => {
+    ? `<ul class="liste-administrable">${snapshots.map((s) => {
         const nom = s.incus_name;
         const taille = s.size_bytes != null ? ` — ${formatBytes(s.size_bytes)}` : '';
         const confirmeSuppression = ui.confirming?.kind === 'snapshot-delete' && ui.confirming.id === nom

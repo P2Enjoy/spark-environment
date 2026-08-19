@@ -1,7 +1,8 @@
 /**
  * Captures de l'écran liste des Sparks.
  *
- * @verifies docs/BACKLOG.md#SPK-18 · docs/DESIGN_SYSTEM.md §13 (les captures
+ * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21 ·
+ *           docs/DAT.md §24, §25, §26 · docs/DESIGN_SYSTEM.md §13 (les captures
  *           sont une preuve), §13.1 (validation attendue) · CLAUDE.md §16
  *
  * Les états sont produits depuis un faux `sparkd` local : la DoD demande de voir
@@ -60,7 +61,8 @@ const USAGE = {
 function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter(); e.kill = () => {}; return e; }
 
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
-                          refusCreation = false } = {}) {
+                          refusCreation = false, routeEnAttente = false,
+                          uneSeuleCle = false, refusRestauration = false } = {}) {
   const chemin = join(await mkdtemp(join(tmpdir(), 'spark-cap-')), 'servers.json');
   await writeFile(chemin, JSON.stringify([
     { name: 'validation', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 },
@@ -81,14 +83,40 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                  storage: { capacity: 207030845440, available: 21474836480 },
                  network: { capacity: 1e9, available: 5e8 } },
       }), { status: 200 });
+      // SPK-21 : la restauration d'un instantané ancien est refusée tant que des
+      // instantanés plus récents existent (docs/DAT.md §19.1).
+      if (url.includes('/restore')) {
+        if (!refusRestauration) return new Response(JSON.stringify({ restored: true }), { status: 200 });
+        return new Response(JSON.stringify({ detail: {
+          error: 'blocked_by_newer_snapshots',
+          message: 'Restaurer « avant-deploiement » détruirait des instantanés plus récents.',
+          blocking: ['apres-migration', 'avant-mise-a-jour'],
+          override: 'Renvoyer avec {"accept_losing_newer": true}.',
+        } }), { status: 409 });
+      }
       if (url.includes('/snapshots')) return new Response(JSON.stringify({ snapshots: [
-        { incus_name: 'avant-deploiement', created_at: '2026-08-19T09:12:00' },
+        { incus_name: 'avant-deploiement', created_at: '2026-08-19T09:12:00', size_bytes: 0 },
+        { incus_name: 'apres-migration', created_at: '2026-08-19T11:40:00', size_bytes: 1_395_864_371 },
+        { incus_name: 'avant-mise-a-jour', created_at: '2026-08-19T14:05:00', size_bytes: 297_795_584 },
       ] }), { status: 200 });
-      if (url.includes('/ssh-config')) return new Response(JSON.stringify({ keys: [
+      if (url.includes('/ssh-config')) return new Response(JSON.stringify({
+        host: 'crm-production', hostname: '10.77.0.16',
+        config: 'Host crm-production\n    HostName 10.77.0.16\n    User root\n    ProxyJump spark-host\n',
+        keys: uneSeuleCle
+          ? [{ label: 'poste-admin', fingerprint: 'SHA256:Vf2N7ryPnZPNBN+vs56E1vFAqq' }]
+          : [{ label: 'poste-admin', fingerprint: 'SHA256:Vf2N7ryPnZPNBN+vs56E1vFAqq' },
+             { label: 'portable-astreinte', fingerprint: 'SHA256:9kQ2mXbT4uLcR7wPzE1oYn' }],
+      }), { status: 200 });
+      // Registre commun des clés : ce qui peut être accordé sans en enregistrer.
+      if (url.includes('/v1/ssh-keys')) return new Response(JSON.stringify({ keys: [
         { label: 'poste-admin', fingerprint: 'SHA256:Vf2N7ryPnZPNBN+vs56E1vFAqq' },
+        { label: 'portable-astreinte', fingerprint: 'SHA256:9kQ2mXbT4uLcR7wPzE1oYn' },
+        { label: 'ci-deploiement', fingerprint: 'SHA256:Dw8sT3vB6nMq0aZxKpL5hJ' },
       ] }), { status: 200 });
       if (url.includes('/v1/ingress')) return new Response(JSON.stringify({ routes: [
-        { domain: 'crm.example.com', target_port: 8080, spark_name: 'crm-production', applied_at: '2026-08-19T09:00:00' },
+        { domain: 'crm.example.com', target_port: 8080, tls: 1, spark_name: 'crm-production', applied_at: '2026-08-19T09:00:00' },
+        ...(routeEnAttente ? [{ domain: 'preprod.example.com', target_port: 3000, tls: 0,
+                                spark_name: 'crm-production', applied_at: null }] : []),
       ] }), { status: 200 });
       if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
         { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
@@ -133,6 +161,24 @@ async function capturer(page, base, nom, { attendre = 'table', largeur = 1440, h
 
 const navigateur = await chromium.launch();
 const page = await navigateur.newPage();
+
+// La console du navigateur doit rester VIERGE de tout message produit par
+// L'APPLICATION. Un avertissement ignoré pendant des mois finit par masquer
+// l'erreur qui comptait.
+//
+// Chromium journalise de lui-même « Failed to load resource » pour toute réponse
+// non-2xx, et cette campagne provoque DÉLIBÉRÉMENT des 500, 502 et 409 pour
+// capturer les états d'erreur et les refus. Ces lignes-là sont la trace du
+// scénario, pas un défaut : elles sont comptées à part et affichées, jamais
+// masquées.
+const bruits = [];
+const reseau = [];
+const JOURNAL_RESEAU = /^Failed to load resource: the server responded with a status of \d{3}/;
+page.on('console', (m) => {
+  if (!['error', 'warning'].includes(m.type())) return;
+  (JOURNAL_RESEAU.test(m.text()) ? reseau : bruits).push(`[${m.type()}] ${m.text()}`);
+});
+page.on('pageerror', (e) => bruits.push(`[pageerror] ${e.message}`));
 
 let ctx = await demarrer();
 await capturer(page, ctx.base, '01-liste-chargee');
@@ -233,6 +279,99 @@ await page.screenshot({ path: join(SORTIE, '19-creation-mobile.png') });
 console.log('  19-creation-mobile.png');
 ctx.server.close();
 
+// --- Panneaux d'administration (SPK-21) -----------------------------------
+// docs/DAT.md §26. Le parcours est celui de l'utilisateur : on ouvre le Spark,
+// on clique sur le déclencheur, on saisit. Aucune URL directe vers un geste.
+const DETAIL = 'crm-production';
+
+async function ouvrirDetail(base, { largeur = 1440, hauteur = 1200 } = {}) {
+  await page.setViewportSize({ width: largeur, height: hauteur });
+  await page.goto(`${base}/#/sparks/${DETAIL}`, { waitUntil: 'domcontentloaded' });
+  // Naviguer vers une URL identique ne recharge pas : sans ce rechargement,
+  // l'état des panneaux d'une capture précédente survivrait dans la suivante.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#titre-routes', { timeout: 8000 });
+}
+
+ctx = await demarrer();
+await ouvrirDetail(ctx.base);
+await page.screenshot({ path: join(SORTIE, '20-panneaux-lecture.png') });
+console.log('  20-panneaux-lecture.png');
+
+// Formulaire de route ouvert AU CLAVIER, avec une saisie réelle.
+await page.focus('[data-ouvre="route"]');
+await page.keyboard.press('Enter');
+await page.waitForSelector('#route-domaine');
+await page.fill('#route-domaine', 'boutique.example.com');
+await page.fill('#route-port', '3000');
+await page.screenshot({ path: join(SORTIE, '21-route-formulaire.png') });
+console.log('  21-route-formulaire.png');
+
+// Confirmation de retrait d'une route, ouverte au clavier.
+await ouvrirDetail(ctx.base);
+await page.focus('[data-retire-route]');
+await page.keyboard.press('Enter');
+await page.waitForSelector('.confirmation', { timeout: 4000 });
+await page.screenshot({ path: join(SORTIE, '22-route-retrait.png') });
+console.log('  22-route-retrait.png');
+
+// Panneau des clés, formulaire ouvert : registre + enregistrement d'une clé neuve.
+await ouvrirDetail(ctx.base);
+await page.click('[data-ouvre="key"]');
+await page.waitForSelector('#cle-registre');
+await page.screenshot({ path: join(SORTIE, '23-cles-formulaire.png') });
+console.log('  23-cles-formulaire.png');
+
+// Instantanés : prendre, puis confirmer une restauration.
+await ouvrirDetail(ctx.base);
+await page.click('[data-ouvre="snapshot"]');
+await page.waitForSelector('#instantane-nom');
+await page.fill('#instantane-nom', 'avant-bascule');
+await page.screenshot({ path: join(SORTIE, '24-instantane-formulaire.png') });
+console.log('  24-instantane-formulaire.png');
+
+await ouvrirDetail(ctx.base);
+await page.click('[data-restaure="avant-deploiement"]');
+await page.waitForSelector('.confirmation', { timeout: 4000 });
+await page.screenshot({ path: join(SORTIE, '25-instantane-restauration.png') });
+console.log('  25-instantane-restauration.png');
+ctx.server.close();
+
+// LE CŒUR DE L'UNITÉ (§26.5) : le refus nomme les instantanés qui bloquent, et
+// l'acceptation de leur perte n'apparaît qu'À CE MOMENT.
+ctx = await demarrer({ refusRestauration: true });
+await ouvrirDetail(ctx.base);
+await page.click('[data-restaure="avant-deploiement"]');
+await page.waitForSelector('[data-confirme-restauration]');
+await page.click('[data-confirme-restauration]');
+await page.waitForSelector('[data-accepte-perte]', { timeout: 6000 });
+await page.screenshot({ path: join(SORTIE, '26-restauration-bloquee.png') });
+console.log('  26-restauration-bloquee.png');
+ctx.server.close();
+
+// Une seule clé autorisée : la conséquence de la révocation est nommée.
+// Et une route enregistrée mais non appliquée (§18.5).
+ctx = await demarrer({ uneSeuleCle: true, routeEnAttente: true });
+await ouvrirDetail(ctx.base);
+await page.screenshot({ path: join(SORTIE, '27-derniere-cle-et-route-en-attente.png') });
+console.log('  27-derniere-cle-et-route-en-attente.png');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(`${ctx.base}/#/sparks/${DETAIL}`);
+await page.waitForSelector('#titre-routes');
+await page.screenshot({ path: join(SORTIE, '28-panneaux-mobile.png'), fullPage: true });
+console.log('  28-panneaux-mobile.png');
+ctx.server.close();
+
 await navigateur.close();
 console.log('\n  captures dans e2e/captures/');
+if (reseau.length) {
+  console.log(`  journal réseau de Chromium, attendu (états d’erreur et refus provoqués) :`);
+  for (const r of [...new Set(reseau)]) console.log(`    ${r}`);
+}
+if (bruits.length) {
+  console.error(`\n  CONSOLE NON VIERGE — ${bruits.length} message(s) de l’application :`);
+  for (const b of [...new Set(bruits)]) console.error(`    ${b}`);
+  process.exit(1);
+}
+console.log('  console vierge de tout message applicatif');
 process.exit(0);

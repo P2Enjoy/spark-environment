@@ -55,6 +55,7 @@ test("le refus liste NOMMEMENT les instantanes bloquants, puis offre l'acceptati
 
 test('le decompte des bloquants s’accorde en nombre', () => {
   const un = renderBlockedRestore({ snapshot: 'a', blocking: ['x'] });
+  assert.ok(un.includes('Restauration de « a » refusée'), 'le refus nomme SA cible');
   assert.ok(un.includes('1 instantané plus récent serait détruit'));
   const trois = renderBlockedRestore({ snapshot: 'a', blocking: ['x', 'y', 'z'] });
   assert.ok(trois.includes('3 instantanés plus récents seraient détruits'));
