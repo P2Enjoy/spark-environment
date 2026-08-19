@@ -3344,6 +3344,80 @@ Cette identité est **déclarative** : elle attribue, elle ne prouve pas. C'est
 exactement pourquoi la signature reste due. Parler de « signature de l'acteur »
 avant SPK-40 resterait une figure de style.
 
+### 36.8 bis L'onglet de supervision : contrat (SPK-39)
+
+Le §36.8 dit ce que l'onglet montre. Cette section dit ce qui se code.
+
+#### 36.8.1 Une destination sous Hôte, pas une facette d'un Spark
+
+`#/hote/journal`, troisième onglet de second degré après *Pools* et *Images*
+(§34.1). Le journal **couvre tous les Sparks** : le lire dans la fenêtre d'un seul
+obligerait à ouvrir chaque Spark pour reconstituer une séquence qui les traverse.
+
+La facette *Journal* d'un Spark **reste** : elle répond à « qu'est-il arrivé à
+CELUI-CI », qui est une autre question. Les deux coexistent sans se dupliquer, et
+la seconde ne porte ni filtres ni vérification.
+
+#### 36.8.2 Les quatre filtres
+
+`GET /v1/audit` accepte, en plus de `limit` déjà existant :
+
+| Paramètre | Effet | Forme |
+|---|---|---|
+| `result` | égalité stricte | `ok` \| `denied` \| `error` |
+| `action` | **préfixe** — `spark` retient `spark.create`, `spark.settle`… | texte |
+| `actor` | sous-chaîne, insensible à la casse | texte |
+| `actor_class` | égalité stricte | `human` \| `runtime` |
+| `since` | horodatage minimum, inclusif | ISO 8601 |
+
+`action` filtre par **préfixe** et non par égalité : les actions sont nommées
+`sujet.verbe`, et l'exploitant cherche « tout ce qui touche aux instantanés »
+bien plus souvent qu'une action précise.
+
+Un filtre inconnu est **refusé** en `422`, jamais ignoré : un filtre ignoré rend
+une liste plus large que demandée, que l'exploitant lira comme un résultat filtré.
+C'est la pire des deux erreurs.
+
+#### 36.8.3 La vérification est un relevé explicite
+
+Comme le relevé de topologie (§27.8) et celui du catalogue d'images (§33.3) : un
+**bouton**, une **date**, et rien qui se rejoue à chaque affichage. Vérifier la
+chaîne parcourt tout le journal ; le faire à chaque ouverture d'onglet en ferait
+un coût permanent pour une information qui ne change qu'à l'écriture.
+
+Tant qu'aucun relevé n'a eu lieu dans la session, l'écran le **dit** — il n'affiche
+pas « intacte » par défaut. Une intégrité supposée est exactement ce que ce
+dispositif existe pour ne pas laisser croire.
+
+#### 36.8.4 Ce que l'écran montre de la chaîne et de l'ancre
+
+Trois choses, et elles ne se confondent pas :
+
+1. **l'état de la chaîne** — vérifiée le …, nombre d'entrées, tête ; et si elle est
+   rompue, la ligne exacte avec son motif ;
+2. **la comparaison avec l'ancre** — le verdict du §36.9.6 en toutes lettres, et
+   ce que la console avait retenu face à ce que le serveur annonce ;
+3. **la classe de chaque entrée**, dans le tableau — geste humain ou événement du
+   runtime (§36.4).
+
+Une chaîne intacte **et** une ancre qui alerte est le cas le plus important de
+tout le dispositif : c'est exactement la troncature. L'écran ne doit donc jamais
+résumer les deux en un seul indicateur — « tout va bien » y serait faux.
+
+#### 36.8.5 Ce que l'écran ne prétend pas
+
+Il n'écrit **jamais** « signé ». Le §21.6.2 le dit pour la facette d'un Spark, et
+cela vaut ici davantage : une page entière consacrée à l'intégrité est l'endroit
+où l'on croirait le plus volontiers à une garantie qui n'existe pas encore. La
+signature est SPK-40.
+
+**INC-01 y devient plus visible, et ce n'est pas un défaut de cette unité.** Les
+messages du runtime portent son vocabulaire — « `starting` → `running` » — là où
+l'interface affiche « En marche ». Une page entière de journal expose cet écart
+sur des dizaines de lignes au lieu de trois. L'arbitrage appartient au responsable
+(§21) ; l'onglet le rend visible, il ne le tranche pas, et il ne réécrit aucun
+message.
+
 ### 36.9 La chaîne, ligne à ligne : contrat (SPK-38)
 
 Les §36.1 à §36.5 disent ce que la chaîne prouve, contre qui, et quels pièges
