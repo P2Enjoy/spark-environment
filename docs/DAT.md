@@ -1803,9 +1803,16 @@ Il nomme le serveur visé et, **quand il la connaît**, l'empreinte de la clé S
 qui a ouvert le tunnel :
 
 ```
-console/<serveur> clé SHA256:…      empreinte déterminée
+console/<serveur> key=SHA256:…      empreinte déterminée
 console/<serveur>                   empreinte non déterminée
 ```
+
+La forme est **ASCII**, et ce n'est pas un détail de style : un en-tête HTTP ne
+transporte pas d'accent. Mesuré — une valeur portant « clé » fait échouer la
+requête à l'encodage, avant d'atteindre `sparkd`. Une identité qui casse l'appel
+qu'elle devait attribuer serait pire qu'aucune identité, donc `sparkd` **borne
+aussi ce qu'il accepte** : tout caractère hors ASCII imprimable est écarté à
+l'entrée du journal.
 
 L'empreinte est relevée à l'ouverture du tunnel, sur la sortie de diagnostic
 d'OpenSSH (`LogLevel=VERBOSE`), qui nomme la clé acceptée par le serveur. Elle

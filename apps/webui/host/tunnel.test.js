@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
-import { Tunnel, TunnelManager, TunnelError, freePort, READY, BROKEN, CLOSED } from './tunnel.js';
+import { Tunnel, TunnelManager, TunnelError, freePort, READY, BROKEN, CLOSED , lireEmpreinte } from './tunnel.js';
 
 const SERVEUR = { name: 'prod', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 };
 
@@ -244,4 +244,39 @@ test('un serveur local se referme proprement, sans processus a tuer', async () =
   await t.open();
   t.close();
   assert.equal(t.state, CLOSED);
+});
+
+
+// --- l'acteur déclaré au journal (SPK-37, docs/DAT.md §21.6.3) -------------
+
+test("l'empreinte est relevée sur la ligne qu'OpenSSH émet en VERBOSE", () => {
+  // Forme documentée d'OpenSSH sous LogLevel=VERBOSE. NON mesurée contre un
+  // serveur SSH réel dans cet environnement : aucun sshd n'y répond.
+  const ligne = 'debug1: Server accepts key: /home/p/.ssh/id_ed25519 ED25519 '
+    + 'SHA256:AbCd12+/xyzABCDEFGHIJKLMNOPQRSTUVWXYZ012 agent';
+  assert.equal(lireEmpreinte(ligne),
+               'SHA256:AbCd12+/xyzABCDEFGHIJKLMNOPQRSTUVWXYZ012');
+});
+
+test("le CHEMIN de la clé n'est pas retenu", () => {
+  // Il nomme un fichier du poste, pas une identité. Le journal n'a rien à faire
+  // d'un chemin local, et l'y écrire fuiterait l'arborescence du responsable.
+  const ligne = 'debug1: Server accepts key: /home/secret-user/.ssh/id_rsa RSA SHA256:Zz09';
+  assert.equal(lireEmpreinte(ligne), 'SHA256:Zz09');
+});
+
+test('une ligne sans empreinte rend null, et ce N’EST PAS un échec', () => {
+  // §21.6.3 : un tunnel local n'a pas de clé, un agent muet n'en donne aucune.
+  // Écrire une empreinte plausible plutôt que rien serait le pire des deux.
+  assert.equal(lireEmpreinte('debug1: Connecting to exemple port 22.'), null);
+  assert.equal(lireEmpreinte(''), null);
+  assert.equal(lireEmpreinte(null), null);
+  assert.equal(lireEmpreinte(undefined), null);
+});
+
+test("l'acteur déclaré nomme le serveur, et la clé SEULEMENT si on la connaît", () => {
+  const t = new Tunnel({ name: 'prod', host: 'h', user: 'u', port: 22, remotePort: 9876 });
+  assert.equal(t.actorHeader, 'console/prod', 'sans empreinte, on ne nomme que le serveur');
+  t.keyFingerprint = 'SHA256:AbCd';
+  assert.equal(t.actorHeader, 'console/prod key=SHA256:AbCd');
 });

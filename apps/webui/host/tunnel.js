@@ -45,6 +45,29 @@ export function freePort() {
   });
 }
 
+/**
+ * Empreinte de la clé qu'OpenSSH déclare acceptée (docs/DAT.md §21.6.3).
+ *
+ * @spec docs/BACKLOG.md#SPK-37 · docs/DAT.md §21.6.3
+ *
+ * Sous `LogLevel=VERBOSE`, OpenSSH émet une ligne de cette forme :
+ *
+ *     debug1: Server accepts key: /home/x/.ssh/id_ed25519 ED25519 SHA256:abc… agent
+ *
+ * On n'en retient que l'empreinte `SHA256:…`. Le chemin du fichier n'est pas
+ * repris : il nomme un fichier du poste, pas l'identité, et le journal n'a rien
+ * à faire d'un chemin local.
+ *
+ * Rend `null` quand rien ne correspond — et c'est un résultat, pas un échec :
+ * un tunnel local n'a pas de clé, un agent muet n'en donne aucune. Le §21.6.3
+ * l'exige, écrire une empreinte plausible plutôt que rien serait le pire des
+ * deux mondes.
+ */
+export function lireEmpreinte(texte) {
+  const ligne = /Server accepts key:.*?(SHA256:[A-Za-z0-9+/=]+)/.exec(String(texte ?? ''));
+  return ligne ? ligne[1] : null;
+}
+
 export class Tunnel {
   #child = null;
   #timer = null;
@@ -53,6 +76,8 @@ export class Tunnel {
     this.server = server;
     this.state = CLOSED;
     this.localPort = null;
+    /** Empreinte relevée sur le flux d'OpenSSH ; `null` tant qu'inconnue. */
+    this.keyFingerprint = null;
     this.lastHealthyAt = null;
     this.lastError = null;
     this.spawnFn = options.spawn ?? spawn;
@@ -66,6 +91,10 @@ export class Tunnel {
   sshArgs(localPort) {
     return [
       '-N',
+      // SPK-37 · docs/DAT.md §21.6.3 : c'est cette verbosité qui fait dire à
+      // OpenSSH QUELLE clé le serveur a acceptée. Sans elle, l'empreinte est
+      // indéterminable et le journal ne peut nommer que le serveur.
+      '-o', 'LogLevel=VERBOSE',
       '-o', 'ExitOnForwardFailure=yes',
       '-o', 'ServerAliveInterval=10',
       '-o', 'ServerAliveCountMax=2',
@@ -111,7 +140,14 @@ export class Tunnel {
     // relancer la commande à la main pour la lire.
     this.#child.stderr?.on('data', (bloc) => {
       const texte = String(bloc).trim();
-      if (texte) this.lastError = texte;
+      if (!texte) return;
+      // L'empreinte de la clé acceptée passe par ce même flux (§21.6.3). On la
+      // relève au vol ; ce n'est PAS une erreur, et la ranger dans lastError
+      // ferait afficher un diagnostic là où tout va bien.
+      const empreinte = lireEmpreinte(texte);
+      if (empreinte) { this.keyFingerprint = empreinte; return; }
+      if (texte.startsWith('debug')) return;   // le reste de la verbosité
+      this.lastError = texte;
     });
     this.#child.on('exit', (code) => {
       if (this.state !== CLOSED) {
@@ -190,6 +226,20 @@ export class Tunnel {
   }
 
   /** Ce que la console affiche. Jamais un état deviné. */
+  /**
+   * Ce que l'hôte console DÉCLARE comme acteur (docs/DAT.md §21.6.3).
+   *
+   * Le serveur toujours, l'empreinte seulement si elle est connue. Un tunnel
+   * local n'en a aucune, un agent muet n'en donne aucune, et dans ces cas on ne
+   * nomme que le serveur — on n'invente pas.
+   */
+  get actorHeader() {
+    const base = `console/${this.server.name}`;
+    // ASCII : un en-tête HTTP ne transporte pas d'accent, et une identité qui
+    // casse l'appel qu'elle devait attribuer serait pire qu'aucune identité.
+    return this.keyFingerprint ? `${base} key=${this.keyFingerprint}` : base;
+  }
+
   describe() {
     return {
       name: this.server.name,

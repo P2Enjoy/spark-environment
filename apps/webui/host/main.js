@@ -125,7 +125,17 @@ async function relayer(url, requete, reponse, tunnels, fetchFn) {
   const corps = await lireCorpsBrut(requete);
   const amont = await fetchFn(cible.toString(), {
     method: requete.method,
-    headers: { 'content-type': requete.headers['content-type'] ?? 'application/json' },
+    headers: {
+      'content-type': requete.headers['content-type'] ?? 'application/json',
+      // SPK-37 · docs/DAT.md §21.6.2 : l'hôte console DÉCLARE qui agit. Le
+      // navigateur ne pose pas cet en-tête et ne pourrait pas : il ne sait rien
+      // du tunnel ni de la clé qui l'a ouvert. C'est ici qu'on le sait.
+      //
+      // Un en-tête arrivant du navigateur serait ÉCRASÉ, et c'est voulu :
+      // laisser une page choisir son identité au journal la rendrait
+      // triviale à falsifier depuis le poste lui-même.
+      'x-spark-actor': tunnel.actorHeader,
+    },
     body: ['GET', 'HEAD'].includes(requete.method) ? undefined : corps,
   });
   const texte = await amont.text();

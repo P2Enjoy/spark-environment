@@ -162,6 +162,11 @@ def normalize_actor(actor: object) -> str:
     preuve viendra de la signature (SPK-40).
     """
     texte = " ".join(str(actor or "").split())
+    # ASCII imprimable seulement. Un en-tete HTTP ne transporte pas d'accent —
+    # mesure : une valeur accentuee fait echouer la requete a l'encodage, avant
+    # d'atteindre le service. Ce qui arriverait par un autre transport est
+    # ecarte ici plutot que journalise tel quel.
+    texte = "".join(c for c in texte if " " <= c <= "~")
     if not texte:
         return UNKNOWN_ACTOR
     return texte[:MAX_ACTOR]

@@ -91,6 +91,25 @@ def create_app(config: Config) -> FastAPI:
             "sur la boucle locale."
         ),
     )
+    # SPK-37 · docs/DAT.md §21.6.2 : l'identité de l'appelant entre ICI, à la
+    # frontière du service, et vaut pour toute écriture au journal produite
+    # pendant la requête. Un seul endroit, comme le chemin d'écriture du §21.1 :
+    # ce qui est posé à quatorze endroits est oublié au quinzième.
+    @app.middleware("http")
+    async def _porter_l_acteur(requete, appeler_suivant):
+        # L'en-tête est DÉCLARATIF et le produit ne le présentera jamais comme
+        # une preuve : qui atteint `sparkd` écrit ce qu'il veut dedans. C'est une
+        # attribution ; la preuve viendra de la signature (SPK-40).
+        declare = requete.headers.get("x-spark-actor")
+        # Une lecture n'écrit rien : la classer serait sans effet, et la classer
+        # `human` par défaut ferait porter cette classe aux recalculs qu'une
+        # lecture peut déclencher. On n'ouvre le contexte que pour les méthodes
+        # qui écrivent.
+        if requete.method in ("GET", "HEAD", "OPTIONS"):
+            return await appeler_suivant(requete)
+        with audit_service.acting_as(declare, audit_service.HUMAN):
+            return await appeler_suivant(requete)
+
     app.state.config = config
     app.state.schema_versions = check_registry(config)
     app.state.incus = make_client(config)
