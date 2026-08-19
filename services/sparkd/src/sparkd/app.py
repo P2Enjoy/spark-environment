@@ -26,6 +26,7 @@ from .admission import HostNotConfigured, pools
 from .config import Config
 from . import cgroup as cgroup_service
 from . import hostmem
+from . import images as images_service
 from .db import connect
 from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
@@ -115,6 +116,29 @@ def create_app(config: Config) -> FastAPI:
 
     app.state.reconciliations = _reconcile_at_startup()
 
+    def _preparer_le_catalogue() -> None:
+        """Pre-renseigne le catalogue, et le releve avec le pilote FACTICE.
+
+        Le releve reel exige le reseau sortant (docs/DAT.md §33.3) ; le produit
+        doit tenir sans (§28.1). Avec le pilote factice, on emploie donc un
+        releve factice — comme `FakeIncus` et `FakeCaddy` —, qui publie
+        exactement les references pre-renseignees. Une reference inventee y est
+        `missing`, comme elle le serait sur le vrai depot.
+
+        Avec le pilote reel, le catalogue reste `unknown` jusqu'au premier
+        releve explicite : annoncer verifiee une image jamais relevee serait le
+        succes simule que le produit refuse partout ailleurs.
+        """
+        connection = connect(config.database)
+        try:
+            images_service.seed_defaults(connection)
+            if config.driver == "fake":
+                images_service.verify(connection, fetch=images_service.fake_fetch)
+        finally:
+            connection.close()
+
+    _preparer_le_catalogue()
+
     def _reponderer_au_demarrage() -> None:
         """Le poids de la tranche est un ETAT DE L'HOTE, pas du registre.
 
@@ -193,6 +217,45 @@ def create_app(config: Config) -> FastAPI:
             "schema_version": versions[-1] if versions else None,
             "detail": "; ".join(causes) if causes else "Toutes les dependances repondent.",
         }
+
+    @app.get("/v1/images", tags=["images"])
+    def list_images() -> dict:
+        """Catalogue complet, y compris ce qui n'est pas proposable.
+
+        Une entree `missing` ou `unknown` reste visible : la faire disparaitre
+        ferait croire qu'elle n'a jamais existe (docs/DAT.md §33.3).
+        """
+        with registry() as connection:
+            entrees = images_service.listing(connection)
+            return {
+                "images": entrees,
+                "selectable": [e["reference"] for e in entrees
+                               if e["state"] == images_service.VERIFIED],
+            }
+
+    @app.post("/v1/images", tags=["images"], status_code=201)
+    def add_image(body: dict = Body(...)) -> dict:
+        """Ajoute une reference. Geste EXPLICITE, hors formulaire de creation."""
+        with registry() as connection:
+            try:
+                return images_service.add(
+                    connection, body.get("reference", ""), body.get("label", ""),
+                    body.get("architecture", "amd64"),
+                )
+            except images_service.ImageError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_image", "message": str(erreur)}) from erreur
+
+    @app.post("/v1/images/verify", tags=["images"])
+    def verify_images() -> dict:
+        """Releve explicite et date (docs/DAT.md §33.3).
+
+        Il n'a pas lieu a chaque ouverture d'un formulaire : cela rendrait la
+        creation tributaire d'un service exterieur, alors que le produit tient
+        sans reseau sortant une fois les images en cache.
+        """
+        with registry() as connection:
+            return images_service.verify(connection)
 
     @app.get("/v1/host", tags=["hote"])
     def host() -> dict[str, object]:
@@ -705,6 +768,11 @@ def create_app(config: Config) -> FastAPI:
             except AddressPoolExhausted as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "address_pool_exhausted", "message": str(erreur)}) from erreur
+            except images_service.ImageError as erreur:
+                # docs/DAT.md §33.2 : refus rendu AVANT l'ecriture de la ligne,
+                # comme un refus d'admission ordinaire.
+                raise HTTPException(status_code=409, detail={
+                    "error": "image_refused", "message": str(erreur)}) from erreur
             except service.SparkError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "refused", "message": str(erreur)}) from erreur

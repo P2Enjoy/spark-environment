@@ -139,6 +139,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Images
+         * @description Catalogue complet, y compris ce qui n'est pas proposable.
+         *
+         *     Une entree `missing` ou `unknown` reste visible : la faire disparaitre
+         *     ferait croire qu'elle n'a jamais existe (docs/DAT.md §33.3).
+         */
+        get: operations["list_images_v1_images_get"];
+        put?: never;
+        /**
+         * Add Image
+         * @description Ajoute une reference. Geste EXPLICITE, hors formulaire de creation.
+         */
+        post: operations["add_image_v1_images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/images/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Images
+         * @description Releve explicite et date (docs/DAT.md §33.3).
+         *
+         *     Il n'a pas lieu a chaque ouverture d'un formulaire : cela rendrait la
+         *     creation tributaire d'un service exterieur, alors que le produit tient
+         *     sans reseau sortant une fois les images en cache.
+         */
+        post: operations["verify_images_v1_images_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ingress": {
         parameters: {
             query?: never;
@@ -555,6 +606,87 @@ export interface operations {
         };
     };
     host_sync_v1_host_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    list_images_v1_images_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    add_image_v1_images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_images_v1_images_verify_post: {
         parameters: {
             query?: never;
             header?: never;

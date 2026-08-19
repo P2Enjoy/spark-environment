@@ -112,11 +112,15 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     # On fait échouer le pilote sur le démarrage : la route appelle alors
     # `finish(success=False)`, qui pose l'état `error`, renseigne `last_error`
     # et journalise un audit `error`. Rien n'est écrit à la main.
-    creer({"name": "site-vitrine", "image": "images:debian/99", "cpu_mode": "shared",
+    # L'image est VALIDE : depuis SPK-32, une reference absente du catalogue est
+    # refusee a la creation. L'etat `error` s'obtient donc par la seule injection
+    # de faute ci-dessous, ce qui est plus honnete — c'est le chemin d'erreur du
+    # produit, pas une reference invalide.
+    creer({"name": "site-vitrine", "image": "images:debian/13", "cpu_mode": "shared",
            "cpu_reservation": 0.25, "memory_bytes": 512 * MIO, "storage_bytes": 5 * GIO,
            "network_bps": 50 * MBIT}, demarrer=False)
     incus.fail_next["set_instance_state"] = (
-        "image « images:debian/99 » introuvable dans le dépôt"
+        "le noyau a refusé de démarrer la cellule : cgroup indisponible"
     )
     _attendu(client.post("/v1/sparks/site-vitrine/start"), 502,
              quoi="échec de démarrage attendu de « site-vitrine »")

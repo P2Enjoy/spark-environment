@@ -212,6 +212,19 @@ def fetch_remote(url: str, client: httpx.Client | None = None) -> Catalogue:
     return Catalogue(frozenset(alias), len(produits))
 
 
+def fake_fetch(url: str, client=None) -> Catalogue:
+    """Relevé factice, pour la pile de développement et les tests.
+
+    Au même titre que `FakeIncus` et `FakeCaddy` : le produit doit tenir **sans
+    réseau sortant** (docs/DAT.md §28.1). Il publie exactement les alias
+    pré-renseignés — ni plus, ni moins — de sorte qu'une référence inventée y soit
+    `missing` comme elle le serait sur le vrai dépôt.
+
+    Il ne prouve jamais qu'une image existe réellement : cela exige le dépôt.
+    """
+    return Catalogue(frozenset(alias for _, _, _, alias, _ in DEFAULTS), len(DEFAULTS))
+
+
 def verify(
     connection: sqlite3.Connection,
     fetch=fetch_remote,

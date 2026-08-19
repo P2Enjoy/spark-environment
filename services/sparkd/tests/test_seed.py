@@ -49,7 +49,10 @@ def test_l_etat_error_vient_du_vrai_chemin_d_erreur(seede):
     """
     spark = seede.get("/v1/sparks/site-vitrine").json()
     assert spark["last_error"], "un Spark en erreur doit dire POURQUOI"
-    assert "images:debian/99" in spark["last_error"]
+    # Depuis SPK-32, une image invalide est refusee A LA CREATION : l'etat
+    # `error` du seed vient donc de la seule injection de faute, ce qui eprouve
+    # le vrai chemin d'erreur plutot qu'une reference impossible.
+    assert "cgroup indisponible" in spark["last_error"]
 
     entrees = seede.get("/v1/audit?limit=500").json()["entries"]
     erreurs = [e for e in entrees if e["result"] == "error"]

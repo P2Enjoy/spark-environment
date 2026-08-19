@@ -19,6 +19,7 @@ from secrets import token_hex
 from .addressing import AddressPoolExhausted, allocate
 from .admission import Request, admit, pools
 from . import audit
+from . import images
 from .db import transaction
 from .lifecycle import (
     TRANSIENT, Command, State, TransitionError, allowed, next_state, reconcile, settle,
@@ -92,6 +93,12 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "respon
             f"Nom « {spec.name} » invalide : minuscules, chiffres et tirets, "
             "sans tiret aux extrémités, 63 caractères au plus."
         )
+
+    # L'image est verifiee AVANT toute ecriture (docs/DAT.md §33.2). Sans ce
+    # controle, une reference inexistante passait, la ligne etait ecrite, la
+    # ressource comptee, et le refus ne venait qu'a `apply` : le Spark restait
+    # en `error` avec ses quotas engages jusqu'a sa suppression.
+    images.ensure_selectable(connection, spec.image)
 
     demande = Request(
         cpu_mode=spec.cpu_mode,

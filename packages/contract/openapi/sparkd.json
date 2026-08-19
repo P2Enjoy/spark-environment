@@ -263,6 +263,98 @@
         ]
       }
     },
+    "/v1/images": {
+      "get": {
+        "description": "Catalogue complet, y compris ce qui n'est pas proposable.\n\nUne entree `missing` ou `unknown` reste visible : la faire disparaitre\nferait croire qu'elle n'a jamais existe (docs/DAT.md §33.3).",
+        "operationId": "list_images_v1_images_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Images V1 Images Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Images",
+        "tags": [
+          "images"
+        ]
+      },
+      "post": {
+        "description": "Ajoute une reference. Geste EXPLICITE, hors formulaire de creation.",
+        "operationId": "add_image_v1_images_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Image V1 Images Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Image",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/v1/images/verify": {
+      "post": {
+        "description": "Releve explicite et date (docs/DAT.md §33.3).\n\nIl n'a pas lieu a chaque ouverture d'un formulaire : cela rendrait la\ncreation tributaire d'un service exterieur, alors que le produit tient\nsans reseau sortant une fois les images en cache.",
+        "operationId": "verify_images_v1_images_verify_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Verify Images V1 Images Verify Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Verify Images",
+        "tags": [
+          "images"
+        ]
+      }
+    },
     "/v1/ingress": {
       "get": {
         "operationId": "list_routes_v1_ingress_get",

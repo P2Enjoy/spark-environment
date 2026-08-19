@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from sparkd import migrations, sparks
+from sparkd import images, migrations, sparks
 from sparkd.db import connect
 from sparkd.incus import FakeIncus
 from sparkd.inventory import sync
@@ -22,6 +22,11 @@ def db(tmp_path):
     connection = connect(tmp_path / "spark.db")
     migrations.upgrade(connection)
     sync(connection, FakeIncus(), "spark")  # hote : 4 coeurs, 98 Gio, 192 Gio
+    # Depuis SPK-32, la creation n'accepte qu'une image du catalogue VERIFIEE
+    # (docs/DAT.md §33.2). Le releve factice publie exactement les references
+    # pre-renseignees, sans reseau sortant.
+    images.seed_defaults(connection)
+    images.verify(connection, fetch=images.fake_fetch)
     yield connection
     connection.close()
 
