@@ -446,6 +446,18 @@ tbody tr:hover { background: var(--color-hover); }
 /* Une cellule sans valeur le DIT plutot que d'afficher un tiret muet (§14.5). */
 .absence-cellule { color: var(--color-text-3); font-style: italic; }
 
+/* SPK-41 · docs/DAT.md §22.4.7 bis — le catalogue des serveurs.
+   La ligne du serveur COURANT se signale : sans reperage, on bascule vers celui
+   qu'on regarde deja, ou l'on retire celui qu'on croit inactif. */
+.ligne--courante { background: var(--color-hover); }
+/* Le resultat de l'epreuve, DANS la modale et pres du bouton d'engagement. */
+.epreuve {
+  margin: 0; padding: var(--space-3);
+  border-radius: var(--radius-md); background: var(--color-bg);
+  font-size: var(--text-compact);
+}
+.epreuve .badge { margin-right: var(--space-2); }
+
 /* SPK-33 · DESIGN_SYSTEM.md §6.27 — la modale limitee a une section.
    `dialog` fournit nativement le voile, l'inertie de l'arriere-plan et Echap ;
    il reste a lui donner sa forme. */
