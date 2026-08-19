@@ -3,6 +3,7 @@
  *
  * @spec docs/BACKLOG.md#SPK-22 · docs/DAT.md §27 (rendre l'admission control
  *       observable), §27.2 (trois grandeurs), §27.3 (la soustraction mémoire),
+ *       §8.8.2 (la marge de métadonnées est nommée à l'écran des pools),
  *       §27.4 (le CPU à deux endroits), §27.5 (le surengagement s'affiche),
  *       §27.6 (la réservation n'est pas une garantie), §27.8 (topologie) ·
  *       §7.7, §15, §16, §13.12 (l'ARC atteint son plafond sous charge) · docs/DESIGN_SYSTEM.md §3.1, §6.4, §6.13, §6.24, §14.6 ·
@@ -69,6 +70,31 @@ export function describeArcUsage(utilise, plafond) {
     + (part === null ? '.' : ` — ${part} % de son plafond.`);
 }
 
+/**
+ * Ce que la marge de métadonnées ajoute à l'alloué du disque (docs/DAT.md §8.8).
+ *
+ * Elle est invisible du LOCATAIRE — la limite d'un Spark reste ce qu'on lui a
+ * vendu — mais elle grossit l'alloué du pool, donc l'exploitant la voit. Un
+ * exploitant qui additionne cinq Sparks de 10 Gio et lit 50,3 Gio doit trouver
+ * l'explication ici, et non dans le code.
+ *
+ * La valeur est LUE dans la réponse, jamais posée en dur (§27.6) : c'est un
+ * réglage du serveur, et une console qui l'écrirait mentirait dès qu'il change.
+ * Une marge nulle ne dit rien — il n'y a rien à expliquer.
+ */
+export function describeMetadataMargin(hote) {
+  const marge = hote?.reserves?.storage_metadata_margin_bytes;
+  if (!marge) return '';
+  // Le total est LU, pas recomposé : le nombre de Sparks n'est pas dans cette
+  // réponse, et le recalculer ici ferait diverger l'écran du registre.
+  const total = hote?.reserves?.storage_metadata_total_bytes;
+  return `L’alloué comprend ${formatBytes(marge)} de métadonnées par Spark`
+    + (total ? `, soit ${formatBytes(total)} au total` : '')
+    + `. Sans cette marge, un Spark qui remplit son quota empêcherait Incus `
+    + `d’écrire ses métadonnées, et ne pourrait plus être reconfiguré — pas même `
+    + `agrandi pour le débloquer. Se règle par SPARKD_STORAGE_METADATA_MARGIN.`;
+}
+
 /** Horodatage lisible (§3.1 pour la typographie technique). */
 export function formatDate(valeur) {
   return String(valeur ?? '').slice(0, 16).replace('T', ' ');
@@ -79,7 +105,8 @@ export function formatDate(valeur) {
  * « 4,0 Gio libres » sans dire sur combien ne permet pas de juger s'il faut
  * supprimer un Spark ou agrandir la machine.
  */
-function renderPool({ cle, nom, format, surengageable, sansFacteur }, pools) {
+function renderPool({ cle, nom, format, surengageable, sansFacteur }, pools,
+                    complement = '') {
   const pool = pools?.[cle];
   if (!pool) {
     return `<div class="pool"><h3>${echapper(nom)}</h3>
@@ -90,9 +117,10 @@ function renderPool({ cle, nom, format, surengageable, sansFacteur }, pools) {
   const facteur = surengageable && pool.overcommit && pool.overcommit !== 1
     ? ` <span class="badge badge--accent">surengagé ×${echapper(pool.overcommit)}</span>`
     : '';
-  const note = !surengageable && sansFacteur
-    ? `<p class="note">${echapper(sansFacteur)}</p>`
-    : '';
+  const note = [
+    !surengageable && sansFacteur ? echapper(sansFacteur) : '',
+    complement,
+  ].filter(Boolean).map((texte) => `<p class="note">${texte}</p>`).join('');
 
   return `<div class="pool">
   <h3>${echapper(nom)}${facteur}</h3>
@@ -236,7 +264,8 @@ export function renderHostView({ status = 'loading', host = null, cores = null,
 </header>
 <section class="carte bloc" aria-labelledby="titre-pools">
   <h2 id="titre-pools">Pools</h2>
-  <div class="pools">${RESSOURCES.map((r) => renderPool(r, host.pools)).join('')}</div>
+  <div class="pools">${RESSOURCES.map((r) =>
+    renderPool(r, host.pools, r.cle === 'storage' ? describeMetadataMargin(host) : '')).join('')}</div>
   ${garantie ? `<p class="avertissement" role="status">${echapper(garantie)}</p>` : ''}
 </section>
 <div class="detail">

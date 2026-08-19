@@ -934,6 +934,18 @@ sur le pool, un pool qui l'ignorerait promettrait ce qu'il n'a pas. Sur trente
 Sparks à 64 Mio, elle coûte 1,9 Gio — négligeable en valeur, mais la comptabilité
 du §7.7 ne connaît pas le négligeable.
 
+**Conséquence, et elle n'est pas facultative : l'écran des pools doit NOMMER la
+marge.** Invisible du locataire (règle 3), elle est au contraire visible de
+l'exploitant, puisqu'elle grossit l'alloué. Un exploitant qui additionne cinq
+Sparks de 10 Gio et lit 50,3 Gio alloué doit trouver l'explication à l'écran, et
+non la chercher dans le code. Le runtime publie donc **deux** termes dans le bloc
+`reserves` de `GET /v1/host` : la marge **unitaire**, qui est le réglage, et ce
+qu'elle **coûte au total** à cet instant, qui est la conséquence. Le total est
+calculé au serveur, où le nombre de Sparks est connu — la console énonce, elle ne
+recompose pas — c'est exactement la règle du §27.3, et pour la
+même raison : la somme seule ne dit pas quelle vanne tourner. La console ne pose
+jamais cette valeur en dur (§27.6) : elle la lit dans la réponse.
+
 #### 8.8.3 La valeur, et pourquoi elle est configurable
 
 `SPARKD_STORAGE_METADATA_MARGIN`, défaut **64 MiB**.

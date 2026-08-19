@@ -1,6 +1,7 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-22 · docs/DAT.md §27, §27.2, §27.3, §27.4,
- *           §27.5, §27.6, §27.7, §27.8 · §7.7, §16.1 ·
+ * @verifies docs/BACKLOG.md#SPK-22, docs/BACKLOG.md#SPK-30 ·
+ *           docs/DAT.md §27, §27.2, §27.3, §27.4, §27.5, §27.6, §27.7, §27.8 ·
+ *           §7.7, §8.8.2 (la marge de metadonnees est nommee a l'ecran), §16.1 ·
  *           docs/DESIGN_SYSTEM.md §1.5, §6.13, §6.24, §14.6
  *
  * Le coeur de l'unite : l'ecran rend l'admission control observable. Chaque
@@ -12,7 +13,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderHostView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage,
+  renderHostView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
 } from './host-view.js';
 
 const GIO = 1024 ** 3;
@@ -272,6 +273,54 @@ test("un ARC non mesurable le DIT, il ne s'affiche pas a zero", () => {
   });
   assert.ok(rendu.includes('n’est pas mesurable'));
   assert.ok(!rendu.includes('consomme actuellement 0'));
+});
+
+// --- la marge de metadonnees, nommee a l'ecran (SPK-30, §8.8.2) ------------
+
+const MIO = 1024 * 1024;
+
+test("l'ecart entre les tailles vendues et l'alloue est EXPLIQUE a l'ecran", () => {
+  // Un exploitant qui additionne cinq Sparks de 10 Gio et lit 50,3 Gio doit
+  // trouver l'explication ici, pas dans le code.
+  const texte = describeMetadataMargin({
+    reserves: { storage_metadata_margin_bytes: 64 * MIO,
+                storage_metadata_total_bytes: 320 * MIO },
+  });
+  assert.match(texte, /64 Mio de métadonnées par Spark/);
+  assert.match(texte, /320 Mio au total/);
+  // Le remede est nomme : l'exploitant doit savoir quelle vanne tourner (§27.3).
+  assert.match(texte, /SPARKD_STORAGE_METADATA_MARGIN/);
+});
+
+test('une marge NULLE n’explique rien : il n’y a rien a expliquer', () => {
+  assert.equal(describeMetadataMargin({
+    reserves: { storage_metadata_margin_bytes: 0, storage_metadata_total_bytes: 0 },
+  }), '');
+  assert.equal(describeMetadataMargin({}), '');
+  assert.equal(describeMetadataMargin(undefined), '');
+});
+
+test('le total est LU dans la reponse, jamais recompose par la console', () => {
+  // §27.6. Sans total publie, l'ecran dit la marge unitaire et se tait sur le
+  // reste — il n'invente pas un nombre de Sparks qu'il ne connait pas.
+  const texte = describeMetadataMargin({
+    reserves: { storage_metadata_margin_bytes: 64 * MIO },
+  });
+  assert.match(texte, /64 Mio de métadonnées par Spark/);
+  assert.ok(!texte.includes('au total'));
+});
+
+test("l'explication est rendue AVEC le pool disque, pas ailleurs", () => {
+  const rendu = renderHostView({
+    status: 'ready',
+    host: { ...HOTE, reserves: { ...HOTE.reserves,
+      storage_metadata_margin_bytes: 64 * MIO,
+      storage_metadata_total_bytes: 128 * MIO } },
+  });
+  const disque = rendu.slice(rendu.indexOf('Disque'));
+  const suivant = disque.indexOf('Réseau');
+  assert.ok(disque.slice(0, suivant).includes('de métadonnées par Spark'),
+            'l’explication doit vivre dans la carte du disque');
 });
 
 test("un ARC a zero est une VRAIE valeur, distincte de l'absence de mesure", () => {

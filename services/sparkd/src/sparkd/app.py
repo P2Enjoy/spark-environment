@@ -279,6 +279,12 @@ def create_app(config: Config) -> FastAPI:
             row = connection.execute("SELECT * FROM host WHERE id = 1").fetchone()
             connection_usage = connection
             adresses = usage(connection)
+            # Compte DANS le bloc : le dict de reponse est construit apres la
+            # fermeture de la connexion. Mesure — « Cannot operate on a closed
+            # database » a la premiere requete.
+            sparks_comptes = connection.execute(
+                "SELECT COUNT(*) AS n FROM spark"
+            ).fetchone()["n"]
         return {
             "hostname": row["hostname"],
             "cpu": {
@@ -295,6 +301,20 @@ def create_app(config: Config) -> FastAPI:
                 "arc_bytes": row["memory_arc_bytes"],
                 "margin_bytes": row["memory_margin_bytes"],
                 "storage_bytes": row["storage_reserve_bytes"],
+                # Marge de metadonnees PAR SPARK (docs/DAT.md §8.8). Elle est
+                # publiee parce qu'elle grossit l'alloue du pool : invisible du
+                # locataire, elle doit etre nommable par l'exploitant, sans quoi
+                # l'ecart entre la somme des tailles vendues et l'alloue serait
+                # inexplicable a l'ecran.
+                "storage_metadata_margin_bytes": (
+                    config.storage_metadata_margin_bytes
+                ),
+                # Ce que la marge coute REELLEMENT au pool a cet instant. Le
+                # calcul se fait ici, ou le nombre de Sparks est connu : la
+                # console enonce, elle ne recompose pas (§8.8.2).
+                "storage_metadata_total_bytes": (
+                    config.storage_metadata_margin_bytes * sparks_comptes
+                ),
                 # Le plafond est PERSISTÉ — il vient du relevé de topologie. La
                 # consommation, elle, est lue À CHAQUE REQUÊTE : la stocker
                 # présenterait une valeur périmée comme actuelle. `null` quand

@@ -162,6 +162,64 @@ def test_host_expose_les_termes_de_la_reserve_memoire(tmp_path):
     assert total - reserves["memory_bytes"] == corps["pools"]["memory"]["capacity"]
 
 
+def test_host_publie_la_marge_de_metadonnees_unitaire_et_son_cout_total(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-30 · docs/DAT.md §8.8.2 (regle 4 et sa
+    consequence d'affichage), §27.6 (la console LIT, elle ne pose pas en dur)
+
+    La marge est invisible du locataire mais grossit l'alloue du pool. Un
+    exploitant qui additionne les tailles vendues et lit un alloue superieur doit
+    trouver l'explication a l'ecran. Deux termes : le REGLAGE (unitaire) et sa
+    CONSEQUENCE (le total), calcule au serveur ou le nombre de Sparks est connu.
+    """
+    MIO = 1024**2
+    GIO = 1024**3
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "mm.db"), "SPARKD_DRIVER": "fake",
+                           "SPARKD_STORAGE_METADATA_MARGIN": "64MiB"}))
+    client_http = TestClient(app)
+    client_http.post("/v1/host/sync")
+
+    reserves = client_http.get("/v1/host").json()["reserves"]
+    assert reserves["storage_metadata_margin_bytes"] == 64 * MIO
+    # Registre vide : la marge est PAR SPARK, elle ne coute encore rien.
+    assert reserves["storage_metadata_total_bytes"] == 0
+
+    for nom in ("un", "deux"):
+        reponse = client_http.post("/v1/sparks", json={
+            "name": nom, "image": "images:debian/13", "cpu_mode": "shared",
+            "cpu_reservation": 0.25, "memory_bytes": GIO,
+            "network_bps": 10_000_000, "storage_bytes": 10 * GIO,
+        })
+        assert reponse.status_code == 201, reponse.text
+
+    corps = client_http.get("/v1/host").json()
+    assert corps["reserves"]["storage_metadata_total_bytes"] == 2 * 64 * MIO
+    # Et le total publie est EXACTEMENT ce que l'alloue porte en plus des
+    # tailles vendues : deux chiffres qui divergeraient rendraient l'ecran faux.
+    assert corps["pools"]["storage"]["allocated"] == 2 * 10 * GIO + 2 * 64 * MIO
+
+
+def test_une_marge_nulle_ne_coute_rien_au_pool(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-30 · docs/DAT.md §8.8.3
+
+    Zero restaure le comportement d'avant l'unite. L'ecran n'a alors rien a
+    expliquer, et l'alloue vaut exactement la somme des tailles vendues.
+    """
+    GIO = 1024**3
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "m0.db"), "SPARKD_DRIVER": "fake",
+                           "SPARKD_STORAGE_METADATA_MARGIN": "0"}))
+    client_http = TestClient(app)
+    client_http.post("/v1/host/sync")
+    client_http.post("/v1/sparks", json={
+        "name": "sans-marge", "image": "images:debian/13", "cpu_mode": "shared",
+        "cpu_reservation": 0.25, "memory_bytes": GIO,
+        "network_bps": 10_000_000, "storage_bytes": 10 * GIO,
+    })
+    corps = client_http.get("/v1/host").json()
+    assert corps["reserves"]["storage_metadata_margin_bytes"] == 0
+    assert corps["reserves"]["storage_metadata_total_bytes"] == 0
+    assert corps["pools"]["storage"]["allocated"] == 10 * GIO
+
+
 # --- cycle de vie par HTTP (SPK-09) ----------------------------------------
 
 def _app(tmp_path):
