@@ -148,6 +148,10 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- Navigation à trois degrés : barre latérale (Sparks, Hôte), onglets de section,
+  et fenêtre d'un Spark découpée en facettes — Aperçu, Routes, Clés, Instantanés,
+  Journal. Chaque onglet a son adresse et survit au rechargement.
+- La page ne défile plus horizontalement à 1024 et 768 px.
 - Écran du catalogue d'images : onglet Images sous Hôte, avec la date du dernier
   relevé, les trois états et ce que le relevé a constaté. Ajout et relevé s'y
   font.

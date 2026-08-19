@@ -2195,3 +2195,55 @@ latérale du premier degré et la fenêtre d'un Spark. Puis SPK-30, libre et
 entièrement spécifiée. SPK-29 attend une contention sur les trois tranches de
 l'hôte ; SPK-12 un domaine ; SPK-17 une exécution de CI ; SPK-28, INC-01, INC-02
 et INC-03 votre arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-33 : les trois degrés, sans la modale
+
+**Unité** : SPK-33. Sa spécification existait — §5.4 et §6.27 du design system,
+§34 du DAT — et je ne l'ai pas réécrite.
+
+**Ce qui est livré.** Barre latérale au premier degré, avec le sélecteur de
+serveur au-dessus parce qu'il est le contexte de toutes les destinations et non
+l'une d'elles. Onglets au second degré. Et la fenêtre d'un Spark répartit
+désormais ses facettes en onglets — Aperçu, Routes, Clés, Instantanés, Journal —
+là où elle empilait cinq sujets sur une page.
+
+Tous les onglets sont des **liens** et jamais un `tablist` : le critère du §5.4
+est l'URL, pas l'apparence. Un parcours le vérifie en rechargeant la page sur une
+facette.
+
+**Les 14 parcours E2E passent sans que leur intention change**, ce que la DoD
+exigeait explicitement : seuls leurs sélecteurs ont bougé — ils cliquent l'onglet
+avant d'agir. Il en va de même des huit gestes et de la campagne de captures. Les
+harnais ont échoué avant d'être adaptés, et c'est le comportement voulu : une
+capture périmée aurait été pire.
+
+**Un défaut trouvé par la mesure, pas par l'œil.** La page défilait
+horizontalement à 1024 et 768 px : une piste de grille ne rétrécit pas sous la
+largeur minimale de son contenu, et le tableau des Sparks poussait la page
+entière — alors qu'il a son propre conteneur de défilement. Vérifié après
+correction à 1440, 1024, 768 et 390 px.
+
+**Une preuve révisée avec sa raison.** « Un seul formulaire à la fois » vérifiait
+que l'ouverture d'un panneau masquait le déclencheur des deux autres. Les trois
+vivant désormais sur des facettes distinctes, l'invariant est d'abord obtenu par
+la structure ; ce qui reste à éprouver est le contrat d'interaction, et c'est ce
+que la preuve dit maintenant.
+
+**Ce qui manque, et c'est nommé.** Le composant de **modale** du §6.27 n'est pas
+livré : les formulaires de section s'ouvrent encore dans le flux. Le §26.2 du DAT
+dit donc encore « pas de modale » — et cela reste **vrai de l'écran
+d'aujourd'hui**. Il sera réécrit dans le même changement que la modale, pas
+avant : un document qui décrirait une cible serait faux.
+
+**Vérifié.** 539 tests Python, 207 Node, 6 de contrat, 8 gestes, **16 parcours
+E2E**, 7 contrôles du manuel, build, contrat sans dérive, captures et
+illustrations refaites, mise en page observée à quatre largeurs.
+
+**Où reprendre.** **SPK-33**, son seul manque : le composant de modale et la
+réécriture du §26.2 dans le même changement. Puis SPK-30, libre et entièrement
+spécifiée. SPK-29 attend une contention sur les trois tranches de l'hôte ; SPK-12
+un domaine ; SPK-17 une exécution de CI ; SPK-28, INC-01, INC-02 et INC-03 votre
+arbitrage.

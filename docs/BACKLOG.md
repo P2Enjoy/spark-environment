@@ -757,7 +757,7 @@ ligne du registre a été écrite et la ressource comptée (§14.2) ; le Spark r
   rendu. La fenêtre s'est élargie quand le catalogue a ajouté une requête, et le
   refus de capacité n'arrivait plus parce que le nom avait disparu.
 
-### [ ] SPK-33 · Refonte de la navigation selon les trois degrés
+### [~] SPK-33 · Refonte de la navigation selon les trois degrés
 
 La console rend aujourd'hui une barre horizontale à deux liens, trois panneaux
 d'administration empilés dans le détail, et des formulaires ouverts dans le flux.
@@ -790,6 +790,36 @@ fenêtre en lecture avec une modale par section.
   captures refaites et observées, y compris sous 768 px et 1024 px ; manuel M3,
   M5, M7, M8, M9 mis à jour avec leurs illustrations ; `@spec` / `@verifies`
   posés.
+
+**Les trois degrés sont livrés ; la modale ne l'est pas.**
+
+- **Degré 1** : barre latérale, avec le sélecteur de serveur au-dessus — c'est le
+  contexte de toutes les destinations, pas une destination. Sous 1024 px elle
+  passe en barre supérieure, libellés conservés.
+- **Degré 2** : onglets — *Instances* sous Sparks, *Pools* et *Images* sous Hôte.
+- **Degré 3** : la fenêtre d'un Spark répartit ses facettes en onglets — Aperçu,
+  Routes, Clés, Instantanés, Journal —, chacune une véritable destination.
+- Tous les onglets sont des **liens** avec `aria-current="page"`, jamais un
+  `tablist` : le critère est l'URL, et un parcours vérifie qu'une facette survit
+  au rechargement.
+- **Les 14 parcours E2E passent sans que leur intention change** : seuls leurs
+  sélecteurs ont bougé, comme la DoD l'exigeait. Deux parcours de plus éprouvent
+  le contrat clavier des trois degrés et le rechargement d'une facette.
+- **Un défaut trouvé par la mesure** : la page défilait horizontalement à 1024 et
+  768 px — une piste de grille ne rétrécit pas sous la largeur de son contenu, et
+  le tableau poussait la page entière. Vérifié après correction à 1440, 1024, 768
+  et 390 px.
+- Manuel M3 et M8 mis à jour ; captures et illustrations refaites.
+
+- **Reste à livrer**, et c'est pourquoi l'unité n'est pas `[x]` :
+  1. **le composant de modale** du §6.27 — les formulaires de section s'ouvrent
+     encore dans le flux. Le contrat à tenir est écrit : focus entrant, focus
+     retenu, `Échap`, focus rendu, arrière-plan inerte, une seule à la fois ;
+  2. par conséquent, le §26.2 du DAT dit encore « pas de modale », ce qui reste
+     **vrai de l'écran d'aujourd'hui** — il sera réécrit dans le même changement
+     que la modale ;
+  3. le manuel M5, M7 et M9 n'a pas eu besoin de changer aujourd'hui : leurs
+     illustrations montrent les mêmes gestes, sur leur facette.
 
 ### [ ] SPK-34 · Sparks protégés contre la modification accidentelle
 
