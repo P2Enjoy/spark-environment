@@ -59,7 +59,8 @@ const USAGE = {
 
 function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter(); e.kill = () => {}; return e; }
 
-async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false } = {}) {
+async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
+                          refusCreation = false } = {}) {
   const chemin = join(await mkdtemp(join(tmpdir(), 'spark-cap-')), 'servers.json');
   await writeFile(chemin, JSON.stringify([
     { name: 'validation', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 },
@@ -74,6 +75,12 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     fetch: async (url) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
+      if (url.includes('/v1/host') && !url.includes('cores')) return new Response(JSON.stringify({
+        hostname: 'spark-experiment',
+        pools: { cpu: { capacity: 4, available: 1 }, memory: { capacity: 81854656512, available: 4294967296 },
+                 storage: { capacity: 207030845440, available: 21474836480 },
+                 network: { capacity: 1e9, available: 5e8 } },
+      }), { status: 200 });
       if (url.includes('/snapshots')) return new Response(JSON.stringify({ snapshots: [
         { incus_name: 'avant-deploiement', created_at: '2026-08-19T09:12:00' },
       ] }), { status: 200 });
@@ -88,6 +95,11 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', target_id: 'S1', message: 'crm.example.com → port 8080.' },
         { ts: '2026-08-19T08:55:00', action: 'spark.start', result: 'ok', target_id: 'S1', message: '« starting » → « running ».' },
       ] }), { status: 200 });
+      if (refusCreation) return new Response(JSON.stringify({ detail: {
+        error: 'admission_refused',
+        message: 'Capacité insuffisante — memory : 68719476736 octets demandés, 4294967296 disponibles (capacité 81854656512, alloué 77559689216) — il manque 64424509440 octets',
+        shortfalls: [{ resource: 'memory', requested: 68719476736, available: 4294967296, missing: 64424509440 }],
+      } }), { status: 409 });
       const detail = url.match(/\/v1\/sparks\/([^/?]+)(\?|$)/);
       if (detail) {
         const nom = decodeURIComponent(detail[1]);
@@ -182,6 +194,43 @@ await page.goto(`${ctx.base}/#/sparks/crm-production`);
 await page.waitForSelector('.entete-entite');
 await page.screenshot({ path: join(SORTIE, '14-detail-mobile.png') });
 console.log('  14-detail-mobile.png');
+ctx.server.close();
+
+// --- Écran de création (SPK-20) -------------------------------------------
+ctx = await demarrer();
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.goto(`${ctx.base}/#/creer`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#formulaire-spark');
+await page.screenshot({ path: join(SORTIE, '15-creation-vierge.png') });
+console.log('  15-creation-vierge.png');
+
+// Soumission vide : les erreurs de FORME, au clavier.
+await page.click('button[type="submit"]');
+await page.waitForSelector('.champ__erreur', { timeout: 4000 }).catch(() => {});
+await page.screenshot({ path: join(SORTIE, '16-creation-forme-invalide.png') });
+console.log('  16-creation-forme-invalide.png');
+
+// Demande trop grande : avertissement, bouton TOUJOURS actif.
+await page.fill('#name', 'gros-spark');
+await page.fill('#memory_gib', '64');
+await page.waitForTimeout(150);
+await page.screenshot({ path: join(SORTIE, '17-creation-avertissement.png') });
+console.log('  17-creation-avertissement.png');
+ctx.server.close();
+
+// Refus du serveur : la saisie survit.
+ctx = await demarrer({ refusCreation: true });
+await page.goto(`${ctx.base}/#/creer`);
+await page.waitForSelector('#formulaire-spark');
+await page.fill('#name', 'gros-spark');
+await page.fill('#memory_gib', '64');
+await page.click('button[type="submit"]');
+await page.waitForSelector('.refus', { timeout: 6000 }).catch(() => {});
+await page.screenshot({ path: join(SORTIE, '18-creation-refus-serveur.png') });
+console.log('  18-creation-refus-serveur.png');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '19-creation-mobile.png') });
+console.log('  19-creation-mobile.png');
 ctx.server.close();
 
 await navigateur.close();

@@ -25,6 +25,22 @@ export const DEFAUTS = {
   memory_gib: 2, storage_gib: 10, network_mbit: 100,
 };
 
+/** Noms de ressources rendus en français. Une valeur technique brute ne doit
+ *  pas atteindre l'écran (docs/DESIGN_SYSTEM.md §14.7). */
+export const RESSOURCES = {
+  cpu: { nom: 'processeur', format: (v) => `${formatCpu(v)} CPU` },
+  memory: { nom: 'mémoire', format: formatBytes },
+  storage: { nom: 'disque', format: formatBytes },
+  network: { nom: 'réseau', format: formatBps },
+};
+
+export function describeShortfall(manque) {
+  const info = RESSOURCES[manque.resource];
+  const nom = info?.nom ?? manque.resource;
+  const quantite = info ? info.format(manque.missing) : String(manque.missing);
+  return `${nom} : il manque ${quantite}`;
+}
+
 export const MODES = {
   shared: 'Partagé — part du pool, burst autorisé',
   capped: 'Plafonné — jamais au-delà du plafond',
@@ -124,7 +140,9 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
   const v = { ...DEFAUTS, ...values };
   const risques = estimate(v, pools);
 
-  const avertissement = risques.length
+  // Une fois que le serveur a tranché, l'estimation locale n'est plus qu'un
+  // doublon bruyant : c'est le refus qui fait autorité (docs/DAT.md §25.1).
+  const avertissement = risques.length && !refusal
     ? `<p class="avertissement" role="status">D’après la capacité relevée à l’ouverture,
        ${echapper(risques.map((r) => `${r.resource} (${r.requested} demandés, ${r.available} libres)`).join(', '))}
        pourrai${risques.length > 1 ? 'ent' : 't'} manquer. La création reste possible :
@@ -134,10 +152,10 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
   // §7.1 et §25.2 : le refus est près de l'action, et la saisie est intacte.
   const refus = refusal
     ? `<div class="refus" role="alert">
-         <p><strong>${echapper(refusal.message ?? 'Création refusée.')}</strong></p>
+         <p><strong>Le serveur a refusé cette création.</strong></p>
          ${(refusal.shortfalls ?? []).length
            ? `<ul class="liste-simple">${refusal.shortfalls.map((s) =>
-               `<li>${echapper(s.resource)} : il manque ${echapper(String(s.missing))}</li>`).join('')}</ul>`
+               `<li>${echapper(describeShortfall(s))}</li>`).join('')}</ul>`
            : ''}
        </div>`
     : '';

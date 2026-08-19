@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderSparkCreate, validateShape, estimate, demandOf, DEFAUTS,
+  renderSparkCreate, validateShape, estimate, demandOf, describeShortfall, DEFAUTS,
 } from './spark-create.js';
 
 const GIO = 1024 ** 3;
@@ -115,15 +115,35 @@ test('une contrainte explique son origine, pas un asterisque', () => {
 test('le refus de sparkd est rendu avec ce qui manque', () => {
   const html = renderSparkCreate({
     values: { ...DEFAUTS, name: 'trop' },
-    refusal: {
-      message: 'Capacité insuffisante — cpu : 9 CPU demandés, 3.5 disponibles',
-      shortfalls: [{ resource: 'cpu', missing: 5.5 }],
-    },
+    refusal: { shortfalls: [{ resource: 'cpu', missing: 5.5 }] },
   });
   assert.match(html, /class="refus"/);
-  assert.match(html, /9 CPU demandés/);
-  assert.match(html, /il manque 5.5/);
+  assert.match(html, /Le serveur a refusé/);
+  assert.match(html, /processeur : il manque 5,50 CPU/);
   assert.match(html, /role="alert"/);
+});
+
+test("le manque est FORMATE, pas rendu en octets bruts", () => {
+  // docs/DESIGN_SYSTEM.md §14.7 : une valeur technique brute ne doit pas
+  // atteindre l'ecran. « 64424509440 » ne se lit pas.
+  assert.equal(describeShortfall({ resource: 'memory', missing: 64424509440 }),
+               'mémoire : il manque 60 Gio');
+  assert.equal(describeShortfall({ resource: 'network', missing: 5e8 }),
+               'réseau : il manque 500 Mbit/s');
+});
+
+test("un nom de ressource inconnu ne casse pas l affichage", () => {
+  assert.match(describeShortfall({ resource: 'exotique', missing: 3 }), /exotique : il manque 3/);
+});
+
+test("l avertissement estime disparait quand le serveur a tranche", () => {
+  // Deux messages disant la meme chose, dont un moins fiable, est du bruit.
+  const html = renderSparkCreate({
+    values: { ...DEFAUTS, name: 'trop', memory_gib: 999 }, pools: POOLS,
+    refusal: { shortfalls: [{ resource: 'memory', missing: 1e9 }] },
+  });
+  assert.match(html, /class="refus"/);
+  assert.equal(/class="avertissement"/.test(html), false);
 });
 
 test('un refus CONSERVE la saisie', () => {

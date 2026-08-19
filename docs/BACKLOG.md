@@ -305,16 +305,22 @@ commandes que le runtime déclare possibles.
   première atteinte au clavier ; et le journal affichait `ok`, valeur brute du
   backend, au lieu de « réussi ».
 
-### [ ] SPK-20 · Création d'un Spark avec aperçu d'admission
+### [x] SPK-20 · Création d'un Spark avec aperçu d'admission
 
 Afficher la capacité restante avant validation, et le refus motivé du backend.
 
 - Spécification : `docs/DAT.md` §25 · `docs/DESIGN_SYSTEM.md` §6.9, §6.12,
   §7.1, §14.9
-- DoD : le refus provient de `sparkd`, jamais d'un contrôle uniquement côté
-  interface ; le bouton de création n'est jamais désactivé sur la foi de
-  l'estimation locale ; un refus conserve la saisie et chiffre ce qui manque ;
-  états chargement et erreur traités ; navigation clavier ; captures observées.
+- **Clos le 2026-08-19.** Le bouton n'est désactivé que pendant l'envoi, jamais
+  sur la foi de l'estimation locale — un test soumet une demande énorme mais bien
+  formée et vérifie qu'aucun contrôle local ne la rejette. L'avertissement local
+  utilise `accent` et dit « c'est le serveur qui décide » ; seul le refus de
+  `sparkd` est rouge, et il conserve intégralement la saisie.
+- Cinq captures observées. **Deux défauts trouvés par l'observation** : le refus
+  affichait des octets bruts (`64424509440`) et le mot `memory` en anglais, alors
+  que toute l'interface formate ; et l'avertissement estimé restait affiché à
+  côté du refus qui fait autorité — deux messages disant la même chose, dont un
+  moins fiable.
 
 ### [ ] SPK-21 · Écrans ingress, clés SSH, snapshots
 

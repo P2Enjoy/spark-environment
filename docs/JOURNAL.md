@@ -1358,3 +1358,47 @@ complète verte, et cinq captures observées.
 le premier écran qui **écrit**. Sa DoD existe déjà et exige que le refus vienne
 de `sparkd`, jamais d'un contrôle uniquement côté interface. SPK-12 attend un
 domaine, SPK-17 une exécution de CI, SPK-29 et SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-20 close : montrer sans décider
+
+**Unité** : SPK-20, le premier écran qui **écrit**. Sa DoD posait deux exigences
+qui semblaient s'opposer : afficher la capacité restante avant validation, et
+faire venir le refus de `sparkd` seulement.
+
+**Elles ne s'opposent pas si l'on sépare montrer de décider.** L'écran affiche la
+capacité — c'est ce qui permet de dimensionner un Spark sans tâtonner — et
+n'interdit rien sur cette base. Le bouton n'est désactivé que pendant l'envoi.
+
+Le motif est concret : la capacité affichée est une **photographie prise à
+l'ouverture**. Un Spark supprimé entre-temps l'a rendue fausse, et dans le sens
+favorable. Bloquer sur une valeur périmée refuserait une création que le serveur
+aurait acceptée, sans que l'exploitant puisse le savoir. L'avertissement local
+utilise donc `accent` et dit « c'est le serveur qui décide » ; seul le refus de
+`sparkd` est rouge.
+
+**Deux contrôles restent locaux**, et ils ne relèvent pas de l'admission : la
+syntaxe d'un nom et la cohérence du mode CPU. Ce sont des questions de forme,
+connues sans interroger le serveur, et doublées par le runtime. Un test soumet
+une demande **énorme mais bien formée** et vérifie qu'aucun contrôle local ne la
+rejette.
+
+**Deux défauts trouvés par l'observation des captures**, encore une fois
+invisibles aux tests alors verts :
+
+1. le refus affichait `memory : il manque 64424509440` — des octets bruts et un
+   nom de ressource en anglais, alors que toute l'interface formate. Le §14.7
+   l'interdit : une valeur technique brute ne doit pas atteindre l'écran ;
+2. l'avertissement estimé restait affiché **à côté** du refus qui fait autorité.
+   Deux messages disant la même chose, dont un moins fiable, sont du bruit.
+
+**Vérifié.** 438 tests Python, 105 tests Node, contrat sans dérive, campagne
+complète verte, et cinq captures observées.
+
+**Où reprendre.** **SPK-21**, les écrans ingress, clés SSH et instantanés — les
+trois dernières surfaces d'administration. Les composants de formulaire, de
+confirmation et d'absence nommée existent désormais ; l'unité consiste surtout à
+les composer. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
+SPK-28 un arbitrage.

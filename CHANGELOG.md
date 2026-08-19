@@ -111,6 +111,9 @@
   de suppression intégrée au flux.
 - `sparkd` publie `allowed_commands` et `transient` avec chaque Spark.
 
+- Écran de création d'un Spark : capacité restante affichée, avertissement local
+  distinct du refus serveur, saisie conservée en cas de refus.
+
 ### Modifié
 
 - `.gitignore` :
