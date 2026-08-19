@@ -358,13 +358,6 @@ tbody tr:hover { background: var(--color-hover); }
 .liste-administrable > li > .confirmation,
 .liste-administrable > li > .refus { flex-basis: 100%; margin-top: var(--space-2); }
 
-.formulaire-panneau {
-  display: grid; gap: var(--space-3);
-  padding: var(--space-3); border: 1px solid var(--color-border);
-  border-radius: var(--radius-md); background: var(--color-bg);
-}
-.formulaire-panneau .champ label input[type="checkbox"] { margin-right: var(--space-2); }
-
 /* §3.1 : le fragment ssh_config se compare caractère par caractère. Il défile
    dans son propre conteneur — la page ne défile jamais horizontalement (§8.2). */
 .fragment {
@@ -447,6 +440,10 @@ tbody tr:hover { background: var(--color-hover); }
   border-top: 1px solid var(--color-border); background: var(--color-bg);
 }
 .modale .refus { margin: 0 var(--space-4); }
+/* Une case a cocher precede son libelle : sans cet ecart elle le touche. La
+   regle vivait sur `.formulaire-panneau`, classe du formulaire dans le flux que
+   la modale a remplace — elle n'avait donc plus de sujet. */
+.modale__corps .champ label input[type="checkbox"] { margin-right: var(--space-2); }
 
 /* Sous 768 px elle occupe l'ecran entier, SANS changer de contrat (§6.27). */
 @media (max-width: 767px) {

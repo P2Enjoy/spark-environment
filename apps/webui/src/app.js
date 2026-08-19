@@ -159,7 +159,7 @@ function brancherPanneaux() {
       admin.refusal = null;
       admin.confirming = null;
       peindre();
-      racine.querySelector('.formulaire-panneau .controle')?.focus();
+      // Le focus entrant appartient à `brancherModale` (§6.27).
     });
   }
   // L'annulation et `Échap` sont tenus par `brancherModale` (§6.27) : un seul

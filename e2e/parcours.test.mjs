@@ -267,8 +267,12 @@ test('prendre un instantané au clavier le crée réellement côté sparkd', asy
     await page.fill('#instantane-nom', 'avant-bascule');
     await page.keyboard.press('Enter');
 
+    // La saisie aboutie referme la modale (§6.27). La condition portait sur
+    // `.formulaire-panneau`, la classe du formulaire dans le flux : plus aucun
+    // composant ne l'émet depuis que la modale est livrée, donc elle était vraie
+    // d'avance et ne prouvait plus rien.
     await page.waitForFunction(
-      () => !document.querySelector('.formulaire-panneau')
+      () => !document.querySelector('dialog.modale[open]')
             && document.querySelector('#titre-instantanes'),
       { timeout: 10000 });
 
@@ -392,10 +396,11 @@ test('ajouter une image la crée NON RELEVÉE, puis le relevé tranche', async (
     await page.waitForSelector('#titre-catalogue', { timeout: 15000 });
 
     await page.click('[data-ouvre="image"]');
-    await page.waitForSelector('#image-reference');
+    // §6.27 : la saisie se fait dans une modale, et le focus y entre tout seul.
+    await page.waitForSelector('dialog.modale[open] #image-reference');
     await page.fill('#image-reference', 'images:debian/31');
     await page.fill('#image-label', 'Version qui n’existe pas');
-    await page.click('[data-formulaire="image"] button[type="submit"]');
+    await page.click('dialog.modale[open] [data-engage="image"]');
     await page.waitForFunction(
       () => document.body.innerText.includes('Non relevée'), { timeout: 15000 });
 
