@@ -178,7 +178,7 @@ démarrage, donc ne peut pas retirer une clé (`docs/DAT.md` §17.1).
 
 ### [ ] SPK-12 · Ingress Caddy et réconciliation
 
-- Spécification : `docs/DAT.md` §8
+- Spécification : `docs/DAT.md` §9, §18
 - DoD : `domaine → spark → port` appliqué à chaud ; reconstruction complète de la
   configuration Caddy depuis le registre ; conflit de domaine refusé par la base.
 

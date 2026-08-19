@@ -1330,3 +1330,72 @@ l'adresse vient de `ipv4_address`, qui est attribuée par le registre (§15.1).
 Conséquence à ne pas perdre de vue : quiconque peut se connecter à l'hôte peut
 atteindre le réseau privé. Le rebond simplifie l'accès, il ne cloisonne pas
 l'hôte des Sparks — et le §11 reste la référence sur ce que l'isolation garantit.
+
+
+## 18. Réconciliation de l'ingress
+
+Le §9 pose le contrat `domaine → spark → port`. Cette section dit **comment** la
+configuration de Caddy est produite, ce que le §9 laissait ouvert.
+
+### 18.1 On régénère, on ne rapièce pas
+
+`sparkd` construit la configuration **entière** de Caddy depuis le registre et la
+pose d'un seul geste sur `POST /load`. Mesuré le 2026-08-19 : cet appel applique
+à chaud, sans interruption de service, et rend `200`.
+
+C'est le même principe qu'`authorized_keys` (§17.1), et pour la même raison : une
+configuration rapiécée diverge. Un `PATCH` route par route laisserait subsister
+les routes d'un Spark supprimé pendant que `sparkd` s'arrêtait, et rien ne
+permettrait de distinguer cet état d'un fonctionnement normal. Régénérer rend la
+dérive **impossible plutôt qu'improbable**.
+
+La conséquence pratique est que la réconciliation n'est pas une opération de
+réparation exceptionnelle : c'est le mécanisme **normal** d'application. Toute
+modification de route la déclenche.
+
+### 18.2 Forme de la configuration produite
+
+```json
+{"apps": {"http": {"servers": {"spark": {
+  "listen": [":80", ":443"],
+  "routes": [
+    {"match": [{"host": ["crm.example.com"]}],
+     "handle": [{"handler": "reverse_proxy",
+                 "upstreams": [{"dial": "10.77.0.16:8080"}]}]}
+  ]}}}}}
+```
+
+L'amont est `ipv4_address:target_port` — l'adresse que le **registre** a
+attribuée (§15.1), jamais une découverte par Docker ou par étiquettes. C'est ce
+qui maintient la frontière du §2 : le plan de contrôle ne consulte pas le runtime
+du locataire.
+
+Seules les routes `enabled` d'un Spark ayant une adresse sont émises. Une route
+déclarée sur un Spark encore `pending` existe dans le registre — c'est voulu, on
+déclare avant de créer — mais n'est pas servie tant qu'il n'y a rien à servir.
+
+### 18.3 TLS : ce qui est automatique, et ce qui ne peut pas l'être
+
+Une route à `tls = 1` est confiée à la gestion automatique de Caddy, qui obtient
+et renouvelle le certificat. Une route à `tls = 0` n'est servie qu'en clair sur
+`:80` — utile pour un domaine interne, un essai, ou un frontal qui termine déjà
+le TLS.
+
+**L'émission d'un certificat suppose que le domaine résolve vers cet hôte.** Ce
+n'est pas une propriété que le produit contrôle : elle dépend du DNS, extérieur
+au système. Un domaine mal pointé produit un échec d'émission côté Caddy, pas une
+erreur de `sparkd` — et la console doit présenter cet écart comme tel plutôt que
+de laisser croire à une panne du plan de contrôle.
+
+### 18.4 L'unicité du domaine appartient à la base
+
+`ingress_route.domain` est `UNIQUE` (`docs/SCHEMA.md` §6). Deux Sparks ne peuvent
+pas revendiquer le même nom, et le refus vient de la base — pas d'un contrôle
+dans l'interface, qui ne protégerait de rien face à deux requêtes simultanées.
+
+### 18.5 `applied_at`, ou la dérive rendue visible
+
+Chaque route porte la date de sa dernière application réussie. Une route
+enregistrée mais jamais appliquée — Caddy injoignable au moment de la demande —
+se voit donc immédiatement, au lieu de se déduire d'une comparaison manuelle
+entre le registre et la configuration active.
