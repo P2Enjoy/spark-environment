@@ -1406,3 +1406,70 @@ Chaque route porte la date de sa dernière application réussie. Une route
 enregistrée mais jamais appliquée — Caddy injoignable au moment de la demande —
 se voit donc immédiatement, au lieu de se déduire d'une comparaison manuelle
 entre le registre et la configuration active.
+
+## 19. Instantanés et restauration
+
+Le §8.3 dit *pourquoi* les instantanés existent. Cette section dit ce que la
+mesure du 2026-08-19 impose sur le *comment*.
+
+### 19.1 Restaurer un instantané ancien détruit les suivants — et cela se refuse
+
+ZFS rembobine un jeu de données : revenir à un point détruit tout ce qui a été
+capturé depuis. Incus le sait et **refuse** plutôt que de le faire en silence :
+
+```
+Snapshot "avant-changement" cannot be restored due to subsequent snapshot(s).
+Set zfs.remove_snapshots to override
+```
+
+**Décision : ce refus est conservé comme comportement par défaut.** Restaurer un
+point ancien en détruisant sans prévenir tous les instantanés pris depuis est
+exactement le genre de surprise irréversible qu'un plan de contrôle ne doit pas
+produire. `sparkd` relaie donc le refus **en nommant les instantanés qui
+bloquent**, et n'écrase qu'à la demande explicite de l'exploitant.
+
+La demande explicite est un drapeau de la requête, jamais une option de
+configuration : une configuration se pose une fois et s'oublie, alors que la
+perte est décidée instantané par instantané.
+
+### 19.2 Un instantané ne suspend pas le Spark
+
+Mesuré : la création d'un instantané sur un Spark en marche n'interrompt pas son
+exécution, et la restauration le laisse `RUNNING`. Un témoin écrit après
+l'instantané disparaît bien après restauration, et les fichiers supprimés
+reviennent.
+
+Le Spark n'est donc pas arrêté pour être capturé — mais son système de fichiers
+est figé à un instant qui ne correspond à aucun point de cohérence applicatif.
+Une base de données en cours d'écriture au moment de l'instantané se retrouvera,
+à la restauration, dans l'état d'un arrêt brutal. C'est acceptable pour ce que
+l'instantané sert — revenir avant un déploiement raté — et c'est précisément
+pourquoi il ne remplace pas la sauvegarde applicative (§8.3).
+
+### 19.3 L'instantané avec état n'est pas disponible
+
+`--stateful` capture la mémoire du conteneur et exige `migration.stateful=true`.
+Mesuré sur l'hôte : même activé, la capture échoue —
+`CRIU was built without libnftables support`, puis `snapshot dump failed`.
+
+Le modèle porte le champ `stateful` (`docs/SCHEMA.md` §8) et il restera à `false`
+sur cet hôte. Le produit **ne propose pas** cette option tant qu'elle n'a pas été
+mesurée fonctionnelle : offrir un bouton qui échoue à l'usage vaut moins que ne
+pas l'offrir.
+
+### 19.4 Un instantané consomme le quota du Spark
+
+Mesuré : le quota est posé sur le jeu de données parent, qui **inclut** ses
+instantanés (§8.7). Un instantané coûte d'abord zéro — il partage tous ses
+blocs — puis grossit à mesure que le Spark s'en écarte.
+
+Conséquence à énoncer dans l'interface : un Spark qui accumule des instantanés
+voit son espace disponible diminuer sans qu'aucun fichier n'ait été ajouté.
+Laisser l'exploitant le découvrir par un disque plein serait un mauvais service.
+
+### 19.5 Ce qu'un instantané n'est pas
+
+Il vit dans le même pool que le Spark. Il ne protège **ni** de la perte du pool,
+**ni** de celle de la machine. La console ne doit jamais le présenter comme une
+sauvegarde : les deux notions restent distinctes dans le modèle comme dans
+l'interface (`docs/SCHEMA.md` §8).
