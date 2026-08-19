@@ -43,6 +43,25 @@ export const MEASURE = {
   unavailable: 'Indisponible',
 };
 
+/**
+ * États d'un tunnel, en français. Défini À UN SEUL ENDROIT.
+ *
+ * Le badge d'en-tête et le bandeau d'alerte rendaient le même état avec deux
+ * vocabulaires : « rompu » d'un côté, « broken » de l'autre, à quelques
+ * centimètres. Une valeur technique brute ne doit pas atteindre l'écran
+ * (docs/DESIGN_SYSTEM.md §14.7).
+ */
+export const TUNNEL_STATES = {
+  ready: { label: 'ouvert', token: 'success' },
+  connecting: { label: 'en cours', token: 'brand' },
+  broken: { label: 'rompu', token: 'danger' },
+  closed: { label: 'fermé', token: 'neutral' },
+};
+
+export function tunnelOf(value) {
+  return TUNNEL_STATES[value] ?? { label: String(value ?? 'inconnu'), token: 'neutral' };
+}
+
 const OCTETS = ['o', 'Kio', 'Mio', 'Gio', 'Tio'];
 
 /** Le produit est en français : la virgule est le séparateur décimal.

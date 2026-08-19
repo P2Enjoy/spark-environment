@@ -6,7 +6,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE } from './tokens.js';
+import {
+  SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE, TUNNEL_STATES, tunnelOf,
+} from './tokens.js';
 
 test('les huit etats du modele sont couverts', () => {
   // docs/SCHEMA.md §4 : un etat non couvert tomberait dans le repli sans qu'on
@@ -77,4 +79,19 @@ test('les quatre absences de mesure portent des textes DISTINCTS', () => {
   assert.equal(new Set(textes).size, textes.length,
     'confondre deux situations les rendrait indiscernables a l’ecran');
   assert.match(MEASURE.declared, /rien à mesurer/);
+});
+
+// --- le vocabulaire du tunnel est defini une seule fois (§14.7) -------------
+
+test('les etats de tunnel portent des libelles francais distincts', () => {
+  const labels = Object.values(TUNNEL_STATES).map((t) => t.label);
+  assert.equal(new Set(labels).size, labels.length);
+  assert.ok(labels.every((l) => !/^[a-z]+$/.test(l) || !['ready','broken','closed'].includes(l)));
+  assert.equal(tunnelOf('broken').label, 'rompu');
+  assert.equal(tunnelOf('ready').label, 'ouvert');
+});
+
+test('un etat de tunnel inconnu ne casse rien et reste visible', () => {
+  assert.equal(tunnelOf('quelque-chose').label, 'quelque-chose');
+  assert.equal(tunnelOf(undefined).label, 'inconnu');
 });

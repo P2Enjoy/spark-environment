@@ -13,6 +13,7 @@ import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
+import { tunnelOf } from './components/tokens.js';
 
 const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
@@ -491,13 +492,13 @@ async function charger() {
 
 /** En-tête de contexte : le serveur courant et l'état RÉEL de son tunnel. */
 function peindreContexte() {
-  const etats = { ready: 'success', connecting: 'brand', broken: 'danger', closed: 'neutral' };
-  const libelles = { ready: 'ouvert', connecting: 'en cours', broken: 'rompu', closed: 'fermé' };
-  const courant = etat.tunnel?.state ?? 'closed';
+  // Le vocabulaire vit dans `tokens.js`, à un seul endroit : le bandeau du
+  // §22.3 le partage (docs/DESIGN_SYSTEM.md §14.7).
+  const { label, token } = tunnelOf(etat.tunnel?.state ?? 'closed');
   racine.querySelector('.entete__contexte').innerHTML =
     `<span class="technique">${etat.server}</span>` +
-    `<span class="badge badge--${etats[courant] ?? 'neutral'}">` +
-    `<span class="badge__point" aria-hidden="true"></span>Tunnel ${libelles[courant] ?? courant}</span>`;
+    `<span class="badge badge--${token}">` +
+    `<span class="badge__point" aria-hidden="true"></span>Tunnel ${label}</span>`;
 }
 
 async function demarrer() {

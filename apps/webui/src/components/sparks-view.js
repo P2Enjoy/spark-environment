@@ -11,7 +11,7 @@
  * navigateur.
  */
 
-import { stateOf, formatBytes, formatBps, formatCpu, MEASURE } from './tokens.js';
+import { stateOf, formatBytes, formatBps, formatCpu, MEASURE, tunnelOf } from './tokens.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -88,7 +88,7 @@ const COLONNES = [
 export function renderSparksView({ status, sparks = [], usage = {}, error = null,
                                    sort = { key: 'name', dir: 'asc' }, tunnel = null } = {}) {
   const bandeau = tunnel && tunnel.state !== 'ready'
-    ? `<p class="bandeau-tunnel" role="alert">Tunnel « ${echapper(tunnel.name)} » ${echapper(tunnel.state)} — les données affichées ne sont plus à jour.</p>`
+    ? `<p class="bandeau-tunnel" role="alert">Tunnel « ${echapper(tunnel.name)} » ${echapper(tunnelOf(tunnel.state).label)} — les données affichées ne sont plus à jour.</p>`
     : '';
 
   if (status === 'loading') return bandeau + renderSkeleton();
