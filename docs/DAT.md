@@ -1685,6 +1685,29 @@ et non en piochant dans une plage fixée. Une plage fixée entre en collision av
 ce que l'exploitant fait tourner par ailleurs, et la collision se manifeste comme
 un tunnel qui « ne marche pas » sans dire pourquoi.
 
+### 22.6 Qui ouvre le tunnel, et quand
+
+Cette section manquait, et son absence a produit un défaut : la console lisait
+l'état des tunnels sans jamais en ouvrir un. Une console ouverte sur une machine
+fraîche affichait « Tunnel fermé » et « Les Sparks n'ont pas pu être chargés »,
+sans offrir le moindre moyen d'y remédier. Tous les harnais l'ouvraient par un
+appel direct à `POST /api/tunnels` — c'est-à-dire par le contournement que la DoD
+de SPK-24 interdit —, ce qui masquait le défaut aussi longtemps qu'aucun parcours
+ne partait vraiment de l'accueil.
+
+**Décision : la console ouvre le tunnel du serveur courant à son démarrage.**
+
+- Elle l'ouvre pour le serveur courant **seulement**. Ouvrir les tunnels de tout
+  l'inventaire établirait des connexions SSH vers des machines qu'on n'a pas
+  demandé à regarder.
+- Si un tunnel est déjà `ready`, elle ne le rouvre pas : `TunnelManager.open`
+  rend l'existant, et la console n'a pas à le savoir.
+- L'ouverture est **visible** : l'en-tête passe par `connecting` puis `ready` ou
+  `broken`. Un échec n'est pas masqué — c'est le bandeau du §22.3 qui prend le
+  relais, avec la sortie d'erreur de `ssh`.
+- Elle n'est **pas** silencieuse en cas d'échec : la vue affiche l'erreur réelle
+  plutôt que la liste vide, faute de quoi on croirait n'avoir aucun Spark.
+
 ## 23. Le contrat d'API
 
 Le §10 pose `packages/contract` comme frontière entre les deux livrables. Cette
