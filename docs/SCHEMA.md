@@ -93,6 +93,39 @@ compris.
 | `docker_enabled` | INTEGER | installation de Docker + Compose à la création |
 | `created_at`, `updated_at` | TEXT | ISO 8601 UTC |
 | `last_error` | TEXT | dernière erreur de transition, NULL si aucune |
+| `protected_at` | TEXT | date d'armement de la protection, NULL si désarmée — **c'est cette colonne qui fait foi** |
+| `protection_hash` | TEXT | empreinte `scrypt` du mot de passe, en hexadécimal ; NULL si désarmée |
+| `protection_salt` | TEXT | sel aléatoire **par Spark**, en hexadécimal ; NULL si désarmée |
+| `protection_params` | TEXT | paramètres de coût `scrypt` en JSON (`n`, `r`, `p`, `dklen`) ; NULL si désarmée |
+
+### 4.1 Les quatre colonnes de protection (`docs/DAT.md` §35, SPK-34)
+
+Elles vont **toujours ensemble** : les quatre sont NULL, ou les quatre sont
+renseignées. Un `CHECK` l'impose, parce qu'un état mi-armé serait indécidable —
+une empreinte sans sel ne se vérifie pas, et un `protected_at` sans empreinte
+verrouillerait un Spark que plus rien ne peut lever.
+
+`protected_at` est la colonne qui **fait foi** : `sparkd` répond « protégé » sur
+sa non-nullité, jamais sur la présence d'une empreinte.
+
+Le mot de passe n'est **jamais** stocké en clair (§35.3). Le sel est tiré par
+Spark : un sel commun rendrait deux Sparks au même mot de passe reconnaissables à
+leur empreinte identique. Les paramètres de coût vivent **à côté** de l'empreinte
+plutôt que dans le code, pour qu'ils puissent évoluer sans invalider l'existant —
+une empreinte posée avec `n = 2^14` reste vérifiable le jour où le défaut passe à
+`2^15`.
+
+**Il n'y a aucune récupération par l'API** (§35.3). Un mot de passe perdu se lève
+sur l'hôte, avec `root`, par un `UPDATE` sur ces quatre colonnes. C'est cohérent
+avec ce que la protection prétend être — un garde-fou, pas un chiffrement.
+
+Aucune de ces colonnes n'est lisible par l'API : `GET /v1/sparks` publie un booléen
+`protected` et la date d'armement, jamais l'empreinte, le sel ni les paramètres.
+
+Migration `004_protection_spark`. Les quatre colonnes sont ajoutées NULL sur les
+Sparks existants : **une protection n'est jamais armée rétroactivement**, sans quoi
+la migration verrouillerait des Sparks dont personne ne connaîtrait le mot de
+passe.
 
 Cohérence des modes, appliquée par `CHECK` **et** revalidée en Python :
 
