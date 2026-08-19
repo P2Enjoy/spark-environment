@@ -14,6 +14,7 @@ import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-cr
 import { ADMIN_VIDE } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
 import { renderCatalogue, renderOngletsHote, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
+import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
 import { brancherModale } from './components/modale.js';
 import { tunnelOf } from './components/tokens.js';
 
@@ -27,6 +28,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                hote: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false },
                facette: '',
+               journal: { status: 'loading', entries: [], error: null,
+                          filtres: { ...FILTRES_VIDES },
+                          chain: null, anchor: null, checking: false },
                catalogue: { status: 'loading', images: [], error: null,
                             ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } } };
 
@@ -40,7 +44,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
 function marquerNavigation() {
   // Le premier degré reste « Sparks » quand on est dans une section de l'hôte :
   // les onglets du second degré portent leur propre `aria-current` (§34.1).
-  const courant = ['hote', 'images'].includes(etat.route) ? '#/hote' : '#/sparks';
+  const courant = ['hote', 'images', 'journal'].includes(etat.route) ? '#/hote' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -54,6 +58,8 @@ function peindre() {
       ? '<div class="carte bloc" aria-busy="true"><p class="sr-only" role="status">Chargement…</p></div>'
       : etat.route === 'images'
       ? renderOngletsHote('#/hote/images') + renderCatalogue(etat.catalogue)
+      : etat.route === 'journal'
+      ? renderJournalHotePage(etat.journal)
       : etat.route === 'hote'
       ? renderOngletsHote('#/hote') + renderHostView(etat.hote)
       : etat.route === 'creation'
@@ -83,6 +89,7 @@ function brancher() {
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
+  brancherJournal();
 
   const formulaire = racine.querySelector('#formulaire-spark');
   if (formulaire) {
@@ -568,6 +575,71 @@ async function releverImages() {
   await chargerCatalogue();
 }
 
+/** Journal de tout le serveur (docs/DAT.md §36.8). */
+async function chargerJournal() {
+  etat.route = 'journal';
+  etat.journal.status = 'loading';
+  etat.journal.error = null;
+  peindre();
+  const parametres = new URLSearchParams({ limit: '200' });
+  for (const [cle, valeur] of Object.entries(etat.journal.filtres)) {
+    if (valeur) parametres.set(cle, valeur);
+  }
+  try {
+    etat.journal.entries = (await api(`/v1/audit?${parametres}`)).entries;
+    etat.journal.status = 'ready';
+  } catch (erreur) {
+    etat.journal.error = erreur;
+    etat.journal.status = 'error';
+  }
+  peindre();
+}
+
+/**
+ * Relevé EXPLICITE de la chaîne, et comparaison à l'ancre (§36.8.3).
+ *
+ * Jamais rejoué à l'affichage : vérifier parcourt tout le journal, et le faire à
+ * chaque ouverture d'onglet en ferait un coût permanent pour une information qui
+ * ne change qu'à l'écriture.
+ */
+async function verifierChaine() {
+  etat.journal.checking = true;
+  peindre();
+  try {
+    etat.journal.chain = await api('/v1/audit/verify');
+    // L'ancre vit sur CETTE machine : c'est l'hôte console qui la tient, et
+    // c'est précisément ce qui lui permet de voir ce que la chaîne ne voit pas.
+    const reponse = await fetch('/api/anchor', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: etat.server }),
+    });
+    etat.journal.anchor = reponse.ok ? await reponse.json() : null;
+  } catch (erreur) {
+    etat.journal.error = erreur;
+  }
+  etat.journal.checking = false;
+  peindre();
+}
+
+function brancherJournal() {
+  const formulaire = racine.querySelector('[data-filtres="journal"]');
+  if (formulaire) {
+    formulaire.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      for (const controle of formulaire.querySelectorAll('input, select')) {
+        etat.journal.filtres[controle.name] = controle.value;
+      }
+      chargerJournal();
+    });
+  }
+  racine.querySelector('[data-action="filtres-vides"]')?.addEventListener('click', () => {
+    etat.journal.filtres = { ...FILTRES_VIDES };
+    chargerJournal();
+  });
+  racine.querySelector('[data-action="verifier-chaine"]')
+    ?.addEventListener('click', verifierChaine);
+}
+
 function brancherCatalogue() {
   const ui = etat.catalogue.ui;
   racine.querySelector('[data-ouvre="image"]')?.addEventListener('click', () => {
@@ -603,6 +675,7 @@ function brancherCatalogue() {
 }
 
 function router() {
+  if (location.hash === '#/hote/journal') return chargerJournal();
   if (location.hash === '#/hote/images') return chargerCatalogue();
   if (location.hash === '#/hote') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();

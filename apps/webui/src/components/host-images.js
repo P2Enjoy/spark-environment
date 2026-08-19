@@ -196,7 +196,10 @@ export function renderOnglets(onglets, courant, etiquette) {
         href === courant ? ' aria-current="page"' : ''}>${echapper(libelle)}</a>`).join('')}</nav>`;
 }
 
-export const ONGLETS_HOTE = [['#/hote', 'Pools'], ['#/hote/images', 'Images']];
+// SPK-39 : le journal est une destination sous Hôte, pas une facette d'un
+// Spark — il couvre TOUS les Sparks (docs/DAT.md §36.8.1).
+export const ONGLETS_HOTE = [['#/hote', 'Pools'], ['#/hote/images', 'Images'],
+                             ['#/hote/journal', 'Journal']];
 
 /** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */
 export const FACETTES_SPARK = [
