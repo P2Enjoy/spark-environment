@@ -8,6 +8,9 @@
  */
 
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, normalize } from 'node:path';
 
 import { load, save, validate, InventoryError } from './inventory.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
@@ -72,7 +75,9 @@ export function createConsoleHost(options = {}) {
         return await relayer(url, requete, reponse, tunnels, fetchFn);
       }
 
-      repondre(reponse, 404, { error: 'not_found', message: `Rien sur ${url.pathname}.` });
+      // Fichiers de la console. Servis uniquement depuis ce dossier : un
+      // chemin remontant serait une lecture arbitraire du disque.
+      return await servirStatique(url.pathname, reponse);
     } catch (erreur) {
       const status = erreur instanceof InventoryError ? 422 : erreur instanceof TunnelError ? 502 : 500;
       repondre(reponse, status, { error: erreur.constructor.name, message: erreur.message });
@@ -126,6 +131,26 @@ async function relayer(url, requete, reponse, tunnels, fetchFn) {
   const texte = await amont.text();
   reponse.writeHead(amont.status, { 'content-type': 'application/json; charset=utf-8' });
   reponse.end(texte);
+}
+
+const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+                '.svg': 'image/svg+xml', '.json': 'application/json' };
+
+async function servirStatique(chemin, reponse) {
+  const relatif = normalize(chemin === '/' ? '/index.html' : chemin).replace(/^(\.\.[/\\])+/, '');
+  const fichier = join(RACINE, relatif);
+  if (!fichier.startsWith(RACINE)) {
+    return repondre(reponse, 403, { error: 'forbidden', message: 'Chemin refusé.' });
+  }
+  try {
+    const contenu = await readFile(fichier);
+    const extension = relatif.slice(relatif.lastIndexOf('.'));
+    reponse.writeHead(200, { 'content-type': `${TYPES[extension] ?? 'application/octet-stream'}; charset=utf-8` });
+    return reponse.end(contenu);
+  } catch {
+    return repondre(reponse, 404, { error: 'not_found', message: `Rien sur ${chemin}.` });
+  }
 }
 
 function repondre(reponse, status, body) {

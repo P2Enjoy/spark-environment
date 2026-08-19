@@ -1,0 +1,111 @@
+/**
+ * Tokens du design system.
+ *
+ * @spec docs/DESIGN_SYSTEM.md §2 (Palette), §3 (Typographie), §4 (Espacement),
+ *       §12.1 (les tokens sont déclarés une seule fois) ·
+ *       docs/DESIGN_SYSTEM_APP.md §3 (tokens calculés)
+ *
+ * Déclarés ici, et ici seulement. Un composant consomme un token, il n'en
+ * recopie jamais la valeur. Les `*-on-soft` sont CALCULÉS pour atteindre AA sur
+ * leur propre fond doux — la couleur pleine ne suffit pas (§14.1).
+ */
+
+:root {
+  /* Palette P2Enjoy */
+  --color-brand: #23468c;
+  --color-brand-soft: #e5e9f1;
+  --color-brand-on-soft: #23468c;   /* 7,42:1 sur soft */
+  --color-brand-hover: #1c3870;
+
+  --color-success: #238c33;
+  --color-success-soft: #e5f1e7;
+  --color-success-on-soft: #1f7b2d; /* 4,60:1 — le plein ne donnait que 3,71 */
+
+  --color-accent: #d9cf4a;
+  --color-accent-soft: #faf9e9;
+  --color-accent-on-soft: #7a7429;  /* 4,54:1 — le plein ne donnait que 1,53 */
+
+  --color-danger: #f24141;
+  --color-danger-soft: #fde8e8;
+  --color-danger-on-soft: #c63535;  /* 4,51:1 — le plein ne donnait que 3,19 */
+
+  --color-ink: #0d0d0d;
+
+  /* Neutres */
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-text-2: #4b5563;
+  --color-text-3: #6b7280;
+  --color-hover: #f3f4f6;
+  --color-veil: rgb(13 13 13 / 0.4);
+
+  /* Espacement — échelle fermée (§4.1) */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Rayons (§4.2) */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.06);
+  --size-target: 40px;
+
+  /* Typographie (§3) */
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --text-h1: 26px;
+  --text-h2: 20px;
+  --text-h3: 16px;
+  --text-body: 15px;
+  --text-compact: 13px;
+  --leading-body: 1.55;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #racine { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--color-ink);
+  background: var(--color-bg);
+}
+
+h1 { font-size: var(--text-h1); font-weight: 700; margin: 0; }
+h2 { font-size: var(--text-h2); font-weight: 700; margin: 0; }
+h3 { font-size: var(--text-h3); font-weight: 700; margin: 0; }
+
+/* §9.5 — le focus est perceptible sur tout élément interactif. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* §7 — respect systématique de prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Données techniques : comparaison caractère par caractère (§3.1). */
+.technique { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

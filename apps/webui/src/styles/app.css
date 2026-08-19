@@ -1,0 +1,161 @@
+/**
+ * Console Spark — mise en page et composants.
+ *
+ * @spec docs/DESIGN_SYSTEM.md §5 (architecture), §6.7 (boutons), §6.8 (badges),
+ *       §6.13 (états systématiques), §6.14 (tableau), §8 (responsive),
+ *       §9 (accessibilité) · docs/DESIGN_SYSTEM_APP.md
+ *
+ * Aucun hexadécimal ici : uniquement des tokens (§2.1, §12.1).
+ */
+
+.page { display: flex; flex-direction: column; min-height: 100%; }
+
+/* --- En-tête : le serveur courant est un CONTEXTE, pas une page ---------- */
+.entete {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.entete__marque { font-weight: 700; color: var(--color-brand); }
+.entete__contexte { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+
+.principal { padding: var(--space-6) var(--space-4); flex: 1; }
+.principal > * + * { margin-top: var(--space-4); }
+
+.titre-vue { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.titre-vue__compte { color: var(--color-text-2); font-size: var(--text-compact); }
+
+/* --- Badges (§6.8) : fond doux + texte on-soft, jamais la couleur pleine -- */
+.badge {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  font-size: var(--text-compact); font-weight: 700;
+  white-space: nowrap;
+}
+.badge__point { width: 6px; height: 6px; border-radius: 999px; background: currentColor; flex: none; }
+.badge--brand   { background: var(--color-brand-soft);   color: var(--color-brand-on-soft); }
+.badge--success { background: var(--color-success-soft); color: var(--color-success-on-soft); }
+.badge--accent  { background: var(--color-accent-soft);  color: var(--color-accent-on-soft); }
+.badge--danger  { background: var(--color-danger-soft);  color: var(--color-danger-on-soft); }
+.badge--neutral { background: var(--color-hover);        color: var(--color-text-2); }
+
+/* Un état transitoire se distingue AUSSI par le mouvement, pas par la seule
+   couleur (§9.8, SPK-DS-01). */
+.badge--transitoire .badge__point { animation: pulsation 1.4s ease-in-out infinite; }
+@keyframes pulsation { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+/* --- Boutons (§6.7) ------------------------------------------------------ */
+.bouton {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--size-target); padding: 0 var(--space-4);
+  border-radius: var(--radius-sm); border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-ink);
+  font: inherit; cursor: pointer;
+  transition: background 150ms ease-out;
+}
+.bouton:hover { background: var(--color-hover); }
+.bouton--primaire {
+  background: var(--color-brand); border-color: var(--color-brand); color: var(--color-surface);
+}
+.bouton--primaire:hover { background: var(--color-brand-hover); }
+.bouton--compact { padding: 0 var(--space-2); font-size: var(--text-compact); }
+.bouton[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+/* --- Tableau (§6.14) : éléments natifs, pas de div ------------------------ */
+.carte {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+/* Le tableau défile dans son PROPRE conteneur ; la page ne défile jamais
+   horizontalement (§8.1). L'ombre de défilement signale le débordement (§8.2). */
+.tableau-enveloppe {
+  overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, transparent),
+    linear-gradient(to left, var(--color-surface) 30%, transparent) 100% 0,
+    linear-gradient(to right, var(--color-border), transparent 12px),
+    linear-gradient(to left, var(--color-border), transparent 12px) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--color-bg);
+  font-size: var(--text-compact); font-weight: 700; color: var(--color-text-2);
+  text-align: left; padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+tbody td {
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  height: var(--size-target);
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--color-hover); }
+.aligne-droite { text-align: right; }
+
+/* Une cellule dense tient sur une ligne, avec ellipse (§6.14). */
+.cellule-dense { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Le tri : un bouton dans l'en-tête, le th porte aria-sort (§6.14). */
+.tri {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: none; border: 0; padding: var(--space-1) 0;
+  font: inherit; font-weight: 700; color: inherit; cursor: pointer;
+}
+.tri__fleche { font-size: 10px; }
+
+.lien-spark { color: var(--color-brand); font-weight: 700; text-decoration: none; }
+.lien-spark:hover { text-decoration: underline; }
+
+/* --- Jauge d'usage : le burst n'est PAS un dépassement (SPK-DS-02) -------- */
+.jauge { display: flex; flex-direction: column; gap: var(--space-1); min-width: 120px; }
+.jauge__piste {
+  height: 6px; border-radius: 999px; background: var(--color-hover);
+  display: flex; overflow: hidden;
+}
+.jauge__part { height: 100%; }
+.jauge__part--reserve { background: var(--color-brand); }
+.jauge__part--burst   { background: var(--color-accent); }
+.jauge__part--depasse { background: var(--color-danger); }
+.jauge__texte { font-size: var(--text-compact); color: var(--color-text-2); }
+.jauge__absent { font-size: var(--text-compact); color: var(--color-text-3); font-style: italic; }
+
+/* --- États systématiques (§6.13) ----------------------------------------- */
+.etat-vue {
+  padding: var(--space-12) var(--space-4);
+  text-align: center; color: var(--color-text-2);
+}
+.etat-vue h2 { margin-bottom: var(--space-2); }
+.etat-vue p { margin: 0 auto; max-width: 52ch; }
+.etat-vue--erreur { color: var(--color-danger-on-soft); background: var(--color-danger-soft); }
+
+/* Squelettes plutôt qu'un spinner plein écran (§6.13). */
+.squelette {
+  background: var(--color-hover); border-radius: var(--radius-sm);
+  height: 12px; animation: respiration 1.4s ease-in-out infinite;
+}
+@keyframes respiration { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+.bandeau-tunnel {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-danger-soft); color: var(--color-danger-on-soft);
+  font-size: var(--text-compact); font-weight: 700;
+}
+
+/* --- Responsive (§8, SPK-DS-05) ------------------------------------------ */
+@media (max-width: 767px) {
+  .colonne-secondaire { display: none; }
+  .principal { padding: var(--space-4) var(--space-2); }
+}

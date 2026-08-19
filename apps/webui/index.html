@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Console Spark</title>
+  <!-- §10.3 : le favicon est référencé explicitement et ne dépend d'aucune police distante. -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2323468C'/><path d='M18 5 9 18h6l-2 9 10-14h-6z' fill='%23fff'/></svg>" />
+  <link rel="stylesheet" href="/src/styles/tokens.css" />
+  <link rel="stylesheet" href="/src/styles/app.css" />
+</head>
+<body>
+  <div id="racine" class="page">
+    <header class="entete">
+      <span class="entete__marque">Spark</span>
+      <nav aria-label="Navigation principale">
+        <a href="#/sparks" aria-current="page" class="lien-spark">Sparks</a>
+      </nav>
+      <div class="entete__contexte"></div>
+    </header>
+    <main class="principal"></main>
+  </div>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
