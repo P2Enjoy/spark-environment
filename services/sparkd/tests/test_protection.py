@@ -23,7 +23,7 @@ def db(tmp_path):
     connection = connect(tmp_path / "spark.db")
     migrations.upgrade(connection)
     connection.execute(
-        "INSERT INTO host (id, hostname, cpu_threads_total, cpu_cores_total,"
+        "INSERT INTO forge (id, hostname, cpu_threads_total, cpu_cores_total,"
         " memory_total_bytes, storage_total_bytes, network_total_bps)"
         " VALUES (1, 'h', 8, 4, ?, ?, 1000000000)", (94 * GIO, 5 * GIO * 1024))
     yield connection

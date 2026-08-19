@@ -120,7 +120,7 @@ def test_pool_de_stockage_vide_refuse():
 
 def test_sync_ecrit_host_et_topologie(db):
     sync(db, FakeIncus(), "spark")
-    host = db.execute("SELECT * FROM host WHERE id = 1").fetchone()
+    host = db.execute("SELECT * FROM forge WHERE id = 1").fetchone()
     assert host["hostname"] == "spark-experiment"
     assert host["cpu_cores_total"] == 4
     assert host["topology_synced_at"] is not None
@@ -163,7 +163,7 @@ def test_sync_signale_un_arc_inconnu(db, tmp_path, monkeypatch):
 def test_la_reserve_soustrait_l_arc_et_la_marge(db, arc_connu):
     """docs/DAT.md §16.1 — un pool qui ignore l'ARC promet ce qu'il n'a pas."""
     sync(db, FakeIncus(), "spark", operating_margin=2 * 1024**3)
-    host = db.execute("SELECT * FROM host WHERE id=1").fetchone()
+    host = db.execute("SELECT * FROM forge WHERE id=1").fetchone()
     assert host["memory_total_bytes"] == 98810556 * 1024      # MemTotal, pas la RAM physique
     assert host["memory_reserve_bytes"] == 18 * 1024**3       # ARC 16 + marge 2
     from sparkd.admission import pools
@@ -173,7 +173,7 @@ def test_la_reserve_soustrait_l_arc_et_la_marge(db, arc_connu):
 def test_la_memoire_retenue_n_est_pas_celle_d_incus(db, arc_connu):
     """Incus rend 98,0 Gio de barrettes ; le noyau n'en gere que 94,2."""
     sync(db, FakeIncus(), "spark")
-    host = db.execute("SELECT * FROM host WHERE id=1").fetchone()
+    host = db.execute("SELECT * FROM forge WHERE id=1").fetchone()
     assert host["memory_total_bytes"] == 98810556 * 1024
     assert host["memory_total_bytes"] < 105_226_698_752  # ce que rapporte Incus
 
@@ -225,7 +225,7 @@ def test_capacite_reduite_sous_l_allocation_est_appliquee_mais_signalee(db):
     assert ligne["result"] == "denied"
     assert "storage" in ligne["message"]
     # Applique malgre tout : le registre ne ment pas sur la machine.
-    assert db.execute("SELECT storage_total_bytes FROM host").fetchone()[0] == 1_000_000
+    assert db.execute("SELECT storage_total_bytes FROM forge").fetchone()[0] == 1_000_000
 
 
 def test_le_nom_d_hote_vient_de_l_api_serveur_pas_des_ressources():

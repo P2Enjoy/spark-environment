@@ -297,7 +297,7 @@ def create_app(config: Config) -> FastAPI:
                         "remedy": "POST /v1/host/sync",
                     },
                 ) from erreur
-            row = connection.execute("SELECT * FROM host WHERE id = 1").fetchone()
+            row = connection.execute("SELECT * FROM forge WHERE id = 1").fetchone()
             connection_usage = connection
             adresses = usage(connection)
             # Compte DANS le bloc : le dict de reponse est construit apres la

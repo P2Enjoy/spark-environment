@@ -47,22 +47,30 @@ def _spark(db, **overrides):
 
 
 def test_la_vraie_migration_cree_toutes_les_tables(db):
+    """REVISE par SPK-42 : la table `host` est renommee `forge`.
+
+    La machine qui porte sparkd s'appelle desormais une Forge (§1 bis) ; « hote »
+    designait aussi le processus Node du poste, et le meme mot valait pour deux
+    machines. Ce que la preuve etablit — la migration cree TOUTES les tables —
+    est inchange ; c'est un nom de la liste qui a change.
+    """
     tables = {r["name"] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     attendues = {
-        "host", "cpu_core", "cpu_thread", "spark", "spark_cpu_pin",
+        "forge", "cpu_core", "cpu_thread", "spark", "spark_cpu_pin",
         "ingress_route", "ssh_key", "spark_ssh_key", "snapshot", "backup",
         "audit_log", "schema_migration",
     }
     assert attendues <= tables
+    assert "host" not in tables, "l'ancien nom ne doit plus exister (SPK-42)"
 
 
-def test_host_est_une_ligne_unique(db):
+def test_forge_est_une_ligne_unique(db):
     colonnes = ("id, hostname, cpu_threads_total, cpu_cores_total, memory_total_bytes,"
                 " storage_total_bytes, network_total_bps")
-    db.execute(f"INSERT INTO host ({colonnes}) VALUES (1,'spark-experiment',8,4,?,?,?)",
+    db.execute(f"INSERT INTO forge ({colonnes}) VALUES (1,'spark-experiment',8,4,?,?,?)",
                (98_810_556 * 1024, 5_841_025_024 * 1024, 1_000_000_000))
     with pytest.raises(sqlite3.IntegrityError):
-        db.execute(f"INSERT INTO host ({colonnes}) VALUES (2,'autre',8,4,1,1,1)")
+        db.execute(f"INSERT INTO forge ({colonnes}) VALUES (2,'autre',8,4,1,1,1)")
 
 
 @pytest.mark.parametrize("mode,champs", [

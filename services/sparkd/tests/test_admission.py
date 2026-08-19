@@ -50,7 +50,7 @@ def poser_hote(db, **overrides):
     }
     valeurs.update(overrides)
     colonnes = ", ".join(valeurs)
-    db.execute(f"INSERT INTO host ({colonnes}) VALUES ({', '.join('?' * len(valeurs))})",
+    db.execute(f"INSERT INTO forge ({colonnes}) VALUES ({', '.join('?' * len(valeurs))})",
                tuple(valeurs.values()))
 
 

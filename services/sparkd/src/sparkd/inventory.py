@@ -201,7 +201,7 @@ def sync(
 
         with transaction(connection):
             connection.execute(
-                """INSERT INTO host (
+                """INSERT INTO forge (
                        id, hostname, cpu_threads_total, cpu_cores_total,
                        memory_total_bytes, storage_total_bytes, network_total_bps,
                        memory_reserve_bytes, memory_arc_bytes, memory_margin_bytes,

@@ -166,7 +166,7 @@ def _fmt(value: float) -> str:
 
 
 def _host_row(connection: sqlite3.Connection) -> sqlite3.Row:
-    row = connection.execute("SELECT * FROM host WHERE id = 1").fetchone()
+    row = connection.execute("SELECT * FROM forge WHERE id = 1").fetchone()
     if row is None:
         raise HostNotConfigured(
             "La capacité de l'hôte n'est pas encore relevée : aucune ligne dans "
