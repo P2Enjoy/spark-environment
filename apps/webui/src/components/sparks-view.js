@@ -114,7 +114,7 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
     const u = usage[s.name] ?? {};
     return [
       '<tr>',
-      `<td><a class="lien-spark" href="#/sparks/${encodeURIComponent(s.name)}">${echapper(s.name)}</a></td>`,
+      `<td class="cellule-nom"><a class="lien-spark" href="#/sparks/${encodeURIComponent(s.name)}" title="${echapper(s.name)}">${echapper(s.name)}</a></td>`,
       `<td>${renderStateBadge(s.state)}</td>`,
       `<td>${renderCpuGauge(u.cpu, s)}</td>`,
       `<td class="aligne-droite">${renderMesure(u.memory?.used_bytes, s.memory_reservation_bytes, formatBytes)}</td>`,
@@ -138,6 +138,7 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
       <tbody>${lignes}</tbody>
     </table>
   </div>
+  <p class="tableau-indice">Le tableau défile horizontalement pour révéler les colonnes suivantes.</p>
 </div>`;
 }
 

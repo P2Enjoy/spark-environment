@@ -39,24 +39,34 @@ export const MEASURE = {
 
 const OCTETS = ['o', 'Kio', 'Mio', 'Gio', 'Tio'];
 
+/** Le produit est en français : la virgule est le séparateur décimal.
+ *  Un point ferait lire « 2.0 Gio » comme un anglicisme dans une interface
+ *  entièrement francophone (docs/DESIGN_SYSTEM.md §11). */
+const virgule = (texte) => String(texte).replace('.', ',');
+
 /** Formate des octets. `null` reste `null` : ce n'est pas zéro (§14.6). */
 export function formatBytes(value) {
   if (value === null || value === undefined) return null;
   let n = value;
   let i = 0;
   while (n >= 1024 && i < OCTETS.length - 1) { n /= 1024; i += 1; }
-  return `${n < 10 && i > 0 ? n.toFixed(1) : Math.round(n)} ${OCTETS[i]}`;
+  return `${virgule(n < 10 && i > 0 ? n.toFixed(1) : Math.round(n))} ${OCTETS[i]}`;
 }
 
 export function formatBps(value) {
   if (value === null || value === undefined) return null;
-  if (value >= 1e9) return `${(value / 1e9).toFixed(1)} Gbit/s`;
+  if (value >= 1e9) return `${virgule((value / 1e9).toFixed(1))} Gbit/s`;
   if (value >= 1e6) return `${Math.round(value / 1e6)} Mbit/s`;
   return `${Math.round(value / 1e3)} kbit/s`;
 }
 
-/** Formate une part de CPU. Distingue explicitement l'inconnu de zéro. */
+/**
+ * Formate une part de CPU. Distingue explicitement l'inconnu de zéro.
+ *
+ * La précision est FIXE : « 2.0 sur 0.50 » juxtaposait deux précisions dans une
+ * même phrase et se lisait mal. Deux décimales partout, virgule française.
+ */
 export function formatCpu(value) {
   if (value === null || value === undefined) return null;
-  return value.toFixed(value < 1 ? 2 : 1);
+  return virgule(value.toFixed(2));
 }

@@ -39,17 +39,29 @@ test('null n est jamais formate en zero', () => {
   assert.equal(formatBps(null), null);
   assert.equal(formatCpu(null), null);
   assert.equal(formatBytes(0), '0 o');
-  assert.equal(formatCpu(0), '0.00');
+  assert.equal(formatCpu(0), '0,00');
 });
 
 test('les octets sont lisibles', () => {
-  assert.equal(formatBytes(2 * 1024 ** 3), '2.0 Gio');
+  assert.equal(formatBytes(2 * 1024 ** 3), '2,0 Gio');
   assert.equal(formatBytes(534981632), '510 Mio');
 });
 
 test('les debits sont lisibles', () => {
   assert.equal(formatBps(100_000_000), '100 Mbit/s');
-  assert.equal(formatBps(1_000_000_000), '1.0 Gbit/s');
+  assert.equal(formatBps(1_000_000_000), '1,0 Gbit/s');
+});
+
+test('le separateur decimal est la virgule, pas le point', () => {
+  // Le produit est entierement francophone : « 2.0 Gio » est un anglicisme.
+  assert.equal(formatCpu(1.996), '2,00');
+  assert.equal(formatCpu(0.5), '0,50');
+  assert.ok(!formatBytes(2 * 1024 ** 3).includes('.'));
+});
+
+test('la precision du CPU est fixe', () => {
+  // « 2.0 sur 0.50 » juxtaposait deux precisions dans une meme phrase.
+  assert.equal(formatCpu(2).length, formatCpu(0.5).length);
 });
 
 test('les trois absences de mesure ont des textes distincts', () => {

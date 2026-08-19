@@ -271,11 +271,19 @@ opération manuelle et n'est pas planifié.
   la déclencher ni observer son résultat depuis ici. Tant qu'une exécution n'a
   pas eu lieu, « dérive détectée en CI » reste une intention, pas une preuve.
 
-### [ ] SPK-18 · Écran liste des Sparks
+### [x] SPK-18 · Écran liste des Sparks
 
-- Spécification : `docs/DESIGN_SYSTEM.md`, `docs/MANUAL_PLAN.md`
-- DoD : états vide, chargement, erreur, données longues ; navigation clavier ;
-  captures observées.
+- Spécification : `docs/DESIGN_SYSTEM.md` (lu intégralement), `docs/DESIGN_SYSTEM_APP.md`
+- **Clos le 2026-08-19.** Les quatre états sont traités et **observés en
+  capture** : chargement par squelettes, vide nommant l'absence, erreur portant
+  son motif, données longues tronquées sans casser la mise en page. Navigation
+  clavier vérifiée, anneau de focus visible.
+- **Cinq défauts trouvés par l'observation des captures**, invisibles aux tests :
+  séparateur décimal anglais dans une interface francophone ; deux précisions
+  juxtaposées dans « 2.0 sur 0.50 » ; un nom long élargissant sa colonne et
+  faisant replier toutes les autres ; des mesures coupées en deux lignes ; et un
+  débordement horizontal **non signalé** au mobile, ce que le §14.2 interdit.
+- Captures : `e2e/captures/`, régénérables par `node e2e/captures.mjs`.
 
 ### [ ] SPK-19 · Écran détail d'un Spark
 
