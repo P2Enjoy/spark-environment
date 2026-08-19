@@ -418,9 +418,26 @@ console du navigateur vierge ; captures observées.
 
 ### [ ] SPK-23 · Pile de développement autonome et seed
 
-- Spécification : `docs/DAT.md` §11
-- DoD : seed couvrant Sparks en marche, arrêtés, en erreur, refus d'admission,
-  routes d'ingress, clés, historique d'audit.
+- Spécification : `docs/DAT.md` §12 (principes) et §28 (le contrat).
+  *La référence pointait vers le §11, « Sécurité » — corrigé le 2026-08-19.*
+- Deux processus, aucun service à orchestrer : `sparkd` avec le pilote factice et
+  l'hôte console (§28.1). L'écart à la conteneurisation de `CLAUDE.md` §3 est
+  assumé et tombe dès qu'un service réel entre dans la pile.
+- L'inventaire accepte un serveur de genre `local`, joint directement : `sparkd`
+  refusant toute adresse routable, un accès direct ne peut atteindre qu'un
+  `sparkd` de boucle locale (§28.2).
+- Le seed appelle les **routes HTTP de `sparkd`**, jamais du SQL direct : un seed
+  en SQL peut produire des états que l'application ne sait pas atteindre (§28.3).
+- Le pilote factice persiste ses instances : sans cela un Spark seedé « en
+  marche » refuse `Arrêter` après un redémarrage (§28.4).
+- `make seed` repart d'un registre neuf ; les noms sont stables (§28.6).
+
+DoD : seed couvrant Sparks en marche, arrêtés, en erreur, en attente et dédié,
+refus d'admission **réel**, routes d'ingress dont une non appliquée, clés dont un
+Spark sans aucune, instantanés permettant le refus de restauration, historique
+d'audit couvrant `ok`, `denied` et `error` ; `make runDev` démarre la pile et
+`make seed` la peuple ; la console parcourue de bout en bout contre ce `sparkd`
+RÉEL ; captures observées.
 
 ### [ ] SPK-24 · Tests E2E Playwright depuis le parcours canonique
 

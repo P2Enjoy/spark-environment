@@ -2082,3 +2082,105 @@ Il ne crée rien et ne supprime rien. C'est une surface de **lecture** et de
 relevé. La seule écriture qu'il déclenche est `POST /v1/host/sync`, qui met le
 registre en accord avec la machine et ne touche à aucun Spark.
 
+
+## 28. La pile de développement et le seed
+
+Le §12 pose les principes. Cette section fixe le contrat : ce que la pile
+démarre, comment le seed est produit, et ce qu'il doit démontrer.
+
+### 28.1 « Autonome » veut dire : aucun service à orchestrer
+
+La pile de développement est faite de **deux processus** :
+
+```
+sparkd        Python, SPARKD_DRIVER=fake, registre SQLite dans un fichier
+console       Node, sert la SPA et relaie vers sparkd
+```
+
+Il n'y a ni base de données serveur, ni file de messages, ni fournisseur externe.
+`CLAUDE.md` §3 demande de conteneuriser tout projet qui peut raisonnablement
+l'être ; ici, mettre deux processus sans dépendance dans des conteneurs
+**ajouterait** une dépendance — un démon Docker — là où il n'y en avait aucune, et
+rendrait la pile moins autonome, pas plus.
+
+**Écart assumé, à rouvrir** : dès qu'un service réel entre dans la pile de
+développement — un Incus local, un Caddy, un fournisseur simulé —, la
+conteneurisation redevient la bonne réponse et cet écart tombe.
+
+### 28.2 Le serveur local est un chemin d'accès, pas un tunnel SSH simulé
+
+La console modélise un **chemin d'accès** vers `sparkd` ; SSH en est une
+implémentation, adaptée à un serveur distant. En local, `sparkd` écoute déjà sur
+la boucle locale de la même machine : ouvrir un tunnel SSH vers `localhost`
+exigerait un `sshd` et des clés pour n'accomplir aucun transport.
+
+L'inventaire accepte donc un serveur de genre `local`, joint directement sur son
+port. Ce n'est pas un contournement de sécurité, et pour une raison qui ne dépend
+pas de la bonne volonté de l'appelant : **`sparkd` refuse de démarrer sur une
+adresse routable** et sort en code 2 (§22). Un accès direct ne peut donc atteindre
+qu'un `sparkd` lié à la boucle locale de la machine où tourne la console —
+exactement ce que le tunnel SSH garantissait à distance.
+
+Un serveur `local` n'a ni hôte, ni utilisateur, ni port distant : les exiger
+obligerait à inventer des valeurs qui ne servent à rien.
+
+### 28.3 Le seed passe par les mêmes chemins que l'application
+
+`CLAUDE.md` §8 l'impose et la raison est concrète : un seed qui écrit des lignes
+en SQL direct peut produire des états que l'application est **incapable
+d'atteindre**. Les écrans seraient alors éprouvés contre des situations qui
+n'existent pas, et les vrais défauts resteraient invisibles.
+
+Le seed appelle donc les **routes HTTP de `sparkd`** — les mêmes que la console
+appelle. Un refus d'admission y est un vrai `409` produit par le vrai contrôle
+d'admission, pas une ligne d'audit fabriquée.
+
+Conséquence à accepter : le seed ne peut créer que ce que le produit sait créer.
+C'est le but.
+
+### 28.4 Le pilote factice doit garder ses instances entre deux démarrages
+
+Mesuré : `FakeIncus` tient ses instances en mémoire. Un Spark seedé « en marche »
+survivrait au redémarrage de `sparkd` — le registre est un fichier — mais l'appel
+`Arrêter` échouerait ensuite sur « instance absente », parce que le pilote, lui,
+aurait tout oublié. La pile paraîtrait fonctionnelle jusqu'au premier geste.
+
+Le pilote factice reçoit donc un **fichier d'état** optionnel, à côté du registre.
+Ce n'est pas une simulation de plus : c'est ce qui rend la pile de développement
+cohérente avec elle-même après un redémarrage.
+
+### 28.5 Ce que le seed doit démontrer
+
+Chaque fixture existe pour rendre une situation observable à l'écran. Un seed qui
+ne produirait que des cas nominaux laisserait les états d'erreur, les absences et
+les refus non éprouvés — précisément ceux où les défauts se logent.
+
+| Fixture | Ce qu'elle rend observable |
+|---|---|
+| Spark en marche, avec mesures | l'écran liste et l'écran détail nominaux |
+| Spark arrêté | « Arrêté — aucune mesure d'exécution » (§20.1) |
+| Spark en erreur, avec `last_error` | le bandeau d'erreur et la commande `Reprendre` |
+| Spark `pending` | un Spark déclaré et pas encore appliqué |
+| Spark en mode **dédié** | la carte des cœurs du §27.4 a quelque chose à montrer |
+| Refus d'admission réel | l'écran de création et le journal d'audit en `denied` |
+| Route appliquée + route **non appliquée** | le badge « non appliquée » et `Réappliquer` (§18.5) |
+| Clé accordée, et un Spark **sans aucune clé** | l'absence nommée du §26.4 |
+| Instantanés, dont un ancien et un plus récent | le refus de restauration du §19.1 |
+| Journal d'audit couvrant `ok`, `denied`, `error` | les trois résultats du §21 |
+
+### 28.6 Reproductible veut dire : rejouable à l'identique
+
+`make seed` **repart d'un registre neuf**. Il ne complète pas un état existant :
+un seed qui s'ajoute produit des captures différentes à chaque exécution, et une
+capture qui change sans que le produit change ne prouve plus rien.
+
+Les noms des Sparks sont **stables** et choisis une fois : les tests et les
+captures s'y réfèrent.
+
+### 28.7 Ce que cette pile ne prouve pas
+
+Le pilote est factice. Aucun quota n'est appliqué, aucun conteneur ne tourne,
+aucune configuration Caddy n'est chargée. La pile éprouve la **traduction**, le
+contrôle d'admission, le cycle de vie, l'audit et l'interface — elle ne prouve
+rien de l'isolation. Cette preuve exige un hôte Incus réel (§12, §13).
+
