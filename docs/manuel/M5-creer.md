@@ -26,6 +26,15 @@ Pour employer une image absente de la liste, il faut l'**ajouter au catalogue** 
 un geste distinct, qui déclenche sa vérification. Le formulaire de création ne
 sert pas de porte d'entrée à une référence inconnue.
 
+Le catalogue vit sous **Hôte → Images**, parce qu'il décrit le serveur et non un
+Spark. Le bouton *Ajouter une image* y ouvre une saisie limitée à cette section.
+
+![Le catalogue d'images, et la saisie d'une nouvelle référence](images/m5-catalogue.png)
+
+Une entrée ajoutée naît **non relevée** : elle n'est pas encore proposée à la
+création. C'est *Relever le catalogue* qui interroge le dépôt et tranche. L'état
+vient donc toujours d'une vérification, jamais d'une déclaration.
+
 ## Les quatre modes CPU
 
 | Mode | Quand le choisir |

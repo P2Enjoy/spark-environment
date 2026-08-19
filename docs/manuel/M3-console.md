@@ -43,6 +43,28 @@ Chaque onglet a sa propre adresse. Vous pouvez donc recharger la page sur
 Sous 1024 px, la barre latérale passe en haut. Elle garde ses libellés : un
 pictogramme seul n'est pas une navigation.
 
+## Saisir
+
+Les trois niveaux ci-dessus servent à **regarder**. Pour **saisir**, la console
+ouvre une fenêtre par-dessus l'écran — une *modale* —, et son titre est celui de
+la section d'où vous l'avez ouverte : une saisie ouverte depuis « Routes » ne
+touche que les routes.
+
+Ce qu'elle vous garantit, au clavier comme à la souris :
+
+- le curseur est déjà dans le premier champ à l'ouverture ;
+- la tabulation reste dans la saisie et ne repart pas dans la page derrière ;
+- `Échap` referme, et refermer vaut annuler ;
+- à la fermeture, le focus revient sur le bouton qui l'avait ouverte ;
+- un refus du serveur s'affiche **dans** la saisie, sans rien effacer de ce que
+  vous avez tapé.
+
+Sous 768 px, elle occupe l'écran entier — mêmes garanties.
+
+Les **confirmations**, elles, ne sont pas des modales : elles s'affichent à
+l'endroit du geste, sous la ligne concernée. Une saisie et une confirmation ne
+demandent pas la même chose, et ne se ressemblent donc pas.
+
 ## L'état du tunnel
 
 La console **ouvre elle-même** le tunnel du serveur courant à son démarrage, et

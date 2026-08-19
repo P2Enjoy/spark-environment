@@ -94,16 +94,27 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.refus', { timeout: 10000 });
     await capturer('m5-refus');
 
+    // Le catalogue, puisque M5 renvoie à ce geste sans dire où il vit. On y va
+    // par la navigation : Hôte, puis l'onglet Images.
+    await accueil();
+    await page.click('nav a[href="#/hote"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/hote/images"]');
+    await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
+    await page.click('[data-ouvre="image"]');
+    await page.waitForSelector('dialog.modale[open] #image-reference', { timeout: 10000 });
+    await capturer('m5-catalogue', { hauteur: 800 });
+
     // --- M6 · Déployer sa pile : clés et configuration SSH -------------------
     await ouvrir('crm-production', 'cles');
     await page.waitForSelector('#titre-cles', { timeout: 10000 });
-    await capturer('m6-cles', { hauteur: 1400 });
+    await capturer('m6-cles', { hauteur: 800 });
 
     // --- M7 · Exposer un domaine ---------------------------------------------
     await ouvrir('crm-production', 'routes');
     await page.click('[data-ouvre="route"]');
     await page.waitForSelector('#route-domaine');
-    await capturer('m7-route', { hauteur: 1400 });
+    await capturer('m7-route', { hauteur: 800 });
 
     // --- M8 · Exploiter au quotidien -----------------------------------------
     await ouvrir('site-vitrine');
@@ -116,7 +127,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('[data-confirme-restauration]');
     await page.click('[data-confirme-restauration]');
     await page.waitForSelector('[data-accepte-perte]', { timeout: 10000 });
-    await capturer('m9-restauration-refusee', { hauteur: 1400 });
+    await capturer('m9-restauration-refusee', { hauteur: 800 });
 
     // --- M10 · Supprimer un Spark --------------------------------------------
     await ouvrir('boutique');
