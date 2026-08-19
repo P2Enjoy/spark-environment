@@ -1168,7 +1168,7 @@ qu'elle a vue. C'est l'ancre qui donne sa valeur à la chaîne, pas la chaîne
   console, ce qui n'est pas la même chose qu'un parcours au clavier et à la
   souris. Tant que SPK-39 n'a pas d'écran, l'unité reste `[~]`.
 
-### [ ] SPK-39 · Onglet de supervision du journal
+### [x] SPK-39 · Onglet de supervision du journal
 
 Le journal devient une destination sous **Hôte** (§34.1, §36.8) : il couvre tous
 les Sparks.
@@ -1188,6 +1188,33 @@ les Sparks.
   lancer la vérification, lire son résultat ; un parcours montre l'écran quand la
   chaîne est **rompue**, et il est capturé ; captures observées, y compris état
   vide et données longues ; manuel M12 mis à jour.
+
+**Livrée et intégralement prouvée le 2026-08-19.**
+
+- `#/hote/journal`, troisième onglet de second degré. Il couvre **tous** les
+  Sparks ; la facette d'un Spark reste, et répond à l'autre question.
+- Cinq filtres au runtime — résultat, action (par **préfixe**), acteur (par
+  sous-chaîne), classe, date minimale. Un filtre à valeur inconnue est **refusé**
+  en `422`, jamais ignoré.
+- La chaîne **et** l'ancre sont rendues à part, jamais résumées en un indicateur :
+  une chaîne intacte avec une ancre qui alerte est exactement la troncature.
+  Tant qu'aucun relevé n'a eu lieu, l'écran le dit au lieu d'afficher « intacte ».
+- La vérification est un relevé **explicite**, jamais rejoué à l'affichage.
+- L'écran n'écrit **jamais** « signé » — une preuve l'interdit.
+- **Preuves** : 617 tests Python, 260 de console dont 14 propres à cet écran, 8
+  gestes, **23 parcours E2E** dont celui que la DoD nomme — ouvrir, filtrer,
+  vérifier, lire —, 7 contrôles du manuel, build, contrat régénéré.
+- **Observé** : `e2e/captures/40-journal-supervision.png`, `41-journal-integrite.png`,
+  `42-journal-mobile.png` (390 px), **`43-journal-chaine-rompue.png`**, et
+  l'illustration `docs/manuel/images/m12-journal.png`.
+- **Trois défauts trouvés par la mesure** : les filtres partaient en escalier
+  (alignement par le bas, avec une aide de trois lignes) ; l'auteur tronqué
+  n'était plus consultable ; et un « Tout afficher » s'affichait alors que tout
+  était déjà affiché.
+- **INC-01 traité comme la DoD le demande** : l'écart change d'échelle et la
+  nouvelle mesure est consignée au registre. L'onglet ne réécrit aucun message —
+  le trancher **serait** l'arbitrage, qui appartient au responsable — mais le
+  manuel M12 le nomme, pour qu'on ne cherche pas une erreur là où il n'y en a pas.
 
 ### [ ] SPK-40 · Signature des gestes par la clé du responsable
 

@@ -2786,3 +2786,55 @@ arbitrage.
 
 **Point d'exploitation** : `006_journal_chaine` est portée au contrat (OP-07),
 avec la décision qui compte — le journal ne se purge pas.
+
+## 2026-08-19 — SPK-39 : le journal a son écran, et il ne résume pas ce qui ne se résume pas
+
+**Unité** : SPK-39, désignée par l'entrée précédente. Le §36.8 disait ce que
+l'onglet montre ; il ne disait ni sa destination, ni ses filtres, ni ce qu'il
+refuse. J'ai écrit le **§36.8 bis**, committé avant la première ligne de code.
+
+**Ce qui est livré.** `Hôte → Journal`, troisième onglet de second degré, qui
+couvre **tous** les Sparks — la facette d'un Spark reste, parce qu'elle répond à
+l'autre question. Cinq filtres au runtime, dont l'action par **préfixe** : on
+cherche « tout ce qui touche aux instantanés » bien plus souvent qu'une action
+précise. Un filtre à valeur inconnue est **refusé** en `422`, jamais ignoré — un
+filtre ignoré rend une liste plus large que demandée, que l'exploitant lira comme
+un résultat filtré.
+
+**Le point qui décidait de la forme.** L'écran rend l'état de la chaîne **et** la
+comparaison avec ce que la console avait vu, sans jamais les résumer en un seul
+indicateur. Une chaîne intacte **avec** une ancre qui alerte est exactement la
+troncature — le cas le plus important de tout le dispositif —, et « tout va bien »
+y serait faux. Une preuve l'interdit. Tant qu'aucun relevé n'a eu lieu, l'écran
+dit qu'il ne sait pas plutôt que d'afficher « intacte » : une intégrité supposée
+est précisément ce que ce dispositif existe pour ne pas laisser croire. Et il
+n'écrit **jamais** « signé ».
+
+**Trois défauts trouvés par la mesure, pas par la relecture.** Les filtres
+partaient en escalier — leur bas était aligné, or l'un porte une aide de trois
+lignes. L'auteur, tronqué par l'ellipse, n'était plus consultable, alors qu'il
+porte le serveur et l'empreinte de clé qui distinguent deux postes. Et un
+« Tout afficher » s'affichait alors que tout était déjà affiché.
+
+**Une preuve corrigée, et sa cause.** Le parcours attendait que le nombre de
+lignes change après filtrage ; l'état de chargement rend zéro ligne, donc
+l'attente était satisfaite avant l'arrivée de la réponse, et le test lisait un
+tableau vide. Il attend désormais le tableau rechargé.
+
+**INC-01, traité comme la DoD le demande.** L'écart de vocabulaire change
+d'échelle : il portait sur trois lignes d'un panneau, il porte sur une page
+entière. La nouvelle mesure est consignée au registre. L'onglet **ne réécrit aucun
+message** — le trancher serait l'arbitrage, qui vous appartient — mais M12 le
+nomme, pour qu'on ne cherche pas une erreur là où il n'y en a pas.
+
+**Vérifié.** 617 tests Python, 260 de console dont 14 propres à cet écran, 6 de
+contrat, 8 gestes, **23 parcours E2E** dont celui de la DoD, 7 contrôles du
+manuel, build, contrat régénéré. Captures 40 à 43 et illustration `m12-journal`
+observées, y compris l'écran **chaîne rompue** et le format 390 px.
+
+**Où reprendre.** **SPK-41** (catalogue local des serveurs tenu depuis la console),
+première `[ ]` restante avec du comportement livrable — SPK-40 dépend de
+l'arbitrage de SPK-35. SPK-38 se solde désormais d'un parcours E2E : l'écran
+existe, et l'ancre s'y voit. SPK-37 se solde d'une mesure sur un vrai tunnel ;
+SPK-30 et SPK-29 sur l'hôte. SPK-28, SPK-35, SPK-36, SPK-42, INC-01 et INC-02
+attendent votre arbitrage.

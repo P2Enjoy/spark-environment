@@ -203,6 +203,11 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **Onglet de supervision du journal** (SPK-39) : `Hôte → Journal`, qui couvre
+  tous les Sparks. Cinq filtres, dont l'action par préfixe ; un filtre inconnu est
+  refusé plutôt qu'ignoré. L'écran rend l'état de la chaîne **et** la comparaison
+  avec ce que la console avait vu, jamais résumés en un seul indicateur, et dit
+  qu'aucune entrée n'est signée. La vérification est un relevé explicite.
 - **Chaîne d'intégrité du journal et ancre** (SPK-38) : chaque entrée porte
   l'empreinte de la précédente, sur une sérialisation canonique figée.
   `GET /v1/audit/verify` désigne la première rupture et distingue une ligne

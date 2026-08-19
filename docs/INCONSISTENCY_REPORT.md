@@ -45,6 +45,18 @@ n'est faussée.
 l'ouverture) », alors que le badge et le bandeau disent maintenant « rompu ». Le
 texte vient de `TunnelManager.require`, côté serveur. C'est le même arbitrage.
 
+**Nouvelle mesure, 2026-08-19, sur l'onglet de supervision (SPK-39).** L'écart
+change d'échelle, comme la DoD de SPK-39 l'annonçait. Il portait sur trois lignes
+d'un panneau ; il porte maintenant sur une **page entière**, où chaque ligne du
+journal expose le vocabulaire du runtime. Vu sur
+`docs/manuel/images/m12-journal.png` et `e2e/captures/40-journal-supervision.png`.
+
+L'onglet **ne réécrit aucun message** — le trancher serait l'arbitrage lui-même.
+Il nomme en revanche l'écart au manuel (M12, « Une bizarrerie de vocabulaire,
+connue »), pour que le lecteur ne cherche pas une erreur là où il n'y en a pas.
+
+L'impact reste inchangé : lisibilité seulement.
+
 **Arbitrage attendu du responsable** : les messages produits par le serveur —
 journal d'audit, erreurs de l'hôte console — doivent-ils rester un enregistrement
 technique, auquel cas le §14.7 gagne une exception écrite, ou la console
