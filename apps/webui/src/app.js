@@ -28,6 +28,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                hote: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false },
                facette: '',
+               servers: [],
                journal: { status: 'loading', entries: [], error: null,
                           filtres: { ...FILTRES_VIDES },
                           chain: null, anchor: null, checking: false },
@@ -714,19 +715,98 @@ async function charger() {
   peindre();
 }
 
-/** En-tête de contexte : le serveur courant et l'état RÉEL de son tunnel. */
+/**
+ * En-tête de contexte : le serveur courant, son tunnel, et de quoi en changer.
+ *
+ * @spec docs/BACKLOG.md#SPK-41 · docs/DAT.md §22.4.5 (le serveur courant est un
+ *       choix), §22.4.6 (la reconnexion est un geste) ·
+ *       docs/DESIGN_SYSTEM_APP.md §1 (le serveur est le CONTEXTE de toutes les
+ *       destinations, pas une destination)
+ */
 function peindreContexte() {
   // Le vocabulaire vit dans `tokens.js`, à un seul endroit : le bandeau du
   // §22.3 le partage (docs/DESIGN_SYSTEM.md §14.7).
   const { label, token } = tunnelOf(etat.tunnel?.state ?? 'closed');
+  const rompu = etat.tunnel?.state === 'broken';
+  const connexion = etat.tunnel?.state === 'connecting';
+
+  // Un SÉLECTEUR dès qu'il y a le choix. Un select à une seule option serait un
+  // contrôle mort : avec un seul serveur, son nom suffit.
+  const choix = etat.servers.length > 1
+    ? `<label class="sr-only" for="selecteur-serveur">Serveur</label>
+       <select class="controle controle--compact" id="selecteur-serveur">${
+         etat.servers.map((s) =>
+           `<option value="${echapperTexte(s.name)}"${
+             s.name === etat.server ? ' selected' : ''}>${echapperTexte(s.name)}</option>`).join('')}
+       </select>`
+    : `<span class="technique">${echapperTexte(etat.server)}</span>`;
+
+  // §22.4.6 : un tunnel rompu porte SA commande. La seule issue était de
+  // recharger la console, ce qui n'est pas un remède mais une superstition.
+  const reconnexion = rompu
+    ? `<button type="button" class="bouton bouton--compact" data-action="reconnecter">Reconnecter</button>`
+    : '';
+
   racine.querySelector('.entete__contexte').innerHTML =
-    `<span class="technique">${etat.server}</span>` +
-    `<span class="badge badge--${token}">` +
-    `<span class="badge__point" aria-hidden="true"></span>Tunnel ${label}</span>`;
+    choix +
+    `<span class="badge badge--${token}"${connexion ? ' aria-live="polite"' : ''}>` +
+    `<span class="badge__point" aria-hidden="true"></span>Tunnel ${label}</span>` +
+    reconnexion;
+
+  racine.querySelector('#selecteur-serveur')?.addEventListener('change', (evenement) => {
+    changerDeServeur(evenement.target.value);
+  });
+  racine.querySelector('[data-action="reconnecter"]')
+    ?.addEventListener('click', () => ouvrirTunnel(etat.server));
+}
+
+const echapperTexte = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+/**
+ * Ouvre — ou rouvre — le tunnel d'un serveur, en MONTRANT la tentative.
+ *
+ * Une reconnexion silencieuse laisserait croire que rien ne se passe : l'état
+ * passe par `connecting` et l'en-tête le rend (§22.4.6).
+ */
+async function ouvrirTunnel(nom) {
+  etat.tunnel = { ...(etat.tunnel ?? {}), name: nom, state: 'connecting' };
+  peindreContexte();
+  try {
+    const reponse = await fetch('/api/tunnels', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: nom }),
+    });
+    // On retient l'état RÉEL, y compris « broken » : la vue doit voir la panne,
+    // pas une liste vide qui ferait croire à zéro Spark (§22.3).
+    etat.tunnel = await reponse.json();
+  } catch (erreur) {
+    etat.tunnel = { name: nom, state: 'broken', lastError: erreur.message };
+  }
+  peindreContexte();
+  return etat.tunnel;
+}
+
+/** Bascule de serveur courant. Le choix est RETENU côté console (§22.4.5). */
+async function changerDeServeur(nom) {
+  if (!nom || nom === etat.server) return;
+  etat.server = nom;
+  etat.tunnel = { name: nom, state: 'connecting' };
+  peindreContexte();
+  await fetch('/api/servers/current', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: nom }),
+  }).catch(() => null);
+  await ouvrirTunnel(nom);
+  // Tout ce qui était affiché appartenait à l'AUTRE serveur : on relit plutôt
+  // que de laisser des données d'un serveur sous le nom d'un autre.
+  router();
 }
 
 async function demarrer() {
-  const { servers, tunnels } = await (await fetch('/api/servers')).json();
+  const { servers, tunnels, current } = await (await fetch('/api/servers')).json();
+  etat.servers = servers;
   const entete = racine.querySelector('.entete__contexte');
   if (servers.length === 0) {
     entete.innerHTML = '<span class="badge badge--neutral">Aucun serveur enregistré</span>';
@@ -734,28 +814,16 @@ async function demarrer() {
     etat.error = new Error("Aucun serveur n'est enregistré dans l'inventaire de la console.");
     return peindre();
   }
-  etat.server = servers[0].name;
+  // §22.4.5 : le serveur courant est PERSISTÉ. Prendre `servers[0]` rendait le
+  // choix implicite et dépendant de l'ordre d'écriture — ajouter un serveur
+  // changeait celui qu'on regardait.
+  etat.server = servers.some((s) => s.name === current) ? current : servers[0].name;
   etat.tunnel = tunnels.find((t) => t.name === etat.server) ?? null;
 
   // docs/DAT.md §22.6 : la console OUVRE le tunnel du serveur courant. Se
   // contenter de lire son état laissait une console fraîche sur « Tunnel
   // fermé », sans aucun moyen d'y remédier depuis l'interface.
-  if (etat.tunnel?.state !== 'ready') {
-    etat.tunnel = { ...(etat.tunnel ?? {}), state: 'connecting' };
-    peindreContexte();
-    try {
-      const reponse = await fetch('/api/tunnels', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: etat.server }),
-      });
-      // On retient l'état RÉEL, y compris « broken » : la vue doit voir la
-      // panne, pas une liste vide qui ferait croire à zéro Spark (§22.3).
-      etat.tunnel = await reponse.json();
-    } catch (erreur) {
-      etat.tunnel = { name: etat.server, state: 'broken', lastError: erreur.message };
-    }
-  }
+  if (etat.tunnel?.state !== 'ready') await ouvrirTunnel(etat.server);
 
   peindreContexte();
   await router();
