@@ -3276,11 +3276,22 @@ garantie creuse, et qu'ils se découvrent trop tard.
 - **Lecture de la tête et insertion dans la même transaction.** Sinon deux
   écritures s'intercalent et la chaîne fourche. SQLite n'a qu'un écrivain, ce qui
   aide, mais ne dispense pas de l'atomicité.
-- **Les trous d'identifiants ne sont pas des altérations.** `AUTOINCREMENT`
-  consomme des identifiants qu'un `ROLLBACK` abandonne, et le §21 journalise
-  délibérément certains refus **hors** transaction. La vérification porte sur la
-  chaîne, jamais sur la continuité des `id` — confondre les deux fabriquerait des
-  alertes fausses, ce qui est la meilleure façon de faire ignorer les vraies.
+- **Les trous d'identifiants ne sont pas des altérations.** La vérification porte
+  sur la chaîne, jamais sur la continuité des `id` — confondre les deux
+  fabriquerait des alertes fausses, ce qui est la meilleure façon de faire ignorer
+  les vraies.
+
+  **Correction du 2026-08-19, mesurée.** Ce paragraphe affirmait qu'`AUTOINCREMENT`
+  consomme des identifiants qu'un `ROLLBACK` abandonne. C'est **faux sur SQLite** :
+  le `ROLLBACK` annule aussi la mise à jour de `sqlite_sequence`, et l'identifiant
+  est réattribué. Mesuré — une insertion annulée laisse `seq` à sa valeur
+  antérieure, et la ligne suivante reprend l'identifiant libéré.
+
+  La règle ne change pas pour autant, et c'est important : elle n'est pas une
+  réaction à un phénomène observé, c'est une **garantie de conception**. Une purge,
+  une restauration partielle, une migration future ou un autre moteur peuvent
+  produire des trous ; une vérification qui les jugerait deviendrait fausse ce
+  jour-là, sans que personne ne l'ait touchée.
 - **La purge casse la chaîne.** À trancher avant d'écrire la première ligne : soit
   le journal ne se purge jamais, soit une purge scelle le préfixe supprimé dans une
   ligne de **point de contrôle** qui porte son empreinte.
