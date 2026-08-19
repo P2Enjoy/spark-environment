@@ -170,9 +170,15 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
     // FILTRER : par origine, puisque le seed produit les deux classes.
     await page.selectOption('#filtre-actor_class', 'runtime');
     await page.click('[data-filtres="journal"] button[type="submit"]');
-    await page.waitForFunction(
-      (avant) => document.querySelectorAll('tbody tr').length !== avant,
-      toutes, { timeout: 10000 });
+    // On attend le tableau RECHARGÉ, pas un simple changement de nombre :
+    // l'état de chargement rend zéro ligne, ce qui satisfaisait cette attente
+    // avant même que la réponse n'arrive. Mesuré — le test lisait alors un
+    // tableau vide et concluait qu'aucun événement du serveur n'existait.
+    await page.waitForFunction(() => {
+      const lignes = [...document.querySelectorAll('tbody tr')];
+      return lignes.length > 0
+        && lignes.every((l) => l.children[3]?.textContent.trim() === 'automatique');
+    }, { timeout: 10000 });
     const auteurs = await page.$$eval('tbody tr td:nth-child(4)',
       (l) => l.map((c) => c.textContent.trim()));
     assert.ok(auteurs.length > 0, 'des événements du serveur existent');
@@ -188,6 +194,8 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
     await page.waitForFunction(
       (avant) => document.querySelectorAll('tbody tr').length === avant,
       toutes, { timeout: 10000 });
+    // Ici l'attente porte sur l'ÉGALITÉ : l'état de chargement ne peut pas la
+    // satisfaire, puisqu'il rend zéro ligne.
     assert.equal(await page.$('[data-action="filtres-vides"]'), null,
       'un « Tout afficher » alors que tout est affiché est un bouton mort');
 
