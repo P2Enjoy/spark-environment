@@ -83,11 +83,20 @@ async function accueil() {
   await page.waitForSelector('tbody a', { timeout: 20000 });
 }
 
-/** Ouvre un Spark PAR SON LIEN dans la liste. */
-async function ouvrir(nom) {
+/** Ouvre un Spark PAR SON LIEN dans la liste, puis une de ses facettes.
+ *
+ *  SPK-33 a réparti la fenêtre en facettes (DESIGN_SYSTEM.md §6.27) : on y va
+ *  en cliquant l'onglet, comme un exploitant. Seul le CHEMIN change ; ce que ces
+ *  parcours vérifient est inchangé. */
+async function ouvrir(nom, facette = '') {
   await accueil();
   await page.click(`tbody a:has-text("${nom}")`);
   await page.waitForSelector('.entete-entite', { timeout: 10000 });
+  if (facette) {
+    await page.click(`.onglet[href$="/${facette}"]`);
+    await page.waitForSelector(`.onglet[href$="/${facette}"][aria-current="page"]`,
+                               { timeout: 10000 });
+  }
 }
 
 // --- LE PARCOURS NOMINAL ----------------------------------------------------
@@ -192,7 +201,7 @@ test('REFUS 2 · une commande impossible dans l’état n’est pas offerte', as
 
 test('REFUS 3 · restaurer un instantané ancien est refusé, et nomme ce qui bloque', async () => {
   await parcours('refus-restauration', async () => {
-    await ouvrir('crm-production');
+    await ouvrir('crm-production', 'instantanes');
     await page.waitForSelector('#titre-instantanes');
 
     // Avant toute tentative, aucun moyen d'accepter la perte n'existe (§26.5).
@@ -217,7 +226,7 @@ test('REFUS 3 · restaurer un instantané ancien est refusé, et nomme ce qui bl
 
 test('REFUS 4 · un domaine déjà pris est refusé par la base, pas par l’interface', async () => {
   await parcours('refus-domaine', async () => {
-    await ouvrir('boutique');
+    await ouvrir('boutique', 'routes');
     await page.waitForSelector('#titre-routes');
     await page.click('[data-ouvre="route"]');
     await page.waitForSelector('#route-domaine');
@@ -245,7 +254,7 @@ test('REFUS 4 · un domaine déjà pris est refusé par la base, pas par l’int
 
 test('prendre un instantané au clavier le crée réellement côté sparkd', async () => {
   await parcours('instantane', async () => {
-    await ouvrir('postgres-dedie');
+    await ouvrir('postgres-dedie', 'instantanes');
     await page.waitForSelector('#titre-instantanes');
 
     const avant = (await pile.lireSparkd('/v1/sparks/postgres-dedie/snapshots'))
@@ -397,5 +406,66 @@ test('ajouter une image la crée NON RELEVÉE, puis le relevé tranche', async (
     assert.equal(ajoutee.verified_at, null);
     assert.ok(!corps.selectable.includes('images:debian/31'),
       'une entrée non relevée n’est pas proposable à la création');
+  });
+});
+
+// --- LE CONTRAT CLAVIER DES TROIS DEGRÉS (SPK-33, §5.4, §9.1) --------------
+
+test('les trois degrés s’atteignent au clavier, et annoncent où l’on est', async () => {
+  await parcours('clavier-degres', async () => {
+    await accueil();
+
+    // Degré 1 — la barre latérale. La destination courante est annoncée.
+    const destination = await page.evaluate(() =>
+      document.querySelector('.laterale a[aria-current="page"]')?.getAttribute('href'));
+    assert.equal(destination, '#/sparks');
+
+    // Degré 2 — l'onglet de l'hôte, atteint par le clavier.
+    let atteint = null;
+    for (let i = 0; i < 20 && atteint !== '#/hote'; i += 1) {
+      await page.keyboard.press('Tab');
+      atteint = await page.evaluate(() => document.activeElement?.getAttribute('href'));
+    }
+    assert.equal(atteint, '#/hote', 'la destination « Hôte » est atteignable');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.onglets', { timeout: 10000 });
+
+    let onglet = null;
+    for (let i = 0; i < 20 && onglet !== '#/hote/images'; i += 1) {
+      await page.keyboard.press('Tab');
+      onglet = await page.evaluate(() => document.activeElement?.getAttribute('href'));
+    }
+    assert.equal(onglet, '#/hote/images', 'l’onglet est atteignable au clavier');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
+
+    // L'onglet courant s'annonce, et la destination de premier degré reste
+    // « Hôte » : deux degrés, deux indications, sans conflit.
+    assert.equal(
+      await page.evaluate(() =>
+        document.querySelector('.onglet[aria-current="page"]')?.getAttribute('href')),
+      '#/hote/images');
+    assert.equal(
+      await page.evaluate(() =>
+        document.querySelector('.laterale a[aria-current="page"]')?.getAttribute('href')),
+      '#/hote');
+  });
+});
+
+test('une facette d’un Spark est une DESTINATION rechargeable', async () => {
+  await parcours('facette-rechargeable', async () => {
+    await ouvrir('crm-production', 'instantanes');
+    const url = page.url();
+    assert.match(url, /#\/sparks\/crm-production\/instantanes$/);
+
+    // §5.4 : le critère est l'URL. Recharger doit ramener la même facette.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#titre-instantanes', { timeout: 15000 });
+    assert.equal(
+      await page.evaluate(() =>
+        document.querySelector('.onglet[aria-current="page"]')?.getAttribute('href')),
+      '#/sparks/crm-production/instantanes');
+    // Un seul sujet par surface : les routes ne sont pas là.
+    assert.equal(await page.$('#titre-routes'), null);
   });
 });
