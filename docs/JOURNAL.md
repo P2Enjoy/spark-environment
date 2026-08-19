@@ -2534,3 +2534,69 @@ Aucun test exécuté : spécification, règles d'interface et backlog. Les faits
 techniques cités ont été relevés dans le code — `exec_command` existe bien dans
 `incus.py`, et le §17.1 documente l'absence de `sshd` dans l'image de base.
 
+
+## 2026-08-19 — SPK-30 : le locataire qui sature son disque ne vous enferme plus dehors
+
+**Unité** : SPK-30, première `[ ]` de l'ordre du plan. SPK-12, SPK-17 et SPK-29
+sont `[~]` mais bloquées par des dépendances extérieures — un domaine, une
+exécution de CI, une contention sur les trois tranches — et n'ont plus de
+comportement à livrer.
+
+**Ce que le §8.7 avait mesuré, sans le trancher.** `backup.yaml` est écrit par
+Incus **à l'intérieur** du jeu de données contingenté. Disque plein, toute
+reconfiguration échoue, y compris l'agrandissement qui débloquerait. Le remède
+était nommé en une phrase — « quelques dizaines de mébioctets » — sans chiffre,
+sans dire où la marge est posée, ce que la console montre, ni si le pool la
+compte. J'ai donc écrit le **§8.8** et l'ai committé avant la première ligne de
+code.
+
+**Les quatre règles, et celle qui n'allait pas de soi.** Le registre stocke la
+taille vendue et elle seule : le quota est dérivé, donc **aucune migration**. Le
+traducteur pose `vendu + marge`, et c'est le seul endroit du produit où la marge
+apparaît. Elle est **invisible du locataire** — sa limite reste ce qu'on lui a
+vendu, il atteindra 100 % à cette valeur. Et elle est **comptée au pool** :
+c'est le point qui décidait, et c'est le même raisonnement qu'au §8.5 pour l'ARC
+— la marge est réellement prise, un pool qui l'ignorerait promettrait ce qu'il
+n'a pas.
+
+**Une conséquence que je n'avais pas vue en écrivant la spéc**, et qui l'a donc
+complétée : comptée au pool, la marge devient **visible de l'exploitant**. Cinq
+Sparks de 10 Gio et un alloué de 50,3 Gio, sans explication à l'écran, c'est une
+question sans réponse. `GET /v1/host` publie donc deux termes — la marge unitaire,
+qui est le réglage, et son coût total, qui en est la conséquence, calculé au
+serveur où le nombre de Sparks est connu. La console énonce, elle ne recompose
+pas, et ne pose pas la valeur en dur (§27.6).
+
+**Une preuve révisée avec sa raison.** `test_stockage` exigeait
+`size == storage_bytes`. Elle avait raison tant que le produit posait le quota à
+la valeur annoncée — c'est précisément ce que la mesure a montré insoutenable.
+Elle vérifie désormais une somme exacte, et le fichier dit pourquoi.
+
+**Deux défauts trouvés par la preuve, pas par la relecture.** Le comptage des
+Sparks se faisait hors du bloc `with registry()`, donc sur une connexion fermée —
+`Cannot operate on a closed database` à la première requête. Et j'ai failli lire
+`config` dans `_apply`, où la variable est réassignée localement : ç'aurait été un
+`UnboundLocalError` à la création du premier Spark. La configuration du service se
+lit sur `app.state`.
+
+**Vérifié.** 550 tests Python, 215 de console, 6 de contrat, 8 gestes,
+**19 parcours E2E**, 7 contrôles du manuel, build, contrat sans dérive. Illustration
+`m4-pools` reproduite sur la pile seedée — cinq Sparks, 320 Mio annoncés — et
+captures des pools observées à 1440 et 390 px.
+
+**Ce qui n'est PAS prouvé, et pourquoi l'unité reste `[~]`.** Le niveau 3 du
+§8.8.5 : remplir un Spark jusqu'au refus d'écriture puis l'agrandir, sur un hôte
+réel. `which incus` ne rend rien sur cette machine. Les niveaux 1 et 2 prouvent
+que le quota posé porte la marge et que le pool la compte ; ils ne prouvent pas
+qu'elle suffit à `backup.yaml` sur le pilote réel.
+
+**Où reprendre.** **SPK-34**, première `[ ]` suivante et entièrement spécifiée
+(§35 du DAT, migration due). SPK-30 se soldera sur l'hôte, en une manipulation
+courte. SPK-29 attend une contention sur les trois tranches ; SPK-12 un domaine ;
+SPK-17 une exécution de CI. SPK-28, SPK-35, SPK-36 et SPK-42 attendent votre
+arbitrage.
+
+**Environnement.** Machine locale, non `root` : Docker répondait, Node 24.14.1 et
+pnpm 9.15.4 en place, les contournements des §2.1 et §2.1 bis de `CloudWorker.md`
+sans objet. Une session concurrente avait poussé la spécification des outils
+d'administration dans le Spark (SPK-43 à SPK-45) ; l'historique est resté linéaire.

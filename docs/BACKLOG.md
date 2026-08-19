@@ -647,7 +647,7 @@ centrale du produit.
 - La console continue donc de **ne pas** présenter la réservation comme une
   garantie absolue, conformément à la DoD.
 
-### [ ] SPK-30 · Marge de métadonnées au-dessus du quota vendu
+### [~] SPK-30 · Marge de métadonnées au-dessus du quota vendu
 
 Mesuré le 2026-08-18 : un Spark qui remplit son quota empêche Incus d'écrire son
 `backup.yaml`, situé **dans** le jeu de données contingenté. Toute reconfiguration
@@ -669,6 +669,31 @@ Mesuré le 2026-08-18 : un Spark qui remplit son quota empêche Incus d'écrire 
   3. **sur un hôte réel** — remplir un Spark jusqu'au refus d'écriture, puis
      l'agrandir, et constater que l'agrandissement aboutit. C'est le seul niveau
      qui prouve le fait du §8.7. Tant qu'il n'est pas exécuté, l'unité reste `[~]`.
+
+**Le mécanisme est LIVRÉ et prouvé aux niveaux 1 et 2 ; le niveau 3 ne l'est pas.**
+
+- Livré : `SPARKD_STORAGE_METADATA_MARGIN` (défaut 64 MiB, zéro accepté, négatif
+  refusé au démarrage) ; le traducteur pose `taille vendue + marge` ; l'admission
+  évalue la demande marge comprise et l'alloué du pool la porte ; `GET /v1/host`
+  publie la marge unitaire **et** son coût total ; la carte du disque énonce
+  l'écart et nomme la vanne ; M4 l'explique.
+- Aucune migration : le registre stocke la taille vendue et elle seule, le quota
+  est dérivé (§8.8.2 règle 1).
+- Prouvé : 550 tests Python — dont la traduction pour quatre tailles × quatre
+  marges, la marge nulle, la marge négative refusée, l'alloué du pool, le refus
+  de ce qui tiendrait tout juste sans elle, et l'égalité des trois défauts
+  (module, configuration, DAT) ; 215 tests de console ; un parcours E2E qui lit
+  l'explication à l'écran **et** vérifie côté serveur que l'alloué vaut
+  `Σ vendues + marge × Sparks`.
+- Observé : illustration `docs/manuel/images/m4-pools.png`, reproduite depuis la
+  pile seedée — cinq Sparks, 320 Mio de marge annoncés — et captures
+  `e2e/captures/29-hote-pools.png` et `30-hote-mobile.png`, à 1440 et 390 px.
+- **Reste à prouver, et c'est le seul écart** : le niveau 3. Il exige un hôte
+  Incus avec un pool réel, pour remplir un Spark jusqu'au refus d'écriture puis
+  l'agrandir. Aucun Incus n'est joignable depuis la machine de cette session
+  (`which incus` ne rend rien). Les niveaux 1 et 2 prouvent que le quota posé
+  porte bien la marge et que le pool la compte ; ils ne prouvent pas qu'elle
+  suffit à `backup.yaml` sur le pilote réel.
 
 ### [x] SPK-31 · Version minimale d'Incus imposée par le nesting Docker
 

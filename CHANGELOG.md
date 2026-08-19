@@ -203,6 +203,13 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **Marge de métadonnées au-dessus de la taille vendue** (`SPARKD_STORAGE_METADATA_MARGIN`,
+  64 MiB par défaut) : le quota posé sur un Spark n'est plus exactement ce qui lui
+  a été vendu. Sans elle, un Spark qui remplit son disque empêchait Incus d'écrire
+  ses métadonnées et devenait irréconfigurable — pas même agrandissable pour le
+  débloquer. La marge est comptée au pool, à l'admission comme dans l'alloué, et
+  reste invisible du locataire. `GET /v1/host` publie la marge unitaire et son
+  coût total ; la carte du disque énonce l'écart et nomme la vanne.
 - Navigation à trois degrés : barre latérale, onglets de second degré, et fenêtre
   d'un Spark répartie en facettes — Infos, Routes, Clés, Instantanés, Journal.
   Chaque onglet est un lien avec sa propre adresse, jamais un `tablist`.
