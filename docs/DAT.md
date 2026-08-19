@@ -3333,6 +3333,140 @@ Cette identité est **déclarative** : elle attribue, elle ne prouve pas. C'est
 exactement pourquoi la signature reste due. Parler de « signature de l'acteur »
 avant SPK-40 resterait une figure de style.
 
+### 36.9 La chaîne, ligne à ligne : contrat (SPK-38)
+
+Les §36.1 à §36.5 disent ce que la chaîne prouve, contre qui, et quels pièges
+l'annulent. Cette section fixe ce qui s'écrit.
+
+#### 36.9.1 Deux colonnes, et ce qu'elles portent
+
+`audit_log` gagne `entry_hash` et `prev_hash`, en hexadécimal minuscule.
+
+- `entry_hash` = `sha256(serialisation_canonique(ligne))`, où la ligne inclut
+  `prev_hash`. C'est ce chaînage-là qui rend une modification détectable : changer
+  une ligne change son empreinte, donc invalide toutes les suivantes.
+- `prev_hash` = l'`entry_hash` de la ligne précédente. La **première** ligne du
+  journal porte `prev_hash` = `GENESE`, une constante littérale et non une chaîne
+  vide : une chaîne vide se confond avec « colonne oubliée », et la confusion
+  tomberait précisément sur la ligne qui ancre tout le reste.
+
+#### 36.9.2 La sérialisation canonique, figée
+
+C'est le premier piège du §36.5, et il ne se rattrape pas : une vérification qui
+échouerait un an plus tard sans qu'aucune ligne n'ait bougé détruirait la
+confiance dans le dispositif entier.
+
+**Forme, figée une fois pour toutes** : JSON, séparateurs `,` et `:` sans espace,
+clés **triées par ordre d'octets**, échappement `ensure_ascii`, encodage UTF-8.
+
+**Champs retenus, et eux seuls** :
+
+```
+actor, actor_class, action, message, payload, prev_hash,
+result, target_id, target_type, ts
+```
+
+`id` n'y figure **pas**, délibérément : il est attribué par la base, et un
+`ROLLBACK` en consomme sans écrire (§36.5). Le faire entrer dans l'empreinte
+ferait dépendre celle-ci d'un compteur que le produit ne contrôle pas.
+
+Une valeur absente est sérialisée `null`, jamais omise. Omettre une clé produirait
+deux octets différents pour deux lignes équivalentes.
+
+**Toute évolution de cette forme est une rupture de compatibilité**, et se traite
+comme telle : nouvelle version de sérialisation portée par une ligne de point de
+contrôle, jamais un changement en place.
+
+#### 36.9.3 La tête se lit et s'écrit dans la même transaction
+
+`record()` calcule l'empreinte à partir de la tête courante, et insère, sous une
+même transaction. `record()` n'en ouvrait pas — l'appelant décidait si la trace
+devait vivre ou mourir avec son opération (§21.1) — et cela reste vrai : quand une
+transaction est **déjà ouverte**, `record()` n'en ouvre pas une seconde ; sinon il
+en ouvre une pour lui seul.
+
+Ce que cela préserve, et qui compte : un refus journalisé **hors** transaction le
+reste, sans quoi le `ROLLBACK` emporterait la trace — c'est exactement le cas où
+elle sert.
+
+#### 36.9.4 Points de contrôle, et la purge tranchée
+
+**Le journal ne se purge pas.** C'est la décision, prise avant la première ligne
+écrite, comme le §36.5 l'exige.
+
+Motif : à l'échelle de ce produit le journal se compte en milliers de lignes, et
+une purge sans scellement casserait la chaîne de façon indétectable. Le jour où
+le volume l'imposera, la purge passera par une ligne de **point de contrôle**
+(`action = "audit.checkpoint"`) qui porte l'empreinte du préfixe supprimé — et
+elle sera une migration, pas une commande d'exploitation.
+
+Le point de contrôle n'est donc **pas** livré par cette unité, mais la
+vérification le connaît déjà : elle traite une ligne `audit.checkpoint` comme un
+nouveau départ légitime, et non comme une rupture. L'ignorer aujourd'hui
+obligerait à modifier la vérification le jour de la purge, c'est-à-dire au pire
+moment.
+
+#### 36.9.5 Ce que la vérification rend
+
+`GET /v1/audit/verify` — une **lecture**, mais journalisée, comme le §36.7 le
+prévoit pour les vérifications d'intégrité.
+
+```
+{
+  "checked": 1234,          entrées parcourues
+  "head": "…",              empreinte de la dernière ligne, ou null si vide
+  "intact": true|false,
+  "verified_at": "…",
+  "break": null | {         PREMIÈRE rupture, et elle seule
+     "id": 42,
+     "reason": "entry_hash" | "prev_hash",
+     "ts": "…", "action": "…"
+  }
+}
+```
+
+Elle désigne la **première** rupture et s'arrête là. Signaler les suivantes serait
+du bruit : une ligne modifiée invalide mécaniquement toute la suite, et lister
+mille alertes ferait manquer la seule qui compte.
+
+`reason` distingue deux constats qui n'ont pas la même cause : `entry_hash` dit
+que la ligne **elle-même** a été récrite, `prev_hash` dit qu'une ligne a été
+**retirée ou insérée** avant elle.
+
+**Ce que la vérification ne fait PAS** : contrôler la continuité des `id`. Un trou
+est normal (§36.5) — `AUTOINCREMENT` en consomme à chaque `ROLLBACK`, et le §21
+journalise délibérément certains refus hors transaction. Une alerte fausse est la
+meilleure façon de faire ignorer les vraies.
+
+**Ce qu'elle ne peut pas voir** : la troncature. Une chaîne coupée à la fin reste
+parfaitement valide. Seule l'ancre du §36.2 la détecte, et le §36.9.6 dit comment.
+
+#### 36.9.6 L'ancre, tenue par la console
+
+La console retient dans son inventaire local, **par serveur** :
+
+```
+{ "head": "…", "length": 1234, "seenAt": "…" }
+```
+
+À chaque relevé, elle compare ce qu'elle avait vu à ce que le serveur annonce, et
+rend un verdict :
+
+| Verdict | Constat | Ce qu'il signifie |
+|---|---|---|
+| `first` | rien de retenu | premier relevé ; on retient, on ne juge pas |
+| `extends` | longueur ≥ retenue, et la tête retenue est **retrouvée** dans l'histoire | l'histoire prolonge celle qu'on connaît |
+| `unchanged` | tête identique, longueur identique | rien n'a été écrit depuis |
+| `shrunk` | longueur en recul | **troncature** — la chaîne seule ne l'aurait pas vue |
+| `diverged` | longueur suffisante mais tête retenue introuvable | **remplacement** — un journal neuf et cohérent |
+
+`shrunk` et `diverged` sont exactement les deux attaques que le §36.1 dit non
+couvertes par la chaîne. C'est là, et seulement là, qu'elles se voient.
+
+L'ancre n'est mise à jour **que** sur `first`, `extends` et `unchanged`. Écraser
+la référence sur un verdict d'alerte reviendrait à effacer la preuve avec le
+signal : au second relevé, tout paraîtrait normal.
+
 ### 36.8 L'onglet de supervision
 
 Le journal devient une destination de second degré sous **Hôte** (§34.1) : il

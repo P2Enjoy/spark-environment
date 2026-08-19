@@ -212,6 +212,29 @@ Migration `005_journal_acteur`. Les lignes existantes reçoivent `runtime`, pour
 même raison que ci-dessus : leur acteur réel n'est pas connu, et le supposer humain
 inventerait une attribution.
 
+### 9.2 `entry_hash` et `prev_hash` (SPK-38, `docs/DAT.md` §36.9)
+
+Deux colonnes `TEXT`, en hexadécimal minuscule, `NOT NULL` sur toute ligne écrite
+après la migration `006_journal_chaine`.
+
+- `entry_hash` : `sha256` de la sérialisation canonique de la ligne, `prev_hash`
+  compris.
+- `prev_hash` : l'`entry_hash` de la ligne précédente ; `GENESE` sur la première.
+
+`id` **n'entre pas** dans l'empreinte : il est attribué par la base et un
+`ROLLBACK` en consomme sans écrire. La vérification ne contrôle donc jamais la
+continuité des `id` — un trou est normal, et une alerte fausse est la meilleure
+façon de faire ignorer les vraies.
+
+**Les lignes antérieures à la migration ne sont PAS chaînées rétroactivement.**
+Recalculer leurs empreintes produirait une chaîne que rien n'atteste : elle
+prouverait seulement que la migration sait calculer un `sha256`. La migration pose
+donc une ligne de **point de contrôle** qui scelle l'état à cet instant, et la
+chaîne commence là. Ce que le journal ne peut pas prouver, il ne le prétend pas.
+
+Le défaut des deux colonnes est la chaîne vide, ce qui rend les lignes anciennes
+reconnaissables : la vérification les traverse sans les juger, et le dit.
+
 ## 10. `schema_migration`
 
 `version` (PK), `applied_at`, `checksum`. Le démarrage de `sparkd` échoue si une
