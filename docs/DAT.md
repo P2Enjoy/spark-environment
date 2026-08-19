@@ -1473,3 +1473,66 @@ Il vit dans le même pool que le Spark. Il ne protège **ni** de la perte du poo
 **ni** de celle de la machine. La console ne doit jamais le présenter comme une
 sauvegarde : les deux notions restent distinctes dans le modèle comme dans
 l'interface (`docs/SCHEMA.md` §8).
+
+## 20. Métriques d'usage
+
+Relevé le 2026-08-19 sur `/1.0/instances/<nom>/state`. Ce que la mesure impose,
+et ce qu'elle interdit d'afficher.
+
+### 20.1 Ce qui est instantané, et ce qui est un compteur
+
+```
+memory.usage         instantané   → comparable directement
+disk.root.usage      instantané   → comparable directement
+cpu.usage            COMPTEUR     nanosecondes cumulées depuis le démarrage
+network.<if>.counters COMPTEUR    octets cumulés depuis le démarrage
+```
+
+Un compteur ne répond pas à « combien consomme-t-il ». Deux relevés à trois
+secondes d'intervalle ont donné `4 815 083 000` puis `4 817 955 000` ns, soit
+`0,0010 CPU` — un taux qu'aucune lecture unique n'aurait pu produire.
+
+`sparkd` conserve donc le relevé précédent et calcule le taux, **en publiant la
+fenêtre de mesure**. Un taux sans sa fenêtre n'est pas interprétable : « 0,3 CPU »
+sur trois secondes et sur une heure ne disent pas la même chose.
+
+**Au premier relevé, il n'y a pas de fenêtre. Le taux vaut alors `null`, jamais
+`0`.** Annoncer zéro serait affirmer une mesure qu'on n'a pas faite — et zéro est
+une valeur plausible, donc indétectable.
+
+### 20.2 Seule `eth0` compte pour le réseau
+
+Le relevé énumère aussi `docker0` et les `br-*` que Docker crée dans le Spark.
+Ce trafic est **interne au Spark** : il ne traverse jamais le bridge de l'hôte et
+ne consomme aucune bande passante du pool. L'additionner ferait apparaître une
+consommation réseau là où rien n'est sorti, et la fausserait d'autant plus que la
+pile du locataire est bavarde entre ses propres conteneurs.
+
+Seule l'interface rattachée au bridge privé est comptée.
+
+### 20.3 À quoi chaque usage se compare — et à quoi il ne se compare pas
+
+| Usage | Se compare à | Remarque |
+|---|---|---|
+| mémoire | `limits.memory` | plafond réellement appliqué |
+| disque | quota du disque racine | **inclut les instantanés** (§19.4) |
+| CPU | la **réservation** | garantie seulement proportionnelle (§7.3 bis) |
+| réseau | le **plafond** `network.burst` | **jamais** à `network.reservation` |
+
+La dernière ligne est celle qui compte. `network.reservation` est une grandeur de
+comptabilité pour l'admission control (§7.6) : le noyau ne garantit aucun débit.
+Afficher « 40 Mbit/s sur 100 réservés » laisserait croire à une garantie qui
+n'existe pas. La comparaison se fait au plafond, seule valeur que le système
+applique.
+
+De même, une consommation CPU rapportée à la réservation ne dit pas que cette
+réservation est tenue en valeur absolue : tant que SPK-29 n'est pas livrée, elle
+ne l'est qu'entre Sparks.
+
+### 20.4 Un Spark arrêté n'a pas d'usage nul, il n'en a pas
+
+Interroger l'état d'un Spark arrêté ne rend aucune métrique. Le produit répond
+alors que l'usage est **indisponible**, et non nul : un disque occupé reste
+occupé même quand rien ne tourne, et afficher `0` sur les quatre ressources
+laisserait croire qu'un Spark arrêté ne coûte rien. Il coûte son disque, et sa
+place dans la comptabilité (§7.7).
