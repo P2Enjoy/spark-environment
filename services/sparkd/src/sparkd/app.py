@@ -613,7 +613,11 @@ def create_app(config: Config) -> FastAPI:
     @app.exception_handler(protection_service.SparkProtected)
     def _protege(request, exc):  # noqa: ANN001 — signature imposée par Starlette
         refus = _refus_protege(exc)
-        return JSONResponse(status_code=refus.status_code, content=refus.detail)
+        # ENVELOPPÉ dans « detail », comme toute autre erreur du produit : la
+        # console lit `detail.error` partout, et une forme à part pour ce seul
+        # refus l'obligerait à connaître l'exception.
+        return JSONResponse(status_code=refus.status_code,
+                            content={"detail": refus.detail})
 
     @app.get("/v1/sparks/{name}/protection", tags=["protection"])
     def read_protection(name: str) -> dict:
