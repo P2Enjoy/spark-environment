@@ -312,17 +312,24 @@ ctx.server.close();
 // on clique sur le déclencheur, on saisit. Aucune URL directe vers un geste.
 const DETAIL = 'crm-production';
 
-async function ouvrirDetail(base, { largeur = 1440, hauteur = 1200 } = {}) {
+// SPK-33 : la fenêtre répartit ses facettes en onglets (§6.27). Chaque capture
+// montre donc la facette qu'elle illustre.
+async function ouvrirDetail(base, { largeur = 1440, hauteur = 1200, facette = '' } = {}) {
   await page.setViewportSize({ width: largeur, height: hauteur });
   await page.goto(`${base}/#/sparks/${DETAIL}`, { waitUntil: 'domcontentloaded' });
   // Naviguer vers une URL identique ne recharge pas : sans ce rechargement,
   // l'état des panneaux d'une capture précédente survivrait dans la suivante.
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#titre-routes', { timeout: 8000 });
+  await page.waitForSelector('.onglet', { timeout: 8000 });
+  if (facette) {
+    await page.click(`.onglet[href$="/${facette}"]`);
+    await page.waitForSelector(`.onglet[href$="/${facette}"][aria-current="page"]`,
+                               { timeout: 8000 });
+  }
 }
 
 ctx = await demarrer();
-await ouvrirDetail(ctx.base);
+await ouvrirDetail(ctx.base, { facette: 'routes' });
 await page.screenshot({ path: join(SORTIE, '20-panneaux-lecture.png') });
 console.log('  20-panneaux-lecture.png');
 
@@ -336,7 +343,7 @@ await page.screenshot({ path: join(SORTIE, '21-route-formulaire.png') });
 console.log('  21-route-formulaire.png');
 
 // Confirmation de retrait d'une route, ouverte au clavier.
-await ouvrirDetail(ctx.base);
+await ouvrirDetail(ctx.base, { facette: 'routes' });
 await page.focus('[data-retire-route]');
 await page.keyboard.press('Enter');
 await page.waitForSelector('.confirmation', { timeout: 4000 });
@@ -344,21 +351,21 @@ await page.screenshot({ path: join(SORTIE, '22-route-retrait.png') });
 console.log('  22-route-retrait.png');
 
 // Panneau des clés, formulaire ouvert : registre + enregistrement d'une clé neuve.
-await ouvrirDetail(ctx.base);
+await ouvrirDetail(ctx.base, { facette: 'cles' });
 await page.click('[data-ouvre="key"]');
 await page.waitForSelector('#cle-registre');
 await page.screenshot({ path: join(SORTIE, '23-cles-formulaire.png') });
 console.log('  23-cles-formulaire.png');
 
 // Instantanés : prendre, puis confirmer une restauration.
-await ouvrirDetail(ctx.base);
+await ouvrirDetail(ctx.base, { facette: 'instantanes' });
 await page.click('[data-ouvre="snapshot"]');
 await page.waitForSelector('#instantane-nom');
 await page.fill('#instantane-nom', 'avant-bascule');
 await page.screenshot({ path: join(SORTIE, '24-instantane-formulaire.png') });
 console.log('  24-instantane-formulaire.png');
 
-await ouvrirDetail(ctx.base);
+await ouvrirDetail(ctx.base, { facette: 'instantanes' });
 await page.click('[data-restaure="avant-deploiement"]');
 await page.waitForSelector('.confirmation', { timeout: 4000 });
 await page.screenshot({ path: join(SORTIE, '25-instantane-restauration.png') });
@@ -368,7 +375,7 @@ ctx.server.close();
 // LE CŒUR DE L'UNITÉ (§26.5) : le refus nomme les instantanés qui bloquent, et
 // l'acceptation de leur perte n'apparaît qu'À CE MOMENT.
 ctx = await demarrer({ refusRestauration: true });
-await ouvrirDetail(ctx.base);
+await ouvrirDetail(ctx.base, { facette: 'instantanes' });
 await page.click('[data-restaure="avant-deploiement"]');
 await page.waitForSelector('[data-confirme-restauration]');
 await page.click('[data-confirme-restauration]');
@@ -380,12 +387,13 @@ ctx.server.close();
 // Une seule clé autorisée : la conséquence de la révocation est nommée.
 // Et une route enregistrée mais non appliquée (§18.5).
 ctx = await demarrer({ uneSeuleCle: true, routeEnAttente: true });
-await ouvrirDetail(ctx.base);
+await ouvrirDetail(ctx.base, { facette: 'routes' });
 await page.screenshot({ path: join(SORTIE, '27-derniere-cle-et-route-en-attente.png') });
 console.log('  27-derniere-cle-et-route-en-attente.png');
 await page.setViewportSize({ width: 390, height: 844 });
-await page.goto(`${ctx.base}/#/sparks/${DETAIL}`);
-await page.waitForSelector('#titre-routes');
+await page.goto(`${ctx.base}/#/sparks/${DETAIL}/routes`);
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#titre-routes', { timeout: 15000 });
 await page.screenshot({ path: join(SORTIE, '28-panneaux-mobile.png'), fullPage: true });
 console.log('  28-panneaux-mobile.png');
 ctx.server.close();
