@@ -160,11 +160,21 @@ isolé.
 - La plage DHCP dynamique est restreinte à `10.77.0.240-254`, disjointe de celle
   du registre — opération de déploiement, voir `docs/PROD_MIGRATIONS.md`.
 
-### [ ] SPK-11 · Clés SSH et injection cloud-init
+### [x] SPK-11 · Clés SSH et provisionnement de l'accès
 
-- Spécification : `docs/SCHEMA.md` §7
-- DoD : accès `ssh spark-x` réussi via `ProxyJump` depuis le poste ; retrait
-  d'une clé vérifié par un accès effectivement refusé.
+L'injection par cloud-init est **écartée** : elle ne s'exécute qu'au premier
+démarrage, donc ne peut pas retirer une clé (`docs/DAT.md` §17.1).
+
+- Spécification : `docs/DAT.md` §17, `docs/SCHEMA.md` §7
+- **Clos le 2026-08-19, la DoD prouvée depuis le poste.**
+  - Un Spark créé et démarré par `sparkd` **seul** reçoit `openssh-server`,
+    l'authentification par mot de passe désactivée, et les clés voulues.
+  - `ssh -J ubuntu@<hôte> root@10.77.0.16` **réussit** depuis le poste : on entre
+    dans le Spark `neuf`, en `root`.
+  - Après `DELETE /v1/sparks/neuf/ssh-keys/poste-admin`, la même commande rend
+    **`Permission denied (publickey)`**.
+  - Le port 22 du Spark reste injoignable de l'extérieur : l'accès passe par le
+    rebond, jamais par une exposition publique.
 
 ### [ ] SPK-12 · Ingress Caddy et réconciliation
 

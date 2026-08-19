@@ -926,3 +926,54 @@ réellement utilisables : aujourd'hui on les crée et on les démarre, mais on n
 peut pas y entrer pour y déployer une pile Compose. Ensuite **SPK-12**, l'ingress
 Caddy, qui a maintenant l'adresse stable qu'il lui fallait. SPK-29 et SPK-28
 restent ouvertes.
+
+
+---
+
+## 2026-08-19 — SPK-11 close : on entre enfin dans un Spark
+
+**Unité** : SPK-11. Sa spécification — `docs/SCHEMA.md` §7 — annonçait une
+injection des clés **par cloud-init**. La mesure l'a écartée, et le document a été
+corrigé avant de coder.
+
+**Pourquoi cloud-init ne convenait pas.** L'image `images:debian/13` n'embarque ni
+cloud-init ni sshd ; `cloud-init.ssh-keys.*` n'existe pas dans Incus 7.3
+(`Unknown configuration key`) ; mais la raison décisive est ailleurs :
+**cloud-init ne s'exécute qu'au premier démarrage**. Retirer une clé d'un Spark
+existant lui est structurellement hors de portée — or c'est précisément ce que la
+Definition of Done demande de prouver. Une conception fondée dessus aurait eu
+besoin d'un second mécanisme pour le retrait, et deux mécanismes écrivant le même
+état finissent par diverger.
+
+**Décision : un seul mécanisme.** `authorized_keys` est **régénéré en entier**
+depuis l'état voulu du registre, par l'API de fichiers d'Incus, à la création
+comme à chaque changement. Régénérer plutôt qu'ajouter n'est pas un détail de
+mise en œuvre : un mécanisme qui ajoute ne retire jamais.
+
+**La DoD, prouvée depuis le poste.** Un Spark créé et démarré par `sparkd` seul —
+sans intervention manuelle — reçoit `openssh-server`, voit l'authentification par
+mot de passe désactivée, et reçoit les clés voulues. Puis :
+
+```
+ssh -J ubuntu@<hôte> root@10.77.0.16   →  connecté, hôte « neuf », root
+DELETE /v1/sparks/neuf/ssh-keys/poste-admin
+ssh -J ubuntu@<hôte> root@10.77.0.16   →  Permission denied (publickey)
+```
+
+Le port 22 du Spark reste injoignable depuis l'extérieur : c'est une adresse
+privée, et l'accès passe par le rebond.
+
+**Un jeu d'essai fautif, et ce qu'il a révélé.** Une seconde clé de test avait été
+inventée à la main ; elle a été refusée par le contrôle de cohérence entre le type
+annoncé et le corps de la clé. Le contrôle avait raison, le jeu d'essai avait
+tort. Remplacé par une vraie clé produite par `ssh-keygen` — et l'occasion de
+vérifier que l'empreinte calculée par `sparkd` est **identique** à celle de
+`ssh-keygen -lf`, ce qu'un test compare désormais réellement.
+
+**Vérifié.** 321 tests verts, campagne complète verte.
+
+**Où reprendre.** **SPK-12**, ingress Caddy. C'est la dernière pièce qui manque
+pour qu'un Spark serve du trafic public : l'adresse privée est stable (SPK-10),
+on peut y entrer déployer une pile Compose (SPK-11), il reste à router un domaine
+vers elle. Caddy n'est pas encore installé sur l'hôte. SPK-29 et SPK-28 restent
+ouvertes.
