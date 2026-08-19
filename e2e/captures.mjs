@@ -177,6 +177,11 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         { reference: 'images:alpine/3.21', label: 'Alpine 3.21', state: 'unknown',
           verified_at: null, is_default: 0, detail: '' },
       ] }), { status: 200 });
+      // SPK-39 : la vérification de la chaîne est un relevé explicite.
+      if (url.includes('/v1/audit/verify')) return new Response(JSON.stringify({
+        checked: 128, head: 'a1b2c3', length: 128, intact: true,
+        verified_at: '2026-08-19T15:30:00', break: null,
+      }), { status: 200 });
       if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
         { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
         { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'crm.example.com → port 8080.' },
@@ -499,6 +504,32 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(150);
 await page.screenshot({ path: join(SORTIE, '35-images-modale-mobile.png') });
 console.log('  35-images-modale-mobile.png');
+ctx.server.close();
+
+// --- L'onglet de supervision du journal (SPK-39) --------------------------
+// docs/DAT.md §36.8. On y va PAR LA NAVIGATION : accueil, Hôte, onglet Journal.
+ctx = await demarrer();
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.click('nav a[href="#/hote"]');
+await page.waitForSelector('#titre-pools', { timeout: 8000 });
+await page.click('.onglet[href="#/hote/journal"]');
+await page.waitForSelector('#titre-journal-hote', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '40-journal-supervision.png') });
+console.log('  40-journal-supervision.png');
+
+// Le relevé, déclenché AU CLAVIER depuis le bouton.
+await page.focus('[data-action="verifier-chaine"]');
+await page.keyboard.press('Enter');
+await page.waitForFunction(
+  () => document.body.innerText.includes('Chaîne intacte'), { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '41-journal-integrite.png') });
+console.log('  41-journal-integrite.png');
+
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '42-journal-mobile.png'), fullPage: true });
+console.log('  42-journal-mobile.png');
 ctx.server.close();
 
 // --- Le journal et son auteur (SPK-37) ------------------------------------

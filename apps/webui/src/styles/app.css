@@ -416,12 +416,18 @@ tbody tr:hover { background: var(--color-hover); }
 /* SPK-39 · docs/DAT.md §36.8.2 — les filtres du journal. Ils tiennent sur une
    ligne tant que la place le permet, et se replient sinon : un formulaire de
    filtres qui pousse le tableau hors de l'ecran fait perdre ce qu'on filtre. */
+/* Une GRILLE, et non une rangee flexible : `align-items: flex-end` alignait le
+   BAS des champs, or l'un d'eux porte une aide de trois lignes — les libelles
+   partaient alors en escalier. Mesure sur 41-journal-integrite. */
 .filtres {
-  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end;
+  display: grid; gap: var(--space-3); align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border);
 }
-.filtres .champ { flex: 1 1 12rem; min-width: 0; }
-.filtres .formulaire__actions { margin: 0; flex: 0 0 auto; }
+.filtres .champ { min-width: 0; }
+/* Les actions sur leur propre ligne : intercalees entre les champs, elles
+   deplaceraient le bouton a chaque changement de largeur. */
+.filtres .formulaire__actions { margin: 0; grid-column: 1 / -1; }
 /* Une cellule sans valeur le DIT plutot que d'afficher un tiret muet (§14.5). */
 .absence-cellule { color: var(--color-text-3); font-style: italic; }
 

@@ -54,8 +54,11 @@ export function renderAuteurCellule(entree) {
       + `automatique</span>`;
   }
   const qui = entree?.actor && entree.actor !== 'inconnu' ? entree.actor : null;
+  // §6.14 : une cellule dense s'ellipse, mais la valeur complete doit rester
+  // accessible. L'identite porte le serveur ET l'empreinte de cle : tronquee
+  // sans recours, elle ne permettrait plus de distinguer deux postes.
   return qui
-    ? `<span class="technique">${echapper(qui)}</span>`
+    ? `<span class="technique" title="${echapper(qui)}">${echapper(qui)}</span>`
     : '<span class="absence-cellule">auteur non déclaré</span>';
 }
 
