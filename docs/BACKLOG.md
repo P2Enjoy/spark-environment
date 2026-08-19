@@ -1231,7 +1231,7 @@ supprimer ou tronquer, mais **pas fabriquer** un geste authentique (§36.3).
   ligne produite par le runtime n'est signée par personne — la supervision le dit
   au lieu de le masquer.
 
-### [~] SPK-41 · Catalogue local des serveurs, tenu depuis la console
+### [x] SPK-41 · Catalogue local des serveurs, tenu depuis la console
 
 Le catalogue **existe** — `~/.config/spark/servers.json`, validé, sans secret, et
 `GET`/`POST /api/servers` le servent (SPK-16). Ce qui manque, c'est tout ce qui
@@ -1329,13 +1329,30 @@ l'est pas.** Contrat au §22.4 ter du DAT, écrit et committé avant le code.
 - **Observé** : `e2e/captures/44-serveurs.png`, `45-serveurs-ajout.png`,
   `46-serveurs-aucun.png` (l'état que la DoD nomme), et
   `docs/manuel/images/m3-serveurs.png`. Manuel M3 réécrit.
-- **Reste, et c'est le seul écart** : la **modification** d'une entrée existante.
-  Le formulaire ajoute et remplace par le nom — `POST` écrase l'entrée homonyme —
-  mais aucun bouton n'ouvre la modale pré-remplie sur un serveur existant. Le
-  contournement est de le ressaisir sous le même nom, ce qui marche et n'est pas
-  dit. Le **seed** n'est pas touché non plus : l'inventaire vit sur le poste, pas
-  dans le registre, et la pile de développement en écrit déjà un — reste à
-  décider s'il doit en porter deux pour montrer le sélecteur.
+**Close le 2026-08-20.**
+
+- **Modification** d'une entrée existante : chaque ligne porte son bouton, la
+  modale s'ouvre **pré-remplie depuis l'entrée réelle** — un alias n'a ni
+  utilisateur ni port, et les valeurs par défaut rempliraient des champs que le
+  produit ne connaît pas. Le **nom y est en lecture seule** (§22.4.7 ter) : `POST`
+  remplaçant par le nom, le changer créerait une seconde entrée en laissant la
+  première. Le genre, lui, reste modifiable.
+- **Pile de développement** : elle écrivait encore un tableau nu — la forme qui a
+  causé le vol de contexte — et un seul serveur. Elle écrit la version 1 et
+  **deux** serveurs, dont un par alias délibérément injoignable : sans lui, ni le
+  sélecteur ni un tunnel fermé ne se verraient, et l'écran ne présenterait que le
+  cas heureux.
+- **Défaut trouvé sur la capture** : le focus entrait dans le champ « Nom », en
+  lecture seule — la saisie commençait là où elle est impossible. Le composant de
+  modale saute désormais les contrôles verrouillés, ce qui vaut pour toutes les
+  modales du produit.
+- **Preuves** : 617 Python, **305 de console** dont 21 propres à cet écran, 88 de
+  l'hôte console, 6 de contrat, 8 gestes, **26 parcours E2E** dont les trois de
+  cette unité — le parcours complet de la DoD, le refus d'un secret, et la
+  modification qui ne duplique pas —, 7 contrôles du manuel, build, contrat sans
+  dérive.
+- **Observé** : `44-serveurs.png`, `45-serveurs-ajout.png`, `46-serveurs-aucun.png`,
+  `47-serveurs-modifier.png`, et `docs/manuel/images/m3-serveurs.png`.
 
 ### [ ] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
 

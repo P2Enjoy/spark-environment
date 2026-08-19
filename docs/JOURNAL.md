@@ -2949,3 +2949,45 @@ modale pré-remplie, et la décision sur le seed. Puis **SPK-42** (nommer la
 machine) ou SPK-43. SPK-38 se solde d'un parcours E2E — l'onglet de supervision
 existe. SPK-37 se solde d'une mesure sur un vrai tunnel ; SPK-30 et SPK-29 sur
 l'hôte. SPK-28, SPK-35, SPK-36, INC-01 et INC-02 attendent votre arbitrage.
+
+## 2026-08-20 — SPK-41 close : modifier une entrée, sans piéger le renommage
+
+**Unité** : SPK-41, reprise sur son dernier manque — la modification d'une entrée
+existante et la décision sur le seed. La spécification existait ; je n'ai complété
+qu'un point qu'elle ne tranchait pas, le **renommage**, committé avant le code.
+
+**Ce qui est livré.** Chaque ligne porte son bouton « Modifier ». La modale
+s'ouvre pré-remplie depuis l'**entrée réelle** et non depuis ce que l'écran
+affichait : un alias n'a ni utilisateur ni port, et les valeurs par défaut
+rempliraient des champs que le produit ne connaît pas.
+
+**Le nom y est en lecture seule**, et c'est le point qui demandait un arbitrage :
+`POST` remplace par le nom, donc le changer ne renommerait rien — cela créerait
+une seconde entrée en laissant la première, et l'exploitant se retrouverait avec
+un doublon qu'il n'a pas demandé. Le produit ne prétend donc pas renommer, et
+l'écran le dit plutôt que de laisser découvrir le doublon. Le genre, lui, reste
+modifiable : passer de `ssh` à `alias` est justement ce qu'on veut faire quand la
+connexion se complique.
+
+**La pile de développement** écrivait encore un tableau nu — la forme historique,
+celle qui avait causé le vol de contexte corrigé hier — et un seul serveur. Elle
+écrit la version 1 et **deux** serveurs, dont un déclaré par alias et
+délibérément injoignable : sans lui, ni le sélecteur ni un tunnel fermé ne se
+verraient, et l'écran ne présenterait jamais que le cas heureux.
+
+**Un défaut vu sur la capture.** Le focus entrait dans le champ « Nom », en
+lecture seule : la saisie commençait là où elle est impossible. Le composant de
+modale saute désormais les contrôles verrouillés — correction qui vaut pour
+toutes les modales du produit, pas seulement celle-ci.
+
+**Vérifié.** 617 tests Python, **305 de console** dont 21 propres à cet écran, 88
+de l'hôte console, 6 de contrat, 8 gestes, **26 parcours E2E** dont les trois de
+cette unité, 7 contrôles du manuel, build, contrat sans dérive. Capture
+`47-serveurs-modifier` observée.
+
+**Où reprendre.** **SPK-42** (nommer la machine qui porte `sparkd`) — mais son
+arbitrage est attendu de vous —, sinon **SPK-43** (terminal dans un Spark),
+première `[ ]` avec du comportement livrable et spécifiée au §37. SPK-38 se solde
+d'un parcours E2E sur l'ancre — l'onglet existe. SPK-37 se solde d'une mesure sur
+un vrai tunnel ; SPK-30 et SPK-29 sur l'hôte. SPK-28, SPK-35, SPK-36, INC-01 et
+INC-02 attendent votre arbitrage.
