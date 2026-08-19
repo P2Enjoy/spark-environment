@@ -4,6 +4,7 @@
  * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21 ·
  *       docs/DAT.md §26 (les trois panneaux d'administration, §26.2 le contrat
  *       d'interaction, §26.5 l'ordre refus-puis-acceptation) ·
+ *       docs/BACKLOG.md#SPK-22 · docs/DAT.md §27 (l'écran des pools) ·
  *       docs/DESIGN_SYSTEM.md §5.1, §6.13, §6.22, §9.1, §9.7
  */
 
@@ -11,6 +12,7 @@ import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE } from './components/spark-admin.js';
+import { renderHostView } from './components/host-view.js';
 
 const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
@@ -18,11 +20,15 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                route: 'liste', spark: null, detail: {}, confirming: null,
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
                            pools: null, submitting: false },
-               admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } } };
+               admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
+               hote: { status: 'loading', host: null, cores: null,
+                       sparkNames: {}, error: null, syncing: false } };
 
 function peindre() {
   racine.querySelector('.principal').innerHTML =
-    etat.route === 'creation'
+    etat.route === 'hote'
+      ? renderHostView(etat.hote)
+      : etat.route === 'creation'
       ? renderSparkCreate(etat.creation)
       : etat.route === 'detail'
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
@@ -43,6 +49,8 @@ function brancher() {
     });
   }
   racine.querySelector('[data-action="reessayer"]')?.addEventListener('click', router);
+  // §27.8 : le relevé ne détruit rien et n'a aucun paramètre — pas de confirmation.
+  racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
 
   const formulaire = racine.querySelector('#formulaire-spark');
   if (formulaire) {
@@ -295,6 +303,9 @@ async function api(chemin) {
   if (!reponse.ok) {
     const erreur = new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
     erreur.tunnel = corps?.tunnel ?? null;
+    // Le runtime nomme ses refus ; l'appelant en a besoin pour distinguer un
+    // état nommé d'une panne (docs/DAT.md §27.8).
+    erreur.code = corps?.detail?.error ?? null;
     throw erreur;
   }
   return corps;
@@ -385,7 +396,49 @@ async function chargerDetail(nom) {
   peindre();
 }
 
+/**
+ * Écran des pools (docs/DAT.md §27).
+ *
+ * Une topologie jamais relevée répond `409 host_not_synced` : ce n'est pas une
+ * panne mais une machine qu'on n'a pas encore interrogée, et l'écran présente
+ * son remède comme une action (§27.8).
+ */
+async function chargerHote() {
+  etat.route = 'hote';
+  etat.hote.status = 'loading';
+  etat.hote.error = null;
+  peindre();
+  try {
+    etat.hote.host = await api('/v1/host');
+    const [cores, sparks] = await Promise.all([
+      api('/v1/host/cores').catch(() => null),
+      api('/v1/sparks').then((r) => r.sparks).catch(() => []),
+    ]);
+    etat.hote.cores = cores;
+    // La carte des cœurs porte des identifiants de Sparks ; l'écran affiche des
+    // NOMS. Un identifiant interne sans intérêt ne doit pas atteindre l'écran
+    // (docs/DESIGN_SYSTEM.md §3.1).
+    etat.hote.sparkNames = Object.fromEntries(sparks.map((s) => [s.id, s.name]));
+    etat.hote.status = 'ready';
+  } catch (erreur) {
+    etat.hote.error = erreur;
+    etat.hote.status = erreur.code === 'host_not_synced' ? 'not-synced' : 'error';
+  }
+  peindre();
+}
+
+async function relever() {
+  etat.hote.syncing = true;
+  peindre();
+  try {
+    await fetch(`/api/v1/host/sync?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+  } catch { /* l'état réel sera relu ci-dessous */ }
+  etat.hote.syncing = false;
+  await chargerHote();
+}
+
 function router() {
+  if (location.hash === '#/hote') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();
   const nom = (location.hash.match(/^#\/sparks\/(.+)$/) || [])[1];
   if (nom) return chargerDetail(decodeURIComponent(nom));

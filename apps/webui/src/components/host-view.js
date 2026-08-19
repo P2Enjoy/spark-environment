@@ -98,18 +98,28 @@ function renderPool({ cle, nom, format, surengageable, sansFacteur }, pools) {
  */
 export function renderMemoryBreakdown(hote) {
   const total = hote?.memory?.total_bytes;
-  const arc = hote?.reserves?.arc_bytes;
-  const marge = hote?.reserves?.memory_bytes;
   const allouable = hote?.pools?.memory?.capacity;
   if (total == null || allouable == null) return '';
 
+  const reserve = hote?.reserves?.memory_bytes ?? 0;
+  const arc = hote?.reserves?.arc_bytes;
+  const marge = hote?.reserves?.margin_bytes;
+
+  // Les deux termes ne sont renseignés qu'à partir du relevé qui suit la
+  // migration 002. Tant qu'ils valent zéro alors que la réserve ne l'est pas,
+  // on n'a que la somme — on l'affiche comme telle, sans inventer la répartition.
+  const detaille = (arc ?? 0) + (marge ?? 0) === reserve && reserve > 0;
+
   const lignes = [
     ['Mémoire de la machine', formatBytes(total), ''],
-    ...(arc != null ? [['− plafond de l’ARC ZFS', formatBytes(arc),
-      'ZFS peut le prendre à tout instant : une réserve qui l’ignore promet une '
-      + 'mémoire que le noyau reprendra sous les Sparks.']] : []),
-    ...(marge != null ? [['− marge d’exploitation', formatBytes(marge),
-      'Ce que l’hôte consomme pour lui-même. Réglable par SPARKD_MEMORY_RESERVE.']] : []),
+    ...(detaille
+      ? [['− plafond de l’ARC ZFS', formatBytes(arc),
+          'ZFS peut le prendre à tout instant : une réserve qui l’ignore promet une '
+          + 'mémoire que le noyau reprendra sous les Sparks. Se règle par zfs_arc_max.'],
+         ['− marge d’exploitation', formatBytes(marge),
+          'Ce que l’hôte consomme pour lui-même. Se règle par SPARKD_MEMORY_RESERVE.']]
+      : [['− réserve de l’hôte', formatBytes(reserve),
+          'Le détail de cette réserve sera connu au prochain relevé de topologie.']]),
     ['= mémoire allouable', formatBytes(allouable), ''],
   ];
 

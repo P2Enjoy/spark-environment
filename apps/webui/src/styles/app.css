@@ -330,3 +330,33 @@ tbody tr:hover { background: var(--color-hover); }
   border-radius: var(--radius-md); overflow-x: auto;
   font-size: var(--text-compact); line-height: 1.5;
 }
+
+/* SPK-22 · docs/DAT.md §27 — l'écran des pools de l'hôte. */
+.pools { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
+@media (min-width: 768px)  { .pools { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1280px) { .pools { grid-template-columns: repeat(4, 1fr); } }
+.pool > * + * { margin-top: var(--space-2); }
+.pool h3 { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.definitions--serrees .def { grid-template-columns: 1fr auto; gap: var(--space-2); }
+.definitions--serrees dd { text-align: right; }
+
+/* §27.3 : la soustraction se lit comme un calcul, sa dernière ligne est le total. */
+.soustraction .def { grid-template-columns: 1fr auto; align-items: start; }
+.soustraction dt { display: grid; gap: var(--space-1); }
+.soustraction dd { text-align: right; white-space: nowrap; }
+.def--total { border-top: 1px solid var(--color-border); padding-top: var(--space-2); }
+.def--total dt, .def--total dd { font-weight: 700; color: var(--color-ink); }
+
+/* §27.4 : la carte des cœurs. Un cœur dédié se distingue par sa TEINTE et par
+   son libellé, jamais par la seule couleur (DESIGN_SYSTEM.md §1.5). */
+.coeurs { list-style: none; margin: 0; padding: 0;
+          display: grid; gap: var(--space-2);
+          grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+.coeur { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-3);
+         min-height: var(--size-target);
+         border: 1px solid var(--color-border); border-radius: var(--radius-md);
+         background: var(--color-bg); }
+.coeur--dedie { background: var(--color-brand-soft); border-color: var(--color-brand); }
+.coeur__id { font-size: var(--text-compact); }
+.coeur__role { font-size: var(--text-compact); color: var(--color-text-2); }
+.coeur--dedie .coeur__role { color: var(--color-brand-on-soft); font-weight: 700; }
