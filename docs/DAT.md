@@ -1787,3 +1787,57 @@ Les paires terme/valeur utilisent `dl`/`dt`/`dd` (§6.4). Une donnée absente
 **n'est pas rendue** ; une absence qui informe est nommée : « Aucune route
 publique », « Aucune clé autorisée » — un Spark sans clé n'est pas un Spark dont
 on ignore les clés.
+
+## 25. L'écran de création : montrer sans décider
+
+### 25.1 Une estimation qui informe, jamais qui bloque
+
+La DoD de SPK-20 demande deux choses qui semblent s'opposer : afficher la
+capacité restante **avant** validation, et faire venir le refus de `sparkd`
+**seulement**. Elles ne s'opposent pas, à condition de séparer *montrer* de
+*décider*.
+
+L'écran affiche la capacité restante — c'est ce qui permet de dimensionner un
+Spark sans tâtonner. Il **n'interdit rien** sur cette base :
+
+- le bouton de création n'est **jamais** désactivé parce que l'estimation locale
+  juge la demande trop grande ;
+- lorsque l'estimation dit que ça ne tiendra pas, l'écran **avertit** et laisse
+  soumettre.
+
+Motif, et il est concret : la capacité affichée est une photographie prise à
+l'ouverture de l'écran. Un Spark supprimé entre-temps l'a rendue fausse — dans le
+sens favorable. Bloquer sur une valeur périmée refuserait une création que le
+serveur aurait acceptée, et l'exploitant n'aurait aucun moyen de le savoir.
+`docs/DESIGN_SYSTEM.md` §14.9 dit la même chose : ne pas désactiver une action
+parce que l'interface *pense* qu'elle sera refusée.
+
+L'avertissement local utilise donc `accent`, pas `danger` : il annonce un risque,
+pas un refus. Seul le refus renvoyé par `sparkd` utilise `danger`.
+
+### 25.2 Un refus n'efface pas la saisie
+
+Le refus d'admission de `sparkd` chiffre ce qui manque, ressource par ressource
+(§7.7). L'écran le rend tel quel, **près du bouton**, et conserve intégralement
+les valeurs saisies (`docs/DESIGN_SYSTEM.md` §7.1).
+
+Perdre un formulaire de dix champs parce que la mémoire demandée dépassait de
+2 Gio serait une punition disproportionnée — et pousserait à demander moins que
+nécessaire pour éviter d'avoir à ressaisir.
+
+### 25.3 Ce que le formulaire refuse lui-même, et pourquoi ce n'est pas la même chose
+
+Deux contrôles restent **locaux**, et ils ne relèvent pas de l'admission :
+
+- **la forme d'un nom** — minuscules, chiffres, tirets. Ce n'est pas une question
+  de capacité mais de syntaxe, connue sans interroger le serveur, et le dire
+  immédiatement évite un aller-retour inutile ;
+- **la cohérence du mode CPU** — un mode `dedicated` demande des cœurs, un mode
+  `capped` un plafond. Là encore, une règle de forme.
+
+Ces deux contrôles sont **doublés** par le runtime, qui refuserait de la même
+façon (`docs/SCHEMA.md` §4). Ils rendent l'écran agréable ; ils ne le rendent pas
+autoritaire.
+
+La distinction est celle du §14.9 : un champ **mal formé** se signale tout de
+suite, un champ **qui ne tiendra peut-être pas** se soumet quand même.

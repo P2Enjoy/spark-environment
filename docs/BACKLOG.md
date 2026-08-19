@@ -309,8 +309,12 @@ commandes que le runtime déclare possibles.
 
 Afficher la capacité restante avant validation, et le refus motivé du backend.
 
+- Spécification : `docs/DAT.md` §25 · `docs/DESIGN_SYSTEM.md` §6.9, §6.12,
+  §7.1, §14.9
 - DoD : le refus provient de `sparkd`, jamais d'un contrôle uniquement côté
-  interface.
+  interface ; le bouton de création n'est jamais désactivé sur la foi de
+  l'estimation locale ; un refus conserve la saisie et chiffre ce qui manque ;
+  états chargement et erreur traités ; navigation clavier ; captures observées.
 
 ### [ ] SPK-21 · Écrans ingress, clés SSH, snapshots
 
