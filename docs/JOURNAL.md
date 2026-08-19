@@ -2991,3 +2991,54 @@ première `[ ]` avec du comportement livrable et spécifiée au §37. SPK-38 se 
 d'un parcours E2E sur l'ancre — l'onglet existe. SPK-37 se solde d'une mesure sur
 un vrai tunnel ; SPK-30 et SPK-29 sur l'hôte. SPK-28, SPK-35, SPK-36, INC-01 et
 INC-02 attendent votre arbitrage.
+
+## 2026-08-20 — Six arbitrages rendus par le responsable
+
+Aucun code cette fois : c'est une session d'**arbitrage**, sollicitée par le
+responsable, et sa persistance immédiate (CLAUDE.md §5). Ce qui suit était en
+attente depuis plusieurs sessions et bloquait autant d'unités.
+
+**SPK-42 — la machine est une « Forge ».** Elle n'avait pas de nom : on disait
+« l'hôte », mot déjà pris par le processus Node du poste. *Forge* lève la
+collision, se pluralise, survit en identifiant de code et en segment d'URL, et ne
+ment pas sur la portée — c'est une machine, pas une grappe. Le renommage touche
+le glossaire, l'interface, le manuel, la table `host`, la route `/v1/host`, le
+contrat et ses types, `servers.json`. **À faire tôt** : chaque unité livrée après
+cet arbitrage en augmente le coût.
+
+**SPK-35 — le modèle de menace s'écrit d'abord, sans choisir d'option.** L'unité
+devient une instruction pure. SPK-40 reste subordonnée à cet arbitrage et ne peut
+pas être livrée avant lui.
+
+**INC-01 — la console traduit à l'affichage.** Le journal reste un enregistrement
+technique : il sert aussi au diagnostic, et y écrire du vocabulaire d'interface le
+rendrait moins précis pour gagner en confort au mauvais endroit. Règle au **§21.5
+bis**, correction portée par la nouvelle unité **SPK-46** — qui interdit
+explicitement de deviner : ce que la console ne reconnaît pas est affiché tel
+quel.
+
+**INC-02 — statu quo assumé.** Un refus journalise sa cause, pas la demande :
+écrire le nom d'une entité qui n'a jamais existé ferait croire à la trace de
+quelque chose qui a été. Ce qui distingue deux refus est **qui** les a demandés
+(§21.6) et quand. Règle au **§21.5 ter**, et l'entrée est **retirée du registre** —
+elle n'est plus une incohérence, c'est une décision.
+
+**SPK-28 — l'environnement est une démonstration, le pool fichier suffit.**
+L'unité change de nature : elle ne vise plus un repartitionnement, mais le
+**schéma de partitionnement JSON à fournir à Scaleway** à la création du serveur,
+pour qu'une machine neuve arrive déjà bien découpée — et la **configurabilité**
+de tout ce qui touche au stockage. Le §8.5 cessera de présenter le pool natif
+comme « la cible » et le pool fichier comme un repli : deux dispositions, avec ce
+que chacune apporte et ce qu'elle ne protège pas.
+
+**SPK-36 — commencer par la sauvegarde du registre.** Sauvegarde **et**
+restauration, avec un test qui rejoue la restauration : c'est le seul scénario du
+lot qui se livre en code vérifiable ici plutôt qu'en document. L'exercice réel que
+la DoD exige appartient au responsable, sur l'hôte.
+
+**Où reprendre.** **SPK-42** en priorité — le renommage en *Forge*, dont le coût
+croît à chaque unité livrée. Puis SPK-46 (la traduction), SPK-36 (la sauvegarde du
+registre), SPK-28 (le schéma Scaleway et la configurabilité), SPK-35
+(l'instruction). SPK-38 se solde d'un parcours E2E ; SPK-37 d'une mesure sur un
+vrai tunnel ; SPK-30 et SPK-29 sur l'hôte. Il ne reste plus **aucun** arbitrage en
+attente, hors INC-03.

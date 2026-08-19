@@ -721,19 +721,39 @@ le contourne pas puisque le profil fautif est celui du Spark. Le correctif est d
   des dépôts Ubuntu interdite, et installation **avant** la création du moindre
   Spark. Ce n'est pas une préférence, c'est une condition de fonctionnement.
 
-### [ ] SPK-28 · Décision et exécution du repartitionnement du stockage
+### [ ] SPK-28 · Partitionnement fourni à la création du serveur
 
-Les deux disques sont intégralement consommés par un unique RAID1 `ext4` monté sur
-`/`. Aucun périphérique bloc n'est libre pour un pool de stockage natif.
+**Arbitrage du responsable, 2026-08-20.** L'environnement de validation est une
+**démonstration** : le pool sur fichier y suffit, et il cesse d'être « provisoire ».
+Ce qui est dû n'est plus un repartitionnement de la machine existante, mais le
+moyen d'obtenir d'emblée une machine bien partitionnée — et de rendre le reste
+configurable.
 
-- Spécification : `docs/DAT.md` §8.2, §8.5, §8.6
-- Décision du responsable, 2026-08-18 : **pool sur fichier, à titre provisoire**.
-  Le pool natif en miroir reste la cible ; l'unité reste donc ouverte.
-- DoD : une paire de partitions dédiées existe et porte le pool. Le pool sur
-  fichier ne clôt pas cette unité, il en diffère l'échéance.
-- Note d'exploitation : `md1` resynchronisait au moment du relevé, pour environ
-  8 heures. Aucune mesure de débit disque n'a de valeur avant la fin de cette
-  resynchronisation.
+L'unité change donc de nature, et son ancienne DoD — « une paire de partitions
+dédiées existe » — est abandonnée avec sa raison : repartitionner une machine de
+démonstration coûterait une réinstallation pour un gain qu'aucun usage réel ne
+réclame ici.
+
+- Spécification : `docs/DAT.md` §8.2, §8.5, §8.6 · `README.md`.
+- Portée :
+  1. le `README.md` compose le **schéma de partitionnement JSON** à fournir à
+     Scaleway à la création du serveur, qui laisse d'emblée une paire de
+     partitions libres pour le pool ZFS en miroir. Un exploitant qui part d'une
+     machine neuve n'a alors rien à repartitionner ;
+  2. **tout est configurable** : chemin du pool, taille du fichier lorsque c'est
+     un pool fichier, nom du pool, point de montage. Aucune de ces valeurs ne
+     reste codée en dur, ni dans les scripts, ni dans le contrat de déploiement.
+- Le §8.5 cesse de présenter le pool natif comme « la cible » et le pool fichier
+  comme un repli : il énonce les deux comme deux dispositions, avec ce que
+  chacune apporte et ce qu'elle ne protège pas — sur fichier, ZFS ne gère pas le
+  miroir et ne répare pas la corruption silencieuse.
+- DoD : le schéma JSON figure au README, avec ce qu'il produit et comment le
+  fournir ; un exploitant qui suit le README obtient les partitions attendues ;
+  aucune valeur de stockage n'est codée en dur — vérifié par une recherche, pas
+  par mémoire ; le §8.5 et le contrat de déploiement disent la même chose que le
+  README.
+- Note d'exploitation conservée : aucune mesure de débit disque menée sur le pool
+  fichier ne caractérise la machine.
 
 ### [x] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
 
@@ -964,6 +984,14 @@ sa clé.
 L'unité instruit cette question, et elle commence par ce qui manque le plus :
 **écrire le modèle de menace**. Sans lui, chaque option se discute au sentiment.
 
+**Arbitrage du responsable, 2026-08-20 : le modèle de menace s'écrit D'ABORD, et
+aucune option technique n'est choisie dans cette unité.** Elle est une
+instruction pure — menaces hiérarchisées, options évaluées contre chacune, ce que
+le produit ne prétend pas traiter — et le choix se fait ensuite, sur pièces.
+
+Conséquence directe : **SPK-40** (signature des gestes par la clé du responsable)
+reste subordonnée à cet arbitrage, et ne peut pas être livrée avant lui.
+
 Menaces à nommer et à hiérarchiser, au minimum :
 
 - une **clé SSH d'accès à l'hôte** volée, copiée ou restée active après un départ ;
@@ -1001,6 +1029,13 @@ panne — la liste est ouverte, elle n'est pas un menu à cocher :
   dehors ; rien n'est implémenté sous cette unité.
 
 ### [ ] SPK-36 · Instruire les plans de contingence et les gestes d'urgence
+
+**Arbitrage du responsable, 2026-08-20 : commencer par la SAUVEGARDE DU REGISTRE.**
+C'est le scénario le moins coûteux et le plus évident du lot, et c'est le seul du
+lot qui se livre en **code vérifiable ici** plutôt qu'en document : sauvegarde ET
+restauration, avec un test qui rejoue la restauration. Les six autres scénarios
+suivront, et l'exercice réel que la DoD exige appartient au responsable, sur
+l'hôte.
 
 Le produit n'a **aucun** document d'urgence. Ce qu'il faut faire quand le pool
 disparaît, quand l'hôte ne redémarre pas, quand le registre est corrompu ou
@@ -1356,14 +1391,19 @@ l'est pas.** Contrat au §22.4 ter du DAT, écrit et committé avant le code.
 
 ### [ ] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
 
-**Question ouverte, en attente d'arbitrage.** Un Spark est une fraction de
-machine, `sparkd` est le démon — la machine, elle, n'a pas de nom de produit.
-Elle est appelée « l'hôte », terme déjà pris : le §22 nomme « hôte console » le
-processus Node du poste local. Le même mot désigne donc deux machines
-différentes, et la console affiche les deux.
+**ARBITRÉ le 2026-08-20 : la machine est une « Forge ».**
 
-- Candidats instruits dans `docs/JOURNAL.md` (entrée du 2026-08-19) : **Forge**,
-  **Foyer**, et les écartés avec leur motif.
+Un Spark est une fraction de machine, `sparkd` est le démon — la machine, elle,
+n'avait pas de nom de produit. Elle était appelée « l'hôte », terme déjà pris :
+le §22 nomme « hôte console » le processus Node du poste local. Le même mot
+désignait donc deux machines différentes, et la console affichait les deux.
+
+**Forge** lève la collision, se pluralise sans ambiguïté, survit en identifiant
+de code comme en segment d'URL, et ne ment pas sur la portée : une Forge est
+**une** machine, pas une grappe. Elle produit des Sparks, ce que le mot dit.
+
+- Candidats instruits dans `docs/JOURNAL.md` (entrée du 2026-08-19) : **Forge**
+  — retenu —, **Foyer**, et les écartés avec leur motif.
 - Critères retenus pour trancher : lever la collision avec « hôte console » ;
   survivre en identifiant de code et en segment d'URL ; se pluraliser sans
   ambiguïté ; ne pas mentir sur la portée — c'est **une** machine, pas une grappe.
@@ -1379,6 +1419,29 @@ différentes, et la console affiche les deux.
   dans le sens visé — vérifié par une recherche, pas par mémoire ; migration de
   la table et du contrat livrées ensemble ; `make contract-check` vert ; manuel
   et captures refaits.
+
+### [ ] SPK-46 · La console traduit les états que le serveur rapporte
+
+**Arbitrage du responsable, 2026-08-20** (registre, INC-01) : le journal reste un
+enregistrement technique, et c'est la **console** qui traduit à l'affichage.
+
+- Spécification : `docs/DAT.md` §21.5 bis · `docs/DESIGN_SYSTEM.md` §14.7 ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-01 (les libellés d'état).
+- Portée : les messages venus du serveur — journal d'audit, erreurs de l'hôte
+  console — sont traduits **à l'affichage**, sur les formes que la console sait
+  reconnaître : les transitions d'état (« `starting` → `running` ») et les états
+  de tunnel (« broken »). Un seul endroit, partagé par la facette *Journal* d'un
+  Spark et l'onglet de supervision.
+- **Ce qu'elle ne fait pas** : deviner. Ce que la console ne reconnaît pas est
+  affiché **tel quel**, sans être déformé — un message inconnu mal traduit serait
+  pire que le même message resté technique. Aucun message n'est réécrit côté
+  serveur.
+- DoD : un test prouve qu'une transition connue est traduite dans les DEUX
+  surfaces ; un test prouve qu'un message inconnu traverse **intact** ; le
+  message d'erreur de tunnel du §22.3 est traduit lui aussi, ce que le registre
+  signalait comme le même motif ; captures de la facette *Journal* et de l'onglet
+  de supervision refaites et observées ; INC-01 retiré du registre dans le même
+  changement.
 
 ### [ ] SPK-43 · Terminal dans un Spark depuis la console
 

@@ -1755,6 +1755,39 @@ Un **refus** est journalisé au même titre qu'un succès (`docs/SCHEMA.md` §9)
 C'est précisément la trace qui manque toujours quand on en a besoin : personne
 n'enquête sur une opération qui a réussi.
 
+### 21.5 bis Le vocabulaire du journal, et qui le traduit
+
+**Arbitrage du responsable, 2026-08-20** (registre, INC-01).
+
+Le journal reste un **enregistrement technique** : `sparkd` continue d'y écrire
+« `starting` → `running` », qui est ce que le runtime a réellement fait. C'est la
+**console qui traduit** à l'affichage, en reconnaissant les états rapportés et en
+posant les libellés du §14.7.
+
+Motif : le journal sert aussi au diagnostic, et y écrire du vocabulaire
+d'interface le rendrait moins précis pour gagner en confort — au mauvais endroit.
+La traduction vit donc à un seul endroit, celui qui affiche.
+
+Ce que cela n'est pas : une traduction qui devinerait. La console ne traduit que
+les formes qu'elle **sait** reconnaître ; ce qu'elle ne reconnaît pas est affiché
+tel quel, sans être déformé. Un message inconnu mal traduit serait pire que le
+même message resté technique.
+
+Porté par `docs/BACKLOG.md#SPK-46`.
+
+### 21.5 ter Un refus ne porte pas le nom demandé
+
+**Arbitrage du responsable, 2026-08-20** (registre, INC-02).
+
+Un refus d'admission journalise sa **cause**, pas la demande qui l'a provoqué : ni
+le nom souhaité, ni un identifiant d'entité — la transaction est annulée, aucune
+ligne n'existe, et écrire au journal la donnée d'une entité inexistante ferait
+croire à une trace de quelque chose qui a été.
+
+Ce qui distingue deux refus consécutifs est donc **qui les a demandés** (§21.6) et
+**quand**, pas ce qu'ils visaient. C'est assumé et écrit ici plutôt que laissé
+comme un manque.
+
 ### 21.6 Qui a agi : contrat de l'acteur (SPK-37)
 
 Le §36.7 posait le constat : `actor` valait la chaîne littérale « responsable »

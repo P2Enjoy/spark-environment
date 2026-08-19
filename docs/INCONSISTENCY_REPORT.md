@@ -57,43 +57,14 @@ connue »), pour que le lecteur ne cherche pas une erreur là où il n'y en a pa
 
 L'impact reste inchangé : lisibilité seulement.
 
-**Arbitrage attendu du responsable** : les messages produits par le serveur —
-journal d'audit, erreurs de l'hôte console — doivent-ils rester un enregistrement
-technique, auquel cas le §14.7 gagne une exception écrite, ou la console
-doit-elle traduire les états qu'ils rapportent ?
+**ARBITRÉ le 2026-08-20 : la console traduit à l'affichage.** Le journal reste un
+enregistrement technique — il sert aussi au diagnostic, et y écrire du vocabulaire
+d'interface le rendrait moins précis pour gagner en confort au mauvais endroit.
+La règle est écrite au §21.5 bis du DAT.
 
-### INC-02 · Un refus de création n'est rattachable à aucune demande
-
-**Constaté le** 2026-08-19, en éprouvant le seed contre le runtime réel.
-
-**Mesure.** Un refus d'admission écrit bien au journal :
-
-```
-action    = spark.create
-result    = denied
-target_id = 31da918ad7146b4491007b81
-message   = Capacité insuffisante — memory : 549755813888 octets demandés,
-            920260608 disponibles (…) — il manque 548835553280 octets
-```
-
-Le `target_id` est l'identifiant d'un Spark **qui n'a jamais existé** : la
-transaction a été annulée, aucune ligne n'a été écrite. Il ne désigne donc rien.
-Et le message ne porte pas le **nom demandé**.
-
-Conséquence : trois refus consécutifs sont indiscernables au journal. On lit
-trois fois « Capacité insuffisante » sans pouvoir dire quelle demande a été
-refusée, ni par qui, ni pour quel Spark.
-
-**Pourquoi ce n'est pas corrigé ici.** Le contenu du journal d'audit relève du
-§21 et de SPK-15. Décider si un refus doit porter le nom demandé — donc écrire
-au journal une donnée d'une entité inexistante — est un arbitrage sur ce
-contrat, pas sur l'unité en cours.
-
-**Impact.** Diagnostic. Aucune décision automatique ne s'appuie sur ce champ.
-
-**Arbitrage attendu du responsable** : un refus doit-il porter le nom demandé
-dans son `message`, et `target_id` doit-il rester vide plutôt que de désigner un
-identifiant sans objet ?
+Cette entrée **n'attend plus d'arbitrage** ; elle reste ouverte jusqu'à ce que la
+traduction soit livrée, ce qui est l'objet de `docs/BACKLOG.md#SPK-46`. Elle sera
+retirée d'ici dans le même changement.
 
 ### INC-03 · Un Spark dont l'instance a disparu ne peut plus être supprimé
 
