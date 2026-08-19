@@ -148,6 +148,9 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- Écran du catalogue d'images : onglet Images sous Hôte, avec la date du dernier
+  relevé, les trois états et ce que le relevé a constaté. Ajout et relevé s'y
+  font.
 - Catalogue d'images vérifié : une référence inexistante est refusée **à la
   création** et non plus à l'application, et l'image se choisit dans une liste.
   Migration `003_catalogue_images` ; routes `GET/POST /v1/images` et

@@ -2153,3 +2153,45 @@ fiction, et ce dépôt ne déclare pas fait ce qui n'a pas été éprouvé.
 
 Aucun test exécuté : ce chunk n'ajoute que des unités de backlog et leur trace.
 
+
+
+---
+
+## 2026-08-19 — SPK-32 close : le catalogue a enfin un écran
+
+**Unité** : SPK-32, reprise. Sa spécification existait (§33, et §34.1 pour la
+place de l'écran) : je ne l'ai pas réécrite, je suis allé au code.
+
+**Ce qui manquait, et pourquoi c'était le manque utile.** Le catalogue existait
+par l'API : le relevé était daté et ses trois états distingués, mais rien ne les
+affichait. Un exploitant ne pouvait pas voir qu'une image avait disparu de son
+dépôt. L'onglet Images sous Hôte le montre désormais — date, états, et ce que le
+relevé a constaté pour chaque entrée.
+
+**Les trois états observés de bout en bout, contre le vrai dépôt.** Une image
+ajoutée par l'interface naît « Non relevée » ; le relevé la donne ensuite
+« Absente des 272 produits publiés ». « Non relevée » est en `accent` et non en
+`danger` : ce n'est pas une panne mais un relevé qui n'a pas eu lieu, et les
+confondre ferait conclure à une image retirée du dépôt.
+
+**Les onglets du second degré sont des liens**, pas un `tablist` : on doit
+pouvoir recharger la page sur « Images ». C'est le §34.1, et les preuves le
+gardent.
+
+**Un défaut trouvé par le parcours E2E, et il ne venait pas du catalogue.** Le
+formulaire de création était peint **deux fois** — une fois vide, une fois les
+pools reçus — et une saisie faite entre les deux était effacée par le second
+rendu. La fenêtre s'est élargie quand j'ai ajouté la requête du catalogue, et le
+refus de capacité a cessé d'arriver parce que le nom avait disparu de la saisie.
+Le formulaire n'est plus peint qu'une fois.
+
+**Vérifié.** 539 tests Python, 207 Node, 6 de contrat, 10 gestes, **14 parcours
+E2E**, 7 contrôles du manuel, build, contrat sans dérive, illustrations
+régénérées et écran observé.
+
+**Où reprendre.** **SPK-33**, la refonte de navigation selon les trois degrés :
+les onglets du second degré existent maintenant sous Hôte, il reste la barre
+latérale du premier degré et la fenêtre d'un Spark. Puis SPK-30, libre et
+entièrement spécifiée. SPK-29 attend une contention sur les trois tranches de
+l'hôte ; SPK-12 un domaine ; SPK-17 une exécution de CI ; SPK-28, INC-01, INC-02
+et INC-03 votre arbitrage.

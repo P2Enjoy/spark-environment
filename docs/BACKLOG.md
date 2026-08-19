@@ -698,7 +698,7 @@ Les deux disques sont intégralement consommés par un unique RAID1 `ext4` mont�
   8 heures. Aucune mesure de débit disque n'a de valeur avant la fin de cette
   resynchronisation.
 
-### [~] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
+### [x] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
 
 `spark.image` est aujourd'hui un texte libre, et le seul contrôle local porte sur
 le **dépôt**, pas sur l'alias : `translate.split_image()` accepte
@@ -738,13 +738,24 @@ ligne du registre a été écrite et la ressource comptée (§14.2) ; le Spark r
 - Le seed employait `images:debian/99` pour provoquer son Spark en erreur, ce que
   l'unité rend impossible. Il s'appuie désormais sur sa seule injection de faute —
   le vrai chemin d'erreur, au lieu d'une référence impossible.
-- **Reste à livrer**, et c'est pourquoi l'unité n'est pas `[x]` :
-  1. le **parcours E2E** que la DoD exige — l'absence de champ libre n'est
-     prouvée que par un test de rendu ;
-  2. **le relevé n'a pas d'écran**. L'API le date et distingue les trois états,
-     mais rien ne les affiche : ni la date, ni `missing`, ni `unknown`. Un
-     exploitant ne peut pas voir qu'une image a disparu de son dépôt.
-- Le geste d'ajout au catalogue existe par l'API, pas par l'interface.
+- **Close le 2026-08-19.** Les deux manques sont livrés.
+  1. **L'écran du catalogue** — onglet Images sous Hôte, comme le §34.1 le
+     prescrit. Il affiche la date du dernier relevé, les trois états avec des
+     libellés et des couleurs distincts, et ce que le relevé a constaté pour
+     chaque entrée. « Non relevée » est en `accent` et non en `danger` : ce n'est
+     pas une panne mais un relevé qui n'a pas eu lieu. Les entrées absentes
+     restent affichées, et l'écran dit pourquoi.
+  2. **Trois parcours E2E** depuis l'accueil, à la souris : l'absence de champ
+     libre, les options comparées à ce que `sparkd` déclare proposable, et le
+     geste d'ajout qui crée une entrée non relevée.
+- Le geste d'ajout existe désormais par l'interface, et le relevé aussi.
+- Les trois états ont été observés de bout en bout contre le vrai dépôt :
+  `images:debian/31` ajoutée naît « Non relevée », puis le relevé la donne
+  « Absente des 272 produits publiés ».
+- **Un défaut trouvé par le parcours E2E** : le formulaire de création était
+  peint deux fois, et une saisie faite entre les deux était effacée par le second
+  rendu. La fenêtre s'est élargie quand le catalogue a ajouté une requête, et le
+  refus de capacité n'arrivait plus parce que le nom avait disparu.
 
 ### [ ] SPK-33 · Refonte de la navigation selon les trois degrés
 
