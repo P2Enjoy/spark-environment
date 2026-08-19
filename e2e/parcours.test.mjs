@@ -153,6 +153,136 @@ test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacit
   });
 });
 
+// --- SPK-34 · LES SPARKS PROTÉGÉS (§35) -------------------------------------
+
+/** Le mot de passe du seed. Ce n'est PAS un secret : la protection est un
+ *  garde-fou, pas un contrôle d'accès (§35.1), et le manuel M8 le publie. */
+const MOT_DE_PASSE = 'protege-moi';
+
+test('armer, échouer à modifier, lever, modifier, réarmer — au clavier', async () => {
+  await parcours('protection', async () => {
+    // « boutique » est libre dans le seed : on l'arme nous-mêmes, depuis l'écran.
+    await ouvrir('boutique');
+    await page.waitForSelector('#titre-protection', { timeout: 10000 });
+
+    // AVANT : la barre propose des commandes.
+    assert.ok(await page.$('[data-commande]'), 'un Spark libre porte ses commandes');
+
+    // ARMER, au clavier depuis le déclencheur de la section.
+    await page.focus('[data-ouvre="protection"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', MOT_DE_PASSE);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Armée'), { timeout: 10000 });
+
+    // ÉCHOUER À MODIFIER : plus aucune commande n'est offerte, et la cause est
+    // NOMMÉE — c'est la protection, pas l'état (§24.1).
+    assert.equal(await page.$('[data-commande]'), null,
+      'un Spark protégé n’offre aucune commande');
+    assert.match(await page.textContent('.entete-entite'), /protégé/);
+
+    // …et une écriture encore ATTEIGNABLE à l'écran est refusée par le SERVEUR.
+    // C'est le sens du §35.1 : la protection est appliquée côté runtime, pas
+    // par l'interface. Le refus arrive DANS la modale, sans effacer la saisie.
+    await page.click('.onglet[href$="/routes"]');
+    await page.waitForSelector('[data-ouvre="route"]', { timeout: 10000 });
+    await page.click('[data-ouvre="route"]');
+    await page.waitForSelector('dialog.modale[open] #route-domaine');
+    await page.fill('#route-domaine', 'refuse.example.test');
+    await page.fill('#route-port', '8080');
+    await page.click('dialog.modale[open] [data-engage="route"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    assert.match(await page.textContent('dialog.modale[open] .refus'), /protégé/);
+    assert.equal(await page.inputValue('#route-domaine'), 'refuse.example.test',
+      'un refus n’efface pas la saisie (§25.2)');
+    await page.keyboard.press('Escape');
+
+    // La route n'a REELLEMENT pas été créée côté serveur.
+    const routes = await pile.lireSparkd('/v1/ingress');
+    assert.ok(!JSON.stringify(routes.corps).includes('refuse.example.test'));
+    await page.click('.onglet[href$="/sparks/boutique"], .onglet:text-is("Infos")');
+    await page.waitForSelector('#titre-protection', { timeout: 10000 });
+
+    // Le badge suit le Spark JUSQUE DANS LA LISTE (§35.4).
+    await page.click('a[href="#/sparks"]');
+    await page.waitForSelector('tbody a');
+    const ligne = await page.textContent('tbody tr:has(a:text-is("boutique"))');
+    assert.match(ligne, /protégé/, 'l’état est visible partout où le Spark est listé');
+
+    // LEVER, puis MODIFIER.
+    await ouvrir('boutique');
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', MOT_DE_PASSE);
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Désarmée'), { timeout: 10000 });
+    assert.ok(await page.$('[data-commande]'), 'les commandes reviennent');
+
+    // RÉARMER avec un AUTRE mot de passe : le produit ne retient pas l'ancien.
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', 'un-autre-secret');
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Armée'), { timeout: 10000 });
+
+    // L'ancien mot de passe ne lève plus rien, et l'échec se lit dans la modale.
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', MOT_DE_PASSE);
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    await page.keyboard.press('Escape');
+    assert.equal((await pile.lireSparkd('/v1/sparks/boutique/protection'))
+                 .corps.protected, true, 'un échec ne désarme rien');
+
+    // Ce parcours REND l'état qu'il a trouvé. Les parcours partagent une pile ;
+    // laisser « boutique » armé ferait échouer ceux qui le pilotent ensuite —
+    // mesuré, et c'est la bonne défaillance : la protection mord vraiment.
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', 'un-autre-secret');
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Désarmée'), { timeout: 10000 });
+  });
+});
+
+test('révoquer une clé malgré le gel, par la confirmation qui NOMME', async () => {
+  await parcours('protection-revocation', async () => {
+    // « analytics » est protégé par le seed et porte une clé.
+    await ouvrir('analytics', 'cles');
+    await page.waitForSelector('#titre-cles', { timeout: 10000 });
+
+    await page.click('[data-revoque="ci-deploiement"]');
+    // §6.23 : les objets protégés sont NOMMÉS, pas comptés.
+    await page.waitForSelector('[data-accepte-protege]', { timeout: 10000 });
+    const refus = await page.textContent('.refus');
+    assert.match(refus, /analytics/, 'le Spark protégé est nommé');
+    assert.match(refus, /Aucune protection ne sera levée/);
+
+    // La clé est TOUJOURS là : le premier appel n'a rien retiré.
+    let cles = await pile.lireSparkd('/v1/sparks/analytics/ssh-config');
+    assert.ok(JSON.stringify(cles.corps).includes('ci-deploiement'));
+
+    // ACCEPTER : la révocation aboutit.
+    await page.click('[data-accepte-protege="ci-deploiement"]');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-accepte-protege]'), { timeout: 10000 });
+
+    cles = await pile.lireSparkd('/v1/sparks/analytics/ssh-config');
+    assert.ok(!JSON.stringify(cles.corps).includes('ci-deploiement'),
+      'la clé est réellement retirée côté serveur');
+
+    // …et AUCUNE protection n'a été levée au passage (§35.2).
+    assert.equal((await pile.lireSparkd('/v1/sparks/analytics/protection'))
+                 .corps.protected, true);
+  });
+});
+
 // --- SPK-30 · LA MARGE DE MÉTADONNÉES (§8.8) --------------------------------
 
 test("l’écart entre les tailles vendues et l’alloué du disque est EXPLIQUÉ", async () => {

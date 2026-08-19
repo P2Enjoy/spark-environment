@@ -168,8 +168,9 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     # Aucun appel suivant ne doit réconcilier l'ingress, sans quoi la route
     # serait appliquée et la fixture disparaîtrait.
 
-    # --- Clés : deux au registre, accordées à un seul Spark. « boutique » et
-    # « analytics » n'en reçoivent aucune : l'absence nommée du §26.4.
+    # --- Clés : deux au registre. « boutique » n'en reçoit aucune : c'est
+    # l'absence nommée du §26.4. « analytics » en reçoit une, plus bas, parce
+    # qu'il porte la démonstration de la protection (SPK-34).
     # Ces clés sont de VRAIES clés publiques ed25519 au format de fil OpenSSH :
     # le registre valide le base64 et calcule l'empreinte, un corps décoratif
     # serait refusé. Aucune clé privée correspondante n'existe — le motif d'octets
@@ -200,25 +201,24 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     # une donnée de DÉMONSTRATION, pas un secret — la protection n'est pas un
     # contrôle d'accès (§35.1), et le manuel le dit.
     #
-    # « postgres-dedie » est choisi délibérément : c'est le Spark que l'on ne
-    # veut pas voir redémarré par erreur, et il porte le seul cœur dédié.
-    _attendu(client.post("/v1/sparks/postgres-dedie/protection",
+    # « analytics » est choisi délibérément, et pas au hasard parmi les cinq :
+    # c'est le seul qu'AUCUN autre parcours ne pilote. Protéger un Spark que
+    # d'autres fixtures démarrent ou instantanéisent rendrait ces parcours
+    # dépendants de l'ordre d'exécution — mesuré : « postgres-dedie » protégé
+    # faisait échouer le parcours de l'instantané au clavier.
+    #
+    # Son état « pending » rend la démonstration plus parlante encore : un Spark
+    # déclaré et gelé avant d'être appliqué, dont même `apply` est refusé.
+    #
+    # La clé lui est accordée AVANT l'armement — l'octroi étant justement refusé
+    # sur un Spark protégé (§35.2). C'est ce qui rend atteignable, depuis
+    # l'écran, la confirmation de révocation qui NOMME les Sparks touchés.
+    _attendu(client.post("/v1/sparks/analytics/ssh-keys/ci-deploiement"), 200,
+             quoi="attribution de la clé au futur Spark protégé")
+    _attendu(client.post("/v1/sparks/analytics/protection",
                          json={"password": SEED_PROTECTION_PASSWORD}),
-             200, quoi="protection de « postgres-dedie »")
+             200, quoi="protection de « analytics »")
     compte["proteges"] = 1
-    # La clé du responsable est accordée à ce Spark protégé : c'est ce qui rend
-    # atteignable, depuis l'écran, la confirmation de révocation qui NOMME les
-    # Sparks protégés touchés (§35.2). Elle est accordée AVANT l'armement dans
-    # l'ordre logique, mais l'octroi étant refusé sur un Spark protégé, on la
-    # pose ici en levant puis réarmant — ce que ferait un exploitant.
-    _attendu(client.request("DELETE", "/v1/sparks/postgres-dedie/protection",
-                            json={"password": SEED_PROTECTION_PASSWORD}),
-             200, quoi="levée temporaire pour accorder la clé")
-    _attendu(client.post("/v1/sparks/postgres-dedie/ssh-keys/poste-responsable"), 200,
-             quoi="attribution de la clé au Spark protégé")
-    _attendu(client.post("/v1/sparks/postgres-dedie/protection",
-                         json={"password": SEED_PROTECTION_PASSWORD}),
-             200, quoi="réarmement de « postgres-dedie »")
 
     return compte
 
