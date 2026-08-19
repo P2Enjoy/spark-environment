@@ -609,7 +609,18 @@ Sparks : la réservation n'est proportionnelle qu'entre Sparks, jamais absolue.
 C'est la correction la plus lourde de la campagne : elle touche la promesse
 centrale du produit.
 
-- Spécification : `docs/DAT.md` §7.3 bis
+- Spécification : `docs/DAT.md` §7.3 bis (le constat) et **§32** (la correction).
+- **Mesuré le 2026-08-19** : `raw.lxc` avec `lxc.cgroup.dir.container` place le
+  Spark dans `spark.slice`. La loi de poids du §7.2 bis s'y applique inchangée
+  (`25 % − 10 + 5 = 20`) et `cpu.max` reste `max`, donc le burst est préservé.
+- Le poids de la tranche **n'est pas une constante** : `W = H × f / (1 − f)` avec
+  `f = Σr / C`. Une constante rendrait la réservation absolue pour un seul taux
+  de remplissage et fausse partout ailleurs (§32.2).
+- Une **réserve CPU de l'hôte** devient nécessaire : sans elle `f → 1` et l'hôte
+  n'ordonnance plus rien, pas même de quoi corriger la situation (§32.3).
+- La tranche est une **unité systemd** : créée à la main elle disparaît au
+  redémarrage, et la réservation redeviendrait proportionnelle en silence (§32.4).
+
 - DoD : sous contention totale provoquée, un Spark à réservation *r* obtient
   effectivement `r / capacité` de la machine, mesuré et archivé. Tant que ce n'est
   pas prouvé, la console ne présente pas la réservation comme une garantie absolue.

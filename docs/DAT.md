@@ -2457,3 +2457,106 @@ n'établit pas qu'une pile Docker tourne dans un Spark : cette preuve-là est un
 mesure, et elle est au §13. La vérification dit que le serveur est en état
 d'être utilisé ; le §13 dit que le produit fonctionne.
 
+
+## 32. Rendre la réservation CPU absolue
+
+Le §7.3 bis constate la dette : Incus place chaque Spark à la **racine** de
+cgroup v2, frère de `system.slice`, `user.slice` et `init.scope`. Le poids d'un
+Spark est donc arbitré contre l'hôte, et sa réservation n'est proportionnelle
+qu'entre Sparks. Cette section dit comment on la rend absolue.
+
+### 32.1 Le mécanisme, mesuré le 2026-08-19
+
+LXC accepte de placer la charge ailleurs qu'à la racine, et Incus laisse passer
+la directive par `raw.lxc` :
+
+```
+lxc.cgroup.dir.container = spark.slice/<nom>
+lxc.cgroup.dir.monitor   = spark.slice/monitor-<nom>
+```
+
+Mesuré sur l'hôte : l'instance atterrit dans `/sys/fs/cgroup/spark.slice/<nom>`
+et non plus à la racine. **Deux propriétés survivent au déplacement**, et c'est ce
+qui rend la solution viable :
+
+- la loi de poids du §7.2 bis s'applique **inchangée** — `allowance 25 %` et
+  `priority 5` donnent `cpu.weight = 20`, exactement `25 − 10 + 5` ;
+- `cpu.max` reste `max`, donc le **burst** du mode partagé est préservé (§7.2).
+
+La tranche doit porter les contrôleurs délégués (`cpu`, `cpuset`, `memory`, `io`,
+`pids`), sans quoi les limites ne s'appliqueraient pas à l'intérieur.
+
+### 32.2 Le poids de la tranche n'est pas une constante
+
+C'est le cœur de l'unité. Placer les Sparks sous un parent ne suffit pas : il
+faut que ce parent pèse **exactement ce que les Sparks ont acheté**.
+
+L'hôte présente trois tranches à `cpu.weight = 100` — `system.slice`,
+`user.slice`, `init.scope` — soit `H = 300`. Sous contention totale, une tranche
+de poids `W` obtient `W / (W + H)` de la machine.
+
+Pour qu'un Spark réservant `r` obtienne `r / C` de la machine, il faut que la
+tranche obtienne la somme des réservations rapportée à la capacité :
+
+```
+W / (W + H) = f        où f = Σr / C
+donc  W = H × f / (1 − f)
+```
+
+Vérification arithmétique sur l'hôte, `C = 4` cœurs :
+
+| Σr | f | W | part obtenue | attendu |
+|---|---|---|---|---|
+| 1,0 | 0,25 | 100 | 100/400 = 25 % | 1/4 ✓ |
+| 2,0 | 0,50 | 300 | 300/600 = 50 % | 2/4 ✓ |
+| 3,5 | 0,875 | 2100 | 2100/2400 = 87,5 % | 3,5/4 ✓ |
+
+**Le poids se recalcule donc à chaque changement d'allocation** — création,
+suppression, redimensionnement. Une constante rendrait la réservation absolue
+seulement pour un taux de remplissage donné, et fausse partout ailleurs.
+
+### 32.3 L'hôte garde une part, et c'est ce qui rend la loi définie
+
+Quand `f → 1`, `W → ∞` : les Sparks prendraient tout et l'hôte n'ordonnancerait
+plus rien — ni `sparkd`, ni `sshd`, ni Incus lui-même. On ne pourrait alors même
+plus corriger la situation.
+
+**Une réserve CPU de l'hôte est donc nécessaire à la définition de la loi**, pas
+seulement prudente. C'est le même raisonnement qu'au §16 pour la mémoire :
+
+```
+capacité allouable = cœurs physiques − réserve CPU de l'hôte
+```
+
+`f` est calculée sur la capacité **physique**, et bornée par la réserve :
+
+```
+f = min(Σr, C − réserve) / C
+```
+
+Avec une réserve de `0,5` cœur sur quatre, `f` ne dépasse jamais `0,875` et `W`
+reste fini. La réserve est un **réglage explicite**, comme
+`SPARKD_MEMORY_RESERVE` : elle dépend de ce que l'exploitant fait tourner à côté,
+et le produit n'a pas à le supposer.
+
+### 32.4 La tranche doit survivre à un redémarrage
+
+Mesuré : une tranche créée à la main dans `/sys/fs/cgroup` **disparaît au
+redémarrage**. Les Sparks retomberaient alors à la racine, et la réservation
+redeviendrait proportionnelle sans que rien ne le signale — exactement le défaut
+qu'on corrige, revenu en silence.
+
+La tranche est donc une **unité systemd** (`spark.slice`), posée par
+l'installation et activée au démarrage, au même titre que `sparkd` (§31.4). Le
+contrôle `RUN-SPARKD` gagne un pendant : la tranche existe et porte ses
+contrôleurs.
+
+### 32.5 Ce que cette section ne prétend pas
+
+La réservation devient absolue **sous contention CPU**. Elle ne dit rien de la
+latence, ni de la contention mémoire ou disque. Et elle ne vaut que si la loi de
+poids est appliquée à tous les Sparks : un Spark créé hors de la tranche — par
+`incus launch` à la main, par exemple — échapperait au partage et fausserait
+celui de tous les autres. Le §14 reste la référence : le registre est la seule
+source de vérité sur ce qui existe.
+
