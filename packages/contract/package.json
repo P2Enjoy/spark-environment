@@ -2,11 +2,18 @@
   "name": "@spark/contract",
   "private": true,
   "version": "0.0.0",
-  "description": "Contrat d'API partage entre la console et le runtime serveur",
+  "description": "Contrat d'API partagé entre la console et le runtime serveur",
   "type": "module",
+  "exports": { ".": "./src/index.js" },
+  "types": "./src/types.d.ts",
   "scripts": {
-    "build": "echo 'contrat non encore genere' && exit 0",
-    "test": "echo 'aucun test — le contrat n est pas encore genere' && exit 0",
-    "typecheck": "echo 'aucune source a verifier' && exit 0"
+    "generate": "openapi-typescript openapi/sparkd.json -o src/types.d.ts",
+    "build": "echo 'types dérivés de l OpenAPI, rien à compiler' && exit 0",
+    "test": "node --test src/*.test.js",
+    "typecheck": "tsc --noEmit --strict src/types.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.6.0"
   }
 }

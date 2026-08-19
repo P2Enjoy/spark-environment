@@ -1,0 +1,51 @@
+# @spec docs/BACKLOG.md#SPK-17 · docs/DAT.md §23.2 (la dérive se détecte en
+# régénérant) · CLAUDE.md §15 (tests) et §17 (Definition of Done)
+#
+# La campagne de preuves du dépôt, rejouée à chaque poussée. La vérification du
+# contrat y figure parce qu'une dérive d'API doit être vue en revue, pas
+# découverte en production par une console qui appelle un champ disparu.
+name: Vérification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  campagne:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Installer le runtime serveur
+        run: |
+          python -m venv services/sparkd/.venv
+          services/sparkd/.venv/bin/pip install --quiet -e "services/sparkd[dev]"
+
+      - name: Installer les paquets TypeScript
+        run: pnpm install --frozen-lockfile
+
+      - name: Tests du runtime serveur
+        run: services/sparkd/.venv/bin/python -m pytest services/sparkd/tests -q
+
+      - name: Le contrat d'API n'a pas dérivé
+        run: services/sparkd/.venv/bin/python scripts/contract.py check
+
+      - name: Tests TypeScript
+        run: pnpm -r test
+
+      - name: Build
+        run: pnpm -r build
