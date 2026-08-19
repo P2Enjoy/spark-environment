@@ -17,13 +17,27 @@ export const DEFAULT_PATH =
   process.env.SPARK_CONSOLE_STATE ?? join(homedir(), '.config', 'spark', 'servers.json');
 
 /** Champs qu'un serveur peut porter. Tout le reste est écarté à l'écriture. */
-const ALLOWED = ['name', 'kind', 'host', 'user', 'port', 'remotePort'];
+const ALLOWED = ['name', 'kind', 'host', 'user', 'port', 'remotePort', 'sshHost'];
+
+/**
+ * Version de la forme du fichier (docs/DAT.md §22.4.2).
+ *
+ * La forme historique — un TABLEAU NU — est lue comme la version 0 et convertie
+ * en mémoire. Elle n'est jamais réécrite à la LECTURE : une console qui migrerait
+ * le fichier en l'affichant le récrirait sans qu'on l'ait demandé. La conversion
+ * est écrite au premier enregistrement, qui est un geste explicite.
+ */
+export const VERSION = 1;
 
 /**
  * Genres de serveur.
  *
  * `ssh` est le cas normal : `sparkd` est sur une autre machine, et seul un
- * porteur de clé l'atteint. `local` sert la pile de développement, où `sparkd`
+ * porteur de clé l'atteint. `alias` délègue TOUT à OpenSSH — l'entrée ne nomme
+ * qu'un `Host` du `~/.ssh/config`, et le produit ne connaît ni l'utilisateur, ni
+ * le port, ni le rebond (docs/DAT.md §22.4 bis). Les deviner donnerait l'illusion
+ * de les connaître, et ils seraient faux dès qu'un `ProxyJump` s'interpose.
+ * `local` sert la pile de développement, où `sparkd`
  * écoute déjà sur la boucle locale de CETTE machine (docs/DAT.md §28.2) : y
  * ouvrir un tunnel SSH exigerait un `sshd` et des clés pour n'accomplir aucun
  * transport.
@@ -33,7 +47,7 @@ const ALLOWED = ['name', 'kind', 'host', 'user', 'port', 'remotePort'];
  * routable. Un accès direct ne peut donc joindre qu'un `sparkd` de boucle
  * locale — exactement ce que le tunnel garantissait à distance.
  */
-export const KINDS = ['ssh', 'local'];
+export const KINDS = ['ssh', 'alias', 'local'];
 
 /** Motifs qui trahissent un secret glissé par erreur dans l'inventaire. */
 const SECRET_HINT = /private[_-]?key|password|passphrase|secret|token|BEGIN [A-Z ]*PRIVATE KEY/i;
@@ -53,9 +67,21 @@ export function validate(server) {
       `Genre « ${server?.kind} » inconnu pour « ${nom} » : attendu ${KINDS.join(' ou ')}.`,
     );
   }
+  // Une entrée `alias` ne porte QUE le nom d'un `Host` du ssh_config : c'est
+  // OpenSSH qui résout le reste (§22.4 bis).
+  const alias = genre === 'alias';
+  const sshHost = alias ? String(server?.sshHost ?? '').trim() : '';
+  if (alias && !sshHost) {
+    throw new InventoryError(
+      `Le serveur « ${nom} » est déclaré par alias mais n'en nomme aucun : ` +
+        `indiquez un « Host » de votre ~/.ssh/config.`,
+    );
+  }
+
   // Un serveur local n'a ni hôte, ni utilisateur, ni port distant : les exiger
   // obligerait à inventer des valeurs qui ne servent à rien (§28.2).
-  const hote = genre === 'local' ? '127.0.0.1' : String(server?.host ?? '').trim();
+  const hote = genre === 'local' ? '127.0.0.1'
+    : alias ? sshHost : String(server?.host ?? '').trim();
   if (!hote) throw new InventoryError(`Le serveur « ${nom} » n'a pas d'hôte.`);
 
   // On refuse plutôt que de filtrer en silence : un secret écrit ici l'a été
@@ -72,6 +98,14 @@ export function validate(server) {
   // Un serveur SSH porte DEUX ports : celui de `sshd` et celui de `sparkd` à
   // l'autre bout. Un serveur local n'en a qu'un, celui où `sparkd` écoute ici.
   const local = genre === 'local';
+  if (alias) {
+    // Ni `user` ni `port` : le produit ne prétend pas les connaître.
+    const distantAlias = Number(server.remotePort ?? 9876);
+    if (!Number.isInteger(distantAlias) || distantAlias < 1 || distantAlias > 65535) {
+      throw new InventoryError(`« remotePort » hors bornes pour « ${nom} » : ${distantAlias}.`);
+    }
+    return { name: nom, kind: genre, sshHost, remotePort: distantAlias };
+  }
   const port = local
     // `port` d'abord, `remotePort` ensuite : l'aller-retour doit rendre ce qui
     // a été écrit. Lire `remotePort` en premier jetait le port fourni et rendait
@@ -92,12 +126,20 @@ export function validate(server) {
            user: String(server.user ?? 'root'), port, remotePort: distant };
 }
 
-export async function load(path = DEFAULT_PATH) {
+/**
+ * Lit le fichier ENTIER : serveurs, serveur courant, ancres (docs/DAT.md §22.4.2).
+ *
+ * La forme historique — un tableau nu — est lue comme la version 0. Elle n'est
+ * PAS réécrite ici : une console qui migrerait le fichier en l'affichant le
+ * récrirait sans qu'on l'ait demandé. La conversion est écrite au premier
+ * enregistrement, qui est un geste explicite.
+ */
+export async function loadFile(path = DEFAULT_PATH) {
   let brut;
   try {
     brut = await readFile(path, 'utf8');
   } catch (erreur) {
-    if (erreur.code === 'ENOENT') return [];
+    if (erreur.code === 'ENOENT') return { version: VERSION, servers: [], current: null, anchors: {} };
     throw new InventoryError(`Inventaire illisible (${path}) : ${erreur.message}`);
   }
   let donnees;
@@ -108,17 +150,50 @@ export async function load(path = DEFAULT_PATH) {
     // croirait avoir perdu ses serveurs.
     throw new InventoryError(`Inventaire illisible (${path}) : ${erreur.message}`);
   }
-  if (!Array.isArray(donnees)) {
-    throw new InventoryError(`Inventaire illisible (${path}) : une liste est attendue.`);
+  if (Array.isArray(donnees)) {
+    return { version: 0, servers: donnees.map(validate), current: null, anchors: {} };
   }
-  return donnees.map(validate);
+  if (!donnees || typeof donnees !== 'object' || !Array.isArray(donnees.servers)) {
+    throw new InventoryError(
+      `Inventaire illisible (${path}) : une liste ou un objet « servers » est attendu.`);
+  }
+  const serveurs = donnees.servers.map(validate);
+  // Un `current` qui ne désigne aucun serveur existant vaut `null` : le garder
+  // ferait chercher un serveur qui n'est plus là.
+  const courant = serveurs.some((s) => s.name === donnees.current) ? donnees.current : null;
+  return {
+    version: Number(donnees.version ?? VERSION),
+    servers: serveurs,
+    current: courant,
+    anchors: (donnees.anchors && typeof donnees.anchors === 'object') ? donnees.anchors : {},
+  };
+}
+
+/** Les serveurs seuls. Forme historique, conservée pour ses appelants. */
+export async function load(path = DEFAULT_PATH) {
+  return (await loadFile(path)).servers;
+}
+
+/** Écrit le fichier ENTIER, dans la forme courante. */
+export async function saveFile({ servers = [], current = null, anchors = {} } = {},
+                               path = DEFAULT_PATH) {
+  const propres = servers.map(validate).map((s) =>
+    // Un champ absent du genre — `user` pour un alias — ne doit pas être écrit
+    // à `undefined` : `JSON.stringify` l'omettrait, mais un `null` explicite
+    // ferait croire à une valeur vide plutôt qu'à une absence.
+    Object.fromEntries(ALLOWED.filter((k) => s[k] !== undefined).map((k) => [k, s[k]])),
+  );
+  const courant = propres.some((s) => s.name === current) ? current : null;
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(
+    { version: VERSION, servers: propres, current: courant, anchors }, null, 2) + '\n',
+    { mode: 0o600 });
+  return propres;
 }
 
 export async function save(servers, path = DEFAULT_PATH) {
-  const propres = servers.map(validate).map((s) =>
-    Object.fromEntries(ALLOWED.map((k) => [k, s[k]])),
-  );
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(propres, null, 2) + '\n', { mode: 0o600 });
-  return propres;
+  // Conserve le serveur courant et les ancres : enregistrer une liste ne doit
+  // pas effacer un état qui vit dans le même fichier.
+  const existant = await loadFile(path).catch(() => ({ current: null, anchors: {} }));
+  return saveFile({ servers, current: existant.current, anchors: existant.anchors }, path);
 }

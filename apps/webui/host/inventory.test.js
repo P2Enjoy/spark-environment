@@ -12,7 +12,9 @@ import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { load, save, validate, InventoryError } from './inventory.js';
+import {
+  load, loadFile, save, saveFile, validate, InventoryError, VERSION,
+} from './inventory.js';
 
 // Un serveur porte desormais un GENRE (§28.2). Les deux attentes ci-dessous
 // enumeraient les champs ecrits ; elles suivent la nouvelle forme.
@@ -61,11 +63,65 @@ test('une cle privee collee dans un champ anodin est attrapee', () => {
 });
 
 test('seuls les champs attendus sont ecrits sur le disque', async () => {
+  // REVISE par SPK-41 : le fichier porte desormais sa VERSION et le serveur
+  // courant (§22.4.2), donc un OBJET remplace le tableau nu a la racine. Ce que
+  // la preuve etablit est inchange — un champ etranger n'atteint pas le disque —
+  // et c'est l'enveloppe qui a change, pas la regle.
   const chemin = await fichier();
   await save([{ ...OK, extra: 'ignoré' }], chemin);
-  const [ecrit] = JSON.parse(await readFile(chemin, 'utf8'));
-  assert.deepEqual(Object.keys(ecrit).sort(),
+  const fichierEcrit = JSON.parse(await readFile(chemin, 'utf8'));
+  assert.equal(fichierEcrit.version, VERSION);
+  assert.deepEqual(Object.keys(fichierEcrit.servers[0]).sort(),
                    ['host', 'kind', 'name', 'port', 'remotePort', 'user']);
+});
+
+// --- la forme du fichier (SPK-41, docs/DAT.md §22.4.2) ---------------------
+
+test('la forme HISTORIQUE se lit encore, et n’est pas recrite a la lecture', async () => {
+  // Une console qui migrerait le fichier en l'affichant le recrirait sans qu'on
+  // l'ait demande. La conversion attend un enregistrement, qui est un geste.
+  const chemin = await fichier();
+  await writeFile(chemin, JSON.stringify([OK]));
+  const avant = await readFile(chemin, 'utf8');
+
+  const lu = await loadFile(chemin);
+  assert.equal(lu.version, 0, 'le tableau nu EST la version 0');
+  assert.deepEqual(lu.servers, [OK]);
+  assert.equal(await readFile(chemin, 'utf8'), avant, 'le fichier n’a pas bouge');
+});
+
+test('un enregistrement CONVERTIT le fichier dans la forme courante', async () => {
+  const chemin = await fichier();
+  await writeFile(chemin, JSON.stringify([OK]));
+  await save([OK], chemin);
+  const ecrit = JSON.parse(await readFile(chemin, 'utf8'));
+  assert.equal(ecrit.version, VERSION);
+  assert.ok(Array.isArray(ecrit.servers));
+});
+
+test('enregistrer une liste n’efface ni le serveur courant ni les ancres', async () => {
+  // Ils vivent dans le meme fichier : les perdre a chaque ajout de serveur
+  // reviendrait a oublier ou l'on regardait, et ce que la console avait vu.
+  const chemin = await fichier();
+  await saveFile({ servers: [OK], current: 'prod', anchors: { prod: { head: 'a' } } }, chemin);
+  await save([OK, { ...OK, name: 'autre' }], chemin);
+  const relu = await loadFile(chemin);
+  assert.equal(relu.current, 'prod');
+  assert.deepEqual(relu.anchors, { prod: { head: 'a' } });
+});
+
+test('un serveur courant qui ne designe plus rien vaut null', async () => {
+  // Le garder ferait chercher un serveur qui n'est plus la.
+  const chemin = await fichier();
+  await saveFile({ servers: [OK], current: 'prod' }, chemin);
+  await saveFile({ servers: [{ ...OK, name: 'autre' }], current: 'prod' }, chemin);
+  assert.equal((await loadFile(chemin)).current, null);
+});
+
+test('un fichier de forme inconnue ECHOUE plutot que de repartir vide', async () => {
+  const chemin = await fichier();
+  await writeFile(chemin, JSON.stringify({ version: 1, serveurs: [] }));
+  await assert.rejects(loadFile(chemin), /illisible/);
 });
 
 // --- lecture ----------------------------------------------------------------
@@ -120,8 +176,44 @@ test('un serveur local survit a un aller-retour sur un port quelconque', () => {
 });
 
 test('un genre inconnu est refuse, en nommant ce qui est attendu', () => {
+  // REVISE par SPK-41 : le §22.4 bis ajoute le genre `alias`, qui delegue TOUT
+  // a OpenSSH. Le message enumere donc trois genres et non deux. Ce que la
+  // preuve etablit — un genre inconnu est refuse EN NOMMANT les attendus — est
+  // inchange : c'est la liste qui a grandi, pas la regle.
   assert.throws(() => validate({ name: 'x', kind: 'telepathie', host: 'a' }),
-                /attendu ssh ou local/);
+                /attendu ssh ou alias ou local/);
+});
+
+// --- le genre `alias` (SPK-41, docs/DAT.md §22.4 bis, §22.4.1) -------------
+
+test('une entree par ALIAS ne porte ni user ni port de connexion', () => {
+  // Les deviner donnerait l'illusion de les connaitre, et ils seraient faux des
+  // qu'un ProxyJump s'interpose.
+  const entree = validate({ name: 'prod', kind: 'alias', sshHost: 'spark-prod' });
+  assert.deepEqual(entree, { name: 'prod', kind: 'alias', sshHost: 'spark-prod',
+                             remotePort: 9876 });
+  assert.ok(!('user' in entree) && !('port' in entree) && !('host' in entree));
+});
+
+test('un alias VIDE est refuse, et dit ou le chercher', () => {
+  assert.throws(() => validate({ name: 'prod', kind: 'alias' }),
+                /~\/\.ssh\/config/);
+  assert.throws(() => validate({ name: 'prod', kind: 'alias', sshHost: '   ' }),
+                InventoryError);
+});
+
+test('une entree par alias porte quand meme le port de sparkd', () => {
+  // C'est le produit qui sait ou `sparkd` ecoute a l'autre bout ; OpenSSH ne le
+  // sait pas, et le §22.4 bis lui delegue la CONNEXION, pas le produit.
+  assert.equal(validate({ name: 'p', kind: 'alias', sshHost: 'h', remotePort: 9999 })
+                 .remotePort, 9999);
+  assert.throws(() => validate({ name: 'p', kind: 'alias', sshHost: 'h', remotePort: 0 }),
+                /hors bornes/);
+});
+
+test('une entree par alias refuse un secret comme les autres', () => {
+  assert.throws(() => validate({ name: 'p', kind: 'alias', sshHost: 'h', passphrase: 'x' }),
+                InventoryError);
 });
 
 test('un serveur local aussi refuse un secret', () => {
