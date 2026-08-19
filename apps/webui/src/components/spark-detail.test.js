@@ -150,3 +150,40 @@ test('un evenement de journal est une ligne, pas une carte', () => {
   assert.match(html, /class="evenement"/);
   assert.equal(/class="carte"[^>]*>\s*<li/.test(html), false);
 });
+
+
+// --- ordre des commandes (defaut trouve en capture) -------------------------
+
+test("l action destructive n est jamais la premiere", () => {
+  // Le runtime publie allowed_commands trie alphabetiquement, ce qui placait
+  // « Supprimer » en tete : l'action la plus dangereuse etait la plus
+  // proeminente et la premiere atteinte au clavier.
+  const html = renderCommands(SPARK);
+  const positions = ['Arrêter', 'Redémarrer', 'Supprimer'].map((l) => html.indexOf(l));
+  assert.equal(Math.max(...positions), html.indexOf('Supprimer'));
+});
+
+test("une action reparatrice vient en premier", () => {
+  const html = renderCommands({ ...SPARK, state: 'error', allowed_commands: ['delete', 'retry'] });
+  assert.ok(html.indexOf('Reprendre') < html.indexOf('Supprimer'));
+});
+
+// --- valeurs techniques traduites (§14.7) -----------------------------------
+
+test("le resultat d audit est affiche en francais, pas en brut", () => {
+  const html = renderSparkDetail({
+    status: 'ready', spark: SPARK,
+    audit: [{ ts: '2026-08-19T10:00', action: 'a', result: 'denied', message: 'refus' }],
+  });
+  assert.match(html, /refusé/);
+  assert.equal(/>denied</.test(html), false);
+});
+
+test("un resultat inconnu ne casse pas l affichage", () => {
+  const html = renderSparkDetail({
+    status: 'ready', spark: SPARK,
+    audit: [{ ts: '2026-08-19T10:00', action: 'a', result: 'bizarre', message: 'x' }],
+  });
+  assert.match(html, /badge--neutral/);
+  assert.equal(/undefined/.test(html), false);
+});

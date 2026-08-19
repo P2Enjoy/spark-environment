@@ -20,6 +20,10 @@ import { EventEmitter } from 'node:events';
 const SORTIE = new URL('./captures/', import.meta.url).pathname;
 
 const GIO = 1024 ** 3;
+const COMMANDES = {
+  running: ['delete', 'restart', 'stop'], stopped: ['delete', 'start'],
+  pending: ['apply', 'delete'], error: ['delete', 'retry'], creating: [],
+};
 const SPARKS = [
   { name: 'crm-production', state: 'running', cpu_mode: 'shared', cpu_reservation: 0.5,
     memory_reservation_bytes: 2 * GIO, storage_bytes: 10 * GIO,
@@ -32,8 +36,11 @@ const SPARKS = [
     ipv4_address: '10.77.0.18', image: 'images:debian/13' },
   { name: 'site-vitrine', state: 'error', cpu_mode: 'shared', cpu_reservation: 0.25,
     memory_reservation_bytes: GIO, storage_bytes: 5 * GIO,
-    ipv4_address: '10.77.0.19', image: 'images:debian/13' },
-];
+    ipv4_address: '10.77.0.19', image: 'images:debian/13',
+    last_error: "image « images:debian/99 » introuvable dans le dépôt" },
+].map((s) => ({ ...s, allowed_commands: COMMANDES[s.state] ?? [],
+                transient: ['creating', 'starting', 'stopping', 'deleting'].includes(s.state),
+                network_burst_bps: 100_000_000 }));
 const LONGS = [
   { ...SPARKS[0],
     name: 'spark-au-nom-particulierement-long-pour-eprouver-la-mise-en-page',
@@ -67,6 +74,27 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     fetch: async (url) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
+      if (url.includes('/snapshots')) return new Response(JSON.stringify({ snapshots: [
+        { incus_name: 'avant-deploiement', created_at: '2026-08-19T09:12:00' },
+      ] }), { status: 200 });
+      if (url.includes('/ssh-config')) return new Response(JSON.stringify({ keys: [
+        { label: 'poste-admin', fingerprint: 'SHA256:Vf2N7ryPnZPNBN+vs56E1vFAqq' },
+      ] }), { status: 200 });
+      if (url.includes('/v1/ingress')) return new Response(JSON.stringify({ routes: [
+        { domain: 'crm.example.com', target_port: 8080, spark_name: 'crm-production', applied_at: '2026-08-19T09:00:00' },
+      ] }), { status: 200 });
+      if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
+        { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
+        { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', target_id: 'S1', message: 'crm.example.com → port 8080.' },
+        { ts: '2026-08-19T08:55:00', action: 'spark.start', result: 'ok', target_id: 'S1', message: '« starting » → « running ».' },
+      ] }), { status: 200 });
+      const detail = url.match(/\/v1\/sparks\/([^/?]+)(\?|$)/);
+      if (detail) {
+        const nom = decodeURIComponent(detail[1]);
+        const s = sparks.find((x) => x.name === nom);
+        return new Response(JSON.stringify(s ? { ...s, id: 'S1' } : { detail: { message: 'inconnu' } }),
+                            { status: s ? 200 : 404 });
+      }
       if (url.includes('/usage')) {
         const nom = decodeURIComponent(url.match(/sparks\/([^/]+)\/usage/)[1]);
         return new Response(JSON.stringify(USAGE[nom] ?? {}), { status: 200 });
@@ -128,6 +156,32 @@ ctx.server.close();
 
 ctx = await demarrer({ tunnelRompu: true });
 await capturer(page, ctx.base, '09-tunnel-rompu', { attendre: '.bandeau-tunnel' });
+ctx.server.close();
+
+// --- Écran détail (SPK-19) ------------------------------------------------
+ctx = await demarrer();
+for (const [nom, cible] of [['10-detail-en-marche', 'crm-production'],
+                            ['11-detail-transitoire', 'postgres-dedie'],
+                            ['12-detail-en-erreur', 'site-vitrine']]) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${ctx.base}/#/sparks/${cible}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.entete-entite', { timeout: 8000 }).catch(() => {});
+  await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
+  console.log(`  ${nom}.png`);
+}
+// Confirmation de suppression, ouverte au CLAVIER.
+await page.goto(`${ctx.base}/#/sparks/crm-production`);
+await page.waitForSelector('[data-commande="delete"]');
+await page.focus('[data-commande="delete"]');
+await page.keyboard.press('Enter');
+await page.waitForSelector('.confirmation', { timeout: 4000 }).catch(() => {});
+await page.screenshot({ path: join(SORTIE, '13-confirmation-suppression.png') });
+console.log('  13-confirmation-suppression.png');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.goto(`${ctx.base}/#/sparks/crm-production`);
+await page.waitForSelector('.entete-entite');
+await page.screenshot({ path: join(SORTIE, '14-detail-mobile.png') });
+console.log('  14-detail-mobile.png');
 ctx.server.close();
 
 await navigateur.close();

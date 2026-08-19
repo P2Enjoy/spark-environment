@@ -106,6 +106,11 @@
   erreur et données longues.
 - `docs/DESIGN_SYSTEM_APP.md` : extension du design system pour la console.
 
+- Écran détail d'un Spark : identité, ressources, accès, instantanés et journal,
+  avec les seules commandes que le runtime déclare possibles et une confirmation
+  de suppression intégrée au flux.
+- `sparkd` publie `allowed_commands` et `transient` avec chaque Spark.
+
 ### Modifié
 
 - `.gitignore` :

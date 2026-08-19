@@ -16,14 +16,29 @@ const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-/** Libellés des commandes. Seule la suppression est destructive (§24.2). */
+/**
+ * Libellés des commandes. Seule la suppression est destructive (§24.2).
+ *
+ * `rang` fixe l'ordre d'affichage. Le runtime publie `allowed_commands` trié
+ * alphabétiquement — un ordre qui plaçait « Supprimer » en tête, donc l'action
+ * la plus dangereuse en premier et la première atteinte au clavier. L'ordre
+ * d'affichage suit l'intention, pas l'alphabet.
+ */
 export const COMMANDES = {
-  apply:   { label: 'Appliquer',  variante: 'primaire',   confirme: false },
-  start:   { label: 'Démarrer',   variante: 'primaire',   confirme: false },
-  stop:    { label: 'Arrêter',    variante: 'secondaire', confirme: false },
-  restart: { label: 'Redémarrer', variante: 'secondaire', confirme: false },
-  retry:   { label: 'Reprendre',  variante: 'primaire',   confirme: false },
-  delete:  { label: 'Supprimer',  variante: 'secondaire', confirme: true },
+  apply:   { label: 'Appliquer',  variante: 'primaire',   confirme: false, rang: 1 },
+  start:   { label: 'Démarrer',   variante: 'primaire',   confirme: false, rang: 1 },
+  retry:   { label: 'Reprendre',  variante: 'primaire',   confirme: false, rang: 1 },
+  restart: { label: 'Redémarrer', variante: 'secondaire', confirme: false, rang: 2 },
+  stop:    { label: 'Arrêter',    variante: 'secondaire', confirme: false, rang: 3 },
+  delete:  { label: 'Supprimer',  variante: 'secondaire', confirme: true,  rang: 9 },
+};
+
+/** Résultats d'audit, en français. Une valeur technique brute ne doit pas
+ *  atteindre l'écran (docs/DESIGN_SYSTEM.md §14.7). */
+export const RESULTATS = {
+  ok: { label: 'réussi', token: 'success' },
+  denied: { label: 'refusé', token: 'accent' },
+  error: { label: 'erreur', token: 'danger' },
 };
 
 /**
@@ -47,6 +62,7 @@ export function renderCommands(spark, { confirming = null } = {}) {
 
   const boutons = permises
     .filter((c) => COMMANDES[c])
+    .sort((a, b) => COMMANDES[a].rang - COMMANDES[b].rang)
     .map((c) => {
       const { label, variante } = COMMANDES[c];
       const classe = variante === 'primaire' ? 'bouton bouton--primaire' : 'bouton';
@@ -154,9 +170,9 @@ function renderInstantanes(snapshots = []) {
 function renderJournal(entries = []) {
   if (entries.length === 0) return '';
   const lignes = entries.slice(0, 8).map((e) => {
-    const token = e.result === 'ok' ? 'success' : e.result === 'denied' ? 'accent' : 'danger';
+    const { label, token } = RESULTATS[e.result] ?? { label: e.result ?? 'inconnu', token: 'neutral' };
     return `<li class="evenement">
-      <span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(e.result)}</span>
+      <span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span>
       <span class="evenement__texte">${echapper(e.message ?? e.action)}</span>
       <span class="technique evenement__date">${echapper((e.ts ?? '').slice(0, 16).replace('T', ' '))}</span>
     </li>`;

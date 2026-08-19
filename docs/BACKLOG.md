@@ -285,18 +285,25 @@ opération manuelle et n'est pas planifié.
   débordement horizontal **non signalé** au mobile, ce que le §14.2 interdit.
 - Captures : `e2e/captures/`, régénérables par `node e2e/captures.mjs`.
 
-### [ ] SPK-19 · Écran détail d'un Spark
+### [x] SPK-19 · Écran détail d'un Spark
 
 Identité, état, ressources, accès, instantanés et journal d'un Spark, avec les
 commandes que le runtime déclare possibles.
 
 - Spécification : `docs/DAT.md` §24, `docs/DESIGN_SYSTEM.md` §6.3 à §6.6, §6.22,
   §6.23, §14.9 · `docs/DESIGN_SYSTEM_APP.md`
-- DoD : les commandes affichées viennent du runtime, jamais d'une table
-  redérivée dans la console ; la suppression demande une confirmation nommant le
-  Spark, intégrée au flux et non en modale ; un état transitoire dit qu'aucune
-  commande n'est acceptée plutôt que d'afficher des boutons morts ; états vide,
-  chargement et erreur traités ; navigation clavier ; captures observées.
+- **Clos le 2026-08-19.** `allowed_commands` est publié par le runtime, dérivé
+  de la table qui applique le refus ; un test passe à la vue un état inventé
+  pour prouver qu'elle ne redérive rien. Un Spark `running` n'affiche que
+  « Redémarrer, Arrêter, Supprimer » — pas de « Démarrer », même désactivé. Un
+  état `creating` n'affiche **aucun bouton** et explique pourquoi.
+- Confirmation de suppression intégrée au flux, ouverte **au clavier**, nommant
+  le Spark et la conséquence, focus dedans, annulation rendant le focus.
+- Cinq captures observées. **Deux défauts trouvés par l'observation** : le
+  runtime publiant `allowed_commands` par ordre alphabétique, « Supprimer »
+  arrivait en tête — l'action la plus dangereuse était la plus proéminente et la
+  première atteinte au clavier ; et le journal affichait `ok`, valeur brute du
+  backend, au lieu de « réussi ».
 
 ### [ ] SPK-20 · Création d'un Spark avec aperçu d'admission
 

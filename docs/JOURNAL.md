@@ -1311,3 +1311,50 @@ désormais lu et son extension écrite : les sessions d'interface suivantes n'on
 plus à rouvrir les 1585 lignes, seulement l'extension et les sections
 concernées. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
 SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-19 close : le runtime dit ce qui est possible
+
+**Unité** : SPK-19. Son entrée n'était qu'un **titre** — ni spécification, ni
+Definition of Done. Les deux ont été écrites avant de coder, avec le DAT §24.
+
+**La décision de conception.** La console doit savoir quelles commandes proposer.
+Réimplémenter la table des transitions de son côté aurait signifié maintenir la
+même règle dans deux langages, avec la certitude qu'elles divergeraient — et
+`DESIGN_SYSTEM.md` §14.9 comme `CLAUDE.md` §10 disent la même chose : l'interface
+n'est jamais l'autorité.
+
+Le runtime publie donc `allowed_commands`, dérivé de la table même qui applique
+le refus. Un test passe à la vue un état **inventé** pour prouver qu'elle ne
+redérive rien.
+
+Conséquence visible : un Spark `running` n'affiche que « Redémarrer, Arrêter,
+Supprimer » — pas de « Démarrer », **même désactivé**. Et un état `creating`
+n'affiche **aucun bouton** : il explique qu'une opération est en cours et
+qu'aucune commande n'est acceptée, plutôt que d'exposer quatre boutons morts.
+
+**Deux défauts trouvés par l'observation des captures**, une fois de plus
+invisibles aux 42 tests alors verts :
+
+1. `allowed_commands` étant publié **par ordre alphabétique**, « Supprimer »
+   arrivait en tête. L'action la plus dangereuse était la plus proéminente et la
+   première atteinte au clavier. L'ordre d'affichage suit désormais l'intention —
+   réparatrices, puis courantes, puis destructive — et non l'alphabet.
+2. Le journal affichait `ok`, `denied`, `error` : des valeurs techniques brutes
+   arrivées jusqu'à l'écran, ce que le §14.7 interdit. Elles sont traduites, avec
+   un repli neutre pour une valeur inconnue.
+
+**Un détail de typographie qui n'en était pas un.** Les textes utilisaient
+l'apostrophe droite, échappée en `&#39;` dans le HTML. Le design system emploie
+partout l'apostrophe typographique, qui ne s'échappe pas. Les textes visibles ont
+été convertis.
+
+**Vérifié.** 438 tests Python, 84 tests Node, contrat sans dérive, campagne
+complète verte, et cinq captures observées.
+
+**Où reprendre.** **SPK-20**, la création d'un Spark avec aperçu d'admission —
+le premier écran qui **écrit**. Sa DoD existe déjà et exige que le refus vienne
+de `sparkd`, jamais d'un contrôle uniquement côté interface. SPK-12 attend un
+domaine, SPK-17 une exécution de CI, SPK-29 et SPK-28 un arbitrage.
