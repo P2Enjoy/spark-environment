@@ -55,6 +55,8 @@ class IncusClient(Protocol):
 
     def snapshots(self, name: str) -> list[dict[str, Any]]: ...
 
+    def instance_state(self, name: str) -> dict[str, Any]: ...
+
 
 @dataclass
 class UnixSocketIncus:
@@ -221,6 +223,9 @@ class UnixSocketIncus:
     def snapshots(self, name: str) -> list[dict[str, Any]]:
         return self._get(f"/1.0/instances/{name}/snapshots?recursion=1")
 
+    def instance_state(self, name: str) -> dict[str, Any]:
+        return self._get(f"/1.0/instances/{name}/state")
+
 
 @dataclass
 class FakeIncus:
@@ -310,6 +315,18 @@ class FakeIncus:
 
     def snapshots(self, name: str) -> list[dict[str, Any]]:
         return list(self.created.get(name, {}).get("snapshots", []))
+
+    def instance_state(self, name: str) -> dict[str, Any]:
+        instance = self.created.get(name)
+        if instance is None:
+            raise IncusError(f"Instance « {name} » absente.")
+        return instance.get("state") or {
+            "status": instance.get("status", "Running"),
+            "cpu": {"usage": instance.get("cpu_ns", 1_000_000_000)},
+            "memory": {"usage": 174_764_032, "total": 2 * 1024**3},
+            "disk": {"root": {"total": 10 * 1024**3, "usage": 534_981_632}},
+            "network": {"eth0": {"counters": {"bytes_received": 461, "bytes_sent": 2192}}},
+        }
 
 
 # Releve reel de l'hote de validation, 2026-08-18 : Dell R320, Xeon E5-1410 v2,

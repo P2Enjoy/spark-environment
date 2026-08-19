@@ -28,6 +28,7 @@ from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
+from . import metrics as metrics_service
 from . import snapshots as snapshot_service
 from . import sshkeys
 from .lifecycle import Command
@@ -78,6 +79,7 @@ def create_app(config: Config) -> FastAPI:
     app.state.config = config
     app.state.schema_versions = check_registry(config)
     app.state.incus = make_client(config)
+    app.state.rates = metrics_service.RateTracker()
     app.state.caddy = (
         ingress_service.FakeCaddy() if config.driver == "fake"
         else ingress_service.Caddy(config.caddy_admin)
@@ -310,6 +312,30 @@ def create_app(config: Config) -> FastAPI:
         est le mécanisme normal d'application, pas une réparation (§18.1).
         """
         ingress_service.reconcile(connection, app.state.caddy)
+
+    @app.get("/v1/sparks/{name}/usage", tags=["metriques"])
+    def spark_usage(name: str) -> dict:
+        """Usage réel, comparé à ce qui est effectivement appliqué."""
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+
+        if spark["state"] != "running" or not spark["incus_name"]:
+            return {"spark": name, **metrics_service.stopped(spark)}
+
+        try:
+            etat = app.state.incus.instance_state(spark["incus_name"])
+        except IncusError as erreur:
+            raise HTTPException(status_code=502, detail={
+                "error": "incus_failed", "message": str(erreur)}) from erreur
+
+        taux = app.state.rates.observe(
+            spark["id"], metrics_service.read_sample(etat)
+        )
+        return {"spark": name, **metrics_service.usage(spark, etat, taux)}
 
     @app.get("/v1/sparks/{name}/snapshots", tags=["instantanes"])
     def list_snapshots(name: str) -> dict:
@@ -663,6 +689,9 @@ def create_app(config: Config) -> FastAPI:
                     raise HTTPException(status_code=502, detail={
                         "error": "incus_failed", "message": str(erreur)}) from erreur
                 service.finish(connection, apres["id"], success=True)
+                # Le suivi de taux garde le relevé précédent : le conserver
+                # ferait calculer un taux pour un Spark qui n'existe plus.
+                app.state.rates.forget(apres["id"])
                 # Les routes du Spark ont disparu avec lui (ON DELETE CASCADE) :
                 # Caddy doit cesser de les servir.
                 try:

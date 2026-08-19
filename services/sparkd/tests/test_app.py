@@ -433,3 +433,41 @@ def test_la_liste_rappelle_qu_un_instantane_n_est_pas_une_sauvegarde(tmp_path):
     note = c.get("/v1/sparks/crm/snapshots").json()["note"]
     assert "ne protège ni de la perte du pool" in note
     assert "quota" in note
+
+
+# --- metriques par HTTP (SPK-14) -------------------------------------------
+
+def test_usage_d_un_spark_arrete_n_est_pas_nul(tmp_path):
+    """@verifies docs/DAT.md §20.4"""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")          # état « stopped »
+    u = c.get("/v1/sparks/crm/usage").json()
+    assert u["cpu"] is None and u["disk"] is None
+    assert "disque reste" in u["unavailable"]
+
+
+def test_le_premier_releve_ne_pretend_pas_connaitre_le_taux(tmp_path):
+    """@verifies docs/DAT.md §20.1 — null, jamais 0."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/sparks/crm/start")
+    u = c.get("/v1/sparks/crm/usage").json()
+    assert u["cpu"]["used"] is None
+    assert u["window_seconds"] is None
+    # Mais memoire et disque, instantanes, sont bien la.
+    assert u["memory"]["used_bytes"] > 0
+    assert u["disk"]["used_bytes"] > 0
+
+
+def test_l_usage_reseau_se_compare_au_plafond(tmp_path):
+    """@verifies docs/DAT.md §20.3"""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm", network_burst_bps=500_000_000))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/sparks/crm/start")
+    reseau = c.get("/v1/sparks/crm/usage").json()["network"]
+    assert reseau["limit_bps"] == 500_000_000
+    assert reseau["reservation_bps"] == 100_000_000
+    assert "seul le plafond" in reseau["note"]
