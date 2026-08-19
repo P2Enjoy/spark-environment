@@ -188,3 +188,77 @@ tbody tr:hover { background: var(--color-hover); }
   .colonne-secondaire { display: none; }
   .principal { padding: var(--space-4) var(--space-2); }
 }
+
+/* --- Détail d'une entité (§6.3, §6.4) ------------------------------------ */
+.entete-entite {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+.entete-entite__identite { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.entete-entite > * + * { margin-top: var(--space-3); }
+
+.erreur-derniere {
+  margin: 0; padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-soft); color: var(--color-danger-on-soft);
+  border-radius: var(--radius-sm); font-size: var(--text-compact); font-weight: 700;
+}
+
+.commandes { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.bouton--destructif {
+  background: var(--color-danger); border-color: var(--color-danger); color: var(--color-surface);
+}
+.bouton--destructif:hover { background: var(--color-danger-on-soft); }
+
+/* Confirmation intégrée au flux, sous le déclencheur (§6.22). */
+.confirmation {
+  margin-top: var(--space-3); padding: var(--space-3);
+  background: var(--color-danger-soft); color: var(--color-danger-on-soft);
+  border-radius: var(--radius-sm);
+}
+.confirmation p { margin: 0; }
+.confirmation > * + * { margin-top: var(--space-2); }
+.confirmation__consequence { font-size: var(--text-compact); }
+.confirmation__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.note-transitoire {
+  margin: 0; padding: var(--space-2) var(--space-3);
+  background: var(--color-brand-soft); color: var(--color-brand-on-soft);
+  border-radius: var(--radius-sm); font-size: var(--text-compact);
+}
+
+/* §6.3 : deux colonnes sur grand écran, empilées sous 1024 px. */
+.detail { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
+@media (min-width: 1024px) { .detail { grid-template-columns: 3fr 2fr; } }
+.detail__principal > * + *, .detail__secondaire > * + * { margin-top: var(--space-4); }
+
+.bloc { padding: var(--space-4); }
+.bloc > * + * { margin-top: var(--space-3); }
+.bloc h3 { font-size: var(--text-compact); color: var(--color-text-2); }
+
+.definitions { margin: 0; display: grid; gap: var(--space-2); }
+.def { display: grid; grid-template-columns: 12rem 1fr; gap: var(--space-3); }
+.def dt { color: var(--color-text-2); font-size: var(--text-compact); }
+.def dd { margin: 0; }
+@media (max-width: 767px) { .def { grid-template-columns: 1fr; gap: 0; } }
+
+.liste-simple { margin: 0; padding-left: var(--space-4); }
+.liste-simple li { min-height: var(--size-target); display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Une absence qui informe est nommée, jamais laissée en blanc (§6.4, §14.5). */
+.absence { color: var(--color-text-3); font-style: italic; margin: 0; }
+.note { color: var(--color-text-3); font-size: var(--text-compact); margin: 0; }
+
+/* §14.8 : deux natures différentes se distinguent par la FORME, pas la couleur.
+   Un événement de journal est une ligne compacte, pas une carte. */
+.liste-evenements { list-style: none; margin: 0; padding: 0; }
+.evenement {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-compact); flex-wrap: wrap;
+}
+.evenement:last-child { border-bottom: 0; }
+.evenement__texte { flex: 1; min-width: 12rem; color: var(--color-text-2); }
+.evenement__date { color: var(--color-text-3); }

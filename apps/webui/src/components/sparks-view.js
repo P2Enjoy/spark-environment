@@ -167,7 +167,7 @@ export function renderEmpty() {
 <div class="titre-vue"><h1>Sparks</h1></div>
 <div class="carte"><div class="etat-vue">
   <h2>Aucun Spark sur ce serveur</h2>
-  <p>Un Spark est une cellule d'exécution contingentée, destinée à héberger une pile Docker Compose.</p>
+  <p>Un Spark est une cellule d’exécution contingentée, destinée à héberger une pile Docker Compose.</p>
   <p style="margin-top:var(--space-4)"><button type="button" class="bouton bouton--primaire">Créer un Spark</button></p>
 </div></div>`;
 }
@@ -178,7 +178,7 @@ export function renderError(error) {
   return `
 <div class="titre-vue"><h1>Sparks</h1></div>
 <div class="carte"><div class="etat-vue etat-vue--erreur" role="alert">
-  <h2>Les Sparks n'ont pas pu être chargés</h2>
+  <h2>Les Sparks n’ont pas pu être chargés</h2>
   <p>${echapper(message)}</p>
   <p style="margin-top:var(--space-4)"><button type="button" class="bouton" data-action="reessayer">Réessayer</button></p>
 </div></div>`;

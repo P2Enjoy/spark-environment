@@ -140,7 +140,7 @@ test('les trois absences de mesure ont des textes distincts', () => {
   const arrete = renderCpuGauge(null, { ...SPARK, state: 'stopped' });
   const erreur = renderCpuGauge(null, { ...SPARK, state: 'error' });
   const attente = renderCpuGauge({ used: null }, { ...SPARK, state: 'running' });
-  assert.match(arrete, /aucune mesure d'exécution/);
+  assert.match(arrete, /aucune mesure d’exécution/);
   assert.match(erreur, /Indisponible/);
   assert.match(attente, /Mesure en cours/);
   assert.notEqual(arrete, erreur);

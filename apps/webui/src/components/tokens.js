@@ -32,7 +32,7 @@ export function stateOf(value) {
 /** Textes d'absence de mesure (§14.6, SPK-DS-03) : zéro, mesure en cours et
  *  mesure impossible ne sont jamais confondus. */
 export const MEASURE = {
-  stopped: "Arrêté — aucune mesure d'exécution",
+  stopped: "Arrêté — aucune mesure d’exécution",
   pending: 'Mesure en cours',
   unavailable: 'Indisponible',
 };
