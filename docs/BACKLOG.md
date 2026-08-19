@@ -526,7 +526,7 @@ secret ni adresse réelle ; captures observées.
   qu'une image plus citée par personne survit indéfiniment à l'écran qu'elle
   montrait.
 
-### [ ] SPK-26 · Contrat de déploiement et procédure d'installation serveur
+### [x] SPK-26 · Contrat de déploiement et procédure d'installation serveur
 
 - Spécification : `docs/DAT.md` §31. Contrat : `docs/PROD_MIGRATIONS.md`.
 - **Une seule liste de contrôles**, employée avant l'installation pour savoir ce
@@ -549,6 +549,22 @@ DoD : les contrôles sont éprouvés par des tests avec relevés injectés ; ils
 et son script d'installation existent ; le contrat de déploiement décrit l'état
 mesuré, sans opération déjà faite présentée comme en attente ; le chapitre M2 du
 manuel est mis au niveau de ce qui est réellement outillé.
+
+- **Close le 2026-08-19.** 35 preuves avec relevés injectés, et **l'installation
+  réellement exécutée sur l'hôte cible** : les neuf contrôles y sont verts,
+  `sparkd` est en service systemd activé au démarrage, et la topologie relevée
+  donne 76,2 Gio allouables — soit exactement la soustraction du §16.1.
+- **Le premier passage contre l'hôte a trouvé un défaut dans le contrôle
+  lui-même** : la surface réseau dénonçait le port 53 de `dnsmasq`, lié au bridge
+  **privé** que les Sparks doivent joindre, et ne reconnaissait pas
+  `127.0.0.53%lo` comme de la boucle locale. Il classe désormais l'adresse.
+- **`readyz` était figé** : il annonçait « degraded » et deux pilotes « non
+  implémentés » quoi qu'il arrive. Un endpoint de disponibilité qui rend toujours
+  la même chose ne distingue pas un serveur sain d'un serveur en panne, et c'est
+  de lui que dépend la vérification de déploiement. Il sonde désormais.
+- **OP-02 était présenté comme en attente alors qu'il est appliqué.** Corrigé.
+- Reste hors outillage, et le chapitre M2 le dit : la mise en place des
+  prérequis, et le repartitionnement du stockage (SPK-28).
 
 ### [ ] SPK-27 · Vérification par mesure des hypothèses du DAT §13
 

@@ -128,6 +128,13 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- `python3 -m sparkd.preflight` : neuf contrôles d'état du serveur, en lecture
+  seule, employés avant et après l'installation.
+- `scripts/install-serveur.sh` et `deploy/sparkd.service` : `sparkd` devient un
+  service systemd activé au démarrage.
+- `GET /readyz` **sonde** désormais ses dépendances et nomme la cause d'une panne,
+  au lieu de rendre une réponse figée.
+- Chapitre M2 du manuel : installer le serveur.
 - Manuel utilisateur sous `docs/manuel/` : dix chapitres écrits à partir du
   comportement observé sur la pile réelle. Les illustrations sont produites par
   `make manuel` et le lien manuel-image est vérifié dans les deux sens.
@@ -159,7 +166,8 @@
   nouveau §25, l'écran de création ; nouveau §26, les trois surfaces
   d'administration d'un Spark ; nouveau §27, l'écran des pools ; nouveau §28, la
   pile de développement et le contrat du seed ; nouveau §29, les parcours E2E ;
-  nouveau §30, le manuel et sa fraîcheur ;
+  nouveau §30, le manuel et sa fraîcheur ; nouveau §31, l'installation du
+  serveur et sa vérification ;
   nouveau §22.6, qui ouvre le tunnel de la console et quand.
 - `docs/SCHEMA.md` : nouveau §11 bis, les deux termes de la réserve mémoire.
 - Migration `002_part_arc` : `host` porte désormais `memory_arc_bytes` et

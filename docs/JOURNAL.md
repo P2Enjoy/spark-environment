@@ -1659,3 +1659,55 @@ d'installation serveur. C'est l'unité qui débloque le chapitre M2 du manuel, e
 la seule qui reste avant les unités d'arbitrage. SPK-27 (vérifications du DAT
 §13) suit. SPK-12 attend un domaine, SPK-17 une exécution de CI ; SPK-28,
 SPK-29, INC-01 et INC-02 attendent un arbitrage du responsable.
+
+
+---
+
+## 2026-08-19 — SPK-26 : le serveur est déployé, et ça se vérifie
+
+**Unité** : SPK-26. L'hôte cible étant joignable, la spécification (`docs/DAT.md`
+§31) a été écrite **après relevé en lecture seule**, pas de mémoire.
+
+**Le relevé a changé ce que l'unité devait livrer.** Incus 7.3, le pool ZFS à
+compression, l'ARC à 16 Gio, le bridge privé avec sa plage DHCP disjointe et
+Caddy étaient déjà en place, et la surface réseau était conforme. Le seul manque
+réel : **`sparkd` tournait depuis une session `ssh`**. Un plan de contrôle lancé
+à la main disparaît au premier redémarrage, et les Sparks continuent de tourner
+sans que rien ne les administre — la panne est silencieuse et ne se découvre qu'à
+la première opération.
+
+**Deux principes portent le livrable.** Une seule liste de contrôles sert avant
+et après l'installation, parce que deux listes divergeraient et que c'est l'après
+qui deviendrait faux. Et la vérification est en **lecture seule**, séparée du
+script d'installation : un outil qui vérifie *et* répare finit par réparer ce
+qu'on voulait seulement constater. Une preuve vérifie qu'aucune commande mutante
+n'est lancée.
+
+**Le premier passage contre l'hôte a trouvé un défaut dans le contrôle
+lui-même.** La surface réseau dénonçait le port 53 : `dnsmasq` écoute sur
+`10.77.0.1`, le côté **privé** du bridge, que les Sparks doivent joindre pour
+leur DNS. Et `127.0.0.53%lo` n'était pas reconnu comme de la boucle locale. Le
+contrôle tenait pour exposé tout ce qui n'était pas `127.0.0.1` ; il classe
+maintenant l'adresse d'écoute. C'est le genre de faux positif qu'aucun test
+inventé n'aurait produit.
+
+**`readyz` était figé** depuis SPK-07 : « degraded » et deux pilotes « non
+implémentés » quoi qu'il arrive, alors qu'ils le sont. Un endpoint de
+disponibilité qui rend toujours la même chose ne distingue pas un serveur sain
+d'un serveur en panne — et c'est de lui que dépend la vérification de
+déploiement. Il sonde désormais chaque dépendance et nomme la cause des pannes.
+Sa preuve est révisée pour la deuxième fois, en le disant.
+
+**Installation exécutée sur l'hôte.** Neuf contrôles verts, `sparkd` en service
+activé au démarrage, topologie relevée : 94,2 − 16 (ARC) − 2 (marge) = **76,2 Gio
+allouables**, ce que le §16.1 prédisait exactement. Le contrat de déploiement est
+remis à l'état mesuré — OP-02 y était donné « en attente » alors qu'il est
+appliqué — et le chapitre M2 du manuel est écrit.
+
+**Vérifié.** 487 tests Python, 178 Node, 6 de contrat, 10 gestes, 11 parcours
+E2E, 7 contrôles du manuel, build, contrat sans dérive.
+
+**Où reprendre.** **SPK-27**, les sept vérifications par mesure du §13 du DAT, sur
+l'hôte désormais déployé. C'est la dernière unité de construction avant celles
+qui attendent un arbitrage. SPK-12 attend un domaine, SPK-17 une exécution de CI ;
+SPK-28, SPK-29, SPK-30, INC-01 et INC-02 attendent votre arbitrage.
