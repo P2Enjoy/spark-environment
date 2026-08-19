@@ -757,12 +757,12 @@ ligne du registre a été écrite et la ressource comptée (§14.2) ; le Spark r
   rendu. La fenêtre s'est élargie quand le catalogue a ajouté une requête, et le
   refus de capacité n'arrivait plus parce que le nom avait disparu.
 
-### [~] SPK-33 · Refonte de la navigation selon les trois degrés
+### [x] SPK-33 · Refonte de la navigation selon les trois degrés
 
-La console rend aujourd'hui une barre horizontale à deux liens, trois panneaux
+La console rendait une barre horizontale à deux liens, trois panneaux
 d'administration empilés dans le détail, et des formulaires ouverts dans le flux.
-Le design system retient désormais trois degrés : barre latérale, onglets, puis
-fenêtre en lecture avec une modale par section.
+Le design system retient trois degrés : barre latérale, onglets, puis fenêtre en
+lecture avec une modale par section.
 
 - Spécification : `docs/DESIGN_SYSTEM.md` §5.4, §6.27, §9.1 ·
   `docs/DESIGN_SYSTEM_APP.md` §1 · `docs/DAT.md` §34.
@@ -791,7 +791,7 @@ fenêtre en lecture avec une modale par section.
   M5, M7, M8, M9 mis à jour avec leurs illustrations ; `@spec` / `@verifies`
   posés.
 
-**Les trois degrés sont livrés ; la modale ne l'est pas.**
+**Livrée et intégralement prouvée le 2026-08-19.**
 
 - **Degré 1** : barre latérale, avec le sélecteur de serveur au-dessus — c'est le
   contexte de toutes les destinations, pas une destination. Sous 1024 px elle
@@ -811,15 +811,30 @@ fenêtre en lecture avec une modale par section.
   et 390 px.
 - Manuel M3 et M8 mis à jour ; captures et illustrations refaites.
 
-- **Reste à livrer**, et c'est pourquoi l'unité n'est pas `[x]` :
-  1. **le composant de modale** du §6.27 — les formulaires de section s'ouvrent
-     encore dans le flux. Le contrat à tenir est écrit : focus entrant, focus
-     retenu, `Échap`, focus rendu, arrière-plan inerte, une seule à la fois ;
-  2. par conséquent, le §26.2 du DAT dit encore « pas de modale », ce qui reste
-     **vrai de l'écran d'aujourd'hui** — il sera réécrit dans le même changement
-     que la modale ;
-  3. le manuel M5, M7 et M9 n'a pas eu besoin de changer aujourd'hui : leurs
-     illustrations montrent les mêmes gestes, sur leur facette.
+- **La modale est livrée**, en un composant unique : `dialog` ouvert par
+  `showModal()`, nom accessible égal au titre de la section, focus entrant dans le
+  premier champ, focus retenu, `Échap` qui vaut annulation, focus rendu au
+  déclencheur — **retrouvé par son identifiant**, jamais par `document.activeElement`,
+  que le repaint détache —, arrière-plan inerte, une seule à la fois, plein écran
+  sous 768 px. Les **quatre** saisies de la console y passent : route, clé,
+  instantané, et l'ajout au catalogue d'images.
+- Le §26.2 du DAT est réécrit et décrit la modale ; il conserve l'argument de coût
+  qui avait fait choisir le formulaire dans le flux, pour qu'on ne le refasse pas.
+  Le §33.2 dit que le catalogue suit la même règle, et le tableau de
+  `docs/DESIGN_SYSTEM_APP.md` §1 décrit l'écran au lieu d'une cible.
+- **Trois défauts trouvés par la mesure**, pas par l'œil : la modale collée au
+  bord supérieur, qu'une règle d'espacement de bloc écrasait ; sous 768 px, un
+  cadre resté à la hauteur de son contenu, laissant l'engagement flotter au milieu
+  de l'écran ; et une attente de parcours devenue vraie d'avance, qui guettait la
+  disparition d'une classe que plus aucun composant n'émettait.
+- Manuel : M3 énonce ce qu'une saisie garantit au clavier, M5 nomme où vit le
+  geste d'ajout au catalogue et l'illustre. Les illustrations des facettes sont
+  recadrées — 1400 px était la hauteur des panneaux empilés.
+- **Preuves exécutées** : 539 tests Python, 211 Node de la console, 6 de contrat,
+  8 gestes, **18 parcours E2E**, 7 contrôles du manuel, build, contrat sans
+  dérive, 35 captures et 10 illustrations refaites et observées. Modale mesurée et
+  observée à 1440, 1024, 768 et 390 px : centrée, focus dans le premier champ,
+  aucun débordement horizontal.
 
 ### [ ] SPK-34 · Sparks protégés contre la modification accidentelle
 

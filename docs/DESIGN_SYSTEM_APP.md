@@ -45,11 +45,10 @@ L'onglet *Images* du second degré est la surface du catalogue d'images
 Le sélecteur de serveur reste **au-dessus** du premier degré : il ne désigne pas
 une destination mais le contexte de toutes les destinations.
 
-**État réel au 2026-08-19 :** la console rend aujourd'hui une barre horizontale à
-deux liens, les trois panneaux d'administration empilés, et des formulaires
-ouverts dans le flux (`docs/DAT.md` §26.2). La convergence est l'objet de
-`docs/BACKLOG.md#SPK-33` ; sa cible est décrite au §34 du [DAT](DAT.md). Tant que
-cette unité n'est pas livrée, ce tableau décrit la cible, pas l'écran.
+**Ce tableau décrit l'écran, et non une cible** : `docs/BACKLOG.md#SPK-33` l'a
+livré le 2026-08-19. La barre latérale, les onglets du second degré, les facettes
+d'un Spark et la modale limitée à une section existent tous. Le §34 du
+[DAT](DAT.md) en donne le détail, et le §26.2 la surface de saisie.
 
 Ce qui prime sur le tableau, et qui ne se négocie pas à la livraison : ce qui
 s'affiche et ce qui se saisit ne partagent pas la même surface, chaque surface a

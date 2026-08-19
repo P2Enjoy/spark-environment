@@ -2392,3 +2392,72 @@ Aucun test exécuté : spécification et backlog seulement. L'état du code de l
 console a été relevé pour écrire ces constats — `apps/webui/host/main.js` n'expose
 que quatre routes, et `apps/webui/src/app.js` prend bien `servers[0]`.
 
+
+## 2026-08-19 — SPK-33 close : la dernière saisie rejoint la modale
+
+**Unité** : SPK-33, reprise là où le journal précédent l'arrêtait — « son seul
+manque : le composant de modale ». Le composant existait déjà au début de cette
+session ; ce qui restait était la dernière saisie encore dans le flux, et les
+documents que la livraison rendait faux.
+
+**Ce qui est livré.** Le formulaire d'ajout du catalogue d'images s'ouvrait sous
+le tableau qu'il décrit. La section « Catalogue » portait donc deux sujets, et la
+tabulation sortait de la saisie sans le dire — ce que le §5.4 point 1 interdit.
+Il passe par le composant de modale, dont le titre est celui de la section. Les
+**quatre** saisies de la console y sont désormais : route, clé, instantané,
+image. Les panneaux d'un Spark ne captent plus `[data-ouvre]` indistinctement :
+ils nomment leurs trois déclencheurs, le catalogue vivant sur une autre
+destination avec son propre état.
+
+**Trois défauts trouvés par la mesure, pas par l'œil.**
+
+1. `.formulaire-panneau` était la classe du formulaire dans le flux. Plus aucun
+   composant ne l'émettait, ce qui laissait une règle de style sans sujet, un
+   appel de focus sans cible, et surtout **une attente de parcours vraie
+   d'avance** : elle guettait la disparition d'un élément qui n'apparaissait
+   jamais. Elle porte maintenant sur la fermeture de la modale, ce qu'elle
+   prouvait avant. L'écart de la case à cocher, que cette règle portait, a été
+   reposé sur le corps de la modale — il avait disparu avec elle.
+2. Sous 768 px, le `dialog` occupait bien l'écran, mais son cadre restait à la
+   hauteur de son contenu : la barre d'engagement flottait au milieu et le bas de
+   l'écran était vide. Vu sur la capture, pas dans le code.
+3. En corrigeant, `flex: 1` seul sur le corps — qui est une **grille** —
+   répartissait la hauteur gagnée entre ses lignes : des champs de deux cents
+   pixels de haut. `align-content: start` les laisse à leur taille.
+
+**Le catalogue n'avait aucune capture**, ni son écran ni le geste qui l'alimente.
+La campagne l'atteint par la navigation — accueil, Hôte, onglet Images — et ouvre
+sa modale au clavier, à 1440 puis 390 px ; le sparkd factice sert quatre entrées
+pour montrer les trois états du relevé plutôt qu'un seul.
+
+**Manuel.** Il décrivait les trois niveaux qui servent à regarder et rien de la
+surface qui recueille. M3 énonce ce qu'une saisie garantit — curseur dans le
+premier champ, tabulation retenue, `Échap`, focus rendu, refus qui n'efface rien
+— et rappelle qu'une confirmation n'est pas une modale. M5 renvoyait à « ajouter
+au catalogue » sans dire où : il nomme Hôte → Images et l'illustre. Les
+illustrations des facettes sont recadrées : 1400 px était la hauteur des panneaux
+empilés, la moitié basse était vide depuis les onglets.
+
+**Documents remis en accord avec la réalité** : `DESIGN_SYSTEM_APP.md` §1 disait
+encore « la console rend aujourd'hui une barre horizontale à deux liens […] et
+des formulaires ouverts dans le flux » ; le CHANGELOG bornait deux mentions par
+« jusqu'à la livraison de SPK-33 » ; le backlog listait comme reste à livrer la
+modale et la réécriture du §26.2, faites toutes deux. Le §33.2 du DAT dit
+maintenant que le catalogue suit la règle du §26.2.
+
+**Vérifié.** 539 tests Python, 211 Node de la console, 6 de contrat, 8 gestes,
+18 parcours E2E, 7 contrôles du manuel, build, contrat sans dérive. 35 captures
+et 10 illustrations refaites et observées. Modale mesurée et observée à 1440,
+1024, 768 et 390 px : centrée, focus dans le premier champ, aucun débordement
+horizontal. Console vierge de tout message applicatif.
+
+**Où reprendre.** **SPK-30**, libre et entièrement spécifiée, puis SPK-34.
+SPK-29 attend une contention sur les trois tranches de l'hôte simultanément ;
+SPK-12 un domaine ; SPK-17 une exécution de CI. SPK-28, SPK-35, SPK-36 et SPK-42
+attendent votre arbitrage.
+
+**Environnement de cette session.** Machine locale, non `root` : Docker répondait
+déjà, Node 24.14.1 et pnpm 9.15.4 étaient en place, et les contournements des
+§2.1 et §2.1 bis de `CloudWorker.md` étaient sans objet. Une session concurrente
+a poussé sur `main` pendant le travail (commit « Instruit le nom de la machine et
+ce qui manque au catalogue ») ; l'historique est resté linéaire.

@@ -2683,6 +2683,12 @@ autorité à la création.
 - Le catalogue est **extensible** : ajouter une image est un geste explicite, qui
   déclenche sa vérification. Ce n'est pas le formulaire de création qui sert de
   porte d'entrée à une référence inconnue.
+- La saisie est recueillie par une **modale limitée à la section « Catalogue »**
+  (`DESIGN_SYSTEM.md` §6.27), comme celle des panneaux d'un Spark (§26.2). Elle
+  s'ouvrait d'abord dans le flux, sous le tableau qu'elle décrit : la section
+  portait alors deux sujets et la tabulation sortait de la saisie, ce que le §5.4
+  interdit. Ajouter au catalogue **insère un élément dans une section** ; c'est la
+  création d'un Spark, objet de premier plan, qui garde sa destination propre.
 
 ### 33.3 La vérification est un relevé, pas un rafraîchissement
 

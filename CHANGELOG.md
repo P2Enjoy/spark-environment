@@ -195,6 +195,16 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- Navigation à trois degrés : barre latérale, onglets de second degré, et fenêtre
+  d'un Spark répartie en facettes — Infos, Routes, Clés, Instantanés, Journal.
+  Chaque onglet est un lien avec sa propre adresse, jamais un `tablist`.
+- Composant de **modale limitée à une section** : focus entrant dans le premier
+  champ, focus retenu, `Échap` qui vaut annulation, focus rendu au déclencheur,
+  arrière-plan inerte, une seule à la fois, plein écran sous 768 px. Les quatre
+  saisies de la console y passent — route, clé, instantané, image du catalogue.
+- Captures du catalogue d'images et de sa saisie, atteintes par la navigation, à
+  1440 et 390 px. Illustration du catalogue dans le manuel, et chapitre M3
+  complété de ce qu'une saisie garantit au clavier.
 
 ### Modifié
 
@@ -236,11 +246,13 @@
   geste qui **réduit** un risque — révoquer un accès, retirer une clé, couper une
   publication. Elle nomme alors les objets protégés touchés et demande
   confirmation, au lieu de refuser.
-- `docs/DESIGN_SYSTEM_APP.md` §1 : les trois degrés appliqués à la console, avec
-  l'écart entre l'écran réel et la cible, borné par SPK-33.
-- `docs/DAT.md` §26.2 : le choix « pas de modale » est explicitement révisé par le
-  §34.2 ; il décrit l'écran réel jusqu'à la livraison de SPK-33. §25.3 renvoie au
-  catalogue d'images pour le contrôle de forme de la référence.
+- `docs/DESIGN_SYSTEM_APP.md` §1 : les trois degrés appliqués à la console. Le
+  tableau décrit l'écran depuis la livraison de SPK-33, et non plus une cible.
+- `docs/DAT.md` §26.2 : réécrit, la saisie est recueillie par une modale limitée à
+  la section. Il conserve l'argument de coût qui avait fait choisir le formulaire
+  dans le flux, pour qu'on ne le refasse pas. §33.2 dit que le catalogue suit la
+  même règle. §25.3 renvoie au catalogue d'images pour le contrôle de forme de la
+  référence.
 - `README.md` : le champ « image » libre entre dans les limites connues.
 
 ### Vérifié sur matériel réel
