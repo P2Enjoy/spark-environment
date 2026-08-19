@@ -7,7 +7,7 @@ VENV   := $(SPARKD)/.venv
 PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
-        contract contract-check test build clean
+        contract contract-check test gestes captures build clean
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -17,6 +17,8 @@ help:
 	@echo "webui-install   installe les dependances de la console"
 	@echo "contract        regenere le contrat d'API et ses types"
 	@echo "contract-check  echoue si le contrat committe a derive du code"
+	@echo "gestes          parcours navigateur des gestes d'administration"
+	@echo "captures        captures d'interface, a OBSERVER (CLAUDE.md §16)"
 	@echo "test            toutes les suites de tests"
 	@echo "build           build de tous les paquets"
 
@@ -43,8 +45,17 @@ contract:
 contract-check:
 	$(PY) scripts/contract.py check
 
+# Les parcours navigateur font partie de la campagne : un test hors campagne
+# cesse d'etre execute, puis cesse d'etre vrai.
+gestes:
+	node --test e2e/gestes.test.mjs
+
+captures:
+	node e2e/captures.mjs
+
 test: sparkd-test contract-check
 	pnpm -r test
+	$(MAKE) gestes
 
 build:
 	pnpm -r build

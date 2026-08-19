@@ -132,6 +132,8 @@ pas encore sont marquées.
 | `make test` | toutes les suites de tests, contrat compris | **oui** |
 | `make contract` | régénère le contrat d'API et ses types | **oui** |
 | `make contract-check` | échoue si le contrat committé a dérivé du code | **oui** |
+| `make gestes` | parcours navigateur des gestes d'administration | **oui** |
+| `make captures` | captures d'interface, à observer | **oui** |
 | `make build` | build de tous les paquets | **oui** |
 | `pnpm -r test` / `build` / `typecheck` | paquets TypeScript de l'espace de travail | **oui** |
 | `pnpm dev` | hôte console sur `http://127.0.0.1:5173` — inventaire et tunnels | **oui** |

@@ -113,6 +113,13 @@
 
 - Écran de création d'un Spark : capacité restante affichée, avertissement local
   distinct du refus serveur, saisie conservée en cas de refus.
+- Trois panneaux d'administration agissants sur l'écran détail : déclarer et
+  retirer une route publique, la réappliquer quand Caddy est en retard ;
+  accorder, enregistrer et révoquer une clé SSH ; prendre, supprimer et restaurer
+  un instantané. La restauration bloquée par des instantanés plus récents les
+  nomme et n'offre l'acceptation de leur perte qu'après ce refus.
+- `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
+- `make captures` échoue si l'application écrit dans la console du navigateur.
 
 ### Modifié
 
@@ -129,7 +136,8 @@
   restauration ; nouveau §20, métriques d'usage ;
   nouveau §21, journal d'audit ; nouveau §22, l'hôte local de la console ;
   nouveau §23, le contrat d'API partagé ; nouveau §24, l'écran détail ;
-  nouveau §25, l'écran de création.
+  nouveau §25, l'écran de création ; nouveau §26, les trois surfaces
+  d'administration d'un Spark.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel

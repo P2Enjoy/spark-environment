@@ -322,7 +322,7 @@ Afficher la capacité restante avant validation, et le refus motivé du backend.
   côté du refus qui fait autorité — deux messages disant la même chose, dont un
   moins fiable.
 
-### [ ] SPK-21 · Écrans ingress, clés SSH, snapshots
+### [x] SPK-21 · Écrans ingress, clés SSH, snapshots
 
 Rendre agissantes les trois sections que l'écran détail affiche en lecture seule
 depuis SPK-19 : routes publiques, clés autorisées, instantanés.
@@ -352,6 +352,23 @@ chaque succès ; aucun contrôle d'unicité de domaine côté interface ; l'ordr
 refus-puis-acceptation est éprouvé par un test ; états chargement, erreur et
 absence traités ; navigation clavier ; console du navigateur vierge ; captures
 observées.
+
+- **Close le 2026-08-19.** 35 tests de rendu et **8 parcours navigateur
+  assertifs** (`e2e/gestes.test.mjs`, intégrés à `make test`) qui ouvrent le
+  Spark depuis la liste, cliquent et saisissent. Ils vérifient que chaque geste
+  part avec la bonne méthode et le bon corps, et que l'écran relit ensuite.
+- Le parcours central est éprouvé deux fois : la première tentative de
+  restauration part avec un corps `{}`, le refus nomme l'instantané bloquant, et
+  `accept_losing_newer` ne part **qu'ensuite**.
+- Neuf captures observées (20 à 28). **Deux défauts trouvés par l'observation** :
+  les listes n'avaient pas les séparateurs du §6.19, si bien que dans la colonne
+  étroite des instantanés le groupe d'actions passait à la ligne et se retrouvait
+  entre deux instantanés — l'action voisine étant « Supprimer » ; et le refus de
+  restauration ne nommait pas l'instantané visé.
+- **Limite assumée** : ces parcours s'exécutent contre un faux `sparkd`. Il
+  n'existe pas encore de pile locale à interroger — c'est SPK-23 — et l'E2E
+  contre la pile réelle appartient à SPK-24. C'est le même niveau de preuve que
+  SPK-18 à SPK-20, augmenté des parcours assertifs.
 
 ### [ ] SPK-22 · Vue des pools de ressources de l'hôte
 

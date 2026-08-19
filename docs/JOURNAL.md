@@ -1402,3 +1402,58 @@ trois dernières surfaces d'administration. Les composants de formulaire, de
 confirmation et d'absence nommée existent désormais ; l'unité consiste surtout à
 les composer. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
 SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-21 : l'ordre des gestes est le produit
+
+**Unité** : SPK-21, les trois surfaces d'administration. Le backlog n'en portait
+que le titre ; la spécification (`docs/DAT.md` §26) a été écrite et committée
+avant la première ligne de code.
+
+**Le titre disait « écrans », au pluriel, et la spécification s'en écarte.** Une
+route publique et un instantané n'existent pas sans leur Spark : leur donner des
+écrans séparés obligerait à choisir un Spark en entrant, donc à refaire l'écran
+détail en moins bon. Ce sont trois panneaux du détail. Une exception réelle
+subsiste : oublier une clé du **registre commun** la retire de tous les Sparks à
+la fois, un effet qui déborde le Spark qu'on regarde — ce geste reste hors de
+cette unité, et le panneau le dit.
+
+**La décision qui structure le reste porte sur la restauration.** `sparkd` refuse
+de restaurer un instantané ancien tant que des plus récents existent (§19.1), et
+accepte un drapeau de requête pour passer outre. La tentation était de mettre une
+case « accepter la perte » dans le formulaire. Elle serait cochée par habitude,
+et ferait perdre des instantanés jamais regardés. **Le refus est ce qui rend la
+perte visible** : l'acceptation ne peut donc venir qu'après lui, et doit nommer
+ce qui meurt. C'est éprouvé deux fois — la première requête part avec `{}`, et
+`accept_losing_newer` n'existe nulle part dans le rendu avant le refus.
+
+**Deux défauts trouvés par l'observation des captures**, tests verts :
+
+1. les listes n'avaient pas les **séparateurs** qu'exige le §6.19. Dans la
+   colonne étroite des instantanés, le groupe d'actions passait à la ligne et se
+   retrouvait visuellement entre deux instantanés — l'action voisine étant
+   « Supprimer » ;
+2. le refus de restauration annonçait le nombre de victimes sans nommer
+   l'instantané visé, alors que trois boutons « Restaurer » coexistent.
+
+**Ce que la session ajoute au harnais.** `e2e/gestes.test.mjs` : huit parcours
+navigateur qui ouvrent le Spark **depuis la liste**, cliquent et saisissent, et
+vérifient la méthode et le corps réellement envoyés. Ils sont dans `make test` —
+un test hors campagne cesse d'être exécuté, puis cesse d'être vrai. La campagne
+de captures échoue désormais si l'application écrit dans la console ; le journal
+réseau de Chromium pour les 500, 502 et 409 provoqués est compté à part et
+affiché, jamais masqué.
+
+**Vérifié.** 438 tests Python, 137 tests Node, 6 tests de contrat, 8 parcours
+navigateur, contrat sans dérive, build, neuf captures observées.
+
+**Limite.** Ces parcours s'exécutent contre un faux `sparkd` : il n'existe pas
+encore de pile locale à interroger.
+
+**Où reprendre.** **SPK-22**, la vue des pools de ressources de l'hôte — la
+dernière surface de lecture, et la seule qui parle de l'hôte plutôt que d'un
+Spark. Puis SPK-23, la pile de développement autonome, qui débloquera l'E2E
+réel de SPK-24. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
+SPK-28 un arbitrage.
