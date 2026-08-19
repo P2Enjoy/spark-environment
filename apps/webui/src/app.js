@@ -153,7 +153,8 @@ function brancherPanneaux() {
   // Les trois panneaux, nommés : `[data-ouvre]` capterait aussi le déclencheur
   // du catalogue, qui vit sur une autre destination et a son propre état.
   for (const bouton of racine.querySelectorAll(
-    '[data-ouvre="route"], [data-ouvre="key"], [data-ouvre="snapshot"]')) {
+    '[data-ouvre="route"], [data-ouvre="key"], [data-ouvre="snapshot"],'
+    + ' [data-ouvre="protection"]')) {
     bouton.addEventListener('click', () => {
       admin.open = bouton.dataset.ouvre;
       admin.refusal = null;
@@ -172,7 +173,9 @@ function brancherPanneaux() {
     });
   }
 
-  const formulaire = racine.querySelector('[data-modale="route"], [data-modale="key"], [data-modale="snapshot"]');
+  const formulaire = racine.querySelector(
+    '[data-modale="route"], [data-modale="key"], [data-modale="snapshot"],'
+    + ' [data-modale="protection"]');
   if (formulaire) {
     for (const controle of formulaire.querySelectorAll('input, select')) {
       controle.addEventListener('input', () => {
@@ -188,6 +191,7 @@ function brancherPanneaux() {
       if (quoi === 'route') return declarerRoute();
       if (quoi === 'key') return autoriserCle();
       if (quoi === 'snapshot') return prendreInstantane();
+      if (quoi === 'protection') return basculerProtection();
     });
   }
 
@@ -216,9 +220,25 @@ function brancherPanneaux() {
     agir('route', () => appel('DELETE', `/v1/ingress/${encodeURIComponent(domaine)}`)));
   geste('reapplique', () =>
     agir('route', () => appel('POST', '/v1/ingress/reconcile')));
-  geste('revoque', (label) =>
-    agir('key', () => appel('DELETE',
-      `/v1/sparks/${encodeURIComponent(etat.spark.name)}/ssh-keys/${encodeURIComponent(label)}`)));
+  // §35.2 : révoquer n'est jamais refusé par la protection. Le premier appel
+  // peut rendre la liste NOMMÉE des Sparks protégés touchés ; le second porte
+  // l'acceptation. Aucun mot de passe, et aucune protection levée.
+  const revoquer = (label, accepte) => agir('key', () => appel(
+    'DELETE',
+    `/v1/sparks/${encodeURIComponent(etat.spark.name)}/ssh-keys/${encodeURIComponent(label)}`,
+    accepte ? { accept_protected: true } : null,
+  )).then((resultat) => {
+    if (!resultat.ok && etat.admin.refusal?.protected_sparks) {
+      // L'étiquette n'est pas dans la réponse : le bouton d'acceptation doit
+      // pourtant savoir QUELLE clé il révoque.
+      etat.admin.refusal.label = label;
+      peindre();
+    }
+    return resultat;
+  });
+  geste('revoque', (label) => revoquer(label, false));
+  // L'acceptation n'est atteignable qu'APRÈS le refus, comme au §26.5.
+  geste('accepte-protege', (label) => revoquer(label, true));
   geste('confirme-suppression', (nom) =>
     agir('snapshot', () => appel('DELETE',
       `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots/${encodeURIComponent(nom)}`)));
@@ -256,7 +276,13 @@ async function agir(panneau, operation, { ferme = true } = {}) {
   etat.admin.busy = false;
   if (!resultat.ok) {
     const detail = resultat.corps?.detail ?? resultat.corps ?? {};
-    etat.admin.refusal = { panel: panneau, message: detail.message ?? 'Le serveur a refusé ce geste.' };
+    etat.admin.refusal = {
+      panel: panneau,
+      message: detail.message ?? 'Le serveur a refusé ce geste.',
+      // §35.2 : la liste NOMMÉE des Sparks protégés voyage avec le refus, sinon
+      // la confirmation ne pourrait que les compter.
+      ...(detail.protected_sparks ? { protected_sparks: detail.protected_sparks } : {}),
+    };
     etat.admin.confirming = null;
     peindre();
     return resultat;
@@ -265,6 +291,27 @@ async function agir(panneau, operation, { ferme = true } = {}) {
   etat.admin.refusal = null;
   if (ferme) etat.admin.open = null;
   await chargerDetail(etat.spark.name, etat.facette);
+  return resultat;
+}
+
+/**
+ * Arme ou lève la protection (SPK-34, docs/DAT.md §35.5).
+ *
+ * Une seule modale pour les deux sens : ce qui change est le titre du bouton et
+ * la méthode, jamais la surface. Lever DÉSARME durablement — il n'y a pas de
+ * fenêtre de temps à surveiller (§35.4).
+ */
+async function basculerProtection() {
+  const arme = Boolean(etat.spark?.protected);
+  const mot = etat.admin.values.password;
+  const resultat = await agir('protection', () =>
+    appel(arme ? 'DELETE' : 'POST',
+          `/v1/sparks/${encodeURIComponent(etat.spark.name)}/protection`,
+          { password: mot }));
+  // Le mot de passe ne SURVIT PAS au geste, réussi ou refusé : le garder en
+  // mémoire de l'écran le laisserait dans un champ que la modale suivante
+  // rouvrirait pré-rempli.
+  etat.admin.values.password = '';
   return resultat;
 }
 

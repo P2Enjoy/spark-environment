@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderSparkDetail, renderCommands, renderDetailNotFound, COMMANDES,
+  renderSparkDetail, renderCommands, renderDetailNotFound, renderProtection, COMMANDES,
 } from './spark-detail.js';
 
 const GIO = 1024 ** 3;
@@ -196,4 +196,56 @@ test("un resultat inconnu ne casse pas l affichage", () => {
   });
   assert.match(html, /badge--neutral/);
   assert.equal(/undefined/.test(html), false);
+});
+
+
+// --- la protection (SPK-34, docs/DAT.md §35) --------------------------------
+
+const PROTEGE = { ...SPARK, protected: true, protected_at: '2026-08-19T10:00:00',
+                  allowed_commands: [] };
+
+test('un Spark protege ne montre AUCUNE commande, et dit pourquoi', () => {
+  // §24.1 : le runtime ne publie plus rien. Sans le cas explicite, l'ecran
+  // dirait « aucune commande dans cet etat » — la mauvaise cause.
+  const html = renderCommands(PROTEGE);
+  for (const absent of ['Arrêter', 'Redémarrer', 'Supprimer'])
+    assert.ok(!html.includes(absent), `${absent} ne doit pas etre propose`);
+  assert.match(html, /protégé/);
+  assert.ok(!html.includes('dans cet état'), 'la cause nommee doit etre la protection');
+});
+
+test("la section dit son etat DANS LES DEUX SENS", () => {
+  // §35.4 : un Spark desarme le dit aussi clairement, pour que l'oubli de
+  // rearmement se voie.
+  assert.match(renderProtection(PROTEGE), /Armée/);
+  assert.match(renderProtection(SPARK), /Désarmée/);
+  assert.match(renderProtection(PROTEGE), /Lever la protection/);
+  assert.match(renderProtection(SPARK), /Armer la protection/);
+});
+
+test("l'ecran ne presente JAMAIS la protection comme une frontiere de securite", () => {
+  // §35.1 : c'est un garde-fou. L'ecran est le premier endroit ou l'on serait
+  // tente de laisser croire le contraire.
+  const html = renderProtection(PROTEGE);
+  assert.match(html, /n’est pas un\s+contrôle d’accès/s);
+  assert.match(html, /Retirer un accès n’est jamais bloqué/);
+});
+
+test('la saisie du mot de passe passe par la MODALE de la section (§6.27)', () => {
+  const ferme = renderProtection(PROTEGE, { open: null, values: {} });
+  assert.ok(!ferme.includes('<dialog'), 'rien tant qu’on n’a rien demande');
+  const ouvert = renderProtection(PROTEGE,
+    { open: 'protection', values: { password: '' } });
+  assert.match(ouvert, /<dialog class="modale" id="protection"/);
+  assert.match(ouvert, /id="protection-titre">Protection</);
+  // Le champ est de type `password` : il ne s'affiche pas en clair a l'ecran.
+  assert.match(ouvert, /id="protection-mot"[^>]*type="password"/s);
+  assert.match(ouvert, /data-engage="protection"[^>]*>Lever la protection</s);
+});
+
+test("l'absence de recuperation est DITE, pas laissee a decouvrir", () => {
+  // §35.3 : il n'y a aucune recuperation par l'API. Le taire ferait chercher un
+  // mecanisme de secours qui n'existe pas.
+  const html = renderProtection(PROTEGE, { open: 'protection', values: {} });
+  assert.match(html, /aucune récupération/);
 });

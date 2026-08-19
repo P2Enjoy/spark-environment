@@ -17,6 +17,8 @@
 import { stateOf, formatBytes, formatBps, formatCpu, MEASURE } from './tokens.js';
 import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel, ADMIN_VIDE } from './spark-admin.js';
 import { renderOngletsSpark } from './host-images.js';
+import { renderModale } from './modale.js';
+import { formatDate } from './host-view.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -54,8 +56,18 @@ export const RESULTATS = {
  * elle n'est pas rendue du tout (§24.1). Un état transitoire le dit en toutes
  * lettres plutôt que d'exposer quatre boutons morts.
  */
-export function renderCommands(spark, { confirming = null } = {}) {
+export function renderCommands(spark, { confirming = null, admin = null } = {}) {
   const permises = spark?.allowed_commands ?? [];
+
+  // §6.23 : « lorsqu'un objet est protégé, la protection se LÈVE D'ABORD, par un
+  // geste distinct et explicite ». Le runtime ne publie alors aucune commande
+  // (§24.1) ; sans ce cas, l'écran dirait « aucune commande dans cet état », ce
+  // qui désignerait la mauvaise cause.
+  if (spark?.protected) {
+    return `<p class="note-transitoire" role="status">Ce Spark est <strong>protégé</strong> :
+      aucune écriture ne l’atteint tant que la protection est armée. La lever est un
+      geste distinct, en bas de cette fenêtre.</p>`;
+  }
 
   if (spark?.transient) {
     return `<p class="note-transitoire" role="status">Une opération est en cours ` +
@@ -91,6 +103,64 @@ export function renderCommands(spark, { confirming = null } = {}) {
     : '';
 
   return `<div class="commandes">${boutons}</div>${confirmation}`;
+}
+
+/**
+ * La section « Protection » et son geste (SPK-34).
+ *
+ * @spec docs/BACKLOG.md#SPK-34 · docs/DAT.md §35.1 (garde-fou, pas contrôle
+ *       d'accès), §35.3 (le mot de passe), §35.4 (lever est un état) ·
+ *       docs/DESIGN_SYSTEM.md §6.23, §6.27 (la saisie passe par une modale)
+ *
+ * La section dit toujours son état — armé COMME désarmé. Un Spark désarmé qui ne
+ * dirait rien laisserait l'oubli de réarmement invisible, ce que le §35.4
+ * interdit explicitement.
+ *
+ * Elle dit aussi ce que la protection VAUT. Le §35.1 est catégorique : le
+ * produit ne la présentera jamais comme une frontière de sécurité, et l'écran
+ * est le premier endroit où l'on serait tenté de le laisser croire.
+ */
+export function renderProtection(spark, admin = null) {
+  const arme = Boolean(spark?.protected);
+  const ui = admin ?? {};
+  const modale = renderModale({
+    ouverte: ui.open === 'protection', id: 'protection', titre: 'Protection',
+    engagement: arme ? 'Lever la protection' : 'Armer la protection',
+    refus: ui.refusal?.panel === 'protection' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps: `
+       <div class="champ">
+         <label for="protection-mot">Mot de passe</label>
+         <input class="controle" id="protection-mot" name="password" type="password"
+                autocomplete="off" value="${echapper(ui.values?.password ?? '')}">
+         <p class="champ__aide">${arme
+           ? 'Le mot de passe posé à l’armement. Il n’y a aucune récupération : '
+             + 'un mot de passe perdu se lève sur le serveur.'
+           : 'Réarmer accepte un autre mot de passe que le précédent : le produit '
+             + 'ne retient pas l’ancien.'}</p>
+       </div>`,
+  });
+
+  return `
+<section class="carte bloc" aria-labelledby="titre-protection">
+  <h2 id="titre-protection">Protection</h2>
+  <p>${arme
+    ? `<strong>Armée</strong> depuis <span class="technique">${
+        echapper(formatDate(spark.protected_at))}</span>. Toute écriture visant ce
+       Spark est refusée par le serveur — commandes, routes, octroi de clé,
+       instantanés.`
+    : '<strong>Désarmée.</strong> Ce Spark accepte toutes les écritures.'}</p>
+  <p class="note">Elle arrête le geste accidentel : le mauvais Spark sélectionné,
+  la ligne cliquée trop vite, le script lancé sur le mauvais nom. Ce n’est pas un
+  contrôle d’accès — qui atteint le serveur atteint le registre.
+  <strong>Retirer un accès n’est jamais bloqué</strong> : révoquer une clé reste
+  possible sur un Spark protégé, après une confirmation qui le nomme.</p>
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-ouvre="protection">${
+      arme ? 'Lever la protection' : 'Armer la protection'}</button>
+  </p>
+  ${modale}
+</section>`;
 }
 
 /** Paires terme/valeur. Une valeur absente n'est PAS rendue (§6.4). */
@@ -187,7 +257,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
 
   const facettes = {
     '': () => `<div class="detail">
-      <div class="detail__principal">${renderRessources(spark, usage)}</div>
+      <div class="detail__principal">${renderRessources(spark, usage)}
+        ${renderProtection(spark, admin)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}</div>
     </div>`,
     routes: () => renderRoutesPanel(spark, routes, admin),

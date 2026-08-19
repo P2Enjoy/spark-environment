@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
-  renderBlockedRestore, formatDate, ADMIN_VIDE,
+  renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation,
 } from './spark-admin.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -320,4 +320,38 @@ test('les valeurs de l’utilisateur sont echappees', () => {
 test('formatDate rend un horodatage lisible', () => {
   assert.equal(formatDate('2026-08-19T14:30:00.123456'), '2026-08-19 14:30');
   assert.equal(formatDate(null), '');
+});
+
+
+// --- revoquer traverse un Spark protege, et le NOMME (SPK-34) --------------
+
+test('la confirmation NOMME les Sparks proteges, elle ne les compte pas', () => {
+  // §6.23 : « les objets protégés concernés sont NOMMÉS, pas comptés ».
+  const html = renderProtectedRevocation({
+    label: 'poste-responsable', protected_sparks: ['postgres-dedie', 'crm-production'],
+  });
+  assert.match(html, /postgres-dedie/);
+  assert.match(html, /crm-production/);
+  assert.match(html, /2 Sparks protégés/);
+});
+
+test("la confirmation dit qu'AUCUNE protection ne sera levee", () => {
+  // §35.2 : l'action aboutit sans qu'aucune protection ait a etre levee, et
+  // sans en lever aucune. Le taire ferait croire a un desarmement au passage.
+  const html = renderProtectedRevocation({ label: 'k', protected_sparks: ['a'] });
+  assert.match(html, /Aucune protection ne sera levée/);
+});
+
+test("le bouton d'acceptation n'est PAS destructif", () => {
+  // §6.23 : revoquer un acces REDUIT un risque. Ne pas employer `danger` parce
+  // qu'une action est importante.
+  const html = renderProtectedRevocation({ label: 'k', protected_sparks: ['a'] });
+  assert.match(html, /data-accepte-protege="k"/);
+  assert.ok(!html.includes('bouton--destructif'));
+});
+
+test("sans Spark protege, il n'y a AUCUNE confirmation a rendre", () => {
+  // §35.5 : « s'il n'y a aucun Spark protégé, il n'y a pas de refus du tout ».
+  assert.equal(renderProtectedRevocation({ label: 'k', protected_sparks: [] }), '');
+  assert.equal(renderProtectedRevocation(null), '');
 });

@@ -29,13 +29,13 @@ export function formatDate(valeur) {
 /** État initial des trois panneaux. Les valeurs vivent ici pour qu'un refus du
  *  serveur ne les efface pas (§26.2). */
 export const ADMIN_VIDE = {
-  open: null,        // 'route' | 'key' | 'snapshot' — un seul à la fois (§26.2)
+  open: null,        // 'route' | 'key' | 'snapshot' | 'protection' (§26.2)
   confirming: null,  // { kind, id }
   refusal: null,     // { panel, message, blocking? }
   busy: false,
   values: { domain: '', port: 8080, tls: true,
             key_label: '', new_label: '', public_key: '',
-            snapshot: '' },
+            snapshot: '', password: '' },
 };
 
 /**
@@ -166,6 +166,11 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
        la révoquer fermera ce Spark à tout le monde.</p>`
     : '';
 
+  // §35.2 : la révocation qui traverse un Spark protégé le NOMME avant d'aboutir.
+  const traverse = ui.refusal?.panel === 'key' && ui.refusal.protected_sparks
+    ? renderProtectedRevocation(ui.refusal)
+    : '';
+
   const choixRegistre = disponibles.length
     ? `<div class="champ">
          <label for="cle-registre">Clé déjà enregistrée</label>
@@ -213,6 +218,7 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
   <h2 id="titre-cles">Clés autorisées</h2>
   ${lignes}
   ${derniere}
+  ${traverse}
   ${declencheur('key', 'Autoriser une clé')}
   ${fragment}
   ${modale}
@@ -231,6 +237,41 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
  * ferait perdre des instantanés jamais regardés. Le refus est ce qui rend la
  * perte visible.
  */
+/**
+ * La révocation d'une clé traverse un Spark protégé, et le NOMME (SPK-34).
+ *
+ * @spec docs/BACKLOG.md#SPK-34 · docs/DAT.md §35.2 (retirer un accès passe
+ *       toujours), §35.5 (l'ordre refus-puis-acceptation) ·
+ *       docs/DESIGN_SYSTEM.md §6.23 (une protection ne bloque jamais un geste
+ *       qui réduit un risque), §6.22 (la confirmation reste dans le flux)
+ *
+ * Ce n'est PAS un blocage : c'est la façon dont le runtime dit ce qu'il va
+ * toucher. Le §6.23 l'exige mot pour mot — les objets protégés sont **nommés**,
+ * pas comptés, et l'action aboutit sans qu'aucune protection soit levée.
+ *
+ * Le bouton n'est PAS destructif : révoquer un accès réduit un risque. Le §6.23
+ * interdit d'employer `danger` parce qu'une action est importante.
+ */
+export function renderProtectedRevocation(refusal) {
+  if (!refusal?.protected_sparks?.length) return '';
+  const noms = refusal.protected_sparks;
+  const n = noms.length;
+  return `<div class="refus" role="alert">
+    <p><strong>Révoquer « ${echapper(refusal.label)} » touche ${n} Spark${
+      n > 1 ? 's' : ''} protégé${n > 1 ? 's' : ''}.</strong></p>
+    <ul class="liste-simple">${noms.map((nom) =>
+      `<li><span class="technique">${echapper(nom)}</span></li>`).join('')}</ul>
+    <p class="confirmation__consequence">Retirer un accès n’est jamais refusé par
+    la protection : elle arrête l’erreur, elle ne retient pas un geste qui réduit
+    un risque. <strong>Aucune protection ne sera levée.</strong></p>
+    <p class="confirmation__actions">
+      <button type="button" class="bouton bouton--primaire" data-accepte-protege="${
+        echapper(refusal.label)}">Révoquer quand même</button>
+      <button type="button" class="bouton" data-annule="key">Annuler</button>
+    </p>
+  </div>`;
+}
+
 export function renderBlockedRestore(refusal) {
   if (!refusal?.blocking?.length) return '';
   const n = refusal.blocking.length;

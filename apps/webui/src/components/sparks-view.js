@@ -18,6 +18,26 @@ const echapper = (v) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 /** Badge d'état. La couleur ne porte jamais seule l'information (§9.8). */
+/**
+ * L'état protégé, visible PARTOUT où le Spark est listé (docs/DAT.md §35.4).
+ *
+ * @spec docs/BACKLOG.md#SPK-34 · docs/DAT.md §35.4 · docs/DESIGN_SYSTEM.md §6.23
+ *
+ * Le badge est `neutral` et non `danger` : un Spark protégé n'est pas en panne,
+ * il est dans l'état où son responsable l'a laissé. Le §14.6 interdit d'employer
+ * la couleur d'alerte pour signaler autre chose qu'un défaut.
+ *
+ * Le titre dit ce que la protection VAUT — un garde-fou, pas une frontière de
+ * sécurité (§35.1) —, parce que la console ne la présentera jamais autrement.
+ */
+export function renderProtectionBadge(spark) {
+  if (!spark?.protected) return '';
+  return ` <span class="badge badge--neutral" title="Les écritures visant ce Spark`
+    + ` sont refusées tant que la protection est armée. C’est un garde-fou contre`
+    + ` le geste accidentel, pas un contrôle d’accès.">`
+    + `<span class="badge__point" aria-hidden="true"></span>protégé</span>`;
+}
+
 export function renderStateBadge(state) {
   const { token, label, transient } = stateOf(state);
   const classes = `badge badge--${token}${transient ? ' badge--transitoire' : ''}`;
@@ -115,7 +135,8 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
     const u = usage[s.name] ?? {};
     return [
       '<tr>',
-      `<td class="cellule-nom"><a class="lien-spark" href="#/sparks/${encodeURIComponent(s.name)}" title="${echapper(s.name)}">${echapper(s.name)}</a></td>`,
+      `<td class="cellule-nom"><a class="lien-spark" href="#/sparks/${encodeURIComponent(s.name)}" title="${echapper(s.name)}">${echapper(s.name)}</a>${
+        renderProtectionBadge(s)}</td>`,
       `<td>${renderStateBadge(s.state)}</td>`,
       `<td>${renderCpuGauge(u.cpu, s)}</td>`,
       `<td class="aligne-droite">${renderMesure(u.memory?.used_bytes, s.memory_reservation_bytes, formatBytes)}</td>`,
