@@ -132,7 +132,7 @@ pas encore sont marquées.
 | `make test` | toutes les suites de tests | **oui** |
 | `make build` | build de tous les paquets | **oui** |
 | `pnpm -r test` / `build` / `typecheck` | paquets TypeScript de l'espace de travail | **oui** |
-| `pnpm dev` | console locale sur `http://127.0.0.1:5173` | non — SPK-18 |
+| `pnpm dev` | hôte console sur `http://127.0.0.1:5173` — inventaire et tunnels | **oui** |
 | `pnpm e2e` | tests Playwright | non — SPK-24 |
 | `make runDev` | pile de développement autonome | non — SPK-23 |
 | `make seed` | données de démonstration reproductibles | non — SPK-23 |

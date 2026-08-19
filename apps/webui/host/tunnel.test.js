@@ -174,3 +174,41 @@ test('ouvrir deux fois le meme serveur ne lance pas deux ssh', async () => {
   await gestion.open(SERVEUR);
   assert.equal(lances, 1);
 });
+
+// --- etablissement (defaut trouve par le test reel) -------------------------
+
+test('un tunnel lent a s ouvrir n est PAS declare rompu', async () => {
+  // `ssh` met un instant a s'authentifier : sonder une seule fois juste apres
+  // l'avoir lance mesure sa vitesse de demarrage, pas sa sante.
+  let essais = 0;
+  const t = tunnel({
+    probe: async () => { if (++essais < 3) throw new Error('pas encore'); },
+    openTimeoutMs: 5000,
+  });
+  await t.open();
+  assert.equal(t.state, READY);
+  assert.ok(essais >= 3);
+});
+
+test('on n attend pas un ssh deja mort', async () => {
+  let enfant;
+  const t = tunnel({
+    spawn: () => { enfant = fauxSsh(); enfant.exitCode = 255; return enfant; },
+    probe: async () => { throw new Error('refusé'); },
+    openTimeoutMs: 30000,
+  });
+  const debut = Date.now();
+  await t.open();
+  assert.equal(t.state, BROKEN);
+  assert.ok(Date.now() - debut < 2000, "on ne doit pas attendre l'échéance complète");
+});
+
+test('un tunnel qui ne s ouvre jamais finit rompu, dans un delai borne', async () => {
+  const t = tunnel({
+    probe: async () => { throw new Error('injoignable'); },
+    openTimeoutMs: 600,
+  });
+  await t.open();
+  assert.equal(t.state, BROKEN);
+  assert.match(t.lastError, /injoignable/);
+});

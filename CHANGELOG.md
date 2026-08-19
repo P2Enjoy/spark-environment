@@ -95,6 +95,9 @@
 - Journal d'audit : point de passage unique, caviardage des valeurs sensibles,
   payload borné, et consultation par `GET /v1/audit`.
 
+- Hôte console : inventaire des serveurs, ouverture et supervision de tunnels
+  SSH, relais vers `sparkd`. Une panne de tunnel remonte avec son motif.
+
 ### Modifié
 
 - `.gitignore` :

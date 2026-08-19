@@ -1161,3 +1161,54 @@ l'hôte console et les tunnels SSH. Attention : à partir de SPK-18 l'interface
 entre en jeu, et `CLAUDE.md` §4 impose alors la lecture **intégrale** de
 `docs/DESIGN_SYSTEM.md` — 1585 lignes — avant toute écriture. SPK-16 et SPK-17
 n'en relèvent pas encore. SPK-12 attend un domaine, SPK-29 et SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-16 close : le poste parle au serveur, et le dit quand il ne peut plus
+
+**Unité** : SPK-16, première du lot 3. Le DAT §22 a été écrit avant de coder.
+
+**Deux décisions de conception.**
+
+Le binaire `ssh` du système, pas une bibliothèque. Le poste du responsable a déjà
+une configuration SSH — agent, clés, `ProxyJump`, parfois une clé matérielle — que
+le binaire honore sans que le produit ait à la connaître. Une bibliothèque les
+réimplémenterait mal, et le premier exploitant avec un bastion serait bloqué par
+un outil censé lui simplifier la vie.
+
+Et surtout : **un tunnel vivant se prouve à travers lui, pas à côté**. Un
+processus `ssh` mort se voit tout de suite ; un processus **figé** ne se voit pas —
+il vit, la socket locale accepte, et chaque requête attend indéfiniment. C'est le
+cas dangereux, parce qu'il ressemble au bon. La supervision interroge donc
+`/healthz` à travers le tunnel, et un test le vérifie sur un faux `ssh` vivant
+mais muet.
+
+**Prouvé depuis le poste vers le serveur réel** : tunnel `ready` sur un port
+attribué par le système, `sparkd` joint à travers lui — `spark-experiment`,
+4 cœurs, 76,2 Gio allouables, Spark `site (running)`. Puis le processus `ssh` tué
+sous les pieds : `502 tunnel_unavailable`, avec le motif, l'âge de la dernière
+réponse et la mise en garde contre l'affichage de données périmées.
+
+**Le défaut que seule la preuve réelle pouvait produire.** La première sonde
+courait plus vite que l'établissement du tunnel : `ssh` met un instant à
+s'authentifier et à ouvrir la redirection, et sonder une seule fois juste après
+l'avoir lancé mesure sa vitesse de démarrage, pas sa santé. Le tunnel était
+déclaré rompu alors qu'il se connectait. La sonde factice, elle, répondait
+toujours instantanément — aucun test unitaire ne pouvait le voir. L'ouverture
+attend désormais, dans une fenêtre bornée, et abandonne tout de suite si `ssh`
+s'est arrêté.
+
+**Deux refus plutôt que deux silences.** Un champ qui ressemble à un secret dans
+l'inventaire est refusé, pas filtré : l'auteur doit savoir qu'il en a copié un,
+pour le retirer de là où il l'a pris. Et un inventaire illisible échoue au lieu
+de repartir vide, ce qui ferait croire à la perte des serveurs.
+
+**Vérifié.** 426 tests Python et 36 tests Node, campagne complète verte.
+
+**Où reprendre.** **SPK-17**, le contrat d'API partagé — dernière unité avant que
+l'interface entre en jeu. Elle ne relève pas encore du design system. À partir de
+**SPK-18**, `CLAUDE.md` §4 impose la lecture **intégrale** de
+`docs/DESIGN_SYSTEM.md` — 1585 lignes — avant toute écriture touchant l'UI, et
+cette lecture doit être budgétée dans la session. SPK-12 attend un domaine,
+SPK-29 et SPK-28 un arbitrage.

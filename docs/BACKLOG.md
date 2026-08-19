@@ -243,11 +243,21 @@ opération manuelle et n'est pas planifié.
 
 ## Lot 3 — Console locale
 
-### [ ] SPK-16 · Hôte console : inventaire serveurs et tunnels SSH
+### [x] SPK-16 · Hôte console : inventaire serveurs et tunnels SSH
 
-- Spécification : `docs/DAT.md` §6
-- DoD : ouverture, supervision et fermeture du tunnel ; perte de connexion
-  signalée à l'interface, jamais masquée.
+- Spécification : `docs/DAT.md` §6, §22
+- **Clos le 2026-08-19, prouvé depuis le poste vers le serveur réel.**
+  - **Ouverture** : vrai `ssh -L` vers `51.158.54.202`, état `ready`, port local
+    attribué par le système.
+  - **`sparkd` joint à travers le tunnel** : `spark-experiment`, 4 cœurs /
+    8 threads, 76,2 Gio allouables, Spark `site (running)`.
+  - **Perte de connexion** : le processus `ssh` tué sous les pieds donne
+    `502 tunnel_unavailable`, avec le motif, l'âge de la dernière réponse et la
+    mise en garde explicite contre l'affichage de données périmées.
+  - **Fermeture** propre.
+- Défaut trouvé par la preuve réelle : la première sonde courait plus vite que
+  l'établissement du tunnel, et déclarait rompu un tunnel qui se connectait.
+- 36 tests pour l'hôte console.
 
 ### [ ] SPK-17 · Contrat d'API partagé
 

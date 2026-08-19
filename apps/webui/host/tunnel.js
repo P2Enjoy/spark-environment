@@ -22,6 +22,14 @@ export const CLOSED = 'closed';
 const PROBE_INTERVAL_MS = 5000;
 const PROBE_TIMEOUT_MS = 2000;
 
+/**
+ * `ssh` met un instant à s'authentifier et à ouvrir la redirection. Sonder une
+ * seule fois juste après l'avoir lancé revient à mesurer sa vitesse de
+ * démarrage, pas sa santé — et déclare rompu un tunnel qui se connecte.
+ */
+const OPEN_TIMEOUT_MS = 15000;
+const OPEN_RETRY_MS = 300;
+
 export class TunnelError extends Error {}
 
 /** Demande un port libre au système (docs/DAT.md §22.5). */
@@ -49,6 +57,7 @@ export class Tunnel {
     this.spawnFn = options.spawn ?? spawn;
     this.probeFn = options.probe ?? defaultProbe;
     this.probeIntervalMs = options.probeIntervalMs ?? PROBE_INTERVAL_MS;
+    this.openTimeoutMs = options.openTimeoutMs ?? OPEN_TIMEOUT_MS;
     this.onChange = options.onChange ?? (() => {});
   }
 
@@ -95,8 +104,39 @@ export class Tunnel {
 
     this.#timer = setInterval(() => this.probe(), this.probeIntervalMs);
     this.#timer.unref?.();
-    await this.probe();
+    await this.#waitReady();
     return this;
+  }
+
+  /**
+   * Laisse au tunnel le temps de s'établir avant de conclure.
+   *
+   * On reste en `connecting` tant que la fenêtre n'est pas écoulée : un tunnel
+   * qui met deux secondes à s'ouvrir n'est pas un tunnel rompu. On abandonne
+   * dès que `ssh` s'arrête — inutile d'attendre un processus mort.
+   */
+  async #waitReady() {
+    const echeance = Date.now() + (this.openTimeoutMs ?? OPEN_TIMEOUT_MS);
+    for (;;) {
+      if (this.#child === null) return this.state;
+      try {
+        await this.probeFn(this.localPort, PROBE_TIMEOUT_MS);
+        this.lastHealthyAt = Date.now();
+        this.#setState(READY);
+        return this.state;
+      } catch (erreur) {
+        this.lastError = erreur.message;
+        if (this.#child?.exitCode !== null && this.#child?.exitCode !== undefined) {
+          this.#setState(BROKEN);
+          return this.state;
+        }
+        if (Date.now() >= echeance) {
+          this.#setState(BROKEN);
+          return this.state;
+        }
+        await new Promise((r) => setTimeout(r, OPEN_RETRY_MS));
+      }
+    }
   }
 
   /**
