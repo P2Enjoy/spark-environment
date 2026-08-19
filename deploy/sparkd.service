@@ -1,0 +1,46 @@
+# Unite systemd de sparkd.
+#
+# @spec docs/BACKLOG.md#SPK-26 · docs/DAT.md §31.4 (sparkd doit survivre a un
+#       redemarrage), §5 (surface reseau) · docs/PROD_MIGRATIONS.md OP-04
+#
+# Mesure le 2026-08-19 : sparkd tournait depuis une session ssh. Un plan de
+# controle lance a la main disparait au premier redemarrage, et les Sparks
+# continuent de tourner sans que rien ne les administre : la panne est
+# silencieuse et ne se decouvre qu'a la premiere operation.
+
+[Unit]
+Description=sparkd — plan de controle Spark
+Documentation=https://github.com/P2Enjoy/spark-environment
+After=network-online.target incus.service
+Wants=network-online.target
+Requires=incus.service
+
+[Service]
+Type=exec
+ExecStart=/opt/sparkd/venv/bin/python -m sparkd
+Restart=on-failure
+RestartSec=5s
+
+# sparkd n'ecoute JAMAIS sur une adresse routable : il refuse de demarrer si on
+# l'y force (docs/DAT.md §11). La valeur est posee ici pour etre explicite.
+Environment=SPARKD_BIND=127.0.0.1:9876
+Environment=SPARKD_DB=/var/lib/sparkd/spark.db
+Environment=SPARKD_DRIVER=incus
+Environment=SPARKD_STORAGE_POOL=spark
+EnvironmentFile=-/etc/sparkd/sparkd.env
+
+# Le plan de controle parle a Incus par sa socket, qui appartient a root.
+User=root
+StateDirectory=sparkd
+StateDirectoryMode=0750
+
+# Durcissement : ce service n'a besoin ni d'ecrire ailleurs, ni de peripheriques.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/var/lib/sparkd
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
