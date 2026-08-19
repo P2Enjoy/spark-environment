@@ -25,6 +25,11 @@ from fastapi.testclient import TestClient
 from .app import create_app
 from .config import Config, load
 
+#: Mot de passe de la protection de démonstration (SPK-34). Ce n'est PAS un
+#: secret : la protection est un garde-fou, pas un contrôle d'accès (§35.1), et
+#: le manuel M8 publie cette valeur pour que le parcours soit rejouable.
+SEED_PROTECTION_PASSWORD = "protege-moi"
+
 GIO = 1024**3
 MIO = 1024**2
 MBIT = 1_000_000
@@ -189,6 +194,32 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
                  201, quoi=f"instantané « {nom} »")
         compte["instantanes"] += 1
 
+    # --- Un Spark PROTÉGÉ (SPK-34, docs/DAT.md §35). Sans lui, l'écran ne peut
+    # montrer ni le badge, ni le refus 423, ni la confirmation de révocation qui
+    # nomme les Sparks protégés. Le mot de passe est celui du manuel M8 : c'est
+    # une donnée de DÉMONSTRATION, pas un secret — la protection n'est pas un
+    # contrôle d'accès (§35.1), et le manuel le dit.
+    #
+    # « postgres-dedie » est choisi délibérément : c'est le Spark que l'on ne
+    # veut pas voir redémarré par erreur, et il porte le seul cœur dédié.
+    _attendu(client.post("/v1/sparks/postgres-dedie/protection",
+                         json={"password": SEED_PROTECTION_PASSWORD}),
+             200, quoi="protection de « postgres-dedie »")
+    compte["proteges"] = 1
+    # La clé du responsable est accordée à ce Spark protégé : c'est ce qui rend
+    # atteignable, depuis l'écran, la confirmation de révocation qui NOMME les
+    # Sparks protégés touchés (§35.2). Elle est accordée AVANT l'armement dans
+    # l'ordre logique, mais l'octroi étant refusé sur un Spark protégé, on la
+    # pose ici en levant puis réarmant — ce que ferait un exploitant.
+    _attendu(client.request("DELETE", "/v1/sparks/postgres-dedie/protection",
+                            json={"password": SEED_PROTECTION_PASSWORD}),
+             200, quoi="levée temporaire pour accorder la clé")
+    _attendu(client.post("/v1/sparks/postgres-dedie/ssh-keys/poste-responsable"), 200,
+             quoi="attribution de la clé au Spark protégé")
+    _attendu(client.post("/v1/sparks/postgres-dedie/protection",
+                         json={"password": SEED_PROTECTION_PASSWORD}),
+             200, quoi="réarmement de « postgres-dedie »")
+
     return compte
 
 
@@ -220,6 +251,22 @@ def verify(client: TestClient) -> None:
     if len(client.get("/v1/sparks/crm-production/snapshots").json()["snapshots"]) < 2:
         raise SeedError("moins de deux instantanés : le refus du §19.1 serait inatteignable")
 
+    # SPK-34 : sans Spark protégé, ni le badge, ni le refus 423, ni la
+    # confirmation de révocation qui NOMME les Sparks touchés ne sont
+    # atteignables depuis l'écran.
+    sparks = {s["name"]: s for s in client.get("/v1/sparks").json()["sparks"]}
+    proteges = [n for n, s in sparks.items() if s.get("protected")]
+    if not proteges:
+        raise SeedError("aucun Spark protégé : le §35 serait invisible à l'écran")
+    if all(s.get("protected") for s in sparks.values()):
+        raise SeedError("tous les Sparks sont protégés : l'écart ne se verrait plus")
+    # Et la protection MORD réellement : une commande y est refusée en 423.
+    refus = client.post(f"/v1/sparks/{proteges[0]}/stop")
+    if refus.status_code != 423:
+        raise SeedError(
+            f"« {proteges[0]} » est marqué protégé mais accepte une commande "
+            f"({refus.status_code}) : le badge mentirait")
+
 
 def run(config: Config | None = None) -> dict[str, int]:
     """Recrée le registre et le peuple. Rejouable à l'identique (§28.6)."""
@@ -247,7 +294,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"seed appliqué : {compte['sparks']} Sparks, {compte['routes']} routes, "
         f"{compte['cles']} clés, {compte['instantanes']} instantanés, "
-        f"{compte['refus']} refus d'admission réel."
+        f"{compte['refus']} refus d'admission réel, "
+        f"{compte.get('proteges', 0)} Spark protégé."
     )
     return 0
 
