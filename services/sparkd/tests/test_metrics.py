@@ -154,3 +154,30 @@ def test_un_spark_arrete_n_a_pas_un_usage_nul():
     assert u["cpu"] is None and u["disk"] is None
     assert "disque reste" in u["unavailable"]
     assert "comptabilisée" in u["unavailable"]
+
+
+# --- consommer plus que sa reservation est NORMAL (§20.3 bis) ---------------
+
+def test_le_burst_n_est_pas_un_depassement():
+    """Mesure sur l'hote : 1,996 CPU pour une reservation de 0,5.
+
+    Une jauge rouge sur « 1,99 / 0,5 » signalerait une violation la ou il n'y a
+    qu'un usage optimal de la machine.
+    """
+    suivi = metrics.RateTracker()
+    suivi.observe("S1", metrics.Sample(0.0, 0, 0, 0))
+    taux = suivi.observe("S1", metrics.Sample(6.0, int(1.996 * 6 * 1e9), 0, 0))
+    cpu = metrics.usage(SPARK, ETAT, taux)["cpu"]
+    assert cpu["used"] == pytest.approx(1.996, abs=1e-3)
+    assert cpu["burst"] == pytest.approx(1.496, abs=1e-3)
+    assert cpu["capped"] is False
+    assert cpu["over_limit"] is False        # jamais un depassement en mode partage
+
+
+def test_un_depassement_n_existe_qu_en_mode_plafonne():
+    plafonne = dict(SPARK, cpu_mode="capped", cpu_reservation=None, cpu_max=0.5)
+    suivi = metrics.RateTracker()
+    suivi.observe("S1", metrics.Sample(0.0, 0, 0, 0))
+    taux = suivi.observe("S1", metrics.Sample(6.0, int(1.5 * 6 * 1e9), 0, 0))
+    cpu = metrics.usage(plafonne, ETAT, taux)["cpu"]
+    assert cpu["capped"] is True and cpu["over_limit"] is True

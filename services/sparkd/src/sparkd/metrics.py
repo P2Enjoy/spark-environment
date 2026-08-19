@@ -106,14 +106,28 @@ def usage(spark: dict, state: dict, rates: dict) -> dict:
     if spark.get("cpu_mode") == "capped":
         reservation = spark.get("cpu_max")
 
+    plafonne = spark.get("cpu_mode") == "capped"
+    utilise = rates["cpu"]
     return {
         "state": state.get("status", "Unknown"),
         "cpu": {
-            "used": rates["cpu"],
+            "used": utilise,
             "reservation": reservation,
             # docs/DAT.md §7.3 bis : ne jamais présenter la réservation comme
             # une garantie absolue tant que SPK-29 n'est pas livrée.
             "guarantee": "proportional_between_sparks_only",
+            # docs/DAT.md §20.3 bis : consommer au-delà de la réservation est
+            # NORMAL en mode partagé — c'est du burst, pas un dépassement. Une
+            # jauge rouge sur « 1,99 / 0,5 » signalerait un défaut inexistant.
+            "capped": plafonne,
+            "burst": (
+                None if utilise is None or reservation is None
+                else round(max(0.0, utilise - reservation), 4)
+            ),
+            "over_limit": (
+                bool(plafonne and utilise is not None and reservation is not None
+                     and utilise > reservation * 1.05)
+            ),
         },
         "memory": {
             "used_bytes": mem_usage,

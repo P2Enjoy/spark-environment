@@ -1064,3 +1064,52 @@ découvrir la chose par un disque plein.
 `[ ]` du plan, sans dépendance bloquée. Elle donne à la console de quoi montrer
 la consommation réelle face aux quotas, ce que plusieurs unités ont laissé en
 dette d'affichage. SPK-12 attend un domaine réel, SPK-29 et SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-14 close : mesurer sans mentir
+
+**Unité** : SPK-14. Son entrée de backlog ne citait aucune spécification ; le
+DAT §20 a été écrit après mesure, avant de coder.
+
+**Ce que la mesure impose.** `cpu.usage` et les compteurs réseau sont
+**cumulés**, pas des taux : deux relevés à trois secondes d'intervalle donnent
+`0,0010 CPU`, qu'aucune lecture unique n'aurait produit. `sparkd` conserve donc
+le relevé précédent, calcule le taux et **publie la fenêtre** — un taux sans sa
+fenêtre n'est pas interprétable.
+
+Au premier relevé il n'y a pas de fenêtre : le taux vaut `null`, **jamais `0`**.
+Zéro est une valeur plausible, donc indétectable ; l'annoncer serait affirmer une
+mesure non faite. Mémoire et disque, eux, sont instantanés et disponibles dès le
+premier appel.
+
+**Un piège écarté.** Le relevé énumère `docker0` et les `br-*` que Docker crée
+*dans* le Spark. Ce trafic ne traverse jamais le bridge de l'hôte : l'additionner
+ferait apparaître une consommation réseau là où rien n'a quitté la cellule, et
+d'autant plus faussement que la pile du locataire est bavarde entre ses propres
+conteneurs. Seule l'interface privée est comptée.
+
+**La découverte de la session.** Un Spark réservant `0,5 CPU`, chargé par deux
+boucles sur un hôte au repos, consomme **1,996 CPU** — quatre fois sa
+réservation. Ce n'est pas un dépassement : `cpu.max` reste à `max` en mode
+partagé, et « hors contention, un Spark consomme tout ce qui traîne » (§7.1). La
+réservation est un droit d'ordonnancement sous contention, pas un plafond.
+
+Conséquence, portée au §20.3 bis et implémentée : l'API distingue `burst` de
+`over_limit`, ce dernier n'existant qu'en mode `capped`, seul mode où un plafond
+est réellement posé. Sans cette distinction, une jauge afficherait « 1,99 / 0,5 »
+en rouge et chaque exploitant signalerait le même faux défaut.
+
+**Une règle d'affichage de plus.** L'usage réseau se compare au **plafond**,
+jamais à la réservation : le noyau ne garantit aucun débit, et « 40 Mbit/s sur
+100 réservés » laisserait croire à une garantie inexistante.
+
+**Vérifié.** 391 tests verts, campagne complète verte, et les relevés réels
+ci-dessus.
+
+**Où reprendre.** **SPK-15**, journal d'audit et filtrage des secrets — première
+`[ ]` du plan. Le journal est déjà écrit par toutes les unités livrées ; il reste
+à l'exposer et surtout à **prouver** qu'aucune clé ni secret n'y atteint, ce que
+sa Definition of Done exige explicitement. SPK-12 attend un domaine, SPK-29 et
+SPK-28 un arbitrage.

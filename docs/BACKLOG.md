@@ -215,9 +215,18 @@ opération manuelle et n'est pas planifié.
   **Obligation reportée à SPK-18 et suivantes** : l'interface visuelle devra la
   porter aussi.
 
-### [ ] SPK-14 · Métriques d'usage et état temps réel
+### [x] SPK-14 · Métriques d'usage et état temps réel
 
-- DoD : usage CPU/RAM/disque/réseau par Spark, cohérent avec les quotas affichés.
+- Spécification : `docs/DAT.md` §20
+- **Clos le 2026-08-19, prouvé sur l'hôte.** `GET /v1/sparks/<nom>/usage` rend les
+  quatre ressources, chacune comparée à ce qui est **réellement appliqué** :
+  mémoire `167 Mio / 2 Gio = 8,1 %`, disque `510 Mio / 10 Gio = 5,0 %`, CPU par
+  taux calculé sur fenêtre, réseau comparé au **plafond** et non à la réservation.
+- Le premier relevé rend `null`, jamais `0` : un taux exige deux points.
+- Découverte de la mesure, portée au §20.3 bis : un Spark réservant `0,5 CPU`
+  chargé sur un hôte au repos consomme **1,996 CPU**. Ce n'est pas un
+  dépassement mais le burst du mode partagé. L'API distingue donc `burst` de
+  `over_limit`, ce dernier n'existant qu'en mode `capped`.
 
 ### [ ] SPK-15 · Journal d'audit et filtrage des secrets
 

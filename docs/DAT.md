@@ -1529,6 +1529,25 @@ De même, une consommation CPU rapportée à la réservation ne dit pas que cett
 réservation est tenue en valeur absolue : tant que SPK-29 n'est pas livrée, elle
 ne l'est qu'entre Sparks.
 
+### 20.3 bis Consommer plus que sa réservation est NORMAL
+
+Mesuré le 2026-08-19 : un Spark réservant `0,5 CPU`, chargé par deux boucles sur
+un hôte au repos, consomme **1,996 CPU** sur une fenêtre de six secondes — quatre
+fois sa réservation.
+
+Ce n'est pas un dépassement, c'est le produit qui fonctionne. Le mode `shared`
+laisse `cpu.max` à `max` : aucun plafond n'est posé, et « hors contention, un
+Spark consomme tout ce qui traîne » (§7.1). La réservation est un **droit
+d'ordonnancement sous contention**, pas un plafond.
+
+**Conséquence pour l'interface, et elle n'est pas facultative.** Une jauge qui
+afficherait « 1,99 / 0,5 » en rouge signalerait une violation là où il n'y a
+qu'un usage optimal de la machine. L'usage au-delà de la réservation se présente
+comme du **burst**, distinct de la part garantie — et un dépassement n'existe
+que dans le mode `capped`, seul mode où un plafond est réellement posé.
+
+Sans cette distinction, chaque exploitant signalera le même faux défaut.
+
 ### 20.4 Un Spark arrêté n'a pas d'usage nul, il n'en a pas
 
 Interroger l'état d'un Spark arrêté ne rend aucune métrique. Le produit répond
