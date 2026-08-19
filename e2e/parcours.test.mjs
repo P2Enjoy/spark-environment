@@ -115,7 +115,10 @@ test('un Spark en erreur dit pourquoi, et propose de reprendre', async () => {
     await ouvrir('site-vitrine');
     const entete = await page.textContent('.entete-entite');
     assert.match(entete, /Dernière erreur/);
-    assert.match(entete, /images:debian\/99/, 'la cause réelle, pas un message générique');
+    // Depuis SPK-32, une image absente du catalogue est refusée À LA CRÉATION :
+    // le Spark en erreur du seed vient donc d'une panne du pilote, pas d'une
+    // référence impossible. Le message reste la cause RÉELLE.
+    assert.match(entete, /cgroup indisponible/, 'la cause réelle, pas un message générique');
     assert.ok(await page.$('[data-commande="retry"]'), '« Reprendre » doit être offert');
   });
 });

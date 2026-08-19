@@ -143,6 +143,10 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- Catalogue d'images vérifié : une référence inexistante est refusée **à la
+  création** et non plus à l'application, et l'image se choisit dans une liste.
+  Migration `003_catalogue_images` ; routes `GET/POST /v1/images` et
+  `POST /v1/images/verify`.
 - Les Sparks vivent désormais dans une tranche cgroup parente `spark.slice` dont
   le poids suit ce qui a été alloué, au lieu d'être arbitrés contre les tranches
   de l'hôte. Nouveau réglage `SPARKD_CPU_RESERVE` ; nouveau contrôle `RUN-SLICE`.

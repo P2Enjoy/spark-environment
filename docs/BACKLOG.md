@@ -698,7 +698,7 @@ Les deux disques sont intégralement consommés par un unique RAID1 `ext4` mont�
   8 heures. Aucune mesure de débit disque n'a de valeur avant la fin de cette
   resynchronisation.
 
-### [ ] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
+### [~] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
 
 `spark.image` est aujourd'hui un texte libre, et le seul contrôle local porte sur
 le **dépôt**, pas sur l'alias : `translate.split_image()` accepte
@@ -725,6 +725,26 @@ ligne du registre a été écrite et la ressource comptée (§14.2) ; le Spark r
   création ne présente plus de champ libre — prouvé par un parcours E2E depuis le
   parcours canonique ; le relevé affiche sa date et distingue les trois états ;
   seed, manuel M5 et captures refaits ; `@spec` / `@verifies` posés.
+
+**Livré et prouvé, sauf deux points de la DoD.**
+
+- **Mesuré d'abord** (§33.3 corrigé) : la clé de produit porte le nom de code, et
+  l'alias vit dans un champ à part — `debian/13/amd64` n'existe pas. Relevé réel :
+  quatre références vérifiées sur 272 produits, `images:debian/31` donnée absente.
+- Migration `003_catalogue_images`, module de catalogue, trois routes, refus
+  **avant** l'écriture de la ligne, liste déroulante à la création.
+- 17 preuves d'API et 6 de rendu. Celle qui porte l'unité compare l'allocation du
+  pool avant et après un refus : rien n'est engagé.
+- Le seed employait `images:debian/99` pour provoquer son Spark en erreur, ce que
+  l'unité rend impossible. Il s'appuie désormais sur sa seule injection de faute —
+  le vrai chemin d'erreur, au lieu d'une référence impossible.
+- **Reste à livrer**, et c'est pourquoi l'unité n'est pas `[x]` :
+  1. le **parcours E2E** que la DoD exige — l'absence de champ libre n'est
+     prouvée que par un test de rendu ;
+  2. **le relevé n'a pas d'écran**. L'API le date et distingue les trois états,
+     mais rien ne les affiche : ni la date, ni `missing`, ni `unknown`. Un
+     exploitant ne peut pas voir qu'une image a disparu de son dépôt.
+- Le geste d'ajout au catalogue existe par l'API, pas par l'interface.
 
 ### [ ] SPK-33 · Refonte de la navigation selon les trois degrés
 

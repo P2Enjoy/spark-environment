@@ -38,7 +38,7 @@ const SPARKS = [
   { name: 'site-vitrine', state: 'error', cpu_mode: 'shared', cpu_reservation: 0.25,
     memory_reservation_bytes: GIO, storage_bytes: 5 * GIO,
     ipv4_address: '10.77.0.19', image: 'images:debian/13',
-    last_error: "image « images:debian/99 » introuvable dans le dépôt" },
+    last_error: "le noyau a refusé de démarrer la cellule : cgroup indisponible" },
 ].map((s, i) => ({ ...s, id: `S${i + 1}`, allowed_commands: COMMANDES[s.state] ?? [],
                 transient: ['creating', 'starting', 'stopping', 'deleting'].includes(s.state),
                 network_burst_bps: 100_000_000 }));

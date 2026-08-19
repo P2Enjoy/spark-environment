@@ -11,6 +11,21 @@ de l'écran. Un Spark supprimé depuis l'a rendue fausse — dans le sens favora
 Bloquer sur une valeur périmée refuserait une création que le serveur aurait
 acceptée, sans que vous puissiez le savoir.
 
+## Choisir l'image
+
+L'image se choisit dans une **liste**, alimentée par le catalogue du serveur. Les
+entrées proposées sont celles que le **dernier relevé** a trouvées chez leur
+dépôt.
+
+Il n'y a plus de saisie libre, et c'est délibéré : une référence inexistante
+passait autrefois tous les contrôles, la cellule était enregistrée et ses quotas
+engagés, et le refus n'arrivait qu'à l'application. Une faute de frappe coûtait
+un Spark en erreur à supprimer.
+
+Pour employer une image absente de la liste, il faut l'**ajouter au catalogue** —
+un geste distinct, qui déclenche sa vérification. Le formulaire de création ne
+sert pas de porte d'entrée à une référence inconnue.
+
 ## Les quatre modes CPU
 
 | Mode | Quand le choisir |

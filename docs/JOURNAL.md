@@ -2034,3 +2034,53 @@ preuves — une révocation qui **aboutit** malgré le gel après acceptation, e
 premier appel qui a bien nommé les Sparks concernés — ainsi qu'un second parcours
 E2E dédié.
 
+
+
+---
+
+## 2026-08-19 — SPK-32 : une faute de frappe ne coûte plus un Spark mort
+
+**Unité** : SPK-32. Sa spécification existait (§33) ; je ne l'ai pas réécrite. La
+première étape était une **mesure**, comme l'unité le demandait.
+
+**La mesure a corrigé la spécification.** La voie simplestreams est la bonne, mais
+la clé de produit porte le nom de code — `debian:trixie:amd64:default`, pas
+« 13 » — et l'alias vit dans un champ à part. Surtout, l'architecture n'est pas
+dans l'alias : `debian/13/amd64` n'existe pas, `debian/13` renvoie aux quatre
+architectures publiées. Le §33.3 est corrigé.
+
+**Ce que l'unité change.** `images:debian/31` passait tous les contrôles locaux :
+la ligne était écrite, la ressource comptée, et le refus n'arrivait qu'à `apply`,
+laissant un Spark en `error` avec ses quotas engagés. Le refus arrive maintenant
+avant l'écriture, et une preuve compare l'allocation du pool avant et après pour
+l'établir.
+
+**Deux distinctions tenues.** Une entrée naît `unknown` : l'état vient du relevé,
+jamais d'une déclaration. Et un dépôt injoignable rend `unknown`, jamais
+`missing` — sans quoi une panne réseau ferait disparaître des images valides et
+l'exploitant conclurait qu'elles ont été retirées du dépôt.
+
+**Le produit tient sans réseau sortant.** Avec le pilote factice, le relevé l'est
+aussi, au même titre que `FakeIncus` et `FakeCaddy` : il publie exactement les
+références pré-renseignées, de sorte qu'une référence inventée y soit `missing`
+comme sur le vrai dépôt. Avec le pilote réel, le catalogue reste `unknown`
+jusqu'au premier relevé explicite.
+
+**Le seed a dû changer**, et en mieux : il employait `images:debian/99` pour
+obtenir un Spark en erreur, ce que l'unité rend impossible. Il s'appuie désormais
+sur sa seule injection de faute — le vrai chemin d'erreur du produit.
+
+**Un défaut d'outillage trouvé au passage** : mes commandes de nettoyage
+employaient `pkill -f "a\|b"`, où `\|` n'est pas l'alternance en regex étendue.
+Aucun processus n'était tué, et la pile servait l'ancien code — d'où un `404` sur
+une route pourtant enregistrée. Les sessions précédentes ont probablement laissé
+des processus derrière elles.
+
+**Vérifié.** 539 tests Python, 188 Node, 6 de contrat, 10 gestes, 11 parcours
+E2E, 7 contrôles du manuel, build, contrat sans dérive, illustration observée.
+
+**Où reprendre.** **SPK-32**, ses deux manques : le parcours E2E que la DoD exige,
+et surtout **l'écran du catalogue** — l'API date le relevé et distingue les trois
+états, mais rien ne les affiche, donc un exploitant ne peut pas voir qu'une image
+a disparu de son dépôt. Puis **SPK-33**, la refonte de navigation, qui aura
+désormais cette liste à placer. SPK-30 reste libre.
