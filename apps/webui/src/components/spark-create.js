@@ -1,7 +1,9 @@
 /**
  * Écran « créer un Spark ».
  *
- * @spec docs/BACKLOG.md#SPK-20 · docs/DAT.md §25 (montrer sans décider),
+ * @spec docs/BACKLOG.md#SPK-20, docs/BACKLOG.md#SPK-32 ·
+ *       docs/DAT.md §25 (montrer sans décider), §33.5 (l'image se choisit dans
+ *       une liste alimentée par le catalogue),
  *       §25.2 (un refus n'efface pas la saisie), §25.3 (ce qui reste local) ·
  *       docs/DESIGN_SYSTEM.md §6.9, §6.12, §7.1, §14.9
  *
@@ -135,8 +137,45 @@ function renderPools(pools) {
   return `<dl class="definitions">${lignes}</dl>`;
 }
 
+/**
+ * Choix de l'image : une LISTE, plus un champ libre (docs/DAT.md §33.5).
+ *
+ * Une saisie libre pouvait produire une référence inexistante. Le refus ne
+ * venait alors qu'à l'application, après que la ligne du registre eut été
+ * écrite et la ressource comptée : une faute de frappe coûtait un Spark en
+ * erreur dont les quotas restaient engagés.
+ *
+ * Cela ne contredit pas le §25.1. Celui-ci interdit de bloquer sur une
+ * ESTIMATION PÉRIMÉE de la capacité, qui change entre l'ouverture de l'écran et
+ * la soumission. L'existence d'un alias ne se périme pas dans le même
+ * intervalle : la contrainte est ici de forme, comme celle du nom (§25.3).
+ */
+export function renderChoixImage(courante, images = []) {
+  if (!images.length) {
+    // §14.6 : une absence qui informe est NOMMÉE. Un catalogue vide n'est pas
+    // un catalogue qu'on ignore — c'est un relevé qui n'a pas eu lieu.
+    return champ({
+      id: 'image', libelle: 'Image',
+      aide: 'Aucune image vérifiée au catalogue. Relever le catalogue avant de '
+        + 'créer un Spark.',
+      controle: `<select id="image" name="image" class="controle" disabled>
+        <option>— catalogue vide —</option></select>`,
+    });
+  }
+  const options = images.map((i) =>
+    `<option value="${echapper(i.reference)}"${i.reference === courante ? ' selected' : ''}>` +
+    `${echapper(i.label)} — ${echapper(i.reference)}</option>`).join('');
+  return champ({
+    id: 'image', libelle: 'Image',
+    aide: 'Les images proposées sont celles que le dernier relevé du catalogue a '
+      + 'trouvées chez leur dépôt.',
+    controle: `<select id="image" name="image" class="controle">${options}</select>`,
+  });
+}
+
 export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
-                                    refusal = null, submitting = false } = {}) {
+                                    refusal = null, submitting = false,
+                                    images = [] } = {}) {
   const v = { ...DEFAUTS, ...values };
   const risques = estimate(v, pools);
 
@@ -191,8 +230,7 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
                 aide: 'Minuscules, chiffres et tirets.',
                 controle: `<input type="text" id="name" name="name" value="${echapper(v.name)}"
                   class="controle${errors.name ? ' controle--erreur' : ''}" aria-describedby="name-aide${errors.name ? ' name-erreur' : ''}"${errors.name ? ' aria-invalid="true"' : ''} />` })}
-      ${champ({ id: 'image', libelle: 'Image', controle:
-        `<input type="text" id="image" name="image" value="${echapper(v.image)}" class="controle" />` })}
+      ${renderChoixImage(v.image, images)}
       ${champ({ id: 'cpu_mode', libelle: 'Mode CPU', controle:
         `<select id="cpu_mode" name="cpu_mode" class="controle">${modeOptions}</select>` })}
       ${champsCpu}

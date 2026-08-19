@@ -20,7 +20,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                sort: { key: 'name', dir: 'asc' }, tunnel: null, server: null,
                route: 'liste', spark: null, detail: {}, confirming: null,
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
-                           pools: null, submitting: false },
+                           pools: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
                hote: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false } };
@@ -333,6 +333,15 @@ async function chargerCreation() {
   etat.status = 'ready';
   peindre();
   try {
+    // Le catalogue alimente la liste : seules les images que le dernier relevé
+    // a trouvées sont proposées (docs/DAT.md §33.5).
+    const catalogue = await api('/v1/images').catch(() => ({ images: [] }));
+    etat.creation.images = (catalogue.images ?? []).filter((i) => i.state === 'verified');
+    if (etat.creation.images.length && !etat.creation.images
+        .some((i) => i.reference === etat.creation.values.image)) {
+      const defaut = etat.creation.images.find((i) => i.is_default) ?? etat.creation.images[0];
+      etat.creation.values.image = defaut.reference;
+    }
     const hote = await api('/v1/host');
     etat.creation.pools = hote.pools;
   } catch {

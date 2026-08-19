@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderSparkCreate, validateShape, estimate, demandOf, describeShortfall, DEFAUTS,
+  renderSparkCreate, validateShape, estimate, demandOf, describeShortfall, DEFAUTS, renderChoixImage,
 } from './spark-create.js';
 
 const GIO = 1024 ** 3;
@@ -176,4 +176,58 @@ test('les champs suivent le mode choisi', () => {
 test('le contenu saisi est echappe', () => {
   const html = renderSparkCreate({ values: { ...DEFAUTS, name: '"><script>x</script>' } });
   assert.equal(/<script>x/.test(html), false);
+});
+
+// --- l'image se choisit dans une LISTE (docs/DAT.md §33.5) ------------------
+
+test("le champ Image n'est plus une saisie libre", () => {
+  // Une saisie libre pouvait produire une reference inexistante, dont le refus
+  // n'arrivait qu'a l'application — apres que la ligne eut ete ecrite et la
+  // ressource comptee.
+  const rendu = renderSparkCreate({ images: [
+    { reference: 'images:debian/13', label: 'Debian 13', is_default: 1, state: 'verified' },
+  ] });
+  assert.ok(!/<input[^>]*id="image"/.test(rendu), 'plus de champ texte');
+  assert.ok(/<select[^>]*id="image"/.test(rendu));
+});
+
+test('la liste montre le libelle ET la reference', () => {
+  const rendu = renderChoixImage('images:debian/13', [
+    { reference: 'images:debian/13', label: 'Debian 13 « trixie »', is_default: 1 },
+  ]);
+  assert.ok(rendu.includes('Debian 13 « trixie »'));
+  assert.ok(rendu.includes('images:debian/13'));
+});
+
+test('la valeur courante est preselectionnee', () => {
+  const rendu = renderChoixImage('images:debian/12', [
+    { reference: 'images:debian/13', label: 'Debian 13', is_default: 1 },
+    { reference: 'images:debian/12', label: 'Debian 12', is_default: 0 },
+  ]);
+  assert.match(rendu, /value="images:debian\/12" selected/);
+  assert.ok(!/value="images:debian\/13" selected/.test(rendu));
+});
+
+test('un catalogue vide NOMME son absence et ne laisse pas choisir', () => {
+  // §14.6 : un catalogue vide n'est pas un catalogue qu'on ignore — c'est un
+  // releve qui n'a pas eu lieu.
+  const rendu = renderChoixImage('images:debian/13', []);
+  assert.ok(rendu.includes('Relever le catalogue'));
+  assert.ok(rendu.includes('disabled'));
+  assert.ok(!/<option value=/.test(rendu), 'aucune option proposable');
+});
+
+test("l'aide dit d'ou vient la liste", () => {
+  const rendu = renderChoixImage('images:debian/13', [
+    { reference: 'images:debian/13', label: 'Debian 13', is_default: 1 },
+  ]);
+  assert.ok(rendu.includes('dernier relevé du catalogue'));
+});
+
+test('les valeurs du catalogue sont echappees', () => {
+  const rendu = renderChoixImage('x', [
+    { reference: '<script>x</script>', label: '<img onerror=1>', is_default: 0 },
+  ]);
+  assert.ok(!rendu.includes('<script>'));
+  assert.ok(!rendu.includes('<img onerror'));
 });
