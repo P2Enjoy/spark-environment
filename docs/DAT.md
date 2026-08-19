@@ -1684,3 +1684,55 @@ Le port local du tunnel est obtenu en laissant le système en choisir un libre,
 et non en piochant dans une plage fixée. Une plage fixée entre en collision avec
 ce que l'exploitant fait tourner par ailleurs, et la collision se manifeste comme
 un tunnel qui « ne marche pas » sans dire pourquoi.
+
+## 23. Le contrat d'API
+
+Le §10 pose `packages/contract` comme frontière entre les deux livrables. Cette
+section dit ce qu'il contient et comment il reste vrai.
+
+### 23.1 Le contrat est un fichier committé, pas une réponse HTTP
+
+`sparkd` produit son OpenAPI à l'exécution. Ce n'est pas suffisant, pour deux
+raisons.
+
+La console doit pouvoir **se construire sans qu'un `sparkd` tourne** : un
+développeur qui ne peut pas compiler sans démarrer le serveur finira par ne plus
+vérifier ses types du tout.
+
+Et surtout, un contrat qui n'existe qu'à l'exécution **ne se relit pas**. Committé,
+un changement d'API apparaît dans le diff, au moment de la revue, avec le reste du
+changement. Non committé, il se découvre en production, par une console qui appelle
+un champ disparu.
+
+Le fichier fait donc partie du dépôt, au même titre que le code qui le produit.
+
+### 23.2 La dérive se détecte en régénérant
+
+La vérification est simple et sans échappatoire : régénérer le contrat depuis le
+code, comparer au fichier committé, échouer s'ils diffèrent.
+
+C'est le même principe que le checksum des migrations (`docs/SCHEMA.md` §12.4) :
+on ne fait pas confiance à la discipline pour maintenir deux choses en accord, on
+rend le désaccord détectable.
+
+**La génération doit être déterministe**, sans quoi la vérification échouerait à
+chaque exécution et serait désactivée dans la semaine. Le JSON est écrit avec des
+clés triées et une indentation fixe.
+
+### 23.3 Les types TypeScript sont dérivés, jamais écrits à la main
+
+`packages/contract` publie des types produits **depuis** l'OpenAPI par
+`openapi-typescript`. Ils ne sont pas rédigés à la main : une déclaration
+manuelle diverge du serveur dès la première modification, et la divergence se
+découvre à l'exécution, chez l'utilisateur.
+
+La console ne redéclare donc jamais la forme d'une donnée de son côté. Le
+runtime est la seule source ; la console en dérive.
+
+### 23.4 Ce que la vérification ne dit pas
+
+Le contrat décrit des **formes**, pas des comportements. Qu'un champ existe ne dit
+pas qu'il est renseigné, ni que sa valeur est fraîche, ni qu'une opération est
+permise. Ces garanties-là appartiennent au runtime et à ses tests, et le §10 de
+`CLAUDE.md` reste la référence : une règle d'autorisation n'est jamais portée par
+un schéma.
