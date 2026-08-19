@@ -133,7 +133,7 @@ def ensure_writable(connection: sqlite3.Connection, name: str, geste: str) -> No
 
 
 def arm(connection: sqlite3.Connection, name: str, password: str,
-        actor: str = "responsable") -> dict:
+        actor: str | None = None) -> dict:
     """Arme la protection. Réarmer accepte un mot de passe DIFFÉRENT (§35.4).
 
     Le produit ne retient pas l'ancien pour le proposer.
@@ -162,7 +162,7 @@ def arm(connection: sqlite3.Connection, name: str, password: str,
 
 
 def disarm(connection: sqlite3.Connection, name: str, password: str,
-           actor: str = "responsable") -> dict:
+           actor: str | None = None) -> dict:
     """Lève la protection, DURABLEMENT (§35.4).
 
     Pas de fenêtre de temps : un déverrouillage de quelques minutes rendrait le

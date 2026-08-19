@@ -2,6 +2,7 @@
 
 @spec docs/BACKLOG.md#SPK-15 · docs/DAT.md §21 (Journal d'audit),
       §21.1 (un seul chemin), §21.2 (on caviarde), §21.3 (ce qui est reconnu),
+      §21.6 (qui a agi : l'acteur et sa classe) · docs/BACKLOG.md#SPK-37,
       §21.4 (un payload n'est pas un dépotoir) · docs/SCHEMA.md §9
 
 Aucun autre module n'écrit dans `audit_log`. Un filtre posé à cinq endroits sera
@@ -14,6 +15,8 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 
 REDACTED = "[caviardé]"
@@ -41,6 +44,66 @@ SENSITIVE_VALUE = re.compile(
 )
 
 RESULTS = ("ok", "denied", "error")
+
+#: Les deux classes du §36.4, rendues verifiables (docs/DAT.md §21.6.1).
+HUMAN = "human"
+RUNTIME = "runtime"
+CLASSES = (HUMAN, RUNTIME)
+
+#: Ce que vaut `actor` quand rien ne l'etablit. PAS « responsable » : affirmer
+#: une identite que rien n'etablit est un mensonge, l'ignorance n'en est pas un
+#: (docs/DAT.md §21.6.2).
+UNKNOWN_ACTOR = "inconnu"
+
+#: Borne de l'identite declaree. Elle arrive d'un en-tete HTTP, donc de
+#: l'exterieur : sans borne, une valeur de plusieurs kibioctets entrerait au
+#: journal a chaque ligne.
+MAX_ACTOR = 200
+
+#: Contexte de la requête en cours. Il vaut `None` hors requête — au démarrage,
+#: dans une réconciliation, dans un test.
+#:
+#: Pourquoi un contexte plutôt que quatorze paramètres à faire descendre : c'est
+#: l'argument du §21.1, appliqué à l'acteur. Un paramètre à passer à quatorze
+#: endroits sera oublié au quinzième, et l'oubli ne se verra pas — le journal
+#: dira « responsable » avec aplomb. Ici, l'omission est IMPOSSIBLE : ce qui
+#: n'est pas déclaré vaut `inconnu` et `runtime`.
+_REQUETE: ContextVar[tuple[str, str] | None] = ContextVar("acteur_requete", default=None)
+
+
+@contextmanager
+def acting_as(actor: str, actor_class: str = HUMAN):
+    """Déclare l'acteur de la requête en cours (docs/DAT.md §21.6.2).
+
+    L'hôte console pose son identité dans un en-tête ; le service l'installe ici
+    pour la durée de la requête, et toute écriture au journal la reprend.
+    """
+    if actor_class not in CLASSES:
+        raise ValueError(f"Classe « {actor_class} » inconnue, attendu {CLASSES}.")
+    jeton = _REQUETE.set((normalize_actor(actor), actor_class))
+    try:
+        yield
+    finally:
+        _REQUETE.reset(jeton)
+
+
+@contextmanager
+def as_runtime(actor: str = "sparkd"):
+    """Déclare un ÉVÉNEMENT DU RUNTIME (docs/DAT.md §36.4).
+
+    À ouvrir dans les recalculs globaux — réconciliation de l'ingress,
+    redistribution des cœurs, relevés. Ils sont souvent DÉCLENCHÉS par une
+    requête humaine, mais ils ne sont pas demandés par elle : sans cette
+    déclaration ils hériteraient du contexte et le journal ferait croire qu'une
+    personne les a réclamés.
+    """
+    with acting_as(actor, RUNTIME):
+        yield
+
+
+def current_actor() -> tuple[str, str]:
+    """L'acteur en vigueur : celui de la requête, ou le runtime lui-même."""
+    return _REQUETE.get() or ("sparkd", RUNTIME)
 
 
 def looks_sensitive(name: str | None, value: object) -> bool:
@@ -86,29 +149,70 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def normalize_actor(actor: object) -> str:
+    """Ce qui entre au journal comme identité (docs/DAT.md §21.6.2).
+
+    L'identité arrive d'un en-tête HTTP, donc de l'extérieur : elle est bornée,
+    dépouillée de ses sauts de ligne — un journal dont une ligne peut en
+    fabriquer d'autres n'est plus lisible — et remplacée par `inconnu` quand
+    elle est vide.
+
+    Elle n'est PAS une preuve, et rien ici ne prétend le contraire : qui atteint
+    `sparkd` écrit ce qu'il veut dans cet en-tête. C'est une attribution ; la
+    preuve viendra de la signature (SPK-40).
+    """
+    texte = " ".join(str(actor or "").split())
+    if not texte:
+        return UNKNOWN_ACTOR
+    return texte[:MAX_ACTOR]
+
+
 def record(
     connection: sqlite3.Connection,
-    actor: str,
+    actor: str | None,
     action: str,
     result: str,
     message: str,
     target_type: str | None = None,
     target_id: str | None = None,
     payload: object = None,
+    actor_class: str | None = None,
 ) -> None:
     """Écrit une entrée. **Seul** chemin vers `audit_log` (docs/DAT.md §21.1).
 
     N'ouvre pas de transaction : l'appelant décide si la trace doit vivre ou
     mourir avec son opération. Un refus, lui, se journalise hors transaction —
     sinon le rollback l'emporterait, et c'est exactement la trace qui sert.
+
+    `actor` et `actor_class` sont résolus ainsi (docs/DAT.md §21.6) :
+
+    - ce que l'appelant passe EXPLICITEMENT l'emporte. C'est ce qui permet à un
+      recalcul déclenché par une requête — réconciliation, repondération — de se
+      déclarer `runtime` alors qu'une personne est à l'origine de l'appel : le
+      §36.4 les classe ainsi, et le contraire ferait croire qu'un humain les a
+      demandés ;
+    - sinon, l'acteur de la requête en cours, s'il y en a une ;
+    - sinon `sparkd` / `runtime`.
+
+    Ce défaut n'est pas une commodité : une écriture qui oublie de se déclarer
+    perd une attribution au lieu d'en fabriquer une (docs/SCHEMA.md §9.1).
     """
     if result not in RESULTS:
         raise ValueError(f"Résultat « {result} » inconnu, attendu {RESULTS}.")
+    contexte_acteur, contexte_classe = current_actor()
+    if actor is None:
+        actor = contexte_acteur
+    if actor_class is None:
+        actor_class = contexte_classe
+    if actor_class not in CLASSES:
+        raise ValueError(f"Classe « {actor_class} » inconnue, attendu {CLASSES}.")
     connection.execute(
-        "INSERT INTO audit_log (ts, actor, action, target_type, target_id,"
-        " payload, result, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO audit_log (ts, actor, actor_class, action, target_type,"
+        " target_id, payload, result, message)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            _now(), actor, action, target_type, target_id,
+            _now(), normalize_actor(actor), actor_class, action,
+            target_type, target_id,
             prepare_payload(payload), result,
             # Le message aussi passe par le filtre : il est composé à la main,
             # donc susceptible d'interpoler une valeur sensible.

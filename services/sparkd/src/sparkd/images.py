@@ -26,6 +26,7 @@ from secrets import token_hex
 
 import httpx
 
+from . import audit
 from .audit import record as _audit
 from .db import transaction
 
@@ -120,7 +121,7 @@ def add(
     reference: str,
     label: str,
     architecture: str = "amd64",
-    actor: str = "responsable",
+    actor: str | None = None,
 ) -> dict:
     """Ajoute une référence. Geste EXPLICITE, hors formulaire de création (§33.2).
 
@@ -239,44 +240,48 @@ def verify(
     Un dépôt injoignable rend `unknown`, **jamais** `missing` : ne pas savoir
     n'est pas savoir que ce n'est pas là (§33.3).
     """
-    entrees = listing(connection)
-    depots = {e["remote"] for e in entrees}
-    releves: dict[str, Catalogue | str] = {}
-    for depot in depots:
-        url = REMOTES.get(depot)
-        if url is None:
-            releves[depot] = f"dépôt « {depot} » inconnu du produit"
-            continue
-        try:
-            releves[depot] = fetch(url)
-        except Exception as erreur:  # noqa: BLE001 — toute panne doit être rendue
-            releves[depot] = f"dépôt injoignable : {erreur}"
+    # §36.4 : ÉVÉNEMENT DU RUNTIME. Souvent déclenché par une requête humaine,
+    # il n'est pas demandé par elle — sans cette déclaration le journal ferait
+    # croire qu'une personne l'a réclamé.
+    with audit.as_runtime(actor or "sparkd"):
+        entrees = listing(connection)
+        depots = {e["remote"] for e in entrees}
+        releves: dict[str, Catalogue | str] = {}
+        for depot in depots:
+            url = REMOTES.get(depot)
+            if url is None:
+                releves[depot] = f"dépôt « {depot} » inconnu du produit"
+                continue
+            try:
+                releves[depot] = fetch(url)
+            except Exception as erreur:  # noqa: BLE001 — toute panne doit être rendue
+                releves[depot] = f"dépôt injoignable : {erreur}"
 
-    compte = {VERIFIED: 0, MISSING: 0, UNKNOWN: 0}
-    horodatage = _now()
-    with transaction(connection):
-        for entree in entrees:
-            releve = releves.get(entree["remote"])
-            if isinstance(releve, Catalogue):
-                present = entree["alias"] in releve.aliases
-                etat = VERIFIED if present else MISSING
-                detail = (
-                    f"relevé sur {releve.produits} produits publiés"
-                    if present
-                    else f"absent des {releve.produits} produits publiés"
+        compte = {VERIFIED: 0, MISSING: 0, UNKNOWN: 0}
+        horodatage = _now()
+        with transaction(connection):
+            for entree in entrees:
+                releve = releves.get(entree["remote"])
+                if isinstance(releve, Catalogue):
+                    present = entree["alias"] in releve.aliases
+                    etat = VERIFIED if present else MISSING
+                    detail = (
+                        f"relevé sur {releve.produits} produits publiés"
+                        if present
+                        else f"absent des {releve.produits} produits publiés"
+                    )
+                else:
+                    etat, detail = UNKNOWN, str(releve)
+                compte[etat] += 1
+                connection.execute(
+                    "UPDATE image_catalog SET state = ?, verified_at = ?, detail = ?"
+                    " WHERE id = ?",
+                    (etat, horodatage, detail, entree["id"]),
                 )
-            else:
-                etat, detail = UNKNOWN, str(releve)
-            compte[etat] += 1
-            connection.execute(
-                "UPDATE image_catalog SET state = ?, verified_at = ?, detail = ?"
-                " WHERE id = ?",
-                (etat, horodatage, detail, entree["id"]),
+            _audit(
+                connection, actor, "image.verify", "ok",
+                f"Catalogue relevé : {compte[VERIFIED]} vérifiée(s), "
+                f"{compte[MISSING]} absente(s), {compte[UNKNOWN]} non relevée(s).",
+                payload=compte,
             )
-        _audit(
-            connection, actor, "image.verify", "ok",
-            f"Catalogue relevé : {compte[VERIFIED]} vérifiée(s), "
-            f"{compte[MISSING]} absente(s), {compte[UNKNOWN]} non relevée(s).",
-            payload=compte,
-        )
-    return {"verified_at": horodatage, **compte}
+        return {"verified_at": horodatage, **compte}

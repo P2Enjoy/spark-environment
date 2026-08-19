@@ -172,127 +172,130 @@ def sync(
     malgré tout — la réalité fait foi — mais journalisé en `denied` pour que
     l'écart reste visible (docs/DAT.md §5.3).
     """
-    from .admission import DEFAULT_METADATA_MARGIN
-    from .admission import pools as lire_pools
+    # §36.4 : ÉVÉNEMENT DU RUNTIME. Souvent déclenché par une requête humaine,
+    # il n'est pas demandé par elle — sans cette déclaration le journal ferait
+    # croire qu'une personne l'a réclamé.
+    with audit.as_runtime(actor or "sparkd"):
+        from .admission import DEFAULT_METADATA_MARGIN
+        from .admission import pools as lire_pools
 
-    # La marge de metadonnees entre dans l'alloue du pool de stockage (§8.8.2
-    # regle 4) : les deux photographies doivent la compter de la meme facon,
-    # sans quoi la comparaison avant/apres attribuerait au releve un ecart qui
-    # ne vient que du parametre.
-    if metadata_margin is None:
-        metadata_margin = DEFAULT_METADATA_MARGIN
+        # La marge de metadonnees entre dans l'alloue du pool de stockage (§8.8.2
+        # regle 4) : les deux photographies doivent la compter de la meme facon,
+        # sans quoi la comparaison avant/apres attribuerait au releve un ecart qui
+        # ne vient que du parametre.
+        if metadata_margin is None:
+            metadata_margin = DEFAULT_METADATA_MARGIN
 
-    topology = read_topology(client, pool, operating_margin)
+        topology = read_topology(client, pool, operating_margin)
 
-    try:
-        avant = lire_pools(connection, metadata_margin)
-        alloue = {
-            "cpu": avant.cpu.allocated,
-            "memory": avant.memory.allocated,
-            "network": avant.network.allocated,
-            "storage": avant.storage.allocated,
-        }
-    except Exception:
-        alloue = {}
+        try:
+            avant = lire_pools(connection, metadata_margin)
+            alloue = {
+                "cpu": avant.cpu.allocated,
+                "memory": avant.memory.allocated,
+                "network": avant.network.allocated,
+                "storage": avant.storage.allocated,
+            }
+        except Exception:
+            alloue = {}
 
-    with transaction(connection):
-        connection.execute(
-            """INSERT INTO host (
-                   id, hostname, cpu_threads_total, cpu_cores_total,
-                   memory_total_bytes, storage_total_bytes, network_total_bps,
-                   memory_reserve_bytes, memory_arc_bytes, memory_margin_bytes,
-                   topology_synced_at)
-               VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
-                   hostname = excluded.hostname,
-                   cpu_threads_total = excluded.cpu_threads_total,
-                   cpu_cores_total = excluded.cpu_cores_total,
-                   memory_total_bytes = excluded.memory_total_bytes,
-                   storage_total_bytes = excluded.storage_total_bytes,
-                   network_total_bps = excluded.network_total_bps,
-                   memory_reserve_bytes = excluded.memory_reserve_bytes,
-                   memory_arc_bytes = excluded.memory_arc_bytes,
-                   memory_margin_bytes = excluded.memory_margin_bytes,
-                   topology_synced_at = excluded.topology_synced_at""",
-            (
-                topology.hostname,
-                topology.cpu_threads_total,
-                topology.cpu_cores_total,
-                topology.memory_total_bytes,
-                topology.storage_total_bytes,
-                topology.network_total_bps,
-                topology.memory_reserve_bytes,
-                topology.memory_arc_bytes,
-                topology.memory_margin_bytes,
-                _now(),
-            ),
-        )
-
-        # Les cœurs déjà attribués à un Spark ne sont pas effacés : la topologie
-        # se relève, les allocations se conservent.
-        attribues = {
-            (row["socket_id"], row["core_id"]): row["spark_id"]
-            for row in connection.execute(
-                "SELECT socket_id, core_id, spark_id FROM cpu_core WHERE spark_id IS NOT NULL"
-            )
-        }
-        connection.execute("DELETE FROM cpu_thread")
-        connection.execute("DELETE FROM cpu_core")
-        for index, core in enumerate(topology.cores, start=1):
-            proprietaire = attribues.get((core.socket_id, core.core_id))
+        with transaction(connection):
             connection.execute(
-                "INSERT INTO cpu_core (id, socket_id, numa_node, core_id, pool, spark_id)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                """INSERT INTO host (
+                       id, hostname, cpu_threads_total, cpu_cores_total,
+                       memory_total_bytes, storage_total_bytes, network_total_bps,
+                       memory_reserve_bytes, memory_arc_bytes, memory_margin_bytes,
+                       topology_synced_at)
+                   VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       hostname = excluded.hostname,
+                       cpu_threads_total = excluded.cpu_threads_total,
+                       cpu_cores_total = excluded.cpu_cores_total,
+                       memory_total_bytes = excluded.memory_total_bytes,
+                       storage_total_bytes = excluded.storage_total_bytes,
+                       network_total_bps = excluded.network_total_bps,
+                       memory_reserve_bytes = excluded.memory_reserve_bytes,
+                       memory_arc_bytes = excluded.memory_arc_bytes,
+                       memory_margin_bytes = excluded.memory_margin_bytes,
+                       topology_synced_at = excluded.topology_synced_at""",
                 (
-                    index,
-                    core.socket_id,
-                    core.numa_node,
-                    core.core_id,
-                    "dedicated" if proprietaire else "shared",
-                    proprietaire,
+                    topology.hostname,
+                    topology.cpu_threads_total,
+                    topology.cpu_cores_total,
+                    topology.memory_total_bytes,
+                    topology.storage_total_bytes,
+                    topology.network_total_bps,
+                    topology.memory_reserve_bytes,
+                    topology.memory_arc_bytes,
+                    topology.memory_margin_bytes,
+                    _now(),
                 ),
             )
-            for thread in core.threads:
-                connection.execute(
-                    "INSERT INTO cpu_thread (cpu_id, core_id) VALUES (?, ?)",
-                    (thread.cpu_id, index),
+
+            # Les cœurs déjà attribués à un Spark ne sont pas effacés : la topologie
+            # se relève, les allocations se conservent.
+            attribues = {
+                (row["socket_id"], row["core_id"]): row["spark_id"]
+                for row in connection.execute(
+                    "SELECT socket_id, core_id, spark_id FROM cpu_core WHERE spark_id IS NOT NULL"
                 )
+            }
+            connection.execute("DELETE FROM cpu_thread")
+            connection.execute("DELETE FROM cpu_core")
+            for index, core in enumerate(topology.cores, start=1):
+                proprietaire = attribues.get((core.socket_id, core.core_id))
+                connection.execute(
+                    "INSERT INTO cpu_core (id, socket_id, numa_node, core_id, pool, spark_id)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        index,
+                        core.socket_id,
+                        core.numa_node,
+                        core.core_id,
+                        "dedicated" if proprietaire else "shared",
+                        proprietaire,
+                    ),
+                )
+                for thread in core.threads:
+                    connection.execute(
+                        "INSERT INTO cpu_thread (cpu_id, core_id) VALUES (?, ?)",
+                        (thread.cpu_id, index),
+                    )
 
-        apres = lire_pools(connection, metadata_margin)
-        depassements = [
-            nom
-            for nom, pool_etat in (
-                ("cpu", apres.cpu), ("memory", apres.memory),
-                ("network", apres.network), ("storage", apres.storage),
+            apres = lire_pools(connection, metadata_margin)
+            depassements = [
+                nom
+                for nom, pool_etat in (
+                    ("cpu", apres.cpu), ("memory", apres.memory),
+                    ("network", apres.network), ("storage", apres.storage),
+                )
+                if alloue.get(nom, 0) > pool_etat.capacity
+            ]
+            audit.record(
+                connection, actor, "host.sync",
+                "denied" if (depassements or not topology.arc_known) else "ok",
+                (
+                    "Capacité relevée inférieure à l'allocation en cours : "
+                    + ", ".join(depassements)
+                    + ". Le relevé est appliqué — la réalité fait foi — mais "
+                      "l'écart doit être résorbé."
+                ) if depassements else (
+                    f"Relevé appliqué. {topology.memory_detail}"
+                    if topology.arc_known else
+                    f"Relevé appliqué MAIS le pool mémoire est peut-être "
+                    f"surestimé : {topology.memory_detail}"
+                ),
+                target_type="host", target_id="1",
+                payload={
+                    "cpu_cores": topology.cpu_cores_total,
+                    "cpu_threads": topology.cpu_threads_total,
+                    "memory_bytes": topology.memory_total_bytes,
+                    "network_bps": topology.network_total_bps,
+                    "storage_bytes": topology.storage_total_bytes,
+                    "memory_reserve_bytes": topology.memory_reserve_bytes,
+                },
             )
-            if alloue.get(nom, 0) > pool_etat.capacity
-        ]
-        audit.record(
-            connection, actor, "host.sync",
-            "denied" if (depassements or not topology.arc_known) else "ok",
-            (
-                "Capacité relevée inférieure à l'allocation en cours : "
-                + ", ".join(depassements)
-                + ". Le relevé est appliqué — la réalité fait foi — mais "
-                  "l'écart doit être résorbé."
-            ) if depassements else (
-                f"Relevé appliqué. {topology.memory_detail}"
-                if topology.arc_known else
-                f"Relevé appliqué MAIS le pool mémoire est peut-être "
-                f"surestimé : {topology.memory_detail}"
-            ),
-            target_type="host", target_id="1",
-            payload={
-                "cpu_cores": topology.cpu_cores_total,
-                "cpu_threads": topology.cpu_threads_total,
-                "memory_bytes": topology.memory_total_bytes,
-                "network_bps": topology.network_total_bps,
-                "storage_bytes": topology.storage_total_bytes,
-                "memory_reserve_bytes": topology.memory_reserve_bytes,
-            },
-        )
-    return topology
-
+        return topology
 
 def sibling_cpus(connection: sqlite3.Connection, core_row_id: int) -> list[int]:
     """CPU logiques d'un cœur physique, frères SMT compris.

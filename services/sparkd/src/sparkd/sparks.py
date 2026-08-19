@@ -78,7 +78,7 @@ def _audit(connection, actor, action, target_id, payload, result, message) -> No
                  target_type="spark", target_id=target_id, payload=payload)
 
 
-def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "responsable",
+def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = None,
            metadata_margin: int = DEFAULT_METADATA_MARGIN) -> dict:
     """Crée la ligne d'un Spark, après admission control.
 
@@ -223,7 +223,7 @@ def command(
     connection: sqlite3.Connection,
     spark_id: str,
     cmd: Command,
-    actor: str = "responsable",
+    actor: str | None = None,
 ) -> dict:
     """Applique une commande, ou la refuse en nommant pourquoi."""
     spark = get(connection, spark_id)
@@ -263,29 +263,32 @@ def finish(
     Une suppression réussie fait **disparaître la ligne** : c'est seulement là que
     la ressource est rendue (docs/DAT.md §14.4).
     """
-    spark = get(connection, spark_id)
-    courant = State(spark["state"])
+    # §36.4 : ÉVÉNEMENT DU RUNTIME. Souvent déclenché par une requête humaine,
+    # il n'est pas demandé par elle — sans cette déclaration le journal ferait
+    # croire qu'une personne l'a réclamé.
+    with audit.as_runtime(actor or "sparkd"):
+        spark = get(connection, spark_id)
+        courant = State(spark["state"])
 
-    if courant is State.DELETING and success:
+        if courant is State.DELETING and success:
+            with transaction(connection):
+                connection.execute("DELETE FROM spark WHERE id = ?", (spark_id,))
+                _audit(connection, actor, "spark.deleted", spark_id, {}, "ok",
+                       f"Spark « {spark['name']} » supprimé, ressources rendues.")
+            return None
+
+        vise = settle(courant, success)
         with transaction(connection):
-            connection.execute("DELETE FROM spark WHERE id = ?", (spark_id,))
-            _audit(connection, actor, "spark.deleted", spark_id, {}, "ok",
-                   f"Spark « {spark['name']} » supprimé, ressources rendues.")
-        return None
-
-    vise = settle(courant, success)
-    with transaction(connection):
-        connection.execute(
-            "UPDATE spark SET state = ?, updated_at = ?, last_error = ? WHERE id = ?",
-            (vise.value, _now(), error, spark_id),
-        )
-        _audit(
-            connection, actor, "spark.settle", spark_id,
-            {"from": courant.value, "to": vise.value}, "ok" if success else "error",
-            error or f"« {courant.value} » → « {vise.value} ».",
-        )
-    return get(connection, spark_id)
-
+            connection.execute(
+                "UPDATE spark SET state = ?, updated_at = ?, last_error = ? WHERE id = ?",
+                (vise.value, _now(), error, spark_id),
+            )
+            _audit(
+                connection, actor, "spark.settle", spark_id,
+                {"from": courant.value, "to": vise.value}, "ok" if success else "error",
+                error or f"« {courant.value} » → « {vise.value} ».",
+            )
+        return get(connection, spark_id)
 
 def reconcile_all(
     connection: sqlite3.Connection,
@@ -297,31 +300,35 @@ def reconcile_all(
     `presence` associe le nom du Spark à `(existe, démarré)`. Un état transitoire
     retrouvé ici n'est pas une anomalie du produit : c'est la trace d'un arrêt.
     """
-    resultats: list[dict] = []
-    for spark in listing(connection):
-        courant = State(spark["state"])
-        if courant not in {State.CREATING, State.STARTING, State.STOPPING, State.DELETING}:
-            continue
-        existe, demarre = presence.get(spark["name"], (False, False))
-        verdict = reconcile(courant, exists=existe, running=demarre)
+    # §36.4 : ÉVÉNEMENT DU RUNTIME. Souvent déclenché par une requête humaine,
+    # il n'est pas demandé par elle — sans cette déclaration le journal ferait
+    # croire qu'une personne l'a réclamé.
+    with audit.as_runtime(actor or "sparkd"):
+        resultats: list[dict] = []
+        for spark in listing(connection):
+            courant = State(spark["state"])
+            if courant not in {State.CREATING, State.STARTING, State.STOPPING, State.DELETING}:
+                continue
+            existe, demarre = presence.get(spark["name"], (False, False))
+            verdict = reconcile(courant, exists=existe, running=demarre)
 
-        with transaction(connection):
-            if verdict.state is None:
-                connection.execute("DELETE FROM spark WHERE id = ?", (spark["id"],))
-            elif verdict.state is not courant:
-                connection.execute(
-                    "UPDATE spark SET state = ?, updated_at = ? WHERE id = ?",
-                    (verdict.state.value, _now(), spark["id"]),
+            with transaction(connection):
+                if verdict.state is None:
+                    connection.execute("DELETE FROM spark WHERE id = ?", (spark["id"],))
+                elif verdict.state is not courant:
+                    connection.execute(
+                        "UPDATE spark SET state = ?, updated_at = ? WHERE id = ?",
+                        (verdict.state.value, _now(), spark["id"]),
+                    )
+                _audit(
+                    connection, actor, "spark.reconcile", spark["id"],
+                    {"from": courant.value,
+                     "to": verdict.state.value if verdict.state else None},
+                    "ok", verdict.reason,
                 )
-            _audit(
-                connection, actor, "spark.reconcile", spark["id"],
-                {"from": courant.value,
-                 "to": verdict.state.value if verdict.state else None},
-                "ok", verdict.reason,
-            )
-        resultats.append({
-            "name": spark["name"], "from": courant.value,
-            "to": verdict.state.value if verdict.state else None,
-            "reason": verdict.reason,
-        })
-    return resultats
+            resultats.append({
+                "name": spark["name"], "from": courant.value,
+                "to": verdict.state.value if verdict.state else None,
+                "reason": verdict.reason,
+            })
+        return resultats

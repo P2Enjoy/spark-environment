@@ -102,7 +102,7 @@ def _audit(connection, actor, action, target, payload, result, message) -> None:
 
 
 def register(
-    connection: sqlite3.Connection, label: str, text: str, actor: str = "responsable"
+    connection: sqlite3.Connection, label: str, text: str, actor: str | None = None
 ) -> dict:
     """Enregistre une clé publique."""
     if not label.strip():
@@ -168,7 +168,7 @@ def affected_sparks(connection: sqlite3.Connection, label: str,
     ]
 
 
-def forget(connection: sqlite3.Connection, label: str, actor: str = "responsable",
+def forget(connection: sqlite3.Connection, label: str, actor: str | None = None,
            protected_affected: list[str] | None = None) -> list[str]:
     """Retire une clé du registre. Rend les Sparks à réconcilier.
 
@@ -197,7 +197,7 @@ def forget(connection: sqlite3.Connection, label: str, actor: str = "responsable
 
 
 def grant(connection: sqlite3.Connection, spark_id: str, label: str,
-          actor: str = "responsable") -> None:
+          actor: str | None = None) -> None:
     cle = by_label(connection, label)
     with transaction(connection):
         connection.execute(
@@ -210,7 +210,7 @@ def grant(connection: sqlite3.Connection, spark_id: str, label: str,
 
 
 def revoke(connection: sqlite3.Connection, spark_id: str, label: str,
-           actor: str = "responsable") -> None:
+           actor: str | None = None) -> None:
     cle = by_label(connection, label)
     with transaction(connection):
         connection.execute(

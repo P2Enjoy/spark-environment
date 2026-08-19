@@ -88,7 +88,7 @@ def _audit(connection, actor, action, target, payload, result, message) -> None:
 
 def declare(
     connection: sqlite3.Connection, spark_id: str, domain: str, port: int,
-    tls: bool = True, actor: str = "responsable",
+    tls: bool = True, actor: str | None = None,
 ) -> dict:
     """Déclare une route. L'unicité du domaine est portée par la base."""
     nom = domain.strip().lower()
@@ -151,7 +151,7 @@ def listing(connection: sqlite3.Connection) -> list[dict]:
 
 
 def withdraw(connection: sqlite3.Connection, domain: str,
-             actor: str = "responsable") -> None:
+             actor: str | None = None) -> None:
     route = by_domain(connection, domain)
     with transaction(connection):
         connection.execute("DELETE FROM ingress_route WHERE id = ?", (route["id"],))
@@ -206,26 +206,30 @@ def build_config(connection: sqlite3.Connection) -> dict:
 
 def reconcile(connection: sqlite3.Connection, caddy, actor: str = "sparkd") -> dict:
     """Régénère et applique. C'est le mécanisme NORMAL, pas une réparation."""
-    config = build_config(connection)
-    # On compte les routes SERVIES : la route terminale de refus n'en est pas
-    # une, et l'annoncer fausserait le nombre que lit l'exploitant.
-    nb = sum(
-        1 for r in config["apps"]["http"]["servers"][SERVER_NAME]["routes"]
-        if "match" in r
-    )
-    try:
-        caddy.load(config)
-    except IngressError as erreur:
-        with transaction(connection):
-            _audit(connection, actor, "ingress.reconcile", None,
-                   {"routes": nb}, "error", str(erreur))
-        raise
-    with transaction(connection):
-        connection.execute(
-            "UPDATE ingress_route SET applied_at = ? WHERE enabled = 1"
-            " AND spark_id IN (SELECT id FROM spark WHERE ipv4_address IS NOT NULL)",
-            (_now(),),
+    # §36.4 : c'est un ÉVÉNEMENT DU RUNTIME. Souvent déclenché par une
+    # requête humaine, il n'est pas demandé par elle — sans cette
+    # déclaration le journal ferait croire qu'une personne l'a réclamé.
+    with audit.as_runtime(actor or "sparkd"):
+        config = build_config(connection)
+        # On compte les routes SERVIES : la route terminale de refus n'en est pas
+        # une, et l'annoncer fausserait le nombre que lit l'exploitant.
+        nb = sum(
+            1 for r in config["apps"]["http"]["servers"][SERVER_NAME]["routes"]
+            if "match" in r
         )
-        _audit(connection, actor, "ingress.reconcile", None,
-               {"routes": nb}, "ok", f"{nb} route(s) appliquée(s).")
-    return {"routes": nb, "config": config}
+        try:
+            caddy.load(config)
+        except IngressError as erreur:
+            with transaction(connection):
+                _audit(connection, actor, "ingress.reconcile", None,
+                       {"routes": nb}, "error", str(erreur))
+            raise
+        with transaction(connection):
+            connection.execute(
+                "UPDATE ingress_route SET applied_at = ? WHERE enabled = 1"
+                " AND spark_id IN (SELECT id FROM spark WHERE ipv4_address IS NOT NULL)",
+                (_now(),),
+            )
+            _audit(connection, actor, "ingress.reconcile", None,
+                   {"routes": nb}, "ok", f"{nb} route(s) appliquée(s).")
+        return {"routes": nb, "config": config}

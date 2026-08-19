@@ -86,7 +86,7 @@ def newer_than(connection: sqlite3.Connection, spark_id: str, name: str) -> list
 
 def create(
     connection: sqlite3.Connection, spark: dict, name: str,
-    incus, actor: str = "responsable",
+    incus, actor: str | None = None,
 ) -> dict:
     """Prend un instantané. N'interrompt pas le Spark (docs/DAT.md §19.2)."""
     nom = name.strip()
@@ -124,7 +124,7 @@ def create(
 
 def restore(
     connection: sqlite3.Connection, spark: dict, name: str, incus,
-    accept_losing_newer: bool = False, actor: str = "responsable",
+    accept_losing_newer: bool = False, actor: str | None = None,
 ) -> dict:
     """Restaure la cellule. Refuse par défaut de détruire les plus récents."""
     nom = name.strip()
@@ -157,7 +157,7 @@ def restore(
 
 def delete(
     connection: sqlite3.Connection, spark: dict, name: str, incus,
-    actor: str = "responsable",
+    actor: str | None = None,
 ) -> None:
     nom = name.strip()
     ligne = connection.execute(
