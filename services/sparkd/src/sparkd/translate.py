@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from . import cgroup
+
 # Loi mesurée sur onze points (docs/DAT.md §7.2 bis) :
 #     cpu.weight = allowance_pct − 10 + limits.cpu.priority
 # Le noyau refuse un poids nul ou négatif, d'où le plancher.
@@ -195,6 +197,11 @@ def translate(
     config: dict[str, str] = {
         # Docker doit pouvoir tourner dans le Spark : c'est l'objet du produit.
         "security.nesting": "true",
+        # Le Spark vit dans la tranche parente, jamais a la racine de cgroup v2
+        # (docs/DAT.md §32.1). A la racine, son poids serait arbitre contre
+        # `system.slice` autant que contre les autres Sparks, et sa reservation
+        # ne serait proportionnelle qu'entre Sparks.
+        "raw.lxc": cgroup.raw_lxc(manifest.name),
         # Plages UID/GID disjointes entre Sparks (docs/DAT.md §11).
         "security.idmap.isolated": "true",
         "limits.memory": str(manifest.memory_bytes),

@@ -247,3 +247,33 @@ def test_l_adresse_est_epinglee_sur_le_nic():
 def test_sans_adresse_aucun_epinglage():
     c = translate(manifeste(), SHARED, POOL)
     assert "ipv4.address" not in c.devices["eth0"]
+
+
+# --- la tranche parente (docs/DAT.md §32.1) ---------------------------------
+
+
+def test_tout_spark_est_place_dans_la_tranche_parente():
+    """Sans cela, son poids est arbitre contre system.slice (docs/DAT.md §7.3 bis).
+
+    C'est la correction centrale de SPK-29 : a la racine de cgroup v2, la
+    reservation n'est proportionnelle qu'entre Sparks.
+    """
+    rendu = translate(manifeste(name="crm"), SHARED, POOL)
+    raw = rendu.config["raw.lxc"]
+    assert "lxc.cgroup.dir.container = spark.slice/crm" in raw
+    assert "lxc.cgroup.dir.monitor = spark.slice/monitor-crm" in raw
+
+
+def test_le_placement_ne_modifie_ni_le_poids_ni_le_burst():
+    """Mesure du §32.1 : la loi du §7.2 bis s'applique inchangee dans la tranche.
+
+    Le manifeste doit donc produire exactement les memes limites qu'avant, et le
+    plafond rester absent — c'est lui qui autorise le burst.
+    """
+    rendu = translate(manifeste(cpu_reservation=1.0), SHARED, POOL)
+    # 1 CPU sur un pool de 4, mis a l'echelle par le facteur 1000 du §7.2 bis.
+    # (La formule naive reservation/capacite x 100 avait ete ecartee : elle
+    # refusait toute reservation sous 0,25 CPU — §13, point 8.)
+    assert rendu.config["limits.cpu.allowance"] == "250%"
+    assert rendu.config["limits.cpu.priority"] == "5"
+    assert "limits.cpu.max" not in rendu.config, "le burst est preserve"
