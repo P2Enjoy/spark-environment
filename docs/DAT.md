@@ -34,6 +34,59 @@ L'unité de déploiement n'est ni une application ni une fonction. C'est **une
 cellule d'exécution Linux à quota**, dont le contenu ne regarde pas le plan de
 contrôle.
 
+## 1 bis. Glossaire : Forge, Spark, console (SPK-42)
+
+**Arbitrage du responsable, 2026-08-20.** La machine qui porte `sparkd` s'appelle
+désormais une **Forge**. Elle n'avait pas de nom : on disait « l'hôte », mot déjà
+pris par le processus Node du poste (§22), et la console affichait les deux.
+
+| Terme | Ce qu'il désigne | Ce qu'il ne désigne pas |
+|---|---|---|
+| **Forge** | LA machine physique qui porte `sparkd`, Incus et le pool | pas une grappe : une Forge est **une** machine |
+| **Spark** | une cellule sur une Forge — une fraction de sa capacité | pas un conteneur Docker : Docker tourne **dans** le Spark |
+| **console** | l'application locale d'administration, sur le poste du responsable | pas une machine administrée |
+| **hôte console** | le processus Node qui sert la console et ouvre les tunnels | pas une Forge |
+
+### 1 bis.1 Ce que le renommage change, et ce qu'il NE change PAS
+
+C'est un renommage **sémantique**, jamais textuel. Une substitution globale de
+`host` serait fausse, et dangereuse : le mot a trois sens dans ce dépôt, et deux
+d'entre eux ne bougent pas.
+
+**Change** — le mot désignait la machine :
+
+- la table `host` du registre et ses colonnes de capacité ;
+- la route `GET /v1/host`, `POST /v1/host/sync`, `/v1/host/cores` ;
+- les libellés d'interface, la destination `#/hote`, le manuel, le glossaire ;
+- les messages où « l'hôte » veut dire « la machine ».
+
+**Ne change PAS** — le mot y a un autre sens, et le changer produirait un
+contresens :
+
+- `host` au sens **réseau** : `SPARKD_BIND`, l'adresse d'écoute, `hostname`, le
+  `host` d'un serveur dans `servers.json`, `sshHost`, `HostName` et `Host` du
+  `ssh_config`. C'est le vocabulaire d'OpenSSH et de TCP, pas le nôtre ;
+- **« hôte console »**, qui reste : la collision disparaît d'elle-même puisque
+  l'autre sens s'en va. Le renommer aussi serait renommer pour renommer ;
+- `hostmem`, qui lit la mémoire de **la machine locale** où tourne `sparkd` —
+  donc de la Forge : il **change** de nom, mais son contenu ne bouge pas.
+
+Cette distinction n'est pas un détail de style : la vérification de la DoD — « plus
+aucune occurrence du terme abandonné **dans le sens visé** » — ne peut se faire
+qu'en la connaissant. Un `grep` nu compte les trois sens et ne prouve rien.
+
+### 1 bis.2 Ordre de livraison, et pourquoi cet ordre
+
+1. **le registre et l'API** — migration `host` → `forge`, routes, contrat
+   régénéré. C'est ce dont le coût croît : chaque unité livrée après cet
+   arbitrage ajoute des appelants ;
+2. **la console** — libellés et destination ;
+3. **la documentation et le manuel**, captures refaites.
+
+La compatibilité ascendante n'est **pas** maintenue : le contrat n'a qu'un
+consommateur, le dépôt lui-même (§23). Garder `/v1/host` en alias créerait deux
+noms pour la même chose, ce que cette unité existe précisément pour supprimer.
+
 ## 2. Le choix structurant : Docker n'est plus la frontière d'isolation
 
 Le point de bascule conceptuel du projet est le suivant :
