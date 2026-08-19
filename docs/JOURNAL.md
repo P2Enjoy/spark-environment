@@ -2729,3 +2729,60 @@ SPK-36, SPK-42 et INC-02 attendent votre arbitrage.
 **Point d'exploitation** : `005_journal_acteur` est portée au contrat de
 déploiement (OP-06). Tout script qui corrigeait ou purgeait `audit_log` échouera
 désormais, et c'est le but ; ne pas supprimer les déclencheurs à la main.
+
+## 2026-08-19 — SPK-38 : la chaîne détecte, l'ancre voit ce qu'elle ne peut pas voir
+
+**Unité** : SPK-38, désignée par l'entrée précédente. Le §36 disait ce qu'une
+chaîne prouve et contre qui ; il ne disait pas ce qui s'écrit. J'ai écrit le
+**§36.9** et le **§9.2 du schéma**, committés avant la première ligne de code.
+
+**Ce qui est livré.** Chaque entrée du journal porte l'empreinte de la
+précédente, calculée sur une sérialisation **canonique figée** — c'est le piège
+du §36.5 qui ne se rattrape pas : une vérification qui échouerait un an plus tard
+sans qu'aucune ligne n'ait bougé détruirait la confiance dans le dispositif
+entier. L'`id` est exclu de l'empreinte, parce qu'elle ne peut pas dépendre d'un
+compteur que le produit ne contrôle pas. `GET /v1/audit/verify` désigne la
+**première** rupture et distingue une ligne récrite d'une ligne retirée.
+
+**L'ancre, qui est le vrai sujet.** La chaîne seule ne voit ni la troncature ni
+le remplacement — qui peut écrire peut recalculer. La console retient la dernière
+tête vue par serveur et rend cinq verdicts ; `shrunk` et `diverged` sont
+exactement les deux attaques que le §36.1 dit non couvertes. Le recul de longueur
+se juge **avant tout le reste et sans croire l'hôte** : un serveur hostile ment
+sur ce qu'il contient, il ne peut pas mentir sur le fait d'en avoir moins
+qu'avant. L'ancre n'est jamais écrasée sur une alerte — l'écraser effacerait la
+preuve avec le signal.
+
+**Deux décisions écrites plutôt que reportées.** La purge est tranchée : le
+journal **ne se purge pas**, et la vérification connaît déjà le point de contrôle
+pour ne pas devoir être modifiée le jour où la purge arrivera. Et la migration ne
+chaîne **pas** le passé : une chaîne recalculée ne prouverait que la capacité à
+calculer un `sha256`.
+
+**Une spécification démentie par la mesure.** Le §36.5 affirmait qu'`AUTOINCREMENT`
+consomme un identifiant qu'un `ROLLBACK` abandonne. Mesuré : **faux sur SQLite**,
+qui annule aussi la mise à jour de `sqlite_sequence` et réattribue l'identifiant.
+Le DAT est corrigé. La règle « ne jamais juger la continuité des `id` » reste
+inchangée — elle n'est pas une réaction à un phénomène observé mais une garantie
+de conception : une purge ou un autre moteur en produiraient, et la vérification
+deviendrait fausse ce jour-là sans que personne ne l'ait touchée.
+
+**Vérifié.** 617 tests Python — dont 13 propres à l'unité, y compris celui qui
+**documente** que la troncature n'est pas détectable par la chaîne —, 246 de
+console dont 11 sur l'ancre et 3 de bout en bout, 6 de contrat, 8 gestes, 22
+parcours E2E, 7 contrôles du manuel, build, contrat régénéré.
+
+**Ce qui n'est PAS livré, et pourquoi l'unité reste `[~]`.** Le parcours E2E
+navigateur que la DoD nomme. L'ancre n'a **aucune surface visible** : l'onglet de
+supervision est l'objet de SPK-39 (§36.8), et l'y ajouter ici déborderait de
+l'unité. Le mécanisme est prouvé de bout en bout par un test d'intégration de
+l'hôte console — ce qui n'est pas la même chose qu'un parcours au clavier.
+
+**Où reprendre.** **SPK-39**, l'onglet de supervision : il porte l'écran qui
+manque à SPK-38, et son §36.8 est déjà écrit. SPK-37 se solde d'une mesure sur un
+vrai tunnel ; SPK-30 et SPK-29 sur l'hôte ; SPK-12 attend un domaine, SPK-17 une
+exécution de CI. SPK-28, SPK-35, SPK-36, SPK-42 et INC-02 attendent votre
+arbitrage.
+
+**Point d'exploitation** : `006_journal_chaine` est portée au contrat (OP-07),
+avec la décision qui compte — le journal ne se purge pas.

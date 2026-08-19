@@ -1110,7 +1110,7 @@ là-dessus (§36.7).
   n'est pas mesuré contre un serveur réel, l'unité reste `[~]`. Le reste du
   contrat — verrou, classes, contexte, en-tête, affichage — est prouvé.
 
-### [ ] SPK-38 · Chaîne d'intégrité du journal et ancre tenue par la console
+### [~] SPK-38 · Chaîne d'intégrité du journal et ancre tenue par la console
 
 Chaque entrée porte l'empreinte de la précédente, et la console retient la tête
 qu'elle a vue. C'est l'ancre qui donne sa valeur à la chaîne, pas la chaîne
@@ -1135,6 +1135,38 @@ qu'elle a vue. C'est l'ancre qui donne sa valeur à la chaîne, pas la chaîne
   d'identifiant, produit par un `ROLLBACK` réel, **ne** déclenche **pas** d'alerte ;
   un parcours E2E montre l'ancre signalant une histoire qui ne prolonge pas la
   précédente.
+
+**Livrée le 2026-08-19, sauf la surface visible nommée plus bas.**
+
+- Migration `006_journal_chaine` : `entry_hash` et `prev_hash`, défaut à la chaîne
+  vide. Les lignes antérieures **ne sont pas chaînées rétroactivement** — une
+  chaîne recalculée ne prouverait que la capacité à calculer un `sha256`.
+- Sérialisation **canonique figée** (§36.9.2), `id` exclu de l'empreinte.
+- La tête se lit et la ligne s'écrit sous une même transaction ; quand une
+  transaction est déjà ouverte, `record()` n'en ouvre pas une seconde — ce qui
+  laisse un refus être journalisé hors transaction (§21.1).
+- `GET /v1/audit/verify` : première rupture désignée, motif distingué —
+  `entry_hash` (ligne récrite) ou `prev_hash` (ligne retirée ou insérée).
+- **Purge tranchée** : le journal ne se purge pas. La vérification connaît déjà le
+  point de contrôle, pour ne pas devoir être modifiée le jour de la purge.
+- **Ancre** côté console : cinq verdicts, dont `shrunk` et `diverged`, les deux
+  attaques que la chaîne seule ne voit pas. Jamais écrasée sur une alerte.
+- **Preuves** : 617 tests Python — dont 13 propres à l'unité : ligne modifiée
+  **désignée**, ligne supprimée au milieu **détectée**, ligne insérée détectée,
+  troncature **non détectée et le test le documente**, trou d'identifiant sans
+  alerte, refus hors transaction toujours chaîné ; 246 de console dont 11 sur
+  l'ancre et 3 de bout en bout console → tunnel → `sparkd` ; 22 parcours E2E ;
+  contrat régénéré.
+- **Correction de spécification, mesurée** : le §36.5 affirmait qu'`AUTOINCREMENT`
+  consomme un identifiant qu'un `ROLLBACK` abandonne. C'est **faux sur SQLite**,
+  qui annule aussi `sqlite_sequence`. Le DAT est corrigé ; la règle « ne jamais
+  juger la continuité des `id` » reste, comme garantie de conception.
+- **Reste à livrer, et c'est le seul écart** : le parcours **E2E navigateur** que
+  la DoD nomme. L'ancre n'a **aucune surface visible** — l'onglet de supervision
+  est l'objet de SPK-39 (§36.8), et l'y ajouter ici déborderait de l'unité. Le
+  mécanisme est prouvé de bout en bout par un test d'intégration de l'hôte
+  console, ce qui n'est pas la même chose qu'un parcours au clavier et à la
+  souris. Tant que SPK-39 n'a pas d'écran, l'unité reste `[~]`.
 
 ### [ ] SPK-39 · Onglet de supervision du journal
 

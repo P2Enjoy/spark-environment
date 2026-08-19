@@ -203,6 +203,13 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **Chaîne d'intégrité du journal et ancre** (SPK-38) : chaque entrée porte
+  l'empreinte de la précédente, sur une sérialisation canonique figée.
+  `GET /v1/audit/verify` désigne la première rupture et distingue une ligne
+  récrite d'une ligne retirée. La console retient la dernière tête vue par
+  serveur et signale les deux attaques que la chaîne seule ne voit pas : journal
+  raccourci, journal remplacé. Le journal ne se purge pas. Migration
+  `006_journal_chaine`.
 - **Un acteur réel dans le journal** (SPK-37) : la constante « responsable »
   disparaît du dépôt. L'hôte console déclare qui agit — serveur, et empreinte de
   la clé SSH quand elle est connue —, `sparkd` porte cette déclaration, et chaque

@@ -256,6 +256,30 @@ Point d'exploitation : À CONNAÎTRE AVANT LA PREMIÈRE MAINTENANCE. Tout script
                 repose. Ne PAS supprimer les déclencheurs à la main.
 ```
 
+### OP-07 · Migration `006_journal_chaine` du registre
+
+```
+Objectif      : chaîner les entrées du journal (SPK-38, docs/DAT.md §36.9).
+                Deux colonnes, `entry_hash` et `prev_hash`.
+Dépend de     : 005_journal_acteur
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : rien. Aucun relevé, aucune reconfiguration.
+Vérification  : GET /v1/audit/verify rend « intact: true » et une tête non nulle
+                dès la première écriture qui suit la migration.
+Retour arrière: fourni. Colonnes retirées, sans perte d'entrée.
+Risques       : aucun sur l'existant. Les lignes ANTÉRIEURES ne sont pas
+                chaînées rétroactivement, et c'est délibéré : une chaîne
+                recalculée ne prouverait que la capacité à calculer un sha256.
+                Elles gardent la chaîne vide et la vérification les traverse
+                sans les juger.
+Point d'exploitation : LE JOURNAL NE SE PURGE PAS. C'est une décision, pas un
+                oubli (§36.5). Une purge sans scellement casserait la chaîne de
+                façon indétectable. Le jour où le volume l'imposera, elle
+                passera par une migration qui scelle le préfixe supprimé dans
+                une ligne de point de contrôle — jamais par une commande
+                d'exploitation.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.
