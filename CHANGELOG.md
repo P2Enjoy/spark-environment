@@ -128,6 +128,8 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- La consommation instantanée de l'ARC ZFS est publiée par `GET /v1/host` et
+  affichée face à son plafond sur l'écran de l'hôte.
 - `python3 -m sparkd.preflight` : neuf contrôles d'état du serveur, en lecture
   seule, employés avant et après l'installation.
 - `scripts/install-serveur.sh` et `deploy/sparkd.service` : `sparkd` devient un

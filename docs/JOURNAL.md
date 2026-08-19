@@ -1711,3 +1711,54 @@ E2E, 7 contrôles du manuel, build, contrat sans dérive.
 l'hôte désormais déployé. C'est la dernière unité de construction avant celles
 qui attendent un arbitrage. SPK-12 attend un domaine, SPK-17 une exécution de CI ;
 SPK-28, SPK-29, SPK-30, INC-01 et INC-02 attendent votre arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-27 : les deux dernières hypothèses, mesurées
+
+**Unité** : SPK-27. Sa spécification existe déjà — c'est le §13 du DAT lui-même,
+qui énumère ce qui reste à mesurer. La réécrire pour se donner un commit
+documentaire aurait été une session en échec : je suis allé mesurer.
+
+Le backlog annonçait « sept points » ; le §13 en compte treize. Corrigé.
+
+**Point 12, la tenue de l'ARC sous charge.** La mesure statique disait le
+plafond ; elle ne disait pas ce que l'ARC en fait. 24 Gio incompressibles écrits
+sur le pool puis relus intégralement : l'ARC monte à **16,00 Gio** et s'y tient.
+Les deux conclusions vont dans des sens opposés et comptent toutes les deux — la
+réserve de 16 Gio n'est pas une précaution mais une **nécessité**, puisque l'ARC
+atteint son plafond dès qu'on lui donne de quoi le remplir ; et elle est
+**suffisante**, puisqu'il ne le franchit pas.
+
+**Point 13, ce que le quota compte.** Dans un jeu de données à `quota=2G` et
+compression active : 8 Gio de zéros n'ont consommé que **24 Kio**, tandis que
+2 Gio incompressibles l'ont épuisé **exactement**. Le quota porte sur les octets
+stockés.
+
+**Décision : la compression reste active, l'écart est documenté.** Il joue
+toujours en faveur du locataire — jamais moins que son quota, parfois plus. La
+désactiver ferait consommer au pool des octets qui n'ont pas besoin d'exister,
+alors que le pool est la ressource rare et non surengageable. Et l'admission
+comptant le quota et non l'usage, le pool ne peut pas être survendu par cet écart.
+
+**Le livrable de code découle du point 12.** Une mesure ponctuelle répond une
+fois et périme aussitôt. Le runtime publie donc ce que l'ARC consomme, lu **à
+chaque requête** et jamais persisté — une consommation stockée serait une valeur
+périmée présentée comme actuelle —, et l'écran des pools l'affiche face au
+plafond. `null` reste distinct de zéro : un ARC dont on ignore la taille n'est pas
+un ARC vide, et les confondre ferait croire la réserve inutile, ce qui est
+exactement l'erreur qui avait fait promettre un cinquième de mémoire en trop.
+
+Vérifié sur l'hôte réel : le runtime annonce 0,80 Gio, `arcstats` en dit 0,80.
+
+**Vérifié.** 491 tests Python, 182 Node, 6 de contrat, 10 gestes, 11 parcours
+E2E, 7 contrôles du manuel, build, contrat sans dérive, illustration du manuel
+régénérée et observée.
+
+**Où reprendre.** Il ne reste **aucune unité de construction non bloquée**.
+SPK-29 (réservation absolue), SPK-30 (marge de métadonnées) et SPK-28
+(repartitionnement du stockage) attendent votre arbitrage, comme INC-01 et
+INC-02 ; SPK-12 attend un domaine et SPK-17 une exécution de CI. La prochaine
+session devrait soit traiter une unité que vous aurez arbitrée, soit — à défaut —
+solder SPK-12 ou SPK-17 sur ce qui est vérifiable sans la dépendance manquante.

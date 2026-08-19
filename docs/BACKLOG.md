@@ -566,7 +566,7 @@ manuel est mis au niveau de ce qui est réellement outillé.
 - Reste hors outillage, et le chapitre M2 le dit : la mise en place des
   prérequis, et le repartitionnement du stockage (SPK-28).
 
-### [ ] SPK-27 · Vérification par mesure des hypothèses du DAT §13
+### [x] SPK-27 · Vérification par mesure des hypothèses du DAT §13
 
 Les points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné.
 *L'unité annonçait « sept points » ; le §13 en compte treize — corrigé le
@@ -586,6 +586,18 @@ Les points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné
   infirmée et le DAT corrigé en conséquence ; la consommation de l'ARC est
   exposée par le runtime et visible à l'écran ; le manuel énonce ce que « 10 Gio »
   désigne réellement.
+
+- **Close le 2026-08-19.** Les treize points du §13 sont désormais mesurés et
+  archivés. Aucun n'était en attente.
+- **Point 12** — 24 Gio incompressibles écrits puis relus : l'ARC monte à
+  16,00 Gio et n'y dépasse pas. La réserve du §16.1 est donc **nécessaire** — il
+  atteint son plafond dès qu'on lui donne de quoi le remplir — et **suffisante**.
+- **Point 13** — dans un quota de 2 Gio, 8 Gio de zéros ont coûté 24 Kio, et
+  2 Gio incompressibles l'ont épuisé exactement. Décision : la compression reste
+  active, l'écart est documenté. Il joue toujours en faveur du locataire.
+- Livrable de code : la consommation de l'ARC est publiée par le runtime, lue à
+  chaque requête et non persistée, et affichée face à son plafond. Vérifié sur
+  l'hôte réel — 0,80 Gio annoncés, 0,80 Gio dans `arcstats`.
 
 ### [ ] SPK-29 · Regrouper les Sparks sous un parent cgroup de poids maîtrisé
 
