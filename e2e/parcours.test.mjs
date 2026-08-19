@@ -153,6 +153,36 @@ test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacit
   });
 });
 
+// --- SPK-30 · LA MARGE DE MÉTADONNÉES (§8.8) --------------------------------
+
+test("l’écart entre les tailles vendues et l’alloué du disque est EXPLIQUÉ", async () => {
+  await parcours('marge-metadonnees', async () => {
+    await accueil();
+    await page.click('nav a[href="#/hote"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+
+    // Ce que l'exploitant lit à l'écran, sans avoir à ouvrir le code.
+    const pools = await page.textContent('#titre-pools ~ .pools, .pools');
+    assert.match(pools, /de métadonnées par Spark/,
+      'l’écart doit être nommé là où il se constate');
+    assert.match(pools, /SPARKD_STORAGE_METADATA_MARGIN/,
+      '§27.3 : chaque terme nomme la vanne qui le commande');
+
+    // …ET l'effet backend est réel (CLAUDE.md §15) : l'alloué publié vaut la
+    // somme des tailles VENDUES plus une marge par Spark. Le registre, lui, ne
+    // stocke que la taille vendue (§8.8.2 règle 1).
+    const { corps } = await pile.lireSparkd('/v1/host');
+    const { corps: liste } = await pile.lireSparkd('/v1/sparks');
+    const vendu = liste.sparks.reduce((total, s) => total + s.storage_bytes, 0);
+    const marge = corps.reserves.storage_metadata_margin_bytes;
+    assert.ok(marge > 0, 'le défaut du produit pose une marge');
+    assert.equal(corps.reserves.storage_metadata_total_bytes,
+                 marge * liste.sparks.length);
+    assert.equal(corps.pools.storage.allocated,
+                 vendu + marge * liste.sparks.length);
+  });
+});
+
 // --- LES QUATRE REFUS DU PRODUIT (§29.4) ------------------------------------
 
 test('REFUS 1 · capacité insuffisante, et le bouton n’est jamais désactivé avant', async () => {
