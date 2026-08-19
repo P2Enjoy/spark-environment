@@ -27,6 +27,7 @@ from .db import connect
 from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
 from . import sparks as service
+from . import ingress as ingress_service
 from . import sshkeys
 from .lifecycle import Command
 from .migrations import applied, upgrade, verify
@@ -76,6 +77,10 @@ def create_app(config: Config) -> FastAPI:
     app.state.config = config
     app.state.schema_versions = check_registry(config)
     app.state.incus = make_client(config)
+    app.state.caddy = (
+        ingress_service.FakeCaddy() if config.driver == "fake"
+        else ingress_service.Caddy(config.caddy_admin)
+    )
 
     def _reconcile_at_startup() -> list[dict]:
         """Les états transitoires ne survivent pas au démarrage (§14.3)."""
@@ -297,6 +302,72 @@ def create_app(config: Config) -> FastAPI:
             spark["incus_name"], sshkeys.AUTHORIZED_KEYS, contenu, mode="0600"
         )
 
+    def _reconcile_ingress(connection) -> None:
+        """Régénère et applique la configuration de Caddy.
+
+        Appelée à chaque changement de route ou d'adresse : la réconciliation
+        est le mécanisme normal d'application, pas une réparation (§18.1).
+        """
+        ingress_service.reconcile(connection, app.state.caddy)
+
+    @app.get("/v1/ingress", tags=["ingress"])
+    def list_routes() -> dict:
+        with registry() as connection:
+            return {"routes": ingress_service.listing(connection)}
+
+    @app.post("/v1/ingress", tags=["ingress"], status_code=201)
+    def add_route(body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, body.get("spark", ""))
+                route = ingress_service.declare(
+                    connection, spark["id"], body.get("domain", ""),
+                    int(body.get("port", 0)), bool(body.get("tls", True)),
+                )
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except (ingress_service.IngressError, ValueError, TypeError) as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "route_refused", "message": str(erreur)}) from erreur
+            try:
+                _reconcile_ingress(connection)
+            except ingress_service.IngressError as erreur:
+                # La route est enregistrée ; l'écart reste visible par
+                # applied_at (§18.5) plutôt que masqué par un succès simulé.
+                raise HTTPException(status_code=502, detail={
+                    "error": "caddy_unavailable",
+                    "message": str(erreur),
+                    "route": route["domain"],
+                    "note": "Route enregistrée mais non appliquée.",
+                }) from erreur
+            return ingress_service.by_domain(connection, route["domain"])
+
+    @app.delete("/v1/ingress/{domain}", tags=["ingress"])
+    def remove_route(domain: str) -> dict:
+        with registry() as connection:
+            try:
+                ingress_service.withdraw(connection, domain)
+            except ingress_service.IngressError as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            try:
+                _reconcile_ingress(connection)
+            except ingress_service.IngressError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "caddy_unavailable", "message": str(erreur)}) from erreur
+            return {"withdrawn": domain}
+
+    @app.post("/v1/ingress/reconcile", tags=["ingress"])
+    def reconcile_routes() -> dict:
+        """Reconstruit intégralement la configuration de Caddy depuis le registre."""
+        with registry() as connection:
+            try:
+                return ingress_service.reconcile(connection, app.state.caddy)
+            except ingress_service.IngressError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "caddy_unavailable", "message": str(erreur)}) from erreur
+
     @app.get("/v1/ssh-keys", tags=["cles"])
     def list_keys() -> dict:
         with registry() as connection:
@@ -486,6 +557,10 @@ def create_app(config: Config) -> FastAPI:
                         # Le Spark tourne ; l'écart sera repris à la
                         # réconciliation plutôt que de faire échouer le démarrage.
                         pass
+                    try:
+                        _reconcile_ingress(connection)
+                    except ingress_service.IngressError:
+                        pass
                 if commande is Command.RESTART:
                     service.command(connection, apres["id"], Command.START)
                     app.state.incus.set_instance_state(apres["name"], "start")
@@ -503,6 +578,12 @@ def create_app(config: Config) -> FastAPI:
                     raise HTTPException(status_code=502, detail={
                         "error": "incus_failed", "message": str(erreur)}) from erreur
                 service.finish(connection, apres["id"], success=True)
+                # Les routes du Spark ont disparu avec lui (ON DELETE CASCADE) :
+                # Caddy doit cesser de les servir.
+                try:
+                    _reconcile_ingress(connection)
+                except ingress_service.IngressError:
+                    pass
                 return {"deleted": name}
 
             return service.by_name(connection, name)

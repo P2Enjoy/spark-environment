@@ -341,3 +341,51 @@ def test_le_demarrage_provisionne_sshd_et_pose_les_cles(tmp_path):
     assert "openssh-server" in commandes
     assert "PasswordAuthentication no" in commandes
     assert "ssh-ed25519" in instance["files"]["/root/.ssh/authorized_keys"]
+
+
+# --- ingress par HTTP (SPK-12) ---------------------------------------------
+
+def test_declarer_une_route_l_applique_a_chaud(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-12 · docs/DAT.md §18.1"""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    r = c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
+    assert r.status_code == 201 and r.json()["applied_at"] is not None
+
+    routes = c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]
+    assert routes[0]["handle"][0]["upstreams"][0]["dial"] == "10.77.0.16:8080"
+
+
+def test_conflit_de_domaine_refuse_par_http(tmp_path):
+    c = _app(tmp_path)
+    for nom in ("a", "b"):
+        c.post("/v1/sparks", json=_spec(name=nom))
+        c.post(f"/v1/sparks/{nom}/apply")
+    c.post("/v1/ingress", json={"spark": "a", "domain": "x.example.com", "port": 80})
+    refus = c.post("/v1/ingress", json={"spark": "b", "domain": "x.example.com", "port": 80})
+    assert refus.status_code == 409
+    assert "déjà routé" in refus.json()["detail"]["message"]
+
+
+def test_supprimer_un_spark_retire_ses_routes_de_caddy(tmp_path):
+    """Les routes disparaissent avec le Spark ; Caddy doit cesser de les servir."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
+    assert len(c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]) == 1
+    c.post("/v1/sparks/crm/delete")
+    assert c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"] == []
+
+
+def test_reconciliation_reconstruit_tout(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-12 — reconstruction complète depuis le registre."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
+    c.app.state.caddy.config = {"apps": {"http": {"servers": {}}}}   # Caddy dérive
+    r = c.post("/v1/ingress/reconcile")
+    assert r.json()["routes"] == 1
+    assert c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]
