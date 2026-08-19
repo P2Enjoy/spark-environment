@@ -2017,6 +2017,51 @@ Le geste appelle `POST /api/tunnels`, qui rouvre. L'état passe par `connecting`
 et l'écran le montre : une reconnexion silencieuse laisserait croire que rien ne
 se passe.
 
+#### 22.4.7 bis Où vit l'écran du catalogue
+
+Le §22.4 ter disait les routes ; il ne disait pas la surface. Ce point-ci le
+tranche, et lui seul.
+
+**Une destination de premier degré, nommée « Serveurs ».** Elle rejoint *Sparks*
+et *Hôte* dans la barre latérale.
+
+Ce n'est **pas** une contradiction avec le §1 de `DESIGN_SYSTEM_APP` — « on ne va
+pas au serveur comme on va aux Sparks ». Le sélecteur reste au-dessus du premier
+degré et désigne le **contexte** ; cette destination-ci ne dit pas « va à ce
+serveur », elle dit « administre ta liste ». Ce sont deux sujets différents :
+l'un choisit ce qu'on regarde, l'autre gère ce qui est déclaré.
+
+Elle est une propriété de la **console**, pas du serveur courant : c'est
+précisément pourquoi elle ne peut pas être un onglet sous *Hôte*, qui décrit la
+machine qu'on regarde. Un catalogue rangé sous *Hôte* disparaîtrait avec le
+tunnel qui le sert, alors qu'il est justement ce qui permet d'en choisir un autre.
+
+Sa forme suit le §6.14 et le §6.27 :
+
+- un **tableau** des serveurs — nom, genre, ce qu'ils désignent, état du tunnel ;
+- la ligne du serveur courant est **signalée**, et une commande y bascule ;
+- l'ajout et la modification passent par une **modale limitée à la section**,
+  portant l'épreuve du §22.4.4 ;
+- le retrait se **confirme dans le flux** (§6.22, §6.23) et nomme le serveur : il
+  ferme un tunnel et fait perdre une déclaration ;
+- l'état **« aucun serveur enregistré »** propose l'ajout, parce que c'est là
+  l'action pertinente — et c'est le seul écran où elle l'est (§6.13).
+
+#### 22.4.7 ter Ce que la modale d'ajout demande, et dans cet ordre
+
+Le **genre** d'abord, parce qu'il décide de tout le reste : un `alias` ne
+demande qu'un `Host`, un `ssh` demande le triplet, un `local` ne demande qu'un
+port. Afficher les champs des trois genres à la fois ferait remplir des champs
+que le produit ignorera.
+
+L'**épreuve** est un bouton de cette modale, pas une étape obligatoire. Son
+résultat s'affiche **dans** la modale, sans effacer la saisie, et
+l'enregistrement reste possible quel qu'il soit (§22.4.4).
+
+Les **candidats du `ssh_config`** sont proposés pour le genre `alias`, dans une
+liste où l'on peut aussi saisir librement : un `Host` peut vivre dans un fichier
+inclus que la console ne lit pas.
+
 #### 22.4.7 Ce qui reste hors de portée, et le reste
 
 Aucun secret, jamais (§22.4). La vérification de la clé d'hôte n'est jamais
