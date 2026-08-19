@@ -2321,3 +2321,74 @@ L'état du code a en revanche été relevé pour écrire le §36.7 — `audit.re
 est bien le point de passage unique, les écritures des cinq modules y passent, et
 `actor` est une constante.
 
+## 2026-08-19 — Comment nommer la machine, et ce qui manque vraiment au catalogue
+
+### Le mot « hôte » désigne déjà deux machines
+
+Un Spark est une fraction de machine, `sparkd` est le démon, et la machine n'a pas
+de nom de produit : on l'appelle « l'hôte ». Sauf que le §22 nomme « hôte console »
+le processus Node du **poste local**. Deux machines, un mot, et la console affiche
+les deux à l'écran. Le besoin de nom n'est donc pas cosmétique : il lève une
+ambiguïté qui existe déjà.
+
+Critères retenus pour trancher, écrits avant de discuter des goûts : lever la
+collision ; survivre en identifiant de code et en segment d'URL ; se pluraliser
+sans ambiguïté ; ne pas mentir sur la portée — c'est **une** machine, pas une
+grappe.
+
+**Forge** — la forge est le lieu d'où partent les étincelles, le mot est identique
+en français et en anglais, court, il se pluralise et donne `forge_id`,
+`/v1/forge`, `forges.json` sans effort. Sa faiblesse est réelle : dans la culture
+technique francophone, « forge » désigne d'abord un hébergement de code. La
+collision est contextuelle et se dissipe dès la première phrase, mais elle existe.
+
+**Foyer** — métaphoriquement le plus exact : c'est du foyer que jaillissent les
+étincelles, et le mot n'a aucune concurrence dans ce domaine. Sa faiblesse est
+symétrique : en anglais, *foyer* est un hall d'entrée, ce qui égare un lecteur non
+francophone sur un dépôt dont le code est anglophone.
+
+Écartés, avec leur motif : **Silex** et **Flint** — `flintlock` est un produit qui
+crée des micro-VM, donc collision dans le domaine exact ; **Creuset** /
+*Crucible* — nom d'un outil de revue de code ; **Brasier**, **Âtre** — justes mais
+lourds à écrire, à accentuer et à taper ; **Enclume** — l'enclume reçoit les
+étincelles, elle ne les produit pas, et le sens s'inverse.
+
+**Recommandation : Forge**, en assumant la collision. **Le vrai arbitrage n'est
+pas le mot, c'est le moment** : le contrat d'API n'a qu'un consommateur, le dépôt
+lui-même. Renommer la table `host`, la route `/v1/host` et le contrat coûte
+aujourd'hui une migration et un `make contract` ; chaque unité livrée ensuite
+l'alourdit. Un produit qui garde deux mots pour la même chose finit par employer
+les deux au hasard. D'où SPK-42, écrite comme « maintenant ou pas du tout ».
+
+### Le catalogue existe déjà — ce qui manque, c'est de pouvoir s'en servir
+
+Relevé dans le code plutôt que supposé : `~/.config/spark/servers.json` existe,
+validé, refusant les secrets, et `GET`/`POST /api/servers` le servent. Mais :
+
+- **aucune interface n'appelle `POST /api/servers`** : on ajoute un serveur à la
+  main dans le fichier ;
+- il n'y a pas de `DELETE /api/servers` : on n'en retire pas ;
+- la console prend `servers[0]` : il n'existe **aucun sélecteur**, alors que le
+  design system d'application place le serveur courant au-dessus du premier degré ;
+- le tunnel n'est ouvert qu'au **démarrage** : rompu ensuite, aucune commande de
+  reconnexion n'est à l'écran.
+
+Une décision de fond a été prise au passage (§22.4 bis) : le catalogue accepte un
+**alias `ssh`**. Aujourd'hui il redécrit `host` / `user` / `port`, c'est-à-dire une
+connexion qu'OpenSSH sait déjà décrire — et toute configuration réelle, rebond par
+bastion, clé dédiée, algorithmes imposés, n'a alors nulle part où aller sauf à
+réimplémenter `ssh_config` champ par champ. Ce qui relève de la connexion
+appartient à OpenSSH ; ce qui relève du produit — quel serveur, quel port local,
+quel état de tunnel — appartient au catalogue.
+
+Et une règle qui ne bougera pas : **la vérification de la clé d'hôte n'est jamais
+désactivée**, pas même « pour simplifier la première connexion ». Rapproché du
+§36.2 : une clé d'hôte qui change **et** une histoire d'audit qui ne prolonge plus
+la précédente disent la même chose.
+
+### Vérifications
+
+Aucun test exécuté : spécification et backlog seulement. L'état du code de la
+console a été relevé pour écrire ces constats — `apps/webui/host/main.js` n'expose
+que quatre routes, et `apps/webui/src/app.js` prend bien `servers[0]`.
+

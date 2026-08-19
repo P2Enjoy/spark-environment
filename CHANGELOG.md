@@ -26,6 +26,12 @@
   touchés et se confirme, elle ne se bloque pas.
 - `docs/DAT.md` : nouveau §35, les Sparks protégés — portée du refus, mot de
   passe et son empreinte, ce que la protection n'est pas.
+- `docs/DAT.md` : nouveau §22.4 bis, ce que le catalogue des serveurs délègue à
+  OpenSSH — alias `ssh` accepté, découverte proposée jamais imposée, vérification
+  de la clé d'hôte jamais désactivée.
+- Unités SPK-41 (catalogue des serveurs tenu depuis la console : ajout, retrait,
+  sélecteur, reconnexion, épreuve avant enregistrement) et SPK-42 (nommer la
+  machine qui porte `sparkd`, arbitrage en attente).
 - `docs/DAT.md` : nouveau §36, intégrité du journal d'audit — ce qu'une chaîne de
   hachage prouve et contre qui, l'ancre tenue par la console, où la signature doit
   être produite, les pièges d'implémentation, et ce qui n'est pas retenu.
