@@ -335,3 +335,67 @@ test('le classement sépare le journal réseau des messages applicatifs (§29.6)
   console.log(`  journal réseau observé : ${reseau.length} ligne(s)`);
   for (const ligne of [...new Set(reseau)]) console.log(`    ${ligne}`);
 });
+
+// --- LE CATALOGUE D'IMAGES (SPK-32, docs/DAT.md §33, §34.1) -----------------
+
+test("l'image se choisit dans une LISTE : plus aucune saisie libre", async () => {
+  await parcours('image-liste', async () => {
+    await accueil();
+    await page.click('.titre-vue .bouton--primaire');
+    await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
+
+    // La DoD l'exige depuis le parcours canonique, pas depuis un test de rendu.
+    assert.equal(await page.$('input#image'), null,
+      'une saisie libre pouvait produire une référence inexistante');
+    assert.ok(await page.$('select#image'));
+
+    const options = await page.$$eval('#image option', (o) => o.map((x) => x.value));
+    assert.ok(options.length > 0);
+    // Chaque option vient du catalogue, et le catalogue les dit vérifiées.
+    const { corps } = await pile.lireSparkd('/v1/images');
+    assert.deepEqual([...options].sort(), [...corps.selectable].sort());
+  });
+});
+
+test('le catalogue a son écran, atteint par les onglets de l’hôte', async () => {
+  await parcours('catalogue', async () => {
+    await accueil();
+    await page.click('nav a[href="#/hote"]');
+    await page.waitForSelector('.onglets', { timeout: 10000 });
+    await page.click('.onglet[href="#/hote/images"]');
+    await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
+
+    const texte = await page.textContent('body');
+    assert.match(texte, /Dernier relevé le/, 'la date du relevé est affichée');
+    assert.match(texte, /Vérifiée/);
+
+    // L'onglet courant se signale — on doit pouvoir recharger ici (§34.1).
+    const courant = await page.evaluate(() =>
+      document.querySelector('.onglet[aria-current="page"]')?.getAttribute('href'));
+    assert.equal(courant, '#/hote/images');
+  });
+});
+
+test('ajouter une image la crée NON RELEVÉE, puis le relevé tranche', async () => {
+  await parcours('image-ajout', async () => {
+    await page.goto(`${pile.base}/#/hote/images`, { waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#titre-catalogue', { timeout: 15000 });
+
+    await page.click('[data-ouvre="image"]');
+    await page.waitForSelector('#image-reference');
+    await page.fill('#image-reference', 'images:debian/31');
+    await page.fill('#image-label', 'Version qui n’existe pas');
+    await page.click('[data-formulaire="image"] button[type="submit"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Non relevée'), { timeout: 15000 });
+
+    // §33.2 : l'état vient du relevé, jamais d'une déclaration.
+    const { corps } = await pile.lireSparkd('/v1/images');
+    const ajoutee = corps.images.find((i) => i.reference === 'images:debian/31');
+    assert.equal(ajoutee.state, 'unknown');
+    assert.equal(ajoutee.verified_at, null);
+    assert.ok(!corps.selectable.includes('images:debian/31'),
+      'une entrée non relevée n’est pas proposable à la création');
+  });
+});
