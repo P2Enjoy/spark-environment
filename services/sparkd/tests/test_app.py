@@ -258,3 +258,70 @@ def test_un_dedie_qui_tient_est_admis_puis_decoupe(tmp_path):
     assert cree.status_code == 201
     c.post("/v1/sparks/pg/apply")
     assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 2.0
+
+
+# --- cles SSH par HTTP (SPK-11) --------------------------------------------
+
+_CLE = ("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILklM4dl9E+GCZog4f8+fV4q3fSF4BkF"
+        "EV5LL5Sl2XoT poste")
+
+
+def test_le_corps_de_la_cle_n_est_jamais_renvoye(tmp_path):
+    """@verifies docs/DAT.md §17.2 — l'API expose libellé et empreinte."""
+    c = _app(tmp_path)
+    cree = c.post("/v1/ssh-keys", json={"label": "poste", "public_key": _CLE})
+    assert cree.status_code == 201
+    assert "public_key" not in cree.json()
+    assert cree.json()["fingerprint"].startswith("SHA256:")
+    assert all("public_key" not in k for k in c.get("/v1/ssh-keys").json()["keys"])
+
+
+def test_cle_invalide_refusee_avec_un_message_utile(tmp_path):
+    c = _app(tmp_path)
+    r = c.post("/v1/ssh-keys", json={"label": "x",
+                                     "public_key": "-----BEGIN OPENSSH PRIVATE KEY-----"})
+    assert r.status_code == 422
+    assert "PRIVÉE" in r.json()["detail"]["message"]
+
+
+def test_accorder_puis_revoquer_reecrit_le_fichier(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-11 — un retrait retire réellement."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/ssh-keys", json={"label": "poste", "public_key": _CLE})
+
+    c.post("/v1/sparks/crm/ssh-keys/poste")
+    fichiers = c.app.state.incus.created["crm"]["files"]
+    assert "ssh-ed25519" in fichiers["/root/.ssh/authorized_keys"]
+
+    c.delete("/v1/sparks/crm/ssh-keys/poste")
+    assert "ssh-ed25519" not in c.app.state.incus.created["crm"]["files"][
+        "/root/.ssh/authorized_keys"]
+
+
+def test_oublier_une_cle_reecrit_tous_les_sparks_concernes(tmp_path):
+    """Retirer du registre ne suffit pas : la clé ouvrirait encore la porte."""
+    c = _app(tmp_path)
+    for nom in ("a", "b"):
+        c.post("/v1/sparks", json=_spec(name=nom))
+        c.post(f"/v1/sparks/{nom}/apply")
+    c.post("/v1/ssh-keys", json={"label": "poste", "public_key": _CLE})
+    c.post("/v1/sparks/a/ssh-keys/poste")
+    c.post("/v1/sparks/b/ssh-keys/poste")
+
+    r = c.delete("/v1/ssh-keys/poste")
+    assert sorted(r.json()["reconciled"]) == ["a", "b"]
+    for nom in ("a", "b"):
+        assert "ssh-ed25519" not in c.app.state.incus.created[nom]["files"][
+            "/root/.ssh/authorized_keys"]
+
+
+def test_le_fragment_ssh_passe_par_le_rebond(tmp_path):
+    """@verifies docs/DAT.md §17.4 — aucun port SSH public."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    config = c.get("/v1/sparks/crm/ssh-config").json()
+    assert "ProxyJump spark-host" in config["config"]
+    assert "HostName 10.77.0.16" in config["config"]
+    assert "Port 22" not in config["config"]

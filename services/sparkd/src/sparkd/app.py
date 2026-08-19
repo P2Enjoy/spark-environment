@@ -27,6 +27,7 @@ from .db import connect
 from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
 from . import sparks as service
+from . import sshkeys
 from .lifecycle import Command
 from .migrations import applied, upgrade, verify
 from .translate import Manifest, TranslationError, translate
@@ -279,9 +280,125 @@ def create_app(config: Config) -> FastAPI:
             "UPDATE spark SET incus_name = ? WHERE id = ?", (spark["name"], spark["id"])
         )
         service.finish(connection, spark["id"], success=True)
+        try:
+            _apply_keys(connection, service.get(connection, spark["id"]))
+        except IncusError:
+            # Le Spark existe ; les cles seront posees a la reconciliation.
+            pass
 
     config_network = "sparkbr0"
     config_pool = config.storage_pool
+
+    def _apply_keys(connection, spark: dict) -> None:
+        """Réécrit `authorized_keys` dans le Spark depuis l'état voulu.
+
+        Régénéré en entier, jamais complété : c'est ce qui fait qu'un retrait
+        retire réellement (docs/DAT.md §17.1).
+        """
+        if not spark.get("incus_name"):
+            return
+        contenu = sshkeys.authorized_keys_content(connection, spark["id"])
+        app.state.incus.push_file(
+            spark["incus_name"], sshkeys.AUTHORIZED_KEYS, contenu, mode="0600"
+        )
+
+    @app.get("/v1/ssh-keys", tags=["cles"])
+    def list_keys() -> dict:
+        with registry() as connection:
+            return {"keys": [
+                {k: v for k, v in cle.items() if k != "public_key"}
+                for cle in sshkeys.listing(connection)
+            ]}
+
+    @app.post("/v1/ssh-keys", tags=["cles"], status_code=201)
+    def add_key(body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                cle = sshkeys.register(
+                    connection, body.get("label", ""), body.get("public_key", "")
+                )
+            except sshkeys.SshKeyError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_key", "message": str(erreur)}) from erreur
+            return {k: v for k, v in cle.items() if k != "public_key"}
+
+    @app.delete("/v1/ssh-keys/{label}", tags=["cles"])
+    def remove_key(label: str) -> dict:
+        with registry() as connection:
+            try:
+                concernes = sshkeys.forget(connection, label)
+            except sshkeys.SshKeyError as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            # Retirer du registre ne suffit pas : les Sparks doivent etre
+            # reecrits, sinon la cle continue d'ouvrir la porte.
+            for nom in concernes:
+                try:
+                    _apply_keys(connection, service.by_name(connection, nom))
+                except (service.NotFound, IncusError):
+                    continue
+            return {"forgotten": label, "reconciled": concernes}
+
+    @app.post("/v1/sparks/{name}/ssh-keys/{label}", tags=["cles"])
+    def grant_key(name: str, label: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                sshkeys.grant(connection, spark["id"], label)
+                _apply_keys(connection, spark)
+            except (service.NotFound, sshkeys.SshKeyError) as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "incus_failed", "message": str(erreur)}) from erreur
+            return {"spark": name, "granted": label}
+
+    @app.delete("/v1/sparks/{name}/ssh-keys/{label}", tags=["cles"])
+    def revoke_key(name: str, label: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                sshkeys.revoke(connection, spark["id"], label)
+                _apply_keys(connection, spark)
+            except (service.NotFound, sshkeys.SshKeyError) as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "incus_failed", "message": str(erreur)}) from erreur
+            return {"spark": name, "revoked": label}
+
+    @app.get("/v1/sparks/{name}/ssh-config", tags=["cles"])
+    def ssh_config(name: str) -> dict:
+        """Fragment de configuration SSH, par rebond sur l'hôte.
+
+        Un Spark n'expose jamais 22 sur l'extérieur (docs/DAT.md §17.4).
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            if not spark["ipv4_address"]:
+                raise HTTPException(status_code=409, detail={
+                    "error": "no_address",
+                    "message": "Ce Spark n'a pas encore d'adresse."})
+            return {
+                "host": spark["name"],
+                "hostname": spark["ipv4_address"],
+                "config": (
+                    f"Host {spark['name']}\n"
+                    f"    HostName {spark['ipv4_address']}\n"
+                    f"    User root\n"
+                    f"    ProxyJump spark-host\n"
+                ),
+                "keys": [
+                    {"label": k["label"], "fingerprint": k["fingerprint"]}
+                    for k in sshkeys.desired_keys(connection, spark["id"])
+                ],
+            }
 
     @app.get("/v1/host/cores", tags=["hote"])
     def host_cores() -> dict:

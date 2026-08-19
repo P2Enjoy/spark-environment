@@ -43,6 +43,10 @@ class IncusClient(Protocol):
 
     def update_instance_config(self, name: str, config: dict[str, str]) -> None: ...
 
+    def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None: ...
+
+    def exec_command(self, name: str, command: list[str]) -> None: ...
+
 
 @dataclass
 class UnixSocketIncus:
@@ -135,6 +139,40 @@ class UnixSocketIncus:
         """
         self._request("PATCH", f"/1.0/instances/{name}", {"config": config})
 
+    def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
+        """Écrit un fichier dans l'instance, en créant son répertoire parent."""
+        parent = path.rsplit("/", 1)[0]
+        if parent:
+            self._raw_push(name, parent, b"", "0700", "directory")
+        self._raw_push(name, path, content.encode("utf-8"), mode, "file")
+
+    def _raw_push(self, name: str, path: str, body: bytes, mode: str, kind: str) -> None:
+        transport = httpx.HTTPTransport(uds=self.socket_path)
+        entetes = {
+            "X-Incus-uid": "0", "X-Incus-gid": "0",
+            "X-Incus-mode": mode, "X-Incus-type": kind,
+        }
+        try:
+            with httpx.Client(transport=transport, timeout=self.timeout) as client:
+                reponse = client.post(
+                    f"http://incus/1.0/instances/{name}/files",
+                    params={"path": path}, content=body, headers=entetes,
+                )
+                if kind == "directory" and reponse.status_code in (400, 409, 500):
+                    return  # le repertoire existe deja : ce n'est pas une erreur
+                reponse.raise_for_status()
+        except httpx.HTTPError as error:
+            raise IncusError(
+                f"Écriture de {path} dans « {name} » refusée : {error}"
+            ) from error
+
+    def exec_command(self, name: str, command: list[str]) -> None:
+        self._request(
+            "POST", f"/1.0/instances/{name}/exec",
+            {"command": command, "wait-for-websocket": False,
+             "interactive": False, "record-output": False},
+        )
+
 
 @dataclass
 class FakeIncus:
@@ -184,6 +222,16 @@ class FakeIncus:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("config", {}).update(config)
+
+    def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
+        if name not in self.created:
+            raise IncusError(f"Instance « {name} » absente.")
+        self.created[name].setdefault("files", {})[path] = content
+
+    def exec_command(self, name: str, command: list[str]) -> None:
+        if name not in self.created:
+            raise IncusError(f"Instance « {name} » absente.")
+        self.created[name].setdefault("commands", []).append(command)
 
 
 # Releve reel de l'hote de validation, 2026-08-18 : Dell R320, Xeon E5-1410 v2,
