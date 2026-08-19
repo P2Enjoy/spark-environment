@@ -120,6 +120,15 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await ouvrir('site-vitrine');
     await capturer('m8-erreur', { hauteur: 1000 });
 
+    // --- M8 · Protéger un Spark (SPK-34) -------------------------------------
+    // « analytics » est protégé par le seed. On l'ouvre PAR SON LIEN, comme un
+    // exploitant, et la fenêtre montre les deux choses à la fois : la barre qui
+    // nomme la protection, et la section qui porte le geste.
+    await accueil();
+    await page.click('tbody a:has-text("analytics")');
+    await page.waitForSelector('#titre-protection', { timeout: 10000 });
+    await capturer('m8-protection', { hauteur: 900 });
+
     // --- M9 · Instantanés : le refus qui protège -----------------------------
     await ouvrir('crm-production', 'instantanes');
     await page.waitForSelector('#titre-instantanes');
