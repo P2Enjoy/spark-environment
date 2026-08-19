@@ -495,6 +495,22 @@ vierge de tout message applicatif.
 
 ### [ ] SPK-25 · Manuel utilisateur
 
+- Plan : `docs/MANUAL_PLAN.md`. Contrat de fraîcheur : `docs/DAT.md` §30.
+- Les illustrations sont **produites** par un harnais contre la pile réelle
+  seedée, jamais collectées à la main (§30.1). Si le parcours change au point que
+  le harnais n'atteint plus l'écran, il échoue plutôt que de laisser une image
+  périmée.
+- Le lien manuel-image est vérifié **dans les deux sens** : toute image citée
+  existe, et toute image produite est citée (§30.2). Une image orpheline n'est vue
+  de personne et survit indéfiniment à l'écran qu'elle montrait.
+- Un chapitre dont l'unité n'est pas livrée **n'est pas rédigé** : il figure avec
+  sa raison et l'unité qui le débloque (§30.3).
+
+DoD : les chapitres dont le comportement est livré et observable sont rédigés à
+partir de la pile réelle ; les autres sont nommés avec leur blocage ; le harnais
+d'illustrations et le contrôle des deux sens entrent dans `make test` ; aucun
+secret ni adresse réelle ; captures observées.
+
 ### [ ] SPK-26 · Contrat de déploiement et procédure d'installation serveur
 
 ### [ ] SPK-27 · Vérification par mesure des hypothèses du DAT §13

@@ -2301,3 +2301,58 @@ tourne, aucune configuration Caddy n'est chargée. Ces parcours prouvent que le
 produit **s'utilise** de bout en bout et que ses refus arrivent où il faut ; ils
 ne prouvent rien de l'isolation, qui exige un hôte Incus réel (§13).
 
+
+## 30. Le manuel et sa fraîcheur
+
+`CLAUDE.md` §7 exige que la documentation utilisateur suive le comportement réel
+et que « les captures d'écran soient renouvelées lorsque l'apparence ou le
+parcours change ». Une exigence de ce genre ne tient pas sans mécanisme : elle
+dépend de la vigilance, et la vigilance s'épuise.
+
+Cette section dit comment le manuel est **tenu vrai par construction**.
+
+### 30.1 Les illustrations sont produites, jamais collectées à la main
+
+Un harnais parcourt la pile réelle seedée (§28) et écrit les images du manuel
+sous `docs/manuel/images/`. Aucune image n'entre autrement.
+
+Conséquence directe : une capture ne peut pas montrer un écran qui n'existe plus,
+puisqu'elle est refaite depuis l'application à chaque exécution. Et si le parcours
+change au point que le harnais n'atteint plus l'écran, il **échoue** au lieu de
+laisser en place une image périmée.
+
+### 30.2 Le lien manuel-image est vérifié dans les deux sens
+
+Deux dérives sont possibles, et une seule est visible à l'œil :
+
+- une page cite une image **absente** — le lecteur voit un cadre vide. C'est
+  visible, mais seulement par celui qui ouvre la page ;
+- une image **orpheline** subsiste, plus citée par aucune page. Elle n'est vue de
+  personne, et elle survit indéfiniment à l'écran qu'elle montrait.
+
+Le contrôle porte donc sur les **deux sens** : toute image citée existe, et toute
+image produite est citée. Les deux échouent la campagne.
+
+### 30.3 Ce qu'un chapitre a le droit d'affirmer
+
+Un chapitre n'est écrit qu'à partir d'un comportement **observé sur la pile**.
+Trois conséquences que le plan laissait implicites :
+
+- un chapitre dont l'unité n'est pas livrée **n'est pas rédigé**. Il figure au
+  manuel avec la raison et l'unité qui le débloque, plutôt que d'être écrit
+  d'avance et faux ;
+- un comportement mesuré sur l'hôte réel mais **non reproductible** sur la pile de
+  développement — l'isolation, les quotas, l'émission d'un certificat — est
+  présenté comme tel, en renvoyant à la mesure du §13, jamais comme quelque chose
+  que le lecteur pourra vérifier avec la pile de développement ;
+- aucune valeur de secret, aucune adresse réelle. Les noms de variables
+  d'environnement sont autorisés, leurs valeurs jamais (`CLAUDE.md` §7).
+
+### 30.4 Ce que le manuel n'est pas
+
+Ce n'est ni le DAT, ni le journal. Il ne justifie pas les choix d'architecture :
+il explique comment se servir du produit. Quand une explication demande de
+comprendre une décision — pourquoi une réservation n'est pas un plafond, pourquoi
+un instantané n'est pas une sauvegarde —, le manuel énonce la conséquence pour
+l'exploitant et renvoie au DAT pour le raisonnement.
+
