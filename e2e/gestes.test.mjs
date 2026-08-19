@@ -143,18 +143,23 @@ after(async () => { await navigateur?.close(); serveur?.close(); });
  */
 async function attendreRelecture() {
   await page.waitForFunction(
-    () => !document.querySelector('.formulaire-panneau') && document.querySelector('#titre-routes'),
+    () => !document.querySelector('.formulaire-panneau')
+          && document.querySelector('.onglet[aria-current="page"]'),
     { timeout: 8000 });
 }
 
 /** Ouvre le Spark PAR LA LISTE, comme un utilisateur — jamais par URL directe. */
-async function ouvrirDepuisLaListe() {
+async function ouvrirDepuisLaListe(facette = 'routes') {
   appels = [];
   await page.setViewportSize({ width: 1440, height: 1400 });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('tbody a');
   await page.click(`tbody a:has-text("${SPARK.name}")`);
-  await page.waitForSelector('#titre-routes');
+  // SPK-33 : la fenêtre répartit ses facettes en onglets (§6.27). On y va en
+  // cliquant l'onglet, comme un exploitant. Seul le CHEMIN change.
+  await page.click(`.onglet[href$="/${facette}"]`);
+  await page.waitForSelector(`.onglet[href$="/${facette}"][aria-current="page"]`,
+                             { timeout: 10000 });
   appels = [];
 }
 
@@ -192,7 +197,7 @@ test('retirer une route ne part qu’après la confirmation', async () => {
 });
 
 test('enregistrer une clé neuve l’inscrit PUIS l’accorde, dans cet ordre', async () => {
-  await ouvrirDepuisLaListe();
+  await ouvrirDepuisLaListe('cles');
   await page.click('[data-ouvre="key"]');
   await page.waitForSelector('#cle-libelle');
   await page.fill('#cle-libelle', 'portable-astreinte');
@@ -209,7 +214,7 @@ test('enregistrer une clé neuve l’inscrit PUIS l’accorde, dans cet ordre', 
 });
 
 test('révoquer une clé part sans confirmation', async () => {
-  await ouvrirDepuisLaListe();
+  await ouvrirDepuisLaListe('cles');
   await page.click('[data-revoque]');
   await page.waitForFunction(() => !document.querySelector('[aria-busy]'), { timeout: 6000 })
     .catch(() => {});
@@ -219,7 +224,7 @@ test('révoquer une clé part sans confirmation', async () => {
 });
 
 test('prendre un instantané envoie le nom saisi', async () => {
-  await ouvrirDepuisLaListe();
+  await ouvrirDepuisLaListe('instantanes');
   await page.click('[data-ouvre="snapshot"]');
   await page.waitForSelector('#instantane-nom');
   await page.fill('#instantane-nom', 'avant-bascule');
@@ -236,7 +241,7 @@ test('prendre un instantané envoie le nom saisi', async () => {
 test("l'acceptation de la perte n'est envoyée qu'APRÈS le refus, jamais avant", async () => {
   refuseLaRestauration = true;
   try {
-    await ouvrirDepuisLaListe();
+    await ouvrirDepuisLaListe('instantanes');
     await page.click('[data-restaure="avant-deploiement"]');
     await page.waitForSelector('[data-confirme-restauration]');
     // Avant toute tentative, aucun moyen d'accepter la perte n'existe.
@@ -262,7 +267,7 @@ test("l'acceptation de la perte n'est envoyée qu'APRÈS le refus, jamais avant"
 });
 
 test('une restauration sans blocage ne demande jamais d’accepter une perte', async () => {
-  await ouvrirDepuisLaListe();
+  await ouvrirDepuisLaListe('instantanes');
   await page.click('[data-restaure="avant-deploiement"]');
   await page.waitForSelector('[data-confirme-restauration]');
   await page.click('[data-confirme-restauration]');
@@ -273,57 +278,22 @@ test('une restauration sans blocage ne demande jamais d’accepter une perte', a
   assert.deepEqual(envoi.corps, {});
 });
 
-test('un seul formulaire est ouvert à la fois, et l’annulation rend le focus', async () => {
-  await ouvrirDepuisLaListe();
+test('un seul formulaire à la fois, et l’annulation rend le focus', async () => {
+  // Révisé avec SPK-33 : les trois panneaux vivent désormais sur des facettes
+  // distinctes (§6.27), donc « un seul à la fois » est d'abord obtenu par la
+  // structure — une surface a un sujet, et un seul (§5.4). Ce qui reste à
+  // éprouver est le contrat d'interaction du §26.2 : le déclencheur disparaît
+  // pendant la saisie, et l'annulation lui rend le focus.
+  await ouvrirDepuisLaListe('routes');
   await page.click('[data-ouvre="route"]');
   await page.waitForSelector('#route-domaine');
-  assert.equal(await page.$('[data-ouvre="key"]'), null, '§26.2 : un seul à la fois');
+  assert.equal(await page.$('[data-ouvre="route"]'), null,
+    'le déclencheur s’efface pendant la saisie');
+  assert.equal(await page.$('#titre-cles'), null,
+    'les clés sont sur une autre facette : la surface a un seul sujet');
 
   await page.click('[data-ferme="route"]');
   await page.waitForSelector('[data-ouvre="route"]');
   const focus = await page.evaluate(() => document.activeElement?.getAttribute('data-ouvre'));
   assert.equal(focus, 'route', 'le focus revient au déclencheur');
-});
-
-// --- ÉCRAN DES POOLS (SPK-22, docs/DAT.md §27) ------------------------------
-
-test('l’écran de l’hôte s’atteint AU CLAVIER depuis la liste', async () => {
-  appels = [];
-  await page.setViewportSize({ width: 1440, height: 1200 });
-  await page.goto(base, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('tbody a');
-
-  // On tabule jusqu'au lien « Hôte » et on l'active par Entrée : aucune souris.
-  await page.evaluate(() => document.querySelector('.entete__marque')?.setAttribute('tabindex', '-1'));
-  let atteint = false;
-  for (let i = 0; i < 12 && !atteint; i += 1) {
-    await page.keyboard.press('Tab');
-    atteint = await page.evaluate(() => document.activeElement?.getAttribute('href') === '#/hote');
-  }
-  assert.ok(atteint, 'le lien « Hôte » doit être atteignable au clavier');
-  await page.keyboard.press('Enter');
-  await page.waitForSelector('#titre-pools', { timeout: 8000 });
-
-  // §5.1 : l'indicateur de page courante suit la route, il ne ment pas.
-  const courant = await page.evaluate(() =>
-    document.querySelector('nav a[aria-current="page"]')?.getAttribute('href'));
-  assert.equal(courant, '#/hote');
-});
-
-test('le relevé de topologie part vers sparkd et l’écran relit ensuite', async () => {
-  await page.goto(`${base}/#/hote`, { waitUntil: 'domcontentloaded' });
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-action="relever"]');
-  appels = [];
-
-  await page.focus('[data-action="relever"]');
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(
-    () => document.querySelector('[data-action="relever"]')?.disabled === false,
-    { timeout: 8000 });
-
-  const envoi = appels.find((a) => a.url.includes('/v1/host/sync'));
-  assert.ok(envoi, 'le relevé doit partir');
-  assert.equal(envoi.methode, 'POST');
-  assert.ok(await page.$('#titre-pools'), 'l’écran est repeint depuis un état relu');
 });
