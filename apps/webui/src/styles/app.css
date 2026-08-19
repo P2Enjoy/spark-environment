@@ -56,7 +56,15 @@
 .entete nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: 4px; }
 .entete__contexte { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
 
-.principal { padding: var(--space-6) var(--space-4); flex: 1; }
+.principal {
+  padding: var(--space-6) var(--space-4); flex: 1;
+  /* Une piste de grille ne rétrécit pas sous la largeur minimale de son contenu.
+     Sans cela, le tableau des Sparks pousse la PAGE ENTIÈRE et la fait défiler
+     horizontalement, ce que le §8.1 interdit — alors que le tableau a déjà son
+     propre conteneur de défilement (§8.2). Mesuré : débordement à 1024 et
+     768 px avant ce correctif. */
+  min-width: 0;
+}
 .principal > * + * { margin-top: var(--space-4); }
 
 .titre-vue { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
