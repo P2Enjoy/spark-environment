@@ -16,6 +16,12 @@ from pathlib import Path
 
 MEMINFO = Path("/proc/meminfo")
 ARC_MAX = Path("/sys/module/zfs/parameters/zfs_arc_max")
+#: Consommation INSTANTANÉE de l'ARC. Le plafond dit ce que ZFS PEUT prendre ;
+#: ce fichier dit ce qu'il prend. Mesuré le 2026-08-19 (docs/DAT.md §13.12) :
+#: sous charge l'ARC atteint son plafond et ne le dépasse pas — la réserve du
+#: §16.1 est donc à la fois nécessaire et suffisante. Une mesure ponctuelle
+#: répond une fois ; l'exposer rend la vérification permanente.
+ARC_STATS = Path("/proc/spl/kstat/zfs/arcstats")
 
 DEFAULT_RESERVE = 2 * 1024**3
 
@@ -106,6 +112,27 @@ def arc_ceiling(total_memory: int, path: Path | None = None) -> ArcCeiling:
     return ArcCeiling(valeur, True, "plafond de l'ARC lu sur le module ZFS.")
 
 
+def arc_used(path: Path | None = None) -> int | None:
+    """Ce que l'ARC consomme À CET INSTANT, ou `None` si on ne peut pas le lire.
+
+    `None` n'est pas zéro : un ARC dont on ignore la taille n'est pas un ARC
+    vide, et les confondre ferait croire la réserve inutile (docs/DAT.md §16.2,
+    même raisonnement que pour le plafond).
+    """
+    try:
+        contenu = (path or ARC_STATS).read_text()
+    except OSError:
+        return None
+    for ligne in contenu.splitlines():
+        colonnes = ligne.split()
+        if len(colonnes) == 3 and colonnes[0] == "size":
+            try:
+                return int(colonnes[2])
+            except ValueError:
+                return None
+    return None
+
+
 @dataclass(frozen=True)
 class HostMemory:
     total_bytes: int
@@ -114,6 +141,8 @@ class HostMemory:
     operating_margin_bytes: int
     arc_known: bool
     detail: str
+    #: Consommation instantanée de l'ARC. `None` = non mesurable.
+    arc_used_bytes: int | None = None
 
     @property
     def allocatable_bytes(self) -> int:
@@ -124,6 +153,7 @@ def measure(
     operating_margin: int = DEFAULT_RESERVE,
     meminfo: Path | None = None,
     arc_path: Path | None = None,
+    arc_stats: Path | None = None,
 ) -> HostMemory:
     """Mémoire totale et réserve, prêtes à écrire dans `host`."""
     total = kernel_memory_total(meminfo)
@@ -144,6 +174,7 @@ def measure(
         total_bytes=total,
         reserve_bytes=reserve,
         arc_bytes=arc.bytes,
+        arc_used_bytes=arc_used(arc_stats),
         operating_margin_bytes=operating_margin,
         arc_known=arc.known,
         detail=detail,

@@ -5,7 +5,7 @@
  *       observable), §27.2 (trois grandeurs), §27.3 (la soustraction mémoire),
  *       §27.4 (le CPU à deux endroits), §27.5 (le surengagement s'affiche),
  *       §27.6 (la réservation n'est pas une garantie), §27.8 (topologie) ·
- *       §7.7, §15, §16 · docs/DESIGN_SYSTEM.md §3.1, §6.4, §6.13, §6.24, §14.6 ·
+ *       §7.7, §15, §16, §13.12 (l'ARC atteint son plafond sous charge) · docs/DESIGN_SYSTEM.md §3.1, §6.4, §6.13, §6.24, §14.6 ·
  *       docs/DESIGN_SYSTEM_APP.md
  *
  * Cet écran répond à une seule question : « pourquoi cette création serait-elle
@@ -46,6 +46,27 @@ export const GARANTIES = {
 export function fillRatio(pool) {
   if (!pool || !pool.capacity) return 0;
   return Math.max(0, Math.min(100, (pool.allocated / pool.capacity) * 100));
+}
+
+/**
+ * Ce que l'ARC consomme réellement, face à son plafond.
+ *
+ * Mesuré le 2026-08-19 (docs/DAT.md §13.12) : sous charge l'ARC atteint son
+ * plafond et ne le dépasse pas. La réserve est donc à la fois nécessaire et
+ * suffisante — mais seulement tant que c'est vrai. L'afficher rend la
+ * vérification permanente au lieu de la laisser périmer.
+ *
+ * `null` n'est pas zéro : un ARC dont on ignore la taille n'est pas un ARC vide,
+ * et les confondre ferait croire la réserve inutile (docs/DESIGN_SYSTEM.md
+ * §14.6).
+ */
+export function describeArcUsage(utilise, plafond) {
+  if (utilise === null || utilise === undefined) {
+    return 'Sa consommation n’est pas mesurable sur cet hôte.';
+  }
+  const part = plafond ? Math.round((utilise / plafond) * 100) : null;
+  return `Il en consomme actuellement ${formatBytes(utilise)}`
+    + (part === null ? '.' : ` — ${part} % de son plafond.`);
 }
 
 /** Horodatage lisible (§3.1 pour la typographie technique). */
@@ -114,8 +135,9 @@ export function renderMemoryBreakdown(hote) {
     ['Mémoire de la machine', formatBytes(total), ''],
     ...(detaille
       ? [['− plafond de l’ARC ZFS', formatBytes(arc),
-          'ZFS peut le prendre à tout instant : une réserve qui l’ignore promet une '
-          + 'mémoire que le noyau reprendra sous les Sparks. Se règle par zfs_arc_max.'],
+          `ZFS peut le prendre à tout instant : une réserve qui l’ignore promet une `
+          + `mémoire que le noyau reprendra sous les Sparks. Se règle par zfs_arc_max. `
+          + describeArcUsage(hote?.reserves?.arc_used_bytes, arc)],
          ['− marge d’exploitation', formatBytes(marge),
           'Ce que l’hôte consomme pour lui-même. Se règle par SPARKD_MEMORY_RESERVE.']]
       : [['− réserve de l’hôte', formatBytes(reserve),

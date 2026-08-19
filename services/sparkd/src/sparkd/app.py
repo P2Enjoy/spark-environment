@@ -24,6 +24,7 @@ from . import cores as core_pool
 from .addressing import DHCP_RANGE, AddressPoolExhausted, usage
 from .admission import HostNotConfigured, pools
 from .config import Config
+from . import hostmem
 from .db import connect
 from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
@@ -218,6 +219,12 @@ def create_app(config: Config) -> FastAPI:
                 "arc_bytes": row["memory_arc_bytes"],
                 "margin_bytes": row["memory_margin_bytes"],
                 "storage_bytes": row["storage_reserve_bytes"],
+                # Le plafond est PERSISTÉ — il vient du relevé de topologie. La
+                # consommation, elle, est lue À CHAQUE REQUÊTE : la stocker
+                # présenterait une valeur périmée comme actuelle. `null` quand
+                # elle n'est pas mesurable : ce n'est pas zéro (docs/DAT.md
+                # §13.12, §16.2).
+                "arc_used_bytes": hostmem.arc_used(),
             },
             "pools": etat.as_dict(),
             "addresses": {

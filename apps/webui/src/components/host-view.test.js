@@ -12,8 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderHostView, renderMemoryBreakdown, renderCores, renderNotSynced,
-  renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES,
+  renderHostView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage,
 } from './host-view.js';
 
 const GIO = 1024 ** 3;
@@ -247,4 +246,42 @@ test('le squelette annonce le chargement aux lecteurs d’écran', () => {
 test('l’erreur porte role=alert et le non-relevé non — l’un presse, l’autre pas', () => {
   assert.ok(renderHostError({ message: 'x' }).includes('role="alert"'));
   assert.ok(!renderNotSynced({ message: 'x' }).includes('role="alert"'));
+});
+
+// --- la consommation reelle de l'ARC (docs/DAT.md §13.12) -------------------
+
+test("la consommation de l'ARC est affichee face a son plafond", () => {
+  const rendu = renderMemoryBreakdown({
+    ...HOTE,
+    reserves: { ...HOTE.reserves, arc_used_bytes: 8 * GIO },
+  });
+  assert.ok(rendu.includes('Il en consomme actuellement'));
+  assert.ok(rendu.includes('8,0 Gio'));
+  assert.ok(rendu.includes('50 %'), 'la part du plafond situe la mesure');
+});
+
+test("un ARC non mesurable le DIT, il ne s'affiche pas a zero", () => {
+  // §14.6 : un ARC dont on ignore la taille n'est pas un ARC vide. Les confondre
+  // ferait croire la reserve inutile.
+  assert.equal(describeArcUsage(null, 16 * GIO),
+               'Sa consommation n’est pas mesurable sur cet hôte.');
+  assert.equal(describeArcUsage(undefined, 16 * GIO),
+               'Sa consommation n’est pas mesurable sur cet hôte.');
+  const rendu = renderMemoryBreakdown({
+    ...HOTE, reserves: { ...HOTE.reserves, arc_used_bytes: null },
+  });
+  assert.ok(rendu.includes('n’est pas mesurable'));
+  assert.ok(!rendu.includes('consomme actuellement 0'));
+});
+
+test("un ARC a zero est une VRAIE valeur, distincte de l'absence de mesure", () => {
+  assert.ok(describeArcUsage(0, 16 * GIO).includes('0 o'));
+  assert.ok(describeArcUsage(0, 16 * GIO).includes('0 %'));
+});
+
+test("l'ARC au plafond s'affiche sans alarme : c'est son fonctionnement normal", () => {
+  // Mesure du §13.12 : sous charge il atteint 100 % et n'y depasse pas.
+  const texte = describeArcUsage(16 * GIO, 16 * GIO);
+  assert.ok(texte.includes('100 %'));
+  assert.ok(!/dépass|alerte|erreur/i.test(texte));
 });

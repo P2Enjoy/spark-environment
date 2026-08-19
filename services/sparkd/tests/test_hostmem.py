@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from sparkd import hostmem
 from sparkd.hostmem import (
     MemoryReadError,
     arc_ceiling,
@@ -70,3 +71,48 @@ def test_mesure_complete(tmp_path):
     assert m.total_bytes == 98810556 * 1024
     assert m.reserve_bytes == 18 * 1024**3
     assert m.allocatable_bytes == m.total_bytes - 18 * 1024**3
+
+
+# --- consommation instantanee de l'ARC (docs/DAT.md §13.12) -----------------
+
+
+def test_arc_used_lit_la_ligne_size_des_arcstats(tmp_path):
+    stats = tmp_path / "arcstats"
+    stats.write_text(
+        "name                            type data\n"
+        "hits                               4 123456\n"
+        "size                               4 17179869184\n"
+        "c_max                              4 17179869184\n"
+    )
+    assert hostmem.arc_used(stats) == 17179869184
+
+
+def test_arc_used_rend_None_et_non_zero_quand_zfs_est_absent(tmp_path):
+    """`None` n'est pas zero : un ARC dont on ignore la taille n'est pas vide.
+
+    Les confondre ferait croire la reserve du §16.1 inutile.
+    """
+    assert hostmem.arc_used(tmp_path / "inexistant") is None
+
+
+def test_arc_used_rend_None_sur_un_fichier_illisible(tmp_path):
+    stats = tmp_path / "arcstats"
+    stats.write_text("size 4 pas-un-nombre\n")
+    assert hostmem.arc_used(stats) is None
+    stats.write_text("aucune ligne size ici\n")
+    assert hostmem.arc_used(stats) is None
+
+
+def test_measure_porte_la_consommation_de_l_arc(tmp_path):
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:       98765432 kB\n")
+    arc_max = tmp_path / "arc_max"
+    arc_max.write_text(str(16 * 1024**3))
+    stats = tmp_path / "arcstats"
+    stats.write_text("size 4 1610612736\n")
+
+    mesure = hostmem.measure(meminfo=meminfo, arc_path=arc_max, arc_stats=stats)
+    assert mesure.arc_bytes == 16 * 1024**3, "le PLAFOND"
+    assert mesure.arc_used_bytes == 1610612736, "et ce qu'il en occupe"
+    # Le plafond est ce qui est reserve ; la consommation ne change pas le calcul.
+    assert mesure.reserve_bytes == 16 * 1024**3 + hostmem.DEFAULT_RESERVE
