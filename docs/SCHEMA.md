@@ -182,13 +182,35 @@ distinctes dans le modèle comme dans l'interface.
 
 ## 9. `audit_log`
 
-`id`, `ts`, `actor`, `action`, `target_type`, `target_id`, `payload` (JSON),
-`result` ∈ {`ok`, `denied`, `error`}, `message`.
+`id`, `ts`, `actor`, `actor_class`, `action`, `target_type`, `target_id`,
+`payload` (JSON), `result` ∈ {`ok`, `denied`, `error`}, `message`.
 
 `payload` est filtré avant écriture : aucune clé privée, aucun secret, aucun
 en-tête d'authentification. Un refus d'admission est journalisé au même titre
 qu'un succès — c'est précisément la trace qui manque toujours quand on en a
 besoin.
+
+### 9.1 `actor_class` et le verrou d'écriture (SPK-37, `docs/DAT.md` §21.6)
+
+`actor_class` ∈ {`human`, `runtime`}, `NOT NULL`, défaut `runtime`.
+
+Le défaut est `runtime` **délibérément** : une écriture qui oublierait de se
+déclarer sera classée comme un événement de la machine, jamais comme un geste
+humain. Se tromper dans ce sens fait perdre une attribution ; se tromper dans
+l'autre en **fabriquerait** une, ce qui est bien pire.
+
+`actor` reste `TEXT NOT NULL`. Sa valeur par défaut applicative devient `inconnu`
+et non plus `responsable` : affirmer une identité que rien n'établit est un
+mensonge, l'ignorance n'en est pas un.
+
+**`UPDATE` et `DELETE` sont refusés par deux déclencheurs** — `audit_log_immuable_update`
+et `audit_log_immuable_delete` — et non par convention de code. `INSERT` reste
+libre. Le verrou protège de l'erreur, pas de `root`, qui peut supprimer les
+déclencheurs : ce qui protège de `root` est l'ancre tenue ailleurs (§36.3, SPK-38).
+
+Migration `005_journal_acteur`. Les lignes existantes reçoivent `runtime`, pour la
+même raison que ci-dessus : leur acteur réel n'est pas connu, et le supposer humain
+inventerait une attribution.
 
 ## 10. `schema_migration`
 

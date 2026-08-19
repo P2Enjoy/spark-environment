@@ -1755,6 +1755,80 @@ Un **refus** est journalisé au même titre qu'un succès (`docs/SCHEMA.md` §9)
 C'est précisément la trace qui manque toujours quand on en a besoin : personne
 n'enquête sur une opération qui a réussi.
 
+### 21.6 Qui a agi : contrat de l'acteur (SPK-37)
+
+Le §36.7 posait le constat : `actor` valait la chaîne littérale « responsable »
+ou « sparkd », donc le journal ne savait pas qui agissait. Cette section fixe ce
+qui le remplace.
+
+#### 21.6.1 Deux classes, portées par une colonne
+
+`audit_log` gagne `actor_class`, contrainte à deux valeurs :
+
+| `actor_class` | Ce que c'est | Exemples |
+|---|---|---|
+| `human` | un geste demandé par une personne, arrivé par l'API | création, commande, route, clé, instantané, protection |
+| `runtime` | un événement produit par `sparkd` lui-même | réconciliation au démarrage (§14.3), repondération de la tranche (§32.2), relevés |
+
+C'est le §36.4 rendu vérifiable. Les afficher pareillement laisserait croire que
+la seconde classe est signée par quelqu'un — elle ne l'est par personne, et elle
+ne le sera jamais.
+
+La classe n'est **pas déduite du nom de l'action** : deux chemins peuvent écrire
+la même action. Elle est portée par l'appelant, au même titre que l'acteur.
+
+#### 21.6.2 L'identité voyage dans un en-tête, et elle est DÉCLARATIVE
+
+L'hôte console pose sur chaque requête relayée :
+
+```
+X-Spark-Actor: <identité>
+```
+
+`sparkd` la lit, la borne à 200 caractères, et la porte jusqu'à
+`audit.record()`. En son absence, l'acteur vaut `inconnu` — jamais
+« responsable », qui affirmerait une identité que rien n'établit.
+
+**Cet en-tête n'est pas une preuve, et le produit ne le présentera jamais comme
+telle.** Qui atteint `sparkd` écrit ce qu'il veut dedans, exactement comme qui
+atteint l'hôte contourne la protection du §35.1. C'est une **attribution**, utile
+entre usages légitimes et pour distinguer les deux classes ; la preuve viendra de
+la signature (SPK-40), et d'elle seule. Le §36.7 dit l'ordre : identité, puis
+signature, puis chaîne, puis ancre — celle-ci est la première marche, et se dit
+comme telle.
+
+#### 21.6.3 Ce que l'hôte console y met
+
+Il nomme le serveur visé et, **quand il la connaît**, l'empreinte de la clé SSH
+qui a ouvert le tunnel :
+
+```
+console/<serveur> clé SHA256:…      empreinte déterminée
+console/<serveur>                   empreinte non déterminée
+```
+
+L'empreinte est relevée à l'ouverture du tunnel, sur la sortie de diagnostic
+d'OpenSSH (`LogLevel=VERBOSE`), qui nomme la clé acceptée par le serveur. Elle
+n'est **pas devinée** : un tunnel local (§28.2) n'en a aucune, un agent muet n'en
+donne aucune, et dans ces cas l'en-tête ne porte que le serveur. Écrire une
+empreinte plausible plutôt que rien serait le pire des deux mondes.
+
+#### 21.6.4 Le journal ne se récrit pas par mégarde
+
+`UPDATE` et `DELETE` sur `audit_log` sont refusés **par la base**, par
+déclencheur, et non par convention de code. Une table qu'on s'interdit d'écraser
+par discipline est une table qu'on écrasera : le premier script de maintenance
+écrit à deux heures du matin suffit.
+
+Ce verrou ne protège pas de `root` — qui peut supprimer les déclencheurs comme le
+fichier — et le §36 le dit déjà : ce qui protège de `root`, c'est l'ancre tenue
+ailleurs (SPK-38), pas la base elle-même. Il protège de l'erreur, qui est le
+risque réel et fréquent.
+
+**L'insertion reste libre**, et la purge du §36.5 n'est pas tranchée ici : le
+jour où elle le sera, elle passera par une migration qui suspend le déclencheur,
+scelle le préfixe dans un point de contrôle, et le repose.
+
 ## 22. L'hôte console
 
 Le §6 pose le principe : le navigateur ne sait rien de SSH, l'hôte console local
@@ -3243,10 +3317,14 @@ ordres de grandeur plus nombreuses, et les inscrire noierait précisément ce qu
 vient chercher. Deux exceptions, parce qu'elles disent qui est entré et quand :
 l'ouverture d'un tunnel, et les vérifications d'intégrité elles-mêmes.
 
-**Prérequis honnête :** aujourd'hui le champ `actor` vaut la chaîne littérale
-« responsable » ou « sparkd ». Il n'y a donc **aucune identité** à signer. Tant
-que ce n'est pas corrigé, parler de « signature de l'acteur » serait une figure de
-style. L'ordre est : identité réelle, puis signature, puis chaîne, puis ancre.
+**L'ordre reste : identité réelle, puis signature, puis chaîne, puis ancre.** La
+première marche est livrée par SPK-37 et son contrat est au §21.6 : l'hôte console
+déclare qui agit, `sparkd` porte cette déclaration au journal, et la classe —
+geste humain ou événement du runtime — est une colonne et non une devinette.
+
+Cette identité est **déclarative** : elle attribue, elle ne prouve pas. C'est
+exactement pourquoi la signature reste due. Parler de « signature de l'acteur »
+avant SPK-40 resterait une figure de style.
 
 ### 36.8 L'onglet de supervision
 
