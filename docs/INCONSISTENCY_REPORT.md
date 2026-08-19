@@ -83,3 +83,36 @@ contrat, pas sur l'unité en cours.
 dans son `message`, et `target_id` doit-il rester vide plutôt que de désigner un
 identifiant sans objet ?
 
+### INC-03 · Un Spark dont l'instance a disparu ne peut plus être supprimé
+
+**Constaté le 2026-08-19**, sur l'hôte, en nettoyant après la mesure de SPK-29.
+
+**Mesure.** Un Spark passé en `error`, dont l'instance Incus a été supprimée hors
+du produit, reste dans le registre :
+
+```
+POST /v1/sparks/mesure-cpu/delete  ->  502
+registre après : ['mesure-cpu']
+```
+
+La suppression échoue parce que le pilote ne trouve pas l'instance, et l'entrée
+reste indéfiniment. Elle continue de compter dans l'admission control et, depuis
+SPK-29, **maintient le poids de la tranche** à une valeur qui ne correspond à
+rien.
+
+Un redémarrage de `sparkd` ne la retire pas : la réconciliation du §14.3 ne
+traite que les états **transitoires**, et `error` est un état stable.
+
+**Pourquoi ce n'est pas corrigé ici.** Le cycle de vie relève de SPK-09 et du §14.
+Décider si `delete` doit réussir quand l'instance est déjà absente — et donc si
+la disparition de l'instance vaut suppression — est un arbitrage sur ce contrat,
+pas sur l'unité en cours.
+
+**Impact.** Une ressource reste comptée pour un Spark qui n'existe plus, et le
+poids de la tranche s'en trouve faussé. L'hôte de validation porte actuellement
+une entrée dans ce cas.
+
+**Arbitrage attendu du responsable** : `delete` doit-il traiter une instance déjà
+absente comme un succès — la ligne disparaît, la ressource est rendue — plutôt
+que comme une panne ?
+

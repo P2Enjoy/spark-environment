@@ -2515,6 +2515,38 @@ Vérification arithmétique sur l'hôte, `C = 4` cœurs :
 suppression, redimensionnement. Une constante rendrait la réservation absolue
 seulement pour un taux de remplissage donné, et fausse partout ailleurs.
 
+#### Ce que la mesure a corrigé dans ce calcul
+
+**Mesuré le 2026-08-19**, sous contention provoquée : un Spark réservant 1 CPU
+sur une machine de 8 threads, tranche à poids 100, a obtenu **50 %** de la
+machine — et non les 25 % que le tableau annonce.
+
+```
+fenêtre 25 s sur 8 threads
+Spark        100,22 s  → 50,1 %
+system.slice  98,70 s  → 49,3 %
+```
+
+La cause n'est pas une erreur de calcul : **`H` n'est pas une constante**. Un
+poids cgroup ne se partage qu'entre frères **exécutables**. Pendant la mesure,
+`user.slice` et `init.scope` étaient au repos : seuls `spark.slice` (100) et
+`system.slice` (100) se disputaient la machine, d'où 100/200.
+
+Conséquence sur la promesse, et elle est favorable :
+
+- avec `H = 300` posé en dur, la tranche est **sous-évaluée** dès qu'une tranche
+  de l'hôte est inactive. Le Spark obtient alors **plus** que sa part, jamais
+  moins ;
+- la réservation devient donc un **plancher** : `r / C` est garanti quand tout
+  l'hôte s'exécute, et dépassé sinon. C'est ce qu'une réservation doit être, et
+  c'est cohérent avec le burst du §7.2.
+
+**Ce qui reste à prouver**, et c'est pourquoi SPK-29 n'est pas close : que sous
+contention **totale** — les trois tranches de l'hôte exécutables en même temps —
+la part converge bien vers `r / C`. La mesure ci-dessus ne l'établit pas, elle
+établit seulement que le plancher est tenu et largement dépassé quand l'hôte est
+calme.
+
 ### 32.3 L'hôte garde une part, et c'est ce qui rend la loi définie
 
 Quand `f → 1`, `W → ∞` : les Sparks prendraient tout et l'hôte n'ordonnancerait
