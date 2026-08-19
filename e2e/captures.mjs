@@ -96,9 +96,16 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
           hostname: 'spark-experiment',
           cpu: { cores_total: 4, threads_total: 8, cores_dedicated: 1 },
           memory: { total_bytes: 94 * GIO },
-          reserves: sansDetailMemoire
-            ? { memory_bytes: 18 * GIO, arc_bytes: 0, margin_bytes: 0, storage_bytes: 0 }
-            : { memory_bytes: 18 * GIO, arc_bytes: 16 * GIO, margin_bytes: 2 * GIO, storage_bytes: 0 },
+          reserves: {
+            ...(sansDetailMemoire
+              ? { memory_bytes: 18 * GIO, arc_bytes: 0, margin_bytes: 0, storage_bytes: 0 }
+              : { memory_bytes: 18 * GIO, arc_bytes: 16 * GIO, margin_bytes: 2 * GIO,
+                  storage_bytes: 0 }),
+            // SPK-30 : la marge de métadonnées grossit l'alloué du disque ; la
+            // capture doit montrer que l'écart est expliqué (docs/DAT.md §8.8.2).
+            storage_metadata_margin_bytes: 64 * 1024 * 1024,
+            storage_metadata_total_bytes: 4 * 64 * 1024 * 1024,
+          },
           pools: {
             cpu: { capacity: 6, allocated: 2.5, available: 3.5, overcommit: 2 },
             memory: { capacity: 76 * GIO, allocated: 12 * GIO, available: 64 * GIO, overcommit: 1 },
