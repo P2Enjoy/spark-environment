@@ -25,25 +25,45 @@ def test_healthz_repond():
     assert reponse.json()["status"] == "ok"
 
 
-def test_readyz_ne_pretend_pas_etre_pret():
-    """Revise le 2026-08-18, avec SPK-04.
+def test_readyz_rend_l_etat_REEL_de_chaque_dependance():
+    """Revise le 2026-08-19, avec SPK-26. Deuxieme revision de cette preuve.
 
-    Cette preuve exigeait auparavant que TOUTES les dependances soient
-    « unknown ». La regle a change parce que le registre existe desormais : son
-    etat est reellement connu, et continuer a le declarer inconnu serait le
-    mensonge que ce test cherche justement a empecher. Elle est donc revisee, et
-    non contournee : ce qui reste verifie, c'est qu'aucune dependance encore
-    non implementee — Incus, Caddy — ne s'annonce prete.
+    Elle exigeait que Incus et Caddy s'annoncent « unknown », ce qui datait de
+    l'epoque ou leurs pilotes n'existaient pas. Ils existent : continuer a exiger
+    « unknown » figeait la reponse, et un endpoint de disponibilite qui rend
+    toujours la meme chose ne distingue pas un serveur sain d'un serveur en
+    panne. C'est pourtant de lui que depend la verification de deploiement
+    (docs/DAT.md §31).
+
+    Ce qui reste verifie est plus fort qu'avant : aucune dependance ne s'annonce
+    prete sans avoir ete SONDEE.
     """
-    reponse = client().get("/readyz")
-    assert reponse.status_code == 200
-    corps = reponse.json()
-    assert corps["status"] == "degraded"
+    corps = client().get("/readyz").json()
     assert set(corps["dependencies"]) == {"incus", "registry", "caddy"}
-    assert corps["dependencies"]["incus"] == "unknown"
-    assert corps["dependencies"]["caddy"] == "unknown"
-    # Le registre est migre par create_app : il est connu, jamais « unknown ».
-    assert corps["dependencies"]["registry"] in {"ready", "empty"}
+    # Le pilote factice repond : le declarer indisponible serait aussi faux que
+    # de declarer pret un pilote muet.
+    assert corps["dependencies"] == {"incus": "ready", "registry": "ready", "caddy": "ready"}
+    assert corps["status"] == "ready"
+
+
+def test_readyz_nomme_la_CAUSE_d_une_dependance_en_panne():
+    """Taire la cause oblige a la rechercher ailleurs (docs/DAT.md §31.2)."""
+    import tempfile
+
+    application = create_app(load({"SPARKD_DB": tempfile.mkdtemp() + "/s.db",
+                                   "SPARKD_DRIVER": "fake"}))
+
+    class IncusMuet:
+        def server_info(self):
+            raise RuntimeError("socket /var/lib/incus/unix.socket absente")
+
+    application.state.incus = IncusMuet()
+    corps = TestClient(application).get("/readyz").json()
+
+    assert corps["status"] == "degraded"
+    assert corps["dependencies"]["incus"] == "unavailable"
+    assert corps["dependencies"]["caddy"] == "ready", "une panne n'en invente pas une autre"
+    assert "socket" in corps["detail"], "la cause doit etre rendue, pas seulement l'etat"
 
 
 def test_openapi_expose_le_contrat():

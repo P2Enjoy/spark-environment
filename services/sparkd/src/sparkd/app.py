@@ -137,23 +137,47 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/readyz", tags=["etat"])
     def readyz() -> dict[str, object]:
-        """Etat des dependances necessaires au travail reel.
+        """Etat REEL des dependances necessaires au travail.
 
-        Tant que les pilotes ne sont pas ecrits (SPK-07, SPK-08), les
-        dependances sont declarees « inconnues » plutot que « pretes ». Annoncer
-        une disponibilite non verifiee serait un succes simule (CLAUDE.md §18).
+        Cette reponse etait figee : elle annoncait « degraded » et deux pilotes
+        « non implementes » quoi qu'il arrive, ce qui datait de l'epoque ou ils ne
+        l'etaient pas. Un endpoint de disponibilite qui rend toujours la meme
+        chose ne distingue pas un serveur sain d'un serveur en panne — et c'est
+        precisement de lui que depend la verification de deploiement
+        (docs/DAT.md §31, docs/PROD_MIGRATIONS.md §5).
+
+        Chaque dependance est donc SONDEE. Une sonde qui echoue rend la cause,
+        jamais un « inconnu » muet : annoncer une disponibilite non verifiee
+        serait un succes simule (CLAUDE.md §18), mais taire la cause d'une panne
+        oblige a la rechercher ailleurs.
         """
         versions = app.state.schema_versions
+        dependances: dict[str, str] = {
+            "registry": "ready" if versions else "empty",
+        }
+        causes: list[str] = []
+
+        try:
+            app.state.incus.server_info()
+            dependances["incus"] = "ready"
+        except Exception as erreur:  # noqa: BLE001 — toute panne doit etre rendue
+            dependances["incus"] = "unavailable"
+            causes.append(f"incus : {erreur}")
+
+        try:
+            app.state.caddy.current()
+            dependances["caddy"] = "ready"
+        except Exception as erreur:  # noqa: BLE001
+            dependances["caddy"] = "unavailable"
+            causes.append(f"caddy : {erreur}")
+
+        pret = all(etat == "ready" for etat in dependances.values())
         return {
-            "status": "degraded",
+            "status": "ready" if pret else "degraded",
             "driver": config.driver,
-            "dependencies": {
-                "incus": "unknown",
-                "registry": "ready" if versions else "empty",
-                "caddy": "unknown",
-            },
+            "dependencies": dependances,
             "schema_version": versions[-1] if versions else None,
-            "detail": "Pilotes Incus et Caddy non implementes : unites SPK-08 et SPK-12.",
+            "detail": "; ".join(causes) if causes else "Toutes les dependances repondent.",
         }
 
     @app.get("/v1/host", tags=["hote"])

@@ -33,11 +33,19 @@ export interface paths {
         };
         /**
          * Readyz
-         * @description Etat des dependances necessaires au travail reel.
+         * @description Etat REEL des dependances necessaires au travail.
          *
-         *     Tant que les pilotes ne sont pas ecrits (SPK-07, SPK-08), les
-         *     dependances sont declarees « inconnues » plutot que « pretes ». Annoncer
-         *     une disponibilite non verifiee serait un succes simule (CLAUDE.md §18).
+         *     Cette reponse etait figee : elle annoncait « degraded » et deux pilotes
+         *     « non implementes » quoi qu'il arrive, ce qui datait de l'epoque ou ils ne
+         *     l'etaient pas. Un endpoint de disponibilite qui rend toujours la meme
+         *     chose ne distingue pas un serveur sain d'un serveur en panne — et c'est
+         *     precisement de lui que depend la verification de deploiement
+         *     (docs/DAT.md §31, docs/PROD_MIGRATIONS.md §5).
+         *
+         *     Chaque dependance est donc SONDEE. Une sonde qui echoue rend la cause,
+         *     jamais un « inconnu » muet : annoncer une disponibilite non verifiee
+         *     serait un succes simule (CLAUDE.md §18), mais taire la cause d'une panne
+         *     oblige a la rechercher ailleurs.
          */
         get: operations["readyz_readyz_get"];
         put?: never;
