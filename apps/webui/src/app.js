@@ -150,7 +150,10 @@ function brancher() {
 function brancherPanneaux() {
   const admin = etat.admin;
 
-  for (const bouton of racine.querySelectorAll('[data-ouvre]')) {
+  // Les trois panneaux, nommés : `[data-ouvre]` capterait aussi le déclencheur
+  // du catalogue, qui vit sur une autre destination et a son propre état.
+  for (const bouton of racine.querySelectorAll(
+    '[data-ouvre="route"], [data-ouvre="key"], [data-ouvre="snapshot"]')) {
     bouton.addEventListener('click', () => {
       admin.open = bouton.dataset.ouvre;
       admin.refusal = null;
@@ -523,14 +526,10 @@ function brancherCatalogue() {
   racine.querySelector('[data-ouvre="image"]')?.addEventListener('click', () => {
     ui.open = true; ui.refusal = null;
     peindre();
-    racine.querySelector('#image-reference')?.focus();
+    // Le focus entrant, `Échap` et la restitution du focus sont tenus par
+    // `brancherModale` (§6.27) : un seul endroit pour un seul contrat.
   });
-  racine.querySelector('[data-ferme="image"]')?.addEventListener('click', () => {
-    ui.open = false; ui.refusal = null;
-    peindre();
-    racine.querySelector('[data-ouvre="image"]')?.focus();
-  });
-  const formulaire = racine.querySelector('[data-formulaire="image"]');
+  const formulaire = racine.querySelector('[data-modale="image"]');
   if (!formulaire) return;
   for (const controle of formulaire.querySelectorAll('input')) {
     controle.addEventListener('input', () => { ui.values[controle.name] = controle.value; });

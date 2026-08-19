@@ -1715,6 +1715,36 @@ phrase de passe.** L'authentification appartient à la configuration SSH du post
 et le produit n'a pas à la dupliquer — dupliquer un secret, c'est doubler les
 endroits où il fuit.
 
+### 22.4 bis Ce que le catalogue délègue à OpenSSH
+
+Le §22.4 dit ce que l'inventaire ne contient pas. Celui-ci dit à qui il confie ce
+qu'il ne contient pas.
+
+L'inventaire retient aujourd'hui `host`, `user` et `port` : il redécrit une
+connexion qu'OpenSSH sait déjà décrire. Toute configuration un peu réelle —
+rebond par un bastion (`ProxyJump`), clé dédiée, algorithmes imposés, agent
+transféré — n'a alors nulle part où aller, et le produit se retrouverait à
+réimplémenter `ssh_config` champ par champ.
+
+**Décision : le catalogue accepte un simple alias `ssh`.** Une entrée nomme un
+`Host` du `~/.ssh/config` du poste, et rien d'autre ; le triplet
+`host`/`user`/`port` reste accepté pour le cas simple. Ce qui relève de la
+connexion appartient à OpenSSH, ce qui relève du produit — quel serveur, quel
+port local, quel état de tunnel — appartient au catalogue.
+
+Conséquence sur la découverte : la console peut **proposer** les `Host` du
+`~/.ssh/config` comme candidats, jamais les ajouter d'office. Un poste de
+développeur en contient des dizaines qui n'ont rien à voir avec le produit.
+
+**La vérification de la clé d'hôte n'est jamais désactivée.** Le produit ne pose
+ni `StrictHostKeyChecking=no`, ni `UserKnownHostsFile=/dev/null` — pas même pour
+« simplifier la première connexion ». Un changement de clé d'hôte est un signal,
+et il est affiché comme tel : rapproché du §36.2, une clé d'hôte qui change **et**
+une histoire d'audit qui ne prolonge plus la précédente disent la même chose.
+
+Cible portée par `docs/BACKLOG.md#SPK-41` ; aujourd'hui le catalogue ne connaît
+que le triplet, et s'édite à la main dans le fichier.
+
 ### 22.5 Le port local est demandé au système
 
 Le port local du tunnel est obtenu en laissant le système en choisir un libre,

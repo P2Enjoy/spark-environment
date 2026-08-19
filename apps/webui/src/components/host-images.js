@@ -5,7 +5,9 @@
  *       est un geste explicite), §33.3 (le relevé, ses trois états, sa date),
  *       §33.4 (ce que le catalogue n'est pas), §34.1 (l'onglet Images est la
  *       surface du catalogue : il décrit l'hôte, pas un Spark) ·
- *       docs/DESIGN_SYSTEM.md §6.14, §6.24, §14.6, §14.7
+ *       docs/DAT.md §26.2 (la saisie est recueillie par une modale limitée
+ *       à la section), §34.2 · docs/DESIGN_SYSTEM.md §6.14, §6.24, §6.27,
+ *       §5.4 (afficher et saisir ne partagent pas la même surface), §14.6, §14.7
  *
  * Le catalogue existait par l'API sans avoir d'écran : le relevé était daté et
  * ses trois états distingués, mais rien ne les affichait. Un exploitant ne
@@ -13,6 +15,7 @@
  */
 
 import { formatDate } from './host-view.js';
+import { renderModale } from './modale.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -62,13 +65,26 @@ function renderLigne(image) {
 </tr>`;
 }
 
-/** Formulaire d'ajout. §33.2 : un geste EXPLICITE, jamais le formulaire de création. */
+/**
+ * Commande de la section « Catalogue », et la modale qu'elle ouvre.
+ *
+ * §33.2 : ajouter est un geste EXPLICITE, jamais le formulaire de création.
+ * §5.4 point 1 : le catalogue AFFICHE, la modale RECUEILLE — ils ne partagent
+ * pas la même surface. Le formulaire s'ouvrait auparavant dans le flux, sous le
+ * tableau qu'il décrit : la section portait alors deux sujets, et l'on pouvait
+ * tabuler hors de la saisie sans s'en apercevoir.
+ *
+ * Insérer un élément DANS une section reste une modale (§6.27) — c'est l'écran
+ * de création d'un Spark, objet de premier plan, qui garde sa destination.
+ *
+ * Le déclencheur reste visible pendant la saisie : c'est lui qui reçoit le focus
+ * à la fermeture.
+ */
 function renderAjout(ui) {
-  if (!ui.open) {
-    return `<p class="formulaire__actions"><button type="button" class="bouton"
-      data-ouvre="image">Ajouter une image</button></p>`;
-  }
-  return `<form class="formulaire-panneau" data-formulaire="image">
+  const modale = renderModale({
+    ouverte: Boolean(ui.open), id: 'image', titre: 'Catalogue',
+    engagement: 'Ajouter au catalogue', refus: ui.refusal, occupee: ui.busy,
+    corps: `
     <div class="champ">
       <label for="image-reference">Référence</label>
       <input class="controle technique" id="image-reference" name="reference" type="text"
@@ -81,15 +97,10 @@ function renderAjout(ui) {
       <label for="image-label">Libellé</label>
       <input class="controle" id="image-label" name="label" type="text"
              autocomplete="off" value="${echapper(ui.values.label)}">
-    </div>
-    ${ui.refusal ? `<div class="refus" role="alert"><p><strong>${
-      echapper(ui.refusal)}</strong></p></div>` : ''}
-    <p class="formulaire__actions">
-      <button type="submit" class="bouton bouton--primaire" ${ui.busy ? 'disabled' : ''}>${
-        ui.busy ? 'Ajout…' : 'Ajouter au catalogue'}</button>
-      <button type="button" class="bouton" data-ferme="image">Annuler</button>
-    </p>
-  </form>`;
+    </div>`,
+  });
+  return `<p class="formulaire__actions"><button type="button" class="bouton"
+      data-ouvre="image">Ajouter une image</button></p>${modale}`;
 }
 
 export const CATALOGUE_VIDE = {

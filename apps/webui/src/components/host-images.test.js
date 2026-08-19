@@ -1,7 +1,10 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-32 · docs/DAT.md §33.2, §33.3 (les trois états,
- *           la date), §33.4, §34.1 (l'onglet Images) ·
- *           docs/DESIGN_SYSTEM.md §6.14, §6.24, §14.6, §14.7
+ * @verifies docs/BACKLOG.md#SPK-32, docs/BACKLOG.md#SPK-33 ·
+ *           docs/DAT.md §33.2, §33.3 (les trois états, la date), §33.4,
+ *           §34.1 (l'onglet Images), §26.2 (la saisie passe par une modale) ·
+ *           docs/DESIGN_SYSTEM.md §6.14, §6.24, §6.27 (modale limitée à une
+ *           section), §5.4 (afficher et saisir ne partagent pas la même
+ *           surface), §14.6, §14.7
  *
  * Le catalogue existait sans écran : ni la date, ni « absente », ni « non
  * relevée » n'étaient visibles. Un exploitant ne pouvait pas voir qu'une image
@@ -109,6 +112,26 @@ test('pendant le releve, le bouton est desactive et le dit', () => {
 test('le formulaire d’ajout dit que l’entree nait NON relevee', () => {
   const rendu = renderCatalogue({ status: 'ready', images: IMAGES, ui: ui({ open: true }) });
   assert.ok(rendu.includes('L’entrée naît non relevée'));
+});
+
+test('la saisie est recueillie par une MODALE, pas dans le flux du catalogue', () => {
+  // §5.4 point 1 : la section « Catalogue » affiche un tableau ; elle ne peut pas
+  // recueillir une saisie sur la même surface.
+  const ferme = renderCatalogue({ status: 'ready', images: IMAGES, ui: ui({}) });
+  assert.ok(ferme.includes('data-ouvre="image"'), 'la section porte sa commande');
+  assert.ok(!ferme.includes('<dialog'), 'aucune modale tant qu’on n’a rien demandé');
+
+  const ouvert = renderCatalogue({ status: 'ready', images: IMAGES, ui: ui({ open: true }) });
+  assert.ok(ouvert.includes('<dialog class="modale" id="image"'));
+  // Le nom accessible est le TITRE DE LA SECTION : c'est ce qui borne la portée.
+  assert.ok(ouvert.includes('aria-labelledby="image-titre"'));
+  assert.match(ouvert, /id="image-titre">Catalogue</);
+  // Un point d'engagement, qui NOMME l'action (§6.27).
+  assert.match(ouvert, /data-engage="image"[^>]*>Ajouter au catalogue</s);
+  // Le déclencheur reste visible : c'est lui qui recevra le focus à la fermeture.
+  assert.ok(ouvert.includes('data-ouvre="image"'));
+  // Une seule modale à la fois.
+  assert.equal(ouvert.match(/<dialog/g).length, 1);
 });
 
 test('un refus du serveur est montre et n’efface pas la saisie', () => {

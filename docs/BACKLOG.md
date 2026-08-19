@@ -1053,6 +1053,75 @@ supprimer ou tronquer, mais **pas fabriquer** un geste authentique (§36.3).
   ligne produite par le runtime n'est signée par personne — la supervision le dit
   au lieu de le masquer.
 
+### [ ] SPK-41 · Catalogue local des serveurs, tenu depuis la console
+
+Le catalogue **existe** — `~/.config/spark/servers.json`, validé, sans secret, et
+`GET`/`POST /api/servers` le servent (SPK-16). Ce qui manque, c'est tout ce qui
+permet de s'en servir sans éditeur de texte.
+
+Constaté dans le code le 2026-08-19 :
+
+- aucune interface n'appelle `POST /api/servers` : une entrée s'ajoute **à la
+  main** dans le fichier ;
+- il n'existe pas de `DELETE /api/servers` : une entrée ne se retire pas ;
+- la console prend `servers[0]` au démarrage — **aucun sélecteur**, alors que
+  `docs/DESIGN_SYSTEM_APP.md` §1 place le serveur courant au-dessus du premier
+  degré de navigation ;
+- le tunnel n'est ouvert **qu'au démarrage** (§22.6) : un tunnel rompu ensuite
+  n'a aucune commande de reconnexion à l'écran.
+
+- Spécification : `docs/DAT.md` §22.4, **§22.4 bis**, §22.5, §22.6 ·
+  `docs/DESIGN_SYSTEM.md` §5.4, §6.27 (le catalogue est une section, l'ajout une
+  modale) · `docs/DESIGN_SYSTEM_APP.md` §1 · manuel M3.
+- Portée : ajout, modification et retrait depuis la console ; sélecteur de
+  serveur courant, avec le dernier utilisé retenu ; commande de reconnexion
+  explicite et reprise automatique visible ; alias `ssh` accepté en plus du
+  triplet (§22.4 bis) ; proposition — jamais l'ajout d'office — des `Host` du
+  `~/.ssh/config` ; **épreuve avant enregistrement** : le tunnel est ouvert et
+  `/healthz` puis `/readyz` sont appelés **à travers lui**, et le résultat est
+  affiché ; champ de version dans le fichier, pour que sa forme puisse évoluer
+  sans deviner ; fichier en `0600`.
+- L'épreuve **informe, elle ne décide pas** : un serveur injoignable au moment de
+  l'ajout peut être enregistré quand même, avec l'avertissement. C'est la règle du
+  §25.1, et elle vaut ici pour la même raison — la machine peut être éteinte.
+- Prévoir le champ d'**ancre d'audit** par serveur (§36.2) : c'est ce fichier qui
+  retiendra la dernière tête connue. SPK-38 l'écrit, SPK-41 lui laisse la place.
+- Ne fait **pas** partie de la portée : stocker une clé, une phrase de passe ou un
+  mot de passe (§22.4), et désactiver la vérification de la clé d'hôte (§22.4 bis).
+- DoD : parcours E2E depuis le parcours canonique — ajouter un serveur, voir
+  l'épreuve, basculer entre deux serveurs, rompre le tunnel et le rouvrir depuis
+  l'écran, retirer l'entrée ; un test prouve qu'aucun champ de secret n'est
+  accepté, même envoyé explicitement ; un test prouve qu'une entrée par alias
+  `ssh` ouvre le tunnel sans que le produit connaisse ni `user` ni `port` ;
+  captures observées, dont l'état « aucun serveur enregistré » ; manuel M3 et
+  seed mis à jour.
+
+### [ ] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
+
+**Question ouverte, en attente d'arbitrage.** Un Spark est une fraction de
+machine, `sparkd` est le démon — la machine, elle, n'a pas de nom de produit.
+Elle est appelée « l'hôte », terme déjà pris : le §22 nomme « hôte console » le
+processus Node du poste local. Le même mot désigne donc deux machines
+différentes, et la console affiche les deux.
+
+- Candidats instruits dans `docs/JOURNAL.md` (entrée du 2026-08-19) : **Forge**,
+  **Foyer**, et les écartés avec leur motif.
+- Critères retenus pour trancher : lever la collision avec « hôte console » ;
+  survivre en identifiant de code et en segment d'URL ; se pluraliser sans
+  ambiguïté ; ne pas mentir sur la portée — c'est **une** machine, pas une grappe.
+- Portée de l'unité, une fois le nom arbitré : glossaire du DAT et du design
+  system d'application, libellés d'interface, `docs/manuel/`, puis la table
+  `host`, la route `/v1/host`, le contrat d'API et ses types générés, le fichier
+  `servers.json` et son schéma.
+- **À faire maintenant ou pas du tout.** Le contrat n'a qu'un consommateur, le
+  dépôt lui-même. Chaque unité livrée après cet arbitrage augmente le coût du
+  renommage, et un produit qui garde deux mots pour la même chose finit par les
+  employer tous les deux au hasard.
+- DoD : le nom est arbitré et écrit ; plus aucune occurrence du terme abandonné
+  dans le sens visé — vérifié par une recherche, pas par mémoire ; migration de
+  la table et du contrat livrées ensemble ; `make contract-check` vert ; manuel
+  et captures refaits.
+
 ---
 
 ## Réservé, non planifié
