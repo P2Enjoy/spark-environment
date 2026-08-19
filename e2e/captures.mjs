@@ -178,9 +178,11 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
           verified_at: null, is_default: 0, detail: '' },
       ] }), { status: 200 });
       if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
-        { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
-        { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', target_id: 'S1', message: 'crm.example.com → port 8080.' },
-        { ts: '2026-08-19T08:55:00', action: 'spark.start', result: 'ok', target_id: 'S1', message: '« starting » → « running ».' },
+        { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
+        { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'crm.example.com → port 8080.' },
+        { ts: '2026-08-19T08:55:00', action: 'spark.settle', result: 'ok',
+          actor_class: 'runtime', actor: 'sparkd',
+          target_id: 'S1', message: '« starting » → « running ».' },
       ] }), { status: 200 });
       if (refusCreation) return new Response(JSON.stringify({ detail: {
         error: 'admission_refused',
@@ -497,6 +499,15 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(150);
 await page.screenshot({ path: join(SORTIE, '35-images-modale-mobile.png') });
 console.log('  35-images-modale-mobile.png');
+ctx.server.close();
+
+// --- Le journal et son auteur (SPK-37) ------------------------------------
+// docs/DAT.md §21.6, §36.4. La facette Journal doit montrer que les deux classes
+// ne se confondent pas.
+ctx = await demarrer();
+await ouvrirDetail(ctx.base, { facette: 'journal', hauteur: 700 });
+await page.screenshot({ path: join(SORTIE, '39-journal-auteur.png') });
+console.log('  39-journal-auteur.png');
 ctx.server.close();
 
 // --- Les Sparks protégés (SPK-34) -----------------------------------------
