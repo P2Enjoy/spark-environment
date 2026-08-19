@@ -1817,3 +1817,90 @@ et `init.scope` — et vérifier la convergence vers `r / C`. Le nettoyage de
 l'entrée fantôme du registre suppose INC-03 arbitré. Puis **SPK-30**, entièrement
 spécifiée et non bloquée. SPK-12 attend un domaine, SPK-17 une exécution de CI ;
 SPK-28, INC-01, INC-02 et INC-03 attendent votre arbitrage.
+
+## 2026-08-19 — SPK-32 et SPK-33 : deux décisions du responsable, persistées avant tout code
+
+**Aucune ligne de code n'a été écrite dans cette entrée.** Deux règles ont été
+tranchées par le responsable ; elles sont écrites d'abord, comme l'impose
+`CLAUDE.md` §5.
+
+### Le champ « image » : la question posée valait constat
+
+La question était : « a-t-on prévu un registre des conteneurs disponibles à
+pré-renseigner, vérifier qu'ils existent, et une liste déroulante plutôt qu'un
+champ libre ? » Réponse mesurée dans le code : **non, rien de tel n'existe et
+rien ne le prévoyait**.
+
+- `spark.image` est un `TEXT NOT NULL` libre (`schema/001_socle_registre.sql`).
+- Le seul contrôle est `translate.split_image()`, et il porte sur le **dépôt**
+  (`images`, `ubuntu`, `ubuntu-daily`), pas sur l'alias.
+- `apps/webui/src/components/spark-create.js` rend un `<input type="text">`,
+  pré-rempli à `images:debian/13`.
+- Aucune table de catalogue, aucune route `/v1/images`, aucun appel de
+  vérification dans `incus.py`.
+
+Ce qui rend le défaut coûteux, ce n'est pas la faute de frappe : c'est **quand**
+elle est vue. Le §14.2 écrit la ligne du registre avant qu'Incus n'existe, donc
+la ressource est déjà comptée ; le refus n'arrive qu'à `apply`, et
+`finish(success=False)` laisse un Spark en `error` avec ses quotas engagés. Il
+faut le supprimer pour les rendre — et si l'instance n'a jamais existé, la
+suppression tombe sur INC-03.
+
+**Décision : un catalogue tenu par le registre** (DAT §33), pré-renseigné,
+vérifié par **relevé explicite daté** — comme la topologie de l'hôte, et pour la
+même raison : ne pas rendre un formulaire tributaire d'un dépôt distant. Trois
+états distincts, `verified` / `missing` / `unknown`, jamais confondus. La
+création n'accepte qu'une référence du catalogue et refuse **avant** d'écrire.
+
+Le point qui reste ouvert est nommé comme tel : **la voie de vérification n'a
+jamais été mesurée** sur l'hôte — index simplestreams du dépôt, `GET /1.0/images`
+pour ce qui est local. C'est une hypothèse, elle est écrite comme une hypothèse,
+et elle borne la clôture de SPK-32.
+
+Ce que le catalogue n'est **pas** : un registry. Le §1 exclut du périmètre la
+construction d'images, la CI/CD et le registry, et les images Docker du locataire
+vivent dans son Spark, hors de portée du plan de contrôle.
+
+### La navigation : trois degrés, et une décision qui en révise une autre
+
+Règle du responsable : barre latérale au premier niveau, onglets au second,
+fenêtres pour les options et modales pour modifier une section.
+
+Écrite dans le socle commun (`DESIGN_SYSTEM.md` §5.4 et §6.27) et non dans
+l'extension du produit, parce qu'elle se formule sans rien connaître du métier —
+c'est le critère du §15.2.
+
+Deux tensions ont été traitées explicitement plutôt que laissées à la lecture :
+
+1. **Onglets contre `tablist`.** Le §5.2 réservait déjà `tablist` aux panneaux
+   échangés sans changement de destination. Les onglets d'un Spark doivent être
+   rechargeables — on doit pouvoir ouvrir « Instantanés » directement —, ce sont
+   donc des **liens**. La forme visuelle est la même, la sémantique non, et le
+   critère écrit est l'URL, pas l'apparence.
+2. **Modales contre §6.22 et §26.2.** Le §6.22 dit qu'une confirmation n'a pas
+   besoin d'être une modale, et le §26.2 avait tranché « pas de modale » pour les
+   trois panneaux, sur un argument de coût. La nouvelle règle ne les balaie pas :
+   la modale est réservée à la **modification d'une section**, les confirmations
+   restent dans le flux, et l'argument de coût du §26.2 tombe puisque le composant
+   devient unique au lieu d'être trois exceptions.
+
+Le §26.2 n'a **pas** été réécrit au présent : il décrit l'écran réel, qui n'a pas
+changé aujourd'hui. Il porte un renvoi vers le §34.2 et sera réécrit dans le même
+changement que SPK-33. Même traitement pour le tableau de
+`DESIGN_SYSTEM_APP.md` §1, qui dit explicitement décrire une cible.
+
+### Vérifications
+
+Aucun test n'a été exécuté : ce chunk ne touche aucun code, aucun test, aucun
+comportement. Les seules vérifications faites sont documentaires — chaque renvoi
+introduit (§1, §7.7, §11, §14.2, §14.4, §24.1, §25.1, §25.3, §26.5, §27.8, §29)
+a été contrôlé contre le sommaire réel du DAT, et le renvoi au périmètre a été
+corrigé de §2 en §1 après relecture.
+
+### Où reprendre
+
+SPK-32 est la seule des deux qui puisse démarrer sans arbitrage supplémentaire ;
+sa première étape est une **mesure sur l'hôte**, pas du code : vérifier comment on
+sait qu'un alias existe. SPK-33 est prête, mais c'est une refonte de surface —
+elle vaut mieux après SPK-32, qui lui ajoute une liste déroulante à placer.
+

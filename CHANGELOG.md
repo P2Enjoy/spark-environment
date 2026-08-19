@@ -16,6 +16,15 @@
   fausse est retirée dans le même changement, et non annotée ; ajoutée aussi à la
   Definition of Done.
 - Unité SPK-28 : décision et exécution du repartitionnement du stockage.
+- Unité SPK-32 : catalogue d'images vérifié, et choix par liste à la création
+  plutôt que par champ libre.
+- Unité SPK-33 : refonte de la navigation de la console selon les trois degrés du
+  design system.
+- `docs/DESIGN_SYSTEM.md` : nouveau §5.4, les trois degrés de navigation — barre
+  latérale au premier, onglets au second, fenêtre et modale au troisième ; nouveau
+  §6.27, fenêtre d'options et modale de section, avec son contrat d'interaction.
+- `docs/DAT.md` : nouveau §33, le catalogue d'images ; nouveau §34,
+  l'architecture de navigation de la console.
 
 ### Modifié
 
@@ -179,6 +188,15 @@
   `memory_margin_bytes`, jusqu'ici confondus dans `memory_reserve_bytes`.
   Opération OP-03 du contrat de déploiement.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
+- `docs/DESIGN_SYSTEM.md` §5 : la barre latérale devient la forme par défaut du
+  premier degré ; un autre patron reste possible mais devient un écart documenté.
+  §9.1 gagne le contrat clavier des onglets et des modales.
+- `docs/DESIGN_SYSTEM_APP.md` §1 : les trois degrés appliqués à la console, avec
+  l'écart entre l'écran réel et la cible, borné par SPK-33.
+- `docs/DAT.md` §26.2 : le choix « pas de modale » est explicitement révisé par le
+  §34.2 ; il décrit l'écran réel jusqu'à la livraison de SPK-33. §25.3 renvoie au
+  catalogue d'images pour le contrôle de forme de la référence.
+- `README.md` : le champ « image » libre entre dans les limites connues.
 
 ### Vérifié sur matériel réel
 

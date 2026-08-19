@@ -17,6 +17,32 @@ prendre des décisions sur la mauvaise machine.
 L'état du tunnel accompagne donc en permanence ce sélecteur : `connecting`,
 `ready`, `broken`.
 
+### Les trois degrés, appliqués à la console
+
+`docs/DESIGN_SYSTEM.md` §5.4 fixe la forme de chaque degré. Voici ce qu'ils
+désignent ici :
+
+| Degré | Contenu de la console | Forme |
+|---|---|---|
+| 1 | **Sparks**, **Hôte** | barre latérale, sélecteur de serveur et état du tunnel en tête |
+| 2 | sur un Spark : *Aperçu*, *Routes*, *Clés*, *Instantanés*, *Journal* | onglets |
+| 3 | les sections de l'onglet ouvert | fenêtre en lecture, modale par section |
+
+Le second degré est porté par les **panneaux** existants du détail (`docs/DAT.md`
+§26). Ce ne sont toujours pas des écrans — une route publique n'existe pas sans
+son Spark — mais des onglets d'une même destination, et non plus des blocs
+empilés dans une page qui s'allonge.
+
+Le sélecteur de serveur reste **au-dessus** du premier degré : il ne désigne pas
+une destination mais le contexte de toutes les destinations.
+
+**État réel au 2026-08-19 :** la console rend aujourd'hui une barre horizontale à
+deux liens, les trois panneaux d'administration empilés, et des formulaires
+ouverts dans le flux (`docs/DAT.md` §26.2). La convergence vers les trois degrés
+est l'objet de `docs/BACKLOG.md#SPK-33` ; sa cible est décrite au §34 du
+[DAT](DAT.md). Tant que cette unité n'est pas livrée, ce tableau décrit la cible,
+pas l'écran.
+
 ## 2. Terminologie métier
 
 | Terme | Sens, tel qu'affiché |

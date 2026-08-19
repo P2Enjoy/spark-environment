@@ -196,6 +196,9 @@ vigilance de l'exploitant.
   un repartitionnement (DAT §8, SPK-28).
 - La réservation CPU n'est proportionnelle qu'entre Sparks, pas absolue, tant que
   SPK-29 n'est pas livrée.
+- Le champ « image » de la création est **libre** : seul le dépôt est contrôlé,
+  pas l'alias. Une référence inexistante n'est refusée qu'à l'application, après
+  écriture de la ligne du registre. Le catalogue vérifié est SPK-32.
 - Les disques de l'hôte sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
 

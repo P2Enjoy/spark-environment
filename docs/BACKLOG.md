@@ -698,6 +698,63 @@ Les deux disques sont intégralement consommés par un unique RAID1 `ext4` mont�
   8 heures. Aucune mesure de débit disque n'a de valeur avant la fin de cette
   resynchronisation.
 
+### [ ] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
+
+`spark.image` est aujourd'hui un texte libre, et le seul contrôle local porte sur
+le **dépôt**, pas sur l'alias : `translate.split_image()` accepte
+`images:debian/31`. Le refus ne vient alors que d'Incus, à `apply`, après que la
+ligne du registre a été écrite et la ressource comptée (§14.2) ; le Spark reste en
+`error` avec ses quotas engagés jusqu'à sa suppression.
+
+- Spécification : `docs/DAT.md` §33, §25.3 · `docs/DESIGN_SYSTEM.md` §5.4, §6.27
+  (la liste vit dans une section de fenêtre) · `docs/SCHEMA.md` (migration due
+  avec l'unité) · manuel M5.
+- Portée : table de catalogue dans le registre + migration ; seed des références
+  connues ; `GET /v1/images` ; relevé explicite daté, avec les trois états
+  `verified` / `missing` / `unknown` (§33.3) ; refus à la création d'une référence
+  absente ou non vérifiée, **avant** écriture de la ligne ; liste déroulante à la
+  création alimentée par le catalogue (§33.5) ; ajout d'une image au catalogue
+  comme geste explicite, hors formulaire de création.
+- Dépend de : rien. Ne dépend **pas** de SPK-28 ni de SPK-29.
+- Hypothèse à mesurer avant clôture : la voie de vérification — index
+  simplestreams du dépôt, et `GET /1.0/images` d'Incus pour ce qui est local — n'a
+  jamais été mesurée sur l'hôte (§33.3). Tant qu'elle ne l'est pas, l'unité reste
+  au mieux `[~]`.
+- DoD : un alias inexistant est refusé **à la création**, avec un message qui le
+  nomme, et le registre reste inchangé — prouvé par un test d'API ; l'écran de
+  création ne présente plus de champ libre — prouvé par un parcours E2E depuis le
+  parcours canonique ; le relevé affiche sa date et distingue les trois états ;
+  seed, manuel M5 et captures refaits ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-33 · Refonte de la navigation selon les trois degrés
+
+La console rend aujourd'hui une barre horizontale à deux liens, trois panneaux
+d'administration empilés dans le détail, et des formulaires ouverts dans le flux.
+Le design system retient désormais trois degrés : barre latérale, onglets, puis
+fenêtre en lecture avec une modale par section.
+
+- Spécification : `docs/DESIGN_SYSTEM.md` §5.4, §6.27, §9.1 ·
+  `docs/DESIGN_SYSTEM_APP.md` §1 · `docs/DAT.md` §34.
+- Portée : barre latérale de premier degré (Sparks, Hôte) avec le sélecteur de
+  serveur et l'état du tunnel au-dessus ; onglets de second degré sur le détail
+  d'un Spark — Aperçu, Routes, Clés, Instantanés, Journal — portés par des liens
+  et non un `tablist`, puisque ce sont de véritables destinations ; sections en
+  lecture, chacune avec une commande « Modifier » ouvrant une modale ; composant
+  de modale unique, conforme au contrat du §6.27.
+- Ne change pas : les confirmations restent dans le flux (§6.22, §6.23), l'écran
+  de création garde sa destination, les commandes de cycle de vie restent des
+  boutons de l'onglet Aperçu (`docs/DAT.md` §34.2).
+- Conséquence documentaire : le §26.2 du DAT cesse de dire « pas de modale » dans
+  le même changement, et le tableau de `docs/DESIGN_SYSTEM_APP.md` §1 cesse de
+  décrire une cible pour décrire l'écran.
+- DoD : les parcours E2E du §29 passent **sans que leur intention change** —
+  seuls leurs sélecteurs bougent ; le contrat clavier est prouvé pour les trois
+  degrés (§9.1) : destination courante annoncée, onglet atteignable et annoncé,
+  modale avec focus entrant, focus retenu, `Échap`, focus rendu au déclencheur ;
+  captures refaites et observées, y compris sous 768 px et 1024 px ; manuel M3,
+  M5, M7, M8, M9 mis à jour avec leurs illustrations ; `@spec` / `@verifies`
+  posés.
+
 ---
 
 ## Réservé, non planifié

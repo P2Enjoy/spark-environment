@@ -1899,6 +1899,11 @@ Ces deux contrôles sont **doublés** par le runtime, qui refuserait de la même
 façon (`docs/SCHEMA.md` §4). Ils rendent l'écran agréable ; ils ne le rendent pas
 autoritaire.
 
+Un troisième s'y ajoutera avec le catalogue d'images (§33.5) : la référence
+d'image proposée vient du catalogue, donc l'écran ne peut plus produire un alias
+inexistant. C'est également une règle de forme, et elle est doublée par le
+runtime.
+
 La distinction est celle du §14.9 : un champ **mal formé** se signale tout de
 suite, un champ **qui ne tiendra peut-être pas** se soumet quand même.
 
@@ -1944,6 +1949,12 @@ Le contrat d'interaction est celui du §6.22, et il vaut pour les trois :
 Un seul panneau est ouvert à la fois. Deux formulaires ouverts côte à côte
 laisseraient croire qu'on prépare deux gestes qui partiraient ensemble, alors que
 chacun part seul.
+
+**Ce choix est révisé.** La règle de navigation retenue par le responsable fait
+passer la modification d'une section par une modale (`DESIGN_SYSTEM.md` §6.27,
+DAT §34.2). Le paragraphe ci-dessus décrit l'écran réel tant que
+`docs/BACKLOG.md#SPK-33` n'est pas livrée ; il sera réécrit dans le même
+changement que la refonte. Le contrat d'interaction, lui, ne change pas.
 
 ### 26.3 Routes publiques
 
@@ -2592,3 +2603,160 @@ poids est appliquée à tous les Sparks : un Spark créé hors de la tranche —
 celui de tous les autres. Le §14 reste la référence : le registre est la seule
 source de vérité sur ce qui existe.
 
+
+## 33. Le catalogue d'images
+
+### 33.1 Ce que le champ « image » vaut aujourd'hui
+
+`spark.image` est un `TEXT NOT NULL` libre (`docs/SCHEMA.md` §4), et l'écran de
+création le saisit dans un champ texte, pré-rempli à `images:debian/13`.
+
+Le seul contrôle existant est celui du traducteur : `translate.split_image()`
+sépare « dépôt:alias » et refuse un **dépôt** inconnu. Il ne dit rien de
+l'**alias**. `images:debian/31` passe donc tous les contrôles locaux.
+
+Ce qui se produit alors est mesurable dans le code du §14.2 : la ligne du
+registre est écrite *avant* que l'instance n'existe, donc la ressource est déjà
+comptée ; le refus ne vient qu'à `apply`, d'Incus, et `finish(success=False)`
+laisse le Spark en `error` avec ses quotas engagés. Il faut le supprimer pour
+récupérer la ressource — et si l'instance n'a jamais existé, la suppression
+rencontre INC-03.
+
+Une faute de frappe coûte donc une ligne morte dans le registre et une part de
+pool immobilisée, pour une erreur que l'on pouvait connaître avant d'écrire quoi
+que ce soit.
+
+### 33.2 Décision : un catalogue tenu par le registre
+
+Le registre porte un **catalogue d'images**, pré-renseigné, vérifié, et faisant
+autorité à la création.
+
+- Une entrée nomme une image utilisable : sa **référence** (`images:debian/13`),
+  son **libellé** lisible, son dépôt, son alias, son architecture, et l'état de sa
+  dernière vérification.
+- La création n'accepte qu'une **référence du catalogue**. Le refus est alors un
+  refus d'admission ordinaire, rendu **avant** l'écriture de la ligne, comme celui
+  du §7.7.
+- Le catalogue est **extensible** : ajouter une image est un geste explicite, qui
+  déclenche sa vérification. Ce n'est pas le formulaire de création qui sert de
+  porte d'entrée à une référence inconnue.
+
+### 33.3 La vérification est un relevé, pas un rafraîchissement
+
+Le catalogue suit la règle déjà retenue pour la topologie de l'hôte (§27.8) :
+l'existence d'une image est **relevée explicitement**, datée, et affichée avec sa
+date. Elle n'est pas revérifiée à chaque requête.
+
+Motif : interroger un dépôt distant à chaque ouverture d'un formulaire rendrait
+la création tributaire d'un service extérieur, alors que l'ensemble du produit
+tient sans réseau sortant une fois les images en cache.
+
+Une entrée porte donc trois états distincts, jamais confondus (`DESIGN_SYSTEM.md`
+§14.6) :
+
+| État | Sens |
+|---|---|
+| `verified` | l'image existait au dernier relevé, à sa date |
+| `missing` | le dépôt ne la publie plus au dernier relevé |
+| `unknown` | jamais relevée, ou relevé impossible |
+
+Une entrée `missing` ou `unknown` reste **visible** et n'est pas proposée à la
+création : la faire disparaître ferait croire qu'elle n'a jamais existé.
+
+**Hypothèse à mesurer, et elle conditionne la livraison :** la vérification
+s'appuie sur l'index simplestreams du dépôt (`/streams/v1/index.json` puis la
+liste de produits) et, pour ce qui est déjà local, sur `GET /1.0/images` d'Incus.
+Aucune de ces deux voies n'a encore été mesurée sur l'hôte. Tant qu'elle ne l'est
+pas, elle reste une hypothèse, et l'unité ne peut pas être déclarée faite.
+
+### 33.4 Ce que le catalogue n'est pas
+
+Ce n'est **pas** un registry. Le §1 exclut explicitement du périmètre la
+construction d'images applicatives, la CI/CD et le registry, et cette exclusion
+ne bouge pas : le
+catalogue ne stocke aucune image, n'en construit aucune, n'en publie aucune. Il
+tient une liste de références *système* utilisables pour créer une cellule.
+
+Les images **Docker** du locataire ne le concernent pas davantage. Elles vivent
+dans le Spark, sous sa responsabilité, et le plan de contrôle n'a aucune socket
+Docker pour les regarder (§11).
+
+### 33.5 Conséquence sur l'écran de création
+
+Le champ « Image » devient une **liste déroulante** alimentée par le catalogue,
+avec le libellé lisible et la référence, ordonnée, et pré-sélectionnée sur
+l'entrée par défaut. Une saisie libre ne peut plus produire une référence qui
+n'existe pas.
+
+Cela ne contredit pas le §25.1 — « montrer sans décider ». Le §25.1 interdit de
+**bloquer sur une estimation périmée** de la capacité : la capacité change entre
+l'ouverture de l'écran et la soumission. L'existence d'un alias, elle, ne se
+périme pas dans le même intervalle, et la contrainte est ici de **forme**, comme
+celle du nom au §25.3 : on ne propose pas une valeur dont on sait qu'elle sera
+refusée.
+
+
+## 34. L'architecture de navigation de la console
+
+`docs/DESIGN_SYSTEM.md` §5.4 fixe trois degrés — barre latérale, onglets, puis
+fenêtre en lecture et modale par section (§6.27). Cette section dit ce qu'ils
+désignent dans la console, et ce qu'ils changent de l'existant.
+
+### 34.1 Ce que porte chaque degré
+
+| Degré | Contenu | Forme |
+|---|---|---|
+| 1 | Sparks, Hôte | barre latérale |
+| 2 | sur un Spark : Aperçu, Routes, Clés, Instantanés, Journal | onglets |
+| 3 | sections de l'onglet ouvert | fenêtre en lecture, modale par section |
+
+Le **sélecteur de serveur** et l'état du tunnel restent au-dessus du premier
+degré. Ce n'est pas une destination : c'est le contexte de toutes les
+destinations (`docs/DESIGN_SYSTEM_APP.md` §1). Le confondre avec une entrée de
+navigation ferait croire qu'on peut « aller au serveur » comme on va aux Sparks.
+
+Les onglets du second degré sont de **véritables destinations** — on doit pouvoir
+recharger la page sur l'onglet « Instantanés » d'un Spark. Ce sont donc des liens
+dans un `nav`, avec `aria-current="page"`, et non un `tablist` (§5.2 et §5.4 du
+design system).
+
+### 34.2 Ce que cela révise du §26.2
+
+Le §26.2 avait tranché : « pas de modale », le formulaire d'ajout s'ouvre dans le
+flux du panneau. Ce choix reposait sur un argument de coût — ni voile, ni piège
+de focus, ni `Échap` global pour trois formulaires de deux champs.
+
+**La règle du responsable le remplace** : la modification d'une section passe par
+une modale (`DESIGN_SYSTEM.md` §6.27). L'argument de coût tombe dès lors que la
+console porte une modale par ailleurs : ce qui était trois exceptions à écrire
+devient un composant unique, déjà écrit, et le contrat d'interaction du §26.2 —
+focus entrant, annulation qui rend le focus, saisie qui survit à un refus — est
+exactement celui que le §6.27 impose.
+
+Ce qui **ne** devient **pas** une modale, et le §6.27 le dit :
+
+- la confirmation de suppression d'un Spark, d'une route, d'une clé ou d'un
+  instantané reste **dans le flux** (§6.22, §6.23) ;
+- l'écran de création garde sa destination propre : une création qui mérite une
+  URL mérite un écran, pas une fenêtre superposée ;
+- les commandes de cycle de vie (§24) restent des boutons de l'onglet Aperçu.
+
+Tant que SPK-33 n'est pas livrée, le §26.2 décrit l'écran réel. À la livraison,
+il est réécrit et cesse de dire « pas de modale ».
+
+### 34.3 Ce que la refonte ne doit pas perdre
+
+Elle est une refonte de **surface**. Rien de ce que les §24 à §27 ont établi ne
+change :
+
+- le runtime publie ce qui est possible, l'écran n'en déduit rien (§24.1) ;
+- un refus est rendu près du geste refusé et n'efface pas la saisie (§25.2) ;
+- un seul formulaire ouvert à la fois (§26.2) — une seule modale à la fois le dit
+  désormais mécaniquement ;
+- l'ordre refus-puis-acceptation des instantanés (§26.5) ;
+- les états d'une vue — chargement, vide, erreur — restent traités par onglet, et
+  non une fois pour la page (`DESIGN_SYSTEM.md` §6.13).
+
+Le contrôle en est simple : les parcours E2E du §29 doivent passer après la
+refonte **sans que leur intention change**. Leurs sélecteurs changeront ; ce
+qu'ils prouvent, non.

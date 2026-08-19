@@ -997,6 +997,83 @@ Une barre graphique peut l’accompagner, mais ne constitue pas l’unique repr�
 
 Éviter par défaut les visites guidées flottantes et surimpressions lorsque le même objectif peut être atteint par un écran normal, accessible et persistant.
 
+## 6.27 Fenêtre d’options et modale de section
+
+C’est le troisième degré du §5.4 : ce que l’on voit une fois la destination et la
+sous-partie choisies.
+
+### La fenêtre
+
+Une **fenêtre d’options** est la surface de lecture d’un onglet. Elle présente des
+réglages, des paramètres ou des propriétés groupés en **sections titrées**,
+rendues en paires terme / valeur (§6.4).
+
+Elle est en **lecture**. Une fenêtre ne porte pas de champ de formulaire
+permanent : elle porte des valeurs et, par section, une seule commande de
+modification.
+
+Motif : une fenêtre entièrement éditable ne distingue plus ce qui est *enregistré*
+de ce qui est *en cours de saisie*. Le lecteur ne sait pas ce qui fait foi, et un
+« Enregistrer » unique en bas de page ne dit pas ce qu’il couvre.
+
+Les valeurs absentes suivent le §6.4 et le §14.5 : une absence utile est nommée,
+elle n’est pas rendue par un tiret muet.
+
+### La modale de section
+
+La commande « Modifier » d’une section ouvre une **modale** dont le sujet est
+**cette section**, et rien d’autre.
+
+Une modale est chère : elle impose un voile, un piège de focus, une gestion
+d’`Échap` et une restitution du focus. Ce prix se paie pour **modifier une
+section**, pas pour afficher une information, pas pour confirmer un geste.
+
+Contrat, non négociable :
+
+* `dialog` natif ouvert par `showModal()`, ou à défaut `role="dialog"` avec
+  `aria-modal="true"` ;
+* le nom accessible de la modale est **le titre de la section** ;
+* à l’ouverture, le focus entre dans le premier contrôle ;
+* le focus reste dans la modale tant qu’elle est ouverte ;
+* `Échap` la ferme, et la fermeture équivaut à une annulation ;
+* à la fermeture, le focus revient à la commande « Modifier » d’origine ;
+* l’arrière-plan est inerte et ne défile pas ;
+* une seule modale à la fois : une modale n’en ouvre pas une autre ;
+* la modale défile dans son propre conteneur ; sous 768 px elle occupe l’écran
+  entier, sans changer de contrat.
+
+Une modale a **un point d’engagement** : un bouton primaire qui nomme l’action.
+L’annulation est secondaire.
+
+Un refus du serveur s’affiche **dans la modale**, près du bouton d’engagement, et
+n’efface aucune saisie. Une modale qui se referme sur un refus ferait perdre le
+travail et cacherait la raison.
+
+Fermer une modale qui contient des modifications non enregistrées demande une
+confirmation, rendue **dans le flux de la modale** (§6.22) — pas dans une seconde
+modale.
+
+### Ce qui ne prend pas de modale
+
+* une **confirmation** — elle est intégrée au flux (§6.22), y compris pour une
+  action destructive (§6.23) ;
+* un **champ autosauvegardé** (§6.11) — il n’a pas de point d’engagement à isoler ;
+* la **création d’une entité** lorsqu’elle possède sa propre destination : une
+  création qui mérite une URL mérite un écran ;
+* l’**affichage** d’une information — si elle mérite d’être lue, elle mérite une
+  section de la fenêtre.
+
+### Articulation avec le §6.5
+
+Le §6.5 conserve son domaine : l’**en-tête d’une entité**, dont plusieurs valeurs
+s’éditent ensemble, bascule globalement entre lecture et édition sur place.
+
+Le §6.27 vaut pour les **sections d’options** d’une fenêtre : chacune est un sujet
+distinct, avec son propre engagement, donc sa propre modale.
+
+Le critère : plusieurs valeurs d’une **même** identité éditées d’un geste → §6.5 ;
+une section autonome parmi d’autres → §6.27.
+
 ---
 
 # 7. Interactions
@@ -1080,7 +1157,9 @@ Cela inclut notamment :
 * tableaux interactifs ;
 * déplacements d’éléments ;
 * confirmations ;
-* actions contextuelles.
+* actions contextuelles ;
+* onglets — flèches, `Home`, `End` lorsque le patron `tablist` s’applique (§5.4) ;
+* modales — focus entrant, focus retenu, `Échap`, focus rendu au déclencheur (§6.27).
 
 ## 9.2 Structure sémantique
 
