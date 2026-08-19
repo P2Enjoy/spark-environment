@@ -46,3 +46,6 @@ Thumbs.db
 # Captures d'interface : regenerees par e2e/captures.mjs
 e2e/captures/*.png
 .dev/
+
+# Diagnostics d'echec E2E : produits a la demande, jamais committes.
+e2e/captures/echecs/

@@ -311,10 +311,24 @@ test('toute la navigation principale est atteignable au clavier', async () => {
   });
 });
 
-test('le journal réseau de Chromium est compté à part, jamais masqué', () => {
+test('le classement sépare le journal réseau des messages applicatifs (§29.6)', () => {
   // Ces parcours provoquent DÉLIBÉRÉMENT des 409 et des 422 : Chromium les
   // journalise de lui-même. Les compter comme des messages applicatifs rendrait
-  // le contrôle du §29.6 inutilisable, les masquer le rendrait mensonger.
-  assert.ok(reseau.length > 0, 'les refus provoqués doivent avoir laissé leur trace');
-  for (const ligne of reseau) assert.match(ligne, JOURNAL_RESEAU);
+  // le contrôle du §29.6 inutilisable ; les masquer le rendrait mensonger.
+  //
+  // Une première version affirmait `reseau.length > 0`. C'était un mauvais test :
+  // il éprouvait ce que Chromium choisit de journaliser, pas ce que ce harnais
+  // fait. Ce qui m'appartient, c'est le CLASSEMENT — et il se vérifie sans
+  // dépendre du navigateur.
+  const reseauType = 'Failed to load resource: the server responded with a status of 409 (Conflict)';
+  const applicatif = "Uncaught TypeError: impossible de lire « name »";
+  assert.ok(JOURNAL_RESEAU.test(reseauType), 'une ligne réseau doit être reconnue');
+  assert.ok(!JOURNAL_RESEAU.test(applicatif), 'un message applicatif ne doit JAMAIS être écarté');
+
+  // Et ce qui a réellement été observé est affiché, jamais masqué. Les lignes
+  // stockées portent leur préfixe de type — la regex, elle, s'applique au texte
+  // nu au moment du classement.
+  for (const ligne of reseau) assert.ok(ligne.includes('Failed to load resource'), ligne);
+  console.log(`  journal réseau observé : ${reseau.length} ligne(s)`);
+  for (const ligne of [...new Set(reseau)]) console.log(`    ${ligne}`);
 });

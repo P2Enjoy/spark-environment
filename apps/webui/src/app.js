@@ -489,6 +489,17 @@ async function charger() {
   peindre();
 }
 
+/** En-tête de contexte : le serveur courant et l'état RÉEL de son tunnel. */
+function peindreContexte() {
+  const etats = { ready: 'success', connecting: 'brand', broken: 'danger', closed: 'neutral' };
+  const libelles = { ready: 'ouvert', connecting: 'en cours', broken: 'rompu', closed: 'fermé' };
+  const courant = etat.tunnel?.state ?? 'closed';
+  racine.querySelector('.entete__contexte').innerHTML =
+    `<span class="technique">${etat.server}</span>` +
+    `<span class="badge badge--${etats[courant] ?? 'neutral'}">` +
+    `<span class="badge__point" aria-hidden="true"></span>Tunnel ${libelles[courant] ?? courant}</span>`;
+}
+
 async function demarrer() {
   const { servers, tunnels } = await (await fetch('/api/servers')).json();
   const entete = racine.querySelector('.entete__contexte');
@@ -500,10 +511,28 @@ async function demarrer() {
   }
   etat.server = servers[0].name;
   etat.tunnel = tunnels.find((t) => t.name === etat.server) ?? null;
-  entete.innerHTML =
-    `<span class="technique">${etat.server}</span>` +
-    `<span class="badge badge--${etat.tunnel?.state === 'ready' ? 'success' : 'danger'}">` +
-    `<span class="badge__point" aria-hidden="true"></span>Tunnel ${etat.tunnel?.state ?? 'fermé'}</span>`;
+
+  // docs/DAT.md §22.6 : la console OUVRE le tunnel du serveur courant. Se
+  // contenter de lire son état laissait une console fraîche sur « Tunnel
+  // fermé », sans aucun moyen d'y remédier depuis l'interface.
+  if (etat.tunnel?.state !== 'ready') {
+    etat.tunnel = { ...(etat.tunnel ?? {}), state: 'connecting' };
+    peindreContexte();
+    try {
+      const reponse = await fetch('/api/tunnels', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: etat.server }),
+      });
+      // On retient l'état RÉEL, y compris « broken » : la vue doit voir la
+      // panne, pas une liste vide qui ferait croire à zéro Spark (§22.3).
+      etat.tunnel = await reponse.json();
+    } catch (erreur) {
+      etat.tunnel = { name: etat.server, state: 'broken', lastError: erreur.message };
+    }
+  }
+
+  peindreContexte();
   await router();
 }
 

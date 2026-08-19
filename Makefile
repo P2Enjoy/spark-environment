@@ -7,7 +7,7 @@ VENV   := $(SPARKD)/.venv
 PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
-        contract contract-check test gestes captures runDev seed build clean
+        contract contract-check test gestes e2e captures runDev seed build clean
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -20,6 +20,7 @@ help:
 	@echo "runDev          pile de developpement : sparkd factice + console"
 	@echo "seed            recree le registre de developpement et le peuple"
 	@echo "gestes          parcours navigateur des gestes d'administration"
+	@echo "e2e             parcours complets contre la pile reelle"
 	@echo "captures        captures d'interface, a OBSERVER (CLAUDE.md §16)"
 	@echo "test            toutes les suites de tests"
 	@echo "build           build de tous les paquets"
@@ -60,12 +61,18 @@ seed:
 gestes:
 	node --test e2e/gestes.test.mjs
 
+# Parcours E2E : le harnais monte SA pile (docs/DAT.md §29.2). Sequentiel, car
+# les parcours partagent un navigateur et une pile.
+e2e:
+	node --test --test-concurrency=1 e2e/parcours.test.mjs
+
 captures:
 	node e2e/captures.mjs
 
 test: sparkd-test contract-check
 	pnpm -r test
 	$(MAKE) gestes
+	$(MAKE) e2e
 
 build:
 	pnpm -r build
