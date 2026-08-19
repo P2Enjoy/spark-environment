@@ -176,11 +176,22 @@ démarrage, donc ne peut pas retirer une clé (`docs/DAT.md` §17.1).
   - Le port 22 du Spark reste injoignable de l'extérieur : l'accès passe par le
     rebond, jamais par une exposition publique.
 
-### [ ] SPK-12 · Ingress Caddy et réconciliation
+### [~] SPK-12 · Ingress Caddy et réconciliation
 
 - Spécification : `docs/DAT.md` §9, §18
-- DoD : `domaine → spark → port` appliqué à chaud ; reconstruction complète de la
-  configuration Caddy depuis le registre ; conflit de domaine refusé par la base.
+- **Les trois exigences de la DoD sont prouvées sur l'hôte, le 2026-08-19.**
+  - `domaine → spark → port` **appliqué à chaud** : une pile Compose réelle
+    (nginx) dans le Spark `site` répond `HTTP 200` et son contenu par
+    `site.exemple.test → 10.77.0.16:8080`. Le retrait fait cesser le trafic.
+  - **Reconstruction complète** depuis le registre par
+    `POST /v1/ingress/reconcile`.
+  - **Conflit de domaine refusé** : `409`, en nommant le Spark propriétaire.
+  - Défaut corrigé au passage : sans route terminale, Caddy rendait `200` et un
+    corps vide pour **tout** domaine non routé. Il rend désormais `404`.
+- **Reste, et c'est pourquoi l'unité n'est pas `[x]`** : l'émission TLS n'est pas
+  prouvée. Elle suppose un domaine résolvant vers l'hôte, ce que le produit ne
+  contrôle pas et dont je ne dispose pas ici. Seul le routage HTTP par nom d'hôte
+  est vérifié.
 
 ### [ ] SPK-13 · Instantanés et restauration de cellule
 

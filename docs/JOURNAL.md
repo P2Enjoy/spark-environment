@@ -977,3 +977,46 @@ pour qu'un Spark serve du trafic public : l'adresse privée est stable (SPK-10),
 on peut y entrer déployer une pile Compose (SPK-11), il reste à router un domaine
 vers elle. Caddy n'est pas encore installé sur l'hôte. SPK-29 et SPK-28 restent
 ouvertes.
+
+
+---
+
+## 2026-08-19 — SPK-12 : la chaîne complète sert du trafic
+
+**Unité** : SPK-12. Caddy installé sur l'hôte, API d'administration sur
+`127.0.0.1:2019` seulement. Le DAT §18 a été écrit après mesure, avant de coder.
+Le renvoi du backlog vers « DAT §8 », périmé depuis une renumérotation, a été
+corrigé au passage.
+
+**La chaîne entière fonctionne**, et c'est la première fois : un Spark créé par
+`sparkd`, provisionné, hébergeant une pile Compose ordinaire (nginx), servi
+publiquement par domaine. `site.exemple.test → 10.77.0.16:8080` rend `HTTP 200`
+et le contenu du Spark. Le retrait de la route fait cesser le trafic.
+
+**Décision : on régénère, on ne rapièce pas.** La configuration entière de Caddy
+est reconstruite depuis le registre et posée d'un geste. Rapiécer route par route
+laisserait subsister les routes d'un Spark supprimé pendant que `sparkd`
+s'arrêtait, et rien ne distinguerait cet état d'un fonctionnement normal.
+Régénérer rend la dérive **impossible plutôt qu'improbable** — et fait de la
+réconciliation le mécanisme normal d'application, pas une réparation.
+
+**Le défaut que la mesure a révélé.** Sans route terminale, Caddy rend `200` avec
+un corps vide pour **tout** domaine non routé. L'hôte répondait donc au nom de
+domaines qu'il ne sert pas, et une erreur de pointage DNS restait invisible au
+lieu de se manifester tout de suite. Une route terminale sans filtre rend
+désormais `404` et le dit en clair. Elle vient après les routes nommées, sans
+quoi elle les masquerait — et elle est exclue du compte annoncé à l'exploitant,
+qui compte les routes *servies*.
+
+**Ce qui n'est pas prouvé, et pourquoi l'unité reste `[~]`.** L'émission d'un
+certificat TLS suppose un domaine résolvant vers cet hôte. Ce n'est pas une
+propriété que le produit contrôle — elle dépend du DNS —, et je ne dispose pas
+d'un tel domaine. Seul le routage HTTP par nom d'hôte est vérifié. L'affirmer
+autrement serait annoncer une preuve non faite.
+
+**Vérifié.** 351 tests verts, campagne complète verte.
+
+**Où reprendre.** Clore SPK-12 demande un domaine réel pointant vers
+`51.158.54.202` — une action du responsable. En attendant, **SPK-13**,
+instantanés et restauration de cellule, est la première `[ ]` du plan et ne
+dépend de rien de bloqué. SPK-29 et SPK-28 restent ouvertes.
