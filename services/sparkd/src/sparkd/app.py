@@ -28,6 +28,7 @@ from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
+from . import snapshots as snapshot_service
 from . import sshkeys
 from .lifecycle import Command
 from .migrations import applied, upgrade, verify
@@ -309,6 +310,90 @@ def create_app(config: Config) -> FastAPI:
         est le mécanisme normal d'application, pas une réparation (§18.1).
         """
         ingress_service.reconcile(connection, app.state.caddy)
+
+    @app.get("/v1/sparks/{name}/snapshots", tags=["instantanes"])
+    def list_snapshots(name: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            snapshot_service.sync_sizes(connection, spark, app.state.incus)
+            return {
+                "snapshots": snapshot_service.listing(connection, spark["id"]),
+                # docs/DAT.md §19.5 — la console ne doit jamais présenter un
+                # instantané comme une sauvegarde.
+                "note": (
+                    "Un instantané vit dans le même pool que le Spark : il ne "
+                    "protège ni de la perte du pool, ni de celle de la machine, "
+                    "et consomme le quota disque du Spark."
+                ),
+            }
+
+    @app.post("/v1/sparks/{name}/snapshots", tags=["instantanes"], status_code=201)
+    def take_snapshot(name: str, body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                return snapshot_service.create(
+                    connection, spark, body.get("name", ""), app.state.incus
+                )
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except snapshot_service.SnapshotError as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "snapshot_refused", "message": str(erreur)}) from erreur
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "incus_failed", "message": str(erreur)}) from erreur
+
+    @app.post("/v1/sparks/{name}/snapshots/{snapshot}/restore", tags=["instantanes"])
+    def restore_snapshot(name: str, snapshot: str, body: dict = Body(default={})) -> dict:
+        """Restaure. Refuse si des instantanés plus récents seraient détruits.
+
+        L'acceptation de leur perte est un drapeau de CETTE requête, jamais une
+        option de configuration : une configuration se pose une fois et s'oublie,
+        alors que la perte se décide instantané par instantané (§19.1).
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                return snapshot_service.restore(
+                    connection, spark, snapshot, app.state.incus,
+                    accept_losing_newer=bool((body or {}).get("accept_losing_newer")),
+                )
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except snapshot_service.BlockedByNewer as refus:
+                raise HTTPException(status_code=409, detail={
+                    "error": "blocked_by_newer_snapshots",
+                    "message": str(refus),
+                    "blocking": list(refus.blocking),
+                    "override": "Renvoyer avec {\"accept_losing_newer\": true}.",
+                }) from refus
+            except snapshot_service.SnapshotError as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "incus_failed", "message": str(erreur)}) from erreur
+
+    @app.delete("/v1/sparks/{name}/snapshots/{snapshot}", tags=["instantanes"])
+    def drop_snapshot(name: str, snapshot: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                snapshot_service.delete(connection, spark, snapshot, app.state.incus)
+            except (service.NotFound, snapshot_service.SnapshotError) as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "incus_failed", "message": str(erreur)}) from erreur
+            return {"deleted": snapshot}
 
     @app.get("/v1/ingress", tags=["ingress"])
     def list_routes() -> dict:

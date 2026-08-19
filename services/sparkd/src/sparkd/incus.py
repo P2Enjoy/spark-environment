@@ -47,6 +47,14 @@ class IncusClient(Protocol):
 
     def exec_command(self, name: str, command: list[str]) -> None: ...
 
+    def create_snapshot(self, name: str, snapshot: str) -> None: ...
+
+    def restore_snapshot(self, name: str, snapshot: str, force: bool = False) -> None: ...
+
+    def delete_snapshot(self, name: str, snapshot: str) -> None: ...
+
+    def snapshots(self, name: str) -> list[dict[str, Any]]: ...
+
 
 @dataclass
 class UnixSocketIncus:
@@ -173,6 +181,46 @@ class UnixSocketIncus:
              "interactive": False, "record-output": False},
         )
 
+    def create_snapshot(self, name: str, snapshot: str) -> None:
+        # `stateful` reste faux : la capture memoire echoue sur cet hote, CRIU
+        # etant construit sans le support de nftables (docs/DAT.md §19.3).
+        self._request(
+            "POST", f"/1.0/instances/{name}/snapshots",
+            {"name": snapshot, "stateful": False},
+        )
+
+    def restore_snapshot(self, name: str, snapshot: str, force: bool = False) -> None:
+        """Restaure. `force` autorise la destruction des instantanés plus récents.
+
+        ZFS rembobine le jeu de données : Incus refuse tant que
+        `zfs.remove_snapshots` n'est pas posé sur le volume. Ce refus est le
+        défaut voulu (docs/DAT.md §19.1) ; on ne lève la garde que le temps de
+        l'opération, et on la repose ensuite.
+        """
+        if not force:
+            self._request("PUT", f"/1.0/instances/{name}", {"restore": snapshot})
+            return
+        self.update_instance_config(name, {"volatile.spark.restoring": "true"})
+        try:
+            self._request(
+                "PATCH", f"/1.0/instances/{name}",
+                {"devices": {"root": {"type": "disk", "path": "/",
+                                      "zfs.remove_snapshots": "true"}}},
+            )
+            self._request("PUT", f"/1.0/instances/{name}", {"restore": snapshot})
+        finally:
+            self._request(
+                "PATCH", f"/1.0/instances/{name}",
+                {"devices": {"root": {"type": "disk", "path": "/",
+                                      "zfs.remove_snapshots": "false"}}},
+            )
+
+    def delete_snapshot(self, name: str, snapshot: str) -> None:
+        self._request("DELETE", f"/1.0/instances/{name}/snapshots/{snapshot}", None)
+
+    def snapshots(self, name: str) -> list[dict[str, Any]]:
+        return self._get(f"/1.0/instances/{name}/snapshots?recursion=1")
+
 
 @dataclass
 class FakeIncus:
@@ -232,6 +280,36 @@ class FakeIncus:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("commands", []).append(command)
+
+    def create_snapshot(self, name: str, snapshot: str) -> None:
+        if name not in self.created:
+            raise IncusError(f"Instance « {name} » absente.")
+        self.created[name].setdefault("snapshots", []).append(
+            {"name": snapshot, "stateful": False, "size": 0}
+        )
+
+    def restore_snapshot(self, name: str, snapshot: str, force: bool = False) -> None:
+        pris = [s["name"] for s in self.created.get(name, {}).get("snapshots", [])]
+        if snapshot not in pris:
+            raise IncusError(f"Instantané « {snapshot} » absent.")
+        if not force and pris[-1] != snapshot:
+            raise IncusError("Instantanés plus récents présents.")
+        self.created[name]["snapshots"] = [
+            s for s in self.created[name]["snapshots"]
+            if pris.index(s["name"]) <= pris.index(snapshot)
+        ]
+        self.created[name]["restored"] = snapshot
+
+    def delete_snapshot(self, name: str, snapshot: str) -> None:
+        instance = self.created.get(name)
+        if instance is None:
+            raise IncusError(f"Instance « {name} » absente.")
+        instance["snapshots"] = [
+            s for s in instance.get("snapshots", []) if s["name"] != snapshot
+        ]
+
+    def snapshots(self, name: str) -> list[dict[str, Any]]:
+        return list(self.created.get(name, {}).get("snapshots", []))
 
 
 # Releve reel de l'hote de validation, 2026-08-18 : Dell R320, Xeon E5-1410 v2,

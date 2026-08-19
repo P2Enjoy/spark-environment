@@ -392,3 +392,44 @@ def test_reconciliation_reconstruit_tout(tmp_path):
     r = c.post("/v1/ingress/reconcile")
     assert r.json()["routes"] == 1
     assert c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]
+
+
+# --- instantanes par HTTP (SPK-13) -----------------------------------------
+
+def test_instantane_puis_restauration(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-13"""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    assert c.post("/v1/sparks/crm/snapshots", json={"name": "avant"}).status_code == 201
+    r = c.post("/v1/sparks/crm/snapshots/avant/restore")
+    assert r.status_code == 200 and r.json()["restored"] == "avant"
+
+
+def test_restaurer_un_ancien_est_refuse_avec_la_sortie(tmp_path):
+    """@verifies docs/DAT.md §19.1 — la perte ne se produit pas en silence."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/sparks/crm/snapshots", json={"name": "ancien"})
+    c.post("/v1/sparks/crm/snapshots", json={"name": "recent"})
+
+    refus = c.post("/v1/sparks/crm/snapshots/ancien/restore")
+    assert refus.status_code == 409
+    detail = refus.json()["detail"]
+    assert detail["blocking"] == ["recent"]
+    assert "accept_losing_newer" in detail["override"]
+
+    force = c.post("/v1/sparks/crm/snapshots/ancien/restore",
+                   json={"accept_losing_newer": True})
+    assert force.json()["destroyed"] == ["recent"]
+
+
+def test_la_liste_rappelle_qu_un_instantane_n_est_pas_une_sauvegarde(tmp_path):
+    """@verifies docs/DAT.md §19.5 — la distinction doit être explicite."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    note = c.get("/v1/sparks/crm/snapshots").json()["note"]
+    assert "ne protège ni de la perte du pool" in note
+    assert "quota" in note
