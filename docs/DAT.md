@@ -2356,3 +2356,67 @@ comprendre une décision — pourquoi une réservation n'est pas un plafond, pou
 un instantané n'est pas une sauvegarde —, le manuel énonce la conséquence pour
 l'exploitant et renvoie au DAT pour le raisonnement.
 
+
+## 31. L'installation du serveur et sa vérification
+
+Le §12 du contrat de déploiement énumère les opérations manuelles. Cette section
+dit comment on **sait** qu'elles ont été faites, et pourquoi cette vérification
+est le livrable principal de l'installation.
+
+### 31.1 Une seule liste de contrôles, employée deux fois
+
+La même série de contrôles sert **avant** l'installation — pour savoir ce qui
+manque — et **après** — pour constater que le serveur est en état. Deux listes
+distinctes finiraient par diverger, et c'est l'après qui deviendrait faux, parce
+qu'on ne le relit qu'en cas de doute.
+
+Chaque contrôle porte un identifiant stable, cité par le contrat de déploiement.
+
+### 31.2 Un contrôle mesure, nomme sa valeur, et donne son remède
+
+Un contrôle qui rend « échec » sans rien d'autre oblige l'exploitant à aller
+mesurer à la main ce que le programme venait de mesurer.
+
+Chacun rend donc trois choses : le **verdict**, la **valeur relevée** telle
+quelle, et la **commande** qui corrige. Un verdict `inconnu` existe et se
+distingue d'un échec : ne pas avoir pu mesurer n'est pas la même chose qu'avoir
+mesuré une valeur fautive, et les confondre ferait « corriger » un serveur
+correct.
+
+### 31.3 La vérification ne modifie rien
+
+Elle est **lecture seule**, sans exception. C'est ce qui la rend utilisable : on
+peut la lancer sur un serveur en service sans se demander ce qu'elle va faire.
+
+L'installation, elle, est un script distinct. Cette séparation est délibérée —
+un outil qui vérifie *et* répare finit par réparer ce qu'on voulait seulement
+constater.
+
+### 31.4 Ce que l'installation doit garantir, mesuré le 2026-08-19
+
+Relevé sur l'hôte cible, en lecture seule :
+
+| Condition | État relevé |
+|---|---|
+| Incus ≥ 6.19 (§3.1) | **7.3** — conforme |
+| pool de stockage à quotas, compression | `spark`, ZFS, compression active |
+| plafond de l'ARC ZFS | 16 Gio |
+| bridge privé et plage DHCP disjointe | `sparkbr0` en `10.77.0.1/24`, plage `.240-.254` |
+| Caddy et son API d'administration locale | v2.11.4, API sur `127.0.0.1:2019` |
+| surface réseau : `22`, `80`, `443` seulement | conforme — `9876` et `2019` sur la boucle locale |
+| `sparkd` **survit à un redémarrage** | **NON** — il tourne depuis un terminal |
+
+Le dernier point est le manque réel. Un plan de contrôle lancé à la main depuis
+une session `ssh` disparaît au premier redémarrage, et les Sparks continuent de
+tourner sans que rien ne les administre : la panne est silencieuse et ne se
+découvre qu'à la première opération. L'installation pose donc une **unité
+systemd**, et la vérification contrôle qu'elle est **activée au démarrage**, pas
+seulement démarrée.
+
+### 31.5 Ce que la vérification ne dit pas
+
+Elle contrôle des **conditions**, pas des comportements. Qu'Incus soit en 7.3
+n'établit pas qu'une pile Docker tourne dans un Spark : cette preuve-là est une
+mesure, et elle est au §13. La vérification dit que le serveur est en état
+d'être utilisé ; le §13 dit que le produit fonctionne.
+

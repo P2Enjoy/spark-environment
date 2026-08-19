@@ -528,6 +528,28 @@ secret ni adresse réelle ; captures observées.
 
 ### [ ] SPK-26 · Contrat de déploiement et procédure d'installation serveur
 
+- Spécification : `docs/DAT.md` §31. Contrat : `docs/PROD_MIGRATIONS.md`.
+- **Une seule liste de contrôles**, employée avant l'installation pour savoir ce
+  qui manque et après pour constater l'état (§31.1). Deux listes divergeraient,
+  et c'est l'après qui deviendrait faux.
+- Chaque contrôle rend le verdict, la **valeur relevée** et la **commande** qui
+  corrige ; `inconnu` se distingue d'`échec` (§31.2).
+- La vérification est **lecture seule**, l'installation est un script distinct
+  (§31.3) : un outil qui vérifie et répare finit par réparer ce qu'on voulait
+  constater.
+- **Mesuré le 2026-08-19** : le seul manque réel est que `sparkd` tourne depuis
+  un terminal et ne survivrait pas à un redémarrage (§31.4). L'installation pose
+  une unité systemd ; la vérification contrôle qu'elle est **activée au
+  démarrage**, pas seulement démarrée.
+- Le contrat de déploiement est remis à l'état mesuré : sa baseline n'est plus
+  vide, et OP-02 est appliqué.
+
+DoD : les contrôles sont éprouvés par des tests avec relevés injectés ; ils sont
+**exécutés contre l'hôte cible réel** et leur sortie consignée ; l'unité systemd
+et son script d'installation existent ; le contrat de déploiement décrit l'état
+mesuré, sans opération déjà faite présentée comme en attente ; le chapitre M2 du
+manuel est mis au niveau de ce qui est réellement outillé.
+
 ### [ ] SPK-27 · Vérification par mesure des hypothèses du DAT §13
 
 Les sept points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné.
