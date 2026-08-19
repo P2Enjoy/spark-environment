@@ -2663,11 +2663,35 @@ Une entrée porte donc trois états distincts, jamais confondus (`DESIGN_SYSTEM.
 Une entrée `missing` ou `unknown` reste **visible** et n'est pas proposée à la
 création : la faire disparaître ferait croire qu'elle n'a jamais existé.
 
-**Hypothèse à mesurer, et elle conditionne la livraison :** la vérification
-s'appuie sur l'index simplestreams du dépôt (`/streams/v1/index.json` puis la
-liste de produits) et, pour ce qui est déjà local, sur `GET /1.0/images` d'Incus.
-Aucune de ces deux voies n'a encore été mesurée sur l'hôte. Tant qu'elle ne l'est
-pas, elle reste une hypothèse, et l'unité ne peut pas être déclarée faite.
+**Mesuré le 2026-08-19 sur l'hôte**, et la mesure corrige l'hypothèse sur un
+point qui change le code.
+
+La voie est bien celle qui était pressentie : `/streams/v1/index.json` donne
+`streams/v1/images.json`, qui publie **272 produits**. Mais la façon d'y trouver
+un alias n'était pas celle qu'on aurait supposée.
+
+```
+clé de produit : debian:trixie:amd64:default     ← nom de CODE, pas « 13 »
+aliases        : "debian/13,debian/trixie,…"     ← champ à part, séparé par des virgules
+```
+
+Trois conséquences :
+
+- **l'alias ne se déduit pas de la clé.** `debian:13:amd64` ne correspond à rien :
+  la clé porte `trixie`. Il faut lire le champ `aliases` de chaque produit et
+  construire la table inverse — 230 alias distincts pour 272 produits ;
+- **l'architecture n'est pas dans l'alias.** `debian/13/amd64` est **absent** de
+  la table des alias ; `debian/13` y renvoie aux quatre produits
+  `amd64`, `arm64`, `armhf`, `riscv64`. L'architecture se lit dans la clé, pas
+  dans ce que l'exploitant saisit ;
+- **un alias inexistant est bien absent.** `debian/31` ne figure nulle part, ce
+  qui est la propriété dont dépend tout le §33.2.
+
+Pour ce qui est déjà local, `GET /1.0/images` sur la socket d'Incus rend les
+empreintes des images en cache. Mesuré : l'image présente sur l'hôte n'a **aucun
+alias local**. Le local renseigne donc la disponibilité hors ligne, jamais
+l'existence d'un alias — les deux voies sont complémentaires et ne se
+remplacent pas.
 
 ### 33.4 Ce que le catalogue n'est pas
 
