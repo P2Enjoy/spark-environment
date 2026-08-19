@@ -145,7 +145,11 @@ function renderFiltres(filtres) {
     </div>
     <p class="formulaire__actions">
       <button type="submit" class="bouton bouton--primaire">Filtrer</button>
-      <button type="button" class="bouton" data-action="filtres-vides">Tout afficher</button>
+      ${Object.values(filtres).some(Boolean)
+        // Un « Tout afficher » alors que tout est deja affiche est un bouton
+        // mort, et un bouton mort vaut moins que pas de bouton (§1.4).
+        ? '<button type="button" class="bouton" data-action="filtres-vides">Tout afficher</button>'
+        : ''}
     </p>
   </form>`;
 }

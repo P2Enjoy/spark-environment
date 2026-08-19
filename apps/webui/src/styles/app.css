@@ -413,6 +413,18 @@ tbody tr:hover { background: var(--color-hover); }
 .onglet--courant { color: var(--color-brand); font-weight: 700;
                    border-bottom-color: var(--color-brand); }
 
+/* SPK-39 · docs/DAT.md §36.8.2 — les filtres du journal. Ils tiennent sur une
+   ligne tant que la place le permet, et se replient sinon : un formulaire de
+   filtres qui pousse le tableau hors de l'ecran fait perdre ce qu'on filtre. */
+.filtres {
+  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end;
+  padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border);
+}
+.filtres .champ { flex: 1 1 12rem; min-width: 0; }
+.filtres .formulaire__actions { margin: 0; flex: 0 0 auto; }
+/* Une cellule sans valeur le DIT plutot que d'afficher un tiret muet (§14.5). */
+.absence-cellule { color: var(--color-text-3); font-style: italic; }
+
 /* SPK-33 · DESIGN_SYSTEM.md §6.27 — la modale limitee a une section.
    `dialog` fournit nativement le voile, l'inertie de l'arriere-plan et Echap ;
    il reste a lui donner sa forme. */
