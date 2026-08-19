@@ -138,6 +138,20 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('[data-accepte-perte]', { timeout: 10000 });
     await capturer('m9-restauration-refusee', { hauteur: 800 });
 
+    // --- M12 · Le journal de tous les Sparks (SPK-39) ------------------------
+    // On y va par la navigation : Hôte, puis l'onglet Journal. Le relevé de la
+    // chaîne est déclenché, sinon l'illustration montrerait « pas encore
+    // vérifiée » — ce qui est vrai mais n'illustre pas le chapitre.
+    await accueil();
+    await page.click('nav a[href="#/hote"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/hote/journal"]');
+    await page.waitForSelector('#titre-journal-hote', { timeout: 10000 });
+    await page.click('[data-action="verifier-chaine"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Chaîne intacte'), { timeout: 15000 });
+    await capturer('m12-journal', { hauteur: 1000 });
+
     // --- M10 · Supprimer un Spark --------------------------------------------
     await ouvrir('boutique');
     await page.click('[data-commande="delete"]');
