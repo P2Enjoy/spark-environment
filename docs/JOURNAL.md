@@ -1020,3 +1020,47 @@ autrement serait annoncer une preuve non faite.
 `51.158.54.202` — une action du responsable. En attendant, **SPK-13**,
 instantanés et restauration de cellule, est la première `[ ]` du plan et ne
 dépend de rien de bloqué. SPK-29 et SPK-28 restent ouvertes.
+
+
+---
+
+## 2026-08-19 — SPK-13 close : la cellule entière revient
+
+**Unité** : SPK-13. Le DAT §19 a été écrit après mesure, avant de coder.
+
+**Prouvé sur l'hôte, et c'est l'argument du §8.3 qui se vérifie.** Une cellule
+cassée volontairement — fichier réécrit, `/srv/site` supprimé, **images Docker
+effacées** — puis restaurée : les trois sont revenus à l'identique, le Spark
+restant `RUNNING`. Le retour des images Docker est précisément ce qu'une
+sauvegarde applicative vers S3 ne restaure pas.
+
+**La décision de conception.** ZFS rembobine : restaurer un point ancien détruit
+tout ce qui a été capturé depuis, et Incus refuse plutôt que de le faire en
+silence. Ce refus est **conservé comme défaut**. `sparkd` le relaie en nommant
+les instantanés qui bloquent et la sortie, et l'acceptation de la perte est un
+drapeau de **la requête**, jamais une option de configuration : une configuration
+se pose une fois et s'oublie, alors que la perte se décide instantané par
+instantané.
+
+**Le défaut sérieux que les tests ont trouvé.** Les instantanés étaient triés par
+`created_at, id`. Deux instantanés pris dans la même seconde partagent leur
+horodatage, et l'identifiant est aléatoire : **l'ordre chronologique était donc
+arbitraire**. Or c'est cet ordre qui décide lesquels une restauration détruit —
+s'y tromper aurait détruit les mauvais, irréversiblement. Le tri se fait
+désormais sur l'ordre d'insertion. À retenir : un tri « à peu près bon » sur une
+opération destructrice ne l'est pas.
+
+**Deux limites mesurées, et assumées.** L'instantané **avec état** n'est pas
+disponible : CRIU est construit sans le support de nftables et la capture échoue.
+Le produit ne proposera pas l'option tant qu'elle n'aura pas été mesurée
+fonctionnelle — offrir un bouton qui échoue à l'usage vaut moins que ne pas
+l'offrir. Et un instantané **consomme le quota du Spark**, grossissant à mesure
+que celui-ci s'en écarte : l'interface doit le dire plutôt que de laisser
+découvrir la chose par un disque plein.
+
+**Vérifié.** 372 tests verts, campagne complète verte.
+
+**Où reprendre.** **SPK-14**, métriques d'usage et état temps réel — première
+`[ ]` du plan, sans dépendance bloquée. Elle donne à la console de quoi montrer
+la consommation réelle face aux quotas, ce que plusieurs unités ont laissé en
+dette d'affichage. SPK-12 attend un domaine réel, SPK-29 et SPK-28 un arbitrage.

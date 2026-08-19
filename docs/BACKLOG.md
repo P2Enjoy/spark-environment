@@ -193,7 +193,7 @@ démarrage, donc ne peut pas retirer une clé (`docs/DAT.md` §17.1).
   contrôle pas et dont je ne dispose pas ici. Seul le routage HTTP par nom d'hôte
   est vérifié.
 
-### [ ] SPK-13 · Instantanés et restauration de cellule
+### [x] SPK-13 · Instantanés et restauration de cellule
 
 Périmètre réduit le 2026-08-18 : les applications hébergées sauvegardent déjà leurs
 **données** vers un S3 externe. L'instantané sert donc au retour arrière de la
@@ -201,9 +201,19 @@ Périmètre réduit le 2026-08-18 : les applications hébergées sauvegardent d�
 qu'une sauvegarde applicative ne restaure pas. L'export hors machine reste une
 opération manuelle et n'est pas planifié.
 
-- Spécification : `docs/DAT.md` §8.3
-- DoD : instantané puis restauration d'un Spark, état de la cellule retrouvé ;
-  distinction instantané / sauvegarde explicite dans l'interface.
+- Spécification : `docs/DAT.md` §8.3, §19
+- **Clos le 2026-08-19, prouvé sur l'hôte.** Cellule cassée volontairement —
+  fichier réécrit, `/srv/site` supprimé, **images Docker effacées** — puis
+  restaurée : les trois sont revenus à l'identique et le Spark est resté
+  `RUNNING`. Le retour des images Docker est ce qu'aucune sauvegarde applicative
+  ne restaure : c'est l'argument du §8.3, vérifié.
+- Restaurer un instantané ancien est **refusé** tant que des plus récents
+  existent ; le refus nomme ce qui bloque et la sortie, et l'acceptation de la
+  perte est un drapeau de requête (§19.1).
+- La distinction instantané / sauvegarde est portée par l'API — la liste rappelle
+  qu'un instantané ne protège ni de la perte du pool ni de celle de la machine.
+  **Obligation reportée à SPK-18 et suivantes** : l'interface visuelle devra la
+  porter aussi.
 
 ### [ ] SPK-14 · Métriques d'usage et état temps réel
 

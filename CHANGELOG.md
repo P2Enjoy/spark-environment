@@ -85,6 +85,9 @@
 - Ingress Caddy : déclaration de routes `domaine → spark → port`, réconciliation
   par régénération complète depuis le registre, refus des domaines non routés.
 
+- Instantanés de cellule : prise, liste, restauration et suppression. Restaurer
+  un instantané ancien est refusé tant que des plus récents existent.
+
 ### Modifié
 
 - `.gitignore` :
@@ -96,7 +99,8 @@
   §7.2 ter, rendu exact des valeurs CPU ; nouveau §14, cycle de vie d'un Spark ;
   nouveau §15, adressage du réseau privé ; nouveau §16, la réserve de l'hôte ;
   nouveaux §7.4 bis et §7.4 ter, redistribution lors d'une découpe ; nouveau
-  §17, accès SSH aux Sparks ; nouveau §18, réconciliation de l'ingress.
+  §17, accès SSH aux Sparks ; nouveau §18, réconciliation de l'ingress ; nouveau §19, instantanés et
+  restauration.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel
