@@ -43,6 +43,28 @@ vide.
 Tant que la topologie n'a pas été relevée depuis la migration qui distingue les
 deux termes, l'écran affiche la somme sans inventer sa répartition.
 
+## Pourquoi l'alloué du disque dépasse la somme des tailles vendues
+
+Additionnez cinq Sparks de 10 Gio, l'écran en annonce un peu plus. L'écart est
+voulu, et l'écran le nomme sous la carte du disque.
+
+Le quota posé sur chaque Spark n'est jamais exactement la taille vendue : une
+**marge de métadonnées** s'y ajoute, invisible du locataire. Sans elle, un Spark
+qui remplit son disque empêche le runtime d'écrire ses propres métadonnées à
+l'intérieur du même quota — et à partir de là, plus aucune reconfiguration ne
+passe, pas même l'agrandissement qui débloquerait la situation. Autrement dit :
+sans cette marge, un locataire qui sature son disque vous enferme dehors.
+
+La marge est réellement prise sur le pool, elle est donc comptée : l'alloué que
+vous lisez est ce qui est réellement engagé, et non ce qui a été promis.
+
+Le locataire, lui, ne la voit jamais : la limite de son Spark reste ce que vous
+lui avez vendu, et il atteindra bien 100 % à cette valeur. La marge n'est pas de
+l'espace offert, c'est de la place gardée.
+
+Elle se règle par `SPARKD_STORAGE_METADATA_MARGIN`, et l'écran le rappelle. La
+poser à zéro est possible et supprime le remède avec elle.
+
 ## Le surengagement
 
 Une capacité de « 4 cœurs × 2 » n'est pas huit processeurs. Le facteur est donc
