@@ -1,19 +1,24 @@
 /**
  * Point d'entrée de la console dans le navigateur.
  *
- * @spec docs/BACKLOG.md#SPK-18 · docs/DESIGN_SYSTEM.md §5.1, §6.13, §9.1, §9.7
+ * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21 ·
+ *       docs/DAT.md §26 (les trois panneaux d'administration, §26.2 le contrat
+ *       d'interaction, §26.5 l'ordre refus-puis-acceptation) ·
+ *       docs/DESIGN_SYSTEM.md §5.1, §6.13, §6.22, §9.1, §9.7
  */
 
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
+import { ADMIN_VIDE } from './components/spark-admin.js';
 
 const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                sort: { key: 'name', dir: 'asc' }, tunnel: null, server: null,
                route: 'liste', spark: null, detail: {}, confirming: null,
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
-                           pools: null, submitting: false } };
+                           pools: null, submitting: false },
+               admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } } };
 
 function peindre() {
   racine.querySelector('.principal').innerHTML =
@@ -21,7 +26,7 @@ function peindre() {
       ? renderSparkCreate(etat.creation)
       : etat.route === 'detail'
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
-                            confirming: etat.confirming, ...etat.detail })
+                            confirming: etat.confirming, admin: etat.admin, ...etat.detail })
       : renderSparksView(etat);
   brancher();
 }
@@ -74,6 +79,7 @@ function brancher() {
       lancer(commande);
     });
   }
+  brancherPanneaux();
   racine.querySelector('[data-confirme]')?.addEventListener('click', () => lancer('delete'));
   racine.querySelector('[data-annule]')?.addEventListener('click', () => {
     etat.confirming = null;
@@ -81,6 +87,194 @@ function brancher() {
     // §6.22 : l'annulation rend le focus au déclencheur.
     racine.querySelector('[data-commande="delete"]')?.focus();
   });
+}
+
+/**
+ * Gestes des trois panneaux (docs/DAT.md §26).
+ *
+ * Le contrat d'interaction du §26.2 vaut pour les trois : le focus entre dans le
+ * formulaire à l'ouverture, l'annulation le rend au déclencheur, et un refus du
+ * serveur ne touche pas à la saisie.
+ */
+function brancherPanneaux() {
+  const admin = etat.admin;
+
+  for (const bouton of racine.querySelectorAll('[data-ouvre]')) {
+    bouton.addEventListener('click', () => {
+      admin.open = bouton.dataset.ouvre;
+      admin.refusal = null;
+      admin.confirming = null;
+      peindre();
+      racine.querySelector('.formulaire-panneau .controle')?.focus();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-ferme]')) {
+    bouton.addEventListener('click', () => {
+      const panneau = bouton.dataset.ferme;
+      admin.open = null;
+      admin.refusal = null;
+      peindre();
+      // §26.2 : l'annulation rend le focus au bouton déclencheur.
+      racine.querySelector(`[data-ouvre="${panneau}"]`)?.focus();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-annule]')) {
+    bouton.addEventListener('click', () => {
+      admin.confirming = null;
+      admin.refusal = null;
+      peindre();
+    });
+  }
+
+  const formulaire = racine.querySelector('.formulaire-panneau');
+  if (formulaire) {
+    for (const controle of formulaire.querySelectorAll('input, select')) {
+      controle.addEventListener('input', () => {
+        admin.values[controle.name] =
+          controle.type === 'checkbox' ? controle.checked
+          : controle.type === 'number' ? Number(controle.value)
+          : controle.value;
+      });
+    }
+    formulaire.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      const quoi = formulaire.dataset.formulaire;
+      if (quoi === 'route') return declarerRoute();
+      if (quoi === 'key') return autoriserCle();
+      if (quoi === 'snapshot') return prendreInstantane();
+    });
+  }
+
+  // Demandes de confirmation : elles n'appellent rien, elles ouvrent le bloc.
+  const demande = (attribut, kind) => {
+    for (const bouton of racine.querySelectorAll(`[data-${attribut}]`)) {
+      bouton.addEventListener('click', () => {
+        admin.confirming = { kind, id: bouton.getAttribute(`data-${attribut}`) };
+        admin.refusal = null;
+        peindre();
+        // §6.22 : le focus entre dans la confirmation.
+        racine.querySelector('.confirmation .bouton--destructif')?.focus();
+      });
+    }
+  };
+  demande('retire-route', 'route');
+  demande('restaure', 'snapshot-restore');
+  demande('supprime-instantane', 'snapshot-delete');
+
+  const geste = (attribut, action) => {
+    for (const bouton of racine.querySelectorAll(`[data-${attribut}]`)) {
+      bouton.addEventListener('click', () => action(bouton.getAttribute(`data-${attribut}`)));
+    }
+  };
+  geste('confirme-route', (domaine) =>
+    agir('route', () => appel('DELETE', `/v1/ingress/${encodeURIComponent(domaine)}`)));
+  geste('reapplique', () =>
+    agir('route', () => appel('POST', '/v1/ingress/reconcile')));
+  geste('revoque', (label) =>
+    agir('key', () => appel('DELETE',
+      `/v1/sparks/${encodeURIComponent(etat.spark.name)}/ssh-keys/${encodeURIComponent(label)}`)));
+  geste('confirme-suppression', (nom) =>
+    agir('snapshot', () => appel('DELETE',
+      `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots/${encodeURIComponent(nom)}`)));
+  geste('confirme-restauration', (nom) => restaurer(nom, false));
+  // §26.5 : l'acceptation de la perte n'est atteignable qu'APRÈS le refus.
+  geste('accepte-perte', (nom) => restaurer(nom, true));
+}
+
+/** Appel d'écriture. Rend toujours `{ ok, corps }` : un refus est une réponse,
+ *  pas une exception à faire remonter jusqu'à l'écran d'erreur global. */
+async function appel(methode, chemin, corps = null) {
+  const reponse = await fetch(
+    `/api${chemin}${chemin.includes('?') ? '&' : '?'}server=${encodeURIComponent(etat.server)}`,
+    { method: methode, ...(corps ? { headers: { 'content-type': 'application/json' },
+                                     body: JSON.stringify(corps) } : {}) });
+  let rendu = null;
+  try { rendu = await reponse.json(); } catch { /* corps vide */ }
+  return { ok: reponse.ok, corps: rendu };
+}
+
+/**
+ * Exécute un geste, puis RELIT l'état (§26.6). Aucun optimisme d'interface :
+ * ces gestes touchent au réseau et au disque, et un état relu vaut mieux qu'un
+ * état deviné.
+ */
+async function agir(panneau, operation, { ferme = true } = {}) {
+  etat.admin.busy = true;
+  peindre();
+  let resultat;
+  try {
+    resultat = await operation();
+  } catch (erreur) {
+    resultat = { ok: false, corps: { detail: { message: erreur.message } } };
+  }
+  etat.admin.busy = false;
+  if (!resultat.ok) {
+    const detail = resultat.corps?.detail ?? resultat.corps ?? {};
+    etat.admin.refusal = { panel: panneau, message: detail.message ?? 'Le serveur a refusé ce geste.' };
+    etat.admin.confirming = null;
+    peindre();
+    return resultat;
+  }
+  etat.admin.confirming = null;
+  etat.admin.refusal = null;
+  if (ferme) etat.admin.open = null;
+  await chargerDetail(etat.spark.name);
+  return resultat;
+}
+
+async function declarerRoute() {
+  const v = etat.admin.values;
+  // §26.3 : aucun contrôle d'unicité ici. Le domaine est UNIQUE en base.
+  const resultat = await agir('route', () => appel('POST', '/v1/ingress', {
+    spark: etat.spark.name, domain: v.domain, port: Number(v.port), tls: Boolean(v.tls),
+  }));
+  if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
+}
+
+async function autoriserCle() {
+  const v = etat.admin.values;
+  const nom = etat.spark.name;
+  const resultat = await agir('key', async () => {
+    // Enregistrer puis accorder restent DEUX effets (§26.4) : la console les
+    // enchaîne, elle ne les confond pas.
+    if (v.new_label && v.public_key) {
+      const inscrit = await appel('POST', '/v1/ssh-keys',
+                                  { label: v.new_label, public_key: v.public_key });
+      if (!inscrit.ok) return inscrit;
+      return appel('POST', `/v1/sparks/${encodeURIComponent(nom)}/ssh-keys/${encodeURIComponent(v.new_label)}`);
+    }
+    if (!v.key_label) {
+      return { ok: false, corps: { detail: {
+        message: 'Choisissez une clé du registre, ou saisissez un libellé et une clé publique.' } } };
+    }
+    return appel('POST', `/v1/sparks/${encodeURIComponent(nom)}/ssh-keys/${encodeURIComponent(v.key_label)}`);
+  });
+  if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
+}
+
+async function prendreInstantane() {
+  const resultat = await agir('snapshot', () => appel(
+    'POST', `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots`,
+    { name: etat.admin.values.snapshot }));
+  if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
+}
+
+/**
+ * Restaure. Un refus « des instantanés plus récents bloquent » n'est pas une
+ * erreur générique : il porte la liste de ce qui serait détruit, et c'est cette
+ * liste qui rend la perte visible avant qu'on l'accepte (§26.5).
+ */
+async function restaurer(nom, accepteLaPerte) {
+  const resultat = await agir('snapshot', () => appel(
+    'POST', `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots/${encodeURIComponent(nom)}/restore`,
+    accepteLaPerte ? { accept_losing_newer: true } : {}));
+  const detail = resultat?.corps?.detail;
+  if (!resultat?.ok && detail?.error === 'blocked_by_newer_snapshots') {
+    etat.admin.refusal = { panel: 'snapshot', snapshot: nom,
+                           message: detail.message, blocking: detail.blocking ?? [] };
+    peindre();
+    racine.querySelector('[data-accepte-perte]')?.focus();
+  }
 }
 
 async function lancer(commande) {
@@ -173,14 +367,16 @@ async function chargerDetail(nom) {
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
-    const [usage, routes, keys, snapshots, audit] = await Promise.all([
+    const [usage, routes, sshConfig, registry, snapshots, audit] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
-      api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).then((c) => c.keys).catch(() => []),
+      api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
+      api('/v1/ssh-keys').then((r) => r.keys).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/snapshots`).then((s) => s.snapshots).catch(() => []),
       api('/v1/audit?limit=200').then((a) => a.entries.filter((e) => e.target_id === etat.spark.id)).catch(() => []),
     ]);
-    etat.detail = { usage, routes, keys, snapshots, audit };
+    etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
+                    snapshots, audit };
     etat.status = 'ready';
   } catch (erreur) {
     etat.status = 'error';

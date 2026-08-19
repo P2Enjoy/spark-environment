@@ -297,3 +297,28 @@ tbody tr:hover { background: var(--color-hover); }
 .refus p { margin: 0; }
 .refus .liste-simple { margin-top: var(--space-2); }
 .refus .liste-simple li { min-height: auto; }
+
+/* SPK-21 · docs/DAT.md §26 — les trois panneaux d'administration.
+   Le groupe d'actions d'une ligne est stable (DESIGN_SYSTEM.md §6.19) : il
+   occupe la même place sur toutes les lignes, qu'elles portent une action de
+   plus ou non. */
+.actions-ligne { display: flex; gap: var(--space-2); margin-left: auto; flex: none; }
+.liste-simple li { flex-wrap: wrap; }
+.liste-simple li .confirmation,
+.liste-simple li .refus { flex-basis: 100%; margin-top: var(--space-2); }
+
+.formulaire-panneau {
+  display: grid; gap: var(--space-3);
+  padding: var(--space-3); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); background: var(--color-bg);
+}
+.formulaire-panneau .champ label input[type="checkbox"] { margin-right: var(--space-2); }
+
+/* §3.1 : le fragment ssh_config se compare caractère par caractère. Il défile
+   dans son propre conteneur — la page ne défile jamais horizontalement (§8.2). */
+.fragment {
+  margin: 0; padding: var(--space-3);
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); overflow-x: auto;
+  font-size: var(--text-compact); line-height: 1.5;
+}

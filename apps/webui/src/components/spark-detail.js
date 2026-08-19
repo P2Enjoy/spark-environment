@@ -1,8 +1,10 @@
 /**
  * Écran « détail d'un Spark ».
  *
- * @spec docs/BACKLOG.md#SPK-19 · docs/DAT.md §24 (le runtime publie ce qui est
- *       possible), §24.2 (confirmations), §24.3 (l'identité d'abord) ·
+ * @spec docs/BACKLOG.md#SPK-19, docs/BACKLOG.md#SPK-21 ·
+ *       docs/DAT.md §24 (le runtime publie ce qui est possible), §24.2
+ *       (confirmations), §24.3 (l'identité d'abord), §26 (les trois panneaux
+ *       d'administration, portés par `spark-admin.js`) ·
  *       docs/DESIGN_SYSTEM.md §6.3, §6.4, §6.6, §6.22, §6.23, §14.9 ·
  *       docs/DESIGN_SYSTEM_APP.md
  *
@@ -11,6 +13,7 @@
  */
 
 import { stateOf, formatBytes, formatBps, formatCpu, MEASURE } from './tokens.js';
+import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel, ADMIN_VIDE } from './spark-admin.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -128,42 +131,11 @@ function renderRessources(spark, usage) {
 </section>`;
 }
 
-function renderAcces(spark, { routes = [], keys = [] } = {}) {
-  // §6.4 et §24.3 : une absence qui informe est NOMMÉE. Un Spark sans clé n'est
-  // pas un Spark dont on ignore les clés.
-  const listeRoutes = routes.length
-    ? `<ul class="liste-simple">${routes.map((r) =>
-        `<li><span class="technique">${echapper(r.domain)}</span> → port ${echapper(r.target_port)}` +
-        `${r.applied_at ? '' : ' <span class="badge badge--accent">non appliquée</span>'}</li>`).join('')}</ul>`
-    : '<p class="absence">Aucune route publique ne pointe vers ce Spark.</p>';
-
-  const listeCles = keys.length
-    ? `<ul class="liste-simple">${keys.map((k) =>
-        `<li>${echapper(k.label)} <span class="technique">${echapper(k.fingerprint)}</span></li>`).join('')}</ul>`
-    : "<p class=\"absence\">Aucune clé n’est autorisée : personne ne peut s’y connecter.</p>";
-
+function renderAcces(spark) {
   return `
 <section class="carte bloc" aria-labelledby="titre-acces">
   <h2 id="titre-acces">Accès</h2>
   ${definitions([['Adresse privée', spark.ipv4_address, true], ['Image', spark.image, true]])}
-  <h3>Routes publiques</h3>${listeRoutes}
-  <h3>Clés autorisées</h3>${listeCles}
-</section>`;
-}
-
-function renderInstantanes(snapshots = []) {
-  const contenu = snapshots.length
-    ? `<ul class="liste-simple">${snapshots.map((s) =>
-        `<li><span class="technique">${echapper(s.incus_name)}</span>` +
-        `<span class="absence"> — ${echapper((s.created_at ?? '').slice(0, 16).replace('T', ' '))}</span></li>`).join('')}</ul>`
-    : '<p class="absence">Aucun instantané.</p>';
-  return `
-<section class="carte bloc" aria-labelledby="titre-instantanes">
-  <h2 id="titre-instantanes">Instantanés</h2>
-  ${contenu}
-  <p class="note">Un instantané rend l’état complet de la cellule. Il vit dans le
-  même pool que le Spark : il ne protège ni de la perte du pool, ni de celle de la
-  machine, et consomme le quota disque.</p>
 </section>`;
 }
 
@@ -186,8 +158,10 @@ function renderJournal(entries = []) {
 
 /** Vue complète. L'identité vient avant tout le reste (§6.3, §24.3). */
 export function renderSparkDetail({ status, spark = null, usage = null, routes = [],
-                                    keys = [], snapshots = [], audit = [],
-                                    error = null, confirming = null } = {}) {
+                                    keys = [], registry = [], sshConfig = null,
+                                    snapshots = [], audit = [],
+                                    error = null, confirming = null,
+                                    admin = ADMIN_VIDE } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -208,10 +182,12 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
 <div class="detail">
   <div class="detail__principal">
     ${renderRessources(spark, usage)}
-    ${renderAcces(spark, { routes, keys })}
+    ${renderAcces(spark)}
+    ${renderRoutesPanel(spark, routes, admin)}
+    ${renderKeysPanel(spark, { keys, registry, sshConfig }, admin)}
   </div>
   <div class="detail__secondaire">
-    ${renderInstantanes(snapshots)}
+    ${renderSnapshotsPanel(spark, snapshots, admin)}
     ${renderJournal(audit)}
   </div>
 </div>`;
