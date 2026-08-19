@@ -31,7 +31,7 @@ vous cliquez :
 |---|---|---|
 | 1 | les destinations — Sparks, Hôte | barre latérale, à gauche |
 | 2 | les sous-parties d'une destination — Pools, Images sous Hôte | onglets |
-| 3 | un Spark ouvert, avec ses facettes — Aperçu, Routes, Clés, Instantanés, Journal | onglets de sa fenêtre |
+| 3 | un Spark ouvert, avec ses facettes — Infos, Routes, Clés, Instantanés, Journal | onglets de sa fenêtre |
 
 Le **serveur courant** et l'état de son tunnel sont au-dessus de la barre
 latérale : ce n'est pas une destination, c'est le contexte de toutes les

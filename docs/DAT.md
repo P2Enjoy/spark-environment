@@ -2794,8 +2794,9 @@ Ce qui **ne** devient **pas** une modale, et le §6.27 le dit :
 - ouvrir une modale ne vaut pas confirmation : une action sensible engagée depuis
   une modale demande sa confirmation, rendue dans le flux de cette modale.
 
-Tant que SPK-33 n'est pas livrée, le §26.2 décrit l'écran réel. À la livraison,
-il est réécrit et cesse de dire « pas de modale ».
+**Fait le 2026-08-19** : le §26.2 est réécrit et décrit la modale. Il conserve
+l'argument de coût qui avait fait choisir le formulaire dans le flux, pour qu'on
+ne le refasse pas — il était juste tant que la console ne portait aucune modale.
 
 ### 34.3 Ce que la refonte ne doit pas perdre
 

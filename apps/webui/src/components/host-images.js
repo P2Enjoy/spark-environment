@@ -189,7 +189,7 @@ export const ONGLETS_HOTE = [['#/hote', 'Pools'], ['#/hote/images', 'Images']];
 
 /** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */
 export const FACETTES_SPARK = [
-  ['', 'Aperçu'], ['routes', 'Routes'], ['cles', 'Clés'],
+  ['', 'Infos'], ['routes', 'Routes'], ['cles', 'Clés'],
   ['instantanes', 'Instantanés'], ['journal', 'Journal'],
 ];
 
