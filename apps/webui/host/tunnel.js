@@ -1,9 +1,10 @@
 /**
  * Tunnels SSH vers les serveurs administrés.
  *
- * @spec docs/BACKLOG.md#SPK-16 · docs/DAT.md §6 (Plan d'administration),
- *       §22.1 (le binaire ssh du système), §22.2 (un tunnel vivant se prouve à
- *       travers lui), §22.3 (une panne se signale), §22.5 (le port local)
+ * @spec docs/BACKLOG.md#SPK-16, docs/BACKLOG.md#SPK-23 ·
+ *       docs/DAT.md §6 (Plan d'administration), §22.1 (le binaire ssh du
+ *       système), §22.2 (un tunnel vivant se prouve à travers lui), §22.3 (une
+ *       panne se signale), §22.5 (le port local), §28.2 (le serveur local)
  *
  * Le point important de ce module tient en une phrase : un processus `ssh`
  * FIGÉ ne se voit pas. Il vit, la socket locale accepte, et chaque requête
@@ -74,8 +75,29 @@ export class Tunnel {
     ];
   }
 
+  /** Un serveur local n'a pas de transport à établir (docs/DAT.md §28.2). */
+  get isLocal() {
+    return this.server.kind === 'local';
+  }
+
   async open() {
     if (this.state !== CLOSED && this.state !== BROKEN) return this;
+
+    // Chemin LOCAL : `sparkd` écoute déjà sur la boucle locale de cette
+    // machine. Il n'y a rien à rediriger, donc pas de `ssh` à lancer — mais la
+    // santé se prouve de la MÊME façon, en interrogeant `/healthz` (§22.2). Un
+    // « ready » posé sans sonder serait un succès simulé (§1.3 du design
+    // system) : un sparkd arrêté paraîtrait joignable.
+    if (this.isLocal) {
+      this.localPort = this.server.port;
+      this.#setState(CONNECTING);
+      this.lastError = null;
+      this.#timer = setInterval(() => this.probe(), this.probeIntervalMs);
+      this.#timer.unref?.();
+      await this.probe();
+      return this;
+    }
+
     this.localPort = await freePort();
     this.#setState(CONNECTING);
     this.lastError = null;

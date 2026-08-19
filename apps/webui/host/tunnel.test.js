@@ -212,3 +212,36 @@ test('un tunnel qui ne s ouvre jamais finit rompu, dans un delai borne', async (
   assert.equal(t.state, BROKEN);
   assert.match(t.lastError, /injoignable/);
 });
+
+// --- le chemin d'acces LOCAL (docs/DAT.md §28.2) ----------------------------
+
+test('un serveur local ne lance AUCUN ssh', async () => {
+  let lance = 0;
+  const t = new Tunnel({ name: 'dev', kind: 'local', host: '127.0.0.1', port: 9876 },
+    { spawn: () => { lance += 1; return fauxSsh(); },
+      probe: async () => {}, probeIntervalMs: 3_600_000 });
+  await t.open();
+  assert.equal(lance, 0, 'ouvrir un tunnel vers localhost n’accomplirait aucun transport');
+  assert.equal(t.state, READY);
+  assert.equal(t.localPort, 9876, 'le port est celui ou sparkd ecoute deja');
+  t.close();
+});
+
+test('un serveur local SONDE quand meme : « ready » ne se pose pas sans preuve', async () => {
+  const t = new Tunnel({ name: 'dev', kind: 'local', host: '127.0.0.1', port: 9876 },
+    { spawn: () => fauxSsh(),
+      probe: async () => { throw new Error('connexion refusee'); },
+      probeIntervalMs: 3_600_000 });
+  await t.open();
+  assert.equal(t.state, BROKEN, 'un sparkd arrete ne doit pas paraitre joignable');
+  assert.match(t.lastError, /connexion refusee/);
+  t.close();
+});
+
+test('un serveur local se referme proprement, sans processus a tuer', async () => {
+  const t = new Tunnel({ name: 'dev', kind: 'local', host: '127.0.0.1', port: 9876 },
+    { spawn: () => fauxSsh(), probe: async () => {}, probeIntervalMs: 3_600_000 });
+  await t.open();
+  t.close();
+  assert.equal(t.state, CLOSED);
+});

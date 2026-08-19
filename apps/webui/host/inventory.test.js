@@ -1,5 +1,6 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-16 · docs/DAT.md §22.4
+ * @verifies docs/BACKLOG.md#SPK-16, docs/BACKLOG.md#SPK-23 ·
+ *           docs/DAT.md §22.4, §28.2 (le serveur local)
  *
  * L'inventaire ne contient jamais de secret : dupliquer un secret, c'est
  * doubler les endroits ou il fuit.
@@ -13,7 +14,10 @@ import { join } from 'node:path';
 
 import { load, save, validate, InventoryError } from './inventory.js';
 
-const OK = { name: 'prod', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 };
+// Un serveur porte desormais un GENRE (§28.2). Les deux attentes ci-dessous
+// enumeraient les champs ecrits ; elles suivent la nouvelle forme.
+const OK = { name: 'prod', kind: 'ssh', host: '203.0.113.10', user: 'ubuntu',
+             port: 22, remotePort: 9876 };
 
 async function fichier() {
   return join(await mkdtemp(join(tmpdir(), 'spark-')), 'servers.json');
@@ -60,7 +64,8 @@ test('seuls les champs attendus sont ecrits sur le disque', async () => {
   const chemin = await fichier();
   await save([{ ...OK, extra: 'ignoré' }], chemin);
   const [ecrit] = JSON.parse(await readFile(chemin, 'utf8'));
-  assert.deepEqual(Object.keys(ecrit).sort(), ['host', 'name', 'port', 'remotePort', 'user']);
+  assert.deepEqual(Object.keys(ecrit).sort(),
+                   ['host', 'kind', 'name', 'port', 'remotePort', 'user']);
 });
 
 // --- lecture ----------------------------------------------------------------
@@ -80,4 +85,39 @@ test('aller-retour', async () => {
   const chemin = await fichier();
   await save([OK], chemin);
   assert.deepEqual(await load(chemin), [OK]);
+});
+
+// --- le serveur local (docs/DAT.md §28.2) -----------------------------------
+
+test('un serveur sans genre reste un serveur SSH', () => {
+  assert.equal(validate({ name: 'prod', host: 'x.example.com' }).kind, 'ssh');
+});
+
+test("un serveur local n'exige ni hote, ni utilisateur, ni port distant", () => {
+  const s = validate({ name: 'dev', kind: 'local' });
+  assert.equal(s.kind, 'local');
+  assert.equal(s.host, '127.0.0.1');
+  assert.equal(s.port, 9876, 'le port ou ecoute sparkd en local');
+  assert.ok(!('user' in s), 'exiger un utilisateur obligerait a en inventer un');
+  assert.ok(!('remotePort' in s), 'il n’y a pas de machine distante');
+});
+
+test('un serveur local accepte un port explicite', () => {
+  assert.equal(validate({ name: 'dev', kind: 'local', remotePort: 9999 }).port, 9999);
+});
+
+test('un genre inconnu est refuse, en nommant ce qui est attendu', () => {
+  assert.throws(() => validate({ name: 'x', kind: 'telepathie', host: 'a' }),
+                /attendu ssh ou local/);
+});
+
+test('un serveur local aussi refuse un secret', () => {
+  assert.throws(() => validate({ name: 'dev', kind: 'local', token: 'abc' }), InventoryError);
+});
+
+test('aller-retour d’un serveur local', async () => {
+  const chemin = await fichier();
+  const local = { name: 'dev', kind: 'local', host: '127.0.0.1', port: 9876 };
+  await save([local], chemin);
+  assert.deepEqual(await load(chemin), [local]);
 });
