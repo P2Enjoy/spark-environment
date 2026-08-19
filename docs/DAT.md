@@ -2184,3 +2184,97 @@ aucune configuration Caddy n'est chargée. La pile éprouve la **traduction**, l
 contrôle d'admission, le cycle de vie, l'audit et l'interface — elle ne prouve
 rien de l'isolation. Cette preuve exige un hôte Incus réel (§12, §13).
 
+
+## 29. Les parcours E2E : éprouver le produit par où il s'utilise
+
+Le §28 a livré une pile réelle. Cette section dit ce qu'on en fait : des parcours
+qui traversent le produit **par où l'exploitant le traverse**, et qui affirment.
+
+### 29.1 La différence avec ce qui existe déjà
+
+Trois harnais coexistent, et confondre leurs rôles ferait croire à une couverture
+qu'on n'a pas :
+
+| Harnais | Contre quoi | Ce qu'il prouve |
+|---|---|---|
+| tests de composants | rien, fonctions pures | le **rendu** : ce que produit une fonction pour un état donné |
+| `e2e/gestes.test.mjs` | un faux `sparkd` écrit sur place | qu'un clic **part** avec la bonne méthode et le bon corps |
+| `e2e/reel.mjs` | la pile réelle | des **captures** à observer — il n'affirme rien |
+
+Il manque le seul qui compte pour la DoD : un harnais qui traverse la **pile
+réelle** et qui **affirme**. C'est SPK-24.
+
+### 29.2 Le harnais monte sa propre pile
+
+Les parcours démarrent `sparkd` et l'hôte console **eux-mêmes**, sur des ports
+libres, avec un registre jetable seedé.
+
+Le motif est concret : s'appuyer sur une pile déjà lancée fait dépendre le
+verdict de son état. Un Spark supprimé à la main pendant une mise au point rend
+la suite rouge sans que le produit ait changé, et — plus grave — un Spark ajouté
+à la main la rend verte alors qu'elle ne devrait pas l'être. Un harnais dont le
+résultat dépend de ce qu'un humain a fait avant lui ne prouve rien.
+
+Chaque exécution repart donc du seed du §28, dont les noms sont stables.
+
+### 29.3 Aucune URL profonde, aucun appel d'API pour AGIR
+
+C'est la DoD, et c'est `CLAUDE.md` §16 : on se déplace en cliquant et en tapant,
+depuis l'accueil. Écrire `location.hash = '#/creer'` pour arriver plus vite
+sauterait exactement ce qu'on veut éprouver — qu'un chemin existe pour y arriver.
+
+**Une distinction à ne pas manquer** : lire l'API pour CONSTATER un effet n'est
+pas un contournement. L'interdiction porte sur le fait d'**atteindre** un écran ou
+d'**accomplir** un geste autrement que par l'interface. Vérifier ensuite, en
+interrogeant `sparkd`, que l'instantané existe bien côté serveur est au contraire
+ce que `CLAUDE.md` §15 exige — « vérifier les effets backend lorsqu'ils
+existent ». Un parcours qui ne regarderait que l'écran validerait un affichage
+optimiste.
+
+### 29.4 Ce que « refus d'autorisation » veut dire dans ce produit
+
+`CLAUDE.md` §15 demande de couvrir les refus d'autorisation. Ce produit n'a **pas
+de comptes d'utilisateurs** : il s'administre par une console locale, derrière
+SSH, par un seul responsable. Prétendre éprouver une authentification qui
+n'existe pas produirait un test décoratif.
+
+Les refus que ce produit oppose réellement, et que les parcours doivent couvrir,
+sont ceux du **serveur** :
+
+| Refus | Règle | Où il se voit |
+|---|---|---|
+| capacité insuffisante | admission control, §7.7 | écran de création |
+| commande impossible dans l'état courant | machine à états, §14.1 | écran détail |
+| restauration bloquée par des instantanés plus récents | §19.1 | panneau instantanés |
+| domaine déjà pris | `UNIQUE` en base, §18.4 | panneau routes |
+
+Chacun doit être **provoqué par l'interface** et **constaté à l'écran**. Et pour
+chacun, le parcours vérifie que l'interface n'a pas décidé à la place du serveur :
+la demande part, et c'est la réponse qui refuse.
+
+### 29.5 Un parcours qui échoue doit dire pourquoi
+
+`CLAUDE.md` §15 demande de « capturer les erreurs utiles au diagnostic ». Un
+`expect` rouge sur une page qu'on ne voit pas oblige à rejouer à la main.
+
+Chaque échec produit donc une capture et le texte de l'écran au moment de
+l'échec, sous `e2e/captures/echecs/`. Les messages de la console du navigateur
+sont collectés pendant tout le parcours et joints au verdict.
+
+### 29.6 La console du navigateur fait partie du verdict
+
+Un avertissement toléré pendant des mois finit par masquer l'erreur qui comptait.
+Les parcours échouent si l'**application** écrit dans la console.
+
+Le journal réseau que Chromium produit de lui-même pour toute réponse non-2xx
+n'en fait pas partie : les parcours provoquent délibérément des refus, et
+compter ces lignes rendrait le contrôle inutilisable. Elles sont comptées à part
+et affichées, jamais masquées.
+
+### 29.7 Ce que ces parcours ne prouvent pas
+
+Le pilote reste factice (§28.7). Aucun quota n'est appliqué, aucun conteneur ne
+tourne, aucune configuration Caddy n'est chargée. Ces parcours prouvent que le
+produit **s'utilise** de bout en bout et que ses refus arrivent où il faut ; ils
+ne prouvent rien de l'isolation, qui exige un hôte Incus réel (§13).
+

@@ -455,8 +455,26 @@ RÉEL ; captures observées.
 
 ### [ ] SPK-24 · Tests E2E Playwright depuis le parcours canonique
 
-- DoD : parcours complets, souris et clavier uniquement, aucun accès direct à une
-  URL profonde ni appel d'API en contournement.
+- Spécification : `docs/DAT.md` §29.
+- Le harnais monte **sa propre pile** — `sparkd` et l'hôte console sur des ports
+  libres, registre jetable seedé (§29.2). Un verdict qui dépend de ce qu'un
+  humain a fait avant lui ne prouve rien.
+- Aucune URL profonde, aucun appel d'API pour **agir** ; lire l'API pour
+  **constater** un effet backend est au contraire exigé (§29.3).
+- Les quatre refus réels du produit sont provoqués par l'interface et constatés à
+  l'écran : capacité insuffisante, commande impossible dans l'état, restauration
+  bloquée, domaine déjà pris (§29.4). Ce produit n'a pas de comptes
+  d'utilisateurs : prétendre éprouver une authentification inexistante
+  produirait un test décoratif.
+- Un échec produit une capture et le texte de l'écran sous `e2e/captures/echecs/`
+  (§29.5).
+- La console du navigateur fait partie du verdict (§29.6).
+
+DoD : parcours complets, souris et clavier uniquement, aucun accès direct à une
+URL profonde ni appel d'API en contournement ; le harnais monte et démonte sa
+pile ; les quatre refus couverts ; les effets backend constatés côté `sparkd` ;
+la commande est documentée et entre dans `make test` ; console du navigateur
+vierge de tout message applicatif.
 
 ### [ ] SPK-25 · Manuel utilisateur
 
