@@ -2,7 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-15 · docs/DAT.md §21 (Journal d'audit),
       §21.1 (un seul chemin), §21.2 (on caviarde), §21.3 (ce qui est reconnu),
-      §21.6 (qui a agi : l'acteur et sa classe) · docs/BACKLOG.md#SPK-37,
+      §21.6 (qui a agi : l'acteur et sa classe), §36.9 (la chaine d'integrite) ·
+      docs/BACKLOG.md#SPK-37, docs/BACKLOG.md#SPK-38,
       §21.4 (un payload n'est pas un dépotoir) · docs/SCHEMA.md §9
 
 Aucun autre module n'écrit dans `audit_log`. Un filtre posé à cinq endroits sera
@@ -18,6 +19,9 @@ import sqlite3
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
+from hashlib import sha256
+
+from .db import transaction
 
 REDACTED = "[caviardé]"
 TRUNCATED = "[tronqué]"
@@ -54,6 +58,28 @@ CLASSES = (HUMAN, RUNTIME)
 #: une identite que rien n'etablit est un mensonge, l'ignorance n'en est pas un
 #: (docs/DAT.md §21.6.2).
 UNKNOWN_ACTOR = "inconnu"
+
+#: Ce que porte `prev_hash` sur la PREMIERE ligne (docs/DAT.md §36.9.1).
+#: Une constante litterale, et non la chaine vide : celle-ci se confond avec
+#: « colonne oubliee », et la confusion tomberait precisement sur la ligne qui
+#: ancre tout le reste.
+GENESIS = "GENESE"
+
+#: Champs entrant dans l'empreinte, TRIES, et eux seuls (§36.9.2).
+#:
+#: `id` n'y figure PAS : il est attribue par la base, et un `ROLLBACK` en
+#: consomme sans ecrire. Le faire entrer dans l'empreinte ferait dependre
+#: celle-ci d'un compteur que le produit ne controle pas.
+CHAINED_FIELDS = (
+    "action", "actor", "actor_class", "message", "payload",
+    "prev_hash", "result", "target_id", "target_type", "ts",
+)
+
+#: Une ligne de point de controle est un DEPART LEGITIME, pas une rupture
+#: (§36.9.4). La purge n'est pas livree, mais la verification la connait deja :
+#: l'ignorer obligerait a modifier la verification le jour de la purge,
+#: c'est-a-dire au pire moment.
+CHECKPOINT_ACTION = "audit.checkpoint"
 
 #: Borne de l'identite declaree. Elle arrive d'un en-tete HTTP, donc de
 #: l'exterieur : sans borne, une valeur de plusieurs kibioctets entrerait au
@@ -99,6 +125,53 @@ def as_runtime(actor: str = "sparkd"):
     """
     with acting_as(actor, RUNTIME):
         yield
+
+
+def canonical(ligne: dict) -> bytes:
+    """Sérialisation CANONIQUE d'une entrée (docs/DAT.md §36.9.2).
+
+    C'est le premier piège du §36.5, et il ne se rattrape pas : une vérification
+    qui échouerait un an plus tard sans qu'aucune ligne n'ait bougé détruirait la
+    confiance dans le dispositif entier. La forme est donc figée — JSON, clés
+    triées, séparateurs sans espace, `ensure_ascii`, UTF-8.
+
+    Une valeur absente est sérialisée `null`, jamais omise : omettre une clé
+    produirait deux octets différents pour deux lignes équivalentes.
+
+    Toute évolution de cette forme est une RUPTURE de compatibilité, et se traite
+    par une nouvelle version portée par un point de contrôle — jamais par un
+    changement en place.
+    """
+    retenu = {champ: ligne.get(champ) for champ in CHAINED_FIELDS}
+    return json.dumps(retenu, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=True).encode("utf-8")
+
+
+def entry_hash(ligne: dict) -> str:
+    """Empreinte d'une entrée, `prev_hash` compris.
+
+    C'est ce chaînage qui rend une modification détectable : changer une ligne
+    change son empreinte, donc invalide toutes les suivantes.
+    """
+    return sha256(canonical(ligne)).hexdigest()
+
+
+def head(connection: sqlite3.Connection) -> tuple[str, int]:
+    """Empreinte de la dernière ligne, et longueur de la chaîne.
+
+    L'ordre suivi est celui des `id`. Une ligne antérieure à la migration porte
+    une empreinte vide ; la tête vaut alors `GENESIS`, ce qui fait commencer la
+    chaîne là où elle peut réellement être prouvée (docs/SCHEMA.md §9.2).
+    """
+    ligne = connection.execute(
+        "SELECT entry_hash FROM audit_log ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    longueur = connection.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE entry_hash <> ''"
+    ).fetchone()["n"]
+    if ligne is None or not ligne["entry_hash"]:
+        return GENESIS, longueur
+    return ligne["entry_hash"], longueur
 
 
 def current_actor() -> tuple[str, str]:
@@ -211,17 +284,48 @@ def record(
         actor_class = contexte_classe
     if actor_class not in CLASSES:
         raise ValueError(f"Classe « {actor_class} » inconnue, attendu {CLASSES}.")
+    ligne = {
+        "ts": _now(),
+        "actor": normalize_actor(actor),
+        "actor_class": actor_class,
+        "action": action,
+        "target_type": target_type,
+        "target_id": target_id,
+        "payload": prepare_payload(payload),
+        "result": result,
+        # Le message aussi passe par le filtre : il est composé à la main,
+        # donc susceptible d'interpoler une valeur sensible.
+        "message": (str(redact(message, "message"))
+                    if looks_sensitive(None, message) else message),
+    }
+
+    # §36.9.3 : la tête se LIT et la ligne s'ÉCRIT sous une même transaction,
+    # sinon deux écritures s'intercalent et la chaîne fourche. SQLite n'a qu'un
+    # écrivain, ce qui aide, mais ne dispense pas de l'atomicité.
+    #
+    # Quand une transaction est DÉJÀ ouverte, on n'en ouvre pas une seconde :
+    # `record()` n'en ouvrait aucune, et c'est ce qui permet à un refus d'être
+    # journalisé HORS transaction — sans quoi le `ROLLBACK` emporterait la trace,
+    # exactement le cas où elle sert (§21.1).
+    if connection.in_transaction:
+        _inserer_chaine(connection, ligne)
+    else:
+        with transaction(connection):
+            _inserer_chaine(connection, ligne)
+
+
+def _inserer_chaine(connection: sqlite3.Connection, ligne: dict) -> None:
+    """Chaîne la ligne à la tête courante, puis l'insère."""
+    ligne["prev_hash"], _ = head(connection)
     connection.execute(
         "INSERT INTO audit_log (ts, actor, actor_class, action, target_type,"
-        " target_id, payload, result, message)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " target_id, payload, result, message, prev_hash, entry_hash)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            _now(), normalize_actor(actor), actor_class, action,
-            target_type, target_id,
-            prepare_payload(payload), result,
-            # Le message aussi passe par le filtre : il est composé à la main,
-            # donc susceptible d'interpoler une valeur sensible.
-            str(redact(message, "message")) if looks_sensitive(None, message) else message,
+            ligne["ts"], ligne["actor"], ligne["actor_class"], ligne["action"],
+            ligne["target_type"], ligne["target_id"], ligne["payload"],
+            ligne["result"], ligne["message"], ligne["prev_hash"],
+            entry_hash(ligne),
         ),
     )
 
@@ -247,3 +351,59 @@ def listing(
             f"SELECT * FROM audit_log{ou} ORDER BY id DESC LIMIT ?", parametres
         )
     ]
+
+
+def verify_chain(connection: sqlite3.Connection) -> dict:
+    """Parcourt la chaîne et désigne la PREMIÈRE rupture (docs/DAT.md §36.9.5).
+
+    @spec docs/BACKLOG.md#SPK-38 · docs/DAT.md §36.1, §36.5, §36.9.5
+
+    Elle s'arrête à la première : signaler les suivantes serait du bruit, une
+    ligne modifiée invalidant mécaniquement toute la suite. Lister mille alertes
+    ferait manquer la seule qui compte.
+
+    `reason` distingue deux constats qui n'ont pas la même cause :
+    `entry_hash` dit que la ligne ELLE-MÊME a été récrite, `prev_hash` dit qu'une
+    ligne a été RETIRÉE OU INSÉRÉE avant elle.
+
+    Ce qu'elle NE fait PAS : contrôler la continuité des `id`. Un trou est normal
+    — `AUTOINCREMENT` en consomme à chaque `ROLLBACK`, et le §21 journalise
+    délibérément certains refus hors transaction. Une alerte fausse est la
+    meilleure façon de faire ignorer les vraies (§36.5).
+
+    Ce qu'elle NE PEUT PAS voir : la troncature. Une chaîne coupée à la fin reste
+    parfaitement valide. Seule l'ancre tenue par la console la détecte (§36.9.6).
+    """
+    attendu = GENESIS
+    parcourues = 0
+    rupture = None
+
+    for ligne in connection.execute("SELECT * FROM audit_log ORDER BY id"):
+        entree = dict(ligne)
+        # Les lignes antérieures à la migration ne sont pas chaînées : on les
+        # traverse sans les juger (docs/SCHEMA.md §9.2).
+        if not entree["entry_hash"]:
+            continue
+        parcourues += 1
+
+        if entree["prev_hash"] != attendu:
+            rupture = {"id": entree["id"], "reason": "prev_hash",
+                       "ts": entree["ts"], "action": entree["action"]}
+            break
+        if entry_hash(entree) != entree["entry_hash"]:
+            rupture = {"id": entree["id"], "reason": "entry_hash",
+                       "ts": entree["ts"], "action": entree["action"]}
+            break
+
+        # Un point de contrôle est un DÉPART LÉGITIME, pas une rupture (§36.9.4).
+        attendu = entree["entry_hash"]
+
+    tete, longueur = head(connection)
+    return {
+        "checked": parcourues,
+        "head": None if tete == GENESIS else tete,
+        "length": longueur,
+        "intact": rupture is None,
+        "verified_at": _now(),
+        "break": rupture,
+    }
