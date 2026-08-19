@@ -89,6 +89,21 @@ export class Tunnel {
 
   /** Argument de `ssh`. Aucun secret : la configuration du poste fait foi. */
   sshArgs(localPort) {
+    // Une entrée par ALIAS ne nomme qu'un `Host` du ssh_config : on le passe tel
+    // quel, sans `-p` ni `user@`. Les ajouter ÉCRASERAIT ce que le fichier
+    // déclare — port, utilisateur, rebond — et le §22.4 bis délègue justement
+    // cela à OpenSSH.
+    if (this.server.kind === 'alias') {
+      return [
+        '-N',
+        '-o', 'LogLevel=VERBOSE',
+        '-o', 'ExitOnForwardFailure=yes',
+        '-o', 'ServerAliveInterval=10',
+        '-o', 'ServerAliveCountMax=2',
+        '-L', `127.0.0.1:${localPort}:127.0.0.1:${this.server.remotePort}`,
+        this.server.sshHost,
+      ];
+    }
     return [
       '-N',
       // SPK-37 · docs/DAT.md §21.6.3 : c'est cette verbosité qui fait dire à

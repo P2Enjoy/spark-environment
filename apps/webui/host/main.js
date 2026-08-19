@@ -12,7 +12,10 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 
-import { load, save, validate, InventoryError } from './inventory.js';
+import {
+  load, loadFile, save, saveFile, validate, InventoryError,
+} from './inventory.js';
+import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
@@ -26,19 +29,101 @@ export function createConsoleHost(options = {}) {
   const fetchFn = options.fetch ?? fetch;
 
   const routes = {
-    'GET /api/servers': async () => ({
-      status: 200,
-      body: {
-        servers: await load(inventoryPath),
-        tunnels: tunnels.list(),
-      },
-    }),
+    'GET /api/servers': async () => {
+      const fichier = await loadFile(inventoryPath);
+      return {
+        status: 200,
+        body: {
+          servers: fichier.servers,
+          tunnels: tunnels.list(),
+          // Le serveur courant est PERSISTÉ (§22.4.5). La console prenait
+          // `servers[0]`, ce qui rendait le choix implicite et dépendant de
+          // l'ordre d'écriture : ajouter un serveur changeait celui qu'on
+          // regardait.
+          current: fichier.current ?? fichier.servers[0]?.name ?? null,
+        },
+      };
+    },
 
     'POST /api/servers': async (corps) => {
       const serveur = validate(corps);
-      const existants = (await load(inventoryPath)).filter((s) => s.name !== serveur.name);
-      await save([...existants, serveur], inventoryPath);
+      const fichier = await loadFile(inventoryPath);
+      const existants = fichier.servers.filter((s) => s.name !== serveur.name);
+      await saveFile({
+        servers: [...existants, serveur],
+        // Un premier serveur devient courant : sans cela, la console aurait un
+        // inventaire et aucun contexte.
+        current: fichier.current ?? serveur.name,
+        anchors: fichier.anchors,
+      }, inventoryPath);
       return { status: 201, body: serveur };
+    },
+
+    /**
+     * Retire une entrée (§22.4.3).
+     *
+     * Le tunnel est fermé AVANT l'effacement : laisser un `ssh` vivant vers une
+     * machine qu'on vient de retirer de l'inventaire, c'est exactement le genre
+     * de processus qu'on ne retrouve plus.
+     */
+    'DELETE /api/servers': async (corps) => {
+      const nom = String(corps?.name ?? '');
+      const fichier = await loadFile(inventoryPath);
+      if (!fichier.servers.some((s) => s.name === nom)) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      tunnels.close(nom);
+      const restants = fichier.servers.filter((s) => s.name !== nom);
+      // Retirer le COURANT ne laisse pas la console sans contexte : le suivant
+      // prend la place, ou aucun si la liste est vide — et l'écran le dit alors,
+      // au lieu d'afficher une liste vide qui ferait croire à un serveur sans
+      // Sparks.
+      const courant = fichier.current === nom
+        ? (restants[0]?.name ?? null)
+        : fichier.current;
+      await saveFile({ servers: restants, current: courant, anchors: fichier.anchors },
+                     inventoryPath);
+      return { status: 200, body: { removed: nom, current: courant } };
+    },
+
+    'POST /api/servers/current': async (corps) => {
+      const nom = String(corps?.name ?? '');
+      const fichier = await loadFile(inventoryPath);
+      const serveur = fichier.servers.find((s) => s.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      await saveFile({ servers: fichier.servers, current: nom, anchors: fichier.anchors },
+                     inventoryPath);
+      // Changer de serveur courant ouvre SON tunnel. On ne ferme pas celui de
+      // l'ancien : il peut encore servir, et il se ferme explicitement (§22.4.5).
+      const tunnel = await tunnels.open(serveur).catch(() => null);
+      return { status: 200,
+               body: { current: nom, tunnel: tunnel?.describe() ?? null } };
+    },
+
+    /**
+     * Candidats du `~/.ssh/config`. On PROPOSE, on n'ajoute jamais d'office :
+     * un poste de développeur en contient des dizaines qui n'ont rien à voir
+     * avec le produit (§22.4 bis).
+     */
+    'GET /api/ssh-hosts': async () => ({ status: 200, body: { hosts: await sshHosts() } }),
+
+    /**
+     * Épreuve avant enregistrement (§22.4.4). Elle INFORME, elle ne décide pas :
+     * son résultat n'est pas une condition d'enregistrement, la machine pouvant
+     * être éteinte.
+     */
+    'POST /api/servers/probe': async (corps) => {
+      let serveur;
+      try {
+        serveur = validate(corps);
+      } catch (erreur) {
+        return { status: 422, body: { error: 'invalid_server', message: erreur.message } };
+      }
+      return { status: 200, body: await probeServer(serveur, { tunnels, fetch: fetchFn }) };
     },
 
     'POST /api/tunnels': async (corps) => {

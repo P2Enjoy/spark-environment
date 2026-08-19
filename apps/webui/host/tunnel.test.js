@@ -280,3 +280,29 @@ test("l'acteur déclaré nomme le serveur, et la clé SEULEMENT si on la connaî
   t.keyFingerprint = 'SHA256:AbCd';
   assert.equal(t.actorHeader, 'console/prod key=SHA256:AbCd');
 });
+
+
+// --- la connexion par alias (SPK-41, docs/DAT.md §22.4 bis) ----------------
+
+test('un tunnel par ALIAS passe le Host tel quel, sans -p ni user@', () => {
+  // Les ajouter ÉCRASERAIT ce que le ssh_config déclare — port, utilisateur,
+  // rebond — et c'est précisément ce que le §22.4 bis lui délègue.
+  const t = new Tunnel({ name: 'prod', kind: 'alias', sshHost: 'spark-prod',
+                         remotePort: 9876 });
+  const args = t.sshArgs(41000);
+  assert.ok(args.includes('spark-prod'), 'le Host est passé tel quel');
+  assert.ok(!args.includes('-p'), 'le port appartient au ssh_config');
+  assert.ok(!args.some((a) => String(a).includes('@')), 'l’utilisateur aussi');
+  assert.ok(args.includes('-L') && args.some((a) => String(a).includes('127.0.0.1:9876')),
+    'la redirection vers sparkd reste celle du produit');
+});
+
+test('un tunnel par alias garde la vérification de la clé d’hôte', () => {
+  // §22.4 bis : le produit ne pose ni StrictHostKeyChecking=no, ni
+  // UserKnownHostsFile=/dev/null — pas même pour « simplifier la première
+  // connexion ». Un changement de clé d’hôte est un signal.
+  const args = new Tunnel({ name: 'p', kind: 'alias', sshHost: 'h', remotePort: 9876 })
+    .sshArgs(41000).join(' ');
+  assert.ok(!/StrictHostKeyChecking/.test(args));
+  assert.ok(!/UserKnownHostsFile/.test(args));
+});
