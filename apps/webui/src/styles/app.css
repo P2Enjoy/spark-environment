@@ -24,7 +24,7 @@
 .principal { padding: var(--space-6) var(--space-4); flex: 1; }
 .principal > * + * { margin-top: var(--space-4); }
 
-.titre-vue { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.titre-vue { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .titre-vue__compte { color: var(--color-text-2); font-size: var(--text-compact); }
 
 /* --- Badges (§6.8) : fond doux + texte on-soft, jamais la couleur pleine -- */
@@ -61,7 +61,7 @@
   background: var(--color-brand); border-color: var(--color-brand); color: var(--color-surface);
 }
 .bouton--primaire:hover { background: var(--color-brand-hover); }
-.bouton--compact { padding: 0 var(--space-2); font-size: var(--text-compact); }
+.bouton--compact { padding: 0 var(--space-3); font-size: var(--text-compact); text-decoration: none; }
 .bouton[disabled] { opacity: 0.55; cursor: not-allowed; }
 
 /* --- Tableau (§6.14) : éléments natifs, pas de div ------------------------ */
@@ -262,3 +262,38 @@ tbody tr:hover { background: var(--color-hover); }
 .evenement:last-child { border-bottom: 0; }
 .evenement__texte { flex: 1; min-width: 12rem; color: var(--color-text-2); }
 .evenement__date { color: var(--color-text-3); }
+
+/* --- Formulaire (§6.9) --------------------------------------------------- */
+.champ { display: grid; gap: var(--space-1); }
+.champ label { font-size: var(--text-compact); color: var(--color-text-2); }
+.controle {
+  min-height: var(--size-target); padding: 0 var(--space-3);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: var(--color-surface); color: var(--color-ink);
+  font: inherit; width: 100%; max-width: 28rem;
+}
+.controle:focus-visible { border-color: var(--color-brand); }
+.controle--erreur { border-color: var(--color-danger); }
+.champ__aide { margin: 0; font-size: var(--text-compact); color: var(--color-text-3); }
+.champ__erreur {
+  margin: 0; font-size: var(--text-compact);
+  color: var(--color-danger-on-soft); font-weight: 700;
+}
+.formulaire__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: 0; }
+
+/* L'avertissement local annonce un RISQUE, pas un refus : accent, pas danger
+   (docs/DAT.md §25.1). */
+.avertissement {
+  margin: 0; padding: var(--space-3);
+  background: var(--color-accent-soft); color: var(--color-accent-on-soft);
+  border-radius: var(--radius-sm); font-size: var(--text-compact);
+}
+/* Seul le refus du serveur est rouge. */
+.refus {
+  margin: 0; padding: var(--space-3);
+  background: var(--color-danger-soft); color: var(--color-danger-on-soft);
+  border-radius: var(--radius-sm); font-size: var(--text-compact);
+}
+.refus p { margin: 0; }
+.refus .liste-simple { margin-top: var(--space-2); }
+.refus .liste-simple li { min-height: auto; }

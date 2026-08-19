@@ -129,6 +129,7 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
 <div class="titre-vue">
   <h1>Sparks</h1>
   <p class="titre-vue__compte">${sparks.length} cellule${sparks.length > 1 ? 's' : ''}</p>
+  <a class="bouton bouton--primaire bouton--compact" href="#/creer" style="margin-left:auto">Créer un Spark</a>
 </div>
 <div class="carte">
   <div class="tableau-enveloppe">
@@ -168,7 +169,7 @@ export function renderEmpty() {
 <div class="carte"><div class="etat-vue">
   <h2>Aucun Spark sur ce serveur</h2>
   <p>Un Spark est une cellule d’exécution contingentée, destinée à héberger une pile Docker Compose.</p>
-  <p style="margin-top:var(--space-4)"><button type="button" class="bouton bouton--primaire">Créer un Spark</button></p>
+  <p style="margin-top:var(--space-4)"><a class="bouton bouton--primaire" href="#/creer">Créer un Spark</a></p>
 </div></div>`;
 }
 

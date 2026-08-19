@@ -6,15 +6,20 @@
 
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
+import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 
 const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                sort: { key: 'name', dir: 'asc' }, tunnel: null, server: null,
-               route: 'liste', spark: null, detail: {}, confirming: null };
+               route: 'liste', spark: null, detail: {}, confirming: null,
+               creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
+                           pools: null, submitting: false } };
 
 function peindre() {
   racine.querySelector('.principal').innerHTML =
-    etat.route === 'detail'
+    etat.route === 'creation'
+      ? renderSparkCreate(etat.creation)
+      : etat.route === 'detail'
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, ...etat.detail })
       : renderSparksView(etat);
@@ -33,6 +38,27 @@ function brancher() {
     });
   }
   racine.querySelector('[data-action="reessayer"]')?.addEventListener('click', router);
+
+  const formulaire = racine.querySelector('#formulaire-spark');
+  if (formulaire) {
+    // Les valeurs vivent dans l'état : un refus ne doit rien effacer (§25.2).
+    for (const controle of formulaire.querySelectorAll('input, select')) {
+      controle.addEventListener('input', () => {
+        const brut = controle.value;
+        etat.creation.values[controle.name] =
+          controle.type === 'number' ? Number(brut) : brut;
+        if (controle.name === 'cpu_mode') peindre();   // les champs suivent le mode
+      });
+    }
+    formulaire.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      creer();
+    });
+  }
+
+  racine.querySelector('.etat-vue .bouton--primaire')?.addEventListener('click', () => {
+    location.hash = '#/creer';
+  });
 
   for (const bouton of racine.querySelectorAll('[data-commande]')) {
     bouton.addEventListener('click', () => {
@@ -80,6 +106,66 @@ async function api(chemin) {
   return corps;
 }
 
+async function chargerCreation() {
+  etat.route = 'creation';
+  etat.status = 'ready';
+  peindre();
+  try {
+    const hote = await api('/v1/host');
+    etat.creation.pools = hote.pools;
+  } catch {
+    // Capacité inconnue : l'écran le dit plutôt que d'inventer des chiffres.
+    etat.creation.pools = null;
+  }
+  peindre();
+}
+
+async function creer() {
+  // Contrôles de FORME seulement. La capacité, c'est sparkd qui tranche (§25.3).
+  etat.creation.errors = validateShape(etat.creation.values);
+  etat.creation.refusal = null;
+  if (Object.keys(etat.creation.errors).length > 0) {
+    peindre();
+    // §6.12 : amener le premier champ concerné et y déplacer le focus.
+    const premier = Object.keys(etat.creation.errors)[0];
+    racine.querySelector(`#${premier}`)?.focus();
+    return;
+  }
+
+  etat.creation.submitting = true;
+  peindre();
+  const v = etat.creation.values;
+  const corps = {
+    name: v.name, image: v.image, cpu_mode: v.cpu_mode,
+    memory_bytes: Math.round(v.memory_gib * 1024 ** 3),
+    network_bps: Math.round(v.network_mbit * 1e6),
+    storage_bytes: Math.round(v.storage_gib * 1024 ** 3),
+    ...(['shared', 'shared-pinned'].includes(v.cpu_mode) ? { cpu_reservation: v.cpu_reservation } : {}),
+    ...(v.cpu_mode === 'capped' ? { cpu_max: v.cpu_max } : {}),
+    ...(['dedicated', 'shared-pinned'].includes(v.cpu_mode) ? { cpu_cores: v.cpu_cores } : {}),
+  };
+  try {
+    const reponse = await fetch(`/api/v1/sparks?server=${encodeURIComponent(etat.server)}`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps) });
+    const rendu = await reponse.json();
+    if (!reponse.ok) {
+      // Le refus vient du serveur, et la saisie reste intacte (§25.2).
+      etat.creation.refusal = rendu?.detail ?? { message: rendu?.message ?? `HTTP ${reponse.status}` };
+      etat.creation.submitting = false;
+      peindre();
+      racine.querySelector('.refus')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    etat.creation.values = { ...DEFAUTS };
+    etat.creation.submitting = false;
+    location.hash = `#/sparks/${encodeURIComponent(rendu.name)}`;
+  } catch (erreur) {
+    etat.creation.refusal = { message: erreur.message };
+    etat.creation.submitting = false;
+    peindre();
+  }
+}
+
 async function chargerDetail(nom) {
   etat.route = 'detail';
   etat.status = 'loading';
@@ -104,6 +190,7 @@ async function chargerDetail(nom) {
 }
 
 function router() {
+  if (location.hash === '#/creer') return chargerCreation();
   const nom = (location.hash.match(/^#\/sparks\/(.+)$/) || [])[1];
   if (nom) return chargerDetail(decodeURIComponent(nom));
   etat.route = 'liste';
