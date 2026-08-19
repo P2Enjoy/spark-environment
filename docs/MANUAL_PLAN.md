@@ -15,9 +15,9 @@ l'apparence change.
 carte des chapitres et de leurs unités ; le contrat de fraîcheur — illustrations
 produites, lien vérifié dans les deux sens — est au §30 du [DAT](DAT.md).
 
-Chapitres rédigés : M1, M3 à M12. **M2 ne l'est pas** : l'installation n'est pas
-outillée (SPK-26) et le repartitionnement du stockage attend un arbitrage
-(SPK-28).
+**Tous les chapitres sont rédigés (M1 à M12).** M2 l'a été avec SPK-26 ; il
+délimite explicitement ce qui n'est pas encore outillé — la mise en place des
+prérequis, et le repartitionnement du stockage qui attend un arbitrage (SPK-28).
 
 ---
 

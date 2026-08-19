@@ -17,7 +17,7 @@ n'existe plus. Voir [DAT §30](../DAT.md).
 | Chapitre | Sujet |
 |---|---|
 | [M1 · Comprendre un Spark](M1-comprendre.md) | ce qu'est une cellule, et ce qu'elle n'est pas |
-| M2 · Installer le serveur | **pas encore rédigé** — l'installation n'est pas outillée (SPK-26), et le repartitionnement du stockage attend un arbitrage (SPK-28) |
+| [M2 · Installer le serveur](M2-installer.md) | vérifier le serveur, déployer `sparkd`, relever la topologie |
 | [M3 · Ouvrir la console](M3-console.md) | lancer la console, choisir un serveur, lire l'état du tunnel |
 | [M4 · Lire les pools de ressources](M4-pools.md) | capacité, réserve, surengagement |
 | [M5 · Créer un Spark](M5-creer.md) | le formulaire, les modes CPU, la lecture d'un refus |

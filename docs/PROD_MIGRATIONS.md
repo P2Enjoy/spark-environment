@@ -12,7 +12,8 @@ n'est appliquée en production sans instruction humaine explicite.
 
 ## 1. Baseline de production
 
-**Aucune.** Rien n'est déployé à ce jour.
+**Établie le 2026-08-19**, et relevée par `python3 -m sparkd.preflight` sur
+l'hôte de validation. Les neuf contrôles du §31 du [DAT](DAT.md) sont verts.
 
 | Élément | État |
 |---|---|
@@ -23,12 +24,22 @@ n'est appliquée en production sans instruction humaine explicite.
 | Pool de stockage | pool ZFS `spark` **sur fichier**, 200 Gio creux dans `/var/lib/incus/disks/spark.img` — provisoire, voir OP-01 |
 | `zfs_arc_max` | **16 Gio**, persisté dans `/etc/modprobe.d/zfs.conf` |
 | Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif |
-| Caddy | non installé |
-| `sparkd` | non déployé |
-| Version de schéma | aucune |
+| Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
+| Caddy | **v2.11.4**, actif, API d'administration sur `127.0.0.1:2019` |
+| `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 002** |
+| Topologie relevée | 4 cœurs / 8 threads, 94,2 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76,2 Gio allouables** |
+| Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
 Cette baseline décrit un hôte de **validation**, pas de production : le pool sur
 fichier et l'absence de repartitionnement restent des dettes ouvertes (OP-01).
+
+**Comment la revérifier**, en lecture seule et sans rien modifier :
+
+```
+python3 -m sparkd.preflight          # texte lisible, code de sortie 1 si bloquant
+python3 -m sparkd.preflight --json   # pour archiver le relevé
+```
 
 ## 2.0 Contrainte de version : Incus ≥ 6.19, depuis le dépôt amont
 
@@ -127,7 +138,11 @@ Risques       : md1 était en resynchronisation au relevé (~8 h). Toute opérat
                 disque menée pendant cette fenêtre est plus lente et plus risquée.
 ```
 
-### OP-02 · Restreindre la plage DHCP dynamique du bridge privé
+### OP-02 · Restreindre la plage DHCP dynamique du bridge privé — **APPLIQUÉ le 2026-08-19**
+
+> Relevé : `ipv4.dhcp.ranges = 10.77.0.240-10.77.0.254`. Contrôle `NET-DHCP`.
+> Conservé ici pour mémoire ; il n'y a rien à faire.
+
 
 ```
 Objectif      : rendre la plage DHCP disjointe de celle qu'attribue le registre,
@@ -141,6 +156,29 @@ Risques       : sans cette restriction, une instance non gérée peut recevoir u
                 adresse que le registre a déjà attribuée à un Spark. La collision
                 se manifeste alors comme une panne réseau intermittente, très loin
                 de sa cause.
+```
+
+### OP-04 · Déployer `sparkd` en service systemd
+
+```
+Objectif      : que sparkd survive a un redemarrage. Mesure le 2026-08-19 : il
+                tournait depuis une session ssh. Un plan de controle lance a la
+                main disparait au premier redemarrage, et les Sparks continuent
+                de tourner sans que rien ne les administre : la panne est
+                silencieuse et ne se decouvre qu'a la premiere operation.
+Depend de     : Incus >= 6.19, pool de stockage, bridge prive
+Commande      : scripts/install-serveur.sh (idempotent, en root)
+Apres         : POST /v1/host/sync — un registre neuf ignore la capacite de la
+                machine tant qu'elle n'a pas ete relevee.
+Verification  : python3 -m sparkd.preflight  -> controle RUN-SPARKD vert, qui
+                exige « active » ET « enabled » ; puis GET /readyz, qui sonde
+                reellement Incus et Caddy.
+Retour arriere: systemctl disable --now sparkd. Le registre est conserve dans
+                /var/lib/sparkd et n'est jamais efface par le script.
+Risques       : le script redemarre le service. Un sparkd lance a la main sur le
+                meme port doit etre arrete avant, sinon l'unite ne peut pas se
+                lier.
+État          : APPLIQUÉ le 2026-08-19 sur l'hôte de validation.
 ```
 
 ### OP-03 · Migration `002_part_arc` du registre
@@ -192,14 +230,35 @@ mémoire que l'ARC consomme (DAT §8.5).
 
 ## 5. Vérifications post-déploiement
 
-À exécuter après toute mise en service, et à archiver :
+**Automatisées** — même série qu'avant l'installation (DAT §31.1), en lecture
+seule :
 
-1. `sparkd` n'écoute que sur la boucle locale — prouvé par un scan **depuis
-   l'extérieur**, pas depuis la machine.
-2. L'API d'administration de Caddy n'est pas joignable depuis le réseau.
-3. Un Spark de test se crée, démarre, obtient son IP privée, et son quota disque
-   refuse effectivement l'écriture au-delà de la limite.
-4. Le registre et l'état réel d'Incus concordent.
+```
+python3 -m sparkd.preflight
+```
+
+| Code | Ce qu'il établit |
+|---|---|
+| `INC-VERSION` | Incus ≥ 6.19, sans quoi aucun conteneur Docker ne démarre dans un Spark |
+| `STO-POOL` | pool ZFS présent ; signale s'il est sur fichier (provisoire) |
+| `STO-COMPRESSION` | compression active |
+| `MEM-ARC` | plafond de l'ARC posé et ≤ 16 Gio |
+| `NET-BRIDGE` | bridge privé présent |
+| `NET-DHCP` | plage DHCP disjointe de celle qu'attribue le registre |
+| `ING-CADDY` | Caddy administrable sur la boucle locale |
+| `SEC-PORTS` | seuls `22`, `80`, `443` joignables depuis le réseau |
+| `RUN-SPARKD` | unité systemd **active ET activée au démarrage** |
+
+Puis `GET /readyz`, qui **sonde** Incus, Caddy et le registre et nomme la cause
+de toute dépendance en panne.
+
+**Restant à faire à la main**, parce que ces contrôles ne peuvent pas les rendre :
+
+1. le scan des ports **depuis l'extérieur**, pas depuis la machine : `SEC-PORTS`
+   lit ce que l'hôte déclare écouter, un pare-feu amont peut différer ;
+2. un Spark de test qui se crée, démarre, obtient son IP privée, et dont le quota
+   disque refuse effectivement l'écriture au-delà de la limite — c'est une mesure
+   de comportement, pas une condition (DAT §31.5, §13).
 
 ## 6. Retour arrière
 
