@@ -128,6 +128,9 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- Les Sparks vivent désormais dans une tranche cgroup parente `spark.slice` dont
+  le poids suit ce qui a été alloué, au lieu d'être arbitrés contre les tranches
+  de l'hôte. Nouveau réglage `SPARKD_CPU_RESERVE` ; nouveau contrôle `RUN-SLICE`.
 - La consommation instantanée de l'ARC ZFS est publiée par `GET /v1/host` et
   affichée face à son plafond sur l'écran de l'hôte.
 - `python3 -m sparkd.preflight` : neuf contrôles d'état du serveur, en lecture
@@ -169,7 +172,7 @@
   d'administration d'un Spark ; nouveau §27, l'écran des pools ; nouveau §28, la
   pile de développement et le contrat du seed ; nouveau §29, les parcours E2E ;
   nouveau §30, le manuel et sa fraîcheur ; nouveau §31, l'installation du
-  serveur et sa vérification ;
+  serveur et sa vérification ; nouveau §32, rendre la réservation CPU absolue ;
   nouveau §22.6, qui ouvre le tunnel de la console et quand.
 - `docs/SCHEMA.md` : nouveau §11 bis, les deux termes de la réserve mémoire.
 - Migration `002_part_arc` : `host` porte désormais `memory_arc_bytes` et

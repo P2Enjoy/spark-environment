@@ -1762,3 +1762,58 @@ SPK-29 (réservation absolue), SPK-30 (marge de métadonnées) et SPK-28
 INC-02 ; SPK-12 attend un domaine et SPK-17 une exécution de CI. La prochaine
 session devrait soit traiter une unité que vous aurez arbitrée, soit — à défaut —
 solder SPK-12 ou SPK-17 sur ce qui est vérifiable sans la dépendance manquante.
+
+
+---
+
+## 2026-08-19 — SPK-29 : le mécanisme est livré, la garantie ne l'est pas encore
+
+**Unité** : SPK-29. Le journal précédent annonçait qu'aucune unité de
+construction n'était débloquée. C'était faux : SPK-29 et SPK-30 sont entièrement
+spécifiées et n'attendaient aucun arbitrage. Corrigé.
+
+**Mesuré d'abord, spécifié ensuite.** `raw.lxc` avec `lxc.cgroup.dir.container`
+place le Spark dans une tranche parente, et deux propriétés y survivent : la loi
+de poids du §7.2 bis s'applique inchangée, et `cpu.max` reste `max`, donc le
+burst est préservé. Le §32 est écrit sur cette mesure.
+
+**La difficulté n'était pas le déplacement mais le poids de la tranche.** Il doit
+valoir `H × f / (1 − f)` où `f` est la part vendue : une constante rendrait la
+réservation absolue pour un seul taux de remplissage. D'où deux conséquences —
+une réserve CPU de l'hôte, qui rend la loi **définie**, et une unité systemd,
+parce qu'une tranche créée à la main disparaît au redémarrage et que la
+réservation redeviendrait proportionnelle **en silence**.
+
+**Un défaut trouvé au déploiement** : systemd crée la tranche mais n'y délègue
+que `hugetlb rdma misc`. Une écriture unique à l'installation ne tient pas — le
+cgroup d'une tranche vide n'existe pas encore. Le runtime réaffirme donc la
+délégation. Sans ces contrôleurs, la tranche existe et paraît correcte alors que
+les limites ne s'y appliquent pas.
+
+**Prouvé sur l'hôte** : un Spark créé par `sparkd` atterrit dans la tranche,
+poids `245`, `cpu.max` à `max`, et le poids de la tranche passe à `100` pour
+1 CPU vendu — la valeur du tableau.
+
+**La DoD n'est PAS atteinte, et c'est l'information importante.** Sous contention
+provoquée, le Spark a obtenu **50 %** de la machine au lieu des 25 % attendus.
+La cause n'est pas une erreur de calcul : `H` n'est pas une constante. Un poids
+cgroup ne se partage qu'entre frères **exécutables**, et deux des trois tranches
+de l'hôte étaient au repos. L'écart joue en faveur du locataire — la réservation
+est désormais un **plancher** tenu et dépassé — mais l'égalité que la DoD exige
+n'est pas établie. L'unité reste `[~]`.
+
+**INC-03 consigné** : un Spark dont l'instance a disparu ne peut plus être
+supprimé (`502`), et maintient depuis cette unité le poids de la tranche à une
+valeur qui ne correspond à rien. L'hôte de validation porte une entrée dans ce
+cas. Le comportement est laissé inchangé : il relève de SPK-09.
+
+**Vérifié.** 522 tests Python, 182 Node, 6 de contrat, 10 gestes, 11 parcours
+E2E, 7 contrôles du manuel, build, contrat sans dérive. Préflight : 10 contrôles
+verts sur l'hôte.
+
+**Où reprendre.** **SPK-29**, sa seule preuve manquante : provoquer une contention
+sur les **trois** tranches de l'hôte simultanément — `system.slice`, `user.slice`
+et `init.scope` — et vérifier la convergence vers `r / C`. Le nettoyage de
+l'entrée fantôme du registre suppose INC-03 arbitré. Puis **SPK-30**, entièrement
+spécifiée et non bloquée. SPK-12 attend un domaine, SPK-17 une exécution de CI ;
+SPK-28, INC-01, INC-02 et INC-03 attendent votre arbitrage.

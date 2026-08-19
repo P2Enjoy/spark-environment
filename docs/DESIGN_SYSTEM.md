@@ -242,9 +242,14 @@ Structure de référence :
 └──────────────┴──────────────────────────────────────────────────────┘
 ```
 
-Toutes les applications ne sont pas obligées d’utiliser une barre latérale.
+Ce patron n’est pas un exemple parmi d’autres : c’est la forme par défaut. La
+navigation de premier niveau est une barre latérale, celle de second niveau des
+onglets, et la modification d’une section passe par une modale. Les trois degrés
+sont définis au §5.4 ; la surface qu’ils ouvrent l’est au §6.27.
 
-Le patron dépend de la quantité et de la nature de la navigation.
+Une application peut retenir un autre patron — une barre horizontale sur deux ou
+trois destinations, par exemple. Ce n’est alors plus une préférence de mise en
+page mais un **écart**, documenté comme tel (§16), avec le motif qui le justifie.
 
 ## 5.1 Navigation principale
 
@@ -279,6 +284,55 @@ Ordre recommandé de sacrifice :
 4. jamais le titre principal de la route sans autre point d’accès.
 
 Un libellé nécessaire aux technologies d’assistance peut devenir `sr-only`, mais ne doit pas être supprimé.
+
+## 5.4 Les trois degrés de navigation
+
+Une application a trois degrés, et pas quatre. Chacun a une forme, et cette forme
+dit à l’utilisateur *ce qui va changer* quand il clique.
+
+| Degré | Ce qu’il représente | Forme |
+|---|---|---|
+| 1 | destinations principales du produit | barre latérale |
+| 2 | sous-parties d’une même destination | onglets |
+| 3 | contenu de la sous-partie | fenêtre d’options en lecture, modale pour modifier une section (§6.27) |
+
+### Degré 1 — barre latérale
+
+Une liste verticale absorbe une destination de plus sans rien sacrifier. Une
+barre horizontale, elle, oblige à arbitrer la largeur dès la cinquième entrée :
+on replie, on abrège, on cache derrière un « plus », et la destination courante
+finit par ne plus être visible. La barre latérale est donc le défaut, y compris
+lorsque le produit n’a encore que deux destinations — c’est précisément le moment
+où le choix ne coûte rien.
+
+Elle suit les règles du §5.1 : identifiable, libellés accessibles conservés même
+lorsqu’elle devient iconographique, `aria-current="page"` sur la destination
+courante, état actif jamais porté par la seule couleur.
+
+Sous 1024 px, elle devient un tiroir ou une barre inférieure. Elle ne devient
+jamais un menu iconographique sans libellés : un pictogramme seul n’est pas une
+navigation, c’est une devinette.
+
+### Degré 2 — onglets
+
+Les sous-parties d’une destination sont des onglets. Visuellement, ce sont des
+onglets dans les deux cas ; la sémantique, elle, dépend de ce qui change
+réellement (§5.2) :
+
+* les panneaux sont **échangés dans la même vue**, sans changement d’URL — patron
+  ARIA `tablist` / `tab` / `tabpanel`, navigation par flèches, `Home` et `End` ;
+* la sous-partie est une **véritable destination** — URL propre, partageable,
+  rechargeable — ce sont des **liens** dans un `nav`, avec
+  `aria-current="page"`, et surtout **pas** un `tablist`.
+
+Le critère est l’URL, jamais l’apparence.
+
+Un onglet change ce que l’on regarde. Il ne modifie jamais l’état des données, et
+ne porte donc aucune action.
+
+Il n’existe pas de troisième degré de **menu**. Lorsqu’un besoin d’en ajouter un
+apparaît, c’est que la destination doit être scindée, ou que ce qu’on voulait y
+mettre est une section de la fenêtre du degré 3.
 
 ---
 

@@ -599,7 +599,7 @@ Les points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné
   chaque requête et non persistée, et affichée face à son plafond. Vérifié sur
   l'hôte réel — 0,80 Gio annoncés, 0,80 Gio dans `arcstats`.
 
-### [ ] SPK-29 · Regrouper les Sparks sous un parent cgroup de poids maîtrisé
+### [~] SPK-29 · Regrouper les Sparks sous un parent cgroup de poids maîtrisé
 
 Mesuré le 2026-08-18 : Incus place chaque Spark à la **racine** de cgroup v2, frère
 de `system.slice`, `user.slice` et `init.scope`, tous à `cpu.weight=100`. Le poids
@@ -624,6 +624,28 @@ centrale du produit.
 - DoD : sous contention totale provoquée, un Spark à réservation *r* obtient
   effectivement `r / capacité` de la machine, mesuré et archivé. Tant que ce n'est
   pas prouvé, la console ne présente pas la réservation comme une garantie absolue.
+
+**Le mécanisme est LIVRÉ et prouvé sur l'hôte ; la DoD ne l'est pas encore.**
+
+- Livré : le traducteur place tout Spark dans `spark.slice` ; le runtime
+  recalcule le poids à la création, à la suppression et au démarrage ; la
+  délégation des contrôleurs se réaffirme ; la tranche est une unité systemd ; le
+  préflight gagne le contrôle `RUN-SLICE` ; `SPARKD_CPU_RESERVE` existe.
+- Prouvé sur l'hôte : un Spark créé par `sparkd` atterrit **dans** la tranche,
+  poids `245` — la loi `250 − 10 + 5` du §7.2 bis s'applique inchangée — et
+  `cpu.max` reste `max`, donc le burst est préservé. Le poids de la tranche est
+  passé à `100` à la création d'un Spark réservant 1 CPU, exactement la valeur du
+  tableau du §32.2.
+- **Reste à prouver, et c'est le seul écart** : sous contention **totale** — les
+  trois tranches de l'hôte exécutables simultanément —, la part converge vers
+  `r / C`. La mesure du 2026-08-19 a donné **50 %** au lieu de 25 %, parce que
+  deux des trois tranches de l'hôte étaient au repos : un poids cgroup ne se
+  partage qu'entre frères **exécutables**. L'écart joue en faveur du locataire —
+  la réservation est un **plancher** tenu et dépassé — mais l'égalité annoncée
+  par la DoD n'est pas établie. Voir §32.2, sous-section « ce que la mesure a
+  corrigé ».
+- La console continue donc de **ne pas** présenter la réservation comme une
+  garantie absolue, conformément à la DoD.
 
 ### [ ] SPK-30 · Marge de métadonnées au-dessus du quota vendu
 
