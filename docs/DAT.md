@@ -1923,6 +1923,109 @@ une histoire d'audit qui ne prolonge plus la précédente disent la même chose.
 Cible portée par `docs/BACKLOG.md#SPK-41` ; aujourd'hui le catalogue ne connaît
 que le triplet, et s'édite à la main dans le fichier.
 
+### 22.4 ter Le catalogue tenu depuis la console : contrat (SPK-41)
+
+Les §22.4 et §22.4 bis disent ce que le catalogue contient et à qui il délègue.
+Celui-ci dit ce qui se code pour s'en servir sans éditeur de texte.
+
+#### 22.4.1 Trois genres, et non plus deux
+
+`kind` ∈ { `ssh`, `alias`, `local` }.
+
+| Genre | Ce que l'entrée porte | Ce qu'OpenSSH résout |
+|---|---|---|
+| `ssh` | `host`, `user`, `port` | rien de plus |
+| `alias` | `sshHost` — un `Host` du `~/.ssh/config` | l'hôte, l'utilisateur, le port, le rebond, la clé |
+| `local` | `port` | rien : `sparkd` écoute déjà ici (§28.2) |
+
+Une entrée `alias` ne porte **ni** `host`, **ni** `user`, **ni** `port` de
+connexion, et le produit ne les devine pas : les inventer donnerait l'illusion de
+les connaître, et ils seraient faux dès qu'un `ProxyJump` s'interpose.
+
+`ssh` reste accepté et n'est pas déprécié : le cas simple ne doit pas exiger un
+`ssh_config`.
+
+#### 22.4.2 Le fichier porte sa version
+
+```json
+{ "version": 1, "servers": [ … ], "anchors": { … } }
+```
+
+La forme historique — un **tableau nu** — est lue comme la version `0` et
+convertie en mémoire. Elle n'est jamais réécrite en place au chargement : une
+console qui migrerait le fichier à la lecture le récrirait sans qu'on l'ait
+demandé, y compris quand elle n'a fait que l'afficher. La conversion est écrite
+au **premier enregistrement**, qui est un geste explicite.
+
+`anchors` est le champ que SPK-38 remplit (§36.2) : il est **prévu ici** pour que
+la place existe, et le fichier séparé écrit par SPK-38 sera replié dedans le jour
+où l'on touche à sa forme. Deux fichiers pour un même état sont une dette, pas une
+architecture — elle est nommée ici plutôt que découverte.
+
+#### 22.4.3 Surface d'API de l'hôte console
+
+| Geste | Route | Réponse |
+|---|---|---|
+| lister | `GET /api/servers` | `{ servers, tunnels, current }` |
+| ajouter ou remplacer | `POST /api/servers` | `201` |
+| retirer | `DELETE /api/servers/{nom}` | `200`, ou `404` |
+| choisir le courant | `POST /api/servers/current` | `200`, ou `404` |
+| candidats du `ssh_config` | `GET /api/ssh-hosts` | `{ hosts: [...] }` |
+| éprouver avant d'enregistrer | `POST /api/servers/probe` | `{ reachable, healthz, readyz, error }` |
+
+`DELETE` **ferme le tunnel** de l'entrée retirée avant de l'effacer : laisser un
+`ssh` vivant vers une machine qu'on vient de retirer de l'inventaire serait
+exactement le genre de processus qu'on ne retrouve plus.
+
+Retirer le serveur **courant** ne laisse pas la console sans contexte : le
+suivant de la liste devient courant, ou aucun si la liste est vide — et l'écran le
+dit alors, au lieu d'afficher une liste de Sparks vide qui ferait croire à un
+serveur sans Sparks.
+
+#### 22.4.4 L'épreuve informe, elle ne décide pas
+
+`POST /api/servers/probe` ouvre un tunnel **temporaire**, appelle `/healthz` puis
+`/readyz` **à travers lui**, referme, et rend ce qu'il a vu.
+
+Elle n'enregistre rien, et son résultat n'est **pas** une condition
+d'enregistrement (§25.1) : la machine peut être éteinte, le réseau coupé, le
+serveur pas encore installé. Un serveur injoignable s'enregistre donc, avec son
+avertissement affiché. Refuser reviendrait à exiger qu'une machine soit allumée
+pour qu'on note son existence.
+
+Le tunnel temporaire est **toujours refermé**, y compris en cas d'échec : une
+épreuve qui laisserait un `ssh` derrière elle transformerait un diagnostic en
+fuite de processus.
+
+#### 22.4.5 Le serveur courant est retenu, et il est un choix
+
+Le serveur courant est **persisté** dans le fichier (`current`). La console
+prenait `servers[0]`, ce qui rendait le choix implicite et dépendant de l'ordre
+d'écriture : ajouter un serveur changeait celui qu'on regardait.
+
+À l'ouverture, la console ouvre le tunnel du serveur courant **seulement**
+(§22.6). Changer de serveur courant ouvre le tunnel du nouveau ; elle ne ferme pas
+celui de l'ancien, qui peut encore servir et se ferme explicitement.
+
+#### 22.4.6 La reconnexion est un geste, pas une attente
+
+Un tunnel `broken` porte une commande de reconnexion **à l'écran**. Aujourd'hui il
+n'en a aucune, et la seule issue est de recharger la console — ce qui n'est pas
+un remède, c'est une superstition.
+
+Le geste appelle `POST /api/tunnels`, qui rouvre. L'état passe par `connecting`
+et l'écran le montre : une reconnexion silencieuse laisserait croire que rien ne
+se passe.
+
+#### 22.4.7 Ce qui reste hors de portée, et le reste
+
+Aucun secret, jamais (§22.4). La vérification de la clé d'hôte n'est jamais
+désactivée (§22.4 bis). La découverte **propose** les `Host` du `ssh_config`, elle
+n'ajoute rien d'office — un poste de développeur en contient des dizaines qui
+n'ont rien à voir avec le produit.
+
+Le fichier reste en `0600`.
+
 ### 22.5 Le port local est demandé au système
 
 Le port local du tunnel est obtenu en laissant le système en choisir un libre,
