@@ -146,6 +146,21 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         ...(routeEnAttente ? [{ domain: 'preprod.example.com', target_port: 3000, tls: 0,
                                 spark_name: 'crm-production', applied_at: null }] : []),
       ] }), { status: 200 });
+      // Catalogue d'images (§33.3) : les trois états, pour que la capture les
+      // montre tous les trois plutôt qu'un seul.
+      if (url.includes('/v1/images')) return new Response(JSON.stringify({ images: [
+        { reference: 'images:debian/13', label: 'Debian 13 « trixie »', state: 'verified',
+          verified_at: '2026-08-19T09:45:00', is_default: 1,
+          detail: 'relevé sur 272 produits publiés' },
+        { reference: 'images:ubuntu/24.04', label: 'Ubuntu 24.04 LTS', state: 'verified',
+          verified_at: '2026-08-19T09:45:00', is_default: 0,
+          detail: 'relevé sur 272 produits publiés' },
+        { reference: 'images:debian/11', label: 'Debian 11 « bullseye »', state: 'missing',
+          verified_at: '2026-08-19T09:45:00', is_default: 0,
+          detail: 'le dépôt ne publie plus cet alias' },
+        { reference: 'images:alpine/3.21', label: 'Alpine 3.21', state: 'unknown',
+          verified_at: null, is_default: 0, detail: '' },
+      ] }), { status: 200 });
       if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
         { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
         { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', target_id: 'S1', message: 'crm.example.com → port 8080.' },
@@ -430,6 +445,37 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-action="relever"]', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '32-hote-non-releve.png') });
 console.log('  32-hote-non-releve.png');
+ctx.server.close();
+
+// --- Catalogue d'images (SPK-32) et sa modale (SPK-33) --------------------
+// docs/DAT.md §33, §34.1. On y va PAR LA NAVIGATION : accueil, Hôte, onglet
+// Images. Aucune URL directe — c'est le parcours d'un utilisateur (CLAUDE.md §16).
+ctx = await demarrer();
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.click('nav a[href="#/hote"]');
+await page.waitForSelector('#titre-pools', { timeout: 8000 });
+await page.click('.onglet[href="#/hote/images"]');
+await page.waitForSelector('#titre-catalogue', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '33-hote-images.png') });
+console.log('  33-hote-images.png');
+
+// §6.27 : la commande de la section ouvre une modale dont le sujet est cette
+// section. Ouverte AU CLAVIER, avec une saisie réelle.
+await page.focus('[data-ouvre="image"]');
+await page.keyboard.press('Enter');
+await page.waitForSelector('dialog.modale[open] #image-reference', { timeout: 4000 });
+await page.fill('#image-reference', 'images:debian/12');
+await page.fill('#image-label', 'Debian 12 « bookworm »');
+await page.screenshot({ path: join(SORTIE, '34-images-modale.png') });
+console.log('  34-images-modale.png');
+
+// Sous 768 px la modale occupe l'écran entier, sans changer de contrat.
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(150);
+await page.screenshot({ path: join(SORTIE, '35-images-modale-mobile.png') });
+console.log('  35-images-modale-mobile.png');
 ctx.server.close();
 
 await navigateur.close();
