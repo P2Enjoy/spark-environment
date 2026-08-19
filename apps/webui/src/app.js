@@ -15,6 +15,7 @@ import { ADMIN_VIDE } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
 import { renderCatalogue, renderOngletsHote, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
 import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
+import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
 import { tunnelOf } from './components/tokens.js';
 
@@ -29,6 +30,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        sparkNames: {}, error: null, syncing: false },
                facette: '',
                servers: [],
+               catalogueServeurs: { status: 'loading', servers: [], tunnels: [],
+                                    current: null, error: null,
+                                    ui: { ...CATALOGUE_SERVEURS_VIDE,
+                                          values: { ...CATALOGUE_SERVEURS_VIDE.values } } },
                journal: { status: 'loading', entries: [], error: null,
                           filtres: { ...FILTRES_VIDES },
                           chain: null, anchor: null, checking: false },
@@ -45,7 +50,8 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
 function marquerNavigation() {
   // Le premier degré reste « Sparks » quand on est dans une section de l'hôte :
   // les onglets du second degré portent leur propre `aria-current` (§34.1).
-  const courant = ['hote', 'images', 'journal'].includes(etat.route) ? '#/hote' : '#/sparks';
+  const courant = etat.route === 'serveurs' ? '#/serveurs'
+    : ['hote', 'images', 'journal'].includes(etat.route) ? '#/hote' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -61,6 +67,8 @@ function peindre() {
       ? renderOngletsHote('#/hote/images') + renderCatalogue(etat.catalogue)
       : etat.route === 'journal'
       ? renderJournalHotePage(etat.journal)
+      : etat.route === 'serveurs'
+      ? renderServeurs(etat.catalogueServeurs)
       : etat.route === 'hote'
       ? renderOngletsHote('#/hote') + renderHostView(etat.hote)
       : etat.route === 'creation'
@@ -91,6 +99,7 @@ function brancher() {
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
   brancherJournal();
+  brancherServeurs();
 
   const formulaire = racine.querySelector('#formulaire-spark');
   if (formulaire) {
@@ -136,6 +145,9 @@ function brancher() {
       etat.admin.refusal = null;
       etat.catalogue.ui.open = false;
       etat.catalogue.ui.refusal = null;
+      etat.catalogueServeurs.ui.open = false;
+      etat.catalogueServeurs.ui.refusal = null;
+      etat.catalogueServeurs.ui.probe = null;
       peindre();
     },
   });
@@ -576,6 +588,159 @@ async function releverImages() {
   await chargerCatalogue();
 }
 
+/**
+ * Catalogue des serveurs (SPK-41, docs/DAT.md §22.4 ter, §22.4.7 bis).
+ *
+ * Cet écran appelle l'hôte console — `/api/servers` —, jamais `sparkd` : c'est
+ * un état de CE poste, et il reste lisible quand tous les tunnels sont rompus.
+ * Le lire à travers un tunnel serait le rendre inaccessible précisément quand
+ * on en a besoin pour en déclarer un autre.
+ */
+async function chargerServeurs() {
+  etat.route = 'serveurs';
+  etat.catalogueServeurs.status = 'loading';
+  etat.catalogueServeurs.error = null;
+  peindre();
+  try {
+    const corps = await (await fetch('/api/servers')).json();
+    etat.catalogueServeurs.servers = corps.servers ?? [];
+    etat.catalogueServeurs.tunnels = corps.tunnels ?? [];
+    etat.catalogueServeurs.current = corps.current ?? null;
+    etat.catalogueServeurs.status = 'ready';
+  } catch (erreur) {
+    etat.catalogueServeurs.error = erreur;
+    etat.catalogueServeurs.status = 'error';
+  }
+  peindre();
+}
+
+/** L'épreuve du §22.4.4. Elle INFORME : son verdict ne bloque rien. */
+async function eprouverServeur() {
+  const ui = etat.catalogueServeurs.ui;
+  ui.probing = true;
+  ui.probe = null;
+  peindre();
+  try {
+    const reponse = await fetch('/api/servers/probe', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(ui.values),
+    });
+    const corps = await reponse.json();
+    ui.probe = reponse.ok ? corps
+      : { reachable: false, error: corps.message ?? 'Entrée refusée.' };
+  } catch (erreur) {
+    ui.probe = { reachable: false, error: erreur.message };
+  }
+  ui.probing = false;
+  peindre();
+}
+
+async function enregistrerServeur() {
+  const ui = etat.catalogueServeurs.ui;
+  ui.busy = true;
+  ui.refusal = null;
+  peindre();
+  let reponse;
+  try {
+    reponse = await fetch('/api/servers', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(ui.values),
+    });
+  } catch (erreur) {
+    reponse = { ok: false, json: async () => ({ message: erreur.message }) };
+  }
+  ui.busy = false;
+  if (!reponse.ok) {
+    // Le refus vient du serveur — un secret, un nom invalide — et la saisie
+    // reste intacte (§25.2).
+    const corps = await reponse.json().catch(() => ({}));
+    ui.refusal = corps.message ?? 'Le serveur a refusé cet enregistrement.';
+    return peindre();
+  }
+  ui.open = false;
+  ui.probe = null;
+  ui.values = { ...CATALOGUE_SERVEURS_VIDE.values };
+  await chargerServeurs();
+  // La liste des serveurs du sélecteur a changé : elle vit dans l'en-tête, et
+  // la laisser périmée ferait basculer vers un serveur qu'on vient de retirer.
+  await rafraichirContexte();
+}
+
+async function retirerServeur(nom) {
+  const ui = etat.catalogueServeurs.ui;
+  ui.confirming = null;
+  await fetch('/api/servers', {
+    method: 'DELETE', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: nom }),
+  }).catch(() => null);
+  await chargerServeurs();
+  await rafraichirContexte();
+}
+
+/** Relit l'inventaire pour l'en-tête, sans toucher à la vue courante. */
+async function rafraichirContexte() {
+  try {
+    const corps = await (await fetch('/api/servers')).json();
+    etat.servers = corps.servers ?? [];
+    if (corps.current && corps.current !== etat.server) {
+      etat.server = corps.current;
+      etat.tunnel = (corps.tunnels ?? []).find((t) => t.name === corps.current) ?? null;
+    }
+    peindreContexte();
+  } catch { /* l'en-tête garde ce qu'il montrait : rien n'est inventé */ }
+}
+
+function brancherServeurs() {
+  const ui = etat.catalogueServeurs.ui;
+  racine.querySelector('[data-ouvre="serveur"]')?.addEventListener('click', () => {
+    ui.open = true; ui.refusal = null; ui.probe = null;
+    peindre();
+    // Les candidats du ssh_config sont PROPOSÉS, jamais imposés (§22.4 bis).
+    fetch('/api/ssh-hosts').then((r) => r.json()).then(({ hosts = [] }) => {
+      ui.hosts = hosts;
+      if (ui.open) peindre();
+    }).catch(() => { /* le formulaire reste utilisable sans candidats */ });
+  });
+
+  const formulaire = racine.querySelector('[data-modale="serveur"]');
+  if (formulaire) {
+    for (const controle of formulaire.querySelectorAll('input, select')) {
+      controle.addEventListener('input', () => {
+        ui.values[controle.name] =
+          controle.type === 'number' ? Number(controle.value) : controle.value;
+        // Le GENRE décide des champs : en changer repeint le formulaire, sinon
+        // on saisirait des champs que le produit ignorera (§22.4.7 ter).
+        if (controle.name === 'kind') peindre();
+      });
+    }
+    formulaire.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      enregistrerServeur();
+    });
+  }
+  racine.querySelector('[data-action="eprouver"]')?.addEventListener('click', eprouverServeur);
+
+  for (const bouton of racine.querySelectorAll('[data-bascule]')) {
+    bouton.addEventListener('click', () => changerDeServeur(bouton.dataset.bascule));
+  }
+  for (const bouton of racine.querySelectorAll('[data-retire-serveur]')) {
+    bouton.addEventListener('click', () => {
+      // §6.23 : retirer ferme un tunnel et efface une déclaration. On confirme,
+      // et la confirmation NOMME le serveur.
+      ui.confirming = bouton.dataset.retireServeur;
+      peindre();
+      racine.querySelector('.confirmation .bouton--destructif')?.focus();
+    });
+  }
+  racine.querySelector('[data-annule-serveur]')?.addEventListener('click', () => {
+    ui.confirming = null;
+    peindre();
+  });
+  for (const bouton of racine.querySelectorAll('[data-confirme-serveur]')) {
+    bouton.addEventListener('click', () => retirerServeur(bouton.dataset.confirmeServeur));
+  }
+}
+
 /** Journal de tout le serveur (docs/DAT.md §36.8). */
 async function chargerJournal() {
   etat.route = 'journal';
@@ -676,6 +841,7 @@ function brancherCatalogue() {
 }
 
 function router() {
+  if (location.hash === '#/serveurs') return chargerServeurs();
   if (location.hash === '#/hote/journal') return chargerJournal();
   if (location.hash === '#/hote/images') return chargerCatalogue();
   if (location.hash === '#/hote') return chargerHote();
