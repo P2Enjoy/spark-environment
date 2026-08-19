@@ -1,0 +1,267 @@
+"""@verifies docs/BACKLOG.md#SPK-26 · docs/DAT.md §31, §31.2 (mesurer, nommer,
+           remédier), §31.3 (lecture seule), §31.4 · §3.1, §11, §16
+
+Les relevés sont INJECTÉS : ces preuves n'ont besoin d'aucun serveur. Ceux du
+`ss` viennent de l'hôte cible, relevés le 2026-08-19 — c'est ce relevé qui a
+montré que le contrôle de surface réseau était faux.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from sparkd import preflight
+from sparkd.preflight import ECHEC, INCONNU, OK, Hote, Verdict
+
+GIO = 1024**3
+
+#: Relevé RÉEL de `ss -lntH` sur l'hôte cible. `dnsmasq` écoute sur le bridge
+#: privé et `systemd-resolved` sur des adresses de boucle locale que la première
+#: version du contrôle ne reconnaissait pas.
+SS_HOTE_REEL = """\
+LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*
+LISTEN 0 2048 127.0.0.1:9876 0.0.0.0:*
+LISTEN 0 4096 127.0.0.1:2019 0.0.0.0:*
+LISTEN 0 4096 *:443 *:*
+LISTEN 0 4096 *:80 *:*
+LISTEN 0 32 10.77.0.1:53 0.0.0.0:*
+LISTEN 0 4096 127.0.0.54:53 0.0.0.0:*
+LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*
+LISTEN 0 4096 [::]:22 [::]:*
+"""
+
+
+def hote(commandes: dict[str, str | None] = None, fichiers: dict[str, str] = None,
+         binaires: set[str] = None) -> Hote:
+    commandes = commandes or {}
+    fichiers = fichiers or {}
+    binaires = binaires if binaires is not None else {"caddy"}
+    return Hote(
+        executer=lambda c: commandes.get(" ".join(c)),
+        lire=lambda p: fichiers.get(p),
+        presence=lambda b: b in binaires,
+    )
+
+
+# --- la surface réseau, et le défaut qu'un relevé réel a révélé --------------
+
+
+def test_le_bridge_prive_et_la_boucle_locale_ne_sont_PAS_exposes():
+    """Le contrôle dénonçait le port 53 de dnsmasq, lié au bridge privé.
+
+    Le côté privé du bridge est ce que les Sparks doivent joindre pour leur DNS.
+    Le tenir pour exposé rendait un verdict rouge sur un serveur correct.
+    """
+    verdict = preflight.surface_reseau(hote({"ss -lntH": SS_HOTE_REEL}))
+    assert verdict.etat == OK, verdict.releve
+    assert "22" in verdict.releve and "80" in verdict.releve and "443" in verdict.releve
+    assert "53" not in verdict.releve
+    assert "9876" not in verdict.releve, "sparkd est sur la boucle locale, pas exposé"
+
+
+@pytest.mark.parametrize("adresse,portee", [
+    ("127.0.0.1:9876", "locale"),
+    ("127.0.0.53%lo:53", "locale"),
+    ("127.0.0.54:53", "locale"),
+    ("[::1]:9876", "locale"),
+    ("10.77.0.1:53", "privee"),
+    ("192.168.1.4:8080", "privee"),
+    ("172.17.0.1:53", "privee"),
+    ("172.32.0.1:53", "exposee"),
+    ("0.0.0.0:22", "exposee"),
+    ("*:443", "exposee"),
+    ("[::]:22", "exposee"),
+    ("51.158.54.202:9876", "exposee"),
+])
+def test_la_portee_d_une_adresse_d_ecoute(adresse, portee):
+    assert preflight._portee(adresse) == portee
+
+
+def test_une_api_d_administration_joignable_du_reseau_est_un_echec():
+    """docs/DAT.md §11 — c'est la propriété de sécurité du produit."""
+    fautif = SS_HOTE_REEL.replace("127.0.0.1:9876", "0.0.0.0:9876")
+    verdict = preflight.surface_reseau(hote({"ss -lntH": fautif}))
+    assert verdict.etat == ECHEC
+    assert "9876" in verdict.releve
+    assert verdict.remede
+
+
+def test_sans_ss_le_verdict_est_INCONNU_et_non_un_echec():
+    """§31.2 — ne pas avoir mesuré n'est pas avoir mesuré une valeur fautive."""
+    verdict = preflight.surface_reseau(hote({}))
+    assert verdict.etat == INCONNU
+    assert not verdict.bloquant
+
+
+# --- Incus (docs/DAT.md §3.1) ------------------------------------------------
+
+
+def test_incus_trop_ancien_est_bloquant_et_nomme_la_cause():
+    verdict = preflight.incus_assez_recent(hote({"incus --version": "6.0.0"}))
+    assert verdict.etat == ECHEC
+    assert "6.0.0" in verdict.releve
+    assert "CVE-2025-52881" in verdict.remede
+
+
+def test_incus_conforme():
+    verdict = preflight.incus_assez_recent(hote({"incus --version": "7.3"}))
+    assert verdict.etat == OK and verdict.releve == "7.3"
+
+
+def test_incus_absent_est_INCONNU_avec_son_remede():
+    verdict = preflight.incus_assez_recent(hote({}))
+    assert verdict.etat == INCONNU
+    assert "Zabbly" in verdict.remede
+
+
+# --- ARC (docs/DAT.md §16) ---------------------------------------------------
+
+
+def test_arc_plafonne_correctement():
+    verdict = preflight.arc_plafonne(
+        hote(fichiers={"/sys/module/zfs/parameters/zfs_arc_max": str(16 * GIO)}))
+    assert verdict.etat == OK and "16.0 Gio" in verdict.releve
+
+
+def test_arc_a_zero_est_un_echec_car_zfs_prend_la_moitie_de_la_ram():
+    verdict = preflight.arc_plafonne(
+        hote(fichiers={"/sys/module/zfs/parameters/zfs_arc_max": "0"}))
+    assert verdict.etat == ECHEC
+    assert "moitié de la RAM" in verdict.releve
+
+
+def test_arc_trop_haut_est_un_echec():
+    verdict = preflight.arc_plafonne(
+        hote(fichiers={"/sys/module/zfs/parameters/zfs_arc_max": str(48 * GIO)}))
+    assert verdict.etat == ECHEC and "48.0 Gio" in verdict.releve
+
+
+def test_arc_illisible_est_INCONNU():
+    assert preflight.arc_plafonne(hote()).etat == INCONNU
+
+
+# --- stockage ----------------------------------------------------------------
+
+
+def test_un_pool_sur_fichier_passe_mais_le_dit(  ):
+    """Il fonctionne ; il reste provisoire (SPK-28), et le verdict le nomme."""
+    montre = "driver: zfs\nconfig:\n  source: /var/lib/incus/disks/spark.img\n"
+    verdict = preflight.pool_de_stockage(hote({"incus storage show spark": montre}))
+    assert verdict.etat == OK
+    assert "provisoire" in verdict.releve
+    assert "SPK-28" in verdict.remede
+
+
+def test_un_pool_absent_est_bloquant():
+    verdict = preflight.pool_de_stockage(hote({}))
+    assert verdict.etat == ECHEC and verdict.remede.startswith("incus storage create")
+
+
+def test_un_pool_qui_n_est_pas_zfs_est_bloquant():
+    verdict = preflight.pool_de_stockage(hote({"incus storage show spark": "driver: dir\n"}))
+    assert verdict.etat == ECHEC and "dir" in verdict.releve
+
+
+def test_compression_desactivee_est_bloquante():
+    verdict = preflight.compression_active(
+        hote({"zfs get -H -o value compression spark": "off"}))
+    assert verdict.etat == ECHEC and "compression=on" in verdict.remede
+
+
+# --- réseau privé ------------------------------------------------------------
+
+
+def test_plage_dhcp_non_restreinte_est_bloquante():
+    """Sinon dnsmasq peut distribuer une adresse que le registre a promise."""
+    verdict = preflight.plage_dhcp_disjointe(hote({}))
+    assert verdict.etat == ECHEC and "ipv4.dhcp.ranges" in verdict.remede
+
+
+def test_bridge_present():
+    verdict = preflight.bridge_prive(
+        hote({"incus network get sparkbr0 ipv4.address": "10.77.0.1/24"}))
+    assert verdict.etat == OK
+
+
+# --- sparkd doit SURVIVRE à un redémarrage (§31.4) ---------------------------
+
+
+def test_sparkd_lance_a_la_main_est_un_echec_meme_s_il_est_actif():
+    """Le cœur du §31.4.
+
+    `is-active` seul déclarerait conforme un sparkd lancé depuis une session
+    ssh. Il disparaîtrait au premier redémarrage, les Sparks continueraient de
+    tourner sans que rien ne les administre, et la panne ne se découvrirait qu'à
+    la première opération.
+    """
+    verdict = preflight.sparkd_survit_au_redemarrage(hote({
+        "systemctl is-active sparkd": "active",
+        "systemctl is-enabled sparkd": None,
+    }))
+    assert verdict.etat == ECHEC
+    assert "install-serveur.sh" in verdict.remede
+
+
+def test_sparkd_active_au_demarrage_et_en_marche():
+    verdict = preflight.sparkd_survit_au_redemarrage(hote({
+        "systemctl is-active sparkd": "active",
+        "systemctl is-enabled sparkd": "enabled",
+    }))
+    assert verdict.etat == OK
+
+
+def test_sparkd_active_au_demarrage_mais_arrete_est_un_echec():
+    verdict = preflight.sparkd_survit_au_redemarrage(hote({
+        "systemctl is-active sparkd": "inactive",
+        "systemctl is-enabled sparkd": "enabled",
+    }))
+    assert verdict.etat == ECHEC and verdict.remede == "systemctl start sparkd"
+
+
+# --- la série entière --------------------------------------------------------
+
+
+def test_chaque_controle_porte_un_code_stable_et_unique():
+    """Le contrat de déploiement cite ces codes : ils ne doivent pas bouger."""
+    verdicts = preflight.verifier(hote())
+    codes = [v.code for v in verdicts]
+    assert len(set(codes)) == len(codes), "deux contrôles partagent un code"
+    assert set(codes) == {
+        "INC-VERSION", "STO-POOL", "STO-COMPRESSION", "MEM-ARC",
+        "NET-BRIDGE", "NET-DHCP", "ING-CADDY", "SEC-PORTS", "RUN-SPARKD",
+    }
+
+
+def test_tout_verdict_non_ok_porte_un_releve_lisible():
+    """§31.2 — un verdict sans valeur relevée oblige à remesurer à la main."""
+    for verdict in preflight.verifier(hote()):
+        assert verdict.releve.strip(), f"{verdict.code} ne dit pas ce qu'il a relevé"
+
+
+def test_le_rendu_texte_montre_le_remede_des_echecs_seulement():
+    rendu = preflight.rendu_texte([
+        Verdict("A", "va bien", OK, "3.2", "remède inutile"),
+        Verdict("B", "va mal", ECHEC, "absent", "faire ceci"),
+    ])
+    assert "faire ceci" in rendu
+    assert "remède inutile" not in rendu
+    assert "1 bloquant(s)" in rendu
+
+
+def test_la_verification_n_execute_aucune_commande_qui_ecrit():
+    """§31.3 — lecture seule, sans exception.
+
+    On enregistre tout ce qui est lancé et on vérifie qu'aucun verbe mutant n'y
+    figure. C'est ce qui rend l'outil lançable sur un serveur en service.
+    """
+    lancees: list[list[str]] = []
+
+    def espion(commande: list[str]) -> str | None:
+        lancees.append(commande)
+        return None
+
+    preflight.verifier(Hote(executer=espion, lire=lambda p: None, presence=lambda b: True))
+    interdits = {"set", "create", "delete", "rm", "start", "stop", "restart",
+                 "enable", "disable", "apply", "install", "write"}
+    for commande in lancees:
+        assert not (set(commande) & interdits), f"commande mutante : {commande}"
