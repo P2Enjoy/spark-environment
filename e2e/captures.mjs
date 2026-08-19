@@ -543,6 +543,14 @@ await page.waitForSelector('#serveur-alias', { timeout: 4000 });
 await page.fill('#serveur-alias', 'spark-bastion');
 await page.screenshot({ path: join(SORTIE, '45-serveurs-ajout.png') });
 console.log('  45-serveurs-ajout.png');
+// La MODIFICATION d'une entrée existante : le nom y est en lecture seule.
+await page.keyboard.press('Escape');
+await page.waitForFunction(() => !document.querySelector('dialog.modale[open]'),
+                           { timeout: 4000 });
+await page.click('[data-modifie-serveur="recette"]');
+await page.waitForSelector('dialog.modale[open] #serveur-nom', { timeout: 4000 });
+await page.screenshot({ path: join(SORTIE, '47-serveurs-modifier.png') });
+console.log('  47-serveurs-modifier.png');
 ctx.server.close();
 
 // L'état « aucun serveur enregistré », que la DoD nomme.

@@ -221,6 +221,44 @@ test('ajouter un serveur, voir l’épreuve, basculer, reconnecter, retirer', as
   });
 });
 
+test('modifier un serveur existant : la modale s’ouvre PRÉ-REMPLIE', async () => {
+  await parcours('catalogue-modifier', async () => {
+    await accueil();
+    await page.click('nav a[href="#/serveurs"]');
+    await page.waitForSelector('#titre-serveurs', { timeout: 10000 });
+
+    // Le serveur de la pile est déclaré « local » : on le modifie sans changer
+    // ce qu'il désigne, et on constate que la modale sait ce qu'il est.
+    const nom = await page.textContent('tbody tr:first-child td:first-child');
+    const attendu = nom.replace(/\s*courant\s*/, '').trim();
+    await page.click(`[data-modifie-serveur="${attendu}"]`);
+    await page.waitForSelector('dialog.modale[open] #serveur-nom', { timeout: 10000 });
+
+    assert.equal(await page.inputValue('#serveur-nom'), attendu,
+      'la modale est pré-remplie depuis l’entrée réelle');
+    // §22.4.7 ter : le nom ne se modifie pas — le changer créerait un doublon.
+    assert.equal(await page.getAttribute('#serveur-nom', 'readonly'), '');
+    assert.match(await page.textContent('dialog.modale[open]'),
+                 /renommer, c’est retirer puis redéclarer/);
+    // Le bouton NOMME le serveur : la modale a été ouverte depuis une ligne
+    // parmi d’autres.
+    assert.match(await page.textContent('[data-engage="serveur"]'),
+                 new RegExp(`Enregistrer « ${attendu} »`));
+
+    // Le focus entre dans le premier champ MODIFIABLE, pas dans le nom.
+    assert.notEqual(await page.evaluate(() => document.activeElement?.id), 'serveur-nom',
+      'la saisie ne commence pas là où elle est impossible');
+
+    // On enregistre sans rien changer : l'entrée reste UNE, pas deux.
+    await page.click('dialog.modale[open] [data-engage="serveur"]');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 15000 });
+    const { servers } = await (await fetch(`${pile.base}/api/servers`)).json();
+    assert.equal(servers.filter((s) => s.name === attendu).length, 1,
+      'remplacer par le nom ne duplique pas l’entrée');
+  });
+});
+
 test('un SECRET saisi dans le formulaire est refusé, et la saisie survit', async () => {
   await parcours('catalogue-secret', async () => {
     await accueil();

@@ -85,9 +85,16 @@ export function brancherModale(racine, { onFermer } = {}) {
     }
   }
 
-  // Le focus entre dans le PREMIER contrôle, pas sur le bouton d'engagement :
-  // ouvrir une modale, c'est commencer à saisir.
-  const premier = dialogue.querySelector('input, select, textarea');
+  // Le focus entre dans le premier contrôle MODIFIABLE, pas sur le bouton
+  // d'engagement : ouvrir une modale, c'est commencer à saisir.
+  //
+  // Les contrôles en lecture seule sont sautés. Mesuré sur la modale de
+  // modification d'un serveur, dont le premier champ est le nom, non
+  // modifiable (docs/DAT.md §22.4.7 ter) : le curseur y entrait, et la saisie
+  // commençait donc là où elle est impossible.
+  const premier = dialogue.querySelector(
+    'input:not([readonly]):not([disabled]), select:not([disabled]),'
+    + ' textarea:not([readonly]):not([disabled])');
   (premier ?? dialogue.querySelector('button'))?.focus();
 
   // `Échap` ferme, et la fermeture ÉQUIVAUT À UNE ANNULATION (§6.27).
