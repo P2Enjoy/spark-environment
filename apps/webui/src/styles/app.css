@@ -54,7 +54,22 @@
 .entete__marque { font-weight: 700; color: var(--color-brand); }
 .entete nav { display: flex; gap: var(--space-4); }
 .entete nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: 4px; }
-.entete__contexte { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+/* SPK-41 : le contexte s'EMPILE dans la barre laterale, qui fait ~240 px.
+   En rangee, le selecteur etait ecrase a quelques pixels — illisible — et le
+   bouton de reconnexion debordait. Mesure sur 09-tunnel-rompu. */
+.entete__contexte {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: var(--space-2); min-width: 0;
+}
+.entete__contexte > * { min-width: 0; }
+.entete__contexte .badge { align-self: flex-start; }
+/* Sous 1024 px la barre laterale passe en barre SUPERIEURE : le contexte y
+   redevient une rangee, ou la largeur ne manque plus. */
+@media (max-width: 1023px) {
+  .entete__contexte {
+    flex-direction: row; align-items: center; margin-left: auto; flex-wrap: wrap;
+  }
+}
 
 .principal {
   padding: var(--space-6) var(--space-4); flex: 1;

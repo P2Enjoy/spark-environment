@@ -74,9 +74,19 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           uneSeuleCle = false, refusRestauration = false,
                           hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false } = {}) {
   const chemin = join(await mkdtemp(join(tmpdir(), 'spark-cap-')), 'servers.json');
-  await writeFile(chemin, JSON.stringify([
-    { name: 'validation', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 },
-  ]));
+  // SPK-41 : DEUX serveurs, sinon le sélecteur ne se voit pas — avec un seul,
+  // le produit affiche le nom plutôt qu'un contrôle mort (§22.4.5). La forme du
+  // fichier est la version 1 (§22.4.2), et le second est déclaré par ALIAS pour
+  // que la capture montre les deux genres.
+  await writeFile(chemin, JSON.stringify({
+    version: 1,
+    current: 'validation',
+    servers: [
+      { name: 'validation', kind: 'ssh', host: '203.0.113.10', user: 'ubuntu',
+        port: 22, remotePort: 9876 },
+      { name: 'recette', kind: 'alias', sshHost: 'spark-recette', remotePort: 9876 },
+    ],
+  }));
   const tunnels = new TunnelManager({
     spawn: () => fauxSsh(),
     probe: async () => { if (tunnelRompu) throw new Error('connexion refusée'); },
