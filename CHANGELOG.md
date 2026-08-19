@@ -121,6 +121,13 @@
 - Écran des ressources de l'hôte : les quatre pools avec capacité, alloué et
   disponible, la soustraction qui donne la mémoire allouable énoncée terme à
   terme, la carte des cœurs, le pool d'adresses et le relevé de topologie.
+- Pile de développement autonome : `make runDev` démarre `sparkd` avec le pilote
+  factice et l'hôte console ; `make seed` recrée le registre et le peuple en
+  appelant les routes HTTP de `sparkd`, jamais du SQL direct.
+- L'inventaire de la console accepte un serveur de genre `local`, joint
+  directement sur la boucle locale, sans tunnel SSH.
+- Le pilote factice persiste ses instances et accepte une injection de faute à
+  usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
 
@@ -140,7 +147,8 @@
   nouveau §21, journal d'audit ; nouveau §22, l'hôte local de la console ;
   nouveau §23, le contrat d'API partagé ; nouveau §24, l'écran détail ;
   nouveau §25, l'écran de création ; nouveau §26, les trois surfaces
-  d'administration d'un Spark ; nouveau §27, l'écran des pools.
+  d'administration d'un Spark ; nouveau §27, l'écran des pools ; nouveau §28, la
+  pile de développement et le contrat du seed.
 - `docs/SCHEMA.md` : nouveau §11 bis, les deux termes de la réserve mémoire.
 - Migration `002_part_arc` : `host` porte désormais `memory_arc_bytes` et
   `memory_margin_bytes`, jusqu'ici confondus dans `memory_reserve_bytes`.

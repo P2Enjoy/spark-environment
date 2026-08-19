@@ -1509,3 +1509,60 @@ navigateur, contrat sans dérive, build, quatre captures observées.
 elle qui débloque l'E2E réel de SPK-24 : tous les parcours navigateur actuels
 s'exécutent contre un faux `sparkd`, faute de pile locale à interroger. SPK-12
 attend un domaine, SPK-17 une exécution de CI, SPK-29 et SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-23 : la console tourne enfin contre un vrai runtime
+
+**Unité** : SPK-23, la pile de développement et le seed. Le backlog renvoyait au
+§11 du DAT, « Sécurité » — la référence était fausse, corrigée vers le §12, et le
+contrat complet est écrit au nouveau §28.
+
+**Docker n'est pas disponible ici** : `dockerd` n'est pas installé, seul le shim
+CLI de Docker Desktop l'est, démon arrêté. Consigné plutôt que contourné. Cela
+n'a pas bloqué l'unité : la pile est faite de **deux processus sans dépendance**,
+et les conteneuriser ajouterait un démon Docker là où il n'y en avait aucun.
+L'écart à `CLAUDE.md` §3 est écrit au §28.1 avec sa condition de réouverture.
+
+**La décision structurante est que le seed appelle les routes HTTP.** Un seed qui
+écrit des lignes en SQL peut produire des états que l'application est incapable
+d'atteindre : les écrans seraient alors éprouvés contre des situations qui
+n'existent pas. Conséquences concrètes : le refus d'admission du seed est un vrai
+`409` du contrôle d'admission, et l'état `error` est atteint en faisant réellement
+échouer le pilote — pas en écrivant « error » dans une colonne.
+
+**Deux mesures ont corrigé mes hypothèses, et le seed s'est corrigé lui-même.**
+
+1. Je déclarais la route non appliquée sur un Spark `pending`, en supposant qu'il
+   n'avait pas encore d'adresse. Mesuré : l'adresse est attribuée dès la
+   **création**. La route était donc servie, et la fixture manquait. C'est la
+   vérification finale du seed qui l'a montré — sans elle, j'aurais livré un jeu
+   de données silencieusement incomplet. Le mécanisme réel est un Caddy
+   injoignable au moment de la déclaration, et c'est celui qui est employé.
+2. Le pilote factice tenait ses instances en mémoire. Un Spark seedé « en
+   marche » survivait au redémarrage — le registre est un fichier — mais
+   « Arrêter » échouait ensuite sur « instance absente ». La pile paraissait
+   fonctionnelle jusqu'au premier geste, ce qui est pire qu'une panne franche.
+
+**Un défaut trouvé en observant la console contre le vrai runtime**, et qu'aucun
+faux `sparkd` n'avait pu produire : `analytics`, déclaré et jamais appliqué,
+annonçait « Mesure en cours ». Rien n'était en cours de mesure et rien ne
+viendrait. Le §14.6 interdit précisément de confondre un calcul en cours avec une
+donnée inexistante.
+
+**Deux constats étrangers consignés** (`docs/INCONSISTENCY_REPORT.md`, recréé) :
+INC-01, le journal d'audit affiche les états techniques là où le reste de l'écran
+les traduit ; INC-02, un refus de création n'est rattachable à aucune demande —
+son `target_id` désigne un Spark qui n'a jamais existé. Les deux attendent un
+arbitrage et le comportement est inchangé.
+
+**Vérifié.** 451 tests Python, 175 tests Node, 6 de contrat, 10 parcours
+navigateur, contrat sans dérive, build, six captures observées contre le runtime
+réel.
+
+**Où reprendre.** **SPK-24**, les tests E2E Playwright depuis le parcours
+canonique. La pile réelle existe désormais et `e2e/reel.mjs` en donne la forme :
+il reste à transformer ces captures en parcours assertifs et à couvrir les refus
+d'autorisation. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
+SPK-28 un arbitrage, comme INC-01 et INC-02.

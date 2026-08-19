@@ -416,7 +416,7 @@ console du navigateur vierge ; captures observées.
 
 ## Lot 4 — Qualité et exploitation
 
-### [ ] SPK-23 · Pile de développement autonome et seed
+### [x] SPK-23 · Pile de développement autonome et seed
 
 - Spécification : `docs/DAT.md` §12 (principes) et §28 (le contrat).
   *La référence pointait vers le §11, « Sécurité » — corrigé le 2026-08-19.*
@@ -438,6 +438,20 @@ Spark sans aucune, instantanés permettant le refus de restauration, historique
 d'audit couvrant `ok`, `denied` et `error` ; `make runDev` démarre la pile et
 `make seed` la peuple ; la console parcourue de bout en bout contre ce `sparkd`
 RÉEL ; captures observées.
+
+- **Close le 2026-08-19.** 12 preuves du seed, dont trois sur le seed lui-même :
+  il repart d'un registre neuf, il est rejouable à l'identique, et il refuse un
+  pilote réel.
+- La console tourne **contre un `sparkd` réel** pour la première fois : six
+  captures (40 à 45) parcourues à la souris depuis l'accueil, avec vrai registre,
+  vrai contrôle d'admission et vrai journal d'audit.
+- **Un défaut trouvé par l'observation** : un Spark `pending`, jamais appliqué,
+  annonçait « Mesure en cours » alors que rien n'était mesurable — le §14.6
+  interdit de confondre un calcul en cours avec une donnée inexistante. Aucun
+  faux `sparkd` n'avait jamais produit ce cas.
+- Deux constats étrangers consignés au registre : **INC-01** (le journal d'audit
+  affiche les états techniques) et **INC-02** (un refus de création n'est
+  rattachable à aucune demande). Tous deux attendent un arbitrage.
 
 ### [ ] SPK-24 · Tests E2E Playwright depuis le parcours canonique
 

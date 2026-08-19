@@ -133,13 +133,14 @@ pas encore sont marquées.
 | `make contract` | régénère le contrat d'API et ses types | **oui** |
 | `make contract-check` | échoue si le contrat committé a dérivé du code | **oui** |
 | `make gestes` | parcours navigateur des gestes d'administration | **oui** |
+| `make runDev` | pile de développement : `sparkd` factice + console | **oui** |
+| `make seed` | recrée le registre de développement et le peuple | **oui** |
 | `make captures` | captures d'interface, à observer | **oui** |
 | `make build` | build de tous les paquets | **oui** |
 | `pnpm -r test` / `build` / `typecheck` | paquets TypeScript de l'espace de travail | **oui** |
 | `pnpm dev` | hôte console sur `http://127.0.0.1:5173` — inventaire et tunnels | **oui** |
-| `pnpm e2e` | tests Playwright | non — SPK-24 |
-| `make runDev` | pile de développement autonome | non — SPK-23 |
-| `make seed` | données de démonstration reproductibles | non — SPK-23 |
+
+| `pnpm e2e` | parcours Playwright complets | non — SPK-24 |
 
 ## Variables d'environnement
 
