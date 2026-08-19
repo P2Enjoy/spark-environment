@@ -235,3 +235,159 @@ test('sans tunnel ouvert, l’ancre ne prétend rien', async () => {
   assert.equal((await r.json()).error, 'tunnel_unavailable');
   server.close();
 });
+
+
+// --- le catalogue tenu depuis la console (SPK-41, §22.4 ter) --------------
+
+async function poser(base, serveur) {
+  return fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(serveur) });
+}
+
+test('le premier serveur ajouté devient le serveur COURANT', async () => {
+  // Sans cela, la console aurait un inventaire et aucun contexte.
+  const { base, server } = await hote();
+  assert.equal((await (await fetch(`${base}/api/servers`)).json()).current, null);
+  await poser(base, SERVEUR);
+  const corps = await (await fetch(`${base}/api/servers`)).json();
+  assert.equal(corps.current, 'prod');
+  server.close();
+});
+
+test('ajouter un second serveur NE CHANGE PAS celui qu’on regarde', async () => {
+  // La console prenait `servers[0]` : l'ordre d'écriture décidait du contexte.
+  const { base, server } = await hote();
+  await poser(base, SERVEUR);
+  await poser(base, { ...SERVEUR, name: 'autre' });
+  assert.equal((await (await fetch(`${base}/api/servers`)).json()).current, 'prod');
+  server.close();
+});
+
+test('changer de serveur courant le RETIENT', async () => {
+  const { base, server } = await hote();
+  await poser(base, SERVEUR);
+  await poser(base, { ...SERVEUR, name: 'autre' });
+  const r = await fetch(`${base}/api/servers/current`,
+                        { method: 'POST', body: JSON.stringify({ name: 'autre' }) });
+  assert.equal(r.status, 200);
+  assert.equal((await (await fetch(`${base}/api/servers`)).json()).current, 'autre');
+  server.close();
+});
+
+test('choisir un serveur inconnu est refusé, sans changer le courant', async () => {
+  const { base, server } = await hote();
+  await poser(base, SERVEUR);
+  const r = await fetch(`${base}/api/servers/current`,
+                        { method: 'POST', body: JSON.stringify({ name: 'fantome' }) });
+  assert.equal(r.status, 404);
+  assert.equal((await r.json()).error, 'unknown_server');
+  assert.equal((await (await fetch(`${base}/api/servers`)).json()).current, 'prod');
+  server.close();
+});
+
+test('retirer un serveur FERME son tunnel avant de l’effacer', async () => {
+  // Laisser un `ssh` vivant vers une machine qu'on vient de retirer, c'est le
+  // genre de processus qu'on ne retrouve plus.
+  const { base, server, tunnels } = await hote();
+  await poser(base, { name: 'prod', kind: 'local', port: 9876 });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  assert.ok(tunnels.get('prod'), 'le tunnel existe');
+
+  const r = await fetch(`${base}/api/servers`,
+                        { method: 'DELETE', body: JSON.stringify({ name: 'prod' }) });
+  assert.equal(r.status, 200);
+  assert.equal(tunnels.get('prod')?.state ?? 'closed', 'closed');
+  assert.deepEqual((await (await fetch(`${base}/api/servers`)).json()).servers, []);
+  server.close();
+});
+
+test('retirer le serveur COURANT donne la place au suivant', async () => {
+  const { base, server } = await hote();
+  await poser(base, SERVEUR);
+  await poser(base, { ...SERVEUR, name: 'autre' });
+  const r = await fetch(`${base}/api/servers`,
+                        { method: 'DELETE', body: JSON.stringify({ name: 'prod' }) });
+  assert.equal((await r.json()).current, 'autre');
+  server.close();
+});
+
+test('retirer le DERNIER serveur laisse un courant nul, et le dit', async () => {
+  // L'écran doit pouvoir dire « aucun serveur », plutôt qu'afficher une liste de
+  // Sparks vide qui ferait croire à un serveur sans Sparks.
+  const { base, server } = await hote();
+  await poser(base, SERVEUR);
+  const r = await fetch(`${base}/api/servers`,
+                        { method: 'DELETE', body: JSON.stringify({ name: 'prod' }) });
+  assert.equal((await r.json()).current, null);
+  server.close();
+});
+
+test('retirer un serveur inconnu est refusé', async () => {
+  const { base, server } = await hote();
+  const r = await fetch(`${base}/api/servers`,
+                        { method: 'DELETE', body: JSON.stringify({ name: 'fantome' }) });
+  assert.equal(r.status, 404);
+  server.close();
+});
+
+test('un SECRET est refusé même envoyé explicitement à l’API', async () => {
+  // §22.4 : l'inventaire n'en contient jamais. Refuser plutôt que filtrer, pour
+  // que l'auteur sache le retirer d'où il l'a copié.
+  const { base, server } = await hote();
+  for (const champ of ['password', 'privateKey', 'passphrase', 'token']) {
+    const r = await poser(base, { ...SERVEUR, [champ]: 'x' });
+    assert.equal(r.status, 422, `${champ} doit être refusé`);
+  }
+  assert.deepEqual((await (await fetch(`${base}/api/servers`)).json()).servers, []);
+  server.close();
+});
+
+test('l’épreuve REND ce qu’elle a vu, et referme son tunnel', async () => {
+  const { base, server, tunnels } = await hote({
+    amont: async (url) => new Response(
+      JSON.stringify(String(url).includes('readyz') ? { status: 'ready' } : { ok: true }),
+      { status: 200 }),
+  });
+  const r = await fetch(`${base}/api/servers/probe`,
+                        { method: 'POST', body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) });
+  assert.equal(r.status, 200);
+  const bilan = await r.json();
+  assert.equal(bilan.reachable, true);
+  assert.equal(bilan.healthz.status, 200);
+  assert.equal(bilan.readyz.status, 200);
+  // Le tunnel temporaire ne SURVIT PAS : un diagnostic ne doit pas fuir un ssh.
+  assert.equal(tunnels.get('probe:prod')?.state ?? 'closed', 'closed');
+  assert.equal(tunnels.get('prod') ?? null, null, 'et il n’usurpe pas le vrai nom');
+  server.close();
+});
+
+test('l’épreuve n’enregistre RIEN', async () => {
+  // §22.4.4 : elle informe, elle ne décide pas — et elle n'écrit pas non plus.
+  const { base, server } = await hote();
+  await fetch(`${base}/api/servers/probe`,
+              { method: 'POST', body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) });
+  assert.deepEqual((await (await fetch(`${base}/api/servers`)).json()).servers, []);
+  server.close();
+});
+
+test('un serveur INJOIGNABLE s’enregistre quand même', async () => {
+  // §25.1 : la machine peut être éteinte. Exiger qu'elle réponde reviendrait à
+  // exiger qu'elle soit allumée pour qu'on note son existence.
+  const { base, server } = await hote({
+    amont: async () => { throw new Error('connexion refusée'); },
+  });
+  const bilan = await (await fetch(`${base}/api/servers/probe`,
+    { method: 'POST', body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) })).json();
+  assert.equal(bilan.reachable, false);
+  assert.ok(bilan.error || bilan.healthz, 'l’échec est RENDU, pas masqué');
+
+  assert.equal((await poser(base, SERVEUR)).status, 201);
+  server.close();
+});
+
+test('une entrée invalide est refusée par l’épreuve, sans tunnel', async () => {
+  const { base, server } = await hote();
+  const r = await fetch(`${base}/api/servers/probe`,
+                        { method: 'POST', body: JSON.stringify({ name: 'Majuscule' }) });
+  assert.equal(r.status, 422);
+  server.close();
+});
