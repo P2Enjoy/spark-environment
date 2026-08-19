@@ -653,10 +653,22 @@ Mesuré le 2026-08-18 : un Spark qui remplit son quota empêche Incus d'écrire 
 `backup.yaml`, situé **dans** le jeu de données contingenté. Toute reconfiguration
 échoue alors, y compris l'agrandissement qui débloquerait la situation.
 
-- Spécification : `docs/DAT.md` §8.7
-- DoD : quota du jeu de données posé au-dessus de la taille vendue, marge invisible
-  du locataire ; un Spark saturé reste reconfigurable, prouvé par un test qui
-  remplit puis agrandit.
+- Spécification : `docs/DAT.md` §8.7 (le fait mesuré) et **§8.8** (le contrat).
+- Portée : `SPARKD_STORAGE_METADATA_MARGIN`, défaut 64 MiB, refusée négative ;
+  le traducteur pose `storage_bytes + marge` sur le disque racine ; l'admission
+  évalue la demande et compte l'alloué du pool **marge comprise** ; le registre
+  stocke la taille vendue et elle seule, donc aucune migration ; la console
+  affiche la taille vendue comme limite et calcule le ratio sur elle.
+- Ne change pas : la forme du refus d'admission (§7.7), la sémantique du quota sur
+  les octets stockés (§8.7 fait 1), l'imputation des instantanés (§8.7 fait 2).
+- DoD, aux trois niveaux du §8.8.5 :
+  1. **traduction** — *T* octets vendus produisent un `root.size` de *T* + marge,
+     et de *T* exactement quand la marge est nulle ;
+  2. **admission** — un Spark qui tiendrait tout juste sans la marge est refusé
+     avec elle, et le pool rend un alloué qui l'inclut ;
+  3. **sur un hôte réel** — remplir un Spark jusqu'au refus d'écriture, puis
+     l'agrandir, et constater que l'agrandissement aboutit. C'est le seul niveau
+     qui prouve le fait du §8.7. Tant qu'il n'est pas exécuté, l'unité reste `[~]`.
 
 ### [x] SPK-31 · Version minimale d'Incus imposée par le nesting Docker
 

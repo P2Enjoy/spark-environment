@@ -158,6 +158,8 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_DRIVER` | pilote d'exécution | `incus` \| `fake` | non | `incus` |
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour l'hôte lui-même, hors ARC | octets ou suffixe | non | `2GiB` |
+| `SPARKD_CPU_RESERVE` | part de processeur que l'hôte garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
+| `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |
 
 `SPARKD_BIND` ne peut pas être positionné sur une adresse routable : `sparkd`

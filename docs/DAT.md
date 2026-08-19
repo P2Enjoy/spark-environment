@@ -890,8 +890,93 @@ Error: Failed to write backup file: … open
 Un locataire qui sature son disque empêche donc le plan de contrôle de modifier ses
 limites — y compris de l'agrandir pour le débloquer. Le remède est de ne jamais
 poser le quota du jeu de données exactement à la valeur annoncée : le registre
-réserve une **marge de métadonnées** (quelques dizaines de mébioctets) au-dessus de
-la taille vendue, invisible du locataire. Unité SPK-30.
+réserve une **marge de métadonnées** au-dessus de la taille vendue, invisible du
+locataire. Son contrat est au §8.8, et l'unité est SPK-30.
+
+### 8.8 La marge de métadonnées : contrat
+
+C'est la correction du fait 3 du §8.7. Elle tient en une phrase : **le quota posé
+sur le jeu de données n'est jamais la taille vendue, il est la taille vendue plus
+une marge que le locataire ne voit pas et ne peut pas remplir.**
+
+#### 8.8.1 Ce que la marge protège, et ce qu'elle ne protège pas
+
+Elle protège **l'administrabilité** d'un Spark saturé : `backup.yaml` continue de
+s'écrire, donc `PATCH` sur l'instance continue d'aboutir, donc le plan de contrôle
+peut encore agrandir le Spark pour le débloquer.
+
+Elle ne protège **pas** le locataire de la saturation : il atteindra son quota,
+verra 100 %, et ses écritures seront refusées. C'est voulu. La marge n'est pas un
+supplément d'espace offert, c'est de la place gardée pour les métadonnées d'Incus.
+
+#### 8.8.2 Les quatre règles
+
+**1. Le registre stocke la taille VENDUE, jamais le quota posé.** `spark.storage_bytes`
+garde exactement ce que le responsable a demandé. Le quota est une valeur
+**dérivée**, recalculée à chaque traduction. Stocker les deux ferait deux vérités à
+tenir d'accord ; aucune migration n'est donc due par cette unité.
+
+**2. Le traducteur pose `storage_bytes + marge`.** C'est le seul endroit où la
+marge apparaît. Un Spark de 10 Gio avec une marge de 64 Mio reçoit un
+`root.size` de `10 804 088 832` octets.
+
+**3. La marge est INVISIBLE du locataire.** Ce que la console affiche comme limite
+reste la taille vendue, et le ratio d'occupation se calcule sur elle. Un Spark
+plein montre `10,0 Gio / 10,0 Gio` et 100 %, jamais `10,06 Gio`. Une limite
+affichée qui ne serait pas celle qu'on a vendue ferait douter du chiffre annoncé —
+et le locataire ne peut de toute façon pas atteindre la marge, puisque ses données
+saturent le quota avant.
+
+**4. La marge est COMPTÉE au pool.** L'admission évalue `storage_bytes + marge`,
+et l'alloué du pool de stockage vaut `Σ(storage_bytes) + marge × nombre de Sparks`.
+C'est le même raisonnement qu'au §8.5 pour l'ARC : la marge est réellement prise
+sur le pool, un pool qui l'ignorerait promettrait ce qu'il n'a pas. Sur trente
+Sparks à 64 Mio, elle coûte 1,9 Gio — négligeable en valeur, mais la comptabilité
+du §7.7 ne connaît pas le négligeable.
+
+#### 8.8.3 La valeur, et pourquoi elle est configurable
+
+`SPARKD_STORAGE_METADATA_MARGIN`, défaut **64 MiB**.
+
+Le fait mesuré est que `backup.yaml` doit pouvoir s'écrire ; il pèse quelques
+kibioctets. Le défaut est donc large de trois ordres de grandeur, délibérément :
+`backup.yaml` n'est pas le seul écrit d'Incus dans le jeu de données, et une marge
+trop juste rendrait le remède intermittent — c'est-à-dire pire qu'absent, parce
+qu'on cesserait de le soupçonner.
+
+Elle est configurable parce que la valeur utile dépend du pilote de stockage, que
+le §8.5 laisse ouvert : ce qui suffit à ZFS ne vaut pas nécessairement pour btrfs,
+dont les `qgroups` comptent autrement.
+
+- **Zéro est accepté** : il restaure exactement le comportement d'avant cette
+  unité, pour un pilote qui n'écrirait pas ses métadonnées dans le jeu de données
+  contingenté. C'est un choix d'exploitant, pas un défaut.
+- **Une valeur négative est refusée au démarrage**, comme les autres réserves
+  (§5) : `sparkd` ne démarre pas.
+
+#### 8.8.4 Ce qui ne change pas
+
+- Le **refus d'admission** reste celui du §7.7, dans sa forme et son vocabulaire.
+  Un Spark refusé parce que la marge ne tient pas est refusé sur `storage`, avec
+  le manque exprimé en octets. Il n'existe pas de refus « marge ».
+- La **sémantique du quota** reste celle du fait 1 du §8.7 : il porte sur les
+  octets stockés après compression. La marge ne corrige pas cela et ne prétend pas
+  le faire.
+- L'**imputation des instantanés** au quota du Spark (fait 2 du §8.7) reste
+  inchangée, ainsi que la note que la console affiche à ce sujet.
+
+#### 8.8.5 Ce que la preuve doit établir
+
+Trois niveaux, et ils ne prouvent pas la même chose :
+
+1. **Traduction** — un manifeste de *T* octets produit un `root.size` de
+   *T* + marge, et de *T* exactement quand la marge est nulle.
+2. **Admission** — la demande évaluée et l'alloué du pool incluent la marge ; un
+   Spark qui tiendrait tout juste sans elle est refusé avec elle.
+3. **Sur un hôte réel** — un Spark saturé reste reconfigurable : on remplit
+   jusqu'au refus d'écriture, puis on agrandit, et l'agrandissement aboutit. Ce
+   troisième niveau est le seul qui prouve le fait du §8.7 ; les deux premiers ne
+   prouvent que la mécanique. Tant qu'il n'est pas exécuté, l'unité reste `[~]`.
 
 ## 9. Ingress
 
