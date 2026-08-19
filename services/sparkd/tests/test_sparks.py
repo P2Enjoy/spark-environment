@@ -227,3 +227,51 @@ def test_l_adresse_figure_au_journal_d_audit(db):
         "SELECT * FROM audit_log WHERE action='spark.create' AND result='ok'"
     ).fetchone()
     assert "10.77.0.16" in ligne["message"]
+
+
+# --- le runtime publie ce qui est possible (SPK-19, docs/DAT.md §24.1) ------
+
+def test_le_spark_porte_les_commandes_possibles(db):
+    """La console ne doit pas rederiver la machine a etats."""
+    s = sparks.create(db, spec())
+    assert s["allowed_commands"] == ["apply", "delete"]
+    assert s["transient"] is False
+
+
+def test_les_commandes_suivent_l_etat(db):
+    s = sparks.create(db, spec())
+    sparks.command(db, s["id"], Command.APPLY)
+    sparks.finish(db, s["id"], success=True)
+    assert sparks.get(db, s["id"])["allowed_commands"] == ["delete", "start"]
+    sparks.command(db, s["id"], Command.START)
+    sparks.finish(db, s["id"], success=True)
+    assert sparks.get(db, s["id"])["allowed_commands"] == ["delete", "restart", "stop"]
+
+
+def test_un_etat_transitoire_n_accepte_AUCUNE_commande(db):
+    """L'ecran doit le dire, plutot que d'afficher des boutons morts."""
+    s = sparks.create(db, spec())
+    apres = sparks.command(db, s["id"], Command.APPLY)
+    assert apres["allowed_commands"] == []
+    assert apres["transient"] is True
+
+
+def test_un_spark_en_erreur_propose_reprise_et_suppression(db):
+    s = sparks.create(db, spec())
+    sparks.command(db, s["id"], Command.APPLY)
+    apres = sparks.finish(db, s["id"], success=False, error="panne")
+    assert apres["allowed_commands"] == ["delete", "retry"]
+
+
+def test_la_liste_porte_aussi_les_commandes(db):
+    sparks.create(db, spec())
+    assert "allowed_commands" in sparks.listing(db)[0]
+
+
+def test_les_commandes_publiees_sont_celles_qui_passent(db):
+    """La liste n'est pas decorative : ce qu'elle annonce doit fonctionner."""
+    s = sparks.create(db, spec())
+    for nom in sparks.get(db, s["id"])["allowed_commands"]:
+        if nom == "delete":
+            continue          # on ne supprime pas au milieu du test
+        sparks.command(db, s["id"], Command(nom))   # ne doit pas lever

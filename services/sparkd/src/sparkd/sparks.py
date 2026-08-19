@@ -20,7 +20,9 @@ from .addressing import AddressPoolExhausted, allocate
 from .admission import Request, admit, pools
 from . import audit
 from .db import transaction
-from .lifecycle import Command, State, TransitionError, next_state, reconcile, settle
+from .lifecycle import (
+    TRANSIENT, Command, State, TransitionError, allowed, next_state, reconcile, settle,
+)
 
 NAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
@@ -158,22 +160,37 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "respon
     return get(connection, spark_id)
 
 
+def decorate(spark: dict) -> dict:
+    """Ajoute au Spark ce que le runtime SAIT de lui.
+
+    `allowed_commands` vient de la même table que celle qui applique le refus
+    (docs/DAT.md §24.1). La console affiche ce que le runtime déclare ; la
+    redériver de son côté ferait diverger deux copies de la même règle.
+    """
+    etat = State(spark["state"])
+    return {
+        **spark,
+        "allowed_commands": sorted(c.value for c in allowed(etat)),
+        "transient": etat in TRANSIENT,
+    }
+
+
 def get(connection: sqlite3.Connection, spark_id: str) -> dict:
     row = connection.execute("SELECT * FROM spark WHERE id = ?", (spark_id,)).fetchone()
     if row is None:
         raise NotFound(f"Aucun Spark d'identifiant « {spark_id} ».")
-    return dict(row)
+    return decorate(dict(row))
 
 
 def by_name(connection: sqlite3.Connection, name: str) -> dict:
     row = connection.execute("SELECT * FROM spark WHERE name = ?", (name,)).fetchone()
     if row is None:
         raise NotFound(f"Aucun Spark nommé « {name} ».")
-    return dict(row)
+    return decorate(dict(row))
 
 
 def listing(connection: sqlite3.Connection) -> list[dict]:
-    return [dict(r) for r in connection.execute("SELECT * FROM spark ORDER BY name")]
+    return [decorate(dict(r)) for r in connection.execute("SELECT * FROM spark ORDER BY name")]
 
 
 def command(
