@@ -45,3 +45,4 @@ Thumbs.db
 
 # Captures d'interface : regenerees par e2e/captures.mjs
 e2e/captures/*.png
+.dev/

@@ -7,7 +7,7 @@ VENV   := $(SPARKD)/.venv
 PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
-        contract contract-check test gestes captures build clean
+        contract contract-check test gestes captures runDev seed build clean
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -17,6 +17,8 @@ help:
 	@echo "webui-install   installe les dependances de la console"
 	@echo "contract        regenere le contrat d'API et ses types"
 	@echo "contract-check  echoue si le contrat committe a derive du code"
+	@echo "runDev          pile de developpement : sparkd factice + console"
+	@echo "seed            recree le registre de developpement et le peuple"
 	@echo "gestes          parcours navigateur des gestes d'administration"
 	@echo "captures        captures d'interface, a OBSERVER (CLAUDE.md §16)"
 	@echo "test            toutes les suites de tests"
@@ -44,6 +46,14 @@ contract:
 
 contract-check:
 	$(PY) scripts/contract.py check
+
+# Pile de developpement (docs/DAT.md §28). Deux processus, aucun service a
+# orchestrer : aucun demon Docker n'est requis.
+runDev:
+	./scripts/dev.sh up
+
+seed:
+	./scripts/dev.sh seed
 
 # Les parcours navigateur font partie de la campagne : un test hors campagne
 # cesse d'etre execute, puis cesse d'etre vrai.
