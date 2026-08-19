@@ -897,7 +897,7 @@ panne — la liste est ouverte, elle n'est pas un menu à cocher :
 | Piste | Ce qu'elle apporte | Ce qu'elle coûte, et où elle casse |
 |---|---|---|
 | **TOTP** (RFC 6238), compatible Google Authenticator, optionnel par Spark ou global | un facteur que la clé SSH volée ne donne pas ; standard, hors ligne, sans matériel | le secret vit dans le registre, donc `root` sur l'hôte le lit ; dérive d'horloge ; enrôlement et **codes de secours** à concevoir, sinon un téléphone perdu enferme le responsable dehors |
-| **Signature par la clé SSH déjà présente** — `sparkd` émet un défi, l'agent le signe | aucun secret nouveau, aucun enrôlement, lie le geste à la clé physique ; réutilise ce que le produit exige déjà | ne protège **pas** du scénario « clé volée », qui est le premier de la liste ; suppose un agent atteignable depuis l'hôte console |
+| **Signature par la clé SSH déjà présente** — `sparkd` émet un défi, l'agent le signe | aucun secret nouveau, aucun enrôlement, lie le geste à la clé physique ; réutilise ce que le produit exige déjà ; **sert aussi de preuve d'audit non répudiable** (§36.3, SPK-39) | ne protège **pas** du scénario « clé volée », qui est le premier de la liste ; suppose un agent atteignable depuis l'hôte console |
 | **WebAuthn / FIDO2** sur la console locale | facteur non exportable, résistant à l'hameçonnage ; `127.0.0.1` est un contexte sécurisé, donc techniquement ouvert | matériel à acheter et à doubler ; enrôlement, perte, récupération ; la charge de conception la plus lourde des quatre |
 | **Ré-authentification à durée limitée** (« mode sudo ») | ramène le coût sur les seules actions sensibles au lieu de chaque geste | dépend de l'heure, donc du même défaut que le déverrouillage temporaire écarté au §35.4 — à trancher, pas à supposer |
 | **Confirmation par frappe du nom** de l'objet | quasi gratuit, efficace contre l'erreur de main | ne prouve rien sur l'identité ; ne traite que la menace déjà traitée |
@@ -968,6 +968,90 @@ Ce que l'unité doit trancher, pas seulement décrire :
   et reconstruction d'un Spark au minimum. Un plan jamais joué est une fiction, et
   ce dépôt ne déclare pas fait ce qui n'a pas été éprouvé ; les chiffres de reprise
   observés pendant l'exercice remplacent les chiffres espérés.
+
+### [ ] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
+
+Le champ `actor` vaut aujourd'hui la chaîne littérale « responsable » ou
+« sparkd » : le journal ne sait pas qui agit. Toute idée de signature bute d'abord
+là-dessus (§36.7).
+
+- Spécification : `docs/DAT.md` §21, §36.7 · `docs/SCHEMA.md` §9.
+- Portée : identité réelle de l'appelant portée jusqu'à `audit.record()` — au
+  minimum l'empreinte de la clé SSH qui a ouvert le tunnel, et la distinction
+  explicite entre un geste humain et un événement du runtime (§36.4) ; complétude
+  de la couverture des **écritures**, y compris celles du runtime ; verrou
+  d'écriture sur `audit_log` — `UPDATE` et `DELETE` refusés au niveau de la base,
+  pas seulement par convention de code.
+- Ne journalise **pas** les lectures (§36.7), à deux exceptions : ouverture d'un
+  tunnel, vérification d'intégrité.
+- DoD : un test prouve qu'un `UPDATE` ou un `DELETE` sur `audit_log` échoue,
+  exécuté directement en base et non par l'application ; un test recense les
+  écritures de chaque module et prouve qu'aucune n'échappe au journal ; l'acteur
+  d'un geste passé par la console est distinct de celui d'un événement du runtime,
+  prouvé de bout en bout ; INC-02 est réexaminé au passage — un refus de création
+  doit-il porter le nom demandé.
+
+### [ ] SPK-38 · Chaîne d'intégrité du journal et ancre tenue par la console
+
+Chaque entrée porte l'empreinte de la précédente, et la console retient la tête
+qu'elle a vue. C'est l'ancre qui donne sa valeur à la chaîne, pas la chaîne
+(§36.1, §36.2).
+
+- Spécification : `docs/DAT.md` §36.1 à §36.5 · `docs/SCHEMA.md` (migration due).
+- Dépend de : SPK-37 — chaîner un journal dont l'acteur est une constante n'a
+  pas d'intérêt.
+- Portée : sérialisation **canonique** figée et documentée ; empreinte de la
+  ligne et de la précédente, calculées et insérées dans la **même transaction**
+  que la lecture de la tête ; lignes de point de contrôle ; `GET` de vérification
+  rendant l'état de la chaîne et la première rupture s'il y en a une ; ancre
+  côté console — dernière tête connue par serveur dans l'inventaire local, et
+  signalement lorsqu'une histoire ne la prolonge pas.
+- Tranché avant la première ligne écrite : le journal **ne se purge pas**, ou une
+  purge scelle le préfixe dans un point de contrôle (§36.5). Laisser la question
+  ouverte reviendrait à casser la chaîne le jour où le fichier grossit.
+- DoD : un test modifie une ligne en base et prouve que la vérification la
+  **désigne** ; un test supprime une ligne au milieu et prouve la détection ; un
+  test tronque la fin et prouve que **seule l'ancre** la détecte — la chaîne seule
+  ne le peut pas, et le test le documente ; un test prouve qu'un trou
+  d'identifiant, produit par un `ROLLBACK` réel, **ne** déclenche **pas** d'alerte ;
+  un parcours E2E montre l'ancre signalant une histoire qui ne prolonge pas la
+  précédente.
+
+### [ ] SPK-39 · Onglet de supervision du journal
+
+Le journal devient une destination sous **Hôte** (§34.1, §36.8) : il couvre tous
+les Sparks.
+
+- Spécification : `docs/DAT.md` §36.8 · `docs/DESIGN_SYSTEM.md` §5.4, §6.14
+  (tableau), §6.13 (états de vue) · manuel M12.
+- Dépend de : SPK-37 et SPK-38.
+- Portée : entrées filtrables par résultat, action, acteur et période ; état de la
+  chaîne et date du dernier relevé ; comparaison avec l'ancre de la console ;
+  **classe** de chaque entrée — geste humain signé, ou événement du runtime
+  (§36.4) ; la vérification est un relevé explicite, jamais rejoué à chaque
+  affichage.
+- À traiter dans la même unité : INC-01. Cet onglet expose sur une page entière
+  l'écart de vocabulaire entre les messages du runtime et les libellés de
+  l'interface ; il le rend plus visible qu'aujourd'hui, il ne l'invente pas.
+- DoD : parcours E2E depuis le parcours canonique — ouvrir l'onglet, filtrer,
+  lancer la vérification, lire son résultat ; un parcours montre l'écran quand la
+  chaîne est **rompue**, et il est capturé ; captures observées, y compris état
+  vide et données longues ; manuel M12 mis à jour.
+
+### [ ] SPK-40 · Signature des gestes par la clé du responsable
+
+La console signe la requête avec la clé SSH du responsable, par son agent ;
+`sparkd` conserve la signature et les octets signés. Root sur l'hôte peut alors
+supprimer ou tronquer, mais **pas fabriquer** un geste authentique (§36.3).
+
+- Spécification : `docs/DAT.md` §36.3, §36.4.
+- Dépend de : SPK-35 pour l'arbitrage — c'est la même mécanique que la piste
+  « signature par la clé SSH » de la sécurisation des actions sensibles, et il
+  serait absurde d'en écrire deux. **Ne pas démarrer avant cet arbitrage.**
+- Ce que l'unité ne prétendra pas : la signature atteste l'**intention**, pas ce
+  que le runtime a fait ensuite ; le résultat reste couvert par la chaîne. Et une
+  ligne produite par le runtime n'est signée par personne — la supervision le dit
+  au lieu de le masquer.
 
 ---
 

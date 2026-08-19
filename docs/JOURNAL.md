@@ -2247,3 +2247,77 @@ réécriture du §26.2 dans le même changement. Puis SPK-30, libre et entièrem
 spécifiée. SPK-29 attend une contention sur les trois tranches de l'hôte ; SPK-12
 un domaine ; SPK-17 une exécution de CI ; SPK-28, INC-01, INC-02 et INC-03 votre
 arbitrage.
+
+## 2026-08-19 — Journal chaîné : la chaîne ne vaut que par son ancre
+
+Question du responsable : auditer toute action, superviser le journal, signer
+chaque ligne avec la clé de l'acteur, et chaîner les signatures pour détecter une
+modification. Bonne idée ?
+
+**Oui pour la chaîne, mais elle ne prouve pas ce qu'on croit**, et l'analyse est
+écrite au DAT §36 plutôt que résumée ici.
+
+### Le point qui décide de tout
+
+Chaîner détecte la modification et la suppression au milieu — à condition de
+connaître la **vraie tête**. Qui peut écrire dans le fichier peut recalculer toute
+la chaîne : contre root sur l'hôte, une chaîne seule ne prouve rien. Et deux
+attaques lui échappent complètement, la **troncature** et le **remplacement** du
+journal par un journal neuf et cohérent.
+
+Ce qui donne sa valeur au dispositif, c'est donc l'**ancre**, et le produit l'a
+déjà sans rien acheter : la console tourne sur une autre machine et se connecte
+régulièrement. Elle retient la dernière tête vue par serveur, dans son inventaire
+local, et vérifie à chaque connexion que l'histoire annoncée **prolonge** celle
+qu'elle connaît. Ce n'est pas la cryptographie qui apporte la garantie, c'est le
+fait que la référence vive ailleurs que sur la machine qu'on soupçonne.
+
+### La signature : c'est le lieu de production qui compte
+
+Signer avec une clé détenue par l'hôte ne protège pas de qui contrôle l'hôte.
+Signer **côté console**, avec la clé SSH du responsable via son agent, change la
+nature de la preuve : root peut supprimer ou tronquer, jamais **fabriquer** un
+geste authentique. C'est exactement la piste « signature par la clé SSH » de
+SPK-35 — une seule mécanique pour l'authentification et pour l'audit, d'où la
+subordination explicite de SPK-40 à cet arbitrage.
+
+Deux limites écrites plutôt que découvertes plus tard : une signature de requête
+atteste l'**intention**, pas ce que le runtime a fait ensuite ; et les événements
+produits par le runtime — réconciliation, repondération — ne sont signés par
+personne. La supervision affiche donc deux **classes** de lignes au lieu de
+laisser croire que tout est signé.
+
+### Ce qui bloque avant tout le reste
+
+`actor` vaut aujourd'hui la chaîne littérale « responsable » ou « sparkd ». Il n'y
+a aucune identité à signer. L'ordre est donc : identité réelle (SPK-37), puis
+chaîne et ancre (SPK-38), puis supervision (SPK-39), puis signature (SPK-40) une
+fois SPK-35 arbitrée.
+
+### Ce qui est écarté, et pourquoi ce n'est pas un jugement sur l'idée
+
+Pas de chaîne de blocs distribuée : le consensus répond à « plusieurs écrivains
+qui ne se font pas confiance », et il y a **un** écrivain. Ce que le mot désigne
+d'utile ici se réduit au journal chaîné vérifiable. Restent optionnels et
+désactivés par défaut, parce qu'ils introduisent une dépendance sortante :
+la copie hors machine au fil de l'eau — le renfort le plus efficace après l'ancre
+—, l'ancrage temporel public, et l'arbre de Merkle, qui ne sert que si un tiers
+doit vérifier un extrait sans recevoir tout le journal.
+
+### Les pièges consignés d'avance
+
+Sérialisation canonique figée, lecture de la tête et insertion dans la même
+transaction, purge tranchée avant la première ligne — et surtout : les **trous
+d'identifiants ne sont pas des altérations**. `AUTOINCREMENT` en produit à chaque
+`ROLLBACK`, et le §21 journalise délibérément certains refus hors transaction. Une
+vérification qui contrôlerait la continuité des `id` fabriquerait des alertes
+fausses, ce qui est la meilleure façon de faire ignorer les vraies. La DoD de
+SPK-38 en fait un test à part entière.
+
+### Vérifications
+
+Aucun test exécuté : ce chunk n'ajoute que de la spécification et des unités.
+L'état du code a en revanche été relevé pour écrire le §36.7 — `audit.record()`
+est bien le point de passage unique, les écritures des cinq modules y passent, et
+`actor` est une constante.
+

@@ -26,6 +26,12 @@
   touchés et se confirme, elle ne se bloque pas.
 - `docs/DAT.md` : nouveau §35, les Sparks protégés — portée du refus, mot de
   passe et son empreinte, ce que la protection n'est pas.
+- `docs/DAT.md` : nouveau §36, intégrité du journal d'audit — ce qu'une chaîne de
+  hachage prouve et contre qui, l'ancre tenue par la console, où la signature doit
+  être produite, les pièges d'implémentation, et ce qui n'est pas retenu.
+- Unités SPK-37 à SPK-40 : acteur réel et verrou d'écriture du journal ; chaîne
+  d'intégrité et ancre côté console ; onglet de supervision sous Hôte ; signature
+  des gestes par la clé du responsable, subordonnée à l'arbitrage de SPK-35.
 - Lot 5 « Sécurité et continuité » et deux unités d'instruction : SPK-35, instruire
   la sécurisation des actions sensibles — modèle de menace d'abord, puis TOTP,
   signature par la clé SSH, WebAuthn, ré-authentification limitée, et la question

@@ -2964,3 +2964,163 @@ Le registre gagne les colonnes correspondantes par migration, et
 - Elle ne crée pas de rôles : il n'y a toujours qu'un responsable, et le produit
   n'introduit pas de modèle multi-utilisateur par ce biais.
 
+
+## 36. Intégrité du journal d'audit
+
+Le §21 dit ce que le journal contient et par où il s'écrit. Cette section dit ce
+qui garantit qu'il n'a pas été **récrit**, et surtout ce que chaque mécanisme
+prouve réellement — parce que l'écart entre « signé » et « infalsifiable » est
+exactement là où ce genre de dispositif déçoit.
+
+### 36.1 Ce qu'une chaîne de hachage prouve, et contre qui
+
+Chaîner les lignes — chaque entrée porte l'empreinte de la précédente — détecte
+la **modification** et la **suppression au milieu** du journal. C'est peu coûteux
+et c'est la bonne primitive. Mais seule, elle ne détecte que l'adversaire qui
+n'a pas lu le code : quiconque peut écrire dans le fichier peut aussi
+**recalculer toute la chaîne** après modification, et obtenir un journal
+parfaitement cohérent.
+
+Deux attaques ne sont pas couvertes du tout par la chaîne seule :
+
+- la **troncature** — on coupe la fin, la chaîne restante est valide ;
+- le **remplacement** — on repart d'un journal neuf et cohérent.
+
+Ce qui distingue un journal chaîné utile d'un journal chaîné décoratif, ce n'est
+donc pas la chaîne : c'est l'**ancre**.
+
+### 36.2 L'ancre : la console est le second témoin
+
+Le produit a déjà ce qu'il faut : la console tourne sur une **autre machine** que
+l'hôte, et s'y connecte régulièrement (§22).
+
+Décision : la console retient, par serveur, la **dernière empreinte de tête**
+qu'elle a vue, dans son inventaire local. À chaque connexion, elle vérifie que
+l'histoire annoncée par le serveur **prolonge** celle qu'elle connaît. Une
+histoire qui ne la prolonge pas — tête inconnue, longueur en recul, empreinte
+divergente — est signalée, et ce signal couvre la troncature et le remplacement
+que la chaîne seule laisse passer.
+
+C'est le point important : ce n'est pas la cryptographie qui apporte la garantie,
+c'est le fait que la vérité de référence vive **ailleurs** que sur la machine
+qu'on soupçonne.
+
+### 36.3 Où la signature est produite décide de ce qu'elle vaut
+
+Signer les lignes avec une clé **détenue par l'hôte** ne protège pas de qui
+contrôle l'hôte : il signe ce qu'il veut. Cela reste utile contre un processus
+non privilégié ou une erreur, et rien de plus. Il ne faut pas l'appeler
+autrement.
+
+Signer **côté console**, avec la clé SSH du responsable via son agent, change la
+nature de la preuve : la clé privée n'est jamais sur l'hôte. Root peut alors
+supprimer ou tronquer, mais ne peut pas **fabriquer** un geste authentique. C'est
+la seule forme de non-répudiation atteignable ici, et elle rejoint une des pistes
+de SPK-35 : un seul mécanisme sert à la fois d'authentification et de preuve
+d'audit.
+
+Ce qu'une signature de requête couvre, et qu'il faut dire : elle atteste
+l'**intention** — ce qui a été demandé, par qui, à quel instant logique. Elle
+n'atteste pas ce que le runtime a réellement fait ensuite. Le résultat, lui, est
+couvert par la chaîne, pas par la signature.
+
+### 36.4 Deux classes de lignes, jamais confondues
+
+Toutes les entrées ne peuvent pas être signées par un humain :
+
+| Classe | Exemples | Ce qui la couvre |
+|---|---|---|
+| geste humain | création, commande, route, clé, instantané | signature de la requête + chaîne |
+| événement du runtime | réconciliation au démarrage (§14.3), repondération de la tranche (§32.2), relevés | chaîne seule |
+
+Les afficher pareillement laisserait croire que la seconde classe est signée. La
+supervision distingue donc les deux, explicitement.
+
+### 36.5 Les pièges, qui sont tous des pièges d'implémentation
+
+Ils sont listés ici parce que chacun produit soit une fausse alerte, soit une
+garantie creuse, et qu'ils se découvrent trop tard.
+
+- **Sérialisation canonique.** L'empreinte porte sur des octets. Ordre des
+  champs, encodage, représentation des nombres et de `null` doivent être figés une
+  fois pour toutes, sans quoi une vérification échouera un an plus tard sans
+  qu'aucune ligne n'ait bougé.
+- **Lecture de la tête et insertion dans la même transaction.** Sinon deux
+  écritures s'intercalent et la chaîne fourche. SQLite n'a qu'un écrivain, ce qui
+  aide, mais ne dispense pas de l'atomicité.
+- **Les trous d'identifiants ne sont pas des altérations.** `AUTOINCREMENT`
+  consomme des identifiants qu'un `ROLLBACK` abandonne, et le §21 journalise
+  délibérément certains refus **hors** transaction. La vérification porte sur la
+  chaîne, jamais sur la continuité des `id` — confondre les deux fabriquerait des
+  alertes fausses, ce qui est la meilleure façon de faire ignorer les vraies.
+- **La purge casse la chaîne.** À trancher avant d'écrire la première ligne : soit
+  le journal ne se purge jamais, soit une purge scelle le préfixe supprimé dans une
+  ligne de **point de contrôle** qui porte son empreinte.
+- **Le temps n'est pas une preuve.** La chaîne donne un **ordre**, pas une date :
+  l'horloge de l'hôte est modifiable. Un horodatage reste informatif.
+- **Le coût de vérification est linéaire.** Des points de contrôle périodiques
+  permettent une vérification incrémentale. À l'échelle de ce produit, la
+  vérification intégrale reste de toute façon peu coûteuse — le journal se compte
+  en milliers de lignes, pas en millions.
+
+### 36.6 Ce qui n'est pas retenu, et ce qui reste optionnel
+
+**Pas de chaîne de blocs distribuée, pas de consensus, pas de jeton.** Le
+consensus répond à la question « plusieurs écrivains qui ne se font pas
+confiance » ; ici il y a **un** écrivain. Ce que le mot « blockchain » désigne
+d'utile dans ce contexte se réduit à un journal chaîné et vérifiable, ce que le
+§36.1 décrit.
+
+Restent optionnels, désactivés par défaut, parce qu'ils introduisent une
+dépendance sortante que le produit n'a pas :
+
+- **copie hors machine au fil de l'eau** — un second exemplaire chez un tiers
+  oblige à corrompre deux machines de façon cohérente. C'est le renfort le plus
+  efficace après l'ancre de la console ;
+- **ancrage temporel public** — publier périodiquement l'empreinte de tête auprès
+  d'un service d'horodatage public prouve à un tiers qu'un journal existait à une
+  date, sans aucune machinerie de consensus. Utile seulement si un tiers doit un
+  jour être convaincu ;
+- **arbre de Merkle plutôt que chaîne linéaire** — n'apporte que des preuves
+  d'inclusion et de cohérence **partielles**, donc n'a d'intérêt que si un
+  vérificateur tiers doit contrôler un extrait sans recevoir tout le journal.
+
+### 36.7 Couverture : ce qui est journalisé, et ce qui ne l'est pas
+
+Sont journalisées **toutes les écritures**, y compris celles produites par le
+runtime lui-même. Un journal qui ne contient que les gestes humains laisse croire
+que le reste n'est pas arrivé.
+
+Les **lectures ne sont pas journalisées**. Elles n'altèrent rien, elles sont des
+ordres de grandeur plus nombreuses, et les inscrire noierait précisément ce qu'on
+vient chercher. Deux exceptions, parce qu'elles disent qui est entré et quand :
+l'ouverture d'un tunnel, et les vérifications d'intégrité elles-mêmes.
+
+**Prérequis honnête :** aujourd'hui le champ `actor` vaut la chaîne littérale
+« responsable » ou « sparkd ». Il n'y a donc **aucune identité** à signer. Tant
+que ce n'est pas corrigé, parler de « signature de l'acteur » serait une figure de
+style. L'ordre est : identité réelle, puis signature, puis chaîne, puis ancre.
+
+### 36.8 L'onglet de supervision
+
+Le journal devient une destination de second degré sous **Hôte** (§34.1) : il
+couvre tous les Sparks, il ne se lit pas dans la fenêtre d'un seul.
+
+Il rend, outre les entrées filtrables :
+
+- l'état de la chaîne — vérifiée le …, tête …, première rupture le cas échéant,
+  avec la ligne exacte ;
+- la comparaison avec l'ancre de la console — « prolonge l'histoire connue » ou
+  le signalement contraire ;
+- la **classe** de chaque entrée (§36.4), pour ne pas laisser croire à une
+  signature qui n'existe pas.
+
+La vérification est un **relevé explicite**, daté, comme le relevé de topologie
+(§27.8) et celui du catalogue d'images (§33.3) : elle n'est pas rejouée à chaque
+affichage.
+
+Une réserve à traiter dans la même unité : INC-01 signale que les messages
+d'audit portent le vocabulaire technique du runtime là où l'interface affiche des
+libellés français. Un onglet dédié va exposer cet écart sur toute une page au lieu
+d'un panneau, et le rendra donc plus visible qu'il ne l'est aujourd'hui.
+
