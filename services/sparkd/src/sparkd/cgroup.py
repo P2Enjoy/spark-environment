@@ -126,6 +126,40 @@ def inspect(root: Path | None = None) -> dict[str, object]:
     return {"present": True, "weight": poids, "controllers": controleurs}
 
 
+#: Contrôleurs sans lesquels les limites d'Incus ne s'appliqueraient pas DANS
+#: la tranche (docs/DAT.md §32.1).
+REQUIRED_CONTROLLERS = ("cpu", "cpuset", "memory")
+
+
+def ensure_delegation(root: Path | None = None) -> list[str]:
+    """Délègue les contrôleurs manquants à la tranche. Rend ceux qui ont été posés.
+
+    Mesuré le 2026-08-19 : systemd crée la tranche mais n'y délègue que
+    `hugetlb rdma misc`. Une écriture unique au moment de l'installation ne tient
+    pas — le cgroup d'une tranche vide n'existe pas encore, et systemd repose
+    l'état à ses propres rechargements.
+
+    La délégation est donc **réaffirmée** par le runtime, qui possède déjà le
+    poids de la tranche. Sans ces contrôleurs, la tranche existe et paraît
+    correcte alors que les limites ne s'y appliquent pas : c'est exactement le
+    genre de panne silencieuse que cette unité corrige.
+    """
+    chemin = slice_path(root)
+    fichier = chemin / "cgroup.subtree_control"
+    try:
+        presents = fichier.read_text().split()
+    except OSError:
+        return []
+    manquants = [c for c in REQUIRED_CONTROLLERS if c not in presents]
+    if not manquants:
+        return []
+    try:
+        fichier.write_text(" ".join(f"+{c}" for c in manquants))
+    except OSError:
+        return []
+    return manquants
+
+
 def apply_weight(poids: SliceWeight, root: Path | None = None) -> bool:
     """Écrit le poids sur la tranche. Rend `False` si elle n'est pas là.
 

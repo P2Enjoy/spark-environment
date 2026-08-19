@@ -381,6 +381,9 @@ def create_app(config: Config) -> FastAPI:
             etat = pools(connection)
         except HostNotConfigured:
             return
+        # La delegation se reaffirme : systemd la repose a ses rechargements, et
+        # une tranche sans controleurs parait correcte tout en n'appliquant rien.
+        cgroup_service.ensure_delegation()
         cgroup_service.apply_weight(cgroup_service.slice_weight(
             sold=etat.cpu.allocated,
             capacity=float(etat.physical_cores or etat.cpu.capacity),

@@ -171,3 +171,28 @@ def test_apply_weight_rend_False_sans_faire_echouer_l_appelant(tmp_path):
     fonctionne. Le manque se constate au preflight.
     """
     assert cgroup.apply_weight(slice_weight(1.0, 4.0, 0.5), tmp_path) is False
+
+
+# --- la delegation se reaffirme (docs/DAT.md §32.1) -------------------------
+
+
+def test_ensure_delegation_pose_les_controleurs_manquants(tmp_path):
+    tranche = tmp_path / cgroup.SLICE
+    tranche.mkdir()
+    (tranche / "cgroup.subtree_control").write_text("hugetlb rdma misc\n")
+    poses = cgroup.ensure_delegation(tmp_path)
+    assert set(poses) == {"cpu", "cpuset", "memory"}
+    assert (tranche / "cgroup.subtree_control").read_text() == "+cpu +cpuset +memory"
+
+
+def test_ensure_delegation_ne_reecrit_pas_ce_qui_est_deja_la(tmp_path):
+    tranche = tmp_path / cgroup.SLICE
+    tranche.mkdir()
+    (tranche / "cgroup.subtree_control").write_text("cpuset cpu io memory pids\n")
+    assert cgroup.ensure_delegation(tmp_path) == []
+    assert "cpuset cpu io memory pids" in (tranche / "cgroup.subtree_control").read_text()
+
+
+def test_ensure_delegation_sans_tranche_ne_leve_pas(tmp_path):
+    """Sur un poste sans cgroup v2, l'absence est normale."""
+    assert cgroup.ensure_delegation(tmp_path) == []
