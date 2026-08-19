@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "node host/main.js",
-    "build": "echo 'SPA non encore implémentée — unité SPK-18' && exit 0",
-    "test": "node --test host/*.test.js",
+    "build": "echo 'console servie telle quelle par l hote, rien a compiler' && exit 0",
+    "test": "node --test host/*.test.js src/components/*.test.js",
     "typecheck": "tsc --noEmit --allowJs --checkJs false host/*.js"
   },
   "devDependencies": {

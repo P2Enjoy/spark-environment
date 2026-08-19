@@ -1257,3 +1257,57 @@ l'interface entre en jeu. `CLAUDE.md` §4 impose la lecture **intégrale** de
 Cette lecture est le premier geste de la session suivante, pas un préalable à
 expédier : elle conditionne tout ce qui sera écrit ensuite. SPK-12 attend un
 domaine, SPK-29 et SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-18 close : le premier écran, et ce que les captures ont trouvé
+
+**Unité** : SPK-18, première unité d'interface. La session a commencé par la
+lecture **intégrale** de `docs/DESIGN_SYSTEM.md`, 1585 lignes, comme
+`CLAUDE.md` §4 l'impose — puis par l'écriture de `docs/DESIGN_SYSTEM_APP.md`,
+avant la moindre ligne d'interface.
+
+**Les tokens sont calculés, pas déclarés.** Le §14.1 exige que la conformité AA
+soit mesurée. Elle l'a été : la couleur pleine de `success`, `accent` et `danger`
+donne 3,71, 1,53 et 3,19 sur sa propre déclinaison douce — insuffisant. Les
+`*-on-soft` retenus atteignent 4,60, 4,54 et 4,51.
+
+**Ce que les captures ont trouvé, et qu'aucun test ne voyait.** C'est
+l'enseignement de la session, et il valide littéralement le §13.2 :
+
+1. le séparateur décimal était un **point** dans une interface entièrement
+   francophone ;
+2. « 2.0 sur 0.50 CPU réservés » juxtaposait deux précisions dans une même
+   phrase ;
+3. un nom de Spark long **élargissait sa colonne** et faisait replier toutes les
+   autres — une seule donnée inhabituelle dégradait tout le tableau ;
+4. les mesures se coupaient en deux lignes, « 86 Mio / 8,0 Gio » se lisant alors
+   comme deux valeurs ;
+5. au mobile, le tableau était coupé **sans aucune indication qu'il défilait**,
+   ce que le §14.2 interdit explicitement : du contenu non signalé est
+   fonctionnellement caché.
+
+Aucun de ces cinq défauts n'aurait été détecté par les 25 tests de la vue, qui
+étaient pourtant tous verts. « Une interface qui passe ses tests peut encore être
+visuellement incorrecte » — le §13.2 le dit, et la session vient de le vérifier.
+
+**Un sixième défaut, trouvé à la campagne.** Le script `test` de la console ne
+lançait que les tests de l'hôte : les 25 tests de composants n'entraient pas dans
+la campagne. Des tests hors campagne ne protègent rien — ils passent, et
+personne ne le sait.
+
+**Deux règles de produit portées à l'écran.** Le burst n'est jamais rouge : la
+part au-delà de la réservation utilise `accent` et se nomme « burst », `danger`
+étant réservé au dépassement réel, qui n'existe qu'en mode `capped`. Et les trois
+absences de mesure — arrêté, en cours, indisponible — ont des textes distincts,
+jamais un blanc.
+
+**Vérifié.** 432 tests Python, 67 tests Node, campagne complète verte, et six
+captures observées.
+
+**Où reprendre.** **SPK-19**, l'écran détail d'un Spark. Le design system est
+désormais lu et son extension écrite : les sessions d'interface suivantes n'ont
+plus à rouvrir les 1585 lignes, seulement l'extension et les sections
+concernées. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
+SPK-28 un arbitrage.

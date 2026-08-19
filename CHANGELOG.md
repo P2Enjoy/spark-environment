@@ -101,6 +101,11 @@
 - Contrat d'API : OpenAPI committé et déterministe, types TypeScript dérivés,
   détection de dérive par `make contract-check`, et une CI qui rejoue la campagne.
 
+- Écran liste des Sparks : tableau natif trié, badges d'état, jauge distinguant
+  le burst du dépassement, et traitement explicite des états vide, chargement,
+  erreur et données longues.
+- `docs/DESIGN_SYSTEM_APP.md` : extension du design system pour la console.
+
 ### Modifié
 
 - `.gitignore` :
