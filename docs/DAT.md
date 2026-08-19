@@ -1555,3 +1555,68 @@ alors que l'usage est **indisponible**, et non nul : un disque occupé reste
 occupé même quand rien ne tourne, et afficher `0` sur les quatre ressources
 laisserait croire qu'un Spark arrêté ne coûte rien. Il coûte son disque, et sa
 place dans la comptabilité (§7.7).
+
+## 21. Journal d'audit
+
+`docs/SCHEMA.md` §9 dit que le `payload` est filtré avant écriture. Cette section
+dit **où** le filtre s'applique et **ce qu'il retient**, ce qui n'était écrit
+nulle part.
+
+### 21.1 Un seul chemin d'écriture
+
+Constat du 2026-08-19 : cinq modules écrivaient chacun leur `INSERT INTO
+audit_log`, avec un payload composé à la main. Un filtre posé à cinq endroits
+sera oublié au sixième — et l'oubli ne se verra pas, puisqu'un journal qui
+contient trop ressemble à un journal qui fonctionne.
+
+**Toute écriture passe désormais par une fonction unique.** Ce n'est pas une
+commodité d'organisation : c'est ce qui rend l'omission impossible plutôt
+qu'improbable. Aucun module n'émet plus de `INSERT` vers cette table.
+
+### 21.2 On caviarde, on ne supprime pas
+
+Une valeur sensible est remplacée par un marqueur, la clé restant visible :
+
+```
+{"label": "poste", "public_key": "ssh-ed25519 AAAA…"}
+      →  {"label": "poste", "public_key": "[caviardé]"}
+```
+
+Supprimer la clé effacerait l'information « ce champ était présent », qui compte
+lors d'une enquête : savoir qu'un secret a transité par un appel n'est pas la
+même chose que ne rien savoir. Le journal doit rester lisible comme récit de ce
+qui s'est passé.
+
+### 21.3 Ce qui est reconnu comme sensible
+
+**Par le nom du champ**, quelle que soit sa valeur : tout nom contenant
+`password`, `secret`, `token`, `credential`, `authorization`, `private_key`,
+`passphrase`, `api_key`, ou `key` seul. Le nom est le signal le plus fiable :
+il est choisi par le développeur, alors que la valeur peut prendre n'importe
+quelle forme.
+
+`public_key` est caviardée elle aussi. Une clé publique n'est pas un secret,
+mais un journal n'a pas à la répéter (§17.2) — et distinguer `public_key` de
+`private_key` par un préfixe est exactement le genre de finesse qui se retourne
+le jour où quelqu'un nomme un champ `user_key`.
+
+**Par la forme de la valeur** : un bloc PEM (`-----BEGIN … PRIVATE KEY-----`),
+un en-tête `Authorization:`, ou une chaîne commençant par `ssh-` suivie de
+base64. Ce second filet attrape ce qu'un nom anodin laisserait passer.
+
+### 21.4 Un payload n'est pas un dépotoir
+
+Le journal de l'ingress écrivait la **configuration Caddy entière** dans son
+payload. Ce n'est plus une trace, c'est une copie — coûteuse en place, illisible
+à la relecture, et prête à emporter le premier secret qu'on ajoutera à cette
+configuration.
+
+Le payload est donc **borné**. Au-delà, il est tronqué en le disant. Ce qu'un
+journal doit permettre, c'est de reconstituer *qui a fait quoi et avec quel
+résultat* — pas de rejouer l'état complet du système.
+
+### 21.5 Ce que le journal retient sans faute
+
+Un **refus** est journalisé au même titre qu'un succès (`docs/SCHEMA.md` §9).
+C'est précisément la trace qui manque toujours quand on en a besoin : personne
+n'enquête sur une opération qui a réussi.
