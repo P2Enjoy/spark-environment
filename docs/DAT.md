@@ -1841,3 +1841,147 @@ autoritaire.
 
 La distinction est celle du §14.9 : un champ **mal formé** se signale tout de
 suite, un champ **qui ne tiendra peut-être pas** se soumet quand même.
+
+
+## 26. Les trois surfaces d'administration d'un Spark
+
+Le §24 a fait du détail l'écran où l'on *lit* un Spark. Cette section dit comment
+il devient l'écran où l'on *agit* sur ses routes, ses clés et ses instantanés.
+
+### 26.1 Ce ne sont pas trois écrans
+
+Le titre de l'unité dit « écrans », au pluriel, et c'est le seul point où la
+spécification s'écarte de lui. Une route publique n'existe pas sans son Spark :
+`ingress_route.spark_id` est obligatoire (`docs/SCHEMA.md` §6). Un instantané non
+plus. Leur donner des écrans séparés obligerait à choisir un Spark en entrant,
+c'est-à-dire à refaire l'écran détail en moins bon.
+
+**Décision : trois panneaux du détail, pas trois écrans.** C'est l'architecture
+que `CLAUDE.md` §4 demande — l'objet métier principal est citoyen de première
+classe, le reste est un contexte porté par lui.
+
+**Une exception, et elle est réelle.** Le registre de clés est *général* : une
+clé y existe avant d'être accordée, et `DELETE /v1/ssh-keys/{label}` la retire de
+**tous** les Sparks à la fois. Ce geste-là n'appartient pas au détail d'un Spark,
+parce que son effet déborde le Spark qu'on regarde. Le détail accorde et révoque
+pour **son** Spark ; l'oubli d'une clé du registre relève d'une surface générale
+qui n'est pas livrée par cette unité, et le panneau le dit plutôt que de le
+laisser deviner.
+
+### 26.2 Un formulaire s'ouvre, il n'occupe pas
+
+Chaque panneau porte un bouton d'ajout qui **révèle** son formulaire à sa place,
+dans le flux (`DESIGN_SYSTEM.md` §6.22). Pas de modale : ni voile, ni piège de
+focus, ni `Échap` global à écrire pour trois formulaires de deux champs.
+
+Le contrat d'interaction est celui du §6.22, et il vaut pour les trois :
+
+- à l'ouverture, le focus entre dans le premier champ ;
+- l'annulation referme et **rend le focus au bouton déclencheur** ;
+- la saisie survit à un refus du serveur — c'est déjà la règle du §25.2, et elle
+  ne change pas parce que le formulaire est plus petit.
+
+Un seul panneau est ouvert à la fois. Deux formulaires ouverts côte à côte
+laisseraient croire qu'on prépare deux gestes qui partiraient ensemble, alors que
+chacun part seul.
+
+### 26.3 Routes publiques
+
+**Déclarer** demande un domaine, un port et le TLS. Le port est celui **du
+Spark**, pas celui de l'hôte : c'est `target_port`, et l'amont est
+`ipv4_address:target_port` (§18.2). Le libellé du champ le dit, sans quoi on
+saisit `443` en croyant décrire l'entrée.
+
+**L'unicité du domaine n'est pas contrôlée ici.** `ingress_route.domain` est
+`UNIQUE` en base (§18.4) et le refus arrive en `409 route_refused`. Le refaire
+côté interface ne protégerait de rien face à deux consoles simultanées, et
+donnerait l'illusion inverse. C'est le même partage qu'au §25.3 : l'interface
+montre, le serveur tranche.
+
+**`applied_at` vide veut dire quelque chose de précis** (§18.5) : la route est
+enregistrée mais Caddy ne la sert pas. L'écran l'affiche en `accent` — « non
+appliquée » — et non en `danger` : rien n'est cassé, un état est simplement en
+retard. À côté, une action **Réappliquer** appelle `POST /v1/ingress/reconcile`.
+C'est une action réparatrice au sens du §6.24 : elle ne détruit rien, n'a aucun
+paramètre, et ne demande donc **pas** de confirmation.
+
+**Le TLS ne se promet pas.** Une route à `tls = 1` est confiée à Caddy, dont
+l'émission dépend du DNS — extérieur au produit (§18.3). Le formulaire énonce
+cette dépendance au moment du choix. L'écran ne montre jamais un certificat comme
+« actif » : il ne le sait pas, et `sparkd` ne le lui dit pas.
+
+**Retirer** une route la retire du service. C'est réversible en la redéclarant,
+mais le domaine cesse de répondre immédiatement : confirmation nommant le domaine
+(§6.23).
+
+### 26.4 Clés autorisées
+
+Deux gestes distincts, dans le même panneau parce qu'ils servent la même
+intention :
+
+- **accorder** une clé déjà enregistrée — une liste déroulante des clés du
+  registre qui ne sont pas déjà accordées à ce Spark ;
+- **enregistrer** une clé nouvelle — un libellé et une clé publique.
+
+Le second n'existe que pour éviter un aller-retour : sans lui, autoriser une
+nouvelle machine imposerait de quitter le Spark qu'on regarde. Il n'accorde pas
+tout seul — enregistrer puis accorder restent deux effets, et l'écran enchaîne
+les deux appels en le disant.
+
+**L'empreinte affichée est celle que le serveur rend**, jamais un condensat
+recalculé dans le navigateur. C'est le §17.2 : ce que la console affiche doit
+être ce que `ssh-keygen -lf` affiche, et une seconde implémentation du calcul
+finirait par diverger de la première.
+
+**Une clé privée collée par erreur est refusée par la base** (`CHECK` du §17.2),
+en `422 invalid_key`. L'interface n'anticipe pas ce refus : elle le montre.
+
+**Révoquer ne demande pas de confirmation.** Le geste est réversible — la clé
+reste au registre, on la ré-accorde d'un clic — et confirmer les gestes
+réversibles banalise les confirmations qui comptent (§6.24). Mais **révoquer la
+dernière clé** ferme le Spark à tout le monde : le panneau nomme cette
+conséquence avant le geste, à l'endroit où le geste se fait.
+
+**Le fragment `ssh_config` est donné à copier** tel que `sparkd` le rend (§17.4),
+en typographie technique (§3.1). Il n'est pas reconstruit par l'interface :
+l'adresse vient du registre, et la retaper ici créerait une seconde vérité.
+
+### 26.5 Instantanés
+
+**Prendre** un instantané ne détruit rien : pas de confirmation. Le formulaire
+énonce en revanche ce que le §19.4 impose de savoir — l'instantané consomme le
+quota disque du Spark, et un Spark qui en accumule voit son espace diminuer sans
+qu'aucun fichier n'ait été ajouté.
+
+**Supprimer** un instantané est irréversible : confirmation nommant l'instantané
+(§6.23).
+
+**Restaurer est le geste délicat de cette unité.** Ce n'est pas une action
+réparatrice au sens du §6.24 : elle **écrase l'état courant** de la cellule. Elle
+confirme donc, en nommant ce qui est perdu.
+
+Et surtout, quand le serveur refuse en `409 blocked_by_newer_snapshots` parce que
+des instantanés plus récents seraient détruits (§19.1), l'écran :
+
+1. affiche le refus et **liste nommément** les instantanés qui bloquent, tels que
+   `sparkd` les rend dans `blocking` ;
+2. n'offre qu'**alors** l'acceptation explicite de leur perte, qui renvoie la
+   requête avec `accept_losing_newer`.
+
+**L'ordre compte, et c'est la seule chose que cette section demande de ne pas
+inverser.** Un formulaire qui porterait la case « accepter la perte » *avant* la
+première tentative la ferait cocher par habitude, et l'exploitant perdrait des
+instantanés qu'il n'a jamais regardés. Le refus est ce qui rend la perte visible ;
+l'acceptation doit venir après lui, et nommer ce qui meurt. C'est la traduction à
+l'écran de la décision du §19.1 : le drapeau appartient à la requête, jamais à la
+configuration.
+
+**`stateful` n'est pas proposé** (§19.3). Il échoue sur cet hôte, et un bouton
+qui échoue à l'usage vaut moins que pas de bouton.
+
+### 26.6 Ce que ces panneaux ne font pas
+
+Ils ne rafraîchissent pas en continu. Après un geste réussi, l'écran relit le
+Spark et ses trois collections — c'est le même choix qu'au §24 : un état relu
+vaut mieux qu'un état deviné, et l'optimisme d'interface (`DESIGN_SYSTEM.md` §7.1)
+n'a pas sa place sur des gestes qui touchent au réseau et au disque.

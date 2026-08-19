@@ -324,6 +324,35 @@ Afficher la capacité restante avant validation, et le refus motivé du backend.
 
 ### [ ] SPK-21 · Écrans ingress, clés SSH, snapshots
 
+Rendre agissantes les trois sections que l'écran détail affiche en lecture seule
+depuis SPK-19 : routes publiques, clés autorisées, instantanés.
+
+Spécification : `docs/DAT.md` §26, qui s'appuie sur §17 (accès SSH), §18
+(réconciliation de l'ingress) et §19 (instantanés).
+
+- Trois panneaux du détail, pas trois écrans : une route et un instantané
+  n'existent pas sans leur Spark (§26.1).
+- Chaque formulaire s'ouvre dans le flux, un seul à la fois ; le focus y entre,
+  l'annulation le rend au déclencheur, un refus conserve la saisie (§26.2).
+- Routes : déclarer, retirer avec confirmation nommant le domaine, réappliquer
+  sans confirmation ; `applied_at` vide s'affiche en `accent` et non en `danger`
+  (§26.3).
+- Clés : accorder depuis le registre, enregistrer une clé nouvelle, révoquer sans
+  confirmation ; révoquer la dernière clé nomme sa conséquence ; l'empreinte
+  affichée est celle du serveur ; le fragment `ssh_config` est donné à copier
+  (§26.4).
+- Instantanés : prendre sans confirmation, supprimer et restaurer avec ;
+  `stateful` n'est pas proposé (§26.5).
+- **Le refus `blocked_by_newer_snapshots` liste nommément les instantanés qui
+  bloquent, et l'acceptation de leur perte n'est offerte qu'APRÈS ce refus,
+  jamais avant** (§26.5).
+
+DoD : les gestes partent réellement vers `sparkd` et l'écran relit l'état après
+chaque succès ; aucun contrôle d'unicité de domaine côté interface ; l'ordre
+refus-puis-acceptation est éprouvé par un test ; états chargement, erreur et
+absence traités ; navigation clavier ; console du navigateur vierge ; captures
+observées.
+
 ### [ ] SPK-22 · Vue des pools de ressources de l'hôte
 
 ## Lot 4 — Qualité et exploitation
