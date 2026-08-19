@@ -2461,3 +2461,76 @@ déjà, Node 24.14.1 et pnpm 9.15.4 étaient en place, et les contournements des
 §2.1 et §2.1 bis de `CloudWorker.md` étaient sans objet. Une session concurrente
 a poussé sur `main` pendant le travail (commit « Instruit le nom de la machine et
 ce qui manque au catalogue ») ; l'historique est resté linéaire.
+
+## 2026-08-19 — Des outils d'administration dans le Spark, sans ouvrir la frontière
+
+Demande : un shell dans le Spark depuis la console web, un onglet des conteneurs
+Docker avec leurs mesures, leur inspection, et un terminal dans un conteneur.
+Quatre arbitrages posés au responsable, quatre réponses, écrites au DAT §37.
+
+### Le point qui décidait de tout : qui parle à Docker
+
+Le produit annonce qu'aucune socket Docker n'est exposée au plan de contrôle
+(§11). Un onglet Docker semble contredire cette promesse — il ne la contredit pas
+si **c'est la console qui parle au Spark, et non `sparkd`**.
+
+L'hôte console ouvre une session SSH vers le Spark par le tunnel existant, avec la
+clé du responsable. Les commandes `docker` s'exécutent dans la cellule, la sortie
+remonte au navigateur, et `sparkd` n'est pas dans ce chemin. La console fait ce que
+le responsable ferait au terminal : elle lui épargne les gestes, pas les droits.
+
+**Arbitrage 1 : SSH en chemin normal, `incus exec` en dépannage seulement.** La
+capacité existe déjà dans le runtime, mais l'employer par défaut donnerait au plan
+de contrôle l'exécution arbitraire en root chez le locataire. Elle est donc bornée
+par quatre conditions cumulatives — Spark en erreur ou `sshd` muet, confirmation
+qui nomme le pouvoir employé, action d'audit distincte, bannière visible toute la
+session.
+
+Contrainte relevée et écrite plutôt que découverte à l'usage : `images:debian/13`
+n'embarque pas de `sshd` (§17.1). Sur un Spark neuf où le locataire n'a rien
+installé, ces outils ne marchent pas — l'écran doit le nommer, pas afficher une
+erreur technique.
+
+### Les trois autres arbitrages
+
+**Périmètre : lecture, plus le cycle de vie d'un conteneur.** Démarrer, arrêter,
+redémarrer, tuer. Pas Compose, pas de construction d'images, pas de registre — le
+§1 les exclut du périmètre, et l'outil observe la pile du locataire sans la gérer
+à sa place.
+
+**Journal : ouverture et fermeture, rien du contenu.** Le filtre de caviardage du
+§21.2 travaille sur des champs nommés ; il ne saura jamais caviarder un flux
+interactif où un mot de passe est tapé au milieu d'une ligne. Enregistrer les
+frappes créerait un dépôt de secrets en clair. Conséquence assumée et écrite : le
+journal dira qu'une session a eu lieu, jamais ce qui y a été fait.
+
+**Gel : il bloque les gestes Docker, pas la lecture.** J'y ajoute une décision qui
+découle du §35.4 et qu'il faut me corriger si elle dépasse l'arbitrage : le
+**terminal reste ouvert sous gel**, parce que c'est l'outil de diagnostic et que le
+bloquer pousserait à désarmer pour regarder, donc à oublier de réarmer.
+
+### L'écart qu'il fallait écrire, pas cacher
+
+Les gestes Docker ne passent pas par `sparkd`. Le runtime ne peut donc pas les
+refuser : c'est la **console** qui applique le gel, à partir de l'état publié par
+le runtime. C'est un écart à la règle « une interdiction s'applique côté serveur ».
+
+Il est assumé et motivé plutôt que masqué : la protection est déjà un garde-fou et
+non un contrôle d'accès (§35.1), et qui veut la contourner ouvre un terminal et
+tape la commande — exactement comme il l'aurait fait en SSH depuis son poste. Le
+produit ne prétendra pas empêcher cela là où il a **choisi** de n'avoir aucune
+autorité.
+
+### Une règle d'affichage qui évitera un faux chiffre
+
+Les mesures du Spark viennent du runtime et se comparent à ses quotas ; celles des
+conteneurs viennent de Docker, à l'intérieur de la cellule, et se comparent à ce
+que la cellule voit d'elle-même. Les empiler dans un même graphique produirait un
+chiffre qui ne veut rien dire. SPK-DS-05 l'interdit, dans la lignée de SPK-DS-02.
+
+### Vérifications
+
+Aucun test exécuté : spécification, règles d'interface et backlog. Les faits
+techniques cités ont été relevés dans le code — `exec_command` existe bien dans
+`incus.py`, et le §17.1 documente l'absence de `sshd` dans l'image de base.
+

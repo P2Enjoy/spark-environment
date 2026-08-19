@@ -1137,6 +1137,78 @@ différentes, et la console affiche les deux.
   la table et du contrat livrées ensemble ; `make contract-check` vert ; manuel
   et captures refaits.
 
+### [ ] SPK-43 · Terminal dans un Spark depuis la console
+
+Le transport de tous les outils du §37, et le premier d'entre eux.
+
+- Spécification : `docs/DAT.md` §37.1 à §37.5 · `docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-04 · manuel M8.
+- Portée : pseudo-terminal servi par l'hôte console sur la boucle locale, rendu
+  dans le navigateur ; transport **SSH vers le Spark** par le tunnel existant,
+  avec la clé du responsable — `sparkd` n'est pas dans ce chemin (§37.1) ;
+  fermeture de l'onglet qui **termine** le processus distant ; fermeture après
+  inactivité, annoncée avant ; propagation du redimensionnement ; mode lecteur
+  d'écran activable et retenu ; entrée d'audit à l'ouverture et à la fermeture,
+  avec l'acteur, la cible, le chemin et la durée — **et rien du contenu** (§37.5).
+- Chemin de dépannage `incus exec`, aux quatre conditions du §37.3 : Spark en
+  `error` ou `sshd` muet, confirmation qui **nomme le pouvoir employé**, action
+  d'audit distincte `spark.rescue_exec`, bannière visible toute la session. Ce
+  n'est jamais le chemin par défaut.
+- Cas à traiter explicitement, pas à laisser en erreur technique : un Spark sans
+  `sshd` — l'image de base n'en a pas (§17.1). L'écran nomme ce qui manque.
+- Le terminal reste **ouvert sous gel** (§37.7), avec l'état protégé affiché en
+  permanence.
+- DoD : parcours E2E depuis le parcours canonique — ouvrir la fenêtre d'un Spark,
+  entrer dans le terminal, exécuter une commande, la voir répondre, quitter et
+  vérifier que le processus distant est mort ; un test prouve que le journal porte
+  l'ouverture et la fermeture **et rien de ce qui a été tapé** ; un parcours
+  montre l'écran d'un Spark sans `sshd` ; un parcours emprunte le dépannage et
+  prouve son audit distinct ; captures observées, dont la bannière de dépannage ;
+  manuel M8 mis à jour.
+
+### [ ] SPK-44 · Onglet Docker : inventaire, mesures et inspection
+
+Ce que le locataire fait tourner, observé sans rien y toucher.
+
+- Spécification : `docs/DAT.md` §37.6 · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-05 ·
+  `docs/DESIGN_SYSTEM.md` §6.14, §6.13 · manuel M8.
+- Dépend de : SPK-43 — les commandes empruntent le même transport.
+- Portée : conteneurs et leur état, mesures d'usage, inspection d'un conteneur,
+  journaux, réseaux et volumes ; collecte à l'ouverture de l'onglet, rafraîchie
+  tant qu'il est ouvert, **arrêtée** quand il est quitté ; mesures du Spark et
+  mesures des conteneurs jamais fondues dans la même jauge, chacune affichée avec
+  son référentiel.
+- Lecture **seule**. Aucun bouton d'action dans cette unité.
+- États à traiter, chacun nommé et non rendu par un tableau vide : Docker absent
+  du Spark, Docker présent sans conteneur, Spark arrêté, `sshd` muet.
+- DoD : parcours E2E depuis le parcours canonique sur une pile Compose réelle du
+  seed — lire l'inventaire, ouvrir l'inspection, lire les journaux ; un test
+  prouve que la collecte **cesse** à la fermeture de l'onglet ; captures observées,
+  dont les quatre états d'absence et un conteneur aux journaux très longs ; manuel
+  M8 mis à jour.
+
+### [ ] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
+
+- Spécification : `docs/DAT.md` §37.7, §37.4 · `docs/DESIGN_SYSTEM.md` §6.23 ·
+  manuel M8.
+- Dépend de : SPK-43 et SPK-44.
+- Portée : démarrer, arrêter, redémarrer, tuer un conteneur ; terminal **dans** un
+  conteneur en marche, avec le même contrat qu'au §37.4 et le même audit qu'au
+  §37.5 ; chaque geste confirmé en **nommant le conteneur et l'effet**.
+- Hors portée, et pas seulement « plus tard » : Compose — `up`, `down`, `pull`,
+  édition du fichier —, la construction d'images et les registres. Le §1 les exclut
+  du périmètre du produit.
+- **Le gel bloque ces gestes, pas la lecture ni le terminal** (§37.7). Le refus est
+  rendu par la console à partir de l'état publié par le runtime : c'est un écart
+  assumé à « une interdiction s'applique côté serveur », parce que ces gestes ne
+  passent délibérément pas par `sparkd`. L'écart est écrit au §37.7 et doit être
+  rappelé dans le manuel : la protection est un garde-fou, pas un contrôle d'accès.
+- DoD : parcours E2E depuis le parcours canonique — arrêter puis redémarrer un
+  conteneur du seed, avec sa confirmation nommée ; ouvrir un terminal dans un
+  conteneur et y exécuter une commande ; un parcours prouve qu'un Spark **gelé**
+  refuse le geste, laisse la lecture et laisse le terminal ; captures observées ;
+  manuel M8 mis à jour.
+
 ---
 
 ## Réservé, non planifié

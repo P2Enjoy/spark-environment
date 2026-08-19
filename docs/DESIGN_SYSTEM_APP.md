@@ -26,7 +26,7 @@ orientation, pas une loi. Voici ce qu'ils désignent ici :
 |---|---|---|
 | 1 | **Sparks**, **Hôte** | barre latérale, sélecteur de serveur et état du tunnel en tête |
 | 2 | sous *Sparks* : *Instances* · sous *Hôte* : *Pools*, *Images* | onglets |
-| 3 | la fenêtre d'un Spark, ouverte depuis la liste : *Infos*, *Routes*, *Clés*, *Instantanés*, *Journal* | onglets de la fenêtre, sections à l'intérieur |
+| 3 | la fenêtre d'un Spark, ouverte depuis la liste : *Infos*, *Routes*, *Clés*, *Instantanés*, *Journal*, *Docker*, *Terminal* | onglets de la fenêtre, sections à l'intérieur |
 | — | modifier une section, ou lui insérer un élément | modale limitée à cette section |
 
 La fenêtre d'un Spark porte donc **ses propres onglets**, sous ceux du second
@@ -132,6 +132,37 @@ pas (`docs/DAT.md` §20.1). L'interface suit :
 | valeur réelle nulle | `0` |
 
 Un blanc n'est jamais employé pour l'une de ces situations.
+### SPK-DS-04 · Le terminal n'est ni une section ni une modale
+
+Un terminal ne se range dans aucune des deux formes du §6.27 : il n'a pas de point
+d'engagement, donc ce n'est pas une modale ; il n'affiche pas des paires
+terme/valeur, donc ce n'est pas une section.
+
+C'est une **surface d'interaction continue**, et elle est traitée comme une
+destination : un onglet de la fenêtre du Spark, avec sa propre adresse.
+
+Règles propres :
+
+- l'état protégé du Spark (`docs/DAT.md` §35) et le chemin employé — SSH ou
+  dépannage (§37.3) — restent affichés **pendant toute la session**, pas seulement
+  à l'ouverture ;
+- quitter l'onglet termine la session, et l'écran le dit avant de le faire ;
+- le terminal ne porte aucun bouton d'action Docker : les gestes appartiennent à
+  l'onglet *Docker*, où ils sont nommés et confirmés (§6.23). Un bouton posé à
+  côté d'un shell laisserait croire que les deux font la même chose de deux
+  façons ;
+- le mode lecteur d'écran est activable et son réglage persiste.
+
+### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
+
+Les mesures d'un Spark viennent du runtime et se comparent à ses quotas
+(`docs/DAT.md` §20). Celles des conteneurs viennent de Docker, à l'intérieur de la
+cellule, et se comparent à ce que la cellule voit d'elle-même (§37.6).
+
+Elles ne sont jamais empilées dans le même graphique ni additionnées. Chaque
+mesure est affichée avec **ce à quoi elle se rapporte**, écrit à côté d'elle. Même
+principe que SPK-DS-02 : un chiffre sans son référentiel est un chiffre faux.
+
 
 ## 5. Responsive spécifique
 

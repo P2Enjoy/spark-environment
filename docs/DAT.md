@@ -2781,7 +2781,7 @@ désignent dans la console, et ce qu'ils changent de l'existant.
 |---|---|---|
 | 1 | Sparks, Hôte | barre latérale |
 | 2 | sous Sparks : Instances · sous Hôte : Pools, Images | onglets |
-| 3 | la fenêtre d'un Spark : Infos, Routes, Clés, Instantanés, Journal | onglets de la fenêtre, sections à l'intérieur |
+| 3 | la fenêtre d'un Spark : Infos, Routes, Clés, Instantanés, Journal, Docker, Terminal | onglets de la fenêtre, sections à l'intérieur |
 | — | modifier une section, ou lui insérer un élément | modale limitée à cette section |
 
 La fenêtre d'un Spark porte ses propres onglets, sous ceux du second degré. Le
@@ -3173,4 +3173,139 @@ Une réserve à traiter dans la même unité : INC-01 signale que les messages
 d'audit portent le vocabulaire technique du runtime là où l'interface affiche des
 libellés français. Un onglet dédié va exposer cet écart sur toute une page au lieu
 d'un panneau, et le rendra donc plus visible qu'il ne l'est aujourd'hui.
+
+
+## 37. Les outils d'administration dans le Spark
+
+Un terminal dans le Spark, l'inventaire de ses conteneurs Docker avec leurs
+mesures, leur inspection, et un terminal dans l'un d'eux. Arbitré par le
+responsable le 2026-08-19.
+
+### 37.1 La frontière tient, et voici pourquoi
+
+Le produit annonce qu'**aucune socket Docker n'est exposée au plan de contrôle**
+(§11) et que Docker appartient au locataire (§2). Ces outils ne l'entament pas, à
+une condition qui est le cœur de leur conception : **c'est la console qui parle au
+Spark, pas `sparkd`**.
+
+L'hôte console — le processus Node du poste local (§22) — ouvre une session SSH
+vers le Spark, à travers le tunnel déjà existant, avec la clé du responsable. Les
+commandes `docker` s'exécutent **dans** le Spark, et leur sortie remonte au
+navigateur. `sparkd` n'est pas dans ce chemin : il ne voit pas Docker, ne lui
+parle pas, et n'en gagne aucun pouvoir.
+
+Autrement dit, la console fait exactement ce que le responsable ferait avec un
+terminal et sa clé. Elle lui épargne les gestes, pas les droits.
+
+### 37.2 Le chemin normal : SSH, et ce qu'il suppose
+
+Le transport normal est SSH vers le Spark, par rebond sur la machine hôte, comme
+le manuel M6 le décrit déjà pour un humain.
+
+Il suppose un `sshd` **dans** le Spark. L'image `images:debian/13` n'en embarque
+pas (§17.1) : sur un Spark fraîchement créé où le locataire n'a rien installé,
+ces outils ne fonctionnent pas. L'écran le dit en toutes lettres, avec ce qu'il
+manque — il n'affiche ni onglet vide, ni erreur technique.
+
+### 37.3 Le dépannage : `incus exec`, borné et nommé
+
+`sparkd` sait déjà exécuter dans une instance (`exec_command`, §14). Cette
+capacité n'est **pas** le chemin par défaut : elle donne au plan de contrôle
+l'exécution arbitraire en root chez le locataire, ce qui est précisément ce que
+le §11 évite.
+
+Elle est ouverte au seul **dépannage**, sous quatre conditions cumulatives :
+
+- le Spark est en `error`, ou son `sshd` ne répond pas ;
+- le geste demande une confirmation qui **nomme le pouvoir employé** — « exécuter
+  en root dans la cellule, depuis le plan de contrôle » — et non un vague
+  « confirmer » ;
+- l'entrée d'audit est **distincte** de celle d'une session SSH
+  (`spark.rescue_exec`), pour qu'un relevé du journal montre combien de fois cette
+  voie a servi ;
+- la bannière reste visible pendant toute la session : on ne doit pas oublier par
+  quel chemin on est entré.
+
+### 37.4 Le terminal
+
+Un pseudo-terminal, rendu dans le navigateur, servi par l'hôte console sur la
+boucle locale. Contrat :
+
+- fermer l'onglet **termine** le processus distant ; une session qui survivrait à
+  son écran serait un shell root abandonné dont personne ne se souvient ;
+- une inactivité prolongée ferme la session, après avertissement à l'écran ;
+- le redimensionnement est propagé, sans quoi tout programme plein écran s'affiche
+  de travers ;
+- le mode lecteur d'écran du terminal est activable — un terminal est utilisable
+  au clavier par construction, mais il n'est pas lisible par défaut.
+
+### 37.5 Ce que le journal retient d'une session
+
+**Décision du responsable : l'ouverture et la fermeture, rien du contenu.** Sont
+journalisés l'acteur, le Spark ou le conteneur visé, le chemin employé — SSH ou
+dépannage —, l'horodatage et la durée.
+
+Motif : le filtre de caviardage du §21.2 travaille sur des champs nommés. Il ne
+sait pas, et ne saura pas, caviarder un flux interactif où un mot de passe est
+tapé au milieu d'une ligne de commande. Enregistrer les frappes reviendrait à
+créer un dépôt de secrets en clair dans le journal — l'inverse du but.
+
+Conséquence assumée, écrite ici pour qu'elle ne soit pas découverte après un
+incident : **le journal dira qu'une session a eu lieu, jamais ce qui y a été
+fait**. Qui veut cette trace-là doit la chercher dans le Spark, chez le locataire.
+
+### 37.6 L'onglet Docker, en lecture
+
+Il rend, en interrogeant Docker **dans** le Spark : les conteneurs et leur état,
+les mesures d'usage, l'inspection d'un conteneur, ses journaux, ses réseaux et
+volumes.
+
+La collecte est faite à l'ouverture de l'onglet puis rafraîchie tant qu'il reste
+ouvert, et **cesse** quand il est quitté. Une console qui interroge en permanence
+un Spark qu'on ne regarde plus consomme le quota du locataire pour rien.
+
+**Deux sources de mesure, jamais fondues dans la même jauge.** Les mesures du
+Spark viennent du runtime et se comparent à ses quotas (§20). Celles des
+conteneurs viennent de Docker, **à l'intérieur** de la cellule, et se comparent à
+ce que la cellule voit d'elle-même. Additionner les secondes ou empiler les deux
+pourcentages dans un même graphique produirait un chiffre qui ne veut rien dire.
+C'est le même principe qu'au SPK-DS-02 : une mesure s'affiche avec ce à quoi elle
+se rapporte.
+
+### 37.7 Les gestes sur un conteneur, et le gel
+
+**Décision du responsable : lecture, plus le cycle de vie d'un conteneur** —
+démarrer, arrêter, redémarrer, tuer. **Pas** Compose : ni `up`, ni `down`, ni
+`pull`, ni édition du fichier. Le §1 exclut du périmètre la construction et le
+déploiement applicatifs, et cette limite ne bouge pas ici.
+
+Chaque geste est **sensible** au sens du §6.23 du design system : il interrompt la
+production du locataire. La confirmation nomme le conteneur et l'effet, jamais un
+« êtes-vous sûr ».
+
+**Le gel (§35) bloque ces gestes, pas la lecture** — arbitrage du responsable.
+Observer un Spark protégé reste possible ; arrêter un de ses conteneurs exige de
+lever le gel d'abord.
+
+Le terminal, lui, **reste ouvert sous gel**, et c'est délibéré : c'est l'outil de
+diagnostic. Le bloquer pousserait à désarmer pour regarder, donc à oublier de
+réarmer — le défaut nommé au §35.4. L'écran affiche l'état protégé en permanence
+pendant la session.
+
+**Et il faut dire où cette règle est appliquée.** Les gestes Docker ne passent pas
+par `sparkd` (§37.1) : le runtime ne peut donc pas les refuser. Le refus est rendu
+par la **console**, à partir de l'état de protection publié par le runtime, qui
+reste la source de vérité. C'est un écart assumé à la règle « une interdiction
+s'applique côté serveur » — et il est cohérent avec ce que la protection est
+déjà : un garde-fou, pas un contrôle d'accès (§35.1). Qui veut contourner ouvre un
+terminal et tape la commande, exactement comme il l'aurait fait en SSH depuis son
+poste. Le produit ne prétendra pas l'en empêcher, parce qu'il ne le peut pas là où
+il a **choisi** de n'avoir aucune autorité.
+
+### 37.8 Ce que ces outils ne sont pas
+
+Ce n'est pas un Docker Desktop. Restent hors périmètre, et pas seulement « pas
+tout de suite » : la construction d'images, les registres, le déploiement de
+piles, l'édition de Compose (§1). L'outil observe la pile du locataire et permet
+de reprendre un conteneur tombé ; il ne la gère pas à sa place.
 

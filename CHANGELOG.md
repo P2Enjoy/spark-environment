@@ -26,6 +26,14 @@
   touchés et se confirme, elle ne se bloque pas.
 - `docs/DAT.md` : nouveau §35, les Sparks protégés — portée du refus, mot de
   passe et son empreinte, ce que la protection n'est pas.
+- `docs/DAT.md` : nouveau §37, les outils d'administration dans le Spark —
+  terminal, onglet Docker, gestes sur un conteneur, et pourquoi la frontière du
+  §11 tient : c'est la console qui parle au Spark, pas `sparkd`.
+- Unités SPK-43 (terminal dans un Spark), SPK-44 (onglet Docker en lecture) et
+  SPK-45 (gestes sur un conteneur et terminal dans un conteneur).
+- `docs/DESIGN_SYSTEM_APP.md` : SPK-DS-04, le terminal n'est ni une section ni une
+  modale mais une destination ; SPK-DS-05, deux origines de mesure ne partagent
+  pas une jauge.
 - `docs/DAT.md` : nouveau §22.4 bis, ce que le catalogue des serveurs délègue à
   OpenSSH — alias `ssh` accepté, découverte proposée jamais imposée, vérification
   de la clé d'hôte jamais désactivée.
