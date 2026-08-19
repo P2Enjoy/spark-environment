@@ -141,6 +141,7 @@ pas encore sont marquées.
 | `pnpm dev` | hôte console sur `http://127.0.0.1:5173` — inventaire et tunnels | **oui** |
 
 | `make e2e` / `pnpm e2e` | parcours complets contre la pile réelle | **oui** |
+| `make manuel` | reproduit les illustrations du manuel | **oui** |
 
 ## Variables d'environnement
 
@@ -207,6 +208,7 @@ vigilance de l'exploitant.
 | [docs/BACKLOG.md](docs/BACKLOG.md) | unités de travail et état réel |
 | [docs/JOURNAL.md](docs/JOURNAL.md) | décisions et investigations |
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | règles d'interface |
+| [docs/manuel/](docs/manuel/) | manuel utilisateur |
 | [docs/MANUAL_PLAN.md](docs/MANUAL_PLAN.md) | plan du manuel utilisateur |
 | [docs/PROD_MIGRATIONS.md](docs/PROD_MIGRATIONS.md) | contrat de déploiement |
 | [docs/ORIGIN_CONVERSATION.md](docs/ORIGIN_CONVERSATION.md) | conversation fondatrice |

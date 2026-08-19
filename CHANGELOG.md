@@ -128,6 +128,9 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- Manuel utilisateur sous `docs/manuel/` : dix chapitres écrits à partir du
+  comportement observé sur la pile réelle. Les illustrations sont produites par
+  `make manuel` et le lien manuel-image est vérifié dans les deux sens.
 - Parcours E2E contre la pile réelle (`make e2e`, dans `make test`) : le harnais
   monte sa propre pile seedée, se déplace à la souris et au clavier, et couvre
   les quatre refus du produit.
@@ -156,6 +159,7 @@
   nouveau §25, l'écran de création ; nouveau §26, les trois surfaces
   d'administration d'un Spark ; nouveau §27, l'écran des pools ; nouveau §28, la
   pile de développement et le contrat du seed ; nouveau §29, les parcours E2E ;
+  nouveau §30, le manuel et sa fraîcheur ;
   nouveau §22.6, qui ouvre le tunnel de la console et quand.
 - `docs/SCHEMA.md` : nouveau §11 bis, les deux termes de la réserve mémoire.
 - Migration `002_part_arc` : `host` porte désormais `memory_arc_bytes` et

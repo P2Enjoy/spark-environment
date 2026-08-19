@@ -7,7 +7,7 @@ VENV   := $(SPARKD)/.venv
 PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
-        contract contract-check test gestes e2e captures runDev seed build clean
+        contract contract-check test gestes e2e captures manuel runDev seed build clean
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -21,6 +21,7 @@ help:
 	@echo "seed            recree le registre de developpement et le peuple"
 	@echo "gestes          parcours navigateur des gestes d'administration"
 	@echo "e2e             parcours complets contre la pile reelle"
+	@echo "manuel          reproduit les illustrations du manuel utilisateur"
 	@echo "captures        captures d'interface, a OBSERVER (CLAUDE.md §16)"
 	@echo "test            toutes les suites de tests"
 	@echo "build           build de tous les paquets"
@@ -69,10 +70,16 @@ e2e:
 captures:
 	node e2e/captures.mjs
 
+# Les illustrations du manuel sont PRODUITES depuis l'application (DAT §30.1),
+# jamais collectees a la main.
+manuel:
+	node e2e/manuel.mjs
+
 test: sparkd-test contract-check
 	pnpm -r test
 	$(MAKE) gestes
 	$(MAKE) e2e
+	node --test e2e/manuel.test.mjs
 
 build:
 	pnpm -r build
