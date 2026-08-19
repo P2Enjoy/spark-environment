@@ -18,6 +18,7 @@ from secrets import token_hex
 
 from .addressing import AddressPoolExhausted, allocate
 from .admission import Request, admit, pools
+from . import audit
 from .db import transaction
 from .lifecycle import Command, State, TransitionError, next_state, reconcile, settle
 
@@ -69,11 +70,9 @@ def _new_id() -> str:
 
 
 def _audit(connection, actor, action, target_id, payload, result, message) -> None:
-    connection.execute(
-        "INSERT INTO audit_log (ts, actor, action, target_type, target_id,"
-        " payload, result, message) VALUES (?, ?, ?, 'spark', ?, ?, ?, ?)",
-        (_now(), actor, action, target_id, json.dumps(payload), result, message),
-    )
+    """Passe par le point unique : aucun module n'écrit dans `audit_log`."""
+    audit.record(connection, actor, action, result, message,
+                 target_type="spark", target_id=target_id, payload=payload)
 
 
 def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "responsable") -> dict:

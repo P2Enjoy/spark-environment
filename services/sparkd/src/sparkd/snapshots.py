@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from secrets import token_hex
 
+from . import audit
 from .db import transaction
 
 #: Incus impose un nom simple ; on reste plus strict pour rester lisible.
@@ -53,11 +54,8 @@ def _now() -> str:
 
 
 def _audit(connection, actor, action, target, payload, result, message) -> None:
-    connection.execute(
-        "INSERT INTO audit_log (ts, actor, action, target_type, target_id,"
-        " payload, result, message) VALUES (?, ?, ?, 'snapshot', ?, ?, ?, ?)",
-        (_now(), actor, action, target, json.dumps(payload), result, message),
-    )
+    audit.record(connection, actor, action, result, message,
+                 target_type="snapshot", target_id=target, payload=payload)
 
 
 def listing(connection: sqlite3.Connection, spark_id: str) -> list[dict]:

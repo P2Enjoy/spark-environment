@@ -28,6 +28,7 @@ from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
+from . import audit as audit_service
 from . import metrics as metrics_service
 from . import snapshots as snapshot_service
 from . import sshkeys
@@ -420,6 +421,15 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
             return {"deleted": snapshot}
+
+    @app.get("/v1/audit", tags=["audit"])
+    def audit_trail(limit: int = 100, result: str | None = None,
+                    action: str | None = None) -> dict:
+        """Journal d'audit. Les valeurs sensibles y sont déjà caviardées."""
+        with registry() as connection:
+            return {"entries": audit_service.listing(
+                connection, limit=limit, result=result, action=action
+            )}
 
     @app.get("/v1/ingress", tags=["ingress"])
     def list_routes() -> dict:

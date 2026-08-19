@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from . import audit
 from .db import transaction
 from .hostmem import HostMemory, measure
 from .incus import IncusClient
@@ -246,32 +247,29 @@ def sync(
             )
             if alloue.get(nom, 0) > pool_etat.capacity
         ]
-        connection.execute(
-            "INSERT INTO audit_log (ts, actor, action, target_type, target_id,"
-            " payload, result, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        audit.record(
+            connection, actor, "host.sync",
+            "denied" if (depassements or not topology.arc_known) else "ok",
             (
-                _now(), actor, "host.sync", "host", "1",
-                json.dumps({
-                    "cpu_cores": topology.cpu_cores_total,
-                    "cpu_threads": topology.cpu_threads_total,
-                    "memory_bytes": topology.memory_total_bytes,
-                    "network_bps": topology.network_total_bps,
-                    "storage_bytes": topology.storage_total_bytes,
-                    "memory_reserve_bytes": topology.memory_reserve_bytes,
-                }),
-                "denied" if (depassements or not topology.arc_known) else "ok",
-                (
-                    "Capacité relevée inférieure à l'allocation en cours : "
-                    + ", ".join(depassements)
-                    + ". Le relevé est appliqué — la réalité fait foi — mais "
-                      "l'écart doit être résorbé."
-                ) if depassements else (
-                    f"Relevé appliqué. {topology.memory_detail}"
-                    if topology.arc_known else
-                    f"Relevé appliqué MAIS le pool mémoire est peut-être "
-                    f"surestimé : {topology.memory_detail}"
-                ),
+                "Capacité relevée inférieure à l'allocation en cours : "
+                + ", ".join(depassements)
+                + ". Le relevé est appliqué — la réalité fait foi — mais "
+                  "l'écart doit être résorbé."
+            ) if depassements else (
+                f"Relevé appliqué. {topology.memory_detail}"
+                if topology.arc_known else
+                f"Relevé appliqué MAIS le pool mémoire est peut-être "
+                f"surestimé : {topology.memory_detail}"
             ),
+            target_type="host", target_id="1",
+            payload={
+                "cpu_cores": topology.cpu_cores_total,
+                "cpu_threads": topology.cpu_threads_total,
+                "memory_bytes": topology.memory_total_bytes,
+                "network_bps": topology.network_total_bps,
+                "storage_bytes": topology.storage_total_bytes,
+                "memory_reserve_bytes": topology.memory_reserve_bytes,
+            },
         )
     return topology
 

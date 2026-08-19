@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from secrets import token_hex
 
+from . import audit
 from .db import transaction
 
 AUTHORIZED_KEYS = "/root/.ssh/authorized_keys"
@@ -96,11 +97,8 @@ def _now() -> str:
 
 
 def _audit(connection, actor, action, target, payload, result, message) -> None:
-    connection.execute(
-        "INSERT INTO audit_log (ts, actor, action, target_type, target_id,"
-        " payload, result, message) VALUES (?, ?, ?, 'ssh_key', ?, ?, ?, ?)",
-        (_now(), actor, action, target, json.dumps(payload), result, message),
-    )
+    audit.record(connection, actor, action, result, message,
+                 target_type="ssh_key", target_id=target, payload=payload)
 
 
 def register(

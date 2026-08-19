@@ -471,3 +471,69 @@ def test_l_usage_reseau_se_compare_au_plafond(tmp_path):
     assert reseau["limit_bps"] == 500_000_000
     assert reseau["reservation_bps"] == 100_000_000
     assert "seul le plafond" in reseau["note"]
+
+
+# --- journal d'audit (SPK-15) ----------------------------------------------
+
+_CLE_PRIVEE = ("-----BEGIN OPENSSH PRIVATE KEY-----\n"
+               "b3BlbnNzaC1rZXktdjEAAAAABG5vbmU=\n"
+               "-----END OPENSSH PRIVATE KEY-----")
+
+
+def test_AUCUN_secret_n_atteint_le_journal(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-15 — la preuve que la DoD exige.
+
+    On exerce l'API RÉELLE avec des secrets, puis on fouille TOUTE la table.
+    Éprouver le filtre isolément ne prouverait rien sur ce qui est réellement
+    écrit.
+    """
+    c = _app(tmp_path)
+
+    # Un parcours complet, avec des secrets à chaque endroit qui en accepte.
+    c.post("/v1/ssh-keys", json={"label": "poste", "public_key": _CLE})
+    c.post("/v1/ssh-keys", json={"label": "fuite", "public_key": _CLE_PRIVEE})  # refusé
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/sparks/crm/ssh-keys/poste")
+    c.post("/v1/sparks/crm/start")
+    c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
+    c.post("/v1/sparks/crm/snapshots", json={"name": "avant"})
+    c.delete("/v1/sparks/crm/ssh-keys/poste")
+    c.post("/v1/sparks", json=_spec(name="trop", cpu_reservation=99.0))          # refusé
+
+    entrees = c.get("/v1/audit", params={"limit": 1000}).json()["entries"]
+    assert len(entrees) > 8, "le parcours doit avoir laissé des traces"
+
+    journal = " ".join(
+        f"{e['message']} {e.get('payload') or ''}" for e in entrees
+    )
+    # Le corps des clés, publique comme privée, ne doit apparaître nulle part.
+    corps_public = _CLE.split()[1]
+    assert corps_public not in journal
+    assert "BEGIN OPENSSH PRIVATE KEY" not in journal
+    assert "b3BlbnNzaC1rZXktdjEAAAAABG5vbmU" not in journal
+
+
+def test_le_journal_reste_lisible_malgre_le_filtrage(tmp_path):
+    """Caviarder tout ne serait pas un journal."""
+    c = _app(tmp_path)
+    c.post("/v1/ssh-keys", json={"label": "poste", "public_key": _CLE})
+    c.post("/v1/sparks", json=_spec(name="crm"))
+
+    entrees = c.get("/v1/audit").json()["entries"]
+    actions = {e["action"] for e in entrees}
+    assert "sshkey.register" in actions and "spark.create" in actions
+    # L'empreinte reste : elle identifie la clé sans la révéler.
+    assert any("SHA256:" in (e["message"] or "") for e in entrees)
+    # Et le nom du Spark aussi.
+    assert any("crm" in (e["message"] or "") for e in entrees)
+
+
+def test_les_refus_sont_journalises_comme_les_succes(tmp_path):
+    """@verifies docs/SCHEMA.md §9 — c'est la trace qui manque toujours."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="gros", cpu_reservation=3.5))
+    c.post("/v1/sparks", json=_spec(name="trop", cpu_reservation=1.0))   # refusé
+    refus = c.get("/v1/audit", params={"result": "denied"}).json()["entries"]
+    assert len(refus) >= 1
+    assert any("cpu" in (e["message"] or "") for e in refus)

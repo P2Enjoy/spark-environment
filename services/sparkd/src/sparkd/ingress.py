@@ -18,6 +18,7 @@ from secrets import token_hex
 
 import httpx
 
+from . import audit
 from .db import transaction
 
 SERVER_NAME = "spark"
@@ -81,11 +82,8 @@ def _now() -> str:
 
 
 def _audit(connection, actor, action, target, payload, result, message) -> None:
-    connection.execute(
-        "INSERT INTO audit_log (ts, actor, action, target_type, target_id,"
-        " payload, result, message) VALUES (?, ?, ?, 'ingress_route', ?, ?, ?, ?)",
-        (_now(), actor, action, target, json.dumps(payload), result, message),
-    )
+    audit.record(connection, actor, action, result, message,
+                 target_type="ingress_route", target_id=target, payload=payload)
 
 
 def declare(
