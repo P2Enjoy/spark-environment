@@ -128,6 +128,13 @@
   directement sur la boucle locale, sans tunnel SSH.
 - Le pilote factice persiste ses instances et accepte une injection de faute à
   usage unique, ce qui permet d'atteindre l'état `error` par le vrai chemin.
+- Parcours E2E contre la pile réelle (`make e2e`, dans `make test`) : le harnais
+  monte sa propre pile seedée, se déplace à la souris et au clavier, et couvre
+  les quatre refus du produit.
+- La console **ouvre** le tunnel du serveur courant à son démarrage. Elle se
+  contentait de lire son état, laissant une console fraîche inutilisable.
+- Vocabulaire du tunnel unifié : le badge et le bandeau rendaient le même état
+  avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
 
@@ -148,7 +155,8 @@
   nouveau §23, le contrat d'API partagé ; nouveau §24, l'écran détail ;
   nouveau §25, l'écran de création ; nouveau §26, les trois surfaces
   d'administration d'un Spark ; nouveau §27, l'écran des pools ; nouveau §28, la
-  pile de développement et le contrat du seed.
+  pile de développement et le contrat du seed ; nouveau §29, les parcours E2E ;
+  nouveau §22.6, qui ouvre le tunnel de la console et quand.
 - `docs/SCHEMA.md` : nouveau §11 bis, les deux termes de la réserve mémoire.
 - Migration `002_part_arc` : `host` porte désormais `memory_arc_bytes` et
   `memory_margin_bytes`, jusqu'ici confondus dans `memory_reserve_bytes`.

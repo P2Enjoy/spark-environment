@@ -453,7 +453,7 @@ RÉEL ; captures observées.
   affiche les états techniques) et **INC-02** (un refus de création n'est
   rattachable à aucune demande). Tous deux attendent un arbitrage.
 
-### [ ] SPK-24 · Tests E2E Playwright depuis le parcours canonique
+### [x] SPK-24 · Tests E2E Playwright depuis le parcours canonique
 
 - Spécification : `docs/DAT.md` §29.
 - Le harnais monte **sa propre pile** — `sparkd` et l'hôte console sur des ports
@@ -475,6 +475,23 @@ URL profonde ni appel d'API en contournement ; le harnais monte et démonte sa
 pile ; les quatre refus couverts ; les effets backend constatés côté `sparkd` ;
 la commande est documentée et entre dans `make test` ; console du navigateur
 vierge de tout message applicatif.
+
+- **Close le 2026-08-19.** 11 parcours (`make e2e`, dans `make test`).
+- **Le harnais a trouvé deux défauts réels dès ses premières exécutions**, tous
+  deux invisibles à tout ce qui existait :
+  - **la console n'ouvrait jamais son tunnel.** Une console ouverte sur une
+    machine fraîche affichait « Tunnel fermé » et « Les Sparks n'ont pas pu être
+    chargés », sans aucun moyen d'y remédier. Le défaut a survécu à trois écrans
+    et vingt captures parce que tous les harnais ouvraient le tunnel par un appel
+    direct à l'API — le contournement même que cette DoD interdit. Corrigé, et le
+    §22.6 du DAT dit désormais qui l'ouvre ;
+  - **`validate` jetait le port d'un serveur local** et rendait toujours 9876 :
+    une pile montée sur un port libre pointait sur un `sparkd` qui n'était pas le
+    sien. Les preuves existantes ne le voyaient pas, l'une fixant `remotePort`,
+    l'autre utilisant justement 9876.
+- **Un défaut trouvé par l'observation** : le badge disait « rompu » et le bandeau
+  « broken » à quelques centimètres. Le vocabulaire du tunnel vit désormais dans
+  `tokens.js`, à un seul endroit.
 
 ### [ ] SPK-25 · Manuel utilisateur
 

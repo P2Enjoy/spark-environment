@@ -1566,3 +1566,54 @@ canonique. La pile réelle existe désormais et `e2e/reel.mjs` en donne la forme
 il reste à transformer ces captures en parcours assertifs et à couvrir les refus
 d'autorisation. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
 SPK-28 un arbitrage, comme INC-01 et INC-02.
+
+
+---
+
+## 2026-08-19 — SPK-24 : le premier harnais qui part vraiment de l'accueil
+
+**Unité** : SPK-24, les parcours E2E. Spécification écrite et committée avant le
+code (`docs/DAT.md` §29).
+
+**Ce que ce harnais ajoute.** Trois en existaient déjà, et confondre leurs rôles
+faisait croire à une couverture qu'on n'avait pas : les tests de composants
+prouvent un rendu, `gestes.test.mjs` prouve qu'un clic part avec le bon corps
+contre un faux `sparkd`, `reel.mjs` produit des captures. Aucun ne traversait la
+pile réelle **en affirmant**. C'est fait, et le harnais monte sa propre pile —
+un verdict qui dépend de ce qu'un humain a fait avant lui ne prouve rien.
+
+**Il a trouvé deux défauts réels dès ses premières exécutions.**
+
+1. **La console n'ouvrait jamais son tunnel.** Ouverte sur une machine fraîche,
+   elle affichait « Tunnel fermé » et « Les Sparks n'ont pas pu être chargés »,
+   sans offrir le moindre moyen d'y remédier. Le parcours canonique était cassé.
+   Ce défaut a survécu à trois écrans et une trentaine de captures **parce que
+   tous les harnais ouvraient le tunnel par un appel direct à l'API** — le
+   contournement même que la DoD de cette unité interdit. C'est l'argument le
+   plus net en faveur de la règle : un harnais qui s'autorise un raccourci ne
+   voit pas ce que l'utilisateur voit. Le §22 décrivait toute la mécanique du
+   tunnel sans jamais dire qui l'ouvre ; le §22.6 le dit maintenant.
+2. **`validate` jetait le port d'un serveur local**, rendant toujours 9876. Une
+   pile montée sur un port libre pointait donc sur un `sparkd` qui n'était pas le
+   sien. Les deux preuves existantes passaient par coïncidence : l'une fixait
+   `remotePort`, l'autre utilisait justement 9876.
+
+**Un défaut trouvé par l'observation** : après avoir traduit le badge en
+« rompu », le bandeau d'alerte disait encore « broken » à quelques centimètres.
+Le vocabulaire du tunnel vit désormais dans `tokens.js`, comme celui des états de
+Spark.
+
+**Une preuve corrigée, et le motif vaut d'être retenu.** Mon méta-test affirmait
+d'abord que Chromium avait journalisé les refus provoqués. Il éprouvait le
+**navigateur**, pas le produit. Il porte désormais sur le classement des
+messages, qui m'appartient — et il ne dépendra pas de la prochaine version de
+Chromium.
+
+**Vérifié.** 451 tests Python, 178 tests Node, 6 de contrat, 10 gestes,
+**11 parcours E2E**, contrat sans dérive, build, captures régénérées et observées.
+
+**Où reprendre.** **SPK-25**, le manuel utilisateur. Le produit a maintenant
+quatre écrans, une pile qui se lance en une commande et des parcours qui
+décrivent son usage : le manuel peut être écrit à partir du comportement réel, ce
+que `CLAUDE.md` §7 exige. SPK-12 attend un domaine, SPK-17 une exécution de CI,
+SPK-29, SPK-28, INC-01 et INC-02 un arbitrage.

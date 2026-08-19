@@ -39,9 +39,16 @@ sur SPK-15, pas sur l'unité en cours.
 **Impact.** Lisibilité seulement. Aucune donnée n'est fausse, aucune décision
 n'est faussée.
 
-**Arbitrage attendu du responsable** : le journal d'audit doit-il rester un
-enregistrement technique — auquel cas le §14.7 gagne une exception écrite — ou
-la console doit-elle traduire les transitions qu'il rapporte ?
+**Le même motif ailleurs.** Constaté le 2026-08-19 sur
+`e2e/captures/09-tunnel-rompu.png` : le message d'erreur de l'hôte console dit
+« Tunnel vers « validation » indisponible (**broken**, jamais joint depuis
+l'ouverture) », alors que le badge et le bandeau disent maintenant « rompu ». Le
+texte vient de `TunnelManager.require`, côté serveur. C'est le même arbitrage.
+
+**Arbitrage attendu du responsable** : les messages produits par le serveur —
+journal d'audit, erreurs de l'hôte console — doivent-ils rester un enregistrement
+technique, auquel cas le §14.7 gagne une exception écrite, ou la console
+doit-elle traduire les états qu'ils rapportent ?
 
 ### INC-02 · Un refus de création n'est rattachable à aucune demande
 

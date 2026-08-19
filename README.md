@@ -140,7 +140,7 @@ pas encore sont marquées.
 | `pnpm -r test` / `build` / `typecheck` | paquets TypeScript de l'espace de travail | **oui** |
 | `pnpm dev` | hôte console sur `http://127.0.0.1:5173` — inventaire et tunnels | **oui** |
 
-| `pnpm e2e` | parcours Playwright complets | non — SPK-24 |
+| `make e2e` / `pnpm e2e` | parcours complets contre la pile réelle | **oui** |
 
 ## Variables d'environnement
 
