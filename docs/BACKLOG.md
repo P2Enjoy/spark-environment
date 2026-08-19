@@ -493,7 +493,7 @@ vierge de tout message applicatif.
   « broken » à quelques centimètres. Le vocabulaire du tunnel vit désormais dans
   `tokens.js`, à un seul endroit.
 
-### [ ] SPK-25 · Manuel utilisateur
+### [x] SPK-25 · Manuel utilisateur
 
 - Plan : `docs/MANUAL_PLAN.md`. Contrat de fraîcheur : `docs/DAT.md` §30.
 - Les illustrations sont **produites** par un harnais contre la pile réelle
@@ -510,6 +510,21 @@ DoD : les chapitres dont le comportement est livré et observable sont rédigés
 partir de la pile réelle ; les autres sont nommés avec leur blocage ; le harnais
 d'illustrations et le contrôle des deux sens entrent dans `make test` ; aucun
 secret ni adresse réelle ; captures observées.
+
+- **Close le 2026-08-19.** Dix chapitres sous `docs/manuel/`, neuf illustrations
+  produites par `make manuel` contre la pile seedée, sept contrôles dans la
+  campagne.
+- **M2 « Installer le serveur » n'est pas rédigé** : l'installation n'est pas
+  outillée (SPK-26) et le repartitionnement du stockage attend un arbitrage
+  (SPK-28). Le sommaire l'annonce avec ces deux unités.
+- M6 et M7 portent une limite explicite : le déploiement d'une pile Compose dans
+  un Spark est **mesuré sur matériel réel** et non reproductible sur la pile de
+  développement ; l'émission d'un certificat n'a pas été éprouvée, faute de
+  domaine (SPK-12).
+- Le contrôle des deux sens vaut surtout pour les **orphelines** : une image
+  citée mais absente laisse un cadre vide que quelqu'un finira par voir, alors
+  qu'une image plus citée par personne survit indéfiniment à l'écran qu'elle
+  montrait.
 
 ### [ ] SPK-26 · Contrat de déploiement et procédure d'installation serveur
 

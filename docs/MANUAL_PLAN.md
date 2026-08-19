@@ -11,6 +11,14 @@ du backlog : un chapitre n'est écrit qu'à partir du comportement réellement
 observé, jamais de mémoire, et ses captures sont refaites dès que le parcours ou
 l'apparence change.
 
+**Le manuel est écrit** : il vit sous [`docs/manuel/`](manuel/). Ce plan reste la
+carte des chapitres et de leurs unités ; le contrat de fraîcheur — illustrations
+produites, lien vérifié dans les deux sens — est au §30 du [DAT](DAT.md).
+
+Chapitres rédigés : M1, M3 à M12. **M2 ne l'est pas** : l'installation n'est pas
+outillée (SPK-26) et le repartitionnement du stockage attend un arbitrage
+(SPK-28).
+
 ---
 
 ## M1 · Comprendre un Spark

@@ -1617,3 +1617,45 @@ quatre écrans, une pile qui se lance en une commande et des parcours qui
 décrivent son usage : le manuel peut être écrit à partir du comportement réel, ce
 que `CLAUDE.md` §7 exige. SPK-12 attend un domaine, SPK-17 une exécution de CI,
 SPK-29, SPK-28, INC-01 et INC-02 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-25 : un manuel qui ne peut pas mentir en silence
+
+**Unité** : SPK-25, le manuel utilisateur. Spécification écrite et committée
+avant le code (`docs/DAT.md` §30).
+
+**Le problème n'était pas d'écrire le manuel, mais de le maintenir vrai.**
+`CLAUDE.md` §7 exige que les captures soient renouvelées quand l'apparence
+change. Une exigence de ce genre ne tient pas sans mécanisme : elle dépend de la
+vigilance, et la vigilance s'épuise. D'où deux décisions.
+
+1. **Les illustrations sont produites, jamais collectées.** `make manuel`
+   parcourt la pile réelle seedée et écrit les neuf images. Une capture ne peut
+   donc pas montrer un écran qui n'existe plus ; et si un parcours change au
+   point que le harnais n'atteint plus l'écran, il échoue au lieu de laisser une
+   image périmée.
+2. **Le lien manuel-image est vérifié dans les deux sens.** Une image citée mais
+   absente laisse un cadre vide — c'est visible, par celui qui ouvre la page. Une
+   image **orpheline**, elle, n'est vue de personne et survit indéfiniment à
+   l'écran qu'elle montrait. C'est la dérive qu'aucun relecteur ne trouve, et
+   c'est celle que le contrôle attrape.
+
+**Dix chapitres écrits, un ne l'est pas.** M2, l'installation du serveur, n'est
+pas rédigé : l'installation n'est pas outillée (SPK-26) et le repartitionnement
+du stockage attend un arbitrage (SPK-28). Le sommaire l'annonce avec ces deux
+unités, plutôt que d'être écrit d'avance et faux. M6 et M7 portent une limite
+explicite : le déploiement d'une pile Compose est mesuré sur matériel réel et non
+reproductible sur la pile de développement, et l'émission d'un certificat n'a pas
+été éprouvée faute de domaine.
+
+**Vérifié.** 451 tests Python, 178 tests Node, 6 de contrat, 10 gestes, 11
+parcours E2E, 7 contrôles du manuel, contrat sans dérive, build. Illustrations
+produites et observées ; le manuel est lisible depuis un checkout neuf.
+
+**Où reprendre.** **SPK-26**, le contrat de déploiement et la procédure
+d'installation serveur. C'est l'unité qui débloque le chapitre M2 du manuel, et
+la seule qui reste avant les unités d'arbitrage. SPK-27 (vérifications du DAT
+§13) suit. SPK-12 attend un domaine, SPK-17 une exécution de CI ; SPK-28,
+SPK-29, INC-01 et INC-02 attendent un arbitrage du responsable.
