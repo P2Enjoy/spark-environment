@@ -11,14 +11,20 @@
 </head>
 <body>
   <div id="racine" class="page">
-    <header class="entete">
+    <!-- Degré 1 : barre latérale (DESIGN_SYSTEM.md §5.4). Une liste verticale
+         absorbe une destination de plus sans rien sacrifier ; une barre
+         horizontale oblige à arbitrer la largeur dès la cinquième entrée. -->
+    <div class="laterale">
       <span class="entete__marque">Spark</span>
-      <nav aria-label="Navigation principale">
-        <a href="#/sparks" class="lien-spark">Sparks</a>
-        <a href="#/hote" class="lien-spark">Hôte</a>
-      </nav>
+      <!-- Le serveur courant est un CONTEXTE de toutes les destinations, pas
+           une destination : il est au-dessus du premier degré
+           (DESIGN_SYSTEM_APP.md §1). -->
       <div class="entete__contexte"></div>
-    </header>
+      <nav class="laterale__nav" aria-label="Navigation principale">
+        <a href="#/sparks" class="destination">Sparks</a>
+        <a href="#/hote" class="destination">Hôte</a>
+      </nav>
+    </div>
     <main class="principal"></main>
   </div>
   <script type="module" src="/src/app.js"></script>

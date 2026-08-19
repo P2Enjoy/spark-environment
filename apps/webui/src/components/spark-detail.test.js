@@ -82,9 +82,13 @@ test('sans confirmation en cours, aucun bouton destructif final', () => {
 // --- l identite d abord (§6.3, §24.3) ---------------------------------------
 
 test('le nom et l etat precedent les ressources', () => {
+  // Revise avec SPK-33 : la fenetre repartit ses facettes en onglets (§6.27), et
+  // les instantanes ne sont plus sur l'apercu. Ce qui reste verifie — l'identite
+  // avant le contenu — est le point du §24.3, et il ne change pas.
   const html = renderSparkDetail({ status: 'ready', spark: SPARK });
   assert.ok(html.indexOf('crm-production') < html.indexOf('Ressources'));
-  assert.ok(html.indexOf('Ressources') < html.indexOf('Instantanés'));
+  assert.ok(html.indexOf('crm-production') < html.indexOf('Facettes'),
+    'l’identite precede aussi les onglets');
 });
 
 test('les paires terme/valeur utilisent dl/dt/dd', () => {
@@ -95,10 +99,13 @@ test('les paires terme/valeur utilisent dl/dt/dd', () => {
 // --- absences nommees (§6.4, §14.5) -----------------------------------------
 
 test('une absence qui informe est NOMMEE', () => {
-  const html = renderSparkDetail({ status: 'ready', spark: SPARK, routes: [], keys: [] });
-  assert.match(html, /Aucune route publique/);
-  assert.match(html, /Aucune clé n’est autorisée : personne ne peut s’y connecter/);
-  assert.match(html, /Aucun instantané/);
+  // Revise avec SPK-33 : chaque absence se lit desormais dans SA facette. Une
+  // surface a un sujet et un seul (§5.4, point 2).
+  const rendu = (facette) => renderSparkDetail({
+    status: 'ready', spark: SPARK, routes: [], keys: [], snapshots: [], facette });
+  assert.match(rendu('routes'), /Aucune route publique/);
+  assert.match(rendu('cles'), /Aucune clé n’est autorisée : personne ne peut s’y connecter/);
+  assert.match(rendu('instantanes'), /Aucun instantané/);
 });
 
 test('une valeur absente n est simplement PAS rendue', () => {
@@ -146,6 +153,7 @@ test('un evenement de journal est une ligne, pas une carte', () => {
   const html = renderSparkDetail({
     status: 'ready', spark: SPARK,
     audit: [{ ts: '2026-08-19T10:00:00', action: 'spark.start', result: 'ok', message: 'démarré' }],
+    facette: 'journal',
   });
   assert.match(html, /class="evenement"/);
   assert.equal(/class="carte"[^>]*>\s*<li/.test(html), false);
@@ -174,6 +182,7 @@ test("le resultat d audit est affiche en francais, pas en brut", () => {
   const html = renderSparkDetail({
     status: 'ready', spark: SPARK,
     audit: [{ ts: '2026-08-19T10:00', action: 'a', result: 'denied', message: 'refus' }],
+    facette: 'journal',
   });
   assert.match(html, /refusé/);
   assert.equal(/>denied</.test(html), false);
@@ -183,6 +192,7 @@ test("un resultat inconnu ne casse pas l affichage", () => {
   const html = renderSparkDetail({
     status: 'ready', spark: SPARK,
     audit: [{ ts: '2026-08-19T10:00', action: 'a', result: 'bizarre', message: 'x' }],
+    facette: 'journal',
   });
   assert.match(html, /badge--neutral/);
   assert.equal(/undefined/.test(html), false);

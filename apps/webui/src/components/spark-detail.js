@@ -1,7 +1,9 @@
 /**
  * Écran « détail d'un Spark ».
  *
- * @spec docs/BACKLOG.md#SPK-19, docs/BACKLOG.md#SPK-21 ·
+ * @spec docs/BACKLOG.md#SPK-19, #SPK-21, #SPK-33 ·
+ *       docs/DESIGN_SYSTEM.md §5.4 (degré 3 : la fenêtre d'un objet), §6.27
+ *       (fenêtre, sections, facettes en onglets) · docs/DAT.md §34.1 ·
  *       docs/DAT.md §24 (le runtime publie ce qui est possible), §24.2
  *       (confirmations), §24.3 (l'identité d'abord), §26 (les trois panneaux
  *       d'administration, portés par `spark-admin.js`) ·
@@ -14,6 +16,7 @@
 
 import { stateOf, formatBytes, formatBps, formatCpu, MEASURE } from './tokens.js';
 import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel, ADMIN_VIDE } from './spark-admin.js';
+import { renderOngletsSpark } from './host-images.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -159,18 +162,40 @@ function renderJournal(entries = []) {
 </section>`;
 }
 
-/** Vue complète. L'identité vient avant tout le reste (§6.3, §24.3). */
+/**
+ * Fenêtre d'un Spark (DESIGN_SYSTEM.md §5.4 degré 3, §6.27).
+ *
+ * Elle était une page unique empilant cinq sujets. Le §6.27 les répartit en
+ * **facettes** : ce qui se lit ensemble d'un côté — l'identité et les mesures —,
+ * les éléments liés de l'autre. Chaque facette est une véritable destination :
+ * on doit pouvoir recharger la page sur « Instantanés ».
+ *
+ * L'en-tête d'identité et les commandes de cycle de vie restent au-dessus des
+ * onglets : ils appartiennent au Spark, pas à une de ses facettes (§34.2).
+ */
 export function renderSparkDetail({ status, spark = null, usage = null, routes = [],
                                     keys = [], registry = [], sshConfig = null,
                                     snapshots = [], audit = [],
                                     error = null, confirming = null,
-                                    admin = ADMIN_VIDE } = {}) {
+                                    admin = ADMIN_VIDE, facette = '' } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
 
   const { token, label, transient } = stateOf(spark.state);
   const classeBadge = `badge badge--${token}${transient ? ' badge--transitoire' : ''}`;
+
+  const facettes = {
+    '': () => `<div class="detail">
+      <div class="detail__principal">${renderRessources(spark, usage)}</div>
+      <div class="detail__secondaire">${renderAcces(spark)}</div>
+    </div>`,
+    routes: () => renderRoutesPanel(spark, routes, admin),
+    cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin),
+    instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
+    journal: () => renderJournal(audit) ||
+      '<div class="carte bloc"><p class="absence">Aucune opération enregistrée.</p></div>',
+  };
 
   return `
 <p><a class="lien-spark" href="#/sparks">← Tous les Sparks</a></p>
@@ -182,18 +207,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
   ${spark.last_error ? `<p class="erreur-derniere" role="status">Dernière erreur : ${echapper(spark.last_error)}</p>` : ''}
   ${renderCommands(spark, { confirming })}
 </header>
-<div class="detail">
-  <div class="detail__principal">
-    ${renderRessources(spark, usage)}
-    ${renderAcces(spark)}
-    ${renderRoutesPanel(spark, routes, admin)}
-    ${renderKeysPanel(spark, { keys, registry, sshConfig }, admin)}
-  </div>
-  <div class="detail__secondaire">
-    ${renderSnapshotsPanel(spark, snapshots, admin)}
-    ${renderJournal(audit)}
-  </div>
-</div>`;
+${renderOngletsSpark(spark.name, facette)}
+${(facettes[facette] ?? facettes[''])()}`;
 }
 
 export function renderDetailSkeleton() {

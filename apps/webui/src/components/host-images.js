@@ -167,14 +167,41 @@ export function renderCatalogue({ status = 'loading', images = [], error = null,
 </section>`;
 }
 
-/** Onglets du second degré sous « Hôte » (docs/DAT.md §34.1).
+/**
+ * Onglets de second degré (docs/DAT.md §34.1, DESIGN_SYSTEM.md §5.4).
  *
- *  Ce sont de véritables destinations — on doit pouvoir recharger la page sur
- *  « Images » — donc des liens dans un `nav`, jamais un `tablist`. */
-export function renderOngletsHote(courant) {
-  const onglets = [['#/hote', 'Pools'], ['#/hote/images', 'Images']];
-  return `<nav class="onglets" aria-label="Sections de l’hôte">${
+ * Ce sont de **véritables destinations** — on doit pouvoir recharger la page sur
+ * « Images » ou sur « Instantanés » —, donc des liens dans un `nav` avec
+ * `aria-current="page"`, et surtout **pas** un `tablist`. Le critère est l'URL,
+ * jamais l'apparence.
+ *
+ * Un onglet change ce que l'on REGARDE : il ne porte aucune action, car les
+ * actions appartiennent à la section qu'il révèle.
+ */
+export function renderOnglets(onglets, courant, etiquette) {
+  return `<nav class="onglets" aria-label="${echapper(etiquette)}">${
     onglets.map(([href, libelle]) =>
-      `<a href="${href}" class="onglet${href === courant ? ' onglet--courant' : ''}"${
-        href === courant ? ' aria-current="page"' : ''}>${libelle}</a>`).join('')}</nav>`;
+      `<a href="${echapper(href)}" class="onglet${href === courant ? ' onglet--courant' : ''}"${
+        href === courant ? ' aria-current="page"' : ''}>${echapper(libelle)}</a>`).join('')}</nav>`;
+}
+
+export const ONGLETS_HOTE = [['#/hote', 'Pools'], ['#/hote/images', 'Images']];
+
+/** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */
+export const FACETTES_SPARK = [
+  ['', 'Aperçu'], ['routes', 'Routes'], ['cles', 'Clés'],
+  ['instantanes', 'Instantanés'], ['journal', 'Journal'],
+];
+
+export function renderOngletsSpark(nom, courant) {
+  const base = `#/sparks/${encodeURIComponent(nom)}`;
+  return renderOnglets(
+    FACETTES_SPARK.map(([suffixe, libelle]) =>
+      [suffixe ? `${base}/${suffixe}` : base, libelle]),
+    courant ? `${base}/${courant}` : base,
+    `Facettes de ${nom}`);
+}
+
+export function renderOngletsHote(courant) {
+  return renderOnglets(ONGLETS_HOTE, courant, 'Sections de l’hôte');
 }

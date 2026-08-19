@@ -13,7 +13,7 @@ import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
-import { renderCatalogue, renderOngletsHote, CATALOGUE_VIDE } from './components/host-images.js';
+import { renderCatalogue, renderOngletsHote, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
 import { tunnelOf } from './components/tokens.js';
 
 const racine = document.getElementById('racine');
@@ -25,6 +25,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
                hote: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false },
+               facette: '',
                catalogue: { status: 'loading', images: [], error: null,
                             ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } } };
 
@@ -58,8 +59,10 @@ function peindre() {
       ? renderSparkCreate(etat.creation)
       : etat.route === 'detail'
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
-                            confirming: etat.confirming, admin: etat.admin, ...etat.detail })
-      : renderSparksView(etat);
+                            confirming: etat.confirming, admin: etat.admin,
+                            facette: etat.facette, ...etat.detail })
+      : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
+        + renderSparksView(etat);
   brancher();
 }
 
@@ -254,7 +257,7 @@ async function agir(panneau, operation, { ferme = true } = {}) {
   etat.admin.confirming = null;
   etat.admin.refusal = null;
   if (ferme) etat.admin.open = null;
-  await chargerDetail(etat.spark.name);
+  await chargerDetail(etat.spark.name, etat.facette);
   return resultat;
 }
 
@@ -416,8 +419,9 @@ async function creer() {
   }
 }
 
-async function chargerDetail(nom) {
+async function chargerDetail(nom, facette = '') {
   etat.route = 'detail';
+  etat.facette = facette;
   etat.status = 'loading';
   etat.error = null;
   peindre();
@@ -552,8 +556,10 @@ function router() {
   if (location.hash === '#/hote/images') return chargerCatalogue();
   if (location.hash === '#/hote') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();
-  const nom = (location.hash.match(/^#\/sparks\/(.+)$/) || [])[1];
-  if (nom) return chargerDetail(decodeURIComponent(nom));
+  // Chaque facette d'un Spark est une véritable destination : on doit pouvoir
+  // recharger la page sur « Instantanés » (DESIGN_SYSTEM.md §5.4, §6.27).
+  const detail = location.hash.match(/^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|journal))?$/);
+  if (detail) return chargerDetail(decodeURIComponent(detail[1]), detail[2] ?? '');
   etat.route = 'liste';
   etat.spark = null;
   return charger();
