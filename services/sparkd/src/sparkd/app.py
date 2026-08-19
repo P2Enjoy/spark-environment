@@ -24,6 +24,7 @@ from . import cores as core_pool
 from .addressing import DHCP_RANGE, AddressPoolExhausted, usage
 from .admission import HostNotConfigured, pools
 from .config import Config
+from . import cgroup as cgroup_service
 from . import hostmem
 from .db import connect
 from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
@@ -113,6 +114,18 @@ def create_app(config: Config) -> FastAPI:
             connection.close()
 
     app.state.reconciliations = _reconcile_at_startup()
+
+    def _reponderer_au_demarrage() -> None:
+        """Le poids de la tranche est un ETAT DE L'HOTE, pas du registre.
+
+        Un redemarrage de l'hote repose la tranche a son poids d'unite : sans ce
+        recalcul, il resterait faux jusqu'a la prochaine creation ou suppression.
+        """
+        connection = connect(config.database)
+        try:
+            _reponderer_la_tranche(connection)
+        finally:
+            connection.close()
 
     @contextmanager
     def registry():
@@ -351,6 +364,30 @@ def create_app(config: Config) -> FastAPI:
         app.state.incus.push_file(
             spark["incus_name"], sshkeys.AUTHORIZED_KEYS, contenu, mode="0600"
         )
+
+    def _reponderer_la_tranche(connection) -> None:
+        """Recalcule le poids de la tranche parente (docs/DAT.md §32.2).
+
+        Le poids doit valoir CE QUE LES SPARKS ONT ACHETE. Il se recalcule donc
+        a chaque changement d'allocation : une constante rendrait la reservation
+        absolue pour un seul taux de remplissage, et fausse partout ailleurs.
+
+        Une tranche absente n'interrompt rien : c'est un hote non prepare, que le
+        controle RUN-SLICE du preflight signale. Faire echouer la creation
+        rendrait inutilisable un produit qui fonctionne — moins bien, mais qui
+        fonctionne (§32.4).
+        """
+        try:
+            etat = pools(connection)
+        except HostNotConfigured:
+            return
+        cgroup_service.apply_weight(cgroup_service.slice_weight(
+            sold=etat.cpu.allocated,
+            capacity=float(etat.physical_cores or etat.cpu.capacity),
+            reserve=config.cpu_reserve,
+        ))
+
+    _reponderer_au_demarrage()
 
     def _reconcile_ingress(connection) -> None:
         """Régénère et applique la configuration de Caddy.
@@ -668,6 +705,8 @@ def create_app(config: Config) -> FastAPI:
             except service.SparkError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "refused", "message": str(erreur)}) from erreur
+            # L'allocation a change : le poids de la tranche doit suivre (§32.2).
+            _reponderer_la_tranche(connection)
             return spark
 
     @app.get("/v1/sparks/{name}", tags=["sparks"])
@@ -754,6 +793,8 @@ def create_app(config: Config) -> FastAPI:
                     _reconcile_ingress(connection)
                 except ingress_service.IngressError:
                     pass
+                # La ressource est rendue : la tranche doit peser moins (§32.2).
+                _reponderer_la_tranche(connection)
                 return {"deleted": name}
 
             return service.by_name(connection, name)

@@ -22,6 +22,11 @@ DEFAULT_CADDY_ADMIN = "http://127.0.0.1:2019"
 DEFAULT_DRIVER = "incus"
 DEFAULT_STORAGE_POOL = "spark"
 DEFAULT_MEMORY_RESERVE = "2GiB"
+#: Part de processeur que l'hote garde pour lui. Elle rend DEFINIE la loi de
+#: poids du §32.2 : sans elle, une machine entierement vendue donnerait un poids
+#: infini a la tranche des Sparks, et l'hote n'ordonnancerait plus rien — pas
+#: meme de quoi corriger la situation (docs/DAT.md §32.3).
+DEFAULT_CPU_RESERVE = 0.5
 DEFAULT_LOG_LEVEL = "info"
 
 DRIVERS = ("incus", "fake")
@@ -43,6 +48,7 @@ class Config:
     log_level: str
     storage_pool: str
     memory_reserve_bytes: int
+    cpu_reserve: float
 
     @property
     def bind(self) -> str:
@@ -123,6 +129,16 @@ def load(env: dict[str, str] | None = None) -> Config:
     if reserve < 0:
         raise ConfigError("SPARKD_MEMORY_RESERVE ne peut pas être négatif.")
 
+    try:
+        cpu_reserve = float(source.get("SPARKD_CPU_RESERVE", DEFAULT_CPU_RESERVE))
+    except (TypeError, ValueError):
+        raise ConfigError(
+            f"SPARKD_CPU_RESERVE : {source.get('SPARKD_CPU_RESERVE')!r} n'est pas "
+            "un nombre de cœurs."
+        ) from None
+    if cpu_reserve < 0:
+        raise ConfigError("SPARKD_CPU_RESERVE ne peut pas être négatif.")
+
     return Config(
         host=host,
         port=port,
@@ -133,4 +149,5 @@ def load(env: dict[str, str] | None = None) -> Config:
         log_level=log_level,
         storage_pool=source.get("SPARKD_STORAGE_POOL", DEFAULT_STORAGE_POOL),
         memory_reserve_bytes=reserve,
+        cpu_reserve=cpu_reserve,
     )

@@ -44,10 +44,17 @@ fi
 "$RACINE_INSTALL/venv/bin/pip" install --quiet --upgrade pip
 "$RACINE_INSTALL/venv/bin/pip" install --quiet "$SOURCE/services/sparkd"
 
-echo "== 3. Unite systemd =="
+echo "== 3. Unites systemd =="
+# docs/DAT.md §32.4 : la tranche parente doit survivre a un redemarrage. Creee a
+# la main, elle disparait, et la reservation redevient proportionnelle en silence.
+install -m 0644 "$SOURCE/deploy/spark.slice" /etc/systemd/system/spark.slice
 # docs/DAT.md §31.4 : « demarre » ne suffit pas, il faut « active au demarrage ».
 install -m 0644 "$SOURCE/deploy/sparkd.service" "$UNITE"
 systemctl daemon-reload
+systemctl start spark.slice
+# Les controleurs doivent etre delegues pour que les limites s'appliquent DANS
+# la tranche : systemd ne le fait pas de lui-meme pour une tranche vide.
+echo "+cpu +cpuset +memory +io +pids" > /sys/fs/cgroup/spark.slice/cgroup.subtree_control 2>/dev/null || true
 systemctl enable sparkd
 systemctl restart sparkd
 

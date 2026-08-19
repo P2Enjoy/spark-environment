@@ -301,6 +301,35 @@ def sparkd_survit_au_redemarrage(hote: Hote) -> Verdict:
                    "Poser l'unité systemd : scripts/install-serveur.sh")
 
 
+def tranche_des_sparks(hote: Hote) -> Verdict:
+    """docs/DAT.md §32.4 — sans elle, la reservation redevient proportionnelle.
+
+    Le piege est qu'une tranche absente ne casse RIEN de visible : les Sparks
+    demarrent, tournent, et leur reservation cesse simplement d'etre absolue.
+    C'est pourquoi elle se controle plutot que de se constater a l'usage.
+    """
+    etat = hote.executer(["systemctl", "is-enabled", "spark.slice"])
+    controleurs = hote.lire("/sys/fs/cgroup/spark.slice/cgroup.subtree_control")
+    if controleurs is None:
+        return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
+                       "/sys/fs/cgroup/spark.slice absente",
+                       "Poser l'unite : scripts/install-serveur.sh")
+    manquants = [c for c in ("cpu", "cpuset", "memory") if c not in controleurs.split()]
+    if manquants:
+        return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
+                       f"controleurs delegues : {controleurs.strip()!r}",
+                       "Les limites ne s'appliquent pas dans la tranche. "
+                       f"echo '+{" +".join(manquants)}' > "
+                       "/sys/fs/cgroup/spark.slice/cgroup.subtree_control")
+    if etat not in ("enabled", "static", "enabled-runtime"):
+        return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
+                       f"presente mais is-enabled = {etat or 'absent'}",
+                       "Creee a la main, elle disparait au redemarrage et la "
+                       "reservation redevient proportionnelle en silence.")
+    return Verdict("RUN-SLICE", "Tranche parente des Sparks", OK,
+                   f"presente, controleurs {controleurs.strip()}, {etat}")
+
+
 CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     incus_assez_recent,
     pool_de_stockage,
@@ -311,6 +340,7 @@ CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     caddy_administrable,
     surface_reseau,
     sparkd_survit_au_redemarrage,
+    tranche_des_sparks,
 )
 
 

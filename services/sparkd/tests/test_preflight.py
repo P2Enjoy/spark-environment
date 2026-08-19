@@ -229,6 +229,7 @@ def test_chaque_controle_porte_un_code_stable_et_unique():
     assert set(codes) == {
         "INC-VERSION", "STO-POOL", "STO-COMPRESSION", "MEM-ARC",
         "NET-BRIDGE", "NET-DHCP", "ING-CADDY", "SEC-PORTS", "RUN-SPARKD",
+        "RUN-SLICE",
     }
 
 
@@ -265,3 +266,44 @@ def test_la_verification_n_execute_aucune_commande_qui_ecrit():
                  "enable", "disable", "apply", "install", "write"}
     for commande in lancees:
         assert not (set(commande) & interdits), f"commande mutante : {commande}"
+
+
+# --- la tranche parente des Sparks (docs/DAT.md §32.4) ----------------------
+
+
+def test_une_tranche_absente_est_bloquante():
+    """Le piege : une tranche absente ne casse RIEN de visible.
+
+    Les Sparks demarrent et tournent ; leur reservation cesse simplement d'etre
+    absolue. Sans ce controle, la regression serait silencieuse.
+    """
+    verdict = preflight.tranche_des_sparks(hote())
+    assert verdict.etat == ECHEC
+    assert "install-serveur.sh" in verdict.remede
+
+
+def test_une_tranche_sans_controleurs_delegues_est_bloquante():
+    """Presente mais inerte : les limites ne s'appliqueraient pas a l'interieur."""
+    verdict = preflight.tranche_des_sparks(hote(
+        commandes={"systemctl is-enabled spark.slice": "enabled"},
+        fichiers={"/sys/fs/cgroup/spark.slice/cgroup.subtree_control": "pids\n"}))
+    assert verdict.etat == ECHEC
+    assert "cpu" in verdict.remede
+
+
+def test_une_tranche_non_activee_au_demarrage_est_bloquante():
+    """Creee a la main, elle disparait au redemarrage (mesure du §32.4)."""
+    verdict = preflight.tranche_des_sparks(hote(
+        commandes={},
+        fichiers={"/sys/fs/cgroup/spark.slice/cgroup.subtree_control":
+                  "cpuset cpu io memory pids\n"}))
+    assert verdict.etat == ECHEC
+    assert "redemarrage" in verdict.releve or "redemarrage" in verdict.remede
+
+
+def test_une_tranche_conforme():
+    verdict = preflight.tranche_des_sparks(hote(
+        commandes={"systemctl is-enabled spark.slice": "enabled"},
+        fichiers={"/sys/fs/cgroup/spark.slice/cgroup.subtree_control":
+                  "cpuset cpu io memory pids\n"}))
+    assert verdict.etat == OK

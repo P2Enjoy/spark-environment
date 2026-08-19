@@ -583,3 +583,60 @@ def test_les_refus_sont_journalises_comme_les_succes(tmp_path):
     refus = c.get("/v1/audit", params={"result": "denied"}).json()["entries"]
     assert len(refus) >= 1
     assert any("cpu" in (e["message"] or "") for e in refus)
+
+
+# --- la tranche est repondere a chaque changement d'allocation (§32.2) -------
+
+
+def test_creer_puis_supprimer_repondere_la_tranche(tmp_path, monkeypatch):
+    """Le poids doit SUIVRE l'allocation, pas rester figé.
+
+    On enregistre chaque poids applique : creer doit le faire monter, supprimer
+    le faire redescendre. Une constante echouerait ici, et c'est l'objet du test.
+    """
+    from sparkd import cgroup
+
+    appliques = []
+    monkeypatch.setattr(
+        "sparkd.app.cgroup_service.apply_weight",
+        lambda poids, root=None: appliques.append(poids.weight) or True,
+    )
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "w.db"),
+                           "SPARKD_DRIVER": "fake"}))
+    client_http = TestClient(app)
+    client_http.post("/v1/host/sync")
+    appliques.clear()
+
+    GIO = 1024**3
+    cree = client_http.post("/v1/sparks", json={
+        "name": "poids", "image": "images:debian/13", "cpu_mode": "shared",
+        "cpu_reservation": 1.0, "memory_bytes": GIO,
+        "storage_bytes": GIO, "network_bps": 10_000_000})
+    assert cree.status_code == 201
+    assert appliques, "aucune reponderation a la creation"
+    apres_creation = appliques[-1]
+    assert apres_creation > cgroup.WEIGHT_MIN, "vendre doit peser"
+
+    client_http.post("/v1/sparks/poids/apply")
+    client_http.post("/v1/sparks/poids/delete")
+    assert appliques[-1] < apres_creation, "rendre la ressource doit alleger"
+
+
+def test_une_tranche_absente_n_empeche_pas_de_creer_un_spark(tmp_path):
+    """§32.4 — c'est un hote non prepare, pas une erreur de creation.
+
+    Sur cette machine il n'y a pas de /sys/fs/cgroup/spark.slice : la creation
+    doit reussir malgre tout. Le manque se constate au preflight, pas en rendant
+    le produit inutilisable.
+    """
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "s.db"),
+                           "SPARKD_DRIVER": "fake"}))
+    client_http = TestClient(app)
+    client_http.post("/v1/host/sync")
+    GIO = 1024**3
+    rendu = client_http.post("/v1/sparks", json={
+        "name": "sans-tranche", "image": "images:debian/13", "cpu_mode": "shared",
+        "cpu_reservation": 0.5, "memory_bytes": GIO,
+        "storage_bytes": GIO, "network_bps": 10_000_000})
+    assert rendu.status_code == 201
