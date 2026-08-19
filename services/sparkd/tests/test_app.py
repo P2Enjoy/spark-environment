@@ -119,6 +119,29 @@ def test_sync_puis_host_expose_les_pools(tmp_path):
     assert corps["reservation_guarantee"] == "proportional_between_sparks_only"
 
 
+def test_host_expose_les_termes_de_la_reserve_memoire(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-22 · docs/DAT.md §16.1, §27.3 · docs/SCHEMA.md §11 bis
+
+    La console doit pouvoir enoncer la soustraction TERME A TERME. La somme
+    seule ne dit pas laquelle des deux vannes tourner -- zfs_arc_max, ou
+    SPARKD_MEMORY_RESERVE.
+    """
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "m.db"), "SPARKD_DRIVER": "fake"}))
+    client_http = TestClient(app)
+    client_http.post("/v1/host/sync")
+
+    corps = client_http.get("/v1/host").json()
+    total = corps["memory"]["total_bytes"]
+    reserves = corps["reserves"]
+    assert total > 0, "la memoire de la machine doit etre publiee"
+
+    # Les deux termes doivent se recomposer exactement en la reserve annoncee :
+    # une somme qui ne retombe pas juste ferait afficher un calcul faux.
+    assert reserves["arc_bytes"] + reserves["margin_bytes"] == reserves["memory_bytes"]
+    # Et la soustraction doit aboutir a la capacite reellement allouable.
+    assert total - reserves["memory_bytes"] == corps["pools"]["memory"]["capacity"]
+
+
 # --- cycle de vie par HTTP (SPK-09) ----------------------------------------
 
 def _app(tmp_path):

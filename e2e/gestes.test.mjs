@@ -85,6 +85,27 @@ function repondre(url, init) {
         spark_name: SPARK.name, applied_at: '2026-08-19T09:00:00' },
     ] }), { status: 200 });
   }
+  if (url.includes('/v1/host/cores')) return new Response(JSON.stringify({
+    physical_cores: 4,
+    shared: { cores: [0, 1, 2], cpus: [0, 4, 1, 5, 2, 6], capacity: 6 },
+    dedicated: [{ core_id: 3, cpus: [3, 7], spark_id: 'S1' }],
+  }), { status: 200 });
+  if (url.includes('/v1/host/sync')) return new Response(JSON.stringify({ hostname: 'h' }), { status: 200 });
+  if (url.includes('/v1/host')) return new Response(JSON.stringify({
+    hostname: 'spark-experiment',
+    cpu: { cores_total: 4, threads_total: 8, cores_dedicated: 1 },
+    memory: { total_bytes: 94 * GIO },
+    reserves: { memory_bytes: 18 * GIO, arc_bytes: 16 * GIO, margin_bytes: 2 * GIO, storage_bytes: 0 },
+    pools: {
+      cpu: { capacity: 6, allocated: 2.5, available: 3.5, overcommit: 2 },
+      memory: { capacity: 76 * GIO, allocated: 12 * GIO, available: 64 * GIO, overcommit: 1 },
+      storage: { capacity: 193 * GIO, allocated: 40 * GIO, available: 153 * GIO, overcommit: 1 },
+      network: { capacity: 1e9, allocated: 3e8, available: 7e8, overcommit: 1 },
+    },
+    addresses: { capacity: 200, used: 4, free: 196, dhcp_dynamic_range: '10.77.0.240-10.77.0.254' },
+    topology_synced_at: '2026-08-19T14:05:00',
+    reservation_guarantee: 'proportional_between_sparks_only',
+  }), { status: 200 });
   if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [] }), { status: 200 });
   if (url.includes('/usage')) return new Response(JSON.stringify({
     cpu: { used: 0.4, reservation: 0.5, over_limit: false },
@@ -262,4 +283,47 @@ test('un seul formulaire est ouvert à la fois, et l’annulation rend le focus'
   await page.waitForSelector('[data-ouvre="route"]');
   const focus = await page.evaluate(() => document.activeElement?.getAttribute('data-ouvre'));
   assert.equal(focus, 'route', 'le focus revient au déclencheur');
+});
+
+// --- ÉCRAN DES POOLS (SPK-22, docs/DAT.md §27) ------------------------------
+
+test('l’écran de l’hôte s’atteint AU CLAVIER depuis la liste', async () => {
+  appels = [];
+  await page.setViewportSize({ width: 1440, height: 1200 });
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('tbody a');
+
+  // On tabule jusqu'au lien « Hôte » et on l'active par Entrée : aucune souris.
+  await page.evaluate(() => document.querySelector('.entete__marque')?.setAttribute('tabindex', '-1'));
+  let atteint = false;
+  for (let i = 0; i < 12 && !atteint; i += 1) {
+    await page.keyboard.press('Tab');
+    atteint = await page.evaluate(() => document.activeElement?.getAttribute('href') === '#/hote');
+  }
+  assert.ok(atteint, 'le lien « Hôte » doit être atteignable au clavier');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('#titre-pools', { timeout: 8000 });
+
+  // §5.1 : l'indicateur de page courante suit la route, il ne ment pas.
+  const courant = await page.evaluate(() =>
+    document.querySelector('nav a[aria-current="page"]')?.getAttribute('href'));
+  assert.equal(courant, '#/hote');
+});
+
+test('le relevé de topologie part vers sparkd et l’écran relit ensuite', async () => {
+  await page.goto(`${base}/#/hote`, { waitUntil: 'domcontentloaded' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-action="relever"]');
+  appels = [];
+
+  await page.focus('[data-action="relever"]');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(
+    () => document.querySelector('[data-action="relever"]')?.disabled === false,
+    { timeout: 8000 });
+
+  const envoi = appels.find((a) => a.url.includes('/v1/host/sync'));
+  assert.ok(envoi, 'le relevé doit partir');
+  assert.equal(envoi.methode, 'POST');
+  assert.ok(await page.$('#titre-pools'), 'l’écran est repeint depuis un état relu');
 });

@@ -118,6 +118,9 @@
   accorder, enregistrer et révoquer une clé SSH ; prendre, supprimer et restaurer
   un instantané. La restauration bloquée par des instantanés plus récents les
   nomme et n'offre l'acceptation de leur perte qu'après ce refus.
+- Écran des ressources de l'hôte : les quatre pools avec capacité, alloué et
+  disponible, la soustraction qui donne la mémoire allouable énoncée terme à
+  terme, la carte des cœurs, le pool d'adresses et le relevé de topologie.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
 
@@ -137,7 +140,11 @@
   nouveau §21, journal d'audit ; nouveau §22, l'hôte local de la console ;
   nouveau §23, le contrat d'API partagé ; nouveau §24, l'écran détail ;
   nouveau §25, l'écran de création ; nouveau §26, les trois surfaces
-  d'administration d'un Spark.
+  d'administration d'un Spark ; nouveau §27, l'écran des pools.
+- `docs/SCHEMA.md` : nouveau §11 bis, les deux termes de la réserve mémoire.
+- Migration `002_part_arc` : `host` porte désormais `memory_arc_bytes` et
+  `memory_margin_bytes`, jusqu'ici confondus dans `memory_reserve_bytes`.
+  Opération OP-03 du contrat de déploiement.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel

@@ -370,7 +370,7 @@ observées.
   contre la pile réelle appartient à SPK-24. C'est le même niveau de preuve que
   SPK-18 à SPK-20, augmenté des parcours assertifs.
 
-### [ ] SPK-22 · Vue des pools de ressources de l'hôte
+### [x] SPK-22 · Vue des pools de ressources de l'hôte
 
 Écran de l'hôte : rendre l'admission control observable, c'est-à-dire permettre
 de répondre à « pourquoi cette création serait-elle refusée, et de combien ? ».
@@ -400,6 +400,19 @@ absence sur le stockage expliquée ; `reservation_guarantee` relayée depuis la
 réponse ; `host_not_synced` offre son remède comme bouton ; le relevé ne demande
 aucune confirmation ; états chargement et erreur traités ; navigation clavier ;
 console du navigateur vierge ; captures observées.
+
+- **Close le 2026-08-19.** 28 tests de rendu, 2 parcours navigateur — l'écran est
+  atteint AU CLAVIER depuis la liste, et le relevé part réellement — et une
+  preuve d'API qui vérifie que les deux termes se recomposent en la réserve
+  annoncée et que la soustraction aboutit à la capacité allouable.
+- **Migration `002_part_arc`** livrée en préalable : `memory_reserve_bytes`
+  portait la somme de l'ARC et de la marge, et la somme seule ne dit pas laquelle
+  des deux vannes tourner. Voir OP-03 du contrat de déploiement.
+- Quatre captures observées (29 à 32). **Trois défauts trouvés par
+  l'observation** : `aria-current` était écrit en dur sur « Sparks » et mentait
+  sur l'écran de l'hôte ; les deux liens de navigation se touchaient ; et mes
+  faux Sparks sans identifiant faisaient afficher « S3 » là où le produit affiche
+  un nom — la capture montrait un comportement que le produit n'a pas.
 
 ## Lot 4 — Qualité et exploitation
 

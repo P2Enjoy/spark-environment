@@ -187,7 +187,8 @@ vigilance de l'exploitant.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique
   qu'un plafond, il n'y a pas de garantie de bande passante.
 - Le relevé de topologie est explicite : la capacité n'est pas rafraîchie à
-  chaque requête, il faut appeler `POST /v1/host/sync`.
+  chaque requête. L'écran de l'hôte affiche la date du dernier relevé et offre
+  un bouton pour le refaire.
 - L'hôte cible n'a aucun périphérique bloc libre : le pool de stockage est
   actuellement **sur fichier**, à titre provisoire, et l'exploitation réelle suppose
   un repartitionnement (DAT §8, SPK-28).

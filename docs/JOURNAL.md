@@ -1457,3 +1457,55 @@ dernière surface de lecture, et la seule qui parle de l'hôte plutôt que d'un
 Spark. Puis SPK-23, la pile de développement autonome, qui débloquera l'E2E
 réel de SPK-24. SPK-12 attend un domaine, SPK-17 une exécution de CI, SPK-29 et
 SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-22 : montrer d'où viennent les chiffres
+
+**Unité** : SPK-22, l'écran des pools. Comme SPK-21, le backlog n'en portait que
+le titre ; la spécification (`docs/DAT.md` §27) a été écrite et committée avant
+la première ligne de code.
+
+**Cet écran-là en est un, et le §26.1 dit pourquoi.** Les routes et les
+instantanés n'existent pas sans leur Spark, donc ils sont des panneaux du détail.
+Les pools ne dépendent d'aucun Spark et concernent tous les Sparks : les loger
+dans le détail de l'un d'eux obligerait à en choisir un arbitrairement pour
+parler de la machine entière.
+
+**Une découverte a coûté une migration.** La spécification demandait d'énoncer la
+soustraction terme à terme — `MemTotal` moins l'ARC moins la marge. Le registre
+ne persistait que leur **somme**. On aurait pu s'en contenter : afficher
+« 94 Gio − 18 Gio de réserve = 76 Gio » suffit déjà à lever le soupçon de défaut.
+Mais la somme ne dit pas **laquelle des deux vannes tourner** — abaisser
+`zfs_arc_max`, ou `SPARKD_MEMORY_RESERVE`. C'est exactement la question qu'on se
+pose devant cet écran. D'où la migration `002_part_arc`, deux colonnes à zéro par
+défaut, renseignées au prochain relevé. Tant qu'il n'a pas eu lieu, l'écran
+affiche la somme **sans inventer sa répartition**.
+
+**Trois preuves étaient figées sur « il n'existe qu'une migration ».** Elles ont
+rougi à l'ajout de la seconde sans rien dire du produit. Elles sont révisées et
+raisonnent désormais sur le registre découvert. Celle de réversibilité déroulait
+la pile en un appel alors que `downgrade` ne retire qu'un cran : elle la déroule
+maintenant réellement, ce qui éprouve chaque sens `down` un à un — une garantie
+que l'ancienne version n'apportait pas.
+
+**Trois défauts trouvés par l'observation des captures**, tests verts :
+
+1. `aria-current="page"` était écrit en dur sur « Sparks » : sur l'écran de
+   l'hôte, un lecteur d'écran annonçait la mauvaise page courante. Un indicateur
+   qui ment est pire qu'un indicateur absent ;
+2. les deux liens de navigation se touchaient et se lisaient comme une seule
+   expression ;
+3. mes faux Sparks n'avaient pas d'identifiant, si bien que la carte des cœurs
+   affichait « S3 » là où le produit affiche un nom. La capture montrait donc un
+   comportement que le produit n'a pas — un harnais qui ment sur le produit est
+   aussi grave qu'un produit fautif.
+
+**Vérifié.** 439 tests Python, 165 tests Node, 6 tests de contrat, 10 parcours
+navigateur, contrat sans dérive, build, quatre captures observées.
+
+**Où reprendre.** **SPK-23**, la pile de développement autonome et le seed. C'est
+elle qui débloque l'E2E réel de SPK-24 : tous les parcours navigateur actuels
+s'exécutent contre un faux `sparkd`, faute de pile locale à interroger. SPK-12
+attend un domaine, SPK-17 une exécution de CI, SPK-29 et SPK-28 un arbitrage.
