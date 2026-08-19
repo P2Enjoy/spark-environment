@@ -165,10 +165,24 @@ def test_resultat_d_audit_contraint(db):
 
 
 def test_migration_reelle_reversible(tmp_path):
+    """Toutes les migrations du paquet s'appliquent, se defont et se rejouent.
+
+    L'attente etait figee sur `[1]` : elle rougissait a l'ajout de 002 sans rien
+    dire du produit. Ce qui compte est que le paquet ENTIER soit reversible, quel
+    que soit le nombre de migrations (docs/SCHEMA.md §11).
+    """
+    toutes = [m.version for m in migrations.discover()]
     connection = connect(tmp_path / "r.db")
-    assert migrations.upgrade(connection) == [1]
-    assert migrations.downgrade(connection) == [1]
+    assert migrations.upgrade(connection) == toutes
+
+    # `downgrade` retire UNE migration par appel (docs/SCHEMA.md §12) : on
+    # deroule la pile entiere, ce qui eprouve chaque sens `down` un a un.
+    defaites = []
+    while (retire := migrations.downgrade(connection)):
+        defaites.extend(retire)
+    assert defaites == list(reversed(toutes))
+
     tables = {r["name"] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "spark" not in tables
-    assert migrations.upgrade(connection) == [1]
+    assert migrations.upgrade(connection) == toutes
     connection.close()

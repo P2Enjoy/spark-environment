@@ -65,7 +65,10 @@ def test_readyz_annonce_la_version_de_schema(tmp_path):
     app = create_app(load({"SPARKD_DB": str(base), "SPARKD_DRIVER": "fake"}))
     corps = TestClient(app).get("/readyz").json()
     assert corps["dependencies"]["registry"] == "ready"
-    assert corps["schema_version"] == 1
+    # La version annoncee est la DERNIERE appliquee. Elle etait figee a 1 tant
+    # qu'il n'existait qu'une migration ; 002 (part de l'ARC, SPK-22) l'a fait
+    # avancer. L'attente suit desormais le registre plutot qu'un nombre ecrit.
+    assert corps["schema_version"] == max(m.version for m in migrations.discover())
 
 
 def test_demarrage_refuse_si_le_schema_a_derive(tmp_path, monkeypatch):

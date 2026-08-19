@@ -148,7 +148,15 @@ def test_dossier_absent_est_une_erreur_pas_un_vide(tmp_path):
 
 
 def test_les_migrations_du_paquet_sont_trouvees():
-    """Les fichiers SQL doivent voyager AVEC le paquet installe."""
+    """Les fichiers SQL doivent voyager AVEC le paquet installe.
+
+    L'attente portait sur la liste exacte `[1]`, ce qui la faisait rougir a
+    chaque migration ajoutee. Ce que la preuve doit etablir, c'est que les
+    fichiers accompagnent le paquet et que les versions se suivent sans trou --
+    pas leur nombre a un instant donne (docs/SCHEMA.md §12.1).
+    """
     trouvees = migrations.discover()
-    assert [m.version for m in trouvees] == [1]
-    assert trouvees[0].path.parent.name == "schema"
+    assert trouvees, "aucune migration : le paquet n'embarque pas son schema"
+    versions = [m.version for m in trouvees]
+    assert versions == list(range(1, len(versions) + 1)), "versions non contigues"
+    assert all(m.path.parent.name == "schema" for m in trouvees)

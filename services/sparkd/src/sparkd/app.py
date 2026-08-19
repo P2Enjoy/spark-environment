@@ -176,8 +176,14 @@ def create_app(config: Config) -> FastAPI:
                 "threads_total": row["cpu_threads_total"],
                 "cores_dedicated": etat.dedicated_cores,
             },
+            "memory": {"total_bytes": row["memory_total_bytes"]},
+            # docs/DAT.md §27.3 : la console doit pouvoir énoncer la soustraction
+            # TERME À TERME. La somme seule ne dit pas laquelle des deux vannes
+            # tourner — zfs_arc_max, ou SPARKD_MEMORY_RESERVE.
             "reserves": {
                 "memory_bytes": row["memory_reserve_bytes"],
+                "arc_bytes": row["memory_arc_bytes"],
+                "margin_bytes": row["memory_margin_bytes"],
                 "storage_bytes": row["storage_reserve_bytes"],
             },
             "pools": etat.as_dict(),

@@ -168,6 +168,24 @@ Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sa
 perte, la migration le documente explicitement dans son en-tête et le contrat de
 déploiement `docs/PROD_MIGRATIONS.md` le signale.
 
+## 11 bis. `host` : les deux termes de la réserve mémoire
+
+`memory_reserve_bytes` porte la **somme** de ce qui est soustrait à `MemTotal`.
+La migration `002_part_arc` ajoute les deux termes séparément :
+
+| Colonne | Sens |
+|---|---|
+| `memory_arc_bytes` | plafond de l'ARC ZFS relevé sur le module (`docs/DAT.md` §16.2) |
+| `memory_margin_bytes` | marge d'exploitation configurée (`SPARKD_MEMORY_RESERVE`) |
+
+Motif : la somme seule ne dit pas **laquelle des deux vannes tourner**. Un
+exploitant qui lit « 76,2 Gio allouables » sur une machine de 94 Gio doit pouvoir
+choisir entre abaisser `zfs_arc_max` et abaisser `SPARKD_MEMORY_RESERVE`.
+
+Les deux colonnes valent `0` par défaut : une base existante conserve sa réserve
+totale, et le prochain relevé de topologie renseigne le détail. Aucune donnée
+n'est perdue et aucune valeur n'est devinée.
+
 ## 12. Mécanique des migrations
 
 Le §11 dit que chaque migration fournit son `down` ; le §10 dit que le démarrage

@@ -54,6 +54,10 @@ class Topology:
     storage_total_bytes: int
     cores: tuple[Core, ...]
     memory_reserve_bytes: int = 0
+    # Les deux termes de la reserve, separement : la somme seule ne dit pas
+    # laquelle des deux vannes tourner (docs/DAT.md §16.1, §27.3).
+    memory_arc_bytes: int = 0
+    memory_margin_bytes: int = 0
     memory_detail: str = ""
     arc_known: bool = True
 
@@ -139,6 +143,8 @@ def read_topology(
             else int(_require((resources.get("memory") or {}).get("total"), "memory.total"))
         ),
         memory_reserve_bytes=memoire.reserve_bytes if memoire else 0,
+        memory_arc_bytes=memoire.arc_bytes if memoire else 0,
+        memory_margin_bytes=memoire.operating_margin_bytes if memoire else 0,
         memory_detail=memoire.detail if memoire else "/proc/meminfo illisible : total physique d'Incus retenu, réserve inconnue.",
         arc_known=memoire.arc_known if memoire else False,
         network_total_bps=int(_require(debit_mbit, "un port réseau détecté")) * MBIT,
@@ -185,8 +191,9 @@ def sync(
             """INSERT INTO host (
                    id, hostname, cpu_threads_total, cpu_cores_total,
                    memory_total_bytes, storage_total_bytes, network_total_bps,
-                   memory_reserve_bytes, topology_synced_at)
-               VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+                   memory_reserve_bytes, memory_arc_bytes, memory_margin_bytes,
+                   topology_synced_at)
+               VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                    hostname = excluded.hostname,
                    cpu_threads_total = excluded.cpu_threads_total,
@@ -195,6 +202,8 @@ def sync(
                    storage_total_bytes = excluded.storage_total_bytes,
                    network_total_bps = excluded.network_total_bps,
                    memory_reserve_bytes = excluded.memory_reserve_bytes,
+                   memory_arc_bytes = excluded.memory_arc_bytes,
+                   memory_margin_bytes = excluded.memory_margin_bytes,
                    topology_synced_at = excluded.topology_synced_at""",
             (
                 topology.hostname,
@@ -204,6 +213,8 @@ def sync(
                 topology.storage_total_bytes,
                 topology.network_total_bps,
                 topology.memory_reserve_bytes,
+                topology.memory_arc_bytes,
+                topology.memory_margin_bytes,
                 _now(),
             ),
         )
