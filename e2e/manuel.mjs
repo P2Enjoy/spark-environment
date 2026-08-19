@@ -59,10 +59,17 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.goto(pile.base, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('tbody a', { timeout: 20000 });
   };
-  const ouvrir = async (nom) => {
+  // SPK-33 : la fenêtre d'un Spark répartit ses facettes en onglets (§6.27).
+  // Les illustrations montrent donc la facette qu'elles illustrent.
+  const ouvrir = async (nom, facette = '') => {
     await accueil();
     await page.click(`tbody a:has-text("${nom}")`);
     await page.waitForSelector('.entete-entite', { timeout: 10000 });
+    if (facette) {
+      await page.click(`.onglet[href$="/${facette}"]`);
+      await page.waitForSelector(`.onglet[href$="/${facette}"][aria-current="page"]`,
+                                 { timeout: 10000 });
+    }
   };
 
   try {
@@ -88,11 +95,12 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m5-refus');
 
     // --- M6 · Déployer sa pile : clés et configuration SSH -------------------
-    await ouvrir('crm-production');
+    await ouvrir('crm-production', 'cles');
     await page.waitForSelector('#titre-cles', { timeout: 10000 });
     await capturer('m6-cles', { hauteur: 1400 });
 
     // --- M7 · Exposer un domaine ---------------------------------------------
+    await ouvrir('crm-production', 'routes');
     await page.click('[data-ouvre="route"]');
     await page.waitForSelector('#route-domaine');
     await capturer('m7-route', { hauteur: 1400 });
@@ -102,7 +110,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m8-erreur', { hauteur: 1000 });
 
     // --- M9 · Instantanés : le refus qui protège -----------------------------
-    await ouvrir('crm-production');
+    await ouvrir('crm-production', 'instantanes');
     await page.waitForSelector('#titre-instantanes');
     await page.click('[data-restaure="avant-deploiement"]');
     await page.waitForSelector('[data-confirme-restauration]');
