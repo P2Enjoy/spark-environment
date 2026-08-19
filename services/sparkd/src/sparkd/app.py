@@ -713,12 +713,24 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/v1/audit", tags=["audit"])
     def audit_trail(limit: int = 100, result: str | None = None,
-                    action: str | None = None) -> dict:
-        """Journal d'audit. Les valeurs sensibles y sont déjà caviardées."""
+                    action: str | None = None, actor: str | None = None,
+                    actor_class: str | None = None,
+                    since: str | None = None) -> dict:
+        """Journal d'audit. Les valeurs sensibles y sont déjà caviardées.
+
+        Un filtre inconnu est REFUSÉ, jamais ignoré (docs/DAT.md §36.8.2) : un
+        filtre ignoré rend une liste plus large que demandée, que l'exploitant
+        lira comme un résultat filtré. C'est la pire des deux erreurs.
+        """
         with registry() as connection:
-            return {"entries": audit_service.listing(
-                connection, limit=limit, result=result, action=action
-            )}
+            try:
+                return {"entries": audit_service.listing(
+                    connection, limit=limit, result=result, action=action,
+                    actor=actor, actor_class=actor_class, since=since,
+                )}
+            except ValueError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "bad_filter", "message": str(erreur)}) from erreur
 
     @app.get("/v1/ingress", tags=["ingress"])
     def list_routes() -> dict:

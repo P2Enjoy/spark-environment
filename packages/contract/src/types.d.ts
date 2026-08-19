@@ -66,6 +66,10 @@ export interface paths {
         /**
          * Audit Trail
          * @description Journal d'audit. Les valeurs sensibles y sont déjà caviardées.
+         *
+         *     Un filtre inconnu est REFUSÉ, jamais ignoré (docs/DAT.md §36.8.2) : un
+         *     filtre ignoré rend une liste plus large que demandée, que l'exploitant
+         *     lira comme un résultat filtré. C'est la pire des deux erreurs.
          */
         get: operations["audit_trail_v1_audit_get"];
         put?: never;
@@ -603,6 +607,9 @@ export interface operations {
                 limit?: number;
                 result?: string | null;
                 action?: string | null;
+                actor?: string | null;
+                actor_class?: string | null;
+                since?: string | null;
             };
             header?: never;
             path?: never;

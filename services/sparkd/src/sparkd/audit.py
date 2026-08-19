@@ -335,8 +335,27 @@ def listing(
     limit: int = 100,
     result: str | None = None,
     action: str | None = None,
+    actor: str | None = None,
+    actor_class: str | None = None,
+    since: str | None = None,
 ) -> list[dict]:
-    """Entrées les plus récentes d'abord."""
+    """Entrées les plus récentes d'abord.
+
+    @spec docs/BACKLOG.md#SPK-39 · docs/DAT.md §36.8.2 (les quatre filtres)
+
+    `action` filtre par PRÉFIXE et non par égalité : les actions sont nommées
+    `sujet.verbe`, et l'exploitant cherche « tout ce qui touche aux instantanés »
+    bien plus souvent qu'une action précise.
+
+    `actor` filtre par sous-chaîne : l'identité déclarée porte le serveur ET
+    l'empreinte de clé (§21.6.3), et chercher « console/prod » doit retenir les
+    deux formes.
+    """
+    if result is not None and result not in RESULTS:
+        raise ValueError(f"Résultat « {result} » inconnu, attendu {RESULTS}.")
+    if actor_class is not None and actor_class not in CLASSES:
+        raise ValueError(f"Classe « {actor_class} » inconnue, attendu {CLASSES}.")
+
     conditions, parametres = [], []
     if result:
         conditions.append("result = ?")
@@ -344,6 +363,20 @@ def listing(
     if action:
         conditions.append("action LIKE ?")
         parametres.append(f"{action}%")
+    if actor:
+        # Insensible a la casse : LIKE l'est deja pour l'ASCII en SQLite, et
+        # l'identite declaree est bornee a l'ASCII imprimable (§21.6.3).
+        conditions.append("actor LIKE ?")
+        parametres.append(f"%{actor}%")
+    if actor_class:
+        conditions.append("actor_class = ?")
+        parametres.append(actor_class)
+    if since:
+        # `ts` est un ISO 8601 en UTC : la comparaison lexicographique EST la
+        # comparaison chronologique. Convertir en date le ferait dependre du
+        # fuseau de la machine, ce que le §36.5 dit deja du temps.
+        conditions.append("ts >= ?")
+        parametres.append(since)
     ou = (" WHERE " + " AND ".join(conditions)) if conditions else ""
     parametres.append(max(1, min(limit, 1000)))
     return [

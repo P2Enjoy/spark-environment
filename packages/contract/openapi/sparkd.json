@@ -115,7 +115,7 @@
     },
     "/v1/audit": {
       "get": {
-        "description": "Journal d'audit. Les valeurs sensibles y sont déjà caviardées.",
+        "description": "Journal d'audit. Les valeurs sensibles y sont déjà caviardées.\n\nUn filtre inconnu est REFUSÉ, jamais ignoré (docs/DAT.md §36.8.2) : un\nfiltre ignoré rend une liste plus large que demandée, que l'exploitant\nlira comme un résultat filtré. C'est la pire des deux erreurs.",
         "operationId": "audit_trail_v1_audit_get",
         "parameters": [
           {
@@ -158,6 +158,54 @@
                 }
               ],
               "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor Class"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
             }
           }
         ],
