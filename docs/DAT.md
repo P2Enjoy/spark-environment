@@ -2062,6 +2062,19 @@ Les **candidats du `ssh_config`** sont proposés pour le genre `alias`, dans une
 liste où l'on peut aussi saisir librement : un `Host` peut vivre dans un fichier
 inclus que la console ne lit pas.
 
+**En modification, le nom n'est pas modifiable.** `POST /api/servers` remplace par
+le **nom** : changer le nom en modifiant ne renommerait rien, cela créerait une
+seconde entrée en laissant la première — et l'exploitant se retrouverait avec un
+doublon qu'il n'a pas demandé.
+
+Le produit ne prétend donc pas renommer. Renommer, c'est retirer puis redéclarer,
+et l'écran le dit plutôt que de laisser découvrir le doublon. Le champ est en
+lecture seule, avec sa raison à côté.
+
+Le **genre** reste modifiable : passer un serveur de `ssh` à `alias` est
+exactement ce qu'on veut pouvoir faire quand la connexion se complique, et le nom
+ne change pas.
+
 #### 22.4.7 Ce qui reste hors de portée, et le reste
 
 Aucun secret, jamais (§22.4). La vérification de la clé d'hôte n'est jamais
