@@ -11,7 +11,10 @@ qui change sans preavis et se parse mal — la commande n'accepte meme aucun
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
+
+import json
 
 import httpx
 
@@ -235,11 +238,47 @@ class FakeIncus:
     afin que la traduction eprouvee ici soit celle qui tournera en production.
     Il ne prouve jamais qu'un quota est applique : cela exige un hote reel
     (docs/DAT.md §12).
+
+    `state_path` rend le pilote PERSISTANT, ce qu'exige la pile de developpement
+    (docs/DAT.md §28.4). Sans lui, les instances vivent en memoire : un Spark
+    seede « en marche » survit au redemarrage de sparkd — le registre est un
+    fichier — mais « Arreter » echoue ensuite sur « instance absente ». La pile
+    parait fonctionnelle jusqu'au premier geste, ce qui est pire qu'une panne
+    franche.
+
+    Les tests n'en passent pas : sans chemin, le comportement est celui d'avant.
     """
 
     payload: dict[str, Any] | None = None
     pool_payload: dict[str, Any] | None = None
     created: dict[str, dict[str, Any]] = field(default_factory=dict)
+    state_path: Path | None = None
+    #: Panne a injecter, consommee une fois : {operation: message}.
+    #: Elle sert a EXECUTER REELLEMENT le chemin d'erreur du produit, pas a
+    #: fabriquer sa trace (CLAUDE.md §8, §15). Le seed s'en sert pour qu'un Spark
+    #: atteigne l'etat `error` par la meme route que celle qui echouerait en
+    #: production.
+    fail_next: dict[str, str] = field(default_factory=dict)
+
+    def _maybe_fail(self, operation: str) -> None:
+        message = self.fail_next.pop(operation, None)
+        if message is not None:
+            raise IncusError(message)
+
+    def __post_init__(self) -> None:
+        if self.state_path is not None and self.state_path.exists():
+            self.created = json.loads(self.state_path.read_text(encoding="utf-8"))
+
+    def _persist(self) -> None:
+        if self.state_path is None:
+            return
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        # Ecriture atomique : une pile interrompue en plein enregistrement
+        # laisserait sinon un fichier tronque, et le demarrage suivant
+        # echouerait sur un JSON invalide sans rapport avec sa cause.
+        provisoire = self.state_path.with_suffix(".tmp")
+        provisoire.write_text(json.dumps(self.created), encoding="utf-8")
+        provisoire.replace(self.state_path)
 
     def resources(self) -> dict[str, Any]:
         return self.payload if self.payload is not None else _EXEMPLE_HOTE
@@ -256,35 +295,43 @@ class FakeIncus:
         return list(self.created.values())
 
     def create_instance(self, payload: dict[str, Any]) -> None:
+        self._maybe_fail("create_instance")
         nom = payload["name"]
         if nom in self.created:
             raise IncusError(f"Instance « {nom} » deja presente.")
         self.created[nom] = {"name": nom, "status": "Stopped", "config": payload.get("config", {})}
+        self._persist()
 
     def set_instance_state(self, name: str, action: str) -> None:
+        self._maybe_fail("set_instance_state")
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name]["status"] = "Running" if action == "start" else "Stopped"
+        self._persist()
 
     def delete_instance(self, name: str) -> None:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         del self.created[name]
+        self._persist()
 
     def update_instance_config(self, name: str, config: dict[str, Any]) -> None:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("config", {}).update(config)
+        self._persist()
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("files", {})[path] = content
+        self._persist()
 
     def exec_command(self, name: str, command: list[str]) -> None:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("commands", []).append(command)
+        self._persist()
 
     def create_snapshot(self, name: str, snapshot: str) -> None:
         if name not in self.created:
@@ -292,6 +339,7 @@ class FakeIncus:
         self.created[name].setdefault("snapshots", []).append(
             {"name": snapshot, "stateful": False, "size": 0}
         )
+        self._persist()
 
     def restore_snapshot(self, name: str, snapshot: str, force: bool = False) -> None:
         pris = [s["name"] for s in self.created.get(name, {}).get("snapshots", [])]
@@ -304,6 +352,7 @@ class FakeIncus:
             if pris.index(s["name"]) <= pris.index(snapshot)
         ]
         self.created[name]["restored"] = snapshot
+        self._persist()
 
     def delete_snapshot(self, name: str, snapshot: str) -> None:
         instance = self.created.get(name)
@@ -312,6 +361,7 @@ class FakeIncus:
         instance["snapshots"] = [
             s for s in instance.get("snapshots", []) if s["name"] != snapshot
         ]
+        self._persist()
 
     def snapshots(self, name: str) -> list[dict[str, Any]]:
         return list(self.created.get(name, {}).get("snapshots", []))

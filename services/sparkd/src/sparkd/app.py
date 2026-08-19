@@ -15,6 +15,7 @@ Confondre les deux ferait declarer prete une instance incapable de travailler.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException
 
@@ -38,9 +39,17 @@ from .translate import Manifest, TranslationError, translate
 
 
 def make_client(config: Config) -> IncusClient:
-    """Choisit le pilote. Le factice sert au développement, jamais à conclure."""
+    """Choisit le pilote. Le factice sert au développement, jamais à conclure.
+
+    Le factice reçoit un fichier d'état à côté du registre : sans lui, un Spark
+    seedé « en marche » refuserait « Arrêter » après un redémarrage, la pile
+    paraissant fonctionnelle jusqu'au premier geste (docs/DAT.md §28.4). Un
+    registre en mémoire — ce que les tests utilisent — n'en reçoit aucun.
+    """
     if config.driver == "fake":
-        return FakeIncus()
+        if config.database == ":memory:":
+            return FakeIncus()
+        return FakeIncus(state_path=Path(f"{config.database}.incus.json"))
     return UnixSocketIncus(config.incus_socket)
 
 
