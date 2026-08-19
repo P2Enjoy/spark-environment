@@ -1620,3 +1620,67 @@ résultat* — pas de rejouer l'état complet du système.
 Un **refus** est journalisé au même titre qu'un succès (`docs/SCHEMA.md` §9).
 C'est précisément la trace qui manque toujours quand on en a besoin : personne
 n'enquête sur une opération qui a réussi.
+
+## 22. L'hôte console
+
+Le §6 pose le principe : le navigateur ne sait rien de SSH, l'hôte console local
+porte le tunnel. Cette section fixe le reste.
+
+### 22.1 Le binaire `ssh` du système, pas une bibliothèque
+
+L'hôte console lance `ssh -L` comme sous-processus. Il n'embarque **pas** de
+client SSH.
+
+Motif : le poste du responsable a déjà une configuration SSH — `~/.ssh/config`,
+un agent, des clés, des `ProxyJump`, parfois une clé matérielle ou une double
+authentification. Le binaire système les honore toutes, sans que le produit ait à
+les connaître. Une bibliothèque les réimplémenterait mal, et le premier
+exploitant avec un bastion dans sa configuration serait bloqué par un outil censé
+lui simplifier la vie.
+
+Contrepartie assumée : le produit dépend d'un `ssh` présent sur le poste. C'est
+acceptable — tout le modèle d'administration repose déjà sur SSH.
+
+### 22.2 Un tunnel vivant se prouve à travers lui, pas à côté
+
+Un processus `ssh` **mort** se voit tout de suite. Un processus `ssh` **figé** ne
+se voit pas : il vit, la socket locale accepte les connexions, et chaque requête
+attend indéfiniment. C'est le cas dangereux, parce qu'il ressemble au bon.
+
+La supervision interroge donc `/healthz` **à travers** le tunnel, à intervalle
+régulier et avec un délai d'expiration court. Vérifier que le sous-processus est
+vivant ne prouve rien : c'est précisément ce que le cas figé met en défaut.
+
+Trois états, et ils sont distincts :
+
+```
+connecting   le tunnel s'ouvre
+ready        /healthz a répondu à travers lui
+broken       il n'a pas répondu, ou le processus est mort
+```
+
+### 22.3 Une panne se signale, elle ne se masque pas
+
+Une requête adressée à un tunnel `broken` échoue **immédiatement**, avec le
+motif : le dernier état connu, l'heure de la dernière réponse, et l'erreur
+rapportée par `ssh`. Elle n'attend pas l'expiration d'un délai réseau, et elle ne
+rend pas un `502` anonyme.
+
+La console ne doit **jamais** afficher des données obtenues avant la panne comme
+si elles étaient à jour. Une valeur périmée présentée comme actuelle est pire
+qu'une erreur : l'exploitant prend une décision sur un état qui n'existe plus.
+
+### 22.4 L'inventaire ne contient aucun secret
+
+`~/.config/spark/servers.json` retient un nom, un hôte, un utilisateur, un port
+distant et le port local à ouvrir. **Aucune clé, aucun mot de passe, aucune
+phrase de passe.** L'authentification appartient à la configuration SSH du poste,
+et le produit n'a pas à la dupliquer — dupliquer un secret, c'est doubler les
+endroits où il fuit.
+
+### 22.5 Le port local est demandé au système
+
+Le port local du tunnel est obtenu en laissant le système en choisir un libre,
+et non en piochant dans une plage fixée. Une plage fixée entre en collision avec
+ce que l'exploitant fait tourner par ailleurs, et la collision se manifeste comme
+un tunnel qui « ne marche pas » sans dire pourquoi.
