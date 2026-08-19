@@ -143,7 +143,7 @@ after(async () => { await navigateur?.close(); serveur?.close(); });
  */
 async function attendreRelecture() {
   await page.waitForFunction(
-    () => !document.querySelector('.formulaire-panneau')
+    () => !document.querySelector('dialog.modale[open]')
           && document.querySelector('.onglet[aria-current="page"]'),
     { timeout: 8000 });
 }
@@ -170,7 +170,7 @@ test('déclarer une route envoie le domaine, le port et le TLS saisis', async ()
   await page.fill('#route-domaine', 'boutique.example.com');
   await page.fill('#route-port', '3000');
   await page.uncheck('#route-tls');
-  await page.click('button[type="submit"]');
+  await page.click('dialog.modale[open] [data-engage]');
   await attendreRelecture();
 
   const envoi = appels.find((a) => a.url === '/v1/ingress');
@@ -202,7 +202,7 @@ test('enregistrer une clé neuve l’inscrit PUIS l’accorde, dans cet ordre', 
   await page.waitForSelector('#cle-libelle');
   await page.fill('#cle-libelle', 'portable-astreinte');
   await page.fill('#cle-publique', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 astreinte');
-  await page.click('button[type="submit"]');
+  await page.click('dialog.modale[open] [data-engage]');
   await attendreRelecture();
 
   const ecritures = appels.filter((a) => a.methode === 'POST');
@@ -228,7 +228,7 @@ test('prendre un instantané envoie le nom saisi', async () => {
   await page.click('[data-ouvre="snapshot"]');
   await page.waitForSelector('#instantane-nom');
   await page.fill('#instantane-nom', 'avant-bascule');
-  await page.click('button[type="submit"]');
+  await page.click('dialog.modale[open] [data-engage]');
   await attendreRelecture();
 
   const envoi = appels.find((a) => a.methode === 'POST' && a.url.endsWith('/snapshots'));
@@ -278,22 +278,29 @@ test('une restauration sans blocage ne demande jamais d’accepter une perte', a
   assert.deepEqual(envoi.corps, {});
 });
 
-test('un seul formulaire à la fois, et l’annulation rend le focus', async () => {
-  // Révisé avec SPK-33 : les trois panneaux vivent désormais sur des facettes
-  // distinctes (§6.27), donc « un seul à la fois » est d'abord obtenu par la
-  // structure — une surface a un sujet, et un seul (§5.4). Ce qui reste à
-  // éprouver est le contrat d'interaction du §26.2 : le déclencheur disparaît
-  // pendant la saisie, et l'annulation lui rend le focus.
+test('la modale tient son contrat, et l’annulation rend le focus', async () => {
+  // Révisé avec la modale du §6.27. La version précédente vérifiait que le
+  // déclencheur S'EFFACE pendant la saisie : c'était vrai du formulaire ouvert
+  // dans le flux, qui prenait sa place. La modale le garde visible — c'est lui
+  // qui reçoit le focus à la fermeture, et un déclencheur disparu n'aurait rien
+  // à qui le rendre.
+  //
+  // Ce qui reste vérifié est plus fort : une seule modale à la fois, un seul
+  // sujet par surface, et le focus rendu.
   await ouvrirDepuisLaListe('routes');
   await page.click('[data-ouvre="route"]');
-  await page.waitForSelector('#route-domaine');
-  assert.equal(await page.$('[data-ouvre="route"]'), null,
-    'le déclencheur s’efface pendant la saisie');
+  await page.waitForSelector('dialog.modale[open]');
+
+  assert.equal(await page.$$eval('dialog.modale[open]', (d) => d.length), 1,
+    'une modale n’en ouvre pas une autre');
+  assert.ok(await page.$('[data-ouvre="route"]'),
+    'le déclencheur reste : c’est lui qui recevra le focus');
   assert.equal(await page.$('#titre-cles'), null,
     'les clés sont sur une autre facette : la surface a un seul sujet');
 
-  await page.click('[data-ferme="route"]');
-  await page.waitForSelector('[data-ouvre="route"]');
+  await page.click('[data-annule-modale="route"]');
+  await page.waitForFunction(() => !document.querySelector('dialog.modale[open]'),
+                             { timeout: 6000 });
   const focus = await page.evaluate(() => document.activeElement?.getAttribute('data-ouvre'));
   assert.equal(focus, 'route', 'le focus revient au déclencheur');
 });
