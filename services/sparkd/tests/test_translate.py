@@ -1,4 +1,6 @@
-"""@verifies docs/BACKLOG.md#SPK-08 · docs/DAT.md §7.2, §7.2 bis, §7.2 ter, §7.5, §7.6
+"""@verifies docs/BACKLOG.md#SPK-08, docs/BACKLOG.md#SPK-30 ·
+             docs/DAT.md §7.2, §7.2 bis, §7.2 ter, §7.5, §7.6,
+             §8.8 (la marge de metadonnees)
 
 La loi et les bornes eprouvees ici ont ete MESUREES sur l'hote, pas deduites. Ces
 tests existent pour qu'une regression sur la traduction soit visible sans
@@ -12,11 +14,13 @@ from __future__ import annotations
 import pytest
 
 from sparkd.translate import (
+    DEFAULT_METADATA_MARGIN,
     Manifest,
     TranslationError,
     allowance_percent,
     cpu_weight,
     quota_allowance,
+    quota_bytes,
     translate,
 )
 
@@ -175,8 +179,49 @@ def test_reseau_est_un_plafond():
 
 
 def test_stockage():
+    """REVISE par SPK-30 : le quota pose n'est plus la taille vendue.
+
+    Cette preuve exigeait `size == storage_bytes`. Elle avait raison tant que le
+    produit posait le quota exactement a la valeur annoncee — et c'est
+    precisement ce que la mesure du 2026-08-18 a montre insoutenable : disque
+    plein, Incus ne peut plus ecrire `backup.yaml`, qui vit DANS le jeu de
+    donnees contingente, et toute reconfiguration echoue, y compris
+    l'agrandissement qui debloquerait la situation.
+
+    Le §8.8 tranche : le quota vaut la taille vendue PLUS une marge de
+    metadonnees. Ce que la preuve verifie change donc de nature — non plus une
+    egalite, mais une somme exacte.
+    """
     c = translate(manifeste(storage_bytes=40 * GIO, storage_io_priority=8), SHARED, POOL)
+    assert c.devices["root"]["size"] == str(40 * GIO + DEFAULT_METADATA_MARGIN)
+
+
+def test_marge_nulle_rend_exactement_la_taille_vendue():
+    """§8.8.3 : zero est ACCEPTE, et restaure le comportement d'avant SPK-30.
+
+    C'est un choix d'exploitant, pour un pilote qui n'ecrirait pas ses
+    metadonnees dans le jeu de donnees contingente — pas un defaut.
+    """
+    c = translate(manifeste(storage_bytes=40 * GIO), SHARED, POOL, metadata_margin=0)
     assert c.devices["root"]["size"] == str(40 * GIO)
+
+
+def test_la_marge_s_ajoute_a_la_taille_vendue_quelle_qu_elle_soit():
+    """§8.8.2 regle 2 : le traducteur est le SEUL endroit ou la marge apparait."""
+    for vendu in (1 * GIO, 5 * GIO, 10 * GIO, 40 * GIO):
+        for marge in (0, 1, 64 * 1024 * 1024, 1 * GIO):
+            c = translate(manifeste(storage_bytes=vendu), SHARED, POOL,
+                          metadata_margin=marge)
+            assert c.devices["root"]["size"] == str(vendu + marge)
+            assert quota_bytes(vendu, marge) == vendu + marge
+
+
+def test_une_marge_negative_est_refusee_et_non_ramenee_a_zero():
+    """Refuser plutot qu'approximer : une marge negative reduirait le quota
+    SOUS la taille vendue, et le locataire recevrait moins qu'annonce sans que
+    rien ne le dise."""
+    with pytest.raises(TranslationError):
+        quota_bytes(10 * GIO, -1)
 
 
 def test_priorite_disque_est_une_option_d_instance_pas_de_peripherique():

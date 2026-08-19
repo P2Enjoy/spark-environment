@@ -1,4 +1,6 @@
-"""@verifies docs/BACKLOG.md#SPK-05 · docs/DAT.md §7.3, §7.3 bis, §7.7
+"""@verifies docs/BACKLOG.md#SPK-05, docs/BACKLOG.md#SPK-30 ·
+             docs/DAT.md §7.3, §7.3 bis, §7.7,
+             §8.8.2 regle 4 (la marge de metadonnees est comptee au pool)
 
 La Definition of Done nomme quatre cas limites — pool exactement plein,
 dépassement d'une unité, surengagement > 1, réserve hôte — et exige un refus qui
@@ -15,6 +17,7 @@ import pytest
 
 from sparkd import migrations
 from sparkd.admission import (
+    DEFAULT_METADATA_MARGIN,
     HostNotConfigured,
     Request,
     Resource,
@@ -187,6 +190,72 @@ def test_reserve_hote_provoque_le_refus(db):
     decision = admit(db, demande(memory_bytes=10 * GIO))
     assert decision.admitted is False
     assert decision.shortfalls[0].resource is Resource.MEMORY
+
+
+# --- la marge de metadonnees (SPK-30, §8.8.2 regle 4) -----------------------
+
+MIO = 1024**2
+
+
+def test_la_marge_entre_dans_l_alloue_du_pool(db):
+    """Elle est POSEE sur le jeu de donnees, donc reellement prise.
+
+    Un pool qui l'ignorerait promettrait ce qu'il n'a pas — meme raisonnement
+    qu'au §8.5 pour l'ARC.
+    """
+    poser_hote(db)
+    poser_spark(db, cpu_reservation=0.5, storage_bytes=10 * GIO)
+    poser_spark(db, cpu_reservation=0.5, storage_bytes=20 * GIO)
+    assert pools(db, 64 * MIO).storage.allocated == 30 * GIO + 2 * 64 * MIO
+
+
+def test_marge_nulle_rend_l_ancienne_comptabilite(db):
+    poser_hote(db)
+    poser_spark(db, cpu_reservation=0.5, storage_bytes=10 * GIO)
+    assert pools(db, 0).storage.allocated == 10 * GIO
+
+
+def test_un_registre_vide_ne_reserve_aucune_marge(db):
+    """La marge est PAR SPARK : sans Spark, elle ne coute rien."""
+    poser_hote(db)
+    assert pools(db, 64 * MIO).storage.allocated == 0
+
+
+def test_ce_qui_tiendrait_tout_juste_sans_la_marge_est_refuse_avec_elle(db):
+    """Le coeur de la regle 4. Sans elle, le registre admettrait un Spark que le
+    pool ne peut pas porter, et la panne arriverait a l'ecriture."""
+    poser_hote(db, storage_total_bytes=20 * GIO)
+    poser_spark(db, cpu_reservation=0.5, storage_bytes=10 * GIO)   # + sa marge
+    # Il reste 10 GiB moins DEUX marges : celle du Spark pose, celle du demande.
+    exact = 10 * GIO - 2 * (64 * MIO)
+    assert admit(db, demande(storage_bytes=exact), 64 * MIO).admitted is True
+    refuse = admit(db, demande(storage_bytes=exact + 1), 64 * MIO)
+    assert refuse.admitted is False
+    # Il n'existe pas de refus « marge » : c'est un refus sur `storage`, dans la
+    # forme du §7.7.
+    assert [m.resource for m in refuse.shortfalls] == [Resource.STORAGE]
+
+
+def test_le_refus_exprime_la_demande_REELLEMENT_posee(db):
+    """§8.8.2 regle 4 : ce qu'on evalue est le quota qui sera pose, pas la taille
+    vendue. Un manque exprime sur la taille vendue serait faux de la marge."""
+    poser_hote(db, storage_total_bytes=5 * GIO)
+    manque = admit(db, demande(storage_bytes=5 * GIO), 64 * MIO).shortfalls[0]
+    assert manque.resource is Resource.STORAGE
+    assert manque.requested == 5 * GIO + 64 * MIO
+
+
+def test_la_marge_par_defaut_est_celle_du_DAT(db):
+    """64 MiB (§8.8.3). Le defaut du module et celui de la configuration doivent
+    rester la meme valeur : deux defauts qui divergent feraient compter le pool
+    autrement que le traducteur ne pose."""
+    from sparkd.config import DEFAULT_STORAGE_METADATA_MARGIN
+    from sparkd.hostmem import parse_size
+    from sparkd.translate import DEFAULT_METADATA_MARGIN as MARGE_TRADUCTEUR
+
+    assert DEFAULT_METADATA_MARGIN == 64 * MIO
+    assert MARGE_TRADUCTEUR == DEFAULT_METADATA_MARGIN
+    assert parse_size(DEFAULT_STORAGE_METADATA_MARGIN) == DEFAULT_METADATA_MARGIN
 
 
 # --- forme du refus ---------------------------------------------------------

@@ -164,6 +164,7 @@ def sync(
     pool: str,
     actor: str = "sparkd",
     operating_margin: int = 0,
+    metadata_margin: int | None = None,
 ) -> Topology:
     """Écrit le relevé dans le registre, et le trace.
 
@@ -171,12 +172,20 @@ def sync(
     malgré tout — la réalité fait foi — mais journalisé en `denied` pour que
     l'écart reste visible (docs/DAT.md §5.3).
     """
+    from .admission import DEFAULT_METADATA_MARGIN
     from .admission import pools as lire_pools
+
+    # La marge de metadonnees entre dans l'alloue du pool de stockage (§8.8.2
+    # regle 4) : les deux photographies doivent la compter de la meme facon,
+    # sans quoi la comparaison avant/apres attribuerait au releve un ecart qui
+    # ne vient que du parametre.
+    if metadata_margin is None:
+        metadata_margin = DEFAULT_METADATA_MARGIN
 
     topology = read_topology(client, pool, operating_margin)
 
     try:
-        avant = lire_pools(connection)
+        avant = lire_pools(connection, metadata_margin)
         alloue = {
             "cpu": avant.cpu.allocated,
             "memory": avant.memory.allocated,
@@ -249,7 +258,7 @@ def sync(
                     (thread.cpu_id, index),
                 )
 
-        apres = lire_pools(connection)
+        apres = lire_pools(connection, metadata_margin)
         depassements = [
             nom
             for nom, pool_etat in (

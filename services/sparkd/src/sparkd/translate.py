@@ -2,7 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-08 · docs/DAT.md §7.2 (les quatre modes CPU),
       §7.2 bis (allowance → poids), §7.2 ter (rendu exact des valeurs),
-      §7.5 (SMT), §7.6 (mémoire, réseau, stockage) · docs/SCHEMA.md §4
+      §7.5 (SMT), §7.6 (mémoire, réseau, stockage),
+      §8.8 (la marge de métadonnées) · docs/BACKLOG.md#SPK-30 · docs/SCHEMA.md §4
 
 Ce module est la frontière entre le vocabulaire du produit — « 0,5 CPU
 partagé » — et celui d'Incus. Il ne parle à personne : il transforme. C'est
@@ -32,6 +33,33 @@ ALLOWANCE_SCALE = 1000
 # La forme temporelle s'exprime en millisecondes entières sur une période de
 # 100 ms (docs/DAT.md §7.2 ter).
 QUOTA_PERIOD_MS = 100
+
+#: Marge de métadonnées par défaut, en octets (docs/DAT.md §8.8.3). Elle vit ici
+#: pour que le traducteur reste éprouvable sans configuration ; l'exploitant la
+#: règle par `SPARKD_STORAGE_METADATA_MARGIN`, et `app.py` la passe alors.
+DEFAULT_METADATA_MARGIN = 64 * 1024 * 1024
+
+
+def quota_bytes(storage_bytes: int, metadata_margin: int = DEFAULT_METADATA_MARGIN) -> int:
+    """Quota à POSER sur le jeu de données, à partir de la taille VENDUE.
+
+    Le registre stocke la taille vendue et elle seule (§8.8.2 règle 1) : le quota
+    est une valeur dérivée, recalculée ici à chaque traduction. Stocker les deux
+    ferait deux vérités à tenir d'accord.
+
+    Mesuré le 2026-08-18 : posé exactement à la taille vendue, un Spark saturé
+    empêche Incus d'écrire `backup.yaml` — qui vit DANS le jeu de données
+    contingenté — et toute reconfiguration échoue, y compris l'agrandissement qui
+    le débloquerait. La marge garde la place de ces écritures.
+
+    Une marge nulle rend exactement la taille vendue : c'est le comportement
+    d'avant SPK-30, et il reste atteignable (§8.8.3).
+    """
+    if metadata_margin < 0:
+        raise TranslationError(
+            f"Marge de métadonnées négative : {metadata_margin} octets."
+        )
+    return storage_bytes + metadata_margin
 
 #: Dépôts d'images connus. Une référence « images:debian/13 » nomme un dépôt et
 #: un alias ; « images: » est un raccourci de la LIGNE DE COMMANDE, que l'API
@@ -181,12 +209,16 @@ def translate(
     shared_cpus: list[int],
     pool_capacity: float,
     dedicated_cpus: list[int] | None = None,
+    metadata_margin: int = DEFAULT_METADATA_MARGIN,
 ) -> IncusConfig:
     """Traduit un manifeste. Refuse plutôt que d'approximer.
 
     `shared_cpus` est le cpuset partagé complet, `dedicated_cpus` les CPU
     logiques attribués — **frères SMT compris** (docs/DAT.md §7.5) — lorsque le
     mode l'exige.
+
+    `metadata_margin` est posée AU-DESSUS de la taille vendue (§8.8.2 règle 2) :
+    c'est le seul endroit du produit où la marge apparaît.
     """
     if not 0 <= manifest.cpu_priority <= 10:
         raise TranslationError(
@@ -254,7 +286,10 @@ def translate(
         "root": {
             "type": "disk",
             "path": "/",
-            "size": str(manifest.storage_bytes),
+            # PAS la taille vendue : elle plus la marge de métadonnées (§8.8).
+            # Le locataire ne verra jamais cette valeur — la console affiche ce
+            # qu'on lui a vendu (§8.8.2 règle 3).
+            "size": str(quota_bytes(manifest.storage_bytes, metadata_margin)),
         },
         "eth0": {
             "type": "nic",

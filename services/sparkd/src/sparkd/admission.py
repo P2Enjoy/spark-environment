@@ -1,8 +1,9 @@
 """Admission control et comptabilité des pools de l'hôte.
 
-@spec docs/BACKLOG.md#SPK-05 · docs/DAT.md §7.3 (invariant), §7.3 bis (ce que
-      l'invariant ne garantit pas), §7.7 (ce qui compte et contre quoi) ·
-      docs/SCHEMA.md §2 (host), §4 (spark)
+@spec docs/BACKLOG.md#SPK-05, docs/BACKLOG.md#SPK-30 · docs/DAT.md §7.3
+      (invariant), §7.3 bis (ce que l'invariant ne garantit pas), §7.7 (ce qui
+      compte et contre quoi), §8.8.2 règle 4 (la marge de métadonnées est
+      comptée au pool) · docs/SCHEMA.md §2 (host), §4 (spark)
 
 Le registre — et non le noyau — produit la garantie de réservation. Le noyau
 n'applique que des proportions ; c'est l'invariant
@@ -27,6 +28,11 @@ from enum import Enum
 # Le mode « capped » consomme son PLAFOND, pas zéro : un Spark plafonné à
 # 0,5 CPU peut réellement consommer 0,5 CPU en permanence (DAT §7.7).
 CPU_POOL_MODES = ("shared", "shared-pinned", "capped")
+
+#: Marge de métadonnées par défaut (docs/DAT.md §8.8.3), en octets. Elle est
+#: réellement prise sur le pool : la compter ferait promettre au registre ce
+#: qu'il n'a pas — même raisonnement qu'au §8.5 pour l'ARC.
+DEFAULT_METADATA_MARGIN = 64 * 1024 * 1024
 
 
 class Resource(str, Enum):
@@ -169,11 +175,19 @@ def _host_row(connection: sqlite3.Connection) -> sqlite3.Row:
     return row
 
 
-def pools(connection: sqlite3.Connection) -> Pools:
+def pools(
+    connection: sqlite3.Connection,
+    metadata_margin: int = DEFAULT_METADATA_MARGIN,
+) -> Pools:
     """Photographie des pools : capacité, alloué, disponible.
 
     Tous les Sparks du registre comptent, quel que soit leur état (DAT §7.7) :
     la ressource n'est rendue qu'à la disparition de la ligne.
+
+    L'alloué du pool de stockage inclut la **marge de métadonnées** de chaque
+    Spark (§8.8.2 règle 4) : elle est posée sur le jeu de données, donc réellement
+    prise. Sur trente Sparks à 64 Mio elle coûte 1,9 Gio — négligeable en valeur,
+    mais la comptabilité du §7.7 ne connaît pas le négligeable.
     """
     host = _host_row(connection)
 
@@ -194,9 +208,13 @@ def pools(connection: sqlite3.Connection) -> Pools:
     autres = connection.execute(
         """SELECT COALESCE(SUM(memory_reservation_bytes), 0)  AS memoire,
                   COALESCE(SUM(network_reservation_bps), 0)   AS reseau,
-                  COALESCE(SUM(storage_bytes), 0)             AS stockage
+                  COALESCE(SUM(storage_bytes), 0)             AS stockage,
+                  COUNT(*)                                    AS nombre
            FROM spark"""
     ).fetchone()
+    # Le registre stocke la taille VENDUE (§8.8.2 règle 1) ; la marge est une
+    # valeur dérivée, ajoutée ici plutôt que dupliquée en base.
+    stockage_alloue = autres["stockage"] + metadata_margin * autres["nombre"]
 
     # La capacité CPU se compte en cœurs physiques : le SMT entrelace
     # l'exécution, il n'ajoute pas de capacité (DAT §7.7).
@@ -227,7 +245,7 @@ def pools(connection: sqlite3.Connection) -> Pools:
         storage=Pool(
             Resource.STORAGE,
             max(0, host["storage_total_bytes"] - host["storage_reserve_bytes"]),
-            autres["stockage"],
+            stockage_alloue,
             1.0,
         ),
         dedicated_cores=coeurs_dedies,
@@ -235,14 +253,22 @@ def pools(connection: sqlite3.Connection) -> Pools:
     )
 
 
-def admit(connection: sqlite3.Connection, request: Request) -> Decision:
+def admit(
+    connection: sqlite3.Connection,
+    request: Request,
+    metadata_margin: int = DEFAULT_METADATA_MARGIN,
+) -> Decision:
     """Décide si la demande tient dans ce qui reste.
 
     Toutes les ressources sont évaluées, et non seulement la première qui
     manque : corriger une demande pour se heurter à la suivante est une perte de
     temps évitable (DAT §7.7).
+
+    La demande de stockage évaluée est celle qui sera réellement posée : taille
+    vendue **plus** marge de métadonnées (§8.8.2 règle 4). Le refus reste un refus
+    sur `storage`, dans la forme du §7.7 : il n'existe pas de refus « marge ».
     """
-    etat = pools(connection)
+    etat = pools(connection, metadata_margin)
     manques: list[Shortfall] = []
 
     def controle(pool: Pool, demande: float) -> None:
@@ -282,6 +308,6 @@ def admit(connection: sqlite3.Connection, request: Request) -> Decision:
 
     controle(etat.memory, request.memory_bytes)
     controle(etat.network, request.network_bps)
-    controle(etat.storage, request.storage_bytes)
+    controle(etat.storage, request.storage_bytes + metadata_margin)
 
     return Decision(admitted=not manques, shortfalls=tuple(manques))

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from secrets import token_hex
 
 from .addressing import AddressPoolExhausted, allocate
-from .admission import Request, admit, pools
+from .admission import DEFAULT_METADATA_MARGIN, Request, admit, pools
 from . import audit
 from . import images
 from .db import transaction
@@ -78,7 +78,8 @@ def _audit(connection, actor, action, target_id, payload, result, message) -> No
                  target_type="spark", target_id=target_id, payload=payload)
 
 
-def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "responsable") -> dict:
+def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "responsable",
+           metadata_margin: int = DEFAULT_METADATA_MARGIN) -> dict:
     """Crée la ligne d'un Spark, après admission control.
 
     L'admission control et l'écriture se font dans **la même transaction**
@@ -118,7 +119,9 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str = "respon
         ).fetchone():
             raise SparkError(f"Un Spark nommé « {spec.name} » existe déjà.")
 
-        decision = admit(connection, demande)
+        # La marge de métadonnées est comptée : c'est le quota réellement posé
+        # qui doit tenir dans le pool, pas la taille vendue (§8.8.2 règle 4).
+        decision = admit(connection, demande, metadata_margin)
         if not decision:
             # On SORT de la transaction avant de journaliser le refus. Écrire la
             # trace ici la ferait annuler par le rollback — et elle disparaîtrait

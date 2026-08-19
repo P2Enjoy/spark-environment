@@ -1,6 +1,7 @@
 """Configuration de sparkd, lue depuis l'environnement.
 
 @spec docs/BACKLOG.md#SPK-01 · docs/DAT.md §5 (Topologie physique et surface reseau),
+      §8.8.3 (la marge de metadonnees et pourquoi elle est configurable),
       §11 (Securite) · README.md section « Variables d'environnement »
 
 La garde d'adresse d'ecoute implemente une invariante de securite du produit,
@@ -27,6 +28,13 @@ DEFAULT_MEMORY_RESERVE = "2GiB"
 #: infini a la tranche des Sparks, et l'hote n'ordonnancerait plus rien — pas
 #: meme de quoi corriger la situation (docs/DAT.md §32.3).
 DEFAULT_CPU_RESERVE = 0.5
+#: Marge posee AU-DESSUS de la taille vendue de chaque Spark (docs/DAT.md §8.8).
+#: Mesure le 2026-08-18 : disque plein, Incus ne peut plus ecrire `backup.yaml`,
+#: qui vit DANS le jeu de donnees contingente, et toute reconfiguration echoue —
+#: y compris l'agrandissement qui debloquerait la situation. Le fichier pese
+#: quelques kibioctets ; le defaut est large de trois ordres de grandeur parce
+#: qu'une marge trop juste rendrait le remede intermittent, donc pire qu'absent.
+DEFAULT_STORAGE_METADATA_MARGIN = "64MiB"
 DEFAULT_LOG_LEVEL = "info"
 
 DRIVERS = ("incus", "fake")
@@ -49,6 +57,7 @@ class Config:
     storage_pool: str
     memory_reserve_bytes: int
     cpu_reserve: float
+    storage_metadata_margin_bytes: int
 
     @property
     def bind(self) -> str:
@@ -139,6 +148,18 @@ def load(env: dict[str, str] | None = None) -> Config:
     if cpu_reserve < 0:
         raise ConfigError("SPARKD_CPU_RESERVE ne peut pas être négatif.")
 
+    try:
+        marge = parse_size(
+            source.get("SPARKD_STORAGE_METADATA_MARGIN", DEFAULT_STORAGE_METADATA_MARGIN)
+        )
+    except ValueError as erreur:
+        raise ConfigError(f"SPARKD_STORAGE_METADATA_MARGIN : {erreur}") from None
+    # Zero est ACCEPTE : il restaure le comportement d'avant SPK-30, pour un
+    # pilote qui n'ecrirait pas ses metadonnees dans le jeu de donnees
+    # contingente. C'est un choix d'exploitant, pas un defaut (§8.8.3).
+    if marge < 0:
+        raise ConfigError("SPARKD_STORAGE_METADATA_MARGIN ne peut pas être négatif.")
+
     return Config(
         host=host,
         port=port,
@@ -150,4 +171,5 @@ def load(env: dict[str, str] | None = None) -> Config:
         storage_pool=source.get("SPARKD_STORAGE_POOL", DEFAULT_STORAGE_POOL),
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,
+        storage_metadata_margin_bytes=marge,
     )

@@ -266,7 +266,7 @@ def create_app(config: Config) -> FastAPI:
         """
         with registry() as connection:
             try:
-                etat = pools(connection)
+                etat = pools(connection, config.storage_metadata_margin_bytes)
             except HostNotConfigured as erreur:
                 raise HTTPException(
                     status_code=409,
@@ -323,6 +323,7 @@ def create_app(config: Config) -> FastAPI:
                 topology = sync(
                     connection, app.state.incus, config.storage_pool,
                     operating_margin=config.memory_reserve_bytes,
+                    metadata_margin=config.storage_metadata_margin_bytes,
                 )
         except (IncusError, InventoryError) as erreur:
             raise HTTPException(
@@ -399,7 +400,10 @@ def create_app(config: Config) -> FastAPI:
             ipv4_address=spark["ipv4_address"],
         )
         try:
-            config = translate(manifest, cpus, capacite, dedicated_cpus=epingles)
+            config = translate(
+                manifest, cpus, capacite, dedicated_cpus=epingles,
+                metadata_margin=app.state.config.storage_metadata_margin_bytes,
+            )
             app.state.incus.create_instance(
                 config.as_payload(config_network, config_pool)
             )
@@ -441,7 +445,7 @@ def create_app(config: Config) -> FastAPI:
         fonctionne (§32.4).
         """
         try:
-            etat = pools(connection)
+            etat = pools(connection, config.storage_metadata_margin_bytes)
         except HostNotConfigured:
             return
         # La delegation se reaffirme : systemd la repose a ses rechargements, et
@@ -751,7 +755,10 @@ def create_app(config: Config) -> FastAPI:
     def create_spark(spec: dict = Body(...)) -> dict:
         with registry() as connection:
             try:
-                spark = service.create(connection, service.SparkSpec(**spec))
+                spark = service.create(
+                    connection, service.SparkSpec(**spec),
+                    metadata_margin=config.storage_metadata_margin_bytes,
+                )
             except TypeError as erreur:
                 raise HTTPException(status_code=422, detail={
                     "error": "bad_request", "message": str(erreur)}) from erreur
