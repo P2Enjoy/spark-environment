@@ -2838,3 +2838,62 @@ l'arbitrage de SPK-35. SPK-38 se solde désormais d'un parcours E2E : l'écran
 existe, et l'ancre s'y voit. SPK-37 se solde d'une mesure sur un vrai tunnel ;
 SPK-30 et SPK-29 sur l'hôte. SPK-28, SPK-35, SPK-36, SPK-42, INC-01 et INC-02
 attendent votre arbitrage.
+
+## 2026-08-20 — SPK-41 : le catalogue devient utilisable, sauf son écran
+
+**Unité** : SPK-41, désignée par l'entrée précédente. Le §22.4 bis avait tranché
+l'alias `ssh` ; il ne disait ni les routes, ni la forme du fichier, ni ce que
+l'épreuve engage. J'ai écrit le **§22.4 ter**, committé avant la première ligne
+de code.
+
+**Ce qui est livré.** Le genre **`alias`** : une entrée ne nomme qu'un `Host` du
+`ssh_config`, et le produit ne connaît ni l'utilisateur, ni le port, ni le
+rebond — les deviner donnerait l'illusion de les connaître, et ils seraient faux
+dès qu'un `ProxyJump` s'interpose. Le tunnel passe le `Host` tel quel et ne
+désactive **jamais** la vérification de la clé d'hôte.
+
+Le fichier porte sa **version**, et la forme historique n'est pas réécrite à la
+lecture : une console qui migrerait le fichier en l'affichant le récrirait sans
+qu'on l'ait demandé. Le **serveur courant** est persisté et devient un choix — il
+valait `servers[0]`, si bien qu'ajouter un serveur changeait celui qu'on
+regardait. Quatre routes de plus, dont le retrait, qui **ferme le tunnel** avant
+d'effacer : laisser un `ssh` vivant vers une machine qu'on vient de retirer de
+l'inventaire, c'est le genre de processus qu'on ne retrouve plus.
+
+L'**épreuve** ouvre un tunnel temporaire, interroge `/healthz` puis `/readyz` à
+travers lui, et le referme dans tous les cas. Elle informe sans décider : un
+serveur injoignable s'enregistre quand même, sinon il faudrait qu'une machine
+soit allumée pour qu'on note son existence.
+
+À l'écran, un **sélecteur** dès qu'il y a le choix, et une **commande de
+reconnexion** sur un tunnel rompu — dont la seule issue était de recharger la
+console, ce qui n'est pas un remède mais une superstition.
+
+**Un défaut vu sur la capture, pas dans le code.** Le contexte était rangé en
+rangée dans une barre latérale de 240 px : le sélecteur tombait à quelques
+pixels, illisible, et le bouton débordait. Il s'empile, et redevient une rangée
+sous 1024 px où la barre passe en haut.
+
+**Deux preuves révisées avec leur raison** : le message d'un genre inconnu
+énumère trois genres, et le fichier a un objet à sa racine plutôt qu'un tableau
+nu. Ce qu'elles établissent est inchangé.
+
+**Vérifié.** 617 tests Python, 284 de console, **88 de l'hôte console** dont 13
+propres aux nouvelles routes, 6 de contrat, 8 gestes, 23 parcours E2E, 7
+contrôles du manuel, build, contrat sans dérive. Capture `09-tunnel-rompu`
+observée après correction.
+
+**Ce qui n'est PAS livré, et pourquoi l'unité reste `[~]`.** L'**écran
+d'administration du catalogue** : ajouter, modifier et retirer un serveur depuis
+la console. Les routes existent et sont prouvées, mais **aucune surface ne les
+appelle** — une entrée s'ajoute donc toujours à la main dans le fichier, ce qui
+est le défaut que l'unité nommait en premier. Par conséquent le parcours E2E de
+la DoD n'est pas écrit : la moitié de ses gestes n'a pas d'écran. La capture
+« aucun serveur enregistré », le manuel M3 et le seed appartiennent à ce même
+morceau.
+
+**Où reprendre.** **SPK-41**, son seul manque : l'écran du catalogue, section avec
+sa modale (§6.27), puis le parcours E2E complet de sa DoD. SPK-38 se solde d'un
+parcours E2E — l'onglet de supervision existe et l'ancre s'y voit. SPK-37 se
+solde d'une mesure sur un vrai tunnel ; SPK-30 et SPK-29 sur l'hôte. SPK-28,
+SPK-35, SPK-36, SPK-42, INC-01 et INC-02 attendent votre arbitrage.

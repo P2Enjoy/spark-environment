@@ -203,6 +203,11 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **Catalogue des serveurs** (SPK-41, socle) : genre `alias` qui délègue la
+  connexion à OpenSSH, version du fichier, serveur courant persisté avec son
+  sélecteur, retrait qui ferme le tunnel, proposition des `Host` du `ssh_config`,
+  épreuve `/healthz` puis `/readyz` à travers un tunnel temporaire, et commande
+  de reconnexion sur un tunnel rompu.
 - **Onglet de supervision du journal** (SPK-39) : `Hôte → Journal`, qui couvre
   tous les Sparks. Cinq filtres, dont l'action par préfixe ; un filtre inconnu est
   refusé plutôt qu'ignoré. L'écran rend l'état de la chaîne **et** la comparaison

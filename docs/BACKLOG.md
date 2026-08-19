@@ -1231,7 +1231,7 @@ supprimer ou tronquer, mais **pas fabriquer** un geste authentique (§36.3).
   ligne produite par le runtime n'est signée par personne — la supervision le dit
   au lieu de le masquer.
 
-### [ ] SPK-41 · Catalogue local des serveurs, tenu depuis la console
+### [~] SPK-41 · Catalogue local des serveurs, tenu depuis la console
 
 Le catalogue **existe** — `~/.config/spark/servers.json`, validé, sans secret, et
 `GET`/`POST /api/servers` le servent (SPK-16). Ce qui manque, c'est tout ce qui
@@ -1273,6 +1273,48 @@ Constaté dans le code le 2026-08-19 :
   `ssh` ouvre le tunnel sans que le produit connaisse ni `user` ni `port` ;
   captures observées, dont l'état « aucun serveur enregistré » ; manuel M3 et
   seed mis à jour.
+
+**Le socle et le contexte sont LIVRÉS ; l'écran d'administration du catalogue ne
+l'est pas.** Contrat au §22.4 ter du DAT, écrit et committé avant le code.
+
+- **Livré et prouvé** :
+  - genre **`alias`** — l'entrée ne nomme qu'un `Host` du `ssh_config`, et le
+    produit ne connaît ni `user`, ni `port`, ni le rebond. Le tunnel passe le
+    `Host` tel quel, sans `-p` ni `user@`, et **ne désactive jamais** la
+    vérification de la clé d'hôte ;
+  - **version du fichier** : la forme historique se lit encore et n'est **pas**
+    réécrite à la lecture ; la conversion attend un enregistrement ;
+  - **serveur courant persisté**, et sélecteur à l'écran dès qu'il y a le choix ;
+  - `DELETE /api/servers` — **ferme le tunnel** avant d'effacer, et donne la place
+    au suivant si c'est le courant qui part ;
+  - `POST /api/servers/current`, `GET /api/ssh-hosts` (proposition, jamais ajout
+    d'office, motifs écartés), `POST /api/servers/probe` ;
+  - **épreuve** : tunnel temporaire, `/healthz` puis `/readyz` **à travers lui**,
+    refermé dans tous les cas. Elle informe et ne décide pas — un serveur
+    injoignable s'enregistre quand même ;
+  - **commande de reconnexion** sur un tunnel rompu, la tentative étant montrée.
+- **Preuves** : 88 tests de l'hôte console, dont 13 propres aux nouvelles routes —
+  secret refusé même envoyé explicitement, épreuve qui n'enregistre rien et ne
+  laisse aucun `ssh`, retrait du courant, entrée par alias sans `user` ni `port` ;
+  284 tests de console ; 617 Python ; 23 parcours E2E ; build.
+- **Observé** : `e2e/captures/09-tunnel-rompu.png` — sélecteur, badge et commande
+  de reconnexion, après correction d'un contexte qui était **écrasé** dans une
+  barre latérale de 240 px.
+- Deux preuves **révisées avec leur raison** : le message d'un genre inconnu
+  énumère trois genres, et le fichier a un objet à sa racine.
+- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
+  1. **l'écran d'administration du catalogue** — ajouter, modifier et retirer un
+     serveur depuis la console, avec l'épreuve affichée et les candidats du
+     `ssh_config` proposés. Les routes existent et sont prouvées ; **aucune
+     surface ne les appelle**, et une entrée s'ajoute donc toujours à la main.
+     Le §6.27 en fait une section avec sa modale ;
+  2. par conséquent, le **parcours E2E** de la DoD — ajouter, voir l'épreuve,
+     basculer, rompre et rouvrir, retirer — n'est pas écrit : la moitié de ses
+     gestes n'a pas d'écran. Ce qui est atteignable aujourd'hui l'est par les
+     routes, et c'est prouvé là ;
+  3. la capture de l'état « aucun serveur enregistré », qui appartient à cet
+     écran ;
+  4. manuel M3 et seed, qui décrivent le catalogue tel qu'il sera administré.
 
 ### [ ] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
 
