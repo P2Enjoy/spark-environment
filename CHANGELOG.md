@@ -92,6 +92,9 @@
   mesure, mémoire et disque instantanés, chacun comparé à ce qui est réellement
   appliqué. Le burst est distingué du dépassement.
 
+- Journal d'audit : point de passage unique, caviardage des valeurs sensibles,
+  payload borné, et consultation par `GET /v1/audit`.
+
 ### Modifié
 
 - `.gitignore` :
@@ -104,7 +107,8 @@
   nouveau §15, adressage du réseau privé ; nouveau §16, la réserve de l'hôte ;
   nouveaux §7.4 bis et §7.4 ter, redistribution lors d'une découpe ; nouveau
   §17, accès SSH aux Sparks ; nouveau §18, réconciliation de l'ingress ; nouveau §19, instantanés et
-  restauration ; nouveau §20, métriques d'usage.
+  restauration ; nouveau §20, métriques d'usage ;
+  nouveau §21, journal d'audit.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel

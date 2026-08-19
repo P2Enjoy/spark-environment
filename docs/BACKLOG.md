@@ -228,10 +228,18 @@ opération manuelle et n'est pas planifié.
   dépassement mais le burst du mode partagé. L'API distingue donc `burst` de
   `over_limit`, ce dernier n'existant qu'en mode `capped`.
 
-### [ ] SPK-15 · Journal d'audit et filtrage des secrets
+### [x] SPK-15 · Journal d'audit et filtrage des secrets
 
-- Spécification : `docs/SCHEMA.md` §9
-- DoD : test prouvant qu'aucune clé ni secret n'atteint le journal.
+- Spécification : `docs/SCHEMA.md` §9, `docs/DAT.md` §21
+- **Clos le 2026-08-19, prouvé sur l'hôte.** Un parcours réel poussant une clé
+  publique, une clé privée et un instantané a laissé **17 entrées** : ni le corps
+  de la clé publique, ni l'en-tête `BEGIN OPENSSH PRIVATE KEY`, ni le contenu de
+  la clé privée n'y figurent — et le journal reste lisible, empreintes et noms de
+  Sparks compris.
+- Les cinq modules qui écrivaient chacun leur `INSERT` passent par une fonction
+  unique. Un test lit les sources pour vérifier qu'aucun autre fichier ne
+  mentionne `audit_log` : l'omission devient impossible, pas seulement
+  improbable.
 
 ## Lot 3 — Console locale
 

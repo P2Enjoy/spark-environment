@@ -116,7 +116,7 @@ def create(
         )
         _audit(connection, actor, "snapshot.create", identifiant,
                {"spark": spark["name"], "snapshot": nom}, "ok",
-               f"Instantané « {nom} » de « {spark['name'] }» pris.")
+               f"Instantané « {nom} » de « {spark['name']} » pris.")
     return dict(connection.execute(
         "SELECT * FROM snapshot WHERE id = ?", (identifiant,)
     ).fetchone())

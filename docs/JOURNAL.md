@@ -1113,3 +1113,51 @@ ci-dessus.
 à l'exposer et surtout à **prouver** qu'aucune clé ni secret n'y atteint, ce que
 sa Definition of Done exige explicitement. SPK-12 attend un domaine, SPK-29 et
 SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-15 close : le journal ne fuit pas, et reste lisible
+
+**Unité** : SPK-15. Le DAT §21 a été écrit avant de coder.
+
+**Le vrai sujet n'était pas le filtre.** Cinq modules écrivaient chacun leur
+`INSERT INTO audit_log`, avec un payload composé à la main. Un filtre posé à cinq
+endroits sera oublié au sixième — et l'oubli ne se verrait pas, puisqu'un journal
+qui contient trop ressemble à un journal qui fonctionne. Toute écriture passe
+désormais par une fonction unique, et **un test lit les sources** pour vérifier
+qu'aucun autre fichier ne mentionne cette table. C'est ce qui rend l'omission
+impossible plutôt qu'improbable.
+
+**Deux décisions de filtrage.** On caviarde plutôt qu'on ne supprime : savoir
+qu'un secret a transité par un appel n'est pas la même chose que ne rien savoir.
+Et `public_key` est caviardée comme le reste — une clé publique n'est pas un
+secret, mais distinguer `public_key` de `private_key` par un préfixe est le genre
+de finesse qui se retourne le jour où quelqu'un nomme un champ `user_key`.
+
+Le nom du champ est le signal principal, parce qu'il est choisi par le
+développeur alors que la valeur peut prendre n'importe quelle forme. La forme de
+la valeur — bloc PEM, en-tête `Authorization`, clé SSH — sert de second filet
+pour ce qu'un nom anodin laisserait passer. Le message y passe aussi, étant
+composé à la main donc susceptible d'interpoler.
+
+**Un payload n'est pas un dépotoir.** Le journal de l'ingress écrivait la
+configuration Caddy **entière**. Ce n'était plus une trace mais une copie —
+coûteuse, illisible, et prête à emporter le premier secret ajouté à cette
+configuration. Le payload est borné, et la troncature est dite.
+
+**La preuve.** Elle n'éprouve pas le filtre isolément : elle exerce l'API réelle
+avec des secrets à chaque endroit qui en accepte, puis **fouille toute la
+table**. Sur l'hôte : 17 entrées, aucun corps de clé, aucun en-tête PEM, aucun
+contenu de clé privée. Un test complémentaire vérifie l'inverse — que le journal
+reste **lisible** : empreintes, noms de Sparks et actions y demeurent. Caviarder
+tout ne serait pas un journal.
+
+**Vérifié.** 426 tests verts, campagne complète verte.
+
+**Où reprendre.** Le lot 2, le runtime serveur, est **entièrement livré**. La
+suite est le **lot 3, la console locale**, dont la première unité est **SPK-16**,
+l'hôte console et les tunnels SSH. Attention : à partir de SPK-18 l'interface
+entre en jeu, et `CLAUDE.md` §4 impose alors la lecture **intégrale** de
+`docs/DESIGN_SYSTEM.md` — 1585 lignes — avant toute écriture. SPK-16 et SPK-17
+n'en relèvent pas encore. SPK-12 attend un domaine, SPK-29 et SPK-28 un arbitrage.
