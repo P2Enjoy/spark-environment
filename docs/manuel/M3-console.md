@@ -12,15 +12,64 @@ make runDev
 
 La console répond alors sur `http://127.0.0.1:5173`.
 
-## Choisir un serveur
+## Déclarer un serveur
 
-Un serveur se déclare dans un inventaire local. Il porte un nom, un hôte, un
-utilisateur et le port sur lequel `sparkd` écoute à l'autre bout.
+La destination **Serveurs** tient la liste de ce que cette console sait
+administrer. C'est de là que vous ajoutez, basculez et retirez.
+
+![Le catalogue des serveurs](images/m3-serveurs.png)
+
+Trois manières de déclarer un serveur, et la première est presque toujours la
+bonne :
+
+| Genre | Ce que vous saisissez | Qui résout le reste |
+|---|---|---|
+| **Alias ssh** | un `Host` de votre `~/.ssh/config` | OpenSSH : hôte, utilisateur, port, rebond, clé |
+| **SSH** | hôte, utilisateur, port | rien de plus |
+| **Local** | un port | rien : `sparkd` écoute déjà sur cette machine |
+
+L'alias est recommandé dès que votre connexion sort du cas trivial. Un rebond par
+un bastion, une clé dédiée, un port inhabituel : tout cela se décrit déjà dans
+`~/.ssh/config`, et le produit n'a pas à le redécrire. Les `Host` de ce fichier
+vous sont **proposés**, jamais ajoutés d'office — vous pouvez aussi en saisir un
+que la console ne connaît pas, s'il vit dans un fichier inclus.
+
+### Éprouver avant d'enregistrer
+
+Le bouton **Éprouver la connexion** ouvre un tunnel temporaire, demande au
+serveur s'il est en bonne santé et s'il est prêt, puis referme. Le résultat
+s'affiche sous les champs.
+
+**Il ne bloque rien.** Un serveur sans réponse s'enregistre quand même : la
+machine est peut-être simplement éteinte, ou pas encore installée. Exiger qu'elle
+réponde reviendrait à exiger qu'elle soit allumée pour que vous puissiez noter
+son existence.
+
+### Basculer, et retirer
+
+Le serveur que vous regardez est signalé **courant** dans la liste, et son nom
+apparaît en haut de la barre latérale. *Regarder* bascule ; le choix est retenu
+d'une session à l'autre.
+
+*Retirer* ferme le tunnel et efface la déclaration, après une confirmation qui
+nomme le serveur. **Le serveur lui-même n'est pas touché** : ni ses Sparks, ni
+ses données, ni sa configuration. Vous ne faites qu'oublier son adresse.
+
+### Aucun secret, jamais
 
 **L'inventaire ne contient jamais de secret.** Ni mot de passe, ni phrase de
 passe, ni clé : l'authentification appartient à votre configuration SSH. Un champ
 qui ressemble à un secret est refusé à l'écriture plutôt que filtré en silence,
 pour que vous sachiez le retirer d'où vous l'aviez copié.
+
+La vérification de la clé d'hôte n'est **jamais** désactivée par le produit, pas
+même pour simplifier une première connexion. Un changement de clé d'hôte est un
+signal, et vous devez le voir.
+
+### Quand le tunnel tombe
+
+Un tunnel rompu porte un bouton **Reconnecter**, en haut de la barre latérale.
+Il n'y a pas à recharger la console.
 
 ## Se repérer
 

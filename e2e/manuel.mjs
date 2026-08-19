@@ -77,6 +77,11 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await accueil();
     await capturer('m3-liste');
 
+    // --- M3 · Déclarer un serveur (SPK-41) -----------------------------------
+    await page.click('nav a[href="#/serveurs"]');
+    await page.waitForSelector('#titre-serveurs', { timeout: 10000 });
+    await capturer('m3-serveurs', { hauteur: 600 });
+
     // --- M4 · Lire les pools de ressources ----------------------------------
     await page.click('nav a[href="#/hote"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
