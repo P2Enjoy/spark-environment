@@ -36,6 +36,7 @@ export function renderCpuGauge(usage, spark) {
 
   if (spark?.state === 'stopped') return `<span class="jauge__absent">${MEASURE.stopped}</span>`;
   if (spark?.state === 'error') return `<span class="jauge__absent">${MEASURE.unavailable}</span>`;
+  if (spark?.state === 'pending') return `<span class="jauge__absent">${MEASURE.declared}</span>`;
   if (usage?.used === null || usage?.used === undefined)
     return `<span class="jauge__absent">${MEASURE.pending}</span>`;
 

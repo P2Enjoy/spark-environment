@@ -118,7 +118,10 @@ function renderRessources(spark, usage) {
     ['Processeur', cpu],
     ['Consommation CPU', mesure(
       usage?.cpu?.used === null || usage?.cpu?.used === undefined ? null : `${formatCpu(usage.cpu.used)} CPU`,
-      spark.state === 'stopped' ? MEASURE.stopped : spark.state === 'error' ? MEASURE.unavailable : MEASURE.pending)],
+      spark.state === 'stopped' ? MEASURE.stopped
+      : spark.state === 'error' ? MEASURE.unavailable
+      : spark.state === 'pending' ? MEASURE.declared
+      : MEASURE.pending)],
     ['Mémoire', `${formatBytes(spark.memory_reservation_bytes)}${
       usage?.memory?.used_bytes != null ? ` — ${formatBytes(usage.memory.used_bytes)} utilisés` : ''}`, true],
     ['Disque', `${formatBytes(spark.storage_bytes)}${

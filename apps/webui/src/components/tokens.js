@@ -33,7 +33,13 @@ export function stateOf(value) {
  *  mesure impossible ne sont jamais confondus. */
 export const MEASURE = {
   stopped: "Arrêté — aucune mesure d’exécution",
+  // Un premier relevé EN COURS : la mesure arrive.
   pending: 'Mesure en cours',
+  // Un Spark DÉCLARÉ mais pas encore appliqué n'a jamais tourné : il n'y a
+  // rien à mesurer, et annoncer « Mesure en cours » ferait attendre une valeur
+  // qui ne viendra pas (docs/DESIGN_SYSTEM.md §14.6 — ne jamais confondre un
+  // calcul en cours avec une donnée inexistante).
+  declared: 'Pas encore appliqué — rien à mesurer',
   unavailable: 'Indisponible',
 };
 

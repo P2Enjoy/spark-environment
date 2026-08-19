@@ -69,3 +69,12 @@ test('les trois absences de mesure ont des textes distincts', () => {
   assert.equal(new Set(textes).size, textes.length);
   for (const t of textes) assert.ok(t.length > 0);
 });
+
+// --- un Spark declare n'est pas un Spark en cours de mesure (§14.6) ---------
+
+test('les quatre absences de mesure portent des textes DISTINCTS', () => {
+  const textes = Object.values(MEASURE);
+  assert.equal(new Set(textes).size, textes.length,
+    'confondre deux situations les rendrait indiscernables a l’ecran');
+  assert.match(MEASURE.declared, /rien à mesurer/);
+});
