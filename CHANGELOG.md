@@ -98,6 +98,9 @@
 - Hôte console : inventaire des serveurs, ouverture et supervision de tunnels
   SSH, relais vers `sparkd`. Une panne de tunnel remonte avec son motif.
 
+- Contrat d'API : OpenAPI committé et déterministe, types TypeScript dérivés,
+  détection de dérive par `make contract-check`, et une CI qui rejoue la campagne.
+
 ### Modifié
 
 - `.gitignore` :

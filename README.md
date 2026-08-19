@@ -129,7 +129,9 @@ pas encore sont marquées.
 | `make sparkd-install` | crée le venv et installe le runtime serveur | **oui** |
 | `make sparkd-test` | tests unitaires du runtime serveur | **oui** |
 | `make sparkd-run` | lance `sparkd` sur `127.0.0.1:9876` — migre le registre puis sert | **oui** |
-| `make test` | toutes les suites de tests | **oui** |
+| `make test` | toutes les suites de tests, contrat compris | **oui** |
+| `make contract` | régénère le contrat d'API et ses types | **oui** |
+| `make contract-check` | échoue si le contrat committé a dérivé du code | **oui** |
 | `make build` | build de tous les paquets | **oui** |
 | `pnpm -r test` / `build` / `typecheck` | paquets TypeScript de l'espace de travail | **oui** |
 | `pnpm dev` | hôte console sur `http://127.0.0.1:5173` — inventaire et tunnels | **oui** |

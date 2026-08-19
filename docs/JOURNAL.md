@@ -1212,3 +1212,48 @@ l'interface entre en jeu. Elle ne relève pas encore du design system. À partir
 `docs/DESIGN_SYSTEM.md` — 1585 lignes — avant toute écriture touchant l'UI, et
 cette lecture doit être budgétée dans la session. SPK-12 attend un domaine,
 SPK-29 et SPK-28 un arbitrage.
+
+
+---
+
+## 2026-08-19 — SPK-17 : le contrat est committé, la dérive est détectable
+
+**Unité** : SPK-17. Le DAT §23 a été écrit avant de coder.
+
+**Pourquoi un fichier plutôt qu'une réponse HTTP.** `sparkd` produit son OpenAPI
+à l'exécution, mais cela ne suffit pas. La console doit se construire **sans
+qu'un `sparkd` tourne** — un développeur qui ne peut pas compiler sans démarrer
+le serveur finira par ne plus vérifier ses types du tout. Et surtout, un contrat
+qui n'existe qu'à l'exécution **ne se relit pas** : committé, un changement d'API
+apparaît dans le diff, au moment de la revue ; non committé, il se découvre en
+production par une console qui appelle un champ disparu.
+
+**La dérive se détecte en régénérant**, exactement comme le checksum des
+migrations : on ne fait pas confiance à la discipline pour maintenir deux choses
+en accord, on rend le désaccord détectable. Vérifié en provoquant une **vraie**
+dérive — une route ajoutée sans régénération fait sortir `make contract-check` en
+code 1, avec le diff et la marche à suivre.
+
+Point qui aurait tué la vérification s'il avait été négligé : **la génération doit
+être déterministe**. Clés triées, indentation fixe, saut de ligne final. Sans
+cela le contrôle échouerait à chaque exécution et serait désactivé dans la
+semaine — un contrôle qu'on désactive ne protège de rien.
+
+**Les types sont dérivés, jamais écrits.** 1183 lignes produites par
+`openapi-typescript` depuis l'OpenAPI. Une déclaration manuelle diverge dès la
+première modification, et la divergence se découvre chez l'utilisateur.
+
+**Ce que je ne peux pas prouver, et pourquoi l'unité reste `[~]`.** La CI est
+écrite, mais **jamais exécutée** : je ne peux ni la déclencher ni observer son
+résultat depuis ici. « Dérive détectée en CI » reste donc une intention. La
+détection elle-même est prouvée en local ; son exécution automatique ne l'est
+pas, et l'affirmer serait annoncer une preuve non faite.
+
+**Vérifié.** 432 tests Python, 42 tests Node, campagne complète verte.
+
+**Où reprendre.** **SPK-18**, l'écran liste des Sparks — et c'est là que
+l'interface entre en jeu. `CLAUDE.md` §4 impose la lecture **intégrale** de
+`docs/DESIGN_SYSTEM.md`, 1585 lignes, **avant** toute écriture touchant l'UI.
+Cette lecture est le premier geste de la session suivante, pas un préalable à
+expédier : elle conditionne tout ce qui sera écrit ensuite. SPK-12 attend un
+domaine, SPK-29 et SPK-28 un arbitrage.

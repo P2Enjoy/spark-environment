@@ -259,10 +259,17 @@ opération manuelle et n'est pas planifié.
   l'établissement du tunnel, et déclarait rompu un tunnel qui se connectait.
 - 36 tests pour l'hôte console.
 
-### [ ] SPK-17 · Contrat d'API partagé
+### [~] SPK-17 · Contrat d'API partagé
 
-- DoD : OpenAPI produit par `sparkd`, types TypeScript générés, dérive détectée
-  en CI.
+- Spécification : `docs/DAT.md` §23
+- **Livré et prouvé le 2026-08-19.** `packages/contract/openapi/sparkd.json`
+  committé, 20 chemins, généré de façon déterministe ; 1183 lignes de types
+  TypeScript dérivées par `openapi-typescript` ; `make contract-check` sort en
+  code 1 sur une vraie dérive provoquée, avec le diff et la marche à suivre.
+- **Reste, et c'est pourquoi l'unité n'est pas `[x]`** : la CI est écrite
+  (`.github/workflows/verification.yml`) mais **jamais exécutée**. Je ne peux pas
+  la déclencher ni observer son résultat depuis ici. Tant qu'une exécution n'a
+  pas eu lieu, « dérive détectée en CI » reste une intention, pas une preuve.
 
 ### [ ] SPK-18 · Écran liste des Sparks
 
