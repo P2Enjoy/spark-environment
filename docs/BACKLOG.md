@@ -568,10 +568,24 @@ manuel est mis au niveau de ce qui est réellement outillé.
 
 ### [ ] SPK-27 · Vérification par mesure des hypothèses du DAT §13
 
-Les sept points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné.
+Les points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné.
+*L'unité annonçait « sept points » ; le §13 en compte treize — corrigé le
+2026-08-19.*
+
+- Spécification : `docs/DAT.md` §13 lui-même. Elle existe et énumère ce qui reste
+  à mesurer : la réécrire pour se donner un commit documentaire serait une
+  session en échec.
+- Restaient au 2026-08-19 : le point **12**, la tenue de l'ARC **sous charge** —
+  la mesure statique ne disait que le plafond —, et le point **13**, ce que le
+  quota compte lorsque la compression est active.
+- Le point 12 impose un livrable de code : une mesure ponctuelle répond une fois.
+  La consommation réelle de l'ARC doit être **observable en continu**, faute de
+  quoi la vérification périme dès qu'on la termine.
 
 - DoD : chaque hypothèse est soit confirmée par une mesure archivée, soit
-  infirmée et le DAT corrigé en conséquence.
+  infirmée et le DAT corrigé en conséquence ; la consommation de l'ARC est
+  exposée par le runtime et visible à l'écran ; le manuel énonce ce que « 10 Gio »
+  désigne réellement.
 
 ### [ ] SPK-29 · Regrouper les Sparks sous un parent cgroup de poids maîtrisé
 

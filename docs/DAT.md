@@ -1023,23 +1023,60 @@ Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
 10. **Le quota bloque le plan de contrôle.** Un Spark qui remplit son quota empêche
     Incus d'écrire son `backup.yaml`, donc toute reconfiguration. §8.7, unité SPK-30.
 
-### Confirmées, suite
+### Confirmées, suite (nesting)
 
 11. **Nesting Docker complet** — pile Compose réelle dans un Spark non privilégié à
     idmap isolé, AppArmor actif, sans contournement ; `HTTP 200` depuis l'hôte sur
     l'IP privée. Docker retient `overlayfs` au-dessus du rootfs ZFS. Exige
     Incus ≥ 6.19 ; mesuré fonctionnel en 7.3, et **cassé en 6.0.0**. §3.1.
 
-### Restant à vérifier
+### Confirmées, suite
 
-12. **`zfs_arc_max` soustrait du pool** — **confirmé le 2026-08-19.** Plafonné à
-    16 Gio, lu sur le module et reporté dans `host.memory_reserve_bytes` avec la
-    marge d'exploitation : le pool annoncé passe de 98,0 à 76,2 Gio. Reste à
-    vérifier la seule chose que la mesure statique ne dit pas : que la
-    consommation réelle de l'ARC demeure sous son plafond **en charge**.
-13. **Compression et quota** — la compression étant active, le quota porte sur les
-    octets **stockés**, pas sur les octets logiques. Décision à prendre : documenter
-    l'écart, ou désactiver la compression par jeu de données. §8.7.
+12. **`zfs_arc_max` tient sous charge** — **confirmé le 2026-08-19.** La mesure
+    statique disait le plafond ; celle-ci dit ce que l'ARC en fait réellement.
+    24 Gio incompressibles écrits puis relus intégralement sur le pool :
+
+    ```
+    au repos            size  1,50 Gio     c  8,00 Gio     c_max 16,00 Gio
+    pendant la lecture  size 16,00 / 15,99 Gio (quatre relevés)
+    après la lecture    size 15,99 Gio     c 16,00 Gio     c_max 16,00 Gio
+    ```
+
+    Deux conclusions, et elles vont dans des sens opposés. L'ARC **atteint** son
+    plafond dès qu'on lui donne de quoi le remplir : la réserve de 16 Gio du §16.1
+    n'est donc pas prudente, elle est **nécessaire** — sans elle, ces 16 Gio
+    seraient promis aux Sparks et repris par le cache. Et il ne le **dépasse
+    pas** : la réserve est donc suffisante, et il n'y a pas lieu de l'augmenter.
+
+13. **Ce que le quota compte, avec compression** — **mesuré le 2026-08-19**, sur
+    un jeu de données à `quota=2G`, `compression=on` :
+
+    | Données écrites | Reçu par le quota | `available` final |
+    |---|---|---|
+    | 8 Gio de zéros | **24 Kio** | `2,00G` — intact |
+    | 2 Gio incompressibles | **2,00 Gio** | `0B` — épuisé |
+
+    Le quota porte sur les octets **stockés**. Les zéros ne sont d'ailleurs même
+    pas compressés : ZFS ne les stocke pas du tout, et 8 Gio n'ont coûté que
+    24 Kio.
+
+    **Décision : la compression reste active, et l'écart est documenté** plutôt
+    que supprimé. Trois raisons.
+
+    - L'écart joue **toujours en faveur du locataire** : avec des données
+      compressibles il loge plus que ce qu'il a acheté, avec des données
+      incompressibles il obtient exactement son quota. Il n'en obtient jamais
+      moins. Une promesse tenue au-delà n'est pas une promesse rompue.
+    - Désactiver la compression ferait consommer au pool des octets qui n'ont pas
+      besoin d'exister. Le pool est la ressource rare et non surengageable
+      (§7.7) : la gaspiller pour rendre une unité de mesure plus intuitive est un
+      mauvais échange.
+    - L'admission control compte le **quota**, pas l'usage (§7.7). Un locataire
+      qui loge plus de données logiques dans son quota ne consomme pas davantage
+      du pool : le pool ne peut donc pas être survendu par cet écart.
+
+    Conséquence à énoncer dans le manuel : « 10 Gio » désigne 10 Gio **stockés
+    après compression**.
 
 ## 14. Cycle de vie d'un Spark
 
