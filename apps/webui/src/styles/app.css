@@ -19,6 +19,8 @@
   flex-wrap: wrap;
 }
 .entete__marque { font-weight: 700; color: var(--color-brand); }
+.entete nav { display: flex; gap: var(--space-4); }
+.entete nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: 4px; }
 .entete__contexte { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
 
 .principal { padding: var(--space-6) var(--space-4); flex: 1; }

@@ -24,7 +24,23 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                hote: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false } };
 
+/**
+ * L'indicateur de page courante SUIT la route.
+ *
+ * Il était écrit en dur sur « Sparks » : sur l'écran de l'hôte, un lecteur
+ * d'écran annonçait donc la mauvaise page courante (docs/DESIGN_SYSTEM.md §5.1,
+ * §9.7). Un indicateur qui ment est pire qu'un indicateur absent.
+ */
+function marquerNavigation() {
+  const courant = etat.route === 'hote' ? '#/hote' : '#/sparks';
+  for (const lien of racine.querySelectorAll('nav a')) {
+    if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
+    else lien.removeAttribute('aria-current');
+  }
+}
+
 function peindre() {
+  marquerNavigation();
   racine.querySelector('.principal').innerHTML =
     etat.route === 'hote'
       ? renderHostView(etat.hote)

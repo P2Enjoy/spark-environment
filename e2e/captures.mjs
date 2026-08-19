@@ -1,8 +1,8 @@
 /**
  * Captures de l'écran liste des Sparks.
  *
- * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21 ·
- *           docs/DAT.md §24, §25, §26 · docs/DESIGN_SYSTEM.md §13 (les captures
+ * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21, #SPK-22 ·
+ *           docs/DAT.md §24, §25, §26, §27 · docs/DESIGN_SYSTEM.md §13 (les captures
  *           sont une preuve), §13.1 (validation attendue) · CLAUDE.md §16
  *
  * Les états sont produits depuis un faux `sparkd` local : la DoD demande de voir
@@ -39,7 +39,7 @@ const SPARKS = [
     memory_reservation_bytes: GIO, storage_bytes: 5 * GIO,
     ipv4_address: '10.77.0.19', image: 'images:debian/13',
     last_error: "image « images:debian/99 » introuvable dans le dépôt" },
-].map((s) => ({ ...s, allowed_commands: COMMANDES[s.state] ?? [],
+].map((s, i) => ({ ...s, id: `S${i + 1}`, allowed_commands: COMMANDES[s.state] ?? [],
                 transient: ['creating', 'starting', 'stopping', 'deleting'].includes(s.state),
                 network_burst_bps: 100_000_000 }));
 const LONGS = [
@@ -62,7 +62,8 @@ function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter()
 
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
-                          uneSeuleCle = false, refusRestauration = false } = {}) {
+                          uneSeuleCle = false, refusRestauration = false,
+                          hoteNonReleve = false, sansDetailMemoire = false } = {}) {
   const chemin = join(await mkdtemp(join(tmpdir(), 'spark-cap-')), 'servers.json');
   await writeFile(chemin, JSON.stringify([
     { name: 'validation', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 },
@@ -77,12 +78,39 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     fetch: async (url) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
-      if (url.includes('/v1/host') && !url.includes('cores')) return new Response(JSON.stringify({
-        hostname: 'spark-experiment',
-        pools: { cpu: { capacity: 4, available: 1 }, memory: { capacity: 81854656512, available: 4294967296 },
-                 storage: { capacity: 207030845440, available: 21474836480 },
-                 network: { capacity: 1e9, available: 5e8 } },
+      // SPK-22 : la carte des cœurs de l'hôte.
+      if (url.includes('/v1/host/cores')) return new Response(JSON.stringify({
+        physical_cores: 4,
+        shared: { cores: [0, 1, 2], cpus: [0, 4, 1, 5, 2, 6], capacity: 6 },
+        dedicated: [{ core_id: 3, cpus: [3, 7], spark_id: 'S3' }],
       }), { status: 200 });
+      if (url.includes('/v1/host')) {
+        // §27.8 : une topologie jamais relevée n'est pas une panne.
+        if (hoteNonReleve) return new Response(JSON.stringify({ detail: {
+          error: 'host_not_synced',
+          message: 'La capacité de cet hôte n’a jamais été relevée.',
+          remedy: 'POST /v1/host/sync',
+        } }), { status: 409 });
+        const GIO = 1024 ** 3;
+        return new Response(JSON.stringify({
+          hostname: 'spark-experiment',
+          cpu: { cores_total: 4, threads_total: 8, cores_dedicated: 1 },
+          memory: { total_bytes: 94 * GIO },
+          reserves: sansDetailMemoire
+            ? { memory_bytes: 18 * GIO, arc_bytes: 0, margin_bytes: 0, storage_bytes: 0 }
+            : { memory_bytes: 18 * GIO, arc_bytes: 16 * GIO, margin_bytes: 2 * GIO, storage_bytes: 0 },
+          pools: {
+            cpu: { capacity: 6, allocated: 2.5, available: 3.5, overcommit: 2 },
+            memory: { capacity: 76 * GIO, allocated: 12 * GIO, available: 64 * GIO, overcommit: 1 },
+            storage: { capacity: 193 * GIO, allocated: 40 * GIO, available: 153 * GIO, overcommit: 1 },
+            network: { capacity: 1e9, allocated: 3e8, available: 7e8, overcommit: 1 },
+          },
+          addresses: { capacity: 200, used: 4, free: 196,
+                       dhcp_dynamic_range: '10.77.0.240-10.77.0.254' },
+          topology_synced_at: '2026-08-19T14:05:00',
+          reservation_guarantee: 'proportional_between_sparks_only',
+        }), { status: 200 });
+      }
       // SPK-21 : la restauration d'un instantané ancien est refusée tant que des
       // instantanés plus récents existent (docs/DAT.md §19.1).
       if (url.includes('/restore')) {
@@ -360,6 +388,40 @@ await page.goto(`${ctx.base}/#/sparks/${DETAIL}`);
 await page.waitForSelector('#titre-routes');
 await page.screenshot({ path: join(SORTIE, '28-panneaux-mobile.png'), fullPage: true });
 console.log('  28-panneaux-mobile.png');
+ctx.server.close();
+
+// --- Écran des pools de l'hôte (SPK-22) -----------------------------------
+// docs/DAT.md §27. On y va PAR LA NAVIGATION, comme un utilisateur.
+ctx = await demarrer();
+await page.setViewportSize({ width: 1440, height: 1250 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.click('nav a[href="#/hote"]');
+await page.waitForSelector('#titre-pools', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '29-hote-pools.png') });
+console.log('  29-hote-pools.png');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '30-hote-mobile.png'), fullPage: true });
+console.log('  30-hote-mobile.png');
+ctx.server.close();
+
+// Base migrée mais pas encore relevée : la somme sans sa répartition inventée.
+ctx = await demarrer({ sansDetailMemoire: true });
+await page.setViewportSize({ width: 1440, height: 1250 });
+await page.goto(`${ctx.base}/#/hote`, { waitUntil: 'domcontentloaded' });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#titre-memoire', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '31-hote-reserve-sans-detail.png') });
+console.log('  31-hote-reserve-sans-detail.png');
+ctx.server.close();
+
+// §27.8 : topologie jamais relevée — un état nommé, avec son remède en bouton.
+ctx = await demarrer({ hoteNonReleve: true });
+await page.goto(`${ctx.base}/#/hote`, { waitUntil: 'domcontentloaded' });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-action="relever"]', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '32-hote-non-releve.png') });
+console.log('  32-hote-non-releve.png');
 ctx.server.close();
 
 await navigateur.close();
