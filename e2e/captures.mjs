@@ -72,13 +72,13 @@ function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter()
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
                           uneSeuleCle = false, refusRestauration = false,
-                          hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false } = {}) {
+                          hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false, sansServeur = false } = {}) {
   const chemin = join(await mkdtemp(join(tmpdir(), 'spark-cap-')), 'servers.json');
   // SPK-41 : DEUX serveurs, sinon le sélecteur ne se voit pas — avec un seul,
   // le produit affiche le nom plutôt qu'un contrôle mort (§22.4.5). La forme du
   // fichier est la version 1 (§22.4.2), et le second est déclaré par ALIAS pour
   // que la capture montre les deux genres.
-  await writeFile(chemin, JSON.stringify({
+  await writeFile(chemin, JSON.stringify(sansServeur ? { version: 1, servers: [] } : {
     version: 1,
     current: 'validation',
     servers: [
@@ -519,6 +519,40 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(150);
 await page.screenshot({ path: join(SORTIE, '35-images-modale-mobile.png') });
 console.log('  35-images-modale-mobile.png');
+ctx.server.close();
+
+// --- Le catalogue des serveurs (SPK-41) ------------------------------------
+// docs/DAT.md §22.4.7 bis. On y va PAR LA NAVIGATION, comme un exploitant.
+ctx = await demarrer();
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.click('nav a[href="#/serveurs"]');
+await page.waitForSelector('#titre-serveurs', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '44-serveurs.png') });
+console.log('  44-serveurs.png');
+
+// La modale d'ajout, ouverte AU CLAVIER, sur le genre « alias » qui est celui
+// que le §22.4 bis vient d'introduire.
+await page.focus('[data-ouvre="serveur"]');
+await page.keyboard.press('Enter');
+await page.waitForSelector('dialog.modale[open] #serveur-nom', { timeout: 4000 });
+await page.fill('#serveur-nom', 'bastion');
+await page.selectOption('#serveur-genre', 'alias');
+await page.waitForSelector('#serveur-alias', { timeout: 4000 });
+await page.fill('#serveur-alias', 'spark-bastion');
+await page.screenshot({ path: join(SORTIE, '45-serveurs-ajout.png') });
+console.log('  45-serveurs-ajout.png');
+ctx.server.close();
+
+// L'état « aucun serveur enregistré », que la DoD nomme.
+ctx = await demarrer({ sansServeur: true });
+await page.setViewportSize({ width: 1440, height: 700 });
+await page.goto(`${ctx.base}/#/serveurs`, { waitUntil: 'domcontentloaded' });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#titre-serveurs', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '46-serveurs-aucun.png') });
+console.log('  46-serveurs-aucun.png');
 ctx.server.close();
 
 // --- L'onglet de supervision du journal (SPK-39) --------------------------

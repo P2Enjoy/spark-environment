@@ -976,9 +976,12 @@ async function demarrer() {
   const entete = racine.querySelector('.entete__contexte');
   if (servers.length === 0) {
     entete.innerHTML = '<span class="badge badge--neutral">Aucun serveur enregistré</span>';
-    etat.status = 'error';
-    etat.error = new Error("Aucun serveur n'est enregistré dans l'inventaire de la console.");
-    return peindre();
+    // SPK-41 : on MÈNE au catalogue, on ne se contente pas de le dire. C'est le
+    // seul écran d'où l'on peut déclarer un serveur ; y laisser une erreur
+    // globale rendait la console inutilisable sans éditeur de texte — exactement
+    // le défaut que l'unité nommait. Mesuré : `#/serveurs` était inatteignable.
+    location.hash = '#/serveurs';
+    return chargerServeurs();
   }
   // §22.4.5 : le serveur courant est PERSISTÉ. Prendre `servers[0]` rendait le
   // choix implicite et dépendant de l'ordre d'écriture — ajouter un serveur
