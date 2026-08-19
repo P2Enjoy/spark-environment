@@ -287,6 +287,17 @@ opération manuelle et n'est pas planifié.
 
 ### [ ] SPK-19 · Écran détail d'un Spark
 
+Identité, état, ressources, accès, instantanés et journal d'un Spark, avec les
+commandes que le runtime déclare possibles.
+
+- Spécification : `docs/DAT.md` §24, `docs/DESIGN_SYSTEM.md` §6.3 à §6.6, §6.22,
+  §6.23, §14.9 · `docs/DESIGN_SYSTEM_APP.md`
+- DoD : les commandes affichées viennent du runtime, jamais d'une table
+  redérivée dans la console ; la suppression demande une confirmation nommant le
+  Spark, intégrée au flux et non en modale ; un état transitoire dit qu'aucune
+  commande n'est acceptée plutôt que d'afficher des boutons morts ; états vide,
+  chargement et erreur traités ; navigation clavier ; captures observées.
+
 ### [ ] SPK-20 · Création d'un Spark avec aperçu d'admission
 
 Afficher la capacité restante avant validation, et le refus motivé du backend.

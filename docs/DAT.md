@@ -1736,3 +1736,54 @@ pas qu'il est renseigné, ni que sa valeur est fraîche, ni qu'une opération es
 permise. Ces garanties-là appartiennent au runtime et à ses tests, et le §10 de
 `CLAUDE.md` reste la référence : une règle d'autorisation n'est jamais portée par
 un schéma.
+
+## 24. L'écran détail : le runtime publie ce qui est possible
+
+### 24.1 La console ne redérive pas la machine à états
+
+Le §14.1 définit les transitions autorisées depuis chaque état. La console doit
+savoir lesquelles proposer — sans quoi elle affiche des boutons qui échoueront,
+ou en cache qui auraient marché.
+
+Deux voies, et une seule est tenable.
+
+**Réimplémenter la table des transitions côté console** est exclu. Ce serait
+maintenir la même règle à deux endroits, dans deux langages, avec la certitude
+qu'elles divergeront ; et `docs/DESIGN_SYSTEM.md` §14.9 comme `CLAUDE.md` §10
+disent la même chose autrement — l'interface n'est jamais l'autorité.
+
+**Le runtime publie les commandes possibles** avec le Spark. `GET
+/v1/sparks/<nom>` porte donc un champ `allowed_commands`, dérivé de la même
+table que celle qui applique le refus. La console affiche ce que le runtime
+déclare ; elle ne le devine pas.
+
+Conséquence directe : une commande absente de cette liste **n'est pas affichée
+désactivée, elle n'est pas affichée du tout** — sauf lorsque son absence est
+elle-même une information. Un état transitoire, par exemple, n'accepte aucune
+commande : l'écran le dit en toutes lettres plutôt que de présenter quatre
+boutons morts.
+
+### 24.2 Ce qui demande une confirmation, et ce qui n'en demande pas
+
+`docs/DESIGN_SYSTEM.md` §6.23 et §6.24 tranchent :
+
+| Commande | Confirmation | Raison |
+|---|---|---|
+| `delete` | **oui**, nommant le Spark | destruction irréversible de la cellule |
+| `stop`, `restart` | non | interrompt un service, mais ne détruit rien |
+| `start`, `apply`, `retry` | non | réparatrices, sans paramètre, réversibles |
+
+Une confirmation systématique banaliserait celle qui compte (§6.24). La
+confirmation de suppression est **intégrée au flux** (§6.22), pas une modale :
+pas de voile, pas de piège de focus, pas de gestion globale d'`Échap` à écrire.
+
+### 24.3 L'identité avant tout le reste
+
+`docs/DESIGN_SYSTEM.md` §6.3 : l'identité de l'objet est présentée avant son
+historique. Sur cet écran, l'ordre est : identité et état, puis ressources, puis
+accès — adresse, clés, routes —, puis instantanés, puis journal.
+
+Les paires terme/valeur utilisent `dl`/`dt`/`dd` (§6.4). Une donnée absente
+**n'est pas rendue** ; une absence qui informe est nommée : « Aucune route
+publique », « Aucune clé autorisée » — un Spark sans clé n'est pas un Spark dont
+on ignore les clés.
