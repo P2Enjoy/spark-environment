@@ -116,9 +116,9 @@
 
 ### Modifié
 
-- `.gitignore` :
+- `.gitignore` : remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
 - `docs/SCHEMA.md` §7 : l'injection des clés ne passe plus par cloud-init.
-- `docs/DAT.md` §5.2 : la mémoire totale vient de `/proc/meminfo`, non d'Incus. remplacement du gabarit C++ hérité, qui ignorait `Makefile`.
+- `docs/DAT.md` §5.2 : la mémoire totale vient de `/proc/meminfo`, non d'Incus.
 - `docs/SCHEMA.md` : nouveau §12, mécanique des migrations.
 - `docs/DAT.md` : nouveau §7.7, ce que l'admission control compte et contre quoi ;
   nouveaux §5.1 à §5.3, accès à Incus et relevé de l'inventaire ; nouveau
@@ -127,7 +127,9 @@
   nouveaux §7.4 bis et §7.4 ter, redistribution lors d'une découpe ; nouveau
   §17, accès SSH aux Sparks ; nouveau §18, réconciliation de l'ingress ; nouveau §19, instantanés et
   restauration ; nouveau §20, métriques d'usage ;
-  nouveau §21, journal d'audit.
+  nouveau §21, journal d'audit ; nouveau §22, l'hôte local de la console ;
+  nouveau §23, le contrat d'API partagé ; nouveau §24, l'écran détail ;
+  nouveau §25, l'écran de création.
 - `docs/SCHEMA.md` §12.1 : les migrations vivent dans le paquet.
 
 ### Vérifié sur matériel réel
