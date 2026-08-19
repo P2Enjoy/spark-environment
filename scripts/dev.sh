@@ -21,9 +21,25 @@ mkdir -p "$ETAT"
 
 # L'inventaire de la console pointe sur le sparkd local (§28.2). Il est ecrit a
 # chaque demarrage : c'est un fichier de developpement, pas une preference.
+#
+# SPK-41 : forme COURANTE du fichier (§22.4.2), et DEUX serveurs.
+#
+# Un seul serveur ne montrerait ni le selecteur — le produit affiche alors le
+# nom plutot qu'un controle mort — ni un tunnel ferme. Le second est declare par
+# ALIAS, le genre que le §22.4 bis introduit, et il est deliberement injoignable :
+# le catalogue doit montrer un serveur qu'on n'atteint pas, sinon l'ecran ne
+# presenterait jamais que le cas heureux (CLAUDE.md §8).
 PORT="${SPARKD_BIND##*:}"
 cat > "$SPARK_CONSOLE_STATE" <<JSON
-[{"name":"local","kind":"local","host":"127.0.0.1","port":$PORT}]
+{
+  "version": 1,
+  "current": "local",
+  "servers": [
+    {"name":"local","kind":"local","host":"127.0.0.1","port":$PORT},
+    {"name":"recette","kind":"alias","sshHost":"spark-recette","remotePort":9876}
+  ],
+  "anchors": {}
+}
 JSON
 
 case "${1:-up}" in
