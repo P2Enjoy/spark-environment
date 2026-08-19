@@ -133,8 +133,8 @@ rend visible toute dérive entre le registre et Caddy.
 base, ni dans le dépôt, ni dans un journal.
 
 `spark_ssh_key` : association `spark_id` × `ssh_key_id`, PK composite. Elle décrit
-l'état *voulu* ; l'application effective dans le Spark passe par cloud-init à la
-création et par une réconciliation ensuite.
+l'état *voulu* ; l'application effective dans le Spark est décrite au §17 du
+`docs/DAT.md`.
 
 ## 8. `snapshot` et `backup`
 

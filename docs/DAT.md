@@ -1258,3 +1258,75 @@ silence le reproduirait.
 Lorsque `zfs_arc_max` vaut `0`, ZFS applique son propre défaut — la moitié de la
 RAM. Le registre retient alors cette moitié, et non zéro : un plafond non posé
 n'est pas un plafond absent.
+
+
+## 17. Accès SSH aux Sparks
+
+### 17.1 Pourquoi ce n'est pas cloud-init
+
+`docs/SCHEMA.md` annonçait une injection par cloud-init à la création. La mesure
+du 2026-08-19 a écarté cette voie, pour trois raisons dont la dernière suffit.
+
+- L'image `images:debian/13` n'embarque **ni cloud-init ni sshd**. La variante
+  `debian/13/cloud` existe (132 Mio contre 100), mais imposer une variante
+  contraindrait le choix d'image de l'exploitant.
+- `cloud-init.ssh-keys.*` **n'existe pas** dans Incus 7.3 :
+  `Unknown configuration key`. Seuls `cloud-init.user-data` et
+  `cloud-init.vendor-data` sont acceptés.
+- Surtout : **cloud-init ne s'exécute qu'au premier démarrage.** Retirer une clé
+  d'un Spark existant lui est donc structurellement hors de portée. Une
+  conception fondée sur cloud-init aurait besoin d'un second mécanisme pour le
+  retrait — et deux mécanismes écrivant le même état finissent par diverger.
+
+**Décision : un seul mécanisme.** Le registre écrit `authorized_keys` dans le
+Spark par l'API de fichiers d'Incus, aussi bien à la création qu'à chaque
+changement. Le fichier est **réécrit en entier** à partir de l'état voulu, jamais
+modifié par ajout : c'est ce qui garantit qu'un retrait retire réellement, et que
+le contenu du Spark ne dérive pas de ce que le registre annonce.
+
+### 17.2 Ce qui est stocké, et ce qui ne l'est jamais
+
+Seules des clés **publiques**. La base le fait respecter par une contrainte, pas
+par une consigne : `CHECK (public_key NOT LIKE '%PRIVATE KEY%')`
+(`docs/SCHEMA.md` §7). Une clé privée collée par erreur est refusée à l'écriture,
+pas détectée plus tard.
+
+L'empreinte est celle d'OpenSSH — `SHA256:` suivi du condensat base64 sans
+remplissage — pour que ce que la console affiche soit ce que `ssh-keygen -lf`
+affiche. Une empreinte maison obligerait à traduire mentalement à chaque
+vérification.
+
+Le journal d'audit retient le **label et l'empreinte**, jamais le corps de la
+clé : une clé publique n'est pas un secret, mais un journal n'a pas à la répéter.
+
+### 17.3 Provisionnement : ce que la création installe
+
+Un Spark neuf reçoit `openssh-server`, puis Docker et Compose si
+`docker_enabled`. Mesuré : environ **130 secondes** pour `openssh-server` sur
+l'hôte de validation, dépendant du réseau. La création d'un Spark n'est donc pas
+instantanée, et la console doit le montrer plutôt que de laisser croire à un
+blocage.
+
+Le serveur SSH du Spark n'accepte que l'authentification par clé. Le mot de passe
+est désactivé, y compris pour `root` : un Spark n'a pas de mot de passe à
+deviner.
+
+### 17.4 Aucun port SSH public, jamais
+
+Un Spark n'expose pas `22` sur l'extérieur. L'accès se fait par **rebond sur
+l'hôte**, dont le `sshd` est la seule porte du système (§5) :
+
+```sshconfig
+Host spark-crm
+    HostName 10.77.0.16
+    User root
+    ProxyJump spark-host
+    IdentityFile ~/.ssh/spark-crm
+```
+
+La console produit ce fragment à partir du registre. Elle ne le devine pas :
+l'adresse vient de `ipv4_address`, qui est attribuée par le registre (§15.1).
+
+Conséquence à ne pas perdre de vue : quiconque peut se connecter à l'hôte peut
+atteindre le réseau privé. Le rebond simplifie l'accès, il ne cloisonne pas
+l'hôte des Sparks — et le §11 reste la référence sur ce que l'isolation garantit.
