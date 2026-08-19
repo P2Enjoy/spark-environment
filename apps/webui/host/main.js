@@ -51,9 +51,12 @@ export function createConsoleHost(options = {}) {
       const existants = fichier.servers.filter((s) => s.name !== serveur.name);
       await saveFile({
         servers: [...existants, serveur],
-        // Un premier serveur devient courant : sans cela, la console aurait un
-        // inventaire et aucun contexte.
-        current: fichier.current ?? serveur.name,
+        // MÊME règle que la lecture : le courant retenu, sinon le PREMIER de la
+        // liste, sinon le nouveau. Sans le repli sur le premier, un fichier en
+        // forme historique — où `current` est nul — laissait le second serveur
+        // ajouté VOLER le contexte, alors que la lecture, elle, montrait le
+        // premier. Mesuré par le parcours E2E du catalogue.
+        current: fichier.current ?? existants[0]?.name ?? serveur.name,
         anchors: fichier.anchors,
       }, inventoryPath);
       return { status: 201, body: serveur };

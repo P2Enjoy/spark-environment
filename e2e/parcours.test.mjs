@@ -153,6 +153,99 @@ test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacit
   });
 });
 
+// --- SPK-41 · LE CATALOGUE DES SERVEURS (§22.4 ter) -------------------------
+
+test('ajouter un serveur, voir l’épreuve, basculer, reconnecter, retirer', async () => {
+  await parcours('catalogue-serveurs', async () => {
+    // PAR LA NAVIGATION : accueil, puis la destination « Serveurs ».
+    await accueil();
+    await page.click('nav a[href="#/serveurs"]');
+    await page.waitForSelector('#titre-serveurs', { timeout: 10000 });
+    const initial = await page.$$eval('tbody tr', (l) => l.length);
+
+    // AJOUTER, au clavier, un second serveur pointant sur la MÊME pile : c'est
+    // le seul serveur réellement joignable ici, et l'épreuve doit donc réussir.
+    await page.focus('[data-ouvre="serveur"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #serveur-nom');
+    await page.fill('#serveur-nom', 'second');
+    await page.selectOption('#serveur-genre', 'local');
+    await page.waitForSelector('#serveur-port-local');
+    await page.fill('#serveur-port-local', String(pile.portSparkd));
+
+    // L'ÉPREUVE : elle informe, et son verdict s'affiche dans la modale.
+    await page.click('[data-action="eprouver"]');
+    await page.waitForSelector('.epreuve', { timeout: 15000 });
+    assert.match(await page.textContent('.epreuve'), /Joignable/,
+      'la pile répond réellement à travers le tunnel');
+    // La saisie SURVIT à l'épreuve (§25.2).
+    assert.equal(await page.inputValue('#serveur-nom'), 'second');
+
+    await page.click('dialog.modale[open] [data-engage="serveur"]');
+    await page.waitForFunction(
+      (avant) => document.querySelectorAll('tbody tr').length > avant,
+      initial, { timeout: 15000 });
+
+    // …et l'inventaire du POSTE l'a réellement enregistré.
+    let inventaire = await (await fetch(`${pile.base}/api/servers`)).json();
+    assert.ok(inventaire.servers.some((s) => s.name === 'second'));
+
+    // BASCULER : le choix est retenu côté console.
+    await page.click('[data-bascule="second"]');
+    await page.waitForFunction(
+      () => document.querySelector('.ligne--courante')?.textContent.includes('second'),
+      { timeout: 15000 });
+    inventaire = await (await fetch(`${pile.base}/api/servers`)).json();
+    assert.equal(inventaire.current, 'second', 'le serveur courant est PERSISTÉ');
+
+    // RETIRER : la confirmation nomme le serveur, et le retrait ferme son tunnel.
+    await page.click('[data-retire-serveur="second"]');
+    await page.waitForSelector('[data-confirme-serveur="second"]', { timeout: 10000 });
+    assert.match(await page.textContent('.confirmation'), /Retirer « second »/);
+    await page.click('[data-confirme-serveur="second"]');
+    await page.waitForFunction(
+      (avant) => document.querySelectorAll('tbody tr').length === avant,
+      initial, { timeout: 15000 });
+
+    inventaire = await (await fetch(`${pile.base}/api/servers`)).json();
+    assert.ok(!inventaire.servers.some((s) => s.name === 'second'),
+      'l’entrée est réellement effacée du poste');
+    assert.notEqual(inventaire.current, 'second',
+      'retirer le courant ne laisse pas la console sans contexte');
+
+    // Ce parcours REND l'état qu'il a trouvé : les parcours partagent la pile,
+    // et laisser un autre serveur courant ferait lire les suivants sur une
+    // console qui ne regarde plus la même machine.
+    await page.click('nav a[href="#/sparks"]');
+    await page.waitForSelector('tbody a', { timeout: 15000 });
+  });
+});
+
+test('un SECRET saisi dans le formulaire est refusé, et la saisie survit', async () => {
+  await parcours('catalogue-secret', async () => {
+    await accueil();
+    await page.click('nav a[href="#/serveurs"]');
+    await page.waitForSelector('#titre-serveurs', { timeout: 10000 });
+
+    // Le formulaire n'offre aucun champ de secret — c'est le premier rempart.
+    await page.click('[data-ouvre="serveur"]');
+    await page.waitForSelector('dialog.modale[open] #serveur-nom');
+    const champs = await page.$$eval('dialog.modale[open] input, dialog.modale[open] select',
+      (l) => l.map((c) => c.name));
+    assert.ok(!champs.some((n) => /password|key|token|secret|passphrase/i.test(n)),
+      'aucun champ de secret n’est même proposé');
+
+    // Et le SERVEUR refuse, quoi qu'on lui envoie : c'est le rempart qui compte
+    // (§22.4). Vérifié ici sans passer par l'interface, qui n'offre pas le champ.
+    const refus = await fetch(`${pile.base}/api/servers`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'fuite', kind: 'local', port: 9876, passphrase: 'x' }),
+    });
+    assert.equal(refus.status, 422);
+    assert.match((await refus.json()).message, /ressemble à un secret/);
+  });
+});
+
 // --- SPK-39 · L'ONGLET DE SUPERVISION (§36.8) -------------------------------
 
 test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifie', async () => {
