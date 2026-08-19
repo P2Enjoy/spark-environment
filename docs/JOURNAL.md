@@ -1904,3 +1904,84 @@ sa première étape est une **mesure sur l'hôte**, pas du code : vérifier comm
 sait qu'un alias existe. SPK-33 est prête, mais c'est une refonte de surface —
 elle vaut mieux après SPK-32, qui lui ajoute une liste déroulante à placer.
 
+## 2026-08-19 — La hiérarchie de navigation redevient une orientation, et les Sparks gagnent un verrou
+
+**Toujours aucune ligne de code dans cette entrée** : deux précisions du
+responsable, écrites avant implémentation.
+
+### Ce que la première rédaction avait durci à tort
+
+Le §5.4 disait « une application a trois degrés, et pas quatre », et le §6.27
+parlait d'« une fenêtre d'options » comme si elle ne portait qu'une section. Les
+deux étaient trop stricts, et le contre-exemple donné par le responsable est
+parfaitement légitime : barre latérale *Sparks* → onglet *Instances* → liste
+cliquable → **fenêtre** de l'instance, portant à son tour ses onglets *Infos*,
+*Routes*, *Clés*, *Instantanés*, *Journal*, chacun avec ses sections.
+
+Deux rangées d'onglets ne sont pas une faute quand ce sont **deux sujets** : ce
+que l'on regarde dans la console, puis quelle facette de l'objet ouvert. La faute
+serait deux rangées côte à côte pour le même sujet.
+
+La règle a donc été réécrite comme ce qu'elle est — une **forme par défaut** —, et
+ce qu'elle sert à obtenir a été extrait et posé à part, parce que c'est cela qui
+ne se négocie pas :
+
+1. ce qui s'affiche et ce qui se saisit ne partagent pas la même surface ;
+2. une surface a un seul sujet, nommable en une phrase ;
+3. une action sensible se confirme toujours.
+
+Le troisième point a fait bouger le §6.23, qui ne parlait que d'actions
+*destructives* : il couvre maintenant l'action **sensible**, y compris celle dont
+l'effet déborde ce que la surface montre, et celle qui porte sur un objet
+protégé. Et une modale ne vaut pas confirmation — l'ouvrir recueille une saisie,
+cela ne démontre aucune intention.
+
+Le §6.27 a suivi : une fenêtre porte **plusieurs** sections, et la modale sert
+aussi bien à **insérer** dans une section qu'à **modifier** ce qu'elle affiche.
+Un seul composant, deux usages, une seule portée.
+
+### Le verrou : ce qu'il vaut, et ce qu'il ne vaut pas
+
+Demande : un interrupteur qui empêche de modifier une instance, par l'API comme
+par la console, tant qu'on ne l'a pas désarmé ; armé par mot de passe, levé par le
+même.
+
+Écrit au DAT §35. Quatre décisions ont demandé un arbitrage, et sont motivées là :
+
+- **La portée est entière.** Toutes les écritures visant le Spark sont refusées,
+  y compris `start`. Une liste partielle — « on peut démarrer mais pas
+  supprimer » — obligerait à justifier chaque cas et produirait exactement les
+  surprises que l'interrupteur supprime.
+- **Deux exceptions structurelles**, et elles sont indispensables : la
+  redistribution des cœurs (§7.4 bis) et la repondération de `spark.slice`
+  (§32.2) passent toujours. Les bloquer ferait échouer la création d'un *autre*
+  Spark parce qu'un troisième est protégé — incompréhensible, et faux, puisque ces
+  recalculs ne touchent ni sa configuration, ni son état, ni ses données.
+- **Un cas déborde et est tranché** : `DELETE /v1/ssh-keys/{label}` retire la clé
+  de tous les Sparks. Si l'un est protégé, le retrait global est refusé et nomme
+  les Sparks concernés. C'est le cas « effet au-delà de la surface » du §6.23.
+- **Lever la protection est un état, pas une fenêtre de temps.** Un déverrouillage
+  de quelques minutes rendrait le produit dépendant de l'heure et pousserait à
+  travailler vite pour ne pas rater la fenêtre — l'inverse du but.
+
+Et une honnêteté qui est écrite dans la spécification plutôt que découverte plus
+tard : **ce n'est pas un contrôle d'accès**. Qui détient une clé SSH de l'hôte
+atteint `sparkd` ; qui détient `root` atteint le fichier SQLite. La protection
+arrête le geste accidentel et le script lancé sur le mauvais nom, pas un opérateur
+hostile. C'est pour cela qu'il n'y a **pas** de verrouillage après N échecs : il
+ne gênerait que le responsable légitime. Chaque tentative est journalisée ; le mot
+de passe, lui, ne l'est jamais, et n'est stocké que sous forme d'empreinte
+`scrypt` à sel par Spark.
+
+### Vérifications
+
+Aucun test exécuté : ce chunk ne touche aucun code. Les renvois introduits —
+§7.4 bis, §11, §14, §19, §21, §26.1, §32.2, et §6.22 / §6.23 / §6.27 du design
+system — ont été contrôlés contre les sommaires réels.
+
+### Où reprendre
+
+SPK-34 est spécifiée et ne dépend de rien : elle peut démarrer par sa migration.
+SPK-33 reste la refonte de surface, et gagne à passer après, pour que la fenêtre
+d'un Spark affiche l'état protégé dès sa première version plutôt que d'y revenir.
+

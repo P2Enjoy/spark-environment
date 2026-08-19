@@ -51,8 +51,9 @@ Unités : SPK-05, SPK-22.
 
 ## M5 · Créer un Spark
 
-Le formulaire, l'aperçu d'admission, et la lecture d'un refus. Les quatre modes
-CPU expliqués par leur usage, pas par leur traduction technique :
+Le formulaire, le choix de l'image dans le catalogue, l'aperçu d'admission, et la
+lecture d'un refus. Les quatre modes CPU expliqués par leur usage, pas par leur
+traduction technique :
 
 - partagé — le défaut, pour presque tout ;
 - plafonné — quand on veut interdire le burst ;
@@ -61,7 +62,7 @@ CPU expliqués par leur usage, pas par leur traduction technique :
 
 Ce que « 0,5 CPU » signifie exactement, et ce que cela ne signifie pas.
 
-Unités : SPK-20, SPK-05, SPK-06.
+Unités : SPK-20, SPK-05, SPK-06, SPK-32.
 
 ## M6 · Déployer sa pile Compose dans un Spark
 
@@ -81,9 +82,11 @@ Unités : SPK-12.
 ## M8 · Exploiter au quotidien
 
 Démarrer, arrêter, redimensionner. Lire les métriques d'usage face aux quotas.
-Comprendre un Spark en erreur.
+Comprendre un Spark en erreur. Protéger un Spark contre la modification
+accidentelle, et lever cette protection — en disant clairement ce dont elle
+protège, et ce dont elle ne protège pas.
 
-Unités : SPK-09, SPK-14.
+Unités : SPK-09, SPK-14, SPK-34.
 
 ## M9 · Sauvegarder et restaurer
 

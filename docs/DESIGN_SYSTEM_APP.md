@@ -17,10 +17,10 @@ prendre des décisions sur la mauvaise machine.
 L'état du tunnel accompagne donc en permanence ce sélecteur : `connecting`,
 `ready`, `broken`.
 
-### Les trois degrés, appliqués à la console
+### Les degrés, appliqués à la console
 
-`docs/DESIGN_SYSTEM.md` §5.4 fixe la forme de chaque degré. Voici ce qu'ils
-désignent ici :
+`docs/DESIGN_SYSTEM.md` §5.4 donne la forme par défaut de chaque degré — une
+orientation, pas une loi. Voici ce qu'ils désignent ici :
 
 | Degré | Contenu de la console | Forme |
 |---|---|---|

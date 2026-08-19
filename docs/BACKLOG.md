@@ -736,11 +736,16 @@ fenêtre en lecture avec une modale par section.
 - Spécification : `docs/DESIGN_SYSTEM.md` §5.4, §6.27, §9.1 ·
   `docs/DESIGN_SYSTEM_APP.md` §1 · `docs/DAT.md` §34.
 - Portée : barre latérale de premier degré (Sparks, Hôte) avec le sélecteur de
-  serveur et l'état du tunnel au-dessus ; onglets de second degré sur le détail
-  d'un Spark — Aperçu, Routes, Clés, Instantanés, Journal — portés par des liens
-  et non un `tablist`, puisque ce sont de véritables destinations ; sections en
-  lecture, chacune avec une commande « Modifier » ouvrant une modale ; composant
-  de modale unique, conforme au contrat du §6.27.
+  serveur et l'état du tunnel au-dessus ; onglets de second degré — *Instances*
+  sous Sparks, *Pools* et *Images* sous Hôte ; **fenêtre** d'un Spark ouverte
+  depuis la liste, portant ses propres onglets — Infos, Routes, Clés, Instantanés,
+  Journal — puis ses sections ; chaque section porte ses commandes, qui ouvrent
+  une modale **limitée à cette section**, en modification comme en insertion ;
+  composant de modale unique, conforme au contrat du §6.27. Onglets portés par des
+  liens et non un `tablist`, puisque ce sont de véritables destinations.
+- La hiérarchie est une orientation. Ce que la revue vérifiera, ce sont les trois
+  invariants du §5.4 : ce qui s'affiche et ce qui se saisit ne partagent pas la
+  même surface, chaque surface a un seul sujet, une action sensible se confirme.
 - Ne change pas : les confirmations restent dans le flux (§6.22, §6.23), l'écran
   de création garde sa destination, les commandes de cycle de vie restent des
   boutons de l'onglet Aperçu (`docs/DAT.md` §34.2).
@@ -754,6 +759,36 @@ fenêtre en lecture avec une modale par section.
   captures refaites et observées, y compris sous 768 px et 1024 px ; manuel M3,
   M5, M7, M8, M9 mis à jour avec leurs illustrations ; `@spec` / `@verifies`
   posés.
+
+### [ ] SPK-34 · Sparks protégés contre la modification accidentelle
+
+Un interrupteur de protection par Spark. Tant qu'il est armé, **le runtime**
+refuse toute écriture visant ce Spark — donc l'API comme la console. Il s'arme
+avec un mot de passe et se lève avec ce même mot de passe.
+
+- Spécification : `docs/DAT.md` §35 · `docs/DESIGN_SYSTEM.md` §6.23 (une action
+  sensible se confirme ; un objet protégé se déverrouille d'abord) ·
+  `docs/SCHEMA.md` (migration due avec l'unité) · manuel M8.
+- Portée : colonnes de protection dans `spark` + migration ; empreinte `scrypt`
+  à sel par Spark, jamais le mot de passe en clair, jamais journalisé (§21) ;
+  `POST` et `DELETE /v1/sparks/{name}/protection` ; refus `423 spark_protected`
+  sur toute écriture visant un Spark protégé — commandes, reconfiguration,
+  routes, clés, instantanés y compris la restauration ; refus du retrait global
+  d'une clé SSH lorsqu'il toucherait un Spark protégé, en les nommant ; état
+  protégé visible dans la liste et dans la fenêtre ; contrat d'API régénéré.
+- Explicitement **hors** protection : la redistribution des cœurs (§7.4 bis) et
+  la repondération de `spark.slice` (§32.2). Les bloquer ferait échouer la
+  création d'un autre Spark.
+- Ce que l'unité ne prétend pas : ce n'est pas un contrôle d'accès. Qui détient
+  une clé SSH de l'hôte atteint `sparkd`, qui détient `root` atteint le registre
+  (§35.1). La console ne présentera jamais la protection comme une frontière de
+  sécurité, et le manuel non plus.
+- DoD : un test d'API prouve le refus `423` sur **chacune** des écritures listées,
+  avec les vrais droits, sans passer par l'interface ; un test prouve que les deux
+  recalculs globaux passent toujours sur un Spark protégé ; un test prouve
+  qu'aucun mot de passe n'atteint `audit_log` ; un parcours E2E arme, échoue à
+  modifier, lève, modifie, réarme — depuis le parcours canonique ; captures
+  observées ; manuel M8 et seed mis à jour ; `@spec` / `@verifies` posés.
 
 ---
 

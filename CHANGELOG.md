@@ -18,8 +18,12 @@
 - Unité SPK-28 : décision et exécution du repartitionnement du stockage.
 - Unité SPK-32 : catalogue d'images vérifié, et choix par liste à la création
   plutôt que par champ libre.
-- Unité SPK-33 : refonte de la navigation de la console selon les trois degrés du
+- Unité SPK-33 : refonte de la navigation de la console selon les degrés du
   design system.
+- Unité SPK-34 : Sparks protégés — un interrupteur par Spark, armé et levé par mot
+  de passe, dont le **runtime** fait respecter le refus, API comprise.
+- `docs/DAT.md` : nouveau §35, les Sparks protégés — portée du refus, mot de
+  passe et son empreinte, ce que la protection n'est pas.
 - `docs/DESIGN_SYSTEM.md` : nouveau §5.4, les trois degrés de navigation — barre
   latérale au premier, onglets au second, fenêtre et modale au troisième ; nouveau
   §6.27, fenêtre d'options et modale de section, avec son contrat d'interaction.
@@ -191,6 +195,14 @@
 - `docs/DESIGN_SYSTEM.md` §5 : la barre latérale devient la forme par défaut du
   premier degré ; un autre patron reste possible mais devient un écart documenté.
   §9.1 gagne le contrat clavier des onglets et des modales.
+- `docs/DESIGN_SYSTEM.md` §5.4 : la hiérarchie est énoncée comme une **orientation**
+  et non comme une loi — une fenêtre ouverte depuis une liste peut porter ses
+  propres onglets. Ce qui ne se négocie pas est nommé à part : afficher et saisir
+  ne partagent pas la même surface, une surface a un seul sujet, une action
+  sensible se confirme. §6.27 : une fenêtre porte **plusieurs** sections, et la
+  modale sert aussi bien à insérer qu'à modifier, toujours limitée à sa section.
+  §6.23 devient « actions sensibles et actions destructives » et traite le cas
+  d'un objet protégé.
 - `docs/DESIGN_SYSTEM_APP.md` §1 : les trois degrés appliqués à la console, avec
   l'écart entre l'écran réel et la cible, borné par SPK-33.
 - `docs/DAT.md` §26.2 : le choix « pas de modale » est explicitement révisé par le

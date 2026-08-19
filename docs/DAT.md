@@ -2800,3 +2800,133 @@ change :
 Le contrôle en est simple : les parcours E2E du §29 doivent passer après la
 refonte **sans que leur intention change**. Leurs sélecteurs changeront ; ce
 qu'ils prouvent, non.
+
+
+## 35. Les Sparks protégés
+
+### 35.1 Ce que protège la protection, et de quoi
+
+Un Spark porte un interrupteur de **protection**. Tant qu'il est armé, le plan de
+contrôle refuse toute écriture visant ce Spark — par l'API comme par la console,
+puisque c'est le **runtime** qui refuse.
+
+Ce dont il protège : le geste accidentel. Le mauvais Spark sélectionné, la ligne
+cliquée trop vite, le `curl` recopié d'un autre bocal, le script d'astreinte lancé
+sur le mauvais nom.
+
+Ce dont il **ne** protège **pas**, et il faut le dire aussi nettement : d'un
+opérateur hostile. Qui détient une clé SSH de l'hôte atteint `sparkd` (§11), et
+qui détient `root` sur l'hôte atteint le fichier SQLite du registre. La protection
+est un **garde-fou**, pas un contrôle d'accès, et le produit ne la présentera
+jamais comme une frontière de sécurité.
+
+Elle est appliquée côté runtime malgré tout, et ce n'est pas contradictoire : une
+protection que seule l'interface respecterait ne protégerait pas du cas le plus
+fréquent — le script, pas l'humain.
+
+### 35.2 Portée : toutes les écritures visant le Spark
+
+Sont refusées sur un Spark protégé :
+
+- les commandes de cycle de vie (§14) — `start`, `stop`, `restart`, `apply`,
+  `retry`, `delete` ;
+- toute reconfiguration de ses quotas ;
+- les routes d'ingress qui le désignent, en ajout comme en retrait ;
+- l'octroi et la révocation de clés **sur ce Spark** ;
+- la création, la suppression et la **restauration** d'un instantané.
+
+Ne sont **pas** refusées : les lectures, les métriques, le journal d'audit.
+
+La règle est volontairement **entière**. Une liste partielle — « on peut démarrer
+mais pas supprimer » — obligerait à justifier chaque cas et produirait exactement
+les surprises que l'interrupteur est censé supprimer. Un Spark protégé reste dans
+l'état où son responsable l'a laissé.
+
+**Deux exceptions, et elles sont structurelles.** La protection porte sur les
+gestes qui **visent** ce Spark, pas sur les recalculs globaux dont il n'est
+qu'objet indirect :
+
+- la redistribution des cœurs lors d'une découpe (§7.4 bis) ;
+- la repondération de `spark.slice` à chaque changement d'allocation (§32.2).
+
+Les bloquer ferait échouer la création d'un *autre* Spark parce qu'un troisième
+est protégé, ce qui serait incompréhensible et faux : ces recalculs n'altèrent ni
+sa configuration, ni son état, ni ses données.
+
+**Un cas déborde, et il est tranché.** `DELETE /v1/ssh-keys/{label}` retire une
+clé de **tous** les Sparks (§26.1). Si l'un d'eux est protégé, le retrait global
+est refusé et **nomme les Sparks concernés**. C'est précisément le cas de l'effet
+au-delà de la surface visible du design system (§6.23).
+
+### 35.3 Le mot de passe
+
+La protection s'arme avec un mot de passe et se lève avec ce même mot de passe.
+
+- Il n'est **jamais** stocké en clair : le registre garde une empreinte dérivée
+  par `scrypt` (bibliothèque standard), avec un **sel aléatoire par Spark** et les
+  paramètres de coût stockés à côté de l'empreinte, pour que ceux-ci puissent
+  évoluer sans invalider l'existant.
+- Il n'est **jamais** journalisé. Le filtre de secrets du §21 gagne le champ,
+  au même titre que les clés — et le journal enregistre la **tentative**, son
+  résultat et sa date, jamais sa valeur.
+- Il n'y a **aucune récupération** par l'API. Un mot de passe perdu se lève sur
+  l'hôte, avec `root`, dans le registre. C'est cohérent avec le §35.1 : ce n'est
+  pas un chiffrement, et prétendre le contraire par un mécanisme de secours
+  compliqué serait mentir sur ce que l'interrupteur vaut.
+
+**Pas de verrouillage après N échecs.** Un compte à rebours ne gênerait que le
+responsable légitime — l'attaquant qu'il repousserait a déjà, par hypothèse, un
+accès qui lui permet de contourner la protection tout entière. Chaque tentative
+est en revanche journalisée, réussie comme refusée : c'est la trace qui a une
+valeur ici, pas l'entrave.
+
+### 35.4 Lever la protection est un état, pas une fenêtre de temps
+
+Lever la protection la **désarme**, durablement, jusqu'à ce qu'on la réarme.
+
+L'alternative — un déverrouillage temporaire, valable quelques minutes — a été
+écartée : elle rend le comportement du produit dépendant de l'heure, donc
+imprévisible, et pousse à travailler vite pour « ne pas rater la fenêtre », ce qui
+est l'inverse du but recherché.
+
+Conséquences, portées par l'interface :
+
+- l'état protégé est **visible** partout où le Spark est listé, pas seulement
+  dans sa fenêtre ;
+- un Spark désarmé le dit aussi clairement, pour que l'oubli de réarmement se
+  voie ;
+- les deux transitions sont journalisées avec leur acteur et leur date.
+
+Réarmer demande de saisir un mot de passe — le même ou un autre. Le produit ne
+retient pas l'ancien pour le proposer.
+
+### 35.5 Surface d'API
+
+| Geste | Route | Corps | Réponse |
+|---|---|---|---|
+| armer | `POST /v1/sparks/{name}/protection` | `{ "password": … }` | `200` |
+| lever | `DELETE /v1/sparks/{name}/protection` | `{ "password": … }` | `200` |
+
+Une écriture refusée par la protection répond **`423 spark_protected`**, avec un
+message qui nomme le Spark et le geste refusé. Le code est distinct des refus
+d'admission (`409`) et des refus de transition (`409`) : confondre « impossible
+maintenant » et « verrouillé exprès » ferait chercher une cause qui n'existe pas.
+
+Un mot de passe erroné répond `403 bad_protection_password`, sans distinguer
+« mauvais mot de passe » de « Spark non protégé » dans le délai de réponse — mais
+en le distinguant dans le message, puisque le §35.1 assume que ce n'est pas un
+secret défendu contre un adversaire.
+
+Le registre gagne les colonnes correspondantes par migration, et
+`docs/SCHEMA.md` est mis à jour dans le même changement que celle-ci.
+
+### 35.6 Ce que la protection ne fait pas
+
+- Elle n'empêche **rien à l'intérieur** du Spark. Le locataire y reste maître de
+  sa pile Docker : la protection est une propriété du plan de contrôle, pas du
+  système invité.
+- Elle ne protège pas des pannes, ni de la perte du pool de stockage. Ce n'est ni
+  une sauvegarde, ni un instantané (§19).
+- Elle ne crée pas de rôles : il n'y a toujours qu'un responsable, et le produit
+  n'introduit pas de modèle multi-utilisateur par ce biais.
+
