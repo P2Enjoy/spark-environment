@@ -692,15 +692,33 @@ async function rafraichirContexte() {
 
 function brancherServeurs() {
   const ui = etat.catalogueServeurs.ui;
-  racine.querySelector('[data-ouvre="serveur"]')?.addEventListener('click', () => {
-    ui.open = true; ui.refusal = null; ui.probe = null;
+  /** Ouvre la modale, en AJOUT ou en MODIFICATION (§22.4.7 ter). */
+  const ouvrirModale = (serveur = null) => {
+    ui.open = serveur ? serveur.name : 'ajout';
+    ui.refusal = null;
+    ui.probe = null;
+    ui.values = serveur
+      // Pré-remplie depuis l'entrée RÉELLE, jamais depuis ce que l'écran
+      // affichait : un alias n'a ni utilisateur ni port, et les defaults
+      // rempliraient des champs que le produit ne connaît pas.
+      ? { ...CATALOGUE_SERVEURS_VIDE.values, ...serveur }
+      : { ...CATALOGUE_SERVEURS_VIDE.values };
     peindre();
     // Les candidats du ssh_config sont PROPOSÉS, jamais imposés (§22.4 bis).
     fetch('/api/ssh-hosts').then((r) => r.json()).then(({ hosts = [] }) => {
       ui.hosts = hosts;
       if (ui.open) peindre();
     }).catch(() => { /* le formulaire reste utilisable sans candidats */ });
-  });
+  };
+
+  racine.querySelector('[data-ouvre="serveur"]')?.addEventListener('click', () => ouvrirModale());
+  for (const bouton of racine.querySelectorAll('[data-modifie-serveur]')) {
+    bouton.addEventListener('click', () => {
+      const serveur = etat.catalogueServeurs.servers
+        .find((s) => s.name === bouton.dataset.modifieServeur);
+      if (serveur) ouvrirModale(serveur);
+    });
+  }
 
   const formulaire = racine.querySelector('[data-modale="serveur"]');
   if (formulaire) {

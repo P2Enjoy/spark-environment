@@ -36,6 +36,8 @@ export function designation(serveur) {
 }
 
 export const CATALOGUE_SERVEURS_VIDE = {
+  // `open` vaut `false`, `'ajout'` ou le NOM du serveur en cours de
+  // modification : c'est ce qui distingue les deux usages de la même modale.
   open: false, busy: false, refusal: null, confirming: null,
   probe: null, probing: false, hosts: [],
   values: { name: '', kind: 'ssh', host: '', user: 'root', port: 22,
@@ -66,13 +68,19 @@ export function renderEpreuve(probe) {
 /** Les champs, qui suivent le GENRE choisi (§22.4.7 ter). */
 function champs(ui) {
   const v = ui.values;
+  // §22.4.7 ter : en MODIFICATION le nom est en lecture seule. `POST` remplace
+  // par le nom ; le changer ne renommerait rien, cela créerait une seconde
+  // entrée en laissant la première — un doublon que personne n'a demandé.
+  const modification = ui.open && ui.open !== 'ajout';
   const commun = `
     <div class="champ">
       <label for="serveur-nom">Nom</label>
       <input class="controle" id="serveur-nom" name="name" type="text" autocomplete="off"
-             value="${echapper(v.name)}">
-      <p class="champ__aide">Minuscules, chiffres et tirets. C’est le nom que
-      vous verrez dans le sélecteur.</p>
+             value="${echapper(v.name)}"${modification ? ' readonly' : ''}>
+      <p class="champ__aide">${modification
+        ? 'Le nom ne se modifie pas : renommer, c’est retirer puis redéclarer. '
+          + 'Le genre et le reste, si.'
+        : 'Minuscules, chiffres et tirets. C’est le nom que vous verrez dans le sélecteur.'}</p>
     </div>
     <div class="champ">
       <label for="serveur-genre">Genre</label>
@@ -166,6 +174,7 @@ function ligne(serveur, courant, tunnels, ui) {
   <td><span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span></td>
   <td><span class="actions-ligne">${estCourant ? '' :
       `<button type="button" class="bouton bouton--compact" data-bascule="${echapper(serveur.name)}">Regarder</button>`}
+    <button type="button" class="bouton bouton--compact" data-modifie-serveur="${echapper(serveur.name)}">Modifier</button>
     <button type="button" class="bouton bouton--compact" data-retire-serveur="${echapper(serveur.name)}">Retirer</button></span></td>
 </tr>${confirme}`;
 }
@@ -196,9 +205,11 @@ export function renderServeurs({ status = 'loading', servers = [], tunnels = [],
     </div></div>`;
   }
 
+  const enModification = ui.open && ui.open !== 'ajout';
   const modale = renderModale({
     ouverte: Boolean(ui.open), id: 'serveur', titre: 'Serveurs',
-    engagement: 'Enregistrer ce serveur',
+    engagement: enModification
+      ? `Enregistrer « ${ui.values.name} »` : 'Enregistrer ce serveur',
     refus: ui.refusal, occupee: ui.busy,
     corps: `${champs(ui)}
       ${renderEpreuve(ui.probe)}

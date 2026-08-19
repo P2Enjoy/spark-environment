@@ -82,8 +82,11 @@ test('l’état VIDE propose l’ajout, parce que c’est ici que l’action exi
 // --- la modale et l'ordre des champs (§6.27, §22.4.7 ter) -------------------
 
 test('la saisie passe par la MODALE de la section', () => {
+  // RÉVISÉ par la modification (§22.4.7 ter) : `open` ne vaut plus un booléen
+  // mais « ajout » ou le NOM du serveur édité — c'est ce qui distingue les deux
+  // usages de la même modale. Ce que la preuve établit est inchangé.
   assert.ok(!pret().includes('<dialog'), 'rien tant qu’on n’a rien demandé');
-  const ouvert = pret({ ui: ui({ open: true }) });
+  const ouvert = pret({ ui: ui({ open: 'ajout' }) });
   assert.match(ouvert, /<dialog class="modale" id="serveur"/);
   assert.match(ouvert, /id="serveur-titre">Serveurs</);
   assert.match(ouvert, /data-engage="serveur"[^>]*>Enregistrer ce serveur</s);
@@ -92,36 +95,36 @@ test('la saisie passe par la MODALE de la section', () => {
 test('les champs SUIVENT le genre choisi', () => {
   // Afficher les champs des trois genres à la fois ferait remplir des champs
   // que le produit ignorera (§22.4.7 ter).
-  const parAlias = pret({ ui: ui({ open: true, values: { kind: 'alias' } }) });
+  const parAlias = pret({ ui: ui({ open: 'ajout', values: { kind: 'alias' } }) });
   assert.match(parAlias, /id="serveur-alias"/);
   assert.ok(!parAlias.includes('id="serveur-utilisateur"'), 'un alias n’a pas d’utilisateur');
   assert.ok(!parAlias.includes('id="serveur-hote"'));
 
-  const parSsh = pret({ ui: ui({ open: true, values: { kind: 'ssh' } }) });
+  const parSsh = pret({ ui: ui({ open: 'ajout', values: { kind: 'ssh' } }) });
   assert.match(parSsh, /id="serveur-utilisateur"/);
   assert.ok(!parSsh.includes('id="serveur-alias"'));
 
-  const enLocal = pret({ ui: ui({ open: true, values: { kind: 'local' } }) });
+  const enLocal = pret({ ui: ui({ open: 'ajout', values: { kind: 'local' } }) });
   assert.match(enLocal, /id="serveur-port-local"/);
   assert.ok(!enLocal.includes('id="serveur-utilisateur"'));
 });
 
 test('un alias porte quand même le port de sparkd, et dit pourquoi', () => {
-  const html = pret({ ui: ui({ open: true, values: { kind: 'alias' } }) });
+  const html = pret({ ui: ui({ open: 'ajout', values: { kind: 'alias' } }) });
   assert.match(html, /id="serveur-sparkd"/);
   assert.match(html, /OpenSSH ne le connaît pas/);
 });
 
 test('les candidats du ssh_config sont PROPOSÉS, pas imposés', () => {
   // Un Host peut vivre dans un fichier inclus que la console ne lit pas.
-  const avec = pret({ ui: ui({ open: true, values: { kind: 'alias' },
+  const avec = pret({ ui: ui({ open: 'ajout', values: { kind: 'alias' },
                                hosts: ['spark-prod', 'bastion'] }) });
   assert.match(avec, /<datalist id="serveur-hosts">/);
   assert.match(avec, /value="spark-prod"/);
   assert.match(avec, /vous pouvez aussi en saisir un autre/i);
 
   // Sans ssh_config lisible, le formulaire reste utilisable.
-  const sans = pret({ ui: ui({ open: true, values: { kind: 'alias' }, hosts: [] }) });
+  const sans = pret({ ui: ui({ open: 'ajout', values: { kind: 'alias' }, hosts: [] }) });
   assert.ok(!sans.includes('<datalist'));
   assert.match(sans, /saisissez le nom du Host/);
 });
@@ -135,7 +138,7 @@ test('un serveur SANS RÉPONSE peut être enregistré quand même', () => {
   assert.match(html, /connexion refusée/);
   assert.match(html, /Vous pouvez l’enregistrer quand même/);
 
-  const modale = pret({ ui: ui({ open: true, probe: { reachable: false, error: 'x' } }) });
+  const modale = pret({ ui: ui({ open: 'ajout', probe: { reachable: false, error: 'x' } }) });
   assert.ok(!/data-engage="serveur"[^>]*disabled/s.test(modale),
     'le bouton d’engagement reste ACTIF : l’épreuve informe, elle ne décide pas');
 });
@@ -168,4 +171,44 @@ test('aucune confirmation n’est ouverte tant qu’on ne l’a pas demandée', 
 
 test('l’écran rappelle qu’aucun secret ne vit dans le catalogue', () => {
   assert.match(pret(), /aucun secret/);
+});
+
+
+// --- la MODIFICATION d'une entrée existante (§22.4.7 ter) ------------------
+
+test('chaque ligne porte son bouton de modification', () => {
+  const html = pret();
+  assert.match(html, /data-modifie-serveur="prod"/);
+  assert.match(html, /data-modifie-serveur="recette"/);
+});
+
+test('en modification, le NOM est en lecture seule, et dit pourquoi', () => {
+  // POST remplace par le nom : le changer ne renommerait rien, cela créerait une
+  // seconde entrée en laissant la première — un doublon que personne n'a demandé.
+  const html = pret({ ui: ui({ open: 'recette',
+                               values: { name: 'recette', kind: 'alias',
+                                         sshHost: 'spark-recette' } }) });
+  assert.match(html, /id="serveur-nom"[^>]*readonly/s);
+  assert.match(html, /renommer, c’est retirer puis redéclarer/);
+});
+
+test('en AJOUT, le nom reste saisissable', () => {
+  const html = pret({ ui: ui({ open: 'ajout' }) });
+  assert.ok(!/id="serveur-nom"[^>]*readonly/s.test(html));
+  assert.match(html, /Minuscules, chiffres et tirets/);
+});
+
+test('la modification NOMME le serveur sur son bouton d’engagement', () => {
+  // « Enregistrer ce serveur » ne dirait pas lequel, alors que la modale a été
+  // ouverte depuis une ligne parmi d’autres.
+  const html = pret({ ui: ui({ open: 'recette', values: { name: 'recette' } }) });
+  assert.match(html, /data-engage="serveur"[^>]*>Enregistrer « recette »</s);
+});
+
+test('le GENRE reste modifiable, lui', () => {
+  // Passer un serveur de ssh à alias est exactement ce qu’on veut pouvoir faire
+  // quand la connexion se complique, et le nom ne change pas.
+  const html = pret({ ui: ui({ open: 'prod', values: { name: 'prod', kind: 'ssh' } }) });
+  assert.match(html, /id="serveur-genre"/);
+  assert.ok(!/id="serveur-genre"[^>]*(readonly|disabled)/s.test(html));
 });
