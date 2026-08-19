@@ -76,6 +76,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/audit/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verify Audit Chain
+         * @description État de la chaîne d'intégrité (SPK-38, docs/DAT.md §36.9.5).
+         *
+         *     C'est une LECTURE, mais elle est journalisée : le §36.7 en fait l'une des
+         *     deux seules exceptions, avec l'ouverture d'un tunnel, parce qu'elle dit
+         *     qui est venu vérifier et quand.
+         *
+         *     Elle ne voit pas la troncature — une chaîne coupée à la fin reste valide.
+         *     Seule l'ancre tenue par la console la détecte (§36.9.6), et la réponse
+         *     porte donc `length` pour que la console puisse la comparer à ce qu'elle
+         *     avait retenu.
+         */
+        get: operations["verify_audit_chain_v1_audit_verify_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/host": {
         parameters: {
             query?: never;
@@ -599,6 +628,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_audit_chain_v1_audit_verify_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

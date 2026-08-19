@@ -682,6 +682,35 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
 
+    @app.get("/v1/audit/verify", tags=["audit"])
+    def verify_audit_chain() -> dict:
+        """État de la chaîne d'intégrité (SPK-38, docs/DAT.md §36.9.5).
+
+        C'est une LECTURE, mais elle est journalisée : le §36.7 en fait l'une des
+        deux seules exceptions, avec l'ouverture d'un tunnel, parce qu'elle dit
+        qui est venu vérifier et quand.
+
+        Elle ne voit pas la troncature — une chaîne coupée à la fin reste valide.
+        Seule l'ancre tenue par la console la détecte (§36.9.6), et la réponse
+        porte donc `length` pour que la console puisse la comparer à ce qu'elle
+        avait retenu.
+        """
+        with registry() as connection:
+            etat = audit_service.verify_chain(connection)
+            # La trace est écrite APRÈS la vérification, sinon elle ferait
+            # partie de ce qu'elle vérifie et la tête publiée serait périmée.
+            audit_service.record(
+                connection, None, "audit.verify",
+                "ok" if etat["intact"] else "denied",
+                (f"Chaîne vérifiée : {etat['checked']} entrée(s), intacte."
+                 if etat["intact"] else
+                 f"Chaîne rompue à l'entrée {etat['break']['id']} "
+                 f"({etat['break']['reason']})."),
+                target_type="audit_log",
+                payload={"checked": etat["checked"], "intact": etat["intact"]},
+            )
+            return etat
+
     @app.get("/v1/audit", tags=["audit"])
     def audit_trail(limit: int = 100, result: str | None = None,
                     action: str | None = None) -> dict:

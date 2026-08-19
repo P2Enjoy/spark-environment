@@ -191,6 +191,30 @@
         ]
       }
     },
+    "/v1/audit/verify": {
+      "get": {
+        "description": "État de la chaîne d'intégrité (SPK-38, docs/DAT.md §36.9.5).\n\nC'est une LECTURE, mais elle est journalisée : le §36.7 en fait l'une des\ndeux seules exceptions, avec l'ouverture d'un tunnel, parce qu'elle dit\nqui est venu vérifier et quand.\n\nElle ne voit pas la troncature — une chaîne coupée à la fin reste valide.\nSeule l'ancre tenue par la console la détecte (§36.9.6), et la réponse\nporte donc `length` pour que la console puisse la comparer à ce qu'elle\navait retenu.",
+        "operationId": "verify_audit_chain_v1_audit_verify_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Verify Audit Chain V1 Audit Verify Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Verify Audit Chain",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
     "/v1/host": {
       "get": {
         "description": "Capacité de l'hôte et état des pools.\n\nC'est ici que l'admission control devient observable : sans cette vue,\nrien ne permet de savoir pourquoi une création serait refusée.",

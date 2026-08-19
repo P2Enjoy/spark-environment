@@ -14,12 +14,15 @@ import { dirname, join, normalize } from 'node:path';
 
 import { load, save, validate, InventoryError } from './inventory.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
+import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
+  from './anchor.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
 export function createConsoleHost(options = {}) {
   const tunnels = options.tunnels ?? new TunnelManager();
   const inventoryPath = options.inventoryPath;
+  const anchorPath = options.anchorPath;
   const fetchFn = options.fetch ?? fetch;
 
   const routes = {
@@ -51,6 +54,60 @@ export function createConsoleHost(options = {}) {
       // On rend l'état RÉEL, y compris « broken » : annoncer un succès parce
       // que la commande a été lancée serait un succès simulé.
       return { status: tunnel.state === READY ? 200 : 502, body: tunnel.describe() };
+    },
+
+    /**
+     * L'ancre : la console confronte ce que le serveur annonce à ce qu'elle
+     * avait vu (SPK-38, docs/DAT.md §36.2, §36.9.6).
+     *
+     * C'est ICI que la troncature et le remplacement se voient — la chaîne
+     * seule ne les détecte pas, et le serveur n'a pas à être cru sur parole :
+     * une longueur en recul suffit à alerter sans lui demander son avis.
+     */
+    'POST /api/anchor': async (corps) => {
+      const nom = String(corps?.name ?? '');
+      let tunnel;
+      try {
+        tunnel = tunnels.require(nom);
+      } catch (erreur) {
+        return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
+      }
+      const amont = await fetchFn(
+        `http://127.0.0.1:${tunnel.localPort}/v1/audit/verify`,
+        { headers: { 'x-spark-actor': tunnel.actorHeader } },
+      );
+      if (!amont.ok) {
+        return { status: 502, body: { error: 'verify_failed', message: `HTTP ${amont.status}` } };
+      }
+      const releve = await amont.json();
+
+      const ancres = await loadAnchors(anchorPath);
+      // La tête retenue est-elle encore DANS l'histoire annoncée ? Seul le
+      // serveur peut répondre — et c'est assumé : un hôte hostile ment, ce qui
+      // est précisément pourquoi le recul de longueur se juge sans lui.
+      const connue = ancres[nom]?.head ?? null;
+      let contient = false;
+      if (connue) {
+        const recherche = await fetchFn(
+          `http://127.0.0.1:${tunnel.localPort}/v1/audit?limit=100000`,
+          { headers: { 'x-spark-actor': tunnel.actorHeader } },
+        );
+        if (recherche.ok) {
+          const { entries = [] } = await recherche.json();
+          contient = entries.some((e) => e.entry_hash === connue);
+        }
+      }
+
+      const bilan = confronterAncre(ancres, nom, releve, contient);
+      await saveAnchors(bilan.anchors, anchorPath);
+      return {
+        status: 200,
+        body: {
+          server: nom, chain: releve,
+          verdict: bilan.verdict, explanation: bilan.explanation,
+          alert: bilan.alert, known: bilan.known, announced: bilan.announced,
+        },
+      };
     },
 
     'DELETE /api/tunnels': async (corps) => {
