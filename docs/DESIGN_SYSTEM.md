@@ -975,6 +975,28 @@ Le dernier cas ne se règle pas par une confirmation : lorsqu’un objet est
 protégé, la protection se **lève d’abord**, par un geste distinct et explicite.
 Une confirmation qui lèverait la protection au passage ne protégerait de rien.
 
+### Une protection ne bloque jamais un geste qui réduit un risque
+
+Il y a une exception, et elle est absolue : une protection est là pour arrêter
+l’erreur, jamais pour retenir un geste qui **diminue** l’exposition — révoquer un
+accès, retirer une clé, couper une publication, fermer une session.
+
+Refuser un tel geste ferait de la protection une vulnérabilité : un accès qui
+devait disparaître survivrait parce que quelqu’un a oublié de désarmer un
+interrupteur ailleurs. Le jour où l’on retire l’accès d’une personne partie, ou
+d’une clé qui a fuité, on ne veut pas d’un obstacle — on veut savoir ce qu’on
+touche.
+
+La protection **informe** alors au lieu de refuser :
+
+* les objets protégés concernés sont **nommés**, pas comptés ;
+* l’action demande sa confirmation explicite, portant cette liste ;
+* elle aboutit sans qu’aucune protection n’ait à être levée, et sans en lever
+  aucune.
+
+Le partage est celui-ci : **ajouter** un accès à un objet protégé se refuse,
+**en retirer un** se confirme.
+
 Une action destructive demande une confirmation explicite lorsqu’elle entraîne une perte ou une modification difficilement réversible.
 
 La confirmation nomme l’objet ou la conséquence.

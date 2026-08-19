@@ -773,9 +773,15 @@ avec un mot de passe et se lève avec ce même mot de passe.
   à sel par Spark, jamais le mot de passe en clair, jamais journalisé (§21) ;
   `POST` et `DELETE /v1/sparks/{name}/protection` ; refus `423 spark_protected`
   sur toute écriture visant un Spark protégé — commandes, reconfiguration,
-  routes, clés, instantanés y compris la restauration ; refus du retrait global
-  d'une clé SSH lorsqu'il toucherait un Spark protégé, en les nommant ; état
-  protégé visible dans la liste et dans la fenêtre ; contrat d'API régénéré.
+  routes, **octroi** de clé, instantanés y compris la restauration ; état protégé
+  visible dans la liste et dans la fenêtre ; contrat d'API régénéré.
+- **La révocation d'une clé n'est jamais refusée**, ni sur un Spark protégé, ni
+  au registre général. Elle suit l'ordre refus-puis-acceptation du §26.5 : un
+  premier appel rend `409 protected_sparks_affected` avec la **liste nommée** des
+  Sparks protégés touchés, la console la présente en confirmation, un second appel
+  porte `accept_protected` et aboutit. Aucun mot de passe n'est demandé sur ce
+  chemin, et aucune protection n'est levée. Motif au §35.2 : une protection ne
+  retient jamais un geste qui réduit un risque — clé qui a fuité, personne partie.
 - Explicitement **hors** protection : la redistribution des cœurs (§7.4 bis) et
   la repondération de `spark.slice` (§32.2). Les bloquer ferait échouer la
   création d'un autre Spark.
@@ -785,10 +791,14 @@ avec un mot de passe et se lève avec ce même mot de passe.
   sécurité, et le manuel non plus.
 - DoD : un test d'API prouve le refus `423` sur **chacune** des écritures listées,
   avec les vrais droits, sans passer par l'interface ; un test prouve que les deux
-  recalculs globaux passent toujours sur un Spark protégé ; un test prouve
-  qu'aucun mot de passe n'atteint `audit_log` ; un parcours E2E arme, échoue à
-  modifier, lève, modifie, réarme — depuis le parcours canonique ; captures
-  observées ; manuel M8 et seed mis à jour ; `@spec` / `@verifies` posés.
+  recalculs globaux passent toujours sur un Spark protégé ; un test prouve qu'une
+  **révocation aboutit** sur un Spark protégé après acceptation, et que le premier
+  appel a nommé les Sparks concernés ; un test prouve qu'aucun mot de passe
+  n'atteint `audit_log`, et que la révocation y consigne les Sparks protégés
+  touchés ; deux parcours E2E depuis le parcours canonique — armer, échouer à
+  modifier, lever, modifier, réarmer ; puis révoquer une clé malgré le gel en
+  passant par la confirmation qui nomme les Sparks ; captures observées ; manuel
+  M8 et seed mis à jour ; `@spec` / `@verifies` posés.
 
 ---
 

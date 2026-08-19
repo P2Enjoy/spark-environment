@@ -2832,7 +2832,7 @@ Sont refusées sur un Spark protégé :
   `retry`, `delete` ;
 - toute reconfiguration de ses quotas ;
 - les routes d'ingress qui le désignent, en ajout comme en retrait ;
-- l'octroi et la révocation de clés **sur ce Spark** ;
+- l'**octroi** d'une clé à ce Spark ;
 - la création, la suppression et la **restauration** d'un instantané.
 
 Ne sont **pas** refusées : les lectures, les métriques, le journal d'audit.
@@ -2853,10 +2853,26 @@ Les bloquer ferait échouer la création d'un *autre* Spark parce qu'un troisiè
 est protégé, ce qui serait incompréhensible et faux : ces recalculs n'altèrent ni
 sa configuration, ni son état, ni ses données.
 
-**Un cas déborde, et il est tranché.** `DELETE /v1/ssh-keys/{label}` retire une
-clé de **tous** les Sparks (§26.1). Si l'un d'eux est protégé, le retrait global
-est refusé et **nomme les Sparks concernés**. C'est précisément le cas de l'effet
-au-delà de la surface visible du design system (§6.23).
+**Une troisième exception, et c'est la plus importante : retirer un accès passe
+toujours.** La révocation d'une clé — sur ce Spark, ou du registre entier par
+`DELETE /v1/ssh-keys/{label}`, qui la retire de **tous** les Sparks (§26.1) —
+n'est jamais refusée par la protection.
+
+Motif, et il est décisif : la protection existe pour arrêter l'erreur, pas pour
+retenir un geste de sécurité. Le jour où l'on retire l'accès d'une personne
+partie, ou d'une clé qui a fuité, un refus ne protégerait rien — il laisserait
+l'accès en place parce qu'un interrupteur a été oublié ailleurs. Ce serait
+transformer un garde-fou en vulnérabilité. C'est la règle du §6.23 du design
+system : une protection ne bloque jamais un geste qui **réduit** un risque.
+
+Ce qui reste, c'est le devoir d'**informer** : la révocation qui touche un ou
+plusieurs Sparks protégés les **nomme**, et demande une confirmation explicite
+portant cette liste. Elle aboutit ensuite sans qu'aucune protection ait à être
+levée, et sans en lever aucune. Le journal d'audit enregistre la révocation avec
+les Sparks protégés qu'elle a touchés.
+
+Le partage est donc net : **octroyer** une clé à un Spark protégé se refuse,
+**révoquer** se confirme.
 
 ### 35.3 Le mot de passe
 
@@ -2906,6 +2922,24 @@ retient pas l'ancien pour le proposer.
 |---|---|---|---|
 | armer | `POST /v1/sparks/{name}/protection` | `{ "password": … }` | `200` |
 | lever | `DELETE /v1/sparks/{name}/protection` | `{ "password": … }` | `200` |
+
+La révocation d'une clé suit l'**ordre refus-puis-acceptation** déjà retenu pour
+la restauration d'un instantané (§26.5), parce qu'il donne à la console de quoi
+nommer ce qu'elle va toucher :
+
+| Geste | Route | Corps | Réponse |
+|---|---|---|---|
+| révoquer sans savoir | `DELETE /v1/ssh-keys/{label}` | `{}` | `409 protected_sparks_affected`, avec la **liste nommée** des Sparks protégés touchés |
+| révoquer en connaissance | `DELETE /v1/ssh-keys/{label}` | `{ "accept_protected": true }` | `200` |
+
+Aucun mot de passe n'est demandé sur ce chemin : exiger le secret de chaque Spark
+protégé pour révoquer une clé qui a fuité reviendrait à refuser. Le premier appel
+n'est pas un blocage, c'est la façon dont le runtime **dit ce qui sera touché** —
+et si aucun Spark protégé n'est concerné, il n'y a pas de refus du tout, la
+révocation passe directement.
+
+La même mécanique vaut pour `DELETE /v1/sparks/{name}/ssh-keys/{label}` lorsque
+le Spark visé est protégé.
 
 Une écriture refusée par la protection répond **`423 spark_protected`**, avec un
 message qui nomme le Spark et le geste refusé. Le code est distinct des refus

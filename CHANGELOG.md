@@ -21,7 +21,9 @@
 - Unité SPK-33 : refonte de la navigation de la console selon les degrés du
   design system.
 - Unité SPK-34 : Sparks protégés — un interrupteur par Spark, armé et levé par mot
-  de passe, dont le **runtime** fait respecter le refus, API comprise.
+  de passe, dont le **runtime** fait respecter le refus, API comprise. La
+  révocation d'une clé SSH échappe au refus : elle nomme les Sparks protégés
+  touchés et se confirme, elle ne se bloque pas.
 - `docs/DAT.md` : nouveau §35, les Sparks protégés — portée du refus, mot de
   passe et son empreinte, ce que la protection n'est pas.
 - `docs/DESIGN_SYSTEM.md` : nouveau §5.4, les trois degrés de navigation — barre
@@ -201,8 +203,11 @@
   ne partagent pas la même surface, une surface a un seul sujet, une action
   sensible se confirme. §6.27 : une fenêtre porte **plusieurs** sections, et la
   modale sert aussi bien à insérer qu'à modifier, toujours limitée à sa section.
-  §6.23 devient « actions sensibles et actions destructives » et traite le cas
-  d'un objet protégé.
+  §6.23 devient « actions sensibles et actions destructives », traite le cas d'un
+  objet protégé, et pose la règle absolue : une protection ne bloque jamais un
+  geste qui **réduit** un risque — révoquer un accès, retirer une clé, couper une
+  publication. Elle nomme alors les objets protégés touchés et demande
+  confirmation, au lieu de refuser.
 - `docs/DESIGN_SYSTEM_APP.md` §1 : les trois degrés appliqués à la console, avec
   l'écart entre l'écran réel et la cible, borné par SPK-33.
 - `docs/DAT.md` §26.2 : le choix « pas de modale » est explicitement révisé par le

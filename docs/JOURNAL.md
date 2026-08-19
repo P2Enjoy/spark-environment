@@ -1985,3 +1985,52 @@ SPK-34 est spécifiée et ne dépend de rien : elle peut démarrer par sa migrat
 SPK-33 reste la refonte de surface, et gagne à passer après, pour que la fenêtre
 d'un Spark affiche l'état protégé dès sa première version plutôt que d'y revenir.
 
+## 2026-08-19 — Le gel ne retient pas une révocation
+
+**Correction d'une décision prise la veille dans la même journée de travail**, sur
+arbitrage du responsable, avant toute implémentation.
+
+Le §35.2 disait : si une clé SSH est utilisée par un Spark protégé, son retrait du
+registre général est **refusé**. C'était faux, et le contre-exemple donné le
+montre en une phrase : un collaborateur qui démissionne, une clé qui a fuité. Ce
+jour-là, on ne veut pas d'un obstacle.
+
+Ce que le refus produisait réellement : un accès qui devait disparaître survivait
+parce qu'un interrupteur avait été oublié **ailleurs**, sur un Spark qui n'a
+peut-être rien à voir avec l'incident. La protection, censée arrêter l'erreur,
+serait devenue le mécanisme qui maintient un accès compromis. Un garde-fou
+transformé en vulnérabilité.
+
+**Nouvelle règle, écrite dans le socle commun** (`DESIGN_SYSTEM.md` §6.23) parce
+qu'elle vaut sans rien connaître du métier : une protection ne bloque jamais un
+geste qui **réduit** un risque — révoquer un accès, retirer une clé, couper une
+publication, fermer une session. Elle **informe** au lieu de refuser : les objets
+protégés concernés sont nommés, pas comptés, et l'action se confirme.
+
+Le partage tient en une ligne : **octroyer** un accès à un objet protégé se
+refuse, **en retirer un** se confirme.
+
+Deux conséquences concrètes, au §35.2 et §35.5 :
+
+- la révocation d'une clé sort de la liste des écritures refusées, aussi bien sur
+  un Spark (`DELETE /v1/sparks/{name}/ssh-keys/{label}`) qu'au registre général
+  (`DELETE /v1/ssh-keys/{label}`) ; seul l'**octroi** y reste ;
+- le mécanisme réutilise l'ordre **refus-puis-acceptation** déjà en place pour la
+  restauration d'un instantané (§26.5) : premier appel → `409` portant la liste
+  nommée des Sparks protégés touchés, la console la présente en confirmation,
+  second appel avec `accept_protected` → la révocation aboutit. S'il n'y a aucun
+  Spark protégé, il n'y a pas de refus du tout.
+
+**Aucun mot de passe n'est demandé sur ce chemin, et aucune protection n'est
+levée.** Exiger le secret de chaque Spark protégé pour retirer une clé compromise
+reviendrait exactement au refus qu'on vient de supprimer, avec une étape de plus.
+Le journal d'audit enregistre en revanche la révocation **avec** les Sparks
+protégés qu'elle a touchés : ici, la trace vaut mieux que l'entrave.
+
+### Vérifications
+
+Aucun test exécuté : ce chunk ne touche aucun code. La DoD de SPK-34 gagne deux
+preuves — une révocation qui **aboutit** malgré le gel après acceptation, et le
+premier appel qui a bien nommé les Sparks concernés — ainsi qu'un second parcours
+E2E dédié.
+
