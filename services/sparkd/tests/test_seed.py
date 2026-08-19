@@ -174,10 +174,22 @@ def test_le_seed_s_arrete_plutot_que_de_produire_un_jeu_partiel(config, monkeypa
 
     def tronque(client, incus, caddy):
         original(client, incus, caddy)
-        # On retire une fixture APRÈS coup : la vérification doit mordre.
-        client.delete("/v1/ingress/analytics.example.com")
+        # On retire une fixture APRES coup : la verification doit mordre.
+        #
+        # REVISE par SPK-34. Cette ligne retirait « analytics.example.com », qui
+        # porte la route NON APPLIQUEE. Depuis que le seed protege « analytics »
+        # (docs/DAT.md §35), ce retrait est refuse en 423 : la fixture restait,
+        # et la verification ne mordait plus — un test devenu incapable
+        # d'echouer. On retire donc la route APPLIQUEE, portee par un Spark que
+        # rien ne protege. La verification exige les deux, elle mord aussi bien.
+        client.delete("/v1/ingress/crm.example.com")
         return {"sparks": 0, "routes": 0, "cles": 0, "instantanes": 0, "refus": 0}
 
     monkeypatch.setattr(seed_module, "populate", tronque)
+    # C'est la route NON APPLIQUEE que la verification reclame, et non celle
+    # qu'on vient de retirer : retirer une route RECONCILIE l'ingress, ce qui
+    # applique l'autre au passage. Le seed le documente deja — « aucun appel
+    # suivant ne doit reconcilier l'ingress ». Ce que la preuve etablit est
+    # inchange : un jeu tronque est detecte au lieu d'etre servi tel quel.
     with pytest.raises(seed_module.SeedError, match="route non appliquée"):
         seed_module.run(config)
