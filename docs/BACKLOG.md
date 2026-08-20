@@ -2256,7 +2256,7 @@ elle **détecte**, et c'est la seule mesure qui serve encore quand tout le reste
   ce que l'envoi porte réellement ; l'absence de canal configuré n'est pas une
   panne, la fonction se désactive et l'écran le dit (§14.5).
 
-### [ ] SPK-63 · Frappe du nom sur les gestes destructifs
+### [x] SPK-63 · Frappe du nom sur les gestes destructifs
 
 Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle traite les menaces
 1 et 2 — les plus fréquentes de la liste — pour un coût quasi nul.
@@ -2275,6 +2275,24 @@ Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle traite les menace
 - DoD : la suppression exige la frappe exacte du nom ; une frappe fausse ou
   partielle n'engage rien ; le parcours est éprouvé au clavier ; si une règle
   réutilisable en sort, `docs/DESIGN_SYSTEM.md` §6.23 est étendu.
+
+**Livrée et vérifiée le 2026-08-20.**
+
+- **La règle réutilisable est au design system** (§6.23, « Frapper le nom ») avec
+  ses trois conditions. La troisième — nom **court et visible** — n'est pas une
+  commodité : faire recopier un identifiant long apprend à le coller sans le lire.
+- **La comparaison est exacte**, casse et espaces compris. Deux Sparks qui ne
+  diffèrent que par la casse existent.
+- **Le bouton reste présent et désactivé** (§9.9), et le focus entre dans le
+  CHAMP — un focus sur un contrôle inerte laisse croire qu'on est bloqué.
+- **Une frappe incomplète n'est pas une erreur** : rien n'a été tenté, donc pas
+  la couleur du refus.
+- **Défaut trouvé par le parcours** : repeindre à chaque caractère perdait la
+  frappe. Le §6.9 bis avait déjà enseigné la leçon pour les curseurs ; seuls les
+  éléments qui dépendent de la valeur sont réécrits.
+- **Preuves** : 8 de composant, 2 parcours E2E dont la révision de la suppression
+  existante. Captures `13-` et `111-` observées, plus
+  `docs/manuel/images/m10-suppression-nom-frappe.png`. Manuel M10 complété.
 
 ### [ ] SPK-51 · Un Spark qui héberge une messagerie, et sa recette DNS
 

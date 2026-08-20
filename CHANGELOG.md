@@ -3,6 +3,14 @@
 ## [Non publié]
 
 ### Ajouté
+- **Supprimer un Spark exige de frapper son nom** (SPK-63,
+  `docs/DESIGN_SYSTEM.md` §6.23) : le bouton reste visible et désactivé tant que
+  le nom exact n'est pas saisi, et l'écran dit pourquoi. La comparaison ne
+  pardonne ni la casse ni un espace en trop. Aucun autre geste ne le demande.
+- **Le modèle de menace des actions sensibles est écrit** (SPK-35,
+  `docs/DAT.md` §45) : cinq menaces hiérarchisées, ce que le produit ne prétend
+  pas traiter, et chaque piste retenue ou écartée avec son motif. Trois unités
+  en sortent : SPK-61, SPK-62, SPK-63.
 - **Le pool de stockage se crée par un geste paramétré** (SPK-28,
   `scripts/creer-pool.sh`) : nom, pilote, source et taille viennent tous de
   l'environnement. Il refuse de recréer un pool en place, refuse un miroir à un

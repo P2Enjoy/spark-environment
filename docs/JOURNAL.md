@@ -5327,3 +5327,70 @@ que la session ne peut pas fournir.
 
 **Où reprendre.** SPK-35 et SPK-36 sont les `[ ]` suivantes du plan. SPK-53 et
 SPK-54 attendent toujours une décision du responsable.
+
+---
+
+## 2026-08-20 · SPK-35 rendue, puis SPK-63 livrée
+
+**Deux unités**, et c'est délibéré : SPK-35 est une instruction pure — son
+arbitrage dit « rien n'est implémenté sous cette unité ». Une session qui s'y
+arrêterait n'aurait poussé aucun code. Le §4.2 prévoit ce cas : on passe ensuite à
+une unité de construction, et SPK-63 est sortie de l'instruction elle-même.
+
+### SPK-35 — le résultat qui déplace la question
+
+`docs/DAT.md` §45. Tant que la clé du responsable ouvre un **shell** sur la Forge,
+un second facteur devant l'API de `sparkd` ne protège de rien contre une clé
+volée : qui a la clé entre par SSH et atteint le registre. Le facteur serait un
+guichet fermé à côté d'une porte ouverte.
+
+D'où la première mesure retenue — **restreindre cette clé au seul tunnel**
+(SPK-61) —, qui est le préalable sans lequel aucun facteur n'a de sens.
+
+Les cinq menaces se rangent en deux familles qui n'appellent pas le même remède :
+l'**erreur** — acteur légitime, intention fausse — se traite par la friction et le
+nommage ; l'**usurpation** se traite par un facteur, et seulement s'il ne vit pas
+là où le premier a été volé. Les confondre fait payer une authentification là où
+il fallait une confirmation qui nomme.
+
+Écrit franchement : le produit ne prétendra pas traiter un poste de travail
+compromis. Aucun facteur saisi sur ce poste n'y survit.
+
+Trois pistes retenues (SPK-61, SPK-62, SPK-63), quatre écartées avec leur motif,
+TOTP **reportée** et non rejetée. SPK-40 requalifiée : ce n'est pas de
+l'authentification — la clé volée signe —, c'est de la non-répudiation d'audit,
+ce que le §36.3 disait déjà. L'arbitrage qui la bloquait est rendu.
+
+### SPK-63 — frapper le nom
+
+La règle est au design system §6.23, avec ses **trois conditions** : action
+irréversible, objet confondable, nom court et visible. La troisième n'est pas une
+commodité — faire recopier un identifiant long apprend à le coller sans le lire.
+
+La suppression d'un Spark les réunit ; aucun autre geste du produit ne les réunit,
+et c'est pourquoi l'unité s'arrête là.
+
+**Défaut trouvé par le parcours, et par lui seul** : mon premier branchement
+repeignait tout l'écran à chaque caractère, et la frappe se perdait. Le dépôt
+avait déjà appris cette leçon pour les curseurs (§6.9 bis) — `innerHTML`
+reconstruit la surface et arrache le contrôle en cours d'usage. Seuls les deux
+éléments qui dépendent de la valeur sont désormais réécrits.
+
+Le parcours de suppression existant est passé au rouge parce que la règle a
+changé : il cliquait directement. Il frappe désormais le nom, avec son motif écrit
+sur place.
+
+### Vérifications
+
+Campagne complète **verte** : 723 Python, contrat conforme, 780 de console, 8 de
+gestes, **70 parcours E2E**, 7 du manuel, `build`. Captures `13-` et `111-`
+observées — les deux moitiés de la règle —, plus
+`docs/manuel/images/m10-suppression-nom-frappe.png`.
+
+**SPK-35 est `[x]`** — l'instruction est rendue, et elle ne devait rien
+implémenter. **SPK-63 est `[x]`.**
+
+**Où reprendre.** SPK-36 est la `[ ]` suivante du plan, et c'est encore une
+instruction. SPK-61 et SPK-62, nées de cette session, sont de la construction.
+SPK-40 est désormais **démarrable**. SPK-53 et SPK-54 attendent toujours une
+décision du responsable.
