@@ -2189,6 +2189,11 @@ saisit à la main dans la cellule, par SSH, sans trace et sans état voulu.
 et sert déjà `authorized_keys` depuis SPK-11. Rien de neuf n'est à inventer côté
 transport.
 
+- **Mesuré avant d'écrire la story** (§43.0, six essais sur la Forge réelle) : un
+  conteneur n'hérite jamais de l'environnement ambiant ; `.env` et le shell ne
+  servent que si le compose **nomme** la variable ; `env_file:` est la seule voie
+  qui porte tout un jeu sans énumérer les noms ; et `/etc/profile.d` échoue pour
+  tout ce que systemd démarre — donc au redémarrage.
 - Spécification : `docs/DAT.md` **§43** · `docs/SCHEMA.md` (migration due) ·
   `docs/DESIGN_SYSTEM.md` §5.4, §6.27, §14.6 · manuel M6 et M8.
 - Portée : jeu de variables **de la Forge** et jeu **du Spark** qui le surcharge
@@ -2222,9 +2227,42 @@ transport.
   sur un Spark protégé ; un parcours E2E depuis le parcours canonique pose une
   variable héritée, la surcharge sur un Spark, et lit d'où vient chaque valeur ;
   preuve sur la Forge réelle qu'un `docker compose` du locataire consomme
-  effectivement le fichier — sans elle, l'unité reste `[~]`, car c'est le seul
-  point qui prouve que la chaîne entière sert à quelque chose ; manuel M6/M8 et
+  effectivement le fichier — déjà obtenue en instruisant l'unité (§43.0, essai F),
+  à refaire sur le fichier que le produit écrit ;
+  un test prouve qu'une variable **ajoutée après coup** arrive sans que le
+  fichier de composition soit retouché, ce qui est la raison d'être de
+  `env_file:` ; manuel M6/M8 et
   seed mis à jour.
+
+### [ ] SPK-59 · Les quotas se règlent au curseur
+
+**Demande du responsable, 2026-08-20.** Les quotas de l'écran de création se
+saisissent au clavier, chiffre par chiffre, alors que ce sont des valeurs bornées
+dont on cherche un ordre de grandeur bien plus souvent qu'une valeur exacte. Un
+curseur montre la plage en même temps que la valeur ; une saisie ne montre que ce
+qu'on y a tapé.
+
+La préférence n'est pas absolue et ne doit pas le devenir : elle ne vaut que
+lorsque les bornes sont connues, qu'un pas traverse la plage en un nombre de crans
+manipulables, et que ce pas ne détruit pas la granularité que la valeur signifie.
+
+- Spécification : `docs/DESIGN_SYSTEM.md` **§6.9 bis** (la règle générale et ses
+  trois conditions) · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-07** (son application
+  ici) · `docs/DAT.md` §25.1, §25.3 · `docs/manuel/M5`.
+- Portée : les six quotas de l'écran de création — réservation CPU, plafond CPU,
+  cœurs, mémoire, disque, débit. Rien d'autre ne change de forme ; les **ports**
+  restent des saisies, et c'est le contre-exemple qui fixe la règle.
+- **Ce qui décide de l'unité** : la borne haute est la **capacité totale de la
+  Forge**, jamais le disponible. Borner sur le disponible ferait décider l'écran
+  à la place de `sparkd` (§25.1) et rendrait le refus d'admission inatteignable
+  depuis le parcours canonique.
+- Repli obligatoire : capacité inconnue, ou plage impossible à parcourir sans
+  perdre la granularité métier — le champ redevient une **saisie numérique**, et
+  l'écran ne s'en cache pas.
+- DoD : tests de composant sur les deux branches — curseur et repli — et sur le
+  calcul des bornes ; parcours E2E qui règle un quota **au clavier** depuis le
+  parcours canonique et obtient le refus réel du serveur ; captures observées aux
+  trois formats ; manuel M5 et design system mis à jour dans le même changement.
 
 ---
 

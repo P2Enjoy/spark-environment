@@ -5068,6 +5068,53 @@ Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doi
 atterrir**, **par quel mécanisme**, et **ce que « secret » peut vouloir dire ici**
 — la troisième question étant celle qui décide de tout le reste.
 
+### 43.0 Six mesures, faites sur la Forge réelle le 2026-08-20
+
+La question « il suffit d'injecter dans l'environnement de l'instance, non ? » se
+tranche par la mesure. Faite dans le Spark `helo`, Docker 29.7.2 :
+
+| # | Ce qui est essayé | Résultat |
+|---|---|---|
+| A | variable dans le **shell**, puis `docker run` | le conteneur **ne la voit pas** |
+| B | variable dans le shell, `environment: - VAR` (sans `=`) dans le compose | passe |
+| C | fichier `.env` à côté du compose, shell vide, `environment: - VAR` | passe |
+| E | fichier `.env`, variable **non nommée** dans le compose | **absente** |
+| F | `env_file: /etc/spark/env` | **tout le fichier passe, sans nommer une seule variable** |
+| D | `/etc/profile.d/…` : shell de connexion, puis service **systemd** | vue par le shell, **absente** du service |
+
+Ce que ces six lignes établissent :
+
+1. **Un conteneur n'hérite jamais de l'environnement ambiant** (A). Peupler
+   l'environnement de la cellule ne suffit donc pas, quoi qu'on fasse.
+2. Le shell et le fichier `.env` alimentent la **substitution** de Compose, pas
+   l'injection : ils ne servent que si le fichier de composition **nomme** la
+   variable (B, C contre E).
+3. `env_file:` est la seule voie qui porte **tout un jeu** sans que le locataire
+   énumère les noms (F). C'est celle qui permet d'ajouter une variable sans
+   toucher au fichier de composition.
+4. `/etc/profile.d` — donc l'idée du `.profile` — fonctionne pour un humain qui se
+   connecte et **échoue pour tout ce que systemd démarre** (D), c'est-à-dire au
+   redémarrage de la machine. C'est le pire mode de panne disponible : cela
+   marche exactement quand on le teste à la main, et casse quand personne ne
+   regarde.
+
+### 43.0 bis Comment font les autres
+
+Aucun produit comparable ne s'appuie sur l'environnement ambiant. Tous tiennent un
+**magasin** et le **matérialisent** au démarrage :
+
+| Produit | Magasin | Matérialisation |
+|---|---|---|
+| Compose seul | `.env` du projet | substitution, et `env_file:` pour le contenu |
+| Dokku, CapRover et semblables | store du plan de contrôle | redéploiement avec les variables posées |
+| Docker Swarm | `docker secret` | **fichiers** sous `/run/secrets/` |
+| Kubernetes | ConfigMap, Secret | variables injectées, ou fichiers montés |
+| systemd | fichier | `EnvironmentFile=` |
+
+Le motif est constant : **un magasin, une matérialisation en fichier, une
+référence explicite du côté qui consomme.** C'est exactement ce que les §43.1 et
+suivants retiennent.
+
 ### 43.1 Où la valeur doit atterrir, et le piège à éviter
 
 Le locataire fait tourner une pile Compose. Compose lit ses variables dans un
@@ -5086,11 +5133,18 @@ locataire.**
 
     /etc/spark/env      root:root, 0600
 
-Le locataire l'attache à ses services : `env_file: /etc/spark/env`. Le produit
-n'écrit **pas** dans le répertoire de projet du locataire : il faudrait le
-deviner, et l'on écraserait un fichier qui ne nous appartient pas. Le contrat est
-donc explicite des deux côtés — le produit garantit le chemin, le locataire
-décide de s'en servir.
+Le locataire l'attache à ses services : `env_file: /etc/spark/env`. **Une ligne,
+une fois**, et toute variable ajoutée ensuite arrive sans qu'il retouche son
+fichier de composition (mesure F). Le produit n'écrit **pas** dans le répertoire
+de projet du locataire : il faudrait le deviner, et l'on écraserait un fichier qui
+ne nous appartient pas. Le contrat est donc explicite des deux côtés — le produit
+garantit le chemin, le locataire décide de s'en servir.
+
+**Un complément, et il est nommé comme tel.** Le même état voulu est aussi rendu
+dans `/etc/profile.d/spark-env.sh`, pour qu'un `docker compose up` tapé à la main
+substitue `${VAR}` sans surprise. C'est un **confort**, pas le mécanisme : la
+mesure D montre qu'il n'existe pas pour ce que systemd démarre. L'écran ne doit
+donc jamais le présenter comme la garantie — la garantie, c'est `env_file:`.
 
 ### 43.2 Un seul mécanisme, et il est déjà mesuré
 

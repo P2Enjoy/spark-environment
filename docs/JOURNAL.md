@@ -4147,3 +4147,145 @@ Aucun code touché : spécification et backlog. Les trois faits cités ont été
 mesurés dans le dépôt — signature de `push_file`, comportement du filtre d'audit
 sur quatre noms réels, et absence de toute notion d'environnement au registre.
 
+---
+
+## 2026-08-20 — Un curseur plutôt qu'une saisie, mais pas partout, et pas à n'importe quelle borne
+
+### Problème
+
+Demande du responsable : les valeurs numériques se saisissent chiffre par chiffre
+alors qu'un curseur serait plus propre et plus intuitif. Avec une réserve
+explicite, et c'est elle qui fait le travail — un curseur sans bornes connues, ou
+dont le pas est si fin que la plage devient impraticable, est pire que la saisie
+qu'il remplace.
+
+### Observations
+
+Onze contrôles numériques dans la console. Ils se rangent en deux familles nettes,
+et la frontière n'est pas une question de goût :
+
+- **six quotas** sur l'écran de création — réservation CPU, plafond CPU, cœurs,
+  mémoire, disque, débit. Bornes connues dès que la Forge a été relevée, pas
+  dicté par le métier (0,05 CPU, 1 Gio, 10 Mbit/s), plages de quelques dizaines à
+  quelques centaines de crans ;
+- **sept ports** — routes publiques, port cible, port de `sparkd`, port local d'un
+  tunnel. Bornes connues elles aussi, 1 à 65 535, mais 65 534 crans à l'unité, et
+  aucun arrondi possible : un port voisin n'est pas presque le bon port.
+
+Mesure qui a fixé le seuil : le contrôle mesure au plus 28 rem, soit 448 px.
+Au-delà d'environ 400 crans, un cran est plus étroit qu'un pixel et cesse d'être
+atteignable au pointeur. Ce n'est pas un chiffre choisi, c'est la largeur du
+contrôle divisée par la précision d'une souris.
+
+### La question difficile : quelle borne haute ?
+
+La tentation évidente était de borner un quota sur ce qui **reste libre**. Elle
+est fausse, et de trois façons.
+
+D'abord, elle contredit le `docs/DAT.md` §25.1 : le disponible est une
+photographie prise à l'ouverture de l'écran, elle se périme dans le sens
+favorable, et l'écran ne décide jamais à la place de `sparkd`. Un curseur qui
+s'arrête au disponible est un refus déguisé en contrôle — pire qu'un bouton
+désactivé, puisqu'il ne se voit même pas.
+
+Ensuite, elle rendrait le **refus d'admission inatteignable depuis le parcours
+canonique**. On ne pourrait plus demander ce que la Forge ne peut pas donner,
+donc plus éprouver le refus par l'écran. Le §16 du `CLAUDE.md` interdit
+précisément d'en arriver là.
+
+Enfin, une borne posée sur la **capacité totale** ne souffre d'aucun de ces deux
+défauts : elle ne bouge pas entre l'ouverture de l'écran et la soumission. C'est
+exactement le raisonnement déjà retenu pour la liste d'images au §33.5 — une
+contrainte stable se pose dans le contrôle, une contrainte périmable appartient
+au serveur.
+
+### Décision
+
+- Règle générale dans `docs/DESIGN_SYSTEM.md` **§6.9 bis** : le curseur est
+  **préféré**, jamais imposé, et cède devant l'une des trois conditions —
+  bornes connues et stables, crans atteignables, granularité métier préservée.
+- Application dans `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-07** : quotas au curseur
+  borné sur la capacité totale, ports à la saisie.
+- Repli quand la capacité n'a pas pu être relevée : saisie numérique. L'écran
+  n'invente pas une borne pour garder le curseur.
+
+### Conséquence mesurée, et elle n'est pas cosmétique
+
+Sur la Forge de validation, les deux disques de 6 To en RAID1 donnent un pool de
+plus de 5 000 Gio. Au pas de 1 Gio, cinq mille crans ; au pas de 20 Gio qui les
+ramènerait sous 400, le quota courant de 10 Gio devient **inatteignable**. Le
+disque y reste donc une saisie pendant que la mémoire et le débit sont des
+curseurs. C'est la condition 3 qui joue, sur la machine réelle, dès la première
+livraison — la règle n'est pas décorative.
+
+### Défaut voisin, corrigé dans le même changement
+
+L'avertissement de capacité ne se rafraîchissait **jamais** pendant la saisie :
+seul `cpu_mode` provoquait un repeint. La capture `17-creation-avertissement.png`
+le montre — elle porte 64 Gio demandés, un panneau annonçant 64 Gio libres, et
+aucun avertissement. Le défaut préexiste au curseur, mais celui-ci le rend
+intolérable : on tire une poignée au-delà du disponible et rien ne bouge. La zone
+d'avertissement est donc recalculée à chaque changement de valeur, sans repeindre
+le formulaire — un repeint arracherait la poignée en cours de glissement et
+perdrait le focus (§14.3).
+
+### Vérifications
+
+Voir SPK-59. Le compte rendu de l'unité porte les tests et les captures.
+
+## 2026-08-20 — Six mesures qui tranchent la question de l'environnement
+
+Le responsable a poussé sur ma première rédaction : « on les injecte dans
+l'instance, ils sont visibles dans l'env de l'instance, donc Docker va les lire,
+non ? Et sinon, un fichier chargé genre dans le `.profile` ? Comment font les
+autres ? » Trois questions justes, auxquelles j'avais répondu par une conclusion
+sans montrer le chemin. Mesuré dans le Spark `helo`, Docker 29.7.2 :
+
+    A  variable du shell → docker run                  le conteneur NE LA VOIT PAS
+    B  variable du shell → environment: - VAR          passe
+    C  fichier .env      → environment: - VAR          passe
+    E  fichier .env, variable non nommée au compose    ABSENTE
+    F  env_file: /etc/spark/env                        tout le fichier passe
+    D  /etc/profile.d → shell de connexion             vue
+    D  /etc/profile.d → service systemd                ABSENTE
+
+Quatre conclusions, et aucune n'était devinable de mémoire :
+
+1. **Un conteneur n'hérite jamais de l'environnement ambiant** (A). L'intuition
+   « c'est dans l'env de l'instance, donc Docker le lit » est fausse, et c'est le
+   point de départ de tout le reste.
+2. Le shell et `.env` alimentent la **substitution** de Compose, pas l'injection :
+   ils ne servent que si le fichier de composition **nomme** la variable (B et C
+   contre E). Un `.env` posé par le produit ne suffirait donc pas.
+3. `env_file:` est la seule voie qui porte **tout un jeu** sans énumérer les noms
+   (F) — donc la seule qui permette d'ajouter une variable plus tard sans que le
+   locataire retouche son fichier de composition.
+4. L'idée du `.profile` **échoue pour tout ce que systemd démarre** (D), c'est-à-dire
+   au redémarrage de la machine. C'est le pire mode de panne disponible : cela
+   marche exactement quand on le teste à la main.
+
+Le point 4 mérite d'être retenu au-delà de cette unité. Une solution qui
+fonctionne en session interactive et pas au démarrage passe toutes les
+vérifications qu'on lui fait subir, et casse la première nuit où la Forge
+redémarre.
+
+**Comment font les autres**, vérifié plutôt que supposé : personne ne s'appuie sur
+l'environnement ambiant. Compose matérialise `.env` et `env_file:` ; Dokku et ses
+semblables tiennent un store et redéploient avec les variables ; Swarm rend ses
+secrets sous forme de **fichiers** dans `/run/secrets` ; Kubernetes monte des
+ConfigMap et des Secret ; systemd lit un `EnvironmentFile=`. Le motif est
+constant : un magasin, une matérialisation en fichier, une référence explicite du
+côté qui consomme.
+
+Le §43 garde donc sa conception, mais il porte désormais les mesures qui la
+justifient plutôt que ma seule affirmation. Et il gagne le complément que le
+responsable avait en tête : `/etc/profile.d/spark-env.sh` est rendu **aussi**,
+pour qu'un `docker compose up` tapé à la main substitue `${VAR}` — nommé comme un
+confort, jamais comme la garantie.
+
+### Vérifications
+
+Six essais exécutés dans la cellule, sortie citée telle quelle. Aucun code du
+dépôt modifié. Les fichiers d'essai et `/etc/spark` créés pour la mesure ont été
+retirés du Spark.
+

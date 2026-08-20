@@ -3,6 +3,20 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/DAT.md` §43.0 : les six mesures qui tranchent l'injection d'environnement
+  — un conteneur n'hérite pas de l'environnement ambiant, `env_file:` est la seule
+  voie qui porte un jeu entier, et `/etc/profile.d` échoue pour ce que systemd
+  démarre. §43.0 bis : comment font les autres produits.
+- `docs/DESIGN_SYSTEM.md` : nouveau **§6.9 bis**, curseur ou saisie numérique.
+  Le curseur est préféré pour une valeur numérique, sans devenir obligatoire : il
+  cède dès que les bornes sont inconnues ou instables, que la plage dépasse ce
+  qu'un pointeur peut viser, ou que le pas détruirait la granularité que la valeur
+  signifie. Un numéro de port reste une saisie, et c'est le contre-exemple qui
+  fixe la règle.
+- `docs/DESIGN_SYSTEM_APP.md` : **SPK-DS-07**, son application à la console — les
+  quotas au curseur, borné sur la **capacité totale** de la Forge et jamais sur ce
+  qui reste libre, les ports à la saisie.
+- Unité SPK-59 : les quotas de l'écran de création se règlent au curseur.
 - `docs/DAT.md` : nouveau §43, l'environnement d'un Spark — où la valeur atterrit,
   pourquoi `environment.*` d'Incus n'est pas le mécanisme, et pourquoi un secret
   se déclare au lieu de se deviner.
