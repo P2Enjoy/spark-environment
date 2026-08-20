@@ -1155,7 +1155,11 @@ function router() {
   if (location.hash === '#/creer') return chargerCreation();
   // Chaque facette d'un Spark est une véritable destination : on doit pouvoir
   // recharger la page sur « Instantanés » (DESIGN_SYSTEM.md §5.4, §6.27).
-  const detail = location.hash.match(/^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|journal))?$/);
+  // SPK-43 · SPK-DS-04 : le terminal est une DESTINATION, avec sa propre
+  // adresse. L'omettre ici le rendait inatteignable au rechargement — et
+  // l'onglet menait à la facette « Infos ». Mesuré.
+  const detail = location.hash.match(
+    /^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|terminal|journal))?$/);
   if (detail) return chargerDetail(decodeURIComponent(detail[1]), detail[2] ?? '');
   etat.route = 'liste';
   etat.spark = null;
