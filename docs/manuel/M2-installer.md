@@ -91,7 +91,7 @@ preuve-là est une mesure, à faire une fois sur le serveur.
 
 Deux vérifications restent donc manuelles :
 
-1. **le scan des ports depuis l'extérieur.** Le contrôle lit ce que l'hôte
+1. **le scan des ports depuis l'extérieur.** Le contrôle lit ce que la Forge
    déclare écouter ; un pare-feu amont peut en différer ;
 2. **un Spark de test** qui se crée, démarre, obtient son adresse privée, et dont
    le quota disque refuse effectivement l'écriture au-delà de la limite.

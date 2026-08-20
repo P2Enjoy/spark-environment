@@ -1,6 +1,6 @@
 # M4 · Lire les pools de ressources
 
-L'onglet **Hôte** répond à une seule question : *pourquoi cette création
+L'onglet **Forge** répond à une seule question : *pourquoi cette création
 serait-elle refusée, et de combien ?*
 
 ![Les quatre pools, la soustraction mémoire et la carte des cœurs](images/m4-pools.png)
@@ -18,7 +18,7 @@ L'écran énonce la soustraction terme à terme :
 ```
 mémoire de la machine
   − plafond de l'ARC ZFS        que ZFS peut prendre à tout instant
-  − marge d'exploitation        ce que l'hôte consomme pour lui-même
+  − marge d'exploitation        ce que la Forge consomme pour lui-même
   = mémoire allouable
 ```
 
@@ -29,7 +29,7 @@ qu'il manque de la mémoire sans savoir quelle vanne tourner.
 La ligne de l'ARC indique aussi **ce qu'il consomme à cet instant**, face à son
 plafond. C'est ce qui permet de juger si la réserve est bien dimensionnée :
 
-- mesuré sur l'hôte de validation, l'ARC **atteint** son plafond dès qu'on lui
+- mesuré sur la Forge de validation, l'ARC **atteint** son plafond dès qu'on lui
   donne assez à lire — la réserve n'est donc pas une précaution, elle est
   nécessaire : sans elle, ces gigaoctets seraient promis aux Sparks puis repris ;
 - il ne le **dépasse pas** — la réserve est donc suffisante, et l'augmenter ne
@@ -94,5 +94,5 @@ demande donc aucune confirmation.
 ## Une limite à connaître
 
 La réservation CPU n'est aujourd'hui proportionnelle **qu'entre Sparks** : elle
-est arbitrée contre les tranches système de l'hôte et n'est pas une garantie
+est arbitrée contre les tranches système de la Forge et n'est pas une garantie
 absolue. L'écran le dit, et le dira autrement le jour où ce sera faux.

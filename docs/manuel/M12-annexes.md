@@ -15,7 +15,7 @@ documentation.
 | `SPARKD_CADDY_ADMIN` | API d'administration du proxy | non |
 | `SPARKD_DRIVER` | pilote d'exécution : réel ou factice | non |
 | `SPARKD_STORAGE_POOL` | pool de stockage dont la capacité fait foi | non |
-| `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour l'hôte, hors ARC | non |
+| `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge, hors ARC | non |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | non |
 
 ### Console
@@ -39,7 +39,7 @@ Les valeurs sensibles y sont caviardées : le corps d'une clé n'y entre jamais.
 
 ### Où le lire
 
-**Hôte → Journal**. Il couvre **tous** les Sparks, parce qu'une séquence les
+**Forge → Journal**. Il couvre **tous** les Sparks, parce qu'une séquence les
 traverse souvent. La facette *Journal* d'un Spark reste, et répond à l'autre
 question : qu'est-il arrivé à celui-ci.
 
@@ -123,7 +123,7 @@ de lisibilité, identifié, dont l'arbitrage n'est pas encore rendu.
 | « Capacité insuffisante — … il manque … » | l'admission a refusé : la ressource nommée manque | réduire la demande, supprimer un Spark, ou consulter [M4](M4-pools.md) |
 | « Ce Spark n'a pas encore d'adresse » | le Spark est déclaré mais pas appliqué | l'appliquer depuis son écran détail |
 | « Restauration de … refusée : … plus récents seraient détruits » | des instantanés postérieurs bloquent | les supprimer, ou accepter explicitement leur perte ([M9](M9-instantanes.md)) |
-| « La topologie de cet hôte n'a pas encore été relevée » | le registre ignore la capacité de la machine | cliquer sur **Relever la topologie** ([M4](M4-pools.md)) |
+| « La topologie de cette Forge n'a pas encore été relevée » | le registre ignore la capacité de la machine | cliquer sur **Relever la topologie** ([M4](M4-pools.md)) |
 | « Pas encore appliqué — rien à mesurer » | le Spark n'a jamais tourné | ce n'est pas une erreur |
 
 ## Où lire la suite

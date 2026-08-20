@@ -2,7 +2,7 @@
 
 Ce document décrit ce qu'un humain doit appliquer sur le serveur, dans l'ordre. Il
 ne doit jamais dériver de l'état réel du projet : toute modification touchant le
-schéma, le service `sparkd`, la configuration de l'hôte ou les variables
+schéma, le service `sparkd`, la configuration de la Forge ou les variables
 d'environnement le met à jour **dans le même changement**.
 
 Aucune opération de ce document ne s'exécute automatiquement. Aucune migration
@@ -13,11 +13,11 @@ n'est appliquée en production sans instruction humaine explicite.
 ## 1. Baseline de production
 
 **Établie le 2026-08-19**, et relevée par `python3 -m sparkd.preflight` sur
-l'hôte de validation. Les neuf contrôles du §31 du [DAT](DAT.md) sont verts.
+la Forge de validation. Les neuf contrôles du §31 du [DAT](DAT.md) sont verts.
 
 | Élément | État |
 |---|---|
-| Hôte cible | `51.158.54.202` — Dell R320, accès obtenu le 2026-08-18, topologie relevée |
+| Forge cible | `51.158.54.202` — Dell R320, accès obtenu le 2026-08-18, topologie relevée |
 | Système | Ubuntu 24.04.3, noyau 6.8.0-88, cgroup v2 |
 | Disposition disque | 2 × 6 To en RAID1 mdadm, `md1` 5,44 Tio `ext4` sur `/` — **aucun périphérique bloc libre** |
 | Incus | **7.3** installé depuis le dépôt amont Zabbly. Les dépôts Ubuntu (6.0.0) sont **inutilisables**, voir §2.0 |
@@ -31,7 +31,7 @@ l'hôte de validation. Les neuf contrôles du §31 du [DAT](DAT.md) sont verts.
 | Topologie relevée | 4 cœurs / 8 threads, 94,2 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76,2 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
-Cette baseline décrit un hôte de **validation**, pas de production : le pool sur
+Cette baseline décrit une Forge de **validation**, pas de production : le pool sur
 fichier et l'absence de repartitionnement restent des dettes ouvertes (OP-01).
 
 **Comment la revérifier**, en lecture seule et sans rien modifier :
@@ -62,7 +62,7 @@ depuis les dépôts Ubuntu est un échec de déploiement, pas une variante accep
 
 **Vérifié le 2026-08-18 en 7.3** : pile Compose réelle fonctionnelle dans un Spark
 non privilégié, à idmap isolé, AppArmor actif, sans contournement — `HTTP 200`
-depuis l'hôte sur l'IP privée du Spark.
+depuis la Forge sur l'IP privée du Spark.
 
 **Deux règles d'ordre, apprises dans un incident et non négociables :**
 
@@ -110,7 +110,7 @@ Contexte      : sda4 et sdb4 s'étendent jusqu'à la fin des disques et forment 
                 occupé par un ext4 monté sur /. Aucun espace non alloué.
 
 Voie A — réinstallation avec partitionnement personnalisé
-  Coût        : reconfiguration complète de l'hôte
+  Coût        : reconfiguration complète de la Forge
   Risque      : FAIBLE — la machine est vide (2,7 Go utilisés)
   Recommandée : oui, sur une machine vide c'est la voie la moins risquée
 
@@ -178,7 +178,7 @@ Retour arriere: systemctl disable --now sparkd. Le registre est conserve dans
 Risques       : le script redemarre le service. Un sparkd lance a la main sur le
                 meme port doit etre arrete avant, sinon l'unite ne peut pas se
                 lier.
-État          : APPLIQUÉ le 2026-08-19 sur l'hôte de validation.
+État          : APPLIQUÉ le 2026-08-19 sur la Forge de validation.
 ```
 
 ### OP-03 · Migration `002_part_arc` du registre
@@ -361,7 +361,7 @@ de toute dépendance en panne.
 **Restant à faire à la main**, parce que ces contrôles ne peuvent pas les rendre :
 
 1. le scan des ports **depuis l'extérieur**, pas depuis la machine : `SEC-PORTS`
-   lit ce que l'hôte déclare écouter, un pare-feu amont peut différer ;
+   lit ce que la Forge déclare écouter, un pare-feu amont peut différer ;
 2. un Spark de test qui se crée, démarre, obtient son IP privée, et dont le quota
    disque refuse effectivement l'écriture au-delà de la limite — c'est une mesure
    de comportement, pas une condition (DAT §31.5, §13).

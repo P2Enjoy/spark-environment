@@ -5,7 +5,7 @@ commune. Seules les règles propres à ce produit figurent ici.
 
 ## 1. Architecture spécifique
 
-La console est une application **locale**, servie sur `127.0.0.1` par l'hôte
+La console est une application **locale**, servie sur `127.0.0.1` par la Forge
 console (`docs/DAT.md` §22). Elle administre un ou plusieurs serveurs à travers
 des tunnels SSH.
 
@@ -24,8 +24,8 @@ orientation, pas une loi. Voici ce qu'ils désignent ici :
 
 | Degré | Contenu de la console | Forme |
 |---|---|---|
-| 1 | **Sparks**, **Hôte** | barre latérale, sélecteur de serveur et état du tunnel en tête |
-| 2 | sous *Sparks* : *Instances* · sous *Hôte* : *Pools*, *Images* | onglets |
+| 1 | **Sparks**, **Forge** | barre latérale, sélecteur de serveur et état du tunnel en tête |
+| 2 | sous *Sparks* : *Instances* · sous *Forge* : *Pools*, *Images* | onglets |
 | 3 | la fenêtre d'un Spark, ouverte depuis la liste : *Infos*, *Routes*, *Clés*, *Instantanés*, *Journal*, *Docker*, *Terminal* | onglets de la fenêtre, sections à l'intérieur |
 | — | modifier une section, ou lui insérer un élément | modale limitée à cette section |
 
@@ -40,7 +40,7 @@ Spark — mais les onglets de sa fenêtre, et non plus des blocs empilés dans u
 page qui s'allonge.
 
 L'onglet *Images* du second degré est la surface du catalogue d'images
-(`docs/DAT.md` §33) : le catalogue décrit l'hôte, pas un Spark.
+(`docs/DAT.md` §33) : le catalogue décrit la Forge, pas un Spark.
 
 Le sélecteur de serveur reste **au-dessus** du premier degré : il ne désigne pas
 une destination mais le contexte de toutes les destinations.
@@ -107,7 +107,7 @@ l'utilisateur ait à essayer.
 
 ### SPK-DS-02 · Le burst n'est pas un dépassement
 
-Mesuré : un Spark réservant `0,5 CPU` en consomme `1,996` sur un hôte au repos
+Mesuré : un Spark réservant `0,5 CPU` en consomme `1,996` sur une Forge au repos
 (`docs/DAT.md` §20.3 bis). Une jauge affichant « 1,99 / 0,5 » en rouge
 signalerait une violation là où il n'y a qu'un usage optimal.
 

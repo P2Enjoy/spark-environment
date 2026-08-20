@@ -43,19 +43,19 @@ contrainte par `CHECK (id = 1)`.
 | `memory_total_bytes` | INTEGER | RAM physique |
 | `storage_total_bytes` | INTEGER | capacité du pool de stockage Incus |
 | `network_total_bps` | INTEGER | débit nominal du lien, en bit/s |
-| `memory_reserve_bytes` | INTEGER | RAM soustraite du pool, réservée à l'hôte |
+| `memory_reserve_bytes` | INTEGER | RAM soustraite du pool, réservée à la Forge |
 | `storage_reserve_bytes` | INTEGER | idem pour le stockage |
 | `overcommit_cpu` | REAL | facteur de surengagement CPU, défaut `1.0` |
 | `overcommit_memory` | REAL | défaut `1.0` |
 | `overcommit_network` | REAL | défaut `1.0` |
 | `topology_synced_at` | TEXT | dernier relevé de topologie |
 
-La capacité allouable n'est jamais la capacité physique : les réserves de l'hôte
+La capacité allouable n'est jamais la capacité physique : les réserves de la Forge
 sont soustraites avant l'admission control.
 
 ## 3. `cpu_core` et `cpu_thread`
 
-Topologie relevée sur l'hôte, indispensable au mode `dedicated` (§7.5 du DAT).
+Topologie relevée sur la Forge, indispensable au mode `dedicated` (§7.5 du DAT).
 
 `cpu_core` : `id`, `socket_id`, `numa_node`, `core_id`, `pool` ∈ {`shared`,
 `dedicated`}, `spark_id` (NULL si partagé).
@@ -116,7 +116,7 @@ une empreinte posée avec `n = 2^14` reste vérifiable le jour où le défaut pa
 `2^15`.
 
 **Il n'y a aucune récupération par l'API** (§35.3). Un mot de passe perdu se lève
-sur l'hôte, avec `root`, par un `UPDATE` sur ces quatre colonnes. C'est cohérent
+sur la Forge, avec `root`, par un `UPDATE` sur ces quatre colonnes. C'est cohérent
 avec ce que la protection prétend être — un garde-fou, pas un chiffrement.
 
 Aucune de ces colonnes n'est lisible par l'API : `GET /v1/sparks` publie un booléen

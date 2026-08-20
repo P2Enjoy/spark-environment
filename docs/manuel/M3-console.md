@@ -24,8 +24,8 @@ bonne :
 
 | Genre | Ce que vous saisissez | Qui résout le reste |
 |---|---|---|
-| **Alias ssh** | un `Host` de votre `~/.ssh/config` | OpenSSH : hôte, utilisateur, port, rebond, clé |
-| **SSH** | hôte, utilisateur, port | rien de plus |
+| **Alias ssh** | un `Host` de votre `~/.ssh/config` | OpenSSH : Forge, utilisateur, port, rebond, clé |
+| **SSH** | Forge, utilisateur, port | rien de plus |
 | **Local** | un port | rien : `sparkd` écoute déjà sur cette machine |
 
 L'alias est recommandé dès que votre connexion sort du cas trivial. Un rebond par
@@ -78,8 +78,8 @@ vous cliquez :
 
 | Niveau | Ce que c'est | Forme |
 |---|---|---|
-| 1 | les destinations — Sparks, Hôte | barre latérale, à gauche |
-| 2 | les sous-parties d'une destination — Pools, Images sous Hôte | onglets |
+| 1 | les destinations — Sparks, Forge | barre latérale, à gauche |
+| 2 | les sous-parties d'une destination — Pools, Images sous Forge | onglets |
 | 3 | un Spark ouvert, avec ses facettes — Infos, Routes, Clés, Instantanés, Journal | onglets de sa fenêtre |
 
 Le **serveur courant** et l'état de son tunnel sont au-dessus de la barre
@@ -137,5 +137,5 @@ La console affiche un bandeau et **cesse d'afficher des données**. Elle ne mont
 pas les valeurs précédentes : une valeur périmée prise pour vraie vous ferait
 décider sur un état qui n'existe plus.
 
-Le message reprend la sortie d'erreur de `ssh` — « clé refusée », « hôte
+Le message reprend la sortie d'erreur de `ssh` — « clé refusée », « Forge
 inconnu » —, pour vous éviter de relancer la commande à la main pour la lire.

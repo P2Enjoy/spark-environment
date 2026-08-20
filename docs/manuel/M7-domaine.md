@@ -7,7 +7,7 @@ Le contrat est simple : **domaine → Spark → port**.
 ## Déclarer une route
 
 Le port demandé est celui sur lequel écoute votre pile **dans le Spark**, pas
-celui de l'hôte. C'est l'erreur la plus fréquente : on saisit `443` en croyant
+celui de la Forge. C'est l'erreur la plus fréquente : on saisit `443` en croyant
 décrire l'entrée.
 
 Le TLS est confié à la gestion automatique du proxy. **L'émission d'un certificat

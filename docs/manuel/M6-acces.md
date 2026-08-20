@@ -21,7 +21,7 @@ se fait pas depuis cet écran.
 
 ## Se connecter
 
-Un Spark **n'expose jamais son port 22**. L'accès se fait par rebond sur l'hôte,
+Un Spark **n'expose jamais son port 22**. L'accès se fait par rebond sur la Forge,
 dont le `sshd` est la seule porte du système. La console vous donne le fragment à
 coller dans votre `~/.ssh/config` :
 
@@ -41,7 +41,7 @@ deviner.
 
 ## Déployer votre pile
 
-Une fois connecté, vous êtes sur un hôte Docker à vous :
+Une fois connecté, vous êtes sur une Forge Docker à vous :
 
 ```
 scp docker-compose.yml mon-spark:/srv/
@@ -51,7 +51,7 @@ cd /srv && docker compose up -d
 
 Rien à réécrire. Docker vit à l'intérieur du Spark et vous appartient.
 
-**Ne pilotez pas le proxy de l'hôte depuis Compose.** L'exposition d'un domaine
+**Ne pilotez pas le proxy de la Forge depuis Compose.** L'exposition d'un domaine
 se déclare dans la console (voir [M7](M7-domaine.md)) : c'est le registre qui
 connaît l'adresse de votre Spark, et deux mécanismes écrivant la même
 configuration finissent par diverger.

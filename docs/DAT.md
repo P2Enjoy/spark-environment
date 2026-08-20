@@ -1,7 +1,7 @@
 # DAT — Dossier d'architecture technique
 
 Projet : **Spark Environment**
-Statut : socle documentaire posé, hôte cible relevé, implémentation non commencée
+Statut : socle documentaire posé, Forge cible relevé, implémentation non commencée
 Dernière mise à jour : 2026-08-18
 
 Ce document fait autorité sur l'architecture. Lorsqu'il diverge du code, c'est un
@@ -58,7 +58,7 @@ d'entre eux ne bougent pas.
 - la table `host` du registre et ses colonnes de capacité ;
 - la route `GET /v1/host`, `POST /v1/host/sync`, `/v1/host/cores` ;
 - les libellés d'interface, la destination `#/hote`, le manuel, le glossaire ;
-- les messages où « l'hôte » veut dire « la machine ».
+- les messages où « la Forge » veut dire « la machine ».
 
 **Ne change PAS** — le mot y a un autre sens, et le changer produirait un
 contresens :
@@ -156,7 +156,7 @@ partie du modèle d'isolation : ce n'est pas la réponse.
 
 La correction est en amont, et le paquet doit donc venir du dépôt amont et non des
 dépôts Ubuntu. Le projet annonce le correctif en 6.19 ; **la version mesurée comme
-fonctionnelle sur cet hôte est 7.3**.
+fonctionnelle sur cette Forge est 7.3**.
 
 **Vérifié le 2026-08-18, et c'est la preuve du concept même du produit.** Sous Incus
 7.3, dans un Spark **non privilégié**, à `security.idmap.isolated=true`, **AppArmor
@@ -174,7 +174,7 @@ Storage Driver            overlayfs      Cgroup Version 2
 ```
 
 Une pile Compose réelle tourne donc dans une cellule contingentée et cloisonnée, et
-répond à l'hôte sur son IP privée — exactement le point de raccordement dont Caddy a
+répond à la Forge sur son IP privée — exactement le point de raccordement dont Caddy a
 besoin (§9). Le contrat central de l'architecture est établi par la mesure, pas par
 le raisonnement.
 
@@ -184,11 +184,11 @@ n'a donc d'effet sur un Spark qu'après arrêt puis redémarrage de celui-ci.
 
 Le mode `vm` n'est pas une fonctionnalité future décorative : il est la réponse
 prévue au jour où des piles non maîtrisées seront hébergées, puisqu'un *system
-container* partage le noyau de l'hôte. Le modèle de données porte donc le champ
+container* partage le noyau de la Forge. Le modèle de données porte donc le champ
 `runtime` dès le premier jour, même si seul `container` est implémenté.
 
 Les valeurs et sémantiques ci-dessus ont été relevées dans la documentation Incus
-`main` le 2026-08-18 ; les vérifications restant à faire sur l'hôte cible sont
+`main` le 2026-08-18 ; les vérifications restant à faire sur la Forge cible sont
 listées au §13.
 
 ## 4. Ce qui est réellement écrit ici
@@ -241,7 +241,7 @@ une socket Unix. Seul un porteur de clé SSH valide peut les atteindre, via un
 tunnel.
 
 Un Spark n'obtient jamais de port SSH public. L'accès se fait par rebond depuis
-l'hôte :
+la Forge :
 
 ```sshconfig
 Host spark-crm
@@ -265,9 +265,9 @@ là où le texte rend des chaînes à réinterpréter.
 La socket appartient au groupe `incus-admin`. L'utilisateur système de `sparkd`
 doit y être, ce que le contrat de déploiement rappelle.
 
-### 5.2 Inventaire de l'hôte : ce qui est lu, et où
+### 5.2 Inventaire de la Forge : ce qui est lu, et où
 
-Relevé le 2026-08-18 sur l'hôte, ces chemins et ces unités sont **mesurés**, pas
+Relevé le 2026-08-18 sur la Forge, ces chemins et ces unités sont **mesurés**, pas
 supposés.
 
 | Grandeur du registre | Source | Unité rendue |
@@ -285,12 +285,12 @@ Trois pièges, tous rencontrés à la mesure :
 - **`cpu.total` compte les threads, pas les cœurs.** Le prendre pour la capacité
   reviendrait à vendre deux fois la même chose (§7.7). Les cœurs se comptent en
   parcourant les sockets.
-- **`link_speed` est en Mbit/s.** L'hôte rend `1000` pour un lien 1 Gbit/s. Le
+- **`link_speed` est en Mbit/s.** La Forge rend `1000` pour un lien 1 Gbit/s. Le
   registre stocke des bit/s : la conversion est explicite, jamais implicite. Les
   ports dont `link_detected` est faux sont ignorés — `eno2` n'est pas raccordé et
   n'ajoute aucune capacité.
 - **La capacité de stockage est celle du POOL Incus, pas celle du disque.** Sur
-  l'hôte de validation, le pool sur fichier ne rend que 192,8 Gio là où le disque
+  la Forge de validation, le pool sur fichier ne rend que 192,8 Gio là où le disque
   en porte 5,4 Tio. Lire le disque ferait promettre vingt-huit fois la place
   réellement disponible.
 
@@ -303,7 +303,7 @@ jamais. Promettre le total physique, c'est promettre de la mémoire qui n'existe
 pas pour les locataires. Le registre retient donc `MemTotal`.
 
 Un quatrième piège, plus discret : **`/1.0/resources` ne porte aucun nom
-d'hôte.** Sa clé `system` décrit le *matériel* — châssis, micrologiciel, carte
+de Forge.** Sa clé `system` décrit le *matériel* — châssis, micrologiciel, carte
 mère, et des **numéros de série**. Le nom vient de `/1.0`. Ces numéros de série
 ne sont ni stockés ni journalisés : ils identifient la machine sans rien
 apporter au produit.
@@ -316,7 +316,7 @@ Le registre n'est **pas** rafraîchi à chaque requête. Le relevé de topologie
 une opération nommée, tracée dans `audit_log`, qui écrit `host`, `cpu_core`,
 `cpu_thread` et met à jour `topology_synced_at`.
 
-Motif : la capacité de l'hôte est la base de tous les calculs d'admission. Si
+Motif : la capacité de la Forge est la base de tous les calculs d'admission. Si
 elle bougeait silencieusement sous les pieds du plan de contrôle — un lien qui
 tombe, un pool redimensionné —, des Sparks déjà admis deviendraient
 rétroactivement non admissibles sans que personne ne l'ait décidé. Un relevé
@@ -381,7 +381,7 @@ pas à un sous-ensemble.
 
 ### 7.2 bis Correspondance mesurée `allowance` → `cpu.weight`
 
-Mesuré le 2026-08-18 sur l'hôte, noyau 6.8, cgroup v2, Incus 6.0 :
+Mesuré le 2026-08-18 sur la Forge, noyau 6.8, cgroup v2, Incus 6.0 :
 
 ```
 allowance    cpu.weight    cpu.max
@@ -438,7 +438,7 @@ exploitable.
 
 ### 7.2 ter Rendu exact des valeurs, mesuré
 
-Incus refuse ce qui n'est pas entier. Mesuré le 2026-08-18 sur l'hôte :
+Incus refuse ce qui n'est pas entier. Mesuré le 2026-08-18 sur la Forge :
 
 ```
 limits.cpu.allowance = 62.5%        REFUSE  strconv.Atoi: parsing "62.5"
@@ -510,7 +510,7 @@ allowance_pct = réservation / capacité(pool partagé) × 1000
 
 L'énoncé ci-dessus était incomplet, et la mesure du 2026-08-18 le montre. Un Spark
 n'est pas créé sous un parent qui lui serait réservé : Incus le place à la
-**racine** de cgroup v2, où il devient frère des tranches de l'hôte.
+**racine** de cgroup v2, où il devient frère des tranches de la Forge.
 
 ```
 /sys/fs/cgroup/
@@ -521,9 +521,9 @@ n'est pas créé sous un parent qui lui serait réservé : Incus le place à la
 └── lxc.payload.spark-test       cpu.weight =   8   ← le Spark
 ```
 
-Le poids d'un Spark est donc arbitré **contre l'hôte**, et pas seulement contre les
+Le poids d'un Spark est donc arbitré **contre la Forge**, et pas seulement contre les
 autres Sparks. Sous contention totale, un Spark à poids 8 face à trois tranches
-hôte à 100 n'obtient pas 12,5 % de la machine : il obtient
+Forge à 100 n'obtient pas 12,5 % de la machine : il obtient
 `8 / (8 + 100 + 100 + 100 + …)`, soit un ordre de grandeur de moins.
 
 Autrement dit : l'admission control assure la **proportionnalité entre Sparks**,
@@ -536,10 +536,10 @@ Trois voies possibles, à trancher par mesure (unité SPK-29) :
    `spark.slice` — dont le poids représente la part de la machine cédée aux
    Sparks, les poids individuels n'arbitrant plus qu'à l'intérieur ;
 2. conserver la disposition actuelle et **soustraire explicitement** la part de
-   l'hôte de la capacité annoncée, ce qui revient à admettre que la réservation
+   la Forge de la capacité annoncée, ce qui revient à admettre que la réservation
    est une part du reste et non de la machine ;
-3. relever le poids des Sparks pour rendre celui de l'hôte négligeable, ce qui
-   revient à ne plus protéger l'hôte — écarté.
+3. relever le poids des Sparks pour rendre celui de la Forge négligeable, ce qui
+   revient à ne plus protéger la Forge — écarté.
 
 La voie 1 est la seule qui rende la réservation littéralement vraie. Tant qu'elle
 n'est pas mise en œuvre et mesurée, la console ne doit pas présenter la
@@ -608,8 +608,8 @@ survient qu'à la restitution, où les réservations tenaient déjà.
 compris. Le déterminisme sert la même chose qu'en §15.3 : une découpe reproduite
 sur un parc identique donne le même résultat, donc se vérifie.
 
-Sur un hôte à plusieurs nœuds NUMA, ce choix devrait préférer des cœurs d'un même
-nœud. L'hôte de validation n'en a qu'un ; la règle est notée comme dette plutôt
+Sur une Forge à plusieurs nœuds NUMA, ce choix devrait préférer des cœurs d'un même
+nœud. La Forge de validation n'en a qu'un ; la règle est notée comme dette plutôt
 qu'implémentée sans pouvoir être éprouvée.
 
 **Dans quel ordre.** L'ordre n'est pas indifférent :
@@ -647,7 +647,7 @@ cores: 1   →   limits.cpu=3,11        (et non limits.cpu=3)
 
 La topologie est lue via `incus info --resources`.
 
-**Mesuré et confirmé le 2026-08-18.** Sur l'hôte, `incus info --resources` rapporte
+**Mesuré et confirmé le 2026-08-18.** Sur la Forge, `incus info --resources` rapporte
 bien la structure cœur → threads, et le frèrage concorde exactement avec `/sys` :
 
 ```
@@ -697,9 +697,9 @@ implicites et que le code ne peut pas deviner.
 
 ```
 CPU partagé   (cœurs_physiques − cœurs_dédiés) × overcommit_cpu
-Mémoire       (mémoire_totale − réserve_hôte)  × overcommit_memory
+Mémoire       (mémoire_totale − réserve_Forge)  × overcommit_memory
 Réseau        débit_nominal                    × overcommit_network
-Stockage      (stockage_total − réserve_hôte)          ← AUCUN surengagement
+Stockage      (stockage_total − réserve_Forge)          ← AUCUN surengagement
 ```
 
 La capacité CPU se compte en **cœurs physiques**, jamais en threads : le SMT
@@ -760,10 +760,10 @@ troisième, est une perte de temps évitable.
 Il garantit que la somme des réservations tient dans la capacité, donc la
 **proportionnalité entre Sparks**. Il ne garantit pas la valeur absolue d'une
 réservation, pour la raison établie au §7.3 bis : les Sparks sont arbitrés contre
-les tranches de l'hôte. Toute présentation de cette garantie — API, console,
+les tranches de la Forge. Toute présentation de cette garantie — API, console,
 manuel — doit rester exacte sur ce point tant que SPK-29 n'est pas livrée.
 
-## 8. Hôte cible et stockage
+## 8. Forge cible et stockage
 
 ### 8.1 Ce que la machine est réellement
 
@@ -893,7 +893,7 @@ voies, la décision appartenant au responsable :
 
 | Voie | Coût | Risque |
 |---|---|---|
-| réinstallation avec partitionnement personnalisé | reconfiguration complète de l'hôte | faible — la machine est vide, 2,7 Go utilisés |
+| réinstallation avec partitionnement personnalisé | reconfiguration complète de la Forge | faible — la machine est vide, 2,7 Go utilisés |
 | réduction en mode rescue (`resize2fs` puis `mdadm --grow`) | une fenêtre d'indisponibilité | moyen — opération destructive en cas d'erreur |
 
 Sur une machine vide, la réinstallation est la voie **la moins risquée**, pas la
@@ -1038,14 +1038,14 @@ Trois niveaux, et ils ne prouvent pas la même chose :
    *T* + marge, et de *T* exactement quand la marge est nulle.
 2. **Admission** — la demande évaluée et l'alloué du pool incluent la marge ; un
    Spark qui tiendrait tout juste sans elle est refusé avec elle.
-3. **Sur un hôte réel** — un Spark saturé reste reconfigurable : on remplit
+3. **Sur une Forge réelle** — un Spark saturé reste reconfigurable : on remplit
    jusqu'au refus d'écriture, puis on agrandit, et l'agrandissement aboutit. Ce
    troisième niveau est le seul qui prouve le fait du §8.7 ; les deux premiers ne
    prouvent que la mécanique. Tant qu'il n'est pas exécuté, l'unité reste `[~]`.
 
 ## 9. Ingress
 
-Un unique Caddy sur l'hôte détient l'exposition publique et les certificats. Le
+Un unique Caddy sur la Forge détient l'exposition publique et les certificats. Le
 contrat est délibérément minimal :
 
 ```
@@ -1067,7 +1067,7 @@ services:
 
 `8080` n'est joignable que sur l'interface privée du Spark.
 
-Ce qui est **refusé** : que chaque pile Compose pilote le proxy de l'hôte par des
+Ce qui est **refusé** : que chaque pile Compose pilote le proxy de la Forge par des
 labels Docker, une socket Traefik ou un montage de `/var/run/docker.sock`. Cela
 recouplerait le plan de contrôle au runtime Docker du locataire et détruirait la
 frontière posée au §2.
@@ -1083,7 +1083,7 @@ depuis le registre.
 ```
 spark-environment/
 ├── apps/
-│   └── webui/          console locale : SPA React/Vite + hôte Node (tunnels SSH)
+│   └── webui/          console locale : SPA React/Vite + Forge Node (tunnels SSH)
 ├── services/
 │   └── sparkd/         runtime serveur : FastAPI, 127.0.0.1, pilote Incus/Caddy
 ├── packages/
@@ -1105,7 +1105,7 @@ serveur ».
 | Paquet | Langage | Motif | Contrepartie assumée |
 |---|---|---|---|
 | `services/sparkd` | Python 3 + FastAPI | convention maison ; le travail réel est de l'orchestration de processus (`incus`), de la comptabilité SQLite et du HTTP, où Python est adapté et testable rapidement | un binaire Go serait déployable en un fichier unique ; ici le déploiement passe par un paquet et un service systemd, ce qui reste acceptable |
-| `apps/webui` | TypeScript (Vite + React, hôte Node) | convention maison pour l'UI ; l'hôte local et la SPA partagent une seule chaîne d'outillage et une seule commande de lancement | deux langages dans le dépôt ; le contrat d'API les sépare proprement |
+| `apps/webui` | TypeScript (Vite + React, Forge Node) | convention maison pour l'UI ; la Forge locale et la SPA partagent une seule chaîne d'outillage et une seule commande de lancement | deux langages dans le dépôt ; le contrat d'API les sépare proprement |
 
 La conversation d'origine suggérait « un très petit démon Go ou Rust ». L'écart
 est délibéré : `CLAUDE.md` §3 fixe Python pour les services backend, et rien dans
@@ -1117,13 +1117,13 @@ possible sans toucher à la console.
 
 - Aucune API d'administration exposée au réseau ; le seul vecteur d'accès est SSH.
 - Les Sparks sont non privilégiés, `security.idmap.isolated=true`, afin que deux
-  Sparks ne partagent pas de plage UID/GID sur l'hôte.
+  Sparks ne partagent pas de plage UID/GID sur la Forge.
 - Toute règle d'autorisation est appliquée par `sparkd`, jamais par la console.
   Masquer un bouton n'est qu'une aide visuelle.
 - Aucun secret n'entre dans le dépôt. Les clés SSH gérées par le produit sont des
   clés **publiques** ; les clés privées restent sur le poste du responsable.
 - Chaque opération mutante est tracée dans un journal d'audit persistant.
-- Un *system container* partage le noyau de l'hôte : pour des charges hostiles ou
+- Un *system container* partage le noyau de la Forge : pour des charges hostiles ou
   réellement multi-locataires, le mode `vm` est la réponse, pas un durcissement du
   mode `container`.
 
@@ -1140,11 +1140,11 @@ serveur de production :
   d'audit couvrant les cas nominaux, les refus d'admission et les états d'erreur.
 
 Un pilote factice sert à tester la traduction et l'admission control. Il ne prouve
-jamais qu'un quota est appliqué : cette preuve exige un hôte Incus réel.
+jamais qu'un quota est appliqué : cette preuve exige une Forge Incus réelle.
 
 ## 13. Vérifications dues avant toute déclaration de conformité
 
-Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
+Statut au 2026-08-18, après une première campagne de mesures sur la Forge.
 
 ### Confirmées par la mesure
 
@@ -1168,7 +1168,7 @@ Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
    refuse toute réservation sous 0,25 CPU sur un pool de 4 CPU. Remplacée par un
    facteur 1000. §7.2 bis.
 9. **L'invariant d'admission control ne suffisait pas.** Les Sparks sont frères des
-   tranches de l'hôte à la racine de cgroup v2 : la réservation n'est proportionnelle
+   tranches de la Forge à la racine de cgroup v2 : la réservation n'est proportionnelle
    qu'entre Sparks, pas absolue. §7.3 bis, unité SPK-29.
 10. **Le quota bloque le plan de contrôle.** Un Spark qui remplit son quota empêche
     Incus d'écrire son `backup.yaml`, donc toute reconfiguration. §8.7, unité SPK-30.
@@ -1176,7 +1176,7 @@ Statut au 2026-08-18, après une première campagne de mesures sur l'hôte.
 ### Confirmées, suite (nesting)
 
 11. **Nesting Docker complet** — pile Compose réelle dans un Spark non privilégié à
-    idmap isolé, AppArmor actif, sans contournement ; `HTTP 200` depuis l'hôte sur
+    idmap isolé, AppArmor actif, sans contournement ; `HTTP 200` depuis la Forge sur
     l'IP privée. Docker retient `overlayfs` au-dessus du rootfs ZFS. Exige
     Incus ≥ 6.19 ; mesuré fonctionnel en 7.3, et **cassé en 6.0.0**. §3.1.
 
@@ -1399,7 +1399,7 @@ vérification est une seconde ligne de défense, pas la première.
 
 ```
 10.77.0.1                passerelle, portée par sparkbr0
-10.77.0.2   – 10.77.0.15 réservé à l'infrastructure de l'hôte
+10.77.0.2   – 10.77.0.15 réservé à l'infrastructure de la Forge
 10.77.0.16  – 10.77.0.239 attribué par le REGISTRE — 224 Sparks
 10.77.0.240 – 10.77.0.254 DHCP dynamique, hors du produit
 ```
@@ -1441,7 +1441,7 @@ garantit qu'un Spark obtienne son débit réservé quand les autres saturent le
 lien. La console doit présenter les deux différemment.
 
 
-## 16. La réserve de l'hôte
+## 16. La réserve de la Forge
 
 Le §7.7 pose que la capacité allouable n'est jamais la capacité physique. Cette
 section dit **ce qu'on soustrait**, et pourquoi chaque terme est nécessaire.
@@ -1451,7 +1451,7 @@ section dit **ce qu'on soustrait**, et pourquoi chaque terme est nécessaire.
 ```
 MemTotal (noyau)                        94,2 Gio   ← base, §5.2
   − plafond de l'ARC ZFS                16,0 Gio
-  − marge d'exploitation de l'hôte       2,0 Gio   ← réglable
+  − marge d'exploitation de la Forge       2,0 Gio   ← réglable
   ─────────────────────────────────────────────
   = mémoire réellement allouable        76,2 Gio
 ```
@@ -1462,7 +1462,7 @@ le noyau reprendra sous les Sparks. Mesuré le 2026-08-19 : le registre annonça
 98,0 Gio allouables avec une réserve à zéro, alors que l'ARC était plafonné à
 16 Gio — soit un cinquième du pool promis en trop.
 
-**L'hôte lui-même.** `sparkd`, Incus, dnsmasq, `sshd`, systemd et le noyau
+**La Forge elle-même.** `sparkd`, Incus, dnsmasq, `sshd`, systemd et le noyau
 consomment. Mesuré : 3,1 Gio en marche à vide. Cette part est un **réglage
 explicite** (`SPARKD_MEMORY_RESERVE`) et non une valeur devinée : elle dépend de
 ce que l'exploitant fait tourner à côté, et le produit n'a pas à le supposer.
@@ -1526,7 +1526,7 @@ clé : une clé publique n'est pas un secret, mais un journal n'a pas à la rép
 
 Un Spark neuf reçoit `openssh-server`, puis Docker et Compose si
 `docker_enabled`. Mesuré : environ **130 secondes** pour `openssh-server` sur
-l'hôte de validation, dépendant du réseau. La création d'un Spark n'est donc pas
+la Forge de validation, dépendant du réseau. La création d'un Spark n'est donc pas
 instantanée, et la console doit le montrer plutôt que de laisser croire à un
 blocage.
 
@@ -1537,7 +1537,7 @@ deviner.
 ### 17.4 Aucun port SSH public, jamais
 
 Un Spark n'expose pas `22` sur l'extérieur. L'accès se fait par **rebond sur
-l'hôte**, dont le `sshd` est la seule porte du système (§5) :
+la Forge**, dont le `sshd` est la seule porte du système (§5) :
 
 ```sshconfig
 Host spark-crm
@@ -1550,9 +1550,9 @@ Host spark-crm
 La console produit ce fragment à partir du registre. Elle ne le devine pas :
 l'adresse vient de `ipv4_address`, qui est attribuée par le registre (§15.1).
 
-Conséquence à ne pas perdre de vue : quiconque peut se connecter à l'hôte peut
+Conséquence à ne pas perdre de vue : quiconque peut se connecter à la Forge peut
 atteindre le réseau privé. Le rebond simplifie l'accès, il ne cloisonne pas
-l'hôte des Sparks — et le §11 reste la référence sur ce que l'isolation garantit.
+la Forge des Sparks — et le §11 reste la référence sur ce que l'isolation garantit.
 
 
 ## 18. Réconciliation de l'ingress
@@ -1595,7 +1595,7 @@ du locataire.
 
 La configuration se termine par une **route terminale sans filtre**, qui rend
 `404`. Sans elle, Caddy répond `200` avec un corps vide à **tout** domaine non
-routé — mesuré le 2026-08-19. L'hôte répondrait alors au nom de domaines qu'il ne
+routé — mesuré le 2026-08-19. La Forge répondrait alors au nom de domaines qu'il ne
 sert pas, et une erreur de pointage DNS resterait invisible au lieu de se
 manifester tout de suite. Elle vient après les routes nommées, sans quoi elle les
 masquerait.
@@ -1739,11 +1739,11 @@ pourquoi il ne remplace pas la sauvegarde applicative (§8.3).
 ### 19.3 L'instantané avec état n'est pas disponible
 
 `--stateful` capture la mémoire du conteneur et exige `migration.stateful=true`.
-Mesuré sur l'hôte : même activé, la capture échoue —
+Mesuré sur la Forge : même activé, la capture échoue —
 `CRIU was built without libnftables support`, puis `snapshot dump failed`.
 
 Le modèle porte le champ `stateful` (`docs/SCHEMA.md` §8) et il restera à `false`
-sur cet hôte. Le produit **ne propose pas** cette option tant qu'elle n'a pas été
+sur cette Forge. Le produit **ne propose pas** cette option tant qu'elle n'a pas été
 mesurée fonctionnelle : offrir un bouton qui échoue à l'usage vaut moins que ne
 pas l'offrir.
 
@@ -1793,7 +1793,7 @@ une valeur plausible, donc indétectable.
 ### 20.2 Seule `eth0` compte pour le réseau
 
 Le relevé énumère aussi `docker0` et les `br-*` que Docker crée dans le Spark.
-Ce trafic est **interne au Spark** : il ne traverse jamais le bridge de l'hôte et
+Ce trafic est **interne au Spark** : il ne traverse jamais le bridge de la Forge et
 ne consomme aucune bande passante du pool. L'additionner ferait apparaître une
 consommation réseau là où rien n'est sorti, et la fausserait d'autant plus que la
 pile du locataire est bavarde entre ses propres conteneurs.
@@ -1822,7 +1822,7 @@ ne l'est qu'entre Sparks.
 ### 20.3 bis Consommer plus que sa réservation est NORMAL
 
 Mesuré le 2026-08-19 : un Spark réservant `0,5 CPU`, chargé par deux boucles sur
-un hôte au repos, consomme **1,996 CPU** sur une fenêtre de six secondes — quatre
+une Forge au repos, consomme **1,996 CPU** sur une fenêtre de six secondes — quatre
 fois sa réservation.
 
 Ce n'est pas un dépassement, c'est le produit qui fonctionne. Le mode `shared`
@@ -1980,7 +1980,7 @@ X-Spark-Actor: <identité>
 
 **Cet en-tête n'est pas une preuve, et le produit ne le présentera jamais comme
 telle.** Qui atteint `sparkd` écrit ce qu'il veut dedans, exactement comme qui
-atteint l'hôte contourne la protection du §35.1. C'est une **attribution**, utile
+atteint la Forge contourne la protection du §35.1. C'est une **attribution**, utile
 entre usages légitimes et pour distinguer les deux classes ; la preuve viendra de
 la signature (SPK-40), et d'elle seule. Le §36.7 dit l'ordre : identité, puis
 signature, puis chaîne, puis ancre — celle-ci est la première marche, et se dit
@@ -2076,7 +2076,7 @@ qu'une erreur : l'exploitant prend une décision sur un état qui n'existe plus.
 
 ### 22.4 L'inventaire ne contient aucun secret
 
-`~/.config/spark/servers.json` retient un nom, un hôte, un utilisateur, un port
+`~/.config/spark/servers.json` retient un nom, une Forge, un utilisateur, un port
 distant et le port local à ouvrir. **Aucune clé, aucun mot de passe, aucune
 phrase de passe.** L'authentification appartient à la configuration SSH du poste,
 et le produit n'a pas à la dupliquer — dupliquer un secret, c'est doubler les
@@ -2124,7 +2124,7 @@ Celui-ci dit ce qui se code pour s'en servir sans éditeur de texte.
 | Genre | Ce que l'entrée porte | Ce qu'OpenSSH résout |
 |---|---|---|
 | `ssh` | `host`, `user`, `port` | rien de plus |
-| `alias` | `sshHost` — un `Host` du `~/.ssh/config` | l'hôte, l'utilisateur, le port, le rebond, la clé |
+| `alias` | `sshHost` — un `Host` du `~/.ssh/config` | la Forge, l'utilisateur, le port, le rebond, la clé |
 | `local` | `port` | rien : `sparkd` écoute déjà ici (§28.2) |
 
 Une entrée `alias` ne porte **ni** `host`, **ni** `user`, **ni** `port` de
@@ -2212,7 +2212,7 @@ Le §22.4 ter disait les routes ; il ne disait pas la surface. Ce point-ci le
 tranche, et lui seul.
 
 **Une destination de premier degré, nommée « Serveurs ».** Elle rejoint *Sparks*
-et *Hôte* dans la barre latérale.
+et *Forge* dans la barre latérale.
 
 Ce n'est **pas** une contradiction avec le §1 de `DESIGN_SYSTEM_APP` — « on ne va
 pas au serveur comme on va aux Sparks ». Le sélecteur reste au-dessus du premier
@@ -2221,8 +2221,8 @@ serveur », elle dit « administre ta liste ». Ce sont deux sujets différents 
 l'un choisit ce qu'on regarde, l'autre gère ce qui est déclaré.
 
 Elle est une propriété de la **console**, pas du serveur courant : c'est
-précisément pourquoi elle ne peut pas être un onglet sous *Hôte*, qui décrit la
-machine qu'on regarde. Un catalogue rangé sous *Hôte* disparaîtrait avec le
+précisément pourquoi elle ne peut pas être un onglet sous *Forge*, qui décrit la
+machine qu'on regarde. Un catalogue rangé sous *Forge* disparaîtrait avec le
 tunnel qui le sert, alors qu'il est justement ce qui permet d'en choisir un autre.
 
 Sa forme suit le §6.14 et le §6.27 :
@@ -2530,7 +2530,7 @@ l'ouvrir ne tient pas lieu de confirmation.
 ### 26.3 Routes publiques
 
 **Déclarer** demande un domaine, un port et le TLS. Le port est celui **du
-Spark**, pas celui de l'hôte : c'est `target_port`, et l'amont est
+Spark**, pas celui de la Forge : c'est `target_port`, et l'amont est
 `ipv4_address:target_port` (§18.2). Le libellé du champ le dit, sans quoi on
 saisit `443` en croyant décrire l'entrée.
 
@@ -2618,7 +2618,7 @@ l'acceptation doit venir après lui, et nommer ce qui meurt. C'est la traduction
 l'écran de la décision du §19.1 : le drapeau appartient à la requête, jamais à la
 configuration.
 
-**`stateful` n'est pas proposé** (§19.3). Il échoue sur cet hôte, et un bouton
+**`stateful` n'est pas proposé** (§19.3). Il échoue sur cette Forge, et un bouton
 qui échoue à l'usage vaut moins que pas de bouton.
 
 ### 26.6 Ce que ces panneaux ne font pas
@@ -2763,7 +2763,7 @@ adresse routable** et sort en code 2 (§22). Un accès direct ne peut donc attei
 qu'un `sparkd` lié à la boucle locale de la machine où tourne la console —
 exactement ce que le tunnel SSH garantissait à distance.
 
-Un serveur `local` n'a ni hôte, ni utilisateur, ni port distant : les exiger
+Un serveur `local` n'a ni Forge, ni utilisateur, ni port distant : les exiger
 obligerait à inventer des valeurs qui ne servent à rien.
 
 ### 28.3 Le seed passe par les mêmes chemins que l'application
@@ -2824,7 +2824,7 @@ captures s'y réfèrent.
 Le pilote est factice. Aucun quota n'est appliqué, aucun conteneur ne tourne,
 aucune configuration Caddy n'est chargée. La pile éprouve la **traduction**, le
 contrôle d'admission, le cycle de vie, l'audit et l'interface — elle ne prouve
-rien de l'isolation. Cette preuve exige un hôte Incus réel (§12, §13).
+rien de l'isolation. Cette preuve exige une Forge Incus réelle (§12, §13).
 
 
 ## 29. Les parcours E2E : éprouver le produit par où il s'utilise
@@ -2918,7 +2918,7 @@ et affichées, jamais masquées.
 Le pilote reste factice (§28.7). Aucun quota n'est appliqué, aucun conteneur ne
 tourne, aucune configuration Caddy n'est chargée. Ces parcours prouvent que le
 produit **s'utilise** de bout en bout et que ses refus arrivent où il faut ; ils
-ne prouvent rien de l'isolation, qui exige un hôte Incus réel (§13).
+ne prouvent rien de l'isolation, qui exige une Forge Incus réelle (§13).
 
 
 ## 30. Le manuel et sa fraîcheur
@@ -2960,7 +2960,7 @@ Trois conséquences que le plan laissait implicites :
 - un chapitre dont l'unité n'est pas livrée **n'est pas rédigé**. Il figure au
   manuel avec la raison et l'unité qui le débloque, plutôt que d'être écrit
   d'avance et faux ;
-- un comportement mesuré sur l'hôte réel mais **non reproductible** sur la pile de
+- un comportement mesuré sur la Forge réelle mais **non reproductible** sur la pile de
   développement — l'isolation, les quotas, l'émission d'un certificat — est
   présenté comme tel, en renvoyant à la mesure du §13, jamais comme quelque chose
   que le lecteur pourra vérifier avec la pile de développement ;
@@ -3013,7 +3013,7 @@ constater.
 
 ### 31.4 Ce que l'installation doit garantir, mesuré le 2026-08-19
 
-Relevé sur l'hôte cible, en lecture seule :
+Relevé sur la Forge cible, en lecture seule :
 
 | Condition | État relevé |
 |---|---|
@@ -3044,7 +3044,7 @@ d'être utilisé ; le §13 dit que le produit fonctionne.
 
 Le §7.3 bis constate la dette : Incus place chaque Spark à la **racine** de
 cgroup v2, frère de `system.slice`, `user.slice` et `init.scope`. Le poids d'un
-Spark est donc arbitré contre l'hôte, et sa réservation n'est proportionnelle
+Spark est donc arbitré contre la Forge, et sa réservation n'est proportionnelle
 qu'entre Sparks. Cette section dit comment on la rend absolue.
 
 ### 32.1 Le mécanisme, mesuré le 2026-08-19
@@ -3057,7 +3057,7 @@ lxc.cgroup.dir.container = spark.slice/<nom>
 lxc.cgroup.dir.monitor   = spark.slice/monitor-<nom>
 ```
 
-Mesuré sur l'hôte : l'instance atterrit dans `/sys/fs/cgroup/spark.slice/<nom>`
+Mesuré sur la Forge : l'instance atterrit dans `/sys/fs/cgroup/spark.slice/<nom>`
 et non plus à la racine. **Deux propriétés survivent au déplacement**, et c'est ce
 qui rend la solution viable :
 
@@ -3073,7 +3073,7 @@ La tranche doit porter les contrôleurs délégués (`cpu`, `cpuset`, `memory`, 
 C'est le cœur de l'unité. Placer les Sparks sous un parent ne suffit pas : il
 faut que ce parent pèse **exactement ce que les Sparks ont acheté**.
 
-L'hôte présente trois tranches à `cpu.weight = 100` — `system.slice`,
+La Forge présente trois tranches à `cpu.weight = 100` — `system.slice`,
 `user.slice`, `init.scope` — soit `H = 300`. Sous contention totale, une tranche
 de poids `W` obtient `W / (W + H)` de la machine.
 
@@ -3085,7 +3085,7 @@ W / (W + H) = f        où f = Σr / C
 donc  W = H × f / (1 − f)
 ```
 
-Vérification arithmétique sur l'hôte, `C = 4` cœurs :
+Vérification arithmétique sur la Forge, `C = 4` cœurs :
 
 | Σr | f | W | part obtenue | attendu |
 |---|---|---|---|---|
@@ -3117,29 +3117,29 @@ poids cgroup ne se partage qu'entre frères **exécutables**. Pendant la mesure,
 Conséquence sur la promesse, et elle est favorable :
 
 - avec `H = 300` posé en dur, la tranche est **sous-évaluée** dès qu'une tranche
-  de l'hôte est inactive. Le Spark obtient alors **plus** que sa part, jamais
+  de la Forge est inactive. Le Spark obtient alors **plus** que sa part, jamais
   moins ;
 - la réservation devient donc un **plancher** : `r / C` est garanti quand tout
-  l'hôte s'exécute, et dépassé sinon. C'est ce qu'une réservation doit être, et
+  la Forge s'exécute, et dépassé sinon. C'est ce qu'une réservation doit être, et
   c'est cohérent avec le burst du §7.2.
 
 **Ce qui reste à prouver**, et c'est pourquoi SPK-29 n'est pas close : que sous
-contention **totale** — les trois tranches de l'hôte exécutables en même temps —
+contention **totale** — les trois tranches de la Forge exécutables en même temps —
 la part converge bien vers `r / C`. La mesure ci-dessus ne l'établit pas, elle
-établit seulement que le plancher est tenu et largement dépassé quand l'hôte est
+établit seulement que le plancher est tenu et largement dépassé quand la Forge est
 calme.
 
-### 32.3 L'hôte garde une part, et c'est ce qui rend la loi définie
+### 32.3 La Forge garde une part, et c'est ce qui rend la loi définie
 
-Quand `f → 1`, `W → ∞` : les Sparks prendraient tout et l'hôte n'ordonnancerait
+Quand `f → 1`, `W → ∞` : les Sparks prendraient tout et la Forge n'ordonnancerait
 plus rien — ni `sparkd`, ni `sshd`, ni Incus lui-même. On ne pourrait alors même
 plus corriger la situation.
 
-**Une réserve CPU de l'hôte est donc nécessaire à la définition de la loi**, pas
+**Une réserve CPU de la Forge est donc nécessaire à la définition de la loi**, pas
 seulement prudente. C'est le même raisonnement qu'au §16 pour la mémoire :
 
 ```
-capacité allouable = cœurs physiques − réserve CPU de l'hôte
+capacité allouable = cœurs physiques − réserve CPU de la Forge
 ```
 
 `f` est calculée sur la capacité **physique**, et bornée par la réserve :
@@ -3220,7 +3220,7 @@ autorité à la création.
 
 ### 33.3 La vérification est un relevé, pas un rafraîchissement
 
-Le catalogue suit la règle déjà retenue pour la topologie de l'hôte (§27.8) :
+Le catalogue suit la règle déjà retenue pour la topologie de la Forge (§27.8) :
 l'existence d'une image est **relevée explicitement**, datée, et affichée avec sa
 date. Elle n'est pas revérifiée à chaque requête.
 
@@ -3240,7 +3240,7 @@ Une entrée porte donc trois états distincts, jamais confondus (`DESIGN_SYSTEM.
 Une entrée `missing` ou `unknown` reste **visible** et n'est pas proposée à la
 création : la faire disparaître ferait croire qu'elle n'a jamais existé.
 
-**Mesuré le 2026-08-19 sur l'hôte**, et la mesure corrige l'hypothèse sur un
+**Mesuré le 2026-08-19 sur la Forge**, et la mesure corrige l'hypothèse sur un
 point qui change le code.
 
 La voie est bien celle qui était pressentie : `/streams/v1/index.json` donne
@@ -3265,7 +3265,7 @@ Trois conséquences :
   qui est la propriété dont dépend tout le §33.2.
 
 Pour ce qui est déjà local, `GET /1.0/images` sur la socket d'Incus rend les
-empreintes des images en cache. Mesuré : l'image présente sur l'hôte n'a **aucun
+empreintes des images en cache. Mesuré : l'image présente sur la Forge n'a **aucun
 alias local**. Le local renseigne donc la disponibilité hors ligne, jamais
 l'existence d'un alias — les deux voies sont complémentaires et ne se
 remplacent pas.
@@ -3307,8 +3307,8 @@ désignent dans la console, et ce qu'ils changent de l'existant.
 
 | Degré | Contenu | Forme |
 |---|---|---|
-| 1 | Sparks, Hôte | barre latérale |
-| 2 | sous Sparks : Instances · sous Hôte : Pools, Images | onglets |
+| 1 | Sparks, Forge | barre latérale |
+| 2 | sous Sparks : Instances · sous Forge : Pools, Images | onglets |
 | 3 | la fenêtre d'un Spark : Infos, Routes, Clés, Instantanés, Journal, Docker, Terminal | onglets de la fenêtre, sections à l'intérieur |
 | — | modifier une section, ou lui insérer un élément | modale limitée à cette section |
 
@@ -3321,7 +3321,7 @@ hiérarchie est une orientation ; ce qu'elle sert à obtenir ne l'est pas :
 2. une surface a un seul sujet, nommable en une phrase ;
 3. une action sensible se confirme (§6.23 du design system).
 
-L'onglet **Images** est la surface du catalogue (§33) : il décrit l'hôte, pas un
+L'onglet **Images** est la surface du catalogue (§33) : il décrit la Forge, pas un
 Spark, et c'est là que s'ajoute et se relève une référence.
 
 Le **sélecteur de serveur** et l'état du tunnel restent au-dessus du premier
@@ -3393,8 +3393,8 @@ cliquée trop vite, le `curl` recopié d'un autre bocal, le script d'astreinte l
 sur le mauvais nom.
 
 Ce dont il **ne** protège **pas**, et il faut le dire aussi nettement : d'un
-opérateur hostile. Qui détient une clé SSH de l'hôte atteint `sparkd` (§11), et
-qui détient `root` sur l'hôte atteint le fichier SQLite du registre. La protection
+opérateur hostile. Qui détient une clé SSH de la Forge atteint `sparkd` (§11), et
+qui détient `root` sur la Forge atteint le fichier SQLite du registre. La protection
 est un **garde-fou**, pas un contrôle d'accès, et le produit ne la présentera
 jamais comme une frontière de sécurité.
 
@@ -3464,7 +3464,7 @@ La protection s'arme avec un mot de passe et se lève avec ce même mot de passe
   au même titre que les clés — et le journal enregistre la **tentative**, son
   résultat et sa date, jamais sa valeur.
 - Il n'y a **aucune récupération** par l'API. Un mot de passe perdu se lève sur
-  l'hôte, avec `root`, dans le registre. C'est cohérent avec le §35.1 : ce n'est
+  la Forge, avec `root`, dans le registre. C'est cohérent avec le §35.1 : ce n'est
   pas un chiffrement, et prétendre le contraire par un mécanisme de secours
   compliqué serait mentir sur ce que l'interrupteur vaut.
 
@@ -3570,7 +3570,7 @@ donc pas la chaîne : c'est l'**ancre**.
 ### 36.2 L'ancre : la console est le second témoin
 
 Le produit a déjà ce qu'il faut : la console tourne sur une **autre machine** que
-l'hôte, et s'y connecte régulièrement (§22).
+la Forge, et s'y connecte régulièrement (§22).
 
 Décision : la console retient, par serveur, la **dernière empreinte de tête**
 qu'elle a vue, dans son inventaire local. À chaque connexion, elle vérifie que
@@ -3585,13 +3585,13 @@ qu'on soupçonne.
 
 ### 36.3 Où la signature est produite décide de ce qu'elle vaut
 
-Signer les lignes avec une clé **détenue par l'hôte** ne protège pas de qui
-contrôle l'hôte : il signe ce qu'il veut. Cela reste utile contre un processus
+Signer les lignes avec une clé **détenue par la Forge** ne protège pas de qui
+contrôle la Forge : il signe ce qu'il veut. Cela reste utile contre un processus
 non privilégié ou une erreur, et rien de plus. Il ne faut pas l'appeler
 autrement.
 
 Signer **côté console**, avec la clé SSH du responsable via son agent, change la
-nature de la preuve : la clé privée n'est jamais sur l'hôte. Root peut alors
+nature de la preuve : la clé privée n'est jamais sur la Forge. Root peut alors
 supprimer ou tronquer, mais ne peut pas **fabriquer** un geste authentique. C'est
 la seule forme de non-répudiation atteignable ici, et elle rejoint une des pistes
 de SPK-35 : un seul mécanisme sert à la fois d'authentification et de preuve
@@ -3646,7 +3646,7 @@ garantie creuse, et qu'ils se découvrent trop tard.
   le journal ne se purge jamais, soit une purge scelle le préfixe supprimé dans une
   ligne de **point de contrôle** qui porte son empreinte.
 - **Le temps n'est pas une preuve.** La chaîne donne un **ordre**, pas une date :
-  l'horloge de l'hôte est modifiable. Un horodatage reste informatif.
+  l'horloge de la Forge est modifiable. Un horodatage reste informatif.
 - **Le coût de vérification est linéaire.** Des points de contrôle périodiques
   permettent une vérification incrémentale. À l'échelle de ce produit, la
   vérification intégrale reste de toute façon peu coûteuse — le journal se compte
@@ -3698,7 +3698,7 @@ avant SPK-40 resterait une figure de style.
 
 Le §36.8 dit ce que l'onglet montre. Cette section dit ce qui se code.
 
-#### 36.8.1 Une destination sous Hôte, pas une facette d'un Spark
+#### 36.8.1 Une destination sous Forge, pas une facette d'un Spark
 
 `#/hote/journal`, troisième onglet de second degré après *Pools* et *Images*
 (§34.1). Le journal **couvre tous les Sparks** : le lire dans la fenêtre d'un seul
@@ -3904,7 +3904,7 @@ signal : au second relevé, tout paraîtrait normal.
 
 ### 36.8 L'onglet de supervision
 
-Le journal devient une destination de second degré sous **Hôte** (§34.1) : il
+Le journal devient une destination de second degré sous **Forge** (§34.1) : il
 couvre tous les Sparks, il ne se lit pas dans la fenêtre d'un seul.
 
 Il rend, outre les entrées filtrables :
@@ -3950,7 +3950,7 @@ terminal et sa clé. Elle lui épargne les gestes, pas les droits.
 
 ### 37.2 Le chemin normal : SSH, et ce qu'il suppose
 
-Le transport normal est SSH vers le Spark, par rebond sur la machine hôte, comme
+Le transport normal est SSH vers le Spark, par rebond sur la machine Forge, comme
 le manuel M6 le décrit déjà pour un humain.
 
 Il suppose un `sshd` **dans** le Spark. L'image `images:debian/13` n'en embarque
@@ -4558,7 +4558,7 @@ le pilote refuse d'appliquer : la ligne reste au registre et `applied_at` reste
 vide, comme au §18.5. Un Spark **protégé** (§35) refuse ces gestes avant tout le
 reste.
 
-### 39.7 Ce qui ne se prouve pas sans hôte réel
+### 39.7 Ce qui ne se prouve pas sans Forge réelle
 
 Le pilote factice permet d'éprouver **tout ce qui appartient au produit** : les
 refus, l'unicité portée par la base, la reconstruction complète des devices, et

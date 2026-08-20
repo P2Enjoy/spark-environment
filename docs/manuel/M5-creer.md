@@ -26,7 +26,7 @@ Pour employer une image absente de la liste, il faut l'**ajouter au catalogue** 
 un geste distinct, qui déclenche sa vérification. Le formulaire de création ne
 sert pas de porte d'entrée à une référence inconnue.
 
-Le catalogue vit sous **Hôte → Images**, parce qu'il décrit le serveur et non un
+Le catalogue vit sous **Forge → Images**, parce qu'il décrit le serveur et non un
 Spark. Le bouton *Ajouter une image* y ouvre une saisie limitée à cette section.
 
 ![Le catalogue d'images, et la saisie d'une nouvelle référence](images/m5-catalogue.png)
@@ -48,7 +48,7 @@ vient donc toujours d'une vérification, jamais d'une déclaration.
 
 C'est un **droit d'ordonnancement sous contention**, pas un plafond. Quand la
 machine est libre, votre Spark consommera davantage, et c'est normal : mesuré, un
-Spark réservant 0,5 CPU en consomme presque 2 sur un hôte au repos. L'interface
+Spark réservant 0,5 CPU en consomme presque 2 sur une Forge au repos. L'interface
 appelle cela un *burst* et ne le signale pas comme une anomalie.
 
 Ce que ce n'est pas : une garantie que 0,5 CPU vous sera réservé quoi qu'il

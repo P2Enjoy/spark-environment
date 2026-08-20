@@ -44,7 +44,7 @@ Unités : SPK-16.
 
 ## M4 · Lire les pools de ressources
 
-Capacité physique, réserve de l'hôte, capacité allouable, surengagement. Pourquoi
+Capacité physique, réserve de la Forge, capacité allouable, surengagement. Pourquoi
 « allouable » est toujours inférieur à « physique ».
 
 Unités : SPK-05, SPK-22.
@@ -68,7 +68,7 @@ Unités : SPK-20, SPK-05, SPK-06, SPK-32.
 
 Ajout d'une clé SSH, connexion par rebond, `docker compose up`. Le contrat
 d'ingress : `domaine → spark → port`, et pourquoi il ne faut pas piloter le proxy
-de l'hôte depuis Compose.
+de la Forge depuis Compose.
 
 Unités : SPK-11, SPK-12.
 
