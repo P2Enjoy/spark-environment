@@ -22,7 +22,7 @@ import {
   OK, SANS_CONTENEUR, DOCKER_ABSENT, MOTEUR_MUET, SSHD_MUET, INJOIGNABLE,
   analyserInspection, analyserReseaux, analyserMontages, analyserJournaux,
   inspecter, journaux, quoter, inspecterConteneur, lireJournaux,
-  CONTENEUR_INCONNU,
+  CONTENEUR_INCONNU, doublonPour,
 } from './docker.js';
 
 const SPARK = { name: 'helo', ipv4_address: '10.77.0.17',
@@ -44,7 +44,9 @@ function fauxSsh(reponses) {
     setImmediate(() => {
       if (r.sortie) e.stdout.emit('data', Buffer.from(r.sortie));
       if (r.erreurs) e.stderr.emit('data', Buffer.from(r.erreurs));
-      e.emit('exit', r.code);
+      // `close` et non `exit` : c'est celui que le module attend, parce que
+      // `exit` peut précéder le drainage de stdout (voir docker.js).
+      e.emit('close', r.code);
     });
     return e;
   };
@@ -317,4 +319,55 @@ test('les journaux d’un conteneur disparu ne rendent pas une liste vide muette
   assert.equal(vu.state, CONTENEUR_INCONNU);
   assert.match(vu.titre, /a disparu/);
   assert.deepEqual(vu.lines, []);
+});
+
+test('le doublon répond PAR GESTE, et « * » sert de défaut', () => {
+  // La deuxième tranche a besoin qu'inspecter et lire les journaux ne rendent
+  // pas la même chose, et que l'un échoue pendant que l'autre aboutit.
+  const table = JSON.stringify({ ps: 'A', logs: 'B', '*': 'C' });
+  assert.equal(doublonPour(table, INVENTAIRE), 'A');
+  assert.equal(doublonPour(table, journaux('web')), 'B');
+  assert.equal(doublonPour(table, inspecter('web')), 'C');
+  assert.equal(doublonPour(table, MESURES), 'C');
+  // Une chaîne simple répond à tout — c'est le doublon de la première tranche.
+  assert.equal(doublonPour('printf x', INVENTAIRE), 'printf x');
+  assert.equal(doublonPour(null, INVENTAIRE), null);
+  // Sans réponse ni défaut, la VRAIE commande passe : un échec bruyant vaut
+  // mieux qu'une sortie muette prise pour un relevé.
+  assert.equal(doublonPour(JSON.stringify({ ps: 'A' }), journaux('web')), null);
+});
+
+test('un doublon passe par un shell, donc une sortie à espaces est possible', async () => {
+  const { spawnFn, vus } = fauxSsh([{ code: 0, sortie: '' }]);
+  await relever({ tunnel: TUNNEL, spark: SPARK, spawn: spawnFn,
+                  doublon: "printf 'a b\\n'" });
+  assert.equal(vus[0].programme, 'sh');
+  assert.deepEqual(vus[0].args, ['-c', "printf 'a b\\n'", INVENTAIRE],
+    'la VRAIE commande est passée en $0, sans quoi un doublon ne peut pas '
+    + 'répondre selon le conteneur demandé');
+});
+
+test('une sortie ENCORE EN COURS n’est pas rendue tronquée', async () => {
+  // MESURÉ le 2026-08-20 sur deux cents lignes de journal : `exit` arrive avant
+  // que stdout ait fini d'être drainé, et le relevé perdait une trentaine de
+  // lignes SANS RIEN DIRE. C'est le pire défaut possible pour un écran dont le
+  // seul rôle est de rapporter. Ce doublon rejoue exactement cet ordre.
+  const spawnFn = () => {
+    const e = new EventEmitter();
+    e.stdout = new EventEmitter();
+    e.stderr = new EventEmitter();
+    setImmediate(() => {
+      e.stdout.emit('data', Buffer.from('2026-08-20T18:52:01Z début\n'));
+      e.emit('exit', 0);                       // le processus est terminé…
+      setImmediate(() => {                     // …mais stdout n'est pas drainé.
+        e.stdout.emit('data', Buffer.from('2026-08-20T18:52:02Z fin\n'));
+        e.emit('close', 0);
+      });
+    });
+    return e;
+  };
+  const vu = await lireJournaux({ tunnel: TUNNEL, spark: SPARK, nom: 'web',
+                                  spawn: spawnFn });
+  assert.equal(vu.lines.length, 2, 'la ligne arrivée après « exit » est gardée');
+  assert.equal(vu.lines.at(-1).text, 'fin');
 });

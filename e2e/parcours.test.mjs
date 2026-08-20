@@ -60,7 +60,13 @@ after(async () => {
   await dns?.demonter();
 });
 
-beforeEach(() => { bruits = []; });
+beforeEach(async () => {
+  bruits = [];
+  // SPK-44 : le doublon Docker garde un témoin entre deux parcours. Le laisser
+  // condamnerait tous les parcours suivants à ne plus lire de journaux, et leur
+  // échec ne dirait pas pourquoi.
+  await pile?.oublierLecturesDocker?.();
+});
 
 /**
  * Enveloppe un parcours pour qu'un échec DISE pourquoi (§29.5).
@@ -1806,7 +1812,7 @@ test('confirmer le dépannage ouvre la session, et le journal la compte À PART'
 
 // --- SPK-44 · L'ONGLET DOCKER, EN LECTURE (§37.6) ---------------------------
 
-test('l’onglet Docker liste ce qui tourne, et n’offre AUCUN bouton', async () => {
+test('l’onglet Docker liste ce qui tourne, sans offrir de geste SUR un conteneur', async () => {
   await parcours('docker-inventaire', async () => {
     // Depuis la liste, comme un exploitant. « crm-production » est en marche et
     // porte une cellule : c'est le cas nominal.
@@ -1830,9 +1836,17 @@ test('l’onglet Docker liste ce qui tourne, et n’offre AUCUN bouton', async (
     assert.match(section, /depuis l’intérieur/);
     assert.match(section, /jamais\s+aux quotas du Spark/);
 
-    // §1.4 : l'unité est en LECTURE. Aucun bouton dans cette section.
-    const boutons = await page.$$('#titre-docker ~ * button, #titre-docker ~ button');
-    assert.equal(boutons.length, 0, 'aucun geste n’est offert par cet onglet');
+    // §1.4 : l'unité est en LECTURE. Le seul bouton offert DEMANDE une lecture
+    // — le §37.6 ter exige qu'inspection et journaux soient demandés — et aucun
+    // n'agit sur le conteneur : démarrer, arrêter, supprimer sont SPK-45.
+    const libelles = await page.$$eval('#titre-docker ~ * button',
+                                       (l) => l.map((b) => b.textContent.trim()));
+    assert.ok(libelles.length > 0, 'la lecture doit pouvoir être demandée');
+    for (const libelle of libelles) {
+      assert.ok(!/démarrer|arrêter|redémarrer|supprimer|relancer/i.test(libelle),
+                `geste interdit offert : ${libelle}`);
+    }
+    assert.equal(await page.$$eval('.bouton--destructif', (l) => l.length), 0);
 
     // §36.7 : une lecture ne se journalise pas. Le relevé passe toutes les cinq
     // secondes ; le journaliser le remplirait de bruit.
@@ -1865,6 +1879,143 @@ test('quitter l’onglet ARRÊTE la collecte', async () => {
     page.off('request', compter);
     assert.equal(releves, 0,
       `la collecte a continué après le départ : ${releves} relevé(s)`);
+  });
+});
+
+test('ouvrir un conteneur montre son identité, ses réseaux et ses journaux', async () => {
+  await parcours('docker-conteneur-ouvert', async () => {
+    // §29.3 : on ouvre le conteneur EN CLIQUANT dessus, jamais par une URL.
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+    await page.click('button[data-conteneur="helo-web-1"]');
+
+    await page.waitForSelector('#titre-conteneur', { timeout: 15000 });
+    assert.equal(await page.textContent('#titre-conteneur'), 'helo-web-1');
+
+    // §5.4 : une surface, un sujet. La liste a cédé la place.
+    assert.equal(await page.$$eval('tbody tr', (l) => l.length), 0);
+
+    await page.waitForSelector('pre.terminal', { timeout: 15000 });
+    const ecran = await page.textContent('.principal');
+
+    // L'identité, dite en français (§14.7), et sans code de sortie : ce
+    // conteneur TOURNE, en afficher un ferait lire qu'il s'est terminé (§14.6).
+    assert.match(ecran, /en marche/);
+    assert.ok(!/Code de sortie/.test(ecran), 'un conteneur en marche n’en a pas');
+    assert.match(ecran, /nginx:alpine/);
+
+    // Ses réseaux et ses volumes, lus sur le Spark.
+    assert.match(ecran, /helo_default/);
+    assert.match(ecran, /172\.18\.0\.2/);
+    assert.match(ecran, /\/var\/lib\/postgresql\/data/);
+
+    // Les journaux, BORNÉS, et la troncature ANNONCÉE : le doublon en écrit
+    // deux cents pile, soit la borne du §37.6 ter.
+    const lignes = (await page.textContent('pre.terminal')).trim().split('\n');
+    assert.equal(lignes.length, 200, 'la borne est tenue');
+    assert.match(ecran, /200 dernières lignes/);
+
+    // Les horodatages sont ceux du LOCATAIRE, rendus tels quels.
+    assert.match(lignes[0], /^2026-08-20T18:52:\d\d\.000000000Z ligne 1$/);
+
+    // §37.6 ter : l'exploitant doit savoir qu'il lit un texte non relu.
+    assert.match(ecran, /vient du locataire/);
+    assert.match(ecran, /ni caviardé/);
+
+    // §36.7 : ces lectures ne se journalisent pas non plus.
+    const { corps } = await pile.lireSparkd('/v1/audit?limit=200');
+    const journal = JSON.stringify(corps.entries);
+    assert.ok(!/container_read|logs_read/.test(journal));
+  });
+});
+
+test('un conteneur ARRÊTÉ montre son code de sortie, et son silence se distingue', async () => {
+  await parcours('docker-conteneur-arrete', async () => {
+    // Le cas qu'on vient chercher quand une pile ne répond plus : pourquoi
+    // s'est-elle arrêtée, et qu'a-t-elle écrit avant.
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+    await page.click('button[data-conteneur="helo-base-1"]');
+    await page.waitForSelector('#titre-conteneur', { timeout: 15000 });
+    await page.waitForSelector('.absence, pre.terminal', { timeout: 15000 });
+
+    const ecran = await page.textContent('.principal');
+    assert.match(ecran, /Code de sortie/);
+    assert.match(ecran, /137/);
+    assert.match(ecran, /arrêté/);
+
+    // §14.6 : « n'a rien écrit » et « a disparu » sont deux faits différents.
+    // Ce conteneur existe et se tait ; l'écran le dit, sans alerter.
+    assert.match(ecran, /n’a rien écrit/);
+    assert.ok(!/a disparu/.test(ecran));
+    assert.equal(await page.$$eval('[role="alert"]', (l) => l.length), 0);
+  });
+});
+
+test('ouvrir un conteneur SUSPEND le relevé de la liste', async () => {
+  await parcours('docker-releve-suspendu', async () => {
+    // §37.6 : la liste a cédé la place ; continuer à la relever consommerait le
+    // quota du locataire pour un écran que personne ne regarde.
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+    await page.click('button[data-conteneur="helo-web-1"]');
+    await page.waitForSelector('pre.terminal', { timeout: 15000 });
+
+    let releves = 0;
+    const compter = (requete) => {
+      if (requete.url().includes('/api/spark/docker')) releves += 1;
+    };
+    page.on('request', compter);
+    await page.waitForFunction(
+      () => new Promise((r) => setTimeout(() => r(true), 11000)), { timeout: 15000 });
+    page.off('request', compter);
+    assert.equal(releves, 0, `la liste a continué d’être relevée : ${releves}`);
+
+    // Et refermer la REPREND : sans cela, la liste resterait figée pour de bon.
+    await page.click('button[data-docker="fermer"]');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+  });
+});
+
+test('un conteneur DISPARU pendant qu’on le regarde est dit, sans crier à la panne', async () => {
+  await parcours('docker-conteneur-disparu', async () => {
+    // §37.6 ter : le locataire a le droit de supprimer son conteneur pendant
+    // qu'on le lit. Le doublon rend 1 à la DEUXIÈME lecture, comme le vrai
+    // Docker — c'est la course, et elle s'éprouve au clavier par « Relire ».
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+    await page.click('button[data-conteneur="helo-web-1"]');
+    await page.waitForSelector('pre.terminal', { timeout: 15000 });
+
+    await page.click('button[data-docker="relire"]');
+    await page.waitForFunction(
+      () => !document.querySelector('pre.terminal'), { timeout: 15000 });
+
+    const ecran = await page.textContent('.principal');
+    // Le fait est DIT, et il n'est pas présenté comme un défaut de la console.
+    assert.ok(!/rien écrit/.test(ecran), 'un absent n’a pas « rien écrit »');
+    assert.ok(!/panne|erreur interne/i.test(ecran));
+    // Et le retour à la liste reste offert : on n'est pas coincé sur un absent.
+    await page.click('button[data-docker="fermer"]');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+  });
+});
+
+test('revenir sur l’onglet repart de la LISTE, jamais d’un journal figé', async () => {
+  await parcours('docker-retour-liste', async () => {
+    // Retrouver un texte qu'on n'a pas demandé le ferait lire comme courant.
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+    await page.click('button[data-conteneur="helo-web-1"]');
+    await page.waitForSelector('pre.terminal', { timeout: 15000 });
+
+    await page.click('.onglet[href$="/journal"]');
+    await page.waitForSelector('.onglet[href$="/journal"][aria-current="page"]',
+                               { timeout: 10000 });
+    await page.click('.onglet[href$="/docker"]');
+    await page.waitForSelector('#titre-docker', { timeout: 15000 });
+    assert.equal(await page.$$eval('pre.terminal', (l) => l.length), 0);
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
   });
 });
 

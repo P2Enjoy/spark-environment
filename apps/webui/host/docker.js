@@ -247,10 +247,34 @@ export function analyserJournaux(sortie) {
 }
 
 /** Lance une commande DANS le Spark, par le chemin du §37.2. */
-function surLeSpark(tunnel, spark, commande, spawnFn, doublon) {
+/**
+ * Le doublon qui répond à CETTE commande.
+ *
+ * Une chaîne simple répond à tout — c'est le doublon de la première tranche. Une
+ * table JSON répond par geste (« ps », « stats », « inspect », « logs »), parce
+ * que la deuxième tranche a besoin qu'inspecter et lire les journaux ne rendent
+ * pas la même chose, et que l'un puisse échouer pendant que l'autre aboutit.
+ *
+ * `*` sert de réponse par défaut. Une valeur absente laisse passer la vraie
+ * commande, ce qui échouera bruyamment plutôt que de rendre une sortie muette.
+ */
+export function doublonPour(doublon, commande) {
+  if (!doublon) return null;
+  if (!doublon.trimStart().startsWith('{')) return doublon;
+  let table;
+  try { table = JSON.parse(doublon); } catch { return doublon; }
+  const geste = /docker\s+(ps|stats|inspect|logs)\b/.exec(commande)?.[1] ?? '*';
+  return table[geste] ?? table['*'] ?? null;
+}
+
+function surLeSpark(tunnel, spark, commande, spawnFn, doublonBrut) {
+  const doublon = doublonPour(doublonBrut, commande);
   return new Promise((resoudre) => {
     const [programme, ...args] = doublon
-      ? doublon.split(/\s+/)
+      // La vraie commande est passée en `$0` : sans elle, un doublon ne pourrait
+      // pas répondre différemment selon le conteneur demandé, et une preuve ne
+      // saurait pas distinguer un conteneur présent d'un conteneur disparu.
+      ? ['sh', '-c', doublon, commande]
       : ['ssh', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new',
          '-o', 'ConnectTimeout=5', ...tunnel.jumpArgs(),
          `root@${spark.ipv4_address}`, commande];
@@ -259,7 +283,12 @@ function surLeSpark(tunnel, spark, commande, spawnFn, doublon) {
     let erreurs = '';
     enfant.stdout?.on('data', (bloc) => { sortie += bloc.toString('utf8'); });
     enfant.stderr?.on('data', (bloc) => { erreurs += bloc.toString('utf8'); });
-    enfant.on('exit', (code) => resoudre({ code: code ?? 0, sortie, erreurs }));
+    // `close`, et non `exit`. MESURÉ le 2026-08-20 : sur deux cents lignes de
+    // journal, `exit` arrive AVANT que stdout ait fini d'être drainé, et le
+    // relevé perdait une trentaine de lignes sans rien dire. `close` n'est émis
+    // qu'une fois tous les flux fermés. Une troncature silencieuse est le pire
+    // des défauts pour un écran dont le seul rôle est de rapporter.
+    enfant.on('close', (code) => resoudre({ code: code ?? 0, sortie, erreurs }));
     // `ssh` introuvable sur le poste : on ne peut RIEN conclure du Spark.
     enfant.on('error', () => resoudre({ code: 255, sortie: '', erreurs: '' }));
   });

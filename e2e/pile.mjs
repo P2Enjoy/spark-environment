@@ -125,10 +125,59 @@ export async function monterPile({ dns = null } = {}) {
     // « printf » plutôt qu'un fichier : la sortie est celle qu'un vrai
     // `docker ps --format` produirait, tabulée, avec un conteneur en marche et
     // un arrêté — le second étant justement ce qu'on vient chercher.
-    SPARK_DOCKER_COMMAND: 'printf'
-      + ' abc123\\thelo-web-1\\trunning\\tUp\\u00a02\\u00a0minutes\\tnginx:alpine\\t0.0.0.0:8080->80/tcp\\n'
-      + 'def456\\thelo-base-1\\texited\\tExited\\u00a0(0)\\tpostgres:16\\t\\n',
-    SPARK_TERMINAL_COMMAND: JSON.stringify({
+    // Le doublon répond PAR GESTE (§37.6 ter) : inspecter et lire les journaux
+    // ne rendent pas la même chose, et « parti » échoue en 1 comme le vrai
+    // Docker le fait pour un conteneur supprimé entre deux relevés.
+    // Le doublon répond PAR GESTE (§37.6 ter) : inspecter et lire les journaux
+    // ne rendent pas la même chose. La vraie commande arrive en « $0 », ce qui
+    // permet de distinguer un conteneur présent, un conteneur muet et un
+    // conteneur DISPARU — qui échoue en 1, comme le vrai Docker.
+    // Le doublon répond PAR GESTE (§37.6 ter) : inspecter et lire les journaux
+    // ne rendent pas la même chose. La vraie commande arrive en « $0 », ce qui
+    // permet de distinguer un conteneur présent, un conteneur MUET et un
+    // conteneur DISPARU — qui échoue en 1, comme le vrai Docker.
+    //
+    // `%b` et non `%s` : les tabulations sont écrites dans les arguments, et
+    // `%s` les rendrait littéralement — les lignes ne se découperaient plus.
+    SPARK_DOCKER_COMMAND: JSON.stringify({
+      ps: "printf '%b\\n'"
+        + " 'abc123\\thelo-web-1\\trunning\\tUp 2 minutes\\tnginx:alpine\\t0.0.0.0:8080->80/tcp'"
+        + " 'def456\\thelo-base-1\\texited\\tExited (0)\\tpostgres:16\\t'",
+      stats: "printf '%b\\n' 'helo-web-1\\t0.03%\\t12.3MiB / 2GiB\\t0.60%'",
+      // L'ordre compte : les listes se reconnaissent à leur gabarit, le
+      // conteneur à son nom, et le nom seul viendrait avant le gabarit.
+      inspect: 'case "$0" in'
+        + " *parti*) echo 'Error: No such object: parti' >&2; exit 1 ;;"
+        + " *NetworkSettings*) printf '%b\\n' 'helo_default\\t172.18.0.2' ;;"
+        + " *Mounts*) printf '%b\\n'"
+        + " 'volume\\thelo_data\\t/var/lib/postgresql/data\\trw' ;;"
+        + " *helo-base-1*) printf '%b\\n' '/helo-base-1\\texited\\t137"
+        + "\\t2026-08-20T18:52:01Z\\t2026-08-20T18:52:18Z\\t2\\tpostgres:16' ;;"
+        + " *) printf '%b\\n' '/helo-web-1\\trunning\\t0"
+        + "\\t2026-08-20T18:52:01Z\\t\\t0\\tnginx:alpine' ;;"
+        + ' esac',
+      // Deux cents lignes PILE pour « helo-web-1 » : la borne du §37.6 ter est
+      // atteinte, donc l'écran doit annoncer une troncature. « helo-base-1 »
+      // n'écrit rien, ce qui n'est pas la même chose qu'un conteneur disparu.
+      //
+      // La DEUXIÈME lecture de « helo-web-1 » échoue en 1. C'est la course du
+      // §37.6 ter, et c'est le seul moyen de l'éprouver au clavier : le
+      // locataire a supprimé son conteneur pendant qu'on le regardait, et
+      // « Relire les journaux » tombe alors sur un conteneur disparu. Un témoin
+      // dans le dossier de la pile la rend déterministe et reproductible.
+      logs: 'case "$0" in'
+        + " *parti*) echo 'Error: No such container: parti' >&2; exit 1 ;;"
+        + ' *helo-web-1*)'
+        + ` if [ -f ${JSON.stringify(join(dossier, 'logs-vus'))} ]; then`
+        + " echo 'Error: No such container: helo-web-1' >&2; exit 1; fi;"
+        + ` touch ${JSON.stringify(join(dossier, 'logs-vus'))};`
+        + " i=1; while [ $i -le 200 ]; do"
+        + " printf '2026-08-20T18:52:%02d.000000000Z ligne %d\\n'"
+        + ' "$((i % 60))" "$i"; i=$((i + 1)); done ;;'
+        + ' *helo-base-1*) : ;;'
+        + ' *) : ;;'
+        + ' esac',
+    }),    SPARK_TERMINAL_COMMAND: JSON.stringify({
       '*': 'cat',
       'site-vitrine': { ssh: 'false', rescue: 'cat' },
     }),
@@ -166,6 +215,17 @@ export async function monterPile({ dns = null } = {}) {
         body: JSON.stringify(corps ?? {}),
       });
       return { status: r.status, corps: await r.json().catch(() => null) };
+    },
+    /**
+     * Rend au doublon Docker sa mémoire vierge (SPK-44, §37.6 ter).
+     *
+     * Le témoin qui fait échouer la DEUXIÈME lecture des journaux vit aussi
+     * longtemps que la pile. Sans remise à zéro, le premier parcours qui ouvre
+     * « helo-web-1 » condamnerait tous les suivants à ne plus jamais lire de
+     * journaux — et leur échec ne dirait pas pourquoi.
+     */
+    async oublierLecturesDocker() {
+      await rm(join(dossier, 'logs-vus'), { force: true });
     },
     /**
      * Altère le registre HORS DU PRODUIT (SPK-38, docs/DAT.md §36.1).
