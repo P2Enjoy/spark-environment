@@ -2,9 +2,10 @@
  * Ce que le locataire fait tourner, lu sans rien y toucher.
  *
  * @spec docs/BACKLOG.md#SPK-44 · docs/DAT.md §37.6 (l'onglet Docker, en
- *       lecture), §37.6 bis (le contrat, mesuré), §37.2 (le chemin normal :
- *       SSH), §37.3 (pourquoi PAS `incus exec`) · §36.7 (les lectures ne se
- *       journalisent pas) · docs/DESIGN_SYSTEM_APP.md SPK-DS-05
+ *       lecture), §37.6 bis (l'inventaire, mesuré), §37.6 ter (l'inspection et
+ *       les journaux, mesurés), §37.2 (le chemin normal : SSH), §37.3 (pourquoi
+ *       PAS `incus exec`) · §36.7 (les lectures ne se journalisent pas) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-05
  *
  * Le chemin est SSH depuis la console, comme le terminal. Pas `incus exec` : le
  * §37.3 réserve le plan de contrôle au dépannage, et lire l'inventaire d'un
@@ -143,6 +144,108 @@ export function attacher(conteneurs, sortieMesures) {
   });
 }
 
+export const CONTENEUR_INCONNU = 'conteneur_inconnu';
+
+/** Combien de lignes de journal au plus. Le §37.6 ter dit pourquoi une borne. */
+export const TAIL = 200;
+
+/**
+ * L'inspection d'un conteneur (§37.6 ter).
+ *
+ * Trois commandes plutôt qu'une : les réseaux et les montages sont des LISTES,
+ * et les mêler à la ligne d'identité obligerait à deviner où l'une finit.
+ */
+export const inspecter = (nom) => `docker inspect ${quoter(nom)} --format `
+  + "'{{.Name}}\t{{.State.Status}}\t{{.State.ExitCode}}\t{{.State.StartedAt}}"
+  + "\t{{.State.FinishedAt}}\t{{.RestartCount}}\t{{.Config.Image}}'";
+
+export const reseaux = (nom) => `docker inspect ${quoter(nom)} --format `
+  + "'{{range $r,$c := .NetworkSettings.Networks}}{{$r}}\t{{$c.IPAddress}}\n{{end}}'";
+
+export const montages = (nom) => `docker inspect ${quoter(nom)} --format `
+  + "'{{range .Mounts}}{{.Type}}\t{{.Source}}\t{{.Destination}}"
+  + "\t{{if .RW}}rw{{else}}ro{{end}}\n{{end}}'";
+
+/**
+ * Les journaux, BORNÉS (§37.6 ter).
+ *
+ * Sans `--tail`, un conteneur bavard renvoie tout son historique par le tunnel
+ * et l'écran devient inutilisable au moment précis où l'on en a besoin.
+ */
+export const journaux = (nom, tail = TAIL) =>
+  `docker logs --tail ${Number(tail) || TAIL} --timestamps ${quoter(nom)} 2>&1`;
+
+/**
+ * Un nom de conteneur entre guillemets simples, pour le shell distant.
+ *
+ * Il vient de l'inventaire, donc de Docker — mais il traverse un `ssh`, et une
+ * valeur non citée y serait interprétée. On ne suppose pas qu'un nom est sûr
+ * parce qu'on l'a lu quelque part.
+ */
+export function quoter(valeur) {
+  return `'${String(valeur ?? '').replace(/'/g, "'\\''")}'`;
+}
+
+/** Le nom que Docker rend est préfixé d'une barre oblique. MESURÉ. */
+const sansBarre = (nom) => String(nom ?? '').replace(/^\//, '');
+
+/** Découpe l'identité d'un conteneur (§37.6 ter). */
+export function analyserInspection(sortie) {
+  const [ligne] = String(sortie).split('\n').filter((l) => l.trim());
+  if (!ligne) return null;
+  const [nom, etat, code, debut, fin, redemarrages, image] = ligne.split('\t');
+  return {
+    name: sansBarre(nom),
+    state: etat ?? '',
+    // §14.6 : le code de sortie n'existe QUE pour un conteneur arrêté. Rendre 0
+    // pour un conteneur en marche ferait croire qu'il s'est terminé sans erreur.
+    exitCode: etat === 'exited' ? Number(code ?? 0) : null,
+    startedAt: debut || null,
+    finishedAt: etat === 'exited' ? (fin || null) : null,
+    restarts: Number(redemarrages ?? 0),
+    image: image ?? '',
+  };
+}
+
+export function analyserReseaux(sortie) {
+  return String(sortie).split('\n').map((l) => l.trimEnd()).filter(Boolean)
+    .map((l) => {
+      const [name, address] = l.split('\t');
+      return { name, address: address || null };
+    })
+    .filter((r) => r.name);
+}
+
+export function analyserMontages(sortie) {
+  return String(sortie).split('\n').map((l) => l.trimEnd()).filter(Boolean)
+    .map((l) => {
+      const [type, source, destination, mode] = l.split('\t');
+      return { type, source: source ?? '', destination: destination ?? '',
+               mode: mode ?? '' };
+    })
+    .filter((m) => m.destination);
+}
+
+/**
+ * Découpe les journaux horodatés.
+ *
+ * Les horodatages sont rendus TELS QUELS : ce sont ceux du locataire, et les
+ * reformater dans le fuseau du poste décalerait l'écran de ce qu'il lit dans son
+ * propre journal (§37.6 ter).
+ */
+export function analyserJournaux(sortie) {
+  return String(sortie).split('\n').map((l) => l.replace(/\r$/, ''))
+    .filter((l) => l.length)
+    .map((ligne) => {
+      const espace = ligne.indexOf(' ');
+      const tete = espace > 0 ? ligne.slice(0, espace) : '';
+      // Une ligne sans horodatage reconnaissable n'en reçoit pas un inventé.
+      return /^\d{4}-\d{2}-\d{2}T/.test(tete)
+        ? { at: tete, text: ligne.slice(espace + 1) }
+        : { at: null, text: ligne };
+    });
+}
+
 /** Lance une commande DANS le Spark, par le chemin du §37.2. */
 function surLeSpark(tunnel, spark, commande, spawnFn, doublon) {
   return new Promise((resoudre) => {
@@ -194,4 +297,72 @@ export async function relever({ tunnel, spark, spawn: spawnFn = spawn,
 
   return { spark: spark.name, state: OK, containers: conteneurs,
            ...ETATS[OK] };
+}
+
+/**
+ * L'inspection d'un conteneur (§37.6 ter).
+ *
+ * @spec docs/BACKLOG.md#SPK-44 · docs/DAT.md §37.6 ter
+ *
+ * Un conteneur DISPARU entre l'inventaire et l'inspection rend `1` — mesuré.
+ * Ce n'est pas une panne : c'est une course normale, le locataire ayant le droit
+ * de supprimer son conteneur pendant qu'on le regarde. On le dit, on ne lève pas.
+ */
+export async function inspecterConteneur({ tunnel, spark, nom,
+                                           spawn: spawnFn = spawn,
+                                           doublon = null } = {}) {
+  const identite = await surLeSpark(tunnel, spark, inspecter(nom), spawnFn, doublon);
+  const etat = classer(identite.code, 'x', identite.erreurs);
+  if (identite.code === 1) {
+    return { name: nom, state: CONTENEUR_INCONNU,
+             titre: `« ${nom} » a disparu`,
+             detail: 'Ce conteneur n’existe plus depuis le dernier relevé. '
+               + 'Le locataire a pu le supprimer ou le recréer sous un autre nom.' };
+  }
+  if (identite.code !== 0) {
+    return { name: nom, state: etat, ...ETATS[etat] };
+  }
+
+  const vu = analyserInspection(identite.sortie);
+  if (!vu) {
+    return { name: nom, state: INJOIGNABLE, ...ETATS[INJOIGNABLE] };
+  }
+
+  // Les listes sont demandées SÉPARÉMENT, et leur échec ne fait pas échouer
+  // l'identité : savoir qu'un conteneur est mort en 137 vaut mieux que rien.
+  const [r, m] = await Promise.all([
+    surLeSpark(tunnel, spark, reseaux(nom), spawnFn, doublon),
+    surLeSpark(tunnel, spark, montages(nom), spawnFn, doublon),
+  ]);
+  return {
+    ...vu,
+    networks: r.code === 0 ? analyserReseaux(r.sortie) : null,
+    mounts: m.code === 0 ? analyserMontages(m.sortie) : null,
+  };
+}
+
+/**
+ * Les journaux d'un conteneur, bornés (§37.6 ter).
+ *
+ * `truncated` est rendu EXPLICITEMENT et non déduit de la longueur : déduire
+ * marcherait aujourd'hui et mentirait le jour où un conteneur a exactement
+ * `tail` lignes.
+ */
+export async function lireJournaux({ tunnel, spark, nom, tail = TAIL,
+                                     spawn: spawnFn = spawn,
+                                     doublon = null } = {}) {
+  const borne = Number(tail) > 0 ? Math.min(Number(tail), 2000) : TAIL;
+  const vu = await surLeSpark(tunnel, spark, journaux(nom, borne), spawnFn, doublon);
+  if (vu.code === 1) {
+    return { name: nom, state: CONTENEUR_INCONNU, lines: [],
+             titre: `« ${nom} » a disparu`,
+             detail: 'Ce conteneur n’existe plus depuis le dernier relevé.' };
+  }
+  if (vu.code !== 0) {
+    const etat = classer(vu.code, 'x', vu.erreurs);
+    return { name: nom, state: etat, lines: [], ...ETATS[etat] };
+  }
+  const lignes = analyserJournaux(vu.sortie);
+  return { name: nom, state: OK, tail: borne, lines: lignes,
+           truncated: lignes.length >= borne };
 }

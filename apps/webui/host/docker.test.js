@@ -20,6 +20,9 @@ import { EventEmitter } from 'node:events';
 import {
   analyser, attacher, classer, relever, ETATS, INVENTAIRE, MESURES,
   OK, SANS_CONTENEUR, DOCKER_ABSENT, MOTEUR_MUET, SSHD_MUET, INJOIGNABLE,
+  analyserInspection, analyserReseaux, analyserMontages, analyserJournaux,
+  inspecter, journaux, quoter, inspecterConteneur, lireJournaux,
+  CONTENEUR_INCONNU,
 } from './docker.js';
 
 const SPARK = { name: 'helo', ipv4_address: '10.77.0.17',
@@ -194,4 +197,124 @@ test('le relevé n’exécute QUE des lectures', async () => {
       assert.ok(!commande.includes(interdit), `${interdit} dans « ${commande} »`);
     }
   }
+});
+
+// --- SPK-44, tranche 2 · INSPECTER ET LIRE LES JOURNAUX (§37.6 ter) ---------
+
+test('le nom rendu par Docker perd sa barre oblique de tête', () => {
+  // MESURÉ : `.Name` revient « /spark-mesure ». Un nom qui n'est pas celui qu'on
+  // a tapé fait douter de ce qu'on regarde.
+  const vu = analyserInspection('/helo-web-1\trunning\t0\t2026-08-20T18:52:01Z\t\t0\tnginx:alpine');
+  assert.equal(vu.name, 'helo-web-1');
+});
+
+test('le code de sortie n’existe QUE pour un conteneur arrêté', () => {
+  // §14.6 : rendre 0 pour un conteneur en marche ferait croire qu'il s'est
+  // terminé sans erreur.
+  const marche = analyserInspection('/web\trunning\t0\t2026-08-20T18:52:01Z\t\t0\tnginx');
+  assert.equal(marche.exitCode, null);
+  assert.equal(marche.finishedAt, null);
+
+  const arrete = analyserInspection(
+    '/web\texited\t137\t2026-08-20T18:52:01Z\t2026-08-20T18:52:18Z\t2\tnginx');
+  assert.equal(arrete.exitCode, 137);
+  assert.equal(arrete.finishedAt, '2026-08-20T18:52:18Z');
+  assert.equal(arrete.restarts, 2);
+});
+
+test('réseaux et montages se découpent en listes', () => {
+  const r = analyserReseaux('helo_default\t172.18.0.2\nbridge\t172.17.0.2\n');
+  assert.deepEqual(r, [{ name: 'helo_default', address: '172.18.0.2' },
+                       { name: 'bridge', address: '172.17.0.2' }]);
+  const m = analyserMontages('volume\thelo_data\t/var/lib/postgresql/data\trw\n');
+  assert.equal(m[0].type, 'volume');
+  assert.equal(m[0].destination, '/var/lib/postgresql/data');
+  assert.equal(m[0].mode, 'rw');
+});
+
+test('un conteneur sans réseau ni montage rend des listes VIDES, pas nulles', () => {
+  assert.deepEqual(analyserReseaux(''), []);
+  assert.deepEqual(analyserMontages(''), []);
+});
+
+test('les horodatages des journaux sont rendus TELS QUELS', () => {
+  // §37.6 ter : ce sont ceux du locataire. Les reformater dans le fuseau du
+  // poste décalerait l'écran de ce qu'il lit dans son propre journal.
+  const [l] = analyserJournaux('2026-08-20T18:52:01.555868713Z ligne 195');
+  assert.equal(l.at, '2026-08-20T18:52:01.555868713Z');
+  assert.equal(l.text, 'ligne 195');
+});
+
+test('une ligne SANS horodatage n’en reçoit pas un inventé', () => {
+  const [l] = analyserJournaux('nginx: [alert] socketpair() failed');
+  assert.equal(l.at, null);
+  assert.match(l.text, /socketpair/);
+});
+
+test('les journaux sont BORNÉS, et la borne est dans la commande', () => {
+  // Sans `--tail`, un conteneur bavard renvoie tout son historique par le
+  // tunnel et l'écran devient inutilisable au moment où l'on en a besoin.
+  assert.match(journaux('web'), /--tail 200/);
+  assert.match(journaux('web', 50), /--tail 50/);
+  // Une borne absurde retombe sur le défaut plutôt que de partir sans borne.
+  assert.match(journaux('web', 0), /--tail 200/);
+});
+
+test('un nom de conteneur est CITÉ avant de traverser un ssh', () => {
+  // Il vient de Docker, mais il traverse un shell distant : on ne suppose pas
+  // qu'une valeur est sûre parce qu'on l'a lue quelque part.
+  assert.equal(quoter('web'), "'web'");
+  assert.equal(quoter("a'b"), "'a'\\''b'");
+  assert.match(inspecter("; rm -rf /"), /'; rm -rf \/'/);
+  assert.match(journaux("; rm -rf /"), /'; rm -rf \/'/);
+});
+
+test('un conteneur DISPARU est dit, et ce n’est pas une panne', async () => {
+  // MESURÉ : `docker inspect` d'un conteneur inconnu rend 1. Le locataire a le
+  // droit de le supprimer pendant qu'on le regarde.
+  const { spawnFn } = fauxSsh([{ code: 1, sortie: '', erreurs: 'No such container' }]);
+  const vu = await inspecterConteneur({ tunnel: TUNNEL, spark: SPARK,
+                                        nom: 'parti', spawn: spawnFn });
+  assert.equal(vu.state, CONTENEUR_INCONNU);
+  assert.match(vu.titre, /a disparu/);
+  assert.ok(!/panne|erreur/i.test(vu.detail));
+});
+
+test('l’identité survit à l’échec des listes', async () => {
+  // Savoir qu'un conteneur est mort en 137 vaut mieux que rien.
+  const { spawnFn } = fauxSsh([
+    { code: 0, sortie: '/web\texited\t137\t2026-08-20T18:52:01Z\t2026-08-20T18:52:18Z\t0\tnginx' },
+    { code: 1, sortie: '', erreurs: 'boom' },
+    { code: 1, sortie: '', erreurs: 'boom' },
+  ]);
+  const vu = await inspecterConteneur({ tunnel: TUNNEL, spark: SPARK,
+                                        nom: 'web', spawn: spawnFn });
+  assert.equal(vu.exitCode, 137);
+  assert.equal(vu.networks, null, 'une liste non lue est NULLE, pas vide');
+  assert.equal(vu.mounts, null);
+});
+
+test('« truncated » est rendu, jamais déduit par l’écran', async () => {
+  // Déduire de `lines.length === tail` marcherait aujourd'hui et mentirait le
+  // jour où un conteneur a exactement `tail` lignes.
+  const trois = Array.from({ length: 3 }, (_, i) => `2026-08-20T18:52:0${i}Z l${i}`).join('\n');
+  const { spawnFn } = fauxSsh([{ code: 0, sortie: trois }]);
+  const court = await lireJournaux({ tunnel: TUNNEL, spark: SPARK, nom: 'web',
+                                     tail: 200, spawn: spawnFn });
+  assert.equal(court.truncated, false);
+  assert.equal(court.lines.length, 3);
+
+  const plein = fauxSsh([{ code: 0, sortie: trois }]);
+  const borne = await lireJournaux({ tunnel: TUNNEL, spark: SPARK, nom: 'web',
+                                     tail: 3, spawn: plein.spawnFn });
+  assert.equal(borne.truncated, true);
+});
+
+test('les journaux d’un conteneur disparu ne rendent pas une liste vide muette', async () => {
+  const { spawnFn } = fauxSsh([{ code: 1, sortie: '', erreurs: 'No such container' }]);
+  const vu = await lireJournaux({ tunnel: TUNNEL, spark: SPARK, nom: 'parti',
+                                  spawn: spawnFn });
+  assert.equal(vu.state, CONTENEUR_INCONNU);
+  assert.match(vu.titre, /a disparu/);
+  assert.deepEqual(vu.lines, []);
 });
