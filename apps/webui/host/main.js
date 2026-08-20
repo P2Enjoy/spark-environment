@@ -691,7 +691,17 @@ function servirFlux(url, reponse, terminaux) {
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-cache',
     connection: 'keep-alive',
+    // Un intermédiaire qui met en tampon retiendrait la sortie du terminal
+    // jusqu'à ce qu'il en ait « assez » : sur un shell, cela veut dire jamais.
+    'x-accel-buffering': 'no',
   });
+  // Node n'ÉMET PAS les en-têtes tant que rien n'est écrit. Sans cette poussée,
+  // l'ouverture du flux ne se termine jamais côté client — mesuré : le premier
+  // `fetch` restait pendu, et un `EventSource` de navigateur ferait de même.
+  reponse.flushHeaders?.();
+  // Un commentaire d'amorce : il ne porte aucun évènement, il prouve seulement
+  // que le flux est ouvert.
+  reponse.write(': ouvert\n\n');
   const desabonner = session.abonner((type, data) => {
     reponse.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
     if (type === 'fin') reponse.end();
