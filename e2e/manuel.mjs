@@ -54,6 +54,21 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     if (!silencieux) console.log(`  ${nom}.png`);
   };
 
+  /**
+   * Pousse un quota à sa borne haute, AU CLAVIER (SPK-59, §6.9 bis).
+   *
+   * On ne « remplit » pas un curseur : `page.fill` rend « Malformed value » sur
+   * un `input[type=range]`. « Fin » est le geste natif qui va à la borne haute —
+   * la capacité TOTALE de la Forge, donc au-delà de ce qui reste libre.
+   */
+  const auMaximum = async (selecteur) => {
+    const controle = page.locator(selecteur);
+    const type = await controle.getAttribute('type');
+    await controle.focus();
+    if (type === 'range') await controle.press('End');
+    else await controle.fill('999999');   // repli du §6.9 bis : resté une saisie
+  };
+
   const accueil = async () => {
     await page.setViewportSize({ width: LARGEUR, height: 900 });
     await page.goto(pile.base, { waitUntil: 'domcontentloaded' });
@@ -91,10 +106,14 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await accueil();
     await page.click('.titre-vue .bouton--primaire');
     await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
-    await capturer('m5-formulaire');
+    // Depuis les curseurs (SPK-59) le formulaire est plus haut : sans cette
+    // hauteur, l'illustration coupe le bouton de création.
+    await capturer('m5-formulaire', { hauteur: 1150 });
 
     await page.fill('#name', 'demande-trop-grande');
-    await page.fill('#memory_gib', '512');
+    // SPK-59 : la mémoire est un curseur. « Fin » le pousse à la capacité
+    // totale de la Forge, au-delà de ce qui reste libre.
+    await auMaximum('#memory_gib');
     await page.click('button[type="submit"]');
     await page.waitForSelector('.refus', { timeout: 10000 });
     await capturer('m5-refus');

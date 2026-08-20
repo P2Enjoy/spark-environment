@@ -124,3 +124,32 @@ navigation qui déborde de l'unité en cours.
 **Pour clore.** Décider de la forme au format étroit, l'appliquer à
 `.onglet`, et vérifier par une mesure que `scrollWidth` retombe à la largeur de
 la vue sur les sept facettes.
+
+### INC-08 · L'erreur d'un champ survit à sa correction, jusqu'à la soumission suivante
+
+**Constaté le** 2026-08-20, en observant les captures de SPK-59.
+
+**Mesure.** Sur `e2e/captures/17-creation-avertissement.png` et
+`16-creation-forme-invalide.png` : le champ *Nom* porte « gros-spark », une valeur
+parfaitement bien formée, et l'écran affiche toujours dessous, en rouge,
+« Requis pour créer un Spark. » L'erreur date de la soumission vide précédente.
+
+**Cause.** `etat.creation.errors` n'est recalculé que dans `creer()`, à la
+soumission. L'écouteur `input` du formulaire écrit la valeur dans l'état mais ne
+rejoue pas `validateShape`, et rien ne repeint le champ. L'erreur reste donc
+affichée jusqu'à la soumission suivante.
+
+**Ligne de base établie** : le défaut est visible sur la capture 17 telle qu'elle
+existait AVANT SPK-59 — le champ portait déjà « gros-spark » et déjà le message
+rouge. Il est antérieur aux curseurs et ne leur appartient pas.
+
+**Ce que cela viole.** `docs/DESIGN_SYSTEM.md` §6.12 : « Un champ manquant et un
+champ incorrect ne constituent pas le même état. » Un message d'erreur qui ne
+décrit plus le champ qu'il désigne est un indicateur qui ment, et le §5.1 du même
+document dit qu'un indicateur qui ment est pire qu'un indicateur absent.
+
+**Comportement laissé inchangé** (CloudWorker §3.1). La correction demande de
+trancher QUAND une erreur de forme se réévalue — à chaque frappe, à la perte du
+focus, ou seulement après une première soumission —, et cet arbitrage appartient
+à l'écran de création dans son ensemble, pas à l'unité qui a changé la forme de
+ses contrôles de quota.

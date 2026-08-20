@@ -395,26 +395,48 @@ await page.waitForSelector('#formulaire-spark');
 await page.screenshot({ path: join(SORTIE, '15-creation-vierge.png') });
 console.log('  15-creation-vierge.png');
 
+/**
+ * Pousse un quota à sa borne haute, AU CLAVIER (SPK-59, §6.9 bis).
+ *
+ * On ne « remplit » pas un curseur : `page.fill` rend « Malformed value » sur un
+ * `input[type=range]`. `Fin` est le geste natif qui va à la borne haute — la
+ * capacité TOTALE de la Forge, donc au-delà de ce qui reste libre.
+ */
+async function auMaximum(selecteur) {
+  const controle = page.locator(selecteur);
+  const type = await controle.getAttribute('type');
+  await controle.focus();
+  if (type === 'range') await controle.press('End');
+  else await controle.fill('999999');   // repli du §6.9 bis : resté une saisie
+}
+
 // Soumission vide : les erreurs de FORME, au clavier.
 await page.click('button[type="submit"]');
 await page.waitForSelector('.champ__erreur', { timeout: 4000 }).catch(() => {});
 await page.screenshot({ path: join(SORTIE, '16-creation-forme-invalide.png') });
 console.log('  16-creation-forme-invalide.png');
 
-// Demande trop grande : avertissement, bouton TOUJOURS actif.
+// Demande trop grande : avertissement, bouton TOUJOURS actif. Le curseur est
+// poussé à la capacité TOTALE de la Forge, donc au-delà de ce qui reste libre —
+// c'est là que l'avertissement doit apparaître, et il se rafraîchit désormais
+// pendant le réglage (SPK-59).
 await page.fill('#name', 'gros-spark');
-await page.fill('#memory_gib', '64');
+await auMaximum('#memory_gib');
 await page.waitForTimeout(150);
+// Le formulaire est plus haut depuis les curseurs : sans cela l'avertissement,
+// qui EST le sujet de cette capture, tombe sous la ligne de flottaison.
+await page.setViewportSize({ width: 1440, height: 1100 });
 await page.screenshot({ path: join(SORTIE, '17-creation-avertissement.png') });
 console.log('  17-creation-avertissement.png');
 ctx.server.close();
 
 // Refus du serveur : la saisie survit.
 ctx = await demarrer({ refusCreation: true });
+await page.setViewportSize({ width: 1440, height: 1100 });
 await page.goto(`${ctx.base}/#/creer`);
 await page.waitForSelector('#formulaire-spark');
 await page.fill('#name', 'gros-spark');
-await page.fill('#memory_gib', '64');
+await auMaximum('#memory_gib');
 await page.click('button[type="submit"]');
 await page.waitForSelector('.refus', { timeout: 6000 }).catch(() => {});
 await page.screenshot({ path: join(SORTIE, '18-creation-refus-serveur.png') });
@@ -422,6 +444,17 @@ console.log('  18-creation-refus-serveur.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '19-creation-mobile.png') });
 console.log('  19-creation-mobile.png');
+ctx.server.close();
+
+// SPK-59 · §6.9 bis, condition 1 : sans capacité relevée, il n'y a pas de
+// bornes, donc pas de curseur. Les quotas redeviennent des saisies, et le
+// libellé reprend son unité — une saisie ne dit pas dans quoi taper.
+ctx = await demarrer({ hoteNonReleve: true });
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.goto(`${ctx.base}/#/creer`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#formulaire-spark');
+await page.screenshot({ path: join(SORTIE, '19b-creation-sans-capacite.png') });
+console.log('  19b-creation-sans-capacite.png');
 ctx.server.close();
 
 // --- Panneaux d'administration (SPK-21) -----------------------------------

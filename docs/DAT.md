@@ -2465,6 +2465,32 @@ runtime.
 La distinction est celle du §14.9 : un champ **mal formé** se signale tout de
 suite, un champ **qui ne tiendra peut-être pas** se soumet quand même.
 
+### 25.4 Pourquoi un curseur de quota s'arrête à la capacité, et pas au disponible
+
+Les quotas se règlent au curseur (`docs/DESIGN_SYSTEM.md` §6.9 bis,
+`docs/DESIGN_SYSTEM_APP.md` SPK-DS-07). Un curseur a une borne haute, ce qui
+soulève exactement la question du §25.1 : cette borne est-elle une information ou
+une décision ?
+
+Elle est une information, **à condition de la prendre sur la capacité totale de
+la Forge et jamais sur ce qui reste libre**. Le disponible est la photographie du
+§25.1, il se périme dans le sens favorable, et un curseur qui s'y arrêterait
+serait pire qu'un bouton désactivé : un refus qui ne se voit même pas. La
+capacité, elle, ne bouge pas entre l'ouverture de l'écran et la soumission —
+c'est le raisonnement du §33.5, une contrainte stable se pose dans le contrôle,
+une contrainte périmable appartient au serveur.
+
+Conséquence à préserver dans toute évolution de cet écran : **le refus
+d'admission doit rester atteignable depuis le parcours canonique**. Pousser le
+curseur de mémoire à sa borne haute demande tout ce que la machine possède, donc
+plus que ce qui reste libre dès qu'un seul Spark existe. C'est ce que fait le
+parcours REFUS 1. Une borne prise sur le disponible priverait le produit de sa
+seule preuve d'écran que le serveur décide.
+
+Quand la capacité n'a pas pu être relevée, ou que la plage ne se parcourt pas
+sans perdre la granularité métier, le champ redevient une saisie numérique. Cela
+ne change rien au reste du §25 : le contrôle change de forme, jamais d'autorité.
+
 
 ## 26. Les trois surfaces d'administration d'un Spark
 

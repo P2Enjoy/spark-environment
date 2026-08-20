@@ -2302,7 +2302,7 @@ transport.
   `env_file:` ; manuel M6/M8 et
   seed mis à jour.
 
-### [ ] SPK-59 · Les quotas se règlent au curseur
+### [x] SPK-59 · Les quotas se règlent au curseur
 
 **Demande du responsable, 2026-08-20.** Les quotas de l'écran de création se
 saisissent au clavier, chiffre par chiffre, alors que ce sont des valeurs bornées
@@ -2331,6 +2331,41 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   calcul des bornes ; parcours E2E qui règle un quota **au clavier** depuis le
   parcours canonique et obtient le refus réel du serveur ; captures observées aux
   trois formats ; manuel M5 et design system mis à jour dans le même changement.
+- **Clos le 2026-08-20.** Livré et vérifié :
+  - règle générale au `docs/DESIGN_SYSTEM.md` **§6.9 bis**, application au
+    **SPK-DS-07**, raisonnement de la borne au `docs/DAT.md` **§25.4** ;
+  - **585 tests de console verts**, dont 20 propres à l'unité : borne prise sur la
+    capacité et non sur le disponible, cœurs bornés par les cœurs physiques,
+    repli en saisie quand la capacité manque, repli quand la plage dépasse les
+    crans atteignables, seuil de crans calculé et non déclaré, valeur en clair et
+    `aria-valuetext`, deux bornes écrites, borne basse qui ne produit jamais une
+    valeur refusée, libellé qui ne porte l'unité que pour la saisie ;
+  - **deux garde-fous de non-application** : un port de connexion et un port
+    publié doivent rester des saisies. Ce sont eux qui empêcheront la préférence
+    de déborder sur ce qu'elle ne doit pas toucher ;
+  - **50 parcours E2E verts**, dont REFUS 1 réécrit : il pousse le curseur de
+    mémoire à sa borne haute **au clavier** (`Fin`), vérifie que la demande
+    dépasse le disponible relevé chez `sparkd`, constate que le bouton n'est
+    jamais désactivé avant l'envoi, et obtient le refus réel du serveur ;
+  - **captures observées** à 1440, 1024, 768 et 390 px, plus l'état de repli
+    (`19b-creation-sans-capacite.png`) : aucun débordement horizontal, la valeur
+    et les bornes tiennent à 390 px ;
+  - illustrations du manuel `m5-formulaire` et `m5-refus` refaites depuis
+    l'application, et observées.
+- **Mesure qui vaut d'être retenue** : sur la pile de validation, le pool mémoire
+  est de 5,4 Gio et le pool disque de 192 Gio — les deux passent au curseur. Sur
+  la Forge réelle, dont les deux disques de 6 To donnent plus de 5 000 Gio, le
+  disque **retombe en saisie** par la condition 3. La règle sépare donc bien les
+  deux cas sur du matériel réel, sans qu'on ait eu à écrire d'exception.
+- **Corrigé dans le même changement, parce que le curseur le rendait intenable** :
+  l'avertissement de capacité ne se rafraîchissait jamais pendant la saisie —
+  seul un changement de mode CPU provoquait un repeint. La capture 17 d'avant
+  cette unité le montre : 64 Gio demandés, 64 Gio libres annoncés, aucun mot. Il
+  se rafraîchit maintenant sans repeindre le formulaire, ce qui arracherait la
+  poignée en cours de glissement.
+- **Défaut voisin NON corrigé, et consigné** : `docs/INCONSISTENCY_REPORT.md`
+  **INC-08** — l'erreur d'un champ survit à sa correction jusqu'à la soumission
+  suivante. Antérieur à cette unité, mesuré sur la capture d'avant.
 
 ---
 

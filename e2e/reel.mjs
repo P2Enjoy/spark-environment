@@ -32,6 +32,21 @@ page.on('console', (m) => {
 });
 page.on('pageerror', (e) => bruits.push(`[pageerror] ${e.message}`));
 
+/**
+ * Pousse un quota à sa borne haute, AU CLAVIER (SPK-59, §6.9 bis).
+ *
+ * On ne « remplit » pas un curseur : `page.fill` rend « Malformed value » sur un
+ * `input[type=range]`. « Fin » est le geste natif qui va à la borne haute — la
+ * capacité TOTALE de la Forge, donc au-delà de ce qui reste libre.
+ */
+async function auMaximum(selecteur) {
+  const controle = page.locator(selecteur);
+  const type = await controle.getAttribute('type');
+  await controle.focus();
+  if (type === 'range') await controle.press('End');
+  else await controle.fill('999999');   // repli du §6.9 bis : resté une saisie
+}
+
 async function capturer(nom, { hauteur = 1000 } = {}) {
   await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
   console.log(`  ${nom}.png`);
@@ -82,7 +97,7 @@ if (!(await page.$('#formulaire-spark'))) {
 }
 await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
 await page.fill('#name', 'trop-gourmand');
-await page.fill('#memory_gib', '512');
+await auMaximum('#memory_gib');
 await page.click('button[type="submit"]');
 await page.waitForSelector('.refus', { timeout: 10000 });
 await capturer('45-reel-refus-admission');

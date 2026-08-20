@@ -588,7 +588,15 @@ test('REFUS 1 · capacité insuffisante, et le bouton n’est jamais désactivé
     await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
 
     await page.fill('#name', 'demande-enorme');
-    await page.fill('#memory_gib', '512');
+    // SPK-59 : la mémoire se règle au curseur. On le pousse à sa borne haute au
+    // clavier — la capacité TOTALE de la Forge —, ce qui dépasse forcément le
+    // disponible dès qu'un Spark existe. Un curseur borné sur le disponible
+    // rendrait ce refus inatteignable, et cette preuve sans objet.
+    await auMaximum('#memory_gib');
+    const demande = Number(await page.inputValue('#memory_gib'));
+    const { corps: forge } = await pile.lireSparkd('/v1/forge');
+    assert.ok(demande * 1024 ** 3 > forge.pools.memory.available,
+      'le curseur doit laisser demander plus que ce qui reste libre');
     // §25.1 : l'estimation locale ne désactive JAMAIS la soumission.
     assert.equal(await page.isDisabled('button[type="submit"]'), false,
       'le refus doit venir du serveur, pas d’un contrôle local');
@@ -974,6 +982,31 @@ test('un refus s’affiche DANS la modale et n’efface pas la saisie', async ()
 const ligneRoute = (domaine) => `li:has(span.technique:text-is("${domaine}"))`;
 
 /** Déclare une route publique DEPUIS l'écran, comme un exploitant (§29.3). */
+/**
+ * Pousse un quota à sa borne haute, AU CLAVIER, comme un utilisateur.
+ *
+ * @verifies docs/BACKLOG.md#SPK-59 · docs/DESIGN_SYSTEM.md §6.9 bis
+ *
+ * On ne « remplit » pas un curseur : `page.fill` rend « Malformed value » sur un
+ * `input[type=range]`. `Fin` est le geste natif qui va à la borne haute, et
+ * l'employer prouve au passage que le curseur est utilisable sans souris (§9.1).
+ *
+ * La borne haute étant la capacité TOTALE de la Forge et non le disponible, ce
+ * geste demande plus que ce qui reste libre dès qu'un seul Spark existe. C'est
+ * ce qui garde le refus d'admission atteignable depuis l'écran.
+ */
+async function auMaximum(selecteur) {
+  const controle = page.locator(selecteur);
+  const type = await controle.getAttribute('type');
+  await controle.focus();
+  if (type === 'range') {
+    await controle.press('End');
+    return;
+  }
+  // Repli du §6.9 bis : sans bornes exploitables, le champ est resté une saisie.
+  await controle.fill('999999');
+}
+
 async function declarerRoute(spark, domaine, port = '8080') {
   await ouvrir(spark, 'routes');
   await page.waitForSelector('#titre-routes');
