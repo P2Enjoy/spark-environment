@@ -3518,3 +3518,42 @@ vocabulaire du serveur. L'entrée sortira du registre dans le même changement.
 Ensuite SPK-42 tranche 3 (renommage de la documentation), puis SPK-43 (terminal),
 qui débloque SPK-51. SPK-51 attend toujours les deux vérifications du §38.6 bis
 auprès du fournisseur.
+
+## 2026-08-20 — SPK-46 : la console traduit, et le registre disparaît
+
+**Unité choisie** : SPK-46, désignée par l'entrée précédente. Sa spécification
+existait au §21.5 bis, écrite lors de l'arbitrage : lue, jugée complète, non
+réécrite. Passage direct au code.
+
+**Ce qui est livré.** La traduction vit dans `tokens.js`, là où vivent déjà les
+libellés d'état, parce que **deux surfaces** l'emploient : la facette *Journal*
+d'un Spark et l'onglet de supervision. Le message d'erreur de tunnel de l'hôte
+console est traduit lui aussi — le registre le signalait comme le même écart.
+
+**Le détail qui compte, et il n'était pas évident.** La table `SPARK_STATES` est
+consultée **directement**, jamais par `stateOf`. `stateOf` fabrique un repli
+« État inconnu (…) » pour toute valeur qu'il ne connaît pas : l'employer aurait
+transformé « Tunnel vers « validation » indisponible » en « Tunnel vers « État
+inconnu (validation) » indisponible ». Le nom d'un serveur cité entre guillemets
+n'est pas un état, et le déformer aurait été pire que de ne rien traduire.
+
+**Mesuré à l'écran**, sur les deux surfaces : plus aucune occurrence de
+`running`, `stopped`, `starting`, `broken` et consorts ; les messages que la
+console ne reconnaît pas — « 4 route(s) appliquée(s) », « Catalogue relevé : … »
+— sont intacts ; les noms cités ne sont pas touchés.
+
+**Le registre d'incohérences a été supprimé du dépôt.** INC-01 était sa dernière
+entrée. `CLAUDE.md` §5 le demande : un registre vide qu'on garde par habitude se
+lit comme un registre qu'on ne tient plus. Le manuel M12 le dit désormais au lieu
+de renvoyer vers un fichier absent. Il réapparaîtra au premier écart constaté.
+
+**Campagne complète, verte.** 653 tests Python, 413 de console et d'hôte console,
+6 de contrat, 8 gestes, **39 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`. Captures `73-` et `74-` observées, console du navigateur vierge.
+
+**Où reprendre.** SPK-42, tranche 3 — la documentation et le manuel emploient
+encore « hôte » au sens de la machine, puis les noms de fichiers de la console
+(`host-view.js` et ses voisins), puis la vérification finale de sa DoD. C'est du
+rédactionnel : si une session veut du comportement, SPK-43 (terminal dans un
+Spark) est la prochaine unité de construction, et elle débloque SPK-51. SPK-51
+attend toujours les deux vérifications du §38.6 bis auprès du fournisseur.
