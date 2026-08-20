@@ -104,7 +104,9 @@ test('le relais atteint sparkd a travers le tunnel', async () => {
 
   const r = await fetch(`${base}/api/v1/forge?server=prod`);
   assert.equal(r.status, 200);
-  assert.match(vue, /^http:\/\/127\.0\.0\.1:\d+\/v1\/host$/);
+  // SPK-42 : le chemin relayé est celui de la FORGE. Le relais retire « /api »
+  // et transmet le reste tel quel — ce que cette attente vérifie.
+  assert.match(vue, /^http:\/\/127\.0\.0\.1:\d+\/v1\/forge$/);
   server.close();
 });
 
