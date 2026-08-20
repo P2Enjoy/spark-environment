@@ -5537,3 +5537,63 @@ signée en pratique : la Forge sait recevoir, personne n'envoie encore.
 
 **Où reprendre.** La tranche 2 de SPK-40, ou SPK-61 et SPK-62 nées de SPK-35.
 SPK-53 et SPK-54 attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-40, deuxième tranche — la console signe
+
+**Unité choisie** au §4.2 point 1 : le journal désignait cette reprise.
+
+### La mesure qui décide de la commande
+
+`ssh-keygen -Y sign -f <clé PUBLIQUE>` — et le choix de la clé publique n'est pas
+un détail. Mesuré le 2026-08-21 sur OpenSSH 8.9p1, en **retirant la clé privée du
+disque** :
+
+```
+agent chargé + -f cle.pub, clé privée ABSENTE  →  0, et la signature se vérifie
+aucun agent  + -f cle.pub, clé privée absente  →  255, « Load key … No such file »
+```
+
+Quand un agent détient la clé, `ssh-keygen` lui délègue la signature et ne lit
+jamais le secret. C'est la propriété du §36.3, et elle vaut ici pour la console
+elle-même : **elle signe sans jamais tenir la clé privée.**
+
+### Ce qui a été construit
+
+`apps/webui/host/signature.js` — la forme canonique, identique à celle de la
+Forge à l'octet près, et la commande de signature. Le relais la pose au **même
+endroit** que l'acteur.
+
+**Ne pas pouvoir signer ne retient jamais le geste** (§36.10.8) : le module ne
+lève pas, il rend un **motif**. Un exploitant dont l'agent vient de se vider ne
+doit pas découvrir que son produit s'est verrouillé.
+
+Le message d'OpenSSH n'est pas montré tel quel — il nomme un fichier que
+l'exploitant n'a pas demandé (§14.7) — mais traduit en ce qui manque vraiment, et
+le motif dit quoi **faire** : `ssh-add`.
+
+Une **lecture n'est pas signée** : le §36.7 ne les journalise pas, et signer ce
+qui ne laisse pas de trace ne prouverait rien.
+
+`signingKey` entre dans l'inventaire, pour **tous** les genres de serveur —
+signer ne dépend pas de la façon d'atteindre la Forge. C'est un chemin vers une
+clé **publique** : aucun secret n'entre là (§11).
+
+### Vérifications
+
+Campagne complète **verte** : 762 Python, contrat conforme, **796 de console**, 8
+de gestes, 70 parcours E2E, 7 du manuel, `build`. Aucune capture : cette tranche
+ne touche pas l'interface.
+
+**SPK-40 reste `[~]`**, avec deux écarts nommés :
+
+1. **aucun parcours E2E ne traverse la chaîne complète** — la console signe, la
+   Forge vérifie, la ligne porte la signature. Les deux moitiés sont prouvées
+   séparément, la jonction ne l'est pas ; le doublon `SPARK_SIGN_COMMAND` n'est
+   pas encore posé dans `e2e/pile.mjs` ;
+2. **l'échec de signature n'est pas dit À L'ÉCRAN.** Le relais le remonte, mais
+   aucun écran ne le montre — c'est du comportement dû, et le §36.10.8 l'exige.
+
+**Où reprendre.** Ces deux écarts, qui closent SPK-40. Puis SPK-61 et SPK-62.
+SPK-53 et SPK-54 attendent une décision du responsable.

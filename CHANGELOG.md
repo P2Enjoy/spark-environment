@@ -3,6 +3,10 @@
 ## [Non publié]
 
 ### Ajouté
+- **La console signe les gestes qu'elle relaie** (SPK-40 deuxième tranche,
+  `docs/DAT.md` §36.10.8), par l'agent SSH du responsable — la clé privée n'est
+  jamais lue. Le champ `signingKey` de l'inventaire désigne la clé **publique**.
+  Ne pas pouvoir signer **ne retient jamais le geste** : il part, non signé.
 - **Le journal conserve la signature d'un geste** (SPK-40 première tranche,
   `docs/DAT.md` §36.10) : `sparkd` accepte une signature SSHSIG, la vérifie et
   l'inscrit. Une requête **non signée passe** — ce n'est pas un contrôle

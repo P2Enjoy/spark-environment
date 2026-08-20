@@ -1415,13 +1415,29 @@ que chacune se prouve seule :
 - **Preuves** : 17 du module, 12 de route, avec de vraies clés et un vrai
   `ssh-keygen`. 762 preuves Python au total.
 
-- **Reste avant `[x]`** :
-  1. la **tranche 2** — la console produit la signature par l'agent du
-     responsable. Tant qu'elle manque, **aucune ligne n'est signée en pratique** :
-     la Forge sait recevoir, personne n'envoie encore ;
-  2. elle suppose un **agent SSH atteignable**, que la pile de développement n'a
-     pas — le doublon devra remplacer la commande de signature, comme
-     `SPARK_TERMINAL_COMMAND` remplace celle du terminal (§37.4.2 bis).
+**Deuxième tranche livrée le 2026-08-21 : la console signe.**
+
+- **Mesuré** : avec un agent, `ssh-keygen -Y sign -f <clé PUBLIQUE>` signe **sans
+  que la clé privée soit sur le disque** — éprouvé en la retirant. La console
+  signe donc sans jamais tenir le secret (§36.3).
+- **Ne pas pouvoir signer ne retient jamais le geste** : le module rend un
+  MOTIF, il ne lève pas. Un exploitant dont l'agent vient de se vider ne doit pas
+  découvrir que son produit s'est verrouillé.
+- Le message d'OpenSSH est **traduit** en ce qui manque vraiment (§14.7), et dit
+  quoi faire — `ssh-add`.
+- Une **lecture n'est pas signée** : signer ce qui ne laisse pas de trace ne
+  prouverait rien.
+- `signingKey` entre dans l'inventaire pour **tous** les genres de serveur, et
+  ne porte qu'une clé **publique**.
+- **Preuves** : 16, avec un vrai `ssh-keygen`, un vrai agent et de vraies clés.
+
+- **Reste avant `[x]`, et ce sont deux écarts de COMPORTEMENT** :
+  1. **aucun parcours E2E ne traverse la chaîne complète** — console qui signe,
+     Forge qui vérifie, ligne qui porte la signature. Les deux moitiés sont
+     prouvées séparément ; la jonction ne l'est pas. Le doublon
+     `SPARK_SIGN_COMMAND` reste à poser dans `e2e/pile.mjs` ;
+  2. **l'échec de signature n'est pas dit à l'écran.** Le relais le remonte, mais
+     aucun écran ne le montre — or le §36.10.8 exige qu'il soit dit, jamais tu.
 
 ### [x] SPK-41 · Catalogue local des serveurs, tenu depuis la console
 
