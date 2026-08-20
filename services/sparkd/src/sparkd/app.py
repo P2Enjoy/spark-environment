@@ -14,6 +14,7 @@ Confondre les deux ferait declarer prete une instance incapable de travailler.
 
 from __future__ import annotations
 
+import base64
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
 from . import ports as ports_service
+from . import signature as signature_service
 from . import audit as audit_service
 from . import bootstrap as bootstrap_service
 from . import metrics as metrics_service
@@ -110,7 +112,39 @@ def create_app(config: Config) -> FastAPI:
         # qui écrivent.
         if requete.method in ("GET", "HEAD", "OPTIONS"):
             return await appeler_suivant(requete)
-        with audit_service.acting_as(declare, audit_service.HUMAN):
+
+        # SPK-40 · §36.10 : la signature entre au MÊME endroit que l'acteur, et
+        # pour la même raison — ce qui est posé à quatorze endroits est oublié au
+        # quinzième.
+        #
+        # Une requête NON signée passe : refuser ferait de ce mécanisme un
+        # contrôle d'accès, ce que le §45.4 dit qu'il n'est pas. Une signature
+        # PRÉSENTE et invalide est refusée, parce que l'inscrire ferait mentir le
+        # journal (§36.10.4).
+        if not signature_service.entete_present(requete.headers):
+            with audit_service.acting_as(declare, audit_service.HUMAN):
+                return await appeler_suivant(requete)
+
+        acteur = audit_service.normalize_actor(declare)
+        try:
+            signature, octets = signature_service.lire_entetes(requete.headers)
+            if not signature_service.decrit_bien(
+                    octets, method=requete.method,
+                    path=requete.url.path, actor=acteur):
+                raise signature_service.SignatureError(
+                    "Les octets signés ne décrivent pas cette requête : la "
+                    "signature porterait sur autre chose.", "octets_etrangers")
+            signature_service.verifier(
+                octets, signature, acteur, config.allowed_signers)
+        except signature_service.SignatureError as refus:
+            return JSONResponse(status_code=422, content={"detail": {
+                "error": refus.motif, "message": str(refus)}})
+
+        with audit_service.acting_as(declare, audit_service.HUMAN), \
+                audit_service.signed_with(
+                    signature,
+                    base64.b64encode(octets).decode("ascii"),
+                    signature_service.VERSION):
             return await appeler_suivant(requete)
 
     app.state.config = config
@@ -821,18 +855,24 @@ def create_app(config: Config) -> FastAPI:
     def audit_trail(limit: int = 100, result: str | None = None,
                     action: str | None = None, actor: str | None = None,
                     actor_class: str | None = None,
-                    since: str | None = None) -> dict:
+                    since: str | None = None,
+                    with_signature: bool = False) -> dict:
         """Journal d'audit. Les valeurs sensibles y sont déjà caviardées.
 
         Un filtre inconnu est REFUSÉ, jamais ignoré (docs/DAT.md §36.8.2) : un
         filtre ignoré rend une liste plus large que demandée, que l'exploitant
         lira comme un résultat filtré. C'est la pire des deux erreurs.
+
+        SPK-40 · §36.10.7 : chaque entrée dit si elle est signée ; la signature
+        elle-même ne vient qu'avec `with_signature`, parce qu'elle ne sert qu'à
+        qui vérifie et pèse quelques centaines d'octets par ligne.
         """
         with registry() as connection:
             try:
                 return {"entries": audit_service.listing(
                     connection, limit=limit, result=result, action=action,
                     actor=actor, actor_class=actor_class, since=since,
+                    avec_signature=with_signature,
                 )}
             except ValueError as erreur:
                 raise HTTPException(status_code=422, detail={

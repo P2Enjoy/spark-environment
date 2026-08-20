@@ -74,6 +74,10 @@ export interface paths {
          *     Un filtre inconnu est REFUSÉ, jamais ignoré (docs/DAT.md §36.8.2) : un
          *     filtre ignoré rend une liste plus large que demandée, que l'exploitant
          *     lira comme un résultat filtré. C'est la pire des deux erreurs.
+         *
+         *     SPK-40 · §36.10.7 : chaque entrée dit si elle est signée ; la signature
+         *     elle-même ne vient qu'avec `with_signature`, parce qu'elle ne sert qu'à
+         *     qui vérifie et pèse quelques centaines d'octets par ligne.
          */
         get: operations["audit_trail_v1_audit_get"];
         put?: never;
@@ -696,6 +700,7 @@ export interface operations {
                 actor?: string | null;
                 actor_class?: string | null;
                 since?: string | null;
+                with_signature?: boolean;
             };
             header?: never;
             path?: never;

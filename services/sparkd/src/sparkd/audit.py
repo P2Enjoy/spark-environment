@@ -96,6 +96,16 @@ MAX_ACTOR = 200
 #: n'est pas déclaré vaut `inconnu` et `runtime`.
 _REQUETE: ContextVar[tuple[str, str] | None] = ContextVar("acteur_requete", default=None)
 
+#: SPK-40 · docs/DAT.md §36.10 : la signature du geste en cours, si la requête en
+#: portait une et qu'elle s'est VÉRIFIÉE. Comme l'acteur, elle est posée une fois
+#: à la frontière du service et reprise par toute écriture au journal.
+#:
+#: Elle vaut `None` par défaut, et c'est le cas NORMAL : une requête non signée
+#: passe, et sa ligne est inscrite non signée (§36.10.1). Un événement du runtime
+#: n'en porte jamais — le §36.4 le dit, et la supervision montre la classe.
+_SIGNATURE: ContextVar[tuple[str, str, str] | None] = ContextVar(
+    "signature_requete", default=None)
+
 
 @contextmanager
 def acting_as(actor: str, actor_class: str = HUMAN):
@@ -114,6 +124,26 @@ def acting_as(actor: str, actor_class: str = HUMAN):
 
 
 @contextmanager
+def signed_with(signature: str, signed_bytes: str, version: str):
+    """Déclare la signature VÉRIFIÉE du geste en cours (docs/DAT.md §36.10).
+
+    Elle n'est jamais posée sans avoir été vérifiée : une ligne qui porterait une
+    signature invalide affirmerait une preuve qu'elle n'a pas, ce qui est pire
+    que de n'en porter aucune (§36.10.4).
+    """
+    jeton = _SIGNATURE.set((signature, signed_bytes, version))
+    try:
+        yield
+    finally:
+        _SIGNATURE.reset(jeton)
+
+
+def current_signature() -> tuple[str, str, str] | None:
+    """La signature en vigueur, ou `None` — qui est le cas normal."""
+    return _SIGNATURE.get()
+
+
+@contextmanager
 def as_runtime(actor: str = "sparkd"):
     """Déclare un ÉVÉNEMENT DU RUNTIME (docs/DAT.md §36.4).
 
@@ -123,8 +153,15 @@ def as_runtime(actor: str = "sparkd"):
     déclaration ils hériteraient du contexte et le journal ferait croire qu'une
     personne les a réclamés.
     """
-    with acting_as(actor, RUNTIME):
-        yield
+    # Un événement du runtime n'est signé par personne (§36.4). S'il hérite du
+    # contexte d'une requête signée, le journal ferait croire que le responsable
+    # a demandé un recalcul qu'il n'a jamais réclamé.
+    jeton = _SIGNATURE.set(None)
+    try:
+        with acting_as(actor, RUNTIME):
+            yield
+    finally:
+        _SIGNATURE.reset(jeton)
 
 
 def canonical(ligne: dict) -> bytes:
@@ -315,17 +352,26 @@ def record(
 
 
 def _inserer_chaine(connection: sqlite3.Connection, ligne: dict) -> None:
-    """Chaîne la ligne à la tête courante, puis l'insère."""
+    """Chaîne la ligne à la tête courante, puis l'insère.
+
+    SPK-40 : la signature accompagne la ligne mais n'entre PAS dans son
+    empreinte (§36.10.6). Le champ retenu du §36.9.2 est figé, et l'y ajouter
+    invaliderait toutes les lignes existantes — ce que ce paragraphe interdit.
+    L'empreinte est donc calculée AVANT que la signature soit jointe.
+    """
     ligne["prev_hash"], _ = head(connection)
+    empreinte = entry_hash(ligne)
+    signature = current_signature() or (None, None, None)
     connection.execute(
         "INSERT INTO audit_log (ts, actor, actor_class, action, target_type,"
-        " target_id, payload, result, message, prev_hash, entry_hash)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " target_id, payload, result, message, prev_hash, entry_hash,"
+        " signature, signed_bytes, signature_version)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             ligne["ts"], ligne["actor"], ligne["actor_class"], ligne["action"],
             ligne["target_type"], ligne["target_id"], ligne["payload"],
             ligne["result"], ligne["message"], ligne["prev_hash"],
-            entry_hash(ligne),
+            empreinte, *signature,
         ),
     )
 
@@ -338,6 +384,7 @@ def listing(
     actor: str | None = None,
     actor_class: str | None = None,
     since: str | None = None,
+    avec_signature: bool = False,
 ) -> list[dict]:
     """Entrées les plus récentes d'abord.
 
@@ -350,6 +397,11 @@ def listing(
     `actor` filtre par sous-chaîne : l'identité déclarée porte le serveur ET
     l'empreinte de clé (§21.6.3), et chercher « console/prod » doit retenir les
     deux formes.
+
+    SPK-40 · §36.10.7 : chaque entrée dit si elle est **signée**, mais la
+    signature elle-même n'est rendue que sur demande. Elle ne sert qu'à qui
+    vérifie, et elle pèse quelques centaines d'octets par ligne — la rendre par
+    défaut alourdirait chaque page du journal pour tous les autres.
     """
     if result is not None and result not in RESULTS:
         raise ValueError(f"Résultat « {result} » inconnu, attendu {RESULTS}.")
@@ -379,11 +431,19 @@ def listing(
         parametres.append(since)
     ou = (" WHERE " + " AND ".join(conditions)) if conditions else ""
     parametres.append(max(1, min(limit, 1000)))
-    return [
-        dict(r) for r in connection.execute(
-            f"SELECT * FROM audit_log{ou} ORDER BY id DESC LIMIT ?", parametres
-        )
-    ]
+    lignes = []
+    for brut in connection.execute(
+            f"SELECT * FROM audit_log{ou} ORDER BY id DESC LIMIT ?", parametres):
+        ligne = dict(brut)
+        # `signed` est un FAIT, toujours rendu : sans lui, l'écran ne pourrait
+        # pas distinguer une ligne non signée d'une ligne dont on n'a pas
+        # demandé la signature (§14.6).
+        ligne["signed"] = ligne.get("signature") is not None
+        if not avec_signature:
+            for champ in ("signature", "signed_bytes"):
+                ligne.pop(champ, None)
+        lignes.append(ligne)
+    return lignes
 
 
 def verify_chain(connection: sqlite3.Connection) -> dict:
