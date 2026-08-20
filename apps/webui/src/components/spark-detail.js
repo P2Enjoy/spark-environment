@@ -14,7 +14,7 @@
  * Cet écran ne connaît pas la machine à états et ne doit pas la connaître.
  */
 
-import { stateOf, formatBytes, formatBps, formatCpu, MEASURE } from './tokens.js';
+import { stateOf, formatBytes, formatBps, formatCpu, MEASURE, traduireMessage } from './tokens.js';
 import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
          renderPortsPanel, ADMIN_VIDE } from './spark-admin.js';
 import { renderOngletsSpark } from './host-images.js';
@@ -244,7 +244,7 @@ function renderJournal(entries = []) {
     const { label, token } = RESULTATS[e.result] ?? { label: e.result ?? 'inconnu', token: 'neutral' };
     return `<li class="evenement">
       <span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span>
-      <span class="evenement__texte">${echapper(e.message ?? e.action)}</span>
+      <span class="evenement__texte">${echapper(traduireMessage(e.message) || e.action)}</span>
       ${renderAuteur(e)}
       <span class="technique evenement__date">${echapper((e.ts ?? '').slice(0, 16).replace('T', ' '))}</span>
     </li>`;
@@ -325,7 +325,7 @@ export function renderDetailError(error) {
 <p><a class="lien-spark" href="#/sparks">← Tous les Sparks</a></p>
 <div class="carte"><div class="etat-vue etat-vue--erreur" role="alert">
   <h2>Ce Spark n’a pas pu être chargé</h2>
-  <p>${echapper(error?.message ?? 'Cause inconnue.')}</p>
+  <p>${echapper(traduireMessage(error?.message) || 'Cause inconnue.')}</p>
   <p style="margin-top:var(--space-4)"><button type="button" class="bouton" data-action="reessayer">Réessayer</button></p>
 </div></div>`;
 }

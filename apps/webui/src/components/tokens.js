@@ -4,6 +4,9 @@
  * @spec docs/DESIGN_SYSTEM.md §12.5 (les correspondances vivent à un seul
  *       endroit), §2.6 (repli documenté pour une valeur inconnue) ·
  *       docs/DESIGN_SYSTEM_APP.md §4 (SPK-DS-01, SPK-DS-03)
+ * @spec docs/BACKLOG.md#SPK-46 · docs/DAT.md §21.5 bis (le vocabulaire du
+ *       journal, et qui le traduit) · docs/DESIGN_SYSTEM.md §14.7 — pour
+ *       `traduireMessage`, qui vit ICI parce que deux surfaces l'emploient.
  *
  * Un composant ne possède pas sa propre copie de ces tables.
  */
@@ -94,4 +97,42 @@ export function formatBps(value) {
 export function formatCpu(value) {
   if (value === null || value === undefined) return null;
   return virgule(value.toFixed(2));
+}
+
+/* ------------------------------------------------ traduction des messages */
+
+/**
+ * Traduit à l'AFFICHAGE le vocabulaire technique d'un message du serveur.
+ *
+ * @spec docs/BACKLOG.md#SPK-46 · docs/DAT.md §21.5 bis · docs/DESIGN_SYSTEM.md §14.7
+ *
+ * Le journal reste un enregistrement TECHNIQUE : `sparkd` continue d'y écrire
+ * « starting » → « running », qui est ce que le runtime a réellement fait. Y
+ * écrire du vocabulaire d'interface le rendrait moins précis pour gagner en
+ * confort, et au mauvais endroit — le journal sert aussi au diagnostic.
+ *
+ * **Elle ne devine jamais.** Seules les formes que la console SAIT reconnaître
+ * sont traduites ; tout le reste traverse INTACT. Un message inconnu mal
+ * traduit serait pire que le même message resté technique.
+ */
+
+/** Les états cités entre guillemets français dans un message du runtime. */
+const CITATION = /«\s*([a-z_-]+)\s*»/g;
+
+/** Les états de tunnel cités entre parenthèses par l'hôte console (§22.3). */
+const ETAT_TUNNEL = /\((broken|ready|connecting|closed)\b/g;
+
+export function traduireMessage(texte) {
+  const brut = String(texte ?? '');
+  if (!brut) return brut;
+  return brut
+    // Un état de Spark cité : on ne remplace QUE si la table le connaît.
+    // `SPARK_STATES[x]` et non `stateOf(x)` : `stateOf` fabrique un repli
+    // « État inconnu (…) », qui déformerait un mot qui n'est pas un état.
+    .replace(CITATION, (entier, mot) =>
+      SPARK_STATES[mot] ? `« ${SPARK_STATES[mot].label} »` : entier)
+    // Un état de tunnel, même règle : le registre signalait ce message comme
+    // le même écart — le badge disait « rompu » quand le texte disait « broken ».
+    .replace(ETAT_TUNNEL, (entier, mot) =>
+      TUNNEL_STATES[mot] ? `(${TUNNEL_STATES[mot].label}` : entier);
 }

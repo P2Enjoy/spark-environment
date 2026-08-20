@@ -15,6 +15,7 @@
 
 import { renderOngletsForge } from './host-images.js';
 import { formatDate } from './host-view.js';
+import { traduireMessage } from './tokens.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -164,7 +165,7 @@ function renderLigne(e) {
   <td><span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span></td>
   <td class="technique cellule-dense">${echapper(e.action)}</td>
   <td class="cellule-dense">${renderAuteurCellule(e)}</td>
-  <td>${echapper(e.message)}</td>
+  <td>${echapper(traduireMessage(e.message))}</td>
 </tr>`;
 }
 
@@ -189,7 +190,7 @@ export function renderJournalHote({ status = 'loading', entries = [], error = nu
   if (status === 'error') {
     return `${entete}<div class="carte"><div class="etat-vue etat-vue--erreur" role="alert">
       <h2>Le journal n’a pas pu être lu</h2>
-      <p>${echapper(error?.message ?? 'Cause inconnue.')}</p>
+      <p>${echapper(traduireMessage(error?.message) || 'Cause inconnue.')}</p>
       <p style="margin-top:var(--space-4)"><button type="button" class="bouton" data-action="reessayer">Réessayer</button></p>
     </div></div>`;
   }
