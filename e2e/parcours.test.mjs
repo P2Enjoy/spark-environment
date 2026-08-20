@@ -1261,3 +1261,77 @@ test('publier puis retirer un port ouvre puis REFERME réellement', async () => 
       'le port doit avoir disparu du registre');
   });
 });
+
+// --- LES RECETTES DNS (SPK-50, docs/DAT.md §38.6) --------------------------
+
+test('appliquer une recette écrit TOUTES ses lignes, et rend le sort de chacune', async () => {
+  await parcours('recette-site-web', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-routes');
+    await page.click('[data-ouvre="recette"]');
+    await page.waitForSelector('dialog.modale[open] #recette-id', { timeout: 15000 });
+
+    await page.selectOption('#recette-id', 'site-web');
+    await page.selectOption('#recette-zone', 'exemple.test');
+    await page.fill('[data-param="domain"]', 'exemple.test');
+    await page.fill('[data-param="address"]', '198.51.100.7');
+    await page.dispatchEvent('[data-param="address"]', 'change');
+
+    // L'écran présente la recette ENTIÈRE avant d'écrire (§38.6.3).
+    await page.waitForSelector('#recette-apercu .recette-lignes', { timeout: 15000 });
+    const apercu = await page.textContent('#recette-apercu');
+    assert.ok(apercu.includes('@ A'), 'le domaine nu se note « @ »');
+    assert.ok(apercu.includes('www A'));
+    assert.ok(apercu.includes('198.51.100.7'));
+
+    await page.click('[data-engage="recette"]');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+    const bilan = await page.textContent('#recette-resultat');
+    assert.ok(bilan.includes('2 écrit(s)'));
+    assert.ok(!bilan.includes('en échec'));
+
+    // EFFET, constaté chez le fournisseur : les deux lignes sont là…
+    const zone = dns.enregistrements();
+    assert.ok(zone.some((r) => r.name === '' && r.type === 'A' && r.data === '198.51.100.7'));
+    assert.ok(zone.some((r) => r.name === 'www' && r.type === 'A' && r.data === '198.51.100.7'));
+    // … et le MX de l'apex, qui est d'un AUTRE type, n'a pas bougé.
+    assert.ok(zone.some((r) => r.name === '' && r.type === 'MX'),
+      'la messagerie de l’apex ne doit pas être emportée');
+  });
+});
+
+test('la recette du relais RÉCLAME sa clé et se dit incomplète sans elle', async () => {
+  await parcours('recette-relais', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.click('[data-ouvre="recette"]');
+    await page.waitForSelector('dialog.modale[open] #recette-id', { timeout: 15000 });
+
+    await page.selectOption('#recette-id', 'relais-transactionnel');
+    // L'avertissement est lisible AVANT d'appliquer.
+    const modale = await page.textContent('dialog.modale[open]');
+    assert.ok(/ÉMET et NE REÇOIT PAS/.test(modale));
+    assert.ok(modale.includes('PTR'), 'les actions humaines restantes sont dites');
+
+    await page.selectOption('#recette-zone', 'exemple.test');
+    await page.fill('[data-param="domain"]', 'noreply.exemple.test');
+    await page.fill('[data-param="selector"]', 'projet-1');
+    await page.dispatchEvent('[data-param="selector"]', 'change');
+
+    await page.waitForSelector('#recette-apercu .recette-lignes', { timeout: 15000 });
+    const apercu = await page.textContent('#recette-apercu');
+    assert.ok(apercu.includes('SANS SIGNATURE'),
+      'sans la clé, l’écran doit dire ce que l’absence entraîne');
+
+    await page.click('[data-engage="recette"]');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+    assert.ok((await page.textContent('#recette-resultat')).includes('3 écrit(s)'));
+
+    // Le MX du sous-domaine pointe bien vers un puits, et le SPF est posé.
+    const zone = dns.enregistrements();
+    assert.ok(zone.some((r) => r.name === 'noreply' && r.type === 'MX'
+                               && r.data.includes('blackhole')));
+    assert.ok(zone.some((r) => r.name === 'noreply' && r.type === 'TXT'
+                               && r.data.includes('_spf.tem.scaleway.com')));
+    assert.ok(zone.some((r) => r.name === '_dmarc.noreply' && r.type === 'TXT'));
+  });
+});

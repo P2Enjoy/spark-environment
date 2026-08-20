@@ -59,7 +59,10 @@ export const ADMIN_VIDE = {
   supersedes: null,
   // SPK-50 · §38.6 : le catalogue, l'aperçu ligne à ligne, et le compte rendu.
   recettes: { catalogue: [], zones: [], apercu: null, resultat: null,
-              chargement: false, erreur: null },
+              chargement: false, erreur: null,
+              // La demande en cours, pour qu'une réponse tardive n'écrase pas
+              // une réponse plus récente (§38.5.2, même garde).
+              lu: null },
   // SPK-47 · §38.1 : ce que la console SAIT du fournisseur. `configured` vaut
   // `null` tant qu'on n'a pas demandé — « pas encore su » n'est pas « pas
   // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
@@ -270,13 +273,20 @@ function renderRecetteModale(ui) {
 
 /** L'aperçu ligne à ligne, remplacé SUR PLACE comme celui du §38.5.2. */
 export function renderRecetteApercu(etat) {
-  if (etat.chargement) {
+  const vu = etat.apercu;
+  // Pendant une RELECTURE, on garde ce qui est affiché et on le marque occupé.
+  //
+  // Mesuré, deux fois : vider le bloc le fait rétrécir, la modale avec, et le
+  // bouton d'engagement se dérobe entre l'appui et le relâchement — le clic ne
+  // part jamais. `change` se déclenche AUSSI à la perte du focus, donc au moment
+  // même où l'on clique. C'est la même correction qu'au §38.5.2.
+  if (etat.chargement && !vu && !etat.erreur) {
     return '<p class="note" aria-busy="true">Lecture de ce qui est déjà en place…</p>';
   }
   if (etat.erreur) return `<p class="refus">${echapper(etat.erreur)}</p>`;
-  const vu = etat.apercu;
   if (!vu) return '';
-  return `<p class="note"><strong>Sera écrit :</strong></p>
+  const occupe = etat.chargement ? ' aria-busy="true"' : '';
+  return `<p class="note"${occupe}><strong>Sera écrit :</strong></p>
     <ul class="liste-simple recette-lignes">${vu.records.map((r) => `
       <li><span class="technique">${echapper(r.name || '@')} ${echapper(r.type)}
           → ${echapper(r.data)}</span>

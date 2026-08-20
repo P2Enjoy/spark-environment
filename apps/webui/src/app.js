@@ -259,6 +259,18 @@ function brancherPanneaux() {
   // SPK-47 · §38 : « DNS » ouvre une modale portant sur CETTE route. Le domaine
   // n'est pas saisi, il est repris de la route ; l'adresse est pré-remplie avec
   // celle du serveur courant, qui EST la Forge.
+  // SPK-50 · §38.6 : les paramètres d'une recette sont DYNAMIQUES — ils
+  // dépendent de la recette choisie —, d'où `data-param` plutôt qu'un `name`
+  // fixe. Sans ces écoutes, l'aperçu restait sur « Aucun domaine fourni » quoi
+  // qu'on saisisse. Mesuré par le parcours E2E.
+  for (const controle of racine.querySelectorAll('[data-param]')) {
+    controle.addEventListener('input', () => {
+      admin.values.recette_params = { ...admin.values.recette_params,
+                                      [controle.dataset.param]: controle.value };
+    });
+    controle.addEventListener('change', () => lireApercuRecette());
+  }
+
   for (const bouton of racine.querySelectorAll('[data-dns-route]')) {
     bouton.addEventListener('click', () => ouvrirDns(bouton.dataset.dnsRoute));
   }
@@ -560,11 +572,21 @@ async function lireApercuRecette() {
     const bloc = racine.querySelector('#recette-apercu');
     if (bloc) bloc.innerHTML = renderRecetteApercu(admin.recettes);
   };
+  // Même garde qu'au §38.5.2, et pour la même raison mesurée : plusieurs
+  // lectures se chevauchent — un changement de recette, de zone, puis chaque
+  // paramètre —, et la dernière ARRIVÉE n'est pas la dernière DEMANDÉE. Sans
+  // cette clé, un refus immédiat « Aucun domaine fourni » écrasait l'aperçu
+  // complet obtenu après un aller-retour réseau.
+  const cle = `${v.recette}|${v.recette_zone}|${JSON.stringify(v.recette_params ?? {})}`;
+  // Relire des valeurs IDENTIQUES n'apprend rien et coûte une requête. Surtout,
+  // `change` se déclenche à la perte du focus — donc au moment du clic sur le
+  // bouton d'engagement (§38.5.2, même mesure).
+  if (admin.recettes.lu === cle) return;
   if (!v.recette || !v.recette_zone) {
-    admin.recettes = { ...admin.recettes, apercu: null, erreur: null };
+    admin.recettes = { ...admin.recettes, apercu: null, erreur: null, lu: cle };
     return montrer();
   }
-  admin.recettes = { ...admin.recettes, chargement: true, erreur: null };
+  admin.recettes = { ...admin.recettes, chargement: true, erreur: null, lu: cle };
   montrer();
   try {
     const reponse = await fetch('/api/dns/recipe/preview', {
@@ -573,11 +595,13 @@ async function lireApercuRecette() {
                              params: v.recette_params ?? {} }),
     });
     const corps = await reponse.json();
+    if (admin.recettes.lu !== cle) return;
     admin.recettes = reponse.ok
       ? { ...admin.recettes, apercu: corps, chargement: false, erreur: null }
       : { ...admin.recettes, apercu: null, chargement: false,
           erreur: corps.message ?? 'Aperçu impossible.' };
   } catch (erreur) {
+    if (admin.recettes.lu !== cle) return;
     admin.recettes = { ...admin.recettes, apercu: null, chargement: false,
                        erreur: erreur.message };
   }
