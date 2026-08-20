@@ -147,3 +147,55 @@ instantanée.
 > résout pas — est levée depuis que la console pose le DNS, mais l'émission
 > elle-même reste à constater sur un serveur joignable depuis l'extérieur. Voir
 > SPK-12 au [backlog](../BACKLOG.md).
+
+## Publier un port — pour ce qui ne parle pas HTTP
+
+Tout ce qui précède route par **nom** : vos applications partagent les ports 80 et
+443, et le proxy lit dans la requête le nom demandé. C'est ce qui permet à des
+dizaines de Sparks de partager une seule adresse, avec un certificat automatique
+par nom.
+
+Cela suppose que le client **annonce** le nom. C'est le cas de HTTP et de HTTPS —
+et donc, c'est moins évident, des WebSockets, qui commencent par une requête HTTP
+avant de changer de protocole. Une API, un Ollama, un serveur de développement,
+un Keycloak, un MinIO : **aucun n'a besoin d'un port publié**.
+
+Un serveur de messagerie, lui, reçoit une connexion sur le port 25 sans qu'aucun
+nom ne soit prononcé. Une base de données, un Redis, un SSH sont dans le même
+cas. Le seul élément qui désigne alors le Spark destinataire est **le port sur
+lequel la connexion est arrivée**.
+
+C'est à cela que sert la section **Ports publiés**, sous les routes.
+
+### Ce qu'un port publié vous coûte
+
+**Le certificat automatique.** Le proxy obtient et renouvelle les certificats
+parce qu'il comprend le protocole ; un port transporté tel quel ne lui passe pas
+devant. L'application dans le Spark doit donc faire **son propre TLS** — une base
+de données, un MinIO ou un serveur de messagerie savent le faire, mais il faut le
+savoir.
+
+Publier un port pour une application qui parle HTTP est presque toujours une
+erreur : vous perdez le certificat sans rien gagner. La fenêtre vous le dit ;
+elle ne vous l'interdit pas.
+
+### Un port appartient à la machine, pas au Spark
+
+C'est la différence avec un nom. Vous pouvez donner autant de noms que vous voulez
+à autant de Sparks que vous voulez. Un port, lui, est **unique sur la Forge** : le
+premier qui le prend le prend, et le refus vous nomme le Spark qui le détient.
+
+Certains ports ne sont jamais attribuables — ceux qu'occupe le système de la
+Forge. La fenêtre les énumère avec la raison de chacun, pour que vous ne
+cherchiez pas à libérer un port qui sert à quelque chose.
+
+### Retirer referme
+
+Le port cesse d'être joignable immédiatement. Le retrait se confirme, parce que
+la coupure est instantanée — mais rien n'est détruit dans le Spark, et vous
+pouvez republier.
+
+> **Limite connue.** Le fait qu'une connexion entrante atteigne réellement le
+> Spark n'a pas encore été constaté sur une Forge réelle : cela demande une
+> machine avec Incus et une adresse publique. Ce que le produit garantit
+> aujourd'hui est que la règle est posée et retirée correctement.

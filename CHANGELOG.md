@@ -98,6 +98,15 @@
   Le harnais E2E impose son propre fichier d'environnement et un doublon local
   du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
 
+- Unité SPK-49 : **publier un port de la Forge vers un Spark**, pour ce qui ne
+  parle pas HTTP — messagerie, base de données, Redis, SSH. Un port public est
+  unique sur la machine : le refus nomme le Spark qui le détient, ou le service
+  qui tient un port réservé. La fenêtre annonce d'abord ce qu'un port publié fait
+  perdre — le certificat automatique — et vers quoi se rabattre.
+
+  Migration `008_ports_publies`, opération OP-08 du contrat de déploiement.
+  Nouvelle variable facultative `SPARKD_RESERVED_PORTS`.
+
 - Unité SPK-48 : **une route peut porter une étoile** — `*.monapi.fr` sert tous
   les sous-domaines d'un niveau. Un nom exact déclaré sur un autre Spark prend
   le pas sur elle, ce qui est le geste de la montée en charge : sortir un

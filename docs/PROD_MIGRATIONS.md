@@ -280,6 +280,34 @@ Point d'exploitation : LE JOURNAL NE SE PURGE PAS. C'est une décision, pas un
                 d'exploitation.
 ```
 
+### OP-08 · Migration `008_ports_publies` du registre
+
+```
+Objectif      : publier un port de la Forge vers un Spark, pour ce qui ne parle
+                pas HTTP — SMTP, Postgres, Redis, SSH (SPK-49,
+                docs/DAT.md §39, docs/SCHEMA.md §6 bis). Une table
+                `published_port`, dont le port public est UNIQUE.
+Dépend de     : 007_forge
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : RIEN d'automatique. Aucun port n'est ouvert par la migration
+                elle-même — la table naît vide.
+Vérification  : GET /v1/ports rend une liste vide et la liste des ports
+                réservés, chacun avec la raison qui le tient.
+Retour arrière: fourni. La table et son index sont retirés. Les publications
+                déjà faites seraient perdues ; les devices « pub-* » posés sur
+                les instances, eux, SURVIVRAIENT au retour arrière. Les retirer
+                avant de redescendre, sans quoi des ports resteraient ouverts
+                sans rien au registre pour les décrire.
+Risques       : la publication ouvre un port sur l'adresse publique de la Forge.
+                Vérifier que le pare-feu de l'hébergeur laisse passer ce port,
+                et que l'application dans le Spark fait SON PROPRE TLS — un port
+                publié ne passe pas devant le proxy et ne reçoit donc aucun
+                certificat (§39.3).
+Variable      : SPARKD_RESERVED_PORTS, facultative. Liste d'entiers séparés par
+                des virgules, ajoutée aux ports que le produit réserve déjà
+                (22, 80, 443). À renseigner si la Forge en occupe d'autres.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.

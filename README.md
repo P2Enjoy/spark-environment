@@ -161,6 +161,7 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_CPU_RESERVE` | part de processeur que l'hôte garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |
+| `SPARKD_RESERVED_PORTS` | ports que la Forge occupe déjà, jamais attribuables à un Spark — **en plus** de `22`, `80` et `443`, que le produit réserve toujours | entiers séparés par des virgules | non | `9100,9090` |
 
 `SPARKD_BIND` ne peut pas être positionné sur une adresse routable : `sparkd`
 **refuse de démarrer** et sort en code 2. L'absence d'API d'administration exposée
