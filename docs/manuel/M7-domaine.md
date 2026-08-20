@@ -148,6 +148,49 @@ instantanée.
 > elle-même reste à constater sur un serveur joignable depuis l'extérieur. Voir
 > SPK-12 au [backlog](../BACKLOG.md).
 
+## Appliquer une recette DNS
+
+Certains usages ne tiennent pas en un enregistrement. Un site sur le domaine nu
+en demande deux ; une messagerie en demande quatre ou cinq, et **l'absence d'un
+seul suffit à faire classer tout le courrier en indésirable**.
+
+Le bouton **Appliquer une recette DNS** pose ces jeux d'un geste.
+
+### Ce que la fenêtre vous montre avant d'écrire
+
+La recette **entière**, ligne par ligne, avec pour chacune ce qu'elle fait et ce
+qu'elle deviendra : *sera posé*, *remplacera telle valeur*, ou *déjà à cette
+valeur*. Rien n'est écrit tant que vous n'avez pas engagé.
+
+Elle vous montre aussi **ce que la recette ne peut pas faire** — les choses qui
+ne vivent pas dans la zone et qu'aucun enregistrement ne réglera.
+
+### Les deux recettes disponibles
+
+**Site web sur le domaine nu** — fait répondre le domaine lui-même et son `www`
+sur cette Forge. Deux enregistrements, aucune valeur à aller chercher ailleurs.
+
+**Émission par le relais transactionnel** — fait émettre un sous-domaine par le
+relais de votre fournisseur. **Attention** : ce sous-domaine *émet* et *ne reçoit
+pas* — son `MX` pointe vers un puits. Ne l'appliquez pas sur un domaine censé
+recevoir du courrier.
+
+Cette recette réclame une **clé DKIM**, que le produit **n'invente jamais** :
+elle est produite par votre fournisseur, et une clé inventée produirait une
+signature invalide — exactement l'effet qu'on cherche à éviter. Laissée vide, la
+recette est posée quand même, et la fenêtre vous dit alors qu'elle est
+**incomplète** : les messages partiront sans signature.
+
+### Après : ce qui est passé, et ce qui ne l'est pas
+
+Une recette écrit ses enregistrements **un par un**, et votre fournisseur peut en
+refuser un au milieu. La fenêtre ne vous annonce donc ni succès ni échec global :
+elle rend **la liste**, chaque ligne avec son sort, et le motif de chaque refus.
+
+**Ce qui est passé n'est pas défait.** Le produit ne connaît pas la valeur
+d'avant — il ne l'a pas retenue — et il ne supprime jamais ce qu'il n'a pas posé.
+Vous voyez l'état réel, et vous décidez.
+
 ## Publier un port — pour ce qui ne parle pas HTTP
 
 Tout ce qui précède route par **nom** : vos applications partagent les ports 80 et

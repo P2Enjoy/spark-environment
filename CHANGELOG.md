@@ -98,6 +98,19 @@
   Le harnais E2E impose son propre fichier d'environnement et un doublon local
   du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
 
+- Unité SPK-50 : **les recettes DNS** — un jeu d'enregistrements posé ensemble,
+  parce qu'un `MX` sans SPF fait recevoir du courrier qu'on ne peut pas renvoyer.
+  La garde s'élargit à `MX`, `TXT`, `SRV` et `CNAME`, chacun avec la forme que
+  sa donnée doit avoir.
+
+  Deux recettes : *site web sur le domaine nu*, et *émission par le relais
+  transactionnel*, composée d'après ce qui a été mesuré sur une zone réelle. La
+  seconde réclame une clé DKIM que le produit n'invente jamais ; sans elle la
+  recette est posée et annoncée incomplète.
+
+  L'écran présente la recette entière avant d'écrire, puis rend le sort de chaque
+  ligne — jamais un verdict global. Ce qui est passé n'est pas défait.
+
 - Unité SPK-49 : **publier un port de la Forge vers un Spark**, pour ce qui ne
   parle pas HTTP — messagerie, base de données, Redis, SSH. Un port public est
   unique sur la machine : le refus nomme le Spark qui le détient, ou le service
