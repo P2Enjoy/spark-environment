@@ -3,6 +3,17 @@
 ## [Non publié]
 
 ### Ajouté
+- Parcours E2E de l'**ancre du journal** (SPK-38), le dernier point de sa DoD :
+  depuis l'accueil et au clavier, la console pose sa référence, on coupe la fin
+  du journal en base, et le relevé suivant rend « le journal a raccourci » alors
+  que la chaîne s'affiche **intacte**. Un relevé de plus alerte encore.
+- `docs/DESIGN_SYSTEM_APP.md` : règle **SPK-DS-06**, deux témoins de l'intégrité
+  jamais résumés en un — et une alerte d'ancre annoncée comme une rupture.
+- Captures `44-journal-ancre-alerte.png`, `45-journal-ancre-mobile.png` et
+  illustration `docs/manuel/images/m12-ancre-alerte.png`, produites depuis
+  l'application exécutée.
+- `docs/manuel/M12-annexes.md` : ce qu'il faut faire quand l'ancre alerte, et
+  pourquoi relancer le relevé ne l'efface pas.
 - `docs/AGENT_RUNBOOK.md` : les procédures exécutables par un agent — déployer
   `sparkd` sur une Forge, créer un Spark, s'y connecter, y déployer une pile,
   l'exposer par DNS puis ingress. Écrites depuis une exécution réelle, pas de
@@ -73,6 +84,12 @@
   l'architecture de navigation de la console.
 
 ### Modifié
+- Une alerte d'ancre — journal raccourci ou remplacé — est désormais rendue dans
+  la même enveloppe `role="alert"` qu'une rupture de chaîne. Elle était portée par
+  la seule couleur du badge, donc muette pour une synthèse vocale.
+- Le harnais de captures impose un chemin d'ancre jetable : il écrivait dans le
+  `~/.config/spark` du poste, et le verdict de la capture dépendait de la machine
+  qui la produisait.
 - **SPK-12 close** : l'émission TLS est prouvée sur un domaine réel.
   `https://helo.spark.lelabs.tech/` rend `200` depuis l'extérieur, certificat
   Let's Encrypt valide et chaîne vérifiée, et un domaine non routé rend `404`.

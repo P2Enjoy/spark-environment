@@ -1154,7 +1154,7 @@ là-dessus (§36.7).
   n'est pas mesuré contre un serveur réel, l'unité reste `[~]`. Le reste du
   contrat — verrou, classes, contexte, en-tête, affichage — est prouvé.
 
-### [~] SPK-38 · Chaîne d'intégrité du journal et ancre tenue par la console
+### [x] SPK-38 · Chaîne d'intégrité du journal et ancre tenue par la console
 
 Chaque entrée porte l'empreinte de la précédente, et la console retient la tête
 qu'elle a vue. C'est l'ancre qui donne sa valeur à la chaîne, pas la chaîne
@@ -1180,7 +1180,7 @@ qu'elle a vue. C'est l'ancre qui donne sa valeur à la chaîne, pas la chaîne
   un parcours E2E montre l'ancre signalant une histoire qui ne prolonge pas la
   précédente.
 
-**Livrée le 2026-08-19, sauf la surface visible nommée plus bas.**
+**Livrée le 2026-08-19, close le 2026-08-20 par le parcours au navigateur.**
 
 - Migration `006_journal_chaine` : `entry_hash` et `prev_hash`, défaut à la chaîne
   vide. Les lignes antérieures **ne sont pas chaînées rétroactivement** — une
@@ -1205,12 +1205,28 @@ qu'elle a vue. C'est l'ancre qui donne sa valeur à la chaîne, pas la chaîne
   consomme un identifiant qu'un `ROLLBACK` abandonne. C'est **faux sur SQLite**,
   qui annule aussi `sqlite_sequence`. Le DAT est corrigé ; la règle « ne jamais
   juger la continuité des `id` » reste, comme garantie de conception.
-- **Reste à livrer, et c'est le seul écart** : le parcours **E2E navigateur** que
-  la DoD nomme. L'ancre n'a **aucune surface visible** — l'onglet de supervision
-  est l'objet de SPK-39 (§36.8), et l'y ajouter ici déborderait de l'unité. Le
-  mécanisme est prouvé de bout en bout par un test d'intégration de l'hôte
-  console, ce qui n'est pas la même chose qu'un parcours au clavier et à la
-  souris. Tant que SPK-39 n'a pas d'écran, l'unité reste `[~]`.
+- **Parcours E2E livré le 2026-08-20**, le dernier point de la DoD. Depuis
+  l'accueil, à la souris et au clavier : la console pose sa référence, on coupe
+  la fin du journal **en base**, et le même geste rend « le journal a raccourci »
+  pendant que la chaîne, elle, s'affiche **intacte**. Un troisième relevé alerte
+  encore — l'ancre n'est pas écrasée par l'alerte (§36.9.6).
+- **Mesuré en écrivant ce parcours** : le verrou d'immuabilité de SPK-37 refuse
+  le `DELETE`. Le parcours lève donc le déclencheur, coupe, puis le rétablit et
+  **vérifie qu'il est revenu**. C'est le pouvoir que l'ancre suppose à
+  l'adversaire (§36.1) ; ce n'est pas un contournement du produit, et le parcours
+  ne s'exécuterait plus contre la Forge livrée s'il laissait la garde désarmée.
+- **Défaut d'interface trouvé et corrigé au passage** : la rupture de chaîne
+  portait `role="alert"`, l'alerte d'ancre non. Deux signaux de même gravité dont
+  un seul est annoncé — et le muet était justement le seul que la chaîne ne sait
+  pas voir. Règle écrite en `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-06**.
+- **Fuite d'état corrigée** : le harnais de captures ne passait pas de chemin
+  d'ancre, donc il écrivait dans le `~/.config/spark` du poste et le verdict de
+  la capture dépendait de la machine qui la produisait. Chemin jetable désormais.
+- Le parcours **ampute le journal de la pile** : il est le dernier du fichier, et
+  un commentaire dit pourquoi il doit le rester. Même contrainte pour
+  l'illustration `m12-ancre-alerte.png`, produite en dernier.
+- Captures observées : `e2e/captures/44-journal-ancre-alerte.png`,
+  `45-journal-ancre-mobile.png`, `docs/manuel/images/m12-ancre-alerte.png`.
 
 ### [x] SPK-39 · Onglet de supervision du journal
 

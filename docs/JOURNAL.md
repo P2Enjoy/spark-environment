@@ -3807,3 +3807,89 @@ préflight, `/healthz` portant le commit déployé, `docker info` confirmant
 AppArmor et seccomp **actifs**, et la preuve publique par `curl` et `openssl`
 depuis l'extérieur.
 
+
+## 2026-08-20 — SPK-38 : le blocage était levé depuis la veille, et personne ne l'avait retiré
+
+**Unité** : SPK-38. La dernière entrée du journal ne désignait pas de reprise —
+elle consignait la mise en service de HELO. J'ai donc appliqué la règle 2 du
+§4.2 : la première unité `[~]` du plan dont il reste du **comportement** à
+livrer.
+
+SPK-17 attend une exécution de CI que je ne peux pas déclencher. SPK-29 et SPK-30
+attendent un hôte réel sous contention. SPK-37 attend un vrai `sshd`. SPK-38, en
+revanche, portait ceci, écrit le 2026-08-19 :
+
+> « Tant que SPK-39 n'a pas d'écran, l'unité reste `[~]`. »
+
+**SPK-39 est close depuis le 2026-08-19.** Le blocage avait cessé d'exister le
+jour même où il a été écrit, et la mention est restée. C'est exactement le défaut
+que `CLAUDE.md` décrit : une mention périmée se lit comme vraie, et elle avait
+fait sauter cette unité dans au moins six sessions — le journal en porte la trace
+(« SPK-38 se solde d'un parcours E2E », six fois, sans que personne n'aille voir
+que l'écran existait).
+
+### Ce que le parcours éprouve
+
+Depuis l'accueil, à la souris et au clavier : Forge, onglet *Journal*, **Vérifier
+la chaîne**. La console pose sa référence. On coupe alors la fin du journal
+**dans la base**, hors du produit — aucun geste de l'interface ne peut le faire,
+et c'est tout le propos. Le même geste, au même endroit, rend « le journal a
+raccourci » pendant que la chaîne, elle, s'affiche **intacte**.
+
+Un troisième relevé alerte encore : l'ancre n'est pas écrasée par l'alerte
+(§36.9.6). Sans cela le signal s'effacerait avec la preuve.
+
+### Trois choses mesurées en écrivant ce parcours
+
+**Le verrou de SPK-37 refuse le `DELETE`.** Le produit se défend, et c'est une
+bonne nouvelle. Mais l'ancre existe pour qui a pris la main sur la machine
+entière — quelqu'un qui peut recalculer la chaîne peut a fortiori désarmer une
+garde locale. Le parcours lève donc le déclencheur, coupe, le rétablit, et
+**vérifie qu'il est revenu** : sans cette dernière étape, la suite du parcours
+n'éprouverait plus la Forge que le produit livre.
+
+**Mon aide de test relisait l'écran avant son repeint.** Elle attendait que le
+bloc « ait quelque chose » — condition déjà vraie au deuxième relevé avant même
+que la requête ne parte. Le parcours lisait le verdict précédent et concluait que
+rien n'avait bougé. Corrigé en marquant le nœud et en attendant qu'il ait été
+remplacé **et** que le bouton soit ressorti de son état occupé : `verifierChaine`
+repeint deux fois, et le premier repeint efface déjà la marque.
+
+**Le harnais de captures écrivait son ancre dans le `~/.config/spark` du poste.**
+Aucun `anchorPath` ne lui était passé. Le verdict rendu par la capture dépendait
+donc de l'état de la machine qui la produisait, et y laissait un fichier. Chemin
+jetable désormais — et la capture de l'état sain dit maintenant « Première
+comparaison » de façon déterministe.
+
+### Un défaut d'interface, trouvé en observant
+
+La rupture de chaîne porte `role="alert"`. L'alerte d'ancre, non : elle n'était
+portée que par la couleur du badge. De deux signaux de même gravité, un seul
+était annoncé — et le muet était justement le seul que la chaîne ne sait pas
+voir. Corrigé, avec la règle écrite en `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-06**.
+
+Les trois verdicts sains n'ouvrent aucune région d'alerte : une alerte permanente
+n'alerte plus de rien. Un test de composant tient les deux côtés.
+
+### Une contrainte d'ordre, écrite là où elle s'applique
+
+Le parcours ampute le journal de la pile, et ce n'est pas annulable. Il est le
+dernier du fichier et un commentaire dit pourquoi il doit le rester. Même
+contrainte pour l'illustration `m12-ancre-alerte.png`, produite après toutes les
+autres.
+
+### Vérifications
+
+Campagne complète verte : 665 tests Python, 6 de contrat, 462 de console, 8 de
+gestes, 43 parcours E2E, 7 du manuel, `contract-check` et `build`. Trois captures
+observées : `44-journal-ancre-alerte.png`, `45-journal-ancre-mobile.png` (aucun
+débordement, le panneau tient dans sa carte) et `m12-ancre-alerte.png`, produite
+depuis la pile réelle après une vraie troncature.
+
+**SPK-38 passe à `[x]`.**
+
+**Où reprendre.** La prochaine `[~]` du plan avec du comportement livrable est
+**SPK-43**, tranche 4 : le chemin de dépannage `incus exec` du §37.3 et ses
+quatre conditions, plus l'écran d'un Spark dont le `sshd` est muet — cas devenu
+concret depuis HELO, où l'on a mesuré qu'une cellule fraîche n'a pas de `sshd`.
+INC-05 reste ouvert et court.

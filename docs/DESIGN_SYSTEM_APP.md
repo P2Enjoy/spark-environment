@@ -164,6 +164,37 @@ mesure est affichée avec **ce à quoi elle se rapporte**, écrit à côté d'el
 principe que SPK-DS-02 : un chiffre sans son référentiel est un chiffre faux.
 
 
+### SPK-DS-06 · Deux témoins de l'intégrité, jamais résumés en un
+
+L'écran *Journal* de la Forge porte **deux** verdicts, et ils ne disent pas la
+même chose : la **chaîne**, telle que le serveur la voit, et la **comparaison**
+avec ce que la console avait vu (`docs/DAT.md` §36.1, §36.8.4).
+
+Ils ne se combinent jamais en un seul indicateur. Le cas qui décide de la règle
+est celui de la **troncature** : la chaîne restante est parfaitement valide et
+s'affiche « intacte », alors que des entrées ont disparu de la fin. Un indicateur
+unique dirait alors « tout va bien », et il aurait tort précisément là où le
+dispositif entier a été construit pour ne pas se tromper.
+
+Conséquences visuelles, non négociables :
+
+- les deux verdicts occupent **deux lignes de définition distinctes**, avec leurs
+  intitulés propres — jamais un badge de synthèse ;
+- un verdict d'ancre en alerte — `shrunk`, `diverged` — est rendu dans la même
+  enveloppe annoncée qu'une rupture de chaîne : `role="alert"`
+  (`DESIGN_SYSTEM.md` §9.7). Deux signaux de même gravité dont un seul est
+  annoncé, c'est celui qu'on tait qui sera manqué ;
+- la différence de nature passe par la **structure** — un panneau bordé face à
+  une ligne simple — et pas seulement par la couleur du badge
+  (`DESIGN_SYSTEM.md` §14.8, §1.5) ;
+- les trois verdicts sains — `first`, `extends`, `unchanged` — ne portent **pas**
+  de région d'alerte : une alerte permanente n'alerte plus de rien ;
+- l'écart est **chiffré** — combien la console avait retenu, combien le serveur
+  annonce — et non simplement affirmé.
+
+Preuve : `e2e/captures/44-journal-ancre-alerte.png` et
+`e2e/captures/45-journal-ancre-mobile.png`, observées.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

@@ -162,6 +162,36 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.click('[data-commande="delete"]');
     await page.waitForSelector('.confirmation', { timeout: 10000 });
     await capturer('m10-suppression');
+
+    // --- M12 · L'ANCRE QUI ALERTE (SPK-38) -----------------------------------
+    // EN DERNIER, et cela doit le rester : la coupe ci-dessous ampute le journal
+    // de la pile et n'est pas annulable. Toute illustration produite après elle
+    // montrerait un journal amputé sans que rien ne le dise.
+    //
+    // Le verrou d'immuabilité refuse ce DELETE : on lève le déclencheur puis on
+    // le rétablit. C'est le pouvoir que l'ancre suppose à l'adversaire — qui a
+    // pris la main sur la Forge — et non un contournement du produit.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/forge/journal"]');
+    await page.waitForSelector('#titre-journal-forge', { timeout: 10000 });
+    await page.click('[data-action="verifier-chaine"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Chaîne intacte'), { timeout: 15000 });
+    await pile.alterer(
+      'DROP TRIGGER audit_log_immuable_delete;\n'
+      + 'DELETE FROM audit_log WHERE id > '
+      + '(SELECT id FROM audit_log ORDER BY id LIMIT 1 OFFSET 2);\n'
+      + 'CREATE TRIGGER audit_log_immuable_delete\n'
+      + 'BEFORE DELETE ON audit_log\n'
+      + 'BEGIN\n'
+      + "    SELECT RAISE(ABORT, 'audit_log est en ecriture seule : DELETE refuse');\n"
+      + 'END;');
+    await page.click('[data-action="verifier-chaine"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Le journal a raccourci'), { timeout: 15000 });
+    await capturer('m12-ancre-alerte', { hauteur: 700 });
   } finally {
     await navigateur.close();
     await pile.demonter();

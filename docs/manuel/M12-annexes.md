@@ -102,6 +102,28 @@ Une chaîne annoncée intacte **avec** l'une de ces alertes est le cas le plus
 important de tout ce dispositif : c'est exactement ce à quoi ressemble une
 troncature. L'écran ne les résume donc jamais en un seul indicateur.
 
+![Chaîne intacte, et pourtant le journal a raccourci](images/m12-ancre-alerte.png)
+
+L'écart est **chiffré** : combien d'entrées la console avait retenues, combien le
+serveur en annonce. C'est le recul lui-même qui est la preuve, et il se constate
+sans avoir à croire le serveur sur parole.
+
+### L'alerte ne s'efface pas toute seule
+
+Relancer **Vérifier la chaîne** ne fera pas disparaître l'alerte. La console
+**ne remplace pas** sa référence sur un verdict d'alerte : elle continue de
+comparer à ce qu'elle avait vu avant l'incident. Sinon le signal s'effacerait en
+même temps que la preuve, et le relevé suivant paraîtrait normal.
+
+Autrement dit, cette alerte se traite, elle ne se dissipe pas. Ce qu'il faut
+faire, dans l'ordre :
+
+1. ne rien redémarrer et ne rien supprimer sur le serveur — l'état est la preuve ;
+2. noter les deux nombres affichés et l'heure du relevé ;
+3. déterminer qui a eu accès à la machine depuis le dernier relevé sain ;
+4. considérer le journal du serveur comme **non fiable** à partir de ce point :
+   ce qui manque ne se reconstitue pas.
+
 Ce n'est pas la cryptographie qui apporte la garantie : c'est le fait que la
 référence vive ailleurs que sur la machine qu'on soupçonne.
 

@@ -72,8 +72,15 @@ function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter()
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
                           uneSeuleCle = false, refusRestauration = false,
-                          hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false, sansServeur = false } = {}) {
-  const chemin = join(await mkdtemp(join(tmpdir(), 'spark-cap-')), 'servers.json');
+                          hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false,
+                          ancreEnAlerte = false, sansServeur = false } = {}) {
+  const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
+  const chemin = join(dossier, 'servers.json');
+  // L'ANCRE vit dans ce dossier jetable, et c'est nécessaire à deux titres :
+  // sans chemin explicite elle irait dans le `~/.config/spark` du poste, ce qui
+  // ferait dépendre le verdict rendu par la capture de l'état de la machine qui
+  // la produit — et y laisserait un fichier (SPK-38, docs/DAT.md §36.2).
+  const cheminAncres = join(dossier, 'anchors.json');
   // SPK-41 : DEUX serveurs, sinon le sélecteur ne se voit pas — avec un seul,
   // le produit affiche le nom plutôt qu'un contrôle mort (§22.4.5). La forme du
   // fichier est la version 1 (§22.4.2), et le second est déclaré par ALIAS pour
@@ -87,13 +94,18 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
       { name: 'recette', kind: 'alias', sshHost: 'spark-recette', remotePort: 9876 },
     ],
   }));
+  // Pour la capture de l'ALERTE : la console a déjà vu une histoire plus longue
+  // que celle que la Forge annoncera. C'est exactement la troncature (§36.9.6).
+  await writeFile(cheminAncres, JSON.stringify(ancreEnAlerte
+    ? { validation: { head: 'a1b2c3', length: 128, seenAt: '2026-08-19T15:30:00' } }
+    : {}));
   const tunnels = new TunnelManager({
     spawn: () => fauxSsh(),
     probe: async () => { if (tunnelRompu) throw new Error('connexion refusée'); },
     probeIntervalMs: 3_600_000, openTimeoutMs: 800,
   });
   const { server } = createConsoleHost({
-    tunnels, inventoryPath: chemin,
+    tunnels, inventoryPath: chemin, anchorPath: cheminAncres,
     fetch: async (url) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
@@ -194,8 +206,13 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
               verified_at: '2026-08-19T15:30:00',
               break: { id: 42, reason: 'entry_hash', ts: '2026-08-19T11:20:00',
                        action: 'spark.delete' } }
-          : { checked: 128, head: 'a1b2c3', length: 128, intact: true,
-              verified_at: '2026-08-19T15:30:00', break: null },
+          : ancreEnAlerte
+            // Chaîne PARFAITEMENT valide, et plus courte : c'est ce que voit la
+            // Forge après qu'on lui a coupé la fin de son journal.
+            ? { checked: 96, head: 'z9y8x7', length: 96, intact: true,
+                verified_at: '2026-08-19T15:30:00', break: null }
+            : { checked: 128, head: 'a1b2c3', length: 128, intact: true,
+                verified_at: '2026-08-19T15:30:00', break: null },
       ), { status: 200 });
       if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
         { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
@@ -601,6 +618,32 @@ await page.waitForFunction(
   () => document.body.innerText.includes('Chaîne rompue'), { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '43-journal-chaine-rompue.png') });
 console.log('  43-journal-chaine-rompue.png');
+ctx.server.close();
+
+// L'ANCRE QUI ALERTE (SPK-38, docs/DAT.md §36.1, §36.9.6). C'est le cas le plus
+// important du dispositif : la chaîne est INTACTE, et pourtant il manque des
+// entrées. Un écran qui résumerait les deux en un seul indicateur dirait « tout
+// va bien » alors que le journal a été amputé.
+ctx = await demarrer({ ancreEnAlerte: true });
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.click('nav a[href="#/forge"]');
+await page.waitForSelector('#titre-pools', { timeout: 8000 });
+await page.click('.onglet[href="#/forge/journal"]');
+await page.waitForSelector('#titre-journal-forge', { timeout: 8000 });
+await page.focus('[data-action="verifier-chaine"]');
+await page.keyboard.press('Enter');
+await page.waitForFunction(
+  () => document.body.innerText.includes('Le journal a raccourci'), { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '44-journal-ancre-alerte.png') });
+console.log('  44-journal-ancre-alerte.png');
+
+// L'alerte introduit un PANNEAU là où il n'y avait que deux paragraphes : c'est
+// exactement le genre de changement qui déborde au mobile (§8.1, §13.1).
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '45-journal-ancre-mobile.png'), fullPage: true });
+console.log('  45-journal-ancre-mobile.png');
 ctx.server.close();
 
 // --- Le journal et son auteur (SPK-37) ------------------------------------

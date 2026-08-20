@@ -3754,6 +3754,15 @@ Une chaîne intacte **et** une ancre qui alerte est le cas le plus important de
 tout le dispositif : c'est exactement la troncature. L'écran ne doit donc jamais
 résumer les deux en un seul indicateur — « tout va bien » y serait faux.
 
+Les deux verdicts s'annoncent de la même façon lorsqu'ils alertent : un verdict
+d'ancre `shrunk` ou `diverged` est rendu dans la même enveloppe `role="alert"`
+qu'une rupture de chaîne. La règle visuelle est écrite en
+`docs/DESIGN_SYSTEM_APP.md` **SPK-DS-06**. Le motif est le même que ci-dessus :
+de deux signaux de même gravité, celui qu'on n'annonce pas est celui qui sera
+manqué — et ici c'est justement le seul que la chaîne ne sait pas voir (§36.1).
+Les trois verdicts sains n'ouvrent aucune région d'alerte : une alerte permanente
+n'alerte plus de rien.
+
 #### 36.8.5 Ce que l'écran ne prétend pas
 
 Il n'écrit **jamais** « signé ». Le §21.6.2 le dit pour la facette d'un Spark, et
