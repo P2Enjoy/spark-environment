@@ -204,7 +204,11 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
 /** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */
 export const FACETTES_SPARK = [
   ['', 'Infos'], ['routes', 'Routes'], ['cles', 'Clés'],
-  ['instantanes', 'Instantanés'], ['journal', 'Journal'],
+  ['instantanes', 'Instantanés'],
+  // SPK-43 · SPK-DS-04 : le terminal est une DESTINATION, avec sa propre
+  // adresse — ni une section, ni une modale.
+  ['terminal', 'Terminal'],
+  ['journal', 'Journal'],
 ];
 
 export function renderOngletsSpark(nom, courant) {

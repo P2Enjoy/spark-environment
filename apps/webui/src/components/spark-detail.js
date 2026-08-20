@@ -17,6 +17,7 @@
 import { stateOf, formatBytes, formatBps, formatCpu, MEASURE, traduireMessage } from './tokens.js';
 import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
          renderPortsPanel, ADMIN_VIDE } from './spark-admin.js';
+import { renderTerminal, TERMINAL_VIDE } from './spark-terminal.js';
 import { renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
 import { formatDate } from './forge-view.js';
@@ -271,6 +272,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     keys = [], registry = [], sshConfig = null,
                                     snapshots = [], audit = [],
                                     ports = [], reservedPorts = [],
+                                    terminal = TERMINAL_VIDE,
                                     error = null, confirming = null,
                                     admin = ADMIN_VIDE, facette = '' } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
@@ -292,6 +294,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                   + renderPortsPanel(spark, ports, admin, reservedPorts),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin),
     instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
+    terminal: () => renderTerminal(spark, terminal),
     journal: () => renderJournal(audit) ||
       '<div class="carte bloc"><p class="absence">Aucune opération enregistrée.</p></div>',
   };
