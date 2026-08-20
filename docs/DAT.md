@@ -4327,6 +4327,102 @@ motif y est écrit : une console qui interroge un Spark qu'on ne regarde plus
 consomme le quota du locataire pour rien. C'est la même règle que la session de
 terminal, qui meurt avec son onglet (§37.4.2).
 
+#### 37.6 ter Inspecter un conteneur, et lire ses journaux — écrit le 2026-08-20
+
+Le §37.6 bis a fixé l'inventaire. Restent l'inspection, les journaux, les réseaux
+et les volumes, que le §37.6 nomme sans les contracter. Écrit après mesure sur un
+vrai conteneur, puis retiré de la machine.
+
+**Ce qui est DEMANDÉ, jamais collecté d'office.** L'inventaire se rafraîchit tout
+seul ; l'inspection et les journaux ne partent que lorsqu'un conteneur est
+ouvert. Trois raisons, et la troisième suffirait : lire les journaux de dix
+conteneurs toutes les cinq secondes multiplierait par dix le coût du §37.6 ; la
+sortie peut peser des mégaoctets ; et personne ne lit dix journaux à la fois.
+
+**L'inspection.** Une commande, un conteneur, des champs nommés :
+
+```sh
+docker inspect <nom> --format '{{.Name}}\t{{.State.Status}}\t{{.State.ExitCode}}\t{{.State.StartedAt}}\t{{.State.FinishedAt}}\t{{.RestartCount}}\t{{.Config.Image}}'
+```
+
+Puis, séparément parce que ce sont des listes :
+
+```sh
+docker inspect <nom> --format '{{range $r,$c := .NetworkSettings.Networks}}{{$r}}\t{{$c.IPAddress}}\n{{end}}'
+docker inspect <nom> --format '{{range .Mounts}}{{.Type}}\t{{.Source}}\t{{.Destination}}\t{{if .RW}}rw{{else}}ro{{end}}\n{{end}}'
+```
+
+Mesuré : `.Name` revient **préfixé d'une barre oblique** (`/spark-mesure`) et
+l'écran la retire — un nom qui n'est pas celui qu'on a tapé fait douter de ce
+qu'on regarde. `.State.ExitCode` et `.State.FinishedAt` ne valent que pour un
+conteneur arrêté, et un `exited|137|…` est exactement ce qu'on vient chercher
+quand une pile est tombée.
+
+Un conteneur **disparu entre l'inventaire et l'inspection** rend le code `1`,
+mesuré. Ce n'est pas une panne : c'est une course normale — le locataire a le
+droit de supprimer son conteneur pendant qu'on le regarde. L'écran le dit et
+revient à la liste.
+
+**Les journaux, BORNÉS.** `--tail` n'est pas une commodité : sans lui, un
+conteneur bavard renvoie tout son historique par le tunnel, et l'écran devient
+inutilisable au moment précis où l'on en a besoin.
+
+```sh
+docker logs --tail 200 --timestamps <nom>
+```
+
+Deux cents lignes, et l'écran **dit** que c'est une fin de journal et non le
+journal entier. Prétendre montrer tout serait faux ; le taire ferait chercher
+une ligne qui n'a jamais été affichée.
+
+`--timestamps` rend des horodatages **ISO en UTC**, mesuré :
+`2026-08-20T18:52:01.555868713Z ligne 195`. Ils sont rendus tels quels : ce sont
+les horodatages du locataire, et les reformater dans le fuseau du poste
+introduirait un décalage entre ce que l'écran montre et ce que le locataire lit
+dans son propre journal.
+
+**Ce qui n'est PAS fait, et pourquoi.** Aucun suivi continu (`--follow`) : ce
+serait un second flux à tenir ouvert, avec sa fermeture à garantir, alors que
+SPK-44 est en lecture et que le §37.6 fait déjà cesser la collecte au départ. Le
+rafraîchissement est **demandé**, par le même bouton qui a ouvert les journaux.
+
+**Le contrat d'API.** Deux routes, sur l'hôte console comme l'inventaire :
+
+```
+GET /api/spark/container?server=<forge>&spark=<nom>&name=<conteneur>
+GET /api/spark/logs?server=<forge>&spark=<nom>&name=<conteneur>&tail=200
+```
+
+```json
+{ "name": "helo-web-1", "state": "exited", "exitCode": 137,
+  "startedAt": "…", "finishedAt": "…", "restarts": 0, "image": "nginx:alpine",
+  "networks": [ { "name": "helo_default", "address": "172.18.0.2" } ],
+  "mounts": [ { "type": "volume", "source": "helo_data",
+                "destination": "/var/lib/postgresql/data", "mode": "rw" } ] }
+```
+
+```json
+{ "name": "helo-web-1", "tail": 200, "truncated": true,
+  "lines": [ { "at": "2026-08-20T18:52:01.555868713Z", "text": "ligne 195" } ] }
+```
+
+`truncated` dit que la borne a mordu — c'est-à-dire que 200 lignes ont été
+rendues. Le déduire de `lines.length === tail` marcherait aujourd'hui et
+mentirait le jour où un conteneur a exactement deux cents lignes.
+
+**Les refus** reprennent ceux du §37.6 bis — `sshd` muet, moteur muet, Docker
+absent — plus un seul de plus :
+
+| Situation | Code | Ce que l'écran dit |
+|---|---|---|
+| conteneur inconnu | `1` | il a disparu depuis le dernier relevé |
+
+**Rien n'est journalisé** : ce sont des lectures (§36.7). Et **rien n'est
+affiché en clair sans le dire** : un journal de conteneur peut contenir un
+secret que le locataire y a écrit. La console ne le filtre pas — elle ne saurait
+pas —, mais l'écran avertit que ce qui s'affiche vient du locataire et n'a été
+ni relu ni caviardé.
+
 ### 37.7 Les gestes sur un conteneur, et le gel
 
 **Décision du responsable : lecture, plus le cycle de vie d'un conteneur** —
