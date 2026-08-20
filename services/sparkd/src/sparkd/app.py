@@ -738,7 +738,14 @@ def create_app(config: Config) -> FastAPI:
     #: inscrire. Ce sont celles que la console est seule à pouvoir constater —
     #: la session de terminal ne passe pas par `sparkd`. Toute autre action
     #: serait un appelant se faisant passer pour le runtime.
-    ACTIONS_DECLARABLES = ("spark.terminal_open", "spark.terminal_close")
+    #: `spark.rescue_exec` est DISTINCTE de `spark.terminal_open`, et c'est le
+    #: point du §37.3 : le dépannage passe par `incus exec`, donc par le plan de
+    #: contrôle en root chez le locataire. Confondre les deux dans une même
+    #: action rendrait impossible ce que le §37.3 demande — relever combien de
+    #: fois cette voie a servi. La fermeture reste commune : ce qui doit se
+    #: compter, c'est l'emprunt du chemin, pas sa sortie.
+    ACTIONS_DECLARABLES = ("spark.terminal_open", "spark.terminal_close",
+                           "spark.rescue_exec")
 
     #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
     #: secrets en clair que le §37.5 interdit précisément.

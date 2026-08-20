@@ -128,3 +128,51 @@ def test_le_message_est_borne_en_longueur(tmp_path):
         "message": "x" * 5000, "payload": {"path": "ssh"}},
         headers={"x-spark-actor": "console/local"})
     assert len(_sessions(client)[0]["message"]) <= 500
+
+
+def test_le_depannage_est_une_action_DISTINCTE_et_donc_denombrable(tmp_path):
+    """§37.3 : « pour qu'un relevé du journal montre combien de fois cette voie
+    a servi ». C'est la raison d'être de l'action séparée, et c'est donc ce que
+    cette preuve mesure — pas seulement qu'elle est acceptée.
+
+    Le chemin de dépannage donne au plan de contrôle l'exécution en root chez le
+    locataire (§37.3), ce que le §11 évite partout ailleurs. Noyé dans
+    `spark.terminal_open`, son usage serait indénombrable, et une voie
+    d'exception qu'on ne peut pas compter cesse d'être une exception.
+    """
+    client = _client(tmp_path)
+    for _ in range(2):
+        assert client.post("/v1/audit", json={
+            "action": "spark.terminal_open", "target_id": "crm",
+            "message": "Session de terminal ouverte sur « crm » par ssh.",
+            "payload": {"path": "ssh"}},
+            headers={"x-spark-actor": "console/local"}).status_code == 201
+    r = client.post("/v1/audit", json={
+        "action": "spark.rescue_exec", "target_id": "crm",
+        "message": "Dépannage ouvert sur « crm » : exécution en root dans la "
+                   "cellule, depuis le plan de contrôle.",
+        "payload": {"path": "rescue", "reason": "sshd_muet"}},
+        headers={"x-spark-actor": "console/local"})
+    assert r.status_code == 201, r.text
+
+    entrees = client.get("/v1/audit").json()["entries"]
+    depannages = [e for e in entrees if e["action"] == "spark.rescue_exec"]
+    normales = [e for e in entrees if e["action"] == "spark.terminal_open"]
+    assert len(depannages) == 1, "le dépannage se compte tout seul"
+    assert len(normales) == 2, "et il ne se confond pas avec les sessions SSH"
+    assert depannages[0]["actor"] == "console/local"
+    assert json.loads(depannages[0]["payload"])["path"] == "rescue"
+
+
+def test_le_motif_du_depannage_reste_borne_aux_cles_admises(tmp_path):
+    """Le §37.5 interdit qu'un champ libre serve de dépôt à ce qui a transité.
+    Le dépannage ne relâche pas cette borne : il l'emprunte telle quelle."""
+    client = _client(tmp_path)
+    r = client.post("/v1/audit", json={
+        "action": "spark.rescue_exec", "target_id": "crm",
+        "payload": {"path": "rescue", "commande": "cat /etc/shadow"}},
+        headers={"x-spark-actor": "console/local"})
+    assert r.status_code == 422, r.text
+    assert "commande" in r.json()["detail"]["message"]
+    assert [e for e in client.get("/v1/audit").json()["entries"]
+            if e["action"] == "spark.rescue_exec"] == []
