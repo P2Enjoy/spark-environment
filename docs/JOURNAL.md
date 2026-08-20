@@ -3436,3 +3436,47 @@ adresse publique. Même limite que SPK-29 et SPK-30.
 ensemble. Sa spécification est au §38.6, et elle dépend de SPK-47, qui est close.
 Ensuite SPK-52 (suppression idempotente, §14.5), court et indépendant. SPK-51
 attend toujours les deux vérifications du §38.6 bis auprès du fournisseur.
+
+## 2026-08-20 — SPK-50 : les recettes DNS, un jeu posé ensemble
+
+**Unité choisie** : SPK-50, désignée par l'entrée précédente. Le §38.6 décrivait
+le concept mais **pas le contrat** : ni ce qu'une recette est dans le code, ni la
+forme que chaque type exige, ni le compte rendu, ni l'API. Complété (§38.6.1 à
+§38.6.5) et committé avant la première ligne de code.
+
+**La décision structurante** : une recette est une **fonction**, jamais une
+donnée stockée. Une recette enregistrée divergerait du code dès la première
+correction, et deux vérités coexisteraient sans qu'on sache laquelle est
+appliquée. Ce qu'on peut relire, on le relit : la zone dit ce qui est posé.
+
+**Deux recettes livrées** : `site-web`, qui ne dépend de rien et prouve le
+mécanisme ; `relais-transactionnel`, composée d'après ce qui a été mesuré sur
+`lelabs.tech` au §38.6 bis. La seconde exerce le cas décisif — **la clé DKIM ne
+s'invente pas** : sans elle, les trois autres enregistrements sont posés et
+l'écran annonce que les messages partiront sans signature.
+
+**Deux défauts trouvés au parcours, pas par relecture.**
+
+1. Les écoutes des paramètres n'avaient **jamais été posées** — le remplacement
+   qui devait les insérer n'avait pas trouvé son motif. L'aperçu restait sur
+   « Aucun domaine fourni » quoi qu'on saisisse.
+2. Le bloc d'aperçu se vidait pendant la relecture : la modale rétrécissait, et
+   le bouton d'engagement **se dérobait entre l'appui et le relâchement**. C'est
+   exactement le défaut corrigé au §38.5.2 pour l'aperçu du DNS, reproduit ici
+   parce que j'ai écrit un second bloc du même genre sans reprendre la garde.
+   Retenue pour la suite : tout bloc rafraîchi dans une modale garde son contenu
+   pendant la relecture, et ne relit pas des valeurs identiques.
+
+**Campagne complète, verte.** 647 tests Python, 402 de console et d'hôte console,
+6 de contrat, 8 gestes, **38 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`.
+
+**Écriture réelle** sur `test.recette.lelabs.tech` et son `www`, depuis le
+parcours canonique. La zone porte ensuite 18 enregistrements, `MX` de `noreply`,
+DKIM et `A` de `gram` intacts.
+
+**Où reprendre.** SPK-52 — la suppression idempotente (§14.5), courte et
+indépendante : trois bornes à éprouver, un parcours, et c'est clos. Ensuite
+SPK-46 (la console traduit les états) ou SPK-42 tranche 3 (renommage de la
+documentation). SPK-51 attend toujours les deux vérifications du §38.6 bis
+auprès du fournisseur.

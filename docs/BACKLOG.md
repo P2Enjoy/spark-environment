@@ -1717,7 +1717,7 @@ ou un SSH joignable de l'extérieur ne se route pas par nom.
   base, la reconstruction complète des devices, et le fait qu'un retrait fasse
   disparaître le device.
 
-### [ ] SPK-50 · Recettes DNS : un jeu d'enregistrements posé ensemble
+### [x] SPK-50 · Recettes DNS : un jeu d'enregistrements posé ensemble
 
 Une recette à moitié posée est pire qu'une recette absente : un `MX` sans SPF
 fait recevoir du courrier qu'on ne peut pas renvoyer.
@@ -1749,6 +1749,23 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
   enregistrement échoue rend compte des deux — ce qui est passé et ce qui ne
   l'est pas — sans prétendre à un succès ; parcours E2E depuis le parcours
   canonique contre le doublon local ; captures observées ; manuel M7 mis à jour.
+- **Livré et vérifié le 2026-08-20.**
+  - Spécification complétée avant tout code : §38.6.1 à §38.6.5.
+  - 16 tests du module, 6 tests de routes, 8 tests d'écran, **2 parcours E2E**
+    contre le doublon local.
+  - **Écriture RÉELLE mesurée** sur `test.recette.lelabs.tech` et son `www`,
+    depuis le parcours canonique, contre le compte du responsable. Après
+    écriture, la zone porte 18 enregistrements : le `MX` de `noreply`, le DKIM et
+    le `A` de `gram` intacts. Captures `65-` à `68-` observées, format étroit
+    compris, console du navigateur vierge.
+  - Deux défauts trouvés au parcours, et non par relecture : les écoutes des
+    paramètres n'avaient jamais été posées ; et le bloc d'aperçu se vidait
+    pendant la relecture, faisant rétrécir la modale et **dérober le bouton
+    d'engagement entre l'appui et le relâchement** — même défaut qu'au §38.5.2,
+    même correction.
+- **Ce qui n'est PAS dans cette unité** : la recette de messagerie complète, qui
+  est SPK-51 et dépend de SPK-43 pour lire la clé DKIM dans le Spark. La recette
+  `relais-transactionnel` livrée ici couvre l'ÉMISSION seule.
 
 ### [ ] SPK-51 · Un Spark qui héberge une messagerie, et sa recette DNS
 
