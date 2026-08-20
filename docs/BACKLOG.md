@@ -2277,12 +2277,17 @@ transport.
   déclarée secrète n'est plus jamais rendue par l'API, ni réaffichée, ni
   journalisée : l'écran n'en montre que le **nom**, une **empreinte** et la date
   du dernier changement, ce qui suffit à comparer deux Sparks sans rien révéler.
-- **Bloquée par un arbitrage du responsable** (§43.5) : où vit la clé de
-  chiffrement — en clair, chiffré avec une clé sur la Forge, ou chiffré avec une
-  clé tenue par la console. La troisième posture rend la console **nécessaire**
-  pour appliquer un environnement, et un poste perdu perd tous les secrets ; elle
-  n'est tenable que si SPK-36 dit d'abord quoi faire dans ce cas. Recommandation
-  écrite : clé sur la Forge.
+- **Arbitrage rendu le 2026-08-20 : clé sur la Forge** (§43.5). L'unité n'est plus
+  bloquée. Conséquence à porter jusqu'au manuel : `sparkd` déchiffre, et la valeur
+  est **en clair dans la cellule** — elle doit l'être, `docker compose` ne
+  déchiffre rien. Le chiffrement au repos achète **une** chose : une copie du seul
+  fichier de registre ne livre plus les secrets. Rien contre `root`.
+- **Deux fichiers, pas un** (§43.5.2), et c'est le point que la mesure a imposé :
+  `/run` est un **tmpfs** dans la cellule, donc un secret qui y vit n'entre dans
+  **aucun instantané**. Avec les secrets dans le fichier persistant, restaurer un
+  instantané ancien **ressusciterait un secret révoqué**, en silence, pendant que
+  le registre le croirait remplacé. Les secrets vont donc dans
+  `/run/spark/secrets`, réécrit à chaque `start` comme `authorized_keys`.
 - Ce que l'unité ne fera pas, et qui doit rester écrit : elle ne redémarre pas la
   pile du locataire (§1), elle ne porte pas de **fichiers** — certificats, clés de
   service —, et elle ne protège de personne qui détient `root` sur la Forge
@@ -2299,7 +2304,10 @@ transport.
   à refaire sur le fichier que le produit écrit ;
   un test prouve qu'une variable **ajoutée après coup** arrive sans que le
   fichier de composition soit retouché, ce qui est la raison d'être de
-  `env_file:` ; manuel M6/M8 et
+  `env_file:` ; un test prouve qu'un **instantané ne capture aucun secret**, et
+  qu'une restauration ne ressuscite donc pas une valeur révoquée — c'est la
+  preuve qui justifie le second fichier ; un test prouve que le fichier volatil
+  est **reposé au démarrage** de la cellule ; manuel M6/M8 et
   seed mis à jour.
 
 ### [x] SPK-59 · Les quotas se règlent au curseur
@@ -2366,6 +2374,15 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
 - **Défaut voisin NON corrigé, et consigné** : `docs/INCONSISTENCY_REPORT.md`
   **INC-08** — l'erreur d'un champ survit à sa correction jusqu'à la soumission
   suivante. Antérieur à cette unité, mesuré sur la capture d'avant.
+- **Amendement du responsable, 2026-08-20, livré le même jour** : la mémoire se
+  règle par pas de **256 Mio** et non de 1 Gio. Le gibioctet rendait inatteignables
+  les 512 Mio que le seed emploie, et n'offrait que cinq crans sur le pool de 5,4
+  Gio de la pile de validation. Deux suites : un format **exact** pour la mémoire,
+  `formatOctetsExact` (`formatBytes` rendait « 1,3 Gio » pour 1,25 et « 10 Gio »
+  pour 10,25, soit trois crans sur quatre invisibles), et la règle du §6.9 bis
+  complétée — la valeur affichée doit être exacte sur la grille du curseur, sans
+  quoi c'est le pas qui est mauvais. Détail au `docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-07.
 
 ---
 

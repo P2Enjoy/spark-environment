@@ -5209,13 +5209,14 @@ que le **plan de contrôle** lance dans la cellule — un `incus exec`, une cons
 de Compose. Poser `environment.FOO` donnerait une console où `FOO` existe et une
 application où il n'existe pas. Ce n'est pas le mécanisme.
 
-**Décision : un fichier unique, à un chemin stable, désigné explicitement par le
-locataire.**
+**Décision : des fichiers à chemins stables, désignés explicitement par le
+locataire** — un pour les variables, un pour les secrets (§43.5.2) :
 
-    /etc/spark/env      root:root, 0600
+    /etc/spark/env        root:root, 0600   variables, persistant
+    /run/spark/secrets    root:root, 0600   secrets, tmpfs, réécrit à chaque démarrage
 
-Le locataire l'attache à ses services : `env_file: /etc/spark/env`. **Une ligne,
-une fois**, et toute variable ajoutée ensuite arrive sans qu'il retouche son
+Le locataire les attache à ses services par un `env_file:` à deux entrées
+(§43.5.2). **Écrit une fois**, et toute variable ajoutée ensuite arrive sans qu'il retouche son
 fichier de composition (mesure F). Le produit n'écrit **pas** dans le répertoire
 de projet du locataire : il faudrait le deviner, et l'on écraserait un fichier qui
 ne nous appartient pas. Le contrat est donc explicite des deux côtés — le produit
@@ -5294,11 +5295,10 @@ Ce que la déclaration protège réellement :
 Ce qu'elle ne protège pas : un opérateur qui a `root` sur la Forge, et le
 locataire lui-même — qui reçoit la valeur, puisque c'est le but.
 
-### 43.5 L'arbitrage à rendre : où vit la clé
+### 43.5 Où vit la clé — **tranché le 2026-08-20 : sur la Forge**
 
-Trois postures possibles, à trancher par le responsable avant toute
-implémentation. Aucune n'est bonne dans l'absolu ; elles diffèrent par **ce
-qu'elles protègent** et par **ce qu'elles cassent**.
+Trois postures étaient possibles. Elles différaient par **ce qu'elles protègent**
+et par **ce qu'elles cassent**.
 
 | Posture | Protège de | Coûte |
 |---|---|---|
@@ -5306,10 +5306,80 @@ qu'elles protègent** et par **ce qu'elles cassent**.
 | **Chiffré, clé sur la Forge** | une copie du registre **seul** : la sauvegarde du `.db` ne suffit plus | rien de plus contre `root` ; une clé de plus à sauvegarder, et à ne pas perdre |
 | **Chiffré, clé tenue par la console** | la Forge ne peut pas déchiffrer seule | **appliquer un environnement exige la console connectée** ; un Spark recréé sans elle démarre sans ses secrets, et un poste perdu les perd tous — SPK-36 doit alors dire quoi faire |
 
-Recommandation, à confirmer : **chiffré, clé sur la Forge**. C'est le seul des
-trois qui améliore quelque chose sans introduire une dépendance nouvelle au
-poste ; et la troisième posture déplace le risque plutôt qu'elle ne le réduit,
-tant qu'aucune procédure de perte n'existe.
+**Décision du responsable : chiffré, clé sur la Forge.** C'est le seul des trois
+qui améliore quelque chose sans introduire une dépendance nouvelle au poste ; la
+troisième déplace le risque plutôt qu'elle ne le réduit, tant qu'aucune procédure
+de perte n'existe.
+
+#### 43.5.1 Qui déchiffre, et où la valeur redevient lisible
+
+La question qui suit immédiatement, et dont la réponse borne tout ce que le
+produit peut promettre : **c'est `sparkd` qui déchiffre**, et la valeur redevient
+**en clair dans la cellule**. La chaîne est celle-ci, sans détour possible :
+
+    registre (chiffré)
+      → sparkd lit et déchiffre, avec la clé de la Forge
+      → push_file écrit le fichier dans la cellule, EN CLAIR
+      → env_file: le lit
+      → le conteneur reçoit la variable
+
+Il ne peut pas en être autrement : `docker compose` ne sait pas déchiffrer, et
+l'application du locataire attend une valeur utilisable. **Toute chaîne qui livre
+un secret à une application le lui livre en clair au bout.**
+
+Ce que le chiffrement au repos achète, donc, exactement une chose : **une copie du
+seul fichier de registre ne suffit plus.** Une sauvegarde emportée, un `.db`
+récupéré, un export de support ne livrent que du chiffré. C'est réel et c'est peu
+— et il faut le dire ainsi plutôt que de laisser le mot « chiffré » suggérer
+davantage.
+
+Ce qu'il n'achète pas : rien contre `root` sur la Forge, qui lit la clé à côté du
+registre ; rien contre la lecture du fichier dans la cellule ; rien contre le
+locataire, qui reçoit la valeur puisque c'est le but.
+
+**Aucun produit comparable ne fait mieux**, et pour la même raison : les `Secret`
+de Kubernetes sont encodés dans `etcd`, avec une clé de chiffrement au repos qui
+vit sur le serveur d'API ; Docker Swarm déchiffre sur le gestionnaire et **monte
+un fichier** dans le conteneur ; Dokku stocke en clair. La seule architecture qui
+échappe à la propriété est celle où l'**application elle-même** va chercher son
+secret dans un coffre avec sa propre identité — ce qui déplace le problème sur
+l'identité de l'application, et sort du périmètre du §1.
+
+#### 43.5.2 Les secrets ne vont pas dans le même fichier que les variables
+
+Mesuré dans la cellule `helo` le 2026-08-20 :
+
+    findmnt -no FSTYPE,OPTIONS /run  →  tmpfs rw,nosuid,nodev,…
+
+`/run` est un **tmpfs** dans un Spark. Un fichier qui y vit n'existe pas sur le
+jeu de données, donc :
+
+- il n'entre **dans aucun instantané** — et c'est le point décisif. Avec les
+  secrets dans `/etc/spark/env`, restaurer un instantané d'il y a trois semaines
+  **ressusciterait un secret révoqué**, en silence, alors que le registre le
+  croirait remplacé ;
+- il disparaît à l'arrêt de la cellule, donc il n'y a pas de résidu à nettoyer.
+
+**Décision : deux fichiers, et le second est volatil.**
+
+| Contenu | Chemin | Support | Instantané |
+|---|---|---|---|
+| variables ordinaires | `/etc/spark/env` | jeu de données | inclus, sans conséquence |
+| **secrets déclarés** | `/run/spark/secrets` | **tmpfs** | **jamais inclus** |
+
+Le locataire en attache deux au lieu d'un :
+
+```yaml
+env_file:
+  - /etc/spark/env
+  - /run/spark/secrets
+```
+
+Contrepartie assumée : le fichier volatil doit être **réécrit à chaque démarrage**
+de la cellule. Le cycle de vie passe par `sparkd` (§14), qui le repose donc à
+`start` comme il repose déjà `authorized_keys`. La limite à écrire au manuel : un
+Spark démarré **hors du produit** — un `incus start` à la main sur la Forge —
+n'aura pas ses secrets tant que la réconciliation du §14.3 ne l'a pas rattrapé.
 
 ### 43.6 Portée : général d'abord, surcharge ensuite
 

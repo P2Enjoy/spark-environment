@@ -4428,3 +4428,116 @@ son travail. C'est le prix de trois sessions dans un même arbre, et il est rée
 `e2e/parcours.test.mjs` et `e2e/captures.mjs` sont libres — c'est court et
 livrable ici. Ensuite SPK-44 (onglet Docker), première `[ ]` du plan à porter du
 comportement, qui emprunte le même transport que SPK-43.
+
+---
+
+## 2026-08-20 — La mémoire au quart de gibioctet, et le format qui rendait le pas invisible
+
+### Problème
+
+Amendement du responsable, quelques minutes après la livraison de SPK-59 : « les
+RAM par paliers de 256 Mo ». Le pas de 1 Gio venait d'un choix implicite — le
+champ s'appelait `memory_gib`, donc le pas valait un gibioctet — et non d'une
+mesure.
+
+### Observations
+
+La mesure lui donne raison, et sur deux points indépendants :
+
+- le **seed** pose quatre Sparks à `512 * MIO`. Un curseur au gibioctet rend donc
+  inatteignable une valeur que le produit emploie lui-même dans ses propres
+  données de démonstration ;
+- sur la pile de validation, le pool mémoire vaut **5,4 Gio** une fois l'ARC et
+  `SPARKD_MEMORY_RESERVE` déduits des 98 Gio déclarés. Au gibioctet, le curseur
+  n'offrait que **cinq crans**. Il avait la forme d'un réglage fin et la
+  granularité d'un menu à cinq entrées — exactement ce que le §6.9 bis cherche à
+  éviter, mais dans l'autre sens que celui prévu.
+
+### Ce que le changement a fait apparaître, et qui n'était pas dans la demande
+
+Passer au quart de gibioctet casse l'affichage, et le casse silencieusement.
+`formatBytes` arrondit : il rend « 1,3 Gio » pour 1,25 et, au-dessus de 10 Gio,
+« 10 Gio » pour 10,25. Trois crans sur quatre auraient donc été **invisibles** —
+on déplace la poignée et le chiffre ne bouge pas.
+
+Ce n'est pas un défaut de `formatBytes`. Son arrondi est correct pour ce qu'il
+sert : une **mesure** qu'on lit, dont la dernière décimale n'apprend rien. Ce qui
+manquait, c'est la distinction entre lire une mesure et régler une valeur qui
+sera transmise. D'où `formatOctetsExact`, et la phrase ajoutée au §6.9 bis : la
+valeur affichée doit être exacte sur la grille du curseur, et si aucun format ne
+sait rendre le pas, c'est le pas qui est mauvais.
+
+### Conséquence acceptée
+
+Au pas de 256 Mio, un pool mémoire dépassant 100,25 Gio compte plus de 400 crans
+et retombe en saisie par la condition 2 du §6.9 bis. Vérifié que cela ne touche
+pas la machine du projet : la Forge déclare 94 Gio, et son pool reste en deçà une
+fois les réserves déduites. Sur une machine plus grosse, la mémoire cédera comme
+le disque a déjà cédé — c'est la règle qui fonctionne, pas une exception qu'on
+lui concède.
+
+### Décision
+
+- pas de 256 Mio pour la mémoire, consigné avec les cinq autres au SPK-DS-07 : le
+  pas de chaque quota est désormais **écrit et motivé**, plus déduit du nom du
+  champ ;
+- `formatOctetsExact` dans `tokens.js`, à côté de `formatBytes` et non à sa place ;
+- règle d'exactitude ajoutée au §6.9 bis.
+
+### Vérifications
+
+Voir SPK-59, dont l'amendement porte le compte rendu.
+
+## 2026-08-20 — La clé est sur la Forge, et la question suivante était la bonne
+
+Arbitrage rendu : **clé de chiffrement sur la Forge**. Et immédiatement la
+question qui compte, posée par le responsable : « mais alors, comment
+`docker compose` lit-il les variables ? `sparkd` les déchiffre avant de les
+injecter ? »
+
+**Oui.** Et il ne peut pas en être autrement. La chaîne est :
+
+    registre chiffré → sparkd déchiffre (clé de la Forge)
+      → push_file écrit le fichier EN CLAIR dans la cellule
+      → env_file: → le conteneur
+
+`docker compose` ne sait pas déchiffrer, et l'application attend une valeur
+utilisable. **Toute chaîne qui livre un secret à une application le lui livre en
+clair au bout.** Le chiffrement au repos achète donc exactement une chose : une
+copie du seul fichier de registre — sauvegarde emportée, export de support — ne
+livre plus rien. C'est réel, et c'est peu. Il fallait l'écrire ainsi plutôt que
+de laisser le mot « chiffré » suggérer davantage.
+
+Vérifié plutôt que supposé, pour ne pas prétendre faire moins bien ou mieux que
+l'état de l'art : les `Secret` de Kubernetes vivent encodés dans `etcd`, avec une
+clé de chiffrement au repos posée sur le serveur d'API ; Docker Swarm déchiffre
+sur le gestionnaire et **monte un fichier** dans le conteneur ; Dokku stocke en
+clair. La seule architecture qui y échappe est celle où l'application va chercher
+son secret elle-même dans un coffre, ce qui déplace le problème sur son identité —
+et sort du §1.
+
+### Ce que la mesure a imposé ensuite, et que je n'avais pas vu
+
+    findmnt -no FSTYPE,OPTIONS /run   →   tmpfs rw,nosuid,nodev,…
+
+`/run` est un tmpfs dans un Spark. Conséquence que j'avais manquée dans la
+première rédaction : avec les secrets dans le fichier persistant,
+**restaurer un instantané ancien ressusciterait un secret révoqué**, en silence,
+pendant que le registre le croirait remplacé. C'est un défaut de sécurité
+introduit par une fonctionnalité de confort, et il ne se serait vu qu'un jour de
+rotation de clé.
+
+**Deux fichiers, donc** : `/etc/spark/env` pour les variables, persistant ;
+`/run/spark/secrets` pour les secrets déclarés, en tmpfs, hors de tout
+instantané. Le locataire attache les deux. Contrepartie assumée et écrite : le
+fichier volatil doit être reposé à chaque démarrage de la cellule — ce que
+`sparkd` fait déjà pour `authorized_keys` —, et un Spark démarré hors du produit
+n'aura ses secrets qu'après la réconciliation du §14.3.
+
+### Vérifications
+
+Une mesure dans la cellule `helo`, citée telle quelle. Aucun code touché : DAT
+§43.5, §43.5.1, §43.5.2 et §43.1, et la DoD de SPK-58 gagne deux preuves — qu'un
+instantané ne capture aucun secret, et que le fichier volatil est reposé au
+démarrage.
+

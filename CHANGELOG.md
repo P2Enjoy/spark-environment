@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/DAT.md` §43.5 : la clé de chiffrement vit sur la Forge — arbitrage rendu.
+  §43.5.1 dit qui déchiffre et où la valeur redevient lisible ; §43.5.2 sépare les
+  secrets des variables, en tmpfs, pour qu'aucun instantané ne les capture.
 - **Amorcer un Spark depuis la console** (SPK-54, `docs/DAT.md` §41, §42) : la
   fiche d'un Spark porte une section *Amorçage* qui relève ce qui manque —
   serveur SSH, clés, dépôt Docker amont, moteur, greffon Compose — et n'installe
@@ -163,6 +166,15 @@
   la plage ne se parcourt pas sans perdre la granularité métier — le pool disque
   de la Forge de validation dépasse 5 000 Gio —, le champ redevient une saisie
   numérique.
+- **La mémoire se règle par pas de 256 Mio**, non de 1 Gio (SPK-59,
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-07). Le gibioctet rendait inatteignables les
+  512 Mio que le seed emploie, et n'offrait que cinq crans sur le pool de la pile
+  de validation. Le quota mémoire s'affiche en conséquence avec un format
+  **exact** — « 512 Mio », « 1,25 Gio » — et non avec l'arrondi réservé aux
+  mesures : un curseur qui affiche « 10 Gio » pour 10,25 ment sur ce qu'il envoie.
+- `docs/DESIGN_SYSTEM.md` §6.9 bis : la valeur affichée par un curseur doit être
+  **exacte sur sa grille**. Si aucun format ne sait rendre le pas, c'est le pas
+  qui est mauvais.
 - L'avertissement de capacité de l'écran de création se rafraîchit désormais
   **pendant** le réglage. Il ne bougeait jamais : seul un changement de mode CPU
   provoquait un repeint, si bien qu'on pouvait demander 64 Gio devant un panneau
