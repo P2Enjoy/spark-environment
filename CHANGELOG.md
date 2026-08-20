@@ -3,6 +3,10 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/AGENT_RUNBOOK.md` §F : éprouver sans faire tomber la machine — la
+  vérification ciblée qui monte **une** pile au lieu de cinquante, quand la
+  campagne complète reste due, et la règle d'une seule pile de développement à la
+  fois. Avec le chiffre qui la rend non négociable : la VM dispose de 7,5 Gio.
 - `docs/DAT.md` : nouveau §44, le briefing d'un Spark — ce qu'un agent doit savoir
   en entrant, et pourquoi c'est un fichier et non un message d'accueil.
 - Unité SPK-60.

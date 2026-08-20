@@ -280,7 +280,66 @@ rendre `404` — pas `200` avec un corps vide.
 
 ---
 
-## F. Ce qu'un agent ne fait pas sans instruction explicite
+## F. Éprouver sans faire tomber la machine
+
+**Chiffre qui rend cette section non négociable : la VM de développement dispose
+de 7,5 Gio**, et non de la mémoire de la machine hôte. Relevé le 2026-08-20,
+`MemTotal: 7714436 kB`.
+
+`make e2e` monte **cinquante fois** une pile complète — un `sparkd` Python, un
+hôte console Node, un Chromium. `make captures` et `make manuel` en montent
+d'autres. À plusieurs sessions sur le même hôte, ce n'est pas de la contention :
+c'est un dépassement, et il tue la machine. Constaté quatre fois le 2026-08-20,
+dont deux terminaisons en **code 137** — un `SIGKILL`, signature du tueur de
+mémoire — et un redémarrage de l'hôte.
+
+### F.1 Éprouver UN parcours
+
+```bash
+node --test --test-concurrency=1 \
+  --test-name-pattern="<nom exact du test>" e2e/parcours.test.mjs
+```
+
+Une seule pile montée. Mesuré sur le parcours `REFUS 1` : **vert en 2,489 s**,
+contre cinquante piles pour la campagne entière.
+
+C'est l'outil de la vérification ciblée — celle qu'on fait vingt fois par heure
+en corrigeant un défaut.
+
+### F.2 Ce que la campagne complète reste, et quand la lancer
+
+Elle **garde sa place dans la Definition of Done** : elle est la preuve de
+non-régression de l'**ensemble**, et rien d'autre ne la remplace. Ce qu'elle
+n'est pas, c'est l'outil d'une vérification ciblée.
+
+Avant de lancer `make e2e`, `make captures` ou `make manuel` sur un hôte partagé,
+**annoncer et attendre** que les autres sessions aient confirmé qu'elles ne
+lancent rien. Deux campagnes simultanées produisent en outre des rouges
+**erratiques** : des délais réglés pour une machine au repos sont dépassés sous
+charge, et le rouge se déplace d'un test à l'autre. Un défaut de la mesure coûte
+plus cher qu'un défaut du produit, parce qu'on le cherche dans le produit.
+
+Ne jamais lancer une campagne **en arrière-plan** : quand la machine tombe, on ne
+sait plus ce qui tournait.
+
+### F.3 Une seule pile de développement à la fois
+
+Même famille de fuite, moins visible donc plus facile à oublier : une pile lancée
+pour une vérification visuelle et jamais arrêtée continue de consommer. Deux
+piles oubliées ont participé aux chutes du 2026-08-20.
+
+```bash
+# ce qui écoute encore, avant d'en lancer une de plus
+ss -ltn | grep -E ':5173|:9876'
+```
+
+Une pile se lance pour une vérification et **s'arrête quand elle est finie**. Sur
+un hôte partagé, la console du responsable est la seule qui a vocation à rester
+ouverte.
+
+---
+
+## G. Ce qu'un agent ne fait pas sans instruction explicite
 
 - écrire un enregistrement DNS hors du motif autorisé sur le poste
   (`SPARK_DNS_ALLOW_PATTERN`) ;

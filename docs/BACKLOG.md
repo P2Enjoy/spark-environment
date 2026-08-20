@@ -2406,9 +2406,10 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   **une** pile au lieu de cinquante et rend en 2,5 s. La campagne complète reste
   la preuve de non-régression de l'ensemble, mais elle n'est pas l'outil d'une
   vérification ciblée, et elle ne doit pas tourner sur un hôte partagé sans que
-  les autres sessions aient confirmé qu'elles ne lancent rien. **À porter dans un
-  document durable** — `docs/AGENT_RUNBOOK.md` ou le `Makefile` — plutôt que de
-  rester dans cette entrée.
+  les autres sessions aient confirmé qu'elles ne lancent rien. Portée le
+  2026-08-20 dans `docs/AGENT_RUNBOOK.md` §F, avec le chiffre qui la rend non
+  négociable : la VM de développement dispose de **7,5 Gio**, pas de la mémoire
+  de la machine hôte.
 
 ### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 

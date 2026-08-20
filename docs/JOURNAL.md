@@ -4636,3 +4636,42 @@ Note de coordination : SPK-59 a été prise entre-temps par une autre session po
 les quotas au curseur. Le briefing est donc **SPK-60** — vérifié dans le fichier
 avant d'écrire, et non supposé.
 
+## 2026-08-20 — 7,5 Gio, et une règle d'éprouvage qui sort des messages
+
+La machine est tombée **quatre fois** cet après-midi, dont deux terminaisons en
+code 137 — un `SIGKILL`, signature du tueur de mémoire — et un redémarrage
+constaté à `up 6 min`. Le chiffre qui clôt le diagnostic a manqué longtemps :
+
+    MemTotal:  7714436 kB     →  7,5 Gio
+
+Nous ne travaillons pas sur la mémoire de la machine hôte mais sur celle d'une
+**VM WSL2 qui en a une fraction**. `make e2e` monte cinquante fois une pile
+complète — `sparkd`, hôte console, Chromium — et `make captures` comme
+`make manuel` en montent d'autres. À quatre sessions, ce n'était pas de la
+contention : c'était un dépassement mécanique, et il était garanti d'arriver.
+
+Une session voisine avait mesuré la contention le matin même et en avait tiré la
+bonne conclusion partielle — des rouges erratiques, qui redeviennent verts rejoués
+seuls. La conclusion suivante, qu'elle pouvait aussi **tuer l'hôte**, n'avait pas
+été tirée. C'est le genre d'écart qui se voit une fois qu'on a le chiffre, et
+jamais avant.
+
+**Ma part, sans détour :** j'avais laissé tourner deux piles de développement —
+la console du responsable et une seconde pour mes vérifications visuelles — et je
+ne les ai jamais arrêtées. Moins visible qu'une campagne, donc plus facile à
+oublier, et exactement la même famille de fuite.
+
+La règle sort des messages entre sessions et entre dans `docs/AGENT_RUNBOOK.md`
+§F, où la personne suivante la trouvera : la vérification ciblée
+(`--test-name-pattern`, une pile, 2,489 s mesurées contre cinquante piles), ce que
+la campagne complète reste — la preuve de non-régression de l'ensemble, due à la
+Definition of Done, mais jamais l'outil d'une vérification ciblée —, l'obligation
+d'annoncer avant de la lancer sur un hôte partagé, et une seule pile de
+développement à la fois.
+
+Le chiffre y figure, et c'est lui qui rend la règle non négociable plutôt que
+polie. Une règle sans son motif se contourne dès qu'elle gêne.
+
+L'entrée de SPK-59 cesse de porter « à porter dans un document durable » : c'est
+fait, et une tâche accomplie n'a pas à rester écrite comme un reste.
+
