@@ -4201,6 +4201,61 @@ Refus, chacun distinct :
 n'est rendue que sur demande explicite — elle ne sert qu'à qui vérifie, et elle
 alourdirait chaque page du journal pour tous les autres.
 
+#### 36.10.8 Côté console : qui signe, et ce qui arrive quand personne ne peut
+
+**Complété le 2026-08-21, après mesure sur OpenSSH 8.9p1.** Le §36.10.7 dit ce qui
+voyage ; celui-ci dit comment la console le produit.
+
+La commande est `ssh-keygen -Y sign -f <clé PUBLIQUE> -n spark-audit`, et le choix
+de la **clé publique** n'est pas un détail :
+
+```
+agent chargé + -f cle.pub, clé privée ABSENTE du disque  →  0, et la signature se vérifie
+aucun agent  + -f cle.pub, clé privée absente            →  255, « Load key … No such file »
+```
+
+**Mesuré** : quand un agent détient la clé, `ssh-keygen` lui délègue la signature
+et ne lit jamais la clé privée. C'est exactement la propriété du §36.3 — la clé
+privée ne quitte pas l'agent —, et elle vaut ici pour la console elle-même, qui
+signe sans jamais tenir le secret.
+
+Sans agent, `ssh-keygen` retombe sur le fichier privé voisin. Le produit ne
+l'interdit pas : c'est le cas d'un poste sans agent, et il fonctionne.
+
+##### Ce qui arrive quand rien ne peut signer
+
+**Le geste part quand même, non signé.** C'est le §36.10.1, appliqué à l'autre
+bout : refuser d'agir faute de signature ferait de ce mécanisme un contrôle
+d'accès. Un exploitant dont l'agent vient de se vider ne doit pas découvrir que
+son produit s'est verrouillé.
+
+L'échec est **dit, jamais tu** : la console signale qu'elle n'a pas pu signer, et
+avec quel motif. Le message d'OpenSSH — « Load key … No such file » — n'est pas
+montré tel quel : il nomme un fichier que l'exploitant n'a pas demandé, et le §14.7
+interdit un jeton technique à l'écran. Il est traduit en ce qui manque
+réellement : aucune clé de signature configurée, ou aucun agent joignable.
+
+##### Quelle clé, et sous quelle identité
+
+La clé est désignée par serveur, dans l'inventaire de la console (§22.4), par un
+champ `signingKey` — un chemin vers une clé **publique**. Absent, ce serveur n'est
+simplement pas signé, et c'est un état normal, pas une panne.
+
+L'identité déclarée à `ssh-keygen -Y sign` est **celle-là même que la console pose
+déjà** dans `x-spark-actor` (§21.6.2). Les deux doivent coïncider, sans quoi la
+Forge vérifierait une signature contre une identité que le journal n'inscrit pas —
+et la ligne porterait deux acteurs différents.
+
+##### Le doublon, pour éprouver sans agent
+
+`SPARK_SIGN_COMMAND` remplace la **commande de signature**, pas le mécanisme —
+même motif et même forme qu'au §37.4.2 bis. Le harnais y met un script qui rend
+une signature préparée ; tout le reste du chemin — la sérialisation canonique, les
+en-têtes, l'échec dit — est celui qui tournera en production.
+
+**Ce que le doublon ne prouve pas** : qu'un agent réel réponde. Cela se mesure sur
+un poste, et c'est la même limite qu'au §37.4.2 bis.
+
 ## 37. Les outils d'administration dans le Spark
 
 Un terminal dans le Spark, l'inventaire de ses conteneurs Docker avec leurs
