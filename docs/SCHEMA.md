@@ -268,6 +268,28 @@ reconnaissables : la vérification les traverse sans les juger, et le dit.
 `version` (PK), `applied_at`, `checksum`. Le démarrage de `sparkd` échoue si une
 migration appliquée a un checksum différent de celle présente dans le dépôt.
 
+## 10 bis. `audit_log` : la signature d'un geste (SPK-40)
+
+Migration `009_journal_signature.sql`.
+
+| Colonne | Type | Contenu |
+|---|---|---|
+| `signature` | TEXT | la signature SSHSIG, armure comprise, ou `NULL` |
+| `signed_bytes` | TEXT | les octets exacts signés (`docs/DAT.md` §36.10.3), ou `NULL` |
+| `signature_version` | TEXT | la version de la forme sérialisée, ou `NULL` |
+
+Les trois vont **ensemble ou pas du tout**, et un déclencheur l'impose. Une
+signature sans ses octets ne se vérifie pas ; des octets sans signature
+n'attestent rien. Une ligne qui porterait l'un sans l'autre affirmerait une
+preuve qu'elle n'a pas.
+
+Elles **n'entrent pas** dans l'empreinte de la chaîne (§9.2) : le champ retenu y
+est figé, et l'y ajouter invaliderait toutes les lignes existantes. Chaîne et
+signature sont indépendantes par construction — l'une couvre l'ordre et
+l'intégrité, l'autre l'intention.
+
+Une ligne produite par le **runtime** porte `NULL` aux trois (`docs/DAT.md` §36.4).
+
 ## 11. Retour arrière
 
 Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sans
