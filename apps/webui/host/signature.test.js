@@ -265,6 +265,12 @@ test('le relais SIGNE une écriture et pose les deux en-têtes', async () => {
     assert.equal(octets.actor, 'console/prod');
     assert.deepEqual(octets.body, { name: 'essai' });
 
+    // §36.10.9 : rien n'a échoué, donc RIEN n'est dit. Un avertissement posé
+    // sur un geste correctement signé ferait désapprendre à le lire.
+    const signe = await fetch(`${base}/api/v1/sparks?server=prod`, {
+      method: 'POST', body: JSON.stringify({ name: 'encore' }) });
+    assert.equal(signe.headers.get('x-spark-signature-motif'), null);
+
     // Une LECTURE n'est pas signée : le §36.7 ne la journalise pas, et signer ce
     // qui ne laisse pas de trace ne prouverait rien.
     await fetch(`${base}/api/v1/sparks?server=prod`);
@@ -308,6 +314,14 @@ test('un relais qui ne peut PAS signer laisse quand même passer le geste', asyn
     assert.ok(!('x-spark-signed' in vues.at(-1)));
     // …et l'acteur, lui, est toujours déclaré.
     assert.equal(vues.at(-1)['x-spark-actor'], 'console/prod');
+
+    // §36.10.9 : l'échec est DIT, et il voyage en JETON stable — un en-tête HTTP
+    // ne transporte pas d'accent, et le §14.7 interdit le jeton brut à l'écran :
+    // la phrase vit dans le vocabulaire de la console.
+    assert.equal(r.headers.get('x-spark-signature-motif'), SANS_CLE);
+    // Le corps reste CELUI DE LA FORGE : y glisser un champ ferait mentir le
+    // contrat d'API sur ce que `sparkd` répond.
+    assert.deepEqual(await r.json(), {});
   } finally {
     server.closeAllConnections?.();
     server.close();

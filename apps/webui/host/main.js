@@ -1143,6 +1143,7 @@ async function relayer(url, requete, reponse, tunnels, fetchFn,
   // Une lecture n'est pas signée : le §36.7 ne les journalise pas, et signer ce
   // qui ne laisse pas de trace ne prouverait rien.
   let signature = {};
+  let motif = null;
   if (!['GET', 'HEAD', 'OPTIONS'].includes(requete.method)) {
     const vu = await signerFn({
       method: requete.method,
@@ -1153,7 +1154,8 @@ async function relayer(url, requete, reponse, tunnels, fetchFn,
       ts: new Date().toISOString(),
     }, tunnel);
     signature = signatureService.entetes(vu);
-    if (vu?.motif && avertir) avertir(nom, vu.motif);
+    motif = vu?.motif ?? null;
+    if (motif && avertir) avertir(nom, motif);
   }
 
   const amont = await fetchFn(cible.toString(), {
@@ -1173,7 +1175,18 @@ async function relayer(url, requete, reponse, tunnels, fetchFn,
     body: ['GET', 'HEAD'].includes(requete.method) ? undefined : corps,
   });
   const texte = await amont.text();
-  reponse.writeHead(amont.status, { 'content-type': 'application/json; charset=utf-8' });
+  reponse.writeHead(amont.status, {
+    'content-type': 'application/json; charset=utf-8',
+    // SPK-40 · §36.10.9 : l'échec de signature REMONTE au navigateur, sous forme
+    // d'un jeton stable et non d'une phrase — un en-tête HTTP ne transporte pas
+    // d'accent, et le §14.7 interdit de toute façon le jeton brut à l'écran : la
+    // phrase vit dans le vocabulaire de la console.
+    //
+    // Le CORPS n'est pas touché : le relais rend ce que la Forge a rendu, et y
+    // glisser un champ ferait mentir le contrat d'API sur ce que `sparkd`
+    // répond.
+    ...(motif ? { 'x-spark-signature-motif': motif } : {}),
+  });
   reponse.end(texte);
 }
 
