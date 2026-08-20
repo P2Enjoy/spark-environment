@@ -224,6 +224,28 @@ function brancherTerminal() {
   racine.querySelector('[data-terminal="fermer"]')
     ?.addEventListener('click', () => fermerTerminal('sortie'));
 
+  // §37.3 : le dépannage passe par une confirmation qui NOMME le pouvoir
+  // employé. Elle est rendue dans le flux (§6.22), donc c'est un simple état.
+  racine.querySelector('[data-terminal="depanner"]')
+    ?.addEventListener('click', () => {
+      etatT.confirmeDepannage = true;
+      peindre();
+      // §14.3 : la commande qui l'a ouverte disparaît. Sans ce déplacement, le
+      // focus resterait sur un bouton retiré du document.
+      racine.querySelector('[data-terminal="depanner-confirme"]')?.focus();
+    });
+  racine.querySelector('[data-terminal="depanner-annule"]')
+    ?.addEventListener('click', () => {
+      etatT.confirmeDepannage = false;
+      peindre();
+      racine.querySelector('[data-terminal="depanner"]')?.focus();
+    });
+  racine.querySelector('[data-terminal="depanner-confirme"]')
+    ?.addEventListener('click', () => {
+      etatT.confirmeDepannage = false;
+      ouvrirTerminal('rescue');
+    });
+
   const lecteur = racine.querySelector('[data-terminal="lecteur"]');
   lecteur?.addEventListener('change', () => {
     etatT.lecteurEcran = lecteur.checked;
@@ -268,7 +290,7 @@ function envoyerAuTerminal(data) {
  * L'ordre compte : le flux ne peut s'abonner qu'à une session existante, et
  * l'ouvrir d'abord garantit qu'aucun octet n'est perdu entre les deux.
  */
-async function ouvrirTerminal() {
+async function ouvrirTerminal(chemin = 'ssh') {
   const t = etat.terminal;
   t.status = 'ouverture';
   t.refus = null;
@@ -280,11 +302,16 @@ async function ouvrirTerminal() {
   try {
     const reponse = await fetch('/api/terminal', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ server: etat.server, spark: etat.spark.name }),
+      body: JSON.stringify({ server: etat.server, spark: etat.spark.name,
+                             path: chemin }),
     });
     corps = await reponse.json();
     if (!reponse.ok) {
-      t.status = 'refus';
+      // Un dépannage refusé n'est PAS une impasse : le chemin normal reste
+      // disponible, et le §14.9 veut que le refus RÉEL du serveur s'affiche
+      // sans fermer l'écran. Fermer ici enfermerait l'exploitant hors d'un
+      // Spark parfaitement joignable.
+      t.status = corps?.error === 'rescue_refused' ? 'ferme' : 'refus';
       t.refus = corps;
       return peindre();
     }

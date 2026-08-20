@@ -3,9 +3,12 @@
  *
  * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.1 (la console parle au Spark),
  *       §37.2 (le chemin normal, et ce qu'il suppose : un `sshd` DANS le Spark),
+ *       §37.3 (le dépannage : borné, confirmé, nommé, journalisé à part),
  *       §37.4 (le contrat), §37.4.1 (le transport), §37.4.3 (la limite du
  *       redimensionnement) · docs/DESIGN_SYSTEM_APP.md SPK-DS-04 ·
- *       docs/DESIGN_SYSTEM.md §6.13 (les états d'une vue), §14.7
+ *       docs/DESIGN_SYSTEM.md §6.13 (les états d'une vue), §6.22 (confirmation
+ *       dans le flux), §6.23 (une action sensible se confirme), §9.8 (jamais la
+ *       couleur seule), §14.7, §14.9 (le backend est l'autorité)
  *
  * SPK-DS-04 : ce n'est ni une section ni une modale. Pas de point d'engagement,
  * donc pas de modale ; pas de paires terme/valeur, donc pas de section. C'est
@@ -20,11 +23,31 @@ const echapper = (v) =>
 /** État de l'écran. Les octets ne vivent PAS ici : voir `TERMINAL_VIDE.lignes`. */
 export const TERMINAL_VIDE = {
   status: 'ferme',      // 'ferme' | 'ouverture' | 'ouvert' | 'refus'
-  session: null,        // { id, path }
-  refus: null,          // { error, message }
+  session: null,        // { id, path, rescueReason }
+  refus: null,          // { error, reason, message }
   avertissement: null,  // l'avis d'inactivité (§37.4.2)
   fin: null,            // le motif de fermeture
   lecteurEcran: false,  // SPK-DS-04 : activable, et son réglage persiste
+  // §37.3 : le dépannage se CONFIRME, et la confirmation nomme le pouvoir
+  // employé. Elle est rendue dans le flux (§6.22) : une modale imposerait un
+  // voile et un piège de focus pour afficher trois lignes et deux boutons.
+  confirmeDepannage: false,
+};
+
+/** Les deux chemins d'entrée, tels que l'écran les nomme (§37.2, §37.3). */
+export const CHEMINS = {
+  ssh: { libelle: 'SSH', token: 'neutral',
+         explication: 'Connexion normale au Spark, avec la clé du responsable.' },
+  rescue: { libelle: 'Dépannage — exécution en root dans la cellule, depuis le plan de contrôle',
+            token: 'danger',
+            explication: 'Le plan de contrôle exécute un shell root DANS la cellule, '
+              + 'sans passer par son « sshd ».' },
+};
+
+/** Pourquoi le dépannage a été ouvert. Il entre au journal, et se lit ici. */
+const MOTIFS_DEPANNAGE = {
+  spark_en_erreur: 'ce Spark est en erreur',
+  sshd_muet: 'rien ne répond sur son port 22',
 };
 
 /**
@@ -49,7 +72,18 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
 
   // §37.2 : un Spark sans adresse n'a rien où se connecter. L'écran NOMME ce qui
   // manque — il n'affiche ni onglet vide, ni erreur technique.
+  // §14.9 : le backend est l'autorité. Un refus de DÉPANNAGE n'est pas une
+  // impasse — le chemin normal, lui, reste disponible —, donc il s'affiche DANS
+  // l'écran plutôt qu'à sa place. Le rendre bloquant enfermerait l'exploitant
+  // hors d'un Spark parfaitement joignable.
+  const refusDepannage = etat.refus?.error === 'rescue_refused'
+    ? `<div class="refus" role="alert">
+         <p><strong>Dépannage refusé.</strong> ${echapper(etat.refus.message)}</p>
+       </div>`
+    : '';
+
   const refus = etat.status === 'refus' && etat.refus
+      && etat.refus.error !== 'rescue_refused'
     ? `<div class="carte bloc">
          <h2 id="titre-terminal">Terminal</h2>
          <p class="refus">${echapper(etat.refus.message)}</p>
@@ -65,13 +99,57 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
   // SPK-DS-04 : l'état protégé et le chemin employé restent affichés PENDANT
   // toute la session. Les montrer à l'ouverture seulement laisserait oublier par
   // quel chemin on est entré.
+  // §37.3 : « la bannière reste visible pendant toute la session : on ne doit pas
+  // oublier par quel chemin on est entré ». Elle porte donc le chemin RÉEL de la
+  // session, pas une constante, et le §9.8 interdit que la couleur seule le
+  // distingue — le libellé nomme le pouvoir employé en toutes lettres.
+  const chemin = CHEMINS[etat.session?.path] ?? CHEMINS.ssh;
+  const motif = etat.session?.rescueReason
+    ? ` <span class="note">Ouvert parce que ${
+        echapper(MOTIFS_DEPANNAGE[etat.session.rescueReason] ?? etat.session.rescueReason)}.</span>`
+    : '';
   const bandeau = `<p class="bandeau-terminal">
-      <span class="badge badge--neutral">${echapper(etat.session?.path ?? 'ssh')}</span>
+      <span class="badge badge--${chemin.token}"><span class="badge__point" aria-hidden="true"></span>${
+        echapper(chemin.libelle)}</span>
       ${spark.protected
         ? '<span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>Spark protégé</span>'
-        : ''}
+        : ''}${motif}
       <span class="note">Quitter cet onglet <strong>termine</strong> la session.</span>
     </p>`;
+
+  // §37.3 : la confirmation NOMME le pouvoir employé, et ne dit pas « confirmer ».
+  // Rendue dans le FLUX (§6.22) : une modale imposerait un voile, un piège de
+  // focus et une restitution, pour trois lignes et deux boutons. Le bouton
+  // d'engagement est destructif (§6.23) — ce geste donne au plan de contrôle
+  // l'exécution en root chez le locataire.
+  const confirmation = etat.confirmeDepannage
+    ? `<div class="confirmation" role="group" aria-labelledby="titre-depannage">
+         <p id="titre-depannage"><strong>Ouvrir un terminal de dépannage ?</strong></p>
+         <p>Le plan de contrôle va <strong>exécuter un shell root dans la cellule
+         de « ${echapper(spark.name)} »</strong>, sans passer par son « sshd ».
+         C’est un pouvoir que la console n’emploie nulle part ailleurs.</p>
+         <p class="note">Cette ouverture est inscrite au journal sous une action
+         distincte, pour que l’on puisse compter combien de fois cette voie a servi.
+         Elle n’est acceptée que si ce Spark est en erreur ou si rien ne répond sur
+         son port 22 — c’est le serveur qui en décide, pas cet écran.</p>
+         <p class="formulaire__actions">
+           <button type="button" class="bouton bouton--danger" data-terminal="depanner-confirme">
+             Exécuter en root dans la cellule
+           </button>
+           <button type="button" class="bouton" data-terminal="depanner-annule">Annuler</button>
+         </p>
+       </div>`
+    : '';
+
+  // §1.4 et §14.9 : le dépannage EXISTE, donc sa commande s'affiche. Elle n'est
+  // pas désactivée d'après ce que l'écran croit savoir de l'état du « sshd » —
+  // il ne le sait pas, et c'est le serveur qui mesure puis refuse en le disant.
+  const boutonDepannage = etat.confirmeDepannage
+    ? ''
+    : `<button type="button" class="bouton" data-terminal="depanner"
+               ${etat.status === 'ouverture' ? 'disabled' : ''}>
+         Terminal de dépannage
+       </button>`;
 
   const commandes = etat.status === 'ouvert'
     ? `<p class="formulaire__actions">
@@ -82,11 +160,13 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
            Mode lecteur d’écran
          </label>
        </p>`
-    : `<p class="formulaire__actions">
+    : `${confirmation}
+       <p class="formulaire__actions">
          <button type="button" class="bouton bouton--primaire" data-terminal="ouvrir"
                  ${etat.status === 'ouverture' ? 'disabled' : ''}>
            ${etat.status === 'ouverture' ? 'Ouverture…' : 'Ouvrir un terminal'}
          </button>
+         ${boutonDepannage}
        </p>`;
 
   const avis = etat.avertissement
@@ -106,6 +186,7 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
 <section class="carte bloc" aria-labelledby="titre-terminal">
   <h2 id="titre-terminal">Terminal</h2>
   ${bandeau}
+  ${refusDepannage}
   ${avis}${fin}
   <pre class="terminal" id="${CHAMP_TERMINAL}" tabindex="0"${region}></pre>
   <label class="sr-only" for="terminal-entree">Saisie du terminal</label>

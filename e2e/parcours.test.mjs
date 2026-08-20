@@ -1467,6 +1467,77 @@ test('un Spark sans CELLULE nomme ce qui manque', async () => {
   });
 });
 
+// --- SPK-43, tranche 4 · LE DÉPANNAGE (§37.3) -------------------------------
+
+test('demander le dépannage montre ce qu’il va employer, et on peut renoncer', async () => {
+  await parcours('terminal-depannage-confirmation', async () => {
+    // « site-vitrine » est en ERREUR dans le seed : c'est le cas que le §37.3
+    // ouvre. On y va comme un exploitant, depuis la liste.
+    await ouvrir('site-vitrine', 'terminal');
+    await page.waitForSelector('#titre-terminal');
+
+    // La commande EXISTE et n'est pas désactivée : l'écran ne présume pas du
+    // verdict, c'est le serveur qui mesure (§14.9).
+    const bouton = await page.$('[data-terminal="depanner"]');
+    assert.ok(bouton, 'la commande de dépannage est offerte');
+    assert.equal(await bouton.getAttribute('disabled'), null);
+
+    await page.click('[data-terminal="depanner"]');
+    await page.waitForSelector('[data-terminal="depanner-confirme"]', { timeout: 10000 });
+
+    // §37.3 : la confirmation NOMME le pouvoir employé. Pas « confirmer ».
+    const texte = await page.textContent('.confirmation');
+    assert.match(texte, /exécuter un shell root dans la cellule/i);
+    assert.match(texte, /site-vitrine/, 'elle nomme l’objet visé');
+    assert.match(texte, /action\s+distincte/, 'et dit que l’emprunt se compte');
+
+    // Renoncer ne doit RIEN avoir ouvert.
+    await page.click('[data-terminal="depanner-annule"]');
+    await page.waitForSelector('[data-terminal="depanner"]', { timeout: 10000 });
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.rescue_exec&limit=10');
+    assert.equal(corps.entries.length, 0, 'une annulation n’ouvre aucun dépannage');
+  });
+});
+
+test('confirmer le dépannage ouvre la session, et le journal la compte À PART', async () => {
+  await parcours('terminal-depannage-ouvert', async () => {
+    await ouvrir('site-vitrine', 'terminal');
+    await page.waitForSelector('#titre-terminal');
+    await page.click('[data-terminal="depanner"]');
+    await page.waitForSelector('[data-terminal="depanner-confirme"]', { timeout: 10000 });
+    // AU CLAVIER : le focus est déjà sur le point d'engagement (§14.3).
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 15000 });
+
+    // §37.3, quatrième condition : la bannière NOMME le chemin, et elle tient.
+    const bandeau = await page.textContent('.bandeau-terminal');
+    assert.match(bandeau, /exécution en root dans la cellule, depuis le plan de contrôle/);
+    assert.match(bandeau, /ce Spark est en erreur/, 'elle dit aussi pourquoi');
+    assert.ok(!/sshd_muet|spark_en_erreur/.test(bandeau), 'aucun jeton brut à l’écran');
+    assert.ok(await page.$('.badge--danger'), 'et la couleur suit le libellé');
+
+    // §37.3, troisième condition : l'action est DISTINCTE, donc dénombrable.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.rescue_exec&limit=10');
+    assert.equal(corps.entries.length, 1, 'le dépannage se compte tout seul');
+    assert.match(corps.entries[0].message,
+      /exécution en root dans la cellule, depuis le plan de contrôle/);
+    const charge = JSON.parse(corps.entries[0].payload);
+    assert.equal(charge.path, 'rescue');
+    assert.equal(charge.reason, 'spark_en_erreur');
+
+    // …et elle ne s'est pas comptée comme une session SSH.
+    const { corps: normales } = await pile.lireSparkd(
+      '/v1/audit?action=spark.terminal_open&limit=50');
+    assert.ok(normales.entries.every((e) => JSON.parse(e.payload).path !== 'rescue'));
+
+    // La bannière survit à la fin du shell distant : c'est le moment où l'on
+    // oublie par quel chemin on est entré.
+    await page.click('[data-terminal="fermer"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Session fermée'), { timeout: 10000 });
+  });
+});
+
 // --- SPK-38 · L'ANCRE VOIT CE QUE LA CHAÎNE NE PEUT PAS VOIR ----------------
 //
 // CE BLOC EST LE DERNIER DU FICHIER, ET IL DOIT LE RESTER. Le parcours ci-dessous
