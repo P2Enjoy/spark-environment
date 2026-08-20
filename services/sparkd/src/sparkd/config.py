@@ -89,6 +89,7 @@ class Config:
     driver: str
     log_level: str
     storage_pool: str
+    storage_dataset: str
     memory_reserve_bytes: int
     cpu_reserve: float
     storage_metadata_margin_bytes: int
@@ -195,6 +196,7 @@ def load(env: dict[str, str] | None = None) -> Config:
     if marge < 0:
         raise ConfigError("SPARKD_STORAGE_METADATA_MARGIN ne peut pas être négatif.")
 
+    pool = source.get("SPARKD_STORAGE_POOL", DEFAULT_STORAGE_POOL)
     return Config(
         host=host,
         port=port,
@@ -203,7 +205,12 @@ def load(env: dict[str, str] | None = None) -> Config:
         caddy_admin=source.get("SPARKD_CADDY_ADMIN", DEFAULT_CADDY_ADMIN),
         driver=driver,
         log_level=log_level,
-        storage_pool=source.get("SPARKD_STORAGE_POOL", DEFAULT_STORAGE_POOL),
+        storage_pool=pool,
+        # SPK-28 · docs/DAT.md §8.5 bis : le jeu de donnees SUIT le pool par
+        # defaut. Sur une installation ordinaire ils portent le meme nom, et les
+        # desynchroniser en silence ferait verifier la compression d'un jeu de
+        # donnees qui n'est pas celui du pool.
+        storage_dataset=source.get("SPARKD_STORAGE_DATASET", "") or pool,
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,
         storage_metadata_margin_bytes=marge,

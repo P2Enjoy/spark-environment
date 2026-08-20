@@ -18,14 +18,21 @@ est un script distinct (§31.3).
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, NamedTuple
 
 GIO = 1024**3
+
+#: Taille par défaut du fichier d'un pool sous la disposition B (§8.5 bis). Elle
+#: est ici pour que le REMÈDE proposé corresponde à ce que l'installation aurait
+#: posé : une consigne de réparation qui contredit le script d'installation
+#: apprend à se méfier des deux.
+DEFAUT_TAILLE_FICHIER = "200GiB"
 
 #: Version d'Incus sans laquelle AUCUN conteneur Docker ne démarre dans un Spark
 #: (docs/DAT.md §3.1). Ce n'est pas une préférence de version.
@@ -34,6 +41,36 @@ INCUS_MINIMUM = (6, 19)
 #: Plafond retenu pour l'ARC ZFS. Au-delà, la mémoire promise aux Sparks est
 #: reprise par le cache sans prévenir (docs/DAT.md §16.1).
 ARC_MAXIMUM = 16 * GIO
+
+class Reglages(NamedTuple):
+    """Ce que la vérification lit au lieu de le supposer (§8.5 bis).
+
+    Le nom du pool et celui du jeu de données viennent de la configuration du
+    runtime ; la taille du fichier vient de l'environnement d'INSTALLATION,
+    parce que sparkd ne crée aucun pool et n'a donc aucun usage de cette valeur.
+    """
+
+    storage_pool: str
+    storage_dataset: str
+    pool_file_size: str
+
+
+def reglages(source: dict[str, str] | None = None) -> Reglages:
+    """Relit la configuration à chaque appel : un contrôle n'est pas un service.
+
+    Importé PARESSEUSEMENT : `preflight` doit rester lançable sur un hôte où
+    `sparkd` n'est pas encore installé, et le §31.3 le veut sans effet de bord.
+    """
+    from .config import load
+
+    brut = dict(os.environ if source is None else source)
+    config = load({**brut, "SPARKD_DRIVER": brut.get("SPARKD_DRIVER", "fake")})
+    return Reglages(
+        storage_pool=config.storage_pool,
+        storage_dataset=config.storage_dataset,
+        pool_file_size=brut.get("SPARK_POOL_FILE_SIZE") or DEFAUT_TAILLE_FICHIER,
+    )
+
 
 OK = "ok"
 ECHEC = "echec"
@@ -122,32 +159,49 @@ def incus_assez_recent(hote: Hote) -> Verdict:
     return Verdict("INC-VERSION", "Incus installé et assez récent", OK, brut)
 
 
-def pool_de_stockage(hote: Hote, nom: str = "spark") -> Verdict:
-    """Le pool doit exister, porter des quotas et compresser (docs/DAT.md §8)."""
+def pool_de_stockage(hote: Hote, nom: str | None = None,
+                     taille: str | None = None) -> Verdict:
+    """Le pool doit exister, porter des quotas et compresser (docs/DAT.md §8).
+
+    Le NOM vient de la configuration, jamais d'un défaut de fonction (§8.5 bis) :
+    vérifier une installation configurée autrement rendrait sinon un verdict qui
+    ne parle pas d'elle — « pool « spark » absent » sur une Forge dont le pool
+    s'appelle « tank » et fonctionne.
+    """
+    nom = nom or reglages().storage_pool
+    taille = taille or reglages().pool_file_size
     brut = hote.executer(["incus", "storage", "show", nom])
     if brut is None:
         return Verdict("STO-POOL", f"Pool de stockage « {nom} »", ECHEC,
                        "absent",
-                       f"incus storage create {nom} zfs size=200GiB")
+                       f"incus storage create {nom} zfs size={taille}")
     pilote = re.search(r"^driver:\s*(\S+)", brut, re.M)
     if not pilote or pilote.group(1) != "zfs":
         return Verdict("STO-POOL", f"Pool de stockage « {nom} »", ECHEC,
                        f"pilote {pilote.group(1) if pilote else 'inconnu'}, attendu zfs",
                        "Le quota, la copie sur écriture et les instantanés "
                        "supposent ZFS (docs/DAT.md §8).")
-    # Le pool sur FICHIER fonctionne mais reste provisoire : c'est SPK-28.
+    # SPK-28 · §8.5 : DEUX dispositions, pas une cible et un repli. Le pool sur
+    # fichier n'est plus « provisoire » — l'arbitrage du 2026-08-20 l'a tranché.
+    # Ce qu'il faut dire est ce qu'il N'APPORTE PAS, et le dire une fois :
+    # le miroir reste géré par ce qui est dessous, donc la protection contre la
+    # corruption silencieuse est absente. Ce n'est pas un remède, c'est un fait —
+    # d'où un relevé qui le nomme et non une consigne de réparation.
     source = re.search(r"^\s*source:\s*(\S+)", brut, re.M)
     sur_fichier = bool(source and source.group(1).endswith(".img"))
     releve = f"zfs, source {source.group(1) if source else 'inconnue'}"
     if sur_fichier:
         return Verdict("STO-POOL", f"Pool de stockage « {nom} »", OK,
-                       releve + " — sur fichier, provisoire",
-                       "Un pool sur fichier ajoute une couche de traduction. "
-                       "Le repartitionnement attend un arbitrage (SPK-28).")
-    return Verdict("STO-POOL", f"Pool de stockage « {nom} »", OK, releve)
+                       releve + " — disposition sur fichier : quotas, copie sur "
+                       "écriture et instantanés actifs ; corruption silencieuse "
+                       "NON couverte, le miroir est géré en dessous")
+    return Verdict("STO-POOL", f"Pool de stockage « {nom} »", OK,
+                   releve + " — disposition native")
 
 
-def compression_active(hote: Hote, dataset: str = "spark") -> Verdict:
+def compression_active(hote: Hote, dataset: str | None = None) -> Verdict:
+    """§8.5 bis : le jeu de données vient de la configuration, comme le pool."""
+    dataset = dataset or reglages().storage_dataset
     brut = hote.executer(["zfs", "get", "-H", "-o", "value", "compression", dataset])
     if brut is None:
         return Verdict("STO-COMPRESSION", "Compression ZFS active", INCONNU,

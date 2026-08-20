@@ -143,13 +143,39 @@ def test_arc_illisible_est_INCONNU():
 # --- stockage ----------------------------------------------------------------
 
 
-def test_un_pool_sur_fichier_passe_mais_le_dit(  ):
-    """Il fonctionne ; il reste provisoire (SPK-28), et le verdict le nomme."""
+def test_un_pool_sur_fichier_passe_et_dit_CE_QU_IL_NE_COUVRE_PAS():
+    """RÉVISÉE le 2026-08-20 par SPK-28, arbitrage du responsable.
+
+    La preuve exigeait le mot « provisoire » et un renvoi à SPK-28. Le §8.5 ne
+    dit plus cela : il y a DEUX dispositions, pas une cible et un repli, et une
+    dette qu'on ne compte pas rembourser n'est pas une dette.
+
+    Ce que la preuve gardait vraiment est INCHANGÉ, et mieux dit : le verdict
+    nomme ce que cette disposition N'APPORTE PAS. Le taire laisserait croire
+    qu'un pool ZFS protège toujours de la corruption silencieuse, alors qu'ici le
+    miroir est géré en dessous et que « md » ne sait pas laquelle des deux copies
+    est la bonne.
+
+    Et ce n'est PAS un remède : on ne répare pas une disposition qu'on a choisie.
+    """
     montre = "driver: zfs\nconfig:\n  source: /var/lib/incus/disks/spark.img\n"
     verdict = preflight.pool_de_stockage(hote({"incus storage show spark": montre}))
     assert verdict.etat == OK
-    assert "provisoire" in verdict.releve
-    assert "SPK-28" in verdict.remede
+    assert "corruption silencieuse" in verdict.releve
+    assert "NON couverte" in verdict.releve
+    # Ce qui FONCTIONNE est dit aussi : sans cela, le relevé se lirait comme un
+    # défaut, et c'est le même ZFS.
+    assert "quotas" in verdict.releve
+    assert verdict.remede == ""
+
+
+def test_un_pool_NATIF_est_distingue_du_pool_sur_fichier():
+    """§8.5 : deux dispositions, donc deux relevés qui ne se confondent pas."""
+    montre = "driver: zfs\nconfig:\n  source: /dev/sda5\n"
+    verdict = preflight.pool_de_stockage(hote({"incus storage show spark": montre}))
+    assert verdict.etat == OK
+    assert "disposition native" in verdict.releve
+    assert "NON couverte" not in verdict.releve
 
 
 def test_un_pool_absent_est_bloquant():
@@ -307,3 +333,48 @@ def test_une_tranche_conforme():
         fichiers={"/sys/fs/cgroup/spark.slice/cgroup.subtree_control":
                   "cpuset cpu io memory pids\n"}))
     assert verdict.etat == OK
+
+
+# --- SPK-28 · La vérification LIT sa configuration (§8.5 bis) ---------------
+
+
+def test_le_nom_du_pool_vient_de_la_CONFIGURATION_pas_d_un_defaut():
+    """Vérifier une Forge dont le pool s'appelle « tank » doit parler d'elle.
+
+    Avec un défaut de fonction, le verdict annonçait « pool « spark » absent »
+    sur une installation parfaitement saine — un rouge qui ne dit rien du
+    produit, exactement ce que le §31.2 interdit.
+    """
+    montre = "driver: zfs\nconfig:\n  source: /dev/sda5\n"
+    verdict = preflight.pool_de_stockage(
+        hote({"incus storage show tank": montre}),
+        nom=preflight.reglages({"SPARKD_STORAGE_POOL": "tank"}).storage_pool)
+    assert verdict.etat == OK
+    assert "tank" in verdict.titre
+
+
+def test_le_REMEDE_propose_la_taille_configuree():
+    """Une consigne de réparation qui contredit le script d'installation apprend
+    à se méfier des deux."""
+    reglages = preflight.reglages({"SPARK_POOL_FILE_SIZE": "1TiB"})
+    verdict = preflight.pool_de_stockage(hote({}), taille=reglages.pool_file_size)
+    assert verdict.etat == ECHEC
+    assert "size=1TiB" in verdict.remede
+
+
+def test_le_jeu_de_donnees_SUIT_le_pool_par_defaut():
+    """§8.5 bis : les désynchroniser en silence ferait vérifier la compression
+    d'un jeu de données qui n'est pas celui du pool."""
+    assert preflight.reglages({"SPARKD_STORAGE_POOL": "tank"}).storage_dataset == "tank"
+    assert preflight.reglages({
+        "SPARKD_STORAGE_POOL": "tank",
+        "SPARKD_STORAGE_DATASET": "tank/sparks"}).storage_dataset == "tank/sparks"
+
+
+def test_la_compression_est_verifiee_sur_le_jeu_de_donnees_CONFIGURE():
+    verdict = preflight.compression_active(
+        hote({"zfs get -H -o value compression tank/sparks": "lz4"}),
+        dataset=preflight.reglages({
+            "SPARKD_STORAGE_POOL": "tank",
+            "SPARKD_STORAGE_DATASET": "tank/sparks"}).storage_dataset)
+    assert verdict.etat == OK and verdict.releve == "lz4"
