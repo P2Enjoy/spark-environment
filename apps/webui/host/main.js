@@ -51,6 +51,10 @@ export function createConsoleHost(options = {}) {
   // les captures montrent les états d'absence, qui ne se provoquent pas sur un
   // faux `sshd` — le relevé lui-même a ses preuves dans `docker.test.js`.
   const lireDocker = options.readDocker ?? null;
+  // SPK-44, deuxième tranche : mêmes points d'injection que « readDocker », et
+  // pour le même motif — les captures ont besoin des ÉCRANS, pas d'un Docker.
+  const lireConteneurInjecte = options.readContainer ?? null;
+  const lireJournauxInjecte = options.readLogs ?? null;
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
   // processus. Il est lu UNE fois : le relire à chaque requête ferait dépendre
@@ -742,11 +746,13 @@ export function createConsoleHost(options = {}) {
      * Lectures pures, non journalisées (§36.7).
      */
     'GET /api/spark/container': async (_corps, url) =>
-      relevéConteneur(url, (args) => inspecterConteneur(args)),
+      relevéConteneur(url, (args) => (lireConteneurInjecte
+        ? lireConteneurInjecte(args) : inspecterConteneur(args))),
 
-    'GET /api/spark/logs': async (_corps, url) =>
-      relevéConteneur(url, (args) => lireJournaux({
-        ...args, tail: Number(url?.searchParams.get('tail')) || undefined })),
+    'GET /api/spark/logs': async (_corps, url) => relevéConteneur(url, (args) => {
+      const avecBorne = { ...args, tail: Number(url?.searchParams.get('tail')) || undefined };
+      return lireJournauxInjecte ? lireJournauxInjecte(avecBorne) : lireJournaux(avecBorne);
+    }),
 
     'POST /api/terminal': async (corps) => {
       const nom = String(corps?.server ?? '');

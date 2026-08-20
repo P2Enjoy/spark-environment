@@ -17,6 +17,9 @@
  * et se comparent à ses quotas. Chacune est donc écrite avec son référentiel.
  */
 
+/** Le même jeton que l'hôte console rend (apps/webui/host/docker.js). */
+const CONTENEUR_INCONNU = 'conteneur_inconnu';
+
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -151,17 +154,33 @@ function definitions(paires) {
 export function renderConteneur(etat) {
   if (!etat.ouvert) return '';
 
-  const fermer = `<p class="formulaire__actions">
+  const d = etat.detail;
+
+  // §14.9 : le titre est celui que la Forge a RENDU, pas celui qu'on a cliqué.
+  // S'ils diffèrent, c'est le second qui ment — et on ne saurait pas lequel on
+  // regarde. Le nom cliqué ne sert que tant que l'inspection n'est pas revenue.
+  const titre = (typeof d === 'object' && d?.name) || etat.ouvert;
+
+  // Les commandes sont EN TÊTE. Sous deux cents lignes de journal, un retour
+  // placé en pied oblige à traverser tout le texte pour revenir à la liste.
+  const commandes = `<p class="formulaire__actions">
     <button type="button" class="bouton bouton--compact" data-docker="fermer">
       Revenir à la liste</button>
     <button type="button" class="bouton bouton--compact" data-docker="relire"
             data-conteneur="${echapper(etat.ouvert)}">Relire les journaux</button>
   </p>`;
-
-  const d = etat.detail;
   const identite = d === 'en-cours' || d === null
     ? '<p class="note" role="status" aria-busy="true">Inspection en cours…</p>'
-    : d.state === 'conteneur_inconnu' || d.titre
+    // Un conteneur DISPARU n'est pas un refus. Le §25.1 réserve le rouge au
+    // refus du serveur ; écrire « c'est un état normal, pas une panne » sur un
+    // fond d'alerte se contredit à l'œil avant même d'être lu. Une course perdue
+    // est un avertissement ; une lecture qui a VRAIMENT échoué reste rouge.
+    : d.state === CONTENEUR_INCONNU
+      ? `<div class="avertissement" role="status">
+           <p><strong>${echapper(d.titre ?? '')}</strong></p>
+           <p>${echapper(d.detail ?? '')}</p>
+         </div>`
+      : d.titre
       ? `<div class="refus" role="alert">
            <p><strong>${echapper(d.titre ?? '')}</strong></p>
            <p>${echapper(d.detail ?? '')}</p>
@@ -176,45 +195,58 @@ export function renderConteneur(etat) {
           ['Terminé', d.finishedAt, true],
           ['Redémarrages', d.restarts ? String(d.restarts) : null],
         ])
-        + (d.networks === null
-          ? '<p class="note">Réseaux : non lus.</p>'
+        + `<h3>Réseaux</h3>${d.networks === null
+          ? '<p class="absence">Non lus — l’inspection a abouti, cette liste non.</p>'
           : d.networks?.length
-            ? `<p class="note">Réseaux — ${d.networks.map((r) =>
+            ? `<p class="note">${d.networks.map((r) =>
                 `<span class="technique">${echapper(r.name)}</span>${
                   r.address ? ` (${echapper(r.address)})` : ''}`).join(', ')}</p>`
-            : '<p class="note">Aucun réseau attaché.</p>')
-        + (d.mounts === null
-          ? '<p class="note">Montages : non lus.</p>'
+            : '<p class="absence">Aucun réseau attaché.</p>'}`
+        + `<h3>Volumes et montages</h3>${d.mounts === null
+          ? '<p class="absence">Non lus — l’inspection a abouti, cette liste non.</p>'
           : d.mounts?.length
-            ? `<ul class="note">${d.mounts.map((m) =>
+            ? `<ul class="liste-simple">${d.mounts.map((m) =>
                 `<li><span class="technique">${echapper(m.source)}</span> →
                  <span class="technique">${echapper(m.destination)}</span>
                  (${echapper(m.type)}, ${echapper(m.mode)})</li>`).join('')}</ul>`
-            : '<p class="note">Aucun volume monté.</p>');
+            : '<p class="absence">Aucun volume monté.</p>'}`;
 
   const j = etat.journaux;
   const journaux = j === 'en-cours' || j === null
     ? '<p class="note" role="status" aria-busy="true">Lecture des journaux…</p>'
-    : j.state === 'conteneur_inconnu'
-      ? ''
-      : `${j.truncated
+    // §14.5 : nommer l'absence. Quand l'identité a abouti et que les journaux
+    // trouvent un conteneur disparu, ne rien afficher laisserait l'écran MUET
+    // sur ce qui vient d'arriver — et l'exploitant lirait une fiche complète
+    // d'un conteneur qui n'existe plus. Rencontré au parcours, pas en unitaire.
+    // …mais UNE FOIS. Quand l'identité l'a déjà dit, le répéter dans un encart
+    // identique juste dessous n'ajoute rien et fait douter qu'il s'agisse du
+    // même fait.
+    : j.state === CONTENEUR_INCONNU
+      ? (d?.state === CONTENEUR_INCONNU ? '' : `<h3>Journaux</h3>
+         <div class="avertissement" role="status">
+           <p><strong>Ce conteneur a disparu</strong></p>
+           <p>Ses journaux sont partis avec lui. Le locataire a pu le supprimer
+           depuis le dernier relevé — c’est un état normal, pas une panne.</p>
+         </div>`)
+      : `<h3>Journaux</h3>${j.truncated
         ? `<p class="note">Les <strong>${echapper(j.tail)} dernières lignes</strong>,
            pas le journal entier — un conteneur bavard rendrait l’écran inutilisable.</p>`
         : `<p class="note">${echapper(j.lines?.length ?? 0)} ligne(s), soit tout ce que
            ce conteneur a écrit depuis son démarrage.</p>`}
-      <p class="note"><strong>Ce texte vient du locataire</strong> et n’a été ni relu
-      ni caviardé : il peut contenir ce qu’il y a écrit, y compris un secret.</p>
+      <p class="avertissement" role="note"><strong>Ce texte vient du
+      locataire</strong> et n’a été ni relu ni caviardé : il peut contenir ce
+      qu’il y a écrit, y compris un secret.</p>
       ${j.lines?.length
-        ? `<pre class="terminal" tabindex="0" role="region"
-                aria-label="Journaux de ${echapper(etat.ouvert)}">${j.lines.map((l) =>
+        ? `<pre class="terminal terminal--journal" tabindex="0" role="region"
+                aria-label="Journaux de ${echapper(titre)}">${j.lines.map((l) =>
              `${l.at ? `${echapper(l.at)} ` : ''}${echapper(l.text)}`).join('\n')}</pre>`
         : '<p class="absence">Ce conteneur n’a rien écrit.</p>'}`;
 
   return `
-<section class="carte bloc" aria-labelledby="titre-conteneur">
-  <h2 id="titre-conteneur">${echapper(etat.ouvert)}</h2>
+<section class="carte bloc fiche-conteneur" aria-labelledby="titre-conteneur">
+  <h2 id="titre-conteneur">${echapper(titre)}</h2>
+  ${commandes}
   ${identite}
   ${journaux}
-  ${fermer}
 </section>`;
 }

@@ -1919,7 +1919,7 @@ test('ouvrir un conteneur montre son identité, ses réseaux et ses journaux', a
     assert.match(lignes[0], /^2026-08-20T18:52:\d\d\.000000000Z ligne 1$/);
 
     // §37.6 ter : l'exploitant doit savoir qu'il lit un texte non relu.
-    assert.match(ecran, /vient du locataire/);
+    assert.match(ecran, /vient du\s+locataire/);
     assert.match(ecran, /ni caviardé/);
 
     // §36.7 : ces lectures ne se journalisent pas non plus.
@@ -1994,10 +1994,45 @@ test('un conteneur DISPARU pendant qu’on le regarde est dit, sans crier à la 
     const ecran = await page.textContent('.principal');
     // Le fait est DIT, et il n'est pas présenté comme un défaut de la console.
     assert.ok(!/rien écrit/.test(ecran), 'un absent n’a pas « rien écrit »');
-    assert.ok(!/panne|erreur interne/i.test(ecran));
+    // §25.1 : le rouge est réservé au refus du serveur. Une course perdue est un
+    // avertissement — la dire en rouge contredirait à l'œil le texte qui la dit.
+    assert.equal(await page.$$eval('.refus', (l) => l.length), 0);
+    assert.ok(await page.$('.avertissement'));
     // Et le retour à la liste reste offert : on n'est pas coincé sur un absent.
     await page.click('button[data-docker="fermer"]');
     await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+  });
+});
+
+test('sur 390 px, les journaux défilent dans LEUR bloc et la page ne déborde pas', async () => {
+  await parcours('docker-conteneur-etroit', async () => {
+    // §8.1 : la page ne défile jamais horizontalement. Un journal contient des
+    // lignes très longues — une requête HTTP complète en fait couramment cent
+    // cinquante colonnes — et c'est LUI qui doit défiler, pas l'écran.
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+    await page.click('button[data-conteneur="helo-web-1"]');
+    await page.waitForSelector('pre.terminal', { timeout: 15000 });
+
+    const avant = await page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mesure = await page.evaluate(() => {
+      const large = document.documentElement.clientWidth;
+      const pre = document.querySelector('pre.terminal');
+      const fiche = document.querySelector('.fiche-conteneur');
+      const deborde = (n) => n
+        ? Math.round(n.getBoundingClientRect().right - large) : null;
+      return { journal: deborde(pre), fiche: deborde(fiche),
+               // Le journal DOIT défiler chez lui : sans quoi il n'y aurait rien
+               // à faire des lignes longues, sinon les tronquer.
+               defile: pre ? pre.scrollWidth > pre.clientWidth : false };
+    });
+    await page.setViewportSize(avant);
+    assert.ok(mesure.journal <= 1, `le journal déborde de ${mesure.journal} px`);
+    assert.ok(mesure.fiche <= 1, `la fiche déborde de ${mesure.fiche} px`);
+    // La barre d'onglets, elle, déborde — c'est INC-07, antérieur à cette unité
+    // et consigné au registre. On ne le corrige pas ici, et on ne le masque pas
+    // non plus : cette preuve mesure ce que l'unité AJOUTE.
   });
 });
 

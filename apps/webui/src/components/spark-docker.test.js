@@ -226,8 +226,10 @@ test('une liste NON LUE se dit, elle ne se rend pas « aucun »', () => {
   const nonLues = renderConteneur(etat({
     ouvert: 'web', journaux: JOURNAUX,
     detail: { ...INSPECTION, networks: null, mounts: null } }));
-  assert.match(nonLues, /Réseaux : non lus/);
-  assert.match(nonLues, /Montages : non lus/);
+  // Deux fois « non lus », une fois par liste, et sous leur propre titre.
+  assert.equal((nonLues.match(/Non lus/g) ?? []).length, 2);
+  assert.match(nonLues, /<h3>Réseaux<\/h3>/);
+  assert.match(nonLues, /<h3>Volumes et montages<\/h3>/);
 
   const vides = renderConteneur(etat({
     ouvert: 'web', journaux: JOURNAUX,
@@ -241,9 +243,12 @@ test('l’écran AVERTIT que les journaux viennent du locataire', () => {
   // doit savoir qu'il lit un texte que personne n'a relu ni caviardé.
   const rendu = renderConteneur(etat({ ouvert: 'web', detail: INSPECTION,
                                        journaux: JOURNAUX }));
-  assert.match(rendu, /vient du locataire/);
+  assert.match(rendu, /vient du\s+locataire/);
   assert.match(rendu, /ni caviardé/);
   assert.match(rendu, /secret/);
+  // Un RISQUE, pas un refus : accent, jamais rouge (docs/DAT.md §25.1).
+  assert.match(rendu, /class="avertissement"/);
+  assert.ok(!/class="refus"/.test(rendu));
 });
 
 test('une TRONCATURE est annoncée, et le nombre de lignes est dit sinon', () => {
@@ -266,15 +271,44 @@ test('un conteneur qui n’a RIEN écrit le dit', () => {
   assert.ok(!/<pre/.test(rendu));
 });
 
-test('un conteneur DISPARU est une alerte, et n’affiche pas de journaux vides', () => {
+test('un conteneur DISPARU n’est pas un REFUS, et n’affiche pas de journaux vides', () => {
+  // RÈGLE RÉVISÉE le 2026-08-20, vue sur la capture : l'écran écrivait « c'est
+  // un état normal, pas une panne » sur le fond ROUGE du refus. Il se
+  // contredisait à l'œil avant même d'être lu. Le §25.1 réserve le rouge au
+  // refus du serveur ; une course perdue est un avertissement.
   const rendu = renderConteneur(etat({
     ouvert: 'parti',
     detail: { state: 'conteneur_inconnu', titre: 'Ce conteneur a disparu',
               detail: 'Il a été supprimé depuis le dernier relevé.' },
     journaux: { state: 'conteneur_inconnu', lines: [] } }));
-  assert.match(rendu, /role="alert"/);
   assert.match(rendu, /a disparu/);
+  assert.match(rendu, /class="avertissement"/);
+  assert.ok(!/class="refus"|role="alert"/.test(rendu));
   assert.ok(!/rien écrit/.test(rendu), 'ne pas dire « rien écrit » d’un absent');
+});
+
+test('un conteneur disparu ENTRE l’identité et les journaux est quand même dit', () => {
+  // Le cas rencontré au parcours : l'inspection avait abouti, les journaux non.
+  // L'écran restait MUET et affichait une fiche complète d'un conteneur qui
+  // n'existait plus (§14.5).
+  const rendu = renderConteneur(etat({
+    ouvert: 'web', detail: INSPECTION,
+    journaux: { state: 'conteneur_inconnu', lines: [], truncated: false } }));
+  assert.match(rendu, /a disparu/);
+  assert.match(rendu, /class="avertissement"/);
+  assert.ok(!/<pre/.test(rendu));
+  assert.ok(!/rien écrit/.test(rendu));
+});
+
+test('une lecture qui a VRAIMENT échoué reste, elle, un refus', () => {
+  // La nuance ne vaut que si l'autre cas garde sa couleur : un tunnel coupé
+  // n'est pas une course perdue, et l'exploitant a quelque chose à y faire.
+  const rendu = renderConteneur(etat({
+    ouvert: 'web', journaux: 'en-cours',
+    detail: { titre: 'Inspection impossible',
+              detail: 'Aucun tunnel ouvert vers « validation ».' } }));
+  assert.match(rendu, /class="refus"/);
+  assert.match(rendu, /role="alert"/);
 });
 
 test('l’inspection en cours ne se confond pas avec un conteneur sans réseau', () => {
@@ -289,8 +323,9 @@ test('les journaux sont ATTEIGNABLES au clavier (§22)', () => {
   // Un <pre> qui défile sans être focusable est illisible sans souris.
   const rendu = renderConteneur(etat({ ouvert: 'web', detail: INSPECTION,
                                        journaux: JOURNAUX }));
-  assert.match(rendu, /<pre class="terminal" tabindex="0"/);
-  assert.match(rendu, /aria-label="Journaux de web"/);
+  assert.match(rendu, /<pre class="terminal terminal--journal" tabindex="0"/);
+  assert.match(rendu, /aria-label="Journaux de helo-web-1"/,
+    'le libellé nomme ce que la Forge a rendu, pas ce qu’on a cliqué');
 });
 
 test('les journaux sont ÉCHAPPÉS — ils viennent d’un tiers', () => {
@@ -309,4 +344,39 @@ test('l’écran DIT que la collecte s’arrête quand on quitte l’onglet', ()
     status: 'pret', releve: { state: 'ok', containers: [CONTENEUR] } }));
   assert.match(rendu, /cinq secondes/);
   assert.match(rendu, /arrêté<\/strong> dès que vous le quittez/);
+});
+
+test('le titre est celui que la Forge a RENDU, pas celui qu’on a cliqué', () => {
+  // §14.9 : la Forge fait autorité. S'ils diffèrent, c'est le nom cliqué qui
+  // ment — et on ne saurait pas lequel des deux conteneurs on regarde.
+  const rendu = renderConteneur(etat({
+    ouvert: 'ce-qu-on-a-clique', detail: INSPECTION, journaux: JOURNAUX }));
+  assert.match(rendu, /<h2 id="titre-conteneur">helo-web-1<\/h2>/);
+
+  // Tant que l'inspection n'est pas revenue, le nom cliqué est tout ce qu'on a.
+  const attente = renderConteneur(etat({ ouvert: 'helo-web-1', detail: 'en-cours',
+                                         journaux: 'en-cours' }));
+  assert.match(attente, /<h2 id="titre-conteneur">helo-web-1<\/h2>/);
+});
+
+test('les commandes sont EN TÊTE, avant deux cents lignes de journal', () => {
+  // Un retour placé en pied oblige à traverser tout le texte pour revenir à la
+  // liste — un écran dont on ne sort qu'en défilant est un écran qui retient.
+  const rendu = renderConteneur(etat({ ouvert: 'web', detail: INSPECTION,
+                                       journaux: JOURNAUX }));
+  assert.ok(rendu.indexOf('data-docker="fermer"') < rendu.indexOf('<pre'));
+  assert.ok(rendu.indexOf('data-docker="fermer"') < rendu.indexOf('<h3>Réseaux'));
+});
+
+test('la disparition est dite UNE FOIS, pas deux', () => {
+  // Vue sur la capture : quand l'identité et les journaux la rapportent tous les
+  // deux, l'écran affichait deux encarts identiques l'un sous l'autre. Le même
+  // fait répété fait douter qu'il s'agisse du même fait.
+  const rendu = renderConteneur(etat({
+    ouvert: 'parti',
+    detail: { state: 'conteneur_inconnu', titre: 'Ce conteneur a disparu',
+              detail: 'Il n’existe plus sur ce Spark.' },
+    journaux: { state: 'conteneur_inconnu', lines: [] } }));
+  assert.equal((rendu.match(/a disparu/g) ?? []).length, 1);
+  assert.equal((rendu.match(/class="avertissement"/g) ?? []).length, 1);
 });

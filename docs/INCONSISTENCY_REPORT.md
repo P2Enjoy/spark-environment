@@ -103,6 +103,20 @@ coupables : a.onglet → 464 · a.onglet → 552
 
 **Ligne de base établie** (CloudWorker §2.4) : `git stash -u` sur
 `apps/webui/src` et `apps/webui/host`, mesure rejouée, **chiffres identiques**.
+
+**Reconstaté le** 2026-08-20 sur un autre écran, celui d'un conteneur ouvert
+(SPK-44, deuxième tranche). Mêmes coupables, mêmes onglets :
+
+```
+conteneur ouvert  scrollWidth 637 / vue 390   → la PAGE déborde de 247 px
+coupables : a.onglet (65 px) · a.onglet.onglet--courant (159 px) · a.onglet (247 px)
+```
+
+Ce que cette deuxième mesure ajoute : le défaut ne tient à aucun contenu
+particulier. Il ne vient ni du terminal ni du journal, qui défilent l'un et
+l'autre dans leur propre bloc — la preuve
+`sur 390 px, les journaux défilent dans LEUR bloc` le mesure séparément et passe.
+Il vient de la barre d'onglets seule, sur **tout** écran de Spark.
 Le défaut est donc préexistant et n'appartient pas à la tranche 4 de SPK-43.
 
 **Ce que cela viole.** `docs/DESIGN_SYSTEM.md` §8.1 : « La page ne défile jamais

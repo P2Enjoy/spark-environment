@@ -89,6 +89,9 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           // rendra. Les états d'absence ne se provoquent pas sur
                           // un faux `sshd` — ils se posent.
                           dockerReleve = null,
+                          // SPK-44, deuxième tranche : l'inspection et les
+                          // journaux d'un conteneur ouvert.
+                          dockerConteneur = null, dockerJournaux = null,
                           terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
@@ -129,6 +132,8 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     ...(terminaux ? { terminals: terminaux } : {}),
     ...(sondageSshd ? { probeSshd: async () => sondageSshd } : {}),
     ...(dockerReleve ? { readDocker: async (spark) => ({ spark, ...dockerReleve }) } : {}),
+    ...(dockerConteneur ? { readContainer: async () => dockerConteneur } : {}),
+    ...(dockerJournaux ? { readLogs: async () => dockerJournaux } : {}),
     fetch: async (url, options = {}) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
@@ -779,6 +784,73 @@ ctx.server.close();
     console.log(`  ${nom}.png`);
     ctx.server.close();
   }
+
+  // --- Le conteneur OUVERT (§37.6 ter) --------------------------------------
+  //
+  // Trois écrans, parce qu'ils appellent trois gestes différents : un conteneur
+  // qui tourne et qu'on inspecte, un conteneur ARRÊTÉ dont on cherche pourquoi,
+  // et un conteneur DISPARU pendant qu'on le regardait.
+  const ligne = (i) => ({
+    at: `2026-08-20T18:5${i % 6}:${String(i % 60).padStart(2, '0')}.284913001Z`,
+    text: i % 7 === 0
+      ? `10.77.0.1 - - [20/Aug/2026:18:52:${String(i % 60).padStart(2, '0')} +0000] `
+        + `"GET /api/clients?page=${i} HTTP/1.1" 200 4213 "-" "Mozilla/5.0"`
+      : `[info] requête ${i} servie en ${8 + (i % 40)} ms`,
+  });
+  const ouverts = [
+    ['98-docker-conteneur',
+     { name: 'crm-web-1', state: 'running', exitCode: null, image: 'nginx:alpine',
+       startedAt: '2026-08-20T15:41:07.118Z', finishedAt: null, restarts: 0,
+       networks: [{ name: 'crm_default', address: '172.18.0.3' },
+                  { name: 'crm_public', address: '172.19.0.2' }],
+       mounts: [{ type: 'bind', source: '/srv/crm/nginx.conf',
+                  destination: '/etc/nginx/conf.d/default.conf', mode: 'ro' },
+                { type: 'volume', source: 'crm_static',
+                  destination: '/usr/share/nginx/html', mode: 'rw' }] },
+     { lines: Array.from({ length: 200 }, (_, i) => ligne(i + 1)),
+       truncated: true, tail: 200 }],
+    ['99-docker-conteneur-arrete',
+     { name: 'crm-migration-1', state: 'exited', exitCode: 137,
+       image: 'crm/migrations:1.4', startedAt: '2026-08-20T16:02:11.004Z',
+       finishedAt: '2026-08-20T16:09:48.771Z', restarts: 2,
+       networks: [], mounts: [] },
+     { lines: [{ at: '2026-08-20T16:09:47.220Z', text: 'appliquant 0031_ajout_index…' },
+               { at: '2026-08-20T16:09:48.766Z',
+                 text: 'Killed — la migration a dépassé la mémoire allouée' }],
+       truncated: false, tail: 200 }],
+    ['100-docker-conteneur-disparu',
+     { state: 'conteneur_inconnu', titre: 'Ce conteneur a disparu',
+       detail: 'Il n’existe plus sur ce Spark. Le locataire a pu le supprimer '
+         + 'depuis le dernier relevé — c’est un état normal, pas une panne.' },
+     { state: 'conteneur_inconnu', lines: [], truncated: false, tail: 200 }],
+  ];
+  for (const [nom, conteneur, journaux] of ouverts) {
+    ctx = await demarrer({ dockerReleve: { state: 'ok', containers: inventaire },
+                           dockerConteneur: conteneur, dockerJournaux: journaux });
+    await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 1000 });
+    await page.waitForSelector('tbody tr', { timeout: 8000 });
+    await page.click(`button[data-conteneur="${conteneur.name ?? 'crm-web-1'}"]`);
+    await page.waitForSelector('#titre-conteneur', { timeout: 8000 });
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Inspection en cours'),
+      { timeout: 8000 });
+    await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
+    console.log(`  ${nom}.png`);
+    ctx.server.close();
+  }
+
+  // Un conteneur ouvert sur 390 px : les journaux ne doivent pas faire déborder
+  // la PAGE, ils défilent dans leur propre bloc (§8.1).
+  ctx = await demarrer({ dockerReleve: { state: 'ok', containers: inventaire },
+                         dockerConteneur: ouverts[0][1], dockerJournaux: ouverts[0][2] });
+  await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 1000 });
+  await page.waitForSelector('tbody tr', { timeout: 8000 });
+  await page.click('button[data-conteneur="crm-web-1"]');
+  await page.waitForSelector('pre.terminal', { timeout: 8000 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: join(SORTIE, '101-docker-conteneur-mobile.png') });
+  console.log('  101-docker-conteneur-mobile.png');
+  ctx.server.close();
 
   // Le format étroit : cinq colonnes ne tiennent pas sur 390 px, le tableau doit
   // défiler dans SON conteneur et la page ne doit pas déborder (§8.1).
