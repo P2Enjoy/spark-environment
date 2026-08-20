@@ -3,6 +3,20 @@
 ## [Non publié]
 
 ### Ajouté
+- **Le journal dit, ligne à ligne, ce que la Forge a vérifié de la signature**
+  (SPK-40, `docs/DAT.md` §36.10.9) : « signée » sur les gestes dont la Forge a
+  vérifié la signature à la réception, « non signée » sur ceux arrivés sans elle
+  — un état normal, pas un défaut —, « sans objet » sur les lignes du runtime,
+  que personne n'a demandées. La mention générale « Aucune entrée n'est signée »
+  a disparu : elle était vraie avant SPK-40 et fausse après.
+- **Un geste que la console n'a pas pu signer le DIT à l'écran**, dans la barre
+  latérale, sous le contexte du serveur. L'avertissement dit que le geste a bien
+  eu lieu, nomme ce qui manque, dit quoi faire — « ssh-add » —, et **s'efface de
+  lui-même** dès qu'un geste repart signé. En accent, jamais en rouge : la Forge
+  a accepté le geste.
+- **La clé de signature se déclare depuis l'écran *Serveurs***, champ *Clé de
+  signature*, pour tous les genres de serveur. Elle nomme une clé **publique** ;
+  laissée vide, les gestes partent non signés.
 - **La console signe les gestes qu'elle relaie** (SPK-40 deuxième tranche,
   `docs/DAT.md` §36.10.8), par l'agent SSH du responsable — la clé privée n'est
   jamais lue. Le champ `signingKey` de l'inventaire désigne la clé **publique**.
