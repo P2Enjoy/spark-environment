@@ -4776,3 +4776,68 @@ l'extérieur, et l'inspection des devices Incus avant et après. Le Spark `helo`
 reste en marche, sur décision du responsable ; le port publié pour la preuve a été
 retiré.
 
+
+## 2026-08-20 — SPK-53 : la console dit quel code la Forge exécute, et se tait quand elle ne sait pas
+
+**Unité** : SPK-53, première `[~]` du plan dont il restait du comportement
+livrable sans Forge réelle. Le runtime publiait l'empreinte depuis ce matin ; la
+console n'en faisait **rien**.
+
+### Ce que l'unité livre
+
+Une section « Code déployé » sur l'écran de la Forge, alimentée par une route
+neuve de l'hôte console. La comparaison vit là et pas dans `sparkd` : c'est le
+poste qui porte le dépôt, et la Forge est déployée par `rsync` **sans** `.git`.
+
+### Le point qui décide, et il n'était pas là où je l'attendais
+
+Ce n'est pas la comparaison — trois lignes de `git`. C'est **ce qu'on dit quand
+elle est impossible**. Trois verdicts sur six sont des non-réponses, et un seul
+affirme que tout va bien : celui qui l'a mesuré.
+
+Le §40.3 en annonçait **cinq**. En l'implémentant, un sixième est apparu :
+**aucun dépôt sur le poste**. C'est même le cas le plus probable en exploitation,
+chez quelqu'un qui ne développe pas. Le ranger dans « build étrangère » aurait été
+faux — on ne sait pas si elle est étrangère, on n'a rien pour le dire. Le §40.3
+est corrigé : une spécification qui annonce cinq cas pendant que le code en traite
+six a cessé d'être vraie.
+
+Et le cas qui trompe le plus est « c'est le **poste** qui est en retard ». Le
+§40.3 le listait sans dire sa conséquence : traité comme un défaut de la Forge, il
+enverrait redéployer une version *plus ancienne* que celle qui tourne. Un écran
+qui se trompe là ne se contente pas d'informer mal — il fait régresser une machine
+en service. Il n'est donc ni en rouge ni annoncé, et une preuve garde la
+différence.
+
+### Un parti pris de preuve
+
+Les dix preuves du module montent un **vrai dépôt jetable** plutôt qu'un `git`
+simulé. C'est l'ascendance des commits qu'on éprouve, et un doublon ne prouverait
+que sa propre fidélité.
+
+### Un défaut trouvé par la campagne, et sa signature
+
+Un parcours du rootless de SPK-54 était **vert lancé seul et rouge dans la
+campagne**. Ce n'était pas la contention de machine mesurée cet après-midi : mes
+deux parcours supposaient un Spark vierge sur un Spark qu'un parcours antérieur
+avait déjà amorcé, et ma propre règle de conflit de mode (§42.2 bis) refusait
+donc la bascule. Les deux symptômes se ressemblent et n'ont rien à voir.
+Corrigé — ils prennent « boutique », qu'aucun autre n'amorce, et le démarrent
+depuis l'écran puisque l'amorçage exige une cellule qui tourne.
+
+### Vérifications
+
+Campagne complète **verte** : 698 tests Python, 6 de contrat, 624 de console,
+8 de gestes, 52 parcours E2E, 7 du manuel, `build`. Captures `90-` à `92-`
+observées — en retard, à jour, non estampillée — plus
+`docs/manuel/images/m4-code-deploye.png` produite depuis la pile réelle.
+
+**SPK-53 reste `[~]`**, avec un seul écart : la **commande de mise à jour** depuis
+l'écran. Le §40 ne la spécifie pas, et ce n'est pas une finition — elle ferait
+redéployer `sparkd` sur une machine en service depuis un bouton. Ce que « mettre
+à jour » veut dire demande une décision du responsable (`CLAUDE.md` §9).
+
+**Où reprendre.** SPK-44 (onglet Docker), première `[ ]` du plan à porter du
+comportement, qui emprunte le transport de SPK-43. SPK-54 attend l'autorisation
+du responsable pour ses deux derniers écarts, et SPK-53 la sienne pour le geste
+de mise à jour.
