@@ -3200,3 +3200,64 @@ encore « hôte » au sens de la machine, puis les noms de fichiers de la consol
 Ensuite SPK-46 (la console traduit), SPK-36 (la sauvegarde du registre), SPK-28
 (le schéma de partitionnement), SPK-35 (le modèle de menace). INC-03 et INC-04
 attendent un arbitrage.
+
+## 2026-08-20 — Quatre arbitrages, et le périmètre de l'ingress se réouvre
+
+**Ce qui a déclenché.** Le responsable a corrigé une vue trop étroite du §38 :
+sur une Forge vivent plusieurs Sparks, chacun hébergeant une application qui doit
+répondre sur des **noms de domaine** — jokers compris — et sur des **ports**. Le
+modèle « un domaine exact → un port HTTP » ne couvre pas ce besoin.
+
+**Arbitrage 1 — INC-04 est classée.** Le retrait des deux `TXT` liés à
+`xrp-academy` était volontaire. L'entrée sort du rapport d'incohérences. Ce que
+la mesure a établi reste vrai et reste utile : le produit n'a aucune méthode de
+suppression, et un test le prouve sur la surface publique du client.
+
+**Arbitrage 2 — INC-03 devient une règle.** Une instance rapportée absente vaut
+suppression réussie (§14.5, unité SPK-52). Trois bornes l'empêchent de devenir un
+mensonge : l'audit porte `instance_absente` et le dit ; un pilote **injoignable**
+rend toujours une panne — ne pas pouvoir demander n'est pas savoir que ce n'est
+pas là, même règle qu'au §33.3 ; un Spark protégé reste refusé par le §35.
+
+**Arbitrage 3 — le joker.** `*.monapi.fr` devient une route valide, un seul
+niveau, en tête seulement, et le plus spécifique gagne — la règle du DNS et celle
+de Caddy. En adopter une autre ferait diverger l'écran du trafic réel. Le point
+qui n'est pas évident et qui est écrit au §18.3 bis : quand une route exacte
+prend le pas sur le joker d'un **autre** Spark, l'écran doit NOMMER ce Spark.
+Sans cela, on détourne une adresse sans le savoir et la panne se cherche du
+mauvais côté.
+
+**Arbitrage 4 — les ports, tranchés par la messagerie.** Le responsable a demandé
+la différence entre les deux mécanismes, sur ses propres exemples. La réponse
+mesure l'ampleur réelle du besoin :
+
+- **par le nom**, donc rien à faire de plus : Ollama, Vite, Keycloak, GoTrue,
+  MinIO, les fonctions de bord, et les **WebSockets** — qui commencent par une
+  requête HTTP avant de changer de protocole ;
+- **par le port** : uniquement ce qui ne prononce aucun nom. Sur toute la liste
+  citée, un seul cas — Postgres joignable de l'extérieur, dans un Supabase
+  complet.
+
+Le `:9012` de l'exemple `*.monapi.fr:9012` n'est donc **pas nécessaire** si l'API
+parle HTTP : le nom suffit, et le Spark continue d'écouter sur 9012 à
+l'intérieur. Le port dans l'URL est une habitude de développement.
+
+**Ce qui tranche vraiment**, c'est la suite annoncée : des Sparks hébergeant
+**Mailcow**. Un SMTP reçoit sur le port 25 sans qu'aucun nom soit prononcé —
+aucun proxy ne peut deviner le destinataire. Les deux mécanismes sont donc
+nécessaires, et le port publié n'est plus optionnel. §39 écrit.
+
+**Trois limites écrites AVANT d'être rencontrées** (§38.7), parce qu'elles
+coûteraient des jours autrement : le `PTR` ne vit pas dans la zone mais chez le
+propriétaire de l'adresse IP, par une autre API ; le port 25 sortant est bloqué
+par défaut chez l'hébergeur et son déblocage est une **action humaine** ; une
+adresse neuve a une réputation à construire. Une recette de messagerie affichera
+ces trois points comme restant à faire, à côté de ce qu'elle a écrit.
+
+**Et une contrainte qui décide de l'ordre** : la clé DKIM est produite par
+Mailcow et doit être **lue dans le Spark**. L'inventer produirait une signature
+invalide, donc l'effet exact qu'on prétend éviter. SPK-51 dépend donc de SPK-43.
+
+**Ordre retenu** : SPK-48 (le joker, peu coûteux et utile tous les jours), puis
+SPK-49 (les ports, prérequis dur), puis SPK-50 (les recettes), puis SPK-51
+(la messagerie). SPK-52 est indépendant et court.

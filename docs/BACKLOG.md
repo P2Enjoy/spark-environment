@@ -1611,6 +1611,111 @@ Le produit disait « le DNS est extérieur au produit », et SPK-12 restait
 - **Reste hors de cette unité** : l'émission TLS elle-même (SPK-12), qui exige un
   serveur joignable depuis l'extérieur.
 
+### [ ] SPK-48 · Le joker sur une route, et la préséance du plus spécifique
+
+Une API qui donne un sous-domaine par client ne peut pas déclarer une route et un
+enregistrement DNS par locataire, à la main, indéfiniment.
+
+- Spécification : `docs/DAT.md` §18.3 bis (le joker et sa préséance), §18.4
+  (l'unicité appartient à la base), §38.3 · `docs/SCHEMA.md` · manuel M7.
+- Portée : `*.monapi.fr` devient une route valide ; un enregistrement DNS joker
+  se pose depuis le même bouton qu'au §38 ; l'écran NOMME le Spark dont une
+  route exacte prend le pas quand elle est avalée par le joker d'un autre.
+- Bornes, portées par la base : un seul niveau, en tête seulement. `*.*.x.tld`,
+  `api.*.x.tld` et `*` seul sont refusés, et le refus dit laquelle des trois
+  bornes s'applique.
+- Ce qui NE change pas : deux routes de même texte se refusent toujours. Un
+  joker et un nom exact ne sont pas le même nom.
+- Hors portée : le certificat joker, qui exige une validation `DNS-01`. Le §18.3
+  continue de valoir — l'écran n'affirme jamais qu'un certificat est émis.
+- DoD : tests des trois bornes et de la préséance ; un test prouve qu'un nom
+  exact l'emporte sur un joker au niveau de la configuration produite, pas
+  seulement à l'écran ; parcours E2E depuis le parcours canonique — déclarer
+  `*.exemple.test` sur un Spark, puis `admin.exemple.test` sur un autre, et voir
+  l'écran NOMMER le premier ; captures observées ; manuel M7 mis à jour.
+
+### [ ] SPK-49 · Publier un port de la Forge vers un Spark
+
+Ce qui ne parle pas HTTP n'a aucun autre chemin : un SMTP, un Postgres, un Redis
+ou un SSH joignable de l'extérieur ne se route pas par nom.
+
+- Spécification : `docs/DAT.md` §39 (§39.1 pourquoi deux mécanismes, §39.2 un
+  port est une ressource de la Forge, §39.3 ce qu'il fait perdre) · §18 ·
+  `docs/SCHEMA.md` · `docs/DESIGN_SYSTEM.md` §6.27 · manuel M7.
+- Dépend de : rien. C'est le prérequis de SPK-51.
+- Portée : déclarer `port public de la Forge → adresse privée et port du Spark` ;
+  l'unicité du port portée par la **base** ; le pare-feu ouvert à la déclaration
+  et refermé au retrait ; la liste des ports publiés d'une Forge.
+- Refus à éprouver, chacun nommant sa raison : port déjà pris — en NOMMANT le
+  Spark qui le détient —, port réservé au système de la Forge (`22`, `80`,
+  `443`, et la liste configurable), port hors bornes.
+- L'écran propose le **nom d'abord** et annonce ce que le port publié coûte : pas
+  de certificat automatique, l'application doit faire son TLS. Il ne l'interdit
+  pas, il le dit (§39.3).
+- DoD : tests unitaires des refus ; un test d'intégration prouve que l'unicité
+  vient de la base et non de l'écran ; un test prouve que le retrait REFERME le
+  pare-feu ; parcours E2E depuis le parcours canonique — publier un port,
+  constater le conflit nommé sur un second Spark, retirer ; captures observées ;
+  manuel M7 mis à jour.
+
+### [ ] SPK-50 · Recettes DNS : un jeu d'enregistrements posé ensemble
+
+Une recette à moitié posée est pire qu'une recette absente : un `MX` sans SPF
+fait recevoir du courrier qu'on ne peut pas renvoyer.
+
+- Spécification : `docs/DAT.md` §38.6 (les recettes), §38.7 (ce que le DNS ne
+  peut pas faire), §38.2, §38.5 · manuel M7.
+- Dépend de : SPK-47.
+- Portée : la garde du §38.5 s'élargit à `MX`, `TXT` et `SRV` ; une recette est
+  présentée **entière** avant écriture et rend compte enregistrement par
+  enregistrement après ; chaque enregistrement continue de viser un nom ET un
+  type exacts.
+- **L'interdiction de toucher ce que le produit n'a pas posé se durcit** : ce
+  sont précisément les enregistrements dont la disparition arrête une messagerie
+  sans bruit.
+- Une recette affiche les **actions humaines restantes** qu'elle ne peut pas
+  faire (§38.7) : le `PTR`, qui n'est pas dans la zone ; le port 25 sortant,
+  bloqué par défaut chez l'hébergeur ; la réputation d'une adresse neuve.
+- DoD : tests de la garde élargie ; un test prouve qu'une recette dont un
+  enregistrement échoue rend compte des deux — ce qui est passé et ce qui ne
+  l'est pas — sans prétendre à un succès ; parcours E2E depuis le parcours
+  canonique contre le doublon local ; captures observées ; manuel M7 mis à jour.
+
+### [ ] SPK-51 · Un Spark qui héberge une messagerie, et sa recette DNS
+
+- Spécification : `docs/DAT.md` §38.6, §38.7, §39 · manuel M7 et M8.
+- Dépend de : SPK-49 (les ports 25, 465, 587, 143, 993 ne passent pas par le
+  proxy), SPK-50 (la recette), et SPK-43 pour lire la clé DKIM dans le Spark.
+- Portée : préréglage « messagerie » qui compose la recette du §38.6 à partir du
+  domaine et de l'adresse de la Forge, et publie les ports nécessaires.
+- **La valeur DKIM ne s'invente pas.** Tant que SPK-43 n'existe pas, la recette
+  pose ce qu'elle connaît et **demande la clé à l'exploitant en disant où la
+  trouver** — une clé inventée produirait une signature invalide, donc l'effet
+  exact qu'elle prétend éviter.
+- DoD : parcours E2E depuis le parcours canonique jusqu'à la recette posée et ses
+  actions humaines restantes affichées ; captures observées ; manuel mis à jour.
+  Le fonctionnement réel d'un envoi **ne pourra pas être prouvé** tant que le
+  port 25 sortant n'est pas débloqué par l'hébergeur : cette limite est écrite
+  dans l'unité, elle n'est pas contournée par une simulation.
+
+### [ ] SPK-52 · Une instance déjà absente vaut suppression réussie
+
+Arbitrage du responsable du 2026-08-20, qui remplace l'entrée INC-03 du rapport
+d'incohérences — retirée dans le même changement.
+
+- Spécification : `docs/DAT.md` §14.5, §14.4, §14.3 · §33.3 (ne pas savoir n'est
+  pas savoir que ce n'est pas là) · §35.
+- Portée : quand le pilote rapporte l'instance absente, `delete` réussit, la
+  ligne part et les ressources sont rendues.
+- Trois bornes, chacune éprouvée : l'audit porte `instance_absente: true` et le
+  dit en toutes lettres ; un pilote **injoignable** rend toujours une panne ; un
+  Spark **protégé** reste refusé par le §35 d'abord.
+- DoD : test unitaire des trois bornes ; test d'intégration sur le registre réel
+  prouvant que les ressources sont rendues et que l'admission les récupère ;
+  parcours E2E depuis le parcours canonique sur un Spark dont le pilote factice
+  rapporte l'instance absente ; le journal montre les deux suppressions
+  distinctement ; captures observées.
+
 ---
 
 ## Réservé, non planifié

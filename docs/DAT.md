@@ -1335,6 +1335,42 @@ La ressource n'est rendue **qu'à la disparition de la ligne** (§7.7). Un Spark
 `deleting` compte donc encore. C'est ce qui empêche qu'une suppression lente
 laisse admettre un Spark dans une place pas encore libérée.
 
+### 14.5 Une instance déjà absente vaut suppression réussie
+
+**Arbitrage du responsable, 2026-08-20** (remplace l'entrée INC-03 du rapport
+d'incohérences, retirée dans le même changement).
+
+Mesuré le 2026-08-19 : un Spark en `error`, dont l'instance Incus avait été
+supprimée hors du produit, restait indéfiniment au registre. `delete` rendait
+`502`, l'entrée continuait de peser dans l'admission, et aucun redémarrage ne la
+retirait — la reprise du §14.3 ne traite que les états **transitoires**, et
+`error` est stable. Le seul recours était d'ouvrir le registre à la main, ce que
+la console existe précisément pour éviter.
+
+**La règle.** Quand le pilote rapporte que l'instance n'existe pas, `delete`
+**réussit** : la ligne part, les ressources sont rendues, la route et les clés
+suivent comme au §14.4.
+
+**Trois choses que cette règle ne fait pas**, parce qu'elles feraient d'un succès
+un mensonge :
+
+- elle ne **cache pas** l'écart : l'entrée d'audit porte
+  `instance_absente: true` et son message le dit en toutes lettres. Un `delete`
+  ordinaire et un `delete` sur une instance disparue ne se lisent pas pareil au
+  journal ;
+- elle ne s'applique qu'à une **absence rapportée**, jamais à un pilote
+  injoignable. Ne pas pouvoir demander n'est pas savoir que ce n'est pas là —
+  c'est la même règle qu'au §33.3 pour le catalogue d'images. Un pilote muet rend
+  toujours une panne ;
+- elle ne vaut pas pour un Spark **protégé** : le §35 s'applique d'abord, et une
+  instance absente n'est pas une raison de contourner une protection armée.
+
+**Le risque assumé.** Si le pilote se trompe et rapporte absente une instance qui
+vit, la ligne disparaît et l'instance continue de consommer sans être comptée. Ce
+risque existait déjà en sens inverse — une ligne comptée pour rien — et il est
+détectable : la réconciliation compare le registre au pilote, et une instance
+sans ligne est visible depuis Incus.
+
 ## 15. Adressage du réseau privé
 
 Le §5 pose le bridge privé. Cette section fixe **qui attribue les adresses**, ce
@@ -1584,6 +1620,45 @@ pas la résolution pour autant, et l'écran ne l'annonce jamais (§38.4).
 Un domaine mal pointé produit donc encore un échec d'émission côté Caddy, pas une
 erreur de `sparkd` — et la console doit présenter cet écart comme tel plutôt que
 de laisser croire à une panne du plan de contrôle.
+
+### 18.3 bis Le joker, et la règle de préséance
+
+**Arbitrage du responsable, 2026-08-20.** Une route peut porter un **joker de
+premier niveau** : `*.monapi.fr`.
+
+Le besoin est réel et il n'a pas de contournement : une API qui donne un
+sous-domaine par client ne peut pas déclarer une route et un enregistrement DNS
+par locataire, à la main, indéfiniment. Le joker est aussi ce que Caddy et le DNS
+font tous les deux nativement — il n'y a donc rien à simuler.
+
+**Un seul niveau, et pas ailleurs qu'en tête.** `*.monapi.fr` est valide.
+`*.*.monapi.fr` ne l'est pas, `api.*.monapi.fr` non plus, et `*` seul non plus —
+il désignerait la zone entière. Cette borne suit celle du DNS, où un joker ne
+couvre qu'un seul niveau et ne vaut qu'en position initiale.
+
+**La préséance : le plus spécifique gagne.** `api.monapi.fr` déclaré par un Spark
+l'emporte sur `*.monapi.fr` déclaré par un autre. C'est la règle du DNS et celle
+de Caddy ; en adopter une autre ferait diverger ce que le produit affiche de ce
+que le trafic fait réellement.
+
+**Ce que l'unicité devient.** Le §18.4 disait « deux Sparks ne peuvent pas
+revendiquer le même nom ». Cela reste vrai **à l'identique** : deux routes de
+même texte se refusent toujours. Mais un joker et un nom exact ne sont PAS le
+même nom, et leur coexistence est légitime — c'est même l'usage courant : un
+`*.monapi.fr` général, et un `admin.monapi.fr` pointé ailleurs.
+
+**Ce que l'écran doit dire, parce que sinon personne ne le devinera.** Quand une
+route exacte est avalée par le joker d'un **autre** Spark, la déclaration
+réussit et l'écran NOMME le Spark dont elle prend le pas. Un exploitant qui
+déclare `admin.monapi.fr` doit savoir qu'il vient de détourner une adresse qui
+partait ailleurs — silence ici produirait une panne cherchée pendant des heures
+du mauvais côté.
+
+**Côté TLS**, un certificat joker exige une validation par enregistrement DNS —
+`DNS-01` — là où un nom exact se valide par HTTP. Le §38 rend cette validation
+possible pour la première fois, puisque la console sait écrire dans la zone ;
+elle n'est pas pour autant implémentée, et le §18.3 continue de valoir : l'écran
+n'affirme jamais qu'un certificat est émis.
 
 ### 18.4 L'unicité du domaine appartient à la base
 
@@ -4056,3 +4131,115 @@ Ces refus ne sont pas des précautions d'usage : ce sont des règles, et un test
 responsable : seuls les noms de la forme `test.<label>` de la zone `lelabs.tech`
 sont écrits. Elle vaut pour le harnais, pas pour le produit — un exploitant gère
 sa zone entière.
+
+### 38.6 Les recettes DNS, et pourquoi une seule écriture ne suffira pas
+
+**Décision du responsable, 2026-08-20.** Une prochaine itération fera héberger
+des serveurs de messagerie — Mailcow — par des Sparks, et la console devra poser
+leur DNS **d'un geste**, comme Scaleway le fait pour ses e-mails transactionnels.
+
+Le §38.3 ne connaît qu'un enregistrement, `A` ou `AAAA`. Une messagerie en exige
+un jeu **cohérent**, dont l'absence d'un seul membre suffit à faire classer tout
+le courrier en indésirable :
+
+| Enregistrement | Ce qu'il dit | D'où vient sa valeur |
+|---|---|---|
+| `A` / `AAAA` de `mail.<domaine>` | où est le serveur | l'adresse de la Forge |
+| `MX` | à qui remettre le courrier de ce domaine | `mail.<domaine>` |
+| `TXT` SPF | quelles adresses ont le droit d'émettre pour ce domaine | l'adresse de la Forge |
+| `TXT` DKIM | la clé publique qui signe les messages | **le Spark**, qui la génère |
+| `TXT` DMARC | quoi faire d'un message qui échoue aux deux précédents | choix de l'exploitant |
+| `SRV` / `CNAME` d'autoconfiguration | comment un client mail se configure seul | conventions |
+
+**Une recette est donc un jeu d'enregistrements écrit ENSEMBLE**, pas une suite
+d'écritures indépendantes. Une recette à moitié posée est pire qu'une recette
+absente : un `MX` sans SPF fait recevoir du courrier qu'on ne peut pas renvoyer.
+L'écran présente donc la recette **entière** avant d'écrire, et rend compte de
+chaque enregistrement individuellement après.
+
+**La valeur DKIM ne s'invente pas.** Elle est produite par Mailcow au moment où
+le domaine y est créé, et elle doit être **lue dans le Spark**. Une recette qui
+inventerait cette clé produirait une signature invalide, donc exactement l'effet
+qu'elle prétend éviter. Cette lecture dépend du transport vers le Spark
+(SPK-43) : tant qu'il n'existe pas, la recette pose ce qu'elle connaît et
+**demande la valeur DKIM à l'exploitant**, en disant où la trouver.
+
+**La garde du §38.5 s'élargit, et sa règle centrale se durcit.** Écrire `MX`,
+`TXT` et `SRV` devient nécessaire ; l'interdiction de toucher un enregistrement
+que le produit n'a pas posé devient, elle, **plus** importante et non moins :
+c'est précisément le genre d'enregistrement dont la disparition arrête une
+messagerie sans bruit. Chaque enregistrement d'une recette continue de viser un
+nom ET un type exacts.
+
+### 38.7 Ce que le DNS ne peut pas faire, et qu'il faut dire avant
+
+Trois conditions d'une messagerie qui fonctionne **ne sont pas dans la zone**. Le
+produit ne les posera pas, et prétendre le contraire ferait perdre des jours :
+
+1. **Le DNS inverse (`PTR`).** Il se déclare chez le propriétaire de l'adresse
+   IP — la configuration du serveur chez l'hébergeur —, pas dans la zone du
+   domaine. C'est une API différente. Sans `PTR` cohérent avec le nom du
+   serveur, la plupart des destinataires refusent le courrier ou le classent.
+2. **Le port 25 sortant.** Il est bloqué par défaut chez la quasi-totalité des
+   hébergeurs, Scaleway compris, et son déblocage demande une **requête humaine
+   explicite**. Aucun enregistrement DNS n'y changera rien.
+3. **La réputation de l'adresse.** Une adresse neuve est traitée avec méfiance
+   pendant des semaines, quels que soient les enregistrements posés.
+
+Une recette de messagerie affiche donc ces trois points comme des **actions
+humaines restantes**, nommées, à côté de ce qu'elle a écrit. C'est la seule
+façon honnête de livrer cette fonction : le produit fait la part qui lui revient
+et dit précisément où s'arrête son pouvoir.
+
+## 39. Les ports publiés : ce qui ne parle pas HTTP
+
+**Décision du responsable, 2026-08-20**, forcée par le besoin de messagerie.
+
+### 39.1 Deux mécanismes, et pourquoi il en faut deux
+
+Le §18 route par **nom** : toutes les routes partagent `:80` et `:443`, et le
+proxy lit dans la requête le nom demandé pour choisir le Spark. C'est ce qui
+permet à des dizaines de Sparks de partager une seule adresse publique, avec un
+certificat automatique par nom.
+
+Cela suppose que le client **annonce** le nom. C'est le cas de HTTP, de HTTPS, et
+donc — c'est moins évident — des WebSockets, qui commencent par une requête HTTP
+avant de changer de protocole. Ollama, Vite, Keycloak, GoTrue, MinIO, les
+fonctions de bord et l'ensemble des services web d'un Supabase relèvent tous du
+§18 : **aucun n'a besoin d'un port publié**.
+
+Un serveur SMTP, lui, reçoit une connexion sur le port 25 sans qu'aucun nom ne
+soit prononcé. Postgres, Redis, SSH, MQTT sont dans le même cas. Le seul élément
+qui permette alors de désigner le Spark destinataire est **le port sur lequel la
+connexion est arrivée**.
+
+D'où le second mécanisme : la Forge fait suivre un port public vers l'adresse
+privée et le port d'un Spark.
+
+### 39.2 Un port public est une ressource de la Forge, pas du Spark
+
+C'est la différence qui structure tout le reste. Un nom appartient à celui qui le
+possède, et deux Sparks peuvent en porter autant qu'ils veulent. Un port public
+est **unique sur la machine** : le premier qui le prend le prend.
+
+Conséquences :
+
+- le registre tient une table des ports publiés, et l'unicité est portée par la
+  **base**, comme celle du domaine au §18.4 ;
+- un conflit est refusé en **nommant le Spark** qui détient déjà le port ;
+- les ports réservés au système de la Forge — dont `22`, `80` et `443` — ne sont
+  jamais attribuables, et le refus dit pourquoi ;
+- la publication ouvre le pare-feu, et la retirer le referme. Un port ouvert vers
+  un Spark arrêté est une surface offerte sans service derrière.
+
+### 39.3 Ce qu'un port publié fait perdre, et qui doit être dit à l'écran
+
+Le TLS automatique. Le proxy obtient et renouvelle les certificats parce qu'il
+comprend le protocole ; un port transporté tel quel ne lui passe pas devant.
+**L'application dans le Spark doit donc faire son propre TLS** — Postgres,
+MinIO et Mailcow savent le faire, mais il faut le savoir.
+
+L'écran propose donc le nom **d'abord**, et présente le port publié comme un
+second geste qui **annonce ce qu'il coûte**. Publier un port pour une application
+qui parle HTTP est presque toujours une erreur : on perd le certificat
+automatique sans rien gagner. Le produit ne l'interdit pas — il le dit.
