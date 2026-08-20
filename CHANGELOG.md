@@ -98,6 +98,15 @@
   Le harnais E2E impose son propre fichier d'environnement et un doublon local
   du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
 
+- Unité SPK-46 : **la console traduit les états que le serveur rapporte.** Le
+  journal affichait « starting » → « running » à quelques centimètres d'un badge
+  qui disait « En marche ». Le journal reste technique — il sert au diagnostic —
+  et c'est l'affichage qui traduit, dans la facette *Journal* d'un Spark comme
+  dans l'onglet de supervision. Le message d'erreur de tunnel suit.
+
+  Elle ne devine pas : un nom de serveur cité entre guillemets n'est pas un état
+  et n'est pas déformé, et un message inconnu traverse mot pour mot.
+
 - Unité SPK-52 : **supprimer un Spark dont la cellule a déjà disparu réussit.**
   Auparavant la ligne restait indéfiniment au registre, occupait de la place dans
   les pools, et le seul recours était d'ouvrir la base à la main.
