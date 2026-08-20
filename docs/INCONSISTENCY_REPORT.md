@@ -99,3 +99,39 @@ une entrée dans ce cas.
 absente comme un succès — la ligne disparaît, la ressource est rendue — plutôt
 que comme une panne ?
 
+
+### INC-04 · Deux enregistrements TXT de la zone `lelabs.tech` ne sont plus là
+
+**Constaté le** 2026-08-20, en travaillant sur SPK-47, entre deux lectures de la
+même zone au même compte.
+
+**Mesure.** Avant toute écriture, le 2026-08-19, `GET /dns-zones/lelabs.tech/records`
+rendait `total_count: 17`, et l'inventaire relevé alors portait notamment un
+`TXT _dmarc.xrp-academy` et **deux** enregistrements DKIM.
+
+Le 2026-08-20, après l'écriture du seul `test.spark A 203.0.113.7`, la même
+requête rend `total_count: 16`, dont l'enregistrement qui vient d'être posé. Il
+reste donc **15 enregistrements préexistants** contre 17 la veille. Manquent :
+
+- `_dmarc.xrp-academy` TXT ;
+- un des deux DKIM (celui qui ne porte pas `noreply`).
+
+**Ce que cet écart n'explique pas, et ce qu'il faut retenir.** L'écriture du
+produit est un `set` visant `{name: "test.spark", type: "A"}` : elle ne peut pas
+sélectionner deux TXT dont les noms ne contiennent ni ce nom ni ce type. Le
+client de la console ne possède d'ailleurs **aucune** méthode de suppression, et
+un test le prouve sur sa surface publique. Les deux enregistrements manquants
+partagent en revanche le même sujet — `xrp-academy` —, ce qui ressemble à un
+retrait délibéré de la configuration de messagerie de ce sous-domaine.
+
+**Ce qui a été tenté pour trancher, sans succès** :
+`GET /dns-zones/lelabs.tech/versions` rend `total_count: 0` — le compte ne
+conserve aucune version de la zone, donc aucun différentiel n'est consultable.
+
+**Comportement laissé inchangé**, et rien n'a été réécrit : restaurer de mémoire
+des enregistrements de messagerie serait pire que l'écart lui-même.
+
+**Arbitrage attendu du responsable** : ces deux `TXT` ont-ils été retirés
+volontairement, par vous ou par un autre outil, entre le 19 et le 20 août ? Si
+la réponse est non, il faut chercher ailleurs que dans ce produit, et cet écart
+doit être traité avant que le pilotage DNS ne serve sur une zone en exploitation.
