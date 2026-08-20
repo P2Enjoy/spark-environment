@@ -167,3 +167,42 @@ trancher QUAND une erreur de forme se réévalue — à chaque frappe, à la per
 focus, ou seulement après une première soumission —, et cet arbitrage appartient
 à l'écran de création dans son ensemble, pas à l'unité qui a changé la forme de
 ses contrôles de quota.
+
+
+### INC-09 · `POST /v1/audit` promet une entrée qu'il ne rend jamais
+
+**Constaté le** 2026-08-20, en étendant la porte du §37.4.6 aux gestes de
+conteneur (SPK-45).
+
+**Mesure.** Sur une pile jetable, une déclaration valide :
+
+```
+POST /v1/audit {"action":"spark.container_stop","target_id":"crm", …}
+=> 201 {"recorded": "spark.container_stop", "entry": null}
+```
+
+L'entrée est pourtant bien inscrite : elle se relit aussitôt par
+`GET /v1/audit?action=spark.container_stop`.
+
+**Cause.** `services/sparkd/src/sparkd/app.py`, route `declare_audit` : elle
+compose sa réponse avec `entree = audit_service.record(...)`, et `record` ne
+retourne rien. Le champ `entry` vaut donc `null` à **toute** déclaration, depuis
+l'ouverture de cette porte par SPK-43.
+
+**Ligne de base établie** : le champ est `null` sur `origin/main` avant ce
+changement — la valeur ne dépend ni de l'action déclarée ni de sa charge. Le
+défaut est antérieur à SPK-45 et ne lui appartient pas.
+
+**Ce que cela viole.** `CLAUDE.md` §3, « préférer les contrats explicites entre
+les composants » : une réponse qui nomme un champ toujours vide se lit comme une
+information manquante, pas comme une information inexistante. Un appelant qui
+voudrait confirmer l'inscription lirait `null` et conclurait à un échec, alors
+que l'entrée est là.
+
+**Ce que ce n'est pas.** Une fuite ni une perte : rien n'est perdu, l'entrée
+rejoint la chaîne d'intégrité comme prévu. C'est un champ mort dans une réponse.
+
+**Comportement laissé inchangé** (CloudWorker §3.1). La correction demande de
+trancher ce que la porte doit rendre — l'entrée entière, son seul identifiant, ou
+rien du tout —, et cela touche le contrat d'API partagé (SPK-17) autant que cette
+route. L'arbitrage dépasse l'unité qui a seulement élargi la liste blanche.

@@ -745,12 +745,21 @@ def create_app(config: Config) -> FastAPI:
     #: action rendrait impossible ce que le §37.3 demande — relever combien de
     #: fois cette voie a servi. La fermeture reste commune : ce qui doit se
     #: compter, c'est l'emprunt du chemin, pas sa sortie.
+    #: SPK-45 · §37.7.4 : les quatre gestes de cycle de vie. QUATRE actions et
+    #: non une seule, pour la raison exacte qui a séparé `spark.rescue_exec` de
+    #: `spark.terminal_open` — ce qui doit se compter, c'est le GESTE.
+    #: « Combien de conteneurs a-t-on tués ce mois-ci » doit se répondre par un
+    #: filtre sur l'action, pas par la lecture des charges.
     ACTIONS_DECLARABLES = ("spark.terminal_open", "spark.terminal_close",
-                           "spark.rescue_exec")
+                           "spark.rescue_exec",
+                           "spark.container_start", "spark.container_stop",
+                           "spark.container_restart", "spark.container_kill")
 
     #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
     #: secrets en clair que le §37.5 interdit précisément.
-    CLES_DECLARABLES = ("path", "reason", "duration_seconds")
+    #: `container` (§37.7.4) : la cible reste le SPARK — c'est lui qui est
+    #: protégé, facturé et retrouvé —, et le nom du conteneur entre ici.
+    CLES_DECLARABLES = ("path", "reason", "duration_seconds", "container")
 
     @app.post("/v1/audit", tags=["audit"], status_code=201)
     def declare_audit(body: dict = Body(...)) -> dict:

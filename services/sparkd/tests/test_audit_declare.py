@@ -176,3 +176,71 @@ def test_le_motif_du_depannage_reste_borne_aux_cles_admises(tmp_path):
     assert "commande" in r.json()["detail"]["message"]
     assert [e for e in client.get("/v1/audit").json()["entries"]
             if e["action"] == "spark.rescue_exec"] == []
+
+
+# --- SPK-45 · §37.7.4 : les quatre gestes de cycle de vie -------------------
+
+
+def test_les_quatre_gestes_sont_QUATRE_actions_donc_denombrables(tmp_path):
+    """Quatre actions et non une seule, comme au dépannage du §37.3.
+
+    Ce qui doit se compter, c'est le GESTE. « Combien de conteneurs a-t-on tués
+    ce mois-ci » doit se répondre par un filtre sur l'action, pas en lisant les
+    charges une à une.
+    """
+    client = _client(tmp_path)
+    for geste in ("start", "stop", "restart", "kill"):
+        r = client.post("/v1/audit", json={
+            "action": f"spark.container_{geste}", "target_id": "crm",
+            "message": f"Conteneur « crm-web-1 » : {geste}.",
+            "payload": {"container": "crm-web-1", "path": "ssh"}})
+        assert r.status_code == 201, r.text
+
+    tues = client.get("/v1/audit?action=spark.container_kill").json()["entries"]
+    assert len(tues) == 1
+    assert json.loads(tues[0]["payload"])["container"] == "crm-web-1"
+    # …et le filtre ne ramasse pas les trois autres gestes.
+    assert all(e["action"] == "spark.container_kill" for e in tues)
+
+
+def test_le_nom_du_CONTENEUR_est_une_cle_admise_et_la_cible_reste_le_Spark(tmp_path):
+    """§37.7.4 : la cible est le SPARK — c'est lui qui est protégé et facturé.
+
+    Le nom du conteneur entre dans la charge bornée. Le prendre comme cible
+    rendrait introuvables tous les gestes portés sur un même Spark.
+    """
+    client = _client(tmp_path)
+    r = client.post("/v1/audit", json={
+        "action": "spark.container_stop", "target_id": "crm",
+        "target_type": "spark",
+        "message": "Conteneur « crm-base-1 » : stop.",
+        "payload": {"container": "crm-base-1"}})
+    assert r.status_code == 201
+    # L'entrée se relit au journal : la route rend « entry: null » (INC-09).
+    entree = client.get("/v1/audit?action=spark.container_stop").json()["entries"][0]
+    assert entree["target_id"] == "crm"
+    assert entree["target_type"] == "spark"
+    assert json.loads(entree["payload"])["container"] == "crm-base-1"
+
+
+def test_la_charge_d_un_geste_reste_BORNEE(tmp_path):
+    """Un champ libre redeviendrait le dépôt de secrets que le §37.5 interdit."""
+    client = _client(tmp_path)
+    r = client.post("/v1/audit", json={
+        "action": "spark.container_kill", "target_id": "crm",
+        "payload": {"container": "crm-web-1", "commande": "docker kill --secret"}})
+    assert r.status_code == 422
+    assert "commande" in r.json()["detail"]["message"]
+
+
+def test_un_geste_INVENTE_reste_refuse(tmp_path):
+    """La porte s'ouvre de quatre gestes, pas d'une famille entière.
+
+    « container_remove » n'est pas dans le périmètre (§37.7, §37.8) : l'admettre
+    au journal laisserait croire que le produit sait le faire.
+    """
+    client = _client(tmp_path)
+    for invente in ("spark.container_remove", "spark.container_exec",
+                    "spark.container_pull", "spark.container"):
+        r = client.post("/v1/audit", json={"action": invente, "target_id": "crm"})
+        assert r.status_code == 422, invente
