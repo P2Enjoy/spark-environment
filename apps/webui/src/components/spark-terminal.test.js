@@ -385,3 +385,17 @@ test('un shell ABSENT est un avertissement, pas un refus rouge', () => {
   // …et l'écran n'est PAS bloqué : le terminal du Spark reste offert.
   assert.match(rendu, /data-terminal="ouvrir"/);
 });
+
+test('l’aide du redimensionnement nomme la BONNE destination', () => {
+  // Vue sur la capture 105 : l'écran disait « propage la taille au Spark » alors
+  // qu'on était dans un conteneur. Le `stty` part au shell distant, qui est
+  // celui du conteneur — dire « au Spark » désigne le mauvais destinataire.
+  const conteneur = renderTerminal(SPARK, { ...TERMINAL_VIDE, status: 'ouvert',
+    session: { id: 'a', path: 'container', container: 'crm-web-1',
+               shell: '/bin/sh' } });
+  assert.match(conteneur, /propage la taille au conteneur/);
+
+  const spark = renderTerminal(SPARK, { ...TERMINAL_VIDE, status: 'ouvert',
+    session: { id: 'a', path: 'ssh', container: null, shell: null } });
+  assert.match(spark, /propage la taille au Spark/);
+});

@@ -98,6 +98,8 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           // contradiction même que le §37.7.2 existe pour
                           // éviter, et une capture qui la montre est fausse.
                           gesteRendu = null, dockerConteneurApres = null,
+                          // SPK-45 tranche 2 : le sondage du shell (§37.4.7).
+                          probeShell = null,
                           terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
@@ -137,6 +139,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     // routes. Tout le reste du chemin est celui de la production.
     ...(terminaux ? { terminals: terminaux } : {}),
     ...(sondageSshd ? { probeSshd: async () => sondageSshd } : {}),
+    ...(probeShell ? { probeShell } : {}),
     ...(dockerReleve ? { readDocker: async (spark) => ({ spark, ...dockerReleve }) } : {}),
     ...(dockerConteneur ? { readContainer: (() => {
       let lu = 0;
@@ -903,6 +906,66 @@ ctx.server.close();
   await page.screenshot({ path: join(SORTIE, '104-geste-gele.png') });
   console.log('  104-geste-gele.png');
   ctx.server.close();
+
+  // --- LE TERMINAL DANS UN CONTENEUR (SPK-45 tranche 2, §37.4.7) ------------
+  // Deux écrans, atteints par le VRAI parcours — on ouvre le conteneur puis on
+  // clique. La bannière doit NOMMER le conteneur : sans elle on croit piloter le
+  // Spark, et une commande tapée là n'a pas les mêmes effets.
+  {
+    const terminaux = new SessionManager({
+      spawn: (commande, args) => {
+        const e = new EventEmitter();
+        e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
+        e.stdin = { write() {} }; e.kill = () => {};
+        e.commande = commande; e.args = args;
+        return e;
+      },
+    });
+    ctx = await demarrer({
+      terminaux,
+      dockerReleve: { state: 'ok', containers: inventaire },
+      dockerConteneur: ouverts[0][1], dockerJournaux: ouverts[0][2],
+      probeShell: async () => ({ state: 'shell_trouve', shell: '/bin/bash' }) });
+    await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 900 });
+    await page.waitForSelector('tbody tr', { timeout: 8000 });
+    await page.click('button[data-conteneur="crm-web-1"]');
+    await page.waitForSelector('[data-docker="terminal"]', { timeout: 8000 });
+    await page.click('[data-docker="terminal"]');
+    await page.waitForSelector('.bandeau-terminal .badge--accent', { timeout: 8000 });
+    await page.screenshot({ path: join(SORTIE, '105-terminal-conteneur.png') });
+    console.log('  105-terminal-conteneur.png');
+    ctx.server.close();
+  }
+
+  // Le conteneur SANS SHELL : le refus le plus important de cette tranche. Une
+  // image « distroless » n'en embarque aucun, et c'est un choix de sécurité du
+  // locataire — pas une panne, donc pas de rouge.
+  {
+    ctx = await demarrer({
+      terminaux: new SessionManager({ spawn: () => {
+        const e = new EventEmitter();
+        e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
+        e.stdin = { write() {} }; e.kill = () => {};
+        return e;
+      } }),
+      dockerReleve: { state: 'ok', containers: inventaire },
+      dockerConteneur: ouverts[0][1], dockerJournaux: ouverts[0][2],
+      probeShell: async () => ({
+        state: 'sans_shell', shell: null,
+        titre: 'Ce conteneur n’a pas de shell',
+        detail: 'Son image n’en embarque aucun — ni « bash », ni « sh ». C’est le '
+          + 'cas des images « distroless », et c’est un choix de sécurité délibéré, '
+          + 'pas une panne. Il n’y a rien où entrer.' }) });
+    await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 900 });
+    await page.waitForSelector('tbody tr', { timeout: 8000 });
+    await page.click('button[data-conteneur="crm-web-1"]');
+    await page.waitForSelector('[data-docker="terminal"]', { timeout: 8000 });
+    await page.click('[data-docker="terminal"]');
+    await page.waitForSelector('.avertissement', { timeout: 8000 });
+    await page.screenshot({ path: join(SORTIE, '106-terminal-conteneur-sans-shell.png') });
+    console.log('  106-terminal-conteneur-sans-shell.png');
+    ctx.server.close();
+  }
 
   // Un conteneur ouvert sur 390 px : les journaux ne doivent pas faire déborder
   // la PAGE, ils défilent dans leur propre bloc (§8.1).

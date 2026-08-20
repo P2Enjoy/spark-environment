@@ -224,6 +224,11 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m8-docker-geste', { hauteur: 700 });
     await page.click('[data-geste-annule]');
 
+    // --- M8 · LE TERMINAL DANS UN CONTENEUR (SPK-45, §37.4.7) ---------------
+    await page.click('[data-docker="terminal"]');
+    await page.waitForSelector('.bandeau-terminal .badge--accent', { timeout: 15000 });
+    await capturer('m8-terminal-conteneur', { hauteur: 700 });
+
     // --- M8 · LE SSHD MUET (SPK-43, §37.2) -----------------------------------
     // « site-vitrine » : son chemin normal meurt aussitôt dans la pile de
     // vérification, comme le fait `ssh` face à un port fermé.

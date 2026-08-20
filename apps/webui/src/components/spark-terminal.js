@@ -297,7 +297,8 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
   <input class="controle technique" id="terminal-entree" type="text" autocomplete="off"
          spellcheck="false" placeholder="Tapez une commande, Entrée pour l’envoyer"
          ${etat.status === 'ouvert' ? '' : 'disabled'}>
-  <p class="champ__aide">Redimensionner la fenêtre propage la taille au Spark.
+  <p class="champ__aide">Redimensionner la fenêtre propage la taille ${
+    etat.session?.container ? 'au conteneur' : 'au Spark'}.
   Un programme plein écran <strong>déjà lancé</strong> ne s’en apercevra pas : il
   faut le relancer.</p>
   ${commandes}
