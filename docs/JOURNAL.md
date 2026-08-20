@@ -4047,3 +4047,30 @@ l'unité qui installe ce `sshd`, donc celle qui débloque le dernier écart de
 SPK-43. Sa spécification existe au §42, elle est `[ ]`, et elle est la première
 du plan à porter du comportement livrable. À défaut, SPK-44 (onglet Docker)
 emprunte le même transport.
+
+## 2026-08-20 — Un garde-fou qui ne tournait pas
+
+**Mesuré**, et signalé par la session pairs : `apps/webui/src/styles/classes.test.js`,
+livré avec la tranche 4 de SPK-43 pour appliquer le §12.3 du design system,
+n'était **joué par aucune campagne**. Le script de test de la console balayait
+`host/*.test.js src/components/*.test.js` ; le fichier vit dans `src/styles/`.
+
+Vérifié plutôt que cru : `git show a115388:apps/webui/package.json` montre les
+deux seuls motifs, et le fichier n'y entre par aucun.
+
+Ce que cela veut dire exactement, et il faut le dire précisément : les trois
+preuves ont bien été **exécutées** — à la main, vertes, et le compte rendu de la
+tranche 4 les annonçait comme telles. Ce qui était faux, c'est qu'un garde-fou
+était en place. Il n'aurait attrapé aucune classe inventée par une session
+suivante, puisque rien ne l'aurait lancé.
+
+C'est la même classe de défaut que celle qu'il existe pour attraper, un cran plus
+haut : une preuve écrite et non exécutée ressemble en tout point à une preuve qui
+passe. Le premier défaut se voyait à la capture ; celui-ci ne se voyait nulle
+part.
+
+Réparé par `449b4fd` (session pairs), qui ajoute les motifs manquants au script.
+Constaté ici : `pnpm -r test` rend 549 preuves pour la console au lieu de 543, et
+les trois du contrôle des classes y figurent nommément.
+
+**Rien d'autre n'est modifié.** Où reprendre reste **SPK-54**, inchangé.

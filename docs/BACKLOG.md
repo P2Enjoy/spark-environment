@@ -1682,6 +1682,12 @@ tenues.**
   chemin, tenu dans une pastille `white-space: nowrap`, se coupait au tiers sous
   390 px. Vingt-six preuves de composant étaient vertes avec le premier en place.
   D'où le contrôle du §12.3, jusque-là absent : `apps/webui/src/styles/classes.test.js`.
+- **Correction du 2026-08-20, à propos de ce contrôle même** : posé dans
+  `src/styles/`, il n'était balayé par aucun motif du script de test de la
+  console — `host/*.test.js src/components/*.test.js`. Il était donc vert quand
+  on le lançait à la main, et **jamais joué par la campagne**. Un garde-fou qui ne
+  tourne pas ne garde rien. Réparé par `449b4fd`, qui ajoute les motifs
+  manquants ; la console rend désormais 549 preuves au lieu de 543.
 - **Preuves** : 667 Python, 35 d'hôte console et 19 de routes, 27 de composant,
   3 de classes CSS, **45 parcours E2E** dont deux neufs. Captures `78-` à `82-`
   observées, format étroit compris. Manuel M8 mis à jour, illustration
