@@ -1888,7 +1888,7 @@ enregistrement DNS par locataire, à la main, indéfiniment.
 - **Reste hors de cette unité** : le certificat joker, qui exige une validation
   `DNS-01` — écrit comme limite connue dans le manuel M7.
 
-### [~] SPK-49 · Publier un port de la Forge vers un Spark
+### [x] SPK-49 · Publier un port de la Forge vers un Spark
 
 Ce qui ne parle pas HTTP n'a aucun autre chemin : un SMTP, un Postgres, un Redis
 ou un SSH joignable de l'extérieur ne se route pas par nom.
@@ -1925,12 +1925,18 @@ ou un SSH joignable de l'extérieur ne se route pas par nom.
     l'application d'un Spark ouvre désormais les ports déclarés avant sa
     création. Second : les ports réservés étaient rendus dans un dictionnaire
     indexé par le port, dont les clés JSON sont des chaînes.
-- **Ce qui manque pour passer à `[x]`, et rien d'autre** : constater qu'une
-  connexion entrante atteint réellement le Spark. Cela exige une **Forge réelle**
-  avec Incus et une adresse publique — même limite que SPK-30 et SPK-29. Tout ce
-  qui appartient au produit est éprouvé : les refus, l'unicité portée par la
-  base, la reconstruction complète des devices, et le fait qu'un retrait fasse
-  disparaître le device.
+- **Close le 2026-08-20 : la connexion entrante est prouvée sur la Forge réelle.**
+  Port `18080` publié vers `helo:8080`, puis frappé **depuis Internet** :
+  - `http://51.158.54.202:18080/` → `200`, et le contenu servi est celui du Spark ;
+  - le device posé est bien un `proxy` d'Incus, et non du netfilter (§39.4) :
+    `pub-18080 · listen tcp:0.0.0.0:18080 · connect tcp:10.77.0.17:8080` ;
+  - **refus éprouvés, chacun nommant sa raison** : port déjà publié → `409` en
+    nommant le Spark qui le détient ; `22` → « tenu par le sshd de la Forge, seule
+    porte du système » ; `443` → « tenu par le proxy, qui sert les routes publiques
+    en TLS » ; `70000` → hors bornes ;
+  - **retrait** : `DELETE` → `200`, le port est **refermé depuis l'extérieur** et
+    le device a disparu de l'instance.
+  Il ne restait que cette mesure ; tout le reste était déjà éprouvé.
 
 ### [x] SPK-50 · Recettes DNS : un jeu d'enregistrements posé ensemble
 

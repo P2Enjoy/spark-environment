@@ -163,6 +163,13 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- **SPK-49 close** : une connexion entrante atteint réellement un Spark. Port
+  publié, frappé depuis Internet en `200`, refus nommés, et retrait qui referme
+  le port — mesuré sur la Forge réelle.
+- `docs/AGENT_RUNBOOK.md` §F : motif corrigé. Une campagne monte **une** pile, pas
+  cinquante ; ce qui tue la machine est le nombre de campagnes simultanées, pas
+  leur contenu. Arbitrage du responsable ajouté : ciblé en multi-session, complet
+  en session seule.
 - **Les quotas de l'écran de création se règlent au curseur** (SPK-59,
   `docs/DESIGN_SYSTEM.md` §6.9 bis) : réservation CPU, plafond CPU, cœurs,
   mémoire, disque et débit. Chaque curseur porte sa valeur formatée, ses deux

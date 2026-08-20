@@ -4722,3 +4722,57 @@ Chromium de `captures` et `manuel` —, mais son motif devait changer avant d'ê
 rootless éprouvé sur une pile qui le supporte, et la preuve qu'un amorçage rend
 une cellule réellement capable de `docker compose up` — Forge réelle. Sinon,
 SPK-44 (onglet Docker) est la première `[ ]` du plan à porter du comportement.
+
+## 2026-08-20 — SPK-49 close par la mesure qui manquait, et un motif que j'avais faux
+
+### La preuve entrante
+
+Sur autorisation du responsable, éprouvé sur la Forge réelle. Port `18080` publié
+vers `helo:8080`, puis frappé **depuis Internet** — pas depuis la Forge :
+
+    http://51.158.54.202:18080/   →  200, contenu du Spark servi
+    device posé                   →  pub-18080 · proxy Incus
+                                     listen tcp:0.0.0.0:18080
+                                     connect tcp:10.77.0.17:8080
+
+Les quatre refus nomment chacun leur raison — port déjà publié, en nommant son
+détenteur ; `22` tenu par le sshd de la Forge ; `443` tenu par le proxy ; `70000`
+hors bornes. Et le retrait **referme** : `DELETE` → le port ne répond plus de
+l'extérieur, le device a disparu de l'instance.
+
+C'était la seule mesure qui manquait à SPK-49, restée `[~]` faute de Forge
+joignable. Elle passe à `[x]`.
+
+### Un motif que j'avais faux, et corrigé par une session voisine
+
+J'avais écrit au §F du runbook qu'une campagne monte « cinquante fois une pile
+complète ». Une session voisine l'a mesuré et m'a contredit :
+
+    grep -c 'monterPile(' e2e/parcours.test.mjs   →  1
+    e2e/parcours.test.mjs:57  after(async () => { … pile?.demonter() })
+
+**Une** pile, montée dans le `before`, servant les 52 tests, démontée par le
+`after`. J'avais cherché la fonction d'arrêt au niveau du module de `pile.mjs`
+alors qu'elle est **rendue par `monterPile`** — d'où un `grep` qui la manque, et
+une conclusion fausse tirée d'une absence apparente.
+
+La conclusion pratique ne bouge pas, mais son motif change entièrement : ce n'est
+pas le contenu d'une campagne qui tue la machine, c'est **leur nombre** — trois
+sessions, trois piles, trois Chromium, plus ceux de `captures` et `manuel`, sur
+7,5 Gio.
+
+Et c'est exactement ce que je reprochais à la version précédente : une règle
+fondée sur un motif inexact se contourne dès qu'on découvre l'inexactitude. Le
+§F porte désormais la mesure, et la note de correction avec sa date — un document
+qui se corrige sans le dire apprend à ses lecteurs à se méfier de tout le reste.
+
+L'arbitrage du responsable y figure aussi : vérifications ciblées autorisées en
+multi-session, campagne complète par lots et en session seule.
+
+### Vérifications
+
+Six appels d'API contre la Forge réelle, deux essais de connexion entrante depuis
+l'extérieur, et l'inspection des devices Incus avant et après. Le Spark `helo`
+reste en marche, sur décision du responsable ; le port publié pour la preuve a été
+retiré.
+

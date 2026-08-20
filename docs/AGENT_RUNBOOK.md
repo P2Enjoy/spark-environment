@@ -286,12 +286,22 @@ rendre `404` — pas `200` avec un corps vide.
 de 7,5 Gio**, et non de la mémoire de la machine hôte. Relevé le 2026-08-20,
 `MemTotal: 7714436 kB`.
 
-`make e2e` monte **cinquante fois** une pile complète — un `sparkd` Python, un
-hôte console Node, un Chromium. `make captures` et `make manuel` en montent
-d'autres. À plusieurs sessions sur le même hôte, ce n'est pas de la contention :
-c'est un dépassement, et il tue la machine. Constaté quatre fois le 2026-08-20,
-dont deux terminaisons en **code 137** — un `SIGKILL`, signature du tueur de
-mémoire — et un redémarrage de l'hôte.
+Une campagne monte **une** pile complète — un `sparkd` Python, un hôte console
+Node, un Chromium — et la démonte à la fin. Mesuré : `e2e/parcours.test.mjs`
+appelle `monterPile()` **une seule fois**, dans son `before`, pour ses 52 tests,
+et son `after` la démonte. `--test-concurrency=1` est posé dans la cible : rien
+n'est concurrent **à l'intérieur** d'une campagne.
+
+**Ce qui tue la machine, c'est donc leur nombre, pas leur contenu.** Trois
+sessions qui lancent chacune leur campagne font trois piles et trois Chromium
+simultanés ; `make captures` et `make manuel` en ajoutent chacun un. Sur 7,5 Gio
+c'est confortable **seul**, et intenable à plusieurs. Constaté quatre fois le
+2026-08-20, dont deux terminaisons en **code 137** — un `SIGKILL`, signature du
+tueur de mémoire — et un redémarrage de l'hôte.
+
+*Rédaction corrigée le 2026-08-20 : la première version affirmait cinquante piles
+par campagne. C'était faux, mesuré par une session voisine, et une règle fondée
+sur un motif inexact se contourne dès qu'on découvre l'inexactitude.*
 
 ### F.1 Éprouver UN parcours
 
@@ -300,8 +310,9 @@ node --test --test-concurrency=1 \
   --test-name-pattern="<nom exact du test>" e2e/parcours.test.mjs
 ```
 
-Une seule pile montée. Mesuré sur le parcours `REFUS 1` : **vert en 2,489 s**,
-contre cinquante piles pour la campagne entière.
+Mesuré sur le parcours `REFUS 1` : **vert en 2,489 s**, contre plusieurs minutes
+pour la campagne entière — qui monte la même pile unique, mais joue les 52
+parcours.
 
 C'est l'outil de la vérification ciblée — celle qu'on fait vingt fois par heure
 en corrigeant un défaut.
@@ -312,9 +323,11 @@ Elle **garde sa place dans la Definition of Done** : elle est la preuve de
 non-régression de l'**ensemble**, et rien d'autre ne la remplace. Ce qu'elle
 n'est pas, c'est l'outil d'une vérification ciblée.
 
-Avant de lancer `make e2e`, `make captures` ou `make manuel` sur un hôte partagé,
-**annoncer et attendre** que les autres sessions aient confirmé qu'elles ne
-lancent rien. Deux campagnes simultanées produisent en outre des rouges
+**Arbitrage du responsable, 2026-08-20 :** les vérifications ciblées sont
+autorisées en **multi-session** ; la campagne complète se lance **par lots et en
+session seule**. Avant de lancer `make e2e`, `make captures` ou `make manuel` sur
+un hôte partagé, **annoncer et attendre** que les autres sessions aient confirmé
+qu'elles ne lancent rien. Deux campagnes simultanées produisent en outre des rouges
 **erratiques** : des délais réglés pour une machine au repos sont dépassés sous
 charge, et le rouge se déplace d'un test à l'autre. Un défaut de la mesure coûte
 plus cher qu'un défaut du produit, parce qu'on le cherche dans le produit.
