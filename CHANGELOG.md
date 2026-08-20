@@ -203,6 +203,10 @@
   avec deux mots différents.
 - `make gestes` : parcours navigateur assertifs, intégrés à `make test`.
 - `make captures` échoue si l'application écrit dans la console du navigateur.
+- **La machine qui porte `sparkd` est une « Forge »** (SPK-42) : table `forge`,
+  routes `/v1/forge`, destination `#/forge` et libellés de la console. Le mot au
+  sens réseau — `hostname`, l'hôte d'un serveur SSH — ne change pas, et « hôte
+  console » non plus. Migration `007_forge`, sans alias sur l'ancien chemin.
 - **Écran du catalogue des serveurs** (SPK-41) : destination « Serveurs » au
   premier degré — ajouter, **modifier**, basculer, retirer depuis la console, avec
   l'épreuve affichée dans la modale et les `Host` du `ssh_config` proposés. Une

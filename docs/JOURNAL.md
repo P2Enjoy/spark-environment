@@ -3042,3 +3042,52 @@ registre), SPK-28 (le schéma Scaleway et la configurabilité), SPK-35
 (l'instruction). SPK-38 se solde d'un parcours E2E ; SPK-37 d'une mesure sur un
 vrai tunnel ; SPK-30 et SPK-29 sur l'hôte. Il ne reste plus **aucun** arbitrage en
 attente, hors INC-03.
+
+## 2026-08-20 — SPK-42 : la machine devient une Forge, dans le code
+
+**Unité** : SPK-42, désignée par l'entrée précédente et arbitrée la veille. J'ai
+écrit le **§1 bis** — glossaire et contrat du renommage — avant la première ligne
+de code.
+
+**Le point qui décidait de tout.** C'est un renommage **sémantique**, jamais
+textuel. Le mot `host` a trois sens dans ce dépôt : la machine — qui devient
+Forge —, l'adresse réseau, qui est le vocabulaire d'OpenSSH et de TCP, et
+« hôte console », dont la collision disparaît d'elle-même puisque l'autre sens
+s'en va. Une substitution globale aurait produit des contresens ; et sans cette
+distinction, la vérification de la DoD ne prouve rien, un `grep` nu comptant les
+trois sens.
+
+**Ce qui est livré.** Migration `007_forge` — SQLite renomme la table sans la
+recopier et met à jour les clés étrangères, aucune donnée ne bouge. Les routes
+deviennent `/v1/forge`, `/v1/forge/sync`, `/v1/forge/cores`, le refus
+`forge_not_synced`, et le contrat est régénéré. **Aucun alias** n'est conservé :
+le contrat n'a qu'un consommateur, et garder deux noms pour la même chose est ce
+que cette unité supprime. La console suit : destination `#/forge`, entrée
+« Forge », et les libellés.
+
+**Ce qui ne change pas, volontairement** : `hostname`, `SPARKD_BIND`, le `host`
+d'un serveur dans `servers.json`, `sshHost`, et le libellé « Hôte, utilisateur et
+port » du formulaire d'un serveur SSH — le renommer produirait un contresens.
+
+**Cinq preuves révisées avec leur raison**, dont deux qui gagnent une exigence :
+la liste des tables exige désormais que `host` n'existe plus, et les chemins du
+contrat qu'aucun alias ne subsiste.
+
+**Vérifié.** 617 tests Python, 217 de console, 88 de l'hôte console, 6 de
+contrat, 8 gestes, **26 parcours E2E**, 7 contrôles du manuel, build,
+`contract-check` vert. Captures et illustrations refaites, `29-hote-pools`
+observée — c'est elle qui a révélé trois libellés au sens visé que le renommage
+avait manqués.
+
+**Ce qui reste, et pourquoi l'unité est `[~]`.** La **documentation** : le DAT, le
+schéma, le contrat de déploiement, le plan du manuel et six chapitres du manuel
+emploient encore « hôte » au sens de la machine. C'est la tranche 3, purement
+rédactionnelle, mais elle doit distinguer les trois sens comme le code l'a fait.
+Et les **noms de fichiers** de la console — `host-view.js` et ses voisins —,
+invisibles de l'utilisateur comme du contrat, sont le dernier morceau.
+
+**Où reprendre.** **SPK-42**, tranche 3 : la documentation et le manuel, puis les
+noms de fichiers, puis la vérification finale de la DoD. Ensuite SPK-46 (la
+console traduit), SPK-36 (la sauvegarde du registre), SPK-28 (le schéma
+Scaleway). SPK-38 se solde d'un parcours E2E ; SPK-37 d'une mesure sur un vrai
+tunnel ; SPK-30 et SPK-29 sur l'hôte.

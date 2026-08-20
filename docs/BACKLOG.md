@@ -1389,7 +1389,7 @@ l'est pas.** Contrat au §22.4 ter du DAT, écrit et committé avant le code.
 - **Observé** : `44-serveurs.png`, `45-serveurs-ajout.png`, `46-serveurs-aucun.png`,
   `47-serveurs-modifier.png`, et `docs/manuel/images/m3-serveurs.png`.
 
-### [ ] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
+### [~] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
 
 **ARBITRÉ le 2026-08-20 : la machine est une « Forge ».**
 
@@ -1419,6 +1419,44 @@ de code comme en segment d'URL, et ne ment pas sur la portée : une Forge est
   dans le sens visé — vérifié par une recherche, pas par mémoire ; migration de
   la table et du contrat livrées ensemble ; `make contract-check` vert ; manuel
   et captures refaits.
+
+**Le CODE est renommé le 2026-08-20 ; la documentation ne l'est pas encore.**
+
+Le contrat du renommage est au **§1 bis** du DAT, écrit et committé avant le
+code. Le point qui décide de tout y est écrit : c'est un renommage **sémantique**,
+jamais textuel — `host` a trois sens ici et deux ne bougent pas.
+
+- **Livré** :
+  - migration `007_forge` : `ALTER TABLE host RENAME TO forge`. SQLite renomme
+    sans recopier et met à jour les clés étrangères ; aucune donnée ne bouge.
+    `hostname` **reste**, elle porte le nom réseau et non le concept ;
+  - `GET /v1/forge`, `POST /v1/forge/sync`, `GET /v1/forge/cores`, refus
+    `forge_not_synced`, contrat régénéré. **Aucun alias** sur l'ancien chemin ;
+  - console : destination `#/forge`, entrée de navigation « Forge », et les
+    libellés — « Ressources de la Forge », « Sections de la Forge », « réserve de
+    la Forge », « tranches de la Forge », « mesurable sur cette Forge ».
+- **Volontairement inchangé** (§1 bis.1) : le mot au sens **réseau** — `hostname`,
+  `SPARKD_BIND`, le `host` d'un serveur dans `servers.json`, `sshHost`, et le
+  libellé « Hôte, utilisateur et port » du formulaire d'un serveur SSH. Et
+  « hôte console », dont la collision disparaît puisque l'autre sens s'en va.
+- **Preuves** : 617 Python, 217 de console, 88 de l'hôte console, 6 de contrat,
+  8 gestes, **26 parcours E2E**, 7 contrôles du manuel, build, `contract-check`
+  vert. Captures et illustrations refaites ; `29-hote-pools.png` observée.
+- **Cinq preuves révisées avec leur raison** : la liste des tables — qui exige en
+  plus que `host` n'existe plus —, les chemins du contrat — qui exigent qu'aucun
+  alias ne subsiste —, le chemin relayé par l'hôte console, et deux libellés.
+- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
+  1. **la documentation** — `docs/DAT.md`, `docs/SCHEMA.md`, `docs/PROD_MIGRATIONS.md`,
+     `docs/MANUAL_PLAN.md` et le **manuel** (M2, M3, M6, M10, M11, M12) emploient
+     encore « hôte » au sens de la machine. C'est la tranche 3 du §1 bis.2, et
+     elle est purement rédactionnelle — mais elle doit distinguer les trois sens,
+     comme le code l'a fait ;
+  2. les **noms de fichiers** de la console — `host-view.js`, `host-images.js`,
+     `host-journal.js` — et leurs identifiants internes portent encore l'ancien
+     mot. Aucun n'est visible de l'utilisateur ni du contrat ; c'est le dernier
+     morceau, et le moins urgent ;
+  3. la vérification finale de la DoD — « plus aucune occurrence dans le sens
+     visé » — ne peut être faite qu'après 1 et 2.
 
 ### [ ] SPK-46 · La console traduit les états que le serveur rapporte
 
