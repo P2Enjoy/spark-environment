@@ -1462,7 +1462,7 @@ jamais textuel — `host` a trois sens ici et deux ne bougent pas.
   3. la vérification finale de la DoD — « plus aucune occurrence dans le sens
      visé » — ne peut être faite qu'après 1 et 2.
 
-### [ ] SPK-46 · La console traduit les états que le serveur rapporte
+### [x] SPK-46 · La console traduit les états que le serveur rapporte
 
 **Arbitrage du responsable, 2026-08-20** (registre, INC-01) : le journal reste un
 enregistrement technique, et c'est la **console** qui traduit à l'affichage.
@@ -1484,6 +1484,23 @@ enregistrement technique, et c'est la **console** qui traduit à l'affichage.
   signalait comme le même motif ; captures de la facette *Journal* et de l'onglet
   de supervision refaites et observées ; INC-01 retiré du registre dans le même
   changement.
+- **Livré et vérifié le 2026-08-20.**
+  - La traduction vit dans `tokens.js`, où vivent déjà les libellés, et les deux
+    surfaces l'emploient. Le message d'erreur de tunnel est traduit lui aussi.
+  - 6 preuves sur la traduction elle-même, 3 sur l'onglet de supervision, 2 sur
+    la facette *Journal*. Elles gardent surtout ce qu'elle NE fait pas : un nom
+    de serveur cité entre guillemets n'est pas un état et n'est pas déformé, un
+    message inconnu traverse mot pour mot, et seul l'état connu d'un message
+    mixte est traduit.
+  - Détail d'implémentation qui compte : la table est consultée **directement**
+    et non par `stateOf`, dont le repli « État inconnu (…) » aurait déformé tout
+    mot cité qui n'est pas un état.
+  - Captures `73-` et `74-` observées : plus aucun vocabulaire technique sur les
+    deux écrans, et les messages que la console ne reconnaît pas sont intacts.
+- **INC-01 est retiré.** C'était la dernière entrée du registre, qui a donc été
+  **supprimé du dépôt** — `CLAUDE.md` §5 : un registre vide qu'on garde se lit
+  comme un registre qu'on ne tient plus. Il réapparaîtra au premier écart
+  constaté.
 
 ### [ ] SPK-43 · Terminal dans un Spark depuis la console
 

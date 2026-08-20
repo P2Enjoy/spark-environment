@@ -129,5 +129,10 @@ de lisibilité, identifié, dont l'arbitrage n'est pas encore rendu.
 ## Où lire la suite
 
 - l'architecture et les mesures : [DAT](../DAT.md) ;
-- l'état réel de chaque fonctionnalité : [backlog](../BACKLOG.md) ;
-- les incohérences connues et non résolues : [registre](../INCONSISTENCY_REPORT.md).
+- l'état réel de chaque fonctionnalité : [backlog](../BACKLOG.md).
+
+Il n'y a aujourd'hui **aucune incohérence connue non résolue** : le registre qui
+les recensait a été supprimé quand sa dernière entrée a été traitée. Il
+réapparaîtra sous `docs/INCONSISTENCY_REPORT.md` le jour où un écart sera
+constaté — un registre vide qu'on garde par habitude se lit comme un registre
+qu'on ne tient plus.
