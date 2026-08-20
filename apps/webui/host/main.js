@@ -25,10 +25,12 @@ import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.j
 import { relever as releverDocker, inspecterConteneur, lireJournaux }
   from './docker.js';
 import { agir as agirConteneur, GESTES } from './gestes-docker.js';
+import { sonderShell, SHELL_TROUVE } from './shell-conteneur.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
-         CHEMIN_SSH, CHEMIN_DEPANNAGE, depannageOuvert, sonderSshd } from './terminal.js';
+         CHEMIN_SSH, CHEMIN_DEPANNAGE, CHEMIN_CONTENEUR,
+         depannageOuvert, sonderSshd } from './terminal.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -56,6 +58,7 @@ export function createConsoleHost(options = {}) {
   // pour le même motif — les captures ont besoin des ÉCRANS, pas d'un Docker.
   const lireConteneurInjecte = options.readContainer ?? null;
   const agirInjecte = options.actOnContainer ?? null;
+  const sonderShellInjecte = options.probeShell ?? null;
   const lireJournauxInjecte = options.readLogs ?? null;
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
@@ -151,7 +154,8 @@ export function createConsoleHost(options = {}) {
    * Un échec de déclaration ne défait rien : le geste est déjà parti. La console
    * le SIGNALE plutôt que de le taire, comme au §37.4.5.
    */
-  async function declarerGeste(tunnel, { action, spark, container, resultat, raison }) {
+  async function declarerGeste(tunnel, { action, spark, container, resultat,
+                                        raison, dureeSecondes = null }) {
     if (!tunnel?.localPort) return false;
     const geste = Object.values(GESTES).find((g) => g.action === action);
     try {
@@ -161,12 +165,18 @@ export function createConsoleHost(options = {}) {
                    'x-spark-actor': tunnel.actorHeader },
         body: JSON.stringify({
           action, result: resultat, target_type: 'spark', target_id: spark,
-          message: resultat === 'denied'
-            ? `Geste refusé sur « ${container} » du Spark « ${spark} » : `
-              + `${geste?.libelle ?? action} (${raison}).`
-            : `Conteneur « ${container} » du Spark « ${spark} » : `
-              + `${geste?.libelle ?? action}.`,
-          payload: { container, path: 'ssh', ...(raison ? { reason: raison } : {}) },
+          message: action === 'spark.container_terminal_open'
+            ? `Terminal ouvert dans « ${container} » du Spark « ${spark} ».`
+            : action === 'spark.container_terminal_close'
+              ? `Terminal fermé dans « ${container} » du Spark « ${spark} » `
+                + `après ${dureeSecondes} s (${raison}).`
+              : resultat === 'denied'
+                ? `Geste refusé sur « ${container} » du Spark « ${spark} » : `
+                  + `${geste?.libelle ?? action} (${raison}).`
+                : `Conteneur « ${container} » du Spark « ${spark} » : `
+                  + `${geste?.libelle ?? action}.`,
+          payload: { container, path: 'ssh', ...(raison ? { reason: raison } : {}),
+                     ...(dureeSecondes == null ? {} : { duration_seconds: dureeSecondes }) },
         }),
       });
       return reponse.ok;
@@ -204,6 +214,32 @@ export function createConsoleHost(options = {}) {
     return { status: 200,
              body: await lire({ tunnel, spark: decrit, nom: conteneur,
                                 doublon: process.env.SPARK_DOCKER_COMMAND || null }) };
+  }
+
+  /**
+   * Déclare la fermeture d'une session, quel que soit le chemin (§37.4.5).
+   *
+   * Écrite UNE fois : les deux routes de fermeture — la balise et le `DELETE` —
+   * la partageaient déjà en copie, et la copie figeait `path: 'ssh'`. C'était
+   * faux dès le dépannage, et cela l'aurait été pour un conteneur : le chemin
+   * réellement emprunté vit dans la session, et c'est lui que le journal doit
+   * recevoir.
+   *
+   * §37.4.7 : un terminal de conteneur porte son ACTION propre, comme le §37.3
+   * a séparé le dépannage. Les confondre rendrait impossible de compter combien
+   * de fois on est entré dans un conteneur.
+   */
+  async function declarerFermeture(tunnels_, session) {
+    const tunnel = tunnels_.get(session.tunnel?.name ?? '') ?? session.tunnel;
+    if (session.chemin === CHEMIN_CONTENEUR) {
+      return declarerGeste(tunnel, {
+        action: 'spark.container_terminal_close', spark: session.spark.name,
+        container: session.conteneur, resultat: 'ok',
+        raison: session.motif, dureeSecondes: session.dureeSecondes() });
+    }
+    return declarerAudit(tunnel, 'spark.terminal_close', {
+      spark: session.spark.name, path: session.chemin,
+      reason: session.motif, duration_seconds: session.dureeSecondes() });
   }
 
   const routes = {
@@ -883,6 +919,34 @@ export function createConsoleHost(options = {}) {
       // §37.3 : le chemin de DÉPANNAGE se contrôle ICI, pas à l'écran. C'est un
       // contrôle d'accès (CLAUDE.md §10) : masquer un bouton n'aurait été
       // qu'une aide d'interface, et la requête reste formable à la main.
+      // §37.4.7 : le troisième chemin. Il est demandé par le NOM du conteneur —
+      // le champ `path` reste celui du §37.3, et un `path: "container"` sans
+      // conteneur ne voudrait rien dire.
+      const conteneur = String(corps?.container ?? '').trim();
+      if (conteneur) {
+        // On SONDE avant d'ouvrir. La console ne sait pas ce que le locataire a
+        // mis dans son image, et ouvrir sur un shell absent laisserait une
+        // fenêtre noire dont il faut deviner pourquoi elle est vide.
+        const sonde = sonderShellInjecte
+          ? await sonderShellInjecte({ spark: decrit, nom: conteneur })
+          : await sonderShell({ tunnel, spark: decrit, nom: conteneur,
+                                doublon: process.env.SPARK_DOCKER_COMMAND || null });
+        if (sonde.state !== SHELL_TROUVE) {
+          // 409 : l'état du conteneur empêche d'entrer. Ce n'est ni un refus
+          // d'autorisation (423) ni une absence (404) — le conteneur peut fort
+          // bien exister et n'avoir simplement pas de shell.
+          return { status: 409, body: { error: 'container_shell_unavailable',
+                                        reason: sonde.state, ...sonde } };
+        }
+        const session = terminaux.ouvrir({
+          tunnel, spark: decrit, chemin: CHEMIN_CONTENEUR,
+          conteneur, shell: sonde.shell });
+        await declarerGeste(tunnel, {
+          action: 'spark.container_terminal_open', spark: decrit.name,
+          container: conteneur, resultat: 'ok' });
+        return { status: 201, body: session.describe() };
+      }
+
       const chemin = corps?.path === CHEMIN_DEPANNAGE ? CHEMIN_DEPANNAGE : CHEMIN_SSH;
       let motifDepannage = null;
       if (chemin === CHEMIN_DEPANNAGE) {
@@ -949,10 +1013,7 @@ export function createConsoleHost(options = {}) {
       const id = String(url?.searchParams.get('id') ?? '');
       const session = terminaux.fermer(id, FLUX_FERME);
       if (!session) return { status: 204, body: null };
-      const tunnel = tunnels.get(session.tunnel?.name ?? '') ?? session.tunnel;
-      await declarerAudit(tunnel, 'spark.terminal_close', {
-        spark: session.spark.name, path: 'ssh',
-        reason: session.motif, duration_seconds: session.dureeSecondes() });
+      await declarerFermeture(tunnels, session);
       return { status: 204, body: null };
     },
 
@@ -963,10 +1024,7 @@ export function createConsoleHost(options = {}) {
       if (!session) {
         return { status: 404, body: { error: 'unknown_session', message: `Aucune session « ${id} ».` } };
       }
-      const tunnel = tunnels.get(session.tunnel?.name ?? '') ?? session.tunnel;
-      await declarerAudit(tunnel, 'spark.terminal_close', {
-        spark: session.spark.name, path: 'ssh',
-        reason: session.motif, duration_seconds: session.dureeSecondes() });
+      await declarerFermeture(tunnels, session);
       return { status: 200, body: session.describe() };
     },
 

@@ -280,3 +280,45 @@ def test_sans_resultat_declare_l_entree_reste_un_SUCCES(tmp_path):
     client.post("/v1/audit", json={"action": "spark.terminal_open",
                                    "target_id": "crm", "message": "x"})
     assert _sessions(client)[0]["result"] == "ok"
+
+
+def test_le_terminal_d_un_CONTENEUR_est_une_action_distincte(tmp_path):
+    """§37.4.7 : entrer dans la cellule d'un locataire et entrer dans un de ses
+    conteneurs ne sont pas le même pouvoir.
+
+    Les confondre rendrait impossible de répondre à « combien de fois est-on
+    entré dans un conteneur », qui est exactement ce qu'on relira après un
+    incident.
+    """
+    client = _client(tmp_path)
+    client.post("/v1/audit", json={
+        "action": "spark.terminal_open", "target_id": "crm",
+        "message": "Session sur « crm »."})
+    r = client.post("/v1/audit", json={
+        "action": "spark.container_terminal_open", "target_id": "crm",
+        "message": "Terminal ouvert dans « crm-web-1 ».",
+        "payload": {"container": "crm-web-1", "path": "container"}})
+    assert r.status_code == 201
+
+    dans_conteneur = client.get(
+        "/v1/audit?action=spark.container_terminal_open").json()["entries"]
+    assert len(dans_conteneur) == 1
+    assert json.loads(dans_conteneur[0]["payload"])["container"] == "crm-web-1"
+    # …et le filtre du terminal de SPARK ne le ramasse pas.
+    assert len(client.get("/v1/audit?action=spark.terminal_open")
+               .json()["entries"]) == 1
+
+
+def test_la_fermeture_d_un_terminal_de_conteneur_porte_sa_duree(tmp_path):
+    client = _client(tmp_path)
+    r = client.post("/v1/audit", json={
+        "action": "spark.container_terminal_close", "target_id": "crm",
+        "message": "Terminal fermé dans « crm-web-1 » après 42 s (sortie).",
+        "payload": {"container": "crm-web-1", "duration_seconds": 42,
+                    "reason": "sortie"}})
+    assert r.status_code == 201
+    entree = client.get(
+        "/v1/audit?action=spark.container_terminal_close").json()["entries"][0]
+    charge = json.loads(entree["payload"])
+    assert charge["duration_seconds"] == 42
+    assert charge["reason"] == "sortie"

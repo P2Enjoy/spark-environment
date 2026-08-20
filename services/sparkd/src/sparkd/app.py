@@ -753,7 +753,14 @@ def create_app(config: Config) -> FastAPI:
     ACTIONS_DECLARABLES = ("spark.terminal_open", "spark.terminal_close",
                            "spark.rescue_exec",
                            "spark.container_start", "spark.container_stop",
-                           "spark.container_restart", "spark.container_kill")
+                           "spark.container_restart", "spark.container_kill",
+                           #: SPK-45 · §37.4.7 : entrer dans la cellule d'un
+                           #: locataire et entrer dans un de ses conteneurs ne
+                           #: sont pas le même pouvoir. « Combien de fois est-on
+                           #: entré dans un conteneur » doit se répondre par un
+                           #: filtre, pas en lisant les charges.
+                           "spark.container_terminal_open",
+                           "spark.container_terminal_close")
 
     #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
     #: secrets en clair que le §37.5 interdit précisément.
