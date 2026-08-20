@@ -2179,6 +2179,53 @@ Le comble est déjà écrit ailleurs : SPK-30 existe pour qu'un Spark saturé re
   cellule** — un quota changé au registre mais pas dans le noyau serait le pire
   des cas ; parcours E2E depuis le parcours canonique ; manuel M8 et captures.
 
+### [ ] SPK-58 · Variables d'environnement et secrets d'un Spark
+
+Le locataire fait tourner une pile Compose ; le produit n'a aucun moyen de lui
+passer une valeur. Aujourd'hui, une adresse de relais SMTP ou un jeton d'API se
+saisit à la main dans la cellule, par SSH, sans trace et sans état voulu.
+
+**Faisable, et par un mécanisme déjà mesuré** : `push_file` écrit dans la cellule
+et sert déjà `authorized_keys` depuis SPK-11. Rien de neuf n'est à inventer côté
+transport.
+
+- Spécification : `docs/DAT.md` **§43** · `docs/SCHEMA.md` (migration due) ·
+  `docs/DESIGN_SYSTEM.md` §5.4, §6.27, §14.6 · manuel M6 et M8.
+- Portée : jeu de variables **de la Forge** et jeu **du Spark** qui le surcharge
+  nom par nom (§43.6) ; fichier unique `/etc/spark/env` en `root:root 0600`,
+  réécrit **en entier** depuis l'état voulu, réappliqué à la création, au
+  changement et **après restauration d'instantané** ; onglet *Environnement* dans
+  la fenêtre du Spark, avec une section par niveau et une modale par section ;
+  audit du geste **sans jamais la valeur**.
+- **Ce qui décide de l'unité, et qui n'est pas le transport** : un secret l'est
+  parce qu'on le **déclare**, jamais parce que son nom en a l'air. Mesuré sur le
+  filtre du §21.2 : il caviarde `STRIPE_API_KEY` et `SMTP_PASSWORD`, et laisse
+  passer `DATABASE_URL` — qui porte un mot de passe neuf fois sur dix. Une entrée
+  déclarée secrète n'est plus jamais rendue par l'API, ni réaffichée, ni
+  journalisée : l'écran n'en montre que le **nom**, une **empreinte** et la date
+  du dernier changement, ce qui suffit à comparer deux Sparks sans rien révéler.
+- **Bloquée par un arbitrage du responsable** (§43.5) : où vit la clé de
+  chiffrement — en clair, chiffré avec une clé sur la Forge, ou chiffré avec une
+  clé tenue par la console. La troisième posture rend la console **nécessaire**
+  pour appliquer un environnement, et un poste perdu perd tous les secrets ; elle
+  n'est tenable que si SPK-36 dit d'abord quoi faire dans ce cas. Recommandation
+  écrite : clé sur la Forge.
+- Ce que l'unité ne fera pas, et qui doit rester écrit : elle ne redémarre pas la
+  pile du locataire (§1), elle ne porte pas de **fichiers** — certificats, clés de
+  service —, et elle ne protège de personne qui détient `root` sur la Forge
+  (§43.4). Le manuel devra le dire aussi clairement que le DAT.
+- DoD : un test prouve qu'une valeur déclarée secrète **n'apparaît nulle part** —
+  ni réponse d'API, ni journal, ni aperçu, ni export — en la cherchant
+  explicitement dans chacun ; un test prouve que le fichier est réécrit en entier
+  et qu'un retrait retire ; un test prouve la réapplication **après restauration
+  d'instantané**, là où l'ancien fichier revient ; un test d'API prouve le refus
+  sur un Spark protégé ; un parcours E2E depuis le parcours canonique pose une
+  variable héritée, la surcharge sur un Spark, et lit d'où vient chaque valeur ;
+  preuve sur la Forge réelle qu'un `docker compose` du locataire consomme
+  effectivement le fichier — sans elle, l'unité reste `[~]`, car c'est le seul
+  point qui prouve que la chaîne entière sert à quelque chose ; manuel M6/M8 et
+  seed mis à jour.
+
 ---
 
 ## Réservé, non planifié

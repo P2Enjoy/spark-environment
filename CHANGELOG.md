@@ -3,6 +3,11 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/DAT.md` : nouveau §43, l'environnement d'un Spark — où la valeur atterrit,
+  pourquoi `environment.*` d'Incus n'est pas le mécanisme, et pourquoi un secret
+  se déclare au lieu de se deviner.
+- Unité SPK-58 : variables d'environnement et secrets, bloquée par un arbitrage
+  sur l'emplacement de la clé de chiffrement.
 - `apps/webui/modules.test.js` : tout module de la console doit se CHARGER. Une
   erreur de syntaxe passait la relecture et cassait au chargement, sans qu'aucune
   suite ne rougisse — puisque rien ne se charge, rien ne s'exécute.

@@ -4074,3 +4074,76 @@ Constaté ici : `pnpm -r test` rend 549 preuves pour la console au lieu de 543, 
 les trois du contrôle des classes y figurent nommément.
 
 **Rien d'autre n'est modifié.** Où reprendre reste **SPK-54**, inchangé.
+
+## 2026-08-20 — L'environnement d'un Spark : trois questions, dont une seule est difficile
+
+Demande du responsable : injecter des variables et des secrets dans un Spark, et
+les piloter depuis un onglet dédié. Faisable ? Exploré avant d'écrire.
+
+### La question du transport est déjà résolue
+
+`push_file` écrit dans la cellule par l'API de fichiers d'Incus, et sert déjà
+`authorized_keys` depuis SPK-11 — réécriture **en entier** depuis l'état voulu,
+mesurée sur la Forge réelle. Rien à inventer : l'environnement suit le même
+chemin, et hérite des mêmes propriétés (un retrait retire, une restauration
+d'instantané est rattrapée par la réapplication).
+
+### La question du bon mécanisme aurait coûté une implémentation entière
+
+Incus sait porter des variables sur une instance — `environment.*`. Elles
+s'appliquent aux processus que le **plan de contrôle** lance dans la cellule, et
+**pas** aux conteneurs Docker du locataire, qui tiennent leur environnement de
+Compose. On aurait obtenu une console où la variable existe et une application
+où elle n'existe pas, ce qui est la pire forme d'échec : celle qui a l'air de
+marcher quand on la teste au mauvais endroit.
+
+Retenu : un fichier unique à chemin stable, `/etc/spark/env`, que le locataire
+attache lui-même par `env_file:`. Le produit n'écrit pas dans son répertoire de
+projet — il faudrait le deviner, et l'on écraserait un fichier qui ne nous
+appartient pas.
+
+### La seule question difficile : ce que « secret » veut dire
+
+Mesuré sur le filtre de caviardage du §21.2, qui décide par le nom du champ :
+
+    STRIPE_API_KEY   → caviardé
+    SMTP_PASSWORD    → caviardé
+    DATABASE_URL     → PAS caviardé
+    S3_ENDPOINT      → pas caviardé
+
+`DATABASE_URL` porte un mot de passe neuf fois sur dix. La détection par le nom
+échoue donc exactement là où elle importe — et elle échouera toujours, parce que
+le nom appartient au locataire, pas au produit.
+
+**Décision : le secret est DÉCLARÉ, jamais deviné.** Une entrée déclarée n'est
+plus jamais rendue par l'API, ni réaffichée, ni journalisée ; l'écran n'en montre
+que le nom, une empreinte et la date du dernier changement — assez pour répondre
+à « est-ce la même valeur que sur l'autre Spark ? » sans la montrer.
+
+Et une honnêteté écrite avant que quiconque promette autre chose : le registre
+vit sur la Forge, donc `root` lit tout. Ce que la déclaration protège, c'est
+l'affichage accidentel, le journal, l'API et les exports. Pas `root`. C'est la
+même limite qu'au §35.1, et le manuel devra le dire aussi nettement.
+
+### Ce que je n'ai pas tranché
+
+Où vit la clé de chiffrement : en clair, clé sur la Forge, ou clé tenue par la
+console. La troisième posture est séduisante — la Forge ne peut plus déchiffrer
+seule — mais elle rend la console **nécessaire** pour appliquer un environnement,
+et un poste perdu perd tous les secrets. Elle n'est tenable qu'après SPK-36.
+Recommandation écrite : clé sur la Forge. SPK-58 reste bloquée dessus.
+
+### Ce que la doctrine du responsable impose, et qui simplifie
+
+`CLAUDE.md` §4 : tout existe au niveau général, les contextes ne définissent que
+leurs différences. Un relais SMTP ou un point d'entrée S3 n'a aucune raison
+d'être ressaisi sur chaque Spark. Deux niveaux, donc — Forge puis Spark —, et
+l'écran doit dire **d'où vient** chaque valeur, sinon on la lit sans pouvoir
+expliquer pourquoi elle est celle-là.
+
+### Vérifications
+
+Aucun code touché : spécification et backlog. Les trois faits cités ont été
+mesurés dans le dépôt — signature de `push_file`, comportement du filtre d'audit
+sur quatre noms réels, et absence de toute notion d'environnement au registre.
+

@@ -5056,3 +5056,161 @@ quelqu'un a demandé le geste et que rien n'était à faire est une information,
 son absence ferait croire que le geste n'a pas été tenté.
 
 
+## 43. L'environnement d'un Spark : variables et secrets
+
+Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doit
+atterrir**, **par quel mécanisme**, et **ce que « secret » peut vouloir dire ici**
+— la troisième question étant celle qui décide de tout le reste.
+
+### 43.1 Où la valeur doit atterrir, et le piège à éviter
+
+Le locataire fait tourner une pile Compose. Compose lit ses variables dans un
+**fichier** — `.env` à côté du fichier de composition, ou un `env_file:` désigné
+explicitement. C'est donc un fichier que le produit doit déposer.
+
+**Le piège, et il coûterait une implémentation entière :** Incus sait porter des
+variables sur une instance (`environment.*`). Elles s'appliquent aux processus
+que le **plan de contrôle** lance dans la cellule — un `incus exec`, une console
+— et **pas** aux conteneurs Docker du locataire, qui tiennent leur environnement
+de Compose. Poser `environment.FOO` donnerait une console où `FOO` existe et une
+application où il n'existe pas. Ce n'est pas le mécanisme.
+
+**Décision : un fichier unique, à un chemin stable, désigné explicitement par le
+locataire.**
+
+    /etc/spark/env      root:root, 0600
+
+Le locataire l'attache à ses services : `env_file: /etc/spark/env`. Le produit
+n'écrit **pas** dans le répertoire de projet du locataire : il faudrait le
+deviner, et l'on écraserait un fichier qui ne nous appartient pas. Le contrat est
+donc explicite des deux côtés — le produit garantit le chemin, le locataire
+décide de s'en servir.
+
+### 43.2 Un seul mécanisme, et il est déjà mesuré
+
+Le fichier est écrit par l'API de fichiers d'Incus (`push_file`), **réécrit en
+entier depuis l'état voulu**, jamais complété ni corrigé sur place. C'est
+exactement ce que fait `authorized_keys` depuis le §17.1, pour la même raison :
+deux mécanismes qui écrivent le même état finissent par diverger.
+
+Il en découle, sans rien inventer :
+
+- l'environnement est réappliqué **à la création**, **à chaque changement**, et
+  **après une restauration d'instantané** — un retour arrière ramène l'ancien
+  fichier dans la cellule, et l'état voulu doit reprendre la main (§19) ;
+- un retrait retire réellement, puisque le fichier est régénéré sans la ligne ;
+- un Spark sans cellule (`pending`, `error`) garde son état voulu au registre et
+  le reçoit quand la cellule existe.
+
+### 43.3 Variables et secrets : la différence est DÉCLARÉE, jamais devinée
+
+Mesuré le 2026-08-20 sur le filtre de caviardage du §21.2, qui décide par le
+**nom** du champ :
+
+| Nom de variable | Caviardé par le filtre ? |
+|---|---|
+| `STRIPE_API_KEY` | oui |
+| `SMTP_PASSWORD` | oui |
+| `DATABASE_URL` | **non** |
+| `S3_ENDPOINT` | non |
+
+`DATABASE_URL` porte un mot de passe dans neuf cas sur dix. La détection par le
+nom échoue donc précisément là où elle importe — et elle échouera toujours, parce
+que le nom appartient au locataire, pas au produit.
+
+**Décision : l'exploitant DÉCLARE qu'une entrée est un secret.** Le produit ne
+devine pas. Une entrée déclarée secrète :
+
+- n'est **jamais rendue** par l'API après son écriture — ni en lecture, ni en
+  aperçu, ni dans un export ;
+- n'entre **jamais** au journal d'audit, même caviardée : seul son **nom** y
+  figure, avec le geste et sa date ;
+- n'est **jamais réaffichée** à l'écran. Le champ est en écriture seule.
+
+Pour qu'un secret reste **comparable** sans être révélé, l'écran montre son
+**empreinte** — un préfixe de hachage — et la date de son dernier changement.
+Cela suffit à répondre à « est-ce la même valeur que sur l'autre Spark ? » sans
+la montrer.
+
+Et le §14.6 s'applique : « absent », « défini mais masqué » et « vidé » sont
+trois états distincts, nommés distinctement. Un champ vide ne doit pas laisser
+croire qu'aucun secret n'est posé.
+
+### 43.4 Ce que « secret » ne veut PAS dire ici
+
+Le registre vit sur la Forge. Qui détient `root` sur la Forge lit le registre, et
+lit le fichier dans la cellule. C'est la même limite qu'au §35.1, et elle doit
+être écrite avant que quiconque promette autre chose.
+
+Ce que la déclaration protège réellement :
+
+- l'affichage accidentel — une capture d'écran, une démonstration, un partage
+  d'écran ;
+- la fuite par le **journal** et par les traces de support ;
+- l'exposition par l'**API**, y compris à un outil tiers branché dessus ;
+- la persistance dans un export ou un rapport de bogue.
+
+Ce qu'elle ne protège pas : un opérateur qui a `root` sur la Forge, et le
+locataire lui-même — qui reçoit la valeur, puisque c'est le but.
+
+### 43.5 L'arbitrage à rendre : où vit la clé
+
+Trois postures possibles, à trancher par le responsable avant toute
+implémentation. Aucune n'est bonne dans l'absolu ; elles diffèrent par **ce
+qu'elles protègent** et par **ce qu'elles cassent**.
+
+| Posture | Protège de | Coûte |
+|---|---|---|
+| **En clair** au registre, fichier `0600` | rien de plus que les permissions | une copie du seul fichier SQLite — sauvegarde, support, exfiltration partielle — livre tous les secrets |
+| **Chiffré, clé sur la Forge** | une copie du registre **seul** : la sauvegarde du `.db` ne suffit plus | rien de plus contre `root` ; une clé de plus à sauvegarder, et à ne pas perdre |
+| **Chiffré, clé tenue par la console** | la Forge ne peut pas déchiffrer seule | **appliquer un environnement exige la console connectée** ; un Spark recréé sans elle démarre sans ses secrets, et un poste perdu les perd tous — SPK-36 doit alors dire quoi faire |
+
+Recommandation, à confirmer : **chiffré, clé sur la Forge**. C'est le seul des
+trois qui améliore quelque chose sans introduire une dépendance nouvelle au
+poste ; et la troisième posture déplace le risque plutôt qu'elle ne le réduit,
+tant qu'aucune procédure de perte n'existe.
+
+### 43.6 Portée : général d'abord, surcharge ensuite
+
+`CLAUDE.md` §4 pose la doctrine : tout existe au niveau général, les contextes
+spécialisés ne définissent que leurs différences. L'environnement s'y prête
+exactement — une adresse de relais SMTP, un point d'entrée S3, un fuseau horaire
+n'ont aucune raison d'être ressaisis sur chaque Spark.
+
+**Deux niveaux, et un seul ordre de préséance :** un jeu **de la Forge**, hérité
+par tous ses Sparks ; un jeu **du Spark**, qui surcharge le premier, nom par nom.
+
+L'écran doit dire **d'où vient chaque valeur** — héritée, surchargée, ou propre.
+Sans cela, on lit une valeur sans pouvoir expliquer pourquoi elle est celle-là, et
+l'on va la chercher au mauvais endroit.
+
+### 43.7 Quand cela prend effet, et ce que le produit ne fait pas à la place du locataire
+
+Écrire le fichier **ne redémarre rien**. La pile du locataire ne le lira qu'à son
+prochain démarrage, et l'écran le dit en toutes lettres au moment de l'écriture —
+plutôt que de laisser croire à un effet immédiat qui n'aurait pas lieu.
+
+Le produit ne relance pas la pile à la place du locataire : le §1 exclut le
+déploiement applicatif de son périmètre. Il peut en revanche **nommer** le geste
+qui reste à faire, et SPK-45 donne déjà de quoi redémarrer un conteneur.
+
+Interactions, toutes déjà décidées ailleurs :
+
+- **gel** (§35.2) : un Spark protégé refuse l'écriture d'environnement, comme
+  toute écriture qui le vise ;
+- **instantanés** (§19) : une restauration ramène l'ancien fichier ; l'état voulu
+  est réappliqué derrière, comme pour les clés ;
+- **amorçage** (§42) : c'est lui qui crée `/etc/spark` et pose le fichier vide, de
+  sorte qu'un `env_file:` ne casse pas la pile avant la première écriture.
+
+### 43.8 Ce que ce n'est pas
+
+Ni coffre-fort d'entreprise — pas de rotation automatique, pas de bail, pas de
+politique d'accès —, ni gestionnaire de configuration applicative. Le produit
+dépose des paires nom/valeur dans une cellule, et s'arrête là.
+
+Les **fichiers** — certificat, clé privée de service, fichier de configuration
+entier — restent hors périmètre de cette section. Ils poseraient d'autres
+questions (taille, format, permissions par fichier) et méritent leur propre
+arbitrage plutôt qu'un élargissement silencieux de celui-ci.
+
