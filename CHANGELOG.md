@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/AGENT_RUNBOOK.md` §F.4 : « vert seul, rouge en campagne » a **deux** causes
+  qui se ressemblent — la contention, et un état partagé entre parcours. La
+  question qui les sépare : le rouge est-il le même à chaque fois ?
 - `docs/AGENT_RUNBOOK.md` §F : éprouver sans faire tomber la machine — la
   vérification ciblée qui monte **une** pile au lieu de cinquante, quand la
   campagne complète reste due, et la règle d'une seule pile de développement à la

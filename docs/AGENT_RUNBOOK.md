@@ -335,6 +335,24 @@ plus cher qu'un défaut du produit, parce qu'on le cherche dans le produit.
 Ne jamais lancer une campagne **en arrière-plan** : quand la machine tombe, on ne
 sait plus ce qui tournait.
 
+### F.4 Vert seul, rouge en campagne : deux causes qui se ressemblent
+
+Le symptôme est identique et les causes n'ont rien à voir. Les confondre fait
+chercher au mauvais endroit, parfois longtemps.
+
+| Cause | Signe qui la distingue | Ce qu'il faut faire |
+|---|---|---|
+| **contention** de la machine | le rouge **se déplace** d'un parcours à l'autre selon la charge ; rejoué seul, il redevient vert | relancer seul, et suivre le §F.2 |
+| **état partagé** entre parcours | le rouge est **toujours le même**, et le parcours suppose un état qu'un parcours antérieur a déjà consommé — un Spark vierge devenu amorcé, par exemple | corriger le parcours, pas la machine |
+
+Constaté le 2026-08-20 par une session voisine : deux parcours supposaient un
+Spark vierge et tournaient sur un Spark déjà amorcé par un parcours précédent.
+Rien à voir avec la mémoire.
+
+Le réflexe « c'est la contention » est confortable parce qu'il n'accuse pas le
+code. Le distinguer coûte une seule question : **le rouge est-il le même à chaque
+fois ?** S'il l'est, ce n'est pas la charge.
+
 ### F.3 Une seule pile de développement à la fois
 
 Même famille de fuite, moins visible donc plus facile à oublier : une pile lancée
