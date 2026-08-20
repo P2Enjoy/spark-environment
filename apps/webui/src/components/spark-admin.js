@@ -8,6 +8,9 @@
  *       docs/DESIGN_SYSTEM.md §3.1, §6.9, §6.19, §6.22, §6.23, §6.24, §6.27
  *       (la saisie est recueillie par une modale limitée à la section), §14.7 ·
  *       docs/DESIGN_SYSTEM_APP.md
+ * @spec docs/BACKLOG.md#SPK-49 · docs/DAT.md §39 (les ports publiés),
+ *       §39.2 (une ressource de la Forge), §39.3 (ce qu'un port fait perdre,
+ *       et que l'écran doit dire)
  * @spec docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la préséance
  *       du plus spécifique, et la vue depuis le joker) · §18.4
  * @spec docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
@@ -42,6 +45,8 @@ export const ADMIN_VIDE = {
   values: { domain: '', port: 8080, tls: true,
             key_label: '', new_label: '', public_key: '',
             snapshot: '', password: '',
+            // SPK-49 · §39 : la publication d'un port de la Forge.
+            public_port: '', target_port: '', protocol: 'tcp', port_note: '',
             // SPK-47 · §38.3 : ce qui sera écrit dans la zone.
             dns_zone: '', dns_address: '' },
   // SPK-48 · §18.3 bis : la route qu'une déclaration vient de dépasser, et le
@@ -383,6 +388,102 @@ function nomAEcrire(domaine, zone) {
   const z = String(zone).toLowerCase();
   if (d === z) return '@';
   return d.endsWith(`.${z}`) ? d.slice(0, -(z.length + 1)) : '—';
+}
+
+/* ------------------------------------------------------------ ports publiés */
+
+/**
+ * Ports publiés d'un Spark (SPK-49, §39).
+ *
+ * Il vit sous les routes publiques, et c'est délibéré : le §39.3 veut que
+ * l'écran propose le NOM d'abord, et présente le port publié comme un second
+ * geste qui annonce ce qu'il coûte. Publier un port pour une application qui
+ * parle HTTP est presque toujours une erreur — on perd le certificat
+ * automatique sans rien gagner. Le produit ne l'interdit pas ; il le dit.
+ */
+export function renderPortsPanel(spark, ports = [], ui = ADMIN_VIDE,
+                                 reserved = []) {
+  const lignes = ports.length
+    ? `<ul class="liste-administrable">${ports.map((p) => {
+        const attente = p.applied_at
+          ? ''
+          : ` <span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>non appliqué</span>`;
+        const confirme = ui.confirming?.kind === 'port' && ui.confirming.id === String(p.public_port)
+          ? `<div class="confirmation" role="group" aria-label="Confirmer le retrait">
+               <p><strong>Retirer le port ${echapper(p.public_port)} ?</strong></p>
+               <p class="confirmation__consequence">Ce port cessera d’être joignable
+               depuis l’extérieur immédiatement. Le Spark et ses données ne sont pas
+               touchés.</p>
+               <p class="confirmation__actions">
+                 <button type="button" class="bouton bouton--destructif" data-confirme-port="${echapper(p.public_port)}">Retirer le port</button>
+                 <button type="button" class="bouton" data-annule="port">Annuler</button>
+               </p>
+             </div>`
+          : '';
+        return `<li><span class="technique">${echapper(p.public_port)}/${echapper(p.protocol)}</span>` +
+          ` de la Forge → port ${echapper(p.target_port)} du Spark${attente}` +
+          (p.note ? ` <span class="note">${echapper(p.note)}</span>` : '') +
+          `<span class="actions-ligne">` +
+          `<button type="button" class="bouton bouton--compact" data-retire-port="${echapper(p.public_port)}">Retirer</button></span>` +
+          `${confirme}</li>`;
+      }).join('')}</ul>`
+    : '<p class="absence">Aucun port de la Forge ne mène à ce Spark.</p>';
+
+  const interdits = reserved.length
+    ? `<p class="champ__aide">Réservés sur cette Forge : ${reserved.map((r) =>
+        `<span class="technique">${echapper(r.port)}</span> (${echapper(r.reason)})`)
+        .join(', ')}.</p>`
+    : '';
+
+  const modale = renderModale({
+    ouverte: ui.open === 'port', id: 'port', titre: 'Publier un port',
+    engagement: 'Publier le port',
+    refus: ui.refusal?.panel === 'port' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps: `
+         <p class="avertissement" role="status">Un port publié <strong>perd le
+         certificat automatique</strong> : le proxy ne le voit pas passer. Si
+         l’application parle HTTP, déclarez plutôt une <strong>route publique</strong>
+         ci-dessus — elle donne le TLS sans rien demander. Ce geste sert à ce qui
+         ne parle pas HTTP : messagerie, base de données, SSH.</p>
+         <div class="champ">
+           <label for="port-public">Port de la Forge</label>
+           <input class="controle" id="port-public" name="public_port" type="number"
+                  min="1" max="65535" value="${echapper(ui.values.public_port)}">
+           <p class="champ__aide">Un port de la Forge appartient à la <strong>machine</strong>,
+           pas au Spark : le premier qui le prend le prend.</p>
+           ${interdits}
+         </div>
+         <div class="champ">
+           <label for="port-cible">Port du Spark</label>
+           <input class="controle" id="port-cible" name="target_port" type="number"
+                  min="1" max="65535" value="${echapper(ui.values.target_port)}">
+         </div>
+         <div class="champ">
+           <label for="port-protocole">Protocole</label>
+           <select class="controle" id="port-protocole" name="protocol">
+             <option value="tcp"${ui.values.protocol === 'udp' ? '' : ' selected'}>TCP</option>
+             <option value="udp"${ui.values.protocol === 'udp' ? ' selected' : ''}>UDP</option>
+           </select>
+         </div>
+         <div class="champ">
+           <label for="port-note">À quoi il sert</label>
+           <input class="controle" id="port-note" name="port_note" type="text"
+                  autocomplete="off" placeholder="SMTP entrant"
+                  value="${echapper(ui.values.port_note)}">
+           <p class="champ__aide">Six mois plus tard, c’est la seule chose qui
+           dira pourquoi ce port est ouvert.</p>
+         </div>`,
+  });
+
+  return `
+<section class="carte bloc" aria-labelledby="titre-ports">
+  <h2 id="titre-ports">Ports publiés</h2>
+  <p class="note">Pour ce qui ne parle pas HTTP. Le reste passe par une route publique.</p>
+  ${lignes}
+  ${declencheur('port', 'Publier un port')}
+  ${modale}
+</section>`;
 }
 
 /* -------------------------------------------------------------------- clés */

@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-49 · docs/DAT.md §39 (les ports publies),
+ *           §39.2, §39.3, §39.5
  * @verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la
  *           preseance du plus specifique, la vue depuis le joker) · §14.7, §14.8
  * @verifies docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
@@ -17,6 +19,7 @@ import assert from 'node:assert/strict';
 import {
   renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
   renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation, zonePour,
+  renderPortsPanel,
 } from './spark-admin.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -598,4 +601,71 @@ test('la prise de pas s’annonce apres une declaration reussie', () => {
 
 test('sans prise de pas, rien ne s’affiche', () => {
   assert.ok(!renderRoutesPanel(SPARK, [ROUTE_DNS]).includes('prise-de-pas'));
+});
+
+// --- les ports publiés (SPK-49, docs/DAT.md §39) ---------------------------
+
+const PORT = { public_port: 2525, target_port: 25, protocol: 'tcp',
+               note: 'SMTP entrant', applied_at: '2026-08-20T09:00:00' };
+const RESERVES = [{ port: 22, reason: 'le sshd de la Forge, seule porte du système' },
+                  { port: 443, reason: 'le proxy, qui sert les routes publiques en TLS' }];
+
+test('un port publie se lit avec sa cible, son protocole et sa raison d’etre', () => {
+  const rendu = renderPortsPanel(SPARK, [PORT]);
+  assert.ok(rendu.includes('2525/tcp'));
+  assert.ok(rendu.includes('port 25 du Spark'));
+  assert.ok(rendu.includes('SMTP entrant'));
+});
+
+test('l’absence de port est NOMMEE, pas rendue par un tableau vide', () => {
+  assert.ok(renderPortsPanel(SPARK, []).includes('Aucun port de la Forge'));
+});
+
+test('un port NON APPLIQUE se voit — accent, pas danger', () => {
+  // C'est un retard, pas une panne : le §18.5 transpose au §39.5.
+  const rendu = renderPortsPanel(SPARK, [{ ...PORT, applied_at: null }]);
+  assert.ok(rendu.includes('non appliqué'));
+  assert.ok(rendu.includes('badge--accent'));
+  assert.ok(!rendu.includes('badge--danger'));
+});
+
+test('la modale DIT ce que le port fait perdre, et vers quoi se rabattre', () => {
+  // §39.3 : publier un port pour une application qui parle HTTP est presque
+  // toujours une erreur — on perd le certificat sans rien gagner. Le produit ne
+  // l'interdit pas, il le dit.
+  const rendu = renderPortsPanel(SPARK, [], ui({ open: 'port' }));
+  assert.ok(rendu.includes('perd le'));
+  assert.ok(rendu.includes('certificat automatique'));
+  assert.ok(rendu.includes('route publique'));
+  assert.ok(/messagerie|base de données/.test(rendu));
+});
+
+test('la modale ENUMERE les ports reserves et la raison de chacun', () => {
+  // « réservé » seul laisserait chercher pourquoi, et un exploitant qui ne sait
+  // pas ce qui occupe 443 essaiera de le libérer (§39.5).
+  const rendu = renderPortsPanel(SPARK, [], ui({ open: 'port' }), RESERVES);
+  assert.ok(rendu.includes('443'));
+  assert.ok(rendu.includes('proxy'));
+  assert.ok(rendu.includes('sshd'));
+});
+
+test('un port de la Forge est annonce comme une ressource de la MACHINE', () => {
+  const rendu = renderPortsPanel(SPARK, [], ui({ open: 'port' }));
+  assert.ok(rendu.includes('machine'));
+  assert.ok(rendu.includes('premier qui le prend'));
+});
+
+test('le retrait d’un port se CONFIRME, en nommant le port et l’effet', () => {
+  const rendu = renderPortsPanel(SPARK, [PORT],
+    ui({ confirming: { kind: 'port', id: '2525' } }));
+  assert.ok(rendu.includes('Retirer le port 2525 ?'));
+  assert.ok(rendu.includes('cessera d’être joignable'));
+  assert.ok(rendu.includes('bouton--destructif'));
+});
+
+test('un refus du serveur s’affiche DANS la modale du port', () => {
+  const rendu = renderPortsPanel(SPARK, [], ui({
+    open: 'port', refusal: { panel: 'port', message: 'Le port 443 est tenu par le proxy.' },
+  }));
+  assert.ok(rendu.includes('Le port 443 est tenu par le proxy.'));
 });

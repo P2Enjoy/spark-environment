@@ -174,7 +174,7 @@ function brancherPanneaux() {
   // du catalogue, qui vit sur une autre destination et a son propre état.
   for (const bouton of racine.querySelectorAll(
     '[data-ouvre="route"], [data-ouvre="key"], [data-ouvre="snapshot"],'
-    + ' [data-ouvre="protection"]')) {
+    + ' [data-ouvre="protection"], [data-ouvre="port"]')) {
     bouton.addEventListener('click', () => {
       admin.open = bouton.dataset.ouvre;
       admin.refusal = null;
@@ -195,7 +195,7 @@ function brancherPanneaux() {
 
   const formulaire = racine.querySelector(
     '[data-modale="route"], [data-modale="key"], [data-modale="snapshot"],'
-    + ' [data-modale="protection"], [data-modale="dns"]');
+    + ' [data-modale="protection"], [data-modale="dns"], [data-modale="port"]');
   if (formulaire) {
     for (const controle of formulaire.querySelectorAll('input, select')) {
       controle.addEventListener('input', () => {
@@ -228,6 +228,7 @@ function brancherPanneaux() {
       if (quoi === 'snapshot') return prendreInstantane();
       if (quoi === 'protection') return basculerProtection();
       if (quoi === 'dns') return poserEnregistrementDns();
+      if (quoi === 'port') return publierPort();
     });
   }
 
@@ -251,6 +252,7 @@ function brancherPanneaux() {
   }
 
   demande('retire-route', 'route');
+  demande('retire-port', 'port');
   demande('restaure', 'snapshot-restore');
   demande('supprime-instantane', 'snapshot-delete');
 
@@ -285,6 +287,8 @@ function brancherPanneaux() {
   geste('confirme-suppression', (nom) =>
     agir('snapshot', () => appel('DELETE',
       `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots/${encodeURIComponent(nom)}`)));
+  geste('confirme-port', (port) =>
+    agir('port', () => appel('DELETE', `/v1/ports/${encodeURIComponent(port)}`)));
   geste('confirme-restauration', (nom) => restaurer(nom, false));
   // §26.5 : l'acceptation de la perte n'est atteignable qu'APRÈS le refus.
   geste('accepte-perte', (nom) => restaurer(nom, true));
@@ -495,6 +499,22 @@ async function poserEnregistrementDns() {
   }
 }
 
+/**
+ * Publie un port de la Forge vers ce Spark (SPK-49, §39).
+ *
+ * Aucun contrôle d'unicité ici : le port public est UNIQUE en base, et une
+ * vérification d'interface ne protégerait de rien face à deux consoles.
+ */
+async function publierPort() {
+  const v = etat.admin.values;
+  const resultat = await agir('port', () => appel('POST', '/v1/ports', {
+    spark: etat.spark.name,
+    public_port: Number(v.public_port), target_port: Number(v.target_port),
+    protocol: v.protocol || 'tcp', note: v.port_note ?? '',
+  }));
+  if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
+}
+
 async function autoriserCle() {
   const v = etat.admin.values;
   const nom = etat.spark.name;
@@ -652,16 +672,21 @@ async function chargerDetail(nom, facette = '') {
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
-    const [usage, routes, sshConfig, registry, snapshots, audit] = await Promise.all([
+    const [usage, routes, sshConfig, registry, snapshots, audit, publies] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
       api('/v1/ssh-keys').then((r) => r.keys).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/snapshots`).then((s) => s.snapshots).catch(() => []),
       api('/v1/audit?limit=200').then((a) => a.entries.filter((e) => e.target_id === etat.spark.id)).catch(() => []),
+      // SPK-49 · §39.2 : la liste est celle de la FORGE ; on ne garde que les
+      // ports qui mènent à CE Spark, mais les réservés valent pour la machine.
+      api('/v1/ports').catch(() => ({ ports: [], reserved: [] })),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit };
+                    snapshots, audit,
+                    ports: (publies.ports ?? []).filter((p) => p.spark_id === etat.spark.id),
+                    reservedPorts: publies.reserved ?? [] };
     etat.status = 'ready';
   } catch (erreur) {
     etat.status = 'error';

@@ -15,7 +15,8 @@
  */
 
 import { stateOf, formatBytes, formatBps, formatCpu, MEASURE } from './tokens.js';
-import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel, ADMIN_VIDE } from './spark-admin.js';
+import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
+         renderPortsPanel, ADMIN_VIDE } from './spark-admin.js';
 import { renderOngletsSpark } from './host-images.js';
 import { renderModale } from './modale.js';
 import { formatDate } from './host-view.js';
@@ -269,6 +270,7 @@ function renderJournal(entries = []) {
 export function renderSparkDetail({ status, spark = null, usage = null, routes = [],
                                     keys = [], registry = [], sshConfig = null,
                                     snapshots = [], audit = [],
+                                    ports = [], reservedPorts = [],
                                     error = null, confirming = null,
                                     admin = ADMIN_VIDE, facette = '' } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
@@ -284,7 +286,10 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
         ${renderProtection(spark, admin)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}</div>
     </div>`,
-    routes: () => renderRoutesPanel(spark, routes, admin),
+    // §39.3 : le nom D'ABORD, le port publié comme un second geste qui annonce
+    // ce qu'il coûte. Les deux vivent donc sur la même facette, dans cet ordre.
+    routes: () => renderRoutesPanel(spark, routes, admin)
+                  + renderPortsPanel(spark, ports, admin, reservedPorts),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin),
     instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
     journal: () => renderJournal(audit) ||
