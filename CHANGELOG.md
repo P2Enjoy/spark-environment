@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- Unité SPK-57 : redimensionner un Spark existant. Le produit crée et supprime,
+  il ne sait pas ajuster — relevé sur la Forge réelle, aucune route ne modifie
+  les quotas.
 - **L'écran du terminal dit pourquoi le chemin normal n'a pas abouti** (SPK-43,
   `docs/DAT.md` §37.2) : quand le shell distant se termine tout seul, la console
   mesure le serveur SSH du Spark et nomme ce qu'elle trouve — aucun serveur,
@@ -115,6 +118,9 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- Recettes DNS : le champ ne demande plus que le libellé, la zone s'affiche en
+  suffixe, vide vaut le domaine lui-même, et l'adresse publique de la Forge est
+  pré-remplie depuis le serveur courant.
 - Écran de la Forge et écran du journal : les paragraphes explicatifs sont
   retirés. Restent la valeur, son unité, le réglage qui la commande — et la
   mesure vive de l'ARC, relevée à chaque requête. Le manuel M4 et M12 portaient

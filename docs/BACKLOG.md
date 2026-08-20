@@ -2133,6 +2133,46 @@ qu'il ne pouvait que faire diverger.
   le manuel M4 et M12 à relire pour qu'ils portent bien ce que l'écran a cessé de
   dire.
 
+### [ ] SPK-57 · Redimensionner un Spark existant
+
+**Trou constaté le 2026-08-20, sur question du responsable.** Le produit crée et
+supprime ; il ne sait pas **ajuster**. Relevé du contrat servi par la Forge
+réelle : aucune route ne modifie les quotas — ni `PATCH /v1/sparks/{name}`, ni
+équivalent. Les seules écritures sont le cycle de vie, la protection, les
+instantanés et les clés.
+
+Aujourd'hui, agrandir un Spark suppose de le supprimer et de le recréer : on perd
+la cellule, ses images Docker, ses volumes et sa configuration. Pour un produit
+dont l'unité **est** une cellule à quota, c'est le geste d'exploitation le plus
+courant qui manque.
+
+Le comble est déjà écrit ailleurs : SPK-30 existe pour qu'un Spark saturé reste
+**reconfigurable** (§8.7) — une propriété au service d'un geste qui n'a jamais
+été spécifié.
+
+- Spécification à produire : section du DAT, `docs/SCHEMA.md` si le registre doit
+  garder une trace des redimensionnements, manuel M8.
+- Portée : modifier mémoire, plafond et réservation CPU, débit réseau, taille de
+  disque, et le **mode CPU** ; l'admission control rejoué sur le **delta**, pas
+  sur la demande entière ; le registre écrit avant Incus (§14.2) ; refus chiffré
+  comme à la création (§7.7) ; journal d'audit ; geste refusé sur un Spark protégé
+  (§35.2).
+- Ce que l'unité doit **mesurer avant de promettre**, chaque cas séparément :
+  - à chaud ou non — le cpuset se reconfigure à chaud (§13), la mémoire aussi ;
+    le disque et le mode CPU restent à établir ;
+  - **rétrécir** n'est pas agrandir : réduire la mémoire sous l'usage courant
+    invite l'OOM killer, réduire un disque sous ce qu'il contient est un refus, et
+    passer de `dedicated` à `shared` rend des cœurs qu'il faut redistribuer
+    (§7.4 bis) puis repondérer (§32.2) ;
+  - un Spark **arrêté** et un Spark **en marche** ne se redimensionnent pas de la
+    même façon : dire lequel exige un redémarrage, et le dire à l'écran avant
+    d'agir, pas après.
+- DoD : tests d'unité des refus, dont chaque rétrécissement impossible nommé ;
+  test d'intégration prouvant que l'admission compte le **delta** ; preuve sur la
+  Forge réelle qu'un agrandissement à chaud est appliqué et **mesurable dans la
+  cellule** — un quota changé au registre mais pas dans le noyau serait le pire
+  des cas ; parcours E2E depuis le parcours canonique ; manuel M8 et captures.
+
 ---
 
 ## Réservé, non planifié
