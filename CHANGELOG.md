@@ -110,6 +110,18 @@
   README. Le sens réseau — nom d'hôte, clé d'hôte, « Hôte, utilisateur et port »
   — et l'« hôte console » ne bougent pas.
 
+- Unité SPK-43, en cours : **un terminal dans un Spark, depuis la console.**
+  C'est votre poste qui s'y connecte avec votre clé ; le serveur qui gère les
+  Sparks n'est pas sur ce chemin. Quitter l'onglet termine la session, et une
+  inactivité prolongée la ferme après un avertissement.
+
+  Le journal retient l'ouverture et la fermeture avec leur durée, et **rien de ce
+  qui est tapé** — le caviardage ne saurait pas nettoyer un flux interactif, et
+  enregistrer les frappes créerait un dépôt de secrets en clair.
+
+  Nouvelle route `POST /v1/audit`, étroite : liste blanche d'actions, acteur pris
+  de l'en-tête, charge bornée.
+
 - Unité SPK-46 : **la console traduit les états que le serveur rapporte.** Le
   journal affichait « starting » → « running » à quelques centimètres d'un badge
   qui disait « En marche ». Le journal reste technique — il sert au diagnostic —
