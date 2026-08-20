@@ -29,7 +29,7 @@ from . import cgroup as cgroup_service
 from . import hostmem
 from . import images as images_service
 from .db import connect
-from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
+from .incus import FakeIncus, IncusClient, IncusError, InstanceAbsente, UnixSocketIncus
 from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
@@ -1155,9 +1155,22 @@ def create_app(config: Config) -> FastAPI:
                     app.state.incus.set_instance_state(apres["name"], "start")
                     service.finish(connection, apres["id"], success=True)
             elif commande is Command.DELETE:
+                # SPK-52 · §14.5 : une instance déjà absente vaut suppression
+                # RÉUSSIE. Sans cela, un Spark dont l'instance a disparu hors du
+                # produit restait indéfiniment au registre, pesait dans
+                # l'admission, et le seul recours était d'ouvrir la base à la
+                # main — ce que la console existe précisément pour éviter.
+                instance_absente = False
                 try:
                     if apres["incus_name"]:
-                        app.state.incus.delete_instance(apres["incus_name"])
+                        try:
+                            app.state.incus.delete_instance(apres["incus_name"])
+                        except InstanceAbsente:
+                            # ABSENCE RAPPORTÉE, et elle seule. Un pilote
+                            # injoignable lève `IncusError` et reste une panne :
+                            # ne pas pouvoir demander n'est pas savoir que ce
+                            # n'est pas là (§33.3).
+                            instance_absente = True
                     if apres["cpu_mode"] in ("dedicated", "shared-pinned"):
                         # Les cœurs retournent au pool, et les Sparks partagés
                         # retrouvent un poids calculé sur la capacité élargie.
@@ -1166,6 +1179,19 @@ def create_app(config: Config) -> FastAPI:
                     service.finish(connection, apres["id"], success=False, error=str(erreur))
                     raise HTTPException(status_code=502, detail={
                         "error": "incus_failed", "message": str(erreur)}) from erreur
+                if instance_absente:
+                    # L'écart n'est PAS caché : un `delete` ordinaire et un
+                    # `delete` sur une instance disparue ne se lisent pas pareil
+                    # au journal (§14.5).
+                    audit_service.record(
+                        connection, None, "spark.delete", "ok",
+                        f"Spark « {name} » retiré du registre alors que le pilote "
+                        "rapportait son instance ABSENTE. La ligne pesait dans "
+                        "l'admission sans que rien ne lui corresponde.",
+                        target_type="spark", target_id=apres["id"],
+                        payload={"instance_absente": True,
+                                 "incus_name": apres["incus_name"]},
+                    )
                 service.finish(connection, apres["id"], success=True)
                 # Le suivi de taux garde le relevé précédent : le conserver
                 # ferait calculer un taux pour un Spark qui n'existe plus.

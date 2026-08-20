@@ -19,6 +19,25 @@ import json
 import httpx
 
 
+class InstanceAbsente(RuntimeError):
+    """Le pilote RAPPORTE que l'instance n'existe pas.
+
+    @spec docs/BACKLOG.md#SPK-52 · docs/DAT.md §14.5 (une instance déjà absente
+          vaut suppression réussie), §33.3 (ne pas savoir n'est pas savoir que
+          ce n'est pas là)
+
+    Distincte d'`IncusError` À DESSEIN. Le §14.5 fait de l'absence une raison de
+    réussir la suppression — mais d'une absence RAPPORTÉE, jamais d'un pilote
+    injoignable. Confondre les deux ferait effacer une ligne du registre parce
+    qu'on n'a pas pu poser la question, et l'instance continuerait de consommer
+    sans être comptée.
+
+    Elle N'hérite PAS d'`IncusError` : les appelants qui rattrapent `IncusError`
+    pour conclure à une panne ne doivent pas l'attraper par mégarde. Ceux que
+    l'absence intéresse la nomment.
+    """
+
+
 class IncusError(RuntimeError):
     """Incus est injoignable, ou a refuse la requete."""
 
@@ -103,9 +122,19 @@ class UnixSocketIncus:
                 response = client.request(method, f"http://incus{path}", json=body)
                 response.raise_for_status()
                 envelope = response.json()
+        except httpx.HTTPStatusError as error:
+            # §14.5 : un 404 est une absence RAPPORTÉE, pas une panne. C'est la
+            # seule réponse d'Incus qui autorise à conclure que la chose n'est
+            # pas là ; toutes les autres disent qu'on n'a pas pu savoir.
+            if error.response.status_code == 404:
+                raise InstanceAbsente(
+                    f"Incus ne connaît pas {path}.") from error
+            raise IncusError(f"Incus a refuse {method} {path} : {error}") from error
         except httpx.HTTPError as error:
             raise IncusError(f"Incus a refuse {method} {path} : {error}") from error
 
+        if envelope.get("error_code") == 404:
+            raise InstanceAbsente(f"Incus ne connaît pas {path}.")
         if envelope.get("error_code"):
             raise IncusError(f"Incus a refuse {method} {path} : {envelope.get('error')}")
 
@@ -358,8 +387,12 @@ class FakeIncus:
         self._persist()
 
     def delete_instance(self, name: str) -> None:
+        # §14.5 : une absence RAPPORTÉE porte son propre type. Le pilote factice
+        # doit la rendre comme le vrai, sans quoi la règle serait éprouvée sur
+        # une forme qui ne tournera jamais en production.
+        self._maybe_fail("delete_instance")
         if name not in self.created:
-            raise IncusError(f"Instance « {name} » absente.")
+            raise InstanceAbsente(f"Instance « {name} » absente.")
         del self.created[name]
         self._persist()
 
