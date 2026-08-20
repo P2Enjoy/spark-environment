@@ -1080,7 +1080,7 @@ def create_app(config: Config) -> FastAPI:
                     "complete": bootstrap_service.complet(vus)}
 
     @app.post("/v1/sparks/{name}/bootstrap", tags=["amorcage"], status_code=200)
-    def run_bootstrap(name: str) -> dict:
+    def run_bootstrap(name: str, body: dict = Body(default={})) -> dict:
         """Amorce ce qui MANQUE, et rien d'autre (docs/DAT.md §42.1, §42.7).
 
         @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §41.2, §42.1, §42.3, §42.8
@@ -1095,14 +1095,38 @@ def create_app(config: Config) -> FastAPI:
             # chez le locataire. C'est exactement ce que la protection arrête,
             # et elle se lève par son geste distinct — jamais au passage.
             protection_service.ensure_writable(connection, name, "bootstrap")
+            # §42.2 : enraciné par DÉFAUT. L'option porte sur ce geste, pas sur
+            # le Spark : elle n'est pas stockée au registre, la vérité étant dans
+            # la cellule (§42.2 bis).
+            mode = (bootstrap_service.ROOTLESS if bool((body or {}).get("rootless"))
+                    else bootstrap_service.ENRACINE)
             try:
                 avant = _relever_amorcage(connection, spark)
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "bootstrap_failed", "message": str(erreur)}) from erreur
+
+            # §42.2 bis : basculer un Docker en place déplacerait le démon sous un
+            # autre compte, et avec lui la production du locataire. On refuse, on
+            # ne bascule pas.
+            try:
+                bootstrap_service.verifier_mode(avant, mode)
+            except bootstrap_service.ModeConflit as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "bootstrap_mode_conflict", "message": str(erreur),
+                    "requested": mode,
+                    "installed": next((v.get("mode") for v in avant
+                                       if v["key"] == "docker"), None),
+                }) from erreur
+
+            try:
                 a_faire = bootstrap_service.manques(avant)
                 for cle in a_faire:
                     if cle == "cles":
                         _apply_keys(connection, spark)
                         continue
-                    commande = bootstrap_service.script_pour(cle)
+                    commande = bootstrap_service.script_pour(
+                        cle, rootless=mode == bootstrap_service.ROOTLESS)
                     if commande:
                         app.state.incus.exec_capture(spark["incus_name"], commande)
                 apres = _relever_amorcage(connection, spark) if a_faire else avant
@@ -1117,12 +1141,15 @@ def create_app(config: Config) -> FastAPI:
             # tenté.
             audit_service.record(
                 connection, None, "spark.bootstrap", "ok",
-                bootstrap_service.message(name, a_faire),
+                bootstrap_service.message(name, a_faire, mode),
                 target_type="spark", target_id=spark["id"],
+                # §42.2 bis : le mode figure au journal MÊME quand rien n'a été
+                # fait. C'est ce qu'on cherchera le jour où une pile ne démarre
+                # pas, et il ne se retrouve nulle part ailleurs.
                 payload={"path": "incus_exec", "changed": bool(a_faire),
-                         "items": a_faire},
+                         "mode": mode, "items": a_faire},
             )
-            return {"spark": name, "path": "incus_exec",
+            return {"spark": name, "path": "incus_exec", "mode": mode,
                     "changed": bool(a_faire), "items": lignes,
                     "complete": bootstrap_service.complet(apres)}
 

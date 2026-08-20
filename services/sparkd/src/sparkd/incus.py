@@ -504,6 +504,12 @@ class FakeIncus:
         if installe and "docker-ce" in script:
             runtime["docker"] = "Docker version 29.7.2"
             runtime["origine"] = "docker-ce"
+            # §42.2 bis : le mode que la cellule PORTE après l'installation. Sans
+            # lui, un second amorçage ne verrait aucun mode en place et le refus
+            # de bascule ne pourrait pas être éprouvé.
+            runtime["mode"] = ("rootless"
+                               if "dockerd-rootless-setuptool" in script
+                               else "enracine")
         if installe and "docker-compose-plugin" in script:
             runtime["compose"] = "Docker Compose version v2.40.0"
         self._persist()

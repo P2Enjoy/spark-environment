@@ -339,3 +339,121 @@ def test_exec_capture_sur_une_instance_ABSENTE_leve(tmp_path):
 
     with pytest.raises(IncusError):
         client.app.state.incus.exec_capture("inexistant", ["bash", "-lc", "true"])
+
+
+# --- SPK-54 · LE MODE ROOTLESS, ET LE REFUS DE BASCULER (§42.2, §42.2 bis) ---
+
+
+def test_le_defaut_est_ENRACINE_et_l_option_doit_etre_demandee(tmp_path):
+    """§42.2 : « d'où le défaut : enraciné, avec le rootless offert à qui le
+    demande. Annoncer l'inverse ferait échouer la promesse centrale du produit
+    sur la moitié des piles. »"""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    corps = client.post(f"/v1/sparks/{nom}/bootstrap").json()
+    assert corps["mode"] == bootstrap.ENRACINE
+    lances = json.dumps(client.app.state.incus.created[nom]["commands"])
+    assert "dockerd-rootless-setuptool" not in lances
+
+
+def test_l_option_rootless_installe_ce_qu_il_faut_pour_qu_il_SURVIVE(tmp_path):
+    """`enable-linger` n'est pas une précaution : sans lui le démon meurt à la fin
+    de la session du compte, ce qui donnerait une cellule qui marche jusqu'au
+    premier redémarrage — et cela ne se verrait qu'alors (§42.2 bis)."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    corps = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True}).json()
+    assert corps["mode"] == bootstrap.ROOTLESS
+    lances = json.dumps(client.app.state.incus.created[nom]["commands"])
+    assert "docker-ce-rootless-extras" in lances
+    assert "dockerd-rootless-setuptool" in lances
+    assert "enable-linger" in lances
+    # Deux démons sur la même cellule se disputeraient stockage et réseaux.
+    assert "systemctl disable --now docker.service" in lances
+
+
+def test_le_MODE_est_observe_et_rendu_par_le_releve(tmp_path):
+    client = _client(tmp_path)
+    nom = _creer(client)
+    client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    releve = client.get(f"/v1/sparks/{nom}/bootstrap").json()
+    docker = next(v for v in releve["items"] if v["key"] == "docker")
+    assert docker["mode"] == bootstrap.ROOTLESS
+
+
+def test_un_Docker_ABSENT_n_a_PAS_de_mode(tmp_path):
+    """§42.2 bis : lui en attribuer un ferait croire à un choix là où rien ne
+    tourne (§14.6 — « inconnu » n'est pas une valeur)."""
+    vus = bootstrap.juger({"docker": "absent", "origine": "absent", "mode": "absent"})
+    docker = next(v for v in vus if v["key"] == "docker")
+    assert docker["mode"] is None
+
+
+def test_un_docker_io_de_distribution_n_a_pas_de_mode_non_plus(tmp_path):
+    """Il tourne, mais il est défectueux : lui reconnaître un mode reviendrait à
+    le compter comme un choix valide."""
+    vus = bootstrap.juger({"docker": "Docker version 26.1.5",
+                           "origine": "docker.io", "mode": "enracine"})
+    docker = next(v for v in vus if v["key"] == "docker")
+    assert docker["state"] == bootstrap.DEFECT
+    assert docker["mode"] is None
+
+
+def test_BASCULER_un_Docker_en_place_est_REFUSE_et_les_deux_modes_sont_nommes(tmp_path):
+    """LE point du §42.2 bis. Basculer déplacerait le démon sous un autre compte,
+    et avec lui les conteneurs, volumes et réseaux du locataire — sa production,
+    sans qu'il l'ait demandé."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    assert client.post(f"/v1/sparks/{nom}/bootstrap").json()["mode"] == "enracine"
+    avant = len(client.app.state.incus.created[nom]["commands"])
+
+    reponse = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    assert reponse.status_code == 409, reponse.text
+    detail = reponse.json()["detail"]
+    assert detail["error"] == "bootstrap_mode_conflict"
+    assert detail["installed"] == "enracine"
+    assert detail["requested"] == "rootless"
+    assert "enraciné" in detail["message"] and "rootless" in detail["message"]
+    # …et il dit ce que l'amorçage NE FERA PAS.
+    assert "vider la cellule" in detail["message"]
+
+    # RIEN n'a été exécuté : un refus ne touche pas la cellule.
+    apres = client.app.state.incus.created[nom]["commands"]
+    assert len(apres) - avant == 1, "seul le relevé, qui n'écrit rien"
+    assert "dockerd-rootless-setuptool" not in json.dumps(apres[avant:])
+
+
+def test_le_refus_de_bascule_joue_dans_les_DEUX_sens(tmp_path):
+    client = _client(tmp_path)
+    nom = _creer(client)
+    client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    reponse = client.post(f"/v1/sparks/{nom}/bootstrap")
+    assert reponse.status_code == 409
+    assert reponse.json()["detail"]["installed"] == "rootless"
+
+
+def test_redemander_le_MEME_mode_reste_idempotent(tmp_path):
+    """Le refus porte sur la BASCULE, pas sur le fait de redemander. Confondre
+    les deux rendrait un second amorçage impossible."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    reponse = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    assert reponse.status_code == 200, reponse.text
+    assert reponse.json()["changed"] is False
+
+
+def test_le_journal_porte_le_MODE_meme_quand_rien_n_a_ete_fait(tmp_path):
+    """§42.2 bis : c'est ce qu'on cherchera le jour où une pile ne démarre pas,
+    et il ne se retrouve nulle part ailleurs."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    entrees = client.get("/v1/audit?action=spark.bootstrap").json()["entries"]
+    assert len(entrees) == 2
+    for entree in entrees:
+        assert json.loads(entree["payload"])["mode"] == "rootless"
+    assert any("rien à faire" in e["message"] and "rootless" in e["message"]
+               for e in entrees)

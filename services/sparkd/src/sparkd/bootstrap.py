@@ -41,9 +41,21 @@ docker=$(docker --version 2>/dev/null | head -1 || echo absent)
 origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null \
           || dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
 compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
-printf 'sshd=%s\ncles=%s\ndepot=%s\ndocker=%s\norigine=%s\ncompose=%s\n' \
-  "$sshd" "$cles" "$depot" "$docker" "$origine" "$compose"
+mode=$(systemctl is-active docker 2>/dev/null >/dev/null && echo enracine \
+       || (id spark-docker >/dev/null 2>&1 && echo rootless || echo absent))
+printf 'sshd=%s\ncles=%s\ndepot=%s\ndocker=%s\norigine=%s\ncompose=%s\nmode=%s\n' \
+  "$sshd" "$cles" "$depot" "$docker" "$origine" "$compose" "$mode"
 """
+
+#: Le compte de service du mode rootless. Un nom FIXE : il sert de signal à la
+#: détection, et le laisser choisir rendrait le mode illisible d'un amorçage à
+#: l'autre (§42.2 bis).
+COMPTE_ROOTLESS = "spark-docker"
+
+#: Les deux modes du §42.2 bis. `None` quand Docker est absent ou vient de la
+#: distribution : on n'attribue pas un mode à ce qui ne tourne pas.
+ENRACINE = "enracine"
+ROOTLESS = "rootless"
 
 #: L'ordre compte : le dépôt avant Docker, Docker avant Compose.
 ELEMENTS = ("sshd", "cles", "depot", "docker", "compose")
@@ -134,8 +146,14 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
         )
     else:
         etat_docker, detail_docker = ABSENT, "absent"
+    # §42.2 bis : le mode est une OBSERVATION, pas une préférence. Il dit ce qui
+    # EST. Un Docker absent ou de distribution n'en a pas : lui en attribuer un
+    # ferait croire à un choix là où il n'y a rien qui tourne.
+    releve_mode = brut.get("mode", "absent")
+    mode = releve_mode if (etat_docker == PRESENT
+                           and releve_mode in (ENRACINE, ROOTLESS)) else None
     vus.append({"key": "docker", "label": LIBELLES["docker"],
-                "state": etat_docker, "detail": detail_docker})
+                "state": etat_docker, "detail": detail_docker, "mode": mode})
 
     compose = brut.get("compose", "absent")
     vus.append({
@@ -200,7 +218,62 @@ SCRIPTS = {
 }
 
 
-def script_pour(cle: str, cles_publiques: str = "") -> list[str] | None:
+#: Le mode ROOTLESS (§42.2, §42.2 bis). Il s'ajoute à l'installation enracinée
+#: plutôt que de la remplacer : `docker-ce` fournit le binaire et le paquet
+#: `-rootless-extras` l'outil d'installation par compte.
+#:
+#: `enable-linger` n'est pas une précaution : sans lui, le démon du compte meurt
+#: à la fin de sa session, ce qui donnerait une cellule qui marche jusqu'au
+#: premier redémarrage — et cela ne se verrait qu'alors.
+SCRIPT_ROOTLESS = APT + (
+    "apt-get install -y -qq docker-ce-rootless-extras uidmap dbus-user-session\n"
+    f"id {COMPTE_ROOTLESS} >/dev/null 2>&1 || "
+    f"useradd -m -s /bin/bash {COMPTE_ROOTLESS}\n"
+    f"loginctl enable-linger {COMPTE_ROOTLESS}\n"
+    # Le démon enraciné est ARRÊTÉ : deux démons sur la même cellule se
+    # disputeraient le stockage et les réseaux.
+    "systemctl disable --now docker.service docker.socket 2>/dev/null || true\n"
+    f"machinectl shell {COMPTE_ROOTLESS}@ /usr/bin/env "
+    "XDG_RUNTIME_DIR=/run/user/$(id -u %s) dockerd-rootless-setuptool.sh install\n"
+    % COMPTE_ROOTLESS
+)
+
+
+class ModeConflit(RuntimeError):
+    """Le mode demandé n'est pas celui qui tourne (§42.2 bis).
+
+    Ce n'est PAS une panne : c'est un refus, et il se rend en `409`.
+    """
+
+
+def verifier_mode(vus: list[dict[str, Any]], voulu: str) -> None:
+    """Refuse de BASCULER un Docker déjà en place (§42.2 bis).
+
+    @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.2 bis
+
+    Basculer déplacerait le démon sous un autre compte, et avec lui les
+    conteneurs, les volumes et les réseaux du locataire — sa production, sans
+    qu'il l'ait demandé. Le §42.1 ne tolère déjà pas un redémarrage gratuit du
+    démon ; une bascule est un ordre de grandeur au-dessus.
+
+    Sur une cellule vierge, les deux modes sont ouverts : c'est le seul moment
+    où le choix se fait sans rien casser.
+    """
+    docker = next((v for v in vus if v["key"] == "docker"), None)
+    en_place = docker.get("mode") if docker else None
+    if en_place is None or en_place == voulu:
+        return
+    lisible = {ENRACINE: "enraciné", ROOTLESS: "rootless"}
+    raise ModeConflit(
+        f"Ce Spark fait déjà tourner un Docker {lisible[en_place]}, et l'amorçage "
+        f"a été demandé en {lisible[voulu]}. Basculer déplacerait le démon sous un "
+        "autre compte, et avec lui les conteneurs, les volumes et les réseaux qui "
+        "y tournent. L'amorçage ne le fait pas : il faudrait vider la cellule "
+        "d'abord, ce qui est un geste du locataire et non de la console."
+    )
+
+
+def script_pour(cle: str, cles_publiques: str = "", rootless: bool = False) -> list[str] | None:
     """Le geste de réparation d'un élément, ou `None` s'il n'en a pas.
 
     Les clés font exception : elles ne s'installent pas, elles se réécrivent
@@ -209,6 +282,8 @@ def script_pour(cle: str, cles_publiques: str = "") -> list[str] | None:
     if cle == "cles":
         return None
     script = SCRIPTS.get(cle)
+    if script and cle == "docker" and rootless:
+        script = script + SCRIPT_ROOTLESS
     return _shell(script) if script else None
 
 
@@ -252,10 +327,15 @@ def compte_rendu(avant: list[dict[str, Any]], apres: list[dict[str, Any]],
     return lignes
 
 
-def message(nom: str, agis: list[str]) -> str:
-    """Ce que le journal lit (§42.8). Il NOMME ce qui a été installé."""
+def message(nom: str, agis: list[str], mode: str = ENRACINE) -> str:
+    """Ce que le journal lit (§42.8). Il NOMME ce qui a été installé, et le mode.
+
+    Le mode figure même quand rien n'a été fait : c'est ce qu'on cherchera le
+    jour où une pile ne démarre pas (§42.2 bis).
+    """
+    lisible = {ENRACINE: "enraciné", ROOTLESS: "rootless"}.get(mode, mode)
     if not agis:
-        return (f"Amorçage demandé sur « {nom} » : rien à faire, "
+        return (f"Amorçage demandé sur « {nom} » en {lisible} : rien à faire, "
                 "la cellule était déjà complète.")
     quoi = ", ".join(LIBELLES.get(cle, cle) for cle in agis)
-    return (f"Amorçage de « {nom} » par le plan de contrôle : {quoi}.")
+    return (f"Amorçage de « {nom} » par le plan de contrôle, en {lisible} : {quoi}.")
