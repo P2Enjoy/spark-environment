@@ -6114,3 +6114,164 @@ gabarit de déploiement, ni un fichier de configuration. Il ne décrit pas
 l'application du locataire : il décrit **la cellule qui l'accueille**, et s'arrête
 là où le §1 s'arrête.
 
+
+
+## 45. Modèle de menace des actions sensibles (SPK-35)
+
+**Instruction rendue le 2026-08-20.** Cette section n'implémente rien : elle
+établit contre quoi le produit se défend, contre quoi il ne se défend pas, et
+elle tranche chaque piste. Le §6.23 du design system impose une confirmation à
+toute action sensible ; le §35 ajoute un verrou par Spark. Ni l'un ni l'autre ne
+prouve **qui agit**.
+
+### 45.1 Les menaces, hiérarchisées
+
+Le classement croise trois choses : la fréquence, le dommage, et **ce que le
+produit peut y faire**. Une menace grave contre laquelle il ne peut rien ne se
+place pas en tête d'une liste de travaux.
+
+| # | Menace | Fréquence | Dommage | Traitée aujourd'hui |
+|---|---|---|---|---|
+| 1 | script d'exploitation lancé sur le mauvais nom ou le mauvais serveur | élevée | destruction d'un Spark | §35 (verrou), §6.23 (confirmation) |
+| 2 | erreur de main du responsable | élevée | idem | idem |
+| 3 | clé SSH restée active après un départ | moyenne | accès complet | révocation nommée (§35.5) — mais rien ne la **déclenche** |
+| 4 | poste de travail compromis, console ouverte, tunnel établi | faible | total | **rien**, et rien ne le peut — voir §45.2 |
+| 5 | clé SSH volée ou copiée, employée depuis ailleurs | faible | total | **rien** — voir §45.3 |
+
+**Les cinq se rangent en deux familles, et elles n'appellent pas le même
+remède.**
+
+**Erreur** — 1, 2, 3. L'acteur est légitime, l'intention est fausse. Le remède est
+la friction et le nommage : dire ce qu'on va toucher, et le faire nommer. C'est
+bon marché, et c'est déjà largement livré.
+
+**Usurpation** — 4, 5. L'acteur n'est pas celui que la clé désigne. Le remède est
+un second facteur — et seulement s'il ne vit pas là où le premier a été volé.
+
+Confondre les deux familles est l'erreur qui coûte le plus cher : on ajoute un
+facteur d'authentification là où il fallait une confirmation qui nomme, et l'on
+paie un mécanisme de récupération pour ne rien avoir résolu.
+
+### 45.2 Ce que le produit ne prétendra pas traiter
+
+- **`root` sur la Forge.** Déjà assumé au §35.1. Tout mécanisme dont le secret
+  vit sur l'hôte tombe avec lui.
+- **Le poste de travail compromis (menace 4).** C'est le point qu'il faut écrire
+  franchement : **aucun facteur saisi sur ce poste n'y survit.** Un code TOTP tapé
+  dans la console d'un poste compromis est capturé ; une clé matérielle branchée
+  sur ce poste est actionnable par ce qui y tourne. Le produit ne prétendra pas
+  s'en défendre, et n'ajoutera pas un mécanisme dont le seul effet serait de le
+  laisser croire.
+
+### 45.3 Le préalable qui décide de tout : ce que la clé du responsable donne
+
+Le §11 pose que « le seul vecteur d'accès est SSH », et le §35.1 que « qui détient
+une clé SSH de la Forge atteint `sparkd` ».
+
+**Conséquence, et c'est le résultat principal de cette instruction :** tant que la
+clé du responsable ouvre un **shell** sur la Forge, un second facteur placé devant
+l'API de `sparkd` ne protège de rien contre la menace 5. Qui a la clé n'a aucune
+raison de passer par l'API : il entre par SSH, atteint le registre SQLite, et fait
+ce qu'il veut. Le facteur serait un guichet fermé à côté d'une porte ouverte.
+
+La question à trancher **avant** tout facteur est donc celle-ci :
+
+> La clé d'accès du responsable peut-elle être **restreinte** à ce dont la console
+> a besoin — un transfert de port vers `sparkd` —, sans shell interactif ?
+
+Techniquement, OpenSSH le permet (`command=`, `restrict`, `permitopen=`). Le
+produit s'en sert déjà partiellement : le §37.2 fait entrer la console dans les
+Sparks par rebond, et non par un shell sur la Forge.
+
+Cette restriction est retenue comme **première mesure**, et pour trois raisons :
+elle est la moins chère de la liste ; elle réduit le dommage des menaces 3 et 5
+sans rien demander au responsable au quotidien ; et elle est **la condition sans
+laquelle aucun second facteur n'a de sens**. La construire est l'objet de SPK-61.
+
+Elle ne supprime pas la menace : une clé restreinte volée donne toujours l'API,
+donc les gestes. Elle transforme « accès total et silencieux » en « accès aux
+gestes, journalisés » — ce qui est précisément le terrain où un facteur, une
+notification et une chaîne d'audit deviennent utiles.
+
+### 45.4 Chaque piste, retenue ou écartée avec son motif
+
+**Retenues.**
+
+| Piste | Ce qu'elle traite | Unité |
+|---|---|---|
+| **Restreindre la clé du responsable** — pas de shell, transfert de port seul | 3, 5 (réduit le dommage) ; **préalable** aux facteurs | SPK-61 |
+| **Notification hors bande** des actions sensibles | 3, 4, 5 — elle ne prévient pas, elle **détecte**, et c'est la seule mesure qui serve encore quand tout le reste a échoué | SPK-62 |
+| **Confirmation par frappe du nom** sur les gestes destructifs | 1, 2 — les plus fréquentes ; quasi gratuit | SPK-63 |
+
+**Écartées, avec leur motif.**
+
+- **TOTP** — *reportée, pas rejetée.* Elle traite la menace 5 et elle seule.
+  Aujourd'hui, elle ne la traite pas non plus, pour la raison du §45.3 : la clé
+  contourne l'API. Elle ne devient discutable qu'une fois SPK-61 livrée, et elle
+  se paiera alors d'un enrôlement et de codes de secours. Son secret dans le
+  registre n'est **pas** un argument contre elle — `root` défait déjà tout (§35.1),
+  et ce n'est donc pas une perte nouvelle.
+- **WebAuthn / FIDO2** — *écartée.* Elle apporte, par rapport au TOTP, la
+  résistance à l'hameçonnage — une menace que ce produit n'a pas : il n'y a ni
+  compte, ni page de connexion publique, ni tiers vers qui être détourné. Elle
+  coûte du matériel à acheter **et à doubler**, et la charge de conception la plus
+  lourde des quatre. Écartée pour disproportion, non pour défaut.
+- **Ré-authentification à durée limitée** — *écartée, et le motif existe déjà.*
+  C'est le déverrouillage temporaire du §35.4, sous un autre nom : elle rend le
+  comportement du produit dépendant de l'heure, et pousse à travailler vite pour
+  ne pas rater la fenêtre. Le §35.4 l'a écarté pour la protection ; le réintroduire
+  ici contredirait la même décision au même endroit.
+- **Console en lecture seule par défaut** — *écartée.* Une bascule qu'on laisse
+  active en permanence ne protège plus de rien, et c'est ce qui arrive à toute
+  bascule employée plusieurs fois par jour. Elle déplacerait le clic accidentel
+  d'un cran, sans le supprimer.
+- **Application différée et annulable** — *écartée comme mécanisme général.* Un
+  geste annulable invite à moins réfléchir avant, et complique la machine à états
+  du §14 pour tous les gestes afin d'en rattraper quelques-uns. Ce qu'elle
+  apportait — le temps de s'apercevoir — est fourni plus simplement par la
+  notification hors bande, qui ne touche à aucun état.
+
+**Requalifiée.**
+
+- **Signature des gestes par la clé SSH (SPK-40)** — elle figurait ici comme
+  piste d'**authentification**. Elle n'en est pas une : la clé volée signe. Le
+  §36.3 dit déjà ce qu'elle vaut réellement, et c'est autre chose — la
+  **non-répudiation d'audit**. Elle reste due à ce titre, et son entrée de backlog
+  est corrigée en conséquence : elle ne prouve pas *qui* agit, elle prouve qu'un
+  geste inscrit a bien été demandé et n'a pas été fabriqué par la Forge.
+
+### 45.5 La récupération, tranchée avant toute implémentation
+
+**Règle, et elle vaut pour tout facteur que le produit introduira un jour :**
+
+1. Aucun facteur n'est introduit sans que sa voie de récupération soit décidée
+   **dans l'unité qui l'introduit**. Un facteur livré sans elle enferme le
+   responsable dehors à la première mise en service, et c'est irréversible.
+2. Cette voie est toujours la même, et c'est **`root` sur la Forge** — la même
+   qu'au §35.3 pour un mot de passe de protection perdu. Le produit n'inventera
+   pas un second mécanisme de secours : il en aurait deux à défendre, et le plus
+   faible ferait la sécurité de l'ensemble.
+3. Ce que cette règle implique et qu'il faut dire : un facteur **ne protège pas de
+   qui a `root`**. C'est exactement le §35.1, et ce n'est pas une faiblesse
+   cachée — c'est la frontière que le produit annonce depuis le début.
+
+Un mécanisme de secours réservé — codes imprimés, clé de rechange — n'est donc pas
+conçu ici. Il le serait dans l'unité qui introduirait un facteur, s'il y en a un.
+
+### 45.6 Articulation avec le verrou du §35 : lequel prime
+
+Un second facteur et un verrou par Spark ne se recouvrent pas, et le dire évite
+qu'on les empile un jour sans y penser :
+
+- le **verrou** (§35) porte sur un **objet** — ce Spark-ci est protégé — et
+  répond à la question « faut-il vraiment toucher à celui-là ? » ;
+- un **facteur** porterait sur l'**acteur** — est-ce bien le responsable — et
+  répond à « est-ce bien lui qui demande ? ».
+
+Le verrou prime, et l'ordre n'est pas négociable : **la protection se lève
+d'abord**, par un geste distinct (§6.23), et un facteur ne la lèverait jamais au
+passage. Une confirmation qui lèverait la protection au passage ne protégerait de
+rien — c'est déjà écrit au design system, et cela reste vrai avec un facteur.
+
+Corollaire : un facteur ne dispense d'aucune confirmation. Le §5.4 le pose déjà —
+« aucun degré de navigation n'en dispense ».

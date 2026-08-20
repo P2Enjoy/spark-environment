@@ -1009,7 +1009,7 @@ produisent une décision écrite, des unités de suite, et la liste motivée de 
 est écarté. Une instruction dont il ne sort qu'une intention est une instruction
 ratée.
 
-### [ ] SPK-35 · Instruire la sécurisation des actions sensibles
+### [x] SPK-35 · Instruire la sécurisation des actions sensibles
 
 Le §6.23 du design system impose une confirmation à toute action sensible, et
 SPK-34 ajoute un verrou par Spark. Aucun des deux ne demande de **prouver qui
@@ -1062,6 +1062,42 @@ panne — la liste est ouverte, elle n'est pas un menu à cocher :
   facteur perdu, téléphone cassé, clé matérielle égarée — est tranchée avant toute
   implémentation, faute de quoi la première mise en service enferme le responsable
   dehors ; rien n'est implémenté sous cette unité.
+
+**Instruction RENDUE le 2026-08-20 — `docs/DAT.md` §45.**
+
+- **Le résultat principal**, et il déplace la question : tant que la clé du
+  responsable ouvre un **shell** sur la Forge, un second facteur placé devant
+  l'API de `sparkd` ne protège de rien contre une clé volée. Qui a la clé n'a
+  aucune raison de passer par l'API — il entre par SSH et atteint le registre.
+  Le facteur serait un guichet fermé à côté d'une porte ouverte.
+- **Les cinq menaces se rangent en deux familles** qui n'appellent pas le même
+  remède : l'**erreur** (acteur légitime, intention fausse → friction et nommage,
+  déjà largement livré) et l'**usurpation** (acteur qui n'est pas celui que la clé
+  désigne → un facteur, et seulement s'il ne vit pas là où le premier a été volé).
+- **Ce que le produit ne prétendra pas traiter, écrit franchement** : un poste de
+  travail compromis. Aucun facteur saisi sur ce poste n'y survit.
+- **Retenues** : SPK-61 (restreindre la clé — préalable à tout facteur), SPK-62
+  (notification hors bande — elle détecte, et c'est la seule mesure qui serve
+  encore quand tout le reste a échoué), SPK-63 (frappe du nom sur les gestes
+  destructifs).
+- **Écartées avec leur motif** : WebAuthn (disproportion — sa résistance à
+  l'hameçonnage traite une menace que ce produit n'a pas), ré-authentification à
+  durée limitée (c'est le déverrouillage temporaire déjà écarté au §35.4),
+  console en lecture seule (une bascule laissée active ne protège plus),
+  application différée (ce qu'elle apporte est fourni par la notification, sans
+  toucher à la machine à états). **TOTP est reportée**, pas rejetée : elle ne
+  devient discutable qu'après SPK-61.
+- **SPK-40 requalifiée** : ce n'est pas un mécanisme d'authentification — la clé
+  volée signe. C'est de la **non-répudiation d'audit**, ce que le §36.3 disait
+  déjà.
+- **Récupération tranchée** (§45.5) : tout facteur futur aura pour unique voie de
+  secours `root` sur la Forge, comme au §35.3. Le produit n'inventera pas un
+  second mécanisme : il en aurait deux à défendre, et le plus faible ferait la
+  sécurité de l'ensemble.
+- **Articulation avec le §35** (§45.6) : le verrou porte sur un OBJET, un facteur
+  porterait sur l'ACTEUR. Le verrou prime, et un facteur ne lèverait jamais une
+  protection au passage.
+- Rien n'a été implémenté, conformément à l'arbitrage.
 
 ### [ ] SPK-36 · Instruire les plans de contingence et les gestes d'urgence
 
@@ -1309,9 +1345,12 @@ La console signe la requête avec la clé SSH du responsable, par son agent ;
 supprimer ou tronquer, mais **pas fabriquer** un geste authentique (§36.3).
 
 - Spécification : `docs/DAT.md` §36.3, §36.4.
-- Dépend de : SPK-35 pour l'arbitrage — c'est la même mécanique que la piste
-  « signature par la clé SSH » de la sécurisation des actions sensibles, et il
-  serait absurde d'en écrire deux. **Ne pas démarrer avant cet arbitrage.**
+- **Requalifiée le 2026-08-20 par l'arbitrage de SPK-35 (§45.4).** Elle figurait
+  parmi les pistes d'**authentification** ; elle n'en est pas une, puisque la clé
+  volée signe. Ce qu'elle apporte réellement est la **non-répudiation d'audit** :
+  elle ne prouve pas *qui* agit, elle prouve qu'un geste inscrit a bien été
+  demandé et n'a pas été fabriqué par la Forge. Elle reste due à ce titre, et
+  l'arbitrage qui la bloquait est rendu : **elle est démarrable**.
 - Ce que l'unité ne prétendra pas : la signature atteste l'**intention**, pas ce
   que le runtime a fait ensuite ; le résultat reste couvert par la chaîne. Et une
   ligne produite par le runtime n'est signée par personne — la supervision le dit
@@ -2173,6 +2212,67 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
 - **Ce qui n'est PAS dans cette unité** : la recette de messagerie complète, qui
   est SPK-51 et dépend de SPK-43 pour lire la clé DKIM dans le Spark. La recette
   `relais-transactionnel` livrée ici couvre l'ÉMISSION seule.
+
+### [ ] SPK-61 · Restreindre la clé d'accès du responsable au seul tunnel
+
+Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.3), et **préalable à tout
+second facteur** : tant que cette clé ouvre un shell sur la Forge, un facteur
+devant l'API de `sparkd` ne protège de rien contre une clé volée.
+
+- Spécification : `docs/DAT.md` §45.3 · §11 · §37.2 (le rebond existe déjà).
+- Portée : une clé d'accès dont les options OpenSSH — `restrict`, `permitopen=`,
+  et `command=` si nécessaire — n'autorisent que le transfert de port vers
+  `sparkd`. Le README et le contrat de déploiement disent comment la poser.
+- Ce qu'elle ne fait PAS, et qui doit être écrit : elle ne supprime pas la
+  menace. Une clé restreinte volée donne toujours l'API, donc les gestes. Elle
+  transforme « accès total et silencieux » en « accès aux gestes, journalisés ».
+- **Le point qui décidera de sa faisabilité** : le §37.2 fait entrer la console
+  dans les Sparks par **rebond** depuis la Forge, et le §37.3 exécute `incus` SUR
+  la Forge pour le dépannage. Il faut donc mesurer ce que chaque chemin exige
+  réellement de la clé avant de la restreindre — une clé restreinte qui casse le
+  terminal de dépannage aurait échangé une protection contre une panne.
+- DoD : la clé restreinte est posée sur la Forge de validation et **tous** les
+  chemins du produit sont éprouvés avec elle — tunnel, terminal d'un Spark,
+  dépannage, gestes Docker ; un test prouve qu'un shell interactif est refusé ;
+  le README et `docs/PROD_MIGRATIONS.md` portent la marche à suivre.
+
+### [ ] SPK-62 · Notification hors bande des actions sensibles
+
+Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle ne prévient pas :
+elle **détecte**, et c'est la seule mesure qui serve encore quand tout le reste a
+échoué — y compris contre un poste compromis, que le §45.2 assume ne pas traiter.
+
+- Spécification : `docs/DAT.md` §45.4 · §21 (le journal) · §36.4 (les deux
+  classes de lignes).
+- Portée : sur les gestes destructifs et sur les levées de protection, un envoi
+  vers un canal choisi par le responsable. Le contenu NOMME l'objet et le geste,
+  et ne porte **aucun secret** — c'est le §21.2 appliqué à une sortie.
+- Ce qu'il faut trancher dans l'unité : le canal introduit une **dépendance
+  sortante** que le produit n'a pas aujourd'hui. Un canal injoignable ne doit
+  jamais faire échouer le geste — ce serait transformer une panne de traçabilité
+  en panne d'exploitation (§37.4.5) —, et l'écart doit être visible.
+- DoD : un geste destructif produit une notification ; un canal injoignable
+  laisse le geste aboutir et le SIGNALE ; aucun secret n'y transite, prouvé sur
+  ce que l'envoi porte réellement ; l'absence de canal configuré n'est pas une
+  panne, la fonction se désactive et l'écran le dit (§14.5).
+
+### [ ] SPK-63 · Frappe du nom sur les gestes destructifs
+
+Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle traite les menaces
+1 et 2 — les plus fréquentes de la liste — pour un coût quasi nul.
+
+- Spécification : `docs/DAT.md` §45.1 · `docs/DESIGN_SYSTEM.md` §6.23.
+- Portée : la suppression d'un Spark, et elle seule pour commencer. La
+  confirmation demande de **frapper le nom** de l'objet avant d'engager.
+- Ce qu'elle ne prouve pas, et qui doit rester écrit : rien sur l'identité. Elle
+  ne traite que l'erreur, et le §45.1 la range explicitement dans cette famille.
+- **À trancher dans l'unité** : jusqu'où l'étendre. Une frappe demandée sur
+  chaque geste banaliserait la frappe elle-même, ce qui est le défaut du §6.24 —
+  « une confirmation systématique banalise les confirmations réellement
+  importantes ».
+- DoD : la suppression exige la frappe exacte du nom ; une frappe fausse ou
+  partielle n'engage rien ; le parcours est éprouvé au clavier ; si une règle
+  réutilisable en sort, `docs/DESIGN_SYSTEM.md` §6.23 est étendu.
 
 ### [ ] SPK-51 · Un Spark qui héberge une messagerie, et sa recette DNS
 
