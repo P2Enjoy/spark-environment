@@ -445,7 +445,14 @@ async function diagnostiquerTerminal() {
   peindre();
 }
 
-async function ouvrirTerminal(chemin = 'ssh') {
+/**
+ * Ouvre une session de terminal.
+ *
+ * @param chemin    'ssh' | 'rescue' (§37.3)
+ * @param conteneur le conteneur où entrer (§37.4.7). Il PRIME sur le chemin :
+ *                  le serveur choisit alors « container ».
+ */
+async function ouvrirTerminal(chemin = 'ssh', conteneur = null) {
   const t = etat.terminal;
   t.status = 'ouverture';
   t.refus = null;
@@ -462,7 +469,8 @@ async function ouvrirTerminal(chemin = 'ssh') {
     const reponse = await fetch('/api/terminal', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ server: etat.server, spark: etat.spark.name,
-                             path: chemin }),
+                             path: chemin,
+                             ...(conteneur ? { container: conteneur } : {}) }),
     });
     corps = await reponse.json();
     if (!reponse.ok) {
@@ -470,7 +478,10 @@ async function ouvrirTerminal(chemin = 'ssh') {
       // disponible, et le §14.9 veut que le refus RÉEL du serveur s'affiche
       // sans fermer l'écran. Fermer ici enfermerait l'exploitant hors d'un
       // Spark parfaitement joignable.
-      t.status = corps?.error === 'rescue_refused' ? 'ferme' : 'refus';
+      // §37.4.7 : un shell absent n'est PAS une impasse non plus. Le conteneur
+      // existe peut-être parfaitement ; c'est son image qui n'a pas de shell.
+      t.status = corps?.error === 'rescue_refused'
+        || corps?.error === 'container_shell_unavailable' ? 'ferme' : 'refus';
       t.refus = corps;
       return peindre();
     }
@@ -731,6 +742,22 @@ async function porterGeste(nom, geste) {
   }
 }
 
+/**
+ * Ouvre un terminal DANS un conteneur, depuis sa fiche (SPK-45, §37.4.7).
+ *
+ * La session vit sur l'onglet Terminal — SPK-DS-04 : le terminal n'est ni une
+ * section ni une modale, il a sa surface. En ouvrir une sous l'onglet Docker
+ * donnerait deux terminaux à deux endroits.
+ */
+function entrerDansConteneur(nom) {
+  if (!nom) return;
+  const base = `#/sparks/${encodeURIComponent(etat.spark.name)}`;
+  // On demande la session AVANT de naviguer : le changement de facette remet
+  // l'état Docker à zéro, et le nom du conteneur serait perdu en chemin.
+  location.hash = `${base}/terminal`;
+  ouvrirTerminal('ssh', nom);
+}
+
 document.addEventListener('click', (evenement) => {
   const geste = evenement.target.closest?.('[data-geste], [data-geste-confirme], [data-geste-annule]');
   if (!geste) return;
@@ -765,6 +792,13 @@ document.addEventListener('click', (evenement) => {
     etat.docker.journaux = 'en-cours';
     peindre();
     lireJournauxConteneur(bouton.dataset.conteneur);
+    return;
+  }
+  if (geste === 'terminal') {
+    // §37.4.7 : on va sur l'onglet Terminal, comme un exploitant le ferait —
+    // c'est LÀ que vit une session, et en ouvrir une sous l'onglet Docker
+    // donnerait deux terminaux à deux endroits (SPK-DS-04).
+    entrerDansConteneur(bouton.dataset.conteneur);
   }
 });
 

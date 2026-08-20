@@ -57,6 +57,13 @@ export const CHEMINS = {
     pastille: 'Dépannage', token: 'danger',
     nomme: 'exécution en root dans la cellule, depuis le plan de contrôle',
   },
+  // SPK-45 · §37.4.7 : on n'est plus dans la cellule mais DANS un conteneur du
+  // locataire. Le taire ferait croire qu'on pilote le Spark, et une commande
+  // tapée là ne produit pas les mêmes effets — ni sur les mêmes fichiers.
+  container: {
+    pastille: 'Conteneur', token: 'accent',
+    nomme: 'shell dans un conteneur, pas dans le Spark',
+  },
 };
 
 /** Pourquoi le dépannage a été ouvert. Il entre au journal, et se lit ici. */
@@ -158,10 +165,17 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
     ? ` <span class="note">Ouvert parce que ${
         echapper(MOTIFS_DEPANNAGE[etat.session.rescueReason] ?? etat.session.rescueReason)}.</span>`
     : '';
+  // §37.4.7 : la bannière NOMME le conteneur. Deux conteneurs d'une même pile se
+  // ressemblent, et taper la mauvaise commande dans le mauvais est l'erreur que
+  // cette ligne existe pour empêcher.
+  const dansConteneur = etat.session?.container
+    ? ` <strong>« ${echapper(etat.session.container)} »</strong>
+        <span class="technique">${echapper(etat.session.shell ?? '')}</span>`
+    : '';
   const bandeau = `<p class="bandeau-terminal">
       <span class="badge badge--${chemin.token}"><span class="badge__point" aria-hidden="true"></span>${
         echapper(chemin.pastille)}</span>
-      ${chemin.nomme ? `<strong>${echapper(chemin.nomme)}</strong>` : ''}
+      ${chemin.nomme ? `<strong>${echapper(chemin.nomme)}</strong>` : ''}${dansConteneur}
       ${spark.protected
         ? '<span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>Spark protégé</span>'
         : ''}${motif}

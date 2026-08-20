@@ -570,3 +570,36 @@ test('la confirmation d’un geste NON destructif n’a pas la couleur du destru
   assert.ok(!/confirmation--sensible/.test(tuer));
   assert.match(tuer, /class="confirmation"/);
 });
+
+// --- SPK-45 tranche 2 · ENTRER DANS UN CONTENEUR (§37.4.7) -----------------
+
+test('un conteneur EN MARCHE offre d’y ouvrir un terminal', () => {
+  const rendu = renderConteneur(ouvert(), SPARK);
+  assert.match(rendu, /data-docker="terminal"/);
+  assert.match(rendu, /data-conteneur="helo-web-1"/);
+  assert.match(rendu, /Ouvrir un terminal/);
+});
+
+test('un conteneur ARRÊTÉ ne l’offre pas', () => {
+  // §1.4 : on n'entre pas dans un conteneur qui ne tourne pas, et une commande
+  // qui ne peut pas aboutir n'a rien à faire à l'écran.
+  const rendu = renderConteneur(ouvert({
+    detail: { ...INSPECTION, state: 'exited', exitCode: 0 } }), SPARK);
+  assert.ok(!/data-docker="terminal"/.test(rendu));
+});
+
+test('le GEL ne retire PAS le terminal du conteneur', () => {
+  // §37.7 : le terminal est l'outil de diagnostic. Le bloquer pousserait à
+  // désarmer pour regarder, donc à oublier de réarmer (§35.4).
+  const rendu = renderConteneur(ouvert(), SPARK_GELE);
+  assert.match(rendu, /data-docker="terminal"/);
+  const bouton = /<button[^>]*data-docker="terminal"[^>]*>/.exec(rendu)[0];
+  assert.ok(!/disabled/.test(bouton), 'il reste actif sous gel');
+});
+
+test('un conteneur DISPARU n’offre pas d’y entrer', () => {
+  const rendu = renderConteneur(ouvert({
+    detail: { state: 'conteneur_inconnu', titre: 'Ce conteneur a disparu',
+              detail: 'x' } }), SPARK);
+  assert.ok(!/data-docker="terminal"/.test(rendu));
+});

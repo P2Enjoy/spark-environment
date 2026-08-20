@@ -274,11 +274,19 @@ export function renderConteneur(etat, spark = null) {
 
   // Les commandes sont EN TÊTE. Sous deux cents lignes de journal, un retour
   // placé en pied oblige à traverser tout le texte pour revenir à la liste.
+  // §37.4.7 : entrer dans le conteneur. Offert seulement s'il TOURNE — on
+  // n'entre pas dans un conteneur arrêté, et le §1.4 interdit une commande qui
+  // ne peut pas aboutir. Le gel ne le retire PAS : le terminal est l'outil de
+  // diagnostic, et le §37.7 le laisse ouvert.
+  const enMarche = typeof d === 'object' && d?.state === 'running';
   const commandes = `<p class="formulaire__actions">
     <button type="button" class="bouton bouton--compact" data-docker="fermer">
       Revenir à la liste</button>
     <button type="button" class="bouton bouton--compact" data-docker="relire"
             data-conteneur="${echapper(etat.ouvert)}">Relire les journaux</button>
+    ${enMarche ? `<button type="button" class="bouton bouton--compact"
+            data-docker="terminal" data-conteneur="${echapper(etat.ouvert)}">
+      Ouvrir un terminal</button>` : ''}
   </p>`;
   const identite = d === 'en-cours' || d === null
     ? '<p class="note" role="status" aria-busy="true">Inspection en cours…</p>'
