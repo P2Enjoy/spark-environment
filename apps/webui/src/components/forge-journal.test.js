@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderJournalForge, renderIntegrite, renderAuteurCellule,
-  VERDICTS, FILTRES_VIDES,
+  renderSignatureCellule, VERDICTS, FILTRES_VIDES,
 } from './forge-journal.js';
 import { ONGLETS_FORGE } from './forge-images.js';
 
@@ -107,11 +107,20 @@ test('sans relevé, l’écran le DIT au lieu d’afficher « intacte »', () =>
   assert.ok(!html.includes('Chaîne intacte'));
 });
 
-test('l’écran ne prétend JAMAIS qu’une entrée est signée', () => {
-  // §36.8.5 : une page entière consacrée à l'intégrité est l'endroit où l'on
-  // croirait le plus volontiers à une garantie qui n'existe pas encore.
+test('l’écran ne prétend jamais qu’une signature dit QUI a agi', () => {
+  // RÉVISÉE le 2026-08-21, et le motif n'a pas changé — c'est la RÉALITÉ qui a
+  // changé. Cette preuve gardait « Aucune entrée n'est signée » : c'était vrai
+  // avant SPK-40, et faux depuis que la console signe. Une mention périmée se
+  // lit comme vraie, et celle-ci se lirait sur la page même où l'on vient
+  // chercher une garantie (§36.8.5 révisé, §36.10.9).
+  //
+  // Ce que l'écran ne doit toujours pas prétendre est intact : une signature
+  // prouve qu'un geste a été DEMANDÉ, jamais l'identité du demandeur (§36.10.1,
+  // §21.6.2). « signé par » reste donc interdit.
   const html = pret({ chain: { intact: true, checked: 3, verified_at: 't', break: null } });
-  assert.match(html, /Aucune entrée n’est signée/);
+  assert.ok(!/Aucune entrée n’est signée/.test(html),
+    'cette phrase est devenue fausse : la console signe');
+  assert.match(html, /pas qui l’a demandé/);
   assert.ok(!/\bsigné par\b/.test(html));
 });
 
@@ -145,6 +154,56 @@ test('un auteur non déclaré le DIT, sans afficher la valeur technique', () => 
   const html = renderAuteurCellule({ actor: 'inconnu', actor_class: 'human' });
   assert.match(html, /auteur non déclaré/);
   assert.ok(!html.includes('>inconnu<'));
+});
+
+// --- la signature, ligne à ligne (SPK-40, §36.10.9) -------------------------
+
+test('les trois situations de signature ne se confondent PAS', () => {
+  // §14.6 : « signée », « non signée » et « sans objet » sont trois faits
+  // différents. Les rendre pareillement effacerait celui qui compte.
+  const signee = renderSignatureCellule(
+    { actor_class: 'human', signed: true });
+  const nue = renderSignatureCellule({ actor_class: 'human', signed: false });
+  const runtime = renderSignatureCellule({ actor_class: 'runtime', signed: false });
+
+  assert.match(signee, />signée</);
+  assert.match(nue, />non signée</);
+  assert.match(runtime, />sans objet</);
+  assert.ok(!/signée/.test(runtime),
+    'une ligne du runtime ne se dit ni signée ni non signée : personne ne l’a demandée');
+});
+
+test('un geste NON SIGNÉ n’est pas peint comme une faute', () => {
+  // §36.10.1 : un geste non signé passe, et c'est voulu. Le rouge est réservé
+  // au refus du serveur (§25.1) ; l'écrire en danger ferait chasser un défaut
+  // qui n'existe pas.
+  const nue = renderSignatureCellule({ actor_class: 'human', signed: false });
+  assert.ok(!nue.includes('badge--danger'));
+  assert.match(nue, /badge--neutral/);
+  // Et la seule qui affirme quelque chose est celle que la Forge a vérifiée.
+  assert.match(renderSignatureCellule({ actor_class: 'human', signed: true }),
+               /badge--success/);
+});
+
+test('la colonne « Signature » existe dans l’en-tête ET dans chaque ligne', () => {
+  // Une cellule sans en-tête laisserait deviner ce qu'elle porte (§6.14) ; un
+  // en-tête sans cellule serait une colonne vide.
+  const html = renderJournalForge({
+    status: 'ready', filtres: FILTRES_VIDES,
+    entries: [{ ...ENTREES[0], signed: true }, { ...ENTREES[1], signed: false }],
+  });
+  assert.match(html, /<th scope="col">Signature<\/th>/);
+  assert.match(html, />signée</);
+  assert.match(html, />sans objet</);
+});
+
+test('la couleur ne porte JAMAIS seule l’état de signature', () => {
+  // §9.8 : chaque badge dit son état en toutes lettres.
+  for (const entree of [{ actor_class: 'human', signed: true },
+                        { actor_class: 'human', signed: false },
+                        { actor_class: 'runtime' }]) {
+    assert.match(renderSignatureCellule(entree), /signée|sans objet/);
+  }
 });
 
 // --- les états de vue (§6.13) -----------------------------------------------

@@ -6,6 +6,9 @@
  *       §21.6.2 (l'identité attribue, elle ne prouve pas), §36.9.6 (les cinq
  *       verdicts de l'ancre) · docs/DESIGN_SYSTEM.md §5.4, §6.13 (états de
  *       vue), §6.14 (tableau), §14.6, §14.7
+ * @spec docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.9 (ce que l'écran dit de la
+ *       signature), §36.8.5 révisé (l'écran ne dit que ce que la Forge a
+ *       mesuré) — pour `renderSignatureCellule` et la colonne « Signature »
  *
  * Le journal couvre TOUS les Sparks : le lire dans la fenêtre d'un seul
  * obligerait à ouvrir chaque Spark pour reconstituer une séquence qui les
@@ -61,6 +64,36 @@ export function renderAuteurCellule(entree) {
   return qui
     ? `<span class="technique" title="${echapper(qui)}">${echapper(qui)}</span>`
     : '<span class="absence-cellule">auteur non déclaré</span>';
+}
+
+/**
+ * Ce que la Forge a VÉRIFIÉ de la signature d'une entrée.
+ *
+ * @spec docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.9 (les trois situations),
+ *       §36.10.1 (un geste non signé passe, c'est un état normal) ·
+ *       docs/DESIGN_SYSTEM.md §14.5 (une absence se nomme), §14.6 (trois
+ *       situations ne se confondent pas), §9.8 (la couleur n'est jamais seule)
+ *
+ * « Signée » est un FAIT, pas une déclaration : la Forge a vérifié cette
+ * signature à la réception, sans quoi la ligne n'existerait pas (§36.10.6).
+ *
+ * Une ligne du runtime n'en reçoit AUCUNE. Personne ne l'a demandée, donc
+ * personne ne pouvait la signer : lui écrire « non signée » suggérerait qu'elle
+ * aurait pu l'être, et ferait chercher une faute là où il n'y a qu'une nature
+ * différente.
+ */
+export function renderSignatureCellule(entree) {
+  if (entree?.actor_class === 'runtime') {
+    return `<span class="absence-cellule" title="Personne n’a demandé cet`
+      + ` événement : il n’y a rien à signer.">sans objet</span>`;
+  }
+  return entree?.signed
+    ? `<span class="badge badge--success" title="La Forge a vérifié cette`
+      + ` signature à la réception. Elle prouve que le geste a été demandé, pas`
+      + ` l’identité du demandeur.">signée</span>`
+    : `<span class="badge badge--neutral" title="Ce geste est arrivé sans`
+      + ` signature. C’est un état normal : la console n’en exige pas pour`
+      + ` agir.">non signée</span>`;
 }
 
 /**
@@ -122,8 +155,9 @@ export function renderIntegrite({ chain = null, anchor = null, checking = false 
     <div class="def"><dt>Chaîne, telle que le serveur la voit</dt><dd>${chaine}</dd></div>
     <div class="def"><dt>Comparaison avec ce que la console avait vu</dt><dd>${ancre}</dd></div>
   </div>
-  <p class="note"><strong>Aucune entrée n’est signée</strong> : l’identité est
-  déclarée, pas prouvée.
+  <p class="note"><strong>Une signature prouve qu’un geste a été demandé</strong>,
+  pas qui l’a demandé : l’identité reste déclarée. Le tableau ci-dessous dit,
+  ligne à ligne, ce que la Forge a vérifié.
   <a href="#/manuel/M12">Manuel M12 — Ce que la chaîne voit, et ce qu’elle ne voit pas</a></p>
   <p class="formulaire__actions">
     <button type="button" class="bouton" data-action="verifier-chaine" ${checking ? 'disabled' : ''}>${
@@ -179,6 +213,7 @@ function renderLigne(e) {
   <td><span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span></td>
   <td class="technique cellule-dense">${echapper(e.action)}</td>
   <td class="cellule-dense">${renderAuteurCellule(e)}</td>
+  <td class="cellule-dense">${renderSignatureCellule(e)}</td>
   <td>${echapper(traduireMessage(e.message))}</td>
 </tr>`;
 }
@@ -217,6 +252,7 @@ export function renderJournalForge({ status = 'loading', entries = [], error = n
       <thead><tr>
         <th scope="col">Date</th><th scope="col">Résultat</th>
         <th scope="col">Action</th><th scope="col">Auteur</th>
+        <th scope="col">Signature</th>
         <th scope="col">Ce qui s’est passé</th>
       </tr></thead>
       <tbody>${entries.map(renderLigne).join('')}</tbody>
