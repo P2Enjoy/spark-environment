@@ -6,7 +6,8 @@
  *       SSH, et ce qu'il suppose), §37.4 (le contrat du terminal),
  *       §37.4.1 (le transport), §37.4.2 (ce qui crée et ce qui tue une session),
  *       §37.4.3 (la limite du redimensionnement), §37.4.5 (ce que le journal
- *       reçoit) · §37.5 (l'ouverture et la fermeture, RIEN du contenu)
+ *       reçoit) · §37.5 (l'ouverture et la fermeture, RIEN du contenu) ·
+ *       §37.3 (le dépannage par `incus exec`, borné et nommé)
  *
  * `sparkd` n'est pas dans ce chemin. La console fait ce que le responsable
  * ferait avec un terminal et sa clé : elle lui épargne les gestes, pas les
@@ -124,6 +125,41 @@ export function depannageOuvert(spark, sondage = null) {
  * ni un extrait. Le §37.5 l'exige, et le code doit rendre cette fuite impossible
  * plutôt qu'improbable — d'où l'absence de tout tampon d'historique ici.
  */
+/**
+ * Sonde le `sshd` d'un Spark. C'est une MESURE, pas une supposition.
+ *
+ * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.3, §22.2 (ce qui vit se prouve
+ *       à travers le chemin réel, jamais en constatant qu'un processus existe)
+ *
+ * Le sondage emprunte EXACTEMENT le chemin du terminal normal — même rebond,
+ * même options —, et n'exécute que `true`. Sonder autrement mesurerait un autre
+ * chemin que celui qu'on s'apprête à déclarer indisponible.
+ *
+ * Le verdict passe par `classerEchecSsh` : un refus de clé n'est pas un `sshd`
+ * muet, et cette fonction ne tranche pas elle-même.
+ */
+export function sonderSshd({ tunnel, spark, spawn: spawnFn = spawn,
+                             timeoutSecondes = 5 } = {}) {
+  return new Promise((resoudre) => {
+    const enfant = spawnFn('ssh', [
+      '-o', 'BatchMode=yes',
+      '-o', 'StrictHostKeyChecking=accept-new',
+      '-o', `ConnectTimeout=${timeoutSecondes}`,
+      ...tunnel.jumpArgs(),
+      `root@${spark.ipv4_address}`,
+      'true',
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let erreurs = '';
+    enfant.stderr?.on('data', (bloc) => { erreurs += bloc.toString('utf8'); });
+    enfant.on('exit', (code) => resoudre(classerEchecSsh(code, erreurs)));
+    // `ssh` introuvable : on ne peut RIEN conclure du `sshd` distant, et
+    // surtout pas qu'il est muet. Le §37.3 n'ouvrirait alors le dépannage que
+    // parce que la console est mal installée.
+    enfant.on('error', (erreur) => resoudre({ repond: true, motif: 'inconnu',
+                                              detail: erreur.message }));
+  });
+}
+
 export class Session {
   #child = null;
   #abonnes = new Set();
