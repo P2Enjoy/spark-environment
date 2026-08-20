@@ -193,3 +193,68 @@ def test_la_signature_ne_pèse_sur_le_journal_que_si_on_la_DEMANDE(atelier):
     sans = len(client.get("/v1/audit").content)
     avec = len(client.get("/v1/audit?with_signature=true").content)
     assert avec > sans, "la signature pèse, et c'est pourquoi elle est optionnelle"
+
+
+# --- La vérification HORS LIGNE, celle qui porte la preuve (§36.10.4) -------
+
+
+def test_le_journal_entier_se_REVERIFIE_ligne_à_ligne(atelier):
+    """C'est ce geste-ci qui attrape l'adversaire qui a root : il peut supprimer
+    ou tronquer, il ne peut pas produire une signature qu'il n'a pas la clé de
+    produire."""
+    from sparkd.db import connect
+
+    client = _client(atelier)
+    entetes = _signe(atelier, method="POST", path="/v1/audit",
+                     actor="console/prod", body=None, action="spark.terminal_open")
+    client.post("/v1/audit", json=CORPS, headers=entetes)
+    client.post("/v1/audit", json=CORPS, headers={"x-spark-actor": "console/prod"})
+
+    connexion = connect(atelier / "a.db")
+    verdict = signature.verifier_journal(connexion, atelier / "signataires")
+    assert verdict["signees"] == 1, "seule la ligne signée est jugée"
+    assert verdict["verifiees"] == 1
+    assert verdict["intact"] is True
+    assert verdict["rupture"] is None
+
+
+def test_une_signature_FABRIQUÉE_après_coup_est_démasquée(atelier):
+    """L'attaque que cette unité existe pour attraper : root récrit le journal et
+    y colle une signature. Le verrou d'écriture est désactivé le temps de la
+    simuler — c'est un adversaire qui a déjà root."""
+    from sparkd.db import connect
+
+    client = _client(atelier)
+    client.post("/v1/audit", json=CORPS, headers={"x-spark-actor": "console/prod"})
+
+    connexion = connect(atelier / "a.db")
+    connexion.execute("DROP TRIGGER audit_log_immuable_update")
+    connexion.execute(
+        "UPDATE audit_log SET signature = 'fabriquee', signed_bytes = 'eyJ4IjoxfQ==',"
+        " signature_version = ? WHERE action = 'spark.terminal_open'",
+        (signature.VERSION,))
+
+    verdict = signature.verifier_journal(connexion, atelier / "signataires")
+    assert verdict["intact"] is False
+    assert verdict["rupture"]["action"] == "spark.terminal_open"
+    assert verdict["rupture"]["motif"] == "signature_invalide"
+
+
+def test_une_VERSION_inconnue_n_est_pas_une_rupture(atelier):
+    """§36.9.2 : la forme évolue par versions. Confondre « je ne sais pas
+    vérifier » avec « c'est falsifié » serait faux, et ferait crier au loup le
+    jour d'une migration de format."""
+    from sparkd.db import connect
+
+    client = _client(atelier)
+    client.post("/v1/audit", json=CORPS, headers={"x-spark-actor": "console/prod"})
+    connexion = connect(atelier / "a.db")
+    connexion.execute("DROP TRIGGER audit_log_immuable_update")
+    connexion.execute(
+        "UPDATE audit_log SET signature = 'x', signed_bytes = 'eyJ4IjoxfQ==',"
+        " signature_version = 'sshsig-v99' WHERE action = 'spark.terminal_open'")
+
+    verdict = signature.verifier_journal(connexion, atelier / "signataires")
+    assert verdict["signees"] == 1
+    assert verdict["verifiees"] == 0, "elle n'est pas vérifiable"
+    assert verdict["intact"] is True, "et ce n'est pas une rupture"

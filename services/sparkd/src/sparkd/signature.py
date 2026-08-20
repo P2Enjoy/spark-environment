@@ -171,3 +171,46 @@ def lire_entetes(entetes) -> tuple[str, bytes]:
             "Les octets signés ne sont pas du base64 valide.",
             "octets_illisibles") from None
     return signature, octets
+
+
+def verifier_journal(connection, allowed_signers: str | Path | None,
+                     *, executer=subprocess.run) -> dict:
+    """Rejoue la vérification de TOUTES les lignes signées du journal.
+
+    @spec docs/DAT.md §36.10.4 (la vérification hors ligne reste la vraie)
+
+    C'est ce geste-ci qui porte la preuve, et il est fait pour être joué
+    **ailleurs** que sur la Forge — sur une sauvegarde du registre (SPK-36), avec
+    le fichier de signataires du poste. La vérification faite par la Forge attrape
+    l'erreur et le bruit ; celle-ci attrape l'adversaire qui a root, parce qu'il
+    ne peut pas produire une signature qu'il n'a pas la clé de produire.
+
+    Ne juge PAS les lignes non signées : le §36.4 dit qu'un événement du runtime
+    n'est signé par personne, et les compter comme des ruptures ferait du bruit
+    exactement là où le silence a un sens.
+    """
+    lignes = connection.execute(
+        "SELECT id, ts, action, actor, signature, signed_bytes, signature_version"
+        " FROM audit_log WHERE signature IS NOT NULL ORDER BY id").fetchall()
+
+    verdict = {"signees": len(lignes), "verifiees": 0, "intact": True,
+               "rupture": None}
+    for ligne in lignes:
+        if ligne["signature_version"] != VERSION:
+            # Une version inconnue n'est PAS une rupture : c'est une ligne qu'on
+            # ne sait pas vérifier, et le §36.9.2 prévoit que la forme évolue par
+            # versions. La confondre avec une falsification serait faux.
+            continue
+        try:
+            verifier(base64.b64decode(ligne["signed_bytes"]), ligne["signature"],
+                     ligne["actor"], allowed_signers, executer=executer)
+        except SignatureError as refus:
+            verdict["intact"] = False
+            verdict["rupture"] = {"id": ligne["id"], "ts": ligne["ts"],
+                                  "action": ligne["action"], "motif": refus.motif,
+                                  "detail": str(refus)}
+            # On s'arrête à la PREMIÈRE, comme la chaîne (§36.9.5) : signaler les
+            # suivantes serait du bruit devant un journal déjà suspect.
+            break
+        verdict["verifiees"] += 1
+    return verdict
