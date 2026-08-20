@@ -4943,3 +4943,116 @@ locataire, ne pose pas ses variables, ne gère pas ses versions. Il rend la
 cellule **joignable et capable de faire tourner une pile Compose**, et s'arrête
 là — la frontière du §2 ne bouge pas.
 
+### 42.5 Ce qui manquait au pilote : exécuter et LIRE
+
+Constat fait le 2026-08-20 en ouvrant l'unité. `IncusDriver.exec_command` poste
+la commande et n'en rend **rien** : ni code de sortie, ni sortie. C'est suffisant
+pour un geste qu'on ordonne — écrire `authorized_keys`, activer un service — et
+insuffisant pour **détecter**, qui est le principe même du §42.1.
+
+Le pilote gagne donc une seconde capacité, distincte et nommée :
+
+```
+exec_capture(name, command) -> (code, stdout, stderr)
+```
+
+Elle poste l'exécution avec `record-output`, attend l'opération comme le fait
+déjà tout le pilote (§14), lit `metadata.return` pour le code, et récupère les
+deux flux par les chemins que l'opération publie dans `metadata.output`.
+
+**Un code de sortie non nul n'est PAS une erreur du pilote.** `command -v sshd`
+qui rend `1` est une réponse — « absent » —, pas une panne. `exec_capture` rend
+donc le triplet sans lever ; seule une opération qu'Incus refuse lève
+`IncusError`. Confondre les deux ferait échouer l'amorçage sur ce qu'il est
+précisément venu constater.
+
+### 42.6 Ce que la détection exécute, exactement
+
+Une seule commande par cellule, et elle n'écrit rien. Elle rend une ligne par
+élément, `<clé>=<valeur>`, ce qui la rend lisible à l'œil dans le journal d'audit
+comme au débogage :
+
+```sh
+sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
+cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64 || echo absent)
+depot=$([ -f /etc/apt/sources.list.d/docker.list ] && echo present || echo absent)
+docker=$(docker --version 2>/dev/null | head -1 || echo absent)
+origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null ||           dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
+compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
+```
+
+**`origine` est le champ qui décide de l'unité.** Il vaut `docker-ce` (bon),
+`docker.io` (défaut à corriger, §41.2) ou `absent`. Un amorçage qui se
+contenterait de `docker=présent` déclarerait bon un Spark où aucune pile ne
+tournera.
+
+L'empreinte des clés est **tronquée à 64 caractères** et ne sert qu'à comparer :
+le §21.2 interdit qu'une clé publique entière traverse le journal.
+
+### 42.7 Le contrat d'API
+
+Deux routes, et la séparation n'est pas décorative : **on peut regarder sans
+agir**. Le §42.1 fait de la détection le cœur du geste ; l'imposer comme effet de
+bord d'une écriture obligerait à amorcer pour savoir s'il y a lieu d'amorcer.
+
+```
+GET  /v1/sparks/{name}/bootstrap    → relevé, n'écrit RIEN
+POST /v1/sparks/{name}/bootstrap    → amorce ce qui manque
+```
+
+Le relevé rend, pour chacun des cinq éléments du §42.1 :
+
+```json
+{ "spark": "helo", "reachable": true,
+  "items": [ { "key": "sshd", "state": "present|absent|defect",
+               "detail": "active", "action": null } ],
+  "complete": false }
+```
+
+`state` a **trois** valeurs et jamais deux : `present`, `absent`, et `defect` —
+réservé au `docker.io` de distribution, qui est là *et* inutilisable. Les réduire
+à un booléen rendrait le §41.2 inexprimable.
+
+L'amorçage rend le même relevé, plus le sort de chaque ligne :
+
+```json
+{ "spark": "helo", "path": "incus_exec", "changed": false,
+  "items": [ { "key": "sshd", "state": "present", "action": "aucune",
+               "outcome": "inchangé" } ] }
+```
+
+`changed: false` est la réponse d'un second amorçage, et l'écran le dit en toutes
+lettres. C'est le point que la DoD éprouve : un geste qui réinstallerait « au cas
+où » redémarrerait le démon Docker du locataire, donc sa production, pour rien.
+
+**Refus, et leur forme :**
+
+| Situation | Code | `error` |
+|---|---|---|
+| Spark sans cellule | `409` | `spark_not_reachable` |
+| cellule à l'arrêt | `409` | `spark_not_running` |
+| Spark protégé (§35) | `409` | `spark_protected` |
+| Incus refuse l'exécution | `502` | `bootstrap_failed` |
+
+Le Spark **protégé** refuse : l'amorçage installe des paquets et redémarre des
+services chez le locataire, ce qui entre exactement dans ce que la protection
+arrête. La protection se lève d'abord, par le geste distinct du §35 — une
+confirmation qui la lèverait au passage ne protégerait de rien
+(`DESIGN_SYSTEM.md` §6.23).
+
+### 42.8 Ce que le journal reçoit
+
+Action **`spark.bootstrap`**, distincte de `spark.rescue_exec` : les deux passent
+par `incus exec`, et les confondre empêcherait de compter les emprunts du chemin
+de dépannage, ce que le §37.3 exige. Le message nomme ce qui a été installé, ou
+dit que rien ne l'a été.
+
+La charge porte les clés `path`, `changed`, et la liste des éléments **modifiés**
+— jamais la sortie des commandes, qui contiendrait la version des paquets du
+locataire sans qu'on en ait besoin.
+
+Un amorçage qui ne change rien est **quand même journalisé** : savoir que
+quelqu'un a demandé le geste et que rien n'était à faire est une information, et
+son absence ferait croire que le geste n'a pas été tenté.
+
+
