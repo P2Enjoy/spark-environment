@@ -4035,6 +4035,172 @@ libellés français. Un onglet dédié va exposer cet écart sur toute une page 
 d'un panneau, et le rendra donc plus visible qu'il ne l'est aujourd'hui.
 
 
+### 36.10 La signature d'un geste : contrat (SPK-40)
+
+Les §36.3 et §36.4 disent ce qu'une signature vaut et sur quelles lignes elle
+s'applique. Cette section fixe ce qui s'écrit.
+
+#### 36.10.1 Ce que cette unité N'EST PAS, et pourquoi le dire d'abord
+
+**Ce n'est pas de l'authentification.** L'arbitrage de SPK-35 (§45.4) l'a établi :
+la clé volée signe. Une signature ne prouve donc pas *qui* agit.
+
+Ce qu'elle prouve est autre chose, et c'est ce qui la rend due : qu'un geste
+inscrit au journal **a bien été demandé**, et n'a pas été fabriqué par la Forge
+après coup. Root peut supprimer ou tronquer ; il ne peut pas produire une
+signature qu'il n'a pas la clé de produire.
+
+**Conséquence directe sur le contrat, et elle n'est pas anodine : une requête non
+signée reste ACCEPTÉE.** Refuser un geste faute de signature ferait de ce
+mécanisme un contrôle d'accès, c'est-à-dire exactement ce que le §45.4 dit qu'il
+n'est pas. La signature enrichit la trace ; elle ne garde pas la porte.
+
+#### 36.10.2 SSHSIG, et pourquoi pas autre chose
+
+Le format est **SSHSIG** — `ssh-keygen -Y sign` / `-Y verify`, présent dans
+OpenSSH depuis 8.1. Motifs, dans l'ordre :
+
+- la clé privée **ne quitte jamais** le poste, et peut vivre dans l'agent. C'est
+  la condition du §36.3 ;
+- le produit exige **déjà** une clé SSH du responsable : aucun secret nouveau,
+  aucun enrôlement ;
+- la vérification ne demande aucune bibliothèque — `ssh-keygen` est là où il y a
+  `ssh`, et il y en a partout où ce produit tourne.
+
+**MESURÉ le 2026-08-21 sur OpenSSH 8.9p1**, ce qui fixe les refus :
+
+| Situation | code de `-Y verify` |
+|---|---|
+| signature valide, signataire autorisé | `0` |
+| **message altéré** | `255` — « incorrect signature » |
+| **identité inconnue** d'`allowed_signers` | `255` |
+| **espace de noms différent** | `255` — « namespace does not match » |
+| **clé absente** d'`allowed_signers` | `255` |
+
+L'espace de noms est `spark-audit`, et il n'est pas décoratif : sans lui, une
+signature produite par le responsable pour un tout autre usage — un commit, un
+courriel — serait rejouable ici. Mesuré : un espace de noms différent est refusé.
+
+> **Note de méthode, parce qu'elle a failli coûter cher.** Une première mesure a
+> rendu `0` sur une signature d'une clé hors liste, ce qui contredisait tout le
+> reste. La cause était un fichier résiduel d'un essai précédent, pas OpenSSH. Une
+> mesure qui contredit les autres se **rejoue de zéro** avant d'être crue ; celle-ci
+> l'a été, et le refus est bien `255`.
+
+#### 36.10.3 Ce qui est signé : l'intention, sérialisée canoniquement
+
+La signature porte sur des **octets**, et le §36.5 dit ce que cela impose. La
+forme est donc figée ici, exactement comme au §36.9.2 :
+
+**JSON, séparateurs `,` et `:` sans espace, clés triées par ordre d'octets,
+`ensure_ascii`, UTF-8.** Champs retenus, et eux seuls :
+
+```
+action, actor, body, method, path, ts
+```
+
+- `method` et `path` — le geste demandé ;
+- `body` — le corps de la requête, **tel qu'il a été envoyé**, ou `null` ;
+- `actor` — l'acteur déclaré par l'hôte console (§21.6.2) ;
+- `ts` — l'instant logique de la demande, en ISO 8601 ;
+- `action` — l'action de journal attendue, pour lier la signature à sa ligne.
+
+`ts` est **dans** les octets signés, et c'est ce qui empêche de rejouer une
+signature pour un second geste identique. Ce n'est pas une horloge de confiance —
+le §36.5 rappelle que le temps n'est pas une preuve —, c'est un discriminant.
+
+**Toute évolution de cette forme est une rupture**, et se traite comme le
+§36.9.2 : une nouvelle version, jamais un changement en place. La colonne
+`signature_version` la porte.
+
+#### 36.10.4 Où la vérification a lieu, et où elle n'a pas lieu
+
+`sparkd` vérifie **à la réception**, et cela peut surprendre après le §36.10.1 :
+si ce n'est pas un contrôle d'accès, pourquoi vérifier ?
+
+Parce qu'une signature stockée sans avoir été vérifiée ferait **mentir le
+journal**. Une ligne qui porte une signature invalide affirme une preuve qu'elle
+n'a pas, et c'est pire que de n'en porter aucune.
+
+La règle est donc en deux temps, et les deux comptent :
+
+- **pas de signature** → le geste passe, la ligne est inscrite **sans**
+  signature, et la supervision la montre comme non signée (§36.4) ;
+- **signature présente et invalide** → la requête est **refusée** en `422`. Ce
+  n'est pas un refus d'accès : c'est le refus d'inscrire une preuve fausse. Le
+  message le dit dans ces termes.
+
+**La vérification hors ligne reste la vraie.** Celle de la Forge est faite par la
+machine qu'on soupçonne : elle attrape l'erreur et le bruit, pas l'adversaire qui
+a root. Qui audite rejoue la vérification **ailleurs**, avec les octets et la
+signature que le journal conserve, exactement comme l'ancre du §36.2 vit ailleurs.
+C'est le même principe, appliqué deux fois.
+
+#### 36.10.5 Où vivent les clés autorisées
+
+Un fichier `allowed_signers` au format OpenSSH, sur la Forge, désigné par
+`SPARKD_ALLOWED_SIGNERS`. Il ne porte que des clés **publiques** : le §11 pose
+que les clés privées restent sur le poste du responsable, et cette unité ne
+change rien à cela.
+
+**Fichier absent ou vide** : la fonction se **désactive**, elle ne tombe pas en
+panne. Aucune signature n'est alors acceptée — une signature qu'on ne peut
+rattacher à personne ne prouve rien —, et le refus le **dit** au lieu de laisser
+croire à une signature invalide. C'est le §14.5 appliqué à une configuration
+absente.
+
+#### 36.10.6 Le registre, et les deux classes de lignes
+
+`audit_log` gagne trois colonnes, par migration :
+
+| Colonne | Contenu |
+|---|---|
+| `signature` | la signature SSHSIG, armure comprise, ou `null` |
+| `signed_bytes` | les octets exacts qui ont été signés, ou `null` |
+| `signature_version` | la version de la forme du §36.10.3, ou `null` |
+
+Elles n'entrent **PAS** dans l'empreinte de la chaîne (§36.9.2). Le champ retenu
+y est figé, et l'y ajouter invaliderait toutes les lignes existantes — ce que le
+§36.9.2 interdit expressément. Les deux mécanismes sont indépendants **par
+construction** : la chaîne couvre l'ordre et l'intégrité, la signature couvre
+l'intention.
+
+Une ligne produite par le **runtime** porte `null` aux trois. Ce n'est pas une
+lacune : le §36.4 le dit, et la supervision montre la classe plutôt que de la
+masquer.
+
+#### 36.10.7 Surface d'API
+
+L'en-tête, sur toute requête mutante :
+
+```
+X-Spark-Signature:  <SSHSIG en base64, armure retirée, sur une ligne>
+X-Spark-Signed:     <les octets du §36.10.3, en base64>
+```
+
+Les octets signés voyagent **explicitement** plutôt que d'être reconstruits par le
+serveur. Reconstruire supposerait que les deux côtés sérialisent à l'octet près,
+pour toujours — c'est précisément le premier piège du §36.5, et le faire porter à
+deux implémentations au lieu d'une le double.
+
+Le serveur **contrôle** que les octets reçus décrivent bien la requête reçue —
+`method`, `path` et `actor` doivent correspondre. Sans ce contrôle, on signerait
+n'importe quoi et on l'attacherait à n'importe quel geste.
+
+Refus, chacun distinct :
+
+| Cas | Code | Motif |
+|---|---|---|
+| signature présente, octets absents | `422` | on ne peut rien vérifier |
+| octets qui ne décrivent pas cette requête | `422` | la signature porterait sur autre chose |
+| signature invalide | `422` | inscrire serait affirmer une preuve fausse |
+| `allowed_signers` absent | `422` | rattachable à personne |
+| aucune signature | — | le geste passe, la ligne est non signée |
+
+`GET /v1/audit` expose `signed: true|false` par entrée. La **signature elle-même**
+n'est rendue que sur demande explicite — elle ne sert qu'à qui vérifie, et elle
+alourdirait chaque page du journal pour tous les autres.
+
 ## 37. Les outils d'administration dans le Spark
 
 Un terminal dans le Spark, l'inventaire de ses conteneurs Docker avec leurs

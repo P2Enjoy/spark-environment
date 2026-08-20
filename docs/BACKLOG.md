@@ -1383,6 +1383,19 @@ supprimer ou tronquer, mais **pas fabriquer** un geste authentique (§36.3).
   ligne produite par le runtime n'est signée par personne — la supervision le dit
   au lieu de le masquer.
 
+**Contrat écrit et poussé avant le code, le 2026-08-21** : `docs/DAT.md` §36.10,
+après mesure de SSHSIG sur OpenSSH 8.9p1.
+
+**Découpage**, parce que les deux moitiés vivent sur des machines différentes et
+que chacune se prouve seule :
+
+1. **Côté Forge** — le registre porte la signature, `sparkd` la vérifie à la
+   réception et l'expose ; plus l'outil de vérification hors ligne. C'est ce qui
+   se prouve entièrement ici, avec un vrai `ssh-keygen`.
+2. **Côté console** — la signature produite par l'agent du responsable sur chaque
+   geste mutant. Elle suppose un agent atteignable, que la pile de développement
+   n'a pas.
+
 ### [x] SPK-41 · Catalogue local des serveurs, tenu depuis la console
 
 Le catalogue **existe** — `~/.config/spark/servers.json`, validé, sans secret, et
