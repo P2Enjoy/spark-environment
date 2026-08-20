@@ -854,6 +854,20 @@ function servirFlux(url, reponse, terminaux) {
   // Un commentaire d'amorce : il ne porte aucun évènement, il prouve seulement
   // que le flux est ouvert.
   reponse.write(': ouvert\n\n');
+
+  // MESURÉ le 2026-08-20 : un distant qui meurt AVANT que le flux soit branché
+  // diffuse sa fin à zéro abonné, et `fermer()` vide ensuite la liste. L'écran
+  // restait alors sur « session ouverte » indéfiniment, pour une session déjà
+  // morte. Ce n'est pas un cas de laboratoire : c'est exactement ce que produit
+  // un `sshd` muet, où `ssh` sort en quelques millisecondes (§37.2).
+  //
+  // La fin est donc REJOUÉE à l'abonnement quand elle a déjà eu lieu. Elle n'est
+  // pas rediffusée à tous — seul ce flux la reçoit, et il se referme aussitôt.
+  if (session.fermeA) {
+    reponse.write(`event: fin\ndata: ${JSON.stringify(session.motif)}\n\n`);
+    return reponse.end();
+  }
+
   const desabonner = session.abonner((type, data) => {
     reponse.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
     if (type === 'fin') reponse.end();

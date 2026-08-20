@@ -32,6 +32,12 @@ export const TERMINAL_VIDE = {
   // employé. Elle est rendue dans le flux (§6.22) : une modale imposerait un
   // voile et un piège de focus pour afficher trois lignes et deux boutons.
   confirmeDepannage: false,
+  // §37.2 : quand le chemin normal n'aboutit pas, l'écran doit DIRE ce qui
+  // manque. Il ne peut pas le lire dans la sortie — la console n'en retient rien
+  // (§37.5) —, alors il le fait MESURER. Trois valeurs, et elles ne se
+  // confondent pas (§6.13, §14.6) : `null` = pas de mesure demandée,
+  // `'en-cours'` = mesure lancée, objet = verdict rendu.
+  diagnostic: null,
 };
 
 /**
@@ -57,6 +63,41 @@ export const CHEMINS = {
 const MOTIFS_DEPANNAGE = {
   spark_en_erreur: 'ce Spark est en erreur',
   sshd_muet: 'rien ne répond sur son port 22',
+};
+
+/**
+ * Ce que le diagnostic a constaté, dit à l'exploitant (§37.2, §37.3.1).
+ *
+ * Chaque cas porte ce qui a été mesuré ET le geste qui y répond. Nommer la panne
+ * sans dire quoi faire laisserait l'exploitant exactement où il était.
+ */
+const DIAGNOSTICS = {
+  sshd_muet: {
+    titre: 'Aucun serveur SSH ne répond dans ce Spark.',
+    detail: 'Rien n’écoute sur son port 22. L’image de base n’embarque pas de '
+      + '« sshd » : sur un Spark où personne ne l’a installé, le chemin normal '
+      + 'ne peut pas aboutir.',
+  },
+  spark_en_erreur: {
+    titre: 'Ce Spark est en erreur.',
+    detail: 'Le chemin normal ne peut pas être supposé disponible tant que la '
+      + 'cellule n’est pas repartie.',
+  },
+  cle_refusee: {
+    titre: 'Le serveur SSH répond, mais il refuse la clé.',
+    detail: 'Ce n’est pas une panne du Spark : c’est un problème d’accès. '
+      + 'Réaccordez la clé depuis l’onglet Clés — le dépannage n’est pas la '
+      + 'réponse, et il vous sera refusé.',
+  },
+  ssh_disponible: {
+    titre: 'Le serveur SSH de ce Spark répond.',
+    detail: 'Le shell distant s’est donc terminé pour une autre raison — une '
+      + 'commande qui rend la main, ou une déconnexion. Rouvrir devrait marcher.',
+  },
+  sans_cellule: {
+    titre: 'Ce Spark n’a pas encore de cellule.',
+    detail: 'Il est déclaré et ses ressources sont réservées, mais rien ne tourne.',
+  },
 };
 
 /**
@@ -186,6 +227,31 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
     ? `<p class="note-transitoire" role="status">${echapper(FINS[etat.fin] ?? etat.fin)}</p>`
     : '';
 
+  // §37.2 : quand le chemin normal n'aboutit pas, l'écran NOMME ce qui manque.
+  // Les trois états ne se confondent pas (§6.13, §14.6) : mesure en cours,
+  // mesure rendue, mesure impossible. Un blanc laisserait croire que tout va
+  // bien là où l'on vient justement d'échouer à entrer.
+  const diagnostic = etat.diagnostic === 'en-cours'
+    ? `<p class="note" role="status" aria-busy="true">Vérification du serveur SSH
+       de ce Spark…</p>`
+    : etat.diagnostic === 'impossible'
+      ? `<p class="note" role="status">La console n’a pas pu vérifier le serveur
+         SSH de ce Spark. La cause de l’échec n’est donc pas établie.</p>`
+      : etat.diagnostic
+        ? (() => {
+            const cas = DIAGNOSTICS[etat.diagnostic.motif];
+            if (!cas) return '';
+            // Une panne qui ouvre le dépannage est une ALERTE : c'est elle qui
+            // justifie d'employer un pouvoir d'exception, et le §9.7 veut
+            // qu'elle soit annoncée. Un Spark joignable ne l'est pas.
+            const grave = etat.diagnostic.ouvert || etat.diagnostic.motif === 'cle_refusee';
+            return `<div class="${grave ? 'refus' : 'note'}"${grave ? ' role="alert"' : ' role="status"'}>
+                      <p><strong>${echapper(cas.titre)}</strong></p>
+                      <p>${echapper(cas.detail)}</p>
+                    </div>`;
+          })()
+        : '';
+
   // Le mode lecteur d'écran fait du terminal une région annoncée : sans lui, la
   // sortie défile sans qu'aucune synthèse vocale ne la lise (SPK-DS-04).
   const region = etat.lecteurEcran
@@ -197,7 +263,7 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
   <h2 id="titre-terminal">Terminal</h2>
   ${bandeau}
   ${refusDepannage}
-  ${avis}${fin}
+  ${avis}${fin}${diagnostic}
   <pre class="terminal" id="${CHAMP_TERMINAL}" tabindex="0"${region}></pre>
   <label class="sr-only" for="terminal-entree">Saisie du terminal</label>
   <input class="controle technique" id="terminal-entree" type="text" autocomplete="off"

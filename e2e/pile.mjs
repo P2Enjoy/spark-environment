@@ -111,7 +111,15 @@ export async function monterPile({ dns = null } = {}) {
     // SPK-43 · §37.4.2 bis : le doublon du transport. La pile n'a pas de `sshd`
     // dans ses Sparks — son pilote est factice —, et sans lui aucun parcours ne
     // pourrait éprouver le flux, la saisie et la fermeture qui tue.
-    SPARK_TERMINAL_COMMAND: 'cat',
+    //
+    // « site-vitrine » porte le cas du §37.2 : son chemin NORMAL meurt aussitôt
+    // — c'est ce que produit un `sshd` muet — tandis que son DÉPANNAGE
+    // fonctionne, puisqu'il passe par la Forge et non par le `sshd`. C'est la
+    // situation réelle, et c'est toute la raison d'être du §37.3.
+    SPARK_TERMINAL_COMMAND: JSON.stringify({
+      '*': 'cat',
+      'site-vitrine': { ssh: 'false', rescue: 'cat' },
+    }),
     // Le `.env` du poste ne doit pas se réintroduire par l'environnement hérité.
     SCW_SECRET_KEY: '', SCW_DEFAULT_ORGANIZATION_ID: '', SPARK_DNS_ALLOW_PATTERN: '',
     SPARK_DNS_BASE_URL: '',

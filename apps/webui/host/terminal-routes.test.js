@@ -404,3 +404,22 @@ test('un Spark INCONNU rend 404, pas un diagnostic inventé', async () => {
   assert.equal((await r.json()).error, 'unknown_spark');
   fermer();
 });
+
+test('un distant mort AVANT le flux fait quand même arriver la fin', async () => {
+  // MESURÉ : `fermer()` diffuse à ses abonnés puis vide la liste. Un distant qui
+  // meurt entre le POST et l'ouverture du flux émettait donc sa fin dans le
+  // vide, et l'écran restait sur « session ouverte » pour une session morte.
+  // C'est la course exacte d'un `sshd` muet, où `ssh` sort en quelques
+  // millisecondes (§37.2).
+  const { base, fermer, enfants } = await pile();
+  const session = JSON.parse(await (await ouvrir(base)).text());
+
+  // Le distant meurt AVANT que quiconque écoute.
+  enfants[0].emit('exit', 255);
+
+  const flux = await fetch(`${base}/api/terminal/flux?id=${session.id}`);
+  const texte = await flux.text();
+  assert.match(texte, /event: fin/, 'la fin est rejouée à l’abonnement');
+  assert.match(texte, /distant_termine/);
+  fermer();
+});

@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
 import {
-  CHEMIN_DEPANNAGE, CHEMIN_SSH, classerEchecSsh, depannageOuvert,
+  CHEMIN_DEPANNAGE, CHEMIN_SSH, classerEchecSsh, commandePour, depannageOuvert,
   DISTANT_TERMINE, EN_ERREUR, FLUX_FERME, INACTIVITE, Session, SessionManager,
   sonderSshd, SORTIE, SSHD_MUET, TerminalError,
 } from './terminal.js';
@@ -408,4 +408,61 @@ test('un ssh INTROUVABLE ne fait pas conclure que le sshd est muet', async () =>
   const verdict = await sonderSshd({ tunnel: FORGE_DISTANTE, spark: CELLULE, spawn: faux });
   assert.equal(verdict.repond, true);
   assert.equal(depannageOuvert(CELLULE, verdict).ouvert, false);
+});
+
+// --- Le doublon du transport, résolu par Spark (§37.4.2 bis) ----------------
+
+test('une commande SIMPLE vaut pour tous les Sparks, comme avant', () => {
+  assert.equal(commandePour('cat', { name: 'crm' }), 'cat');
+  assert.equal(commandePour('cat', { name: 'autre' }), 'cat');
+});
+
+test('absente, le produit lance ssh — le doublon ne s’invente pas', () => {
+  assert.equal(commandePour(null, { name: 'crm' }), null);
+  assert.equal(commandePour('', { name: 'crm' }), null);
+});
+
+test('une TABLE choisit par Spark, et « * » couvre le reste', () => {
+  // Un doublon qui ne sait représenter qu'un distant VIVANT ne peut pas
+  // éprouver ce qui arrive quand il meurt — le cas même du sshd muet.
+  const table = '{"*":"cat","site-vitrine":"false"}';
+  assert.equal(commandePour(table, { name: 'site-vitrine' }), 'false');
+  assert.equal(commandePour(table, { name: 'crm' }), 'cat');
+});
+
+test('une table SANS « * » ne double PAS les autres Sparks', () => {
+  // Rendre `cat` par défaut ferait taire une table incomplète ; rendre `null`
+  // fait lancer `ssh`, ce qui se voit tout de suite.
+  assert.equal(commandePour('{"site-vitrine":"false"}', { name: 'crm' }), null);
+});
+
+test('une table ILLISIBLE est refusée, pas ignorée', () => {
+  // L'ignorer reviendrait à lancer un vrai `ssh` depuis un harnais, contre une
+  // adresse privée qui n'existe pas — un échec lent et trompeur.
+  assert.throws(() => commandePour('{ceci n’est pas du JSON', { name: 'crm' }),
+                TerminalError);
+});
+
+test('le gestionnaire résout la commande POUR CE Spark', () => {
+  const { enfant } = pile({
+    commande: '{"*":"cat","site-vitrine":"false"}',
+    tunnel: FORGE_DISTANTE,
+    spark: { name: 'site-vitrine', ipv4_address: '10.77.0.19', incus_name: 'site-vitrine' },
+  });
+  assert.equal(enfant.commande, 'false');
+});
+
+test('une entrée peut distinguer les deux CHEMINS d’un même Spark', () => {
+  // Sur un Spark au `sshd` muet, le chemin normal meurt et le dépannage
+  // fonctionne : c'est toute la raison d'être du §37.3. Un doublon qui les
+  // traiterait pareil rendrait le dépannage inéprouvable là où il sert.
+  const table = '{"*":"cat","site-vitrine":{"ssh":"false","rescue":"cat"}}';
+  assert.equal(commandePour(table, { name: 'site-vitrine' }, CHEMIN_SSH), 'false');
+  assert.equal(commandePour(table, { name: 'site-vitrine' }, CHEMIN_DEPANNAGE), 'cat');
+  assert.equal(commandePour(table, { name: 'crm' }, CHEMIN_DEPANNAGE), 'cat');
+});
+
+test('une entrée par chemin INCOMPLÈTE retombe sur celle du chemin normal', () => {
+  assert.equal(commandePour('{"crm":{"ssh":"cat"}}', { name: 'crm' }, CHEMIN_DEPANNAGE),
+               'cat');
 });

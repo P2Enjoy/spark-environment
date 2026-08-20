@@ -279,3 +279,73 @@ test('la PASTILLE du chemin reste courte, le pouvoir est nommé à côté', () =
   // …mais il reste nommé, et en dehors d'elle.
   assert.match(rendu, /<strong>exécution en root dans la cellule, depuis le plan de contrôle<\/strong>/);
 });
+
+// --- SPK-43 · L'ÉCRAN NOMME CE QUI MANQUE (§37.2, §37.3.1) ------------------
+
+test('un sshd MUET est nommé, avec ce qui manque et pourquoi', () => {
+  // §37.2 : « l'écran le dit en toutes lettres, avec ce qu'il manque — il
+  // n'affiche ni onglet vide, ni erreur technique ».
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine',
+    diagnostic: { motif: 'sshd_muet', ouvert: true } }));
+  assert.match(rendu, /Aucun serveur SSH ne répond dans ce Spark/);
+  assert.match(rendu, /L’image de base n’embarque pas/);
+  assert.match(rendu, /role="alert"/, 'la panne qui ouvre un pouvoir d’exception est annoncée');
+  // …et la commande qui y répond est là, juste à côté.
+  assert.match(rendu, /data-terminal="depanner"/);
+});
+
+test('une clé refusée est nommée AUTREMENT, et renvoie ailleurs', () => {
+  // Le point du §37.3.1 : les deux pannes se ressemblent et n'appellent pas le
+  // même geste. Les dire pareil ferait employer le dépannage pour un problème
+  // de clé, qu'il ne réglerait pas.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine',
+    diagnostic: { motif: 'cle_refusee', ouvert: false } }));
+  assert.match(rendu, /il refuse la clé/);
+  assert.match(rendu, /onglet Clés/);
+  assert.match(rendu, /le dépannage n’est pas la réponse/);
+  assert.ok(!/Aucun serveur SSH ne répond/.test(rendu));
+});
+
+test('un sshd qui RÉPOND ne déclenche aucune alerte', () => {
+  // Une région d'alerte sur un Spark joignable userait le signal.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine',
+    diagnostic: { motif: 'ssh_disponible', ouvert: false } }));
+  assert.match(rendu, /Le serveur SSH de ce Spark répond/);
+  assert.match(rendu, /Rouvrir devrait marcher/);
+  assert.ok(!/role="alert"/.test(rendu));
+});
+
+test('la mesure EN COURS se distingue de son résultat', () => {
+  // §6.13 et §14.6 : « calcul en cours » n'est ni zéro, ni un verdict.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine', diagnostic: 'en-cours' }));
+  assert.match(rendu, /Vérification du serveur SSH/);
+  assert.match(rendu, /aria-busy="true"/);
+  assert.ok(!/Aucun serveur SSH ne répond/.test(rendu));
+});
+
+test('une mesure IMPOSSIBLE le dit, au lieu de laisser un blanc', () => {
+  // §14.6 : « calcul impossible » n'est pas « tout va bien ». Un blanc, ici,
+  // laisserait croire que la cause a été établie alors qu'on l'ignore.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine', diagnostic: 'impossible' }));
+  assert.match(rendu, /n’a pas pu vérifier/);
+  assert.match(rendu, /La cause de l’échec n’est donc pas établie/);
+});
+
+test('sans mesure demandée, l’écran n’invente aucun verdict', () => {
+  const rendu = renderTerminal(SPARK, etat({ status: 'ferme', fin: 'sortie' }));
+  assert.ok(!/serveur SSH/.test(rendu));
+  assert.ok(!/Vérification/.test(rendu));
+});
+
+test('un motif de diagnostic INCONNU ne rend rien plutôt qu’un jeton brut', () => {
+  // §14.7 : une valeur technique inconnue ne doit jamais atteindre l'écran.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine',
+    diagnostic: { motif: 'quelque_chose_de_neuf', ouvert: false } }));
+  assert.ok(!rendu.includes('quelque_chose_de_neuf'));
+});

@@ -375,6 +375,49 @@ export class Session {
 }
 
 
+/**
+ * Résout la commande du doublon pour UN Spark (§37.4.2 bis).
+ *
+ * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.4.2 bis
+ *
+ * Le doublon remplace la commande lancée, pas le mécanisme. Une valeur simple —
+ * `cat` — vaut pour tous les Sparks et reste la forme normale.
+ *
+ * Un doublon qui ne sait représenter qu'un distant VIVANT ne peut pas éprouver
+ * ce qui arrive quand il meurt : or c'est exactement ce que produit un `sshd`
+ * muet, et c'est le cas que le §37.2 demande à l'écran de nommer. La valeur
+ * accepte donc aussi une table par Spark, avec `*` pour le reste — même idée
+ * que le `fail_next` du pilote factice, qui fait échouer un Spark nommé sans
+ * toucher aux autres.
+ *
+ * L'entrée d'un Spark peut elle-même distinguer les deux CHEMINS, et ce n'est
+ * pas un raffinement : sur un Spark au `sshd` muet, le chemin normal meurt et
+ * le dépannage fonctionne — c'est toute la raison d'être du §37.3. Un doublon
+ * qui les traiterait pareil rendrait le dépannage inéprouvable là où il sert.
+ *
+ * Absente en production : le produit lance alors `ssh`, et c'est le vrai `sshd`
+ * qui décide de vivre ou de mourir.
+ */
+export function commandePour(commande, spark, chemin = CHEMIN_SSH) {
+  if (!commande) return null;
+  const brut = String(commande).trim();
+  if (!brut.startsWith('{')) return brut;
+  let table;
+  try {
+    table = JSON.parse(brut);
+  } catch {
+    // Une table illisible n'est PAS un doublon vide : ce serait lancer `ssh`
+    // pour de bon depuis un harnais, contre une adresse qui n'existe pas.
+    throw new TerminalError('SPARK_TERMINAL_COMMAND : table JSON illisible.');
+  }
+  const entree = table[spark?.name] ?? table['*'] ?? null;
+  if (entree === null || entree === undefined) return null;
+  const choisie = typeof entree === 'object'
+    ? (entree[chemin] ?? entree[CHEMIN_SSH] ?? null)
+    : entree;
+  return choisie ? String(choisie) : null;
+}
+
 /** Les sessions vivantes, et rien d'autre. */
 export class SessionManager {
   #sessions = new Map();
@@ -394,7 +437,7 @@ export class SessionManager {
 
   ouvrir({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null }) {
     const session = new Session({
-      tunnel, spark, spawn: this.spawnFn, commande: this.commande,
+      tunnel, spark, spawn: this.spawnFn, commande: commandePour(this.commande, spark, chemin),
       chemin, motifDepannage,
       inactiviteMs: this.inactiviteMs,
       preavisMs: this.preavisMs, maintenant: this.maintenant,

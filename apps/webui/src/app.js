@@ -290,12 +290,42 @@ function envoyerAuTerminal(data) {
  * L'ordre compte : le flux ne peut s'abonner qu'à une session existante, et
  * l'ouvrir d'abord garantit qu'aucun octet n'est perdu entre les deux.
  */
+/**
+ * Pourquoi le chemin normal n'a pas abouti (§37.2, §37.3.1).
+ *
+ * La console ne retient AUCUN octet de la session (§37.5) : elle ne peut donc
+ * pas déduire la cause de ce qui s'est affiché. Elle la fait mesurer.
+ */
+async function diagnostiquerTerminal() {
+  const t = etat.terminal;
+  t.diagnostic = 'en-cours';
+  peindre();
+  try {
+    const reponse = await fetch(
+      `/api/terminal/diagnostic?server=${encodeURIComponent(etat.server)}`
+      + `&spark=${encodeURIComponent(etat.spark.name)}`);
+    if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+    const corps = await reponse.json();
+    t.diagnostic = { motif: corps.rescue?.motif ?? null,
+                     ouvert: Boolean(corps.rescue?.ouvert) };
+  } catch {
+    // §14.6 : « mesure impossible » n'est pas « tout va bien ». Taire l'échec
+    // du diagnostic laisserait croire que la cause a été établie.
+    t.diagnostic = 'impossible';
+  }
+  peindre();
+}
+
 async function ouvrirTerminal(chemin = 'ssh') {
   const t = etat.terminal;
   t.status = 'ouverture';
   t.refus = null;
   t.fin = null;
   t.avertissement = null;
+  // Le verdict portait sur la session PRÉCÉDENTE : le garder afficherait un
+  // diagnostic périmé à côté d'une session neuve.
+  t.diagnostic = null;
+  t.session = null;
   peindre();
 
   let corps;
@@ -333,12 +363,21 @@ async function ouvrirTerminal(chemin = 'ssh') {
     peindre();
   });
   fluxTerminal.addEventListener('fin', (e) => {
-    etat.terminal.fin = JSON.parse(e.data);
+    const motif = JSON.parse(e.data);
+    const finie = etat.terminal.session;
+    etat.terminal.fin = motif;
     etat.terminal.status = 'ferme';
-    etat.terminal.session = null;
+    // La session est CONSERVÉE à l'affichage : le §37.3 veut qu'on n'oublie pas
+    // par quel chemin on est entré, et l'oublier au moment même où l'on lit le
+    // message de fermeture serait le pire moment. Elle est effacée à la
+    // prochaine ouverture, pas ici.
     fluxTerminal?.close();
     fluxTerminal = null;
     peindre();
+
+    // §37.2 : un shell distant qui MEURT sur le chemin normal appelle une
+    // explication. « sortie » est un départ volontaire et n'en appelle aucune.
+    if (motif === 'distant_termine' && finie?.path !== 'rescue') diagnostiquerTerminal();
   });
 
   propagerTaille();

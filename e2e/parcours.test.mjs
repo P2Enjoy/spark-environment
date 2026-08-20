@@ -1469,6 +1469,42 @@ test('un Spark sans CELLULE nomme ce qui manque', async () => {
 
 // --- SPK-43, tranche 4 · LE DÉPANNAGE (§37.3) -------------------------------
 
+test('un distant qui MEURT fait dire à l’écran ce qui manque, et propose la suite', async () => {
+  await parcours('terminal-sshd-muet', async () => {
+    // « site-vitrine » : distant qui meurt aussitôt (doublon du §37.4.2 bis),
+    // et Spark en erreur dans le seed. C'est le cas du §37.2 — une cellule qui
+    // tourne, mais rien qui réponde.
+    await ouvrir('site-vitrine', 'terminal');
+    await page.waitForSelector('#titre-terminal');
+    await page.click('[data-terminal="ouvrir"]');
+
+    // Le shell meurt de lui-même. L'écran ne doit pas s'en tenir là.
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Le shell distant'), { timeout: 20000 });
+
+    // §6.13 : la mesure EN COURS se voit, elle ne se confond pas avec son
+    // résultat — puis le verdict la remplace.
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Ce Spark est en erreur')
+         || document.body.innerText.includes('Aucun serveur SSH ne répond'),
+      { timeout: 20000 });
+
+    const ecran = await page.textContent('.principal');
+    assert.ok(!/sshd_muet|spark_en_erreur|ssh_disponible/.test(ecran),
+      'aucun jeton technique brut n’atteint l’écran (§14.7)');
+    assert.ok(await page.$('[role="alert"]'),
+      'une panne qui ouvre un pouvoir d’exception est annoncée (§9.7)');
+
+    // …et la commande qui y répond est là, juste à côté.
+    assert.ok(await page.$('[data-terminal="depanner"]'));
+
+    // Le diagnostic est une LECTURE : rien n'a été ouvert, rien n'a été
+    // journalisé de plus que la session qui vient de mourir (§36.7).
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.rescue_exec&limit=10');
+    assert.equal(corps.entries.length, 0, 'diagnostiquer n’ouvre aucun dépannage');
+  });
+});
+
 test('demander le dépannage montre ce qu’il va employer, et on peut renoncer', async () => {
   await parcours('terminal-depannage-confirmation', async () => {
     // « site-vitrine » est en ERREUR dans le seed : c'est le cas que le §37.3
