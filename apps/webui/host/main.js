@@ -561,6 +561,25 @@ export function createConsoleHost(options = {}) {
       }
     },
 
+    /**
+     * Fermeture par BALISE, quand la page se démonte (§37.4.2).
+     *
+     * `navigator.sendBeacon` ne sait que POSTer, et c'est le seul envoi qui
+     * parte encore quand l'onglet se ferme — un `fetch` y serait abandonné.
+     * Sans cette route, fermer l'onglet du navigateur laisserait un shell root
+     * vivant jusqu'au délai d'inactivité.
+     */
+    'POST /api/terminal/fermeture': async (_corps, url) => {
+      const id = String(url?.searchParams.get('id') ?? '');
+      const session = terminaux.fermer(id, FLUX_FERME);
+      if (!session) return { status: 204, body: null };
+      const tunnel = tunnels.get(session.tunnel?.name ?? '') ?? session.tunnel;
+      await declarerAudit(tunnel, 'spark.terminal_close', {
+        spark: session.spark.name, path: 'ssh',
+        reason: session.motif, duration_seconds: session.dureeSecondes() });
+      return { status: 204, body: null };
+    },
+
     /** Ferme, et TUE le distant (§37.4). */
     'DELETE /api/terminal': async (_corps, url) => {
       const id = String(url?.searchParams.get('id') ?? '');

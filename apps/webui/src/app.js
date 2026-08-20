@@ -10,6 +10,7 @@
 
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
+import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
   from './components/spark-admin.js';
@@ -30,6 +31,17 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                forge: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false },
                facette: '',
+               // SPK-43 · §37.4 : la session de terminal. Les OCTETS n'y sont
+               // pas — ils vont directement au DOM (§37.5).
+               terminal: {
+                 ...TERMINAL_VIDE,
+                 // §11 : la préférence d'affichage est limitée à la SESSION.
+                 lecteurEcran: (() => {
+                   try {
+                     return sessionStorage.getItem('spark.terminal.lecteur') === 'true';
+                   } catch { return false; }
+                 })(),
+               },
                servers: [],
                catalogueServeurs: { status: 'loading', servers: [], tunnels: [],
                                     current: null, error: null,
@@ -77,7 +89,8 @@ function peindre() {
       : etat.route === 'detail'
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, admin: etat.admin,
-                            facette: etat.facette, ...etat.detail })
+                            facette: etat.facette, terminal: etat.terminal,
+                            ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
         + renderSparksView(etat);
   brancher();
@@ -138,6 +151,7 @@ function brancher() {
     });
   }
   brancherPanneaux();
+  brancherTerminal();
   // §6.27 : le contrat de la modale est tenu à UN SEUL endroit — focus entrant,
   // focus retenu, Échap qui vaut annulation, focus rendu au déclencheur.
   brancherModale(racine, {
@@ -168,6 +182,192 @@ function brancher() {
  * formulaire à l'ouverture, l'annulation le rend au déclencheur, et un refus du
  * serveur ne touche pas à la saisie.
  */
+/* ------------------------------------------------------------- le terminal */
+
+/**
+ * Le flux d'évènements en cours. Il vit HORS de l'état : c'est une ressource
+ * ouverte, pas une donnée d'écran, et la peindre n'aurait aucun sens.
+ */
+let fluxTerminal = null;
+
+/**
+ * Les octets en attente d'envoi (SPK-43, §37.4.1).
+ *
+ * Le flux est unidirectionnel : chaque saisie est un envoi distinct, avec sa
+ * latence. Pour un collage de plusieurs kilo-octets, on GROUPE ce qui attend et
+ * on n'envoie qu'une requête — sans quoi coller un script produirait une requête
+ * par ligne.
+ */
+let enAttente = '';
+let envoiPlanifie = null;
+
+/** La sortie va DIRECTEMENT au DOM : l'état n'en garde aucune trace (§37.5). */
+function ecrireSortie(texte) {
+  const bloc = racine.querySelector(`#${CHAMP_TERMINAL}`);
+  if (!bloc) return;
+  bloc.append(texte);
+  bloc.scrollTop = bloc.scrollHeight;
+}
+
+function brancherTerminal() {
+  const etatT = etat.terminal;
+
+  racine.querySelector('[data-terminal="ouvrir"]')
+    ?.addEventListener('click', () => ouvrirTerminal());
+  racine.querySelector('[data-terminal="fermer"]')
+    ?.addEventListener('click', () => fermerTerminal('sortie'));
+
+  const lecteur = racine.querySelector('[data-terminal="lecteur"]');
+  lecteur?.addEventListener('change', () => {
+    etatT.lecteurEcran = lecteur.checked;
+    // §11 de CLAUDE.md : une préférence d'interface qui peut rester limitée à la
+    // session emploie `sessionStorage`. Rien ici ne justifie de la persister sur
+    // l'appareil au-delà.
+    try {
+      sessionStorage.setItem('spark.terminal.lecteur', String(lecteur.checked));
+    } catch { /* stockage refusé : la préférence vaut pour cet écran seulement */ }
+    peindre();
+  });
+
+  const saisie = racine.querySelector('#terminal-entree');
+  saisie?.addEventListener('keydown', (evenement) => {
+    if (evenement.key !== 'Enter') return;
+    evenement.preventDefault();
+    envoyerAuTerminal(`${saisie.value}\n`);
+    saisie.value = '';
+  });
+}
+
+/** Groupe les octets et n'envoie qu'une requête (§37.4.1). */
+function envoyerAuTerminal(data) {
+  if (!etat.terminal.session) return;
+  enAttente += data;
+  if (envoiPlanifie) return;
+  envoiPlanifie = setTimeout(async () => {
+    const charge = enAttente;
+    enAttente = '';
+    envoiPlanifie = null;
+    if (!charge || !etat.terminal.session) return;
+    await fetch(`/api/terminal/entree?id=${encodeURIComponent(etat.terminal.session.id)}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ data: charge }),
+    }).catch(() => {});
+  }, 16);
+}
+
+/**
+ * Ouvre la session, puis branche le flux de sortie (§37.4.1, §37.4.4).
+ *
+ * L'ordre compte : le flux ne peut s'abonner qu'à une session existante, et
+ * l'ouvrir d'abord garantit qu'aucun octet n'est perdu entre les deux.
+ */
+async function ouvrirTerminal() {
+  const t = etat.terminal;
+  t.status = 'ouverture';
+  t.refus = null;
+  t.fin = null;
+  t.avertissement = null;
+  peindre();
+
+  let corps;
+  try {
+    const reponse = await fetch('/api/terminal', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server: etat.server, spark: etat.spark.name }),
+    });
+    corps = await reponse.json();
+    if (!reponse.ok) {
+      t.status = 'refus';
+      t.refus = corps;
+      return peindre();
+    }
+  } catch (erreur) {
+    t.status = 'refus';
+    t.refus = { error: 'console_unreachable', message: erreur.message };
+    return peindre();
+  }
+
+  t.session = corps;
+  t.status = 'ouvert';
+  peindre();
+
+  fluxTerminal = new EventSource(
+    `/api/terminal/flux?id=${encodeURIComponent(corps.id)}`);
+  fluxTerminal.addEventListener('sortie', (e) => ecrireSortie(JSON.parse(e.data)));
+  fluxTerminal.addEventListener('avertissement', (e) => {
+    etat.terminal.avertissement = JSON.parse(e.data);
+    peindre();
+  });
+  fluxTerminal.addEventListener('fin', (e) => {
+    etat.terminal.fin = JSON.parse(e.data);
+    etat.terminal.status = 'ferme';
+    etat.terminal.session = null;
+    fluxTerminal?.close();
+    fluxTerminal = null;
+    peindre();
+  });
+
+  propagerTaille();
+  racine.querySelector('#terminal-entree')?.focus();
+}
+
+/**
+ * Propage la taille (§37.4.3), déduite du conteneur de sortie.
+ *
+ * La limite est écrite à l'écran : un programme plein écran DÉJÀ lancé ne
+ * recevra pas `SIGWINCH` et ne s'en apercevra pas.
+ */
+async function propagerTaille() {
+  const t = etat.terminal;
+  const bloc = racine.querySelector(`#${CHAMP_TERMINAL}`);
+  if (!t.session || !bloc) return;
+  const style = getComputedStyle(bloc);
+  const hauteurLigne = parseFloat(style.lineHeight) || 18;
+  // La largeur d'un caractère en fonte à chasse fixe vaut environ 0,6 em.
+  const largeurCar = (parseFloat(style.fontSize) || 13) * 0.6;
+  const rows = Math.max(4, Math.floor(bloc.clientHeight / hauteurLigne));
+  const cols = Math.max(20, Math.floor(bloc.clientWidth / largeurCar));
+  await fetch(`/api/terminal/taille?id=${encodeURIComponent(t.session.id)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ rows, cols }),
+  }).catch(() => {});
+}
+
+/** Ferme la session, et TUE le distant (§37.4). */
+async function fermerTerminal(motif = 'sortie') {
+  const t = etat.terminal;
+  fluxTerminal?.close();
+  fluxTerminal = null;
+  const session = t.session;
+  t.session = null;
+  t.status = 'ferme';
+  t.avertissement = null;
+  if (motif) t.fin = motif;
+  peindre();
+  if (session) {
+    await fetch(`/api/terminal?id=${encodeURIComponent(session.id)}`,
+                { method: 'DELETE' }).catch(() => {});
+  }
+}
+
+// §37.4 : quitter l'onglet TERMINE la session. Sans cela, un shell root
+// survivrait à l'écran qui l'a ouvert, et personne ne s'en souviendrait.
+window.addEventListener('hashchange', () => {
+  if (etat.terminal.session && !location.hash.endsWith('/terminal')) {
+    fermerTerminal('sortie');
+  }
+});
+// Fermer l'onglet du navigateur vaut quitter : `sendBeacon` part même quand la
+// page se démonte, là où un `fetch` serait abandonné.
+window.addEventListener('pagehide', () => {
+  const session = etat.terminal.session;
+  if (!session) return;
+  navigator.sendBeacon?.(
+    `/api/terminal/fermeture?id=${encodeURIComponent(session.id)}`, new Blob());
+});
+// §37.4.3 : le redimensionnement de la fenêtre se propage au Spark.
+window.addEventListener('resize', () => { if (etat.terminal.session) propagerTaille(); });
+
 function brancherPanneaux() {
   const admin = etat.admin;
 
