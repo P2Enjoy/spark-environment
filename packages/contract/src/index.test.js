@@ -22,13 +22,21 @@ test('la console lit le contrat sans qu un sparkd tourne', () => {
 });
 
 test('les chemins attendus par la console sont declares', () => {
+  // REVISE par SPK-42 : la machine qui porte sparkd est une FORGE (§1 bis), et
+  // ses chemins suivent. « host » designait aussi le processus Node du poste, et
+  // le meme mot valait pour deux machines. Ce que la preuve etablit — les
+  // chemins dont la console depend sont declares — est inchange.
   const declares = paths();
   for (const chemin of [
-    '/healthz', '/readyz', '/v1/host', '/v1/host/cores', '/v1/sparks',
+    '/healthz', '/readyz', '/v1/forge', '/v1/forge/cores', '/v1/sparks',
     '/v1/ingress', '/v1/ssh-keys', '/v1/audit',
   ]) {
     assert.ok(declares.includes(chemin), `${chemin} doit etre declare`);
   }
+  // Aucun alias n'est conserve : deux noms pour la meme chose sont exactement
+  // ce que SPK-42 supprime.
+  assert.ok(!declares.some((c) => c.startsWith('/v1/host')),
+            'l’ancien chemin ne doit plus etre declare');
 });
 
 test('les methodes d un chemin sont connues', () => {
