@@ -98,6 +98,17 @@
   Le harnais E2E impose son propre fichier d'environnement et un doublon local
   du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
 
+- SPK-47, révisé sur arbitrage : la console n'est plus bornée à un espace de
+  noms — elle gère **toutes** les zones du compte. La borne existe encore comme
+  option de poste, mais elle vit dans un fichier d'environnement réservé aux
+  vérifications autonomes de l'agent, que la console ne lit jamais.
+
+  Le refus d'écrire à l'**apex** est levé : un site sur le domaine nu est un cas
+  ordinaire, et l'écriture visant un nom *et un type* exacts, les `NS`, le `MX` et
+  les `TXT` de la zone ne sont pas concernés. En remplacement, l'écran **montre ce
+  qui est déjà là** avant de l'écraser — posera, remplacera *telle valeur*, ou
+  aucun changement.
+
 - Règle de design system §6.9 : un champ en lecture seule se **voit** — fond
   distinct, curseur inerte, et un texte d'aide qui dit d'où vient la valeur.
 

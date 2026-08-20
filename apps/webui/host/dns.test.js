@@ -15,8 +15,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
-  DnsError, TTL, TYPES, ScalewayDns, fournisseurDepuis, nomRelatif, normaliser,
-  preparer, readDotEnv, typePourAdresse,
+  APEX, DnsError, TTL, TYPES, ScalewayDns, fournisseurDepuis, nomRelatif,
+  normaliser, preparer, readDotEnv, typePourAdresse,
 } from './dns.js';
 
 // --- le nom relatif, et les trois refus (§38.5) -----------------------------
@@ -26,12 +26,30 @@ test('un sous-domaine rend son nom relatif à la zone', () => {
   assert.equal(nomRelatif('test.spark.exemple.tech', 'exemple.tech'), 'test.spark');
 });
 
-test("l'APEX de la zone est refusé, en disant pourquoi", () => {
-  // Il porte les NS et le MX : y écrire un A d'ingress casse la délégation et la
-  // messagerie de tout le domaine, et ce n'est pas rattrapable en une minute.
-  assert.throws(() => nomRelatif('exemple.tech', 'exemple.tech'),
-                /apex de la zone/);
-  assert.throws(() => nomRelatif('exemple.tech.', 'exemple.tech'), DnsError);
+test("l'APEX de la zone rend le nom vide, et n'est plus refusé", () => {
+  // REVISE le 2026-08-20 (§38.5.1). Cette preuve exigeait un REFUS, au motif que
+  // l'apex porte les NS et le MX. Le motif ne tenait pas : l'ecriture vise un nom
+  // ET un type exacts, donc a l'apex elle ne remplace que les A. Le refus
+  // interdisait un site sur le domaine nu — `johndalia.com` —, cas ordinaire et
+  // nomme par le responsable.
+  //
+  // Ce que la preuve etablit maintenant : l'apex se calcule correctement, et la
+  // casse comme le point final n'en font pas deux noms differents. Ce que le
+  // refus pretendait proteger l'est par le test « une ecriture vise le nom ET le
+  // type exacts », plus bas.
+  assert.equal(nomRelatif('exemple.tech', 'exemple.tech'), APEX);
+  assert.equal(nomRelatif('exemple.tech.', 'EXEMPLE.tech'), APEX);
+  assert.equal(APEX, '', 'le fournisseur designe l’apex par un nom relatif VIDE');
+});
+
+test("une preparation a l'apex se signale comme telle", () => {
+  // Ecraser le nom nu coupe le domaine ENTIER, pas un sous-domaine : l'ecran
+  // doit pouvoir le dire, meme si le geste est permis (§38.5.1).
+  const apex = preparer({ domain: 'exemple.tech', zone: 'exemple.tech', address: '203.0.113.7' });
+  assert.equal(apex.apex, true);
+  assert.equal(apex.name, APEX);
+  assert.equal(preparer({ domain: 'app.exemple.tech', zone: 'exemple.tech',
+                          address: '203.0.113.7' }).apex, false);
 });
 
 test("un domaine HORS de la zone choisie est refusé", () => {
@@ -49,6 +67,27 @@ test('un suffixe qui ressemble à la zone sans en être ne passe pas', () => {
 test('la casse et le point final ne font pas deux noms différents', () => {
   assert.equal(nomRelatif('APP.Exemple.TECH.', 'exemple.tech'), 'app');
   assert.equal(normaliser('  Exemple.Tech. '), 'exemple.tech');
+});
+
+test('ce qui est DEJA la se lit avant d’ecrire, sur le nom ET le type exacts', async () => {
+  // §38.5.2 : c'est ce qui remplace le refus d'ecrire a l'apex. On ne retire pas
+  // le pouvoir, on montre ce qu'il va faire.
+  const zone = [
+    { name: '', type: 'NS', data: 'ns0.exemple.', ttl: 1800, id: '1' },
+    { name: '', type: 'A', data: '198.51.100.1', ttl: 3600, id: '2' },
+    { name: 'app', type: 'AAAA', data: '2001:db8::1', ttl: 3600, id: '3' },
+  ];
+  const client = () => new ScalewayDns({
+    token: 't', organizationId: 'o',
+    fetch: async () => ({ ok: true, status: 200,
+                          text: async () => JSON.stringify({ records: zone }) }),
+  });
+
+  const aApex = await client().existant({ zone: 'exemple.tech', name: '', type: 'A' });
+  assert.equal(aApex.data, '198.51.100.1', 'le A de l’apex, pas son NS');
+
+  const absent = await client().existant({ zone: 'exemple.tech', name: 'app', type: 'A' });
+  assert.equal(absent, null, 'un AAAA de meme nom n’est PAS un A');
 });
 
 test('un domaine ou une zone vide est refusé', () => {
@@ -76,7 +115,11 @@ test("ce qui n'est pas une adresse est refusé", () => {
 test('une préparation valide rend exactement ce qui sera écrit', () => {
   assert.deepEqual(
     preparer({ domain: 'app.exemple.tech', zone: 'exemple.tech', address: '203.0.113.7' }),
-    { zone: 'exemple.tech', name: 'app', type: 'A', data: '203.0.113.7', ttl: TTL },
+    // `apex` s'ajoute par SPK-47 revise (§38.5.1) : l'ecran doit pouvoir dire
+    // qu'un ecrasement porte sur le domaine nu. Ce que la preuve etablit — la
+    // preparation rend EXACTEMENT ce qui sera ecrit — est inchange.
+    { zone: 'exemple.tech', name: 'app', type: 'A', data: '203.0.113.7', ttl: TTL,
+      apex: false },
   );
   assert.equal(TTL, 300, 'un TTL long ferait traîner la panne après sa correction');
 });
@@ -211,7 +254,8 @@ test('aucune méthode ne SUPPRIME : le produit ne défait pas ce qu’il n’a p
   // elle qu'un écran pourrait appeler.
   const client = new ScalewayDns({ token: 't', organizationId: 'o', fetch: async () => {} });
   const surface = Object.getOwnPropertyNames(Object.getPrototypeOf(client));
-  assert.deepEqual(surface.sort(), ['constructor', 'records', 'setRecord', 'zones']);
+  assert.deepEqual(surface.sort(),
+                   ['constructor', 'existant', 'records', 'setRecord', 'zones']);
 });
 
 test('un refus du fournisseur remonte SON message, pas un « HTTP 403 » nu', async () => {

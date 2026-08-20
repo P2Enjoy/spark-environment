@@ -268,6 +268,45 @@ export function createConsoleHost(options = {}) {
     },
 
     /**
+     * Ce que l'écriture ferait, SANS l'écrire (§38.5.2).
+     *
+     * L'écran le demande à l'ouverture et au changement de zone. C'est ce qui
+     * remplace le refus d'écrire à l'apex : on ne retire pas le pouvoir, on
+     * montre ce qu'il va faire.
+     */
+    'POST /api/dns/preview': async (corps) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 409, body: { error: 'dns_not_configured', message: bilan.reason } };
+      }
+      let prepare;
+      try {
+        prepare = preparer({
+          domain: corps?.domain, zone: corps?.zone, address: corps?.address,
+          motif: bilan.motif,
+        });
+      } catch (erreur) {
+        if (!(erreur instanceof DnsError)) throw erreur;
+        return { status: 422, body: { error: 'dns_refused', message: erreur.message } };
+      }
+      try {
+        const actuel = await bilan.provider.existant(prepare);
+        return {
+          status: 200,
+          body: {
+            ...prepare,
+            current: actuel,
+            effet: !actuel ? 'pose'
+              : actuel.data === prepare.data ? 'inchange'
+              : 'remplace',
+          },
+        };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /**
      * Pose l'enregistrement d'ingress (§38.3).
      *
      * La garde s'applique AVANT tout appel au fournisseur : un refus doit coûter

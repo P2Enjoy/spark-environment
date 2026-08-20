@@ -4229,6 +4229,68 @@ c'est précisément le genre d'enregistrement dont la disparition arrête une
 messagerie sans bruit. Chaque enregistrement d'une recette continue de viser un
 nom ET un type exacts.
 
+### 38.6 bis Envoyer et recevoir sont deux produits, et le relais les réunit
+
+**Question du responsable, 2026-08-20**, et elle est la bonne : faut-il un
+serveur mail complet, ou suffit-il de relayer par le service transactionnel du
+fournisseur ?
+
+**Mesuré dans la zone `lelabs.tech`** : le service transactionnel de Scaleway y
+est **déjà en service** sur le sous-domaine `noreply`, et sa signature est sans
+ambiguïté :
+
+```
+noreply                          MX   0 blackhole.tem.scaleway.com.
+noreply                          TXT  "v=spf1 include:_spf.tem.scaleway.com -all"
+<project_id>._domainkey.noreply  TXT  "v=DKIM1; …"
+_dmarc.noreply                   TXT  "v=DMARC1; p=none"
+```
+
+Le sélecteur DKIM **est** l'identifiant de projet du compte — vérifié caractère
+pour caractère contre `SCW_DEFAULT_PROJECT_ID`. Et le `MX` pointe vers un
+`blackhole` : il dit littéralement que ce domaine **n'accepte aucun courrier
+entrant**.
+
+**Ce que cela établit.** Le service transactionnel est un **relais sortant**. Il
+n'a ni boîte aux lettres, ni IMAP, ni webmail : il ne remplace pas un serveur de
+messagerie, il en prend la moitié.
+
+| | Envoyer | Recevoir |
+|---|---|---|
+| Service transactionnel du fournisseur | oui, c'est son métier | **non** |
+| Serveur de messagerie dans un Spark | oui | oui — boîtes, IMAP, alias |
+
+**L'architecture retenue** — et c'est la configuration recommandée d'un serveur
+de messagerie en environnement infonuagique :
+
+- le serveur du Spark **reçoit** : le `MX` du domaine pointe vers la Forge, et le
+  port 25 **entrant** est publié (§39) ;
+- il n'émet pas lui-même : il **remet au relais** du fournisseur, sur un port
+  chiffré, avec les identifiants du compte.
+
+**Trois des limites du §38.7 disparaissent dans cette architecture**, et c'est la
+raison de la préférer :
+
+1. le port 25 **sortant** n'est plus employé — donc plus rien à faire débloquer ;
+2. le `PTR` qui compte devient celui du relais, déjà cohérent ;
+3. la réputation est celle du fournisseur, déjà établie, et non celle d'une
+   adresse neuve.
+
+**Deux points restent à vérifier auprès du fournisseur, et ils décident du
+reste** — ils sont écrits ici pour ne pas être découverts à l'implémentation :
+
+- les **quotas, la tarification et les conditions d'usage** du service
+  transactionnel lorsqu'il achemine la correspondance de vraies boîtes aux
+  lettres, et non des messages applicatifs. Le produit est vendu comme
+  *transactionnel* ; rien ne garantit que l'usage visé entre dans son périmètre ;
+- que le port 25 **entrant** soit bien ouvert sur le type de serveur retenu. Le
+  blocage porte classiquement sur le sortant, mais cela se constate, cela ne se
+  suppose pas.
+
+Tant que ces deux points ne sont pas tranchés, SPK-51 ne peut pas choisir entre
+« émettre par le relais » et « émettre en direct » — et c'est ce choix qui décide
+si les trois limites ci-dessus tombent ou demeurent.
+
 ### 38.7 Ce que le DNS ne peut pas faire, et qu'il faut dire avant
 
 Trois conditions d'une messagerie qui fonctionne **ne sont pas dans la zone**. Le

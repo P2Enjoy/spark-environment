@@ -11,7 +11,7 @@
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
-import { ADMIN_VIDE, apercu, zonePour } from './components/spark-admin.js';
+import { ADMIN_VIDE, apercu, renderEffet, zonePour } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
 import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
@@ -210,6 +210,15 @@ function brancherPanneaux() {
         const vue = racine.querySelector('#dns-apercu');
         if (vue) vue.textContent = apercu(admin.dns.domain, admin.values);
       });
+      // Le changement de ZONE vise un autre enregistrement : on relit ce qui est
+      // en place. `change` et non `input` — une frappe dans l'adresse ne doit pas
+      // déclencher une requête par caractère.
+      if (controle.name === 'dns_zone') {
+        controle.addEventListener('change', () => lireEffetDns());
+      }
+      if (controle.name === 'dns_address') {
+        controle.addEventListener('change', () => lireEffetDns());
+      }
     }
     formulaire.addEventListener('submit', (evenement) => {
       evenement.preventDefault();
@@ -393,6 +402,62 @@ async function ouvrirDns(domaine) {
   // changer, et rien n'est écrit avant l'engagement.
   admin.values.dns_zone = zonePour(domaine, admin.dns.zones);
   peindre();
+  await lireEffetDns();
+}
+
+/**
+ * Demande ce que l'écriture ferait, SANS l'écrire (SPK-47 révisé, §38.5.2).
+ *
+ * C'est ce qui remplace le refus d'écrire à l'apex. On relit à chaque changement
+ * de ZONE, parce que le même domaine dans une autre zone vise un autre
+ * enregistrement — mais pas à chaque frappe dans l'adresse : une requête par
+ * caractère saturerait le fournisseur pour ne rien apprendre de plus.
+ */
+async function lireEffetDns() {
+  const admin = etat.admin;
+  const { domain } = admin.dns;
+  const v = admin.values;
+
+  // On remplace le bloc SUR PLACE. Repeindre reconstruirait le formulaire sous
+  // les doigts : le focus repartirait au premier champ, et le bouton
+  // d'engagement se détacherait sous le clic. Mesuré par le parcours E2E.
+  const montrer = () => {
+    const bloc = racine.querySelector('#dns-effet');
+    if (bloc) bloc.innerHTML = renderEffet(admin.dns);
+  };
+
+  if (!domain || !v.dns_zone || !v.dns_address) {
+    admin.dns = { ...admin.dns, apercu: null, apercuEnCours: false, lu: null };
+    return montrer();
+  }
+  // Relire des valeurs IDENTIQUES n'apprend rien et coûte une requête au
+  // fournisseur. Surtout, `change` se déclenche AUSSI à la perte du focus —
+  // donc au moment même où l'on clique sur le bouton d'engagement.
+  const cle = `${domain}|${v.dns_zone}|${v.dns_address}`;
+  if (admin.dns.lu === cle) return;
+
+  admin.dns = { ...admin.dns, apercuEnCours: true, lu: cle };
+  montrer();
+
+  let vu = null;
+  try {
+    const reponse = await fetch('/api/dns/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ domain, zone: v.dns_zone, address: v.dns_address }),
+    });
+    vu = reponse.ok ? await reponse.json() : null;
+  } catch {
+    // Ne pas avoir pu LIRE n'est pas « rien n'est là » : on n'affiche alors
+    // aucun effet, plutôt qu'un « sera posé » qui pourrait être faux (§33.3).
+    vu = null;
+  }
+  // Une réponse ARRIVÉE n'est pas forcément la réponse ATTENDUE : une première
+  // lecture lente peut revenir après une seconde, et écraser un résultat plus
+  // récent par un plus ancien. Mesuré contre le vrai fournisseur — l'écran
+  // annonçait le remplacement de l'adresse pré-remplie, pas de celle saisie.
+  if (admin.dns.lu !== cle) return;
+  admin.dns = { ...admin.dns, apercu: vu, apercuEnCours: false };
+  montrer();
 }
 
 /**

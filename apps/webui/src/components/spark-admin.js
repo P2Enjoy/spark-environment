@@ -47,7 +47,13 @@ export const ADMIN_VIDE = {
   // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
   // constatée.
   dns: { domain: null, configured: null, reason: null, zones: [],
-         loading: false, written: null },
+         loading: false, written: null,
+         // Ce qui a DÉJÀ été lu, pour ne pas relire à l'identique (§38.5.2).
+         lu: null,
+         // §38.5.2 : ce qui occupe DÉJÀ le couple nom + type visé. `effet` vaut
+         // 'pose' | 'remplace' | 'inchange'. Tant qu'on ne l'a pas demandé, il
+         // est nul — et l'écran dit alors qu'il vérifie, pas qu'il n'y a rien.
+         apercu: null, apercuEnCours: false },
 };
 
 /**
@@ -61,7 +67,10 @@ export function zonePour(domaine, zones = []) {
   const d = String(domaine ?? '').trim().toLowerCase().replace(/\.$/, '');
   return zones
     .map((z) => (typeof z === 'string' ? z : z.zone))
-    .filter((z) => z && d.endsWith(`.${z.toLowerCase()}`))
+    // Le domaine peut ÊTRE la zone : c'est le cas d'un site sur le domaine nu,
+    // `johndalia.com`. Ne retenir que les sous-domaines laissait l'exploitant
+    // choisir à la main la seule zone possible, sans lui dire laquelle (§38.5.1).
+    .filter((z) => z && (d === z.toLowerCase() || d.endsWith(`.${z.toLowerCase()}`)))
     .sort((a, b) => b.length - a.length)[0] ?? '';
 }
 
@@ -182,7 +191,10 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
 function renderDnsEcrit(ui) {
   const ecrit = ui.dns?.written;
   if (!ecrit) return '';
-  return `<p class="avertissement" role="status">Enregistrement
+  // `id` distinct de celui de l'effet : deux blocs de même classe et même rôle
+  // coexistent dans cet écran — « sera remplacé » dans la modale, « a été écrit »
+  // dans la section —, et les confondre ferait lire un projet pour un fait.
+  return `<p class="avertissement" role="status" id="dns-ecrit">Enregistrement
     <span class="technique">${echapper(ecrit.type)} ${echapper(ecrit.fqdn)}
     → ${echapper(ecrit.data)}</span> écrit chez le fournisseur.
     ${echapper(ecrit.propagation ?? '')}</p>`;
@@ -237,7 +249,8 @@ function renderDnsModale(ui) {
          </div>
          <p class="note">Sera écrit :
            <span class="technique" id="dns-apercu">${echapper(apercu(domaine, ui.values))}</span>,
-           TTL 300 s. Rien d’autre n’est touché dans la zone.</p>`;
+           TTL 300 s. Rien d’autre n’est touché dans la zone.</p>
+         <div id="dns-effet">${renderEffet(dns)}</div>`;
 
   return renderModale({
     ouverte: ui.open === 'dns', id: 'dns',
@@ -247,6 +260,51 @@ function renderDnsModale(ui) {
     occupee: ui.busy,
     corps,
   });
+}
+
+/**
+ * Ce que l'écriture fera à ce qui est DÉJÀ là (§38.5.2).
+ *
+ * C'est ce qui remplace le refus d'écrire à l'apex : on ne retire pas le
+ * pouvoir, on montre ce qu'il va faire. Un écrasement reste le comportement
+ * voulu — reposer une route déplacée doit marcher — mais jamais une surprise.
+ *
+ * Exporté parce que l'écran le remplace SUR PLACE, dans `#dns-effet`, sans
+ * repeindre. Mesuré : repeindre la modale pendant la lecture reconstruisait le
+ * formulaire sous les doigts — le focus repartait au premier champ, et le bouton
+ * d'engagement se détachait sous le clic.
+ */
+export function renderEffet(dns) {
+  const vu = dns.apercu;
+  // Pendant une RELECTURE, on garde ce qui est affiché et on le marque occupé.
+  //
+  // Mesuré : vider le bloc le faisait rétrécir, la modale avec — et le bouton
+  // d'engagement se dérobait entre l'appui et le relâchement. Le clic ne partait
+  // jamais. Un bloc qui change de hauteur sous le curseur est un piège, pas une
+  // information (docs/DESIGN_SYSTEM.md §6.13).
+  if (dns.apercuEnCours && !vu) {
+    return '<p class="note" aria-busy="true">Lecture de ce qui est déjà en place…</p>';
+  }
+  if (!vu) return '';
+  const occupe = dns.apercuEnCours ? ' aria-busy="true"' : '';
+
+  if (vu.effet === 'inchange') {
+    return `<p class="note" role="status"${occupe}>Cet enregistrement porte déjà cette
+      valeur : l’écrire ne changera rien.</p>`;
+  }
+  if (vu.effet === 'remplace') {
+    // Accent, pas danger : remplacer est le geste demandé, pas une panne — mais
+    // la valeur remplacée doit être LUE avant, pas devinée après.
+    return `<p class="avertissement" role="status"${occupe}>Cet enregistrement existe déjà.
+      Il sera <strong>remplacé</strong> :
+      <span class="technique">${echapper(vu.current?.data ?? '')}</span> →
+      <span class="technique">${echapper(vu.data)}</span>.${
+      vu.apex ? ' C’est le domaine <strong>nu</strong> : le remplacer déplace tout'
+              + ' ce qui répond sur ce domaine, pas seulement un sous-domaine.' : ''}</p>`;
+  }
+  return `<p class="note" role="status"${occupe}>Rien n’occupe ce nom pour l’instant :
+    l’enregistrement sera posé.${
+    vu.apex ? ' Il porte sur le domaine <strong>nu</strong>.' : ''}</p>`;
 }
 
 /**
@@ -263,11 +321,18 @@ export function apercu(domaine, valeurs = {}) {
   return `${nomAEcrire(domaine, valeurs.dns_zone)} ${type} → ${adresse || '…'}`;
 }
 
-/** Nom relatif tel qu'il sera écrit, ou un tiret tant que la zone n'est pas choisie. */
+/**
+ * Nom relatif tel qu'il sera écrit, ou un tiret tant que la zone n'est pas
+ * choisie.
+ *
+ * L'apex s'écrit `@` — la notation des fichiers de zone —, pas un tiret : un
+ * tiret se lit « rien » là où il faut lire « le domaine lui-même ».
+ */
 function nomAEcrire(domaine, zone) {
   if (!zone) return '—';
   const d = String(domaine ?? '').toLowerCase();
   const z = String(zone).toLowerCase();
+  if (d === z) return '@';
   return d.endsWith(`.${z}`) ? d.slice(0, -(z.length + 1)) : '—';
 }
 

@@ -995,10 +995,17 @@ test('pointer le DNS d’une route écrit l’enregistrement, et RIEN d’autre'
     assert.ok(apercu.includes('boutique'), 'le nom relatif à la zone');
     assert.ok(apercu.includes('198.51.100.7'));
 
+    // Un exploitant LIT ce que l'écriture va faire avant d'engager. Le parcours
+    // attend la même chose — et c'est aussi ce qui prouve que la lecture aboutit.
+    await page.waitForSelector('#dns-effet p', { timeout: 10000 });
+    assert.match(await page.textContent('#dns-effet'), /Rien n’occupe ce nom/);
+
     await page.click('[data-engage="dns"]');
-    await page.waitForSelector('#titre-routes ~ * .avertissement, .avertissement[role="status"]',
-                               { timeout: 10000 });
-    const annonce = await page.textContent('.avertissement[role="status"]');
+    // `#dns-ecrit` et non `.avertissement` : depuis §38.5.2, la modale porte elle
+    // aussi un avertissement — « sera remplacé ». Attendre la classe seule ferait
+    // prendre un projet d'écriture pour une écriture faite. Mesuré.
+    await page.waitForSelector('#dns-ecrit', { timeout: 10000 });
+    const annonce = await page.textContent('#dns-ecrit');
     assert.ok(annonce.includes('A boutique.exemple.test'));
     assert.ok(annonce.includes('198.51.100.7'));
     assert.ok(/écrit chez le fournisseur/.test(annonce));
@@ -1029,28 +1036,64 @@ test('pointer le DNS d’une route écrit l’enregistrement, et RIEN d’autre'
   });
 });
 
-test('pointer l’APEX d’une zone est refusé, et la zone n’est pas touchée', async () => {
+test('pointer l’APEX écrit le domaine NU, sans toucher ses NS ni son MX', async () => {
+  // REVISE le 2026-08-20 (§38.5.1). Ce parcours exigeait un REFUS sur l'apex. Le
+  // refus interdisait un site sur le domaine nu — `johndalia.com` —, cas
+  // ordinaire et nommé par le responsable ; et son motif ne tenait pas, puisque
+  // l'écriture vise un nom ET un type exacts.
+  //
+  // Ce que le parcours établit est plus fort qu'avant : non seulement l'apex
+  // s'écrit, mais les enregistrements d'AUTRE TYPE qui y vivent survivent — ce
+  // qui EST la garantie que le refus prétendait apporter.
   await parcours('dns-apex', async () => {
-    const avant = dns.enregistrements().length;
     await declarerRoute('boutique', 'exemple.test', '8081');
 
     await page.click(`${ligneRoute('exemple.test')} [data-dns-route]`);
     await page.waitForSelector('dialog.modale[open] #dns-adresse', { timeout: 10000 });
-    // Aucune zone ne contient l'apex : il faut donc la choisir à la main, ce qui
-    // est déjà un signal. Le refus, lui, vient du produit et pas de l'écran.
+    // Aucune zone ne CONTIENT l'apex : il se choisit donc à la main.
     await page.selectOption('#dns-zone', 'exemple.test');
     await page.fill('#dns-adresse', '198.51.100.7');
-    assert.equal(await page.isDisabled('[data-engage="dns"]'), false,
-      'l’interface ne s’oppose pas : le refus est une RÈGLE, pas un grisage');
+    await page.waitForSelector('#dns-effet p', { timeout: 10000 });
+    // L'écran DIT que le geste porte sur le domaine nu (§38.5.1).
+    assert.match(await page.textContent('#dns-effet'), /domaine nu/);
+
     await page.click('[data-engage="dns"]');
+    await page.waitForSelector('#dns-ecrit', { timeout: 10000 });
+    const annonce = await page.textContent('#dns-ecrit');
+    assert.ok(annonce.includes('exemple.test'));
 
-    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
-    const refus = await page.textContent('dialog.modale[open] .refus');
-    assert.ok(/apex/.test(refus), 'le refus doit NOMMER ce qu’il protège');
-    assert.ok(/serveurs de noms|messagerie/.test(refus));
+    const zone = dns.enregistrements();
+    const apex = zone.find((r) => r.name === '' && r.type === 'A');
+    assert.ok(apex, 'l’apex doit porter un A');
+    assert.equal(apex.data, '198.51.100.7');
 
-    // La modale reste ouverte, et la zone n'a pas bougé d'un enregistrement.
-    assert.ok(await page.$('dialog.modale[open]'));
-    assert.equal(dns.enregistrements().length, avant);
+    // LA garantie : le MX de l'apex, qui est d'un AUTRE type, n'a pas bougé.
+    assert.ok(zone.some((r) => r.name === '' && r.type === 'MX'
+                               && r.data === '10 mail.exemple.test.'),
+      'la messagerie de l’apex ne doit pas être emportée');
+    assert.ok(zone.some((r) => r.name === '_verification' && r.type === 'TXT'));
+  });
+});
+
+test('l’écran MONTRE ce qu’il va remplacer avant de le remplacer', async () => {
+  // §38.5.2 : c'est ce qui remplace le refus d'écrire à l'apex — on ne retire
+  // pas le pouvoir, on montre ce qu'il va faire.
+  await parcours('dns-remplace', async () => {
+    await declarerRoute('boutique', 'www.exemple.test', '8082');
+    await page.click(`${ligneRoute('www.exemple.test')} [data-dns-route]`);
+    await page.waitForSelector('dialog.modale[open] #dns-adresse', { timeout: 10000 });
+
+    // `www` porte déjà 198.51.100.1 dans le doublon.
+    await page.fill('#dns-adresse', '198.51.100.9');
+    await page.dispatchEvent('#dns-adresse', 'change');
+    await page.waitForSelector('#dns-effet .avertissement', { timeout: 10000 });
+    const effet = await page.textContent('#dns-effet');
+
+    // Le focus ne doit PAS avoir bougé : la lecture remplace un bloc, elle ne
+    // reconstruit pas le formulaire sous les doigts.
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'dns-adresse');
+    assert.ok(effet.includes('198.51.100.1'), 'la valeur REMPLACÉE doit être lisible');
+    assert.ok(effet.includes('198.51.100.9'));
+    assert.ok(/remplac/.test(effet));
   });
 });

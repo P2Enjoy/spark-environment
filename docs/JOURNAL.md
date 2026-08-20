@@ -3299,3 +3299,55 @@ l'enregistrement en place pour ce nom et ce type, et annonce « posera »,
 **Leçon.** Une garde qui interdit un cas d'usage réel n'est pas une garde, c'est
 un défaut. La prudence utile ne retire pas un pouvoir : elle rend visible ce que
 ce pouvoir va faire.
+
+## 2026-08-20 — Le relais transactionnel, et quatre défauts trouvés par la mesure réelle
+
+**La question du responsable** — faut-il un serveur de messagerie complet, ou
+suffit-il de relayer par le service transactionnel du fournisseur ? — se tranche
+sur ses propres données.
+
+**Mesuré** : le service transactionnel de Scaleway est **déjà en service** sur
+`noreply.lelabs.tech`. Le `MX` pointe vers un `blackhole` — le domaine n'accepte
+aucun courrier entrant —, le SPF inclut le relais, et le **sélecteur DKIM est
+l'identifiant de projet du compte**, vérifié caractère pour caractère contre
+`SCW_DEFAULT_PROJECT_ID`.
+
+Cela établit ce qu'est ce service : un **relais sortant**, sans boîte aux lettres
+ni IMAP. Il ne remplace pas un serveur de messagerie, il en prend la moitié.
+D'où l'architecture du §38.6 bis : le Spark **reçoit**, et **émet par le relais**.
+Trois des limites du §38.7 tombent alors — plus de port 25 sortant à débloquer,
+un `PTR` déjà cohérent, une réputation déjà établie.
+
+Deux points restent à vérifier auprès du fournisseur et sont écrits pour ne pas
+être découverts à l'implémentation : les quotas et conditions d'usage du relais
+pour de la correspondance humaine, et l'ouverture du port 25 **entrant**.
+
+**Quatre défauts, tous trouvés en exécutant contre le vrai compte.**
+
+1. **La modale rétrécissait sous le curseur.** Le bloc d'effet se vidait pendant
+   la relecture pour afficher « Lecture… ». La modale raccourcissait, le bouton
+   d'engagement remontait entre l'appui et le relâchement, et **le clic ne partait
+   jamais**. Aucun test de composant ne pouvait le voir : c'est une question de
+   hauteur, pas de contenu. Le bloc garde désormais ce qu'il affiche et se marque
+   `aria-busy`.
+2. **Une lecture lente écrasait une lecture récente.** La première lecture, faite
+   à l'ouverture avec l'adresse pré-remplie, revenait après celle déclenchée par
+   la saisie et la remplaçait. L'écran annonçait le remplacement d'une adresse que
+   l'utilisateur n'avait pas saisie. La réponse n'est appliquée que si elle
+   correspond encore à la demande en cours.
+3. **`change` se déclenche aussi à la perte du focus**, donc au moment même où
+   l'on clique sur le bouton. Relire des valeurs identiques ne dit rien de plus et
+   coûte une requête : c'est maintenant écarté.
+4. **La zone n'était pas pré-choisie pour un domaine nu.** `zonePour` ne
+   reconnaissait que les sous-domaines : pour `johndalia.com`, il fallait aller
+   chercher à la main la seule zone possible dans une liste de quatorze.
+
+**Vérifié contre le compte réel, dans la peau de l'utilisateur.** Une écriture —
+`test.spark.lelabs.tech`, `203.0.113.8 → 203.0.113.10`, annoncée avant de l'être
+et constatée après. Deux **lectures seules** sur des zones en exploitation, sans
+jamais engager : l'apex `lelabs.tech`, qui annonce « sera posé, il porte sur le
+domaine nu » ; et `gram.lelabs.tech`, qui annonce « sera remplacé :
+163.172.156.76 → … ». Après l'écriture, la zone porte toujours ses 16
+enregistrements, `MX`, DKIM et le `A` de `gram` intacts.
+
+Captures `53-` à `55-` observées.

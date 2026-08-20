@@ -452,9 +452,15 @@ test('un fournisseur injoignable rend 502 AVEC son motif, pas un succes vide', a
   server.close();
 });
 
-test('une ecriture sur l APEX est refusee AVANT tout appel sortant', async () => {
-  // Un refus ne doit couter aucune requete, et surtout ne jamais atteindre une
-  // zone reelle pour s'y faire refuser sur place (§38.5).
+test('un refus de la garde ne coute AUCUNE requete sortante', async () => {
+  // REVISE le 2026-08-20 (§38.5.1) : cette preuve visait l'APEX, qui n'est plus
+  // refuse — le refus interdisait un site sur le domaine nu, cas ordinaire, et
+  // son motif ne tenait pas puisque l'ecriture vise un nom ET un type exacts.
+  //
+  // Ce que la preuve etablit est INCHANGE, et c'est ce qui compte : un refus ne
+  // doit couter aucune requete, et surtout ne jamais atteindre une zone reelle
+  // pour s'y faire refuser sur place. Elle porte desormais sur le refus qui
+  // subsiste : un domaine hors de la zone choisie.
   let appels = 0;
   const { base, server } = await hote({
     env: JETON,
@@ -462,11 +468,72 @@ test('une ecriture sur l APEX est refusee AVANT tout appel sortant', async () =>
   });
   const r = await fetch(`${base}/api/dns/record`, {
     method: 'POST',
-    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '1.2.3.4' }),
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'a.autre.tech', address: '1.2.3.4' }),
   });
   assert.equal(r.status, 422);
-  assert.match((await r.json()).message, /apex/);
+  assert.match((await r.json()).message, /n'est pas dans la zone/);
   assert.equal(appels, 0, 'aucune requete ne doit partir vers le fournisseur');
+  server.close();
+});
+
+test("l'APEX s'ecrit, et vise le nom RELATIF vide", async () => {
+  // §38.5.1 : un site sur le domaine nu est un cas ordinaire. Ce qui protege les
+  // NS et le MX est le ciblage nom + type, pas une liste de noms interdits.
+  const corps = [];
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async (_url, options = {}) => {
+      if (options.method === 'PATCH') corps.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ records: [] }), { status: 200 });
+    },
+  });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '203.0.113.7' }),
+  });
+  assert.equal(r.status, 200);
+  const rendu = await r.json();
+  assert.equal(rendu.apex, true, 'l’ecran doit pouvoir le DIRE');
+  assert.deepEqual(corps[0].changes[0].set.id_fields, { name: '', type: 'A' },
+    'le type est cible : les NS et le MX de l’apex ne sont pas vises');
+  server.close();
+});
+
+test("l'apercu DIT ce que l'ecriture ferait, sans rien ecrire", async () => {
+  // §38.5.2 : c'est ce qui remplace le refus d'ecrire a l'apex.
+  let ecritures = 0;
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async (_url, options = {}) => {
+      if (options.method === 'PATCH') ecritures += 1;
+      return new Response(JSON.stringify({ records: [
+        { name: '', type: 'A', data: '198.51.100.1', ttl: 3600, id: '1' },
+      ] }), { status: 200 });
+    },
+  });
+
+  const remplace = await (await fetch(`${base}/api/dns/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '203.0.113.7' }),
+  })).json();
+  assert.equal(remplace.effet, 'remplace');
+  assert.equal(remplace.current.data, '198.51.100.1', 'la valeur remplacee est LUE, pas devinee');
+  assert.equal(remplace.apex, true);
+
+  const inchange = await (await fetch(`${base}/api/dns/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '198.51.100.1' }),
+  })).json();
+  assert.equal(inchange.effet, 'inchange');
+
+  const pose = await (await fetch(`${base}/api/dns/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'neuf.lelabs.tech', address: '203.0.113.7' }),
+  })).json();
+  assert.equal(pose.effet, 'pose');
+  assert.equal(pose.current, null);
+
+  assert.equal(ecritures, 0, 'un apercu n’ecrit RIEN');
   server.close();
 });
 

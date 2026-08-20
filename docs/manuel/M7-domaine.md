@@ -37,10 +37,27 @@ L'adresse demandée est celle du **serveur**, pas celle du Spark : un Spark vit
 sur un réseau privé et n'a pas d'adresse publique. C'est le proxy qui répartit
 ensuite par nom d'hôte.
 
-Avant d'écrire, la fenêtre montre l'enregistrement exact qui partira. Après, elle
-annonce ce qui a été **écrit** — jamais que le domaine est « prêt ». La
-résolution demande le temps du délai d'expiration, et davantage si un résolveur
-a déjà mis l'ancienne réponse en cache.
+Avant d'écrire, la fenêtre montre l'enregistrement exact qui partira, **et ce
+qu'il va faire à ce qui est déjà en place** :
+
+* « l'enregistrement sera posé » — rien n'occupe ce nom ;
+* « il sera **remplacé** : *ancienne valeur* → *nouvelle valeur* » — la valeur
+  remplacée est affichée, pas seulement annoncée ;
+* « l'écrire ne changera rien » — la valeur en place est déjà la bonne.
+
+Après, elle annonce ce qui a été **écrit** — jamais que le domaine est « prêt ».
+La résolution demande le temps du délai d'expiration, et davantage si un
+résolveur a déjà mis l'ancienne réponse en cache.
+
+### Le domaine nu
+
+`johndalia.com` sans sous-domaine est un cas ordinaire, et il fonctionne. La
+fenêtre le signale — « il porte sur le domaine **nu** » — parce que le remplacer
+déplace tout ce qui répond sur ce domaine, et pas seulement une de ses branches.
+
+Vos serveurs de noms, votre messagerie et vos preuves de propriété ne sont **pas**
+touchés : chaque écriture vise un nom *et un type* précis, et ceux-là sont d'un
+autre type.
 
 ### Ce que ce bouton ne fera jamais
 
@@ -51,10 +68,8 @@ enregistrement qu'il n'a pas posé : votre zone porte de la messagerie et des
 preuves de propriété, dont la disparition casserait des choses sans rapport avec
 ce produit.
 
-Trois écritures sont refusées, et le refus dit ce qu'il protège :
+Deux écritures sont refusées, et le refus dit ce qu'il protège :
 
-* l'**apex** de la zone — le nom du domaine lui-même —, qui porte ses serveurs
-  de noms et sa messagerie ;
 * un domaine qui n'est **pas dans** la zone choisie ;
 * tout ce qui n'est pas une adresse IP.
 

@@ -377,6 +377,10 @@ const ROUTE_DNS = { domain: 'test.spark.lelabs.tech', target_port: 8080, tls: tr
                     applied_at: '2026-08-20T09:00:00' };
 const ZONES = [{ zone: 'lelabs.tech', status: 'active' },
                { zone: 'staging.lelabs.tech', status: 'active' }];
+
+test('un domaine sans zone au compte ne pre-choisit rien', () => {
+  assert.equal(zonePour('app.autre.tech', ZONES), '');
+});
 const dnsUi = (dns = {}, valeurs = {}) => ui({
   open: 'dns',
   dns: { ...ADMIN_VIDE.dns, domain: ROUTE_DNS.domain, configured: true, zones: ZONES, ...dns },
@@ -397,7 +401,11 @@ test('la zone la plus SPECIFIQUE est retenue, pas la premiere trouvee', () => {
   assert.equal(zonePour('app.staging.lelabs.tech', ZONES), 'staging.lelabs.tech');
   assert.equal(zonePour('test.spark.lelabs.tech', ZONES), 'lelabs.tech');
   assert.equal(zonePour('app.autre.tech', ZONES), '');
-  assert.equal(zonePour('lelabs.tech', ZONES), '', 'l’apex n’est pas dans sa propre zone');
+  // REVISE le 2026-08-20 : l'apex EST desormais pre-choisi. Le refus d'ecrire a
+  // l'apex ayant ete leve (§38.5.1), ne pas pre-choisir la zone d'un site sur le
+  // domaine nu obligeait a la chercher a la main dans une liste de quatorze —
+  // pour une seule reponse possible. Mesure sur le compte reel.
+  assert.equal(zonePour('lelabs.tech', ZONES), 'lelabs.tech');
 });
 
 test('le domaine de la modale est en LECTURE SEULE et vient de la route', () => {
@@ -458,6 +466,8 @@ test('ce qui est ECRIT est annonce avec sa propagation, jamais comme « pret »'
   }));
   assert.ok(rendu.includes('test.spark.lelabs.tech'));
   assert.ok(rendu.includes('écrit chez le fournisseur'));
+  assert.ok(rendu.includes('id="dns-ecrit"'),
+    'l’annonce d’écriture doit se distinguer de l’avertissement de remplacement');
   assert.ok(rendu.includes('300 secondes'));
   assert.ok(!/domaine (est )?prêt|résout désormais/i.test(rendu));
 });
@@ -471,4 +481,65 @@ test('un refus du fournisseur s’affiche DANS la modale, sans effacer la saisie
   }));
   assert.ok(rendu.includes('Le fournisseur DNS a refusé (HTTP 403).'));
   assert.ok(rendu.includes('203.0.113.7'), 'la saisie survit au refus (§26.2)');
+});
+
+// --- ce qui est deja la (SPK-47 revise, docs/DAT.md §38.5.2) ---------------
+
+test('un remplacement MONTRE la valeur remplacee, pas seulement son existence', () => {
+  // §38.5.2 : c'est ce qui remplace le refus d'ecrire a l'apex. On ne retire pas
+  // le pouvoir, on montre ce qu'il va faire.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({
+    apercu: { effet: 'remplace', apex: false, data: '203.0.113.7',
+              current: { data: '198.51.100.1', type: 'A' } },
+  }, { dns_zone: 'lelabs.tech', dns_address: '203.0.113.7' }));
+  assert.ok(rendu.includes('198.51.100.1'), 'la valeur REMPLACEE doit etre lisible');
+  assert.ok(rendu.includes('remplacé'));
+});
+
+test('un remplacement a l’APEX dit que c’est le domaine NU', () => {
+  // Ecraser le nom nu deplace tout ce qui repond sur le domaine, pas un
+  // sous-domaine : le geste est permis, il n'est pas anodin (§38.5.1).
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({
+    apercu: { effet: 'remplace', apex: true, data: '203.0.113.7',
+              current: { data: '198.51.100.1', type: 'A' } },
+  }, { dns_zone: 'lelabs.tech', dns_address: '203.0.113.7' }));
+  assert.ok(/domaine <strong>nu<\/strong>/.test(rendu));
+});
+
+test('une valeur DEJA en place le dit, et n’alarme pas', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({
+    apercu: { effet: 'inchange', apex: false, data: '203.0.113.7',
+              current: { data: '203.0.113.7', type: 'A' } },
+  }, { dns_zone: 'lelabs.tech', dns_address: '203.0.113.7' }));
+  assert.ok(rendu.includes('ne changera rien'));
+  assert.ok(!rendu.includes('avertissement'), 'rien a signaler n’est pas un avertissement');
+});
+
+test('une pose sur un nom libre le dit', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({
+    apercu: { effet: 'pose', apex: false, data: '203.0.113.7', current: null },
+  }, { dns_zone: 'lelabs.tech', dns_address: '203.0.113.7' }));
+  assert.ok(rendu.includes('Rien n’occupe ce nom'));
+});
+
+test('tant que la lecture n’a pas eu lieu, l’ecran ne PRETEND rien', () => {
+  // Ne pas avoir lu n'est pas « rien n'est la » : afficher « sera pose » avant
+  // d'avoir lu serait affirmer ce qu'on ne sait pas (§33.3).
+  const enCours = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({ apercuEnCours: true }));
+  assert.ok(enCours.includes('Lecture de ce qui est déjà en place'));
+
+  const rien = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({ apercu: null }));
+  assert.ok(!rien.includes('Rien n’occupe ce nom'));
+  assert.ok(!rien.includes('remplacé'));
+});
+
+test('l’apercu de l’APEX s’ecrit « @ », pas un tiret', () => {
+  // Un tiret se lit « rien » la ou il faut lire « le domaine lui-meme ».
+  const rendu = renderRoutesPanel(SPARK, [{ ...ROUTE_DNS, domain: 'lelabs.tech' }], ui({
+    open: 'dns',
+    dns: { ...ADMIN_VIDE.dns, domain: 'lelabs.tech', configured: true, zones: ZONES },
+    values: { dns_zone: 'lelabs.tech', dns_address: '203.0.113.7' },
+  }));
+  assert.ok(rendu.includes('@ A'), 'la notation des fichiers de zone');
+  assert.ok(!rendu.includes('— A'));
 });

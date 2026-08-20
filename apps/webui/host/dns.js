@@ -68,34 +68,31 @@ export function normaliser(nom) {
   return String(nom ?? '').trim().toLowerCase().replace(/\.$/, '');
 }
 
+/** Nom relatif de l'apex, tel que le fournisseur l'attend. */
+export const APEX = '';
+
 /**
  * Nom RELATIF à la zone, ou refus motivé (§38.5).
  *
- * Trois refus, et chacun protège quelque chose de réel :
- * - l'apex porte les `NS` et le `MX` de la zone ; y écrire un `A` d'ingress
- *   n'est pas une erreur de frappe rattrapable ;
- * - un domaine hors de la zone viserait une zone qu'on n'a pas choisie ;
- * - un nom vide vaut l'apex.
+ * REVISE le 2026-08-20 (§38.5.1) : l'apex n'est plus refusé. Il l'était au motif
+ * qu'il porte les `NS` et le `MX` — mais l'écriture vise un nom ET un type
+ * exacts, donc à l'apex elle ne remplace que les `A`. Le refus interdisait un
+ * site sur le domaine nu, cas ordinaire, sans rien protéger que le §38.2 ne
+ * protège déjà.
+ *
+ * Reste UN refus, et il protège quelque chose de réel : un domaine hors de la
+ * zone viserait une zone qu'on n'a pas choisie.
  */
 export function nomRelatif(domaine, zone) {
   const d = normaliser(domaine);
   const z = normaliser(zone);
   if (!d) throw new DnsError('Aucun domaine fourni.');
   if (!z) throw new DnsError('Aucune zone choisie.');
-  if (d === z) {
-    throw new DnsError(
-      `« ${d} » est l'apex de la zone : il porte ses serveurs de noms et sa `
-      + "messagerie. Le produit n'y écrit pas. Choisir un sous-domaine.",
-    );
-  }
+  if (d === z) return APEX;
   if (!d.endsWith(`.${z}`)) {
     throw new DnsError(`« ${d} » n'est pas dans la zone « ${z} ».`);
   }
-  const relatif = d.slice(0, -(z.length + 1));
-  if (!relatif || relatif === '@') {
-    throw new DnsError(`Nom relatif vide pour « ${d} » dans « ${z} ».`);
-  }
-  return relatif;
+  return d.slice(0, -(z.length + 1));
 }
 
 /**
@@ -124,6 +121,9 @@ export function typePourAdresse(adresse) {
  */
 export function preparer({ domain, zone, address, ttl = TTL, motif = null }) {
   const name = nomRelatif(domain, zone);
+  // `apex` voyage avec la préparation : l'écran le dit, parce qu'écraser le nom
+  // nu coupe le domaine ENTIER et non un sous-domaine (§38.5.1).
+  const apex = name === APEX;
   const type = typePourAdresse(address);
   if (!TYPES.includes(type)) {
     throw new DnsError(`Type « ${type} » refusé : seuls ${TYPES.join(' et ')} sont écrits.`);
@@ -137,7 +137,7 @@ export function preparer({ domain, zone, address, ttl = TTL, motif = null }) {
       + `autorisé sur ce poste (${motif}).`,
     );
   }
-  return { zone: normaliser(zone), name, type, data: String(address).trim(), ttl };
+  return { zone: normaliser(zone), name, type, data: String(address).trim(), ttl, apex };
 }
 
 /**
@@ -213,6 +213,19 @@ export class ScalewayDns {
     return records.map((r) => ({
       name: r.name, type: r.type, data: r.data, ttl: r.ttl, id: r.id,
     }));
+  }
+
+  /**
+   * Ce qui occupe DÉJÀ ce couple nom + type, ou `null` (§38.5.2).
+   *
+   * On lit avant d'écrire pour que l'écran puisse dire « remplacera telle
+   * valeur » au lieu de « posera ». Un écrasement est le comportement voulu —
+   * reposer une route déplacée doit marcher — mais il ne doit jamais surprendre,
+   * et c'est ce qui autorise à ne plus refuser l'apex.
+   */
+  async existant({ zone, name, type }) {
+    const tous = await this.records(zone);
+    return tous.find((r) => (r.name ?? '') === name && r.type === type) ?? null;
   }
 
   /**

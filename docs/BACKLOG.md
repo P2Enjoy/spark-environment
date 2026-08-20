@@ -1701,6 +1701,17 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
   proxy), SPK-50 (la recette), et SPK-43 pour lire la clé DKIM dans le Spark.
 - Portée : préréglage « messagerie » qui compose la recette du §38.6 à partir du
   domaine et de l'adresse de la Forge, et publie les ports nécessaires.
+- **Architecture visée (§38.6 bis)** : le Spark **reçoit** — `MX` vers la Forge,
+  port 25 entrant publié — et **émet par le relais transactionnel** du
+  fournisseur, ce qui fait tomber trois des limites du §38.7 : plus de port 25
+  sortant à débloquer, un `PTR` déjà cohérent, une réputation déjà établie.
+  Mesuré : ce relais est **déjà en service** sur `noreply.lelabs.tech`, et son
+  sélecteur DKIM est l'identifiant de projet du compte.
+- **Deux vérifications préalables, à faire AVANT de coder** : les quotas, la
+  tarification et les conditions d'usage du relais pour de la correspondance
+  humaine et non des messages applicatifs ; et que le port 25 **entrant** soit
+  ouvert sur le serveur retenu. C'est ce couple qui décide entre « émettre par le
+  relais » et « émettre en direct ».
 - **La valeur DKIM ne s'invente pas.** Tant que SPK-43 n'existe pas, la recette
   pose ce qu'elle connaît et **demande la clé à l'exploitant en disant où la
   trouver** — une clé inventée produirait une signature invalide, donc l'effet
