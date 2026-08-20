@@ -789,3 +789,13 @@ test('les ports publies restent des SAISIES, jamais des curseurs', () => {
   assert.equal(/<input[^>]*type="range"/.test(html), false);
   assert.match(html, /<input[^>]*id="port-public"[^>]*type="number"[^>]*max="65535"/);
 });
+
+test('le fragment SSH dit pourquoi il porte un rebond, et renvoie (§1.5 bis)', () => {
+  // Le fait QUALIFIE le fragment affiché : sans lui, le « ProxyJump » se lit
+  // comme une bizarrerie. C'est le « mot juste » que le §1.5 bis conserve, et
+  // le renvoi mène à l'explication au lieu de la recopier.
+  const rendu = renderKeysPanel(SPARK,
+    { keys: [CLE], sshConfig: { config: 'Host crm\n  ProxyJump forge' } }, ui());
+  assert.match(rendu, /n’expose jamais son port 22/);
+  assert.match(rendu, /href="#\/manuel\/M6"/);
+});

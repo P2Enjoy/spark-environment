@@ -705,8 +705,9 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
   const fragment = sshConfig?.config
     ? `<h3>Configuration SSH</h3>
        <pre class="fragment technique">${echapper(sshConfig.config)}</pre>
-       <p class="note">Un Spark n’expose jamais son port 22 : l’accès passe par rebond
-       sur la Forge.</p>`
+       <p class="note">Un Spark n’expose jamais son port 22 : l’accès passe par
+       rebond sur la Forge — c’est ce que porte le fragment ci-dessus.
+       <a href="#/manuel/M6">Manuel M6 — Se connecter</a></p>`
     : '';
 
   return `
