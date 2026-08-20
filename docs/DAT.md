@@ -4238,6 +4238,95 @@ pourcentages dans un même graphique produirait un chiffre qui ne veut rien dire
 C'est le même principe qu'au SPK-DS-02 : une mesure s'affiche avec ce à quoi elle
 se rapporte.
 
+#### 37.6 bis Le contrat de l'onglet — écrit le 2026-08-20
+
+Le §37.6 dit ce que l'onglet rend et par quel principe. Il ne disait ni par quel
+chemin, ni ce qu'on exécute, ni comment se distinguent les absences. Ces trois
+points sont fixés ici, après mesure sur un vrai Docker.
+
+**Par quel chemin.** Par **SSH depuis la console**, le transport du §37.2 et le
+même que celui du terminal (§37.4.1). Pas par `incus exec` : le §37.3 réserve le
+plan de contrôle au dépannage, et lire l'inventaire d'un locataire n'en est pas
+un. La conséquence est directe : **un Spark dont le `sshd` est muet n'a pas
+d'onglet Docker**, et l'écran le dit avec le même vocabulaire qu'au §37.2, sans
+inventer un second diagnostic.
+
+**Ce qu'on exécute.** Une seule commande par relevé, en lecture, qui ne modifie
+rien :
+
+```sh
+docker ps -a --no-trunc \
+  --format '{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
+```
+
+`-a` et non le défaut : un conteneur **arrêté** est précisément ce qu'on vient
+chercher quand une pile ne répond plus. Le format tabulé plutôt que `--format
+json` : la sortie reste lisible à l'œil au débogage, et le champ `Ports` d'un
+conteneur sans publication est vide, ce qui ne casse pas le découpage.
+
+**Les mesures sont un second relevé, et il est facultatif :**
+
+```sh
+docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}'
+```
+
+`--no-stream` est obligatoire : sans lui la commande ne rend jamais la main.
+Elle est **plus lente** que l'inventaire — elle échantillonne — et un onglet qui
+attendrait les deux avant d'afficher quoi que ce soit paraîtrait plus lent que le
+Spark ne l'est. L'inventaire s'affiche donc en premier, les mesures le
+complètent.
+
+**Comment se distinguent les absences.** Mesuré, et c'est le code de sortie qui
+tranche — pas la sortie, qui est vide dans deux cas sur trois :
+
+| Ce qu'on observe | Code | Ce que l'écran dit |
+|---|---|---|
+| `docker` introuvable | `127` | Docker n'est pas installé dans ce Spark — renvoi vers l'amorçage (§42) |
+| commande présente, démon muet | `1` | Docker est installé mais son moteur ne répond pas |
+| commande rendue, **zéro ligne** | `0` | Docker tourne, aucun conteneur |
+| le `sshd` ne répond pas | — | le cas du §37.2, dit dans ses termes |
+| la cellule ne tourne pas | — | le Spark est arrêté |
+
+Les deux premiers cas se confondent à l'œil — « Docker ne marche pas » — et
+n'appellent pas le même geste : le premier s'amorce, le second se redémarre.
+Les fondre en un seul message enverrait réinstaller ce qui est déjà là.
+
+**Le troisième n'est pas un tableau vide.** Un Spark qui tourne sans conteneur
+est un état **normal** — une cellule fraîchement amorcée, une pile arrêtée pour
+la nuit —, et il se nomme (`DESIGN_SYSTEM.md` §6.13, §14.5).
+
+**Le contrat d'API.** Une route, sur l'hôte console, parce que c'est lui qui a le
+tunnel et la clé :
+
+```
+GET /api/spark/docker?server=<forge>&spark=<nom>
+```
+
+```json
+{ "spark": "helo", "state": "ok|sans_conteneur|docker_absent|moteur_muet|sshd_muet|spark_arrete",
+  "containers": [ { "id": "…", "name": "web", "state": "running",
+                    "status": "Up 3 hours", "image": "nginx:alpine",
+                    "ports": "0.0.0.0:8080->80/tcp",
+                    "cpu": "0.03%", "memory": "12.3MiB / 2GiB", "memoryPercent": "0.60%" } ] }
+```
+
+`state` porte le verdict et `containers` la liste — jamais l'un déduit de
+l'autre. Une liste vide avec `state: "ok"` serait ambiguë ; c'est pourquoi le
+troisième cas a son propre nom.
+
+Les mesures sont **absentes** du conteneur quand `docker stats` n'a pas répondu,
+et non mises à zéro : le §14.6 interdit de confondre « pas mesuré » et « zéro ».
+
+**Rien n'est journalisé.** L'onglet lit ; le §36.7 ne journalise pas les
+lectures, et un relevé rafraîchi toutes les quelques secondes remplirait le
+journal de bruit sans dire qui a fait quoi.
+
+**Cadence et arrêt.** Rafraîchissement toutes les **cinq secondes** tant que
+l'onglet est ouvert, et **arrêt** dès qu'il est quitté — c'est le §37.6, et le
+motif y est écrit : une console qui interroge un Spark qu'on ne regarde plus
+consomme le quota du locataire pour rien. C'est la même règle que la session de
+terminal, qui meurt avec son onglet (§37.4.2).
+
 ### 37.7 Les gestes sur un conteneur, et le gel
 
 **Décision du responsable : lecture, plus le cycle de vie d'un conteneur** —
