@@ -4365,3 +4365,66 @@ réellement capable de `docker compose up` exige une Forge réelle.
 **Où reprendre.** Le mode rootless de SPK-54, qui est livrable ici : une option à
 l'écran qui énonce ce qu'elle coûte (§42.2), une variante d'installation, et ses
 preuves. Le reste de l'unité attend la Forge réelle, comme SPK-43.
+
+## 2026-08-20 — SPK-54 : le mode rootless, et un refus qui vaut mieux qu'une bascule
+
+**Unité** : SPK-54, mode rootless, désigné par l'entrée précédente. L'unité étant
+`[~]` et le §42.2 ne couvrant que l'intention, j'ai complété **ce point précis**
+— §42.2 bis — et l'ai poussé avant la première ligne de code (§3.2).
+
+### Ce que le §42.2 ne disait pas, et qu'il fallait trancher
+
+Comment l'option voyage, ce qu'elle change à l'installation, et surtout : **ce
+qui arrive quand on la demande sur une cellule déjà pourvue**.
+
+La réponse est un refus, pas une bascule. Basculer déplacerait le démon sous un
+autre compte, et avec lui les conteneurs, les volumes et les réseaux du
+locataire — sa production, sans qu'il l'ait demandé. Le §42.1 ne tolère déjà pas
+un redémarrage gratuit du démon ; une bascule est un ordre de grandeur au-dessus.
+Laisser passer aurait fait de la case à cocher la commande la plus destructrice
+de la console, sans confirmation propre.
+
+Le refus joue dans les deux sens et porte sur la **bascule**, pas sur le fait de
+redemander : redemander le même mode reste idempotent, et une preuve le garde —
+les confondre aurait rendu un second amorçage impossible.
+
+Deux autres points méritent d'être notés : `enable-linger` n'est pas une
+précaution — sans lui le démon meurt à la fin de la session du compte, ce qui
+donnerait une cellule qui marche jusqu'au premier redémarrage, et cela ne se
+verrait qu'alors ; et le démon enraciné est **arrêté** avant l'installation
+rootless, deux démons sur la même cellule se disputant stockage et réseaux.
+
+### À l'écran
+
+La case est décochée par défaut et **énonce ses trois coûts** au lieu de les
+vendre. Une preuve garde qu'aucun « plus sûr » ni « recommandé » ne s'y glisse :
+le §42.2 est explicite, annoncer l'inverse ferait échouer la promesse centrale du
+produit sur la moitié des piles.
+
+Quand le relevé montre un mode en place, l'option n'est plus offerte. Ce n'est
+pas le §14.9 : l'écran ne suppose rien, il le tient d'une mesure que le serveur
+vient de rendre — et le serveur refuse de toute façon.
+
+### Vérifications
+
+Campagne complète **verte** : 697 tests Python (30 propres à l'unité), 6 de
+contrat, 590 de console (53 sur la fiche d'un Spark), 8 de gestes, 50 parcours
+E2E, 7 du manuel.
+
+**Une réserve à dire** : les 50 parcours ont tourné avec le travail **non
+committé** d'une autre session dans `e2e/parcours.test.mjs`, `captures.mjs`,
+`manuel.mjs` et `reel.mjs` — son adaptation de REFUS 1 au curseur de SPK-59. Le
+verdict est donc vrai de l'arbre tel qu'il était, pas de `origin/main` seul.
+
+### Ce qui manque, et pourquoi
+
+Le **parcours E2E et la capture** du mode rootless ne sont pas écrits : les deux
+fichiers étaient tenus par cette autre session, et les reprendre aurait écrasé
+son travail. C'est le prix de trois sessions dans un même arbre, et il est réel.
+
+**SPK-54 reste `[~]`** avec trois écarts nommés au backlog.
+
+**Où reprendre.** Le parcours E2E et la capture du rootless, dès que
+`e2e/parcours.test.mjs` et `e2e/captures.mjs` sont libres — c'est court et
+livrable ici. Ensuite SPK-44 (onglet Docker), première `[ ]` du plan à porter du
+comportement, qui emprunte le même transport que SPK-43.

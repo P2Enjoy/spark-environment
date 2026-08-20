@@ -2119,14 +2119,38 @@ et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
 - **Défaut trouvé en observant la capture du manuel** : « absent » était écrit
   deux fois sur la même ligne — la pastille et le détail. Corrigé, avec sa preuve.
 
+**Mode rootless livré le 2026-08-20 (§42.2, §42.2 bis).**
+
+- Contrat écrit et poussé avant le code : §42.2 bis — comment l'option voyage, ce
+  qu'elle change à l'installation, et ce qui arrive quand on la demande sur une
+  cellule déjà pourvue.
+- **Le point de la tranche** : demander l'autre mode sur une cellule déjà pourvue
+  est **refusé**, pas exécuté. Basculer déplacerait le démon sous un autre compte,
+  et avec lui les conteneurs, les volumes et les réseaux du locataire — sa
+  production, sans qu'il l'ait demandé. Une preuve compte les commandes : un refus
+  ne touche pas la cellule. Le refus joue dans les deux sens, et redemander le
+  **même** mode reste idempotent — les confondre rendrait un second amorçage
+  impossible.
+- `enable-linger` n'est pas une précaution : sans lui le démon meurt à la fin de
+  la session du compte, ce qui donnerait une cellule qui marche jusqu'au premier
+  redémarrage — et cela ne se verrait qu'alors.
+- L'option **énonce ses trois coûts** au lieu de les vendre, et une preuve garde
+  qu'aucun argument de vente ne s'y glisse. Le mode est une **observation** rendue
+  par le relevé, et il figure au journal même quand rien n'a été fait.
+- **Preuves** : 30 de `sparkd` propres à l'unité, 53 de composant.
+
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. le **mode rootless** du §42.2 n'est ni offert ni éprouvé. Il demande une
-     option à l'écran, une variante d'installation, et une pile qui le supporte
-     pour l'éprouver ;
-  2. la preuve qu'un amorçage rend une cellule **réellement** joignable et
+  1. le **parcours E2E et la capture** du mode rootless — le geste depuis la
+     confirmation et le mode au journal. `e2e/parcours.test.mjs` et
+     `e2e/captures.mjs` étaient tenus par une autre session au moment de cette
+     tranche, et je ne les ai pas repris pour ne pas écraser son travail sur
+     SPK-59 ;
+  2. le mode rootless **éprouvé sur une pile qui le supporte**, que la DoD
+     demande. Le doublon représente l'effet des scripts, pas le comportement d'un
+     vrai démon rootless ;
+  3. la preuve qu'un amorçage rend une cellule **réellement** joignable et
      capable de `docker compose up` : elle exige une Forge réelle avec Incus, et
-     c'est la même limite qu'au §39.7. Le doublon représente l'effet des scripts,
-     ce qui prouve la logique du geste, pas son résultat sur une vraie cellule.
+     c'est la même limite qu'au §39.7.
 
 ### [ ] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
 

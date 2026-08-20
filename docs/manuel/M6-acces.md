@@ -77,6 +77,41 @@ Le compte rendu donne le sort de **chaque** ligne : inchangé, installé, ou
 échoué. Jamais un « succès » global, qui laisserait croire que tout a été fait
 alors qu'on n'a agi que sur une partie.
 
+### Le mode rootless, si vous le voulez
+
+La confirmation propose une case : **installer Docker en mode rootless**. Elle est
+décochée, et c'est un choix, pas un oubli.
+
+En rootless, le moteur Docker tourne sous un compte non privilégié *à l'intérieur*
+de votre Spark. Trois choses changent, et il vaut mieux les savoir avant :
+
+- **les ports sous 1024 deviennent impossibles à publier dans la cellule.** Si
+  votre pile écoute sur 80 ou 443 à l'intérieur, elle ne démarrera pas telle
+  quelle ;
+- **certaines piles Compose existantes ne fonctionnent pas sans retouche.** Or
+  reprendre une pile sans la réécrire est précisément ce que ce produit vous
+  promet ;
+- **votre Spark est déjà une cellule non privilégiée** sur la Forge. Le rootless
+  est une seconde couche, pas la première : vous n'êtes pas sans protection si
+  vous ne le cochez pas.
+
+C'est pourquoi le défaut est le mode ordinaire. Le rootless est offert à qui le
+demande en connaissance de cause, pas recommandé par défaut.
+
+### Ce choix ne se reprend pas
+
+**Un amorçage ne bascule jamais un Docker déjà installé d'un mode à l'autre**, et
+il refuse si vous le lui demandez.
+
+Ce n'est pas une limitation qu'on lèvera : basculer déplacerait le moteur sous un
+autre compte, et avec lui vos conteneurs, vos volumes et vos réseaux. Autrement
+dit ce qui tourne, sans que vous l'ayez demandé. Le refus vous dit quel mode est
+en place et lequel vous avez demandé.
+
+Le choix se fait donc **au premier amorçage**, tant que rien ne tourne — et
+l'écran ne vous propose la case qu'à ce moment-là. Ensuite, la ligne *moteur
+Docker* vous rappelle dans quel mode votre Spark tourne.
+
 ### Ce que l'amorçage ne fait pas
 
 Il n'installe pas votre application, ne pose pas vos variables, ne gère pas vos
