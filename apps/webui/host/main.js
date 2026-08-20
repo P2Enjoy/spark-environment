@@ -21,11 +21,15 @@ import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre
   from './anchor.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, ValeurManquante } from './recettes.js';
+import { SessionManager, TerminalError, FLUX_FERME } from './terminal.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
 export function createConsoleHost(options = {}) {
   const tunnels = options.tunnels ?? new TunnelManager();
+  // SPK-43 · §37.1 : les sessions de terminal vivent ICI, sur le poste. Le plan
+  // de contrôle n'est pas dans ce chemin et n'en gagne aucun pouvoir.
+  const terminaux = options.terminals ?? new SessionManager();
   const inventoryPath = options.inventoryPath;
   const anchorPath = options.anchorPath;
   const fetchFn = options.fetch ?? fetch;
@@ -56,6 +60,40 @@ export function createConsoleHost(options = {}) {
   /** Rend le fournisseur, ou `null` avec la raison. Un jeton absent n'est PAS une panne. */
   async function fournisseur() {
     return fournisseurDepuis(await environnement(), { fetch: fetchFn });
+  }
+
+  /**
+   * Déclare un évènement de session au journal de `sparkd` (§37.4.5).
+   *
+   * **Rien du contenu ne traverse jamais cette frontière** : la charge est
+   * construite ici, champ par champ, et ne peut donc pas emporter un octet de
+   * la session — c'est la règle du §37.5 rendue impossible à enfreindre plutôt
+   * qu'improbable.
+   *
+   * Un échec ne remonte pas : le §37.4.5 le dit, une panne de journal n'est pas
+   * une panne d'exploitation.
+   */
+  async function declarerAudit(tunnel, action, { spark, path, reason, duration_seconds }) {
+    if (!tunnel?.localPort) return false;
+    try {
+      const reponse = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/audit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json',
+                   'x-spark-actor': tunnel.actorHeader },
+        body: JSON.stringify({
+          action, result: 'ok', target_type: 'spark', target_id: spark,
+          message: action === 'spark.terminal_open'
+            ? `Session de terminal ouverte sur « ${spark} » par ${path}.`
+            : `Session de terminal fermée sur « ${spark} » après `
+              + `${duration_seconds} s (${reason}).`,
+          payload: { path, ...(reason ? { reason } : {}),
+                     ...(duration_seconds == null ? {} : { duration_seconds }) },
+        }),
+      });
+      return reponse.ok;
+    } catch {
+      return false;
+    }
   }
 
   const routes = {
@@ -459,6 +497,84 @@ export function createConsoleHost(options = {}) {
       };
     },
 
+    /**
+     * Ouvre une session de terminal vers un Spark (§37.4.4).
+     *
+     * Le Spark est relu sur `sparkd` pour obtenir son adresse privée : c'est le
+     * REGISTRE qui l'attribue (§15.1), et la deviner serait se tromper de Spark.
+     */
+    'POST /api/terminal': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const spark = String(corps?.spark ?? '');
+      let tunnel;
+      try {
+        tunnel = tunnels.require(nom);
+      } catch (erreur) {
+        return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
+      }
+      const amont = await fetchFn(
+        `http://127.0.0.1:${tunnel.localPort}/v1/sparks/${encodeURIComponent(spark)}`,
+        { headers: { 'x-spark-actor': tunnel.actorHeader } });
+      if (!amont.ok) {
+        return { status: 404, body: { error: 'unknown_spark',
+                                      message: `Aucun Spark « ${spark} » sur ce serveur.` } };
+      }
+      const decrit = await amont.json();
+      if (!decrit.ipv4_address) {
+        // §37.2 : l'écran doit NOMMER ce qui manque, pas rendre une erreur
+        // technique. Un Spark jamais appliqué n'a rien où se connecter.
+        return { status: 409, body: {
+          error: 'spark_not_reachable',
+          message: `Le Spark « ${spark} » n'a pas encore d'adresse : il n'a jamais `
+                   + 'été appliqué. Créez-le avant d’y ouvrir un terminal.' } };
+      }
+      const session = terminaux.ouvrir({ tunnel, spark: decrit });
+      // §37.4.5 : on DÉCLARE l'ouverture. Si `sparkd` est injoignable, la
+      // session s'ouvre quand même — refuser un terminal parce que le journal
+      // est indisponible transformerait une panne de traçabilité en panne
+      // d'exploitation, au moment précis où l'on cherche à réparer.
+      await declarerAudit(tunnel, 'spark.terminal_open', {
+        spark: decrit.name, path: 'ssh' });
+      return { status: 201, body: session.describe() };
+    },
+
+    /** Les octets saisis. Ils traversent ; rien ne les retient (§37.5). */
+    'POST /api/terminal/entree': async (corps, url) => {
+      try {
+        terminaux.get(String(url?.searchParams.get('id') ?? '')).ecrire(String(corps?.data ?? ''));
+        return { status: 204, body: null };
+      } catch (erreur) {
+        if (!(erreur instanceof TerminalError)) throw erreur;
+        return { status: 409, body: { error: 'session_closed', message: erreur.message } };
+      }
+    },
+
+    /** Le redimensionnement, avec la limite du §37.4.3. */
+    'POST /api/terminal/taille': async (corps, url) => {
+      try {
+        terminaux.get(String(url?.searchParams.get('id') ?? ''))
+          .redimensionner(Number(corps?.rows), Number(corps?.cols));
+        return { status: 204, body: null };
+      } catch (erreur) {
+        if (!(erreur instanceof TerminalError)) throw erreur;
+        return { status: 409, body: { error: 'resize_refused', message: erreur.message } };
+      }
+    },
+
+    /** Ferme, et TUE le distant (§37.4). */
+    'DELETE /api/terminal': async (_corps, url) => {
+      const id = String(url?.searchParams.get('id') ?? '');
+      const session = terminaux.fermer(id);
+      if (!session) {
+        return { status: 404, body: { error: 'unknown_session', message: `Aucune session « ${id} ».` } };
+      }
+      const tunnel = tunnels.get(session.tunnel?.name ?? '') ?? session.tunnel;
+      await declarerAudit(tunnel, 'spark.terminal_close', {
+        spark: session.spark.name, path: 'ssh',
+        reason: session.motif, duration_seconds: session.dureeSecondes() });
+      return { status: 200, body: session.describe() };
+    },
+
     'DELETE /api/tunnels': async (corps) => {
       tunnels.close(corps?.name);
       return { status: 200, body: { closed: corps?.name } };
@@ -476,6 +592,12 @@ export function createConsoleHost(options = {}) {
         return repondre(reponse, status, body);
       }
 
+      // SPK-43 · §37.4.1 : le flux de sortie tient la connexion ouverte. Il ne
+      // peut donc pas passer par `repondre`, qui termine la réponse.
+      if (requete.method === 'GET' && url.pathname === '/api/terminal/flux') {
+        return servirFlux(url, reponse, terminaux);
+      }
+
       // Tout le reste est relayé au sparkd du serveur choisi.
       if (url.pathname.startsWith('/api/v1/')) {
         return await relayer(url, requete, reponse, tunnels, fetchFn);
@@ -490,8 +612,9 @@ export function createConsoleHost(options = {}) {
     }
   });
 
-  server.on('close', () => tunnels.closeAll());
-  return { server, tunnels };
+  // §37.4.2 : aucun shell ne survit à l'hôte console.
+  server.on('close', () => { terminaux.fermerToutes(); tunnels.closeAll(); });
+  return { server, tunnels, terminals: terminaux };
 }
 
 /**
@@ -547,6 +670,37 @@ async function relayer(url, requete, reponse, tunnels, fetchFn) {
   const texte = await amont.text();
   reponse.writeHead(amont.status, { 'content-type': 'application/json; charset=utf-8' });
   reponse.end(texte);
+}
+
+/**
+ * Sert la sortie d'une session en flux d'évènements (§37.4.1).
+ *
+ * La fermeture du flux TUE la session (§37.4.2) : c'est ce qui fait qu'un onglet
+ * fermé ne laisse pas un shell root derrière lui.
+ */
+function servirFlux(url, reponse, terminaux) {
+  const id = String(url.searchParams.get('id') ?? '');
+  let session;
+  try {
+    session = terminaux.get(id);
+  } catch (erreur) {
+    reponse.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
+    return reponse.end(JSON.stringify({ error: 'unknown_session', message: erreur.message }));
+  }
+  reponse.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+  const desabonner = session.abonner((type, data) => {
+    reponse.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (type === 'fin') reponse.end();
+  });
+  reponse.on('close', () => {
+    desabonner();
+    terminaux.fermer(id, FLUX_FERME);
+  });
+  return reponse;
 }
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
