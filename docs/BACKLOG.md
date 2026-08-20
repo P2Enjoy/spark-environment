@@ -2312,7 +2312,7 @@ transport.
   est **reposé au démarrage** de la cellule ; manuel M6/M8 et
   seed mis à jour.
 
-### [~] SPK-59 · Les quotas se règlent au curseur
+### [x] SPK-59 · Les quotas se règlent au curseur
 
 **Demande du responsable, 2026-08-20.** Les quotas de l'écran de création se
 saisissent au clavier, chiffre par chiffre, alors que ce sont des valeurs bornées
@@ -2385,13 +2385,14 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   complétée — la valeur affichée doit être exacte sur la grille du curseur, sans
   quoi c'est le pas qui est mauvais. Détail au `docs/DESIGN_SYSTEM_APP.md`
   SPK-DS-07.
-- **Repassée à `[~]` le 2026-08-20, et il faut dire pourquoi.** L'amendement des
-  256 Mio est implémenté, couvert par **599 tests de console verts** et
-  **vérifié visuellement** — captures 15 à 19b et illustrations M5 refaites et
-  observées après le changement. Ce qui manque, et une seule chose : **la
-  campagne E2E n'a pas été rejouée depuis l'amendement**. `REFUS 1` est le seul
-  parcours concerné ; il était vert au pas de 1 Gio et rien n'indique qu'il ne le
-  soit plus, mais « rien n'indique » n'est pas une preuve.
+- **Preuve de l'amendement, close le 2026-08-20** : **599 tests de console
+  verts** ; captures 15 à 19b et illustrations M5 refaites **et observées après**
+  le changement — sur la pile de validation, le curseur de mémoire passe de cinq
+  crans à vingt, de 256 Mio à 5,25 Gio ; parcours **`REFUS 1` vert**, seul
+  parcours que l'amendement touche, rejoué **isolément** et non par la campagne
+  complète (voir le motif ci-dessous). Il pousse le curseur à sa borne haute au
+  clavier, vérifie que la demande dépasse le disponible relevé chez `sparkd`, et
+  obtient le refus réel.
 - **Motif de l'arrêt, et il vaut d'être écrit** : les campagnes E2E ont **saturé
   la mémoire de la machine** et l'ont fait tomber quatre fois. Deux commandes se
   sont terminées en code **137**, un `SIGKILL` — signature du tueur de mémoire.
@@ -2399,8 +2400,15 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   Chromium — et trois sessions en lançaient en parallèle sur le même hôte WSL2.
   La contention avait déjà été mesurée le même jour comme cause de rouges
   erratiques ; la conclusion qu'elle pouvait aussi tuer l'hôte n'en avait pas été
-  tirée. **À traiter avant de rejouer une campagne complète** : la reprise se
-  fera sur le seul parcours `REFUS 1`, pas sur les cinquante.
+  tirée.
+- **Règle qui en sort, et qui dépasse cette unité** : pour éprouver UN parcours,
+  `node --test --test-concurrency=1 --test-name-pattern="<nom exact>"` monte
+  **une** pile au lieu de cinquante et rend en 2,5 s. La campagne complète reste
+  la preuve de non-régression de l'ensemble, mais elle n'est pas l'outil d'une
+  vérification ciblée, et elle ne doit pas tourner sur un hôte partagé sans que
+  les autres sessions aient confirmé qu'elles ne lancent rien. **À porter dans un
+  document durable** — `docs/AGENT_RUNBOOK.md` ou le `Makefile` — plutôt que de
+  rester dans cette entrée.
 
 ### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 
