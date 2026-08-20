@@ -21,6 +21,7 @@ import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
+import { comparer as comparerBuild } from './build.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
@@ -252,6 +253,40 @@ export function createConsoleHost(options = {}) {
      * seule ne les détecte pas, et le serveur n'a pas à être cru sur parole :
      * une longueur en recul suffit à alerter sans lui demander son avis.
      */
+    /**
+     * La build d'une Forge, confrontée au dépôt de CE poste (SPK-53, §40.3).
+     *
+     * @spec docs/BACKLOG.md#SPK-53 · docs/DAT.md §40.1 (le runtime ne dérive
+     *       jamais cette valeur), §40.3
+     *
+     * La comparaison vit dans l'hôte console et pas dans `sparkd` : c'est le
+     * poste qui porte le dépôt, et la Forge n'a aucune raison d'en avoir un —
+     * elle est déployée par `rsync` SANS `.git` (§40.1).
+     *
+     * Lecture pure. Rien n'est écrit, rien n'est journalisé (§36.7).
+     */
+    'GET /api/forge/build': async (_corps, url) => {
+      const nom = String(url?.searchParams.get('server') ?? '');
+      let tunnel;
+      try {
+        tunnel = tunnels.require(nom);
+      } catch (erreur) {
+        return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
+      }
+      const amont = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/forge`,
+                                  { headers: { 'x-spark-actor': tunnel.actorHeader } });
+      if (!amont.ok) {
+        return { status: 502, body: { error: 'forge_unreadable',
+                                      message: `La Forge a répondu ${amont.status}.` } };
+      }
+      const forge = await amont.json();
+      // Une Forge qui ne publie AUCUNE build est traitée comme non estampillée,
+      // pas comme une panne : `comparer` sait déjà le dire (§40.2).
+      return { status: 200,
+               body: { server: nom, ...(await comparerBuild(forge?.build ?? null,
+                                                            RACINE_DEPOT)) } };
+    },
+
     'POST /api/anchor': async (corps) => {
       const nom = String(corps?.name ?? '');
       let tunnel;

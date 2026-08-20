@@ -743,3 +743,67 @@ test('sans jeton, les recettes se lisent mais ne s’ecrivent pas', async () => 
   assert.equal(r.status, 409);
   server.close();
 });
+
+// --- SPK-53 · LA BUILD D'UNE FORGE, CONFRONTÉE AU DÉPÔT (§40.3) -------------
+
+test('la route CONFRONTE, et rend le verdict du dépôt de ce poste', async () => {
+  // La comparaison vit dans l'hôte console et pas dans `sparkd` : c'est le poste
+  // qui porte le dépôt, et la Forge est déployée par `rsync` SANS `.git` (§40.1).
+  const { base, server, tunnels } = await hote({
+    amont: async (url) => (String(url).includes('/v1/forge')
+      ? new Response(JSON.stringify({ build: { commit: 'a'.repeat(40) } }), { status: 200 })
+      : new Response('{}', { status: 200 })),
+  });
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+
+  const corps = await (await fetch(`${base}/api/forge/build?server=prod`)).json();
+  assert.equal(corps.server, 'prod');
+  // Ce commit n'existe dans aucun dépôt : le verdict est « étrangère », JAMAIS
+  // « à jour » — c'est le point du §40.3.
+  assert.equal(corps.verdict, 'etrangere');
+  assert.equal(corps.forge.commit, 'a'.repeat(40));
+  tunnels.closeAll?.(); server.close();
+});
+
+test('une Forge qui ne publie AUCUNE build est dite non estampillée, pas en panne', async () => {
+  // §40.2 : « inconnue » est une réponse. Rendre 502 ferait d'une absence
+  // d'estampille une panne d'écran.
+  const { base, server, tunnels } = await hote({
+    amont: async (url) => (String(url).includes('/v1/forge')
+      ? new Response(JSON.stringify({ pools: [] }), { status: 200 })
+      : new Response('{}', { status: 200 })),
+  });
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+
+  const reponse = await fetch(`${base}/api/forge/build?server=prod`);
+  assert.equal(reponse.status, 200);
+  assert.equal((await reponse.json()).verdict, 'non_estampillee');
+  tunnels.closeAll?.(); server.close();
+});
+
+test('sans tunnel, la route dit que le tunnel manque — pas que la build est inconnue', async () => {
+  // Les deux se ressemblent à l'écran et n'appellent pas le même geste : l'un
+  // se règle en rouvrant le tunnel, l'autre en réinstallant la Forge.
+  const { base, server } = await hote();
+  const reponse = await fetch(`${base}/api/forge/build?server=absent`);
+  assert.equal(reponse.status, 502);
+  assert.equal((await reponse.json()).error, 'tunnel_unavailable');
+  server.close();
+});
+
+test('une Forge qui répond mal n’est pas confondue avec une build inconnue', async () => {
+  const { base, server, tunnels } = await hote({
+    amont: async (url) => (String(url).includes('/v1/forge')
+      ? new Response('{}', { status: 500 })
+      : new Response('{}', { status: 200 })),
+  });
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+
+  const reponse = await fetch(`${base}/api/forge/build?server=prod`);
+  assert.equal(reponse.status, 502);
+  assert.equal((await reponse.json()).error, 'forge_unreadable');
+  tunnels.closeAll?.(); server.close();
+});
