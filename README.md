@@ -324,6 +324,35 @@ héritage.
 - Les disques de la Forge sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
 
+## Sauvegarder le registre
+
+Le registre `spark.db` porte toute la correspondance Spark ↔ quotas ↔ routes ↔
+clés, et le journal d'audit. Les cellules, elles, vivent dans Incus : perdre le
+registre ne détruit aucune donnée de locataire, mais détruit la connaissance que
+le produit en a.
+
+```bash
+python3 -m sparkd.sauvegarde /var/backups/sparkd
+```
+
+N'arrête rien, écrit un fichier daté, et **vérifie ce qu'il vient d'écrire** —
+structure SQLite et chaîne du journal — avant de rendre la main.
+
+**Ne copiez pas `spark.db` à la main.** Il est en mode WAL : une copie de fichier
+laisse derrière les transactions validées qui vivent encore dans le `-wal`, et la
+copie s'ouvre ensuite **sans se plaindre**. Mesuré : 490 lignes sur 500.
+
+Pour restaurer, `sparkd` doit être arrêté :
+
+```bash
+systemctl stop sparkd
+python3 -m sparkd.sauvegarde --restaurer /var/backups/sparkd/spark-….db
+systemctl start sparkd
+```
+
+Le registre remplacé est **déplacé**, pas écrasé. La marche à suivre complète, ce
+qui est perdu et ce qu'il faut vérifier après : [docs/CONTINGENCE.md](docs/CONTINGENCE.md).
+
 ## Documentation
 
 | Document | Contenu |
@@ -336,6 +365,7 @@ héritage.
 | [docs/manuel/](docs/manuel/) | manuel utilisateur |
 | [docs/MANUAL_PLAN.md](docs/MANUAL_PLAN.md) | plan du manuel utilisateur |
 | [docs/PROD_MIGRATIONS.md](docs/PROD_MIGRATIONS.md) | contrat de déploiement |
+| [docs/CONTINGENCE.md](docs/CONTINGENCE.md) | plans d'urgence : ce qu'on fait quand ça casse |
 | [docs/ORIGIN_CONVERSATION.md](docs/ORIGIN_CONVERSATION.md) | conversation fondatrice |
 
 ## Licence

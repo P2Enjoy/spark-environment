@@ -99,6 +99,20 @@ l'autre.
    de Caddy : l'émission automatique de certificats suppose des enregistrements DNS
    déjà résolus.
 
+## 2 bis. Sauvegarder le registre
+
+```bash
+python3 -m sparkd.sauvegarde /var/backups/sparkd
+```
+
+À exécuter **avant toute migration** et avant toute opération de cette liste. Le
+registre est le seul état que le produit ne sait pas reconstruire : les cellules
+vivent dans Incus, la configuration dans `scripts/install-serveur.sh`, mais la
+correspondance Spark ↔ quotas ↔ routes ↔ clés n'existe nulle part ailleurs.
+
+Ne copiez pas le fichier à la main : il est en WAL, et une copie perd en silence
+ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
+
 ## 3. Opérations en attente
 
 ### OP-01 · CLOSE le 2026-08-20 — la disposition du stockage est tranchée
