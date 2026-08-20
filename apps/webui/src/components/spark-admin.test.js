@@ -669,3 +669,113 @@ test('un refus du serveur s’affiche DANS la modale du port', () => {
   }));
   assert.ok(rendu.includes('Le port 443 est tenu par le proxy.'));
 });
+
+// --- les recettes DNS (SPK-50, docs/DAT.md §38.6) --------------------------
+
+const CATALOGUE = [{
+  id: 'site-web', label: 'Site web sur le domaine nu',
+  description: 'Fait répondre le domaine lui-même et son « www ».',
+  parametres: [{ nom: 'domain', label: 'Domaine', aide: 'Le domaine nu.' },
+               { nom: 'address', label: 'Adresse publique de la Forge' }],
+  actionsHumaines: [],
+}, {
+  id: 'relais-transactionnel', label: 'Émission par le relais',
+  description: 'ATTENTION : ce sous-domaine ÉMET et NE REÇOIT PAS.',
+  parametres: [{ nom: 'domain', label: 'Sous-domaine émetteur' },
+               { nom: 'dkim', label: 'Clé publique DKIM', facultatif: true,
+                 aide: 'À LIRE dans la console du fournisseur.' }],
+  actionsHumaines: ['Le DNS inverse (PTR) ne vit pas dans la zone.'],
+}];
+const recetteUi = (recettes = {}, valeurs = {}) => ui({
+  open: 'recette',
+  recettes: { ...ADMIN_VIDE.recettes, catalogue: CATALOGUE,
+              zones: [{ zone: 'exemple.tech' }], ...recettes },
+  values: valeurs,
+});
+
+test('la modale enumere les recettes et decrit celle qui est choisie', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({}, { recette: 'relais-transactionnel' }));
+  assert.ok(rendu.includes('Site web sur le domaine nu'));
+  assert.ok(rendu.includes('ÉMET et NE REÇOIT PAS'),
+    'l’avertissement de la recette doit etre lisible AVANT de l’appliquer');
+});
+
+test('les parametres SUIVENT la recette choisie', () => {
+  const web = renderRoutesPanel(SPARK, [], recetteUi({}, { recette: 'site-web' }));
+  assert.ok(web.includes('data-param="address"'));
+  assert.ok(!web.includes('data-param="dkim"'));
+
+  const relais = renderRoutesPanel(SPARK, [], recetteUi({}, { recette: 'relais-transactionnel' }));
+  assert.ok(relais.includes('data-param="dkim"'));
+  assert.ok(relais.includes('(facultatif)'));
+  assert.ok(relais.includes('console du fournisseur'), 'l’aide doit dire OU lire la cle');
+});
+
+test('les actions HUMAINES restantes sont montrees avec la recette', () => {
+  // §38.7 : le produit fait sa part et dit precisement ou s'arrete son pouvoir.
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({}, { recette: 'relais-transactionnel' }));
+  assert.ok(rendu.includes('ne peut pas faire'));
+  assert.ok(rendu.includes('PTR'));
+});
+
+test('l’apercu montre CHAQUE ligne, son role et son effet', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({
+    apercu: { label: 'Site web', incomplete: null, records: [
+      { name: '', type: 'A', data: '203.0.113.7', role: 'Le domaine lui-même.',
+        effet: 'remplace', current: { data: '198.51.100.1' } },
+      { name: 'www', type: 'A', data: '203.0.113.7', role: 'Le « www ».', effet: 'pose' },
+    ] },
+  }, { recette: 'site-web', recette_zone: 'exemple.tech' }));
+  assert.ok(rendu.includes('@ A'), 'l’apex se note « @ »');
+  assert.ok(rendu.includes('Le domaine lui-même.'));
+  assert.ok(rendu.includes('remplacera'));
+  assert.ok(rendu.includes('198.51.100.1'), 'la valeur remplacee doit etre LUE');
+  assert.ok(rendu.includes('sera posé'));
+});
+
+test('une recette INCOMPLETE le dit des l’apercu', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({
+    apercu: { label: 'Relais', records: [],
+              incomplete: 'La clé DKIM n’a pas été fournie : SANS SIGNATURE.' },
+  }, { recette: 'relais-transactionnel', recette_zone: 'exemple.tech' }));
+  assert.ok(rendu.includes('SANS SIGNATURE'));
+});
+
+test('le compte rendu rend le sort de CHAQUE ligne, jamais un verdict global', () => {
+  // §38.6.3 : un « succes » sur une recette a moitie posee serait le pire des
+  // mensonges possibles ici. DESIGN_SYSTEM §6.13 : « resultat partiel » est un
+  // etat a traiter.
+  const rendu = renderRoutesPanel(SPARK, [], ui({
+    recettes: { ...ADMIN_VIDE.recettes, resultat: {
+      label: 'Site web', written: 1, failed: 1,
+      incomplete: 'Recette incomplète : A www n’a pas été écrit.',
+      propagation: 'La résolution peut demander jusqu’à 300 secondes.',
+      records: [{ name: '', type: 'A', written: true },
+                { name: 'www', type: 'A', written: false, error: 'HTTP 429' }],
+    } },
+  }));
+  assert.ok(rendu.includes('1 écrit(s), 1 en échec'));
+  assert.ok(rendu.includes('HTTP 429'));
+  assert.ok(rendu.includes('Recette incomplète'));
+  assert.ok(rendu.includes('avertissement'), 'un resultat partiel s’annonce en accent');
+});
+
+test('une recette ENTIEREMENT ecrite n’est pas presentee comme un avertissement', () => {
+  const rendu = renderRoutesPanel(SPARK, [], ui({
+    recettes: { ...ADMIN_VIDE.recettes, resultat: {
+      label: 'Site web', written: 2, failed: 0, incomplete: null,
+      propagation: 'La résolution peut demander jusqu’à 300 secondes.',
+      records: [{ name: '', type: 'A', written: true },
+                { name: 'www', type: 'A', written: true }],
+    } },
+  }));
+  assert.ok(rendu.includes('2 écrit(s)'));
+  assert.ok(!rendu.includes('en échec'));
+});
+
+test('tant que la lecture n’a pas eu lieu, l’apercu ne PRETEND rien', () => {
+  const enCours = renderRoutesPanel(SPARK, [], recetteUi({ chargement: true }));
+  assert.ok(enCours.includes('Lecture de ce qui est déjà en place'));
+  const rien = renderRoutesPanel(SPARK, [], recetteUi());
+  assert.ok(!rien.includes('Sera écrit'));
+});

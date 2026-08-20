@@ -8,6 +8,9 @@
  *       docs/DESIGN_SYSTEM.md §3.1, §6.9, §6.19, §6.22, §6.23, §6.24, §6.27
  *       (la saisie est recueillie par une modale limitée à la section), §14.7 ·
  *       docs/DESIGN_SYSTEM_APP.md
+ * @spec docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.6 (les recettes DNS),
+ *       §38.6.3 (le compte rendu ligne à ligne) · docs/DESIGN_SYSTEM.md §6.13
+ *       (« résultat partiel » est un état à traiter)
  * @spec docs/BACKLOG.md#SPK-49 · docs/DAT.md §39 (les ports publiés),
  *       §39.2 (une ressource de la Forge), §39.3 (ce qu'un port fait perdre,
  *       et que l'écran doit dire)
@@ -47,11 +50,16 @@ export const ADMIN_VIDE = {
             snapshot: '', password: '',
             // SPK-49 · §39 : la publication d'un port de la Forge.
             public_port: '', target_port: '', protocol: 'tcp', port_note: '',
+            // SPK-50 · §38.6 : la recette choisie, sa zone, et ses paramètres.
+            recette: '', recette_zone: '', recette_params: {},
             // SPK-47 · §38.3 : ce qui sera écrit dans la zone.
             dns_zone: '', dns_address: '' },
   // SPK-48 · §18.3 bis : la route qu'une déclaration vient de dépasser, et le
   // Spark qui la servait. Nul tant qu'aucune déclaration n'a pris le pas.
   supersedes: null,
+  // SPK-50 · §38.6 : le catalogue, l'aperçu ligne à ligne, et le compte rendu.
+  recettes: { catalogue: [], zones: [], apercu: null, resultat: null,
+              chargement: false, erreur: null },
   // SPK-47 · §38.1 : ce que la console SAIT du fournisseur. `configured` vaut
   // `null` tant qu'on n'a pas demandé — « pas encore su » n'est pas « pas
   // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
@@ -186,10 +194,129 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
   ${lignes}
   ${renderPriseDePas(ui)}
   ${renderDnsEcrit(ui)}
-  ${declencheur('route', 'Ajouter une route')}
+  ${renderRecetteResultat(ui)}
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-ouvre="route">Ajouter une route</button>
+    <button type="button" class="bouton" data-ouvre="recette">Appliquer une recette DNS</button>
+  </p>
   ${modale}
   ${renderDnsModale(ui)}
+  ${renderRecetteModale(ui)}
 </section>`;
+}
+
+/**
+ * Une recette DNS : un jeu d'enregistrements posé ENSEMBLE (SPK-50, §38.6).
+ *
+ * L'écran présente la recette ENTIÈRE avant d'écrire. Une recette à moitié posée
+ * est pire qu'une recette absente — un `MX` sans SPF fait recevoir du courrier
+ * qu'on ne peut pas renvoyer —, et on ne s'en aperçoit qu'après.
+ */
+function renderRecetteModale(ui) {
+  const etat = ui.recettes ?? ADMIN_VIDE.recettes;
+  const choisie = etat.catalogue.find((r) => r.id === ui.values.recette) ?? null;
+
+  const choix = `
+    <div class="champ">
+      <label for="recette-id">Recette</label>
+      <select class="controle" id="recette-id" name="recette">
+        <option value="">— choisir une recette —</option>
+        ${etat.catalogue.map((r) =>
+          `<option value="${echapper(r.id)}"${ui.values.recette === r.id ? ' selected' : ''}>`
+          + `${echapper(r.label)}</option>`).join('')}
+      </select>
+      ${choisie ? `<p class="champ__aide">${echapper(choisie.description)}</p>` : ''}
+    </div>
+    <div class="champ">
+      <label for="recette-zone">Zone</label>
+      <select class="controle" id="recette-zone" name="recette_zone">
+        <option value="">— choisir une zone —</option>
+        ${etat.zones.map((z) =>
+          `<option value="${echapper(z.zone)}"`
+          + `${ui.values.recette_zone === z.zone ? ' selected' : ''}>`
+          + `${echapper(z.zone)}</option>`).join('')}
+      </select>
+    </div>`;
+
+  const parametres = choisie
+    ? choisie.parametres.map((p) => `
+        <div class="champ">
+          <label for="recette-p-${echapper(p.nom)}">${echapper(p.label)}${
+            p.facultatif ? ' <span class="note">(facultatif)</span>' : ''}</label>
+          <input class="controle" id="recette-p-${echapper(p.nom)}"
+                 data-param="${echapper(p.nom)}" type="text" autocomplete="off"
+                 value="${echapper(ui.values.recette_params?.[p.nom] ?? p.defaut ?? '')}">
+          ${p.aide ? `<p class="champ__aide">${echapper(p.aide)}</p>` : ''}
+        </div>`).join('')
+    : '';
+
+  const humaines = choisie?.actionsHumaines?.length
+    ? `<div class="avertissement" role="status">
+         <p><strong>Ce que cette recette ne peut pas faire :</strong></p>
+         <ul class="liste-simple">${choisie.actionsHumaines.map((a) =>
+           `<li>${echapper(a)}</li>`).join('')}</ul>
+       </div>`
+    : '';
+
+  return renderModale({
+    ouverte: ui.open === 'recette', id: 'recette', titre: 'Appliquer une recette DNS',
+    engagement: 'Écrire la recette',
+    refus: ui.refusal?.panel === 'recette' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps: `${choix}${parametres}${humaines}
+            <div id="recette-apercu">${renderRecetteApercu(etat)}</div>`,
+  });
+}
+
+/** L'aperçu ligne à ligne, remplacé SUR PLACE comme celui du §38.5.2. */
+export function renderRecetteApercu(etat) {
+  if (etat.chargement) {
+    return '<p class="note" aria-busy="true">Lecture de ce qui est déjà en place…</p>';
+  }
+  if (etat.erreur) return `<p class="refus">${echapper(etat.erreur)}</p>`;
+  const vu = etat.apercu;
+  if (!vu) return '';
+  return `<p class="note"><strong>Sera écrit :</strong></p>
+    <ul class="liste-simple recette-lignes">${vu.records.map((r) => `
+      <li><span class="technique">${echapper(r.name || '@')} ${echapper(r.type)}
+          → ${echapper(r.data)}</span>
+        <span class="note">${echapper(r.role ?? '')}</span>
+        ${renderEffetLigne(r)}</li>`).join('')}</ul>
+    ${vu.incomplete ? `<p class="avertissement" role="status">${echapper(vu.incomplete)}</p>` : ''}`;
+}
+
+function renderEffetLigne(r) {
+  if (r.effet === 'inchange') return '<span class="note">déjà à cette valeur</span>';
+  if (r.effet === 'remplace') {
+    return `<span class="note">remplacera <span class="technique">`
+      + `${echapper(r.current?.data ?? '')}</span></span>`;
+  }
+  return '<span class="note">sera posé</span>';
+}
+
+/**
+ * Le compte rendu APRÈS écriture (§38.6.3, DESIGN_SYSTEM §6.13 « résultat
+ * partiel »).
+ *
+ * Ni succès ni échec global : la liste, chaque ligne avec son sort. Un
+ * « succès » sur une recette à moitié posée serait le pire des mensonges
+ * possibles ici.
+ */
+function renderRecetteResultat(ui) {
+  const fait = ui.recettes?.resultat;
+  if (!fait) return '';
+  const partiel = fait.failed > 0;
+  return `<div class="${partiel ? 'avertissement' : 'note-transitoire'}"
+               role="status" id="recette-resultat">
+    <p><strong>${echapper(fait.label)}</strong> — ${echapper(fait.written)} écrit(s)${
+      partiel ? `, ${echapper(fait.failed)} en échec` : ''}.</p>
+    <ul class="liste-simple">${fait.records.map((r) => `
+      <li><span class="technique">${echapper(r.name || '@')} ${echapper(r.type)}</span>
+        ${r.written ? 'écrit' : `<strong>refusé</strong> : ${echapper(r.error ?? '')}`}</li>`)
+      .join('')}</ul>
+    ${fait.incomplete ? `<p>${echapper(fait.incomplete)}</p>` : ''}
+    <p class="note">${echapper(fait.propagation ?? '')}</p>
+  </div>`;
 }
 
 /**

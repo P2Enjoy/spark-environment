@@ -11,7 +11,8 @@
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
-import { ADMIN_VIDE, apercu, renderEffet, zonePour } from './components/spark-admin.js';
+import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
+  from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
 import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
@@ -174,12 +175,17 @@ function brancherPanneaux() {
   // du catalogue, qui vit sur une autre destination et a son propre état.
   for (const bouton of racine.querySelectorAll(
     '[data-ouvre="route"], [data-ouvre="key"], [data-ouvre="snapshot"],'
-    + ' [data-ouvre="protection"], [data-ouvre="port"]')) {
+    + ' [data-ouvre="protection"], [data-ouvre="port"], [data-ouvre="recette"]')) {
     bouton.addEventListener('click', () => {
       admin.open = bouton.dataset.ouvre;
       admin.refusal = null;
       admin.confirming = null;
       peindre();
+      // SPK-50 : le catalogue et les zones se lisent à l'OUVERTURE, pas au
+      // chargement de l'écran — interroger un fournisseur extérieur à chaque
+      // affichage d'un Spark rendrait le détail tributaire d'un service dont il
+      // n'a pas besoin.
+      if (admin.open === 'recette') chargerRecettes();
       // Le focus entrant appartient à `brancherModale` (§6.27).
     });
   }
@@ -195,7 +201,8 @@ function brancherPanneaux() {
 
   const formulaire = racine.querySelector(
     '[data-modale="route"], [data-modale="key"], [data-modale="snapshot"],'
-    + ' [data-modale="protection"], [data-modale="dns"], [data-modale="port"]');
+    + ' [data-modale="protection"], [data-modale="dns"], [data-modale="port"],'
+    + ' [data-modale="recette"]');
   if (formulaire) {
     for (const controle of formulaire.querySelectorAll('input, select')) {
       controle.addEventListener('input', () => {
@@ -219,6 +226,10 @@ function brancherPanneaux() {
       if (controle.name === 'dns_address') {
         controle.addEventListener('change', () => lireEffetDns());
       }
+      // SPK-50 : changer de recette, de zone ou d'un paramètre relit l'aperçu.
+      if (['recette', 'recette_zone'].includes(controle.name)) {
+        controle.addEventListener('change', () => { peindre(); lireApercuRecette(); });
+      }
     }
     formulaire.addEventListener('submit', (evenement) => {
       evenement.preventDefault();
@@ -229,6 +240,7 @@ function brancherPanneaux() {
       if (quoi === 'protection') return basculerProtection();
       if (quoi === 'dns') return poserEnregistrementDns();
       if (quoi === 'port') return publierPort();
+      if (quoi === 'recette') return ecrireRecette();
     });
   }
 
@@ -513,6 +525,83 @@ async function publierPort() {
     protocol: v.protocol || 'tcp', note: v.port_note ?? '',
   }));
   if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
+}
+
+/** Lit le catalogue et les zones (SPK-50, §38.6.5). */
+async function chargerRecettes() {
+  const admin = etat.admin;
+  admin.recettes = { ...ADMIN_VIDE.recettes, chargement: true };
+  peindre();
+  try {
+    const [catalogue, zones] = await Promise.all([
+      fetch('/api/dns/recipes').then((r) => r.json()),
+      fetch('/api/dns/zones').then((r) => r.json()),
+    ]);
+    admin.recettes = { ...ADMIN_VIDE.recettes,
+                       catalogue: catalogue.recipes ?? [],
+                       zones: zones.zones ?? [],
+                       erreur: zones.configured === false ? zones.reason : null };
+  } catch (erreur) {
+    admin.recettes = { ...ADMIN_VIDE.recettes, erreur: erreur.message };
+  }
+  peindre();
+}
+
+/**
+ * Demande ce que la recette écrirait, SANS l'écrire (§38.6.3).
+ *
+ * Remplacé sur place, comme l'effet du §38.5.2 : repeindre reconstruirait le
+ * formulaire sous les doigts et déroberait le bouton d'engagement.
+ */
+async function lireApercuRecette() {
+  const admin = etat.admin;
+  const v = admin.values;
+  const montrer = () => {
+    const bloc = racine.querySelector('#recette-apercu');
+    if (bloc) bloc.innerHTML = renderRecetteApercu(admin.recettes);
+  };
+  if (!v.recette || !v.recette_zone) {
+    admin.recettes = { ...admin.recettes, apercu: null, erreur: null };
+    return montrer();
+  }
+  admin.recettes = { ...admin.recettes, chargement: true, erreur: null };
+  montrer();
+  try {
+    const reponse = await fetch('/api/dns/recipe/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ recipe: v.recette, zone: v.recette_zone,
+                             params: v.recette_params ?? {} }),
+    });
+    const corps = await reponse.json();
+    admin.recettes = reponse.ok
+      ? { ...admin.recettes, apercu: corps, chargement: false, erreur: null }
+      : { ...admin.recettes, apercu: null, chargement: false,
+          erreur: corps.message ?? 'Aperçu impossible.' };
+  } catch (erreur) {
+    admin.recettes = { ...admin.recettes, apercu: null, chargement: false,
+                       erreur: erreur.message };
+  }
+  montrer();
+}
+
+/** Écrit la recette, et rend le sort de chaque ligne (§38.6.3). */
+async function ecrireRecette() {
+  const v = etat.admin.values;
+  const resultat = await agir('recette', async () => {
+    const reponse = await fetch('/api/dns/recipe', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ recipe: v.recette, zone: v.recette_zone,
+                             params: v.recette_params ?? {} }),
+    });
+    const corps = await reponse.json().catch(() => null);
+    return { ok: reponse.ok,
+             corps: reponse.ok ? corps
+               : { detail: { message: corps?.message ?? 'Refus du fournisseur DNS.' } } };
+  });
+  if (resultat?.ok) {
+    etat.admin.recettes = { ...etat.admin.recettes, resultat: resultat.corps };
+    peindre();
+  }
 }
 
 async function autoriserCle() {
