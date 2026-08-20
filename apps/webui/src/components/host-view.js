@@ -63,7 +63,7 @@ export function fillRatio(pool) {
  */
 export function describeArcUsage(utilise, plafond) {
   if (utilise === null || utilise === undefined) {
-    return 'Sa consommation n’est pas mesurable sur cet hôte.';
+    return 'Sa consommation n’est pas mesurable sur cette Forge.';
   }
   const part = plafond ? Math.round((utilise / plafond) * 100) : null;
   return `Il en consomme actuellement ${formatBytes(utilise)}`
@@ -167,7 +167,7 @@ export function renderMemoryBreakdown(forge) {
           + `mémoire que le noyau reprendra sous les Sparks. Se règle par zfs_arc_max. `
           + describeArcUsage(forge?.reserves?.arc_used_bytes, arc)],
          ['− marge d’exploitation', formatBytes(marge),
-          'Ce que l’hôte consomme pour lui-même. Se règle par SPARKD_MEMORY_RESERVE.']]
+          'Ce que la Forge consomme pour elle-même. Se règle par SPARKD_MEMORY_RESERVE.']]
       : [['− réserve de la Forge', formatBytes(reserve),
           'Le détail de cette réserve sera connu au prochain relevé de topologie.']]),
     ['= mémoire allouable', formatBytes(allouable), ''],
@@ -295,7 +295,7 @@ export function renderHostSkeleton() {
 export function renderNotSynced(error, syncing = false) {
   return `
 <div class="carte"><div class="etat-vue">
-  <h2>La topologie de cet hôte n’a pas encore été relevée</h2>
+  <h2>La topologie de cette Forge n’a pas encore été relevée</h2>
   <p>${echapper(error?.message ?? 'Le registre ne connaît pas encore la capacité de la machine.')}</p>
   <p style="margin-top:var(--space-4)">
     <button type="button" class="bouton bouton--primaire" data-action="relever"

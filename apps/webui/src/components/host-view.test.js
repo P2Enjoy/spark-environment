@@ -265,12 +265,15 @@ test("la consommation de l'ARC est affichee face a son plafond", () => {
 });
 
 test("un ARC non mesurable le DIT, il ne s'affiche pas a zero", () => {
+  // REVISE par SPK-42 : la machine est une FORGE (§1 bis). Le libelle suit ; ce
+  // que la preuve etablit — un ARC dont on ignore la taille n'est pas un ARC
+  // vide — est inchange.
   // §14.6 : un ARC dont on ignore la taille n'est pas un ARC vide. Les confondre
   // ferait croire la reserve inutile.
   assert.equal(describeArcUsage(null, 16 * GIO),
-               'Sa consommation n’est pas mesurable sur cet hôte.');
+               'Sa consommation n’est pas mesurable sur cette Forge.');
   assert.equal(describeArcUsage(undefined, 16 * GIO),
-               'Sa consommation n’est pas mesurable sur cet hôte.');
+               'Sa consommation n’est pas mesurable sur cette Forge.');
   const rendu = renderMemoryBreakdown({
     ...HOTE, reserves: { ...HOTE.reserves, arc_used_bytes: null },
   });
