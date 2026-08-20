@@ -591,14 +591,109 @@ async function releverDocker({ premier = false } = {}) {
   peindre();
   // La minuterie se rearme APRÈS la réponse, jamais à intervalle fixe : sur un
   // Spark lent, un intervalle fixe empilerait les requêtes.
-  if (etat.facette === 'docker' && etat.route === 'detail') {
+  //
+  // Elle ne se rearme PAS quand un conteneur est ouvert : la liste a cédé la
+  // place, et continuer à la relever consommerait le quota du locataire pour un
+  // écran que personne ne regarde — le motif même du §37.6.
+  if (etat.facette === 'docker' && etat.route === 'detail' && !etat.docker.ouvert) {
     minuterieDocker = setTimeout(() => releverDocker(), DOCKER_CADENCE_MS);
   }
 }
 
+/**
+ * Ouvrir un conteneur : son inspection et ses journaux (SPK-44, §37.6 ter).
+ *
+ * DEMANDÉS, jamais collectés d'office. Les deux lectures partent ENSEMBLE et
+ * s'affichent chacune dès qu'elle revient : un journal lourd ne doit pas retenir
+ * l'identité du conteneur, qui est souvent ce qu'on venait chercher.
+ */
+async function ouvrirConteneur(nom) {
+  const d = etat.docker;
+  arreterDocker();
+  d.ouvert = nom;
+  d.detail = 'en-cours';
+  d.journaux = 'en-cours';
+  peindre();
+  lireDetail(nom);
+  lireJournauxConteneur(nom);
+}
+
+/** Une lecture demandée, et son refus dit à la place du texte attendu. */
+async function lireConteneur(chemin, nom, extra = '') {
+  const reponse = await fetch(
+    `${chemin}?server=${encodeURIComponent(etat.server)}`
+    + `&spark=${encodeURIComponent(etat.spark.name)}`
+    + `&name=${encodeURIComponent(nom)}${extra}`);
+  const corps = await reponse.json();
+  if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+  return corps;
+}
+
+async function lireDetail(nom) {
+  const d = etat.docker;
+  try {
+    const vu = await lireConteneur('/api/spark/container', nom);
+    if (d.ouvert === nom) d.detail = vu;
+  } catch (erreur) {
+    // §14.6 : ne pas avoir pu lire n'est pas « ce conteneur n'existe pas ».
+    if (d.ouvert === nom) {
+      d.detail = { titre: 'Inspection impossible',
+                   detail: erreur?.message ?? String(erreur) };
+    }
+  }
+  peindre();
+}
+
+async function lireJournauxConteneur(nom) {
+  const d = etat.docker;
+  try {
+    const vu = await lireConteneur('/api/spark/logs', nom);
+    if (d.ouvert === nom) d.journaux = vu;
+  } catch (erreur) {
+    if (d.ouvert === nom) {
+      d.journaux = { lines: [], truncated: false, tail: 200,
+                     state: 'conteneur_inconnu' };
+      d.detail = typeof d.detail === 'object' && d.detail
+        ? d.detail
+        : { titre: 'Journaux illisibles',
+            detail: erreur?.message ?? String(erreur) };
+    }
+  }
+  peindre();
+}
+
+/** Refermer le conteneur, et reprendre le relevé de la liste. */
+function fermerConteneur() {
+  const d = etat.docker;
+  d.ouvert = null;
+  d.detail = null;
+  d.journaux = null;
+  peindre();
+  if (etat.facette === 'docker' && etat.route === 'detail') {
+    releverDocker({ premier: !d.releve });
+  }
+}
+
+document.addEventListener('click', (evenement) => {
+  const bouton = evenement.target.closest?.('[data-docker]');
+  if (!bouton) return;
+  const geste = bouton.dataset.docker;
+  if (geste === 'ouvrir') return void ouvrirConteneur(bouton.dataset.conteneur);
+  if (geste === 'fermer') return void fermerConteneur();
+  if (geste === 'relire') {
+    etat.docker.journaux = 'en-cours';
+    peindre();
+    lireJournauxConteneur(bouton.dataset.conteneur);
+  }
+});
+
 // §37.6 : la collecte CESSE quand l'onglet est quitté.
 window.addEventListener('hashchange', () => {
-  if (!location.hash.includes('/docker')) arreterDocker();
+  if (location.hash.includes('/docker')) return;
+  arreterDocker();
+  // Y revenir doit repartir de la LISTE : retrouver un journal figé qu'on n'a
+  // pas demandé ferait lire un texte périmé comme s'il était courant.
+  Object.assign(etat.docker, { ouvert: null, detail: null, journaux: null });
 });
 window.addEventListener('pagehide', arreterDocker);
 
@@ -1244,6 +1339,9 @@ async function chargerDetail(nom, facette = '') {
   // suivant.
   arreterDocker();
   if (facette !== 'docker') etat.docker = { ...DOCKER_VIDE };
+  // Le conteneur ouvert appartient à l'écran qui l'a demandé. Le garder en
+  // changeant de Spark afficherait le conteneur de l'un sous le nom de l'autre.
+  else Object.assign(etat.docker, { ouvert: null, detail: null, journaux: null });
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
