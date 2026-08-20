@@ -23,7 +23,8 @@ import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre
   from './anchor.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, ValeurManquante } from './recettes.js';
-import { SessionManager, TerminalError, FLUX_FERME } from './terminal.js';
+import { SessionManager, TerminalError, FLUX_FERME,
+         CHEMIN_SSH, CHEMIN_DEPANNAGE, depannageOuvert, sonderSshd } from './terminal.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -39,6 +40,10 @@ export function createConsoleHost(options = {}) {
   const inventoryPath = options.inventoryPath;
   const anchorPath = options.anchorPath;
   const fetchFn = options.fetch ?? fetch;
+  // §37.3 : le sondage du `sshd` lance un vrai `ssh`. Injectable pour que les
+  // preuves de cette route éprouvent la RÈGLE sans dépendre d'un réseau — le
+  // sondage lui-même a ses propres preuves dans `terminal.test.js`.
+  const sonder = options.probeSshd ?? sonderSshd;
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
   // processus. Il est lu UNE fois : le relire à chaque requête ferait dépendre
@@ -90,8 +95,14 @@ export function createConsoleHost(options = {}) {
           action, result: 'ok', target_type: 'spark', target_id: spark,
           message: action === 'spark.terminal_open'
             ? `Session de terminal ouverte sur « ${spark} » par ${path}.`
-            : `Session de terminal fermée sur « ${spark} » après `
-              + `${duration_seconds} s (${reason}).`,
+            // §37.3 : le message NOMME le pouvoir employé, comme la
+            // confirmation le fait à l'écran. Un « ouverture de dépannage »
+            // laisserait croire à un mode dégradé anodin.
+            : action === 'spark.rescue_exec'
+              ? `Dépannage ouvert sur « ${spark} » : exécution en root dans la `
+                + `cellule, depuis le plan de contrôle (${reason}).`
+              : `Session de terminal fermée sur « ${spark} » après `
+                + `${duration_seconds} s (${reason}).`,
           payload: { path, ...(reason ? { reason } : {}),
                      ...(duration_seconds == null ? {} : { duration_seconds }) },
         }),
@@ -577,13 +588,37 @@ export function createConsoleHost(options = {}) {
                    + 'déclaré, ses ressources sont réservées, mais rien ne tourne '
                    + 'encore. Créez-le avant d’y ouvrir un terminal.' } };
       }
-      const session = terminaux.ouvrir({ tunnel, spark: decrit });
+      // §37.3 : le chemin de DÉPANNAGE se contrôle ICI, pas à l'écran. C'est un
+      // contrôle d'accès (CLAUDE.md §10) : masquer un bouton n'aurait été
+      // qu'une aide d'interface, et la requête reste formable à la main.
+      const chemin = corps?.path === CHEMIN_DEPANNAGE ? CHEMIN_DEPANNAGE : CHEMIN_SSH;
+      let motifDepannage = null;
+      if (chemin === CHEMIN_DEPANNAGE) {
+        // Le sondage n'est fait QUE si l'état ne suffit pas : un Spark en
+        // erreur ouvre le chemin sans qu'on ait à attendre cinq secondes de
+        // plus pour l'apprendre.
+        const sondage = decrit.state === 'error'
+          ? null
+          : await sonder({ tunnel, spark: decrit });
+        const verdict = depannageOuvert(decrit, sondage);
+        if (!verdict.ouvert) {
+          return { status: 409, body: {
+            error: 'rescue_refused', reason: verdict.motif,
+            message: verdict.explication } };
+        }
+        motifDepannage = verdict.motif;
+      }
+      const session = terminaux.ouvrir({ tunnel, spark: decrit, chemin, motifDepannage });
       // §37.4.5 : on DÉCLARE l'ouverture. Si `sparkd` est injoignable, la
       // session s'ouvre quand même — refuser un terminal parce que le journal
       // est indisponible transformerait une panne de traçabilité en panne
       // d'exploitation, au moment précis où l'on cherche à réparer.
-      await declarerAudit(tunnel, 'spark.terminal_open', {
-        spark: decrit.name, path: 'ssh' });
+      //
+      // §37.3 : le dépannage porte une action DISTINCTE, sans quoi un relevé du
+      // journal ne pourrait pas dire combien de fois cette voie a servi.
+      await declarerAudit(tunnel,
+        chemin === CHEMIN_DEPANNAGE ? 'spark.rescue_exec' : 'spark.terminal_open',
+        { spark: decrit.name, path: chemin, reason: motifDepannage ?? undefined });
       return { status: 201, body: session.describe() };
     },
 

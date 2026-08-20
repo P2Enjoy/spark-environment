@@ -34,18 +34,22 @@ function fauxSsh() {
  */
 async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
                                 incus_name: 'crm' },
-                      statutSpark = 200, journalMuet = false } = {}) {
+                      statutSpark = 200, journalMuet = false,
+                      sondage = { repond: true, motif: null } } = {}) {
+  const sondages = [];
   const enfants = [];
   const declarees = [];
   const dossier = await mkdtemp(join(tmpdir(), 'spark-term-'));
   const faux = { name: 'prod', localPort: 9876, actorHeader: 'console/prod',
-                 jumpArgs: () => ['-J', 'ubuntu@203.0.113.10:22'] };
+                 jumpArgs: () => ['-J', 'ubuntu@203.0.113.10:22'],
+                 forgeArgs: () => ['-p', '22', 'ubuntu@203.0.113.10'] };
   const { server } = createConsoleHost({
     tunnels: { require: () => faux, get: () => faux, list: () => [faux],
                close() {}, closeAll() {} },
     inventoryPath: join(dossier, 'servers.json'),
     anchorPath: join(dossier, 'anchors.json'),
     env: {},
+    probeSshd: async (args) => { sondages.push(args); return sondage; },
     terminals: new SessionManager({
       spawn: (commande, args) => {
         const enfant = fauxSsh();
@@ -71,11 +75,12 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
   // rend pas la main.
   const fermer = () => { server.closeAllConnections?.(); server.close(); };
   return { base: `http://127.0.0.1:${server.address().port}`,
-           fermer, enfants, declarees };
+           fermer, enfants, declarees, sondages };
 }
 
-const ouvrir = (base) => fetch(`${base}/api/terminal`, {
-  method: 'POST', body: JSON.stringify({ server: 'prod', spark: 'crm' }) });
+const ouvrir = (base, path) => fetch(`${base}/api/terminal`, {
+  method: 'POST',
+  body: JSON.stringify({ server: 'prod', spark: 'crm', ...(path ? { path } : {}) }) });
 
 test('ouvrir lance ssh vers le Spark et DÉCLARE l’ouverture au journal', async () => {
   const { base, fermer, enfants, declarees } = await pile();
@@ -244,5 +249,100 @@ test('une balise sur une session inconnue ne fâche personne', async () => {
   const { base, fermer } = await pile();
   assert.equal((await fetch(`${base}/api/terminal/fermeture?id=nulle`,
                             { method: 'POST' })).status, 204);
+  fermer();
+});
+
+// --- SPK-43, tranche 4 · LE DÉPANNAGE SE CONTRÔLE AU BACKEND (§37.3) --------
+//
+// L'écran n'est pas l'autorité : la requête reste formable à la main. Ces
+// preuves passent donc TOUTES par la route, jamais par le composant.
+
+test('le dépannage est REFUSÉ quand le chemin normal est disponible', async () => {
+  const { base, fermer, enfants, declarees } = await pile({
+    sondage: { repond: true, motif: null } });
+  const r = await ouvrir(base, 'rescue');
+  const corps = await r.json();
+  assert.equal(r.status, 409);
+  assert.equal(corps.error, 'rescue_refused');
+  assert.equal(corps.reason, 'ssh_disponible');
+  assert.equal(enfants.length, 0, 'aucun incus exec ne doit avoir été lancé');
+  assert.deepEqual(declarees, [], 'un refus n’ouvre rien, donc ne déclare rien');
+  fermer();
+});
+
+test('un sshd MUET ouvre le dépannage, et lance incus exec sur la FORGE', async () => {
+  const { base, fermer, enfants, declarees, sondages } = await pile({
+    sondage: { repond: false, motif: 'sshd_muet' } });
+  const r = await ouvrir(base, 'rescue');
+  const session = JSON.parse(await r.text());
+  assert.equal(r.status, 201);
+  assert.equal(session.path, 'rescue');
+  assert.equal(session.rescueReason, 'sshd_muet');
+  assert.equal(sondages.length, 1, 'la règle se fonde sur une MESURE, pas une supposition');
+  assert.equal(enfants[0].commande, 'ssh');
+  assert.ok(enfants[0].args.includes('incus'));
+  assert.ok(enfants[0].args.includes('exec'));
+  assert.ok(!enfants[0].args.some((a) => String(a).includes('10.77.0.16')),
+    'on ne se connecte pas au Spark : c’est lui qui ne répond pas');
+  fermer();
+});
+
+test('un Spark EN ERREUR ouvre le dépannage SANS sonder', async () => {
+  // Attendre cinq secondes de plus pour apprendre ce que l'état dit déjà
+  // retarderait le geste au moment précis où l'on cherche à réparer.
+  const { base, fermer, sondages, declarees } = await pile({
+    spark: { name: 'crm', ipv4_address: '10.77.0.16', incus_name: 'crm', state: 'error' },
+    sondage: { repond: true, motif: null } });
+  const r = await ouvrir(base, 'rescue');
+  assert.equal(r.status, 201);
+  assert.deepEqual(sondages, [], 'l’état suffit : aucun sondage');
+  const entree = declarees.find((d) => d.action === 'spark.rescue_exec');
+  assert.equal(entree.payload.reason, 'spark_en_erreur');
+  fermer();
+});
+
+test('le dépannage écrit une action DISTINCTE, qui NOMME le pouvoir employé', async () => {
+  // §37.3 : « pour qu'un relevé du journal montre combien de fois cette voie a
+  // servi ». Et le message dit ce qui a été employé, comme la confirmation à
+  // l'écran — un « mode dégradé » laisserait croire à quelque chose d'anodin.
+  const { base, fermer, declarees } = await pile({
+    sondage: { repond: false, motif: 'sshd_muet' } });
+  await ouvrir(base, 'rescue');
+  assert.equal(declarees.filter((d) => d.action === 'spark.terminal_open').length, 0,
+    'le dépannage ne se compte pas comme une session SSH');
+  const entree = declarees.find((d) => d.action === 'spark.rescue_exec');
+  assert.ok(entree, 'l’action distincte est écrite');
+  assert.match(entree.message, /exécution en root dans la cellule, depuis le plan de contrôle/);
+  assert.deepEqual(entree.payload, { path: 'rescue', reason: 'sshd_muet' });
+  fermer();
+});
+
+test('une clé refusée NE donne PAS le dépannage, et dit quoi faire', async () => {
+  const { base, fermer, enfants } = await pile({
+    sondage: { repond: true, motif: 'cle_refusee' } });
+  const r = await ouvrir(base, 'rescue');
+  const corps = await r.json();
+  assert.equal(r.status, 409);
+  assert.equal(corps.reason, 'cle_refusee');
+  assert.match(corps.message, /onglet Clés/);
+  assert.equal(enfants.length, 0);
+  fermer();
+});
+
+test('un Spark SANS CELLULE ne passe pas non plus par le dépannage', async () => {
+  const { base, fermer } = await pile({
+    spark: { name: 'neuf', ipv4_address: '10.77.0.19', incus_name: null } });
+  const r = await ouvrir(base, 'rescue');
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).error, 'spark_not_reachable',
+    'le refus de cellule prime : il n’y a rien où exécuter');
+  fermer();
+});
+
+test('un chemin INCONNU retombe sur ssh, il n’invente pas un troisième chemin', async () => {
+  const { base, fermer } = await pile();
+  const r = await ouvrir(base, 'root');
+  assert.equal(r.status, 201);
+  assert.equal(JSON.parse(await r.text()).path, 'ssh');
   fermer();
 });
