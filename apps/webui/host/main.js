@@ -24,6 +24,7 @@ import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre
 import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.js';
 import { relever as releverDocker, inspecterConteneur, lireJournaux }
   from './docker.js';
+import { agir as agirConteneur, GESTES } from './gestes-docker.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
@@ -54,6 +55,7 @@ export function createConsoleHost(options = {}) {
   // SPK-44, deuxième tranche : mêmes points d'injection que « readDocker », et
   // pour le même motif — les captures ont besoin des ÉCRANS, pas d'un Docker.
   const lireConteneurInjecte = options.readContainer ?? null;
+  const agirInjecte = options.actOnContainer ?? null;
   const lireJournauxInjecte = options.readLogs ?? null;
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
@@ -131,6 +133,40 @@ export function createConsoleHost(options = {}) {
                 + `${duration_seconds} s (${reason}).`,
           payload: { path, ...(reason ? { reason } : {}),
                      ...(duration_seconds == null ? {} : { duration_seconds }) },
+        }),
+      });
+      return reponse.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Déclare au journal un geste porté sur un conteneur (§37.7.4).
+   *
+   * Séparée de `declarerAudit` : ce n'est pas une session, elle porte un
+   * RÉSULTAT — un geste refusé se journalise comme refusé —, et la charge n'a
+   * pas les mêmes clés. Les fondre rendrait la composition du message illisible.
+   *
+   * Un échec de déclaration ne défait rien : le geste est déjà parti. La console
+   * le SIGNALE plutôt que de le taire, comme au §37.4.5.
+   */
+  async function declarerGeste(tunnel, { action, spark, container, resultat, raison }) {
+    if (!tunnel?.localPort) return false;
+    const geste = Object.values(GESTES).find((g) => g.action === action);
+    try {
+      const reponse = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/audit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json',
+                   'x-spark-actor': tunnel.actorHeader },
+        body: JSON.stringify({
+          action, result: resultat, target_type: 'spark', target_id: spark,
+          message: resultat === 'denied'
+            ? `Geste refusé sur « ${container} » du Spark « ${spark} » : `
+              + `${geste?.libelle ?? action} (${raison}).`
+            : `Conteneur « ${container} » du Spark « ${spark} » : `
+              + `${geste?.libelle ?? action}.`,
+          payload: { container, path: 'ssh', ...(raison ? { reason: raison } : {}) },
         }),
       });
       return reponse.ok;
@@ -745,6 +781,67 @@ export function createConsoleHost(options = {}) {
      *
      * Lectures pures, non journalisées (§36.7).
      */
+    /**
+     * Un geste sur un conteneur (SPK-45, §37.7.4).
+     *
+     * Le seul point du §37 qui ÉCRIT dans le Spark. Il est donc journalisé, là
+     * où la lecture du §37.6 ne l'est pas : arrêter le conteneur d'un locataire
+     * interrompt sa production, et un tel geste doit pouvoir être retrouvé.
+     */
+    'POST /api/spark/container/action': async (corps) => {
+      const geste = String(corps?.action ?? '');
+      const conteneur = String(corps?.name ?? '');
+      if (!GESTES[geste]) {
+        return { status: 422, body: { error: 'unknown_action',
+          message: `Geste inconnu : « ${geste} ». `
+            + `Admis : ${Object.keys(GESTES).join(', ')}.` } };
+      }
+      if (!conteneur) {
+        return { status: 422, body: { error: 'missing_container',
+                                      message: 'Aucun conteneur nommé.' } };
+      }
+      let tunnel;
+      try {
+        tunnel = tunnels.require(String(corps?.server ?? ''));
+      } catch (erreur) {
+        return { status: 502, body: { error: 'tunnel_unavailable',
+                                      message: erreur.message } };
+      }
+      const nomSpark = String(corps?.spark ?? '');
+      const amont = await fetchFn(
+        `http://127.0.0.1:${tunnel.localPort}/v1/sparks/${encodeURIComponent(nomSpark)}`,
+        { headers: { 'x-spark-actor': tunnel.actorHeader } });
+      if (!amont.ok) {
+        return { status: 404, body: { error: 'unknown_spark',
+          message: `Aucun Spark « ${nomSpark} » sur ce serveur.` } };
+      }
+      const decrit = await amont.json();
+      const vu = agirInjecte
+        ? await agirInjecte({ spark: decrit, nom: conteneur, geste })
+        : await agirConteneur({ tunnel, spark: decrit, nom: conteneur, geste,
+                                doublon: process.env.SPARK_DOCKER_COMMAND || null });
+
+      // Le refus du GEL est un 423, celui-là même que le runtime emploie : deux
+      // codes pour un même refus obligeraient à savoir par quel chemin on passe.
+      if (vu.refus === 'protege') {
+        const declare = await declarerGeste(tunnel, {
+          action: GESTES[geste].action, spark: nomSpark, container: conteneur,
+          resultat: 'denied', raison: 'protege' });
+        return { status: 423, body: { ...vu, journalise: declare } };
+      }
+
+      // SEUL un geste ABOUTI est journalisé comme un succès. Inscrire « ok »
+      // sur un conteneur disparu, déjà arrêté ou injoignable ferait dire au
+      // journal qu'un conteneur a été arrêté alors qu'il ne s'est rien passé —
+      // et c'est précisément ce qu'on relira après un incident.
+      const abouti = vu.state === 'abouti';
+      const declare = await declarerGeste(tunnel, {
+        action: GESTES[geste].action, spark: nomSpark, container: conteneur,
+        resultat: abouti ? 'ok' : 'denied',
+        raison: abouti ? null : vu.state });
+      return { status: 200, body: { ...vu, journalise: declare } };
+    },
+
     'GET /api/spark/container': async (_corps, url) =>
       relevéConteneur(url, (args) => (lireConteneurInjecte
         ? lireConteneurInjecte(args) : inspecterConteneur(args))),

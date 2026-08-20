@@ -4616,6 +4616,12 @@ filtre `?result=denied` de répondre à « qu'est-ce qui a été refusé ». Une
 déclaration sans `result` reste un succès, de sorte que les déclarations de
 session du §37.4.5 sont inchangées.
 
+**Seul un geste ABOUTI est inscrit comme succès.** Un conteneur disparu, déjà
+arrêté, injoignable ou refusé par Docker donne `denied`, avec son état pour
+raison. Inscrire `ok` dans ces cas ferait dire au journal qu'un conteneur a été
+arrêté alors qu'il ne s'est rien passé — et c'est précisément ce que l'on relira
+après un incident.
+
 Si la déclaration échoue, le geste **a quand même eu lieu** : il est parti avant.
 La console ne peut pas le défaire, et prétendre le contraire serait pire. Elle le
 signale à l'écran plutôt que de le taire, comme au §37.4.5.
