@@ -244,3 +244,39 @@ def test_un_geste_INVENTE_reste_refuse(tmp_path):
                     "spark.container_pull", "spark.container"):
         r = client.post("/v1/audit", json={"action": invente, "target_id": "crm"})
         assert r.status_code == 422, invente
+
+
+def test_un_geste_REFUSE_se_journalise_comme_refuse(tmp_path):
+    """§37.7.4 : ne journaliser que les succès laisserait invisible une
+    tentative répétée sur un Spark protégé — ce qu'un journal existe pour
+    montrer."""
+    client = _client(tmp_path)
+    r = client.post("/v1/audit", json={
+        "action": "spark.container_stop", "result": "denied", "target_id": "crm",
+        "message": "Refusé : « crm » est protégé.",
+        "payload": {"container": "crm-web-1", "reason": "protege"}})
+    assert r.status_code == 201
+    refuses = client.get("/v1/audit?result=denied&action=spark.container_stop")
+    entrees = refuses.json()["entries"]
+    assert len(entrees) == 1
+    assert entrees[0]["result"] == "denied"
+    assert json.loads(entrees[0]["payload"])["reason"] == "protege"
+
+
+def test_le_resultat_est_BORNE_a_deux_valeurs(tmp_path):
+    """Un champ libre ferait du résultat un message, et le filtre du journal
+    cesserait de répondre à « qu'est-ce qui a été refusé »."""
+    client = _client(tmp_path)
+    for invente in ("erreur", "partiel", "OK", ""):
+        r = client.post("/v1/audit", json={
+            "action": "spark.container_stop", "result": invente, "target_id": "crm"})
+        assert r.status_code == 422, invente
+        assert "result_refused" == r.json()["detail"]["error"]
+
+
+def test_sans_resultat_declare_l_entree_reste_un_SUCCES(tmp_path):
+    """Le défaut ne change pas : les déclarations de SPK-43 n'en portent pas."""
+    client = _client(tmp_path)
+    client.post("/v1/audit", json={"action": "spark.terminal_open",
+                                   "target_id": "crm", "message": "x"})
+    assert _sessions(client)[0]["result"] == "ok"

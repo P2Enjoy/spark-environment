@@ -761,6 +761,13 @@ def create_app(config: Config) -> FastAPI:
     #: protégé, facturé et retrouvé —, et le nom du conteneur entre ici.
     CLES_DECLARABLES = ("path", "reason", "duration_seconds", "container")
 
+    #: SPK-45 · §37.7.4 : un geste REFUSÉ se journalise comme refusé. Ne
+    #: journaliser que les succès laisserait invisible une tentative répétée sur
+    #: un Spark protégé — exactement ce qu'un journal existe pour montrer.
+    #: Deux valeurs, pas un champ libre : le résultat est une information de
+    #: journal, pas un message.
+    RESULTATS_DECLARABLES = ("ok", "denied")
+
     @app.post("/v1/audit", tags=["audit"], status_code=201)
     def declare_audit(body: dict = Body(...)) -> dict:
         """Inscrit au journal un geste que `sparkd` ne peut pas constater.
@@ -778,6 +785,12 @@ def create_app(config: Config) -> FastAPI:
         if not isinstance(brut, dict):
             raise HTTPException(status_code=422, detail={
                 "error": "payload_refused", "message": "La charge doit être un objet."})
+        resultat = str(body.get("result", "ok"))
+        if resultat not in RESULTATS_DECLARABLES:
+            raise HTTPException(status_code=422, detail={
+                "error": "result_refused",
+                "message": f"Le résultat « {resultat} » n'est pas déclarable. "
+                           f"Admis : {', '.join(RESULTATS_DECLARABLES)}."})
         inconnues = sorted(set(brut) - set(CLES_DECLARABLES))
         if inconnues:
             raise HTTPException(status_code=422, detail={
@@ -789,7 +802,7 @@ def create_app(config: Config) -> FastAPI:
             # (§21.6.2) —, jamais du corps. Laisser une requête choisir son
             # identité au journal la rendrait triviale à falsifier.
             entree = audit_service.record(
-                connection, None, action, "ok",
+                connection, None, action, resultat,
                 str(body.get("message", ""))[:500],
                 target_type=str(body.get("target_type", "spark")),
                 target_id=str(body.get("target_id", "")) or None,

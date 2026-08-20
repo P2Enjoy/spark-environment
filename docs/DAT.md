@@ -4609,6 +4609,13 @@ Un geste **refusé** est journalisé comme refusé, avec sa raison. Ne journalis
 que les succès laisserait invisible une tentative répétée sur un Spark protégé —
 exactement ce qu'un journal existe pour montrer.
 
+La porte du §37.4.6 figeait son résultat à `ok` : elle admet désormais `result`,
+**borné à `ok` et `denied`**. Deux valeurs et non un champ libre — le résultat est
+une information de journal, pas un message, et un champ libre ferait cesser le
+filtre `?result=denied` de répondre à « qu'est-ce qui a été refusé ». Une
+déclaration sans `result` reste un succès, de sorte que les déclarations de
+session du §37.4.5 sont inchangées.
+
 Si la déclaration échoue, le geste **a quand même eu lieu** : il est parti avant.
 La console ne peut pas le défaire, et prétendre le contraire serait pire. Elle le
 signale à l'écran plutôt que de le taire, comme au §37.4.5.
