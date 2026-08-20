@@ -17,7 +17,11 @@ export const DEFAULT_PATH =
   process.env.SPARK_CONSOLE_STATE ?? join(homedir(), '.config', 'spark', 'servers.json');
 
 /** Champs qu'un serveur peut porter. Tout le reste est écarté à l'écriture. */
-const ALLOWED = ['name', 'kind', 'host', 'user', 'port', 'remotePort', 'sshHost'];
+// `signingKey` (SPK-40, §36.10.8) : un chemin vers une clé PUBLIQUE. Aucun
+// secret n'entre ici — le §11 garde les clés privées sur le poste, et c'est
+// l'agent qui signe.
+const ALLOWED = ['name', 'kind', 'host', 'user', 'port', 'remotePort', 'sshHost',
+                 'signingKey'];
 
 /**
  * Version de la forme du fichier (docs/DAT.md §22.4.2).
@@ -98,13 +102,20 @@ export function validate(server) {
   // Un serveur SSH porte DEUX ports : celui de `sshd` et celui de `sparkd` à
   // l'autre bout. Un serveur local n'en a qu'un, celui où `sparkd` écoute ici.
   const local = genre === 'local';
+  // SPK-40 · §36.10.8 : la clé de SIGNATURE, si ce serveur en a une. Absente,
+  // ce serveur n'est simplement pas signé — un état normal, pas une panne. Elle
+  // est jointe à TOUS les genres : signer ne dépend pas de la façon d'atteindre
+  // la Forge.
+  const signature = server.signingKey
+    ? { signingKey: String(server.signingKey) } : {};
+
   if (alias) {
     // Ni `user` ni `port` : le produit ne prétend pas les connaître.
     const distantAlias = Number(server.remotePort ?? 9876);
     if (!Number.isInteger(distantAlias) || distantAlias < 1 || distantAlias > 65535) {
       throw new InventoryError(`« remotePort » hors bornes pour « ${nom} » : ${distantAlias}.`);
     }
-    return { name: nom, kind: genre, sshHost, remotePort: distantAlias };
+    return { name: nom, kind: genre, sshHost, remotePort: distantAlias, ...signature };
   }
   const port = local
     // `port` d'abord, `remotePort` ensuite : l'aller-retour doit rendre ce qui
@@ -121,9 +132,10 @@ export function validate(server) {
     }
   }
 
-  if (local) return { name: nom, kind: genre, host: hote, port };
+  if (local) return { name: nom, kind: genre, host: hote, port, ...signature };
   return { name: nom, kind: genre, host: hote,
-           user: String(server.user ?? 'root'), port, remotePort: distant };
+           user: String(server.user ?? 'root'), port, remotePort: distant,
+           ...signature };
 }
 
 /**

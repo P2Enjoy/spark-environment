@@ -200,3 +200,116 @@ test('un doublon qui ÉCHOUE laisse le geste partir', async () => {
   assert.equal(vu.motif, ECHEC);
   assert.ok(!vu.signature);
 });
+
+// --- L'inventaire porte la clé, sans jamais porter de secret ---------------
+
+test('l’inventaire retient signingKey, pour TOUS les genres de serveur', async () => {
+  // Signer ne dépend pas de la façon d'atteindre la Forge : un alias, un serveur
+  // SSH et un serveur local se signent pareil.
+  const { validate } = await import('./inventory.js');
+  for (const brut of [
+    { name: 'a', kind: 'ssh', host: '203.0.113.10', signingKey: '/k.pub' },
+    { name: 'b', kind: 'alias', sshHost: 'forge', signingKey: '/k.pub' },
+    { name: 'c', kind: 'local', signingKey: '/k.pub' },
+  ]) {
+    assert.equal(validate(brut).signingKey, '/k.pub', brut.kind);
+  }
+});
+
+test('un serveur SANS clé de signature n’en invente pas', () => {
+  // §14.6 : absent n'est pas vide. Une chaîne vide ferait lancer `ssh-keygen`
+  // sur un chemin qui n'existe pas, et rendrait un échec là où il n'y a rien.
+  return import('./inventory.js').then(({ validate }) => {
+    const vu = validate({ name: 'a', kind: 'ssh', host: '203.0.113.10' });
+    assert.ok(!('signingKey' in vu));
+  });
+});
+
+// --- Le RELAIS signe, et ne bloque jamais (§36.10.8) ------------------------
+
+test('le relais SIGNE une écriture et pose les deux en-têtes', async () => {
+  const { createConsoleHost } = await import('./main.js');
+  const { mkdtemp } = await import('node:fs/promises');
+  const vues = [];
+  const faux = { name: 'prod', localPort: 9876, actorHeader: 'console/prod',
+                 server: { name: 'prod', signingKey: '/k.pub' },
+                 jumpArgs: () => [] };
+  const dossier = await mkdtemp(join(tmpdir(), 'spark-relais-'));
+  const { server } = createConsoleHost({
+    tunnels: { require: () => faux, get: () => faux, list: () => [faux],
+               close() {}, closeAll() {} },
+    inventoryPath: join(dossier, 'servers.json'),
+    anchorPath: join(dossier, 'anchors.json'),
+    // Le doublon remplace la COMMANDE de signature, pas le mécanisme : la
+    // sérialisation, les en-têtes et l'échec dit restent ceux de la production.
+    signIntention: (intention) => signer(intention, {
+      doublon: 'printf -- "-----BEGIN SSH SIGNATURE-----\\nc2lnbmVl\\n'
+        + '-----END SSH SIGNATURE-----\\n" > "$0.sig"' }),
+    env: {},
+    fetch: async (url, options = {}) => {
+      vues.push({ url: String(url), headers: options.headers ?? {} });
+      return new Response('{}', { status: 200 });
+    },
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    await fetch(`${base}/api/v1/sparks?server=prod`, {
+      method: 'POST', body: JSON.stringify({ name: 'essai' }) });
+    const vu = vues.at(-1);
+    assert.equal(vu.headers['x-spark-signature'], 'c2lnbmVl');
+    // Les octets signés décrivent bien CETTE requête (§36.10.7).
+    const octets = JSON.parse(Buffer.from(vu.headers['x-spark-signed'], 'base64'));
+    assert.equal(octets.method, 'POST');
+    assert.equal(octets.path, '/v1/sparks');
+    assert.equal(octets.actor, 'console/prod');
+    assert.deepEqual(octets.body, { name: 'essai' });
+
+    // Une LECTURE n'est pas signée : le §36.7 ne la journalise pas, et signer ce
+    // qui ne laisse pas de trace ne prouverait rien.
+    await fetch(`${base}/api/v1/sparks?server=prod`);
+    assert.ok(!('x-spark-signature' in vues.at(-1).headers));
+  } finally {
+    server.closeAllConnections?.();
+    server.close();
+  }
+});
+
+test('un relais qui ne peut PAS signer laisse quand même passer le geste', async () => {
+  // §36.10.1 : refuser d'agir faute de signature ferait de ce mécanisme un
+  // contrôle d'accès. C'est le cas de l'exploitant dont l'agent vient de se
+  // vider, et son produit ne doit pas se verrouiller.
+  const { createConsoleHost } = await import('./main.js');
+  const { mkdtemp } = await import('node:fs/promises');
+  const vues = [];
+  const faux = { name: 'prod', localPort: 9876, actorHeader: 'console/prod',
+                 server: { name: 'prod' }, jumpArgs: () => [] };
+  // Aucune clé, aucun doublon : rien ne peut signer, et c'est le cas éprouvé.
+  const dossier = await mkdtemp(join(tmpdir(), 'spark-relais-'));
+  const { server } = createConsoleHost({
+    tunnels: { require: () => faux, get: () => faux, list: () => [faux],
+               close() {}, closeAll() {} },
+    inventoryPath: join(dossier, 'servers.json'),
+    anchorPath: join(dossier, 'anchors.json'),
+    env: {},
+    fetch: async (url, options = {}) => {
+      vues.push(options.headers ?? {});
+      return new Response('{}', { status: 200 });
+    },
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const r = await fetch(`${base}/api/v1/sparks?server=prod`, {
+      method: 'POST', body: JSON.stringify({ name: 'essai' }) });
+    assert.equal(r.status, 200, 'le geste passe');
+    // Aucune signature vide n'est envoyée : la Forge refuserait en 422.
+    assert.ok(!('x-spark-signature' in vues.at(-1)));
+    assert.ok(!('x-spark-signed' in vues.at(-1)));
+    // …et l'acteur, lui, est toujours déclaré.
+    assert.equal(vues.at(-1)['x-spark-actor'], 'console/prod');
+  } finally {
+    server.closeAllConnections?.();
+    server.close();
+  }
+});

@@ -26,6 +26,7 @@ import { relever as releverDocker, inspecterConteneur, lireJournaux }
   from './docker.js';
 import { agir as agirConteneur, GESTES } from './gestes-docker.js';
 import { sonderShell, SHELL_TROUVE } from './shell-conteneur.js';
+import * as signatureService from './signature.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
@@ -58,6 +59,10 @@ export function createConsoleHost(options = {}) {
   // pour le même motif — les captures ont besoin des ÉCRANS, pas d'un Docker.
   const lireConteneurInjecte = options.readContainer ?? null;
   const agirInjecte = options.actOnContainer ?? null;
+  // SPK-40 · §36.10.8 : même point d'injection que `probeShell` et
+  // `readDocker`, et pour le même motif — un harnais n'a pas d'agent SSH, et
+  // sans lui aucune preuve ne pourrait éprouver ce que le relais pose.
+  const signerInjecte = options.signIntention ?? null;
   const sonderShellInjecte = options.probeShell ?? null;
   const lireJournauxInjecte = options.readLogs ?? null;
 
@@ -1057,7 +1062,8 @@ export function createConsoleHost(options = {}) {
 
       // Tout le reste est relayé au sparkd du serveur choisi.
       if (url.pathname.startsWith('/api/v1/')) {
-        return await relayer(url, requete, reponse, tunnels, fetchFn);
+        return await relayer(url, requete, reponse, tunnels, fetchFn,
+                             { signer: signerInjecte ?? signerIntention });
       }
 
       // Fichiers de la console. Servis uniquement depuis ce dossier : un
@@ -1075,12 +1081,30 @@ export function createConsoleHost(options = {}) {
 }
 
 /**
+ * Signe l'intention d'un geste avec la clé du serveur visé (SPK-40, §36.10.8).
+ *
+ * `signingKey` désigne une clé PUBLIQUE dans l'inventaire (§22.4) : avec un
+ * agent, `ssh-keygen` lui délègue la signature et ne lit jamais le secret.
+ * Absente, ce serveur n'est simplement pas signé — un état normal, pas une panne.
+ */
+function signerIntention(intention, tunnel) {
+  return signatureService.signer(intention, {
+    signingKey: tunnel?.server?.signingKey ?? null,
+    // §36.10.8 : le doublon remplace la COMMANDE, pas le mécanisme — la pile de
+    // développement n'a pas d'agent, et sans lui aucun parcours ne pourrait
+    // éprouver ce que le produit possède.
+    doublon: process.env.SPARK_SIGN_COMMAND || null,
+  });
+}
+
+/**
  * Relaie une requête vers `sparkd`, à travers le tunnel du serveur nommé.
  *
  * Le refus d'un tunnel rompu remonte tel quel : la console doit voir la panne,
  * pas un `502` anonyme (docs/DAT.md §22.3).
  */
-async function relayer(url, requete, reponse, tunnels, fetchFn) {
+async function relayer(url, requete, reponse, tunnels, fetchFn,
+                       { signer: signerFn = signerIntention, avertir } = {}) {
   const nom = url.searchParams.get('server');
   if (!nom) {
     return repondre(reponse, 400, {
@@ -1109,10 +1133,34 @@ async function relayer(url, requete, reponse, tunnels, fetchFn) {
   for (const [cle, valeur] of url.searchParams) if (cle !== 'server') cible.searchParams.set(cle, valeur);
 
   const corps = await lireCorpsBrut(requete);
+
+  // SPK-40 · §36.10.8 : l'hôte console SIGNE l'intention, par l'agent du
+  // responsable. Ne pas pouvoir signer n'empêche JAMAIS le geste — refuser
+  // d'agir faute de signature ferait de ce mécanisme un contrôle d'accès, et un
+  // exploitant dont l'agent vient de se vider ne doit pas découvrir que son
+  // produit s'est verrouillé. L'échec est DIT, jamais tu.
+  //
+  // Une lecture n'est pas signée : le §36.7 ne les journalise pas, et signer ce
+  // qui ne laisse pas de trace ne prouverait rien.
+  let signature = {};
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(requete.method)) {
+    const vu = await signerFn({
+      method: requete.method,
+      path: cible.pathname,
+      actor: tunnel.actorHeader,
+      body: corps ? JSON.parse(corps || 'null') : null,
+      action: null,
+      ts: new Date().toISOString(),
+    }, tunnel);
+    signature = signatureService.entetes(vu);
+    if (vu?.motif && avertir) avertir(nom, vu.motif);
+  }
+
   const amont = await fetchFn(cible.toString(), {
     method: requete.method,
     headers: {
       'content-type': requete.headers['content-type'] ?? 'application/json',
+      ...signature,
       // SPK-37 · docs/DAT.md §21.6.2 : l'hôte console DÉCLARE qui agit. Le
       // navigateur ne pose pas cet en-tête et ne pourrait pas : il ne sait rien
       // du tunnel ni de la clé qui l'a ouvert. C'est ici qu'on le sait.
