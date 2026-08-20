@@ -34,21 +34,22 @@ export const NAMESPACE = 'spark-audit';
 /** Champs retenus, et eux seuls — l'ordre vient du tri, pas d'ici (§36.10.3). */
 export const CHAMPS = ['action', 'actor', 'body', 'method', 'path', 'ts'];
 
-/** Motifs d'un échec de signature. Ils sont STABLES ; les messages sont pour
- *  l'humain (§14.7 : le message d'OpenSSH nomme un fichier qu'on n'a pas
- *  demandé, et ne se montre pas tel quel). */
+/** Motifs d'un échec de signature. Ils sont STABLES, et ils ne sont QUE des
+ *  jetons : c'est sous cette forme qu'ils voyagent jusqu'au navigateur, un
+ *  en-tête HTTP ne transportant pas d'accent (§36.10.9).
+ *
+ *  **La phrase française ne vit pas ici** mais dans le vocabulaire de la
+ *  console — `apps/webui/src/components/tokens.js` —, à un seul endroit
+ *  (`docs/DESIGN_SYSTEM.md` §12.5). Une seconde copie ici finirait par diverger,
+ *  et un motif sans phrase serait un échec TU : exactement ce que le §36.10.8
+ *  interdit. Le §14.7 interdit de son côté que le jeton lui-même atteigne
+ *  l'écran. */
 export const SANS_CLE = 'sans_cle';
 export const AGENT_MUET = 'agent_muet';
 export const ECHEC = 'echec_signature';
 
-export const MOTIFS = {
-  [SANS_CLE]: 'Aucune clé de signature n’est configurée pour ce serveur : '
-    + 'ce geste part sans signature.',
-  [AGENT_MUET]: 'La clé de signature est configurée, mais aucun agent ne la '
-    + 'détient et le fichier privé est introuvable : ce geste part sans '
-    + 'signature. Chargez la clé dans votre agent — « ssh-add ».',
-  [ECHEC]: 'La signature n’a pas pu être produite : ce geste part sans elle.',
-};
+/** L'ensemble des motifs, figé. La console garde que sa table les couvre TOUS. */
+export const MOTIFS = Object.freeze([SANS_CLE, AGENT_MUET, ECHEC]);
 
 /**
  * Les octets du §36.10.3, figés.

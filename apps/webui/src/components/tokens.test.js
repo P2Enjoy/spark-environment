@@ -11,7 +11,11 @@ import assert from 'node:assert/strict';
 import {
   SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE,
   TUNNEL_STATES, tunnelOf, traduireMessage, formatOctetsExact,
+  SIGNATURE_MOTIFS, signatureMotifOf,
 } from './tokens.js';
+// La table de l'hôte console est la RÉFÉRENCE des jetons : on l'importe plutôt
+// que d'en recopier la liste, sans quoi la garde ci-dessous garderait une copie.
+import { MOTIFS, SANS_CLE, AGENT_MUET } from '../../host/signature.js';
 
 test('les huit etats du modele sont couverts', () => {
   // docs/SCHEMA.md §4 : un etat non couvert tomberait dans le repli sans qu'on
@@ -184,4 +188,43 @@ test('la virgule francaise est employee, et null reste null', () => {
   assert.ok(!formatOctetsExact(1.25 * 1024 ** 3).includes('.'));
   assert.equal(formatOctetsExact(null), null);
   assert.equal(formatOctetsExact(undefined), null);
+});
+
+/* --- Ce qui est parti sans signature (SPK-40, §36.10.9) ------------------- */
+
+test('la console a une phrase pour CHAQUE motif de l hote, et pas une de plus', () => {
+  // Un motif sans phrase serait un echec TU, ce que le §36.10.8 interdit ; une
+  // phrase sans motif serait du texte que rien ne peut declencher (§1.4).
+  assert.deepEqual(Object.keys(SIGNATURE_MOTIFS).sort(), [...MOTIFS].sort());
+});
+
+test('chaque phrase dit que le geste a EU LIEU', () => {
+  // §36.10.1 : le geste passe. Une phrase qui laisserait croire au contraire
+  // ferait refaire un arret, un demarrage ou une suppression deja accomplis.
+  for (const [jeton, phrase] of Object.entries(SIGNATURE_MOTIFS)) {
+    assert.match(phrase, /a bien eu lieu/, jeton);
+  }
+});
+
+test('le motif de l agent muet dit quoi FAIRE, sans le message d OpenSSH', () => {
+  // §14.7 : « Load key … No such file » nomme un fichier que l exploitant n a
+  // pas demande. Ce qui manque vraiment, c est la cle dans l agent.
+  assert.match(SIGNATURE_MOTIFS[AGENT_MUET], /ssh-add/);
+  assert.ok(!/No such file/.test(SIGNATURE_MOTIFS[AGENT_MUET]));
+});
+
+test('aucune phrase ne laisse passer le jeton technique', () => {
+  // §14.7 : « sans_cle » a l ecran ne veut rien dire pour un exploitant.
+  for (const jeton of MOTIFS) {
+    assert.ok(!signatureMotifOf(jeton).includes(jeton), jeton);
+  }
+});
+
+test('un motif INCONNU se dit quand meme, et rien ne se dit sans motif', () => {
+  // §2.6 : le repli est documente. Taire un motif inconnu ferait disparaitre
+  // l avertissement au moment ou l on sait le moins ce qui s est passe.
+  assert.match(signatureMotifOf('venu_d_ailleurs'), /a bien eu lieu/);
+  assert.equal(signatureMotifOf(null), null);
+  assert.equal(signatureMotifOf(''), null);
+  assert.match(signatureMotifOf(SANS_CLE), /clé de signature/);
 });

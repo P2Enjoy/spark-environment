@@ -124,6 +124,47 @@ export function formatCpu(value) {
   return virgule(value.toFixed(2));
 }
 
+/* ------------------------------------------ ce qui est parti sans signature */
+
+/**
+ * Ce qu'un geste NON SIGNÉ dit à l'exploitant, motif par motif.
+ *
+ * @spec docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.8 (les motifs et ce qu'ils
+ *       doivent faire faire), §36.10.9 (le motif voyage en jeton, la phrase
+ *       reste ici) · docs/DESIGN_SYSTEM.md §12.5 (une table, un seul endroit),
+ *       §14.7 (aucun jeton technique à l'écran)
+ *
+ * Le relais rend un JETON — `sans_cle`, `agent_muet`, `echec_signature` — parce
+ * qu'un en-tête HTTP ne transporte pas d'accent. La phrase vit ICI, et une
+ * preuve garde que cette table couvre exactement les motifs de
+ * `apps/webui/host/signature.js` : un motif sans phrase serait un échec TU,
+ * précisément ce que le §36.10.8 interdit.
+ *
+ * Chaque phrase dit DEUX choses : que le geste a bien eu lieu — il ne faut pas
+ * le refaire —, et quoi faire pour que le suivant soit signé.
+ */
+export const SIGNATURE_MOTIFS = {
+  sans_cle: 'Aucune clé de signature n’est configurée pour ce serveur : ce geste '
+    + 'a bien eu lieu, mais il est parti sans signature et le journal ne pourra '
+    + 'pas prouver qu’il a été demandé.',
+  agent_muet: 'Aucun agent ne détient la clé de signature de ce serveur : ce '
+    + 'geste a bien eu lieu, mais il est parti sans signature. Chargez la clé '
+    + 'dans votre agent — « ssh-add » — pour que les suivants soient signés.',
+  echec_signature: 'La signature n’a pas pu être produite : ce geste a bien eu '
+    + 'lieu, mais il est parti sans elle.',
+};
+
+/**
+ * Repli documenté (§2.6) : un motif que la console ne connaît pas se DIT quand
+ * même. Le taire ferait disparaître l'avertissement au moment précis où l'on ne
+ * sait pas ce qui s'est passé — le §36.10.8 veut l'inverse.
+ */
+export function signatureMotifOf(jeton) {
+  if (!jeton) return null;
+  return SIGNATURE_MOTIFS[jeton]
+    ?? 'Ce geste a bien eu lieu, mais la console n’a pas pu le signer.';
+}
+
 /* ------------------------------------------------ traduction des messages */
 
 /**

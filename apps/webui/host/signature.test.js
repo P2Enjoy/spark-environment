@@ -99,9 +99,11 @@ test('sans agent NI clé privée, le motif dit ce qui manque VRAIMENT', async ()
         { ...o, env: { ...process.env, SSH_AUTH_SOCK: '' } }),
     });
     assert.equal(vu.motif, AGENT_MUET);
-    assert.match(MOTIFS[AGENT_MUET], /ssh-add/, 'le motif dit quoi FAIRE');
-    assert.ok(!/No such file/.test(MOTIFS[AGENT_MUET]),
-      'le message d’OpenSSH n’est pas montré tel quel');
+    // Le motif est un JETON, et rien d'autre : la phrase française vit dans le
+    // vocabulaire de la console (§36.10.9), et sa preuve avec elle.
+    assert.ok(MOTIFS.includes(vu.motif));
+    assert.ok(!/No such file/.test(vu.motif),
+      'le message d’OpenSSH n’est pas remonté tel quel');
   } finally {
     a.nettoyer();
   }
