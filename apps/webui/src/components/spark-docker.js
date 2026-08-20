@@ -218,7 +218,11 @@ function gestes(etat, spark) {
 function confirmation(etat) {
   const g = GESTES.find((x) => x.cle === etat.confirme);
   if (!g) return '';
-  return `<div class="confirmation" role="group" aria-labelledby="titre-geste">
+  // Le rouge est réservé au geste DESTRUCTIF. Peindre « redémarrer » de la même
+  // couleur que « tuer » les rendrait indiscernables au moment où l'on est
+  // pressé — donc au moment où l'on tue (SPK-DS-09).
+  return `<div class="confirmation${g.destructif ? '' : ' confirmation--sensible'}"
+       role="group" aria-labelledby="titre-geste">
     <p id="titre-geste"><strong>${echapper(g.libelle)}
       « ${echapper(etat.ouvert)} » ?</strong></p>
     <p>${echapper(g.effet(etat.ouvert))}</p>

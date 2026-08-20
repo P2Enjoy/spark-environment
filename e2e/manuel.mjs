@@ -218,6 +218,12 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('pre.terminal', { timeout: 15000 });
     await capturer('m8-docker-conteneur', { hauteur: 900 });
 
+    // --- M8 · LA CONFIRMATION D'UN GESTE (SPK-45, §37.7.2) -------------------
+    await page.click('button[data-geste="stop"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+    await capturer('m8-docker-geste', { hauteur: 700 });
+    await page.click('[data-geste-annule]');
+
     // --- M8 · LE SSHD MUET (SPK-43, §37.2) -----------------------------------
     // « site-vitrine » : son chemin normal meurt aussitôt dans la pile de
     // vérification, comme le fait `ssh` face à un port fermé.

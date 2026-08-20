@@ -288,6 +288,28 @@ rien fait.
 Le vert ne s'écrit jamais sur ce que l'écran **suppose** : il s'écrit sur ce que
 la Forge a rendu (`DESIGN_SYSTEM.md` §14.9).
 
+### SPK-DS-09 · Une confirmation sensible n'a pas la couleur d'une confirmation destructive
+
+**Date** : 2026-08-20 · introduit par SPK-45.
+
+`.confirmation` est **rouge** depuis son origine. Cela convenait tant que la
+console n'en portait qu'une, celle du dépannage en root — un geste dont l'effet
+est grave par nature.
+
+SPK-45 en apporte quatre d'un coup, et l'une seulement est destructive. Peindre
+« redémarrer » de la couleur de « tuer » les rendrait indiscernables **au moment
+où l'on est pressé**, c'est-à-dire au moment où l'on tue. La couleur cesserait
+alors d'être une information et deviendrait un bruit de fond dont on apprend à ne
+plus tenir compte.
+
+- `.confirmation` — **rouge** : le geste détruit, sans attendre ni prévenir.
+- `.confirmation.confirmation--sensible` — **accent** : le geste interrompt, mais
+  laisse une chance de terminer proprement.
+
+Le bouton d'engagement suit la même règle : `bouton--destructif` pour le premier
+cas, un bouton ordinaire pour le second. Une confirmation accent avec un bouton
+rouge donnerait deux signaux contradictoires dans le même bloc.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

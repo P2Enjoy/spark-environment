@@ -462,7 +462,7 @@ test('la confirmation NOMME le conteneur et l’effet, jamais « êtes-vous sûr
   assert.match(rendu, /La production servie par « helo-web-1 » s’interrompt/);
   assert.ok(!/êtes-vous sûr|Êtes-vous sûr/.test(rendu));
   // §6.22 : dans le flux, pas une modale par-dessus.
-  assert.match(rendu, /class="confirmation"/);
+  assert.match(rendu, /class="confirmation/);
   assert.ok(!/class="modale/.test(rendu));
   // Elle dit que le geste sera inscrit : ce n'est pas une surprise d'après-coup.
   assert.match(rendu, /inscrit au journal/);
@@ -557,4 +557,16 @@ test('tant que l’inspection n’est pas revenue, aucun geste n’est offert', 
   // conteneur déjà arrêté serait deviner.
   const rendu = renderConteneur(ouvert({ detail: 'en-cours' }), SPARK);
   assert.ok(!/data-geste="/.test(rendu));
+});
+
+test('la confirmation d’un geste NON destructif n’a pas la couleur du destructif', () => {
+  // SPK-DS-09 : peindre « redémarrer » de la couleur de « tuer » les rendrait
+  // indiscernables au moment où l'on est pressé — donc au moment où l'on tue.
+  for (const cle of ['start', 'stop', 'restart']) {
+    const rendu = renderConteneur(ouvert({ confirme: cle }), SPARK);
+    assert.match(rendu, /confirmation--sensible/, cle);
+  }
+  const tuer = renderConteneur(ouvert({ confirme: 'kill' }), SPARK);
+  assert.ok(!/confirmation--sensible/.test(tuer));
+  assert.match(tuer, /class="confirmation"/);
 });

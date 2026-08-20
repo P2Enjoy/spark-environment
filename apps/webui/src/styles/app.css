@@ -280,6 +280,13 @@ tbody tr:hover { background: var(--color-hover); }
 .confirmation > * + * { margin-top: var(--space-2); }
 .confirmation__consequence { font-size: var(--text-compact); }
 .confirmation__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+/* SPK-DS-09 — une action SENSIBLE qui n'est pas destructive. Le rouge par défaut
+   de `.confirmation` conviendrait à « tuer » ; appliqué aussi à « redémarrer »,
+   il rendrait les deux indiscernables au moment où l'on est pressé — donc au
+   moment où l'on tue. L'accent alerte sans crier. */
+.confirmation--sensible {
+  background: var(--color-accent-soft); color: var(--color-accent-on-soft);
+}
 
 .note-transitoire {
   margin: 0; padding: var(--space-2) var(--space-3);

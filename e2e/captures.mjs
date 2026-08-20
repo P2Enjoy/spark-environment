@@ -92,6 +92,12 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           // SPK-44, deuxième tranche : l'inspection et les
                           // journaux d'un conteneur ouvert.
                           dockerConteneur = null, dockerJournaux = null,
+                          // SPK-45 : l'issue que le geste rend, et l'inspection
+                          // RELUE après lui. Rendre deux fois la même ferait
+                          // afficher « en marche » sous « arrêt réussi » — la
+                          // contradiction même que le §37.7.2 existe pour
+                          // éviter, et une capture qui la montre est fausse.
+                          gesteRendu = null, dockerConteneurApres = null,
                           terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
@@ -132,8 +138,14 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     ...(terminaux ? { terminals: terminaux } : {}),
     ...(sondageSshd ? { probeSshd: async () => sondageSshd } : {}),
     ...(dockerReleve ? { readDocker: async (spark) => ({ spark, ...dockerReleve }) } : {}),
-    ...(dockerConteneur ? { readContainer: async () => dockerConteneur } : {}),
+    ...(dockerConteneur ? { readContainer: (() => {
+      let lu = 0;
+      return async () => (dockerConteneurApres && lu++ > 0
+        ? dockerConteneurApres : dockerConteneur);
+    })() } : {}),
     ...(dockerJournaux ? { readLogs: async () => dockerJournaux } : {}),
+    ...(gesteRendu ? { actOnContainer: async (a) => ({ name: a.nom, geste: a.geste,
+                                                       ...gesteRendu }) } : {}),
     fetch: async (url, options = {}) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
@@ -838,6 +850,59 @@ ctx.server.close();
     console.log(`  ${nom}.png`);
     ctx.server.close();
   }
+
+  // --- SPK-45 · LES GESTES SUR UN CONTENEUR (§37.7) -------------------------
+  //
+  // Trois écrans qui décident : la confirmation d'un geste DESTRUCTIF, le
+  // succès constaté, et le refus sous gel — celui qui doit apprendre comment
+  // avancer plutôt que seulement interdire.
+  ctx = await demarrer({ dockerReleve: { state: 'ok', containers: inventaire },
+                         dockerConteneur: ouverts[0][1], dockerJournaux: ouverts[0][2] });
+  await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 1000 });
+  await page.waitForSelector('tbody tr', { timeout: 8000 });
+  await page.click('button[data-conteneur="crm-web-1"]');
+  await page.waitForSelector('button[data-geste="kill"]', { timeout: 8000 });
+  await page.click('button[data-geste="kill"]');
+  await page.waitForSelector('.confirmation', { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '102-geste-confirmation-tuer.png') });
+  console.log('  102-geste-confirmation-tuer.png');
+  ctx.server.close();
+
+  // Le succès : vert, et il est le SEUL à l'être (SPK-DS-08).
+  ctx = await demarrer({
+    dockerReleve: { state: 'ok', containers: inventaire },
+    dockerConteneur: ouverts[0][1], dockerJournaux: ouverts[0][2],
+    gesteRendu: { state: 'abouti', titre: 'Arrêter : c’est fait',
+                  detail: 'Le geste a abouti sur « crm-web-1 ».' },
+    // Ce que la relecture rend VRAIMENT après un arrêt réussi (§37.7.2).
+    dockerConteneurApres: { ...ouverts[0][1], state: 'exited', exitCode: 0,
+                            finishedAt: '2026-08-20T21:44:02.310Z' } });
+  await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 1000 });
+  await page.waitForSelector('tbody tr', { timeout: 8000 });
+  await page.click('button[data-conteneur="crm-web-1"]');
+  await page.waitForSelector('button[data-geste="stop"]', { timeout: 8000 });
+  await page.click('button[data-geste="stop"]');
+  await page.click('[data-geste-confirme="stop"]');
+  await page.waitForSelector('.succes', { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '103-geste-abouti.png') });
+  console.log('  103-geste-abouti.png');
+  ctx.server.close();
+
+  // Le gel : les gestes PRÉSENTS, désactivés et expliqués, la lecture entière.
+  ctx = await demarrer({ sparks: SPARKS.map((s) => s.name === DETAIL
+                           ? { ...s, protected: true,
+                               protected_at: '2026-08-19T10:00:00',
+                               allowed_commands: [] }
+                           : s),
+                         dockerReleve: { state: 'ok', containers: inventaire },
+                         dockerConteneur: ouverts[0][1], dockerJournaux: ouverts[0][2] });
+  await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 1000 });
+  await page.waitForSelector('tbody tr', { timeout: 8000 });
+  await page.click('button[data-conteneur="crm-web-1"]');
+  await page.waitForSelector('button[data-geste="stop"]', { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '104-geste-gele.png') });
+  console.log('  104-geste-gele.png');
+  ctx.server.close();
 
   // Un conteneur ouvert sur 390 px : les journaux ne doivent pas faire déborder
   // la PAGE, ils défilent dans leur propre bloc (§8.1).
