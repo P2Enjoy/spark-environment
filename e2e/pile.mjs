@@ -116,6 +116,18 @@ export async function monterPile({ dns = null } = {}) {
     // — c'est ce que produit un `sshd` muet — tandis que son DÉPANNAGE
     // fonctionne, puisqu'il passe par la Forge et non par le `sshd`. C'est la
     // situation réelle, et c'est toute la raison d'être du §37.3.
+    // SPK-44 · §37.4.2 bis : le doublon du relevé Docker. La pile n'a pas de
+    // `sshd` dans ses Sparks — son pilote est factice —, donc sans lui aucun
+    // parcours ne pourrait lire un inventaire. Il remplace la COMMANDE lancée,
+    // pas le mécanisme : le découpage, le classement et l'écran sont ceux de la
+    // production.
+    //
+    // « printf » plutôt qu'un fichier : la sortie est celle qu'un vrai
+    // `docker ps --format` produirait, tabulée, avec un conteneur en marche et
+    // un arrêté — le second étant justement ce qu'on vient chercher.
+    SPARK_DOCKER_COMMAND: 'printf'
+      + ' abc123\\thelo-web-1\\trunning\\tUp\\u00a02\\u00a0minutes\\tnginx:alpine\\t0.0.0.0:8080->80/tcp\\n'
+      + 'def456\\thelo-base-1\\texited\\tExited\\u00a0(0)\\tpostgres:16\\t\\n',
     SPARK_TERMINAL_COMMAND: JSON.stringify({
       '*': 'cat',
       'site-vitrine': { ssh: 'false', rescue: 'cat' },

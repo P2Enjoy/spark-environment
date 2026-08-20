@@ -1804,6 +1804,70 @@ test('confirmer le dépannage ouvre la session, et le journal la compte À PART'
   });
 });
 
+// --- SPK-44 · L'ONGLET DOCKER, EN LECTURE (§37.6) ---------------------------
+
+test('l’onglet Docker liste ce qui tourne, et n’offre AUCUN bouton', async () => {
+  await parcours('docker-inventaire', async () => {
+    // Depuis la liste, comme un exploitant. « crm-production » est en marche et
+    // porte une cellule : c'est le cas nominal.
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('#titre-docker', { timeout: 15000 });
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+
+    const lignes = await page.$$eval('tbody tr', (l) => l.map((x) => x.textContent));
+    assert.equal(lignes.length, 2, 'un conteneur en marche et un arrêté');
+    assert.ok(lignes.some((l) => /helo-web-1/.test(l)));
+    assert.ok(lignes.some((l) => /helo-base-1/.test(l)));
+
+    // §14.7 : l'état est en français, jamais le jeton de Docker.
+    const ecran = await page.textContent('#titre-docker ~ .table-defilante');
+    assert.match(ecran, /en marche/);
+    assert.match(ecran, /arrêté/);
+    assert.ok(!/>running<|>exited</.test(await page.innerHTML('tbody')));
+
+    // SPK-DS-05 : l'écran écrit d'où viennent ces mesures.
+    const section = await page.textContent('.principal');
+    assert.match(section, /depuis l’intérieur/);
+    assert.match(section, /jamais\s+aux quotas du Spark/);
+
+    // §1.4 : l'unité est en LECTURE. Aucun bouton dans cette section.
+    const boutons = await page.$$('#titre-docker ~ * button, #titre-docker ~ button');
+    assert.equal(boutons.length, 0, 'aucun geste n’est offert par cet onglet');
+
+    // §36.7 : une lecture ne se journalise pas. Le relevé passe toutes les cinq
+    // secondes ; le journaliser le remplirait de bruit.
+    const { corps } = await pile.lireSparkd('/v1/audit?limit=200');
+    assert.ok(!JSON.stringify(corps.entries).includes('docker_read'));
+  });
+});
+
+test('quitter l’onglet ARRÊTE la collecte', async () => {
+  await parcours('docker-collecte-arretee', async () => {
+    // §37.6 : une console qui interroge en permanence un Spark qu'on ne regarde
+    // plus consomme le quota du locataire pour rien.
+    await ouvrir('crm-production', 'docker');
+    await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+
+    // On compte les relevés qui partent, en écoutant les requêtes du navigateur.
+    let releves = 0;
+    const compter = (requete) => {
+      if (requete.url().includes('/api/spark/docker')) releves += 1;
+    };
+    page.on('request', compter);
+
+    // On quitte l'onglet, puis on laisse passer DEUX cadences.
+    await page.click('.onglet[href$="/journal"]');
+    await page.waitForSelector('.onglet[href$="/journal"][aria-current="page"]',
+                               { timeout: 10000 });
+    await page.waitForFunction(
+      () => new Promise((r) => setTimeout(() => r(true), 11000)), { timeout: 15000 });
+
+    page.off('request', compter);
+    assert.equal(releves, 0,
+      `la collecte a continué après le départ : ${releves} relevé(s)`);
+  });
+});
+
 // --- SPK-38 · L'ANCRE VOIT CE QUE LA CHAÎNE NE PEUT PAS VOIR ----------------
 //
 // CE BLOC EST LE DERNIER DU FICHIER, ET IL DOIT LE RESTER. Le parcours ci-dessous
