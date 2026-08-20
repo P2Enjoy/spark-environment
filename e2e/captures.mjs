@@ -13,6 +13,7 @@
 import { chromium } from 'playwright';
 import { createConsoleHost } from '../apps/webui/host/main.js';
 import { TunnelManager } from '../apps/webui/host/tunnel.js';
+import { SessionManager } from '../apps/webui/host/terminal.js';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -46,6 +47,11 @@ const SPARKS = [
     ipv4_address: '10.77.0.20', image: 'images:debian/13',
     protected: true, protected_at: '2026-08-19T10:00:00' },
 ].map((s, i) => ({ ...s, id: `S${i + 1}`,
+                // SPK-43 · §37.2 : la CELLULE est le signal d'un Spark où l'on
+                // peut entrer, et elle n'existe qu'après une application
+                // réussie — pas dès l'écriture au registre, contrairement à
+                // l'adresse. Un Spark « pending » n'en a donc pas.
+                incus_name: s.state === 'pending' ? null : s.name,
                 // Un Spark protégé n'accepte AUCUNE commande (§24.1) : c'est le
                 // runtime qui le dit, et le factice doit dire la même chose.
                 allowed_commands: s.protected ? [] : (COMMANDES[s.state] ?? []),
@@ -73,7 +79,8 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           refusCreation = false, routeEnAttente = false,
                           uneSeuleCle = false, refusRestauration = false,
                           hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false,
-                          ancreEnAlerte = false, sansServeur = false } = {}) {
+                          ancreEnAlerte = false, sansServeur = false,
+                          terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
   // L'ANCRE vit dans ce dossier jetable, et c'est nécessaire à deux titres :
@@ -106,6 +113,12 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
   });
   const { server } = createConsoleHost({
     tunnels, inventoryPath: chemin, anchorPath: cheminAncres,
+    // SPK-43 · §37.3 : le terminal lance un vrai `ssh` et sonde un vrai port.
+    // Les captures ont besoin des ÉCRANS, pas d'un réseau : on injecte donc le
+    // gestionnaire de sessions et le sondage, comme le font les preuves de
+    // routes. Tout le reste du chemin est celui de la production.
+    ...(terminaux ? { terminals: terminaux } : {}),
+    ...(sondageSshd ? { probeSshd: async () => sondageSshd } : {}),
     fetch: async (url) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
@@ -645,6 +658,64 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '45-journal-ancre-mobile.png'), fullPage: true });
 console.log('  45-journal-ancre-mobile.png');
 ctx.server.close();
+
+// --- Le TERMINAL DE DÉPANNAGE (SPK-43, §37.3) -----------------------------
+// Les quatre conditions du §37.3 se voient ou ne se voient pas : la
+// confirmation qui nomme le pouvoir employé, et la bannière qui tient.
+{
+  const enfants = [];
+  const terminaux = new SessionManager({
+    spawn: (commande, args) => {
+      const e = new EventEmitter();
+      e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
+      e.stdin = { write() {} }; e.kill = () => {};
+      e.commande = commande; e.args = args; enfants.push(e);
+      return e;
+    },
+  });
+  ctx = await demarrer({ terminaux, sondageSshd: { repond: false, motif: 'sshd_muet' } });
+  await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
+  await page.screenshot({ path: join(SORTIE, '78-terminal-ferme.png') });
+  console.log('  78-terminal-ferme.png');
+
+  // La CONFIRMATION. C'est elle qui doit nommer le pouvoir employé.
+  await page.click('[data-terminal="depanner"]');
+  await page.waitForSelector('[data-terminal="depanner-confirme"]', { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '79-terminal-depannage-confirmation.png') });
+  console.log('  79-terminal-depannage-confirmation.png');
+
+  // La BANNIÈRE, une fois la session ouverte.
+  await page.click('[data-terminal="depanner-confirme"]');
+  await page.waitForSelector('[data-terminal="fermer"]', { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '80-terminal-depannage-banniere.png') });
+  console.log('  80-terminal-depannage-banniere.png');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: join(SORTIE, '81-terminal-depannage-mobile.png'),
+                          fullPage: true });
+  console.log('  81-terminal-depannage-mobile.png');
+  ctx.server.close();
+}
+
+// Le REFUS du dépannage : le chemin normal reste offert, l'écran ne se ferme pas.
+{
+  const terminaux = new SessionManager({ spawn: () => {
+    const e = new EventEmitter();
+    e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
+    e.stdin = { write() {} }; e.kill = () => {};
+    return e;
+  } });
+  ctx = await demarrer({ terminaux, sondageSshd: { repond: true, motif: null } });
+  await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
+  await page.click('[data-terminal="depanner"]');
+  await page.waitForSelector('[data-terminal="depanner-confirme"]', { timeout: 8000 });
+  await page.click('[data-terminal="depanner-confirme"]');
+  await page.waitForFunction(
+    () => document.body.innerText.includes('Dépannage refusé'), { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '82-terminal-depannage-refuse.png') });
+  console.log('  82-terminal-depannage-refuse.png');
+  ctx.server.close();
+}
 
 // --- Le journal et son auteur (SPK-37) ------------------------------------
 // docs/DAT.md §21.6, §36.4. La facette Journal doit montrer que les deux classes

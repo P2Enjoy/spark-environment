@@ -34,14 +34,23 @@ export const TERMINAL_VIDE = {
   confirmeDepannage: false,
 };
 
-/** Les deux chemins d'entrée, tels que l'écran les nomme (§37.2, §37.3). */
+/**
+ * Les deux chemins d'entrée, tels que l'écran les nomme (§37.2, §37.3).
+ *
+ * Le libellé de la PASTILLE est court, et le pouvoir employé est nommé à côté
+ * d'elle, en prose. Ce découpage n'est pas cosmétique : une pastille est
+ * `white-space: nowrap` (§6.8), et une phrase entière y débordait de sa carte
+ * sous 390 px — MESURÉ, capture `81-terminal-depannage-mobile.png` du
+ * 2026-08-20. Le §37.3 veut le chemin lisible pendant toute la session ; un
+ * libellé coupé au tiers ne l'est pas, et le §8.1 interdit par ailleurs que la
+ * page déborde horizontalement.
+ */
 export const CHEMINS = {
-  ssh: { libelle: 'SSH', token: 'neutral',
-         explication: 'Connexion normale au Spark, avec la clé du responsable.' },
-  rescue: { libelle: 'Dépannage — exécution en root dans la cellule, depuis le plan de contrôle',
-            token: 'danger',
-            explication: 'Le plan de contrôle exécute un shell root DANS la cellule, '
-              + 'sans passer par son « sshd ».' },
+  ssh: { pastille: 'SSH', token: 'neutral', nomme: null },
+  rescue: {
+    pastille: 'Dépannage', token: 'danger',
+    nomme: 'exécution en root dans la cellule, depuis le plan de contrôle',
+  },
 };
 
 /** Pourquoi le dépannage a été ouvert. Il entre au journal, et se lit ici. */
@@ -110,7 +119,8 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
     : '';
   const bandeau = `<p class="bandeau-terminal">
       <span class="badge badge--${chemin.token}"><span class="badge__point" aria-hidden="true"></span>${
-        echapper(chemin.libelle)}</span>
+        echapper(chemin.pastille)}</span>
+      ${chemin.nomme ? `<strong>${echapper(chemin.nomme)}</strong>` : ''}
       ${spark.protected
         ? '<span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>Spark protégé</span>'
         : ''}${motif}
@@ -132,8 +142,8 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
          distincte, pour que l’on puisse compter combien de fois cette voie a servi.
          Elle n’est acceptée que si ce Spark est en erreur ou si rien ne répond sur
          son port 22 — c’est le serveur qui en décide, pas cet écran.</p>
-         <p class="formulaire__actions">
-           <button type="button" class="bouton bouton--danger" data-terminal="depanner-confirme">
+         <p class="confirmation__actions">
+           <button type="button" class="bouton bouton--destructif" data-terminal="depanner-confirme">
              Exécuter en root dans la cellule
            </button>
            <button type="button" class="bouton" data-terminal="depanner-annule">Annuler</button>

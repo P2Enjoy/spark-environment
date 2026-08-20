@@ -210,7 +210,7 @@ test('le dépannage se CONFIRME, et la confirmation nomme ce qui va se passer', 
   assert.match(rendu, /exécuter un shell root dans la cellule/i);
   assert.match(rendu, /« crm »/, 'la confirmation nomme l’objet visé');
   assert.match(rendu, /data-terminal="depanner-confirme"/);
-  assert.match(rendu, /bouton--danger/, 'le point d’engagement est destructif');
+  assert.match(rendu, /bouton--destructif/, 'le point d’engagement est destructif');
   assert.match(rendu, /data-terminal="depanner-annule"/);
   // §6.22 : dans le FLUX, pas dans une seconde surface.
   assert.ok(!/<dialog/.test(rendu), 'une confirmation n’a pas besoin d’une modale');
@@ -262,4 +262,20 @@ test('un Spark sans cellule reste un refus PLEIN ÉCRAN, lui', () => {
     refus: { error: 'spark_not_reachable', message: 'pas encore de cellule' } }));
   assert.ok(!rendu.includes('id="terminal-entree"'));
   assert.match(rendu, /doit être <strong>créé<\/strong>/);
+});
+
+test('la PASTILLE du chemin reste courte, le pouvoir est nommé à côté', () => {
+  // MESURÉ le 2026-08-20 : une pastille est `white-space: nowrap` (§6.8), et
+  // une phrase entière y débordait de sa carte sous 390 px, coupant le libellé
+  // au tiers. Le §37.3 veut le chemin LISIBLE toute la session, le §8.1 interdit
+  // le débordement horizontal — les deux exigent ce découpage.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ouvert', session: { id: 'a', path: 'rescue', rescueReason: 'sshd_muet' } }));
+  const pastille = rendu.match(/<span class="badge badge--danger">[\s\S]*?<\/span>[^<]*<\/span>/);
+  assert.ok(pastille, 'la pastille existe');
+  assert.ok(pastille[0].length < 160, 'et elle est courte');
+  assert.ok(!pastille[0].includes('plan de contrôle'),
+    'le pouvoir employé n’est pas DANS la pastille');
+  // …mais il reste nommé, et en dehors d'elle.
+  assert.match(rendu, /<strong>exécution en root dans la cellule, depuis le plan de contrôle<\/strong>/);
 });
