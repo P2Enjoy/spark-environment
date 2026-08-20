@@ -73,6 +73,34 @@ soixante-dix minutes ; lancée avant d'avoir choisi une unité, elle consomme la
 mesurer un dépôt que tu n'as pas encore modifié. Elle est une opération de FIN, suivie d'une boucle
 de correction.
 
+### 0.1. ANNONCE D'OUVERTURE, AVANT TOUT AUTRE AFFICHAGE
+
+La toute première chose que tu ÉCRIS, avant tout diagnostic, toute commande et tout
+autre message, est cette ligne, seule et telle quelle :
+
+```
+A NEW SCHEDULED SESSION HAVE BEEN STARTED
+```
+
+suivie immédiatement de l'horodatage courant, relevé sur la machine et non
+supposé :
+
+```
+date -Is
+```
+
+Exemple de ce que tu affiches :
+
+```
+A NEW SCHEDULED SESSION HAVE BEEN STARTED
+2026-08-20T14:32:07+00:00
+```
+
+Motif : ces sessions s'enchaînent automatiquement et leurs sorties se lisent à la
+suite. Sans cette borne, on ne sait plus où finit une exécution et où commence la
+suivante, ni quand chacune a eu lieu — et deux comptes rendus se confondent.
+
+
 ## 1. BRANCHE : QUEL QUE SOIT L'ÉTAT INITIAL, TU DOIS TRAVAILLER ET FINIR SUR "main"
 
 L'environnement peut démarrer dans n'importe lequel de ces états :
@@ -973,7 +1001,64 @@ Il couvre l'INTÉGRALITÉ de la session, pas seulement son dernier geste. La HI�
 4. En bref, sans développer : les migrations, les entrées de "docs/INCONSISTENCY_REPORT.md" consignées, et tout arbitrage désormais attendu du responsable.
 5. Le commit final et la confirmation que "origin/main" le porte.
 
+Lorsque la session conclut à l'arrêt définitif de la boucle, ce compte rendu prend la
+forme du §4.5 : il reste celui décrit ici, et il dit EN PREMIÈRE LIGNE que la tâche
+automatique est arrêtée.
+
 Une session qui n'a livré AUCUN code reste soumise à ce compte rendu, et le dit en PREMIÈRE ligne, sans détour : l'absence de fonctionnalité codée est l'information la plus importante de ce compte rendu-là, pas un fait noyé après le travail documentaire (§4.2 bis).
+
+### 4.5. CONDITION D'ARRÊT DÉFINITIF DE LA TÂCHE PLANIFIÉE
+
+La boucle planifiée n'est pas éternelle. Elle a une FIN, et cette fin est un geste
+explicite que tu poses toi-même.
+
+**Tu arrêtes définitivement la tâche planifiée dans exactement deux cas :**
+
+1. **Le backlog est terminé** : plus aucune unité `[ ]` ni `[~]` dans
+   `docs/BACKLOG.md`, autrement dit toute unité restante est `[x]` avec sa
+   Definition of Done satisfaite. Une unité laissée `[~]` NE compte pas comme
+   terminée, et n'autorise donc pas l'arrêt à ce titre.
+2. **Tu n'as plus aucune option pour avancer** : tout ce qui reste est bloqué par
+   quelque chose que la session ne peut pas fournir — un matériel absent, un
+   service extérieur indisponible, un arbitrage du responsable non rendu, un
+   accès manquant. « Difficile » n'est pas « bloqué » : avant de conclure à
+   l'arrêt, tu dois avoir vérifié une par une TOUTES les unités restantes et
+   nommé, pour chacune, ce qui l'empêche précisément.
+
+Tant que l'un des deux cas n'est pas ÉTABLI, tu ne t'arrêtes pas : tu choisis une
+unité et tu travailles, comme au §4.2.
+
+**La procédure d'arrêt, dans cet ordre, sans en sauter une étape :**
+
+1. **Arrête la tâche planifiée elle-même.** C'est le premier geste, pas le
+   dernier : une session qui rédige son compte rendu d'arrêt sans couper la
+   boucle sera relancée à l'heure suivante et refera le même constat. Selon
+   l'outillage qui porte la tâche, cela signifie supprimer le travail planifié
+   — `CronDelete` avec l'identifiant de la tâche, arrêt de la boucle dynamique,
+   ou suppression de la tâche planifiée dans le nuage. Si plusieurs mécanismes
+   la portent, coupe-les TOUS ; si l'outillage ne permet pas de couper toi-même,
+   dis-le explicitement et demande au responsable de le faire.
+2. **Mets le dépôt à jour et committe une dernière fois** : `docs/JOURNAL.md`
+   porte une entrée d'arrêt datée, `docs/BACKLOG.md` porte l'état RÉEL de chaque
+   unité, et tout blocage nommé au point 2 ci-dessus est écrit là où quelqu'un le
+   cherchera — dans l'unité concernée, pas seulement dans le journal.
+3. **Pousse ce commit sur `origin/main`** et satisfais la garde du §5.
+4. **Produis un compte rendu final d'ARRÊT**, qui reprend le §4.4 et y ajoute,
+   clairement et sans détour :
+   - **que la tâche automatique est ARRÊTÉE**, dit en toutes lettres et en
+     PREMIÈRE ligne du compte rendu, pas noyé au milieu ;
+   - lequel des deux cas ci-dessus l'a déclenché ;
+   - où en est le projet : ce qui est livré et prouvé, ce qui ne l'est pas ;
+   - ce qui RESTE en attente, unité par unité ;
+   - ce qui a EMPÊCHÉ d'aller plus loin, précisément, pour chaque unité restante,
+     et ce qu'il faudrait pour la débloquer — un matériel, un accès, un
+     arbitrage ;
+   - le commit final et la confirmation que `origin/main` le porte.
+
+N'arrête JAMAIS la tâche en silence, et ne la laisse JAMAIS tourner sur un projet
+qui n'a plus rien à avancer : les deux font perdre du temps, l'un en cachant la
+fin, l'autre en la répétant indéfiniment.
+
 
 ## 5. RÈGLE FINALE, AUCUNE EXCEPTION
 
