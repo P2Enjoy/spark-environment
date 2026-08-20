@@ -4090,6 +4090,35 @@ même** et l'écart reste visible : refuser un terminal parce que le journal est
 indisponible transformerait une panne de traçabilité en panne d'exploitation, au
 moment précis où l'on cherche à réparer.
 
+#### 37.4.6 `POST /v1/audit` : une porte étroite, et pourquoi elle l'est
+
+Le journal n'avait jusqu'ici **aucune écriture depuis l'extérieur** : seul
+`sparkd` y écrivait, sur ses propres gestes. Le §37.4.5 en exige une, puisque la
+session de terminal ne passe délibérément pas par lui.
+
+Ouvrir cette porte en grand serait défaire le journal : n'importe quel appelant
+pourrait y inscrire n'importe quelle action, et une entrée forgée ne se
+distinguerait pas d'une vraie. Elle est donc **étroite**, par trois bornes :
+
+- **une liste blanche d'actions.** Seules celles que la console est seule à
+  pouvoir constater sont acceptées : `spark.terminal_open`,
+  `spark.terminal_close`, et plus tard leurs équivalents pour un conteneur.
+  Toute autre action est refusée en `422`, en nommant celles qui sont admises.
+  Un appelant ne peut donc pas se faire passer pour le runtime ;
+- **l'acteur n'est pas choisi par l'appelant.** Il vient de l'en-tête que l'hôte
+  console pose déjà sur chaque requête relayée (§21.6.2), et le corps ne peut
+  pas le contredire. Laisser une requête choisir son identité au journal la
+  rendrait triviale à falsifier ;
+- **la charge est bornée.** `payload` n'accepte que des clés connues — `path`,
+  `reason`, `duration_seconds` — et le message est composé par la console à
+  partir d'elles. Un champ libre deviendrait le dépôt de secrets en clair que le
+  §37.5 interdit précisément.
+
+L'entrée rejoint la chaîne d'intégrité comme n'importe quelle autre (§36.9) :
+elle est chaînée, et une vérification la traverse sans la distinguer. C'est
+voulu — une session de terminal est un geste du produit, pas une note en marge.
+
+
 ### 37.5 Ce que le journal retient d'une session
 
 **Décision du responsable : l'ouverture et la fermeture, rien du contenu.** Sont
