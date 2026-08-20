@@ -629,3 +629,117 @@ test('le jeton DNS n entre NI dans l inventaire NI dans une requete vers sparkd'
     'rien de ce qui part vers sparkd ne porte le jeton');
   server.close();
 });
+
+// --- les recettes DNS (SPK-50, docs/DAT.md §38.6) ---------------------------
+
+test('le catalogue des recettes vient du code, avec leurs parametres', async () => {
+  const { base, server } = await hote({ env: JETON });
+  const { recipes } = await (await fetch(`${base}/api/dns/recipes`)).json();
+  assert.deepEqual(recipes.map((r) => r.id).sort(),
+                   ['relais-transactionnel', 'site-web']);
+  server.close();
+});
+
+test('l’apercu d’une recette rend l’effet de CHAQUE ligne, sans rien ecrire', async () => {
+  // §38.6.3 : l'ecran presente la recette ENTIERE avant d'ecrire. Une recette a
+  // moitie posee est pire qu'une recette absente, et on ne s'en apercoit qu'apres.
+  let ecritures = 0;
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async (_url, options = {}) => {
+      if (options.method === 'PATCH') ecritures += 1;
+      return new Response(JSON.stringify({ records: [
+        { name: '', type: 'A', data: '198.51.100.1', ttl: 3600, id: '1' },
+      ] }), { status: 200 });
+    },
+  });
+  const vu = await (await fetch(`${base}/api/dns/recipe/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
+                           params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
+  })).json();
+
+  assert.equal(vu.records.length, 2);
+  assert.equal(vu.records[0].effet, 'remplace');
+  assert.equal(vu.records[0].current.data, '198.51.100.1');
+  assert.equal(vu.records[1].effet, 'pose', 'le « www » n’existe pas encore');
+  assert.equal(ecritures, 0, 'un apercu n’ecrit RIEN');
+  server.close();
+});
+
+test('une recette ecrit ligne a ligne et rend LE SORT de chacune', async () => {
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async (_url, options = {}) =>
+      new Response(JSON.stringify({ records: [] }), { status: 200 }),
+  });
+  const fait = await (await fetch(`${base}/api/dns/recipe`, {
+    method: 'POST',
+    body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
+                           params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
+  })).json();
+  assert.equal(fait.written, 2);
+  assert.equal(fait.failed, 0);
+  assert.ok(fait.records.every((r) => r.written));
+  assert.equal(fait.incomplete, null);
+  assert.match(fait.propagation, /La résolution peut demander/);
+  server.close();
+});
+
+test('une ligne REFUSEE au milieu rend la recette INCOMPLETE, sans rien defaire', async () => {
+  // Ni succes ni echec global : un « succes » sur une recette a moitie posee
+  // serait le pire des mensonges possibles ici (§38.6.3).
+  let patchs = 0;
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async (_url, options = {}) => {
+      if (options.method !== 'PATCH') {
+        return new Response(JSON.stringify({ records: [] }), { status: 200 });
+      }
+      patchs += 1;
+      return patchs === 2
+        ? new Response('quota exceeded', { status: 429 })
+        : new Response('{}', { status: 200 });
+    },
+  });
+  const fait = await (await fetch(`${base}/api/dns/recipe`, {
+    method: 'POST',
+    body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
+                           params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
+  })).json();
+
+  assert.equal(fait.written, 1);
+  assert.equal(fait.failed, 1);
+  assert.equal(fait.records[0].written, true);
+  assert.equal(fait.records[1].written, false);
+  assert.match(fait.records[1].error, /429/);
+  assert.match(fait.incomplete, /incomplète/);
+  assert.match(fait.incomplete, /n'est pas défait/,
+    'on n’annule pas ce qui est passé : la valeur d’avant n’a pas été retenue');
+  server.close();
+});
+
+test('une valeur que l’exploitant doit fournir rend 422 en NOMMANT le champ', async () => {
+  const { base, server } = await hote({ env: JETON });
+  const r = await fetch(`${base}/api/dns/recipe`, {
+    method: 'POST',
+    body: JSON.stringify({ recipe: 'relais-transactionnel', zone: 'exemple.tech',
+                           params: { domain: 'noreply.exemple.tech', selector: '' } }),
+  });
+  assert.equal(r.status, 422);
+  const corps = await r.json();
+  assert.equal(corps.error, 'value_required');
+  assert.equal(corps.field, 'selector');
+  server.close();
+});
+
+test('sans jeton, les recettes se lisent mais ne s’ecrivent pas', async () => {
+  const { base, server } = await hote();
+  assert.equal((await fetch(`${base}/api/dns/recipes`)).status, 200);
+  const r = await fetch(`${base}/api/dns/recipe`, {
+    method: 'POST',
+    body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech', params: {} }),
+  });
+  assert.equal(r.status, 409);
+  server.close();
+});

@@ -1,6 +1,9 @@
 /**
  * Fournisseur DNS piloté par l'hôte console.
  *
+ * @spec docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.6 (les recettes),
+ *       §38.6.1 (une recette est une fonction), §38.6.2 (la garde élargie),
+ *       §38.6.3 (le compte rendu), §38.6.4 (les deux premières recettes)
  * @spec docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
  *       périmètre), §38.1 (où vit le secret), §38.2 (ce que le produit ne fait
  *       pas), §38.3 (ce qu'écrit un enregistrement d'ingress), §38.5 (la garde
@@ -19,8 +22,36 @@ import { readFile } from 'node:fs/promises';
 
 export class DnsError extends Error {}
 
-/** Seuls types écrits (§38.2) : une route d'ingress est une adresse, rien d'autre. */
+/** Types d'une route d'ingress : une route est une adresse, rien d'autre (§38.2). */
 export const TYPES = ['A', 'AAAA'];
+
+/**
+ * Types qu'une RECETTE sait composer, et la forme que leur donnée doit avoir
+ * (§38.6.2).
+ *
+ * Ce n'est pas une liste de prudence : c'est la liste de ce que le produit sait
+ * composer. Écrire un type qu'il ne compose pas serait écrire une valeur qu'il
+ * n'a pas vérifiée, et laisser le fournisseur la refuser après coup.
+ */
+export const FORMES = {
+  A: { attendu: 'une adresse IPv4', valide: (d) => estIPv4(d) },
+  AAAA: { attendu: 'une adresse IPv6', valide: (d) => d.includes(':') },
+  MX: {
+    attendu: 'une priorité puis un nom d’hôte, par exemple « 10 mail.exemple.tech. »',
+    valide: (d) => /^\d{1,5}\s+\S+$/.test(d),
+  },
+  TXT: { attendu: 'un texte non vide', valide: (d) => d.trim().length > 0 },
+  CNAME: { attendu: 'un nom d’hôte', valide: (d) => /^[a-z0-9.-]+\.?$/i.test(d) },
+  SRV: {
+    attendu: 'priorité, poids, port et cible, par exemple « 0 1 993 mail.exemple.tech. »',
+    valide: (d) => /^\d{1,5}\s+\d{1,5}\s+\d{1,5}\s+\S+$/.test(d),
+  },
+};
+
+function estIPv4(adresse) {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(adresse)
+    && adresse.split('.').every((n) => Number(n) <= 255);
+}
 
 /** TTL court : une route se déplace, et un TTL long ferait traîner la panne (§38.3). */
 export const TTL = 300;
@@ -105,10 +136,7 @@ export function typePourAdresse(adresse) {
   const a = String(adresse ?? '').trim();
   if (!a) throw new DnsError('Aucune adresse fournie.');
   if (a.includes(':')) return 'AAAA';
-  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(a)
-      || a.split('.').some((n) => Number(n) > 255)) {
-    throw new DnsError(`« ${a} » n'est pas une adresse IP.`);
-  }
+  if (!estIPv4(a)) throw new DnsError(`« ${a} » n'est pas une adresse IP.`);
   return 'A';
 }
 
@@ -119,6 +147,33 @@ export function typePourAdresse(adresse) {
  * paramètre, pas une constante : un exploitant gère sa zone entière, et la
  * garde du harnais ne doit pas devenir une limite du produit.
  */
+export function preparerEnregistrement(
+  { domain, zone, type, data, ttl = TTL, motif = null }) {
+  const name = nomRelatif(domain, zone);
+  const apex = name === APEX;
+  const t = String(type ?? '').toUpperCase();
+  const forme = FORMES[t];
+  if (!forme) {
+    throw new DnsError(
+      `Type « ${type} » refusé : le produit compose ${Object.keys(FORMES).join(', ')}.`);
+  }
+  const valeur = String(data ?? '').trim();
+  if (!valeur) throw new DnsError(`Un enregistrement ${t} sans valeur ne dit rien.`);
+  if (!forme.valide(valeur)) {
+    throw new DnsError(
+      `Valeur « ${valeur} » invalide pour un ${t} : attendu ${forme.attendu}.`);
+  }
+  if (!Number.isInteger(ttl) || ttl < 60 || ttl > 86400) {
+    throw new DnsError(`TTL « ${ttl} » hors bornes : 60 à 86400 secondes.`);
+  }
+  if (motif && !new RegExp(motif).test(normaliser(domain))) {
+    throw new DnsError(
+      `Écriture refusée : « ${normaliser(domain)} » sort de l'espace de noms `
+      + `autorisé sur ce poste (${motif}).`);
+  }
+  return { zone: normaliser(zone), name, type: t, data: valeur, ttl, apex };
+}
+
 export function preparer({ domain, zone, address, ttl = TTL, motif = null }) {
   const name = nomRelatif(domain, zone);
   // `apex` voyage avec la préparation : l'écran le dit, parce qu'écraser le nom

@@ -20,6 +20,7 @@ import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
+import { catalogue, composer, ValeurManquante } from './recettes.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -349,6 +350,113 @@ export function createConsoleHost(options = {}) {
       } catch (erreur) {
         return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
       }
+    },
+
+    /**
+     * Le catalogue des recettes (SPK-50, §38.6.5).
+     *
+     * Il vient du CODE, jamais d'un stockage : une recette enregistrée
+     * divergerait du code dès la première correction, et deux vérités
+     * coexisteraient sans qu'on sache laquelle est appliquée (§38.6.1).
+     */
+    'GET /api/dns/recipes': async () => ({ status: 200, body: { recipes: catalogue() } }),
+
+    /**
+     * Ce que la recette ÉCRIRAIT, et l'effet de chaque ligne (§38.6.3).
+     *
+     * L'écran présente la recette ENTIÈRE avant d'écrire : une recette à moitié
+     * posée est pire qu'une recette absente, et on ne s'en aperçoit qu'après.
+     */
+    'POST /api/dns/recipe/preview': async (corps) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 409, body: { error: 'dns_not_configured', message: bilan.reason } };
+      }
+      let compose;
+      try {
+        compose = composer(corps?.recipe, corps?.params ?? {},
+                           { zone: corps?.zone, motif: bilan.motif });
+      } catch (erreur) {
+        if (erreur instanceof ValeurManquante) {
+          return { status: 422, body: { error: 'value_required',
+                                        field: erreur.champ, message: erreur.message } };
+        }
+        if (!(erreur instanceof DnsError)) throw erreur;
+        return { status: 422, body: { error: 'dns_refused', message: erreur.message } };
+      }
+      try {
+        const lignes = [];
+        for (const record of compose.records) {
+          const actuel = await bilan.provider.existant(record);
+          lignes.push({
+            ...record, current: actuel,
+            effet: !actuel ? 'pose'
+              : actuel.data === record.data ? 'inchange' : 'remplace',
+          });
+        }
+        return { status: 200, body: { ...compose, records: lignes } };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /**
+     * Écrit la recette, ligne à ligne, et rend LE SORT DE CHACUNE (§38.6.3).
+     *
+     * Ni succès ni échec global : un « succès » sur une recette à moitié posée
+     * serait le pire des mensonges possibles ici — un `MX` sans SPF fait
+     * recevoir du courrier qu'on ne peut pas renvoyer.
+     *
+     * On n'annule PAS ce qui est passé : défaire supposerait de connaître la
+     * valeur d'avant, que le produit n'a pas retenue, et le §38.2 lui interdit
+     * de supprimer ce qu'il n'a pas posé.
+     */
+    'POST /api/dns/recipe': async (corps) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 409, body: { error: 'dns_not_configured', message: bilan.reason } };
+      }
+      let compose;
+      try {
+        compose = composer(corps?.recipe, corps?.params ?? {},
+                           { zone: corps?.zone, motif: bilan.motif });
+      } catch (erreur) {
+        if (erreur instanceof ValeurManquante) {
+          return { status: 422, body: { error: 'value_required',
+                                        field: erreur.champ, message: erreur.message } };
+        }
+        if (!(erreur instanceof DnsError)) throw erreur;
+        return { status: 422, body: { error: 'dns_refused', message: erreur.message } };
+      }
+
+      const resultats = [];
+      for (const record of compose.records) {
+        try {
+          const ecrit = await bilan.provider.setRecord(record);
+          resultats.push({ ...record, written: true, fqdn: ecrit.fqdn });
+        } catch (erreur) {
+          resultats.push({ ...record, written: false, error: erreur.message });
+        }
+      }
+      const manquants = resultats.filter((r) => !r.written);
+      return {
+        status: 200,
+        body: {
+          ...compose,
+          records: resultats,
+          written: resultats.length - manquants.length,
+          failed: manquants.length,
+          // Une recette dont UNE seule ligne a échoué est INCOMPLÈTE, et le dit
+          // en nommant ce qui manque (§38.6.3).
+          incomplete: manquants.length
+            ? `Recette incomplète : ${manquants.map((r) => `${r.type} ${r.name || '@'}`)
+                .join(', ')} n'a pas été écrit. Ce qui est passé n'est pas défait.`
+            : compose.incomplete,
+          propagation: `La résolution peut demander jusqu'à `
+            + `${compose.records[0]?.ttl ?? 300} secondes, davantage si un `
+            + `résolveur a déjà mis l'ancienne réponse en cache.`,
+        },
+      };
     },
 
     'DELETE /api/tunnels': async (corps) => {
