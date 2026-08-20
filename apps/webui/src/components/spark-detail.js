@@ -255,11 +255,16 @@ const SORTS_AMORCAGE = {
 function ligneAmorcage(ligne) {
   const etat = ETATS_AMORCAGE[ligne.state] ?? ETATS_AMORCAGE.absent;
   const sort = ligne.outcome ? SORTS_AMORCAGE[ligne.outcome] : null;
+  // Le runtime rend « absent » comme détail d'un élément absent. La pastille le
+  // dit déjà : le répéter écrit deux fois la même chose sur une ligne, et §14.5
+  // veut qu'une absence soit nommée UNE fois.
+  const detail = (ligne.detail ?? '').trim();
+  const utile = detail && detail !== etat.libelle && detail !== ligne.state;
   return `<li class="ligne-amorcage">
     <span class="badge badge--${etat.token}">${echapper(etat.libelle)}</span>
     <strong>${echapper(ligne.label ?? ligne.key)}</strong>
     ${sort ? `<span class="badge badge--${sort.token}">${echapper(sort.libelle)}</span>` : ''}
-    <span class="note">${echapper(ligne.detail ?? '')}</span>
+    ${utile ? `<span class="note">${echapper(detail)}</span>` : ''}
   </li>`;
 }
 

@@ -464,3 +464,19 @@ test('la section vit sur la facette d’identité, avec les accès', () => {
   assert.match(rendu, /id="titre-amorcage"/);
   assert.match(rendu, /id="titre-acces"/);
 });
+
+test('une absence est nommée UNE fois, pas deux sur la même ligne', () => {
+  // §14.5 : le runtime rend « absent » comme détail d'un élément absent, et la
+  // pastille le dit déjà. Trouvé en observant `docs/manuel/images/m6-amorcage.png`.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { complete: false, items: [
+      { key: 'depot', label: 'dépôt Docker amont', state: 'absent', detail: 'absent' },
+    ] } }));
+  assert.equal((rendu.match(/absent/g) ?? []).length, 1);
+  // …mais un détail qui APPREND quelque chose reste affiché.
+  const utile = renderAmorcage(CELLULE, amorcage({
+    releve: { complete: false, items: [
+      { key: 'sshd', label: 'serveur SSH', state: 'present', detail: 'active' },
+    ] } }));
+  assert.match(utile, /active/);
+});

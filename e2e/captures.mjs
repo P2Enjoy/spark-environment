@@ -119,7 +119,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     // routes. Tout le reste du chemin est celui de la production.
     ...(terminaux ? { terminals: terminaux } : {}),
     ...(sondageSshd ? { probeSshd: async () => sondageSshd } : {}),
-    fetch: async (url) => {
+    fetch: async (url, options = {}) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
       // SPK-22 : la carte des cœurs de la Forge.
@@ -212,6 +212,35 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         { reference: 'images:alpine/3.21', label: 'Alpine 3.21', state: 'unknown',
           verified_at: null, is_default: 0, detail: '' },
       ] }), { status: 200 });
+      // SPK-54 · §42 : l'amorçage. Le relevé montre les TROIS états, dont le
+      // `docker.io` de distribution — celui qui décide de l'unité (§41.2) —,
+      // et l'amorçage rend le sort de chaque ligne.
+      if (url.includes('/bootstrap')) {
+        const pose = (key, label, state, detail, outcome) => ({
+          key, label, state, detail,
+          action: outcome && outcome !== 'inchangé' ? 'amorcé' : 'aucune',
+          ...(outcome ? { outcome } : {}),
+        });
+        const amorce = options.method === 'POST';
+        return new Response(JSON.stringify(amorce
+          ? { spark: DETAIL, path: 'incus_exec', changed: true, complete: true, items: [
+              pose('sshd', 'serveur SSH', 'present', 'active', 'inchangé'),
+              pose('cles', 'clés d’accès', 'present', 'conformes au registre', 'installé'),
+              pose('depot', 'dépôt Docker amont', 'present', 'sources.list.d/docker.list', 'installé'),
+              pose('docker', 'moteur Docker', 'present', 'Docker version 29.7.2', 'installé'),
+              pose('compose', 'greffon Compose', 'present', 'Docker Compose version v2.40.0', 'installé'),
+            ] }
+          : { spark: DETAIL, reachable: true, complete: false, items: [
+              pose('sshd', 'serveur SSH', 'present', 'active'),
+              pose('cles', 'clés d’accès', 'absent', 'aucun fichier authorized_keys'),
+              pose('depot', 'dépôt Docker amont', 'absent', 'absent'),
+              pose('docker', 'moteur Docker', 'defect',
+                   'Docker version 26.1.5 — paquet « docker.io » de la distribution. '
+                   + 'Son profil AppArmor refuse socketpair() sous imbrication : les '
+                   + 'conteneurs démarrent puis meurent.'),
+              pose('compose', 'greffon Compose', 'absent', 'absent'),
+            ] }), { status: 200 });
+      }
       // SPK-39 : la vérification de la chaîne est un relevé explicite.
       if (url.includes('/v1/audit/verify')) return new Response(JSON.stringify(
         chaineRompue
@@ -657,6 +686,30 @@ console.log('  44-journal-ancre-alerte.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '45-journal-ancre-mobile.png'), fullPage: true });
 console.log('  45-journal-ancre-mobile.png');
+ctx.server.close();
+
+// --- L'AMORÇAGE (SPK-54, §41, §42) ----------------------------------------
+// Les trois états qui décident : pas encore relevé, un docker.io À CORRIGER, et
+// la confirmation qui nomme le pouvoir employé.
+ctx = await demarrer();
+await ouvrirDetail(ctx.base, { hauteur: 1300 });
+await page.screenshot({ path: join(SORTIE, '85-amorcage-non-releve.png'), fullPage: true });
+console.log('  85-amorcage-non-releve.png');
+await page.click('[data-amorcage="amorcer"]');
+await page.waitForSelector('[data-amorcage="engager"]', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '86-amorcage-confirmation.png'), fullPage: true });
+console.log('  86-amorcage-confirmation.png');
+
+// Le compte rendu ligne à ligne, et son format étroit : cinq lignes portant
+// chacune un état, un nom et un détail ne tiennent pas sur 390 px (§8.1).
+await page.click('[data-amorcage="engager"]');
+await page.waitForSelector('.liste-amorcage', { timeout: 8000 });
+await page.setViewportSize({ width: 1440, height: 1300 });
+await page.screenshot({ path: join(SORTIE, '87-amorcage-compte-rendu.png'), fullPage: true });
+console.log('  87-amorcage-compte-rendu.png');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '88-amorcage-mobile.png'), fullPage: true });
+console.log('  88-amorcage-mobile.png');
 ctx.server.close();
 
 // --- Le TERMINAL DE DÉPANNAGE (SPK-43, §37.3) -----------------------------

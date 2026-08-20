@@ -3,6 +3,19 @@
 ## [Non publié]
 
 ### Ajouté
+- **Amorcer un Spark depuis la console** (SPK-54, `docs/DAT.md` §41, §42) : la
+  fiche d'un Spark porte une section *Amorçage* qui relève ce qui manque —
+  serveur SSH, clés, dépôt Docker amont, moteur, greffon Compose — et n'installe
+  que cela. Le relevé se demande, il ne part pas tout seul : il exécute une
+  commande dans la cellule du locataire.
+- Un `docker.io` de distribution est signalé **« à corriger »** et non
+  « présent » : il s'installe, il démarre, et les conteneurs meurent
+  (`socketpair() failed`). L'amorçage le purge et pose `docker-ce`.
+- Un second amorçage ne fait **rien** et le dit. Un Spark protégé le refuse.
+- `exec_capture` au pilote Incus : exécuter et LIRE le code de sortie et les deux
+  flux, là où `exec_command` ne rendait rien.
+- `docs/manuel/M6-acces.md` : le chapitre de l'amorçage et son illustration.
+
 - `docs/DAT.md` §43.0 : les six mesures qui tranchent l'injection d'environnement
   — un conteneur n'hérite pas de l'environnement ambiant, `env_file:` est la seule
   voie qui porte un jeu entier, et `/etc/profile.d` échoue pour ce que systemd

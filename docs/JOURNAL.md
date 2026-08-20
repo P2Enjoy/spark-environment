@@ -4289,3 +4289,79 @@ Six essais exécutés dans la cellule, sortie citée telle quelle. Aucun code du
 dépôt modifié. Les fichiers d'essai et `/etc/spark` créés pour la mesure ont été
 retirés du Spark.
 
+
+## 2026-08-20 — SPK-54 : amorcer un Spark, et trois sessions dans un même arbre
+
+**Unité** : SPK-54, désignée par l'entrée précédente. `[ ]` et non `[~]` : la
+spécification manquante a donc été **écrite et poussée avant la première ligne de
+code** (§3.2, point 3). Le §42 disait l'intention du geste ; il ne disait ni ce
+que la détection exécute, ni ce que l'API rend, ni ce que le journal reçoit.
+Quatre sections neuves — §42.5 à §42.8 —, écrites après lecture du pilote et du
+runbook.
+
+### Le constat qui a ouvert l'unité
+
+`IncusDriver.exec_command` poste la commande et n'en rend **rien** : ni code, ni
+sortie. Suffisant pour ordonner un geste, insuffisant pour **détecter**, qui est
+le principe même du §42.1. D'où `exec_capture`, et sa règle : un code de sortie
+non nul n'est pas une erreur du pilote. `command -v sshd` qui rend `1` est une
+réponse — « absent » —, pas une panne. Les confondre ferait échouer l'amorçage
+sur ce qu'il est précisément venu constater.
+
+### Ce que l'unité livre
+
+La détection porte sur l'**origine** du paquet Docker, pas sur sa présence. Un
+`docker.io` est rendu `defect`, entre dans les manques, et l'installation le
+**purge** avant de poser `docker-ce` : les laisser cohabiter ne réparerait rien,
+c'est son profil AppArmor qui casse et il resterait posé.
+
+Deux routes : le relevé n'écrit rien et ne se journalise pas, l'amorçage agit.
+À l'écran, le relevé **ne part pas de lui-même** — il exécute une commande dans
+la cellule du locataire, et le lancer à chaque ouverture ferait entrer la console
+chez lui à chaque coup d'œil.
+
+### Deux manques du doublon, de même nature que celui du terminal
+
+Le pilote factice ne reflétait ni l'effet des scripts, ni l'empreinte des clés
+écrites. Sans le second, l'amorçage réécrivait les clés à chaque passage et
+n'était **jamais** idempotent — or c'est le point de la DoD. Mesuré au passage :
+le relevé contient `docker-ce` dans son `dpkg-query`, et un marqueur posé sur ce
+mot faisait déclarer Docker installé par la commande venue constater son absence.
+
+### Vérifications, et ce qui est rouge sans être de moi
+
+688 tests Python, 6 de contrat, 8 de gestes, 7 du manuel, `contract-check`,
+`build`. Captures `85-` à `88-` observées, plus `m6-amorcage.png` produite depuis
+la pile réelle — c'est elle qui a montré « absent » écrit deux fois sur la même
+ligne, corrigé avec sa preuve.
+
+**Deux preuves rouges, toutes deux étrangères à cette unité, mesurées :**
+
+- `classes.test.js` a rougi sur cinq classes de `spark-create.js`, fichier écrit
+  **en direct** par la session `spark-environment-e8`. Ligne de base établie :
+  vert à `HEAD`, rouge avec son fichier en cours. Elle a posé le CSS manquant
+  dans le même changement, et c'est redevenu vert. **Le garde-fou a fait son
+  travail sur du code non encore committé.**
+- Le parcours `REFUS 1` échoue sur `page.fill('#memory_gib', '512')` : son commit
+  `ea1aa28` (SPK-59) a fait de ce champ un `input[type=range]`, qu'on ne remplit
+  pas. Elle l'avait annoncé et reprend `e2e/parcours.test.mjs`, `captures.mjs` et
+  `manuel.mjs` pour l'adapter.
+
+### Trois sessions dans le même arbre
+
+Nous étions trois cet après-midi. Ce qui a tenu : terrain annoncé avant
+d'écrire, ajout par chemin explicite, documents partagés touchés à l'instant du
+commit. Ce qui n'a pas tenu : un commit a encore emporté le `CHANGELOG.md` et le
+`JOURNAL.md` d'une autre session, et j'ai moi-même lancé un `git stash push -u`
+sur l'arbre entier pour établir la ligne de base du §2.4 — il a rendu la main
+proprement, mais il aurait arraché le travail en cours des deux autres si l'une
+d'elles avait écrit pendant cette seconde. **Le §2.4 porte le même danger que le
+§1.2 dans un arbre partagé**, et l'arbitrage du responsable reste attendu.
+
+**SPK-54 est `[~]`**, avec deux écarts nommés : le mode **rootless** du §42.2
+n'est ni offert ni éprouvé, et la preuve qu'un amorçage rend une cellule
+réellement capable de `docker compose up` exige une Forge réelle.
+
+**Où reprendre.** Le mode rootless de SPK-54, qui est livrable ici : une option à
+l'écran qui énonce ce qu'elle coûte (§42.2), une variante d'installation, et ses
+preuves. Le reste de l'unité attend la Forge réelle, comme SPK-43.

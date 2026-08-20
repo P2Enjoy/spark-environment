@@ -349,6 +349,30 @@ tbody tr:hover { background: var(--color-hover); }
 }
 .formulaire__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: 0; }
 
+/* --- Curseur (§6.9 bis) --------------------------------------------------
+   La piste est native : `accent-color` la teinte et la poignée sans réécrire un
+   contrôle qui sait déjà répondre aux flèches, à Origine et à Fin. La valeur est
+   répétée à droite parce qu'une poignée ne dit pas où elle est. */
+.curseur { display: flex; align-items: center; gap: var(--space-3); max-width: 28rem; }
+.curseur__piste {
+  flex: 1; min-width: 0; margin: 0; padding: 0;
+  height: var(--size-target);
+  accent-color: var(--color-brand);
+}
+.curseur__valeur {
+  flex: none; min-width: 7rem; text-align: right; font-weight: 700;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.curseur__bornes {
+  display: flex; justify-content: space-between; gap: var(--space-2);
+  margin: 0; max-width: 28rem;
+  font-size: var(--text-compact); color: var(--color-text-3);
+}
+/* La zone existe même vide : l'avertissement s'y écrit sans repeindre le
+   formulaire, ce qui arracherait la poignée en cours de glissement. */
+.zone-avertissement:empty { display: none; }
+
+
 
 /* L'avertissement local annonce un RISQUE, pas un refus : accent, pas danger
    (docs/DAT.md §25.1). */

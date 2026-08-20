@@ -19,6 +19,73 @@ le panneau vous le dit avant le geste.
 Retirer une clé du **registre commun** — donc de tous les Sparks à la fois — ne
 se fait pas depuis cet écran.
 
+## Amorcer le Spark, une fois
+
+**Un Spark neuf n'a ni serveur SSH ni moteur Docker.** L'image de base n'en
+embarque aucun. Vos clés y sont bien écrites, mais rien n'écoute : la connexion
+décrite plus bas ne peut pas aboutir tant que ce premier geste n'a pas eu lieu.
+
+La section **Amorçage**, sur la fiche du Spark, s'en charge.
+
+![L'amorçage relève ce qui manque avant d'agir](images/m6-amorcage.png)
+
+### Relever d'abord
+
+Le bouton **Relever l'état** regarde ce qui est déjà là. Il n'installe rien, et
+il ne part pas tout seul : il exécute une commande **dans** votre Spark, et la
+console ne s'y invite pas à chaque coup d'œil. Tant que vous ne l'avez pas
+demandé, l'écran dit qu'il ne sait pas — il n'affiche pas « tout va bien » par
+défaut.
+
+Cinq éléments, chacun avec son état :
+
+| Élément | Ce que c'est |
+|---|---|
+| serveur SSH | ce qui vous laissera entrer |
+| clés d'accès | celles que vous avez autorisées |
+| dépôt Docker amont | d'où vient le moteur |
+| moteur Docker | ce qui fait tourner votre pile |
+| greffon Compose | `docker compose` |
+
+Trois états, et le troisième mérite une explication : **« à corriger »**. Il ne
+veut pas dire « absent ». Il veut dire présent *et* inutilisable.
+
+Le cas concret est celui du paquet `docker.io` fourni par Debian. Il s'installe,
+il démarre, `docker --version` répond — et **vos conteneurs meurent au
+démarrage**, avec une erreur qui ne dit pas pourquoi (`socketpair() failed`). Son
+profil de sécurité est trop ancien pour fonctionner dans un Spark. L'amorçage le
+remplace par le moteur du dépôt officiel de Docker, qui fonctionne sans rien
+désactiver.
+
+C'est pour ce cas que l'écran distingue trois états et non deux : un Spark où
+Docker est « présent » peut être un Spark où rien ne tournera.
+
+### Puis amorcer
+
+**Amorcer ce Spark** demande une confirmation, et elle dit ce qui va se passer :
+la console exécute des commandes **en root dans la cellule**, sans passer par
+SSH — puisque c'est justement ce qui n'existe pas encore. C'est le seul geste du
+produit qui emprunte ce chemin en dehors du dépannage, et il est inscrit au
+journal sous une entrée qui lui est propre.
+
+**Seuls les manques sont installés.** Ce qui est déjà en place n'est pas touché,
+et ce n'est pas une optimisation : réinstaller « au cas où » redémarrerait le
+moteur Docker du Spark, donc ce qu'il fait tourner. Vous pouvez donc relancer
+l'amorçage sans risque — s'il n'y a rien à faire, il ne fait rien et vous le dit.
+
+Le compte rendu donne le sort de **chaque** ligne : inchangé, installé, ou
+échoué. Jamais un « succès » global, qui laisserait croire que tout a été fait
+alors qu'on n'a agi que sur une partie.
+
+### Ce que l'amorçage ne fait pas
+
+Il n'installe pas votre application, ne pose pas vos variables, ne gère pas vos
+versions. Il rend le Spark joignable et capable de faire tourner une pile
+Compose, et s'arrête là.
+
+Un Spark **protégé** refuse l'amorçage : il installe des paquets et redémarre des
+services, ce que la protection est là pour arrêter. Levez-la d'abord.
+
 ## Se connecter
 
 Un Spark **n'expose jamais son port 22**. L'accès se fait par rebond sur la Forge,

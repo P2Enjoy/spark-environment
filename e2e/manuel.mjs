@@ -163,6 +163,15 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.confirmation', { timeout: 10000 });
     await capturer('m10-suppression');
 
+    // --- M6 · L'AMORÇAGE (SPK-54, §42) ---------------------------------------
+    // Le relevé AVANT d'agir : c'est ce que le chapitre demande au lecteur de
+    // reconnaître, et c'est l'état où il arrivera.
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-amorcage', { timeout: 10000 });
+    await page.click('[data-amorcage="relever"]');
+    await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+    await capturer('m6-amorcage', { hauteur: 1000 });
+
     // --- M8 · LE SSHD MUET (SPK-43, §37.2) -----------------------------------
     // « site-vitrine » : son chemin normal meurt aussitôt dans la pile de
     // vérification, comme le fait `ssh` face à un port fermé.

@@ -2060,7 +2060,7 @@ d'incohérences — retirée dans le même changement.
   mise à jour depuis l'interface. Tant que ce n'est pas livré et éprouvé depuis le
   parcours canonique, l'unité reste `[~]`.
 
-### [ ] SPK-54 · Amorcer un Spark depuis la console
+### [~] SPK-54 · Amorcer un Spark depuis la console
 
 Mesuré en montant `helo` de bout en bout (§41) : un Spark neuf n'a **ni `sshd`**,
 et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
@@ -2083,6 +2083,50 @@ et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
   bavard casserait la production du locataire ; un test prouve la détection d'un
   `docker.io` de distribution ; le mode rootless est éprouvé sur une pile qui le
   supporte ; captures observées ; manuel M6 mis à jour.
+
+**Livrée le 2026-08-20, sauf deux points nommés plus bas.**
+
+- **Contrat écrit AVANT le code** : §42.5 à §42.8 du DAT — ce qui manquait au
+  pilote, ce que la détection exécute, le contrat d'API, ce que le journal
+  reçoit. Commit documentaire dédié, poussé avant la première ligne.
+- **Le constat qui a ouvert l'unité** : `exec_command` poste la commande et n'en
+  rend RIEN. Suffisant pour ordonner un geste, insuffisant pour DÉTECTER, qui est
+  le principe du §42.1. D'où `exec_capture`, et sa règle : **un code de sortie
+  non nul n'est pas une erreur du pilote** — `command -v sshd` qui rend `1` est
+  une réponse, pas une panne.
+- **L'origine, pas la présence** : un `docker.io` est rendu `defect`, entre dans
+  les manques, et l'installation le **purge** avant de poser `docker-ce`. Les
+  laisser cohabiter ne réparerait rien : c'est son profil AppArmor qui casse, et
+  il resterait posé.
+- **Deux routes** : le relevé n'écrit rien et ne se journalise pas, l'amorçage
+  agit. Faire de la détection l'effet de bord d'une écriture obligerait à amorcer
+  pour savoir s'il y a lieu d'amorcer.
+- **Le relevé ne part pas de lui-même** depuis l'écran : il exécute une commande
+  dans la cellule du locataire, et le lancer à chaque ouverture ferait entrer la
+  console chez lui à chaque coup d'œil. « Pas encore relevé » n'est donc ni
+  « rien à faire », ni « tout va bien ».
+- **Deux manques du doublon**, trouvés en écrivant les parcours et de même nature
+  que celui du terminal : le pilote factice ne reflétait pas l'effet des scripts,
+  ni l'empreinte des clés écrites. Sans le second, l'amorçage réécrivait les clés
+  à chaque passage et n'était **jamais** idempotent.
+- **Correction de spécification après mesure** : le refus d'un Spark protégé rend
+  `423` et non `409`, code déjà fixé par le §35.5. La table du §42.7 disait
+  `409`, ce qui était une supposition.
+- **Preuves** : 21 de `sparkd` propres à l'unité, 48 de composant, 4 parcours E2E
+  neufs (**50 au total**). Captures `85-` à `88-` observées, format étroit
+  compris, plus `docs/manuel/images/m6-amorcage.png` produite depuis la pile
+  réelle. Manuel M6 complété.
+- **Défaut trouvé en observant la capture du manuel** : « absent » était écrit
+  deux fois sur la même ligne — la pastille et le détail. Corrigé, avec sa preuve.
+
+- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
+  1. le **mode rootless** du §42.2 n'est ni offert ni éprouvé. Il demande une
+     option à l'écran, une variante d'installation, et une pile qui le supporte
+     pour l'éprouver ;
+  2. la preuve qu'un amorçage rend une cellule **réellement** joignable et
+     capable de `docker compose up` : elle exige une Forge réelle avec Incus, et
+     c'est la même limite qu'au §39.7. Le doublon représente l'effet des scripts,
+     ce qui prouve la logique du geste, pas son résultat sur une vraie cellule.
 
 ### [ ] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
 
@@ -2233,36 +2277,6 @@ transport.
   fichier de composition soit retouché, ce qui est la raison d'être de
   `env_file:` ; manuel M6/M8 et
   seed mis à jour.
-
-### [ ] SPK-59 · Les quotas se règlent au curseur
-
-**Demande du responsable, 2026-08-20.** Les quotas de l'écran de création se
-saisissent au clavier, chiffre par chiffre, alors que ce sont des valeurs bornées
-dont on cherche un ordre de grandeur bien plus souvent qu'une valeur exacte. Un
-curseur montre la plage en même temps que la valeur ; une saisie ne montre que ce
-qu'on y a tapé.
-
-La préférence n'est pas absolue et ne doit pas le devenir : elle ne vaut que
-lorsque les bornes sont connues, qu'un pas traverse la plage en un nombre de crans
-manipulables, et que ce pas ne détruit pas la granularité que la valeur signifie.
-
-- Spécification : `docs/DESIGN_SYSTEM.md` **§6.9 bis** (la règle générale et ses
-  trois conditions) · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-07** (son application
-  ici) · `docs/DAT.md` §25.1, §25.3 · `docs/manuel/M5`.
-- Portée : les six quotas de l'écran de création — réservation CPU, plafond CPU,
-  cœurs, mémoire, disque, débit. Rien d'autre ne change de forme ; les **ports**
-  restent des saisies, et c'est le contre-exemple qui fixe la règle.
-- **Ce qui décide de l'unité** : la borne haute est la **capacité totale de la
-  Forge**, jamais le disponible. Borner sur le disponible ferait décider l'écran
-  à la place de `sparkd` (§25.1) et rendrait le refus d'admission inatteignable
-  depuis le parcours canonique.
-- Repli obligatoire : capacité inconnue, ou plage impossible à parcourir sans
-  perdre la granularité métier — le champ redevient une **saisie numérique**, et
-  l'écran ne s'en cache pas.
-- DoD : tests de composant sur les deux branches — curseur et repli — et sur le
-  calcul des bornes ; parcours E2E qui règle un quota **au clavier** depuis le
-  parcours canonique et obtient le refus réel du serveur ; captures observées aux
-  trois formats ; manuel M5 et design system mis à jour dans le même changement.
 
 ### [ ] SPK-59 · Les quotas se règlent au curseur
 
