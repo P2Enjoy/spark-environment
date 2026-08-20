@@ -90,7 +90,10 @@ test('sans détail relevé, la somme est affichée SANS inventer sa répartition
   const rendu = renderMemoryBreakdown({
     ...HOTE, reserves: { memory_bytes: 18 * GIO, arc_bytes: 0, margin_bytes: 0 },
   });
-  assert.ok(rendu.includes('− réserve de l’hôte'));
+  // REVISE par SPK-42 : la machine est une FORGE (§1 bis). Le libelle suit ; ce
+  // que la preuve etablit — la somme est affichee SANS inventer sa repartition —
+  // est inchange.
+  assert.ok(rendu.includes('− réserve de la Forge'));
   assert.ok(rendu.includes('18 Gio'));
   assert.ok(!rendu.includes('ARC ZFS'), 'ne pas nommer un terme qu’on ne connaît pas');
   assert.ok(rendu.includes('prochain relevé de topologie'));

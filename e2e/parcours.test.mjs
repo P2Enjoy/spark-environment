@@ -135,7 +135,7 @@ test('un Spark en erreur dit pourquoi, et propose de reprendre', async () => {
 test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacité", async () => {
   await parcours('hote', async () => {
     await accueil();
-    await page.click('nav a[href="#/hote"]');
+    await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
 
     // La capacité affichée doit être celle que sparkd calcule (§29.3 : on LIT
@@ -290,9 +290,9 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
   await parcours('journal-supervision', async () => {
     // PAR LA NAVIGATION : accueil, Hôte, onglet Journal (§36.8.1).
     await accueil();
-    await page.click('nav a[href="#/hote"]');
+    await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
-    await page.click('.onglet[href="#/hote/journal"]');
+    await page.click('.onglet[href="#/forge/journal"]');
     await page.waitForSelector('#titre-journal-hote', { timeout: 10000 });
 
     const toutes = await page.$$eval('tbody tr', (l) => l.length);
@@ -537,7 +537,7 @@ test('révoquer une clé malgré le gel, par la confirmation qui NOMME', async (
 test("l’écart entre les tailles vendues et l’alloué du disque est EXPLIQUÉ", async () => {
   await parcours('marge-metadonnees', async () => {
     await accueil();
-    await page.click('nav a[href="#/hote"]');
+    await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
 
     // Ce que l'exploitant lit à l'écran, sans avoir à ouvrir le code.
@@ -722,17 +722,17 @@ test('toute la navigation principale est atteignable au clavier', async () => {
   await parcours('clavier', async () => {
     await accueil();
     let atteint = null;
-    for (let i = 0; i < 15 && atteint !== '#/hote'; i += 1) {
+    for (let i = 0; i < 15 && atteint !== '#/forge'; i += 1) {
       await page.keyboard.press('Tab');
       atteint = await page.evaluate(() => document.activeElement?.getAttribute('href'));
     }
-    assert.equal(atteint, '#/hote', 'le lien « Hôte » doit être atteignable au clavier');
+    assert.equal(atteint, '#/forge', 'le lien « Hôte » doit être atteignable au clavier');
     await page.keyboard.press('Enter');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
 
     const courant = await page.evaluate(() =>
       document.querySelector('nav a[aria-current="page"]')?.getAttribute('href'));
-    assert.equal(courant, '#/hote', 'l’indicateur de page courante suit la route');
+    assert.equal(courant, '#/forge', 'l’indicateur de page courante suit la route');
   });
 });
 
@@ -782,9 +782,9 @@ test("l'image se choisit dans une LISTE : plus aucune saisie libre", async () =>
 test('le catalogue a son écran, atteint par les onglets de l’hôte', async () => {
   await parcours('catalogue', async () => {
     await accueil();
-    await page.click('nav a[href="#/hote"]');
+    await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('.onglets', { timeout: 10000 });
-    await page.click('.onglet[href="#/hote/images"]');
+    await page.click('.onglet[href="#/forge/images"]');
     await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
 
     const texte = await page.textContent('body');
@@ -794,13 +794,13 @@ test('le catalogue a son écran, atteint par les onglets de l’hôte', async ()
     // L'onglet courant se signale — on doit pouvoir recharger ici (§34.1).
     const courant = await page.evaluate(() =>
       document.querySelector('.onglet[aria-current="page"]')?.getAttribute('href'));
-    assert.equal(courant, '#/hote/images');
+    assert.equal(courant, '#/forge/images');
   });
 });
 
 test('ajouter une image la crée NON RELEVÉE, puis le relevé tranche', async () => {
   await parcours('image-ajout', async () => {
-    await page.goto(`${pile.base}/#/hote/images`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${pile.base}/#/forge/images`, { waitUntil: 'domcontentloaded' });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#titre-catalogue', { timeout: 15000 });
 
@@ -836,20 +836,20 @@ test('les trois degrés s’atteignent au clavier, et annoncent où l’on est',
 
     // Degré 2 — l'onglet de l'hôte, atteint par le clavier.
     let atteint = null;
-    for (let i = 0; i < 20 && atteint !== '#/hote'; i += 1) {
+    for (let i = 0; i < 20 && atteint !== '#/forge'; i += 1) {
       await page.keyboard.press('Tab');
       atteint = await page.evaluate(() => document.activeElement?.getAttribute('href'));
     }
-    assert.equal(atteint, '#/hote', 'la destination « Hôte » est atteignable');
+    assert.equal(atteint, '#/forge', 'la destination « Hôte » est atteignable');
     await page.keyboard.press('Enter');
     await page.waitForSelector('.onglets', { timeout: 10000 });
 
     let onglet = null;
-    for (let i = 0; i < 20 && onglet !== '#/hote/images'; i += 1) {
+    for (let i = 0; i < 20 && onglet !== '#/forge/images'; i += 1) {
       await page.keyboard.press('Tab');
       onglet = await page.evaluate(() => document.activeElement?.getAttribute('href'));
     }
-    assert.equal(onglet, '#/hote/images', 'l’onglet est atteignable au clavier');
+    assert.equal(onglet, '#/forge/images', 'l’onglet est atteignable au clavier');
     await page.keyboard.press('Enter');
     await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
 
@@ -858,11 +858,11 @@ test('les trois degrés s’atteignent au clavier, et annoncent où l’on est',
     assert.equal(
       await page.evaluate(() =>
         document.querySelector('.onglet[aria-current="page"]')?.getAttribute('href')),
-      '#/hote/images');
+      '#/forge/images');
     assert.equal(
       await page.evaluate(() =>
         document.querySelector('.laterale a[aria-current="page"]')?.getAttribute('href')),
-      '#/hote');
+      '#/forge');
   });
 });
 

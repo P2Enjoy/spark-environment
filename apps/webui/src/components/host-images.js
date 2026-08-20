@@ -1,5 +1,5 @@
 /**
- * Écran « catalogue d'images » — onglet Images sous Hôte.
+ * Écran « catalogue d'images » — onglet Images sous Forge.
  *
  * @spec docs/BACKLOG.md#SPK-32 · docs/DAT.md §33 (le catalogue), §33.2 (ajouter
  *       est un geste explicite), §33.3 (le relevé, ses trois états, sa date),
@@ -196,10 +196,10 @@ export function renderOnglets(onglets, courant, etiquette) {
         href === courant ? ' aria-current="page"' : ''}>${echapper(libelle)}</a>`).join('')}</nav>`;
 }
 
-// SPK-39 : le journal est une destination sous Hôte, pas une facette d'un
+// SPK-39 : le journal est une destination sous Forge, pas une facette d'un
 // Spark — il couvre TOUS les Sparks (docs/DAT.md §36.8.1).
-export const ONGLETS_HOTE = [['#/hote', 'Pools'], ['#/hote/images', 'Images'],
-                             ['#/hote/journal', 'Journal']];
+export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images'],
+                             ['#/forge/journal', 'Journal']];
 
 /** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */
 export const FACETTES_SPARK = [
@@ -216,6 +216,6 @@ export function renderOngletsSpark(nom, courant) {
     `Facettes de ${nom}`);
 }
 
-export function renderOngletsHote(courant) {
-  return renderOnglets(ONGLETS_HOTE, courant, 'Sections de l’hôte');
+export function renderOngletsForge(courant) {
+  return renderOnglets(ONGLETS_FORGE, courant, 'Sections de la Forge');
 }

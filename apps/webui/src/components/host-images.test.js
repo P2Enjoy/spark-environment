@@ -15,7 +15,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderCatalogue, renderOngletsHote, dernierReleve, etatOf, ETATS, CATALOGUE_VIDE,
+  renderCatalogue, renderOngletsForge, dernierReleve, etatOf, ETATS, CATALOGUE_VIDE,
 } from './host-images.js';
 
 const IMAGES = [
@@ -171,14 +171,14 @@ test('les valeurs venues du serveur sont echappees', () => {
 // --- les onglets sont des DESTINATIONS (§34.1) ------------------------------
 
 test('les onglets du second degre sont des liens, pas un tablist', () => {
-  const rendu = renderOngletsHote('#/hote/images');
-  assert.ok(rendu.includes('<a href="#/hote/images"'));
+  const rendu = renderOngletsForge('#/forge/images');
+  assert.ok(rendu.includes('<a href="#/forge/images"'));
   assert.ok(!rendu.includes('role="tab"'), 'on doit pouvoir recharger la page');
   assert.ok(rendu.includes('aria-label'));
 });
 
 test('l’onglet courant se signale, et lui seul', () => {
-  const rendu = renderOngletsHote('#/hote/images');
+  const rendu = renderOngletsForge('#/forge/images');
   assert.equal((rendu.match(/aria-current="page"/g) || []).length, 1);
-  assert.match(rendu, /href="#\/hote\/images"[^>]*aria-current="page"/);
+  assert.match(rendu, /href="#\/forge\/images"[^>]*aria-current="page"/);
 });

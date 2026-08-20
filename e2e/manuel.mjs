@@ -83,7 +83,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m3-serveurs', { hauteur: 600 });
 
     // --- M4 · Lire les pools de ressources ----------------------------------
-    await page.click('nav a[href="#/hote"]');
+    await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
     await capturer('m4-pools', { hauteur: 1200 });
 
@@ -102,9 +102,9 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     // Le catalogue, puisque M5 renvoie à ce geste sans dire où il vit. On y va
     // par la navigation : Hôte, puis l'onglet Images.
     await accueil();
-    await page.click('nav a[href="#/hote"]');
+    await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
-    await page.click('.onglet[href="#/hote/images"]');
+    await page.click('.onglet[href="#/forge/images"]');
     await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
     await page.click('[data-ouvre="image"]');
     await page.waitForSelector('dialog.modale[open] #image-reference', { timeout: 10000 });
@@ -148,9 +148,9 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     // chaîne est déclenché, sinon l'illustration montrerait « pas encore
     // vérifiée » — ce qui est vrai mais n'illustre pas le chapitre.
     await accueil();
-    await page.click('nav a[href="#/hote"]');
+    await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
-    await page.click('.onglet[href="#/hote/journal"]');
+    await page.click('.onglet[href="#/forge/journal"]');
     await page.waitForSelector('#titre-journal-hote', { timeout: 10000 });
     await page.click('[data-action="verifier-chaine"]');
     await page.waitForFunction(

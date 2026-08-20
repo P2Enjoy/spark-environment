@@ -13,7 +13,7 @@ import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
-import { renderCatalogue, renderOngletsHote, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
+import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
 import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
@@ -26,7 +26,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
                            pools: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
-               hote: { status: 'loading', host: null, cores: null,
+               forge: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false },
                facette: '',
                servers: [],
@@ -43,15 +43,15 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
 /**
  * L'indicateur de page courante SUIT la route.
  *
- * Il était écrit en dur sur « Sparks » : sur l'écran de l'hôte, un lecteur
+ * Il était écrit en dur sur « Sparks » : sur l'écran de la Forge, un lecteur
  * d'écran annonçait donc la mauvaise page courante (docs/DESIGN_SYSTEM.md §5.1,
  * §9.7). Un indicateur qui ment est pire qu'un indicateur absent.
  */
 function marquerNavigation() {
-  // Le premier degré reste « Sparks » quand on est dans une section de l'hôte :
+  // Le premier degré reste « Sparks » quand on est dans une section de la Forge :
   // les onglets du second degré portent leur propre `aria-current` (§34.1).
   const courant = etat.route === 'serveurs' ? '#/serveurs'
-    : ['hote', 'images', 'journal'].includes(etat.route) ? '#/hote' : '#/sparks';
+    : ['forge', 'images', 'journal'].includes(etat.route) ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -64,13 +64,13 @@ function peindre() {
     etat.route === 'creation' && etat.status === 'loading'
       ? '<div class="carte bloc" aria-busy="true"><p class="sr-only" role="status">Chargement…</p></div>'
       : etat.route === 'images'
-      ? renderOngletsHote('#/hote/images') + renderCatalogue(etat.catalogue)
+      ? renderOngletsForge('#/forge/images') + renderCatalogue(etat.catalogue)
       : etat.route === 'journal'
       ? renderJournalHotePage(etat.journal)
       : etat.route === 'serveurs'
       ? renderServeurs(etat.catalogueServeurs)
-      : etat.route === 'hote'
-      ? renderOngletsHote('#/hote') + renderHostView(etat.hote)
+      : etat.route === 'forge'
+      ? renderOngletsForge('#/forge') + renderHostView(etat.forge)
       : etat.route === 'creation'
       ? renderSparkCreate(etat.creation)
       : etat.route === 'detail'
@@ -437,8 +437,8 @@ async function chargerCreation() {
       const defaut = etat.creation.images.find((i) => i.is_default) ?? etat.creation.images[0];
       etat.creation.values.image = defaut.reference;
     }
-    const hote = await api('/v1/forge');
-    etat.creation.pools = hote.pools;
+    const forge = await api('/v1/forge');
+    etat.creation.pools = forge.pools;
   } catch {
     // Capacité inconnue : l'écran le dit plutôt que d'inventer des chiffres.
     etat.creation.pools = null;
@@ -527,36 +527,36 @@ async function chargerDetail(nom, facette = '') {
  * son remède comme une action (§27.8).
  */
 async function chargerHote() {
-  etat.route = 'hote';
-  etat.hote.status = 'loading';
-  etat.hote.error = null;
+  etat.route = 'forge';
+  etat.forge.status = 'loading';
+  etat.forge.error = null;
   peindre();
   try {
-    etat.hote.host = await api('/v1/forge');
+    etat.forge.host = await api('/v1/forge');
     const [cores, sparks] = await Promise.all([
       api('/v1/forge/cores').catch(() => null),
       api('/v1/sparks').then((r) => r.sparks).catch(() => []),
     ]);
-    etat.hote.cores = cores;
+    etat.forge.cores = cores;
     // La carte des cœurs porte des identifiants de Sparks ; l'écran affiche des
     // NOMS. Un identifiant interne sans intérêt ne doit pas atteindre l'écran
     // (docs/DESIGN_SYSTEM.md §3.1).
-    etat.hote.sparkNames = Object.fromEntries(sparks.map((s) => [s.id, s.name]));
-    etat.hote.status = 'ready';
+    etat.forge.sparkNames = Object.fromEntries(sparks.map((s) => [s.id, s.name]));
+    etat.forge.status = 'ready';
   } catch (erreur) {
-    etat.hote.error = erreur;
-    etat.hote.status = erreur.code === 'forge_not_synced' ? 'not-synced' : 'error';
+    etat.forge.error = erreur;
+    etat.forge.status = erreur.code === 'forge_not_synced' ? 'not-synced' : 'error';
   }
   peindre();
 }
 
 async function relever() {
-  etat.hote.syncing = true;
+  etat.forge.syncing = true;
   peindre();
   try {
     await fetch(`/api/v1/forge/sync?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
   } catch { /* l'état réel sera relu ci-dessous */ }
-  etat.hote.syncing = false;
+  etat.forge.syncing = false;
   await chargerHote();
 }
 
@@ -860,9 +860,9 @@ function brancherCatalogue() {
 
 function router() {
   if (location.hash === '#/serveurs') return chargerServeurs();
-  if (location.hash === '#/hote/journal') return chargerJournal();
-  if (location.hash === '#/hote/images') return chargerCatalogue();
-  if (location.hash === '#/hote') return chargerHote();
+  if (location.hash === '#/forge/journal') return chargerJournal();
+  if (location.hash === '#/forge/images') return chargerCatalogue();
+  if (location.hash === '#/forge') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();
   // Chaque facette d'un Spark est une véritable destination : on doit pouvoir
   // recharger la page sur « Instantanés » (DESIGN_SYSTEM.md §5.4, §6.27).

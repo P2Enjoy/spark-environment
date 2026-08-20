@@ -1,5 +1,5 @@
 /**
- * Écran « pools de ressources de l'hôte ».
+ * Écran « pools de ressources de la Forge ».
  *
  * @spec docs/BACKLOG.md#SPK-22 · docs/DAT.md §27 (rendre l'admission control
  *       observable), §27.2 (trois grandeurs), §27.3 (la soustraction mémoire),
@@ -38,9 +38,9 @@ export const RESSOURCES = [
 export const GARANTIES = {
   proportional_between_sparks_only:
     'La réservation CPU n’est proportionnelle qu’entre Sparks : elle est arbitrée '
-    + 'contre les tranches de l’hôte et n’est pas une garantie absolue.',
+    + 'contre les tranches de la Forge et n’est pas une garantie absolue.',
   absolute:
-    'La réservation CPU est garantie même sous contention de l’hôte.',
+    'La réservation CPU est garantie même sous contention de la Forge.',
 };
 
 /** Part occupée d'un pool, en pourcentage borné. */
@@ -82,12 +82,12 @@ export function describeArcUsage(utilise, plafond) {
  * réglage du serveur, et une console qui l'écrirait mentirait dès qu'il change.
  * Une marge nulle ne dit rien — il n'y a rien à expliquer.
  */
-export function describeMetadataMargin(hote) {
-  const marge = hote?.reserves?.storage_metadata_margin_bytes;
+export function describeMetadataMargin(forge) {
+  const marge = forge?.reserves?.storage_metadata_margin_bytes;
   if (!marge) return '';
   // Le total est LU, pas recomposé : le nombre de Sparks n'est pas dans cette
   // réponse, et le recalculer ici ferait diverger l'écran du registre.
-  const total = hote?.reserves?.storage_metadata_total_bytes;
+  const total = forge?.reserves?.storage_metadata_total_bytes;
   return `L’alloué comprend ${formatBytes(marge)} de métadonnées par Spark`
     + (total ? `, soit ${formatBytes(total)} au total` : '')
     + `. Sans cette marge, un Spark qui remplit son quota empêcherait Incus `
@@ -145,14 +145,14 @@ function renderPool({ cle, nom, format, surengageable, sansFacteur }, pools,
  * un défaut ». Chaque terme retranché est donc nommé à l'endroit où la question
  * se pose.
  */
-export function renderMemoryBreakdown(hote) {
-  const total = hote?.memory?.total_bytes;
-  const allouable = hote?.pools?.memory?.capacity;
+export function renderMemoryBreakdown(forge) {
+  const total = forge?.memory?.total_bytes;
+  const allouable = forge?.pools?.memory?.capacity;
   if (total == null || allouable == null) return '';
 
-  const reserve = hote?.reserves?.memory_bytes ?? 0;
-  const arc = hote?.reserves?.arc_bytes;
-  const marge = hote?.reserves?.margin_bytes;
+  const reserve = forge?.reserves?.memory_bytes ?? 0;
+  const arc = forge?.reserves?.arc_bytes;
+  const marge = forge?.reserves?.margin_bytes;
 
   // Les deux termes ne sont renseignés qu'à partir du relevé qui suit la
   // migration 002. Tant qu'ils valent zéro alors que la réserve ne l'est pas,
@@ -165,10 +165,10 @@ export function renderMemoryBreakdown(hote) {
       ? [['− plafond de l’ARC ZFS', formatBytes(arc),
           `ZFS peut le prendre à tout instant : une réserve qui l’ignore promet une `
           + `mémoire que le noyau reprendra sous les Sparks. Se règle par zfs_arc_max. `
-          + describeArcUsage(hote?.reserves?.arc_used_bytes, arc)],
+          + describeArcUsage(forge?.reserves?.arc_used_bytes, arc)],
          ['− marge d’exploitation', formatBytes(marge),
           'Ce que l’hôte consomme pour lui-même. Se règle par SPARKD_MEMORY_RESERVE.']]
-      : [['− réserve de l’hôte', formatBytes(reserve),
+      : [['− réserve de la Forge', formatBytes(reserve),
           'Le détail de cette réserve sera connu au prochain relevé de topologie.']]),
     ['= mémoire allouable', formatBytes(allouable), ''],
   ];
@@ -252,7 +252,7 @@ export function renderHostView({ status = 'loading', host = null, cores = null,
   return `
 <header class="entete-entite">
   <div class="entete-entite__identite">
-    <h1>Ressources de l’hôte</h1>
+    <h1>Ressources de la Forge</h1>
     ${host.hostname ? `<span class="technique">${echapper(host.hostname)}</span>` : ''}
   </div>
   <p class="note">Relevé le
@@ -282,7 +282,7 @@ export function renderHostView({ status = 'loading', host = null, cores = null,
 export function renderHostSkeleton() {
   return `
 <div class="carte bloc" aria-busy="true">
-  <p class="sr-only" role="status">Relevé de l’hôte en cours…</p>
+  <p class="sr-only" role="status">Relevé de la Forge en cours…</p>
   ${Array.from({ length: 4 }, (_, i) =>
     `<span class="squelette" style="display:block;width:${70 - i * 8}%;margin-bottom:var(--space-3)"></span>`).join('')}
 </div>`;
@@ -307,7 +307,7 @@ export function renderNotSynced(error, syncing = false) {
 export function renderHostError(error) {
   return `
 <div class="carte"><div class="etat-vue etat-vue--erreur" role="alert">
-  <h2>Les ressources de l’hôte n’ont pas pu être lues</h2>
+  <h2>Les ressources de la Forge n’ont pas pu être lues</h2>
   <p>${echapper(error?.message ?? 'Cause inconnue.')}</p>
   <p style="margin-top:var(--space-4)"><button type="button" class="bouton" data-action="reessayer">Réessayer</button></p>
 </div></div>`;

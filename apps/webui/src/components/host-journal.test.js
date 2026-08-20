@@ -15,7 +15,7 @@ import {
   renderJournalHote, renderIntegrite, renderAuteurCellule,
   VERDICTS, FILTRES_VIDES,
 } from './host-journal.js';
-import { ONGLETS_HOTE } from './host-images.js';
+import { ONGLETS_FORGE } from './host-images.js';
 
 const ENTREES = [
   { ts: '2026-08-19T10:00:00', action: 'spark.create', result: 'ok',
@@ -33,8 +33,8 @@ const pret = (surcharge = {}) => renderJournalHote({
 // --- la destination (§36.8.1) ----------------------------------------------
 
 test('le journal est un onglet de l’HÔTE, à côté de Pools et Images', () => {
-  const chemins = ONGLETS_HOTE.map(([href]) => href);
-  assert.deepEqual(chemins, ['#/hote', '#/hote/images', '#/hote/journal']);
+  const chemins = ONGLETS_FORGE.map(([href]) => href);
+  assert.deepEqual(chemins, ['#/forge', '#/forge/images', '#/forge/journal']);
 });
 
 test('l’écran dit qu’il couvre TOUS les Sparks', () => {

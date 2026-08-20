@@ -1,5 +1,5 @@
 /**
- * Onglet de supervision du journal — troisième onglet sous Hôte.
+ * Onglet de supervision du journal — troisième onglet sous Forge.
  *
  * @spec docs/BACKLOG.md#SPK-39 · docs/DAT.md §36.8 (ce que l'onglet rend),
  *       §36.8 bis (son contrat), §36.4 (deux classes jamais confondues),
@@ -13,7 +13,7 @@
  * autre question — « qu'est-il arrivé à celui-ci ».
  */
 
-import { renderOngletsHote } from './host-images.js';
+import { renderOngletsForge } from './host-images.js';
 import { formatDate } from './host-view.js';
 
 const echapper = (v) =>
@@ -222,8 +222,8 @@ export function renderJournalHote({ status = 'loading', entries = [], error = nu
 
   return `${entete}
 ${renderIntegrite({ chain, anchor, checking })}
-<section class="carte bloc" aria-labelledby="titre-journal-hote">
-  <h2 id="titre-journal-hote">Opérations</h2>
+<section class="carte bloc" aria-labelledby="titre-journal-forge">
+  <h2 id="titre-journal-forge">Opérations</h2>
   ${renderFiltres(filtres)}
   ${corps}
   <p class="note">Les lectures ne sont pas journalisées : elles n’altèrent rien et
@@ -232,7 +232,7 @@ ${renderIntegrite({ chain, anchor, checking })}
 </section>`;
 }
 
-/** Les onglets de l'hôte, journal compris (§34.1). */
+/** Les onglets de la Forge, journal compris (§34.1). */
 export function renderJournalHotePage(etat) {
-  return renderOngletsHote('#/hote/journal') + renderJournalHote(etat);
+  return renderOngletsForge('#/forge/journal') + renderJournalHote(etat);
 }
