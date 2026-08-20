@@ -4037,6 +4037,25 @@ Trois façons de mourir, et une seule est normale :
 - **le shell distant se termine** de lui-même — `exit`, `Ctrl-D` : la session
   s'arrête et l'écran le dit.
 
+#### 37.4.2 bis Le doublon du transport, pour éprouver sans Spark
+
+`ssh -tt` exige un `sshd` **dans** le Spark, que la pile de développement n'a pas
+— son pilote est factice (§28.1). Sans doublon, aucun parcours ne pourrait
+éprouver ce que le produit possède : le flux, la saisie, la fermeture qui tue.
+
+`SPARK_TERMINAL_COMMAND` remplace la **commande lancée**, pas le mécanisme. Le
+harnais y met un interpréteur local ; tout le reste du chemin — la session, le
+flux d'évènements, le groupage des saisies, la mort du distant à la fermeture —
+est celui qui tournera en production. C'est le même motif que `FakeIncus`,
+`FakeCaddy` et `SPARK_DNS_BASE_URL`.
+
+**Ce que le doublon ne prouve pas**, et qu'il ne faut pas lui faire dire : que
+`ssh` atteigne réellement un Spark, ni qu'un `sshd` y réponde. Cela exige une
+Forge réelle — même limite qu'au §39.7.
+
+La variable est **absente en production** : son absence est le cas normal, et le
+produit lance alors `ssh`.
+
 #### 37.4.3 Le redimensionnement, et sa limite
 
 `ssh` en ligne de commande ne sait pas transmettre un changement de taille sans
