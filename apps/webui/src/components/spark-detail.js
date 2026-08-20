@@ -338,17 +338,15 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
          </label>
        </p>
        <p class="champ__aide">Le moteur tourne alors sous un compte non
-       privilégié <em>dans</em> la cellule. Trois choses changent, et il vaut mieux
-       les savoir avant :</p>
+       privilégié <em>dans</em> la cellule. <strong>Ce choix ne se reprend
+       pas.</strong> Trois choses changent :</p>
        <ul class="champ__aide">
          <li>les ports sous 1024 deviennent impossibles à publier dans la cellule ;</li>
-         <li>certaines piles Compose existantes ne fonctionnent pas telles quelles,
-         et reprendre une pile sans la réécrire est ce que ce produit vend ;</li>
-         <li>la cellule est <strong>déjà</strong> non privilégiée sur la Forge :
-         c’est une seconde couche, pas la première.</li>
+         <li>certaines piles Compose existantes ne fonctionnent pas telles quelles ;</li>
+         <li>la cellule est <strong>déjà</strong> non privilégiée sur la Forge.</li>
        </ul>
-       <p class="champ__aide">Ce choix ne se reprend pas : il se fait maintenant,
-       tant que rien ne tourne.</p>`;
+       <p class="champ__aide">
+         <a href="#/manuel/M6">Manuel M6 — Le mode rootless</a></p>`;
 
   const confirmation = etat.confirme
     ? `<div class="confirmation" role="group" aria-labelledby="titre-confirme-amorcage">
@@ -356,9 +354,8 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
          <p>Le plan de contrôle va <strong>exécuter des commandes en root dans la
          cellule</strong>, sans passer par SSH — c’est justement ce qui n’existe
          pas encore sur un Spark neuf.</p>
-         <p class="note">Seuls les éléments manquants sont installés. Ce qui est
-         déjà en place n’est pas touché : réinstaller « au cas où » redémarrerait
-         le moteur Docker de ce Spark, donc ce qu’il fait tourner.</p>
+         <p class="note">Seuls les éléments manquants sont installés ; ce qui est
+         déjà en place n’est pas touché.</p>
          ${option}
          <p class="confirmation__actions">
            <button type="button" class="bouton bouton--destructif" data-amorcage="engager">
@@ -372,8 +369,8 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
   return `
 <section class="carte bloc" aria-labelledby="titre-amorcage">
   <h2 id="titre-amorcage">Amorçage</h2>
-  <p class="note">L’image de base n’embarque ni serveur SSH ni moteur Docker.
-  L’amorçage relève ce qui manque et ne pose que cela.</p>
+  <p class="note">L’amorçage relève ce qui manque dans la cellule et ne pose que
+  cela. <a href="#/manuel/M6">Manuel M6 — Amorcer un Spark</a></p>
   ${corps}
   ${verdict}${rien}
   ${confirmation}

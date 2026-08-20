@@ -458,10 +458,18 @@ test('l’amorçage se CONFIRME, et la confirmation nomme le pouvoir employé', 
   assert.ok(!/<dialog/.test(rendu));
 });
 
-test('la confirmation dit que seuls les MANQUES sont installés, et pourquoi', () => {
+test('la confirmation dit que seuls les MANQUES sont installés', () => {
+  // RÉVISÉE le 2026-08-20 par SPK-56 (§1.5 bis). La preuve exigeait aussi le
+  // « pourquoi » — réinstaller au cas où redémarrerait le moteur Docker. Cette
+  // phrase reste vraie quel que soit le relevé : c'est du raisonnement, et il
+  // est au manuel M6.
+  //
+  // Ce que la confirmation doit dire pour qu'on décide reste : ce qu'elle va
+  // FAIRE, et qu'elle ne touche pas à ce qui est en place.
   const rendu = renderAmorcage(CELLULE, amorcage({ confirme: true }));
   assert.match(rendu, /Seuls les éléments manquants sont installés/);
-  assert.match(rendu, /redémarrerait\s+le moteur Docker/);
+  assert.match(rendu, /déjà en place n’est pas touché/);
+  assert.match(rendu, /exécuter des commandes en root/);
 });
 
 test('pendant la confirmation, la commande qui l’a ouverte disparaît', () => {
@@ -520,10 +528,20 @@ test('l’option rootless est OFFERTE, et décochée par défaut', () => {
 });
 
 test('l’option ÉNONCE ses trois coûts, elle ne se vend pas', () => {
+  // Ces trois coûts RESTENT à l'écran, et le §1.5 bis ne les en chasse pas :
+  // ils sont la CONSÉQUENCE d'une action sensible et irréversible, et le §6.23
+  // exige qu'une confirmation nomme sa conséquence. Le §1.5 bis vise le
+  // raisonnement de fond, pas ce qu'une confirmation doit dire pour décider.
+  //
+  // Ce qui EST parti au manuel (M6, « Le mode rootless »), c'est l'argumentation
+  // qui accompagnait chacun : pourquoi reprendre une pile sans la réécrire est
+  // ce que le produit vend, pourquoi la seconde couche n'est pas la première.
   const rendu = renderAmorcage(CELLULE, amorcage({ confirme: true }));
   assert.match(rendu, /ports sous 1024/);
   assert.match(rendu, /ne fonctionnent pas telles quelles/);
   assert.match(rendu, /déjà<\/strong> non privilégiée sur la Forge/);
+  assert.match(rendu, /ne se reprend\s+pas/, 'l’irréversibilité est dite');
+  assert.match(rendu, /href="#\/manuel\/M6"/, 'et le reste est au manuel');
   // …et jamais un argument de vente.
   assert.ok(!/plus sûr|recommandé|conseillé/i.test(rendu));
 });
