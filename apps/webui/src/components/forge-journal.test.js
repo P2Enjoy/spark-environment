@@ -60,6 +60,30 @@ test('une chaîne INTACTE avec une ancre qui ALERTE montre les DEUX', () => {
   assert.match(html, /annonce 3/);
 });
 
+test('une alerte d’ancre est ANNONCÉE, comme l’est une rupture de chaîne', () => {
+  // DESIGN_SYSTEM.md §9.7 et §14.8 : la rupture de chaîne porte `role="alert"`.
+  // Le verdict d'ancre est de même gravité — et c'est le seul des deux que la
+  // chaîne ne sait pas voir. Le laisser muet reviendrait à annoncer le signal
+  // qu'on a déjà, et à taire celui pour lequel la console existe.
+  const alerte = renderIntegrite({
+    chain: { intact: true, checked: 3, verified_at: 't', break: null },
+    anchor: { verdict: 'shrunk', explanation: 'Le journal a RACCOURCI.', alert: true,
+              known: { length: 9 }, announced: { length: 3 } },
+  });
+  assert.match(alerte, /<div class="refus" role="alert">[\s\S]*Le journal a raccourci/,
+    'l’alerte d’ancre porte la même enveloppe annoncée que la rupture de chaîne');
+
+  // …et une histoire SAINE n'en porte pas : une région d'alerte permanente
+  // n'alerte plus de rien.
+  const saine = renderIntegrite({
+    chain: { intact: true, checked: 3, verified_at: 't', break: null },
+    anchor: { verdict: 'extends', explanation: 'L’histoire se prolonge.', alert: false,
+              known: { length: 3 }, announced: { length: 9 } },
+  });
+  assert.ok(!saine.includes('role="alert"'),
+    'un verdict sain ne se déclare pas en alerte');
+});
+
 test('une chaîne ROMPUE désigne la ligne et dit ce qui s’est passé', () => {
   const recrite = renderIntegrite({
     chain: { intact: false, checked: 2, verified_at: 't',

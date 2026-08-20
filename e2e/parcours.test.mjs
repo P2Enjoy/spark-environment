@@ -1466,3 +1466,134 @@ test('un Spark sans CELLULE nomme ce qui manque', async () => {
     assert.ok((await page.textContent('.principal')).includes('doit être'));
   });
 });
+
+// --- SPK-38 · L'ANCRE VOIT CE QUE LA CHAÎNE NE PEUT PAS VOIR ----------------
+//
+// CE BLOC EST LE DERNIER DU FICHIER, ET IL DOIT LE RESTER. Le parcours ci-dessous
+// coupe la fin du journal DANS LA BASE de la pile — c'est l'attaque même qu'il
+// éprouve, et elle n'est pas annulable. Tout parcours écrit après lui lirait un
+// journal amputé et une ancre en alerte, sans que rien ne le lui dise.
+
+/** Ouvre l'onglet Journal PAR LA NAVIGATION, comme un exploitant (§36.8.1). */
+async function ouvrirJournalDeLaForge() {
+  await accueil();
+  await page.click('nav a[href="#/forge"]');
+  await page.waitForSelector('#titre-pools', { timeout: 10000 });
+  await page.click('.onglet[href="#/forge/journal"]');
+  await page.waitForSelector('#titre-journal-forge', { timeout: 10000 });
+}
+
+const DD_ANCRE = '#titre-integrite ~ .definitions .def:nth-child(2) dd';
+const DD_CHAINE = '#titre-integrite ~ .definitions .def:nth-child(1) dd';
+
+/**
+ * Déclenche le relevé AU CLAVIER et attend le REPEINT, pas un texte.
+ *
+ * Attendre un libellé particulier ferait passer le test pour une autre raison
+ * que celle qu'il éprouve ; attendre que le bloc « ait quelque chose » est pire
+ * encore — MESURÉ : au deuxième relevé la condition était déjà vraie avant même
+ * que la requête ne parte, et le parcours relisait le verdict PRÉCÉDENT.
+ *
+ * On marque donc le noeud courant, et on attend qu'il ait été remplacé ET que le
+ * bouton soit ressorti de son état occupé. Les deux ensemble : `verifierChaine`
+ * repeint DEUX fois, et le premier repeint efface déjà la marque alors que
+ * l'ancre porte encore la valeur d'avant.
+ */
+async function releverAuClavier() {
+  await page.$eval(DD_ANCRE, (dd) => { dd.dataset.avant = 'oui'; });
+  await page.focus('[data-action="verifier-chaine"]');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction((selecteur) => {
+    const dd = document.querySelector(selecteur);
+    const bouton = document.querySelector('[data-action="verifier-chaine"]');
+    return !!dd && dd.dataset.avant !== 'oui' && !!bouton && !bouton.disabled;
+  }, DD_ANCRE, { timeout: 15000 });
+  return page.textContent(DD_ANCRE);
+}
+
+test('l’ancre SIGNALE une histoire qui ne prolonge pas la précédente', async () => {
+  await parcours('journal-ancre-troncature', async () => {
+    // 1. La console pose sa référence, depuis l'écran et au clavier.
+    await ouvrirJournalDeLaForge();
+    const pose = await releverAuClavier();
+    assert.match(pose, /Première comparaison|L’histoire se prolonge|Rien de nouveau/,
+      'avant l’attaque, l’ancre ne doit rien avoir à signaler');
+    assert.ok(!pose.includes('raccourci') && !pose.includes('remplacé'),
+      `l’ancre alerte AVANT toute altération : ${pose}`);
+
+    // 2. Combien d'entrées la Forge porte-t-elle ? On LIT pour constater
+    //    (§29.3) : la troncature doit être assez profonde pour que la longueur
+    //    recule réellement sous celle que la console vient de retenir.
+    const { corps: liste } = await pile.lireSparkd('/v1/audit?limit=100000');
+    const chainees = liste.entries.filter((e) => e.entry_hash).length;
+    assert.ok(chainees > 10,
+      `le seed doit écrire assez d’entrées pour que la coupe soit franche (${chainees})`);
+
+    // 3. L'ATTAQUE, hors du produit. On coupe la FIN du journal en base : le
+    //    préfixe qui reste est une chaîne parfaitement valide, et c'est tout le
+    //    problème (§36.1). Aucun geste de l'interface ne peut faire cela.
+    //
+    //    Le verrou de SPK-37 refuse ce `DELETE` — MESURÉ, et c'est le produit
+    //    qui fonctionne. Il faut donc lever le déclencheur d'abord, puis le
+    //    remettre : c'est exactement le pouvoir que l'ancre suppose à
+    //    l'adversaire (§36.1 — qui peut écrire dans le fichier peut aussi
+    //    recalculer la chaîne, donc a fortiori désarmer une garde locale).
+    //    Le remettre en place n'est pas une politesse : sans lui, la suite du
+    //    parcours n'éprouverait plus la Forge que le produit livre.
+    await pile.alterer(
+      'DROP TRIGGER audit_log_immuable_delete;\n'
+      + 'DELETE FROM audit_log WHERE id > '
+      + '(SELECT id FROM audit_log ORDER BY id LIMIT 1 OFFSET 2);\n'
+      + 'CREATE TRIGGER audit_log_immuable_delete\n'
+      + 'BEFORE DELETE ON audit_log\n'
+      + 'BEGIN\n'
+      + "    SELECT RAISE(ABORT, 'audit_log est en ecriture seule : DELETE refuse');\n"
+      + 'END;');
+
+    // Le verrou est bien REVENU : la suite de ce parcours doit s'exécuter contre
+    // la Forge que le produit livre, pas contre une Forge désarmée.
+    await assert.rejects(
+      () => pile.alterer('DELETE FROM audit_log WHERE id = '
+        + '(SELECT id FROM audit_log ORDER BY id LIMIT 1);'),
+      /DELETE refuse/, 'le déclencheur d’immuabilité doit avoir été rétabli');
+
+    // 4. Le même geste, au même endroit, par le même chemin.
+    const verdict = await releverAuClavier();
+
+    // La chaîne, elle, ne voit RIEN : elle est intacte, et elle le dit.
+    const chaine = await page.textContent(DD_CHAINE);
+    assert.match(chaine, /Chaîne intacte/,
+      'une chaîne coupée à la fin reste valide — c’est précisément le point');
+
+    // L'ancre, elle, le voit.
+    assert.match(verdict, /Le journal a raccourci/);
+
+    // Le verdict CHIFFRE l'écart au lieu de l'affirmer, et c'est le recul lui-même
+    // qui est la preuve. On ne fige pas les deux nombres : le relevé s'inscrit au
+    // journal avant de lire la tête, donc la Forge en annonce une de plus que ce
+    // qui reste. Ce qui doit être vrai, c'est le RECUL.
+    const [, retenu, annonce] = verdict.match(
+      /avait retenu (\d+) entrée\(s\)[\s\S]*?annonce (\d+)/) ?? [];
+    assert.ok(retenu && annonce, `l’écart n’est pas chiffré à l’écran : ${verdict}`);
+    assert.ok(Number(retenu) > 10,
+      `la console doit avoir retenu une histoire consistante : ${retenu}`);
+    assert.ok(Number(annonce) < Number(retenu),
+      `la longueur doit avoir RECULÉ : ${annonce} n’est pas inférieur à ${retenu}`);
+
+    // …et il est ANNONCÉ, comme l'est une rupture de chaîne (DESIGN_SYSTEM.md
+    // §9.7, §14.8) : la structure porte la nature, pas la seule couleur.
+    const forme = await page.$eval(DD_ANCRE, (dd) => ({
+      alerte: !!dd.querySelector('[role="alert"]'),
+      danger: !!dd.querySelector('.badge--danger'),
+    }));
+    assert.equal(forme.alerte, true, 'l’alerte d’ancre est une région annoncée');
+    assert.equal(forme.danger, true);
+
+    // 5. Le point que le §36.9.6 tranche : l'ancre n'est PAS écrasée par une
+    //    alerte. Un second relevé alerte encore — sinon le signal s'effacerait
+    //    avec la preuve, et tout paraîtrait normal au relevé suivant.
+    const encore = await releverAuClavier();
+    assert.match(encore, /Le journal a raccourci/,
+      'un relevé de plus ne doit pas absoudre la Forge');
+  });
+});

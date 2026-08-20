@@ -89,14 +89,26 @@ export function renderIntegrite({ chain = null, anchor = null, checking = false 
          </div>`;
 
   const verdict = anchor ? (VERDICTS[anchor.verdict] ?? null) : null;
-  const ancre = anchor === null
-    ? '<p class="absence">La console n’a pas encore comparé cette histoire à ce qu’elle avait vu.</p>'
-    : `<p><span class="badge badge--${verdict?.token ?? 'neutral'}"><span class="badge__point" aria-hidden="true"></span>${
+  const dit = anchor === null ? '' :
+    `<p><span class="badge badge--${verdict?.token ?? 'neutral'}"><span class="badge__point" aria-hidden="true"></span>${
         echapper(verdict?.label ?? anchor.verdict)}</span> ${echapper(anchor.explanation ?? '')}</p>`
       + (anchor.known
         ? `<p class="note">La console avait retenu ${echapper(anchor.known.length)} entrée(s) ;
            le serveur en annonce ${echapper(anchor.announced?.length ?? 0)}.</p>`
         : '');
+
+  // `shrunk` et `diverged` sont des ALERTES, et elles se traitent comme la
+  // rupture de chaîne juste au-dessus : même enveloppe `refus`, même
+  // `role="alert"`. Deux signaux de même gravité dont un seul est annoncé, c'est
+  // celui qu'on n'annonce pas qui sera manqué — et ici c'est justement le seul
+  // que la chaîne ne sait pas voir (§36.1). DESIGN_SYSTEM.md §9.7 (annonce d'une
+  // alerte) et §14.8 : la nature se porte par la STRUCTURE, pas par la couleur
+  // du seul badge.
+  const ancre = anchor === null
+    ? '<p class="absence">La console n’a pas encore comparé cette histoire à ce qu’elle avait vu.</p>'
+    : anchor.alert
+      ? `<div class="refus" role="alert">${dit}</div>`
+      : dit;
 
   return `
 <section class="carte bloc" aria-labelledby="titre-integrite">

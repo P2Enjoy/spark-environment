@@ -129,6 +129,29 @@ export async function monterPile({ dns = null } = {}) {
       const r = await fetch(`http://127.0.0.1:${portSparkd}${chemin}`);
       return { status: r.status, corps: await r.json().catch(() => null) };
     },
+    /**
+     * Altère le registre HORS DU PRODUIT (SPK-38, docs/DAT.md §36.1).
+     *
+     * Aucun geste de l'interface ne peut couper la fin du journal : c'est
+     * précisément le propos de l'ancre. Prouver qu'elle voit la troncature
+     * exige donc d'écrire dans la base par un autre chemin que l'application,
+     * comme le ferait qui aurait pris la main sur la Forge. Ce levier n'existe
+     * que pour cela, et il n'atteint que le registre JETABLE de la pile.
+     */
+    async alterer(sql) {
+      await new Promise((resolve, reject) => {
+        const script = lancer(PYTHON, ['-c',
+          'import sqlite3,sys\n'
+          + 'c=sqlite3.connect(sys.argv[1])\n'
+          + 'c.executescript(sys.argv[2])\n'
+          + 'c.commit()\n'
+          + 'c.close()\n',
+          registre, sql], {}, journal);
+        script.on('exit', (code) => (code === 0
+          ? resolve()
+          : reject(new Error(`altération sortie en ${code} :\n${journal.join('')}`))));
+      });
+    },
     journal,
     async demonter() {
       sparkd.kill('SIGTERM');
