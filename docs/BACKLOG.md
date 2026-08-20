@@ -2264,6 +2264,36 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   parcours canonique et obtient le refus réel du serveur ; captures observées aux
   trois formats ; manuel M5 et design system mis à jour dans le même changement.
 
+### [ ] SPK-59 · Les quotas se règlent au curseur
+
+**Demande du responsable, 2026-08-20.** Les quotas de l'écran de création se
+saisissent au clavier, chiffre par chiffre, alors que ce sont des valeurs bornées
+dont on cherche un ordre de grandeur bien plus souvent qu'une valeur exacte. Un
+curseur montre la plage en même temps que la valeur ; une saisie ne montre que ce
+qu'on y a tapé.
+
+La préférence n'est pas absolue et ne doit pas le devenir : elle ne vaut que
+lorsque les bornes sont connues, qu'un pas traverse la plage en un nombre de crans
+manipulables, et que ce pas ne détruit pas la granularité que la valeur signifie.
+
+- Spécification : `docs/DESIGN_SYSTEM.md` **§6.9 bis** (la règle générale et ses
+  trois conditions) · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-07** (son application
+  ici) · `docs/DAT.md` §25.1, §25.3 · `docs/manuel/M5`.
+- Portée : les six quotas de l'écran de création — réservation CPU, plafond CPU,
+  cœurs, mémoire, disque, débit. Rien d'autre ne change de forme ; les **ports**
+  restent des saisies, et c'est le contre-exemple qui fixe la règle.
+- **Ce qui décide de l'unité** : la borne haute est la **capacité totale de la
+  Forge**, jamais le disponible. Borner sur le disponible ferait décider l'écran
+  à la place de `sparkd` (§25.1) et rendrait le refus d'admission inatteignable
+  depuis le parcours canonique.
+- Repli obligatoire : capacité inconnue, ou plage impossible à parcourir sans
+  perdre la granularité métier — le champ redevient une **saisie numérique**, et
+  l'écran ne s'en cache pas.
+- DoD : tests de composant sur les deux branches — curseur et repli — et sur le
+  calcul des bornes ; parcours E2E qui règle un quota **au clavier** depuis le
+  parcours canonique et obtient le refus réel du serveur ; captures observées aux
+  trois formats ; manuel M5 et design system mis à jour dans le même changement.
+
 ---
 
 ## Réservé, non planifié

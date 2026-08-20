@@ -195,6 +195,45 @@ Conséquences visuelles, non négociables :
 Preuve : `e2e/captures/44-journal-ancre-alerte.png` et
 `e2e/captures/45-journal-ancre-mobile.png`, observées.
 
+### SPK-DS-07 · Les quotas se règlent au curseur, les ports se saisissent
+
+`DESIGN_SYSTEM.md` §6.9 bis donne la préférence et ses trois conditions. Voici où
+elles tombent dans la console.
+
+**Les quotas de l'écran de création** — réservation CPU, plafond CPU, cœurs,
+mémoire, disque, débit — se règlent au curseur dès que la capacité de la Forge
+est connue.
+
+La borne haute d'un curseur de quota est la **capacité totale de la Forge**, et
+jamais ce qui reste libre. Ce n'est pas un détail d'implémentation :
+
+- borner sur le **disponible** ferait décider l'écran à la place de `sparkd`, ce
+  que le `docs/DAT.md` §25.1 interdit — le disponible est une photographie qui se
+  périme, et dans le sens favorable ;
+- cela rendrait le **refus d'admission inatteignable depuis le parcours
+  canonique** : on ne pourrait plus demander ce que la Forge ne peut pas donner,
+  donc plus l'éprouver par l'écran ;
+- la **capacité**, elle, ne bouge pas entre l'ouverture de l'écran et la
+  soumission. C'est le raisonnement de la liste d'images du §33.5 : une contrainte
+  stable se pose dans le contrôle, une contrainte périmable appartient au serveur.
+
+Le panneau *Capacité restante* le dit en toutes lettres. Un curseur qui va
+jusqu'à 76 Gio à côté d'un panneau annonçant 64 Gio libres se lirait autrement
+comme une contradiction.
+
+Lorsque la capacité n'a pas pu être relevée, les quotas se rendent en **saisie
+numérique** : sans bornes, pas de curseur (§6.9 bis, condition 1).
+
+**Le disque de la Forge de validation illustre la condition 3, et il vaut d'être
+écrit** : ses deux disques de 6 To en RAID1 donnent un pool de plus de 5 000 Gio.
+Au pas de 1 Gio le curseur compterait plus de cinq mille crans ; le pas de 20 Gio
+qui les ramènerait sous 400 rendrait le quota courant de 10 Gio **inatteignable**.
+Le disque s'y saisit donc, pendant que la mémoire et le débit restent des
+curseurs. La règle fonctionne — ce n'est pas une exception qu'on lui concède.
+
+**Les ports ne sont jamais des curseurs** : route publique, port cible, port de
+`sparkd`, port local d'un tunnel. C'est le contre-exemple du §6.9 bis.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

@@ -663,6 +663,56 @@ donc pas à une valeur qu'on veut donner à lire.
 Le focus entrant d'une modale ignore ces champs et va au premier contrôle
 **modifiable** (§6.27).
 
+## 6.9 bis Curseur ou saisie numérique
+
+Pour une valeur numérique, le **curseur** (`input[type="range"]`) est la forme
+préférée. Il montre la plage en même temps que la valeur, il se règle d'un geste,
+et il rend une valeur hors bornes impossible à produire.
+
+Ce n'est pas une obligation. Le curseur est retenu lorsque les **trois**
+conditions suivantes tiennent ensemble. Dès que l'une manque, la saisie numérique
+est le bon contrôle, et ce n'est pas un pis-aller.
+
+1. **Les deux bornes sont connues et stables.** Connues : l'écran sait dire
+   jusqu'où va la plage. Stables : la borne ne se périme pas entre l'ouverture de
+   l'écran et la soumission. Une borne posée sur une mesure rafraîchissable
+   ferait décider le contrôle à la place du serveur, et sur une photographie.
+2. **Un pas traverse la plage en un nombre de crans atteignables.** Le contrôle
+   mesure au plus 28 rem, soit 448 px : au-delà d'environ **400 crans**, un cran
+   devient plus étroit qu'un pixel et cesse d'être visé au pointeur. Au-delà,
+   c'est une saisie.
+3. **Ce pas ne dégrade pas la granularité que le sens métier exige.** Si le seul
+   pas qui ramène la plage sous 400 crans est plus grossier que ce que la valeur
+   signifie — au point de rendre une valeur courante inatteignable —, c'est une
+   saisie.
+
+Un curseur seul est illisible : la poignée ne dit pas où elle est. Il porte donc
+toujours
+
+* sa **valeur en clair**, formatée avec son unité, à côté de la piste ;
+* `aria-valuetext` avec cette même chaîne — sans quoi la synthèse annonce
+  « 16 » là où l'écran montre « 16 Gio » ;
+* ses **deux bornes**, écrites sous la piste ;
+* une phrase disant **d'où vient la borne haute** lorsque celle-ci n'est pas
+  évidente. Une limite sans origine se lit comme un interdit arbitraire.
+
+La borne basse n'est jamais une valeur que le formulaire refusera ensuite : un
+curseur ne doit pas pouvoir produire une valeur invalide (§1.4).
+
+Le curseur est nativement utilisable au clavier — flèches, `Origine`, `Fin`,
+`Page préc.` et `Page suiv.` — et cet usage ne se remplace pas par un raccourci
+maison. Sa hauteur cliquable atteint `--size-target` (§4.4).
+
+Contre-exemple retenu : un **numéro de port**. Ses bornes sont pourtant connues,
+1 à 65 535 ; mais la plage compte 65 534 crans à l'unité, la condition 2 tombe, et
+la condition 3 interdit de l'arrondir — un port voisin n'est pas « presque » le
+bon port. Un port se saisit, et il se recopie le plus souvent depuis un fichier
+de configuration : un geste qu'un curseur ne sait pas faire.
+
+Lorsque les bornes ne sont **pas connues à l'exécution** — la mesure qui les donne
+a échoué —, l'écran se rabat sur la saisie et nomme l'absence (§14.6). Il
+n'invente pas une borne pour garder le curseur.
+
 ## 6.10 Cases à cocher
 
 La case visible peut mesurer 24 px.
