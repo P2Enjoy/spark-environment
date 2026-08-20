@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderSparkDetail, renderCommands, renderDetailNotFound, renderProtection,
-  renderAuteur, COMMANDES,
+  renderAuteur, renderAmorcage, AMORCAGE_VIDE, COMMANDES,
 } from './spark-detail.js';
 
 const GIO = 1024 ** 3;
@@ -312,4 +312,155 @@ test('un message inconnu traverse INTACT dans la facette Journal', () => {
               result: 'ok', message: brut }],
   });
   assert.ok(html.includes(brut));
+});
+
+// --- SPK-54 · L'AMORÇAGE (§41, §42) -----------------------------------------
+
+const CELLULE = { ...SPARK, name: 'helo', incus_name: 'helo', state: 'running' };
+const amorcage = (partiel = {}) => ({ ...AMORCAGE_VIDE, ...partiel });
+
+test('sans relevé, l’écran ne PRÉTEND rien sur l’état de la cellule', () => {
+  // §14.6 : « pas encore relevé » n'est ni « rien à faire », ni « tout va bien ».
+  const rendu = renderAmorcage(CELLULE, amorcage());
+  assert.match(rendu, /n’a pas encore été relevé/);
+  assert.ok(!/complète/.test(rendu));
+  assert.ok(!/en place/.test(rendu));
+});
+
+test('l’écran DIT que le relevé entre dans la cellule du locataire', () => {
+  // C'est ce qui justifie qu'il ne parte pas tout seul. Le taire ferait passer
+  // pour gratuit un geste qui ne l'est pas.
+  const rendu = renderAmorcage(CELLULE, amorcage());
+  assert.match(rendu, /exécute une commande <strong>dans<\/strong> le Spark/);
+  assert.match(rendu, /demandé, jamais lancé de lui-même/);
+});
+
+test('la mesure EN COURS ne se confond pas avec son résultat', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({ releve: 'en-cours' }));
+  assert.match(rendu, /Relevé de la cellule en cours/);
+  assert.match(rendu, /aria-busy="true"/);
+});
+
+test('un docker.io de distribution s’affiche « à corriger », pas « en place »', () => {
+  // LE point de l'unité (§41.2) : il est présent ET inutilisable. L'afficher
+  // comme présent ferait croire le Spark prêt alors qu'aucune pile n'y tournera.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { complete: false, items: [
+      { key: 'docker', label: 'moteur Docker', state: 'defect',
+        detail: 'Docker version 26.1.5 — paquet « docker.io » de la distribution.' },
+    ] } }));
+  assert.match(rendu, /à corriger/);
+  assert.match(rendu, /badge--danger/);
+  assert.ok(!/en place/.test(rendu));
+  assert.match(rendu, /docker\.io/, 'le détail nomme le paquet fautif');
+});
+
+test('les trois états ont chacun leur libellé, et jamais un jeton brut', () => {
+  // §14.7 : « defect » est une valeur d'API, pas un mot d'interface.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { complete: false, items: [
+      { key: 'sshd', label: 'serveur SSH', state: 'present', detail: 'active' },
+      { key: 'depot', label: 'dépôt Docker amont', state: 'absent', detail: 'absent' },
+      { key: 'docker', label: 'moteur Docker', state: 'defect', detail: 'x' },
+    ] } }));
+  assert.match(rendu, /en place/);
+  assert.match(rendu, /absent/);
+  assert.match(rendu, /à corriger/);
+  // « present » et « defect » sont des jetons d'API et ne doivent pas paraître.
+  // « absent » est exclu de ce contrôle À DESSEIN : c'est aussi le mot français
+  // juste, et le jeton coïncide avec le libellé. Le chercher ferait échouer la
+  // preuve sur une bonne traduction.
+  for (const jeton of ['>present<', '>defect<']) {
+    assert.ok(!rendu.includes(jeton), jeton);
+  }
+});
+
+test('une cellule COMPLÈTE le dit, et dit ce que cela veut dire', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { complete: true, items: [
+      { key: 'sshd', label: 'serveur SSH', state: 'present', detail: 'active' },
+    ] } }));
+  assert.match(rendu, /joignable\s+en SSH et capable de faire tourner une pile Compose/);
+});
+
+test('un amorçage qui ne change RIEN le dit en toutes lettres', () => {
+  // §42.1 : c'est là qu'un geste bavard casserait la production du locataire.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    resultat: { changed: false, complete: true, items: [
+      { key: 'sshd', label: 'serveur SSH', state: 'present',
+        detail: 'active', action: 'aucune', outcome: 'inchangé' },
+    ] } }));
+  assert.match(rendu, /Rien n’a été fait : tout était déjà en place/);
+  assert.match(rendu, /inchangé/);
+});
+
+test('le compte rendu rend le sort de CHAQUE ligne, jamais un verdict global', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    resultat: { changed: true, complete: true, items: [
+      { key: 'sshd', label: 'serveur SSH', state: 'present',
+        detail: 'active', action: 'aucune', outcome: 'inchangé' },
+      { key: 'docker', label: 'moteur Docker', state: 'present',
+        detail: 'Docker version 29.7.2', action: 'amorcé', outcome: 'installé' },
+    ] } }));
+  assert.match(rendu, /serveur SSH/);
+  assert.match(rendu, /inchangé/);
+  assert.match(rendu, /moteur Docker/);
+  assert.match(rendu, /installé/);
+});
+
+test('une ligne ÉCHOUÉE se voit, et n’est pas noyée dans un succès', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    resultat: { changed: true, complete: false, items: [
+      { key: 'docker', label: 'moteur Docker', state: 'absent',
+        detail: 'absent', action: 'amorcé', outcome: 'échoué' },
+    ] } }));
+  assert.match(rendu, /échoué/);
+  assert.match(rendu, /badge--danger/);
+  assert.ok(!/Cette cellule est complète/.test(rendu));
+});
+
+test('l’amorçage se CONFIRME, et la confirmation nomme le pouvoir employé', () => {
+  // §6.23 et §42.3. « Confirmer » ne dirait rien de ce qui va se passer.
+  const rendu = renderAmorcage(CELLULE, amorcage({ confirme: true }));
+  assert.match(rendu, /exécuter des commandes en root dans la\s+cellule/);
+  assert.match(rendu, /sans passer par SSH/);
+  assert.match(rendu, /« helo »/, 'elle nomme l’objet visé');
+  assert.match(rendu, /bouton--destructif/);
+  assert.match(rendu, /data-amorcage="annuler"/);
+  // §6.22 : dans le flux, pas dans une seconde surface.
+  assert.ok(!/<dialog/.test(rendu));
+});
+
+test('la confirmation dit que seuls les MANQUES sont installés, et pourquoi', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({ confirme: true }));
+  assert.match(rendu, /Seuls les éléments manquants sont installés/);
+  assert.match(rendu, /redémarrerait\s+le moteur Docker/);
+});
+
+test('pendant la confirmation, la commande qui l’a ouverte disparaît', () => {
+  // §14.3 : sinon on l'ouvre deux fois.
+  const rendu = renderAmorcage(CELLULE, amorcage({ confirme: true }));
+  assert.ok(!/data-amorcage="amorcer"/.test(rendu));
+  assert.match(rendu, /data-amorcage="relever"/, 'relever reste possible');
+});
+
+test('un Spark SANS CELLULE nomme ce qui manque au lieu d’offrir le geste', () => {
+  // §1.4 : une commande qui sera refusée à coup sûr est une commande morte.
+  const rendu = renderAmorcage({ ...SPARK, incus_name: null }, amorcage());
+  assert.match(rendu, /n’a pas encore de cellule/);
+  assert.ok(!/data-amorcage="amorcer"/.test(rendu));
+  assert.ok(!/data-amorcage="relever"/.test(rendu));
+});
+
+test('un refus du serveur s’affiche, avec le motif qu’il a NOMMÉ', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    erreur: '« helo » est protégé : bootstrap y est refusée.' }));
+  assert.match(rendu, /est protégé/);
+  assert.match(rendu, /role="alert"/);
+});
+
+test('la section vit sur la facette d’identité, avec les accès', () => {
+  const rendu = renderSparkDetail({ status: 'ready', spark: CELLULE, facette: '' });
+  assert.match(rendu, /id="titre-amorcage"/);
+  assert.match(rendu, /id="titre-acces"/);
 });

@@ -1467,6 +1467,114 @@ test('un Spark sans CELLULE nomme ce qui manque', async () => {
   });
 });
 
+// --- SPK-54 · AMORCER UN SPARK (§41, §42) -----------------------------------
+
+test('l’amorçage RELÈVE avant d’agir, et ne relève pas de lui-même', async () => {
+  await parcours('amorcage-releve', async () => {
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-amorcage');
+
+    // §14.6 : « pas encore relevé » n'est ni « rien à faire », ni « tout va
+    // bien ». Le relevé entre dans la cellule du locataire : il se demande.
+    const avant = await page.textContent('#titre-amorcage ~ .absence');
+    assert.match(avant, /n’a pas encore été relevé/);
+
+    await page.focus('[data-amorcage="relever"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.liste-amorcage', { timeout: 15000 });
+
+    const lignes = await page.$$eval('.ligne-amorcage', (l) => l.map((x) => x.textContent));
+    assert.equal(lignes.length, 5, 'les cinq éléments du §42.1');
+    const ecran = await page.textContent('.principal');
+    assert.ok(!/present|defect|sshd=/.test(ecran),
+      'aucun jeton technique brut n’atteint l’écran (§14.7)');
+
+    // Une LECTURE : rien au journal (§36.7).
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.bootstrap&limit=10');
+    assert.equal(corps.entries.length, 0, 'relever n’est pas amorcer');
+  });
+});
+
+test('amorcer NOMME le pouvoir employé, puis rend le sort de chaque ligne', async () => {
+  await parcours('amorcage-geste', async () => {
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-amorcage');
+
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+
+    // §6.23 et §42.3 : la confirmation dit ce qui va se passer.
+    const confirmation = await page.textContent('.confirmation');
+    assert.match(confirmation, /en root dans la\s+cellule/);
+    assert.match(confirmation, /sans passer par SSH/);
+    assert.match(confirmation, /crm-production/);
+    assert.match(confirmation, /Seuls les éléments manquants sont installés/);
+
+    // AU CLAVIER : le focus est déjà sur le point d'engagement (§14.3).
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+
+    const lignes = await page.$$eval('.ligne-amorcage', (l) => l.map((x) => x.textContent));
+    assert.equal(lignes.length, 5);
+    assert.ok(lignes.some((l) => /installé/.test(l)), 'ce qui manquait est posé');
+
+    // EFFET côté sparkd : le journal porte l'action DISTINCTE, et elle nomme.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.bootstrap&limit=10');
+    assert.equal(corps.entries.length, 1);
+    assert.match(corps.entries[0].message, /Amorçage de « crm-production »/);
+    assert.equal(JSON.parse(corps.entries[0].payload).path, 'incus_exec');
+    // …et elle ne s'est pas comptée comme un dépannage (§37.3).
+    const { corps: depannages } = await pile.lireSparkd(
+      '/v1/audit?action=spark.rescue_exec&limit=10');
+    assert.equal(depannages.entries.length, 0);
+  });
+});
+
+test('un SECOND amorçage ne fait rien, et le dit', async () => {
+  await parcours('amorcage-idempotent', async () => {
+    // C'est LE point de la DoD : un geste bavard redémarrerait le moteur Docker
+    // du locataire, donc sa production, pour rien.
+    await ouvrir('postgres-dedie');
+    await page.waitForSelector('#titre-amorcage');
+
+    for (const _ of [1, 2]) {
+      await page.click('[data-amorcage="amorcer"]');
+      await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+      await page.click('[data-amorcage="engager"]');
+      await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+    }
+
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Rien n’a été fait'), { timeout: 10000 });
+    const ecran = await page.textContent('.principal');
+    assert.match(ecran, /tout était déjà en place/);
+
+    // Les DEUX amorçages sont au journal : savoir que le geste a été demandé et
+    // que rien n'était à faire est une information (§42.8).
+    // Le journal est celui de la FORGE : un parcours précédent y a déjà écrit
+    // pour un autre Spark. On ne retient que celui-ci.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.bootstrap&limit=50');
+    const siennes = corps.entries.filter((e) => e.message.includes('postgres-dedie'));
+    assert.equal(siennes.length, 2, 'les DEUX amorçages sont inscrits');
+    assert.ok(siennes.some((e) => /rien à faire/.test(e.message)));
+  });
+});
+
+test('un Spark PROTÉGÉ refuse l’amorçage, et le refus est LISIBLE', async () => {
+  await parcours('amorcage-protege', async () => {
+    // §35 : l'amorçage installe des paquets et redémarre des services. La
+    // protection se lève par son geste distinct, jamais au passage (§6.23).
+    await ouvrir('analytics');
+    await page.waitForSelector('.entete-entite');
+    // « analytics » est protégé ET sans cellule dans le seed : l'écran nomme
+    // d'abord ce qui manque, avant même la protection.
+    assert.match(await page.textContent('#titre-amorcage ~ .absence'),
+                 /n’a pas encore de cellule/);
+    assert.equal(await page.$('[data-amorcage="amorcer"]'), null,
+      'une commande qui sera refusée à coup sûr n’est pas offerte (§1.4)');
+  });
+});
+
 // --- SPK-43, tranche 4 · LE DÉPANNAGE (§37.3) -------------------------------
 
 test('un distant qui MEURT fait dire à l’écran ce qui manque, et propose la suite', async () => {

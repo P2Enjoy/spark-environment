@@ -455,6 +455,16 @@ class FakeIncus:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("files", {})[path] = content
+        # Écrire `authorized_keys` change ce que le relevé du §42.6 y lira : sur
+        # une vraie cellule, `sha256sum` suit le fichier. Sans cela, l'amorçage
+        # réécrirait les clés à chaque passage et ne serait jamais idempotent —
+        # or c'est le point de la DoD (SPK-54, §42.1).
+        if path.endswith("/authorized_keys"):
+            import hashlib
+
+            self.created[name].setdefault("runtime", {})["cles"] = (
+                hashlib.sha256(content.encode("utf-8")).hexdigest()[:64]
+            )
         self._persist()
 
     def exec_command(self, name: str, command: list[str]) -> None:
@@ -475,8 +485,29 @@ class FakeIncus:
         if name not in self.created:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("commands", []).append(command)
+        script = command[-1] if command else ""
+        runtime = self.created[name].setdefault("runtime", {})
+
+        # Le doublon représente l'EFFET de la commande, pas seulement son
+        # passage. Sans cela, un second amorçage retrouverait la cellule vierge
+        # et réinstallerait tout — l'idempotence, qui est le point de la DoD,
+        # serait alors inéprouvable de bout en bout (§28.4, §42.1).
+        # Les marqueurs portent sur ce qui INSTALLE, jamais sur ce qui interroge.
+        # Mesuré : le relevé du §42.6 contient « docker-ce » dans son
+        # `dpkg-query`, et un marqueur posé sur ce mot faisait déclarer Docker
+        # installé par la commande même qui venait constater son absence.
+        installe = "apt-get install" in script
+        if installe and "openssh-server" in script:
+            runtime["sshd"] = "active"
+        if "> /etc/apt/sources.list.d/docker.list" in script:
+            runtime["depot"] = "present"
+        if installe and "docker-ce" in script:
+            runtime["docker"] = "Docker version 29.7.2"
+            runtime["origine"] = "docker-ce"
+        if installe and "docker-compose-plugin" in script:
+            runtime["compose"] = "Docker Compose version v2.40.0"
         self._persist()
-        runtime = self.created[name].get("runtime") or {}
+
         lignes = "".join(f"{cle}={valeur}\n" for cle, valeur in runtime.items())
         return (0, lignes, "")
 
