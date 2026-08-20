@@ -25,7 +25,10 @@ function fauxSsh() {
   return e;
 }
 
-async function hote({ sonde = async () => ({}), amont } = {}) {
+// `env` vaut `{}` par DÉFAUT, et ce n'est pas un détail : sans cela, l'hôte
+// lirait le `.env` du poste et les tests parleraient au VRAI fournisseur DNS,
+// donc à quatorze zones en exploitation (SPK-47, docs/DAT.md §38.1).
+async function hote({ sonde = async () => ({}), amont, env = {} } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-'));
   const chemin = join(dossier, 'servers.json');
   const tunnels = new TunnelManager({
@@ -33,6 +36,7 @@ async function hote({ sonde = async () => ({}), amont } = {}) {
   });
   const { server } = createConsoleHost({
     tunnels, inventoryPath: chemin, anchorPath: join(dossier, 'anchors.json'),
+    env,
     fetch: amont ?? (async () => new Response('{"ok":true}', { status: 200 })),
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -391,5 +395,140 @@ test('une entrée invalide est refusée par l’épreuve, sans tunnel', async ()
   const r = await fetch(`${base}/api/servers/probe`,
                         { method: 'POST', body: JSON.stringify({ name: 'Majuscule' }) });
   assert.equal(r.status, 422);
+  server.close();
+});
+
+// --- le DNS (SPK-47, docs/DAT.md §38) --------------------------------------
+
+const JETON = { SCW_SECRET_KEY: 'jeton-de-test', SCW_DEFAULT_ORGANIZATION_ID: 'org' };
+
+test('sans jeton, les zones rendent 200 et DISENT que rien n est configure', async () => {
+  // Un poste sans fournisseur est le cas NORMAL : rendre une erreur ferait
+  // chercher une panne la ou il n'y a qu'une absence de configuration (§38.1).
+  const { base, server } = await hote();
+  const r = await fetch(`${base}/api/dns/zones`);
+  const corps = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(corps.configured, false);
+  assert.match(corps.reason, /Aucun jeton DNS/);
+  assert.deepEqual(corps.zones, []);
+  server.close();
+});
+
+test('sans jeton, une ECRITURE est refusee en 409 avec la meme raison', async () => {
+  const { base, server } = await hote();
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'exemple.tech', domain: 'a.exemple.tech', address: '1.2.3.4' }),
+  });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).error, 'dns_not_configured');
+  server.close();
+});
+
+test('les zones du compte sont listees, et le jeton ne figure PAS dans la reponse', async () => {
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async () => new Response(JSON.stringify({ dns_zones: [
+      { domain: 'exemple.tech', subdomain: '', status: 'active', ns: ['a'] },
+    ] }), { status: 200 }),
+  });
+  const r = await fetch(`${base}/api/dns/zones`);
+  const texte = await r.text();
+  assert.equal(r.status, 200);
+  assert.match(texte, /exemple\.tech/);
+  assert.ok(!texte.includes('jeton-de-test'), 'le jeton ne sort jamais vers le navigateur');
+  server.close();
+});
+
+test('un fournisseur injoignable rend 502 AVEC son motif, pas un succes vide', async () => {
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async () => new Response('permission denied', { status: 403 }),
+  });
+  const r = await fetch(`${base}/api/dns/zones`);
+  assert.equal(r.status, 502);
+  assert.match((await r.json()).message, /HTTP 403/);
+  server.close();
+});
+
+test('une ecriture sur l APEX est refusee AVANT tout appel sortant', async () => {
+  // Un refus ne doit couter aucune requete, et surtout ne jamais atteindre une
+  // zone reelle pour s'y faire refuser sur place (§38.5).
+  let appels = 0;
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async () => { appels += 1; return new Response('{}', { status: 200 }); },
+  });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '1.2.3.4' }),
+  });
+  assert.equal(r.status, 422);
+  assert.match((await r.json()).message, /apex/);
+  assert.equal(appels, 0, 'aucune requete ne doit partir vers le fournisseur');
+  server.close();
+});
+
+test('un domaine hors zone est refuse en 422', async () => {
+  const { base, server } = await hote({ env: JETON });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'a.autre.tech', address: '1.2.3.4' }),
+  });
+  assert.equal(r.status, 422);
+  server.close();
+});
+
+test("l espace de noms des essais borne l ecriture quand le poste le pose", async () => {
+  const env = { ...JETON, SPARK_DNS_ALLOW_PATTERN: '^test\\.[a-z0-9-]+\\.lelabs\\.tech$' };
+  const { base, server } = await hote({
+    env, amont: async () => new Response('{}', { status: 200 }),
+  });
+  const refuse = await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'gram.lelabs.tech', address: '1.2.3.4' }),
+  });
+  assert.equal(refuse.status, 422);
+  assert.match((await refuse.json()).message, /espace de noms/);
+
+  const pose = await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'test.spark.lelabs.tech', address: '1.2.3.4' }),
+  });
+  assert.equal(pose.status, 200);
+  server.close();
+});
+
+test("l ecriture annonce ce qui est ECRIT et la propagation, jamais un domaine pret", async () => {
+  // §38.4 : poser un enregistrement ne le fait pas resoudre. Annoncer « pret »
+  // ferait chercher la panne ailleurs pendant toute la duree du TTL.
+  const { base, server } = await hote({
+    env: JETON, amont: async () => new Response('{}', { status: 200 }),
+  });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'lelabs.tech', domain: 'test.spark.lelabs.tech',
+                           address: '203.0.113.7' }),
+  });
+  const corps = await r.json();
+  assert.equal(corps.written, true);
+  assert.equal(corps.fqdn, 'test.spark.lelabs.tech');
+  assert.equal(corps.type, 'A');
+  assert.match(corps.propagation, /jusqu'à 300 secondes/);
+  assert.ok(!('ready' in corps));
+  server.close();
+});
+
+test('les enregistrements d une zone se lisent, et la zone est OBLIGATOIRE', async () => {
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async () => new Response(JSON.stringify({ records: [
+      { name: 'gram', type: 'A', data: '163.172.156.76', ttl: 3600, id: 'x' },
+    ] }), { status: 200 }),
+  });
+  assert.equal((await fetch(`${base}/api/dns/records`)).status, 400);
+  const r = await fetch(`${base}/api/dns/records?zone=lelabs.tech`);
+  assert.equal((await r.json()).records[0].name, 'gram');
   server.close();
 });

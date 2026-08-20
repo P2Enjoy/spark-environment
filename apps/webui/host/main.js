@@ -19,6 +19,7 @@ import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
+import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -27,6 +28,28 @@ export function createConsoleHost(options = {}) {
   const inventoryPath = options.inventoryPath;
   const anchorPath = options.anchorPath;
   const fetchFn = options.fetch ?? fetch;
+
+  // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
+  // processus. Il est lu UNE fois : le relire à chaque requête ferait dépendre
+  // le comportement d'un fichier modifiable pendant qu'un écran l'utilise.
+  //
+  // `process.env` prime sur le fichier — un export explicite doit gagner sur un
+  // `.env` oublié dans un coin du disque.
+  const envPath = options.envPath
+    ?? process.env.SPARK_ENV_FILE
+    ?? join(RACINE_DEPOT, '.env');
+  let environnementCache = options.env ?? null;
+  async function environnement() {
+    if (!environnementCache) {
+      environnementCache = { ...await readDotEnv(envPath), ...process.env };
+    }
+    return environnementCache;
+  }
+
+  /** Rend le fournisseur, ou `null` avec la raison. Un jeton absent n'est PAS une panne. */
+  async function fournisseur() {
+    return fournisseurDepuis(await environnement(), { fetch: fetchFn });
+  }
 
   const routes = {
     'GET /api/servers': async () => {
@@ -198,6 +221,88 @@ export function createConsoleHost(options = {}) {
       };
     },
 
+    /**
+     * Zones du compte (§38.2). Lecture SEULE.
+     *
+     * Un poste sans jeton rend `configured: false` avec sa raison, et un `200` :
+     * ne pas avoir configuré de fournisseur est le cas normal, pas une panne, et
+     * l'écran doit pouvoir le DIRE au lieu d'afficher une erreur (§38.1).
+     */
+    'GET /api/dns/zones': async (_corps, url) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 200,
+                 body: { configured: false, reason: bilan.reason, zones: [] } };
+      }
+      try {
+        return { status: 200,
+                 body: { configured: true, motif: bilan.motif,
+                         zones: await bilan.provider.zones() } };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /** Enregistrements d'une zone (§38.2). Lecture SEULE. */
+    'GET /api/dns/records': async (_corps, url) => {
+      const zone = url?.searchParams.get('zone') ?? '';
+      if (!zone) {
+        return { status: 400,
+                 body: { error: 'missing_zone', message: 'Préciser la zone : ?zone=<nom>.' } };
+      }
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 409, body: { error: 'dns_not_configured', message: bilan.reason } };
+      }
+      try {
+        return { status: 200, body: { zone, records: await bilan.provider.records(zone) } };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /**
+     * Pose l'enregistrement d'ingress (§38.3).
+     *
+     * La garde s'applique AVANT tout appel au fournisseur : un refus doit coûter
+     * zéro requête sortante, et surtout ne jamais atteindre une zone réelle pour
+     * s'y faire refuser sur place.
+     */
+    'POST /api/dns/record': async (corps) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 409, body: { error: 'dns_not_configured', message: bilan.reason } };
+      }
+      let prepare;
+      try {
+        prepare = preparer({
+          domain: corps?.domain, zone: corps?.zone, address: corps?.address,
+          ...(corps?.ttl == null ? {} : { ttl: Number(corps.ttl) }),
+          motif: bilan.motif,
+        });
+      } catch (erreur) {
+        if (!(erreur instanceof DnsError)) throw erreur;
+        return { status: 422, body: { error: 'dns_refused', message: erreur.message } };
+      }
+      try {
+        const ecrit = await bilan.provider.setRecord(prepare);
+        return {
+          status: 200,
+          body: {
+            ...ecrit,
+            // §38.4 : on annonce l'enregistrement ÉCRIT, jamais le domaine
+            // « prêt ». La propagation prend le temps du TTL, et un cache déjà
+            // chaud sert encore l'ancienne réponse.
+            propagation: `Enregistrement écrit. La résolution peut demander jusqu'à `
+                         + `${prepare.ttl} secondes, davantage si un résolveur a `
+                         + `déjà mis l'ancienne réponse en cache.`,
+          },
+        };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
     'DELETE /api/tunnels': async (corps) => {
       tunnels.close(corps?.name);
       return { status: 200, body: { closed: corps?.name } };
@@ -211,7 +316,7 @@ export function createConsoleHost(options = {}) {
 
       if (routes[cle]) {
         const corps = await lireCorps(requete);
-        const { status, body } = await routes[cle](corps);
+        const { status, body } = await routes[cle](corps, url);
         return repondre(reponse, status, body);
       }
 
@@ -289,6 +394,9 @@ async function relayer(url, requete, reponse, tunnels, fetchFn) {
 }
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Racine du DÉPÔT, où vit le `.env` du poste (§38.1). Il n'est jamais servi :
+// `servirStatique` ne sort pas de `RACINE`, qui est le dossier de la console.
+const RACINE_DEPOT = join(RACINE, '..', '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
                 '.svg': 'image/svg+xml', '.json': 'application/json' };
 
