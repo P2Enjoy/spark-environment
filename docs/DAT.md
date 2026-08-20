@@ -4927,6 +4927,61 @@ plutôt que de le vendre :
 D'où le défaut : **enraciné**, avec le rootless offert à qui le demande. Annoncer
 l'inverse ferait échouer la promesse centrale du produit sur la moitié des piles.
 
+#### 42.2 bis Le contrat de l'option — écrit le 2026-08-20
+
+Le §42.2 tranche le produit : enraciné par défaut, rootless offert. Il ne disait
+pas comment l'option voyage, ni ce qu'elle change à l'installation, ni ce qui
+arrive quand on la demande sur une cellule déjà pourvue. Ces trois points sont
+fixés ici, et le troisième est le seul difficile.
+
+**Comment elle voyage.** `POST /v1/sparks/{name}/bootstrap` accepte un corps
+`{"rootless": true}`. Absent ou faux : enraciné. L'option porte sur CE geste, pas
+sur le Spark — elle n'est pas une propriété qu'on stocke au registre, parce que
+la vérité est dans la cellule et qu'un registre qui la doublerait divergerait.
+
+**Ce que la détection rend en plus.** L'élément `docker` gagne un **mode** :
+
+| Mode relevé | Ce qui a été trouvé |
+|---|---|
+| `enracine` | le démon tourne en root dans la cellule |
+| `rootless` | le démon tourne sous un compte non privilégié |
+| `null` | Docker est absent, ou son origine est le paquet de distribution |
+
+Le mode est une observation, pas une préférence : il dit ce qui EST.
+
+**Le point qui décide : demander l'autre mode sur une cellule déjà pourvue est
+REFUSÉ, pas exécuté.** Basculer un Docker en place déplacerait le démon sous un
+autre compte, et avec lui les conteneurs, les volumes et les réseaux du
+locataire — c'est-à-dire sa production, sans qu'il l'ait demandé. Le §42.1 ne
+tolère déjà pas un redémarrage gratuit du démon ; une bascule est un ordre de
+grandeur au-dessus.
+
+Le refus est donc `409 bootstrap_mode_conflict`, et il NOMME les deux modes ainsi
+que ce qu'il faudrait faire pour changer d'avis — ce qui n'est pas un geste de
+l'amorçage. Le laisser passer ferait de la case à cocher la commande la plus
+destructrice de la console, sans confirmation propre.
+
+Corollaire : sur une cellule vierge, les deux modes sont ouverts, et c'est le
+seul moment où le choix se fait sans rien casser. L'écran le dit.
+
+**Ce que l'installation change.** Le mode rootless ajoute
+`docker-ce-rootless-extras`, crée le compte de service, exécute
+`dockerd-rootless-setuptool.sh install` pour lui, et pose `loginctl
+enable-linger` — sans quoi le démon meurt à la fin de la session du compte, ce
+qui donnerait une cellule qui marche jusqu'au premier redémarrage.
+
+**Ce que l'écran doit dire, et non vendre** (§42.2) : les trois coûts, en toutes
+lettres, à côté de la case — les ports sous 1024 deviennent impossibles dans la
+cellule, certaines piles Compose existantes ne fonctionnent pas telles quelles,
+et la cellule est déjà non privilégiée sur la Forge, donc c'est une seconde
+couche et non la première. Une option présentée comme « plus sûr, cochez-la »
+ferait échouer la promesse centrale du produit sur la moitié des piles.
+
+**Ce que le journal reçoit.** La charge de `spark.bootstrap` porte `mode`, à
+côté de `path` et de `changed`. Sans lui, un relevé du journal ne dirait pas dans
+quel mode une cellule a été amorcée, et c'est justement ce qu'on cherchera le
+jour où une pile ne démarre pas.
+
 ### 42.3 Par où il passe
 
 Par `incus exec`, et c'est le seul geste du produit qui l'emploie hors dépannage
