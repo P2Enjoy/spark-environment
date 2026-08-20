@@ -363,6 +363,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Bootstrap
+         * @description Relevé de l'amorçage. N'écrit RIEN (docs/DAT.md §42.7).
+         *
+         *     @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.1, §42.6, §42.7
+         *
+         *     Deux routes plutôt qu'une, et la séparation n'est pas décorative : on
+         *     peut regarder sans agir. Faire de la détection l'effet de bord d'une
+         *     écriture obligerait à amorcer pour savoir s'il y a lieu d'amorcer.
+         */
+        get: operations["read_bootstrap_v1_sparks__name__bootstrap_get"];
+        put?: never;
+        /**
+         * Run Bootstrap
+         * @description Amorce ce qui MANQUE, et rien d'autre (docs/DAT.md §42.1, §42.7).
+         *
+         *     @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §41.2, §42.1, §42.3, §42.8
+         *
+         *     Un second amorçage ne fait rien et le dit. Un geste qui réinstallerait
+         *     « au cas où » redémarrerait le démon Docker du locataire, donc sa
+         *     production, pour rien.
+         */
+        post: operations["run_bootstrap_v1_sparks__name__bootstrap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/protection": {
         parameters: {
             query?: never;
@@ -1161,6 +1197,72 @@ export interface operations {
         };
     };
     get_spark_v1_sparks__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_bootstrap_v1_sparks__name__bootstrap_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_bootstrap_v1_sparks__name__bootstrap_post: {
         parameters: {
             query?: never;
             header?: never;

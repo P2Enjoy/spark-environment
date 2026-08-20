@@ -72,6 +72,9 @@ class IncusClient(Protocol):
 
     def exec_command(self, name: str, command: list[str]) -> None: ...
 
+    def exec_capture(
+        self, name: str, command: list[str]) -> tuple[int, str, str]: ...
+
     def create_snapshot(self, name: str, snapshot: str) -> None: ...
 
     def restore_snapshot(self, name: str, snapshot: str, force: bool = False) -> None: ...
@@ -243,6 +246,52 @@ class UnixSocketIncus:
              "interactive": False, "record-output": False},
         )
 
+    def exec_capture(self, name: str, command: list[str]) -> tuple[int, str, str]:
+        """Exécute et REND le code de sortie et les deux flux (docs/DAT.md §42.5).
+
+        @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.5, §42.6
+
+        `exec_command` ci-dessus poste la commande et n'en rend rien : cela suffit
+        pour ordonner un geste, pas pour DÉTECTER, qui est le principe du §42.1.
+
+        Le point qui décide : **un code de sortie non nul n'est pas une erreur du
+        pilote**. `command -v sshd` qui rend 1 est une réponse — « absent » —, pas
+        une panne. Seule une opération qu'Incus refuse lève. Confondre les deux
+        ferait échouer l'amorçage sur ce qu'il est précisément venu constater.
+        """
+        resultat = self._request(
+            "POST", f"/1.0/instances/{name}/exec",
+            {"command": command, "wait-for-websocket": False,
+             "interactive": False, "record-output": True},
+        )
+        interne = resultat.get("metadata") or {}
+        sorties = interne.get("output") or {}
+        return (
+            int(interne.get("return", 0)),
+            self._lire_sortie(sorties.get("1")),
+            self._lire_sortie(sorties.get("2")),
+        )
+
+    def _lire_sortie(self, chemin: str | None) -> str:
+        """Récupère un flux enregistré par une exécution.
+
+        Ces fichiers ne sont PAS du JSON : `_get` les rejetterait. Une sortie
+        illisible rend la chaîne vide plutôt que de lever — la détection saura
+        conclure « absent » d'une réponse muette, alors qu'une exception ferait
+        échouer le relevé entier pour un flux d'erreur qu'on ne lisait que par
+        acquit de conscience.
+        """
+        if not chemin:
+            return ""
+        transport = httpx.HTTPTransport(uds=self.socket_path)
+        try:
+            with httpx.Client(transport=transport, timeout=self.timeout) as client:
+                reponse = client.get(f"http://incus{chemin}")
+                reponse.raise_for_status()
+                return reponse.text
+        except httpx.HTTPError:
+            return ""
+
     def create_snapshot(self, name: str, snapshot: str) -> None:
         # `stateful` reste faux : la capture memoire echoue sur cet hote, CRIU
         # etant construit sans le support de nftables (docs/DAT.md §19.3).
@@ -413,6 +462,23 @@ class FakeIncus:
             raise IncusError(f"Instance « {name} » absente.")
         self.created[name].setdefault("commands", []).append(command)
         self._persist()
+
+    def exec_capture(self, name: str, command: list[str]) -> tuple[int, str, str]:
+        """Doublon d'`exec_capture` (docs/DAT.md §28.4, §42.5).
+
+        La cellule factice porte un état de RUNTIME — ce qui y est installé — que
+        les scénarios posent dans `runtime`. Sans lui, la détection du §42.6
+        n'aurait rien à observer et l'amorçage ne pourrait être éprouvé que sur
+        une cellule vierge, c'est-à-dire jamais sur le cas qui compte : celle qui
+        est déjà complète.
+        """
+        if name not in self.created:
+            raise IncusError(f"Instance « {name} » absente.")
+        self.created[name].setdefault("commands", []).append(command)
+        self._persist()
+        runtime = self.created[name].get("runtime") or {}
+        lignes = "".join(f"{cle}={valeur}\n" for cle, valeur in runtime.items())
+        return (0, lignes, "")
 
     def create_snapshot(self, name: str, snapshot: str) -> None:
         if name not in self.created:

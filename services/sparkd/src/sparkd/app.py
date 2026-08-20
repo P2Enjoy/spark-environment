@@ -36,6 +36,7 @@ from . import sparks as service
 from . import ingress as ingress_service
 from . import ports as ports_service
 from . import audit as audit_service
+from . import bootstrap as bootstrap_service
 from . import metrics as metrics_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
@@ -1025,6 +1026,105 @@ def create_app(config: Config) -> FastAPI:
                 except (service.NotFound, IncusError):
                     continue
             return {"forgotten": label, "reconciled": concernes}
+
+    def _cellule_ou_refus(connection, name: str) -> dict:
+        """Le Spark, s'il est amorçable. Sinon le refus NOMMÉ du §42.7.
+
+        @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.7
+        """
+        try:
+            spark = service.by_name(connection, name)
+        except service.NotFound as erreur:
+            raise HTTPException(status_code=404, detail={
+                "error": "not_found", "message": str(erreur)}) from erreur
+        # §37.2 : le signal d'une cellule est `incus_name`, renseigné SEULEMENT
+        # après une application réussie. Ce n'est pas l'adresse, attribuée dès
+        # l'écriture au registre.
+        if not spark.get("incus_name"):
+            raise HTTPException(status_code=409, detail={
+                "error": "spark_not_reachable",
+                "message": f"« {name} » n'a pas encore de cellule : il est déclaré, "
+                           "ses ressources sont réservées, mais rien ne tourne. "
+                           "Créez-le avant de l'amorcer."})
+        if spark.get("state") != "running":
+            raise HTTPException(status_code=409, detail={
+                "error": "spark_not_running",
+                "message": f"« {name} » n'est pas en marche. L'amorçage exécute "
+                           "des commandes DANS la cellule : elle doit tourner."})
+        return spark
+
+    def _relever_amorcage(connection, spark: dict) -> list[dict]:
+        """Le relevé du §42.6, jugé selon le §42.1."""
+        brut = bootstrap_service.releve_brut(app.state.incus, spark["incus_name"])
+        voulu = sshkeys.authorized_keys_content(connection, spark["id"])
+        return bootstrap_service.juger(brut, bootstrap_service.empreinte(voulu))
+
+    @app.get("/v1/sparks/{name}/bootstrap", tags=["amorcage"])
+    def read_bootstrap(name: str) -> dict:
+        """Relevé de l'amorçage. N'écrit RIEN (docs/DAT.md §42.7).
+
+        @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.1, §42.6, §42.7
+
+        Deux routes plutôt qu'une, et la séparation n'est pas décorative : on
+        peut regarder sans agir. Faire de la détection l'effet de bord d'une
+        écriture obligerait à amorcer pour savoir s'il y a lieu d'amorcer.
+        """
+        with registry() as connection:
+            spark = _cellule_ou_refus(connection, name)
+            try:
+                vus = _relever_amorcage(connection, spark)
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "bootstrap_failed", "message": str(erreur)}) from erreur
+            return {"spark": name, "reachable": True, "items": vus,
+                    "complete": bootstrap_service.complet(vus)}
+
+    @app.post("/v1/sparks/{name}/bootstrap", tags=["amorcage"], status_code=200)
+    def run_bootstrap(name: str) -> dict:
+        """Amorce ce qui MANQUE, et rien d'autre (docs/DAT.md §42.1, §42.7).
+
+        @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §41.2, §42.1, §42.3, §42.8
+
+        Un second amorçage ne fait rien et le dit. Un geste qui réinstallerait
+        « au cas où » redémarrerait le démon Docker du locataire, donc sa
+        production, pour rien.
+        """
+        with registry() as connection:
+            spark = _cellule_ou_refus(connection, name)
+            # §35 : l'amorçage installe des paquets et redémarre des services
+            # chez le locataire. C'est exactement ce que la protection arrête,
+            # et elle se lève par son geste distinct — jamais au passage.
+            protection_service.ensure_writable(connection, name, "bootstrap")
+            try:
+                avant = _relever_amorcage(connection, spark)
+                a_faire = bootstrap_service.manques(avant)
+                for cle in a_faire:
+                    if cle == "cles":
+                        _apply_keys(connection, spark)
+                        continue
+                    commande = bootstrap_service.script_pour(cle)
+                    if commande:
+                        app.state.incus.exec_capture(spark["incus_name"], commande)
+                apres = _relever_amorcage(connection, spark) if a_faire else avant
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "bootstrap_failed", "message": str(erreur)}) from erreur
+
+            lignes = bootstrap_service.compte_rendu(avant, apres, a_faire)
+            # §42.8 : un amorçage qui ne change RIEN est quand même journalisé.
+            # Savoir que quelqu'un a demandé le geste et que rien n'était à faire
+            # est une information ; son absence ferait croire qu'il n'a pas été
+            # tenté.
+            audit_service.record(
+                connection, None, "spark.bootstrap", "ok",
+                bootstrap_service.message(name, a_faire),
+                target_type="spark", target_id=spark["id"],
+                payload={"path": "incus_exec", "changed": bool(a_faire),
+                         "items": a_faire},
+            )
+            return {"spark": name, "path": "incus_exec",
+                    "changed": bool(a_faire), "items": lignes,
+                    "complete": bootstrap_service.complet(apres)}
 
     @app.post("/v1/sparks/{name}/ssh-keys/{label}", tags=["cles"])
     def grant_key(name: str, label: str) -> dict:

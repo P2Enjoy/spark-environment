@@ -5031,10 +5031,16 @@ où » redémarrerait le démon Docker du locataire, donc sa production, pour ri
 |---|---|---|
 | Spark sans cellule | `409` | `spark_not_reachable` |
 | cellule à l'arrêt | `409` | `spark_not_running` |
-| Spark protégé (§35) | `409` | `spark_protected` |
+| Spark protégé (§35) | `423` | `spark_protected` |
 | Incus refuse l'exécution | `502` | `bootstrap_failed` |
 
-Le Spark **protégé** refuse : l'amorçage installe des paquets et redémarre des
+Le Spark **protégé** refuse en **`423`**, et non en `409` : c'est le code que le
+§35.5 a déjà fixé pour toute écriture visant un Spark protégé, et une seconde
+convention pour le même refus obligerait la console à en connaître deux. Corrigé
+le 2026-08-20 après mesure — cette table disait d'abord `409`, ce qui était une
+supposition et non un relevé.
+
+L'amorçage installe des paquets et redémarre des
 services chez le locataire, ce qui entre exactement dans ce que la protection
 arrête. La protection se lève d'abord, par le geste distinct du §35 — une
 confirmation qui la lèverait au passage ne protégerait de rien

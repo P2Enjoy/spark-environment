@@ -824,6 +824,94 @@
         ]
       }
     },
+    "/v1/sparks/{name}/bootstrap": {
+      "get": {
+        "description": "Relevé de l'amorçage. N'écrit RIEN (docs/DAT.md §42.7).\n\n@spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.1, §42.6, §42.7\n\nDeux routes plutôt qu'une, et la séparation n'est pas décorative : on\npeut regarder sans agir. Faire de la détection l'effet de bord d'une\nécriture obligerait à amorcer pour savoir s'il y a lieu d'amorcer.",
+        "operationId": "read_bootstrap_v1_sparks__name__bootstrap_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Bootstrap V1 Sparks  Name  Bootstrap Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Bootstrap",
+        "tags": [
+          "amorcage"
+        ]
+      },
+      "post": {
+        "description": "Amorce ce qui MANQUE, et rien d'autre (docs/DAT.md §42.1, §42.7).\n\n@spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §41.2, §42.1, §42.3, §42.8\n\nUn second amorçage ne fait rien et le dit. Un geste qui réinstallerait\n« au cas où » redémarrerait le démon Docker du locataire, donc sa\nproduction, pour rien.",
+        "operationId": "run_bootstrap_v1_sparks__name__bootstrap_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Bootstrap V1 Sparks  Name  Bootstrap Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Bootstrap",
+        "tags": [
+          "amorcage"
+        ]
+      }
+    },
     "/v1/sparks/{name}/protection": {
       "delete": {
         "description": "Lever DÉSARME durablement (§35.4). Il n'y a pas de fenêtre de temps.",
