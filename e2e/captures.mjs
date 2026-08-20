@@ -18,6 +18,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
+import { execFileSync } from 'node:child_process';
 
 const SORTIE = new URL('./captures/', import.meta.url).pathname;
 
@@ -80,6 +81,10 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           uneSeuleCle = false, refusRestauration = false,
                           hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false,
                           ancreEnAlerte = false, sansServeur = false,
+                          // SPK-53 · §40.3 : l'empreinte que la Forge publie.
+                          // Un VRAI commit du dépôt, pour que la comparaison
+                          // porte sur une ascendance réelle et non simulée.
+                          buildCommit = null,
                           terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
@@ -138,6 +143,14 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         const GIO = 1024 ** 3;
         return new Response(JSON.stringify({
           hostname: 'spark-experiment',
+          // SPK-53 · §40.2 : `null` vaut « non estampillée », et c'est une
+          // réponse. La console ne doit pas la confondre avec « à jour ».
+          build: buildCommit
+            ? { commit: buildCommit, version: `0.0.0+${buildCommit.slice(0, 12)}`,
+                dirty: false, committed_at: null, installed_at: null,
+                installed_from: null }
+            : { commit: null, version: '0.0.0+inconnue', dirty: false,
+                committed_at: null, installed_at: null, installed_from: null },
           cpu: { cores_total: 4, threads_total: 8, cores_dedicated: 1 },
           memory: { total_bytes: 94 * GIO },
           reserves: {
@@ -720,6 +733,49 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '45-journal-ancre-mobile.png'), fullPage: true });
 console.log('  45-journal-ancre-mobile.png');
 ctx.server.close();
+
+// --- LE CODE DÉPLOYÉ (SPK-53, §40.3) --------------------------------------
+// Les deux états qui décident : une Forge EN RETARD, qui appelle un geste, et
+// une build NON ESTAMPILLÉE, qui ne se confond pas avec « à jour ».
+{
+  const tete = execFileSync('git', ['rev-parse', 'HEAD'],
+                            { cwd: join(SORTIE, '..', '..'), encoding: 'utf8' }).trim();
+  const ancien = execFileSync('git', ['rev-parse', 'HEAD~4'],
+                              { cwd: join(SORTIE, '..', '..'), encoding: 'utf8' }).trim();
+
+  ctx = await demarrer({ buildCommit: ancien });
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('tbody a');
+  await page.click('nav a[href="#/forge"]');
+  await page.waitForFunction(
+    () => document.body.innerText.includes('commits d’écart'), { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '90-forge-build-en-retard.png'), fullPage: true });
+  console.log('  90-forge-build-en-retard.png');
+  ctx.server.close();
+
+  // À JOUR : la seule situation où la console affirme que tout va bien.
+  ctx = await demarrer({ buildCommit: tete });
+  await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('tbody a');
+  await page.click('nav a[href="#/forge"]');
+  await page.waitForFunction(
+    () => document.body.innerText.includes('À jour'), { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '91-forge-build-a-jour.png'), fullPage: true });
+  console.log('  91-forge-build-a-jour.png');
+  ctx.server.close();
+
+  // NON ESTAMPILLÉE : « inconnue » est une réponse, pas « à jour » (§40.2).
+  ctx = await demarrer();
+  await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('tbody a');
+  await page.click('nav a[href="#/forge"]');
+  await page.waitForFunction(
+    () => document.body.innerText.includes('non estampillée'), { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '92-forge-build-inconnue.png'), fullPage: true });
+  console.log('  92-forge-build-inconnue.png');
+  ctx.server.close();
+}
 
 // --- L'AMORÇAGE (SPK-54, §41, §42) ----------------------------------------
 // Les trois états qui décident : pas encore relevé, un docker.io À CORRIGER, et

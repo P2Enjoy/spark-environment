@@ -182,6 +182,18 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.confirmation', { timeout: 10000 });
     await capturer('m10-suppression');
 
+    // --- M4 · LE CODE DÉPLOYÉ (SPK-53, §40.3) --------------------------------
+    // L'état qui appelle un geste : la Forge en retard sur le dépôt du poste.
+    // La pile de développement n'est pas estampillée, donc c'est « non
+    // estampillée » qui s'affichera — l'illustration montre alors le cas que le
+    // chapitre nomme en premier parmi les non-réponses.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-build', { timeout: 10000 });
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Comparaison en cours'), { timeout: 15000 });
+    await capturer('m4-code-deploye', { hauteur: 900 });
+
     // --- M6 · L'AMORÇAGE (SPK-54, §42) ---------------------------------------
     // Le relevé AVANT d'agir : c'est ce que le chapitre demande au lecteur de
     // reconnaître, et c'est l'état où il arrivera.

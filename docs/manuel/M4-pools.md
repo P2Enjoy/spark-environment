@@ -91,6 +91,47 @@ La capacité affichée date du dernier relevé, dont la date accompagne toujours
 chiffres. Le bouton **Relever à nouveau** la rafraîchit ; il ne détruit rien et ne
 demande donc aucune confirmation.
 
+## Quel code cette Forge exécute
+
+L'écran porte une section **Code déployé**. Elle répond à une question qu'on ne
+peut pas se poser trop tôt : *cette Forge exécute-t-elle bien la correction que
+j'ai poussée ?*
+
+Sans elle, « c'est déployé » est une croyance — rien ne distingue une Forge à
+jour d'une Forge oubliée depuis trois semaines, et le premier diagnostic part
+d'une hypothèse fausse.
+
+La console compare l'empreinte que la Forge publie au dépôt **de votre poste**.
+Six réponses, et une seule dit que tout va bien :
+
+| Ce que vous lisez | Ce que cela veut dire | Que faire |
+|---|---|---|
+| **À jour** | même code des deux côtés | rien |
+| **En retard — N commits d'écart** | votre dépôt porte du code que la Forge n'exécute pas | redéployer |
+| **C'est ce poste qui est en retard** | la Forge exécute du code plus récent que le vôtre | récupérer, **ne pas redéployer** |
+| **Build étrangère à ce dépôt** | son commit est inconnu ici | rien à conclure |
+| **Build non estampillée** | elle ne dit pas quel code elle exécute | réinstaller |
+| **Aucun dépôt sur ce poste** | il n'y a rien ici à quoi comparer | rien à conclure |
+
+**Les trois dernières ne sont pas des pannes**, ce sont des non-réponses. La
+console préfère dire qu'elle ne sait pas plutôt que d'afficher « à jour » : c'est
+précisément au moment où l'on a besoin d'elle qu'un « à jour » inventé ferait le
+plus de dégâts.
+
+**La troisième mérite qu'on s'y arrête.** Si votre poste est en retard sur la
+Forge, l'écran ne le signale pas en rouge, et ce n'est pas une omission :
+redéployer dans ce cas remplacerait le code de la machine par une version *plus
+ancienne*. Récupérez d'abord.
+
+![La console dit qu'elle ne sait pas, plutôt que d'afficher « à jour »](images/m4-code-deploye.png)
+
+Une **version installée** apparaît à côté du verdict. Si elle se termine par
+`.sale`, l'arbre déployé avait des modifications non committées — c'est licite,
+on corrige parfois en urgence, mais la console ne vous le cache pas.
+
+La comparaison se refait avec **Comparer à nouveau**. Elle ne touche pas à la
+Forge : elle relit ce que celle-ci publie déjà, et regarde votre dépôt local.
+
 ## Une limite à connaître
 
 La réservation CPU n'est aujourd'hui proportionnelle **qu'entre Sparks** : elle

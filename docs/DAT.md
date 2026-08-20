@@ -4828,17 +4828,42 @@ de la Forge.
 La console compare l'empreinte de la Forge à l'état du dépôt local, et **nomme ce
 qu'elle sait** plutôt que de conclure :
 
-| Situation | Ce qui est dit |
-|---|---|
-| même commit | à jour |
-| commit de la Forge **ancêtre** du dépôt local | en retard de N commits, mise à jour disponible |
-| commit local ancêtre de celui de la Forge | c'est le **poste** qui est en retard |
-| commit inconnu du dépôt local | build étrangère à ce dépôt — aucune conclusion |
-| build inconnue | non estampillée : réinstaller pour le savoir |
+| Situation | Ce qui est dit | Appelle un geste |
+|---|---|---|
+| même commit | à jour | non |
+| commit de la Forge **ancêtre** du dépôt local | en retard de N commits, mise à jour disponible | **oui** |
+| commit local ancêtre de celui de la Forge | c'est le **poste** qui est en retard | non |
+| commit inconnu du dépôt local, ou histoires divergentes | build étrangère à ce dépôt — aucune conclusion | non |
+| build inconnue | non estampillée : réinstaller pour le savoir | **oui** |
+| **aucun dépôt sur le poste** | rien ici à quoi comparer | non |
 
-Les deux derniers cas comptent autant que les autres. Une console qui afficherait
-« à jour » faute de savoir comparer mentirait exactement au moment où l'on a
-besoin d'elle.
+Les trois avant-derniers cas comptent autant que les autres. Une console qui
+afficherait « à jour » faute de savoir comparer mentirait exactement au moment où
+l'on a besoin d'elle.
+
+**La sixième situation a été ajoutée le 2026-08-20**, en implémentant la
+comparaison : ce chapitre en annonçait cinq. Une console peut tourner là où il
+n'y a **aucun dépôt** — c'est même le cas le plus probable en exploitation, chez
+un exploitant qui ne développe pas. La ranger dans « build étrangère » aurait été
+faux : on ne sait pas si elle est étrangère, on n'a rien pour le dire.
+
+**Le troisième cas ne s'annonce PAS comme un défaut de la Forge, et c'est la
+conséquence qui le décide** : traité comme tel, il enverrait redéployer une
+version *plus ancienne* que celle qui tourne. Un écran qui se trompe là ne se
+contente pas d'informer mal — il fait régresser une machine en service. Seuls
+« en retard » et « non estampillée » sont donc rendus en alerte (§9.7 du design
+system) ; les autres informent.
+
+**Où vit la comparaison.** Dans l'hôte console, jamais dans `sparkd` : c'est le
+poste qui porte le dépôt, et la Forge est déployée par `rsync` **sans** `.git`
+(§40.1). L'hôte console est le seul endroit qui ait à la fois le tunnel et le
+dépôt. Il rend le verdict ET son libellé — le libellé est le contrat de ce
+chapitre, pas une formulation d'écran, et une copie côté navigateur en ferait une
+seconde vérité qui divergerait.
+
+Un `git` en échec est une **réponse**, jamais une panne : lever ferait d'une
+absence de comparaison une panne d'écran, ce que le §40.2 refuse déjà pour la
+Forge et qui vaut ici pour les mêmes raisons.
 
 
 ## 41. Le runtime d'un Spark : ce que l'image ne donne pas

@@ -2062,9 +2062,40 @@ d'incohérences — retirée dans le même changement.
 - **Livré et vérifié le 2026-08-20 pour le runtime** : module `build.py`,
   4 tests d'unité, estampille écrite par `scripts/install-serveur.sh`, et
   `/healthz` de la Forge réelle qui rend le commit déployé.
-- **Reste** : la comparaison côté console, ses cinq situations, et la commande de
-  mise à jour depuis l'interface. Tant que ce n'est pas livré et éprouvé depuis le
-  parcours canonique, l'unité reste `[~]`.
+**Comparaison côté console livrée le 2026-08-20.**
+
+- `apps/webui/host/build.js` : les **six** verdicts. Le §40.3 en annonçait cinq ;
+  le sixième — **aucun dépôt sur le poste** — est apparu en l'implémentant, et
+  c'est le cas le plus probable en exploitation, chez un exploitant qui ne
+  développe pas. Le ranger dans « build étrangère » aurait été faux : on ne sait
+  pas si elle est étrangère, on n'a rien pour le dire. Le §40.3 est corrigé.
+- **Ce qui décide de l'unité n'est pas la comparaison, c'est ce qu'on dit quand
+  elle est impossible.** Trois verdicts sur six sont des non-réponses, et un seul
+  affirme que tout va bien — celui qui l'a mesuré.
+- **Le cas qui trompe le plus** : « c'est le poste qui est en retard » n'est ni en
+  rouge ni annoncé. Traité comme un défaut de la Forge, il enverrait redéployer
+  une version *plus ancienne* que celle qui tourne — un écran qui se trompe là ne
+  se contente pas d'informer mal, il fait régresser une machine en service. Une
+  preuve garde cette différence, et le §40.3 porte désormais la conséquence.
+- La comparaison vit dans l'**hôte console**, seul endroit qui ait à la fois le
+  tunnel et le dépôt — la Forge est déployée par `rsync` sans `.git` (§40.1). Il
+  rend le verdict **et son libellé** : le libellé est le contrat du §40.3, et une
+  copie côté navigateur en aurait fait une seconde vérité.
+- Un `git` en échec est une **réponse**, jamais une panne : lever ferait d'une
+  absence de comparaison une panne d'écran.
+- **Preuves** : 10 du module — montées sur un vrai dépôt jetable et non sur un
+  `git` simulé, parce que c'est l'ascendance des commits qu'on éprouve et qu'un
+  doublon ne prouverait que sa propre fidélité —, 48 d'hôte console, 47 de
+  composant. Captures `90-` à `92-` observées, plus
+  `docs/manuel/images/m4-code-deploye.png` produite depuis la pile réelle.
+  Manuel M4 complété.
+
+- **Reste à livrer, et c'est le seul écart** : la **commande de mise à jour**
+  depuis l'écran de la Forge. Le §40 ne la spécifie pas, et elle n'est pas une
+  finition : elle ferait redéployer `sparkd` sur une machine en service depuis un
+  bouton. Ce que « mettre à jour » veut dire — quel artefact, quelle
+  confirmation, quel retour arrière — demande une décision du responsable avant
+  la première ligne de code (`CLAUDE.md` §9).
 
 ### [~] SPK-54 · Amorcer un Spark depuis la console
 
