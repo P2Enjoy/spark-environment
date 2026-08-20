@@ -55,7 +55,7 @@ export const EXPLICATIONS = {
  * `connue` est l'ancre retenue (ou `null`), `annoncee` porte `head` et `length`
  * du relevé, et `contient` dit si la tête retenue se retrouve dans l'histoire
  * annoncée — c'est le serveur qui répond à cette question, et c'est assumé : un
- * hôte hostile ment, et c'est précisément pourquoi une longueur en recul suffit
+ * Forge hostile ment, et c'est précisément pourquoi une longueur en recul suffit
  * à alerter sans lui demander son avis.
  */
 export function juger(connue, annoncee, contient = false) {
@@ -66,7 +66,7 @@ export function juger(connue, annoncee, contient = false) {
   // Le recul se juge AVANT tout le reste : c'est la troncature, et elle ne se
   // discute pas. Un serveur qui aurait aussi remplacé son journal serait alors
   // signalé « shrunk » plutôt que « diverged » — les deux sont des alertes, et
-  // celle qui se constate sans faire confiance à l'hôte prime.
+  // celle qui se constate sans faire confiance à la Forge prime.
   if (apres < avant) return SHRUNK;
   if (annoncee?.head === connue.head && apres === avant) return UNCHANGED;
   return contient ? EXTENDS : DIVERGED;

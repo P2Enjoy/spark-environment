@@ -13,8 +13,8 @@
  * autre question — « qu'est-il arrivé à celui-ci ».
  */
 
-import { renderOngletsForge } from './host-images.js';
-import { formatDate } from './host-view.js';
+import { renderOngletsForge } from './forge-images.js';
+import { formatDate } from './forge-view.js';
 import { traduireMessage } from './tokens.js';
 
 const echapper = (v) =>
@@ -170,7 +170,7 @@ function renderLigne(e) {
 }
 
 /** Vue complète. §6.13 : chargement, vide et erreur sont traités explicitement. */
-export function renderJournalHote({ status = 'loading', entries = [], error = null,
+export function renderJournalForge({ status = 'loading', entries = [], error = null,
                                     filtres = FILTRES_VIDES, chain = null,
                                     anchor = null, checking = false } = {}) {
   const entete = `
@@ -234,6 +234,6 @@ ${renderIntegrite({ chain, anchor, checking })}
 }
 
 /** Les onglets de la Forge, journal compris (§34.1). */
-export function renderJournalHotePage(etat) {
-  return renderOngletsForge('#/forge/journal') + renderJournalHote(etat);
+export function renderJournalForgePage(etat) {
+  return renderOngletsForge('#/forge/journal') + renderJournalForge(etat);
 }

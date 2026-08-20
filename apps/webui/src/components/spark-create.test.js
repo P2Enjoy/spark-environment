@@ -65,7 +65,7 @@ test('une demande qui tient ne declenche aucun avertissement', () => {
 
 test('sans capacite connue, aucune estimation n est inventee', () => {
   assert.deepEqual(estimate(DEFAUTS, null), []);
-  assert.match(renderSparkCreate({ pools: null }), /Capacité de l’hôte inconnue/);
+  assert.match(renderSparkCreate({ pools: null }), /Capacité de la Forge inconnue/);
 });
 
 test('un mode dedie ne consomme pas de reservation mais des coeurs', () => {

@@ -201,7 +201,7 @@ export function createConsoleHost(options = {}) {
 
       const ancres = await loadAnchors(anchorPath);
       // La tête retenue est-elle encore DANS l'histoire annoncée ? Seul le
-      // serveur peut répondre — et c'est assumé : un hôte hostile ment, ce qui
+      // serveur peut répondre — et c'est assumé : une Forge hostile ment, ce qui
       // est précisément pourquoi le recul de longueur se juge sans lui.
       const connue = ancres[nom]?.head ?? null;
       let contient = false;

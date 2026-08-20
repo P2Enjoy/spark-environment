@@ -4,7 +4,7 @@
  * @spec docs/BACKLOG.md#SPK-32 · docs/DAT.md §33 (le catalogue), §33.2 (ajouter
  *       est un geste explicite), §33.3 (le relevé, ses trois états, sa date),
  *       §33.4 (ce que le catalogue n'est pas), §34.1 (l'onglet Images est la
- *       surface du catalogue : il décrit l'hôte, pas un Spark) ·
+ *       surface du catalogue : il décrit la Forge, pas un Spark) ·
  *       docs/DAT.md §26.2 (la saisie est recueillie par une modale limitée
  *       à la section), §34.2 · docs/DESIGN_SYSTEM.md §6.14, §6.24, §6.27,
  *       §5.4 (afficher et saisir ne partagent pas la même surface), §14.6, §14.7
@@ -14,7 +14,7 @@
  * pouvait pas voir qu'une image avait disparu de son dépôt.
  */
 
-import { formatDate } from './host-view.js';
+import { formatDate } from './forge-view.js';
 import { renderModale } from './modale.js';
 
 const echapper = (v) =>

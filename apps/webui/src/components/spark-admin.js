@@ -177,7 +177,7 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
            <input class="controle" id="route-port" name="port" type="number" min="1" max="65535"
                   value="${echapper(ui.values.port)}">
            <p class="champ__aide">Le port sur lequel écoute la pile DANS le Spark,
-           pas celui de l’hôte.</p>
+           pas celui de la Forge.</p>
          </div>
          <div class="champ">
            <label for="route-tls">
@@ -694,7 +694,7 @@ export function renderKeysPanel(spark, { keys = [], registry = [], sshConfig = n
     ? `<h3>Configuration SSH</h3>
        <pre class="fragment technique">${echapper(sshConfig.config)}</pre>
        <p class="note">Un Spark n’expose jamais son port 22 : l’accès passe par rebond
-       sur l’hôte.</p>`
+       sur la Forge.</p>`
     : '';
 
   return `
@@ -775,7 +775,7 @@ export function renderBlockedRestore(refusal) {
   </div>`;
 }
 
-/** Instantanés. `stateful` n'est pas proposé : il échoue sur cet hôte (§19.3). */
+/** Instantanés. `stateful` n'est pas proposé : il échoue sur cette Forge (§19.3). */
 export function renderSnapshotsPanel(spark, snapshots = [], ui = ADMIN_VIDE) {
   const lignes = snapshots.length
     ? `<ul class="liste-administrable">${snapshots.map((s) => {

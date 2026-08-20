@@ -239,7 +239,7 @@ function renderAddresses(adresses) {
 }
 
 /** Vue complète. */
-export function renderHostView({ status = 'loading', host = null, cores = null,
+export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
                                  syncing = false } = {}) {
   if (status === 'loading') return renderHostSkeleton();

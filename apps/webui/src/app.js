@@ -13,9 +13,9 @@ import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
   from './components/spark-admin.js';
-import { renderHostView } from './components/host-view.js';
-import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
-import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
+import { renderForgeView } from './components/forge-view.js';
+import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
+import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
 import { tunnelOf } from './components/tokens.js';
@@ -67,11 +67,11 @@ function peindre() {
       : etat.route === 'images'
       ? renderOngletsForge('#/forge/images') + renderCatalogue(etat.catalogue)
       : etat.route === 'journal'
-      ? renderJournalHotePage(etat.journal)
+      ? renderJournalForgePage(etat.journal)
       : etat.route === 'serveurs'
       ? renderServeurs(etat.catalogueServeurs)
       : etat.route === 'forge'
-      ? renderOngletsForge('#/forge') + renderHostView(etat.forge)
+      ? renderOngletsForge('#/forge') + renderForgeView(etat.forge)
       : etat.route === 'creation'
       ? renderSparkCreate(etat.creation)
       : etat.route === 'detail'

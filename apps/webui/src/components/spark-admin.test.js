@@ -157,7 +157,7 @@ test('retirer une route confirme en nommant le domaine', () => {
 test("le champ de port designe le port DU SPARK, pas celui de l'hote (§26.3)", () => {
   const rendu = renderRoutesPanel(SPARK, [], ui({ open: 'route' }));
   assert.ok(rendu.includes('Port du Spark'));
-  assert.ok(rendu.includes('pas celui de l’hôte'));
+  assert.ok(rendu.includes('pas celui de la Forge'));
 });
 
 test('le formulaire enonce que le TLS depend du DNS (§18.3)', () => {

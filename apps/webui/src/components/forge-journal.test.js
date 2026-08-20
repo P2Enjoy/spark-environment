@@ -12,10 +12,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderJournalHote, renderIntegrite, renderAuteurCellule,
+  renderJournalForge, renderIntegrite, renderAuteurCellule,
   VERDICTS, FILTRES_VIDES,
-} from './host-journal.js';
-import { ONGLETS_FORGE } from './host-images.js';
+} from './forge-journal.js';
+import { ONGLETS_FORGE } from './forge-images.js';
 
 const ENTREES = [
   { ts: '2026-08-19T10:00:00', action: 'spark.create', result: 'ok',
@@ -27,7 +27,7 @@ const ENTREES = [
     actor: 'inconnu', actor_class: 'human', message: 'Capacité insuffisante.' },
 ];
 
-const pret = (surcharge = {}) => renderJournalHote({
+const pret = (surcharge = {}) => renderJournalForge({
   status: 'ready', entries: ENTREES, filtres: FILTRES_VIDES, ...surcharge });
 
 // --- la destination (§36.8.1) ----------------------------------------------
@@ -126,22 +126,22 @@ test('un auteur non déclaré le DIT, sans afficher la valeur technique', () => 
 // --- les états de vue (§6.13) -----------------------------------------------
 
 test('chargement, erreur et vide sont traités explicitement', () => {
-  assert.match(renderJournalHote({ status: 'loading' }), /aria-busy/);
-  assert.match(renderJournalHote({ status: 'error', error: { message: 'tunnel rompu' } }),
+  assert.match(renderJournalForge({ status: 'loading' }), /aria-busy/);
+  assert.match(renderJournalForge({ status: 'error', error: { message: 'tunnel rompu' } }),
                /etat-vue--erreur[\s\S]*tunnel rompu/);
-  assert.match(renderJournalHote({ status: 'ready', entries: [] }),
+  assert.match(renderJournalForge({ status: 'ready', entries: [] }),
                /Aucune opération enregistrée/);
 });
 
 test('un vide PAR FILTRE ne se confond pas avec un journal vide', () => {
   // §6.13 : un état vide ne propose une action que si elle est pertinente. Ici
   // elle l'est — élargir. Sur un journal réellement vide, elle ne l'est pas.
-  const filtre = renderJournalHote({
+  const filtre = renderJournalForge({
     status: 'ready', entries: [], filtres: { ...FILTRES_VIDES, action: 'spark' } });
   assert.match(filtre, /ce sont les filtres qui excluent tout/);
   assert.match(filtre, /data-action="filtres-vides"/);
 
-  const vide = renderJournalHote({ status: 'ready', entries: [], filtres: FILTRES_VIDES });
+  const vide = renderJournalForge({ status: 'ready', entries: [], filtres: FILTRES_VIDES });
   assert.ok(!vide.includes('data-action="filtres-vides"'),
     'sur un journal vide, élargir ne servirait à rien');
 });

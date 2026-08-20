@@ -13,8 +13,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderHostView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
-} from './host-view.js';
+  renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
+} from './forge-view.js';
 
 const GIO = 1024 ** 3;
 const HOTE = {
@@ -42,7 +42,7 @@ const CORES = {
 // --- LES TROIS GRANDEURS (§27.2) --------------------------------------------
 
 test('chaque ressource montre capacité, alloué ET disponible', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE });
   // Compter sur la page entiere surcompterait : le pool d'adresses porte lui
   // aussi un « Capacite ». On mesure DANS le bloc des pools.
   const bloc = rendu.slice(rendu.indexOf('<div class="pools">'),
@@ -54,14 +54,14 @@ test('chaque ressource montre capacité, alloué ET disponible', () => {
 });
 
 test('les quatre ressources sont présentes et nommées en français', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE });
   for (const { nom } of RESSOURCES) assert.ok(rendu.includes(nom), `${nom} absent`);
   assert.ok(!/\bcpu\b|\bmemory\b|\bstorage\b|\bnetwork\b/.test(
     rendu.replace(/data-[a-z-]+="[^"]*"/g, '')), 'aucun nom technique brut à l’écran');
 });
 
 test('un pool absent est nommé, pas laissé vide (§14.6)', () => {
-  const rendu = renderHostView({ status: 'ready', host: { ...HOTE, pools: { cpu: HOTE.pools.cpu } } });
+  const rendu = renderForgeView({ status: 'ready', host: { ...HOTE, pools: { cpu: HOTE.pools.cpu } } });
   assert.ok(rendu.includes('Non relevé.'));
 });
 
@@ -107,19 +107,19 @@ test('sans mémoire totale connue, la soustraction ne rend rien plutôt qu’un 
 // --- LE SURENGAGEMENT (§27.5) -----------------------------------------------
 
 test('le facteur de surengagement est affiché à côté de la capacité', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE });
   assert.ok(rendu.includes('surengagé ×2'),
     '« 6,00 CPU » sur quatre cœurs promettrait du matériel qui n’existe pas');
 });
 
 test('un facteur de 1 n’est pas affiché : il n’apprend rien', () => {
-  const rendu = renderHostView({ status: 'ready', host: {
+  const rendu = renderForgeView({ status: 'ready', host: {
     ...HOTE, pools: { ...HOTE.pools, cpu: { ...HOTE.pools.cpu, overcommit: 1 } } } });
   assert.ok(!rendu.includes('surengagé'));
 });
 
 test('l’absence de surengagement sur le disque est expliquée, pas laissée en blanc', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE });
   assert.ok(rendu.includes('Aucun surengagement'));
   assert.ok(rendu.includes('panne dure'));
 });
@@ -161,18 +161,18 @@ test('sans relevé des cœurs, la carte ne rend rien', () => {
 // --- LA RÉSERVATION N'EST PAS UNE GARANTIE (§27.6) --------------------------
 
 test('la portée de la réservation est LUE dans la réponse, pas écrite en dur', () => {
-  const proportionnelle = renderHostView({ status: 'ready', host: HOTE });
+  const proportionnelle = renderForgeView({ status: 'ready', host: HOTE });
   assert.ok(proportionnelle.includes('n’est proportionnelle qu’entre Sparks'));
 
   // Le jour où SPK-29 est livrée, le runtime change cette valeur et l'écran suit.
-  const absolue = renderHostView({ status: 'ready',
+  const absolue = renderForgeView({ status: 'ready',
     host: { ...HOTE, reservation_guarantee: 'absolute' } });
   assert.ok(absolue.includes('garantie même sous contention'));
   assert.ok(!absolue.includes('n’est proportionnelle qu’entre Sparks'));
 });
 
 test('une portée inconnue n’affiche rien plutôt qu’une phrase inventée', () => {
-  const rendu = renderHostView({ status: 'ready',
+  const rendu = renderForgeView({ status: 'ready',
     host: { ...HOTE, reservation_guarantee: 'quelque_chose_de_neuf' } });
   for (const phrase of Object.values(GARANTIES)) assert.ok(!rendu.includes(phrase));
 });
@@ -180,7 +180,7 @@ test('une portée inconnue n’affiche rien plutôt qu’une phrase inventée', 
 // --- ADRESSES (§27.7) --------------------------------------------------------
 
 test('le pool d’adresses figure avec les autres', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE });
   assert.ok(rendu.includes('Adresses privées'));
   assert.ok(rendu.includes('196'), 'les adresses libres');
   assert.ok(rendu.includes('10.77.0.240-10.77.0.254'), 'la plage DHCP');
@@ -189,13 +189,13 @@ test('le pool d’adresses figure avec les autres', () => {
 // --- TOPOLOGIE ET ÉTATS (§27.8, §6.13) --------------------------------------
 
 test('la capacité est toujours accompagnée de sa date de relevé', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE });
   assert.ok(rendu.includes('2026-08-19 14:05'));
   assert.ok(rendu.includes('n’est pas rafraîchie à chaque requête'));
 });
 
 test('une topologie jamais relevée offre son remède comme une ACTION', () => {
-  const rendu = renderHostView({ status: 'not-synced',
+  const rendu = renderForgeView({ status: 'not-synced',
     error: { message: 'L’hôte n’a jamais été relevé.' } });
   assert.ok(rendu.includes('data-action="relever"'));
   assert.ok(rendu.includes('Relever la topologie'));
@@ -203,20 +203,20 @@ test('une topologie jamais relevée offre son remède comme une ACTION', () => {
 });
 
 test('le relevé ne demande aucune confirmation (§6.24)', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE });
   assert.ok(rendu.includes('data-action="relever"'));
   assert.ok(!rendu.includes('confirmation'), 'il ne détruit rien et n’a aucun paramètre');
 });
 
 test('pendant le relevé, le bouton est désactivé et le dit', () => {
-  const rendu = renderHostView({ status: 'ready', host: HOTE, syncing: true });
+  const rendu = renderForgeView({ status: 'ready', host: HOTE, syncing: true });
   assert.ok(rendu.includes('disabled'));
   assert.ok(rendu.includes('Relevé…'));
 });
 
 test('les états chargement et erreur sont traités', () => {
-  assert.ok(renderHostView({ status: 'loading' }).includes('aria-busy'));
-  const erreur = renderHostView({ status: 'error', error: { message: 'tunnel rompu' } });
+  assert.ok(renderForgeView({ status: 'loading' }).includes('aria-busy'));
+  const erreur = renderForgeView({ status: 'error', error: { message: 'tunnel rompu' } });
   assert.ok(erreur.includes('etat-vue--erreur'));
   assert.ok(erreur.includes('tunnel rompu'));
   assert.ok(erreur.includes('data-action="reessayer"'));
@@ -237,7 +237,7 @@ test('formatDate rend un horodatage lisible, et rien pour une absence', () => {
 });
 
 test('les valeurs venues du serveur sont échappées', () => {
-  const rendu = renderHostView({ status: 'ready',
+  const rendu = renderForgeView({ status: 'ready',
     host: { ...HOTE, hostname: '<script>x</script>' } });
   assert.ok(!rendu.includes('<script>'));
   assert.ok(rendu.includes('&lt;script&gt;'));
@@ -317,7 +317,7 @@ test('le total est LU dans la reponse, jamais recompose par la console', () => {
 });
 
 test("l'explication est rendue AVEC le pool disque, pas ailleurs", () => {
-  const rendu = renderHostView({
+  const rendu = renderForgeView({
     status: 'ready',
     host: { ...HOTE, reserves: { ...HOTE.reserves,
       storage_metadata_margin_bytes: 64 * MIO,

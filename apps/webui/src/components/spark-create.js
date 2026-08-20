@@ -125,7 +125,7 @@ function nombre(id, valeur, pas, erreur, aide) {
 
 /** Capacité restante, affichée pour dimensionner — pas pour interdire. */
 function renderPools(pools) {
-  if (!pools) return '<p class="absence">Capacité de l’hôte inconnue.</p>';
+  if (!pools) return '<p class="absence">Capacité de la Forge inconnue.</p>';
   const lignes = [
     ['CPU', pools.cpu, (v) => `${formatCpu(v)} CPU`],
     ['Mémoire', pools.memory, formatBytes],

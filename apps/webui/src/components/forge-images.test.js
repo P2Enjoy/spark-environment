@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderCatalogue, renderOngletsForge, dernierReleve, etatOf, ETATS, CATALOGUE_VIDE,
-} from './host-images.js';
+} from './forge-images.js';
 
 const IMAGES = [
   { reference: 'images:debian/13', label: 'Debian 13', state: 'verified',

@@ -43,7 +43,7 @@ test('une tête connue INTROUVABLE est un remplacement', () => {
   assert.equal(juger({ head: 'a', length: 3 }, releve('z', 9), false), DIVERGED);
 });
 
-test('le RECUL prime, et il se juge SANS croire l’hôte', () => {
+test('le RECUL prime, et il se juge SANS croire la Forge', () => {
   // Un serveur hostile ment sur ce qu'il contient — donc sur `contient`. Il ne
   // peut pas mentir sur le fait d'en avoir moins qu'avant, et c'est pourquoi ce
   // verdict est rendu en premier.

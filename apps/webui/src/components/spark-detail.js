@@ -17,9 +17,9 @@
 import { stateOf, formatBytes, formatBps, formatCpu, MEASURE, traduireMessage } from './tokens.js';
 import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
          renderPortsPanel, ADMIN_VIDE } from './spark-admin.js';
-import { renderOngletsSpark } from './host-images.js';
+import { renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
-import { formatDate } from './host-view.js';
+import { formatDate } from './forge-view.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
