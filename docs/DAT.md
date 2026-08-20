@@ -865,17 +865,91 @@ noyau. Sa contrepartie est que la comptabilité des quotas repose sur les
 `qgroups`, dont le coût croît avec le nombre d'instantanés — c'est-à-dire
 précisément sur le mécanisme dont dépend la promesse de quota.
 
-Repli sans repartitionnement : pool sur **fichier** posé sur l'`ext4` existant.
-C'est le chemin par défaut d'`incus admin init` et il fonctionne, mais il empile
-deux systèmes de fichiers sur du disque mécanique et prive ZFS de la gestion du
-miroir. Acceptable pour valider la chaîne, pas pour exploiter.
+**RÉVISÉ le 2026-08-20 par arbitrage du responsable (SPK-28).** Ce qui précède
+énonçait une cible et un repli. Ce n'est plus la façon de le dire : il y a **deux
+dispositions**, chacune avec ce qu'elle apporte et ce qu'elle ne protège pas. Le
+choix appartient à qui installe, et il dépend de ce que la machine sert.
 
-**État au 2026-08-18 : c'est cette voie qui est en place**, sur décision du
-responsable, à titre provisoire. Le pool natif en miroir reste la cible ; la dette
-est inscrite dans `docs/PROD_MIGRATIONS.md` (OP-01) et n'est pas refermée. Deux
-conséquences à ne pas perdre de vue : aucune mesure de débit disque menée sur ce
-pool ne caractérise la machine, et ZFS ne protège pas ici contre la corruption
-silencieuse puisque le miroir reste géré par `md`.
+**Disposition A — pool natif, en miroir sur une paire de partitions dédiées.**
+Ce que les motifs ci-dessus décrivent. Elle exige que la machine ait été
+partitionnée pour cela **avant** d'être installée (§8.6, et le schéma du
+`README.md`). Ce qu'elle apporte en propre : ZFS gère lui-même le miroir, donc
+détecte et **répare** la corruption silencieuse.
+
+**Disposition B — pool sur fichier, posé sur le système de fichiers existant.**
+C'est le chemin par défaut d'`incus admin init`. Le quota, la copie sur écriture,
+le clonage et les instantanés fonctionnent **tous** : c'est le même ZFS. Ce
+qu'elle n'apporte pas, et qu'il faut savoir : elle empile deux systèmes de
+fichiers, et le miroir reste géré par ce qui est dessous — `md` ici, qui ne sait
+pas laquelle des deux copies est la bonne. La protection contre la corruption
+silencieuse est donc **absente**, pas dégradée.
+
+Ce qui a changé, et pourquoi : la disposition B avait été retenue « à titre
+provisoire » sur une machine de **démonstration**. Y voir une dette revenait à
+inscrire au contrat de déploiement une réinstallation qu'aucun usage de cette
+machine ne réclame. Une dette qu'on ne compte pas rembourser n'est pas une dette :
+c'est une disposition, et elle se documente comme telle.
+
+Le repli en pilote, lui, demeure : si le module hors arbre est refusé, **btrfs**
+en `raid1` apporte aussi sommes de contrôle et réparation, et vit dans le noyau.
+Sa contrepartie est que la comptabilité des quotas repose sur les `qgroups`, dont
+le coût croît avec le nombre d'instantanés — c'est-à-dire précisément sur le
+mécanisme dont dépend la promesse de quota.
+
+**Conséquence à ne pas perdre de vue sous la disposition B** : aucune mesure de
+débit disque menée sur ce pool ne caractérise la machine.
+
+### 8.5 bis Le stockage se configure — aucune valeur codée en dur
+
+**Décidé le 2026-08-20 (SPK-28).** Le produit ne suppose ni le nom du pool, ni son
+emplacement, ni sa taille. Une valeur codée en dur oblige à modifier le code pour
+installer ailleurs, et le premier exploitant qui le fait perd la garantie que son
+installation ressemble à celle qui a été éprouvée.
+
+Les valeurs se répartissent en deux familles, et la frontière n'est pas
+arbitraire : **`sparkd` ne crée aucun pool**. Il en lit un à travers Incus.
+
+**Ce que le runtime connaît**, parce qu'il l'interroge :
+
+| Variable | Rôle | Format | Défaut |
+|---|---|---|---|
+| `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | `spark` |
+| `SPARKD_STORAGE_DATASET` | jeu de données ZFS dont la compression est vérifiée | nom | la valeur de `SPARKD_STORAGE_POOL` |
+
+Le second **suit** le premier par défaut, et ce n'est pas une commodité : sur une
+installation ordinaire ils portent le même nom, et les désynchroniser en silence
+ferait vérifier la compression d'un jeu de données qui n'est pas celui du pool.
+
+**Ce que l'installation connaît**, parce qu'elle le pose :
+
+| Variable | Rôle | Format | Défaut |
+|---|---|---|---|
+| `SPARK_POOL_NAME` | nom du pool à créer | nom | `spark` |
+| `SPARK_POOL_DRIVER` | pilote Incus | `zfs` \| `btrfs` \| `dir` | `zfs` |
+| `SPARK_POOL_SOURCE` | disposition A : les périphériques du miroir, séparés par une virgule. Vide → disposition B | chemins | vide |
+| `SPARK_POOL_FILE_SIZE` | disposition B : taille du fichier creux | taille Incus, p. ex. `200GiB` | `200GiB` |
+
+`SPARK_POOL_SOURCE` **décide de la disposition**, et c'est délibéré : un drapeau
+séparé permettrait de demander la disposition A sans dire sur quoi, ce qui ne veut
+rien dire. Renseigner les périphériques EST le choix de la disposition A.
+
+**Ce que ces variables ne font pas.** Elles ne repartitionnent rien et ne
+détruisent rien. Créer un pool sur des périphériques qui portent des données les
+écraserait ; le geste d'installation **refuse** donc de créer un pool sur un
+périphérique non vide, et le dit, plutôt que de vérifier après coup.
+
+**Le point de montage n'est pas configurable, et il faut dire pourquoi.** Incus
+gère l'emplacement de ses jeux de données lui-même, sous `/var/lib/incus`. Offrir
+un réglage que le produit ne peut pas honorer serait une commande morte (§1.4 du
+design system). Ce qui se règle, c'est le chemin du **socket** — déjà
+`SPARKD_INCUS_SOCKET` — et la source du pool.
+
+**La vérification lit ces valeurs, elle ne les suppose pas.** `sparkd.preflight`
+prenait `"spark"` en défaut de fonction et proposait `size=200GiB` en remède. Les
+deux devaient venir de la configuration, sans quoi la vérification d'une
+installation configurée autrement rendait un verdict qui ne parlait pas d'elle.
+
+
 
 ### 8.6 Disposition de partitions visée
 
