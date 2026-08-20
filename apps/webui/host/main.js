@@ -22,6 +22,7 @@ import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.js';
+import { relever as releverDocker } from './docker.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
@@ -660,6 +661,39 @@ export function createConsoleHost(options = {}) {
         rescue: { ouvert: verdict.ouvert, motif: verdict.motif,
                   explication: verdict.explication },
       } };
+    },
+
+    /**
+     * Ce que le locataire fait tourner (SPK-44, §37.6).
+     *
+     * @spec docs/BACKLOG.md#SPK-44 · docs/DAT.md §37.6, §37.6 bis, §36.7
+     *
+     * Lecture SEULE, et rien n'est journalisé : le §36.7 ne journalise pas les
+     * lectures, et un relevé rafraîchi toutes les cinq secondes remplirait le
+     * journal de bruit sans dire qui a fait quoi.
+     */
+    'GET /api/spark/docker': async (_corps, url) => {
+      const nom = String(url?.searchParams.get('server') ?? '');
+      const spark = String(url?.searchParams.get('spark') ?? '');
+      let tunnel;
+      try {
+        tunnel = tunnels.require(nom);
+      } catch (erreur) {
+        return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
+      }
+      const amont = await fetchFn(
+        `http://127.0.0.1:${tunnel.localPort}/v1/sparks/${encodeURIComponent(spark)}`,
+        { headers: { 'x-spark-actor': tunnel.actorHeader } });
+      if (!amont.ok) {
+        return { status: 404, body: { error: 'unknown_spark',
+                                      message: `Aucun Spark « ${spark} » sur ce serveur.` } };
+      }
+      const decrit = await amont.json();
+      // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
+      // Absent en production — le produit lance alors `ssh`.
+      return { status: 200,
+               body: await releverDocker({ tunnel, spark: decrit,
+                                           doublon: process.env.SPARK_DOCKER_COMMAND || null }) };
     },
 
     'POST /api/terminal': async (corps) => {

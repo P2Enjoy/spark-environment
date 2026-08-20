@@ -208,6 +208,9 @@ export const FACETTES_SPARK = [
   // SPK-43 · SPK-DS-04 : le terminal est une DESTINATION, avec sa propre
   // adresse — ni une section, ni une modale.
   ['terminal', 'Terminal'],
+  // SPK-44 · §37.6 : ce que le locataire fait tourner, en LECTURE. La facette
+  // vient après le terminal parce qu'elle s'observe, quand celui-ci s'emploie.
+  ['docker', 'Docker'],
   ['journal', 'Journal'],
 ];
 

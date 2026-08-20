@@ -10,6 +10,7 @@
 
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE } from './components/spark-detail.js';
+import { DOCKER_VIDE } from './components/spark-docker.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
   from './components/spark-create.js';
@@ -60,7 +61,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                             ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } },
                // SPK-54 · §42 : l'amorçage. Vide tant qu'on n'a rien demandé —
                // le relevé exécute une commande dans la cellule du locataire.
-               amorcage: { ...AMORCAGE_VIDE } };
+               amorcage: { ...AMORCAGE_VIDE },
+               // SPK-44 · §37.6 : ce qui tourne dans le Spark. Relevé tant que
+               // l'onglet est ouvert, et ARRÊTÉ dès qu'il est quitté.
+               docker: { ...DOCKER_VIDE } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -105,7 +109,7 @@ function peindre() {
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, admin: etat.admin,
                             facette: etat.facette, terminal: etat.terminal,
-                            amorcage: etat.amorcage,
+                            amorcage: etat.amorcage, docker: etat.docker,
                             ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
         + renderSparksView(etat);
@@ -547,6 +551,56 @@ async function fermerTerminal(motif = 'sortie') {
                 { method: 'DELETE' }).catch(() => {});
   }
 }
+
+/**
+ * Le relevé Docker d'un Spark (SPK-44, docs/DAT.md §37.6).
+ *
+ * Rafraîchi toutes les CINQ secondes tant que l'onglet est ouvert, et **arrêté**
+ * dès qu'il est quitté. Le motif est au §37.6 : une console qui interroge en
+ * permanence un Spark qu'on ne regarde plus consomme le quota du locataire pour
+ * rien. C'est la même règle que la session de terminal, qui meurt avec son
+ * onglet.
+ */
+const DOCKER_CADENCE_MS = 5000;
+let minuterieDocker = null;
+
+function arreterDocker() {
+  clearTimeout(minuterieDocker);
+  minuterieDocker = null;
+}
+
+async function releverDocker({ premier = false } = {}) {
+  const d = etat.docker;
+  if (premier) { d.status = 'chargement'; d.erreur = null; peindre(); }
+  try {
+    const reponse = await fetch(
+      `/api/spark/docker?server=${encodeURIComponent(etat.server)}`
+      + `&spark=${encodeURIComponent(etat.spark.name)}`);
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    d.releve = corps;
+    d.status = 'pret';
+    d.erreur = null;
+  } catch (erreur) {
+    // §14.6 : ne pas avoir pu lire n'est pas « rien ne tourne ». On le dit, et
+    // on n'efface pas le relevé précédent — il porte encore une information
+    // datée, là où un écran vidé n'en porterait aucune.
+    d.status = d.releve ? 'pret' : 'erreur';
+    d.erreur = erreur?.message ?? String(erreur);
+  }
+  peindre();
+  // La minuterie se rearme APRÈS la réponse, jamais à intervalle fixe : sur un
+  // Spark lent, un intervalle fixe empilerait les requêtes.
+  if (etat.facette === 'docker' && etat.route === 'detail') {
+    minuterieDocker = setTimeout(() => releverDocker(), DOCKER_CADENCE_MS);
+  }
+}
+
+// §37.6 : la collecte CESSE quand l'onglet est quitté.
+window.addEventListener('hashchange', () => {
+  if (!location.hash.includes('/docker')) arreterDocker();
+});
+window.addEventListener('pagehide', arreterDocker);
 
 // §37.4 : quitter l'onglet TERMINE la session. Sans cela, un shell root
 // survivrait à l'écran qui l'a ouvert, et personne ne s'en souviendrait.
@@ -1185,6 +1239,11 @@ async function chargerDetail(nom, facette = '') {
   etat.facette = facette;
   etat.status = 'loading';
   etat.error = null;
+  // §37.6 : la collecte ne survit pas au changement de facette. Un relevé lancé
+  // pour un Spark continuerait sinon à interroger l'ancien depuis l'écran du
+  // suivant.
+  arreterDocker();
+  if (facette !== 'docker') etat.docker = { ...DOCKER_VIDE };
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
@@ -1209,6 +1268,11 @@ async function chargerDetail(nom, facette = '') {
     etat.error = erreur;
   }
   peindre();
+  // SPK-44 · §37.6 : la collecte commence à l'OUVERTURE de l'onglet, pas avant.
+  // Un Spark dont on ne regarde pas le Docker n'est jamais interrogé.
+  if (etat.facette === 'docker' && etat.status === 'ready') {
+    releverDocker({ premier: true });
+  }
 }
 
 /**
@@ -1629,7 +1693,7 @@ function router() {
   // adresse. L'omettre ici le rendait inatteignable au rechargement — et
   // l'onglet menait à la facette « Infos ». Mesuré.
   const detail = location.hash.match(
-    /^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|terminal|journal))?$/);
+    /^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|terminal|docker|journal))?$/);
   if (detail) return chargerDetail(decodeURIComponent(detail[1]), detail[2] ?? '');
   etat.route = 'liste';
   etat.spark = null;
