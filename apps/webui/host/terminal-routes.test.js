@@ -215,3 +215,30 @@ test('le flux d’une session inconnue rend 404, pas un flux vide', async () => 
   assert.equal((await r.json()).error, 'unknown_session');
   fermer();
 });
+
+test('la fermeture par BALISE tue le distant et déclare la fermeture', async () => {
+  // §37.4.2 : `sendBeacon` ne sait que POSTer, et c'est le seul envoi qui parte
+  // encore quand l'onglet se ferme. Sans cette route, fermer le navigateur
+  // laisserait un shell root vivant jusqu'au délai d'inactivité.
+  const { base, fermer, enfants, declarees } = await pile();
+  const { id } = await (await ouvrir(base)).json();
+
+  const r = await fetch(`${base}/api/terminal/fermeture?id=${id}`, { method: 'POST' });
+  assert.equal(r.status, 204);
+  assert.deepEqual(enfants[0].tue, ['SIGKILL']);
+
+  const fermeture = declarees.find((d) => d.action === 'spark.terminal_close');
+  assert.ok(fermeture);
+  assert.equal(fermeture.payload.reason, 'flux_ferme',
+    'la balise dit que la CONNEXION est partie, pas qu’on a quitté volontairement');
+  fermer();
+});
+
+test('une balise sur une session inconnue ne fâche personne', async () => {
+  // Une balise part quand la page se démonte : elle peut arriver après que la
+  // session a déjà été fermée autrement. La refuser n'apprendrait rien.
+  const { base, fermer } = await pile();
+  assert.equal((await fetch(`${base}/api/terminal/fermeture?id=nulle`,
+                            { method: 'POST' })).status, 204);
+  fermer();
+});
