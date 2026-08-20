@@ -2054,6 +2054,156 @@ test('revenir sur l’onglet repart de la LISTE, jamais d’un journal figé', a
   });
 });
 
+// --- SPK-45 · LES GESTES SUR UN CONTENEUR (§37.7) --------------------------
+
+/** Ouvre un conteneur de « crm-production » depuis la liste, à la souris. */
+async function ouvrirConteneur(nom, spark = 'crm-production') {
+  await ouvrir(spark, 'docker');
+  await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
+  await page.click(`button[data-conteneur="${nom}"]`);
+  await page.waitForSelector('#titre-conteneur', { timeout: 15000 });
+  await page.waitForFunction(
+    () => !document.body.innerText.includes('Inspection en cours'), { timeout: 15000 });
+}
+
+test('arrêter un conteneur : la confirmation NOMME l’effet, et le journal le retient',
+     async () => {
+  await parcours('geste-arreter', async () => {
+    await ouvrirConteneur('helo-web-1');
+
+    // §29.3 : on demande le geste EN CLIQUANT, jamais par un appel d'API.
+    await page.click('button[data-geste="stop"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+
+    // §6.23 : l'effet est décrit, jamais un « êtes-vous sûr ».
+    const confirmation = await page.textContent('.confirmation');
+    assert.match(confirmation, /helo-web-1/);
+    assert.match(confirmation, /La production servie par « helo-web-1 » s’interrompt/);
+    assert.ok(!/êtes-vous sûr/i.test(confirmation));
+    assert.match(confirmation, /inscrit au journal/);
+
+    // §6.22 : le focus ENTRE dans la confirmation.
+    const focalise = await page.evaluate(() =>
+      document.activeElement?.getAttribute('data-geste-confirme'));
+    assert.equal(focalise, 'stop', 'le focus entre dans la confirmation');
+
+    await page.click('[data-geste-confirme="stop"]');
+    await page.waitForSelector('.succes', { timeout: 15000 });
+    const issue = await page.textContent('.succes');
+    assert.match(issue, /c’est fait/);
+    assert.match(issue, /helo-web-1/);
+
+    // CLAUDE.md §15 : on LIT `sparkd` pour constater l'effet, jamais pour agir.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.container_stop');
+    const inscrit = corps.entries[0];
+    assert.ok(inscrit, 'le geste doit être au journal');
+    assert.equal(inscrit.result, 'ok');
+    assert.equal(inscrit.target_id, 'crm-production');
+    assert.equal(JSON.parse(inscrit.payload).container, 'helo-web-1');
+  });
+});
+
+test('annuler une confirmation ne fait RIEN, et rend le focus au déclencheur', async () => {
+  await parcours('geste-annule', async () => {
+    // Une confirmation dont l'annulation agirait quand même serait pire que pas
+    // de confirmation du tout.
+    const { corps: avant } = await pile.lireSparkd('/v1/audit?action=spark.container_kill');
+    await ouvrirConteneur('helo-web-1');
+    await page.click('button[data-geste="kill"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+    await page.click('[data-geste-annule]');
+    await page.waitForFunction(
+      () => !document.querySelector('.confirmation'), { timeout: 10000 });
+
+    // §6.22 : l'annulation rend le focus au déclencheur.
+    const focalise = await page.evaluate(() =>
+      document.activeElement?.getAttribute('data-geste'));
+    assert.equal(focalise, 'kill');
+
+    const { corps: apres } = await pile.lireSparkd('/v1/audit?action=spark.container_kill');
+    assert.equal(apres.entries.length, avant.entries.length,
+      'annuler n’a rien inscrit, donc rien fait');
+  });
+});
+
+test('tuer un conteneur DÉJÀ ARRÊTÉ le dit, sans crier à la panne', async () => {
+  await parcours('geste-deja-arrete', async () => {
+    // MESURÉ (§37.7.1) : le seul geste non idempotent. L'état voulu est
+    // pourtant déjà celui-là — ce n'est pas un échec du produit.
+    await ouvrirConteneur('helo-base-1');
+    await page.click('button[data-geste="start"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+    await page.click('[data-geste-confirme="start"]');
+    await page.waitForSelector('.succes', { timeout: 15000 });
+
+    // « helo-base-1 » est arrêté dans l'inventaire : le doublon fait échouer son
+    // « kill » avec « is not running », comme le vrai Docker.
+    await ouvrirConteneur('helo-base-1');
+    const rendu = await page.content();
+    if (rendu.includes('data-geste="kill"')) {
+      await page.click('button[data-geste="kill"]');
+      await page.click('[data-geste-confirme="kill"]');
+      await page.waitForSelector('.avertissement', { timeout: 15000 });
+      const issue = await page.textContent('.avertissement');
+      assert.match(issue, /ne tournait pas/);
+      assert.ok(!/panne/i.test(issue));
+      // §25.1 : ce n'est pas un refus, donc pas de rouge.
+      assert.equal(await page.$$eval('.refus', (l) => l.length), 0);
+    }
+  });
+});
+
+test('un Spark GELÉ refuse le geste et LAISSE la lecture (§37.7)', async () => {
+  await parcours('geste-gel', async () => {
+    // La DoD de SPK-45. On arme la protection DEPUIS L'ÉCRAN, comme un
+    // exploitant, puis on la rend — les parcours partagent une pile.
+    //
+    // « postgres-dedie » et non « boutique » : il faut un Spark EN MARCHE, sinon
+    // l'onglet Docker n'a pas d'inventaire et l'on éprouverait l'arrêt du Spark
+    // au lieu du gel. Mesuré — « boutique » est arrêté dans le seed.
+    await ouvrir('postgres-dedie');
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot',
+                               { timeout: 10000 });
+    await page.fill('#protection-mot', 'gel-des-gestes');
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Armée'), { timeout: 10000 });
+
+    try {
+      await ouvrirConteneur('helo-web-1', 'postgres-dedie');
+
+      // Les gestes sont PRÉSENTS, désactivés et expliqués (§1.4, §37.7.3).
+      const boutons = await page.$$eval('button[data-geste]',
+        (l) => l.map((b) => ({ cle: b.dataset.geste, gele: b.disabled })));
+      assert.ok(boutons.length >= 3, 'les gestes restent visibles');
+      assert.ok(boutons.every((b) => b.gele), 'et tous sont désactivés');
+
+      const ecran = await page.textContent('.principal');
+      assert.match(ecran, /Levez la protection/);
+      assert.match(ecran, /Infos/);
+
+      // …et la LECTURE reste entière : c'est l'arbitrage du §37.7.
+      assert.ok(await page.$('pre.terminal'), 'les journaux restent lisibles');
+      assert.match(ecran, /Réseaux/);
+      const relire = await page.$eval('[data-docker="relire"]', (b) => b.disabled);
+      assert.equal(relire, false, 'relire est une lecture, pas un geste');
+    } finally {
+      // Ce parcours REND l'état qu'il a trouvé : laisser ce Spark armé ferait
+      // échouer ceux qui le pilotent ensuite — et c'est la bonne défaillance,
+      // la protection mord vraiment.
+      await ouvrir('postgres-dedie');
+      await page.click('[data-ouvre="protection"]');
+      await page.waitForSelector('dialog.modale[open] #protection-mot',
+                                 { timeout: 10000 });
+      await page.fill('#protection-mot', 'gel-des-gestes');
+      await page.click('dialog.modale[open] [data-engage="protection"]');
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Désarmée'), { timeout: 10000 });
+    }
+  });
+});
+
 // --- SPK-38 · L'ANCRE VOIT CE QUE LA CHAÎNE NE PEUT PAS VOIR ----------------
 //
 // CE BLOC EST LE DERNIER DU FICHIER, ET IL DOIT LE RESTER. Le parcours ci-dessous

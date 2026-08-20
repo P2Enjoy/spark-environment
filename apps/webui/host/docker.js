@@ -251,9 +251,9 @@ export function analyserJournaux(sortie) {
  * Le doublon qui répond à CETTE commande.
  *
  * Une chaîne simple répond à tout — c'est le doublon de la première tranche. Une
- * table JSON répond par geste (« ps », « stats », « inspect », « logs »), parce
- * que la deuxième tranche a besoin qu'inspecter et lire les journaux ne rendent
- * pas la même chose, et que l'un puisse échouer pendant que l'autre aboutit.
+ * table JSON répond par geste (« ps », « stats », « inspect », « logs », plus
+ * les quatre gestes du §37.7), parce que ces commandes n'ont pas à rendre la
+ * même chose, et que l'une puisse échouer pendant que l'autre aboutit.
  *
  * `*` sert de réponse par défaut. Une valeur absente laisse passer la vraie
  * commande, ce qui échouera bruyamment plutôt que de rendre une sortie muette.
@@ -263,7 +263,11 @@ export function doublonPour(doublon, commande) {
   if (!doublon.trimStart().startsWith('{')) return doublon;
   let table;
   try { table = JSON.parse(doublon); } catch { return doublon; }
-  const geste = /docker\s+(ps|stats|inspect|logs)\b/.exec(commande)?.[1] ?? '*';
+  // Les quatre gestes du §37.7 en font partie : sans eux, un doublon laisse
+  // partir la VRAIE commande `ssh`, qui échoue en 255 et fait rendre à l'écran
+  // « aucun serveur SSH ne répond » — un diagnostic qui ne dit rien du geste.
+  const geste = /docker\s+(ps|stats|inspect|logs|start|stop|restart|kill)\b/
+    .exec(commande)?.[1] ?? '*';
   return table[geste] ?? table['*'] ?? null;
 }
 

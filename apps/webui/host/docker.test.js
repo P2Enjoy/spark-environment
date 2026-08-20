@@ -337,6 +337,18 @@ test('le doublon répond PAR GESTE, et « * » sert de défaut', () => {
   assert.equal(doublonPour(JSON.stringify({ ps: 'A' }), journaux('web')), null);
 });
 
+test('les QUATRE GESTES du §37.7 sont reconnus par le doublon', () => {
+  // Rencontré au parcours : sans eux, `doublonPour` rendait null et la VRAIE
+  // commande `ssh` partait. Elle échouait en 255, et l'écran annonçait
+  // « aucun serveur SSH ne répond » — un diagnostic qui ne dit rien du geste.
+  const table = JSON.stringify({ start: 'A', stop: 'B', restart: 'C',
+                                 kill: 'D', '*': 'Z' });
+  assert.equal(doublonPour(table, "docker start 'web'"), 'A');
+  assert.equal(doublonPour(table, "docker stop -t 10 'web'"), 'B');
+  assert.equal(doublonPour(table, "docker restart -t 10 'web'"), 'C');
+  assert.equal(doublonPour(table, "docker kill 'web'"), 'D');
+});
+
 test('un doublon passe par un shell, donc une sortie à espaces est possible', async () => {
   const { spawnFn, vus } = fauxSsh([{ code: 0, sortie: '' }]);
   await relever({ tunnel: TUNNEL, spark: SPARK, spawn: spawnFn,

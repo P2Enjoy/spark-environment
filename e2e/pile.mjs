@@ -156,6 +156,32 @@ export async function monterPile({ dns = null } = {}) {
         + " *) printf '%b\\n' '/helo-web-1\\trunning\\t0"
         + "\\t2026-08-20T18:52:01Z\\t\\t0\\tnginx:alpine' ;;"
         + ' esac',
+      // SPK-45 · §37.7.1 : les quatre gestes, avec les codes MESURÉS sur un vrai
+      // Docker. « helo-base-1 » est arrêté, donc le tuer rend 1 avec « is not
+      // running » — le seul geste non idempotent. « parti » a disparu.
+      start: "case \"$0\" in"
+        + " *parti*) echo 'Error response from daemon: No such container: parti' >&2;"
+        + ' exit 1 ;;'
+        + " *) printf '%b\\n' \"${0##* }\" ;;"
+        + ' esac',
+      stop: "case \"$0\" in"
+        + " *parti*) echo 'Error response from daemon: No such container: parti' >&2;"
+        + ' exit 1 ;;'
+        + " *) printf '%b\\n' \"${0##* }\" ;;"
+        + ' esac',
+      restart: "case \"$0\" in"
+        + " *parti*) echo 'Error response from daemon: No such container: parti' >&2;"
+        + ' exit 1 ;;'
+        + " *) printf '%b\\n' \"${0##* }\" ;;"
+        + ' esac',
+      kill: "case \"$0\" in"
+        + " *parti*) echo 'Error response from daemon: cannot kill container:"
+        + " parti: No such container' >&2; exit 1 ;;"
+        + " *helo-base-1*) echo 'Error response from daemon: cannot kill"
+        + " container: helo-base-1: container helo-base-1 is not running' >&2;"
+        + ' exit 1 ;;'
+        + " *) printf '%b\\n' \"${0##* }\" ;;"
+        + ' esac',
       // Deux cents lignes PILE pour « helo-web-1 » : la borne du §37.6 ter est
       // atteinte, donc l'écran doit annoncer une troncature. « helo-base-1 »
       // n'écrit rien, ce qui n'est pas la même chose qu'un conteneur disparu.
