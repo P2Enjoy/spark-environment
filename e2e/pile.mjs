@@ -138,6 +138,24 @@ export async function monterPile({ dns = null } = {}) {
       return { status: r.status, corps: await r.json().catch(() => null) };
     },
     /**
+     * Écrit sur `sparkd` en CONTOURNANT l'interface (`CLAUDE.md` §10).
+     *
+     * À ne pas confondre avec `lireSparkd`, qui constate un effet. Ici on agit,
+     * ce que le §29.3 interdit pour ATTEINDRE un écran ou accomplir un geste.
+     * L'unique usage admis est celui que le `CLAUDE.md` §10 exige : « toute
+     * règle d'accès doit être vérifiée par une requête directe qui contourne
+     * l'interface ». Masquer un bouton n'est qu'une aide ; la requête, elle,
+     * reste formable à la main, et c'est cela qu'on éprouve.
+     */
+    async ecrireSparkd(chemin, corps = null) {
+      const r = await fetch(`http://127.0.0.1:${portSparkd}${chemin}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(corps ?? {}),
+      });
+      return { status: r.status, corps: await r.json().catch(() => null) };
+    },
+    /**
      * Altère le registre HORS DU PRODUIT (SPK-38, docs/DAT.md §36.1).
      *
      * Aucun geste de l'interface ne peut couper la fin du journal : c'est

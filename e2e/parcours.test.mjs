@@ -1608,6 +1608,80 @@ test('un Spark PROTÉGÉ refuse l’amorçage, et le refus est LISIBLE', async (
   });
 });
 
+test('cocher le rootless amorce dans ce mode, et le journal le PORTE', async () => {
+  await parcours('amorcage-rootless', async () => {
+    // §42.2 : l'option est offerte, jamais imposée. On la coche depuis la
+    // confirmation, là où le geste s'engage.
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-amorcage');
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+
+    // L'option ÉNONCE ses trois coûts au lieu de les vendre (§42.2).
+    const confirmation = await page.textContent('.confirmation');
+    assert.match(confirmation, /ports sous 1024/);
+    assert.match(confirmation, /ne fonctionnent pas telles quelles/);
+    assert.match(confirmation, /déjà<\/strong>|déjà/, 'la seconde couche est dite');
+    assert.ok(!/plus sûr|recommandé|conseillé/i.test(confirmation),
+      'aucun argument de vente ne se glisse à côté de la case');
+
+    // Décochée par défaut : le défaut du produit est ENRACINÉ.
+    assert.equal(await page.isChecked('#amorcage-rootless'), false);
+
+    await page.check('#amorcage-rootless');
+    await page.click('[data-amorcage="engager"]');
+    await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+
+    // Le mode est rendu à l'écran, en français, sur la ligne du moteur.
+    const ecran = await page.textContent('#titre-amorcage ~ .liste-amorcage');
+    assert.match(ecran, /rootless/);
+    assert.ok(!/enracine\b/.test(ecran), 'aucun jeton brut (§14.7)');
+
+    // §42.2 bis : le journal porte le MODE. C'est ce qu'on cherchera le jour où
+    // une pile ne démarre pas, et il ne se retrouve nulle part ailleurs.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.bootstrap&limit=20');
+    const sienne = corps.entries.filter((e) => e.message.includes('crm-production'));
+    assert.ok(sienne.length > 0);
+    assert.equal(JSON.parse(sienne[0].payload).mode, 'rootless');
+    assert.match(sienne[0].message, /en rootless/);
+  });
+});
+
+test('redemander l’autre mode est REFUSÉ, et le refus nomme les deux', async () => {
+  await parcours('amorcage-bascule-refusee', async () => {
+    // LE point du §42.2 bis. Basculer déplacerait le moteur sous un autre compte,
+    // et avec lui les conteneurs, volumes et réseaux du locataire.
+    await ouvrir('postgres-dedie');
+    await page.waitForSelector('#titre-amorcage');
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+    await page.click('[data-amorcage="engager"]');   // enraciné, le défaut
+    await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+
+    // Le mode est en place : l'option n'est PLUS offerte (§1.4). L'écran ne le
+    // suppose pas — il le tient du relevé que le serveur vient de rendre.
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+    assert.equal(await page.$('#amorcage-rootless'), null,
+      'offrir un geste que le serveur refusera à coup sûr est une commande morte');
+    assert.match(await page.textContent('.confirmation'),
+                 /fait déjà tourner un Docker/);
+    await page.click('[data-amorcage="annuler"]');
+
+    // …et le REFUS existe bel et bien au serveur, qui est l'autorité (§10 de
+    // CLAUDE.md) : l'écran n'est qu'une aide, la requête reste formable.
+    const { status, corps } = await pile.ecrireSparkd(
+      '/v1/sparks/postgres-dedie/bootstrap', { rootless: true });
+    assert.equal(status, 409, JSON.stringify(corps));
+    assert.equal(corps.detail.error, 'bootstrap_mode_conflict');
+    assert.equal(corps.detail.installed, 'enracine');
+    assert.equal(corps.detail.requested, 'rootless');
+    assert.match(corps.detail.message, /enraciné/);
+    assert.match(corps.detail.message, /rootless/);
+    assert.match(corps.detail.message, /vider la cellule/);
+  });
+});
+
 // --- SPK-43, tranche 4 · LE DÉPANNAGE (§37.3) -------------------------------
 
 test('un distant qui MEURT fait dire à l’écran ce qui manque, et propose la suite', async () => {
