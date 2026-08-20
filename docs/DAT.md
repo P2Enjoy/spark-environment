@@ -3957,3 +3957,98 @@ tout de suite » : la construction d'images, les registres, le déploiement de
 piles, l'édition de Compose (§1). L'outil observe la pile du locataire et permet
 de reprendre un conteneur tombé ; il ne la gère pas à sa place.
 
+
+## 38. Le DNS entre dans le périmètre (SPK-47)
+
+**Décision du responsable, 2026-08-20.** Jusqu'ici le produit disait, et répétait
+à l'écran : « le DNS est extérieur au produit ». C'était vrai, et c'était le
+premier obstacle réel — SPK-12 reste `[~]` précisément parce qu'aucune émission
+TLS n'a pu être prouvée faute de domaine qui résolve.
+
+La console sait désormais **piloter un fournisseur DNS** : lister les zones que
+le compte possède, et poser l'enregistrement qui fait résoudre un domaine vers la
+Forge, pour la route d'ingress d'un Spark.
+
+### 38.1 Qui détient le secret, et où il vit
+
+**L'hôte console**, jamais la Forge.
+
+Le jeton d'API du fournisseur vit dans un `.env` du **poste**, hors du dépôt et
+hors du registre. C'est le même raisonnement qu'au §36.3 pour la signature : un
+secret qui vit sur la Forge est lisible par qui détient `root` sur la Forge, et
+le produit assume déjà (§35.1) qu'il ne protège pas de celui-là.
+
+Conséquences, et elles ne sont pas négociables :
+
+- `sparkd` **ne voit jamais** ce jeton, ne l'écrit jamais, ne le journalise
+  jamais. Aucune colonne du registre ne le porte ;
+- le jeton n'entre **pas** dans `servers.json` : le §22.4 dit que l'inventaire ne
+  contient aucun secret, et cette règle ne souffre pas d'exception ;
+- il est lu depuis l'environnement du processus de l'hôte console, et **rien
+  d'autre**. Un jeton absent n'est pas une panne : la fonctionnalité se désactive
+  et l'écran le dit.
+
+### 38.2 Ce que le produit fait, et ce qu'il ne fait pas
+
+**Il fait** : lire les zones du compte, lire les enregistrements d'une zone, et
+créer ou mettre à jour **un** enregistrement pour un domaine d'ingress.
+
+**Il ne fait pas**, et c'est délibéré :
+
+- il n'**achète** aucun domaine, et ne renouvelle rien. Une opération qui engage
+  de l'argent ne se déclenche pas depuis un écran d'administration ;
+- il ne **transfère** aucune zone, ne change aucun serveur de noms ;
+- il ne **supprime** jamais un enregistrement qu'il n'a pas posé. Une zone réelle
+  porte des enregistrements de messagerie, de vérification et de service dont la
+  suppression casse des choses qui n'ont rien à voir avec le produit ;
+- il ne touche **aucun** enregistrement dont le nom ne correspond pas au domaine
+  demandé. Le rapprochement se fait sur le nom exact, jamais sur un préfixe.
+
+### 38.3 Ce qu'écrit un enregistrement d'ingress
+
+Pour un domaine `app.exemple.tech` dans la zone `exemple.tech` :
+
+```
+type = A       (AAAA si l'adresse est IPv6)
+name = app     le nom RELATIF à la zone
+data = <adresse publique de la Forge>
+ttl  = 300
+```
+
+Le TTL est **court** : une route d'ingress se déplace quand la Forge change
+d'adresse, et un TTL long ferait traîner la panne bien après la correction.
+
+L'adresse écrite est celle de la **Forge**, pas celle du Spark : le Spark vit sur
+un bridge privé (§10) et n'a pas d'adresse publique. C'est Caddy qui répartit
+ensuite par nom d'hôte (§18).
+
+### 38.4 Poser un enregistrement ne suffit pas, et l'écran le dit
+
+Un enregistrement posé ne **résout** pas immédiatement : la propagation prend le
+temps du TTL des serveurs interrogés, et un cache déjà chaud peut servir
+l'ancienne réponse. L'écran annonce donc l'enregistrement **écrit**, jamais le
+domaine « prêt » — et le §18.5 continue de valoir : une route enregistrée mais
+non appliquée est un retard, pas une panne.
+
+L'émission du certificat par Caddy, elle, reste subordonnée à la résolution
+effective. Le produit ne la déclenche pas : il retire seulement la cause la plus
+fréquente de son échec.
+
+### 38.5 Garde d'écriture, et pourquoi elle est dans le code
+
+Une zone DNS réelle porte des enregistrements dont la casse arrête une
+messagerie, invalide une vérification de propriété, ou coupe un service. Le
+produit écrit donc sous une **garde explicite** :
+
+- il refuse d'écrire si le nom relatif calculé est vide ou vaut `@` — cela
+  viserait l'apex de la zone, qui porte les `NS` et le `MX` ;
+- il refuse d'écrire un type autre que `A` ou `AAAA` ;
+- il refuse si le domaine demandé n'est pas **sous** la zone choisie.
+
+Ces refus ne sont pas des précautions d'usage : ce sont des règles, et un test les
+éprouve chacune.
+
+**Pour les essais du dépôt**, une garde supplémentaire s'ajoute, bornée par le
+responsable : seuls les noms de la forme `test.<label>` de la zone `lelabs.tech`
+sont écrits. Elle vaut pour le harnais, pas pour le produit — un exploitant gère
+sa zone entière.

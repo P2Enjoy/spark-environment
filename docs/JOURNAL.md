@@ -3091,3 +3091,52 @@ noms de fichiers, puis la vérification finale de la DoD. Ensuite SPK-46 (la
 console traduit), SPK-36 (la sauvegarde du registre), SPK-28 (le schéma
 Scaleway). SPK-38 se solde d'un parcours E2E ; SPK-37 d'une mesure sur un vrai
 tunnel ; SPK-30 et SPK-29 sur l'hôte.
+
+## 2026-08-20 — Le DNS cesse d'être extérieur au produit (SPK-47)
+
+**Décision du responsable.** Un jeton d'API Scaleway est fourni, et la console
+doit pouvoir lister les domaines du compte puis poser le DNS d'une route
+d'ingress. Écrit avant toute ligne de code, conformément au §5 : une décision qui
+ne vit que dans le contexte d'un agent est une décision perdue.
+
+**Le problème que cela résout.** SPK-12 est `[~]` depuis le 2026-08-19 pour une
+seule raison : l'émission TLS n'a jamais pu être prouvée, faute d'un domaine qui
+résolve vers la Forge. Le produit affichait à trois endroits — l'écran, le manuel
+M7 et le DAT — que « le DNS est extérieur au produit ». C'était vrai, et c'était
+l'obstacle. Cette affirmation est donc **révisée**, pas supprimée : elle avait une
+raison, et cette raison a cessé de valoir.
+
+**Ce qui a été mesuré avant d'écrire quoi que ce soit**, en lecture seule sur
+l'API Scaleway Domain & DNS v2beta1, jeton passé en `X-Auth-Token` :
+
+- `GET /dns-zones?organization_id=…` rend `200` et `total_count: 14`. Les quatorze
+  zones sont `active`, et ce sont des zones **réelles** en exploitation.
+- `GET /dns-zones/lelabs.tech/records` rend `200` et `total_count: 17` :
+  des `NS`, des `TXT` de vérification et DKIM, un `_dmarc`, un `MX`, et des `A`
+  de services vivants.
+- **Aucun enregistrement ne commence par `test.`** — l'espace de nom des essais
+  est libre.
+
+**Ce que cette mesure impose au produit.** Une zone réelle porte des
+enregistrements dont la casse arrête une messagerie ou invalide une preuve de
+propriété. Le produit n'écrit donc rien à l'apex, n'écrit que `A`/`AAAA`, et ne
+supprime **jamais** un enregistrement qu'il n'a pas posé (§38.2, §38.5). Ce ne
+sont pas des précautions d'usage : chacune est éprouvée par un test.
+
+**Où vit le secret, et pourquoi là.** Sur l'**hôte console**, dans un `.env` du
+poste, hors dépôt — le `.gitignore` le couvrait déjà, et l'absence du fichier de
+l'index a été vérifiée. Jamais sur la Forge : le §35.1 assume déjà que le produit
+ne protège pas de qui détient `root` sur la Forge, et y déposer un jeton qui
+pilote quatorze zones de production reviendrait à faire de cette limite connue
+une perte réelle. Jamais dans `servers.json` non plus : le §22.4 interdit tout
+secret dans l'inventaire, et cette règle ne souffre pas d'exception.
+
+**Une limite que l'écran devra dire.** Poser un enregistrement ne le fait pas
+résoudre : la propagation prend le temps du TTL, et un cache chaud sert encore
+l'ancienne réponse. L'écran annoncera donc l'enregistrement **écrit**, jamais le
+domaine « prêt » (§38.4). Le produit retire la cause la plus fréquente de l'échec
+d'émission TLS ; il ne garantit pas cette émission.
+
+**Périmètre des essais, borné par le responsable** : seuls les noms
+`test.<label>.lelabs.tech` sont écrits, et rien d'autre n'est touché. La garde
+vaut pour le harnais, pas pour le produit — un exploitant gère sa zone entière.

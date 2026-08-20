@@ -1553,6 +1553,40 @@ Ce que le locataire fait tourner, observé sans rien y toucher.
   refuse le geste, laisse la lecture et laisse le terminal ; captures observées ;
   manuel M8 mis à jour.
 
+### [ ] SPK-47 · Le DNS entre dans le produit : zones lues, enregistrement d'ingress posé
+
+Jusqu'ici le produit disait « le DNS est extérieur au produit », et SPK-12 reste
+`[~]` faute d'un domaine qui résolve. Cette unité retire cette cause.
+
+- Spécification : `docs/DAT.md` §38 (§38.1 où vit le secret, §38.2 le périmètre,
+  §38.3 ce qui est écrit, §38.4 poser n'est pas résoudre, §38.5 la garde) ·
+  `docs/DAT.md` §22.4 (l'inventaire ne porte aucun secret) · `docs/DESIGN_SYSTEM.md`
+  §6.27 (la modale bornée à une section) · manuel M7.
+- **Révise** une affirmation du produit, à trois endroits, dans le même
+  changement : `apps/webui/src/components/spark-admin.js`, `docs/manuel/M7-domaine.md`
+  et `docs/DAT.md` disaient que le DNS était extérieur au produit. Ce n'est plus
+  vrai ; la preuve qui l'affirmait est révisée en expliquant pourquoi, jamais
+  supprimée.
+- Portée : lire les zones du compte ; lire les enregistrements d'une zone ;
+  créer ou mettre à jour **un** enregistrement `A`/`AAAA` pour le domaine d'une
+  route d'ingress, avec l'adresse publique de la Forge et un TTL court.
+- Hors portée, et pas « plus tard » : achat et renouvellement de domaine,
+  transfert de zone, changement de serveurs de noms, suppression d'un
+  enregistrement que le produit n'a pas posé.
+- Le jeton vit dans un `.env` de l'**hôte console**, hors dépôt et hors registre.
+  `sparkd` ne le voit jamais. Jeton absent n'est pas une panne : la fonction se
+  désactive et l'écran le dit.
+- Gardes éprouvées une à une : apex refusé, type autre que `A`/`AAAA` refusé,
+  domaine hors de la zone refusé.
+- États à traiter, chacun nommé : aucun jeton configuré, jeton refusé par le
+  fournisseur, fournisseur injoignable, compte sans zone, zone sans
+  enregistrement, enregistrement déjà posé à la bonne valeur.
+- DoD : tests unitaires sur les gardes et sur le calcul du nom relatif ; un test
+  prouve qu'aucun secret n'entre dans l'inventaire ni dans le registre ; parcours
+  E2E **depuis le parcours canonique** — se connecter, atteindre l'onglet d'un
+  Spark, ouvrir la modale, choisir une zone, poser l'enregistrement ; captures
+  observées, dont les états d'absence ; manuel M7 révisé ; §38 tenu à jour.
+
 ---
 
 ## Réservé, non planifié
