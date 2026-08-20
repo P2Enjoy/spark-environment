@@ -98,6 +98,14 @@
   Le harnais E2E impose son propre fichier d'environnement et un doublon local
   du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
 
+- Unité SPK-52 : **supprimer un Spark dont la cellule a déjà disparu réussit.**
+  Auparavant la ligne restait indéfiniment au registre, occupait de la place dans
+  les pools, et le seul recours était d'ouvrir la base à la main.
+
+  Trois bornes empêchent ce succès d'être un mensonge : le journal porte la
+  mention « absente » et dit ce que la ligne coûtait ; un serveur qui ne répond
+  pas reste une panne et la ligne reste ; un Spark protégé refuse d'abord.
+
 - Unité SPK-50 : **les recettes DNS** — un jeu d'enregistrements posé ensemble,
   parce qu'un `MX` sans SPF fait recevoir du courrier qu'on ne peut pas renvoyer.
   La garde s'élargit à `MX`, `TXT`, `SRV` et `CNAME`, chacun avec la forme que
