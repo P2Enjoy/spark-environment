@@ -3,6 +3,22 @@
 ## [Non publié]
 
 ### Ajouté
+- **Ouvrir un conteneur depuis l'onglet Docker** (SPK-44 deuxième tranche,
+  `docs/DAT.md` §37.6 ter) : son état, son code de sortie, son image, ses réseaux,
+  ses volumes et ses deux cents dernières lignes de journal. Ces lectures sont
+  **demandées**, jamais collectées d'office — les relever pour dix conteneurs
+  toutes les cinq secondes coûterait dix fois l'inventaire au quota du locataire,
+  pour un texte que personne ne lit dix fois à la fois. Ouvrir un conteneur
+  suspend le relevé de la liste ; refermer le reprend.
+- Le code de sortie ne s'affiche que pour un conteneur **arrêté** : en rendre `0`
+  pour un conteneur en marche ferait lire qu'il s'est terminé sans erreur.
+- Les horodatages des journaux sont ceux du locataire, rendus **tels quels** : les
+  retraduire dans le fuseau du poste décalerait l'écran de ce qu'il lit chez lui.
+- L'écran avertit que les journaux n'ont été **ni relus ni caviardés** et peuvent
+  contenir un secret que le locataire y a écrit.
+- Un conteneur supprimé pendant qu'on le regarde est dit **disparu**, en
+  avertissement et non en refus : c'est une course normale, pas une panne.
+- Manuel M8 : chapitre *Ouvrir un conteneur*, illustré depuis la pile réelle.
 - `docs/AGENT_RUNBOOK.md` §C.4 : une sortie vide de `docker` a trois causes, que
   seul le **code de sortie** sépare — `127` s'amorce, `1` se redémarre, `0` ne
   demande rien. Les confondre envoie réinstaller ce qui est déjà là.
@@ -164,6 +180,14 @@
   l'architecture de navigation de la console.
 
 ### Corrigé
+- **Troncature silencieuse des relevés Docker** : la lecture se résolvait sur
+  `exit`, qui précède le drainage de `stdout`. Sur deux cents lignes de journal,
+  l'écran en affichait cent soixante-quatorze et les montages revenaient vides,
+  sans rien signaler. Elle attend désormais `close`.
+- L'écran d'un conteneur affichait le nom **cliqué** plutôt que celui rendu par la
+  Forge, plaçait le retour à la liste sous deux cents lignes de journal, peignait
+  en rouge un conteneur disparu sous un texte disant « pas une panne », et restait
+  muet quand seuls les journaux le trouvaient disparu.
 - Une session dont le distant mourait **avant** l'ouverture du flux laissait
   l'écran sur « session ouverte » indéfiniment. C'est la course exacte d'un
   `sshd` muet, où `ssh` sort en quelques millisecondes.
