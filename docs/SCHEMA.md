@@ -158,6 +158,34 @@ Un cœur ne peut appartenir qu'à un seul Spark, contrainte d'unicité sur `core
 L'unicité du domaine est portée par la base, pas par l'interface. `applied_at`
 rend visible toute dérive entre le registre et Caddy.
 
+## 6 bis. `published_port`
+
+Introduite par la migration `008`. Contrat au `docs/DAT.md` §39.5.
+
+| Colonne | Type | Rôle |
+|---|---|---|
+| `id` | TEXT PK | identifiant |
+| `public_port` | INTEGER UNIQUE | port écouté par la Forge |
+| `spark_id` | TEXT FK | Spark destinataire, `ON DELETE CASCADE` |
+| `target_port` | INTEGER | port sur l'IP privée du Spark |
+| `protocol` | TEXT | `tcp` ou `udp` |
+| `note` | TEXT | à quoi il sert, écrit par l'exploitant |
+| `applied_at` | TEXT | dernière application réussie vers le pilote |
+| `created_at` | TEXT | horodatage |
+
+`public_port` est **UNIQUE** : un port public est une ressource de la MACHINE,
+pas du Spark, et le premier qui le prend le prend. L'unicité vient de la base et
+non de l'interface, qui ne protégerait de rien face à deux requêtes simultanées.
+
+La cascade sur `spark_id` suit celle d'`ingress_route` (§6) : un port qui
+survivrait à son Spark serait un port ouvert vers rien.
+
+`applied_at` joue le même rôle qu'au §6 — la dérive entre le registre et le
+pilote se voit, au lieu de se déduire.
+
+Les deux ports sont bornés à `1..65535` par une contrainte `CHECK`, et le
+protocole à `tcp` ou `udp`.
+
 ## 7. `ssh_key` et `spark_ssh_key`
 
 `ssh_key` : `id`, `label` unique, `public_key`, `fingerprint` unique, `created_at`.

@@ -4387,3 +4387,75 @@ L'écran propose donc le nom **d'abord**, et présente le port publié comme un
 second geste qui **annonce ce qu'il coûte**. Publier un port pour une application
 qui parle HTTP est presque toujours une erreur : on perd le certificat
 automatique sans rien gagner. Le produit ne l'interdit pas — il le dit.
+
+### 39.4 Le mécanisme : un device `proxy` d'Incus, pas du netfilter
+
+**Complété le 2026-08-20, après lecture du pilote.** Le §39 disait « la
+publication ouvre le pare-feu » sans dire par quoi. Deux voies existaient :
+
+1. écrire des règles de traduction d'adresse en `nftables` depuis `sparkd` ;
+2. poser un **device `proxy`** sur l'instance Incus, qui fait écouter la Forge et
+   relaie vers l'adresse privée du Spark.
+
+**La seconde est retenue**, et pour la même raison qui fonde le §2 : le plan de
+contrôle pilote Incus, il ne pilote pas le système de la Forge par-dessus.
+Écrire des règles de netfilter obligerait `sparkd` à un accès au filtrage réseau
+qu'il n'a pas besoin d'avoir, et créerait un second endroit où l'état du réseau
+peut diverger de ce que le registre dit. Incus sait déjà faire exactement cela,
+et c'est lui qui défait la règle quand l'instance disparaît.
+
+Le device porte le nom `pub-<port public>`, ce qui rend l'appartenance lisible
+depuis `incus config show` sans consulter le registre.
+
+**On régénère l'ensemble des devices d'un Spark, on ne les rapièce pas.** C'est
+la règle du §18.1, pour la même raison : `PATCH` fusionne et ne sait donc pas
+**retirer** un device. Un retrait rapiécé laisserait un port ouvert vers un
+service qui n'est plus là — précisément la surface offerte sans service derrière
+que le §39.2 interdit. La publication comme le retrait reconstruisent donc la
+carte complète des devices du Spark depuis le registre.
+
+### 39.5 Le modèle : `published_port`, et où vit l'unicité
+
+Une table dédiée, décrite à `docs/SCHEMA.md` §6 bis. Trois points qui ne sont pas
+négociables :
+
+- `public_port` est **`UNIQUE`**. C'est la base qui refuse le doublon, jamais
+  l'interface — qui ne protégerait de rien face à deux requêtes simultanées.
+  C'est la règle du §18.4, transposée ;
+- la suppression d'un Spark emporte ses ports publiés, comme elle emporte ses
+  routes (§14.4). Un port qui survivrait à son Spark serait un port ouvert vers
+  rien ;
+- `applied_at` porte la date de la dernière application réussie, exactement comme
+  au §18.5 : un port enregistré mais non appliqué — pilote injoignable au moment
+  de la demande — se voit, au lieu de se déduire.
+
+**Les ports réservés** sont ceux du système de la Forge. Le défaut est `22`, `80`
+et `443` — respectivement la seule porte du système (§5) et les deux ports que
+le proxy occupe (§18.2). La liste est **configurable** par
+`SPARKD_RESERVED_PORTS`, parce qu'une Forge peut en occuper d'autres, et le refus
+nomme le service qui tient le port plutôt que de dire « réservé ».
+
+### 39.6 La surface d'API
+
+```
+GET    /v1/ports                  la liste des ports publiés de la Forge
+POST   /v1/ports                  { spark, public_port, target_port }
+DELETE /v1/ports/{public_port}    retire, et referme
+```
+
+`POST` rend `409` sur un port déjà pris — en **nommant** le Spark qui le
+détient —, sur un port réservé, et sur un port hors bornes. Il rend `502` quand
+le pilote refuse d'appliquer : la ligne reste au registre et `applied_at` reste
+vide, comme au §18.5. Un Spark **protégé** (§35) refuse ces gestes avant tout le
+reste.
+
+### 39.7 Ce qui ne se prouve pas sans hôte réel
+
+Le pilote factice permet d'éprouver **tout ce qui appartient au produit** : les
+refus, l'unicité portée par la base, la reconstruction complète des devices, et
+le fait qu'un retrait fasse disparaître le device.
+
+Il ne prouve **pas** qu'une connexion entrante atteigne réellement le Spark :
+cela exige une Forge réelle, avec Incus et une adresse publique. C'est la même
+limite qu'au §33.3 pour le catalogue d'images et qu'à SPK-30 pour les quotas —
+et elle est nommée dans l'unité plutôt que masquée par une simulation.
