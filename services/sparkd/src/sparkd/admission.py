@@ -1,4 +1,4 @@
-"""Admission control et comptabilité des pools de l'hôte.
+"""Admission control et comptabilité des pools de la Forge.
 
 @spec docs/BACKLOG.md#SPK-05, docs/BACKLOG.md#SPK-30 · docs/DAT.md §7.3
       (invariant), §7.3 bis (ce que l'invariant ne garantit pas), §7.7 (ce qui
@@ -14,7 +14,7 @@ maintenu ici qui rend ces proportions signifiantes.
 
 Portée exacte de cette garantie, à ne pas surestimer : elle assure la
 proportionnalité ENTRE Sparks, pas la valeur absolue d'une réservation, parce que
-les Sparks sont arbitrés contre les tranches de l'hôte (DAT §7.3 bis). Tant que
+les Sparks sont arbitrés contre les tranches de la Forge (DAT §7.3 bis). Tant que
 SPK-29 n'est pas livrée, rien de ce module ne doit être présenté comme une
 garantie absolue.
 """
@@ -51,7 +51,7 @@ UNITS = {
 
 
 class HostNotConfigured(RuntimeError):
-    """La capacité de l'hôte n'a pas encore été relevée."""
+    """La capacité de la Forge n'a pas encore été relevée."""
 
 
 @dataclass(frozen=True)
@@ -169,7 +169,7 @@ def _host_row(connection: sqlite3.Connection) -> sqlite3.Row:
     row = connection.execute("SELECT * FROM forge WHERE id = 1").fetchone()
     if row is None:
         raise HostNotConfigured(
-            "La capacité de l'hôte n'est pas encore relevée : aucune ligne dans "
+            "La capacité de la Forge n'est pas encore relevée : aucune ligne dans "
             "« host ». Rien ne peut être admis tant qu'on ignore ce qui existe."
         )
     return row

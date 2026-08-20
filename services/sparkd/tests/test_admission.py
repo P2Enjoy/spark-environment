@@ -3,11 +3,11 @@
              §8.8.2 regle 4 (la marge de metadonnees est comptee au pool)
 
 La Definition of Done nomme quatre cas limites — pool exactement plein,
-dépassement d'une unité, surengagement > 1, réserve hôte — et exige un refus qui
+dépassement d'une unité, surengagement > 1, réserve Forge — et exige un refus qui
 nomme la ressource fautive et la capacité restante. Ces tests les éprouvent tous,
 et surtout les REFUS : un admission control qui n'a jamais dit non n'a rien prouvé.
 
-L'hôte de référence est la machine réellement mesurée le 2026-08-18 : 4 cœurs
+La Forge de référence est la machine réellement mesurée le 2026-08-18 : 4 cœurs
 physiques, 94 Gio, 1 Gbit/s, 5,4 Tio.
 """
 

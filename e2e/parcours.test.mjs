@@ -149,7 +149,7 @@ test('un Spark en erreur dit pourquoi, et propose de reprendre', async () => {
   });
 });
 
-test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacité", async () => {
+test("l'écran de la Forge s'atteint par la navigation et montre la vraie capacité", async () => {
   await parcours('hote', async () => {
     await accueil();
     await page.click('nav a[href="#/forge"]');
@@ -305,7 +305,7 @@ test('un SECRET saisi dans le formulaire est refusé, et la saisie survit', asyn
 
 test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifie', async () => {
   await parcours('journal-supervision', async () => {
-    // PAR LA NAVIGATION : accueil, Hôte, onglet Journal (§36.8.1).
+    // PAR LA NAVIGATION : accueil, Forge, onglet Journal (§36.8.1).
     await accueil();
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
@@ -743,7 +743,7 @@ test('toute la navigation principale est atteignable au clavier', async () => {
       await page.keyboard.press('Tab');
       atteint = await page.evaluate(() => document.activeElement?.getAttribute('href'));
     }
-    assert.equal(atteint, '#/forge', 'le lien « Hôte » doit être atteignable au clavier');
+    assert.equal(atteint, '#/forge', 'le lien « Forge » doit être atteignable au clavier');
     await page.keyboard.press('Enter');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
 
@@ -796,7 +796,7 @@ test("l'image se choisit dans une LISTE : plus aucune saisie libre", async () =>
   });
 });
 
-test('le catalogue a son écran, atteint par les onglets de l’hôte', async () => {
+test('le catalogue a son écran, atteint par les onglets de la Forge', async () => {
   await parcours('catalogue', async () => {
     await accueil();
     await page.click('nav a[href="#/forge"]');
@@ -851,13 +851,13 @@ test('les trois degrés s’atteignent au clavier, et annoncent où l’on est',
       document.querySelector('.laterale a[aria-current="page"]')?.getAttribute('href'));
     assert.equal(destination, '#/sparks');
 
-    // Degré 2 — l'onglet de l'hôte, atteint par le clavier.
+    // Degré 2 — l'onglet de la Forge, atteint par le clavier.
     let atteint = null;
     for (let i = 0; i < 20 && atteint !== '#/forge'; i += 1) {
       await page.keyboard.press('Tab');
       atteint = await page.evaluate(() => document.activeElement?.getAttribute('href'));
     }
-    assert.equal(atteint, '#/forge', 'la destination « Hôte » est atteignable');
+    assert.equal(atteint, '#/forge', 'la destination « Forge » est atteignable');
     await page.keyboard.press('Enter');
     await page.waitForSelector('.onglets', { timeout: 10000 });
 
@@ -871,7 +871,7 @@ test('les trois degrés s’atteignent au clavier, et annoncent où l’on est',
     await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
 
     // L'onglet courant s'annonce, et la destination de premier degré reste
-    // « Hôte » : deux degrés, deux indications, sans conflit.
+    // « Forge » : deux degrés, deux indications, sans conflit.
     assert.equal(
       await page.evaluate(() =>
         document.querySelector('.onglet[aria-current="page"]')?.getAttribute('href')),

@@ -32,7 +32,7 @@ const pret = (surcharge = {}) => renderJournalForge({
 
 // --- la destination (§36.8.1) ----------------------------------------------
 
-test('le journal est un onglet de l’HÔTE, à côté de Pools et Images', () => {
+test('le journal est un onglet de l’FORGE, à côté de Pools et Images', () => {
   const chemins = ONGLETS_FORGE.map(([href]) => href);
   assert.deepEqual(chemins, ['#/forge', '#/forge/images', '#/forge/journal']);
 });

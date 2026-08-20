@@ -118,7 +118,7 @@ export interface paths {
         };
         /**
          * Host
-         * @description Capacité de l'hôte et état des pools.
+         * @description Capacité de la Forge et état des pools.
          *
          *     C'est ici que l'admission control devient observable : sans cette vue,
          *     rien ne permet de savoir pourquoi une création serait refusée.
@@ -445,7 +445,7 @@ export interface paths {
         };
         /**
          * Ssh Config
-         * @description Fragment de configuration SSH, par rebond sur l'hôte.
+         * @description Fragment de configuration SSH, par rebond sur la Forge.
          *
          *     Un Spark n'expose jamais 22 sur l'extérieur (docs/DAT.md §17.4).
          */

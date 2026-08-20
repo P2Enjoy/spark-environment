@@ -5,7 +5,7 @@
       §7.7 (ce que compte l'admission control) · docs/SCHEMA.md §4
 
 Ce module ne décide que des transitions. Il ne parle ni à Incus ni au réseau :
-c'est ce qui permet d'éprouver les refus sans hôte, et ce qui garde la règle
+c'est ce qui permet d'éprouver les refus sans Forge, et ce qui garde la règle
 lisible au même endroit.
 """
 

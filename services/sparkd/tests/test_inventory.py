@@ -1,6 +1,6 @@
 """@verifies docs/BACKLOG.md#SPK-07 · docs/DAT.md §5.2, §5.3 · docs/SCHEMA.md §2, §3
 
-Les trois pièges du §5.2 ont été rencontrés à la mesure sur l'hôte réel. Ces
+Les trois pièges du §5.2 ont été rencontrés à la mesure sur la Forge réelle. Ces
 tests existent pour qu'ils ne reviennent jamais en silence.
 """
 

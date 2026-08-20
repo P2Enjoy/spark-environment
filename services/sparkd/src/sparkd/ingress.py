@@ -293,7 +293,7 @@ def build_config(connection: sqlite3.Connection) -> dict:
         })
 
     # Route terminale : sans elle, Caddy rend « 200 » et un corps vide pour
-    # TOUT domaine non routé — mesuré le 2026-08-19. L'hôte répondrait alors
+    # TOUT domaine non routé — mesuré le 2026-08-19. La Forge répondrait alors
     # pour des noms qu'il ne sert pas, et une erreur de pointage DNS resterait
     # invisible au lieu de se voir immédiatement (docs/DAT.md §18.2).
     routes.append({

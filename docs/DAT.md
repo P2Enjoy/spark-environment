@@ -37,7 +37,7 @@ contrôle.
 ## 1 bis. Glossaire : Forge, Spark, console (SPK-42)
 
 **Arbitrage du responsable, 2026-08-20.** La machine qui porte `sparkd` s'appelle
-désormais une **Forge**. Elle n'avait pas de nom : on disait « l'hôte », mot déjà
+désormais une **Forge**. Elle n'avait pas de nom : on disait « la Forge », mot déjà
 pris par le processus Node du poste (§22), et la console affichait les deux.
 
 | Terme | Ce qu'il désigne | Ce qu'il ne désigne pas |
@@ -169,7 +169,7 @@ docker compose version    v5.5.0
 docker compose up -d      Container demo-web-1 Started
 docker ps                 nginx:alpine  Up  0.0.0.0:8080->80/tcp
 curl depuis le Spark      HTTP 200
-curl depuis l'HÔTE        HTTP 200   sur 10.77.0.38:8080
+curl depuis la FORGE        HTTP 200   sur 10.77.0.38:8080
 Storage Driver            overlayfs      Cgroup Version 2
 ```
 
@@ -1105,7 +1105,7 @@ serveur ».
 | Paquet | Langage | Motif | Contrepartie assumée |
 |---|---|---|---|
 | `services/sparkd` | Python 3 + FastAPI | convention maison ; le travail réel est de l'orchestration de processus (`incus`), de la comptabilité SQLite et du HTTP, où Python est adapté et testable rapidement | un binaire Go serait déployable en un fichier unique ; ici le déploiement passe par un paquet et un service systemd, ce qui reste acceptable |
-| `apps/webui` | TypeScript (Vite + React, Forge Node) | convention maison pour l'UI ; la Forge locale et la SPA partagent une seule chaîne d'outillage et une seule commande de lancement | deux langages dans le dépôt ; le contrat d'API les sépare proprement |
+| `apps/webui` | TypeScript (Vite + React, Forge Node) | convention maison pour l'UI ; la Forge localee et la SPA partagent une seule chaîne d'outillage et une seule commande de lancement | deux langages dans le dépôt ; le contrat d'API les sépare proprement |
 
 La conversation d'origine suggérait « un très petit démon Go ou Rust ». L'écart
 est délibéré : `CLAUDE.md` §3 fixe Python pour les services backend, et rien dans

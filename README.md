@@ -43,15 +43,15 @@ L'idée d'origine est conservée intégralement dans
 L'architecture, le modèle de données et le backlog font foi. L'état réel de chaque
 unité est dans [docs/BACKLOG.md](docs/BACKLOG.md).
 
-Ce qui est **établi par la mesure** sur l'hôte, le 2026-08-18 : une pile Docker
+Ce qui est **établi par la mesure** sur la Forge, le 2026-08-18 : une pile Docker
 Compose réelle tourne dans un Spark **non privilégié**, à plages UID/GID disjointes,
-sous AppArmor actif et sans aucun contournement, et répond en `HTTP 200` à l'hôte sur
+sous AppArmor actif et sans aucun contournement, et répond en `HTTP 200` à la Forge sur
 son IP privée. Le quota disque, le plafond réseau, les limites mémoire et la
 reconfiguration du cpuset à chaud sont vérifiés de la même façon.
 
 Ce que la mesure a **infirmé**, et qui est corrigé dans le [DAT](docs/DAT.md) : la
 sémantique de la réservation CPU. Le poids d'un Spark est arbitré contre les tranches
-de l'hôte et pas seulement contre les autres Sparks, donc la réservation est pour
+de la Forge et pas seulement contre les autres Sparks, donc la réservation est pour
 l'instant proportionnelle et non absolue. C'est la principale dette ouverte
 ([SPK-29](docs/BACKLOG.md)), et la console ne doit pas présenter la réservation comme
 une garantie tant qu'elle n'est pas levée.
@@ -59,7 +59,7 @@ une garantie tant qu'elle n'est pas levée.
 Le détail des vérifications, confirmées comme infirmées, est au §13 du
 [DAT](docs/DAT.md).
 
-## Hôte cible
+## Forge cible
 
 Dell PowerEdge R320, relevé le 2026-08-18.
 
@@ -157,8 +157,8 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_CADDY_ADMIN` | API d'administration Caddy | URL | non | `http://127.0.0.1:2019` |
 | `SPARKD_DRIVER` | pilote d'exécution | `incus` \| `fake` | non | `incus` |
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
-| `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour l'hôte lui-même, hors ARC | octets ou suffixe | non | `2GiB` |
-| `SPARKD_CPU_RESERVE` | part de processeur que l'hôte garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
+| `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
+| `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |
 | `SPARKD_RESERVED_PORTS` | ports que la Forge occupe déjà, jamais attribuables à un Spark — **en plus** de `22`, `80` et `443`, que le produit réserve toujours | entiers séparés par des virgules | non | `9100,9090` |
@@ -191,9 +191,9 @@ héritage.
 - Aucune API d'administration n'est joignable depuis le réseau. Seul un porteur de
   clé SSH valide atteint `sparkd`, par tunnel.
 - Les Sparks sont non privilégiés, avec des plages UID/GID disjointes.
-- Un Spark n'a pas de port SSH public : l'accès se fait par rebond sur l'hôte.
+- Un Spark n'a pas de port SSH public : l'accès se fait par rebond sur la Forge.
 - Seules des clés **publiques** sont stockées.
-- Un *system container* partage le noyau de l'hôte. Pour des charges hostiles, la
+- Un *system container* partage le noyau de la Forge. Pour des charges hostiles, la
   réponse prévue est le mode `vm`, pas un durcissement du mode `container`.
 
 ## Limites connues
@@ -206,9 +206,9 @@ héritage.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique
   qu'un plafond, il n'y a pas de garantie de bande passante.
 - Le relevé de topologie est explicite : la capacité n'est pas rafraîchie à
-  chaque requête. L'écran de l'hôte affiche la date du dernier relevé et offre
+  chaque requête. L'écran de la Forge affiche la date du dernier relevé et offre
   un bouton pour le refaire.
-- L'hôte cible n'a aucun périphérique bloc libre : le pool de stockage est
+- La Forge cible n'a aucun périphérique bloc libre : le pool de stockage est
   actuellement **sur fichier**, à titre provisoire, et l'exploitation réelle suppose
   un repartitionnement (DAT §8, SPK-28).
 - La réservation CPU n'est proportionnelle qu'entre Sparks, pas absolue, tant que
@@ -216,7 +216,7 @@ héritage.
 - Le champ « image » de la création est **libre** : seul le dépôt est contrôlé,
   pas l'alias. Une référence inexistante n'est refusée qu'à l'application, après
   écriture de la ligne du registre. Le catalogue vérifié est SPK-32.
-- Les disques de l'hôte sont mécaniques (7200 tr/min) : la copie sur écriture n'y
+- Les disques de la Forge sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
 
 ## Documentation

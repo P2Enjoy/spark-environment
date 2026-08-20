@@ -146,7 +146,7 @@ def test_le_seed_est_rejouable_a_l_identique(config):
 
 
 def test_le_seed_refuse_un_pilote_reel(tmp_path):
-    """Peupler un hôte RÉEL depuis un script de démonstration n'est pas prévu.
+    """Peupler une Forge RÉEL depuis un script de démonstration n'est pas prévu.
 
     Le refus vient du seed lui-même, pas d'une consigne : une commande de
     développement lancée par mégarde contre la production doit échouer.

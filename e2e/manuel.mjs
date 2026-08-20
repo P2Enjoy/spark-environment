@@ -100,7 +100,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m5-refus');
 
     // Le catalogue, puisque M5 renvoie à ce geste sans dire où il vit. On y va
-    // par la navigation : Hôte, puis l'onglet Images.
+    // par la navigation : Forge, puis l'onglet Images.
     await accueil();
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
@@ -144,7 +144,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m9-restauration-refusee', { hauteur: 800 });
 
     // --- M12 · Le journal de tous les Sparks (SPK-39) ------------------------
-    // On y va par la navigation : Hôte, puis l'onglet Journal. Le relevé de la
+    // On y va par la navigation : Forge, puis l'onglet Journal. Le relevé de la
     // chaîne est déclenché, sinon l'illustration montrerait « pas encore
     // vérifiée » — ce qui est vrai mais n'illustre pas le chapitre.
     await accueil();

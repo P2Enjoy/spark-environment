@@ -2,7 +2,7 @@
            remédier), §31.3 (lecture seule), §31.4 · §3.1, §11, §16
 
 Les relevés sont INJECTÉS : ces preuves n'ont besoin d'aucun serveur. Ceux du
-`ss` viennent de l'hôte cible, relevés le 2026-08-19 — c'est ce relevé qui a
+`ss` viennent de la Forge cible, relevés le 2026-08-19 — c'est ce relevé qui a
 montré que le contrôle de surface réseau était faux.
 """
 
@@ -15,7 +15,7 @@ from sparkd.preflight import ECHEC, INCONNU, OK, Hote, Verdict
 
 GIO = 1024**3
 
-#: Relevé RÉEL de `ss -lntH` sur l'hôte cible. `dnsmasq` écoute sur le bridge
+#: Relevé RÉEL de `ss -lntH` sur la Forge cible. `dnsmasq` écoute sur le bridge
 #: privé et `systemd-resolved` sur des adresses de boucle locale que la première
 #: version du contrôle ne reconnaissait pas.
 SS_HOTE_REEL = """\

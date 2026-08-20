@@ -59,7 +59,7 @@ class Verdict:
 
 @dataclass
 class Hote:
-    """Accès en LECTURE SEULE à l'hôte.
+    """Accès en LECTURE SEULE à la Forge.
 
     Les lectures passent toutes par ici pour que les contrôles soient éprouvables
     avec des relevés injectés, sans serveur.
@@ -71,7 +71,7 @@ class Hote:
 
 
 def hote_local() -> Hote:
-    """Hôte réel. Aucune commande de ce module n'écrit."""
+    """Forge réelle. Aucune commande de ce module n'écrit."""
 
     def executer(commande: list[str]) -> str | None:
         try:
@@ -224,10 +224,10 @@ def _portee(adresse_ecoute: str) -> str:
     """Classe une adresse d'écoute : « locale », « privee » ou « exposee ».
 
     Une première version tenait pour exposé tout ce qui n'était pas `127.0.0.1`.
-    Mesuré sur l'hôte cible : elle dénonçait le port 53 de `dnsmasq`, lié à
+    Mesuré sur la Forge cible : elle dénonçait le port 53 de `dnsmasq`, lié à
     `10.77.0.1` — le côté PRIVÉ du bridge, que les Sparks doivent joindre pour
     leur DNS — et ne reconnaissait ni `127.0.0.53%lo` ni `127.0.0.54`, qui sont
-    de la boucle locale. Le contrôle était faux, pas l'hôte.
+    de la boucle locale. Le contrôle était faux, pas la Forge.
 
     Est exposé ce qui écoute sur un joker ou sur une adresse routable. Une
     adresse de boucle locale ou de réseau privé ne l'est pas.

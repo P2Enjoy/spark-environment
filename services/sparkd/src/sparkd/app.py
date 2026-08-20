@@ -281,7 +281,7 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/v1/forge", tags=["forge"])
     def host() -> dict[str, object]:
-        """Capacité de l'hôte et état des pools.
+        """Capacité de la Forge et état des pools.
 
         C'est ici que l'admission control devient observable : sans cette vue,
         rien ne permet de savoir pourquoi une création serait refusée.
@@ -1014,7 +1014,7 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/v1/sparks/{name}/ssh-config", tags=["cles"])
     def ssh_config(name: str) -> dict:
-        """Fragment de configuration SSH, par rebond sur l'hôte.
+        """Fragment de configuration SSH, par rebond sur la Forge.
 
         Un Spark n'expose jamais 22 sur l'extérieur (docs/DAT.md §17.4).
         """

@@ -25,7 +25,7 @@ function fauxSsh() {
   return e;
 }
 
-// `env` vaut `{}` par DÉFAUT, et ce n'est pas un détail : sans cela, l'hôte
+// `env` vaut `{}` par DÉFAUT, et ce n'est pas un détail : sans cela, la Forge
 // lirait le `.env` du poste et les tests parleraient au VRAI fournisseur DNS,
 // donc à quatorze zones en exploitation (SPK-47, docs/DAT.md §38.1).
 async function hote({ sonde = async () => ({}), amont, env = {} } = {}) {

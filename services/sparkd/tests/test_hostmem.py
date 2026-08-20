@@ -1,4 +1,4 @@
-"""@verifies docs/BACKLOG.md#SPK-03 · docs/DAT.md §16 (La réserve de l'hôte)
+"""@verifies docs/BACKLOG.md#SPK-03 · docs/DAT.md §16 (La réserve de la Forge)
 
 On ne suppose JAMAIS un ARC nul : c'est l'hypothese qui a fait promettre au
 registre un cinquieme de memoire en trop.

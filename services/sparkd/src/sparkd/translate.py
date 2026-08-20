@@ -7,7 +7,7 @@
 
 Ce module est la frontière entre le vocabulaire du produit — « 0,5 CPU
 partagé » — et celui d'Incus. Il ne parle à personne : il transforme. C'est
-délibéré, parce que c'est ce qui le rend éprouvable sans hôte.
+délibéré, parce que c'est ce qui le rend éprouvable sans Forge.
 
 Principe directeur, hérité du §7.2 ter : **quand une valeur ne peut pas être
 rendue fidèlement, on refuse au lieu d'approximer**. Une approximation
@@ -162,7 +162,7 @@ def allowance_percent(reservation: float, pool_capacity: float, priority: int) -
     if pool_capacity <= 0:
         raise TranslationError(
             "Capacité du pool partagé nulle : aucun Spark partagé ne peut y être "
-            "traduit. Relever la topologie de l'hôte d'abord."
+            "traduit. Relever la topologie de la Forge d'abord."
         )
     plancher = WEIGHT_OFFSET + MIN_WEIGHT - priority
     pct = round(reservation / pool_capacity * ALLOWANCE_SCALE)

@@ -93,7 +93,7 @@ export async function monterPile({ dns = null } = {}) {
   // 4. L'hôte console.
   //
   // `SPARK_ENV_FILE` pointe sur un fichier du dossier JETABLE, et il est posé
-  // même quand aucun DNS n'est demandé : sans lui, l'hôte lirait le `.env` du
+  // même quand aucun DNS n'est demandé : sans lui, la Forge lirait le `.env` du
   // poste et un parcours automatique parlerait au VRAI fournisseur, donc à des
   // zones en exploitation (SPK-47, docs/DAT.md §38.1).
   const envConsole = join(dossier, '.env');

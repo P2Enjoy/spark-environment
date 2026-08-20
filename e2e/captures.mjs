@@ -97,7 +97,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     fetch: async (url) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
-      // SPK-22 : la carte des cœurs de l'hôte.
+      // SPK-22 : la carte des cœurs de la Forge.
       if (url.includes('/v1/forge/cores')) return new Response(JSON.stringify({
         physical_cores: 4,
         shared: { cores: [0, 1, 2], cpus: [0, 4, 1, 5, 2, 6], capacity: 6 },
@@ -107,7 +107,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         // §27.8 : une topologie jamais relevée n'est pas une panne.
         if (hoteNonReleve) return new Response(JSON.stringify({ detail: {
           error: 'forge_not_synced',
-          message: 'La capacité de cet hôte n’a jamais été relevée.',
+          message: 'La capacité de cette Forge n’a jamais été relevée.',
           remedy: 'POST /v1/forge/sync',
         } }), { status: 409 });
         const GIO = 1024 ** 3;
@@ -456,7 +456,7 @@ await page.screenshot({ path: join(SORTIE, '28-panneaux-mobile.png'), fullPage: 
 console.log('  28-panneaux-mobile.png');
 ctx.server.close();
 
-// --- Écran des pools de l'hôte (SPK-22) -----------------------------------
+// --- Écran des pools de la Forge (SPK-22) -----------------------------------
 // docs/DAT.md §27. On y va PAR LA NAVIGATION, comme un utilisateur.
 ctx = await demarrer();
 await page.setViewportSize({ width: 1440, height: 1250 });
@@ -491,7 +491,7 @@ console.log('  32-hote-non-releve.png');
 ctx.server.close();
 
 // --- Catalogue d'images (SPK-32) et sa modale (SPK-33) --------------------
-// docs/DAT.md §33, §34.1. On y va PAR LA NAVIGATION : accueil, Hôte, onglet
+// docs/DAT.md §33, §34.1. On y va PAR LA NAVIGATION : accueil, Forge, onglet
 // Images. Aucune URL directe — c'est le parcours d'un utilisateur (CLAUDE.md §16).
 ctx = await demarrer();
 await page.setViewportSize({ width: 1440, height: 1000 });
@@ -564,7 +564,7 @@ console.log('  46-serveurs-aucun.png');
 ctx.server.close();
 
 // --- L'onglet de supervision du journal (SPK-39) --------------------------
-// docs/DAT.md §36.8. On y va PAR LA NAVIGATION : accueil, Hôte, onglet Journal.
+// docs/DAT.md §36.8. On y va PAR LA NAVIGATION : accueil, Forge, onglet Journal.
 ctx = await demarrer();
 await page.setViewportSize({ width: 1440, height: 1000 });
 await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });

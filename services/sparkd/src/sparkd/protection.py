@@ -10,7 +10,7 @@ sélectionné, la ligne cliquée trop vite, le `curl` recopié d'un autre bocal,
 script d'astreinte lancé sur le mauvais nom.
 
 Ce qu'elle n'arrête pas, et le produit ne prétendra jamais le contraire : un
-opérateur hostile. Qui détient une clé SSH de l'hôte atteint `sparkd`, qui
+opérateur hostile. Qui détient une clé SSH de la Forge atteint `sparkd`, qui
 détient `root` atteint le fichier du registre (§35.1). C'est un **garde-fou**,
 pas un contrôle d'accès.
 

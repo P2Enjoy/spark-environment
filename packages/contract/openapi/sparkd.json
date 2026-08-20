@@ -265,7 +265,7 @@
     },
     "/v1/forge": {
       "get": {
-        "description": "Capacité de l'hôte et état des pools.\n\nC'est ici que l'admission control devient observable : sans cette vue,\nrien ne permet de savoir pourquoi une création serait refusée.",
+        "description": "Capacité de la Forge et état des pools.\n\nC'est ici que l'admission control devient observable : sans cette vue,\nrien ne permet de savoir pourquoi une création serait refusée.",
         "operationId": "host_v1_forge_get",
         "responses": {
           "200": {
@@ -1155,7 +1155,7 @@
     },
     "/v1/sparks/{name}/ssh-config": {
       "get": {
-        "description": "Fragment de configuration SSH, par rebond sur l'hôte.\n\nUn Spark n'expose jamais 22 sur l'extérieur (docs/DAT.md §17.4).",
+        "description": "Fragment de configuration SSH, par rebond sur la Forge.\n\nUn Spark n'expose jamais 22 sur l'extérieur (docs/DAT.md §17.4).",
         "operationId": "ssh_config_v1_sparks__name__ssh_config_get",
         "parameters": [
           {

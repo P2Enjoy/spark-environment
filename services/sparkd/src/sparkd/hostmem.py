@@ -1,11 +1,11 @@
-"""Mémoire réellement allouable de l'hôte.
+"""Mémoire réellement allouable de la Forge.
 
-@spec docs/BACKLOG.md#SPK-03 · docs/DAT.md §16 (La réserve de l'hôte),
+@spec docs/BACKLOG.md#SPK-03 · docs/DAT.md §16 (La réserve de la Forge),
       §16.2 (lire le plafond, ne jamais le supposer), §5.2
 
 Trois consommateurs doivent être connus du registre avant qu'il promette quoi
 que ce soit : ce que le noyau ne gère pas, ce que l'ARC peut prendre, et ce que
-l'hôte consomme pour lui-même.
+la Forge consomme pour lui-même.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ _TAILLE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([A-Za-z]*)\s*$")
 
 
 class MemoryReadError(RuntimeError):
-    """Impossible de connaître la mémoire de l'hôte. Mieux vaut échouer."""
+    """Impossible de connaître la mémoire de la Forge. Mieux vaut échouer."""
 
 
 def parse_size(value: str | int) -> int:
@@ -57,7 +57,7 @@ def parse_size(value: str | int) -> int:
 def kernel_memory_total(meminfo: Path | None = None) -> int:
     """`MemTotal`, ce que le noyau peut réellement allouer.
 
-    Et non le total physique rapporté par Incus : l'écart — 4 Gio sur l'hôte de
+    Et non le total physique rapporté par Incus : l'écart — 4 Gio sur la Forge de
     validation — est réservé par le micrologiciel et le noyau, et aucun
     processus ne l'obtiendra jamais (docs/DAT.md §5.2).
     """

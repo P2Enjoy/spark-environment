@@ -2,10 +2,10 @@
 
 @spec docs/BACKLOG.md#SPK-29 · docs/DAT.md §32 (rendre la réservation CPU
       absolue), §32.1 (le mécanisme), §32.2 (le poids n'est pas une constante),
-      §32.3 (l'hôte garde une part), §32.4 (la tranche survit au redémarrage) ·
+      §32.3 (la Forge garde une part), §32.4 (la tranche survit au redémarrage) ·
       §7.2 bis, §7.3 bis
 
-Incus place chaque Spark à la RACINE de cgroup v2, frère des tranches de l'hôte.
+Incus place chaque Spark à la RACINE de cgroup v2, frère des tranches de la Forge.
 Le poids d'un Spark y est arbitré contre `system.slice` autant que contre les
 autres Sparks : sa réservation n'est donc proportionnelle qu'entre Sparks.
 
@@ -72,7 +72,7 @@ def slice_weight(sold: float, capacity: float, reserve: float) -> SliceWeight:
 
     La réserve n'est pas une précaution : elle rend la loi **définie**. Sans
     elle, une machine entièrement vendue donne `f = 1` et un poids infini —
-    l'hôte n'ordonnancerait plus rien, pas même de quoi corriger la situation.
+    la Forge n'ordonnancerait plus rien, pas même de quoi corriger la situation.
 
     Une constante à la place de ce calcul rendrait la réservation absolue pour un
     seul taux de remplissage, et fausse partout ailleurs.
@@ -80,7 +80,7 @@ def slice_weight(sold: float, capacity: float, reserve: float) -> SliceWeight:
     if capacity <= 0:
         raise CgroupError("Capacité CPU nulle : le poids de la tranche n'a pas de sens.")
     if reserve < 0:
-        raise CgroupError("La réserve CPU de l'hôte ne peut pas être négative.")
+        raise CgroupError("La réserve CPU de la Forge ne peut pas être négative.")
     if reserve >= capacity:
         raise CgroupError(
             f"Réserve CPU ({reserve}) supérieure ou égale à la capacité "
@@ -163,7 +163,7 @@ def ensure_delegation(root: Path | None = None) -> list[str]:
 def apply_weight(poids: SliceWeight, root: Path | None = None) -> bool:
     """Écrit le poids sur la tranche. Rend `False` si elle n'est pas là.
 
-    L'absence de tranche n'est pas une erreur du plan de contrôle : c'est un hôte
+    L'absence de tranche n'est pas une erreur du plan de contrôle : c'est une Forge
     qui n'a pas été préparé. Elle se constate par le contrôle `RUN-SLICE` du
     préflight, pas en faisant échouer chaque création de Spark.
     """

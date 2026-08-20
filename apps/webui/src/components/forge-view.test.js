@@ -196,7 +196,7 @@ test('la capacité est toujours accompagnée de sa date de relevé', () => {
 
 test('une topologie jamais relevée offre son remède comme une ACTION', () => {
   const rendu = renderForgeView({ status: 'not-synced',
-    error: { message: 'L’hôte n’a jamais été relevé.' } });
+    error: { message: 'La Forge n’a jamais été relevé.' } });
   assert.ok(rendu.includes('data-action="relever"'));
   assert.ok(rendu.includes('Relever la topologie'));
   assert.ok(!rendu.includes('etat-vue--erreur'), 'ce n’est pas une panne (§27.8)');

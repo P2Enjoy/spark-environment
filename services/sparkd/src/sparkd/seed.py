@@ -34,7 +34,7 @@ GIO = 1024**3
 MIO = 1024**2
 MBIT = 1_000_000
 
-# L'hôte factice annonce 4 CPU, 5,4 Gio allouables, 192,8 Gio de disque et
+# La Forge factice annonce 4 CPU, 5,4 Gio allouables, 192,8 Gio de disque et
 # 1 Gbit/s — mesuré, pas supposé. Les fixtures sont dimensionnées pour y TENIR :
 # un seed qui demande plus que la machine ne porte s'arrête au milieu et laisse
 # des écrans vides. Somme : 1,5 CPU partagé + 1 cœur dédié, 4,5 Gio, 80 Gio,
@@ -76,7 +76,7 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     """Produit les fixtures du §28.5. Rend un décompte de ce qui a été créé."""
     compte = {"sparks": 0, "routes": 0, "cles": 0, "instantanes": 0, "refus": 0}
 
-    # La capacité de l'hôte doit être connue avant toute admission.
+    # La capacité de la Forge doit être connue avant toute admission.
     _attendu(client.post("/v1/forge/sync"), 200, quoi="relevé de topologie")
 
     def creer(corps: dict, *, appliquer: bool = True, demarrer: bool = True) -> dict:
@@ -333,7 +333,7 @@ def run(config: Config | None = None) -> dict[str, int]:
     if config.driver != "fake":
         raise SeedError(
             f"Le seed ne s'applique qu'au pilote factice, pas à « {config.driver} ». "
-            "Peupler un hôte réel depuis un script de démonstration n'est pas "
+            "Peupler une Forge réelle depuis un script de démonstration n'est pas "
             "prévu et ne doit pas l'être."
         )
     wipe(config)

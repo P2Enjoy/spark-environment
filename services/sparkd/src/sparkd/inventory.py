@@ -1,10 +1,10 @@
-"""Relevé de la capacité et de la topologie de l'hôte.
+"""Relevé de la capacité et de la topologie de la Forge.
 
 @spec docs/BACKLOG.md#SPK-07 · docs/DAT.md §5.2 (ce qui est lu et où), §5.3 (le
       relevé est explicite) · docs/SCHEMA.md §2 (host), §3 (cpu_core, cpu_thread)
 
 Le relevé n'est jamais implicite : c'est une opération nommée, datée et tracée.
-La capacité de l'hôte est la base de tous les calculs d'admission ; la voir bouger
+La capacité de la Forge est la base de tous les calculs d'admission ; la voir bouger
 silencieusement rendrait des Sparks déjà admis non admissibles sans que personne
 ne l'ait décidé.
 """

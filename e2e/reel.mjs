@@ -42,7 +42,7 @@ await page.goto(BASE, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('tbody a', { timeout: 15000 });
 await capturer('40-reel-liste');
 
-// L'hôte, atteint par la navigation.
+// La Forge, atteint par la navigation.
 await page.click('nav a[href="#/forge"]');
 await page.waitForSelector('#titre-pools', { timeout: 10000 });
 await page.setViewportSize({ width: 1440, height: 1250 });
