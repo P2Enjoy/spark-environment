@@ -22,7 +22,8 @@ import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.js';
-import { relever as releverDocker } from './docker.js';
+import { relever as releverDocker, inspecterConteneur, lireJournaux }
+  from './docker.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
@@ -132,6 +133,37 @@ export function createConsoleHost(options = {}) {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Le préalable commun aux deux relevés d'un conteneur : le tunnel, le Spark,
+   * puis la lecture. Écrit une fois — les dupliquer ferait diverger leurs refus.
+   */
+  async function relevéConteneur(url, lire) {
+    const nom = String(url?.searchParams.get('server') ?? '');
+    const spark = String(url?.searchParams.get('spark') ?? '');
+    const conteneur = String(url?.searchParams.get('name') ?? '');
+    if (!conteneur) {
+      return { status: 422, body: { error: 'missing_container',
+                                    message: 'Aucun conteneur nommé.' } };
+    }
+    let tunnel;
+    try {
+      tunnel = tunnels.require(nom);
+    } catch (erreur) {
+      return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
+    }
+    const amont = await fetchFn(
+      `http://127.0.0.1:${tunnel.localPort}/v1/sparks/${encodeURIComponent(spark)}`,
+      { headers: { 'x-spark-actor': tunnel.actorHeader } });
+    if (!amont.ok) {
+      return { status: 404, body: { error: 'unknown_spark',
+                                    message: `Aucun Spark « ${spark} » sur ce serveur.` } };
+    }
+    const decrit = await amont.json();
+    return { status: 200,
+             body: await lire({ tunnel, spark: decrit, nom: conteneur,
+                                doublon: process.env.SPARK_DOCKER_COMMAND || null }) };
   }
 
   const routes = {
@@ -700,6 +732,21 @@ export function createConsoleHost(options = {}) {
                body: await releverDocker({ tunnel, spark: decrit,
                                            doublon: process.env.SPARK_DOCKER_COMMAND || null }) };
     },
+
+    /**
+     * L'inspection d'un conteneur, et ses journaux (SPK-44, §37.6 ter).
+     *
+     * DEMANDÉES, jamais collectées d'office : la sortie peut peser des
+     * mégaoctets, et personne ne lit dix journaux à la fois.
+     *
+     * Lectures pures, non journalisées (§36.7).
+     */
+    'GET /api/spark/container': async (_corps, url) =>
+      relevéConteneur(url, (args) => inspecterConteneur(args)),
+
+    'GET /api/spark/logs': async (_corps, url) =>
+      relevéConteneur(url, (args) => lireJournaux({
+        ...args, tail: Number(url?.searchParams.get('tail')) || undefined })),
 
     'POST /api/terminal': async (corps) => {
       const nom = String(corps?.server ?? '');
