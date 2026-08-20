@@ -22,7 +22,7 @@ import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journa
 import { renderManuel } from './components/manuel-view.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
-import { tunnelOf } from './components/tokens.js';
+import { tunnelOf, signatureMotifOf } from './components/tokens.js';
 
 const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
@@ -31,6 +31,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // SPK-63 · §6.23 : ce qui a été frappé pour confirmer une
                // suppression. Vide tant qu'on n'a rien tapé.
                frappe: '',
+               // SPK-40 · §36.10.9 : ce que le DERNIER geste relayé n'a pas pu
+               // signer. `null` tant que rien n'a échoué — et il redevient
+               // `null` dès qu'un geste repart signé.
+               signature: null,
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
                            pools: null, cores: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
@@ -347,7 +351,7 @@ async function amorcageAppel(methode) {
   const chemin = `/api/v1/sparks/${encodeURIComponent(etat.spark.name)}/bootstrap`
     + `?server=${encodeURIComponent(etat.server)}`;
   try {
-    const reponse = await fetch(chemin, methode === 'GET' ? {} : {
+    const reponse = await relais(chemin, methode === 'GET' ? {} : {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ rootless: a.rootless }),
     });
@@ -1010,10 +1014,45 @@ function brancherPanneaux() {
   geste('accepte-perte', (nom) => restaurer(nom, true));
 }
 
+/**
+ * Un geste RELAYÉ vers la Forge, dont on retient s'il est parti SIGNÉ.
+ *
+ * @spec docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.9 (l'échec de signature se
+ *       dit dans la coquille), §36.10.1 (le geste passe quand même) ·
+ *       docs/DESIGN_SYSTEM.md §25.1 (le rouge est réservé au refus du serveur)
+ *
+ * Tout ce qui MUTE la Forge passe par ici, et par ici seulement : sept appels
+ * dispersés qui liraient chacun l'en-tête finiraient par en oublier un, et
+ * l'échec y serait tu — exactement ce que le §36.10.8 interdit.
+ *
+ * La réponse est rendue INTACTE : l'appelant en fait ce qu'il faisait déjà, et
+ * un `catch` posé derrière continue de fonctionner.
+ */
+async function relais(chemin, options = {}) {
+  const reponse = await fetch(chemin, options);
+  noterSignature(reponse);
+  return reponse;
+}
+
+/**
+ * Retient — ou efface — l'avertissement de signature du dernier geste.
+ *
+ * Il s'EFFACE de lui-même dès qu'un geste repart signé : un avertissement qui
+ * survivrait à sa cause mentirait dans l'autre sens, et l'on désapprendrait à le
+ * lire. Rien n'est repeint quand rien n'a changé — `peindre()` reconstruit
+ * `.principal`, ce qui arracherait le focus au clavier (§14.3).
+ */
+function noterSignature(reponse) {
+  const phrase = signatureMotifOf(reponse?.headers?.get?.('x-spark-signature-motif'));
+  if (phrase === etat.signature) return;
+  etat.signature = phrase;
+  peindreSignature();
+}
+
 /** Appel d'écriture. Rend toujours `{ ok, corps }` : un refus est une réponse,
  *  pas une exception à faire remonter jusqu'à l'écran d'erreur global. */
 async function appel(methode, chemin, corps = null) {
-  const reponse = await fetch(
+  const reponse = await relais(
     `/api${chemin}${chemin.includes('?') ? '&' : '?'}server=${encodeURIComponent(etat.server)}`,
     { method: methode, ...(corps ? { headers: { 'content-type': 'application/json' },
                                      body: JSON.stringify(corps) } : {}) });
@@ -1371,8 +1410,8 @@ async function lancer(commande) {
   etat.status = 'loading';
   peindre();
   try {
-    await fetch(`/api/v1/sparks/${encodeURIComponent(etat.spark.name)}/${commande}?server=${encodeURIComponent(etat.server)}`,
-                { method: 'POST' });
+    await relais(`/api/v1/sparks/${encodeURIComponent(etat.spark.name)}/${commande}?server=${encodeURIComponent(etat.server)}`,
+                 { method: 'POST' });
   } catch { /* l'état réel sera relu ci-dessous */ }
   if (commande === 'delete') { location.hash = '#/sparks'; return router(); }
   await router();
@@ -1453,7 +1492,7 @@ async function creer() {
     ...(['dedicated', 'shared-pinned'].includes(v.cpu_mode) ? { cpu_cores: v.cpu_cores } : {}),
   };
   try {
-    const reponse = await fetch(`/api/v1/sparks?server=${encodeURIComponent(etat.server)}`,
+    const reponse = await relais(`/api/v1/sparks?server=${encodeURIComponent(etat.server)}`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps) });
     const rendu = await reponse.json();
     if (!reponse.ok) {
@@ -1586,7 +1625,7 @@ async function relever() {
   etat.forge.syncing = true;
   peindre();
   try {
-    await fetch(`/api/v1/forge/sync?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+    await relais(`/api/v1/forge/sync?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
   } catch { /* l'état réel sera relu ci-dessous */ }
   etat.forge.syncing = false;
   await chargerHote();
@@ -1613,8 +1652,8 @@ async function releverImages() {
   etat.catalogue.ui.syncing = true;
   peindre();
   try {
-    await fetch(`/api/v1/images/verify?server=${encodeURIComponent(etat.server)}`,
-                { method: 'POST' });
+    await relais(`/api/v1/images/verify?server=${encodeURIComponent(etat.server)}`,
+                 { method: 'POST' });
   } catch { /* l'état réel sera relu ci-dessous */ }
   etat.catalogue.ui.syncing = false;
   await chargerCatalogue();
@@ -1873,7 +1912,7 @@ function brancherCatalogue() {
     evenement.preventDefault();
     ui.busy = true; ui.refusal = null;
     peindre();
-    const reponse = await fetch(`/api/v1/images?server=${encodeURIComponent(etat.server)}`, {
+    const reponse = await relais(`/api/v1/images?server=${encodeURIComponent(etat.server)}`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ reference: ui.values.reference, label: ui.values.label }),
     }).catch((e) => ({ ok: false, json: async () => ({ detail: { message: e.message } }) }));
@@ -2013,6 +2052,30 @@ function peindreContexte() {
   });
   racine.querySelector('[data-action="reconnecter"]')
     ?.addEventListener('click', () => ouvrirTunnel(etat.server));
+}
+
+/**
+ * L'avertissement de signature, dans la barre latérale.
+ *
+ * @spec docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.9 (il se dit dans la
+ *       coquille, en accent, et s'efface de lui-même), §36.10.1 (le geste a eu
+ *       lieu) · docs/DESIGN_SYSTEM.md §25.1 (le rouge est réservé au refus du
+ *       serveur), §9.7 (`role="status"`), §9.8 (la couleur n'est jamais seule)
+ *
+ * **En accent, jamais en rouge** : la Forge a accepté le geste, il n'y a aucun
+ * refus. Ce qui est en jeu est la TRACE, pas l'action — et le titre le dit en
+ * toutes lettres, pour que la couleur ne porte pas seule l'information.
+ */
+function peindreSignature() {
+  const zone = racine.querySelector('.entete__signature');
+  if (!zone) return;
+  zone.innerHTML = etat.signature
+    ? `<div class="avertissement avertissement--laterale" role="status">
+         <p><strong>Geste non signé</strong></p>
+         <p>${echapperTexte(etat.signature)}</p>
+         <p><a href="#/manuel/M12">Manuel M12 — Qui a fait quoi</a></p>
+       </div>`
+    : '';
 }
 
 const echapperTexte = (v) =>

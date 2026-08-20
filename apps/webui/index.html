@@ -20,6 +20,12 @@
            une destination : il est au-dessus du premier degré
            (DESIGN_SYSTEM_APP.md §1). -->
       <div class="entete__contexte"></div>
+      <!-- SPK-40 · docs/DAT.md §36.10.9 : ce qu'un geste n'a pas pu signer se
+           dit ICI, et non dans l'écran du geste. La cause est l'état du poste —
+           agent vidé, clé non configurée — : elle survit au geste et frappera le
+           suivant. Un avertissement posé dans l'écran disparaîtrait en changeant
+           de page alors que la cause reste. -->
+      <div class="entete__signature"></div>
       <nav class="laterale__nav" aria-label="Navigation principale">
         <a href="#/sparks" class="destination">Sparks</a>
         <a href="#/forge" class="destination">Forge</a>

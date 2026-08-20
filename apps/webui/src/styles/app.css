@@ -62,6 +62,11 @@
   gap: var(--space-2); min-width: 0;
 }
 .entete__contexte > * { min-width: 0; }
+/* SPK-40 · §36.10.9 : la zone existe TOUJOURS dans la coquille, pour que
+   l'avertissement s'y écrive sans repeindre `.principal` — ce qui arracherait le
+   focus au clavier (§14.3). Vide, elle disparaît : `.laterale` est une colonne
+   à `gap`, et un conteneur vide y creuserait un trou inexpliqué. */
+.entete__signature:empty { display: none; }
 .entete__contexte .badge { align-self: flex-start; }
 /* Sous 1024 px la barre laterale passe en barre SUPERIEURE : le contexte y
    redevient une rangee, ou la largeur ne manque plus. */
@@ -69,6 +74,9 @@
   .entete__contexte {
     flex-direction: row; align-items: center; margin-left: auto; flex-wrap: wrap;
   }
+  /* La barre laterale est alors une RANGEE : l'avertissement prend sa propre
+     ligne plutot que de comprimer la navigation. */
+  .entete__signature { flex-basis: 100%; }
 }
 
 .principal {
@@ -398,6 +406,19 @@ tbody tr:hover { background: var(--color-hover); }
   border-radius: var(--radius-sm); font-size: var(--text-compact);
 }
 .succes p { margin: 0; }
+.avertissement p { margin: 0; }
+.avertissement p + p { margin-top: var(--space-2); }
+
+/* SPK-40 · docs/DAT.md §36.10.9 — l'avertissement de signature vit dans la
+   barre latérale, sous le contexte du serveur : la cause n'est pas le geste mais
+   l'état du poste, et elle survit au geste. La largeur y est contrainte, donc
+   les mots longs se coupent plutôt que de pousser la barre — §8.1 : la page ne
+   défile jamais horizontalement. */
+.avertissement--laterale {
+  margin: var(--space-2) 0 0; padding: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.avertissement--laterale a { color: inherit; }
 .succes .note { margin-top: var(--space-2); }
 
 /* Seul le refus du serveur est rouge. */
