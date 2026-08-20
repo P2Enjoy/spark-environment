@@ -3393,3 +3393,46 @@ prérequis dur de SPK-51 (messagerie) et sa spécification est écrite au §39.
 Ensuite SPK-50 (recettes DNS), puis SPK-52 (suppression idempotente), court et
 indépendant. SPK-51 attend les deux vérifications du §38.6 bis auprès du
 fournisseur.
+
+## 2026-08-20 — SPK-49 : publier un port, pour ce qui ne parle pas HTTP
+
+**Unité choisie** : SPK-49, désignée par l'entrée précédente. Sa spécification
+existait au §39 mais **ne couvrait pas ce qu'il fallait coder** : ni le
+mécanisme d'ouverture, ni le modèle de données, ni l'API. Complétée sur ces
+points précis et committée avant la première ligne de code.
+
+**La décision structurante** : un **device `proxy` d'Incus**, pas des règles de
+netfilter écrites par `sparkd`. C'est la frontière du §2 — le plan de contrôle
+pilote Incus, il ne pilote pas le système de la Forge par-dessus — et cela évite
+un second endroit où l'état du réseau peut diverger du registre. Corollaire : on
+régénère la carte complète des devices d'un Spark, on ne la rapièce pas, parce
+que `PATCH` fusionne et ne sait donc pas **retirer** — un retrait rapiécé
+laisserait un port ouvert vers un service absent.
+
+**Deux défauts trouvés par les preuves d'API, pas par relecture.**
+
+1. Je jugeais qu'un Spark avait une instance chez le pilote à sa seule
+   **adresse**. Elle est attribuée dès l'écriture au registre (§15.1), bien avant
+   que le pilote ne porte quoi que ce soit : la publication échouait donc en
+   `502 « Instance absente »` sur un Spark parfaitement normal, encore `pending`.
+   Le signal est `incus_name`, ce qu'emploie déjà `_apply_keys` pour la même
+   question. Conséquence tirée dans la foulée : **l'application d'un Spark ouvre
+   maintenant les ports déclarés avant sa création**, sans quoi ils ne
+   s'ouvriraient jamais.
+2. Les ports réservés étaient rendus dans un dictionnaire indexé par le port. Les
+   clés JSON sont des chaînes : la forme rendue dépendait du codage. C'est une
+   liste `{port, reason}`.
+
+**Campagne complète, verte.** 647 tests Python, 372 de console et d'hôte console,
+6 de contrat, 8 gestes, **36 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`. Captures `60-` à `64-` observées, console du navigateur vierge.
+
+**Pourquoi l'unité reste `[~]`.** Tout ce qui appartient au produit est éprouvé.
+Ce qui ne l'est pas — et qui est écrit au §39.7 — est qu'une connexion entrante
+atteigne réellement le Spark : cela exige une Forge réelle avec Incus et une
+adresse publique. Même limite que SPK-29 et SPK-30.
+
+**Où reprendre.** SPK-50 — les recettes DNS, un jeu d'enregistrements posé
+ensemble. Sa spécification est au §38.6, et elle dépend de SPK-47, qui est close.
+Ensuite SPK-52 (suppression idempotente, §14.5), court et indépendant. SPK-51
+attend toujours les deux vérifications du §38.6 bis auprès du fournisseur.

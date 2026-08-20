@@ -1673,7 +1673,7 @@ enregistrement DNS par locataire, à la main, indéfiniment.
 - **Reste hors de cette unité** : le certificat joker, qui exige une validation
   `DNS-01` — écrit comme limite connue dans le manuel M7.
 
-### [ ] SPK-49 · Publier un port de la Forge vers un Spark
+### [~] SPK-49 · Publier un port de la Forge vers un Spark
 
 Ce qui ne parle pas HTTP n'a aucun autre chemin : un SMTP, un Postgres, un Redis
 ou un SSH joignable de l'extérieur ne se route pas par nom.
@@ -1696,6 +1696,26 @@ ou un SSH joignable de l'extérieur ne se route pas par nom.
   pare-feu ; parcours E2E depuis le parcours canonique — publier un port,
   constater le conflit nommé sur un second Spark, retirer ; captures observées ;
   manuel M7 mis à jour.
+- **Livré le 2026-08-20, et `[~]` pour une seule raison, nommée au §39.7.**
+  - Spécification complétée avant tout code : §39.4 (un device `proxy` d'Incus
+    et non du netfilter — c'est la frontière du §2), §39.5 (le modèle et où vit
+    l'unicité), §39.6 (l'API), §39.7 (ce qui ne se prouve pas sans hôte réel).
+    Migration `008`, `docs/SCHEMA.md` §6 bis, opération OP-08.
+  - 17 tests d'unité et d'API, **4 parcours E2E** depuis le parcours canonique,
+    captures `60-` à `64-` observées, format étroit compris, console vierge.
+  - Deux défauts trouvés par les preuves. Je jugeais qu'un Spark avait une
+    instance à sa seule **adresse**, alors qu'elle est attribuée dès l'écriture
+    au registre : la publication échouait en `502` sur un Spark encore
+    `pending`. Le signal est `incus_name`, ce qu'emploie déjà `_apply_keys` — et
+    l'application d'un Spark ouvre désormais les ports déclarés avant sa
+    création. Second : les ports réservés étaient rendus dans un dictionnaire
+    indexé par le port, dont les clés JSON sont des chaînes.
+- **Ce qui manque pour passer à `[x]`, et rien d'autre** : constater qu'une
+  connexion entrante atteint réellement le Spark. Cela exige une **Forge réelle**
+  avec Incus et une adresse publique — même limite que SPK-30 et SPK-29. Tout ce
+  qui appartient au produit est éprouvé : les refus, l'unicité portée par la
+  base, la reconstruction complète des devices, et le fait qu'un retrait fasse
+  disparaître le device.
 
 ### [ ] SPK-50 · Recettes DNS : un jeu d'enregistrements posé ensemble
 
