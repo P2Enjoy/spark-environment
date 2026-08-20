@@ -437,7 +437,7 @@ async function chargerCreation() {
       const defaut = etat.creation.images.find((i) => i.is_default) ?? etat.creation.images[0];
       etat.creation.values.image = defaut.reference;
     }
-    const hote = await api('/v1/host');
+    const hote = await api('/v1/forge');
     etat.creation.pools = hote.pools;
   } catch {
     // Capacité inconnue : l'écran le dit plutôt que d'inventer des chiffres.
@@ -522,7 +522,7 @@ async function chargerDetail(nom, facette = '') {
 /**
  * Écran des pools (docs/DAT.md §27).
  *
- * Une topologie jamais relevée répond `409 host_not_synced` : ce n'est pas une
+ * Une topologie jamais relevée répond `409 forge_not_synced` : ce n'est pas une
  * panne mais une machine qu'on n'a pas encore interrogée, et l'écran présente
  * son remède comme une action (§27.8).
  */
@@ -532,9 +532,9 @@ async function chargerHote() {
   etat.hote.error = null;
   peindre();
   try {
-    etat.hote.host = await api('/v1/host');
+    etat.hote.host = await api('/v1/forge');
     const [cores, sparks] = await Promise.all([
-      api('/v1/host/cores').catch(() => null),
+      api('/v1/forge/cores').catch(() => null),
       api('/v1/sparks').then((r) => r.sparks).catch(() => []),
     ]);
     etat.hote.cores = cores;
@@ -545,7 +545,7 @@ async function chargerHote() {
     etat.hote.status = 'ready';
   } catch (erreur) {
     etat.hote.error = erreur;
-    etat.hote.status = erreur.code === 'host_not_synced' ? 'not-synced' : 'error';
+    etat.hote.status = erreur.code === 'forge_not_synced' ? 'not-synced' : 'error';
   }
   peindre();
 }
@@ -554,7 +554,7 @@ async function relever() {
   etat.hote.syncing = true;
   peindre();
   try {
-    await fetch(`/api/v1/host/sync?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+    await fetch(`/api/v1/forge/sync?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
   } catch { /* l'état réel sera relu ci-dessous */ }
   etat.hote.syncing = false;
   await chargerHote();

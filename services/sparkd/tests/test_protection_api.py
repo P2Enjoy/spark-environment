@@ -28,7 +28,7 @@ CLE_PUBLIQUE = ("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILklM4dl9E+GCZog4f8+fV4q3f"
 def client(tmp_path):
     app = create_app(load({"SPARKD_DB": str(tmp_path / "p.db"), "SPARKD_DRIVER": "fake"}))
     c = TestClient(app)
-    c.post("/v1/host/sync")
+    c.post("/v1/forge/sync")
     return c
 
 
@@ -156,7 +156,7 @@ def test_les_LECTURES_ne_sont_jamais_refusees(client):
     nom = creer(client)
     armer(client, nom)
     for chemin in (f"/v1/sparks/{nom}", "/v1/sparks", f"/v1/sparks/{nom}/usage",
-                   "/v1/audit", "/v1/host", f"/v1/sparks/{nom}/snapshots"):
+                   "/v1/audit", "/v1/forge", f"/v1/sparks/{nom}/snapshots"):
         assert client.get(chemin).status_code == 200, chemin
 
 

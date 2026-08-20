@@ -110,7 +110,7 @@ def test_deux_instantanes_rendent_le_refus_de_restauration_atteignable(seede):
 
 def test_un_spark_dedie_retire_des_coeurs_du_pool(seede):
     """§27.4, §28.5 — la carte des cœurs doit avoir quelque chose à montrer."""
-    cores = seede.get("/v1/host/cores").json()
+    cores = seede.get("/v1/forge/cores").json()
     assert cores["dedicated"], "aucun cœur dédié : la carte serait uniforme"
     assert len(cores["shared"]["cores"]) == cores["physical_cores"] - len(cores["dedicated"])
 

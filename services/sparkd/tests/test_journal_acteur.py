@@ -39,7 +39,7 @@ def db(tmp_path):
 def client(tmp_path):
     app = create_app(load({"SPARKD_DB": str(tmp_path / "a.db"), "SPARKD_DRIVER": "fake"}))
     c = TestClient(app)
-    c.post("/v1/host/sync")
+    c.post("/v1/forge/sync")
     return c
 
 
@@ -193,7 +193,7 @@ def test_une_LECTURE_n_ouvre_pas_de_contexte_humain(client):
     pas les classer — et surtout pas classer `human` un recalcul qu'une lecture
     declencherait."""
     avant = len(entrees(client))
-    for chemin in ("/v1/sparks", "/v1/host", "/v1/audit", "/v1/images"):
+    for chemin in ("/v1/sparks", "/v1/forge", "/v1/audit", "/v1/images"):
         assert client.get(chemin, headers={"x-spark-actor": "console/prod"}).status_code == 200
     assert len(entrees(client)) == avant
 

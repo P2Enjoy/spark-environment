@@ -85,13 +85,13 @@ function repondre(url, init) {
         spark_name: SPARK.name, applied_at: '2026-08-19T09:00:00' },
     ] }), { status: 200 });
   }
-  if (url.includes('/v1/host/cores')) return new Response(JSON.stringify({
+  if (url.includes('/v1/forge/cores')) return new Response(JSON.stringify({
     physical_cores: 4,
     shared: { cores: [0, 1, 2], cpus: [0, 4, 1, 5, 2, 6], capacity: 6 },
     dedicated: [{ core_id: 3, cpus: [3, 7], spark_id: 'S1' }],
   }), { status: 200 });
-  if (url.includes('/v1/host/sync')) return new Response(JSON.stringify({ hostname: 'h' }), { status: 200 });
-  if (url.includes('/v1/host')) return new Response(JSON.stringify({
+  if (url.includes('/v1/forge/sync')) return new Response(JSON.stringify({ hostname: 'h' }), { status: 200 });
+  if (url.includes('/v1/forge')) return new Response(JSON.stringify({
     hostname: 'spark-experiment',
     cpu: { cores_total: 4, threads_total: 8, cores_dedicated: 1 },
     memory: { total_bytes: 94 * GIO },

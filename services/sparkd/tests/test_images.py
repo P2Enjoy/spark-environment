@@ -152,8 +152,8 @@ def test_une_image_inconnue_est_refusee_SANS_ecrire_la_ligne(tmp_path):
     qu'a `apply` — le Spark restait en `error` avec ses quotas engages.
     """
     client = _client(tmp_path)
-    client.post("/v1/host/sync")
-    avant = client.get("/v1/host").json()["pools"]["memory"]["allocated"]
+    client.post("/v1/forge/sync")
+    avant = client.get("/v1/forge").json()["pools"]["memory"]["allocated"]
 
     refus = client.post("/v1/sparks", json={
         "name": "faute-de-frappe", "image": "images:debian/31",
@@ -166,14 +166,14 @@ def test_une_image_inconnue_est_refusee_SANS_ecrire_la_ligne(tmp_path):
     assert "images:debian/31" in detail["message"], "le refus NOMME la reference"
 
     assert client.get("/v1/sparks/faute-de-frappe").status_code == 404
-    assert client.get("/v1/host").json()["pools"]["memory"]["allocated"] == avant, (
+    assert client.get("/v1/forge").json()["pools"]["memory"]["allocated"] == avant, (
         "aucune ressource ne doit avoir ete engagee"
     )
 
 
 def test_une_image_du_catalogue_est_acceptee(tmp_path):
     client = _client(tmp_path)
-    client.post("/v1/host/sync")
+    client.post("/v1/forge/sync")
     rendu = client.post("/v1/sparks", json={
         "name": "bonne-image", "image": "images:debian/13",
         "cpu_mode": "shared", "cpu_reservation": 0.5, "memory_bytes": GIO,

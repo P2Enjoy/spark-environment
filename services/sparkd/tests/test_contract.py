@@ -46,6 +46,6 @@ def test_un_contrat_absent_est_signale(tmp_path):
 
 def test_le_contrat_couvre_les_chemins_du_produit():
     chemins = contract.build()["paths"]
-    for attendu in ("/healthz", "/v1/host", "/v1/sparks", "/v1/ingress",
+    for attendu in ("/healthz", "/v1/forge", "/v1/sparks", "/v1/ingress",
                     "/v1/ssh-keys", "/v1/audit"):
         assert attendu in chemins

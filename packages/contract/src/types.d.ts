@@ -109,7 +109,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/host": {
+    "/v1/forge": {
         parameters: {
             query?: never;
             header?: never;
@@ -123,7 +123,7 @@ export interface paths {
          *     C'est ici que l'admission control devient observable : sans cette vue,
          *     rien ne permet de savoir pourquoi une création serait refusée.
          */
-        get: operations["host_v1_host_get"];
+        get: operations["host_v1_forge_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -132,7 +132,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/host/cores": {
+    "/v1/forge/cores": {
         parameters: {
             query?: never;
             header?: never;
@@ -140,10 +140,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Host Cores
+         * Forge Cores
          * @description Partage des cœurs entre pool commun et Sparks dédiés.
          */
-        get: operations["host_cores_v1_host_cores_get"];
+        get: operations["forge_cores_v1_forge_cores_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -152,7 +152,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/host/sync": {
+    "/v1/forge/sync": {
         parameters: {
             query?: never;
             header?: never;
@@ -162,10 +162,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Host Sync
+         * Forge Sync
          * @description Relève la topologie depuis Incus et l'écrit dans le registre.
          */
-        post: operations["host_sync_v1_host_sync_post"];
+        post: operations["forge_sync_v1_forge_sync_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -661,7 +661,7 @@ export interface operations {
             };
         };
     };
-    host_v1_host_get: {
+    host_v1_forge_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -683,7 +683,7 @@ export interface operations {
             };
         };
     };
-    host_cores_v1_host_cores_get: {
+    forge_cores_v1_forge_cores_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -705,7 +705,7 @@ export interface operations {
             };
         };
     };
-    host_sync_v1_host_sync_post: {
+    forge_sync_v1_forge_sync_post: {
         parameters: {
             query?: never;
             header?: never;

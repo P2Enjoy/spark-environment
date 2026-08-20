@@ -98,17 +98,17 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
       // SPK-22 : la carte des cœurs de l'hôte.
-      if (url.includes('/v1/host/cores')) return new Response(JSON.stringify({
+      if (url.includes('/v1/forge/cores')) return new Response(JSON.stringify({
         physical_cores: 4,
         shared: { cores: [0, 1, 2], cpus: [0, 4, 1, 5, 2, 6], capacity: 6 },
         dedicated: [{ core_id: 3, cpus: [3, 7], spark_id: 'S3' }],
       }), { status: 200 });
-      if (url.includes('/v1/host')) {
+      if (url.includes('/v1/forge')) {
         // §27.8 : une topologie jamais relevée n'est pas une panne.
         if (hoteNonReleve) return new Response(JSON.stringify({ detail: {
-          error: 'host_not_synced',
+          error: 'forge_not_synced',
           message: 'La capacité de cet hôte n’a jamais été relevée.',
-          remedy: 'POST /v1/host/sync',
+          remedy: 'POST /v1/forge/sync',
         } }), { status: 409 });
         const GIO = 1024 ** 3;
         return new Response(JSON.stringify({

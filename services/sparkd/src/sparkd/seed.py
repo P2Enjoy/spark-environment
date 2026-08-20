@@ -77,7 +77,7 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     compte = {"sparks": 0, "routes": 0, "cles": 0, "instantanes": 0, "refus": 0}
 
     # La capacité de l'hôte doit être connue avant toute admission.
-    _attendu(client.post("/v1/host/sync"), 200, quoi="relevé de topologie")
+    _attendu(client.post("/v1/forge/sync"), 200, quoi="relevé de topologie")
 
     def creer(corps: dict, *, appliquer: bool = True, demarrer: bool = True) -> dict:
         nom = corps["name"]

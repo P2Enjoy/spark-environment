@@ -140,7 +140,7 @@ test("l'écran de l'hôte s'atteint par la navigation et montre la vraie capacit
 
     // La capacité affichée doit être celle que sparkd calcule (§29.3 : on LIT
     // pour constater, on n'a pas navigué par l'API).
-    const { corps } = await pile.lireSparkd('/v1/host');
+    const { corps } = await pile.lireSparkd('/v1/forge');
     const attendu = corps.pools.cpu.available;
     const texte = await page.textContent('#titre-pools ~ .pools, .pools');
     assert.ok(texte.includes('Disponible'), 'les trois grandeurs du §27.2');
@@ -550,7 +550,7 @@ test("l’écart entre les tailles vendues et l’alloué du disque est EXPLIQU�
     // …ET l'effet backend est réel (CLAUDE.md §15) : l'alloué publié vaut la
     // somme des tailles VENDUES plus une marge par Spark. Le registre, lui, ne
     // stocke que la taille vendue (§8.8.2 règle 1).
-    const { corps } = await pile.lireSparkd('/v1/host');
+    const { corps } = await pile.lireSparkd('/v1/forge');
     const { corps: liste } = await pile.lireSparkd('/v1/sparks');
     const vendu = liste.sparks.reduce((total, s) => total + s.storage_bytes, 0);
     const marge = corps.reserves.storage_metadata_margin_bytes;

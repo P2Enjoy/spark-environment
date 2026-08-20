@@ -102,7 +102,7 @@ test('le relais atteint sparkd a travers le tunnel', async () => {
   await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
   await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
 
-  const r = await fetch(`${base}/api/v1/host?server=prod`);
+  const r = await fetch(`${base}/api/v1/forge?server=prod`);
   assert.equal(r.status, 200);
   assert.match(vue, /^http:\/\/127\.0\.0\.1:\d+\/v1\/host$/);
   server.close();
@@ -113,7 +113,7 @@ test('une requete vers un tunnel rompu remonte le MOTIF, pas un 502 anonyme', as
   await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
   await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
 
-  const r = await fetch(`${base}/api/v1/host?server=prod`);
+  const r = await fetch(`${base}/api/v1/forge?server=prod`);
   assert.equal(r.status, 502);
   const corps = await r.json();
   assert.equal(corps.error, 'tunnel_unavailable');
@@ -127,7 +127,7 @@ test('une requete vers un tunnel rompu remonte le MOTIF, pas un 502 anonyme', as
 
 test('le relais exige de nommer le serveur vise', async () => {
   const { base, server } = await hote();
-  const r = await fetch(`${base}/api/v1/host`);
+  const r = await fetch(`${base}/api/v1/forge`);
   assert.equal(r.status, 400);
   assert.match((await r.json()).message, /Préciser le serveur/);
   server.close();

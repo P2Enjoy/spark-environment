@@ -278,7 +278,7 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             return images_service.verify(connection)
 
-    @app.get("/v1/host", tags=["hote"])
+    @app.get("/v1/forge", tags=["forge"])
     def host() -> dict[str, object]:
         """Capacité de l'hôte et état des pools.
 
@@ -292,9 +292,9 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(
                     status_code=409,
                     detail={
-                        "error": "host_not_synced",
+                        "error": "forge_not_synced",
                         "message": str(erreur),
-                        "remedy": "POST /v1/host/sync",
+                        "remedy": "POST /v1/forge/sync",
                     },
                 ) from erreur
             row = connection.execute("SELECT * FROM forge WHERE id = 1").fetchone()
@@ -356,8 +356,8 @@ def create_app(config: Config) -> FastAPI:
             "reservation_guarantee": "proportional_between_sparks_only",
         }
 
-    @app.post("/v1/host/sync", tags=["hote"], status_code=200)
-    def host_sync() -> dict[str, object]:
+    @app.post("/v1/forge/sync", tags=["forge"], status_code=200)
+    def forge_sync() -> dict[str, object]:
         """Relève la topologie depuis Incus et l'écrit dans le registre."""
         try:
             with registry() as connection:
@@ -945,8 +945,8 @@ def create_app(config: Config) -> FastAPI:
                 ],
             }
 
-    @app.get("/v1/host/cores", tags=["hote"])
-    def host_cores() -> dict:
+    @app.get("/v1/forge/cores", tags=["forge"])
+    def forge_cores() -> dict:
         """Partage des cœurs entre pool commun et Sparks dédiés."""
         with registry() as connection:
             return core_pool.layout(connection)

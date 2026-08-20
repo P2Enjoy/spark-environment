@@ -263,17 +263,17 @@
         ]
       }
     },
-    "/v1/host": {
+    "/v1/forge": {
       "get": {
         "description": "Capacité de l'hôte et état des pools.\n\nC'est ici que l'admission control devient observable : sans cette vue,\nrien ne permet de savoir pourquoi une création serait refusée.",
-        "operationId": "host_v1_host_get",
+        "operationId": "host_v1_forge_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Host V1 Host Get",
+                  "title": "Response Host V1 Forge Get",
                   "type": "object"
                 }
               }
@@ -283,21 +283,21 @@
         },
         "summary": "Host",
         "tags": [
-          "hote"
+          "forge"
         ]
       }
     },
-    "/v1/host/cores": {
+    "/v1/forge/cores": {
       "get": {
         "description": "Partage des cœurs entre pool commun et Sparks dédiés.",
-        "operationId": "host_cores_v1_host_cores_get",
+        "operationId": "forge_cores_v1_forge_cores_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Host Cores V1 Host Cores Get",
+                  "title": "Response Forge Cores V1 Forge Cores Get",
                   "type": "object"
                 }
               }
@@ -305,23 +305,23 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Host Cores",
+        "summary": "Forge Cores",
         "tags": [
-          "hote"
+          "forge"
         ]
       }
     },
-    "/v1/host/sync": {
+    "/v1/forge/sync": {
       "post": {
         "description": "Relève la topologie depuis Incus et l'écrit dans le registre.",
-        "operationId": "host_sync_v1_host_sync_post",
+        "operationId": "forge_sync_v1_forge_sync_post",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Host Sync V1 Host Sync Post",
+                  "title": "Response Forge Sync V1 Forge Sync Post",
                   "type": "object"
                 }
               }
@@ -329,9 +329,9 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Host Sync",
+        "summary": "Forge Sync",
         "tags": [
-          "hote"
+          "forge"
         ]
       }
     },

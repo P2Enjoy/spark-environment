@@ -115,9 +115,9 @@ def test_demarrage_refuse_si_le_schema_a_derive(tmp_path, monkeypatch):
 def test_host_refuse_avant_tout_releve(tmp_path):
     """@verifies docs/BACKLOG.md#SPK-07 · docs/DAT.md §5.3"""
     app = create_app(load({"SPARKD_DB": str(tmp_path / "a.db"), "SPARKD_DRIVER": "fake"}))
-    reponse = TestClient(app).get("/v1/host")
+    reponse = TestClient(app).get("/v1/forge")
     assert reponse.status_code == 409
-    assert reponse.json()["detail"]["remedy"] == "POST /v1/host/sync"
+    assert reponse.json()["detail"]["remedy"] == "POST /v1/forge/sync"
 
 
 def test_sync_puis_host_expose_les_pools(tmp_path):
@@ -125,11 +125,11 @@ def test_sync_puis_host_expose_les_pools(tmp_path):
     app = create_app(load({"SPARKD_DB": str(tmp_path / "b.db"), "SPARKD_DRIVER": "fake"}))
     client_http = TestClient(app)
 
-    releve = client_http.post("/v1/host/sync")
+    releve = client_http.post("/v1/forge/sync")
     assert releve.status_code == 200
     assert releve.json()["cpu_cores_total"] == 4
 
-    corps = client_http.get("/v1/host").json()
+    corps = client_http.get("/v1/forge").json()
     assert corps["cpu"]["cores_total"] == 4
     assert corps["cpu"]["threads_total"] == 8
     assert corps["pools"]["cpu"]["capacity"] == 4.0
@@ -148,9 +148,9 @@ def test_host_expose_les_termes_de_la_reserve_memoire(tmp_path):
     """
     app = create_app(load({"SPARKD_DB": str(tmp_path / "m.db"), "SPARKD_DRIVER": "fake"}))
     client_http = TestClient(app)
-    client_http.post("/v1/host/sync")
+    client_http.post("/v1/forge/sync")
 
-    corps = client_http.get("/v1/host").json()
+    corps = client_http.get("/v1/forge").json()
     total = corps["memory"]["total_bytes"]
     reserves = corps["reserves"]
     assert total > 0, "la memoire de la machine doit etre publiee"
@@ -176,9 +176,9 @@ def test_host_publie_la_marge_de_metadonnees_unitaire_et_son_cout_total(tmp_path
     app = create_app(load({"SPARKD_DB": str(tmp_path / "mm.db"), "SPARKD_DRIVER": "fake",
                            "SPARKD_STORAGE_METADATA_MARGIN": "64MiB"}))
     client_http = TestClient(app)
-    client_http.post("/v1/host/sync")
+    client_http.post("/v1/forge/sync")
 
-    reserves = client_http.get("/v1/host").json()["reserves"]
+    reserves = client_http.get("/v1/forge").json()["reserves"]
     assert reserves["storage_metadata_margin_bytes"] == 64 * MIO
     # Registre vide : la marge est PAR SPARK, elle ne coute encore rien.
     assert reserves["storage_metadata_total_bytes"] == 0
@@ -191,7 +191,7 @@ def test_host_publie_la_marge_de_metadonnees_unitaire_et_son_cout_total(tmp_path
         })
         assert reponse.status_code == 201, reponse.text
 
-    corps = client_http.get("/v1/host").json()
+    corps = client_http.get("/v1/forge").json()
     assert corps["reserves"]["storage_metadata_total_bytes"] == 2 * 64 * MIO
     # Et le total publie est EXACTEMENT ce que l'alloue porte en plus des
     # tailles vendues : deux chiffres qui divergeraient rendraient l'ecran faux.
@@ -208,13 +208,13 @@ def test_une_marge_nulle_ne_coute_rien_au_pool(tmp_path):
     app = create_app(load({"SPARKD_DB": str(tmp_path / "m0.db"), "SPARKD_DRIVER": "fake",
                            "SPARKD_STORAGE_METADATA_MARGIN": "0"}))
     client_http = TestClient(app)
-    client_http.post("/v1/host/sync")
+    client_http.post("/v1/forge/sync")
     client_http.post("/v1/sparks", json={
         "name": "sans-marge", "image": "images:debian/13", "cpu_mode": "shared",
         "cpu_reservation": 0.25, "memory_bytes": GIO,
         "network_bps": 10_000_000, "storage_bytes": 10 * GIO,
     })
-    corps = client_http.get("/v1/host").json()
+    corps = client_http.get("/v1/forge").json()
     assert corps["reserves"]["storage_metadata_margin_bytes"] == 0
     assert corps["reserves"]["storage_metadata_total_bytes"] == 0
     assert corps["pools"]["storage"]["allocated"] == 10 * GIO
@@ -225,7 +225,7 @@ def test_une_marge_nulle_ne_coute_rien_au_pool(tmp_path):
 def _app(tmp_path):
     app = create_app(load({"SPARKD_DB": str(tmp_path / "c.db"), "SPARKD_DRIVER": "fake"}))
     c = TestClient(app)
-    c.post("/v1/host/sync")
+    c.post("/v1/forge/sync")
     return c
 
 
@@ -288,7 +288,7 @@ def test_spark_inexistant(tmp_path):
 def test_la_capacite_reflete_les_sparks_crees(tmp_path):
     c = _app(tmp_path)
     c.post("/v1/sparks", json=_spec(cpu_reservation=1.5))
-    pools = c.get("/v1/host").json()["pools"]
+    pools = c.get("/v1/forge").json()["pools"]
     assert pools["cpu"]["allocated"] == 1.5
     assert pools["cpu"]["available"] == 2.5
 
@@ -301,14 +301,14 @@ def test_un_spark_dedie_decoupe_le_pool_et_reconfigure_les_partages(tmp_path):
     c.post("/v1/sparks", json=_spec(name="partage", cpu_reservation=0.5))
     c.post("/v1/sparks/partage/apply")
 
-    avant = c.get("/v1/host/cores").json()
+    avant = c.get("/v1/forge/cores").json()
     assert avant["shared"]["capacity"] == 4.0 and avant["dedicated"] == []
 
     c.post("/v1/sparks", json=_spec(
         name="postgres", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=2))
     c.post("/v1/sparks/postgres/apply")
 
-    apres = c.get("/v1/host/cores").json()
+    apres = c.get("/v1/forge/cores").json()
     assert apres["shared"]["capacity"] == 2.0
     # Freres SMT emportes ensemble : coeurs 0 et 1 -> CPU 0,4 et 1,5.
     assert sorted(cpu for d in apres["dedicated"] for cpu in d["cpus"]) == [0, 1, 4, 5]
@@ -320,9 +320,9 @@ def test_la_suppression_d_un_dedie_rend_les_coeurs(tmp_path):
     c.post("/v1/sparks", json=_spec(
         name="postgres", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=2))
     c.post("/v1/sparks/postgres/apply")
-    assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 2.0
+    assert c.get("/v1/forge/cores").json()["shared"]["capacity"] == 2.0
     c.post("/v1/sparks/postgres/delete")
-    rendu = c.get("/v1/host/cores").json()
+    rendu = c.get("/v1/forge/cores").json()
     assert rendu["shared"]["capacity"] == 4.0 and rendu["dedicated"] == []
 
 
@@ -349,7 +349,7 @@ def test_une_decoupe_impossible_est_refusee_des_la_CREATION(tmp_path):
 
     # Aucune ligne ecrite, aucun coeur bouge.
     assert c.get("/v1/sparks/glouton").status_code == 404
-    assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 4.0
+    assert c.get("/v1/forge/cores").json()["shared"]["capacity"] == 4.0
 
 
 def test_un_dedie_qui_tient_est_admis_puis_decoupe(tmp_path):
@@ -361,7 +361,7 @@ def test_un_dedie_qui_tient_est_admis_puis_decoupe(tmp_path):
         name="pg", cpu_mode="dedicated", cpu_reservation=None, cpu_cores=2))
     assert cree.status_code == 201
     c.post("/v1/sparks/pg/apply")
-    assert c.get("/v1/host/cores").json()["shared"]["capacity"] == 2.0
+    assert c.get("/v1/forge/cores").json()["shared"]["capacity"] == 2.0
 
 
 # --- cles SSH par HTTP (SPK-11) --------------------------------------------
@@ -663,7 +663,7 @@ def test_creer_puis_supprimer_repondere_la_tranche(tmp_path, monkeypatch):
     app = create_app(load({"SPARKD_DB": str(tmp_path / "w.db"),
                            "SPARKD_DRIVER": "fake"}))
     client_http = TestClient(app)
-    client_http.post("/v1/host/sync")
+    client_http.post("/v1/forge/sync")
     appliques.clear()
 
     GIO = 1024**3
@@ -691,7 +691,7 @@ def test_une_tranche_absente_n_empeche_pas_de_creer_un_spark(tmp_path):
     app = create_app(load({"SPARKD_DB": str(tmp_path / "s.db"),
                            "SPARKD_DRIVER": "fake"}))
     client_http = TestClient(app)
-    client_http.post("/v1/host/sync")
+    client_http.post("/v1/forge/sync")
     GIO = 1024**3
     rendu = client_http.post("/v1/sparks", json={
         "name": "sans-tranche", "image": "images:debian/13", "cpu_mode": "shared",
