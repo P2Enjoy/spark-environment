@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- `apps/webui/modules.test.js` : tout module de la console doit se CHARGER. Une
+  erreur de syntaxe passait la relecture et cassait au chargement, sans qu'aucune
+  suite ne rougisse — puisque rien ne se charge, rien ne s'exécute.
 - Unité SPK-57 : redimensionner un Spark existant. Le produit crée et supprime,
   il ne sait pas ajuster — relevé sur la Forge réelle, aucune route ne modifie
   les quotas.
@@ -118,6 +121,8 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- Le script de test de la console n'exécutait ni `modules.test.js` ni
+  `src/styles/classes.test.js` : deux garde-fous écrits et jamais joués.
 - Recettes DNS : le champ ne demande plus que le libellé, la zone s'affiche en
   suffixe, vide vaut le domaine lui-même, et l'adresse publique de la Forge est
   pré-remplie depuis le serveur courant.
