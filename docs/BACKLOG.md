@@ -1579,21 +1579,41 @@ Le transport de tous les outils du §37, et le premier d'entre eux.
     blanche d'actions, acteur pris de l'en-tête et non du corps, charge bornée à
     `path`, `reason` et `duration_seconds`. L'entrée rejoint la chaîne
     d'intégrité sans être distinguée.
-- **Implémenté mais NON PROUVÉ** : les cinq routes du §37.4.4 sur l'hôte console
-  (`POST /api/terminal`, le flux d'évènements, l'entrée, la taille, la
-  fermeture). Le code est poussé ; ses preuves sont restées inabouties.
-  **Mesure de l'obstacle** : le harnais de `main.test.js` ne rend jamais la main
-  une fois ces preuves ajoutées — les 52 preuves passent, puis le processus reste
-  vivant. `server.closeAllConnections()` n'a pas suffi. La cause n'est pas
-  isolée ; hors harnais, la route rend bien `201` et le serveur se ferme.
-- **Reste à livrer** :
-  1. les preuves des cinq routes, une fois l'obstacle ci-dessus levé ;
-  2. le **rendu dans le navigateur** — l'écran du terminal, le mode lecteur
-     d'écran du §37.4, et le groupage des saisies du §37.4.1 ;
-  3. le **chemin de dépannage** `incus exec` du §37.3, avec sa confirmation qui
+**Deuxième tranche, 2026-08-20 : les routes sont prouvées, et l'écran existe.**
+
+- **L'obstacle de la tranche 1 était un DÉFAUT DU PRODUIT**, pas du harnais :
+  Node n'émet pas les en-têtes d'une réponse tant que rien n'y est écrit.
+  L'ouverture du flux ne se terminait donc **jamais** côté client — un
+  `EventSource` de navigateur serait resté pendu, sans qu'aucune erreur ne le
+  dise. Les en-têtes sont poussés, un commentaire d'amorce prouve que le flux est
+  ouvert, et l'en-tête qui désactive la mise en tampon d'un intermédiaire
+  l'accompagne.
+- **Les cinq routes sont prouvées** : 10 preuves dans leur propre fichier, dont
+  qu'aucun octet de la session n'atteint le journal, que la fermeture du flux tue
+  le distant, et qu'un Spark sans adresse est nommé plutôt que rendu par une
+  erreur technique.
+- **L'écran existe** : une facette *Terminal* de la fenêtre d'un Spark, avec
+  16 preuves. L'état protégé et le chemin employé restent affichés pendant toute
+  la session ; l'écran prévient que quitter l'onglet termine la session ; il ne
+  porte aucun bouton d'action Docker ; les motifs de fermeture sont dits en
+  français ; le mode lecteur d'écran fait du terminal une région annoncée.
+  Captures `75-` à `77-` observées, format étroit compris.
+- **Défaut corrigé en capturant** : la facette manquait au motif du routeur.
+  L'adresse n'était pas rechargeable — ce que SPK-DS-04 exige d'une destination —
+  et l'onglet menait silencieusement à « Infos ».
+
+- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
+  1. le **câblage de l'écran au transport** : ouvrir depuis le bouton, brancher
+     `EventSource`, envoyer les frappes, propager la taille, et le **groupage des
+     saisies** du §37.4.1. L'écran rend et les routes répondent ; rien ne les
+     relie encore ;
+  2. le **chemin de dépannage** `incus exec` du §37.3, avec sa confirmation qui
      nomme le pouvoir employé, son action d'audit distincte et sa bannière ;
-  4. l'écran d'un Spark **sans `sshd`** (§37.2) ;
-  5. les parcours E2E, les captures et le manuel M8.
+  3. l'écran d'un Spark **sans `sshd`** — distinct du Spark sans adresse, déjà
+     traité : celui-ci a une adresse mais rien qui réponde sur le port 22 ;
+  4. les **parcours E2E** de la DoD — entrer, exécuter une commande, la voir
+     répondre, quitter et vérifier que le processus distant est mort — et le
+     manuel M8.
 
 ### [ ] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 

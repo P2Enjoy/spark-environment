@@ -3645,3 +3645,44 @@ committer des preuves rouges serait pire que de dire qu'elles manquent.
 pas, dont les abonnés et l'enfant simulé survivent —, prouver les cinq routes,
 puis l'écran du terminal dans le navigateur. Le chemin de dépannage du §37.3 et
 l'écran d'un Spark sans `sshd` viennent après. INC-05 reste ouvert et court.
+
+## 2026-08-20 — SPK-43, tranche 2 : l'obstacle était le produit, pas le harnais
+
+**Unité choisie** : SPK-43, désignée par l'entrée précédente. Spécification déjà
+écrite (§37.1 à §37.5, §37.4.1 à §37.4.6) : lue, non réécrite.
+
+**Le diagnostic de la tranche 1 était faux, et c'est le fait marquant.** Je
+soupçonnais le harnais de retenir le processus. C'était un **défaut du produit** :
+Node n'émet pas les en-têtes d'une réponse tant que rien n'y est écrit, et
+l'ouverture du flux d'évènements ne se terminait donc jamais côté client. Un
+`EventSource` de navigateur serait resté pendu à l'ouverture **sans qu'aucune
+erreur ne le dise** — le pire des symptômes. Les en-têtes sont poussés, un
+commentaire d'amorce prouve que le flux est ouvert, et l'en-tête qui désactive la
+mise en tampon d'un intermédiaire l'accompagne : sur un shell, « attendre d'en
+avoir assez » veut dire jamais.
+
+Retenue pour la suite : quand une preuve pend, la cause peut être dans le
+produit. Le harnais n'est pas coupable par défaut.
+
+**Livré et prouvé** : les cinq routes du §37.4.4, 10 preuves dans leur propre
+fichier ; et la facette **Terminal** de la fenêtre d'un Spark, 16 preuves.
+
+**Second défaut, trouvé en capturant** : la facette manquait au motif du routeur.
+L'adresse n'était donc pas rechargeable — ce que SPK-DS-04 exige d'une
+destination — et l'onglet menait silencieusement à « Infos ». Aucune erreur, juste
+le mauvais écran : c'est exactement ce qu'une capture attrape et qu'un test de
+composant ne voit pas.
+
+**Campagne complète, verte.** 661 tests Python, 457 de console et d'hôte console,
+6 de contrat, 8 gestes, **39 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`. Captures `75-` à `77-` observées, console du navigateur vierge.
+
+**Où reprendre.** SPK-43, tranche 3 : **câbler l'écran au transport** — ouvrir
+depuis le bouton, brancher `EventSource`, envoyer les frappes, propager la
+taille, grouper les saisies. L'écran rend et les routes répondent ; rien ne les
+relie encore. Ensuite le chemin de dépannage du §37.3, l'écran d'un Spark sans
+`sshd`, puis les parcours E2E et le manuel M8.
+
+**Note d'exploitation** : la pile de développement porte un serveur « demo »
+laissé par un parcours E2E, et il devient le serveur courant. Basculer sur
+« local » par le sélecteur de la barre latérale avant toute capture.
