@@ -98,6 +98,19 @@
   Le harnais E2E impose son propre fichier d'environnement et un doublon local
   du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
 
+- Unité SPK-48 : **une route peut porter une étoile** — `*.monapi.fr` sert tous
+  les sous-domaines d'un niveau. Un nom exact déclaré sur un autre Spark prend
+  le pas sur elle, ce qui est le geste de la montée en charge : sortir un
+  sous-domaine du lot pour lui donner son propre Spark, sans toucher à l'étoile.
+
+  Défaut corrigé : les routes étaient données au proxy dans l'ordre
+  alphabétique, où l'étoile précède les lettres. L'étoile gagnait donc sur le nom
+  exact, à l'inverse de la règle. Elles sont désormais ordonnées par spécificité.
+
+  La surcharge se voit dans les deux sens — un bandeau au moment de la
+  déclaration, et sous chaque route étoile la liste des noms qui lui sont
+  soustraits avec le Spark qui les sert.
+
 - SPK-47, révisé sur arbitrage : la console n'est plus bornée à un espace de
   noms — elle gère **toutes** les zones du compte. La borne existe encore comme
   option de poste, mais elle vit dans un fichier d'environnement réservé aux

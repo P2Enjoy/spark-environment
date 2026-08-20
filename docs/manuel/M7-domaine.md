@@ -18,6 +18,46 @@ pas.
 
 Pour faire résoudre le domaine, voir « Pointer le domaine » ci-dessous.
 
+## Un domaine et tous ses sous-domaines
+
+Une route peut porter une **étoile** en tête : `*.monapi.fr`. Elle sert alors
+tous les sous-domaines d'un seul niveau — `api.monapi.fr`, `client42.monapi.fr` —
+sans qu'il faille les déclarer un par un.
+
+L'étoile ne vaut **qu'en tête et que sur un niveau**. `*.*.monapi.fr`,
+`api.*.monapi.fr` et `*.fr` sont refusés, et le refus vous dit laquelle de ces
+trois formes vous avez employée.
+
+### Sortir un sous-domaine du lot
+
+C'est le geste de la montée en charge : quand `api.monapi.fr` devient assez
+chargé pour mériter son propre Spark, vous le déclarez **en nom exact** sur ce
+Spark. Il prend aussitôt le pas sur l'étoile, sans que vous ayez à toucher à
+cette dernière. Tout le reste continue de passer par elle.
+
+**Le plus précis gagne toujours.** C'est la règle du DNS et celle du proxy ;
+le produit n'en invente pas d'autre.
+
+### Vous saurez toujours qui prend le pas sur quoi
+
+Dans les deux sens, et c'est voulu :
+
+* **au moment où vous déclarez** un nom déjà servi par l'étoile d'un autre
+  Spark, un bandeau vous dit lequel. La déclaration réussit — c'est un geste
+  légitime —, mais vous venez de détourner une adresse qui partait ailleurs, et
+  vous devez le savoir ;
+* **en consultant les routes** du Spark qui porte l'étoile, chaque nom qui lui a
+  été soustrait apparaît sous elle, avec le Spark qui le sert.
+
+Ce second point est celui qui sert le plus au dépannage. Un sous-domaine qui ne
+répond pas comme les autres se diagnostique depuis l'étoile elle-même — sans
+cela, on cherche dans la configuration du Spark porteur, où il n'y a rien à
+trouver.
+
+> **Limite connue.** Un certificat pour une étoile exige une validation par
+> enregistrement DNS, que le produit ne réalise pas encore. Les noms exacts, eux,
+> se valident normalement.
+
 ## Pointer le domaine
 
 Chaque route porte un bouton **DNS**. Il ouvre une fenêtre qui lit les zones de

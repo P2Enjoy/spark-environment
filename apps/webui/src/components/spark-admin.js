@@ -136,14 +136,13 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           : '';
         return `<li><span class="technique">${echapper(r.domain)}</span>` +
           ` → port ${echapper(r.target_port)} du Spark` +
-          renderSurcharges(r) +
           `${r.tls ? '' : ' <span class="badge badge--neutral">sans TLS</span>'}${attente}` +
           `<span class="actions-ligne">${reappliquer}` +
           // SPK-47 · §38 : pointer le DNS est un geste de CETTE route, pas de la
           // section — deux routes du même Spark ont deux domaines distincts.
           `<button type="button" class="bouton bouton--compact" data-dns-route="${echapper(r.domain)}">DNS</button>` +
           `<button type="button" class="bouton bouton--compact" data-retire-route="${echapper(r.domain)}">Retirer</button></span>` +
-          `${confirme}</li>`;
+          `${renderSurcharges(r)}${confirme}</li>`;
       }).join('')}</ul>`
     : '<p class="absence">Aucune route publique ne pointe vers ce Spark.</p>';
 
@@ -221,7 +220,11 @@ function renderSurcharges(route) {
   const pris = route.superseded_by;
   if (!Array.isArray(pris) || pris.length === 0) return '';
   // §14.8 : une nature différente se distingue par la STRUCTURE, pas seulement
-  // par la couleur — d'où une liste imbriquée sous la route, et non un badge.
+  // par la couleur — d'où une liste imbriquée SOUS la route, et non un badge.
+  //
+  // Elle est écrite en FIN de ligne, après les actions : la ligne est un flex
+  // qui replie, et l'insérer avant les actions les renvoyait à la ligne
+  // suivante. Mesuré sur la capture.
   return `<ul class="surcharges">${pris.map((p) =>
     `<li><span class="technique">${echapper(p.domain)}</span> est servi par le
      Spark <strong>${echapper(p.spark_name)}</strong></li>`).join('')}</ul>`;
