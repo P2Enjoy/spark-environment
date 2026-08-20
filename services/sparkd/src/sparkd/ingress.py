@@ -229,13 +229,34 @@ def by_domain(connection: sqlite3.Connection, domain: str) -> dict:
 
 
 def listing(connection: sqlite3.Connection) -> list[dict]:
-    return [
+    """Toutes les routes, chaque joker portant ce qui lui est SOUSTRAIT.
+
+    §18.3 bis : dire la surcharge au moment où on la crée ne suffit pas — ce
+    message passe une fois, et l'exploitant du Spark porteur du joker ne l'a
+    peut-être jamais lu. C'est aussi l'information qui manque au diagnostic :
+    sans elle, on cherche dans la configuration du Spark porteur, où il n'y a
+    rien à trouver.
+    """
+    routes = [
         dict(r) for r in connection.execute(
             "SELECT r.*, s.name AS spark_name, s.ipv4_address"
             " FROM ingress_route r JOIN spark s ON s.id = r.spark_id"
             " ORDER BY r.domain"
         )
     ]
+    exactes = [r for r in routes if not is_wildcard(r["domain"]) and r["enabled"]]
+    for route in routes:
+        if not is_wildcard(route["domain"]):
+            continue
+        # Une route DÉSACTIVÉE ne prend le pas sur rien. Et un nom exact du MÊME
+        # Spark n'est pas une surcharge : c'est le même exploitant qui affine sa
+        # propre route, et l'afficher serait du bruit.
+        route["superseded_by"] = [
+            {"domain": e["domain"], "spark_name": e["spark_name"]}
+            for e in exactes
+            if e["spark_id"] != route["spark_id"] and covers(route["domain"], e["domain"])
+        ]
+    return routes
 
 
 def withdraw(connection: sqlite3.Connection, domain: str,

@@ -309,3 +309,66 @@ def test_deux_routes_de_MEME_texte_se_refusent_toujours(db):
     with pytest.raises(ingress.IngressError) as leve:
         ingress.declare(db, "01J1", "*.monapi.fr", 9090)
     assert "déjà routé" in str(leve.value)
+
+
+def test_un_joker_porte_les_noms_qui_lui_sont_SOUSTRAITS(db):
+    """@verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (la vue depuis
+    le joker)
+
+    Sans cette liste, un exploitant qui constate qu'un sous-domaine ne répond pas
+    comme les autres cherche dans la configuration du Spark porteur du joker, où
+    il n'y a rien à trouver.
+    """
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    poser_spark(db, "01J1", "dedie", "10.77.0.11")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    ingress.declare(db, "01J1", "api.monapi.fr", 9090)
+
+    joker = next(r for r in ingress.listing(db) if r["domain"] == "*.monapi.fr")
+    assert joker["superseded_by"] == [
+        {"domain": "api.monapi.fr", "spark_name": "dedie"}]
+
+    # Une route exacte, elle, ne porte pas cette liste : elle n'est surchargée
+    # par rien, et lui donner une liste vide laisserait croire le contraire.
+    exacte = next(r for r in ingress.listing(db) if r["domain"] == "api.monapi.fr")
+    assert "superseded_by" not in exacte
+
+
+def test_un_joker_sans_surcharge_porte_une_liste_VIDE(db):
+    """Vide, et non absente : l'écran doit pouvoir distinguer « rien ne le
+    surcharge » de « ce n'est pas un joker »."""
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    joker = next(r for r in ingress.listing(db) if r["domain"] == "*.monapi.fr")
+    assert joker["superseded_by"] == []
+
+
+def test_les_noms_exacts_du_MEME_spark_ne_comptent_pas_comme_surcharge(db):
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    ingress.declare(db, "01J0", "admin.monapi.fr", 9090)
+    joker = next(r for r in ingress.listing(db) if r["domain"] == "*.monapi.fr")
+    assert joker["superseded_by"] == []
+
+
+def test_une_route_DESACTIVEE_ne_surcharge_rien(db):
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    poser_spark(db, "01J1", "dedie", "10.77.0.11")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    route = ingress.declare(db, "01J1", "api.monapi.fr", 9090)
+    db.execute("UPDATE ingress_route SET enabled = 0 WHERE id = ?", (route["id"],))
+    joker = next(r for r in ingress.listing(db) if r["domain"] == "*.monapi.fr")
+    assert joker["superseded_by"] == []
+
+
+def test_un_joker_plus_LONG_surcharge_aussi_le_plus_court(db):
+    """`*.eu.monapi.fr` prend le pas sur `*.monapi.fr` — mais la liste des noms
+    soustraits ne recense que les noms EXACTS, pas les autres jokers : un joker
+    ne nomme aucun hôte en particulier, et l'y faire figurer laisserait croire
+    qu'un nom précis part ailleurs."""
+    poser_spark(db, "01J0", "large", "10.77.0.10")
+    poser_spark(db, "01J1", "etroit", "10.77.0.11")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    ingress.declare(db, "01J1", "*.eu.monapi.fr", 9090)
+    joker = next(r for r in ingress.listing(db) if r["domain"] == "*.monapi.fr")
+    assert joker["superseded_by"] == []
