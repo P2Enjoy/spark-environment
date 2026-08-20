@@ -212,6 +212,12 @@ export async function produireIllustrations({ silencieux = false } = {}) {
       { timeout: 15000 });
     await capturer('m8-docker', { hauteur: 800 });
 
+    // --- M8 · UN CONTENEUR OUVERT (SPK-44, §37.6 ter) ------------------------
+    await page.click('button[data-conteneur="helo-web-1"]');
+    await page.waitForSelector('#titre-conteneur', { timeout: 15000 });
+    await page.waitForSelector('pre.terminal', { timeout: 15000 });
+    await capturer('m8-docker-conteneur', { hauteur: 900 });
+
     // --- M8 · LE SSHD MUET (SPK-43, §37.2) -----------------------------------
     // « site-vitrine » : son chemin normal meurt aussitôt dans la pile de
     // vérification, comme le fait `ssh` face à un port fermé.

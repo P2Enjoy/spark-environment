@@ -4892,3 +4892,130 @@ aucun vrai `docker ps` n'a encore été lu, le doublon remplaçant la commande.
 **Où reprendre.** La deuxième tranche de SPK-44 — inspection d'un conteneur, ses
 journaux, ses réseaux et volumes — qui est livrable ici et prolonge directement
 cette route. SPK-54 et SPK-53 attendent chacune une décision du responsable.
+
+---
+
+## 2026-08-20 · SPK-44, deuxième tranche — inspecter un conteneur et lire ses journaux
+
+**Problème.** L'inventaire dit ce qui tourne. Il ne dit pas *pourquoi* une pile ne
+répond plus. Pour cela il faut ouvrir un conteneur : son état exact, son code de
+sortie, ses réseaux, ses volumes, et ce qu'il a écrit avant de se taire.
+
+### Ce que la mesure a tranché avant qu'une ligne soit écrite
+
+Un conteneur `alpine` créé sur cette machine, interrogé, puis supprimé — la
+machine rendue à zéro conteneur et l'image effacée. Quatre faits en sont sortis, et
+chacun a changé la spécification :
+
+- `.Name` revient préfixé d'une **barre oblique** : `/spark-mesure`. Un nom qui
+  n'est pas celui qu'on a tapé fait douter de ce qu'on regarde.
+- `.State.ExitCode` vaut `0` pour un conteneur **en marche**. L'afficher tel quel
+  ferait lire qu'il s'est terminé sans erreur. C'est le §14.6 à la lettre : il
+  n'existe que pour un conteneur arrêté.
+- `docker logs --timestamps` rend un horodatage **UTC du locataire**, à la
+  nanoseconde. Le retraduire dans le fuseau du poste décalerait l'écran de ce que
+  le locataire lit dans son propre journal.
+- Un conteneur inconnu rend **1**, sur `inspect` comme sur `logs`.
+
+Ce dernier point avait failli m'échapper : ma première mesure passait par un
+`| head` et rapportait `$?=0`. Le tube ment sur le code de sortie. Remesuré
+proprement.
+
+### Demandé, jamais collecté
+
+Le §37.6 relève l'inventaire toutes les cinq secondes. Étendre cette cadence à
+l'inspection et aux journaux multiplierait par dix le coût pour le locataire, et
+personne ne lit dix journaux à la fois. Les deux lectures ne partent donc que sur
+un geste, et **ouvrir un conteneur suspend le relevé de la liste** : elle a cédé
+la place, la relever ne servirait personne.
+
+Corollaire assumé : `truncated` est **rendu par l'hôte**, jamais déduit à l'écran
+d'un `lines.length === tail`. Cette déduction marcherait aujourd'hui et mentirait
+le jour où un conteneur a exactement deux cents lignes.
+
+### Le défaut que seul le parcours pouvait trouver
+
+Trente-deux preuves unitaires vertes, et l'écran affichait **cent soixante-quatorze
+lignes sur deux cents**. Les montages revenaient vides.
+
+Cause : le relevé se résolvait sur `exit`. Or `exit` arrive quand le processus
+meurt, pas quand `stdout` a fini d'être drainé. Sur une sortie courte le doublon
+ne le voit jamais ; sur deux cents lignes, si.
+
+C'est le pire défaut possible pour un écran dont le seul rôle est de rapporter :
+il n'échoue pas, il **ment en silence**. Il aurait fait conclure qu'un conteneur
+n'avait rien écrit, ou n'avait aucun volume. Corrigé en attendant `close`, et
+gardé par une preuve qui rejoue l'ordre exact — une ligne émise après `exit` et
+avant `close` doit survivre.
+
+Leçon, la même qu'au `compte_rendu` de SPK-54 : les preuves unitaires éprouvent la
+**forme** de ce qu'on reçoit ; seul un parcours éprouve qu'on le reçoit en entier.
+
+### Quatre défauts que seule la capture montre
+
+Aucun n'était rouge :
+
+1. Le titre venait du nom **cliqué**, pas de ce que la Forge a rendu. La capture
+   d'un conteneur arrêté affichait `crm-web-1` au-dessus des données de
+   `crm-migration-1`. C'était mon harnais qui les désaccordait — mais le produit,
+   lui, aurait fait exactement la même chose (§14.9).
+2. Le retour à la liste était en **pied**, sous deux cents lignes de journal. Un
+   écran dont on ne sort qu'en défilant est un écran qui retient.
+3. Un conteneur disparu s'affichait en **rouge**, sous un texte disant « c'est un
+   état normal, pas une panne ». L'écran se contredisait à l'œil avant même d'être
+   lu. Le §25.1 réserve le rouge au refus du serveur.
+4. Quand l'identité aboutissait et que **seuls les journaux** trouvaient le
+   conteneur disparu, l'écran restait **muet** : il affichait une fiche complète
+   d'un conteneur qui n'existait plus. Corrigé — et dit **une seule fois**, parce
+   que le même fait dans deux encarts identiques fait douter qu'il s'agisse du
+   même fait.
+
+### Une règle révisée, pas contournée
+
+La preuve « aucun bouton d'action n'est offert » est passée au rouge. Elle avait
+raison de garder quelque chose, et tort sur ce qu'elle gardait : elle interdisait
+tout `<button>`, donc le seul moyen de **demander** une lecture — que le §37.6 ter
+exige.
+
+Ce qu'elle protégeait était « aucun geste **sur** le conteneur ». Elle dit
+désormais cela, l'explication et sa date sont dans le fichier, et elle éprouve
+l'absence de tout libellé de démarrage, d'arrêt, de redémarrage ou de suppression.
+La règle n'a pas été affaiblie : elle a été énoncée correctement.
+
+### Éprouver une course au clavier
+
+Un conteneur qui disparaît pendant qu'on le regarde n'est pas atteignable depuis
+l'interface : on ne peut pas cliquer un conteneur absent de la liste. Le doublon
+fait donc échouer la **deuxième** lecture des journaux, sur témoin. Le parcours
+ouvre le conteneur, lit ses journaux, clique *Relire* — et tombe sur la course,
+exactement comme si le locataire venait de supprimer sa pile. Aucune URL profonde,
+aucun appel d'API.
+
+Le témoin vit aussi longtemps que la pile : sans remise à zéro entre parcours, le
+premier condamnait tous les suivants. `pile.oublierLecturesDocker()` l'efface au
+`beforeEach`.
+
+### INC-07, reconstaté
+
+Le §8.1 mesuré sur ce nouvel écran : la page déborde de **247 px** sur 390. Les
+coupables sont les mêmes trois `a.onglet` qu'au terminal. Ce que cette deuxième
+mesure ajoute : le défaut ne tient à **aucun contenu**. Ni le terminal ni le
+journal ne débordent — ils défilent chacun dans leur bloc, et la preuve le mesure
+séparément. La barre d'onglets seule déborde, sur tout écran de Spark.
+Comportement laissé inchangé, mesure consignée.
+
+### Vérifications
+
+32 preuves du module, 32 de composant, 8 parcours E2E ciblés, tous verts. Captures
+`98-` à `101-` observées, plus `docs/manuel/images/m8-docker-conteneur.png`
+produite depuis la pile réelle. Manuel M8 complété.
+
+**SPK-44 reste `[~]`**, avec un seul écart désormais : aucun vrai `docker ps`,
+`docker inspect` ni `docker logs` n'a été lu à travers un tunnel. Le doublon
+remplace la commande — le découpage, les refus et l'écran sont éprouvés, la
+traversée réelle ne l'est pas. Elle tombera avec l'amorçage d'un Spark sur la
+Forge réelle (SPK-54).
+
+**Où reprendre.** SPK-45 — les gestes sur un conteneur — est la suite naturelle et
+ne dépend plus de rien. SPK-54 et SPK-53 attendent chacune une décision du
+responsable.

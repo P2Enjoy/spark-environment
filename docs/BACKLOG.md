@@ -1741,7 +1741,9 @@ Ce que le locataire fait tourner, observé sans rien y toucher.
   tant qu'il est ouvert, **arrêtée** quand il est quitté ; mesures du Spark et
   mesures des conteneurs jamais fondues dans la même jauge, chacune affichée avec
   son référentiel.
-- Lecture **seule**. Aucun bouton d'action dans cette unité.
+- Lecture **seule**. Aucun geste **sur un conteneur** dans cette unité — les
+  boutons qui DEMANDENT une lecture en font partie, puisque l'inspection et les
+  journaux ne se collectent jamais d'office (§37.6 ter).
 - États à traiter, chacun nommé et non rendu par un tableau vide : Docker absent
   du Spark, Docker présent sans conteneur, Spark arrêté, `sshd` muet.
 - DoD : parcours E2E depuis le parcours canonique sur une pile Compose réelle du
@@ -1781,15 +1783,63 @@ Ce que le locataire fait tourner, observé sans rien y toucher.
   et le format étroit, plus `docs/manuel/images/m8-docker.png` produite depuis la
   pile réelle. Manuel M8 complété.
 
+**Deuxième tranche livrée le 2026-08-20 : l'inspection, les journaux, les réseaux
+et les volumes.**
+
+- Contrat écrit et poussé **avant le code** : DAT §37.6 ter, après mesure sur un
+  vrai conteneur `alpine` créé puis supprimé pour l'occasion.
+- **Demandés, jamais collectés d'office.** Relever les journaux de dix conteneurs
+  toutes les cinq secondes coûterait dix fois le §37.6 au quota du locataire, pour
+  un texte que personne ne lit dix fois à la fois. Ouvrir un conteneur **suspend**
+  le relevé de la liste, qui a cédé la place.
+- **Journaux bornés à deux cents lignes**, et `truncated` est **rendu** par
+  l'hôte, jamais déduit de la longueur : déduire marcherait aujourd'hui et
+  mentirait le jour où un conteneur a exactement deux cents lignes.
+- **Mesuré, et gardé par des preuves** : le nom que Docker rend est préfixé d'une
+  barre oblique ; le code de sortie n'existe que pour un conteneur **arrêté**, en
+  rendre `0` pour un conteneur en marche ferait lire qu'il s'est terminé sans
+  erreur (§14.6) ; les horodatages sont ceux du locataire et sont rendus **tels
+  quels**, les retraduire décalerait l'écran de ce qu'il lit chez lui ; une ligne
+  sans horodatage n'en reçoit pas un inventé.
+- Une **liste non lue est nulle, pas vide** : « aucun réseau attaché » et « non
+  lus » sont deux faits, et l'un des deux ferait chercher une panne inexistante.
+  L'identité survit à l'échec des listes — savoir qu'un conteneur est mort en 137
+  vaut mieux que rien.
+- Un conteneur **disparu** entre l'inventaire et l'inspection rend `1`. C'est une
+  course normale, pas une panne : le locataire a le droit de le supprimer pendant
+  qu'on le regarde. L'écran le dit en **avertissement**, pas en refus.
+- **Défaut trouvé par le parcours, jamais par une preuve unitaire** : le relevé se
+  résolvait sur `exit`, qui précède le drainage de `stdout`. Sur deux cents lignes,
+  l'écran en montrait cent soixante-quatorze et les montages revenaient vides —
+  une **troncature silencieuse**, le pire défaut pour un écran dont le seul rôle
+  est de rapporter. Corrigé en attendant `close`, et gardé par une preuve qui
+  rejoue cet ordre exact.
+- **Quatre défauts d'écran vus seulement à la capture** : le titre venait du nom
+  cliqué et non de ce que la Forge a rendu (§14.9) ; le retour à la liste était en
+  pied, sous deux cents lignes ; un conteneur disparu s'affichait en **rouge** sous
+  un texte disant « pas une panne » (§25.1) ; et quand seuls les journaux le
+  trouvaient disparu, l'écran restait **muet** en affichant une fiche complète d'un
+  conteneur qui n'existait plus (§14.5).
+- **Une règle révisée, pas contournée** : la preuve « aucun bouton » interdisait,
+  sans le vouloir, le seul moyen de demander une lecture. Ce qu'elle gardait était
+  « aucun geste **sur** le conteneur ». Elle dit désormais cela, l'explication est
+  écrite dans le fichier, et elle éprouve l'absence de tout libellé de démarrage,
+  d'arrêt, de redémarrage ou de suppression — qui restent SPK-45.
+- **Le §8.1 mesuré séparément** : le journal et la fiche ne débordent pas la page
+  sur 390 px. La barre d'onglets, elle, déborde de 247 px — c'est INC-07,
+  antérieur à cette unité, reconstaté avec sa mesure et laissé inchangé.
+- **Preuves** : 32 du module, 32 de composant, 8 parcours E2E. Captures `98-` à
+  `101-` observées, dont un conteneur en marche aux journaux à la borne, un
+  conteneur arrêté en 137, un conteneur disparu et le format étroit ; plus
+  `docs/manuel/images/m8-docker-conteneur.png` produite depuis la pile réelle.
+  Manuel M8 complété.
+
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. l'**inspection** d'un conteneur, ses **journaux**, ses **réseaux et
-     volumes** — la portée les nomme, cette tranche ne livre que l'inventaire ;
-  2. la capture d'un conteneur **aux journaux très longs**, que la DoD réclame et
-     qui dépend du point 1 ;
-  3. l'épreuve sur une **pile Compose réelle** : le doublon du §37.4.2 bis
+  1. l'épreuve sur une **pile Compose réelle** : le doublon du §37.4.2 bis
      remplace la commande, donc le découpage et l'écran sont éprouvés, mais aucun
-     vrai `docker ps` n'a encore été lu. Même limite qu'au §39.7, et elle tombera
-     avec l'amorçage d'un Spark sur la Forge réelle (SPK-54).
+     vrai `docker ps`, `docker inspect` ni `docker logs` n'a encore été lu à
+     travers un tunnel. Même limite qu'au §39.7, et elle tombera avec l'amorçage
+     d'un Spark sur la Forge réelle (SPK-54).
 
 ### [ ] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
 

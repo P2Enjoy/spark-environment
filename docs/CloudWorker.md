@@ -100,7 +100,6 @@ Motif : ces sessions s'enchaînent automatiquement et leurs sorties se lisent à
 suite. Sans cette borne, on ne sait plus où finit une exécution et où commence la
 suivante, ni quand chacune a eu lieu — et deux comptes rendus se confondent.
 
-
 ## 1. BRANCHE : QUEL QUE SOIT L'ÉTAT INITIAL, TU DOIS TRAVAILLER ET FINIR SUR "main"
 
 L'environnement peut démarrer dans n'importe lequel de ces états :
@@ -966,12 +965,12 @@ exécuté**. Une campagne partielle annoncée comme telle vaut mieux qu'une sess
 
 **3. Écris dans "docs/JOURNAL.md" une entrée datée disant :**
 
-   - ce que tu as mesuré ;
-   - ce que tu as modifié ;
-   - ce que tu as vérifié ;
-   - ce qui a échoué ;
-   - où tu t'arrêtes ;
-   - où l'exécution suivante doit reprendre.
+- ce que tu as mesuré ;
+- ce que tu as modifié ;
+- ce que tu as vérifié ;
+- ce qui a échoué ;
+- où tu t'arrêtes ;
+- où l'exécution suivante doit reprendre.
 
 **4. Mets "docs/BACKLOG.md" au véritable état de l'unité**, et nomme précisément les preuves qui
 restent à exécuter.
@@ -1058,7 +1057,6 @@ unité et tu travailles, comme au §4.2.
 N'arrête JAMAIS la tâche en silence, et ne la laisse JAMAIS tourner sur un projet
 qui n'a plus rien à avancer : les deux font perdre du temps, l'un en cachant la
 fin, l'autre en la répétant indéfiniment.
-
 
 ## 5. RÈGLE FINALE, AUCUNE EXCEPTION
 
