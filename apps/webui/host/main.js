@@ -46,6 +46,10 @@ export function createConsoleHost(options = {}) {
   // preuves de cette route éprouvent la RÈGLE sans dépendre d'un réseau — le
   // sondage lui-même a ses propres preuves dans `terminal.test.js`.
   const sonder = options.probeSshd ?? sonderSshd;
+  // SPK-44 · §37.6 : le relevé Docker lance un vrai `ssh`. Injectable pour que
+  // les captures montrent les états d'absence, qui ne se provoquent pas sur un
+  // faux `sshd` — le relevé lui-même a ses preuves dans `docker.test.js`.
+  const lireDocker = options.readDocker ?? null;
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
   // processus. Il est lu UNE fois : le relire à chaque requête ferait dépendre
@@ -691,6 +695,7 @@ export function createConsoleHost(options = {}) {
       const decrit = await amont.json();
       // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
       // Absent en production — le produit lance alors `ssh`.
+      if (lireDocker) return { status: 200, body: await lireDocker(decrit.name) };
       return { status: 200,
                body: await releverDocker({ tunnel, spark: decrit,
                                            doublon: process.env.SPARK_DOCKER_COMMAND || null }) };

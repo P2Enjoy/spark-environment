@@ -1729,7 +1729,7 @@ corrigée.**
   été exécuté contre un vrai `incus exec` : le doublon du §37.4.2 bis remplace la
   commande. Même limite qu'au §39.7, et elle vaut pour les deux chemins.
 
-### [ ] SPK-44 · Onglet Docker : inventaire, mesures et inspection
+### [~] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 
 Ce que le locataire fait tourner, observé sans rien y toucher.
 
@@ -1749,6 +1749,47 @@ Ce que le locataire fait tourner, observé sans rien y toucher.
   prouve que la collecte **cesse** à la fermeture de l'onglet ; captures observées,
   dont les quatre états d'absence et un conteneur aux journaux très longs ; manuel
   M8 mis à jour.
+
+**Première tranche livrée le 2026-08-20 : l'inventaire et ses absences.**
+
+- Contrat écrit et poussé **avant le code** : DAT §37.6 bis — le chemin, les
+  commandes exactes, la forme des refus, la cadence. Écrit après mesure sur un
+  vrai Docker.
+- **Le chemin est SSH depuis la console**, celui du §37.2 et du terminal. Pas
+  `incus exec` : le §37.3 réserve le plan de contrôle au dépannage, et lire
+  l'inventaire d'un locataire n'en est pas un. Conséquence assumée — un Spark au
+  `sshd` muet n'a pas d'onglet Docker, et l'écran le dit dans les termes du §37.2.
+- **Le point de l'unité, mesuré** : c'est le **code de sortie** qui distingue les
+  absences, pas la sortie, vide dans deux cas sur trois. `127` quand `docker` est
+  introuvable, `1` quand la commande existe et que le démon ne répond pas, `0`
+  avec zéro ligne quand tout va bien. Les deux premiers se confondent à l'œil et
+  n'appellent pas le même geste : l'un s'amorce, l'autre se redémarre. Les fondre
+  enverrait réinstaller ce qui est déjà là — donc redémarrer le démon du locataire
+  et interrompre sa production pour rien.
+- Zéro conteneur est un **état normal**, pas un tableau vide.
+- **SPK-DS-05 tenu** : l'écran écrit que ces mesures viennent de Docker *à
+  l'intérieur* de la cellule ; une preuve le garde, sans quoi la règle se perdrait
+  au premier remaniement. Une mesure absente se dit « non mesuré » et ne devient
+  jamais zéro (§14.6).
+- **Aucun bouton** : l'unité est en lecture, les gestes sont SPK-45, et une preuve
+  garde qu'aucun n'apparaît.
+- **La collecte cesse** au départ de l'onglet — changement de facette, de page, ou
+  fermeture du navigateur. Prouvé en **comptant** les requêtes sur deux cadences
+  complètes, avec zéro attendu : c'est la façon de prouver une absence d'effet.
+- **Preuves** : 17 du module, 13 de composant, 2 parcours E2E, 654 de console au
+  total. Captures `93-` à `97-` observées, dont les deux absences **côte à côte**
+  et le format étroit, plus `docs/manuel/images/m8-docker.png` produite depuis la
+  pile réelle. Manuel M8 complété.
+
+- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
+  1. l'**inspection** d'un conteneur, ses **journaux**, ses **réseaux et
+     volumes** — la portée les nomme, cette tranche ne livre que l'inventaire ;
+  2. la capture d'un conteneur **aux journaux très longs**, que la DoD réclame et
+     qui dépend du point 1 ;
+  3. l'épreuve sur une **pile Compose réelle** : le doublon du §37.4.2 bis
+     remplace la commande, donc le découpage et l'écran sont éprouvés, mais aucun
+     vrai `docker ps` n'a encore été lu. Même limite qu'au §39.7, et elle tombera
+     avec l'amorçage d'un Spark sur la Forge réelle (SPK-54).
 
 ### [ ] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
 

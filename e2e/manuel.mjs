@@ -203,6 +203,15 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
     await capturer('m6-amorcage', { hauteur: 1000 });
 
+    // --- M8 · L'ONGLET DOCKER (SPK-44, §37.6) --------------------------------
+    await ouvrir('crm-production');
+    await page.click('.onglet[href$="/docker"]');
+    await page.waitForSelector('#titre-docker', { timeout: 15000 });
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Lecture de ce qui tourne'),
+      { timeout: 15000 });
+    await capturer('m8-docker', { hauteur: 800 });
+
     // --- M8 · LE SSHD MUET (SPK-43, §37.2) -----------------------------------
     // « site-vitrine » : son chemin normal meurt aussitôt dans la pile de
     // vérification, comme le fait `ssh` face à un port fermé.

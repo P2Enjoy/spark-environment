@@ -85,6 +85,10 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           // Un VRAI commit du dépôt, pour que la comparaison
                           // porte sur une ascendance réelle et non simulée.
                           buildCommit = null,
+                          // SPK-44 · §37.6 : le relevé Docker que la console
+                          // rendra. Les états d'absence ne se provoquent pas sur
+                          // un faux `sshd` — ils se posent.
+                          dockerReleve = null,
                           terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
@@ -124,6 +128,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     // routes. Tout le reste du chemin est celui de la production.
     ...(terminaux ? { terminals: terminaux } : {}),
     ...(sondageSshd ? { probeSshd: async () => sondageSshd } : {}),
+    ...(dockerReleve ? { readDocker: async (spark) => ({ spark, ...dockerReleve }) } : {}),
     fetch: async (url, options = {}) => {
       if (lent) await new Promise((r) => setTimeout(r, 4000));
       if (casse) return new Response(JSON.stringify({ detail: { message: 'sparkd a répondu 500 : registre illisible.' } }), { status: 500 });
@@ -733,6 +738,58 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '45-journal-ancre-mobile.png'), fullPage: true });
 console.log('  45-journal-ancre-mobile.png');
 ctx.server.close();
+
+// --- L'ONGLET DOCKER (SPK-44, §37.6) --------------------------------------
+// L'inventaire, et surtout les DEUX absences qui se confondent à l'œil : Docker
+// qui manque, et Docker dont le moteur ne répond pas.
+{
+  const inventaire = [
+    { id: 'abc', name: 'crm-web-1', state: 'running', status: 'Up 3 hours',
+      image: 'nginx:alpine', ports: '0.0.0.0:8080->80/tcp, :::8080->80/tcp',
+      cpu: '0.03%', memory: '12.3MiB / 2GiB', memoryPercent: '0.60%' },
+    { id: 'def', name: 'crm-base-1', state: 'running', status: 'Up 3 hours',
+      image: 'postgres:16', ports: '',
+      cpu: '1.42%', memory: '184.6MiB / 2GiB', memoryPercent: '9.01%' },
+    { id: 'ghi', name: 'crm-migration-1', state: 'exited',
+      status: 'Exited (0) 2 hours ago', image: 'crm/migrations:1.4', ports: '' },
+  ];
+  const etats = [
+    ['93-docker-inventaire', { state: 'ok', containers: inventaire }],
+    ['94-docker-absent', { state: 'docker_absent', containers: [],
+      titre: 'Docker n’est pas installé dans ce Spark',
+      detail: 'L’image de base n’en embarque pas. L’amorçage, sur l’onglet Infos, '
+        + 'le pose et rend la cellule capable de faire tourner une pile Compose.' }],
+    ['95-docker-moteur-muet', { state: 'moteur_muet', containers: [],
+      titre: 'Docker est installé, mais son moteur ne répond pas',
+      detail: 'La commande existe et le démon ne répond pas. Ce n’est pas une '
+        + 'installation qui manque : c’est un service à redémarrer dans le Spark.' }],
+    ['96-docker-sans-conteneur', { state: 'sans_conteneur', containers: [],
+      titre: 'Aucun conteneur',
+      detail: 'Docker tourne dans ce Spark, et rien n’y est lancé. '
+        + 'C’est un état normal — une cellule fraîchement amorcée, ou une pile arrêtée.' }],
+  ];
+  for (const [nom, releve] of etats) {
+    ctx = await demarrer({ dockerReleve: releve });
+    await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 800 });
+    await page.waitForSelector('#titre-docker', { timeout: 8000 });
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Lecture de ce qui tourne'),
+      { timeout: 8000 });
+    await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
+    console.log(`  ${nom}.png`);
+    ctx.server.close();
+  }
+
+  // Le format étroit : cinq colonnes ne tiennent pas sur 390 px, le tableau doit
+  // défiler dans SON conteneur et la page ne doit pas déborder (§8.1).
+  ctx = await demarrer({ dockerReleve: { state: 'ok', containers: inventaire } });
+  await ouvrirDetail(ctx.base, { facette: 'docker', hauteur: 800 });
+  await page.waitForSelector('tbody tr', { timeout: 8000 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: join(SORTIE, '97-docker-mobile.png'), fullPage: true });
+  console.log('  97-docker-mobile.png');
+  ctx.server.close();
+}
 
 // --- LE CODE DÉPLOYÉ (SPK-53, §40.3) --------------------------------------
 // Les deux états qui décident : une Forge EN RETARD, qui appelle un geste, et

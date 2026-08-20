@@ -4841,3 +4841,54 @@ redéployer `sparkd` sur une machine en service depuis un bouton. Ce que « mett
 comportement, qui emprunte le transport de SPK-43. SPK-54 attend l'autorisation
 du responsable pour ses deux derniers écarts, et SPK-53 la sienne pour le geste
 de mise à jour.
+
+## 2026-08-20 — SPK-44 : l'onglet Docker, et trois absences qui se ressemblent
+
+**Unité** : SPK-44, désignée par l'entrée précédente. `[ ]`, donc la
+spécification manquante a été **écrite et poussée avant la première ligne de
+code** : le §37.6 disait ce que l'onglet rend et par quel principe, pas par quel
+chemin ni ce qu'on exécute. §37.6 bis, écrit après mesure sur un vrai Docker.
+
+### Deux décisions que la spécification ne portait pas
+
+**Le chemin est SSH depuis la console**, celui du terminal. Pas `incus exec` : le
+§37.3 réserve le plan de contrôle au dépannage, et lire l'inventaire d'un
+locataire n'en est pas un. La conséquence est assumée et écrite — un Spark au
+`sshd` muet n'a pas d'onglet Docker, et l'écran le dit dans les termes du §37.2
+plutôt que d'inventer un second diagnostic.
+
+**C'est le code de sortie qui distingue les absences, pas la sortie.** Mesuré :
+`127` quand `docker` est introuvable, `1` quand la commande existe et que le
+démon ne répond pas, `0` avec zéro ligne quand tout va bien et qu'il n'y a rien.
+La sortie est vide dans deux cas sur trois — s'y fier aurait fondu trois états en
+un.
+
+Les deux premiers se confondent à l'œil — « Docker ne marche pas » — et
+n'appellent pas le même geste : l'un s'amorce, l'autre se redémarre. Les fondre
+enverrait réinstaller ce qui est déjà là, donc redémarrer le démon du locataire et
+interrompre sa production pour rien. C'est du §14.6 appliqué non plus à
+l'affichage mais à la **détection**.
+
+### Prouver une absence en la comptant
+
+La DoD demandait qu'un test prouve que la collecte **cesse** à la fermeture de
+l'onglet. Le parcours écoute les requêtes du navigateur après le départ, sur deux
+cadences complètes, et exige **zéro**. Affirmer qu'on a arrêté un intervalle ne
+prouve rien ; le compter, si.
+
+### Vérifications
+
+Campagne complète **verte** : 698 Python, 6 de contrat, 654 de console, 8 de
+gestes, 54 parcours E2E, 7 du manuel, `build`. Captures `93-` à `97-` observées,
+dont les deux absences **côte à côte** — c'est là que la différence se voit, une
+capture unique n'aurait rien prouvé — et le format étroit. Plus
+`docs/manuel/images/m8-docker.png`, produite depuis la pile réelle.
+
+**SPK-44 reste `[~]`**, avec trois écarts nommés au backlog : l'inspection, les
+journaux, les réseaux et volumes ne sont pas livrés — cette tranche ne porte que
+l'inventaire ; la capture d'un conteneur aux journaux très longs en dépend ; et
+aucun vrai `docker ps` n'a encore été lu, le doublon remplaçant la commande.
+
+**Où reprendre.** La deuxième tranche de SPK-44 — inspection d'un conteneur, ses
+journaux, ses réseaux et volumes — qui est livrable ici et prolonge directement
+cette route. SPK-54 et SPK-53 attendent chacune une décision du responsable.
