@@ -3979,3 +3979,71 @@ commande, donc la limite du §39.7 vaut maintenant pour les deux chemins.
 **Où reprendre.** Les deux points ci-dessus, dont le premier est livrable ici et
 le second exige la Forge réelle. Si l'on préfère construire, SPK-44 (onglet
 Docker) est la première `[ ]` du plan et emprunte le même transport.
+
+## 2026-08-20 — SPK-43 tranche 5 : l'écran nomme la panne, et une course était cachée dessous
+
+**Unité** : SPK-43, désignée par l'entrée précédente — le dernier point livrable
+ici. Le §37.2 l'exigeait depuis toujours : « l'écran le dit en toutes lettres,
+avec ce qu'il manque ». Il ne le faisait pas pour un `sshd` muet.
+
+### Ce qui est livré
+
+Quand le shell distant se termine tout seul sur le chemin normal, la console
+**mesure** le `sshd` du Spark et nomme ce qu'elle trouve. Elle mesure du dehors
+de la session, et c'est une contrainte, pas un choix : elle ne retient aucun
+octet de ce qui a transité (§37.5), donc elle ne peut pas — et ne doit pas —
+inspecter la sortie pour en déduire la cause.
+
+Trois issues, trois gestes différents : `sshd` muet → le dépannage, offert juste
+à côté ; clé refusée → l'onglet *Clés*, parce que le dépannage ne réglerait pas
+ce problème-là ; serveur qui répond → rouvrir. Et trois états de la mesure qui ne
+se confondent pas : en cours, rendue, **impossible** — un blanc laisserait croire
+que la cause a été établie.
+
+### Le défaut que le parcours a trouvé, et il comptait plus que le reste
+
+Le premier parcours E2E a échoué sur un écran resté à « session ouverte » alors
+que le distant était mort. Cause : `fermer()` diffuse la fin à ses abonnés **puis
+vide la liste**. Un distant qui meurt entre le `POST` et l'ouverture du flux
+émettait donc sa fin dans le vide, et l'écran ne l'apprenait jamais.
+
+Ce n'est pas un cas de laboratoire : c'est exactement ce que produit un `sshd`
+muet, où `ssh` sort en quelques millisecondes. Le défaut était là depuis la
+tranche 1 et aucun parcours ne pouvait le voir, parce que le doublon ne savait
+représenter qu'un distant vivant. La fin est désormais rejouée à l'abonnement
+quand elle a déjà eu lieu.
+
+### Le doublon devait pouvoir représenter la mort
+
+D'où la seule modification de mécanisme : `SPARK_TERMINAL_COMMAND` résout sa
+commande **par Spark et par chemin**. Sur un Spark au `sshd` muet, le chemin
+normal meurt tandis que le dépannage fonctionne — c'est toute la raison d'être du
+§37.3, et un doublon qui les traiterait pareil rendrait le dépannage inéprouvable
+là où il sert. Même idée que le `fail_next` du pilote factice. Une table illisible
+est refusée et non ignorée : la taire reviendrait à lancer un vrai `ssh` depuis un
+harnais, contre une adresse privée qui n'existe pas.
+
+### Deux sessions, et un protocole qui a tenu
+
+Terrain annoncé de part et d'autre avant d'écrire, ajout par chemin explicite,
+documents partagés touchés seulement juste avant de committer. Aucune collision
+cette fois. Le §1.2 de `CloudWorker.md` — `git stash push -u` à l'ouverture —
+reste dangereux dans cette configuration et attend toujours l'arbitrage du
+responsable.
+
+### Vérifications
+
+Campagne complète verte : 667 Python, 6 de contrat, 543 de console, 8 de gestes,
+46 parcours E2E dont un neuf, 7 du manuel, `contract-check` et `build`. Captures
+`83-` et `84-` observées, plus `docs/manuel/images/m8-sshd-muet.png`.
+
+**SPK-43 reste `[~]`, et il ne reste qu'un seul écart** : la vérification qu'une
+connexion atteint réellement un Spark, pour les deux chemins. Elle exige une
+Forge réelle avec Incus et un `sshd` installé dans le Spark — ce que l'image de
+base n'embarque pas.
+
+**Où reprendre.** **SPK-54** (« Amorcer un Spark depuis la console ») : c'est
+l'unité qui installe ce `sshd`, donc celle qui débloque le dernier écart de
+SPK-43. Sa spécification existe au §42, elle est `[ ]`, et elle est la première
+du plan à porter du comportement livrable. À défaut, SPK-44 (onglet Docker)
+emprunte le même transport.

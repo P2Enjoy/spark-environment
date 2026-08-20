@@ -697,6 +697,58 @@ ctx.server.close();
   ctx.server.close();
 }
 
+// Le SSHD MUET (§37.2) : l'écran doit NOMMER ce qui manque, et proposer la
+// suite. C'est le cas pour lequel le chemin de dépannage existe.
+{
+  const enfants = [];
+  const terminaux = new SessionManager({
+    spawn: () => {
+      const e = new EventEmitter();
+      e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
+      e.stdin = { write() {} }; e.kill = () => {};
+      enfants.push(e);
+      return e;
+    },
+  });
+  ctx = await demarrer({ terminaux, sondageSshd: { repond: false, motif: 'sshd_muet' } });
+  await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
+  await page.click('[data-terminal="ouvrir"]');
+  await page.waitForSelector('[data-terminal="fermer"]', { timeout: 8000 });
+  // Le distant meurt de lui-même, comme le fait `ssh` face à un port fermé.
+  enfants[0].emit('exit', 255);
+  await page.waitForFunction(
+    () => document.body.innerText.includes('Aucun serveur SSH ne répond'),
+    { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '83-terminal-sshd-muet.png') });
+  console.log('  83-terminal-sshd-muet.png');
+  ctx.server.close();
+}
+
+// La clé REFUSÉE : la panne ressemble à la précédente et n'appelle pas le même
+// geste. L'écran doit renvoyer aux clés, pas au dépannage (§37.3.1).
+{
+  const enfants = [];
+  const terminaux = new SessionManager({
+    spawn: () => {
+      const e = new EventEmitter();
+      e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
+      e.stdin = { write() {} }; e.kill = () => {};
+      enfants.push(e);
+      return e;
+    },
+  });
+  ctx = await demarrer({ terminaux, sondageSshd: { repond: true, motif: 'cle_refusee' } });
+  await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
+  await page.click('[data-terminal="ouvrir"]');
+  await page.waitForSelector('[data-terminal="fermer"]', { timeout: 8000 });
+  enfants[0].emit('exit', 255);
+  await page.waitForFunction(
+    () => document.body.innerText.includes('il refuse la clé'), { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '84-terminal-cle-refusee.png') });
+  console.log('  84-terminal-cle-refusee.png');
+  ctx.server.close();
+}
+
 // Le REFUS du dépannage : le chemin normal reste offert, l'écran ne se ferme pas.
 {
   const terminaux = new SessionManager({ spawn: () => {

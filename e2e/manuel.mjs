@@ -163,6 +163,19 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.confirmation', { timeout: 10000 });
     await capturer('m10-suppression');
 
+    // --- M8 · LE SSHD MUET (SPK-43, §37.2) -----------------------------------
+    // « site-vitrine » : son chemin normal meurt aussitôt dans la pile de
+    // vérification, comme le fait `ssh` face à un port fermé.
+    await ouvrir('site-vitrine');
+    await page.click('.onglet[href$="/terminal"]');
+    await page.waitForSelector('#titre-terminal', { timeout: 10000 });
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Ce Spark est en erreur')
+         || document.body.innerText.includes('Aucun serveur SSH ne répond'),
+      { timeout: 20000 });
+    await capturer('m8-sshd-muet', { hauteur: 1050 });
+
     // --- M8 · LE TERMINAL DE DÉPANNAGE (SPK-43, §37.3) -----------------------
     // C'est la confirmation qui doit être illustrée : elle NOMME le pouvoir
     // employé, et c'est ce que le chapitre demande au lecteur de reconnaître.

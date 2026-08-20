@@ -1687,17 +1687,41 @@ tenues.**
   observées, format étroit compris. Manuel M8 mis à jour, illustration
   `m8-depannage.png`.
 
-- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. l'écran d'un Spark **dont le `sshd` est muet** est traité par le chemin de
-     dépannage — la commande est offerte et le serveur l'accorde après mesure —
-     mais l'échec du chemin NORMAL sur un tel Spark se rend encore par la sortie
-     brute de `ssh` puis « le shell distant s'est terminé ». L'écran ne
-     reconnaît pas ce cas pour le nommer et proposer le dépannage de lui-même ;
-  2. la vérification que la connexion atteint **réellement** un Spark : elle
-     exige une Forge réelle avec Incus et un `sshd` installé, que l'image de base
-     n'embarque pas (§37.2). Le dépannage, lui, n'a jamais été exécuté contre un
-     vrai `incus exec` — le doublon du §37.4.2 bis remplace la commande. Même
-     limite qu'au §39.7, et elle vaut désormais pour les deux chemins.
+**Cinquième tranche, 2026-08-20 : l'écran dit ce qui manque, et une course est
+corrigée.**
+
+- `GET /api/terminal/diagnostic` **mesure** au lieu de deviner, et mesure du
+  DEHORS de la session : la console ne retient aucun octet de ce qui a transité
+  (§37.5), donc elle ne peut pas inspecter la sortie pour en déduire la cause.
+  Lecture pure, rien d'ouvert, rien de journalisé (§36.7).
+- L'écran nomme les trois issues et les distingue : `sshd` muet — qui ouvre le
+  dépannage, offert juste à côté —, clé refusée — qui renvoie à l'onglet *Clés*,
+  parce que le dépannage ne réglerait pas ce problème-là —, et serveur qui
+  répond. Les trois états de la mesure ne se confondent pas non plus (§6.13,
+  §14.6) : en cours, rendue, **impossible**.
+- **Défaut trouvé par le parcours, et il comptait plus que le reste** : un distant
+  qui meurt AVANT que le flux soit branché diffusait sa fin à zéro abonné, et
+  `fermer()` vidait ensuite la liste. L'écran restait sur « session ouverte »
+  pour une session morte, indéfiniment. C'est la course exacte d'un `sshd` muet,
+  où `ssh` sort en quelques millisecondes. La fin est désormais rejouée à
+  l'abonnement quand elle a déjà eu lieu.
+- **Le doublon du transport résout sa commande par Spark ET par chemin** (§37.4.2
+  bis). Un doublon qui ne sait représenter qu'un distant vivant ne peut pas
+  éprouver ce qui arrive quand il meurt ; et sur un Spark au `sshd` muet, le
+  chemin normal meurt tandis que le dépannage fonctionne — c'est toute la raison
+  d'être du §37.3. Même idée que le `fail_next` du pilote factice. Une table
+  illisible est **refusée**, pas ignorée : la taire reviendrait à lancer un vrai
+  `ssh` depuis un harnais, contre une adresse qui n'existe pas.
+- **Preuves** : 667 Python, 43 d'hôte console, 25 de routes, 34 de composant,
+  **46 parcours E2E** dont un neuf. Captures `83-` et `84-` observées, plus
+  `docs/manuel/images/m8-sshd-muet.png`. Manuel M8 mis à jour.
+
+- **Reste à livrer, et c'est le seul écart** : la vérification que la connexion
+  atteint **réellement** un Spark. Elle exige une Forge réelle avec Incus et un
+  `sshd` installé, que l'image de base n'embarque pas (§37.2) — SPK-54 est
+  précisément l'unité qui installera ce `sshd`. Le dépannage n'a jamais non plus
+  été exécuté contre un vrai `incus exec` : le doublon du §37.4.2 bis remplace la
+  commande. Même limite qu'au §39.7, et elle vaut pour les deux chemins.
 
 ### [ ] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 

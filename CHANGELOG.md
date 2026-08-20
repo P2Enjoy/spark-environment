@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **L'écran du terminal dit pourquoi le chemin normal n'a pas abouti** (SPK-43,
+  `docs/DAT.md` §37.2) : quand le shell distant se termine tout seul, la console
+  mesure le serveur SSH du Spark et nomme ce qu'elle trouve — aucun serveur,
+  serveur qui refuse la clé, ou serveur qui répond. Chaque cas dit le geste qui y
+  répond. Une vérification impossible est dite comme telle, pas laissée en blanc.
+
 - **Terminal de dépannage** (SPK-43, `docs/DAT.md` §37.3) : quand un Spark est en
   erreur ou que rien ne répond sur son port 22, la console demande à la Forge
   d'exécuter un shell root dans la cellule. Confirmation qui nomme le pouvoir
@@ -102,6 +108,11 @@
   §6.27, fenêtre d'options et modale de section, avec son contrat d'interaction.
 - `docs/DAT.md` : nouveau §33, le catalogue d'images ; nouveau §34,
   l'architecture de navigation de la console.
+
+### Corrigé
+- Une session dont le distant mourait **avant** l'ouverture du flux laissait
+  l'écran sur « session ouverte » indéfiniment. C'est la course exacte d'un
+  `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
 - Écran de la Forge et écran du journal : les paragraphes explicatifs sont
