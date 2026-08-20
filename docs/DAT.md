@@ -4697,3 +4697,60 @@ Il ne prouve **pas** qu'une connexion entrante atteigne réellement le Spark :
 cela exige une Forge réelle, avec Incus et une adresse publique. C'est la même
 limite qu'au §33.3 pour le catalogue d'images et qu'à SPK-30 pour les quotas —
 et elle est nommée dans l'unité plutôt que masquée par une simulation.
+
+
+## 40. La build installée se nomme
+
+### 40.1 Un seul mécanisme : le fichier posé à l'installation
+
+Une Forge en production doit pouvoir dire **quel code elle exécute**. Sans cela,
+« la correction est déployée » est une croyance : rien ne distingue une Forge à
+jour d'une Forge oubliée depuis trois semaines, et le premier diagnostic part
+d'une hypothèse fausse.
+
+`scripts/install-serveur.sh` écrit `<prefix>/build.json` — à côté du code, pas
+dans l'état, parce que le fichier décrit ce qui est **installé** et non ce que la
+Forge a fait depuis. Le runtime le lit au fil des requêtes.
+
+Le runtime ne **dérive** jamais cette valeur. Sortir un `git` d'un service en
+production ferait dépendre sa réponse d'un dépôt qui n'a aucune raison d'être sur
+la machine — et le déploiement se fait justement par `rsync` **sans** `.git`. Le
+hash est donc fourni par l'appelant (`SPARKD_BUILD_COMMIT`), ou lu du dépôt
+lorsqu'il y en a un à portée du script.
+
+### 40.2 « Inconnue » est une réponse, pas un défaut
+
+Une build non estampillée rend `commit = null` et une version
+`0.0.0+inconnue`. Elle ne rend **jamais** une valeur plausible : « 0.0.0 » a
+exactement l'air d'une version et n'en est pas une. C'est la règle du §14.6 du
+design system appliquée au déploiement — on ne confond pas zéro, en cours et
+indisponible.
+
+Un fichier corrompu vaut « inconnue » lui aussi. Un service qui refuserait de
+démarrer parce que son estampille est illisible transformerait une gêne en panne.
+
+Déployer un arbre **modifié** est licite — on corrige parfois en urgence. Le
+taire ne l'est pas : la version porte alors le suffixe `.sale`, et l'écran le
+montre.
+
+### 40.3 Ce que la console en fait
+
+`/healthz` et `/v1/forge` portent tous deux l'empreinte : la première est ce que
+la console lit en ouvrant un tunnel, la seconde évite un second appel à l'écran
+de la Forge.
+
+La console compare l'empreinte de la Forge à l'état du dépôt local, et **nomme ce
+qu'elle sait** plutôt que de conclure :
+
+| Situation | Ce qui est dit |
+|---|---|
+| même commit | à jour |
+| commit de la Forge **ancêtre** du dépôt local | en retard de N commits, mise à jour disponible |
+| commit local ancêtre de celui de la Forge | c'est le **poste** qui est en retard |
+| commit inconnu du dépôt local | build étrangère à ce dépôt — aucune conclusion |
+| build inconnue | non estampillée : réinstaller pour le savoir |
+
+Les deux derniers cas comptent autant que les autres. Une console qui afficherait
+« à jour » faute de savoir comparer mentirait exactement au moment où l'on a
+besoin d'elle.
+

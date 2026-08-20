@@ -30,6 +30,7 @@ from . import hostmem
 from . import images as images_service
 from .db import connect
 from .incus import FakeIncus, IncusClient, IncusError, InstanceAbsente, UnixSocketIncus
+from . import build
 from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
@@ -191,9 +192,15 @@ def create_app(config: Config) -> FastAPI:
             connection.close()
 
     @app.get("/healthz", tags=["etat"])
-    def healthz() -> dict[str, str]:
-        """Le processus repond. Ne dit rien de ses dependances."""
-        return {"status": "ok", "version": __version__}
+    def healthz() -> dict[str, object]:
+        """Le processus repond. Ne dit rien de ses dependances.
+
+        Il dit en revanche QUELLE build il execute (docs/DAT.md §40) : c'est la
+        premiere chose que la console lit en se connectant, et la seule qui
+        permette de distinguer une Forge a jour d'une Forge oubliee.
+        """
+        empreinte = build.identity()
+        return {"status": "ok", "version": empreinte["version"], "build": empreinte}
 
     @app.get("/readyz", tags=["etat"])
     def readyz() -> dict[str, object]:
@@ -309,6 +316,9 @@ def create_app(config: Config) -> FastAPI:
             ).fetchone()["n"]
         return {
             "hostname": row["hostname"],
+            # docs/DAT.md §40.3 : l'ecran de la Forge doit pouvoir dire si la
+            # pile est a jour SANS second appel.
+            "build": build.identity(),
             "cpu": {
                 "cores_total": row["cpu_cores_total"],
                 "threads_total": row["cpu_threads_total"],

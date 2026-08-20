@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- `sparkd` porte l'empreinte de la build installée : `build.json` écrit à
+  l'installation, publié par `/healthz` et `/v1/forge`, sous la forme
+  `0.0.0+<commit>` — et `0.0.0+inconnue` quand la build n'est pas estampillée.
+- `docs/DAT.md` : nouveau §40, la build installée se nomme, et les cinq situations
+  que la console doit distinguer plutôt que de conclure.
+- Unité SPK-53.
 
 - Socle documentaire du projet : `docs/DAT.md`, `docs/SCHEMA.md`,
   `docs/BACKLOG.md`, `docs/JOURNAL.md`, `docs/MANUAL_PLAN.md`,

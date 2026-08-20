@@ -44,6 +44,38 @@ fi
 "$RACINE_INSTALL/venv/bin/pip" install --quiet --upgrade pip
 "$RACINE_INSTALL/venv/bin/pip" install --quiet "$SOURCE/services/sparkd"
 
+echo "== 2 bis. Estampille de build =="
+# docs/DAT.md §40 : une Forge doit pouvoir dire QUEL code elle execute. Le
+# fichier est ecrit ICI, une fois, et lu au fil des requetes. Le runtime ne
+# derive jamais cette valeur : sortir un « git » d'un service en production
+# ferait dependre sa reponse d'un depot qui n'a aucune raison d'etre la.
+#
+# La source arrive souvent SANS « .git » (rsync du deploiement) : le hash est
+# alors fourni par l'appelant. Une build non estampillee reste licite et se DIT
+# inconnue (§40.2) — elle ne rend jamais une valeur plausible.
+COMMIT="${SPARKD_BUILD_COMMIT:-}"
+COMMIT_AT="${SPARKD_BUILD_AT:-}"
+DIRTY="${SPARKD_BUILD_DIRTY:-false}"
+if [ -z "$COMMIT" ] && git -C "$SOURCE" rev-parse --git-dir >/dev/null 2>&1; then
+  COMMIT="$(git -C "$SOURCE" rev-parse --short=12 HEAD)"
+  COMMIT_AT="$(git -C "$SOURCE" log -1 --format=%cI)"
+  if [ -n "$(git -C "$SOURCE" status --porcelain)" ]; then DIRTY=true; fi
+fi
+python3 - "$RACINE_INSTALL/build.json" "$COMMIT" "$COMMIT_AT" "$DIRTY" "${SPARKD_BUILD_FROM:-$(hostname):$SOURCE}" <<'ESTAMPILLE'
+import json, sys
+from datetime import datetime, timezone
+chemin, commit, commit_at, dirty, depuis = sys.argv[1:6]
+json.dump({
+    "commit": commit or None,
+    "committed_at": commit_at or None,
+    "dirty": dirty == "true",
+    "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    "installed_from": depuis,
+}, open(chemin, "w"), ensure_ascii=False, indent=2)
+ESTAMPILLE
+chmod 0644 "$RACINE_INSTALL/build.json"
+echo "  build : ${COMMIT:-inconnue}${COMMIT:+ (dirty=$DIRTY)}"
+
 echo "== 3. Unites systemd =="
 # docs/DAT.md §32.4 : la tranche parente doit survivre a un redemarrage. Creee a
 # la main, elle disparait, et la reservation redevient proportionnelle en silence.

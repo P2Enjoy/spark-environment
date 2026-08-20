@@ -14,6 +14,10 @@ export interface paths {
         /**
          * Healthz
          * @description Le processus repond. Ne dit rien de ses dependances.
+         *
+         *     Il dit en revanche QUELLE build il execute (docs/DAT.md §40) : c'est la
+         *     premiere chose que la console lit en se connectant, et la seule qui
+         *     permette de distinguer une Forge a jour d'une Forge oubliee.
          */
         get: operations["healthz_healthz_get"];
         put?: never;
@@ -619,7 +623,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string;
+                        [key: string]: unknown;
                     };
                 };
             };

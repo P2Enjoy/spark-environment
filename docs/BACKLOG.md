@@ -1911,6 +1911,21 @@ d'incohérences — retirée dans le même changement.
     seedés, et celle qui **figeait leur nombre** à cinq — le compte se lit
     désormais sur le registre, ce qui est ce que la preuve voulait dire.
 
+### [~] SPK-53 · La build installée se nomme, et la console dit si la pile est en retard
+
+- Spécification : `docs/DAT.md` §40 · `docs/PROD_MIGRATIONS.md` OP-04 ·
+  `docs/DESIGN_SYSTEM.md` §14.6 (« inconnue » n'est pas zéro).
+- Portée : `build.json` écrit à l'installation ; `sparkd.build` qui le lit ;
+  `/healthz` et `/v1/forge` qui le publient ; comparaison côté console avec le
+  dépôt local et les **cinq** situations du §40.3 ; commande de mise à jour depuis
+  l'écran de la Forge.
+- **Livré et vérifié le 2026-08-20 pour le runtime** : module `build.py`,
+  4 tests d'unité, estampille écrite par `scripts/install-serveur.sh`, et
+  `/healthz` de la Forge réelle qui rend le commit déployé.
+- **Reste** : la comparaison côté console, ses cinq situations, et la commande de
+  mise à jour depuis l'interface. Tant que ce n'est pas livré et éprouvé depuis le
+  parcours canonique, l'unité reste `[~]`.
+
 ---
 
 ## Réservé, non planifié
