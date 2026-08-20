@@ -480,3 +480,60 @@ test('une absence est nommée UNE fois, pas deux sur la même ligne', () => {
     ] } }));
   assert.match(utile, /active/);
 });
+
+// --- SPK-54 · LE MODE ROOTLESS À L'ÉCRAN (§42.2, §42.2 bis) -----------------
+
+test('l’option rootless est OFFERTE, et décochée par défaut', () => {
+  // §42.2 : « enraciné, avec le rootless offert à qui le demande ». Annoncer
+  // l'inverse ferait échouer la promesse centrale du produit sur la moitié des
+  // piles Compose existantes.
+  const rendu = renderAmorcage(CELLULE, amorcage({ confirme: true }));
+  assert.match(rendu, /data-amorcage="rootless"/);
+  assert.ok(!/data-amorcage="rootless"[^>]*checked/.test(rendu));
+});
+
+test('l’option ÉNONCE ses trois coûts, elle ne se vend pas', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({ confirme: true }));
+  assert.match(rendu, /ports sous 1024/);
+  assert.match(rendu, /ne fonctionnent pas telles quelles/);
+  assert.match(rendu, /déjà<\/strong> non privilégiée sur la Forge/);
+  // …et jamais un argument de vente.
+  assert.ok(!/plus sûr|recommandé|conseillé/i.test(rendu));
+});
+
+test('quand un mode est DÉJÀ en place, l’option n’est plus offerte', () => {
+  // §1.4 : offrir un geste que le serveur refusera à coup sûr est une commande
+  // morte. Ce n'est pas le §14.9 : l'écran ne le SUPPOSE pas, il le tient du
+  // relevé que le serveur vient de rendre.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    confirme: true,
+    releve: { complete: true, items: [
+      { key: 'docker', label: 'moteur Docker', state: 'present',
+        detail: 'Docker version 29.7.2', mode: 'enracine' },
+    ] } }));
+  assert.ok(!/data-amorcage="rootless"/.test(rendu));
+  assert.match(rendu, /fait déjà tourner un Docker/);
+  assert.match(rendu, /enraciné/);
+  assert.match(rendu, /basculer déplacerait le moteur sous un autre\s+compte/i);
+});
+
+test('le mode observé s’affiche sur la ligne Docker, en français', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { complete: true, items: [
+      { key: 'docker', label: 'moteur Docker', state: 'present',
+        detail: 'Docker version 29.7.2', mode: 'rootless' },
+    ] } }));
+  assert.match(rendu, />rootless</);
+  assert.ok(!rendu.includes('enracine'), 'le jeton brut ne paraît pas');
+});
+
+test('un Docker sans mode n’affiche aucun mode', () => {
+  // §42.2 bis : un Docker absent ou de distribution n'en a pas, et lui en prêter
+  // un ferait croire à un choix là où rien ne tourne.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { complete: false, items: [
+      { key: 'docker', label: 'moteur Docker', state: 'defect',
+        detail: 'paquet « docker.io » de la distribution', mode: null },
+    ] } }));
+  assert.ok(!/enraciné|rootless/.test(rendu));
+});

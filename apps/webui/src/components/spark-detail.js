@@ -235,9 +235,16 @@ export const AMORCAGE_VIDE = {
   releve: null,       // null | 'en-cours' | { items, complete }
   resultat: null,     // le compte rendu ligne à ligne du dernier amorçage
   confirme: false,    // §6.23 : la confirmation qui nomme le pouvoir employé
+  // §42.2 : le rootless est OFFERT, jamais imposé. Le défaut est enraciné, et
+  // annoncer l'inverse ferait échouer la promesse centrale du produit — reprendre
+  // une pile Compose existante sans la réécrire — sur la moitié des piles.
+  rootless: false,
   busy: false,
   erreur: null,
 };
+
+/** Les deux modes, dits en français (§14.7). */
+const MODES = { enracine: 'enraciné', rootless: 'rootless' };
 
 /** Les trois états d'un élément, dits en français (§14.7). */
 const ETATS_AMORCAGE = {
@@ -260,10 +267,15 @@ function ligneAmorcage(ligne) {
   // veut qu'une absence soit nommée UNE fois.
   const detail = (ligne.detail ?? '').trim();
   const utile = detail && detail !== etat.libelle && detail !== ligne.state;
+  // §42.2 bis : le mode est une OBSERVATION. Il ne s'affiche que lorsqu'il y en
+  // a un — un Docker absent, ou de distribution, n'en a pas, et lui en prêter un
+  // ferait croire à un choix là où rien ne tourne.
+  const mode = ligne.mode ? MODES[ligne.mode] ?? ligne.mode : null;
   return `<li class="ligne-amorcage">
     <span class="badge badge--${etat.token}">${echapper(etat.libelle)}</span>
     <strong>${echapper(ligne.label ?? ligne.key)}</strong>
     ${sort ? `<span class="badge badge--${sort.token}">${echapper(sort.libelle)}</span>` : ''}
+    ${mode ? `<span class="badge badge--neutral">${echapper(mode)}</span>` : ''}
     ${utile ? `<span class="note">${echapper(detail)}</span>` : ''}
   </li>`;
 }
@@ -309,6 +321,38 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
 
   // §6.23 et §42.3 : l'amorçage passe par le plan de contrôle, en root dans la
   // cellule. La confirmation le NOMME, et elle est rendue dans le flux (§6.22).
+  // §42.2 bis : le mode ne se BASCULE pas. Quand le relevé en montre un en
+  // place, le choix n'est plus ouvert — l'offrir serait offrir un geste que le
+  // serveur refusera à coup sûr (§1.4). La différence avec le §14.9 tient à ce
+  // que l'écran ne le SUPPOSE pas : il le tient d'une mesure que le serveur
+  // vient de rendre.
+  const modeEnPlace = lignes?.find((l) => l.key === 'docker')?.mode ?? null;
+  const option = modeEnPlace
+    ? `<p class="note">Ce Spark fait déjà tourner un Docker
+       <strong>${echapper(MODES[modeEnPlace] ?? modeEnPlace)}</strong>. Le mode ne
+       se change pas par un amorçage : basculer déplacerait le moteur sous un autre
+       compte, et avec lui les conteneurs, les volumes et les réseaux qui y
+       tournent.</p>`
+    : `<p class="champ">
+         <label for="amorcage-rootless">
+           <input type="checkbox" id="amorcage-rootless" data-amorcage="rootless"
+                  ${etat.rootless ? 'checked' : ''}>
+           Installer Docker en mode <strong>rootless</strong>
+         </label>
+       </p>
+       <p class="champ__aide">Le moteur tourne alors sous un compte non
+       privilégié <em>dans</em> la cellule. Trois choses changent, et il vaut mieux
+       les savoir avant :</p>
+       <ul class="champ__aide">
+         <li>les ports sous 1024 deviennent impossibles à publier dans la cellule ;</li>
+         <li>certaines piles Compose existantes ne fonctionnent pas telles quelles,
+         et reprendre une pile sans la réécrire est ce que ce produit vend ;</li>
+         <li>la cellule est <strong>déjà</strong> non privilégiée sur la Forge :
+         c’est une seconde couche, pas la première.</li>
+       </ul>
+       <p class="champ__aide">Ce choix ne se reprend pas : il se fait maintenant,
+       tant que rien ne tourne.</p>`;
+
   const confirmation = etat.confirme
     ? `<div class="confirmation" role="group" aria-labelledby="titre-confirme-amorcage">
          <p id="titre-confirme-amorcage"><strong>Amorcer « ${echapper(spark.name)} » ?</strong></p>
@@ -318,6 +362,7 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
          <p class="note">Seuls les éléments manquants sont installés. Ce qui est
          déjà en place n’est pas touché : réinstaller « au cas où » redémarrerait
          le moteur Docker de ce Spark, donc ce qu’il fait tourner.</p>
+         ${option}
          <p class="confirmation__actions">
            <button type="button" class="bouton bouton--destructif" data-amorcage="engager">
              Exécuter en root dans la cellule

@@ -280,6 +280,12 @@ function brancherAmorcage() {
       racine.querySelector('[data-amorcage="amorcer"]')?.focus();
     });
 
+  // §42.2 : l'option est OFFERTE, jamais imposée. Elle vaut pour ce geste-ci.
+  racine.querySelector('[data-amorcage="rootless"]')
+    ?.addEventListener('change', (evenement) => {
+      a.rootless = evenement.target.checked;
+    });
+
   racine.querySelector('[data-amorcage="engager"]')
     ?.addEventListener('click', () => {
       a.confirme = false;
@@ -302,7 +308,10 @@ async function amorcageAppel(methode) {
   const chemin = `/api/v1/sparks/${encodeURIComponent(etat.spark.name)}/bootstrap`
     + `?server=${encodeURIComponent(etat.server)}`;
   try {
-    const reponse = await fetch(chemin, methode === 'GET' ? {} : { method: 'POST' });
+    const reponse = await fetch(chemin, methode === 'GET' ? {} : {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rootless: a.rootless }),
+    });
     const corps = await reponse.json();
     if (!reponse.ok) {
       // Le runtime NOMME ses refus (§42.7) : « pas de cellule », « à l'arrêt »,
@@ -312,7 +321,12 @@ async function amorcageAppel(methode) {
     a.releve = { items: corps.items, complete: corps.complete };
     // Le compte rendu n'existe qu'après un amorçage : un relevé seul ne dit pas
     // ce qui a été fait, il dit ce qui est.
-    if (methode !== 'GET') a.resultat = corps;
+    if (methode !== 'GET') {
+      a.resultat = corps;
+      // Le choix vaut pour CE geste (§42.2 bis). Le garder coché ferait amorcer
+      // le prochain Spark en rootless sans qu'on l'ait redemandé.
+      a.rootless = false;
+    }
   } catch (erreur) {
     a.erreur = erreur?.message ?? String(erreur);
     if (methode === 'GET') a.releve = null;
