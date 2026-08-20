@@ -572,7 +572,7 @@ await page.waitForSelector('tbody a');
 await page.click('nav a[href="#/forge"]');
 await page.waitForSelector('#titre-pools', { timeout: 8000 });
 await page.click('.onglet[href="#/forge/journal"]');
-await page.waitForSelector('#titre-journal-hote', { timeout: 8000 });
+await page.waitForSelector('#titre-journal-forge', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '40-journal-supervision.png') });
 console.log('  40-journal-supervision.png');
 

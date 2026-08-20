@@ -293,7 +293,7 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
     await page.click('.onglet[href="#/forge/journal"]');
-    await page.waitForSelector('#titre-journal-hote', { timeout: 10000 });
+    await page.waitForSelector('#titre-journal-forge', { timeout: 10000 });
 
     const toutes = await page.$$eval('tbody tr', (l) => l.length);
     assert.ok(toutes > 0, 'le seed a écrit au journal');

@@ -151,7 +151,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
     await page.click('.onglet[href="#/forge/journal"]');
-    await page.waitForSelector('#titre-journal-hote', { timeout: 10000 });
+    await page.waitForSelector('#titre-journal-forge', { timeout: 10000 });
     await page.click('[data-action="verifier-chaine"]');
     await page.waitForFunction(
       () => document.body.innerText.includes('Chaîne intacte'), { timeout: 15000 });
