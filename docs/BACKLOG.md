@@ -2047,6 +2047,32 @@ correctif de sécurité n'est en attente. Trois points restent.
   la main ; un test prouve qu'un Spark garde son DNS et sa sortie internet après
   durcissement — le durcissement ne doit pas casser ce qu'il protège.
 
+### [~] SPK-56 · L'écran nomme, le manuel explique — et le manuel devient joignable
+
+Constat du responsable, 2026-08-20 : l'écran de la Forge portait des paragraphes
+entiers — pourquoi le disque n'est pas surengageable, ce que ZFS reprend sous les
+Sparks, ce qu'une marge de métadonnées évite. Vérifié : **le manuel M4 disait déjà
+les trois**, mot pour mot en substance. L'écran dupliquait donc une explication
+qu'il ne pouvait que faire diverger.
+
+- Spécification : `docs/DESIGN_SYSTEM.md` **§1.5 bis** (la règle), §1.4 (pas de
+  commande morte) · `docs/DAT.md` §27, §30 · `docs/manuel/M4`, `M12`.
+- **Livré et vérifié le 2026-08-20** :
+  - écran de la Forge et écran du journal allégés — le fait, l'unité, le réglage
+    qui la commande et la mesure vive restent ; le raisonnement part au manuel ;
+  - le manuel est **servi depuis `docs/manuel/`**, sa source unique, par trois
+    routes de l'hôte console, et devient une destination de premier degré ;
+  - rendu Markdown restreint à ce que le manuel emploie, sans dépendance ;
+  - 10 tests de composant, 7 tests d'hôte, 479 tests de console verts.
+- Ce qui a **failli** être introduit et ne l'a pas été : un renvoi « Manuel M4 »
+  qui ne mène nulle part. C'est le §1.4 — une commande morte — et c'est pourquoi
+  le manuel est servi dans le même changement que l'allègement.
+- **Reste avant `[x]`** : le balayage des autres écrans, dont l'écran de création
+  et le détail d'un Spark, qui n'ont pas été relus sous cette règle ; la
+  vérification visuelle des deux écrans modifiés et du manuel, aux trois formats ;
+  le manuel M4 et M12 à relire pour qu'ils portent bien ce que l'écran a cessé de
+  dire.
+
 ---
 
 ## Réservé, non planifié

@@ -28,19 +28,23 @@ export const RESSOURCES = [
     surengageable: true },
   { cle: 'memory', nom: 'Mémoire', format: formatBytes, surengageable: true },
   { cle: 'storage', nom: 'Disque', format: formatBytes, surengageable: false,
-    sansFacteur: 'Aucun surengagement : un pool de disque saturé est une panne '
-      + 'dure, là où un pool CPU saturé n’est que de la lenteur.' },
+    // §1.5 bis : l'écran NOMME le fait — pas de surengagement ici —, le manuel
+    // explique pourquoi (manuel M4, « Le surengagement »). La phrase qui restait
+    // vraie quand toutes les valeurs changent appartenait au manuel.
+    sansFacteur: 'Aucun surengagement' },
   { cle: 'network', nom: 'Réseau', format: formatBps, surengageable: true },
 ];
 
 /** Portées possibles de la réservation, telles que le runtime les publie.
  *  §27.6 : la valeur est LUE dans la réponse, jamais écrite en dur ici. */
 export const GARANTIES = {
+  // §1.5 bis : ce n'est pas une explication mais une QUALIFICATION de la valeur —
+  // « 2,5 CPU alloués » se lirait comme une garantie sans elle. Elle reste donc à
+  // l'écran, et reste LUE dans la réponse (§27.6), jamais écrite en dur.
   proportional_between_sparks_only:
-    'La réservation CPU n’est proportionnelle qu’entre Sparks : elle est arbitrée '
-    + 'contre les tranches de la Forge et n’est pas une garantie absolue.',
+    'Réservation proportionnelle entre Sparks — non garantie sous contention.',
   absolute:
-    'La réservation CPU est garantie même sous contention de la Forge.',
+    'Réservation garantie sous contention.',
 };
 
 /** Part occupée d'un pool, en pourcentage borné. */
@@ -63,11 +67,14 @@ export function fillRatio(pool) {
  */
 export function describeArcUsage(utilise, plafond) {
   if (utilise === null || utilise === undefined) {
-    return 'Sa consommation n’est pas mesurable sur cette Forge.';
+    return 'consommation non mesurée';
   }
   const part = plafond ? Math.round((utilise / plafond) * 100) : null;
-  return `Il en consomme actuellement ${formatBytes(utilise)}`
-    + (part === null ? '.' : ` — ${part} % de son plafond.`);
+  // Relevé à CHAQUE requête dans `arcstats`, jamais persisté (docs/DAT.md §20.1).
+  // C'est ce qui lui donne sa valeur : une consommation stockée serait une valeur
+  // périmée présentée comme actuelle.
+  return `consomme ${formatBytes(utilise)}`
+    + (part === null ? '' : ` (${part} %)`);
 }
 
 /**
@@ -88,11 +95,11 @@ export function describeMetadataMargin(forge) {
   // Le total est LU, pas recomposé : le nombre de Sparks n'est pas dans cette
   // réponse, et le recalculer ici ferait diverger l'écran du registre.
   const total = forge?.reserves?.storage_metadata_total_bytes;
-  return `L’alloué comprend ${formatBytes(marge)} de métadonnées par Spark`
+  // §1.5 bis : le CHIFFRE et le réglage qui le commande restent ; le mode de
+  // panne qu'il évite est au manuel (M4, « La marge de métadonnées »).
+  return `Dont ${formatBytes(marge)} de métadonnées par Spark`
     + (total ? `, soit ${formatBytes(total)} au total` : '')
-    + `. Sans cette marge, un Spark qui remplit son quota empêcherait Incus `
-    + `d’écrire ses métadonnées, et ne pourrait plus être reconfiguré — pas même `
-    + `agrandi pour le débloquer. Se règle par SPARKD_STORAGE_METADATA_MARGIN.`;
+    + ` · SPARKD_STORAGE_METADATA_MARGIN`;
 }
 
 /** Horodatage lisible (§3.1 pour la typographie technique). */
@@ -163,13 +170,13 @@ export function renderMemoryBreakdown(forge) {
     ['Mémoire de la machine', formatBytes(total), ''],
     ...(detaille
       ? [['− plafond de l’ARC ZFS', formatBytes(arc),
-          `ZFS peut le prendre à tout instant : une réserve qui l’ignore promet une `
-          + `mémoire que le noyau reprendra sous les Sparks. Se règle par zfs_arc_max. `
-          + describeArcUsage(forge?.reserves?.arc_used_bytes, arc)],
+          // La mesure vive reste — elle change à chaque relevé, donc elle est de
+          // l'écran (§1.5 bis). Le réglage la nomme ; le manuel l'explique.
+          `zfs_arc_max · ${describeArcUsage(forge?.reserves?.arc_used_bytes, arc)}`],
          ['− marge d’exploitation', formatBytes(marge),
-          'Ce que la Forge consomme pour elle-même. Se règle par SPARKD_MEMORY_RESERVE.']]
+          'SPARKD_MEMORY_RESERVE']]
       : [['− réserve de la Forge', formatBytes(reserve),
-          'Le détail de cette réserve sera connu au prochain relevé de topologie.']]),
+          'détail connu au prochain relevé']]),
     ['= mémoire allouable', formatBytes(allouable), ''],
   ];
 
@@ -213,10 +220,9 @@ export function renderCores(cores, nomsParSpark = {}) {
 <section class="carte bloc" aria-labelledby="titre-coeurs">
   <h2 id="titre-coeurs">Carte des cœurs</h2>
   <ul class="coeurs">${toutes.map((c) => pastille(c.id, c.spark)).join('')}</ul>
-  <p class="note">Un Spark en mode dédié ne consomme pas de réservation : il
-  retire ses cœurs du pool commun, ce qui réduit la capacité de tous les autres.
-  La capacité se compte en cœurs physiques — le SMT entrelace l’exécution, il
-  n’ajoute pas de capacité.</p>
+  <p class="note">Capacité comptée en cœurs physiques.
+  Un cœur dédié sort du pool commun.
+  <a href="#/manuel/M4#coeurs">Manuel M4 — Les pools</a></p>
 </section>`;
 }
 

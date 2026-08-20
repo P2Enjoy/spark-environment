@@ -9,6 +9,8 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { chapitres as manuelChapitres, chapitre as manuelChapitre,
+         image as manuelImage, ManuelError } from './manuel.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 
@@ -507,6 +509,45 @@ export function createConsoleHost(options = {}) {
      * Le Spark est relu sur `sparkd` pour obtenir son adresse privée : c'est le
      * REGISTRE qui l'attribue (§15.1), et la deviner serait se tromper de Spark.
      */
+    /**
+     * Le manuel, servi depuis `docs/manuel/` (§1.5 bis du design system).
+     *
+     * Les écrans renvoient au manuel plutôt que de porter le raisonnement. Un
+     * renvoi doit donc aboutir : sans ces trois routes, la règle fabriquerait
+     * des commandes mortes (§1.4).
+     */
+    'GET /api/manuel': async () => ({
+      status: 200, body: { chapters: await manuelChapitres(RACINE_MANUEL) },
+    }),
+
+    'GET /api/manuel/chapitre': async (_corps, url) => {
+      try {
+        const id = url?.searchParams.get('id') ?? '';
+        return { status: 200,
+                 body: { id, markdown: await manuelChapitre(RACINE_MANUEL, id) } };
+      } catch (erreur) {
+        if (erreur instanceof ManuelError) {
+          return { status: 404, body: { error: 'unknown_chapter', message: erreur.message } };
+        }
+        throw erreur;
+      }
+    },
+
+    'GET /api/manuel/image': async (_corps, url, reponse) => {
+      try {
+        const { contenu, type } = await manuelImage(RACINE_MANUEL,
+                                                    url?.searchParams.get('nom') ?? '');
+        reponse.writeHead(200, { 'content-type': type });
+        reponse.end(contenu);
+        return null;   // déjà répondu : le corps est binaire, pas du JSON
+      } catch (erreur) {
+        if (erreur instanceof ManuelError) {
+          return { status: 404, body: { error: 'unknown_image', message: erreur.message } };
+        }
+        throw erreur;
+      }
+    },
+
     'POST /api/terminal': async (corps) => {
       const nom = String(corps?.server ?? '');
       const spark = String(corps?.spark ?? '');
@@ -615,8 +656,12 @@ export function createConsoleHost(options = {}) {
 
       if (routes[cle]) {
         const corps = await lireCorps(requete);
-        const { status, body } = await routes[cle](corps, url);
-        return repondre(reponse, status, body);
+        // Une route qui rend `null` a DÉJÀ répondu : c'est le cas d'un corps
+        // binaire — une illustration du manuel — que `repondre` sérialiserait
+        // en JSON.
+        const rendu = await routes[cle](corps, url, reponse);
+        if (rendu === null) return;
+        return repondre(reponse, rendu.status, rendu.body);
       }
 
       // SPK-43 · §37.4.1 : le flux de sortie tient la connexion ouverte. Il ne
@@ -744,6 +789,9 @@ const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Racine du DÉPÔT, où vit le `.env` du poste (§38.1). Il n'est jamais servi :
 // `servirStatique` ne sort pas de `RACINE`, qui est le dossier de la console.
 const RACINE_DEPOT = join(RACINE, '..', '..');
+// Le manuel est servi depuis sa SOURCE UNIQUE (§30). Le recopier dans la
+// console en ferait une seconde version, qui divergerait.
+const RACINE_MANUEL = join(RACINE_DEPOT, 'docs', 'manuel');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
                 '.svg': 'image/svg+xml', '.json': 'application/json' };
 

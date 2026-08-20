@@ -96,7 +96,7 @@ test('sans détail relevé, la somme est affichée SANS inventer sa répartition
   assert.ok(rendu.includes('− réserve de la Forge'));
   assert.ok(rendu.includes('18 Gio'));
   assert.ok(!rendu.includes('ARC ZFS'), 'ne pas nommer un terme qu’on ne connaît pas');
-  assert.ok(rendu.includes('prochain relevé de topologie'));
+  assert.ok(rendu.includes('prochain relevé'));
 });
 
 test('sans mémoire totale connue, la soustraction ne rend rien plutôt qu’un calcul faux', () => {
@@ -118,10 +118,14 @@ test('un facteur de 1 n’est pas affiché : il n’apprend rien', () => {
   assert.ok(!rendu.includes('surengagé'));
 });
 
-test('l’absence de surengagement sur le disque est expliquée, pas laissée en blanc', () => {
+test('l’absence de surengagement sur le disque est NOMMÉE, pas laissée en blanc', () => {
+  // REVISE par SPK-56 (DESIGN_SYSTEM.md §1.5 bis) : l'écran nomme le fait, le
+  // manuel explique pourquoi (M4). Ce que la preuve établit — la case n'est pas
+  // un blanc inexpliqué — est inchangé.
   const rendu = renderForgeView({ status: 'ready', host: HOTE });
   assert.ok(rendu.includes('Aucun surengagement'));
-  assert.ok(rendu.includes('panne dure'));
+  assert.ok(!rendu.includes('panne dure'),
+            'le POURQUOI appartient au manuel, pas à l’écran');
 });
 
 // --- LA CARTE DES CŒURS (§27.4) ---------------------------------------------
@@ -150,8 +154,10 @@ test('faute de nom connu, la carte retombe sur l’identifiant plutôt que sur d
 
 test('la carte énonce qu’un Spark dédié réduit le pool des autres', () => {
   const rendu = renderCores(CORES, {});
-  assert.ok(rendu.includes('retire ses cœurs du pool commun'));
+  // REVISE par SPK-56 : le fait reste à l'écran, le raisonnement part au manuel.
+  assert.ok(rendu.includes('sort du pool commun'));
   assert.ok(rendu.includes('cœurs physiques'), 'le SMT n’ajoute pas de capacité');
+  assert.ok(rendu.includes('Manuel M4'), 'le renvoi remplace le paragraphe');
 });
 
 test('sans relevé des cœurs, la carte ne rend rien', () => {
@@ -162,13 +168,13 @@ test('sans relevé des cœurs, la carte ne rend rien', () => {
 
 test('la portée de la réservation est LUE dans la réponse, pas écrite en dur', () => {
   const proportionnelle = renderForgeView({ status: 'ready', host: HOTE });
-  assert.ok(proportionnelle.includes('n’est proportionnelle qu’entre Sparks'));
+  assert.ok(proportionnelle.includes('proportionnelle entre Sparks'));
 
   // Le jour où SPK-29 est livrée, le runtime change cette valeur et l'écran suit.
   const absolue = renderForgeView({ status: 'ready',
     host: { ...HOTE, reservation_guarantee: 'absolute' } });
-  assert.ok(absolue.includes('garantie même sous contention'));
-  assert.ok(!absolue.includes('n’est proportionnelle qu’entre Sparks'));
+  assert.ok(absolue.includes('garantie sous contention'));
+  assert.ok(!absolue.includes('proportionnelle entre Sparks'));
 });
 
 test('une portée inconnue n’affiche rien plutôt qu’une phrase inventée', () => {
@@ -259,9 +265,13 @@ test("la consommation de l'ARC est affichee face a son plafond", () => {
     ...HOTE,
     reserves: { ...HOTE.reserves, arc_used_bytes: 8 * GIO },
   });
-  assert.ok(rendu.includes('Il en consomme actuellement'));
+  // La MESURE reste à l'écran : elle change à chaque relevé, donc elle est de
+  // l'écran (§1.5 bis). C'est le cours sur ZFS qui part au manuel.
+  assert.ok(rendu.includes('consomme'));
   assert.ok(rendu.includes('8,0 Gio'));
   assert.ok(rendu.includes('50 %'), 'la part du plafond situe la mesure');
+  assert.ok(!rendu.includes('reprendra sous les Sparks'),
+            'le POURQUOI de la réserve appartient au manuel');
 });
 
 test("un ARC non mesurable le DIT, il ne s'affiche pas a zero", () => {
@@ -270,15 +280,13 @@ test("un ARC non mesurable le DIT, il ne s'affiche pas a zero", () => {
   // vide — est inchange.
   // §14.6 : un ARC dont on ignore la taille n'est pas un ARC vide. Les confondre
   // ferait croire la reserve inutile.
-  assert.equal(describeArcUsage(null, 16 * GIO),
-               'Sa consommation n’est pas mesurable sur cette Forge.');
-  assert.equal(describeArcUsage(undefined, 16 * GIO),
-               'Sa consommation n’est pas mesurable sur cette Forge.');
+  assert.equal(describeArcUsage(null, 16 * GIO), 'consommation non mesurée');
+  assert.equal(describeArcUsage(undefined, 16 * GIO), 'consommation non mesurée');
   const rendu = renderMemoryBreakdown({
     ...HOTE, reserves: { ...HOTE.reserves, arc_used_bytes: null },
   });
-  assert.ok(rendu.includes('n’est pas mesurable'));
-  assert.ok(!rendu.includes('consomme actuellement 0'));
+  assert.ok(rendu.includes('non mesurée'));
+  assert.ok(!rendu.includes('consomme 0'));
 });
 
 // --- la marge de metadonnees, nommee a l'ecran (SPK-30, §8.8.2) ------------

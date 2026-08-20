@@ -117,12 +117,9 @@ export function renderIntegrite({ chain = null, anchor = null, checking = false 
     <div class="def"><dt>Chaîne, telle que le serveur la voit</dt><dd>${chaine}</dd></div>
     <div class="def"><dt>Comparaison avec ce que la console avait vu</dt><dd>${ancre}</dd></div>
   </div>
-  <p class="note">La chaîne détecte qu’une entrée a été récrite ou retirée du
-  milieu. Elle ne peut pas voir qu’on a coupé la fin, ni qu’on a remplacé le
-  journal entier : c’est la comparaison ci-dessus qui le voit, parce que la
-  référence vit sur cette machine et non sur le serveur.
-  <strong>Aucune entrée n’est signée</strong> — l’identité est déclarée par la
-  console, elle attribue sans prouver.</p>
+  <p class="note"><strong>Aucune entrée n’est signée</strong> : l’identité est
+  déclarée, pas prouvée.
+  <a href="#/manuel/M12">Manuel M12 — Ce que la chaîne voit, et ce qu’elle ne voit pas</a></p>
   <p class="formulaire__actions">
     <button type="button" class="bouton" data-action="verifier-chaine" ${checking ? 'disabled' : ''}>${
       checking ? 'Vérification…' : 'Vérifier la chaîne'}</button>

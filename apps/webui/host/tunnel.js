@@ -138,6 +138,29 @@ export class Tunnel {
     return ['-J', `${this.server.user}@${this.server.host}:${this.server.port}`];
   }
 
+  /**
+   * Arguments pour atteindre la FORGE elle-même, et non un Spark.
+   *
+   * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.3 (le dépannage par
+   *       `incus exec`), §17.4, §22.1
+   *
+   * Le chemin de dépannage n'entre pas dans le Spark : il s'exécute SUR la
+   * Forge, qui commande Incus. La destination change donc de nature — ce n'est
+   * plus un rebond vers une adresse privée, c'est le serveur lui-même.
+   *
+   * Le retour est une LISTE, vide pour un serveur local, et c'est ce qui porte
+   * la distinction : sur une Forge locale il n'y a pas de `ssh` à lancer du
+   * tout, `incus` s'exécute ici. Rendre une destination factice obligerait
+   * l'appelant à la reconnaître, donc à retenir la règle une seconde fois.
+   */
+  forgeArgs() {
+    if (this.isLocal) return [];
+    if (this.server.kind === 'alias') return [this.server.sshHost];
+    // Le port n'est pas dans la destination : `ssh` le prend par `-p`, là où
+    // `-J` l'accepte collé au nom. Les deux formes ne sont pas interchangeables.
+    return ['-p', String(this.server.port), `${this.server.user}@${this.server.host}`];
+  }
+
   /** Un serveur local n'a pas de transport à établir (docs/DAT.md §28.2). */
   get isLocal() {
     return this.server.kind === 'local';

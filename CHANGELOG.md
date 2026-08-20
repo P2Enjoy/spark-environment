@@ -3,6 +3,13 @@
 ## [Non publié]
 
 ### Ajouté
+- Le **manuel est joignable depuis la console** : servi depuis `docs/manuel/`,
+  sa source unique, et rendu dans une destination de premier degré. Les renvois
+  des écrans y mènent réellement.
+- `docs/DESIGN_SYSTEM.md` §1.5 bis : l'écran nomme, le manuel explique. Le test
+  écrit : si la phrase reste vraie quand toutes les valeurs de l'écran changent,
+  elle appartient au manuel.
+- Unité SPK-56.
 - Parcours E2E de l'**ancre du journal** (SPK-38), le dernier point de sa DoD :
   depuis l'accueil et au clavier, la console pose sa référence, on coupe la fin
   du journal en base, et le relevé suivant rend « le journal a raccourci » alors
@@ -84,6 +91,10 @@
   l'architecture de navigation de la console.
 
 ### Modifié
+- Écran de la Forge et écran du journal : les paragraphes explicatifs sont
+  retirés. Restent la valeur, son unité, le réglage qui la commande — et la
+  mesure vive de l'ARC, relevée à chaque requête. Le manuel M4 et M12 portaient
+  déjà ces explications : l'écran les dupliquait.
 - Une alerte d'ancre — journal raccourci ou remplacé — est désormais rendue dans
   la même enveloppe `role="alert"` qu'une rupture de chaîne. Elle était portée par
   la seule couleur du badge, donc muette pour une synthèse vocale.

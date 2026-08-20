@@ -31,6 +31,93 @@ export const DISTANT_TERMINE = 'distant_termine';
 export class TerminalError extends Error {}
 
 /**
+ * Les deux chemins d'entrée, et il n'y en a pas d'autre (§37.2, §37.3).
+ *
+ * `ssh` est le chemin NORMAL : la console se connecte au Spark avec la clé du
+ * responsable, exactement comme il le ferait à la main. `rescue` est le chemin
+ * de DÉPANNAGE : la console se connecte à la Forge et lui fait exécuter
+ * `incus exec` dans la cellule. Le second donne au plan de contrôle l'exécution
+ * arbitraire en root chez le locataire, ce que le §11 évite partout ailleurs.
+ */
+export const CHEMIN_SSH = 'ssh';
+export const CHEMIN_DEPANNAGE = 'rescue';
+
+/** Motifs qui OUVRENT le dépannage, et qui entrent au journal (§37.3). */
+export const EN_ERREUR = 'spark_en_erreur';
+export const SSHD_MUET = 'sshd_muet';
+
+/**
+ * Classe l'échec d'une connexion SSH vers un Spark.
+ *
+ * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.3 (« son `sshd` ne répond
+ *       pas »), §22.3 (une panne se signale, avec son motif)
+ *
+ * Le point qui décide : « le `sshd` ne répond pas » et « le `sshd` répond et
+ * refuse la clé » ne sont PAS le même incident, et n'appellent pas le même
+ * geste. Le premier ouvre le dépannage — rien n'écoute, aucun accès normal
+ * n'existe. Le second est un problème de clé : la réponse est de réaccorder
+ * l'accès (§17), pas d'employer un pouvoir d'exception. Confondre les deux
+ * ferait du dépannage la façon ordinaire d'entrer, ce que le §37.3 refuse.
+ */
+export function classerEchecSsh(code, stderr = '') {
+  if (code === 0) return { repond: true, motif: null };
+  const texte = String(stderr);
+  if (/Connection refused|Connection timed out|No route to host|Network is unreachable|Operation timed out/i
+      .test(texte)) {
+    return { repond: false, motif: SSHD_MUET };
+  }
+  if (/Permission denied|Too many authentication failures|publickey/i.test(texte)) {
+    return { repond: true, motif: 'cle_refusee' };
+  }
+  // Inconnu : on ne DÉCLARE pas le `sshd` muet sur une erreur qu'on ne
+  // reconnaît pas. Ouvrir le dépannage sur un doute reviendrait à l'ouvrir
+  // toujours, puisque toute panne finit par produire un message inconnu.
+  return { repond: true, motif: 'inconnu' };
+}
+
+/**
+ * Le dépannage est-il ouvert sur ce Spark ? Première condition du §37.3.
+ *
+ * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.3
+ *
+ * Fonction PURE, et c'est délibéré : cette règle est un contrôle d'accès au
+ * sens du `CLAUDE.md` §10. Elle doit donc être appliquée par l'hôte console —
+ * qui est le backend de ce chemin, `sparkd` n'y étant pas (§37.1) — et non par
+ * l'écran. Masquer un bouton ne serait qu'une aide d'interface.
+ *
+ * `sondage` est le résultat de `classerEchecSsh`, ou `null` quand aucun sondage
+ * n'a été fait. Sans cellule, il n'y a rien où exécuter : le refus le dit
+ * plutôt que de laisser `incus exec` échouer sur un nom qui n'existe pas
+ * (§37.2, même signal qu'au §39.4).
+ */
+export function depannageOuvert(spark, sondage = null) {
+  if (!spark?.incus_name) {
+    return { ouvert: false, motif: 'sans_cellule',
+             explication: "Ce Spark n'a pas encore de cellule : il n'y a rien où "
+               + "exécuter. Il doit d'abord être appliqué." };
+  }
+  if (spark.state === 'error') {
+    return { ouvert: true, motif: EN_ERREUR,
+             explication: 'Ce Spark est en erreur : le chemin normal ne peut pas '
+               + 'être supposé disponible.' };
+  }
+  if (sondage && sondage.repond === false) {
+    return { ouvert: true, motif: SSHD_MUET,
+             explication: "Rien ne répond sur le port 22 de ce Spark : son « sshd » "
+               + "est absent ou arrêté." };
+  }
+  if (sondage && sondage.motif === 'cle_refusee') {
+    return { ouvert: false, motif: 'cle_refusee',
+             explication: 'Le « sshd » de ce Spark répond mais refuse la clé. '
+               + "C'est un problème d'accès, pas de dépannage : réaccordez la clé "
+               + "depuis l'onglet Clés." };
+  }
+  return { ouvert: false, motif: 'ssh_disponible',
+           explication: 'Le chemin normal est disponible : le dépannage est réservé '
+             + 'au Spark en erreur ou dont le « sshd » ne répond pas.' };
+}
+
+/**
  * Une session ouverte vers un Spark.
  *
  * Elle ne retient JAMAIS ce qui transite : ni les octets saisis, ni la sortie,
@@ -44,6 +131,7 @@ export class Session {
   #preavis = null;
 
   constructor({ tunnel, spark, spawn: spawnFn = spawn, commande = null,
+                chemin = CHEMIN_SSH, motifDepannage = null,
                 inactiviteMs = INACTIVITE_MS, preavisMs = PREAVIS_MS,
                 maintenant = () => Date.now() } = {}) {
     if (!tunnel) throw new TerminalError('Aucun tunnel : le Spark est injoignable.');
@@ -61,6 +149,15 @@ export class Session {
     // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
     // Tout le reste du chemin est celui qui tournera en production.
     this.commande = commande;
+    // §37.3 : le chemin employé est retenu pour TOUTE la session. La bannière
+    // doit rester visible jusqu'au bout — « on ne doit pas oublier par quel
+    // chemin on est entré » —, et le journal doit pouvoir le nommer à la
+    // fermeture comme à l'ouverture.
+    if (chemin !== CHEMIN_SSH && chemin !== CHEMIN_DEPANNAGE) {
+      throw new TerminalError(`Chemin d'entrée inconnu : « ${chemin} ».`);
+    }
+    this.chemin = chemin;
+    this.motifDepannage = chemin === CHEMIN_DEPANNAGE ? motifDepannage : null;
     this.inactiviteMs = inactiviteMs;
     this.preavisMs = preavisMs;
     this.maintenant = maintenant;
@@ -87,10 +184,48 @@ export class Session {
     ];
   }
 
+  /**
+   * Arguments du chemin de DÉPANNAGE (§37.3).
+   *
+   * La destination n'est plus le Spark mais la FORGE : c'est elle qui commande
+   * Incus. On lui fait exécuter `incus exec <cellule> -- <shell>`, ce qui donne
+   * un shell root DANS la cellule sans passer par son `sshd` — précisément le
+   * cas où il n'y en a pas.
+   *
+   * `--` est obligatoire et n'est pas décoratif : sans lui, `incus` interprète
+   * les options du shell comme les siennes.
+   *
+   * Sur une Forge LOCALE il n'y a aucun `ssh` : `incus` s'exécute ici. C'est
+   * `forgeArgs()` qui porte la distinction, en rendant une liste vide.
+   */
+  rescueArgs() {
+    const surLaForge = ['incus', 'exec', this.spark.incus_name, '--', '/bin/bash'];
+    const forge = this.tunnel.forgeArgs();
+    if (!forge.length) return { programme: surLaForge[0], arguments_: surLaForge.slice(1) };
+    return {
+      programme: 'ssh',
+      arguments_: [
+        '-tt',
+        '-o', 'BatchMode=yes',
+        '-o', 'StrictHostKeyChecking=accept-new',
+        ...forge,
+        ...surLaForge,
+      ],
+    };
+  }
+
+  /** Le couple programme/arguments du chemin retenu à l'ouverture. */
+  argv() {
+    if (this.commande) {
+      const [programme, ...arguments_] = this.commande.split(/\s+/);
+      return { programme, arguments_ };
+    }
+    if (this.chemin === CHEMIN_DEPANNAGE) return this.rescueArgs();
+    return { programme: 'ssh', arguments_: this.sshArgs() };
+  }
+
   demarrer() {
-    const [programme, ...arguments_] = this.commande
-      ? this.commande.split(/\s+/)
-      : ['ssh', ...this.sshArgs()];
+    const { programme, arguments_ } = this.argv();
     this.#child = this.spawnFn(programme, arguments_, { stdio: ['pipe', 'pipe', 'pipe'] });
     const pousser = (canal) => (bloc) => this.#diffuser(canal, bloc.toString('utf8'));
     this.#child.stdout?.on('data', pousser('sortie'));
@@ -99,7 +234,8 @@ export class Session {
     this.#child.stderr?.on('data', pousser('sortie'));
     this.#child.on('exit', () => this.fermer(DISTANT_TERMINE));
     this.#child.on('error', (erreur) => {
-      this.#diffuser('sortie', `\r\n[la console n'a pas pu lancer ssh : ${erreur.message}]\r\n`);
+      this.#diffuser('sortie',
+        `\r\n[la console n'a pas pu lancer ${programme} : ${erreur.message}]\r\n`);
       this.fermer(DISTANT_TERMINE);
     });
     this.#armerInactivite();
@@ -189,7 +325,12 @@ export class Session {
    */
   describe() {
     return {
-      id: this.id, spark: this.spark.name, path: 'ssh',
+      id: this.id, spark: this.spark.name,
+      // §37.3 : le chemin RÉELLEMENT emprunté, pas une constante. C'est lui qui
+      // fait tenir la bannière toute la session, et c'est lui que le journal
+      // reçoit — un « ssh » écrit en dur mentirait sur les deux.
+      path: this.chemin,
+      rescueReason: this.motifDepannage,
       openedAt: new Date(this.ouvertA).toISOString(),
       closed: Boolean(this.fermeA), reason: this.motif,
       durationSeconds: this.dureeSecondes(),
@@ -215,9 +356,10 @@ export class SessionManager {
     this.maintenant = maintenant;
   }
 
-  ouvrir({ tunnel, spark }) {
+  ouvrir({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null }) {
     const session = new Session({
       tunnel, spark, spawn: this.spawnFn, commande: this.commande,
+      chemin, motifDepannage,
       inactiviteMs: this.inactiviteMs,
       preavisMs: this.preavisMs, maintenant: this.maintenant,
     }).demarrer();

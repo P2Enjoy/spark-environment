@@ -551,3 +551,27 @@ tbody tr:hover { background: var(--color-hover); }
   display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
   margin: 0 0 var(--space-3);
 }
+
+/* SPK-56 · docs/DESIGN_SYSTEM.md §1.5 bis — le manuel est une destination de la
+   console. Sommaire à gauche, chapitre à droite ; empilés sous 1024 px (§8.1). */
+.manuel { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr; gap: var(--space-4); align-items: start; }
+.manuel__sommaire { position: sticky; top: var(--space-4); background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); }
+.manuel__sommaire h1 { font-size: 1.125rem; margin: 0 0 var(--space-3); }
+.manuel__sommaire ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.manuel__sommaire a { display: block; padding: var(--space-2); border-radius: var(--radius-md); }
+.manuel__chapitre { max-width: 68ch; }
+.manuel__chapitre h2 { margin-top: 0; }
+.manuel__chapitre h3, .manuel__chapitre h4 { margin-top: var(--space-5); }
+.manuel__chapitre img { max-width: 100%; height: auto; border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); }
+.manuel__chapitre blockquote { margin: var(--space-4) 0; padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--color-brand); background: var(--color-hover); }
+.bloc-code { background: var(--color-ink); color: #fff; padding: var(--space-3);
+  border-radius: var(--radius-md); overflow-x: auto; }
+.bloc-code code { color: inherit; background: none; }
+.table-defilante { overflow-x: auto; }
+@media (max-width: 1024px) {
+  .manuel { grid-template-columns: 1fr; }
+  .manuel__sommaire { position: static; }
+}

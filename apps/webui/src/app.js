@@ -17,6 +17,7 @@ import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
 import { renderForgeView } from './components/forge-view.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
+import { renderManuel } from './components/manuel-view.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
 import { tunnelOf } from './components/tokens.js';
@@ -64,6 +65,7 @@ function marquerNavigation() {
   // Le premier degré reste « Sparks » quand on est dans une section de la Forge :
   // les onglets du second degré portent leur propre `aria-current` (§34.1).
   const courant = etat.route === 'serveurs' ? '#/serveurs'
+    : etat.route === 'manuel' ? '#/manuel'
     : ['forge', 'images', 'journal'].includes(etat.route) ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
@@ -71,10 +73,15 @@ function marquerNavigation() {
   }
 }
 
+/** État de l'écran du manuel (SPK-56). */
+const manuel = { status: 'loading', chapters: [], current: null, markdown: '', error: null };
+
 function peindre() {
   marquerNavigation();
   racine.querySelector('.principal').innerHTML =
-    etat.route === 'creation' && etat.status === 'loading'
+    etat.route === 'manuel'
+      ? renderManuel(manuel)
+      : etat.route === 'creation' && etat.status === 'loading'
       ? '<div class="carte bloc" aria-busy="true"><p class="sr-only" role="status">Chargement…</p></div>'
       : etat.route === 'images'
       ? renderOngletsForge('#/forge/images') + renderCatalogue(etat.catalogue)
@@ -1347,7 +1354,42 @@ function brancherCatalogue() {
   });
 }
 
+/**
+ * Le manuel (SPK-56 · DESIGN_SYSTEM.md §1.5 bis).
+ *
+ * Les écrans renvoient au manuel plutôt que de porter le raisonnement. Le
+ * chapitre est désigné par son NUMÉRO : le slug du fichier est un détail
+ * d'écriture, et un renvoi qui en dépendrait casserait au premier renommage.
+ */
+async function chargerManuel(chapitre) {
+  etat.route = 'manuel';
+  manuel.status = manuel.chapters.length ? 'ready' : 'loading';
+  manuel.current = chapitre || manuel.current;
+  peindre();
+  try {
+    if (!manuel.chapters.length) {
+      const liste = await (await fetch('/api/manuel')).json();
+      manuel.chapters = liste.chapters ?? [];
+    }
+    const vise = manuel.current || manuel.chapters[0]?.id;
+    if (vise) {
+      const reponse = await fetch(`/api/manuel/chapitre?id=${encodeURIComponent(vise)}`);
+      const rendu = await reponse.json();
+      if (!reponse.ok) throw new Error(rendu?.message ?? 'Chapitre introuvable.');
+      manuel.markdown = rendu.markdown;
+      manuel.current = rendu.id;
+    }
+    manuel.status = 'ready';
+  } catch (erreur) {
+    manuel.status = 'error';
+    manuel.error = erreur;
+  }
+  peindre();
+}
+
 function router() {
+  const chapitre = location.hash.match(/^#\/manuel(?:\/([A-Za-z0-9-]+))?/);
+  if (chapitre) return chargerManuel(chapitre[1] ?? null);
   if (location.hash === '#/serveurs') return chargerServeurs();
   if (location.hash === '#/forge/journal') return chargerJournal();
   if (location.hash === '#/forge/images') return chargerCatalogue();
