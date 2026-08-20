@@ -227,9 +227,36 @@ test("la section dit son etat DANS LES DEUX SENS", () => {
 test("l'ecran ne presente JAMAIS la protection comme une frontiere de securite", () => {
   // §35.1 : c'est un garde-fou. L'ecran est le premier endroit ou l'on serait
   // tente de laisser croire le contraire.
+  //
+  // RÉVISÉE le 2026-08-20 par SPK-56 (§1.5 bis). La preuve gardait la règle en
+  // exigeant le PARAGRAPHE qui la portait. La règle n'a pas changé ; l'endroit
+  // où elle est expliquée, si — le manuel M8 la disait déjà, en plus complet, et
+  // une explication écrite deux fois diverge.
+  //
+  // Ce que l'écran garde, et que cette preuve exige toujours : le mot qui
+  // QUALIFIE (« garde-fou, pas un contrôle d'accès ») et le renvoi qui mène à
+  // l'explication. Le renvoi remplace le paragraphe, jamais le mot juste.
+  //
+  // « Retirer un accès n'est jamais bloqué » n'est pas perdu pour autant : la
+  // confirmation de révocation NOMME les Sparks protégés au moment où le geste
+  // se pose (§35.2, §6.23), ce que `spark-admin.test.js` garde de son côté.
   const html = renderProtection(PROTEGE);
-  assert.match(html, /n’est pas un\s+contrôle d’accès/s);
-  assert.match(html, /Retirer un accès n’est jamais bloqué/);
+  assert.match(html, /garde-fou/);
+  assert.match(html, /pas un contrôle d’accès/);
+  assert.match(html, /href="#\/manuel\/M8"/, 'le renvoi remplace le paragraphe');
+  // Et l'écran ne prétend toujours nulle part être une barrière.
+  assert.ok(!/sécurisé|infranchissable|interdit l’accès/i.test(html));
+});
+
+test('la section Protection ne porte plus de raisonnement (§1.5 bis)', () => {
+  // Le test du §1.5 bis : une phrase qui reste vraie quand toutes les valeurs de
+  // l'écran changent appartient au manuel. Celles-ci y sont parties.
+  const html = renderProtection(PROTEGE);
+  assert.ok(!/geste accidentel/.test(html));
+  assert.ok(!/atteint le serveur atteint le registre/.test(html));
+  // …mais l'ÉTAT, lui, reste : c'est une valeur, pas un raisonnement.
+  assert.match(html, /Armée/);
+  assert.match(html, /Toute écriture visant ce/);
 });
 
 test('la saisie du mot de passe passe par la MODALE de la section (§6.27)', () => {
@@ -536,4 +563,21 @@ test('un Docker sans mode n’affiche aucun mode', () => {
         detail: 'paquet « docker.io » de la distribution', mode: null },
     ] } }));
   assert.ok(!/enraciné|rootless/.test(rendu));
+});
+
+test('la section Ressources NOMME ses valeurs et renvoie pour le reste (§1.5 bis)', () => {
+  // Les valeurs sont déjà QUALIFIÉES — « réservés », « au plus », « Plafond
+  // réseau » —, donc le mot juste est à l'écran. Le paragraphe qui expliquait
+  // ce qu'est un droit d'ordonnancement restait vrai quand toutes les valeurs
+  // changent : il est au manuel M5, qui le disait déjà en plus complet.
+  // Éprouvé par la SURFACE réelle, pas par une fonction interne exportée pour
+  // l'occasion : c'est ce que l'exploitant lit qui doit tenir.
+  const html = renderSparkDetail({ status: 'ready', spark: SPARK });
+  assert.match(html, /CPU réservés/, 'la valeur porte son qualificatif');
+  assert.match(html, /Plafond réseau/);
+  assert.ok(!/droit d’ordonnancement/.test(html));
+  assert.ok(!/consommer davantage quand la machine est libre/.test(html));
+  // Le fait qui NE se déduit d'aucune valeur affichée reste, lui, à l'écran.
+  assert.match(html, /Seul le plafond réseau est appliqué par le noyau/);
+  assert.match(html, /href="#\/manuel\/M5"/);
 });

@@ -153,11 +153,8 @@ export function renderProtection(spark, admin = null) {
        Spark est refusée par le serveur — commandes, routes, octroi de clé,
        instantanés.`
     : '<strong>Désarmée.</strong> Ce Spark accepte toutes les écritures.'}</p>
-  <p class="note">Elle arrête le geste accidentel : le mauvais Spark sélectionné,
-  la ligne cliquée trop vite, le script lancé sur le mauvais nom. Ce n’est pas un
-  contrôle d’accès — qui atteint le serveur atteint le registre.
-  <strong>Retirer un accès n’est jamais bloqué</strong> : révoquer une clé reste
-  possible sur un Spark protégé, après une confirmation qui le nomme.</p>
+  <p class="note">Un garde-fou, pas un contrôle d’accès.
+  <a href="#/manuel/M8">Manuel M8 — Protéger un Spark</a></p>
   <p class="formulaire__actions">
     <button type="button" class="bouton" data-ouvre="protection">${
       arme ? 'Lever la protection' : 'Armer la protection'}</button>
@@ -204,9 +201,8 @@ function renderRessources(spark, usage) {
       usage?.disk?.used_bytes != null ? ` — ${formatBytes(usage.disk.used_bytes)} utilisés` : ''}`, true],
     ['Plafond réseau', formatBps(spark.network_burst_bps), true],
   ])}
-  <p class="note">La réservation CPU est un droit d’ordonnancement sous contention,
-  pas un plafond : consommer davantage quand la machine est libre est normal.
-  Seul le plafond réseau est appliqué par le noyau.</p>
+  <p class="note">Seul le plafond réseau est appliqué par le noyau.
+  <a href="#/manuel/M5">Manuel M5 — Ce que « 0,5 CPU » veut dire</a></p>
 </section>`;
 }
 
