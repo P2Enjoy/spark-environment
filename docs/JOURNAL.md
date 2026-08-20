@@ -5394,3 +5394,72 @@ implémenter. **SPK-63 est `[x]`.**
 instruction. SPK-61 et SPK-62, nées de cette session, sont de la construction.
 SPK-40 est désormais **démarrable**. SPK-53 et SPK-54 attendent toujours une
 décision du responsable.
+
+---
+
+## 2026-08-20 · SPK-36, premier scénario — sauvegarder le registre
+
+**Unité choisie** au §4.2 point 3, première `[ ]` du plan. Son arbitrage désigne
+lui-même le point de départ : la sauvegarde du registre, **le seul scénario du lot
+qui se livre en code vérifiable** plutôt qu'en document.
+
+### Ce que la mesure a tranché
+
+Le registre est en mode WAL (`db.py`). Mesuré pendant qu'une connexion écrivait :
+
+```
+500 lignes écrites
+cp reg.db copie.db    → la copie s'ouvre SANS ERREUR et contient 490 lignes
+Connection.backup()   → 500 lignes
+```
+
+**Dix lignes perdues en silence, et une copie qui ne se plaint pas.** C'est le
+pire mode de panne d'une sauvegarde : elle restaure, elle ne signale rien, et il
+manque ce qu'on venait chercher. En preuve, le cas s'est révélé pire encore —
+selon ce qui reste dans le WAL, la copie peut ne pas porter la **table** du tout.
+
+Sur le registre réel : 237 568 octets en 0,005 s, et la chaîne d'audit de la copie
+porte la **même tête** que l'original. Le coût n'est pas un argument pour espacer
+les sauvegardes.
+
+### Ce qui a été construit
+
+`sparkd.sauvegarde` — sauvegarde par l'API en ligne, sans arrêter le service, et
+qui **vérifie ce qu'elle vient d'écrire** par deux contrôles qui ne disent pas la
+même chose : `integrity_check` porte sur la structure, la chaîne d'audit sur le
+contenu du journal. Une copie douteuse est **retirée** : la garder ferait croire
+qu'une sauvegarde existe, ce qui est pire que de n'en avoir aucune.
+
+La restauration refuse si `sparkd` répond, refuse un fichier qui ne se vérifie
+pas, et **déplace** le registre remplacé au lieu de l'écraser. Les fichiers `-wal`
+et `-shm` partent avec lui — laissés en place, SQLite les rejouerait par-dessus le
+registre restauré, et la restauration serait silencieusement inutile.
+
+`docs/CONTINGENCE.md` porte la fiche complète et, une fois pour toutes, la
+**frontière** : ce que le produit sauvegarde et ce qu'il ne sauvegarde pas. Le
+trou le plus grave y est nommé — les instantanés vivent DANS le pool, donc ils ne
+protègent pas de sa perte.
+
+### Un défaut trouvé par les preuves
+
+Un fichier SQLite valide sans `audit_log` faisait lever une erreur brute de
+SQLite. Un tel fichier n'est pas un registre Spark — ou c'en est un tronqué —, et
+l'erreur nue ferait chercher une panne du produit là où le fichier est simplement
+le mauvais. Il est désormais nommé, et la restauration le refuse en parlant du
+journal.
+
+### Vérifications
+
+Campagne complète **verte** : 733 Python, contrat conforme, 780 de console, 8 de
+gestes, 70 parcours E2E, 7 du manuel, `build`. Aucune capture : cette unité ne
+touche pas l'interface.
+
+**SPK-36 reste `[~]`.** Un scénario sur dix est traité, et sa DoD exige en outre
+un **exercice réel sur l'hôte** — restauration du registre et reconstruction d'un
+Spark — que la session ne peut pas conduire. Les chiffres de reprise restent
+espérés tant que cet exercice ne les a pas remplacés.
+
+**Où reprendre.** SPK-40 est démarrable depuis l'arbitrage de SPK-35. SPK-61 et
+SPK-62 sont de la construction. Les neuf autres scénarios de SPK-36 sont listés
+au §3 de `docs/CONTINGENCE.md`. SPK-53 et SPK-54 attendent une décision du
+responsable.

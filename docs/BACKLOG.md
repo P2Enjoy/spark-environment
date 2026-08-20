@@ -1099,7 +1099,7 @@ panne — la liste est ouverte, elle n'est pas un menu à cocher :
   protection au passage.
 - Rien n'a été implémenté, conformément à l'arbitrage.
 
-### [ ] SPK-36 · Instruire les plans de contingence et les gestes d'urgence
+### [~] SPK-36 · Instruire les plans de contingence et les gestes d'urgence
 
 **Arbitrage du responsable, 2026-08-20 : commencer par la SAUVEGARDE DU REGISTRE.**
 C'est le scénario le moins coûteux et le plus évident du lot, et c'est le seul du
@@ -1158,6 +1158,33 @@ Ce que l'unité doit trancher, pas seulement décrire :
   et reconstruction d'un Spark au minimum. Un plan jamais joué est une fiction, et
   ce dépôt ne déclare pas fait ce qui n'a pas été éprouvé ; les chiffres de reprise
   observés pendant l'exercice remplacent les chiffres espérés.
+
+**Premier scénario livré le 2026-08-20 : la sauvegarde du registre.**
+
+- **Le point de l'unité, mesuré** : le registre est en WAL, et une copie de
+  fichier perd EN SILENCE ce qui n'a pas été reversé — 490 lignes sur 500, et la
+  copie s'ouvre sans se plaindre. C'est le pire mode de panne d'une sauvegarde.
+  L'API de sauvegarde en ligne rend 500 sur 500 sans arrêter le service.
+- `sparkd.sauvegarde` **vérifie ce qu'elle vient d'écrire** — structure SQLite et
+  chaîne d'audit — et **retire** une copie douteuse : la garder ferait croire
+  qu'une sauvegarde existe, ce qui est pire que de n'en avoir aucune.
+- La restauration refuse si `sparkd` répond, refuse un fichier qui ne se vérifie
+  pas, et **déplace** le registre remplacé. Les `-wal` et `-shm` partent avec lui,
+  sans quoi SQLite les rejouerait par-dessus le fichier restauré.
+- **`docs/CONTINGENCE.md` créé**, lié depuis le README et le contrat de
+  déploiement. Il porte la **frontière** — ce que le produit sauvegarde et ce
+  qu'il ne sauvegarde pas — et nomme le trou le plus grave : les instantanés
+  vivent DANS le pool, donc ils ne protègent pas de sa perte.
+- **Preuves** : 10, dont une qui rejoue la mesure du WAL pour qu'une future
+  « simplification » en `shutil.copy` rougisse immédiatement.
+
+- **Reste avant `[x]`** :
+  1. les **neuf autres scénarios**, listés au §3 de `docs/CONTINGENCE.md` avec ce
+     qui manque à chacun ;
+  2. l'**exercice réel sur l'hôte** que la DoD exige — restauration du registre et
+     reconstruction d'un Spark. Les chiffres de reprise du §2.6 restent
+     **espérés** tant qu'il ne les a pas remplacés, et un plan jamais joué est une
+     fiction. **Nécessite une action humaine.**
 
 ### [~] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
 

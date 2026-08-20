@@ -3,6 +3,13 @@
 ## [Non publié]
 
 ### Ajouté
+- **Sauvegarder et restaurer le registre** (SPK-36, `python3 -m sparkd.sauvegarde`)
+  : sans arrêter le service, avec vérification de ce qui vient d'être écrit —
+  structure SQLite et chaîne du journal. La restauration refuse si `sparkd`
+  tourne, refuse un fichier qui ne se vérifie pas, et déplace le registre
+  remplacé au lieu de l'écraser.
+- **`docs/CONTINGENCE.md`** : les plans d'urgence. La première fiche est écrite,
+  les neuf autres scénarios sont listés avec ce qui manque à chacun.
 - **Supprimer un Spark exige de frapper son nom** (SPK-63,
   `docs/DESIGN_SYSTEM.md` §6.23) : le bouton reste visible et désactivé tant que
   le nom exact n'est pas saisi, et l'écran dit pourquoi. La comparaison ne
