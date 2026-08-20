@@ -1654,6 +1654,30 @@ déclare `admin.monapi.fr` doit savoir qu'il vient de détourner une adresse qui
 partait ailleurs — silence ici produirait une panne cherchée pendant des heures
 du mauvais côté.
 
+**Et la vue depuis le joker — arbitrage du responsable, 2026-08-20.** Dire la
+surcharge au moment où on la crée ne suffit pas : ce message passe une fois, et
+la personne qui exploite le Spark porteur du joker ne l'a peut-être jamais lu.
+
+Quand on consulte les routes d'un Spark, une route joker affiche donc **la liste
+des noms qui lui sont soustraits**, chacun avec le Spark qui le sert. Un
+`*.monapi.fr` porte la mention « `api.monapi.fr` est servi par le Spark
+*dedie* » aussi longtemps que cette route exacte existe.
+
+C'est l'information qui manque le plus au diagnostic : un exploitant qui constate
+qu'un sous-domaine ne répond pas comme les autres doit pouvoir voir, **depuis le
+joker lui-même**, que ce nom part ailleurs. Sans cela il cherche dans la
+configuration du Spark porteur, où il n'y a rien à trouver.
+
+Le cas d'usage est celui du responsable : lorsqu'un sous-domaine devient assez
+chargé pour mériter son propre Spark, on le déclare en exact et il prend le pas.
+La montée en charge se fait ainsi, un nom à la fois, sans toucher au joker.
+
+**Deux règles pour que cette liste reste utile.** Elle ne compte que les routes
+**actives** — une route désactivée ne prend le pas sur rien. Et elle ne mentionne
+pas les noms exacts que **le même Spark** possède : ce n'est pas une surcharge,
+c'est le même exploitant qui affine sa propre route, et l'afficher serait du
+bruit.
+
 **Côté TLS**, un certificat joker exige une validation par enregistrement DNS —
 `DNS-01` — là où un nom exact se valide par HTTP. Le §38 rend cette validation
 possible pour la première fois, puisque la console sait écrire dans la zone ;

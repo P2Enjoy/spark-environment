@@ -1634,6 +1634,12 @@ enregistrement DNS par locataire, à la main, indéfiniment.
 - Portée : `*.monapi.fr` devient une route valide ; un enregistrement DNS joker
   se pose depuis le même bouton qu'au §38 ; l'écran NOMME le Spark dont une
   route exacte prend le pas quand elle est avalée par le joker d'un autre.
+- **Et la vue inverse** (arbitrage du 2026-08-20) : consulter les routes d'un
+  Spark montre, sur chaque route joker, **les noms qui lui sont soustraits** et
+  le Spark qui les sert. Dire la surcharge à sa création ne suffit pas — ce
+  message passe une fois, et l'exploitant du Spark porteur ne l'a peut-être
+  jamais lu. Routes actives seulement, et les noms exacts du même Spark ne
+  comptent pas comme une surcharge.
 - Bornes, portées par la base : un seul niveau, en tête seulement. `*.*.x.tld`,
   `api.*.x.tld` et `*` seul sont refusés, et le refus dit laquelle des trois
   bornes s'applique.
