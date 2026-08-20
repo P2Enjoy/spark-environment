@@ -58,7 +58,15 @@ def verifier(chemin: Path) -> dict:
     connexion = connect(chemin)
     try:
         structure = connexion.execute("PRAGMA integrity_check").fetchone()[0]
-        chaine = audit.verify_chain(connexion)
+        try:
+            chaine = audit.verify_chain(connexion)
+        except sqlite3.OperationalError as erreur:
+            # Un fichier SQLite valide qui ne porte pas `audit_log` n'est pas un
+            # registre Spark — ou c'en est un tronqué. Laisser remonter l'erreur
+            # brute de SQLite ferait chercher une panne du produit là où le
+            # fichier est simplement le mauvais (CLAUDE.md §18).
+            chaine = {"intact": False, "length": None, "head": None,
+                      "break": f"journal illisible : {erreur}"}
     finally:
         connexion.close()
     return {"structure": structure, "chaine": chaine}
