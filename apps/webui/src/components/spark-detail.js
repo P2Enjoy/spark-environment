@@ -112,7 +112,7 @@ export function renderCommands(spark, { confirming = null, admin = null,
            <input class="controle" id="suppression-nom" type="text"
                   autocomplete="off" spellcheck="false"
                   data-frappe="delete" value="${echapper(frappe)}">
-           <p class="champ__aide" id="suppression-aide">${correspond
+           <p class="champ__aide" id="suppression-aide" role="status">${correspond
              ? 'Le nom correspond.'
              : 'Le nom n’est pas encore celui du Spark : la suppression n’est pas engageable.'}</p>
          </div>

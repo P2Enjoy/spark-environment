@@ -1398,6 +1398,12 @@ test('supprimer un Spark dont l’instance a disparu RÉUSSIT depuis la console'
     await page.waitForSelector('.entete-entite');
     await page.click('[data-commande="delete"]');
     await page.waitForSelector('[data-confirme]', { timeout: 10000 });
+
+    // RÉVISÉ le 2026-08-20 par SPK-63 (§6.23) : la suppression exige désormais
+    // qu'on FRAPPE le nom. Le parcours cliquait directement — ce qui prouvait la
+    // suppression, mais ne pouvait plus aboutir. On frappe donc, comme un
+    // exploitant, et le clavier fait foi.
+    await page.fill('[data-frappe="delete"]', 'orphelin');
     await page.click('[data-confirme]');
 
     // On revient à la liste, et le Spark n'y est plus.
@@ -1419,6 +1425,59 @@ test('supprimer un Spark dont l’instance a disparu RÉUSSIT depuis la console'
       && /ABSENTE/.test(e.message ?? ''));
     assert.ok(marquee, 'la suppression d’une instance absente ne se lit pas comme une autre');
     assert.ok(marquee.message.includes('admission'));
+  });
+});
+
+// --- SPK-63 · FRAPPER LE NOM (§6.23) ---------------------------------------
+
+test('sans la frappe du nom, la suppression ne s’engage PAS', async () => {
+  await parcours('suppression-frappe', async () => {
+    // §6.23 : une confirmation ordinaire prouve qu'on a VU l'écran ; frapper le
+    // nom prouve qu'on a lu LEQUEL. C'est la seule différence qui compte quand
+    // on a sélectionné le mauvais Spark.
+    await ouvrir('boutique');
+    await page.waitForSelector('.entete-entite');
+    await page.click('[data-commande="delete"]');
+    await page.waitForSelector('[data-frappe="delete"]', { timeout: 10000 });
+
+    // §6.22 et §14.3 : le focus entre dans le CHAMP, pas sur un bouton inerte.
+    const focalise = await page.evaluate(() =>
+      document.activeElement?.getAttribute('data-frappe'));
+    assert.equal(focalise, 'delete');
+
+    // §9.9 : le bouton est PRÉSENT et désactivé — le faire disparaître ferait
+    // croire que le produit ne sait pas supprimer.
+    const engage = () => page.$eval('[data-confirme]', (b) => b.disabled);
+    assert.equal(await engage(), true, 'rien de frappé : rien n’est engageable');
+
+    // Un nom APPROCHANT n'engage pas. La casse ne suffit pas non plus : deux
+    // Sparks qui ne diffèrent que par elle existent.
+    for (const approche of ['bouti', 'BOUTIQUE', 'boutique ']) {
+      await page.fill('[data-frappe="delete"]', approche);
+      assert.equal(await engage(), true, approche);
+    }
+
+    // Et rien n'a été tenté : ce n'est pas une erreur, donc pas de rouge.
+    assert.equal(await page.$$eval('.refus', (l) => l.length), 0);
+
+    // Le nom EXACT engage.
+    await page.fill('[data-frappe="delete"]', 'boutique');
+    assert.equal(await engage(), false);
+
+    // On ANNULE : le Spark doit être intact, et c'est `sparkd` qui le dit.
+    await page.click('[data-annule]');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-frappe="delete"]'), { timeout: 10000 });
+    const { status } = await pile.lireSparkd('/v1/sparks/boutique');
+    assert.equal(status, 200, 'une confirmation annulée n’a rien supprimé');
+
+    // Rouvrir REPART à vide : garder la frappe précédente rendrait la suivante
+    // engageable sans avoir rien lu.
+    await page.click('[data-commande="delete"]');
+    await page.waitForSelector('[data-frappe="delete"]', { timeout: 10000 });
+    assert.equal(await page.$eval('[data-frappe="delete"]', (c) => c.value), '');
+    assert.equal(await engage(), true);
+    await page.click('[data-annule]');
   });
 });
 

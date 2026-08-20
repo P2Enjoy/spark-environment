@@ -225,18 +225,23 @@ function brancher() {
       peindre();
     },
   });
-  // SPK-63 : la frappe repeint l'écran — le bouton s'active quand le nom
-  // correspond. Le curseur est REPLACÉ après le repeint, sans quoi il
-  // reviendrait au début du champ à chaque caractère.
+  // SPK-63 : la frappe n'appelle PAS `peindre()`. Le §6.9 bis a déjà enseigné la
+  // leçon pour les curseurs — `innerHTML` reconstruit la surface, ce qui arrache
+  // le contrôle en cours d'usage et fait perdre le focus au clavier. Seuls les
+  // deux éléments qui dépendent de la valeur sont réécrits.
   const champFrappe = racine.querySelector('[data-frappe="delete"]');
   champFrappe?.addEventListener('input', () => {
-    const position = champFrappe.selectionStart;
     etat.frappe = champFrappe.value;
-    peindre();
-    const rendu = racine.querySelector('[data-frappe="delete"]');
-    if (rendu) {
-      rendu.focus();
-      rendu.setSelectionRange(position, position);
+    const correspond = etat.frappe === (etat.spark?.name ?? '');
+    const engagement = racine.querySelector('[data-confirme="delete"]');
+    if (engagement) engagement.disabled = !correspond;
+    const aide = racine.querySelector('#suppression-aide');
+    // §9.7 : le changement est ANNONCÉ. Sans cela, qui n'a pas l'écran sous les
+    // yeux ne sait pas que le bouton vient de s'activer.
+    if (aide) {
+      aide.textContent = correspond
+        ? 'Le nom correspond.'
+        : 'Le nom n’est pas encore celui du Spark : la suppression n’est pas engageable.';
     }
   });
   racine.querySelector('[data-confirme]')?.addEventListener('click', () => lancer('delete'));
