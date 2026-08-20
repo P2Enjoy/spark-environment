@@ -159,3 +159,34 @@ test('l’écran rappelle que les lectures ne sont pas journalisées', () => {
   // Sinon un exploitant chercherait longtemps qui a consulté quoi.
   assert.match(pret(), /lectures ne sont pas journalisées/);
 });
+
+// --- la traduction à l'affichage (SPK-46, docs/DAT.md §21.5 bis) -----------
+
+test('une transition d’états est TRADUITE dans la table de supervision', () => {
+  // INC-01 : la page entière portait le vocabulaire du runtime, à côté de badges
+  // qui disaient « En marche ». Le journal reste technique ; c'est la CONSOLE
+  // qui traduit.
+  const rendu = pret({ entries: [{
+    ts: '2026-08-20T10:00:00', action: 'spark.start', result: 'ok',
+    actor: 'console/local', actor_class: 'human',
+    message: '« starting » → « running ».' }] });
+  assert.ok(rendu.includes('« Démarrage… » → « En marche »'));
+  assert.ok(!rendu.includes('starting'), 'le vocabulaire technique ne doit plus atteindre l’écran');
+});
+
+test('un message que la console ne reconnaît pas traverse INTACT', () => {
+  // Un message inconnu mal traduit serait pire que le même message resté
+  // technique (§21.5 bis).
+  const brut = 'Relevé appliqué. MemTotal 94 Gio, ARC 8 Gio.';
+  assert.ok(pret({ entries: [{
+    ts: '2026-08-20T10:00:00', action: 'host.sync', result: 'ok',
+    actor: 'sparkd', actor_class: 'runtime', message: brut }] }).includes(brut));
+});
+
+test('un NOM cité qui n’est pas un état n’est pas déformé', () => {
+  const rendu = pret({ entries: [{
+    ts: '2026-08-20T10:00:00', action: 'spark.delete', result: 'ok',
+    actor: 'console/local', actor_class: 'human',
+    message: 'Spark « boutique » supprimé, ressources rendues.' }] });
+  assert.ok(rendu.includes('« boutique »'));
+});

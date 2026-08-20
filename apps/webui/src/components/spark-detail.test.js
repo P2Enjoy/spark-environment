@@ -289,3 +289,27 @@ test("le journal d'un Spark porte l'auteur de chaque ligne", () => {
   assert.match(html, /déclaré par console\/prod/);
   assert.match(html, /automatique/);
 });
+
+// --- la traduction à l'affichage (SPK-46, docs/DAT.md §21.5 bis) -----------
+
+test('une transition d’etats est TRADUITE dans la facette Journal d’un Spark', () => {
+  // La DoD exige la preuve dans les DEUX surfaces : la traduction vit a un seul
+  // endroit, mais elle doit etre BRANCHEE aux deux.
+  const html = renderSparkDetail({
+    status: 'ready', spark: SPARK, facette: 'journal',
+    audit: [{ ts: '2026-08-20T10:00:00', action: 'spark.start', result: 'ok',
+              message: '« stopped » → « starting ».' }],
+  });
+  assert.ok(html.includes('« Arrêté » → « Démarrage… »'));
+  assert.ok(!html.includes('stopped'));
+});
+
+test('un message inconnu traverse INTACT dans la facette Journal', () => {
+  const brut = '4 route(s) appliquée(s).';
+  const html = renderSparkDetail({
+    status: 'ready', spark: SPARK, facette: 'journal',
+    audit: [{ ts: '2026-08-20T10:00:00', action: 'ingress.reconcile',
+              result: 'ok', message: brut }],
+  });
+  assert.ok(html.includes(brut));
+});

@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-46 · docs/DAT.md §21.5 bis (le vocabulaire du
+ *           journal, et qui le traduit) · docs/DESIGN_SYSTEM.md §14.7
  * @verifies docs/DESIGN_SYSTEM.md §2.6, §12.5, §14.6, §14.7 ·
  *           docs/DESIGN_SYSTEM_APP.md §4
  */
@@ -7,7 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE, TUNNEL_STATES, tunnelOf,
+  SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE,
+  TUNNEL_STATES, tunnelOf, traduireMessage,
 } from './tokens.js';
 
 test('les huit etats du modele sont couverts', () => {
@@ -94,4 +97,60 @@ test('les etats de tunnel portent des libelles francais distincts', () => {
 test('un etat de tunnel inconnu ne casse rien et reste visible', () => {
   assert.equal(tunnelOf('quelque-chose').label, 'quelque-chose');
   assert.equal(tunnelOf(undefined).label, 'inconnu');
+});
+
+// --- la traduction des messages (SPK-46, docs/DAT.md §21.5 bis) ------------
+
+test('une transition d’etats est traduite dans le vocabulaire de l’ecran', () => {
+  // Le meme concept portait deux vocabulaires a quelques centimetres d'ecart :
+  // le badge disait « En marche », le journal « running » (INC-01).
+  assert.equal(traduireMessage('« starting » → « running ».'),
+               '« Démarrage… » → « En marche ».');
+  assert.equal(traduireMessage('« stopped » → « starting ».'),
+               '« Arrêté » → « Démarrage… ».');
+  assert.equal(traduireMessage('« pending » → « creating ».'),
+               '« En attente » → « Création… ».');
+});
+
+test('un etat de TUNNEL cite par l’hote console est traduit aussi', () => {
+  // Le registre signalait ce message comme le MEME ecart : le badge disait
+  // « rompu » quand le texte disait « broken » (§22.3).
+  assert.equal(
+    traduireMessage('Tunnel vers « validation » indisponible (broken, jamais joint).'),
+    'Tunnel vers « validation » indisponible (rompu, jamais joint).');
+});
+
+test('un NOM cite qui n’est pas un etat traverse INTACT', () => {
+  // C'est la garantie centrale : la console ne DEVINE pas. « validation » est un
+  // nom de serveur, pas un etat, et le traduire serait le deformer.
+  assert.ok(traduireMessage('Tunnel vers « validation » indisponible.')
+              .includes('« validation »'));
+  assert.equal(traduireMessage('Spark « boutique » supprimé.'),
+               'Spark « boutique » supprimé.');
+});
+
+test('un message que la console ne reconnait PAS traverse mot pour mot', () => {
+  // Un message inconnu mal traduit serait pire que le meme message reste
+  // technique (§21.5 bis).
+  for (const brut of [
+    'Relevé appliqué. MemTotal 94 Gio, ARC 8 Gio.',
+    'Capacité relevée inférieure à l’allocation en cours : memory.',
+    '4 route(s) appliquée(s).',
+    'Le port 443 est tenu par le proxy.',
+  ]) assert.equal(traduireMessage(brut), brut);
+});
+
+test('seul l’etat CONNU d’un message mixte est traduit', () => {
+  // « zombie » n'est pas un etat du produit : il reste tel quel, et seul
+  // « running » est traduit. La traduction est mot a mot, pas globale.
+  assert.equal(traduireMessage('« zombie » → « running ».'),
+               '« zombie » → « En marche ».');
+});
+
+test('une valeur absente ne devient jamais « undefined » a l’ecran', () => {
+  // §14.7 : une valeur inconnue recue du backend ne doit pas atteindre l'ecran
+  // sous cette forme.
+  assert.equal(traduireMessage(null), '');
+  assert.equal(traduireMessage(undefined), '');
+  assert.equal(traduireMessage(''), '');
 });
