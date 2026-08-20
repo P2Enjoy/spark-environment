@@ -3990,6 +3990,106 @@ boucle locale. Contrat :
 - le mode lecteur d'écran du terminal est activable — un terminal est utilisable
   au clavier par construction, mais il n'est pas lisible par défaut.
 
+#### 37.4.1 Le transport : un flux d'évènements et des envois, pas une WebSocket
+
+**Complété le 2026-08-20, après mesure du dépôt.** Le §37.4 décrit le contrat du
+terminal sans dire par quoi les octets passent. Trois voies existaient :
+
+1. une **WebSocket** — le réflexe, et ce que fait tout le monde ;
+2. un **flux d'évènements** (`text/event-stream`) pour la sortie, et un `POST`
+   par saisie pour l'entrée ;
+3. un sondage périodique.
+
+**La deuxième est retenue.** La console n'a **aucune dépendance d'exécution** —
+mesuré : `apps/webui/package.json` ne déclare que TypeScript, en développement.
+Node ne porte pas de serveur WebSocket, il faudrait donc en ajouter un ; le
+navigateur, lui, porte `EventSource` nativement. Le §19 de `CLAUDE.md` demande de
+vérifier qu'une dépendance est nécessaire avant de l'ajouter, et elle ne l'est
+pas ici.
+
+Le sondage est écarté : il ajoute une latence à chaque frappe, ce qu'un terminal
+ne pardonne pas.
+
+**Le compromis assumé, et il est réel** : le flux d'évènements est
+**unidirectionnel**. Chaque saisie est donc un `POST` distinct, avec sa latence
+d'aller simple. Pour un shell interactif au clavier, cela ne se voit pas ; pour
+un collage de plusieurs kilo-octets, la console **groupe** les octets en attente
+et n'envoie qu'une requête. Si la mesure montre un jour que cela ne suffit pas,
+la WebSocket redeviendra justifiable — avec sa dépendance, et une raison écrite.
+
+#### 37.4.2 La session : ce qui la crée, ce qui la tue
+
+`ssh -tt` **alloue un pseudo-terminal sur le Spark** : c'est le côté distant qui
+le fournit, l'hôte console n'en crée aucun localement. Cela évite `node-pty`, un
+module natif, pour la même raison qu'au §37.4.1.
+
+Le processus est lancé **par le tunnel existant**, avec la clé du responsable
+(§37.1). `sparkd` n'est pas dans ce chemin.
+
+Trois façons de mourir, et une seule est normale :
+
+- **le flux se ferme** — l'onglet est fermé, la page rechargée, le réseau tombe :
+  le processus distant est **tué**. C'est le contrat du §37.4, et c'est celui qui
+  compte : une session qui survivrait à son écran serait un shell root abandonné
+  dont personne ne se souvient ;
+- **l'inactivité** dépasse le délai : la session se ferme, après un avertissement
+  **affiché avant**, jamais après ;
+- **le shell distant se termine** de lui-même — `exit`, `Ctrl-D` : la session
+  s'arrête et l'écran le dit.
+
+#### 37.4.3 Le redimensionnement, et sa limite
+
+`ssh` en ligne de commande ne sait pas transmettre un changement de taille sans
+terminal de contrôle local. La console envoie donc, sur le canal d'entrée, la
+commande que taperait un humain :
+
+```
+stty rows <lignes> cols <colonnes>
+```
+
+**Ce que cela ne fait pas** : rien pour un programme plein écran **déjà en
+cours** — celui-ci ne recevra pas `SIGWINCH`. Redimensionner pendant qu'un
+éditeur tourne ne le réparera pas ; il faut le relancer. C'est écrit ici plutôt
+que laissé à découvrir, et c'est le prix de n'avoir pas de dépendance native.
+
+#### 37.4.4 La surface d'API
+
+```
+POST   /api/terminal            { server, spark }   ouvre, rend { id, pty }
+GET    /api/terminal/{id}/flux                      text/event-stream : la sortie
+POST   /api/terminal/{id}/entree   { data }         les octets saisis
+POST   /api/terminal/{id}/taille   { rows, cols }   le redimensionnement
+DELETE /api/terminal/{id}                           ferme, et TUE le distant
+```
+
+Elle vit sur l'**hôte console**, comme le reste du §37 : le plan de contrôle n'y
+est pas.
+
+Un identifiant de session est **opaque et imprévisible** — tiré au hasard, jamais
+dérivé du nom du Spark : il ouvre un shell, et le deviner reviendrait à l'obtenir.
+
+#### 37.4.5 Ce que le journal reçoit de l'hôte console
+
+Le §37.5 dit **quoi** journaliser ; voici **comment**, puisque le journal vit
+dans `sparkd` et que la session, elle, n'y passe pas.
+
+L'hôte console **déclare** l'ouverture et la fermeture à `sparkd` par l'API
+d'audit, avec l'acteur qu'il pose déjà sur chaque requête relayée (§21.6.2) :
+
+- à l'ouverture : `spark.terminal_open`, cible le Spark, chemin `ssh` ;
+- à la fermeture : `spark.terminal_close`, la **durée** en secondes, et le motif
+  — `sortie`, `inactivite`, `flux_ferme`, `distant_termine`.
+
+**Rien du contenu ne traverse jamais cette frontière** : ni les octets saisis, ni
+la sortie, ni un extrait. C'est la conséquence assumée du §37.5, et le code doit
+rendre cette fuite impossible plutôt qu'improbable — un test l'éprouve sur ce que
+l'hôte console envoie réellement.
+
+Si la déclaration échoue — `sparkd` injoignable —, **la session s'ouvre quand
+même** et l'écart reste visible : refuser un terminal parce que le journal est
+indisponible transformerait une panne de traçabilité en panne d'exploitation, au
+moment précis où l'on cherche à réparer.
+
 ### 37.5 Ce que le journal retient d'une session
 
 **Décision du responsable : l'ouverture et la fermeture, rien du contenu.** Sont

@@ -1532,8 +1532,14 @@ enregistrement technique, et c'est la **console** qui traduit à l'affichage.
 
 Le transport de tous les outils du §37, et le premier d'entre eux.
 
-- Spécification : `docs/DAT.md` §37.1 à §37.5 · `docs/DESIGN_SYSTEM_APP.md`
-  SPK-DS-04 · manuel M8.
+- Spécification : `docs/DAT.md` §37.1 à §37.5, complétée le 2026-08-20 par les
+  §37.4.1 à §37.4.5 — le transport, la vie de la session, la limite du
+  redimensionnement, la surface d'API et ce que le journal reçoit ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-04 · manuel M8.
+- **Décision de transport (§37.4.1)** : un flux d'évènements et des envois, pas
+  une WebSocket. La console n'a AUCUNE dépendance d'exécution — mesuré — et le
+  navigateur porte `EventSource` nativement. `ssh -tt` fournit le
+  pseudo-terminal côté Spark, ce qui évite aussi `node-pty`.
 - Portée : pseudo-terminal servi par l'hôte console sur la boucle locale, rendu
   dans le navigateur ; transport **SSH vers le Spark** par le tunnel existant,
   avec la clé du responsable — `sparkd` n'est pas dans ce chemin (§37.1) ;
