@@ -236,10 +236,8 @@ function renderDnsModale(ui) {
            par nom d’hôte.</p>
          </div>
          <p class="note">Sera écrit :
-           <span class="technique">${echapper(nomAEcrire(domaine, ui.values.dns_zone))}
-           ${echapper(String(ui.values.dns_address ?? '').includes(':') ? 'AAAA' : 'A')}
-           → ${echapper(ui.values.dns_address || '…')}</span>, TTL 300 s.
-           Rien d’autre n’est touché dans la zone.</p>`;
+           <span class="technique" id="dns-apercu">${echapper(apercu(domaine, ui.values))}</span>,
+           TTL 300 s. Rien d’autre n’est touché dans la zone.</p>`;
 
   return renderModale({
     ouverte: ui.open === 'dns', id: 'dns',
@@ -249,6 +247,20 @@ function renderDnsModale(ui) {
     occupee: ui.busy,
     corps,
   });
+}
+
+/**
+ * Aperçu de l'enregistrement, tel qu'il partira.
+ *
+ * Exporté parce que l'écran le RECALCULE à chaque frappe sans repeindre : un
+ * repeint à chaque touche déplacerait le curseur, et un aperçu qui ne suit pas
+ * la saisie est pire que pas d'aperçu — il montre une valeur qui ne sera pas
+ * écrite. Mesuré par le parcours E2E.
+ */
+export function apercu(domaine, valeurs = {}) {
+  const adresse = String(valeurs.dns_address ?? '').trim();
+  const type = adresse.includes(':') ? 'AAAA' : 'A';
+  return `${nomAEcrire(domaine, valeurs.dns_zone)} ${type} → ${adresse || '…'}`;
 }
 
 /** Nom relatif tel qu'il sera écrit, ou un tiret tant que la zone n'est pas choisie. */

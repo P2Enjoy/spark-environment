@@ -58,7 +58,7 @@ function lancer(commande, args, env, journal) {
  * son état dans un fichier voisin du registre (docs/DAT.md §28.4), et peupler
  * après coup laisserait le processif servir un registre qu'il n'a pas relu.
  */
-export async function monterPile() {
+export async function monterPile({ dns = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-e2e-'));
   const registre = join(dossier, 'spark.db');
   const inventaire = join(dossier, 'servers.json');
@@ -91,9 +91,26 @@ export async function monterPile() {
   ]));
 
   // 4. L'hôte console.
+  //
+  // `SPARK_ENV_FILE` pointe sur un fichier du dossier JETABLE, et il est posé
+  // même quand aucun DNS n'est demandé : sans lui, l'hôte lirait le `.env` du
+  // poste et un parcours automatique parlerait au VRAI fournisseur, donc à des
+  // zones en exploitation (SPK-47, docs/DAT.md §38.1).
+  const envConsole = join(dossier, '.env');
+  await writeFile(envConsole, dns
+    ? [`SCW_SECRET_KEY=jeton-de-doublon`,
+       `SCW_DEFAULT_ORGANIZATION_ID=organisation-de-doublon`,
+       `SPARK_DNS_BASE_URL=${dns.baseUrl}`,
+       ...(dns.motif ? [`SPARK_DNS_ALLOW_PATTERN=${dns.motif}`] : [])].join('\n')
+    : '');
+
   const consoleHost = lancer('node', [join(RACINE, 'apps', 'webui', 'host', 'main.js')], {
     SPARK_CONSOLE_PORT: String(portConsole),
     SPARK_CONSOLE_STATE: inventaire,
+    SPARK_ENV_FILE: envConsole,
+    // Le `.env` du poste ne doit pas se réintroduire par l'environnement hérité.
+    SCW_SECRET_KEY: '', SCW_DEFAULT_ORGANIZATION_ID: '', SPARK_DNS_ALLOW_PATTERN: '',
+    SPARK_DNS_BASE_URL: '',
   }, journal);
   await attendre(`http://127.0.0.1:${portConsole}/api/servers`, { quoi: "l'hôte console" });
 

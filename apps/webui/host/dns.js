@@ -258,6 +258,11 @@ export class ScalewayDns {
 export function fournisseurDepuis(env = {}, { fetch: fetchFn = fetch } = {}) {
   const token = env.SCW_SECRET_KEY;
   const motif = env.SPARK_DNS_ALLOW_PATTERN || null;
+  // `SPARK_DNS_BASE_URL` fait parler le MÊME client à un doublon local, comme
+  // `FakeIncus` et `FakeCaddy` le font pour le reste de la pile (§28.1) : le
+  // harnais éprouve le vrai code jusqu'au corps de la requête HTTP, sans
+  // qu'aucun parcours automatique n'atteigne quatorze zones en exploitation.
+  const baseUrl = env.SPARK_DNS_BASE_URL || SCALEWAY;
   if (!token) {
     return {
       configured: false,
@@ -276,6 +281,7 @@ export function fournisseurDepuis(env = {}, { fetch: fetchFn = fetch } = {}) {
       organizationId: env.SCW_DEFAULT_ORGANIZATION_ID,
       projectId: env.SCW_DEFAULT_PROJECT_ID,
       fetch: fetchFn,
+      baseUrl,
     }),
   };
 }

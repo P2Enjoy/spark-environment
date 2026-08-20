@@ -11,7 +11,7 @@
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
-import { ADMIN_VIDE, zonePour } from './components/spark-admin.js';
+import { ADMIN_VIDE, apercu, zonePour } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
 import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
@@ -203,6 +203,12 @@ function brancherPanneaux() {
           controle.type === 'checkbox' ? controle.checked
           : controle.type === 'number' ? Number(controle.value)
           : controle.value;
+        // SPK-47 · §38.3 : l'aperçu de l'enregistrement suit la saisie. On le
+        // met à jour SUR PLACE : repeindre à chaque frappe déplacerait le
+        // curseur, et un aperçu figé montrerait une valeur qui ne sera pas
+        // écrite. Mesuré par le parcours E2E.
+        const vue = racine.querySelector('#dns-apercu');
+        if (vue) vue.textContent = apercu(admin.dns.domain, admin.values);
       });
     }
     formulaire.addEventListener('submit', (evenement) => {

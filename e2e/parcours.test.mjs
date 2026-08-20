@@ -24,10 +24,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { monterPile } from './pile.mjs';
+import { monterDoublonDns } from './dns-doublon.mjs';
 
 const ECHECS = new URL('./captures/echecs/', import.meta.url).pathname;
 
 let pile;
+let dns;
 let navigateur;
 let page;
 /** Messages écrits par l'APPLICATION. Le journal réseau de Chromium est à part. */
@@ -38,7 +40,11 @@ const JOURNAL_RESEAU = /^Failed to load resource: the server responded with a st
 
 before(async () => {
   await mkdir(ECHECS, { recursive: true });
-  pile = await monterPile();
+  // SPK-47 · §38 : le fournisseur DNS est un DOUBLON local. Aucun parcours
+  // automatique ne doit atteindre un compte réel, et la pile impose de toute
+  // façon son propre fichier d'environnement (docs/DAT.md §28.1).
+  dns = await monterDoublonDns();
+  pile = await monterPile({ dns });
   navigateur = await chromium.launch();
   page = await navigateur.newPage();
   page.on('console', (m) => {
@@ -51,6 +57,7 @@ before(async () => {
 after(async () => {
   await navigateur?.close();
   await pile?.demonter();
+  await dns?.demonter();
 });
 
 beforeEach(() => { bruits = []; });
@@ -942,5 +949,99 @@ test('un refus s’affiche DANS la modale et n’efface pas la saisie', async ()
     assert.ok(await page.$('dialog.modale[open]'));
     assert.equal(await page.inputValue('#route-domaine'), 'crm.example.com');
     assert.equal(await page.inputValue('#route-port'), '8080');
+  });
+});
+
+// --- POINTER LE DOMAINE (SPK-47, docs/DAT.md §38) --------------------------
+
+/** Déclare une route publique DEPUIS l'écran, comme un exploitant (§29.3). */
+async function declarerRoute(spark, domaine, port = '8080') {
+  await ouvrir(spark, 'routes');
+  await page.waitForSelector('#titre-routes');
+  await page.click('[data-ouvre="route"]');
+  await page.waitForSelector('dialog.modale[open] #route-domaine');
+  await page.fill('#route-domaine', domaine);
+  await page.fill('#route-port', port);
+  await page.click('[data-engage="route"]');
+  await page.waitForSelector(`li:has-text("${domaine}")`, { timeout: 10000 });
+}
+
+test('pointer le DNS d’une route écrit l’enregistrement, et RIEN d’autre', async () => {
+  await parcours('dns-pointer', async () => {
+    await declarerRoute('boutique', 'boutique.exemple.test');
+
+    // Le geste part de la LIGNE de la route : c'est elle qui porte le domaine.
+    await page.click('li:has-text("boutique.exemple.test") [data-dns-route]');
+    await page.waitForSelector('dialog.modale[open] #dns-zone', { timeout: 10000 });
+
+    // Le domaine n'est pas saisissable : il vient de la route.
+    assert.equal(await page.inputValue('#dns-domaine'), 'boutique.exemple.test');
+    assert.equal(await page.getAttribute('#dns-domaine', 'readonly'), '');
+    // La zone la plus spécifique qui le contienne est PRÉ-CHOISIE.
+    assert.equal(await page.inputValue('#dns-zone'), 'exemple.test');
+
+    await page.fill('#dns-adresse', '198.51.100.7');
+    // L'écran montre ce qui SERA écrit avant de l'écrire.
+    const apercu = await page.textContent('dialog.modale[open] .note');
+    assert.ok(apercu.includes('boutique'), 'le nom relatif à la zone');
+    assert.ok(apercu.includes('198.51.100.7'));
+
+    await page.click('[data-engage="dns"]');
+    await page.waitForSelector('#titre-routes ~ * .avertissement, .avertissement[role="status"]',
+                               { timeout: 10000 });
+    const annonce = await page.textContent('.avertissement[role="status"]');
+    assert.ok(annonce.includes('A boutique.exemple.test'));
+    assert.ok(annonce.includes('198.51.100.7'));
+    assert.ok(/écrit chez le fournisseur/.test(annonce));
+    // §38.4 : ce qui est ÉCRIT, jamais un domaine « prêt ».
+    assert.ok(/propagation|jusqu/i.test(annonce), 'la propagation doit être dite');
+    assert.ok(!/prêt|résout désormais/i.test(annonce));
+
+    // EFFET, constaté chez le fournisseur : l'enregistrement est là…
+    const zone = dns.enregistrements();
+    const pose = zone.find((r) => r.name === 'boutique' && r.type === 'A');
+    assert.ok(pose, 'l’enregistrement doit exister chez le fournisseur');
+    assert.equal(pose.data, '198.51.100.7');
+    assert.equal(pose.ttl, 300);
+
+    // … et les VOISINS n'ont pas bougé. C'est la règle du §38.2, et c'est ce
+    // qu'une écriture trop large casserait pour de bon dans une zone réelle.
+    assert.ok(zone.some((r) => r.type === 'MX' && r.data === '10 mail.exemple.test.'),
+      'la messagerie de la zone ne doit pas être touchée');
+    assert.ok(zone.some((r) => r.name === '_verification' && r.type === 'TXT'),
+      'la preuve de propriété ne doit pas être touchée');
+    assert.ok(zone.some((r) => r.name === 'www' && r.data === '198.51.100.1'),
+      'un A voisin ne doit pas être emporté');
+
+    // Ce que le produit a DEMANDÉ : jamais de création de zone.
+    const dernier = dns.recus().at(-1);
+    assert.equal(dernier.disallow_new_zone_creation, true);
+    assert.equal(dernier.changes.length, 1, 'un seul changement, pas un lot');
+  });
+});
+
+test('pointer l’APEX d’une zone est refusé, et la zone n’est pas touchée', async () => {
+  await parcours('dns-apex', async () => {
+    const avant = dns.enregistrements().length;
+    await declarerRoute('boutique', 'exemple.test', '8081');
+
+    await page.click('li:has-text("exemple.test") [data-dns-route]');
+    await page.waitForSelector('dialog.modale[open] #dns-adresse', { timeout: 10000 });
+    // Aucune zone ne contient l'apex : il faut donc la choisir à la main, ce qui
+    // est déjà un signal. Le refus, lui, vient du produit et pas de l'écran.
+    await page.selectOption('#dns-zone', 'exemple.test');
+    await page.fill('#dns-adresse', '198.51.100.7');
+    assert.equal(await page.isDisabled('[data-engage="dns"]'), false,
+      'l’interface ne s’oppose pas : le refus est une RÈGLE, pas un grisage');
+    await page.click('[data-engage="dns"]');
+
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    const refus = await page.textContent('dialog.modale[open] .refus');
+    assert.ok(/apex/.test(refus), 'le refus doit NOMMER ce qu’il protège');
+    assert.ok(/serveurs de noms|messagerie/.test(refus));
+
+    // La modale reste ouverte, et la zone n'a pas bougé d'un enregistrement.
+    assert.ok(await page.$('dialog.modale[open]'));
+    assert.equal(dns.enregistrements().length, avant);
   });
 });

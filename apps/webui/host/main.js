@@ -41,7 +41,13 @@ export function createConsoleHost(options = {}) {
   let environnementCache = options.env ?? null;
   async function environnement() {
     if (!environnementCache) {
-      environnementCache = { ...await readDotEnv(envPath), ...process.env };
+      // Une variable exportée VIDE n'écrase pas le fichier : elle sert à
+      // NEUTRALISER un héritage, et la traiter comme une valeur ferait passer
+      // « rien » pour un choix. C'est ce que fait le harnais E2E, qui vide les
+      // variables du poste avant de désigner son propre fichier.
+      const exportees = Object.fromEntries(
+        Object.entries(process.env).filter(([, v]) => v !== undefined && v !== ''));
+      environnementCache = { ...await readDotEnv(envPath), ...exportees };
     }
     return environnementCache;
   }
