@@ -67,15 +67,17 @@ test('le terminal ne porte AUCUN bouton d’action Docker', () => {
 
 // --- les états à traiter (§6.13, §37.2) -------------------------------------
 
-test('un Spark SANS adresse est nommé, pas rendu par une erreur technique', () => {
-  // §37.2 : l'écran dit ce qui manque. Un Spark jamais appliqué n'a rien où se
-  // connecter.
+test('un Spark SANS cellule est nommé, pas rendu par une erreur technique', () => {
+  // RÉVISÉ : la preuve parlait d'ADRESSE. Mesuré depuis, l'adresse est attribuée
+  // dès l'écriture au registre (§15.1) — un Spark « pending » porte déjà la
+  // sienne. Le signal est la CELLULE. Ce que la preuve établit — l'écran nomme
+  // ce qui manque, et n'offre aucune saisie — est inchangé.
   const rendu = renderTerminal(SPARK, etat({
     status: 'refus',
     refus: { error: 'spark_not_reachable',
-             message: 'Le Spark « neuf » n’a pas encore d’adresse.' } }));
-  assert.ok(rendu.includes('n’a pas encore d’adresse'));
-  assert.ok(rendu.includes('doit être créé'));
+             message: 'Le Spark « neuf » n’a pas encore de cellule.' } }));
+  assert.ok(rendu.includes('pas encore de cellule'));
+  assert.ok(rendu.includes('doit être <strong>créé</strong>'));
   assert.ok(!rendu.includes('terminal-entree'), 'aucune saisie n’est offerte');
 });
 

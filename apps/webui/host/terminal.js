@@ -43,7 +43,7 @@ export class Session {
   #minuterie = null;
   #preavis = null;
 
-  constructor({ tunnel, spark, spawn: spawnFn = spawn,
+  constructor({ tunnel, spark, spawn: spawnFn = spawn, commande = null,
                 inactiviteMs = INACTIVITE_MS, preavisMs = PREAVIS_MS,
                 maintenant = () => Date.now() } = {}) {
     if (!tunnel) throw new TerminalError('Aucun tunnel : le Spark est injoignable.');
@@ -58,6 +58,9 @@ export class Session {
     this.motif = null;
     this.derniereActivite = this.ouvertA;
     this.spawnFn = spawnFn;
+    // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
+    // Tout le reste du chemin est celui qui tournera en production.
+    this.commande = commande;
     this.inactiviteMs = inactiviteMs;
     this.preavisMs = preavisMs;
     this.maintenant = maintenant;
@@ -85,7 +88,10 @@ export class Session {
   }
 
   demarrer() {
-    this.#child = this.spawnFn('ssh', this.sshArgs(), { stdio: ['pipe', 'pipe', 'pipe'] });
+    const [programme, ...arguments_] = this.commande
+      ? this.commande.split(/\s+/)
+      : ['ssh', ...this.sshArgs()];
+    this.#child = this.spawnFn(programme, arguments_, { stdio: ['pipe', 'pipe', 'pipe'] });
     const pousser = (canal) => (bloc) => this.#diffuser(canal, bloc.toString('utf8'));
     this.#child.stdout?.on('data', pousser('sortie'));
     // La sortie d'erreur de `ssh` porte le motif d'un refus — « clé refusée »,
@@ -196,9 +202,14 @@ export class Session {
 export class SessionManager {
   #sessions = new Map();
 
-  constructor({ spawn: spawnFn = spawn, inactiviteMs = INACTIVITE_MS,
+  constructor({ spawn: spawnFn = spawn, commande = null,
+                inactiviteMs = INACTIVITE_MS,
                 preavisMs = PREAVIS_MS, maintenant = () => Date.now() } = {}) {
     this.spawnFn = spawnFn;
+    this.commande = commande;
+    // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
+    // Tout le reste du chemin est celui qui tournera en production.
+    this.commande = commande;
     this.inactiviteMs = inactiviteMs;
     this.preavisMs = preavisMs;
     this.maintenant = maintenant;
@@ -206,7 +217,8 @@ export class SessionManager {
 
   ouvrir({ tunnel, spark }) {
     const session = new Session({
-      tunnel, spark, spawn: this.spawnFn, inactiviteMs: this.inactiviteMs,
+      tunnel, spark, spawn: this.spawnFn, commande: this.commande,
+      inactiviteMs: this.inactiviteMs,
       preavisMs: this.preavisMs, maintenant: this.maintenant,
     }).demarrer();
     this.#sessions.set(session.id, session);

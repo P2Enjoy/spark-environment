@@ -108,6 +108,10 @@ export async function monterPile({ dns = null } = {}) {
     SPARK_CONSOLE_PORT: String(portConsole),
     SPARK_CONSOLE_STATE: inventaire,
     SPARK_ENV_FILE: envConsole,
+    // SPK-43 · §37.4.2 bis : le doublon du transport. La pile n'a pas de `sshd`
+    // dans ses Sparks — son pilote est factice —, et sans lui aucun parcours ne
+    // pourrait éprouver le flux, la saisie et la fermeture qui tue.
+    SPARK_TERMINAL_COMMAND: 'cat',
     // Le `.env` du poste ne doit pas se réintroduire par l'environnement hérité.
     SCW_SECRET_KEY: '', SCW_DEFAULT_ORGANIZATION_ID: '', SPARK_DNS_ALLOW_PATTERN: '',
     SPARK_DNS_BASE_URL: '',

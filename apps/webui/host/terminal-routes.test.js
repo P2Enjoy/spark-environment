@@ -32,7 +32,8 @@ function fauxSsh() {
  * Une pile dont le tunnel est SIMULÉ : c'est le terminal qu'on éprouve, pas le
  * tunnel — celui-ci a ses propres preuves dans `tunnel.test.js`.
  */
-async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16' },
+async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
+                                incus_name: 'crm' },
                       statutSpark = 200, journalMuet = false } = {}) {
   const enfants = [];
   const declarees = [];
@@ -95,15 +96,18 @@ test('ouvrir lance ssh vers le Spark et DÉCLARE l’ouverture au journal', asyn
   fermer();
 });
 
-test('un Spark sans adresse est NOMMÉ, pas rendu par une erreur technique', async () => {
-  // §37.2 : l'écran doit dire ce qui manque. Un Spark jamais appliqué n'a rien
-  // où se connecter.
-  const { base, fermer } = await pile({ spark: { name: 'neuf', ipv4_address: null } });
+test('un Spark sans CELLULE est NOMMÉ, pas rendu par une erreur technique', async () => {
+  // §37.2 : l'écran doit dire ce qui manque. Et le signal est `incus_name`, pas
+  // l'adresse — elle est attribuée dès l'écriture au registre, bien avant qu'une
+  // cellule existe. Mesuré : un Spark « pending » porte déjà la sienne, et s'y
+  // fier laissait ouvrir un terminal vers rien.
+  const { base, fermer } = await pile({
+    spark: { name: 'neuf', ipv4_address: '10.77.0.19', incus_name: null } });
   const r = await ouvrir(base);
   assert.equal(r.status, 409);
   const corps = await r.json();
   assert.equal(corps.error, 'spark_not_reachable');
-  assert.match(corps.message, /jamais été appliqué/);
+  assert.match(corps.message, /pas encore de cellule/);
   fermer();
 });
 

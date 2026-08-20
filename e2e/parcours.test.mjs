@@ -1382,3 +1382,87 @@ test('supprimer un Spark dont l’instance a disparu RÉUSSIT depuis la console'
     assert.ok(marquee.message.includes('admission'));
   });
 });
+
+// --- LE TERMINAL (SPK-43, docs/DAT.md §37.4) -------------------------------
+
+test('entrer dans le terminal, écrire, voir répondre, quitter, et le distant meurt', async () => {
+  // LE parcours de la DoD. Le transport est doublé (§37.4.2 bis) : « cat »
+  // renvoie ce qu'on lui donne, donc la boucle complète — saisie, flux, sortie —
+  // est celle de la production, seule la commande lancée change.
+  await parcours('terminal', async () => {
+    await ouvrir('crm-production', 'terminal');
+    await page.waitForSelector('#titre-terminal');
+
+    // Fermé, la saisie est verrouillée : rien ne part vers un Spark sans session.
+    assert.ok(await page.isDisabled('#terminal-entree'));
+
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+    assert.equal(await page.isDisabled('#terminal-entree'), false);
+
+    // Une commande, au CLAVIER, et sa réponse.
+    await page.fill('#terminal-entree', 'bonjour depuis le parcours');
+    await page.press('#terminal-entree', 'Enter');
+    await page.waitForFunction(
+      () => document.querySelector('#terminal-sortie')
+        ?.textContent.includes('bonjour depuis le parcours'),
+      null, { timeout: 20000 });
+    assert.equal(await page.inputValue('#terminal-entree'), '',
+      'la saisie se vide après envoi');
+
+    // EFFET côté sparkd : le journal porte l'OUVERTURE, et rien de ce qui a été
+    // tapé (§37.5).
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=200');
+    const ouverture = journal.entries.find((e) => e.action === 'spark.terminal_open');
+    assert.ok(ouverture, 'l’ouverture doit être au journal');
+    assert.ok(!JSON.stringify(journal.entries).includes('bonjour depuis le parcours'),
+      'AUCUNE frappe ne doit atteindre le journal');
+
+    // Quitter : la session se ferme et le distant meurt.
+    await page.click('[data-terminal="fermer"]');
+    await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 20000 });
+
+    const { corps: apres } = await pile.lireSparkd('/v1/audit?limit=200');
+    const fermeture = apres.entries.find((e) => e.action === 'spark.terminal_close');
+    assert.ok(fermeture, 'la fermeture doit être au journal, avec sa durée');
+    assert.match(fermeture.message, /après \d+ s/);
+  });
+});
+
+test('quitter l’ONGLET termine la session, sans la fermer soi-même', async () => {
+  // §37.4 : une session qui survivrait à son écran serait un shell root
+  // abandonné dont personne ne se souvient.
+  await parcours('terminal-quitter', async () => {
+    await ouvrir('boutique', 'terminal');
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+    const avant = (await pile.lireSparkd('/v1/audit?limit=200')).corps.entries
+      .filter((e) => e.action === 'spark.terminal_close').length;
+
+    // On CHANGE d'onglet, sans rien fermer.
+    await page.click('.onglet[href$="/journal"]');
+    await page.waitForSelector('.onglet[href$="/journal"][aria-current="page"]',
+                               { timeout: 10000 });
+
+    await page.waitForFunction(async (n) => {
+      const r = await fetch('/api/v1/audit?limit=200&server=local');
+      const { entries } = await r.json();
+      return entries.filter((e) => e.action === 'spark.terminal_close').length > n;
+    }, avant, { timeout: 20000 });
+  });
+});
+
+test('un Spark sans CELLULE nomme ce qui manque', async () => {
+  // §37.2 : l'écran ne rend ni onglet vide, ni erreur technique. « analytics »
+  // est déclaré mais jamais appliqué : il porte DÉJÀ une adresse — elle est
+  // attribuée à l'écriture au registre — et pourtant rien ne tourne.
+  await parcours('terminal-sans-cellule', async () => {
+    await ouvrir('analytics', 'terminal');
+    await page.waitForSelector('#titre-terminal');
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('.refus', { timeout: 20000 });
+    assert.match(await page.textContent('.refus'), /pas encore de cellule/);
+    assert.ok((await page.textContent('.principal')).includes('doit être'));
+  });
+});

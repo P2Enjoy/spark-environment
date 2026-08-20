@@ -29,7 +29,11 @@ export function createConsoleHost(options = {}) {
   const tunnels = options.tunnels ?? new TunnelManager();
   // SPK-43 · §37.1 : les sessions de terminal vivent ICI, sur le poste. Le plan
   // de contrôle n'est pas dans ce chemin et n'en gagne aucun pouvoir.
-  const terminaux = options.terminals ?? new SessionManager();
+  const terminaux = options.terminals ?? new SessionManager({
+    // §37.4.2 bis : absente en production, et c'est le cas normal — le produit
+    // lance alors `ssh`.
+    commande: process.env.SPARK_TERMINAL_COMMAND || null,
+  });
   const inventoryPath = options.inventoryPath;
   const anchorPath = options.anchorPath;
   const fetchFn = options.fetch ?? fetch;
@@ -520,13 +524,17 @@ export function createConsoleHost(options = {}) {
                                       message: `Aucun Spark « ${spark} » sur ce serveur.` } };
       }
       const decrit = await amont.json();
-      if (!decrit.ipv4_address) {
-        // §37.2 : l'écran doit NOMMER ce qui manque, pas rendre une erreur
-        // technique. Un Spark jamais appliqué n'a rien où se connecter.
+      // §37.2 : l'écran doit NOMMER ce qui manque, pas rendre une erreur
+      // technique. Le signal est `incus_name`, renseigné SEULEMENT après une
+      // application réussie — comme au §39.4. Ce n'est PAS l'adresse : elle est
+      // attribuée dès l'écriture au registre (§15.1), bien avant qu'une cellule
+      // existe. Mesuré : un Spark « pending » porte déjà la sienne.
+      if (!decrit.incus_name || !decrit.ipv4_address) {
         return { status: 409, body: {
           error: 'spark_not_reachable',
-          message: `Le Spark « ${spark} » n'a pas encore d'adresse : il n'a jamais `
-                   + 'été appliqué. Créez-le avant d’y ouvrir un terminal.' } };
+          message: `Le Spark « ${spark} » n'a pas encore de cellule : il est `
+                   + 'déclaré, ses ressources sont réservées, mais rien ne tourne '
+                   + 'encore. Créez-le avant d’y ouvrir un terminal.' } };
       }
       const session = terminaux.ouvrir({ tunnel, spark: decrit });
       // §37.4.5 : on DÉCLARE l'ouverture. Si `sparkd` est injoignable, la

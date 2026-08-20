@@ -54,8 +54,9 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
          <h2 id="titre-terminal">Terminal</h2>
          <p class="refus">${echapper(etat.refus.message)}</p>
          ${etat.refus.error === 'spark_not_reachable'
-           ? `<p class="note">Un Spark doit être créé avant qu’on puisse y entrer.
-              Ses ressources sont réservées, mais aucune cellule ne tourne encore.</p>`
+           ? `<p class="note">Un Spark doit être <strong>créé</strong> avant qu’on
+              puisse y entrer. Ses ressources sont déjà réservées et son adresse
+              attribuée, mais aucune cellule ne tourne encore.</p>`
            : ''}
        </div>`
     : '';

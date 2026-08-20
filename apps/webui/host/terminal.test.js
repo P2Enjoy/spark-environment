@@ -215,3 +215,24 @@ test('le flux fermé est un motif DISTINCT d’une sortie volontaire', () => {
   manager.fermer(session.id, FLUX_FERME);
   assert.equal(session.describe().reason, FLUX_FERME);
 });
+
+test('le DOUBLON remplace la commande lancée, pas le mécanisme', () => {
+  // §37.4.2 bis : le harnais y met un interpréteur local ; tout le reste du
+  // chemin — flux, saisie, mort du distant — est celui de la production.
+  const enfants = [];
+  const manager = new SessionManager({
+    commande: '/bin/sh -i',
+    spawn: (commande, args) => {
+      const e = fauxSsh(); e.commande = commande; e.args = args;
+      enfants.push(e); return e;
+    },
+  });
+  manager.ouvrir({ tunnel: { jumpArgs: () => [] }, spark: SPARK });
+  assert.equal(enfants[0].commande, '/bin/sh');
+  assert.deepEqual(enfants[0].args, ['-i']);
+});
+
+test('SANS doublon, c’est bien « ssh » qui est lancé', () => {
+  const { enfant } = pile();
+  assert.equal(enfant.commande, 'ssh');
+});
