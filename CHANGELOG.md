@@ -3,6 +3,29 @@
 ## [Non publié]
 
 ### Ajouté
+- **Agir sur un conteneur** (SPK-45 première tranche, `docs/DAT.md` §37.7.1 à
+  §37.7.4) : démarrer, redémarrer, arrêter, tuer. Les gestes vivent sur le
+  conteneur **ouvert**, jamais sur la liste — agir depuis une ligne de tableau,
+  c'est agir sans avoir regardé. Seuls les gestes qui ont un sens sont offerts :
+  un conteneur arrêté ne propose que *Démarrer*, un conteneur disparu ne propose
+  rien.
+- Chaque geste se confirme en **nommant le conteneur et l'effet**, jamais par un
+  « êtes-vous sûr ». *Tuer* est le seul destructif, et le seul en rouge.
+- Chaque geste est **inscrit au journal** du Spark, sous une action qui lui est
+  propre — « combien de conteneurs a-t-on tués ce mois-ci » se répond par un
+  filtre. Un geste **refusé** y figure comme refusé. La lecture, elle, n'est
+  toujours pas journalisée.
+- Après le geste, l'écran **relit** le conteneur et affiche ce que la Forge rend,
+  jamais l'état supposé atteint.
+- **Un Spark protégé refuse les gestes et laisse la lecture** : les boutons
+  restent visibles, désactivés, et l'écran dit comment lever la protection. Le
+  terminal reste ouvert — le garde-fou vise le geste distrait, pas le geste
+  urgent.
+- `docs/DESIGN_SYSTEM_APP.md` SPK-DS-08 : un troisième bloc d'issue, vert. Sans
+  lui, un succès s'écrivait dans la couleur qui sert à prévenir d'un danger.
+- `docs/DESIGN_SYSTEM_APP.md` SPK-DS-09 : une confirmation sensible n'a pas la
+  couleur d'une confirmation destructive.
+- Manuel M8 : chapitre *Agir sur un conteneur*, illustré depuis la pile réelle.
 - **Ouvrir un conteneur depuis l'onglet Docker** (SPK-44 deuxième tranche,
   `docs/DAT.md` §37.6 ter) : son état, son code de sortie, son image, ses réseaux,
   ses volumes et ses deux cents dernières lignes de journal. Ces lectures sont

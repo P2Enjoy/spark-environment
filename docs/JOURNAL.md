@@ -5019,3 +5019,99 @@ Forge réelle (SPK-54).
 **Où reprendre.** SPK-45 — les gestes sur un conteneur — est la suite naturelle et
 ne dépend plus de rien. SPK-54 et SPK-53 attendent chacune une décision du
 responsable.
+
+---
+
+## 2026-08-20 · SPK-45, première tranche — le cycle de vie d'un conteneur
+
+**Problème.** L'onglet Docker observait sans rien pouvoir faire. Un conteneur
+tombé se relançait au terminal, à la main, sans trace au journal.
+
+### Ce que la mesure a tranché avant qu'une ligne soit écrite
+
+Docker 29.6.1, un conteneur `alpine` créé puis supprimé. Trois faits, et chacun a
+changé la spécification :
+
+- **`start` et `stop` sont idempotents, `kill` ne l'est pas.** Démarrer ce qui
+  tourne déjà et arrêter ce qui est déjà arrêté rendent `0` ; tuer un conteneur
+  arrêté rend `1`.
+- **Le code `1` a deux causes, et seule la sortie d'erreur les sépare** — `No
+  such container` et `is not running`. C'est l'exact inverse du §37.6 bis, où le
+  code distinguait et la sortie ne disait rien. Les confondre annoncerait une
+  disparition à propos d'un conteneur simplement arrêté, et enverrait chercher
+  une suppression qui n'a jamais eu lieu.
+- **« Le geste a réussi » ≠ « le conteneur s'est arrêté proprement »** : un
+  conteneur qui ignore `SIGTERM` finit en `137`, et `docker stop` rend quand même
+  `0`.
+
+Une mesure a failli m'échapper : mon premier `docker inspect` passait par un
+`| head` et rapportait `$?=0`. Le tube ment sur le code de sortie.
+
+### Deux décisions qui ne se voyaient pas dans le §37.7
+
+**Quatre actions d'audit, pas une.** Même raison qu'au §37.3, qui a séparé
+`spark.rescue_exec` de `spark.terminal_open` : ce qui doit se compter, c'est le
+geste. « Combien de conteneurs a-t-on tués ce mois-ci » doit se répondre par un
+filtre, pas en lisant les charges.
+
+**La porte d'audit figeait `result: "ok"`.** Un geste refusé n'aurait donc pas pu
+être journalisé comme tel, et une tentative répétée sur un Spark protégé serait
+restée invisible — exactement ce qu'un journal existe pour montrer. Elle admet
+désormais `result`, borné à deux valeurs. Et **seul un geste abouti est un
+succès** : un conteneur disparu, déjà arrêté ou injoignable donne `denied` avec
+son état pour raison.
+
+### L'objection du §6.23, et sa réponse
+
+Le design system pose qu'une protection ne bloque **jamais** un geste qui réduit
+un risque. Arrêter un conteneur compromis y ressemble, et l'objection est fondée.
+
+Elle a sa réponse dans le §37.7 lui-même, désormais écrite : **le terminal reste
+ouvert sous gel**. Qui doit couper vite y tape la commande, sans désarmer quoi
+que ce soit ni oublier de réarmer. Le garde-fou porte sur le geste distrait,
+jamais sur le geste urgent.
+
+### Ce que les parcours ont trouvé et les preuves unitaires non
+
+- **`doublonPour` ne reconnaissait pas les quatre gestes.** La vraie commande
+  `ssh` partait, échouait en 255, et l'écran annonçait « aucun serveur SSH ne
+  répond » — un diagnostic qui ne dit rien du geste demandé.
+- **Le parcours du gel visait un Spark arrêté.** Sans inventaire Docker, il
+  aurait éprouvé l'arrêt du Spark au lieu du gel.
+
+### Ce que la capture a trouvé et les parcours non
+
+- **`.confirmation` est rouge depuis son origine.** Cela convenait à une seule
+  confirmation, celle du dépannage en root. Avec quatre gestes dont un seul
+  détruit, la couleur cessait d'informer. D'où SPK-DS-09 : une confirmation
+  sensible prend l'accent, une destructive garde le rouge.
+- **Il manquait un troisième bloc d'issue.** Un succès n'avait que l'accent pour
+  se dire, et « le conteneur est arrêté » s'affichait dans la couleur qui sert à
+  prévenir d'un danger. D'où SPK-DS-08 — et son intérêt second : le vert rend
+  visible qu'un conteneur déjà arrêté ou disparu n'est **pas** un succès.
+- **Le harnais de capture rendait la même inspection avant et après le geste**,
+  affichant « Arrêter : c'est fait » au-dessus de « en marche ». La contradiction
+  même que le §37.7.2 existe pour éviter. Une capture qui la montre est fausse.
+
+### Une preuve révisée pour la troisième fois
+
+« Aucun bouton n'est offert » (SPK-44) est repassée au rouge, cette fois par
+l'unité qui **livre** les gestes. Ce qu'elle gardait vraiment tient en deux
+points, tous deux encore vrais et désormais écrits : la **liste** ne porte aucun
+geste — agir depuis une ligne de tableau, c'est agir sans avoir regardé —, et un
+geste se demande sur un conteneur qu'on a **ouvert**.
+
+### Vérifications
+
+Campagne complète **verte** : 705 Python, contrat conforme, 730 de console, 8 de
+gestes, **64 parcours E2E**, 7 du manuel, `build`. Captures `102-` à `104-`
+observées — la confirmation destructive, le succès constaté, le gel — plus
+`docs/manuel/images/m8-docker-geste.png` produite depuis la pile réelle.
+
+**SPK-45 reste `[~]`** : la deuxième tranche — le terminal **dans** un conteneur
+— n'est pas livrée, et n'est pas encore spécifiée. Et comme pour SPK-44, aucun
+vrai `docker stop` n'a traversé un tunnel : le doublon remplace la commande.
+
+**Où reprendre.** La deuxième tranche de SPK-45 : spécifier puis livrer
+`docker exec -it` avec le contrat du §37.4 et l'audit du §37.5. SPK-54 et SPK-53
+attendent chacune une décision du responsable.

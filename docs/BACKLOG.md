@@ -1841,7 +1841,7 @@ et les volumes.**
      travers un tunnel. Même limite qu'au §39.7, et elle tombera avec l'amorçage
      d'un Spark sur la Forge réelle (SPK-54).
 
-### [ ] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
+### [~] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
 
 - Spécification : `docs/DAT.md` §37.7, §37.4 · `docs/DESIGN_SYSTEM.md` §6.23 ·
   manuel M8.
@@ -1876,6 +1876,44 @@ interactive qui vit — et qu'un seul des deux tient dans une session :
 leurs codes, mesurés sur Docker 29.6.1), §37.7.2 (demandé, confirmé, constaté),
 §37.7.3 (où le refus du gel est rendu), §37.7.4 (la route et les quatre actions
 d'audit).
+
+**Première tranche livrée le 2026-08-20 : le cycle de vie d'un conteneur.**
+
+- **Le point de l'unité, mesuré** : le code `1` a DEUX causes, et seule la sortie
+  d'erreur les sépare — `No such container` et `is not running`. Inverse exact du
+  §37.6 bis. Les confondre annoncerait une disparition à propos d'un conteneur
+  simplement arrêté. Un échec non reconnu n'est PAS qualifié.
+- `start` et `stop` sont **idempotents** ; `kill` ne l'est pas. Et « le geste a
+  abouti » ne promet pas un arrêt propre : un conteneur qui ignore `SIGTERM`
+  finit en `137` pendant que `docker stop` rend `0`.
+- **Le gel refuse AVANT toute connexion**, pour les quatre gestes, et une preuve
+  vérifie qu'aucun `ssh` ne part. Le refus nomme la **levée**. Les boutons
+  restent présents, désactivés et expliqués (§1.4). La lecture n'est pas touchée,
+  et le terminal non plus — l'objection du §6.23 est levée au §37.7.3.
+- **Quatre actions d'audit**, dénombrables séparément. La porte figeait
+  `result: "ok"` : elle admet désormais `denied`, borné. **Seul un geste abouti
+  est un succès** — inscrire `ok` sur un conteneur disparu ferait dire au journal
+  qu'un conteneur a été arrêté alors qu'il ne s'est rien passé.
+- **Après le geste, l'écran relit** l'inspection et affiche ce que la Forge rend,
+  jamais l'état supposé (§14.9).
+- **Deux règles de design system introduites** : SPK-DS-08 (un troisième bloc
+  d'issue, vert — sans lui un succès s'écrivait dans la couleur du danger, et son
+  existence rend visible qu'un conteneur déjà arrêté n'est PAS un succès) et
+  SPK-DS-09 (une confirmation sensible n'a pas la couleur d'une destructive).
+- **Preuves** : 19 du module, 9 de route, 17 de la porte d'audit, 48 de
+  composant, 5 parcours E2E dont la DoD du gel. Captures `102-` à `104-`
+  observées, plus `docs/manuel/images/m8-docker-geste.png`. Manuel M8 complété
+  d'un chapitre *Agir sur un conteneur*.
+
+- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
+  1. **le terminal DANS un conteneur** (`docker exec -it`), avec le contrat du
+     §37.4 et l'audit du §37.5. Non spécifié : c'est le premier geste de la
+     tranche 2 ;
+  2. le parcours de la DoD qui prouve qu'un Spark gelé **laisse le terminal** —
+     il dépend du point 1 ;
+  3. l'épreuve sur une **pile Compose réelle** : aucun vrai `docker stop` n'a
+     traversé un tunnel, le doublon remplaçant la commande. Même limite qu'au
+     §39.7 et qu'à SPK-44, et elle tombera avec SPK-54.
 
 ### [x] SPK-47 · Le DNS entre dans le produit : zones lues, enregistrement d'ingress posé
 
