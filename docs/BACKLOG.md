@@ -1725,10 +1725,20 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
 - Spécification : `docs/DAT.md` §38.6 (les recettes), §38.7 (ce que le DNS ne
   peut pas faire), §38.2, §38.5 · manuel M7.
 - Dépend de : SPK-47.
-- Portée : la garde du §38.5 s'élargit à `MX`, `TXT` et `SRV` ; une recette est
-  présentée **entière** avant écriture et rend compte enregistrement par
-  enregistrement après ; chaque enregistrement continue de viser un nom ET un
-  type exacts.
+- Portée : la garde du §38.5 s'élargit à `MX`, `TXT`, `SRV` et `CNAME`, chacun
+  avec la forme que sa donnée doit avoir (§38.6.2) ; une recette est présentée
+  **entière** avant écriture et rend compte enregistrement par enregistrement
+  après ; chaque enregistrement continue de viser un nom ET un type exacts.
+- **Une recette est une FONCTION, pas une donnée stockée** (§38.6.1) : une
+  recette enregistrée divergerait du code dès la première correction, et deux
+  vérités coexisteraient sans qu'on sache laquelle est appliquée.
+- **Deux recettes livrées** (§38.6.4) : `site-web`, qui ne dépend de rien et
+  prouve le mécanisme ; et `relais-transactionnel`, mesurée sur une zone réelle,
+  qui exerce `MX` et `TXT` et surtout le cas de la **valeur que l'exploitant doit
+  fournir** — la clé DKIM ne s'invente pas.
+- **On n'annule pas ce qui est passé** (§38.6.3) : défaire supposerait de
+  connaître la valeur d'avant, que le produit n'a pas retenue, et le §38.2 lui
+  interdit de supprimer ce qu'il n'a pas posé.
 - **L'interdiction de toucher ce que le produit n'a pas posé se durcit** : ce
   sont précisément les enregistrements dont la disparition arrête une messagerie
   sans bruit.

@@ -4253,6 +4253,115 @@ c'est précisément le genre d'enregistrement dont la disparition arrête une
 messagerie sans bruit. Chaque enregistrement d'une recette continue de viser un
 nom ET un type exacts.
 
+#### 38.6.1 Ce qu'une recette EST dans le produit
+
+Une recette n'est **pas une donnée stockée**. C'est une **fonction** : elle prend
+un domaine, une adresse de Forge et quelques paramètres, et rend une liste
+d'enregistrements prêts à écrire. Rien n'est retenu au registre.
+
+Le motif est le même qu'au §18.1 : une recette enregistrée divergerait de la
+recette du code dès la première correction, et deux vérités coexisteraient sans
+qu'on sache laquelle est appliquée. Ce que l'on peut relire, on le relit — la
+zone dit ce qui est posé, et c'est la seule source qui compte.
+
+Une recette porte donc, et rien de plus :
+
+- un **identifiant** stable et un libellé lisible ;
+- les **paramètres** qu'elle réclame, chacun avec ce qu'il attend ;
+- la liste des enregistrements qu'elle produit ;
+- les **actions humaines restantes** qu'elle ne peut pas accomplir (§38.7).
+
+#### 38.6.2 La garde élargie : ce que chaque type exige
+
+Le §38.5 n'admettait que `A` et `AAAA`, dont la donnée est une adresse. Les types
+d'une recette n'ont pas la même forme, et la garde doit le savoir plutôt que de
+laisser le fournisseur refuser après coup :
+
+| Type | Ce que la donnée doit être |
+|---|---|
+| `A` | une adresse IPv4 |
+| `AAAA` | une adresse IPv6 |
+| `MX` | une **priorité** puis un nom d'hôte : `10 mail.exemple.tech.` |
+| `TXT` | un texte non vide, entre guillemets si l'exploitant les a mis |
+| `CNAME` | un nom d'hôte |
+| `SRV` | priorité, poids, port, cible |
+
+Tout autre type est refusé. Ce n'est pas de la prudence : c'est la liste de ce
+que le produit sait composer, et écrire un type qu'il ne compose pas serait
+écrire une valeur qu'il n'a pas vérifiée.
+
+**La règle centrale ne bouge pas et se durcit** : chaque enregistrement vise un
+nom ET un type exacts, et rien de ce que le produit n'a pas posé n'est touché.
+C'est précisément le genre d'enregistrement dont la disparition arrête une
+messagerie sans bruit.
+
+#### 38.6.3 Le compte rendu : ce qui est passé, ce qui ne l'est pas
+
+Une recette écrit ses enregistrements **un par un**, et le fournisseur peut en
+refuser un au milieu. Le produit ne prétend alors ni au succès ni à l'échec
+global : il rend **la liste**, chaque enregistrement avec son sort.
+
+- l'écran présente la recette **entière** avant d'écrire, avec pour chaque ligne
+  ce qu'elle fera — poser, remplacer telle valeur, ou ne rien changer (§38.5.2) ;
+- après, il rend la même liste avec, pour chacune, `écrit` ou le **motif** du
+  refus ;
+- une recette dont un seul enregistrement a échoué est annoncée comme
+  **incomplète**, en disant lequel manque et ce que son absence entraîne.
+
+Un « succès » global sur une recette à moitié posée serait le pire des mensonges
+possibles ici : un `MX` sans SPF fait recevoir du courrier qu'on ne peut pas
+renvoyer, et l'exploitant chercherait ailleurs.
+
+**On n'annule pas ce qui est passé.** Défaire des enregistrements déjà écrits
+supposerait de connaître leur valeur d'avant, que le produit n'a pas retenue —
+et le §38.2 lui interdit de supprimer ce qu'il n'a pas posé. On rend l'état
+réel ; l'exploitant décide.
+
+#### 38.6.4 Les deux premières recettes
+
+**`site-web`** — le cas nommé par le responsable : un site sur le domaine nu.
+
+```
+@     A  <adresse de la Forge>
+www   A  <adresse de la Forge>
+```
+
+Deux enregistrements, aucune valeur extérieure. C'est la recette qui prouve le
+mécanisme de bout en bout sans dépendre de rien.
+
+**`relais-transactionnel`** — l'émission par le service transactionnel du
+fournisseur, mesurée sur `lelabs.tech` au §38.6 bis :
+
+```
+<sous-domaine>                     MX   0 blackhole.tem.scaleway.com.
+<sous-domaine>                     TXT  "v=spf1 include:_spf.tem.scaleway.com -all"
+_dmarc.<sous-domaine>              TXT  "v=DMARC1; p=none"
+<selecteur>._domainkey.<sous-dom.> TXT  "v=DKIM1; …"        ← VALEUR DE L'EXPLOITANT
+```
+
+Elle exerce `MX` et `TXT`, et surtout le cas du §38.6 : **la clé DKIM ne
+s'invente pas**. Le produit compose les trois enregistrements qu'il connaît et
+**réclame** la clé, en disant où la lire — dans la console du fournisseur, à la
+vérification du domaine. Sans elle, la recette est posée mais annoncée
+**incomplète**, et l'écran dit ce que cette absence entraîne : les messages
+partiront sans signature.
+
+Le `MX` vers un `blackhole` est délibéré et doit être dit : ce sous-domaine
+**émet** et **ne reçoit pas**. Un exploitant qui l'appliquerait sur un domaine
+censé recevoir du courrier le couperait — c'est écrit dans la description de la
+recette, pas seulement dans ce document.
+
+#### 38.6.5 La surface d'API
+
+```
+GET  /api/dns/recipes                    les recettes, leurs paramètres, leurs actions humaines
+POST /api/dns/recipe/preview  {recipe, params}   ce qui SERA écrit, et l'effet de chaque ligne
+POST /api/dns/recipe          {recipe, params}   écrit, et rend le sort de chaque ligne
+```
+
+Elle vit sur l'**hôte console**, comme le reste du §38 : le jeton n'atteint
+jamais la Forge.
+
 ### 38.6 bis Envoyer et recevoir sont deux produits, et le relais les réunit
 
 **Question du responsable, 2026-08-20**, et elle est la bonne : faut-il un
