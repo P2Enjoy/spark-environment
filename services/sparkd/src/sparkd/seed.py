@@ -147,6 +147,31 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
         "port": 8080, "tls": True}), 201, quoi="route « crm.example.com »")
     compte["routes"] += 1
 
+    # --- SPK-48 · §18.3 bis : un JOKER, et le nom exact qui lui prend le pas.
+    #
+    # C'est le geste de montée en charge du responsable : un sous-domaine devient
+    # assez chargé pour mériter son propre Spark, on le déclare en exact, et il
+    # se soustrait au joker sans qu'on touche à ce dernier.
+    #
+    # Ces deux routes sont posées AVANT le bloc « caddy.fail » ci-dessous : les
+    # déclarer après réconcilierait l'ingress et appliquerait la route que ce
+    # bloc laisse volontairement non appliquée, faisant disparaître la fixture
+    # du §18.5.
+    _attendu(client.post("/v1/ingress", json={
+        "spark": "boutique", "domain": "*.boutique.example.com",
+        "port": 8080, "tls": True}), 201, quoi="joker « *.boutique.example.com »")
+    compte["routes"] += 1
+
+    prise = _attendu(client.post("/v1/ingress", json={
+        "spark": "crm-production", "domain": "vip.boutique.example.com",
+        "port": 8080, "tls": True}), 201,
+        quoi="nom exact qui prend le pas « vip.boutique.example.com »")
+    compte["routes"] += 1
+    if not prise.json().get("supersedes"):
+        raise SeedError(
+            "la route exacte devait signaler qu'elle prend le pas sur le joker : "
+            "sans cela la démonstration de SPK-48 ne montre rien")
+
     # Le mécanisme réel d'une route non appliquée est un CADDY INJOIGNABLE au
     # moment de la déclaration (§18.5) : la route entre au registre, la
     # configuration n'est pas chargée, et `applied_at` reste vide. On rend donc

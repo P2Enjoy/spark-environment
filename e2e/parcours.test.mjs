@@ -1097,3 +1097,74 @@ test('l’écran MONTRE ce qu’il va remplacer avant de le remplacer', async ()
     assert.ok(/remplac/.test(effet));
   });
 });
+
+// --- LE JOKER ET LA SURCHARGE (SPK-48, docs/DAT.md §18.3 bis) --------------
+
+test('le joker seedé montre le nom qui lui est SOUSTRAIT, et qui le sert', async () => {
+  await parcours('joker-surcharge', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-routes');
+
+    const joker = ligneRoute('*.boutique.example.com');
+    await page.waitForSelector(joker, { timeout: 10000 });
+
+    // C'est CE que l'unité apporte : depuis le joker, on voit ce qui part
+    // ailleurs. Sans cela on chercherait dans la configuration du Spark
+    // porteur, où il n'y a rien à trouver.
+    const surcharge = await page.textContent(`${joker} .surcharges`);
+    assert.ok(surcharge.includes('vip.boutique.example.com'));
+    assert.ok(surcharge.includes('crm-production'));
+
+    // EFFET côté sparkd : c'est bien le nom EXACT qui est rencontré en premier
+    // par le proxy — la préséance ne se voit pas à l'écran, elle se lit dans la
+    // configuration produite.
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    const joker_ = corps.routes.find((r) => r.domain === '*.boutique.example.com');
+    assert.deepEqual(joker_.superseded_by,
+      [{ domain: 'vip.boutique.example.com', spark_name: 'crm-production' }]);
+  });
+});
+
+test('déclarer un nom avalé par un joker RÉUSSIT, et nomme le Spark dépassé', async () => {
+  await parcours('joker-prise-de-pas', async () => {
+    await ouvrir('crm-production', 'routes');
+    await page.waitForSelector('#titre-routes');
+    await page.click('[data-ouvre="route"]');
+    await page.waitForSelector('dialog.modale[open] #route-domaine');
+
+    // `*.boutique.example.com` appartient au Spark « boutique » dans le seed.
+    await page.fill('#route-domaine', 'promo.boutique.example.com');
+    await page.fill('#route-port', '8080');
+    // L'interface ne s'y oppose PAS : c'est une déclaration légitime, celle par
+    // laquelle on sort un sous-domaine du joker pour lui donner son Spark.
+    assert.equal(await page.isDisabled('[data-engage="route"]'), false);
+    await page.click('[data-engage="route"]');
+
+    await page.waitForSelector('#prise-de-pas', { timeout: 10000 });
+    const avis = await page.textContent('#prise-de-pas');
+    assert.ok(avis.includes('*.boutique.example.com'));
+    assert.ok(avis.includes('boutique'), 'le Spark dépassé doit être NOMMÉ');
+
+    // Ce n'est pas un refus : la route existe réellement.
+    assert.ok(await page.$(ligneRoute('promo.boutique.example.com')));
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    const posee = corps.routes.find((r) => r.domain === 'promo.boutique.example.com');
+    assert.equal(posee.spark_name, 'crm-production');
+  });
+});
+
+test('un joker mal placé est refusé en NOMMANT la borne', async () => {
+  await parcours('joker-borne', async () => {
+    await ouvrir('crm-production', 'routes');
+    await page.click('[data-ouvre="route"]');
+    await page.waitForSelector('dialog.modale[open] #route-domaine');
+    await page.fill('#route-domaine', 'api.*.monapi.fr');
+    await page.fill('#route-port', '8080');
+    await page.click('[data-engage="route"]');
+
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    const refus = await page.textContent('dialog.modale[open] .refus');
+    assert.ok(/joker/.test(refus), 'le refus doit nommer la borne, pas dire « invalide »');
+    assert.ok(refus.includes('*.monapi.fr'), 'il doit montrer la forme acceptée');
+  });
+});
