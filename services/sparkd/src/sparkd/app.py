@@ -764,7 +764,13 @@ def create_app(config: Config) -> FastAPI:
                     "route": route["domain"],
                     "note": "Route enregistrée mais non appliquée.",
                 }) from erreur
-            return ingress_service.by_domain(connection, route["domain"])
+            relue = ingress_service.by_domain(connection, route["domain"])
+            # SPK-48 · §18.3 bis : la relecture par domaine ne porte pas le
+            # relevé du joker pris. On le rattache, sinon l'écran ne pourrait
+            # pas NOMMER le Spark dont cette route prend le pas.
+            if route.get("supersedes"):
+                relue["supersedes"] = route["supersedes"]
+            return relue
 
     @app.delete("/v1/ingress/{domain}", tags=["ingress"])
     def remove_route(domain: str) -> dict:

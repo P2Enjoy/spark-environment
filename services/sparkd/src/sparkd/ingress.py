@@ -2,6 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-12 · docs/DAT.md §9 (Ingress), §18 (Réconciliation),
       §18.1 (on régénère), §18.4 (unicité) · docs/SCHEMA.md §6
+@spec docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker de premier
+      niveau, ses trois bornes, et la préséance du plus spécifique)
 
 On régénère la configuration entière, on ne la rapièce pas. Une configuration
 rapiécée diverge ; une configuration régénérée ne le peut pas.
@@ -23,10 +25,76 @@ from .db import transaction
 
 SERVER_NAME = "spark"
 
-#: Un nom d'hôte, éventuellement avec un joker de premier niveau.
+#: Un nom d'hôte, éventuellement avec un joker de premier niveau (§18.3 bis).
 DOMAIN = re.compile(
     r"^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$", re.IGNORECASE
 )
+
+#: Un nom d'hôte SANS joker. Sert à nommer précisément la borne enfreinte.
+STRICT = re.compile(
+    r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$", re.IGNORECASE
+)
+
+
+def is_wildcard(domain: str) -> bool:
+    """Le domaine porte-t-il le joker de premier niveau ?"""
+    return domain.startswith("*.")
+
+
+def covers(pattern: str, domain: str) -> bool:
+    """`pattern` sert-il `domain` ? (§18.3 bis)
+
+    Un joker couvre **un seul niveau** : `*.monapi.fr` sert `api.monapi.fr`, et
+    ne sert PAS `a.b.monapi.fr`. C'est la règle du DNS et celle de Caddy ; en
+    adopter une autre ferait diverger ce que le produit affiche de ce que le
+    trafic fait réellement.
+    """
+    if pattern == domain:
+        return True
+    if not is_wildcard(pattern) or is_wildcard(domain):
+        return False
+    suffixe = pattern[1:]                      # « .monapi.fr »
+    if not domain.endswith(suffixe):
+        return False
+    tete = domain[: -len(suffixe)]
+    return bool(tete) and "." not in tete
+
+
+def specificity(domain: str) -> tuple[int, int, str]:
+    """Clé de tri : le plus SPÉCIFIQUE d'abord (§18.3 bis).
+
+    Caddy retient la PREMIÈRE route dont le filtre correspond. Trier par ordre
+    alphabétique — ce que faisait le listing — plaçait `*.monapi.fr` avant
+    `api.monapi.fr`, parce que « * » précède les lettres : le joker gagnait, à
+    l'exact inverse de la règle. Mesuré.
+
+    Un nom exact passe donc avant tout joker ; entre deux jokers, le plus long
+    d'abord, puisqu'il couvre moins de noms.
+    """
+    return (1 if is_wildcard(domain) else 0, -len(domain), domain)
+
+
+def covering(connection: sqlite3.Connection, domain: str,
+             exclude_spark: str | None = None) -> dict | None:
+    """La route JOKER d'un autre Spark qui servait déjà ce nom, s'il y en a une.
+
+    §18.3 bis : la déclaration réussit, mais l'écran doit NOMMER le Spark dont
+    elle prend le pas. Un exploitant qui déclare `admin.monapi.fr` doit savoir
+    qu'il vient de détourner une adresse qui partait ailleurs — le silence ici
+    produirait une panne cherchée pendant des heures du mauvais côté.
+    """
+    if is_wildcard(domain):
+        return None
+    candidates = [
+        dict(r) for r in connection.execute(
+            "SELECT r.domain, r.spark_id, s.name AS spark_name FROM ingress_route r"
+            " JOIN spark s ON s.id = r.spark_id"
+            " WHERE r.domain LIKE '*.%' AND r.enabled = 1"
+        )
+        if covers(r["domain"], domain) and r["spark_id"] != exclude_spark
+    ]
+    candidates.sort(key=lambda r: specificity(r["domain"]))
+    return candidates[0] if candidates else None
 
 
 class IngressError(RuntimeError):
@@ -93,6 +161,14 @@ def declare(
     """Déclare une route. L'unicité du domaine est portée par la base."""
     nom = domain.strip().lower()
     if not DOMAIN.match(nom):
+        # §18.3 bis : le refus NOMME la borne enfreinte. « invalide » seul
+        # laisserait chercher entre une faute de frappe et une règle du produit.
+        if "*" in nom:
+            raise IngressError(
+                f"Domaine « {domain} » invalide. Un joker ne vaut qu'en TÊTE et "
+                "sur UN seul niveau : « *.monapi.fr » est accepté, "
+                "« *.*.monapi.fr », « api.*.monapi.fr » et « *.fr » ne le sont pas."
+            )
         raise IngressError(
             f"Domaine « {domain} » invalide. Attendu un nom d'hôte complet, "
             "par exemple « crm.example.com »."
@@ -111,15 +187,27 @@ def declare(
                 f"Le domaine « {nom} » est déjà routé vers le Spark "
                 f"« {existante['name']} »."
             )
+        # §18.3 bis : relevé AVANT l'insertion, sinon la route qu'on ajoute
+        # figurerait parmi les candidates et se couvrirait elle-même.
+        prise = covering(connection, nom, exclude_spark=spark_id)
         connection.execute(
             "INSERT INTO ingress_route (id, domain, spark_id, target_port, tls, enabled)"
             " VALUES (?, ?, ?, ?, ?, 1)",
             (identifiant, nom, spark_id, port, 1 if tls else 0),
         )
         _audit(connection, actor, "ingress.declare", identifiant,
-               {"domain": nom, "spark_id": spark_id, "port": port, "tls": tls},
-               "ok", f"{nom} → port {port}.")
-    return get(connection, identifiant)
+               {"domain": nom, "spark_id": spark_id, "port": port, "tls": tls,
+                **({"supersedes": prise["domain"],
+                    "supersedes_spark": prise["spark_name"]} if prise else {})},
+               "ok",
+               f"{nom} → port {port}."
+               + (f" Prend le pas sur « {prise['domain']} », servi par le Spark "
+                  f"« {prise['spark_name']} »." if prise else ""))
+    route = get(connection, identifiant)
+    if prise:
+        route["supersedes"] = {"domain": prise["domain"],
+                               "spark_name": prise["spark_name"]}
+    return route
 
 
 def get(connection: sqlite3.Connection, route_id: str) -> dict:
@@ -167,7 +255,10 @@ def build_config(connection: sqlite3.Connection) -> dict:
     créer — mais rien ne peut la servir (docs/DAT.md §18.2).
     """
     routes = []
-    for route in listing(connection):
+    # §18.3 bis : Caddy retient la PREMIÈRE route qui correspond. L'ordre est
+    # donc la règle de préséance elle-même, pas une commodité d'affichage.
+    servies = sorted(listing(connection), key=lambda r: specificity(r["domain"]))
+    for route in servies:
         if not route["enabled"] or not route["ipv4_address"]:
             continue
         routes.append({

@@ -202,3 +202,110 @@ def test_la_suppression_d_un_spark_emporte_ses_routes(db):
     ingress.declare(db, "S1", "crm.example.com", 8080)
     db.execute("DELETE FROM spark WHERE id='S1'")
     assert ingress.listing(db) == []
+
+
+# --- SPK-48 · le joker et la préséance (docs/DAT.md §18.3 bis) ---------------
+
+
+def test_les_trois_bornes_du_joker_sont_refusees_en_les_nommant(db):
+    """@verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis
+
+    Un joker ne vaut qu'en tête et sur UN seul niveau. Le refus NOMME la borne :
+    « invalide » seul laisserait chercher entre une faute de frappe et une règle
+    du produit.
+    """
+    poser_spark(db, "01J0", "demo")
+    for mauvais in ("*.*.monapi.fr", "api.*.monapi.fr", "*.fr", "*"):
+        with pytest.raises(ingress.IngressError) as leve:
+            ingress.declare(db, "01J0", mauvais, 8080)
+        assert "joker" in str(leve.value), mauvais
+
+
+def test_un_joker_de_premier_niveau_est_accepte(db):
+    poser_spark(db, "01J0", "demo")
+    route = ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    assert route["domain"] == "*.monapi.fr"
+
+
+def test_un_joker_ne_couvre_QU_UN_niveau(db):
+    """C'est la règle du DNS et celle de Caddy. En adopter une autre ferait
+    diverger ce que le produit affiche de ce que le trafic fait réellement."""
+    assert ingress.covers("*.monapi.fr", "api.monapi.fr")
+    assert not ingress.covers("*.monapi.fr", "a.b.monapi.fr")
+    assert not ingress.covers("*.monapi.fr", "monapi.fr")
+    assert not ingress.covers("*.monapi.fr", "api.autre.fr")
+    assert ingress.covers("api.monapi.fr", "api.monapi.fr")
+
+
+def test_le_plus_SPECIFIQUE_passe_avant_dans_la_configuration(db):
+    """LE cœur de l'unité, et il ne se voit pas à l'écran.
+
+    Caddy retient la PREMIÈRE route qui correspond. Le listing triait par ordre
+    alphabétique, où « * » précède les lettres : « *.monapi.fr » passait donc
+    avant « api.monapi.fr » et le joker gagnait, à l'inverse exact de la règle.
+    """
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    poser_spark(db, "01J1", "dedie", "10.77.0.11")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    ingress.declare(db, "01J1", "api.monapi.fr", 9090)
+
+    config = ingress.build_config(db)
+    hotes = [r["match"][0]["host"][0]
+             for r in config["apps"]["http"]["servers"]["spark"]["routes"]
+             if "match" in r]
+    assert hotes.index("api.monapi.fr") < hotes.index("*.monapi.fr"), (
+        "le nom exact doit être rencontré AVANT le joker")
+
+    # Et l'amont du nom exact est bien celui du Spark dédié.
+    exacte = next(r for r in config["apps"]["http"]["servers"]["spark"]["routes"]
+                  if "match" in r and r["match"][0]["host"] == ["api.monapi.fr"])
+    assert exacte["handle"][0]["upstreams"] == [{"dial": "10.77.0.11:9090"}]
+
+
+def test_entre_deux_jokers_le_plus_long_passe_avant(db):
+    poser_spark(db, "01J0", "large", "10.77.0.10")
+    poser_spark(db, "01J1", "etroit", "10.77.0.11")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    ingress.declare(db, "01J1", "*.eu.monapi.fr", 9090)
+    hotes = [r["match"][0]["host"][0]
+             for r in ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"]
+             if "match" in r]
+    assert hotes.index("*.eu.monapi.fr") < hotes.index("*.monapi.fr")
+
+
+def test_declarer_un_nom_exact_NOMME_le_spark_dont_il_prend_le_pas(db):
+    """§18.3 bis : la déclaration réussit, mais le silence produirait une panne
+    cherchée pendant des heures du mauvais côté."""
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    poser_spark(db, "01J1", "dedie", "10.77.0.11")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+
+    route = ingress.declare(db, "01J1", "admin.monapi.fr", 9090)
+    assert route["supersedes"] == {"domain": "*.monapi.fr", "spark_name": "general"}
+
+
+def test_prendre_le_pas_sur_SON_PROPRE_joker_ne_se_signale_pas(db):
+    """Ce n'est pas un détournement : c'est le même exploitant qui affine sa
+    propre route. Le signaler serait du bruit."""
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    route = ingress.declare(db, "01J0", "admin.monapi.fr", 9090)
+    assert "supersedes" not in route
+
+
+def test_un_nom_qu_aucun_joker_ne_couvre_ne_signale_rien(db):
+    poser_spark(db, "01J0", "general", "10.77.0.10")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    poser_spark(db, "01J1", "autre", "10.77.0.11")
+    assert "supersedes" not in ingress.declare(db, "01J1", "admin.autre.fr", 9090)
+
+
+def test_deux_routes_de_MEME_texte_se_refusent_toujours(db):
+    """§18.3 bis : ce que l'unicité devient — elle ne change PAS. Un joker et un
+    nom exact ne sont pas le même nom, mais deux textes identiques le sont."""
+    poser_spark(db, "01J0", "a", "10.77.0.10")
+    poser_spark(db, "01J1", "b", "10.77.0.11")
+    ingress.declare(db, "01J0", "*.monapi.fr", 8080)
+    with pytest.raises(ingress.IngressError) as leve:
+        ingress.declare(db, "01J1", "*.monapi.fr", 9090)
+    assert "déjà routé" in str(leve.value)
