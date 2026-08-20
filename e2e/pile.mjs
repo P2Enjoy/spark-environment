@@ -142,7 +142,10 @@ export async function monterPile({ dns = null } = {}) {
     SPARK_DOCKER_COMMAND: JSON.stringify({
       ps: "printf '%b\\n'"
         + " 'abc123\\thelo-web-1\\trunning\\tUp 2 minutes\\tnginx:alpine\\t0.0.0.0:8080->80/tcp'"
-        + " 'def456\\thelo-base-1\\texited\\tExited (0)\\tpostgres:16\\t'",
+        + " 'def456\\thelo-base-1\\texited\\tExited (0)\\tpostgres:16\\t'"
+        // SPK-45 tranche 2 : un conteneur SANS shell, pour éprouver au clavier
+        // le refus du §37.4.7. Une image « distroless » n'en embarque aucun.
+        + " 'ghi789\\tdistroless-1\\trunning\\tUp 5 minutes\\tgcr.io/distroless/static\\t'",
       stats: "printf '%b\\n' 'helo-web-1\\t0.03%\\t12.3MiB / 2GiB\\t0.60%'",
       // L'ordre compte : les listes se reconnaissent à leur gabarit, le
       // conteneur à son nom, et le nom seul viendrait avant le gabarit.
@@ -151,10 +154,25 @@ export async function monterPile({ dns = null } = {}) {
         + " *NetworkSettings*) printf '%b\\n' 'helo_default\\t172.18.0.2' ;;"
         + " *Mounts*) printf '%b\\n'"
         + " 'volume\\thelo_data\\t/var/lib/postgresql/data\\trw' ;;"
+        + " *distroless-1*) printf '%b\\n' '/distroless-1\\trunning\\t0"
+        + "\\t2026-08-20T18:52:01Z\\t\\t0\\tgcr.io/distroless/static' ;;"
         + " *helo-base-1*) printf '%b\\n' '/helo-base-1\\texited\\t137"
         + "\\t2026-08-20T18:52:01Z\\t2026-08-20T18:52:18Z\\t2\\tpostgres:16' ;;"
         + " *) printf '%b\\n' '/helo-web-1\\trunning\\t0"
         + "\\t2026-08-20T18:52:01Z\\t\\t0\\tnginx:alpine' ;;"
+        + ' esac',
+      // SPK-45, tranche 2 · §37.4.7 : le SONDAGE du shell. « helo-web-1 » porte
+      // bash, « helo-base-1 » n'a que sh, « distroless-1 » n'a aucun shell et
+      // rend 127 sur sa SORTIE STANDARD — comme le vrai Docker, et c'est ce que
+      // le parcours doit éprouver.
+      exec: 'case "$0" in'
+        + " *parti*) echo 'Error response from daemon: No such container: parti' >&2;"
+        + ' exit 1 ;;'
+        + " *distroless*) printf '%b\\n' 'OCI runtime exec failed: exec failed:"
+        + " unable to start container process: exec: \"sh\": executable file not"
+        + " found in $PATH'; exit 127 ;;"
+        + " *helo-base-1*) printf '%b\\n' '/bin/sh' ;;"
+        + " *) printf '%b\\n' '/bin/bash' ;;"
         + ' esac',
       // SPK-45 · §37.7.1 : les quatre gestes, avec les codes MESURÉS sur un vrai
       // Docker. « helo-base-1 » est arrêté, donc le tuer rend 1 avec « is not

@@ -266,7 +266,7 @@ export function doublonPour(doublon, commande) {
   // Les quatre gestes du §37.7 en font partie : sans eux, un doublon laisse
   // partir la VRAIE commande `ssh`, qui échoue en 255 et fait rendre à l'écran
   // « aucun serveur SSH ne répond » — un diagnostic qui ne dit rien du geste.
-  const geste = /docker\s+(ps|stats|inspect|logs|start|stop|restart|kill)\b/
+  const geste = /docker\s+(ps|stats|inspect|logs|start|stop|restart|kill|exec)\b/
     .exec(commande)?.[1] ?? '*';
   return table[geste] ?? table['*'] ?? null;
 }

@@ -2204,6 +2204,149 @@ test('un Spark GELÉ refuse le geste et LAISSE la lecture (§37.7)', async () =>
   });
 });
 
+// --- SPK-45 tranche 2 · LE TERMINAL DANS UN CONTENEUR (§37.4.7) ------------
+
+test('entrer dans un conteneur : la bannière le NOMME, le journal le distingue',
+     async () => {
+  await parcours('terminal-conteneur', async () => {
+    // §29.3 : on y entre EN CLIQUANT depuis la fiche du conteneur.
+    await ouvrirConteneur('helo-web-1');
+    await page.click('button[data-docker="terminal"]');
+
+    // La session vit sur l'onglet Terminal (SPK-DS-04), pas sous Docker.
+    await page.waitForSelector('.onglet[href$="/terminal"][aria-current="page"]',
+                               { timeout: 15000 });
+    await page.waitForSelector('.bandeau-terminal', { timeout: 15000 });
+
+    const bandeau = await page.textContent('.bandeau-terminal');
+    // §9.8 : la couleur seule ne distingue pas — le libellé le dit en toutes
+    // lettres, et le conteneur est NOMMÉ. Deux conteneurs d'une même pile se
+    // ressemblent, et taper la mauvaise commande dans le mauvais est l'erreur
+    // que cette ligne existe pour empêcher.
+    assert.match(bandeau, /Conteneur/);
+    assert.match(bandeau, /pas dans le Spark/);
+    assert.match(bandeau, /helo-web-1/);
+    assert.match(bandeau, /\/bin\/bash/, 'le shell SONDÉ, pas un shell supposé');
+
+    // CLAUDE.md §15 : on LIT `sparkd` pour constater l'effet.
+    const { corps } = await pile.lireSparkd(
+      '/v1/audit?action=spark.container_terminal_open');
+    const inscrit = corps.entries[0];
+    assert.ok(inscrit, 'l’ouverture doit porter l’action du CONTENEUR');
+    assert.equal(inscrit.target_id, 'crm-production');
+    assert.equal(JSON.parse(inscrit.payload).container, 'helo-web-1');
+
+    // Et elle ne se confond pas avec un terminal de Spark.
+    const spark = await pile.lireSparkd('/v1/audit?action=spark.terminal_open');
+    assert.ok(!JSON.stringify(spark.corps.entries).includes('helo-web-1'));
+  });
+});
+
+test('quitter l’onglet ferme la session, et le journal porte sa DURÉE', async () => {
+  await parcours('terminal-conteneur-ferme', async () => {
+    await ouvrirConteneur('helo-web-1');
+    await page.click('button[data-docker="terminal"]');
+    await page.waitForSelector('.bandeau-terminal', { timeout: 15000 });
+
+    // §37.4 : quitter l'onglet TERMINE la session. Un shell qui survivrait à
+    // son écran serait un shell abandonné dont personne ne se souvient.
+    await page.click('.onglet[href$="/journal"]');
+    await page.waitForSelector('.onglet[href$="/journal"][aria-current="page"]',
+                               { timeout: 10000 });
+    await page.waitForFunction(
+      () => new Promise((r) => setTimeout(() => r(true), 1500)), { timeout: 5000 });
+
+    const { corps } = await pile.lireSparkd(
+      '/v1/audit?action=spark.container_terminal_close');
+    const ferme = corps.entries[0];
+    assert.ok(ferme, 'la fermeture porte l’action du conteneur');
+    const charge = JSON.parse(ferme.payload);
+    assert.equal(charge.container, 'helo-web-1');
+    assert.equal(typeof charge.duration_seconds, 'number');
+    assert.equal(charge.reason, 'sortie');
+  });
+});
+
+test('un conteneur SANS SHELL le dit, et n’ouvre pas de fenêtre noire', async () => {
+  await parcours('terminal-conteneur-sans-shell', async () => {
+    // §37.4.7 : une image « distroless » n'embarque aucun shell, et c'est un
+    // choix de sécurité du locataire — pas une panne.
+    const { corps: avant } = await pile.lireSparkd(
+      '/v1/audit?action=spark.container_terminal_open');
+    await ouvrirConteneur('distroless-1');
+    await page.click('button[data-docker="terminal"]');
+    await page.waitForSelector('.onglet[href$="/terminal"][aria-current="page"]',
+                               { timeout: 15000 });
+    await page.waitForFunction(
+      () => document.body.innerText.includes('pas de shell'), { timeout: 15000 });
+
+    const ecran = await page.textContent('.principal');
+    assert.match(ecran, /pas de shell/);
+    assert.match(ecran, /distroless/);
+    assert.match(ecran, /pas une panne/);
+    // Aucune SESSION n'est ouverte : la commande d'ouverture est toujours là,
+    // et rien n'a été inscrit au journal.
+    //
+    // On ne mesure PAS l'absence de bannière : elle s'affiche même sans session
+    // — c'est INC-10, antérieur à cette unité et laissé inchangé.
+    assert.ok(await page.$('[data-terminal="ouvrir"]'),
+              'le terminal du Spark reste offert : ce refus n’est pas une impasse');
+    // …et rien n'est inscrit au journal : il ne s'est rien passé.
+    const { corps: apres } = await pile.lireSparkd(
+      '/v1/audit?action=spark.container_terminal_open');
+    assert.equal(apres.entries.length, avant.entries.length);
+  });
+});
+
+test('un conteneur ARRÊTÉ n’offre pas d’y entrer', async () => {
+  await parcours('terminal-conteneur-arrete', async () => {
+    // §1.4 : une commande qui ne peut pas aboutir n'a rien à faire à l'écran.
+    await ouvrirConteneur('helo-base-1');
+    assert.equal(await page.$$eval('[data-docker="terminal"]', (l) => l.length), 0);
+    // …alors que la lecture, elle, reste offerte.
+    assert.ok(await page.$('[data-docker="relire"]'));
+  });
+});
+
+test('un Spark GELÉ laisse entrer dans un conteneur (§37.7)', async () => {
+  await parcours('terminal-conteneur-gel', async () => {
+    // La seconde moitié de la DoD : le gel refuse les GESTES, laisse la lecture
+    // ET laisse le terminal. Le bloquer pousserait à désarmer pour regarder,
+    // donc à oublier de réarmer (§35.4).
+    await ouvrir('postgres-dedie');
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot',
+                               { timeout: 10000 });
+    await page.fill('#protection-mot', 'gel-du-terminal');
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Armée'), { timeout: 10000 });
+
+    try {
+      await ouvrirConteneur('helo-web-1', 'postgres-dedie');
+      // Le bouton est là, ACTIF, malgré le gel.
+      const bouton = await page.$eval('[data-docker="terminal"]', (b) => b.disabled);
+      assert.equal(bouton, false, 'le terminal reste offert sous gel');
+
+      await page.click('button[data-docker="terminal"]');
+      await page.waitForSelector('.bandeau-terminal', { timeout: 15000 });
+      const bandeau = await page.textContent('.bandeau-terminal');
+      assert.match(bandeau, /helo-web-1/);
+      // …et la bannière rappelle que ce Spark est protégé (§35.4).
+      assert.match(bandeau, /protégé/);
+    } finally {
+      await ouvrir('postgres-dedie');
+      await page.click('[data-ouvre="protection"]');
+      await page.waitForSelector('dialog.modale[open] #protection-mot',
+                                 { timeout: 10000 });
+      await page.fill('#protection-mot', 'gel-du-terminal');
+      await page.click('dialog.modale[open] [data-engage="protection"]');
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Désarmée'), { timeout: 10000 });
+    }
+  });
+});
+
 // --- SPK-38 · L'ANCRE VOIT CE QUE LA CHAÎNE NE PEUT PAS VOIR ----------------
 //
 // CE BLOC EST LE DERNIER DU FICHIER, ET IL DOIT LE RESTER. Le parcours ci-dessous

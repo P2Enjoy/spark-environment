@@ -206,3 +206,37 @@ rejoint la chaîne d'intégrité comme prévu. C'est un champ mort dans une rép
 trancher ce que la porte doit rendre — l'entrée entière, son seul identifiant, ou
 rien du tout —, et cela touche le contrat d'API partagé (SPK-17) autant que cette
 route. L'arbitrage dépasse l'unité qui a seulement élargi la liste blanche.
+
+### INC-10 · La bannière du terminal annonce une session « SSH » quand aucune n'est ouverte
+
+**Constaté le** 2026-08-20, en éprouvant le refus d'un conteneur sans shell
+(SPK-45, tranche 2).
+
+**Mesure.** `renderTerminal` avec `status: 'ferme'` et `session: null` :
+
+```
+bannière présente sans session : true
+elle annonce : « SSH » | « Quitter cet onglet termine la session »
+```
+
+**Ligne de base établie** (CloudWorker §2.4) : `git stash -u` sur
+`apps/webui/src/components/spark-terminal.js` seul, mesure rejouée, **résultat
+identique**. Le défaut est antérieur à SPK-45 et ne lui appartient pas.
+
+**Cause.** Le bandeau est rendu inconditionnellement, et le chemin retombe sur
+`CHEMINS.ssh` faute de session : `const chemin = CHEMINS[etat.session?.path] ??
+CHEMINS.ssh`.
+
+**Ce que cela viole.** `docs/DESIGN_SYSTEM.md` §14.6 — « inconnu » n'est pas une
+valeur — et §1.4 : l'écran affiche l'état d'une session qui n'existe pas, et
+promet qu'en quittant l'onglet on la terminera. Sur un écran où l'on vient
+précisément d'apprendre qu'aucun terminal ne peut s'ouvrir, la ligne se lit comme
+une contradiction.
+
+**Ce que ce n'est pas.** Une fuite ni une perte : aucune session n'est réellement
+ouverte, et le §37.4 est tenu. C'est un écran qui décrit ce qui n'est pas là.
+
+**Comportement laissé inchangé** (CloudWorker §3.1). La correction demande de
+trancher ce que le bandeau doit dire hors session — disparaître, ou annoncer
+« aucune session » —, et cela touche l'écran du terminal dans son ensemble, pas
+l'unité qui y a ajouté un troisième chemin.

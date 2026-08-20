@@ -139,8 +139,21 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
        </div>`
     : '';
 
+  // §37.4.7 : un shell absent n'est pas une impasse non plus. Le conteneur
+  // existe peut-être parfaitement ; c'est son image qui n'embarque pas de
+  // shell, et une image « distroless » n'en embarque délibérément aucun. Le
+  // refus s'affiche DANS l'écran, comme celui du dépannage, et il NOMME l'état
+  // constaté plutôt que de rendre une erreur technique (§14.5).
+  const refusConteneur = etat.refus?.error === 'container_shell_unavailable'
+    ? `<div class="avertissement" role="status">
+         <p><strong>${echapper(etat.refus.titre ?? '')}</strong></p>
+         <p>${echapper(etat.refus.detail ?? etat.refus.message ?? '')}</p>
+       </div>`
+    : '';
+
   const refus = etat.status === 'refus' && etat.refus
       && etat.refus.error !== 'rescue_refused'
+      && etat.refus.error !== 'container_shell_unavailable'
     ? `<div class="carte bloc">
          <h2 id="titre-terminal">Terminal</h2>
          <p class="refus">${echapper(etat.refus.message)}</p>
@@ -277,6 +290,7 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
   <h2 id="titre-terminal">Terminal</h2>
   ${bandeau}
   ${refusDepannage}
+  ${refusConteneur}
   ${avis}${fin}${diagnostic}
   <pre class="terminal" id="${CHAMP_TERMINAL}" tabindex="0"${region}></pre>
   <label class="sr-only" for="terminal-entree">Saisie du terminal</label>

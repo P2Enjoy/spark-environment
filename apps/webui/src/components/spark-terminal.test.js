@@ -349,3 +349,39 @@ test('un motif de diagnostic INCONNU ne rend rien plutôt qu’un jeton brut', (
     diagnostic: { motif: 'quelque_chose_de_neuf', ouvert: false } }));
   assert.ok(!rendu.includes('quelque_chose_de_neuf'));
 });
+
+// --- SPK-45 tranche 2 · LE TERMINAL DANS UN CONTENEUR (§37.4.7) ------------
+
+test('la bannière NOMME le conteneur et son shell, et le dit en toutes lettres', () => {
+  // §9.8 : la couleur seule ne distingue pas. Deux conteneurs d'une même pile
+  // se ressemblent, et taper la mauvaise commande dans le mauvais est l'erreur
+  // que cette ligne existe pour empêcher.
+  const rendu = renderTerminal(SPARK, { ...TERMINAL_VIDE, status: 'ouvert',
+    session: { id: 'a', path: 'container', container: 'crm-web-1',
+               shell: '/bin/bash' } });
+  assert.match(rendu, /Conteneur/);
+  assert.match(rendu, /pas dans le Spark/);
+  assert.match(rendu, /crm-web-1/);
+  assert.match(rendu, /\/bin\/bash/);
+});
+
+test('un terminal de SPARK ne parle d’aucun conteneur', () => {
+  const rendu = renderTerminal(SPARK, { ...TERMINAL_VIDE, status: 'ouvert',
+    session: { id: 'a', path: 'ssh', container: null, shell: null } });
+  assert.match(rendu, />SSH</);
+  assert.ok(!/Conteneur/.test(rendu));
+});
+
+test('un shell ABSENT est un avertissement, pas un refus rouge', () => {
+  // §25.1 : le rouge est réservé au refus du serveur. Une image « distroless »
+  // sans shell est un choix de sécurité du locataire, pas une panne.
+  const rendu = renderTerminal(SPARK, { ...TERMINAL_VIDE, status: 'ferme',
+    refus: { error: 'container_shell_unavailable', reason: 'sans_shell',
+             titre: 'Ce conteneur n’a pas de shell',
+             detail: 'Son image n’en embarque aucun — ni « bash », ni « sh ».' } });
+  assert.match(rendu, /pas de shell/);
+  assert.match(rendu, /class="avertissement"/);
+  assert.ok(!/class="refus"/.test(rendu));
+  // …et l'écran n'est PAS bloqué : le terminal du Spark reste offert.
+  assert.match(rendu, /data-terminal="ouvrir"/);
+});
