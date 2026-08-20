@@ -237,6 +237,50 @@
         "tags": [
           "audit"
         ]
+      },
+      "post": {
+        "description": "Inscrit au journal un geste que `sparkd` ne peut pas constater.\n\nPorte ÉTROITE (docs/DAT.md §37.4.6) : liste blanche d'actions, acteur\npris de l'en-tête et non du corps, charge bornée à des clés connues.",
+        "operationId": "declare_audit_v1_audit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Declare Audit V1 Audit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Declare Audit",
+        "tags": [
+          "audit"
+        ]
       }
     },
     "/v1/audit/verify": {

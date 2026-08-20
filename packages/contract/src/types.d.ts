@@ -73,7 +73,14 @@ export interface paths {
          */
         get: operations["audit_trail_v1_audit_get"];
         put?: never;
-        post?: never;
+        /**
+         * Declare Audit
+         * @description Inscrit au journal un geste que `sparkd` ne peut pas constater.
+         *
+         *     Porte ÉTROITE (docs/DAT.md §37.4.6) : liste blanche d'actions, acteur
+         *     pris de l'en-tête et non du corps, charge bornée à des clés connues.
+         */
+        post: operations["declare_audit_v1_audit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -658,6 +665,43 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    declare_audit_v1_audit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

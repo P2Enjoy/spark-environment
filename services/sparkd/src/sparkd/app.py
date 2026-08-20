@@ -724,6 +724,52 @@ def create_app(config: Config) -> FastAPI:
             )
             return etat
 
+    #: SPK-43 · §37.4.6 : les seules actions qu'un appelant EXTÉRIEUR peut
+    #: inscrire. Ce sont celles que la console est seule à pouvoir constater —
+    #: la session de terminal ne passe pas par `sparkd`. Toute autre action
+    #: serait un appelant se faisant passer pour le runtime.
+    ACTIONS_DECLARABLES = ("spark.terminal_open", "spark.terminal_close")
+
+    #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
+    #: secrets en clair que le §37.5 interdit précisément.
+    CLES_DECLARABLES = ("path", "reason", "duration_seconds")
+
+    @app.post("/v1/audit", tags=["audit"], status_code=201)
+    def declare_audit(body: dict = Body(...)) -> dict:
+        """Inscrit au journal un geste que `sparkd` ne peut pas constater.
+
+        Porte ÉTROITE (docs/DAT.md §37.4.6) : liste blanche d'actions, acteur
+        pris de l'en-tête et non du corps, charge bornée à des clés connues.
+        """
+        action = str(body.get("action", ""))
+        if action not in ACTIONS_DECLARABLES:
+            raise HTTPException(status_code=422, detail={
+                "error": "action_refused",
+                "message": f"L'action « {action} » ne peut pas être déclarée de "
+                           f"l'extérieur. Admises : {', '.join(ACTIONS_DECLARABLES)}."})
+        brut = body.get("payload") or {}
+        if not isinstance(brut, dict):
+            raise HTTPException(status_code=422, detail={
+                "error": "payload_refused", "message": "La charge doit être un objet."})
+        inconnues = sorted(set(brut) - set(CLES_DECLARABLES))
+        if inconnues:
+            raise HTTPException(status_code=422, detail={
+                "error": "payload_refused",
+                "message": f"Clés refusées : {', '.join(inconnues)}. "
+                           f"Admises : {', '.join(CLES_DECLARABLES)}."})
+        with registry() as connection:
+            # L'acteur vient du CONTEXTE — l'en-tête posé par l'hôte console
+            # (§21.6.2) —, jamais du corps. Laisser une requête choisir son
+            # identité au journal la rendrait triviale à falsifier.
+            entree = audit_service.record(
+                connection, None, action, "ok",
+                str(body.get("message", ""))[:500],
+                target_type=str(body.get("target_type", "spark")),
+                target_id=str(body.get("target_id", "")) or None,
+                payload={k: brut[k] for k in CLES_DECLARABLES if k in brut},
+            )
+        return {"recorded": action, "entry": entree}
+
     @app.get("/v1/audit", tags=["audit"])
     def audit_trail(limit: int = 100, result: str | None = None,
                     action: str | None = None, actor: str | None = None,
