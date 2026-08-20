@@ -599,3 +599,72 @@ test('la section Ressources NOMME ses valeurs et renvoie pour le reste (§1.5 bi
   assert.match(html, /Seul le plafond réseau est appliqué par le noyau/);
   assert.match(html, /href="#\/manuel\/M5"/);
 });
+
+// --- SPK-63 · FRAPPER LE NOM (§6.23) ---------------------------------------
+
+const supprimer = (partiel = {}) =>
+  renderCommands({ ...SPARK, allowed_commands: ['delete'] },
+                 { confirming: 'delete', ...partiel });
+
+test('la confirmation DIT quoi frapper, et montre le nom attendu', () => {
+  const rendu = supprimer();
+  assert.match(rendu, /Frappez <strong>crm-production<\/strong>/);
+  assert.match(rendu, /id="suppression-nom"/);
+});
+
+test('tant que la frappe ne correspond pas, l’engagement est PRÉSENT et désactivé', () => {
+  // §9.9 : l'action existe, elle est indisponible dans un état connu. La faire
+  // disparaître ferait croire que le produit ne sait pas supprimer.
+  const rendu = supprimer({ frappe: 'crm-produc' });
+  const bouton = /<button[^>]*data-confirme="delete"[^>]*>/.exec(rendu)[0];
+  assert.match(bouton, /disabled/);
+  assert.match(bouton, /aria-describedby="suppression-aide"/);
+});
+
+test('la frappe EXACTE engage', () => {
+  const rendu = supprimer({ frappe: 'crm-production' });
+  const bouton = /<button[^>]*data-confirme="delete"[^>]*>/.exec(rendu)[0];
+  assert.ok(!/disabled/.test(bouton));
+  assert.match(rendu, /Le nom correspond/);
+});
+
+test('la comparaison est EXACTE : ni casse, ni espaces ignorés', () => {
+  // Deux Sparks dont les noms ne diffèrent que par la casse existent. Les
+  // confondre rendrait la frappe inutile précisément là où elle sert.
+  for (const approche of ['CRM-PRODUCTION', 'Crm-Production',
+                          ' crm-production', 'crm-production ']) {
+    const rendu = supprimer({ frappe: approche });
+    const bouton = /<button[^>]*data-confirme="delete"[^>]*>/.exec(rendu)[0];
+    assert.match(bouton, /disabled/, approche);
+  }
+});
+
+test('une frappe incomplète n’est PAS une erreur', () => {
+  // Rien n'a encore été tenté : c'est un état d'attente, pas un échec. Lui
+  // donner la couleur du refus apprendrait à ignorer cette couleur.
+  const rendu = supprimer({ frappe: 'crm' });
+  assert.ok(!/class="refus"/.test(rendu));
+  assert.ok(!/role="alert"/.test(rendu));
+  assert.match(rendu, /class="champ__aide"/);
+});
+
+test('la frappe saisie est CONSERVÉE au repeint', () => {
+  // Un champ vidé à chaque frappe serait impossible à remplir.
+  assert.match(supprimer({ frappe: 'crm-pro' }), /value="crm-pro"/);
+});
+
+test('la frappe saisie est ÉCHAPPÉE', () => {
+  assert.ok(!/<img/.test(supprimer({ frappe: '<img src=x onerror=1>' })));
+});
+
+test('aucun AUTRE geste ne demande la frappe du nom', () => {
+  // §6.24 : une confirmation systématique banalise les confirmations réellement
+  // importantes, et une frappe demandée souvent devient un réflexe qui ne lit
+  // plus. La suppression est le seul geste du produit à réunir les trois
+  // conditions du §6.23.
+  for (const geste of ['stop', 'restart', 'start']) {
+    const rendu = renderCommands({ ...SPARK, allowed_commands: [geste] },
+                                 { confirming: geste });
+    assert.ok(!/data-frappe/.test(rendu), geste);
+  }
+});

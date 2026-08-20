@@ -28,6 +28,9 @@ const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                sort: { key: 'name', dir: 'asc' }, tunnel: null, server: null,
                route: 'liste', spark: null, detail: {}, confirming: null,
+               // SPK-63 · §6.23 : ce qui a été frappé pour confirmer une
+               // suppression. Vide tant qu'on n'a rien tapé.
+               frappe: '',
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
                            pools: null, cores: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
@@ -107,7 +110,8 @@ function peindre() {
       ? renderSparkCreate(etat.creation)
       : etat.route === 'detail'
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
-                            confirming: etat.confirming, admin: etat.admin,
+                            confirming: etat.confirming, frappe: etat.frappe,
+                            admin: etat.admin,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
                             ...etat.detail })
@@ -191,9 +195,14 @@ function brancher() {
       // Seule la suppression passe par une confirmation (docs/DAT.md §24.2).
       if (commande === 'delete') {
         etat.confirming = 'delete';
+        // La frappe repart à VIDE : garder celle d'une confirmation annulée
+        // rendrait la suivante engageable sans avoir rien lu (§6.23).
+        etat.frappe = '';
         peindre();
-        // §6.22 : le focus entre dans la confirmation.
-        racine.querySelector('[data-confirme]')?.focus();
+        // §6.22 : le focus entre dans la confirmation. Il va au CHAMP, pas au
+        // bouton : celui-ci est désactivé tant que rien n'est frappé, et un
+        // focus sur un contrôle inerte laisse croire qu'on est bloqué (§14.3).
+        racine.querySelector('[data-frappe="delete"]')?.focus();
         return;
       }
       lancer(commande);
@@ -216,9 +225,24 @@ function brancher() {
       peindre();
     },
   });
+  // SPK-63 : la frappe repeint l'écran — le bouton s'active quand le nom
+  // correspond. Le curseur est REPLACÉ après le repeint, sans quoi il
+  // reviendrait au début du champ à chaque caractère.
+  const champFrappe = racine.querySelector('[data-frappe="delete"]');
+  champFrappe?.addEventListener('input', () => {
+    const position = champFrappe.selectionStart;
+    etat.frappe = champFrappe.value;
+    peindre();
+    const rendu = racine.querySelector('[data-frappe="delete"]');
+    if (rendu) {
+      rendu.focus();
+      rendu.setSelectionRange(position, position);
+    }
+  });
   racine.querySelector('[data-confirme]')?.addEventListener('click', () => lancer('delete'));
   racine.querySelector('[data-annule]')?.addEventListener('click', () => {
     etat.confirming = null;
+    etat.frappe = '';
     peindre();
     // §6.22 : l'annulation rend le focus au déclencheur.
     racine.querySelector('[data-commande="delete"]')?.focus();

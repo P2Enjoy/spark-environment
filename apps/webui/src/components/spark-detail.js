@@ -59,7 +59,8 @@ export const RESULTATS = {
  * elle n'est pas rendue du tout (§24.1). Un état transitoire le dit en toutes
  * lettres plutôt que d'exposer quatre boutons morts.
  */
-export function renderCommands(spark, { confirming = null, admin = null } = {}) {
+export function renderCommands(spark, { confirming = null, admin = null,
+                                        frappe = '' } = {}) {
   const permises = spark?.allowed_commands ?? [];
 
   // §6.23 : « lorsqu'un objet est protégé, la protection se LÈVE D'ABORD, par un
@@ -93,13 +94,32 @@ export function renderCommands(spark, { confirming = null, admin = null } = {}) 
 
   // §6.22 : la confirmation est intégrée au flux, sous le déclencheur — pas de
   // voile, pas de piège de focus, pas d'Échap global à écrire.
+  // SPK-63 · §6.23 « Frapper le nom » : la suppression réunit les trois
+  // conditions — irréversible, objet confondable avec les autres Sparks, nom
+  // court et visible. La comparaison est EXACTE : deux Sparks dont les noms ne
+  // diffèrent que par la casse existent, et les confondre rendrait la frappe
+  // inutile là où elle sert.
+  const nomFrappe = spark?.name ?? '';
+  const correspond = frappe === nomFrappe;
   const confirmation = confirming === 'delete'
     ? `<div class="confirmation" role="group" aria-label="Confirmer la suppression">
-         <p><strong>Supprimer « ${echapper(spark.name)} » ?</strong></p>
+         <p><strong>Supprimer « ${echapper(nomFrappe)} » ?</strong></p>
          <p class="confirmation__consequence">La cellule, son disque et ses instantanés
          sont détruits. Les données sauvegardées ailleurs ne sont pas concernées.</p>
+         <div class="champ">
+           <label for="suppression-nom">Frappez <strong>${echapper(nomFrappe)}</strong>
+             pour confirmer</label>
+           <input class="controle" id="suppression-nom" type="text"
+                  autocomplete="off" spellcheck="false"
+                  data-frappe="delete" value="${echapper(frappe)}">
+           <p class="champ__aide" id="suppression-aide">${correspond
+             ? 'Le nom correspond.'
+             : 'Le nom n’est pas encore celui du Spark : la suppression n’est pas engageable.'}</p>
+         </div>
          <p class="confirmation__actions">
-           <button type="button" class="bouton bouton--destructif" data-confirme="delete">Supprimer définitivement</button>
+           <button type="button" class="bouton bouton--destructif"
+                   data-confirme="delete" aria-describedby="suppression-aide"
+                   ${correspond ? '' : 'disabled'}>Supprimer définitivement</button>
            <button type="button" class="bouton" data-annule="delete">Annuler</button>
          </p>
        </div>`
