@@ -4453,6 +4453,166 @@ terminal et tape la commande, exactement comme il l'aurait fait en SSH depuis so
 poste. Le produit ne prétendra pas l'en empêcher, parce qu'il ne le peut pas là où
 il a **choisi** de n'avoir aucune autorité.
 
+#### 37.7.1 Les quatre commandes, et ce que leurs codes de sortie disent vraiment
+
+**Complété le 2026-08-20, après mesure sur un vrai Docker 29.6.1.** Le §37.7 rend
+la décision ; il ne dit ni par quelles commandes, ni comment se lit ce qu'elles
+rendent. Sans cela, chaque cas limite se tranche à l'improvisation.
+
+Les commandes, sur le chemin du §37.2 — SSH, comme la lecture du §37.6 :
+
+```
+docker start <nom>
+docker stop -t 10 <nom>
+docker restart -t 10 <nom>
+docker kill <nom>
+```
+
+Le délai d'arrêt est **explicite**, et c'est délibéré : laissé implicite, il
+serait celui de la version de Docker installée chez le locataire, donc une
+valeur que le produit ne choisit pas et qui peut changer sous lui. Le délai du
+`ssh` qui porte la commande est plus long que ce délai-là, sans quoi la console
+abandonnerait un arrêt qui se déroule normalement.
+
+**Ce que la mesure a établi, et qui n'était pas devinable :**
+
+| Situation | Code | Sortie |
+|---|---|---|
+| geste réussi, quel qu'il soit | `0` | le nom du conteneur |
+| `start` d'un conteneur **déjà en marche** | `0` | le nom |
+| `stop` d'un conteneur **déjà arrêté** | `0` | le nom |
+| `kill` d'un conteneur **déjà arrêté** | `1` | `cannot kill container: … is not running` |
+| n'importe lequel, conteneur **inconnu** | `1` | `No such container` |
+
+Deux faits en découlent, et ils commandent tout le traitement.
+
+**1. `start` et `stop` sont idempotents, `kill` ne l'est pas.** Démarrer ce qui
+tourne déjà et arrêter ce qui est déjà arrêté réussissent. C'est heureux : entre
+le relevé de la liste et le clic, l'état a pu changer, et faire échouer un geste
+parce qu'il n'avait plus rien à faire produirait une erreur là où il ne s'est rien
+passé de fâcheux.
+
+**2. Le code `1` a DEUX causes, et seule la sortie d'erreur les sépare.** C'est
+l'exact inverse du §37.6 bis, où c'était le code qui distinguait et la sortie qui
+ne disait rien. Ici, « ce conteneur a disparu » et « ce conteneur ne tourne pas »
+rendent le même `1`.
+
+Les confondre annoncerait une **disparition** à propos d'un conteneur simplement
+arrêté, et enverrait l'exploitant chercher une suppression qui n'a jamais eu
+lieu — pendant que son conteneur, lui, est toujours là. La console distingue donc
+sur la sortie d'erreur :
+
+- `No such container` → le conteneur a **disparu**. C'est la course déjà décrite
+  au §37.6 ter, et elle n'est pas une panne ;
+- `is not running` → le conteneur est **déjà arrêté**. `kill` n'avait rien à
+  faire ; l'état voulu est atteint, et l'écran le dit sans crier ;
+- toute autre sortie → un échec que la console **ne qualifie pas**. Elle rend ce
+  que Docker a dit, sans le traduire en un diagnostic qu'elle n'a pas. Conclure
+  sur un doute reviendrait à conclure toujours (§37.3.1).
+
+**3. « Le geste a réussi » ne veut pas dire « le conteneur s'est arrêté
+proprement ».** Mesuré : un conteneur qui ignore `SIGTERM` est tué au terme du
+délai et se termine en **137** ; `docker stop` rend quand même `0`. L'écran ne
+promet donc jamais un arrêt propre — il rapporte que le geste a abouti, et l'état
+du conteneur se relit dans l'inventaire, qui est la source du §37.6.
+
+#### 37.7.2 Le geste est demandé, confirmé, puis constaté
+
+Chaque geste est **sensible** au sens du §6.23 : la confirmation nomme le
+conteneur et l'effet — « Arrêter `crm-web-1` ? La production servie par ce
+conteneur s'interrompt. » —, jamais un « êtes-vous sûr ».
+
+`kill` est le seul **destructif** au sens du design system : il n'attend rien et
+ne laisse rien terminer. Son bouton d'engagement porte la classe destructive ;
+les trois autres non. Distinguer visuellement `arrêter` de `tuer` est le seul
+moyen d'empêcher qu'on les confonde au moment où l'on est pressé — c'est-à-dire
+au moment où l'on tue.
+
+Après un geste, la console **relit l'inventaire immédiatement** au lieu
+d'attendre la cadence de cinq secondes du §37.6. Un écran qui montrerait encore
+« en marche » quatre secondes après un arrêt réussi ferait douter du geste, et
+inviterait à le rejouer.
+
+L'écran n'écrit jamais l'état qu'il **suppose** atteint : il écrit celui que
+l'inventaire relu lui rend. C'est le §14.9 — la Forge fait autorité, pas
+l'intention de l'exploitant.
+
+#### 37.7.3 Le gel : où le refus est rendu, et comment il se dit
+
+Le §37.7 pose la règle et nomme l'écart. Voici sa mise en œuvre.
+
+La console rend le refus **avant d'ouvrir la moindre connexion**, à partir de
+`protected` publié par le runtime. Elle ne demande pas à Docker de refuser : il
+n'a aucune raison de le faire, la protection n'existe pas chez le locataire.
+
+Trois conséquences, écrites pour n'être pas découvertes :
+
+- **la lecture reste entière** sous gel — l'inventaire, l'inspection, les
+  journaux. Le §37.7 le dit ; l'écran doit le montrer, en gardant l'onglet
+  Docker pleinement utilisable et en ne grisant que les gestes ;
+- **le terminal reste ouvert** sous gel, pour la raison du §35.4 ;
+- **le refus nomme la levée**, pas seulement l'interdiction : « Ce Spark est
+  protégé. Levez la protection sur l'onglet *Infos* pour agir sur ses
+  conteneurs. » Un refus qui ne dit pas comment avancer se contourne au jugé.
+
+Le §1.4 interdit d'afficher une commande morte. Un bouton désactivé sous gel
+n'en est pas une : il est **présent, désactivé et expliqué**, ce qui apprend que
+le geste existe et pourquoi il ne part pas. Le faire disparaître laisserait
+croire que le produit ne sait pas arrêter un conteneur.
+
+#### 37.7.4 La surface d'API, et ce que le journal en retient
+
+Une seule route, sur l'hôte console comme tout le §37 :
+
+```
+POST /api/spark/container/action   { server, spark, name, action }
+                                   action ∈ start | stop | restart | kill
+```
+
+Refus rendus, chacun distinct :
+
+| Cas | Code | Ce que l'écran en fait |
+|---|---|---|
+| `action` hors des quatre | `422` | défaut de programmation, jamais montré |
+| `name` absent | `422` | idem |
+| Spark **protégé** | `423` | le refus du §37.7.3, avec la levée nommée |
+| Spark inconnu du serveur | `404` | l'écran renvoie à la liste |
+| tunnel absent | `502` | « aucun tunnel ouvert vers … » |
+| geste abouti | `200` | `{ state, name, action }` puis relecture |
+
+`423` et non `409` : c'est le code déjà employé par le runtime pour un Spark
+protégé, et deux codes pour un même refus obligeraient à connaître par quel
+chemin on est passé.
+
+**Le journal reçoit le geste**, et c'est une différence nette avec la lecture du
+§37.6, qui ne journalise rien : arrêter le conteneur d'un locataire interrompt sa
+production, et un tel geste doit pouvoir être retrouvé.
+
+La porte du §37.4.6 s'ouvre donc de quatre actions :
+
+```
+spark.container_start   spark.container_stop
+spark.container_restart spark.container_kill
+```
+
+**Quatre actions et non une seule**, pour la raison exacte qui a séparé
+`spark.rescue_exec` de `spark.terminal_open` : ce qui doit se compter, c'est le
+geste. « Combien de conteneurs a-t-on tués ce mois-ci » doit se répondre par un
+filtre sur l'action, pas par la lecture des charges.
+
+La cible reste le **Spark** — c'est lui qui est protégé, facturé et retrouvé. Le
+nom du conteneur entre dans la charge bornée, par une clé `container` ajoutée aux
+clés admises. La charge reste bornée : un champ libre redeviendrait le dépôt de
+secrets que le §37.5 interdit.
+
+Un geste **refusé** est journalisé comme refusé, avec sa raison. Ne journaliser
+que les succès laisserait invisible une tentative répétée sur un Spark protégé —
+exactement ce qu'un journal existe pour montrer.
+
+Si la déclaration échoue, le geste **a quand même eu lieu** : il est parti avant.
+La console ne peut pas le défaire, et prétendre le contraire serait pire. Elle le
+signale à l'écran plutôt que de le taire, comme au §37.4.5.
+
 ### 37.8 Ce que ces outils ne sont pas
 
 Ce n'est pas un Docker Desktop. Restent hors périmètre, et pas seulement « pas

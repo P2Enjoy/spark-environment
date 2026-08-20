@@ -1863,6 +1863,20 @@ et les volumes.**
   refuse le geste, laisse la lecture et laisse le terminal ; captures observées ;
   manuel M8 mis à jour.
 
+**Découpage décidé le 2026-08-20**, parce que l'unité porte deux mécanismes qui
+n'ont rien en commun — un appel court qui aboutit ou non, et une session
+interactive qui vit — et qu'un seul des deux tient dans une session :
+
+1. **Le cycle de vie d'un conteneur** — les quatre gestes, leur confirmation, le
+   refus sous gel, le journal. Spécifié au §37.7.1 à §37.7.4.
+2. **Le terminal dans un conteneur** — `docker exec -it`, avec le contrat du
+   §37.4 et l'audit du §37.5. Reste à spécifier.
+
+**Contrat écrit et poussé avant le code** : DAT §37.7.1 (les quatre commandes et
+leurs codes, mesurés sur Docker 29.6.1), §37.7.2 (demandé, confirmé, constaté),
+§37.7.3 (où le refus du gel est rendu), §37.7.4 (la route et les quatre actions
+d'audit).
+
 ### [x] SPK-47 · Le DNS entre dans le produit : zones lues, enregistrement d'ingress posé
 
 Le produit disait « le DNS est extérieur au produit », et SPK-12 restait
