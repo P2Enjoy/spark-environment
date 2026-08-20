@@ -10,9 +10,9 @@
  * verte alors qu'elle ne devrait pas l'être.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,10 +66,26 @@ export async function monterPile({ dns = null } = {}) {
   const portConsole = await portLibre();
   const journal = [];
 
+  // SPK-40 · docs/DAT.md §36.10.9 : une VRAIE paire de clés, dans le dossier
+  // jetable. Les deux moitiés de la signature sont prouvées séparément par leurs
+  // preuves unitaires ; ce qui manquait est la JONCTION — la console qui signe,
+  // la Forge qui vérifie, la ligne qui le porte. Un doublon des deux côtés ne
+  // prouverait que la fidélité des doublons.
+  //
+  // L'identité est `console/local`, celle-là même que l'hôte console déclare
+  // dans `x-spark-actor` (§36.10.8) : la Forge vérifierait sinon une signature
+  // contre une identité que le journal n'inscrit pas.
+  const cle = join(dossier, 'signature');
+  execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'e2e', '-f', cle]);
+  const signataires = join(dossier, 'allowed_signers');
+  await writeFile(signataires,
+    `console/local namespaces="spark-audit" ${await readFile(`${cle}.pub`, 'utf8')}`);
+
   const envSparkd = {
     SPARKD_DB: registre,
     SPARKD_DRIVER: 'fake',
     SPARKD_BIND: `127.0.0.1:${portSparkd}`,
+    SPARKD_ALLOWED_SIGNERS: signataires,
     PYTHONPATH: join(RACINE, 'services', 'sparkd', 'src'),
   };
 
@@ -87,7 +103,10 @@ export async function monterPile({ dns = null } = {}) {
 
   // 3. L'inventaire de la console pointe sur CE sparkd (docs/DAT.md §28.2).
   await writeFile(inventaire, JSON.stringify([
-    { name: 'local', kind: 'local', host: '127.0.0.1', port: portSparkd },
+    // `signingKey` désigne une clé PUBLIQUE (§36.10.8) : aucun secret n'entre
+    // dans l'inventaire, et c'est vrai ici comme en production.
+    { name: 'local', kind: 'local', host: '127.0.0.1', port: portSparkd,
+      signingKey: `${cle}.pub` },
   ]));
 
   // 4. L'hôte console.
@@ -221,7 +240,29 @@ export async function monterPile({ dns = null } = {}) {
         + ' *helo-base-1*) : ;;'
         + ' *) : ;;'
         + ' esac',
-    }),    SPARK_TERMINAL_COMMAND: JSON.stringify({
+    }),
+    // SPK-40 · §36.10.9 : le doublon de SIGNATURE répond PAR GESTE, comme celui
+    // de Docker au §37.6 ter. Il ÉCHOUE sur le relevé de topologie — pour que
+    // l'avertissement du §36.10.8 se voie réellement à l'écran — et délègue tout
+    // le reste au VRAI `ssh-keygen -Y sign`. Une seule pile porte ainsi la
+    // chaîne signée ET l'échec dit.
+    //
+    // Le message imité est celui d'OpenSSH, MESURÉ : « Load key … : No such file
+    // or directory ». C'est lui que `classer()` doit reconnaître pour rendre
+    // « agent muet » plutôt qu'un échec sans nom.
+    //
+    // `SSH_AUTH_SOCK` est VIDÉ : un agent du poste qui exécute la série ne doit
+    // pas décider du verdict. La clé privée est voisine de la publique, et c'est
+    // le cas du poste sans agent que le §36.10.8 admet.
+    SPARK_SIGN_COMMAND:
+      'case "$(cat "$0")" in'
+      + ' *\'"path":"/v1/forge/sync"\'*)'
+      + ` echo 'Load key "${cle}.pub": No such file or directory' >&2; exit 255 ;;`
+      + ' *) SSH_AUTH_SOCK=; export SSH_AUTH_SOCK;'
+      + ` exec ssh-keygen -Y sign -f ${JSON.stringify(`${cle}.pub`)}`
+      + ' -n spark-audit "$0" ;;'
+      + ' esac',
+    SPARK_TERMINAL_COMMAND: JSON.stringify({
       '*': 'cat',
       'site-vitrine': { ssh: 'false', rescue: 'cat' },
     }),

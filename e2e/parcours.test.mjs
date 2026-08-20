@@ -378,6 +378,129 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
   });
 });
 
+// --- SPK-40 · LA CHAÎNE DE SIGNATURE, DE BOUT EN BOUT (§36.10.9) -----------
+
+test('un geste signé traverse la chaîne : la console signe, la Forge vérifie, le journal le porte', async () => {
+  await parcours('signature-chaine', async () => {
+    // Ce que ce parcours ajoute aux preuves unitaires : la JONCTION. Les deux
+    // moitiés étaient prouvées séparément — la console produit une signature,
+    // la Forge sait en vérifier une —, mais rien ne montrait qu'elles se
+    // parlent. Ici la clé est réelle, `ssh-keygen` est réel des deux côtés, et
+    // le geste part d'un clic.
+    await ouvrir('crm-production');
+    await page.click('[data-commande="stop"]');
+    await page.waitForFunction(
+      () => document.querySelector('[data-commande="start"]') !== null,
+      { timeout: 15000 });
+
+    // Ce que la FORGE a retenu (§29.3 : on lit pour constater, jamais pour agir).
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.stop&limit=10');
+    const geste = corps.entries[0];
+    assert.ok(geste, 'l’arrêt a laissé une trace');
+    assert.equal(geste.actor, 'console/local',
+      'la signature a été vérifiée contre l’identité que le journal inscrit');
+    assert.equal(geste.signed, true,
+      'la Forge a VÉRIFIÉ cette signature : sans quoi elle aurait refusé en 422');
+
+    // …et l'exploitant le lit à l'écran, par la navigation (§36.10.9).
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/forge/journal"]');
+    await page.waitForSelector('#titre-journal-forge', { timeout: 10000 });
+
+    const colonnes = await page.$$eval('thead th', (l) => l.map((c) => c.textContent.trim()));
+    assert.ok(colonnes.includes('Signature'),
+      'la colonne existe : une cellule sans en-tête laisserait deviner');
+
+    const lignes = await page.$$eval('tbody tr', (l) => l.map((r) => ({
+      action: r.children[2]?.textContent.trim(),
+      auteur: r.children[3]?.textContent.trim(),
+      signature: r.children[4]?.textContent.trim(),
+    })));
+
+    const arret = lignes.find((r) => r.action === 'spark.stop');
+    assert.ok(arret, 'l’arrêt figure au journal');
+    assert.equal(arret.signature, 'signée');
+
+    // Les TROIS situations du §36.10.9 se lisent sur le même écran, et ne se
+    // confondent pas — c'est là tout l'intérêt de les nommer.
+    const automatique = lignes.find((r) => r.auteur === 'automatique');
+    assert.ok(automatique, 'le seed produit des événements du runtime');
+    assert.equal(automatique.signature, 'sans objet',
+      'personne n’a demandé cet événement : il n’y a rien à signer');
+
+    const nue = lignes.find((r) => r.auteur !== 'automatique' && r.signature === 'non signée');
+    assert.ok(nue, 'le seed produit des gestes arrivés sans signature');
+
+    // La page ne prétend plus que rien n’est signé : c’était vrai avant SPK-40.
+    const texte = await page.innerText('body');
+    assert.ok(!texte.includes('Aucune entrée n’est signée'));
+
+    // On remet la pile dans l'état du seed.
+    await ouvrir('crm-production');
+    await page.click('[data-commande="start"]');
+    await page.waitForFunction(
+      () => document.querySelector('[data-commande="stop"]') !== null,
+      { timeout: 15000 });
+  });
+});
+
+test('un geste que la console n’a PAS pu signer part quand même, et l’écran le DIT', async () => {
+  await parcours('signature-echec', async () => {
+    // §36.10.1 : refuser d'agir faute de signature ferait de ce mécanisme un
+    // contrôle d'accès. §36.10.8 : l'échec est dit, jamais tu. Les deux se
+    // vérifient d'un seul geste.
+    await accueil();
+    assert.equal(await page.$('.entete__signature .avertissement'), null,
+      'rien n’est dit tant que rien n’a échoué');
+
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('[data-action="relever"]');
+
+    await page.waitForSelector('.entete__signature .avertissement', { timeout: 15000 });
+    const dit = await page.innerText('.entete__signature .avertissement');
+    assert.match(dit, /Geste non signé/);
+    assert.match(dit, /a bien eu lieu/, 'le geste a eu lieu : ne pas le refaire');
+    assert.match(dit, /ssh-add/, 'l’avertissement dit quoi FAIRE');
+    // §14.7 : le message d'OpenSSH nomme un fichier qu'on n'a pas demandé, et
+    // le jeton technique n'atteint pas l'écran.
+    assert.ok(!/No such file/.test(dit));
+    assert.ok(!/agent_muet/.test(dit));
+
+    // §25.1 : le rouge est réservé au REFUS du serveur. Ici la Forge a accepté.
+    const classes = await page.getAttribute('.entete__signature .avertissement', 'class');
+    assert.ok(!classes.includes('refus'));
+    assert.ok(!classes.includes('danger'));
+    // §9.7 : le changement est annoncé, sans être une erreur.
+    assert.equal(await page.getAttribute('.entete__signature .avertissement', 'role'),
+                 'status');
+
+    // Le relevé a bien EU LIEU malgré l'absence de signature.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=host.sync&limit=5');
+    assert.ok(corps.entries.length > 0, 'le geste est passé, non signé');
+
+    // …et l'avertissement s'EFFACE de lui-même dès qu'un geste repart signé :
+    // un avertissement qui survivrait à sa cause mentirait dans l'autre sens.
+    await page.click('nav a[href="#/sparks"]');
+    await page.waitForSelector('tbody a', { timeout: 10000 });
+    await page.click('tbody a:has-text("crm-production")');
+    await page.waitForSelector('.entete-entite', { timeout: 10000 });
+    assert.ok(await page.$('.entete__signature .avertissement'),
+      'changer d’écran n’efface pas la cause, donc n’efface pas l’avertissement');
+
+    await page.click('[data-commande="stop"]');
+    await page.waitForFunction(
+      () => document.querySelector('.entete__signature .avertissement') === null,
+      { timeout: 15000 });
+
+    await page.click('[data-commande="start"]');
+    await page.waitForFunction(
+      () => document.querySelector('[data-commande="stop"]') !== null,
+      { timeout: 15000 });
+  });
+});
+
 // --- SPK-37 · QUI A AGI (§21.6, §36.4) --------------------------------------
 
 test('le journal distingue un geste de la console d’un événement du serveur', async () => {

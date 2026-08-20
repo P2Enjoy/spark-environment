@@ -224,3 +224,44 @@ test('un port de connexion reste une SAISIE, jamais un curseur', () => {
     'le §6.9 bis ne s’applique pas a un port');
   assert.match(html, /<input[^>]*type="number"[^>]*max="65535"/);
 });
+
+/* --- La clé de signature (SPK-40, docs/DAT.md §36.10.8) ------------------- */
+
+test('le formulaire porte la cle de signature, quel que soit le GENRE', () => {
+  // Signer et atteindre la Forge sont deux choses : la cle ne depend pas du
+  // genre. Sans ce champ, elle ne se declarerait qu'en editant un fichier a la
+  // main — exactement le defaut que SPK-41 existe pour supprimer.
+  for (const kind of ['ssh', 'alias', 'local']) {
+    const html = renderServeurs({
+      status: 'ready', servers: [], tunnels: [],
+      ui: { ...CATALOGUE_SERVEURS_VIDE, open: 'ajout',
+            values: { ...CATALOGUE_SERVEURS_VIDE.values, kind } },
+    });
+    assert.match(html, /name="signingKey"/, kind);
+    assert.match(html, /Clé de signature/, kind);
+  }
+});
+
+test('l aide dit que la cle est PUBLIQUE et que le vide est normal', () => {
+  // CLAUDE.md §11 : aucun secret n'entre dans l'inventaire. §14.5 : une absence
+  // se nomme, pour qu'on ne cherche pas un defaut la ou il n'y en a pas.
+  const html = renderServeurs({
+    status: 'ready', servers: [], tunnels: [],
+    ui: { ...CATALOGUE_SERVEURS_VIDE, open: 'ajout' },
+  });
+  assert.match(html, /<strong>publique<\/strong>/);
+  assert.match(html, /la clé privée ne quitte jamais/);
+  assert.match(html, /état\s+normal, pas une panne/);
+});
+
+test('la valeur deja declaree revient dans le champ en MODIFICATION', () => {
+  // §22.4.7 ter : la modale de modification est PRE-REMPLIE. Un champ vide y
+  // ferait effacer la cle a chaque enregistrement.
+  const html = renderServeurs({
+    status: 'ready', servers: [], tunnels: [],
+    ui: { ...CATALOGUE_SERVEURS_VIDE, open: 'prod',
+          values: { ...CATALOGUE_SERVEURS_VIDE.values, name: 'prod',
+                    signingKey: '/home/x/.ssh/id_ed25519.pub' } },
+  });
+  assert.match(html, /value="\/home\/x\/\.ssh\/id_ed25519\.pub"/);
+});

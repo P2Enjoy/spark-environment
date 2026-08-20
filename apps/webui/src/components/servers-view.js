@@ -7,6 +7,8 @@
  *       docs/DESIGN_SYSTEM.md §5.4, §6.13 (états de vue), §6.14 (tableau),
  *       §6.22, §6.23 (une action destructive se confirme), §6.27 (la saisie
  *       passe par une modale) · docs/DESIGN_SYSTEM_APP.md §1
+ * @spec docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.8 (la clé de signature est
+ *       désignée PAR SERVEUR, et c'est une clé publique) — pour `champSignature`
  *
  * Cette destination gère ce qui est DÉCLARÉ ; le sélecteur au-dessus du premier
  * degré choisit ce qu'on REGARDE. Deux sujets, deux surfaces.
@@ -41,7 +43,7 @@ export const CATALOGUE_SERVEURS_VIDE = {
   open: false, busy: false, refusal: null, confirming: null,
   probe: null, probing: false, hosts: [],
   values: { name: '', kind: 'ssh', host: '', user: 'root', port: 22,
-            remotePort: 9876, sshHost: '' },
+            remotePort: 9876, sshHost: '', signingKey: '' },
 };
 
 /**
@@ -63,6 +65,31 @@ export function renderEpreuve(probe) {
     <span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>Sans réponse</span>
     ${echapper(probe.error ?? 'Le serveur n’a pas répondu.')}
     Vous pouvez l’enregistrer quand même : la machine est peut-être éteinte.</p>`;
+}
+
+/**
+ * La clé qui signe les gestes de ce serveur (SPK-40, docs/DAT.md §36.10.8).
+ *
+ * Elle ne dépend PAS du genre : signer et atteindre la Forge sont deux choses.
+ * Elle est donc posée après les champs de connexion, pour tous les genres.
+ *
+ * Le champ nomme une clé **publique**, et le dit : aucun secret n'entre dans
+ * l'inventaire (`CLAUDE.md` §11). Vide, ce serveur n'est simplement pas signé —
+ * un état normal, pas une panne (§36.10.8), et l'aide le dit pour qu'on ne
+ * cherche pas un défaut là où il n'y en a pas (§14.5).
+ */
+function champSignature(v) {
+  return `
+    <div class="champ">
+      <label for="serveur-signature">Clé de signature</label>
+      <input class="controle technique" id="serveur-signature" name="signingKey"
+             type="text" autocomplete="off" placeholder="~/.ssh/id_ed25519.pub"
+             value="${echapper(v.signingKey ?? '')}">
+      <p class="champ__aide">Chemin d’une clé <strong>publique</strong>. La
+      console demande la signature à votre agent : la clé privée ne quitte jamais
+      votre poste. Laissé vide, les gestes partent non signés — c’est un état
+      normal, pas une panne.</p>
+    </div>`;
 }
 
 /** Les champs, qui suivent le GENRE choisi (§22.4.7 ter). */
@@ -113,7 +140,7 @@ function champs(ui) {
              value="${echapper(v.remotePort)}">
       <p class="champ__aide">OpenSSH ne le connaît pas : c’est le produit qui sait
       où sparkd écoute à l’autre bout.</p>
-    </div>`;
+    </div>${champSignature(v)}`;
   }
   if (v.kind === 'local') {
     return `${commun}
@@ -121,7 +148,7 @@ function champs(ui) {
       <label for="serveur-port-local">Port de sparkd</label>
       <input class="controle" id="serveur-port-local" name="port" type="number" min="1" max="65535"
              value="${echapper(v.port)}">
-    </div>`;
+    </div>${champSignature(v)}`;
   }
   return `${commun}
     <div class="champ">
@@ -143,7 +170,7 @@ function champs(ui) {
       <label for="serveur-sparkd-ssh">Port de sparkd</label>
       <input class="controle" id="serveur-sparkd-ssh" name="remotePort" type="number" min="1" max="65535"
              value="${echapper(v.remotePort)}">
-    </div>`;
+    </div>${champSignature(v)}`;
 }
 
 function ligne(serveur, courant, tunnels, ui) {

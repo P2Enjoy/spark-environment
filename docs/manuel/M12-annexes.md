@@ -70,6 +70,48 @@ quelqu'un. Il ne l'est par personne.
 appel ; qui atteint le serveur autrement écrit ce qu'il veut. Elle sert à
 distinguer des usages légitimes, jamais à établir une responsabilité.
 
+### La colonne « Signature »
+
+Chaque ligne dit aussi ce que le serveur a pu **vérifier** de sa provenance :
+
+| Signature | Sens |
+|---|---|
+| **signée** | le serveur a vérifié, à la réception, une signature produite par votre clé. Elle prouve que ce geste a bien été **demandé**, et qu'il n'a pas été fabriqué sur le serveur après coup |
+| **non signée** | le geste est arrivé sans signature. C'est un état **normal**, pas un défaut : la console n'exige pas de signature pour agir |
+| **sans objet** | une ligne écrite par le serveur lui-même. Personne ne l'a demandée, donc personne ne pouvait la signer |
+
+Ce qu'une signature **ne dit pas** : *qui* a agi. Une clé volée signe aussi bien
+que la vôtre. Elle répond à une autre question, et c'est celle qui manquait :
+*ce geste a-t-il été réellement demandé ?*
+
+Pour que vos gestes soient signés, il faut deux choses :
+
+1. la console connaît la **clé publique** à employer pour ce serveur — le champ
+   *clé de signature* de la fiche du serveur ;
+2. la clé est **chargée dans votre agent**, ou son fichier privé est à côté de la
+   clé publique.
+
+Aucun secret n'est jamais copié : la console demande la signature à votre agent,
+qui ne rend jamais la clé privée.
+
+### Quand la console n'a pas pu signer
+
+Elle vous le dit, dans la barre de gauche, sous le nom du serveur :
+
+> **Geste non signé** — Aucun agent ne détient la clé de signature de ce serveur :
+> ce geste a bien eu lieu, mais il est parti sans signature. Chargez la clé dans
+> votre agent — « ssh-add » — pour que les suivants soient signés.
+
+Trois choses à en retenir :
+
+- **le geste a eu lieu.** Ne le refaites pas. Un arrêt, un démarrage ou une
+  suppression n'ont pas été annulés parce qu'ils n'étaient pas signés ;
+- ce n'est **pas un refus du serveur** — c'est pourquoi le message n'est pas
+  rouge. Ce qui manque est la trace, pas l'action ;
+- l'avertissement **disparaît tout seul** dès qu'un geste repart signé. Il reste
+  tant que la cause reste, même si vous changez d'écran : la cause est l'état de
+  votre poste, pas la page que vous regardez.
+
 ### Vérifier que le journal n'a pas été récrit
 
 Chaque entrée porte l'empreinte de la précédente. Le bouton **Vérifier la

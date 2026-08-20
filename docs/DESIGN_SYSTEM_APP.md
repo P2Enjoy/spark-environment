@@ -310,6 +310,37 @@ Le bouton d'engagement suit la même règle : `bouton--destructif` pour le premi
 cas, un bouton ordinaire pour le second. Une confirmation accent avec un bouton
 rouge donnerait deux signaux contradictoires dans le même bloc.
 
+### SPK-DS-10 · Un avertissement dont la cause survit au geste vit dans la coquille
+
+**Date** : 2026-08-21 · introduit par SPK-40.
+
+Un message d'après-geste se place selon la DURÉE DE SA CAUSE, pas selon l'écran
+d'où le geste est parti.
+
+- **La cause est le geste** — un refus du serveur, une saisie invalide, un
+  instantané créé : le message vit DANS l'écran, à côté de ce qui l'a produit.
+  C'est le cas ordinaire, et SPK-DS-08 en fixe les trois blocs.
+- **La cause survit au geste** — un agent SSH vidé, une clé non configurée, un
+  service extérieur muet : le message vit dans la COQUILLE, sous le contexte du
+  serveur auquel la cause appartient.
+
+Le motif est mesuré sur le cas qui a introduit cette règle : l'échec de signature
+(`docs/DAT.md` §36.10.9). Posé dans l'écran du geste, il disparaissait en
+changeant de page — alors que l'agent restait vide et que le geste suivant
+repartirait non signé lui aussi. L'exploitant croyait avoir réglé en naviguant ce
+qu'il n'avait pas touché.
+
+Deux obligations en découlent, et elles vont ensemble :
+
+- l'avertissement **PERSISTE** tant que la cause persiste, y compris à travers un
+  changement d'écran ;
+- il **S'EFFACE DE LUI-MÊME** dès que la cause disparaît. Un avertissement qui
+  survivrait à sa cause mentirait dans l'autre sens, et l'on désapprendrait à le
+  lire — ce qui est pire que ne rien dire.
+
+Il porte `role="status"` et non `role="alert"` : le geste a eu lieu, rien n'est
+refusé. Et sa couleur suit le §25.1 — accent, jamais rouge.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

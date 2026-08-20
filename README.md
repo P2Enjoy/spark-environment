@@ -284,6 +284,15 @@ vigilance de l'exploitant.
 | `SCW_DEFAULT_ORGANIZATION_ID` | organisation dont les zones sont listées | UUID | non | `00000000-0000-0000-0000-000000000000` |
 | `SPARK_DNS_ALLOW_PATTERN` | expression régulière bornant les domaines écrivables depuis ce poste | regex | non | `^test\.[a-z0-9-]+\.exemple\.tech$` |
 | `SPARK_DNS_BASE_URL` | racine de l'API DNS, pour pointer un doublon local | URL | non | `http://127.0.0.1:8099` |
+| `SPARK_SIGN_COMMAND` | remplace la **commande** de signature d'un geste, pour éprouver la chaîne sans agent (`docs/DAT.md` §36.10.9) | commande shell | non | *(vide en production)* |
+
+La **clé de signature** d'un serveur se déclare dans l'écran *Serveurs*, champ
+*Clé de signature* : un chemin vers une clé **publique**, retenu dans
+`servers.json`. La console demande la signature à l'agent SSH, qui ne rend jamais
+la clé privée. Vide, les gestes de ce serveur partent non signés — un état
+normal, que la console dit sans le traiter comme une panne (`docs/DAT.md`
+§36.10.8, §36.10.9). Côté Forge, `SPARKD_ALLOWED_SIGNERS` décide quelles clés
+sont recevables.
 
 Le jeton DNS vit **sur le poste qui fait tourner la console**, dans un `.env`
 ignoré par Git — jamais sur la Forge, où il serait lisible par qui y détient
