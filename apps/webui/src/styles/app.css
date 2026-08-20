@@ -636,6 +636,14 @@ tbody tr:hover { background: var(--color-hover); }
 @media (max-width: 1024px) {
   .manuel { grid-template-columns: 1fr; }
   .manuel__sommaire { position: static; }
+  /* SPK-56 — empilés, le SOMMAIRE passe après le chapitre. Mesuré sur la
+     capture 110 : arriver sur « #/manuel/M5 » montrait douze liens de chapitres,
+     et le chapitre demandé commençait sous la ligne de flottaison. Le lecteur a
+     cliqué pour lire M5 ; c'est M5 le sujet de la page, et le §5.3 fait passer
+     le contexte déjà porté par la navigation après le contenu de la route. Le
+     sommaire reste atteignable en défilant, et par la barre latérale. */
+  .manuel__chapitre { order: 1; }
+  .manuel__sommaire { order: 2; }
 }
 
 /* SPK-50 · §38.6.5 — un nom relatif à la zone : le libellé se saisit, la zone

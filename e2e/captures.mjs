@@ -418,11 +418,39 @@ await page.keyboard.press('Enter');
 await page.waitForSelector('.confirmation', { timeout: 4000 }).catch(() => {});
 await page.screenshot({ path: join(SORTIE, '13-confirmation-suppression.png') });
 console.log('  13-confirmation-suppression.png');
+// SPK-56 · §1.5 bis : les écrans allégés se vérifient AUX TROIS FORMATS. La
+// tablette manquait, et c'est le palier où une note qui rétrécit se replie sans
+// qu'on s'en aperçoive au bureau.
+await page.setViewportSize({ width: 834, height: 1112 });
+await page.goto(`${ctx.base}/#/sparks/crm-production`);
+// Naviguer vers une URL IDENTIQUE ne recharge pas : sans cela, la confirmation
+// de suppression ouverte par la capture précédente survivrait, et l'écran
+// montrerait un état que le lecteur n'a pas demandé.
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.entete-entite');
+await page.screenshot({ path: join(SORTIE, '107-detail-tablette.png') });
+console.log('  107-detail-tablette.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.goto(`${ctx.base}/#/sparks/crm-production`);
+await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.entete-entite');
 await page.screenshot({ path: join(SORTIE, '14-detail-mobile.png') });
 console.log('  14-detail-mobile.png');
+ctx.server.close();
+
+// --- LE MANUEL, destination de premier degré (SPK-56, §1.5 bis) -----------
+// Il n'avait aucune capture, alors qu'il est désormais l'endroit où les écrans
+// renvoient : un renvoi qui mène à un écran cassé vaut un renvoi mort.
+ctx = await demarrer();
+for (const [nom, largeur, hauteur] of [['108-manuel', 1440, 1000],
+                                       ['109-manuel-tablette', 834, 1112],
+                                       ['110-manuel-mobile', 390, 844]]) {
+  await page.setViewportSize({ width: largeur, height: hauteur });
+  await page.goto(`${ctx.base}/#/manuel/M5`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.manuel__chapitre h2', { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
+  console.log(`  ${nom}.png`);
+}
 ctx.server.close();
 
 // --- Écran de création (SPK-20) -------------------------------------------
