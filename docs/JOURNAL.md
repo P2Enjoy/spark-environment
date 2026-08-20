@@ -3686,3 +3686,41 @@ relie encore. Ensuite le chemin de dépannage du §37.3, l'écran d'un Spark san
 **Note d'exploitation** : la pile de développement porte un serveur « demo »
 laissé par un parcours E2E, et il devient le serveur courant. Basculer sur
 « local » par le sélecteur de la barre latérale avant toute capture.
+
+## 2026-08-20 — SPK-43, tranche 3 : le terminal fonctionne de bout en bout
+
+**Unité choisie** : SPK-43, désignée par l'entrée précédente. Spécification déjà
+écrite : lue, non réécrite — sauf sur un point précis, le **doublon du
+transport**, que le §37.4.2 bis pose désormais.
+
+**Ce qui est livré.** L'écran est câblé au transport : le bouton ouvre,
+`EventSource` porte la sortie, les frappes partent **groupées** — sans quoi
+coller un script ferait une requête par ligne —, la taille se propage, et quitter
+l'onglet termine la session. Une balise `sendBeacon` couvre la fermeture du
+navigateur : c'est le seul envoi qui parte encore quand la page se démonte, et
+sans elle un shell root survivait jusqu'au délai d'inactivité.
+
+**Les octets vont directement au DOM.** L'état de l'écran n'en garde aucune
+trace : un tampon dans l'état serait sérialisé, et le §37.5 interdit qu'un octet
+de session quitte l'écran.
+
+**Le doublon du transport** permet d'éprouver ce que le produit possède sans
+`sshd` : `SPARK_TERMINAL_COMMAND` remplace la **commande lancée**, pas le
+mécanisme. Même motif que `FakeIncus` et `SPARK_DNS_BASE_URL`.
+
+**Défaut trouvé par un parcours, pas par relecture.** Je jugeais qu'un Spark
+n'avait rien où se connecter à son **adresse** — elle est attribuée dès l'écriture
+au registre (§15.1), et un Spark `pending` porte déjà la sienne. S'y fier
+laissait ouvrir un terminal vers rien. Le signal est la **cellule**, exactement
+comme au §39.4 pour les ports publiés. C'est la deuxième fois que cette confusion
+apparaît : l'adresse n'est pas la preuve qu'une cellule existe.
+
+**Campagne complète, verte.** 665 tests Python, 461 de console et d'hôte console,
+6 de contrat, 8 gestes, **42 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`. Captures `78-` à `81-` observées, console du navigateur vierge.
+
+**Où reprendre.** SPK-43, tranche 4 — le **chemin de dépannage** `incus exec` du
+§37.3 et ses quatre conditions, plus l'écran d'un Spark dont le `sshd` est muet,
+qui est justement ce qui ouvre ce chemin. C'est le dernier morceau de
+comportement de l'unité ; la vérification sur une Forge réelle restera hors de
+portée d'une session locale. INC-05 reste ouvert et court.

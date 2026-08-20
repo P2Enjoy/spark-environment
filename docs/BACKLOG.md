@@ -1602,18 +1602,45 @@ Le transport de tous les outils du §37, et le premier d'entre eux.
   L'adresse n'était pas rechargeable — ce que SPK-DS-04 exige d'une destination —
   et l'onglet menait silencieusement à « Infos ».
 
+**Troisième tranche, 2026-08-20 : l'écran est câblé et le parcours de la DoD passe.**
+
+- **Le câblage est livré** : le bouton ouvre, `EventSource` porte la sortie, les
+  frappes partent **groupées** (§37.4.1 — sans quoi coller un script ferait une
+  requête par ligne), la taille se propage, et quitter l'onglet termine la
+  session — par le changement d'adresse **et** par une balise quand la page se
+  démonte. `sendBeacon` ne sait que POSTer et c'est le seul envoi qui parte encore
+  à la fermeture d'un onglet, d'où `POST /api/terminal/fermeture` ; sans elle,
+  fermer le navigateur laissait un shell root vivant jusqu'au délai d'inactivité.
+- **Les octets vont DIRECTEMENT au DOM** : l'état de l'écran n'en garde aucune
+  trace, parce qu'un tampon dans l'état serait sérialisé.
+- **Le parcours de la DoD passe** : entrer dans le terminal, écrire au clavier,
+  voir répondre, quitter, et constater que le journal porte l'ouverture et la
+  fermeture avec sa durée — et **rien** de ce qui a été tapé. Deux autres
+  parcours : changer d'onglet termine la session, et un Spark sans cellule nomme
+  ce qui manque.
+- **Doublon du transport** (§37.4.2 bis) : `SPARK_TERMINAL_COMMAND` remplace la
+  commande lancée, pas le mécanisme — tout le reste du chemin est celui de la
+  production. Absente en production.
+- **Défaut corrigé, trouvé par un parcours** : je jugeais qu'un Spark n'avait rien
+  où se connecter à son **adresse**, alors qu'elle est attribuée dès l'écriture au
+  registre. Un Spark `pending` porte déjà la sienne, et s'y fier laissait ouvrir
+  un terminal vers rien. Le signal est la **cellule**, comme au §39.4.
+- **Preuves** : 665 Python, 461 de console et d'hôte console, 6 de contrat,
+  8 gestes, **42 parcours E2E**, 7 contrôles du manuel, build et
+  `contract-check`. Captures `78-` à `81-` observées, format étroit compris.
+  Manuel M8 mis à jour.
+
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. le **câblage de l'écran au transport** : ouvrir depuis le bouton, brancher
-     `EventSource`, envoyer les frappes, propager la taille, et le **groupage des
-     saisies** du §37.4.1. L'écran rend et les routes répondent ; rien ne les
-     relie encore ;
-  2. le **chemin de dépannage** `incus exec` du §37.3, avec sa confirmation qui
-     nomme le pouvoir employé, son action d'audit distincte et sa bannière ;
-  3. l'écran d'un Spark **sans `sshd`** — distinct du Spark sans adresse, déjà
-     traité : celui-ci a une adresse mais rien qui réponde sur le port 22 ;
-  4. les **parcours E2E** de la DoD — entrer, exécuter une commande, la voir
-     répondre, quitter et vérifier que le processus distant est mort — et le
-     manuel M8.
+  1. le **chemin de dépannage** `incus exec` du §37.3, avec ses quatre
+     conditions : Spark en `error` ou `sshd` muet, confirmation qui **nomme le
+     pouvoir employé**, action d'audit distincte `spark.rescue_exec`, et bannière
+     visible toute la session. C'est le dernier morceau de comportement ;
+  2. l'écran d'un Spark **dont le `sshd` est muet** — distinct du Spark sans
+     cellule, déjà traité : celui-ci a une cellule qui tourne, mais rien ne
+     répond sur le port 22. C'est ce cas qui ouvre le chemin de dépannage ;
+  3. la vérification que la connexion atteint **réellement** un Spark : elle
+     exige une Forge réelle avec Incus et un `sshd` installé, que l'image de base
+     n'embarque pas (§37.2). Même limite qu'au §39.7.
 
 ### [ ] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 

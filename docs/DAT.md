@@ -4773,3 +4773,132 @@ Les deux derniers cas comptent autant que les autres. Une console qui afficherai
 « à jour » faute de savoir comparer mentirait exactement au moment où l'on a
 besoin d'elle.
 
+
+## 41. Le runtime d'un Spark : ce que l'image ne donne pas
+
+Mesuré le 2026-08-20 en montant le Spark `helo` de bout en bout sur la Forge
+réelle. Deux constats bloquants, et ils ne s'improvisent pas.
+
+### 41.1 L'image de base n'a ni `sshd` ni `cloud-init`
+
+`images:debian/13` n'embarque aucun des deux (§17.1). `sparkd` écrit bien
+`authorized_keys` dans la cellule, mais **rien n'écoute** : le chemin d'accès
+documenté — rebond sur la Forge, `ssh root@10.77.0.x` — ne fonctionne pas sur un
+Spark neuf.
+
+L'amorçage passe donc une fois par le plan de contrôle (`incus exec`), puis plus
+jamais. C'est l'usage de dépannage du §37.3, et c'est ce que le bouton
+d'amorçage du §41.3 automatise.
+
+### 41.2 Docker doit venir du dépôt amont, jamais de la distribution
+
+Avec `docker.io` **26.1.5** de Debian 13, un `nginx` démarre puis meurt :
+
+```
+[alert] socketpair() failed while spawning "worker process" (13: Permission denied)
+```
+
+Le noyau nomme la cause :
+
+```
+apparmor="DENIED" operation="create" class="net" profile="docker-default"
+  namespace="root//incus-helo_<var-lib-incus>"
+  family="unix" sock_type="stream" requested="create" denied="create"
+```
+
+Le profil `docker-default` **généré par cette version** ne connaît pas la
+médiation des sockets unix d'AppArmor 4, active sur le noyau de la Forge. Tout
+programme qui appelle `socketpair()` est donc refusé — c'est-à-dire presque tout.
+
+Mesures d'isolement, faites dans cet ordre :
+
+| Essai | Résultat |
+|---|---|
+| `--security-opt seccomp=unconfined` | **échoue** — ce n'est pas seccomp |
+| `--security-opt apparmor=unconfined` | répond `200` — c'est bien AppArmor |
+| Docker CE **29.7.2** du dépôt amont, **sans aucune option** | répond `200` |
+
+`apparmor=unconfined` n'est pas retenu : il « répare » en désactivant une
+protection pour **tous** les conteneurs du locataire, et il faudrait l'écrire
+dans chaque fichier Compose. On ne troque pas une protection contre un symptôme.
+
+**Décision : le runtime d'un Spark s'installe depuis le dépôt amont de Docker.**
+C'est exactement la leçon de SPK-31 pour Incus, une couche plus haut : sur ce
+terrain, le paquet de la distribution est trop ancien pour l'imbrication.
+
+Vérification qui fait foi, `AppArmor` et `seccomp` devant rester **actifs** :
+
+```
+overlay2 · cgroup 2 · [name=apparmor name=seccomp,profile=builtin name=cgroupns]
+```
+
+### 41.3 L'amorçage est un geste du produit, pas une recette à recopier
+
+Ces deux constats se répètent à chaque Spark créé. Les laisser dans un runbook
+que l'exploitant recopie garantit qu'un jour l'un d'eux sera oublié — et le
+symptôme, un `socketpair()` refusé au fond d'un journal Docker, ne désigne pas sa
+cause.
+
+Le produit porte donc un geste **« Amorcer ce Spark »**, en mode **détection** :
+il constate ce qui est déjà là, n'installe que ce qui manque, et **dit** ce qu'il
+a fait. Détail au §42.
+
+
+## 42. Amorcer un Spark
+
+Geste demandé par le responsable le 2026-08-20, à partir de ce que le §41 a
+mesuré.
+
+### 42.1 Détecter d'abord, n'installer que ce qui manque
+
+L'amorçage est **idempotent et bavard**. Il relève l'état de la cellule, puis
+n'agit que sur les manques, et rend un compte rendu ligne à ligne :
+
+| Élément | Détection | Action si absent |
+|---|---|---|
+| `sshd` | le service répond dans la cellule | installer `openssh-server`, activer |
+| clés | `authorized_keys` conforme à l'état voulu | réécrire depuis le registre (§17.1) |
+| dépôt Docker amont | `/etc/apt/sources.list.d/docker.list` | poser la clé et le dépôt |
+| `docker` | `docker --version`, et **origine du paquet** | installer `docker-ce` |
+| `compose` | `docker compose version` | installer `docker-compose-plugin` |
+
+Le point qui compte : détecter Docker **présent** ne suffit pas. Un `docker.io`
+de distribution est présent *et* inutilisable (§41.2). La détection porte donc
+sur l'**origine** du paquet, et un Docker de distribution est signalé comme un
+défaut à corriger, pas comme un état acceptable.
+
+Un amorçage sur une cellule déjà complète ne fait **rien** et le dit. Un geste
+qui réinstallerait « au cas où » ferait redémarrer le démon Docker du locataire,
+donc sa production, pour rien.
+
+### 42.2 Rootless en option, et ce que l'option coûte
+
+Le mode **rootless** est proposé, pas imposé, et l'écran énonce ce qu'il change
+plutôt que de le vendre :
+
+- il retire au démon Docker les privilèges de root **dans la cellule** — la
+  cellule étant déjà non privilégiée sur la Forge, c'est une seconde couche, pas
+  la première ;
+- il interdit la publication de ports privilégiés (`< 1024`) dans la cellule ;
+- certaines piles Compose existantes ne fonctionnent pas telles quelles, et le
+  produit vend précisément la reprise d'une pile existante sans la réécrire (§2).
+
+D'où le défaut : **enraciné**, avec le rootless offert à qui le demande. Annoncer
+l'inverse ferait échouer la promesse centrale du produit sur la moitié des piles.
+
+### 42.3 Par où il passe
+
+Par `incus exec`, et c'est le seul geste du produit qui l'emploie hors dépannage
+(§37.3) : sur un Spark neuf, **il n'y a pas encore de SSH** — c'est justement ce
+qu'on installe. La confirmation le nomme, l'audit l'enregistre sous une action
+distincte, et l'écran affiche par quel chemin il est passé.
+
+Une fois l'amorçage terminé, tout revient à SSH.
+
+### 42.4 Ce que l'amorçage n'est pas
+
+Ce n'est pas un gestionnaire de configuration. Il n'installe pas l'application du
+locataire, ne pose pas ses variables, ne gère pas ses versions. Il rend la
+cellule **joignable et capable de faire tourner une pile Compose**, et s'arrête
+là — la frontière du §2 ne bouge pas.
+
