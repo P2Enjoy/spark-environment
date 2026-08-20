@@ -33,6 +33,7 @@ from .incus import FakeIncus, IncusClient, IncusError, UnixSocketIncus
 from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
+from . import ports as ports_service
 from . import audit as audit_service
 from . import metrics as metrics_service
 from . import snapshots as snapshot_service
@@ -456,6 +457,18 @@ def create_app(config: Config) -> FastAPI:
             "UPDATE spark SET incus_name = ? WHERE id = ?", (spark["name"], spark["id"])
         )
         service.finish(connection, spark["id"], success=True)
+        # SPK-49 · §39.4 : les ports déclarés AVANT la création s'ouvrent
+        # maintenant. Sans ce geste, un port publié sur un Spark encore
+        # `pending` ne s'ouvrirait jamais — il resterait au registre avec un
+        # `applied_at` vide, sans que rien ne vienne jamais le combler.
+        try:
+            if ports_service.apply_devices(
+                    connection, app.state.incus, spark["name"], spark["id"]) is not None:
+                ports_service.mark_applied(connection, spark["id"])
+        except ports_service.PortError:
+            # L'instance existe : ne pas faire échouer sa création pour un port.
+            # L'écart reste visible par `applied_at` (§39.5).
+            pass
 
     config_network = "sparkbr0"
     config_pool = config.storage_pool
@@ -794,6 +807,85 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=502, detail={
                     "error": "caddy_unavailable", "message": str(erreur)}) from erreur
             return {"withdrawn": domain}
+
+    # --- Ports publiés (SPK-49 · docs/DAT.md §39) ---------------------------
+
+    @app.get("/v1/ports", tags=["ports"])
+    def list_ports() -> dict:
+        """Les ports publiés de la FORGE. C'est une liste de la machine, pas
+        d'un Spark : un port public est une ressource unique sur la machine."""
+        with registry() as connection:
+            # Une LISTE, pas un dictionnaire indexé par le port : les clés JSON
+            # sont des chaînes, et la forme rendue dépendrait alors du codage.
+            return {
+                "ports": ports_service.listing(connection),
+                "reserved": [
+                    {"port": port, "reason": raison}
+                    for port, raison in sorted(
+                        ports_service.reserved(app.state.config.reserved_ports).items())
+                ],
+            }
+
+    @app.post("/v1/ports", tags=["ports"], status_code=201)
+    def publish_port(body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, body.get("spark", ""))
+                # §35 : la protection s'applique AVANT tout le reste.
+                protection_service.ensure_writable(connection, spark["name"], "port")
+                port = ports_service.publish(
+                    connection, app.state.incus, spark,
+                    int(body.get("public_port", 0)), int(body.get("target_port", 0)),
+                    str(body.get("protocol", "tcp")), str(body.get("note", "")),
+                    extra_reserved=app.state.config.reserved_ports,
+                )
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except (ports_service.PortError, ValueError, TypeError) as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "port_refused", "message": str(erreur)}) from erreur
+            try:
+                pose = ports_service.apply_devices(
+                    connection, app.state.incus, spark["name"], spark["id"])
+                # `applied_at` n'est renseigné QUE si le pilote a réellement été
+                # appelé : un Spark sans instance n'a rien à appliquer, et dater
+                # l'application ferait croire à une publication effective.
+                if pose is not None:
+                    ports_service.mark_applied(connection, spark["id"])
+            except ports_service.PortError as erreur:
+                # La ligne est enregistrée ; l'écart reste visible par
+                # `applied_at` plutôt que masqué par un succès simulé (§39.5).
+                raise HTTPException(status_code=502, detail={
+                    "error": "driver_unavailable",
+                    "message": str(erreur),
+                    "port": port["public_port"],
+                    "note": "Port enregistré mais non appliqué.",
+                }) from erreur
+            return ports_service.by_public_port(connection, port["public_port"])
+
+    @app.delete("/v1/ports/{public_port}", tags=["ports"])
+    def withdraw_port(public_port: int) -> dict:
+        with registry() as connection:
+            try:
+                vise = ports_service.by_public_port(connection, public_port)
+                protection_service.ensure_writable(
+                    connection, vise["spark_name"], "port")
+                ports_service.withdraw(connection, public_port)
+            except ports_service.PortError as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            try:
+                # On REFERME : la carte des devices est reconstruite sans celui
+                # qu'on vient de retirer (§39.2, §39.4).
+                ports_service.apply_devices(
+                    connection, app.state.incus, vise["spark_name"], vise["spark_id"])
+            except ports_service.PortError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "driver_unavailable", "message": str(erreur),
+                    "note": "Port retiré du registre mais pas encore refermé.",
+                }) from erreur
+            return {"withdrawn": public_port}
 
     @app.post("/v1/ingress/reconcile", tags=["ingress"])
     def reconcile_routes() -> dict:

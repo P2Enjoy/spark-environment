@@ -109,9 +109,38 @@ def devices_for(connection: sqlite3.Connection, spark_id: str) -> dict[str, dict
     return carte
 
 
+def has_instance(connection: sqlite3.Connection, spark_id: str) -> bool:
+    """Le Spark a-t-il une instance à configurer ?
+
+    Le signal est `incus_name`, renseigné SEULEMENT après une application
+    réussie — c'est déjà ce que `_apply_keys` emploie pour la même question.
+
+    Ce n'est PAS l'adresse : elle est attribuée dès l'écriture au registre
+    (§15.1), bien avant que le pilote ne porte quoi que ce soit. Mesuré : s'y
+    fier faisait échouer la publication en 502 « Instance absente » sur un Spark
+    parfaitement normal, encore `pending`.
+    """
+    row = connection.execute(
+        "SELECT incus_name FROM spark WHERE id = ?", (spark_id,)
+    ).fetchone()
+    return bool(row and row["incus_name"])
+
+
 def apply_devices(connection: sqlite3.Connection, client, spark_name: str,
-                  spark_id: str) -> int:
-    """Pose sur l'instance la carte complète des devices de publication."""
+                  spark_id: str) -> int | None:
+    """Pose sur l'instance la carte complète des devices de publication.
+
+    Rend `None` quand il n'y a **rien à configurer** : un Spark encore `pending`
+    n'a pas d'instance chez le pilote. On déclare avant de créer — c'est voulu,
+    c'est la règle du §18.2 pour une route —, le port reste au registre et son
+    `applied_at` reste vide, ce qui rend l'écart visible au lieu d'inventer une
+    panne du pilote.
+
+    Mesuré : appeler le pilote quand même faisait rendre « Instance absente », et
+    la publication échouait en 502 sur un Spark parfaitement normal.
+    """
+    if not has_instance(connection, spark_id):
+        return None
     carte = devices_for(connection, spark_id)
     try:
         client.set_publication_devices(spark_name, carte)

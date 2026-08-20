@@ -13,8 +13,11 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
+from fastapi.testclient import TestClient
 
 from sparkd import migrations, ports
+from sparkd.app import create_app
+from sparkd.config import load
 from sparkd.db import connect
 from sparkd.incus import FakeIncus
 
@@ -34,12 +37,16 @@ def pilote():
     return FakeIncus()
 
 
-def poser_spark(db, ident, nom, adresse="10.77.0.16"):
+def poser_spark(db, ident, nom, adresse="10.77.0.16", applique=False):
+    """`applique` renseigne `incus_name`, ce qui signifie que le PILOTE porte
+    une instance — le signal qu'emploie `has_instance` (§39.4)."""
     db.execute(
         "INSERT INTO spark (id,name,image,cpu_mode,cpu_reservation,"
         "memory_reservation_bytes,network_reservation_bps,storage_bytes,"
-        "ipv4_address,created_at,updated_at) VALUES (?,?,?,'shared',0.5,?,?,?,?,'x','x')",
-        (ident, nom, "images:debian/13", GIO, 10_000_000, GIO, adresse))
+        "ipv4_address,incus_name,created_at,updated_at)"
+        " VALUES (?,?,?,'shared',0.5,?,?,?,?,?,'x','x')",
+        (ident, nom, "images:debian/13", GIO, 10_000_000, GIO, adresse,
+         nom if applique else None))
     return {"id": ident, "name": nom}
 
 
@@ -113,7 +120,7 @@ def test_la_suppression_d_un_spark_emporte_ses_ports(db, pilote):
 
 
 def test_publier_pose_un_device_proxy_lisible(db, pilote):
-    spark = poser_spark(db, "S1", "mail")
+    spark = poser_spark(db, "S1", "mail", applique=True)
     pilote.created["mail"] = {"name": "mail", "devices": {
         "eth0": {"type": "nic"}, "root": {"type": "disk"}}}
     ports.publish(db, pilote, spark, 2525, 25)
@@ -132,7 +139,7 @@ def test_publier_pose_un_device_proxy_lisible(db, pilote):
 def test_le_retrait_fait_DISPARAITRE_le_device(db, pilote):
     """LE cœur de l'unité : sans cela le port resterait ouvert vers un service
     qui n'est plus là — la surface offerte sans service derrière du §39.2."""
-    spark = poser_spark(db, "S1", "mail")
+    spark = poser_spark(db, "S1", "mail", applique=True)
     pilote.created["mail"] = {"name": "mail", "devices": {"eth0": {"type": "nic"}}}
     ports.publish(db, pilote, spark, 2525, 25)
     ports.apply_devices(db, pilote, "mail", "S1")
@@ -145,7 +152,7 @@ def test_le_retrait_fait_DISPARAITRE_le_device(db, pilote):
 
 def test_les_devices_ETRANGERS_ne_sont_jamais_touches(db, pilote):
     """Remplacer la carte réseau ou le disque racine détruirait l'instance."""
-    spark = poser_spark(db, "S1", "mail")
+    spark = poser_spark(db, "S1", "mail", applique=True)
     pilote.created["mail"] = {"name": "mail", "devices": {
         "eth0": {"type": "nic", "network": "sparkbr0"},
         "root": {"type": "disk", "pool": "spark"}}}
@@ -157,6 +164,18 @@ def test_les_devices_ETRANGERS_ne_sont_jamais_touches(db, pilote):
     devices = pilote.created["mail"]["devices"]
     assert devices["eth0"] == {"type": "nic", "network": "sparkbr0"}
     assert devices["root"] == {"type": "disk", "pool": "spark"}
+
+
+def test_un_spark_sans_INSTANCE_n_appelle_pas_le_pilote(db, pilote):
+    """Mesuré : appeler le pilote quand même faisait rendre « Instance absente »,
+    et la publication échouait en 502 sur un Spark parfaitement normal — encore
+    `pending`, donc sans instance. On déclare avant de créer (§18.2)."""
+    # Adresse PRESENTE — elle est attribuee des l'ecriture au registre — mais
+    # `incus_name` vide : le pilote ne porte encore rien.
+    poser_spark(db, "S8", "pending", "10.77.0.18")
+    ports.publish(db, pilote, {"id": "S8", "name": "pending"}, 2525, 25)
+    assert ports.apply_devices(db, pilote, "pending", "S8") is None
+    assert ports.by_public_port(db, 2525)["applied_at"] is None
 
 
 def test_un_spark_SANS_adresse_ne_recoit_aucun_device(db, pilote):
@@ -173,7 +192,7 @@ def test_un_spark_SANS_adresse_ne_recoit_aucun_device(db, pilote):
 
 def test_une_panne_du_pilote_remonte_AVEC_son_motif(db, pilote):
     """Un « 502 » anonyme ferait chercher la panne au mauvais endroit."""
-    spark = poser_spark(db, "S1", "mail")
+    spark = poser_spark(db, "S1", "mail", applique=True)
     pilote.created["mail"] = {"name": "mail", "devices": {}}
     ports.publish(db, pilote, spark, 2525, 25)
     pilote.fail_next["set_publication_devices"] = "pilote injoignable"
@@ -203,3 +222,59 @@ def test_le_journal_porte_la_publication_et_le_retrait(db, pilote):
     actions = [r["action"] for r in db.execute(
         "SELECT action FROM audit_log ORDER BY id")]
     assert "port.publish" in actions and "port.withdraw" in actions
+
+
+# --- l'API (§39.6) -----------------------------------------------------------
+
+
+def _client(tmp_path):
+    client = TestClient(create_app(load({"SPARKD_DB": str(tmp_path / "a.db"),
+                                         "SPARKD_DRIVER": "fake"})))
+    # La capacite doit etre RELEVEE avant toute admission : rien ne peut etre
+    # admis tant qu'on ignore ce qui existe.
+    assert client.post("/v1/forge/sync").status_code == 200
+    # Un Spark REEL, cree par l'API : le port se publie vers quelque chose.
+    assert client.post("/v1/sparks", json={
+        "name": "crm", "image": "images:debian/13", "cpu_mode": "shared",
+        "cpu_reservation": 0.5, "memory_bytes": GIO, "storage_bytes": GIO,
+        "network_bps": 10_000_000}).status_code in (201, 202)
+    return client
+
+
+def test_api_publie_refuse_et_retire(tmp_path):
+    """@verifies docs/DAT.md §39.6 (la surface d'API)"""
+    client = _client(tmp_path)
+    cree = client.post("/v1/ports", json={
+        "spark": "crm", "public_port": 2525, "target_port": 25, "note": "SMTP"})
+    assert cree.status_code == 201, cree.text
+    assert cree.json()["applied_at"] is None, (
+        "le Spark est encore `pending` : rien n'est appliqué, et la date reste "
+        "vide plutôt que d'affirmer une publication effective")
+
+    # Réservé : 409, en nommant le service qui tient le port.
+    reserve = client.post("/v1/ports", json={
+        "spark": "crm", "public_port": 443, "target_port": 25})
+    assert reserve.status_code == 409
+    assert "proxy" in reserve.json()["detail"]["message"]
+
+    # Déjà pris : 409, en nommant le Spark.
+    pris = client.post("/v1/ports", json={
+        "spark": "crm", "public_port": 2525, "target_port": 25})
+    assert pris.status_code == 409
+    assert "crm" in pris.json()["detail"]["message"]
+
+    liste = client.get("/v1/ports").json()
+    assert [p["public_port"] for p in liste["ports"]] == [2525]
+    reserves = {r["port"]: r["reason"] for r in liste["reserved"]}
+    assert 443 in reserves, "l'écran doit pouvoir DIRE ce qui est réservé"
+    assert "proxy" in reserves[443], "et POURQUOI, pas seulement que c'est réservé"
+
+    assert client.delete("/v1/ports/2525").status_code == 200
+    assert client.get("/v1/ports").json()["ports"] == []
+
+
+def test_api_un_spark_inconnu_rend_404(tmp_path):
+    client = _client(tmp_path)
+    r = client.post("/v1/ports", json={
+        "spark": "fantome", "public_port": 2525, "target_port": 25})
+    assert r.status_code == 404

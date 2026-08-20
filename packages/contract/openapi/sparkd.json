@@ -561,6 +561,117 @@
         ]
       }
     },
+    "/v1/ports": {
+      "get": {
+        "description": "Les ports publiés de la FORGE. C'est une liste de la machine, pas\nd'un Spark : un port public est une ressource unique sur la machine.",
+        "operationId": "list_ports_v1_ports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Ports V1 Ports Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Ports",
+        "tags": [
+          "ports"
+        ]
+      },
+      "post": {
+        "operationId": "publish_port_v1_ports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Publish Port V1 Ports Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish Port",
+        "tags": [
+          "ports"
+        ]
+      }
+    },
+    "/v1/ports/{public_port}": {
+      "delete": {
+        "operationId": "withdraw_port_v1_ports__public_port__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_port",
+            "required": true,
+            "schema": {
+              "title": "Public Port",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Withdraw Port V1 Ports  Public Port  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw Port",
+        "tags": [
+          "ports"
+        ]
+      }
+    },
     "/v1/sparks": {
       "get": {
         "operationId": "list_sparks_v1_sparks_get",
