@@ -3480,3 +3480,41 @@ indépendante : trois bornes à éprouver, un parcours, et c'est clos. Ensuite
 SPK-46 (la console traduit les états) ou SPK-42 tranche 3 (renommage de la
 documentation). SPK-51 attend toujours les deux vérifications du §38.6 bis
 auprès du fournisseur.
+
+## 2026-08-20 — SPK-52 : une instance déjà absente vaut suppression réussie
+
+**Unité choisie** : SPK-52, désignée par l'entrée précédente. Sa spécification
+existait au §14.5, écrite lors de l'arbitrage du responsable : lue, jugée
+complète, non réécrite. Passage direct au code.
+
+**Le point délicat, et il n'était pas dans la spécification** : tout remontait un
+`IncusError` générique. Le §14.5 exige pourtant de distinguer l'absence
+**rapportée** d'un pilote **injoignable** — sans quoi on effacerait une ligne du
+registre parce qu'on n'a pas pu poser la question, et l'instance continuerait de
+consommer sans être comptée. D'où `InstanceAbsente`, qui **n'hérite pas**
+d'`IncusError` : les appelants qui rattrapent `IncusError` pour conclure à une
+panne ne doivent pas l'attraper par mégarde. Côté pilote réel, un `404` d'Incus
+est la seule réponse qui autorise à conclure que la chose n'est pas là.
+
+**La fixture du seed est une reproduction, pas une trace fabriquée.** Il n'existe
+aucun chemin du produit qui produise cet état — par définition l'instance est
+supprimée ailleurs. La ligne d'`orphelin` est donc écrite par le vrai chemin,
+puis l'instance est retirée du pilote : exactement l'évènement du 2026-08-19.
+
+**Deux preuves révisées avec leur raison.** Celle qui énumérait les Sparks
+seedés, et surtout celle qui **figeait leur nombre à cinq** : elle a rougi sans
+rien dire du produit, et aurait rougi encore à la prochaine fixture. Le compte se
+lit désormais sur le registre — « l'écran montre ce que le registre contient » —,
+ce qui est ce que la preuve voulait dire depuis le début.
+
+**Campagne complète, verte.** 653 tests Python, 402 de console et d'hôte console,
+6 de contrat, 8 gestes, **39 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`. Captures `69-` à `72-` observées.
+
+**Où reprendre.** SPK-46 — la console traduit les états que le serveur rapporte.
+C'est la dernière entrée ouverte du registre d'incohérences (INC-01), arbitrée
+depuis le 2026-08-19 : la console traduit à l'affichage, le journal garde le
+vocabulaire du serveur. L'entrée sortira du registre dans le même changement.
+Ensuite SPK-42 tranche 3 (renommage de la documentation), puis SPK-43 (terminal),
+qui débloque SPK-51. SPK-51 attend toujours les deux vérifications du §38.6 bis
+auprès du fournisseur.

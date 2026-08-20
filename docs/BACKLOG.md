@@ -1795,7 +1795,7 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
   port 25 sortant n'est pas débloqué par l'hébergeur : cette limite est écrite
   dans l'unité, elle n'est pas contournée par une simulation.
 
-### [ ] SPK-52 · Une instance déjà absente vaut suppression réussie
+### [x] SPK-52 · Une instance déjà absente vaut suppression réussie
 
 Arbitrage du responsable du 2026-08-20, qui remplace l'entrée INC-03 du rapport
 d'incohérences — retirée dans le même changement.
@@ -1812,6 +1812,23 @@ d'incohérences — retirée dans le même changement.
   parcours E2E depuis le parcours canonique sur un Spark dont le pilote factice
   rapporte l'instance absente ; le journal montre les deux suppressions
   distinctement ; captures observées.
+- **Livré et vérifié le 2026-08-20.**
+  - L'absence rapportée porte son propre type, `InstanceAbsente`, qui **n'hérite
+    pas** d'`IncusError` : un appelant qui rattrape `IncusError` pour conclure à
+    une panne ne doit pas l'attraper par mégarde. Côté pilote réel, un `404`
+    d'Incus est la seule réponse qui autorise à conclure que la chose n'est pas
+    là.
+  - 6 tests d'intégration sur la pile réelle : la suppression réussit, la place
+    revient au pool de la Forge, le journal distingue les deux suppressions, un
+    pilote **muet** rend toujours `502` et laisse la ligne, un Spark **protégé**
+    refuse d'abord, et un Spark jamais appliqué se supprime sans solliciter le
+    pilote.
+  - **1 parcours E2E** depuis le parcours canonique sur la fixture `orphelin` du
+    seed, avec les trois effets constatés côté `sparkd`. Captures `69-` à `72-`
+    observées, console du navigateur vierge.
+  - Deux preuves révisées avec leur raison : celle qui énumérait les Sparks
+    seedés, et celle qui **figeait leur nombre** à cinq — le compte se lit
+    désormais sur le registre, ce qui est ce que la preuve voulait dire.
 
 ---
 
