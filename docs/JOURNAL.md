@@ -3351,3 +3351,45 @@ domaine nu » ; et `gram.lelabs.tech`, qui annonce « sera remplacé :
 enregistrements, `MX`, DKIM et le `A` de `gram` intacts.
 
 Captures `53-` à `55-` observées.
+
+## 2026-08-20 — SPK-48 : le joker, et la préséance qui était inversée
+
+**Unité choisie** : SPK-48, désignée par l'entrée précédente. Sa spécification
+existait déjà (§18.3 bis) : lue, jugée complète, non réécrite.
+
+**Le défaut au cœur de l'unité, et il ne se voyait pas à l'écran.** La validation
+acceptait déjà `*.monapi.fr`. Mais `build_config` émettait les routes dans
+l'ordre alphabétique du listing, où `*` précède les lettres — et Caddy retient la
+**première** correspondance. `*.monapi.fr` passait donc avant `api.monapi.fr` :
+le joker gagnait, à l'inverse exact de la règle. Les routes sont désormais
+triées par spécificité, et la preuve lit l'ordre dans la configuration produite.
+
+**Arbitrage du responsable en cours de session** : la surcharge doit se voir dans
+les **deux sens**. Dire la prise de pas à sa création ne suffit pas — ce message
+passe une fois, et l'exploitant du Spark porteur du joker ne l'a peut-être jamais
+lu. Spécifié au §18.3 bis et committé avant d'être codé : chaque route joker
+porte désormais la liste des noms qui lui sont soustraits, avec le Spark qui les
+sert. Routes actives seulement ; les noms exacts du même Spark ne comptent pas —
+ce n'est pas un détournement, c'est le même exploitant qui affine sa route.
+
+**Un défaut trouvé par la capture, pas par un test.** La liste des surcharges se
+posait **à côté** de la route : la ligne est un flex qui replie, et le bloc y
+entrait comme un élément de la ligne. Aligné sur la convention déjà présente dans
+la feuille de style pour la confirmation et le refus.
+
+**Campagne complète, verte.** 631 tests Python, 364 de console et d'hôte console,
+6 de contrat, 8 gestes, **32 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`. Captures `56-` à `59-` observées, format étroit compris,
+console du navigateur vierge.
+
+**Note d'environnement, pour la session suivante** : sur ce poste, un `sleep` en
+premier lancement est bloqué par le harnais et interrompt la commande entière —
+d'où des `rm` qui n'ont jamais été exécutés. Attendre une condition avec
+`until <test>; do sleep 2; done`. Et la pile doit être lancée avec `setsid`,
+faute de quoi elle est tuée avec la tâche d'arrière-plan qui l'a démarrée.
+
+**Où reprendre.** SPK-49 — publier un port de la Forge vers un Spark. C'est le
+prérequis dur de SPK-51 (messagerie) et sa spécification est écrite au §39.
+Ensuite SPK-50 (recettes DNS), puis SPK-52 (suppression idempotente), court et
+indépendant. SPK-51 attend les deux vérifications du §38.6 bis auprès du
+fournisseur.

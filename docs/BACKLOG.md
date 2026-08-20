@@ -1624,7 +1624,7 @@ Le produit disait « le DNS est extérieur au produit », et SPK-12 restait
 - **Reste hors de cette unité** : l'émission TLS elle-même (SPK-12), qui exige un
   serveur joignable depuis l'extérieur.
 
-### [ ] SPK-48 · Le joker sur une route, et la préséance du plus spécifique
+### [x] SPK-48 · Le joker sur une route, et la préséance du plus spécifique
 
 Une API qui donne un sous-domaine par client ne peut pas déclarer une route et un
 enregistrement DNS par locataire, à la main, indéfiniment.
@@ -1652,6 +1652,26 @@ enregistrement DNS par locataire, à la main, indéfiniment.
   seulement à l'écran ; parcours E2E depuis le parcours canonique — déclarer
   `*.exemple.test` sur un Spark, puis `admin.exemple.test` sur un autre, et voir
   l'écran NOMMER le premier ; captures observées ; manuel M7 mis à jour.
+- **Livré et vérifié le 2026-08-20.**
+  - **Défaut de préséance corrigé** : `build_config` émettait les routes dans
+    l'ordre alphabétique, où `*` précède les lettres. Caddy retenant la première
+    correspondance, le joker l'emportait sur le nom exact — l'inverse exact de la
+    règle. Les routes sont triées par spécificité, et un test lit l'ordre dans la
+    **configuration produite**, pas à l'écran.
+  - 20 tests d'unité : les trois bornes nommées une à une, la couverture d'un
+    seul niveau, la préséance, l'ordre entre deux jokers, le relevé du joker
+    dépassé, et les quatre cas où rien ne doit être signalé.
+  - **3 parcours E2E** depuis le parcours canonique : lire depuis le joker ce qui
+    lui est soustrait, déclarer un nom avalé par le joker d'un autre Spark et
+    voir ce Spark nommé, se voir refuser un joker mal placé avec sa borne.
+  - **Seed** : `*.boutique.example.com` sur `boutique` et
+    `vip.boutique.example.com` sur `crm-production`, posés avant le bloc
+    `caddy.fail` pour ne pas détruire la fixture du §18.5.
+  - Captures `56-` à `59-` observées, format étroit compris. Défaut visuel
+    corrigé : la liste des surcharges se posait à côté de la route au lieu d'être
+    imbriquée dessous.
+- **Reste hors de cette unité** : le certificat joker, qui exige une validation
+  `DNS-01` — écrit comme limite connue dans le manuel M7.
 
 ### [ ] SPK-49 · Publier un port de la Forge vers un Spark
 
