@@ -53,8 +53,12 @@ export const VERSION = 1;
  */
 export const KINDS = ['ssh', 'alias', 'local'];
 
-/** Motifs qui trahissent un secret glissé par erreur dans l'inventaire. */
-const SECRET_HINT = /private[_-]?key|password|passphrase|secret|token|BEGIN [A-Z ]*PRIVATE KEY/i;
+/** Motifs qui trahissent un secret glissé par erreur dans l'inventaire.
+ *
+ *  EXPORTÉ pour que les preuves emploient CE motif plutôt qu'une seconde règle
+ *  écrite à côté : deux heuristiques finissent par diverger, et celle du parcours
+ *  prenait `signingKey` — un chemin vers une clé PUBLIQUE — pour un secret. */
+export const SECRET_HINT = /private[_-]?key|password|passphrase|secret|token|BEGIN [A-Z ]*PRIVATE KEY/i;
 
 export class InventoryError extends Error {}
 

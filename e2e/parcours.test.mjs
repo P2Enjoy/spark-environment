@@ -25,6 +25,9 @@ import { join } from 'node:path';
 
 import { monterPile } from './pile.mjs';
 import { monterDoublonDns } from './dns-doublon.mjs';
+// Le motif du SERVEUR, employé tel quel : une seconde heuristique écrite
+// ici dériverait de celle qui est réellement appliquée (§22.4).
+import { SECRET_HINT } from '../apps/webui/host/inventory.js';
 
 const ECHECS = new URL('./captures/echecs/', import.meta.url).pathname;
 
@@ -293,8 +296,27 @@ test('un SECRET saisi dans le formulaire est refusé, et la saisie survit', asyn
     await page.waitForSelector('dialog.modale[open] #serveur-nom');
     const champs = await page.$$eval('dialog.modale[open] input, dialog.modale[open] select',
       (l) => l.map((c) => c.name));
-    assert.ok(!champs.some((n) => /password|key|token|secret|passphrase/i.test(n)),
+    // RÉVISÉE le 2026-08-21, et il faut dire pourquoi. Ce contrôle cherchait
+    // « key » dans le nom des champs. SPK-40 en ajoute un — `signingKey`, un
+    // chemin vers une clé PUBLIQUE (§36.10.8) —, et l'heuristique le prenait
+    // pour un secret. C'est l'heuristique qui était trop large, pas le champ qui
+    // est fautif : le motif employé est désormais CELUI DU SERVEUR
+    // (`SECRET_HINT`, `apps/webui/host/inventory.js`), et non une seconde règle
+    // écrite à côté qui dériverait de la première.
+    assert.ok(!champs.some((n) => SECRET_HINT.test(n)),
       'aucun champ de secret n’est même proposé');
+
+    // …et le champ ajouté ne devient pas une porte : y COLLER une clé privée est
+    // refusé, comme n'importe quel autre secret. C'est ce qui rend la révision
+    // ci-dessus honnête — on n'a pas retiré un rempart, on l'a déplacé sur ce
+    // que le serveur applique réellement.
+    const collee = await fetch(`${pile.base}/api/servers`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'fuite', kind: 'local', port: 9876,
+                             signingKey: '-----BEGIN OPENSSH PRIVATE KEY-----' }),
+    });
+    assert.equal(collee.status, 422);
+    assert.match((await collee.json()).message, /ressemble à un secret/);
 
     // Et le SERVEUR refuse, quoi qu'on lui envoie : c'est le rempart qui compte
     // (§22.4). Vérifié ici sans passer par l'interface, qui n'offre pas le champ.

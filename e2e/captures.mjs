@@ -100,6 +100,11 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           gesteRendu = null, dockerConteneurApres = null,
                           // SPK-45 tranche 2 : le sondage du shell (§37.4.7).
                           probeShell = null,
+                          // SPK-40 · §36.10.9 : la console n'a PAS pu signer.
+                          // On injecte le résultat de la signature plutôt que de
+                          // vider un agent : l'écran à capturer est le même, et
+                          // le reste du chemin est celui de la production.
+                          signatureEchouee = false,
                           terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
@@ -140,6 +145,9 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
     ...(terminaux ? { terminals: terminaux } : {}),
     ...(sondageSshd ? { probeSshd: async () => sondageSshd } : {}),
     ...(probeShell ? { probeShell } : {}),
+    ...(signatureEchouee
+      ? { signIntention: async () => ({ motif: 'agent_muet', signed: 'e30=' }) }
+      : {}),
     ...(dockerReleve ? { readDocker: async (spark) => ({ spark, ...dockerReleve }) } : {}),
     ...(dockerConteneur ? { readContainer: (() => {
       let lu = 0;
@@ -294,12 +302,15 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
             : { checked: 128, head: 'a1b2c3', length: 128, intact: true,
                 verified_at: '2026-08-19T15:30:00', break: null },
       ), { status: 200 });
+      // SPK-40 · §36.10.9 : les TROIS situations de signature sur le même
+      // écran. Une capture qui n'en montrerait qu'une ne dirait pas ce que la
+      // colonne existe pour distinguer.
       if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [
-        { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.' },
-        { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'crm.example.com → port 8080.' },
+        { ts: '2026-08-19T09:12:00', action: 'snapshot.create', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'Instantané « avant-deploiement » pris.', signed: true },
+        { ts: '2026-08-19T09:00:00', action: 'ingress.declare', result: 'ok', actor_class: 'human', actor: 'console/validation key=SHA256:AbCd12', target_id: 'S1', message: 'crm.example.com → port 8080.', signed: false },
         { ts: '2026-08-19T08:55:00', action: 'spark.settle', result: 'ok',
           actor_class: 'runtime', actor: 'sparkd',
-          target_id: 'S1', message: '« starting » → « running ».' },
+          target_id: 'S1', message: '« starting » → « running ».', signed: false },
       ] }), { status: 200 });
       if (refusCreation) return new Response(JSON.stringify({ detail: {
         error: 'admission_refused',
@@ -1240,6 +1251,42 @@ await page.keyboard.press('Enter');
 await page.waitForSelector('dialog.modale[open] #protection-mot', { timeout: 4000 });
 await page.screenshot({ path: join(SORTIE, '38-protection-modale.png') });
 console.log('  38-protection-modale.png');
+ctx.server.close();
+
+// --- SPK-40 · CE QUE L'ÉCRAN DIT DE LA SIGNATURE (§36.10.9) ---------------
+// Deux écrans, et ils répondent à deux questions différentes : ce que la Forge a
+// VÉRIFIÉ ligne à ligne, et ce que la console n'a PAS PU faire.
+ctx = await demarrer();
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.click('nav a[href="#/forge"]');
+await page.waitForSelector('#titre-pools', { timeout: 8000 });
+await page.click('.onglet[href="#/forge/journal"]');
+await page.waitForSelector('#titre-journal-forge', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '47-journal-signature.png') });
+console.log('  47-journal-signature.png');
+ctx.server.close();
+
+// L'ÉCHEC DIT. Le geste a eu lieu — la Forge l'a accepté —, seule la trace
+// manque : accent, jamais rouge (§25.1). Il vit dans la barre latérale parce que
+// sa cause survit au geste (SPK-DS-10).
+ctx = await demarrer({ signatureEchouee: true });
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('tbody a');
+await page.click('nav a[href="#/forge"]');
+await page.waitForSelector('#titre-pools', { timeout: 8000 });
+await page.click('[data-action="relever"]');
+await page.waitForSelector('.entete__signature .avertissement', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '48-signature-echec.png') });
+console.log('  48-signature-echec.png');
+
+// Sous 1024 px la barre latérale devient une rangée : l'avertissement doit y
+// prendre sa propre ligne au lieu de comprimer la navigation (§8.1).
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '49-signature-echec-mobile.png'), fullPage: true });
+console.log('  49-signature-echec-mobile.png');
 ctx.server.close();
 
 await navigateur.close();

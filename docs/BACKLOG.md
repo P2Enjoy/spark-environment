@@ -1431,13 +1431,42 @@ que chacune se prouve seule :
   ne porte qu'une clé **publique**.
 - **Preuves** : 16, avec un vrai `ssh-keygen`, un vrai agent et de vraies clés.
 
-- **Reste avant `[x]`, et ce sont deux écarts de COMPORTEMENT** :
-  1. **aucun parcours E2E ne traverse la chaîne complète** — console qui signe,
-     Forge qui vérifie, ligne qui porte la signature. Les deux moitiés sont
-     prouvées séparément ; la jonction ne l'est pas. Le doublon
-     `SPARK_SIGN_COMMAND` reste à poser dans `e2e/pile.mjs` ;
-  2. **l'échec de signature n'est pas dit à l'écran.** Le relais le remonte, mais
-     aucun écran ne le montre — or le §36.10.8 exige qu'il soit dit, jamais tu.
+**Troisième tranche livrée le 2026-08-21 : ce que les écrans en disent.**
+Contrat écrit et poussé avant le code — `docs/DAT.md` §36.10.9, et §36.8.5 révisé.
+
+- **La chaîne complète est éprouvée d'un clic.** Le harnais des parcours produit
+  une VRAIE paire de clés dans son dossier jetable, la Forge la reconnaît par
+  `SPARKD_ALLOWED_SIGNERS` sous l'identité `console/local` — celle-là même que
+  la console déclare —, et `SPARK_SIGN_COMMAND` répond PAR GESTE comme le
+  doublon Docker du §37.6 ter : il échoue sur le relevé de topologie et délègue
+  tout le reste au vrai `ssh-keygen -Y sign`. Une seule pile porte la chaîne
+  signée ET l'échec dit.
+- **Le journal dit, ligne à ligne, ce que la Forge a VÉRIFIÉ** : « signée »,
+  « non signée » — un état normal, jamais peint en rouge —, « sans objet » pour
+  une ligne du runtime, que personne n'a demandée. La mention générale « Aucune
+  entrée n'est signée » a disparu : vraie avant SPK-40, fausse après, et lue
+  comme vraie sur la page même où l'on vient chercher une garantie.
+- **L'échec de signature se dit dans la COQUILLE**, pas dans l'écran du geste :
+  sa cause est l'état du poste, elle survit au geste et frappera le suivant. Il
+  persiste à travers un changement d'écran et **s'efface de lui-même** dès qu'un
+  geste repart signé. Règle réutilisable extraite : `docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-10.
+- **Le motif voyage en JETON**, la phrase vit dans `tokens.js` — un en-tête HTTP
+  ne transporte pas d'accent, et le §14.7 interdit le jeton brut à l'écran. Une
+  preuve garde que les deux tables ne dérivent pas : un motif sans phrase serait
+  un échec tu.
+- **La clé de signature se déclare depuis l'écran *Serveurs***, pour tous les
+  genres. Sans ce champ elle ne se déclarait qu'en éditant un fichier à la main
+  — le défaut même que SPK-41 existe pour supprimer.
+- **Preuves** : 2 parcours E2E, 11 de composant, 2 de relais, 5 du vocabulaire ;
+  3 captures observées (`e2e/captures/47`, `48`, `49`).
+
+- **Reste avant `[x]`, et c'est un seul écart, hors de portée d'une session** :
+  aucun agent SSH réel n'a signé un geste. Le harnais éprouve la chaîne avec la
+  clé privée voisine de la publique — le cas du poste sans agent, que le
+  §36.10.8 admet et qui fonctionne. Que l'agent réponde se mesure **sur un
+  poste**, et c'est la même limite qu'au §37.4.2 bis : **nécessite une action
+  humaine**.
 
 ### [x] SPK-41 · Catalogue local des serveurs, tenu depuis la console
 
