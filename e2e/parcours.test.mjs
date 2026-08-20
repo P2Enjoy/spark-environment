@@ -1335,3 +1335,40 @@ test('la recette du relais RÉCLAME sa clé et se dit incomplète sans elle', as
     assert.ok(zone.some((r) => r.name === '_dmarc.noreply' && r.type === 'TXT'));
   });
 });
+
+// --- SUPPRESSION D'UN SPARK SANS INSTANCE (SPK-52, docs/DAT.md §14.5) ------
+
+test('supprimer un Spark dont l’instance a disparu RÉUSSIT depuis la console', async () => {
+  await parcours('suppression-orphelin', async () => {
+    // Mesuré le 2026-08-19 : ce geste rendait 502, la ligne restait au registre
+    // et pesait dans l'admission. Le seul recours était d'ouvrir la base.
+    const { corps: avant } = await pile.lireSparkd('/v1/forge');
+    const placeAvant = avant.pools.memory.allocated;
+
+    await ouvrir('orphelin');
+    await page.waitForSelector('.entete-entite');
+    await page.click('[data-commande="delete"]');
+    await page.waitForSelector('[data-confirme]', { timeout: 10000 });
+    await page.click('[data-confirme]');
+
+    // On revient à la liste, et le Spark n'y est plus.
+    await page.waitForSelector('tbody a', { timeout: 20000 });
+    await page.waitForFunction(
+      () => ![...document.querySelectorAll('tbody a')].some((a) => a.textContent.trim() === 'orphelin'),
+      null, { timeout: 20000 });
+
+    // EFFET côté sparkd : la ligne est partie ET la place est rendue (§14.4).
+    const { status } = await pile.lireSparkd('/v1/sparks/orphelin');
+    assert.equal(status, 404);
+    const { corps: apres } = await pile.lireSparkd('/v1/forge');
+    assert.ok(apres.pools.memory.allocated < placeAvant,
+      'la mémoire du Spark disparu doit retourner au pool');
+
+    // L'ÉCART reste lisible : le journal le dit en toutes lettres (§14.5).
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=200');
+    const marquee = journal.entries.find((e) => e.action === 'spark.delete'
+      && /ABSENTE/.test(e.message ?? ''));
+    assert.ok(marquee, 'la suppression d’une instance absente ne se lit pas comme une autre');
+    assert.ok(marquee.message.includes('admission'));
+  });
+});

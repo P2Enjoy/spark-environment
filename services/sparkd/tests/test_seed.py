@@ -29,7 +29,15 @@ def seede(config):
 
 
 def test_le_seed_produit_les_cinq_etats_annonces(seede):
-    """§28.5 — chaque état que les écrans traitent doit exister quelque part."""
+    """§28.5 — chaque état que les écrans traitent doit exister quelque part.
+
+    REVISE par SPK-52 : le seed porte desormais « orphelin », un Spark dont
+    l'INSTANCE a disparu hors du produit (§14.5). Il n'ajoute aucun ETAT — il est
+    `stopped`, comme un Spark ordinaire —, et c'est justement le point : rien ne
+    le distingue a l'ecran tant qu'on ne tente pas de le supprimer. Ce que la
+    preuve etablit — les cinq etats existent — est inchange ; c'est la liste des
+    Sparks qui a grandi.
+    """
     etats = {s["name"]: s["state"] for s in seede.get("/v1/sparks").json()["sparks"]}
     assert etats == {
         "crm-production": "running",
@@ -37,6 +45,7 @@ def test_le_seed_produit_les_cinq_etats_annonces(seede):
         "postgres-dedie": "running",
         "analytics": "pending",
         "site-vitrine": "error",
+        "orphelin": "stopped",
     }
 
 

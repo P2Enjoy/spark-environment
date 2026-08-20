@@ -130,6 +130,20 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     _attendu(client.post("/v1/sparks/site-vitrine/start"), 502,
              quoi="échec de démarrage attendu de « site-vitrine »")
 
+    # --- SPK-52 · §14.5 : un Spark dont l'INSTANCE A DISPARU hors du produit.
+    #
+    # Il n'existe aucun chemin du produit qui produise cet état : par définition,
+    # l'instance est supprimée AILLEURS — un `incus delete` à la main, comme cela
+    # s'est réellement produit le 2026-08-19. Retirer l'instance du pilote EST
+    # donc la reproduction fidèle de l'évènement, pas une trace fabriquée : la
+    # ligne du registre, elle, a été écrite par le vrai chemin.
+    creer({"name": "orphelin", "image": "images:debian/13", "cpu_mode": "shared",
+           "cpu_reservation": 0.25, "memory_bytes": 512 * MIO, "storage_bytes": 5 * GIO,
+           "network_bps": 50 * MBIT}, demarrer=False)
+    incus.created.pop("orphelin", None)
+    if "orphelin" in incus.created:
+        raise SeedError("l'instance « orphelin » devait avoir disparu du pilote")
+
     # --- Refus d'admission RÉEL : un vrai 409 du contrôle d'admission (§28.5).
     refus = _attendu(
         client.post("/v1/sparks", json={
