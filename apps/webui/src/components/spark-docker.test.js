@@ -8,9 +8,9 @@
  * muet, ou s'il n'y a simplement rien à montrer — et les trois n'appellent pas
  * le même geste.
  *
- * Et l'unité est en LECTURE : un bouton qui AGIRAIT sur un conteneur laisserait
- * croire que cet onglet peut le démarrer ou l'arrêter (§1.4). Ces gestes sont
- * l'objet de SPK-45.
+ * Depuis SPK-45, cet onglet AGIT — mais seulement sur un conteneur ouvert. La
+ * liste, elle, n'offre toujours aucun geste : agir depuis une ligne de tableau,
+ * c'est agir sans avoir regardé.
  *
  * RÈGLE RÉVISÉE le 2026-08-20, deuxième tranche. La preuve interdisait tout
  * `<button>`. Elle interdisait donc, sans le vouloir, le seul moyen de DEMANDER
@@ -28,7 +28,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { renderDocker, renderConteneur, DOCKER_VIDE } from './spark-docker.js';
+import { renderDocker, renderConteneur, DOCKER_VIDE, GESTES }
+  from './spark-docker.js';
 
 const SPARK = { name: 'helo', state: 'running', incus_name: 'helo' };
 const etat = (partiel = {}) => ({ ...DOCKER_VIDE, ...partiel });
@@ -164,15 +165,24 @@ test('un tableau large défile dans SON conteneur (§8.1)', () => {
 
 // --- L'unité est en LECTURE (§1.4) ------------------------------------------
 
-test('aucun geste SUR un conteneur n’est offert', () => {
-  // Voir l'en-tête : la règle gardée est « pas de geste sur le conteneur », pas
-  // « pas de bouton ». Démarrer, arrêter, redémarrer, supprimer sont SPK-45.
+test('la LISTE n’offre aucun geste : ils vivent sur le conteneur ouvert', () => {
+  // RÈGLE RÉVISÉE une seconde fois, le 2026-08-20, par SPK-45 — l'unité qui
+  // LIVRE ces gestes. La preuve interdisait tout libellé d'action partout dans
+  // l'onglet. Ce qu'elle gardait vraiment tient en deux points, et les deux
+  // restent vrais :
+  //
+  //   1. la LISTE ne porte aucun geste. Agir depuis une ligne de tableau,
+  //      c'est agir sans avoir regardé — et un clic de travers y arrête le
+  //      conteneur du voisin ;
+  //   2. un geste se demande sur un conteneur qu'on a OUVERT, donc dont on lit
+  //      l'état, l'image et les journaux au moment où l'on décide.
+  //
+  // Les gestes eux-mêmes sont éprouvés plus bas, sur le conteneur ouvert.
   const interdits = /démarrer|arrêter|redémarrer|supprimer|relancer|tuer|purger/i;
   for (const cas of [
     { status: 'pret', releve: { state: 'ok', containers: [CONTENEUR] } },
     { status: 'pret', releve: { state: 'sans_conteneur', containers: [],
                                 titre: 'Aucun conteneur', detail: 'x' } },
-    { ouvert: 'helo-web-1', detail: INSPECTION, journaux: JOURNAUX },
   ]) {
     const rendu = renderDocker(SPARK, etat(cas));
     const libelles = [...rendu.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)]
@@ -181,6 +191,7 @@ test('aucun geste SUR un conteneur n’est offert', () => {
       assert.ok(!interdits.test(libelle), `${libelle} — ${JSON.stringify(cas)}`);
     }
     assert.ok(!/bouton--destructif/.test(rendu), JSON.stringify(cas));
+    assert.ok(!/data-geste=/.test(rendu), JSON.stringify(cas));
   }
 });
 
@@ -379,4 +390,171 @@ test('la disparition est dite UNE FOIS, pas deux', () => {
     journaux: { state: 'conteneur_inconnu', lines: [] } }));
   assert.equal((rendu.match(/a disparu/g) ?? []).length, 1);
   assert.equal((rendu.match(/class="avertissement"/g) ?? []).length, 1);
+});
+
+// --- SPK-45 · LES GESTES SUR UN CONTENEUR (§37.7) --------------------------
+
+const SPARK_GELE = { ...SPARK, protected: true };
+const ouvert = (partiel = {}) => etat({ ouvert: 'helo-web-1', detail: INSPECTION,
+                                        journaux: JOURNAUX, ...partiel });
+
+test('un conteneur EN MARCHE offre redémarrer, arrêter et tuer — pas démarrer', () => {
+  // §1.4 : pas de commande morte. Démarrer ce qui tourne déjà n'apprend rien.
+  const rendu = renderConteneur(ouvert(), SPARK);
+  for (const attendu of ['Redémarrer', 'Arrêter', 'Tuer']) {
+    assert.match(rendu, new RegExp(`>\\s*${attendu}<`), attendu);
+  }
+  assert.ok(!/data-geste="start"/.test(rendu));
+});
+
+test('un conteneur ARRÊTÉ n’offre que démarrer', () => {
+  const rendu = renderConteneur(ouvert({
+    detail: { ...INSPECTION, state: 'exited', exitCode: 0 } }), SPARK);
+  assert.match(rendu, /data-geste="start"/);
+  for (const absent of ['stop', 'kill', 'restart']) {
+    assert.ok(!new RegExp(`data-geste="${absent}"`).test(rendu), absent);
+  }
+});
+
+test('« tuer » est le SEUL bouton destructif', () => {
+  // Distinguer visuellement « arrêter » de « tuer » est le seul moyen
+  // d'empêcher qu'on les confonde au moment où l'on est pressé.
+  const rendu = renderConteneur(ouvert(), SPARK);
+  const destructifs = [...rendu.matchAll(/<button[^>]*data-geste="(\w+)"[^>]*>/g)]
+    .filter((m) => m[0].includes('bouton--destructif')).map((m) => m[1]);
+  assert.deepEqual(destructifs, ['kill']);
+});
+
+test('sous GEL les gestes sont PRÉSENTS, désactivés et expliqués', () => {
+  // §1.4 : un bouton désactivé n'est pas une commande morte — il apprend que le
+  // geste existe et pourquoi il ne part pas. Le faire disparaître laisserait
+  // croire que le produit ne sait pas arrêter un conteneur.
+  const rendu = renderConteneur(ouvert(), SPARK_GELE);
+  assert.match(rendu, /data-geste="stop"/, 'le geste reste visible');
+  const boutons = [...rendu.matchAll(/<button[^>]*data-geste="[^"]*"[^>]*>/g)];
+  assert.ok(boutons.length >= 3);
+  for (const b of boutons) assert.match(b[0], /disabled/);
+  // Le refus NOMME la levée : un refus qui ne dit pas comment avancer se
+  // contourne au jugé.
+  assert.match(rendu, /Levez la protection/);
+  assert.match(rendu, /Infos/);
+  // …et rappelle que la lecture et le terminal restent, eux, disponibles.
+  assert.match(rendu, /lecture, elle, reste entière/);
+  assert.match(rendu, /terminal/);
+});
+
+test('sous gel, la LECTURE reste entière : rien n’est masqué', () => {
+  // §37.7 : observer un Spark protégé reste possible. Ne griser QUE les gestes.
+  const rendu = renderConteneur(ouvert(), SPARK_GELE);
+  assert.match(rendu, /<pre class="terminal terminal--journal"/);
+  assert.match(rendu, /helo_default/);
+  assert.match(rendu, /Relire les journaux/);
+  // Le bouton de relecture n'est PAS désactivé : c'est une lecture.
+  const relire = /<button[^>]*data-docker="relire"[^>]*>/.exec(rendu)[0];
+  assert.ok(!/disabled/.test(relire));
+});
+
+// --- La confirmation (§6.22, §6.23) ----------------------------------------
+
+test('la confirmation NOMME le conteneur et l’effet, jamais « êtes-vous sûr »', () => {
+  const rendu = renderConteneur(ouvert({ confirme: 'stop' }), SPARK);
+  assert.match(rendu, /Arrêter\s+«\s*helo-web-1\s*»\s*\?/);
+  assert.match(rendu, /La production servie par « helo-web-1 » s’interrompt/);
+  assert.ok(!/êtes-vous sûr|Êtes-vous sûr/.test(rendu));
+  // §6.22 : dans le flux, pas une modale par-dessus.
+  assert.match(rendu, /class="confirmation"/);
+  assert.ok(!/class="modale/.test(rendu));
+  // Elle dit que le geste sera inscrit : ce n'est pas une surprise d'après-coup.
+  assert.match(rendu, /inscrit au journal/);
+});
+
+test('confirmer « tuer » engage par un bouton DESTRUCTIF', () => {
+  const rendu = renderConteneur(ouvert({ confirme: 'kill' }), SPARK);
+  assert.match(rendu, /data-geste-confirme="kill"[^>]*/);
+  const engagement = /<button[^>]*data-geste-confirme="kill"[^>]*>/.exec(rendu)[0];
+  assert.match(engagement, /bouton--destructif/);
+  assert.match(rendu, /IMMÉDIATEMENT/);
+  assert.match(rendu, /perdu/);
+  // Annuler reste offert, et n'est pas destructif.
+  assert.match(rendu, /data-geste-annule/);
+});
+
+test('confirmer « arrêter » n’engage PAS par un bouton destructif', () => {
+  const rendu = renderConteneur(ouvert({ confirme: 'stop' }), SPARK);
+  const engagement = /<button[^>]*data-geste-confirme="stop"[^>]*>/.exec(rendu)[0];
+  assert.ok(!/bouton--destructif/.test(engagement));
+});
+
+test('chaque geste décrit SON effet, et aucun ne décrit celui d’un autre', () => {
+  const effets = GESTES.map((g) => g.effet('web'));
+  assert.equal(new Set(effets).size, GESTES.length);
+  for (const e of effets) assert.match(e, /web/);
+});
+
+// --- L'issue : jamais l'état SUPPOSÉ (§14.9) -------------------------------
+
+test('un geste ABOUTI est vert, et il est le SEUL à l’être', () => {
+  // SPK-DS-08 : sans ce troisième bloc, on aurait verdi dès que la requête
+  // aboutit, ce qui aurait fait lire « c’est fait » sur un geste sans effet.
+  const reussi = renderConteneur(ouvert({
+    issue: { state: 'abouti', titre: 'Arrêter : c’est fait',
+             detail: 'Le geste a abouti sur « helo-web-1 ».' } }), SPARK);
+  assert.match(reussi, /class="succes"/);
+  assert.match(reussi, /c’est fait/);
+
+  for (const etatIssue of ['conteneur_inconnu', 'deja_arrete', 'sshd_muet']) {
+    const rendu = renderConteneur(ouvert({
+      issue: { state: etatIssue, titre: 't', detail: 'd' } }), SPARK);
+    assert.ok(!/class="succes"/.test(rendu), etatIssue);
+    assert.match(rendu, /class="avertissement"/, etatIssue);
+  }
+});
+
+test('un REFUS est rouge, et lui seul', () => {
+  const refus = renderConteneur(ouvert({
+    issue: { state: 'echec', refus: 'protege', titre: 'Ce Spark est protégé',
+             detail: 'Levez la protection.' } }), SPARK);
+  assert.match(refus, /class="refus"/);
+  assert.match(refus, /role="alert"/);
+
+  const arrete = renderConteneur(ouvert({
+    issue: { state: 'deja_arrete', titre: 'Ce conteneur ne tournait pas',
+             detail: 'Il n’y avait rien à tuer.' } }), SPARK);
+  assert.ok(!/class="refus"/.test(arrete));
+});
+
+test('un geste EN COURS ne se confond pas avec son issue', () => {
+  const rendu = renderConteneur(ouvert({ enCours: 'stop' }), SPARK);
+  assert.match(rendu, /aria-busy="true"/);
+  assert.match(rendu, /Arrêter « helo-web-1 »…/);
+  assert.ok(!/c’est fait/.test(rendu));
+});
+
+test('un journal MUET est dit à l’écran, pas tu', () => {
+  // Le geste a eu lieu ; la console ne peut pas le défaire. Taire l'écart
+  // laisserait croire à une trace qui n'existe pas.
+  const rendu = renderConteneur(ouvert({
+    issue: { state: 'abouti', titre: 'x', detail: 'y', journalise: false } }),
+    SPARK);
+  assert.match(rendu, /n’a pas pu\s+l’enregistrer/);
+
+  const normal = renderConteneur(ouvert({
+    issue: { state: 'abouti', titre: 'x', detail: 'y', journalise: true } }),
+    SPARK);
+  assert.ok(!/n’a pas pu/.test(normal));
+});
+
+test('un conteneur DISPARU n’offre aucun geste', () => {
+  // §1.4 : agir sur ce qui n'existe plus n'est pas une commande, c'est un piège.
+  const rendu = renderConteneur(ouvert({
+    detail: { state: 'conteneur_inconnu', titre: 'Ce conteneur a disparu',
+              detail: 'x' } }), SPARK);
+  assert.ok(!/data-geste="/.test(rendu));
+});
+
+test('tant que l’inspection n’est pas revenue, aucun geste n’est offert', () => {
+  // On ne sait pas encore si le conteneur tourne : offrir « arrêter » à un
+  // conteneur déjà arrêté serait deviner.
+  const rendu = renderConteneur(ouvert({ detail: 'en-cours' }), SPARK);
+  assert.ok(!/data-geste="/.test(rendu));
 });

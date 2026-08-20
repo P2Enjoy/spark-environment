@@ -613,6 +613,11 @@ async function ouvrirConteneur(nom) {
   d.ouvert = nom;
   d.detail = 'en-cours';
   d.journaux = 'en-cours';
+  // Une confirmation ou une issue qui survivrait à l'ouverture porterait sur le
+  // conteneur PRÉCÉDENT — et se lirait comme si elle portait sur celui-ci.
+  d.confirme = null;
+  d.enCours = null;
+  d.issue = null;
   peindre();
   lireDetail(nom);
   lireJournauxConteneur(nom);
@@ -668,11 +673,87 @@ function fermerConteneur() {
   d.ouvert = null;
   d.detail = null;
   d.journaux = null;
+  d.confirme = null;
+  d.enCours = null;
+  d.issue = null;
   peindre();
   if (etat.facette === 'docker' && etat.route === 'detail') {
     releverDocker({ premier: !d.releve });
   }
 }
+
+/**
+ * Un geste sur le conteneur ouvert (SPK-45, §37.7.2).
+ *
+ * Après le geste, la console RELIT l'inventaire immédiatement au lieu d'attendre
+ * la cadence de cinq secondes : un écran qui montrerait encore « en marche »
+ * quatre secondes après un arrêt réussi ferait douter du geste et inviterait à
+ * le rejouer.
+ *
+ * L'écran n'écrit jamais l'état qu'il SUPPOSE atteint. Il écrit ce que
+ * l'inspection relue lui rend (§14.9).
+ */
+async function porterGeste(nom, geste) {
+  const d = etat.docker;
+  d.confirme = null;
+  d.enCours = geste;
+  d.issue = null;
+  peindre();
+  try {
+    const reponse = await fetch('/api/spark/container/action', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server: etat.server, spark: etat.spark.name,
+                             name: nom, action: geste }),
+    });
+    const corps = await reponse.json();
+    // Un 423 porte un REFUS, pas une panne : son corps est celui qu'on affiche.
+    d.issue = reponse.ok || reponse.status === 423
+      ? corps
+      : { state: 'echec', refus: 'route',
+          titre: 'Le geste n’est pas parti',
+          detail: corps?.message ?? `HTTP ${reponse.status}` };
+  } catch (erreur) {
+    // §14.6 : ne pas avoir pu joindre la console n'est pas « le geste a échoué
+    // sur le Spark ». On ne sait pas ce qui s'est passé, et on le dit.
+    d.issue = { state: 'echec', refus: 'reseau',
+                titre: 'La console n’a pas répondu',
+                detail: `${erreur?.message ?? erreur}. L’état du conteneur est `
+                  + `inconnu : relisez-le avant de rejouer le geste.` };
+  }
+  d.enCours = null;
+  peindre();
+  // On RELIT, quoi qu'il soit arrivé : même un geste refusé a pu croiser un
+  // changement d'état, et c'est la Forge qui fait autorité.
+  if (d.ouvert === nom) {
+    d.detail = 'en-cours';
+    lireDetail(nom);
+  }
+}
+
+document.addEventListener('click', (evenement) => {
+  const geste = evenement.target.closest?.('[data-geste], [data-geste-confirme], [data-geste-annule]');
+  if (!geste) return;
+  const d = etat.docker;
+  if (geste.dataset.gesteAnnule) {
+    // Le déclencheur est relevé AVANT d'effacer l'état : après, on ne saurait
+    // plus à quel bouton rendre le focus.
+    const declencheur = d.confirme;
+    d.confirme = null;
+    peindre();
+    // §6.22 : l'annulation rend le focus au déclencheur.
+    document.querySelector(`[data-geste="${declencheur}"]`)?.focus();
+    return;
+  }
+  if (geste.dataset.gesteConfirme) {
+    return void porterGeste(geste.dataset.conteneur, geste.dataset.gesteConfirme);
+  }
+  d.confirme = geste.dataset.geste;
+  d.issue = null;
+  peindre();
+  // §6.22 : le focus ENTRE dans la confirmation.
+  document.querySelector('.confirmation [data-geste-confirme]')?.focus();
+});
 
 document.addEventListener('click', (evenement) => {
   const bouton = evenement.target.closest?.('[data-docker]');
@@ -693,7 +774,8 @@ window.addEventListener('hashchange', () => {
   arreterDocker();
   // Y revenir doit repartir de la LISTE : retrouver un journal figé qu'on n'a
   // pas demandé ferait lire un texte périmé comme s'il était courant.
-  Object.assign(etat.docker, { ouvert: null, detail: null, journaux: null });
+  Object.assign(etat.docker, { ouvert: null, detail: null, journaux: null,
+                               confirme: null, enCours: null, issue: null });
 });
 window.addEventListener('pagehide', arreterDocker);
 
@@ -1341,7 +1423,8 @@ async function chargerDetail(nom, facette = '') {
   if (facette !== 'docker') etat.docker = { ...DOCKER_VIDE };
   // Le conteneur ouvert appartient à l'écran qui l'a demandé. Le garder en
   // changeant de Spark afficherait le conteneur de l'un sous le nom de l'autre.
-  else Object.assign(etat.docker, { ouvert: null, detail: null, journaux: null });
+  else Object.assign(etat.docker, { ouvert: null, detail: null, journaux: null,
+                                    confirme: null, enCours: null, issue: null });
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);

@@ -20,6 +20,32 @@
 /** Le même jeton que l'hôte console rend (apps/webui/host/docker.js). */
 const CONTENEUR_INCONNU = 'conteneur_inconnu';
 
+/**
+ * Les quatre gestes du §37.7, dans l'ordre où on les emploie.
+ *
+ * L'effet est écrit ICI comme il l'est dans l'hôte console : l'écran doit
+ * pouvoir composer sa confirmation sans avoir d'abord interrogé la Forge, sinon
+ * la confirmation arriverait après le clic qu'elle est censée précéder.
+ */
+export const GESTES = [
+  { cle: 'start', libelle: 'Démarrer', destructif: false,
+    quand: (etat) => etat !== 'running',
+    effet: (nom) => `Le conteneur « ${nom} » sera relancé.` },
+  { cle: 'restart', libelle: 'Redémarrer', destructif: false,
+    quand: (etat) => etat === 'running',
+    effet: (nom) => `« ${nom} » s’arrête puis repart. Le service qu’il rend est `
+      + `interrompu le temps du redémarrage.` },
+  { cle: 'stop', libelle: 'Arrêter', destructif: false,
+    quand: (etat) => etat === 'running',
+    effet: (nom) => `La production servie par « ${nom} » s’interrompt. Le `
+      + `conteneur reçoit d’abord une demande d’arrêt, puis il est tué au bout `
+      + `de 10 secondes s’il ne s’est pas arrêté.` },
+  { cle: 'kill', libelle: 'Tuer', destructif: true,
+    quand: (etat) => etat === 'running',
+    effet: (nom) => `« ${nom} » est tué IMMÉDIATEMENT, sans demande d’arrêt : `
+      + `ce qu’il était en train d’écrire est perdu.` },
+];
+
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -35,6 +61,10 @@ export const DOCKER_VIDE = {
   ouvert: null,           // le nom du conteneur ouvert
   detail: null,           // 'en-cours' | l'inspection rendue
   journaux: null,         // 'en-cours' | { lines, truncated, tail }
+  // SPK-45 : le geste en cours de confirmation, puis son issue.
+  confirme: null,         // la clé du geste dont la confirmation est ouverte
+  enCours: null,          // la clé du geste parti, tant qu'il n'est pas revenu
+  issue: null,            // { state, titre, detail, refus }
 };
 
 /** L'état d'un conteneur, dit en français (§14.7). */
@@ -76,7 +106,7 @@ export function renderDocker(spark, etat = DOCKER_VIDE) {
   // §5.4, point 2 : une surface a UN sujet. Le conteneur ouvert remplace la
   // liste plutôt que de s'empiler dessous — sinon l'écran en porte deux, et on
   // ne sait plus lequel fait foi.
-  if (etat.ouvert) return renderConteneur(etat);
+  if (etat.ouvert) return renderConteneur(etat, spark);
 
   const entete = `<h2 id="titre-docker">Docker</h2>`;
 
@@ -151,7 +181,84 @@ function definitions(paires) {
  * @spec docs/BACKLOG.md#SPK-44 · docs/DAT.md §37.6 ter ·
  *       docs/DESIGN_SYSTEM.md §6.13, §14.5, §14.6, §6.27
  */
-export function renderConteneur(etat) {
+/**
+ * Les gestes offerts sur le conteneur ouvert (SPK-45, §37.7.2, §37.7.3).
+ *
+ * Sous gel, ils sont PRÉSENTS, désactivés et expliqués — le §1.4 interdit une
+ * commande morte, et un bouton désactivé n'en est pas une : il apprend que le
+ * geste existe et pourquoi il ne part pas. Le faire disparaître laisserait croire
+ * que le produit ne sait pas arrêter un conteneur.
+ */
+function gestes(etat, spark) {
+  const d = etat.detail;
+  // Tant que l'inspection n'est pas revenue, on ne sait pas ce qui est offert.
+  if (!d || d === 'en-cours' || d.state === CONTENEUR_INCONNU || d.titre) return '';
+
+  const gele = Boolean(spark?.protected);
+  const offerts = GESTES.filter((g) => g.quand(d.state));
+  if (!offerts.length) return '';
+
+  const boutons = offerts.map((g) => `<button type="button"
+      class="bouton bouton--compact${g.destructif ? ' bouton--destructif' : ''}"
+      data-geste="${echapper(g.cle)}" data-conteneur="${echapper(etat.ouvert)}"
+      ${gele ? 'disabled aria-describedby="gel-conteneur"' : ''}>
+      ${echapper(g.libelle)}</button>`).join('');
+
+  const explication = gele
+    ? `<p class="avertissement" id="gel-conteneur" role="note">
+         <strong>Ce Spark est protégé.</strong> Levez la protection sur l’onglet
+         Infos pour agir sur ses conteneurs. La lecture, elle, reste entière —
+         et le terminal aussi, si vous devez agir sans attendre.</p>`
+    : '';
+
+  return `<h3>Gestes</h3><p class="formulaire__actions">${boutons}</p>${explication}`;
+}
+
+/** La confirmation, dans le flux (§6.22) — jamais une modale par-dessus. */
+function confirmation(etat) {
+  const g = GESTES.find((x) => x.cle === etat.confirme);
+  if (!g) return '';
+  return `<div class="confirmation" role="group" aria-labelledby="titre-geste">
+    <p id="titre-geste"><strong>${echapper(g.libelle)}
+      « ${echapper(etat.ouvert)} » ?</strong></p>
+    <p>${echapper(g.effet(etat.ouvert))}</p>
+    <p class="note">Ce geste est inscrit au journal de ce Spark.</p>
+    <p class="confirmation__actions">
+      <button type="button"
+              class="bouton${g.destructif ? ' bouton--destructif' : ''}"
+              data-geste-confirme="${echapper(g.cle)}"
+              data-conteneur="${echapper(etat.ouvert)}">
+        ${echapper(g.libelle)} ce conteneur</button>
+      <button type="button" class="bouton" data-geste-annule="1">Annuler</button>
+    </p>
+  </div>`;
+}
+
+/** Ce que le geste a rendu. Jamais l'état SUPPOSÉ atteint (§14.9). */
+function issue(etat) {
+  if (etat.enCours) {
+    const g = GESTES.find((x) => x.cle === etat.enCours);
+    return `<p class="note" role="status" aria-busy="true">
+      ${echapper(g?.libelle ?? 'Geste')} « ${echapper(etat.ouvert)} »…</p>`;
+  }
+  const i = etat.issue;
+  if (!i) return '';
+  // §25.1 : le rouge est réservé au REFUS. Un conteneur disparu ou déjà arrêté
+  // n'en est pas un — l'état voulu est parfois déjà celui-là.
+  const classe = i.refus || i.state === 'echec' ? 'refus' : 'avertissement';
+  const role = classe === 'refus' ? 'alert' : 'status';
+  const reussi = i.state === 'abouti';
+  return `<div class="${reussi ? 'succes' : classe}" role="${reussi ? 'status' : role}">
+    <p><strong>${echapper(i.titre ?? '')}</strong></p>
+    <p>${echapper(i.detail ?? '')}</p>
+    ${i.journalise === false
+      ? '<p class="note">Le geste a bien eu lieu, mais le journal n’a pas pu '
+        + 'l’enregistrer : il n’en gardera pas la trace.</p>'
+      : ''}
+  </div>`;
+}
+
+export function renderConteneur(etat, spark = null) {
   if (!etat.ouvert) return '';
 
   const d = etat.detail;
@@ -246,6 +353,9 @@ export function renderConteneur(etat) {
 <section class="carte bloc fiche-conteneur" aria-labelledby="titre-conteneur">
   <h2 id="titre-conteneur">${echapper(titre)}</h2>
   ${commandes}
+  ${gestes(etat, spark)}
+  ${confirmation(etat)}
+  ${issue(etat)}
   ${identite}
   ${journaux}
 </section>`;

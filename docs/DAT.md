@@ -4560,6 +4560,20 @@ n'en est pas une : il est **présent, désactivé et expliqué**, ce qui apprend
 le geste existe et pourquoi il ne part pas. Le faire disparaître laisserait
 croire que le produit ne sait pas arrêter un conteneur.
 
+**Et il faut lever une objection, parce qu'elle est fondée.** Le §6.23 du design
+system pose qu'une protection ne bloque JAMAIS un geste qui réduit un risque —
+révoquer un accès, retirer une clé, couper une publication. Arrêter un conteneur
+compromis y ressemble.
+
+La règle du §6.23 vise les gestes dont le seul effet est de **retirer** une
+exposition. Arrêter un conteneur n'en est pas un : son effet premier est
+d'interrompre la production du locataire, et c'est pour cela que le §37.7 le
+range parmi ce que le gel arrête. L'objection reste néanmoins réelle le jour où
+il faut couper vite — et elle a sa réponse dans le §37.7 lui-même : **le terminal
+reste ouvert sous gel**. Qui doit arrêter un conteneur compromis y tape la
+commande, sans désarmer quoi que ce soit et sans oublier de réarmer. Le
+garde-fou porte sur le geste distrait, jamais sur le geste urgent.
+
 #### 37.7.4 La surface d'API, et ce que le journal en retient
 
 Une seule route, sur l'hôte console comme tout le §37 :

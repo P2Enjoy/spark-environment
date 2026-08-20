@@ -262,6 +262,32 @@ curseurs. La règle fonctionne — ce n'est pas une exception qu'on lui concède
 **Les ports ne sont jamais des curseurs** : route publique, port cible, port de
 `sparkd`, port local d'un tunnel. C'est le contre-exemple du §6.9 bis.
 
+### SPK-DS-08 · Trois blocs d'issue, et le rouge n'en est qu'un
+
+**Date** : 2026-08-20 · introduit par SPK-45.
+
+La console rendait déjà deux blocs d'issue, et leur partage est une règle :
+
+- `.refus` — **rouge**. Le serveur a refusé. C'est le seul cas rouge.
+- `.avertissement` — **accent**. Un risque est annoncé, ou un fait est signalé
+  qui n'est ni un refus ni un succès.
+
+Un troisième manquait, et son absence se voyait : un geste **abouti** n'avait que
+le jaune de l'avertissement pour se dire. « Le conteneur est arrêté » s'affichait
+dans la couleur qui sert à prévenir d'un danger.
+
+- `.succes` — **vert**. Le geste demandé a eu lieu, constaté et non supposé.
+
+**Ce que cette troisième couleur interdit**, et c'est son intérêt : elle rend
+visible qu'un état intermédiaire n'est PAS un succès. Un conteneur déjà arrêté,
+un conteneur disparu, un geste qui n'est pas parti prennent l'accent — pas le
+vert. Sans ce troisième bloc, on aurait été tenté de tout verdir dès que la
+requête aboutissait, ce qui aurait fait lire « c'est fait » sur un geste qui n'a
+rien fait.
+
+Le vert ne s'écrit jamais sur ce que l'écran **suppose** : il s'écrit sur ce que
+la Forge a rendu (`DESIGN_SYSTEM.md` §14.9).
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

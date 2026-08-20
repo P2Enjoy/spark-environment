@@ -381,6 +381,18 @@ tbody tr:hover { background: var(--color-hover); }
   background: var(--color-accent-soft); color: var(--color-accent-on-soft);
   border-radius: var(--radius-sm); font-size: var(--text-compact);
 }
+/* SPK-DS-08 — le geste a EU LIEU. Sans ce troisième bloc, un succès n'avait que
+   l'accent pour se dire, et « le conteneur est arrêté » s'affichait dans la
+   couleur qui sert à prévenir d'un danger. Le vert ne s'écrit que sur ce que la
+   Forge a rendu, jamais sur ce que l'écran suppose (§14.9). */
+.succes {
+  margin: 0; padding: var(--space-3);
+  background: var(--color-success-soft); color: var(--color-success-on-soft);
+  border-radius: var(--radius-sm); font-size: var(--text-compact);
+}
+.succes p { margin: 0; }
+.succes .note { margin-top: var(--space-2); }
+
 /* Seul le refus du serveur est rouge. */
 .refus {
   margin: 0; padding: var(--space-3);
