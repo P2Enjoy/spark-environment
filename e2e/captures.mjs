@@ -418,6 +418,13 @@ await page.keyboard.press('Enter');
 await page.waitForSelector('.confirmation', { timeout: 4000 }).catch(() => {});
 await page.screenshot({ path: join(SORTIE, '13-confirmation-suppression.png') });
 console.log('  13-confirmation-suppression.png');
+// SPK-63 : l'autre moitié de l'état — le nom frappé, l'engagement rendu.
+await page.fill('[data-frappe="delete"]', 'crm-production');
+await page.waitForFunction(
+  () => !document.querySelector('[data-confirme]')?.disabled, { timeout: 4000 });
+await page.screenshot({ path: join(SORTIE, '111-suppression-nom-frappe.png') });
+console.log('  111-suppression-nom-frappe.png');
+await page.click('[data-annule]');
 // SPK-56 · §1.5 bis : les écrans allégés se vérifient AUX TROIS FORMATS. La
 // tablette manquait, et c'est le palier où une note qui rétrécit se replie sans
 // qu'on s'en aperçoive au bureau.

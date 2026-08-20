@@ -26,6 +26,31 @@ pour laquelle un instantané n'en est pas une (voir [M9](M9-instantanes.md)).
 Il n'y a pas de corbeille. La confirmation nomme le Spark et énonce la
 conséquence avant que le bouton destructif ne soit atteignable.
 
+### Vous devez frapper le nom
+
+![Le nom frappé, la suppression engageable](images/m10-suppression-nom-frappe.png)
+
+Le bouton *Supprimer définitivement* reste **désactivé** tant que vous n'avez pas
+frappé le nom exact du Spark dans le champ. Il ne disparaît pas : il est là, et
+l'écran vous dit pourquoi il ne part pas.
+
+Le nom est comparé **exactement** : ni la casse, ni un espace en trop ne passent.
+Ce n'est pas une chicanerie — deux Sparks dont les noms ne diffèrent que par la
+casse peuvent coexister, et les accepter l'un pour l'autre annulerait tout
+l'intérêt du geste.
+
+Ce que cela protège : le mauvais Spark sélectionné, la ligne cliquée trop vite.
+Une confirmation ordinaire prouve que vous avez **vu** l'écran ; frapper le nom
+prouve que vous avez lu **lequel**. C'est la seule différence qui compte le jour
+où vous vous êtes trompé de fenêtre.
+
+Ce que cela ne protège pas : rien sur l'identité de qui agit. Si quelqu'un
+d'autre est à votre console, il frappera le nom aussi bien que vous.
+
+Aucun autre geste du produit ne le demande, et c'est délibéré : une frappe
+demandée plusieurs fois par jour deviendrait un réflexe, et un réflexe ne lit
+plus.
+
 ## Quand la cellule a déjà disparu
 
 Il arrive qu'une cellule soit supprimée **en dehors du produit** — par une

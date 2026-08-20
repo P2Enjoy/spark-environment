@@ -181,6 +181,14 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.click('[data-commande="delete"]');
     await page.waitForSelector('.confirmation', { timeout: 10000 });
     await capturer('m10-suppression');
+    // SPK-63 : l'illustration montre l'état ENGAGEABLE, celui qu'on atteint
+    // après avoir frappé le nom — c'est ce que le chapitre décrit. Le nom est
+    // celui du Spark OUVERT, pas une constante : une capture qui frapperait un
+    // autre nom montrerait un bouton qui ne s'active jamais.
+    await page.fill('[data-frappe="delete"]', 'boutique');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-confirme]')?.disabled, { timeout: 8000 });
+    await capturer('m10-suppression-nom-frappe');
 
     // --- M4 · LE CODE DÉPLOYÉ (SPK-53, §40.3) --------------------------------
     // L'état qui appelle un geste : la Forge en retard sur le dépôt du poste.
