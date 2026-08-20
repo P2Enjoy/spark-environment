@@ -4205,6 +4205,98 @@ elle est chaînée, et une vérification la traverse sans la distinguer. C'est
 voulu — une session de terminal est un geste du produit, pas une note en marge.
 
 
+#### 37.4.7 Le terminal DANS un conteneur
+
+**Complété le 2026-08-20, après mesure sur Docker 29.6.1** (SPK-45, tranche 2).
+
+Le §37.4 décrit un terminal dans le **Spark**. Celui-ci entre dans un
+**conteneur** du locataire. Tout le contrat du §37.4 s'applique sans changement —
+la fermeture qui tue le distant, l'inactivité, le redimensionnement, le mode
+lecteur d'écran. Ce qui suit ne décrit que les différences.
+
+**Une seule session, un seul mécanisme.** L'ouverture emprunte la route existante
+`POST /api/terminal`, avec un champ `container` en plus. Ajouter une seconde
+famille de routes dupliquerait le flux, la saisie, la fermeture et la mort du
+distant — quatre endroits où deux terminaux finiraient par diverger.
+
+La commande devient :
+
+```
+ssh -tt … root@<spark>  docker exec -it <conteneur> <shell>
+```
+
+##### Quel shell — et pourquoi on le SONDE au lieu de le supposer
+
+La console ne peut pas savoir ce que le locataire a mis dans son image. Mesuré :
+
+| Situation | Code | Où |
+|---|---|---|
+| `docker exec <c> sh -c 'echo x'` sur un conteneur en marche | `0` | — |
+| binaire absent de l'image (`bash` sur `alpine`) | `127` | **stdout** |
+| conteneur inconnu | `1` | stderr, `No such container` |
+| conteneur **arrêté** | `1` | stderr, `container <id> is not running` |
+| code de sortie de la commande interne | propagé tel quel | — |
+
+**Le `127` arrive sur la SORTIE STANDARD, pas sur la sortie d'erreur.** C'est
+contre-intuitif et cela se paie : une console qui ne surveillerait que `stderr`
+ne verrait rien et prendrait l'échec pour un shell ouvert et muet.
+
+D'où la décision : **on sonde avant d'ouvrir**, exactement comme le §37.3.1 sonde
+`sshd` avant de conclure. Un sondage court et non interactif :
+
+```
+docker exec <conteneur> sh -c 'command -v bash || command -v sh'
+```
+
+- code `0` et un chemin → c'est **ce** shell que la session lancera. `bash` est
+  préféré parce qu'il donne l'historique et l'édition de ligne ; `sh` suffit ;
+- code `127` → **aucun shell**. Ce n'est pas une panne : une image *distroless*
+  n'en embarque délibérément pas, et c'est un bon choix de sécurité du locataire.
+  L'écran le NOMME et n'ouvre rien ;
+- code `1` avec `is not running` → le conteneur est **arrêté**. On n'entre pas
+  dans un conteneur arrêté ; l'écran renvoie au geste *Démarrer* du §37.7 ;
+- code `1` avec `No such container` → il a **disparu** (§37.6 ter) ;
+- tout le reste n'est **pas qualifié** — on rend ce que Docker a dit.
+
+Sonder coûte un aller-retour de plus à l'ouverture. C'est le prix pour qu'un
+terminal qui s'ouvre soit un terminal qui marche, au lieu d'une fenêtre noire
+dont il faut deviner pourquoi elle est vide.
+
+**Le message d'un conteneur arrêté nomme son IDENTIFIANT, pas son nom** —
+mesuré. Il n'est donc jamais montré tel quel : le §14.7 interdit un jeton
+technique à l'écran, et cet identifiant-là n'apprendrait rien à personne.
+
+##### Le gel, et l'audit
+
+**Le terminal dans un conteneur reste ouvert sous gel**, comme celui du Spark et
+pour la même raison (§35.4, §37.7) : c'est l'outil de diagnostic, et le bloquer
+pousserait à désarmer pour regarder, donc à oublier de réarmer. C'est aussi la
+réponse à l'objection du §37.7.3 — qui doit couper un conteneur compromis sans
+attendre entre ici et y tape sa commande.
+
+La porte du §37.4.6 s'ouvre de deux actions de plus :
+
+```
+spark.container_terminal_open    spark.container_terminal_close
+```
+
+**Distinctes de `spark.terminal_open`**, pour la raison qui a déjà séparé
+`spark.rescue_exec` : entrer dans la cellule d'un locataire et entrer dans un de
+ses conteneurs ne sont pas le même pouvoir, et « combien de fois est-on entré
+dans un conteneur » doit se répondre par un filtre. Le nom du conteneur voyage
+dans la clé `container` déjà admise (§37.7.4).
+
+**Rien du contenu ne traverse cette frontière**, comme au §37.4.5. La règle du
+§37.5 ne s'assouplit pas parce qu'on est descendu d'un cran.
+
+##### Ce que le doublon éprouve, et ce qu'il n'éprouve pas
+
+`SPARK_TERMINAL_COMMAND` remplace déjà la commande lancée (§37.4.2 bis). Le
+sondage de shell a besoin du sien, pour la même raison : la pile de développement
+n'a ni `sshd` ni Docker dans un Spark. Il éprouve donc le **choix** du shell, les
+refus et l'écran — pas que `docker exec` atteigne un vrai conteneur. Même limite
+qu'au §39.7.
+
 ### 37.5 Ce que le journal retient d'une session
 
 **Décision du responsable : l'ouverture et la fermeture, rien du contenu.** Sont
@@ -4438,8 +4530,8 @@ production du locataire. La confirmation nomme le conteneur et l'effet, jamais u
 Observer un Spark protégé reste possible ; arrêter un de ses conteneurs exige de
 lever le gel d'abord.
 
-Le terminal, lui, **reste ouvert sous gel**, et c'est délibéré : c'est l'outil de
-diagnostic. Le bloquer pousserait à désarmer pour regarder, donc à oublier de
+Le terminal, lui, **reste ouvert sous gel** — celui du Spark comme celui d'un
+conteneur (§37.4.7) —, et c'est délibéré : c'est l'outil de diagnostic. Le bloquer pousserait à désarmer pour regarder, donc à oublier de
 réarmer — le défaut nommé au §35.4. L'écran affiche l'état protégé en permanence
 pendant la session.
 

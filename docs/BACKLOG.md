@@ -1870,7 +1870,7 @@ interactive qui vit — et qu'un seul des deux tient dans une session :
 1. **Le cycle de vie d'un conteneur** — les quatre gestes, leur confirmation, le
    refus sous gel, le journal. Spécifié au §37.7.1 à §37.7.4.
 2. **Le terminal dans un conteneur** — `docker exec -it`, avec le contrat du
-   §37.4 et l'audit du §37.5. Reste à spécifier.
+   §37.4 et l'audit du §37.5. Spécifié au §37.4.7 le 2026-08-20.
 
 **Contrat écrit et poussé avant le code** : DAT §37.7.1 (les quatre commandes et
 leurs codes, mesurés sur Docker 29.6.1), §37.7.2 (demandé, confirmé, constaté),
@@ -1907,8 +1907,7 @@ d'audit).
 
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
   1. **le terminal DANS un conteneur** (`docker exec -it`), avec le contrat du
-     §37.4 et l'audit du §37.5. Non spécifié : c'est le premier geste de la
-     tranche 2 ;
+     §37.4 et l'audit du §37.5. **Spécifié au §37.4.7** ; reste à coder ;
   2. le parcours de la DoD qui prouve qu'un Spark gelé **laisse le terminal** —
      il dépend du point 1 ;
   3. l'épreuve sur une **pile Compose réelle** : aucun vrai `docker stop` n'a
