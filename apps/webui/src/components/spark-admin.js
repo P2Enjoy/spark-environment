@@ -8,6 +8,10 @@
  *       docs/DESIGN_SYSTEM.md §3.1, §6.9, §6.19, §6.22, §6.23, §6.24, §6.27
  *       (la saisie est recueillie par une modale limitée à la section), §14.7 ·
  *       docs/DESIGN_SYSTEM_APP.md
+ * @spec docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
+ *       périmètre), §38.3 (ce qu'écrit un enregistrement d'ingress),
+ *       §38.4 (poser n'est pas résoudre) — pour le panneau « Pointer le
+ *       domaine » de la section des routes publiques.
  *
  * Ce sont des panneaux du détail, pas des écrans (§26.1) : une route publique
  * et un instantané n'existent pas sans leur Spark.
@@ -29,14 +33,37 @@ export function formatDate(valeur) {
 /** État initial des trois panneaux. Les valeurs vivent ici pour qu'un refus du
  *  serveur ne les efface pas (§26.2). */
 export const ADMIN_VIDE = {
-  open: null,        // 'route' | 'key' | 'snapshot' | 'protection' (§26.2)
+  open: null,        // 'route' | 'key' | 'snapshot' | 'protection' | 'dns' (§26.2)
   confirming: null,  // { kind, id }
   refusal: null,     // { panel, message, blocking? }
   busy: false,
   values: { domain: '', port: 8080, tls: true,
             key_label: '', new_label: '', public_key: '',
-            snapshot: '', password: '' },
+            snapshot: '', password: '',
+            // SPK-47 · §38.3 : ce qui sera écrit dans la zone.
+            dns_zone: '', dns_address: '' },
+  // SPK-47 · §38.1 : ce que la console SAIT du fournisseur. `configured` vaut
+  // `null` tant qu'on n'a pas demandé — « pas encore su » n'est pas « pas
+  // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
+  // constatée.
+  dns: { domain: null, configured: null, reason: null, zones: [],
+         loading: false, written: null },
 };
+
+/**
+ * Zone la plus SPÉCIFIQUE qui contienne le domaine (§38.5).
+ *
+ * Un compte peut porter `exemple.tech` ET `staging.exemple.tech` : proposer la
+ * première trouvée écrirait `app.staging` dans la zone parente, où la
+ * délégation le rendrait invisible. La plus longue gagne.
+ */
+export function zonePour(domaine, zones = []) {
+  const d = String(domaine ?? '').trim().toLowerCase().replace(/\.$/, '');
+  return zones
+    .map((z) => (typeof z === 'string' ? z : z.zone))
+    .filter((z) => z && d.endsWith(`.${z.toLowerCase()}`))
+    .sort((a, b) => b.length - a.length)[0] ?? '';
+}
 
 /**
  * Bouton qui ouvre un formulaire, ou rien si un autre panneau est déjà ouvert.
@@ -97,6 +124,9 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           ` → port ${echapper(r.target_port)} du Spark` +
           `${r.tls ? '' : ' <span class="badge badge--neutral">sans TLS</span>'}${attente}` +
           `<span class="actions-ligne">${reappliquer}` +
+          // SPK-47 · §38 : pointer le DNS est un geste de CETTE route, pas de la
+          // section — deux routes du même Spark ont deux domaines distincts.
+          `<button type="button" class="bouton bouton--compact" data-dns-route="${echapper(r.domain)}">DNS</button>` +
           `<button type="button" class="bouton bouton--compact" data-retire-route="${echapper(r.domain)}">Retirer</button></span>` +
           `${confirme}</li>`;
       }).join('')}</ul>`
@@ -125,8 +155,9 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
              Certificat TLS automatique
            </label>
            <p class="champ__aide">L’émission suppose que le domaine résolve déjà vers
-           cet hôte. Le DNS est extérieur au produit : un domaine mal pointé fait
-           échouer l’émission côté Caddy, pas côté plan de contrôle.</p>
+           cette Forge. Le bouton « DNS » de la route pose l’enregistrement chez le
+           fournisseur ; la résolution reste soumise à la propagation, et un domaine
+           mal pointé fait échouer l’émission côté Caddy, pas côté plan de contrôle.</p>
          </div>`,
   });
 
@@ -134,9 +165,98 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
 <section class="carte bloc" aria-labelledby="titre-routes">
   <h2 id="titre-routes">Routes publiques</h2>
   ${lignes}
+  ${renderDnsEcrit(ui)}
   ${declencheur('route', 'Ajouter une route')}
   ${modale}
+  ${renderDnsModale(ui)}
 </section>`;
+}
+
+/**
+ * Ce qui a été ÉCRIT, et rien de plus (§38.4).
+ *
+ * On n'annonce jamais « le domaine est prêt » : la propagation prend le temps du
+ * TTL, et un résolveur qui a déjà l'ancienne réponse en cache la sert encore.
+ * Annoncer « prêt » ferait chercher la panne ailleurs pendant tout ce temps.
+ */
+function renderDnsEcrit(ui) {
+  const ecrit = ui.dns?.written;
+  if (!ecrit) return '';
+  return `<p class="avertissement" role="status">Enregistrement
+    <span class="technique">${echapper(ecrit.type)} ${echapper(ecrit.fqdn)}
+    → ${echapper(ecrit.data)}</span> écrit chez le fournisseur.
+    ${echapper(ecrit.propagation ?? '')}</p>`;
+}
+
+/**
+ * « Pointer le domaine » : modale limitée à la section des routes (§6.27).
+ *
+ * Le domaine n'est PAS saisissable : il vient de la route qu'on pointe. Le
+ * rendre modifiable ici laisserait poser un enregistrement pour un domaine que
+ * la Forge ne route pas, c'est-à-dire un domaine qui résoudrait vers un 404.
+ */
+function renderDnsModale(ui) {
+  const dns = ui.dns ?? ADMIN_VIDE.dns;
+  const domaine = dns.domain ?? '';
+
+  const corps = dns.loading
+    ? '<p class="absence">Lecture des zones du compte…</p>'
+    : dns.configured === false
+      ? `<p class="absence">${echapper(dns.reason ?? '')}</p>
+         <p class="champ__aide">Le jeton vit sur ce poste, jamais sur la Forge :
+         un jeton déposé sur la Forge serait lisible par qui y détient
+         l’administration.</p>`
+      : dns.zones.length === 0
+        ? '<p class="absence">Le compte ne porte aucune zone DNS.</p>'
+        : `
+         <div class="champ">
+           <label for="dns-domaine">Domaine de la route</label>
+           <input class="controle technique" id="dns-domaine" type="text" readonly
+                  value="${echapper(domaine)}">
+           <p class="champ__aide">Il vient de la route publique : la Forge ne
+           routerait pas un autre nom.</p>
+         </div>
+         <div class="champ">
+           <label for="dns-zone">Zone</label>
+           <select class="controle" id="dns-zone" name="dns_zone">
+             <option value="">— choisir une zone —</option>
+             ${dns.zones.map((z) =>
+               `<option value="${echapper(z.zone)}"` +
+               `${ui.values.dns_zone === z.zone ? ' selected' : ''}>` +
+               `${echapper(z.zone)}${z.status === 'active' ? '' : ` (${echapper(z.status)})`}` +
+               `</option>`).join('')}
+           </select>
+         </div>
+         <div class="champ">
+           <label for="dns-adresse">Adresse publique de la Forge</label>
+           <input class="controle technique" id="dns-adresse" name="dns_address" type="text"
+                  autocomplete="off" value="${echapper(ui.values.dns_address)}">
+           <p class="champ__aide">C’est l’adresse de la FORGE, pas celle du Spark :
+           un Spark vit sur un réseau privé, et c’est Caddy qui répartit ensuite
+           par nom d’hôte.</p>
+         </div>
+         <p class="note">Sera écrit :
+           <span class="technique">${echapper(nomAEcrire(domaine, ui.values.dns_zone))}
+           ${echapper(String(ui.values.dns_address ?? '').includes(':') ? 'AAAA' : 'A')}
+           → ${echapper(ui.values.dns_address || '…')}</span>, TTL 300 s.
+           Rien d’autre n’est touché dans la zone.</p>`;
+
+  return renderModale({
+    ouverte: ui.open === 'dns', id: 'dns',
+    titre: 'Pointer le domaine',
+    engagement: 'Poser l’enregistrement',
+    refus: ui.refusal?.panel === 'dns' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps,
+  });
+}
+
+/** Nom relatif tel qu'il sera écrit, ou un tiret tant que la zone n'est pas choisie. */
+function nomAEcrire(domaine, zone) {
+  if (!zone) return '—';
+  const d = String(domaine ?? '').toLowerCase();
+  const z = String(zone).toLowerCase();
+  return d.endsWith(`.${z}`) ? d.slice(0, -(z.length + 1)) : '—';
 }
 
 /* -------------------------------------------------------------------- clés */

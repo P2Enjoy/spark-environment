@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
+ *           perimetre), §38.3, §38.4, §38.5 — pour « Pointer le domaine ».
  * @verifies docs/BACKLOG.md#SPK-21 · docs/DAT.md §26 (les trois surfaces),
  *           §26.2, §26.3, §26.4, §26.5 · §17.2, §18.4, §18.5, §19.3, §19.4 ·
  *           docs/DESIGN_SYSTEM.md §6.19, §6.22, §6.23, §6.24, §14.7
@@ -12,7 +14,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
-  renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation,
+  renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation, zonePour,
 } from './spark-admin.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -154,8 +156,21 @@ test("le champ de port designe le port DU SPARK, pas celui de l'hote (§26.3)", 
 });
 
 test('le formulaire enonce que le TLS depend du DNS (§18.3)', () => {
+  // REVISE par SPK-47 : l'ecran disait « Le DNS est exterieur au produit ».
+  // C'etait vrai, et c'etait l'obstacle — SPK-12 reste ouvert faute d'un domaine
+  // qui resolve. Le produit pilote desormais le DNS (§38), donc la phrase est
+  // devenue fausse et l'attente qui la figeait avec elle.
+  //
+  // Ce que la preuve etablit est INCHANGE, et double : le formulaire dit que
+  // l'emission depend de la resolution, et il n'affirme JAMAIS qu'un certificat
+  // est emis — l'ecran ne le sait pas.
   const rendu = renderRoutesPanel(SPARK, [], ui({ open: 'route' }));
-  assert.ok(rendu.includes('Le DNS est extérieur au produit'));
+  assert.ok(rendu.includes('résolve déjà vers'),
+    'l’emission depend de la resolution, et le formulaire doit le dire');
+  assert.ok(rendu.includes('soumise à la propagation'),
+    'poser un enregistrement ne le fait pas resoudre (§38.4)');
+  assert.ok(!rendu.includes('Le DNS est extérieur au produit'),
+    'cette phrase a cesse d’etre vraie : le produit pilote le DNS (§38)');
   assert.ok(!/certificat actif|TLS actif/i.test(rendu),
     'l’ecran ne sait pas si un certificat est emis, il ne doit pas l’affirmer');
 });
@@ -354,4 +369,106 @@ test("sans Spark protege, il n'y a AUCUNE confirmation a rendre", () => {
   // §35.5 : « s'il n'y a aucun Spark protégé, il n'y a pas de refus du tout ».
   assert.equal(renderProtectedRevocation({ label: 'k', protected_sparks: [] }), '');
   assert.equal(renderProtectedRevocation(null), '');
+});
+
+// --- « Pointer le domaine » (SPK-47, docs/DAT.md §38) -----------------------
+
+const ROUTE_DNS = { domain: 'test.spark.lelabs.tech', target_port: 8080, tls: true,
+                    applied_at: '2026-08-20T09:00:00' };
+const ZONES = [{ zone: 'lelabs.tech', status: 'active' },
+               { zone: 'staging.lelabs.tech', status: 'active' }];
+const dnsUi = (dns = {}, valeurs = {}) => ui({
+  open: 'dns',
+  dns: { ...ADMIN_VIDE.dns, domain: ROUTE_DNS.domain, configured: true, zones: ZONES, ...dns },
+  values: valeurs,
+});
+
+test('chaque route porte son propre bouton DNS', () => {
+  // Deux routes d'un meme Spark ont deux domaines : un bouton de SECTION ne
+  // saurait pas lequel pointer.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS, { ...ROUTE_DNS, domain: 'autre.lelabs.tech' }]);
+  assert.equal((rendu.match(/data-dns-route=/g) ?? []).length, 2);
+  assert.ok(rendu.includes('data-dns-route="test.spark.lelabs.tech"'));
+});
+
+test('la zone la plus SPECIFIQUE est retenue, pas la premiere trouvee', () => {
+  // Ecrire « app.staging » dans la zone parente le rendrait invisible : la
+  // delegation renvoie a la zone fille (§38.5).
+  assert.equal(zonePour('app.staging.lelabs.tech', ZONES), 'staging.lelabs.tech');
+  assert.equal(zonePour('test.spark.lelabs.tech', ZONES), 'lelabs.tech');
+  assert.equal(zonePour('app.autre.tech', ZONES), '');
+  assert.equal(zonePour('lelabs.tech', ZONES), '', 'l’apex n’est pas dans sa propre zone');
+});
+
+test('le domaine de la modale est en LECTURE SEULE et vient de la route', () => {
+  // Le rendre saisissable laisserait pointer un domaine que la Forge ne route
+  // pas, donc un domaine qui resoudrait vers un 404.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi());
+  const champ = rendu.slice(rendu.indexOf('id="dns-domaine"'));
+  assert.ok(champ.slice(0, 200).includes('readonly'));
+  assert.ok(rendu.includes('value="test.spark.lelabs.tech"'));
+});
+
+test('la modale montre ce qui SERA ecrit, nom relatif compris', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS],
+    dnsUi({}, { dns_zone: 'lelabs.tech', dns_address: '203.0.113.7' }));
+  assert.ok(rendu.includes('Sera écrit'));
+  assert.ok(rendu.includes('test.spark'), 'le nom RELATIF a la zone');
+  assert.ok(rendu.includes('203.0.113.7'));
+  assert.ok(rendu.includes('TTL 300'));
+  assert.ok(rendu.includes('Rien d’autre n’est touché dans la zone'));
+});
+
+test('une adresse IPv6 annonce un AAAA', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS],
+    dnsUi({}, { dns_zone: 'lelabs.tech', dns_address: '2001:bc8:1200::1' }));
+  assert.ok(/AAAA\s*\n?\s*→/.test(rendu) || rendu.includes('AAAA'));
+});
+
+test('sans jeton, la modale DIT que rien n’est configure et ne montre aucun champ', () => {
+  // Une absence de configuration n'est pas une panne : l'ecran doit le dire, et
+  // ne pas offrir une saisie qui ne pourrait aboutir (§38.1).
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS],
+    dnsUi({ configured: false, reason: 'Aucun jeton DNS sur ce poste.', zones: [] }));
+  assert.ok(rendu.includes('Aucun jeton DNS sur ce poste.'));
+  assert.ok(!rendu.includes('id="dns-zone"'));
+  assert.ok(rendu.includes('jamais sur la Forge'));
+});
+
+test('un compte sans zone est NOMME, pas rendu par une liste vide', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({ zones: [] }));
+  assert.ok(rendu.includes('aucune zone DNS'));
+});
+
+test('la lecture des zones a son etat, distinct de l’absence de jeton', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS],
+    dnsUi({ loading: true, configured: null, zones: [] }));
+  assert.ok(rendu.includes('Lecture des zones'));
+  assert.ok(!rendu.includes('Aucun jeton'));
+});
+
+test('ce qui est ECRIT est annonce avec sa propagation, jamais comme « pret »', () => {
+  // §38.4 : annoncer « pret » ferait chercher la panne ailleurs pendant toute
+  // la duree du TTL.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], ui({
+    dns: { ...ADMIN_VIDE.dns, written: {
+      type: 'A', fqdn: 'test.spark.lelabs.tech', data: '203.0.113.7',
+      propagation: 'Enregistrement écrit. La résolution peut demander jusqu’à 300 secondes.',
+    } },
+  }));
+  assert.ok(rendu.includes('test.spark.lelabs.tech'));
+  assert.ok(rendu.includes('écrit chez le fournisseur'));
+  assert.ok(rendu.includes('300 secondes'));
+  assert.ok(!/domaine (est )?prêt|résout désormais/i.test(rendu));
+});
+
+test('un refus du fournisseur s’affiche DANS la modale, sans effacer la saisie', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], ui({
+    open: 'dns',
+    dns: { ...ADMIN_VIDE.dns, domain: ROUTE_DNS.domain, configured: true, zones: ZONES },
+    refusal: { panel: 'dns', message: 'Le fournisseur DNS a refusé (HTTP 403).' },
+    values: { dns_zone: 'lelabs.tech', dns_address: '203.0.113.7' },
+  }));
+  assert.ok(rendu.includes('Le fournisseur DNS a refusé (HTTP 403).'));
+  assert.ok(rendu.includes('203.0.113.7'), 'la saisie survit au refus (§26.2)');
 });

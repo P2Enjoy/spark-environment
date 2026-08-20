@@ -11,7 +11,7 @@
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail } from './components/spark-detail.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
-import { ADMIN_VIDE } from './components/spark-admin.js';
+import { ADMIN_VIDE, zonePour } from './components/spark-admin.js';
 import { renderHostView } from './components/host-view.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/host-images.js';
 import { renderJournalHotePage, FILTRES_VIDES } from './components/host-journal.js';
@@ -195,7 +195,7 @@ function brancherPanneaux() {
 
   const formulaire = racine.querySelector(
     '[data-modale="route"], [data-modale="key"], [data-modale="snapshot"],'
-    + ' [data-modale="protection"]');
+    + ' [data-modale="protection"], [data-modale="dns"]');
   if (formulaire) {
     for (const controle of formulaire.querySelectorAll('input, select')) {
       controle.addEventListener('input', () => {
@@ -212,6 +212,7 @@ function brancherPanneaux() {
       if (quoi === 'key') return autoriserCle();
       if (quoi === 'snapshot') return prendreInstantane();
       if (quoi === 'protection') return basculerProtection();
+      if (quoi === 'dns') return poserEnregistrementDns();
     });
   }
 
@@ -227,6 +228,13 @@ function brancherPanneaux() {
       });
     }
   };
+  // SPK-47 · §38 : « DNS » ouvre une modale portant sur CETTE route. Le domaine
+  // n'est pas saisi, il est repris de la route ; l'adresse est pré-remplie avec
+  // celle du serveur courant, qui EST la Forge.
+  for (const bouton of racine.querySelectorAll('[data-dns-route]')) {
+    bouton.addEventListener('click', () => ouvrirDns(bouton.dataset.dnsRoute));
+  }
+
   demande('retire-route', 'route');
   demande('restaure', 'snapshot-restore');
   demande('supprime-instantane', 'snapshot-delete');
@@ -342,6 +350,71 @@ async function declarerRoute() {
     spark: etat.spark.name, domain: v.domain, port: Number(v.port), tls: Boolean(v.tls),
   }));
   if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
+}
+
+/**
+ * Ouvre « Pointer le domaine » et LIT les zones du compte (SPK-47, §38.2).
+ *
+ * La lecture a lieu à l'ouverture, pas au chargement de l'écran : interroger un
+ * fournisseur extérieur à chaque affichage d'un Spark rendrait le détail
+ * tributaire d'un service dont il n'a pas besoin.
+ */
+async function ouvrirDns(domaine) {
+  const admin = etat.admin;
+  admin.open = 'dns';
+  admin.refusal = null;
+  admin.confirming = null;
+  admin.dns = { ...ADMIN_VIDE.dns, domain: domaine, loading: true };
+  // L'adresse par défaut est celle du serveur courant : c'est la Forge, et la
+  // retaper de mémoire est le meilleur moyen de se tromper d'un chiffre.
+  admin.values.dns_address =
+    etat.servers.find((s) => s.name === etat.server)?.host ?? '';
+  peindre();
+
+  let corps;
+  try {
+    corps = await (await fetch('/api/dns/zones')).json();
+  } catch (erreur) {
+    corps = { configured: false, reason: `Fournisseur DNS injoignable : ${erreur.message}` };
+  }
+  admin.dns = {
+    ...admin.dns, loading: false,
+    configured: corps.configured ?? false,
+    reason: corps.reason ?? corps.message ?? null,
+    zones: corps.zones ?? [],
+  };
+  // La zone la plus spécifique est PRÉ-CHOISIE, jamais imposée : on peut la
+  // changer, et rien n'est écrit avant l'engagement.
+  admin.values.dns_zone = zonePour(domaine, admin.dns.zones);
+  peindre();
+}
+
+/**
+ * Pose l'enregistrement d'ingress (SPK-47, §38.3).
+ *
+ * Le résultat annonce ce qui est ÉCRIT et le délai de propagation, jamais un
+ * domaine « prêt » (§38.4).
+ */
+async function poserEnregistrementDns() {
+  const v = etat.admin.values;
+  const domaine = etat.admin.dns.domain;
+  const resultat = await agir('dns', async () => {
+    const reponse = await fetch('/api/dns/record', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ domain: domaine, zone: v.dns_zone, address: v.dns_address }),
+    });
+    const corps = await reponse.json().catch(() => null);
+    // `agir` lit le refus dans `detail` : l'hôte console, lui, rend `message` à
+    // plat. On l'y remet plutôt que d'apprendre deux formes à `agir`.
+    return { ok: reponse.ok,
+             corps: reponse.ok ? corps : { detail: { message: corps?.message ?? 'Refus du fournisseur DNS.' } } };
+  });
+  if (resultat?.ok) {
+    etat.admin.dns = { ...etat.admin.dns, written: resultat.corps };
+    // `agir` a déjà repeint en fermant la modale : sans ce second passage, ce
+    // qui a été écrit ne s'afficherait qu'au prochain rendu, donc jamais.
+    peindre();
+  }
 }
 
 async function autoriserCle() {
