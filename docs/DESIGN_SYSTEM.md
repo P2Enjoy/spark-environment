@@ -1117,6 +1117,44 @@ Le bouton qui ouvre la confirmation peut rester secondaire lorsque l’action n�
 
 Ne pas utiliser la couleur `danger` simplement parce qu’une action est importante.
 
+### Frapper le nom : quand l'exiger, et quand ne pas l'exiger
+
+Une confirmation ordinaire prouve qu'on a **vu** l'écran. Frapper le nom de
+l'objet prouve qu'on a **lu lequel**. Ce n'est pas la même chose, et la
+différence n'apparaît que dans le cas qui compte : le mauvais objet sélectionné,
+la ligne cliquée trop vite, le script lancé sur le mauvais nom.
+
+**On l'exige quand les trois conditions tiennent ensemble :**
+
+1. l'action est **irréversible** — aucun retour arrière, aucune corbeille ;
+2. elle porte sur **un objet parmi d'autres qui se ressemblent**, donc
+   confondables ;
+3. le nom de l'objet est **court et visible** à l'écran au moment où on le frappe.
+   Faire recopier un identifiant long apprend à le coller sans le lire, ce qui
+   annule tout le bénéfice.
+
+**On ne l'exige pas** dès qu'une seule manque. En particulier :
+
+* jamais sur une action réversible (§6.24) ;
+* jamais sur une action fréquente. Le §6.24 le dit d'une confirmation, et cela
+  vaut à plus forte raison ici : une frappe demandée plusieurs fois par jour
+  devient un réflexe, et un réflexe ne lit plus.
+
+**Contrat.**
+
+* La confirmation dit **quoi frapper**, en montrant le nom attendu.
+* La comparaison est **exacte** : ni espaces de bordure ignorés en silence, ni
+  insensibilité à la casse. Un objet dont le nom ne diffère que par la casse
+  existe, et l'accepter rendrait la frappe inutile précisément là où elle sert.
+* Tant que la frappe ne correspond pas, le bouton d'engagement est **présent et
+  désactivé** — pas absent. Le §9.9 s'applique : l'action existe, elle est
+  indisponible dans un état connu, et la raison reste lisible.
+* Le champ porte son libellé, et l'engagement lui est associé par
+  `aria-describedby` : au clavier et à la synthèse vocale, on doit savoir
+  pourquoi le bouton ne part pas.
+* Une frappe fausse **n'est pas une erreur** et ne prend pas la couleur du refus
+  (§6.9). Rien n'a encore été tenté ; c'est un état d'attente, pas un échec.
+
 ## 6.24 Action réparatrice
 
 Une action de restauration, réveil, réactivation ou récupération n’a généralement pas besoin d’une confirmation lorsqu’elle :

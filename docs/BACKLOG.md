@@ -2266,10 +2266,12 @@ Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle traite les menace
   confirmation demande de **frapper le nom** de l'objet avant d'engager.
 - Ce qu'elle ne prouve pas, et qui doit rester écrit : rien sur l'identité. Elle
   ne traite que l'erreur, et le §45.1 la range explicitement dans cette famille.
-- **À trancher dans l'unité** : jusqu'où l'étendre. Une frappe demandée sur
-  chaque geste banaliserait la frappe elle-même, ce qui est le défaut du §6.24 —
-  « une confirmation systématique banalise les confirmations réellement
-  importantes ».
+- **Tranché le 2026-08-20, et la règle est au design system** (§6.23, « Frapper
+  le nom ») : on l'exige quand les TROIS conditions tiennent — action
+  irréversible, objet confondable avec d'autres, nom court et visible. Dès
+  qu'une manque, on ne l'exige pas. La suppression d'un Spark les réunit ; aucun
+  autre geste du produit ne les réunit aujourd'hui, et c'est pourquoi l'unité
+  s'arrête là.
 - DoD : la suppression exige la frappe exacte du nom ; une frappe fausse ou
   partielle n'engage rien ; le parcours est éprouvé au clavier ; si une règle
   réutilisable en sort, `docs/DESIGN_SYSTEM.md` §6.23 est étendu.
