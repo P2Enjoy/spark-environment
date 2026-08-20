@@ -65,6 +65,38 @@ Tout état porté par une couleur doit également être identifiable par au moin
 * forme ;
 * attribut ARIA adapté.
 
+## 1.5 bis L’écran nomme, le manuel explique
+
+Un écran d’administration affiche des **valeurs** et des **noms**. Il ne porte pas
+le raisonnement qui a conduit à les produire.
+
+Ce qui reste à l’écran :
+
+* la valeur, son unité, et ce à quoi elle se rapporte ;
+* le nom de ce qui la commande — un réglage, une variable, une source ;
+* le mot exact qui la qualifie lorsqu’elle est ambiguë : « plafond », « réservé »,
+  « alloué », « non mesuré ».
+
+Ce qui part au manuel :
+
+* **pourquoi** la grandeur existe et ce qui arrive sans elle ;
+* le mode de panne qu’elle évite ;
+* l’historique de la décision, la mesure qui l’a établie, le compromis retenu.
+
+Motif, et il est double. D’abord, une explication de trois lignes par ligne de
+tableau **noie la valeur** : l’écran d’un exploitant se lit en diagonale, sous
+pression, pour trouver un chiffre. Ensuite, une explication écrite deux fois — à
+l’écran et au manuel — **diverge**. Celle de l’écran est la plus difficile à
+maintenir et la plus lue : c’est donc celle qui ment en premier.
+
+Le test : si la phrase reste vraie quand toutes les valeurs de l’écran changent,
+elle n’appartient pas à l’écran. Elle appartient au manuel.
+
+Ce n’est pas une invitation à rendre l’interface muette. Une valeur ambiguë est
+**qualifiée** — « 8,0 CPU (facteur ×2) » et non « 8,0 CPU » —, une absence est
+**nommée** (§14.5, §14.6), et un renvoi mène au chapitre du manuel qui explique.
+Le renvoi remplace le paragraphe ; il ne remplace pas le mot juste.
+
 ## 1.6 Les décisions visuelles se vérifient sur l’application exécutée
 
 Une règle théoriquement correcte peut produire un mauvais résultat une fois rendue.
