@@ -1393,7 +1393,7 @@ l'est pas.** Contrat au §22.4 ter du DAT, écrit et committé avant le code.
 - **Observé** : `44-serveurs.png`, `45-serveurs-ajout.png`, `46-serveurs-aucun.png`,
   `47-serveurs-modifier.png`, et `docs/manuel/images/m3-serveurs.png`.
 
-### [~] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
+### [x] SPK-42 · Nommer la machine qui porte `sparkd`, et propager le nom
 
 **ARBITRÉ le 2026-08-20 : la machine est une « Forge ».**
 
@@ -1461,6 +1461,32 @@ jamais textuel — `host` a trois sens ici et deux ne bougent pas.
      morceau, et le moins urgent ;
   3. la vérification finale de la DoD — « plus aucune occurrence dans le sens
      visé » — ne peut être faite qu'après 1 et 2.
+
+**Tranche 3 livrée le 2026-08-20 : l'unité est close.**
+
+- **Fichiers de la console renommés** : `host-view.js`, `host-images.js` et
+  `host-journal.js` deviennent `forge-*`, et leurs identifiants suivent —
+  `renderHostView`, `renderJournalHote`, `titre-journal-hote`.
+- **211 occurrences renommées au sens de la machine** : 142 dans la
+  documentation — DAT, schéma, contrat de déploiement, plan du manuel, design
+  system d'application et neuf chapitres du manuel — et 69 dans le code du
+  runtime, les harnais E2E et le `README.md`. Le contrat d'API portait la
+  description de la route des pools et a été régénéré.
+- **Le sens RÉSEAU n'a pas bougé**, comme le §1 bis.1 l'exige. Deux tournures
+  ont rejoint la liste des protégées en cours de route : « un hôte Docker »,
+  qu'un Spark **est** — ce n'est pas une Forge —, et « hôte inconnu », message
+  d'OpenSSH.
+- **Trois défauts trouvés en RELISANT le résultat**, pas en le supposant : des
+  accords restés au masculin — Forge est féminin —, et surtout la **mention
+  historique** du §1 bis, qui explique qu'on disait « l'hôte » : la remplacer
+  détruisait l'explication elle-même.
+- **Vérification finale de la DoD, par recherche** : plus aucune occurrence du
+  terme abandonné dans le sens visé, hors `docs/JOURNAL.md`, `docs/BACKLOG.md`,
+  `CHANGELOG.md` et `docs/ORIGIN_CONVERSATION.md`, qui sont des **archives** —
+  y réécrire le passé le falsifierait.
+- **Preuves** : 653 Python, 413 de console et d'hôte console, 6 de contrat,
+  8 gestes, **39 parcours E2E**, 7 contrôles du manuel, build et
+  `contract-check` vert. 13 illustrations du manuel refaites et observées.
 
 ### [x] SPK-46 · La console traduit les états que le serveur rapporte
 

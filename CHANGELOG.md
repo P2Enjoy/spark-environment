@@ -98,6 +98,12 @@
   Le harnais E2E impose son propre fichier d'environnement et un doublon local
   du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
 
+- Unité SPK-42, **close** : le renommage de la machine en « Forge » est achevé.
+  Les trois fichiers de la console renommés, et 211 occurrences au sens de la
+  machine traduites dans la documentation, le code du runtime, les harnais et le
+  README. Le sens réseau — nom d'hôte, clé d'hôte, « Hôte, utilisateur et port »
+  — et l'« hôte console » ne bougent pas.
+
 - Unité SPK-46 : **la console traduit les états que le serveur rapporte.** Le
   journal affichait « starting » → « running » à quelques centimètres d'un badge
   qui disait « En marche ». Le journal reste technique — il sert au diagnostic —

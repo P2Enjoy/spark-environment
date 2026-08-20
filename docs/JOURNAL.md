@@ -3557,3 +3557,50 @@ encore « hôte » au sens de la machine, puis les noms de fichiers de la consol
 rédactionnel : si une session veut du comportement, SPK-43 (terminal dans un
 Spark) est la prochaine unité de construction, et elle débloque SPK-51. SPK-51
 attend toujours les deux vérifications du §38.6 bis auprès du fournisseur.
+
+## 2026-08-20 — SPK-42 tranche 3 : le renommage est achevé, l'unité est close
+
+**Unité choisie** : SPK-42, désignée par l'entrée précédente. Sa spécification —
+le §1 bis du DAT — était écrite depuis la tranche 1 : lue, non réécrite.
+
+**Ce qui restait, et qui est fait.** Les trois fichiers de la console
+(`host-view`, `host-images`, `host-journal`) et leurs identifiants ; puis
+**211 occurrences** au sens de la machine — 142 dans la documentation, 69 dans
+le code du runtime, les harnais et le `README.md`. Le contrat d'API portait la
+description de la route des pools : régénéré.
+
+**La méthode, parce qu'elle est le sujet.** Le §1 bis.1 dit que c'est un
+renommage **sémantique**, jamais textuel. J'ai donc mis à l'abri le sens réseau
+et l'hôte console AVANT tout remplacement, puis relu le résultat. Deux tournures
+ont rejoint la liste des protégées en cours de route : « un hôte Docker », qu'un
+Spark **est** — ce n'est pas une Forge —, et « hôte inconnu », message d'OpenSSH.
+
+**Trois défauts trouvés en relisant, pas en supposant.** Des accords restés au
+masculin — Forge est féminin, d'où « la Forge consomme pour **elle**-même ». Et
+surtout la **mention historique** du §1 bis, qui explique qu'on disait
+« l'hôte » : le remplacement l'avait transformée en « on disait « la Forge » »,
+ce qui détruisait l'explication elle-même. Une recherche-remplacement non relue
+ne vaut rien.
+
+**Vérification finale de la DoD, par recherche et non de mémoire** : plus aucune
+occurrence du terme abandonné dans le sens visé. Restent volontairement
+`docs/JOURNAL.md`, `docs/BACKLOG.md`, `CHANGELOG.md` et
+`docs/ORIGIN_CONVERSATION.md` : ce sont des **archives**, et y réécrire le passé
+le falsifierait.
+
+**Campagne complète, verte.** 653 tests Python, 413 de console et d'hôte console,
+6 de contrat, 8 gestes, **39 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`. 13 illustrations du manuel refaites et observées.
+
+**Un défaut PRÉEXISTANT consigné, INC-05.** `e2e/reel.mjs` attend `#titre-routes`
+juste après l'ouverture d'un Spark, alors que depuis SPK-33 la fenêtre s'ouvre
+sur *Infos*. Ligne de base établie : il échoue à l'identique des deux côtés du
+`git stash`. Il est passé inaperçu parce qu'**aucune cible du Makefile ne
+l'appelle** — les captures « contre un runtime réel » ne sont donc plus
+régénérables, et rien ne le signalait. Comportement laissé inchangé.
+
+**Où reprendre.** SPK-43 — terminal dans un Spark depuis la console. C'est la
+prochaine unité de construction, et elle débloque SPK-51. Si une session préfère
+solder, INC-05 est court : ajouter le clic sur l'onglet *Routes* et rattacher
+`reel.mjs` à une cible du `Makefile`. SPK-51 attend toujours les deux
+vérifications du §38.6 bis auprès du fournisseur.
