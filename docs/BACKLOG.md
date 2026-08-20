@@ -1905,14 +1905,32 @@ d'audit).
   observées, plus `docs/manuel/images/m8-docker-geste.png`. Manuel M8 complété
   d'un chapitre *Agir sur un conteneur*.
 
+**Deuxième tranche livrée le 2026-08-20 : le terminal DANS un conteneur.**
+
+- **Le point de l'unité, mesuré** : un binaire manquant fait rendre `127` à
+  `docker exec`, **avec son message sur la SORTIE STANDARD**. Ne lire que
+  `stderr` ferait prendre l'échec pour un shell ouvert et muet.
+- **On sonde avant d'ouvrir** (§37.4.7), comme le §37.3.1 sonde `sshd`. `bash`
+  préféré, `sh` accepté, aucun des deux = un état NOMMÉ — une image *distroless*
+  n'en embarque délibérément pas, et c'est un choix de sécurité du locataire.
+- **Une seule session, un seul mécanisme** : la route existante avec un champ
+  `container`. Un refus arrive en `409`, aucune session n'est ouverte et rien
+  n'est journalisé.
+- **Deux actions d'audit distinctes** de celles du Spark, et la fermeture porte
+  la durée. Les deux routes de fermeture, qui figeaient `path: 'ssh'` en copie,
+  partagent désormais une fonction qui lit le chemin réel — le dépannage cesse
+  par là même d'être journalisé comme un `ssh` normal.
+- **Le gel LAISSE entrer**, c'est la seconde moitié de la DoD, prouvée au
+  parcours. C'est aussi la réponse à l'objection du §37.7.3.
+- **Preuves** : 16 du sondage, 48 du terminal, 8 de la route, 19 de la porte
+  d'audit, 83 de composant, 5 parcours E2E. Captures `105-` et `106-` observées,
+  plus `docs/manuel/images/m8-terminal-conteneur.png`, toutes produites par le
+  vrai parcours. Manuel M8 complété d'un chapitre *Entrer dans un conteneur*.
+
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. **le terminal DANS un conteneur** (`docker exec -it`), avec le contrat du
-     §37.4 et l'audit du §37.5. **Spécifié au §37.4.7** ; reste à coder ;
-  2. le parcours de la DoD qui prouve qu'un Spark gelé **laisse le terminal** —
-     il dépend du point 1 ;
-  3. l'épreuve sur une **pile Compose réelle** : aucun vrai `docker stop` n'a
-     traversé un tunnel, le doublon remplaçant la commande. Même limite qu'au
-     §39.7 et qu'à SPK-44, et elle tombera avec SPK-54.
+  1. l'épreuve sur une **pile Compose réelle** : aucun vrai `docker stop` ni
+     `docker exec` n'a traversé un tunnel, le doublon remplaçant la commande.
+     Même limite qu'au §39.7 et qu'à SPK-44, et elle tombera avec SPK-54.
 
 ### [x] SPK-47 · Le DNS entre dans le produit : zones lues, enregistrement d'ingress posé
 

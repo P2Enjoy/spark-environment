@@ -5115,3 +5115,79 @@ vrai `docker stop` n'a traversé un tunnel : le doublon remplace la commande.
 **Où reprendre.** La deuxième tranche de SPK-45 : spécifier puis livrer
 `docker exec -it` avec le contrat du §37.4 et l'audit du §37.5. SPK-54 et SPK-53
 attendent chacune une décision du responsable.
+
+---
+
+## 2026-08-20 · SPK-45, deuxième tranche — le terminal dans un conteneur
+
+**Problème.** L'onglet Docker savait lire et agir, mais pour entrer dans un
+conteneur il fallait ouvrir le terminal du Spark et taper `docker exec` à la
+main — sans trace au journal disant dans quel conteneur on était entré.
+
+### Ce que la mesure a tranché avant qu'une ligne soit écrite
+
+Docker 29.6.1, un conteneur `alpine`. Le fait qui commande tout le module :
+
+**Quand le binaire demandé manque de l'image, `docker exec` rend `127` et écrit
+son message sur la SORTIE STANDARD, pas sur la sortie d'erreur.** Une console qui
+ne surveillerait que `stderr` ne verrait rien et prendrait l'échec pour un shell
+ouvert et muet — donc laisserait une fenêtre noire dont il faut deviner pourquoi
+elle est vide. Une preuve l'éprouve avec un `stderr` vide.
+
+D'où la décision : **on sonde avant d'ouvrir**, comme le §37.3.1 sonde `sshd`
+avant de conclure. `bash` préféré, `sh` accepté, aucun des deux = un état NOMMÉ.
+Une image *distroless* n'embarque délibérément pas de shell : c'est un bon choix
+de sécurité du locataire, pas une panne.
+
+Trois autres mesures : un conteneur arrêté et un conteneur disparu rendent tous
+deux `1` et seul le texte les sépare ; le message d'un conteneur arrêté nomme
+l'**identifiant long**, jamais le nom, donc il n'est pas montrable (§14.7) ; le
+code de sortie de la commande interne est propagé tel quel.
+
+### Une session, pas deux
+
+L'ouverture emprunte la route existante avec un champ `container`. Une seconde
+famille de routes aurait dupliqué le flux, la saisie, la fermeture et la mort du
+distant — quatre endroits où deux terminaux finissent par diverger.
+
+En écrivant la fermeture, un défaut est apparu : les **deux** routes de fermeture
+partageaient une copie qui figeait `path: 'ssh'`. C'était déjà faux pour le
+dépannage. Elles partagent désormais une seule fonction, qui lit le chemin de la
+session.
+
+### Ce que les parcours et la capture ont trouvé
+
+- **`doublonPour` ne reconnaissait pas `docker exec`** — même défaut qu'à la
+  tranche 1 avec les quatre gestes.
+- **La capture 105 disait « propage la taille au Spark »** alors qu'on était dans
+  un conteneur. Le `stty` part au shell distant, qui est celui du conteneur.
+- **La capture 106 a confirmé INC-10** : la bannière annonce « SSH » et promet
+  qu'en quittant on terminera la session, au-dessus d'un message disant qu'aucun
+  terminal ne peut s'ouvrir. Ligne de base établie sur le seul fichier concerné :
+  le défaut est antérieur, comportement laissé inchangé.
+
+### Une preuve révisée, et une seconde
+
+`describe()` a une liste blanche exhaustive de ses champs : elle a fait son
+travail en rougissant sur `container` et `shell`. Allongée une seconde fois, avec
+son motif — ce sont des métadonnées du même genre que le nom du Spark, et une
+preuve vérifie qu'aucun octet de session n'y arrive.
+
+Et le parcours d'inventaire figeait le nombre de conteneurs à deux. Le doublon en
+porte trois depuis cette tranche. Même fragilité que celle déjà révisée par
+SPK-52 : la preuve dit désormais ce qu'elle gardait — `docker ps -a` liste ce qui
+tourne ET ce qui est arrêté.
+
+### Vérifications
+
+Campagne complète **verte** : 707 Python, contrat conforme, 767 de console, 8 de
+gestes, **69 parcours E2E**, 7 du manuel, `build`. Captures `105-` et `106-`
+observées, plus `docs/manuel/images/m8-terminal-conteneur.png`, toutes produites
+par le vrai parcours.
+
+**SPK-45 reste `[~]`** : un seul écart demeure, le même qu'à SPK-44 — aucun vrai
+`docker exec` n'a traversé un tunnel, le doublon remplaçant la commande.
+
+**Où reprendre.** SPK-53 et SPK-54 attendent chacune une décision du responsable.
+Sans elles, la première unité du plan qui reste à construire est SPK-55 (durcir
+la Forge) ou SPK-57 (redimensionner un Spark existant), toutes deux `[ ]`.

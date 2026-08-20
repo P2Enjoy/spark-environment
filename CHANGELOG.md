@@ -3,6 +3,19 @@
 ## [Non publié]
 
 ### Ajouté
+- **Entrer dans un conteneur** (SPK-45 deuxième tranche, `docs/DAT.md` §37.4.7) :
+  un conteneur qui tourne porte un bouton *Ouvrir un terminal*, et la session
+  s'ouvre dans un shell **du conteneur**. La bannière le nomme, avec son shell —
+  deux conteneurs d'une même pile se ressemblent.
+- La console **cherche le shell avant d'ouvrir** : `bash` s'il est là, sinon
+  `sh`. Une image sans shell, un conteneur arrêté ou disparu sont **nommés** et
+  n'ouvrent rien, au lieu d'une fenêtre noire dont il faut deviner pourquoi elle
+  est vide.
+- Chaque ouverture et chaque fermeture entrent au journal sous une action propre
+  au conteneur, avec sa durée. Rien du contenu ne traverse.
+- **Un Spark protégé laisse entrer dans ses conteneurs** — c'est l'issue de
+  secours qui évite d'avoir à désarmer la protection pour diagnostiquer.
+- Manuel M8 : chapitre *Entrer dans un conteneur*, illustré depuis la pile réelle.
 - **Agir sur un conteneur** (SPK-45 première tranche, `docs/DAT.md` §37.7.1 à
   §37.7.4) : démarrer, redémarrer, arrêter, tuer. Les gestes vivent sur le
   conteneur **ouvert**, jamais sur la liste — agir depuis une ligne de tableau,
@@ -203,6 +216,9 @@
   l'architecture de navigation de la console.
 
 ### Corrigé
+- La fermeture d'une session de terminal inscrivait toujours `path: "ssh"` au
+  journal, quel que soit le chemin réellement emprunté. C'était faux dès le
+  dépannage.
 - **Troncature silencieuse des relevés Docker** : la lecture se résolvait sur
   `exit`, qui précède le drainage de `stdout`. Sur deux cents lignes de journal,
   l'écran en affichait cent soixante-quatorze et les montages revenaient vides,
