@@ -233,6 +233,27 @@ Note d'exploitation : sur un Spark à 2 Gio, `dpkg` a échoué une fois en
 « Broken pipe » sur le dépaquetage de `docker-buildx-plugin`.
 `dpkg --configure -a` a suffi, et `dpkg --audit` doit finir vide.
 
+### C.4 Une sortie vide de `docker` a trois causes : lire le CODE DE SORTIE
+
+Mesuré le 2026-08-20. `docker ps` rend une sortie **vide dans deux cas sur
+trois**, et ces deux-là n'appellent pas le même geste :
+
+| Code | Ce que ça veut dire | Ce qu'il faut faire |
+|---|---|---|
+| `127` | `docker` introuvable — la cellule n'est pas amorcée | **amorcer** |
+| `1` | la commande existe, le démon ne répond pas | **redémarrer le démon** |
+| `0`, zéro ligne | tout va bien, rien ne tourne | **ne rien faire** |
+
+Les deux premiers se ressemblent à l'œil — « Docker ne marche pas ». Les
+confondre envoie **réinstaller ce qui est déjà là**, ce qui redémarre le démon du
+locataire et interrompt sa production pour rien.
+
+C'est la règle du §14.6 du design system — ne pas confondre zéro, en cours et
+indisponible — appliquée non plus à l'affichage mais à la **détection**. Une
+absence a des causes ; les fondre coûte un geste faux.
+
+Le contrat complet, côté produit, est au §37.6 bis du [DAT](DAT.md).
+
 ---
 
 ## D. Déployer une application dans un Spark

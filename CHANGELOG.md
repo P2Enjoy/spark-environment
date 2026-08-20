@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/AGENT_RUNBOOK.md` §C.4 : une sortie vide de `docker` a trois causes, que
+  seul le **code de sortie** sépare — `127` s'amorce, `1` se redémarre, `0` ne
+  demande rien. Les confondre envoie réinstaller ce qui est déjà là.
 - `docs/AGENT_RUNBOOK.md` §F.4 : « vert seul, rouge en campagne » a **deux** causes
   qui se ressemblent — la contention, et un état partagé entre parcours. La
   question qui les sépare : le rouge est-il le même à chaque fois ?
