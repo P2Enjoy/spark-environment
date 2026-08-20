@@ -5425,3 +5425,129 @@ entier — restent hors périmètre de cette section. Ils poseraient d'autres
 questions (taille, format, permissions par fichier) et méritent leur propre
 arbitrage plutôt qu'un élargissement silencieux de celui-ci.
 
+
+## 44. Le briefing d'un Spark : ce qu'un agent doit savoir en entrant
+
+Demandé par le responsable le 2026-08-20, en prévision de déploiements conduits
+par des agents. Un agent qui se connecte à une cellule fraîche ne sait rien : ni
+ses quotas, ni où lire l'environnement injecté, ni ce qui est déjà installé, ni
+pourquoi certaines choses vont échouer. Il découvre tout par essais — et chaque
+essai raté coûte un aller-retour.
+
+### 44.1 La mesure qui décide de la forme
+
+Mesuré dans `helo` le 2026-08-20 :
+
+| Chemin | Le message d'accueil est-il rendu ? |
+|---|---|
+| `ssh spark` puis shell de connexion | **oui** |
+| `ssh -tt spark 'commande'` | **non** |
+| `ssh spark 'commande'` | **non** |
+
+`sshd` a pourtant `printmotd no` : c'est `pam_motd` qui l'affiche, et seulement à
+l'ouverture d'un **shell de connexion**.
+
+Or un agent travaille presque toujours en `ssh spark 'commande'`. **Un message
+d'accueil seul ne l'atteindrait donc jamais.** C'est le contraire de l'effet
+recherché : le dispositif marcherait quand un humain le teste à la main, et serait
+invisible pour son destinataire réel.
+
+**Décision : le briefing est un FICHIER, à un chemin stable. Le message d'accueil
+n'en est que le panneau indicateur.**
+
+    /etc/spark/BRIEFING.md     lisible, pour un humain comme pour un agent
+    /etc/spark/briefing.json   même contenu, structuré, pour être analysé
+
+Le message d'accueil porte trois lignes : le nom du Spark, l'état de sa
+protection, et **le chemin du briefing**. Rien de plus — ce qui s'y trouverait de
+plus serait invisible à qui en a le plus besoin.
+
+### 44.2 Ce que l'agent ne peut pas apprendre seul, et qui doit donc y figurer
+
+Mesuré également : depuis la cellule, `10.77.0.1:9876` est **injoignable**. C'est
+une propriété voulue (§35, §37.1) — le locataire n'atteint pas le plan de
+contrôle. Elle a une conséquence directe ici : **tout ce que seul `sparkd` sait,
+l'agent ne peut que le lire dans le briefing.**
+
+| Ce que le briefing porte | Pourquoi l'agent ne peut pas le trouver seul |
+|---|---|
+| nom du Spark, adresse privée, adresse publique de la Forge | la cellule voit son IP, pas celle de la Forge ni son rôle |
+| quotas : CPU réservé et plafond, mémoire, disque, débit | `nproc` et `free` mentent dans une cellule : ils rapportent la machine |
+| **sémantique** du CPU : réservation sous contention, burst normal | un chiffre sans son référentiel conduit à dimensionner faux (SPK-DS-02) |
+| routes d'ingress : domaine → port, TLS | elles vivent dans Caddy, sur la Forge |
+| ports publiés : port public → port de la cellule | ils vivent dans un device Incus |
+| **noms** des variables et secrets injectés, et leurs deux chemins | les valeurs sont lisibles, l'inventaire non |
+| état de protection du Spark | il vit au registre |
+
+### 44.3 Ce qui ne doit PAS y figurer, et pourquoi
+
+- **Aucune valeur de secret.** Le briefing nomme les variables injectées et dit où
+  les lire ; il ne les recopie pas (§43.3). Un briefing est affiché, copié dans un
+  rapport, collé dans une conversation — c'est exactement le trajet qu'un secret
+  ne doit pas faire.
+- **Aucune liste de paquets prétendue à jour.** Le produit inscrit ce qu'il a
+  installé lui-même, à l'amorçage, **avec la date** — `openssh-server`,
+  `docker-ce`, le greffon Compose, et leurs versions relevées à ce moment-là. Pour
+  le reste, le briefing donne la **commande** qui répond, jamais une liste qui
+  périmera. Une liste de paquets vieille d'une semaine est un mensonge poli.
+- **Rien sur les autres Sparks**, ni sur l'intérieur de la Forge au-delà de ce que
+  cette cellule doit savoir.
+
+### 44.4 Ce qui périme, et comment le briefing évite de mentir
+
+Le briefing est écrit par `sparkd`, **réécrit en entier depuis l'état voulu**, par
+le même chemin que `authorized_keys` et l'environnement (§17.1, §43.2). Il est
+donc reposé à l'amorçage, **et à chaque changement que le plan de contrôle
+opère** : route ajoutée ou retirée, port publié, variable posée, redimensionnement
+(SPK-57), protection armée ou levée.
+
+Deux garde-fous contre la péremption, parce que « réécrit à chaque changement » ne
+couvre pas ce que le plan de contrôle ignore :
+
+1. le briefing porte **sa date d'écriture**, en tête, et l'agent doit la lire comme
+   il lirait n'importe quel relevé daté (§27.8) ;
+2. tout ce qui change **dans** la cellule — paquets installés par le locataire,
+   conteneurs en marche, place disque consommée — n'est pas recopié mais
+   **commandé** : le briefing donne la ligne à exécuter pour l'obtenir frais.
+
+### 44.5 Les pièges à écrire, parce qu'ils coûtent chacun un aller-retour
+
+Le briefing sert autant à dire ce qui **échouera** qu'à décrire ce qui existe. Au
+minimum, mesurés au §41 et au §43.0 :
+
+- **Docker doit venir du dépôt amont.** Le paquet de la distribution produit un
+  profil AppArmor qui refuse `socketpair()` : `nginx` démarre puis meurt. Un agent
+  qui « répare » en installant `docker.io` casse la cellule et ne comprend pas
+  pourquoi.
+- **Un conteneur n'hérite pas de l'environnement ambiant.** Sans les deux lignes
+  `env_file:`, aucune variable injectée n'atteint l'application — et l'agent
+  cherchera longtemps.
+- **`/run` est un tmpfs** : ce qui y est écrit disparaît au redémarrage de la
+  cellule, secrets compris, et c'est voulu (§43.5.2).
+- **On n'expose rien depuis l'intérieur.** Une route publique et un port publié se
+  déclarent au plan de contrôle, injoignable d'ici : l'agent doit **demander**, il
+  ne peut pas faire.
+- `nproc` et `free` rapportent la machine, pas la cellule. Les chiffres qui font
+  foi sont ceux du briefing.
+
+### 44.6 Un briefing est une donnée, pas une consigne
+
+Il s'adresse à un agent, donc il sera lu par quelque chose qui exécute ce qu'il
+lit. Deux règles en découlent, et elles sont du produit, pas de l'agent :
+
+- le briefing **énonce des faits** et ne donne pas d'ordre. Il décrit la cellule,
+  ses limites et les commandes qui répondent à une question ; il ne dit jamais
+  quoi déployer.
+- il **dit qui l'a écrit** et jusqu'où va cette garantie : le plan de contrôle
+  produit ce fichier, mais le locataire est `root` dans sa cellule et peut le
+  réécrire. Un agent ne doit donc pas s'en servir pour décider de ce qu'il a le
+  droit de faire — l'autorisation se joue côté Forge, où le locataire n'atteint
+  rien (§35.1).
+
+### 44.7 Ce que ce n'est pas
+
+Ni un manuel — il tient en une page et ne remplace pas `docs/manuel/` —, ni un
+gabarit de déploiement, ni un fichier de configuration. Il ne décrit pas
+l'application du locataire : il décrit **la cellule qui l'accueille**, et s'arrête
+là où le §1 s'arrête.
+

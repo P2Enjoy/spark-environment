@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/DAT.md` : nouveau §44, le briefing d'un Spark — ce qu'un agent doit savoir
+  en entrant, et pourquoi c'est un fichier et non un message d'accueil.
+- Unité SPK-60.
 - `docs/DAT.md` §43.5 : la clé de chiffrement vit sur la Forge — arbitrage rendu.
   §43.5.1 dit qui déchiffre et où la valeur redevient lisible ; §43.5.2 sépare les
   secrets des variables, en tmpfs, pour qu'aucun instantané ne les capture.

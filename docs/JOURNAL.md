@@ -4577,3 +4577,62 @@ INC-09 ; je la laisse le faire plutôt que d'écrire deux fois la même chose.
 Playwright est libre, observer la capture de la confirmation avec l'option, et
 clore ce point. Le reste de SPK-54 attend une pile qui supporte le rootless et
 une Forge réelle.
+
+## 2026-08-20 — Le briefing d'un Spark, et la mesure qui l'a fait changer de forme
+
+Demande du responsable, en prévision de déploiements conduits par des agents :
+que chaque Spark fraîchement amorcé porte un message d'accueil SSH destiné à un
+LLM — environnement, ressources, utilisateur, arborescence, où lire
+l'environnement injecté, paquets et versions, routes, ports.
+
+**La forme demandée ne pouvait pas fonctionner, et une mesure le montre.** Dans
+`helo` :
+
+    ssh spark            puis shell de connexion   →  message RENDU
+    ssh -tt spark 'cmd'                            →  rien
+    ssh spark 'cmd'                                →  rien
+
+`sshd` a `printmotd no` ; c'est `pam_motd` qui affiche, et seulement à l'ouverture
+d'un **shell de connexion**. Or un agent travaille presque toujours en
+`ssh spark 'commande'`. Un message d'accueil seul n'aurait donc jamais atteint son
+destinataire — il aurait marché quand un humain le teste à la main, et serait
+resté invisible en usage réel. Encore le même mode de panne que le `.profile`
+d'hier, et pour une raison voisine : on vérifie dans le contexte interactif ce qui
+servira dans un contexte qui ne l'est pas.
+
+**Décision : le briefing est un fichier**, `/etc/spark/BRIEFING.md` et son jumeau
+`briefing.json`. Le message d'accueil est réduit à trois lignes dont la seule qui
+compte est **le chemin du briefing**.
+
+### Ce que la seconde mesure impose au contenu
+
+Depuis la cellule, `10.77.0.1:9876` est injoignable — propriété voulue, vérifiée
+à nouveau aujourd'hui. Conséquence directe : **tout ce que seul `sparkd` sait,
+l'agent ne peut que le lire dans le briefing**. D'où la liste : quotas et leur
+sémantique — `nproc` et `free` rapportent la machine, pas la cellule et
+induiraient un dimensionnement faux —, routes, ports publiés, noms des variables
+injectées, état de protection.
+
+Et symétriquement, ce qui n'y entre pas : aucune **valeur** de secret, parce qu'un
+briefing est affiché, copié, collé dans un rapport — c'est le trajet qu'un secret
+ne doit pas faire ; et aucune liste de paquets prétendue à jour, parce qu'une
+liste vieille d'une semaine est un mensonge poli. Le produit inscrit ce qu'il a
+installé lui-même, daté, et donne la **commande** pour le reste.
+
+### Une règle que je n'avais pas anticipée
+
+Le briefing s'adresse à quelque chose qui **exécute ce qu'il lit**. Il énonce donc
+des faits et ne donne aucun ordre ; et il dit qui l'a écrit, avec la limite de
+cette garantie : le locataire est `root` dans sa cellule et peut le réécrire. Un
+agent ne doit jamais s'en servir pour décider de ce qu'il a le droit de faire —
+l'autorisation se joue côté Forge, là où le locataire n'atteint rien.
+
+### Vérifications
+
+Trois mesures dans `helo`, sorties citées telles quelles, et le message d'accueil
+de test retiré derrière moi. Aucun code touché : DAT §44 et unité SPK-60.
+
+Note de coordination : SPK-59 a été prise entre-temps par une autre session pour
+les quotas au curseur. Le briefing est donc **SPK-60** — vérifié dans le fichier
+avant d'écrire, et non supposé.
+

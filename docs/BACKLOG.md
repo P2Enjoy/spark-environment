@@ -2386,6 +2386,53 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   quoi c'est le pas qui est mauvais. Détail au `docs/DESIGN_SYSTEM_APP.md`
   SPK-DS-07.
 
+### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
+
+Un agent qui entre dans une cellule fraîche ne sait rien : ni ses quotas, ni où
+lire l'environnement injecté, ni ce qui est installé, ni pourquoi certaines
+choses vont échouer. Il découvre par essais, et chaque essai raté coûte un
+aller-retour.
+
+- **Mesuré avant d'écrire la story** (§44.1), et cela décide de la forme : le
+  message d'accueil SSH n'est rendu que pour un **shell de connexion
+  interactif**. `ssh spark 'commande'` — ce que fait un agent — ne l'affiche
+  **jamais**, `-tt` compris. Un message d'accueil seul n'atteindrait donc pas son
+  destinataire : il marcherait quand un humain le teste, et serait invisible en
+  usage réel.
+- Spécification : `docs/DAT.md` **§44** · §41, §43 (les pièges qu'il énonce) ·
+  `docs/AGENT_RUNBOOK.md` · manuel M6.
+- Dépend de : SPK-54 — c'est l'amorçage qui pose le briefing la première fois.
+- Portée : `/etc/spark/BRIEFING.md` et `/etc/spark/briefing.json`, même contenu,
+  l'un lisible et l'autre analysable ; message d'accueil réduit à trois lignes
+  dont **le chemin du briefing** ; réécriture en entier depuis l'état voulu, comme
+  `authorized_keys` (§17.1), reposée à chaque changement du plan de contrôle —
+  route, port publié, variable, redimensionnement, protection.
+- Contenu, dicté par ce que l'agent **ne peut pas apprendre seul** depuis la
+  cellule (§44.2, `sparkd` y est injoignable et c'est voulu) : identité et
+  adresses, quotas **avec leur sémantique** — `nproc` et `free` rapportent la
+  machine, pas la cellule —, routes d'ingress, ports publiés, **noms** des
+  variables et secrets injectés et leurs deux chemins, état de protection.
+- Ce qu'il ne porte **pas** (§44.3) : aucune valeur de secret — un briefing est
+  affiché, copié, collé, c'est le trajet qu'un secret ne doit pas faire ; aucune
+  liste de paquets prétendue à jour — le produit inscrit ce qu'il a installé
+  lui-même **avec la date**, et donne la commande pour le reste.
+- Doit énoncer les pièges qui coûtent chacun un aller-retour (§44.5) : Docker
+  depuis le dépôt amont sous peine de refus AppArmor, les deux lignes `env_file:`
+  sans lesquelles aucune variable n'arrive, `/run` en tmpfs, et le fait qu'on
+  n'expose rien depuis l'intérieur — une route se **demande** au plan de contrôle.
+- Règle de fond (§44.6) : un briefing **énonce des faits**, il ne donne pas
+  d'ordre, et il dit qui l'a écrit — le locataire est `root` dans sa cellule et
+  peut le réécrire, donc un agent ne s'en sert jamais pour décider de ce qu'il a
+  le droit de faire.
+- DoD : un test prouve qu'aucune **valeur** de secret n'entre dans le briefing, en
+  la cherchant explicitement dans les deux fichiers ; un test prouve la réécriture
+  après ajout d'une route et après une variable ; un test prouve que les deux
+  formats portent **le même** contenu ; parcours E2E depuis le parcours canonique —
+  amorcer un Spark, s'y connecter en `ssh spark 'cat …'` et **lire le briefing
+  sans shell interactif**, ce qui est le cas d'usage réel ; preuve sur la Forge
+  réelle qu'un agent partant du seul briefing déploie une pile joignable ; manuel
+  M6 et `docs/AGENT_RUNBOOK.md` mis à jour.
+
 ---
 
 ## Réservé, non planifié
