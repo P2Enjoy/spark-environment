@@ -261,6 +261,7 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_DRIVER` | pilote d'exécution | `incus` \| `fake` | non | `incus` |
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
 | `SPARKD_STORAGE_DATASET` | jeu de données ZFS dont la compression est vérifiée | nom | non | la valeur de `SPARKD_STORAGE_POOL` |
+| `SPARKD_ALLOWED_SIGNERS` | fichier `allowed_signers` d'OpenSSH — clés **publiques** autorisées à signer un geste (`docs/DAT.md` §36.10) | chemin absolu | non | vide, la vérification est désactivée |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |

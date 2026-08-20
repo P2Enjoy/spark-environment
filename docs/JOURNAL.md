@@ -5463,3 +5463,77 @@ espérés tant que cet exercice ne les a pas remplacés.
 SPK-62 sont de la construction. Les neuf autres scénarios de SPK-36 sont listés
 au §3 de `docs/CONTINGENCE.md`. SPK-53 et SPK-54 attendent une décision du
 responsable.
+
+---
+
+## 2026-08-21 · SPK-40, première tranche — la signature d'un geste, côté Forge
+
+**Unité choisie** au §4.2 point 3, première `[ ]` du plan, débloquée par
+l'arbitrage de SPK-35.
+
+### Ce que la mesure a tranché
+
+SSHSIG, mesuré sur OpenSSH 8.9p1. `ssh-keygen -Y verify` rend `0` quand tout
+tient, et `255` sur chacun des quatre refus : message altéré, identité inconnue,
+espace de noms différent, clé absente de la liste. Le code de sortie fait donc
+foi.
+
+L'espace de noms `spark-audit` n'est pas décoratif : sans lui, une signature
+produite par le responsable pour un commit ou un courriel serait rejouable ici.
+
+**Note de méthode, écrite au §36.10.2 parce qu'elle a failli coûter cher.** Une
+première mesure rendait `0` sur une clé hors liste, ce qui contredisait tout le
+reste. La cause était un fichier résiduel d'un essai précédent, pas OpenSSH. Une
+mesure qui contredit les autres se **rejoue de zéro** avant d'être crue.
+
+### Ce que le contrat a dû dire d'abord
+
+Que l'unité **n'est pas** de l'authentification. Tout en découle, et notamment le
+point qui surprend : **une requête non signée reste acceptée.** Refuser faute de
+signature ferait de ce mécanisme un contrôle d'accès, ce que le §45.4 dit qu'il
+n'est pas.
+
+Mais une signature **présente et invalide** est refusée en `422` — non par
+contrôle d'accès, mais parce que l'inscrire ferait mentir le journal : la ligne
+affirmerait une preuve qu'elle n'a pas, ce qui est pire que de n'en porter
+aucune.
+
+### Ce qui a été construit
+
+Migration `009` : trois colonnes qui vont **ensemble ou pas du tout**, un
+déclencheur l'impose. Elles n'entrent **pas** dans l'empreinte de la chaîne — le
+champ retenu du §36.9.2 est figé, et l'y ajouter invaliderait toutes les lignes
+existantes. Chaîne et signature restent indépendantes par construction.
+
+`sparkd.signature` : la forme canonique, le contrôle que les octets décrivent
+bien la requête reçue, et la vérification par `ssh-keygen`. Le middleware la
+pose au **même endroit** que l'acteur — ce qui est posé à quatorze endroits est
+oublié au quinzième.
+
+`verifier_journal` rejoue la vérification **hors ligne**, et c'est elle qui porte
+la preuve : celle de la Forge attrape l'erreur et le bruit, celle-ci attrape
+l'adversaire qui a root. Une preuve simule exactement cette attaque.
+
+### Deux écarts que les preuves ont fermés
+
+- Un événement du runtime **héritait** de la signature de la requête qui l'avait
+  déclenché : le journal aurait fait croire que le responsable avait demandé un
+  recalcul qu'il n'a jamais réclamé. `as_runtime` remet le contexte à zéro.
+- Le journal exposait la signature entière à chaque page, contre mon propre
+  §36.10.7. Chaque entrée dit désormais `signed` ; la signature ne vient qu'avec
+  `with_signature`, et une preuve **mesure** que la page est plus lourde avec —
+  sans quoi l'option n'aurait pas de raison d'être.
+
+### Vérifications
+
+Campagne complète **verte** : 762 Python, contrat conforme, 780 de console, 8 de
+gestes, 70 parcours E2E, 7 du manuel, `build`. Aucune capture : cette tranche ne
+touche pas l'interface.
+
+**SPK-40 reste `[~]`** : la seconde tranche — la console **produit** la signature
+par l'agent du responsable — n'est pas livrée. Elle suppose un agent atteignable,
+que la pile de développement n'a pas. Tant qu'elle manque, aucune ligne n'est
+signée en pratique : la Forge sait recevoir, personne n'envoie encore.
+
+**Où reprendre.** La tranche 2 de SPK-40, ou SPK-61 et SPK-62 nées de SPK-35.
+SPK-53 et SPK-54 attendent une décision du responsable.

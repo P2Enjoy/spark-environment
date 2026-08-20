@@ -3,6 +3,13 @@
 ## [Non publié]
 
 ### Ajouté
+- **Le journal conserve la signature d'un geste** (SPK-40 première tranche,
+  `docs/DAT.md` §36.10) : `sparkd` accepte une signature SSHSIG, la vérifie et
+  l'inscrit. Une requête **non signée passe** — ce n'est pas un contrôle
+  d'accès —, une signature invalide est refusée. `SPARKD_ALLOWED_SIGNERS` désigne
+  les clés **publiques** autorisées ; absent, la vérification se désactive.
+- La vérification du journal **se rejoue hors ligne**, sur une sauvegarde : c'est
+  là qu'elle attrape l'adversaire qui a root.
 - **Sauvegarder et restaurer le registre** (SPK-36, `python3 -m sparkd.sauvegarde`)
   : sans arrêter le service, avec vérification de ce qui vient d'être écrit —
   structure SQLite et chaîne du journal. La restauration refuse si `sparkd`

@@ -1365,7 +1365,7 @@ les Sparks.
   le trancher **serait** l'arbitrage, qui appartient au responsable — mais le
   manuel M12 le nomme, pour qu'on ne cherche pas une erreur là où il n'y en a pas.
 
-### [ ] SPK-40 · Signature des gestes par la clé du responsable
+### [~] SPK-40 · Signature des gestes par la clé du responsable
 
 La console signe la requête avec la clé SSH du responsable, par son agent ;
 `sparkd` conserve la signature et les octets signés. Root sur l'hôte peut alors
@@ -1395,6 +1395,33 @@ que chacune se prouve seule :
 2. **Côté console** — la signature produite par l'agent du responsable sur chaque
    geste mutant. Elle suppose un agent atteignable, que la pile de développement
    n'a pas.
+
+**Première tranche livrée le 2026-08-21 : côté Forge.**
+
+- **Le point du contrat** : une requête **non signée passe**, une signature
+  **présente et invalide** est refusée en `422`. Les confondre ferait de ce
+  mécanisme un contrôle d'accès, ce que le §45.4 dit qu'il n'est pas — et
+  l'inscrire ferait mentir le journal.
+- **Mesuré sur OpenSSH 8.9p1** : les quatre refus rendent tous `255`. L'espace de
+  noms `spark-audit` empêche de rejouer ici une signature faite pour un commit.
+- **Migration 009** : trois colonnes qui vont ensemble ou pas du tout, un
+  déclencheur l'impose. Elles n'entrent **pas** dans l'empreinte de la chaîne.
+- **La vérification hors ligne** (`verifier_journal`) est celle qui porte la
+  preuve, et une preuve simule l'attaque : root récrit une ligne et y colle une
+  signature fabriquée.
+- **Deux écarts fermés par les preuves** : un événement du runtime héritait de la
+  signature de la requête déclenchante ; et le journal exposait la signature
+  entière à chaque page, contre le §36.10.7.
+- **Preuves** : 17 du module, 12 de route, avec de vraies clés et un vrai
+  `ssh-keygen`. 762 preuves Python au total.
+
+- **Reste avant `[x]`** :
+  1. la **tranche 2** — la console produit la signature par l'agent du
+     responsable. Tant qu'elle manque, **aucune ligne n'est signée en pratique** :
+     la Forge sait recevoir, personne n'envoie encore ;
+  2. elle suppose un **agent SSH atteignable**, que la pile de développement n'a
+     pas — le doublon devra remplacer la commande de signature, comme
+     `SPARK_TERMINAL_COMMAND` remplace celle du terminal (§37.4.2 bis).
 
 ### [x] SPK-41 · Catalogue local des serveurs, tenu depuis la console
 
