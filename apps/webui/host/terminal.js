@@ -42,6 +42,8 @@ export class TerminalError extends Error {}
  */
 export const CHEMIN_SSH = 'ssh';
 export const CHEMIN_DEPANNAGE = 'rescue';
+/** SPK-45 · §37.4.7 : le terminal DANS un conteneur du locataire. */
+export const CHEMIN_CONTENEUR = 'container';
 
 /** Motifs qui OUVRENT le dépannage, et qui entrent au journal (§37.3). */
 export const EN_ERREUR = 'spark_en_erreur';
@@ -168,6 +170,7 @@ export class Session {
 
   constructor({ tunnel, spark, spawn: spawnFn = spawn, commande = null,
                 chemin = CHEMIN_SSH, motifDepannage = null,
+                conteneur = null, shell = null,
                 inactiviteMs = INACTIVITE_MS, preavisMs = PREAVIS_MS,
                 maintenant = () => Date.now() } = {}) {
     if (!tunnel) throw new TerminalError('Aucun tunnel : le Spark est injoignable.');
@@ -189,11 +192,21 @@ export class Session {
     // doit rester visible jusqu'au bout — « on ne doit pas oublier par quel
     // chemin on est entré » —, et le journal doit pouvoir le nommer à la
     // fermeture comme à l'ouverture.
-    if (chemin !== CHEMIN_SSH && chemin !== CHEMIN_DEPANNAGE) {
+    if (chemin !== CHEMIN_SSH && chemin !== CHEMIN_DEPANNAGE
+        && chemin !== CHEMIN_CONTENEUR) {
       throw new TerminalError(`Chemin d'entrée inconnu : « ${chemin} ».`);
+    }
+    // §37.4.7 : on n'entre dans un conteneur qu'avec un shell CONSTATÉ. Ouvrir
+    // sans lui reviendrait à supposer ce que le sondage existe pour établir, et
+    // l'échec n'arriverait qu'après, sans dire pourquoi.
+    if (chemin === CHEMIN_CONTENEUR && (!conteneur || !shell)) {
+      throw new TerminalError(
+        'Un terminal de conteneur exige le conteneur ET son shell sondé.');
     }
     this.chemin = chemin;
     this.motifDepannage = chemin === CHEMIN_DEPANNAGE ? motifDepannage : null;
+    this.conteneur = chemin === CHEMIN_CONTENEUR ? conteneur : null;
+    this.shell = chemin === CHEMIN_CONTENEUR ? shell : null;
     this.inactiviteMs = inactiviteMs;
     this.preavisMs = preavisMs;
     this.maintenant = maintenant;
@@ -250,6 +263,21 @@ export class Session {
     };
   }
 
+  /**
+   * Arguments du terminal DANS un conteneur (§37.4.7).
+   *
+   * C'est le chemin du §37.2 — `ssh` vers le Spark — auquel on ajoute un cran :
+   * `docker exec -it`. Le shell n'est pas choisi ici, il a été SONDÉ ; ce module
+   * ne fait que le lancer.
+   */
+  conteneurArgs() {
+    return {
+      programme: 'ssh',
+      arguments_: [...this.sshArgs(), 'docker', 'exec', '-it',
+                   this.conteneur, this.shell],
+    };
+  }
+
   /** Le couple programme/arguments du chemin retenu à l'ouverture. */
   argv() {
     if (this.commande) {
@@ -257,6 +285,7 @@ export class Session {
       return { programme, arguments_ };
     }
     if (this.chemin === CHEMIN_DEPANNAGE) return this.rescueArgs();
+    if (this.chemin === CHEMIN_CONTENEUR) return this.conteneurArgs();
     return { programme: 'ssh', arguments_: this.sshArgs() };
   }
 
@@ -367,6 +396,11 @@ export class Session {
       // reçoit — un « ssh » écrit en dur mentirait sur les deux.
       path: this.chemin,
       rescueReason: this.motifDepannage,
+      // §37.4.7 : la session dit DANS QUOI elle est entrée. Sans cela, l'écran
+      // ne saurait pas distinguer un shell du Spark d'un shell de conteneur, et
+      // sa bannière mentirait sur ce qu'on est en train de piloter.
+      container: this.conteneur,
+      shell: this.shell,
       openedAt: new Date(this.ouvertA).toISOString(),
       closed: Boolean(this.fermeA), reason: this.motif,
       durationSeconds: this.dureeSecondes(),
@@ -435,10 +469,11 @@ export class SessionManager {
     this.maintenant = maintenant;
   }
 
-  ouvrir({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null }) {
+  ouvrir({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null,
+           conteneur = null, shell = null }) {
     const session = new Session({
       tunnel, spark, spawn: this.spawnFn, commande: commandePour(this.commande, spark, chemin),
-      chemin, motifDepannage,
+      chemin, motifDepannage, conteneur, shell,
       inactiviteMs: this.inactiviteMs,
       preavisMs: this.preavisMs, maintenant: this.maintenant,
     }).demarrer();

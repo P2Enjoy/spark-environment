@@ -32,7 +32,8 @@ function fauxSsh() {
   return e;
 }
 
-function pile({ tunnel, spark, chemin, motifDepannage, ...options } = {}) {
+function pile({ tunnel, spark, chemin, motifDepannage,
+                conteneur, shell, ...options } = {}) {
   const enfants = [];
   const spawnFn = (commande, args) => {
     const enfant = fauxSsh();
@@ -44,7 +45,7 @@ function pile({ tunnel, spark, chemin, motifDepannage, ...options } = {}) {
   const manager = new SessionManager({ spawn: spawnFn, ...options });
   const session = manager.ouvrir({
     tunnel: tunnel ?? { jumpArgs: () => ['-J', 'ubuntu@203.0.113.10:22'] },
-    spark: spark ?? SPARK, chemin, motifDepannage,
+    spark: spark ?? SPARK, chemin, motifDepannage, conteneur, shell,
   });
   return { manager, session, enfant: enfants[0], enfants };
 }
@@ -94,9 +95,19 @@ test('ce que la session DÉCRIT ne porte aucun contenu', () => {
   // motif doit voyager jusqu'à l'écran — la bannière le nomme — et jusqu'au
   // journal. La liste est donc allongée, PAS relâchée : elle reste exhaustive,
   // et c'est elle qui interdit qu'un champ libre s'y glisse un jour.
+  //
+  // RÉVISÉE une seconde fois le 2026-08-20, tranche 2 de SPK-45 : `container`
+  // et `shell` s'ajoutent (§37.4.7). Ce sont des MÉTADONNÉES, du même genre que
+  // `spark` — dans quoi l'on est entré, et avec quoi. Ni l'une ni l'autre ne
+  // porte un octet de la session, et la preuve ci-dessous l'éprouve.
+  //
+  // `shell` vient de la sortie d'une image du locataire, ce qui pourrait
+  // rouvrir la fuite : il est borné à un CHEMIN ABSOLU par le sondage, dont
+  // `shell-conteneur.test.js` garde la règle. Ici, on éprouve qu'aucun contenu
+  // de session n'y arrive.
   assert.deepEqual(Object.keys(session.describe()).sort(),
-    ['closed', 'durationSeconds', 'id', 'openedAt', 'path', 'rescueReason',
-     'reason', 'spark'].sort());
+    ['closed', 'container', 'durationSeconds', 'id', 'openedAt', 'path',
+     'rescueReason', 'reason', 'shell', 'spark'].sort());
   // Et le nouveau champ est BORNÉ : il ne prend que des motifs connus, jamais
   // un texte venu de la session. Sinon il rouvrirait exactement la fuite que ce
   // test existe pour fermer.
@@ -465,4 +476,52 @@ test('une entrée peut distinguer les deux CHEMINS d’un même Spark', () => {
 test('une entrée par chemin INCOMPLÈTE retombe sur celle du chemin normal', () => {
   assert.equal(commandePour('{"crm":{"ssh":"cat"}}', { name: 'crm' }, CHEMIN_DEPANNAGE),
                'cat');
+});
+
+// --- SPK-45 · LE TERMINAL DANS UN CONTENEUR (§37.4.7) ----------------------
+
+test('un terminal de conteneur ajoute UN CRAN au chemin du §37.2', () => {
+  // Ce n'est pas un second mécanisme : c'est le même `ssh` vers le Spark, suivi
+  // de `docker exec -it`. Dupliquer le transport ferait diverger deux terminaux.
+  const { session, enfant } = pile({
+    chemin: 'container', conteneur: 'crm-web-1', shell: '/bin/bash' });
+  assert.equal(enfant.commande, 'ssh');
+  assert.ok(enfant.args.includes('-tt'), 'le pseudo-terminal vient du Spark');
+  assert.ok(enfant.args.includes('root@10.77.0.16'));
+  const fin = enfant.args.slice(-5);
+  assert.deepEqual(fin, ['docker', 'exec', '-it', 'crm-web-1', '/bin/bash']);
+  session.fermer('sortie');
+});
+
+test('la session DIT dans quoi elle est entrée, et avec quel shell', () => {
+  // Sans cela, l'écran ne distinguerait pas un shell du Spark d'un shell de
+  // conteneur, et sa bannière mentirait sur ce qu'on est en train de piloter.
+  const { session } = pile({ chemin: 'container', conteneur: 'crm-base-1',
+                             shell: '/bin/sh' });
+  const vu = session.describe();
+  assert.equal(vu.path, 'container');
+  assert.equal(vu.container, 'crm-base-1');
+  assert.equal(vu.shell, '/bin/sh');
+  session.fermer('sortie');
+});
+
+test('une session de SPARK ne porte ni conteneur ni shell', () => {
+  // §14.6 : rendre une chaîne vide ferait lire « un conteneur sans nom ».
+  const { session } = pile();
+  assert.equal(session.describe().container, null);
+  assert.equal(session.describe().shell, null);
+  session.fermer('sortie');
+});
+
+test('on n’entre PAS dans un conteneur sans shell sondé', () => {
+  // §37.4.7 : ouvrir sans lui reviendrait à supposer ce que le sondage existe
+  // pour établir, et l'échec n'arriverait qu'après, sans dire pourquoi.
+  for (const manquant of [{ conteneur: 'web' }, { shell: '/bin/sh' }, {}]) {
+    assert.throws(() => pile({ chemin: 'container', ...manquant }),
+                  /conteneur ET son shell/, JSON.stringify(manquant));
+  }
+});
+
+test('un chemin d’entrée INVENTÉ est refusé', () => {
+  assert.throws(() => pile({ chemin: 'docker' }), /Chemin d'entrée inconnu/);
 });
