@@ -21,7 +21,7 @@ import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
-import { comparer as comparerBuild } from './build.js';
+import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
@@ -282,9 +282,12 @@ export function createConsoleHost(options = {}) {
       const forge = await amont.json();
       // Une Forge qui ne publie AUCUNE build est traitée comme non estampillée,
       // pas comme une panne : `comparer` sait déjà le dire (§40.2).
+      const vu = await comparerBuild(forge?.build ?? null, RACINE_DEPOT);
+      // Les libellés du §40.3 partent AVEC le verdict : ils sont le contrat, pas
+      // une formulation d'écran, et une copie côté navigateur en ferait une
+      // seconde vérité qui divergerait.
       return { status: 200,
-               body: { server: nom, ...(await comparerBuild(forge?.build ?? null,
-                                                            RACINE_DEPOT)) } };
+               body: { server: nom, ...vu, ...(VERDICTS_BUILD[vu.verdict] ?? {}) } };
     },
 
     'POST /api/anchor': async (corps) => {

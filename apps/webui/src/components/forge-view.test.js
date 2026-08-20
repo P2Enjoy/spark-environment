@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
+  renderBuild,
 } from './forge-view.js';
 
 const GIO = 1024 ** 3;
@@ -347,4 +348,103 @@ test("l'ARC au plafond s'affiche sans alarme : c'est son fonctionnement normal",
   const texte = describeArcUsage(16 * GIO, 16 * GIO);
   assert.ok(texte.includes('100 %'));
   assert.ok(!/dépass|alerte|erreur/i.test(texte));
+});
+
+// --- SPK-53 · QUEL CODE CETTE FORGE EXÉCUTE (§40.3) -------------------------
+
+test('sans comparaison, l’écran ne dit PAS « à jour »', () => {
+  // §14.6 : « pas encore comparé » n'est ni à jour, ni une panne. C'est le cœur
+  // du §40.3 — une console qui afficherait « à jour » faute de savoir comparer
+  // mentirait exactement au moment où l'on a besoin d'elle.
+  const rendu = renderBuild(null);
+  assert.match(rendu, /n’a pas encore comparé/);
+  assert.ok(!/à jour/i.test(rendu));
+});
+
+test('la comparaison EN COURS ne se confond pas avec son résultat', () => {
+  const rendu = renderBuild('en-cours');
+  assert.match(rendu, /Comparaison en cours/);
+  assert.match(rendu, /aria-busy="true"/);
+  assert.ok(!/à jour/i.test(rendu));
+});
+
+test('une Forge à jour le dit, en vert, et sans chiffre d’écart', () => {
+  const rendu = renderBuild({
+    verdict: 'a_jour', titre: 'À jour', detail: 'Même commit.', behind: 0,
+    forge: { version: '0.0.0+abc123' }, local: { head: 'abc123def456', branch: 'main' } });
+  assert.match(rendu, /badge--success/);
+  assert.match(rendu, /À jour/);
+  assert.ok(!/commit d’écart/.test(rendu));
+  assert.ok(!/role="alert"/.test(rendu), 'une bonne nouvelle n’est pas une alerte');
+});
+
+test('une Forge en retard CHIFFRE son écart, et c’est une alerte', () => {
+  const rendu = renderBuild({
+    verdict: 'forge_en_retard', titre: 'En retard', detail: 'Des commits manquent.',
+    behind: 3, forge: { version: '0.0.0+aaa' }, local: { head: 'bbb', branch: 'main' } });
+  assert.match(rendu, /3 commits d’écart/);
+  assert.match(rendu, /badge--danger/);
+  assert.match(rendu, /role="alert"/, '§9.7 : ce qui appelle un geste est annoncé');
+});
+
+test('un seul commit d’écart se dit au SINGULIER', () => {
+  const rendu = renderBuild({ verdict: 'forge_en_retard', titre: 'En retard',
+                              detail: 'x', behind: 1 });
+  assert.match(rendu, /1 commit d’écart/);
+  assert.ok(!/1 commits/.test(rendu));
+});
+
+test('quand c’est le POSTE qui est en retard, ce n’est pas une alerte', () => {
+  // Le cas qui trompe : traité comme un défaut de la Forge, il enverrait
+  // redéployer une version PLUS ANCIENNE.
+  const rendu = renderBuild({
+    verdict: 'poste_en_retard', titre: 'C’est ce poste qui est en retard',
+    detail: 'Récupérez avant de conclure.', ahead: 2 });
+  assert.match(rendu, /ce poste qui est en retard/);
+  assert.match(rendu, /2 commits d’avance sur ce poste/);
+  assert.ok(!/role="alert"/.test(rendu));
+  assert.ok(!/badge--danger/.test(rendu));
+});
+
+test('une build étrangère dit qu’on ne sait pas, et ne conclut rien', () => {
+  const rendu = renderBuild({
+    verdict: 'etrangere', titre: 'Build étrangère à ce dépôt',
+    detail: 'Aucune comparaison n’est possible — ce n’est pas « à jour ».' });
+  assert.match(rendu, /Build étrangère/);
+  assert.match(rendu, /n’est pas « à jour »/);
+});
+
+test('une build non estampillée est une ALERTE, et dit quoi faire', () => {
+  const rendu = renderBuild({
+    verdict: 'non_estampillee', titre: 'Build non estampillée',
+    detail: 'Réinstallez-la pour le savoir.' });
+  assert.match(rendu, /role="alert"/);
+  assert.match(rendu, /Réinstallez/);
+});
+
+test('un arbre MODIFIÉ se voit à côté de la version', () => {
+  // §40.2 : déployer un arbre modifié est licite, le taire ne l'est pas.
+  const rendu = renderBuild({
+    verdict: 'a_jour', titre: 'À jour', detail: 'x',
+    forge: { version: '0.0.0+abc123.sale', dirty: true } });
+  assert.match(rendu, /arbre modifié/);
+  assert.match(rendu, /badge--accent/);
+});
+
+test('la tête du dépôt local est TRONQUÉE et en chasse fixe', () => {
+  // §3.1 : une donnée qui se compare caractère par caractère est en monospace ;
+  // quarante caractères d'empreinte n'apprennent rien de plus que douze.
+  const rendu = renderBuild({
+    verdict: 'a_jour', titre: 'À jour', detail: 'x',
+    local: { head: '0123456789abcdef0123456789abcdef01234567', branch: 'main' } });
+  assert.match(rendu, /technique">0123456789ab</);
+  assert.ok(!rendu.includes('0123456789abcdef0123456789abcdef01234567'));
+});
+
+test('la section vit sur l’écran de la Forge, et le bouton de comparaison aussi', () => {
+  const rendu = renderForgeView({
+    status: 'ready', host: HOTE, cores: null,
+    build: { verdict: 'a_jour', titre: 'À jour', detail: 'x' } });
+  assert.match(rendu, /id="titre-build"/);
+  assert.match(rendu, /data-action="comparer-build"/);
 });

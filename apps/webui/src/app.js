@@ -31,7 +31,11 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                            pools: null, cores: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
                forge: { status: 'loading', host: null, cores: null,
-                       sparkNames: {}, error: null, syncing: false },
+                       sparkNames: {}, error: null, syncing: false,
+                       // SPK-53 · §40.3 : quel code cette Forge exécute, et
+                       // comment il se situe. `null` tant qu'on n'a pas comparé
+                       // — « pas encore su » n'est ni « à jour », ni une panne.
+                       build: null },
                facette: '',
                // SPK-43 · §37.4 : la session de terminal. Les OCTETS n'y sont
                // pas — ils vont directement au DOM (§37.5).
@@ -148,6 +152,8 @@ function brancher() {
   racine.querySelector('[data-action="reessayer"]')?.addEventListener('click', router);
   // §27.8 : le relevé ne détruit rien et n'a aucun paramètre — pas de confirmation.
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
+  racine.querySelector('[data-action="comparer-build"]')
+    ?.addEventListener('click', () => comparerBuild());
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
   brancherJournal();
@@ -1232,6 +1238,38 @@ async function chargerHote() {
   } catch (erreur) {
     etat.forge.error = erreur;
     etat.forge.status = erreur.code === 'forge_not_synced' ? 'not-synced' : 'error';
+  }
+  peindre();
+  // SPK-53 · §40.3 : la comparaison suit l'écran, sans le retenir. Elle ne coûte
+  // qu'une lecture de `/v1/forge` et un `git` sur CE poste — rien n'est exécuté
+  // sur la Forge, contrairement au relevé de topologie.
+  if (etat.forge.status === 'ready') comparerBuild();
+}
+
+/**
+ * Confronte le code déployé sur la Forge à celui de ce poste (SPK-53, §40.3).
+ *
+ * Ne conclut jamais à la place du serveur : les six verdicts viennent de l'hôte
+ * console, qui a le tunnel ET le dépôt.
+ */
+async function comparerBuild() {
+  const f = etat.forge;
+  f.build = 'en-cours';
+  peindre();
+  try {
+    const reponse = await fetch(
+      `/api/forge/build?server=${encodeURIComponent(etat.server)}`);
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    // Les libellés viennent du SERVEUR : ils sont le contrat du §40.3, pas une
+    // formulation d'écran. Les recopier ici en ferait une seconde vérité — et
+    // le module qui les porte importe `node:child_process`, donc il n'a rien à
+    // faire dans un navigateur.
+    f.build = corps;
+  } catch (erreur) {
+    // §14.6 : ne pas avoir pu comparer n'est pas « à jour ». On le DIT.
+    f.build = { verdict: 'indisponible', titre: 'Comparaison impossible',
+                detail: erreur?.message ?? String(erreur) };
   }
   peindre();
 }

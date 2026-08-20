@@ -245,9 +245,88 @@ function renderAddresses(adresses) {
 }
 
 /** Vue complète. */
+/**
+ * Quel code cette Forge exécute, et comment il se situe (SPK-53, §40.3).
+ *
+ * @spec docs/BACKLOG.md#SPK-53 · docs/DAT.md §40.2 (« inconnue » est une
+ *       réponse), §40.3 (les situations, et pourquoi les deux dernières
+ *       comptent autant) · docs/DESIGN_SYSTEM.md §14.6, §9.7
+ *
+ * Le point à ne pas perdre : **un seul verdict affirme que tout va bien**, et
+ * c'est celui qui l'a mesuré. Les autres nomment ce qu'ils savent. Une console
+ * qui afficherait « à jour » faute de savoir comparer mentirait exactement au
+ * moment où l'on a besoin d'elle.
+ */
+const TOKENS_BUILD = {
+  a_jour: 'success',
+  forge_en_retard: 'danger',
+  poste_en_retard: 'accent',
+  etrangere: 'neutral',
+  non_estampillee: 'danger',
+  sans_depot: 'neutral',
+};
+
+export function renderBuild(build) {
+  // §14.6 : « pas encore relevé » n'est ni « à jour », ni une panne. Tant que la
+  // console n'a pas comparé, elle ne dit rien plutôt qu'une supposition.
+  if (!build) {
+    return `
+<section class="carte bloc" aria-labelledby="titre-build">
+  <h2 id="titre-build">Code déployé</h2>
+  <p class="absence">La console n’a pas encore comparé le code de cette Forge
+  à celui de ce poste.</p>
+</section>`;
+  }
+  if (build === 'en-cours') {
+    return `
+<section class="carte bloc" aria-labelledby="titre-build">
+  <h2 id="titre-build">Code déployé</h2>
+  <p class="note" role="status" aria-busy="true">Comparaison en cours…</p>
+</section>`;
+  }
+
+  const token = TOKENS_BUILD[build.verdict] ?? 'neutral';
+  const grave = token === 'danger';
+  const chiffre = build.behind ? ` — ${build.behind} commit${build.behind > 1 ? 's' : ''} d’écart`
+    : build.ahead ? ` — ${build.ahead} commit${build.ahead > 1 ? 's' : ''} d’avance sur ce poste`
+      : '';
+
+  // La version est une donnée technique : elle se compare caractère par
+  // caractère, donc elle est en chasse fixe (§3.1). Elle n'est PAS le verdict.
+  const version = build.forge?.version
+    ? `<div class="def"><dt>Version installée</dt>
+         <dd><span class="technique">${echapper(build.forge.version)}</span>${
+           build.forge.dirty
+             ? ' <span class="badge badge--accent">arbre modifié</span>' : ''}</dd></div>`
+    : '';
+
+  return `
+<section class="carte bloc" aria-labelledby="titre-build">
+  <h2 id="titre-build">Code déployé</h2>
+  <div class="${grave ? 'refus' : 'definitions'}"${grave ? ' role="alert"' : ''}>
+    <p><span class="badge badge--${token}"><span class="badge__point" aria-hidden="true"></span>${
+      echapper(build.titre ?? build.verdict)}</span>${echapper(chiffre)}</p>
+    <p>${echapper(build.detail ?? '')}</p>
+  </div>
+  <div class="definitions">
+    ${version}
+    ${build.local?.head
+      ? `<div class="def"><dt>Dépôt de ce poste</dt>
+           <dd><span class="technique">${echapper(build.local.head.slice(0, 12))}</span>
+           ${build.local.branch ? `sur ${echapper(build.local.branch)}` : ''}</dd></div>`
+      : ''}
+  </div>
+  <p class="formulaire__actions">
+    <button type="button" class="bouton bouton--compact" data-action="comparer-build">
+      Comparer à nouveau
+    </button>
+  </p>
+</section>`;
+}
+
 export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
-                                 syncing = false } = {}) {
+                                 build = null, syncing = false } = {}) {
   if (status === 'loading') return renderHostSkeleton();
   if (status === 'not-synced') return renderNotSynced(error, syncing);
   if (status === 'error') return renderHostError(error);
@@ -280,6 +359,7 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
     ${renderCores(cores, sparkNames)}
   </div>
   <div class="detail__secondaire">
+    ${renderBuild(build)}
     ${renderAddresses(host.addresses)}
   </div>
 </div>`;
