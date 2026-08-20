@@ -2140,11 +2140,13 @@ et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
 - **Preuves** : 30 de `sparkd` propres à l'unité, 53 de composant.
 
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. le **parcours E2E et la capture** du mode rootless — le geste depuis la
-     confirmation et le mode au journal. `e2e/parcours.test.mjs` et
-     `e2e/captures.mjs` étaient tenus par une autre session au moment de cette
-     tranche, et je ne les ai pas repris pour ne pas écraser son travail sur
-     SPK-59 ;
+  1. **les deux parcours du rootless sont ÉCRITS mais NON EXÉCUTÉS** (commit
+     `4f8710d`) : « cocher le rootless amorce dans ce mode, et le journal le
+     PORTE », et « redemander l'autre mode est REFUSÉ ». Ils sont syntaxiquement
+     valides et poussés, mais aucune exécution ne les a encore vus verts — une
+     autre session tenait la fenêtre Playwright de la machine. **La capture de la
+     confirmation avec l'option n'est pas produite non plus.** À faire dès qu'une
+     fenêtre Playwright est libre : `make e2e` puis `make captures`, et observer ;
   2. le mode rootless **éprouvé sur une pile qui le supporte**, que la DoD
      demande. Le doublon représente l'effet des scripts, pas le comportement d'un
      vrai démon rootless ;

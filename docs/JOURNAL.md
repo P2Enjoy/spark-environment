@@ -4541,3 +4541,39 @@ Une mesure dans la cellule `helo`, citée telle quelle. Aucun code touché : DAT
 instantané ne capture aucun secret, et que le fichier volatil est reposé au
 démarrage.
 
+
+## 2026-08-20 — Les parcours du rootless, écrits et poussés sans avoir été exécutés
+
+Suite immédiate de l'entrée précédente. La session qui tenait
+`e2e/parcours.test.mjs` l'a libéré ; j'ai donc écrit les deux parcours qui
+manquaient à SPK-54 :
+
+- cocher l'option rootless dans la confirmation, vérifier que l'écran rend le
+  mode en français et que le journal le porte dans sa charge ;
+- constater qu'un second amorçage dans l'autre mode n'offre plus l'option, **et**
+  que le serveur refuse en `409` quand on contourne l'écran.
+
+Le harnais gagne `ecrireSparkd`, dont l'usage est borné et documenté : le §29.3
+interdit d'agir par l'API pour atteindre un écran, mais le `CLAUDE.md` §10 exige
+qu'une règle d'accès soit vérifiée par une requête directe qui contourne
+l'interface. C'est le seul emploi admis, et le commentaire du harnais le dit.
+
+**Ils ne sont pas exécutés, et c'est le fait important de cette entrée.** Ma
+campagne a été tuée en cours, puis une troisième session a pris la fenêtre
+Playwright de la machine. Je ne l'ai pas reprise : deux campagnes simultanées
+font dépasser des timeouts réglés pour une machine au repos — mesuré par deux
+sessions aujourd'hui, et le rouge se **déplace** d'un test à l'autre selon la
+charge, ce qui est la signature d'une course et non d'une régression.
+
+Poussés quand même (§0 : un travail non poussé est un travail perdu), et le
+backlog porte l'écart en toutes lettres.
+
+**Ce que cela apprend, et qui dépasse mon unité** : le harnais isole bien l'ÉTAT
+— ports libres, registre jetable, c'est le §29.2 et il tient — mais pas le TEMPS.
+Le §29.2 ne dit rien de la machine. Une autre session propose de le consigner en
+INC-09 ; je la laisse le faire plutôt que d'écrire deux fois la même chose.
+
+**Où reprendre.** Exécuter `make e2e` puis `make captures` dès qu'une fenêtre
+Playwright est libre, observer la capture de la confirmation avec l'option, et
+clore ce point. Le reste de SPK-54 attend une pile qui supporte le rootless et
+une Forge réelle.
