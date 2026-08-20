@@ -1820,10 +1820,17 @@ test('l’onglet Docker liste ce qui tourne, sans offrir de geste SUR un contene
     await page.waitForSelector('#titre-docker', { timeout: 15000 });
     await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
 
+    // RÉVISÉE le 2026-08-20 par SPK-45 tranche 2, pour la raison DÉJÀ rencontrée
+    // en tête de ce fichier : le compte était FIGÉ à deux. Le doublon porte
+    // désormais un conteneur sans shell, et le nombre a rougi sans rien dire du
+    // produit — il rougirait encore à la prochaine fixture.
+    //
+    // Ce que la preuve établit est inchangé, et mieux dit : `docker ps -a`
+    // liste ce qui tourne ET ce qui est arrêté. C'est le point du §37.6 bis —
+    // une pile qui ne répond plus a justement des conteneurs arrêtés.
     const lignes = await page.$$eval('tbody tr', (l) => l.map((x) => x.textContent));
-    assert.equal(lignes.length, 2, 'un conteneur en marche et un arrêté');
-    assert.ok(lignes.some((l) => /helo-web-1/.test(l)));
-    assert.ok(lignes.some((l) => /helo-base-1/.test(l)));
+    assert.ok(lignes.some((l) => /helo-web-1/.test(l)), 'celui qui tourne');
+    assert.ok(lignes.some((l) => /helo-base-1/.test(l)), 'et celui qui est arrêté');
 
     // §14.7 : l'état est en français, jamais le jeton de Docker.
     const ecran = await page.textContent('#titre-docker ~ .table-defilante');
