@@ -9,7 +9,7 @@
  */
 
 import { renderSparksView } from './components/sparks-view.js';
-import { renderSparkDetail } from './components/spark-detail.js';
+import { renderSparkDetail, AMORCAGE_VIDE } from './components/spark-detail.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
 import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
@@ -52,7 +52,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                           filtres: { ...FILTRES_VIDES },
                           chain: null, anchor: null, checking: false },
                catalogue: { status: 'loading', images: [], error: null,
-                            ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } } };
+                            ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } },
+               // SPK-54 · §42 : l'amorçage. Vide tant qu'on n'a rien demandé —
+               // le relevé exécute une commande dans la cellule du locataire.
+               amorcage: { ...AMORCAGE_VIDE } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -97,6 +100,7 @@ function peindre() {
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, admin: etat.admin,
                             facette: etat.facette, terminal: etat.terminal,
+                            amorcage: etat.amorcage,
                             ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
         + renderSparksView(etat);
@@ -159,6 +163,7 @@ function brancher() {
   }
   brancherPanneaux();
   brancherTerminal();
+  brancherAmorcage();
   // §6.27 : le contrat de la modale est tenu à UN SEUL endroit — focus entrant,
   // focus retenu, Échap qui vaut annulation, focus rendu au déclencheur.
   brancherModale(racine, {
@@ -214,6 +219,78 @@ function ecrireSortie(texte) {
   if (!bloc) return;
   bloc.append(texte);
   bloc.scrollTop = bloc.scrollHeight;
+}
+
+/**
+ * L'amorçage d'un Spark (SPK-54, docs/DAT.md §42).
+ *
+ * Le relevé comme l'amorçage sont des gestes DEMANDÉS : ni l'un ni l'autre ne
+ * part de lui-même, parce que les deux exécutent une commande dans la cellule du
+ * locataire. Un relevé automatique à l'ouverture de l'écran ferait entrer la
+ * console chez lui à chaque coup d'œil.
+ */
+function brancherAmorcage() {
+  const a = etat.amorcage;
+
+  racine.querySelector('[data-amorcage="relever"]')
+    ?.addEventListener('click', () => amorcageAppel('GET'));
+
+  racine.querySelector('[data-amorcage="amorcer"]')
+    ?.addEventListener('click', () => {
+      // §6.23 : une action sensible se confirme, et la confirmation nomme le
+      // pouvoir employé. Elle est rendue dans le flux (§6.22).
+      a.confirme = true;
+      peindre();
+      racine.querySelector('[data-amorcage="engager"]')?.focus();
+    });
+
+  racine.querySelector('[data-amorcage="annuler"]')
+    ?.addEventListener('click', () => {
+      a.confirme = false;
+      peindre();
+      // §14.3 : le focus revient au déclencheur, qui vient de réapparaître.
+      racine.querySelector('[data-amorcage="amorcer"]')?.focus();
+    });
+
+  racine.querySelector('[data-amorcage="engager"]')
+    ?.addEventListener('click', () => {
+      a.confirme = false;
+      amorcageAppel('POST');
+    });
+}
+
+async function amorcageAppel(methode) {
+  const a = etat.amorcage;
+  a.erreur = null;
+  a.busy = true;
+  if (methode === 'GET') {
+    // §14.6 : « mesure en cours » ne se confond ni avec un verdict, ni avec
+    // l'absence de mesure. Le compte rendu précédent s'efface : il portait sur
+    // un état qu'on est en train de remesurer.
+    a.releve = 'en-cours';
+    a.resultat = null;
+  }
+  peindre();
+  const chemin = `/api/v1/sparks/${encodeURIComponent(etat.spark.name)}/bootstrap`
+    + `?server=${encodeURIComponent(etat.server)}`;
+  try {
+    const reponse = await fetch(chemin, methode === 'GET' ? {} : { method: 'POST' });
+    const corps = await reponse.json();
+    if (!reponse.ok) {
+      // Le runtime NOMME ses refus (§42.7) : « pas de cellule », « à l'arrêt »,
+      // « protégé ». Les remplacer par un code HTTP ferait deviner.
+      throw new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
+    }
+    a.releve = { items: corps.items, complete: corps.complete };
+    // Le compte rendu n'existe qu'après un amorçage : un relevé seul ne dit pas
+    // ce qui a été fait, il dit ce qui est.
+    if (methode !== 'GET') a.resultat = corps;
+  } catch (erreur) {
+    a.erreur = erreur?.message ?? String(erreur);
+    if (methode === 'GET') a.releve = null;
+  }
+  a.busy = false;
+  peindre();
 }
 
 function brancherTerminal() {

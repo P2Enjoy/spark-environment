@@ -218,6 +218,132 @@ function renderAcces(spark) {
 }
 
 /**
+ * L'amorçage d'un Spark (SPK-54, docs/DAT.md §41, §42).
+ *
+ * @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.1 (détecter d'abord),
+ *       §42.3 (par où il passe), §42.7 (le contrat) ·
+ *       docs/DESIGN_SYSTEM.md §6.13 (les états d'une vue), §6.22
+ *       (confirmation dans le flux), §6.23 (une action sensible se confirme),
+ *       §14.6 (« pas encore relevé » n'est pas « rien à faire »)
+ *
+ * `null` tant qu'on n'a pas demandé. C'est délibéré et cela vaut d'être dit : le
+ * relevé EXÉCUTE une commande dans la cellule du locataire. Le lancer à chaque
+ * ouverture de l'écran ferait entrer la console chez lui à chaque coup d'œil,
+ * pour une information qui ne change qu'après un geste.
+ */
+export const AMORCAGE_VIDE = {
+  releve: null,       // null | 'en-cours' | { items, complete }
+  resultat: null,     // le compte rendu ligne à ligne du dernier amorçage
+  confirme: false,    // §6.23 : la confirmation qui nomme le pouvoir employé
+  busy: false,
+  erreur: null,
+};
+
+/** Les trois états d'un élément, dits en français (§14.7). */
+const ETATS_AMORCAGE = {
+  present: { libelle: 'en place', token: 'success' },
+  absent: { libelle: 'absent', token: 'neutral' },
+  defect: { libelle: 'à corriger', token: 'danger' },
+};
+
+const SORTS_AMORCAGE = {
+  'inchangé': { libelle: 'inchangé', token: 'neutral' },
+  'installé': { libelle: 'installé', token: 'success' },
+  'échoué': { libelle: 'échoué', token: 'danger' },
+};
+
+function ligneAmorcage(ligne) {
+  const etat = ETATS_AMORCAGE[ligne.state] ?? ETATS_AMORCAGE.absent;
+  const sort = ligne.outcome ? SORTS_AMORCAGE[ligne.outcome] : null;
+  return `<li class="ligne-amorcage">
+    <span class="badge badge--${etat.token}">${echapper(etat.libelle)}</span>
+    <strong>${echapper(ligne.label ?? ligne.key)}</strong>
+    ${sort ? `<span class="badge badge--${sort.token}">${echapper(sort.libelle)}</span>` : ''}
+    <span class="note">${echapper(ligne.detail ?? '')}</span>
+  </li>`;
+}
+
+export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
+  // §37.2 : sans cellule, il n'y a rien où exécuter. L'écran le NOMME plutôt
+  // que d'offrir un geste qui sera refusé.
+  if (!spark.incus_name) {
+    return `
+<section class="carte bloc" aria-labelledby="titre-amorcage">
+  <h2 id="titre-amorcage">Amorçage</h2>
+  <p class="absence">Ce Spark n’a pas encore de cellule. Il doit être créé avant
+  qu’on puisse l’amorcer.</p>
+</section>`;
+  }
+
+  const releve = etat.releve;
+  const lignes = etat.resultat?.items ?? (releve && releve !== 'en-cours' ? releve.items : null);
+
+  // §6.13 et §14.6 : « pas encore relevé » n'est NI « rien à faire », NI « tout
+  // va bien ». L'écran ne prétend pas savoir ce qu'il n'a pas mesuré.
+  const corps = etat.erreur
+    ? `<div class="refus" role="alert"><p>${echapper(etat.erreur)}</p></div>`
+    : releve === 'en-cours'
+      ? '<p class="note" role="status" aria-busy="true">Relevé de la cellule en cours…</p>'
+      : !lignes
+        ? `<p class="absence">L’état de cette cellule n’a pas encore été relevé.
+           Le relevé exécute une commande <strong>dans</strong> le Spark : il est
+           demandé, jamais lancé de lui-même.</p>`
+        : `<ul class="liste-amorcage">${lignes.map(ligneAmorcage).join('')}</ul>`;
+
+  const complet = etat.resultat?.complete ?? (releve && releve !== 'en-cours'
+    ? releve.complete : null);
+  const verdict = lignes && complet
+    ? `<p class="note" role="status">Cette cellule est complète : elle est joignable
+       en SSH et capable de faire tourner une pile Compose.</p>`
+    : '';
+
+  // §42.1 : un second amorçage ne fait rien, et l'écran le DIT.
+  const rien = etat.resultat && etat.resultat.changed === false
+    ? `<p class="note" role="status">Rien n’a été fait : tout était déjà en place.</p>`
+    : '';
+
+  // §6.23 et §42.3 : l'amorçage passe par le plan de contrôle, en root dans la
+  // cellule. La confirmation le NOMME, et elle est rendue dans le flux (§6.22).
+  const confirmation = etat.confirme
+    ? `<div class="confirmation" role="group" aria-labelledby="titre-confirme-amorcage">
+         <p id="titre-confirme-amorcage"><strong>Amorcer « ${echapper(spark.name)} » ?</strong></p>
+         <p>Le plan de contrôle va <strong>exécuter des commandes en root dans la
+         cellule</strong>, sans passer par SSH — c’est justement ce qui n’existe
+         pas encore sur un Spark neuf.</p>
+         <p class="note">Seuls les éléments manquants sont installés. Ce qui est
+         déjà en place n’est pas touché : réinstaller « au cas où » redémarrerait
+         le moteur Docker de ce Spark, donc ce qu’il fait tourner.</p>
+         <p class="confirmation__actions">
+           <button type="button" class="bouton bouton--destructif" data-amorcage="engager">
+             Exécuter en root dans la cellule
+           </button>
+           <button type="button" class="bouton" data-amorcage="annuler">Annuler</button>
+         </p>
+       </div>`
+    : '';
+
+  return `
+<section class="carte bloc" aria-labelledby="titre-amorcage">
+  <h2 id="titre-amorcage">Amorçage</h2>
+  <p class="note">L’image de base n’embarque ni serveur SSH ni moteur Docker.
+  L’amorçage relève ce qui manque et ne pose que cela.</p>
+  ${corps}
+  ${verdict}${rien}
+  ${confirmation}
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-amorcage="relever"
+            ${etat.busy ? 'disabled' : ''}>
+      ${lignes ? 'Relever à nouveau' : 'Relever l’état'}
+    </button>
+    ${etat.confirme ? '' : `<button type="button" class="bouton bouton--primaire"
+            data-amorcage="amorcer" ${etat.busy ? 'disabled' : ''}>
+      Amorcer ce Spark
+    </button>`}
+  </p>
+</section>`;
+}
+
+/**
  * Qui a produit une entrée du journal (SPK-37, docs/DAT.md §21.6, §36.4).
  *
  * Les deux classes ne se confondent pas : les afficher pareillement laisserait
@@ -273,6 +399,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     snapshots = [], audit = [],
                                     ports = [], reservedPorts = [],
                                     terminal = TERMINAL_VIDE,
+                                    amorcage = AMORCAGE_VIDE,
                                     error = null, confirming = null,
                                     admin = ADMIN_VIDE, facette = '' } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
@@ -286,7 +413,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     '': () => `<div class="detail">
       <div class="detail__principal">${renderRessources(spark, usage)}
         ${renderProtection(spark, admin)}</div>
-      <div class="detail__secondaire">${renderAcces(spark)}</div>
+      <div class="detail__secondaire">${renderAcces(spark)}
+        ${renderAmorcage(spark, amorcage)}</div>
     </div>`,
     // §39.3 : le nom D'ABORD, le port publié comme un second geste qui annonce
     // ce qu'il coûte. Les deux vivent donc sur la même facette, dans cet ordre.
