@@ -3986,6 +3986,38 @@ Elle est ouverte au seul **dépannage**, sous quatre conditions cumulatives :
 - la bannière reste visible pendant toute la session : on ne doit pas oublier par
   quel chemin on est entré.
 
+#### 37.3.1 « Ne répond pas » n'est pas « refuse la clé » — mesuré le 2026-08-20
+
+La première condition ci-dessus dit « son `sshd` ne répond pas ». En l'écrivant
+en code, il a fallu trancher un cas qu'elle ne couvrait pas, et qui décide de
+tout le reste : un `sshd` qui **répond et refuse la clé**.
+
+Les deux se ressemblent — dans les deux cas on n'entre pas — et ils n'appellent
+pas le même geste :
+
+| Ce que le sondage rend | Verdict | Pourquoi |
+|---|---|---|
+| connexion refusée, expirée, réseau injoignable | **le dépannage s'ouvre** | rien n'écoute : aucun accès normal n'existe |
+| `Permission denied`, `publickey` | **refusé**, renvoi vers les clés | le chemin normal existe ; il manque un accès, qui se réaccorde (§17) |
+| autre chose, non reconnue | **refusé** | ouvrir sur un doute reviendrait à ouvrir toujours : toute panne finit par produire un message inconnu |
+| `ssh` introuvable sur le poste | **refusé** | sinon le dépannage s'ouvrirait parce que la CONSOLE est mal installée |
+
+Confondre les deux premières lignes ferait du dépannage la façon ordinaire
+d'entrer le jour où une clé n'est plus accordée — c'est-à-dire précisément ce que
+ce paragraphe existe pour empêcher.
+
+Le sondage emprunte **exactement** le chemin du terminal normal — même rebond,
+mêmes options — et n'exécute que `true`. Sonder autrement mesurerait un autre
+chemin que celui qu'on s'apprête à déclarer indisponible. Il n'a pas lieu quand
+l'état du Spark suffit : `error` ouvre le chemin sans attendre.
+
+**Où la règle vit.** Dans l'hôte console, qui est le backend de ce chemin
+puisque `sparkd` n'y est pas (§37.1). L'écran affiche la commande sans la
+désactiver : il ne sait pas si le `sshd` répond, et le `DESIGN_SYSTEM.md` §14.9
+réserve l'autorité au serveur. Un refus s'affiche **dans** l'écran sans le
+fermer — le chemin normal reste offert, et fermer enfermerait l'exploitant hors
+d'un Spark joignable.
+
 ### 37.4 Le terminal
 
 Un pseudo-terminal, rendu dans le navigateur, servi par l'hôte console sur la

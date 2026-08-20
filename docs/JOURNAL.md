@@ -3893,3 +3893,89 @@ depuis la pile réelle après une vraie troncature.
 quatre conditions, plus l'écran d'un Spark dont le `sshd` est muet — cas devenu
 concret depuis HELO, où l'on a mesuré qu'une cellule fraîche n'a pas de `sshd`.
 INC-05 reste ouvert et court.
+
+## 2026-08-20 — SPK-43 tranche 4 : le dépannage, et deux sessions dans un même arbre
+
+**Unité** : SPK-43, tranche 4, désignée par l'entrée précédente. Le §37.3 était
+déjà écrit et couvrait ce qui restait : j'ai codé directement, sans réécrire la
+spécification (CloudWorker §3.2, l'exception).
+
+### Deux agents sur le même arbre de travail, et ce que ça change
+
+L'ouverture de session a trouvé six fichiers modifiés non committés. Ce n'était
+pas un reliquat : une session pairs (`spark-environment-b5`) écrivait **en
+direct** — `apps/webui/host/main.js` datait de cinq secondes.
+
+Le §1.2 de `CloudWorker.md` prescrit `git stash push -u`. **Je ne l'ai pas fait.**
+Dans cette configuration, il aurait arraché une heure de travail non committé à
+l'autre session, ce que le `CLAUDE.md` §13 interdit et que le §26 place au-dessus
+d'une convention de procédure. J'ai coordonné : signalé la collision, listé ce
+que je prenais, attendu qu'elle pousse. Elle l'a fait en six minutes.
+
+**La faute symétrique s'est produite quand même** : son commit `389650c` a emporté
+mon `apps/webui/host/tunnel.js` non committé — `git add -A` dans un arbre partagé
+prend le travail de l'autre exactement comme `stash -u` l'aurait arraché. Le
+contenu est intact sur `origin/main`, seulement classé sous un message qui n'en
+parle pas. Je n'ai pas réécrit l'historique poussé pour si peu.
+
+**Ce que le responsable doit trancher** : le §1.2 de `CloudWorker.md` est écrit
+pour une machine éphémère où l'arbre n'appartient à personne. Sur un poste
+partagé par deux agents, il est dangereux. Nous avons tenu par convention — ajout
+par chemin explicite, terrain annoncé — mais rien ne l'impose.
+
+### Ce que la tranche livre
+
+Le dépannage ne se connecte pas au Spark : il vise la **Forge** et lui fait
+exécuter `incus exec <cellule> -- /bin/bash`. C'est le sens du chemin — ce qui ne
+répond pas, c'est justement le Spark. Sur Forge locale, aucun `ssh`.
+
+Les quatre conditions du §37.3 sont tenues : règle d'accès appliquée par l'hôte
+console et non par l'écran, confirmation qui nomme le pouvoir employé, action
+d'audit `spark.rescue_exec` distincte et dénombrable, bannière portant le chemin
+réel et qui tient après la fin du shell distant.
+
+**Un point que la spécification ne couvrait pas**, et qui décide du reste : « le
+`sshd` ne répond pas » et « le `sshd` répond et refuse la clé » ne sont pas le
+même incident. Confondre les deux ferait du dépannage la façon ordinaire d'entrer
+le jour où une clé n'est plus accordée. Le §37.3.1 écrit désormais la table des
+quatre verdicts, dont « échec non reconnu → refusé » : ouvrir sur un doute
+reviendrait à ouvrir toujours.
+
+### Deux défauts que seules les captures ont montrés
+
+`bouton--danger` n'existe pas — le projet nomme sa variante destructive
+`bouton--destructif`. Le point d'engagement se rendait en **secondaire, blanc**,
+à l'endroit où le §6.23 exige la variante destructive. **Vingt-six preuves de
+composant étaient vertes** : elles cherchaient la classe dans la chaîne rendue,
+ce qui prouve qu'on l'a écrite, pas qu'elle peint quoi que ce soit.
+
+D'où `apps/webui/src/styles/classes.test.js`, le contrôle que le §12.3 du design
+system réclame et qui manquait. Il trouve quatre classes manquantes
+préexistantes — INC-06, comportement inchangé, liste qui ne peut que décroître.
+
+Second défaut : le libellé du chemin tenait dans une pastille, qui est
+`white-space: nowrap`, et se coupait au tiers sous 390 px — à l'endroit précis où
+le §37.3 veut le chemin lisible toute la session. Pastille courte, pouvoir nommé
+à côté en prose qui s'enroule.
+
+En vérifiant ce format, mesuré et **non corrigé** : la rangée d'onglets d'un
+Spark fait déborder la page entière sous 390 px — 552 px pour une vue de 390.
+Ligne de base par `git stash` : chiffres identiques des deux côtés, donc
+préexistant. INC-07.
+
+### Vérifications
+
+Campagne complète verte : 667 Python, 6 de contrat, 515 de console, 8 de gestes,
+45 parcours E2E dont deux neufs, 7 du manuel, `contract-check` et `build`.
+Captures `78-` à `82-` observées, format étroit compris, plus
+`docs/manuel/images/m8-depannage.png` produite depuis la pile réelle.
+
+**SPK-43 reste `[~]`**, et l'écart est nommé : l'échec du chemin **normal** sur un
+Spark au `sshd` muet se rend encore par la sortie brute de `ssh`, sans que l'écran
+reconnaisse le cas pour proposer le dépannage de lui-même ; et rien n'a jamais été
+exécuté contre un vrai `incus exec` — le doublon du §37.4.2 bis remplace la
+commande, donc la limite du §39.7 vaut maintenant pour les deux chemins.
+
+**Où reprendre.** Les deux points ci-dessus, dont le premier est livrable ici et
+le second exige la Forge réelle. Si l'on préfère construire, SPK-44 (onglet
+Docker) est la première `[ ]` du plan et emprunte le même transport.

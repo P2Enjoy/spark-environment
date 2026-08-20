@@ -3,6 +3,19 @@
 ## [Non publié]
 
 ### Ajouté
+- **Terminal de dépannage** (SPK-43, `docs/DAT.md` §37.3) : quand un Spark est en
+  erreur ou que rien ne répond sur son port 22, la console demande à la Forge
+  d'exécuter un shell root dans la cellule. Confirmation qui nomme le pouvoir
+  employé, action d'audit distincte `spark.rescue_exec`, bannière visible toute
+  la session. Le serveur décide, pas l'écran.
+- Distinction entre « le `sshd` ne répond pas » et « le `sshd` refuse la clé » :
+  le second renvoie à l'onglet *Clés*, il n'ouvre pas le dépannage.
+- `apps/webui/src/styles/classes.test.js` : le contrôle que le §12.3 du design
+  system exige — toute classe littérale d'un composant existe dans le CSS.
+- `docs/manuel/M8-exploiter.md` : le chapitre du dépannage, avec son illustration.
+- `docs/INCONSISTENCY_REPORT.md` : INC-06 (quatre classes CSS manquantes) et
+  INC-07 (les onglets d'un Spark débordent la page sous 390 px).
+
 - Le **manuel est joignable depuis la console** : servi depuis `docs/manuel/`,
   sa source unique, et rendu dans une destination de premier degré. Les renvois
   des écrans y mènent réellement.

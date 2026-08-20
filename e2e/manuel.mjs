@@ -163,6 +163,17 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.confirmation', { timeout: 10000 });
     await capturer('m10-suppression');
 
+    // --- M8 · LE TERMINAL DE DÉPANNAGE (SPK-43, §37.3) -----------------------
+    // C'est la confirmation qui doit être illustrée : elle NOMME le pouvoir
+    // employé, et c'est ce que le chapitre demande au lecteur de reconnaître.
+    // « site-vitrine » est en erreur dans le seed, donc le chemin est ouvert.
+    await ouvrir('site-vitrine');
+    await page.click('.onglet[href$="/terminal"]');
+    await page.waitForSelector('#titre-terminal', { timeout: 10000 });
+    await page.click('[data-terminal="depanner"]');
+    await page.waitForSelector('[data-terminal="depanner-confirme"]', { timeout: 10000 });
+    await capturer('m8-depannage', { hauteur: 900 });
+
     // --- M12 · L'ANCRE QUI ALERTE (SPK-38) -----------------------------------
     // EN DERNIER, et cela doit le rester : la coupe ci-dessous ampute le journal
     // de la pile et n'est pas annulable. Toute illustration produite après elle

@@ -1651,17 +1651,53 @@ Le transport de tous les outils du §37, et le premier d'entre eux.
   `contract-check`. Captures `78-` à `81-` observées, format étroit compris.
   Manuel M8 mis à jour.
 
+**Quatrième tranche, 2026-08-20 : le chemin de dépannage, ses quatre conditions
+tenues.**
+
+- Le dépannage ne se connecte PAS au Spark — c'est lui qui ne répond pas. Il vise
+  la **Forge** et lui fait exécuter `incus exec <cellule> -- /bin/bash`. Sur une
+  Forge locale, aucun `ssh` n'est lancé : `incus` s'exécute sur place.
+- **La règle d'accès est appliquée par l'hôte console**, qui est le backend de ce
+  chemin puisque `sparkd` n'y est pas (§37.1). Masquer un bouton n'aurait été
+  qu'une aide d'interface (`CLAUDE.md` §10) : sept preuves passent par la route,
+  aucune par le composant.
+- **Point qui décide, et qui n'était pas dans la spécification** : « le `sshd` ne
+  répond pas » et « le `sshd` répond et refuse la clé » ne sont pas le même
+  incident. Le second se règle en réaccordant la clé, et l'écran le renvoie à
+  l'onglet *Clés*. Un échec **non reconnu** n'ouvre rien non plus — ouvrir sur un
+  doute reviendrait à ouvrir toujours, puisque toute panne finit par produire un
+  message inconnu. Et un `ssh` introuvable ne fait pas conclure que le `sshd`
+  distant est muet, sinon le dépannage s'ouvrirait parce que la console est mal
+  installée.
+- Le sondage emprunte **exactement** le chemin du terminal normal et n'exécute que
+  `true` : sonder autrement mesurerait un autre chemin que celui qu'on s'apprête à
+  déclarer indisponible. Il n'a pas lieu quand l'état suffit — un Spark en erreur
+  ouvre le chemin sans cinq secondes d'attente de plus.
+- Confirmation **dans le flux** (§6.22) qui nomme le pouvoir employé, action
+  d'audit **distincte** `spark.rescue_exec` avec son motif, et bannière portant le
+  chemin RÉEL de la session, qui tient après la fin du shell distant.
+- **Deux défauts que seules les captures ont montrés** : `bouton--danger`
+  n'existe pas dans la feuille de style — le point d'engagement se rendait en
+  secondaire là où le §6.23 exige la variante destructive —, et le libellé du
+  chemin, tenu dans une pastille `white-space: nowrap`, se coupait au tiers sous
+  390 px. Vingt-six preuves de composant étaient vertes avec le premier en place.
+  D'où le contrôle du §12.3, jusque-là absent : `apps/webui/src/styles/classes.test.js`.
+- **Preuves** : 667 Python, 35 d'hôte console et 19 de routes, 27 de composant,
+  3 de classes CSS, **45 parcours E2E** dont deux neufs. Captures `78-` à `82-`
+  observées, format étroit compris. Manuel M8 mis à jour, illustration
+  `m8-depannage.png`.
+
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. le **chemin de dépannage** `incus exec` du §37.3, avec ses quatre
-     conditions : Spark en `error` ou `sshd` muet, confirmation qui **nomme le
-     pouvoir employé**, action d'audit distincte `spark.rescue_exec`, et bannière
-     visible toute la session. C'est le dernier morceau de comportement ;
-  2. l'écran d'un Spark **dont le `sshd` est muet** — distinct du Spark sans
-     cellule, déjà traité : celui-ci a une cellule qui tourne, mais rien ne
-     répond sur le port 22. C'est ce cas qui ouvre le chemin de dépannage ;
-  3. la vérification que la connexion atteint **réellement** un Spark : elle
+  1. l'écran d'un Spark **dont le `sshd` est muet** est traité par le chemin de
+     dépannage — la commande est offerte et le serveur l'accorde après mesure —
+     mais l'échec du chemin NORMAL sur un tel Spark se rend encore par la sortie
+     brute de `ssh` puis « le shell distant s'est terminé ». L'écran ne
+     reconnaît pas ce cas pour le nommer et proposer le dépannage de lui-même ;
+  2. la vérification que la connexion atteint **réellement** un Spark : elle
      exige une Forge réelle avec Incus et un `sshd` installé, que l'image de base
-     n'embarque pas (§37.2). Même limite qu'au §39.7.
+     n'embarque pas (§37.2). Le dépannage, lui, n'a jamais été exécuté contre un
+     vrai `incus exec` — le doublon du §37.4.2 bis remplace la commande. Même
+     limite qu'au §39.7, et elle vaut désormais pour les deux chemins.
 
 ### [ ] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 
