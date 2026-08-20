@@ -3,6 +3,13 @@
 ## [Non publié]
 
 ### Ajouté
+- **Les écrans renvoient au manuel au lieu de recopier son raisonnement**
+  (SPK-56, `docs/DESIGN_SYSTEM.md` §1.5 bis) : les sections *Ressources*,
+  *Protection*, *Amorçage*, *Clés* et le catalogue d'images gardent leurs valeurs,
+  leurs qualificatifs et un renvoi ; l'explication vit désormais au seul endroit
+  où elle peut rester juste.
+- Manuel M5 : nouveau passage *Ce catalogue n'est pas un registre d'images*.
+- Sur écran étroit, le manuel ouvre le **chapitre demandé** et non son sommaire.
 - **Entrer dans un conteneur** (SPK-45 deuxième tranche, `docs/DAT.md` §37.4.7) :
   un conteneur qui tourne porte un bouton *Ouvrir un terminal*, et la session
   s'ouvre dans un shell **du conteneur**. La bannière le nomme, avec son shell —

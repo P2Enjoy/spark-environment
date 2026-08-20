@@ -2380,7 +2380,7 @@ correctif de sécurité n'est en attente. Trois points restent.
   la main ; un test prouve qu'un Spark garde son DNS et sa sortie internet après
   durcissement — le durcissement ne doit pas casser ce qu'il protège.
 
-### [~] SPK-56 · L'écran nomme, le manuel explique — et le manuel devient joignable
+### [x] SPK-56 · L'écran nomme, le manuel explique — et le manuel devient joignable
 
 Constat du responsable, 2026-08-20 : l'écran de la Forge portait des paragraphes
 entiers — pourquoi le disque n'est pas surengageable, ce que ZFS reprend sous les
@@ -2400,11 +2400,31 @@ qu'il ne pouvait que faire diverger.
 - Ce qui a **failli** être introduit et ne l'a pas été : un renvoi « Manuel M4 »
   qui ne mène nulle part. C'est le §1.4 — une commande morte — et c'est pourquoi
   le manuel est servi dans le même changement que l'allègement.
-- **Reste avant `[x]`** : le balayage des autres écrans, dont l'écran de création
-  et le détail d'un Spark, qui n'ont pas été relus sous cette règle ; la
-  vérification visuelle des deux écrans modifiés et du manuel, aux trois formats ;
-  le manuel M4 et M12 à relire pour qu'ils portent bien ce que l'écran a cessé de
-  dire.
+**Clos le 2026-08-20 : le balayage, la vérification visuelle et la relecture du
+manuel.**
+
+- **Quatre paragraphes retirés**, chaque fois après avoir VÉRIFIÉ que le manuel
+  les portait : le droit d'ordonnancement (Ressources → M5), le geste accidentel
+  (Protection → M8), l'argumentation des trois coûts du rootless et le
+  « pourquoi » de l'amorçage (→ M6), le développement sur le catalogue (→ M5).
+  Pour ce dernier le manuel ne disait rien : **le chapitre a été écrit d'abord**.
+- **La limite du §1.5 bis, posée** : il vise le raisonnement de fond, et ne prime
+  pas sur le §6.23 — une confirmation doit NOMMER sa conséquence. Les trois
+  conséquences du rootless restent donc à l'écran ; seule leur argumentation
+  part. Deux preuves l'ont imposé, et le motif est écrit dans les fichiers.
+- **La vérification visuelle a trouvé ce qu'elle seule pouvait trouver** : le
+  manuel n'avait aucune capture, et sur 390 px `#/manuel/M5` montrait douze liens
+  avant le chapitre demandé. Empilés, le chapitre passe désormais avant le
+  sommaire.
+- **Garde durable** : `apps/webui/src/styles/renvois.test.js` exige que chaque
+  renvoi `#/manuel/Mx` désigne un chapitre présent, et que tout écran ayant
+  délégué porte un renvoi. Un renvoi mort est une commande morte (§1.4).
+- **M4 et M12 relus** : ils portent bien le surengagement, la marge de
+  métadonnées, `zfs_arc_max` et la chaîne d'intégrité que les écrans ont cessé
+  d'expliquer.
+- **Preuves** : 772 de console dont 58 du détail, 86 de l'administration, 25 du
+  catalogue et des renvois. Captures `107-` à `110-` observées, plus
+  `14-detail-mobile` refaite. Campagne complète verte.
 
 ### [ ] SPK-57 · Redimensionner un Spark existant
 

@@ -5191,3 +5191,67 @@ par le vrai parcours.
 **Où reprendre.** SPK-53 et SPK-54 attendent chacune une décision du responsable.
 Sans elles, la première unité du plan qui reste à construire est SPK-55 (durcir
 la Forge) ou SPK-57 (redimensionner un Spark existant), toutes deux `[ ]`.
+
+---
+
+## 2026-08-20 · SPK-56 — le balayage des écrans, et la limite du §1.5 bis
+
+**Unité choisie** au §4.2 point 2 : premier `[~]` du plan dont il reste du
+comportement. SPK-17, SPK-29, SPK-30 et SPK-37 attendent du matériel ou une
+exécution de CI ; SPK-43/44/45 attendent la Forge réelle ; SPK-53 et SPK-54 un
+arbitrage. SPK-56 restait, avec trois écarts nommés et livrables ici.
+
+### Ce que le §1.5 bis a effectivement retiré
+
+Le test de la règle — « une phrase qui reste vraie quand toutes les valeurs de
+l'écran changent appartient au manuel » — appliqué aux écrans non encore balayés.
+Quatre paragraphes sont partis : le droit d'ordonnancement (Ressources → M5), le
+geste accidentel (Protection → M8), l'argumentation des trois coûts du rootless
+et le « pourquoi » de l'amorçage (→ M6), le développement sur le catalogue
+(→ M5). Chaque fois, le manuel a été **vérifié d'abord** ; pour le catalogue il
+ne disait rien, et le chapitre a donc été écrit avant que l'écran cesse de le
+dire.
+
+### La limite qu'il fallait poser
+
+Premier passage trop agressif : j'avais retiré les **trois conséquences** du mode
+rootless. Deux preuves l'ont refusé, et elles avaient raison. Le §6.23 exige
+qu'une confirmation nomme sa conséquence, et le rootless est un choix
+irréversible engagé depuis une confirmation. **Le §1.5 bis vise le raisonnement
+de fond ; il ne prime pas sur ce qu'une confirmation doit dire pour qu'on
+décide.** Les conséquences restent, l'argumentation part. Le motif est écrit dans
+les preuves, pour que la prochaine session ne recoupe pas ce que le §6.23
+protège.
+
+### Ce que la vérification visuelle a trouvé, et elle seule
+
+Le manuel n'avait **aucune capture**, alors qu'il est désormais l'endroit où tous
+les écrans renvoient. Mesuré sur 390 px : arriver sur `#/manuel/M5` montrait
+douze liens de chapitres, et M5 commençait sous la ligne de flottaison. Empilés,
+le chapitre passe donc avant le sommaire — le lecteur a cliqué pour lire M5.
+
+Second défaut, du harnais : `goto` vers une adresse identique ne recharge pas, si
+bien que la capture de la tablette portait la confirmation de suppression ouverte
+par la capture précédente.
+
+### La garde posée
+
+Chaque renvoi `#/manuel/Mx` écrit dans un composant doit désigner un chapitre
+présent sur le disque, et les écrans qui ont délégué doivent porter un renvoi. Un
+renvoi mort est une commande morte (§1.4) — c'est le piège que SPK-56 avait évité
+de justesse, désormais impossible à retomber dedans en silence.
+
+### Vérifications
+
+Campagne complète **verte** : 707 Python, contrat conforme, 772 de console, 8 de
+gestes, 69 parcours E2E, 7 du manuel, `build`. Captures `107-` à `110-` observées
+— le détail à la tablette, le manuel aux trois formats — plus `14-detail-mobile`
+refaite.
+
+**SPK-56 passe `[x]`** : le balayage est fait, la vérification visuelle aussi,
+M4 et M12 portent bien ce que les écrans ont cessé de dire, et le manuel M5 porte
+ce qui lui manquait.
+
+**Où reprendre.** SPK-53 et SPK-54 attendent une décision du responsable. Sans
+elles, la première unité `[ ]` du plan qui reste constructible est SPK-55
+(durcir la Forge) ou SPK-57 (redimensionner un Spark existant).
