@@ -160,3 +160,58 @@ def test_disposition_NATIVE_quand_deux_peripheriques_VIDES_sont_nommes(tmp_path)
             f"source=mirror {BLOCS[0]} {BLOCS[1]}") in appels
     # …et elle dit ce qu'elle apporte en propre.
     assert "reparee" in vu.stdout
+
+
+# --- Le schéma de partitionnement du README (§8.6) --------------------------
+
+
+def _schema_du_readme() -> dict:
+    import json
+    import re
+
+    readme = (Path(__file__).resolve().parents[3] / "README.md").read_text("utf-8")
+    bloc = re.search(r"```json\n(.*?)\n```", readme, re.S)
+    assert bloc, "le README doit porter le schéma de partitionnement (SPK-28)"
+    return json.loads(bloc.group(1))
+
+
+def test_le_schema_du_README_est_un_JSON_VALIDE():
+    """Un schéma qu'on copie-colle et que l'hébergeur refuse ne sert à rien.
+
+    Il est relu depuis le README, pas depuis une copie : une copie divergerait,
+    et c'est celle du README qui serait employée.
+    """
+    schema = _schema_du_readme()
+    assert set(schema) >= {"disks", "raids", "filesystems"}
+
+
+def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
+    """C'est tout l'objet du schéma (§8.6, disposition A).
+
+    Confier « sda5 » et « sdb5 » à `md` reproduirait exactement le problème que
+    le miroir ZFS résout : `md` ne sait pas laquelle des deux copies est la
+    bonne. La preuve garde donc qu'elles n'apparaissent NI dans un RAID, NI dans
+    un système de fichiers.
+    """
+    schema = _schema_du_readme()
+    for disque in ("/dev/sda", "/dev/sdb"):
+        partitions = schema["disks"][disque]["partitions"]
+        assert "pool" in partitions, f"{disque} doit porter une partition de pool"
+        # « size: 0 » vaut « tout l'espace restant » : la borner ici gâcherait
+        # la fin des disques sans rien apporter.
+        assert partitions["pool"]["size"] == 0
+
+    engagees = {d for r in schema["raids"].values() for d in r["devices"]}
+    engagees |= {f["device"] for f in schema["filesystems"]}
+    for libre in ("/dev/sda5", "/dev/sdb5"):
+        assert libre not in engagees, f"{libre} doit rester un périphérique NU"
+
+
+def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
+    """La disposition A réduit « / », elle ne le laisse pas sans redondance."""
+    schema = _schema_du_readme()
+    for raid in schema["raids"].values():
+        assert raid["level"] == "raid_level_1"
+        assert len(raid["devices"]) == 2
+    montages = {f["mountpoint"] for f in schema["filesystems"]}
+    assert montages == {"/", "/boot"}

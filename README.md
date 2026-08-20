@@ -76,9 +76,112 @@ d'origine — 94 Gio et non 256, 1 Gbit/s et non 3. Sur 4 cœurs physiques, déd
 un cœur coûte un quart de la machine : le mode partagé n'est pas seulement le
 défaut, c'est le mode normal sur cette machine.
 
-**Contrainte structurante :** les deux disques sont entièrement consommés par un
-unique RAID1 `ext4` monté sur `/`. Il n'existe aucun périphérique bloc libre pour
-un pool de stockage natif. Voir le §8 du [DAT](docs/DAT.md).
+**Contrainte structurante :** sur cette machine, les deux disques sont
+entièrement consommés par un unique RAID1 `ext4` monté sur `/`. Il n'existe aucun
+périphérique bloc libre pour un pool de stockage natif — d'où la disposition sur
+fichier décrite ci-dessous. Voir le §8 du [DAT](docs/DAT.md).
+
+## Le stockage : deux dispositions
+
+Le produit ne suppose ni le nom du pool, ni son emplacement, ni sa taille. Le pool
+se crée par un geste, et **toutes** ses valeurs viennent de l'environnement :
+
+```bash
+sudo scripts/creer-pool.sh
+```
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `SPARK_POOL_NAME` | nom du pool à créer | `spark` |
+| `SPARK_POOL_DRIVER` | pilote Incus — `zfs`, `btrfs`, `dir` | `zfs` |
+| `SPARK_POOL_SOURCE` | périphériques du miroir, séparés par une virgule. **Vide → disposition sur fichier** | vide |
+| `SPARK_POOL_FILE_SIZE` | taille du fichier creux, disposition sur fichier | `200GiB` |
+
+Le script est **idempotent** : sur un pool déjà en place, il ne touche à rien. Il
+**refuse** de créer un pool sur un périphérique qui porte déjà des données, et
+montre ce qu'il y a trouvé.
+
+### Disposition A — miroir natif sur périphériques dédiés
+
+```bash
+sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
+```
+
+Ce qu'elle apporte en propre : **ZFS gère lui-même le miroir**, donc il détecte
+et **répare** la corruption silencieuse. Elle exige deux périphériques vides, donc
+une machine partitionnée pour cela dès sa création — voir le schéma ci-dessous.
+
+### Disposition B — pool sur fichier
+
+```bash
+sudo scripts/creer-pool.sh          # ou SPARK_POOL_FILE_SIZE=1TiB
+```
+
+Quotas, copie sur écriture, clonage et instantanés fonctionnent **tous** : c'est
+le même ZFS. Ce qu'elle n'apporte pas : le miroir reste géré par ce qui est
+dessous — `md` ici, qui ne sait pas laquelle des deux copies est la bonne. La
+protection contre la corruption silencieuse est donc **absente**, pas dégradée.
+
+Une mesure de débit disque menée sur cette disposition ne caractérise pas la
+machine : elle traverse deux systèmes de fichiers.
+
+### Obtenir d'emblée une machine partitionnée pour la disposition A
+
+Chez un hébergeur qui accepte un schéma de partitionnement à la création du
+serveur — Scaleway le fait —, le fournir évite tout repartitionnement ultérieur.
+Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
+
+```json
+{
+  "disks": {
+    "/dev/sda": {
+      "device": "/dev/sda",
+      "partitions": {
+        "bios":  { "label": "bios",  "number": 1, "size": 536870912 },
+        "swap":  { "label": "swap",  "number": 2, "size": 4294967296 },
+        "boot":  { "label": "boot",  "number": 3, "size": 536870912 },
+        "root":  { "label": "root",  "number": 4, "size": 214748364800 },
+        "pool":  { "label": "pool",  "number": 5, "size": 0 }
+      }
+    },
+    "/dev/sdb": {
+      "device": "/dev/sdb",
+      "partitions": {
+        "bios":  { "label": "bios",  "number": 1, "size": 536870912 },
+        "swap":  { "label": "swap",  "number": 2, "size": 4294967296 },
+        "boot":  { "label": "boot",  "number": 3, "size": 536870912 },
+        "root":  { "label": "root",  "number": 4, "size": 214748364800 },
+        "pool":  { "label": "pool",  "number": 5, "size": 0 }
+      }
+    }
+  },
+  "raids": {
+    "/dev/md0": { "name": "/dev/md0", "level": "raid_level_1",
+                  "devices": ["/dev/sda3", "/dev/sdb3"] },
+    "/dev/md1": { "name": "/dev/md1", "level": "raid_level_1",
+                  "devices": ["/dev/sda4", "/dev/sdb4"] }
+  },
+  "filesystems": [
+    { "device": "/dev/md0", "format": "ext4", "mountpoint": "/boot" },
+    { "device": "/dev/md1", "format": "ext4", "mountpoint": "/" }
+  ]
+}
+```
+
+Ce qu'il produit, et pourquoi :
+
+- `size: 0` sur la partition `pool` signifie « tout l'espace restant » ;
+- **`sda5` et `sdb5` n'apparaissent ni dans `raids` ni dans `filesystems`** :
+  elles restent des périphériques bloc nus, ce qu'exige la disposition A. Les
+  confier à `md` reproduirait exactement le problème que le miroir ZFS résout ;
+- le système reste sur un RAID1 de ~200 Gio, largement suffisant : la Forge de
+  validation en consomme 2,7 Gio.
+
+Une fois la machine livrée, il ne reste qu'à créer le pool :
+
+```bash
+sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
+```
 
 ## Stack
 
@@ -157,6 +260,7 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_CADDY_ADMIN` | API d'administration Caddy | URL | non | `http://127.0.0.1:2019` |
 | `SPARKD_DRIVER` | pilote d'exécution | `incus` \| `fake` | non | `incus` |
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
+| `SPARKD_STORAGE_DATASET` | jeu de données ZFS dont la compression est vérifiée | nom | non | la valeur de `SPARKD_STORAGE_POOL` |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
@@ -208,9 +312,10 @@ héritage.
 - Le relevé de topologie est explicite : la capacité n'est pas rafraîchie à
   chaque requête. L'écran de la Forge affiche la date du dernier relevé et offre
   un bouton pour le refaire.
-- La Forge cible n'a aucun périphérique bloc libre : le pool de stockage est
-  actuellement **sur fichier**, à titre provisoire, et l'exploitation réelle suppose
-  un repartitionnement (DAT §8, SPK-28).
+- La Forge de validation emploie la **disposition sur fichier** : quotas, copie
+  sur écriture et instantanés fonctionnent, mais la corruption silencieuse n'y
+  est pas couverte. Ce n'est pas une dette — c'est une disposition, et le §8.5
+  du DAT dit ce que chacune apporte.
 - La réservation CPU n'est proportionnelle qu'entre Sparks, pas absolue, tant que
   SPK-29 n'est pas livrée.
 - Le champ « image » de la création est **libre** : seul le dépôt est contrôlé,

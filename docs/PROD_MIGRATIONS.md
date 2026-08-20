@@ -21,7 +21,7 @@ la Forge de validation. Les neuf contrôles du §31 du [DAT](DAT.md) sont verts.
 | Système | Ubuntu 24.04.3, noyau 6.8.0-88, cgroup v2 |
 | Disposition disque | 2 × 6 To en RAID1 mdadm, `md1` 5,44 Tio `ext4` sur `/` — **aucun périphérique bloc libre** |
 | Incus | **7.3** installé depuis le dépôt amont Zabbly. Les dépôts Ubuntu (6.0.0) sont **inutilisables**, voir §2.0 |
-| Pool de stockage | pool ZFS `spark` **sur fichier**, 200 Gio creux dans `/var/lib/incus/disks/spark.img` — provisoire, voir OP-01 |
+| Pool de stockage | pool ZFS `spark`, **disposition sur fichier** (DAT §8.5) — 200 Gio creux dans `/var/lib/incus/disks/spark.img` |
 | `zfs_arc_max` | **16 Gio**, persisté dans `/etc/modprobe.d/zfs.conf` |
 | Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif |
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
@@ -31,8 +31,9 @@ la Forge de validation. Les neuf contrôles du §31 du [DAT](DAT.md) sont verts.
 | Topologie relevée | 4 cœurs / 8 threads, 94,2 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76,2 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
-Cette baseline décrit une Forge de **validation**, pas de production : le pool sur
-fichier et l'absence de repartitionnement restent des dettes ouvertes (OP-01).
+Cette baseline décrit une Forge de **validation**, pas de production. Sa
+disposition de stockage n'est plus une dette : c'est un choix, documenté au
+DAT §8.5 avec ce qu'il apporte et ce qu'il ne couvre pas.
 
 **Comment la revérifier**, en lecture seule et sans rien modifier :
 
@@ -84,58 +85,43 @@ le noyau et empêche la recréation du réseau géré. La supprimer d'abord :
 
 L'accès SSH est obtenu : ce prérequis est levé.
 
-1. **Trancher la disposition du stockage** (unité SPK-28). Voir OP-01 : c'est la
-   seule décision qui bloque encore l'exploitation réelle.
+La disposition du stockage est **tranchée** (SPK-28, OP-01 close) : ce prérequis
+est levé lui aussi. Reste à choisir, pour une machine neuve, laquelle des deux
+dispositions du DAT §8.5 elle emploiera — le README dit comment obtenir l'une ou
+l'autre.
 
-2. Confirmer que le serveur est bien dédié à cet usage et qu'aucune donnée
+1. Confirmer que le serveur est bien dédié à cet usage et qu'aucune donnée
    existante ne doit y être préservée. La création du pool est destructive pour les
-   périphériques qu'elle consomme.
+   périphériques qu'elle consomme — `scripts/creer-pool.sh` refuse d'ailleurs
+   d'écrire sur un périphérique non vide, et montre ce qu'il y a trouvé.
 
-3. Décider des domaines qui pointeront vers la machine, avant toute configuration
+2. Décider des domaines qui pointeront vers la machine, avant toute configuration
    de Caddy : l'émission automatique de certificats suppose des enregistrements DNS
    déjà résolus.
 
 ## 3. Opérations en attente
 
-### OP-01 · Libérer un périphérique bloc pour le pool de stockage
+### OP-01 · CLOSE le 2026-08-20 — la disposition du stockage est tranchée
 
 ```
-Objectif      : disposer d'une paire de partitions dédiées (~5,2 To) pour un pool
-                ZFS en miroir, le système restant sur un RAID1 réduit (~200 Go).
-Dépend de     : décision du responsable (SPK-28)
-État          : DÉCIDÉ le 2026-08-18 — VOIE C retenue, à titre PROVISOIRE.
-                Le pool natif reste la cible ; la voie C ne la remplace pas, elle
-                permet de valider la chaîne sans toucher au partitionnement.
-Contexte      : sda4 et sdb4 s'étendent jusqu'à la fin des disques et forment md1,
-                occupé par un ext4 monté sur /. Aucun espace non alloué.
-
-Voie A — réinstallation avec partitionnement personnalisé
-  Coût        : reconfiguration complète de la Forge
-  Risque      : FAIBLE — la machine est vide (2,7 Go utilisés)
-  Recommandée : oui, sur une machine vide c'est la voie la moins risquée
-
-Voie B — réduction en mode rescue
-  Étapes      : démarrer en rescue, resize2fs sur md1, mdadm --grow --size,
-                repartitionner sda/sdb, créer sda5/sdb5
-  Coût        : une fenêtre d'indisponibilité
-  Risque      : MOYEN — destructif en cas d'erreur de calcul de taille
-
-Voie C — pool sur fichier, provisoire            ← RETENUE le 2026-08-18
-  Étapes      : laisser incus admin init créer un pool sur fichier dans l'ext4
-  Coût        : nul
-  Risque      : faible pour les données, mais empile deux systèmes de fichiers sur
-                du disque mécanique et prive ZFS de la gestion du miroir
-  Usage       : valider la chaîne de bout en bout, pas exploiter
-  Conséquence : l'exploitation réelle exigera une migration vers un pool natif
-                (voie A ou B). Cette dette est ouverte et reste inscrite ici
-                jusqu'à sa résolution. Aucune mesure de débit disque conduite sur
-                ce pool ne caractérise la machine.
-
-Vérification  : lsblk montre une partition libre par disque, ou le pool sur
-                fichier est consigné avec ses conséquences
-Retour arrière: voie A et B — réinstallation ; voie C — suppression du pool
-Risques       : md1 était en resynchronisation au relevé (~8 h). Toute opération
-                disque menée pendant cette fenêtre est plus lente et plus risquée.
+État          : CLOSE. Arbitrage du responsable, 2026-08-20 (SPK-28).
+Ce qui change : cette opération demandait de libérer une paire de partitions pour
+                un pool ZFS natif, et tenait le pool sur fichier pour une dette.
+                Il n'y a plus une cible et un repli : il y a DEUX dispositions,
+                documentées au DAT §8.5 et au README.
+Motif         : cette machine est une machine de DÉMONSTRATION. Y inscrire une
+                réinstallation qu'aucun de ses usages ne réclame revenait à
+                porter au contrat une dette qu'on ne comptait pas rembourser.
+                Une dette qu'on ne rembourse pas n'est pas une dette.
+Ce qui reste  : rien à faire sur cette Forge. Ce qui est dû est ailleurs, et est
+                livré : le README porte le schéma de partitionnement à fournir à
+                la création d'un serveur pour obtenir d'emblée la disposition A,
+                et « scripts/creer-pool.sh » crée le pool dans l'une ou l'autre
+                sans qu'aucune valeur soit codée en dur.
+À SAVOIR      : sous la disposition en place, la protection contre la corruption
+                silencieuse est ABSENTE — le miroir est géré par « md », qui ne
+                sait pas laquelle des deux copies est la bonne. Et aucune mesure
+                de débit disque conduite sur ce pool ne caractérise la machine.
 ```
 
 ### OP-02 · Restreindre la plage DHCP dynamique du bridge privé — **APPLIQUÉ le 2026-08-19**
@@ -346,7 +332,7 @@ python3 -m sparkd.preflight
 | Code | Ce qu'il établit |
 |---|---|
 | `INC-VERSION` | Incus ≥ 6.19, sans quoi aucun conteneur Docker ne démarre dans un Spark |
-| `STO-POOL` | pool ZFS présent ; signale s'il est sur fichier (provisoire) |
+| `STO-POOL` | pool ZFS présent ; nomme la disposition et ce qu'elle ne couvre pas |
 | `STO-COMPRESSION` | compression active |
 | `MEM-ARC` | plafond de l'ARC posé et ≤ 16 Gio |
 | `NET-BRIDGE` | bridge privé présent |
