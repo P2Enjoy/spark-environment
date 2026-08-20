@@ -109,13 +109,23 @@ async function ouvrir(nom, facette = '') {
 // --- LE PARCOURS NOMINAL ----------------------------------------------------
 
 test('la console affiche les Sparks seedés, avec leurs états réels', async () => {
+  // REVISE par SPK-52 : le compte était FIGÉ à cinq. Le seed porte désormais
+  // « orphelin » (§14.5), et le nombre a rougi sans rien dire du produit — il
+  // rougira encore à la prochaine fixture.
+  //
+  // Ce que la preuve établit est INCHANGÉ, et mieux dit : l'écran montre ce que
+  // le REGISTRE contient, ni plus ni moins. Le compte se lit donc sur `sparkd`
+  // au lieu d'être recopié ici, et les fixtures nommées restent exigées une à
+  // une — c'est leur PRÉSENCE qui compte, pas leur nombre.
   await parcours('liste', async () => {
     await accueil();
     const lignes = await page.$$eval('tbody tr', (tr) => tr.map((l) => l.innerText));
-    assert.equal(lignes.length, 5, 'les cinq fixtures du seed');
+    const { corps } = await pile.lireSparkd('/v1/sparks');
+    assert.equal(lignes.length, corps.sparks.length,
+      'l’écran doit montrer exactement ce que le registre contient');
     const texte = lignes.join('\n');
     for (const attendu of ['crm-production', 'boutique', 'postgres-dedie',
-                           'analytics', 'site-vitrine']) {
+                           'analytics', 'site-vitrine', 'orphelin']) {
       assert.ok(texte.includes(attendu), `« ${attendu} » absent de la liste`);
     }
     // Les états viennent du registre, pas d'un rendu figé.
