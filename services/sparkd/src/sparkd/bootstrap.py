@@ -318,12 +318,20 @@ def compte_rendu(avant: list[dict[str, Any]], apres: list[dict[str, Any]],
             sort = "installé"
         else:
             sort = "échoué"
-        lignes.append({
+        ligne = {
             "key": cle, "label": vu["label"],
             "state": arrive["state"], "detail": arrive["detail"],
             "action": "aucune" if cle not in agis else "amorcé",
             "outcome": sort,
-        })
+        }
+        # Le MODE traverse le compte rendu. Il était perdu ici : les lignes sont
+        # reconstruites champ par champ, et `mode` n'en faisait pas partie — le
+        # relevé le portait, l'amorçage ne le rendait pas. Trouvé par le parcours
+        # E2E, qu'aucun test d'unité ne pouvait attraper puisqu'ils
+        # interrogeaient le relevé (§42.2 bis).
+        if "mode" in arrive:
+            ligne["mode"] = arrive["mode"]
+        lignes.append(ligne)
     return lignes
 
 

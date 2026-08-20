@@ -457,3 +457,25 @@ def test_le_journal_porte_le_MODE_meme_quand_rien_n_a_ete_fait(tmp_path):
         assert json.loads(entree["payload"])["mode"] == "rootless"
     assert any("rien à faire" in e["message"] and "rootless" in e["message"]
                for e in entrees)
+
+
+def test_le_compte_rendu_de_l_amorcage_PORTE_le_mode(tmp_path):
+    """Défaut trouvé par le parcours E2E, invisible aux tests d'unité existants :
+    ils interrogeaient le RELEVÉ, qui portait bien le mode, alors que le compte
+    rendu de l'amorçage reconstruit ses lignes champ par champ et l'oubliait.
+
+    L'écran lit le compte rendu juste après le geste : sans le mode, il ne peut
+    pas dire dans quel mode le Spark vient d'être amorcé — c'est-à-dire au moment
+    précis où l'information compte le plus (§42.2 bis).
+    """
+    client = _client(tmp_path)
+    nom = _creer(client)
+    corps = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True}).json()
+    docker = next(v for v in corps["items"] if v["key"] == "docker")
+    assert docker["mode"] == bootstrap.ROOTLESS
+
+    # …et le compte rendu d'un amorçage qui ne change RIEN le porte aussi.
+    encore = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True}).json()
+    assert encore["changed"] is False
+    assert next(v for v in encore["items"]
+                if v["key"] == "docker")["mode"] == bootstrap.ROOTLESS
