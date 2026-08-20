@@ -1608,6 +1608,19 @@ Le produit disait « le DNS est extérieur au produit », et SPK-12 restait
     observées, dont le format étroit.
   - Défaut corrigé au passage : l'aperçu de l'enregistrement ne suivait pas la
     saisie et montrait une valeur qui n'aurait pas été écrite.
+- **Révisé le 2026-08-20, sur arbitrage du responsable.** Deux défauts nommés par
+  lui, corrigés dans la même unité :
+  - la borne d'espace de noms bridait **sa** console, alors que le §38.5 disait
+    depuis le début qu'elle valait pour le harnais. Elle vit désormais dans un
+    fichier d'environnement distinct, réservé aux vérifications autonomes de
+    l'agent, que la console ne lit jamais (§38.5.3) ;
+  - le refus d'écrire à l'**apex** interdisait un site sur le domaine nu —
+    `johndalia.com` —, cas ordinaire et explicitement attendu. Le refus est levé
+    (§38.5.1) : l'écriture visant un nom ET un type exacts, les `NS`, le `MX` et
+    les `TXT` de la zone sont protégés par le §38.2, pas par une liste de noms.
+  - en remplacement, l'écran **montre ce qui est déjà là** avant de l'écraser
+    (§38.5.2) : « posera », « remplacera *valeur actuelle* », ou « aucun
+    changement ». Cela vaut pour tous les noms, l'apex compris.
 - **Reste hors de cette unité** : l'émission TLS elle-même (SPK-12), qui exige un
   serveur joignable depuis l'extérieur.
 

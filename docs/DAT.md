@@ -4081,7 +4081,10 @@ créer ou mettre à jour **un** enregistrement pour un domaine d'ingress.
   porte des enregistrements de messagerie, de vérification et de service dont la
   suppression casse des choses qui n'ont rien à voir avec le produit ;
 - il ne touche **aucun** enregistrement dont le nom ne correspond pas au domaine
-  demandé. Le rapprochement se fait sur le nom exact, jamais sur un préfixe.
+  demandé, ni d'un autre type que celui qu'il écrit. Le rapprochement se fait sur
+  le couple nom + type exacts, jamais sur un préfixe. C'est cette règle, et non
+  une liste de noms interdits, qui protège les `NS`, le `MX` et les `TXT` d'une
+  zone (§38.5.1).
 
 ### 38.3 Ce qu'écrit un enregistrement d'ingress
 
@@ -4119,18 +4122,73 @@ Une zone DNS réelle porte des enregistrements dont la casse arrête une
 messagerie, invalide une vérification de propriété, ou coupe un service. Le
 produit écrit donc sous une **garde explicite** :
 
-- il refuse d'écrire si le nom relatif calculé est vide ou vaut `@` — cela
-  viserait l'apex de la zone, qui porte les `NS` et le `MX` ;
 - il refuse d'écrire un type autre que `A` ou `AAAA` ;
-- il refuse si le domaine demandé n'est pas **sous** la zone choisie.
+- il refuse si le domaine demandé n'est pas **sous** la zone choisie, ni la zone
+  elle-même.
 
 Ces refus ne sont pas des précautions d'usage : ce sont des règles, et un test les
 éprouve chacune.
 
-**Pour les essais du dépôt**, une garde supplémentaire s'ajoute, bornée par le
-responsable : seuls les noms de la forme `test.<label>` de la zone `lelabs.tech`
-sont écrits. Elle vaut pour le harnais, pas pour le produit — un exploitant gère
-sa zone entière.
+#### 38.5.1 L'apex n'est plus refusé — révision du 2026-08-20
+
+La première version de ce chapitre refusait d'écrire à l'**apex** de la zone, au
+motif qu'il porte les `NS` et le `MX`. **Ce refus était trop large, et il a été
+retiré.**
+
+Il interdisait un cas parfaitement ordinaire, et nommé par le responsable : un
+site web sur le domaine nu, `johndalia.com`. Un produit qui ne sait pas exposer
+un site sur son propre domaine ne remplit pas son objet.
+
+Et le motif du refus ne tenait pas à l'examen. L'écriture du §38.3 vise un nom
+**et un type** exacts : à l'apex, elle ne remplace que les `A` — ou les `AAAA` —
+qui s'y trouvent. Les `NS`, le `MX`, les `TXT` de vérification et de politique
+sont d'autres types, et ne sont pas touchés. Ce que le refus prétendait protéger
+l'était déjà par la règle du §38.2, qui est la vraie garantie.
+
+Reste que l'apex est le nom le plus **exposé** de la zone : s'y tromper coupe le
+domaine entier, et non un sous-domaine. C'est la raison d'être du §38.5.2, qui ne
+lui est d'ailleurs pas propre.
+
+#### 38.5.2 Ce qui est déjà là est montré AVANT d'être remplacé
+
+Une écriture qui vise un nom et un type déjà pourvus **remplace** la valeur en
+place. C'est le comportement voulu — reposer une route déplacée doit marcher —
+mais il ne doit jamais être une surprise.
+
+Avant d'écrire, la console **lit** l'enregistrement existant pour ce nom et ce
+type exacts, et l'écran énonce alors :
+
+- « posera », lorsque rien n'occupe le couple nom + type ;
+- « **remplacera** `<valeur actuelle>` par `<nouvelle valeur>` », lorsque quelque
+  chose l'occupe. La valeur actuelle est affichée, pas seulement annoncée ;
+- « **aucun changement** », lorsque la valeur en place est déjà celle demandée.
+  Le geste reste possible, il ne prétend simplement pas modifier quoi que ce
+  soit.
+
+Cette lecture ne remplace pas la règle du §38.2 : elle la rend **visible**. Elle
+vaut pour tous les noms, l'apex compris, et c'est ce qui autorise à lever le
+refus du §38.5.1 sans rien perdre.
+
+#### 38.5.3 La borne d'espace de noms est une option du POSTE, jamais du produit
+
+`SPARK_DNS_ALLOW_PATTERN` restreint les domaines écrivables depuis un poste
+donné. Elle est **absente par défaut**, et son absence est le cas normal.
+
+**Elle ne borne jamais la console du responsable.** Le §38.2 est explicite depuis
+le début : le produit gère la zone entière, et toutes les zones du compte. Une
+console qui refuserait un domaine que le jeton permet d'écrire serait un produit
+diminué, pas un produit prudent.
+
+Elle existe pour un cas précis, et un seul : **l'agent qui développe et valide en
+autonomie** ne doit pas pouvoir toucher une zone en exploitation. Elle est donc
+posée dans un fichier d'environnement **distinct**, réservé à ses vérifications,
+que la console du responsable ne lit jamais. Le harnais E2E, lui, ne dépend même
+pas de cette borne : il impose son propre fichier et un doublon local du
+fournisseur (§28.1), de sorte qu'aucun parcours automatique n'atteigne un compte
+réel.
+
+Un exploitant qui voudrait la même borne sur son poste peut la poser — c'est une
+option documentée —, mais rien dans le produit ne la suppose.
 
 ### 38.6 Les recettes DNS, et pourquoi une seule écriture ne suffira pas
 

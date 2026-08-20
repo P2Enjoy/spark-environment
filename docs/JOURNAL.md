@@ -3261,3 +3261,41 @@ invalide, donc l'effet exact qu'on prétend éviter. SPK-51 dépend donc de SPK-
 **Ordre retenu** : SPK-48 (le joker, peu coûteux et utile tous les jours), puis
 SPK-49 (les ports, prérequis dur), puis SPK-50 (les recettes), puis SPK-51
 (la messagerie). SPK-52 est indépendant et court.
+
+## 2026-08-20 — La garde du harnais bridait la console du responsable
+
+**Deux défauts nommés par le responsable, du même endroit.**
+
+**Le premier est une faute d'implémentation contre ma propre spécification.** Le
+§38.5 disait, dès sa première rédaction, que la borne d'espace de noms valait
+« pour le harnais, pas pour le produit — un exploitant gère sa zone entière ».
+J'ai pourtant posé `SPARK_DNS_ALLOW_PATTERN` dans le `.env` que la **console**
+lit. Le responsable se retrouvait donc bridé sur ses propres domaines par une
+garde écrite pour me borner, moi.
+
+Corrigé en séparant les deux fichiers : `.env` est celui de l'exploitant et ne
+porte aucune borne ; `.env.verification`, distinct et lui aussi hors dépôt, ne
+sert qu'à mes vérifications autonomes. Le harnais E2E ne dépendait déjà pas de
+cette borne — il impose son propre fichier et un doublon local. §38.5.3 écrit.
+
+**Le second est une erreur de conception, et elle est plus intéressante.** Je
+refusais d'écrire à l'apex de la zone, au motif qu'il porte les `NS` et le `MX`.
+Cela interdisait `johndalia.com` — un site sur le domaine nu, cas parfaitement
+ordinaire, et cité par le responsable comme un besoin réel.
+
+**Le motif ne tenait pas.** L'écriture vise un nom **et un type** exacts : à
+l'apex, elle ne remplace que les `A`. Les `NS`, le `MX` et les `TXT` sont
+d'autres types et ne sont pas touchés. Ce que le refus prétendait protéger
+l'était déjà par la règle du §38.2, qui est la vraie garantie. J'avais posé une
+liste de noms interdits là où il fallait se fier à la règle qui existait.
+
+**Ce que le refus protégeait vraiment**, c'est l'idée qu'un écrasement à l'apex
+coupe le domaine entier et non un sous-domaine. Cette inquiétude est légitime,
+mais elle n'est pas propre à l'apex, et un refus n'est pas la bonne réponse : la
+bonne réponse est de **montrer ce qui est déjà là**. L'écran lit donc
+l'enregistrement en place pour ce nom et ce type, et annonce « posera »,
+« remplacera *telle valeur* » ou « aucun changement ». §38.5.2.
+
+**Leçon.** Une garde qui interdit un cas d'usage réel n'est pas une garde, c'est
+un défaut. La prudence utile ne retire pas un pouvoir : elle rend visible ce que
+ce pouvoir va faire.
