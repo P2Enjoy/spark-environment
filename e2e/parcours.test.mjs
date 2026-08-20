@@ -1168,3 +1168,96 @@ test('un joker mal placé est refusé en NOMMANT la borne', async () => {
     assert.ok(refus.includes('*.monapi.fr'), 'il doit montrer la forme acceptée');
   });
 });
+
+// --- LES PORTS PUBLIÉS (SPK-49, docs/DAT.md §39) ---------------------------
+
+const lignePort = (p) => `li:has(span.technique:text-is("${p}"))`;
+
+test('le port publié du seed se lit, avec ce à quoi il sert', async () => {
+  await parcours('port-seede', async () => {
+    await ouvrir('crm-production', 'routes');
+    await page.waitForSelector('#titre-ports');
+    const ligne = await page.textContent(lignePort('2525/tcp'));
+    assert.ok(ligne.includes('port 25 du Spark'));
+    assert.ok(ligne.includes('SMTP entrant'), 'la raison d’être doit être lisible');
+
+    // EFFET côté sparkd : le device est réellement posé sur l'instance.
+    const { corps } = await pile.lireSparkd('/v1/ports');
+    const publie = corps.ports.find((p) => p.public_port === 2525);
+    assert.equal(publie.spark_name, 'crm-production');
+    assert.ok(publie.applied_at, 'un Spark appliqué voit son port appliqué');
+  });
+});
+
+test('publier un port RÉSERVÉ est refusé en nommant ce qui le tient', async () => {
+  await parcours('port-reserve', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-ports');
+    await page.click('[data-ouvre="port"]');
+    await page.waitForSelector('dialog.modale[open] #port-public');
+
+    // La mise en garde du §39.3 est là AVANT toute saisie.
+    const modale = await page.textContent('dialog.modale[open]');
+    assert.ok(modale.includes('certificat automatique'));
+    assert.ok(modale.includes('route publique'));
+
+    await page.fill('#port-public', '443');
+    await page.fill('#port-cible', '8080');
+    // L'interface ne s'y oppose PAS : le refus est une RÈGLE, pas un grisage.
+    assert.equal(await page.isDisabled('[data-engage="port"]'), false);
+    await page.click('[data-engage="port"]');
+
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    const refus = await page.textContent('dialog.modale[open] .refus');
+    assert.ok(refus.includes('proxy'), 'le refus doit NOMMER ce qui tient le port');
+    assert.ok(refus.includes('pas attribuable'));
+  });
+});
+
+test('publier un port DÉJÀ PRIS est refusé en nommant le Spark qui le détient', async () => {
+  await parcours('port-conflit', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-ports');
+    await page.click('[data-ouvre="port"]');
+    await page.waitForSelector('dialog.modale[open] #port-public');
+    await page.fill('#port-public', '2525');       // détenu par crm-production
+    await page.fill('#port-cible', '25');
+    await page.click('[data-engage="port"]');
+
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    const refus = await page.textContent('dialog.modale[open] .refus');
+    assert.ok(refus.includes('crm-production'), 'le Spark détenteur doit être NOMMÉ');
+
+    // Effet backend : le port appartient toujours au même Spark.
+    const { corps } = await pile.lireSparkd('/v1/ports');
+    assert.equal(corps.ports.find((p) => p.public_port === 2525).spark_name,
+                 'crm-production');
+  });
+});
+
+test('publier puis retirer un port ouvre puis REFERME réellement', async () => {
+  await parcours('port-cycle', async () => {
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-ports');
+    await page.click('[data-ouvre="port"]');
+    await page.waitForSelector('dialog.modale[open] #port-public');
+    await page.fill('#port-public', '5433');
+    await page.fill('#port-cible', '5432');
+    await page.fill('#port-note', 'Postgres depuis le poste');
+    await page.click('[data-engage="port"]');
+    await page.waitForSelector(lignePort('5433/tcp'), { timeout: 10000 });
+
+    const { corps: apres } = await pile.lireSparkd('/v1/ports');
+    assert.ok(apres.ports.some((p) => p.public_port === 5433));
+
+    // Le retrait CONFIRME, puis referme.
+    await page.click(`${lignePort('5433/tcp')} [data-retire-port]`);
+    await page.waitForSelector('.confirmation [data-confirme-port]');
+    await page.click('[data-confirme-port]');
+    await page.waitForSelector(lignePort('5433/tcp'), { state: 'detached', timeout: 10000 });
+
+    const { corps: fini } = await pile.lireSparkd('/v1/ports');
+    assert.ok(!fini.ports.some((p) => p.public_port === 5433),
+      'le port doit avoir disparu du registre');
+  });
+});

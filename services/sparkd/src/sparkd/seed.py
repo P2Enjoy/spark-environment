@@ -193,6 +193,26 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     # Aucun appel suivant ne doit réconcilier l'ingress, sans quoi la route
     # serait appliquée et la fixture disparaîtrait.
 
+    # --- SPK-49 · §39 : un port publié, pour ce qui ne parle pas HTTP.
+    #
+    # `crm-production` est appliqué : le pilote porte son instance, donc le
+    # device s'ouvre réellement et `applied_at` se renseigne. C'est la
+    # démonstration du geste complet, pas seulement de la ligne au registre.
+    _attendu(client.post("/v1/ports", json={
+        "spark": "crm-production", "public_port": 2525, "target_port": 25,
+        "protocol": "tcp", "note": "SMTP entrant"}), 201,
+        quoi="port publié « 2525 → 25 »")
+    compte["ports"] = compte.get("ports", 0) + 1
+
+    # Le REFUS d'un port réservé, obtenu par le vrai chemin : l'écran doit
+    # pouvoir le montrer, et une trace fabriquée ne prouverait rien (CLAUDE.md §8).
+    refus_port = _attendu(client.post("/v1/ports", json={
+        "spark": "crm-production", "public_port": 443, "target_port": 8080}),
+        409, quoi="refus d'un port réservé attendu")
+    if "proxy" not in refus_port.json().get("detail", {}).get("message", ""):
+        raise SeedError("le refus d'un port réservé doit NOMMER ce qui le tient")
+    compte["refus"] += 1
+
     # --- Clés : deux au registre. « boutique » n'en reçoit aucune : c'est
     # l'absence nommée du §26.4. « analytics » en reçoit une, plus bas, parce
     # qu'il porte la démonstration de la protection (SPK-34).
