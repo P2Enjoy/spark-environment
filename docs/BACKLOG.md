@@ -2140,13 +2140,13 @@ et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
 - **Preuves** : 30 de `sparkd` propres à l'unité, 53 de composant.
 
 - **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. **les deux parcours du rootless sont ÉCRITS mais NON EXÉCUTÉS** (commit
-     `4f8710d`) : « cocher le rootless amorce dans ce mode, et le journal le
-     PORTE », et « redemander l'autre mode est REFUSÉ ». Ils sont syntaxiquement
-     valides et poussés, mais aucune exécution ne les a encore vus verts — une
-     autre session tenait la fenêtre Playwright de la machine. **La capture de la
-     confirmation avec l'option n'est pas produite non plus.** À faire dès qu'une
-     fenêtre Playwright est libre : `make e2e` puis `make captures`, et observer ;
+  1. ~~les deux parcours du rootless et la capture~~ — **fait le 2026-08-20**.
+     Exécutés en ciblé, un par un, plutôt qu'en campagne complète. Le premier
+     était **rouge** et a trouvé un défaut réel : le compte rendu de l'amorçage
+     reconstruit ses lignes champ par champ et perdait le `mode` que le relevé
+     portait. Les trente preuves d'unité ne pouvaient pas le voir — elles
+     interrogeaient le relevé, pas le compte rendu. Corrigé en `4c88a97` avec sa
+     preuve. Capture `89-amorcage-rootless.png` produite et observée ;
   2. le mode rootless **éprouvé sur une pile qui le supporte**, que la DoD
      demande. Le doublon représente l'effet des scripts, pas le comportement d'un
      vrai démon rootless ;

@@ -733,6 +733,14 @@ await page.waitForSelector('[data-amorcage="engager"]', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '86-amorcage-confirmation.png'), fullPage: true });
 console.log('  86-amorcage-confirmation.png');
 
+// SPK-54 · §42.2 : l'option rootless ÉNONCE ses trois coûts au lieu de les
+// vendre. C'est ce qui doit se voir : une case seule, ou accompagnée d'un
+// « plus sûr », ferait cocher sans savoir ce qu'on accepte.
+await page.check('#amorcage-rootless');
+await page.screenshot({ path: join(SORTIE, '89-amorcage-rootless.png'), fullPage: true });
+console.log('  89-amorcage-rootless.png');
+await page.uncheck('#amorcage-rootless');
+
 // Le compte rendu ligne à ligne, et son format étroit : cinq lignes portant
 // chacune un état, un nom et un détail ne tiennent pas sur 390 px (§8.1).
 await page.click('[data-amorcage="engager"]');

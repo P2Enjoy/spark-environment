@@ -4675,3 +4675,50 @@ polie. Une règle sans son motif se contourne dès qu'elle gêne.
 L'entrée de SPK-59 cesse de porter « à porter dans un document durable » : c'est
 fait, et une tâche accomplie n'a pas à rester écrite comme un reste.
 
+
+## 2026-08-20 — Le parcours ciblé trouve ce que trente preuves d'unité ne voyaient pas
+
+Suite de l'entrée précédente, qui laissait les deux parcours du rootless écrits
+et non exécutés.
+
+Une session pairs a signalé que les campagnes E2E complètes avaient provoqué
+plusieurs arrêts de la machine par manque de mémoire — ce qui explique le **code
+137** qui avait tué ma propre campagne. Elle a donné le bon moyen de contourner :
+
+```
+node --test --test-concurrency=1 --test-name-pattern="<nom exact>" e2e/parcours.test.mjs
+```
+
+**Le premier parcours était rouge, et il avait raison.** L'écran n'affichait
+aucun mode après un amorçage rootless. Cause : `compte_rendu` reconstruit ses
+lignes champ par champ, et `mode` n'en faisait pas partie. Le **relevé** le
+portait ; le **compte rendu** le perdait — c'est-à-dire exactement au moment où
+l'écran en a besoin, juste après un choix qui ne se reprend pas.
+
+Les trente preuves d'unité de l'unité ne pouvaient pas l'attraper : elles
+interrogeaient le relevé. C'est le genre de défaut pour lequel un parcours existe.
+Corrigé, avec une preuve d'unité qui le garde des deux côtés — après un amorçage
+qui installe, et après un amorçage qui ne change rien.
+
+Les deux parcours sont **verts**. Capture `89-amorcage-rootless.png` produite et
+observée : l'option cochée, ses trois coûts, et l'avertissement que le choix ne
+se reprend pas.
+
+### Une mesure qui corrige un diagnostic partagé
+
+Une session pairs s'apprêtait à écrire dans `docs/AGENT_RUNBOOK.md` que `make
+e2e` monte « cinquante piles » et que `e2e/pile.mjs` n'a ni `after` ni fonction
+d'arrêt. Mesuré, les deux sont faux : `parcours.test.mjs` appelle `monterPile`
+**une fois** pour ses 52 tests, et la démonte dans son `after` ; `manuel.mjs`
+fait de même dans un `finally`. La fonction d'arrêt est **rendue par**
+`monterPile`, pas déclarée au niveau du module — ce qui explique qu'un `grep` la
+manque.
+
+Sa conclusion tient — plusieurs sessions lançant chacune une campagne, plus les
+Chromium de `captures` et `manuel` —, mais son motif devait changer avant d'être
+écrit dans une règle. Signalé à son autrice, qui tient ce fichier.
+
+**Où reprendre.** SPK-54 garde deux écarts, tous deux hors de portée d'ici : le
+rootless éprouvé sur une pile qui le supporte, et la preuve qu'un amorçage rend
+une cellule réellement capable de `docker compose up` — Forge réelle. Sinon,
+SPK-44 (onglet Docker) est la première `[ ]` du plan à porter du comportement.
