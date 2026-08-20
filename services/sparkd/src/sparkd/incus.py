@@ -46,6 +46,9 @@ class IncusClient(Protocol):
 
     def update_instance_config(self, name: str, config: dict[str, str]) -> None: ...
 
+    def set_publication_devices(
+        self, name: str, devices: dict[str, dict[str, str]]) -> None: ...
+
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None: ...
 
     def exec_command(self, name: str, command: list[str]) -> None: ...
@@ -151,6 +154,31 @@ class UnixSocketIncus:
         effacerait tout ce qu'on ne renvoie pas.
         """
         self._request("PATCH", f"/1.0/instances/{name}", {"config": config})
+
+    def set_publication_devices(
+        self, name: str, devices: dict[str, dict[str, str]]) -> None:
+        """Remplace TOUS les devices de publication de l'instance.
+
+        @spec docs/BACKLOG.md#SPK-49 · docs/DAT.md §39.4
+
+        Lecture-modification-écriture, et non `PATCH` : `PATCH` fusionne et ne
+        sait donc pas RETIRER un device. Un retrait rapiécé laisserait un port
+        ouvert vers un service qui n'est plus là (§39.2).
+
+        Seuls les devices « pub-* » sont touchés : la carte, l'interface réseau
+        et le disque racine de l'instance sont relus puis réécrits tels quels.
+        Les remplacer serait détruire l'instance par mégarde.
+        """
+        actuelle = self._get(f"/1.0/instances/{name}")
+        metadata = actuelle.get("metadata") or actuelle
+        conservees = {
+            nom: valeurs
+            for nom, valeurs in (metadata.get("devices") or {}).items()
+            if not nom.startswith("pub-")
+        }
+        metadata = dict(metadata)
+        metadata["devices"] = {**conservees, **devices}
+        self._request("PUT", f"/1.0/instances/{name}", metadata)
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
         """Écrit un fichier dans l'instance, en créant son répertoire parent."""
@@ -293,6 +321,26 @@ class FakeIncus:
 
     def instances(self) -> list[dict[str, Any]]:
         return list(self.created.values())
+
+    def set_publication_devices(
+        self, name: str, devices: dict[str, dict[str, str]]) -> None:
+        """@spec docs/BACKLOG.md#SPK-49 · docs/DAT.md §39.4
+
+        Même sémantique que le pilote réel : les devices « pub-* » sont
+        REMPLACÉS, les autres sont conservés. C'est ce qui permet d'éprouver
+        qu'un retrait fait bien disparaître le device — et donc que le port se
+        referme (§39.2).
+        """
+        self._maybe_fail("set_publication_devices")
+        instance = self.created.get(name)
+        if instance is None:
+            raise IncusError(f"Instance « {name} » absente.")
+        conservees = {
+            nom: valeurs for nom, valeurs in (instance.get("devices") or {}).items()
+            if not nom.startswith("pub-")
+        }
+        instance["devices"] = {**conservees, **devices}
+        self._persist()
 
     def create_instance(self, payload: dict[str, Any]) -> None:
         self._maybe_fail("create_instance")

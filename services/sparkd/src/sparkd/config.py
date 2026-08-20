@@ -38,7 +38,41 @@ DEFAULT_STORAGE_METADATA_MARGIN = "64MiB"
 DEFAULT_LOG_LEVEL = "info"
 
 DRIVERS = ("incus", "fake")
+
+#: Ports que le système de la Forge occupe, et qui ne sont donc jamais
+#: attribuables à un Spark (docs/DAT.md §39.5). Le refus NOMME le service qui
+#: tient le port : « réservé » seul laisserait chercher pourquoi.
+DEFAULT_RESERVED_PORTS: dict[int, str] = {
+    22: "le sshd de la Forge, seule porte du système",
+    80: "le proxy, qui sert les routes publiques en clair",
+    443: "le proxy, qui sert les routes publiques en TLS",
+}
 LOG_LEVELS = ("debug", "info", "warning", "error")
+
+
+def _parse_reserved_ports(raw: str) -> tuple[int, ...]:
+    """Ports réservés SUPPLÉMENTAIRES, en plus de ceux du produit.
+
+    Une Forge peut occuper d'autres ports que ceux du système du produit — un
+    superviseur, une sauvegarde, un service de l'hébergeur. La liste est donc
+    un paramètre et non une constante (docs/DAT.md §39.5).
+    """
+    ports: list[int] = []
+    for morceau in raw.replace(";", ",").split(","):
+        morceau = morceau.strip()
+        if not morceau:
+            continue
+        try:
+            valeur = int(morceau)
+        except ValueError as erreur:
+            raise ConfigError(
+                f"SPARKD_RESERVED_PORTS : « {morceau} » n'est pas un entier."
+            ) from erreur
+        if not 1 <= valeur <= 65535:
+            raise ConfigError(
+                f"SPARKD_RESERVED_PORTS : le port {valeur} est hors bornes.")
+        ports.append(valeur)
+    return tuple(sorted(set(ports)))
 
 
 class ConfigError(ValueError):
@@ -58,6 +92,7 @@ class Config:
     memory_reserve_bytes: int
     cpu_reserve: float
     storage_metadata_margin_bytes: int
+    reserved_ports: tuple[int, ...]
 
     @property
     def bind(self) -> str:
@@ -172,4 +207,6 @@ def load(env: dict[str, str] | None = None) -> Config:
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,
         storage_metadata_margin_bytes=marge,
+        reserved_ports=_parse_reserved_ports(
+            source.get("SPARKD_RESERVED_PORTS", "")),
     )
