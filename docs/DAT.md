@@ -3865,10 +3865,19 @@ n'alerte plus de rien.
 
 #### 36.8.5 Ce que l'écran ne prétend pas
 
-Il n'écrit **jamais** « signé ». Le §21.6.2 le dit pour la facette d'un Spark, et
-cela vaut ici davantage : une page entière consacrée à l'intégrité est l'endroit
-où l'on croirait le plus volontiers à une garantie qui n'existe pas encore. La
-signature est SPK-40.
+**Révisé le 2026-08-21 par la livraison de SPK-40.** Cette section interdisait à
+l'écran d'écrire « signé », et elle avait raison tant que rien ne signait : une
+page entière consacrée à l'intégrité est l'endroit où l'on croirait le plus
+volontiers à une garantie qui n'existe pas. La garantie existe désormais, et la
+règle s'inverse sans changer de motif — l'écran ne dit que ce que la Forge a
+mesuré. Ce qu'il porte est fixé au §36.10.9 : « signée » se lit sur les lignes
+dont la Forge a VÉRIFIÉ la signature à la réception, « non signée » sur les
+gestes arrivés sans elle, et une ligne du runtime n'en porte aucune parce que
+personne ne l'a demandée.
+
+Ce que l'écran ne prétend toujours pas : qu'une signature dise QUI a agi. Elle
+prouve qu'un geste a été demandé, pas l'identité du demandeur — c'est le §36.10.1,
+et le §21.6.2 continue de valoir pour la facette d'un Spark.
 
 **INC-01 y devient plus visible, et ce n'est pas un défaut de cette unité.** Les
 messages du runtime portent son vocabulaire — « `starting` → `running` » — là où
@@ -4255,6 +4264,92 @@ en-têtes, l'échec dit — est celui qui tournera en production.
 
 **Ce que le doublon ne prouve pas** : qu'un agent réel réponde. Cela se mesure sur
 un poste, et c'est la même limite qu'au §37.4.2 bis.
+
+#### 36.10.9 Ce que les écrans en disent
+
+**Écrit le 2026-08-21, avant le code.** Les §36.10.7 et §36.10.8 disent ce qui
+voyage et ce que la console produit. Celui-ci dit ce que l'exploitant VOIT — et
+c'est la moitié qui manquait : un mécanisme d'audit dont rien ne se lit à l'écran
+ne se distingue pas d'un mécanisme absent.
+
+##### Le journal dit, ligne à ligne, si elle est signée
+
+`GET /v1/audit` rend déjà `signed` sur chaque entrée, toujours, sans qu'il faille
+demander la signature elle-même (§36.10.7). L'écran de supervision le porte, et il
+distingue **trois situations qui ne se confondent pas** (§14.6) :
+
+- **signée** — la Forge a vérifié cette signature à la réception, sans quoi la
+  ligne n'existerait pas ; c'est un fait, pas une déclaration ;
+- **non signée** — un geste d'exploitant arrivé sans signature. C'est un état
+  NORMAL, pas un défaut : le §36.10.1 veut qu'un geste non signé passe. L'écran le
+  nomme au lieu de le taire, et ne l'écrit pas en rouge ;
+- **automatique** — une ligne produite par le runtime. Personne ne l'a demandée,
+  donc personne ne la signe. Elle ne reçoit AUCUN état de signature : lui écrire
+  « non signée » suggérerait qu'elle aurait pu l'être, et ferait chercher une
+  faute là où il n'y a qu'une nature différente. `renderAuteurCellule` la nomme
+  déjà, et c'est là que cela se dit.
+
+**La note générale disparaît.** L'écran portait « Aucune entrée n'est signée :
+l'identité est déclarée, pas prouvée ». C'était vrai avant SPK-40 et c'est faux
+après. Une mention périmée se lit comme vraie ; celle-ci se lirait sur la page
+même où l'on vient chercher une garantie.
+
+##### L'échec de signature se dit dans la COQUILLE, pas dans l'écran du geste
+
+**Le point qui décide de l'emplacement** : la cause n'est pas le geste, c'est
+l'état du poste — agent vidé, clé non configurée. Elle SURVIT au geste et frappera
+le suivant. Un avertissement posé dans l'écran du geste disparaîtrait en changeant
+de page alors que la cause reste, et l'exploitant croirait l'avoir réglé en
+naviguant.
+
+Il se dit donc dans la barre latérale, sous le contexte du serveur — là où vit
+déjà la clé de signature, qui est désignée PAR SERVEUR (§36.10.8).
+
+**En accent, jamais en rouge** (§25.1). Le geste a eu lieu, la Forge l'a accepté :
+il n'y a aucun refus du serveur. Ce qui est en jeu est la TRACE, pas l'action.
+
+**Il s'efface de lui-même** dès qu'un geste repart signé — l'en-tête est alors
+absent, et la console reprend son silence. Un avertissement qui survivrait à sa
+cause mentirait dans l'autre sens, et l'on désapprendrait à le lire.
+
+##### Le motif voyage en JETON, la phrase reste dans la console
+
+La réponse relayée porte `X-Spark-Signature-Motif`, dont les valeurs sont les
+motifs stables du §36.10.8 : `sans_cle`, `agent_muet`, `echec_signature`.
+
+Deux raisons, et aucune n'est un détail :
+
+- un en-tête HTTP ne transporte pas d'accent, et une phrase française y serait
+  soit mutilée soit encodée ;
+- le §14.7 interdit le jeton technique à l'écran. La phrase vit donc dans le
+  vocabulaire de la console — `tokens.js`, à un seul endroit (§12.5) —, et une
+  preuve garde que cette table couvre EXACTEMENT les motifs de
+  `apps/webui/host/signature.js`. Deux tables qui dérivent laisseraient un motif
+  sans phrase, c'est-à-dire un échec tu : précisément ce que le §36.10.8 interdit.
+
+Le corps de la réponse n'est pas touché : le relais rend ce que la Forge a rendu,
+et y ajouter un champ ferait mentir le contrat d'API sur ce que `sparkd` répond.
+
+##### Ce que le harnais éprouve, et ce qu'il ne prouve toujours pas
+
+Les deux moitiés sont prouvées séparément depuis le 2026-08-21 ; ce qui manquait
+est la JONCTION. Le harnais des parcours monte donc une pile où :
+
+- une vraie paire de clés est produite dans le dossier jetable, et le fichier
+  `allowed_signers` de la Forge la désigne sous l'identité que la console déclare
+  — `console/local`, celle-là même de `x-spark-actor` (§36.10.8) ;
+- `SPARK_SIGN_COMMAND` répond **par geste**, comme le doublon Docker du §37.6 ter :
+  il ÉCHOUE sur un geste désigné — pour que l'avertissement se voie à l'écran — et
+  délègue tout le reste au vrai `ssh-keygen -Y sign`. Une seule pile porte ainsi la
+  chaîne signée ET l'échec dit.
+
+MESURÉ le 2026-08-21 sur OpenSSH 8.9p1 : `console/local` est un principal
+recevable dans `allowed_signers`, et la chaîne signe puis se vérifie sans agent,
+la clé privée étant voisine de la publique — le cas du poste sans agent que le
+§36.10.8 admet.
+
+**Ce que cela ne prouve pas**, et c'est la même limite qu'au §37.4.2 bis : qu'un
+agent réel réponde. Cela se mesure sur un poste.
 
 ## 37. Les outils d'administration dans le Spark
 
