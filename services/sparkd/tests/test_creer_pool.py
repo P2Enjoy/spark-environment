@@ -215,3 +215,16 @@ def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
         assert len(raid["devices"]) == 2
     montages = {f["mountpoint"] for f in schema["filesystems"]}
     assert montages == {"/", "/boot"}
+
+
+def test_le_defaut_du_REMEDE_et_celui_du_SCRIPT_sont_le_MEME():
+    """Une consigne de réparation qui contredit le script d'installation apprend
+    à se méfier des deux.
+
+    Les deux valeurs vivent à deux endroits — le remède est en Python, le geste
+    en shell — et rien d'autre qu'une preuve ne peut les tenir ensemble.
+    """
+    from sparkd import preflight
+
+    script = SCRIPT.read_text("utf-8")
+    assert f'SPARK_POOL_FILE_SIZE:-{preflight.DEFAUT_TAILLE_FICHIER}' in script

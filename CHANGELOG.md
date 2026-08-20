@@ -3,6 +3,15 @@
 ## [Non publié]
 
 ### Ajouté
+- **Le pool de stockage se crée par un geste paramétré** (SPK-28,
+  `scripts/creer-pool.sh`) : nom, pilote, source et taille viennent tous de
+  l'environnement. Il refuse de recréer un pool en place, refuse un miroir à un
+  seul périphérique, et refuse d'écrire sur un périphérique non vide — en
+  montrant ce qu'il y a trouvé.
+- **Le README porte le schéma de partitionnement** à fournir à la création d'un
+  serveur, pour obtenir d'emblée une paire de partitions libres.
+- `SPARKD_STORAGE_DATASET` : le jeu de données dont la compression est vérifiée,
+  qui suit le pool par défaut.
 - **Les écrans renvoient au manuel au lieu de recopier son raisonnement**
   (SPK-56, `docs/DESIGN_SYSTEM.md` §1.5 bis) : les sections *Ressources*,
   *Protection*, *Amorçage*, *Clés* et le catalogue d'images gardent leurs valeurs,
@@ -239,6 +248,13 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- **Le pool sur fichier n'est plus « provisoire »** : le DAT §8.5 énonce **deux
+  dispositions**, chacune avec ce qu'elle apporte et ce qu'elle ne protège pas.
+  Sous la disposition sur fichier, la protection contre la corruption silencieuse
+  est absente, pas dégradée. OP-01 est close.
+- La vérification du stockage lit le nom du pool et du jeu de données dans la
+  configuration : sur une Forge configurée autrement, elle annonçait un pool
+  absent qui existait.
 - **SPK-49 close** : une connexion entrante atteint réellement un Spark. Port
   publié, frappé depuis Internet en `200`, refus nommés, et retrait qui referme
   le port — mesuré sur la Forge réelle.

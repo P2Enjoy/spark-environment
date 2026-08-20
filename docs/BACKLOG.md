@@ -730,7 +730,7 @@ le contourne pas puisque le profil fautif est celui du Spark. Le correctif est d
   des dépôts Ubuntu interdite, et installation **avant** la création du moindre
   Spark. Ce n'est pas une préférence, c'est une condition de fonctionnement.
 
-### [ ] SPK-28 · Partitionnement fourni à la création du serveur
+### [~] SPK-28 · Partitionnement fourni à la création du serveur
 
 **Arbitrage du responsable, 2026-08-20.** L'environnement de validation est une
 **démonstration** : le pool sur fichier y suffit, et il cesse d'être « provisoire ».
@@ -763,6 +763,32 @@ réclame ici.
   README.
 - Note d'exploitation conservée : aucune mesure de débit disque menée sur le pool
   fichier ne caractérise la machine.
+
+**Livré le 2026-08-20.**
+
+- **§8.5 révisé** : deux DISPOSITIONS, plus une cible et un repli. Ce que la
+  disposition sur fichier n'apporte pas est dit franchement — la protection
+  contre la corruption silencieuse est **absente**, pas dégradée.
+- **§8.5 bis écrit** : le contrat des valeurs configurables, réparties selon une
+  frontière qui n'est pas arbitraire — `sparkd` ne CRÉE aucun pool, il en lit un.
+- **Trois valeurs codées en dur trouvées par recherche** et retirées de
+  `sparkd.preflight`. Sur une Forge dont le pool s'appelle `tank`, la
+  vérification annonçait « pool « spark » absent ».
+- **`scripts/creer-pool.sh`** : le pool se crée par un geste paramétré, dans
+  l'une ou l'autre disposition. Trois refus, dont celui d'écrire sur un
+  périphérique non vide — **avant** d'écrire, en montrant ce qui a été trouvé.
+- **Le schéma JSON est au README**, avec ce qu'il produit et pourquoi `sda5` et
+  `sdb5` restent des périphériques nus.
+- **OP-01 close**, avec son motif. Plus aucun document ne dit « provisoire ».
+- **Preuves** : 11 du geste et du schéma — le premier script du dépôt à être
+  éprouvé, exécuté pour de vrai avec `id`, `incus` et `wipefs` doublés —, plus
+  4 du préflight configurable. 722 preuves Python au total.
+
+- **Reste avant `[x]`, et c'est le seul écart** : le schéma JSON n'a **jamais été
+  soumis à un hébergeur**. Il est valide, et une preuve le relit depuis le README
+  pour garder que la paire reste libre — mais « un exploitant qui suit le README
+  obtient les partitions attendues » demande une machine commandée, que la
+  session ne peut pas fournir. **Nécessite une action humaine.**
 
 ### [x] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
 

@@ -5255,3 +5255,75 @@ ce qui lui manquait.
 **Où reprendre.** SPK-53 et SPK-54 attendent une décision du responsable. Sans
 elles, la première unité `[ ]` du plan qui reste constructible est SPK-55
 (durcir la Forge) ou SPK-57 (redimensionner un Spark existant).
+
+---
+
+## 2026-08-20 · SPK-28 — le stockage se configure, et cesse d'être une dette
+
+**Unité choisie** au §4.2 point 3 : première `[ ]` du plan. Les `[~]` restantes
+attendent du matériel, une exécution de CI, la Forge réelle ou un arbitrage.
+
+### Ce que la recherche a trouvé, et que la mémoire aurait manqué
+
+La DoD exigeait « aucune valeur de stockage codée en dur, vérifié par une
+recherche ». Elle en a montré trois, toutes dans `sparkd.preflight` : le nom du
+pool et celui du jeu de données en **défaut de fonction**, et `size=200GiB` dans
+le remède.
+
+Conséquence mesurable : sur une Forge dont le pool s'appelle `tank` et qui
+fonctionne, la vérification annonçait « pool « spark » absent ». Un rouge qui ne
+dit rien du produit est ce que le §31.2 interdit.
+
+Elle a aussi montré qu'aucun script ne créait le pool : il était posé à la main et
+décrit en prose au contrat de déploiement.
+
+### L'arbitrage porté au produit
+
+Le §8.5 disait « une cible et un repli ». Il dit désormais **deux dispositions**,
+chacune avec ce qu'elle apporte et ce qu'elle ne protège pas. Ce qu'elle ne
+protège pas est dit franchement plutôt qu'adouci : sous la disposition sur
+fichier, la protection contre la corruption silencieuse est **absente**, pas
+dégradée.
+
+Le motif du changement est écrit là où quelqu'un le cherchera : une dette qu'on ne
+compte pas rembourser n'est pas une dette. OP-01 est close pour cette raison, et
+plus aucun document ne dit « provisoire » — sauf celui qui raconte pourquoi cela
+a changé.
+
+### Ce qui a été construit
+
+`scripts/creer-pool.sh` crée le pool dans l'une ou l'autre disposition, sans
+qu'aucune valeur soit codée en dur. `SPARK_POOL_SOURCE` **décide** de la
+disposition : le renseigner EST le choix du miroir natif.
+
+Trois refus, chacun avec sa raison : un pool déjà en place n'est jamais recréé ; un
+seul périphérique est refusé, faute de quoi on livrerait une disposition qui porte
+le nom de « native » sans en donner la protection ; un périphérique non vide est
+refusé **avant** toute écriture, et le script montre ce qu'il a trouvé.
+
+Le README porte le schéma de partitionnement JSON à fournir à la création d'un
+serveur. Le point qui compte : `sda5` et `sdb5` n'apparaissent ni dans un RAID ni
+dans un système de fichiers — les confier à `md` reproduirait exactement le
+problème que le miroir ZFS résout.
+
+### Un premier script éprouvé
+
+Aucun script du dépôt ne l'était. Ces preuves exécutent le **vrai** script :
+`id`, `incus` et `wipefs` sont doublés sur le `PATH`, ce qui le laisse intact et
+lui fait croire qu'il est root sur une machine à lui. Le contrôle `[ -b … ]` étant
+une primitive du shell, la preuve nomme de **vrais** périphériques bloc — les
+inventer aurait éprouvé le mauvais refus. Rien n'est écrit ni lu sur eux.
+
+### Vérifications
+
+Campagne complète **verte** : 722 Python, contrat conforme, 772 de console, 8 de
+gestes, 69 parcours E2E, 7 du manuel, `build`. Aucune capture : cette unité ne
+touche pas l'interface.
+
+**SPK-28 reste `[~]`**, avec un seul écart : le schéma JSON n'a jamais été soumis
+à un hébergeur. Il est valide et une preuve le garde, mais « un exploitant qui
+suit le README obtient les partitions attendues » demande une machine commandée,
+que la session ne peut pas fournir.
+
+**Où reprendre.** SPK-35 et SPK-36 sont les `[ ]` suivantes du plan. SPK-53 et
+SPK-54 attendent toujours une décision du responsable.
