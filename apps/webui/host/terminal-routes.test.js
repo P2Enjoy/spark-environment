@@ -346,3 +346,61 @@ test('un chemin INCONNU retombe sur ssh, il n’invente pas un troisième chemin
   assert.equal(JSON.parse(await r.text()).path, 'ssh');
   fermer();
 });
+
+// --- SPK-43 · POURQUOI LE CHEMIN NORMAL N'A PAS ABOUTI (§37.2, §37.3.1) -----
+
+const diagnostiquer = (base, spark = 'crm') =>
+  fetch(`${base}/api/terminal/diagnostic?server=prod&spark=${spark}`);
+
+test('le diagnostic MESURE le sshd au lieu de deviner, et ne journalise rien', async () => {
+  // §37.5 : la console ne retient aucun octet de la session, donc elle ne peut
+  // pas inspecter la sortie pour en déduire la cause. Elle sonde.
+  // §36.7 : une lecture ne se journalise pas.
+  const { base, fermer, sondages, declarees } = await pile({
+    sondage: { repond: false, motif: 'sshd_muet' } });
+  const corps = await (await diagnostiquer(base)).json();
+  assert.equal(sondages.length, 1, 'le verdict vient d’une mesure');
+  assert.deepEqual(corps.sshd, { repond: false, motif: 'sshd_muet' });
+  assert.equal(corps.rescue.ouvert, true);
+  assert.match(corps.rescue.explication, /rien ne répond sur le port 22/i);
+  assert.deepEqual(declarees, [], 'un diagnostic est une lecture');
+  fermer();
+});
+
+test('le diagnostic n’OUVRE aucune session', async () => {
+  // Il informe. Ouvrir au passage priverait l'exploitant de la confirmation que
+  // le §37.3 exige avant d'employer le dépannage.
+  const { base, fermer, enfants } = await pile({
+    sondage: { repond: false, motif: 'sshd_muet' } });
+  await diagnostiquer(base);
+  assert.equal(enfants.length, 0);
+  fermer();
+});
+
+test('un sshd qui REFUSE LA CLÉ est distingué d’un sshd muet', async () => {
+  const { base, fermer } = await pile({ sondage: { repond: true, motif: 'cle_refusee' } });
+  const corps = await (await diagnostiquer(base)).json();
+  assert.equal(corps.sshd.repond, true);
+  assert.equal(corps.rescue.ouvert, false);
+  assert.match(corps.rescue.explication, /onglet Clés/);
+  fermer();
+});
+
+test('un Spark EN ERREUR est diagnostiqué sans sonder', async () => {
+  const { base, fermer, sondages } = await pile({
+    spark: { name: 'crm', ipv4_address: '10.77.0.16', incus_name: 'crm', state: 'error' } });
+  const corps = await (await diagnostiquer(base)).json();
+  assert.deepEqual(sondages, []);
+  assert.equal(corps.sshd, null, 'aucune mesure n’est prétendue');
+  assert.equal(corps.rescue.ouvert, true);
+  assert.equal(corps.rescue.motif, 'spark_en_erreur');
+  fermer();
+});
+
+test('un Spark INCONNU rend 404, pas un diagnostic inventé', async () => {
+  const { base, fermer } = await pile({ statutSpark: 404 });
+  const r = await diagnostiquer(base);
+  assert.equal(r.status, 404);
+  assert.equal((await r.json()).error, 'unknown_spark');
+  fermer();
+});

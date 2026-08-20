@@ -559,6 +559,51 @@ export function createConsoleHost(options = {}) {
       }
     },
 
+    /**
+     * Pourquoi le chemin normal n'a pas abouti (§37.2, §37.3.1).
+     *
+     * Le §37.2 veut que l'écran DISE ce qui manque, en toutes lettres. Or un
+     * Spark dont le `sshd` est muet ne produit rien d'autre qu'une ligne de
+     * `ssh` et un shell qui meurt : l'exploitant lit « le shell distant s'est
+     * terminé » et doit deviner.
+     *
+     * Cette route MESURE plutôt que de deviner, et elle mesure du dehors de la
+     * session : la console ne retient aucun octet de ce qui a transité (§37.5),
+     * donc elle ne peut pas — et ne doit pas — inspecter la sortie pour en
+     * déduire la cause. Elle sonde le `sshd`, comme le fait le dépannage.
+     *
+     * Lecture pure : rien n'est ouvert, rien n'est écrit au journal (§36.7).
+     */
+    'GET /api/terminal/diagnostic': async (_corps, url) => {
+      const nom = String(url?.searchParams.get('server') ?? '');
+      const spark = String(url?.searchParams.get('spark') ?? '');
+      let tunnel;
+      try {
+        tunnel = tunnels.require(nom);
+      } catch (erreur) {
+        return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
+      }
+      const amont = await fetchFn(
+        `http://127.0.0.1:${tunnel.localPort}/v1/sparks/${encodeURIComponent(spark)}`,
+        { headers: { 'x-spark-actor': tunnel.actorHeader } });
+      if (!amont.ok) {
+        return { status: 404, body: { error: 'unknown_spark',
+                                      message: `Aucun Spark « ${spark} » sur ce serveur.` } };
+      }
+      const decrit = await amont.json();
+      // Un Spark en erreur ouvre le dépannage sans sondage : l'état suffit, et
+      // sonder ferait attendre cinq secondes pour apprendre ce qu'on sait déjà.
+      const sondage = decrit.state === 'error' ? null : await sonder({ tunnel, spark: decrit });
+      const verdict = depannageOuvert(decrit, sondage);
+      return { status: 200, body: {
+        spark: decrit.name,
+        // Ce que le sondage a CONSTATÉ, distinct de ce qu'on en conclut.
+        sshd: sondage ? { repond: sondage.repond, motif: sondage.motif } : null,
+        rescue: { ouvert: verdict.ouvert, motif: verdict.motif,
+                  explication: verdict.explication },
+      } };
+    },
+
     'POST /api/terminal': async (corps) => {
       const nom = String(corps?.server ?? '');
       const spark = String(corps?.spark ?? '');
