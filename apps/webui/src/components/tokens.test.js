@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE,
-  TUNNEL_STATES, tunnelOf, traduireMessage,
+  TUNNEL_STATES, tunnelOf, traduireMessage, formatOctetsExact,
 } from './tokens.js';
 
 test('les huit etats du modele sont couverts', () => {
@@ -153,4 +153,35 @@ test('une valeur absente ne devient jamais « undefined » a l’ecran', () => {
   assert.equal(traduireMessage(null), '');
   assert.equal(traduireMessage(undefined), '');
   assert.equal(traduireMessage(''), '');
+});
+
+// --- lire une mesure n'est pas regler un quota (SPK-59, §6.9 bis) -----------
+
+test('le format EXACT rend le pas de 256 Mio, la ou l arrondi le masque', () => {
+  const GIO = 1024 ** 3;
+  // Trois crans sur quatre disparaissent avec le format des mesures.
+  assert.equal(formatOctetsExact(1.25 * GIO), '1,25 Gio');
+  assert.equal(formatBytes(1.25 * GIO), '1,3 Gio');
+  assert.equal(formatOctetsExact(10.25 * GIO), '10,25 Gio');
+  assert.equal(formatBytes(10.25 * GIO), '10 Gio');
+});
+
+test('le format exact ne traine pas de zeros inutiles', () => {
+  const GIO = 1024 ** 3;
+  assert.equal(formatOctetsExact(2 * GIO), '2 Gio');
+  assert.equal(formatOctetsExact(2.5 * GIO), '2,5 Gio');
+  assert.equal(formatOctetsExact(76 * GIO), '76 Gio');
+});
+
+test('il descend dans l unite qui dit la valeur sans decimale', () => {
+  const MIO = 1024 ** 2;
+  assert.equal(formatOctetsExact(256 * MIO), '256 Mio');
+  assert.equal(formatOctetsExact(512 * MIO), '512 Mio');
+  assert.equal(formatOctetsExact(768 * MIO), '768 Mio');
+});
+
+test('la virgule francaise est employee, et null reste null', () => {
+  assert.ok(!formatOctetsExact(1.25 * 1024 ** 3).includes('.'));
+  assert.equal(formatOctetsExact(null), null);
+  assert.equal(formatOctetsExact(undefined), null);
 });

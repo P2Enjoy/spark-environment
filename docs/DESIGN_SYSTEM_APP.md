@@ -224,6 +224,34 @@ comme une contradiction.
 Lorsque la capacité n'a pas pu être relevée, les quotas se rendent en **saisie
 numérique** : sans bornes, pas de curseur (§6.9 bis, condition 1).
 
+**Le pas de chaque quota, et pourquoi la mémoire ne se règle pas au gibioctet.**
+
+| Quota | Pas | Motif |
+|---|---|---|
+| réservation et plafond CPU | 0,05 CPU | la plus petite part que le produit sait poser |
+| cœurs | 1 | un cœur physique ne se coupe pas |
+| **mémoire** | **256 Mio** | décision du responsable, 2026-08-20 |
+| disque | 1 Gio | le quota compte l'écrit après compression, au gibioctet |
+| débit | 10 Mbit/s | la comptabilité du lien ne descend pas plus bas |
+
+Le gibioctet était trop grossier pour la mémoire, et la mesure le dit : le seed
+pose des Sparks à **512 Mio**, valeur qu'un pas de 1 Gio rend inatteignable. Sur
+la pile de validation, dont le pool mémoire est de 5,4 Gio une fois les réserves
+déduites, un curseur au gibioctet n'offrait que **cinq crans** — le contrôle avait
+la forme d'un réglage fin et la granularité d'un menu à cinq entrées.
+
+Deux conséquences, toutes deux assumées :
+
+- la mémoire s'affiche avec un format **exact** (§6.9 bis) et non avec l'arrondi
+  des mesures : « 512 Mio », « 1,25 Gio », « 76 Gio ». `formatBytes` rendrait
+  « 1,3 Gio » pour 1,25 et « 10 Gio » pour 10,25 — trois crans sur quatre y
+  seraient invisibles ;
+- un pool mémoire dépassant **100,25 Gio** compte plus de 400 crans à ce pas, et
+  la mémoire y **retombe en saisie** par la condition 2. La Forge de validation
+  déclare 94 Gio de RAM et son pool reste bien en deçà une fois l'ARC et
+  `SPARKD_MEMORY_RESERVE` déduits, donc le curseur y survit ; sur une machine plus
+  grosse il cédera, et c'est la règle qui fonctionne.
+
 **Le disque de la Forge de validation illustre la condition 3, et il vaut d'être
 écrit** : ses deux disques de 6 To en RAID1 donnent un pool de plus de 5 000 Gio.
 Au pas de 1 Gio le curseur compterait plus de cinq mille crans ; le pas de 20 Gio

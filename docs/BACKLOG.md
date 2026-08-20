@@ -2312,7 +2312,7 @@ transport.
   est **reposé au démarrage** de la cellule ; manuel M6/M8 et
   seed mis à jour.
 
-### [x] SPK-59 · Les quotas se règlent au curseur
+### [~] SPK-59 · Les quotas se règlent au curseur
 
 **Demande du responsable, 2026-08-20.** Les quotas de l'écran de création se
 saisissent au clavier, chiffre par chiffre, alors que ce sont des valeurs bornées
@@ -2385,6 +2385,22 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   complétée — la valeur affichée doit être exacte sur la grille du curseur, sans
   quoi c'est le pas qui est mauvais. Détail au `docs/DESIGN_SYSTEM_APP.md`
   SPK-DS-07.
+- **Repassée à `[~]` le 2026-08-20, et il faut dire pourquoi.** L'amendement des
+  256 Mio est implémenté, couvert par **599 tests de console verts** et
+  **vérifié visuellement** — captures 15 à 19b et illustrations M5 refaites et
+  observées après le changement. Ce qui manque, et une seule chose : **la
+  campagne E2E n'a pas été rejouée depuis l'amendement**. `REFUS 1` est le seul
+  parcours concerné ; il était vert au pas de 1 Gio et rien n'indique qu'il ne le
+  soit plus, mais « rien n'indique » n'est pas une preuve.
+- **Motif de l'arrêt, et il vaut d'être écrit** : les campagnes E2E ont **saturé
+  la mémoire de la machine** et l'ont fait tomber quatre fois. Deux commandes se
+  sont terminées en code **137**, un `SIGKILL` — signature du tueur de mémoire.
+  `make e2e` monte cinquante fois une pile complète — `sparkd`, hôte console et
+  Chromium — et trois sessions en lançaient en parallèle sur le même hôte WSL2.
+  La contention avait déjà été mesurée le même jour comme cause de rouges
+  erratiques ; la conclusion qu'elle pouvait aussi tuer l'hôte n'en avait pas été
+  tirée. **À traiter avant de rejouer une campagne complète** : la reprise se
+  fera sur le seul parcours `REFUS 1`, pas sur les cinquante.
 
 ### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 

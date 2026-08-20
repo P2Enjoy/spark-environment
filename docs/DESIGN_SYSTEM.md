@@ -699,6 +699,13 @@ toujours
 La borne basse n'est jamais une valeur que le formulaire refusera ensuite : un
 curseur ne doit pas pouvoir produire une valeur invalide (§1.4).
 
+**La valeur affichée est EXACTE sur la grille du curseur.** Un format qui arrondit
+convient à une mesure qu'on lit — la dernière décimale n'y apprend rien — mais pas
+à un réglage qu'on transmet : un curseur qui affiche « 10 Gio » pour 10,25 Gio
+ment sur ce qu'il va envoyer, et l'utilisateur qui déplace la poignée d'un cran
+voit un chiffre immobile. Choisir le pas, c'est donc aussi choisir un format
+capable de le rendre ; si aucun format ne le peut, c'est le pas qui est mauvais.
+
 Le curseur est nativement utilisable au clavier — flèches, `Origine`, `Fin`,
 `Page préc.` et `Page suiv.` — et cet usage ne se remplace pas par un raccourci
 maison. Sa hauteur cliquable atteint `--size-target` (§4.4).

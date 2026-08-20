@@ -81,6 +81,31 @@ export function formatBytes(value) {
   return `${virgule(n < 10 && i > 0 ? n.toFixed(1) : Math.round(n))} ${OCTETS[i]}`;
 }
 
+/**
+ * Octets d'un QUOTA qu'on règle, par opposition à une mesure qu'on lit.
+ *
+ * @spec docs/BACKLOG.md#SPK-59 · docs/DESIGN_SYSTEM.md §6.9 bis (la valeur
+ *       affichée est exacte sur la grille du curseur) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-07 (la mémoire au pas de 256 Mio)
+ *
+ * `formatBytes` arrondit, et il a raison de le faire : la dernière décimale
+ * d'une mesure n'apprend rien. Un quota, lui, est la valeur qui SERA envoyée.
+ * Mesuré sur le pas de 256 Mio : `formatBytes` rend « 1,3 Gio » pour 1,25 et
+ * « 10 Gio » pour 10,25 — trois crans sur quatre deviennent invisibles, on
+ * déplace la poignée et le chiffre ne bouge pas.
+ *
+ * Deux décimales suffisent et ne mentent pas : les pas du produit sont des
+ * quarts de gibioctet ou des unités entières. Les zéros inutiles tombent, pour
+ * que « 2 Gio » ne s'écrive pas « 2,00 Gio ».
+ */
+export function formatOctetsExact(value) {
+  if (value === null || value === undefined) return null;
+  let n = value;
+  let i = 0;
+  while (n >= 1024 && i < OCTETS.length - 1) { n /= 1024; i += 1; }
+  return `${virgule(String(Number(n.toFixed(2))))} ${OCTETS[i]}`;
+}
+
 export function formatBps(value) {
   if (value === null || value === undefined) return null;
   if (value >= 1e9) return `${virgule((value / 1e9).toFixed(1))} Gbit/s`;

@@ -15,6 +15,7 @@ import {
   renderSparkCreate, validateShape, estimate, demandOf, describeShortfall, DEFAUTS, renderChoixImage,
   borneHaute, formatQuota, renderAvertissement, QUOTAS, CRANS_MAX,
 } from './spark-create.js';
+import { formatBytes } from './tokens.js';
 
 const GIO = 1024 ** 3;
 const POOLS = {
@@ -295,18 +296,62 @@ test('une plage trop longue pour un pointeur redevient une SAISIE', () => {
 
 test('le seuil de crans est CALCULE, pas declare', () => {
   // 400 crans = 28 rem (448 px) de contrôle : au-dela, un cran est plus etroit
-  // qu'un pixel. La borne juste sous le seuil passe, celle juste au-dessus non.
-  const gio = (n) => ({ ...POOLS, memory: { capacity: n * 1024 ** 3, available: 0 } });
-  assert.equal(borneHaute('memory_gib', { pools: gio(CRANS_MAX + 1) }), CRANS_MAX + 1);
-  assert.equal(borneHaute('memory_gib', { pools: gio(CRANS_MAX + 2) }), null);
+  // qu'un pixel. Eprouve sur le disque, dont le pas vaut 1 Gio : la borne juste
+  // sous le seuil passe, celle juste au-dessus non.
+  const gio = (n) => ({ ...POOLS, storage: { capacity: n * GIO, available: 0 } });
+  assert.equal(borneHaute('storage_gib', { pools: gio(CRANS_MAX + 1) }), CRANS_MAX + 1);
+  assert.equal(borneHaute('storage_gib', { pools: gio(CRANS_MAX + 2) }), null);
+});
+
+test('le seuil s applique AU PAS du quota, pas a son unite', () => {
+  // La memoire avance de 256 Mio : 400 crans y valent 100 Gio et non 400. Un
+  // pool plus gros retombe donc en saisie, et c'est la regle qui fonctionne.
+  const gio = (n) => ({ ...POOLS, memory: { capacity: n * GIO, available: 0 } });
+  assert.equal(borneHaute('memory_gib', { pools: gio(100.25) }), 100.25);
+  assert.equal(borneHaute('memory_gib', { pools: gio(100.5) }), null);
+});
+
+test('la memoire avance par pas de 256 Mio', () => {
+  // Decision du responsable (SPK-DS-07). Le gibioctet rendait inatteignables
+  // les 512 Mio que le SEED emploie pour quatre de ses Sparks.
+  assert.equal(QUOTAS.memory_gib.pas, 0.25);
+  assert.equal(QUOTAS.memory_gib.min, 0.25);
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.match(html, /id="memory_gib"[^>]*step="0.25"/);
+  assert.match(html, /id="memory_gib"[^>]*min="0.25"/);
+  // La valeur du seed est sur un cran, donc atteignable au curseur.
+  assert.equal(formatQuota('memory_gib', 0.5), '512 Mio');
+});
+
+test('la valeur affichee est EXACTE sur la grille, jamais arrondie', () => {
+  // §6.9 bis : un curseur qui affiche « 10 Gio » pour 10,25 ment sur ce qu'il
+  // envoie, et trois crans sur quatre deviennent invisibles.
+  assert.equal(formatQuota('memory_gib', 1.25), '1,25 Gio');
+  assert.equal(formatQuota('memory_gib', 10.25), '10,25 Gio');
+  assert.equal(formatQuota('memory_gib', 2), '2 Gio');
+  // Ce que le format des MESURES aurait rendu, et qui serait faux ici.
+  assert.equal(formatBytes(10.25 * GIO), '10 Gio');
+  assert.equal(formatBytes(1.25 * GIO), '1,3 Gio');
+});
+
+test('les deux quotas en octets s ecrivent de la MEME facon', () => {
+  // Deux valeurs de meme unite sur le meme ecran ne peuvent pas s'ecrire l'une
+  // « 1 Gio » et l'autre « 1,0 Gio ».
+  assert.equal(formatQuota('memory_gib', 1), formatQuota('storage_gib', 1));
+});
+
+test('ce qu on DEMANDE s ecrit exactement, ce qui RESTE est une mesure', () => {
+  const risques = estimate({ ...DEFAUTS, memory_gib: 10.25 }, POOLS);
+  assert.equal(risques[0].requested, '10,25 Gio');
+  assert.equal(risques[0].available, '4,0 Gio');
 });
 
 test('le curseur porte sa valeur EN CLAIR et dans aria-valuetext', () => {
   // Une poignee ne dit pas ou elle est, et la synthese annoncerait « 2 » la ou
   // l'ecran montre « 2,0 Gio ».
   const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
-  assert.match(html, /id="memory_gib"[\s\S]*?aria-valuetext="2,0 Gio"/);
-  assert.match(html, /data-valeur-de="memory_gib" aria-hidden="true">2,0 Gio</);
+  assert.match(html, /id="memory_gib"[\s\S]*?aria-valuetext="2 Gio"/);
+  assert.match(html, /data-valeur-de="memory_gib" aria-hidden="true">2 Gio</);
 });
 
 test('le doublon visible de la valeur est cache a la synthese', () => {
@@ -320,7 +365,7 @@ test('le doublon visible de la valeur est cache a la synthese', () => {
 test('les deux bornes sont ecrites sous la piste', () => {
   const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
   assert.match(html, /class="curseur__bornes"/);
-  assert.match(html, /1,0 Gio[\s\S]*?76 Gio/);
+  assert.match(html, /256 Mio[\s\S]*?76 Gio/);
 });
 
 test('l ecran dit D OU VIENT la borne haute', () => {

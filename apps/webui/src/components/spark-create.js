@@ -17,7 +17,7 @@
  * périmée, et dans le sens favorable.
  */
 
-import { formatBytes, formatBps, formatCpu } from './tokens.js';
+import { formatBytes, formatBps, formatCpu, formatOctetsExact } from './tokens.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -102,15 +102,20 @@ export function demandOf(valeurs) {
 export function estimate(valeurs, pools) {
   if (!pools) return [];
   const demande = demandOf(valeurs);
+  const cpu = (v) => `${formatCpu(v)} CPU`;
+  // Deux formats par ligne, et ce n'est pas une coquetterie : ce qu'on DEMANDE
+  // est la valeur réglée au curseur, elle doit s'écrire exactement comme lui
+  // (§6.9 bis) ; ce qui RESTE est une mesure, que l'arrondi sert mieux.
   const paires = [
-    ['cpu', demande.cpu, pools.cpu?.available, (v) => `${formatCpu(v)} CPU`],
-    ['mémoire', demande.memory, pools.memory?.available, formatBytes],
-    ['disque', demande.storage, pools.storage?.available, formatBytes],
-    ['réseau', demande.network, pools.network?.available, formatBps],
+    ['cpu', demande.cpu, pools.cpu?.available, cpu, cpu],
+    ['mémoire', demande.memory, pools.memory?.available, formatOctetsExact, formatBytes],
+    ['disque', demande.storage, pools.storage?.available, formatOctetsExact, formatBytes],
+    ['réseau', demande.network, pools.network?.available, formatBps, formatBps],
   ];
   return paires
     .filter(([, veut, reste]) => reste !== undefined && reste !== null && veut > reste)
-    .map(([nom, veut, reste, f]) => ({ resource: nom, requested: f(veut), available: f(reste) }));
+    .map(([nom, veut, reste, exact, mesure]) =>
+      ({ resource: nom, requested: exact(veut), available: mesure(reste) }));
 }
 
 function champ({ id, libelle, aide, erreur, controle }) {
@@ -150,12 +155,18 @@ export const QUOTAS = {
   cpu_cores:       { pas: 1, min: 1,
                      borne: (c) => c.cores,
                      format: (v) => `${v} cœur${v > 1 ? 's' : ''}` },
-  memory_gib:      { pas: 1, min: 1,
+  // 256 Mio, décision du responsable (SPK-DS-07) : le gibioctet rendait
+  // inatteignables les 512 Mio que le seed emploie, et n'offrait que cinq crans
+  // sur le pool de 5,4 Gio de la pile de validation. Le format est EXACT et non
+  // arrondi : `formatBytes` rendrait « 10 Gio » pour 10,25 (§6.9 bis).
+  memory_gib:      { pas: 0.25, min: 0.25,
                      borne: (c) => (c.pools ? c.pools.memory?.capacity / GIO : null),
-                     format: (v) => formatBytes(v * GIO) },
+                     format: (v) => formatOctetsExact(v * GIO) },
+  // Format exact lui aussi : deux quotas de la même unité sur le même écran ne
+  // peuvent pas s'écrire l'un « 256 Mio » et l'autre « 1,0 Gio ».
   storage_gib:     { pas: 1, min: 1,
                      borne: (c) => (c.pools ? c.pools.storage?.capacity / GIO : null),
-                     format: (v) => formatBytes(v * GIO) },
+                     format: (v) => formatOctetsExact(v * GIO) },
   network_mbit:    { pas: 10, min: 10,
                      borne: (c) => (c.pools ? c.pools.network?.capacity / MBIT : null),
                      format: (v) => formatBps(v * MBIT) },

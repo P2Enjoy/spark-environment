@@ -18,6 +18,17 @@ avec son unité, et ses deux bornes sous la piste. Au clavier : les flèches
 avancent d'un cran, `Origine` et `Fin` vont aux extrémités, `Page préc.` et
 `Page suiv.` se déplacent par bonds.
 
+Chaque quota a son propre pas, choisi sur ce que la valeur signifie : la
+**mémoire avance de 256 Mio**, le disque d'un gibioctet, le débit de 10 Mbit/s,
+la réservation CPU de 0,05 CPU. La mémoire est plus fine que les autres parce que
+des Sparks utiles tiennent en 512 Mio : un pas d'un gibioctet aurait rendu cette
+valeur impossible à choisir.
+
+La valeur affichée est toujours **exacte** — « 512 Mio », « 1,25 Gio » — et jamais
+arrondie. C'est délibéré : un curseur qui afficherait « 10 Gio » pour 10,25
+mentirait sur ce qu'il envoie, et vous verriez le chiffre rester immobile en
+déplaçant la poignée.
+
 **Un curseur va jusqu'à ce que la machine possède *en tout*, pas jusqu'à ce qui
 reste libre.** Ce n'est pas une erreur d'affichage. Le panneau de droite peut
 annoncer 64 Gio disponibles pendant que le curseur monte à 76 : vous avez le
@@ -32,6 +43,8 @@ une machine dont le pool disque dépasse le millier de gibioctets, un curseur au
 gibioctet compterait plusieurs milliers de crans : impossible à viser, et un pas
 plus grossier rendrait un quota courant de 10 Gio inatteignable. Le disque s'y
 saisit donc au clavier, pendant que la mémoire et le débit restent des curseurs.
+La mémoire cède de la même façon au-delà d'une centaine de gibioctets de pool,
+puisqu'elle avance par pas de 256 Mio.
 
 De même, si la capacité de la machine n'a pas pu être relevée, tous les quotas
 redeviennent des champs de saisie : sans bornes connues, il n'y a pas de curseur
