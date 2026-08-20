@@ -95,3 +95,18 @@ test('le chapitre courant est annoncé, et pas seulement coloré', () => {
   // suivre, sinon la page courante n'est annoncée nulle part.
   assert.ok(rendu.includes('href="#/manuel/M4-pools" class="destination" aria-current="page"'));
 });
+
+test('un paragraphe est un GROUPE de lignes, pas une ligne', () => {
+  // Vu à l'écran, invisible d'un test de contenu : un `<p>` par ligne doublait
+  // l'interligne et coupait les phrases en deux.
+  const rendu = renderMarkdown('Une phrase qui\ncontinue à la ligne.\n\nUne autre.\n');
+  assert.equal((rendu.match(/<p>/g) ?? []).length, 2);
+  assert.ok(rendu.includes('<p>Une phrase qui continue à la ligne.</p>'));
+});
+
+test('l’italique est rendu, et le gras n’est pas mangé par lui', () => {
+  const rendu = enrichir('un *mot* et un **autre**');
+  assert.ok(rendu.includes('<em>mot</em>'));
+  assert.ok(rendu.includes('<strong>autre</strong>'));
+  assert.ok(!rendu.includes('<em></em>'), 'le gras ne se lit pas comme deux italiques vides');
+});

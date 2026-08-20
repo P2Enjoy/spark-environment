@@ -214,3 +214,14 @@ test('un NOM cité qui n’est pas un état n’est pas déformé', () => {
     message: 'Spark « boutique » supprimé, ressources rendues.' }] });
   assert.ok(rendu.includes('« boutique »'));
 });
+
+test('« Chaîne intacte » ne se lit pas comme une preuve de complétude', () => {
+  // §1.5 bis garde à l'écran la QUALIFICATION d'une valeur ambiguë. Le verdict
+  // seul laisserait croire le journal entier prouvé, alors qu'une fin coupée est
+  // invisible de la chaîne — c'est l'ancre qui la voit.
+  const rendu = renderIntegrite({
+    chain: { intact: true, checked: 42, verified_at: '2026-08-20T14:00:00Z' },
+  });
+  assert.ok(rendu.includes('Chaîne intacte'));
+  assert.ok(rendu.includes('fin coupée'), 'la limite du verdict est nommée à côté de lui');
+});

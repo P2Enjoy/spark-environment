@@ -76,9 +76,14 @@ export function renderIntegrite({ chain = null, anchor = null, checking = false 
        L’état affiché serait une supposition, et c’est précisément ce que ce
        dispositif existe pour ne pas laisser croire.</p>`
     : chain.intact
+      // §1.5 bis : « Chaîne intacte » est une valeur AMBIGUË — elle se lit comme
+      // une preuve de complétude. La qualification reste donc à l'écran ; c'est
+      // le POURQUOI qui est au manuel. Sans elle, un lecteur qui ne suit pas le
+      // renvoi croit le journal entier prouvé.
       ? `<p><span class="badge badge--success"><span class="badge__point" aria-hidden="true"></span>Chaîne intacte</span>
          ${echapper(chain.checked)} entrée(s) parcourue(s), vérifiées le
-         <span class="technique">${echapper(formatDate(chain.verified_at))}</span>.</p>`
+         <span class="technique">${echapper(formatDate(chain.verified_at))}</span>.
+         Une fin coupée ne s’y verrait pas : seule la comparaison à l’ancre la voit.</p>`
       : `<div class="refus" role="alert">
            <p><strong>Chaîne rompue à l’entrée ${echapper(chain.break?.id)}.</strong></p>
            <p>${chain.break?.reason === 'entry_hash'
