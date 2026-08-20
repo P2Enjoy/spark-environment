@@ -22,7 +22,7 @@ import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
-import { catalogue, composer, ValeurManquante } from './recettes.js';
+import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError, FLUX_FERME,
          CHEMIN_SSH, CHEMIN_DEPANNAGE, depannageOuvert, sonderSshd } from './terminal.js';
 
@@ -66,6 +66,21 @@ export function createConsoleHost(options = {}) {
       environnementCache = { ...await readDotEnv(envPath), ...exportees };
     }
     return environnementCache;
+  }
+
+  /**
+   * Adresse publique de la Forge courante (§38.6.5).
+   *
+   * La console la connaît par son inventaire. La faire ressaisir dans chaque
+   * recette serait demander ce qu'on sait déjà — et une recette existe pour
+   * simplifier. Rend `null` quand elle n'est pas connaissable : une Forge locale
+   * n'en a pas, un alias `ssh` la cache dans le `ssh_config`.
+   */
+  async function adresseForgeCourante() {
+    const etat = await loadFile(inventoryPath);
+    const courant = etat.servers.find((s) => s.name === etat.current)
+      ?? etat.servers[0] ?? null;
+    return adressePublique(courant);
   }
 
   /** Rend le fournisseur, ou `null` avec la raison. Un jeton absent n'est PAS une panne. */
@@ -414,7 +429,10 @@ export function createConsoleHost(options = {}) {
      * divergerait du code dès la première correction, et deux vérités
      * coexisteraient sans qu'on sache laquelle est appliquée (§38.6.1).
      */
-    'GET /api/dns/recipes': async () => ({ status: 200, body: { recipes: catalogue() } }),
+    'GET /api/dns/recipes': async () => ({
+      status: 200,
+      body: { recipes: catalogue({ adresseForge: await adresseForgeCourante() }) },
+    }),
 
     /**
      * Ce que la recette ÉCRIRAIT, et l'effet de chaque ligne (§38.6.3).
@@ -430,7 +448,8 @@ export function createConsoleHost(options = {}) {
       let compose;
       try {
         compose = composer(corps?.recipe, corps?.params ?? {},
-                           { zone: corps?.zone, motif: bilan.motif });
+                           { zone: corps?.zone, motif: bilan.motif,
+                             adresseForge: await adresseForgeCourante() });
       } catch (erreur) {
         if (erreur instanceof ValeurManquante) {
           return { status: 422, body: { error: 'value_required',
@@ -474,7 +493,8 @@ export function createConsoleHost(options = {}) {
       let compose;
       try {
         compose = composer(corps?.recipe, corps?.params ?? {},
-                           { zone: corps?.zone, motif: bilan.motif });
+                           { zone: corps?.zone, motif: bilan.motif,
+                             adresseForge: await adresseForgeCourante() });
       } catch (erreur) {
         if (erreur instanceof ValeurManquante) {
           return { status: 422, body: { error: 'value_required',

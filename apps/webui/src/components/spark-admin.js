@@ -241,16 +241,28 @@ function renderRecetteModale(ui) {
       </select>
     </div>`;
 
+  // §38.6.5 : un paramètre `dansLaZone` ne redemande PAS ce que la zone dit
+  // déjà. Le champ ne porte que le libellé, la zone est affichée en suffixe, et
+  // vide vaut le domaine lui-même. Sans la zone choisie, le suffixe n'a rien à
+  // montrer et le champ reste nu.
+  const zoneChoisie = ui.values.recette_zone ?? '';
   const parametres = choisie
-    ? choisie.parametres.map((p) => `
+    ? choisie.parametres.map((p) => {
+        const relatif = p.dansLaZone && zoneChoisie;
+        const controle = `<input class="controle" id="recette-p-${echapper(p.nom)}"
+                 data-param="${echapper(p.nom)}" type="text" autocomplete="off"
+                 value="${echapper(ui.values.recette_params?.[p.nom] ?? p.defaut ?? '')}">`;
+        return `
         <div class="champ">
           <label for="recette-p-${echapper(p.nom)}">${echapper(p.label)}${
             p.facultatif ? ' <span class="note">(facultatif)</span>' : ''}</label>
-          <input class="controle" id="recette-p-${echapper(p.nom)}"
-                 data-param="${echapper(p.nom)}" type="text" autocomplete="off"
-                 value="${echapper(ui.values.recette_params?.[p.nom] ?? p.defaut ?? '')}">
+          ${relatif
+            ? `<div class="champ-suffixe">${controle}<span class="champ-suffixe__zone"
+                 title="${echapper(zoneChoisie)}">.${echapper(zoneChoisie)}</span></div>`
+            : controle}
           ${p.aide ? `<p class="champ__aide">${echapper(p.aide)}</p>` : ''}
-        </div>`).join('')
+        </div>`;
+      }).join('')
     : '';
 
   const humaines = choisie?.actionsHumaines?.length

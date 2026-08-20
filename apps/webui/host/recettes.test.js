@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { catalogue, composer, RECETTES, ValeurManquante } from './recettes.js';
+import { catalogue, composer, RECETTES, ValeurManquante , dansLaZone, adressePublique } from './recettes.js';
 import { DnsError, FORMES, preparerEnregistrement } from './dns.js';
 
 // --- la garde élargie (§38.6.2) ---------------------------------------------
@@ -155,4 +155,57 @@ test('les actions HUMAINES restantes voyagent avec la recette', () => {
 test('une recette inconnue est refusee', () => {
   assert.throws(() => composer('inexistante', {}, { zone: 'exemple.tech' }),
                 /inconnue/);
+});
+
+// --- le nom est RELATIF à la zone (§38.6.5) ----------------------------------
+
+test('la zone étant choisie, un libellé vide vaut le domaine lui-même', () => {
+  // Redemander le domaine entier faisait ressaisir ce que l'écran sait déjà.
+  const vu = composer('site-web', { domain: '', address: '203.0.113.7' },
+                      { zone: 'exemple.tech' });
+  assert.deepEqual(vu.records.map((r) => r.name), ['', 'www']);
+  assert.equal(vu.records[0].apex, true, 'le premier enregistrement EST l’apex');
+});
+
+test('un libellé simple devient un sous-domaine de la zone', () => {
+  const vu = composer('site-web', { domain: 'boutique', address: '203.0.113.7' },
+                      { zone: 'exemple.tech' });
+  assert.deepEqual(vu.records.map((r) => r.name), ['boutique', 'www.boutique']);
+});
+
+test('le nom COMPLET de la zone reste accepté : c’est une saisie par habitude', () => {
+  const vu = composer('site-web', { domain: 'boutique.exemple.tech', address: '203.0.113.7' },
+                      { zone: 'exemple.tech' });
+  assert.equal(vu.records[0].name, 'boutique');
+});
+
+test('un libellé pointé hors zone est REFUSÉ, et la sortie est nommée', () => {
+  // Sans ce refus, « autre.fr » deviendrait « autre.fr.exemple.tech » en
+  // silence : un nom que personne n'a voulu, écrit dans la bonne zone.
+  assert.throws(() => dansLaZone('www.boutique', 'exemple.tech'),
+                /nom complet.*www\.boutique\.exemple\.tech/s);
+});
+
+// --- ce que la console SAIT n'est pas redemandé (§38.6.5) --------------------
+
+test('l’adresse de la Forge est pré-remplie depuis le serveur courant', () => {
+  const p = catalogue({ adresseForge: '203.0.113.7' })[0]
+    .parametres.find((x) => x.nom === 'address');
+  assert.equal(p.defaut, '203.0.113.7');
+  assert.match(p.aide, /Pré-rempli/);
+});
+
+test('sans adresse connaissable, le champ reste VIDE plutôt que faux', () => {
+  // §14.6 : proposer une valeur fausse est pire que ne rien proposer.
+  const p = catalogue({ adresseForge: null })[0]
+    .parametres.find((x) => x.nom === 'address');
+  assert.equal(p.defaut, undefined);
+  assert.doesNotMatch(p.aide, /Pré-rempli/);
+});
+
+test('une Forge locale ou déclarée par alias n’a pas d’adresse publique', () => {
+  assert.equal(adressePublique({ kind: 'local', host: '127.0.0.1' }), null);
+  assert.equal(adressePublique({ kind: 'alias', sshHost: 'ma-forge' }), null);
+  assert.equal(adressePublique({ kind: 'ssh', host: '51.158.54.202' }), '51.158.54.202');
+  assert.equal(adressePublique(null), null);
 });

@@ -509,6 +509,14 @@ tbody tr:hover { background: var(--color-hover); }
   border-top: 1px solid var(--color-border); background: var(--color-bg);
 }
 .modale .refus { margin: 0 var(--space-4); }
+/* Un `select` tire sa largeur INTRINSÈQUE de son option la plus longue. Une zone
+   DNS privée en porte deux UUID : le contrôle réclamait ~700 px dans une modale
+   de 544, et rognait tout ce qui l'entourait — description, refus, suffixe.
+   Mesuré le 2026-08-20. La modale ne s'élargit pas : c'est le contrôle qui plie
+   (docs/DESIGN_SYSTEM.md §8.2). */
+.modale__corps, .modale__corps .champ { min-width: 0; }
+.modale__corps .controle { max-width: 100%; }
+.modale__corps select.controle { width: 100%; }
 /* Une case a cocher precede son libelle : sans cet ecart elle le touche. La
    regle vivait sur `.formulaire-panneau`, classe du formulaire dans le flux que
    la modale a remplace — elle n'avait donc plus de sujet. */
@@ -575,3 +583,23 @@ tbody tr:hover { background: var(--color-hover); }
   .manuel { grid-template-columns: 1fr; }
   .manuel__sommaire { position: static; }
 }
+
+/* SPK-50 · §38.6.5 — un nom relatif à la zone : le libellé se saisit, la zone
+   s'affiche en suffixe. Elle est déjà choisie ; la retaper serait la redire. */
+.champ-suffixe { display: flex; align-items: stretch; gap: 0; }
+.champ-suffixe .controle { border-top-right-radius: 0; border-bottom-right-radius: 0; min-width: 0; }
+.champ-suffixe__zone { display: flex; align-items: center; padding: 0 var(--space-3);
+  border: 1px solid var(--color-border); border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--color-hover); color: var(--color-text-2);
+  font-family: var(--font-mono, monospace);
+  /* Une zone peut porter un nom très long — un domaine privé du fournisseur en
+     porte deux UUID. Sans ces trois lignes, le suffixe pousse la modale et rogne
+     tout ce qui l'entoure, description et refus compris (§8.2). Mesuré. */
+  /* `min-width: 0` est indispensable : sans lui, `nowrap` impose une largeur
+     MINIMALE égale au texte entier — 700 px pour une zone à UUID — et
+     `overflow: hidden` ne la réduit pas. Le bloc parent grossissait alors, et un
+     `max-width` en pourcentage se résolvait contre cette largeur enflée. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; max-width: 14rem; flex: 0 1 auto; }
+.champ-suffixe { max-width: 100%; }
