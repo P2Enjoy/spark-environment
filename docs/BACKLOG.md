@@ -176,7 +176,7 @@ démarrage, donc ne peut pas retirer une clé (`docs/DAT.md` §17.1).
   - Le port 22 du Spark reste injoignable de l'extérieur : l'accès passe par le
     rebond, jamais par une exposition publique.
 
-### [~] SPK-12 · Ingress Caddy et réconciliation
+### [x] SPK-12 · Ingress Caddy et réconciliation
 
 - Spécification : `docs/DAT.md` §9, §18
 - **Les trois exigences de la DoD sont prouvées sur l'hôte, le 2026-08-19.**
@@ -192,10 +192,15 @@ démarrage, donc ne peut pas retirer une clé (`docs/DAT.md` §17.1).
   l'enregistrement d'une route, et une écriture réelle a été mesurée le
   2026-08-20. Ce qui manque est désormais une Forge **joignable depuis
   l'extérieur**, sans quoi l'autorité de certification ne peut pas valider.
-- **Reste, et c'est pourquoi l'unité n'est pas `[x]`** : l'émission TLS n'est pas
-  prouvée. Elle suppose un domaine résolvant vers l'hôte, ce que le produit ne
-  contrôle pas et dont je ne dispose pas ici. Seul le routage HTTP par nom d'hôte
-  est vérifié.
+- **Close le 2026-08-20 : l'émission TLS est prouvée sur un domaine réel.**
+  `helo.spark.lelabs.tech` a été posé par la console vers `51.158.54.202`, la
+  route déclarée par l'API, et le certificat émis par Let's Encrypt. Mesuré
+  **depuis l'extérieur**, pas depuis la Forge :
+  - `https://helo.spark.lelabs.tech/` → `200`, `ssl_verify_result=0`, HTTP/2 ;
+  - `subject=CN = helo.spark.lelabs.tech`, `issuer=Let's Encrypt`, valide du
+    2026-08-20 au 2026-11-18 ;
+  - `http://51.158.54.202/`, domaine non routé → `404`, le comportement corrigé
+    plus haut.
 
 ### [x] SPK-13 · Instantanés et restauration de cellule
 
@@ -1972,6 +1977,59 @@ d'incohérences — retirée dans le même changement.
 - **Reste** : la comparaison côté console, ses cinq situations, et la commande de
   mise à jour depuis l'interface. Tant que ce n'est pas livré et éprouvé depuis le
   parcours canonique, l'unité reste `[~]`.
+
+### [ ] SPK-54 · Amorcer un Spark depuis la console
+
+Mesuré en montant `helo` de bout en bout (§41) : un Spark neuf n'a **ni `sshd`**,
+et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
+`docker-default` refuse `socketpair()`. Les deux se répètent à chaque création.
+
+- Spécification : `docs/DAT.md` §41 (les constats), **§42** (le geste) ·
+  `docs/DESIGN_SYSTEM.md` §6.23, §6.27 · manuel M6.
+- Portée : geste « Amorcer ce Spark », en **détection** — relever, n'installer que
+  les manques, rendre un compte rendu ligne à ligne ; `sshd`, clés réécrites
+  depuis le registre, dépôt Docker **amont**, `docker-ce`, `docker-compose-plugin` ;
+  option **rootless**, non retenue par défaut (§42.2) ; passage par `incus exec`
+  avec confirmation nommée et action d'audit distincte (§42.3).
+- Point qui décide de l'unité : la détection porte sur l'**origine** du paquet
+  Docker, pas sur sa présence. Un `docker.io` présent est un défaut à corriger,
+  pas un état acceptable — sans quoi l'amorçage déclarerait bon un Spark où
+  aucune pile ne tournera.
+- DoD : un amorçage sur cellule vierge la rend joignable en SSH et capable de
+  `docker compose up`, prouvé par un parcours E2E depuis le parcours canonique ;
+  un second amorçage ne fait **rien** et le dit — prouvé, car c'est là qu'un geste
+  bavard casserait la production du locataire ; un test prouve la détection d'un
+  `docker.io` de distribution ; le mode rootless est éprouvé sur une pile qui le
+  supporte ; captures observées ; manuel M6 mis à jour.
+
+### [ ] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
+
+Audit mené sur la Forge réelle pendant la mise en place de `helo`. La posture est
+bonne sur l'essentiel — seuls `22`, `80`, `443` répondent depuis l'extérieur,
+`sparkd` et l'API d'administration de Caddy sont sur la boucle locale, l'API
+d'Incus n'est exposée qu'en socket unix, `sshd` refuse les mots de passe, aucun
+correctif de sécurité n'est en attente. Trois points restent.
+
+- **Un Spark atteint le `sshd` de la Forge.** Mesuré depuis `helo` :
+  `10.77.0.1:9876` et `10.77.0.1:2019` sont injoignables — c'est la propriété
+  attendue —, mais `10.77.0.1:22` **répond**. Le chemin d'accès du produit va de
+  la Forge vers le Spark, jamais l'inverse : un locataire compromis n'a aucune
+  raison d'atteindre le service qui l'héberge. La chaîne `input` du bridge est en
+  `policy accept`.
+- **Aucun pare-feu par défaut.** `ufw` est inactif : ce qui n'est pas joignable ne
+  l'est que parce que rien ne s'y lie. Le jour où un service se lie à `0.0.0.0`,
+  il est public sans que personne ne l'ait décidé.
+- **`sparkd` tourne en `root`**, avec `ProtectSystem=strict`, `PrivateTmp` et
+  `NoNewPrivileges`. C'est défendable — il repondère `spark.slice` et parle à la
+  socket d'Incus — mais ce doit être une décision écrite, pas un héritage.
+  `X11Forwarding` reste par ailleurs à `yes` sans usage.
+- Spécification à produire par l'unité : section de durcissement du DAT et
+  contrôles ajoutés au préflight, pour que la posture soit **vérifiée** et non
+  constatée une fois.
+- DoD : un contrôle de préflight échoue si un Spark atteint un port de la Forge
+  autre que ceux dont il a besoin ; la règle est posée par l'installation, pas à
+  la main ; un test prouve qu'un Spark garde son DNS et sa sortie internet après
+  durcissement — le durcissement ne doit pas casser ce qu'il protège.
 
 ---
 

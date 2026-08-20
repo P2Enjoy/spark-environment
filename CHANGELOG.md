@@ -3,6 +3,15 @@
 ## [Non publié]
 
 ### Ajouté
+- `docs/AGENT_RUNBOOK.md` : les procédures exécutables par un agent — déployer
+  `sparkd` sur une Forge, créer un Spark, s'y connecter, y déployer une pile,
+  l'exposer par DNS puis ingress. Écrites depuis une exécution réelle, pas de
+  mémoire.
+- `docs/DAT.md` : nouveau §41, ce que l'image d'un Spark ne donne pas — ni `sshd`,
+  et un Docker de distribution inutilisable sous imbrication ; nouveau §42, le
+  geste « Amorcer ce Spark », en détection.
+- Unités SPK-54 (amorçage d'un Spark) et SPK-55 (durcissement de la Forge, sur
+  l'audit du 2026-08-20).
 - `sparkd` porte l'empreinte de la build installée : `build.json` écrit à
   l'installation, publié par `/healthz` et `/v1/forge`, sous la forme
   `0.0.0+<commit>` — et `0.0.0+inconnue` quand la build n'est pas estampillée.
@@ -64,6 +73,9 @@
   l'architecture de navigation de la console.
 
 ### Modifié
+- **SPK-12 close** : l'émission TLS est prouvée sur un domaine réel.
+  `https://helo.spark.lelabs.tech/` rend `200` depuis l'extérieur, certificat
+  Let's Encrypt valide et chaîne vérifiée, et un domaine non routé rend `404`.
 
 - `README.md` : remplacement du contenu hérité d'`ollama.cpp`, sans rapport avec
   ce dépôt.

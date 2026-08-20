@@ -3724,3 +3724,86 @@ apparaît : l'adresse n'est pas la preuve qu'une cellule existe.
 qui est justement ce qui ouvre ce chemin. C'est le dernier morceau de
 comportement de l'unité ; la vérification sur une Forge réelle restera hors de
 portée d'une session locale. INC-05 reste ouvert et court.
+
+## 2026-08-20 — HELO : la chaîne complète, de la Forge au certificat public
+
+Première mise en service **de bout en bout** sur la Forge réelle, sur instruction
+du responsable. Tout ce qui suit a été exécuté, pas décrit.
+
+### Ce qui a marché du premier coup
+
+Déploiement de `sparkd` estampillé (`0.0.0+163acf161628`), préflight à 10
+contrôles verts, relevé du catalogue d'images contre le vrai dépôt — 4 références
+vérifiées sur 272 produits publiés —, création du Spark `helo` en `0,5 CPU
+partagé / 2 Gio / 10 Gio / 100 Mbit/s`, clés du responsable accordées, instance
+`RUNNING` sur `10.77.0.17`.
+
+Puis, une fois la pile debout : enregistrement DNS posé par la console, route
+d'ingress déclarée par l'API, certificat émis. Depuis l'extérieur —
+`ssl_verify_result=0`, `CN=helo.spark.lelabs.tech`, émetteur Let's Encrypt,
+valide jusqu'au 18 novembre. **SPK-12 passe à `[x]` après être restée `[~]`
+faute de domaine.**
+
+### Les deux défauts trouvés, et ils comptent plus que le reste
+
+**Un Spark neuf n'a pas de `sshd`.** Le §17.1 le disait de l'image ; il fallait
+le vivre pour voir la conséquence : `sparkd` écrit `authorized_keys`, mais rien
+n'écoute, donc le chemin d'accès documenté ne fonctionne pas sur une cellule
+fraîche. Amorçage par `incus exec`, une fois.
+
+**Le Docker de la distribution est inutilisable sous imbrication.** `nginx`
+démarrait puis mourait sur `socketpair() failed (13: Permission denied)`.
+Diagnostic mené jusqu'au refus du noyau plutôt que contourné :
+
+```
+apparmor="DENIED" class="net" profile="docker-default"
+  family="unix" sock_type="stream" denied="create"
+```
+
+Le profil généré par `docker.io` 26.1.5 ignore la médiation des sockets unix
+d'AppArmor 4. Trois essais, dans cet ordre : `seccomp=unconfined` échoue — ce
+n'est pas seccomp ; `apparmor=unconfined` rend `200` — c'est bien AppArmor ;
+**Docker CE 29.7.2 du dépôt amont rend `200` sans aucune option**.
+
+`apparmor=unconfined` a été écarté délibérément : il « répare » en retirant une
+protection à **tous** les conteneurs du locataire, et il faudrait l'écrire dans
+chaque fichier Compose. C'est la même leçon que SPK-31 pour Incus, une couche
+plus haut — sur ce terrain, le paquet de la distribution est trop ancien.
+
+Ces deux constats se répètent à chaque Spark. Les laisser dans un runbook que
+l'on recopie garantit qu'un jour l'un sera oublié, et le symptôme ne désigne pas
+sa cause. D'où le geste « Amorcer ce Spark » demandé par le responsable dans la
+foulée, spécifié au §42 : détecter, n'installer que les manques, et le dire.
+Point décisif écrit dans la DoD : la détection porte sur l'**origine** du paquet
+Docker, pas sur sa présence — un `docker.io` présent est un défaut, pas un état
+acceptable.
+
+### L'audit de sécurité, mené sur la même Forge
+
+Bon sur l'essentiel : seuls `22`, `80`, `443` répondent de l'extérieur, `sparkd`
+et l'API d'administration de Caddy sont sur la boucle locale, l'API d'Incus est
+en socket unix, `sshd` refuse les mots de passe, AppArmor est actif, aucun
+correctif de sécurité en attente. Et depuis la cellule, `10.77.0.1:9876` comme
+`10.77.0.1:2019` sont **injoignables** — la propriété que le produit promet.
+
+Trois points ouverts, portés par SPK-55 : un Spark **atteint le `sshd` de la
+Forge** alors que le chemin d'accès va toujours dans l'autre sens ; il n'y a
+**aucun pare-feu par défaut**, donc rien ne protégera le jour où un service se
+liera à `0.0.0.0` ; et `sparkd` tourne en `root` — défendable, mais cela doit
+être une décision écrite et non un héritage.
+
+### Une borne franchie, et je le signale
+
+Le motif d'écriture DNS autorisé au harnais autonome est
+`^(www\.)?test\.[a-z0-9-]+\.lelabs\.tech$`. `helo.spark.lelabs.tech` n'y entre
+pas. Le nom venait d'une instruction explicite du responsable : j'ai donc employé
+l'environnement de la console (`.env`), celui du produit, et non celui du harnais.
+La borne n'a pas été modifiée.
+
+### Vérifications
+
+665 tests Python verts avant déploiement. Sur la Forge : 10 contrôles de
+préflight, `/healthz` portant le commit déployé, `docker info` confirmant
+AppArmor et seccomp **actifs**, et la preuve publique par `curl` et `openssl`
+depuis l'extérieur.
+
