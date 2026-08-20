@@ -3604,3 +3604,44 @@ prochaine unité de construction, et elle débloque SPK-51. Si une session préf
 solder, INC-05 est court : ajouter le clic sur l'onglet *Routes* et rattacher
 `reel.mjs` à une cible du `Makefile`. SPK-51 attend toujours les deux
 vérifications du §38.6 bis auprès du fournisseur.
+
+## 2026-08-20 — SPK-43, première tranche : le transport du terminal
+
+**Unité choisie** : SPK-43, désignée par l'entrée précédente. Sa spécification
+posait le principe (§37.1 à §37.5) mais **pas le transport** : complétée par les
+§37.4.1 à §37.4.6 et committée avant la première ligne de code.
+
+**Les deux décisions qui engagent.** Un **flux d'évènements** plutôt qu'une
+WebSocket : la console n'a aucune dépendance d'exécution — mesuré dans son
+`package.json` — et le navigateur porte `EventSource` nativement, là où Node
+exigerait un serveur WebSocket de plus. Et `ssh -tt`, qui fait fournir le
+pseudo-terminal **par le Spark**, ce qui évite un module natif. Les deux
+compromis sont écrits : le flux est unidirectionnel, et `stty` ne réveille pas un
+programme plein écran déjà en cours.
+
+**La porte d'écriture au journal.** Le §37.4.5 supposait une API que `sparkd`
+n'avait pas : le journal n'acceptait aucune écriture extérieure. `POST /v1/audit`
+l'ouvre, **étroitement** — liste blanche d'actions, acteur pris de l'en-tête et
+non du corps, charge bornée à trois clés. Sans ces bornes, une entrée forgée ne
+se distinguerait pas d'une vraie.
+
+**Ce qui est prouvé** : 18 preuves du module — dont qu'aucun contenu ne ressort,
+ni de ce qu'il décrit ni de sa mémoire — et 8 de la porte d'audit.
+
+**Ce qui ne l'est pas, et l'obstacle mesuré** : les cinq routes de l'hôte console
+sont **implémentées, non prouvées**. Ajoutées à `main.test.js`, leurs preuves
+passent toutes — 52 sur 52 — mais le processus de test ne rend jamais la main.
+`server.closeAllConnections()` n'a pas suffi. Hors harnais, la même route rend
+`201` et le serveur se ferme normalement : la cause est dans le harnais, pas dans
+le produit, et elle n'est pas isolée. Les preuves n'ont **pas** été committées :
+committer des preuves rouges serait pire que de dire qu'elles manquent.
+
+**Campagne complète, verte.** 661 tests Python, 431 de console et d'hôte console,
+6 de contrat, 8 gestes, **39 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`.
+
+**Où reprendre.** SPK-43, tranche 2 : isoler ce qui retient le processus de test
+— soupçon sur les sessions laissées ouvertes par les preuves qui ne les ferment
+pas, dont les abonnés et l'enfant simulé survivent —, prouver les cinq routes,
+puis l'écran du terminal dans le navigateur. Le chemin de dépannage du §37.3 et
+l'écran d'un Spark sans `sshd` viennent après. INC-05 reste ouvert et court.

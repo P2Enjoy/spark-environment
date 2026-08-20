@@ -1528,7 +1528,7 @@ enregistrement technique, et c'est la **console** qui traduit à l'affichage.
   comme un registre qu'on ne tient plus. Il réapparaîtra au premier écart
   constaté.
 
-### [ ] SPK-43 · Terminal dans un Spark depuis la console
+### [~] SPK-43 · Terminal dans un Spark depuis la console
 
 Le transport de tous les outils du §37, et le premier d'entre eux.
 
@@ -1562,6 +1562,38 @@ Le transport de tous les outils du §37, et le premier d'entre eux.
   montre l'écran d'un Spark sans `sshd` ; un parcours emprunte le dépannage et
   prouve son audit distinct ; captures observées, dont la bannière de dépannage ;
   manuel M8 mis à jour.
+
+**Première tranche livrée le 2026-08-20 — le TRANSPORT et sa traçabilité.**
+
+- **Livré et prouvé** :
+  - `apps/webui/host/terminal.js` : une session lance `ssh -tt` vers le Spark
+    par rebond sur sa Forge, avec la clé du poste. **18 preuves**, dont les deux
+    qui portent l'unité : ce que la session décrit ne contient aucune frappe ni
+    aucune sortie, et le module ne retient **aucun historique même en mémoire**.
+    Fermer tue le distant ; l'arrêt de l'hôte console ne laisse aucun shell ;
+    l'avis d'inactivité arrive **avant** la fermeture et une frappe la repousse ;
+    l'identifiant est tiré au hasard et ne dérive pas du nom du Spark.
+  - `Tunnel.jumpArgs()` : le rebond se construit sur le tunnel, qui sait déjà
+    comment on atteint son serveur.
+  - **`POST /v1/audit`**, la porte étroite du §37.4.6, avec **8 preuves** : liste
+    blanche d'actions, acteur pris de l'en-tête et non du corps, charge bornée à
+    `path`, `reason` et `duration_seconds`. L'entrée rejoint la chaîne
+    d'intégrité sans être distinguée.
+- **Implémenté mais NON PROUVÉ** : les cinq routes du §37.4.4 sur l'hôte console
+  (`POST /api/terminal`, le flux d'évènements, l'entrée, la taille, la
+  fermeture). Le code est poussé ; ses preuves sont restées inabouties.
+  **Mesure de l'obstacle** : le harnais de `main.test.js` ne rend jamais la main
+  une fois ces preuves ajoutées — les 52 preuves passent, puis le processus reste
+  vivant. `server.closeAllConnections()` n'a pas suffi. La cause n'est pas
+  isolée ; hors harnais, la route rend bien `201` et le serveur se ferme.
+- **Reste à livrer** :
+  1. les preuves des cinq routes, une fois l'obstacle ci-dessus levé ;
+  2. le **rendu dans le navigateur** — l'écran du terminal, le mode lecteur
+     d'écran du §37.4, et le groupage des saisies du §37.4.1 ;
+  3. le **chemin de dépannage** `incus exec` du §37.3, avec sa confirmation qui
+     nomme le pouvoir employé, son action d'audit distincte et sa bannière ;
+  4. l'écran d'un Spark **sans `sshd`** (§37.2) ;
+  5. les parcours E2E, les captures et le manuel M8.
 
 ### [ ] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 
