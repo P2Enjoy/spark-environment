@@ -364,7 +364,14 @@ async function declarerRoute() {
   const resultat = await agir('route', () => appel('POST', '/v1/ingress', {
     spark: etat.spark.name, domain: v.domain, port: Number(v.port), tls: Boolean(v.tls),
   }));
-  if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
+  if (resultat?.ok) {
+    etat.admin.values = { ...ADMIN_VIDE.values };
+    // SPK-48 · §18.3 bis : la déclaration a réussi ET elle a détourné une
+    // adresse. Le serveur le dit ; l'écran doit le répéter, sinon personne ne
+    // le saura. `agir` a déjà repeint, d'où ce second passage.
+    etat.admin.supersedes = resultat.corps?.supersedes ?? null;
+    if (etat.admin.supersedes) peindre();
+  }
 }
 
 /**

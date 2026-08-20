@@ -8,6 +8,8 @@
  *       docs/DESIGN_SYSTEM.md §3.1, §6.9, §6.19, §6.22, §6.23, §6.24, §6.27
  *       (la saisie est recueillie par une modale limitée à la section), §14.7 ·
  *       docs/DESIGN_SYSTEM_APP.md
+ * @spec docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la préséance
+ *       du plus spécifique, et la vue depuis le joker) · §18.4
  * @spec docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
  *       périmètre), §38.3 (ce qu'écrit un enregistrement d'ingress),
  *       §38.4 (poser n'est pas résoudre) — pour le panneau « Pointer le
@@ -42,6 +44,9 @@ export const ADMIN_VIDE = {
             snapshot: '', password: '',
             // SPK-47 · §38.3 : ce qui sera écrit dans la zone.
             dns_zone: '', dns_address: '' },
+  // SPK-48 · §18.3 bis : la route qu'une déclaration vient de dépasser, et le
+  // Spark qui la servait. Nul tant qu'aucune déclaration n'a pris le pas.
+  supersedes: null,
   // SPK-47 · §38.1 : ce que la console SAIT du fournisseur. `configured` vaut
   // `null` tant qu'on n'a pas demandé — « pas encore su » n'est pas « pas
   // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
@@ -131,6 +136,7 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           : '';
         return `<li><span class="technique">${echapper(r.domain)}</span>` +
           ` → port ${echapper(r.target_port)} du Spark` +
+          renderSurcharges(r) +
           `${r.tls ? '' : ' <span class="badge badge--neutral">sans TLS</span>'}${attente}` +
           `<span class="actions-ligne">${reappliquer}` +
           // SPK-47 · §38 : pointer le DNS est un geste de CETTE route, pas de la
@@ -174,11 +180,51 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
 <section class="carte bloc" aria-labelledby="titre-routes">
   <h2 id="titre-routes">Routes publiques</h2>
   ${lignes}
+  ${renderPriseDePas(ui)}
   ${renderDnsEcrit(ui)}
   ${declencheur('route', 'Ajouter une route')}
   ${modale}
   ${renderDnsModale(ui)}
 </section>`;
+}
+
+/**
+ * Ce que la déclaration vient de détourner (SPK-48, §18.3 bis).
+ *
+ * La déclaration a RÉUSSI — ce n'est pas un refus, donc accent et non danger.
+ * Mais un exploitant qui déclare `admin.monapi.fr` doit savoir qu'il vient de
+ * prendre le pas sur une adresse qui partait ailleurs : le silence ici
+ * produirait une panne cherchée pendant des heures du mauvais côté.
+ */
+function renderPriseDePas(ui) {
+  const prise = ui.supersedes;
+  if (!prise) return '';
+  return `<p class="avertissement" role="status" id="prise-de-pas">Cette route prend
+    le pas sur <span class="technique">${echapper(prise.domain)}</span>, servi
+    par le Spark <strong>${echapper(prise.spark_name)}</strong>. Ce nom ne part
+    plus là-bas.</p>`;
+}
+
+/**
+ * Les noms qu'un joker s'est fait SOUSTRAIRE (SPK-48, §18.3 bis).
+ *
+ * Dire la surcharge au moment où on la crée ne suffit pas : ce message passe
+ * une fois, et l'exploitant du Spark porteur du joker ne l'a peut-être jamais
+ * lu. C'est aussi ce qui manque au diagnostic — sans cette liste, on cherche
+ * dans la configuration du Spark porteur, où il n'y a rien à trouver.
+ *
+ * Le repli est l'absence, jamais `undefined` à l'écran (§14.7) : une route
+ * exacte ne porte pas cette clé, et un joker sans surcharge porte une liste
+ * vide, ce qui n'est pas la même chose.
+ */
+function renderSurcharges(route) {
+  const pris = route.superseded_by;
+  if (!Array.isArray(pris) || pris.length === 0) return '';
+  // §14.8 : une nature différente se distingue par la STRUCTURE, pas seulement
+  // par la couleur — d'où une liste imbriquée sous la route, et non un badge.
+  return `<ul class="surcharges">${pris.map((p) =>
+    `<li><span class="technique">${echapper(p.domain)}</span> est servi par le
+     Spark <strong>${echapper(p.spark_name)}</strong></li>`).join('')}</ul>`;
 }
 
 /**

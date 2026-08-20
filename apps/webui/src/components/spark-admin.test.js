@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la
+ *           preseance du plus specifique, la vue depuis le joker) · §14.7, §14.8
  * @verifies docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
  *           perimetre), §38.3, §38.4, §38.5 — pour « Pointer le domaine ».
  * @verifies docs/BACKLOG.md#SPK-21 · docs/DAT.md §26 (les trois surfaces),
@@ -542,4 +544,58 @@ test('l’apercu de l’APEX s’ecrit « @ », pas un tiret', () => {
   }));
   assert.ok(rendu.includes('@ A'), 'la notation des fichiers de zone');
   assert.ok(!rendu.includes('— A'));
+});
+
+// --- le joker et la surcharge (SPK-48, docs/DAT.md §18.3 bis) --------------
+
+const JOKER = { domain: '*.monapi.fr', target_port: 8080, tls: true,
+                applied_at: '2026-08-20T09:00:00',
+                superseded_by: [{ domain: 'api.monapi.fr', spark_name: 'dedie' }] };
+
+test('un joker MONTRE les noms qui lui sont soustraits, et qui les sert', () => {
+  // Sans cette liste, un exploitant qui constate qu'un sous-domaine ne repond
+  // pas comme les autres cherche dans la configuration du Spark porteur, ou il
+  // n'y a rien a trouver.
+  const rendu = renderRoutesPanel(SPARK, [JOKER]);
+  assert.ok(rendu.includes('*.monapi.fr'));
+  assert.ok(rendu.includes('api.monapi.fr'));
+  assert.ok(rendu.includes('dedie'));
+  assert.ok(rendu.includes('est servi par le'));
+});
+
+test('un joker SANS surcharge n’affiche aucune liste', () => {
+  const rendu = renderRoutesPanel(SPARK, [{ ...JOKER, superseded_by: [] }]);
+  assert.ok(!rendu.includes('surcharges'));
+});
+
+test('une route exacte, qui ne porte pas la cle, ne fait rien apparaitre', () => {
+  // §14.7 : une valeur absente ne doit jamais devenir « undefined » a l'ecran.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS]);
+  assert.ok(!rendu.includes('undefined'));
+  assert.ok(!rendu.includes('surcharges'));
+});
+
+test('la liste est IMBRIQUEE sous la route, pas un badge', () => {
+  // §14.8 : deux natures differentes se distinguent par la STRUCTURE et pas
+  // seulement par la couleur.
+  const rendu = renderRoutesPanel(SPARK, [JOKER]);
+  assert.ok(/<ul class="surcharges">/.test(rendu));
+  assert.ok(!/badge[^"]*">[^<]*api\.monapi\.fr/.test(rendu));
+});
+
+test('la prise de pas s’annonce apres une declaration reussie', () => {
+  // La declaration a REUSSI : accent, pas danger. Mais le silence produirait une
+  // panne cherchee pendant des heures du mauvais cote.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], ui({
+    supersedes: { domain: '*.monapi.fr', spark_name: 'general' },
+  }));
+  assert.ok(rendu.includes('prend'));
+  assert.ok(rendu.includes('*.monapi.fr'));
+  assert.ok(rendu.includes('general'));
+  assert.ok(rendu.includes('id="prise-de-pas"'));
+  assert.ok(!rendu.includes('class="refus"'), 'ce n’est pas un refus');
+});
+
+test('sans prise de pas, rien ne s’affiche', () => {
+  assert.ok(!renderRoutesPanel(SPARK, [ROUTE_DNS]).includes('prise-de-pas'));
 });
