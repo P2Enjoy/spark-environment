@@ -119,6 +119,25 @@ export class Tunnel {
     ];
   }
 
+  /**
+   * Arguments de REBOND pour atteindre un Spark de cette Forge.
+   *
+   * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §17.4 (aucun port SSH public :
+   *       l'accès passe par rebond sur la Forge), §37.2
+   *
+   * C'est le tunnel qui sait comment on atteint SON serveur — la même
+   * connaissance que `sshArgs`, sous une autre forme. La dupliquer ailleurs
+   * ferait diverger les deux le jour où un genre de serveur change.
+   *
+   * Un serveur LOCAL n'a pas de rebond : la Forge est cette machine, et le
+   * réseau privé des Sparks y est directement joignable.
+   */
+  jumpArgs() {
+    if (this.isLocal) return [];
+    if (this.server.kind === 'alias') return ['-J', this.server.sshHost];
+    return ['-J', `${this.server.user}@${this.server.host}:${this.server.port}`];
+  }
+
   /** Un serveur local n'a pas de transport à établir (docs/DAT.md §28.2). */
   get isLocal() {
     return this.server.kind === 'local';
