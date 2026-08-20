@@ -11,7 +11,8 @@
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE } from './components/spark-detail.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
-import { renderSparkCreate, validateShape, DEFAUTS } from './components/spark-create.js';
+import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
+  from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
   from './components/spark-admin.js';
 import { renderForgeView } from './components/forge-view.js';
@@ -27,7 +28,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                sort: { key: 'name', dir: 'asc' }, tunnel: null, server: null,
                route: 'liste', spark: null, detail: {}, confirming: null,
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
-                           pools: null, submitting: false, images: [] },
+                           pools: null, cores: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
                forge: { status: 'loading', host: null, cores: null,
                        sparkNames: {}, error: null, syncing: false },
@@ -107,6 +108,32 @@ function peindre() {
   brancher();
 }
 
+/**
+ * Ce qu'une valeur de quota change à l'écran, SANS repeindre le formulaire.
+ *
+ * @spec docs/BACKLOG.md#SPK-59 · docs/DESIGN_SYSTEM.md §6.9 bis (le curseur
+ *       porte sa valeur en clair et dans `aria-valuetext`), §14.3 (le focus ne
+ *       se perd pas) · docs/DAT.md §25.1 (l'avertissement est un risque)
+ *
+ * Repeindre serait plus simple et serait faux : `innerHTML` reconstruit le
+ * formulaire, ce qui arrache la poignée en cours de glissement et fait perdre le
+ * focus au clavier. Seuls les deux éléments qui dépendent de la valeur sont
+ * réécrits.
+ */
+function rafraichirQuota(formulaire, controle) {
+  if (controle.type === 'range') {
+    const texte = formatQuota(controle.name, controle.value);
+    controle.setAttribute('aria-valuetext', texte);
+    const vue = formulaire.querySelector(`[data-valeur-de="${controle.name}"]`);
+    if (vue) vue.textContent = texte;
+  }
+  const zone = formulaire.querySelector('.zone-avertissement');
+  if (zone) {
+    zone.innerHTML = renderAvertissement(etat.creation.values, etat.creation.pools,
+                                         etat.creation.refusal);
+  }
+}
+
 /** §9.1 : toute fonction est utilisable sans souris. Le tri est un bouton. */
 function brancher() {
   for (const bouton of racine.querySelectorAll('[data-tri]')) {
@@ -133,8 +160,9 @@ function brancher() {
       controle.addEventListener('input', () => {
         const brut = controle.value;
         etat.creation.values[controle.name] =
-          controle.type === 'number' ? Number(brut) : brut;
-        if (controle.name === 'cpu_mode') peindre();   // les champs suivent le mode
+          ['number', 'range'].includes(controle.type) ? Number(brut) : brut;
+        if (controle.name === 'cpu_mode') { peindre(); return; }   // les champs suivent le mode
+        rafraichirQuota(formulaire, controle);
       });
     }
     formulaire.addEventListener('submit', (evenement) => {
@@ -1073,9 +1101,14 @@ async function chargerCreation() {
     }
     const forge = await api('/v1/forge');
     etat.creation.pools = forge.pools;
+    // Les cœurs physiques bornent le curseur du mode dédié (SPK-DS-07). Ils ne
+    // vivent pas dans les pools : le pool CPU compte des parts, pas des cœurs.
+    etat.creation.cores = forge.cpu?.cores_total ?? null;
   } catch {
     // Capacité inconnue : l'écran le dit plutôt que d'inventer des chiffres.
+    // Sans bornes, pas de curseur — les quotas redeviennent des saisies (§6.9 bis).
     etat.creation.pools = null;
+    etat.creation.cores = null;
   }
   etat.status = 'ready';
   peindre();

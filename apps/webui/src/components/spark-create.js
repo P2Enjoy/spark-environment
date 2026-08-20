@@ -2,6 +2,10 @@
  * Écran « créer un Spark ».
  *
  * @spec docs/BACKLOG.md#SPK-20, docs/BACKLOG.md#SPK-32 ·
+ * @spec docs/BACKLOG.md#SPK-59 · docs/DESIGN_SYSTEM.md §6.9 bis (curseur ou
+ *       saisie numérique) · docs/DESIGN_SYSTEM_APP.md SPK-DS-07 (la borne haute
+ *       d'un quota est la capacité TOTALE de la Forge) — pour `QUOTAS`,
+ *       `borneHaute`, `curseur` et `champQuota`.
  *       docs/DAT.md §25 (montrer sans décider), §33.5 (l'image se choisit dans
  *       une liste alimentée par le catalogue),
  *       §25.2 (un refus n'efface pas la saisie), §25.3 (ce qui reste local) ·
@@ -20,6 +24,7 @@ const echapper = (v) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const GIO = 1024 ** 3;
+const MBIT = 1e6;
 
 export const DEFAUTS = {
   name: '', image: 'images:debian/13', cpu_mode: 'shared',
@@ -123,6 +128,140 @@ function nombre(id, valeur, pas, erreur, aide) {
     class="controle${erreur ? ' controle--erreur' : ''}"${decrits ? ` aria-describedby="${decrits}"` : ''}${erreur ? ' aria-invalid="true"' : ''} />`;
 }
 
+/**
+ * Les quotas, et ce qu'il faut savoir d'eux pour les rendre.
+ *
+ * @spec docs/BACKLOG.md#SPK-59 · docs/DESIGN_SYSTEM.md §6.9 bis ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-07
+ *
+ * `borne` rend la CAPACITÉ TOTALE de la Forge pour cette ressource, et jamais ce
+ * qui reste libre. Ce point décide de tout le reste : le disponible est une
+ * photographie qui se périme dans le sens favorable (docs/DAT.md §25.1), un
+ * curseur qui s'y arrêterait serait un refus déguisé en contrôle, et le refus
+ * d'admission deviendrait inatteignable depuis le parcours canonique.
+ */
+export const QUOTAS = {
+  cpu_reservation: { pas: 0.05, min: 0.05,
+                     borne: (c) => c.pools?.cpu?.capacity,
+                     format: (v) => `${formatCpu(v)} CPU` },
+  cpu_max:         { pas: 0.05, min: 0.05,
+                     borne: (c) => c.pools?.cpu?.capacity,
+                     format: (v) => `${formatCpu(v)} CPU` },
+  cpu_cores:       { pas: 1, min: 1,
+                     borne: (c) => c.cores,
+                     format: (v) => `${v} cœur${v > 1 ? 's' : ''}` },
+  memory_gib:      { pas: 1, min: 1,
+                     borne: (c) => (c.pools ? c.pools.memory?.capacity / GIO : null),
+                     format: (v) => formatBytes(v * GIO) },
+  storage_gib:     { pas: 1, min: 1,
+                     borne: (c) => (c.pools ? c.pools.storage?.capacity / GIO : null),
+                     format: (v) => formatBytes(v * GIO) },
+  network_mbit:    { pas: 10, min: 10,
+                     borne: (c) => (c.pools ? c.pools.network?.capacity / MBIT : null),
+                     format: (v) => formatBps(v * MBIT) },
+};
+
+/**
+ * Nombre maximal de crans d'un curseur (docs/DESIGN_SYSTEM.md §6.9 bis,
+ * condition 2).
+ *
+ * Ce n'est pas un chiffre choisi : `.controle` mesure au plus 28 rem, soit
+ * 448 px. Au-delà de cette valeur, un cran devient plus étroit qu'un pixel et
+ * cesse d'être atteignable au pointeur.
+ */
+export const CRANS_MAX = 400;
+
+/** La valeur d'un quota, formatée avec son unité. Un seul endroit (§12.5). */
+export function formatQuota(nom, valeur) {
+  const q = QUOTAS[nom];
+  const v = Number(valeur);
+  return q && Number.isFinite(v) ? q.format(v) : String(valeur ?? '');
+}
+
+/**
+ * La borne haute du curseur, ou `null` s'il ne faut pas de curseur.
+ *
+ * Rend `null` dans les cas du §6.9 bis : capacité inconnue (condition 1), plage
+ * trop longue pour être visée au pointeur (condition 2), plage qui ne contient
+ * même pas la borne basse. Le repli en saisie numérique n'est pas un pis-aller —
+ * c'est la règle qui s'applique.
+ */
+export function borneHaute(nom, contexte = {}) {
+  const q = QUOTAS[nom];
+  if (!q) return null;
+  const brut = q.borne(contexte);
+  if (!Number.isFinite(brut) || brut <= 0) return null;
+  // La borne tombe sur un cran : « Fin » doit donner une valeur ronde, pas un
+  // reste de division flottante.
+  const max = Number((Math.floor(brut / q.pas) * q.pas).toFixed(4));
+  if (max < q.min) return null;
+  if ((max - q.min) / q.pas > CRANS_MAX) return null;
+  return max;
+}
+
+/** Une valeur tombe-t-elle sur un cran ? Sinon le navigateur l'arrondirait
+ *  SILENCIEUSEMENT, et l'écran afficherait autre chose que ce qui sera envoyé. */
+function surLeCran(valeur, q, max) {
+  const v = Number(valeur);
+  if (!Number.isFinite(v) || v < q.min || v > max) return false;
+  const crans = (v - q.min) / q.pas;
+  return Math.abs(crans - Math.round(crans)) < 1e-6;
+}
+
+/**
+ * Le curseur : piste, valeur en clair, et ses deux bornes (§6.9 bis).
+ *
+ * La valeur est répétée en clair parce qu'une poignée ne dit pas où elle est, et
+ * portée par `aria-valuetext` parce que la synthèse annoncerait « 16 » là où
+ * l'écran montre « 16 Gio ». Le doublon visible est `aria-hidden` : le curseur
+ * annonce déjà sa valeur, et un `<output>` — région vive — parlerait à chaque
+ * cran d'un glissement.
+ */
+function curseur(id, valeur, max, erreur, aide) {
+  const q = QUOTAS[id];
+  const decrits = [aide ? `${id}-aide` : '', erreur ? `${id}-erreur` : ''].filter(Boolean).join(' ');
+  const texte = formatQuota(id, valeur);
+  return `<div class="curseur">
+    <input type="range" class="curseur__piste" id="${id}" name="${id}"
+      min="${q.min}" max="${max}" step="${q.pas}" value="${echapper(valeur)}"
+      aria-valuetext="${echapper(texte)}"${decrits ? ` aria-describedby="${decrits}"` : ''}${erreur ? ' aria-invalid="true"' : ''} />
+    <span class="curseur__valeur" data-valeur-de="${id}" aria-hidden="true">${echapper(texte)}</span>
+  </div>
+  <p class="curseur__bornes" aria-hidden="true">
+    <span>${echapper(formatQuota(id, q.min))}</span>
+    <span>${echapper(formatQuota(id, max))}</span>
+  </p>`;
+}
+
+/**
+ * Un quota : curseur quand les conditions du §6.9 bis tiennent, saisie sinon.
+ *
+ * `unite` n'apparaît dans le libellé que pour la SAISIE. Un curseur porte déjà
+ * son unité à côté de la poignée ; « Mémoire (Gio) » y répéterait ce que la
+ * valeur dit mieux. Une saisie, elle, ne dit pas dans quelle unité taper.
+ */
+function champQuota(nom, { libelle, unite = null, aide, erreur, valeur, contexte }) {
+  const q = QUOTAS[nom];
+  const max = borneHaute(nom, contexte);
+  const auCurseur = max !== null && surLeCran(valeur, q, max);
+  return champ({
+    id: nom, aide, erreur,
+    libelle: auCurseur || !unite ? libelle : `${libelle} (${unite})`,
+    controle: auCurseur
+      ? curseur(nom, valeur, max, erreur, Boolean(aide))
+      : nombre(nom, valeur, String(q.pas), erreur, Boolean(aide)),
+  });
+}
+
+/** Y a-t-il au moins un curseur à l'écran ? Le panneau de capacité doit alors
+ *  dire d'où vient la borne haute (§6.9 bis). */
+function auMoinsUnCurseur(valeurs, contexte) {
+  return Object.keys(QUOTAS).some((nom) => {
+    const max = borneHaute(nom, contexte);
+    return max !== null && surLeCran(valeurs[nom], QUOTAS[nom], max);
+  });
+}
+
 /** Capacité restante, affichée pour dimensionner — pas pour interdire. */
 function renderPools(pools) {
   if (!pools) return '<p class="absence">Capacité de la Forge inconnue.</p>';
@@ -173,20 +312,38 @@ export function renderChoixImage(courante, images = []) {
   });
 }
 
-export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
-                                    refusal = null, submitting = false,
-                                    images = [] } = {}) {
-  const v = { ...DEFAUTS, ...values };
-  const risques = estimate(v, pools);
-
+/**
+ * L'avertissement d'estimation, rendu SEUL pour pouvoir se rafraîchir sans
+ * repeindre le formulaire.
+ *
+ * @spec docs/BACKLOG.md#SPK-59 · docs/DAT.md §25.1 · docs/DESIGN_SYSTEM.md §6.9 bis
+ *
+ * Il ne se rafraîchissait pas du tout : seul un changement de mode CPU
+ * provoquait un repeint, si bien qu'on pouvait demander 64 Gio devant un panneau
+ * en annonçant 64 de libres sans qu'un mot bouge. Le curseur rend ce silence
+ * intenable — on tire la poignée au-delà du disponible et rien ne réagit. Et
+ * repeindre le formulaire n'est pas une option : cela arracherait la poignée en
+ * cours de glissement et perdrait le focus (§14.3).
+ */
+export function renderAvertissement(valeurs, pools, refusal = null) {
+  const risques = estimate({ ...DEFAUTS, ...valeurs }, pools);
   // Une fois que le serveur a tranché, l'estimation locale n'est plus qu'un
   // doublon bruyant : c'est le refus qui fait autorité (docs/DAT.md §25.1).
-  const avertissement = risques.length && !refusal
-    ? `<p class="avertissement" role="status">D’après la capacité relevée à l’ouverture,
+  if (!risques.length || refusal) return '';
+  return `<p class="avertissement" role="status">D’après la capacité relevée à l’ouverture,
        ${echapper(risques.map((r) => `${r.resource} (${r.requested} demandés, ${r.available} libres)`).join(', '))}
        pourrai${risques.length > 1 ? 'ent' : 't'} manquer. La création reste possible :
-       c’est le serveur qui décide.</p>`
-    : '';
+       c’est le serveur qui décide.</p>`;
+}
+
+export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
+                                    refusal = null, submitting = false,
+                                    images = [], cores = null } = {}) {
+  const v = { ...DEFAUTS, ...values };
+  // Ce dont dépendent les bornes des curseurs : la capacité TOTALE de la Forge,
+  // et le nombre de cœurs physiques (SPK-DS-07).
+  const contexte = { pools, cores };
+  const avertissement = `<div class="zone-avertissement">${renderAvertissement(v, pools, refusal)}</div>`;
 
   // §7.1 et §25.2 : le refus est près de l'action, et la saisie est intacte.
   const refus = refusal
@@ -204,19 +361,19 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
 
   const champsCpu = [
     ['shared', 'shared-pinned'].includes(v.cpu_mode)
-      ? champ({ id: 'cpu_reservation', libelle: 'Réservation CPU', erreur: errors.cpu_reservation,
+      ? champQuota('cpu_reservation', { libelle: 'Réservation CPU', contexte,
                 aide: 'Droit d’ordonnancement sous contention, pas un plafond.',
-                controle: nombre('cpu_reservation', v.cpu_reservation, '0.05', errors.cpu_reservation, true) })
+                valeur: v.cpu_reservation, erreur: errors.cpu_reservation })
       : '',
     v.cpu_mode === 'capped'
-      ? champ({ id: 'cpu_max', libelle: 'Plafond CPU', erreur: errors.cpu_max,
+      ? champQuota('cpu_max', { libelle: 'Plafond CPU', contexte,
                 aide: 'Jamais dépassé. Pas de burst.',
-                controle: nombre('cpu_max', v.cpu_max, '0.05', errors.cpu_max, true) })
+                valeur: v.cpu_max, erreur: errors.cpu_max })
       : '',
     ['dedicated', 'shared-pinned'].includes(v.cpu_mode)
-      ? champ({ id: 'cpu_cores', libelle: 'Cœurs', erreur: errors.cpu_cores,
+      ? champQuota('cpu_cores', { libelle: 'Cœurs', contexte,
                 aide: 'Cœurs physiques entiers, frères SMT compris.',
-                controle: nombre('cpu_cores', v.cpu_cores, '1', errors.cpu_cores, true) })
+                valeur: v.cpu_cores, erreur: errors.cpu_cores })
       : '',
   ].join('');
 
@@ -234,13 +391,13 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
       ${champ({ id: 'cpu_mode', libelle: 'Mode CPU', controle:
         `<select id="cpu_mode" name="cpu_mode" class="controle">${modeOptions}</select>` })}
       ${champsCpu}
-      ${champ({ id: 'memory_gib', libelle: 'Mémoire (Gio)', erreur: errors.memory_gib,
-                controle: nombre('memory_gib', v.memory_gib, '1', errors.memory_gib) })}
-      ${champ({ id: 'storage_gib', libelle: 'Disque (Gio)', erreur: errors.storage_gib,
-                controle: nombre('storage_gib', v.storage_gib, '1', errors.storage_gib) })}
-      ${champ({ id: 'network_mbit', libelle: 'Débit (Mbit/s)', erreur: errors.network_mbit,
+      ${champQuota('memory_gib', { libelle: 'Mémoire', unite: 'Gio', contexte,
+                valeur: v.memory_gib, erreur: errors.memory_gib })}
+      ${champQuota('storage_gib', { libelle: 'Disque', unite: 'Gio', contexte,
+                valeur: v.storage_gib, erreur: errors.storage_gib })}
+      ${champQuota('network_mbit', { libelle: 'Débit', unite: 'Mbit/s', contexte,
                 aide: 'Sert à la comptabilité ; seul le plafond est appliqué par le noyau.',
-                controle: nombre('network_mbit', v.network_mbit, '10', errors.network_mbit, true) })}
+                valeur: v.network_mbit, erreur: errors.network_mbit })}
       ${avertissement}
       ${refus}
       <p class="formulaire__actions">
@@ -255,7 +412,9 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
       <h2 id="titre-capacite">Capacité restante</h2>
       ${renderPools(pools)}
       <p class="note">Relevée à l’ouverture de cet écran. Elle peut avoir changé
-      depuis : c’est le serveur qui tranche à la création.</p>
+      depuis : c’est le serveur qui tranche à la création.${auMoinsUnCurseur(v, contexte)
+        ? ` Les curseurs vont donc jusqu’à ce que la Forge possède <strong>en
+        tout</strong>, et non jusqu’à ce qui reste libre.` : ''}</p>
     </section>
   </div>
 </div>`;

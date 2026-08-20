@@ -11,6 +11,32 @@ de l'écran. Un Spark supprimé depuis l'a rendue fausse — dans le sens favora
 Bloquer sur une valeur périmée refuserait une création que le serveur aurait
 acceptée, sans que vous puissiez le savoir.
 
+## Régler les quotas
+
+Les quotas se règlent au **curseur**. Chaque curseur affiche sa valeur en clair,
+avec son unité, et ses deux bornes sous la piste. Au clavier : les flèches
+avancent d'un cran, `Origine` et `Fin` vont aux extrémités, `Page préc.` et
+`Page suiv.` se déplacent par bonds.
+
+**Un curseur va jusqu'à ce que la machine possède *en tout*, pas jusqu'à ce qui
+reste libre.** Ce n'est pas une erreur d'affichage. Le panneau de droite peut
+annoncer 64 Gio disponibles pendant que le curseur monte à 76 : vous avez le
+droit de demander plus que le disponible, parce que ce disponible est une
+photographie qui peut avoir changé depuis, et parce que c'est le serveur qui
+tranche — pas l'écran. Si la demande ne passe pas, vous obtenez un refus qui
+chiffre ce qui manque, et votre saisie reste intacte.
+
+**Certains quotas restent des champs de saisie, et c'est voulu.** Un curseur n'a
+de sens que si sa plage se parcourt à la main sans perdre la précision utile. Sur
+une machine dont le pool disque dépasse le millier de gibioctets, un curseur au
+gibioctet compterait plusieurs milliers de crans : impossible à viser, et un pas
+plus grossier rendrait un quota courant de 10 Gio inatteignable. Le disque s'y
+saisit donc au clavier, pendant que la mémoire et le débit restent des curseurs.
+
+De même, si la capacité de la machine n'a pas pu être relevée, tous les quotas
+redeviennent des champs de saisie : sans bornes connues, il n'y a pas de curseur
+possible, et l'écran préfère le dire plutôt que d'inventer une limite.
+
 ## Choisir l'image
 
 L'image se choisit dans une **liste**, alimentée par le catalogue du serveur. Les
@@ -54,7 +80,7 @@ appelle cela un *burst* et ne le signale pas comme une anomalie.
 Ce que ce n'est pas : une garantie que 0,5 CPU vous sera réservé quoi qu'il
 arrive sur la machine (voir [M4](M4-pools.md)).
 
-En mode **plafonné**, à l'inverse, la valeur saisie est une limite réellement
+En mode **plafonné**, à l'inverse, la valeur réglée est une limite réellement
 appliquée — et elle est provisionnée en entier, parce que vous pouvez la
 consommer en permanence.
 
@@ -83,8 +109,8 @@ passante.
 ![Un refus du serveur, avec la saisie conservée](images/m5-refus.png)
 
 Un refus vient toujours du serveur, jamais d'un contrôle de l'interface. Il
-**chiffre ce qui manque**, dans l'unité que vous avez saisie, et **votre saisie
-reste intacte** : vous corrigez la valeur fautive sans tout ressaisir.
+**chiffre ce qui manque**, dans l'unité que vous avez réglée, et **votre saisie
+reste intacte** : vous corrigez la valeur fautive sans tout reprendre.
 
 Deux contrôles restent locaux, et ils ne portent pas sur la capacité : la syntaxe
 du nom, et la cohérence du mode CPU avec les champs affichés. Ce sont des

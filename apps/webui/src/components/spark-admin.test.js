@@ -779,3 +779,13 @@ test('tant que la lecture n’a pas eu lieu, l’apercu ne PRETEND rien', () => 
   const rien = renderRoutesPanel(SPARK, [], recetteUi());
   assert.ok(!rien.includes('Sera écrit'));
 });
+
+// --- un port n'est PAS un curseur (SPK-59, DESIGN_SYSTEM.md §6.9 bis) -------
+
+test('les ports publies restent des SAISIES, jamais des curseurs', () => {
+  // Contre-exemple du §6.9 bis : bornes connues, mais 65 534 crans a l'unite et
+  // aucun arrondi possible. Un port se recopie, il ne se fait pas glisser.
+  const html = renderPortsPanel(SPARK, [], ui({ open: 'port' }));
+  assert.equal(/<input[^>]*type="range"/.test(html), false);
+  assert.match(html, /<input[^>]*id="port-public"[^>]*type="number"[^>]*max="65535"/);
+});

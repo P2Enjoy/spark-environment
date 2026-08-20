@@ -212,3 +212,15 @@ test('le GENRE reste modifiable, lui', () => {
   assert.match(html, /id="serveur-genre"/);
   assert.ok(!/id="serveur-genre"[^>]*(readonly|disabled)/s.test(html));
 });
+
+// --- un port n'est PAS un curseur (SPK-59, DESIGN_SYSTEM.md §6.9 bis) -------
+
+test('un port de connexion reste une SAISIE, jamais un curseur', () => {
+  // C'est le contre-exemple qui fixe la regle : les bornes sont pourtant
+  // connues, 1 a 65 535, mais la plage compte 65 534 crans a l'unite et aucun
+  // arrondi n'est possible — un port voisin n'est pas presque le bon port.
+  const html = pret({ ui: ui({ open: 'ajout' }) });
+  assert.equal(/<input[^>]*type="range"/.test(html), false,
+    'le §6.9 bis ne s’applique pas a un port');
+  assert.match(html, /<input[^>]*type="number"[^>]*max="65535"/);
+});

@@ -1,6 +1,8 @@
 /**
  * @verifies docs/BACKLOG.md#SPK-20 · docs/DAT.md §25 ·
  *           docs/DESIGN_SYSTEM.md §6.9, §7.1, §14.9
+ * @verifies docs/BACKLOG.md#SPK-59 · docs/DESIGN_SYSTEM.md §6.9 bis ·
+ *           docs/DESIGN_SYSTEM_APP.md SPK-DS-07 — pour la section « curseur ».
  *
  * Le coeur de l'unite : l'ecran MONTRE la capacite restante et ne DECIDE
  * jamais a la place de sparkd.
@@ -11,6 +13,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderSparkCreate, validateShape, estimate, demandOf, describeShortfall, DEFAUTS, renderChoixImage,
+  borneHaute, formatQuota, renderAvertissement, QUOTAS, CRANS_MAX,
 } from './spark-create.js';
 
 const GIO = 1024 ** 3;
@@ -230,4 +233,161 @@ test('les valeurs du catalogue sont echappees', () => {
   ]);
   assert.ok(!rendu.includes('<script>'));
   assert.ok(!rendu.includes('<img onerror'));
+});
+
+// --- LE CURSEUR (SPK-59, DESIGN_SYSTEM.md §6.9 bis) -------------------------
+
+const CONTEXTE = { pools: POOLS, cores: 4 };
+
+test('un quota se regle au CURSEUR des que la capacite est connue', () => {
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.match(html, /<input type="range"[^>]*id="memory_gib"/);
+  assert.match(html, /<input type="range"[^>]*id="storage_gib"/);
+  assert.match(html, /<input type="range"[^>]*id="network_mbit"/);
+  assert.match(html, /<input type="range"[^>]*id="cpu_reservation"/);
+});
+
+test('la borne haute est la CAPACITE, jamais le disponible', () => {
+  // C'est le point qui decide de l'unite. Borner sur le disponible ferait
+  // decider l'ecran a la place de sparkd (docs/DAT.md §25.1) et rendrait le
+  // refus d'admission inatteignable depuis le parcours canonique.
+  assert.equal(borneHaute('memory_gib', CONTEXTE), 76);   // capacite, pas les 4 libres
+  assert.equal(borneHaute('storage_gib', CONTEXTE), 190); // capacite, pas les 20 libres
+  assert.equal(borneHaute('network_mbit', CONTEXTE), 1000);
+  assert.equal(borneHaute('cpu_reservation', CONTEXTE), 4);
+});
+
+test('le curseur laisse donc demander plus que ce qui reste libre', () => {
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  const max = /id="memory_gib"[^>]*max="(\d+)"/.exec(html);
+  assert.ok(max, 'le curseur porte une borne haute');
+  assert.ok(Number(max[1]) * 1024 ** 3 > POOLS.memory.available,
+    'sans cela, un refus du serveur ne serait plus atteignable par l’ecran');
+});
+
+test('les coeurs sont bornes par les coeurs PHYSIQUES, pas par le pool CPU', () => {
+  // Le pool CPU compte des parts ; un cœur n'est pas une part.
+  assert.equal(borneHaute('cpu_cores', CONTEXTE), 4);
+  assert.equal(borneHaute('cpu_cores', { pools: POOLS, cores: null }), null);
+});
+
+test('sans capacite connue, le quota redevient une SAISIE', () => {
+  // §6.9 bis condition 1 : pas de bornes, pas de curseur. L'ecran n'invente
+  // pas une borne pour garder le curseur.
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, pools: null });
+  assert.equal(/<input type="range"/.test(html), false);
+  assert.match(html, /<input type="number"[^>]*id="memory_gib"/);
+  assert.equal(borneHaute('memory_gib', { pools: null }), null);
+});
+
+test('une plage trop longue pour un pointeur redevient une SAISIE', () => {
+  // §6.9 bis condition 2 et 3, mesurees sur la Forge de validation : deux
+  // disques de 6 To en RAID1 donnent plus de 5 000 Gio. Au pas de 1 Gio le
+  // curseur compterait cinq mille crans ; le pas qui les ramenerait sous 400
+  // rendrait le quota courant de 10 Gio inatteignable.
+  const enorme = { ...POOLS, storage: { capacity: 5.5 * 1024 ** 4, available: 1e12 } };
+  assert.equal(borneHaute('storage_gib', { pools: enorme, cores: 4 }), null);
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, pools: enorme, cores: 4 });
+  assert.match(html, /<input type="number"[^>]*id="storage_gib"/);
+  // ... pendant que la memoire, elle, reste un curseur. La regle est locale au champ.
+  assert.match(html, /<input type="range"[^>]*id="memory_gib"/);
+});
+
+test('le seuil de crans est CALCULE, pas declare', () => {
+  // 400 crans = 28 rem (448 px) de contrôle : au-dela, un cran est plus etroit
+  // qu'un pixel. La borne juste sous le seuil passe, celle juste au-dessus non.
+  const gio = (n) => ({ ...POOLS, memory: { capacity: n * 1024 ** 3, available: 0 } });
+  assert.equal(borneHaute('memory_gib', { pools: gio(CRANS_MAX + 1) }), CRANS_MAX + 1);
+  assert.equal(borneHaute('memory_gib', { pools: gio(CRANS_MAX + 2) }), null);
+});
+
+test('le curseur porte sa valeur EN CLAIR et dans aria-valuetext', () => {
+  // Une poignee ne dit pas ou elle est, et la synthese annoncerait « 2 » la ou
+  // l'ecran montre « 2,0 Gio ».
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.match(html, /id="memory_gib"[\s\S]*?aria-valuetext="2,0 Gio"/);
+  assert.match(html, /data-valeur-de="memory_gib" aria-hidden="true">2,0 Gio</);
+});
+
+test('le doublon visible de la valeur est cache a la synthese', () => {
+  // Un <output> serait une region vive et parlerait a chaque cran d'un
+  // glissement ; le curseur annonce deja sa valeur.
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.equal(/<output/.test(html), false);
+  assert.match(html, /class="curseur__valeur"[^>]*aria-hidden="true"/);
+});
+
+test('les deux bornes sont ecrites sous la piste', () => {
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.match(html, /class="curseur__bornes"/);
+  assert.match(html, /1,0 Gio[\s\S]*?76 Gio/);
+});
+
+test('l ecran dit D OU VIENT la borne haute', () => {
+  // Un curseur qui va a 76 Gio a cote d'un panneau annoncant 4 Gio libres se
+  // lirait autrement comme une contradiction.
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.match(html, /Les curseurs vont donc jusqu’à ce que la Forge possède/);
+  assert.match(html, /non jusqu’à ce qui reste libre/);
+  // Sans curseur, la phrase n'a pas lieu d'etre.
+  assert.equal(/Les curseurs vont donc/.test(
+    renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, pools: null })), false);
+});
+
+test('la borne basse ne produit jamais une valeur que le formulaire refuse', () => {
+  // §1.4 : un curseur ne doit pas pouvoir produire une valeur invalide.
+  for (const [nom, q] of Object.entries(QUOTAS)) {
+    const valeurs = { ...DEFAUTS, name: 'ok', [nom]: q.min };
+    assert.deepEqual(validateShape({ ...valeurs, cpu_mode: 'shared-pinned' })[nom], undefined,
+      `la borne basse de ${nom} est refusee par le controle local`);
+  }
+});
+
+test('le libelle porte l unite pour une SAISIE, pas pour un curseur', () => {
+  // Le curseur montre deja « 2,0 Gio » ; « Mémoire (Gio) » y repeterait ce que
+  // la valeur dit mieux. Une saisie, elle, ne dit pas dans quelle unite taper.
+  assert.match(renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, pools: null }),
+               /<label for="memory_gib">Mémoire \(Gio\)<\/label>/);
+  assert.match(renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE }),
+               /<label for="memory_gib">Mémoire<\/label>/);
+});
+
+test('une valeur hors plage ou hors cran retombe sur la SAISIE', () => {
+  // Le navigateur l'arrondirait SILENCIEUSEMENT, et l'ecran afficherait autre
+  // chose que ce qui sera envoye.
+  const horsPlage = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok', memory_gib: 999 }, ...CONTEXTE });
+  assert.match(horsPlage, /<input type="number"[^>]*id="memory_gib"[^>]*value="999"/);
+  const horsCran = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok', network_mbit: 33 }, ...CONTEXTE });
+  assert.match(horsCran, /<input type="number"[^>]*id="network_mbit"[^>]*value="33"/);
+});
+
+test('un quota est FORMATE, jamais rendu brut', () => {
+  assert.equal(formatQuota('memory_gib', 16), '16 Gio');
+  assert.equal(formatQuota('network_mbit', 100), '100 Mbit/s');
+  assert.equal(formatQuota('cpu_reservation', 0.5), '0,50 CPU');
+  assert.equal(formatQuota('cpu_cores', 1), '1 cœur');
+  assert.equal(formatQuota('cpu_cores', 2), '2 cœurs');
+});
+
+// --- L'avertissement se rafraichit sans repeindre ---------------------------
+
+test('la zone d avertissement existe TOUJOURS, meme vide', () => {
+  // Elle est le point d'ancrage du rafraichissement : sans elle il faudrait
+  // repeindre le formulaire, ce qui arracherait la poignee en cours de
+  // glissement et ferait perdre le focus (§14.3).
+  const html = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.match(html, /<div class="zone-avertissement">/);
+});
+
+test('l avertissement se rend SEUL, a partir des memes valeurs', () => {
+  assert.equal(renderAvertissement({ ...DEFAUTS, name: 'ok' }, POOLS), '');
+  const alerte = renderAvertissement({ ...DEFAUTS, memory_gib: 76 }, POOLS);
+  assert.match(alerte, /class="avertissement"/);
+  assert.match(alerte, /mémoire/);
+  assert.match(alerte, /c’est le serveur qui décide/);
+});
+
+test('un refus du serveur fait taire l estimation locale, la aussi', () => {
+  assert.equal(renderAvertissement({ ...DEFAUTS, memory_gib: 76 }, POOLS,
+                                   { shortfalls: [] }), '');
 });

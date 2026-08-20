@@ -153,6 +153,21 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- **Les quotas de l'écran de création se règlent au curseur** (SPK-59,
+  `docs/DESIGN_SYSTEM.md` §6.9 bis) : réservation CPU, plafond CPU, cœurs,
+  mémoire, disque et débit. Chaque curseur porte sa valeur formatée, ses deux
+  bornes, et `aria-valuetext` — sans quoi la synthèse annoncerait « 16 » là où
+  l'écran montre « 16 Gio ». Sa borne haute est la **capacité totale** de la
+  Forge et jamais le disponible : demander plus que ce qui reste libre doit
+  rester possible, c'est le serveur qui tranche. Sans capacité relevée, ou quand
+  la plage ne se parcourt pas sans perdre la granularité métier — le pool disque
+  de la Forge de validation dépasse 5 000 Gio —, le champ redevient une saisie
+  numérique.
+- L'avertissement de capacité de l'écran de création se rafraîchit désormais
+  **pendant** le réglage. Il ne bougeait jamais : seul un changement de mode CPU
+  provoquait un repeint, si bien qu'on pouvait demander 64 Gio devant un panneau
+  en annonçant 64 de libres sans qu'un mot bouge. Le formulaire n'est pas
+  repeint pour autant, ce qui arracherait la poignée en cours de glissement.
 - Le script de test de la console n'exécutait ni `modules.test.js` ni
   `src/styles/classes.test.js` : deux garde-fous écrits et jamais joués.
 - Recettes DNS : le champ ne demande plus que le libellé, la zone s'affiche en
