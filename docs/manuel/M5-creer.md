@@ -74,6 +74,21 @@ Une entrée ajoutée naît **non relevée** : elle n'est pas encore proposée à
 création. C'est *Relever le catalogue* qui interroge le dépôt et tranche. L'état
 vient donc toujours d'une vérification, jamais d'une déclaration.
 
+### Ce catalogue n'est pas un registre d'images
+
+Il ne **stocke** rien, ne **construit** rien et ne **publie** rien. Il tient la
+liste des images système avec lesquelles une cellule peut être créée, et cette
+liste seulement.
+
+Les images Docker de vos piles — celles que vos `docker-compose.yml` tirent — ne
+le concernent pas : elles vivent **dans** votre Spark, tirées par votre moteur
+Docker depuis les dépôts que vous employez déjà. Le produit ne s'interpose pas
+entre eux et vous, et n'a aucun registre à vous vendre.
+
+La confusion est facile parce que les deux se disent « images ». Ce ne sont pas
+les mêmes : l'une est le système d'exploitation de la cellule, l'autre est ce que
+vous y faites tourner.
+
 ## Les quatre modes CPU
 
 | Mode | Quand le choisir |

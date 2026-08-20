@@ -156,10 +156,22 @@ test('un catalogue vide dit ce qu’il implique', () => {
   assert.ok(rendu.includes('aucun Spark ne peut être créé'));
 });
 
-test('l’ecran rappelle que le catalogue n’est pas un registre d’images', () => {
+test('l’ecran DISTINGUE le catalogue d’un registre d’images', () => {
+  // RÉVISÉE le 2026-08-20 par SPK-56 (§1.5 bis). La preuve exigeait le
+  // paragraphe entier. La confusion qu'il dissipe est réelle — les deux se
+  // disent « images » —, donc la DISTINCTION reste à l'écran : c'est le mot qui
+  // qualifie, pas du raisonnement.
+  //
+  // Ce qui part au manuel M5, « Ce catalogue n'est pas un registre d'images » :
+  // le développement — ce qu'il ne stocke ni ne construit ni ne publie, d'où
+  // les images d'une pile sont réellement tirées, et pourquoi le produit n'a
+  // aucun registre à vendre. Le chapitre a été ÉCRIT avant que l'écran cesse de
+  // le dire : il ne l'avait pas.
   const rendu = renderCatalogue({ status: 'ready', images: IMAGES });
-  assert.ok(rendu.includes('n’est pas un registre d’images'));
-  assert.ok(rendu.includes('vivent dans le Spark'));
+  assert.match(rendu, /images <strong>système<\/strong>/);
+  assert.match(rendu, /pas un registre/);
+  assert.match(rendu, /pas les images Docker de vos piles/);
+  assert.match(rendu, /href="#\/manuel\/M5"/, 'le renvoi mène au développement');
 });
 
 test('les valeurs venues du serveur sont echappees', () => {

@@ -370,7 +370,7 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
 <section class="carte bloc" aria-labelledby="titre-amorcage">
   <h2 id="titre-amorcage">Amorçage</h2>
   <p class="note">L’amorçage relève ce qui manque dans la cellule et ne pose que
-  cela. <a href="#/manuel/M6">Manuel M6 — Amorcer un Spark</a></p>
+  cela. <a href="#/manuel/M6">Manuel M6 — Amorcer le Spark, une fois</a></p>
   ${corps}
   ${verdict}${rien}
   ${confirmation}

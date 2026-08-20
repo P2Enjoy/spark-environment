@@ -171,10 +171,9 @@ export function renderCatalogue({ status = 'loading', images = [], error = null,
       n’ont jamais existé.</p>`
     : ''}
   ${renderAjout(ui)}
-  <p class="note">Ce catalogue n’est pas un registre d’images : il ne stocke, ne
-  construit et ne publie rien. Il tient la liste des images système utilisables
-  pour créer une cellule. Les images Docker de vos piles vivent dans le Spark et
-  ne le concernent pas.</p>
+  <p class="note">Les images <strong>système</strong> avec lesquelles une cellule
+  se crée — pas un registre, et pas les images Docker de vos piles.
+  <a href="#/manuel/M5">Manuel M5 — Ce catalogue n’est pas un registre d’images</a></p>
 </section>`;
 }
 
