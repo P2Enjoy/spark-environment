@@ -1612,7 +1612,19 @@ test('cocher le rootless amorce dans ce mode, et le journal le PORTE', async () 
   await parcours('amorcage-rootless', async () => {
     // §42.2 : l'option est offerte, jamais imposée. On la coche depuis la
     // confirmation, là où le geste s'engage.
-    await ouvrir('crm-production');
+    //
+    // Sur « boutique », et PAS sur un Spark qu'un parcours antérieur a déjà
+    // amorcé : le §42.2 bis refuse de basculer un Docker en place, donc y
+    // demander le rootless rendrait 409 et ce parcours n'éprouverait rien.
+    // Mesuré — il passait seul et échouait dans la campagne, ce qui est la
+    // signature d'un parcours qui dépend de l'état laissé par un autre.
+    //
+    // « boutique » est à l'arrêt dans le seed : on le démarre depuis l'écran,
+    // comme un exploitant, puisque l'amorçage exige une cellule qui tourne.
+    await ouvrir('boutique');
+    await page.click('[data-commande="start"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('En marche'), { timeout: 20000 });
     await page.waitForSelector('#titre-amorcage');
     await page.click('[data-amorcage="amorcer"]');
     await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
@@ -1640,7 +1652,7 @@ test('cocher le rootless amorce dans ce mode, et le journal le PORTE', async () 
     // §42.2 bis : le journal porte le MODE. C'est ce qu'on cherchera le jour où
     // une pile ne démarre pas, et il ne se retrouve nulle part ailleurs.
     const { corps } = await pile.lireSparkd('/v1/audit?action=spark.bootstrap&limit=20');
-    const sienne = corps.entries.filter((e) => e.message.includes('crm-production'));
+    const sienne = corps.entries.filter((e) => e.message.includes('boutique'));
     assert.ok(sienne.length > 0);
     assert.equal(JSON.parse(sienne[0].payload).mode, 'rootless');
     assert.match(sienne[0].message, /en rootless/);
@@ -1651,11 +1663,14 @@ test('redemander l’autre mode est REFUSÉ, et le refus nomme les deux', async 
   await parcours('amorcage-bascule-refusee', async () => {
     // LE point du §42.2 bis. Basculer déplacerait le moteur sous un autre compte,
     // et avec lui les conteneurs, volumes et réseaux du locataire.
-    await ouvrir('postgres-dedie');
+    //
+    // Sur « boutique », que le parcours précédent vient d'amorcer en ROOTLESS :
+    // on éprouve donc le refus dans le sens qui compte le plus — redemander
+    // l'enraciné sur une cellule rootless, ce qui est le défaut du produit et
+    // donc le clic le plus facile à faire par mégarde.
+    await ouvrir('boutique');
     await page.waitForSelector('#titre-amorcage');
-    await page.click('[data-amorcage="amorcer"]');
-    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
-    await page.click('[data-amorcage="engager"]');   // enraciné, le défaut
+    await page.click('[data-amorcage="relever"]');
     await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
 
     // Le mode est en place : l'option n'est PLUS offerte (§1.4). L'écran ne le
@@ -1671,11 +1686,11 @@ test('redemander l’autre mode est REFUSÉ, et le refus nomme les deux', async 
     // …et le REFUS existe bel et bien au serveur, qui est l'autorité (§10 de
     // CLAUDE.md) : l'écran n'est qu'une aide, la requête reste formable.
     const { status, corps } = await pile.ecrireSparkd(
-      '/v1/sparks/postgres-dedie/bootstrap', { rootless: true });
+      '/v1/sparks/boutique/bootstrap', {});
     assert.equal(status, 409, JSON.stringify(corps));
     assert.equal(corps.detail.error, 'bootstrap_mode_conflict');
-    assert.equal(corps.detail.installed, 'enracine');
-    assert.equal(corps.detail.requested, 'rootless');
+    assert.equal(corps.detail.installed, 'rootless');
+    assert.equal(corps.detail.requested, 'enracine');
     assert.match(corps.detail.message, /enraciné/);
     assert.match(corps.detail.message, /rootless/);
     assert.match(corps.detail.message, /vider la cellule/);
