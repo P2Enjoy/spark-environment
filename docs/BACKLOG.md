@@ -188,6 +188,10 @@ démarrage, donc ne peut pas retirer une clé (`docs/DAT.md` §17.1).
   - **Conflit de domaine refusé** : `409`, en nommant le Spark propriétaire.
   - Défaut corrigé au passage : sans route terminale, Caddy rendait `200` et un
     corps vide pour **tout** domaine non routé. Il rend désormais `404`.
+- **Depuis SPK-47, le DNS n'est plus l'obstacle** : la console pose
+  l'enregistrement d'une route, et une écriture réelle a été mesurée le
+  2026-08-20. Ce qui manque est désormais une Forge **joignable depuis
+  l'extérieur**, sans quoi l'autorité de certification ne peut pas valider.
 - **Reste, et c'est pourquoi l'unité n'est pas `[x]`** : l'émission TLS n'est pas
   prouvée. Elle suppose un domaine résolvant vers l'hôte, ce que le produit ne
   contrôle pas et dont je ne dispose pas ici. Seul le routage HTTP par nom d'hôte
@@ -1553,9 +1557,9 @@ Ce que le locataire fait tourner, observé sans rien y toucher.
   refuse le geste, laisse la lecture et laisse le terminal ; captures observées ;
   manuel M8 mis à jour.
 
-### [ ] SPK-47 · Le DNS entre dans le produit : zones lues, enregistrement d'ingress posé
+### [x] SPK-47 · Le DNS entre dans le produit : zones lues, enregistrement d'ingress posé
 
-Jusqu'ici le produit disait « le DNS est extérieur au produit », et SPK-12 reste
+Le produit disait « le DNS est extérieur au produit », et SPK-12 restait
 `[~]` faute d'un domaine qui résolve. Cette unité retire cette cause.
 
 - Spécification : `docs/DAT.md` §38 (§38.1 où vit le secret, §38.2 le périmètre,
@@ -1586,6 +1590,26 @@ Jusqu'ici le produit disait « le DNS est extérieur au produit », et SPK-12 re
   E2E **depuis le parcours canonique** — se connecter, atteindre l'onglet d'un
   Spark, ouvrir la modale, choisir une zone, poser l'enregistrement ; captures
   observées, dont les états d'absence ; manuel M7 révisé ; §38 tenu à jour.
+- **Livré et vérifié le 2026-08-20.**
+  - 22 tests du module — les trois refus, le suffixe trompeur, la casse, le
+    point final, les bornes du TTL, l'absence de méthode de suppression sur la
+    surface publique du client.
+  - Un test prouve que le jeton **n'atteint ni l'inventaire ni `sparkd`**, et un
+    autre qu'il ne sort pas d'un fournisseur sérialisé. Défaut trouvé par ce
+    test et corrigé : le jeton était un champ public.
+  - 10 tests d'écran, 9 tests de routes, **2 parcours E2E** : poser
+    l'enregistrement, et se voir refuser l'apex. Le parcours constate chez le
+    fournisseur que le `MX`, le `TXT` de vérification et le `A` voisin n'ont pas
+    bougé, et que la demande interdit la création d'une zone.
+  - **Écriture RÉELLE mesurée** sur `test.spark.lelabs.tech` depuis le parcours
+    canonique, contre le compte du responsable : l'enregistrement `A` existe
+    chez le fournisseur avec `ttl=300`, et la garde d'espace de noms a refusé
+    `gram.lelabs.tech` sans qu'aucune requête ne parte. Captures `48-` à `52-`
+    observées, dont le format étroit.
+  - Défaut corrigé au passage : l'aperçu de l'enregistrement ne suivait pas la
+    saisie et montrait une valeur qui n'aurait pas été écrite.
+- **Reste hors de cette unité** : l'émission TLS elle-même (SPK-12), qui exige un
+  serveur joignable depuis l'extérieur.
 
 ---
 

@@ -83,6 +83,25 @@
 
 ### Ajouté — code
 
+- Unité SPK-47 : **le DNS entre dans le périmètre du produit.** La console lit
+  les zones du compte chez le fournisseur et pose l'enregistrement `A`/`AAAA`
+  d'une route d'ingress, depuis un bouton porté par la route elle-même. Elle
+  annonce ce qui est **écrit** et le délai de propagation, jamais un domaine
+  « prêt ».
+
+  Le jeton vit dans un `.env` du poste, ignoré par Git : jamais sur la Forge,
+  jamais dans `servers.json`. Son absence désactive la fonction et l'écran le
+  dit — ce n'est pas une panne. Le produit ne supprime aucun enregistrement,
+  ne transfère aucune zone et n'achète aucun domaine ; il refuse d'écrire à
+  l'apex, hors de la zone choisie, ou autre chose qu'une adresse.
+
+  Le harnais E2E impose son propre fichier d'environnement et un doublon local
+  du fournisseur, pour qu'aucun parcours automatique n'atteigne un compte réel.
+
+- Règle de design system §6.9 : un champ en lecture seule se **voit** — fond
+  distinct, curseur inerte, et un texte d'aide qui dit d'où vient la valeur.
+
+
 - Espace de travail du monorepo : `apps/webui`, `services/sparkd`,
   `packages/contract`, `deploy`, `scripts`, avec un `Makefile` d'entrée.
 - `services/sparkd` : configuration validée depuis l'environnement, garde

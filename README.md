@@ -173,6 +173,17 @@ vigilance de l'exploitant.
 |---|---|---|---|---|
 | `SPARK_CONSOLE_PORT` | port local de la console | entier | non | `5173` |
 | `SPARK_CONSOLE_STATE` | inventaire des serveurs | chemin | non | `~/.config/spark/servers.json` |
+| `SPARK_ENV_FILE` | fichier `.env` lu par l'hôte console | chemin | non | `./.env` |
+| `SCW_SECRET_KEY` | jeton du fournisseur DNS ; **son absence désactive le pilotage DNS, ce n'est pas une panne** | jeton | non | *(jamais dans le dépôt)* |
+| `SCW_DEFAULT_ORGANIZATION_ID` | organisation dont les zones sont listées | UUID | non | `00000000-0000-0000-0000-000000000000` |
+| `SPARK_DNS_ALLOW_PATTERN` | expression régulière bornant les domaines écrivables depuis ce poste | regex | non | `^test\.[a-z0-9-]+\.exemple\.tech$` |
+| `SPARK_DNS_BASE_URL` | racine de l'API DNS, pour pointer un doublon local | URL | non | `http://127.0.0.1:8099` |
+
+Le jeton DNS vit **sur le poste qui fait tourner la console**, dans un `.env`
+ignoré par Git — jamais sur la Forge, où il serait lisible par qui y détient
+`root`, et jamais dans `servers.json`, dont le contrat interdit tout secret.
+Une variable exportée **vide** n'écrase pas le fichier : elle neutralise un
+héritage.
 
 ## Sécurité
 
@@ -186,6 +197,9 @@ vigilance de l'exploitant.
 
 ## Limites connues
 
+- L'émission TLS n'est pas éprouvée de bout en bout. La console pose désormais le
+  DNS d'une route, ce qui lève la cause la plus fréquente de son échec, mais
+  l'émission reste à constater sur un serveur joignable depuis l'extérieur.
 - Un seul serveur. Aucun ordonnancement inter-machines.
 - `runtime: vm` est porté par le modèle de données mais n'est pas implémenté.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique

@@ -11,10 +11,60 @@ celui de l'hôte. C'est l'erreur la plus fréquente : on saisit `443` en croyant
 décrire l'entrée.
 
 Le TLS est confié à la gestion automatique du proxy. **L'émission d'un certificat
-suppose que le domaine résolve déjà vers ce serveur** — le DNS est extérieur au
-produit. Un domaine mal pointé produit un échec d'émission côté proxy, pas une
-panne du plan de contrôle, et l'interface ne présentera jamais un certificat
-comme « actif » : elle ne le sait pas.
+suppose que le domaine résolve déjà vers ce serveur.** Un domaine mal pointé
+produit un échec d'émission côté proxy, pas une panne du plan de contrôle, et
+l'interface ne présentera jamais un certificat comme « actif » : elle ne le sait
+pas.
+
+Pour faire résoudre le domaine, voir « Pointer le domaine » ci-dessous.
+
+## Pointer le domaine
+
+Chaque route porte un bouton **DNS**. Il ouvre une fenêtre qui lit les zones de
+votre compte chez le fournisseur, et pose l'enregistrement qui fait résoudre ce
+domaine vers votre serveur.
+
+Le domaine n'est pas saisissable : il vient de la route. Le rendre modifiable
+laisserait pointer un nom que le serveur ne route pas, c'est-à-dire un nom qui
+répondrait « page introuvable ».
+
+La zone la plus précise qui contienne le domaine est proposée d'avance. Si votre
+compte porte à la fois `exemple.tech` et `staging.exemple.tech`, un domaine
+`app.staging.exemple.tech` ira dans la seconde — écrit dans la première, il
+serait invisible.
+
+L'adresse demandée est celle du **serveur**, pas celle du Spark : un Spark vit
+sur un réseau privé et n'a pas d'adresse publique. C'est le proxy qui répartit
+ensuite par nom d'hôte.
+
+Avant d'écrire, la fenêtre montre l'enregistrement exact qui partira. Après, elle
+annonce ce qui a été **écrit** — jamais que le domaine est « prêt ». La
+résolution demande le temps du délai d'expiration, et davantage si un résolveur
+a déjà mis l'ancienne réponse en cache.
+
+### Ce que ce bouton ne fera jamais
+
+Il n'achète aucun domaine et n'en renouvelle aucun : une opération qui engage de
+l'argent ne se déclenche pas depuis un écran d'administration. Il ne transfère
+aucune zone et ne change aucun serveur de noms. Et il **ne supprime jamais** un
+enregistrement qu'il n'a pas posé : votre zone porte de la messagerie et des
+preuves de propriété, dont la disparition casserait des choses sans rapport avec
+ce produit.
+
+Trois écritures sont refusées, et le refus dit ce qu'il protège :
+
+* l'**apex** de la zone — le nom du domaine lui-même —, qui porte ses serveurs
+  de noms et sa messagerie ;
+* un domaine qui n'est **pas dans** la zone choisie ;
+* tout ce qui n'est pas une adresse IP.
+
+### Si rien n'est configuré
+
+Le jeton du fournisseur vit sur le **poste** qui fait tourner la console, dans un
+fichier `.env` qui n'entre jamais dans le dépôt — jamais sur le serveur, où il
+serait lisible par qui y détient l'administration. Sans jeton, la fenêtre le dit
+et n'offre aucune saisie : ce n'est pas une panne, c'est une configuration
+absente.
 
 ## Un domaine déjà pris
 
@@ -37,7 +87,8 @@ Le domaine cesse de répondre immédiatement. C'est réversible — il suffit de
 redéclarer — mais la confirmation nomme le domaine, parce que la coupure est
 instantanée.
 
-> **Limite connue.** L'émission d'un certificat n'a pas été éprouvée : elle
-> suppose un domaine résolvant vers l'hôte, dont le projet ne dispose pas encore.
-> Seul le routage HTTP par nom d'hôte est prouvé. Voir SPK-12 au
-> [backlog](../BACKLOG.md).
+> **Limite connue.** L'émission d'un certificat n'a pas encore été éprouvée de
+> bout en bout. La cause la plus fréquente de son échec — un domaine qui ne
+> résout pas — est levée depuis que la console pose le DNS, mais l'émission
+> elle-même reste à constater sur un serveur joignable depuis l'extérieur. Voir
+> SPK-12 au [backlog](../BACKLOG.md).

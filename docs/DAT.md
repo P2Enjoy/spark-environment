@@ -1575,9 +1575,13 @@ et renouvelle le certificat. Une route à `tls = 0` n'est servie qu'en clair sur
 `:80` — utile pour un domaine interne, un essai, ou un frontal qui termine déjà
 le TLS.
 
-**L'émission d'un certificat suppose que le domaine résolve vers cet hôte.** Ce
-n'est pas une propriété que le produit contrôle : elle dépend du DNS, extérieur
-au système. Un domaine mal pointé produit un échec d'émission côté Caddy, pas une
+**L'émission d'un certificat suppose que le domaine résolve vers cette Forge.**
+Ce n'est toujours pas une propriété que `sparkd` contrôle : elle dépend du DNS,
+puis de sa propagation. Ce qui a changé depuis le §38, c'est que le DNS n'est
+plus **extérieur au produit** : la console pose l'enregistrement. Elle ne rend
+pas la résolution pour autant, et l'écran ne l'annonce jamais (§38.4).
+
+Un domaine mal pointé produit donc encore un échec d'émission côté Caddy, pas une
 erreur de `sparkd` — et la console doit présenter cet écart comme tel plutôt que
 de laisser croire à une panne du plan de contrôle.
 

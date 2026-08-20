@@ -3140,3 +3140,63 @@ d'émission TLS ; il ne garantit pas cette émission.
 **Périmètre des essais, borné par le responsable** : seuls les noms
 `test.<label>.lelabs.tech` sont écrits, et rien d'autre n'est touché. La garde
 vaut pour le harnais, pas pour le produit — un exploitant gère sa zone entière.
+
+## 2026-08-20 — SPK-47 livré, et une écriture réelle mesurée
+
+**Ce qui est en place.** La console lit les zones du compte et pose
+l'enregistrement d'ingress d'une route, depuis un bouton porté par la ligne de
+la route — pas par la section : deux routes d'un même Spark ont deux domaines.
+
+**Quatre défauts trouvés par les preuves, pas par relecture.**
+
+1. Le jeton était un champ public du client : il sortait dès qu'on sérialisait le
+   fournisseur, donc au premier corps de réponse ou au premier rapport de bogue.
+   Champ privé. Le test qui l'a trouvé est celui qui sérialise le bilan.
+2. L'aperçu « Sera écrit » ne suivait pas la saisie — la console ne repeint pas à
+   chaque frappe, pour ne pas déplacer le curseur. Il montrait donc une valeur
+   qui n'aurait pas été écrite, ce qui est pire que pas d'aperçu. Mis à jour sur
+   place. Trouvé par le parcours E2E.
+3. La bannière répétait « Enregistrement écrit » mot pour mot, parce que le champ
+   `propagation` du serveur le disait déjà. Vu sur la capture, pas dans le code.
+4. Le parcours de l'apex passait seul et rougissait dans la campagne :
+   `has-text` cherche un **sous-texte**, et « exemple.test » désignait aussi
+   « boutique.exemple.test ». La ligne se désigne désormais par son domaine
+   exact.
+
+**Un champ en lecture seule se voit maintenant.** La capture a montré que le
+domaine repris de la route avait l'apparence d'un champ modifiable : on clique,
+on tape, rien ne se passe. Règle §6.9 du design system, et le style qui va avec.
+La lacune n'était pas propre à cet écran — le nom d'un serveur en modification
+avait le même défaut.
+
+**Vérification réelle, dans la peau de l'utilisateur.** Depuis l'accueil, en
+cliquant : un Spark, l'onglet Routes, déclarer `test.spark.lelabs.tech`, le
+bouton DNS, la zone `lelabs.tech` pré-choisie, l'adresse `203.0.113.7`
+— TEST-NET-3, réservée à la documentation, donc incapable de pointer sur la
+machine de quelqu'un. L'enregistrement existe chez le fournisseur, `ttl=300`.
+La garde d'espace de noms a refusé `gram.lelabs.tech` **sans qu'aucune requête
+ne parte**. Captures `48-` à `52-` observées, format étroit compris.
+
+**Ce que cette vérification n'a pas prouvé** : que le domaine résolve, et que
+Caddy émette le certificat. Le premier demande d'attendre la propagation, le
+second une Forge joignable depuis l'extérieur. SPK-12 reste donc `[~]`, mais sa
+cause de blocage a changé de nature : ce n'est plus le DNS.
+
+**Un écart consigné, non tranché.** La zone `lelabs.tech` portait 17
+enregistrements le 19 août et en porte 15 hors le nôtre le 20. Deux `TXT` liés à
+`xrp-academy` manquent. L'écriture du produit vise `{name, type}` et le client
+n'a aucune méthode de suppression, ce qu'un test prouve sur sa surface publique ;
+le compte ne conserve aucune version de zone, donc rien n'est consultable. Rien
+n'a été réécrit — restaurer de mémoire des enregistrements de messagerie serait
+pire que l'écart. Voir INC-04 : cela demande l'arbitrage du responsable **avant**
+que le pilotage DNS ne serve sur une zone en exploitation.
+
+**Campagne complète, verte.** 617 tests Python, 346 de console et d'hôte console,
+6 de contrat, 8 gestes, **28 parcours E2E**, 7 contrôles du manuel, build et
+`contract-check`.
+
+**Où reprendre.** SPK-42, tranche 3 : la documentation et le manuel emploient
+encore « hôte » au sens de la machine, puis les noms de fichiers de la console.
+Ensuite SPK-46 (la console traduit), SPK-36 (la sauvegarde du registre), SPK-28
+(le schéma de partitionnement), SPK-35 (le modèle de menace). INC-03 et INC-04
+attendent un arbitrage.

@@ -954,6 +954,15 @@ test('un refus s’affiche DANS la modale et n’efface pas la saisie', async ()
 
 // --- POINTER LE DOMAINE (SPK-47, docs/DAT.md §38) --------------------------
 
+/**
+ * Désigne la LIGNE d'une route par son domaine EXACT.
+ *
+ * `has-text` cherche un sous-texte : « exemple.test » désignait aussi
+ * « boutique.exemple.test », et le parcours de l'apex cliquait sur la mauvaise
+ * ligne — il passait seul et rougissait dans la campagne. Mesuré.
+ */
+const ligneRoute = (domaine) => `li:has(span.technique:text-is("${domaine}"))`;
+
 /** Déclare une route publique DEPUIS l'écran, comme un exploitant (§29.3). */
 async function declarerRoute(spark, domaine, port = '8080') {
   await ouvrir(spark, 'routes');
@@ -963,7 +972,7 @@ async function declarerRoute(spark, domaine, port = '8080') {
   await page.fill('#route-domaine', domaine);
   await page.fill('#route-port', port);
   await page.click('[data-engage="route"]');
-  await page.waitForSelector(`li:has-text("${domaine}")`, { timeout: 10000 });
+  await page.waitForSelector(ligneRoute(domaine), { timeout: 10000 });
 }
 
 test('pointer le DNS d’une route écrit l’enregistrement, et RIEN d’autre', async () => {
@@ -971,7 +980,7 @@ test('pointer le DNS d’une route écrit l’enregistrement, et RIEN d’autre'
     await declarerRoute('boutique', 'boutique.exemple.test');
 
     // Le geste part de la LIGNE de la route : c'est elle qui porte le domaine.
-    await page.click('li:has-text("boutique.exemple.test") [data-dns-route]');
+    await page.click(`${ligneRoute('boutique.exemple.test')} [data-dns-route]`);
     await page.waitForSelector('dialog.modale[open] #dns-zone', { timeout: 10000 });
 
     // Le domaine n'est pas saisissable : il vient de la route.
@@ -1025,7 +1034,7 @@ test('pointer l’APEX d’une zone est refusé, et la zone n’est pas touchée
     const avant = dns.enregistrements().length;
     await declarerRoute('boutique', 'exemple.test', '8081');
 
-    await page.click('li:has-text("exemple.test") [data-dns-route]');
+    await page.click(`${ligneRoute('exemple.test')} [data-dns-route]`);
     await page.waitForSelector('dialog.modale[open] #dns-adresse', { timeout: 10000 });
     // Aucune zone ne contient l'apex : il faut donc la choisir à la main, ce qui
     // est déjà un signal. Le refus, lui, vient du produit et pas de l'écran.

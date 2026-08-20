@@ -299,9 +299,12 @@ export function createConsoleHost(options = {}) {
             // §38.4 : on annonce l'enregistrement ÉCRIT, jamais le domaine
             // « prêt ». La propagation prend le temps du TTL, et un cache déjà
             // chaud sert encore l'ancienne réponse.
-            propagation: `Enregistrement écrit. La résolution peut demander jusqu'à `
-                         + `${prepare.ttl} secondes, davantage si un résolveur a `
-                         + `déjà mis l'ancienne réponse en cache.`,
+            // Mesuré à l'écran : la bannière NOMME déjà l'enregistrement écrit,
+            // et un « Enregistrement écrit. » de plus s'y répétait mot pour mot.
+            // Ce champ ne porte donc que la réserve, qui est son objet.
+            propagation: `La résolution peut demander jusqu'à ${prepare.ttl} secondes, `
+                         + `davantage si un résolveur a déjà mis l'ancienne réponse `
+                         + `en cache.`,
           },
         };
       } catch (erreur) {

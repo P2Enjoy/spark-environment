@@ -610,6 +610,27 @@ Exemple :
 
 plutôt qu’un simple astérisque dépourvu de contexte.
 
+### Un champ en lecture seule se VOIT
+
+Un contrôle `readonly` qui a l'apparence d'un contrôle modifiable est un piège :
+on clique dedans, on tape, et rien ne se passe — sans qu'aucun message
+n'explique pourquoi.
+
+Un champ en lecture seule porte donc, en plus de l'attribut :
+
+* un fond `--color-bg`, distinct du blanc des contrôles modifiables ;
+* un curseur `default`, jamais le curseur de saisie ;
+* un texte d'aide qui dit **d'où vient la valeur**, pas seulement qu'elle est
+  figée — « il vient de la route publique », « le nom identifie l'entrée ».
+
+Il reste **focusable** au clavier et sélectionnable à la souris : la valeur doit
+pouvoir être lue par une synthèse vocale et copiée. C'est ce qui distingue
+`readonly` de `disabled`, lequel sort du parcours de tabulation et ne convient
+donc pas à une valeur qu'on veut donner à lire.
+
+Le focus entrant d'une modale ignore ces champs et va au premier contrôle
+**modifiable** (§6.27).
+
 ## 6.10 Cases à cocher
 
 La case visible peut mesurer 24 px.

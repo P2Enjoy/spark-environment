@@ -334,6 +334,13 @@ tbody tr:hover { background: var(--color-hover); }
   font: inherit; width: 100%; max-width: 28rem;
 }
 .controle:focus-visible { border-color: var(--color-brand); }
+/* §6.9 : un champ en lecture seule se VOIT. Sans cela on clique dedans, on tape,
+   et rien ne se passe. Il reste focusable et sélectionnable — ce qui le
+   distingue de `disabled` — parce que sa valeur est faite pour être lue. */
+.controle[readonly] {
+  background: var(--color-bg); color: var(--color-text-2);
+  cursor: default;
+}
 .controle--erreur { border-color: var(--color-danger); }
 .champ__aide { margin: 0; font-size: var(--text-compact); color: var(--color-text-3); }
 .champ__erreur {

@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -515,7 +515,8 @@ test("l ecriture annonce ce qui est ECRIT et la propagation, jamais un domaine p
   assert.equal(corps.written, true);
   assert.equal(corps.fqdn, 'test.spark.lelabs.tech');
   assert.equal(corps.type, 'A');
-  assert.match(corps.propagation, /jusqu'à 300 secondes/);
+  assert.match(corps.propagation, /^La résolution peut demander jusqu'à 300 secondes/,
+    'la bannière nomme déjà l’enregistrement écrit : ce champ ne porte que la réserve');
   assert.ok(!('ready' in corps));
   server.close();
 });
@@ -530,5 +531,34 @@ test('les enregistrements d une zone se lisent, et la zone est OBLIGATOIRE', asy
   assert.equal((await fetch(`${base}/api/dns/records`)).status, 400);
   const r = await fetch(`${base}/api/dns/records?zone=lelabs.tech`);
   assert.equal((await r.json()).records[0].name, 'gram');
+  server.close();
+});
+
+test('le jeton DNS n entre NI dans l inventaire NI dans une requete vers sparkd', async () => {
+  // §38.1 et §22.4 : le secret vit dans l'environnement du processus, et nulle
+  // part ailleurs. Le voir passer dans l'inventaire ou dans le relais, c'est le
+  // voir atteindre le disque du poste ou la Forge.
+  const vus = [];
+  const { base, server, dossier } = await hote({
+    env: { ...JETON, SPARK_DNS_ALLOW_PATTERN: '.*' },
+    amont: async (url, options = {}) => {
+      vus.push(JSON.stringify({ url, headers: options.headers ?? {}, body: String(options.body ?? '') }));
+      return new Response('{}', { status: 200 });
+    },
+  });
+
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/dns/record`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'exemple.tech', domain: 'a.exemple.tech', address: '1.2.3.4' }),
+  });
+
+  const inventaire = await readFile(join(dossier, 'servers.json'), 'utf8');
+  assert.ok(!inventaire.includes('jeton-de-test'), 'l’inventaire ne porte aucun secret');
+
+  // Le jeton n'apparait QUE dans l'appel au fournisseur, en en-tete.
+  const versSparkd = vus.filter((v) => v.includes('127.0.0.1'));
+  assert.ok(versSparkd.every((v) => !v.includes('jeton-de-test')),
+    'rien de ce qui part vers sparkd ne porte le jeton');
   server.close();
 });
