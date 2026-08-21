@@ -6713,21 +6713,42 @@ Deux familles de cibles, et une seule est stable :
 - **`<adresse privée d'un Spark>:22`** — une par Spark, et elles changent à chaque
   création.
 
-**`permitopen` n'accepte PAS de notation CIDR.** Une plage ne s'y écrit donc pas,
-et maintenir une ligne par Spark ferait dépendre l'accès d'une mise à jour
-manuelle à chaque création — une console qui cesse de fonctionner le jour où l'on
-crée un Spark serait pire que pas de restriction du tout.
+Maintenir une ligne `permitopen` par Spark ferait dépendre l'accès d'une mise à
+jour manuelle à chaque création — une console qui cesse de fonctionner le jour où
+l'on crée un Spark serait pire que pas de restriction du tout. Il faut donc une
+forme qui s'écrive **une fois**.
 
-Deux voies, et le choix se fait **par mesure**, pas par préférence :
+**MESURÉ le 2026-08-21, et cela tranche la question :**
 
-- si la version d'OpenSSH de la Forge accepte un **motif** dans `permitopen`
-  (`permitopen="10.77.0.*:22"`), c'est cette forme, et elle est écrite une fois ;
-- sinon, la restriction porte sur le **port** et non sur l'adresse, et le §17.4
-  reste la vraie borne : les Sparks n'ont pas de port SSH public, leur réseau est
-  privé, et le rebond n'atteint qu'eux.
+| Forme | Rebond vers un Spark | Tunnel vers `sparkd` | Autre service de la Forge |
+|---|---|---|---|
+| `permitopen="127.0.0.1:9876"` seul | **refusé** | passe | refusé |
+| `permitopen="172.17.0.*:22"` | **refusé** — le motif n'est pas interprété | passe | refusé |
+| `permitopen="127.0.0.1:9876",permitopen="*:22"` | **passe** | **passe** | **refusé** |
 
-Cette mesure est à faire sur la version de la Forge, et son résultat est écrit
-dans `docs/PROD_MIGRATIONS.md` avec la ligne exacte à poser.
+**OpenSSH n'applique aucune correspondance de motif sur l'ADRESSE** d'un
+`permitopen` : `172.17.0.*` est pris pour un nom d'hôte littéral, et le rebond
+échoue sur « stdio forwarding failed ». Le joker d'HÔTE, lui, fonctionne : `*:22`
+autorise le port 22 partout, et rien d'autre.
+
+La forme retenue est donc :
+
+```
+permitopen="127.0.0.1:<port de sparkd>",permitopen="*:22"
+```
+
+Elle donne exactement les deux besoins du produit et se pose une fois pour
+toutes. **Ce qu'elle concède, et il faut l'écrire** : elle autorise à rebondir sur
+le port 22 de toute machine joignable depuis la Forge, pas seulement des Sparks —
+la Forge devient un relais SSH vers le port 22 de son réseau. Ce n'est pas un
+shell sur la Forge, et rebondir sur la Forge elle-même retombe sur la même clé
+restreinte, donc sur la garde. Le §17.4 reste la vraie borne du côté des Sparks :
+leur réseau est privé et sans port SSH public.
+
+La ligne exacte à poser est écrite dans `docs/PROD_MIGRATIONS.md`, et
+`scripts/cle-restreinte.sh` la PRODUIT plutôt que de la faire recopier : une
+ligne d'`authorized_keys` recopiée à la main est une ligne où l'on oublie une
+virgule, et une virgule oubliée y ouvre une porte en silence.
 
 ### 46.6 Ce que cette unité ne prétend pas
 
