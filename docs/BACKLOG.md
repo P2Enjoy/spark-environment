@@ -674,7 +674,7 @@ et elle a trouve un DEFAUT GRAVE avant de pouvoir rien mesurer.
 - La console continue donc de **ne pas** présenter la réservation comme une
   garantie absolue, conformément à la DoD.
 
-### [~] SPK-30 · Marge de métadonnées au-dessus du quota vendu
+### [x] SPK-30 · Marge de métadonnées au-dessus du quota vendu
 
 Mesuré le 2026-08-18 : un Spark qui remplit son quota empêche Incus d'écrire son
 `backup.yaml`, situé **dans** le jeu de données contingenté. Toute reconfiguration
@@ -697,7 +697,37 @@ Mesuré le 2026-08-18 : un Spark qui remplit son quota empêche Incus d'écrire 
      l'agrandir, et constater que l'agrandissement aboutit. C'est le seul niveau
      qui prouve le fait du §8.7. Tant qu'il n'est pas exécuté, l'unité reste `[~]`.
 
-**Le mécanisme est LIVRÉ et prouvé aux niveaux 1 et 2 ; le niveau 3 ne l'est pas.**
+**NIVEAU 3 EXÉCUTÉ le 2026-08-21 sur la Forge de validation, et il a INFIRMÉ la
+promesse avant de la rétablir.**
+
+Un Spark à 1 Gio, marge de 64 Mio, rempli de données incompressibles jusqu'au
+refus (`Disk quota exceeded`, 0 octet disponible). Puis, sur ce dataset saturé :
+
+| Geste | Résultat |
+|---|---|
+| écrire la **configuration** de l'instance | **ÉCHOUE** — `backup.yaml: disk quota exceeded` |
+| agrandir la **taille du device** | **RÉUSSIT**, et la cellule respire aussitôt |
+
+- **La marge ne protège PAS ce que le §8.8.1 affirmait.** Le quota ZFS porte sur
+  le jeu de données ENTIER : le `df` de la cellule montre `vendue + marge`, et le
+  locataire remplit donc la marge. Elle n'est ni invisible ni inaccessible.
+- **Le produit posait la configuration AVANT le disque** — donc échouait
+  précisément sur un Spark plein, le seul cas où l'agrandissement est urgent.
+  **Corrigé** : le disque d'abord, la configuration ensuite. Une preuve garde
+  l'ordre, car rien d'autre ne dirait qu'il compte.
+- **Le niveau 3 est ensuite passé de bout en bout, par le produit** : Spark
+  saturé, `PATCH` à 10 Gio, `applied: true` sans erreur, et le locataire écrit de
+  nouveau. La cellule a été rendue à son état exact.
+
+- **Reste un ARBITRAGE, pas une mesure** : rendre la marge réellement
+  inaccessible exigerait `refquota = taille vendue` en plus de
+  `quota = vendue + marge`. Incus ne pose que `quota`. Accepter la marge
+  consommable — la promesse tient alors par l'ordre des gestes, ce que le produit
+  fait — ou piloter `refquota` en contournant l'abstraction d'Incus. Écrit au
+  §8.8.1.
+
+**Le mécanisme est LIVRÉ et prouvé aux niveaux 1 et 2 ; le niveau 3 l'est depuis
+le 2026-08-21.**
 
 - Livré : `SPARKD_STORAGE_METADATA_MARGIN` (défaut 64 MiB, zéro accepté, négatif
   refusé au démarrage) ; le traducteur pose `taille vendue + marge` ; l'admission
