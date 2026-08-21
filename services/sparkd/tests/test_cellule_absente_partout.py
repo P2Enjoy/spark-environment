@@ -99,8 +99,15 @@ def test_chaque_route_NOMME_la_cellule_perdue(geste, tmp_path):
     detail = reponse.json()["detail"]
     assert detail["error"] == "cellule_absente"
     assert nom in detail["message"], "le message NOMME le Spark"
-    assert "Reprendre" in detail["message"] and "Supprimer" in detail["message"], (
-        "il nomme les deux issues, comme la console les nomme (§1.5 bis)")
+    assert "reconstruite" in detail["message"] and "supprimé" in detail["message"], (
+        "il dit les deux issues")
+    # §1.5 bis, vu à l'écran le 2026-08-21 : ces routes se rencontrent sur un
+    # Spark dans N'IMPORTE quel état, et « Reprendre » n'est offert qu'en panne.
+    # Nommer ce bouton ici enverrait chercher un bouton absent — la faute
+    # symétrique de celle corrigée la veille. Seul le cycle de vie le nomme,
+    # parce qu'il vient de le faire apparaître.
+    assert "« Reprendre »" not in detail["message"], (
+        "un refus ne nomme un bouton que là où ce bouton est certain d'exister")
     assert "/1.0/" not in detail["message"], (
         "aucun chemin de l'API interne d'Incus sous les yeux de l'exploitant (§20)")
 

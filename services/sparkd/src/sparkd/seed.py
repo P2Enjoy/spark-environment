@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 
 from .app import create_app
 from .config import Config, load
+from .incus import InstanceAbsente
 
 #: Mot de passe de la protection de démonstration (SPK-34). Ce n'est PAS un
 #: secret : la protection est un garde-fou, pas un contrôle d'accès (§35.1), et
@@ -141,7 +142,21 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
            "cpu_reservation": 0.25, "memory_bytes": 512 * MIO, "storage_bytes": 5 * GIO,
            "network_bps": 50 * MBIT}, demarrer=False)
     incus.created.pop("orphelin", None)
-    if "orphelin" in incus.created:
+    # SPK-67 : la perte est ÉCRITE, pas seulement oubliée. Le seed s'exécute dans
+    # un AUTRE processus que `sparkd` : sans cette écriture, le pilote relit son
+    # état au démarrage du service et l'instance REPARAÎT. Mesuré le 2026-08-21
+    # en cliquant : « Prendre un instantané » sur ce Spark RÉUSSISSAIT, alors que
+    # sa cellule était censée avoir disparu.
+    incus._persist()
+    # La garde vérifie ce que le PRODUIT verra, et non ce que le seed se
+    # rappelle. L'ancienne interrogeait `incus.created`, c'est-à-dire la mémoire
+    # dont on venait de retirer l'entrée : elle ne pouvait pas échouer, et elle
+    # n'a rien vu quand la perte a cessé d'être effective.
+    try:
+        incus.instance_state("orphelin")
+    except InstanceAbsente:
+        pass
+    else:
         raise SeedError("l'instance « orphelin » devait avoir disparu du pilote")
 
     # --- Refus d'admission RÉEL : un vrai 409 du contrôle d'admission (§28.5).

@@ -520,13 +520,26 @@ def create_app(config: Config) -> FastAPI:
         diagnostique rien de plus que le nom déjà présent. Elle reste attachée à
         l'exception chaînée, donc au journal du service.
         """
-        suite = ("Le Spark passe en panne." if en_panne
-                 else "Ce geste est impossible tant qu'elle n'est pas là.")
+        # Le message ne nomme un BOUTON que là où ce bouton est certain d'être
+        # affiché. Vu à l'écran le 2026-08-21 : sur un Spark « arrêté », l'écran
+        # offre « Démarrer » et « Supprimer » — pas « Reprendre », qui n'apparaît
+        # qu'en panne. Un refus qui envoie chercher « Reprendre » fait donc
+        # chercher un bouton absent, exactement la faute que ce même message
+        # avait commise dans l'autre sens la veille (§1.5 bis).
+        #
+        # Le cycle de vie, lui, VIENT de mettre le Spark en panne : les deux
+        # boutons y sont garantis, et les nommer est ce qui aide le plus.
+        if en_panne:
+            suite = ("Le Spark passe en panne. Deux issues, toutes deux par le "
+                     "produit : « Reprendre » reconstruit la cellule, "
+                     "« Supprimer » rend sa place au pool.")
+        else:
+            suite = ("Ce geste est impossible tant qu'elle n'est pas là. Depuis "
+                     "l'écran du Spark, la cellule peut être reconstruite, ou "
+                     "le Spark supprimé pour rendre sa place au pool.")
         raison = (
             f"La cellule du Spark « {spark['name']} » a disparu : Incus ne la "
-            f"connaît plus. {suite} Deux issues, toutes deux par le produit : "
-            "« Reprendre » reconstruit la cellule, « Supprimer » rend sa place "
-            "au pool.")
+            f"connaît plus. {suite}")
         return HTTPException(status_code=409, detail={
             "error": "cellule_absente", "message": raison})
 
@@ -589,7 +602,7 @@ def create_app(config: Config) -> FastAPI:
         # démarrage en désignant un fichier qui n'existe pas encore.
         try:
             _apply_env(connection, service.get(connection, spark["id"]))
-        except (IncusError, env_service.CleError):
+        except (IncusError, InstanceAbsente, env_service.CleError):
             # L'instance existe : ne pas faire échouer sa création. L'écart sera
             # repris au prochain démarrage, qui repose les fichiers (§43.5.2).
             pass
@@ -767,7 +780,7 @@ def create_app(config: Config) -> FastAPI:
                 # cellule qui gagnerait.
                 try:
                     _apply_env(connection, service.by_name(connection, name))
-                except (IncusError, env_service.CleError):
+                except (IncusError, InstanceAbsente, env_service.CleError):
                     pass
                 return rendu
             except service.NotFound as erreur:
@@ -1221,7 +1234,7 @@ def create_app(config: Config) -> FastAPI:
                 "SELECT id FROM spark WHERE incus_name IS NOT NULL").fetchall():
             try:
                 _apply_env(connection, service.get(connection, rangee["id"]))
-            except (IncusError, env_service.CleError, service.NotFound):
+            except (IncusError, InstanceAbsente, env_service.CleError, service.NotFound):
                 continue
 
     @app.get("/v1/env", tags=["environnement"])
@@ -1295,7 +1308,7 @@ def create_app(config: Config) -> FastAPI:
             except env_service.EnvError as erreur:
                 raise HTTPException(status_code=422, detail={
                     "error": "invalid_name", "message": str(erreur)}) from erreur
-            except (IncusError, env_service.CleError):
+            except (IncusError, InstanceAbsente, env_service.CleError):
                 # Le registre est écrit ; la cellule sera rattrapée au prochain
                 # démarrage. Le geste n'échoue pas pour autant (§43.5.2).
                 pass
@@ -1319,7 +1332,7 @@ def create_app(config: Config) -> FastAPI:
                 entree = env_service.cocher(connection, spark["id"], variable)
                 try:
                     _apply_env(connection, service.by_name(connection, name))
-                except (IncusError, env_service.CleError):
+                except (IncusError, InstanceAbsente, env_service.CleError):
                     # Meme regle qu'a la pose : le registre est ecrit, la cellule
                     # sera rattrapee au prochain demarrage (§43.5.2).
                     pass
@@ -1349,7 +1362,7 @@ def create_app(config: Config) -> FastAPI:
                 decoche = env_service.decocher(connection, spark["id"], variable)
                 try:
                     _apply_env(connection, service.by_name(connection, name))
-                except (IncusError, env_service.CleError):
+                except (IncusError, InstanceAbsente, env_service.CleError):
                     pass
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
@@ -1369,7 +1382,7 @@ def create_app(config: Config) -> FastAPI:
                     connection, "spark", spark["id"], variable)
                 try:
                     _apply_env(connection, service.by_name(connection, name))
-                except (IncusError, env_service.CleError):
+                except (IncusError, InstanceAbsente, env_service.CleError):
                     pass
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
@@ -1998,7 +2011,7 @@ def create_app(config: Config) -> FastAPI:
                         # reposer ici n'est pas une précaution : sans cela, un
                         # Spark redémarré perdrait ses secrets.
                         _apply_env(connection, service.by_name(connection, name))
-                    except (IncusError, env_service.CleError):
+                    except (IncusError, InstanceAbsente, env_service.CleError):
                         # Le Spark tourne ; l'écart sera repris à la
                         # réconciliation plutôt que de faire échouer le démarrage.
                         pass
