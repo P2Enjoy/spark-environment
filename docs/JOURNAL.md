@@ -7460,3 +7460,23 @@ changement, conformément à sa propre règle et à `CLAUDE.md` §5. Le journal 
 les décisions ; les travaux qui en découlent devront être ouverts comme unités
 explicites, avec leur spécification et leurs preuves, et non recréés comme des
 incohérences ouvertes.
+
+---
+
+## 2026-08-21 · SPK-64 — la sélection est vérifiée à l'écran
+
+Le catalogue Forge est devenu une destination explicite, et la facette
+*Environnement* de chaque Spark porte les cases qui font effectivement descendre
+une entrée. Une valeur propre masque une valeur cochée du même nom ; un secret ne
+révèle jamais sa valeur. Le parcours réel ajoute une entrée, constate son absence
+avant coche, la voit arriver puis disparaître après décochage.
+
+Les captures observées sont `e2e/captures/56-environnement.png`,
+`57-environnement-modale.png` et `82-environnement-catalogue-forge.png`.
+`make test` est vert après régénération du contrat : 999 tests runtime, 856 tests
+web, 8 gestes, 84 parcours E2E et 7 contrôles du manuel. SPK-64 est `[x]`.
+
+Le diagnostic isolé des deux fichiers runtime a atteint 90 s sans sortie dans
+cet environnement, alors que la campagne complète venait de les couvrir au vert ;
+aucune régression ne lui est attribuée. La prochaine session reprend une unité
+productive selon le §4.2.

@@ -1,7 +1,7 @@
 """@verifies docs/BACKLOG.md#SPK-67 · docs/DAT.md §12.1.4 (ce que le contrat
             exige des appelants), §12.1.2 (le contrat est uniforme), §14.6 (une
             cellule absente ne vaut PAS démarrage réussi), §33.3 ·
-            docs/CONTINGENCE.md §4.5 · docs/INCONSISTENCY_REPORT.md INC-15
+            docs/CONTINGENCE.md §4.5 · docs/JOURNAL.md (décision INC-15)
 
 Uniformiser le contrat d'échec du pilote CRÉE l'absence là où ces routes n'en
 voyaient pas : sans traitement, `InstanceAbsente` s'y échapperait en erreur

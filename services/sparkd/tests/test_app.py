@@ -1191,6 +1191,8 @@ def test_les_routes_d_environnement_sont_au_CONTRAT(tmp_path):
     assert "get" in chemins["/v1/env"]
     assert {"put", "delete"} <= set(chemins["/v1/env/{name}"])
     assert "get" in chemins["/v1/sparks/{name}/env"]
+    assert {"post", "delete"} <= set(
+        chemins["/v1/sparks/{name}/env/selection/{variable}"])
     assert {"put", "delete"} <= set(chemins["/v1/sparks/{name}/env/{variable}"])
 
 
