@@ -4751,7 +4751,7 @@ Elle est ouverte au seul **dépannage**, sous quatre conditions cumulatives :
 - la bannière reste visible pendant toute la session : on ne doit pas oublier par
   quel chemin on est entré.
 
-#### 37.3.1 « Ne répond pas » n'est pas « refuse la clé » — mesuré le 2026-08-20
+#### 37.3.1 « Ne répond pas » n'est ni « refuse la clé » ni « clé d'hôte changée » — mesuré le 2026-08-20
 
 La première condition ci-dessus dit « son `sshd` ne répond pas ». En l'écrivant
 en code, il a fallu trancher un cas qu'elle ne couvrait pas, et qui décide de
@@ -4764,12 +4764,20 @@ pas le même geste :
 |---|---|---|
 | connexion refusée, expirée, réseau injoignable | **le dépannage s'ouvre** | rien n'écoute : aucun accès normal n'existe |
 | `Permission denied`, `publickey` | **refusé**, renvoi vers les clés | le chemin normal existe ; il manque un accès, qui se réaccorde (§17) |
+| `REMOTE HOST IDENTIFICATION HAS CHANGED` | **refusé**, clé d'hôte changée nommée | ni la console ni le dépannage ne doivent accepter ou effacer une empreinte à la place de l'opérateur (§22.4 bis) |
 | autre chose, non reconnue | **refusé** | ouvrir sur un doute reviendrait à ouvrir toujours : toute panne finit par produire un message inconnu |
 | `ssh` introuvable sur le poste | **refusé** | sinon le dépannage s'ouvrirait parce que la CONSOLE est mal installée |
 
 Confondre les deux premières lignes ferait du dépannage la façon ordinaire
 d'entrer le jour où une clé n'est plus accordée — c'est-à-dire précisément ce que
 ce paragraphe existe pour empêcher.
+
+Le troisième cas est différent d'un refus de clé utilisateur : le `sshd` répond,
+mais OpenSSH a constaté une identité d'hôte incompatible avec l'histoire locale.
+L'écran le dit explicitement et **aucune commande Docker ou terminal ne part**.
+La console ne lance ni `ssh-keygen -R`, ni `StrictHostKeyChecking=no`, ni une
+acceptation silencieuse; la réconciliation de l'empreinte reste une décision de
+l'opérateur après vérification du remplacement de la cellule.
 
 Le sondage emprunte **exactement** le chemin du terminal normal — même rebond,
 mêmes options — et n'exécute que `true`. Sonder autrement mesurerait un autre
@@ -5126,6 +5134,7 @@ tranche — pas la sortie, qui est vide dans deux cas sur trois :
 | commande présente, démon muet | `1` | Docker est installé mais son moteur ne répond pas |
 | commande rendue, **zéro ligne** | `0` | Docker tourne, aucun conteneur |
 | le `sshd` ne répond pas | — | le cas du §37.2, dit dans ses termes |
+| la clé d'hôte SSH a changé | — | changement d'empreinte nommé; aucune commande n'est envoyée (§37.3.1) |
 | la cellule ne tourne pas | — | le Spark est arrêté |
 
 Les deux premiers cas se confondent à l'œil — « Docker ne marche pas » — et

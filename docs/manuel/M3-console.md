@@ -64,7 +64,10 @@ pour que vous sachiez le retirer d'où vous l'aviez copié.
 
 La vérification de la clé d'hôte n'est **jamais** désactivée par le produit, pas
 même pour simplifier une première connexion. Un changement de clé d'hôte est un
-signal, et vous devez le voir.
+signal, et vous devez le voir. La console nomme ce cas et n'envoie aucune
+commande au Spark; elle ne retire ni n'accepte elle-même l'ancienne empreinte.
+Vérifiez d'abord pourquoi la cellule a été remplacée, puis réconciliez la clé
+avec OpenSSH selon votre procédure d'exploitation.
 
 ### Quand le tunnel tombe
 
