@@ -7044,3 +7044,76 @@ périmée. Console du responsable redémarrée : l'onglet Docker rend `helo-web-
 avec ses mesures, et ses quatre serveurs ont survécu, ce qui éprouve au passage
 la fusion d'inventaire livrée une heure plus tôt.
 
+
+## 2026-08-21 · SPK-37 — l'empreinte n'atteignait jamais le journal
+
+**Unité choisie au §4.2 point 2.** La dernière entrée du journal désigne SPK-64,
+mais c'est l'unité d'une session voisine, qui a annoncé son terrain. J'ai pris la
+première `[~]` du plan hors de ce terrain, et dont l'écart était mesurable ici :
+SPK-37, dont le relevé de l'empreinte SSH n'avait jamais rencontré de vrai
+`sshd`.
+
+**Coordination** : terrain annoncé au pair avant d'écrire une ligne
+— `apps/webui/host/tunnel.js`, `DAT.md` §21.6.3, et les trois fichiers de suivi.
+Son `011_env_selection.sql` non suivi était dans l'arbre au démarrage : je ne l'ai
+**ni stashé ni touché**, et je l'en ai prévenu — le §1.2 appliqué à la lettre le
+lui aurait arraché des mains.
+
+### Le défaut, et il annulait toute l'unité
+
+`Server accepts key` est un message `debug1:`. Le produit demandait
+`LogLevel=VERBOSE`, qui s'arrête un cran avant. Mesuré, tunnel ouvert avec les
+options exactes du produit contre la Forge de validation :
+
+```
+LogLevel=VERBOSE ->  1 ligne,  0 « Server accepts key »
+LogLevel=DEBUG1  -> 81 lignes, 1 « Server accepts key »
+```
+
+La branche « empreinte déterminée » du §21.6.3 ne se produisait donc **jamais**.
+Et rien ne le signalait : l'en-tête retombait sur `console/<serveur>`, qui est une
+valeur de repli **légitime** — donc impossible à distinguer d'un repli mérité.
+C'est le mode de panne le plus coûteux : le contrat paraissait tenu.
+
+**L'analyseur, lui, était juste.** Sur le flux réel il rend l'empreinte du poste
+et ignore celle de l'**hôte**, qui apparaît pourtant AVANT. Une expression qui
+aurait pris « la première `SHA256:` » aurait attribué chaque geste à l'empreinte
+du serveur — identique pour tous les opérateurs, donc une identité qui n'identifie
+personne, et qui en aurait l'air. Une preuve garde désormais ce piège.
+
+### Le second défaut, trouvé en corrigeant le premier
+
+Le flux d'erreur était lu **bloc par bloc**, et seule la première ligne du bloc
+était testée. Tout ce qui suivait une ligne bénigne atterrissait dans
+`lastError`, que `describe()` publie. Sous VERBOSE, la seule ligne émise —
+« Authenticated to … using "publickey" » — y tombait à **chaque tunnel réussi**.
+Passer à 81 lignes en aurait fait la règle plutôt que l'exception. Corrigé :
+lecture ligne par ligne, et un succès d'authentification n'est plus pris pour une
+panne.
+
+### Ce qui est prouvé
+
+La chaîne entière, contre la Forge : tunnel réel → empreinte relevée → en-tête →
+geste → journal.
+
+```
+env.set | classe: human | acteur: console/validation key=SHA256:Vf2N7ryPnZ…
+```
+
+Les entrées antérieures au correctif portent, dans le **même** journal,
+`console/forge1` sans clé. L'avant et l'après se lisent côte à côte.
+
+4 preuves de plus (29 sur le tunnel), dont deux vérifiées comme **échouant sans
+le correctif**. Le témoin de mesure a été retiré de la Forge.
+
+### Où reprendre
+
+**INC-14** consigné, non corrigé : un sondage raté laisse « fetch failed » dans
+`lastError` d'un tunnel `ready` qui sert les requêtes. Même champ que le défaut
+que j'ai corrigé, mais autre chemin — il appartient au contrat de santé du tunnel
+(SPK-16, §22.3), pas à l'acteur du journal.
+
+Restent bloquées : **SPK-28** (une machine à commander), **SPK-61** (poser la clé
+restreinte, geste délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel),
+**SPK-43** (route de dépannage de bout en bout), **SPK-17** (CI jamais exécutée),
+**SPK-36** (reconstruction d'un Spark, et neuf scénarios à instruire).

@@ -53,6 +53,14 @@
   contention » — vrai, mais trop modeste.
 
 ### Corrigé
+- **Le journal nomme enfin la clé qui a agi** (SPK-37). L'empreinte de la clé
+  SSH n'atteignait **jamais** le journal : la console demandait à OpenSSH un
+  niveau de diagnostic qui n'émet pas la ligne nommant la clé acceptée. Chaque
+  geste était donc attribué au seul serveur, sans que rien ne le signale — la
+  valeur de repli est légitime, et ne se distinguait pas d'un repli mérité.
+  Mesuré et corrigé contre un vrai serveur SSH.
+- **Un tunnel qui s'ouvre bien n'affiche plus de diagnostic** (SPK-37). Le
+  message de succès d'OpenSSH était rangé parmi les erreurs et rendu à l'écran.
 - **La modale d'environnement se ferme désormais par « Échap »** (SPK-58). Elle
   se rouvrait dans le même tour : la fermeture s'exécutait, puis la repeinte la
   rappelait aussitôt. La touche paraissait sans effet.
