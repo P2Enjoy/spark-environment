@@ -832,6 +832,61 @@
         "tags": [
           "sparks"
         ]
+      },
+      "patch": {
+        "description": "Ajuste les quotas d'un Spark existant (SPK-57, docs/DAT.md §49).\n\nTrois refus, et ils ne se confondent pas :\n\n- `403 spark_protected` — le verrou porte sur l'objet, et redimensionner\n  est une écriture. La protection se lève d'abord (§35.2, §49.5) ;\n- `409 admission_refused` — « il n'y a pas la place sur la Forge » ;\n- `409 shrink_refused` — « ce que vous voulez retirer est UTILISÉ dans la\n  cellule ». Les mélanger enverrait l'exploitant libérer de la place là\n  où le problème n'est pas (§49.3).\n\nL'usage réel de la cellule est relevé AVANT d'agir : sans lui, les refus\nde rétrécissement ne peuvent pas être prononcés, et le produit\naccepterait de livrer des processus à l'OOM killer.",
+        "operationId": "resize_spark_v1_sparks__name__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Resize Spark V1 Sparks  Name  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resize Spark",
+        "tags": [
+          "sparks"
+        ]
       }
     },
     "/v1/sparks/{name}/bootstrap": {

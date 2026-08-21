@@ -1351,6 +1351,75 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             return {"sparks": service.listing(connection)}
 
+    @app.patch("/v1/sparks/{name}", tags=["sparks"])
+    def resize_spark(name: str, body: dict = Body(...)) -> dict:
+        """Ajuste les quotas d'un Spark existant (SPK-57, docs/DAT.md §49).
+
+        Trois refus, et ils ne se confondent pas :
+
+        - `403 spark_protected` — le verrou porte sur l'objet, et redimensionner
+          est une écriture. La protection se lève d'abord (§35.2, §49.5) ;
+        - `409 admission_refused` — « il n'y a pas la place sur la Forge » ;
+        - `409 shrink_refused` — « ce que vous voulez retirer est UTILISÉ dans la
+          cellule ». Les mélanger enverrait l'exploitant libérer de la place là
+          où le problème n'est pas (§49.3).
+
+        L'usage réel de la cellule est relevé AVANT d'agir : sans lui, les refus
+        de rétrécissement ne peuvent pas être prononcés, et le produit
+        accepterait de livrer des processus à l'OOM killer.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "resize")
+                usage = _usage_de_la_cellule(spark)
+                return service.decorate(service.resize(
+                    connection, name, body or {},
+                    metadata_margin=config.storage_metadata_margin_bytes,
+                    usage=usage,
+                ))
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except service.AdmissionRefused as refus:
+                raise HTTPException(status_code=409, detail={
+                    "error": "admission_refused",
+                    "message": refus.decision.reason,
+                    "shortfalls": [
+                        {"resource": m.resource.value, "requested": m.requested,
+                         "available": m.available, "missing": m.missing}
+                        for m in refus.decision.shortfalls
+                    ],
+                }) from refus
+            except service.ShrinkRefused as refus:
+                raise HTTPException(status_code=409, detail={
+                    "error": "shrink_refused",
+                    "message": str(refus),
+                    "resource": refus.ressource,
+                    "requested": refus.demande,
+                    "in_use": refus.occupe,
+                }) from refus
+            except service.SparkError as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "refused", "message": str(erreur)}) from erreur
+
+    def _usage_de_la_cellule(spark: dict) -> dict | None:
+        """Ce que la cellule occupe RÉELLEMENT (§49.3).
+
+        Rend `None` quand la mesure n'est pas possible — Spark sans cellule,
+        arrêté, ou runtime muet. C'est une RÉPONSE, pas une panne : sans mesure,
+        les refus de rétrécissement ne sont simplement pas prononcés, et l'unité
+        le dit plutôt que d'inventer une occupation (§31.2).
+        """
+        if not spark.get("incus_name") or spark.get("state") != "running":
+            return None
+        try:
+            etat = app.state.incus.instance_state(spark["incus_name"])
+        except IncusError:
+            return None
+        memoire = (etat or {}).get("memory", {}).get("usage")
+        return {"memory_bytes": memoire} if memoire else None
+
     @app.post("/v1/sparks", tags=["sparks"], status_code=201)
     def create_spark(spec: dict = Body(...)) -> dict:
         with registry() as connection:

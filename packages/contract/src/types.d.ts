@@ -364,7 +364,24 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Resize Spark
+         * @description Ajuste les quotas d'un Spark existant (SPK-57, docs/DAT.md §49).
+         *
+         *     Trois refus, et ils ne se confondent pas :
+         *
+         *     - `403 spark_protected` — le verrou porte sur l'objet, et redimensionner
+         *       est une écriture. La protection se lève d'abord (§35.2, §49.5) ;
+         *     - `409 admission_refused` — « il n'y a pas la place sur la Forge » ;
+         *     - `409 shrink_refused` — « ce que vous voulez retirer est UTILISÉ dans la
+         *       cellule ». Les mélanger enverrait l'exploitant libérer de la place là
+         *       où le problème n'est pas (§49.3).
+         *
+         *     L'usage réel de la cellule est relevé AVANT d'agir : sans lui, les refus
+         *     de rétrécissement ne peuvent pas être prononcés, et le produit
+         *     accepterait de livrer des processus à l'OOM killer.
+         */
+        patch: operations["resize_spark_v1_sparks__name__patch"];
         trace?: never;
     };
     "/v1/sparks/{name}/bootstrap": {
@@ -1211,6 +1228,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resize_spark_v1_sparks__name__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
