@@ -761,3 +761,61 @@ def test_le_redimensionnement_est_ATTEIGNABLE_dans_le_contrat(tmp_path):
     c = _app(tmp_path)
     chemins = c.get("/openapi.json").json()["paths"]
     assert "patch" in chemins["/v1/sparks/{name}"]
+
+
+def test_le_quota_est_POSE_sur_la_cellule_apres_le_registre(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.2
+
+    Le pire des cas que la DoD de l'unité nomme est « un quota changé au registre
+    mais pas dans le noyau ». `applied` distingue « en vigueur » de « promis »."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    vu = c.patch("/v1/sparks/crm-production",
+                 json={"memory_reservation_bytes": 4 * 1024**3})
+    assert vu.status_code == 200
+    assert vu.json()["applied"] is True
+    assert "apply_error" not in vu.json()
+
+
+def test_sans_CELLULE_il_n_y_a_RIEN_a_poser_et_ce_n_est_pas_un_echec(tmp_path):
+    """§14.6 : « rien à poser » n'est ni un succès de pose ni un échec. Les
+    confondre ferait chercher une panne sur un Spark encore en attente."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())  # naît sans cellule
+
+    vu = c.patch("/v1/sparks/crm-production",
+                 json={"memory_reservation_bytes": 4 * 1024**3})
+    assert vu.status_code == 200
+    assert vu.json()["applied"] is None
+    # Le registre, lui, a bien été écrit.
+    assert vu.json()["memory_reservation_bytes"] == 4 * 1024**3
+
+
+def test_un_echec_de_POSE_ne_defait_PAS_le_registre_et_le_DIT(tmp_path):
+    """§49.2 : annuler ferait perdre l'admission déjà accordée et rouvrirait la
+    course que la transaction du §14.2 vient de fermer. Mais l'écart ne se tait
+    pas — c'est ce qui distingue « en vigueur » de « promis »."""
+    from sparkd.incus import IncusError
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "e.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    def refuser(name, config):
+        raise IncusError("le noyau a refusé la nouvelle limite mémoire")
+
+    app.state.incus.update_instance_config = refuser
+
+    vu = c.patch("/v1/sparks/crm-production",
+                 json={"memory_reservation_bytes": 4 * 1024**3})
+    assert vu.status_code == 200, "le geste n'échoue pas : le registre est écrit"
+    assert vu.json()["applied"] is False
+    assert "refusé" in vu.json()["apply_error"]
+    # Le registre porte bien la nouvelle valeur : on surestime l'occupation
+    # plutôt que de la sous-estimer, comme à la création.
+    assert c.get("/v1/sparks/crm-production").json()["memory_reservation_bytes"] \
+        == 4 * 1024**3
