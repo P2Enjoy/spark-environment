@@ -6423,6 +6423,55 @@ dans un fichier où elle n'est pas.
 rende : on le remplace, ou on le retire. Une route de révélation, même protégée,
 finirait par être appelée par un outil branché sur l'API, et le §43.3 tomberait.
 
+**Les routes, écrites le 2026-08-21 avant de les coder.** Elles suivent le couple
+que le produit emploie déjà pour les clés (§17) — un jeu de la Forge, un geste
+par Spark :
+
+| Route | Ce qu'elle fait |
+|---|---|
+| `GET /v1/env` | le jeu de la **Forge** |
+| `PUT /v1/env/{nom}` | pose ou remplace une entrée de la Forge |
+| `DELETE /v1/env/{nom}` | la retire |
+| `GET /v1/sparks/{nom}/env` | le jeu **RÉSOLU** du Spark, avec l'origine de chaque valeur |
+| `PUT /v1/sparks/{nom}/env/{variable}` | pose ou remplace une entrée du Spark |
+| `DELETE /v1/sparks/{nom}/env/{variable}` | la retire |
+
+Le corps d'un `PUT` porte `{"value": "…", "secret": true|false}`.
+
+**`PUT` et non `POST`**, et le nom est dans le CHEMIN : le geste est
+idempotent — « cette variable vaut ceci » — et rejouer la même requête doit
+donner le même état, pas une seconde entrée. Un `POST` sur la collection ferait
+porter le nom au corps, et deux requêtes identiques deviendraient deux gestes
+différents selon que l'entrée existait ou non.
+
+**Écrire repose les fichiers**, c'est le « au changement » du §43.2. Sans cela,
+le registre et la cellule diraient deux choses différentes jusqu'au prochain
+démarrage.
+
+#### 43.9.5 bis Un geste de FORGE face à un Spark protégé
+
+Le §43.9.5 dit qu'un Spark protégé refuse une écriture qui LE vise : `423`. Il ne
+disait pas ce qu'il advient d'une écriture au niveau de la **Forge** qui le
+touche par héritage — et la question est réelle, puisqu'une variable de la Forge
+descend dans tous ses Sparks.
+
+**Décision : la convention EXISTE déjà dans le produit**, posée pour la
+révocation d'une clé (§35.2, route `DELETE /v1/ssh-keys/{label}`), et on s'y
+range plutôt que d'en inventer une troisième — **informer, puis accepter** :
+
+1. le premier appel **nomme** les Sparks protégés touchés et refuse en `409
+   protected_sparks_affected` ;
+2. le second porte `accept_protected` et aboutit.
+
+Aucun mot de passe n'est demandé, aucune protection n'est levée. S'il n'y a aucun
+Spark protégé, il n'y a **aucun refus**.
+
+Le motif de ne pas refuser sèchement est le même qu'aux clés : un refus ferme
+gèlerait toute la Forge dès qu'un seul Spark est protégé, et l'exploitant
+lèverait alors la protection pour contourner — ce qui protégerait moins, pas
+plus. Le refus par défaut sert à ce qu'on ne touche pas un Spark gelé **sans le
+savoir**, pas à l'interdire.
+
 #### 43.9.6 Le découpage, et où en est l'unité
 
 Cette unité est trop large pour une session ; le découpage est écrit ici plutôt
