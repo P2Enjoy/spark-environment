@@ -7720,3 +7720,41 @@ et aucune ligne d'audit de succès. Les **77 preuves ciblées** sont vertes. Le
 prochain geste est volontairement la même cellule `briefing-e2e`, restée dans
 l'état incomplet mesuré, afin de prouver une reprise et non une installation
 neuve.
+
+---
+
+## 2026-08-21 · SPK-54 / SPK-60 — le socket rootless est réel, la confiance SSH bloque la dernière preuve
+
+La reprise de `briefing-e2e` sur la Forge `51.158.54.202` a enfin rendu les six
+composants d'amorçage présents, dont Docker **rootless**, Docker CE 29.7.2 et le
+greffon Compose. Ce relevé n'est plus l'existence trompeuse du compte : il exige
+le service utilisateur actif et le `docker info` du socket rootless. La première
+partie de SPK-54 — le démon réel — est donc observée sur la cellule, pas déduite
+du pilote.
+
+La comparaison visuelle a ensuite trouvé un écart de produit : l'onglet Docker
+de `helo`, en Docker enraciné, liste `helo-web-1`; la même vue sur
+`briefing-e2e` rendait seulement « La console n'a pas pu interroger ce Spark ».
+Le contrat a d'abord été écrit, puis la console a été corrigée pour sélectionner
+à chaque commande le socket réellement disponible : `spark-docker`,
+`XDG_RUNTIME_DIR` et `DOCKER_HOST` pour rootless, Docker enraciné sinon. Cette
+sélection couvre lecture, inspection, journaux, gestes et terminal de conteneur;
+un échec rootless n'est jamais rejoué sur le démon root. Le briefing partage ce
+fait — mode, compte, gabarit de socket et source de l'UID — et M6/runbook le
+documentent sans introduire de secret.
+
+La mesure directe du même rebond a toutefois révélé la cause restante :
+OpenSSH refuse `briefing-e2e` parce que sa **clé d'hôte a changé**. Ce n'est ni
+un socket Docker ni une permission de clé utilisateur. Effacer l'empreinte ou
+passer `StrictHostKeyChecking=no` aurait masqué un signal de sécurité. Le
+contrat, l'hôte console et le terminal distinguent désormais ce cas; l'écran
+observé dit qu'aucune commande Docker n'a été envoyée et que la console
+n'accepte ni n'efface l'empreinte elle-même.
+
+Les preuves ciblées sont vertes : 122 tests Node couvrent le contexte Docker,
+le terminal et ce verdict; le modèle rootless du briefing est couvert par un
+pytest pur; typecheck et `make contract-check` passent. Les commits sont
+`15966ee`, `8e0c5f8`, `a087553` et `ebf2f70`, tous poussés. La prochaine session
+doit faire vérifier puis réconcilier l'empreinte de la cellule avant de déposer
+une pile Compose joignable et d'actualiser le briefing réel. SPK-54 et SPK-60
+restent donc `[~]`, non clos.

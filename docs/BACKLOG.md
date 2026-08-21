@@ -2990,6 +2990,18 @@ et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
      capable de `docker compose up` : elle exige une Forge réelle avec Incus, et
      c'est la même limite qu'au §39.7.
 
+**Reprise réelle du 2026-08-21.** Le relevé de `briefing-e2e`, réamorcée sur la
+Forge `51.158.54.202`, rend désormais Docker **rootless**, Docker CE et Compose
+installés : le démon utilisateur et son socket répondent réellement. La console
+a été corrigée pour choisir ce socket sous `spark-docker` pour la lecture, les
+gestes et les terminaux de conteneur; le briefing porte le même contexte. La
+comparaison visuelle garde `helo` lisible sur Docker enraciné. La cellule
+rootless ne peut pas encore achever la même lecture : OpenSSH constate que sa
+clé d'hôte a changé. C'est nommé explicitement à l'écran, sans aucune commande
+Docker envoyée et sans effacement automatique de `known_hosts`. Il reste à
+vérifier puis réconcilier cette empreinte, et à rejouer le Compose joignable
+depuis le seul briefing sur le paquet qui contient ces deux corrections.
+
 ### [~] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
 
 Audit mené sur la Forge réelle pendant la mise en place de `helo`. La posture est
@@ -3683,6 +3695,14 @@ DAT §42.2 bis distingue cette reprise d'une bascule et exige `systemd-container
 Le correctif local est couvert : une reprise n'exécute pas le démon root, et un
 code d'installation non nul répond `bootstrap_failed` sans audit de succès. La
 preuve reste à rejouer sur `briefing-e2e` avec le paquet corrigé.
+
+**Contexte rootless complété le 2026-08-21.** Le modèle unique ajoute le mode
+Docker et, lorsqu'il est rootless, `spark-docker`, le socket
+`/run/user/<uid>/docker.sock` et la source de cet UID. Ni valeur de secret ni
+privilège supplémentaire ne sont introduits. Le manuel et le runbook disent le
+même contexte. La preuve pure est verte; la projection réelle attend la pose du
+paquet courant et la réconciliation explicite de la clé d'hôte changée de
+`briefing-e2e`, avant le Compose joignable qui clôturera avec SPK-54.
 
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 

@@ -75,6 +75,15 @@
   contention » — vrai, mais trop modeste.
 
 ### Corrigé
+- **Le contexte Docker rootless est maintenant cohérent entre la console et le
+  briefing** (SPK-54 / SPK-60) : chaque commande de lecture ou d'action emploie
+  le socket de `spark-docker` uniquement lorsqu'il répond; un échec n'est jamais
+  rejoué sur Docker root. Le briefing, M6 et le runbook indiquent le compte et
+  le gabarit de socket nécessaires à une pile rootless.
+- **Un changement de clé d'hôte SSH est nommé sans être contourné** (SPK-43) :
+  l'onglet Docker et le diagnostic de terminal distinguent cette empreinte
+  changée d'un Spark injoignable. Aucune commande ne part, et la console
+  n'accepte ni n'efface automatiquement `known_hosts`.
 - **La reprise Docker rootless constate maintenant un démon réellement
   utilisable** (SPK-54) : le compte de service seul ne suffit pas. Le script
   rejoint son bus D-Bus avec `runuser`, vérifie le service et son socket, et
