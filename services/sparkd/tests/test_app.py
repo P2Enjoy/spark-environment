@@ -1225,3 +1225,35 @@ def test_quitter_le_mode_DEDIE_rend_ses_coeurs_au_pool(tmp_path):
     with connect(tmp_path / "c.db") as registre:
         assert core_pool.dedicated_cpus(registre, spark["id"]) == [], \
             "les cœurs sont RENDUS au pool commun"
+
+
+def test_le_DISQUE_est_pose_AVANT_la_configuration(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-30, #SPK-57 · docs/DAT.md §8.8.1
+
+    MESURÉ sur la Forge de validation le 2026-08-21, sur un dataset SATURÉ :
+
+        ecrire la configuration -> ECHEC (backup.yaml: disk quota exceeded)
+        agrandir le device      -> REUSSIT, et la cellule respire aussitot
+
+    `backup.yaml` est écrit par Incus À L'INTÉRIEUR du jeu de données
+    contingenté. Poser la configuration en premier échoue donc précisément sur un
+    Spark plein — c'est-à-dire dans le seul cas où l'agrandissement est urgent.
+
+    L'ordre est le remède, et cette preuve le garde : un jour où l'on
+    réorganisera cette fonction, rien d'autre ne dira que l'ordre compte.
+    """
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "o.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    ordre = []
+    app.state.incus.update_root_size = lambda *a, **k: ordre.append("disque")
+    app.state.incus.update_instance_config = lambda *a, **k: ordre.append("config")
+
+    assert c.patch("/v1/sparks/crm-production",
+                   json={"storage_bytes": 12 * 1024**3}).status_code == 200
+    assert ordre == ["disque", "config"], (
+        "le disque se pose AVANT la configuration : l'inverse laisse un Spark "
+        "plein inadministrable (§8.8.1)")

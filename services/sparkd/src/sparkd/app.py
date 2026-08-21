@@ -1691,17 +1691,27 @@ def create_app(config: Config) -> FastAPI:
                 manifest, cpus, capacite, dedicated_cpus=epingles,
                 metadata_margin=app.state.config.storage_metadata_margin_bytes,
             )
-            app.state.incus.update_instance_config(
-                spark["incus_name"], traduit.config)
-            # La taille du disque ne vit PAS dans la configuration : elle vit
-            # dans le device `root`. MESURÉ sur la Forge de validation le
-            # 2026-08-21 — poser la seule configuration laissait le registre à
-            # 12 Gio et Incus à 10, et la route répondait pourtant
-            # `applied: true`. C'est le pire des cas que la DoD de SPK-57
-            # nomme : un quota changé au registre mais pas dans le noyau.
+            # LE DISQUE D'ABORD, LA CONFIGURATION ENSUITE, et l'ordre n'est
+            # pas indifférent — MESURÉ sur la Forge de validation le
+            # 2026-08-21 (docs/DAT.md §8.8.1) :
+            #
+            #   sur un dataset SATURÉ, écrire la configuration ÉCHOUE
+            #   (« backup.yaml: disk quota exceeded ») tandis qu'agrandir le
+            #   device RÉUSSIT et libère aussitôt la place.
+            #
+            # L'ordre inverse laissait donc un Spark plein INADMINISTRABLE —
+            # exactement la situation que la marge de métadonnées (§8.8) existe
+            # pour empêcher, et qu'elle n'empêche pas, le locataire pouvant
+            # remplir la marge.
+            #
+            # La taille ne vit pas dans la configuration mais dans le device
+            # `root` : poser la seule configuration laissait le registre à
+            # 12 Gio et Incus à 10, la route répondant pourtant `applied: true`.
             devices = traduit.as_payload(config_network, config_pool)["devices"]
             app.state.incus.update_root_size(
                 spark["incus_name"], devices["root"]["size"])
+            app.state.incus.update_instance_config(
+                spark["incus_name"], traduit.config)
         except (TranslationError, IncusError, KeyError) as erreur:
             return False, str(erreur)
         return True, None
