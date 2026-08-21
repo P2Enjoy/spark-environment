@@ -6374,3 +6374,59 @@ Tranche 2 du §43.9.6 : **la matérialisation** — poser `/etc/spark/env` et
 et après restauration d'instantané, sur le modèle d'`authorized_keys` (§17.1).
 Puis la tranche 3 (l'onglet *Environnement*) et la tranche 4 (manuel, seed, et la
 preuve du §43.0 essai F refaite sur le fichier que le produit écrit).
+
+## 2026-08-21 · SPK-58 — la matérialisation, et ce que la mesure a corrigé
+
+**Unité reprise** au §4.2 point 1 : tranche 2 du §43.9.6. La spécification
+existait ; je n'ai complété que le point qu'elle ne couvrait pas.
+
+### Ce que la mesure a trouvé, et qui changeait le contrat
+
+Le §43.1 disait *quel* fichier, pas *comment* y écrire une valeur. Mesuré sur
+Docker Compose v5.1.4, avec de vrais conteneurs :
+
+- **l'analyseur d'`env_file:` n'est PAS littéral.** `A=abc$def` arrive comme
+  `abc` : Compose substitue, la variable est inconnue, la fin disparaît. **Un
+  mot de passe contenant `$` serait tronqué en silence** ;
+- **les guillemets sont retirés** et **les blancs de tête et de fin rognés** ;
+- **l'apostrophe simple ne sauve pas** : l'idiome du shell `'ab'\''cd'` fait
+  échouer la lecture du **fichier entier** — une seule apostrophe dans un mot de
+  passe viderait tout l'environnement de la pile ;
+- **`docker run --env-file` prend tout littéralement**, lui. Deux analyseurs
+  différents pour deux commandes du même produit : il faut écrire pour le plus
+  exigeant.
+
+**Décision, mesurée** : guillemets doubles, échappement de `\`, `"` et `$`, et
+traduction des caractères de contrôle. Écrit au §43.9.7 et committé avant le
+code.
+
+### Ce qui a été codé
+
+`citer()` et `_citer_shell()` — deux grammaires, parce que Compose et le shell
+n'en ont pas la même. `fichiers()` rend les **trois** fichiers depuis l'état
+voulu, régénérés en entier. `_apply_env()` les pose dans la cellule **à la
+création**, **au démarrage** et **après restauration d'instantané**.
+
+### Deux corrections trouvées en codant
+
+- **le fichier de confort ne porte AUCUN secret.** Il vit dans `/etc`, donc sur
+  le jeu de données, donc **dans les instantanés** : y écrire les secrets
+  annulerait exactement ce que le §43.5.2 protège. Ma première version les y
+  mettait ;
+- **le chemin de la clé se DÉRIVE de celui du registre.** Le défaut codé en dur
+  faisait chercher la clé dans `/var/lib/sparkd` alors que le registre est
+  ailleurs — en test, en développement, sur une seconde Forge. La spécification
+  disait « à côté du registre » ; le code ne le faisait pas.
+
+### Vérifications
+
+**899 preuves Python** (886 + 13), dont trois qui touchent la cellule : la pose
+dès la création, la repose du fichier volatil au démarrage, et la reprise en main
+après une restauration qui ramenait un ancien fichier.
+
+### Où reprendre
+
+Il manque à la tranche 2 les **routes d'API** qui posent et retirent une entrée —
+donc le « au changement » du §43.2. Puis la tranche 3 (l'onglet *Environnement*)
+et la tranche 4 (manuel, seed, et la preuve du §43.0 essai F refaite sur le
+fichier que le produit écrit, qui **exige une Forge réelle**).

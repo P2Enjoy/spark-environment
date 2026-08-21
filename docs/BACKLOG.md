@@ -3170,9 +3170,32 @@ que laissé à la mémoire d'une conversation.
   première version de cette preuve ne prouvait rien : `str(sqlite3.Row)` ne rend
   pas son contenu, et elle cherchait le secret dans une adresse mémoire.
 
+**Tranche 2 — la matérialisation — est livrée le 2026-08-21, sauf ses routes.**
+
+- **La MESURE a corrigé le contrat** (§43.9.7, Docker Compose v5.1.4) :
+  l'analyseur d'`env_file:` n'est pas littéral. `A=abc$def` arrive comme `abc`,
+  les guillemets sont retirés, les blancs rognés — **un mot de passe contenant
+  `$` serait tronqué en silence**. Et l'idiome du shell `'ab'\''cd'` fait
+  échouer la lecture du **fichier entier** : une apostrophe dans un mot de passe
+  viderait tout l'environnement de la pile. D'où les guillemets doubles avec
+  échappement, mesurés sur de vrais conteneurs.
+- **Trois fichiers, deux grammaires** : Compose et le shell n'encodent pas
+  pareil, et l'idiome que l'un exige est celui que l'autre refuse.
+- **Le fichier de confort ne porte AUCUN secret** — trouvé en codant : il vit
+  dans `/etc`, donc dans les instantanés, et y écrire les secrets annulerait
+  exactement ce que le §43.5.2 protège.
+- **La clé se DÉRIVE du chemin du registre** — trouvé en codant aussi : le
+  défaut codé en dur la cherchait dans `/var/lib/sparkd` alors que le registre
+  est ailleurs en test et en développement.
+- **Posé à la création, au démarrage et après restauration.** Le fichier volatil
+  est reposé à chaque démarrage : sans cela, un Spark redémarré perdrait ses
+  secrets.
+- **Preuves** : 13 de plus — 10 sur l'écriture et les trois fichiers, 3 qui
+  vérifient ce que la CELLULE a reçu. 899 preuves Python.
+
 - **Reste avant `[x]`**, dans l'ordre du §43.9.6 :
-  1. **la matérialisation** — les deux fichiers posés dans la cellule à la
-     création, au changement, au démarrage et après restauration d'instantané ;
+  1. **les routes d'API** qui posent et retirent une entrée — donc le « au
+     changement » du §43.2, seul moment de la tranche 2 encore absent ;
   2. **l'écran** — onglet *Environnement*, l'origine de chaque valeur, le champ
      de secret en écriture seule ;
   3. **le manuel, le seed**, et la preuve du §43.0 essai F refaite sur le fichier

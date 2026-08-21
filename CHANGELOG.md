@@ -10,8 +10,15 @@
   au repos, n'est plus jamais rendue par l'API, n'entre jamais au journal, et
   l'écran n'en montrera que le nom, une empreinte et la date. La clé de
   chiffrement vit sur la Forge, est créée si elle manque et n'est jamais
-  remplacée. **Rien n'est encore posé dans la cellule** : c'est la tranche
-  suivante.
+  remplacée.
+- **L'environnement d'un Spark : les fichiers** (SPK-58, `docs/DAT.md` §43.9.7) —
+  deuxième tranche. Les fichiers `/etc/spark/env` et `/run/spark/secrets` sont
+  désormais **posés dans la cellule** à la création, à chaque démarrage et après
+  une restauration d'instantané. Le locataire les attache à ses services par un
+  `env_file:` à deux entrées. Les valeurs sont écrites de façon à **traverser
+  Compose intactes** — mesuré : sans cela, un mot de passe contenant `$` serait
+  tronqué en silence, et une apostrophe viderait tout l'environnement de la pile.
+  **Aucune route ne pose encore une valeur** : c'est la tranche suivante.
 - **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de
