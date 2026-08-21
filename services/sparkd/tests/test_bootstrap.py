@@ -389,6 +389,8 @@ def test_l_option_rootless_installe_ce_qu_il_faut_pour_qu_il_SURVIVE(tmp_path):
     assert corps["mode"] == bootstrap.ROOTLESS
     lances = json.dumps(client.app.state.incus.created[nom]["commands"])
     assert "docker-ce-rootless-extras" in lances
+    # Dépendance explicitement portée par le contrat de reprise Debian 13.
+    assert "systemd-container" in lances
     assert "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" in lances
     assert "dockerd-rootless-setuptool" in lances
     assert "machinectl shell" not in lances

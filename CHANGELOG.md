@@ -92,6 +92,7 @@
   n'accepte ni n'efface automatiquement `known_hosts`.
 - **La reprise Docker rootless constate maintenant un démon réellement
   utilisable** (SPK-54) : le compte de service seul ne suffit pas. Le script
+  porte aussi explicitement `systemd-container` dans sa préparation Debian 13,
   rejoint son bus D-Bus avec `runuser`, vérifie le service et son socket, et
   réserve ses sous-plages `subuid`/`subgid` dans l'idmap réel de la cellule
   Incus. Il reprend seulement ce démon quand aucun Docker enraciné ne tourne et

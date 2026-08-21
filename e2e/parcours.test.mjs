@@ -2869,7 +2869,11 @@ test('arrêter un conteneur : la confirmation NOMME l’effet, et le journal le 
     const inscrit = corps.entries[0];
     assert.ok(inscrit, 'le geste doit être au journal');
     assert.equal(inscrit.result, 'ok');
-    assert.equal(inscrit.target_id, 'crm-production');
+    // Le nom est humain et peut changer ; le journal cible l'identifiant
+    // immuable que sparkd a réellement attribué au Spark (§36.9, §37.7.4).
+    const { corps: sparkCible } = await pile.lireSparkd('/v1/sparks/crm-production');
+    assert.notEqual(sparkCible.id, sparkCible.name);
+    assert.equal(inscrit.target_id, sparkCible.id);
     assert.equal(JSON.parse(inscrit.payload).container, 'helo-web-1');
   });
 });
@@ -3004,7 +3008,11 @@ test('entrer dans un conteneur : la bannière le NOMME, le journal le distingue'
       '/v1/audit?action=spark.container_terminal_open');
     const inscrit = corps.entries[0];
     assert.ok(inscrit, 'l’ouverture doit porter l’action du CONTENEUR');
-    assert.equal(inscrit.target_id, 'crm-production');
+    // Même cible stable que les gestes : le conteneur est dans la charge,
+    // le Spark est référencé par son identifiant, jamais par son nom mutable.
+    const { corps: sparkCible } = await pile.lireSparkd('/v1/sparks/crm-production');
+    assert.notEqual(sparkCible.id, sparkCible.name);
+    assert.equal(inscrit.target_id, sparkCible.id);
     assert.equal(JSON.parse(inscrit.payload).container, 'helo-web-1');
 
     // Et elle ne se confond pas avec un terminal de Spark.

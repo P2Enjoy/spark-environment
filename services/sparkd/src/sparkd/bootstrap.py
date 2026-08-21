@@ -238,13 +238,16 @@ SCRIPTS = {
 
 #: Le mode ROOTLESS (§42.2, §42.2 bis). Il s'ajoute à l'installation enracinée
 #: plutôt que de la remplacer : `docker-ce` fournit le binaire et le paquet
-#: `-rootless-extras` l'outil d'installation par compte.
+#: `-rootless-extras` l'outil d'installation par compte. `systemd-container`
+#: reste une dépendance explicite du contrat de reprise Debian 13 (§42.2 bis),
+#: même si la pose n'appelle jamais `machinectl shell` : elle passe par le bus
+#: utilisateur avec `runuser`.
 #:
 #: `enable-linger` n'est pas une précaution : sans lui, le démon du compte meurt
 #: à la fin de sa session, ce qui donnerait une cellule qui marche jusqu'au
 #: premier redémarrage — et cela ne se verrait qu'alors.
 SCRIPT_ROOTLESS = APT + (
-    "apt-get install -y -qq docker-ce-rootless-extras uidmap dbus-user-session\n"
+    "apt-get install -y -qq docker-ce-rootless-extras uidmap dbus-user-session systemd-container\n"
     f"id {COMPTE_ROOTLESS} >/dev/null 2>&1 || "
     f"useradd -m -s /bin/bash {COMPTE_ROOTLESS}\n"
     f"loginctl enable-linger {COMPTE_ROOTLESS}\n"

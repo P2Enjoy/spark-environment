@@ -6317,13 +6317,18 @@ Corollaire : sur une cellule vierge, les deux modes sont ouverts, et c'est le
 seul moment où le choix se fait sans rien casser. L'écran le dit.
 
 **Ce que l'installation change.** Le mode rootless ajoute
-`docker-ce-rootless-extras`, `uidmap` et `dbus-user-session`, crée le compte de
-service, exécute `dockerd-rootless-setuptool.sh install` sous ce compte avec son
+`docker-ce-rootless-extras`, `uidmap`, `dbus-user-session` et
+`systemd-container`, crée le compte de service, exécute
+`dockerd-rootless-setuptool.sh install` sous ce compte avec son
 `XDG_RUNTIME_DIR` **et** son `DBUS_SESSION_BUS_ADDRESS`, et pose `loginctl
 enable-linger` — sans quoi le démon meurt à la fin de la session du compte, ce
 qui donnerait une cellule qui marche jusqu'au premier redémarrage. Avant
 l'installation, il remplace les sous-plages `subuid` et `subgid` par une plage
 réservée à ce seul compte et **contenue dans l'idmap effectif de la cellule**.
+
+`systemd-container` est une dépendance explicite de cette reprise sur Debian 13.
+Cela ne réintroduit pas le chemin fragile : la pose n'appelle jamais
+`machinectl shell`; elle joint le bus utilisateur existant avec `runuser`.
 
 **Reprendre une pose rootless interrompue n'est pas basculer.** Mesuré le
 2026-08-21 : l'image Debian ne porte pas `machinectl`; l'ancien script installait

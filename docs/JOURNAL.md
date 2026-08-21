@@ -7841,3 +7841,27 @@ Le relevé est corrigé vers `--pairs`, couvert par sa preuve, puis rejoué sur 
 Forge réelle. Les 80 preuves ciblées tunnel/hôte sont vertes, et le parcours
 visuel desktop/mobile a confirmé la séparation entre le tunnel API rompu et
 « SSH établi », sans défilement horizontal de page sur mobile.
+
+---
+
+## 2026-08-22 · SPK-54 — la campagne complète retrouve deux écarts et les ferme
+
+La reprise rootless portait déjà le contrat de Debian 13, mais le script ne
+posait que `docker-ce-rootless-extras`, `uidmap` et `dbus-user-session` :
+`systemd-container`, explicitement requis par le contrat de reprise, manquait.
+La préparation installe maintenant les quatre paquets. Elle continue de joindre
+le bus utilisateur avec `runuser` et n'appelle jamais `machinectl shell`.
+
+La première campagne a aussi atteint les scénarios E2E auparavant non terminés.
+Deux d'entre eux attendaient le nom mutable `crm-production` dans `target_id`.
+Le contrat du journal fixe au contraire l'identifiant immuable du Spark comme
+cible, le nom restant dans le message. Les preuves lisent donc désormais l'ID
+retourné par `sparkd` et le comparent à l'entrée d'audit : le test contrôle la
+propriété réelle, sans modifier le produit.
+
+La ligne de base est verte, par étapes pour laisser le harnais navigateur fermer
+sa pile : `sparkd-test` **1 017** verts, contrôle du contrat, tests de packages
+**6 + 885** verts, gestes **8/8**, parcours E2E **84/84**, manuel **7/7** et
+build. SPK-54 reste `[~]` : la dernière preuve agent, qui doit partir du seul
+briefing via SSH, attend toujours l'autorisation de réconcilier la clé d'hôte
+changée de `briefing-e2e`; aucune entrée `known_hosts` n'a été modifiée.

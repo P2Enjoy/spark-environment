@@ -3023,9 +3023,13 @@ n'a été modifiée. C'est nommé explicitement à l'écran, sans commande Docke
 envoyée et sans effacement automatique. Il faut une décision explicite de
 réconciliation de cette empreinte, puis rejouer le Compose depuis SSH et le seul
 briefing.
-La campagne complète `make test` reste également à rejouer : son `sparkd-test`
-se fige dans le portail TestClient de cet environnement avant les suites web et
-E2E; les preuves ciblées, le contrat et la build sont verts.
+La campagne est rejouée le 2026-08-22, par ses étapes pour laisser le harnais E2E
+fermer proprement sa pile : `sparkd-test` (1 017 verts, plus de gel TestClient),
+contrat, 891 tests de packages, 8 gestes, 84 parcours E2E et 7 vérifications du
+manuel sont verts; la build l'est aussi. Deux écarts ont été trouvés puis corrigés
+par cette ligne de base : la reprise rootless omettait `systemd-container`, et
+deux preuves E2E comparaient l'audit au nom mutable du Spark au lieu de son ID
+immuable.
 
 ### [~] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
 
