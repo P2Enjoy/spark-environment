@@ -3236,10 +3236,19 @@ la fenêtre d'un Spark, **deux sections, une par niveau** (§43.6).
 - **Preuves** : 11 de composant, 836 preuves de console. Captures
   `56-environnement.png` et `57-environnement-modale.png` observées.
 
+**Deux parcours E2E le 2026-08-21**, depuis le parcours canonique : l'origine de
+chaque valeur est à l'écran, et **la valeur d'un secret ne s'affiche nulle part**
+— la preuve cherche les deux valeurs seedées dans tout le texte rendu. C'est le
+point central de la Definition of Done, et il est tenu.
+
 - **Reste avant `[x]`** :
-  1. **un parcours E2E** depuis le parcours canonique : poser une variable, la
-     surcharger, lire son origine, en déclarer une secrète et vérifier que sa
-     valeur ne s'affiche nulle part. Le seed le permet ;
+  1. **les parcours d'ÉCRITURE** — poser une variable au clavier, et le refus
+     d'un nom hors grammaire. Non livrés, et ce qui a été mesuré est écrit au
+     journal du 2026-08-21 : la saisie survit au submit, le gestionnaire
+     s'exécute (sans quoi `<form method="dialog">` fermerait la modale), le
+     `PUT` atteint le serveur, et le relais de l'hôte n'a aucun filtre de verbe.
+     L'hypothèse restante est un rejet silencieux de `poserEnv`, dont le
+     gestionnaire de submit n'attend pas la promesse ;
   2. **le manuel** M6 et M8 ;
   3. **la preuve du §43.0 essai F refaite sur le fichier que le produit écrit** —
      celle-là **nécessite une Forge réelle**.

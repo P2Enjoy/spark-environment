@@ -6531,3 +6531,52 @@ surcharger, lire son origine, en déclarer une secrète et vérifier que sa vale
 ne s'affiche nulle part. Le seed le permet. Puis la tranche 4 : manuel M6 et M8,
 et la preuve du §43.0 essai F refaite sur le fichier que le produit écrit —
 celle-là **exige une Forge réelle**.
+
+## 2026-08-21 · SPK-58 — l'environnement éprouvé à l'écran, et un parcours qui résiste
+
+**Unité reprise** au §4.2 point 1 : le parcours E2E de la tranche 3.
+
+### Ce qui est livré
+
+**Deux parcours E2E**, depuis le parcours canonique, sur la pile réelle :
+
+- l'environnement se lit avec l'**origine** de chaque valeur — les trois sont à
+  l'écran, et la surcharge porte bien la valeur du Spark, pas celle de la Forge ;
+- **la valeur d'un secret ne s'affiche NULLE PART** : la preuve cherche les deux
+  valeurs seedées dans tout le texte rendu, pas seulement là où on s'attend à ne
+  pas les trouver. C'est le point central de la Definition of Done.
+
+### Ce qui a RÉSISTÉ, et ce que la mesure a établi
+
+Deux parcours d'**écriture** — poser une variable au clavier, et le refus d'un
+nom hors grammaire — n'ont pas pu être rendus verts dans la session. Ils ne sont
+pas committés : ce sont des échafaudages inachevés, pas une preuve qu'on
+désactive.
+
+Ce que j'ai **mesuré**, et qui vaut pour la reprise :
+
+- la saisie **survit** au submit — deux sondes l'ont vérifié avant et après le
+  clic : le champ porte toujours `AVEC-TIRET` une seconde et demie après ;
+- la modale **reste ouverte** et n'affiche **aucun refus**. Or `<form
+  method="dialog">` fermerait nativement la modale si le gestionnaire de submit
+  ne s'exécutait pas : il s'exécute donc, et `preventDefault()` prend ;
+- le parcours de pose, lui, a bien **atteint le serveur** : l'écran est passé à
+  « Chargement du Spark… », donc `router()` a été appelé, donc le `PUT` a réussi.
+  Son assertion tombait trop tôt, pendant la repeinte ;
+- le relais de l'hôte console est **indifférent au verbe** — vérifié dans
+  `relayer()` : rien n'y filtre `PUT`.
+
+**L'hypothèse qui reste** : la promesse de `poserEnv` rejette avant d'atteindre
+la branche de refus, laissant `busy` à vrai — ce qui expliquerait une modale
+ouverte, une saisie intacte et aucun refus. Le gestionnaire de submit ne
+l'attend pas, donc un rejet serait silencieux. La preuve de composant montre que
+le refus **se rend** quand l'état le porte : le défaut, s'il existe, est dans le
+chemin d'appel, pas dans le rendu.
+
+### Où reprendre
+
+Instrumenter `poserEnv` — un `try/catch` qui **nomme** l'échec au lieu de le
+perdre serait de toute façon la bonne forme (§18) — puis rétablir les deux
+parcours d'écriture. Ensuite la tranche 4 : manuel M6 et M8, et la preuve du
+§43.0 essai F sur le fichier que le produit écrit, qui **exige une Forge
+réelle**.
