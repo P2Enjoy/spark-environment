@@ -96,7 +96,10 @@ export class Tunnel {
     if (this.server.kind === 'alias') {
       return [
         '-N',
-        '-o', 'LogLevel=VERBOSE',
+        // SPK-37 · §21.6.3 : DEBUG1, et non VERBOSE. MESURÉ le 2026-08-21
+        // contre un vrai sshd — VERBOSE n'émet qu'UNE ligne et jamais
+        // « Server accepts key », qui est un message `debug1:`.
+        '-o', 'LogLevel=DEBUG1',
         '-o', 'ExitOnForwardFailure=yes',
         '-o', 'ServerAliveInterval=10',
         '-o', 'ServerAliveCountMax=2',
@@ -109,7 +112,12 @@ export class Tunnel {
       // SPK-37 · docs/DAT.md §21.6.3 : c'est cette verbosité qui fait dire à
       // OpenSSH QUELLE clé le serveur a acceptée. Sans elle, l'empreinte est
       // indéterminable et le journal ne peut nommer que le serveur.
-      '-o', 'LogLevel=VERBOSE',
+      //
+      // DEBUG1 et non VERBOSE : MESURÉ le 2026-08-21 contre un vrai sshd,
+      // VERBOSE n'émet qu'UNE ligne — « Authenticated to … » — et jamais
+      // « Server accepts key », qui est un message `debug1:`. La branche
+      // « empreinte déterminée » ne se produisait donc JAMAIS.
+      '-o', 'LogLevel=DEBUG1',
       '-o', 'ExitOnForwardFailure=yes',
       '-o', 'ServerAliveInterval=10',
       '-o', 'ServerAliveCountMax=2',
@@ -196,15 +204,26 @@ export class Tunnel {
     // refusée » ou « hôte inconnu », et la taire obligerait l'exploitant à
     // relancer la commande à la main pour la lire.
     this.#child.stderr?.on('data', (bloc) => {
-      const texte = String(bloc).trim();
-      if (!texte) return;
-      // L'empreinte de la clé acceptée passe par ce même flux (§21.6.3). On la
-      // relève au vol ; ce n'est PAS une erreur, et la ranger dans lastError
-      // ferait afficher un diagnostic là où tout va bien.
-      const empreinte = lireEmpreinte(texte);
-      if (empreinte) { this.keyFingerprint = empreinte; return; }
-      if (texte.startsWith('debug')) return;   // le reste de la verbosité
-      this.lastError = texte;
+      // LIGNE PAR LIGNE, et non bloc par bloc. Un bloc porte plusieurs lignes,
+      // et n'en tester que la première rangeait dans `lastError` tout ce qui
+      // suivait une ligne bénigne — `describe()` publie ce champ, donc l'écran
+      // affichait un diagnostic sur un tunnel qui va bien (§14.5). Sous DEBUG1
+      // le flux passe de 1 à 81 lignes : ce qui était rare devient la règle.
+      for (const ligne of String(bloc).split('\n')) {
+        const texte = ligne.trim();
+        if (!texte) continue;
+        // L'empreinte de la clé acceptée passe par ce même flux (§21.6.3). On la
+        // relève au vol ; ce n'est PAS une erreur, et la ranger dans lastError
+        // ferait afficher un diagnostic là où tout va bien.
+        const empreinte = lireEmpreinte(texte);
+        if (empreinte) { this.keyFingerprint = empreinte; continue; }
+        if (texte.startsWith('debug')) continue;   // le reste de la verbosité
+        // « Authenticated to … using "publickey" » est un SUCCÈS, pas une
+        // panne. MESURÉ : c'était la seule ligne que VERBOSE émettait, et elle
+        // atterrissait donc dans `lastError` à chaque tunnel qui s'ouvrait bien.
+        if (/^Authenticated to /.test(texte)) continue;
+        this.lastError = texte;
+      }
     });
     this.#child.on('exit', (code) => {
       if (this.state !== CLOSED) {
