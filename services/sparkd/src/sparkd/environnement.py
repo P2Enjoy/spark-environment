@@ -163,6 +163,11 @@ class Entree:
     #: `forge`, `spark` ou `overridden` (§43.9.4).
     origin: str
     updated_at: str
+    #: SPK-64 · §43.6 révisé. Sur une entrée du CATALOGUE lue sans Spark : combien
+    #: de Sparks l'ont cochée. `0` dit qu'elle ne descend nulle part — l'écran
+    #: doit pouvoir le dire, sinon une entrée définie ressemble à une entrée
+    #: active.
+    selected_by: int | None = None
 
 
 def _valider(nom: str) -> str:
@@ -251,40 +256,129 @@ def retirer(connection: sqlite3.Connection, scope: str, spark_id: str | None,
     return True
 
 
-def _ligne(rangee: sqlite3.Row, origine: str) -> Entree:
+def _ligne(rangee: sqlite3.Row, origine: str, selected_by: int | None = None) -> Entree:
     return Entree(
         name=rangee["name"], is_secret=bool(rangee["is_secret"]),
         value=None if rangee["is_secret"] else rangee["value"],
         fingerprint=rangee["fingerprint"], scope=rangee["scope"],
-        origin=origine, updated_at=rangee["updated_at"])
+        origin=origine, updated_at=rangee["updated_at"], selected_by=selected_by)
+
+
+def catalogue(connection: sqlite3.Connection) -> list[Entree]:
+    """Le catalogue de la Forge, avec le nombre de Sparks qui l'ont coché.
+
+    `selected_by = 0` dit qu'une entrée **ne descend nulle part**. L'écran doit
+    pouvoir le dire : sans ce compte, une entrée définie ressemble à une entrée
+    active, et l'on croit avoir posé une valeur qu'aucune cellule ne reçoit
+    (§43.6, §14.6).
+    """
+    return [
+        _ligne(r, "forge", selected_by=r["selected_by"])
+        for r in connection.execute(
+            "SELECT e.*, (SELECT COUNT(*) FROM env_selection s WHERE s.entry_id = e.id)"
+            " AS selected_by"
+            " FROM env_entry e WHERE e.scope = 'forge' ORDER BY e.name")
+    ]
 
 
 def lister(connection: sqlite3.Connection, spark_id: str | None = None) -> list[Entree]:
     """L'environnement TEL QU'IL S'APPLIQUE, avec l'origine de chaque valeur.
 
-    Sans `spark_id`, rend le seul jeu de la Forge. Avec, rend le jeu résolu :
-    la surcharge se fait **nom par nom** (§43.6), jamais jeu par jeu — surcharger
-    `SMTP_HOST` sur un Spark ne doit pas lui faire perdre le `SMTP_PORT` hérité.
+    Sans `spark_id`, rend le catalogue de la Forge.
+
+    Avec, rend ce que **ce** Spark reçoit — et depuis SPK-64 ce n'est plus tout
+    le catalogue. Une entrée de la Forge ne descend que si elle est **cochée**
+    (§43.6 révisé) : l'héritage automatique déposait un secret en clair dans des
+    cellules qui n'en avaient aucun usage.
+
+    La surcharge se fait toujours **nom par nom**, jamais jeu par jeu —
+    surcharger `SMTP_HOST` ne doit pas faire perdre le `SMTP_PORT` coché.
     """
-    forge = {r["name"]: r for r in connection.execute(
-        "SELECT * FROM env_entry WHERE scope = 'forge' ORDER BY name")}
     if spark_id is None:
-        return [_ligne(r, "forge") for r in forge.values()]
+        return catalogue(connection)
+
+    # Les entrées COCHÉES, et elles seules. Une entrée du catalogue que ce Spark
+    # n'a pas cochée n'existe pas pour lui.
+    cochees = {r["name"]: r for r in connection.execute(
+        "SELECT e.* FROM env_entry e"
+        " JOIN env_selection s ON s.entry_id = e.id"
+        " WHERE e.scope = 'forge' AND s.spark_id = ? ORDER BY e.name", (spark_id,))}
 
     propres = {r["name"]: r for r in connection.execute(
         "SELECT * FROM env_entry WHERE scope = 'spark' AND spark_id = ? ORDER BY name",
         (spark_id,))}
 
     resolu: list[Entree] = []
-    for nom in sorted(set(forge) | set(propres)):
+    for nom in sorted(set(cochees) | set(propres)):
         if nom in propres:
             # `overridden` et `spark` ne se confondent pas : le premier dit qu'une
-            # valeur de la Forge est MASQUÉE, donc qu'on la cherchera en vain là
-            # où elle est écrite.
-            resolu.append(_ligne(propres[nom], "overridden" if nom in forge else "spark"))
+            # valeur COCHÉE est MASQUÉE, donc qu'on la cherchera en vain là où
+            # elle est écrite. Une entrée propre qui ne masque rien — parce que
+            # l'entrée de catalogue du même nom n'est pas cochée ici — est un
+            # simple `spark`, et le dire autrement enverrait chercher un conflit
+            # qui n'existe pas.
+            resolu.append(_ligne(propres[nom], "overridden" if nom in cochees else "spark"))
         else:
-            resolu.append(_ligne(forge[nom], "forge"))
+            resolu.append(_ligne(cochees[nom], "forge"))
     return resolu
+
+
+def cocher(connection: sqlite3.Connection, spark_id: str, nom: str,
+           actor: str | None = None) -> Entree:
+    """Fait descendre une entrée du catalogue dans CE Spark.
+
+    Le geste est **idempotent** : cocher deux fois ne change rien et ne rougit
+    pas. C'est la clé primaire de `env_selection` qui le garantit, pas une
+    vérification préalable — deux consoles qui cochent en même temps ne doivent
+    pas produire d'erreur pour un état qu'elles voulaient toutes deux.
+    """
+    rangee = connection.execute(
+        "SELECT * FROM env_entry WHERE scope = 'forge' AND name = ?", (nom,)).fetchone()
+    if rangee is None:
+        raise EnvError(
+            f"« {nom} » n'est pas au catalogue de la Forge : il n'y a rien à "
+            "faire descendre (docs/DAT.md §43.6).")
+
+    curseur = connection.execute(
+        "INSERT OR IGNORE INTO env_selection (spark_id, entry_id, selected_at)"
+        " VALUES (?, ?, ?)", (spark_id, rangee["id"], _maintenant()))
+    if curseur.rowcount:
+        # Le journal porte le NOM, jamais la valeur — y compris pour une variable
+        # ordinaire (§43.3). Cocher est un geste de distribution : ce qu'il faut
+        # pouvoir reconstituer, c'est OÙ une valeur est allée.
+        audit.record(
+            connection, actor, "env.select", "ok",
+            f"Entrée « {nom} » du catalogue cochée sur ce Spark.",
+            target_type="spark", target_id=spark_id,
+            payload={"name": nom, "scope": "forge"})
+    return _ligne(rangee, "forge")
+
+
+def decocher(connection: sqlite3.Connection, spark_id: str, nom: str,
+             actor: str | None = None) -> bool:
+    """Cesse de faire descendre une entrée. Rend `False` si elle n'était pas cochée.
+
+    Ne pas trouver n'est pas une erreur : l'état voulu est « cette entrée ne
+    descend pas ici », et il est atteint dans les deux cas (§14.5).
+
+    Décocher ne retire rien à lui seul : c'est la réécriture des fichiers depuis
+    l'état voulu qui fait disparaître la valeur de la cellule (§43.2). L'appelant
+    doit la déclencher — sans quoi la case serait décochée au registre et la
+    valeur toujours en place, ce qui ferait croire à une révocation qui n'a pas
+    eu lieu.
+    """
+    curseur = connection.execute(
+        "DELETE FROM env_selection WHERE spark_id = ? AND entry_id ="
+        " (SELECT id FROM env_entry WHERE scope = 'forge' AND name = ?)",
+        (spark_id, nom))
+    if not curseur.rowcount:
+        return False
+    audit.record(
+        connection, actor, "env.deselect", "ok",
+        f"Entrée « {nom} » du catalogue décochée sur ce Spark.",
+        target_type="spark", target_id=spark_id,
+        payload={"name": nom, "scope": "forge"})
+    return True
 
 
 def resoudre(connection: sqlite3.Connection, cle: bytes, spark_id: str) -> dict[str, dict[str, str]]:

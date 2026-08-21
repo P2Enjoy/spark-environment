@@ -447,3 +447,42 @@ laissé inchangé (CloudWorker §3.1).
 `ready`, ou qu'un sondage antérieur à la disponibilité n'y écrive pas. Le choix
 appartient au contrat du §22.3 : un champ « dernière erreur » qui survit à la
 guérison ment dans le sens le plus coûteux — il fait chercher une panne éteinte.
+
+### INC-15 · Neuf routes de lecture rendent 500 là où elles promettent 502
+
+**Relevé le 2026-08-21**, en corrigeant SPK-36. Mesuré par lecture du code,
+**non reproduit sur la Forge** : c'est une déduction du même mécanisme, et elle
+est présentée comme telle.
+
+`InstanceAbsente` n'hérite pas d'`IncusError` — à dessein, et le §33.3 explique
+pourquoi. La conséquence est que toute branche `except IncusError` qui peut
+rencontrer une instance absente la laisse s'échapper. Vingt-et-une branches
+attrapent `IncusError` dans `services/sparkd/src/sparkd/app.py` ; **une seule**
+nommait l'absence avant aujourd'hui (SPK-52, la suppression), deux la nomment
+désormais (SPK-36, le cycle de vie).
+
+Restent celles-ci, toutes sur des routes qui interrogent ou modifient une
+cellule sans passer par un état transitoire :
+
+| Ligne | Route | Appel au pilote |
+|---|---|---|
+| 657 | mesures d'un Spark | `instance_state` |
+| 701, 744, 758 | instantanés : créer, restaurer, supprimer | service d'instantanés |
+| 1382, 1411, 1439 | amorçage : relevé et pose | `exec_capture` |
+| 1474, 1506 | clés SSH : accorder, révoquer | `_apply_keys` |
+
+**Ce que cela coûte, et ce que cela ne coûte pas.** Le refus sort en **500**
+au lieu du **502** annoncé par le contrat : l'exploitant lit « erreur interne »
+là où le produit voulait dire « le pilote n'a pas pu ». C'est un défaut de
+diagnostic, borné. Ces routes n'appellent PAS `service.command`, donc elles
+n'entrent dans aucun état transitoire : **elles ne peuvent pas coincer le
+Spark**. C'est la différence avec le défaut de SPK-36, et c'est pourquoi
+celui-là a été corrigé tout de suite et celles-ci sont seulement consignées.
+
+Vérifié plutôt que supposé : `service.command` n'est appelée qu'aux lignes 1819
+et 1861, toutes deux dans `command_spark`.
+
+**Ce qu'il faudrait.** Nommer l'absence dans chacune, avec la réponse qui
+convient à sa route — pour une lecture, un 404 disant que la cellule a disparu
+vaut mieux qu'un 502 disant que le pilote a refusé. Cela demande un arbitrage
+par route, donc une unité à soi ; ce n'est pas une retouche mécanique.

@@ -1801,6 +1801,35 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
 
+    def _cellule_perdue(connection, spark: dict, erreur: Exception) -> HTTPException:
+        """Conclut la transition en PANNE, et rend le refus qui nomme la perte.
+
+        @spec docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §4 (l'entrée fantôme)
+              · docs/DAT.md §14.3, §14.5, §33.3
+
+        Mesuré sur la Forge de validation le 2026-08-21 : sans cela,
+        `InstanceAbsente` — qui n'hérite PAS d'`IncusError` — s'échappait de la
+        route. `finish` n'était alors jamais appelé, et le Spark restait
+        STABLEMENT dans son état transitoire, `allowed_commands` vide : plus
+        rien n'était possible depuis la console, ni reconstruire ni supprimer.
+
+        L'état visé est « error » parce que c'est le SEUL d'où les deux remèdes
+        annoncés par le contrôle REG-FANTOME sont offerts : « retry », qui
+        refait la cellule, et « delete », qui rend la place (§14.5).
+
+        À la différence de la suppression, on ne fait pas ici de l'absence une
+        réussite : la ligne SURVIT, et un succès de façade laisserait un fantôme
+        silencieux au registre — précisément ce que le §4 rend impossible.
+        """
+        raison = (
+            f"La cellule du Spark « {spark['name']} » a disparu : Incus ne la "
+            f"connaît plus ({erreur}). Le Spark passe en panne. Deux issues, "
+            "toutes deux par le produit : « retry » reconstruit la cellule, "
+            "« delete » rend sa place au pool.")
+        service.finish(connection, spark["id"], success=False, error=raison)
+        return HTTPException(status_code=409, detail={
+            "error": "cellule_absente", "message": raison})
+
     @app.post("/v1/sparks/{name}/{action}", tags=["sparks"])
     def command_spark(name: str, action: str) -> dict:
         try:
@@ -1830,6 +1859,8 @@ def create_app(config: Config) -> FastAPI:
                 incus_action = "start" if commande is Command.START else "stop"
                 try:
                     app.state.incus.set_instance_state(apres["name"], incus_action)
+                except InstanceAbsente as erreur:
+                    raise _cellule_perdue(connection, apres, erreur) from erreur
                 except IncusError as erreur:
                     service.finish(connection, apres["id"], success=False, error=str(erreur))
                     raise HTTPException(status_code=502, detail={
@@ -1858,8 +1889,19 @@ def create_app(config: Config) -> FastAPI:
                     except ingress_service.IngressError:
                         pass
                 if commande is Command.RESTART:
+                    # Le second appel au pilote vivait HORS de toute garde : une
+                    # panne y coinçait le Spark en « starting » aussi sûrement
+                    # que la première.
                     service.command(connection, apres["id"], Command.START)
-                    app.state.incus.set_instance_state(apres["name"], "start")
+                    try:
+                        app.state.incus.set_instance_state(apres["name"], "start")
+                    except InstanceAbsente as erreur:
+                        raise _cellule_perdue(connection, apres, erreur) from erreur
+                    except IncusError as erreur:
+                        service.finish(connection, apres["id"], success=False,
+                                       error=str(erreur))
+                        raise HTTPException(status_code=502, detail={
+                            "error": "incus_failed", "message": str(erreur)}) from erreur
                     service.finish(connection, apres["id"], success=True)
             elif commande is Command.DELETE:
                 # SPK-52 · §14.5 : une instance déjà absente vaut suppression

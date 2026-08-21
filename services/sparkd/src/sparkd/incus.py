@@ -35,6 +35,14 @@ class InstanceAbsente(RuntimeError):
     Elle N'hérite PAS d'`IncusError` : les appelants qui rattrapent `IncusError`
     pour conclure à une panne ne doivent pas l'attraper par mégarde. Ceux que
     l'absence intéresse la nomment.
+
+    Le prix de ce choix, mesuré sur la Forge de validation le 2026-08-21 : un
+    appelant qui OUBLIE de la nommer ne rend pas une panne propre, il rend un
+    500. Sur la route du cycle de vie, où l'état transitoire est posé AVANT
+    l'appel au pilote, cela laissait le Spark coincé sans aucune commande
+    possible (SPK-36). Ce n'est pas une raison de rétablir l'héritage — cela
+    ramènerait la confusion que le §33.3 interdit —, c'en est une de nommer
+    l'absence partout où elle peut se produire.
     """
 
 
@@ -470,9 +478,14 @@ class FakeIncus:
         self._persist()
 
     def set_instance_state(self, name: str, action: str) -> None:
+        # SPK-36 · §14.5 : le VRAI pilote lève `InstanceAbsente` sur tout 404,
+        # donc ici aussi. Le factice rendait `IncusError`, que la route du cycle
+        # de vie attrapait : la panne était invisible en preuve et bien réelle
+        # sur la Forge. C'est exactement l'écart que le commentaire de
+        # `delete_instance`, juste dessous, interdit.
         self._maybe_fail("set_instance_state")
         if name not in self.created:
-            raise IncusError(f"Instance « {name} » absente.")
+            raise InstanceAbsente(f"Instance « {name} » absente.")
         self.created[name]["status"] = "Running" if action == "start" else "Stopped"
         self._persist()
 
