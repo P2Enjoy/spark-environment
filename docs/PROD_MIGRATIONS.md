@@ -340,6 +340,74 @@ Variable      : SPARKD_ALLOWED_SIGNERS, facultative. Chemin d'un fichier
                 ne coïncide pas ferait refuser des signatures valides.
 ```
 
+### OP-10 · Restreindre la clé d'accès du responsable
+
+```
+Objectif      : la clé SSH du responsable n'ouvre plus de shell sur la Forge.
+                Elle garde ce dont la console a besoin — le tunnel vers sparkd,
+                le rebond vers un Spark, le dépannage du §37.3 — et rien d'autre
+                (SPK-61, docs/DAT.md §46).
+Dépend de     : sparkd installé et son port connu.
+Ordre         : les deux gestes vont ENSEMBLE. Poser la ligne sans le réglage
+                serveur donne une console EN PANNE ; poser le réglage sans la
+                ligne ne protège de rien.
+
+  1. sshd_config de la Forge :
+
+         AllowTcpForwarding local
+
+     MESURÉ (§46.2) : à « no », TOUT tombe, y compris avec une clé sans aucune
+     option, sur « administratively prohibited: open failed ». Certaines
+     distributions l'ont ainsi par défaut. « local » et non « yes » : il
+     autorise -L et -W, dont la console a besoin, et refuse -R.
+     Puis : systemctl reload ssh
+
+  2. La garde, posée sur la Forge :
+
+         install -m 0755 scripts/garde-ssh.sh /usr/local/sbin/spark-garde-ssh
+
+  3. La ligne, PRODUITE et non recopiée :
+
+         ./scripts/cle-restreinte.sh ~/.ssh/id_ed25519.pub 9876
+
+     Elle remplace la ligne existante de CETTE clé dans le
+     ~/.ssh/authorized_keys de la Forge. Une ligne recopiée à la main est une
+     ligne où l'on oublie une virgule, et une virgule oubliée y ouvre une porte
+     en silence : sshd n'avertit de rien.
+
+Après         : RIEN d'automatique. Aucun redémarrage de sparkd n'est requis.
+Vérification  : GARDER UNE SECONDE SESSION OUVERTE pendant tout le geste. Puis,
+                depuis une NOUVELLE connexion, les six cas mesurés au §46 :
+
+                  doivent PASSER
+                    ssh -W 127.0.0.1:<port sparkd> <forge>
+                    ssh -J <forge> root@<ip privée d'un Spark> id
+                    ssh <forge> incus exec <cellule> -- /bin/bash
+
+                  doivent ÊTRE REFUSÉS
+                    ssh <forge>                      (shell interactif)
+                    ssh <forge> "cat /etc/hostname"  (lecture d'un fichier)
+                    ssh -W 127.0.0.1:22 <forge>      (autre service)
+
+                Et depuis la console : le tunnel s'ouvre, un terminal de Spark
+                s'ouvre, le dépannage s'ouvre.
+Retour arrière: immédiat et sans perte — remettre la ligne d'origine dans
+                authorized_keys. C'est pourquoi la seconde session ouverte n'est
+                pas une précaution facultative : elle EST le retour arrière.
+Risques       : s'enfermer dehors. Une ligne mal écrite refuse la clé, et sans
+                session ouverte il ne reste que la console de l'hébergeur.
+                Second risque, moins visible : « restrict » SEUL ne ferme pas
+                l'exécution de commande (§46.1, MESURÉ). Une ligne sans
+                « command= » laisse lire tout le registre, et l'opération serait
+                réputée faite sans l'être.
+Concession    : « permitopen="*:22" » autorise à rebondir sur le port 22 de
+                toute machine joignable depuis la Forge, pas seulement des
+                Sparks. C'est le prix d'une ligne qui ne se réécrit pas à chaque
+                création de Spark ; OpenSSH n'interprète aucun motif d'adresse
+                (§46.5, MESURÉ).
+Variable      : aucune.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.

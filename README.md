@@ -294,6 +294,33 @@ normal, que la console dit sans le traiter comme une panne (`docs/DAT.md`
 §36.10.8, §36.10.9). Côté Forge, `SPARKD_ALLOWED_SIGNERS` décide quelles clés
 sont recevables.
 
+### Restreindre la clé d'accès du responsable
+
+Par défaut, une clé qui atteint la Forge y ouvre un shell — et qui a un shell a le
+registre. Deux gestes ferment cela sans rien retirer à la console, et ils vont
+**ensemble** :
+
+```bash
+# 1. Sur la Forge — sans ce réglage, tout tombe, même avec une clé sans options.
+#    Dans /etc/ssh/sshd_config :  AllowTcpForwarding local
+# 2. Poser la garde sur la Forge :
+install -m 0755 scripts/garde-ssh.sh /usr/local/sbin/spark-garde-ssh
+# 3. Produire la ligne, et remplacer celle de cette clé dans authorized_keys :
+./scripts/cle-restreinte.sh ~/.ssh/id_ed25519.pub 9876
+```
+
+Ce que la clé garde : le tunnel vers `sparkd`, le rebond vers un Spark, et le
+dépannage. Ce qu'elle perd : le shell interactif, la lecture des fichiers de la
+Forge, et l'accès à tout autre service que `sparkd`.
+
+**Gardez une seconde session SSH ouverte pendant l'opération** : elle est votre
+retour arrière. La marche à suivre complète, avec ses six vérifications, est dans
+`docs/PROD_MIGRATIONS.md` (OP-10) ; le raisonnement et les mesures sont au §46 du
+`docs/DAT.md`.
+
+Attention à un faux ami mesuré : `restrict` seul **ne ferme pas** l'exécution de
+commande. Une clé « restreinte » sans `command=` lit encore tout le registre.
+
 Le jeton DNS vit **sur le poste qui fait tourner la console**, dans un `.env`
 ignoré par Git — jamais sur la Forge, où il serait lisible par qui y détient
 `root`, et jamais dans `servers.json`, dont le contrat interdit tout secret.
@@ -307,6 +334,8 @@ héritage.
 - Les Sparks sont non privilégiés, avec des plages UID/GID disjointes.
 - Un Spark n'a pas de port SSH public : l'accès se fait par rebond sur la Forge.
 - Seules des clés **publiques** sont stockées.
+- La clé d'accès du responsable **peut être restreinte** au strict nécessaire :
+  elle n'ouvre alors plus de shell sur la Forge (voir ci-dessous).
 - Un *system container* partage le noyau de la Forge. Pour des charges hostiles, la
   réponse prévue est le mode `vm`, pas un durcissement du mode `container`.
 
