@@ -196,3 +196,53 @@ def test_ensure_delegation_ne_reecrit_pas_ce_qui_est_deja_la(tmp_path):
 def test_ensure_delegation_sans_tranche_ne_leve_pas(tmp_path):
     """Sur un poste sans cgroup v2, l'absence est normale."""
     assert cgroup.ensure_delegation(tmp_path) == []
+
+
+def test_le_poids_est_pose_PAR_systemd_et_non_dans_le_fichier(tmp_path, monkeypatch):
+    """@verifies docs/BACKLOG.md#SPK-29 · docs/DAT.md §32.4 bis
+
+    DÉFAUT MESURÉ sur la Forge de validation le 2026-08-21 :
+
+        on ecrit 180 dans cpu.weight  -> 180
+        apres daemon-reload           -> 1
+
+    systemd est l'autorité sur les propriétés de cgroup d'une unité, et
+    `spark.slice` porte `CPUWeight=1` comme point de départ. Écrire le fichier
+    « marche », puis se défait à la première reconciliation — EN SILENCE, sans
+    qu'aucun contrôle ne rougisse, puisque le registre et le calcul restent
+    justes. C'est le pire mode de panne du produit : la promesse centrale
+    s'évapore sans trace.
+    """
+    appels = []
+
+    class Vu:
+        returncode = 0
+
+    monkeypatch.setattr(cgroup.shutil, "which", lambda _: "/usr/bin/systemctl")
+    (tmp_path / "sys" / "fs" / "cgroup" / cgroup.SLICE).mkdir(parents=True)
+    monkeypatch.setattr(cgroup, "CGROUP_ROOT", tmp_path / "sys" / "fs" / "cgroup")
+
+    def faux_run(argv, **_):
+        appels.append(argv)
+        return Vu()
+
+    assert cgroup.apply_weight(cgroup.SliceWeight(weight=180, sold=1.5,
+                                                  capacity=4.0, reserve=0.5),
+                               run=faux_run) is True
+    assert appels == [["systemctl", "set-property", "spark.slice", "CPUWeight=180"]]
+    # Et le fichier n'a PAS été écrit : le faire aussi rendrait deux écrivains
+    # pour une même valeur, ce que le §32.4 bis exclut.
+    assert not (tmp_path / "sys" / "fs" / "cgroup" / cgroup.SLICE / "cpu.weight").exists()
+
+
+def test_sans_systemd_le_poids_retombe_sur_le_FICHIER(tmp_path, monkeypatch):
+    """Un hôte sans systemd doit continuer de fonctionner : le repli existe, et
+    il est nommé comme tel (§32.4 bis)."""
+    monkeypatch.setattr(cgroup.shutil, "which", lambda _: None)
+    racine = tmp_path / "sys" / "fs" / "cgroup"
+    (racine / cgroup.SLICE).mkdir(parents=True)
+    monkeypatch.setattr(cgroup, "CGROUP_ROOT", racine)
+
+    assert cgroup.apply_weight(cgroup.SliceWeight(weight=42, sold=0.5,
+                                                  capacity=4.0, reserve=0.5)) is True
+    assert (racine / cgroup.SLICE / "cpu.weight").read_text() == "42"

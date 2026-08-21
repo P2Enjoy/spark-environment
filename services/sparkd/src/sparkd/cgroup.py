@@ -16,6 +16,8 @@ module.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -160,16 +162,43 @@ def ensure_delegation(root: Path | None = None) -> list[str]:
     return manquants
 
 
-def apply_weight(poids: SliceWeight, root: Path | None = None) -> bool:
-    """Écrit le poids sur la tranche. Rend `False` si elle n'est pas là.
+def apply_weight(poids: SliceWeight, root: Path | None = None,
+                 run=subprocess.run) -> bool:
+    """Pose le poids sur la tranche. Rend `False` si elle n'est pas là.
 
-    L'absence de tranche n'est pas une erreur du plan de contrôle : c'est une Forge
-    qui n'a pas été préparé. Elle se constate par le contrôle `RUN-SLICE` du
-    préflight, pas en faisant échouer chaque création de Spark.
+    **PAR systemd, jamais dans le fichier cgroup** (docs/DAT.md §32.4 bis).
+
+    MESURÉ le 2026-08-21 sur la Forge de validation : écrire directement dans
+    `cpu.weight` réussit, puis se défait au premier `daemon-reload` — systemd
+    est l'autorité sur les propriétés de cgroup d'une unité, et l'unité porte
+    `CPUWeight=1` comme point de départ. La promesse centrale du produit
+    s'évaporait donc en silence, sans qu'aucun contrôle ne rougisse.
+
+    `systemctl set-property` fait écrire systemd lui-même : il applique
+    immédiatement ET réaffirme la valeur à chaque reconciliation, au lieu de
+    l'écraser.
+
+    L'écriture directe reste en REPLI, pour un hôte sans systemd — et seulement
+    là. L'absence de tranche n'est pas une erreur du plan de contrôle : c'est une
+    Forge qui n'a pas été préparée, et le contrôle `RUN-SLICE` du préflight la
+    constate.
     """
     chemin = slice_path(root)
     if not chemin.is_dir():
         return False
+
+    # `root` fourni signifie une racine de cgroup SIMULÉE : on n'appelle pas
+    # systemd, qui ne connaît pas cette racine-là.
+    if root is None and shutil.which("systemctl"):
+        try:
+            vu = run(["systemctl", "set-property", SLICE,
+                      f"CPUWeight={poids.weight}"],
+                     capture_output=True, timeout=15)
+            if getattr(vu, "returncode", 1) == 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+
     try:
         (chemin / "cpu.weight").write_text(str(poids.weight))
     except OSError:
