@@ -249,13 +249,47 @@ test('un serveur local se referme proprement, sans processus a tuer', async () =
 
 // --- l'acteur déclaré au journal (SPK-37, docs/DAT.md §21.6.3) -------------
 
-test("l'empreinte est relevée sur la ligne qu'OpenSSH émet en VERBOSE", () => {
-  // Forme documentée d'OpenSSH sous LogLevel=VERBOSE. NON mesurée contre un
-  // serveur SSH réel dans cet environnement : aucun sshd n'y répond.
+test("l'empreinte est relevée sur la ligne qu'OpenSSH émet en DEBUG1", () => {
+  // RÉVISÉE le 2026-08-21 : le titre disait « en VERBOSE » et le commentaire
+  // « NON mesurée contre un serveur SSH réel ». Les deux sont devenus faux.
+  //
+  // Mesuré depuis, contre un vrai sshd : VERBOSE n'émet qu'UNE ligne et jamais
+  // celle-ci, qui est un message `debug1:`. La ligne ci-dessous est désormais
+  // recopiée d'une sortie RÉELLE, empreinte tronquée.
   const ligne = 'debug1: Server accepts key: /home/p/.ssh/id_ed25519 ED25519 '
     + 'SHA256:AbCd12+/xyzABCDEFGHIJKLMNOPQRSTUVWXYZ012 agent';
   assert.equal(lireEmpreinte(ligne),
                'SHA256:AbCd12+/xyzABCDEFGHIJKLMNOPQRSTUVWXYZ012');
+});
+
+test("le tunnel DEMANDE le niveau qui nomme la clé acceptée", () => {
+  // DÉFAUT MESURÉ le 2026-08-21 contre un vrai sshd, et cette preuve l'aurait
+  // attrapé :
+  //
+  //     LogLevel=VERBOSE ->  1 ligne,  0 « Server accepts key »
+  //     LogLevel=DEBUG1  -> 81 lignes, 1 « Server accepts key »
+  //
+  // Le produit demandait VERBOSE. La branche « empreinte déterminée » du
+  // §21.6.3 ne se produisait donc JAMAIS : tout geste était attribué à
+  // `console/<serveur>` sans clé — une valeur de repli légitime, et donc
+  // impossible à distinguer d'un repli mérité. Rien ne rougissait.
+  const args = tunnel().sshArgs(19876);
+  assert.ok(args.includes('LogLevel=DEBUG1'),
+            'sans ce niveau, OpenSSH ne dit pas quelle clé a été acceptée');
+  assert.ok(!args.includes('LogLevel=VERBOSE'));
+});
+
+test("l'empreinte de l'HÔTE n'est pas prise pour celle du poste", () => {
+  // Piège mesuré sur le flux réel : sous DEBUG1, OpenSSH nomme d'abord la clé
+  // de l'HÔTE, ensuite seulement celle qu'il a acceptée. Une expression qui
+  // chercherait « la première SHA256: » attribuerait chaque geste à l'empreinte
+  // du serveur — identique pour tous les opérateurs, donc une identité qui
+  // n'identifie personne, et qui en aurait l'air.
+  const flux = [
+    'debug1: Server host key: ssh-ed25519 SHA256:HOTEhotehoteHOTEhote',
+    'debug1: Server accepts key: /home/p/.ssh/id_ed25519 ED25519 SHA256:POSTEposte',
+  ].join('\n');
+  assert.equal(lireEmpreinte(flux), 'SHA256:POSTEposte');
 });
 
 test("le CHEMIN de la clé n'est pas retenu", () => {
@@ -305,4 +339,45 @@ test('un tunnel par alias garde la vérification de la clé d’hôte', () => {
     .sshArgs(41000).join(' ');
   assert.ok(!/StrictHostKeyChecking/.test(args));
   assert.ok(!/UserKnownHostsFile/.test(args));
+});
+
+test("un BLOC de plusieurs lignes est lu ligne par ligne", async () => {
+  // DÉFAUT MESURÉ le 2026-08-21, et il s'aggravait avec le correctif du niveau.
+  //
+  // Le gestionnaire testait `texte.startsWith('debug')` sur le BLOC entier. Un
+  // bloc porte plusieurs lignes : dès qu'il commençait par autre chose, tout ce
+  // qui suivait atterrissait dans `lastError` — que `describe()` publie. La
+  // console affichait donc un diagnostic sur un tunnel qui va bien (§14.5).
+  //
+  // Sous VERBOSE le flux tenait en UNE ligne, « Authenticated to … », qui y
+  // atterrissait à chaque tunnel réussi. Sous DEBUG1 il en fait 81 : ce qui
+  // était une gêne devient la règle.
+  let enfant;
+  const t = tunnel({ spawn: () => (enfant = fauxSsh()) });
+  await t.open();
+  enfant.stderr.emit('data', Buffer.from(
+    'Authenticated to 203.0.113.10 ([203.0.113.10]:22) using "publickey".\n'
+    + 'debug1: Local connections to 127.0.0.1:41000 forwarded.\n'
+    + 'debug1: Server accepts key: /home/p/.ssh/id_ed25519 ED25519 SHA256:VraieCle\n'));
+
+  assert.equal(t.keyFingerprint, 'SHA256:VraieCle',
+               'l’empreinte est relevée même au milieu d’un bloc');
+  assert.equal(t.lastError, null,
+               'un tunnel qui s’ouvre bien ne porte AUCUN diagnostic');
+  await t.close();
+});
+
+test("une VRAIE erreur reste rapportée, elle", async () => {
+  // La contrepartie : filtrer ne doit pas rendre muet. Une ligne qui n'est ni
+  // du bruit de verbosité ni un succès d'authentification est un diagnostic, et
+  // l'exploitant doit la lire sans relancer la commande à la main.
+  let enfant;
+  const t = tunnel({ spawn: () => (enfant = fauxSsh()) });
+  await t.open();
+  enfant.stderr.emit('data', Buffer.from(
+    'debug1: Connecting to 203.0.113.10 port 22.\n'
+    + 'Permission denied (publickey).\n'));
+
+  assert.equal(t.lastError, 'Permission denied (publickey).');
+  await t.close();
 });
