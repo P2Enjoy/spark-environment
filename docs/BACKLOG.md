@@ -1243,13 +1243,34 @@ Ce que l'unité doit trancher, pas seulement décrire :
 - **Preuves** : 10, dont une qui rejoue la mesure du WAL pour qu'une future
   « simplification » en `shutil.copy` rougisse immédiatement.
 
+**L'EXERCICE DE RESTAURATION A ÉTÉ JOUÉ le 2026-08-21**, sur la Forge de
+validation, de bout en bout et avec les seules commandes du document. Les
+chiffres du §2.6 ne sont plus espérés :
+
+```
+sauvegarde   : 253 952 octets, 0,10 s, service en marche
+restauration : 0,08 s
+interruption : ~20 s, dominee par l'arret et le redemarrage de sparkd
+verifications: preflight 12/0/0 · 2 Sparks avec leurs etats reels
+               GET /v1/audit/verify -> intact: true, 51 entrees
+```
+
+- **La perte a été DÉMONTRÉE, pas affirmée** : une variable posée **après** la
+  sauvegarde n'existe plus après restauration, celles posées avant sont là. La
+  fenêtre de perte est l'intervalle entre deux sauvegardes, et rien d'autre.
+- **Le dispositif s'est comporté comme écrit** : la restauration a refusé de
+  s'exécuter tant que `sparkd` tournait, et elle a **déplacé** l'ancien registre
+  au lieu de l'écraser.
+- La Forge a été rendue à son état, données de démonstration comprises.
+
 - **Reste avant `[x]`** :
   1. les **neuf autres scénarios**, listés au §3 de `docs/CONTINGENCE.md` avec ce
-     qui manque à chacun ;
-  2. l'**exercice réel sur l'hôte** que la DoD exige — restauration du registre et
-     reconstruction d'un Spark. Les chiffres de reprise du §2.6 restent
-     **espérés** tant qu'il ne les a pas remplacés, et un plan jamais joué est une
-     fiction. **Nécessite une action humaine.**
+     qui manque à chacun. C'est du travail d'instruction, pas de mesure ;
+  2. la **reconstruction d'un Spark** après perte de sa cellule — l'autre moitié
+     de l'exercice que la DoD nomme. Non jouée ;
+  3. l'**ancre de la console** au §2.5 point 4 : la signaler exige la console
+     lancée avec son tunnel, que l'exercice n'a pas monté. Le comportement
+     attendu reste écrit, il n'est pas mesuré.
 
 ### [~] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
 
