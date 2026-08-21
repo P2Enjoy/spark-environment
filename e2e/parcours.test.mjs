@@ -424,9 +424,13 @@ test('redimensionner un Spark depuis l’écran, sans le détruire', async () =>
     //   produit qui a raison : le §49.3 interdit de descendre sous ce que la
     //   cellule emploie, sous peine de livrer ses processus à l'OOM killer.
     //
-    // Un Spark arrêté n'a pas d'usage relevé, et rendre du disque ne peut jamais
-    // manquer de place (§49.1). Le geste est en outre réversible, donc le
-    // parcours ne laisse aucune trace aux suivants (§29.2).
+    // Un Spark arrêté n'occupe pas de mémoire — c'est la dissymétrie du §49.3 —
+    // et rendre du disque ne peut jamais manquer de place (§49.1). Rétrécir de
+    // 1 Gio reste très au-dessus de ce que la cellule occupe, donc le refus de
+    // rétrécissement ne se déclenche pas : il est éprouvé par le parcours
+    // « le disque OCCUPÉ refuse d'être rétréci », plus bas. Le geste est en
+    // outre réversible, donc le parcours ne laisse aucune trace aux
+    // suivants (§29.2).
     await ouvrir('boutique');
     await page.waitForSelector('#titre-ressources', { timeout: 10000 });
 
@@ -550,6 +554,47 @@ test('un quota REFUSÉ reste dans la modale, sans effacer la saisie', async () =
     // Rien n'a bougé côté Forge : un refus ne laisse aucune trace.
     const { corps } = await pile.lireSparkd('/v1/sparks/crm-production');
     assert.notEqual(corps.memory_reservation_bytes, 900000 * 1024 ** 3);
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 10000 });
+  });
+});
+
+test('le disque OCCUPÉ refuse d’être rétréci, et le dit autrement', async () => {
+  await parcours('quotas-disque-occupe', async () => {
+    // §49.3 : les DEUX refus arrivent par le même code HTTP et la même modale.
+    // Ce parcours prouve qu'ils ne DISENT pas la même chose — l'admission
+    // envoie libérer de la place sur la Forge, celui-ci envoie vider la cellule.
+    // Les confondre ferait chercher au mauvais endroit.
+    //
+    // La valeur saisie est ZÉRO, et ce n'est pas une provocation : la cellule du
+    // harnais occupe moins d'un gibioctet, et le champ se saisit au gibioctet.
+    // Sur une Forge réelle, une cellule occupe plusieurs gibioctets et le refus
+    // tombe à des valeurs ordinaires.
+    await ouvrir('boutique');
+    await page.waitForSelector('#titre-ressources', { timeout: 10000 });
+
+    const avant = await pile.lireSparkd('/v1/sparks/boutique');
+
+    await page.focus('[data-ouvre="quotas"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #quota-storage', { timeout: 10000 });
+
+    await page.fill('#quota-storage', '0');
+    await page.click('dialog.modale[open] [data-engage="quotas"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 15000 });
+
+    const refus = await page.textContent('dialog.modale[open] .refus');
+    // Le message porte l'occupation MESURÉE, et dit quoi faire : vider la
+    // cellule. Pas « capacité insuffisante », qui enverrait ailleurs.
+    assert.match(refus, /occupe actuellement/);
+    assert.match(refus, /octets de disque/);
+    assert.doesNotMatch(refus, /Capacité insuffisante/);
+
+    // Rien n'a bougé côté Forge : le disque du Spark est intact.
+    const apres = await pile.lireSparkd('/v1/sparks/boutique');
+    assert.equal(apres.corps.storage_bytes, avant.corps.storage_bytes);
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(
