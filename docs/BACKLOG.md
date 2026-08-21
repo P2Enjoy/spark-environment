@@ -2804,7 +2804,7 @@ manuel.**
   catalogue et des renvois. Captures `107-` à `110-` observées, plus
   `14-detail-mobile` refaite. Campagne complète verte.
 
-### [~] SPK-57 · Redimensionner un Spark existant
+### [x] SPK-57 · Redimensionner un Spark existant
 
 **Trou constaté le 2026-08-20, sur question du responsable.** Le produit crée et
 supprime ; il ne sait pas **ajuster**. Relevé du contrat servi par la Forge
@@ -2972,11 +2972,29 @@ prononçait jamais en production. Un refus inatteignable ne protège personne.
   ne dit PAS « capacité insuffisante ». Capture `55-quotas-refus-disque.png`
   observée.
 
-- **Reste avant `[x]`**, et rien n'en est constructible sans matériel : ce que le
-  §49.4 laisse à mesurer — la prise à chaud du disque et du changement de mode
-  CPU —, plus le fait qu'une instance ARRÊTÉE rende bien `disk.root.usage` sur un
-  Incus réel. Les trois exigent une Forge de validation : **nécessite une action
-  humaine**.
+**CLOSE le 2026-08-21, sur la Forge de validation réelle**, sur instruction
+explicite du responsable. Les trois mesures qui manquaient sont faites, et l'une
+d'elles a trouvé un DÉFAUT :
+
+- **le disque prend à chaud** : 10 → 12 Gio, la cellule voit la nouvelle taille
+  sans redémarrer (`df` rend 13161594880) ; le rétrécissement aussi ;
+- **le mode CPU prend à chaud** : `shared` → `capped` pose
+  `cpu.max = 50000 100000` dans le cgroup du NOYAU, et le retour rend `max` ;
+- **une instance ARRÊTÉE rend bien `disk.root.usage`** — 598029312 octets sur
+  `helo` — là où `memory.usage` tombe à zéro. Le refus du §49.3 est donc
+  atteignable sur un Spark arrêté, et il a été éprouvé sur la Forge : le refus
+  porte le chiffre mesuré et le registre reste intact ;
+- **DÉFAUT TROUVÉ ET CORRIGÉ** : la route rendait `applied: true` sans rien
+  poser. La taille du disque vit dans le **device** `root`, pas dans la
+  configuration de l'instance. C'était le pire des cas que la DoD de l'unité
+  nomme — « un quota changé au registre mais pas dans le noyau » —, aggravé par
+  un `applied` qui affirmait le contraire. Corrigé, avec la preuve qui regarde le
+  device (§49.4 bis).
+
+**Conséquence portée jusqu'à l'écran** : la modale annonçait « exige un
+redémarrage » pour le disque et le mode CPU. La mesure l'a démenti ; l'annonce
+est retirée de l'écran, du manuel M8, et les preuves qui la gardaient ont été
+RÉVISÉES en expliquant pourquoi dans le fichier.
 
 ### [x] SPK-58 · Variables d'environnement et secrets d'un Spark
 
