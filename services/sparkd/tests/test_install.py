@@ -15,7 +15,7 @@ def paths(tmp_path: Path) -> install.Paths:
     python = tmp_path / "opt" / "sparkd" / "venv" / "bin" / "python"
     python.parent.mkdir(parents=True)
     python.touch()
-    return install.Paths(prefix=python.parent.parent,
+    return install.Paths(prefix=python.parent.parent.parent,
                          state=tmp_path / "state",
                          systemd=tmp_path / "systemd", python=python)
 
@@ -30,6 +30,18 @@ def test_les_unites_sont_lues_depuis_le_paquet():
     slice_ = install.packaged_unit("spark.slice")
     assert "@SPARKD_PYTHON@ -m sparkd" in service
     assert "CPUWeight=1" in slice_
+
+
+def test_le_chemin_du_venv_n_est_pas_resolu_vers_le_python_systeme(monkeypatch):
+    """@verifies docs/BACKLOG.md#SPK-66
+
+    Les venvs Ubuntu lient souvent `bin/python` vers `/usr/bin/python3`. Le
+    résoudre est un défaut de disponibilité : l'unité perd alors le paquet.
+    """
+    monkeypatch.setattr(install.sys, "executable", "/opt/sparkd/venv/bin/python")
+    cible = install.Paths.installed()
+    assert cible.python == Path("/opt/sparkd/venv/bin/python")
+    assert cible.prefix == Path("/opt/sparkd")
 
 
 def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_path):

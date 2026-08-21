@@ -54,8 +54,12 @@ class Paths:
 
     @classmethod
     def installed(cls) -> "Paths":
-        python = Path(sys.executable).resolve()
-        return cls(prefix=python.parent.parent, state=DEFAULT_STATE,
+        # Le binaire d'un venv est couramment un lien vers le Python système.
+        # Le résoudre rendrait l'unité avec `/usr/bin/python…`, qui ne connaît
+        # pas les dépendances du paquet que ce venv vient justement d'installer.
+        # On conserve donc le chemin ABSOLU d'invocation, sans suivre le lien.
+        python = Path(sys.executable).absolute()
+        return cls(prefix=python.parent.parent.parent, state=DEFAULT_STATE,
                    systemd=DEFAULT_SYSTEMD, python=python)
 
     @property
