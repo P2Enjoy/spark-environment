@@ -1032,6 +1032,44 @@ Elle protège **l'administrabilité** d'un Spark saturé : `backup.yaml` continu
 s'écrire, donc `PATCH` sur l'instance continue d'aboutir, donc le plan de contrôle
 peut encore agrandir le Spark pour le débloquer.
 
+##### CORRIGÉ PAR LA MESURE DU 2026-08-21 : la marge ne tient PAS cette promesse
+
+Niveau 3 de la DoD de SPK-30, exécuté sur la Forge de validation. Un Spark à
+1 Gio vendu, marge de 64 Mio, rempli de données incompressibles jusqu'au refus :
+
+```
+df dans la cellule  ->  1561329664  1561329664  0
+ecriture de plus    ->  Disk quota exceeded
+```
+
+Puis, sur ce dataset saturé, les deux gestes séparément :
+
+| Geste | Résultat |
+|---|---|
+| écrire la **configuration** de l'instance | **ÉCHOUE** — `Failed to write backup file: … backup.yaml: disk quota exceeded` |
+| écrire la **taille du device** `root` | **RÉUSSIT**, et la cellule respire aussitôt |
+
+**Pourquoi la marge ne protège pas** : le quota ZFS porte sur le jeu de données
+ENTIER, marge comprise. Le `df` de la cellule montre `vendue + marge`, et le
+locataire peut donc **remplir la marge** — elle n'est ni invisible ni
+inaccessible, contrairement à ce que cette section affirmait. Le §8.7 fait 2 le
+disait déjà à demi-mot : Incus pose `quota`, pas `refquota`.
+
+**Ce qui reste vrai, et sauve la promesse** : agrandir le device **fonctionne**
+même à saturation. L'administrabilité tient donc, à une condition d'ORDRE :
+
+> **On agrandit le disque AVANT d'écrire la configuration.** Grandir libère la
+> place que l'écriture de `backup.yaml` réclame. L'ordre inverse échoue sur un
+> Spark saturé — c'est-à-dire précisément dans le cas que cette section existe
+> pour traiter.
+
+**Ce qui reste à trancher, et c'est un ARBITRAGE** : rendre la marge réellement
+inaccessible exigerait de poser `refquota = taille vendue` en plus de
+`quota = vendue + marge`. Incus ne pose aujourd'hui que `quota`, et le produit ne
+pilote pas `refquota`. Deux voies : accepter que la marge soit consommable — la
+promesse tient alors par l'ordre des gestes, ce que le produit fait désormais —
+ou piloter `refquota`, au prix d'un chemin qui contourne l'abstraction d'Incus.
+
 Elle ne protège **pas** le locataire de la saturation : il atteindra son quota,
 verra 100 %, et ses écritures seront refusées. C'est voulu. La marge n'est pas un
 supplément d'espace offert, c'est de la place gardée pour les métadonnées d'Incus.
