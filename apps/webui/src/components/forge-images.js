@@ -198,6 +198,10 @@ export function renderOnglets(onglets, courant, etiquette) {
 // SPK-39 : le journal est une destination sous Forge, pas une facette d'un
 // Spark — il couvre TOUS les Sparks (docs/DAT.md §36.8.1).
 export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images'],
+                             // SPK-64 · §43.6 : le CATALOGUE vit ici, parce
+                             // qu'il décrit la Forge et non un Spark. Ce qui
+                             // descend se décide en revanche Spark par Spark.
+                             ['#/forge/environnement', 'Environnement'],
                              ['#/forge/journal', 'Journal']];
 
 /** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */

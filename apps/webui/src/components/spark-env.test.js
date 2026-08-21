@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { renderModale } from './modale.js';
-import { ENV_VIDE, ORIGINES, renderEnvPanel } from './spark-env.js';
+import { ENV_VIDE, ORIGINES, renderEnvPanel, renderCatalogueCases } from './spark-env.js';
 
 const SPARK = { name: 'crm-production', protected: false };
 // La VRAIE modale, pas un doublon : c'est elle qui rend le refus et l'engagement,
@@ -112,4 +112,46 @@ test('une valeur est ÉCHAPPÉE avant d’atteindre l’écran', () => {
   const rendu = renderEnvPanel(SPARK, [entree({
     name: 'X', value: '<script>alert(1)</script>' })], ENV_VIDE, renderModale);
   assert.doesNotMatch(rendu, /<script>/);
+});
+
+// --- SPK-64 · le catalogue descend par SÉLECTION -----------------------------
+
+test('une entrée du catalogue porte une case, cochée si elle descend', () => {
+  const rendu = renderCatalogueCases('crm', [
+    { name: 'TZ', is_secret: false },
+    { name: 'SMTP_PASSWORD', is_secret: true },
+    { name: 'OBJECT_STORAGE_URL', is_secret: false },
+  ], [
+    { name: 'TZ', origin: 'forge' },
+    { name: 'SMTP_PASSWORD', origin: 'forge' },
+  ]);
+
+  assert.match(rendu, /data-descend="TZ"[^>]*checked/);
+  assert.match(rendu, /data-descend="SMTP_PASSWORD"[^>]*checked/);
+  // Celle que personne n'a cochée est PRÉSENTE et NON cochée : c'est l'état que
+  // l'unité existe pour rendre visible.
+  assert.match(rendu, /data-descend="OBJECT_STORAGE_URL"(?![^>]*checked)/);
+});
+
+test('une entrée MASQUÉE reste cochée, et le dit', () => {
+  // Sans cette mention, on cherche pourquoi la valeur affichée n'est pas celle
+  // du catalogue alors que la case est cochée.
+  const rendu = renderCatalogueCases('crm',
+    [{ name: 'SMTP_HOST', is_secret: false }],
+    [{ name: 'SMTP_HOST', origin: 'overridden' }]);
+
+  assert.match(rendu, /data-descend="SMTP_HOST"[^>]*checked/);
+  assert.match(rendu, /masquée par une entrée propre/);
+});
+
+test('un catalogue vide se NOMME et dit où en ajouter une', () => {
+  const rendu = renderCatalogueCases('crm', [], []);
+  assert.match(rendu, /catalogue de la Forge est vide/);
+  assert.match(rendu, /#\/forge\/environnement/);
+});
+
+test('le mot « héritée » a disparu de l’écran', () => {
+  // SPK-64 : rien n'est hérité. Le mot décrivait le défaut, pas le produit.
+  assert.doesNotMatch(JSON.stringify(ORIGINES), /[Hh]érit/);
+  assert.match(ORIGINES.forge.libelle, /coch/i);
 });

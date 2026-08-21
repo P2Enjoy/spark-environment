@@ -37,9 +37,11 @@ export const ENV_VIDE = {
  * MASQUÉE, donc qu'on la chercherait en vain là où elle est écrite.
  */
 export const ORIGINES = {
-  forge: { libelle: 'Héritée de la Forge', token: 'neutral' },
+  // SPK-64 : « héritée » était le mot du défaut. Rien n'est hérité — une entrée
+  // du catalogue descend parce qu'on l'a COCHÉE ici, et nulle part ailleurs.
+  forge: { libelle: 'Cochée au catalogue', token: 'neutral' },
   spark: { libelle: 'Propre à ce Spark', token: 'brand' },
-  overridden: { libelle: 'Surcharge la Forge', token: 'accent' },
+  overridden: { libelle: 'Masque une entrée cochée', token: 'accent' },
 };
 
 /** Une valeur de secret ne s'affiche JAMAIS (§43.3). L'empreinte la compare. */
@@ -153,7 +155,60 @@ function section(niveau, spark, entrees, ui, renderModale) {
  * qu'on se trompe à faire (§43.6).
  */
 export function renderEnvPanel(spark, entrees = [], ui = ENV_VIDE,
-                               renderModale = () => '') {
-  return section('forge', spark, entrees, ui, renderModale)
+                               renderModale = () => '', catalogue = []) {
+  return renderCatalogueCases(spark, catalogue, entrees)
+       + section('forge', spark, entrees, ui, renderModale)
        + section('spark', spark, entrees, ui, renderModale);
+}
+
+/**
+ * Le catalogue de la Forge, avec une case par entrée (SPK-64 · §43.6 révisé).
+ *
+ * C'est ICI que se décide ce qui descend. Une entrée du catalogue n'atteint
+ * cette cellule que si sa case est cochée — sans quoi un secret défini une fois
+ * à la Forge se déposerait en clair dans toutes les cellules, y compris celles
+ * qui n'en ont aucun usage (§43.5.1).
+ */
+export function renderCatalogueCases(spark, catalogue = [], entrees = []) {
+  if (!catalogue.length) {
+    // §14.5 : l'absence se nomme. Un bloc vide laisserait croire à une panne
+    // de chargement là où il n'y a simplement rien à cocher.
+    return `<section class="carte bloc" aria-labelledby="titre-catalogue">
+      <h2 id="titre-catalogue">Catalogue de la Forge</h2>
+      <p class="absence">Le catalogue de la Forge est vide : il n’y a rien à faire
+      descendre. Une entrée s’y ajoute depuis
+      <a href="#/forge/environnement">l’onglet Environnement de la Forge</a>.</p>
+    </section>`;
+  }
+
+  // Une entrée COCHÉE peut être masquée par une entrée propre du même nom. Le
+  // dire sur la case évite de chercher pourquoi la valeur affichée n'est pas
+  // celle du catalogue (§43.6).
+  const masques = new Set(entrees.filter((e) => e.origin === 'overridden')
+                                 .map((e) => e.name));
+  const descend = new Set(entrees.filter((e) => e.origin !== 'spark')
+                                 .map((e) => e.name));
+
+  const cases = catalogue.map((e) => {
+    const coche = descend.has(e.name) || masques.has(e.name);
+    const id = `descend-${e.name}`;
+    return `<li class="case-catalogue">
+      <label for="${id}">
+        <input type="checkbox" id="${id}" data-descend="${echapper(e.name)}"
+               ${coche ? 'checked' : ''} />
+        <span class="technique">${echapper(e.name)}</span>
+        ${e.is_secret ? '<span class="badge badge--neutral">Secret</span>' : ''}
+      </label>
+      ${masques.has(e.name)
+        ? '<span class="note">masquée par une entrée propre à ce Spark</span>'
+        : ''}
+    </li>`;
+  }).join('');
+
+  return `<section class="carte bloc" aria-labelledby="titre-catalogue">
+  <h2 id="titre-catalogue">Catalogue de la Forge</h2>
+  <p class="note">Cocher fait descendre l’entrée dans ce Spark. Décocher la retire
+  de sa cellule. <a href="#/manuel/M8">Manuel M8</a></p>
+  <ul class="liste-cases">${cases}</ul>
+</section>`;
 }

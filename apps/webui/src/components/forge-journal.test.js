@@ -34,7 +34,9 @@ const pret = (surcharge = {}) => renderJournalForge({
 
 test('le journal est un onglet de l’FORGE, à côté de Pools et Images', () => {
   const chemins = ONGLETS_FORGE.map(([href]) => href);
-  assert.deepEqual(chemins, ['#/forge', '#/forge/images', '#/forge/journal']);
+  // SPK-64 a inséré le catalogue d'environnement entre les images et le journal.
+  assert.deepEqual(chemins, ['#/forge', '#/forge/images',
+                             '#/forge/environnement', '#/forge/journal']);
 });
 
 test('l’écran dit qu’il couvre TOUS les Sparks', () => {
