@@ -18,7 +18,15 @@
   `env_file:` à deux entrées. Les valeurs sont écrites de façon à **traverser
   Compose intactes** — mesuré : sans cela, un mot de passe contenant `$` serait
   tronqué en silence, et une apostrophe viderait tout l'environnement de la pile.
-  **Aucune route ne pose encore une valeur** : c'est la tranche suivante.
+- **L'environnement d'un Spark : les gestes** (SPK-58, `docs/DAT.md` §43.9.5) —
+  troisième tranche. Six routes posent, lisent et retirent une variable, au
+  niveau de la **Forge** ou d'un **Spark**, et l'écriture repose aussitôt les
+  fichiers dans la cellule. La lecture d'un Spark dit **d'où vient chaque
+  valeur** — héritée, propre, ou masquant celle de la Forge. Un Spark protégé
+  refuse l'écriture qui le vise ; un geste de Forge qui toucherait des Sparks
+  protégés les **nomme** d'abord et n'aboutit qu'au second appel. Les données de
+  démonstration couvrent les trois origines et deux secrets. **L'écran n'existe
+  pas encore** : c'est la tranche suivante.
 - **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de

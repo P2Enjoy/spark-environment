@@ -6430,3 +6430,52 @@ Il manque à la tranche 2 les **routes d'API** qui posent et retirent une entré
 donc le « au changement » du §43.2. Puis la tranche 3 (l'onglet *Environnement*)
 et la tranche 4 (manuel, seed, et la preuve du §43.0 essai F refaite sur le
 fichier que le produit écrit, qui **exige une Forge réelle**).
+
+## 2026-08-21 · SPK-58 — les routes, et le seed qui les emploie
+
+**Unité reprise** au §4.2 point 1 : ce qui manquait à la tranche 2 du §43.9.6.
+
+### Ce qui a été spécifié avant d'être codé
+
+Le §43.9.5 donnait les refus, pas les chemins ni les verbes. Écrit et committé
+avant le code : les six routes, `PUT` avec le nom dans le CHEMIN — le geste est
+idempotent, « cette variable vaut ceci », et un `POST` sur la collection ferait
+de deux requêtes identiques deux gestes différents.
+
+**Une question que la spécification ne tranchait pas** : que fait un geste de
+**Forge** face à un Spark protégé ? Une variable de la Forge descend dans tous
+ses Sparks, gelés compris. La convention EXISTE déjà dans le produit — la
+révocation d'une clé (§35.2) — et on s'y range : **informer, puis accepter**. Le
+premier appel nomme les Sparks gelés et refuse en `409`, le second porte
+`accept_protected`. Un refus ferme gèlerait toute la Forge dès qu'un seul Spark
+est protégé, et l'exploitant lèverait la protection pour contourner : cela
+protégerait moins, pas plus. Écrit au §43.9.5 bis.
+
+### Ce qui a été codé
+
+Les six routes. Écrire **repose les fichiers** dans la cellule — c'est le « au
+changement » du §43.2, le dernier des quatre moments qui manquait. Une écriture
+de Forge repose sur **tous** les Sparks, puisqu'ils en héritent.
+
+Le **seed** pose les cinq situations que l'écran devra distinguer : les trois
+origines — héritée, propre, surchargée — et deux secrets, dont un hérité. Il
+emploie les **vraies routes** (§28.3), et sa vérification échoue si une origine
+manque ou si un secret rend sa valeur.
+
+### Vérifications
+
+**909 preuves Python** (899 + 10). Celle qui garde la DoD cherche la valeur du
+secret dans **chaque** sortie de l'API — la liste du Spark, celle de la Forge, la
+fiche du Spark, le journal, et la réponse du geste voisin.
+
+Le contrat d'API a été régénéré : `make contract-check` rougissait, et c'est
+exactement ce que cette preuve existe pour attraper.
+
+### Où reprendre
+
+**Tranche 3 : l'écran** — onglet *Environnement* dans la fenêtre d'un Spark, une
+section par niveau, l'origine de chaque valeur, le champ de secret en écriture
+seule. Le seed est prêt à le démontrer. Lire `docs/DESIGN_SYSTEM.md`
+INTÉGRALEMENT avant (`CLAUDE.md` §4). Puis la tranche 4 : manuel M6/M8, et la
+preuve du §43.0 essai F refaite sur le fichier que le produit écrit — celle-là
+**exige une Forge réelle**.

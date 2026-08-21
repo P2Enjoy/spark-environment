@@ -3193,13 +3193,36 @@ que laissé à la mémoire d'une conversation.
 - **Preuves** : 13 de plus — 10 sur l'écriture et les trois fichiers, 3 qui
   vérifient ce que la CELLULE a reçu. 899 preuves Python.
 
+**Tranche 2 — COMPLÈTE le 2026-08-21.** Les six routes du §43.9.5 sont ouvertes,
+et écrire repose les fichiers : le « au changement » du §43.2 était le dernier des
+quatre moments qui manquait.
+
+- **`PUT` avec le nom dans le CHEMIN**, pas `POST` sur la collection : le geste
+  est idempotent — « cette variable vaut ceci » — et rejouer la requête doit
+  donner le même état, pas une seconde entrée.
+- **Un geste de FORGE face à un Spark gelé** : la question n'était pas tranchée,
+  et une variable de la Forge descend dans tous les Sparks. La convention EXISTE
+  déjà dans le produit — la révocation d'une clé (§35.2) — et on s'y range :
+  **informer, puis accepter** (§43.9.5 bis). Un refus ferme gèlerait toute la
+  Forge dès qu'un Spark est protégé, et l'exploitant lèverait la protection pour
+  contourner : cela protégerait moins, pas plus.
+- **Une écriture au niveau du Spark reste refusée en `423`** : le verrou porte
+  sur l'objet, et c'est une écriture qui LE vise.
+- **Le SEED pose les cinq situations** que l'écran devra distinguer — les trois
+  origines et deux secrets, dont un hérité — par les **vraies routes** (§28.3).
+  Sa vérification échoue si une origine manque ou si un secret rend sa valeur.
+- **Preuves** : 10 de plus, dont celle de la DoD qui cherche la valeur du secret
+  dans **chaque** sortie de l'API. 909 preuves Python. Contrat d'API régénéré.
+
 - **Reste avant `[x]`**, dans l'ordre du §43.9.6 :
-  1. **les routes d'API** qui posent et retirent une entrée — donc le « au
-     changement » du §43.2, seul moment de la tranche 2 encore absent ;
-  2. **l'écran** — onglet *Environnement*, l'origine de chaque valeur, le champ
-     de secret en écriture seule ;
-  3. **le manuel, le seed**, et la preuve du §43.0 essai F refaite sur le fichier
-     que le produit écrit — celle-là **nécessite une Forge réelle**.
+  1. **l'écran** — onglet *Environnement*, une section par niveau, l'origine de
+     chaque valeur, le champ de secret en écriture seule. Le seed est prêt à le
+     démontrer, et aucun parcours E2E n'est possible avant lui ;
+  2. **le manuel** M6 et M8 — délibérément non écrits tant que l'écran n'existe
+     pas : le manuel décrit ce qu'on fait à l'écran, et documenter aujourd'hui un
+     geste qui n'a pas de surface décrirait une fonctionnalité inatteignable ;
+  3. **la preuve du §43.0 essai F refaite sur le fichier que le produit écrit** —
+     celle-là **nécessite une Forge réelle**.
 
 ### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 
