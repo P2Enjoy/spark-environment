@@ -6682,10 +6682,23 @@ session sans commande — le shell interactif —, `cat`, `sh -c`, `incus file p
 `incus exec` avec des options avant le nom, et toute commande dont un argument ne
 correspond pas à la forme attendue.
 
-**Le refus est BAVARD dans le journal de la Forge et muet vers le client** : il
-écrit ce qui a été refusé sur la sortie d'erreur du `sshd`, et ne rend au client
-qu'un code non nul et une phrase qui ne décrit pas la grammaire acceptée. Décrire
-la grammaire à qui n'y a pas droit lui apprend comment la contourner.
+**Le refus est BAVARD vers l'exploitant de la Forge et muet vers le client.** Le
+détail — la commande refusée, telle qu'elle est arrivée — part au **journal
+système** par `logger -t spark-garde -p auth.warning`, là où l'exploitant lit déjà
+ses refus d'authentification. Le client, lui, ne reçoit qu'un code non nul et une
+phrase qui ne décrit pas la grammaire acceptée : la lui décrire lui apprendrait à
+la contourner. Une preuve garde que ni `incus`, ni `exec`, ni le shell admis, ni
+`permitopen` n'apparaissent dans ce que le client reçoit.
+
+La sortie d'erreur ne convient pas pour le détail : sous `command=`, elle est
+relayée **au client**, et non au journal du `sshd`. Si `logger` est absent, le
+détail est perdu — ce qui vaut mieux que de l'envoyer à qui vient d'être refusé.
+
+**Le découpage de `SSH_ORIGINAL_COMMAND` se fait sous `set -f`**, et ce n'est pas
+une précaution de style. MESURÉ : sans lui, `incus exec * -- /bin/bash` se
+développe sur les fichiers du répertoire courant, et la garde **lance** un
+dépannage sur une cellule que personne n'a nommée. Les mots validés sont ensuite
+passés un à un, jamais réassemblés en une chaîne qu'un interpréteur relirait.
 
 **Ce que la garde ne prétend pas être** : une frontière de sécurité contre un
 adversaire qui a déjà `root` sur la Forge. Le §35.1 l'assume déjà pour la
