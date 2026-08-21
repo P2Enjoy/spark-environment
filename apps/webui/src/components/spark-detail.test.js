@@ -707,14 +707,22 @@ test('la modale a pour SUJET la section, et un seul point d’engagement', () =>
   assert.equal((html.match(/bouton--primaire/g) || []).length, 1);
 });
 
-test('le DISQUE annonce son redémarrage AVANT d’agir', () => {
-  // §49.4 : un geste qui redémarre une cellule sans l'avoir annoncé coupe un
-  // service en production. Tant que la prise à chaud n'est pas MESURÉE sur une
-  // Forge réelle, on promet moins que ce qu'on fait — l'inverse coupe un
-  // service.
+test('le DISQUE dit qu’il est pris en compte IMMÉDIATEMENT', () => {
+  // RÉVISÉE le 2026-08-21, et le motif est une MESURE, pas un revirement.
+  //
+  // Cette preuve gardait l'annonce « exige un redémarrage ». Le §49.4 l'imposait
+  // TANT QUE la prise à chaud n'était pas mesurée sur une Forge réelle : promettre
+  // moins que ce qu'on fait est sans conséquence, l'inverse coupe un service.
+  //
+  // La mesure a été faite : Forge de validation, Incus 7.3 sur ZFS, Spark en
+  // marche. Agrandir de 10 à 12 Gio se voit dans la cellule SANS redémarrage —
+  // `df` rend la nouvelle taille —, et le rétrécissement aussi. L'annonce était
+  // devenue fausse, et une annonce fausse dans ce sens-là fait renoncer à un
+  // geste qui ne coûte rien.
   const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
   const disque = html.slice(html.indexOf('quota-storage'));
-  assert.match(disque.slice(0, 400), /exige un redémarrage/);
+  assert.match(disque.slice(0, 400), /pris en compte immédiatement/);
+  assert.doesNotMatch(disque.slice(0, 400), /exige un redémarrage/);
 });
 
 test('la modale DIT que ce qu’on retire doit être libre', () => {
@@ -738,14 +746,15 @@ test('fermée, la modale ne rend RIEN', () => {
   assert.equal(renderQuotas(SPARK_LIBRE, QUOTAS_VIDE), '');
 });
 
-test('le MODE CPU est modifiable, et annonce son redémarrage', () => {
-  // §49.2 : le mode CPU est un champ redimensionnable. §49.4 : tant que sa prise
-  // à chaud n'est pas mesurée sur une Forge réelle, l'écran promet moins que ce
-  // qu'il fait — l'inverse coupe un service en production.
+test('le MODE CPU est modifiable, et dit qu’il est pris immédiatement', () => {
+  // RÉVISÉE le 2026-08-21 pour la même raison que le disque, ci-dessus : la
+  // prise à chaud a été MESURÉE. Passer de `shared` à `capped` pose
+  // `cpu.max = 50000 100000` dans le cgroup du NOYAU sans redémarrage, et le
+  // retour rend `max`, donc le burst.
   const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
   assert.match(html, /name="cpu_mode"/);
   const bloc = html.slice(html.indexOf('quota-cpu_mode'));
-  assert.match(bloc.slice(0, 500), /exige un redémarrage/);
+  assert.match(bloc.slice(0, 500), /pris en compte immédiatement/);
 });
 
 test('les champs CPU SUIVENT le mode retenu', () => {

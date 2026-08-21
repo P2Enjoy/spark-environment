@@ -267,9 +267,11 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE) {
       <p class="champ__aide">${echapper(unite)}${aide ? ` · ${aide}` : ''}</p>
     </div>`;
 
-  // §49.2 : le mode CPU se redimensionne, et le §49.4 impose de dire qu'il
-  // exige un redémarrage tant que sa prise à chaud n'est pas MESURÉE sur une
-  // Forge réelle.
+  // §49.2 : le mode CPU se redimensionne. Le §49.4 imposait d'annoncer un
+  // redémarrage tant que la prise à chaud n'était pas MESURÉE — elle l'a été le
+  // 2026-08-21 sur la Forge de validation : le noyau porte le nouveau `cpu.max`
+  // et la cellule voit le nouveau disque, sans redémarrer. L'annonce tombe donc,
+  // et l'écran cesse de promettre moins que ce que le produit tient.
   //
   // Les champs qui suivent DÉPENDENT du mode : un mode partagé se règle par une
   // réservation, un mode plafonné par un plafond, un mode dédié par un nombre de
@@ -297,12 +299,12 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE) {
       <div class="champ">
         <label for="quota-cpu_mode">Mode CPU</label>
         <select class="controle" id="quota-cpu_mode" name="cpu_mode">${options}</select>
-        <p class="champ__aide"><strong>exige un redémarrage</strong></p>
+        <p class="champ__aide">pris en compte immédiatement</p>
       </div>
       ${champsCpu}
       ${champ('memory', 'Mémoire', v.memory_gib, '', 'en Gio')}
       ${champ('storage', 'Disque', v.storage_gib,
-              '<strong>exige un redémarrage</strong>', 'en Gio')}
+              'pris en compte immédiatement', 'en Gio')}
       ${champ('network', 'Plafond réseau', v.network_mbps, '', 'en Mbit/s')}
       <p class="note">Ce que vous retirez doit être libre : réduire la mémoire
       sous ce que la cellule emploie, ou le disque sous ce qu’il contient, sera

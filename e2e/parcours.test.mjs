@@ -447,8 +447,10 @@ test('redimensionner un Spark depuis l’écran, sans le détruire', async () =>
     assert.equal(await page.inputValue('#quota-storage'),
                  String(Math.round(avant.corps.storage_bytes / 1024 ** 3)));
 
-    // §49.4 : le disque annonce son redémarrage AVANT qu'on agisse.
-    assert.match(await page.innerText('dialog.modale[open]'), /exige un redémarrage/);
+    // §49.4, RÉVISÉ le 2026-08-21 : la prise à chaud a été MESURÉE sur la Forge
+    // de validation — la cellule voit le nouveau disque sans redémarrer. L'écran
+    // ne promet donc plus un redémarrage qui n'a pas lieu.
+    assert.match(await page.innerText('dialog.modale[open]'), /pris en compte immédiatement/);
 
     await page.fill('#quota-storage', String(Math.round(cible / 1024 ** 3)));
     await page.click('dialog.modale[open] [data-engage="quotas"]');
@@ -492,7 +494,7 @@ test('changer le MODE CPU depuis l’écran, au clavier', async () => {
     await page.waitForSelector('dialog.modale[open] #quota-cpu_mode', { timeout: 10000 });
 
     // §49.4 : le mode annonce son redémarrage AVANT qu'on agisse.
-    assert.match(await page.innerText('dialog.modale[open]'), /exige un redémarrage/);
+    assert.match(await page.innerText('dialog.modale[open]'), /pris en compte immédiatement/);
     // Le mode courant est PRÉ-SÉLECTIONNÉ.
     assert.equal(await page.inputValue('#quota-cpu_mode'), 'shared');
     // …et le champ qui lui correspond est là, les autres non (§1.4).
