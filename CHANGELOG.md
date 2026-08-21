@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- Unité SPK-64 : l'héritage de l'environnement devient une **sélection**. La Forge
+  tient un catalogue, chaque Spark coche ce qui descend chez lui — correction d'un
+  défaut de sécurité de SPK-58, relevé par le responsable.
 - **L'environnement d'un Spark : le magasin** (SPK-58, `docs/DAT.md` §43.9) —
   première tranche. Le registre sait porter des variables d'environnement à deux
   niveaux, la Forge et le Spark, la seconde surchargeant la première **nom par
@@ -400,6 +403,10 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- `docs/DAT.md` §43.6 révisé : l'héritage automatique déposait un secret **en
+  clair** dans toutes les cellules, y compris celles qui n'en ont aucun usage.
+  La doctrine du général vers le particulier vaut pour ce qu'on **lit**, pas pour
+  ce qu'on **distribue dans des cellules isolées**.
 - **La réservation CPU est un plancher, et le produit le dit enfin.** Arbitrage du
   responsable : `H = 300` reste posé, donc `r/C` est garanti sous contention
   totale et dépassé sinon. Le runtime publie `floor_under_contention` et l'écran

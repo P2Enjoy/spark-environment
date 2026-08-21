@@ -6930,3 +6930,60 @@ l'exercice —, et l'ancre de la console, qui exige l'hôte lancé avec son tunn
 Restent bloquées : **SPK-28** (une machine à commander), **SPK-61** (poser la clé
 restreinte, geste délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel),
 **SPK-43** (route de dépannage de bout en bout), **SPK-17** (CI jamais exécutée).
+
+## 2026-08-21 — L'héritage de l'environnement était un défaut de sécurité
+
+Le responsable, en regardant l'écran : « les variables de la Forge, pourquoi on
+les règle Spark par Spark ? Elles devraient être un onglet sur la Forge, et
+Spark par Spark on les coche pour les faire descendre. »
+
+Question d'ergonomie en apparence. C'en est une de sécurité, et le défaut est de
+moi.
+
+### Ce que j'avais écrit, et pourquoi c'était faux
+
+Mon §43.6 posait un héritage **automatique** : toute entrée de la Forge descend
+dans tous ses Sparks, à charge pour chacun de la surcharger. SPK-58 l'a livré
+fidèlement — la résolution est là, nom par nom, avec l'origine affichée. Le code
+fait exactement ce que la spécification demandait.
+
+Mais le §43.5.1, que j'ai écrit deux jours plus tôt, établit que la valeur
+redevient **en clair dans la cellule** — elle doit l'être, `docker compose` ne
+déchiffre rien. Les deux mis bout à bout donnent : **définir un secret une fois à
+la Forge le dépose en clair dans les trente cellules**, y compris celles qui n'en
+ont aucun usage, y compris celle qu'un locataire compromettra.
+
+C'est une violation du moindre privilège, et elle est **silencieuse** : ajouter
+une entrée modifie l'environnement de Sparks que personne n'a touchés.
+
+### La faute de raisonnement, parce qu'elle resservira
+
+J'avais invoqué la doctrine du `CLAUDE.md` §4 — tout existe au niveau général,
+les contextes ne définissent que leurs différences — et je l'ai citée comme si
+elle tranchait. Elle dit **« lorsque cette architecture est pertinente »**, et
+j'ai sauté cette réserve.
+
+Elle ne l'est pas ici. Cette doctrine vaut pour des réglages qu'on **lit** — un
+libellé, un défaut de formulaire, une préférence. L'environnement d'un Spark n'est
+pas lu : il est **distribué dans une cellule isolée**, en clair, chez quelqu'un
+d'autre. Appliquée à un secret, la doctrine le répand.
+
+Invoquer une convention du responsable ne dispense pas de vérifier qu'elle
+s'applique — et c'est précisément parce qu'elle vient de lui que je ne l'ai pas
+questionnée.
+
+### Le modèle retenu
+
+La Forge tient un **catalogue** ; chaque Spark **coche** ce qui descend chez lui.
+Une entrée du catalogue n'a aucun effet tant que personne ne l'a cochée. Trois
+gains : moindre privilège, aucune surprise à l'ajout, et une révocation précise —
+décocher retire d'un seul Spark sans toucher aux autres.
+
+Un point que la DoD retient et qui aurait pu être manqué : **la migration doit
+cocher, pour chaque Spark existant, tout ce qu'il recevait déjà.** Sinon la mise à
+jour retirerait en silence des variables dont des piles dépendent — une correction
+de sécurité qui casserait la production serait un mauvais échange.
+
+SPK-58 reste `[x]` avec un renvoi : elle est le récit exact de ce qui a été livré
+et prouvé sous la spécification d'alors. SPK-64 porte le changement.
+

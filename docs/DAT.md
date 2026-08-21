@@ -6417,19 +6417,65 @@ de la cellule. Le cycle de vie passe par `sparkd` (§14), qui le repose donc à
 Spark démarré **hors du produit** — un `incus start` à la main sur la Forge —
 n'aura pas ses secrets tant que la réconciliation du §14.3 ne l'a pas rattrapé.
 
-### 43.6 Portée : général d'abord, surcharge ensuite
+### 43.6 Portée : la Forge propose, le Spark **choisit** — révisé le 2026-08-21
 
-`CLAUDE.md` §4 pose la doctrine : tout existe au niveau général, les contextes
-spécialisés ne définissent que leurs différences. L'environnement s'y prête
-exactement — une adresse de relais SMTP, un point d'entrée S3, un fuseau horaire
-n'ont aucune raison d'être ressaisis sur chaque Spark.
+**Cette section disait l'inverse, et c'était un défaut de sécurité.** Elle posait
+un héritage automatique : toute entrée de la Forge descendait dans **tous** ses
+Sparks, à charge pour chacun de la surcharger. Le responsable l'a relevé.
 
-**Deux niveaux, et un seul ordre de préséance :** un jeu **de la Forge**, hérité
-par tous ses Sparks ; un jeu **du Spark**, qui surcharge le premier, nom par nom.
+#### Pourquoi l'héritage automatique était faux
 
-L'écran doit dire **d'où vient chaque valeur** — héritée, surchargée, ou propre.
-Sans cela, on lit une valeur sans pouvoir expliquer pourquoi elle est celle-là, et
-l'on va la chercher au mauvais endroit.
+Le §43.5.1 l'établit : la valeur redevient **en clair dans la cellule**. Un
+héritage automatique signifie donc que **définir un secret une fois à la Forge le
+dépose en clair dans les trente cellules** — y compris celles qui n'en ont aucun
+usage, y compris celle qu'un locataire compromettra.
+
+C'est une violation du moindre privilège, et elle est silencieuse : ajouter une
+entrée à la Forge modifie l'environnement de Sparks que personne n'a touchés.
+
+J'avais invoqué la doctrine du `CLAUDE.md` §4 — tout existe au niveau général,
+les contextes ne définissent que leurs différences. La doctrine dit **« lorsque
+cette architecture est pertinente »**, et elle ne l'est pas ici : elle vaut pour
+des réglages qu'on **lit**, pas pour des valeurs qu'on **distribue dans des
+cellules isolées**. Appliquée à un secret, elle le répand.
+
+#### Le modèle retenu
+
+**La Forge tient un catalogue. Chaque Spark coche ce qui descend chez lui.**
+
+| Niveau | Ce qu'il porte | Effet |
+|---|---|---|
+| **Forge** | le **catalogue** — nom, valeur ou secret, défini une fois | **rien**, tant qu'aucun Spark ne l'a coché |
+| **Spark** | la **sélection** dans ce catalogue, plus ses entrées propres | ce qui est coché descend, le reste n'existe pas pour lui |
+
+Trois conséquences, et chacune est un gain :
+
+- **moindre privilège** : un secret ne va que là où il sert ;
+- **aucune surprise** : ajouter une entrée au catalogue ne change l'environnement
+  d'aucun Spark existant. C'est un geste sans effet tant qu'on ne le coche pas ;
+- **révocation précise** : décocher retire d'un seul Spark, sans toucher aux
+  autres ni supprimer la définition.
+
+#### Préséance et affichage
+
+Un Spark peut définir une entrée **de son propre nom** en plus de sa sélection.
+Si les deux portent le même nom, **la sienne gagne** : c'est le contexte le plus
+spécifique.
+
+L'écran dit **d'où vient chaque valeur** — cochée au catalogue, propre au Spark,
+ou propre **en masquant** une entrée cochée. Sans cela, on lit une valeur sans
+pouvoir expliquer pourquoi elle est celle-là, et l'on va la chercher au mauvais
+endroit.
+
+#### Ce que décocher doit faire
+
+Décocher **retire réellement** : le fichier est réécrit en entier depuis l'état
+voulu (§43.2), donc l'entrée disparaît de la cellule au geste suivant. Un
+décochage qui laisserait la valeur en place serait pire qu'un décochage absent —
+il ferait croire à une révocation qui n'a pas eu lieu.
+
+Et changer une valeur du catalogue **repousse chez tous ceux qui l'ont cochée**,
+et chez eux seuls.
 
 ### 43.7 Quand cela prend effet, et ce que le produit ne fait pas à la place du locataire
 

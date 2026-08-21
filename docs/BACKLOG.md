@@ -3146,6 +3146,13 @@ RÉVISÉES en expliquant pourquoi dans le fichier.
 
 ### [x] SPK-58 · Variables d'environnement et secrets d'un Spark
 
+> **Révisée par SPK-64 le 2026-08-21.** Cette unité a livré ce que le §43.6
+> demandait alors : un héritage **automatique** de toute entrée de la Forge par
+> tous ses Sparks. Le responsable a relevé que cela dépose un secret en clair
+> dans des cellules qui n'en ont aucun usage. Le modèle devient une **sélection**,
+> et SPK-64 porte le changement. Ce qui est écrit ci-dessous reste le récit exact
+> de ce qui a été livré et prouvé.
+
 Le locataire fait tourner une pile Compose ; le produit n'a aucun moyen de lui
 passer une valeur. Aujourd'hui, une adresse de relais SMTP ou un jeton d'API se
 saisit à la main dans la cellule, par SSH, sans trace et sans état voulu.
@@ -3485,6 +3492,43 @@ aller-retour.
   sans shell interactif**, ce qui est le cas d'usage réel ; preuve sur la Forge
   réelle qu'un agent partant du seul briefing déploie une pile joignable ; manuel
   M6 et `docs/AGENT_RUNBOOK.md` mis à jour.
+
+### [ ] SPK-64 · L'héritage de l'environnement devient une sélection
+
+**Correction d'un défaut de sécurité de SPK-58**, relevé par le responsable le
+2026-08-21. Le modèle livré fait descendre **toute** entrée de la Forge dans
+**tous** ses Sparks. Or le §43.5.1 établit que la valeur redevient **en clair
+dans la cellule** : définir un secret une fois à la Forge le dépose donc en clair
+dans trente cellules, dont celles qui n'en ont aucun usage et celle qu'un
+locataire compromettra.
+
+- Spécification : `docs/DAT.md` **§43.6 révisé** · §43.2 (réécriture en entier
+  depuis l'état voulu) · §43.5.1 · `docs/SCHEMA.md` (migration due).
+- Portée : la Forge tient un **catalogue** ; chaque Spark **coche** ce qui descend
+  chez lui. Une entrée de catalogue n'a **aucun effet** tant qu'aucun Spark ne l'a
+  cochée. Un Spark garde ses entrées propres, qui **gagnent** sur une entrée
+  cochée de même nom.
+- Migration : les sélections n'existent pas encore. Elle doit **cocher pour chaque
+  Spark existant tout ce qu'il recevait déjà**, sinon la mise à jour retirerait en
+  silence des variables dont des piles dépendent. Le comportement observable ne
+  change pas au moment de la migration ; ce sont les **ajouts suivants** qui
+  cessent de descendre tout seuls.
+- Écran : l'onglet de la Forge porte le catalogue ; la facette *Environnement* d'un
+  Spark porte les cases et ses entrées propres. Chaque valeur dit **d'où elle
+  vient** — cochée, propre, ou propre en **masquant** une cochée.
+- À proposer au responsable, sans l'implémenter d'office : une entrée du catalogue
+  pourrait être **proposée par défaut à la création** d'un Spark. Ce serait un
+  défaut de formulaire, pas un héritage — la sélection resterait stockée par
+  Spark, donc changer le défaut plus tard ne changerait rien aux Sparks existants.
+  Utile si cocher les cinq mêmes entrées trente fois devient pénible.
+- DoD : un test prouve qu'une entrée ajoutée au catalogue **ne change
+  l'environnement d'aucun Spark existant** ; un test prouve que **décocher retire
+  réellement** de la cellule, et pas seulement du registre ; un test prouve qu'une
+  entrée propre l'emporte sur une entrée cochée de même nom ; un test prouve que la
+  migration **préserve** l'environnement effectif de chaque Spark existant ;
+  parcours E2E depuis le parcours canonique — définir au catalogue, constater qu'il
+  ne descend nulle part, cocher sur un Spark, le voir arriver, décocher, le voir
+  partir ; manuel M6/M8 et seed mis à jour.
 
 ---
 
