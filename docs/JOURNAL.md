@@ -7610,3 +7610,19 @@ Forge et les 6 routes ciblées sont verts. La passe Chromium sur la Forge réell
 de validation a de plus rendu « En retard — 4 commits d'écart », avec le commit
 du paquet installé et celui du poste : le verdict a donc été observé à travers
 le tunnel, sans geste de mise à jour. SPK-53 est `[x]`; SPK-69 reste `[ ]`.
+
+---
+
+## 2026-08-21 · SPK-62 — l'alerte de suppression nomme son Spark
+
+Le message de `spark.delete` ne disait jusque-là que la transition d'état. C'est
+la ligne qui part vers le canal ; le nom du Spark n'arrivait qu'à
+`spark.deleted`, événement runtime qui ne doit pas notifier. Une alerte hors
+bande désignait donc un identifiant opaque, sans nom exploitable.
+
+La transition porte maintenant « Spark « crm-production » : … → deleting ».
+La preuve lit cette ligne à l'endroit où la notification l'emprunte, et les 80
+tests Spark/notification sont verts ; le contrat OpenAPI a été régénéré après la
+dérive de version du paquet. Il reste une seule preuve : recevoir ce corps sur un
+vrai canal choisi par le responsable, ce qui nécessite son URL et l'autorisation
+de jouer un geste sensible. SPK-62 reste `[~]`.

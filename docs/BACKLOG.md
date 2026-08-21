@@ -2740,18 +2740,15 @@ avant la première ligne de code.
   série entière le dirait. Captures observées : `e2e/captures/50-notify-sans-canal.png`
   et `51-notify-en-echec.png`.
 
-- **Reste avant `[x]`, et ce sont deux écarts nommés** :
-  1. **l'alerte ne NOMME pas l'objet en clair.** MESURÉ : le message de
-     `spark.delete` est une transition d'état — « error » → « deleting » —, et le
-     nom du Spark ne vit que dans `spark.deleted`, la ligne d'ACHÈVEMENT.
-     L'alerte porte donc `target_type` et `target_id`, un identifiant opaque. Le
-     backlog exige qu'elle nomme l'objet ; elle le désigne sans le nommer.
-     Corriger à la cause touche le vocabulaire du journal (§21), hors de cette
-     unité : à arbitrer — notifier aussi `spark.deleted` au risque de doubler
-     l'alerte, ou faire nommer le Spark par le message de `spark.delete` ;
-  2. **le canal n'a jamais parlé à un vrai destinataire.** Le doublon est un
-     vrai serveur HTTP, mais local : qu'un Slack, un Discord ou un `ntfy` accepte
-     ce corps se mesure sur un canal réel, et **nécessite une action humaine**.
+- **Écart de vocabulaire corrigé le 2026-08-21** : `spark.delete` nomme désormais
+  le Spark dans son message de transition. C'est cette ligne qui notifie ;
+  `spark.deleted` reste un événement runtime et ne double donc jamais l'alerte.
+  Une preuve traverse la transition et garde ce nom avant la disparition de la
+  ligne du registre.
+- **Reste avant `[x]`** : le canal n'a jamais parlé à un vrai destinataire. Le
+  doublon est un vrai serveur HTTP, mais local ; qu'un Slack, un Discord ou un
+  `ntfy` accepte ce corps se mesure sur un canal réel, et **nécessite une action
+  humaine** — URL du canal, puis geste sensible explicitement autorisé.
 
 ### [x] SPK-63 · Frappe du nom sur les gestes destructifs
 
