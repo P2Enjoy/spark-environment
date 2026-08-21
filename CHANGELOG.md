@@ -442,6 +442,12 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- `README.md` : la section « Statut » annonçait encore un **plan de contrôle non
+  commencé** et SPK-29 comme dette ouverte, alors qu'il tourne sur une Forge
+  réelle et que la réservation est arbitrée. Réécrite avec ce que la mesure
+  établit, et avec ce qui manque encore. Deux limites connues devenues fausses
+  sont retirées : l'émission TLS, prouvée le 2026-08-20, et le champ « image »
+  libre, remplacé par le catalogue de SPK-32.
 - `make runProd` écoute sur **5175**, et non plus sur le port de `runDev` : les
   deux consoles servent deux mondes différents — un `sparkd` factice d'un côté,
   de vraies Forges de l'autre — et devaient pouvoir tourner ensemble. Un port

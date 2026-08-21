@@ -39,25 +39,34 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Faisabilité prouvée sur matériel réel, plan de contrôle non commencé.**
-L'architecture, le modèle de données et le backlog font foi. L'état réel de chaque
-unité est dans [docs/BACKLOG.md](docs/BACKLOG.md).
+**Le plan de contrôle tourne sur une Forge réelle.** 67 unités : 51 closes, 11
+partielles, 5 non commencées. L'état de chacune est dans
+[docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
-Ce qui est **établi par la mesure** sur la Forge, le 2026-08-18 : une pile Docker
-Compose réelle tourne dans un Spark **non privilégié**, à plages UID/GID disjointes,
-sous AppArmor actif et sans aucun contournement, et répond en `HTTP 200` à la Forge sur
-son IP privée. Le quota disque, le plafond réseau, les limites mémoire et la
-reconfiguration du cpuset à chaud sont vérifiés de la même façon.
+Ce qui est **établi par la mesure**, et non par intention :
 
-Ce que la mesure a **infirmé**, et qui est corrigé dans le [DAT](docs/DAT.md) : la
-sémantique de la réservation CPU. Le poids d'un Spark est arbitré contre les tranches
-de la Forge et pas seulement contre les autres Sparks, donc la réservation est pour
-l'instant proportionnelle et non absolue. C'est la principale dette ouverte
-([SPK-29](docs/BACKLOG.md)), et la console ne doit pas présenter la réservation comme
-une garantie tant qu'elle n'est pas levée.
+- une pile Docker Compose réelle tourne dans un Spark **non privilégié**, à plages
+  UID/GID disjointes, sous AppArmor actif et **sans aucun contournement** ;
+- elle est **servie publiquement en TLS** : `HTTPS 200`, certificat Let's Encrypt,
+  chaîne vérifiée depuis l'extérieur, et `404` sur un domaine non routé ;
+- un **port publié** de la Forge atteint réellement un Spark depuis Internet, et
+  son retrait referme le port ;
+- la **réservation CPU est un plancher** : `47,9 %` obtenus pour `47,4 %` prédits,
+  sous contention des trois tranches. Garantie sous contention totale, dépassée
+  quand la Forge est au repos ;
+- un Spark **saturé reste reconfigurable**, un Spark **redimensionné** l'est à
+  chaud, et un Spark dont la **cellule a disparu** se reconstruit.
 
-Le détail des vérifications, confirmées comme infirmées, est au §13 du
-[DAT](docs/DAT.md).
+Ce que la mesure a **infirmé** en chemin, et qui est corrigé dans le
+[DAT](docs/DAT.md) : le paquet Docker d'une distribution est inutilisable sous
+imbrication — son profil AppArmor refuse `socketpair()` —, l'image de base
+n'embarque pas de `sshd`, et un conteneur n'hérite jamais de l'environnement
+ambiant de sa cellule.
+
+**Ce qui manque encore** tient en trois lignes : le plan de reprise n'est joué
+qu'à moitié, l'installation n'a jamais été rejouée sur une machine neuve, et rien
+n'a jamais tourné ailleurs que sur cette Forge-là. Le détail est au §13 du
+[DAT](docs/DAT.md) et dans les unités `[~]`.
 
 ## Forge cible
 
@@ -344,9 +353,6 @@ héritage.
 
 ## Limites connues
 
-- L'émission TLS n'est pas éprouvée de bout en bout. La console pose désormais le
-  DNS d'une route, ce qui lève la cause la plus fréquente de son échec, mais
-  l'émission reste à constater sur un serveur joignable depuis l'extérieur.
 - Un seul serveur. Aucun ordonnancement inter-machines.
 - `runtime: vm` est porté par le modèle de données mais n'est pas implémenté.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique
@@ -363,9 +369,6 @@ héritage.
   obtenus pour 47,4 % prédits, sous contention des trois tranches. Ce n'est pas
   une égalité : quand la Forge est au repos, un Spark obtient plus que sa
   réservation, et c'est voulu (`docs/DAT.md` §32.2).
-- Le champ « image » de la création est **libre** : seul le dépôt est contrôlé,
-  pas l'alias. Une référence inexistante n'est refusée qu'à l'application, après
-  écriture de la ligne du registre. Le catalogue vérifié est SPK-32.
 - Les disques de la Forge sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
 
