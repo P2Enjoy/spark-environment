@@ -7665,3 +7665,21 @@ La suite qui ne peut pas être simulée est assumée : jouer
 `ssh spark 'cat /etc/spark/BRIEFING.md'`, puis déployer une pile joignable depuis
 ce seul fichier, demande la Forge Incus réellement amorcée de SPK-54. SPK-60
 reste donc `[~]`.
+
+### Lecture non interactive sur la Forge réelle
+
+Le paquet `2c8d02766` a été installé sur `51.158.54.202` : migration 012,
+`/readyz` vert et 13 contrôles de préflight verts. `POST /v1/sparks/helo/bootstrap`
+a confirmé qu'il n'y avait rien à installer, puis a daté le relevé et écrit les
+trois projections. Incus confirme `600 /etc/spark/BRIEFING.md`,
+`600 /etc/spark/briefing.json`, `644 /etc/motd`.
+
+La commande réellement représentative d'un agent —
+`ssh -J ubuntu@51.158.54.202 root@10.77.0.17 'cat /etc/spark/BRIEFING.md'` — a
+lu le fichier sans shell interactif. Elle contient la route TLS actuelle, les
+quotas, les chemins d'environnement et les noms `AJOUTEE_APRES`, `APP_NAME`,
+`SPARK_DEMO_TZ` et `DEMO_TOKEN`; aucune de leurs valeurs ne figure dans le
+texte ni dans le JSON relu au même instant. L'adresse publique reste
+explicitement inconnue, parce qu'aucune configuration
+`SPARKD_FORGE_PUBLIC_ADDRESS` n'a été posée : l'inventer depuis l'IP de connexion
+aurait contredit le contrat.

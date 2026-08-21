@@ -3664,8 +3664,16 @@ le relevé daté; le briefing JSON, le Markdown et le panneau `/etc/motd` sont
 routes, ports, variables, quotas et protection le reposent depuis le registre;
 les 75 preuves ciblées cherchent une valeur de secret dans chaque projection,
 jouent les réécritures et gardent le cas d'un Docker déjà présent. Le contrat
-d'API reste vert. Il reste le parcours SSH et le déploiement depuis le seul
-briefing sur une Forge réelle, dépendants de la preuve matérielle de SPK-54.
+d'API reste vert.
+
+**Lecture SSH réelle jouée le 2026-08-21.** La Forge `51.158.54.202` sert le
+paquet `2c8d02766`, schéma 12 et préflight 13/13. L'amorçage idempotent de `helo`
+n'a rien modifié, a écrit les fichiers en `600`, `600`, `644`, puis
+`ssh -J ubuntu@51.158.54.202 root@10.77.0.17 'cat /etc/spark/BRIEFING.md'` les a
+lus sans shell interactif. Le JSON et le Markdown portent le même ingress, les
+trois noms d'environnement et le seul nom de secret, sans sa valeur. Il reste le
+déploiement d'une pile joignable depuis le seul briefing, qui partagera la
+preuve matérielle de SPK-54.
 
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 
