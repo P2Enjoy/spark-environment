@@ -105,6 +105,10 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           // vider un agent : l'écran à capturer est le même, et
                           // le reste du chemin est celui de la production.
                           signatureEchouee = false,
+                          // SPK-62 · §47.6 : l'état du canal hors bande. Les
+                          // trois situations que l'écran doit distinguer ne se
+                          // provoquent pas sur un vrai canal, elles se posent.
+                          notify = null,
                           terminaux = null, sondageSshd = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-cap-'));
   const chemin = join(dossier, 'servers.json');
@@ -176,6 +180,9 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         const GIO = 1024 ** 3;
         return new Response(JSON.stringify({
           hostname: 'spark-experiment',
+          // SPK-62 · §47.6. `undefined` quand rien n'est posé : une Forge qui ne
+          // rend pas ce champ n'est pas une Forge sans canal (§14.5).
+          ...(notify ? { notify } : {}),
           // SPK-53 · §40.2 : `null` vaut « non estampillée », et c'est une
           // réponse. La console ne doit pas la confondre avec « à jour ».
           build: buildCommit
@@ -1287,6 +1294,27 @@ console.log('  48-signature-echec.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '49-signature-echec-mobile.png'), fullPage: true });
 console.log('  49-signature-echec-mobile.png');
+ctx.server.close();
+
+// --- SPK-62 · L'ALERTE HORS BANDE (§47.6) ---------------------------------
+// Les deux situations qui ne se confondent pas : « rien n'est surveillé » et
+// « des alertes ne sont pas parties ». La seconde est en ACCENT et non en rouge —
+// la Forge n'a rien refusé, les gestes ont abouti (§25.1).
+ctx = await demarrer({ notify: { configured: false, sent: 0, failed: 0, dropped: 0 } });
+await page.setViewportSize({ width: 1440, height: 1100 });
+await page.goto(`${ctx.base}/#/forge`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#titre-notify', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '50-notify-sans-canal.png'), fullPage: true });
+console.log('  50-notify-sans-canal.png');
+ctx.server.close();
+
+ctx = await demarrer({ notify: { configured: true, sent: 14, failed: 3, dropped: 1,
+                                 last_error: 'connexion refusée',
+                                 last_error_at: '2026-08-21T00:12:08+00:00' } });
+await page.goto(`${ctx.base}/#/forge`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#titre-notify', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '51-notify-en-echec.png'), fullPage: true });
+console.log('  51-notify-en-echec.png');
 ctx.server.close();
 
 await navigateur.close();

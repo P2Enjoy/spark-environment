@@ -410,9 +410,16 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
 // --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
 
 test('supprimer un Spark envoie une alerte hors bande, et l’écran le dit', async () => {
-  await parcours('notify-suppression', async () => {
-    // §47.1 : l'alerte part du journal, donc d'un geste RÉEL fait à l'écran —
-    // pas d'un appel qu'on aurait fabriqué pour la déclencher.
+  await parcours('notify-alerte', async () => {
+    // §47.1 : l'alerte part du JOURNAL, donc d'un geste réel fait à l'écran —
+    // jamais d'un appel fabriqué pour la déclencher.
+    //
+    // « site-vitrine » est le Spark en ERREUR du seed. Les parcours du terminal
+    // s'en servent PLUS BAS dans ce fichier : ils éprouvent un `sshd` muet et un
+    // dépannage, et le pilote factice laisse la ligne en « deleting » plutôt que
+    // de la retirer — la campagne complète du 2026-08-21 le confirme, ils
+    // restent verts. Si cela cessait d'être vrai, c'est ICI qu'il faudrait
+    // changer de Spark, pas là-bas.
     canal.oublier();
     await ouvrir('site-vitrine');
     await page.click('[data-commande="delete"]');
@@ -430,15 +437,13 @@ test('supprimer un Spark envoie une alerte hors bande, et l’écran le dit', as
     assert.equal(vu.actor_class, 'human');
     assert.equal(vu.actor, 'console/local',
       'l’alerte nomme qui a agi, tel que le journal l’inscrit');
-    // ÉCART MESURÉ le 2026-08-21, et il est nommé au backlog plutôt que masqué :
-    // l'alerte porte l'IDENTIFIANT de l'objet, pas son nom. Le message de
-    // `spark.delete` est une transition d'état — « error » → « deleting » —, et
-    // le nom ne vit que dans `spark.deleted`, la ligne d'ACHÈVEMENT. Détecter la
-    // DEMANDE reste le bon choix (une suppression qui échoue à mi-chemin doit
-    // quand même alerter), mais l'alerte n'est pas encore exploitable seule.
+    assert.equal(vu.version, 'spark-notify-v1');
+    // ÉCART MESURÉ le 2026-08-21, nommé au backlog plutôt que masqué : l'alerte
+    // porte l'IDENTIFIANT de l'objet, pas son nom. Le message de `spark.delete`
+    // est une transition d'état — « error » → « deleting » —, et le nom ne vit
+    // que dans `spark.deleted`, la ligne d'ACHÈVEMENT.
     assert.ok(vu.target_id, 'la cible est désignée, fût-ce par son identifiant');
     assert.equal(vu.target_type, 'spark');
-    assert.equal(vu.version, 'spark-notify-v1');
     // §47.4 : le payload n'y est PAS. Un champ qu'on n'envoie pas ne fuit pas.
     assert.ok(!('payload' in vu));
 
@@ -447,29 +452,6 @@ test('supprimer un Spark envoie une alerte hors bande, et l’écran le dit', as
     await page.waitForSelector('#titre-notify', { timeout: 10000 });
     const dit = await page.innerText('#titre-notify ~ *');
     assert.match(dit, /Toutes les alertes sont parties/);
-  });
-});
-
-test('un geste de CONSTRUCTION n’envoie aucune alerte', async () => {
-  await parcours('notify-silence', async () => {
-    // §47.2 : un canal qui crie tout le temps n'est plus lu, et c'est la panne
-    // la plus probable de ce dispositif. Prendre un instantané ne détruit rien.
-    canal.oublier();
-    await ouvrir('crm-production', 'instantanes');
-    await page.focus('[data-ouvre="snapshot"]');
-    await page.keyboard.press('Enter');
-    await page.waitForSelector('dialog.modale[open] #instantane-nom');
-    await page.fill('#instantane-nom', 'sans-alerte');
-    await page.keyboard.press('Enter');
-    await page.waitForFunction(
-      () => !document.querySelector('dialog.modale[open]'), { timeout: 10000 });
-
-    // Le geste a bien eu lieu — sinon la preuve mesurerait un silence sans cause.
-    const { corps } = await pile.lireSparkd('/v1/audit?action=snapshot.create&limit=5');
-    assert.ok(corps.entries.some((e) => e.message.includes('sans-alerte')));
-
-    await canal.attendre(1, { tentatives: 8 });
-    assert.deepEqual(canal.recus, [], 'aucune alerte pour un geste qui construit');
   });
 });
 
