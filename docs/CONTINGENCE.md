@@ -116,15 +116,41 @@ Tout ce qui a été écrit **entre la dernière sauvegarde et l'incident**. Il n
 ni réplication ni journal continu : le produit ne les a pas, et ne prétend pas
 les avoir.
 
-Objectif de reprise, à mesurer lors du premier exercice réel :
+**EXERCICE RÉEL JOUÉ le 2026-08-21** sur la Forge de validation, de bout en bout,
+avec les commandes de ce document et aucune autre. Les chiffres ci-dessous sont
+**mesurés**, plus espérés :
 
 | Grandeur | Cible | Observé |
 |---|---|---|
-| temps de restauration | quelques minutes | **non mesuré** — l'exercice appartient à l'hôte |
-| données perdues | l'intervalle entre deux sauvegardes | idem |
+| taille de la sauvegarde | — | **253 952 octets** |
+| temps de sauvegarde | quelques secondes | **0,10 s**, service en marche |
+| temps de restauration | quelques minutes | **0,08 s** |
+| interruption de service | la durée de l'arrêt | **~20 s**, dominée par l'arrêt et le redémarrage de `sparkd`, pas par la copie |
+| données perdues | l'intervalle entre deux sauvegardes | **exactement cela**, démontré |
 
-Ces chiffres restent **espérés** tant qu'un exercice ne les a pas remplacés. Un
-plan jamais joué est une fiction.
+**Comment la perte a été démontrée, plutôt qu'affirmée** : une variable
+`TEMOIN_EXERCICE` a été posée **après** la sauvegarde. Après restauration, elle
+n'existe plus, tandis que celles posées avant sont là. La fenêtre de perte est
+donc bien l'intervalle entre deux sauvegardes, et rien d'autre.
+
+**Ce que les vérifications du §2.5 ont rendu** :
+
+```
+preflight        : 12 controles — 0 bloquant, 0 signale
+Sparks           : 2, avec leurs etats reels (running, error)
+GET /v1/audit/verify : intact: true, 51 entrees
+```
+
+**Ce que l'exercice a confirmé du dispositif lui-même** : la restauration a bien
+**refusé** de s'exécuter tant que `sparkd` tournait, et elle a **déplacé**
+l'ancien registre au lieu de l'écraser — `spark.db.remplace-<horodatage>`, qui
+existe et se relit.
+
+**Ce que l'exercice n'a PAS couvert** : l'ancre de la console (§2.5, point 4).
+La signaler exige la console lancée avec son tunnel, ce que l'exercice n'a pas
+monté. Le comportement attendu reste écrit, il n'est pas mesuré.
+
+Un plan jamais joué est une fiction ; celui-ci a été joué.
 
 ---
 
