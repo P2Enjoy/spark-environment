@@ -6683,3 +6683,70 @@ d'accès), **SPK-54** (rootless), **SPK-40** (un agent SSH réel signe), **SPK-2
 (contention totale), **SPK-30** (niveau 3), **SPK-36** (exercice de restauration).
 **SPK-43** n'attend plus qu'une chose : la route de dépannage de l'hôte console
 parcourue de bout en bout, ce qui exige l'hôte lancé avec son tunnel.
+
+## 2026-08-21 · SPK-29 — le poids que systemd effaçait
+
+**Unité reprise** au §4.2 point 1, sur la Forge de validation. La mesure de
+contention totale que la DoD exige a d'abord trouvé **deux défauts**, dont un
+grave, et l'un empêchait purement et simplement de mesurer.
+
+### Le défaut grave : systemd écrasait le poids, en silence
+
+`spark.slice` pesait **1** à l'ouverture de la session, là où la loi du §32.2 en
+prescrit 180. Reproduit :
+
+```
+on ecrit 180 dans cpu.weight  -> 180
+apres daemon-reload           -> 1
+apres systemd-run             -> 1
+```
+
+Faire de la tranche une unité systemd a un corollaire que le §32.4 ne tirait
+pas : **systemd devient l'autorité sur ses propriétés de cgroup**, et l'unité
+porte `CPUWeight=1` comme point de départ, qu'il **réaffirme** à chaque
+reconciliation. Le produit écrivait le fichier ; sa valeur tenait jusqu'au
+premier `daemon-reload`.
+
+C'est le pire mode de panne du produit : la promesse centrale s'évapore sans
+qu'aucun contrôle ne rougisse, puisque le registre et le calcul restent justes.
+
+**Corrigé** : le poids se pose par `systemctl set-property`, et systemd le
+réaffirme au lieu de l'écraser. Vérifié sur la Forge — 180 avant **et** après
+reconciliation.
+
+### Le second défaut : le redimensionnement ne suivait pas l'allocation
+
+La portée de SPK-57 nomme deux effets d'un changement de mode CPU : rendre les
+cœurs dédiés au pool (§7.4 bis) et repondérer la tranche (§32.2). **Ni l'un ni
+l'autre n'était fait.** C'est ce qui avait laissé la tranche à 1 après mon
+aller-retour de mode de la session précédente. Corrigé, avec deux preuves qui
+**échouent sans le correctif** — vérifié en le désactivant.
+
+### La mesure, enfin
+
+```
+fenetre 25 s sur 8 threads, trois tranches chargees
+  spark.slice     95,72 s  ->  47,9 % de la machine
+  system.slice    48,16 s  ->  24,1 %
+  user.slice      45,42 s  ->  22,7 %
+  init.scope       0,00 s  ->   0,0 %
+```
+
+Le mécanisme est vérifié **au pour-cent près** : la loi prédit
+`180/(180+200) = 47,4 %`, la machine rend 47,9 %.
+
+Et `init.scope` est resté à **zéro** — il ne contient que PID 1 et n'est jamais
+exécutable. Le `H = 300` posé est donc optimiste : le `H` réel vaut 200, et la
+tranche obtient systématiquement plus que la part visée.
+
+### Où reprendre
+
+**SPK-29 n'attend plus une mesure mais un ARBITRAGE** : garder `H = 300` posé —
+la réservation reste un plancher tenu et dépassé, ce que le produit annonce — ou
+mesurer `H` pour en faire une égalité, au prix d'un poids qui bouge avec
+l'activité de la Forge. Les deux voies sont écrites au §32.2.
+
+Restent bloquées sur la Forge : **SPK-61** (poser la clé restreinte, geste
+délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel), **SPK-30**
+(niveau 3), **SPK-36** (exercice de restauration), **SPK-43** (route de dépannage
+de bout en bout).
