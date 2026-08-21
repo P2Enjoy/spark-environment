@@ -1317,6 +1317,26 @@ await page.screenshot({ path: join(SORTIE, '51-notify-en-echec.png'), fullPage: 
 console.log('  51-notify-en-echec.png');
 ctx.server.close();
 
+// --- SPK-57 · REDIMENSIONNER UN SPARK (§49) -------------------------------
+// La section Ressources porte SA commande, et la modale s'ouvre PRÉ-REMPLIE.
+// Le champ du disque annonce son redémarrage AVANT qu'on agisse (§49.4).
+ctx = await demarrer();
+await ouvrirDetail(ctx.base, { hauteur: 1000 });
+await page.waitForSelector('#titre-ressources', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '52-quotas-commande.png') });
+console.log('  52-quotas-commande.png');
+
+await page.click('[data-ouvre="quotas"]');
+await page.waitForSelector('dialog.modale[open] #quota-memory', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '53-quotas-modale.png') });
+console.log('  53-quotas-modale.png');
+
+// Sous 768 px, la modale occupe l'écran entier SANS changer de contrat (§6.27).
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '54-quotas-mobile.png'), fullPage: true });
+console.log('  54-quotas-mobile.png');
+ctx.server.close();
+
 await navigateur.close();
 console.log('\n  captures dans e2e/captures/');
 if (reseau.length) {
