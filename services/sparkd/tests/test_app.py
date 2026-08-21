@@ -698,3 +698,66 @@ def test_une_tranche_absente_n_empeche_pas_de_creer_un_spark(tmp_path):
         "cpu_reservation": 0.5, "memory_bytes": GIO,
         "storage_bytes": GIO, "network_bps": 10_000_000})
     assert rendu.status_code == 201
+
+
+# --- SPK-57 · la route de redimensionnement (docs/DAT.md §49) ---------------
+
+
+def test_redimensionner_par_http_ecrit_le_nouveau_quota(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.2"""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    vu = c.patch("/v1/sparks/crm-production",
+                 json={"memory_reservation_bytes": 4 * 1024**3})
+    assert vu.status_code == 200
+    assert vu.json()["memory_reservation_bytes"] == 4 * 1024**3
+    # Relu par une AUTRE requête : la valeur rendue pourrait mentir.
+    assert c.get("/v1/sparks/crm-production").json()["memory_reservation_bytes"] \
+        == 4 * 1024**3
+
+
+def test_un_spark_PROTEGE_refuse_le_redimensionnement(tmp_path):
+    """§49.5, §35.2 : le verrou porte sur l'objet, et redimensionner est une
+    écriture. La protection se lève d'abord, par un geste distinct."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/protection",
+           json={"password": "protege-moi"})
+    vu = c.patch("/v1/sparks/crm-production",
+                 json={"memory_reservation_bytes": 4 * 1024**3})
+    # 423 « Locked », et non 403 : c'est la convention que le produit emploie
+    # déjà pour un Spark protégé. En inventer une seconde pour ce geste ferait
+    # traiter le même refus de deux façons dans la console.
+    assert vu.status_code == 423
+    # Le quota n'a PAS bougé : un refus ne laisse rien derrière lui.
+    assert c.get("/v1/sparks/crm-production").json()["memory_reservation_bytes"] \
+        == 2 * 1024**3
+
+
+def test_les_trois_refus_ne_portent_PAS_le_meme_code(tmp_path):
+    """§49.3 : confondre « il n'y a pas la place » et « ce que vous voulez
+    retirer est utilisé » enverrait l'exploitant libérer de la place sur la
+    Forge alors que le problème est dans la cellule."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+
+    trop = c.patch("/v1/sparks/crm-production",
+                   json={"memory_reservation_bytes": 900 * 1024**3})
+    assert trop.status_code == 409
+    assert trop.json()["detail"]["error"] == "admission_refused"
+    assert trop.json()["detail"]["shortfalls"], "le refus est CHIFFRÉ (§7.7)"
+
+    identite = c.patch("/v1/sparks/crm-production", json={"name": "autre"})
+    assert identite.status_code == 409
+    assert identite.json()["detail"]["error"] == "refused"
+
+    absent = c.patch("/v1/sparks/fantome", json={"memory_reservation_bytes": 1})
+    assert absent.status_code == 404
+
+
+def test_le_redimensionnement_est_ATTEIGNABLE_dans_le_contrat(tmp_path):
+    """Une route absente du contrat n'existe pas pour la console, qui en dérive
+    ses types (SPK-17)."""
+    c = _app(tmp_path)
+    chemins = c.get("/openapi.json").json()["paths"]
+    assert "patch" in chemins["/v1/sparks/{name}"]

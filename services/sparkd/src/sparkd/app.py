@@ -1357,8 +1357,10 @@ def create_app(config: Config) -> FastAPI:
 
         Trois refus, et ils ne se confondent pas :
 
-        - `403 spark_protected` — le verrou porte sur l'objet, et redimensionner
-          est une écriture. La protection se lève d'abord (§35.2, §49.5) ;
+        - `423 Locked` — le verrou porte sur l'objet, et redimensionner est une
+          écriture. La protection se lève d'abord (§35.2, §49.5). Le code est
+          celui que le produit emploie DÉJÀ pour un Spark protégé : en inventer
+          un second ferait traiter le même refus de deux façons dans la console ;
         - `409 admission_refused` — « il n'y a pas la place sur la Forge » ;
         - `409 shrink_refused` — « ce que vous voulez retirer est UTILISÉ dans la
           cellule ». Les mélanger enverrait l'exploitant libérer de la place là
