@@ -409,49 +409,79 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
 
 // --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
 
-test('supprimer un Spark envoie une alerte hors bande, et l’écran le dit', async () => {
+test('un geste sensible envoie une alerte hors bande, un geste ordinaire non', async () => {
   await parcours('notify-alerte', async () => {
-    // §47.1 : l'alerte part du JOURNAL, donc d'un geste réel fait à l'écran —
-    // jamais d'un appel fabriqué pour la déclencher.
-    //
-    // « site-vitrine » est le Spark en ERREUR du seed. Les parcours du terminal
-    // s'en servent PLUS BAS dans ce fichier : ils éprouvent un `sshd` muet et un
-    // dépannage, et le pilote factice laisse la ligne en « deleting » plutôt que
-    // de la retirer — la campagne complète du 2026-08-21 le confirme, ils
-    // restent verts. Si cela cessait d'être vrai, c'est ICI qu'il faudrait
-    // changer de Spark, pas là-bas.
+    // Le geste éprouvé est la LEVÉE DE PROTECTION, et le choix n'est pas
+    // indifférent : le §47.2 la range en tête — c'est le geste qui rend tous les
+    // autres possibles — et elle se REMET, là où une suppression ne se remet
+    // pas. MESURÉ le 2026-08-21 : une première version supprimait
+    // « site-vitrine », et les parcours du terminal, plus bas dans ce fichier,
+    // tombaient trente secondes durant sur un Spark disparu. Un parcours qui
+    // laisse une trace rend le verdict des suivants dépendant de l'ordre (§29.2).
     canal.oublier();
-    await ouvrir('site-vitrine');
-    await page.click('[data-commande="delete"]');
-    await page.waitForSelector('#suppression-nom', { timeout: 10000 });
-    await page.fill('#suppression-nom', 'site-vitrine');
-    await page.click('[data-confirme="delete"]');
+
+    // §47.2 : DÉMARRER ne détruit rien et ne donne aucun accès. Le geste est
+    // réel, et l'état est remis juste après.
+    await ouvrir('boutique');
+    await page.click('[data-commande="start"]');
     await page.waitForFunction(
-      () => location.hash === '#/sparks', { timeout: 15000 });
+      () => document.querySelector('[data-commande="stop"]') !== null,
+      { timeout: 15000 });
+    await canal.attendre(1, { tentatives: 8 });
+    assert.deepEqual(canal.recus, [], 'aucune alerte pour un geste qui construit');
+    await page.click('[data-commande="stop"]');
+    await page.waitForFunction(
+      () => document.querySelector('[data-commande="start"]') !== null,
+      { timeout: 15000 });
+
+    // LEVER la protection d'« analytics », protégé par le seed.
+    canal.oublier();
+    await ouvrir('analytics');
+    await page.waitForSelector('#titre-protection', { timeout: 10000 });
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', MOT_DE_PASSE);
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Désarmée'), { timeout: 15000 });
 
     const recus = await canal.attendre(1);
-    assert.equal(recus.length, 1, 'une alerte, et une seule');
+    assert.ok(recus.length >= 1, 'la levée de protection a produit une alerte');
     const vu = recus[0];
-    assert.equal(vu.action, 'spark.delete');
+    assert.equal(vu.action, 'spark.unprotect');
     assert.equal(vu.result, 'ok');
     assert.equal(vu.actor_class, 'human');
     assert.equal(vu.actor, 'console/local',
       'l’alerte nomme qui a agi, tel que le journal l’inscrit');
     assert.equal(vu.version, 'spark-notify-v1');
-    // ÉCART MESURÉ le 2026-08-21, nommé au backlog plutôt que masqué : l'alerte
-    // porte l'IDENTIFIANT de l'objet, pas son nom. Le message de `spark.delete`
-    // est une transition d'état — « error » → « deleting » —, et le nom ne vit
-    // que dans `spark.deleted`, la ligne d'ACHÈVEMENT.
-    assert.ok(vu.target_id, 'la cible est désignée, fût-ce par son identifiant');
     assert.equal(vu.target_type, 'spark');
-    // §47.4 : le payload n'y est PAS. Un champ qu'on n'envoie pas ne fuit pas.
+    assert.ok(vu.target_id, 'la cible est désignée');
+    assert.match(vu.message, /analytics/,
+      'elle NOMME l’objet : « une protection a été levée » serait inexploitable');
+    // §47.4 : le payload n'y est PAS. Un champ qu'on n'envoie pas ne fuit pas,
+    // et le mot de passe de protection vit précisément là.
     assert.ok(!('payload' in vu));
+    assert.ok(!JSON.stringify(vu).includes(MOT_DE_PASSE),
+      'le mot de passe de protection ne sort PAS par le canal');
 
     // …et l'écran de la Forge le DIT (§47.6), atteint par la navigation.
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-notify', { timeout: 10000 });
     const dit = await page.innerText('#titre-notify ~ *');
     assert.match(dit, /Toutes les alertes sont parties/);
+
+    // On REMET la pile dans l'état du seed : « analytics » y est protégé, et le
+    // laisser ouvert ferait dépendre du hasard les parcours qui éprouvent un
+    // refus de Spark protégé.
+    await ouvrir('analytics');
+    await page.click('[data-ouvre="protection"]');
+    await page.waitForSelector('dialog.modale[open] #protection-mot');
+    await page.fill('#protection-mot', MOT_DE_PASSE);
+    await page.click('dialog.modale[open] [data-engage="protection"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Armée'), { timeout: 15000 });
+    assert.equal((await pile.lireSparkd('/v1/sparks/analytics/protection'))
+      .corps.protected, true, 'la pile est rendue dans l’état du seed');
   });
 });
 
