@@ -4958,10 +4958,10 @@ lecteur d'écran. Ce qui suit ne décrit que les différences.
 famille de routes dupliquerait le flux, la saisie, la fermeture et la mort du
 distant — quatre endroits où deux terminaux finiraient par diverger.
 
-La commande devient :
+La commande devient, après sélection du contexte Docker du §42.2 bis :
 
 ```
-ssh -tt … root@<spark>  docker exec -it <conteneur> <shell>
+ssh -tt … root@<spark>  <docker sélectionné> exec -it <conteneur> <shell>
 ```
 
 ##### Quel shell — et pourquoi on le SONDE au lieu de le supposer
@@ -4981,10 +4981,11 @@ contre-intuitif et cela se paie : une console qui ne surveillerait que `stderr`
 ne verrait rien et prendrait l'échec pour un shell ouvert et muet.
 
 D'où la décision : **on sonde avant d'ouvrir**, exactement comme le §37.3.1 sonde
-`sshd` avant de conclure. Un sondage court et non interactif :
+`sshd` avant de conclure. Un sondage court et non interactif, dans ce **même**
+contexte Docker :
 
 ```
-docker exec <conteneur> sh -c 'command -v bash || command -v sh'
+<docker sélectionné> exec <conteneur> sh -c 'command -v bash || command -v sh'
 ```
 
 - code `0` et un chemin → c'est **ce** shell que la session lancera. `bash` est
@@ -5081,6 +5082,15 @@ plan de contrôle au dépannage, et lire l'inventaire d'un locataire n'en est pa
 un. La conséquence est directe : **un Spark dont le `sshd` est muet n'a pas
 d'onglet Docker**, et l'écran le dit avec le même vocabulaire qu'au §37.2, sans
 inventer un second diagnostic.
+
+Avant toute commande, la console choisit le contexte Docker comme le §42.2 bis
+le prescrit. Un socket rootless réellement utilisable est exécuté sous
+`spark-docker`, avec son `XDG_RUNTIME_DIR` et son `DOCKER_HOST`; sinon c'est le
+socket enraciné qui est interrogé. La règle vaut également pour l'inspection,
+les journaux, le cycle de vie (§37.7) et le terminal de conteneur (§37.4.7) :
+une console qui lirait rootless mais agirait sur root aurait deux vérités selon
+l'onglet. Le test du socket n'écrit rien et un simple compte `spark-docker` sans
+démon ne change jamais le chemin.
 
 **Ce qu'on exécute.** Une seule commande par relevé, en lecture, qui ne modifie
 rien :
@@ -5290,7 +5300,8 @@ il a **choisi** de n'avoir aucune autorité.
 la décision ; il ne dit ni par quelles commandes, ni comment se lit ce qu'elles
 rendent. Sans cela, chaque cas limite se tranche à l'improvisation.
 
-Les commandes, sur le chemin du §37.2 — SSH, comme la lecture du §37.6 :
+Les commandes, sur le chemin du §37.2 — SSH, comme la lecture du §37.6 — et
+dans le contexte Docker sélectionné par le §42.2 bis :
 
 ```
 docker start <nom>
@@ -6324,6 +6335,17 @@ Si un démon root tourne, le mode est `enracine` et le refus de bascule reste
 geste échoue en `502 bootstrap_failed` et n'écrit pas d'audit de succès : dire
 « amorcé » sans service serait précisément le défaut mesuré.
 
+**Conséquence d'exploitation.** Le démon rootless n'écoute pas le socket
+`/var/run/docker.sock` et `root` ne doit pas lui parler à sa place. Le compte de
+service stable est `spark-docker`; son UID détermine le socket
+`/run/user/<uid>/docker.sock`. Toute commande Docker que la console porte dans
+un Spark — lecture, geste de cycle de vie, sondage ou terminal de conteneur —
+sonde d'abord ce socket avec ce compte. S'il répond, elle exécute la même
+commande sous `spark-docker`, avec `XDG_RUNTIME_DIR` et `DOCKER_HOST` pointés
+vers ce socket; sinon elle emploie le Docker enraciné habituel. Ce choix est une
+observation du moment, pas un champ recopié par la console : un compte créé par
+une pose interrompue ne suffit jamais à déclarer ou à employer le rootless.
+
 **Ce que l'écran doit dire, et non vendre** (§42.2) : les trois coûts, en toutes
 lettres, à côté de la case — les ports sous 1024 deviennent impossibles dans la
 cellule, certaines piles Compose existantes ne fonctionnent pas telles quelles,
@@ -7174,6 +7196,7 @@ l'agent ne peut que le lire dans le briefing.**
 | routes d'ingress : domaine → port, TLS | elles vivent dans Caddy, sur la Forge |
 | ports publiés : port public → port de la cellule | ils vivent dans un device Incus |
 | **noms** des variables et secrets injectés, et leurs deux chemins | les valeurs sont lisibles, l'inventaire non |
+| mode Docker relevé et, en rootless, compte et socket qui le portent | `root` ne parle pas au socket utilisateur et un compte seul ne prouve aucun démon |
 | état de protection du Spark | il vit au registre |
 
 ### 44.3 Ce qui ne doit PAS y figurer, et pourquoi
@@ -7187,6 +7210,10 @@ l'agent ne peut que le lire dans le briefing.**
   `docker-ce`, le greffon Compose, et leurs versions relevées à ce moment-là. Pour
   le reste, le briefing donne la **commande** qui répond, jamais une liste qui
   périmera. Une liste de paquets vieille d'une semaine est un mensonge poli.
+- **Aucune capacité d'accès supplémentaire.** Le compte et le chemin du socket
+  rootless sont des faits d'exploitation, pas une clé ni une délégation de
+  privilège; le briefing ne contient donc ni valeur d'environnement ni moyen de
+  contourner les autorisations déjà posées dans la cellule.
 - **Rien sur les autres Sparks**, ni sur l'intérieur de la Forge au-delà de ce que
   cette cellule doit savoir.
 
@@ -7216,6 +7243,10 @@ minimum, mesurés au §41 et au §43.0 :
   profil AppArmor qui refuse `socketpair()` : `nginx` démarre puis meurt. Un agent
   qui « répare » en installant `docker.io` casse la cellule et ne comprend pas
   pourquoi.
+- **Le Docker rootless appartient à `spark-docker`.** Lorsqu'il est relevé,
+  l'agent doit lui parler avec son socket utilisateur indiqué, pas avec
+  `/var/run/docker.sock`; un compte présent sans socket répondant n'est pas un
+  Docker utilisable.
 - **Un conteneur n'hérite pas de l'environnement ambiant.** Sans les deux lignes
   `env_file:`, aucune variable injectée n'atteint l'application — et l'agent
   cherchera longtemps.
@@ -7266,6 +7297,9 @@ Le modèle porte, sans valeurs d'environnement :
   la Forge **si elle est configurée** ;
 - chaque quota et sa sémantique, les routes et ports publiés qui visent ce Spark,
   et les noms séparés des variables ordinaires et secrètes ;
+- le relevé Docker : son mode, ou `null` s'il n'est pas utilisable, puis en mode
+  rootless le compte `spark-docker` et le socket utilisateur qui doivent porter
+  les commandes ;
 - les chemins `/etc/spark/env` et `/run/spark/secrets`, l'état du dernier
   amorçage, et les cinq pièges du §44.5 ;
 - l'avertissement du §44.6 : fichier produit par le plan de contrôle mais
