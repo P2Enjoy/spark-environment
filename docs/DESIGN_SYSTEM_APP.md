@@ -341,6 +341,20 @@ Deux obligations en découlent, et elles vont ensemble :
 Il porte `role="status"` et non `role="alert"` : le geste a eu lieu, rien n'est
 refusé. Et sa couleur suit le §25.1 — accent, jamais rouge.
 
+### SPK-DS-11 · Le code local périmé est un avertissement de coquille
+
+**Date** : 2026-08-21 · introduit par SPK-65.
+
+Une console démarrée avant la tête du dépôt affiche une version qui n'est plus
+celle que le responsable vient de lire. Le symptôme survit à toutes les
+destinations : il est donc rendu sous le contexte de serveur, dans la coquille,
+avec un badge **accent**, un texte explicite et `role="status"`.
+
+Le message nomme le seul geste qui le corrige — redémarrer la console — sans
+bouton qui prétendrait pouvoir le faire. Un processus ne se relance jamais sous
+les mains de l'exploitant. L'absence de dépôt, un dépôt qui a reculé, et une
+comparaison impossible restent des faits nommés, jamais « à jour » par défaut.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

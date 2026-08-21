@@ -6105,6 +6105,32 @@ rejouent `python -m sparkd.install`; elles constatent ensuite que `/healthz`
 sert bien le commit attendu. Un téléchargement ou un redémarrage sans ce
 changement est un échec, jamais une mise à jour déclarée.
 
+### 40.5 La console locale nomme son propre retard (SPK-65)
+
+La comparaison du §40.3 répond « quel code la Forge sert-elle ? ». Elle ne dit
+pas si le **processus de console** qui présente la réponse a été démarré avant
+le code du poste. C'est une identité distincte : le runtime Node lit les modules
+au démarrage et continue légitimement à servir cette copie tant qu'il n'est pas
+redémarré.
+
+Au démarrage, l'hôte console relève une empreinte de ses fichiers servis : la
+tête Git lorsqu'un dépôt est disponible, sinon la date la plus récente de son
+arbre applicatif. À chaque lecture, il la confronte à l'état courant. Les faits
+ne se confondent pas :
+
+| Situation | Ce qui est dit | Geste proposé |
+|---|---|---|
+| même empreinte | console à jour | aucun |
+| tête de démarrage ancêtre de la tête courante | console démarrée avant N commits | **redémarrer la console** |
+| tête courante ancêtre de celle du démarrage | le dépôt a reculé depuis le démarrage | aucun |
+| dépôt ou date indisponible | comparaison indisponible | aucun |
+
+L'hôte console ne se redémarre **jamais** lui-même : interrompre sous les mains
+d'un exploitant est plus grave que le décalage qu'on signale. Le message persiste
+dans la coquille, et non dans la seule vue Forge, car sa cause survit à toute
+navigation (`DESIGN_SYSTEM_APP.md` SPK-DS-10). Il nomme l'action utile :
+« Console démarrée avant N commits · redémarrer pour en bénéficier ».
+
 
 ## 41. Le runtime d'un Spark : ce que l'image ne donne pas
 

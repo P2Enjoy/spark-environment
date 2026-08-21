@@ -66,7 +66,8 @@
    l'avertissement s'y écrive sans repeindre `.principal` — ce qui arracherait le
    focus au clavier (§14.3). Vide, elle disparaît : `.laterale` est une colonne
    à `gap`, et un conteneur vide y creuserait un trou inexpliqué. */
-.entete__signature:empty { display: none; }
+.entete__signature:empty,
+.entete__console:empty { display: none; }
 .entete__contexte .badge { align-self: flex-start; }
 /* Sous 1024 px la barre laterale passe en barre SUPERIEURE : le contexte y
    redevient une rangee, ou la largeur ne manque plus. */
@@ -76,7 +77,8 @@
   }
   /* La barre laterale est alors une RANGEE : l'avertissement prend sa propre
      ligne plutot que de comprimer la navigation. */
-  .entete__signature { flex-basis: 100%; }
+  .entete__signature,
+  .entete__console { flex-basis: 100%; }
 }
 
 .principal {

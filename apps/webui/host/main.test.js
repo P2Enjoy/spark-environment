@@ -28,7 +28,14 @@ function fauxSsh() {
 // `env` vaut `{}` par DÉFAUT, et ce n'est pas un détail : sans cela, la Forge
 // lirait le `.env` du poste et les tests parleraient au VRAI fournisseur DNS,
 // donc à quatorze zones en exploitation (SPK-47, docs/DAT.md §38.1).
-async function hote({ sonde = async () => ({}), amont, env = {} } = {}) {
+async function hote({
+  sonde = async () => ({}), amont, env = {},
+  // Evite que les tests de routes lancent Git : le harnais interdit les
+  // sous-processus Node, tandis que la capture Git est déjà isolée ci-dessous.
+  consoleBuild = { kind: 'files', mtime: 0 },
+  compareConsole = () => ({ verdict: 'a_jour' }),
+  ...options
+} = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-'));
   const chemin = join(dossier, 'servers.json');
   const tunnels = new TunnelManager({
@@ -38,6 +45,8 @@ async function hote({ sonde = async () => ({}), amont, env = {} } = {}) {
     tunnels, inventoryPath: chemin, anchorPath: join(dossier, 'anchors.json'),
     env,
     fetch: amont ?? (async () => new Response('{"ok":true}', { status: 200 })),
+    consoleBuild, compareConsole,
+    ...options,
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;

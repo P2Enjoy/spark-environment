@@ -38,6 +38,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // signer. `null` tant que rien n'a échoué — et il redevient
                // `null` dès qu'un geste repart signé.
                signature: null,
+               // SPK-65 · §40.5 : l'hôte dit si CE processus Node a démarré
+               // avant le code du poste. Cela ne dépend d'aucune Forge.
+               consoleBuild: null,
                // SPK-57 · §49 : la modale de redimensionnement. Fermée tant
                // qu'on ne l'a pas ouverte, et ses valeurs sont celles du Spark
                // AU MOMENT DE L'OUVERTURE — pas des champs vides qui feraient
@@ -2460,6 +2463,19 @@ function peindreSignature() {
     : '';
 }
 
+/** Avertissement durable de code local périmé (SPK-65, SPK-DS-11). */
+function peindreBuildConsole() {
+  const zone = racine.querySelector('.entete__console');
+  if (!zone) return;
+  const vu = etat.consoleBuild;
+  zone.innerHTML = vu?.verdict === 'perimee'
+    ? `<div class="avertissement avertissement--laterale" role="status">
+         <p><strong>${echapperTexte(vu.title)}</strong></p>
+         <p>${echapperTexte(vu.detail)}</p>
+       </div>`
+    : '';
+}
+
 const echapperTexte = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -2505,6 +2521,12 @@ async function changerDeServeur(nom) {
 }
 
 async function demarrer() {
+  // Le message appartient à la coquille : il est chargé indépendamment des
+  // serveurs et reste en place quand l'on navigue (SPK-DS-10/11).
+  fetch('/api/console/build').then((r) => r.json()).then((corps) => {
+    etat.consoleBuild = corps;
+    peindreBuildConsole();
+  }).catch(() => { /* comparaison indisponible : aucun faux avertissement */ });
   const { servers, tunnels, current } = await (await fetch('/api/servers')).json();
   etat.servers = servers;
   const entete = racine.querySelector('.entete__contexte');

@@ -22,6 +22,8 @@ import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.js';
+import { capture as capturerConsole, compare as comparerConsole,
+         describe as decrireConsole } from './console-build.js';
 import { relever as releverDocker, inspecterConteneur, lireJournaux }
   from './docker.js';
 import { agir as agirConteneur, GESTES } from './gestes-docker.js';
@@ -36,6 +38,14 @@ import { SessionManager, TerminalError, FLUX_FERME,
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
 export function createConsoleHost(options = {}) {
+  const racineDepot = options.repositoryRoot ?? RACINE_DEPOT;
+  // Hors Git, on ne date que les fichiers effectivement servis par la console.
+  // Un changement de documentation ne doit pas réclamer son redémarrage.
+  const racineConsole = options.consoleRoot ?? join(racineDepot, 'apps', 'webui');
+  // La capture précède toute route : ce n'est pas une comparaison faite à la
+  // première visite de Forge, mais l'identité de CE processus au démarrage.
+  const consoleAuDemarrage = options.consoleBuild ?? capturerConsole(racineConsole);
+  const comparerCetteConsole = options.compareConsole ?? comparerConsole;
   const tunnels = options.tunnels ?? new TunnelManager();
   // SPK-43 · §37.1 : les sessions de terminal vivent ICI, sur le poste. Le plan
   // de contrôle n'est pas dans ce chemin et n'en gagne aucun pouvoir.
@@ -411,13 +421,20 @@ export function createConsoleHost(options = {}) {
       const forge = await amont.json();
       // Une Forge qui ne publie AUCUNE build est traitée comme non estampillée,
       // pas comme une panne : `comparer` sait déjà le dire (§40.2).
-      const vu = await comparerBuild(forge?.build ?? null, RACINE_DEPOT);
+      const vu = await comparerBuild(forge?.build ?? null, racineDepot);
       // Les libellés du §40.3 partent AVEC le verdict : ils sont le contrat, pas
       // une formulation d'écran, et une copie côté navigateur en ferait une
       // seconde vérité qui divergerait.
       return { status: 200,
                body: { server: nom, ...vu, ...(VERDICTS_BUILD[vu.verdict] ?? {}) } };
     },
+
+    // SPK-65 : ce relevé est local au poste. Il ne demande aucun tunnel, reste
+    // lisible quand toutes les Forges sont rompues et ne modifie rien.
+    'GET /api/console/build': async () => ({
+      status: 200,
+      body: decrireConsole(comparerCetteConsole(consoleAuDemarrage, racineConsole)),
+    }),
 
     'POST /api/anchor': async (corps) => {
       const nom = String(corps?.name ?? '');
