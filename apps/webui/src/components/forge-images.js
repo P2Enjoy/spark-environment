@@ -204,6 +204,9 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
 export const FACETTES_SPARK = [
   ['', 'Infos'], ['routes', 'Routes'], ['cles', 'Clés'],
   ['instantanes', 'Instantanés'],
+  // SPK-58 · §43 : ce que la pile du locataire RECEVRA. La facette vient après
+  // les instantanés et avant le terminal : elle se lit, quand celui-ci s'emploie.
+  ['environnement', 'Environnement'],
   // SPK-43 · SPK-DS-04 : le terminal est une DESTINATION, avec sa propre
   // adresse — ni une section, ni une modale.
   ['terminal', 'Terminal'],

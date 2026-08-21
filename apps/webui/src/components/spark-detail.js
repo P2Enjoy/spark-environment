@@ -21,6 +21,7 @@ import { renderTerminal, TERMINAL_VIDE } from './spark-terminal.js';
 import { renderDocker, DOCKER_VIDE } from './spark-docker.js';
 import { renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
+import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 // §12.5 : la table des modes CPU vit à UN SEUL endroit. En recopier une
 // seconde ici ferait diverger deux libellés pour le même mode.
 // `MODES` est DÉJÀ pris dans ce fichier par les modes d'amorçage : on nomme donc
@@ -557,7 +558,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     amorcage = AMORCAGE_VIDE,
                                     error = null, confirming = null,
                                     admin = ADMIN_VIDE, facette = '',
-                                    quotas = QUOTAS_VIDE } = {}) {
+                                    quotas = QUOTAS_VIDE,
+                                    env = [], envUi = ENV_VIDE } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -578,6 +580,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                   + renderPortsPanel(spark, ports, admin, reservedPorts),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin),
     instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
+    environnement: () => renderEnvPanel(spark, env, envUi, renderModale),
     terminal: () => renderTerminal(spark, terminal),
     docker: () => renderDocker(spark, docker),
     journal: () => renderJournal(audit) ||
