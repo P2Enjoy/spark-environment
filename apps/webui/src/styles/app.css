@@ -519,6 +519,25 @@ tbody tr:hover { background: var(--color-hover); }
            overflow-x: auto; scrollbar-width: thin;
            scroll-snap-type: x proximity; }
 .onglets > * { flex: 0 0 auto; scroll-snap-align: start; }
+/* §14.2 : un débordement NON SIGNALÉ rend le contenu fonctionnellement caché.
+   Faire défiler la barre ne suffisait donc pas — à 390 px, la dernière facette
+   restait hors champ sans que rien n'indique qu'elle existe. Le dégradé du bord
+   droit le dit, et il s'efface dès que la barre est défilée jusqu'au bout. */
+.onglets { position: relative;
+  mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent); }
+@supports (animation-timeline: scroll(self inline)) {
+  .onglets { animation: onglets-fin linear both; animation-timeline: scroll(self inline); }
+  @keyframes onglets-fin {
+    to { mask-image: linear-gradient(to right, #000 100%, #000);
+         -webkit-mask-image: linear-gradient(to right, #000 100%, #000); }
+  }
+}
+/* Sans débordement, aucun voile : le dégradé ne doit pas suggérer un ailleurs
+   qui n'existe pas. */
+@media (min-width: 1024px) {
+  .onglets { mask-image: none; -webkit-mask-image: none; }
+}
 .onglet { padding: var(--space-2) var(--space-4); min-height: var(--size-target);
           display: inline-flex; align-items: center;
           color: var(--color-text-2); text-decoration: none;

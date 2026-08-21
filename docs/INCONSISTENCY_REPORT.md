@@ -88,57 +88,6 @@ contrôle, et un second test refuse qu'une classe soldée y reste.
 retirée du composant, en regardant l'écran concerné ; puis la retirer de
 `CONNUES` et cette entrée du registre.
 
-### INC-07 · Les onglets de la fenêtre d'un Spark débordent la page sous 390 px
-
-**Constaté le** 2026-08-20, en vérifiant au format étroit la bannière du chemin
-de dépannage (SPK-43, tranche 4).
-
-**Mesure.** Fenêtre 390 × 844, écran d'un Spark, onglet *Terminal* :
-
-```
-liste     scrollWidth 390 / vue 390   → conforme, le tableau défile dans SON conteneur
-terminal  scrollWidth 552 / vue 390   → la PAGE déborde
-coupables : a.onglet → 464 · a.onglet → 552
-```
-
-**Ligne de base établie** (CloudWorker §2.4) : `git stash -u` sur
-`apps/webui/src` et `apps/webui/host`, mesure rejouée, **chiffres identiques**.
-
-**Reconstaté le** 2026-08-20 sur un autre écran, celui d'un conteneur ouvert
-(SPK-44, deuxième tranche). Mêmes coupables, mêmes onglets :
-
-```
-conteneur ouvert  scrollWidth 637 / vue 390   → la PAGE déborde de 247 px
-coupables : a.onglet (65 px) · a.onglet.onglet--courant (159 px) · a.onglet (247 px)
-```
-
-Ce que cette deuxième mesure ajoute : le défaut ne tient à aucun contenu
-particulier. Il ne vient ni du terminal ni du journal, qui défilent l'un et
-l'autre dans leur propre bloc — la preuve
-`sur 390 px, les journaux défilent dans LEUR bloc` le mesure séparément et passe.
-Il vient de la barre d'onglets seule, sur **tout** écran de Spark.
-Le défaut est donc préexistant et n'appartient pas à la tranche 4 de SPK-43.
-
-**Ce que cela viole.** `docs/DESIGN_SYSTEM.md` §8.1 : « La page ne défile jamais
-horizontalement. » La rangée d'onglets de la fenêtre d'un Spark — *Infos*,
-*Routes*, *Clés*, *Instantanés*, *Terminal*, *Journal*, et *Docker* quand
-SPK-44 l'ajoutera — dépasse 390 px et pousse le document entier. Le §8.2 exige en
-outre qu'un débordement soit **signalé** : ici il ne l'est pas, et les deux
-derniers onglets sont simplement hors champ.
-
-**À distinguer du cas conforme.** Sur la liste des Sparks, le tableau large
-défile bien dans son propre conteneur : `scrollWidth` reste égal à la vue. C'est
-la forme attendue, et elle montre que le défaut est propre à la rangée d'onglets.
-
-**Comportement laissé inchangé** (CloudWorker §3.1). La rangée d'onglets
-appartient à SPK-33 (les trois degrés de navigation), et la corriger demanderait
-de trancher entre défilement local signalé, repli, ou tiroir — un arbitrage de
-navigation qui déborde de l'unité en cours.
-
-**Pour clore.** Décider de la forme au format étroit, l'appliquer à
-`.onglet`, et vérifier par une mesure que `scrollWidth` retombe à la largeur de
-la vue sur les sept facettes.
-
 ### INC-08 · L'erreur d'un champ survit à sa correction, jusqu'à la soumission suivante
 
 **Constaté le** 2026-08-20, en observant les captures de SPK-59.
@@ -503,32 +452,3 @@ convient à sa route — pour une lecture, un 404 disant que la cellule a dispar
 vaut mieux qu'un 502 disant que le pilote a refusé. Cela demande un arbitrage
 par route, donc une unité à soi ; ce n'est pas une retouche mécanique.
 
-### INC-16 · La fenêtre d'un Spark défile horizontalement sous 768 px
-
-**Mesuré le 2026-08-21**, en vérifiant visuellement le refus de SPK-36. Le
-`DESIGN_SYSTEM.md` §8.1 range « la page ne défile jamais horizontalement » parmi
-les règles **invariantes**, et le §14.2 ajoute qu'un débordement non signalé rend
-le contenu fonctionnellement caché.
-
-À 390 px, sur la fenêtre d'un Spark :
-
-```
-orphelin      page déborde : true | onglets débordent : true
-boutique      page déborde : true | onglets débordent : true
-site-vitrine  page déborde : true | onglets débordent : true
-```
-
-**Ce n'est pas le message de SPK-36.** Le témoin le montre : `boutique` n'a
-aucune erreur à afficher et déborde à l'identique. La cause est la **barre
-d'onglets des facettes** — *Infos, Routes, Clés, Instantanés, Environnement,
-Terminal, Docker, Journal* — qui pousse la page au lieu de défiler dans son
-propre conteneur. À 390 px, la dernière facette est hors champ **sans aucune
-indication** qu'elle existe.
-
-Le texte du refus, lui, s'enroule correctement dans son bandeau à toutes les
-largeurs éprouvées — 1440, 900 et 390 px, captures observées.
-
-**Ce qu'il faudrait.** Que la barre de facettes défile dans son propre
-conteneur, avec l'indication de débordement que le §8.2 décrit, la page restant
-fixe. C'est un défaut de mise en page général de la fenêtre, pas de l'unité qui
-l'a fait voir : le comportement est laissé inchangé (CloudWorker §3.1).

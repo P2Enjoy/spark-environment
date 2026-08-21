@@ -450,6 +450,9 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- La barre de facettes défile dans son conteneur **et signale son débordement**.
+  INC-07 et INC-16 — le même défaut consigné deux fois à un jour d'écart — sont
+  retirés du rapport d'incohérences.
 - `README.md` : la section « Statut » annonçait encore un **plan de contrôle non
   commencé** et SPK-29 comme dette ouverte, alors qu'il tourne sur une Forge
   réelle et que la réservation est arbitrée. Réécrite avec ce que la mesure

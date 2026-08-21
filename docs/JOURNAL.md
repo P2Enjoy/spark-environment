@@ -7296,3 +7296,46 @@ SPK-54, dont les écarts sont des PREUVES à exécuter — l'une exige l'hôte c
 lancé avec son tunnel, l'autre une Forge réelle, disponible. Les autres unités
 `[~]` attendent un arbitrage du responsable ou une action humaine, chacune le
 disant dans son bloc.
+
+## 2026-08-21 — Le même défaut consigné deux fois, et ce que cela apprend
+
+En fermant le débordement de la barre de facettes, j'ai trouvé **deux entrées
+pour un seul défaut** :
+
+    INC-07 · les onglets débordent la page sous 390 px   (2026-08-20)
+    INC-16 · la fenêtre défile horizontalement sous 768  (2026-08-21)
+
+Mêmes coupables — `a.onglet` —, même cause, un jour d'écart, deux sessions. La
+seconde a même établi une ligne de base sur témoin pour prouver que la cause
+n'était pas le message qu'elle venait d'écrire, ce qui était rigoureux et
+inutile : la première entrée le disait déjà.
+
+**Ce que cela apprend** : un rapport d'incohérences qui grossit devient un
+rapport qu'on n'ouvre plus avant d'y ajouter. Douze entrées, et personne n'a
+relu. Le coût n'est pas la ligne en double — c'est le temps de mesure dépensé
+deux fois sur la même chose, et la fausse impression que le produit a douze
+défauts distincts quand il en a onze.
+
+Les deux entrées sont retirées. Le fichier n'est pas vide, il en garde dix.
+
+### Le correctif ne suffisait pas, et le rapport le disait
+
+Ma première version faisait défiler la barre dans son conteneur — le §8.2 est
+satisfait, la page ne défile plus. Mais INC-16 portait une seconde phrase que
+j'avais lue trop vite : « à 390 px, la dernière facette est hors champ **sans
+aucune indication** qu'elle existe ».
+
+C'est le §14.2 : un débordement non signalé rend le contenu **fonctionnellement
+caché**. Une barre qui défile sans le dire cache la facette *Journal* aussi
+sûrement qu'une barre qui déborde — elle le fait juste proprement.
+
+D'où le dégradé au bord droit, qui s'efface quand la barre est défilée jusqu'au
+bout, et qui n'existe pas là où rien ne déborde : un voile permanent
+suggérerait un ailleurs qui n'existe pas.
+
+**Mesure empruntée, et je le dis** : la vérification à 390 px est celle d'une
+session voisine — `débordement horizontal : false` — et non la mienne. Sa
+campagne occupait la machine, et le §F du runbook interdit d'en lancer une
+seconde. Je referai la mesure sous mes propres yeux avec la vérification
+visuelle de SPK-64, qui est due de toute façon.
+
