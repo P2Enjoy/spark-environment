@@ -1375,11 +1375,20 @@ def create_app(config: Config) -> FastAPI:
                 spark = service.by_name(connection, name)
                 protection_service.ensure_writable(connection, name, "resize")
                 usage = _usage_de_la_cellule(spark)
-                return service.decorate(service.resize(
+                apres = service.resize(
                     connection, name, body or {},
                     metadata_margin=config.storage_metadata_margin_bytes,
                     usage=usage,
-                ))
+                )
+                # §49.2 : le registre est écrit, la cellule vient ENSUITE. Le
+                # champ `applied` dit laquelle des trois situations on est —
+                # posé, promis mais pas posé, ou rien à poser.
+                pose, motif = _poser_les_quotas(connection, apres)
+                rendu = service.decorate(apres)
+                rendu["applied"] = pose
+                if motif:
+                    rendu["apply_error"] = motif
+                return rendu
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
@@ -1404,6 +1413,48 @@ def create_app(config: Config) -> FastAPI:
             except service.SparkError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "refused", "message": str(erreur)}) from erreur
+
+    def _poser_les_quotas(connection, spark: dict) -> tuple[bool | None, str | None]:
+        """Pose sur la cellule les quotas que le registre vient d'écrire (§49.2).
+
+        Rend `(True, None)`, `(False, motif)` ou `(None, None)` quand il n'y a
+        RIEN à poser — Spark sans cellule. Les trois ne se confondent pas
+        (§14.6) : « rien à poser » n'est pas un échec, et « promis » n'est pas
+        « en vigueur ».
+
+        **Un échec ne défait PAS le registre.** Annuler ferait perdre
+        l'admission déjà accordée et rouvrirait la course que la transaction du
+        §14.2 vient de fermer. L'écart est DIT, pas rattrapé en silence.
+        """
+        if not spark.get("incus_name"):
+            return None, None
+        cpus = core_pool.shared_cpus(connection)
+        capacite = core_pool.shared_capacity(connection)
+        epingles = (core_pool.dedicated_cpus(connection, spark["id"])
+                    if spark["cpu_mode"] == "dedicated" else None)
+        manifest = Manifest(
+            name=spark["name"], image=spark["image"], cpu_mode=spark["cpu_mode"],
+            memory_bytes=spark["memory_reservation_bytes"],
+            network_burst_bps=spark["network_burst_bps"],
+            storage_bytes=spark["storage_bytes"],
+            cpu_reservation=spark["cpu_reservation"], cpu_max=spark["cpu_max"],
+            cpu_cores=spark["cpu_cores"], cpu_priority=spark["cpu_priority"],
+            memory_enforce=spark["memory_enforce"],
+            memory_swap=bool(spark["memory_swap"]),
+            storage_io_priority=spark["storage_io_priority"],
+            runtime=spark["runtime"],
+            ipv4_address=spark["ipv4_address"],
+        )
+        try:
+            traduit = translate(
+                manifest, cpus, capacite, dedicated_cpus=epingles,
+                metadata_margin=app.state.config.storage_metadata_margin_bytes,
+            )
+            app.state.incus.update_instance_config(
+                spark["incus_name"], traduit.config)
+        except (TranslationError, IncusError) as erreur:
+            return False, str(erreur)
+        return True, None
 
     def _usage_de_la_cellule(spark: dict) -> dict | None:
         """Ce que la cellule occupe RÉELLEMENT (§49.3).
