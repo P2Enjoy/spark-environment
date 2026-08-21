@@ -59,7 +59,7 @@
   "info": {
     "description": "Runtime serveur du plan de controle Spark. Ecoute exclusivement sur la boucle locale.",
     "title": "sparkd",
-    "version": "0.post1.dev561+g9761d83c2.d20260821"
+    "version": "0.post1.dev579+ge6916b224"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -317,7 +317,7 @@
     },
     "/v1/env": {
       "get": {
-        "description": "Le jeu de la FORGE, hérité par tous ses Sparks (§43.6).",
+        "description": "Le catalogue de la Forge, sélectionné Spark par Spark (§43.6).",
         "operationId": "list_forge_env_v1_env_get",
         "responses": {
           "200": {

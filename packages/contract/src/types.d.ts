@@ -133,7 +133,7 @@ export interface paths {
         };
         /**
          * List Forge Env
-         * @description Le jeu de la FORGE, hérité par tous ses Sparks (§43.6).
+         * @description Le catalogue de la Forge, sélectionné Spark par Spark (§43.6).
          */
         get: operations["list_forge_env_v1_env_get"];
         put?: never;
