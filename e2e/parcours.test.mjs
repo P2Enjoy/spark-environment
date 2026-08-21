@@ -478,8 +478,9 @@ test('redimensionner un Spark depuis l’écran, sans le détruire', async () =>
 test('changer le MODE CPU depuis l’écran, au clavier', async () => {
   await parcours('quotas-mode-cpu', async () => {
     // §49.2 : le mode CPU est un champ redimensionnable. Le geste se fait sur un
-    // Spark ARRÊTÉ — pas d'usage relevé —, et il est réversible : le parcours
-    // rend la pile à l'état du seed (§29.2).
+    // Spark ARRÊTÉ — donc sans mémoire relevée, ce qui écarte le refus du
+    // §49.3 —, et il est réversible : le parcours rend la pile à l'état du
+    // seed (§29.2).
     await ouvrir('boutique');
     await page.waitForSelector('#titre-ressources', { timeout: 10000 });
 

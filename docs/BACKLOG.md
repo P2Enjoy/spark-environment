@@ -2926,8 +2926,9 @@ le refus DANS la modale sans effacer la saisie (§6.27).
   **existe toujours** —, et le refus qui reste dans la modale avec sa saisie.
 - **Ce que les parcours ont MESURÉ, et qui vaut d'être écrit** : rétrécir la
   mémoire d'un Spark EN MARCHE est refusé, et c'est le produit qui a raison
-  (§49.3). Le parcours vise donc le disque d'un Spark ARRÊTÉ — pas d'usage
-  relevé, et rendre du disque ne peut jamais manquer de place.
+  (§49.3). Le parcours vise donc le disque d'un Spark ARRÊTÉ, et d'assez loin
+  au-dessus de son occupation : rendre du disque ne peut jamais manquer de
+  place.
 - **Preuves** : 2 parcours E2E. 821 preuves de console.
 
 **Captures et manuel, le 2026-08-21.** Trois captures observées —
