@@ -48,7 +48,9 @@ compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/nul
 rootless=absent
 if id spark-docker >/dev/null 2>&1; then
   uid=$(id -u spark-docker)
-  if systemctl --user -M spark-docker@.host is-active docker.service >/dev/null 2>&1 \
+  if runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
+          DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus \
+          systemctl --user is-active docker.service >/dev/null 2>&1 \
      && runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
           DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info >/dev/null 2>&1; then
     rootless=active
@@ -242,20 +244,20 @@ SCRIPTS = {
 #: à la fin de sa session, ce qui donnerait une cellule qui marche jusqu'au
 #: premier redémarrage — et cela ne se verrait qu'alors.
 SCRIPT_ROOTLESS = APT + (
-    # `machinectl` ne fait PAS partie de l'image Debian minimale : l'omettre
-    # installe les paquets puis échoue juste avant le service utilisateur.
-    "apt-get install -y -qq docker-ce-rootless-extras uidmap dbus-user-session systemd-container\n"
+    "apt-get install -y -qq docker-ce-rootless-extras uidmap dbus-user-session\n"
     f"id {COMPTE_ROOTLESS} >/dev/null 2>&1 || "
     f"useradd -m -s /bin/bash {COMPTE_ROOTLESS}\n"
     f"loginctl enable-linger {COMPTE_ROOTLESS}\n"
     # Le démon enraciné est ARRÊTÉ : deux démons sur la même cellule se
     # disputeraient le stockage et les réseaux.
     "systemctl disable --now docker.service docker.socket 2>/dev/null || true\n"
-    # `.host` est indispensable : sans lui, `machinectl` cherche une machine
-    # appelée `spark-docker@` au lieu du bus utilisateur local.
-    f"machinectl shell {COMPTE_ROOTLESS}@.host /usr/bin/env "
-    "XDG_RUNTIME_DIR=/run/user/$(id -u %s) dockerd-rootless-setuptool.sh install\n"
-    % COMPTE_ROOTLESS
+    # `machinectl shell` a quitté sans créer d'unité sur la cellule réelle.
+    # Le bus existe déjà grâce à linger; l'indiquer à `runuser` joint le BON
+    # utilisateur et laisse l'outil Docker installer son unité systemd.
+    f"uid=$(id -u {COMPTE_ROOTLESS})\n"
+    f"runuser -u {COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus "
+    "dockerd-rootless-setuptool.sh install\n"
 )
 
 
