@@ -9,7 +9,7 @@
  */
 
 import { renderSparksView } from './components/sparks-view.js';
-import { renderSparkDetail, AMORCAGE_VIDE } from './components/spark-detail.js';
+import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spark-detail.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
@@ -35,6 +35,11 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // signer. `null` tant que rien n'a échoué — et il redevient
                // `null` dès qu'un geste repart signé.
                signature: null,
+               // SPK-57 · §49 : la modale de redimensionnement. Fermée tant
+               // qu'on ne l'a pas ouverte, et ses valeurs sont celles du Spark
+               // AU MOMENT DE L'OUVERTURE — pas des champs vides qui feraient
+               // saisir de mémoire ce qui est déjà à l'écran.
+               quotas: { ...QUOTAS_VIDE, values: { ...QUOTAS_VIDE.values } },
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
                            pools: null, cores: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
@@ -115,7 +120,7 @@ function peindre() {
       : etat.route === 'detail'
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, frappe: etat.frappe,
-                            admin: etat.admin,
+                            admin: etat.admin, quotas: etat.quotas,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
                             ...etat.detail })
@@ -226,6 +231,11 @@ function brancher() {
       etat.catalogueServeurs.ui.open = false;
       etat.catalogueServeurs.ui.refusal = null;
       etat.catalogueServeurs.ui.probe = null;
+      // SPK-57 : la modale des quotas suit le MÊME contrat. L'oublier ici la
+      // laisserait ouverte après une fermeture par « Échap », et l'écran
+      // afficherait une surface que l'utilisateur croit avoir refermée.
+      etat.quotas.open = false;
+      etat.quotas.refusal = null;
       peindre();
     },
   });
@@ -885,6 +895,42 @@ function brancherPanneaux() {
       // Le focus entrant appartient à `brancherModale` (§6.27).
     });
   }
+  // SPK-57 · §49 : la modale des quotas. Elle a son propre état parce que son
+  // SUJET est la section « Ressources » et non les panneaux d'administration —
+  // les mêler ferait qu'ouvrir l'une fermerait l'autre (§6.27).
+  racine.querySelector('[data-ouvre="quotas"]')?.addEventListener('click', () => {
+    const q = etat.quotas;
+    q.open = true;
+    q.refusal = null;
+    // Les valeurs viennent du Spark AFFICHÉ, jamais de champs vides : faire
+    // ressaisir de mémoire ce qui est déjà à l'écran invite à se tromper d'ordre
+    // de grandeur, et c'est précisément ce qu'un quota ne pardonne pas.
+    q.values = {
+      memory_gib: String(Math.round(etat.spark.memory_reservation_bytes / 1024 ** 3)),
+      storage_gib: String(Math.round(etat.spark.storage_bytes / 1024 ** 3)),
+      network_mbps: String(Math.round(etat.spark.network_burst_bps / 1e6)),
+    };
+    peindre();
+    // Le focus entrant, `Échap` et la restitution du focus sont tenus par
+    // `brancherModale` (§6.27).
+  });
+
+  const quotas = racine.querySelector('[data-modale="quotas"]');
+  if (quotas) {
+    for (const controle of quotas.querySelectorAll('input')) {
+      controle.addEventListener('input', () => {
+        // On ne repeint PAS à chaque frappe : `innerHTML` reconstruirait la
+        // modale et arracherait le focus au clavier (§14.3).
+        etat.quotas.values[`${controle.name}_${
+          controle.name === 'network' ? 'mbps' : 'gib'}`] = controle.value;
+      });
+    }
+    quotas.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      appliquerQuotas();
+    });
+  }
+
   // L'annulation et `Échap` sont tenus par `brancherModale` (§6.27) : un seul
   // endroit pour un seul contrat.
   for (const bouton of racine.querySelectorAll('[data-annule]')) {
@@ -1047,6 +1093,48 @@ function noterSignature(reponse) {
   if (phrase === etat.signature) return;
   etat.signature = phrase;
   peindreSignature();
+}
+
+/**
+ * Applique les nouveaux quotas d'un Spark (SPK-57, docs/DAT.md §49).
+ *
+ * @spec docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.2 (registre puis cellule),
+ *       §49.3 (un refus de rétrécissement n'est pas un refus d'admission) ·
+ *       docs/DESIGN_SYSTEM.md §6.27 (le refus s'affiche DANS la modale et
+ *       n'efface aucune saisie), §1.3 (pas de succès simulé)
+ *
+ * **Le refus reste dans la modale**, avec la saisie intacte : une modale qui se
+ * refermerait sur un refus ferait perdre le travail ET cacherait la raison.
+ */
+async function appliquerQuotas() {
+  const q = etat.quotas;
+  q.busy = true;
+  q.refusal = null;
+  peindre();
+
+  const corps = {
+    memory_reservation_bytes: Math.round(Number(q.values.memory_gib) * 1024 ** 3),
+    storage_bytes: Math.round(Number(q.values.storage_gib) * 1024 ** 3),
+    network_reservation_bps: Math.round(Number(q.values.network_mbps) * 1e6),
+  };
+
+  const vu = await appel('PATCH', `/v1/sparks/${encodeURIComponent(etat.spark.name)}`, corps);
+  q.busy = false;
+
+  if (!vu.ok) {
+    // Le runtime NOMME ses refus : « pas la place » et « ce que vous retirez est
+    // utilisé » ne se disent pas pareil (§49.3). Les remplacer par un code HTTP
+    // ferait deviner lequel des deux on a reçu.
+    q.refusal = vu.corps?.detail?.message ?? vu.corps?.message
+      ?? 'Le serveur a refusé ces quotas.';
+    return peindre();
+  }
+
+  // §1.3 : rien n'est présenté comme réussi avant que la Forge ne l'ait rendu.
+  // Le champ `applied` distingue « en vigueur » de « promis » (§49.2) ; on relit
+  // donc l'état RÉEL plutôt que d'afficher ce qu'on a envoyé.
+  q.open = false;
+  await router();
 }
 
 /** Appel d'écriture. Rend toujours `{ ok, corps }` : un refus est une réponse,
