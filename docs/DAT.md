@@ -7090,6 +7090,31 @@ présenter comme tel : l'admission dit « il n'y a pas la place », celui-ci dit
 « ce que vous voulez retirer est utilisé ». Les confondre enverrait l'exploitant
 libérer de la place sur la Forge alors que le problème est dans la cellule.
 
+**Complété le 2026-08-21, en livrant le relevé.** Le tableau ci-dessus promettait
+« l'occupation mesurée » sans dire CE QU'ON MESURE. C'est écrit ici, avec ses
+limites, parce qu'un refus dont on ignore la grandeur ne se conteste pas.
+
+| Ce qu'on relève | D'où il vient | Quand |
+|---|---|---|
+| mémoire employée | `memory.usage` de l'état de la cellule | cellule **en marche** uniquement |
+| disque occupé | `disk.root.usage` de l'état de la cellule | quel que soit l'état de la cellule |
+
+**Le disque se relève même à l'arrêt, la mémoire non**, et la dissymétrie n'est
+pas un oubli : une cellule arrêtée n'occupe aucune mémoire — refuser sur un
+chiffre périmé interdirait un rétrécissement légitime —, tandis qu'elle occupe
+toujours son jeu de données.
+
+**L'occupation du disque inclut les instantanés du Spark**, et c'est la bonne
+quantité, pas une approximation : le quota porte sur le jeu de données entier,
+instantanés compris. Se fonder sur les seuls fichiers vivants laisserait poser un
+quota que le pool ne peut pas honorer, et le refus tomberait plus tard, ailleurs,
+sans rapport apparent avec le geste qui l'a causé. C'est déjà la quantité que la
+section *Ressources* affiche, avec la même note.
+
+**Ce qui reste à mesurer sur une Forge réelle** : qu'une instance ARRÊTÉE rende
+bien `disk.root.usage`. Si le runtime se tait, aucun refus n'est prononcé —
+l'absence de mesure est une réponse, jamais une occupation inventée (§31.2).
+
 ### 49.4 À chaud ou non : ce qui est ÉTABLI, et ce qui reste à mesurer
 
 **Ce que le produit sait déjà**, par ses sections existantes : le `cpuset` se
