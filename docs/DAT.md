@@ -6499,6 +6499,12 @@ Techniquement, OpenSSH le permet (`command=`, `restrict`, `permitopen=`). Le
 produit s'en sert déjà partiellement : le §37.2 fait entrer la console dans les
 Sparks par rebond, et non par un shell sur la Forge.
 
+**La réponse a été mesurée le 2026-08-21, et elle est au §46 : oui, mais pas avec
+`restrict` seul.** Cette option ne ferme pas l'exécution d'une commande ; il faut
+`command=`, et donc une garde, parce que `command=` casserait sinon le dépannage
+du §37.3. Ne pas lire le §46 avant de poser une clé « restreinte » revient à
+croire la porte fermée alors qu'elle ne l'est pas.
+
 Cette restriction est retenue comme **première mesure**, et pour trois raisons :
 elle est la moins chère de la liste ; elle réduit le dommage des menaces 3 et 5
 sans rien demander au responsable au quotidien ; et elle est **la condition sans
