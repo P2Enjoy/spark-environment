@@ -2978,7 +2978,7 @@ prononçait jamais en production. Un refus inatteignable ne protège personne.
   Incus réel. Les trois exigent une Forge de validation : **nécessite une action
   humaine**.
 
-### [ ] SPK-58 · Variables d'environnement et secrets d'un Spark
+### [~] SPK-58 · Variables d'environnement et secrets d'un Spark
 
 Le locataire fait tourner une pile Compose ; le produit n'a aucun moyen de lui
 passer une valeur. Aujourd'hui, une adresse de relais SMTP ou un jeton d'API se
@@ -3139,6 +3139,44 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   2026-08-20 dans `docs/AGENT_RUNBOOK.md` §F, avec le chiffre qui la rend non
   négociable : la VM de développement dispose de **7,5 Gio**, pas de la mémoire
   de la machine hôte.
+
+**Spécifiée et commencée le 2026-08-21.** `docs/DAT.md` **§43.9** et
+`docs/SCHEMA.md` §10 ter écrits et committés **avant la première ligne de code** :
+le §43 posait la doctrine, pas le modèle, ni le chiffrement, ni l'empreinte, ni
+la résolution. Le **découpage en quatre tranches** est écrit au §43.9.6 plutôt
+que laissé à la mémoire d'une conversation.
+
+**Tranche 1 — le magasin — est LIVRÉE et prouvée le 2026-08-21.**
+
+- **Une table pour les deux portées** (`env_entry`), et non deux : les deux
+  niveaux du §43.6 partagent les mêmes colonnes et les mêmes règles.
+- **Deux index PARTIELS** portent l'unicité, et c'est une contrainte de SQLite,
+  pas un choix de style : un `UNIQUE (scope, spark_id, name)` ne protégerait rien
+  au niveau Forge, SQLite tenant deux `NULL` pour distincts.
+- **La base refuse elle-même une ligne secrète portant sa valeur en clair**, par
+  déclencheur, comme au §10 bis pour la signature. Compter sur le code appelant
+  produirait exactement la fuite que l'unité existe pour empêcher.
+- **AES-256-GCM, le NOM en donnée associée** : un chiffré déplacé d'une variable
+  à une autre ne se déchiffre pas. Écartés, avec leur motif au §43.9.2 : la
+  bibliothèque standard, qui n'embarque aucun chiffrement symétrique, et
+  `openssl enc`, dont le mode GCM ne gère pas l'étiquette d'authentification.
+- **L'empreinte est un HMAC pris avec la clé de la Forge**, jamais un hachage nu
+  qui livrerait `changeme` par force brute. Comparable entre deux Sparks de la
+  même Forge — ce que le §43.3 demande — et pas d'une Forge à l'autre.
+- **La clé est créée si elle manque, et JAMAIS remplacée** : la refabriquer
+  rendrait tous les secrets indéchiffrables en silence.
+- **Preuves** : 19, dont celle de la DoD — la valeur d'un secret est **cherchée**
+  dans la réponse, dans le journal et dans la table, et ne s'y trouve pas. Une
+  première version de cette preuve ne prouvait rien : `str(sqlite3.Row)` ne rend
+  pas son contenu, et elle cherchait le secret dans une adresse mémoire.
+
+- **Reste avant `[x]`**, dans l'ordre du §43.9.6 :
+  1. **la matérialisation** — les deux fichiers posés dans la cellule à la
+     création, au changement, au démarrage et après restauration d'instantané ;
+  2. **l'écran** — onglet *Environnement*, l'origine de chaque valeur, le champ
+     de secret en écriture seule ;
+  3. **le manuel, le seed**, et la preuve du §43.0 essai F refaite sur le fichier
+     que le produit écrit — celle-là **nécessite une Forge réelle**.
 
 ### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 

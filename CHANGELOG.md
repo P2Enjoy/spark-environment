@@ -3,6 +3,15 @@
 ## [Non publié]
 
 ### Ajouté
+- **L'environnement d'un Spark : le magasin** (SPK-58, `docs/DAT.md` §43.9) —
+  première tranche. Le registre sait porter des variables d'environnement à deux
+  niveaux, la Forge et le Spark, la seconde surchargeant la première **nom par
+  nom**. Une entrée peut être **déclarée secrète** : sa valeur est alors chiffrée
+  au repos, n'est plus jamais rendue par l'API, n'entre jamais au journal, et
+  l'écran n'en montrera que le nom, une empreinte et la date. La clé de
+  chiffrement vit sur la Forge, est créée si elle manque et n'est jamais
+  remplacée. **Rien n'est encore posé dans la cellule** : c'est la tranche
+  suivante.
 - **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de

@@ -6309,3 +6309,68 @@ ici : la prise à chaud du disque et du mode CPU, plus le fait qu'une instance
 ARRÊTÉE rende bien `disk.root.usage` — les trois exigent une Forge réelle
 (**nécessite une action humaine**). La session suivante prend donc l'unité
 suivante du plan, ou INC-12 si le responsable l'ordonne.
+
+## 2026-08-21 · SPK-58 — le magasin d'environnement
+
+**Unité choisie au §4.2 point 3.** SPK-57 n'a plus d'écart constructible ici, et
+**toutes** les unités `[~]` restantes sont bloquées sur une Forge réelle, un
+arbitrage ou un accès : SPK-17 (CI jamais exécutée), 29, 30, 28, 36, 37, 40, 43,
+44, 45, 61, 55 (Forge réelle), 53 et 54 (arbitrage). SPK-51, première `[ ]`,
+exige deux vérifications extérieures **avant** de coder. La première `[ ]`
+réellement constructible est donc SPK-58.
+
+### Ce qui a été spécifié avant d'être codé
+
+`docs/DAT.md` **§43.9** et `docs/SCHEMA.md` §10 ter, committés avant la première
+ligne de code (§3.2). Le §43 posait la doctrine ; il ne disait ni le modèle, ni
+le chiffrement, ni l'empreinte, ni la résolution.
+
+Trois décisions qui pouvaient aller autrement, et leur motif :
+
+- **une table pour les deux portées**, pas deux. Deux tables imposeraient
+  d'écrire deux fois la validation, le chiffrement et la résolution, puis de les
+  faire diverger ;
+- **AES-256-GCM par `cryptography`**, le nom de la variable en donnée associée.
+  Écarté : la bibliothèque standard, qui n'embarque aucun chiffrement
+  symétrique ; et `openssl enc`, dont le mode GCM ne gère pas l'étiquette
+  d'authentification — le chiffré serait malléable ;
+- **l'empreinte est un HMAC, pas un hachage nu.** Un préfixe de SHA-256 public
+  livrerait `changeme` par force brute en quelques secondes. Avec la clé de la
+  Forge, elle reste comparable entre deux Sparks de la même Forge — ce que le
+  §43.3 demande — et ne se retourne pas.
+
+### Ce qui a été codé
+
+Migration `010_environnement.sql` : la table, ses **deux index partiels** — un
+`UNIQUE (scope, spark_id, name)` ne protégerait rien au niveau Forge, SQLite
+tenant deux `NULL` pour distincts — et **deux déclencheurs** qui interdisent à la
+base une ligne secrète portant sa valeur en clair.
+
+`sparkd/environnement.py` : la clé (créée si absente, jamais remplacée),
+`chiffrer`, `dechiffrer`, `empreinte`, puis `poser`, `retirer`, `lister` avec
+l'origine de chaque valeur, et `resoudre` qui rend le contenu des **deux**
+fichiers du §43.5.2.
+
+### Ce qui a été mesuré, et une preuve qui ne prouvait rien
+
+`str(sqlite3.Row)` ne rend **pas** son contenu. La première version de la preuve
+centrale cherchait le secret dans `<sqlite3.Row object at 0x…>` et passait sans
+rien regarder. Corrigée en aplatissant les colonnes, avec le motif écrit dans le
+fichier. C'est le genre de preuve verte qui coûte le plus cher.
+
+Mesuré aussi : SQLite ne concatène pas deux littéraux adjacents comme C — un
+`RAISE(ABORT, 'a' 'b')` est une erreur de syntaxe.
+
+### Vérifications
+
+**19 preuves d'unité**, dont celle de la DoD : la valeur d'un secret est
+**cherchée** explicitement dans la réponse, dans le journal et dans la table, et
+ne s'y trouve pas.
+
+### Où reprendre
+
+Tranche 2 du §43.9.6 : **la matérialisation** — poser `/etc/spark/env` et
+`/run/spark/secrets` dans la cellule à la création, au changement, au démarrage
+et après restauration d'instantané, sur le modèle d'`authorized_keys` (§17.1).
+Puis la tranche 3 (l'onglet *Environnement*) et la tranche 4 (manuel, seed, et la
+preuve du §43.0 essai F refaite sur le fichier que le produit écrit).
