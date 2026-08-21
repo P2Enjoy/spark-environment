@@ -6115,3 +6115,54 @@ humaine**.
 `PATCH`, rendre le refus dans la modale —, puis le parcours et les captures.
 SPK-51 attend deux vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur
 le nom de l'objet dans l'alerte hors bande attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-57 — le geste devient atteignable au clavier
+
+**Unité reprise** au §4.2 point 1. Spécification existante (§49) : code direct.
+
+### Ce qui a été construit
+
+La modale des quotas est **câblée**. Elle s'ouvre pré-remplie des valeurs du
+Spark affiché — faire ressaisir de mémoire ce qui est déjà à l'écran invite à se
+tromper d'ordre de grandeur, et c'est ce qu'un quota ne pardonne pas. Elle envoie
+le `PATCH`, et rend le refus **dans** la modale sans effacer la saisie (§6.27).
+
+Elle suit le contrat commun de modale — focus entrant, `Échap`, focus rendu — et
+son état a été ajouté à la fermeture centralisée : l'oublier l'aurait laissée
+ouverte après un `Échap`.
+
+### Ce que les parcours ont mesuré, et qui a corrigé le parcours lui-même
+
+Deux échecs successifs, tous deux instructifs, et **aucun n'était un défaut du
+produit** :
+
+- **agrandir est refusé** sur la pile du harnais : il n'y reste que ~1,36 Gio
+  libres. Le refus est exact, chiffré, et parfaitement légitime ;
+- **rétrécir la mémoire d'un Spark EN MARCHE est refusé** aussi — et c'est le
+  §49.3 qui parle : descendre sous ce que la cellule emploie livrerait ses
+  processus à l'OOM killer. Le produit avait raison ; c'est le parcours qui
+  demandait l'impossible.
+
+Le parcours vise donc le **disque d'un Spark arrêté** : pas d'usage relevé, et
+rendre du disque ne peut jamais manquer de place (§49.1). Le raisonnement est
+écrit dans le parcours, pour que la prochaine session ne le refasse pas.
+
+### Vérifications
+
+821 preuves de console, **2 parcours E2E** neufs — le geste qui aboutit, avec son
+effet constaté côté Forge et le Spark toujours vivant ; et le refus qui reste
+dans la modale avec sa saisie.
+
+**SPK-57 reste `[~]`**, quatre écarts : aucune capture observée ni manuel M8 ;
+l'usage relevé ne porte que la mémoire, donc le refus du §49.3 sur le disque est
+prouvé au service mais pas atteignable par la route ; le **mode CPU** n'est pas
+modifiable depuis l'écran alors que le §49.2 le range parmi les champs
+redimensionnables et que l'API l'accepte ; et la prise à chaud du disque et du
+mode CPU exige une Forge réelle — **nécessite une action humaine**.
+
+**Où reprendre.** SPK-57 : les captures du geste, le manuel M8, puis le mode CPU
+à l'écran. SPK-51 attend deux vérifications extérieures ; SPK-53, SPK-54 et
+l'arbitrage sur le nom de l'objet dans l'alerte hors bande attendent une décision
+du responsable.

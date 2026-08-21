@@ -12,8 +12,9 @@
   des trois situations on est : quota en vigueur, quota **promis** mais que le
   noyau a refusé, ou rien à poser faute de cellule. La section *Ressources* d'un
   Spark porte désormais sa commande **Modifier les quotas**, et le champ du
-  disque annonce qu'il **exige un redémarrage** avant qu'on agisse. *La modale
-  n'est pas encore câblée : elle rend, elle n'envoie pas.*
+  disque annonce qu'il **exige un redémarrage** avant qu'on agisse. La modale
+  s'ouvre **pré-remplie** des valeurs du Spark, et un refus y reste affiché sans
+  effacer la saisie. *Le mode CPU n'est pas encore modifiable depuis l'écran.*
 - **L'admission sait compter un redimensionnement** (SPK-57, `docs/DAT.md` §49.1) :
   `pools(..., sauf=<id>)` et `admit(..., sauf=<id>)` rendent au pool le Spark
   visé avant d'évaluer sa nouvelle demande. Un agrandissement tenable n'est plus

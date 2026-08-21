@@ -2917,14 +2917,26 @@ sujet est cette section (`DESIGN_SYSTEM.md` §6.27).
   faire disparaître ferait croire que le produit ne sait pas redimensionner.
 - **Preuves** : 7 de composant. 821 preuves de console au total.
 
+**Le geste est ATTEIGNABLE au clavier, le 2026-08-21.** La modale est câblée :
+elle s'ouvre pré-remplie des valeurs du Spark affiché, envoie le `PATCH`, et rend
+le refus DANS la modale sans effacer la saisie (§6.27).
+
+- **Deux parcours E2E**, depuis le parcours canonique et au clavier : le
+  redimensionnement qui aboutit — l'effet est constaté côté Forge, et le Spark
+  **existe toujours** —, et le refus qui reste dans la modale avec sa saisie.
+- **Ce que les parcours ont MESURÉ, et qui vaut d'être écrit** : rétrécir la
+  mémoire d'un Spark EN MARCHE est refusé, et c'est le produit qui a raison
+  (§49.3). Le parcours vise donc le disque d'un Spark ARRÊTÉ — pas d'usage
+  relevé, et rendre du disque ne peut jamais manquer de place.
+- **Preuves** : 2 parcours E2E. 821 preuves de console.
+
 - **Reste avant `[x]`** :
-  1. **la modale n'est pas encore CÂBLÉE** : elle rend, mais `app.js` ne l'ouvre
-     pas et n'envoie pas le `PATCH`. C'est le geste qui manque entre l'écran et
-     l'API, tous deux prêts ;
-  2. **aucun parcours E2E, aucune capture, aucun manuel** ;
-  3. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
+  1. **aucune capture observée** du geste, ni du manuel M8 mis à jour ;
+  2. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
      mesurée, donc le refus du §49.3 sur le disque ne se déclenche pas en
      production — il est prouvé au service, pas atteignable par la route ;
+  3. **le mode CPU n'est pas modifiable depuis l'écran.** Le §49.2 le range
+     pourtant parmi les champs redimensionnables, et l'API l'accepte ;
   4. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
      changement de mode CPU — exige une Forge réelle : **nécessite une action
      humaine**.
