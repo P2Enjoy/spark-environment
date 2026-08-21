@@ -139,6 +139,15 @@ def test_le_releve_n_ECRIT_rien(tmp_path):
         assert interdit not in bootstrap.RELEVE, interdit
 
 
+def test_le_releve_rootless_exige_un_SERVICE_et_un_SOCKET_utilisable(tmp_path):
+    """Un compte de service seul n'est pas un démon. Le cas réel avait bien
+    `spark-docker`, mais `docker.service` était inactive et aucun client ne
+    pouvait joindre le socket rootless (§42.2 bis)."""
+    assert "systemctl --user -M spark-docker@ is-active docker.service" in bootstrap.RELEVE
+    assert "DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info" in bootstrap.RELEVE
+    assert "id spark-docker >/dev/null 2>&1 && echo rootless" not in bootstrap.RELEVE
+
+
 # --- Le contrat d'API (§42.7) -----------------------------------------------
 
 

@@ -45,8 +45,17 @@ origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null \
           || dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
 compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
 compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/null || echo absent)
-mode=$(systemctl is-active docker 2>/dev/null >/dev/null && echo enracine \
-       || (id spark-docker >/dev/null 2>&1 && echo rootless || echo absent))
+rootless=absent
+if id spark-docker >/dev/null 2>&1; then
+  uid=$(id -u spark-docker)
+  if systemctl --user -M spark-docker@ is-active docker.service >/dev/null 2>&1 \
+     && runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
+          DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info >/dev/null 2>&1; then
+    rootless=active
+  fi
+fi
+mode=$(systemctl is-active docker.service >/dev/null 2>&1 && echo enracine \
+       || ([ "$rootless" = active ] && echo rootless || echo absent))
 printf 'sshd=%s\nopenssh_version=%s\ncles=%s\ndepot=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\n' \
   "$sshd" "$openssh_version" "$cles" "$depot" "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode"
 """
