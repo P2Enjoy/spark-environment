@@ -6042,6 +6042,26 @@ tranche par la mesure. Faite dans le Spark `helo`, Docker 29.7.2 :
 | F | `env_file: /etc/spark/env` | **tout le fichier passe, sans nommer une seule variable** |
 | D | `/etc/profile.d/…` : shell de connexion, puis service **systemd** | vue par le shell, **absente** du service |
 
+**Essai F REFAIT le 2026-08-21 sur le fichier que le PRODUIT écrit**, et non plus
+sur un fichier posé à la main — c'est ce que la Definition of Done de SPK-58
+exigeait. Forge de validation, Docker 29.7.2, Compose v5.5.0, Spark `helo` :
+
+| Ce qui a été posé par l'API | Ce que le conteneur a reçu |
+|---|---|
+| `SPARK_DEMO_TZ` au niveau **Forge** | `Europe/Paris` — l'héritage traverse |
+| `APP_NAME` au niveau **Spark** | `helo-demo` |
+| `DEMO_TOKEN` **déclaré secret** | sa valeur, depuis `/run/spark/secrets` |
+| `AJOUTEE_APRES`, posée **après** le premier démarrage | arrivée **sans que le fichier de composition la nomme** |
+
+La dernière ligne est celle qui justifie `env_file:` : le locataire écrit son
+`env_file:` une fois, et tout ce qu'on ajoute ensuite arrive sans qu'il y
+retouche.
+
+Relevé dans la cellule au même instant : `/etc/spark/env` et
+`/run/spark/secrets` en `root:root 0600`, le secret **absent** du fichier
+persistant et **absent** de `/etc/profile.d/spark-env.sh`, et la clé de
+chiffrement créée en `0600` à côté du registre.
+
 Ce que ces six lignes établissent :
 
 1. **Un conteneur n'hérite jamais de l'environnement ambiant** (A). Peupler

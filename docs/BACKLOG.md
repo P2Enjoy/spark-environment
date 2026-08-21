@@ -2978,7 +2978,7 @@ prononçait jamais en production. Un refus inatteignable ne protège personne.
   Incus réel. Les trois exigent une Forge de validation : **nécessite une action
   humaine**.
 
-### [~] SPK-58 · Variables d'environnement et secrets d'un Spark
+### [x] SPK-58 · Variables d'environnement et secrets d'un Spark
 
 Le locataire fait tourner une pile Compose ; le produit n'a aucun moyen de lui
 passer une valeur. Aujourd'hui, une adresse de relais SMTP ou un jeton d'API se
@@ -3260,10 +3260,18 @@ point central de la Definition of Done, et il est tenu.
   l'exploitant les trois origines, ce qu'une déclaration de secret engage et ce
   qu'elle **ne protège pas**.
 
-- **Reste avant `[x]`, et c'est le SEUL écart** : la preuve du §43.0 essai F
-  refaite sur le fichier que le produit écrit — un `docker compose` du locataire
-  qui consomme réellement `/etc/spark/env`. Elle exige une Forge réelle :
-  **nécessite une action humaine**.
+**CLOSE le 2026-08-21, sur la Forge de validation réelle.** Le dernier écart est
+levé : l'essai F du §43.0 a été refait **sur le fichier que le produit écrit**.
+Sur instruction explicite du responsable, la build du jour a été installée sur la
+Forge, la migration `010` s'est appliquée, et un `docker compose` du locataire a
+reçu les trois valeurs — une héritée de la Forge, une propre au Spark, un secret
+depuis le fichier volatil. Une quatrième, posée **après** le premier démarrage,
+est arrivée **sans que le fichier de composition la nomme** : c'est ce qui
+justifie `env_file:`.
+
+Relevé au même instant dans la cellule : les deux fichiers en `root:root 0600`,
+le secret absent du fichier persistant et du fichier de confort, et la clé de
+chiffrement créée en `0600` à côté du registre.
 
 ### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 
