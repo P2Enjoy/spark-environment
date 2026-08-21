@@ -486,3 +486,33 @@ et 1861, toutes deux dans `command_spark`.
 convient à sa route — pour une lecture, un 404 disant que la cellule a disparu
 vaut mieux qu'un 502 disant que le pilote a refusé. Cela demande un arbitrage
 par route, donc une unité à soi ; ce n'est pas une retouche mécanique.
+
+### INC-16 · La fenêtre d'un Spark défile horizontalement sous 768 px
+
+**Mesuré le 2026-08-21**, en vérifiant visuellement le refus de SPK-36. Le
+`DESIGN_SYSTEM.md` §8.1 range « la page ne défile jamais horizontalement » parmi
+les règles **invariantes**, et le §14.2 ajoute qu'un débordement non signalé rend
+le contenu fonctionnellement caché.
+
+À 390 px, sur la fenêtre d'un Spark :
+
+```
+orphelin      page déborde : true | onglets débordent : true
+boutique      page déborde : true | onglets débordent : true
+site-vitrine  page déborde : true | onglets débordent : true
+```
+
+**Ce n'est pas le message de SPK-36.** Le témoin le montre : `boutique` n'a
+aucune erreur à afficher et déborde à l'identique. La cause est la **barre
+d'onglets des facettes** — *Infos, Routes, Clés, Instantanés, Environnement,
+Terminal, Docker, Journal* — qui pousse la page au lieu de défiler dans son
+propre conteneur. À 390 px, la dernière facette est hors champ **sans aucune
+indication** qu'elle existe.
+
+Le texte du refus, lui, s'enroule correctement dans son bandeau à toutes les
+largeurs éprouvées — 1440, 900 et 390 px, captures observées.
+
+**Ce qu'il faudrait.** Que la barre de facettes défile dans son propre
+conteneur, avec l'indication de débordement que le §8.2 décrit, la page restant
+fixe. C'est un défaut de mise en page général de la fenêtre, pas de l'unité qui
+l'a fait voir : le comportement est laissé inchangé (CloudWorker §3.1).

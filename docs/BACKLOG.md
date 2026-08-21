@@ -1164,6 +1164,47 @@ panne — la liste est ouverte, elle n'est pas un menu à cocher :
   protection au passage.
 - Rien n'a été implémenté, conformément à l'arbitrage.
 
+### [ ] SPK-67 · Le pilote factice doit mentir aussi peu que le vrai
+
+**Relevé le 2026-08-21, en corrigeant SPK-36, et c'est ce défaut qui a permis
+au précédent de survivre à 900 preuves.**
+
+`FakeIncus` diverge du pilote réel sur deux points mesurés :
+
+1. **il rendait la mauvaise exception.** Sur une instance absente,
+   `set_instance_state` levait `IncusError` là où le vrai lève
+   `InstanceAbsente` (`incus.py:_request`, tout 404). La route du cycle de vie
+   attrapait donc l'une et laissait fuir l'autre : **vert en preuve, 500 sur la
+   Forge**. Corrigé pour cette méthode ; les autres n'ont pas été revues ;
+2. **il ne relit jamais son fichier d'état.** `__post_init__` charge une fois,
+   puis `created` vit en mémoire. Le vrai pilote n'a aucun cache : il interroge
+   Incus à chaque appel. Une cellule qui disparaît sous le produit est donc
+   invisible au factice tant que le service tourne — l'évènement même que
+   `docs/CONTINGENCE.md` §4 instruit ne peut pas être joué contre lui.
+
+Le principe est déjà écrit dans le code, à côté de `delete_instance` : « le
+pilote factice doit la rendre comme le vrai, sans quoi la règle serait éprouvée
+sur une forme qui ne tournera jamais en production ». Il n'a été appliqué qu'à
+une méthode.
+
+Ce que l'unité doit trancher, pas seulement corriger :
+
+- **jusqu'où** va la fidélité exigée. Un doublon n'imite pas tout : le §12 du
+  DAT dit déjà qu'il ne prouve jamais qu'un quota est appliqué. La ligne se
+  trace entre ce qu'il **imite** et ce qu'il **admet ne pas savoir** ;
+- si l'état doit être **relu à chaque appel** — fidèle, et cela rend jouable la
+  perte de cellule en preuve — ou si un levier explicite suffit. Le coût est à
+  mesurer, pas à supposer ;
+- toute divergence qui subsiste est **écrite près du code**, avec ce qu'elle
+  empêche de prouver.
+
+- Spécification : `docs/DAT.md` §12 · `docs/CONTINGENCE.md` §4.5.
+- Portée : `services/sparkd/src/sparkd/incus.py`, classe `FakeIncus`.
+- DoD : une preuve compare, méthode par méthode, l'exception rendue par le
+  factice et celle du vrai pilote sur la même condition ; la perte d'une cellule
+  hors du produit est jouable contre la pile de développement **sans redémarrer
+  le service** ; les divergences restantes sont documentées.
+
 ### [~] SPK-36 · Instruire les plans de contingence et les gestes d'urgence
 
 **Arbitrage du responsable, 2026-08-20 : commencer par la SAUVEGARDE DU REGISTRE.**

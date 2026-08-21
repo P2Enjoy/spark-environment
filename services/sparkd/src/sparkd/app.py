@@ -1884,15 +1884,20 @@ def create_app(config: Config) -> FastAPI:
         réussite : la ligne SURVIT, et un succès de façade laisserait un fantôme
         silencieux au registre — précisément ce que le §4 rend impossible.
         """
-        # §20 : le message est LU par l'exploitant. La phrase du pilote nomme un
+        # §20 : le message est LU par l'exploitant. Il nomme donc les gestes
+        # comme la console les nomme — « Reprendre », « Supprimer » — et non
+        # comme l'API les appelle : vu à l'écran le 2026-08-21, un message qui
+        # dit « retry » envoie chercher un bouton qui n'existe pas sous ce nom
+        # (DESIGN_SYSTEM.md §1.5 bis). Les noms d'API restent lisibles dans
+        # `allowed_commands`, où un appelant automatique les trouve. La phrase du pilote nomme un
         # chemin de l'API d'Incus — de la plomberie interne, sans valeur de
         # diagnostic ici puisqu'elle ne fait que répéter le nom. Elle reste
         # attachée à l'exception chaînée, donc au journal du service.
         raison = (
             f"La cellule du Spark « {spark['name']} » a disparu : Incus ne la "
             "connaît plus. Le Spark passe en panne. Deux issues, toutes deux "
-            "par le produit : « retry » reconstruit la cellule, « delete » rend "
-            "sa place au pool.")
+            "par le produit : « Reprendre » reconstruit la cellule, "
+            "« Supprimer » rend sa place au pool.")
         service.finish(connection, spark["id"], success=False, error=raison)
         return HTTPException(status_code=409, detail={
             "error": "cellule_absente", "message": raison})

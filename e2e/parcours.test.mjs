@@ -1928,6 +1928,61 @@ test('la recette du relais RÉCLAME sa clé et se dit incomplète sans elle', as
   });
 });
 
+// --- SPK-36 · PERTE DE LA CELLULE (docs/CONTINGENCE.md §4.5) ---------------
+
+test('démarrer un Spark dont la cellule a disparu le laisse MANŒUVRABLE', async () => {
+  await parcours('cellule-perdue', async () => {
+    // Mesuré sur la Forge de validation le 2026-08-21, et atteignable ICI en un
+    // seul clic sur un Spark seedé : ce geste rendait 500, et laissait le Spark
+    // en « starting », `allowed_commands` VIDE, `last_error` nul. Un état
+    // transitoire dont on ne sort plus, sans commande et sans raison — l'écran
+    // montrait un démarrage qui n'aboutirait jamais (DESIGN_SYSTEM.md §1.3),
+    // aucune commande alors que deux existaient (§9.9), et une absence que rien
+    // ne nommait (§14.5).
+    //
+    // `orphelin` est seedé comme la reproduction fidèle de l'évènement du
+    // 2026-08-19 : sa ligne est écrite par le vrai chemin, son instance est
+    // retirée du pilote. C'est le fantôme du §4.1, tel quel.
+    await ouvrir('orphelin');
+    assert.ok(await page.$('[data-commande="start"]'),
+      '§1.4 : la commande EXISTE, c\'est le serveur qui refusera — pas l\'écran');
+
+    await page.click('[data-commande="start"]');
+    // On attend l'état RÉEL relu par la console, pas un message fugace :
+    // `lancer()` relit la fiche plutôt que d'afficher le refus, et c'est la
+    // fiche qui doit porter la raison.
+    await page.waitForFunction(
+      () => document.querySelector('[data-commande="retry"]') !== null,
+      null, { timeout: 20000 });
+
+    const entete = await page.textContent('.entete-entite');
+    assert.match(entete, /Dernière erreur/, '§14.5 : l\'absence est NOMMÉE');
+    assert.match(entete, /cellule/i, 'la raison dit ce qui a disparu');
+    assert.match(entete, /orphelin/, 'et de quel Spark il s\'agit');
+    assert.doesNotMatch(entete, /\/1\.0\//,
+      '§20 : aucun chemin de l\'API interne d\'Incus sous les yeux de l\'exploitant');
+
+    // Les DEUX remèdes annoncés par le contrôle REG-FANTOME sont offerts, et
+    // c'est tout l'objet du correctif : l'ancien comportement n'en offrait
+    // aucun.
+    assert.ok(await page.$('[data-commande="retry"]'), '« Reprendre » doit être offert');
+    assert.ok(await page.$('[data-commande="delete"]'), '« Supprimer » doit rester offert');
+
+    // EFFET côté sparkd : la panne est nommée et l'état n'est plus transitoire.
+    const { corps } = await pile.lireSparkd('/v1/sparks/orphelin');
+    assert.equal(corps.state, 'error', 'surtout pas un état transitoire sans issue');
+    assert.equal(corps.transient, false);
+    assert.ok(corps.last_error, 'la raison est PERSISTÉE, pas seulement affichée');
+    assert.deepEqual(corps.allowed_commands.sort(), ['delete', 'retry']);
+
+    // On ne clique PAS « Reprendre » : la reconstruction recréerait la cellule,
+    // et le parcours suivant a besoin de ce Spark SANS instance pour éprouver
+    // SPK-52. Les deux parcours racontent ensemble le §4.5 — ici le refus qui
+    // laisse manœuvrable, là l'autre remède qui aboutit. La reconstruction
+    // elle-même est éprouvée en unité, et elle a été JOUÉE sur la Forge.
+  });
+});
+
 // --- SUPPRESSION D'UN SPARK SANS INSTANCE (SPK-52, docs/DAT.md §14.5) ------
 
 test('supprimer un Spark dont l’instance a disparu RÉUSSIT depuis la console', async () => {

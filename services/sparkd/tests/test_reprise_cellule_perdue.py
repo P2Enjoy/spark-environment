@@ -99,6 +99,12 @@ def test_le_refus_DIT_la_perte_et_ne_la_devine_pas(tmp_path):
     message = client.post(f"/v1/sparks/{nom}/start").json()["detail"]["message"]
     assert nom in message, "le message nomme le Spark concerné"
     assert "cellule" in message.lower()
+    # DESIGN_SYSTEM.md §1.5 bis : vu à l'écran le 2026-08-21, le message nommait
+    # « retry » et « delete » pendant que les boutons portaient « Reprendre » et
+    # « Supprimer ». Un message qui envoie chercher un bouton sous un nom qu'il
+    # ne porte pas fait perdre du temps là où il prétend en faire gagner.
+    for geste in ("Reprendre", "Supprimer"):
+        assert geste in message, f"le message nomme le geste « {geste} » comme l'écran"
     corps = client.get(f"/v1/sparks/{nom}").json()
     assert corps["last_error"], "la raison RESTE lisible sur la fiche du Spark"
 
