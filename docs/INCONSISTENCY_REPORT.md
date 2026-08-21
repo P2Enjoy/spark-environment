@@ -341,3 +341,41 @@ passe seul, ce qui interdit d'incriminer le produit sans mesure supplémentaire.
 resserrée : le journal de l'hôte console pour CE parcours — il dit lequel des
 trois motifs de fermeture a été employé (`DISTANT_TERMINE`, inactivité, ou
 fermeture du flux). C'est ce motif, et lui seul, qui tranche.
+
+### INC-12 · Les refus chiffrés annoncent des octets bruts sous un écran en Gio
+
+**Constaté le** 2026-08-21, en observant la capture
+`e2e/captures/55-quotas-refus-disque.png` produite pour SPK-57.
+
+**Mesure.** La modale des quotas se saisit en **Gio** — trois champs le disent
+sous eux, « en Gio ». Le refus qu'elle affiche, lui, est en octets :
+
+```
+« crm-production » occupe actuellement 534981632 octets de disque :
+descendre sa taille à 0 perdrait des données.
+```
+
+Le refus d'admission fait de même, et il est **antérieur** :
+
+```
+Capacité insuffisante — memory : 68719476736 octets demandés,
+4294967296 disponibles (capacité 81854656512, alloué 77559689216)
+— il manque 64424509440 octets
+```
+
+L'exploitant doit donc convertir de tête pour comparer le chiffre du refus à
+celui qu'il vient de taper. C'est exactement ce que le §1.5 bis du design system
+demande d'éviter : « la valeur, son unité », et le §6.9 bis prend soin de montrer
+« 16 Gio » là où le contrôle vaut « 16 ».
+
+**Pourquoi ce n'est PAS corrigé ici.** Le défaut porte sur **deux** familles de
+refus, et une seule appartient à SPK-57. Ne formater que celle-là ferait dire la
+même grandeur de deux façons selon le refus reçu — une divergence pire que le
+défaut d'origine. Le geste juste est un formatage unique, partagé par les refus
+de l'admission (§7.7) et du rétrécissement (§49.3), et il dépasse l'unité en
+cours (CloudWorker §3.1).
+
+**Ce qu'il faudrait.** Une seule fonction de rendu des grandeurs côté runtime,
+employée par les deux constructeurs de message, et le choix de l'unité tranché :
+la même que celle du champ saisi. Les champs machine (`in_use`, `requested`,
+`shortfalls`) restent en octets — ils ne sont pas lus par un humain.

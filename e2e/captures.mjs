@@ -78,6 +78,10 @@ function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter()
 
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
+                          // SPK-57 · §49.3 : le refus de RÉTRÉCISSEMENT. Il ne se
+                          // provoque pas sur un faux sparkd, il se pose — et le
+                          // corps posé est celui RELEVÉ sur le vrai runtime.
+                          refusRetrecissement = false,
                           uneSeuleCle = false, refusRestauration = false,
                           hoteNonReleve = false, sansDetailMemoire = false, chaineRompue = false,
                           ancreEnAlerte = false, sansServeur = false,
@@ -329,6 +333,17 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
       if (url.includes('/protection')) return new Response(JSON.stringify({
         name: 'analytics', protected: true, protected_at: '2026-08-19T10:00:00',
       }), { status: 200 });
+      // SPK-57 · §49.3 : sur la seule ÉCRITURE de quotas. La lecture du même
+      // chemin doit continuer de répondre, sans quoi l'écran ne se peint pas.
+      if (refusRetrecissement && options.method === 'PATCH') {
+        return new Response(JSON.stringify({ detail: {
+          error: 'shrink_refused',
+          message: '« crm-production » occupe actuellement 534981632 octets de disque : '
+            + 'descendre sa taille à 0 perdrait des données. Videz ce qui peut l’être '
+            + 'dans la cellule, puis recommencez.',
+          resource: 'storage', requested: 0, in_use: 534981632,
+        } }), { status: 409 });
+      }
       const detail = url.match(/\/v1\/sparks\/([^/?]+)(\?|$)/);
       if (detail) {
         const nom = decodeURIComponent(detail[1]);
@@ -1335,6 +1350,23 @@ console.log('  53-quotas-modale.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '54-quotas-mobile.png'), fullPage: true });
 console.log('  54-quotas-mobile.png');
+
+// Le refus de RÉTRÉCISSEMENT, qui ne dit pas la même chose qu'un refus
+// d'admission (§49.3) : il annonce l'occupation mesurée de la cellule et
+// renvoie l'exploitant DANS son Spark, pas sur la Forge. Un refus ne laisse
+// aucune trace, donc cette capture ne modifie rien.
+ctx.server.close();
+
+ctx = await demarrer({ refusRetrecissement: true });
+await ouvrirDetail(ctx.base, { hauteur: 1000 });
+await page.waitForSelector('#titre-ressources', { timeout: 8000 });
+await page.click('[data-ouvre="quotas"]');
+await page.waitForSelector('dialog.modale[open] #quota-storage', { timeout: 8000 });
+await page.fill('#quota-storage', '0');
+await page.click('dialog.modale[open] [data-engage="quotas"]');
+await page.waitForSelector('dialog.modale[open] .refus', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '55-quotas-refus-disque.png') });
+console.log('  55-quotas-refus-disque.png');
 ctx.server.close();
 
 await navigateur.close();
