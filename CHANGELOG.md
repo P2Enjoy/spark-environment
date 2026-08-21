@@ -3,6 +3,14 @@
 ## [Non publié]
 
 ### Ajouté
+- **Alerte hors bande sur les gestes sensibles** (SPK-62, `docs/DAT.md` §47) :
+  neuf actions — suppression d'un Spark, levée de protection, restauration ou
+  suppression d'un instantané, don ou retrait d'un accès, retrait d'un port ou
+  d'un nom public, ouverture d'un shell root de dépannage — envoient un message
+  JSON à l'URL de `SPARKD_NOTIFY_URL`. **Un canal injoignable n'empêche jamais un
+  geste** ; l'échec se lit sur l'écran de la Forge. Sans URL, la fonction est
+  désactivée et l'écran dit que rien n'est surveillé. Le `payload` n'est jamais
+  envoyé.
 - **La clé d'accès du responsable peut être restreinte** (SPK-61, `docs/DAT.md`
   §46) : elle garde le tunnel, le rebond vers un Spark et le dépannage, et perd
   le shell interactif, la lecture des fichiers de la Forge et l'accès à ses

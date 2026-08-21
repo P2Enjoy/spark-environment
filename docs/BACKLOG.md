@@ -2392,7 +2392,7 @@ committé avant la première ligne de code.
   Poser la ligne sur la vraie Forge est un geste humain (`CLAUDE.md` §9), et
   OP-10 le décrit pas à pas — **nécessite une action humaine**.
 
-### [ ] SPK-62 · Notification hors bande des actions sensibles
+### [~] SPK-62 · Notification hors bande des actions sensibles
 
 Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle ne prévient pas :
 elle **détecte**, et c'est la seule mesure qui serve encore quand tout le reste a
@@ -2411,6 +2411,48 @@ elle **détecte**, et c'est la seule mesure qui serve encore quand tout le reste
   laisse le geste aboutir et le SIGNALE ; aucun secret n'y transite, prouvé sur
   ce que l'envoi porte réellement ; l'absence de canal configuré n'est pas une
   panne, la fonction se désactive et l'écran le dit (§14.5).
+
+**Spécifiée et construite le 2026-08-21** — `docs/DAT.md` §47, écrit et committé
+avant la première ligne de code.
+
+- **Elle s'accroche à `audit.record()`**, qui est le SEUL chemin vers le journal
+  (§21.1). S'accrocher à la console laisserait sortir sans un mot exactement les
+  gestes qu'on cherche à détecter : ceux qu'on fait en la contournant. C'est le
+  `CLAUDE.md` §10 appliqué à une sortie.
+- **La liste des actions est FERMÉE**, neuf entrées énumérées. Un motif du genre
+  « tout ce qui contient `delete` » laisserait passer `spark.unprotect`, qui est
+  le geste le plus grave de la liste, et notifierait `spark.settle` le jour où on
+  le renommerait.
+- **Les lignes du runtime ne notifient pas**, ni les refus, ni les gestes de
+  construction : un canal qui crie tout le temps n'est plus lu, et c'est la panne
+  la plus probable de ce dispositif.
+- **Un canal injoignable ne fait JAMAIS échouer un geste** (§37.4.5) : envoi dans
+  un fil séparé — jamais dans la transaction SQLite, où un `POST` de trois
+  secondes bloquerait l'unique écrivain de la Forge —, délai de garde de cinq
+  secondes, file BORNÉE, et aucune exception qui remonte.
+- **Le `payload` n'est PAS envoyé** : c'est là que vivent les valeurs d'un geste.
+  Un champ qu'on n'envoie pas ne fuit pas.
+- **L'échec est DIT** : `GET /v1/forge` rend `notify`, et l'écran de la Forge le
+  montre. Sans canal, il écrit en toutes lettres que **rien n'est surveillé** —
+  les compteurs valent alors zéro, et zéro ressemble à « tout va bien » (§14.6).
+- **Preuves** : 33 du module, sur un VRAI serveur HTTP local et non un doublon de
+  la fonction d'envoi ; 6 de l'écran ; 2 parcours E2E depuis un geste réel au
+  clavier. Le canal est branché sur la pile de TOUS les parcours : s'il cassait
+  un geste, la série entière le dirait.
+
+- **Reste avant `[x]`, et ce sont deux écarts nommés** :
+  1. **l'alerte ne NOMME pas l'objet en clair.** MESURÉ : le message de
+     `spark.delete` est une transition d'état — « error » → « deleting » —, et le
+     nom du Spark ne vit que dans `spark.deleted`, la ligne d'ACHÈVEMENT.
+     L'alerte porte donc `target_type` et `target_id`, un identifiant opaque. Le
+     backlog exige qu'elle nomme l'objet ; elle le désigne sans le nommer.
+     Corriger à la cause touche le vocabulaire du journal (§21), hors de cette
+     unité : à arbitrer — notifier aussi `spark.deleted` au risque de doubler
+     l'alerte, ou faire nommer le Spark par le message de `spark.delete` ;
+  2. **aucune capture n'a été observée** pour le bloc « Alerte hors bande » de
+     l'écran de la Forge. Le rendu est prouvé par six preuves de composant et le
+     parcours lit le texte à l'écran, mais `CLAUDE.md` §16 veut une capture
+     regardée.
 
 ### [x] SPK-63 · Frappe du nom sur les gestes destructifs
 

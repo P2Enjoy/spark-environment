@@ -61,6 +61,36 @@ La marche à suivre s'adresse à qui administre la Forge : elle est dans le
 `README.md` du produit, section *Restreindre la clé d'accès du responsable*.
 Gardez une seconde session ouverte pendant l'opération.
 
+## Être prévenu quand quelque chose de grave arrive
+
+La Forge peut envoyer une **alerte hors bande** — vers Slack, Discord, `ntfy` ou
+un script à vous — chaque fois qu'un geste sensible aboutit :
+
+- un Spark est supprimé ;
+- une **protection est levée** ;
+- un instantané est supprimé ou restauré ;
+- un accès SSH est donné ou retiré ;
+- un port publié ou un nom public est retiré ;
+- un shell de **dépannage** est ouvert en root dans un Spark.
+
+Trois choses à comprendre, et elles décident de ce que cette alerte vaut :
+
+- **elle ne prévient pas, elle détecte.** Le geste a déjà eu lieu quand le
+  message part. C'est précisément ce qui la rend utile : elle sert encore quand
+  tout le reste a échoué ;
+- **un canal injoignable n'empêche jamais un geste.** Si votre destinataire est
+  en panne, vos gestes continuent d'aboutir. L'écran *Forge* vous dit combien
+  d'alertes ne sont pas parties ;
+- **sans canal configuré, rien n'est surveillé**, et l'écran *Forge* le dit en
+  toutes lettres plutôt que d'afficher des compteurs à zéro qui ressembleraient à
+  « tout va bien ».
+
+Le message nomme le geste, qui l'a demandé et sur quoi il a porté. Il ne contient
+**jamais** de secret : les valeurs d'un geste — corps de clé, mots de passe — ne
+sont pas envoyées du tout.
+
+Cela se règle avec la variable `SPARKD_NOTIFY_URL` sur la Forge.
+
 ## Toute règle d'accès est appliquée côté serveur
 
 Un bouton masqué ou un champ désactivé n'est qu'une aide visuelle. Les refus que
