@@ -24,8 +24,12 @@ from base64 import b64decode, b64encode
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from secrets import token_hex
+
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from . import audit
 
 #: §43.9.1 : la grammaire du shell. Un nom qui ne s'exporte pas produirait un
 #: fichier qu'`env_file:` refuse, et la panne se lirait chez le locataire, loin
@@ -150,3 +154,153 @@ class Entree:
     #: `forge`, `spark` ou `overridden` (§43.9.4).
     origin: str
     updated_at: str
+
+
+def _valider(nom: str) -> str:
+    if not NOM.match(nom or ""):
+        raise EnvError(
+            f"« {nom} » n'est pas un nom de variable exportable : il faut une "
+            "lettre ou un souligné, puis des lettres, chiffres et soulignés "
+            "(docs/DAT.md §43.9.1)."
+        )
+    return nom
+
+
+def poser(connection: sqlite3.Connection, cle: bytes, scope: str, spark_id: str | None,
+          nom: str, valeur: str, *, secret: bool = False,
+          actor: str | None = None) -> Entree:
+    """Écrit une entrée, ou remplace celle qui porte déjà ce nom.
+
+    Le geste entre au journal SANS la valeur — jamais, même caviardée, même
+    pour une variable ordinaire (§43.3). Seul le nom y figure, avec le geste et
+    sa date : c'est ce qui rend le journal partageable.
+    """
+    if scope not in PORTEES:
+        raise EnvError(f"Portée inconnue : {scope!r}.")
+    if (scope == "forge") != (spark_id is None):
+        raise EnvError(
+            "Une entrée de la Forge ne vise aucun Spark, et une entrée de Spark "
+            "en vise un : les deux ne se mélangent pas (docs/DAT.md §43.9.1).")
+    _valider(nom)
+
+    chiffre = chiffrer(cle, nom, valeur) if secret else None
+    trace = empreinte(cle, valeur) if secret else None
+    quand = _maintenant()
+
+    ou = "spark_id IS NULL" if spark_id is None else "spark_id = ?"
+    args = [scope] if spark_id is None else [scope, spark_id]
+    existante = connection.execute(
+        f"SELECT id FROM env_entry WHERE scope = ? AND {ou} AND name = ?",
+        (*args, nom)).fetchone()
+
+    if existante:
+        connection.execute(
+            "UPDATE env_entry SET is_secret = ?, value = ?, value_enc = ?, "
+            "fingerprint = ?, updated_at = ? WHERE id = ?",
+            (int(secret), None if secret else valeur, chiffre, trace, quand,
+             existante["id"]))
+    else:
+        connection.execute(
+            "INSERT INTO env_entry (id, scope, spark_id, name, is_secret, value, "
+            "value_enc, fingerprint, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (token_hex(8), scope, spark_id, nom, int(secret),
+             None if secret else valeur, chiffre, trace, quand))
+
+    audit.record(
+        connection, actor, "env.set", "ok",
+        f"{'Secret' if secret else 'Variable'} « {nom} » "
+        f"{'remplacé' if existante else 'posé'} "
+        f"({'la Forge' if scope == 'forge' else 'ce Spark'}).",
+        target_type="spark" if spark_id else "forge", target_id=spark_id,
+        # AUCUNE valeur, et pas même caviardée : ce qui n'entre pas ne fuit pas.
+        payload={"name": nom, "scope": scope, "is_secret": secret})
+
+    return Entree(name=nom, is_secret=secret, value=None if secret else valeur,
+                  fingerprint=trace, scope=scope, origin=scope, updated_at=quand)
+
+
+def retirer(connection: sqlite3.Connection, scope: str, spark_id: str | None,
+            nom: str, actor: str | None = None) -> bool:
+    """Retire une entrée. Rend `False` si elle n'existait pas.
+
+    Ne pas trouver n'est pas une erreur : c'est l'état voulu qui compte, et
+    l'état voulu est « cette variable n'est pas définie » dans les deux cas
+    (§14.5).
+    """
+    ou = "spark_id IS NULL" if spark_id is None else "spark_id = ?"
+    args = [scope] if spark_id is None else [scope, spark_id]
+    curseur = connection.execute(
+        f"DELETE FROM env_entry WHERE scope = ? AND {ou} AND name = ?",
+        (*args, nom))
+    if not curseur.rowcount:
+        return False
+    audit.record(
+        connection, actor, "env.unset", "ok",
+        f"Entrée « {nom} » retirée ({'la Forge' if scope == 'forge' else 'ce Spark'}).",
+        target_type="spark" if spark_id else "forge", target_id=spark_id,
+        payload={"name": nom, "scope": scope})
+    return True
+
+
+def _ligne(rangee: sqlite3.Row, origine: str) -> Entree:
+    return Entree(
+        name=rangee["name"], is_secret=bool(rangee["is_secret"]),
+        value=None if rangee["is_secret"] else rangee["value"],
+        fingerprint=rangee["fingerprint"], scope=rangee["scope"],
+        origin=origine, updated_at=rangee["updated_at"])
+
+
+def lister(connection: sqlite3.Connection, spark_id: str | None = None) -> list[Entree]:
+    """L'environnement TEL QU'IL S'APPLIQUE, avec l'origine de chaque valeur.
+
+    Sans `spark_id`, rend le seul jeu de la Forge. Avec, rend le jeu résolu :
+    la surcharge se fait **nom par nom** (§43.6), jamais jeu par jeu — surcharger
+    `SMTP_HOST` sur un Spark ne doit pas lui faire perdre le `SMTP_PORT` hérité.
+    """
+    forge = {r["name"]: r for r in connection.execute(
+        "SELECT * FROM env_entry WHERE scope = 'forge' ORDER BY name")}
+    if spark_id is None:
+        return [_ligne(r, "forge") for r in forge.values()]
+
+    propres = {r["name"]: r for r in connection.execute(
+        "SELECT * FROM env_entry WHERE scope = 'spark' AND spark_id = ? ORDER BY name",
+        (spark_id,))}
+
+    resolu: list[Entree] = []
+    for nom in sorted(set(forge) | set(propres)):
+        if nom in propres:
+            # `overridden` et `spark` ne se confondent pas : le premier dit qu'une
+            # valeur de la Forge est MASQUÉE, donc qu'on la cherchera en vain là
+            # où elle est écrite.
+            resolu.append(_ligne(propres[nom], "overridden" if nom in forge else "spark"))
+        else:
+            resolu.append(_ligne(forge[nom], "forge"))
+    return resolu
+
+
+def resoudre(connection: sqlite3.Connection, cle: bytes, spark_id: str) -> dict[str, dict[str, str]]:
+    """Le CONTENU des deux fichiers du §43.5.2, en clair, prêt à être posé.
+
+    Deux jeux et non un : les secrets vont dans le fichier volatil de `/run`,
+    qui n'entre dans aucun instantané. Avec les secrets dans le fichier
+    persistant, restaurer un instantané ancien ressusciterait un secret révoqué,
+    en silence, pendant que le registre le croirait remplacé.
+
+    C'est ICI que les valeurs redeviennent lisibles, et nulle part ailleurs
+    (§43.5.1) : ce que cette fonction rend part vers la cellule, jamais vers
+    l'API ni vers l'écran.
+    """
+    variables: dict[str, str] = {}
+    secrets: dict[str, str] = {}
+    for entree in lister(connection, spark_id):
+        rangee = connection.execute(
+            "SELECT value, value_enc FROM env_entry WHERE scope = ? AND "
+            + ("spark_id IS NULL" if entree.scope == "forge" else "spark_id = ?")
+            + " AND name = ?",
+            (entree.scope, entree.name) if entree.scope == "forge"
+            else (entree.scope, spark_id, entree.name)).fetchone()
+        if entree.is_secret:
+            secrets[entree.name] = dechiffrer(cle, entree.name, rangee["value_enc"])
+        else:
+            variables[entree.name] = rangee["value"]
+    return {"variables": variables, "secrets": secrets}
