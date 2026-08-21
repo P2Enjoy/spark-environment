@@ -54,7 +54,11 @@ function cellule(entree) {
 }
 
 function lignes(entrees) {
-  return `<div class="table-defilante"><table class="tableau">
+  // §8.1 et §14.2 : le tableau défile dans son PROPRE conteneur, et le
+  // débordement est SIGNALÉ — un débordement muet est un contenu caché.
+  return `<div class="tableau-enveloppe">
+  <p class="tableau-indice">Le tableau défile horizontalement.</p>
+  <table>
   <thead><tr><th scope="col">Nom</th><th scope="col">Valeur</th>
     <th scope="col">Origine</th><th scope="col">Modifiée</th>
     <th scope="col"><span class="sr-only">Actions</span></th></tr></thead>

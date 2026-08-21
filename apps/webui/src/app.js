@@ -10,6 +10,7 @@
 
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spark-detail.js';
+import { ENV_VIDE } from './components/spark-env.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
@@ -40,6 +41,8 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // AU MOMENT DE L'OUVERTURE — pas des champs vides qui feraient
                // saisir de mémoire ce qui est déjà à l'écran.
                quotas: { ...QUOTAS_VIDE, values: { ...QUOTAS_VIDE.values } },
+               // SPK-58 · §43 : l'état de la facette Environnement.
+               envUi: { ...ENV_VIDE, values: { ...ENV_VIDE.values } },
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
                            pools: null, cores: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
@@ -121,6 +124,7 @@ function peindre() {
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, frappe: etat.frappe,
                             admin: etat.admin, quotas: etat.quotas,
+                            envUi: etat.envUi,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
                             ...etat.detail })
@@ -1653,7 +1657,8 @@ async function chargerDetail(nom, facette = '') {
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
-    const [usage, routes, sshConfig, registry, snapshots, audit, publies] = await Promise.all([
+    const [usage, routes, sshConfig, registry, snapshots, audit, publies,
+           env] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -1663,11 +1668,16 @@ async function chargerDetail(nom, facette = '') {
       // SPK-49 · §39.2 : la liste est celle de la FORGE ; on ne garde que les
       // ports qui mènent à CE Spark, mais les réservés valent pour la machine.
       api('/v1/ports').catch(() => ({ ports: [], reserved: [] })),
+      // SPK-58 · §43.9.4 : le jeu RÉSOLU, avec l'origine de chaque valeur. On
+      // le demande au serveur plutôt que de croiser deux listes ici : la
+      // surcharge est une règle métier, et l'écran n'en est pas l'autorité
+      // (DESIGN_SYSTEM.md §1.2).
+      api(`/v1/sparks/${encodeURIComponent(nom)}/env`).then((r) => r.env).catch(() => []),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
                     snapshots, audit,
                     ports: (publies.ports ?? []).filter((p) => p.spark_id === etat.spark.id),
-                    reservedPorts: publies.reserved ?? [] };
+                    reservedPorts: publies.reserved ?? [], env };
     etat.status = 'ready';
   } catch (erreur) {
     etat.status = 'error';
