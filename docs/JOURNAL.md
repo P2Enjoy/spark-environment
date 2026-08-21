@@ -5597,3 +5597,79 @@ ne touche pas l'interface.
 
 **Où reprendre.** Ces deux écarts, qui closent SPK-40. Puis SPK-61 et SPK-62.
 SPK-53 et SPK-54 attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-40, troisième tranche — ce que les écrans en disent
+
+**Unité choisie** au §4.2 point 1 : le journal désignait ces deux écarts.
+
+### La mesure qui décide du harnais
+
+Le backlog demandait un doublon `SPARK_SIGN_COMMAND` dans `e2e/pile.mjs`. Mesuré
+d'abord, sur OpenSSH 8.9p1, avant d'écrire quoi que ce soit :
+
+```
+ssh-keygen -Y sign -f cle.pub -n spark-audit intention        →  0
+ssh-keygen -Y verify -f allowed_signers -I console/local …    →  0
+```
+
+`console/local` est un principal recevable, et la chaîne signe puis se vérifie
+**sans agent**, la clé privée étant voisine de la publique. Le harnais fait donc
+mieux qu'un doublon : il monte une VRAIE paire de clés et laisse tourner le vrai
+`ssh-keygen` des deux côtés. Le doublon reste, mais il répond **par geste**, comme
+celui de Docker au §37.6 ter — il échoue sur le relevé de topologie, pour que
+l'échec se voie à l'écran, et délègue le reste au vrai `ssh-keygen`. Une seule
+pile porte ainsi la chaîne signée ET l'échec dit.
+
+### Ce qui a été trouvé en chemin, et qui n'était pas dans le backlog
+
+L'écran du journal affirmait, en gras : « **Aucune entrée n'est signée** ».
+C'était vrai avant SPK-40. C'est faux depuis. Une mention périmée se lit comme
+vraie, et celle-ci se lisait sur la page même où l'on vient chercher une
+garantie. Le §36.8.5 l'interdisait explicitement, et la RÈGLE a changé : il est
+révisé, pas contourné, et la preuve qui le gardait aussi.
+
+De même, la clé de signature ne se déclarait qu'en éditant `servers.json` à la
+main — le défaut exact que SPK-41 existe pour supprimer. Le champ est dans
+l'écran *Serveurs*, pour tous les genres.
+
+### Où l'avertissement se place, et pourquoi ce n'est pas un détail
+
+Dans la **coquille**, pas dans l'écran du geste. La cause n'est pas le geste :
+c'est l'état du poste — agent vidé, clé absente —, et elle survit au geste.
+Placé dans l'écran, l'avertissement disparaissait en changeant de page alors que
+la cause restait, et l'exploitant croyait avoir réglé en naviguant ce qu'il
+n'avait pas touché. Règle extraite : `docs/DESIGN_SYSTEM_APP.md` SPK-DS-10.
+
+En **accent, jamais en rouge** : la Forge a accepté le geste. Ce qui est en jeu
+est la trace, pas l'action (§25.1).
+
+### Une preuve révisée, et il faut dire pourquoi
+
+`un SECRET saisi dans le formulaire est refusé` cherchait « key » dans le nom des
+champs. `signingKey` — un chemin vers une clé **publique** — l'a fait rougir.
+C'est l'heuristique qui était trop large : le parcours emploie désormais le motif
+du SERVEUR (`SECRET_HINT`), et non une seconde règle écrite à côté qui dériverait
+de la première. Une preuve ajoutée dans le même geste montre que le rempart n'a
+pas été retiré mais déplacé : coller une clé privée dans ce champ est refusé en
+422.
+
+### Vérifications
+
+Campagne complète **verte** : 762 Python, contrat conforme, 812 de console, 8 de
+gestes, 72 parcours E2E, 7 du manuel, `build`. Trois captures observées —
+`47-journal-signature.png`, `48-signature-echec.png`,
+`49-signature-echec-mobile.png` — et les illustrations du manuel renouvelées :
+`m12-journal.png` porte désormais de VRAIES lignes signées, produites par la
+chaîne réelle.
+
+**SPK-40 reste `[~]`**, avec un seul écart, et il est hors de portée d'une
+session : **aucun agent SSH réel n'a signé un geste de bout en bout**. La preuve
+unitaire le mesure déjà avec un vrai agent ; le parcours, lui, signe par le
+fichier privé voisin — le cas du poste sans agent, que le §36.10.8 admet. Que
+l'agent réponde se mesure **sur un poste** : c'est la même limite qu'au
+§37.4.2 bis, et cela **nécessite une action humaine**.
+
+**Où reprendre.** SPK-61 et SPK-62, nées de SPK-35. SPK-53 et SPK-54 attendent
+une décision du responsable.
