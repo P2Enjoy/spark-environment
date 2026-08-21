@@ -3235,11 +3235,43 @@ Conséquence sur la promesse, et elle est favorable :
   la Forge s'exécute, et dépassé sinon. C'est ce qu'une réservation doit être, et
   c'est cohérent avec le burst du §7.2.
 
-**Ce qui reste à prouver**, et c'est pourquoi SPK-29 n'est pas close : que sous
-contention **totale** — les trois tranches de la Forge exécutables en même temps —
-la part converge bien vers `r / C`. La mesure ci-dessus ne l'établit pas, elle
-établit seulement que le plancher est tenu et largement dépassé quand la Forge est
-calme.
+#### La mesure sous contention TOTALE, faite le 2026-08-21
+
+Forge de validation, 8 threads, `spark.slice` a 180, les trois tranches chargees
+simultanement — et le poids pose PAR systemd (§32.4 bis), sans quoi la mesure ne
+disait rien du produit :
+
+```
+fenetre 25 s sur 8 threads — 200 s-CPU disponibles
+  spark.slice     95,72 s  ->  47,9 % de la machine
+  system.slice    48,16 s  ->  24,1 %
+  user.slice      45,42 s  ->  22,7 %
+  init.scope       0,00 s  ->   0,0 %
+```
+
+**Le mecanisme est verifie au pour-cent pres.** `spark.slice` pese 180 contre
+`system.slice` et `user.slice` a 100 chacune : la loi predit
+`180 / (180 + 200) = 47,4 %`, la machine rend **47,9 %**.
+
+**Et la mesure corrige la loi une seconde fois** : `init.scope` est reste a
+**zero**. Il ne contient que PID 1, qui ne consomme rien — il n'est donc
+**jamais exécutable**. Le `H = 300` du calcul est par consequent une constante
+optimiste : le `H` reel vaut 200 en pratique, et la tranche obtient
+systematiquement **plus** que la part visee.
+
+**Ce qui reste a trancher, et c'est un ARBITRAGE, non une mesure** : la loi
+atteint `r / C` seulement si `H` vaut ce qu'on a posé. Deux voies s'offrent, et
+elles ne se valent pas :
+
+- **garder `H = 300` pose** : la reservation reste un **plancher** tenu et
+  depasse — c'est ce que le produit fait aujourd'hui, c'est favorable au
+  locataire, et c'est deja ce que la console annonce ;
+- **mesurer `H`** — la somme des poids des tranches reellement exécutables — et
+  recalculer : la reservation devient une egalite, au prix d'un poids qui bouge
+  quand l'activite de la Forge change, donc d'un ordonnancement moins previsible.
+
+Tant que l'arbitrage n'est pas rendu, la premiere voie tient, et la console
+continue de **ne pas** presenter la reservation comme une garantie absolue.
 
 ### 32.3 La Forge garde une part, et c'est ce qui rend la loi définie
 
