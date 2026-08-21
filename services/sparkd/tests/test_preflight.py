@@ -252,14 +252,15 @@ def test_chaque_controle_porte_un_code_stable_et_unique():
     verdicts = preflight.verifier(hote())
     codes = [v.code for v in verdicts]
     assert len(set(codes)) == len(codes), "deux contrôles partagent un code"
-    # RÉVISÉE le 2026-08-21 : SPK-55 ajoute deux contrôles (`docs/DAT.md` §48.2).
+    # RÉVISÉE le 2026-08-21 : SPK-55 ajoute deux contrôles (`docs/DAT.md` §48.2),
+    # puis SPK-36 en ajoute un — `REG-FANTOME` (`docs/CONTINGENCE.md` §4.4).
     # La liste est gardée EN ENTIER et non par inclusion, et c'est voulu : un
     # contrôle retiré par mégarde doit faire rougir cette preuve, sans quoi la
     # série pourrait maigrir sans que personne ne le voie.
     assert set(codes) == {
         "INC-VERSION", "STO-POOL", "STO-COMPRESSION", "MEM-ARC",
         "NET-BRIDGE", "NET-DHCP", "ING-CADDY", "SEC-PORTS", "RUN-SPARKD",
-        "RUN-SLICE", "NET-REMONTEE", "SSH-X11",
+        "RUN-SLICE", "NET-REMONTEE", "SSH-X11", "REG-FANTOME",
     }
 
 

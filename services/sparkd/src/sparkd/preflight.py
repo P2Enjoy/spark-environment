@@ -110,6 +110,43 @@ class Hote:
     executer: Callable[[list[str]], str | None]
     lire: Callable[[str], str | None]
     presence: Callable[[str], bool] = field(default=lambda binaire: bool(shutil.which(binaire)))
+    #: SPK-36 · docs/CONTINGENCE.md §4 : ce que le REGISTRE déclare, pour le
+    #: confronter à ce qu'Incus connaît. Une couture de plus, au même titre que
+    #: `executer` et `lire` — un contrôle doit s'éprouver sans serveur.
+    #:
+    #: Rend `None` quand le registre est illisible : « pas mesuré » n'est pas
+    #: « mesuré fautif » (§31.2), et conclure sur une absence de réponse ferait
+    #: signaler comme fantômes des Sparks bien vivants.
+    declarations: Callable[[], list[dict] | None] = field(
+        default=lambda: _declarations_locales())
+
+
+def _declarations_locales(chemin: str | None = None) -> list[dict] | None:
+    """Les Sparks qui DÉCLARENT une cellule, lus au registre en lecture seule.
+
+    Le chemin par défaut est celui de la configuration du service. On n'écrit
+    rien et on n'ouvre qu'en lecture : le préflight relève, il ne répare pas
+    (§48.2), et un registre ouvert en écriture par un outil de diagnostic
+    finirait par le modifier un jour de fatigue.
+    """
+    import sqlite3
+
+    from .config import DEFAULT_DB
+
+    fichier = chemin or os.environ.get("SPARKD_DB") or DEFAULT_DB
+    if not os.path.exists(fichier):
+        return None
+    try:
+        connexion = sqlite3.connect(f"file:{fichier}?mode=ro", uri=True, timeout=5)
+        connexion.row_factory = sqlite3.Row
+        try:
+            return [dict(r) for r in connexion.execute(
+                "SELECT name, incus_name, state, cpu_reservation, "
+                "memory_reservation_bytes FROM spark WHERE incus_name IS NOT NULL")]
+        finally:
+            connexion.close()
+    except sqlite3.Error:
+        return None
 
 
 def hote_local() -> Hote:
@@ -459,6 +496,61 @@ def tranche_des_sparks(hote: Hote) -> Verdict:
                    f"presente, controleurs {controleurs.strip()}, {etat}")
 
 
+def registre_sans_fantome(hote: Hote) -> Verdict:
+    """Aucune ligne du registre ne déclare une cellule qui n'existe pas.
+
+    @spec docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §4 (l'entrée fantôme),
+          §4.2 (ce qu'elle coûte), §4.4 (ce que ce contrôle dit et ne dit pas) ·
+          docs/DAT.md §32.2 (le poids suit la somme des réservations) ·
+          §48.2 (le préflight relève, il ne répare pas)
+
+    **Le défaut est SILENCIEUX, et c'est ce qui le rend durable.** Une ligne
+    fantôme consomme de l'allocation réelle — l'admission compte ce que le
+    registre déclare — et fait donc peser la tranche parente plus lourd qu'elle
+    ne devrait. MESURÉ sur la Forge de validation : une réservation fantôme de
+    1,0 CPU sur 4 faisait passer le poids de **43 à 180**, quatre fois trop.
+
+    L'écart joue en faveur des Sparks vivants, qui obtiennent PLUS que ce qu'ils
+    ont acheté. Personne ne s'en plaint, donc personne ne le voit : la Forge est
+    restée mal pondérée deux jours en rendant « 0 bloquant ».
+
+    Ce contrôle RELÈVE. Le geste reste au responsable, parce que supprimer une
+    ligne détruit une déclaration d'intention, et que la bonne réponse est
+    parfois de RECONSTRUIRE la cellule plutôt que d'effacer la ligne.
+    """
+    declarees = hote.declarations()
+    # §31.2 : registre illisible, on ne SAIT PAS. Conclure ici ferait signaler
+    # comme fantômes tous les Sparks d'une Forge dont on n'a pas pu lire l'état.
+    if declarees is None:
+        return Verdict("REG-FANTOME", "Aucune cellule déclarée n’est absente",
+                       INCONNU, "registre illisible", "")
+
+    brut = hote.executer(["incus", "list", "--format", "csv", "-c", "n"])
+    if brut is None:
+        return Verdict("REG-FANTOME", "Aucune cellule déclarée n’est absente",
+                       INCONNU, "Incus injoignable", "")
+
+    vivantes = {ligne.strip() for ligne in brut.splitlines() if ligne.strip()}
+    fantomes = [s for s in declarees if s["incus_name"] not in vivantes]
+    if not fantomes:
+        return Verdict("REG-FANTOME", "Aucune cellule déclarée n’est absente", OK,
+                       f"{len(declarees)} cellule(s) déclarée(s), toutes présentes")
+
+    # Le CHIFFRE, pas seulement le nom : sans lui on ne sait pas s'il faut agir
+    # aujourd'hui ou la semaine prochaine (§4.4).
+    cpu = sum(float(s["cpu_reservation"] or 0) for s in fantomes)
+    memoire = sum(int(s["memory_reservation_bytes"] or 0) for s in fantomes)
+    noms = ", ".join(sorted(s["name"] for s in fantomes))
+    return Verdict(
+        "REG-FANTOME", "Aucune cellule déclarée n’est absente", ECHEC,
+        f"{len(fantomes)} ligne(s) déclarent une cellule absente : {noms} — "
+        f"{cpu:g} CPU et {memoire} octets comptés pour rien",
+        "Supprimer le Spark par le produit — une instance déjà absente vaut "
+        "suppression réussie (SPK-52) — OU le reconstruire si sa ligne doit "
+        "vivre. L'allocation et le poids de la tranche suivent d'eux-mêmes. "
+        "Sauvegarder le registre d'abord (docs/CONTINGENCE.md §2.3).")
+
+
 CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     incus_assez_recent,
     pool_de_stockage,
@@ -472,6 +564,7 @@ CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     x11_sans_usage,
     sparkd_survit_au_redemarrage,
     tranche_des_sparks,
+    registre_sans_fantome,
 )
 
 
