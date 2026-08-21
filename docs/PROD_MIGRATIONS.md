@@ -408,6 +408,71 @@ Concession    : « permitopen="*:22" » autorise à rebondir sur le port 22 de
 Variable      : aucune.
 ```
 
+### OP-11 · Fermer la remontée d'un Spark vers sa Forge
+
+```
+Objectif      : un Spark ne doit pas atteindre le `sshd` de la Forge. MESURÉ le
+                2026-08-20 depuis un Spark en service : 10.77.0.1:9876 et
+                10.77.0.1:2019 sont injoignables — la propriété attendue — mais
+                10.77.0.1:22 RÉPOND (SPK-55, docs/DAT.md §48.1). Le sens du
+                produit est à sens unique : aucun de ses chemins ne part d'un
+                Spark vers sa Forge.
+Dépend de     : le bridge privé « sparkbr0 » (OP-02).
+Ordre         : le DNS D'ABORD, la fermeture ENSUITE. Inversé, la règle qui
+                tombe en premier ferme tout et chaque Spark devient muet — une
+                panne, pas une protection.
+
+    nft add rule inet filter input iifname "sparkbr0" udp dport 53 accept
+    nft add rule inet filter input iifname "sparkbr0" tcp dport 53 accept
+    nft add rule inet filter input iifname "sparkbr0" drop
+    incus network set sparkbr0 user.spark.input_policy=drop
+
+                La dernière ligne n'est pas décorative : c'est elle que le
+                préflight lit pour rendre NET-REMONTEE en « ok ». Sans elle, la
+                règle est posée mais la Forge se déclare toujours ouverte.
+Après         : RIEN d'automatique. Aucun redémarrage n'est requis.
+Vérification  : python3 -m sparkd.preflight → NET-REMONTEE en « ok ».
+                Puis, DEPUIS UN SPARK, et c'est la vérification qui compte :
+
+                  doit être REFUSÉ   : nc -z -w 2 10.77.0.1 22
+                  doivent MARCHER    : getent hosts deb.debian.org
+                                       curl -sI https://deb.debian.org
+
+                Le durcissement ne doit pas casser ce qu'il protège : un Spark
+                garde son résolveur et sa sortie internet.
+Retour arrière: immédiat — `nft flush chain inet filter input` retire les règles
+                de la session, et `incus network unset sparkbr0
+                user.spark.input_policy` remet l'état déclaré. Les règles `nft`
+                ne survivent pas à un redémarrage tant qu'elles ne sont pas
+                persistées : c'est un retour arrière, et c'est aussi un RISQUE.
+Risques       : les règles ci-dessus sont VOLATILES. Les persister
+                (`/etc/nftables.conf` + `systemctl enable nftables`) est
+                nécessaire, faute de quoi la protection disparaît au premier
+                redémarrage sans que rien ne le dise — le préflight, lui,
+                continuerait de lire « drop » dans la configuration d'Incus et
+                rendrait « ok ». C'est l'écart le plus dangereux de cette
+                opération : vérifier APRÈS redémarrage, pas seulement après pose.
+Variable      : aucune.
+```
+
+### OP-12 · Désactiver X11Forwarding sur la Forge
+
+```
+Objectif      : retirer une surface qui ne sert à rien. Le produit n'ouvre
+                jamais de fenêtre (SPK-55, docs/DAT.md §48.2).
+Dépend de     : rien.
+Commande      : X11Forwarding no dans /etc/ssh/sshd_config,
+                puis systemctl reload ssh
+Après         : RIEN. Aucune session en cours n'est coupée par un « reload ».
+Vérification  : python3 -m sparkd.preflight → SSH-X11 en « ok ».
+Retour arrière: remettre « yes » et recharger.
+Risques       : aucun pour le produit. Un exploitant qui se servirait de X11 par
+                ailleurs le perdrait — d'où un AVERTISSEMENT au préflight et non
+                un échec : ce n'est pas au produit de refuser une Forge pour
+                cela.
+Variable      : aucune.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.
