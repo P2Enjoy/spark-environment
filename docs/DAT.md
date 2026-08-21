@@ -7050,6 +7050,29 @@ Incus ensuite.** Un quota posé sur la cellule sans ligne au registre est une
 ressource prise que l'admission ne voit pas ; l'inverse est une ligne fausse que
 le prochain relevé corrige.
 
+**Complété le 2026-08-21, en codant** : cet ordre laisse une fenêtre où le
+registre est en AVANCE sur la cellule, et il faut dire ce que la route en fait.
+
+La réponse porte un champ **`applied`**, à trois valeurs qui ne se confondent pas
+(§14.6) :
+
+| `applied` | Ce que cela veut dire |
+|---|---|
+| `true` | les quotas sont posés sur la cellule ; registre et noyau disent la même chose |
+| `false` | le registre est écrit, **la cellule ne l'est pas**. La réponse porte alors `apply_error`, et l'écart est VISIBLE |
+| `null` | il n'y avait **rien à poser** : le Spark n'a pas de cellule, ou il est arrêté. Ce n'est pas un échec |
+
+**Un échec de pose ne défait PAS le registre**, et ce n'est pas de la
+négligence : annuler ferait perdre l'admission déjà accordée et rouvrirait la
+course que la transaction du §14.2 vient de fermer. Entre surestimer et
+sous-estimer l'occupation, le produit surestime toujours — c'est déjà la règle de
+la création.
+
+**Mais l'écart ne se tait pas.** `applied: false` avec son motif est ce qui
+distingue « le quota est en vigueur » de « le quota est promis ». Les confondre
+serait le pire des cas que la DoD de l'unité nomme : un quota changé au registre
+mais pas dans le noyau.
+
 ### 49.3 Rétrécir n'est pas agrandir
 
 Un agrandissement ne peut échouer que sur l'admission. Un rétrécissement a ses
