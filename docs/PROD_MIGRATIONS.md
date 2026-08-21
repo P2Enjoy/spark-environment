@@ -449,9 +449,18 @@ responsable. Vérification depuis le Spark `helo` : `10.77.0.1:22` **refusé** l
 ou il repondait, `9876` toujours refuse, DNS resolu, sortie HTTPS en 200.
 Preflight : `NET-REMONTEE` en « ok », 12 controles, 0 bloquant.
 
-**TROIS corrections que l'application a imposees**, integrees a la recette
+**QUATRE corrections que l'application a imposees**, integrees a la recette
 ci-dessous — sans elles, la protection cassait ce qu'elle protege :
 
+0. **LES CONNEXIONS ETABLIES doivent etre acceptees EN PREMIER**, et c'est la
+   correction la plus grave. Le produit va de la Forge VERS ses Sparks — rebond
+   `ssh -J`, tunnels, releves Docker. Les REPONSES reviennent par `sparkbr0` et
+   tombent sur le `drop`. MESURE : avec la recette d'origine, la Forge ne
+   joignait plus le port 22 de son propre Spark. Le durcissement cassait
+   exactement ce qu'il protege, et la premiere verification ne le voyait pas
+   parce qu'elle n'eprouvait que le sens Spark -> Forge. La regle est
+   `iifname "sparkbr0" ct state established,related accept`, et elle vient avant
+   tout le reste ;
 1. **la table `inet filter` N'EXISTAIT PAS.** Incus tient sa propre table
    `inet incus` ; `nft add rule inet filter input ...` echoue tant que la table
    et la chaine ne sont pas creees ;
@@ -502,6 +511,14 @@ Vérification  : python3 -m sparkd.preflight → NET-REMONTEE en « ok ».
 
                 Le durcissement ne doit pas casser ce qu'il protège : un Spark
                 garde son résolveur et sa sortie internet.
+
+                ET, DEPUIS LA FORGE — la moitie de la verification qui manquait :
+
+                  doit MARCHER       : nc -z -w 5 <ip-du-Spark> 22
+                                       ssh -J <forge> root@<ip-du-Spark> hostname
+
+                Le produit va de la Forge vers ses Sparks. Ne verifier que le
+                sens inverse laisse passer une coupure totale de ce chemin-la.
 Retour arrière: immédiat — `nft flush chain inet filter input` retire les règles
                 de la session, et `incus network unset sparkbr0
                 user.spark.input_policy` remet l'état déclaré. Les règles `nft`
