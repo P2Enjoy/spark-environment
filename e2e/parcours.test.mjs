@@ -646,6 +646,44 @@ test('la valeur d’un SECRET ne s’affiche NULLE PART à l’écran', async ()
   });
 });
 
+test('poser une variable AU CLAVIER, et la retirer', async () => {
+  await parcours('env-poser', async () => {
+    // Le geste complet depuis le parcours canonique, et il est RÉVERSIBLE : le
+    // parcours rend la pile à l'état du seed (§29.2).
+    await ouvrir('boutique', 'environnement');
+    await page.waitForSelector('#titre-env-spark', { timeout: 10000 });
+
+    await page.focus('[data-ouvre-env="spark"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #env-nom-spark', { timeout: 10000 });
+
+    // §43.7 : l'écran annonce AVANT le geste que rien ne redémarre.
+    assert.match(await page.innerText('dialog.modale[open]'), /ne redémarre rien/);
+
+    await page.fill('#env-nom-spark', 'PARCOURS_E2E');
+    await page.fill('#env-valeur-spark', 'valeur-du-parcours');
+    await page.click('dialog.modale[open] [data-engage="env-spark"]');
+    // La modale se ferme, PUIS l'écran est relu (§1.3). On attend la ligne, pas
+    // la fermeture : une première version assertait entre les deux, pendant
+    // « Chargement du Spark… », et lisait un écran qui n'était pas encore là.
+    await page.waitForFunction(
+      () => document.body.innerText.includes('PARCOURS_E2E'), { timeout: 15000 });
+
+    // Effet BACKEND (§29.3 : on lit pour constater, jamais pour agir).
+    const apres = await pile.lireSparkd('/v1/sparks/boutique/env');
+    const posee = apres.corps.env.find((e) => e.name === 'PARCOURS_E2E');
+    assert.equal(posee?.value, 'valeur-du-parcours');
+    assert.equal(posee?.origin, 'spark', 'elle est PROPRE au Spark, pas héritée');
+
+    // On rend la pile à l'état du seed.
+    await page.click('[data-env-retire="PARCOURS_E2E"]');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('PARCOURS_E2E'), { timeout: 15000 });
+    const rendu = await pile.lireSparkd('/v1/sparks/boutique/env');
+    assert.equal(rendu.corps.env.find((e) => e.name === 'PARCOURS_E2E'), undefined);
+  });
+});
+
 test('un nom REFUSÉ reste dans la modale, et « Échap » la ferme', async () => {
   await parcours('env-refus', async () => {
     // §6.27 : une modale qui se refermerait sur un refus ferait perdre le
