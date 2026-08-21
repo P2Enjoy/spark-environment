@@ -5748,3 +5748,64 @@ Poser la ligne sur la vraie Forge est un geste humain, OP-10 le décrit pas à p
 
 **Où reprendre.** SPK-62, la notification hors bande, entièrement constructible
 ici. SPK-53 et SPK-54 attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-62 — l'alerte hors bande
+
+**Unité choisie** au §4.2 point 1 : le journal la désignait. Spécification écrite
+et committée avant la première ligne de code — `docs/DAT.md` §47.
+
+### Où elle s'accroche, et pourquoi ce point-là
+
+Sur `audit.record()`, qui est le **seul chemin** vers le journal (§21.1). Toute
+écriture y passe, qu'elle vienne de la console, d'un appel direct ou d'un script
+sur la Forge. S'accrocher à la console laisserait sortir sans un mot exactement
+les gestes qu'on cherche à détecter : ceux qu'on fait en la contournant.
+
+### Ce qui a décidé de la forme du code
+
+**Un canal injoignable ne fait jamais échouer un geste** (§37.4.5). L'envoi part
+dans un fil séparé — jamais dans la transaction SQLite, où un `POST` de trois
+secondes bloquerait l'unique écrivain de la Forge —, avec un délai de garde, une
+file bornée, et aucune exception qui remonte.
+
+**La liste des actions est FERMÉE**, neuf entrées. Un motif du genre « tout ce qui
+contient `delete` » laisserait passer `spark.unprotect`, le geste le plus grave de
+la liste. Les lignes du runtime, les refus et les gestes de construction ne
+notifient pas : un canal qui crie tout le temps n'est plus lu, et c'est la panne
+la plus probable de ce dispositif.
+
+### Deux choses trouvées en éprouvant, non en réfléchissant
+
+- **une preuve supposait plus que le §21.2 ne promet.** Mesuré : `SENSITIVE_VALUE`
+  est un second filet étroit — une clé privée en armure, un en-tête
+  `Authorization`, une clé publique longue. Un « password=… » composé à la main
+  dans un message n'est pas reconnu. La preuve a été révisée sur ce que le filtre
+  garantit RÉELLEMENT, et le canal porte exactement ce que le journal porte, ni
+  plus ni moins — le resserrer ici ferait diverger deux caviardages ;
+- **le premier parcours cassait un autre parcours.** Il prenait un instantané sur
+  `crm-production`, et le REFUS 3 compte les instantanés de ce Spark. Corrigé à
+  la cause : le parcours ne laisse plus de trace.
+
+### Vérifications
+
+33 preuves du module — sur un **vrai serveur HTTP local**, pas un doublon de la
+fonction d'envoi : ce qu'on mesure est ce qui part sur le réseau. 6 de l'écran.
+1 parcours E2E depuis un geste réel au clavier. Le canal est branché sur la pile
+de TOUS les parcours : s'il cassait un geste, la série entière le dirait.
+
+**SPK-62 passe à `[~]`**, avec deux écarts nommés :
+
+1. **l'alerte ne NOMME pas l'objet en clair.** Mesuré : le message de
+   `spark.delete` est une transition d'état, et le nom du Spark ne vit que dans
+   `spark.deleted`, la ligne d'achèvement. L'alerte porte donc un identifiant
+   opaque. Corriger à la cause touche le vocabulaire du journal (§21), hors de
+   cette unité — **à arbitrer** : notifier aussi `spark.deleted` au risque de
+   doubler l'alerte, ou faire nommer le Spark par le message de `spark.delete` ;
+2. les captures du bloc « Alerte hors bande » ont été **produites mais non encore
+   observées** au moment d'écrire cette entrée — voir le compte rendu, qui dit
+   l'état réel.
+
+**Où reprendre.** L'arbitrage ci-dessus, puis SPK-51 ou SPK-55, premières `[ ]`
+suivantes. SPK-53 et SPK-54 attendent une décision du responsable.
