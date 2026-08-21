@@ -1928,7 +1928,7 @@ test('la recette du relais RÉCLAME sa clé et se dit incomplète sans elle', as
   });
 });
 
-// --- SPK-36 · PERTE DE LA CELLULE (docs/CONTINGENCE.md §4.5) ---------------
+// --- SPK-36 · PERTE DE LA CELLULE (docs/DAT.md §14.6, CONTINGENCE §4.5) ---
 
 test('démarrer un Spark dont la cellule a disparu le laisse MANŒUVRABLE', async () => {
   await parcours('cellule-perdue', async () => {

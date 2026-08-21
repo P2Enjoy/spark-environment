@@ -1486,6 +1486,48 @@ risque existait déjà en sens inverse — une ligne comptée pour rien — et i
 détectable : la réconciliation compare le registre au pilote, et une instance
 sans ligne est visible depuis Incus.
 
+### 14.6 Une cellule absente ne vaut PAS démarrage réussi
+
+**Mesuré sur la Forge de validation le 2026-08-21**, en jouant le plan de reprise
+de `docs/CONTINGENCE.md` §4.5.
+
+Le §14.5 fait de l'absence une raison de **réussir** la suppression. La symétrie
+serait fausse pour le cycle de vie, et le partage tient en une phrase : **la
+suppression fait partir la ligne avec le fantôme ; un démarrage, un arrêt ou un
+redémarrage la laissent vivre.** Faire semblant de réussir laisserait donc au
+registre une ligne qui déclare une cellule absente — exactement ce que le
+contrôle `REG-FANTOME` existe pour lever.
+
+**La règle.** Quand le pilote rapporte que la cellule n'existe pas, `start`,
+`stop` et `restart` **refusent**, et le Spark passe en **panne** :
+
+- l'état visé est `error` parce que c'est le seul d'où le produit offre les deux
+  issues — `retry`, qui refait la cellule, et `delete`, qui rend la place ;
+- la raison est **persistée** dans `last_error`, donc lisible sur la fiche du
+  Spark et pas seulement au moment du geste ;
+- le message nomme les gestes **comme la console les nomme**, « Reprendre » et
+  « Supprimer », et non comme l'API les appelle. Un appelant automatique trouve
+  les noms d'API dans `allowed_commands` ;
+- il ne rend **pas** la phrase du pilote telle quelle : elle porte un chemin de
+  l'API d'Incus, que le §20 de `CLAUDE.md` interdit d'exposer et qui ne
+  diagnostique rien de plus que le nom déjà présent.
+
+**Ce que le défaut coûtait.** Sans cette règle, `InstanceAbsente` — qui n'hérite
+pas d'`IncusError`, et c'est délibéré (§33.3) — s'échappait de la route. La
+transition n'était jamais conclue, et le Spark restait **stablement** dans son
+état transitoire, `allowed_commands` vide et `last_error` nul : plus rien n'était
+possible depuis la console, ni reconstruire ni supprimer.
+
+**Pourquoi la reprise du §14.3 ne suffisait pas.** Elle rattrapait bien le Spark,
+mais au démarrage du service. Un recours qui exige de redémarrer le démon n'est
+pas un recours pour la personne qui tient la console. Elle ne renseigne pas non
+plus `last_error` : elle rétablit un état sain sans dire ce qui s'était passé.
+
+**Ce que cette règle ne fait pas.** Elle ne s'applique qu'à une absence
+**rapportée**. Un pilote injoignable rend toujours une panne de pilote, jamais
+une invitation à reconstruire : proposer de refaire une cellule qui tourne
+peut-être encore serait pire que de ne rien proposer.
+
 ## 15. Adressage du réseau privé
 
 Le §5 pose le bridge privé. Cette section fixe **qui attribue les adresses**, ce

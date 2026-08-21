@@ -1867,8 +1867,9 @@ def create_app(config: Config) -> FastAPI:
     def _cellule_perdue(connection, spark: dict, erreur: Exception) -> HTTPException:
         """Conclut la transition en PANNE, et rend le refus qui nomme la perte.
 
-        @spec docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §4 (l'entrée fantôme)
-              · docs/DAT.md §14.3, §14.5, §33.3
+        @spec docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §4 (l'entrée fantôme),
+              §4.5 (la reconstruction) · docs/DAT.md §14.6 (une cellule absente ne
+              vaut PAS démarrage réussi), §14.3, §14.5, §33.3
 
         Mesuré sur la Forge de validation le 2026-08-21 : sans cela,
         `InstanceAbsente` — qui n'hérite PAS d'`IncusError` — s'échappait de la

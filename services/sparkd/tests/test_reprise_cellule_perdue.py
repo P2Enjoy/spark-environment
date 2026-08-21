@@ -1,8 +1,9 @@
 """@verifies docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §4 (l'entrée fantôme,
             ce qu'elle coûte et comment on en sort), §4.4 (le signal qui
-            manquait) · docs/DAT.md §14.3 (la reprise des états transitoires),
-            §14.5 (une absence RAPPORTÉE n'est pas une panne), §33.3 (ne pas
-            savoir n'est pas savoir que ce n'est pas là)
+            manquait), §4.5 (la reconstruction) · docs/DAT.md §14.6 (une
+            cellule absente ne vaut PAS démarrage réussi), §14.3 (la reprise des
+            états transitoires), §14.5 (une absence RAPPORTÉE n'est pas une
+            panne), §33.3 (ne pas savoir n'est pas savoir que ce n'est pas là)
 
 Mesuré sur la Forge de validation le 2026-08-21, sur un Spark jetable dont la
 cellule avait été détruite hors du produit : `POST /start` rendait **500**,
