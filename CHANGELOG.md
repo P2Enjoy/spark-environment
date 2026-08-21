@@ -7,8 +7,11 @@
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de
   place sur la Forge (`409 admission_refused`), et « ce que vous voulez retirer
-  est utilisé dans la cellule » (`409 shrink_refused`). *Aucun écran ne l'offre
-  encore, et rien n'est encore posé sur Incus.*
+  est utilisé dans la cellule » (`409 shrink_refused`). Les nouvelles limites
+  sont **posées sur la cellule** après le registre, et la réponse dit laquelle
+  des trois situations on est : quota en vigueur, quota **promis** mais que le
+  noyau a refusé, ou rien à poser faute de cellule. *Aucun écran ne l'offre
+  encore.*
 - **L'admission sait compter un redimensionnement** (SPK-57, `docs/DAT.md` §49.1) :
   `pools(..., sauf=<id>)` et `admit(..., sauf=<id>)` rendent au pool le Spark
   visé avant d'évaluer sa nouvelle demande. Un agrandissement tenable n'est plus

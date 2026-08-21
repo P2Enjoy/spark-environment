@@ -2887,15 +2887,29 @@ avant la première ligne de code.
   et ADMISE en redimensionnement, puisque le Spark rend ses 6. 861 preuves Python
   au total.
 
+**La cellule reçoit le quota, le 2026-08-21.** La seconde moitié du §49.2 est
+livrée : après le registre, la route pose les nouvelles limites sur la cellule.
+
+- **Un champ `applied`, à TROIS valeurs qui ne se confondent pas** (§14.6) :
+  `true` — registre et noyau disent la même chose ; `false` avec `apply_error` —
+  le quota est **promis**, pas en vigueur ; `null` — il n'y avait rien à poser,
+  le Spark n'a pas de cellule, et ce n'est pas un échec.
+- **Un échec de pose ne défait PAS le registre**, et le §49.2 dit pourquoi :
+  annuler ferait perdre l'admission déjà accordée et rouvrirait la course que la
+  transaction du §14.2 vient de fermer. Entre surestimer et sous-estimer
+  l'occupation, le produit surestime — c'est déjà la règle de la création.
+- **Mais l'écart ne se tait pas** : c'est exactement le pire des cas que la DoD
+  de cette unité nomme, « un quota changé au registre mais pas dans le noyau ».
+- **Preuves** : 3 de plus, dont l'échec de pose éprouvé sur un client Incus qui
+  refuse. 864 preuves Python au total.
+
 - **Reste avant `[x]`** :
   1. **aucun écran, aucun parcours, aucun manuel.** Le geste existe à l'API ;
      personne ne peut encore le faire depuis la console ;
-  2. **rien n'est posé sur Incus.** Le registre est écrit, la cellule ne l'est
-     pas : c'est l'ordre du §49.2, mais la seconde moitié manque ;
-  3. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
+  2. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
      mesurée, donc le refus du §49.3 sur le disque ne se déclenche pas en
      production — il est prouvé au service, pas atteignable par la route ;
-  4. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
+  3. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
      changement de mode CPU — exige une Forge réelle : **nécessite une action
      humaine**. Tant que ce n'est pas mesuré, l'écran devra annoncer un
      redémarrage : promettre moins que ce qu'on fait est sans conséquence,

@@ -6002,3 +6002,53 @@ et la prise à chaud du disque et du mode CPU exige une Forge réelle —
 l'écran et son parcours. SPK-51 attend deux vérifications extérieures ; SPK-53,
 SPK-54 et l'arbitrage sur le nom de l'objet dans l'alerte hors bande attendent une
 décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-57 — la cellule reçoit le quota
+
+**Unité reprise** au §4.2 point 1. Spécification existante (§49) : la session est
+allée droit au code, comme le §3.2 l'autorise.
+
+### Ce qui manquait, et qui est livré
+
+La seconde moitié du §49.2. Le registre était écrit ; la cellule ne l'était pas.
+Après l'écriture, la route traduit les nouveaux quotas et les pose par
+`update_instance_config`.
+
+### Le point que la spécification ne tranchait pas, et qu'il a fallu compléter
+
+L'ordre « registre d'abord, Incus ensuite » laisse une fenêtre où le registre est
+en AVANCE sur la cellule. Le §49.2 ne disait pas ce que la route en fait ; il le
+dit maintenant, et c'est un champ **`applied`** à trois valeurs :
+
+- `true` — registre et noyau disent la même chose ;
+- `false`, avec `apply_error` — le quota est **promis**, pas en vigueur ;
+- `null` — il n'y avait rien à poser, le Spark n'a pas de cellule.
+
+Les trois ne se confondent pas (§14.6). Confondre les deux premières serait
+exactement le pire des cas que la DoD de l'unité nomme : « un quota changé au
+registre mais pas dans le noyau ».
+
+**Un échec de pose ne défait pas le registre**, et ce n'est pas de la
+négligence : annuler ferait perdre l'admission déjà accordée et rouvrirait la
+course que la transaction du §14.2 vient de fermer. Entre surestimer et
+sous-estimer l'occupation, le produit surestime — c'est déjà la règle de la
+création. Mais l'écart est DIT.
+
+### Vérifications
+
+864 preuves Python (861 + 3), contrat régénéré et conforme. L'échec de pose est
+éprouvé sur un client Incus qui refuse, pas supposé. Aucune capture : **aucun
+écran n'offre encore ce geste**.
+
+**SPK-57 reste `[~]`**, trois écarts : aucun écran ni parcours ni manuel ; l'usage
+relevé ne porte que la mémoire, donc le refus du §49.3 sur le disque est prouvé
+au service mais pas atteignable par la route ; et la prise à chaud du disque et
+du mode CPU exige une Forge réelle — **nécessite une action humaine**.
+
+**Où reprendre.** SPK-57 : l'écran de redimensionnement et son parcours. Le §49.4
+impose qu'il annonce un redémarrage AVANT d'agir pour les champs dont la prise à
+chaud n'est pas mesurée. SPK-51 attend deux vérifications extérieures ; SPK-53,
+SPK-54 et l'arbitrage sur le nom de l'objet dans l'alerte hors bande attendent une
+décision du responsable.
