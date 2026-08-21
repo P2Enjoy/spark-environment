@@ -340,6 +340,40 @@ Variable      : SPARKD_ALLOWED_SIGNERS, facultative. Chemin d'un fichier
                 ne coïncide pas ferait refuser des signatures valides.
 ```
 
+### OP-13 · Migration `010_environnement` du registre
+
+```
+Objectif      : le registre porte l'environnement d'un Spark — variables
+                ordinaires et secrets DÉCLARÉS (SPK-58, docs/DAT.md §43,
+                docs/SCHEMA.md §10 ter).
+Dépend de     : 001_socle_registre (la table `spark`).
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : RIEN d'automatique. La table naît vide ; aucun Spark existant
+                ne change de comportement tant qu'aucune entrée n'est posée.
+Nouveau paquet: le runtime dépend désormais de `cryptography` (PyCA). Une mise
+                à jour de sparkd sans réinstaller ses dépendances échouerait à
+                l'import. Réinstaller le paquet, pas seulement le code.
+Vérification  : sparkd démarre, et `sqlite3 <registre> ".schema env_entry"`
+                montre la table, ses deux index PARTIELS et ses deux
+                déclencheurs.
+Retour arrière: fourni, et IRRÉVERSIBLE pour les secrets — le chiffré part avec
+                la ligne, et réappliquer la migration ne le ramène pas. Les
+                variables ordinaires sont perdues aussi. À ne jouer que sur un
+                registre dont on a la sauvegarde du §2 bis.
+Risques       : la clé de chiffrement est CRÉÉE au premier besoin, en 0600, à
+                côté du registre. Elle n'entre dans AUCUNE sauvegarde qui ne
+                copierait que le `.db` — et sans elle, les secrets sont perdus
+                définitivement, les variables ordinaires restant lisibles.
+                Ajouter ce fichier à la sauvegarde du §2 bis est une action
+                humaine, à faire AVANT de poser le premier secret.
+Variable      : SPARKD_SECRET_KEY_FILE, facultative. Chemin de la clé de
+                chiffrement des secrets. Défaut :
+                /var/lib/sparkd/secret.key. Une clé présente mais de taille
+                différente de 32 octets fait échouer le geste plutôt que d'être
+                remplacée — la remplacer rendrait tous les secrets déjà écrits
+                indéchiffrables, en silence.
+```
+
 ### OP-10 · Restreindre la clé d'accès du responsable
 
 ```
@@ -498,6 +532,13 @@ documentées dans le `README.md` ; toutes ont une valeur par défaut sûre.
 pas un secret, et le fichier peut être versionné hors de ce dépôt. La clé privée
 correspondante ne quitte jamais le poste du responsable — la console la fait
 employer par l'agent SSH, elle ne la lit pas (§36.10.8).
+
+`SPARKD_SECRET_KEY_FILE` (OP-13) désigne en revanche un fichier qui EST un
+secret : les 32 octets qui déchiffrent tous les secrets d'environnement de la
+Forge. Il ne se versionne pas, ne se copie pas hors de la machine autrement que
+dans la sauvegarde, et ne se régénère pas — le perdre perd les secrets, et le
+produit refuse de le remplacer plutôt que de les rendre indéchiffrables en
+silence (`docs/DAT.md` §43.9.2).
 
 Un réglage système est en revanche obligatoire dès la création du pool :
 `zfs_arc_max` doit être posé explicitement, et sa valeur reportée dans

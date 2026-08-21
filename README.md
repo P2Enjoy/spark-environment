@@ -262,6 +262,7 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
 | `SPARKD_STORAGE_DATASET` | jeu de données ZFS dont la compression est vérifiée | nom | non | la valeur de `SPARKD_STORAGE_POOL` |
 | `SPARKD_ALLOWED_SIGNERS` | fichier `allowed_signers` d'OpenSSH — clés **publiques** autorisées à signer un geste (`docs/DAT.md` §36.10) | chemin absolu | non | vide, la vérification est désactivée |
+| `SPARKD_SECRET_KEY_FILE` | clé de chiffrement des **secrets d'environnement** — 32 octets, `0600`, créée si absente et jamais remplacée (`docs/DAT.md` §43.9.2) | chemin absolu | non | `/var/lib/sparkd/secret.key` |
 | `SPARKD_NOTIFY_URL` | canal d'**alerte hors bande** : un `POST` de JSON y part sur chaque geste sensible (`docs/DAT.md` §47) | URL | non | vide, la fonction est désactivée |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
