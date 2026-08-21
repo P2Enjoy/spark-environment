@@ -3704,7 +3704,7 @@ locataire compromettra.
   ne descend nulle part, cocher sur un Spark, le voir arriver, décocher, le voir
   partir ; manuel M6/M8 et seed mis à jour.
 
-### [ ] SPK-65 · La console dit quand elle sert du code périmé
+### [x] SPK-65 · La console dit quand elle sert du code périmé
 
 **Trois fois en deux jours**, le responsable a perdu du temps sur un défaut qui
 n'en était pas un : le processus servait du code plus ancien que le dépôt.
@@ -3737,6 +3737,14 @@ build déployée au dépôt et nomme les six situations. Elle ne le fait pas pou
   et **dépôt en retard sur la console**, qui n'est pas une anomalie.
 - Ce que l'unité ne fait pas : redémarrer toute seule. Un processus qui se relance
   sous les doigts de quelqu'un est pire que le décalage qu'il corrige.
+- **Livré et observé le 2026-08-21** : l'hôte capture sa tête au démarrage (ou la
+  date des seuls fichiers servis sans dépôt), compare l'ascendance à chaque
+  lecture et expose le verdict sans tunnel. La coquille affiche en accent
+  « Console à redémarrer » avec le nombre de commits et le geste explicite, sans
+  bouton ni redémarrage automatique. Les six scénarios de comparaison et la
+  route sont verts ; une console d'exploitation volontairement démarrée un
+  commit avant `main` l'a montré dans la vue Forge, tunnel réel ouvert vers
+  `validation`.
 - DoD : un test prouve qu'un dépôt avancé d'un commit produit le signal ; un test
   prouve que l'absence de dépôt ne le produit **pas** ; un parcours E2E montre le
   signal à l'écran ; captures observées ; le signal nomme le geste, prouvé sur son

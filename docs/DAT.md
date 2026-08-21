@@ -6128,7 +6128,7 @@ ne se confondent pas :
 L'hôte console ne se redémarre **jamais** lui-même : interrompre sous les mains
 d'un exploitant est plus grave que le décalage qu'on signale. Le message persiste
 dans la coquille, et non dans la seule vue Forge, car sa cause survit à toute
-navigation (`DESIGN_SYSTEM_APP.md` SPK-DS-10). Il nomme l'action utile :
+navigation (`DESIGN_SYSTEM_APP.md` SPK-DS-11). Il nomme l'action utile :
 « Console démarrée avant N commits · redémarrer pour en bénéficier ».
 
 

@@ -7543,3 +7543,30 @@ sans checkout sous `/opt/sparkd`. `/healthz` porte sa version de métadonnées,
 `/v1/env` et `/v1/sparks/helo/env` contiennent de nouveau `selected_by` au lieu
 des deux `500` observés pendant SPK-43. L'installation de la Forge neuve, la
 mesure de mise à jour et son retour arrière restent à jouer avant la clôture.
+
+---
+
+## 2026-08-21 · SPK-65 — la console nomme enfin son propre retard
+
+La build d'une Forge n'est pas la build du processus Node qui la présente. La
+console relève donc au démarrage la tête Git de **son** arbre servi, ou la date
+de ces seuls fichiers lorsqu'il n'y a pas de dépôt, puis compare cette empreinte
+à la lecture. Les quatre faits restent distincts : identique, en retard, dépôt
+reculé et indisponible. Seul le retard devient un avertissement dans la
+coquille ; aucune branche ne redémarre un processus sous les mains de
+l'exploitant.
+
+### Preuve réelle observée
+
+La console d'exploitation a été lancée avec l'inventaire de `validation`, puis
+`main` a avancé d'un commit. Son endpoint local a rendu `perimee`, `behind: 1`
+et le texte exact « Console démarrée avant 1 commit · redémarrer pour en
+bénéficier. ». Dans Chromium, l'avertissement accent « Console à redémarrer »
+est resté dans la barre latérale pendant la vue *Forge* ; le tunnel SSH vers
+`ubuntu@51.158.54.202` était explicitement **ouvert** et les ressources réelles
+de `spark-experiment` étaient rendues. La capture a été observée après
+stabilisation de cette vue, pas pendant son squelette de chargement.
+
+Les six scénarios de `console-build` — commit avancé, égalité, dépôt reculé,
+absence de dépôt, arbre illisible et dépendance exclue — ainsi que la route sans
+tunnel sont verts. SPK-65 est `[x]`.
