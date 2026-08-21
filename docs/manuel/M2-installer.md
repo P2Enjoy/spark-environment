@@ -23,16 +23,16 @@ sélectionne jamais. S'il n'y a pas deux disques sûrs, il n'invente pas un miro
 ni la taille d'un pool fichier. L'écran le dit, puis s'arrête : aucune commande
 d'installation, aucun redémarrage et aucune modification ne sont partis.
 
-## Vérifier avant d'installer
+## Vérifier une Forge déjà équipée
 
 La vérification est **en lecture seule** : vous pouvez la lancer sur un serveur
 en service sans vous demander ce qu'elle va faire.
 
 ```
-python3 -m sparkd.preflight
+sudo /opt/sparkd/venv/bin/python -m sparkd.preflight
 ```
 
-Elle rend neuf contrôles. Chacun dit son verdict, **la valeur qu'il a relevée**,
+Elle rend treize contrôles. Chacun dit son verdict, **la valeur qu'il a relevée**,
 et la commande qui corrige — pour vous éviter d'aller remesurer à la main ce que
 le programme venait de mesurer.
 
@@ -46,7 +46,11 @@ le programme venait de mesurer.
 | `NET-DHCP` | plage DHCP disjointe de celle du registre |
 | `ING-CADDY` | Caddy administrable localement |
 | `SEC-PORTS` | seuls `22`, `80`, `443` joignables depuis le réseau |
+| `NET-REMONTEE` | un Spark ne peut pas remonter vers le SSH de sa Forge |
+| `SSH-X11` | la redirection X11 inutile est désactivée ou signalée sans bloquer |
 | `RUN-SPARKD` | `sparkd` survivra à un redémarrage |
+| `RUN-SLICE` | la tranche systemd parente des Sparks existe et est paramétrée |
+| `REG-FANTOME` | chaque cellule déclarée existe réellement dans Incus |
 
 Un verdict **inconnu** n'est pas un échec : il veut dire que la mesure n'a pas
 pu être faite. Les confondre vous ferait « corriger » un serveur correct.

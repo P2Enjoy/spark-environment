@@ -69,7 +69,7 @@ instantané cohérent sans arrêter le service.
 ### 2.3 Sauvegarder
 
 ```bash
-python3 -m sparkd.sauvegarde /var/backups/sparkd
+sudo /opt/sparkd/venv/bin/python -m sparkd.sauvegarde /var/backups/sparkd
 ```
 
 - N'arrête **rien**. Le service continue de répondre pendant la copie.
@@ -86,7 +86,7 @@ pas un argument pour l'espacer.
 ### 2.4 Restaurer
 
 ```bash
-python3 -m sparkd.sauvegarde --restaurer <fichier> --vers /var/lib/sparkd/spark.db
+sudo /opt/sparkd/venv/bin/python -m sparkd.sauvegarde --restaurer <fichier> --vers /var/lib/sparkd/spark.db
 ```
 
 - **Refuse** si `sparkd` tourne encore. Restaurer sous un service actif laisserait
@@ -102,7 +102,7 @@ python3 -m sparkd.sauvegarde --restaurer <fichier> --vers /var/lib/sparkd/spark.
 
 ### 2.5 Après une restauration : ce qu'il faut vérifier
 
-1. `python3 -m sparkd.preflight` — la Forge est en état.
+1. `sudo /opt/sparkd/venv/bin/python -m sparkd.preflight` — la Forge est en état.
 2. La console liste les Sparks, et leur nombre est celui qu'on attendait.
 3. **Le journal se vérifie** : `GET /v1/audit/verify` rend `intact: true`.
 4. **L'ancre** de la console (§36.9.6) : si la sauvegarde est antérieure à ce que

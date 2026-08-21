@@ -12,8 +12,8 @@ n'est appliquée en production sans instruction humaine explicite.
 
 ## 1. Baseline de production
 
-**Établie le 2026-08-19**, et relevée par `python3 -m sparkd.preflight` sur
-la Forge de validation. Les neuf contrôles du §31 du [DAT](DAT.md) sont verts.
+**Établie le 2026-08-19**, et relevée par le préflight du paquet sur la Forge de
+validation. Les neuf contrôles initiaux du §31 du [DAT](DAT.md) sont verts.
 
 | Élément | État |
 |---|---|
@@ -38,8 +38,8 @@ DAT §8.5 avec ce qu'il apporte et ce qu'il ne couvre pas.
 **Comment la revérifier**, en lecture seule et sans rien modifier :
 
 ```
-python3 -m sparkd.preflight          # texte lisible, code de sortie 1 si bloquant
-python3 -m sparkd.preflight --json   # pour archiver le relevé
+sudo /opt/sparkd/venv/bin/python -m sparkd.preflight          # texte lisible, code 1 si bloquant
+sudo /opt/sparkd/venv/bin/python -m sparkd.preflight --json   # pour archiver le relevé
 ```
 
 ## 2.0 Contrainte de version : Incus ≥ 6.19, depuis le dépôt amont
@@ -102,7 +102,7 @@ l'autre.
 ## 2 bis. Sauvegarder le registre
 
 ```bash
-python3 -m sparkd.sauvegarde /var/backups/sparkd
+sudo /opt/sparkd/venv/bin/python -m sparkd.sauvegarde /var/backups/sparkd
 ```
 
 À exécuter **avant toute migration** et avant toute opération de cette liste. Le
@@ -176,7 +176,7 @@ Commande      : apt-get update ; apt-get install -y --no-install-recommends git
                 checkout du dépôt ne vit sur la Forge.
 Apres         : POST /v1/host/sync — un registre neuf ignore la capacite de la
                 machine tant qu'elle n'a pas ete relevee.
-Verification  : python3 -m sparkd.preflight  -> controle RUN-SPARKD vert, qui
+Verification  : /opt/sparkd/venv/bin/python -m sparkd.preflight -> controle RUN-SPARKD vert, qui
                 exige « active » ET « enabled » ; puis GET /readyz, qui sonde
                 reellement Incus et Caddy.
 Retour arriere: systemctl disable --now sparkd. Le registre est conserve dans
@@ -510,7 +510,7 @@ Ordre         : le DNS D'ABORD, la fermeture ENSUITE. Inversé, la règle qui
                 préflight lit pour rendre NET-REMONTEE en « ok ». Sans elle, la
                 règle est posée mais la Forge se déclare toujours ouverte.
 Après         : RIEN d'automatique. Aucun redémarrage n'est requis.
-Vérification  : python3 -m sparkd.preflight → NET-REMONTEE en « ok ».
+Vérification  : /opt/sparkd/venv/bin/python -m sparkd.preflight → NET-REMONTEE en « ok ».
                 Puis, DEPUIS UN SPARK, et c'est la vérification qui compte :
 
                   doit être REFUSÉ   : nc -z -w 2 10.77.0.1 22
@@ -558,7 +558,7 @@ Dépend de     : rien.
 Commande      : X11Forwarding no dans /etc/ssh/sshd_config,
                 puis systemctl reload ssh
 Après         : RIEN. Aucune session en cours n'est coupée par un « reload ».
-Vérification  : python3 -m sparkd.preflight → SSH-X11 en « ok ».
+Vérification  : /opt/sparkd/venv/bin/python -m sparkd.preflight → SSH-X11 en « ok ».
 Retour arrière: remettre « yes » et recharger.
 Risques       : aucun pour le produit. Un exploitant qui se servirait de X11 par
                 ailleurs le perdrait — d'où un AVERTISSEMENT au préflight et non
@@ -611,7 +611,7 @@ mémoire que l'ARC consomme (DAT §8.5).
 seule :
 
 ```
-python3 -m sparkd.preflight
+sudo /opt/sparkd/venv/bin/python -m sparkd.preflight
 ```
 
 | Code | Ce qu'il établit |

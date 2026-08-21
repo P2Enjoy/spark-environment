@@ -162,6 +162,23 @@ def test_le_registre_remplacé_est_DÉPLACÉ_jamais_écrasé(tmp_path):
     assert _compter(connect(cible)) == 40
 
 
+def test_la_restauration_annonce_le_python_du_PAQUET(tmp_path, monkeypatch, capsys):
+    """Une Forge installée n'importe pas `sparkd` avec son Python système.
+
+    Le message après restauration doit donc donner l'exécutable qui vient de
+    restaurer, plutôt qu'une commande historique qui échoue sur la Forge réelle
+    (docs/DAT.md §40.4, CONTINGENCE.md §2.5).
+    """
+    _registre(tmp_path / "reg.db")
+    fichier = sauvegarde.sauvegarder(tmp_path / "reg.db", tmp_path / "sauv")
+    monkeypatch.setattr(sauvegarde, "_sparkd_tourne", lambda _bind: False)
+    monkeypatch.setattr(sauvegarde.sys, "executable", "/opt/sparkd/venv/bin/python")
+
+    assert sauvegarde.main(["--restaurer", str(fichier), "--vers",
+                            str(tmp_path / "restaure.db")]) == 0
+    assert "/opt/sparkd/venv/bin/python -m sparkd.preflight" in capsys.readouterr().out
+
+
 def test_les_annexes_WAL_de_l_ancien_registre_partent_AVEC_lui(tmp_path):
     """Laissées en place, SQLite les rejouerait par-dessus le registre restauré.
 

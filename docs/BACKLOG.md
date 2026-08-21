@@ -3099,6 +3099,15 @@ du responsable. OP-11 et OP-12 sont posees et persistees ; le preflight rend
   redemarrage — NAT, DNS et DHCP de tous les Sparks. Le fichier pose ne flushe
   que sa propre table.
 
+**Relevé renouvelé le 2026-08-22.** Le service réellement actif emploie
+`/opt/sparkd/venv/bin/python`, jamais le Python système ; le préflight lancé par
+ce venv rend **13 contrôles, 0 bloquant, 0 signalé, 0 inconnu**. `NET-REMONTEE`
+est `ok` (`drop`), `SSH-X11` est `ok`, et les règles persistées conservent les
+connexions établies, DNS, DHCP et ICMP utile avant le `drop`. Les procédures
+opérationnelles et le message post-restauration ont été alignés sur cet
+interpréteur empaqueté : `python3 -m sparkd.preflight` aurait échoué sur la Forge
+réelle.
+
 - **Reste avant `[x]`, et c'est un ARBITRAGE, pas une mesure** : la regle n'est
   pas posee par `scripts/install-serveur.sh`, qui n'installe pas le reseau — le
   bridge nait d'OP-02, a la main. Poser la regle la ou le bridge nait demande

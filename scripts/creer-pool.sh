@@ -7,7 +7,7 @@
 #
 # Ce script CREE. La verification est ailleurs, en lecture seule (§31.3) :
 #
-#     python3 -m sparkd.preflight
+#     /opt/sparkd/venv/bin/python -m sparkd.preflight
 #
 # Il est IDEMPOTENT : si le pool existe deja, il ne le touche pas et le dit.
 # Recreer « au cas ou » detruirait les Sparks qui vivent dessus.

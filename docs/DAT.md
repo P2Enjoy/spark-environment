@@ -6132,6 +6132,11 @@ pose les unités issues du paquet, recharge systemd, redémarre `sparkd`, attend
 `/healthz` et refuse le succès si le préflight reste rouge. Le registre sous
 `/var/lib/sparkd` n'est jamais effacé.
 
+Après cette pose, toute commande d'exploitation du paquet — préflight,
+sauvegarde ou restauration — passe par **`/opt/sparkd/venv/bin/python`**. Le
+Python système ne contient volontairement pas `sparkd`; l'employer ferait
+échouer une procédure pourtant applicable au service réellement lancé.
+
 `setuptools-scm` donne une version PEP 440 croissante à chaque commit. C'est une
 propriété nécessaire : avec une constante `0.0.0`, `pip install -U` conclurait
 « déjà satisfait » alors que `main` a changé. La mise à jour et son retour

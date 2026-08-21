@@ -7865,3 +7865,24 @@ sa pile : `sparkd-test` **1 017** verts, contrôle du contrat, tests de packages
 build. SPK-54 reste `[~]` : la dernière preuve agent, qui doit partir du seul
 briefing via SSH, attend toujours l'autorisation de réconcilier la clé d'hôte
 changée de `briefing-e2e`; aucune entrée `known_hosts` n'a été modifiée.
+
+---
+
+## 2026-08-22 · SPK-55 / SPK-66 — le préflight réel retrouve son interpréteur
+
+Le relevé SSH strict de `51.158.54.202` confirme la posture SPK-55 sans aucun
+geste : le bridge `sparkbr0` est marqué `drop`, sa chaîne garde les connexions
+établies, DNS, DHCP et ICMP utile avant le refus, et `X11Forwarding` est à `no`.
+Le venv déclaré par `sparkd.service`, `/opt/sparkd/venv/bin/python`, rend les
+**13 contrôles**, tous verts.
+
+Le premier essai avec `/usr/bin/python3 -m sparkd.preflight` a, lui, échoué : le
+Python système ne contient volontairement pas le paquet. C'était une procédure
+historique encore présente dans les runbooks, le manuel, les migrations et le
+message de restauration. Ils emploient désormais le venv du paquet, et une
+preuve de restauration garde que le message annonce l'exécutable réellement
+utilisé. Aucun service ni règle réseau n'a été modifié par ce relevé.
+
+SPK-55 reste `[~]` : automatiser la création du bridge et de ses règles dans
+l'installateur exige toujours la décision explicite de confier ce réseau au
+produit; le contrôle et la recette appliquée sont déjà vérifiés.

@@ -81,6 +81,11 @@
   contention » — vrai, mais trop modeste.
 
 ### Corrigé
+- **Les procédures d'exploitation emploient maintenant le Python du paquet**
+  (SPK-55 / SPK-66) : préflight, sauvegarde et restauration passent par
+  `/opt/sparkd/venv/bin/python`, comme le service systemd. Le Python système ne
+  contient volontairement pas `sparkd`; le message après restauration annonce
+  donc l'exécutable qui vient réellement d'effectuer le geste.
 - **Le contexte Docker rootless est maintenant cohérent entre la console et le
   briefing** (SPK-54 / SPK-60) : chaque commande de lecture ou d'action emploie
   le socket de `spark-docker` uniquement lorsqu'il répond; un échec n'est jamais

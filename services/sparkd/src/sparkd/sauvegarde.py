@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Restauré : {args.restaurer} → {args.vers}")
             if remplace:
                 print(f"  l'ancien registre est conservé : {remplace}")
-            print("  vérifiez ensuite : python3 -m sparkd.preflight, puis "
+            print(f"  vérifiez ensuite : {sys.executable} -m sparkd.preflight, puis "
                   "GET /v1/audit/verify (docs/CONTINGENCE.md §2.5).")
             return 0
 
