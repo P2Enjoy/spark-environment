@@ -2903,17 +2903,31 @@ livrée : après le registre, la route pose les nouvelles limites sur la cellule
 - **Preuves** : 3 de plus, dont l'échec de pose éprouvé sur un client Incus qui
   refuse. 864 preuves Python au total.
 
+**L'écran s'ouvre, le 2026-08-21.** La section *Ressources* de la fenêtre d'un
+Spark porte sa commande — « Modifier les quotas » — et ouvre une modale dont le
+sujet est cette section (`DESIGN_SYSTEM.md` §6.27).
+
+- **Le disque ANNONCE son redémarrage avant qu'on agisse** (§49.4) : tant que la
+  prise à chaud n'est pas mesurée sur une Forge réelle, l'écran promet moins que
+  ce qu'il fait. L'inverse coupe un service en production.
+- **La modale prépare au refus qu'elle peut recevoir** : elle dit que ce qu'on
+  retire doit être libre, ce qui distingue à l'avance « il n'y a pas la place »
+  de « ce que vous voulez retirer est utilisé » (§49.3).
+- **Un Spark protégé garde la commande, DÉSACTIVÉE, avec sa raison** (§9.9) : la
+  faire disparaître ferait croire que le produit ne sait pas redimensionner.
+- **Preuves** : 7 de composant. 821 preuves de console au total.
+
 - **Reste avant `[x]`** :
-  1. **aucun écran, aucun parcours, aucun manuel.** Le geste existe à l'API ;
-     personne ne peut encore le faire depuis la console ;
-  2. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
+  1. **la modale n'est pas encore CÂBLÉE** : elle rend, mais `app.js` ne l'ouvre
+     pas et n'envoie pas le `PATCH`. C'est le geste qui manque entre l'écran et
+     l'API, tous deux prêts ;
+  2. **aucun parcours E2E, aucune capture, aucun manuel** ;
+  3. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
      mesurée, donc le refus du §49.3 sur le disque ne se déclenche pas en
      production — il est prouvé au service, pas atteignable par la route ;
-  3. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
+  4. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
      changement de mode CPU — exige une Forge réelle : **nécessite une action
-     humaine**. Tant que ce n'est pas mesuré, l'écran devra annoncer un
-     redémarrage : promettre moins que ce qu'on fait est sans conséquence,
-     l'inverse coupe un service en production.
+     humaine**.
 
 ### [ ] SPK-58 · Variables d'environnement et secrets d'un Spark
 

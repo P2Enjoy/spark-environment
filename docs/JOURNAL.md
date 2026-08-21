@@ -6067,3 +6067,51 @@ impose qu'il annonce un redémarrage AVANT d'agir pour les champs dont la prise 
 chaud n'est pas mesurée. SPK-51 attend deux vérifications extérieures ; SPK-53,
 SPK-54 et l'arbitrage sur le nom de l'objet dans l'alerte hors bande attendent une
 décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-57 — l'écran s'ouvre sur les quotas
+
+**Unité reprise** au §4.2 point 1. Spécification existante (§49) ; le design
+system a été relu **intégralement** avant de toucher à l'interface, comme le
+`CLAUDE.md` §4 l'exige.
+
+### Ce qui a été construit
+
+La section *Ressources* de la fenêtre d'un Spark porte sa commande — « Modifier
+les quotas » — et ouvre une modale dont le sujet est cette section. C'est le
+patron du §6.27 : une fenêtre montre, une modale recueille.
+
+**Le disque annonce son redémarrage AVANT qu'on agisse**, et c'est le point du
+§49.4 : tant que la prise à chaud n'est pas mesurée sur une Forge réelle,
+l'écran promet moins que ce qu'il fait. Promettre trop coupe un service en
+production ; promettre trop peu ne coûte rien.
+
+La modale prépare aussi à un refus qu'elle peut recevoir : elle dit que ce qu'on
+retire doit être libre. Cela distingue à l'avance « il n'y a pas la place sur la
+Forge » de « ce que vous voulez retirer est utilisé dans la cellule ».
+
+Un Spark protégé garde la commande, **désactivée**, avec sa raison (§9.9) : la
+faire disparaître ferait croire que le produit ne sait pas redimensionner.
+
+### Une correction, minuscule et significative
+
+Une preuve a rougi sur une apostrophe : le composant écrivait `qu'il` en
+apostrophe droite là où tout le produit emploie l'apostrophe typographique.
+C'est le composant qui a été corrigé, pas la preuve.
+
+### Vérifications
+
+821 preuves de console (814 + 7). Aucune capture : **la modale n'est pas encore
+câblée**, donc rien de nouveau n'est atteignable au clavier.
+
+**SPK-57 reste `[~]`**, quatre écarts : la modale rend mais n'envoie pas — le
+geste manque entre l'écran et l'API, tous deux prêts ; aucun parcours, aucune
+capture, aucun manuel ; l'usage relevé ne porte que la mémoire ; et la prise à
+chaud du disque et du mode CPU exige une Forge réelle — **nécessite une action
+humaine**.
+
+**Où reprendre.** SPK-57 : câbler la modale dans `app.js` — l'ouvrir, envoyer le
+`PATCH`, rendre le refus dans la modale —, puis le parcours et les captures.
+SPK-51 attend deux vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur
+le nom de l'objet dans l'alerte hors bande attendent une décision du responsable.

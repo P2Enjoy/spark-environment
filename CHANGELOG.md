@@ -10,8 +10,10 @@
   est utilisé dans la cellule » (`409 shrink_refused`). Les nouvelles limites
   sont **posées sur la cellule** après le registre, et la réponse dit laquelle
   des trois situations on est : quota en vigueur, quota **promis** mais que le
-  noyau a refusé, ou rien à poser faute de cellule. *Aucun écran ne l'offre
-  encore.*
+  noyau a refusé, ou rien à poser faute de cellule. La section *Ressources* d'un
+  Spark porte désormais sa commande **Modifier les quotas**, et le champ du
+  disque annonce qu'il **exige un redémarrage** avant qu'on agisse. *La modale
+  n'est pas encore câblée : elle rend, elle n'envoie pas.*
 - **L'admission sait compter un redimensionnement** (SPK-57, `docs/DAT.md` §49.1) :
   `pools(..., sauf=<id>)` et `admit(..., sauf=<id>)` rendent au pool le Spark
   visé avant d'évaluer sa nouvelle demande. Un agrandissement tenable n'est plus
