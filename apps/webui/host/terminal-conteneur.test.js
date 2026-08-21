@@ -90,10 +90,15 @@ test('ouvrir dans un conteneur SONDE d’abord, puis lance le shell trouvé', as
   assert.equal(session.container, 'crm-web-1');
   assert.equal(session.shell, '/bin/bash');
 
-  // Le transport reste celui du §37.2, avec un cran de plus.
+  // Le transport reste celui du §37.2, avec un cran de plus et le contexte
+  // Docker sélectionné pour le Spark.
   assert.equal(enfants[0].commande, 'ssh');
-  assert.deepEqual(enfants[0].args.slice(-5),
-    ['docker', 'exec', '-it', 'crm-web-1', '/bin/bash']);
+  const commande = enfants[0].args.at(-1);
+  assert.match(commande, /^sh -lc /);
+  assert.match(commande, /docker info/);
+  assert.match(commande, /docker exec -it/);
+  assert.match(commande, /crm-web-1/);
+  assert.match(commande, /\/bin\/bash/);
   fermer();
 });
 

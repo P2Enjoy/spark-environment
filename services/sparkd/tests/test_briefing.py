@@ -143,3 +143,30 @@ def test_une_presence_preexistante_ne_devient_pas_une_installation_par_sparkd(tm
     model, markdown, _ = _briefing_files(client, name)
     assert model["bootstrap"]["managed_items"] == []
     assert "Modifiés par sparkd : aucun lors des relevés connus" in markdown
+
+
+def test_le_briefing_rootless_nomme_le_compte_et_le_socket_sans_inventer_le_uid():
+    spark = {
+        "id": "spark-rootless", "name": "rootless", "ipv4_address": "10.77.0.42",
+        "protected": False, "cpu_mode": "shared", "cpu_reservation": 0.5,
+        "memory_reservation_bytes": GIO, "storage_bytes": 5 * GIO,
+        "network_reservation_bps": 10_000_000,
+    }
+    observed = {
+        "observed_at": "2026-08-21T21:00:00+00:00", "openssh_version": "1:9",
+        "docker_version": "5:29", "compose_version": "2.40",
+        "docker_mode": "rootless", "managed_items": ["docker"],
+    }
+    model = briefing.modele(
+        spark, forge_public_address="", routes=[], ports=[], environment=[],
+        bootstrap=observed, written_at="2026-08-21T21:00:00+00:00")
+
+    assert model["docker"] == {
+        "mode": "rootless", "user": "spark-docker",
+        "socket": "/run/user/<uid>/docker.sock",
+        "socket_uid_source": "id -u spark-docker",
+    }
+    rendered = briefing.markdown(model)
+    assert "Compte : spark-docker" in rendered
+    assert "Socket : /run/user/<uid>/docker.sock" in rendered
+    assert "/run/user/1000/docker.sock" not in rendered

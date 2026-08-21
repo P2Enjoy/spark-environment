@@ -22,6 +22,7 @@ import { spawn } from 'node:child_process';
 
 import { classerEchecSsh } from './terminal.js';
 import { doublonPour, quoter } from './docker.js';
+import { dansContexteDocker } from './docker-context.js';
 
 /** Le délai laissé au conteneur avant d'être tué, en secondes. */
 export const DELAI_ARRET = 10;
@@ -139,7 +140,7 @@ function surLeSpark(tunnel, spark, commande, spawnFn, doublonBrut) {
       ? ['sh', '-c', doublon, commande]
       : ['ssh', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new',
          '-o', 'ConnectTimeout=5', ...tunnel.jumpArgs(),
-         `root@${spark.ipv4_address}`, commande];
+         `root@${spark.ipv4_address}`, dansContexteDocker(commande)];
     const enfant = spawnFn(programme, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let sortie = '';
     let erreurs = '';

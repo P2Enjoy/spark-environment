@@ -166,6 +166,12 @@ Le plan de contrôle le réécrit après ses changements. Il porte néanmoins un
 limite importante : `root` dans votre Spark peut le modifier. Employez-le pour
 comprendre la cellule, jamais comme preuve que vous êtes autorisé à agir.
 
+Si la section « Contexte Docker relevé » indique `rootless`, Docker appartient
+au compte `spark-docker`, pas à `root`. Son socket est
+`/run/user/<uid>/docker.sock`, où `<uid>` vaut `id -u spark-docker`. Utilisez ce
+contexte pour toute commande Docker ; un simple compte sans socket répondant ne
+signifie pas que Docker est prêt.
+
 ## Déployer votre pile
 
 Une fois connecté, vous êtes sur une Forge Docker à vous :
@@ -174,6 +180,15 @@ Une fois connecté, vous êtes sur une Forge Docker à vous :
 scp docker-compose.yml mon-spark:/srv/
 ssh mon-spark
 cd /srv && docker compose up -d
+```
+
+Pour un Spark rootless, remplacez la dernière commande par le même contexte que
+celui indiqué dans le briefing :
+
+```
+uid=$(id -u spark-docker)
+runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
+  DOCKER_HOST=unix:///run/user/$uid/docker.sock docker compose up -d
 ```
 
 Rien à réécrire. Docker vit à l'intérieur du Spark et vous appartient.

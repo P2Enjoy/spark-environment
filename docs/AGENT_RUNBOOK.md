@@ -168,6 +168,12 @@ fichiers `/etc/spark/env` et `/run/spark/secrets`; aucune valeur de secret n'y
 est présente. Le fichier vient du plan de contrôle mais `root` dans la cellule
 peut le modifier : il éclaire un déploiement, il ne prouve jamais une permission.
 
+Le briefing porte aussi le **contexte Docker relevé**. Si son mode est
+`rootless`, le démon n'écoute pas `/var/run/docker.sock` : il faut employer le
+compte et le socket qu'il nomme. Le placeholder `<uid>` est celui que rend
+`id -u spark-docker`; un compte présent sans socket répondant n'est pas une
+installation Docker utilisable.
+
 ### C.2 Le piège, mesuré : l'image de base n'a pas de `sshd`
 
 `images:debian/13` n'embarque ni `cloud-init` ni `sshd` (§17.1). `sparkd` a bien

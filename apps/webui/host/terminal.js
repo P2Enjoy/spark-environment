@@ -16,6 +16,7 @@
 
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { dansContexteDocker, quoterShell } from './docker-context.js';
 
 /** Délai d'inactivité avant fermeture (§37.4.2). Averti AVANT, jamais après. */
 export const INACTIVITE_MS = 15 * 60 * 1000;
@@ -277,10 +278,14 @@ export class Session {
    * ne fait que le lancer.
    */
   conteneurArgs() {
+    const commande = dansContexteDocker(
+      `exec -it ${quoterShell(this.conteneur)} ${quoterShell(this.shell)}`);
     return {
       programme: 'ssh',
-      arguments_: [...this.sshArgs(), 'docker', 'exec', '-it',
-                   this.conteneur, this.shell],
+      // `ssh` reconstruit la commande distante en joignant ses arguments. Le
+      // script doit donc rester UN argument de `sh -lc`, cité pour le shell du
+      // Spark, sans quoi son premier point-virgule finirait cette commande.
+      arguments_: [...this.sshArgs(), `sh -lc ${quoterShell(commande)}`],
     };
   }
 

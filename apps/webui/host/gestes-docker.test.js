@@ -188,7 +188,10 @@ test('le geste passe par SSH, avec le rebond du tunnel (§37.2)', async () => {
   assert.equal(vus[0].programme, 'ssh');
   assert.ok(vus[0].args.includes('-J'));
   assert.ok(vus[0].args.includes('root@10.77.0.17'));
-  assert.ok(vus[0].args.at(-1).startsWith('docker stop'));
+  assert.match(vus[0].args.at(-1), /docker info/,
+    'le socket rootless est vérifié avant de choisir le démon');
+  assert.match(vus[0].args.at(-1), /exec docker stop -t 10 'helo-web-1'/,
+    'le geste ne peut être rejoué sur Docker root après un échec rootless');
   assert.equal(vu.state, ABOUTI);
   assert.equal(vu.action, 'spark.container_stop');
   assert.equal(vu.name, 'helo-web-1');

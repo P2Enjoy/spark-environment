@@ -484,14 +484,19 @@ test('une entrée par chemin INCOMPLÈTE retombe sur celle du chemin normal', ()
 
 test('un terminal de conteneur ajoute UN CRAN au chemin du §37.2', () => {
   // Ce n'est pas un second mécanisme : c'est le même `ssh` vers le Spark, suivi
-  // de `docker exec -it`. Dupliquer le transport ferait diverger deux terminaux.
+  // de `docker exec -it`, dans le contexte rootless réellement utilisable.
+  // Dupliquer le transport ferait diverger deux terminaux.
   const { session, enfant } = pile({
     chemin: 'container', conteneur: 'crm-web-1', shell: '/bin/bash' });
   assert.equal(enfant.commande, 'ssh');
   assert.ok(enfant.args.includes('-tt'), 'le pseudo-terminal vient du Spark');
   assert.ok(enfant.args.includes('root@10.77.0.16'));
-  const fin = enfant.args.slice(-5);
-  assert.deepEqual(fin, ['docker', 'exec', '-it', 'crm-web-1', '/bin/bash']);
+  const fin = enfant.args.at(-1);
+  assert.match(fin, /^sh -lc /);
+  assert.match(fin, /docker info/, 'le socket rootless est sondé');
+  assert.match(fin, /docker exec -it/);
+  assert.match(fin, /crm-web-1/);
+  assert.match(fin, /\/bin\/bash/);
   session.fermer('sortie');
 });
 

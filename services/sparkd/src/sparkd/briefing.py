@@ -24,6 +24,9 @@ FICHIER_JSON = "/etc/spark/briefing.json"
 FICHIER_MOTD = "/etc/motd"
 FICHIER_VARIABLES = "/etc/spark/env"
 FICHIER_SECRETS = "/run/spark/secrets"
+COMPTE_ROOTLESS = "spark-docker"
+SOCKET_ROOTLESS = "/run/user/<uid>/docker.sock"
+SOCKET_ENRACINE = "/var/run/docker.sock"
 
 PIEGES = (
     "Docker doit venir du dépôt amont : docker.io de la distribution échoue sous AppArmor.",
@@ -131,6 +134,32 @@ def _cpu(spark: dict[str, Any]) -> dict[str, Any]:
     return {"mode": mode, "value": value, "semantic": semantic}
 
 
+def _docker(bootstrap: dict[str, Any] | None) -> dict[str, str | None]:
+    """Le seul contexte Docker que le dernier relevé permet d'affirmer.
+
+    Le UID du compte rootless appartient à la cellule : le briefing ne l'invente
+    donc pas. Il expose le chemin stable avec son emplacement variable et nomme
+    la source de ce UID. Un compte présent sans socket répondant a déjà été
+    normalisé en ``None`` par le relevé d'amorçage (§42.2 bis).
+    """
+    mode = bootstrap.get("docker_mode") if bootstrap else None
+    if mode == "rootless":
+        return {
+            "mode": mode,
+            "user": COMPTE_ROOTLESS,
+            "socket": SOCKET_ROOTLESS,
+            "socket_uid_source": f"id -u {COMPTE_ROOTLESS}",
+        }
+    if mode == "enracine":
+        return {
+            "mode": mode,
+            "user": "root",
+            "socket": SOCKET_ENRACINE,
+            "socket_uid_source": None,
+        }
+    return {"mode": None, "user": None, "socket": None, "socket_uid_source": None}
+
+
 def modele(spark: dict[str, Any], *, forge_public_address: str,
            routes: list[dict[str, Any]], ports: list[dict[str, Any]],
            environment: list[Any], bootstrap: dict[str, Any] | None,
@@ -174,6 +203,7 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
             "files": {"variables": FICHIER_VARIABLES, "secrets": FICHIER_SECRETS},
         },
         "bootstrap": bootstrap,
+        "docker": _docker(bootstrap),
         "pitfalls": list(PIEGES),
     }
 
@@ -187,6 +217,7 @@ def markdown(model: dict[str, Any]) -> str:
     """Présente TOUS les faits du modèle, sans en rajouter ni en retirer."""
     spark = model["spark"]
     bootstrap = model["bootstrap"]
+    docker = model["docker"]
     resource = model["resources"]
     forge = model["forge"]["public_address"] or "inconnue du plan de contrôle"
     lines = [
@@ -233,6 +264,24 @@ def markdown(model: dict[str, Any]) -> str:
         f"- Secrets ({env['files']['secrets']}) : " +
         (", ".join(env["secrets"]) or "aucun"),
         "- Les valeurs ne sont pas recopiées ici.",
+        "",
+        "## Contexte Docker relevé",
+    ])
+    if docker["mode"] is None:
+        lines.append("- Docker n'a pas été relevé comme utilisable.")
+    elif docker["mode"] == "rootless":
+        lines.extend([
+            "- Mode : rootless",
+            f"- Compte : {docker['user']}",
+            f"- Socket : {docker['socket']} (<uid> = {docker['socket_uid_source']})",
+        ])
+    else:
+        lines.extend([
+            "- Mode : enraciné",
+            f"- Compte : {docker['user']}",
+            f"- Socket : {docker['socket']}",
+        ])
+    lines.extend([
         "",
         "## Amorçage relevé",
     ])
