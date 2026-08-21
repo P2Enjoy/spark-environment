@@ -6166,3 +6166,40 @@ mode CPU exige une Forge réelle — **nécessite une action humaine**.
 à l'écran. SPK-51 attend deux vérifications extérieures ; SPK-53, SPK-54 et
 l'arbitrage sur le nom de l'objet dans l'alerte hors bande attendent une décision
 du responsable.
+
+---
+
+## 2026-08-21 · SPK-57 — les captures et le manuel
+
+**Unité reprise** au §4.2 point 1. Spécification existante (§49) : code direct.
+
+### Ce qui a été livré
+
+**Trois captures, produites et observées** : la commande dans sa section, la
+modale pré-remplie portant son annonce de redémarrage sur le disque, et la même
+sous 768 px — elle y occupe l'écran entier sans changer de contrat (§6.27).
+
+**Le manuel M8 porte le geste**, et surtout ce qui compte pour l'exploitant : les
+**deux familles de refus** ne se confondent pas. « Capacité insuffisante » se
+règle sur la Forge ; « ce que la cellule emploie ou contient » se règle **dans le
+Spark**. Un message qui les mélangerait enverrait chercher au mauvais endroit.
+
+Le manuel dit aussi franchement ce qui n'est **pas** encore possible — changer le
+mode CPU — plutôt que de le taire. Un manuel qui omet une limite se fait
+découvrir par l'exploitant au pire moment.
+
+### Vérifications
+
+Captures observées à 1440 px et à 390 px. 7 preuves du manuel vertes.
+
+**SPK-57 reste `[~]`**, trois écarts : le **mode CPU** n'est pas modifiable depuis
+l'écran alors que le §49.2 le range parmi les champs redimensionnables et que
+l'API l'accepte ; l'usage relevé ne porte que la mémoire, donc le refus du §49.3
+sur le disque est prouvé au service mais pas atteignable par la route ; et la
+prise à chaud du disque et du mode CPU exige une Forge réelle — **nécessite une
+action humaine**.
+
+**Où reprendre.** SPK-57 : le mode CPU à l'écran, puis relever l'occupation du
+disque pour rendre le refus du §49.3 atteignable. SPK-51 attend deux
+vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur le nom de l'objet
+dans l'alerte hors bande attendent une décision du responsable.

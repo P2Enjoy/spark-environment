@@ -2930,14 +2930,21 @@ le refus DANS la modale sans effacer la saisie (§6.27).
   relevé, et rendre du disque ne peut jamais manquer de place.
 - **Preuves** : 2 parcours E2E. 821 preuves de console.
 
+**Captures et manuel, le 2026-08-21.** Trois captures observées —
+`52-quotas-commande.png`, `53-quotas-modale.png`, `54-quotas-mobile.png` : la
+commande dans sa section, la modale pré-remplie avec son annonce de redémarrage,
+et la même sous 768 px où elle occupe l'écran sans changer de contrat (§6.27).
+Le manuel M8 porte le geste, ses deux familles de refus et ce qui n'est pas
+encore possible.
+
 - **Reste avant `[x]`** :
-  1. **aucune capture observée** du geste, ni du manuel M8 mis à jour ;
+  1. **le mode CPU n'est pas modifiable depuis l'écran.** Le §49.2 le range
+     pourtant parmi les champs redimensionnables, et l'API l'accepte. Le manuel
+     le dit franchement plutôt que de le taire ;
   2. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
      mesurée, donc le refus du §49.3 sur le disque ne se déclenche pas en
      production — il est prouvé au service, pas atteignable par la route ;
-  3. **le mode CPU n'est pas modifiable depuis l'écran.** Le §49.2 le range
-     pourtant parmi les champs redimensionnables, et l'API l'accepte ;
-  4. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
+  3. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
      changement de mode CPU — exige une Forge réelle : **nécessite une action
      humaine**.
 
