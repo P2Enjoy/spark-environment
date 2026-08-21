@@ -18,6 +18,12 @@ from dataclasses import dataclass
 
 DEFAULT_BIND = "127.0.0.1:9876"
 DEFAULT_DB = "/var/lib/sparkd/spark.db"
+#: SPK-58 · §43.9.2 : la cle qui chiffre les secrets d'environnement, a cote
+#: du registre. Elle est CREEE si elle manque — un runtime qui refuserait de
+#: demarrer faute d'une cle qu'il sait fabriquer ferait perdre un service
+#: pour rien —, mais jamais REECRITE : une cle presente mais illisible est une
+#: erreur franche, la remplacer rendrait tous les secrets indechiffrables.
+DEFAULT_SECRET_KEY_FILE = "/var/lib/sparkd/secret.key"
 DEFAULT_INCUS_SOCKET = "/var/lib/incus/unix.socket"
 DEFAULT_CADDY_ADMIN = "http://127.0.0.1:2019"
 DEFAULT_DRIVER = "incus"
@@ -98,6 +104,8 @@ class Config:
     #: et ce n'est pas une panne (§14.5) — une Forge sans canal fonctionne
     #: exactement comme avant.
     notify_url: str
+    #: SPK-58 · §43.9.2 : le fichier de la cle de chiffrement des secrets.
+    secret_key_file: str
     memory_reserve_bytes: int
     cpu_reserve: float
     storage_metadata_margin_bytes: int
@@ -220,6 +228,7 @@ def load(env: dict[str, str] | None = None) -> Config:
         # donnees qui n'est pas celui du pool.
         storage_dataset=source.get("SPARKD_STORAGE_DATASET", "") or pool,
         allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", ""),
+        secret_key_file=source.get("SPARKD_SECRET_KEY_FILE", DEFAULT_SECRET_KEY_FILE),
         notify_url=source.get("SPARKD_NOTIFY_URL", "").strip(),
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,
