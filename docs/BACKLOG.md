@@ -2748,15 +2748,27 @@ avant la première ligne de code.
 - **Preuves** : 9, dont l'ordre du remède et le comptage séparé des
   avertissements. 836 preuves Python au total.
 
-- **Reste avant `[x]`** :
-  1. **la règle n'est pas posée par l'installation** : `scripts/install-serveur.sh`
-     n'installe pas le réseau — le bridge naît d'OP-02, à la main. Poser la règle
-     là où le bridge naît demande d'abord de décider si l'installation prend le
-     réseau en charge, ce qui déborde cette unité ;
-  2. **aucun test ne prouve qu'un Spark garde son DNS et sa sortie** après
-     durcissement. Cela exige une Forge réelle avec Incus et un Spark en marche :
-     **nécessite une action humaine**. La vérification est écrite pas à pas dans
-     OP-11.
+**APPLIQUE sur la Forge de validation le 2026-08-21**, sur instruction explicite
+du responsable. OP-11 et OP-12 sont posees et persistees ; le preflight rend
+**12 controles, 0 bloquant, 0 signale**.
+
+- **Le durcissement ne casse pas ce qu'il protege** — c'est la verification qui
+  comptait, et elle est faite DEPUIS un Spark : `10.77.0.1:22` est refuse la ou
+  il repondait, tandis que le DNS resout et que la sortie HTTPS rend 200.
+- **TROIS omissions de la recette, trouvees en l'appliquant** : la table
+  `inet filter` n'existait pas ; le **DHCP** devait etre accepte, faute de quoi
+  un Spark perd son adresse au bail suivant — une panne differee, donc pire ; et
+  l'**ICMP utile** aussi, sans quoi la decouverte de MTU casse en silence.
+- **Un piege de persistance, evite** : le `/etc/nftables.conf` d'Ubuntu commence
+  par `flush ruleset`, ce qui aurait efface la table d'Incus au premier
+  redemarrage — NAT, DNS et DHCP de tous les Sparks. Le fichier pose ne flushe
+  que sa propre table.
+
+- **Reste avant `[x]`, et c'est un ARBITRAGE, pas une mesure** : la regle n'est
+  pas posee par `scripts/install-serveur.sh`, qui n'installe pas le reseau — le
+  bridge nait d'OP-02, a la main. Poser la regle la ou le bridge nait demande
+  d'abord de **decider si l'installation prend le reseau en charge**, ce qui
+  deborde cette unite. **Attend une decision du responsable.**
 
 ### [x] SPK-56 · L'écran nomme, le manuel explique — et le manuel devient joignable
 
