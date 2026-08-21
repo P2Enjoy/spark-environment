@@ -90,15 +90,24 @@ def charger_cle(chemin: str) -> bytes:
         return brut
 
     cle = _alea.token_bytes(TAILLE_CLE)
-    dossier = os.path.dirname(chemin)
-    if dossier:
-        os.makedirs(dossier, exist_ok=True)
-    # `0600` posé à la CRÉATION et non après : entre les deux, la clé serait
-    # lisible par tous, et une seconde suffit.
-    fd = os.open(chemin, os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                 stat.S_IRUSR | stat.S_IWUSR)
-    with os.fdopen(fd, "wb") as f:
-        f.write(cle)
+    try:
+        dossier = os.path.dirname(chemin)
+        if dossier:
+            os.makedirs(dossier, exist_ok=True)
+        # `0600` posé à la CRÉATION et non après : entre les deux, la clé serait
+        # lisible par tous, et une seconde suffit.
+        fd = os.open(chemin, os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                     stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "wb") as f:
+            f.write(cle)
+    except OSError as erreur:
+        # Un refus du système ne doit pas remonter en trace : l'appelant a
+        # besoin de savoir que les SECRETS sont indisponibles, pas de lire un
+        # errno au milieu d'une pile.
+        raise CleError(
+            f"La clé de chiffrement « {chemin} » n'a pas pu être créée : "
+            f"{erreur}. Les secrets d'environnement restent indisponibles."
+        ) from erreur
     return cle
 
 

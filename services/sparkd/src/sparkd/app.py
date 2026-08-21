@@ -43,6 +43,7 @@ from . import bootstrap as bootstrap_service
 from . import metrics as metrics_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
+from . import environnement as env_service
 from . import sshkeys
 from .lifecycle import Command
 from .migrations import applied, upgrade, verify
@@ -540,6 +541,15 @@ def create_app(config: Config) -> FastAPI:
             "UPDATE spark SET incus_name = ? WHERE id = ?", (spark["name"], spark["id"])
         )
         service.finish(connection, spark["id"], success=True)
+        # SPK-58 · §43.7 : l'environnement est posé DÈS la création, de sorte
+        # qu'un `env_file:` du locataire ne casse pas sa pile au premier
+        # démarrage en désignant un fichier qui n'existe pas encore.
+        try:
+            _apply_env(connection, service.get(connection, spark["id"]))
+        except (IncusError, env_service.CleError):
+            # L'instance existe : ne pas faire échouer sa création. L'écart sera
+            # repris au prochain démarrage, qui repose les fichiers (§43.5.2).
+            pass
         # SPK-49 · §39.4 : les ports déclarés AVANT la création s'ouvrent
         # maintenant. Sans ce geste, un port publié sur un Spark encore
         # `pending` ne s'ouvrirait jamais — il resterait au registre avec un
@@ -568,6 +578,26 @@ def create_app(config: Config) -> FastAPI:
         app.state.incus.push_file(
             spark["incus_name"], sshkeys.AUTHORIZED_KEYS, contenu, mode="0600"
         )
+
+    def _apply_env(connection, spark: dict) -> None:
+        """Pose les fichiers d'environnement dans le Spark (SPK-58, §43.2).
+
+        Régénérés EN ENTIER depuis l'état voulu, jamais complétés : c'est ce qui
+        fait qu'un retrait retire réellement. Même mécanisme et même motif
+        qu'`authorized_keys` — deux mécanismes qui écrivent le même état
+        finissent par diverger (§17.1).
+
+        Le fichier des secrets vit dans un **tmpfs** (§43.5.2), il est donc
+        reposé à chaque démarrage : c'est ce qui empêche une restauration
+        d'instantané de ressusciter un secret révoqué.
+        """
+        if not spark.get("incus_name"):
+            return
+        cle = env_service.charger_cle(config.secret_key_file)
+        for chemin, contenu in env_service.fichiers(
+                connection, cle, spark["id"]).items():
+            app.state.incus.push_file(
+                spark["incus_name"], chemin, contenu, mode="0600")
 
     def _reponderer_la_tranche(connection) -> None:
         """Recalcule le poids de la tranche parente (docs/DAT.md §32.2).
@@ -679,10 +709,20 @@ def create_app(config: Config) -> FastAPI:
             try:
                 spark = service.by_name(connection, name)
                 protection_service.ensure_writable(connection, name, "snapshot")
-                return snapshot_service.restore(
+                rendu = snapshot_service.restore(
                     connection, spark, snapshot, app.state.incus,
                     accept_losing_newer=bool((body or {}).get("accept_losing_newer")),
                 )
+                # SPK-58 · §43.2 : une restauration ramène l'ANCIEN fichier
+                # d'environnement dans la cellule. L'état voulu reprend donc la
+                # main derrière, comme pour les clés — sans quoi le registre et
+                # la cellule diraient deux choses différentes, et c'est la
+                # cellule qui gagnerait.
+                try:
+                    _apply_env(connection, service.by_name(connection, name))
+                except (IncusError, env_service.CleError):
+                    pass
+                return rendu
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
@@ -1579,7 +1619,12 @@ def create_app(config: Config) -> FastAPI:
                             apres["name"], sshkeys.PROVISION_SSHD
                         )
                         _apply_keys(connection, service.by_name(connection, name))
-                    except IncusError:
+                        # SPK-58 · §43.5.2 : le fichier des secrets vit dans un
+                        # tmpfs, il DISPARAÎT à l'arrêt de la cellule. Le
+                        # reposer ici n'est pas une précaution : sans cela, un
+                        # Spark redémarré perdrait ses secrets.
+                        _apply_env(connection, service.by_name(connection, name))
+                    except (IncusError, env_service.CleError):
                         # Le Spark tourne ; l'écart sera repris à la
                         # réconciliation plutôt que de faire échouer le démarrage.
                         pass

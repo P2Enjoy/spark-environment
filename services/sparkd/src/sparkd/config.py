@@ -18,12 +18,12 @@ from dataclasses import dataclass
 
 DEFAULT_BIND = "127.0.0.1:9876"
 DEFAULT_DB = "/var/lib/sparkd/spark.db"
-#: SPK-58 · §43.9.2 : la cle qui chiffre les secrets d'environnement, a cote
-#: du registre. Elle est CREEE si elle manque — un runtime qui refuserait de
-#: demarrer faute d'une cle qu'il sait fabriquer ferait perdre un service
-#: pour rien —, mais jamais REECRITE : une cle presente mais illisible est une
-#: erreur franche, la remplacer rendrait tous les secrets indechiffrables.
-DEFAULT_SECRET_KEY_FILE = "/var/lib/sparkd/secret.key"
+#: SPK-58 · §43.9.2 : la cle qui chiffre les secrets d'environnement. Elle vit
+#: A COTE DU REGISTRE, et son defaut se DERIVE donc du chemin de celui-ci : un
+#: chemin absolu code en dur ferait chercher la cle dans /var/lib/sparkd alors
+#: que le registre est ailleurs — en developpement, en test, sur une seconde
+#: Forge. Elle est CREEE si elle manque, jamais REECRITE (docs/DAT.md §43.9.2).
+SECRET_KEY_NAME = "secret.key"
 DEFAULT_INCUS_SOCKET = "/var/lib/incus/unix.socket"
 DEFAULT_CADDY_ADMIN = "http://127.0.0.1:2019"
 DEFAULT_DRIVER = "incus"
@@ -162,6 +162,16 @@ def _require_loopback(host: str) -> None:
         )
 
 
+def _cle_par_defaut(source) -> str:
+    """Le chemin de la cle : celui donne, sinon a cote du registre."""
+    pose = source.get("SPARKD_SECRET_KEY_FILE")
+    if pose:
+        return pose
+    return os.path.join(
+        os.path.dirname(source.get("SPARKD_DB", DEFAULT_DB)) or ".",
+        SECRET_KEY_NAME)
+
+
 def load(env: dict[str, str] | None = None) -> Config:
     """Construit la configuration, ou echoue avec un message exploitable."""
     source = os.environ if env is None else env
@@ -228,7 +238,7 @@ def load(env: dict[str, str] | None = None) -> Config:
         # donnees qui n'est pas celui du pool.
         storage_dataset=source.get("SPARKD_STORAGE_DATASET", "") or pool,
         allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", ""),
-        secret_key_file=source.get("SPARKD_SECRET_KEY_FILE", DEFAULT_SECRET_KEY_FILE),
+        secret_key_file=_cle_par_defaut(source),
         notify_url=source.get("SPARKD_NOTIFY_URL", "").strip(),
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,

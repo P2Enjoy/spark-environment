@@ -367,8 +367,8 @@ Risques       : la clé de chiffrement est CRÉÉE au premier besoin, en 0600, �
                 Ajouter ce fichier à la sauvegarde du §2 bis est une action
                 humaine, à faire AVANT de poser le premier secret.
 Variable      : SPARKD_SECRET_KEY_FILE, facultative. Chemin de la clé de
-                chiffrement des secrets. Défaut :
-                /var/lib/sparkd/secret.key. Une clé présente mais de taille
+                chiffrement des secrets. Défaut : `secret.key` dans le
+                répertoire DU REGISTRE, quel qu'il soit. Une clé présente mais de taille
                 différente de 32 octets fait échouer le geste plutôt que d'être
                 remplacée — la remplacer rendrait tous les secrets déjà écrits
                 indéchiffrables, en silence.

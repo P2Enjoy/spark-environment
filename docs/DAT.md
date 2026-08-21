@@ -6361,8 +6361,11 @@ Ce qui a été écarté, et le motif :
 licence Apache-2.0 / BSD, distribuée en roues précompilées : c'est la dépendance
 que tout le reste de l'écosystème emploie déjà (`CLAUDE.md` §19).
 
-**La clé vit à côté du registre**, en `0600`, à un chemin donné par
-`SPARKD_SECRET_KEY_FILE`. Elle est **créée si elle manque**, comme le pool l'est
+**La clé vit à côté du registre**, en `0600`. Son chemin se DÉRIVE de celui du
+registre — `secret.key` dans le même répertoire — et `SPARKD_SECRET_KEY_FILE` le
+remplace si besoin. Un chemin absolu codé en dur ferait chercher la clé dans
+`/var/lib/sparkd` alors que le registre est ailleurs : en développement, en test,
+ou sur une seconde Forge. Elle est **créée si elle manque**, comme le pool l'est
 à l'installation — un runtime qui refuserait de démarrer faute d'une clé qu'il
 sait fabriquer ferait perdre un service pour rien. En revanche, une clé
 **présente mais illisible ou de mauvaise taille** est une erreur franche : la
