@@ -252,10 +252,14 @@ def test_chaque_controle_porte_un_code_stable_et_unique():
     verdicts = preflight.verifier(hote())
     codes = [v.code for v in verdicts]
     assert len(set(codes)) == len(codes), "deux contrôles partagent un code"
+    # RÉVISÉE le 2026-08-21 : SPK-55 ajoute deux contrôles (`docs/DAT.md` §48.2).
+    # La liste est gardée EN ENTIER et non par inclusion, et c'est voulu : un
+    # contrôle retiré par mégarde doit faire rougir cette preuve, sans quoi la
+    # série pourrait maigrir sans que personne ne le voie.
     assert set(codes) == {
         "INC-VERSION", "STO-POOL", "STO-COMPRESSION", "MEM-ARC",
         "NET-BRIDGE", "NET-DHCP", "ING-CADDY", "SEC-PORTS", "RUN-SPARKD",
-        "RUN-SLICE",
+        "RUN-SLICE", "NET-REMONTEE", "SSH-X11",
     }
 
 
@@ -378,3 +382,89 @@ def test_la_compression_est_verifiee_sur_le_jeu_de_donnees_CONFIGURE():
             "SPARKD_STORAGE_POOL": "tank",
             "SPARKD_STORAGE_DATASET": "tank/sparks"}).storage_dataset)
     assert verdict.etat == OK and verdict.releve == "lz4"
+
+
+# --- SPK-55 · durcir la Forge (docs/DAT.md §48) ------------------------------
+
+
+def test_une_entree_de_bridge_qui_accepte_tout_est_un_ECHEC():
+    """§48.1 : mesuré sur la Forge réelle, `10.77.0.1:22` répondait depuis un
+    Spark. Le sens du produit est à SENS UNIQUE — aucun de ses chemins ne part
+    d'un Spark vers sa Forge."""
+    verdict = preflight.remontee_vers_la_forge(hote({
+        "incus network get sparkbr0 ipv4.firewall": "true",
+    }))
+    assert verdict.etat == ECHEC
+    assert "22" in verdict.releve
+
+
+def test_le_remede_LAISSE_le_DNS_et_la_sortie():
+    """§48.1, la moitié difficile : une règle qui fermerait tout rendrait chaque
+    Spark muet — une panne, pas une protection."""
+    verdict = preflight.remontee_vers_la_forge(hote({
+        "incus network get sparkbr0 ipv4.firewall": "true",
+    }))
+    assert "dport 53 accept" in verdict.remede, "le résolveur reste joignable"
+    assert verdict.remede.index("dport 53 accept") < verdict.remede.index("drop"), (
+        "le DNS doit être ouvert AVANT la fermeture, sinon la règle qui tombe "
+        "en premier ferme tout")
+
+
+def test_une_entree_deja_fermee_est_OK():
+    for pose in ("drop", "reject", "DROP"):
+        verdict = preflight.remontee_vers_la_forge(hote({
+            "incus network get sparkbr0 user.spark.input_policy": pose,
+        }))
+        assert verdict.etat == OK, pose
+
+
+def test_un_reseau_ILLISIBLE_ne_conclut_a_rien():
+    """§31.2 : ne pas avoir mesuré n'est pas avoir mesuré une valeur fautive.
+    Conclure ici ferait « corriger » une Forge correcte."""
+    verdict = preflight.remontee_vers_la_forge(hote())
+    assert verdict.etat == INCONNU
+    assert not verdict.bloquant
+
+
+def test_X11_ouvert_est_SIGNALE_sans_bloquer():
+    """§48.2 : ce n'est pas une faille ouverte, c'est une surface qui ne sert à
+    rien. Un préflight qui échoue pour un détail apprend à passer outre ses
+    échecs."""
+    verdict = preflight.x11_sans_usage(
+        hote(fichiers={"/etc/ssh/sshd_config": "X11Forwarding yes\nPermitRootLogin no\n"}))
+    assert verdict.etat == preflight.AVERTISSEMENT
+    assert not verdict.bloquant, "un avertissement ne refuse pas une installation"
+    assert "X11Forwarding no" in verdict.remede
+
+
+def test_X11_ferme_ou_absent_est_OK():
+    # Absent du fichier : le défaut d'OpenSSH est « yes », mais le produit ne
+    # conclut que sur ce qu'il LIT — deviner ferait signaler des Forges saines.
+    for contenu in ("X11Forwarding no\n", "PermitRootLogin no\n"):
+        verdict = preflight.x11_sans_usage(hote(fichiers={"/etc/ssh/sshd_config": contenu}))
+        assert verdict.etat == OK, contenu
+
+
+def test_la_DERNIERE_valeur_lue_fait_foi():
+    # `sshd` retient la PREMIÈRE ; ce contrôle retient la dernière, ce qui est
+    # plus SÉVÈRE et donc plus sûr : il signale un fichier ambigu au lieu de le
+    # déclarer sain. Écrit ici pour que l'écart soit vu, pas découvert.
+    verdict = preflight.x11_sans_usage(
+        hote(fichiers={"/etc/ssh/sshd_config": "X11Forwarding no\nX11Forwarding yes\n"}))
+    assert verdict.etat == preflight.AVERTISSEMENT
+
+
+def test_un_sshd_config_illisible_ne_conclut_a_rien():
+    verdict = preflight.x11_sans_usage(hote())
+    assert verdict.etat == INCONNU
+    assert not verdict.bloquant
+
+
+def test_un_avertissement_est_COMPTE_a_part_dans_le_rendu():
+    """§14.6 appliqué au texte : « signalé » n'est ni « bloquant » ni « non
+    mesuré », et les confondre ferait chercher une panne ou l'ignorer."""
+    texte = preflight.rendu_texte([
+        preflight.Verdict("SSH-X11", "t", preflight.AVERTISSEMENT, "r", "m"),
+    ])
+    assert "1 signalé(s)" in texte
+    assert "0 bloquant(s)" in texte

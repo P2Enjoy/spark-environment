@@ -77,6 +77,11 @@ ECHEC = "echec"
 #: Ne pas avoir pu mesurer n'est PAS avoir mesuré une valeur fautive. Les
 #: confondre ferait « corriger » un serveur correct (§31.2).
 INCONNU = "inconnu"
+#: SPK-55 · §48.2 : une surface inutile n'est pas une faille ouverte. La ranger
+#: avec les échecs ferait refuser l'installation d'une Forge pour un détail, et
+#: un préflight qui échoue pour un détail apprend à passer outre ses échecs.
+#: Signalé, donc, et NON bloquant.
+AVERTISSEMENT = "avertissement"
 
 
 @dataclass(frozen=True)
@@ -332,6 +337,76 @@ def surface_reseau(hote: Hote) -> Verdict:
                    f"exposés : {', '.join(sorted(exposes)) or 'aucun'}")
 
 
+def remontee_vers_la_forge(hote: Hote, nom: str = "sparkbr0") -> Verdict:
+    """Un Spark ne doit pas atteindre le `sshd` de sa Forge (§48.1).
+
+    @spec docs/BACKLOG.md#SPK-55 · docs/DAT.md §48.1 (le sens du produit est à
+          SENS UNIQUE), §48.2 (le préflight relève, il ne répare pas) ·
+          §37.2, §37.3 (aucun chemin du produit ne part d'un Spark vers la Forge)
+
+    MESURÉ le 2026-08-20 depuis un Spark en service : `10.77.0.1:9876` et
+    `10.77.0.1:2019` sont injoignables — c'est la propriété attendue — mais
+    `10.77.0.1:22` RÉPOND. La cause est nue : la chaîne `input` du bridge est en
+    « policy accept », et le `sshd`, lui, se lie partout.
+
+    **Ce qui ne doit PAS être fermé** est aussi important que ce qui doit l'être :
+    un Spark garde son DNS — `dnsmasq` écoute sur l'adresse du bridge — et sa
+    sortie internet, qui passe par le NAT du même bridge. Une règle qui fermerait
+    tout rendrait chaque Spark muet : une panne, pas une protection. Le remède
+    proposé ouvre donc explicitement le 53 avant de fermer le reste.
+    """
+    politique = hote.executer(
+        ["incus", "network", "get", nom, "ipv4.firewall"])
+    regles = hote.executer(
+        ["incus", "network", "get", nom, "user.spark.input_policy"])
+    # Ni l'un ni l'autre : on ne SAIT PAS. Le §31.2 interdit de confondre « pas
+    # mesuré » avec « mesuré fautif » — conclure ici ferait « corriger » une
+    # Forge correcte.
+    if politique is None and regles is None:
+        return Verdict("NET-REMONTEE", "Un Spark n’atteint pas le sshd de la Forge",
+                       INCONNU, f"réseau « {nom} » illisible", "")
+    if (regles or "").strip().lower() in {"drop", "reject"}:
+        return Verdict("NET-REMONTEE", "Un Spark n’atteint pas le sshd de la Forge",
+                       OK, f"entrée du bridge en « {regles.strip().lower()} »")
+    return Verdict(
+        "NET-REMONTEE", "Un Spark n’atteint pas le sshd de la Forge", ECHEC,
+        "l’entrée du bridge accepte tout : le port 22 de la Forge répond "
+        "depuis le réseau des Sparks",
+        f"Fermer l’entrée du bridge en LAISSANT le DNS et la sortie : "
+        f"nft add rule inet filter input iifname \"{nom}\" udp dport 53 accept ; "
+        f"nft add rule inet filter input iifname \"{nom}\" tcp dport 53 accept ; "
+        f"nft add rule inet filter input iifname \"{nom}\" drop — "
+        f"puis marquer l’état : incus network set {nom} user.spark.input_policy=drop")
+
+
+def x11_sans_usage(hote: Hote) -> Verdict:
+    """`X11Forwarding` est ouvert sans que le produit s'en serve (§48.2).
+
+    @spec docs/BACKLOG.md#SPK-55 · docs/DAT.md §48.2
+
+    AVERTISSEMENT et non échec, et le motif est écrit : ce n'est pas une faille
+    ouverte, c'est une surface qui ne sert à rien. Refuser l'installation d'une
+    Forge pour cela serait disproportionné, et un préflight qui échoue pour un
+    détail apprend à passer outre ses échecs.
+    """
+    brut = hote.lire("/etc/ssh/sshd_config")
+    if brut is None:
+        return Verdict("SSH-X11", "X11Forwarding inutile est désactivé", INCONNU,
+                       "sshd_config illisible", "")
+    actif = False
+    for ligne in brut.splitlines():
+        mots = ligne.strip().split()
+        if len(mots) >= 2 and mots[0].lower() == "x11forwarding":
+            actif = mots[1].lower() == "yes"
+    if actif:
+        return Verdict("SSH-X11", "X11Forwarding inutile est désactivé", AVERTISSEMENT,
+                       "X11Forwarding yes — le produit n’ouvre jamais de fenêtre",
+                       "X11Forwarding no dans /etc/ssh/sshd_config, "
+                       "puis systemctl reload ssh")
+    return Verdict("SSH-X11", "X11Forwarding inutile est désactivé", OK,
+                   "désactivé")
+
+
 def sparkd_survit_au_redemarrage(hote: Hote) -> Verdict:
     """§31.4 — le manque relevé le 2026-08-19.
 
@@ -393,6 +468,8 @@ CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     plage_dhcp_disjointe,
     caddy_administrable,
     surface_reseau,
+    remontee_vers_la_forge,
+    x11_sans_usage,
     sparkd_survit_au_redemarrage,
     tranche_des_sparks,
 )
@@ -405,7 +482,8 @@ def verifier(hote: Hote | None = None) -> list[Verdict]:
 
 
 def rendu_texte(verdicts: list[Verdict]) -> str:
-    symboles = {OK: "  ok  ", ECHEC: "ECHEC ", INCONNU: "  ?   "}
+    symboles = {OK: "  ok  ", ECHEC: "ECHEC ", INCONNU: "  ?   ",
+                AVERTISSEMENT: " note "}
     lignes = []
     for v in verdicts:
         lignes.append(f"[{symboles[v.etat]}] {v.code:<16} {v.titre}")
@@ -416,6 +494,7 @@ def rendu_texte(verdicts: list[Verdict]) -> str:
     lignes.append("")
     lignes.append(
         f"{len(verdicts)} contrôles — {len(bloquants)} bloquant(s), "
+        f"{sum(1 for v in verdicts if v.etat == AVERTISSEMENT)} signalé(s), "
         f"{sum(1 for v in verdicts if v.etat == INCONNU)} non mesuré(s)."
     )
     return "\n".join(lignes)
