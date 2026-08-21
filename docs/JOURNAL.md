@@ -6203,3 +6203,50 @@ action humaine**.
 disque pour rendre le refus du §49.3 atteignable. SPK-51 attend deux
 vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur le nom de l'objet
 dans l'alerte hors bande attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-57 — le mode CPU se change depuis l'écran
+
+**Unité reprise** au §4.2 point 1. Spécification existante (§49) ; le design
+system a été relu **intégralement** avant de toucher à l'interface (§4).
+
+### Ce qui a été construit
+
+La modale des quotas porte un sélecteur des quatre modes CPU, et **les champs qui
+suivent dépendent de lui** : une réservation en partagé, un plafond en plafonné,
+un nombre de cœurs en dédié. Afficher les trois ensemble ferait saisir des
+valeurs que le produit ignorera — un contrôle mort (§1.4).
+
+**Les réglages de l'ancien mode ne survivent pas.** Une réservation laissée sur
+un Spark devenu plafonné serait une valeur que rien n'emploie, et que le prochain
+lecteur croirait vraie. Le parcours le vérifie côté registre.
+
+Le mode **annonce son redémarrage** avant qu'on agisse, comme le disque (§49.4).
+
+### Deux décisions de conception, écrites parce qu'elles pouvaient aller autrement
+
+- **le mode REPEINT la modale, les autres champs non.** Repeindre à chaque frappe
+  arracherait le focus (§14.3) ; mais un `select` n'est pas un champ de frappe, et
+  le focus s'y replace. Le motif du §14.3 ne s'applique donc pas ici, et il fallait
+  le dire plutôt que d'appliquer la règle par réflexe ;
+- **la table des modes est importée**, jamais recopiée (§12.5). Elle s'est heurtée
+  à un `MODES` déjà présent dans le fichier — celui des modes d'amorçage — et a
+  été nommée `MODES_CPU` : deux tables homonymes dans un même module finiraient
+  par être confondues.
+
+### Vérifications
+
+825 preuves de console (821 + 4), **1 parcours E2E** neuf qui va du clavier au
+registre. Manuel M8 mis à jour, et sa section « ce qui n'est pas encore
+possible » **retirée** : elle est devenue fausse.
+
+**SPK-57 reste `[~]`**, deux écarts, tous deux hors de portée d'ici : l'usage
+relevé ne porte que la mémoire, donc le refus du §49.3 sur le disque est prouvé
+au service mais pas atteignable par la route ; et la prise à chaud du disque et
+du mode CPU exige une Forge réelle — **nécessite une action humaine**.
+
+**Où reprendre.** SPK-57 : relever l'occupation du disque de la cellule pour
+rendre le refus du §49.3 atteignable — c'est le dernier écart constructible ici.
+SPK-51 attend deux vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur
+le nom de l'objet dans l'alerte hors bande attendent une décision du responsable.
