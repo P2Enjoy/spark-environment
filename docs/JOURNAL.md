@@ -5679,3 +5679,72 @@ l'agent réponde se mesure **sur un poste** : c'est la même limite qu'au
 
 **Où reprendre.** SPK-61 et SPK-62, nées de SPK-35. SPK-53 et SPK-54 attendent
 une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-61 — la clé restreinte, mesurée avant d'être écrite
+
+**Unité choisie** au §4.2 point 3 : première `[ ]` du backlog, désignée par le
+journal précédent. Son backlog annonçait que sa faisabilité se déciderait par une
+MESURE ; elle a été faite avant la première ligne de spécification.
+
+### Le banc, et pourquoi il fallait un vrai `sshd`
+
+L'hôte n'a pas de `sshd`. Deux conteneurs Alpine — une « Forge » et un « Spark » —
+avec un vrai `sshd` 9.7, trois clés portant trois politiques, et deux services
+distincts pour distinguer une cible autorisée d'une autre.
+
+### Le résultat qui inverse une intuition
+
+**`restrict` est un faux ami.** Il retire le pseudo-terminal, l'agent, le X11. Il
+ne retire **pas** l'exécution d'une commande. MESURÉ : avec
+`restrict,port-forwarding,permitopen=…`, `ssh forge "cat <fichier>"` rend `0` et
+lit. Une clé « restreinte » à ce seul sens laisse tout le registre lisible, et
+l'unité aurait été réputée faite sans l'être — c'est exactement le genre d'écart
+qu'une spécification écrite de mémoire aurait produit.
+
+Le corollaire est heureux et lui aussi mesuré : **`command=` ne casse ni le tunnel
+ni le rebond**. `-L` et `-W` sont des canaux `direct-tcpip`, auxquels `command=`
+ne s'applique pas.
+
+### Le piège annoncé, et sa sortie
+
+`command=` casse le **dépannage** du §37.3, qui est une session avec commande.
+Renoncer au dépannage était refusé — il sert précisément quand le `sshd` d'un
+Spark est muet, donc au pire moment. La sortie est une **garde** :
+`scripts/garde-ssh.sh`, posée en `command=`, lit `SSH_ORIGINAL_COMMAND` et
+n'accepte que `incus exec <nom> -- <shell>`. Contrat FERMÉ.
+
+### Deux choses trouvées en montant le banc, et non en réfléchissant
+
+- **`AllowTcpForwarding no`** — le défaut d'Alpine — fait tout tomber, y compris
+  avec une clé sans aucune option. La ligne d'`authorized_keys` seule donnerait
+  une console en panne, pas une console protégée. C'est au §46.2 et dans OP-10.
+- **`permitopen` n'interprète aucun motif d'adresse** : `172.17.0.*:22` est
+  refusé. Ma spécification, écrite une heure plus tôt, proposait deux voies ; la
+  mesure en a tranché une, et le §46.5 a été récrit. Le joker d'HÔTE fonctionne —
+  `permitopen="*:22"` s'écrit une fois et survit à chaque création de Spark, au
+  prix d'une concession écrite.
+
+### Deux défauts trouvés par les preuves elles-mêmes
+
+- sans `set -f`, `incus exec * -- /bin/bash` se développait sur le répertoire
+  courant et la garde LANÇAIT un dépannage sur une cellule que personne n'avait
+  nommée. Vérifié en retirant `set -f` : le doublon d'`incus` est bien appelé ;
+- `${2:-9876}` confondait un port VIDE avec un port ABSENT, et rendait
+  silencieusement une ligne sur le port par défaut.
+
+### Vérifications
+
+32 preuves Python neuves, et **six chemins mesurés de bout en bout** contre le
+`sshd` réel, avec la ligne réellement produite par `scripts/cle-restreinte.sh` et
+la garde réellement posée : tunnel `0`, rebond `0`, dépannage `0` ; shell
+interactif refusé, lecture d'un fichier refusée, autre service refusé.
+
+**SPK-61 passe à `[~]`**, avec un seul écart : la clé n'est pas posée sur une
+Forge de validation. Le banc est un `sshd` jetable et l'`incus` y est un doublon.
+Poser la ligne sur la vraie Forge est un geste humain, OP-10 le décrit pas à pas —
+**nécessite une action humaine**.
+
+**Où reprendre.** SPK-62, la notification hors bande, entièrement constructible
+ici. SPK-53 et SPK-54 attendent une décision du responsable.
