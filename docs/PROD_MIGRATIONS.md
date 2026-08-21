@@ -442,7 +442,35 @@ Concession    : « permitopen="*:22" » autorise à rebondir sur le port 22 de
 Variable      : aucune.
 ```
 
-### OP-11 · Fermer la remontée d'un Spark vers sa Forge
+### OP-11 · Fermer la remontée d'un Spark vers sa Forge — **APPLIQUÉ le 2026-08-21**
+
+**Appliqué et vérifié sur la Forge de validation**, sur instruction explicite du
+responsable. Vérification depuis le Spark `helo` : `10.77.0.1:22` **refusé** la
+ou il repondait, `9876` toujours refuse, DNS resolu, sortie HTTPS en 200.
+Preflight : `NET-REMONTEE` en « ok », 12 controles, 0 bloquant.
+
+**TROIS corrections que l'application a imposees**, integrees a la recette
+ci-dessous — sans elles, la protection cassait ce qu'elle protege :
+
+1. **la table `inet filter` N'EXISTAIT PAS.** Incus tient sa propre table
+   `inet incus` ; `nft add rule inet filter input ...` echoue tant que la table
+   et la chaine ne sont pas creees ;
+2. **le DHCP doit etre accepte** — port 67. La chaine d'Incus l'accepte, mais un
+   `drop` dans NOTRE chaine l'emporte : sans cette ligne, un Spark perd son
+   adresse au renouvellement du bail. La panne ne se voit pas a la pose, elle se
+   voit au bail suivant ;
+3. **l'ICMP utile doit etre accepte** — `destination-unreachable`,
+   `time-exceeded`, `parameter-problem` —, faute de quoi la decouverte de MTU
+   casse et les grandes reponses se perdent sans message.
+
+**Le piege de la persistance, et il est grave** : le `/etc/nftables.conf`
+d'Ubuntu commence par `flush ruleset`. Activer le service avec ce fichier tel
+quel **efface la table d'Incus** — NAT, DNS et DHCP de tous les Sparks — au
+premier redemarrage. Le fichier pose ne flushe donc RIEN : il supprime et recree
+sa seule table. Verifie : apres rechargement, `nft list tables` rend bien
+`inet incus` **et** `inet filter`.
+
+### OP-11 · Recette de reference
 
 ```
 Objectif      : un Spark ne doit pas atteindre le `sshd` de la Forge. MESURÉ le
@@ -489,7 +517,14 @@ Risques       : les règles ci-dessus sont VOLATILES. Les persister
 Variable      : aucune.
 ```
 
-### OP-12 · Désactiver X11Forwarding sur la Forge
+### OP-12 · Desactiver X11Forwarding sur la Forge — **APPLIQUE le 2026-08-21**
+
+Applique sur la Forge de validation : `X11Forwarding no`, configuration validee
+par `sshd -t` **avant** le rechargement — recharger une configuration invalide
+sur la seule voie d'acces est le geste qui coupe l'acces a la machine. `sshd -T`
+rend `x11forwarding no`, et la session en cours a survecu.
+
+### OP-12 · Recette de reference
 
 ```
 Objectif      : retirer une surface qui ne sert à rien. Le produit n'ouvre
