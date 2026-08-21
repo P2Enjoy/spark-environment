@@ -408,6 +408,30 @@ class FakeIncus:
     franche.
 
     Les tests n'en passent pas : sans chemin, le comportement est celui d'avant.
+
+    CE QU'IL IMITE FIDÈLEMENT, et que le §12.1.3 lui impose : la même exception
+    que le vrai pilote pour la même condition, méthode par méthode ; l'aveu
+    plutôt que la réponse inventée quand Incus ne répondrait pas ; la simulation
+    d'un pilote injoignable sur CHAQUE méthode, sans quoi la borne du §33.3 y
+    serait inéprouvable ; et la relecture de son état à chaque opération,
+    puisque le vrai pilote n'a aucun cache.
+
+    CE QU'IL N'IMITE PAS, écrit ici parce qu'une divergence non écrite est un
+    piège pour la session suivante (§12.1.3) :
+
+    - **l'application effective d'un quota.** Il enregistre la configuration
+      traduite, il ne la fait appliquer par aucun noyau. Une preuve verte ici ne
+      dit RIEN de ce qu'une Forge appliquera (§12) ;
+    - **les délais et les états intermédiaires.** Une opération d'Incus est
+      asynchrone et passe par des états que le doublon saute : il conclut
+      immédiatement. Une course entre deux gestes ne s'éprouve donc pas contre
+      lui ;
+    - **le noyau, AppArmor et le cgroup.** Rien de ce qui relève du confinement
+      réel n'a d'équivalent ici.
+
+    Chacune de ces trois limites est de NATURE, pas une dette : la combler
+    demanderait un vrai Incus, auquel cas le doublon n'aurait plus de raison
+    d'être.
     """
 
     payload: dict[str, Any] | None = None

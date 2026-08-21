@@ -7238,3 +7238,61 @@ migration. Le fichier n'a pas été touché sur le disque, la session voisine a 
 prévenue immédiatement et a poussé la suite. Le reste de la session a été
 committé chemin par chemin. `git add -A` n'est pas un raccourci sur une branche
 partagée, c'est un pari sur ce que personne d'autre n'a écrit depuis.
+
+---
+
+## 2026-08-21 · SPK-67 — le contrat d'échec du pilote, et ce qu'un doublon doit
+
+**Problème.** L'unité avait été ouverte la veille sur un constat étroit : le
+doublon rendait une exception là où le vrai en rend une autre. La mesure, faite
+méthode par méthode avant d'écrire la moindre ligne, a montré autre chose.
+
+**Ce que la mesure a trouvé.** Le client RÉEL emploie **trois** aides privées, et
+une instance absente en ressortait en `InstanceAbsente` ou en `IncusError` selon
+celle qu'une méthode employait. « Lire l'état d'une cellule » ne savait donc pas
+dire qu'elle avait disparu, quand « la supprimer » le savait. Or c'est sur cette
+distinction que reposent SPK-52 — l'absence fait réussir une suppression — et le
+§14.6 — l'absence fait proposer une reconstruction. **Elle dépendait d'un détail
+d'implémentation qu'aucun appelant ne peut connaître.** Ce n'était pas le doublon
+qui mentait tout seul : il copiait une incohérence du vrai.
+
+**Décision, écrite et committée avant le code** (`docs/DAT.md` §12.1) : le
+contrat est uniforme. Les trois transports mappent le 404 vers
+`InstanceAbsente`, et rien d'autre ne le fait. Conséquence assumée et écrite :
+uniformiser **crée** l'absence là où les appelants n'en voyaient pas, donc le
+contrat n'est pas tenu tant que chacun ne la nomme pas. Neuf routes ont suivi.
+
+**Ce que l'unité a appris sur les doublons.** Trois écarts, et le pire n'est pas
+celui qu'on croit. Rendre la mauvaise exception se voit dès qu'on regarde.
+`snapshots()` rendant `[]` sur une instance absente ne se voit **jamais** : le
+doublon affirmait « pas d'instantané » là où le vrai dit « je ne la trouve pas ».
+Une erreur bruyante coûte une minute ; une affirmation fausse coûte une décision.
+Et douze méthodes ne savaient pas simuler un pilote injoignable — la borne du
+§33.3 y était donc inéprouvable, ce qui s'est découvert en essayant de l'éprouver.
+**Une borne qu'on ne peut pas éprouver n'est pas une borne, c'est une intention.**
+
+**Le geste qui ferme la classe plutôt que trois cas.** La preuve compare les deux
+pilotes **par énumération du protocole**, et une preuve garde l'énumération
+elle-même. Une méthode ajoutée demain entre d'elle-même dans la comparaison :
+l'écart ne peut plus se rouvrir en silence, ce qui était exactement arrivé quand
+`delete_instance` avait été corrigée et `set_instance_state` oubliée.
+
+**Ce que la vérification visuelle a trouvé, et rien d'autre.** Le seed retirait
+l'instance de la MÉMOIRE du pilote sans jamais l'écrire ; sa garde interrogeait
+cette même mémoire, donc elle ne pouvait pas échouer. Depuis que le doublon relit
+son état, la perte était devenue inerte et « Prendre un instantané » sur le Spark
+orphelin **réussissait** — l'inverse de ce que mes preuves d'unité affirmaient.
+Aucune preuve ne pouvait le voir : chacune monte sa propre pile. La garde vérifie
+maintenant ce que le PRODUIT verra, en demandant l'état de la cellule.
+
+Second défaut vu à l'écran : le refus nommait « Reprendre » sur un écran qui
+n'offre que « Démarrer » et « Supprimer », ce bouton n'apparaissant qu'en panne.
+C'est le symétrique exact de la faute corrigée la veille — nommer les commandes
+d'API au lieu des boutons. **La règle qui manquait est plus générale que les
+deux : un message ne nomme un bouton que là où ce bouton est certain d'exister.**
+
+**Où reprendre.** SPK-67 est close. Restent, dans l'ordre du plan : SPK-43 et
+SPK-54, dont les écarts sont des PREUVES à exécuter — l'une exige l'hôte console
+lancé avec son tunnel, l'autre une Forge réelle, disponible. Les autres unités
+`[~]` attendent un arbitrage du responsable ou une action humaine, chacune le
+disant dans son bloc.

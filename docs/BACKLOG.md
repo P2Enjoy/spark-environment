@@ -1164,7 +1164,7 @@ panne — la liste est ouverte, elle n'est pas un menu à cocher :
   protection au passage.
 - Rien n'a été implémenté, conformément à l'arbitrage.
 
-### [ ] SPK-67 · Le pilote factice doit mentir aussi peu que le vrai
+### [x] SPK-67 · Le pilote factice doit mentir aussi peu que le vrai
 
 **Relevé le 2026-08-21, en corrigeant SPK-36, et c'est ce défaut qui a permis
 au précédent de survivre à 900 preuves.**
@@ -1204,6 +1204,53 @@ Ce que l'unité doit trancher, pas seulement corriger :
   factice et celle du vrai pilote sur la même condition ; la perte d'une cellule
   hors du produit est jouable contre la pile de développement **sans redémarrer
   le service** ; les divergences restantes sont documentées.
+
+**LIVRÉ le 2026-08-21, et l'unité s'est révélée plus large que son relevé.**
+
+- **Le fait qui a tout décidé, et qui n'était pas dans le relevé initial** : le
+  client RÉEL emploie **trois** aides privées, et une instance absente en
+  ressortait en `InstanceAbsente` ou en `IncusError` selon celle qu'une méthode
+  employait. « Lire l'état d'une cellule » ne savait donc pas dire qu'elle avait
+  disparu, quand « la supprimer » le savait. La distinction sur laquelle
+  reposent SPK-52 et le §14.6 dépendait d'un détail d'implémentation qu'aucun
+  appelant ne peut connaître. Ce n'était pas le doublon qui mentait tout seul.
+- **Contrat écrit AVANT le code** : `docs/DAT.md` §12.1, en quatre parties — le
+  fait mesuré, la règle uniforme, ce que le doublon doit et ce qu'il admet ne
+  pas savoir, et ce que la règle exige des appelants.
+- **Le contrat est uniforme** : les trois transports mappent le 404 vers
+  `InstanceAbsente`, et rien d'autre ne le fait. Deux bornes le tiennent : une
+  collection n'est pas une instance, un code de sortie non nul reste une réponse.
+- **Le doublon est aligné** sur quatre points, chacun tiré d'un écart mesuré :
+  la même exception que le vrai ; ne plus répondre à la place d'Incus —
+  `snapshots()` rendait `[]` sur une instance absente, l'écart le plus
+  **silencieux** ; savoir simuler un pilote injoignable sur **chaque** méthode,
+  contre quatre auparavant, faute de quoi la borne du §33.3 y était
+  inéprouvable ; et relire son état à chaque opération, le vrai n'ayant aucun
+  cache.
+- **Neuf routes nomment désormais l'absence** — usage, instantanés, amorçage,
+  clés — avec la même réponse que le cycle de vie : `409`, `cellule_absente`. La
+  borne qui les en distingue est éprouvée : elles n'ayant posé aucun état
+  transitoire, elles refusent **sans rien écrire**, et leur message n'annonce
+  pas une panne qui n'a pas eu lieu.
+- **Deux défauts que seule la vérification visuelle a montrés** : le seed
+  retirait l'instance de la MÉMOIRE du pilote sans jamais l'écrire — donc
+  « Prendre un instantané » sur le Spark orphelin RÉUSSISSAIT depuis que le
+  doublon relit son état —, et le refus nommait « Reprendre » sur un écran qui
+  n'offre que « Démarrer » et « Supprimer ». La garde du seed vérifie maintenant
+  ce que le PRODUIT verra, et non ce que le seed se rappelle.
+- **Preuves** : 45 qui comparent les deux pilotes **par énumération du
+  protocole** — une méthode ajoutée demain y entre d'elle-même —, 18 sur les
+  routes, et un parcours qui part de l'accueil, saisit au clavier et lit le refus
+  dans la modale. Captures observées à 1440 et 390 px, console du navigateur
+  vierge.
+- INC-15 est **pris en charge** par cette unité, et corrigé au passage : il
+  annonçait neuf routes, la mesure en donne six.
+
+- **Les divergences ASSUMÉES sont écrites près du code**, dans la docstring de
+  `FakeIncus`, comme le §12.1.3 l'exige : quota jamais appliqué, délais et états
+  intermédiaires sautés, noyau et confinement absents. Chacune est de NATURE et
+  non une dette — la combler demanderait un vrai Incus, auquel cas le doublon
+  n'aurait plus de raison d'être.
 
 ### [~] SPK-36 · Instruire les plans de contingence et les gestes d'urgence
 

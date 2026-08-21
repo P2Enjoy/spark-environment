@@ -62,6 +62,14 @@
   contention » — vrai, mais trop modeste.
 
 ### Corrigé
+- **« La cellule a disparu » se dit maintenant partout** (SPK-67). Selon l'écran
+  d'où l'on agissait, le produit savait ou ne savait pas distinguer une cellule
+  disparue d'un Incus injoignable : la suppression le savait, la lecture non.
+  Neuf écrans supplémentaires — usage, instantanés, amorçage, clés — nomment
+  désormais la perte avec la même phrase et les mêmes issues, au lieu de rendre
+  une erreur interne. Le pilote factice du développement rend enfin les mêmes
+  réponses que le vrai, ce qui empêche une preuve d'être verte sur une forme qui
+  ne tourne jamais en production.
 - **Un Spark dont la cellule a disparu reste manœuvrable** (SPK-36). Demander son
   démarrage rendait une erreur interne et le laissait **stablement** en cours de
   démarrage, sans aucune commande offerte et sans dire pourquoi : depuis la
