@@ -6580,3 +6580,51 @@ perdre serait de toute façon la bonne forme (§18) — puis rétablir les deux
 parcours d'écriture. Ensuite la tranche 4 : manuel M6 et M8, et la preuve du
 §43.0 essai F sur le fichier que le produit écrit, qui **exige une Forge
 réelle**.
+
+## 2026-08-21 · SPK-58 — le défaut que le parcours a trouvé, et la tranche 3 close
+
+**Unité reprise** au §4.2 point 1 : rétablir les parcours d'écriture.
+
+### Le défaut, et il était RÉEL
+
+La session précédente avait laissé une hypothèse — un rejet silencieux de
+`poserEnv`. Elle était **fausse**. Le filet posé au §18 l'a montré du premier
+coup : le refus **s'affichait**, texte compris. L'échec était plus loin, sur
+`Échap`.
+
+**`onFermer` oubliait l'état de la facette.** `close()` s'exécutait, puis la
+repeinte trouvait `envUi.open` encore vrai et rappelait `showModal()` : la modale
+se rouvrait dans le même tour, et « Échap » paraissait sans effet. C'est
+exactement le défaut que le §6.27 existe pour empêcher, et seul un parcours
+pouvait le voir — les preuves de composant ne rejouent pas le cycle de
+fermeture.
+
+Le filet du §18 reste, indépendamment : une promesse qui rejette laisserait
+sinon la modale sur « Envoi… » indéfiniment.
+
+### Ce qui est livré
+
+- **`Échap` ferme la modale d'environnement**, aux deux niveaux ;
+- **trois parcours E2E de plus** : la pose au clavier avec son retrait, le refus
+  d'un nom hors grammaire avec sa fermeture par `Échap`, et les deux de lecture
+  livrés la veille. La tranche 3 du §43.9.6 est **close** ;
+- **le manuel** : M6 dit au locataire comment attacher les deux fichiers à ses
+  services et ce que le fichier volatil implique ; M8 dit à l'exploitant les
+  trois origines, ce qu'une déclaration de secret engage et ce qu'elle ne protège
+  pas.
+
+### Une casse, et sa réparation
+
+Ma chirurgie de la session précédente avait, en retirant les parcours inachevés,
+**emporté le corps du parcours du refus de quota** — le fichier gardait son
+titre mais le corps d'un autre. Constaté en rejouant, réparé en restaurant le
+fichier depuis le dernier commit puis en réinsérant proprement. Leçon : découper
+un fichier de tests par index de chaîne est fragile ; restaurer depuis Git puis
+réinsérer coûte moins cher que réparer.
+
+### Où reprendre
+
+Il ne reste à SPK-58 que la preuve du §43.0 essai F **refaite sur le fichier que
+le produit écrit** — un `docker compose` du locataire qui consomme réellement
+`/etc/spark/env`. Elle **exige une Forge réelle** : nécessite une action humaine.
+L'unité suivante du plan est donc SPK-60, le briefing d'un Spark (§44).

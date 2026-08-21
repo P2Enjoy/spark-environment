@@ -3241,17 +3241,29 @@ chaque valeur est à l'écran, et **la valeur d'un secret ne s'affiche nulle par
 — la preuve cherche les deux valeurs seedées dans tout le texte rendu. C'est le
 point central de la Definition of Done, et il est tenu.
 
-- **Reste avant `[x]`** :
-  1. **les parcours d'ÉCRITURE** — poser une variable au clavier, et le refus
-     d'un nom hors grammaire. Non livrés, et ce qui a été mesuré est écrit au
-     journal du 2026-08-21 : la saisie survit au submit, le gestionnaire
-     s'exécute (sans quoi `<form method="dialog">` fermerait la modale), le
-     `PUT` atteint le serveur, et le relais de l'hôte n'a aucun filtre de verbe.
-     L'hypothèse restante est un rejet silencieux de `poserEnv`, dont le
-     gestionnaire de submit n'attend pas la promesse ;
-  2. **le manuel** M6 et M8 ;
-  3. **la preuve du §43.0 essai F refaite sur le fichier que le produit écrit** —
-     celle-là **nécessite une Forge réelle**.
+**Tranche 3 CLOSE le 2026-08-21, et le parcours a trouvé un vrai défaut.**
+
+- **`Échap` ne fermait pas la modale d'environnement.** `onFermer` oubliait
+  l'état de la facette : `close()` s'exécutait, puis la repeinte trouvait `open`
+  encore vrai et rappelait `showModal()`. La modale se rouvrait dans le même
+  tour. C'est le défaut que le §6.27 existe pour empêcher, et **seul un parcours
+  pouvait le voir** — les preuves de composant ne rejouent pas le cycle de
+  fermeture. Corrigé, et éprouvé.
+- **L'hypothèse de la session précédente était FAUSSE** : le refus s'affichait
+  bien. Le filet posé au §18 — un échec qui se NOMME au lieu de se perdre — l'a
+  montré du premier coup. Il reste en place : une promesse qui rejette laisserait
+  sinon la modale sur « Envoi… » indéfiniment.
+- **Quatre parcours E2E** : les deux de lecture, la pose au clavier avec son
+  retrait, et le refus d'un nom hors grammaire avec sa fermeture par `Échap`.
+- **Le manuel porte le geste** : M6 dit au locataire comment attacher les deux
+  fichiers à ses services et ce que le fichier volatil implique ; M8 dit à
+  l'exploitant les trois origines, ce qu'une déclaration de secret engage et ce
+  qu'elle **ne protège pas**.
+
+- **Reste avant `[x]`, et c'est le SEUL écart** : la preuve du §43.0 essai F
+  refaite sur le fichier que le produit écrit — un `docker compose` du locataire
+  qui consomme réellement `/etc/spark/env`. Elle exige une Forge réelle :
+  **nécessite une action humaine**.
 
 ### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 

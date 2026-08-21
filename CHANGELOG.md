@@ -32,7 +32,14 @@
   ligne dit **d'où vient sa valeur**, et la valeur d'un secret n'est jamais
   affichée : seuls son nom, une empreinte et sa date. Poser une variable se fait
   depuis la section, et l'écran annonce que **rien ne redémarre** — la pile du
-  locataire lira la nouvelle valeur à son prochain démarrage.
+  locataire lira la nouvelle valeur à son prochain démarrage. Le manuel M6
+  explique au locataire comment attacher les fichiers à ses services, et le
+  manuel M8 explique à l'exploitant ce qu'une déclaration de secret engage.
+
+### Corrigé
+- **La modale d'environnement se ferme désormais par « Échap »** (SPK-58). Elle
+  se rouvrait dans le même tour : la fermeture s'exécutait, puis la repeinte la
+  rappelait aussitôt. La touche paraissait sans effet.
 - **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de
