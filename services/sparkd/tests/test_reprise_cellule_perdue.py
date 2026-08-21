@@ -103,6 +103,7 @@ def test_le_refus_DIT_la_perte_et_ne_la_devine_pas(tmp_path):
     assert corps["last_error"], "la raison RESTE lisible sur la fiche du Spark"
 
 
+
 def test_ARRETER_une_cellule_disparue_le_DIT_au_lieu_de_faire_semblant(tmp_path):
     """La différence avec §14.5, et elle est délibérée.
 
@@ -170,3 +171,32 @@ def test_un_pilote_MUET_reste_une_PANNE_et_pas_une_absence(tmp_path):
     assert reponse.status_code == 502, reponse.text
     assert reponse.json()["detail"]["error"] == "incus_failed"
     assert nom in application.state.incus.created, "la cellule, elle, est intacte"
+
+
+def test_le_message_ne_LAISSE_PAS_FUIR_la_plomberie_d_incus(tmp_path, monkeypatch):
+    """§20 : relevé sur la Forge le 2026-08-21.
+
+    Le refus rendait la phrase du pilote telle quelle, et donc :
+    « Incus ne connaît pas /1.0/instances/exercice-reprise/state. » Un chemin de
+    l'API interne n'a rien à faire sous les yeux de l'exploitant, et il ne
+    diagnostique rien de plus que le nom, déjà présent dans le message.
+
+    La preuve REPRODUIT la phrase du vrai pilote plutôt que celle du factice :
+    le factice dit « Instance « x » absente. », sans chemin, et la fuite serait
+    donc invisible ici. C'est exactement le piège qui a laissé passer le défaut
+    principal de cette unité.
+    """
+    client, application = _pile(tmp_path)
+    nom = _spark(client)
+
+    def absente_comme_le_vrai(name, action):
+        raise InstanceAbsente(f"Incus ne connaît pas /1.0/instances/{name}/state.")
+
+    monkeypatch.setattr(application.state.incus, "set_instance_state",
+                        absente_comme_le_vrai)
+
+    message = client.post(f"/v1/sparks/{nom}/start").json()["detail"]["message"]
+    lisible = client.get(f"/v1/sparks/{nom}").json()["last_error"]
+    for texte in (message, lisible):
+        assert "/1.0/" not in texte, "pas de chemin d'API interne dans un message lu"
+        assert nom in texte, "le message reste utile : il nomme le Spark"
