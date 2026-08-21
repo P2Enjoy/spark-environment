@@ -358,8 +358,11 @@ héritage.
   sur écriture et instantanés fonctionnent, mais la corruption silencieuse n'y
   est pas couverte. Ce n'est pas une dette — c'est une disposition, et le §8.5
   du DAT dit ce que chacune apporte.
-- La réservation CPU n'est proportionnelle qu'entre Sparks, pas absolue, tant que
-  SPK-29 n'est pas livrée.
+- La réservation CPU est un **plancher** : garantie sous contention totale,
+  dépassée sinon. Mesuré sur la Forge de validation le 2026-08-21 — 47,9 %
+  obtenus pour 47,4 % prédits, sous contention des trois tranches. Ce n'est pas
+  une égalité : quand la Forge est au repos, un Spark obtient plus que sa
+  réservation, et c'est voulu (`docs/DAT.md` §32.2).
 - Le champ « image » de la création est **libre** : seul le dépôt est contrôlé,
   pas l'alias. Une référence inexistante n'est refusée qu'à l'application, après
   écriture de la ligne du registre. Le catalogue vérifié est SPK-32.
