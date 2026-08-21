@@ -2449,10 +2449,9 @@ avant la première ligne de code.
      Corriger à la cause touche le vocabulaire du journal (§21), hors de cette
      unité : à arbitrer — notifier aussi `spark.deleted` au risque de doubler
      l'alerte, ou faire nommer le Spark par le message de `spark.delete` ;
-  2. **aucune capture n'a été observée** pour le bloc « Alerte hors bande » de
-     l'écran de la Forge. Le rendu est prouvé par six preuves de composant et le
-     parcours lit le texte à l'écran, mais `CLAUDE.md` §16 veut une capture
-     regardée.
+  2. **le canal n'a jamais parlé à un vrai destinataire.** Le doublon est un
+     vrai serveur HTTP, mais local : qu'un Slack, un Discord ou un `ntfy` accepte
+     ce corps se mesure sur un canal réel, et **nécessite une action humaine**.
 
 ### [x] SPK-63 · Frappe du nom sur les gestes destructifs
 

@@ -5784,9 +5784,14 @@ la plus probable de ce dispositif.
   dans un message n'est pas reconnu. La preuve a été révisée sur ce que le filtre
   garantit RÉELLEMENT, et le canal porte exactement ce que le journal porte, ni
   plus ni moins — le resserrer ici ferait diverger deux caviardages ;
-- **le premier parcours cassait un autre parcours.** Il prenait un instantané sur
-  `crm-production`, et le REFUS 3 compte les instantanés de ce Spark. Corrigé à
-  la cause : le parcours ne laisse plus de trace.
+- **le parcours cassait d'autres parcours, DEUX fois.** Première version : il
+  prenait un instantané sur `crm-production`, et le REFUS 3 compte les
+  instantanés de ce Spark. Deuxième : il supprimait `site-vitrine`, et les
+  parcours du terminal — trente lignes plus bas — tombaient sur un Spark
+  disparu. Corrigé à la cause, et la leçon est écrite dans le parcours : le
+  geste sensible éprouvé doit être **réversible**. C'est la levée de
+  protection — que le §47.2 range en tête, puisqu'elle rend tous les autres
+  gestes possibles — et l'état du seed est remis à la fin.
 
 ### Vérifications
 
@@ -5803,9 +5808,9 @@ de TOUS les parcours : s'il cassait un geste, la série entière le dirait.
    opaque. Corriger à la cause touche le vocabulaire du journal (§21), hors de
    cette unité — **à arbitrer** : notifier aussi `spark.deleted` au risque de
    doubler l'alerte, ou faire nommer le Spark par le message de `spark.delete` ;
-2. les captures du bloc « Alerte hors bande » ont été **produites mais non encore
-   observées** au moment d'écrire cette entrée — voir le compte rendu, qui dit
-   l'état réel.
+2. les captures du bloc « Alerte hors bande » — `50-notify-sans-canal.png` et
+   `51-notify-en-echec.png` — sont produites par le harnais ; leur observation
+   est dite dans le compte rendu de la session, qui seul fait foi sur ce point.
 
 **Où reprendre.** L'arbitrage ci-dessus, puis SPK-51 ou SPK-55, premières `[ ]`
 suivantes. SPK-53 et SPK-54 attendent une décision du responsable.
