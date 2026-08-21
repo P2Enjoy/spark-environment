@@ -407,6 +407,99 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
   });
 });
 
+// --- SPK-57 · REDIMENSIONNER UN SPARK (§49) --------------------------------
+
+test('redimensionner un Spark depuis l’écran, sans le détruire', async () => {
+  await parcours('quotas-redimensionner', async () => {
+    // Le geste que le produit ne savait pas faire : jusqu'ici, changer un quota
+    // imposait de supprimer et recréer — on perdait la cellule, ses images
+    // Docker et ses volumes.
+    //
+    // Le parcours rétrécit le DISQUE d'un Spark ARRÊTÉ, et les deux termes sont
+    // MESURÉS, pas choisis au hasard :
+    //
+    // - agrandir est légitimement refusé ici : il ne reste que ~1,36 Gio libres
+    //   sur la pile du harnais ;
+    // - rétrécir la MÉMOIRE d'un Spark EN MARCHE est refusé aussi, et c'est le
+    //   produit qui a raison : le §49.3 interdit de descendre sous ce que la
+    //   cellule emploie, sous peine de livrer ses processus à l'OOM killer.
+    //
+    // Un Spark arrêté n'a pas d'usage relevé, et rendre du disque ne peut jamais
+    // manquer de place (§49.1). Le geste est en outre réversible, donc le
+    // parcours ne laisse aucune trace aux suivants (§29.2).
+    await ouvrir('boutique');
+    await page.waitForSelector('#titre-ressources', { timeout: 10000 });
+
+    const avant = await pile.lireSparkd('/v1/sparks/boutique');
+    const cible = avant.corps.storage_bytes - 1024 ** 3;
+
+    // AU CLAVIER, depuis la commande de la section (§6.27).
+    await page.focus('[data-ouvre="quotas"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #quota-storage', { timeout: 10000 });
+
+    // La modale s'ouvre PRÉ-REMPLIE : faire ressaisir de mémoire ce qui est déjà
+    // à l'écran invite à se tromper d'ordre de grandeur.
+    assert.equal(await page.inputValue('#quota-storage'),
+                 String(Math.round(avant.corps.storage_bytes / 1024 ** 3)));
+
+    // §49.4 : le disque annonce son redémarrage AVANT qu'on agisse.
+    assert.match(await page.innerText('dialog.modale[open]'), /exige un redémarrage/);
+
+    await page.fill('#quota-storage', String(Math.round(cible / 1024 ** 3)));
+    await page.click('dialog.modale[open] [data-engage="quotas"]');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 15000 });
+
+    // Effet BACKEND (§29.3 : on lit pour constater, jamais pour agir).
+    const apres = await pile.lireSparkd('/v1/sparks/boutique');
+    assert.equal(apres.corps.storage_bytes, cible);
+    // Et le Spark existe TOUJOURS : c'est tout l'intérêt du geste.
+    assert.equal(apres.corps.name, 'boutique');
+
+    // On remet la pile dans l'état du seed.
+    await page.focus('[data-ouvre="quotas"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #quota-storage', { timeout: 10000 });
+    await page.fill('#quota-storage',
+                    String(Math.round(avant.corps.storage_bytes / 1024 ** 3)));
+    await page.click('dialog.modale[open] [data-engage="quotas"]');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 15000 });
+    const rendu = await pile.lireSparkd('/v1/sparks/boutique');
+    assert.equal(rendu.corps.storage_bytes, avant.corps.storage_bytes);
+  });
+});
+
+test('un quota REFUSÉ reste dans la modale, sans effacer la saisie', async () => {
+  await parcours('quotas-refus', async () => {
+    // §6.27 : une modale qui se refermerait sur un refus ferait perdre le
+    // travail ET cacherait la raison.
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-ressources', { timeout: 10000 });
+    await page.click('[data-ouvre="quotas"]');
+    await page.waitForSelector('dialog.modale[open] #quota-memory', { timeout: 10000 });
+
+    await page.fill('#quota-memory', '900000');
+    await page.click('dialog.modale[open] [data-engage="quotas"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 15000 });
+
+    const refus = await page.textContent('dialog.modale[open] .refus');
+    assert.match(refus, /Capacité insuffisante/);
+    assert.match(refus, /mémoire|memory/, 'la ressource manquante est NOMMÉE');
+    // La saisie survit (§25.2) : on corrige, on ne recommence pas.
+    assert.equal(await page.inputValue('#quota-memory'), '900000');
+
+    // Rien n'a bougé côté Forge : un refus ne laisse aucune trace.
+    const { corps } = await pile.lireSparkd('/v1/sparks/crm-production');
+    assert.notEqual(corps.memory_reservation_bytes, 900000 * 1024 ** 3);
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 10000 });
+  });
+});
+
 // --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
 
 test('un geste sensible envoie une alerte hors bande, un geste ordinaire non', async () => {
