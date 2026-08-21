@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import {
   renderSparkDetail, renderCommands, renderDetailNotFound, renderProtection,
   renderAuteur, renderAmorcage, AMORCAGE_VIDE, COMMANDES,
+  renderQuotas, QUOTAS_VIDE,
 } from './spark-detail.js';
 
 const GIO = 1024 ** 3;
@@ -667,4 +668,72 @@ test('aucun AUTRE geste ne demande la frappe du nom', () => {
                                  { confirming: geste });
     assert.ok(!/data-frappe/.test(rendu), geste);
   }
+});
+
+
+/* --- SPK-57 · modifier les quotas (docs/DAT.md §49) ---------------------- */
+
+const SPARK_LIBRE = {
+  name: 'crm-production', state: 'running', cpu_mode: 'shared',
+  cpu_reservation: 0.5, memory_reservation_bytes: 2 * 1024 ** 3,
+  storage_bytes: 10 * 1024 ** 3, network_burst_bps: 100_000_000,
+  ipv4_address: '10.77.0.10', image: 'images:debian/13', protected: false,
+};
+
+test('la section Ressources porte SA commande, comme le §6.27 le veut', () => {
+  const html = renderSparkDetail({ status: 'ready', spark: SPARK_LIBRE });
+  assert.match(html, /data-ouvre="quotas"/);
+  // Elle vit DANS la section Ressources, pas ailleurs : une commande de section
+  // a pour sujet cette section, et rien d'autre.
+  const section = html.slice(html.indexOf('titre-ressources'));
+  assert.ok(section.indexOf('data-ouvre="quotas"') < section.indexOf('titre-acces')
+            || !section.includes('titre-acces'));
+});
+
+test('un Spark PROTÉGÉ garde la commande, désactivée, avec sa raison', () => {
+  // §9.9 : l'action existe et est indisponible dans un état connu. La faire
+  // disparaître ferait croire que le produit ne sait pas redimensionner.
+  const html = renderSparkDetail({
+    status: 'ready', spark: { ...SPARK_LIBRE, protected: true } });
+  assert.match(html, /data-ouvre="quotas"[^>]*disabled/);
+  assert.match(html, /levez la protection/);
+});
+
+test('la modale a pour SUJET la section, et un seul point d’engagement', () => {
+  const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
+  assert.match(html, /<dialog class="modale" id="quotas"/);
+  assert.match(html, /modale__titre[^>]*>Ressources</);
+  assert.match(html, /data-engage="quotas"/);
+  assert.equal((html.match(/bouton--primaire/g) || []).length, 1);
+});
+
+test('le DISQUE annonce son redémarrage AVANT d’agir', () => {
+  // §49.4 : un geste qui redémarre une cellule sans l'avoir annoncé coupe un
+  // service en production. Tant que la prise à chaud n'est pas MESURÉE sur une
+  // Forge réelle, on promet moins que ce qu'on fait — l'inverse coupe un
+  // service.
+  const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
+  const disque = html.slice(html.indexOf('quota-storage'));
+  assert.match(disque.slice(0, 400), /exige un redémarrage/);
+});
+
+test('la modale DIT que ce qu’on retire doit être libre', () => {
+  // §49.3 : « ce que vous voulez retirer est utilisé » n'est pas « il n'y a pas
+  // la place ». L'écran prépare l'exploitant au refus qu'il peut recevoir.
+  const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
+  assert.match(html, /sous ce que la cellule emploie/);
+  assert.match(html, /sous ce qu’il contient/);
+});
+
+test('un refus du serveur s’affiche DANS la modale', () => {
+  // §6.27 : une modale qui se refermerait sur un refus ferait perdre la saisie
+  // et cacherait la raison.
+  const html = renderQuotas(SPARK_LIBRE, {
+    ...QUOTAS_VIDE, open: true, refusal: 'Capacité insuffisante — memory.' });
+  assert.match(html, /class="refus" role="alert"/);
+  assert.match(html, /Capacité insuffisante/);
+});
+
+test('fermée, la modale ne rend RIEN', () => {
+  assert.equal(renderQuotas(SPARK_LIBRE, QUOTAS_VIDE), '');
 });

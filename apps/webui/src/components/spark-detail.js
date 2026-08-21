@@ -270,7 +270,7 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE) {
               '<strong>exige un redémarrage</strong>', 'en Gio')}
       ${champ('network', 'Plafond réseau', v.network_mbps, '', 'en Mbit/s')}
       <p class="note">Ce que vous retirez doit être libre : réduire la mémoire
-      sous ce que la cellule emploie, ou le disque sous ce qu'il contient, sera
+      sous ce que la cellule emploie, ou le disque sous ce qu’il contient, sera
       refusé. <a href="#/manuel/M8">Manuel M8 — Exploiter au quotidien</a></p>`,
   });
 }
