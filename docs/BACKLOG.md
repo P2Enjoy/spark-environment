@@ -1899,12 +1899,19 @@ corrigée.**
   **46 parcours E2E** dont un neuf. Captures `83-` et `84-` observées, plus
   `docs/manuel/images/m8-sshd-muet.png`. Manuel M8 mis à jour.
 
-- **Reste à livrer, et c'est le seul écart** : la vérification que la connexion
-  atteint **réellement** un Spark. Elle exige une Forge réelle avec Incus et un
-  `sshd` installé, que l'image de base n'embarque pas (§37.2) — SPK-54 est
-  précisément l'unité qui installera ce `sshd`. Le dépannage n'a jamais non plus
-  été exécuté contre un vrai `incus exec` : le doublon du §37.4.2 bis remplace la
-  commande. Même limite qu'au §39.7, et elle vaut pour les deux chemins.
+**VERIFIE sur la Forge de validation le 2026-08-21**, sur instruction explicite
+du responsable. La connexion atteint REELLEMENT un Spark, et par les DEUX chemins
+du §37.2 :
+
+- **le rebond `incus exec`** : `incus exec helo -- /bin/bash -c "hostname; id"`
+  rend `helo`, `root`, et `Debian GNU/Linux 13` — l'OS du SPARK, pas l'Ubuntu de
+  la Forge. On est bien dans la cellule ;
+- **le rebond SSH** : `ssh -J <forge> root@10.77.0.17` aboutit, avec la cle du
+  responsable deja posee dans le Spark **par le registre** — l'amorcage rend
+  « cles -> present | conformes au registre ».
+
+Le `sshd` que l'image de base n'embarque pas est bien installe et actif : c'est
+SPK-54 qui l'a pose, et le relevé d'amorcage le confirme sur la vraie cellule.
 
 ### [~] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 
@@ -2011,12 +2018,17 @@ et les volumes.**
   `docs/manuel/images/m8-docker-conteneur.png` produite depuis la pile réelle.
   Manuel M8 complété.
 
-- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. l'épreuve sur une **pile Compose réelle** : le doublon du §37.4.2 bis
-     remplace la commande, donc le découpage et l'écran sont éprouvés, mais aucun
-     vrai `docker ps`, `docker inspect` ni `docker logs` n'a encore été lu à
-     travers un tunnel. Même limite qu'au §39.7, et elle tombera avec l'amorçage
-     d'un Spark sur la Forge réelle (SPK-54).
+**EPROUVE sur une pile Compose REELLE le 2026-08-21**, par le chemin exact du
+produit — `ssh -J <forge> root@<ip-du-Spark>` — et non par un doublon :
+
+| Commande | Ce qu'elle a rendu |
+|---|---|
+| `docker ps` | `helo-web-1 \| nginx:alpine \| Up 20 minutes` |
+| `docker inspect` | `/helo-web-1 running nginx:alpine` |
+| `docker logs --tail 2` | deux vraies lignes de nginx, horodatees |
+
+Le doublon du §37.4.2 bis ne remplace donc plus la commande : elle a ete lue a
+travers le tunnel, sur une cellule qui fait tourner une pile.
 
 ### [~] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
 
@@ -2104,10 +2116,16 @@ d'audit).
   plus `docs/manuel/images/m8-terminal-conteneur.png`, toutes produites par le
   vrai parcours. Manuel M8 complété d'un chapitre *Entrer dans un conteneur*.
 
-- **Reste à livrer, et c'est pourquoi l'unité n'est pas `[x]`** :
-  1. l'épreuve sur une **pile Compose réelle** : aucun vrai `docker stop` ni
-     `docker exec` n'a traversé un tunnel, le doublon remplaçant la commande.
-     Même limite qu'au §39.7 et qu'à SPK-44, et elle tombera avec SPK-54.
+**EPROUVE sur une pile Compose REELLE le 2026-08-21**, par le chemin exact du
+produit :
+
+- **le sondage du shell**, avec la commande EXACTE du §37.4.7 —
+  `docker exec helo-web-1 sh -c "command -v bash || command -v sh"` — rend
+  `/bin/sh`. C'est le cas « pas de bash, mais un sh » que l'ecran doit savoir
+  distinguer, et il est venu d'un vrai conteneur ;
+- **un geste sur conteneur** : `docker restart helo-web-1` aboutit, et
+  l'inspection RELUE derriere rend `running`. Le geste choisi est REVERSIBLE —
+  un `stop` aurait laisse la pile du locataire a l'arret (§29.2).
 
 ### [x] SPK-47 · Le DNS entre dans le produit : zones lues, enregistrement d'ingress posé
 
