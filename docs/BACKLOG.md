@@ -3940,6 +3940,66 @@ un geste de la console, pas une procédure parallèle.
   retour arrière est joué ; tests d'hôte et de composant, parcours E2E, captures,
   journal d'administration et manuel M2/M4/M8 mis à jour.
 
+### [ ] SPK-70 · Terminal interactif fiable et sessions visibles
+
+**Besoin exprimé le 2026-08-21.** Le terminal intégré affiche actuellement les
+séquences de contrôle ANSI telles quelles — par exemple `\x1b[1;34m`,
+`\x1b[m` ou `\x1b[6n` — au lieu d'interpréter les couleurs, les effacements,
+les déplacements du curseur et les demandes de position. Une console qui rend
+ces octets littéralement devient illisible et ne peut pas servir d'outil
+d'exploitation.
+
+Le même écran n'offre aujourd'hui qu'un champ texte séparé pour saisir les
+octets. Ce détour casse les usages attendus d'un terminal — curseur, sélection,
+copier-coller, touches de contrôle et raccourcis — et n'a pas lieu d'être. La
+frappe doit se faire directement dans la grille du terminal, comme dans un vrai
+terminal local. Il manque aussi une vue des sessions encore ouvertes : l'opérateur
+doit retrouver toutes les sessions vivantes — terminal d'un Spark, terminal d'un
+conteneur et dépannage — sans devoir deviner quel onglet les porte.
+
+- Dépend de : SPK-43 pour le transport et le cycle de vie des terminaux, SPK-45
+  pour le terminal d'un conteneur. Étend leur contrat sans changer le transport
+  SSH existant.
+- **Émulateur de terminal complet** : remplacer l'affichage texte et son champ de
+  saisie séparé par un composant éprouvé, compatible xterm/ECMA-48 (par exemple
+  `xterm.js`), et ne pas tenter de réimplémenter ce protocole dans l'application.
+  Il interprète notamment SGR (couleurs et attributs), retour chariot,
+  effacement, positionnement du curseur et réponse à `DSR 6` (`CSI 6 n`). Le
+  clavier, les touches de contrôle et de fonction, le collage, la sélection et
+  la copie se font dans la grille ; les octets reçus sont envoyés sans les
+  transformer au transport existant. La taille de la grille envoyée au
+  pseudo-terminal et celle rendue à l'écran restent cohérentes ; aucun `stty
+  rows … cols …` injecté par la console ne doit devenir du texte parasite. Le
+  repli lecteur d'écran garde une restitution lisible et sûre, sans exposer les
+  séquences brutes.
+- **Confidentialité et audit** : la frappe directe ne devient pas un historique.
+  SPK-43 continue d'interdire de retenir les frappes ou la sortie — jamais de
+  clé privée, jeton, mot de passe ou valeur d'environnement en clair. Le journal
+  d'audit durable trace uniquement l'ouverture et la fermeture de la session,
+  avec son acteur, sa cible, son chemin et sa durée.
+- **Registre de sessions** : un panneau à gauche, visible depuis la console,
+  liste toutes les sessions ouvertes de l'utilisateur sur toutes les Forges :
+  type (Spark, conteneur ou dépannage), Forge, Spark, conteneur éventuel, chemin
+  réel, heure d'ouverture, dernière activité et état. Une ligne sélectionne la
+  session correspondante ; une fermeture explicite demande confirmation et tue
+  le processus distant. Le registre se met à jour à l'ouverture, l'inactivité,
+  la fermeture distante, le changement d'onglet et la déconnexion de la Forge ;
+  il ne ressuscite jamais une session terminée. En vue étroite, il devient un
+  tiroir accessible plutôt qu'un panneau qui masque le terminal.
+- Ce que l'unité ne fait pas : elle ne fournit pas un shell libre sur une Forge,
+  ne conserve pas un historique de commandes et ne transforme pas le journal
+  d'audit en enregistreur de frappes.
+- DoD : un parcours E2E exécute `ls --color=always` et montre les couleurs sans
+  aucune séquence `ESC[` visible ; un second prouve que les requêtes de position
+  du terminal reçoivent une réponse et que le curseur reste cohérent après un
+  redimensionnement ; un parcours saisit directement dans la grille, utilise une
+  touche de contrôle et colle une commande, puis constate les mêmes octets dans
+  le Spark ; un test prouve que le journal d'audit ne contient ni frappe ni
+  sortie ; un parcours ouvre un terminal de Spark et un de conteneur, les voit
+  tous deux dans le panneau, ferme l'un depuis ce panneau et constate que seul
+  son processus distant meurt ; fermeture distante, inactivité et déconnexion
+  retirent chacune la ligne ; captures desktop/mobile et manuel M8 mis à jour.
+
 ---
 
 ## Réservé, non planifié
