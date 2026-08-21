@@ -1270,7 +1270,7 @@ la même chose sur la même condition :
 
 | Aide | Employée par | Sur une instance absente |
 |---|---|---|
-| `_get` | `resources`, `storage_pool_resources`, `server_info`, `instances`, `snapshots`, `instance_state`, et la lecture de `set_publication_devices` et `update_root_size` | `IncusError` |
+| `_get` | `resources`, `storage_pool_resources`, `server_info`, `instances`, `snapshots`, `instance_state`, et la lecture de `set_publication_devices` et `update_root_size` | `IncusError` — sauf `snapshots`, voir §12.1.2 |
 | `_request` | `create_instance`, `set_instance_state`, `delete_instance`, `update_instance_config`, `exec_command`, `exec_capture`, les trois gestes d'instantané | `InstanceAbsente` |
 | `_raw_push` | `push_file` | `IncusError` |
 
@@ -1301,7 +1301,25 @@ Deux bornes, qui empêchent la règle de devenir un mensonge :
   quand il n'y a pas de Spark : c'est une réponse, pas une absence ;
 - un **code de sortie non nul** d'`exec_capture` reste une réponse, jamais une
   panne (§42.5). Le contrat porte sur la joignabilité de l'instance, pas sur le
-  résultat de ce qu'on y exécute.
+  résultat de ce qu'on y exécute ;
+- **la liste des instantanés ne peut PAS rapporter une absence**, et c'est une
+  limite d'Incus, pas du produit. MESURÉ sur la Forge de validation le
+  2026-08-21, contre un vrai Incus :
+
+  ```
+  GET  /1.0/instances/<inconnue>          -> 404
+  GET  /1.0/instances/<inconnue>/state    -> 404
+  POST /1.0/instances/<inconnue>/exec     -> 404
+  POST /1.0/instances/<inconnue>/files    -> 404
+  GET  /1.0/instances/<inconnue>/snapshots -> 200, metadata: []
+  ```
+
+  Tout rend 404 sauf ce point-là, qui rend la MÊME chose que pour une instance
+  vivante sans instantané. Aucun appelant ne peut donc conclure de cette liste
+  qu'une cellule existe ou non : il doit le demander à un point qui sait
+  répondre. Le doublon reproduit cet angle mort au lieu de le corriger — lever
+  là où Incus répond rendrait vertes des preuves fondées sur une distinction que
+  la production ne sait pas faire.
 
 #### 12.1.3 Ce que le doublon doit, et ce qu'il admet ne pas savoir
 
@@ -1316,10 +1334,13 @@ Ce que le doublon **doit**, en revanche, et qui n'était écrit nulle part :
    preuves vertes pour du code faux — mesuré : `set_instance_state` rendait
    `IncusError` là où le vrai rend `InstanceAbsente`, la route du cycle de vie
    attrapait donc l'une en preuve et laissait fuir l'autre en production ;
-2. **ne pas répondre à la place d'Incus quand Incus ne répondrait pas.** Mesuré :
-   `snapshots()` sur une instance absente rendait `[]`. Le doublon affirmait
-   « cette instance n'a pas d'instantané » là où le vrai dit « je ne la trouve
-   pas ». C'est le pire écart des deux, parce qu'il est **silencieux** ;
+2. **ne pas en savoir PLUS que le vrai pilote.** La tentation est forte : un
+   doublon voit tout son état, il peut donc toujours répondre mieux qu'Incus. Il
+   ne doit pas. La liste des instantanés d'une instance absente en est le cas
+   mesuré — Incus rend `[]`, donc le doublon rend `[]`, si inconfortable que ce
+   soit. Un doublon plus informatif que le vrai fabrique des preuves vertes
+   reposant sur une distinction que la production ne sait pas faire, ce qui est
+   le défaut de cette unité pris à l'envers ;
 3. **savoir représenter les DEUX formes d'échec sur chaque méthode.** Le
    doublon ne pouvait injecter une panne de pilote que sur quatre méthodes :
    sur les treize autres, la borne du §33.3 — « ne pas pouvoir demander n'est

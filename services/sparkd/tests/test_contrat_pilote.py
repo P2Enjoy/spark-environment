@@ -20,13 +20,15 @@ from sparkd.incus import FakeIncus, IncusClient, IncusError, InstanceAbsente
 
 GIO = 1024**3
 
-#: Les méthodes du contrat qui DÉSIGNENT une instance par son nom. Les autres
-#: interrogent le serveur ou une collection : le §12.1.2 dit qu'une collection
-#: n'est pas une instance, et un 404 y voudrait dire autre chose.
+#: Les méthodes du contrat qui DÉSIGNENT une instance par son nom ET dont Incus
+#: sait rapporter l'absence. Les autres interrogent le serveur ou une collection.
+#:
+#: `snapshots` en est ABSENTE, et c'est mesuré, pas supposé : Incus rend 200 et
+#: une liste vide pour une instance inconnue (§12.1.2). L'y inclure exigerait du
+#: doublon une distinction que la production ne sait pas faire.
 def _appels(pilote):
     return {
         "instance_state":          lambda: pilote.instance_state("absente"),
-        "snapshots":               lambda: pilote.snapshots("absente"),
         "set_instance_state":      lambda: pilote.set_instance_state("absente", "start"),
         "delete_instance":         lambda: pilote.delete_instance("absente"),
         "update_instance_config":  lambda: pilote.update_instance_config("absente", {"a": "b"}),
@@ -104,15 +106,24 @@ def test_le_DOUBLON_rend_la_meme_exception_que_le_vrai(methode, monkeypatch):
         _appels(FakeIncus())[methode]()
 
 
-def test_le_DOUBLON_ne_repond_PAS_a_la_place_d_incus(tmp_path):
-    """§12.1.3, point 2, et c'est l'écart le plus SILENCIEUX des trois.
+def test_le_DOUBLON_n_en_sait_pas_PLUS_que_le_vrai(tmp_path):
+    """§12.1.3, point 2 — et cette preuve est née d'une erreur de ma part.
 
-    Mesuré : `snapshots()` sur une instance absente rendait `[]`. Le doublon
-    affirmait « cette instance n'a pas d'instantané » là où le vrai dit « je ne
-    la trouve pas ». Un appelant rendait donc une liste vide au lieu d'un refus.
+    J'avais d'abord fait LEVER le doublon ici, en écrivant que rendre `[]` sur
+    une instance absente était son écart le plus silencieux. La mesure sur la
+    Forge de validation, le 2026-08-21, contre un vrai Incus, dit l'inverse :
+
+        GET /1.0/instances/<inconnue>/snapshots -> 200, metadata: []
+
+    Tous les autres points du contrat rendent 404 ; celui-là non. Le doublon
+    était donc FIDÈLE, et mon correctif l'avait fait diverger.
+
+    Un doublon voit tout son état : il peut toujours répondre mieux qu'Incus.
+    Il ne doit pas. En savoir plus que le vrai rend vertes des preuves fondées
+    sur une distinction que la production ne sait pas faire — le défaut de cette
+    unité, pris à l'envers.
     """
-    with pytest.raises(InstanceAbsente):
-        FakeIncus().snapshots("jamais-creee")
+    assert FakeIncus().snapshots("jamais-creee") == []
 
 
 def test_une_COLLECTION_n_est_pas_une_instance(tmp_path):
@@ -173,18 +184,35 @@ def test_sans_chemin_d_etat_le_DOUBLON_reste_en_memoire(tmp_path):
 # --- l'énumération elle-même est gardée --------------------------------------
 
 
+#: Ce qui est HORS de la comparaison, et POURQUOI. Chaque exclusion porte son
+#: motif : une exclusion sans motif est une méthode oubliée qui se déguise.
+_HORS_COMPARAISON = {
+    "resources":              "interroge le SERVEUR, pas une instance",
+    "storage_pool_resources": "interroge un POOL, pas une instance",
+    "server_info":            "interroge le SERVEUR",
+    "instances":              "COLLECTION : vide est une réponse (§12.1.2)",
+    "create_instance":        "crée : il n'y a rien dont l'absence serait anormale",
+    "snapshots":              "MESURÉ : Incus rend 200 et une liste vide pour une "
+                              "instance inconnue — il ne SAIT PAS rapporter "
+                              "l'absence ici (§12.1.2)",
+}
+
+
 def test_le_CONTRAT_ne_gagne_pas_de_methode_en_silence():
-    """Cette preuve garde les autres.
+    """Cette preuve garde toutes les autres.
 
     Une méthode ajoutée au protocole sans entrer dans la comparaison
     échapperait à tout ce fichier — et c'est exactement ainsi que
     `set_instance_state` a divergé pendant que `delete_instance` était corrigée.
+
+    Elle force donc un CLASSEMENT, pas un simple passage : toute méthode est
+    soit comparée, soit exclue avec son motif écrit. Une exclusion muette serait
+    le même oubli sous un autre nom.
     """
-    nommees = set(_appels(None))
     du_contrat = {n for n in dir(IncusClient) if not n.startswith("_")}
-    # Les méthodes SANS nom d'instance sont hors comparaison, par le §12.1.2.
-    sans_instance = {"resources", "storage_pool_resources", "server_info",
-                     "instances", "create_instance"}
-    assert du_contrat - sans_instance == nommees, (
-        "le protocole a changé : toute méthode qui DÉSIGNE une instance doit "
-        "entrer dans la comparaison des deux pilotes (§12.1.3)")
+    classees = set(_appels(None)) | set(_HORS_COMPARAISON)
+    assert du_contrat == classees, (
+        "le protocole a changé : toute méthode doit être soit comparée entre "
+        "les deux pilotes, soit exclue AVEC son motif dans _HORS_COMPARAISON "
+        "(docs/DAT.md §12.1.3)")
+    assert all(_HORS_COMPARAISON.values()), "une exclusion sans motif n'en est pas une"

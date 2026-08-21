@@ -7262,14 +7262,26 @@ contrat est uniforme. Les trois transports mappent le 404 vers
 uniformiser **crée** l'absence là où les appelants n'en voyaient pas, donc le
 contrat n'est pas tenu tant que chacun ne la nomme pas. Neuf routes ont suivi.
 
-**Ce que l'unité a appris sur les doublons.** Trois écarts, et le pire n'est pas
-celui qu'on croit. Rendre la mauvaise exception se voit dès qu'on regarde.
-`snapshots()` rendant `[]` sur une instance absente ne se voit **jamais** : le
-doublon affirmait « pas d'instantané » là où le vrai dit « je ne la trouve pas ».
-Une erreur bruyante coûte une minute ; une affirmation fausse coûte une décision.
-Et douze méthodes ne savaient pas simuler un pilote injoignable — la borne du
-§33.3 y était donc inéprouvable, ce qui s'est découvert en essayant de l'éprouver.
-**Une borne qu'on ne peut pas éprouver n'est pas une borne, c'est une intention.**
+**Ce que l'unité a appris sur les doublons.** Rendre la mauvaise exception se
+voit dès qu'on regarde. Ce qui ne se voit pas, c'est qu'une borne peut être
+inéprouvable : douze méthodes du doublon ne savaient pas simuler un pilote
+injoignable, donc la borne du §33.3 n'y était pas vérifiable — découvert en
+essayant de la vérifier. **Une borne qu'on ne peut pas éprouver n'est pas une
+borne, c'est une intention.**
+
+**Et une erreur de ma part, corrigée avant de clore, qui est la leçon la plus
+utile de la session.** J'avais écrit que `snapshots()` rendant `[]` sur une
+instance absente était le pire écart du doublon — une affirmation là où le vrai
+avouerait. Mesuré ensuite sur la Forge, contre un vrai Incus : `GET
+.../snapshots` rend **200 et une liste vide** pour une instance inconnue, seul
+point du contrat à ne pas rendre 404. Le doublon était FIDÈLE ; mon correctif
+l'avait fait diverger, et ma spécification affirmait le contraire de la réalité.
+
+Ce qui m'a trompé mérite d'être nommé : ma première « mesure » était une lecture
+de code, plus un 404 **simulé** par un transport de test. Elle prouvait mon
+mapping, pas ce qu'Incus répond. **Simuler la condition qu'on veut mesurer n'est
+pas une mesure.** La règle du §12.1.3 s'énonce donc dans l'autre sens : un
+doublon ne doit pas en savoir PLUS que le vrai, si inconfortable que ce soit.
 
 **Le geste qui ferme la classe plutôt que trois cas.** La preuve compare les deux
 pilotes **par énumération du protocole**, et une preuve garde l'énumération

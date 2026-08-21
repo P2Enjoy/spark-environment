@@ -1220,13 +1220,21 @@ Ce que l'unité doit trancher, pas seulement corriger :
 - **Le contrat est uniforme** : les trois transports mappent le 404 vers
   `InstanceAbsente`, et rien d'autre ne le fait. Deux bornes le tiennent : une
   collection n'est pas une instance, un code de sortie non nul reste une réponse.
-- **Le doublon est aligné** sur quatre points, chacun tiré d'un écart mesuré :
-  la même exception que le vrai ; ne plus répondre à la place d'Incus —
-  `snapshots()` rendait `[]` sur une instance absente, l'écart le plus
-  **silencieux** ; savoir simuler un pilote injoignable sur **chaque** méthode,
-  contre quatre auparavant, faute de quoi la borne du §33.3 y était
-  inéprouvable ; et relire son état à chaque opération, le vrai n'ayant aucun
-  cache.
+- **Le doublon est aligné** sur trois points, chacun tiré d'un écart mesuré :
+  la même exception que le vrai pour la même condition ; savoir simuler un
+  pilote injoignable sur **chaque** méthode, contre quatre auparavant, faute de
+  quoi la borne du §33.3 y était inéprouvable ; et relire son état à chaque
+  opération, le vrai n'ayant aucun cache.
+- **Une erreur de la session, corrigée avant clôture, et elle vaut d'être
+  retenue.** Le relevé d'ouverture accusait `snapshots()` de rendre `[]` sur une
+  instance absente là où le vrai « dirait » ne pas la trouver. La mesure sur la
+  Forge, contre un vrai Incus, dit l'inverse : `GET .../snapshots` rend **200 et
+  une liste vide** pour une instance inconnue, seul point du contrat à ne pas
+  rendre 404. Le doublon était fidèle, et mon correctif l'avait fait diverger.
+  La règle du §12.1.3 s'énonce donc dans l'autre sens : un doublon ne doit pas
+  **en savoir plus** que le vrai, si inconfortable que ce soit. La première
+  « mesure » était une lecture de code plus un 404 simulé — c'est-à-dire une
+  supposition déguisée en mesure.
 - **Neuf routes nomment désormais l'absence** — usage, instantanés, amorçage,
   clés — avec la même réponse que le cycle de vie : `409`, `cellule_absente`. La
   borne qui les en distingue est éprouvée : elles n'ayant posé aucun état

@@ -68,8 +68,8 @@
   Neuf écrans supplémentaires — usage, instantanés, amorçage, clés — nomment
   désormais la perte avec la même phrase et les mêmes issues, au lieu de rendre
   une erreur interne. Le pilote factice du développement rend enfin les mêmes
-  réponses que le vrai, ce qui empêche une preuve d'être verte sur une forme qui
-  ne tourne jamais en production.
+  réponses que le vrai — ni moins, ni plus —, ce qui empêche une preuve d'être
+  verte sur une forme qui ne tourne jamais en production.
 - **Un Spark dont la cellule a disparu reste manœuvrable** (SPK-36). Demander son
   démarrage rendait une erreur interne et le laissait **stablement** en cours de
   démarrage, sans aucune commande offerte et sans dire pourquoi : depuis la

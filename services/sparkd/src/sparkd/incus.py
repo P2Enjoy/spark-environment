@@ -672,12 +672,22 @@ class FakeIncus:
         self._persist()
 
     def snapshots(self, name: str) -> list[dict[str, Any]]:
+        """Rend `[]` sur une instance absente, et c'est FIDÈLE.
+
+        MESURÉ sur la Forge de validation le 2026-08-21, contre un vrai Incus :
+        `GET /1.0/instances/<inconnue>/snapshots` rend **200** et `metadata: []`
+        — exactement ce qu'il rend pour une instance qui existe et n'a aucun
+        instantané. Tous les autres points du contrat rendent 404 ; celui-ci est
+        un angle mort de l'API d'Incus.
+
+        Le doublon le REPRODUIT au lieu de le corriger. Lever ici rendrait vertes
+        des preuves reposant sur une distinction que le produit ne peut pas faire
+        en production — c'est-à-dire le défaut même que cette unité traite, à
+        l'envers (§12.1.2).
+        """
         self._maybe_fail("snapshots")
-        # §12.1.3, point 2 : rendait `[]` sur une instance absente. Le doublon
-        # affirmait « pas d'instantané » là où le vrai dit « je ne la trouve
-        # pas » — l'écart le plus SILENCIEUX des trois, car aucun appelant ne
-        # pouvait s'en apercevoir.
-        return list(self._vivante(name).get("snapshots", []))
+        self._recharger()
+        return list(self.created.get(name, {}).get("snapshots", []))
 
     def instance_state(self, name: str) -> dict[str, Any]:
         self._maybe_fail("instance_state")
