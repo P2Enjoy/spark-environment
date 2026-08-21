@@ -1928,6 +1928,54 @@ test('la recette du relais RÉCLAME sa clé et se dit incomplète sans elle', as
   });
 });
 
+// --- SPK-67 · LE CONTRAT D'ÉCHEC DU PILOTE (docs/DAT.md §12.1.4) -----------
+
+test('un geste ORDINAIRE sur une cellule disparue est refusé DANS la modale', async () => {
+  await parcours('cellule-absente-instantane', async () => {
+    // Ce parcours passe AVANT celui de SPK-36 : « orphelin » y est encore
+    // « arrêté », et c'est l'état qui décide. L'écran n'offre alors que
+    // « Démarrer » et « Supprimer » — pas « Reprendre », qui n'apparaît qu'en
+    // panne. Un refus qui nommerait « Reprendre » enverrait donc chercher un
+    // bouton absent (DESIGN_SYSTEM.md §1.5 bis).
+    await ouvrir('orphelin', 'instantanes');
+    await page.click('button:has-text("Prendre un instantané")');
+    await page.waitForSelector('dialog[open] input', { timeout: 10000 });
+    await page.keyboard.type('avant-mise-a-jour');
+    await page.click('button:has-text("Prendre l\u2019instantané")');
+
+    // §6.27 : le refus s'affiche DANS la modale, près du bouton d'engagement.
+    // Une modale qui se refermerait ferait perdre la saisie ET cacherait la
+    // raison — les deux à la fois.
+    await page.waitForFunction(
+      () => /a disparu/.test(document.querySelector('dialog[open]')?.innerText ?? ''),
+      null, { timeout: 15000 });
+
+    const modale = await page.textContent('dialog[open]');
+    assert.match(modale, /orphelin/, 'le refus NOMME le Spark');
+    assert.match(modale, /reconstruite/, 'et dit ce qu\'on peut faire');
+    assert.doesNotMatch(modale, /« Reprendre »/,
+      'il ne nomme pas un bouton que cet écran n\'offre pas');
+
+    const saisie = await page.inputValue('dialog[open] input');
+    assert.equal(saisie, 'avant-mise-a-jour', '§6.27 : la saisie SURVIT au refus');
+
+    // §1.3 : aucun succès simulé. L'instantané n'existe ni à l'écran ni côté
+    // sparkd — et c'est le second qui fait foi.
+    await page.click('button:has-text("Annuler")');
+    const { corps } = await pile.lireSparkd('/v1/sparks/orphelin/snapshots');
+    assert.deepEqual(corps.snapshots ?? [], [],
+      'un geste refusé ne laisse RIEN derrière lui');
+
+    // La borne du §12.1.4 : cette route n'a posé aucun état transitoire, donc
+    // elle refuse sans rien écrire. Lire ou tenter un geste ordinaire ne met
+    // pas le Spark en panne — seul le cycle de vie le fait, et le parcours
+    // suivant le montre.
+    const { corps: fiche } = await pile.lireSparkd('/v1/sparks/orphelin');
+    assert.equal(fiche.state, 'stopped', 'l\'état n\'a pas bougé');
+    assert.equal(fiche.last_error, null, 'et rien n\'est écrit sur sa fiche');
+  });
+});
+
 // --- SPK-36 · PERTE DE LA CELLULE (docs/DAT.md §14.6, CONTINGENCE §4.5) ---
 
 test('démarrer un Spark dont la cellule a disparu le laisse MANŒUVRABLE', async () => {
