@@ -412,3 +412,38 @@ d'ordre, et l'hypothèse reste à éprouver.
 **Ce qu'il faudrait.** Faire porter l'URL au message collecté, ce qui suffirait à
 nommer la requête fautive. C'est une modification du harnais, étrangère à
 l'unité en cours (CloudWorker §3.1).
+
+### INC-14 · Un sondage raté laisse un diagnostic sur un tunnel qui va bien
+
+**Constaté le** 2026-08-21, en éprouvant la chaîne de SPK-37 contre la Forge de
+validation.
+
+**Mesure.** Un tunnel ouvert, sain, servant les requêtes, rend malgré tout :
+
+```
+etat             : ready
+empreinte relevee: SHA256:Vf2N7ryPnZPNBN+v…
+lastError        : "fetch failed"
+geste            : 200
+```
+
+`lastError` porte « fetch failed » alors que l'état est `ready` et que le geste
+qui suit aboutit en 200. Le message vient du **sondage** (`probe()`), qui échoue
+une fois avant que `ssh` n'ait fini d'ouvrir le port local, et qui range son
+erreur dans le même champ.
+
+**Pourquoi c'est un défaut.** `describe()` publie `lastError`, et l'écran des
+serveurs l'affiche. Un exploitant lit donc un diagnostic sur un tunnel qui
+fonctionne — exactement ce que le `DESIGN_SYSTEM.md` §14.5 et §14.6 demandent de
+distinguer : « en cours d'établissement » n'est pas « en panne ».
+
+**Ce n'est PAS le défaut voisin que j'ai corrigé.** SPK-37 portait une pollution
+du même champ par le flux d'erreur de `ssh` — celle-là est corrigée et éprouvée.
+Celle-ci vient du chemin du **sondage**, appartient au contrat de santé du tunnel
+(SPK-16, `docs/DAT.md` §22.3) et non à l'acteur du journal. Le comportement est
+laissé inchangé (CloudWorker §3.1).
+
+**Ce qu'il faudrait.** Que `lastError` soit **effacé** quand le tunnel atteint
+`ready`, ou qu'un sondage antérieur à la disponibilité n'y écrive pas. Le choix
+appartient au contrat du §22.3 : un champ « dernière erreur » qui survit à la
+guérison ment dans le sens le plus coûteux — il fait chercher une panne éteinte.
