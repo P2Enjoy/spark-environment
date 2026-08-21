@@ -379,3 +379,36 @@ cours (CloudWorker §3.1).
 employée par les deux constructeurs de message, et le choix de l'unité tranché :
 la même que celle du champ saisi. Les champs machine (`in_use`, `requested`,
 `shortfalls`) restent en octets — ils ne sont pas lus par un humain.
+
+### INC-13 · Le harnais de captures finit sur une console NON VIERGE
+
+**Constaté le** 2026-08-21, en produisant les captures de la facette
+*Environnement* (SPK-58).
+
+**Mesure.** `node e2e/captures.mjs` se termine par :
+
+```
+  CONSOLE NON VIERGE — 1 message(s) de l’application :
+    [error] Failed to load resource: net::ERR_CONNECTION_REFUSED
+```
+
+**Ligne de base établie** (§2.4), et c'est le point : le harnais rend le message
+**à l'identique** sur `cfe5b87`, avant tout changement de cette session. Ce n'est
+donc pas une régression, et la facette neuve n'en est pas la cause.
+
+**Ce que cela coûte.** Le harnais sort en code 0 malgré ce bilan — vérifié —,
+donc la campagne reste verte. Mais la règle du CloudWorker demande une console
+**vierge de toute erreur**, et un message permanent rend cette garde inopérante :
+le jour où un vrai défaut d'application s'y ajoutera, il se lira comme le bruit
+habituel.
+
+**Piste, non vérifiée.** Le message ne porte pas d'URL, donc la requête n'est pas
+identifiée. Le harnais ferme ses piles successives par `ctx.server.close()`
+pendant que la page reste sur l'ancienne adresse ; une requête encore en vol
+tomberait alors sur un port fermé. Déplacer un bloc de captures en fin de fichier
+n'a **pas** fait disparaître le message — donc ce n'est pas un simple effet
+d'ordre, et l'hypothèse reste à éprouver.
+
+**Ce qu'il faudrait.** Faire porter l'URL au message collecté, ce qui suffirait à
+nommer la requête fautive. C'est une modification du harnais, étrangère à
+l'unité en cours (CloudWorker §3.1).
