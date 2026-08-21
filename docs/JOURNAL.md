@@ -5824,3 +5824,75 @@ ligne de base.
 instabilité de harnais rend tous les verdicts suivants douteux. Puis l'arbitrage
 sur le nom de l'objet dans l'alerte, puis SPK-51 ou SPK-55. SPK-53 et SPK-54
 attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · INC-11 non reproduit, puis SPK-55 — durcir la Forge
+
+### INC-11 : deux mesures, aucune reproduction
+
+Le journal précédent le désignait comme premier point à reprendre « si la
+campagne suivante le retrouve ». Elle ne le retrouve pas :
+
+```
+série complète, seed fraîchement appliqué   =>  73 parcours, 0 échec
+série complète REJOUÉE sans reseed          =>  73 parcours, 0 échec
+```
+
+La seconde exécution éprouvait l'hypothèse la plus probable — l'échec était
+apparu à la DEUXIÈME série d'une même session — et l'infirme. Le harnais monte de
+toute façon sa propre pile jetable à chaque série (§29.2).
+
+**Rien n'a été corrigé, et c'est délibéré** : le §18 exige de reproduire avant de
+traiter la cause, et corriger ce qu'on n'observe pas reviendrait à poser une
+temporisation, que le §3.1 interdit. L'entrée du registre porte désormais la
+mesure et ce que la prochaine occurrence devra relever.
+
+### SPK-51 écartée, et pourquoi
+
+Elle exige « deux vérifications préalables, à faire AVANT de coder » : les
+conditions d'usage du relais transactionnel, et l'ouverture du port 25 entrant.
+Ni le compte ni le serveur ne sont atteignables ici, et c'est ce couple qui
+décide entre « émettre par le relais » et « émettre en direct ». Coder l'un ou
+l'autre serait choisir à la place du responsable — **bloquée par une dépendance**.
+
+### SPK-55 : ce qui a été construit
+
+Spécification écrite et committée avant le code — `docs/DAT.md` §48.
+
+Deux contrôles neufs au préflight. `NET-REMONTEE` porte le point de l'audit :
+mesuré sur la Forge réelle, `10.77.0.1:22` **répond** depuis un Spark, alors que
+`9876` et `2019` sont bien injoignables. Le sens du produit est à sens unique —
+aucun de ses chemins ne part d'un Spark vers sa Forge.
+
+**La moitié difficile est le remède, pas le constat.** Une règle qui fermerait
+tout rendrait chaque Spark muet : il perdrait son résolveur, qui écoute sur
+l'adresse du bridge, et sa sortie internet, qui passe par le même NAT. Le remède
+ouvre donc le 53 AVANT de fermer, et une preuve garde cet ordre.
+
+`SSH-X11` a demandé un quatrième état de verdict, `AVERTISSEMENT`, non bloquant :
+un `X11Forwarding` ouvert n'est pas une faille, et un préflight qui échoue pour
+un détail apprend à passer outre ses échecs. Le rendu le compte à part.
+
+Deux décisions écrites plutôt que codées : `sparkd` en `root` est **assumé**
+(§48.2), et `ufw` est **écarté** (§48.3) — deux jeux de règles qui se recouvrent,
+et le jour où l'un bloque ce que l'autre autorise, personne ne sait lequel a
+tranché.
+
+### Vérifications
+
+836 preuves Python (827 + 9), contrat conforme, 814 de console, 8 de gestes,
+7 du manuel, `build`. **73 parcours E2E, deux fois de suite, 0 échec.** Aucune
+capture : cette unité ne touche aucun écran.
+
+**SPK-55 passe à `[~]`**, deux écarts nommés : la règle n'est pas posée par
+l'installation — `install-serveur.sh` n'installe pas le réseau, le bridge naît
+d'OP-02 à la main —, et aucun test ne prouve qu'un Spark garde son DNS et sa
+sortie après durcissement, ce qui exige une Forge réelle avec un Spark en marche.
+OP-11 décrit cette vérification pas à pas, et nomme l'écart le plus dangereux :
+les règles `nft` sont VOLATILES, et le préflight lirait toujours « drop » dans la
+configuration d'Incus après un redémarrage qui les a perdues.
+
+**Où reprendre.** SPK-57 ou SPK-58, premières `[ ]` constructibles. SPK-51 attend
+deux vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur le nom de
+l'objet dans l'alerte hors bande attendent une décision du responsable.

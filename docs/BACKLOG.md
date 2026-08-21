@@ -2696,7 +2696,7 @@ et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
      capable de `docker compose up` : elle exige une Forge réelle avec Incus, et
      c'est la même limite qu'au §39.7.
 
-### [ ] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
+### [~] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
 
 Audit mené sur la Forge réelle pendant la mise en place de `helo`. La posture est
 bonne sur l'essentiel — seuls `22`, `80`, `443` répondent depuis l'extérieur,
@@ -2724,6 +2724,39 @@ correctif de sécurité n'est en attente. Trois points restent.
   autre que ceux dont il a besoin ; la règle est posée par l'installation, pas à
   la main ; un test prouve qu'un Spark garde son DNS et sa sortie internet après
   durcissement — le durcissement ne doit pas casser ce qu'il protège.
+
+**Spécifiée et commencée le 2026-08-21** — `docs/DAT.md` §48, écrit et committé
+avant la première ligne de code.
+
+- **Deux contrôles neufs au préflight** : `NET-REMONTEE` — l'entrée du bridge
+  privé n'accepte pas tout, et le port 22 de la Forge n'est pas atteignable
+  depuis le réseau des Sparks — et `SSH-X11`.
+- **Le remède ouvre le DNS AVANT de fermer le reste**, et une preuve garde cet
+  ordre : inversé, la règle qui tombe en premier ferme tout et chaque Spark
+  devient muet. Le durcissement ne doit pas casser ce qu'il protège.
+- **Un quatrième état de verdict**, `AVERTISSEMENT`, non bloquant. `X11Forwarding`
+  ouvert n'est pas une faille : refuser l'installation d'une Forge pour cela
+  serait disproportionné, et un préflight qui échoue pour un détail apprend à
+  passer outre ses échecs. Le rendu le compte à part — « signalé » n'est ni
+  « bloquant » ni « non mesuré ».
+- **`sparkd` en `root` est ASSUMÉ et écrit** (§48.2), et `ufw` est **écarté**
+  (§48.3) : deux jeux de règles qui se recouvrent, et le jour où l'un bloque ce
+  que l'autre autorise, personne ne sait lequel a tranché.
+- **OP-11 et OP-12** portent la marche à suivre. OP-11 nomme l'écart le plus
+  dangereux : les règles `nft` sont VOLATILES, et le préflight lirait toujours
+  « drop » dans la configuration d'Incus après un redémarrage qui les a perdues.
+- **Preuves** : 9, dont l'ordre du remède et le comptage séparé des
+  avertissements. 836 preuves Python au total.
+
+- **Reste avant `[x]`** :
+  1. **la règle n'est pas posée par l'installation** : `scripts/install-serveur.sh`
+     n'installe pas le réseau — le bridge naît d'OP-02, à la main. Poser la règle
+     là où le bridge naît demande d'abord de décider si l'installation prend le
+     réseau en charge, ce qui déborde cette unité ;
+  2. **aucun test ne prouve qu'un Spark garde son DNS et sa sortie** après
+     durcissement. Cela exige une Forge réelle avec Incus et un Spark en marche :
+     **nécessite une action humaine**. La vérification est écrite pas à pas dans
+     OP-11.
 
 ### [x] SPK-56 · L'écran nomme, le manuel explique — et le manuel devient joignable
 

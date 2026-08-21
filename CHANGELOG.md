@@ -3,6 +3,13 @@
 ## [Non publié]
 
 ### Ajouté
+- **Deux contrôles de durcissement au préflight** (SPK-55, `docs/DAT.md` §48) :
+  `NET-REMONTEE` échoue si un Spark peut atteindre le `sshd` de sa Forge — mesuré
+  ouvert sur la Forge réelle —, et `SSH-X11` signale un `X11Forwarding` inutile.
+  Le remède ouvre le DNS **avant** de fermer le reste : un Spark garde son
+  résolveur et sa sortie internet. Nouvel état de verdict `avertissement`, **non
+  bloquant**, compté à part. Marche à suivre : `docs/PROD_MIGRATIONS.md` OP-11 et
+  OP-12.
 - **Alerte hors bande sur les gestes sensibles** (SPK-62, `docs/DAT.md` §47) :
   neuf actions — suppression d'un Spark, levée de protection, restauration ou
   suppression d'un instantané, don ou retrait d'un accès, retrait d'un port ou
