@@ -3742,7 +3742,7 @@ build déployée au dépôt et nomme les six situations. Elle ne le fait pas pou
   signal à l'écran ; captures observées ; le signal nomme le geste, prouvé sur son
   texte.
 
-### [ ] SPK-66 · `sparkd` s'installe comme un paquet, pas comme une copie du dépôt
+### [~] SPK-66 · `sparkd` s'installe comme un paquet, pas comme une copie du dépôt
 
 Question du responsable, 2026-08-21 : « pourquoi `sparkd` n'est pas simplement une
 dépendance Python qu'on installerait par `pip install git+…` ? Le dépôt est
@@ -3805,6 +3805,16 @@ documents. Rien de tout cela n'y sert.
   un retour à une version antérieure est joué et mesuré ;
   le préflight reste vert ; `PROD_MIGRATIONS.md` OP-04 et le runbook §A.2 réécrits
   dans le même changement.
+
+**Commencé le 2026-08-21, et déjà mesuré sur la Forge existante.** Le wheel porte
+ses migrations, ses deux unités et `sparkd.install`; le premier essai réel a
+trouvé qu'il ne fallait pas résoudre le lien symbolique du Python du venv, sous
+peine d'écrire `/usr/bin/python…` dans `ExecStart` et de perdre le paquet. Le
+correctif a été publié puis installé depuis l'URL Git publique : la Forge sert
+maintenant `c95a7fcea`, les 13 contrôles de préflight et `/readyz` sont verts, et
+les routes d'environnement auparavant en `500` répondent de nouveau. Restent la
+preuve complète sur la Forge neuve, le changement de commit puis son retour
+arrière mesuré, avant de cocher l'unité.
 
 ### [ ] SPK-68 · Assistant complet d'installation distante d'une Forge
 

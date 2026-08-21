@@ -7518,3 +7518,28 @@ Le chargement de la fiche a aussi rendu deux `500` sur `/v1/env` et
 ne le fournit pas. La Forge reste utilisable pour le terminal, mais sa mise à jour
 doit devenir atomique et vérifiable : c'est précisément l'objet de SPK-69, qui
 reste ouvert. Ce défaut ne doit pas être masqué comme une limite de SPK-43.
+
+---
+
+## 2026-08-21 · SPK-66 — le paquet répare la Forge hybride, et le premier essai nomme son piège
+
+Avant toute installation, le registre de `spark-experiment` a été sauvegardé par
+`sparkd.sauvegarde` : `spark-20260821-192126.db`, chaîne d'audit intacte. La
+Forge servait alors `0.0.0+inconnue` et les routes d'environnement échouaient
+parce que son `app.py` et son module installé n'étaient pas de la même build.
+
+Le paquet issu de `git+https://github.com/P2Enjoy/spark-environment.git@main`
+porte maintenant les migrations, `sparkd.service`, `spark.slice` et
+`python -m sparkd.install`. La première installation a réellement échoué — et a
+donc refusé de s'annoncer réussie — car l'installateur suivait le lien symbolique
+`/opt/sparkd/venv/bin/python` vers `/usr/bin/python3.12`. L'unité résultante ne
+voyait plus le paquet. Le chemin du venv est désormais conservé sans résolution,
+un test le garde, et la Forge a été restaurée immédiatement avant la publication
+du correctif.
+
+La build `c95a7fcea` est ensuite installée directement depuis le dépôt public,
+sans checkout sous `/opt/sparkd`. `/healthz` porte sa version de métadonnées,
+`/readyz` est `ready` et les 13 contrôles du préflight sont verts. Les réponses
+`/v1/env` et `/v1/sparks/helo/env` contiennent de nouveau `selected_by` au lieu
+des deux `500` observés pendant SPK-43. L'installation de la Forge neuve, la
+mesure de mise à jour et son retour arrière restent à jouer avant la clôture.
