@@ -3001,6 +3001,9 @@ clé d'hôte a changé. C'est nommé explicitement à l'écran, sans aucune comm
 Docker envoyée et sans effacement automatique de `known_hosts`. Il reste à
 vérifier puis réconcilier cette empreinte, et à rejouer le Compose joignable
 depuis le seul briefing sur le paquet qui contient ces deux corrections.
+La campagne complète `make test` reste également à rejouer : son `sparkd-test`
+se fige dans le portail TestClient de cet environnement avant les suites web et
+E2E; les preuves ciblées, le contrat et la build sont verts.
 
 ### [~] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
 

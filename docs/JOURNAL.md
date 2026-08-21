@@ -7758,3 +7758,15 @@ pytest pur; typecheck et `make contract-check` passent. Les commits sont
 doit faire vérifier puis réconcilier l'empreinte de la cellule avant de déposer
 une pile Compose joignable et d'actualiser le briefing réel. SPK-54 et SPK-60
 restent donc `[~]`, non clos.
+
+### Garde de campagne
+
+La campagne prescrite, `make test`, a démarré par `sparkd-test` puis s'est figée
+après une première série de points, sans nouvelle sortie pendant soixante
+secondes. Le processus a été interrompu : le même blocage AnyIO du portail
+TestClient, déjà isolé hors de cette unité, empêche d'atteindre les suites web,
+gestes, E2E et manuel de cette campagne. Ce n'est pas déclaré vert. En revanche,
+les 122 preuves Node touchées, le pytest pur du briefing rootless, le typecheck,
+`make contract-check` et `make build` sont verts. La session suivante reprend
+par la réconciliation SSH puis rejoue la campagne complète dans un environnement
+où le portail TestClient progresse.
