@@ -75,12 +75,12 @@
   contention » — vrai, mais trop modeste.
 
 ### Corrigé
-- **Une reprise rootless interrompue est de nouveau amorçable** (SPK-54) :
-  Debian ne fournit pas `machinectl` dans son image minimale. Le script
-  installait donc les paquets puis s'arrêtait avant le démon utilisateur. Il
-  installe maintenant `systemd-container`, reprend seulement ce démon quand
-  aucun Docker enraciné ne tourne, et refuse tout code d'installation non nul
-  au lieu de journaliser un succès fictif.
+- **La reprise Docker rootless constate maintenant un démon réellement
+  utilisable** (SPK-54) : le compte de service seul ne suffit pas. Le script
+  rejoint son bus D-Bus avec `runuser`, vérifie le service et son socket, et
+  réserve ses sous-plages `subuid`/`subgid` dans l'idmap réel de la cellule
+  Incus. Il reprend seulement ce démon quand aucun Docker enraciné ne tourne et
+  refuse tout résultat incomplet au lieu de journaliser un succès fictif.
 - **« La cellule a disparu » se dit maintenant partout** (SPK-67). Selon l'écran
   d'où l'on agissait, le produit savait ou ne savait pas distinguer une cellule
   disparue d'un Incus injoignable : la suppression le savait, la lecture non.
