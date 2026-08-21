@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from sparkd import images, migrations, sparks
+from sparkd import audit, images, migrations, sparks
 from sparkd.db import connect
 from sparkd.incus import FakeIncus
 from sparkd.inventory import sync
@@ -153,6 +153,17 @@ def test_la_ressource_n_est_rendue_qu_a_la_disparition(db):
     assert pools(db).cpu.allocated == 2.0
     assert sparks.finish(db, s["id"], success=True) is None
     assert pools(db).cpu.allocated == 0.0
+
+
+def test_la_transition_de_suppression_nomme_le_spark_qui_notifie(db):
+    """SPK-62 · §47.4 : la notification part de `spark.delete`, pas de
+    `spark.deleted` (runtime). Le message doit donc nommer l'objet avant que
+    sa ligne de registre ne disparaisse."""
+    s = sparks.create(db, spec(name="crm-production"))
+    sparks.command(db, s["id"], Command.DELETE)
+    entree = next(e for e in audit.listing(db) if e["action"] == "spark.delete")
+    assert "Spark « crm-production »" in entree["message"]
+    assert "deleting" in entree["message"]
 
 
 def test_suppression_ratee_ne_perd_pas_le_spark(db):

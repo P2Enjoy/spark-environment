@@ -383,7 +383,11 @@ def command(
         _audit(
             connection, actor, f"spark.{cmd.value}", spark_id,
             {"from": courant.value, "to": vise.value}, "ok",
-            f"« {courant.value} » → « {vise.value} ».",
+            # SPK-62 · §47.4 : `spark.delete` NOTIFIE cette transition, tandis
+            # que `spark.deleted` est un évènement runtime et ne notifie pas.
+            # Le nom doit donc être dans CETTE ligne : un identifiant de registre
+            # seul ne permet pas d'agir quand l'alerte arrive hors bande.
+            f"Spark « {spark['name']} » : « {courant.value} » → « {vise.value} ».",
         )
     return get(connection, spark_id)
 
