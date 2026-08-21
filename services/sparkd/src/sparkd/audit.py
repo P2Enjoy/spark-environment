@@ -5,6 +5,9 @@
       §21.6 (qui a agi : l'acteur et sa classe), §36.9 (la chaine d'integrite) ·
       docs/BACKLOG.md#SPK-37, docs/BACKLOG.md#SPK-38,
       §21.4 (un payload n'est pas un dépotoir) · docs/SCHEMA.md §9
+@spec docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.1 (la notification hors bande
+      s'accroche ICI, parce que c'est le seul chemin — s'accrocher à la console
+      laisserait sortir sans un mot les gestes faits en la contournant)
 
 Aucun autre module n'écrit dans `audit_log`. Un filtre posé à cinq endroits sera
 oublié au sixième, et l'oubli ne se verra pas — un journal qui contient trop
@@ -103,6 +106,21 @@ _REQUETE: ContextVar[tuple[str, str] | None] = ContextVar("acteur_requete", defa
 #: Elle vaut `None` par défaut, et c'est le cas NORMAL : une requête non signée
 #: passe, et sa ligne est inscrite non signée (§36.10.1). Un événement du runtime
 #: n'en porte jamais — le §36.4 le dit, et la supervision montre la classe.
+#: SPK-62 · §47.1 : le canal hors bande, posé au démarrage. `None` tant que rien
+#: ne l'a posé — une Forge sans canal fonctionne exactement comme avant (§47.3).
+_CANAL = None
+
+
+def set_canal(canal) -> None:
+    """Pose le canal hors bande. Appelé une fois, au démarrage de `sparkd`."""
+    global _CANAL
+    _CANAL = canal
+
+
+def current_canal():
+    return _CANAL
+
+
 _SIGNATURE: ContextVar[tuple[str, str, str] | None] = ContextVar(
     "signature_requete", default=None)
 
@@ -349,6 +367,23 @@ def record(
     else:
         with transaction(connection):
             _inserer_chaine(connection, ligne)
+
+    # SPK-62 · §47.1 : la notification hors bande part D'ICI, après l'écriture.
+    #
+    # Elle ne peut PAS faire échouer le geste (§47.5) : `poster` ne bloque
+    # jamais, ne lève jamais, et l'envoi vit dans un autre fil — jamais dans la
+    # transaction SQLite, où un POST de trois secondes bloquerait l'unique
+    # écrivain de la Forge.
+    #
+    # Le `try` n'est pas vide et ne masque rien : il garde l'invariant du §47.5,
+    # qui est que RIEN venant du canal n'atteint l'appelant. Ce qui se passe
+    # au canal se lit dans son état, rendu par `GET /v1/forge` (§47.6).
+    canal = _CANAL
+    if canal is not None:
+        try:
+            canal.poster(ligne)
+        except Exception:  # noqa: BLE001 - §47.5, aucune exception ne remonte
+            pass
 
 
 def _inserer_chaine(connection: sqlite3.Connection, ligne: dict) -> None:

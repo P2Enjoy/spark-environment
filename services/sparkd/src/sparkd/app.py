@@ -37,6 +37,7 @@ from . import sparks as service
 from . import ingress as ingress_service
 from . import ports as ports_service
 from . import signature as signature_service
+from . import notification as notification_service
 from . import audit as audit_service
 from . import bootstrap as bootstrap_service
 from . import metrics as metrics_service
@@ -46,6 +47,27 @@ from . import sshkeys
 from .lifecycle import Command
 from .migrations import applied, upgrade, verify
 from .translate import Manifest, TranslationError, translate
+
+
+def _nom_de_la_forge(config: Config) -> str:
+    """Le nom d'hôte relevé, pour les messages hors bande (SPK-62, §47.4).
+
+    Une Forge jamais relevée n'en a pas : on rend une chaîne vide plutôt que de
+    faire échouer le démarrage. Le canal est un confort, pas une condition de
+    service (§47.5).
+    """
+    try:
+        connection = connect(config.database)
+    except Exception:  # noqa: BLE001 - le démarrage ne tombe pas pour un nom
+        return ""
+    try:
+        ligne = connection.execute(
+            "SELECT hostname FROM forge WHERE id = 1").fetchone()
+        return (ligne["hostname"] if ligne and ligne["hostname"] else "")
+    except Exception:  # noqa: BLE001 - idem
+        return ""
+    finally:
+        connection.close()
 
 
 def make_client(config: Config) -> IncusClient:
@@ -151,6 +173,17 @@ def create_app(config: Config) -> FastAPI:
     app.state.schema_versions = check_registry(config)
     app.state.incus = make_client(config)
     app.state.rates = metrics_service.RateTracker()
+    # SPK-62 · docs/DAT.md §47.1 : le canal hors bande est posé sur `audit`, qui
+    # est le SEUL chemin vers le journal. S'accrocher à la console laisserait
+    # sortir sans un mot les gestes faits en la contournant.
+    #
+    # Le nom de la Forge sert quand plusieurs écrivent dans le même canal :
+    # « un Spark a été supprimé » sans dire OÙ est une alerte inexploitable
+    # (§47.4). Il est lu au démarrage ; une Forge jamais relevée n'en a pas, et
+    # une chaîne vide vaut mieux qu'un plantage au démarrage.
+    app.state.notify = notification_service.Canal(
+        url=config.notify_url, forge=_nom_de_la_forge(config))
+    audit_service.set_canal(app.state.notify)
     app.state.caddy = (
         ingress_service.FakeCaddy() if config.driver == "fake"
         else ingress_service.Caddy(config.caddy_admin)
@@ -397,6 +430,11 @@ def create_app(config: Config) -> FastAPI:
                 "dhcp_dynamic_range": DHCP_RANGE,
             },
             "topology_synced_at": row["topology_synced_at"],
+            # SPK-62 · docs/DAT.md §47.6 : l'échec du canal hors bande est DIT.
+            # `configured: false` ne veut PAS dire « tout va bien » : les
+            # compteurs valent alors zéro parce que rien n'est surveillé, et
+            # l'écran doit le dire autrement (§14.6).
+            "notify": app.state.notify.etat(),
             # docs/DAT.md §7.3 bis : ne jamais présenter la réservation comme
             # une garantie absolue tant que SPK-29 n'est pas livrée.
             "reservation_guarantee": "proportional_between_sparks_only",
