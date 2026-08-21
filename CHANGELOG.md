@@ -47,6 +47,15 @@
 - **Le disque et le mode CPU n'annoncent plus de redémarrage** (SPK-57) : la
   prise à chaud a été mesurée sur matériel réel, les deux prennent effet
   immédiatement. L'écran promettait moins que ce que le produit tient.
+- **La réservation CPU tient de nouveau ses promesses** (SPK-29). Le poids de la
+  tranche parente était écrit dans le fichier cgroup, et **systemd l'écrasait**
+  à la première reconciliation : la réservation retombait à presque rien, sans
+  qu'aucun contrôle ne le signale. Le poids se pose désormais par systemd, qui
+  le réaffirme. Mesuré sur matériel réel, avant et après reconciliation.
+- **Redimensionner un Spark met à jour l'allocation** (SPK-57) : changer le mode
+  CPU ne rendait pas ses cœurs dédiés au pool commun et ne recalculait pas le
+  poids de la tranche. Un simple redimensionnement pouvait donc rompre la
+  réservation de tous les Sparks.
 - **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de
