@@ -1320,7 +1320,12 @@ Ce que le doublon **doit**, en revanche, et qui n'était écrit nulle part :
    `snapshots()` sur une instance absente rendait `[]`. Le doublon affirmait
    « cette instance n'a pas d'instantané » là où le vrai dit « je ne la trouve
    pas ». C'est le pire écart des deux, parce qu'il est **silencieux** ;
-3. **relire son état à chaque opération** lorsqu'il est persisté. Le vrai pilote
+3. **savoir représenter les DEUX formes d'échec sur chaque méthode.** Le
+   doublon ne pouvait injecter une panne de pilote que sur quatre méthodes :
+   sur les treize autres, la borne du §33.3 — « ne pas pouvoir demander n'est
+   pas savoir que ce n'est pas là » — était tout simplement inéprouvable. Une
+   borne qu'on ne peut pas éprouver n'est pas une borne, c'est une intention ;
+4. **relire son état à chaque opération** lorsqu'il est persisté. Le vrai pilote
    n'a aucun cache : il interroge Incus à chaque appel. Un doublon qui charge son
    état une fois au démarrage ne peut pas voir une cellule disparaître sous le
    produit — c'est-à-dire précisément l'évènement que `docs/CONTINGENCE.md` §4

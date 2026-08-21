@@ -492,6 +492,44 @@ def create_app(config: Config) -> FastAPI:
                 # réconciliation.
                 continue
 
+    def _refus_cellule_perdue(spark: dict, *, en_panne: bool = False) -> HTTPException:
+        """Le refus qui NOMME la perte d'une cellule (docs/DAT.md §12.1.4).
+
+        @spec docs/BACKLOG.md#SPK-67 · docs/DAT.md §12.1.4 (ce que le contrat
+              exige des appelants), §14.6 · docs/CONTINGENCE.md §4.5
+
+        Une seule réponse pour tout le produit, et c'est délibéré : `409`,
+        `cellule_absente`, le nom du Spark et les deux issues. Un exploitant n'a
+        pas à apprendre une réponse différente par écran pour un seul et même
+        incident.
+
+        `en_panne` distingue la seule route qui fait davantage : celle du cycle
+        de vie, qui a posé un état transitoire AVANT d'appeler le pilote et doit
+        donc le refermer. Les autres ne touchent à aucun état — elles refusent
+        et n'écrivent rien —, et leur message ne doit donc pas annoncer un
+        changement qui n'a pas eu lieu (DESIGN_SYSTEM.md §1.3).
+
+        Le message nomme les gestes comme la CONSOLE les nomme — « Reprendre »,
+        « Supprimer » — et non comme l'API les appelle : vu à l'écran le
+        2026-08-21, un message qui dit « retry » envoie chercher un bouton qui
+        n'existe pas sous ce nom (§1.5 bis). Les noms d'API restent lisibles
+        dans `allowed_commands`.
+
+        Il ne reprend jamais la phrase du pilote : elle porte un chemin de l'API
+        d'Incus, que le §20 de `CLAUDE.md` interdit d'exposer et qui ne
+        diagnostique rien de plus que le nom déjà présent. Elle reste attachée à
+        l'exception chaînée, donc au journal du service.
+        """
+        suite = ("Le Spark passe en panne." if en_panne
+                 else "Ce geste est impossible tant qu'elle n'est pas là.")
+        raison = (
+            f"La cellule du Spark « {spark['name']} » a disparu : Incus ne la "
+            f"connaît plus. {suite} Deux issues, toutes deux par le produit : "
+            "« Reprendre » reconstruit la cellule, « Supprimer » rend sa place "
+            "au pool.")
+        return HTTPException(status_code=409, detail={
+            "error": "cellule_absente", "message": raison})
+
     def _apply_to_incus(connection, spark: dict) -> None:
         """Crée réellement l'instance, puis conclut la transition.
 
@@ -654,6 +692,8 @@ def create_app(config: Config) -> FastAPI:
 
         try:
             etat = app.state.incus.instance_state(spark["incus_name"])
+        except InstanceAbsente as erreur:
+            raise _refus_cellule_perdue(spark) from erreur
         except IncusError as erreur:
             raise HTTPException(status_code=502, detail={
                 "error": "incus_failed", "message": str(erreur)}) from erreur
@@ -698,6 +738,8 @@ def create_app(config: Config) -> FastAPI:
             except snapshot_service.SnapshotError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "snapshot_refused", "message": str(erreur)}) from erreur
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
@@ -741,6 +783,8 @@ def create_app(config: Config) -> FastAPI:
             except snapshot_service.SnapshotError as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
@@ -755,6 +799,8 @@ def create_app(config: Config) -> FastAPI:
             except (service.NotFound, snapshot_service.SnapshotError) as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
@@ -1442,6 +1488,8 @@ def create_app(config: Config) -> FastAPI:
             spark = _cellule_ou_refus(connection, name)
             try:
                 vus = _relever_amorcage(connection, spark)
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
@@ -1471,6 +1519,8 @@ def create_app(config: Config) -> FastAPI:
                     else bootstrap_service.ENRACINE)
             try:
                 avant = _relever_amorcage(connection, spark)
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
@@ -1499,6 +1549,8 @@ def create_app(config: Config) -> FastAPI:
                     if commande:
                         app.state.incus.exec_capture(spark["incus_name"], commande)
                 apres = _relever_amorcage(connection, spark) if a_faire else avant
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
@@ -1534,6 +1586,8 @@ def create_app(config: Config) -> FastAPI:
             except (service.NotFound, sshkeys.SshKeyError) as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
@@ -1566,6 +1620,8 @@ def create_app(config: Config) -> FastAPI:
             except (service.NotFound, sshkeys.SshKeyError) as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "incus_failed", "message": str(erreur)}) from erreur
@@ -1885,23 +1941,12 @@ def create_app(config: Config) -> FastAPI:
         réussite : la ligne SURVIT, et un succès de façade laisserait un fantôme
         silencieux au registre — précisément ce que le §4 rend impossible.
         """
-        # §20 : le message est LU par l'exploitant. Il nomme donc les gestes
-        # comme la console les nomme — « Reprendre », « Supprimer » — et non
-        # comme l'API les appelle : vu à l'écran le 2026-08-21, un message qui
-        # dit « retry » envoie chercher un bouton qui n'existe pas sous ce nom
-        # (DESIGN_SYSTEM.md §1.5 bis). Les noms d'API restent lisibles dans
-        # `allowed_commands`, où un appelant automatique les trouve. La phrase du pilote nomme un
-        # chemin de l'API d'Incus — de la plomberie interne, sans valeur de
-        # diagnostic ici puisqu'elle ne fait que répéter le nom. Elle reste
-        # attachée à l'exception chaînée, donc au journal du service.
-        raison = (
-            f"La cellule du Spark « {spark['name']} » a disparu : Incus ne la "
-            "connaît plus. Le Spark passe en panne. Deux issues, toutes deux "
-            "par le produit : « Reprendre » reconstruit la cellule, "
-            "« Supprimer » rend sa place au pool.")
-        service.finish(connection, spark["id"], success=False, error=raison)
-        return HTTPException(status_code=409, detail={
-            "error": "cellule_absente", "message": raison})
+        refus = _refus_cellule_perdue(spark, en_panne=True)
+        # La raison est PERSISTÉE : elle doit rester lisible sur la fiche du
+        # Spark, et pas seulement au moment du geste (§14.6).
+        service.finish(connection, spark["id"], success=False,
+                       error=refus.detail["message"])
+        return refus
 
     @app.post("/v1/sparks/{name}/{action}", tags=["sparks"])
     def command_spark(name: str, action: str) -> dict:

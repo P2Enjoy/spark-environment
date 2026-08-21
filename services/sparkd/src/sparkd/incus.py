@@ -476,17 +476,21 @@ class FakeIncus:
         provisoire.replace(self.state_path)
 
     def resources(self) -> dict[str, Any]:
+        self._maybe_fail("resources")
         return self.payload if self.payload is not None else _EXEMPLE_HOTE
 
     def storage_pool_resources(self, pool: str) -> dict[str, Any]:
+        self._maybe_fail("storage_pool_resources")
         if self.pool_payload is not None:
             return self.pool_payload
         return {"space": {"total": 207_030_845_440, "used": 739_906_560}}
 
     def server_info(self) -> dict[str, Any]:
+        self._maybe_fail("server_info")
         return {"environment": {"server_name": "spark-experiment", "server_version": "7.3"}}
 
     def instances(self) -> list[dict[str, Any]]:
+        self._maybe_fail("instances")
         return list(self.created.values())
 
     def set_publication_devices(
@@ -547,10 +551,12 @@ class FakeIncus:
         self._persist()
 
     def update_instance_config(self, name: str, config: dict[str, Any]) -> None:
+        self._maybe_fail("update_instance_config")
         self._vivante(name).setdefault("config", {}).update(config)
         self._persist()
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
+        self._maybe_fail("push_file")
         self._vivante(name).setdefault("files", {})[path] = content
         # Écrire `authorized_keys` change ce que le relevé du §42.6 y lira : sur
         # une vraie cellule, `sha256sum` suit le fichier. Sans cela, l'amorçage
@@ -565,6 +571,7 @@ class FakeIncus:
         self._persist()
 
     def exec_command(self, name: str, command: list[str]) -> None:
+        self._maybe_fail("exec_command")
         self._vivante(name).setdefault("commands", []).append(command)
         self._persist()
 
@@ -577,6 +584,7 @@ class FakeIncus:
         une cellule vierge, c'est-à-dire jamais sur le cas qui compte : celle qui
         est déjà complète.
         """
+        self._maybe_fail("exec_capture")
         self._vivante(name).setdefault("commands", []).append(command)
         script = command[-1] if command else ""
         runtime = self.created[name].setdefault("runtime", {})
@@ -611,12 +619,14 @@ class FakeIncus:
         return (0, lignes, "")
 
     def create_snapshot(self, name: str, snapshot: str) -> None:
+        self._maybe_fail("create_snapshot")
         self._vivante(name).setdefault("snapshots", []).append(
             {"name": snapshot, "stateful": False, "size": 0}
         )
         self._persist()
 
     def restore_snapshot(self, name: str, snapshot: str, force: bool = False) -> None:
+        self._maybe_fail("restore_snapshot")
         pris = [s["name"] for s in self._vivante(name).get("snapshots", [])]
         if snapshot not in pris:
             raise IncusError(f"Instantané « {snapshot} » absent.")
@@ -630,6 +640,7 @@ class FakeIncus:
         self._persist()
 
     def delete_snapshot(self, name: str, snapshot: str) -> None:
+        self._maybe_fail("delete_snapshot")
         instance = self._vivante(name)
         instance["snapshots"] = [
             s for s in instance.get("snapshots", []) if s["name"] != snapshot
@@ -637,6 +648,7 @@ class FakeIncus:
         self._persist()
 
     def snapshots(self, name: str) -> list[dict[str, Any]]:
+        self._maybe_fail("snapshots")
         # §12.1.3, point 2 : rendait `[]` sur une instance absente. Le doublon
         # affirmait « pas d'instantané » là où le vrai dit « je ne la trouve
         # pas » — l'écart le plus SILENCIEUX des trois, car aucun appelant ne
@@ -644,6 +656,7 @@ class FakeIncus:
         return list(self._vivante(name).get("snapshots", []))
 
     def instance_state(self, name: str) -> dict[str, Any]:
+        self._maybe_fail("instance_state")
         instance = self._vivante(name)
         return instance.get("state") or {
             "status": instance.get("status", "Running"),
