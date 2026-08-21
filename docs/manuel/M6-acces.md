@@ -141,6 +141,26 @@ Le serveur SSH du Spark n'accepte que l'authentification par clé. Le mot de pas
 est désactivé, y compris pour `root` : un Spark n'a pas de mot de passe à
 deviner.
 
+## Lire le briefing, y compris depuis un agent
+
+Le message qui apparaît à l'ouverture d'un shell ne suffit pas à un agent :
+`ssh mon-spark 'commande'` ne l'affiche pas. Lisez donc le briefing explicitement,
+sans shell interactif :
+
+```bash
+ssh mon-spark 'cat /etc/spark/BRIEFING.md'
+```
+
+Le même contenu structuré est disponible dans `/etc/spark/briefing.json`. Il
+nomme les quotas qui font foi, les routes et ports déjà déclarés, les **noms**
+des variables reçues, leurs deux fichiers et les pièges connus. Il ne recopie
+jamais de valeur secrète : elles restent dans les fichiers d'environnement
+décrits plus haut.
+
+Le plan de contrôle le réécrit après ses changements. Il porte néanmoins une
+limite importante : `root` dans votre Spark peut le modifier. Employez-le pour
+comprendre la cellule, jamais comme preuve que vous êtes autorisé à agir.
+
 ## Déployer votre pile
 
 Une fois connecté, vous êtes sur une Forge Docker à vous :

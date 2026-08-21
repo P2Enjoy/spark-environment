@@ -1,4 +1,5 @@
-"""@verifies docs/BACKLOG.md#SPK-04 · docs/SCHEMA.md §2 a §10
+"""@verifies docs/BACKLOG.md#SPK-04 · docs/SCHEMA.md §2 a §10 ·
+             docs/BACKLOG.md#SPK-60 · docs/SCHEMA.md §10 quinquies
 
 Ces tests appliquent la VRAIE migration 001, pas un jeu d'essai, et verifient
 que les regles du modele sont portees par la base et pas seulement ecrites dans
@@ -58,7 +59,7 @@ def test_la_vraie_migration_cree_toutes_les_tables(db):
     attendues = {
         "forge", "cpu_core", "cpu_thread", "spark", "spark_cpu_pin",
         "ingress_route", "ssh_key", "spark_ssh_key", "snapshot", "backup",
-        "audit_log", "schema_migration",
+        "audit_log", "schema_migration", "spark_bootstrap_observation",
     }
     assert attendues <= tables
     assert "host" not in tables, "l'ancien nom ne doit plus exister (SPK-42)"
@@ -162,6 +163,16 @@ def test_suppression_d_un_spark_emporte_ses_routes(db):
                " VALUES ('r1','a.example.com','01J0',8080)")
     db.execute("DELETE FROM spark WHERE id='01J0'")
     assert db.execute("SELECT count(*) FROM ingress_route").fetchone()[0] == 0
+
+
+def test_suppression_d_un_spark_emporte_son_releve_d_amorcage(db):
+    """Le briefing ne survit pas à la cellule qu'il décrivait (§10 quinquies)."""
+    _spark(db)
+    db.execute(
+        "INSERT INTO spark_bootstrap_observation (spark_id, observed_at, managed_items)"
+        " VALUES ('01J0', '2026-08-21T00:00:00+00:00', '[]')")
+    db.execute("DELETE FROM spark WHERE id='01J0'")
+    assert db.execute("SELECT count(*) FROM spark_bootstrap_observation").fetchone()[0] == 0
 
 
 def test_resultat_d_audit_contraint(db):

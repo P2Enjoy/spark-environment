@@ -3658,6 +3658,15 @@ l'amorçage est conservé sans jamais transformer un composant déjà présent e
 installation prétendument faite par le plan de contrôle. La suite est
 l'implémentation et les preuves, dont la Forge réelle dépend de SPK-54.
 
+**Runtime et documentation livrés le 2026-08-21.** La migration `012` conserve
+le relevé daté; le briefing JSON, le Markdown et le panneau `/etc/motd` sont
+écrits depuis le même modèle, avec permissions `0600`, `0600`, `0644`. Les
+routes, ports, variables, quotas et protection le reposent depuis le registre;
+les 75 preuves ciblées cherchent une valeur de secret dans chaque projection,
+jouent les réécritures et gardent le cas d'un Docker déjà présent. Le contrat
+d'API reste vert. Il reste le parcours SSH et le déploiement depuis le seul
+briefing sur une Forge réelle, dépendants de la preuve matérielle de SPK-54.
+
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 
 **Correction d'un défaut de sécurité de SPK-58**, relevé par le responsable le

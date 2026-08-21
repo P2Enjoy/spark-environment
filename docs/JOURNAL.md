@@ -7643,3 +7643,25 @@ deux sont réécrits en entier à chaque changement de plan qui les concerne. Un
 adresse publique de Forge est elle aussi un fait configuré, jamais une
 supposition tirée de l'adresse privée : absente, elle est dite inconnue. SPK-60
 passe à `[~]` : le contrat est poussé avant l'implémentation.
+
+### Runtime livré, preuve matérielle restante
+
+La migration `012` pose l'observation par Spark. L'amorçage conserve les trois
+versions observées et l'union des composants réellement modifiés; un second
+passage idempotent actualise la date sans transformer ce qu'il trouve en une
+installation rétroactive. Le pilote factice porte aussi les permissions de
+fichier, afin de ne pas éprouver des fichiers théoriquement `0600` comme s'ils
+l'étaient réellement.
+
+Après l'amorçage, les projections `/etc/spark/briefing.json`,
+`/etc/spark/BRIEFING.md` et `/etc/motd` sont générées d'un unique modèle. Les
+modifications d'environnement, de route, de port, de quota ou de protection les
+reposent; une cellule absente ne défait pas l'écriture déjà faite au registre.
+Les **75 preuves ciblées** sont vertes, dont la recherche explicite d'une valeur
+secrète dans les trois projections et la lecture d'un Spark déjà complet sans
+lui attribuer d'installation fictive.
+
+La suite qui ne peut pas être simulée est assumée : jouer
+`ssh spark 'cat /etc/spark/BRIEFING.md'`, puis déployer une pile joignable depuis
+ce seul fichier, demande la Forge Incus réellement amorcée de SPK-54. SPK-60
+reste donc `[~]`.

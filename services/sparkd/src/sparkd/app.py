@@ -40,6 +40,7 @@ from . import signature as signature_service
 from . import notification as notification_service
 from . import audit as audit_service
 from . import bootstrap as bootstrap_service
+from . import briefing as briefing_service
 from . import metrics as metrics_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
@@ -654,6 +655,45 @@ def create_app(config: Config) -> FastAPI:
                 connection, cle, spark["id"]).items():
             app.state.incus.push_file(
                 spark["incus_name"], chemin, contenu, mode="0600")
+        # SPK-60 · §44.4 : une variable posee change le briefing lui-meme
+        # (ses NOMS, jamais ses valeurs). Le faire dans le meme chemin evite
+        # qu'une nouvelle route d'environnement oublie la seconde projection.
+        _apply_briefing(connection, spark)
+
+    def _apply_briefing(connection, spark: dict) -> None:
+        """Projette le briefing unique dans une cellule déjà amorcée.
+
+        @spec docs/BACKLOG.md#SPK-60 · docs/DAT.md §44.1 (le panneau), §44.4
+              (réécriture), §44.8 (modèle unique) · docs/SCHEMA.md §10 quinquies
+
+        Une cellule sans relevé d'amorçage n'a pas encore de briefing à
+        prétendre : elle peut ne pas avoir sshd et Docker. Dès que l'observation
+        existe, tout le contenu est régénéré depuis le registre.
+        """
+        if not spark.get("incus_name"):
+            return
+        releve = briefing_service.observation(connection, spark["id"])
+        if releve is None:
+            return
+        model = briefing_service.modele(
+            spark,
+            forge_public_address=config.forge_public_address,
+            routes=ingress_service.listing(connection),
+            ports=ports_service.listing(connection),
+            environment=env_service.lister(connection, spark["id"]),
+            bootstrap=releve,
+        )
+        for chemin, (contenu, mode) in briefing_service.fichiers(model).items():
+            app.state.incus.push_file(spark["incus_name"], chemin, contenu, mode=mode)
+
+    def _rattraper_briefing(connection, spark: dict) -> None:
+        """Rafraîchit sans annuler un registre déjà écrit (§44.8)."""
+        try:
+            _apply_briefing(connection, spark)
+        except (IncusError, InstanceAbsente, env_service.CleError):
+            # Une projection en retard est reprise au démarrage. Annuler une
+            # route ou une protection déjà écrite créerait deux vérités.
+            pass
 
     def _reponderer_la_tranche(connection) -> None:
         """Recalcule le poids de la tranche parente (docs/DAT.md §32.2).
@@ -852,8 +892,10 @@ def create_app(config: Config) -> FastAPI:
     def arm_protection(name: str, body: dict = Body(...)) -> dict:
         with registry() as connection:
             try:
-                return protection_service.arm(connection, name,
-                                              str(body.get("password", "")))
+                rendu = protection_service.arm(connection, name,
+                                                   str(body.get("password", "")))
+                _rattraper_briefing(connection, service.by_name(connection, name))
+                return rendu
             except protection_service.BadProtectionPassword as erreur:
                 raise HTTPException(status_code=403, detail={
                     "error": "bad_protection_password",
@@ -872,8 +914,10 @@ def create_app(config: Config) -> FastAPI:
         """Lever DÉSARME durablement (§35.4). Il n'y a pas de fenêtre de temps."""
         with registry() as connection:
             try:
-                return protection_service.disarm(connection, name,
-                                                 str((body or {}).get("password", "")))
+                rendu = protection_service.disarm(
+                    connection, name, str((body or {}).get("password", "")))
+                _rattraper_briefing(connection, service.by_name(connection, name))
+                return rendu
             except protection_service.BadProtectionPassword as erreur:
                 raise HTTPException(status_code=403, detail={
                     "error": "bad_protection_password",
@@ -1035,6 +1079,7 @@ def create_app(config: Config) -> FastAPI:
                     connection, spark["id"], body.get("domain", ""),
                     int(body.get("port", 0)), bool(body.get("tls", True)),
                 )
+                _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
@@ -1073,6 +1118,8 @@ def create_app(config: Config) -> FastAPI:
                 if cible is not None:
                     protection_service.ensure_writable(connection, cible["name"], "ingress")
                 ingress_service.withdraw(connection, domain)
+                if cible is not None:
+                    _rattraper_briefing(connection, service.by_name(connection, cible["name"]))
             except ingress_service.IngressError as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
@@ -1131,12 +1178,14 @@ def create_app(config: Config) -> FastAPI:
             except ports_service.PortError as erreur:
                 # La ligne est enregistrée ; l'écart reste visible par
                 # `applied_at` plutôt que masqué par un succès simulé (§39.5).
+                _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
                 raise HTTPException(status_code=502, detail={
                     "error": "driver_unavailable",
                     "message": str(erreur),
                     "port": port["public_port"],
                     "note": "Port enregistré mais non appliqué.",
                 }) from erreur
+            _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
             return ports_service.by_public_port(connection, port["public_port"])
 
     @app.delete("/v1/ports/{public_port}", tags=["ports"])
@@ -1156,10 +1205,14 @@ def create_app(config: Config) -> FastAPI:
                 ports_service.apply_devices(
                     connection, app.state.incus, vise["spark_name"], vise["spark_id"])
             except ports_service.PortError as erreur:
+                _rattraper_briefing(
+                    connection, service.by_name(connection, vise["spark_name"]))
                 raise HTTPException(status_code=502, detail={
                     "error": "driver_unavailable", "message": str(erreur),
                     "note": "Port retiré du registre mais pas encore refermé.",
                 }) from erreur
+            _rattraper_briefing(
+                connection, service.by_name(connection, vise["spark_name"]))
             return {"withdrawn": public_port}
 
     @app.post("/v1/ingress/reconcile", tags=["ingress"])
@@ -1499,11 +1552,15 @@ def create_app(config: Config) -> FastAPI:
                            "des commandes DANS la cellule : elle doit tourner."})
         return spark
 
-    def _relever_amorcage(connection, spark: dict) -> list[dict]:
-        """Le relevé du §42.6, jugé selon le §42.1."""
+    def _lire_amorcage(connection, spark: dict) -> tuple[dict[str, str], list[dict]]:
+        """Le relevé brut et son jugement, lus une seule fois (§42.6)."""
         brut = bootstrap_service.releve_brut(app.state.incus, spark["incus_name"])
         voulu = sshkeys.authorized_keys_content(connection, spark["id"])
-        return bootstrap_service.juger(brut, bootstrap_service.empreinte(voulu))
+        return brut, bootstrap_service.juger(brut, bootstrap_service.empreinte(voulu))
+
+    def _relever_amorcage(connection, spark: dict) -> list[dict]:
+        """Le relevé du §42.6, jugé selon le §42.1."""
+        return _lire_amorcage(connection, spark)[1]
 
     @app.get("/v1/sparks/{name}/bootstrap", tags=["amorcage"])
     def read_bootstrap(name: str) -> dict:
@@ -1549,7 +1606,7 @@ def create_app(config: Config) -> FastAPI:
             mode = (bootstrap_service.ROOTLESS if bool((body or {}).get("rootless"))
                     else bootstrap_service.ENRACINE)
             try:
-                avant = _relever_amorcage(connection, spark)
+                brut_avant, avant = _lire_amorcage(connection, spark)
             except InstanceAbsente as erreur:
                 raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
@@ -1579,7 +1636,14 @@ def create_app(config: Config) -> FastAPI:
                         cle, rootless=mode == bootstrap_service.ROOTLESS)
                     if commande:
                         app.state.incus.exec_capture(spark["incus_name"], commande)
-                apres = _relever_amorcage(connection, spark) if a_faire else avant
+                # §44.3, §44.8 : le briefing ne devine pas les versions depuis
+                # un vieux texte. Le relevé initial suffit si l'amorçage n'a
+                # rien fait; après une écriture, on le rejoue pour dater l'état
+                # qu'elle a effectivement produit.
+                if a_faire:
+                    brut_final, apres = _lire_amorcage(connection, spark)
+                else:
+                    brut_final, apres = brut_avant, avant
             except InstanceAbsente as erreur:
                 raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
@@ -1587,6 +1651,9 @@ def create_app(config: Config) -> FastAPI:
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
 
             lignes = bootstrap_service.compte_rendu(avant, apres, a_faire)
+            briefing_service.enregistrer_observation(
+                connection, spark["id"], brut_final, a_faire)
+            _rattraper_briefing(connection, service.by_name(connection, name))
             # §42.8 : un amorçage qui ne change RIEN est quand même journalisé.
             # Savoir que quelqu'un a demandé le geste et que rien n'était à faire
             # est une information ; son absence ferait croire qu'il n'a pas été
@@ -1744,6 +1811,7 @@ def create_app(config: Config) -> FastAPI:
                 rendu["applied"] = pose
                 if motif:
                     rendu["apply_error"] = motif
+                _rattraper_briefing(connection, service.by_name(connection, name))
                 return rendu
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={

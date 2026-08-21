@@ -1,7 +1,8 @@
 """Client de l'API Incus, sur la socket Unix.
 
 @spec docs/BACKLOG.md#SPK-07 · docs/DAT.md §5.1 (Acces a Incus), §5.2 (ce qui
-      est lu, et ou)
+      est lu, et ou) · docs/BACKLOG.md#SPK-60 · docs/DAT.md §44.3 (versions
+      observées à l'amorçage)
 
 On ne lance jamais le binaire « incus » : sa sortie est un format d'affichage,
 qui change sans preavis et se parse mal — la commande n'accepte meme aucun
@@ -581,7 +582,12 @@ class FakeIncus:
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
         self._maybe_fail("push_file")
-        self._vivante(name).setdefault("files", {})[path] = content
+        instance = self._vivante(name)
+        instance.setdefault("files", {})[path] = content
+        # SPK-60 · §44.8 : la permission fait partie de la projection. Ne pas
+        # la retenir dans le doublon laisserait une preuve verte sur 0644 alors
+        # que le vrai pilote reçoit 0600.
+        instance.setdefault("file_modes", {})[path] = mode
         # Écrire `authorized_keys` change ce que le relevé du §42.6 y lira : sur
         # une vraie cellule, `sha256sum` suit le fichier. Sans cela, l'amorçage
         # réécrirait les clés à chaque passage et ne serait jamais idempotent —
@@ -624,10 +630,12 @@ class FakeIncus:
         installe = "apt-get install" in script
         if installe and "openssh-server" in script:
             runtime["sshd"] = "active"
+            runtime["openssh_version"] = "1:9.8p1-1"
         if "> /etc/apt/sources.list.d/docker.list" in script:
             runtime["depot"] = "present"
         if installe and "docker-ce" in script:
             runtime["docker"] = "Docker version 29.7.2"
+            runtime["docker_version"] = "5:29.7.2-1"
             runtime["origine"] = "docker-ce"
             # §42.2 bis : le mode que la cellule PORTE après l'installation. Sans
             # lui, un second amorçage ne verrait aucun mode en place et le refus
@@ -637,6 +645,7 @@ class FakeIncus:
                                else "enracine")
         if installe and "docker-compose-plugin" in script:
             runtime["compose"] = "Docker Compose version v2.40.0"
+            runtime["compose_version"] = "2.40.0-1"
         self._persist()
 
         lignes = "".join(f"{cle}={valeur}\n" for cle, valeur in runtime.items())

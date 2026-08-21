@@ -2,7 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-01 · docs/DAT.md §5 (Topologie physique et surface reseau),
       §8.8.3 (la marge de metadonnees et pourquoi elle est configurable),
-      §11 (Securite) · README.md section « Variables d'environnement »
+      §11 (Securite), §44.8 (adresse publique du briefing) · README.md section
+      « Variables d'environnement »
 
 La garde d'adresse d'ecoute implemente une invariante de securite du produit,
 pas une preference de configuration : « aucune API d'administration n'est
@@ -104,6 +105,10 @@ class Config:
     #: et ce n'est pas une panne (§14.5) — une Forge sans canal fonctionne
     #: exactement comme avant.
     notify_url: str
+    #: SPK-60 · §44.8 : une adresse PUBLIQUE est un fait de configuration. Elle
+    #: n'est jamais devinee depuis l'IP privee de la cellule ni via un service
+    #: externe ; vide, le briefing dit qu'elle est inconnue.
+    forge_public_address: str
     #: SPK-58 · §43.9.2 : le fichier de la cle de chiffrement des secrets.
     secret_key_file: str
     memory_reserve_bytes: int
@@ -240,6 +245,7 @@ def load(env: dict[str, str] | None = None) -> Config:
         allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", ""),
         secret_key_file=_cle_par_defaut(source),
         notify_url=source.get("SPARKD_NOTIFY_URL", "").strip(),
+        forge_public_address=source.get("SPARKD_FORGE_PUBLIC_ADDRESS", "").strip(),
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,
         storage_metadata_margin_bytes=marge,

@@ -4,7 +4,8 @@
       §41.2 (Docker vient du dépôt AMONT, jamais de la distribution),
       §42.1 (détecter d'abord), §42.5 (exec_capture), §42.6 (la détection,
       exactement), §42.7 (le contrat d'API), §42.8 (ce que le journal reçoit) ·
-      §37.3 (le chemin `incus exec`) · §21.2 (ce qui ne traverse pas le journal)
+      §37.3 (le chemin `incus exec`) · §21.2 (ce qui ne traverse pas le journal) ·
+      docs/BACKLOG.md#SPK-60 · docs/DAT.md §44.3 (versions du relevé)
 
 Le point qui décide de ce module : **détecter Docker présent ne suffit pas**. Un
 `docker.io` de distribution est présent *et* inutilisable — son profil AppArmor
@@ -35,16 +36,19 @@ SUITE = "trixie"
 #: le §21.2 interdit qu'une clé publique entière traverse le journal.
 RELEVE = r"""
 sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
+openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null || echo absent)
 cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64 || echo absent)
 depot=$([ -f /etc/apt/sources.list.d/docker.list ] && echo present || echo absent)
 docker=$(docker --version 2>/dev/null | head -1 || echo absent)
+docker_version=$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null || echo absent)
 origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null \
           || dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
 compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
+compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/null || echo absent)
 mode=$(systemctl is-active docker 2>/dev/null >/dev/null && echo enracine \
        || (id spark-docker >/dev/null 2>&1 && echo rootless || echo absent))
-printf 'sshd=%s\ncles=%s\ndepot=%s\ndocker=%s\norigine=%s\ncompose=%s\nmode=%s\n' \
-  "$sshd" "$cles" "$depot" "$docker" "$origine" "$compose" "$mode"
+printf 'sshd=%s\nopenssh_version=%s\ncles=%s\ndepot=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\n' \
+  "$sshd" "$openssh_version" "$cles" "$depot" "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode"
 """
 
 #: Le compte de service du mode rootless. Un nom FIXE : il sert de signal à la

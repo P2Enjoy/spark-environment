@@ -1,4 +1,5 @@
-"""@verifies docs/BACKLOG.md#SPK-01 · docs/DAT.md §5 (surface reseau), §11 (Securite)
+"""@verifies docs/BACKLOG.md#SPK-01 · docs/DAT.md §5 (surface reseau), §11 (Securite) ·
+             docs/BACKLOG.md#SPK-60 · docs/DAT.md §44.8 (adresse publique du briefing)
 
 Ces tests eprouvent la garde d'adresse d'ecoute, qui porte une invariante de
 securite du produit : sparkd ne doit jamais etre joignable depuis le reseau.
@@ -19,6 +20,12 @@ def test_valeurs_par_defaut_sur_la_boucle_locale():
     assert config.port == 9876
     assert config.bind == "127.0.0.1:9876"
     assert config.driver == "incus"
+    assert config.forge_public_address == ""
+
+
+def test_adresse_publique_de_forge_est_un_fait_configure_et_non_devine():
+    assert load({"SPARKD_FORGE_PUBLIC_ADDRESS": "forge.exemple.test"}).forge_public_address == (
+        "forge.exemple.test")
 
 
 @pytest.mark.parametrize(

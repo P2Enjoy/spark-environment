@@ -152,6 +152,22 @@ ssh -J <compte>@<forge> root@10.77.0.x
 
 Le Spark n'a **aucun port SSH public** : on passe par rebond sur la Forge.
 
+### C.1 bis Le briefing atteint aussi une commande non interactive
+
+Le message d'accueil SSH est volontairement court et **ne s'affiche pas** dans
+`ssh spark 'commande'`. C'est précisément le chemin d'un agent. Lire donc le
+fichier stable avant tout déploiement :
+
+```bash
+ssh -J <compte>@<forge> root@10.77.0.x 'cat /etc/spark/BRIEFING.md'
+```
+
+`/etc/spark/briefing.json` porte les mêmes faits pour un lecteur structuré. Ils
+décrivent les quotas, les routes et ports connus, les noms des variables et les
+fichiers `/etc/spark/env` et `/run/spark/secrets`; aucune valeur de secret n'y
+est présente. Le fichier vient du plan de contrôle mais `root` dans la cellule
+peut le modifier : il éclaire un déploiement, il ne prouve jamais une permission.
+
 ### C.2 Le piège, mesuré : l'image de base n'a pas de `sshd`
 
 `images:debian/13` n'embarque ni `cloud-init` ni `sshd` (§17.1). `sparkd` a bien

@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **Le briefing d'un Spark** (SPK-60, `docs/DAT.md` §44) : l'amorçage relève
+  `openssh-server`, Docker et Compose avec leur date, puis le plan de contrôle
+  produit `/etc/spark/BRIEFING.md` et son même modèle JSON. Un agent le lit par
+  `ssh spark 'cat …'`, donc sans dépendre d'un shell interactif. Les noms des
+  variables sont présents, jamais leurs valeurs secrètes ; routes, ports,
+  quotas et protection le réécrivent depuis l'état voulu.
 - La version de `sparkd` est **dérivée du dépôt** : elle porte le commit et croît
   à chaque commit, ce qui rend `pip install -U` effectif et supprime la variable
   d'estampille qu'on pouvait oublier.
