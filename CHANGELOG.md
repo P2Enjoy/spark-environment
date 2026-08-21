@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **L'admission sait compter un redimensionnement** (SPK-57, `docs/DAT.md` §49.1) :
+  `pools(..., sauf=<id>)` et `admit(..., sauf=<id>)` rendent au pool le Spark
+  visé avant d'évaluer sa nouvelle demande. Un agrandissement tenable n'est plus
+  refusé, et **rétrécir ne peut jamais manquer de place**. Le refus porte les
+  chiffres saisis, jamais un delta. *La route de redimensionnement elle-même
+  n'est pas encore livrée.*
 - **Deux contrôles de durcissement au préflight** (SPK-55, `docs/DAT.md` §48) :
   `NET-REMONTEE` échoue si un Spark peut atteindre le `sshd` de sa Forge — mesuré
   ouvert sur la Forge réelle —, et `SSH-X11` signale un `X11Forwarding` inutile.

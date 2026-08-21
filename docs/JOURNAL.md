@@ -5896,3 +5896,56 @@ configuration d'Incus après un redémarrage qui les a perdues.
 **Où reprendre.** SPK-57 ou SPK-58, premières `[ ]` constructibles. SPK-51 attend
 deux vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur le nom de
 l'objet dans l'alerte hors bande attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-57 — l'admission apprend à compter un redimensionnement
+
+**Unité choisie** au §4.2 point 1 : le journal la désignait. Spécification écrite
+et committée avant la première ligne de code — `docs/DAT.md` §49.
+
+### Le trou, et ce qui le rendait invisible
+
+Le produit crée et supprime ; il ne sait pas **ajuster**. Agrandir un Spark
+suppose de le supprimer et de le recréer — on perd la cellule, ses images Docker,
+ses volumes. Pour un produit dont l'unité EST une cellule à quota, c'est le geste
+d'exploitation le plus courant qui manque.
+
+### La décision qui portait tout le reste
+
+Un Spark qui existe est **déjà compté** dans l'alloué (§7.7). Rejouer l'admission
+sur la demande entière refuserait des agrandissements tenables — et refuserait
+même de RÉTRÉCIR sur une Forge saturée, ce qui est absurde : rendre de la mémoire
+ne peut pas manquer de mémoire.
+
+Deux voies, et une seule donne des refus vrais. **Soustraire** — admettre
+`nouveau − ancien` — a été écartée : le refus du §7.7 porte `requested` et
+`available`, et l'exploitant lirait « il manque 2 Gio sur une demande de 2 Gio »
+alors qu'il en demande 8. Un message exact sur des chiffres faux est pire qu'un
+message absent.
+
+Retenue : **rendre d'abord, admettre ensuite.** `pools(connection, sauf=<id>)`
+exclut le Spark visé des TROIS relevés — n'en oublier qu'un rendrait un pool
+cohérent et un autre faux, et le refus mélangerait deux comptabilités. Les cœurs
+dédiés en font partie, et c'est là que la règle compte le plus : passer de
+`dedicated` à `shared` rend des cœurs physiques, donc augmente la **capacité** du
+pool partagé.
+
+### Vérifications
+
+7 preuves neuves, dont celle qui montre le défaut évité : la même demande est
+REFUSÉE sans exclusion et admise avec. 843 preuves Python au total (836 + 7).
+Aucune capture : rien de visible n'a changé.
+
+**SPK-57 passe à `[~]`**, et c'est un début, pas une livraison : le noyau du
+calcul est posé, **aucune route ne redimensionne encore**. Restent la route et
+son ordre — registre d'abord, Incus ensuite (§49.2) —, les refus de
+rétrécissement (§49.3), les refus dus sur un Spark protégé ou transitoire
+(§49.5), l'écran, le parcours et le manuel. Et ce que le §49.4 laisse à mesurer
+sur une Forge réelle : la prise à chaud du disque et du changement de mode CPU —
+**nécessite une action humaine**.
+
+**Où reprendre.** SPK-57, la route `PATCH` et ses refus : la spécification les
+fixe ligne à ligne, il n'y a plus qu'à coder. SPK-51 attend deux vérifications
+extérieures ; SPK-53, SPK-54 et l'arbitrage sur le nom de l'objet dans l'alerte
+hors bande attendent une décision du responsable.

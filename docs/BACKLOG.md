@@ -2804,7 +2804,7 @@ manuel.**
   catalogue et des renvois. Captures `107-` à `110-` observées, plus
   `14-detail-mobile` refaite. Campagne complète verte.
 
-### [ ] SPK-57 · Redimensionner un Spark existant
+### [~] SPK-57 · Redimensionner un Spark existant
 
 **Trou constaté le 2026-08-20, sur question du responsable.** Le produit crée et
 supprime ; il ne sait pas **ajuster**. Relevé du contrat servi par la Forge
@@ -2843,6 +2843,40 @@ Le comble est déjà écrit ailleurs : SPK-30 existe pour qu'un Spark saturé re
   Forge réelle qu'un agrandissement à chaud est appliqué et **mesurable dans la
   cellule** — un quota changé au registre mais pas dans le noyau serait le pire
   des cas ; parcours E2E depuis le parcours canonique ; manuel M8 et captures.
+
+**Spécifiée et commencée le 2026-08-21** — `docs/DAT.md` §49, écrit et committé
+avant la première ligne de code.
+
+- **Le point qui décide de tout est livré et prouvé** : l'admission compte le
+  DELTA. `pools(connection, sauf=<id>)` et `admit(..., sauf=<id>)` **rendent** au
+  pool le Spark visé avant d'évaluer sa nouvelle demande.
+- **« Rendre d'abord, admettre ensuite » et NON « admettre le delta »**, et le
+  motif est écrit au §49.1 : soustraire ferait lire « il manque 2 Gio sur une
+  demande de 2 Gio » à qui en demande 8 — un message exact sur des chiffres faux
+  est pire qu'un message absent. Une preuve garde que le refus porte les chiffres
+  SAISIS.
+- **Rétrécir ne peut jamais manquer de place** : sans l'exclusion, une Forge
+  saturée refuserait de rendre de la mémoire. Prouvé.
+- **Les cœurs DÉDIÉS suivent la même règle**, et c'est là qu'elle compte le plus :
+  passer de `dedicated` à `shared` rend des cœurs physiques, donc augmente la
+  capacité du pool partagé. Prouvé sur la capacité, pas seulement sur l'alloué.
+- **Preuves** : 7, dont celle qui montre le défaut évité — la même demande est
+  REFUSÉE sans exclusion et admise avec. 843 preuves Python au total.
+
+- **Reste avant `[x]`, et c'est la majeure partie du geste** :
+  1. **aucune route ne redimensionne encore.** Le §49.2 fixe l'ordre — registre
+     d'abord, Incus ensuite — et le §49.5 les refus dus : Spark protégé, état
+     transitoire. Rien de cela n'est codé ;
+  2. **les refus de RÉTRÉCISSEMENT du §49.3** — mémoire sous l'usage courant,
+     disque sous l'occupation — ne sont pas codés. Ils ne se confondent pas avec
+     un refus d'admission : l'un dit « il n'y a pas la place », l'autre « ce que
+     vous voulez retirer est utilisé » ;
+  3. **aucun écran, aucun parcours, aucun manuel** ;
+  4. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
+     changement de mode CPU — exige une Forge réelle : **nécessite une action
+     humaine**. Tant que ce n'est pas mesuré, l'écran devra annoncer un
+     redémarrage : promettre moins que ce qu'on fait est sans conséquence,
+     l'inverse coupe un service en production.
 
 ### [ ] SPK-58 · Variables d'environnement et secrets d'un Spark
 
