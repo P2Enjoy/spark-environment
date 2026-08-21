@@ -2951,13 +2951,31 @@ valeurs que le produit ignorera serait un contrôle mort (§1.4).
 - **Preuves** : 4 de composant, 1 parcours E2E qui va du clavier au registre.
   825 preuves de console.
 
-- **Reste avant `[x]`** :
-  1. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
-     mesurée, donc le refus du §49.3 sur le disque ne se déclenche pas en
-     production — il est prouvé au service, pas atteignable par la route ;
-  2. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
-     changement de mode CPU — exige une Forge réelle : **nécessite une action
-     humaine**.
+**Le refus du DISQUE devient atteignable, le 2026-08-21.** La route relevait la
+seule mémoire : le refus du §49.3 sur le disque était prouvé au service et ne se
+prononçait jamais en production. Un refus inatteignable ne protège personne.
+
+- **Deux grandeurs, deux conditions**, et la dissymétrie est écrite au §49.3
+  avant d'être codée : la **mémoire** n'est relevée que sur une cellule EN
+  MARCHE — une cellule arrêtée n'en occupe aucune, et refuser sur un chiffre
+  périmé interdirait un rétrécissement légitime ; le **disque** est relevé quel
+  que soit l'état, parce qu'un Spark arrêté occupe toujours son jeu de données.
+- **L'occupation compte les INSTANTANÉS**, et c'est la bonne quantité : le quota
+  porte sur le jeu de données entier. Se fonder sur les seuls fichiers vivants
+  laisserait poser un quota que le pool ne peut pas honorer.
+- **Le runtime muet ne refuse rien** : l'absence de mesure reste une réponse,
+  jamais une occupation inventée (§31.2).
+- **Preuves** : 3 de route — le refus prononcé avec son occupation mesurée, la
+  dissymétrie éprouvée sur un même Spark arrêté, le runtime muet qui laisse
+  passer. 867 preuves Python. 1 parcours E2E : le refus arrive dans la modale et
+  ne dit PAS « capacité insuffisante ». Capture `55-quotas-refus-disque.png`
+  observée.
+
+- **Reste avant `[x]`**, et rien n'en est constructible sans matériel : ce que le
+  §49.4 laisse à mesurer — la prise à chaud du disque et du changement de mode
+  CPU —, plus le fait qu'une instance ARRÊTÉE rende bien `disk.root.usage` sur un
+  Incus réel. Les trois exigent une Forge de validation : **nécessite une action
+  humaine**.
 
 ### [ ] SPK-58 · Variables d'environnement et secrets d'un Spark
 

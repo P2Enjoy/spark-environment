@@ -6250,3 +6250,62 @@ du mode CPU exige une Forge réelle — **nécessite une action humaine**.
 rendre le refus du §49.3 atteignable — c'est le dernier écart constructible ici.
 SPK-51 attend deux vérifications extérieures ; SPK-53, SPK-54 et l'arbitrage sur
 le nom de l'objet dans l'alerte hors bande attendent une décision du responsable.
+
+## 2026-08-21 · SPK-57 — le refus du disque devient atteignable
+
+**Unité reprise** au §4.2 point 1, sur le point où la dernière session s'était
+arrêtée : le refus de rétrécissement du disque existait au service, mais la
+route ne relevait que la MÉMOIRE. Un refus prouvé mais inatteignable ne protège
+personne.
+
+### Ce qui a été construit
+
+`_usage_de_la_cellule()` relève désormais **deux** grandeurs, et pas dans les
+mêmes conditions — c'est la dissymétrie écrite au §49.3 avant de coder :
+
+- la **mémoire**, seulement sur une cellule EN MARCHE. Une cellule arrêtée n'en
+  occupe aucune, et refuser sur un chiffre périmé interdirait un rétrécissement
+  légitime ;
+- le **disque**, quel que soit l'état, parce qu'un Spark arrêté occupe toujours
+  son jeu de données. C'est `disk.root.usage`, la grandeur que la section
+  *Ressources* affiche déjà, **instantanés compris** — le quota porte sur le jeu
+  entier, et se fonder sur les seuls fichiers vivants laisserait poser un quota
+  que le pool ne peut pas honorer.
+
+L'absence de mesure reste une RÉPONSE : runtime muet, aucun refus prononcé.
+
+### Ce qui a été mesuré
+
+Le message réel du refus, relevé sur le runtime avant d'être posé dans le
+harnais de captures — pas transcrit de mémoire :
+
+```
+409 shrink_refused · resource=storage · in_use=534981632
+« crm-production » occupe actuellement 534981632 octets de disque : descendre
+sa taille à 0 perdrait des données. Videz ce qui peut l'être dans la cellule,
+puis recommencez.
+```
+
+### Vérifications
+
+3 preuves de route neuves — le refus prononcé avec l'occupation mesurée, la
+dissymétrie mémoire/disque sur un même Spark arrêté, et le runtime muet qui ne
+refuse rien. **867 preuves Python.** 1 parcours E2E neuf : le refus du disque
+arrive dans la modale et ne dit PAS « capacité insuffisante ». Capture
+`55-quotas-refus-disque.png` produite et observée.
+
+Le commentaire du parcours de redimensionnement disait « un Spark arrêté n'a pas
+d'usage relevé » : c'est devenu faux dans le même changement, et il a été
+corrigé là.
+
+### Ce qui a été consigné, pas corrigé
+
+**INC-12** : les refus annoncent des octets bruts sous un écran qui se saisit en
+Gio. Le défaut porte sur DEUX familles de refus, dont une seule est SPK-57 ; ne
+formater que celle-là ferait dire la même grandeur de deux façons.
+
+**Où reprendre.** SPK-57 n'a plus qu'un écart, et il n'est pas constructible
+ici : la prise à chaud du disque et du mode CPU, plus le fait qu'une instance
+ARRÊTÉE rende bien `disk.root.usage` — les trois exigent une Forge réelle
+(**nécessite une action humaine**). La session suivante prend donc l'unité
+suivante du plan, ou INC-12 si le responsable l'ordonne.

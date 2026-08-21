@@ -16,7 +16,10 @@
   s'ouvre **pré-remplie** des valeurs du Spark, et un refus y reste affiché sans
   effacer la saisie. Le manuel M8 porte le geste et ses deux familles de refus.
   Le **mode CPU** se change aussi : les champs qui suivent dépendent de lui, et
-  les réglages de l'ancien mode ne survivent pas.
+  les réglages de l'ancien mode ne survivent pas. Réduire le **disque** sous ce
+  que la cellule contient est désormais refusé pour de bon : l'occupation est
+  relevée sur la cellule — instantanés compris — même lorsque le Spark est
+  arrêté. La mémoire, elle, n'est comptée que sur un Spark en marche.
 - **L'admission sait compter un redimensionnement** (SPK-57, `docs/DAT.md` §49.1) :
   `pools(..., sauf=<id>)` et `admit(..., sauf=<id>)` rendent au pool le Spark
   visé avant d'évaluer sa nouvelle demande. Un agrandissement tenable n'est plus
