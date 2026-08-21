@@ -7702,3 +7702,10 @@ pas parce que les cinq composants ordinaires sont présents. Le contrat DAT
 §42.2 bis est donc complété et poussé avant le correctif : `systemd-container`
 est une dépendance explicite, et la demande rootless reprend le seul service
 utilisateur inachevé sans basculer un démon enraciné.
+
+Le même relevé établit une seconde garde : `exec_capture` rend le code de sortie
+justement pour que la lecture accepte `1` sans confondre « absent » et « panne ».
+Cette règle ne vaut pas pour l'installation. Un script qui rend non zéro doit
+faire échouer le POST et empêcher l'audit de succès; le correctif la pose aussi,
+afin qu'une prochaine dépendance manquante ne soit pas silencieusement traitée
+comme un amorçage accompli.

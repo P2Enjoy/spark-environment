@@ -6353,6 +6353,13 @@ donc le triplet sans lever ; seule une opération qu'Incus refuse lève
 `IncusError`. Confondre les deux ferait échouer l'amorçage sur ce qu'il est
 précisément venu constater.
 
+Cette tolérance appartient à la **lecture**. Une commande d'installation qui
+rend un code non nul est l'inverse : elle n'a pas produit l'état voulu. Le
+POST la rend donc `502 bootstrap_failed`, avec son seul code de sortie, et ne
+trace aucun succès. Continuer jusqu'au compte rendu donnerait « amorcé » après
+une commande interrompue — le mode de panne que la reprise rootless vient de
+mesurer.
+
 ### 42.6 Ce que la détection exécute, exactement
 
 Une seule commande par cellule, et elle n'écrit rien. Elle rend une ligne par
