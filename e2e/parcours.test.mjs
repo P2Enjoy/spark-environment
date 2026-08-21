@@ -603,6 +603,49 @@ test('le disque OCCUPÉ refuse d’être rétréci, et le dit autrement', async 
   });
 });
 
+// --- SPK-58 · L'ENVIRONNEMENT D'UN SPARK (§43) -----------------------------
+
+test('l’environnement se lit avec l’ORIGINE de chaque valeur', async () => {
+  await parcours('env-origines', async () => {
+    // §43.9.4 : c'est l'information la plus difficile à reconstituer. Sans elle,
+    // on lit une valeur sans pouvoir dire pourquoi elle est celle-là — et on va
+    // la chercher au mauvais endroit.
+    //
+    // Le seed pose les trois origines sur « crm-production » (§28.5).
+    await ouvrir('crm-production', 'environnement');
+    await page.waitForSelector('#titre-env-forge', { timeout: 10000 });
+
+    const ecran = await page.innerText('body');
+    assert.match(ecran, /Héritée de la Forge/);
+    assert.match(ecran, /Surcharge la Forge/);
+    assert.match(ecran, /Propre à ce Spark/);
+
+    // La surcharge porte bien la valeur DU SPARK, pas celle de la Forge.
+    const ligne = await page.innerText(
+      'tr:has(th:text-is("SMTP_HOST"))');
+    assert.match(ligne, /relais\.crm\.example/);
+    assert.doesNotMatch(ligne, /relais\.interne\.example/);
+  });
+});
+
+test('la valeur d’un SECRET ne s’affiche NULLE PART à l’écran', async () => {
+  await parcours('env-secret', async () => {
+    // La Definition of Done de l'unité, éprouvée depuis le parcours canonique :
+    // on CHERCHE la valeur seedée dans tout le texte rendu, pas seulement là où
+    // on s'attend à ne pas la trouver.
+    await ouvrir('crm-production', 'environnement');
+    await page.waitForSelector('#titre-env-forge', { timeout: 10000 });
+
+    const ecran = await page.innerText('body');
+    assert.doesNotMatch(ecran, /mot-de-passe-de-demonstration/);
+    assert.doesNotMatch(ecran, /postgres:\/\//);
+    // Le NOM et une empreinte, eux, sont là : c'est ce qui permet de comparer
+    // deux Sparks sans rien révéler (§43.3).
+    assert.match(ecran, /SMTP_PASSWORD/);
+    assert.match(ecran, /DATABASE_URL/);
+  });
+});
+
 // --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
 
 test('un geste sensible envoie une alerte hors bande, un geste ordinaire non', async () => {
