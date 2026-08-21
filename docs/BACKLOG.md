@@ -645,14 +645,32 @@ centrale du produit.
   `cpu.max` reste `max`, donc le burst est préservé. Le poids de la tranche est
   passé à `100` à la création d'un Spark réservant 1 CPU, exactement la valeur du
   tableau du §32.2.
-- **Reste à prouver, et c'est le seul écart** : sous contention **totale** — les
-  trois tranches de l'hôte exécutables simultanément —, la part converge vers
-  `r / C`. La mesure du 2026-08-19 a donné **50 %** au lieu de 25 %, parce que
-  deux des trois tranches de l'hôte étaient au repos : un poids cgroup ne se
-  partage qu'entre frères **exécutables**. L'écart joue en faveur du locataire —
-  la réservation est un **plancher** tenu et dépassé — mais l'égalité annoncée
-  par la DoD n'est pas établie. Voir §32.2, sous-section « ce que la mesure a
-  corrigé ».
+**MESURE SOUS CONTENTION TOTALE, le 2026-08-21**, sur la Forge de validation —
+et elle a trouve un DEFAUT GRAVE avant de pouvoir rien mesurer.
+
+- **Le poids etait ecrase par systemd, en silence.** `spark.slice` est une unite
+  systemd, donc systemd est l'autorite sur ses proprietes de cgroup ; l'unite
+  porte `CPUWeight=1` comme point de depart et le **reaffirme** a chaque
+  reconciliation. Le produit ecrivait le fichier `cpu.weight` : sa valeur tenait
+  jusqu'au premier `daemon-reload`, puis retombait a **1**. MESURE :
+  `ecriture -> 180`, `daemon-reload -> 1`. La promesse centrale du produit
+  s'evaporait sans qu'aucun controle ne rougisse — le registre et le calcul
+  restaient justes. **Corrige** : le poids se pose par
+  `systemctl set-property`, et systemd le reaffirme au lieu de l'ecraser
+  (§32.4 bis). Verifie sur la Forge : 180 avant ET apres reconciliation.
+- **Le mecanisme est ensuite verifie au pour-cent pres** : `spark.slice` a 180
+  contre deux tranches a 100, la loi predit `180/(180+200) = 47,4 %`, la machine
+  rend **47,9 %** sur 25 secondes de contention a trois.
+- **La mesure corrige la loi une seconde fois** : `init.scope` est reste a
+  **zero** — il ne contient que PID 1 et n'est jamais executable. Le `H = 300`
+  pose est donc optimiste, le `H` reel vaut 200, et la tranche obtient
+  systematiquement PLUS que la part visee.
+
+- **Reste avant `[x]`, et c'est un ARBITRAGE du responsable, plus une mesure** :
+  garder `H = 300` pose — la reservation reste un **plancher** tenu et depasse,
+  ce que le produit fait et annonce aujourd'hui — ou **mesurer `H`** pour que la
+  reservation devienne une egalite, au prix d'un poids qui bouge avec l'activite
+  de la Forge. Les deux voies sont ecrites au §32.2.
 - La console continue donc de **ne pas** présenter la réservation comme une
   garantie absolue, conformément à la DoD.
 
