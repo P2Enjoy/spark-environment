@@ -65,7 +65,7 @@ function lignes(entrees) {
   <tbody>${entrees.map((e) => {
     const origine = ORIGINES[e.origin] ?? ORIGINES.spark;
     return `<tr>
-      <th scope="row" class="technique">${echapper(e.name)}</th>
+      <th scope="row" class="technique nom-cellule">${echapper(e.name)}</th>
       ${cellule(e)}
       <td><span class="badge badge--${origine.token}">${echapper(origine.libelle)}</span></td>
       <td class="technique">${echapper((e.updated_at || '').slice(0, 10))}</td>

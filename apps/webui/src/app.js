@@ -926,6 +926,45 @@ function brancherPanneaux() {
     // `brancherModale` (§6.27).
   });
 
+  // SPK-58 · §43 : les deux sections de la facette Environnement. Elles ont leur
+  // propre état, comme les quotas et pour le même motif : leur SUJET est la
+  // section, pas les panneaux d'administration (§6.27).
+  for (const bouton of racine.querySelectorAll('[data-ouvre-env]')) {
+    bouton.addEventListener('click', () => {
+      const e = etat.envUi;
+      e.open = bouton.dataset.ouvreEnv;
+      e.refusal = null;
+      // Champs VIDES, et c'est voulu : on pose une variable neuve, on ne
+      // modifie pas celle d'à côté. Pré-remplir ferait croire qu'on édite.
+      e.values = { name: '', value: '', secret: false };
+      peindre();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-env-retire]')) {
+    bouton.addEventListener('click', () => retirerEnv(
+      bouton.dataset.envRetire, bouton.dataset.envPortee));
+  }
+  for (const niveau of ['forge', 'spark']) {
+    const formulaire = racine.querySelector(`[data-modale="env-${niveau}"]`);
+    if (!formulaire) continue;
+    for (const controle of formulaire.querySelectorAll('input')) {
+      controle.addEventListener('input', () => {
+        // Sans repeindre : `innerHTML` arracherait le focus en cours de frappe
+        // (§14.3).
+        const champ = { env_name: 'name', env_value: 'value',
+                        env_secret: 'secret' }[controle.name];
+        if (champ) {
+          etat.envUi.values[champ] =
+            controle.type === 'checkbox' ? controle.checked : controle.value;
+        }
+      });
+    }
+    formulaire.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      poserEnv(niveau);
+    });
+  }
+
   const quotas = racine.querySelector('[data-modale="quotas"]');
   if (quotas) {
     for (const controle of quotas.querySelectorAll('input')) {
@@ -1132,6 +1171,50 @@ const CLES_QUOTA = {
  * **Le refus reste dans la modale**, avec la saisie intacte : une modale qui se
  * refermerait sur un refus ferait perdre le travail ET cacherait la raison.
  */
+/**
+ * Pose une variable d'environnement (SPK-58, docs/DAT.md §43.9.5).
+ *
+ * Le refus reste DANS la modale, sans effacer la saisie (§6.27) : une modale qui
+ * se refermerait ferait perdre le travail ET cacherait la raison.
+ */
+async function poserEnv(niveau) {
+  const e = etat.envUi;
+  e.busy = true;
+  e.refusal = null;
+  peindre();
+
+  const nom = String(e.values.name || '').trim();
+  const chemin = niveau === 'forge'
+    ? `/v1/env/${encodeURIComponent(nom)}`
+    : `/v1/sparks/${encodeURIComponent(etat.spark.name)}/env/${encodeURIComponent(nom)}`;
+  const vu = await appel('PUT', chemin,
+                         { value: e.values.value, secret: Boolean(e.values.secret) });
+  e.busy = false;
+
+  if (!vu.ok) {
+    e.refusal = { niveau,
+                  message: vu.corps?.detail?.message ?? 'Le serveur a refusé cette variable.' };
+    return peindre();
+  }
+  // §1.3 : rien n'est présenté comme réussi avant que la Forge ne l'ait rendu.
+  e.open = false;
+  await router();
+}
+
+/** Retire une entrée. Le geste est réversible : on la repose (§6.24). */
+async function retirerEnv(nom, portee) {
+  const chemin = portee === 'forge'
+    ? `/v1/env/${encodeURIComponent(nom)}`
+    : `/v1/sparks/${encodeURIComponent(etat.spark.name)}/env/${encodeURIComponent(nom)}`;
+  const vu = await appel('DELETE', chemin);
+  if (!vu.ok) {
+    etat.envUi.refusal = { niveau: portee,
+                           message: vu.corps?.detail?.message ?? 'Le serveur a refusé ce retrait.' };
+    return peindre();
+  }
+  await router();
+}
+
 async function appliquerQuotas() {
   const q = etat.quotas;
   q.busy = true;
@@ -2109,7 +2192,7 @@ function router() {
   // adresse. L'omettre ici le rendait inatteignable au rechargement — et
   // l'onglet menait à la facette « Infos ». Mesuré.
   const detail = location.hash.match(
-    /^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|terminal|docker|journal))?$/);
+    /^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|environnement|terminal|docker|journal))?$/);
   if (detail) return chargerDetail(decodeURIComponent(detail[1]), detail[2] ?? '');
   etat.route = 'liste';
   etat.spark = null;

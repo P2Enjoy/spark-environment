@@ -351,6 +351,26 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         return new Response(JSON.stringify(s ? { ...s, id: 'S1' } : { detail: { message: 'inconnu' } }),
                             { status: s ? 200 : 404 });
       }
+      // SPK-58 · §43.9.4 : les TROIS origines et un secret. Une capture qui n'en
+      // montrerait qu'une ne dirait pas ce que la colonne existe pour distinguer.
+      if (url.includes('/env')) {
+        return new Response(JSON.stringify({ env: [
+          { name: 'TZ', is_secret: false, value: 'Europe/Paris', fingerprint: null,
+            scope: 'forge', origin: 'forge', updated_at: '2026-08-21T08:00:00' },
+          { name: 'SMTP_HOST', is_secret: false, value: 'relais.crm.example',
+            fingerprint: null, scope: 'spark', origin: 'overridden',
+            updated_at: '2026-08-21T08:10:00' },
+          { name: 'APP_NAME', is_secret: false, value: 'crm-production',
+            fingerprint: null, scope: 'spark', origin: 'spark',
+            updated_at: '2026-08-21T08:12:00' },
+          { name: 'SMTP_PASSWORD', is_secret: true, value: null,
+            fingerprint: 'a41f0c9e2b77', scope: 'forge', origin: 'forge',
+            updated_at: '2026-08-20T17:30:00' },
+          { name: 'DATABASE_URL', is_secret: true, value: null,
+            fingerprint: '07acff4bc411', scope: 'spark', origin: 'spark',
+            updated_at: '2026-08-21T08:15:00' },
+        ] }), { status: 200 });
+      }
       if (url.includes('/usage')) {
         const nom = decodeURIComponent(url.match(/sparks\/([^/]+)\/usage/)[1]);
         return new Response(JSON.stringify(USAGE[nom] ?? {}), { status: 200 });
@@ -1367,6 +1387,20 @@ await page.click('dialog.modale[open] [data-engage="quotas"]');
 await page.waitForSelector('dialog.modale[open] .refus', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '55-quotas-refus-disque.png') });
 console.log('  55-quotas-refus-disque.png');
+ctx.server.close();
+
+// SPK-58 · §43 : la facette Environnement, ses deux sections et ses secrets
+// masqués. Puis la modale, qui annonce que rien ne redémarre (§43.7).
+ctx = await demarrer();
+await ouvrirDetail(ctx.base, { facette: 'environnement', hauteur: 1100 });
+await page.waitForSelector('#titre-env-forge', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '56-environnement.png'), fullPage: true });
+console.log('  56-environnement.png');
+
+await page.click('[data-ouvre-env="spark"]');
+await page.waitForSelector('dialog.modale[open] #env-nom-spark', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '57-environnement-modale.png') });
+console.log('  57-environnement-modale.png');
 ctx.server.close();
 
 await navigateur.close();
