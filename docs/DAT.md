@@ -6766,3 +6766,161 @@ lequel la chaîne d'audit (§36), la signature (§36.10) et une notification fut
 
 Elle ne protège pas non plus contre un poste compromis (§45.2) : la clé y est, et
 elle est restreinte pour tout le monde de la même façon.
+
+## 47. La notification hors bande : contrat (SPK-62)
+
+Le §45.4 la retient, et son motif est le plus important de la liste : **elle ne
+prévient pas, elle détecte.** C'est la seule mesure qui serve encore quand tout le
+reste a échoué — y compris contre le poste compromis que le §45.2 assume ne pas
+traiter. Un attaquant qui a la clé, le poste et l'API ne peut pas empêcher un
+message de partir vers un canal qu'il ne connaît pas.
+
+### 47.1 Où elle s'accroche, et pourquoi pas ailleurs
+
+**Sur `audit.record()`, côté Forge, et nulle part ailleurs.**
+
+Le §21.1 en fait le **seul chemin** vers `audit_log`. Toute écriture y passe,
+qu'elle vienne de la console, d'un appel direct à l'API, ou d'un script lancé sur
+la Forge. S'accrocher à la console laisserait sortir sans un mot exactement les
+gestes qu'on cherche à détecter — ceux que quelqu'un fait en la contournant.
+
+C'est le même raisonnement qu'au `CLAUDE.md` §10 : une règle qui ne vit que dans
+l'interface n'existe pas.
+
+### 47.2 Ce qui notifie, et ce qui ne notifie pas
+
+La liste est **FERMÉE et énumérée**, jamais déduite d'un motif. Un motif du genre
+« tout ce qui contient `delete` » laisserait passer `spark.unprotect`, qui est le
+geste le plus grave de la liste, et ferait notifier `spark.settle` le jour où on
+le renommerait.
+
+**Notifient** — les gestes qui détruisent, et ceux qui ouvrent :
+
+| Action | Ce qu'elle fait, et pourquoi elle notifie |
+|---|---|
+| `spark.delete` | détruit un Spark et ses données |
+| `spark.unprotect` | **lève** une protection : c'est le geste qui rend tous les autres possibles (§35) |
+| `snapshot.delete` | détruit le point de retour |
+| `snapshot.restore` | écrase l'état courant, et perd ce qui suivait l'instantané |
+| `sshkey.revoke` | retire un accès |
+| `sshkey.grant` | **donne** un accès à un Spark |
+| `port.withdraw` | referme un port publié |
+| `ingress.withdraw` | retire un nom public |
+| `spark.rescue_exec` | ouvre un shell **root** dans une cellule sans passer par son `sshd` (§37.3) |
+
+**Ne notifient PAS**, et c'est délibéré :
+
+- **les lignes du runtime** (`actor_class = "runtime"`) — `spark.settle`,
+  `spark.reconcile`, `ingress.reconcile`. Personne ne les a demandées (§36.4), et
+  les notifier noierait les neuf lignes ci-dessus sous des dizaines d'autres.
+  Un canal qui crie tout le temps n'est plus lu, et c'est la panne la plus
+  probable de ce dispositif ;
+- **les gestes de construction** — `spark.create`, `snapshot.create`,
+  `ingress.declare`, `port.publish`, `image.add`. Ils ne détruisent rien et ne
+  donnent aucun accès ;
+- **les lectures** — le §36.7 ne les journalise même pas ;
+- **les refus** (`result = "denied"`) — rien n'a eu lieu. Un refus se lit au
+  journal ; le notifier apprendrait à ignorer le canal.
+
+**Une notification qui ÉCHOUE ne notifie pas.** C'est évident et il faut l'écrire :
+sans cette règle, un canal en panne produirait une boucle infinie de notifications
+d'échec de notification.
+
+### 47.3 Le canal : un webhook, et le motif de ce choix
+
+`SPARKD_NOTIFY_URL` — une URL, et un `POST` de JSON dessus. Rien d'autre.
+
+Pourquoi celui-là plutôt qu'un courriel, un SMS ou un service nommé :
+
+- il n'introduit **aucune dépendance payante ni aucun compte** (`CLAUDE.md` §19) ;
+- il atteint tout ce que le responsable voudra : Slack, Discord, `ntfy`, un
+  script maison derrière un port ;
+- il se **double localement** trivialement — un serveur HTTP jetable —, comme
+  `SPARK_DNS_BASE_URL` le fait déjà pour le fournisseur DNS (§38.1). Une preuve
+  peut donc mesurer ce qui part réellement, et non ce qu'on croit envoyer.
+
+**Absente, la fonction se DÉSACTIVE, et ce n'est pas une panne** (§14.5). Une
+Forge sans canal fonctionne exactement comme aujourd'hui. L'écran de la Forge le
+DIT, au lieu de laisser croire qu'un canal veille.
+
+### 47.4 Ce que l'envoi porte, et ce qu'il ne portera jamais
+
+```json
+{
+  "version": "spark-notify-v1",
+  "ts": "2026-08-21T00:12:03+00:00",
+  "forge": "spark-experiment",
+  "action": "spark.delete",
+  "actor": "console/prod key=SHA256:AbCd",
+  "actor_class": "human",
+  "target_type": "spark",
+  "target_id": "S3",
+  "result": "ok",
+  "message": "Spark « crm-production » supprimé."
+}
+```
+
+**Le `payload` n'y est PAS.** C'est là que vivent les valeurs d'un geste — corps
+de clé, réglages, chemins —, et le §21.2 le caviarde déjà pour le journal. Ne pas
+l'envoyer du tout est plus sûr que de le caviarder une seconde fois : un champ
+qu'on n'envoie pas ne fuit pas.
+
+Le `message`, lui, passe par le filtre du §21.2 **avant** d'être écrit au journal,
+donc avant d'arriver ici. Une preuve mesure ce que l'envoi porte RÉELLEMENT, sur
+un geste dont le payload contient un secret : le secret ne doit apparaître nulle
+part dans le corps envoyé.
+
+`forge` est le nom d'hôte, celui que `GET /v1/forge` rend déjà. Il sert quand
+plusieurs Forges écrivent dans le même canal : « un Spark a été supprimé » sans
+dire où est une alerte inexploitable.
+
+### 47.5 Un canal injoignable ne fait JAMAIS échouer un geste
+
+C'est la règle qui décide de la forme du code, et elle vient du §37.4.5 : une
+panne de traçabilité ne doit pas devenir une panne d'exploitation.
+
+- l'envoi part dans un **fil séparé**, jamais dans la transaction SQLite du geste.
+  Un `POST` de trois secondes tenu à l'intérieur d'une transaction bloquerait
+  l'unique écrivain de SQLite pour toute la Forge ;
+- il porte un **délai de garde court** — cinq secondes, connexion et lecture
+  comprises ;
+- **aucune exception ne remonte** à l'appelant. `record()` rend `None` comme
+  avant, quoi qu'il arrive au canal ;
+- une file **bornée**. Pleine, on jette les plus anciens et on compte ce qu'on a
+  jeté : une file non bornée transforme un canal muet en fuite de mémoire, et la
+  Forge tomberait pour une raison qui n'a rien à voir avec son travail.
+
+### 47.6 L'échec est DIT, et voici où
+
+`GET /v1/forge` gagne un objet `notify` :
+
+```json
+{ "configured": true, "sent": 12, "failed": 3, "dropped": 0,
+  "last_error": "connexion refusée", "last_error_at": "2026-08-21T00:12:08+00:00" }
+```
+
+`configured: false` quand aucune URL n'est réglée — et alors les compteurs valent
+zéro sans que cela signifie « tout va bien » : ils signifient « rien n'est
+surveillé », ce que l'écran doit dire autrement (§14.6).
+
+**Pourquoi un état exposé plutôt qu'une ligne de journal**, et il faut le dire
+franchement : une ligne de journal serait meilleure — elle survivrait à un
+redémarrage et entrerait dans la chaîne. Elle exige une écriture SQLite depuis le
+fil d'envoi, donc une seconde connexion et une concurrence d'écriture que le §36.9
+n'a jamais eu à traiter. Le compteur en mémoire rend l'écart VISIBLE, ce que la
+DoD exige, sans introduire ce risque. **Ce qu'il ne fait pas** : survivre à un
+redémarrage de `sparkd`. C'est une limite connue, elle est écrite, et l'écran ne
+prétend pas le contraire.
+
+### 47.7 Ce que cette unité ne prétend pas
+
+- **Elle ne prévient rien.** Le geste a eu lieu quand le message part. C'est le
+  §45.4 : elle détecte, et c'est pour cela qu'elle sert encore quand tout le reste
+  a échoué.
+- **Elle ne résiste pas à `root` sur la Forge.** Qui y détient `root` change
+  `SPARKD_NOTIFY_URL` ou coupe le réseau sortant. Le §35.1 assume déjà cette
+  limite pour la protection ; elle vaut ici.
+- **Elle ne garantit pas la remise.** Aucun réessai, aucune persistance : un
+  canal muet perd le message, et le compteur le dit. Un mécanisme de remise
+  garantie demanderait une file durable, donc un état à défendre — hors de
+  proportion avec ce que l'unité apporte.
