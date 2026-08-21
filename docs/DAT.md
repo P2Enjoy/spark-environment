@@ -2131,10 +2131,46 @@ aussi ce qu'il accepte** : tout caractère hors ASCII imprimable est écarté à
 l'entrée du journal.
 
 L'empreinte est relevée à l'ouverture du tunnel, sur la sortie de diagnostic
-d'OpenSSH (`LogLevel=VERBOSE`), qui nomme la clé acceptée par le serveur. Elle
-n'est **pas devinée** : un tunnel local (§28.2) n'en a aucune, un agent muet n'en
-donne aucune, et dans ces cas l'en-tête ne porte que le serveur. Écrire une
-empreinte plausible plutôt que rien serait le pire des deux mondes.
+d'OpenSSH, qui nomme la clé acceptée par le serveur. Elle n'est **pas devinée** :
+un tunnel local (§28.2) n'en a aucune, un agent muet n'en donne aucune, et dans
+ces cas l'en-tête ne porte que le serveur. Écrire une empreinte plausible plutôt
+que rien serait le pire des deux mondes.
+
+##### Le niveau de journalisation, CORRIGÉ par la mesure du 2026-08-21
+
+Cette section prescrivait `LogLevel=VERBOSE`. **Mesuré contre un vrai `sshd`** —
+OpenSSH 8.9 client, Forge de validation, un tunnel ouvert avec exactement les
+options du produit :
+
+| `LogLevel` | lignes émises | « Server accepts key » |
+|---|---|---|
+| `VERBOSE` | **1** | **aucune** |
+| `DEBUG1` | 81 | **1** |
+
+`Server accepts key` est une ligne `debug1:`. `VERBOSE` s'arrête un cran avant et
+n'émet que « Authenticated to … using "publickey" ». **La branche « empreinte
+déterminée » ne se produisait donc jamais** : tout geste était attribué à
+`console/<serveur>` sans clé, et rien ne le signalait — la valeur de repli est
+légitime, elle ne se distingue pas d'une valeur de repli méritée.
+
+Le niveau est donc **`DEBUG1`**, et la sortie qu'il faut savoir traiter est celle
+de 81 lignes, pas d'une.
+
+##### Le flux porte DEUX empreintes, et l'ordre est un piège
+
+Sous `DEBUG1`, OpenSSH nomme d'abord la clé de l'**hôte**, ensuite seulement
+celle qui a été acceptée :
+
+```
+debug1: Server host key: ssh-ed25519 SHA256:bD6x1G+jq9RnMa9c…
+debug1: Server accepts key: /home/…/id_ed25519 ED25519 SHA256:Vf2N7ryPnZPNBN+v…
+```
+
+Une expression qui chercherait « la première `SHA256:` » attribuerait donc chaque
+geste à **l'empreinte du serveur**, identique pour tous les opérateurs : une
+identité qui n'identifie personne, et qui en aurait l'air. L'expression est
+ancrée sur `Server accepts key:`, et elle doit le rester — vérifié sur le flux
+réel, elle rend bien la clé du poste.
 
 #### 21.6.4 Le journal ne se récrit pas par mégarde
 
