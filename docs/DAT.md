@@ -6286,7 +6286,9 @@ seul moment où le choix se fait sans rien casser. L'écran le dit.
 service, exécute `dockerd-rootless-setuptool.sh install` sous ce compte avec son
 `XDG_RUNTIME_DIR` **et** son `DBUS_SESSION_BUS_ADDRESS`, et pose `loginctl
 enable-linger` — sans quoi le démon meurt à la fin de la session du compte, ce
-qui donnerait une cellule qui marche jusqu'au premier redémarrage.
+qui donnerait une cellule qui marche jusqu'au premier redémarrage. Avant
+l'installation, il remplace les sous-plages `subuid` et `subgid` par une plage
+réservée à ce seul compte et **contenue dans l'idmap effectif de la cellule**.
 
 **Reprendre une pose rootless interrompue n'est pas basculer.** Mesuré le
 2026-08-21 : l'image Debian ne porte pas `machinectl`; l'ancien script installait
@@ -6298,15 +6300,24 @@ inexistante, puis, même corrigée avec `.host`, a quitté sans créer d'unité.
 bus est pourtant disponible : mesuré avec `runuser -u spark-docker`,
 `XDG_RUNTIME_DIR=/run/user/<uid>` et
 `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<uid>/bus`, `systemctl --user`
-répond `active`. C'est donc ce chemin explicite, sans `machinectl`, qui installe
-et relève le démon. Le relevé ne rend `rootless` que si **les deux** sont vrais :
-le service utilisateur sous ce bus est `active` et `docker info`, pointé
-explicitement vers `/run/user/<uid>/docker.sock`, répond. Sinon il rend `null`.
-Lorsqu'un appel demande **rootless** et trouve exactement cet état — démon root
-absent, aucun démon rootless utilisable — il réexécute la seule préparation
-rootless; il ne réinstalle ni ne démarre le démon root et ne déplace aucun
-conteneur. Le compte rendu ajoute la ligne `rootless` pour que `changed: true`
-nomme ce qui a été repris.
+répond `active`. Enfin, le premier lancement réel a révélé que `useradd` donne
+à `spark-docker` la sous-plage `100000:65536`, alors qu'une cellule Incus non
+privilégiée ne peut déléguer que sa propre plage — ici `0:65536`. `newuidmap`
+refuse donc ce premier choix avec `Operation not permitted`. L'amorçage lit la
+première ligne de `/proc/self/uid_map` et de `gid_map`, vérifie qu'elle commence
+à `0`, puis réserve pour **ce seul compte** `[uid + 1, fin de la plage[` dans
+`/etc/subuid` et `/etc/subgid`. S'il ne reste aucune identité délégable, il
+échoue : inventer une plage hors idmap contournerait l'isolation Incus.
+
+C'est donc ce chemin explicite, sans `machinectl`, qui installe et relève le
+démon. Le relevé ne rend `rootless` que si **les deux** sont vrais : le service
+utilisateur sous ce bus est `active` et `docker info`, pointé explicitement vers
+`/run/user/<uid>/docker.sock`, répond. Sinon il rend `null`. Lorsqu'un appel
+demande **rootless** et trouve exactement cet état — démon root absent, aucun
+démon rootless utilisable — il réexécute la seule préparation rootless; il ne
+réinstalle ni ne démarre le démon root et ne déplace aucun conteneur. Le compte
+rendu ajoute la ligne `rootless` pour que `changed: true` nomme ce qui a été
+repris.
 
 Si un démon root tourne, le mode est `enracine` et le refus de bascule reste
 `409`, sans exception. Si le second relevé ne trouve toujours pas `rootless`, le
