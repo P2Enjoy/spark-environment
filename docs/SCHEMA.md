@@ -290,6 +290,40 @@ l'intégrité, l'autre l'intention.
 
 Une ligne produite par le **runtime** porte `NULL` aux trois (`docs/DAT.md` §36.4).
 
+## 10 ter. `env_entry` : l'environnement d'un Spark (SPK-58)
+
+Migration `010_environnement.sql`. Contrat complet : `docs/DAT.md` §43.9.
+
+| Colonne | Type | Contenu |
+|---|---|---|
+| `id` | TEXT | clé primaire |
+| `scope` | TEXT | `forge` ou `spark` |
+| `spark_id` | TEXT | le Spark visé, `NULL` **si et seulement si** `scope = 'forge'` |
+| `name` | TEXT | le nom de la variable, grammaire du shell `[A-Za-z_][A-Za-z0-9_]*` |
+| `is_secret` | INTEGER | `0` ou `1` — **déclaré**, jamais deviné (`docs/DAT.md` §43.3) |
+| `value` | TEXT | la valeur en clair, ou `NULL` si l'entrée est secrète |
+| `value_enc` | TEXT | le chiffré AES-256-GCM, ou `NULL` si l'entrée ne l'est pas |
+| `fingerprint` | TEXT | HMAC-SHA-256 tronqué, ou `NULL` |
+| `updated_at` | TEXT | horodatage du dernier changement |
+
+**Une table pour les deux portées.** Les deux niveaux du §43.6 partagent les
+mêmes colonnes et les mêmes règles ; deux tables imposeraient d'écrire deux fois
+la validation, le chiffrement et la résolution, puis de les faire diverger.
+
+**L'unicité tient en deux index PARTIELS**, et c'est une contrainte de SQLite,
+pas un choix de style : un `UNIQUE (scope, spark_id, name)` ne protégerait rien
+au niveau Forge, SQLite tenant deux `NULL` pour distincts.
+
+**Un déclencheur impose la cohérence des trois colonnes de valeur** : une entrée
+secrète porte un chiffré et une empreinte et **aucune** valeur en clair ; une
+entrée ordinaire l'inverse. Une ligne secrète qui porterait sa valeur en clair
+serait exactement la fuite que l'unité existe pour empêcher — la base la refuse
+plutôt que de compter sur le code appelant, comme au §10 bis pour la signature.
+
+**Retour arrière** : le `down` supprime la table, donc les valeurs. Les secrets
+sont perdus, et c'est irréversible même en réappliquant la migration : le
+chiffré part avec la ligne.
+
 ## 11. Retour arrière
 
 Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sans

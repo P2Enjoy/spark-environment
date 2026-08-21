@@ -6304,6 +6304,136 @@ entier — restent hors périmètre de cette section. Ils poseraient d'autres
 questions (taille, format, permissions par fichier) et méritent leur propre
 arbitrage plutôt qu'un élargissement silencieux de celui-ci.
 
+### 43.9 Le contrat vérifiable (écrit le 2026-08-21, avant la première ligne)
+
+Les sections précédentes tranchent la doctrine. Celle-ci dit ce qui s'écrit, ce
+qui se refuse et ce qui se prouve — le reste ne serait qu'une intention.
+
+#### 43.9.1 Le modèle : une seule table, deux portées
+
+    env_entry(id, scope, spark_id, name, is_secret,
+              value, value_enc, fingerprint, updated_at)
+
+**Une table et non deux.** Les deux niveaux du §43.6 partagent exactement les
+mêmes colonnes et les mêmes règles ; deux tables imposeraient d'écrire deux fois
+la validation du nom, deux fois le chiffrement, deux fois la résolution — et de
+les faire diverger. `scope` vaut `forge` ou `spark`, et `spark_id` est NULL si et
+seulement si la portée est `forge`.
+
+**L'unicité tient en DEUX index partiels**, et c'est une contrainte de SQLite,
+pas un choix de style : un `UNIQUE (scope, spark_id, name)` ne protégerait rien
+au niveau Forge, SQLite tenant deux NULL pour distincts. Donc un index unique sur
+`(name)` filtré sur `scope = 'forge'`, et un autre sur `(spark_id, name)` filtré
+sur `scope = 'spark'`.
+
+**Le nom obéit à la grammaire du shell** — `[A-Za-z_][A-Za-z0-9_]*` — et la base
+le vérifie. Un nom qui ne s'exporte pas produirait un fichier qu'`env_file:`
+refuse, et la panne se lirait chez le locataire, loin du geste qui l'a causée.
+
+**Un déclencheur tient la cohérence des trois colonnes de valeur**, comme le
+§10 bis le fait déjà pour la signature d'un geste :
+
+| `is_secret` | `value` | `value_enc` | `fingerprint` |
+|---|---|---|---|
+| `0` | NON NULL | NULL | NULL |
+| `1` | NULL | NON NULL | NON NULL |
+
+Une ligne secrète qui porterait une valeur en clair serait précisément la fuite
+que l'unité existe pour empêcher : la base la refuse plutôt que de compter sur
+le code appelant.
+
+#### 43.9.2 Le chiffrement : AES-256-GCM, et pourquoi pas autrement
+
+**Décision : `cryptography` (PyCA) et AES-256-GCM**, une clé de 32 octets tirée
+d'un fichier de la Forge, un nonce de 96 bits tiré au hasard **par valeur**, et
+le nom de la variable en donnée associée — un chiffré déplacé d'une variable à
+une autre ne se déchiffre donc pas.
+
+Ce qui a été écarté, et le motif :
+
+| Voie | Écartée parce que |
+|---|---|
+| bibliothèque standard seule | Python n'embarque **aucun** chiffrement symétrique : `hashlib` et `hmac` ne chiffrent rien |
+| `openssl enc` en sous-processus | la commande `enc` ne gère pas l'étiquette d'authentification du mode GCM : le chiffré serait **malléable**, et un registre modifiable livrerait un secret altéré sans que rien ne le dise |
+| chiffrement maison | jamais, sur aucun produit |
+
+`cryptography` est maintenue par la Python Cryptographic Authority, sous double
+licence Apache-2.0 / BSD, distribuée en roues précompilées : c'est la dépendance
+que tout le reste de l'écosystème emploie déjà (`CLAUDE.md` §19).
+
+**La clé vit à côté du registre**, en `0600`, à un chemin donné par
+`SPARKD_SECRET_KEY_FILE`. Elle est **créée si elle manque**, comme le pool l'est
+à l'installation — un runtime qui refuserait de démarrer faute d'une clé qu'il
+sait fabriquer ferait perdre un service pour rien. En revanche, une clé
+**présente mais illisible ou de mauvaise taille** est une erreur franche : la
+fabriquer par-dessus rendrait tous les secrets existants indéchiffrables en
+silence.
+
+**Perdre la clé, c'est perdre les secrets**, et rien d'autre : les variables
+ordinaires restent lisibles. Cela se dit au manuel et à `docs/CONTINGENCE.md`,
+sans quoi la première sauvegarde du seul `.db` donnera l'illusion d'une reprise
+complète.
+
+#### 43.9.3 L'empreinte : un HMAC, jamais un hachage nu
+
+Le §43.3 veut qu'on puisse répondre à « est-ce la même valeur que sur l'autre
+Spark ? » sans montrer la valeur. Un préfixe de SHA-256 nu le permettrait — et
+livrerait les secrets faibles : `admin`, `changeme` ou un jeton court se
+retrouvent par force brute en quelques secondes, puisque la fonction est publique
+et sans clé.
+
+**L'empreinte est donc un HMAC-SHA-256 pris avec la clé de la Forge**, rendu sur
+12 caractères hexadécimaux. Elle reste comparable entre deux Sparks de la même
+Forge — ce que le §43.3 demande — et ne se retourne pas sans la clé. Elle n'est
+**pas** comparable d'une Forge à l'autre, et c'est voulu : deux Forges n'ont
+aucune raison de partager un espace de noms de secrets.
+
+#### 43.9.4 La résolution : ce que le Spark reçoit, et d'où cela vient
+
+La résolution rend, pour un Spark, la liste des noms avec leur **origine** :
+
+| Origine | Ce que cela veut dire |
+|---|---|
+| `forge` | définie au niveau de la Forge, et non surchargée |
+| `spark` | définie sur ce Spark seul |
+| `overridden` | définie aux deux niveaux ; c'est la valeur du Spark qui s'applique |
+
+**La surcharge se fait nom par nom**, jamais jeu par jeu (§43.6) : surcharger
+`SMTP_HOST` sur un Spark ne doit pas lui faire perdre le `SMTP_PORT` hérité.
+
+**Un secret et une variable ordinaire du même nom ne cohabitent pas** aux deux
+niveaux sans conséquence : la ligne retenue décide du fichier de destination, et
+c'est la ligne du Spark. Une variable ordinaire du Spark masque donc un secret de
+la Forge — et l'écran le dit, parce que le contraire ferait chercher une valeur
+dans un fichier où elle n'est pas.
+
+#### 43.9.5 Les refus, chacun distinct
+
+| Situation | Réponse |
+|---|---|
+| Spark protégé | `423 Locked` — c'est déjà la convention du produit pour toute écriture visant un Spark gelé (§35.2) |
+| nom hors grammaire du shell | `422` avec le nom fautif |
+| valeur d'un secret relue par l'API | jamais rendue — il n'y a pas de route pour cela, ce n'est pas un refus mais une absence |
+| Spark inconnu | `404` |
+
+**Un secret ne se « révèle » par aucun geste.** Il n'existe aucune route qui le
+rende : on le remplace, ou on le retire. Une route de révélation, même protégée,
+finirait par être appelée par un outil branché sur l'API, et le §43.3 tomberait.
+
+#### 43.9.6 Le découpage, et où en est l'unité
+
+Cette unité est trop large pour une session ; le découpage est écrit ici plutôt
+que laissé à la mémoire d'une conversation (`CLAUDE.md` §5) :
+
+1. **le magasin** — migration, chiffrement, empreinte, service de lecture et
+   d'écriture, résolution des deux niveaux, audit sans valeur ;
+2. **la matérialisation** — les deux fichiers du §43.5.2 posés dans la cellule à
+   la création, au changement, au démarrage et après restauration d'instantané ;
+3. **l'écran** — onglet *Environnement*, une section par niveau, l'origine de
+   chaque valeur, le champ de secret en écriture seule ;
+4. **le manuel et le seed**, et la preuve du §43.0 essai F refaite sur le fichier
+   que le produit écrit.
+
 
 ## 44. Le briefing d'un Spark : ce qu'un agent doit savoir en entrant
 
