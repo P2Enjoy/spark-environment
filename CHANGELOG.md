@@ -418,6 +418,10 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- `docs/CloudWorker.md` §2.1 ter : `pkill -f vite` remplacé par un geste qui ne
+  vise **que ce qui tient le port 4173**. Mesuré : `-f` fait correspondre la ligne
+  de commande entière, donc la commande tuait tout processus mentionnant ce mot —
+  y compris le shell d'une session voisine qui ne servait rien.
 - **La pile de développement n'efface plus les serveurs saisis.** `scripts/dev.sh`
   réécrivait l'inventaire en entier à chaque démarrage : les deux serveurs de la
   pile revenaient, et tout ce qui avait été ajouté depuis la console disparaissait.

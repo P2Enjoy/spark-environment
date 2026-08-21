@@ -564,8 +564,22 @@ laissé par une exécution précédente — une série interrompue en laisse un 
 entière sur `http://127.0.0.1:4173 is already used`, ce qui ne dit rien du produit non plus :
 
 ```
-pkill -f vite
+pid=$(ss -ltnp 'sport = :4173' 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)
+[ -n "$pid" ] && kill "$pid"
 ```
+
+**Ne jamais employer `pkill -f vite`**, et le motif de cette interdiction est
+mesuré, pas théorique. L'option `-f` fait correspondre la **ligne de commande
+entière** : la commande ne tue donc pas « les serveurs vite », elle tue **tout
+processus dont la ligne mentionne ce mot** — un `grep`, un éditeur, une commande
+d'une autre session qui parle de vite en passant. Relevé le 2026-08-21 sur cette
+machine : `pgrep -af vite` a rendu le shell d'une session voisine, qui ne servait
+rien du tout.
+
+Sur une machine partagée, la version ci-dessus ne vise **que ce qui tient
+réellement le port** — c'est-à-dire la seule chose qui gêne. L'intention de la
+règle a toujours été « libérer 4173 s'il est tenu », jamais « faire le ménage sur
+la machine ».
 
 **Avec ces deux conditions**, les harnais de vérification rendent un verdict qui parle du produit.
 Sans elles, un verdict rouge ne doit être lu ni comme une régression, ni comme une preuve.
