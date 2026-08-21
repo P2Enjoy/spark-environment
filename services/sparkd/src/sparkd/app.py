@@ -1108,6 +1108,160 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=502, detail={
                     "error": "caddy_unavailable", "message": str(erreur)}) from erreur
 
+    # --- SPK-58 · l'environnement (docs/DAT.md §43.9.5) --------------------
+
+    def _rendu_env(entree) -> dict:
+        """Ce que l'API rend d'une entrée. La valeur d'un SECRET n'y est jamais.
+
+        Il n'existe aucune route qui révèle un secret : on le remplace, ou on le
+        retire (§43.3). Une route de révélation, même protégée, finirait par être
+        appelée par un outil branché sur l'API.
+        """
+        return {
+            "name": entree.name, "is_secret": entree.is_secret,
+            "value": entree.value, "fingerprint": entree.fingerprint,
+            "scope": entree.scope, "origin": entree.origin,
+            "updated_at": entree.updated_at,
+        }
+
+    def _cle_de_forge():
+        try:
+            return env_service.charger_cle(config.secret_key_file)
+        except env_service.CleError as erreur:
+            raise HTTPException(status_code=503, detail={
+                "error": "secret_key_unavailable", "message": str(erreur)}) from erreur
+
+    def _sparks_proteges_touches(connection) -> list[str]:
+        """Les Sparks GELÉS qu'une écriture au niveau de la Forge atteindrait."""
+        return [r["name"] for r in connection.execute(
+            "SELECT name FROM spark WHERE protected_at IS NOT NULL ORDER BY name")]
+
+    def _garde_de_forge(connection, body: dict, geste: str) -> None:
+        """Informer, puis accepter — la convention du produit (§43.9.5 bis).
+
+        Un refus ferme gèlerait toute la Forge dès qu'un seul Spark est protégé,
+        et l'exploitant lèverait alors la protection pour contourner : cela
+        protégerait moins, pas plus. Le refus par défaut sert à ce qu'on ne
+        touche pas un Spark gelé SANS LE SAVOIR.
+        """
+        proteges = _sparks_proteges_touches(connection)
+        if proteges and not bool((body or {}).get("accept_protected")):
+            raise HTTPException(status_code=409, detail={
+                "error": "protected_sparks_affected",
+                "message": (
+                    f"{geste} au niveau de la Forge touche "
+                    f"{len(proteges)} Spark(s) protégé(s) : {', '.join(proteges)}. "
+                    "Aucune protection ne sera levée."
+                ),
+                "protected_sparks": proteges,
+                "override": "Renvoyer avec {\"accept_protected\": true}.",
+            })
+
+    def _reposer_partout(connection) -> None:
+        """Repose les fichiers sur TOUS les Sparks : une variable de Forge y
+        descend (§43.6). Un Spark injoignable n'interrompt pas les autres —
+        l'écart sera repris à son prochain démarrage (§43.5.2)."""
+        for rangee in connection.execute(
+                "SELECT id FROM spark WHERE incus_name IS NOT NULL").fetchall():
+            try:
+                _apply_env(connection, service.get(connection, rangee["id"]))
+            except (IncusError, env_service.CleError, service.NotFound):
+                continue
+
+    @app.get("/v1/env", tags=["environnement"])
+    def list_forge_env() -> dict:
+        """Le jeu de la FORGE, hérité par tous ses Sparks (§43.6)."""
+        with registry() as connection:
+            return {"env": [_rendu_env(e) for e in env_service.lister(connection)]}
+
+    @app.put("/v1/env/{name}", tags=["environnement"])
+    def set_forge_env(name: str, body: dict = Body(...)) -> dict:
+        """Pose ou remplace une entrée de la Forge.
+
+        `PUT` et non `POST`, le nom dans le CHEMIN : le geste est idempotent —
+        « cette variable vaut ceci » — et rejouer la requête doit donner le même
+        état, pas une seconde entrée (§43.9.5).
+        """
+        with registry() as connection:
+            _garde_de_forge(connection, body, f"Poser « {name} »")
+            try:
+                entree = env_service.poser(
+                    connection, _cle_de_forge(), "forge", None, name,
+                    str((body or {}).get("value", "")),
+                    secret=bool((body or {}).get("secret")))
+            except env_service.EnvError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_name", "message": str(erreur)}) from erreur
+            # §43.2 : le registre écrit, la cellule suit. Sans cela, les deux
+            # diraient deux choses différentes jusqu'au prochain démarrage.
+            _reposer_partout(connection)
+            return _rendu_env(entree)
+
+    @app.delete("/v1/env/{name}", tags=["environnement"])
+    def unset_forge_env(name: str, body: dict = Body(default={})) -> dict:
+        with registry() as connection:
+            _garde_de_forge(connection, body, f"Retirer « {name} »")
+            retire = env_service.retirer(connection, "forge", None, name)
+            _reposer_partout(connection)
+            # §14.5 : ne pas trouver n'est pas une erreur — l'état voulu est
+            # « cette variable n'est pas définie », et il est atteint.
+            return {"name": name, "removed": retire}
+
+    @app.get("/v1/sparks/{name}/env", tags=["environnement"])
+    def list_spark_env(name: str) -> dict:
+        """Le jeu RÉSOLU du Spark, avec l'origine de chaque valeur (§43.9.4)."""
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            return {"spark": name, "env": [
+                _rendu_env(e) for e in env_service.lister(connection, spark["id"])]}
+
+    @app.put("/v1/sparks/{name}/env/{variable}", tags=["environnement"])
+    def set_spark_env(name: str, variable: str, body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                # §35.2 : le verrou porte sur l'objet, et poser une variable est
+                # une écriture qui LE vise. Le geste de Forge, lui, suit la
+                # convention du §43.9.5 bis.
+                protection_service.ensure_writable(connection, name, "env")
+                entree = env_service.poser(
+                    connection, _cle_de_forge(), "spark", spark["id"], variable,
+                    str((body or {}).get("value", "")),
+                    secret=bool((body or {}).get("secret")))
+                _apply_env(connection, service.by_name(connection, name))
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except env_service.EnvError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_name", "message": str(erreur)}) from erreur
+            except (IncusError, env_service.CleError):
+                # Le registre est écrit ; la cellule sera rattrapée au prochain
+                # démarrage. Le geste n'échoue pas pour autant (§43.5.2).
+                pass
+            return _rendu_env(entree)
+
+    @app.delete("/v1/sparks/{name}/env/{variable}", tags=["environnement"])
+    def unset_spark_env(name: str, variable: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "env")
+                retire = env_service.retirer(
+                    connection, "spark", spark["id"], variable)
+                try:
+                    _apply_env(connection, service.by_name(connection, name))
+                except (IncusError, env_service.CleError):
+                    pass
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            return {"spark": name, "name": variable, "removed": retire}
+
     @app.get("/v1/ssh-keys", tags=["cles"])
     def list_keys() -> dict:
         with registry() as connection:

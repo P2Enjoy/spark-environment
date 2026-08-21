@@ -315,6 +315,141 @@
         ]
       }
     },
+    "/v1/env": {
+      "get": {
+        "description": "Le jeu de la FORGE, hérité par tous ses Sparks (§43.6).",
+        "operationId": "list_forge_env_v1_env_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Forge Env V1 Env Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Forge Env",
+        "tags": [
+          "environnement"
+        ]
+      }
+    },
+    "/v1/env/{name}": {
+      "delete": {
+        "operationId": "unset_forge_env_v1_env__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Unset Forge Env V1 Env  Name  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unset Forge Env",
+        "tags": [
+          "environnement"
+        ]
+      },
+      "put": {
+        "description": "Pose ou remplace une entrée de la Forge.\n\n`PUT` et non `POST`, le nom dans le CHEMIN : le geste est idempotent —\n« cette variable vaut ceci » — et rejouer la requête doit donner le même\nétat, pas une seconde entrée (§43.9.5).",
+        "operationId": "set_forge_env_v1_env__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Forge Env V1 Env  Name  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Forge Env",
+        "tags": [
+          "environnement"
+        ]
+      }
+    },
     "/v1/forge": {
       "get": {
         "description": "Capacité de la Forge et état des pools.\n\nC'est ici que l'admission control devient observable : sans cette vue,\nrien ne permet de savoir pourquoi une création serait refusée.",
@@ -986,6 +1121,167 @@
         "summary": "Run Bootstrap",
         "tags": [
           "amorcage"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/env": {
+      "get": {
+        "description": "Le jeu RÉSOLU du Spark, avec l'origine de chaque valeur (§43.9.4).",
+        "operationId": "list_spark_env_v1_sparks__name__env_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Spark Env V1 Sparks  Name  Env Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Spark Env",
+        "tags": [
+          "environnement"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/env/{variable}": {
+      "delete": {
+        "operationId": "unset_spark_env_v1_sparks__name__env__variable__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "variable",
+            "required": true,
+            "schema": {
+              "title": "Variable",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Unset Spark Env V1 Sparks  Name  Env  Variable  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unset Spark Env",
+        "tags": [
+          "environnement"
+        ]
+      },
+      "put": {
+        "operationId": "set_spark_env_v1_sparks__name__env__variable__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "variable",
+            "required": true,
+            "schema": {
+              "title": "Variable",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Spark Env V1 Sparks  Name  Env  Variable  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Spark Env",
+        "tags": [
+          "environnement"
         ]
       }
     },
