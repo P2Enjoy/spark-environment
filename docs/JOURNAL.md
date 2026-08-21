@@ -5657,12 +5657,18 @@ pas été retiré mais déplacé : coller une clé privée dans ce champ est ref
 
 ### Vérifications
 
-Campagne complète **verte** : 762 Python, contrat conforme, 812 de console, 8 de
+Campagne complète **verte** : 762 Python, contrat conforme, 808 de console, 8 de
 gestes, 72 parcours E2E, 7 du manuel, `build`. Trois captures observées —
 `47-journal-signature.png`, `48-signature-echec.png`,
 `49-signature-echec-mobile.png` — et les illustrations du manuel renouvelées :
 `m12-journal.png` porte désormais de VRAIES lignes signées, produites par la
 chaîne réelle.
+
+**Un manque du contrat de déploiement, fermé au passage** : la migration `009`
+avait été livrée la veille sans son opération. `docs/PROD_MIGRATIONS.md` porte
+désormais **OP-09**, avec son retour arrière et le piège qui compte — poser
+`SPARKD_ALLOWED_SIGNERS` sur un fichier vide ou illisible ferait refuser en 422
+tout geste signé, alors que ne PAS la poser désactive proprement la vérification.
 
 **SPK-40 reste `[~]`**, avec un seul écart, et il est hors de portée d'une
 session : **aucun agent SSH réel n'a signé un geste de bout en bout**. La preuve

@@ -1458,7 +1458,7 @@ Contrat écrit et poussé avant le code — `docs/DAT.md` §36.10.9, et §36.8.5
 - **La clé de signature se déclare depuis l'écran *Serveurs***, pour tous les
   genres. Sans ce champ elle ne se déclarait qu'en éditant un fichier à la main
   — le défaut même que SPK-41 existe pour supprimer.
-- **Preuves** : 2 parcours E2E, 11 de composant, 2 de relais, 5 du vocabulaire ;
+- **Preuves** : 2 parcours E2E, 7 de composant, 5 du vocabulaire, 2 de relais ;
   3 captures observées (`e2e/captures/47`, `48`, `49`).
 
 - **Reste avant `[x]`, et c'est un seul écart, hors de portée d'une session** :

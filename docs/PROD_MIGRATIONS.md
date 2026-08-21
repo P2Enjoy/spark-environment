@@ -308,6 +308,38 @@ Variable      : SPARKD_RESERVED_PORTS, facultative. Liste d'entiers séparés pa
                 (22, 80, 443). À renseigner si la Forge en occupe d'autres.
 ```
 
+### OP-09 · Migration `009_journal_signature` du registre
+
+```
+Objectif      : le journal porte la SIGNATURE d'un geste, les octets qu'elle
+                couvre et sa version (SPK-40, docs/DAT.md §36.10,
+                docs/SCHEMA.md §10 bis). Root peut alors supprimer ou tronquer,
+                mais pas FABRIQUER un geste authentique.
+Dépend de     : 006_journal_chaine
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : RIEN d'automatique. Les trois colonnes naissent nulles, et les
+                lignes déjà écrites restent non signées — elles l'étaient.
+                Les colonnes n'entrent PAS dans l'empreinte de la chaîne : la
+                migration ne casse donc aucune vérification antérieure.
+Vérification  : GET /v1/audit rend « signed: false » sur chaque entrée
+                existante, et la vérification de chaîne reste intacte.
+Retour arrière: fourni. Les trois colonnes, le déclencheur et l'index partiel
+                sont retirés. Les signatures déjà inscrites seraient perdues —
+                les lignes, elles, survivent.
+Risques       : aucun tant que SPARKD_ALLOWED_SIGNERS n'est pas posée : sans
+                fichier de signataires, la vérification se DÉSACTIVE et toute
+                requête passe non signée, ce qui est le comportement voulu
+                (§36.10.5). Le risque apparaît à l'inverse — poser la variable
+                sur un fichier vide ou illisible ferait refuser en 422 tout
+                geste porteur d'une signature.
+Variable      : SPARKD_ALLOWED_SIGNERS, facultative. Chemin d'un fichier
+                `allowed_signers` d'OpenSSH, ne contenant que des clés
+                PUBLIQUES, chaque ligne nommant le principal sous lequel la
+                console se déclare — « console/<nom-du-serveur> », l'identité
+                exacte de l'en-tête x-spark-actor (§36.10.8). Un principal qui
+                ne coïncide pas ferait refuser des signatures valides.
+```
+
 Les opérations suivantes — installation d'Incus, création du pool, `zfs_arc_max`,
 bridge privé, Caddy, `sparkd` — seront ajoutées ici à mesure que les unités SPK-03
 et SPK-26 seront livrées.
@@ -328,6 +360,11 @@ Risques     :
 
 Aucun secret n'est requis à ce stade. Les variables du service `sparkd` sont
 documentées dans le `README.md` ; toutes ont une valeur par défaut sûre.
+
+`SPARKD_ALLOWED_SIGNERS` (OP-09) ne porte que des clés **publiques** : ce n'est
+pas un secret, et le fichier peut être versionné hors de ce dépôt. La clé privée
+correspondante ne quitte jamais le poste du responsable — la console la fait
+employer par l'agent SSH, elle ne la lit pas (§36.10.8).
 
 Un réglage système est en revanche obligatoire dès la création du pool :
 `zfs_arc_max` doit être posé explicitement, et sa valeur reportée dans

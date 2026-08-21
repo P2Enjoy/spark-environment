@@ -17,6 +17,8 @@
 - **La clé de signature se déclare depuis l'écran *Serveurs***, champ *Clé de
   signature*, pour tous les genres de serveur. Elle nomme une clé **publique** ;
   laissée vide, les gestes partent non signés.
+- Le contrat de déploiement porte **OP-09**, l'opération de la migration `009`
+  du journal, avec son retour arrière et le réglage de `SPARKD_ALLOWED_SIGNERS`.
 - **La console signe les gestes qu'elle relaie** (SPK-40 deuxième tranche,
   `docs/DAT.md` §36.10.8), par l'agent SSH du responsable — la clé privée n'est
   jamais lue. Le champ `signingKey` de l'inventaire désigne la clé **publique**.
