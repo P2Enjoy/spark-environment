@@ -170,6 +170,143 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = 
     return get(connection, spark_id)
 
 
+class ShrinkRefused(SparkError):
+    """Ce qu'on veut retirer est UTILISÉ (docs/DAT.md §49.3).
+
+    Distinct d'`AdmissionRefused`, et ce n'est pas une subtilité : l'admission
+    dit « il n'y a pas la place sur la Forge », celui-ci dit « ce que vous voulez
+    retirer est utilisé DANS la cellule ». Les confondre enverrait l'exploitant
+    libérer de la place sur la Forge alors que le problème est ailleurs.
+    """
+
+    def __init__(self, ressource: str, demande: int, occupe: int, message: str) -> None:
+        self.ressource = ressource
+        self.demande = demande
+        self.occupe = occupe
+        super().__init__(message)
+
+
+#: Ce qu'un redimensionnement peut toucher (§49.2). Le nom, l'image et l'adresse
+#: privée n'y sont PAS : ce sont des identités, pas des quotas.
+CHAMPS_REDIMENSIONNABLES = (
+    "cpu_mode", "cpu_reservation", "cpu_max", "cpu_cores",
+    "memory_reservation_bytes", "network_reservation_bps", "storage_bytes",
+)
+
+
+def resize(connection: sqlite3.Connection, name: str, champs: dict,
+           actor: str | None = None,
+           metadata_margin: int = DEFAULT_METADATA_MARGIN,
+           usage: dict | None = None) -> dict:
+    """Ajuste les quotas d'un Spark existant.
+
+    @spec docs/BACKLOG.md#SPK-57 · docs/DAT.md §49 (le contrat), §49.1
+          (l'admission compte le DELTA), §49.2 (registre d'abord, Incus ensuite),
+          §49.3 (rétrécir n'est pas agrandir), §49.5 (ce que le geste refuse
+          toujours) · §14.2, §35.2
+
+    **Le point qui décide de tout** : le Spark visé est EXCLU du calcul de
+    l'alloué avant que sa nouvelle demande n'y soit admise (§49.1). Il est déjà
+    compté ; rejouer l'admission sur la demande entière refuserait des
+    agrandissements tenables, et refuserait même de RÉTRÉCIR sur une Forge
+    saturée — rendre de la mémoire ne peut pas manquer de mémoire.
+
+    `usage` porte ce que la cellule occupe RÉELLEMENT — mémoire employée, disque
+    rempli. Il vient du runtime, jamais du registre : c'est ce qui permet de
+    refuser un rétrécissement destructeur (§49.3). Absent, ces refus-là ne
+    peuvent pas être prononcés, et l'appelant doit le savoir plutôt que de croire
+    à une garantie qu'il n'a pas.
+
+    Rien n'est posé sur Incus ici : le registre s'écrit d'abord (§49.2).
+    """
+    spark = by_name(connection, name)
+
+    inconnus = sorted(set(champs) - set(CHAMPS_REDIMENSIONNABLES))
+    if inconnus:
+        raise SparkError(
+            f"Ces champs ne se redimensionnent pas : {', '.join(inconnus)}. "
+            "Le nom, l'image et l'adresse privée sont des identités, pas des "
+            "quotas (docs/DAT.md §49.2)."
+        )
+    if not champs:
+        raise SparkError("Aucun quota à modifier.")
+
+    # §49.5 : un état transitoire n'est pas un état. Un quota écrit pendant une
+    # transition le serait sur un état qui n'existe déjà plus (§14.3).
+    if spark["state"] in TRANSIENT:
+        raise SparkError(
+            f"« {name} » est en cours de {spark['state']} : ses quotas ne se "
+            "modifient pas pendant une transition."
+        )
+
+    vise = {**{c: spark[c] for c in CHAMPS_REDIMENSIONNABLES}, **champs}
+
+    # §49.3 : les refus de RÉTRÉCISSEMENT, avant l'admission. Ils portent sur ce
+    # que la cellule occupe, pas sur ce que la Forge a de libre.
+    if usage:
+        _refuser_retrecissement(name, spark, vise, usage)
+
+    demande = Request(
+        cpu_mode=vise["cpu_mode"],
+        memory_bytes=vise["memory_reservation_bytes"],
+        network_bps=vise["network_reservation_bps"],
+        storage_bytes=vise["storage_bytes"],
+        cpu_reservation=vise["cpu_reservation"],
+        cpu_max=vise["cpu_max"],
+        cpu_cores=vise["cpu_cores"],
+    )
+
+    refus = None
+    with transaction(connection):
+        decision = admit(connection, demande, metadata_margin, sauf=spark["id"])
+        if not decision:
+            refus = decision
+        else:
+            assignations = ", ".join(f"{c} = ?" for c in CHAMPS_REDIMENSIONNABLES)
+            connection.execute(
+                f"UPDATE spark SET {assignations}, updated_at = ? WHERE id = ?",
+                (*(vise[c] for c in CHAMPS_REDIMENSIONNABLES), _now(), spark["id"]),
+            )
+            _audit(
+                connection, actor, "spark.resize", spark["id"],
+                {"name": name, **{c: vise[c] for c in champs}},
+                "ok",
+                f"Quotas de « {name} » ajustés : "
+                + ", ".join(f"{c} → {vise[c]}" for c in sorted(champs)) + ".",
+            )
+
+    if refus is not None:
+        # Hors transaction : un `ROLLBACK` emporterait la trace, et c'est
+        # exactement le cas où elle sert (§21.1).
+        with transaction(connection):
+            _audit(connection, actor, "spark.resize", spark["id"],
+                   {"name": name}, "denied", refus.reason)
+        raise AdmissionRefused(refus)
+
+    return get(connection, spark["id"])
+
+
+def _refuser_retrecissement(name: str, spark: dict, vise: dict, usage: dict) -> None:
+    """Les refus du §49.3, chacun nommé, avec la mesure qui le motive."""
+    memoire = usage.get("memory_bytes")
+    if memoire is not None and vise["memory_reservation_bytes"] < memoire:
+        raise ShrinkRefused(
+            "memory", vise["memory_reservation_bytes"], memoire,
+            f"« {name} » emploie actuellement {memoire} octets de mémoire : "
+            f"descendre son quota à {vise['memory_reservation_bytes']} livrerait "
+            "ses processus à l'OOM killer. Libérez de la mémoire dans la cellule, "
+            "puis recommencez.",
+        )
+    disque = usage.get("storage_bytes")
+    if disque is not None and vise["storage_bytes"] < disque:
+        raise ShrinkRefused(
+            "storage", vise["storage_bytes"], disque,
+            f"« {name} » occupe actuellement {disque} octets de disque : "
+            f"descendre sa taille à {vise['storage_bytes']} perdrait des données. "
+            "Videz ce qui peut l'être dans la cellule, puis recommencez.",
+        )
+
+
 def decorate(spark: dict) -> dict:
     """Ajoute au Spark ce que le runtime SAIT de lui.
 
