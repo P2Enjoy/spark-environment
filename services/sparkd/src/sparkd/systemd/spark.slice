@@ -1,0 +1,16 @@
+# Tranche cgroup parente des cellules Spark.
+#
+# @spec docs/BACKLOG.md#SPK-66 · docs/DAT.md §32.4
+
+[Unit]
+Description=Tranche des cellules Spark
+Documentation=https://github.com/P2Enjoy/spark-environment
+Before=incus.service
+
+[Slice]
+# `sparkd` recalcule ce poids à chaque changement d'allocation : il doit valoir
+# ce que les Sparks ont acheté. Cette valeur n'est qu'un point de départ.
+CPUWeight=1
+CPUAccounting=yes
+MemoryAccounting=yes
+IOAccounting=yes

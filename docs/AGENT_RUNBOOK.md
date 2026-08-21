@@ -35,31 +35,18 @@ laissée « RUNNING » mais injoignable, `stop --force` compris.
 
 ### A.2 Déploiement
 
-Depuis le poste, dépôt à jour :
+Depuis le poste, **sans copier le dépôt** :
 
 ```bash
-COMMIT=$(git rev-parse --short=12 HEAD)
-COMMIT_AT=$(git log -1 --format=%cI)
-
-rsync -az --delete \
-  --exclude '.git' --exclude 'node_modules' --exclude '.venv' --exclude '.dev' \
-  --exclude '.env' --exclude '.env.*' --exclude '__pycache__' \
-  --exclude '.pytest_cache' --exclude '*.egg-info' \
-  ./ <compte>@<forge>:/home/<compte>/spark-environment/
-
-ssh <compte>@<forge> "sudo \
-  SPARKD_BUILD_COMMIT='$COMMIT' \
-  SPARKD_BUILD_AT='$COMMIT_AT' \
-  SPARKD_BUILD_DIRTY=false \
-  SPARKD_BUILD_FROM='$(hostname):$(pwd)' \
-  bash /home/<compte>/spark-environment/scripts/install-serveur.sh"
+ssh <compte>@<forge> 'sudo python3 -m venv /opt/sparkd/venv'
+ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/pip install --upgrade "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd" && sudo /opt/sparkd/venv/bin/python -m sparkd.install'
 ```
 
-En root direct, retirer `sudo`. Le script est **idempotent** : le relancer met à
-jour le code et l'unité sans jamais effacer le registre.
-
-`--exclude '.git'` n'est pas un détail : c'est pourquoi le hash est passé en
-variable. Le runtime ne dérive jamais sa build d'un dépôt (`docs/DAT.md` §40.1).
+En root direct, retirer `sudo`. La seconde ligne est **idempotente** : elle
+réinstalle le paquet, ses dépendances et ses unités sans jamais effacer le
+registre. `sparkd.install` part du paquet qui vient d'être posé — migrations SQL
+et unités systemd incluses — et la version issue de ses métadonnées porte le
+commit sans aucune variable à transmettre (`docs/DAT.md` §40.4).
 
 ### A.3 Vérifier, sans faire confiance au script
 
@@ -70,7 +57,7 @@ ssh <compte>@<forge> 'curl -s http://127.0.0.1:9876/healthz'
 Attendu — le commit doit être **celui qu'on vient de déployer** :
 
 ```json
-{"status":"ok","version":"0.0.0+163acf161628","build":{"commit":"163acf161628", ...}}
+{"status":"ok","version":"0.post1.dev…+g163acf161628…","build":{"commit":"163acf161628", ...}}
 ```
 
 `0.0.0+inconnue` signifie que l'estampille n'a pas été écrite : réinstaller.

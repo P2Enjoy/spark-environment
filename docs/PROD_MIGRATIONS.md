@@ -167,7 +167,12 @@ Objectif      : que sparkd survive a un redemarrage. Mesure le 2026-08-19 : il
                 de tourner sans que rien ne les administre : la panne est
                 silencieuse et ne se decouvre qu'a la premiere operation.
 Depend de     : Incus >= 6.19, pool de stockage, bridge prive
-Commande      : scripts/install-serveur.sh (idempotent, en root)
+Commande      : python3 -m venv /opt/sparkd/venv ; puis
+                /opt/sparkd/venv/bin/pip install --upgrade
+                "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"
+                et /opt/sparkd/venv/bin/python -m sparkd.install (en root).
+                Le paquet porte les migrations SQL et les unités systemd : aucun
+                checkout du dépôt ne vit sur la Forge.
 Apres         : POST /v1/host/sync — un registre neuf ignore la capacite de la
                 machine tant qu'elle n'a pas ete relevee.
 Verification  : python3 -m sparkd.preflight  -> controle RUN-SPARKD vert, qui
@@ -175,9 +180,11 @@ Verification  : python3 -m sparkd.preflight  -> controle RUN-SPARKD vert, qui
                 reellement Incus et Caddy.
 Retour arriere: systemctl disable --now sparkd. Le registre est conserve dans
                 /var/lib/sparkd et n'est jamais efface par le script.
-Risques       : le script redemarre le service. Un sparkd lance a la main sur le
-                meme port doit etre arrete avant, sinon l'unite ne peut pas se
-                lier.
+Risques       : l'installateur redémarre le service. Un sparkd lancé à la main
+                sur le même port doit être arrêté avant, sinon l'unité ne peut
+                pas se lier. Une mise à jour se conclut seulement si /healthz
+                sert la version du paquet attendu ; un téléchargement réussi ne
+                suffit pas.
 État          : APPLIQUÉ le 2026-08-19 sur la Forge de validation.
 ```
 

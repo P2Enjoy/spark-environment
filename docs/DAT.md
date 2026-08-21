@@ -5990,22 +5990,27 @@ et elle est nommée dans l'unité plutôt que masquée par une simulation.
 
 ## 40. La build installée se nomme
 
-### 40.1 Un seul mécanisme : le fichier posé à l'installation
+### 40.1 Un seul mécanisme : les métadonnées du paquet installé
 
 Une Forge en production doit pouvoir dire **quel code elle exécute**. Sans cela,
 « la correction est déployée » est une croyance : rien ne distingue une Forge à
 jour d'une Forge oubliée depuis trois semaines, et le premier diagnostic part
 d'une hypothèse fausse.
 
-`scripts/install-serveur.sh` écrit `<prefix>/build.json` — à côté du code, pas
-dans l'état, parce que le fichier décrit ce qui est **installé** et non ce que la
-Forge a fait depuis. Le runtime le lit au fil des requêtes.
+Le paquet `sparkd` porte une version calculée à sa construction par
+`setuptools-scm`. Son numéro contient le commit qui l'a produit ;
+`importlib.metadata.version("sparkd")` est donc la source qui identifie le code
+en service. Il n'est ni donné par une variable, ni reconstitué à l'exécution.
+
+`python -m sparkd.install` écrit encore `<prefix>/build.json` — à côté du code,
+pas dans l'état — pour la date et la provenance de l'installation. Il ne choisit
+pas le commit : si le fichier est absent ou périmé, les métadonnées du paquet
+priment. C'est ainsi qu'une installation ne peut plus oublier son empreinte.
 
 Le runtime ne **dérive** jamais cette valeur. Sortir un `git` d'un service en
 production ferait dépendre sa réponse d'un dépôt qui n'a aucune raison d'être sur
-la machine — et le déploiement se fait justement par `rsync` **sans** `.git`. Le
-hash est donc fourni par l'appelant (`SPARKD_BUILD_COMMIT`), ou lu du dépôt
-lorsqu'il y en a un à portée du script.
+la machine : la Forge installe précisément un paquet depuis le dépôt public, et
+ne conserve aucune copie du dépôt.
 
 ### 40.2 « Inconnue » est une réponse, pas un défaut
 
@@ -6058,15 +6063,45 @@ contente pas d'informer mal — il fait régresser une machine en service. Seuls
 system) ; les autres informent.
 
 **Où vit la comparaison.** Dans l'hôte console, jamais dans `sparkd` : c'est le
-poste qui porte le dépôt, et la Forge est déployée par `rsync` **sans** `.git`
-(§40.1). L'hôte console est le seul endroit qui ait à la fois le tunnel et le
-dépôt. Il rend le verdict ET son libellé — le libellé est le contrat de ce
-chapitre, pas une formulation d'écran, et une copie côté navigateur en ferait une
-seconde vérité qui divergerait.
+poste qui porte le dépôt, tandis que la Forge ne reçoit qu'un paquet et ne garde
+aucun `.git` (§40.1). L'hôte console est le seul endroit qui ait à la fois le
+tunnel et le dépôt. Il rend le verdict ET son libellé — le libellé est le contrat
+de ce chapitre, pas une formulation d'écran, et une copie côté navigateur en
+ferait une seconde vérité qui divergerait.
 
 Un `git` en échec est une **réponse**, jamais une panne : lever ferait d'une
 absence de comparaison une panne d'écran, ce que le §40.2 refuse déjà pour la
 Forge et qui vaut ici pour les mêmes raisons.
+
+### 40.4 Le paquet est l'artefact d'installation (SPK-66)
+
+Une Forge n'est pas un second checkout du monorepo. Elle installe le sous-projet
+Python directement depuis le dépôt public, et **le paquet contient** les
+migrations SQL, `sparkd.service`, `spark.slice` et l'installateur. La source
+unique des unités est donc celle que le Python installé lit avec
+`importlib.resources`, pas une copie de `deploy/` qu'un administrateur devrait
+retrouver sur la Forge.
+
+La procédure est volontairement réduite à deux commandes SSH et n'accepte ni
+jeton ni variable d'empreinte :
+
+```bash
+ssh <compte>@<forge> 'sudo python3 -m venv /opt/sparkd/venv'
+ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/pip install --upgrade "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd" && sudo /opt/sparkd/venv/bin/python -m sparkd.install'
+```
+
+En root direct, `sudo` disparaît. La seconde ligne réinstalle les dépendances,
+pose les unités issues du paquet, recharge systemd, redémarre `sparkd`, attend
+`/healthz` et refuse le succès si le préflight reste rouge. Le registre sous
+`/var/lib/sparkd` n'est jamais effacé.
+
+`setuptools-scm` donne une version PEP 440 croissante à chaque commit. C'est une
+propriété nécessaire : avec une constante `0.0.0`, `pip install -U` conclurait
+« déjà satisfait » alors que `main` a changé. La mise à jour et son retour
+arrière installent le même URL en remplaçant `@main` par le commit voulu, puis
+rejouent `python -m sparkd.install`; elles constatent ensuite que `/healthz`
+sert bien le commit attendu. Un téléchargement ou un redémarrage sans ce
+changement est un échec, jamais une mise à jour déclarée.
 
 
 ## 41. Le runtime d'un Spark : ce que l'image ne donne pas

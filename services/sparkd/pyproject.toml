@@ -33,12 +33,16 @@ dev = [
 
 [project.scripts]
 sparkd = "sparkd.__main__:main"
+sparkd-install = "sparkd.install:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-sparkd = ["schema/*.sql"]
+# Le paquet doit porter tout ce dont une Forge a besoin. Les unités systemd
+# n'habitent donc pas seulement dans l'arbre du poste : une installation directe
+# depuis GitHub n'a, par définition, aucune copie du dépôt à consulter.
+sparkd = ["schema/*.sql", "systemd/*.service", "systemd/*.slice"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

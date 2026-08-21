@@ -1,0 +1,44 @@
+# Unité systemd emballée avec sparkd.
+#
+# @spec docs/BACKLOG.md#SPK-66 · docs/DAT.md §40.4
+#
+# `@SPARKD_PYTHON@` est rendu par `python -m sparkd.install` avec le Python du
+# paquet qui vient d'être installé. Ainsi le service ne peut pas reprendre le
+# Python système, ni un ancien venv laissé par une installation précédente.
+
+[Unit]
+Description=sparkd — plan de contrôle Spark
+Documentation=https://github.com/P2Enjoy/spark-environment
+After=network-online.target incus.service
+Wants=network-online.target
+Requires=incus.service
+
+[Service]
+Type=exec
+ExecStart=@SPARKD_PYTHON@ -m sparkd
+Restart=on-failure
+RestartSec=5s
+
+# sparkd n'écoute JAMAIS sur une adresse routable : il refuse de démarrer si on
+# l'y force (docs/DAT.md §11). La valeur est posée ici pour être explicite.
+Environment=SPARKD_BIND=127.0.0.1:9876
+Environment=SPARKD_DB=/var/lib/sparkd/spark.db
+Environment=SPARKD_DRIVER=incus
+Environment=SPARKD_STORAGE_POOL=spark
+EnvironmentFile=-/etc/sparkd/sparkd.env
+
+# Le plan de contrôle parle à Incus par sa socket, qui appartient à root.
+User=root
+StateDirectory=sparkd
+StateDirectoryMode=0750
+
+# Durcissement : ce service n'a besoin ni d'écrire ailleurs, ni de périphériques.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/var/lib/sparkd
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

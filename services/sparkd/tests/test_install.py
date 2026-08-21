@@ -1,0 +1,95 @@
+"""Preuves de l'installateur distribué avec le paquet sparkd."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+
+from sparkd import install
+
+
+def paths(tmp_path: Path) -> install.Paths:
+    python = tmp_path / "opt" / "sparkd" / "venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.touch()
+    return install.Paths(prefix=python.parent.parent,
+                         state=tmp_path / "state",
+                         systemd=tmp_path / "systemd", python=python)
+
+
+def test_les_unites_sont_lues_depuis_le_paquet():
+    """@verifies docs/BACKLOG.md#SPK-66
+
+    Sans ces ressources, un ``pip install git+…`` réussirait mais ne pourrait
+    jamais rendre le service persistant : ce serait une installation à moitié.
+    """
+    service = install.packaged_unit("sparkd.service")
+    slice_ = install.packaged_unit("spark.slice")
+    assert "@SPARKD_PYTHON@ -m sparkd" in service
+    assert "CPUWeight=1" in slice_
+
+
+def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_path):
+    cible = paths(tmp_path)
+    commandes: list[list[str]] = []
+    monkeypatch.setattr(install, "commit_du_paquet", lambda: "abc123def456")
+    monkeypatch.setattr(install, "__version__", "0.post1.dev1+gabc123def456")
+
+    install.install(cible, runner=commandes.append, healthcheck=lambda: True,
+                    preflight=lambda: 0, uid=0, sleep=lambda _: None)
+
+    service = (cible.systemd / "sparkd.service").read_text(encoding="utf-8")
+    assert f"ExecStart={cible.python} -m sparkd" in service
+    assert (cible.systemd / "spark.slice").is_file()
+    assert commandes == [
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "start", "spark.slice"],
+        ["systemctl", "enable", "sparkd"],
+        ["systemctl", "restart", "sparkd"],
+    ]
+    build = json.loads(cible.build.read_text(encoding="utf-8"))
+    assert build["commit"] == "abc123def456"
+    assert build["installed_from"] == "paquet sparkd 0.post1.dev1+gabc123def456"
+
+
+def test_no_start_ne_fait_pas_passer_une_forge_incomplete_pour_prete(tmp_path):
+    cible = paths(tmp_path)
+    commandes: list[list[str]] = []
+    called = False
+
+    def preflight() -> int:
+        nonlocal called
+        called = True
+        return 1
+
+    install.install(cible, runner=commandes.append, healthcheck=lambda: False,
+                    preflight=preflight, uid=0, sleep=lambda _: None, start=False)
+    assert commandes == [["systemctl", "daemon-reload"], ["systemctl", "start", "spark.slice"]]
+    assert called is False
+
+
+def test_un_echec_de_preflight_empeche_le_faux_succes(tmp_path):
+    with pytest.raises(install.InstallationError, match="préflight rouge"):
+        install.install(paths(tmp_path), runner=lambda _: None, healthcheck=lambda: True,
+                        preflight=lambda: 1, uid=0, sleep=lambda _: None)
+
+
+def test_l_installateur_refuse_de_s_executer_sans_root(tmp_path):
+    with pytest.raises(install.InstallationError, match="root"):
+        install.install(paths(tmp_path), uid=1000)
+
+
+def test_build_n_a_pas_besoin_d_une_variable_de_commit(monkeypatch, tmp_path):
+    cible = paths(tmp_path)
+    monkeypatch.setattr(install, "commit_du_paquet", lambda: "0123456789ab")
+    monkeypatch.setattr(install, "__version__", "0.post1.dev1+g0123456789ab")
+    install.write_build(cible, now=lambda: datetime(2026, 8, 21, tzinfo=timezone.utc))
+    assert json.loads(cible.build.read_text(encoding="utf-8")) == {
+        "commit": "0123456789ab",
+        "dirty": False,
+        "installed_at": "2026-08-21T00:00:00+00:00",
+        "installed_from": "paquet sparkd 0.post1.dev1+g0123456789ab",
+    }

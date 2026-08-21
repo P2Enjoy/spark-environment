@@ -90,6 +90,22 @@ entièrement consommés par un unique RAID1 `ext4` monté sur `/`. Il n'existe a
 périphérique bloc libre pour un pool de stockage natif — d'où la disposition sur
 fichier décrite ci-dessous. Voir le §8 du [DAT](docs/DAT.md).
 
+### Installer le plan de contrôle sans copier le dépôt
+
+Le runtime de Forge est un paquet Python autonome : les migrations et les unités
+systemd voyagent avec lui. Depuis un poste ayant l'accès SSH, sur une Forge dont
+les prérequis Incus, pool, bridge et Caddy sont déjà conformes :
+
+```bash
+ssh <compte>@<forge> 'sudo python3 -m venv /opt/sparkd/venv'
+ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/pip install --upgrade "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd" && sudo /opt/sparkd/venv/bin/python -m sparkd.install'
+```
+
+Le second geste redémarre brièvement le plan de contrôle et ne réussit qu'après
+`/healthz` et le préflight. Il ne supprime jamais `/var/lib/sparkd/spark.db`.
+La procédure complète et son retour arrière sont dans le
+[runbook d'agent](docs/AGENT_RUNBOOK.md#A-déployer-sparkd-sur-une-nouvelle-forge).
+
 ## Le stockage : deux dispositions
 
 Le produit ne suppose ni le nom du pool, ni son emplacement, ni sa taille. Le pool
