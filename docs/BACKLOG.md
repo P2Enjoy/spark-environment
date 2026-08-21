@@ -1332,10 +1332,13 @@ que ni le préflight ni la console ne signalaient.
      qui manque à chacun. C'est du travail d'instruction, pas de mesure ;
   2. l'**ancre de la console** au §2.5 point 4 : la signaler exige la console
      lancée avec son tunnel, que l'exercice n'a pas monté. Le comportement
-     attendu reste écrit, il n'est pas mesuré ;
-  3. la **vérification visuelle** du refus de cellule perdue dans la console —
-     le comportement est éprouvé côté service et sur la Forge, la lecture par
-     l'exploitant ne l'est pas encore.
+     attendu reste écrit, il n'est pas mesuré.
+
+  La vérification visuelle du refus est **faite** : parcours depuis l'accueil à
+  la souris et au clavier, captures observées à 1440, 900 et 390 px, focus atteint
+  à la seule tabulation. Elle a sorti un défaut qu'aucune preuve ne voyait — le
+  message nommait « retry » et « delete » quand les boutons portaient
+  « Reprendre » et « Supprimer » — et un défaut voisin, INC-16.
 
 ### [x] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
 
