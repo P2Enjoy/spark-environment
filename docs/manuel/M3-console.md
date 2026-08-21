@@ -45,6 +45,19 @@ machine est peut-être simplement éteinte, ou pas encore installée. Exiger qu'
 réponde reviendrait à exiger qu'elle soit allumée pour que vous puissiez noter
 son existence.
 
+### Diagnostiquer avant d’installer
+
+Une fois la destination courante, ouvrez **Forge**. Même si l’API est absente et
+que le tunnel de `sparkd` est rouge, le panneau **Installer cette Forge** reste
+accessible. **Diagnostiquer la Forge** réalise un relevé SSH borné, en lecture
+seule : système, droits d’administration, runtimes, services et disques.
+
+Les lignes **SSH établi** et **sparkd sans réponse ou non installé** sont
+volontairement séparées. La première ne rend pas la Forge prête. Le stockage
+montre les supports exclus et ne sélectionne rien automatiquement ; aucun pool,
+service ou paquet n'est modifié par ce diagnostic. Consultez [M2](M2-installer.md)
+pour interpréter le relevé et les prérequis restants.
+
 ### Basculer, et retirer
 
 Le serveur que vous regardez est signalé **courant** dans la liste, et son nom

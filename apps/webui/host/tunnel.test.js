@@ -11,7 +11,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
-import { Tunnel, TunnelManager, TunnelError, freePort, READY, BROKEN, CLOSED , lireEmpreinte } from './tunnel.js';
+import { Tunnel, TunnelManager, TunnelError, freePort, READY, BROKEN, CLOSED,
+         TRANSPORT_LOCAL, lireEmpreinte } from './tunnel.js';
 
 const SERVEUR = { name: 'prod', host: '203.0.113.10', user: 'ubuntu', port: 22, remotePort: 9876 };
 
@@ -70,6 +71,7 @@ test('un tunnel sain est pret', async () => {
   const t = tunnel();
   await t.open();
   assert.equal(t.state, READY);
+  assert.equal(t.describe().transportState, READY);
   assert.ok(t.lastHealthyAt !== null);
 });
 
@@ -81,6 +83,22 @@ test('un tunnel devient rompu quand la sonde cesse de repondre', async () => {
   sain = false;
   await t.probe();
   assert.equal(t.state, BROKEN);
+});
+
+test('SSH authentifié et sparkd muet sont deux états distincts', async () => {
+  const t = tunnel({
+    spawn: () => {
+      const enfant = fauxSsh();
+      queueMicrotask(() => enfant.stderr.emit(
+        'data', 'Authenticated to 203.0.113.10 using "publickey".\n'));
+      return enfant;
+    },
+    probe: async () => { throw new Error('connexion à sparkd refusée'); },
+    openTimeoutMs: 20,
+  });
+  await t.open();
+  assert.equal(t.state, BROKEN, 'sparkd reste indisponible');
+  assert.equal(t.describe().transportState, READY, 'mais SSH est établi');
 });
 
 // --- la sortie d'erreur de ssh est retenue ----------------------------------
@@ -223,6 +241,7 @@ test('un serveur local ne lance AUCUN ssh', async () => {
   await t.open();
   assert.equal(lance, 0, 'ouvrir un tunnel vers localhost n’accomplirait aucun transport');
   assert.equal(t.state, READY);
+  assert.equal(t.describe().transportState, TRANSPORT_LOCAL);
   assert.equal(t.localPort, 9876, 'le port est celui ou sparkd ecoute deja');
   t.close();
 });

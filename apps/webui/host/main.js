@@ -34,6 +34,7 @@ import { catalogue, composer, adressePublique, ValeurManquante } from './recette
 import { SessionManager, TerminalError, FLUX_FERME,
          CHEMIN_SSH, CHEMIN_DEPANNAGE, CHEMIN_CONTENEUR,
          depannageOuvert, sonderSshd } from './terminal.js';
+import { runDiagnostic as diagnostiquerForge, ForgeDiagnosticError } from './forge-diagnostic.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -75,6 +76,10 @@ export function createConsoleHost(options = {}) {
   const signerInjecte = options.signIntention ?? null;
   const sonderShellInjecte = options.probeShell ?? null;
   const lireJournauxInjecte = options.readLogs ?? null;
+  // SPK-68 · §50.2 : le seul relevé utilisable quand SSH fonctionne mais que
+  // sparkd n'est pas encore là. Injectable afin de prouver la route sans une
+  // machine distante ; l'implémentation réelle n'accepte aucune commande web.
+  const diagnosticForge = options.diagnoseForge ?? diagnostiquerForge;
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
   // processus. Il est lu UNE fois : le relire à chaque requête ferait dépendre
@@ -427,6 +432,31 @@ export function createConsoleHost(options = {}) {
       // seconde vérité qui divergerait.
       return { status: 200,
                body: { server: nom, ...vu, ...(VERDICTS_BUILD[vu.verdict] ?? {}) } };
+    },
+
+    /**
+     * SPK-68 · §50.1-50.2 : ce relevé ne passe volontairement PAS par
+     * `tunnels.require`. Celle-ci exige /healthz ; c'est précisément ce qui
+     * manque sur une machine à installer. Le navigateur ne transmet qu'un nom
+     * de serveur déjà enregistré : l'exécuteur porte le script fermé.
+     */
+    'POST /api/forge/diagnostic': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const serveur = (await load(inventoryPath)).find((candidate) => candidate.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      try {
+        return { status: 200, body: { server: nom, ...await diagnosticForge(serveur) } };
+      } catch (erreur) {
+        const known = erreur instanceof ForgeDiagnosticError;
+        return {
+          status: known && erreur.code === 'local_server' ? 422 : 502,
+          body: { error: known ? erreur.code : 'diagnostic_failed',
+                  message: known ? erreur.message : `Le diagnostic a échoué : ${erreur.message}` },
+        };
+      }
     },
 
     // SPK-65 : ce relevé est local au poste. Il ne demande aucun tunnel, reste

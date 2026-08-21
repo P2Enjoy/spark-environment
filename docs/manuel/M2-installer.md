@@ -3,8 +3,25 @@
 Ce chapitre décrit l'installation de `sparkd` sur un serveur qui porte déjà
 Incus, un pool de stockage, un bridge privé et Caddy.
 
-> **La mise en place de ces prérequis n'est pas encore outillée**, et la
-> disposition du stockage attend un arbitrage. Voir la fin de ce chapitre.
+> La console sait maintenant **diagnostiquer** une Forge distante neuve, sans
+> rien y écrire. L'exécution automatisée du plan de prérequis reste à livrer :
+> elle ne doit jamais choisir un disque ou une taille à votre place.
+
+## Diagnostiquer une Forge neuve depuis la console
+
+Déclarez d'abord le serveur dans **Serveurs**, puis ouvrez **Forge** et cliquez
+sur **Diagnostiquer la Forge** dans *Installer cette Forge*.
+
+Le relevé est strictement en lecture seule. Il distingue trois faits qui ne se
+remplacent pas : le transport SSH, le plan de contrôle `sparkd`, puis la
+disponibilité que prouvera plus tard `/readyz`. Ainsi, **SSH établi** avec
+`sparkd` absent n'est ni une Forge prête ni une panne SSH.
+
+Le panneau relève le système, les services et les périphériques. Il affiche un
+disque exclu avec son motif — racine, montage, partition ou signature — et ne le
+sélectionne jamais. S'il n'y a pas deux disques sûrs, il n'invente pas un miroir
+ni la taille d'un pool fichier. L'écran le dit, puis s'arrête : aucune commande
+d'installation, aucun redémarrage et aucune modification ne sont partis.
 
 ## Vérifier avant d'installer
 
@@ -98,9 +115,9 @@ Deux vérifications restent donc manuelles :
 
 ## Ce qui n'est pas encore outillé
 
-- **La mise en place des prérequis** — Incus, le pool, le bridge, Caddy — se fait
-  encore à la main. Les commandes figurent dans les remèdes des contrôles, mais
-  aucun script ne les enchaîne.
+- **L'exécution du plan de prérequis** — Incus, le pool, le bridge, Caddy — se
+  fait encore à la main. La console en fait le relevé sûr, mais n'enchaîne pas
+  encore les écritures ni leurs confirmations.
 - **La disposition du stockage attend un arbitrage.** Le pool de validation est
   un fichier de 200 Gio, ce qui fonctionne mais ajoute une couche de traduction.
   Un pool sur périphériques dédiés suppose de repartitionner les disques, ce qui

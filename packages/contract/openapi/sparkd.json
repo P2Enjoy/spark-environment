@@ -59,7 +59,7 @@
   "info": {
     "description": "Runtime serveur du plan de controle Spark. Ecoute exclusivement sur la boucle locale.",
     "title": "sparkd",
-    "version": "0.post1.dev596+g53b42e77f"
+    "version": "0.post1.dev622+gd7cd9b1dd"
   },
   "openapi": "3.1.0",
   "paths": {

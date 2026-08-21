@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **Diagnostic d’installation distante de Forge** (première tranche de SPK-68,
+  `DAT.md` §50) : la console distingue désormais « SSH établi » de l’API
+  `sparkd`, même quand `/healthz` ne répond pas. Son script fermé relève en
+  lecture seule le système, les runtimes, les services et les supports ; un
+  disque racine, monté ou signé est affiché mais jamais proposé au miroir. Aucun
+  pool, service ou paquet ne peut être créé depuis cette première tranche.
 - **Le briefing d'un Spark** (SPK-60, `docs/DAT.md` §44) : l'amorçage relève
   `openssh-server`, Docker et Compose avec leur date, puis le plan de contrôle
   produit `/etc/spark/BRIEFING.md` et son même modèle JSON. Un agent le lit par

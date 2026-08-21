@@ -20,6 +20,7 @@ import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEF
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
   from './components/spark-admin.js';
 import { renderForgeView } from './components/forge-view.js';
+import { INSTALLER_VIDE } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
 import { renderManuel } from './components/manuel-view.js';
@@ -56,7 +57,8 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        // SPK-53 · §40.3 : quel code cette Forge exécute, et
                        // comment il se situe. `null` tant qu'on n'a pas comparé
                        // — « pas encore su » n'est ni « à jour », ni une panne.
-                       build: null },
+                       build: null,
+                       installer: { ...INSTALLER_VIDE } },
                facette: '',
                // SPK-43 · §37.4 : la session de terminal. Les OCTETS n'y sont
                // pas — ils vont directement au DOM (§37.5).
@@ -188,6 +190,8 @@ function brancher() {
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
   racine.querySelector('[data-action="comparer-build"]')
     ?.addEventListener('click', () => comparerBuild());
+  racine.querySelector('[data-action="diagnostiquer-forge"]')
+    ?.addEventListener('click', diagnostiquerForge);
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
   brancherCatalogueEnv();
@@ -1927,6 +1931,35 @@ async function relever() {
   } catch { /* l'état réel sera relu ci-dessous */ }
   etat.forge.syncing = false;
   await chargerHote();
+}
+
+/**
+ * SPK-68 · §50.2 : cet appel cible l'hôte console, pas le relais sparkd. Il
+ * reste donc utilisable précisément lorsqu'une Forge neuve n'a pas d'API.
+ */
+async function diagnostiquerForge() {
+  const installer = etat.forge.installer;
+  installer.status = 'running';
+  installer.error = null;
+  peindre();
+  try {
+    const reponse = await fetch('/api/forge/diagnostic', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server: etat.server }),
+    });
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    installer.status = 'ready';
+    installer.result = corps;
+  } catch (erreur) {
+    // Une erreur de transport ou de clé d'hôte n'est pas un refus de Forge :
+    // le panneau l'annonce sans rouge et sans prétendre que l'installation a
+    // commencé (§14.5, SPK-DS-12).
+    installer.status = 'error';
+    installer.error = erreur?.message ?? String(erreur);
+    installer.result = null;
+  }
+  peindre();
 }
 
 /** Catalogue d'images (docs/DAT.md §33, §34.1). */

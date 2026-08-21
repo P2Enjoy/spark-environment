@@ -816,3 +816,37 @@ test('une Forge qui répond mal n’est pas confondue avec une build inconnue', 
   assert.equal((await reponse.json()).error, 'forge_unreadable');
   tunnels.closeAll?.(); server.close();
 });
+
+// --- SPK-68 · diagnostic avant sparkd ---------------------------------------
+
+test('le diagnostic SSH ne réclame PAS un tunnel sparkd prêt', async () => {
+  let vu = null;
+  const { base, server, tunnels } = await hote({
+    sonde: async () => { throw new Error('sparkd absent'); },
+    diagnoseForge: async (serveur) => {
+      vu = serveur;
+      return { transport: 'established', report: { system: { os: 'ubuntu 24.04' } },
+               storage: { nativeMirror: { eligible: false, disks: [] },
+                          filePool: { possible: true, sizeBytes: null } } };
+    },
+  });
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  const reponse = await fetch(`${base}/api/forge/diagnostic`, {
+    method: 'POST', body: JSON.stringify({ server: 'prod' }),
+  });
+  assert.equal(reponse.status, 200);
+  assert.equal((await reponse.json()).transport, 'established');
+  assert.equal(vu.name, 'prod');
+  assert.equal(tunnels.get('prod'), null, 'le diagnostic ne fabrique pas de tunnel API');
+  server.close();
+});
+
+test('le diagnostic ne reçoit qu’un serveur connu et nomme le refus', async () => {
+  const { base, server } = await hote();
+  const reponse = await fetch(`${base}/api/forge/diagnostic`, {
+    method: 'POST', body: JSON.stringify({ server: 'inconnu' }),
+  });
+  assert.equal(reponse.status, 404);
+  assert.equal((await reponse.json()).error, 'unknown_server');
+  server.close();
+});

@@ -7826,3 +7826,18 @@ montés ou ambigus ne seront jamais proposés pour un miroir ; aucune installati
 réelle ne commence sans confirmation explicite du plan et, le cas échéant, des
 supports ou du fichier de pool. Référence : `DAT.md` §50 et
 `DESIGN_SYSTEM_APP.md` SPK-DS-12.
+
+### Première tranche — diagnostic réel sans écriture
+
+La console porte maintenant un script SSH fermé et borné, dont le navigateur ne
+peut fournir aucune commande. Sur `212.47.246.142`, il a observé le transport
+établi, Ubuntu 26.04/aarch64, `sparkd` inactif, aucun Incus ni Caddy, et un unique
+`/dev/sda` de 10 Go. Ses partitions racine, boot et EFI ainsi que leurs signatures
+l'excluent du miroir ; le panneau ne propose donc aucune paire et n'invente pas
+la taille d'un pool fichier. Aucun paquet, pool ni service n'a été modifié.
+
+Le premier essai a révélé que `lsblk --raw --pairs` est une combinaison invalide.
+Le relevé est corrigé vers `--pairs`, couvert par sa preuve, puis rejoué sur la
+Forge réelle. Les 80 preuves ciblées tunnel/hôte sont vertes, et le parcours
+visuel desktop/mobile a confirmé la séparation entre le tunnel API rompu et
+« SSH établi », sans défilement horizontal de page sur mobile.

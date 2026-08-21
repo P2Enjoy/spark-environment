@@ -3915,11 +3915,14 @@ Aujourd'hui, la console assimile ce cas à un tunnel rompu, car elle exige
 proposer le remède qui convient.
 
 **En cours le 2026-08-22.** Le contrat détaillé est désormais fixé dans le
-`DAT.md` §50 : deux états séparés pour SSH et `sparkd`, diagnostic sans écriture,
-stockage sans choix implicite, confirmations distinctes et reprise fondée sur un
-nouveau relevé. L'implémentation commence par ce chemin de diagnostic, qui est le
-seul geste possible sans décider à la place du responsable du disque ou de la
-taille du pool.
+`DAT.md` §50 et sa première tranche est livrée : deux états séparés pour SSH et
+`sparkd`, diagnostic sans écriture, relevé structuré et stockage sans choix
+implicite. La nouvelle Forge réelle a rendu `SSH établi`, `sparkd inactive`,
+aucun Incus/Caddy et un seul disque racine de 10 Go explicitement exclu ;
+l'assistant ne l'a ni choisi ni modifié. Les preuves d'hôte, de tunnel et de vue
+desktop/mobile sont vertes. Il manque encore l'exécuteur versionné, ses
+confirmations de stockage, sa reprise persistée et les deux installations réelles
+de la DoD : l'unité reste donc honnêtement ouverte.
 
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
   seulement le paquet Python. C'est un **assistant de bout en bout** qui part

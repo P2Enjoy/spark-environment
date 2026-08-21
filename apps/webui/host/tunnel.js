@@ -19,6 +19,7 @@ export const CONNECTING = 'connecting';
 export const READY = 'ready';
 export const BROKEN = 'broken';
 export const CLOSED = 'closed';
+export const TRANSPORT_LOCAL = 'local';
 
 const PROBE_INTERVAL_MS = 5000;
 const PROBE_TIMEOUT_MS = 2000;
@@ -75,6 +76,10 @@ export class Tunnel {
   constructor(server, options = {}) {
     this.server = server;
     this.state = CLOSED;
+    // SPK-68 · §50.1 : l'authentification SSH et la réponse de sparkd ne sont
+    // pas le même fait. `state` garde le contrat historique du plan de
+    // contrôle ; cette valeur supplémentaire dit ce que le transport a établi.
+    this.transportState = CLOSED;
     this.localPort = null;
     /** Empreinte relevée sur le flux d'OpenSSH ; `null` tant qu'inconnue. */
     this.keyFingerprint = null;
@@ -184,6 +189,7 @@ export class Tunnel {
     // system) : un sparkd arrêté paraîtrait joignable.
     if (this.isLocal) {
       this.localPort = this.server.port;
+      this.transportState = TRANSPORT_LOCAL;
       this.#setState(CONNECTING);
       this.lastError = null;
       this.#timer = setInterval(() => this.probe(), this.probeIntervalMs);
@@ -193,6 +199,7 @@ export class Tunnel {
     }
 
     this.localPort = await freePort();
+    this.transportState = CONNECTING;
     this.#setState(CONNECTING);
     this.lastError = null;
 
@@ -221,18 +228,27 @@ export class Tunnel {
         // « Authenticated to … using "publickey" » est un SUCCÈS, pas une
         // panne. MESURÉ : c'était la seule ligne que VERBOSE émettait, et elle
         // atterrissait donc dans `lastError` à chaque tunnel qui s'ouvrait bien.
-        if (/^Authenticated to /.test(texte)) continue;
+        if (/^Authenticated to /.test(texte)) {
+          // OpenSSH ne formule cette ligne qu'après la clé d'hôte, la
+          // négociation et l'authentification. Elle ne rend PAS sparkd sain :
+          // le cas précisément recherché par SPK-68 est « SSH établi, API
+          // absente ». L'état API reste donc `broken` si la sonde échoue.
+          this.transportState = READY;
+          continue;
+        }
         this.lastError = texte;
       }
     });
     this.#child.on('exit', (code) => {
       if (this.state !== CLOSED) {
         this.lastError = this.lastError ?? `ssh s'est arrêté (code ${code}).`;
+        this.transportState = BROKEN;
         this.#setState(BROKEN);
       }
     });
     this.#child.on('error', (erreur) => {
       this.lastError = `ssh est introuvable ou n'a pas pu démarrer : ${erreur.message}`;
+      this.transportState = BROKEN;
       this.#setState(BROKEN);
     });
 
@@ -256,6 +272,7 @@ export class Tunnel {
       try {
         await this.probeFn(this.localPort, PROBE_TIMEOUT_MS);
         this.lastHealthyAt = Date.now();
+        if (!this.isLocal) this.transportState = READY;
         this.#setState(READY);
         return this.state;
       } catch (erreur) {
@@ -284,6 +301,7 @@ export class Tunnel {
     try {
       await this.probeFn(this.localPort, PROBE_TIMEOUT_MS);
       this.lastHealthyAt = Date.now();
+      if (!this.isLocal) this.transportState = READY;
       this.#setState(READY);
     } catch (erreur) {
       this.lastError = erreur.message;
@@ -299,6 +317,7 @@ export class Tunnel {
     this.#child?.kill('SIGTERM');
     this.#child = null;
     this.localPort = null;
+    this.transportState = CLOSED;
   }
 
   /** Ce que la console affiche. Jamais un état deviné. */
@@ -321,6 +340,7 @@ export class Tunnel {
       name: this.server.name,
       host: this.server.host,
       state: this.state,
+      transportState: this.transportState,
       localPort: this.localPort,
       lastHealthyAt: this.lastHealthyAt,
       lastError: this.lastError,

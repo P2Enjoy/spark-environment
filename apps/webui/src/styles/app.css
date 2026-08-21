@@ -608,6 +608,25 @@ tbody tr:hover { background: var(--color-hover); }
   border-top: 1px solid var(--color-border); background: var(--color-bg);
 }
 .modale .refus { margin: 0 var(--space-4); }
+
+/* SPK-68 · DAT §50 : le diagnostic reste lisible dans la vue Forge, sans
+   emprunter la couleur rouge réservée aux refus du serveur. */
+.installation { margin-top: var(--space-6); }
+.installation__entete { display: flex; gap: var(--space-4); justify-content: space-between; align-items: start; }
+.installation__entete h2 { margin-bottom: var(--space-1); }
+.installation__etat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-4) 0; }
+.installation__etat > div { border: 1px solid var(--color-border); border-radius: var(--radius-2); padding: var(--space-3); }
+.installation__etat p { margin: var(--space-2) 0 0; color: var(--color-text-2); }
+.installation__releve h3, .installation__stockage h3 { margin-top: 0; }
+.installation__stockage { margin-top: var(--space-4); }
+.tableau-defilant { overflow-x: auto; }
+.tableau-defilant table { min-width: 34rem; }
+
+@media (max-width: 767px) {
+  .installation__entete { align-items: stretch; flex-direction: column; }
+  .installation__entete .bouton { align-self: flex-start; }
+  .installation__etat { grid-template-columns: 1fr; }
+}
 /* Un `select` tire sa largeur INTRINSÈQUE de son option la plus longue. Une zone
    DNS privée en porte deux UUID : le contrôle réclamait ~700 px dans une modale
    de 544, et rognait tout ce qui l'entourait — description, refus, suffixe.

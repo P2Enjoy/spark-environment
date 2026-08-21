@@ -14,6 +14,7 @@
  */
 
 import { formatBytes, formatBps, formatCpu } from './tokens.js';
+import { renderForgeInstaller } from './forge-installer.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -389,11 +390,15 @@ export function renderNotify(notify) {
 
 export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
-                                 build = null, syncing = false } = {}) {
-  if (status === 'loading') return renderHostSkeleton();
-  if (status === 'not-synced') return renderNotSynced(error, syncing);
-  if (status === 'error') return renderHostError(error);
-  if (!host) return renderHostError(null);
+                                 build = null, syncing = false,
+                                 installer = null } = {}) {
+  // SPK-68 · §50.1 : l'assistant doit rester visible quand /healthz manque ;
+  // le cacher derrière l'erreur du plan de contrôle rendrait son cas d'usage
+  // inatteignable.
+  if (status === 'loading') return renderHostSkeleton() + renderForgeInstaller(installer);
+  if (status === 'not-synced') return renderNotSynced(error, syncing) + renderForgeInstaller(installer);
+  if (status === 'error') return renderHostError(error) + renderForgeInstaller(installer);
+  if (!host) return renderHostError(null) + renderForgeInstaller(installer);
 
   const garantie = GARANTIES[host.reservation_guarantee];
 
@@ -426,7 +431,8 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
     ${renderNotify(host.notify)}
     ${renderAddresses(host.addresses)}
   </div>
-</div>`;
+</div>
+${renderForgeInstaller(installer)}`;
 }
 
 export function renderHostSkeleton() {
