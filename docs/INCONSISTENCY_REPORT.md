@@ -277,3 +277,26 @@ vérifié par une assertion du parcours lui-même.
 **Comportement laissé inchangé.** L'arbitrage appartient au responsable :
 diagnostiquer une instabilité de harnais est une unité en soi, et la traiter au
 passage aurait mêlé deux sujets.
+
+**NON REPRODUIT le 2026-08-21 à 03h**, et la tentative est écrite pour que la
+suivante n'ait pas à la refaire :
+
+```
+série complète, seed fraîchement appliqué   =>  73 parcours, 0 échec
+série complète REJOUÉE sans reseed          =>  73 parcours, 0 échec
+```
+
+La seconde exécution éprouvait l'hypothèse la plus probable — l'échec était
+apparu à la DEUXIÈME série d'une même session — et l'**infirme**. Le harnais
+monte de toute façon sa propre pile jetable à chaque série (§29.2), donc l'état
+du seed ne se transmet pas d'une série à l'autre.
+
+**Rien n'a été corrigé, et c'est délibéré** : le `CLAUDE.md` §18 exige de
+reproduire un défaut avant d'en traiter la cause. Corriger ce qu'on n'observe pas
+reviendrait à poser une temporisation ou un contournement, que le §3.1 du
+`CloudWorker.md` interdit nommément.
+
+**Ce que la prochaine occurrence doit relever** pour trancher : le fichier de
+diagnostic `e2e/captures/echecs/terminal.txt`, l'ordre exact des parcours joués
+avant lui, et si la machine était chargée — deux séries E2E tournaient en
+parallèle dans la session où il est apparu.
