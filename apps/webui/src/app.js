@@ -1187,8 +1187,21 @@ async function poserEnv(niveau) {
   const chemin = niveau === 'forge'
     ? `/v1/env/${encodeURIComponent(nom)}`
     : `/v1/sparks/${encodeURIComponent(etat.spark.name)}/env/${encodeURIComponent(nom)}`;
-  const vu = await appel('PUT', chemin,
-                         { value: e.values.value, secret: Boolean(e.values.secret) });
+
+  // §18 : un échec ne se PERD pas. Sans ce filet, une promesse qui rejette —
+  // réseau coupé, relais absent, corps illisible — laisserait la modale sur
+  // « Envoi… » indéfiniment : le geste paraîtrait en cours alors que plus rien
+  // ne court. Le gestionnaire de submit n'attend pas cette promesse, donc rien
+  // d'autre ne rattraperait le rejet.
+  let vu;
+  try {
+    vu = await appel('PUT', chemin,
+                     { value: e.values.value, secret: Boolean(e.values.secret) });
+  } catch (erreur) {
+    e.busy = false;
+    e.refusal = { niveau, message: `La requête n’a pas abouti : ${erreur.message}` };
+    return peindre();
+  }
   e.busy = false;
 
   if (!vu.ok) {
@@ -1206,7 +1219,14 @@ async function retirerEnv(nom, portee) {
   const chemin = portee === 'forge'
     ? `/v1/env/${encodeURIComponent(nom)}`
     : `/v1/sparks/${encodeURIComponent(etat.spark.name)}/env/${encodeURIComponent(nom)}`;
-  const vu = await appel('DELETE', chemin);
+  let vu;
+  try {
+    vu = await appel('DELETE', chemin);
+  } catch (erreur) {
+    etat.envUi.refusal = { niveau: portee,
+                           message: `La requête n’a pas abouti : ${erreur.message}` };
+    return peindre();
+  }
   if (!vu.ok) {
     etat.envUi.refusal = { niveau: portee,
                            message: vu.corps?.detail?.message ?? 'Le serveur a refusé ce retrait.' };
