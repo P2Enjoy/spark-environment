@@ -6591,3 +6591,138 @@ rien — c'est déjà écrit au design system, et cela reste vrai avec un facteu
 
 Corollaire : un facteur ne dispense d'aucune confirmation. Le §5.4 le pose déjà —
 « aucun degré de navigation n'en dispense ».
+
+## 46. La clé restreinte du responsable : contrat (SPK-61)
+
+Le §45.3 pose la question et la déclare préalable à tout second facteur : *la clé
+d'accès du responsable peut-elle être restreinte à ce dont la console a besoin,
+sans shell interactif ?* Cette section rend la réponse, **mesurée le 2026-08-21
+sur OpenSSH 9.7 côté serveur et 8.9p1 côté client**, et fixe ce qui s'écrit.
+
+### 46.1 Le résultat qui décide de tout : `restrict` est un faux ami
+
+MESURÉ, sur un `sshd` jetable, avec trois clés portant trois politiques :
+
+| Ce que la console ou l'attaquant fait | clé nue | `restrict,port-forwarding,permitopen=…` | la même, plus `command=` |
+|---|---|---|---|
+| §22 · tunnel `-L` vers `sparkd` | passe | **passe** | **passe** |
+| `-L` vers une AUTRE cible de la Forge | passe | **refusé** | **refusé** |
+| §37.2 · rebond `-W` vers un Spark | passe | **passe** | **passe** |
+| rebond `-W` vers une cible non listée | passe | **refusé** — « stdio forwarding failed » | **refusé** |
+| **`ssh forge "cat <un fichier>"`** | passe | **PASSE** | **refusé** |
+| §37.3 · `ssh forge "incus exec …"` | passe | **passe** | **refusé** |
+
+**La ligne qui compte est la cinquième.** `restrict` désactive le pseudo-terminal,
+le transfert d'agent, le X11 et le `user-rc` — il **ne désactive pas l'exécution
+d'une commande**. Une clé « restreinte » au sens de `restrict` lit donc encore
+tout le registre SQLite de la Forge, et le §45.3 serait satisfait sur le papier
+sans l'être en fait. Seul `command=` ferme cette porte.
+
+Le corollaire est aussi mesuré, et il est heureux : **`command=` ne casse ni le
+tunnel ni le rebond.** `-L` et `-W` sont des canaux `direct-tcpip`, pas des
+sessions ; `command=` ne s'applique qu'aux sessions. La console garde donc ses
+deux chemins principaux avec la clé la plus fermée.
+
+### 46.2 Une condition SERVEUR, sans laquelle rien ne fonctionne
+
+MESURÉ, et découvert en montant le banc : avec `AllowTcpForwarding no` dans le
+`sshd_config`, **tout tombe, y compris avec une clé sans aucune option**, sur un
+laconique « administratively prohibited: open failed ». Certaines distributions
+l'ont ainsi par défaut — Alpine, sur laquelle la mesure a été faite.
+
+La Forge exige donc, côté serveur :
+
+```
+AllowTcpForwarding local
+```
+
+`local` et non `yes` : il autorise `-L` et `-W`, dont la console a besoin, et
+refuse `-R` — un transfert distant, dont elle n'a aucun besoin et qui ouvrirait un
+service du poste vers la Forge.
+
+Cette condition n'est pas dans `authorized_keys` : une restriction posée sur la
+clé sans elle donnerait une console en panne, pas une console protégée.
+
+### 46.3 Le dépannage : le seul chemin que `command=` casse
+
+Le §37.3 fait exécuter `incus exec <cellule> -- /bin/bash` **sur la Forge**. C'est
+une session avec commande, donc exactement ce que `command=` écrase — MESURÉ :
+avec `command="/bin/false"`, le dépannage rend `1` et rien d'autre.
+
+Le backlog l'annonçait : « une clé restreinte qui casse le terminal de dépannage
+aurait échangé une protection contre une panne ». Trois issues, et une seule
+tient :
+
+- **renoncer au dépannage depuis cette clé** — refusé : le §37.3 existe pour le
+  cas où le `sshd` d'un Spark est muet, c'est-à-dire précisément quand on en a le
+  plus besoin ;
+- **`command=` absent** — refusé : c'est le trou du §46.1, et l'unité perdrait
+  son objet ;
+- **`command=` qui est une GARDE** — retenu. Un script sur la Forge reçoit la
+  commande demandée dans `SSH_ORIGINAL_COMMAND`, n'exécute que ce que le produit
+  a besoin d'exécuter, et refuse tout le reste.
+
+MESURÉ : `SSH_ORIGINAL_COMMAND` porte bien la commande complète, telle que la
+console l'a écrite — `incus exec cellule -- /bin/bash`.
+
+### 46.4 Ce que la garde accepte, et ce qu'elle refuse
+
+La garde est un contrat **fermé** : elle n'accepte que des formes ÉNUMÉRÉES, et
+refuse tout le reste. Une garde qui filtrerait par motifs interdits laisserait
+passer ce qu'elle n'a pas prévu ; une garde qui énumère laisse passer trop peu, ce
+qui se voit et se corrige, plutôt que trop, ce qui ne se voit pas.
+
+**Acceptées**, et rien d'autre :
+
+- `incus exec <nom> -- <shell>` où `<nom>` est un nom de cellule du produit et
+  `<shell>` l'un des shells que le §37.3 lance. C'est le dépannage.
+
+**Refusées**, et la liste n'a pas à être écrite puisque tout le reste l'est : une
+session sans commande — le shell interactif —, `cat`, `sh -c`, `incus file pull`,
+`incus exec` avec des options avant le nom, et toute commande dont un argument ne
+correspond pas à la forme attendue.
+
+**Le refus est BAVARD dans le journal de la Forge et muet vers le client** : il
+écrit ce qui a été refusé sur la sortie d'erreur du `sshd`, et ne rend au client
+qu'un code non nul et une phrase qui ne décrit pas la grammaire acceptée. Décrire
+la grammaire à qui n'y a pas droit lui apprend comment la contourner.
+
+**Ce que la garde ne prétend pas être** : une frontière de sécurité contre un
+adversaire qui a déjà `root` sur la Forge. Le §35.1 l'assume déjà pour la
+protection, et le §45.2 pour le poste compromis. La garde réduit ce qu'une clé
+volée donne ; elle ne transforme pas la Forge en système inviolable.
+
+### 46.5 Ce que `permitopen` doit couvrir, et le piège qui s'y cache
+
+Deux familles de cibles, et une seule est stable :
+
+- **`127.0.0.1:<port de sparkd>`** — fixe, connue, écrite une fois ;
+- **`<adresse privée d'un Spark>:22`** — une par Spark, et elles changent à chaque
+  création.
+
+**`permitopen` n'accepte PAS de notation CIDR.** Une plage ne s'y écrit donc pas,
+et maintenir une ligne par Spark ferait dépendre l'accès d'une mise à jour
+manuelle à chaque création — une console qui cesse de fonctionner le jour où l'on
+crée un Spark serait pire que pas de restriction du tout.
+
+Deux voies, et le choix se fait **par mesure**, pas par préférence :
+
+- si la version d'OpenSSH de la Forge accepte un **motif** dans `permitopen`
+  (`permitopen="10.77.0.*:22"`), c'est cette forme, et elle est écrite une fois ;
+- sinon, la restriction porte sur le **port** et non sur l'adresse, et le §17.4
+  reste la vraie borne : les Sparks n'ont pas de port SSH public, leur réseau est
+  privé, et le rebond n'atteint qu'eux.
+
+Cette mesure est à faire sur la version de la Forge, et son résultat est écrit
+dans `docs/PROD_MIGRATIONS.md` avec la ligne exacte à poser.
+
+### 46.6 Ce que cette unité ne prétend pas
+
+Elle ne supprime pas la menace 5. Une clé restreinte volée donne toujours l'API,
+donc les gestes — le §45.3 le disait déjà. Ce qu'elle change : « accès total et
+silencieux » devient « accès aux gestes, journalisés », et c'est le terrain sur
+lequel la chaîne d'audit (§36), la signature (§36.10) et une notification future
+(SPK-62) deviennent utiles.
+
+Elle ne protège pas non plus contre un poste compromis (§45.2) : la clé y est, et
+elle est restreinte pour tout le monde de la même façon.
