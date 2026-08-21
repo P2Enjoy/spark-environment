@@ -7,7 +7,7 @@ VENV   := $(SPARKD)/.venv
 PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
-        contract contract-check test gestes e2e captures manuel runDev seed build clean
+        contract contract-check test gestes e2e captures manuel runDev runProd seed build clean
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -18,6 +18,7 @@ help:
 	@echo "contract        regenere le contrat d'API et ses types"
 	@echo "contract-check  echoue si le contrat committe a derive du code"
 	@echo "runDev          pile de developpement : sparkd factice + console"
+	@echo "runProd         console d exploitation seule : inventaire du poste, tunnels SSH"
 	@echo "seed            recree le registre de developpement et le peuple"
 	@echo "gestes          parcours navigateur des gestes d'administration"
 	@echo "e2e             parcours complets contre la pile reelle"
@@ -56,6 +57,20 @@ runDev:
 
 seed:
 	./scripts/dev.sh seed
+
+# Console d'EXPLOITATION (CLAUDE.md §3). Elle n'est pas la pile de developpement
+# sans le mot « dev » : c'est un processus, pas deux.
+#
+#   runDev  : sparkd FACTICE local + console, inventaire jetable dans .dev/
+#   runProd : la console SEULE, inventaire du poste, tunnels vers de vraies Forges
+#
+# Aucun sparkd ne tourne ici : la console en atteint un par tunnel SSH, sur la
+# machine qui le porte. Lancer un sparkd local en croyant faire de la production
+# donnerait une console qui administre un registre vide.
+runProd:
+	@echo "Console d'exploitation — inventaire : $${SPARK_CONSOLE_STATE:-$$HOME/.config/spark/servers.json}"
+	@echo "Aucun sparkd local : les Forges sont atteintes par tunnel SSH."
+	cd apps/webui && node host/main.js
 
 # Les parcours navigateur font partie de la campagne : un test hors campagne
 # cesse d'etre execute, puis cesse d'etre vrai.

@@ -3,6 +3,10 @@
 ## [Non publié]
 
 ### Ajouté
+- `make runProd` : la **console d'exploitation seule** — inventaire du poste,
+  tunnels vers de vraies Forges, aucun `sparkd` local. La cible manquait, alors
+  que `CLAUDE.md` §3 la demande ; `make runDev` monte un `sparkd` **factice**, et
+  rien ne disait comment lancer la console pour de vrai.
 - Unité SPK-64 : l'héritage de l'environnement devient une **sélection**. La Forge
   tient un catalogue, chaque Spark coche ce qui descend chez lui — correction d'un
   défaut de sécurité de SPK-58, relevé par le responsable.
