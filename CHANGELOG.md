@@ -15,7 +15,8 @@
   disque annonce qu'il **exige un redémarrage** avant qu'on agisse. La modale
   s'ouvre **pré-remplie** des valeurs du Spark, et un refus y reste affiché sans
   effacer la saisie. Le manuel M8 porte le geste et ses deux familles de refus.
-  *Le mode CPU n'est pas encore modifiable depuis l'écran, et le manuel le dit.*
+  Le **mode CPU** se change aussi : les champs qui suivent dépendent de lui, et
+  les réglages de l'ancien mode ne survivent pas.
 - **L'admission sait compter un redimensionnement** (SPK-57, `docs/DAT.md` §49.1) :
   `pools(..., sauf=<id>)` et `admit(..., sauf=<id>)` rendent au pool le Spark
   visé avant d'évaluer sa nouvelle demande. Un agrandissement tenable n'est plus

@@ -2937,14 +2937,25 @@ et la même sous 768 px où elle occupe l'écran sans changer de contrat (§6.27
 Le manuel M8 porte le geste, ses deux familles de refus et ce qui n'est pas
 encore possible.
 
+**Le mode CPU se change depuis l'écran, le 2026-08-21.** La modale porte un
+sélecteur des quatre modes, et **les champs qui suivent dépendent de lui** —
+réservation en partagé, plafond en plafonné, cœurs en dédié. Laisser saisir des
+valeurs que le produit ignorera serait un contrôle mort (§1.4).
+
+- **Les réglages de l'ancien mode ne SURVIVENT pas** : une réservation sur un
+  Spark plafonné serait une valeur que rien n'emploie, et que le prochain lecteur
+  croirait vraie. Prouvé côté registre par le parcours.
+- **Le mode annonce son redémarrage** avant qu'on agisse, comme le disque (§49.4).
+- **La table des modes est importée**, jamais recopiée (§12.5) — une seconde
+  copie finirait par proposer un mode que le runtime ne connaît pas.
+- **Preuves** : 4 de composant, 1 parcours E2E qui va du clavier au registre.
+  825 preuves de console.
+
 - **Reste avant `[x]`** :
-  1. **le mode CPU n'est pas modifiable depuis l'écran.** Le §49.2 le range
-     pourtant parmi les champs redimensionnables, et l'API l'accepte. Le manuel
-     le dit franchement plutôt que de le taire ;
-  2. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
+  1. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
      mesurée, donc le refus du §49.3 sur le disque ne se déclenche pas en
      production — il est prouvé au service, pas atteignable par la route ;
-  3. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
+  2. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
      changement de mode CPU — exige une Forge réelle : **nécessite une action
      humaine**.
 
