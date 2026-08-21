@@ -132,8 +132,20 @@ on corrige parfois en urgence, mais la console ne vous le cache pas.
 La comparaison se refait avec **Comparer à nouveau**. Elle ne touche pas à la
 Forge : elle relit ce que celle-ci publie déjà, et regarde votre dépôt local.
 
-## Une limite à connaître
+## Ce que vaut exactement une réservation CPU
 
-La réservation CPU n'est aujourd'hui proportionnelle **qu'entre Sparks** : elle
-est arbitrée contre les tranches système de la Forge et n'est pas une garantie
-absolue. L'écran le dit, et le dira autrement le jour où ce sera faux.
+**Un plancher.** Sous contention totale — quand la Forge et tous ses Sparks
+travaillent en même temps —, un Spark obtient bien la part qu'il a réservée. Dès
+qu'une partie de la Forge est au repos, il obtient **davantage** : c'est le burst,
+et il est voulu.
+
+Ce n'est donc ni « une garantie absolue » ni « aucune garantie ». C'est une
+promesse tenue par le bas, et dépassée le reste du temps.
+
+Ce qui la rend vraie : les Sparks sont regroupés sous une tranche commune dont le
+poids vaut exactement la somme de ce qu'ils ont réservé. La mesure sur la Forge
+de validation le 2026-08-21 a donné **47,9 %** de la machine là où le calcul en
+prédisait 47,4.
+
+L'écran des pools énonce cette portée sous les jauges, et il la **lit** auprès de
+la Forge : si la règle changeait, l'écran changerait avec elle.
