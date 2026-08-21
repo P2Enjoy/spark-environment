@@ -3633,25 +3633,35 @@ documents. Rien de tout cela n'y sert.
   métadonnées ; `importlib.metadata.version()` la lit, et **plus personne ne peut
   l'oublier**. Le mécanisme actuel est un rappel à la vigilance ; celui-ci est une
   propriété.
-- **Ce qu'il faut trancher, et ne pas décider en écrivant le code** :
-  1. `pip install -U` **sans version épinglée** met à jour vers ce qui traîne sur
-     la branche. Une Forge en service ne se met pas à jour par surprise : le
-     produit doit-il installer une **étiquette** (`@v0.4.2`), un **commit précis**,
-     ou laisser le choix ? Écrire lequel, et pourquoi ;
-  2. l'installation devient **tributaire du réseau sortant** vers l'hébergeur du
-     dépôt. Aujourd'hui elle ne demande qu'un SSH depuis le poste. Une Forge sans
-     sortie Internet peut être installée aujourd'hui et ne le pourrait plus —
-     à nommer, et à traiter si le cas doit rester couvert ;
-  3. le dépôt est public **aujourd'hui**. S'il devenait privé, `pip` réclamerait
-     un jeton **sur la Forge**, ce que le §22.4 refuse pour la console. Dire dès
-     maintenant ce qui se passerait.
+- **Les trois arbitrages sont rendus, le 2026-08-21** :
+  1. **Pull direct depuis la branche**, sans épinglage. La Forge se met à jour au
+     fil de l'eau ; c'est le mode de travail assumé aujourd'hui — un responsable,
+     une branche, une livraison continue ;
+  2. **la dépendance au réseau sortant est acceptée** : « une Forge sans Internet
+     ne sert à rien ». Le cas hors ligne sort du périmètre et n'a pas à être
+     couvert ;
+  3. **le dépôt reste public.** La question du jeton sur la Forge ne se pose pas.
+- **Le piège de la première décision, à traiter DANS l'unité** : avec
+  `version = "0.0.0"` figée au `pyproject`, `pip install -U git+…@main` **ne
+  réinstalle rien**. Pip lit la version du dépôt distant, la compare à celle qui
+  est posée, les trouve égales et conclut « déjà satisfait ». La mise à jour
+  paraîtrait faite et ne le serait pas — exactement le mode de panne qui a produit
+  la Forge en `0.0.0+inconnue`, mais silencieux cette fois.
+  Deux voies, à mesurer avant de choisir : une version **dérivée du dépôt**, de
+  sorte que chaque commit en porte une distincte — ce qui alimente du même coup
+  l'estampille du §40 —, ou un `--force-reinstall` assumé et écrit. La première
+  est plus propre ; la seconde ne demande rien. **Aucune ne se décide sans
+  mesure** : la DoD exige de constater qu'une mise à jour change réellement le
+  code en service.
 - Ne change **rien** côté poste : la console reste servie depuis le dépôt, puisque
   c'est une application Node servie telle quelle. Le dépôt disparaît de la
   **Forge**, pas du poste.
 - DoD : une Forge neuve est installée **sans qu'aucun fichier du dépôt n'y soit
   copié**, prouvé sur la machine ex-novo `212.47.246.142` ; `/healthz` rend une
   version **issue des métadonnées du paquet**, sans variable passée à la main ;
-  une mise à jour puis un retour à la version précédente sont joués et mesurés ;
+  **une mise à jour est jouée et le commit servi CHANGE** — c'est la preuve qui
+  ferme le piège ci-dessus, et une mise à jour qui ne change rien doit rougir ;
+  un retour à une version antérieure est joué et mesuré ;
   le préflight reste vert ; `PROD_MIGRATIONS.md` OP-04 et le runbook §A.2 réécrits
   dans le même changement.
 

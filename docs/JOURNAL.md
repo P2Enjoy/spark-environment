@@ -7117,3 +7117,42 @@ Restent bloquées : **SPK-28** (une machine à commander), **SPK-61** (poser la 
 restreinte, geste délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel),
 **SPK-43** (route de dépannage de bout en bout), **SPK-17** (CI jamais exécutée),
 **SPK-36** (reconstruction d'un Spark, et neuf scénarios à instruire).
+
+## 2026-08-21 — Trois arbitrages sur l'installation, et le piège de la première
+
+Le responsable a tranché les trois questions de SPK-66 :
+
+1. **pull direct depuis la branche**, sans épinglage — la Forge se met à jour au
+   fil de l'eau ;
+2. **la dépendance au réseau sortant est acceptée** : « une Forge sans Internet ne
+   sert à rien ». Le cas hors ligne sort du périmètre ;
+3. **le dépôt reste public** : la question du jeton sur la Forge ne se pose pas.
+
+Les deux dernières ferment proprement. La première ouvre un piège qu'il vaut
+mieux écrire maintenant que découvrir sur une Forge en service.
+
+### `pip install -U` peut ne rien faire, en silence
+
+Avec `version = "0.0.0"` figée au `pyproject` — ce qui est le cas aujourd'hui —,
+`pip install -U git+…@main` lit la version du dépôt distant, la compare à celle
+qui est installée, les trouve **égales**, et conclut « déjà satisfait ». Il ne
+réinstalle rien.
+
+La mise à jour paraîtrait faite et ne le serait pas. C'est exactement le mode de
+panne qui a produit la Forge en `0.0.0+inconnue` ce matin — mais **silencieux
+cette fois**, puisque aucune variable oubliée ne le trahirait.
+
+Deux voies, et l'unité doit les mesurer avant de choisir : une version **dérivée
+du dépôt**, de sorte que chaque commit en porte une distincte — ce qui alimente
+du même coup l'estampille du §40 —, ou un `--force-reinstall` assumé et écrit. La
+première est plus propre, la seconde ne demande rien.
+
+La DoD gagne donc la preuve qui ferme le piège : **une mise à jour doit changer le
+commit servi**, et une mise à jour qui ne change rien doit rougir. Sans elle,
+l'unité livrerait une commande qui a l'air de fonctionner.
+
+C'est le troisième cas cette semaine du même motif : un geste qui réussit sans
+rien faire. Le premier était la console périmée qui servait du code mort, le
+second l'empreinte SSH que `LogLevel=VERBOSE` n'atteignait jamais. À chaque fois,
+rien ne rougit, et c'est le responsable qui paie la découverte.
+
