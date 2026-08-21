@@ -97,7 +97,7 @@ systemd voyagent avec lui. Depuis un poste ayant l'accès SSH, sur une Forge don
 les prérequis Incus, pool, bridge et Caddy sont déjà conformes :
 
 ```bash
-ssh <compte>@<forge> 'sudo python3 -m venv /opt/sparkd/venv'
+ssh <compte>@<forge> 'sudo apt-get update && sudo apt-get install -y --no-install-recommends git python3-venv && sudo python3 -m venv /opt/sparkd/venv'
 ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/pip install --upgrade "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd" && sudo /opt/sparkd/venv/bin/python -m sparkd.install'
 ```
 

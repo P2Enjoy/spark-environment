@@ -167,7 +167,8 @@ Objectif      : que sparkd survive a un redemarrage. Mesure le 2026-08-19 : il
                 de tourner sans que rien ne les administre : la panne est
                 silencieuse et ne se decouvre qu'a la premiere operation.
 Depend de     : Incus >= 6.19, pool de stockage, bridge prive
-Commande      : python3 -m venv /opt/sparkd/venv ; puis
+Commande      : apt-get update ; apt-get install -y --no-install-recommends git
+                python3-venv ; python3 -m venv /opt/sparkd/venv ; puis
                 /opt/sparkd/venv/bin/pip install --upgrade
                 "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"
                 et /opt/sparkd/venv/bin/python -m sparkd.install (en root).

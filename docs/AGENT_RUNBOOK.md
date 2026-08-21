@@ -38,11 +38,13 @@ laissée « RUNNING » mais injoignable, `stop --force` compris.
 Depuis le poste, **sans copier le dépôt** :
 
 ```bash
-ssh <compte>@<forge> 'sudo python3 -m venv /opt/sparkd/venv'
+ssh <compte>@<forge> 'sudo apt-get update && sudo apt-get install -y --no-install-recommends git python3-venv && sudo python3 -m venv /opt/sparkd/venv'
 ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/pip install --upgrade "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd" && sudo /opt/sparkd/venv/bin/python -m sparkd.install'
 ```
 
-En root direct, retirer `sudo`. La seconde ligne est **idempotente** : elle
+En root direct, retirer `sudo`. La première ligne est nécessaire même sur une
+Ubuntu neuve : Python peut y être présent sans `ensurepip`, donc sans `venv`.
+La seconde ligne est **idempotente** : elle
 réinstalle le paquet, ses dépendances et ses unités sans jamais effacer le
 registre. `sparkd.install` part du paquet qui vient d'être posé — migrations SQL
 et unités systemd incluses — et la version issue de ses métadonnées porte le

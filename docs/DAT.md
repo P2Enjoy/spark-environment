@@ -6086,11 +6086,13 @@ La procédure est volontairement réduite à deux commandes SSH et n'accepte ni
 jeton ni variable d'empreinte :
 
 ```bash
-ssh <compte>@<forge> 'sudo python3 -m venv /opt/sparkd/venv'
+ssh <compte>@<forge> 'sudo apt-get update && sudo apt-get install -y --no-install-recommends git python3-venv && sudo python3 -m venv /opt/sparkd/venv'
 ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/pip install --upgrade "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd" && sudo /opt/sparkd/venv/bin/python -m sparkd.install'
 ```
 
-En root direct, `sudo` disparaît. La seconde ligne réinstalle les dépendances,
+En root direct, `sudo` disparaît. La première ligne pose aussi `git` et
+`python3-venv` : Ubuntu peut livrer Python sans `ensurepip`, et une procédure qui
+suppose le venv déjà présent échoue dès la Forge neuve. La seconde ligne réinstalle les dépendances,
 pose les unités issues du paquet, recharge systemd, redémarre `sparkd`, attend
 `/healthz` et refuse le succès si le préflight reste rouge. Le registre sous
 `/var/lib/sparkd` n'est jamais effacé.
