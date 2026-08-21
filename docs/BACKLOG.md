@@ -3530,6 +3530,44 @@ locataire compromettra.
   ne descend nulle part, cocher sur un Spark, le voir arriver, décocher, le voir
   partir ; manuel M6/M8 et seed mis à jour.
 
+### [ ] SPK-65 · La console dit quand elle sert du code périmé
+
+**Trois fois en deux jours**, le responsable a perdu du temps sur un défaut qui
+n'en était pas un : le processus servait du code plus ancien que le dépôt.
+
+| Symptôme rapporté | Cause réelle |
+|---|---|
+| « le manuel est vide » | la console tournait depuis avant les routes du manuel |
+| « la Forge dit `build inconnue` » | `sparkd` réinstallé sans son estampille |
+| « l'onglet Docker ne fonctionne pas » | la console tournait depuis **15 heures**, avant SPK-44 |
+
+Aucun de ces trois n'est un défaut du code. Les trois se voient de la même façon
+— on cherche longtemps dans le produit ce qui n'y est pas — et se corrigent par
+un redémarrage. **Ce qui manque n'est pas un correctif, c'est un signal.**
+
+SPK-53 a résolu exactement ce problème **pour la Forge** : la console compare la
+build déployée au dépôt et nomme les six situations. Elle ne le fait pas pour
+**elle-même**.
+
+- Spécification : `docs/DAT.md` §40 (le modèle de SPK-53, à étendre) ·
+  `docs/DESIGN_SYSTEM.md` §14.6 (trois situations ne se confondent pas).
+- Portée : l'hôte console relève, à son démarrage, ce qu'il exécute — commit du
+  dépôt, ou date des fichiers servis quand il n'y a pas de dépôt — et le compare à
+  l'état courant. Le décalage est **annoncé dans l'interface**, pas seulement
+  journalisé : celui qui subit le symptôme n'est pas dans les journaux.
+- Ce que le signal doit dire, et qui décide de l'unité : **quoi faire**. « Console
+  démarrée avant 12 commits · redémarrer pour en bénéficier » est utile ; « version
+  différente » ne l'est pas.
+- Cas à ne pas confondre (§14.6) : dépôt absent — une console installée chez un
+  exploitant qui ne développe pas —, dépôt présent et identique, dépôt en avance,
+  et **dépôt en retard sur la console**, qui n'est pas une anomalie.
+- Ce que l'unité ne fait pas : redémarrer toute seule. Un processus qui se relance
+  sous les doigts de quelqu'un est pire que le décalage qu'il corrige.
+- DoD : un test prouve qu'un dépôt avancé d'un commit produit le signal ; un test
+  prouve que l'absence de dépôt ne le produit **pas** ; un parcours E2E montre le
+  signal à l'écran ; captures observées ; le signal nomme le geste, prouvé sur son
+  texte.
+
 ---
 
 ## Réservé, non planifié

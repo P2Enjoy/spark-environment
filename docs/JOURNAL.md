@@ -6987,3 +6987,60 @@ de sécurité qui casserait la production serait un mauvais échange.
 SPK-58 reste `[x]` avec un renvoi : elle est le récit exact de ce qui a été livré
 et prouvé sous la spécification d'alors. SPK-64 porte le changement.
 
+## 2026-08-21 — « L'onglet Docker ne fonctionne pas » : le code n'était pas en cause
+
+Rapporté par le responsable, avec une remarque juste : « je ne sais pas ce que tu
+as vérifié pour dire OK à cette unité. » Réponse honnête : ce n'est pas moi qui ai
+livré SPK-44 ni déclaré sa clôture — mais cela ne change rien au fait qu'il perd
+du temps.
+
+### Le diagnostic, dans l'ordre où il s'est fait
+
+D'abord une fausse piste, écartée par la mesure : `sparkd` déployé n'expose
+**aucune** route Docker. Vrai, et sans rapport — l'onglet ne passe pas par
+`sparkd` mais **en SSH depuis la console vers le Spark**.
+
+Ensuite l'appel exact que fait l'écran, joué à la main contre `helo` sur la Forge
+réelle, à travers une console fraîche :
+
+    GET /api/spark/docker?server=forge&spark=helo
+    → state: ok · helo-web-1 · running · nginx:alpine · cpu 0.00% · mém 7,418 Mio
+
+**La fonctionnalité marche.** Puis la même route contre la console que le
+responsable utilise :
+
+    → 404  « Rien sur /api/spark/docker. »
+    ps → démarrée le 2026-08-20 à 20:20, soit 15 h 27 plus tôt
+
+Le processus est antérieur à SPK-44. Le code servi n'a jamais eu cette route.
+
+### Ce que ça dit de nos preuves, et c'est le vrai enseignement
+
+SPK-44 a été close sur des preuves qui ne pouvaient pas voir ce défaut — parce
+qu'il n'est **pas dans le code**. Aucune campagne, aucune capture, aucun parcours
+E2E n'aurait rougi : ils s'exécutent tous contre un processus fraîchement
+démarré. Le seul endroit où le défaut existe est la machine de quelqu'un qui n'a
+pas redémarré.
+
+**Troisième occurrence en deux jours**, et j'ai traité les deux premières comme
+des incidents isolés :
+
+    « le manuel est vide »            → console antérieure aux routes du manuel
+    « la Forge dit build inconnue »   → sparkd réinstallé sans estampille
+    « l'onglet Docker ne marche pas » → console antérieure à SPK-44
+
+Trois symptômes différents, une seule cause, et à chaque fois le responsable
+cherche dans le produit ce qui n'y est pas. J'aurais dû voir le motif à la
+deuxième.
+
+L'ironie est complète : **SPK-53 résout exactement ce problème pour la Forge** —
+la console compare la build déployée au dépôt et nomme six situations. Elle ne le
+fait pas pour elle-même. D'où SPK-65.
+
+### Vérifications
+
+Route jouée contre la Forge réelle depuis deux consoles — une fraîche, une
+périmée. Console du responsable redémarrée : l'onglet Docker rend `helo-web-1`
+avec ses mesures, et ses quatre serveurs ont survécu, ce qui éprouve au passage
+la fusion d'inventaire livrée une heure plus tôt.
+

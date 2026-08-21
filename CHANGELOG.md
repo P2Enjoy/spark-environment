@@ -3,6 +3,9 @@
 ## [Non publié]
 
 ### Ajouté
+- Unité SPK-65 : la console dit quand elle sert du code périmé. Trois symptômes
+  rapportés en deux jours — manuel vide, build inconnue, onglet Docker en 404 —
+  avaient la même cause : un processus plus ancien que le dépôt.
 - `make runProd` : la **console d'exploitation seule** — inventaire du poste,
   tunnels vers de vraies Forges, aucun `sparkd` local. La cible manquait, alors
   que `CLAUDE.md` §3 la demande ; `make runDev` monte un `sparkd` **factice**, et
