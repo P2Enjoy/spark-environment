@@ -6434,6 +6434,66 @@ que laissé à la mémoire d'une conversation (`CLAUDE.md` §5) :
 4. **le manuel et le seed**, et la preuve du §43.0 essai F refaite sur le fichier
    que le produit écrit.
 
+#### 43.9.7 Comment une valeur s'écrit dans le fichier — MESURÉ le 2026-08-21
+
+Le §43.1 dit *quel* fichier. Il ne disait pas *comment* y écrire une valeur, et
+la mesure montre que ce n'est pas un détail de forme : **l'analyseur d'`env_file:`
+de Compose n'est pas littéral**, et une valeur écrite naïvement est modifiée en
+silence.
+
+Mesuré sur Docker Compose v5.1.4, valeurs écrites SANS guillemets :
+
+| Écrit dans le fichier | Ce que le conteneur reçoit |
+|---|---|
+| `A=abc$def` | **`abc`** — `$def` est substitué, et la variable étant inconnue, il disparaît |
+| `A=abc$$def` | `abc$def` — `$$` est l'échappement |
+| `A="entre guillemets"` | `entre guillemets` — les guillemets sont RETIRÉS |
+| `A=  espaces  ` | `espaces` — les blancs de tête et de fin sont ROGNÉS |
+
+**Un mot de passe contenant `$` serait donc tronqué sans que rien ne le dise.**
+C'est le pire mode de panne du §43.0 : cela marche sur les valeurs simples qu'on
+essaie à la main, et casse sur celles qui comptent.
+
+Ce n'est pas non plus le comportement de `docker run --env-file`, qui prend tout
+littéralement — deux analyseurs différents pour deux commandes du même produit.
+Le fichier doit donc être écrit pour le PLUS exigeant des deux, et c'est Compose,
+puisque c'est lui que le §43.1 désigne.
+
+**L'apostrophe simple ne sauve pas.** L'idiome du shell `'ab'\''cd'` est REFUSÉ
+par l'analyseur, et son refus porte sur le FICHIER ENTIER :
+
+```
+failed to read env.list: line 1: unexpected character "\" in variable name
+```
+
+Toutes les variables sont alors perdues, pas seulement la fautive. Une seule
+apostrophe dans un mot de passe suffirait à vider l'environnement de la pile.
+
+**Décision : guillemets DOUBLES, avec échappement par barre oblique inverse.**
+Mesuré, et cette forme passe tout :
+
+| Écrit | Reçu | Ce que cela règle |
+|---|---|---|
+| `L="ab'cd"` | `ab'cd` | l'apostrophe |
+| `M="ab\$cd"` | `ab$cd` | la substitution |
+| `N="ab\"cd"` | `ab"cd` | le guillemet |
+| `O="a\\b"` | `a\b` | la barre oblique |
+| `P="  garde  "` | `  garde  ` | les blancs, CONSERVÉS |
+| `Q="a\nb"` | un vrai saut de ligne | les caractères de contrôle |
+
+**La règle d'encodage, dans cet ordre** : échapper `\` en `\\`, puis `"` en
+`\"`, puis `$` en `\$` ; traduire le saut de ligne en `\n`, le retour chariot
+en `\r`, la tabulation en `\t` ; entourer de guillemets doubles.
+
+L'ordre compte : échapper la barre oblique en dernier doublerait les barres
+introduites par les autres échappements.
+
+**Le complément `/etc/profile.d/spark-env.sh` du §43.1 n'obéit PAS à ces
+règles-là** : c'est un script de shell, et le shell a sa propre grammaire. Il est
+écrit avec des apostrophes simples, et une valeur qui en contient une y est
+rendue par l'idiome `'\''` — celui-là même que Compose refuse. Deux
+consommateurs, deux grammaires : les confondre casserait l'un ou l'autre.
+
 
 ## 44. Le briefing d'un Spark : ce qu'un agent doit savoir en entrant
 
