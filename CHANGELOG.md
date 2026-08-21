@@ -36,6 +36,12 @@
   explique au locataire comment attacher les fichiers à ses services, et le
   manuel M8 explique à l'exploitant ce qu'une déclaration de secret engage.
 
+- **La réservation CPU est désormais annoncée pour ce qu'elle est** (SPK-29) :
+  un **plancher**, garanti quand la Forge et ses Sparks travaillent tous, et
+  dépassé le reste du temps. L'écran des pools et le manuel M4 le disent, avec le
+  chiffre de la mesure. Le produit annonçait jusqu'ici « non garantie sous
+  contention » — vrai, mais trop modeste.
+
 ### Corrigé
 - **La modale d'environnement se ferme désormais par « Échap »** (SPK-58). Elle
   se rouvrait dans le même tour : la fermeture s'exécutait, puis la repeinte la
