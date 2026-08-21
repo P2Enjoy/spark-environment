@@ -280,3 +280,148 @@ def test_les_commandes_publiees_sont_celles_qui_passent(db):
         if nom == "delete":
             continue          # on ne supprime pas au milieu du test
         sparks.command(db, s["id"], Command(nom))   # ne doit pas lever
+
+
+# --- SPK-57 · redimensionner un Spark (docs/DAT.md §49) ---------------------
+
+
+def test_agrandir_la_memoire_ecrit_le_registre(db):
+    """§49.2 : le registre d'abord, Incus ensuite. Rien n'est posé sur la
+    cellule ici — un quota sur la cellule sans ligne au registre serait une
+    ressource prise que l'admission ne voit pas."""
+    sparks.create(db, spec())
+    apres = sparks.resize(db, "crm-production", {"memory_reservation_bytes": 4 * GIO})
+    assert apres["memory_reservation_bytes"] == 4 * GIO
+    # Relu depuis le registre, pas depuis la valeur rendue.
+    assert sparks.by_name(db, "crm-production")["memory_reservation_bytes"] == 4 * GIO
+
+
+def test_agrandir_est_ADMIS_alors_que_la_meme_demande_a_neuf_ne_le_serait_pas(db):
+    """§49.1 : le Spark visé est DÉJÀ compté. C'est le point qui décide de toute
+    l'unité, et il se montre en comparant les deux chemins."""
+    sparks.create(db, spec(memory_bytes=6 * GIO))
+    # Une création de 7 Gio échouerait : 6 sont déjà pris sur les ~7,35 Gio
+    # allouables de la Forge factice (mesuré, et non les 98 que le commentaire
+    # de la fixture annonce).
+    with pytest.raises(sparks.AdmissionRefused):
+        sparks.create(db, spec(name="second", memory_bytes=7 * GIO))
+    # Le MÊME chiffre passe en redimensionnement, puisque le Spark rend ses 6.
+    apres = sparks.resize(db, "crm-production", {"memory_reservation_bytes": 7 * GIO})
+    assert apres["memory_reservation_bytes"] == 7 * GIO
+
+
+def test_RETRECIR_passe_meme_sur_une_forge_saturee(db):
+    """Rendre de la mémoire ne peut pas manquer de mémoire (§49.1)."""
+    sparks.create(db, spec(memory_bytes=7 * GIO))
+    apres = sparks.resize(db, "crm-production", {"memory_reservation_bytes": 2 * GIO})
+    assert apres["memory_reservation_bytes"] == 2 * GIO
+
+
+def test_une_demande_qui_ne_tient_PAS_est_refusee_et_journalisee(db):
+    sparks.create(db, spec())
+    with pytest.raises(sparks.AdmissionRefused):
+        sparks.resize(db, "crm-production", {"memory_reservation_bytes": 900 * GIO})
+    # Le registre n'a pas bougé : un refus ne laisse rien derrière lui.
+    assert sparks.by_name(db, "crm-production")["memory_reservation_bytes"] == 2 * GIO
+    # …et le refus laisse sa TRACE, hors transaction (§21.1).
+    trace = db.execute(
+        "SELECT result FROM audit_log WHERE action = 'spark.resize' "
+        "ORDER BY id DESC LIMIT 1").fetchone()
+    assert trace["result"] == "denied"
+
+
+# --- §49.3 · rétrécir n'est pas agrandir ------------------------------------
+
+
+def test_descendre_la_memoire_SOUS_L_USAGE_est_refuse(db):
+    """L'OOM killer tuerait des processus dans la cellule. Le refus porte la
+    mesure qui le motive."""
+    sparks.create(db, spec(memory_bytes=4 * GIO))
+    with pytest.raises(sparks.ShrinkRefused) as refus:
+        sparks.resize(db, "crm-production", {"memory_reservation_bytes": GIO},
+                      usage={"memory_bytes": 3 * GIO})
+    assert refus.value.ressource == "memory"
+    assert refus.value.occupe == 3 * GIO
+    assert "OOM" in str(refus.value)
+
+
+def test_descendre_le_DISQUE_sous_l_occupation_est_refuse(db):
+    sparks.create(db, spec(storage_bytes=50 * GIO))
+    with pytest.raises(sparks.ShrinkRefused) as refus:
+        sparks.resize(db, "crm-production", {"storage_bytes": 10 * GIO},
+                      usage={"storage_bytes": 30 * GIO})
+    assert refus.value.ressource == "storage"
+    assert "perdrait des données" in str(refus.value)
+
+
+def test_un_refus_de_RETRECISSEMENT_n_est_PAS_un_refus_d_admission(db):
+    """§49.3 : les confondre enverrait l'exploitant libérer de la place sur la
+    Forge alors que le problème est DANS la cellule."""
+    sparks.create(db, spec(memory_bytes=4 * GIO))
+    with pytest.raises(sparks.ShrinkRefused) as refus:
+        sparks.resize(db, "crm-production", {"memory_reservation_bytes": GIO},
+                      usage={"memory_bytes": 3 * GIO})
+    assert not isinstance(refus.value, sparks.AdmissionRefused)
+
+
+def test_SANS_usage_les_refus_de_retrecissement_ne_sont_pas_prononces(db):
+    """Ils portent sur ce que le RUNTIME mesure. Sans mesure, on ne les invente
+    pas : le §49.3 les fonde sur une occupation relevée, pas supposée."""
+    sparks.create(db, spec(memory_bytes=4 * GIO))
+    apres = sparks.resize(db, "crm-production", {"memory_reservation_bytes": GIO})
+    assert apres["memory_reservation_bytes"] == GIO
+
+
+def test_agrandir_au_dessus_de_l_usage_reste_admis(db):
+    sparks.create(db, spec(memory_bytes=4 * GIO))
+    apres = sparks.resize(db, "crm-production", {"memory_reservation_bytes": 6 * GIO},
+                          usage={"memory_bytes": 3 * GIO})
+    assert apres["memory_reservation_bytes"] == 6 * GIO
+
+
+# --- §49.5 · ce que le geste refuse toujours --------------------------------
+
+
+def test_un_spark_TRANSITOIRE_ne_se_redimensionne_pas(db):
+    """§14.3 : un quota écrit pendant une transition le serait sur un état qui
+    n'existe déjà plus."""
+    sparks.create(db, spec())  # naît en « pending », qui est transitoire ? non
+    db.execute("UPDATE spark SET state = 'creating' WHERE name = 'crm-production'")
+    with pytest.raises(sparks.SparkError) as refus:
+        sparks.resize(db, "crm-production", {"memory_reservation_bytes": 4 * GIO})
+    assert "transition" in str(refus.value)
+
+
+def test_un_champ_qui_n_est_PAS_un_quota_est_refuse(db):
+    """§49.2 : le nom, l'image et l'adresse privée sont des IDENTITÉS."""
+    sparks.create(db, spec())
+    for champ in ("name", "image", "ipv4_address", "state"):
+        with pytest.raises(sparks.SparkError) as refus:
+            sparks.resize(db, "crm-production", {champ: "x"})
+        assert "ne se redimensionnent pas" in str(refus.value), champ
+
+
+def test_une_demande_VIDE_est_refusee(db):
+    # Écrire une ligne d'audit pour un geste qui ne change rien apprendrait à
+    # ignorer le journal.
+    sparks.create(db, spec())
+    with pytest.raises(sparks.SparkError):
+        sparks.resize(db, "crm-production", {})
+
+
+def test_un_spark_INCONNU_rend_NotFound(db):
+    with pytest.raises(sparks.NotFound):
+        sparks.resize(db, "fantome", {"memory_reservation_bytes": GIO})
+
+
+def test_le_geste_est_JOURNALISE_avec_ce_qui_a_change(db):
+    sparks.create(db, spec())
+    sparks.resize(db, "crm-production", {"memory_reservation_bytes": 4 * GIO},
+                  actor="console/prod")
+    trace = db.execute(
+        "SELECT actor, result, message FROM audit_log "
+        "WHERE action = 'spark.resize' ORDER BY id DESC LIMIT 1").fetchone()
+    assert trace["result"] == "ok"
+    assert trace["actor"] == "console/prod"
+    # Le message NOMME le Spark : « des quotas ont changé » serait inexploitable.
+    assert "crm-production" in trace["message"]
