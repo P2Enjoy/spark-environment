@@ -1130,3 +1130,31 @@ def test_les_routes_d_environnement_sont_au_CONTRAT(tmp_path):
     assert {"put", "delete"} <= set(chemins["/v1/env/{name}"])
     assert "get" in chemins["/v1/sparks/{name}/env"]
     assert {"put", "delete"} <= set(chemins["/v1/sparks/{name}/env/{variable}"])
+
+
+def test_la_taille_du_disque_est_posee_sur_le_DEVICE_pas_la_config(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.2
+
+    DÉFAUT MESURÉ sur la Forge de validation le 2026-08-21, et cette preuve
+    l'aurait attrapé : la route posait la seule CONFIGURATION de l'instance. Or
+    la taille du disque vit dans le device `root`. Le registre passait donc à
+    12 Gio, Incus restait à 10 — et la réponse disait `applied: true`.
+
+    C'est exactement le pire des cas que la Definition of Done de l'unité nomme :
+    « un quota changé au registre mais pas dans le noyau ». Le champ `applied`
+    ne vaut que ce que la pose vaut.
+    """
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "d.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    vu = c.patch("/v1/sparks/crm-production", json={"storage_bytes": 12 * 1024**3})
+    assert vu.status_code == 200 and vu.json()["applied"] is True
+
+    racine = app.state.incus.created["crm-production"]["devices"]["root"]
+    # La marge de métadonnées s'ajoute au quota vendu (§30) : on vérifie que la
+    # taille posée SUIT la demande, pas qu'elle lui est égale.
+    assert int(racine["size"]) >= 12 * 1024**3
+    assert int(racine["size"]) < 13 * 1024**3

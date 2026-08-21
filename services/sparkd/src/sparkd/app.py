@@ -1646,7 +1646,16 @@ def create_app(config: Config) -> FastAPI:
             )
             app.state.incus.update_instance_config(
                 spark["incus_name"], traduit.config)
-        except (TranslationError, IncusError) as erreur:
+            # La taille du disque ne vit PAS dans la configuration : elle vit
+            # dans le device `root`. MESURÉ sur la Forge de validation le
+            # 2026-08-21 — poser la seule configuration laissait le registre à
+            # 12 Gio et Incus à 10, et la route répondait pourtant
+            # `applied: true`. C'est le pire des cas que la DoD de SPK-57
+            # nomme : un quota changé au registre mais pas dans le noyau.
+            devices = traduit.as_payload(config_network, config_pool)["devices"]
+            app.state.incus.update_root_size(
+                spark["incus_name"], devices["root"]["size"])
+        except (TranslationError, IncusError, KeyError) as erreur:
             return False, str(erreur)
         return True, None
 

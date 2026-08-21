@@ -68,6 +68,8 @@ class IncusClient(Protocol):
     def set_publication_devices(
         self, name: str, devices: dict[str, dict[str, str]]) -> None: ...
 
+    def update_root_size(self, name: str, size: str) -> None: ...
+
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None: ...
 
     def exec_command(self, name: str, command: list[str]) -> None: ...
@@ -211,6 +213,29 @@ class UnixSocketIncus:
         metadata = dict(metadata)
         metadata["devices"] = {**conservees, **devices}
         self._request("PUT", f"/1.0/instances/{name}", metadata)
+
+    def update_root_size(self, name: str, size: str) -> None:
+        """Pose la taille du disque racine (SPK-57, docs/DAT.md §49.2).
+
+        MESURÉ sur la Forge de validation le 2026-08-21 : la taille du disque ne
+        vit PAS dans la configuration de l'instance mais dans son **device**
+        `root`. Poser la seule configuration laissait donc le registre à 12 Gio
+        et Incus à 10 — exactement le pire des cas que la Definition of Done de
+        SPK-57 nomme, et la route répondait pourtant `applied: true`.
+
+        Le device est RELU puis réécrit complet : envoyer la seule clé `size`
+        ferait perdre `type`, `path` et `pool` sur les pilotes qui remplacent le
+        device au lieu de le fusionner.
+        """
+        actuelle = self._get(f"/1.0/instances/{name}")
+        metadata = actuelle.get("metadata") or actuelle
+        racine = dict((metadata.get("devices") or {}).get("root") or {})
+        if not racine:
+            raise IncusError(
+                f"L'instance « {name} » n'a pas de device « root » : "
+                "la taille de son disque ne peut pas être posée.")
+        racine["size"] = size
+        self._request("PATCH", f"/1.0/instances/{name}", {"devices": {"root": racine}})
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
         """Écrit un fichier dans l'instance, en créant son répertoire parent."""
@@ -418,6 +443,22 @@ class FakeIncus:
             if not nom.startswith("pub-")
         }
         instance["devices"] = {**conservees, **devices}
+
+    def update_root_size(self, name: str, size: str) -> None:
+        """Meme semantique que le pilote reel : le device `root` porte la taille.
+
+        Le doublon la garde dans `devices`, la ou le vrai Incus la garde — sans
+        quoi une preuve verte ici ne dirait rien de la Forge (SPK-57, §49.2).
+        """
+        self._maybe_fail("update_root_size")
+        instance = self.created.get(name)
+        if instance is None:
+            raise IncusError(f"Instance « {name} » absente.")
+        devices = dict(instance.get("devices") or {})
+        racine = dict(devices.get("root") or {"type": "disk", "path": "/"})
+        racine["size"] = size
+        devices["root"] = racine
+        instance["devices"] = devices
         self._persist()
 
     def create_instance(self, payload: dict[str, Any]) -> None:
