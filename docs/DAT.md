@@ -6261,8 +6261,8 @@ la vérité est dans la cellule et qu'un registre qui la doublerait divergerait.
 | Mode relevé | Ce qui a été trouvé |
 |---|---|
 | `enracine` | le démon tourne en root dans la cellule |
-| `rootless` | le démon tourne sous un compte non privilégié |
-| `null` | Docker est absent, vient de la distribution, ou un amorçage rootless a été interrompu avant son démon utilisateur |
+| `rootless` | le service utilisateur tourne sous le compte non privilégié **et** son socket répond à `docker info` |
+| `null` | Docker est absent, vient de la distribution, ou le compte rootless existe sans service actif et socket Docker réellement utilisable |
 
 Le mode est une observation, pas une préférence : il dit ce qui EST.
 
@@ -6290,12 +6290,17 @@ qui donnerait une cellule qui marche jusqu'au premier redémarrage.
 
 **Reprendre une pose rootless interrompue n'est pas basculer.** Mesuré le
 2026-08-21 : l'image Debian ne porte pas `machinectl`; l'ancien script installait
-les paquets, puis échouait avant de créer le service utilisateur. Le relevé
-voyait alors `docker-ce`, mais aucun mode. Lorsqu'un appel demande **rootless**
-et trouve exactement cet état — démon root absent, aucun démon rootless — il
-réexécute la seule préparation rootless, avec `systemd-container`; il ne réinstalle
-ni ne démarre le démon root et ne déplace aucun conteneur. Le compte rendu ajoute
-la ligne `rootless` pour que `changed: true` nomme ce qui a été repris.
+les paquets, puis échouait avant de créer le service utilisateur. Une première
+correction a ensuite confondu l'existence du compte `spark-docker` avec celle du
+démon : le compte était bien créé, mais le service était `inactive` et son socket
+injoignable. Le relevé ne rend donc `rootless` que si **les deux** sont vrais :
+le service utilisateur est `active` et `docker info`, pointé explicitement vers
+`/run/user/<uid>/docker.sock`, répond. Sinon il rend `null`. Lorsqu'un appel
+demande **rootless** et trouve exactement cet état — démon root absent, aucun
+démon rootless utilisable — il réexécute la seule préparation rootless, avec
+`systemd-container`; il ne réinstalle ni ne démarre le démon root et ne déplace
+aucun conteneur. Le compte rendu ajoute la ligne `rootless` pour que `changed:
+true` nomme ce qui a été repris.
 
 Si un démon root tourne, le mode est `enracine` et le refus de bascule reste
 `409`, sans exception. Si le second relevé ne trouve toujours pas `rootless`, le
@@ -6373,6 +6378,17 @@ depot=$([ -f /etc/apt/sources.list.d/docker.list ] && echo present || echo absen
 docker=$(docker --version 2>/dev/null | head -1 || echo absent)
 origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null ||           dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
 compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
+rootless=absent
+if id spark-docker >/dev/null 2>&1; then
+  uid=$(id -u spark-docker)
+  if systemctl --user -M spark-docker@ is-active docker.service >/dev/null 2>&1 \
+     && runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
+          DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info >/dev/null 2>&1; then
+    rootless=active
+  fi
+fi
+mode=$(systemctl is-active docker.service >/dev/null 2>&1 && echo enracine \
+       || ([ "$rootless" = active ] && echo rootless || echo absent))
 ```
 
 **`origine` est le champ qui décide de l'unité.** Il vaut `docker-ce` (bon),
