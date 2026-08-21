@@ -1913,7 +1913,14 @@ du §37.2 :
 Le `sshd` que l'image de base n'embarque pas est bien installe et actif : c'est
 SPK-54 qui l'a pose, et le relevé d'amorcage le confirme sur la vraie cellule.
 
-### [~] SPK-44 · Onglet Docker : inventaire, mesures et inspection
+- **Reste avant `[x]`, et l'ecart est RESSERRE** : les deux commandes du
+  depannage ont ete executees pour de vrai, mais la route `GET
+  /api/terminal/diagnostic` de l'hote console ne l'a pas ete de bout en bout —
+  elle exige l'hote lance avec son tunnel, ce que cette session n'a pas monte.
+  Ce qui reste n'est donc plus « la commande est un doublon » mais « le chemin
+  d'appel n'a pas ete parcouru ».
+
+### [x] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 
 Ce que le locataire fait tourner, observé sans rien y toucher.
 
@@ -2030,7 +2037,7 @@ produit — `ssh -J <forge> root@<ip-du-Spark>` — et non par un doublon :
 Le doublon du §37.4.2 bis ne remplace donc plus la commande : elle a ete lue a
 travers le tunnel, sur une cellule qui fait tourner une pile.
 
-### [~] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
+### [x] SPK-45 · Gestes sur un conteneur, et terminal dans un conteneur
 
 - Spécification : `docs/DAT.md` §37.7, §37.4 · `docs/DESIGN_SYSTEM.md` §6.23 ·
   manuel M8.
