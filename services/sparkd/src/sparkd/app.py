@@ -1459,19 +1459,37 @@ def create_app(config: Config) -> FastAPI:
     def _usage_de_la_cellule(spark: dict) -> dict | None:
         """Ce que la cellule occupe RÉELLEMENT (§49.3).
 
-        Rend `None` quand la mesure n'est pas possible — Spark sans cellule,
-        arrêté, ou runtime muet. C'est une RÉPONSE, pas une panne : sans mesure,
-        les refus de rétrécissement ne sont simplement pas prononcés, et l'unité
-        le dit plutôt que d'inventer une occupation (§31.2).
+        Deux grandeurs, et elles ne se relèvent pas dans les mêmes conditions :
+
+        - la **mémoire** ne se relève que sur une cellule EN MARCHE. Une cellule
+          arrêtée n'en occupe aucune ; refuser sur un chiffre périmé interdirait
+          un rétrécissement légitime ;
+        - le **disque** se relève quel que soit l'état, parce qu'un Spark arrêté
+          occupe toujours son jeu de données. C'est `disk.root.usage`, la même
+          grandeur que la section *Ressources* affiche, instantanés compris —
+          le quota porte sur le jeu entier (§49.3).
+
+        Rend `None` quand rien n'est mesurable — Spark sans cellule, ou runtime
+        muet. C'est une RÉPONSE, pas une panne : sans mesure, les refus de
+        rétrécissement ne sont simplement pas prononcés, et l'unité le dit plutôt
+        que d'inventer une occupation (§31.2).
         """
-        if not spark.get("incus_name") or spark.get("state") != "running":
+        if not spark.get("incus_name"):
             return None
         try:
-            etat = app.state.incus.instance_state(spark["incus_name"])
+            etat = app.state.incus.instance_state(spark["incus_name"]) or {}
         except IncusError:
             return None
-        memoire = (etat or {}).get("memory", {}).get("usage")
-        return {"memory_bytes": memoire} if memoire else None
+
+        releve: dict[str, int] = {}
+        if spark.get("state") == "running":
+            memoire = (etat.get("memory") or {}).get("usage")
+            if memoire:
+                releve["memory_bytes"] = memoire
+        disque = ((etat.get("disk") or {}).get("root") or {}).get("usage")
+        if disque:
+            releve["storage_bytes"] = disque
+        return releve or None
 
     @app.post("/v1/sparks", tags=["sparks"], status_code=201)
     def create_spark(spec: dict = Body(...)) -> dict:

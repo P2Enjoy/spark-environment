@@ -819,3 +819,79 @@ def test_un_echec_de_POSE_ne_defait_PAS_le_registre_et_le_DIT(tmp_path):
     # plutôt que de la sous-estimer, comme à la création.
     assert c.get("/v1/sparks/crm-production").json()["memory_reservation_bytes"] \
         == 4 * 1024**3
+
+
+def test_la_route_PRONONCE_le_refus_du_DISQUE_occupe(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.3
+
+    Le refus du disque existait au service depuis le premier jour, mais la route
+    ne relevait que la mémoire : il n'était donc jamais prononcé en production.
+    Un refus prouvé mais inatteignable ne protège personne.
+    """
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")  # la cellule existe, à l'arrêt
+
+    # 534 981 632 octets occupés — relevé du runtime. On demande moins.
+    vu = c.patch("/v1/sparks/crm-production", json={"storage_bytes": 256 * 1024**2})
+    assert vu.status_code == 409
+    detail = vu.json()["detail"]
+    # Et surtout PAS `admission_refused` : le problème est dans la cellule, pas
+    # sur la Forge. Les confondre enverrait libérer de la place au mauvais
+    # endroit (§49.3).
+    assert detail["error"] == "shrink_refused"
+    assert detail["resource"] == "storage"
+    assert detail["in_use"] == 534_981_632, "le refus porte l'occupation MESURÉE"
+    assert detail["requested"] == 256 * 1024**2
+    # Un refus ne laisse rien derrière lui.
+    assert c.get("/v1/sparks/crm-production").json()["storage_bytes"] == 10 * 1024**3
+
+
+def test_le_DISQUE_se_releve_a_l_ARRET_mais_pas_la_MEMOIRE(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.3
+
+    La dissymétrie n'est pas un oubli : une cellule arrêtée n'occupe aucune
+    mémoire — refuser sur un chiffre périmé interdirait un rétrécissement
+    légitime — tandis qu'elle occupe toujours son jeu de données.
+    """
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+    assert c.get("/v1/sparks/crm-production").json()["state"] == "stopped"
+
+    # Le runtime annonce 174 764 032 octets de mémoire employée. Le Spark étant
+    # ARRÊTÉ, ce chiffre ne vaut rien, et descendre sous lui est ADMIS.
+    vu = c.patch("/v1/sparks/crm-production",
+                 json={"memory_reservation_bytes": 128 * 1024**2})
+    assert vu.status_code == 200, vu.json()
+    assert vu.json()["memory_reservation_bytes"] == 128 * 1024**2
+
+    # Le disque, lui, est bien relevé sur ce MÊME Spark arrêté.
+    refus = c.patch("/v1/sparks/crm-production", json={"storage_bytes": 256 * 1024**2})
+    assert refus.status_code == 409
+    assert refus.json()["detail"]["error"] == "shrink_refused"
+
+
+def test_un_runtime_MUET_ne_prononce_AUCUN_refus_de_retrecissement(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.3, §31.2
+
+    L'absence de mesure est une RÉPONSE, pas une panne — et surtout pas une
+    occupation inventée. Le produit préfère ne pas prononcer un refus plutôt que
+    de le fonder sur un chiffre qu'il n'a pas.
+    """
+    from sparkd.incus import IncusError
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "m.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    def muet(name):
+        raise IncusError("l'état de l'instance est indisponible")
+
+    app.state.incus.instance_state = muet
+
+    vu = c.patch("/v1/sparks/crm-production", json={"storage_bytes": 256 * 1024**2})
+    assert vu.status_code == 200, "sans mesure, le refus n'est pas prononcé"
+    assert vu.json()["storage_bytes"] == 256 * 1024**2
