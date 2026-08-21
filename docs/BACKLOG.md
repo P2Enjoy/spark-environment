@@ -1263,14 +1263,38 @@ verifications: preflight 12/0/0 · 2 Sparks avec leurs etats reels
   au lieu de l'écraser.
 - La Forge a été rendue à son état, données de démonstration comprises.
 
+**DEUXIÈME SCÉNARIO INSTRUIT le 2026-08-21 : l'entrée fantôme, et la
+reconstruction avec elle** — `docs/CONTINGENCE.md` §4. Instruit sur un cas
+**réel** : la Forge de validation en portait un depuis deux jours, `mesure-cpu`,
+que ni le préflight ni la console ne signalaient.
+
+- **Ce qu'il coûtait, mesuré** : 1,5 CPU alloué au lieu de 0,5, et un poids de
+  tranche de 180 au lieu de 43. La loi du §32.2 s'est vérifiée au chiffre près
+  après suppression par le produit.
+- **Contrôle `REG-FANTOME` ajouté au préflight** : il compare ce que le registre
+  déclare à ce qu'Incus connaît, nomme les Sparks concernés **et ce qu'ils
+  coûtent**, distingue un Spark jamais appliqué d'un fantôme, et rend « non
+  mesuré » quand Incus est injoignable. Vu vert ET vu **rouge** sur la Forge.
+- **La reconstruction a été JOUÉE** — le point 2 ci-dessous — sur un Spark
+  jetable dont la cellule a été détruite hors du produit. `helo` n'a pas été
+  touché et a été vérifié intact après coup.
+- **L'exercice a fait sortir deux défauts de production** qu'aucune preuve
+  existante ne pouvait voir, faute de détruire une cellule sous le produit :
+  un Spark dont la cellule disparaît restait **coincé sans aucune commande**
+  (corrigé, et c'est le plus sérieux), et le refus **exposait un chemin de
+  l'API d'Incus** à l'exploitant (corrigé, §20).
+- **Preuves** : 4 pour le contrôle, 8 pour la reprise — dont une qui reproduit
+  la phrase du VRAI pilote, la seule forme sous laquelle la fuite était visible.
+
 - **Reste avant `[x]`** :
-  1. les **neuf autres scénarios**, listés au §3 de `docs/CONTINGENCE.md` avec ce
+  1. les **huit autres scénarios**, listés au §3 de `docs/CONTINGENCE.md` avec ce
      qui manque à chacun. C'est du travail d'instruction, pas de mesure ;
-  2. la **reconstruction d'un Spark** après perte de sa cellule — l'autre moitié
-     de l'exercice que la DoD nomme. Non jouée ;
-  3. l'**ancre de la console** au §2.5 point 4 : la signaler exige la console
+  2. l'**ancre de la console** au §2.5 point 4 : la signaler exige la console
      lancée avec son tunnel, que l'exercice n'a pas monté. Le comportement
-     attendu reste écrit, il n'est pas mesuré.
+     attendu reste écrit, il n'est pas mesuré ;
+  3. la **vérification visuelle** du refus de cellule perdue dans la console —
+     le comportement est éprouvé côté service et sur la Forge, la lecture par
+     l'exploitant ne l'est pas encore.
 
 ### [x] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
 

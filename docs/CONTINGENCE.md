@@ -156,8 +156,14 @@ Un plan jamais joué est une fiction ; celui-ci a été joué.
 
 ## 3. Les scénarios qui restent à instruire
 
-Aucun n'est traité. Ils sont listés ici pour que l'absence se voie, et non pour
-laisser croire qu'elle est comblée.
+Un seul est traité à ce jour — l'entrée fantôme, au §4. Les autres sont listés
+ici pour que l'absence se voie, et non pour laisser croire qu'elle est comblée.
+
+Ce que le premier a appris vaut pour la suite : il a été **joué**, pas écrit, et
+c'est en le jouant qu'on a trouvé deux défauts de production que ni les preuves
+d'unité, ni les campagnes, ni les captures ne pouvaient voir — parce qu'aucune
+d'elles ne détruit une cellule sous le produit. Instruire un scénario sans le
+jouer produirait un document rassurant et faux.
 
 | Scénario | Ce qui manque |
 |---|---|
@@ -241,3 +247,64 @@ Ce que le contrôle dit, et ce qu'il ne dit pas :
   au défaut sur le déroulement normal d'une création ;
 - Incus injoignable rend « non mesuré », jamais « fautif » (§31.2) : conclure
   sur une absence de réponse ferait supprimer des Sparks bien vivants.
+
+### 4.5 Reconstruire plutôt qu'effacer : le chemin, et la porte qui le fermait
+
+Le §4.4 dit que la bonne réponse est **parfois de reconstruire**. Encore
+faut-il que ce soit possible. Le scénario a été **joué** sur la Forge de
+validation le 2026-08-21, sur un Spark jetable créé pour cela, dont la cellule
+a été détruite hors du produit — `helo` n'a pas été touché.
+
+Il l'est aujourd'hui, il ne l'était pas ce matin.
+
+**Ce qu'on a trouvé en jouant le plan.** Sur un Spark dont la cellule a disparu,
+demander un démarrage rendait **500**, et laissait le Spark ainsi :
+
+```
+etat      : starting
+commandes : []
+erreur    : null
+```
+
+Stable, vérifié à vingt secondes. Un état transitoire dont on ne sort plus,
+sans aucune commande offerte et **sans même dire pourquoi**. Depuis la console,
+plus rien : ni reconstruire, ni supprimer. Le fantôme du §4.1 devenait un Spark
+qu'on ne pouvait plus ni réparer ni retirer.
+
+**La cause, et elle mérite d'être retenue.** Le pilote distingue à dessein deux
+choses : « Incus RAPPORTE que la cellule n'est pas là » et « je n'ai pas pu
+demander » (§33.3). La première ne se laisse pas attraper par les gardes qui
+guettent la seconde — c'est voulu, sans quoi on effacerait des lignes parce
+qu'on n'a pas pu poser la question. Mais la route du cycle de vie ne la nommait
+pas, et elle s'échappait. L'état transitoire, posé **avant** l'appel au pilote,
+ne se refermait jamais.
+
+**Ce que cela apprend, au-delà du défaut.** Le chemin de reconstruction
+**existait déjà** : depuis l'état de panne, le produit offre `retry`, qui refait
+la cellule, et `delete`, qui rend la place. Ce n'était pas une fonctionnalité
+manquante, c'était une porte fermée devant un escalier construit. Un plan de
+reprise qu'on relit ne montre pas ce genre de chose ; un plan qu'on joue, si.
+
+**Ce que le produit fait maintenant**, mesuré sur la Forge :
+
+| Geste | Avant | Maintenant |
+|---|---|---|
+| démarrer une cellule disparue | 500, Spark coincé sans commande | refus nommé, Spark en panne, `retry` et `delete` offerts |
+| `retry` depuis la panne | inatteignable | la cellule est **refaite**, le Spark revient à l'arrêt |
+| `delete` depuis la panne | inatteignable | la ligne part, la place retourne au pool (§14.5) |
+
+À la différence de la suppression, l'absence ne vaut **pas** réussite ici : la
+ligne survit au geste, et un succès de façade laisserait au registre un fantôme
+silencieux — précisément ce que le §4 cherche à rendre impossible.
+
+**Une réserve, et elle compte.** Avant ce correctif, un Spark coincé n'était pas
+perdu pour autant : la reprise des états transitoires au démarrage du service
+(§14.3) le ramenait en panne, donc en état d'être réparé. Vérifié. Mais elle
+exige de **redémarrer le démon**, ce qu'un exploitant ne peut pas faire depuis
+la console. Un recours qui suppose un accès administrateur à la machine n'est
+pas un recours pour la personne qui tient la console. C'est la raison pour
+laquelle le défaut a été corrigé plutôt que documenté comme contournable.
+
+Cette même reprise ne renseigne pas `last_error` : elle rétablit un état sain
+sans dire ce qui s'était passé. Le geste manuel, lui, laisse la raison lisible
+sur la fiche du Spark.
