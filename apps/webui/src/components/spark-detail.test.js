@@ -737,3 +737,53 @@ test('un refus du serveur s’affiche DANS la modale', () => {
 test('fermée, la modale ne rend RIEN', () => {
   assert.equal(renderQuotas(SPARK_LIBRE, QUOTAS_VIDE), '');
 });
+
+test('le MODE CPU est modifiable, et annonce son redémarrage', () => {
+  // §49.2 : le mode CPU est un champ redimensionnable. §49.4 : tant que sa prise
+  // à chaud n'est pas mesurée sur une Forge réelle, l'écran promet moins que ce
+  // qu'il fait — l'inverse coupe un service en production.
+  const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
+  assert.match(html, /name="cpu_mode"/);
+  const bloc = html.slice(html.indexOf('quota-cpu_mode'));
+  assert.match(bloc.slice(0, 500), /exige un redémarrage/);
+});
+
+test('les champs CPU SUIVENT le mode retenu', () => {
+  // §1.4 : laisser saisir des valeurs que le produit ignorera est un contrôle
+  // mort. Un mode partagé se règle par une réservation, un plafonné par un
+  // plafond, un dédié par des cœurs.
+  const pour = (cpu_mode) => renderQuotas(
+    SPARK_LIBRE, { ...QUOTAS_VIDE, open: true,
+                   values: { ...QUOTAS_VIDE.values, cpu_mode } });
+
+  const partage = pour('shared');
+  assert.match(partage, /name="cpu_reservation"/);
+  assert.ok(!partage.includes('name="cpu_max"'));
+  assert.ok(!partage.includes('name="cpu_cores"'));
+
+  const plafonne = pour('capped');
+  assert.match(plafonne, /name="cpu_max"/);
+  assert.ok(!plafonne.includes('name="cpu_reservation"'));
+
+  const dedie = pour('dedicated');
+  assert.match(dedie, /name="cpu_cores"/);
+  assert.ok(!dedie.includes('name="cpu_max"'));
+});
+
+test('sans mode SAISI, la modale part de celui du Spark', () => {
+  // Faire choisir de mémoire un mode déjà affiché invite à se tromper.
+  const html = renderQuotas({ ...SPARK_LIBRE, cpu_mode: 'capped' },
+                            { ...QUOTAS_VIDE, open: true });
+  assert.match(html, /value="capped" selected/);
+  assert.match(html, /name="cpu_max"/);
+});
+
+test('les quatre modes du produit sont proposés, et aucun autre', () => {
+  // §12.5 : la table vit à un seul endroit. Une copie locale finirait par
+  // proposer un mode que le runtime ne connaît pas.
+  const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
+  for (const mode of ['shared', 'capped', 'dedicated', 'shared-pinned']) {
+    assert.match(html, new RegExp(`value="${mode}"`), mode);
+  }
+  assert.equal((html.match(/<option /g) || []).length, 4);
+});

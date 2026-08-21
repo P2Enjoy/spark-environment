@@ -471,6 +471,63 @@ test('redimensionner un Spark depuis l’écran, sans le détruire', async () =>
   });
 });
 
+test('changer le MODE CPU depuis l’écran, au clavier', async () => {
+  await parcours('quotas-mode-cpu', async () => {
+    // §49.2 : le mode CPU est un champ redimensionnable. Le geste se fait sur un
+    // Spark ARRÊTÉ — pas d'usage relevé —, et il est réversible : le parcours
+    // rend la pile à l'état du seed (§29.2).
+    await ouvrir('boutique');
+    await page.waitForSelector('#titre-ressources', { timeout: 10000 });
+
+    const avant = await pile.lireSparkd('/v1/sparks/boutique');
+    assert.equal(avant.corps.cpu_mode, 'shared', 'le seed le pose partagé');
+
+    await page.focus('[data-ouvre="quotas"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #quota-cpu_mode', { timeout: 10000 });
+
+    // §49.4 : le mode annonce son redémarrage AVANT qu'on agisse.
+    assert.match(await page.innerText('dialog.modale[open]'), /exige un redémarrage/);
+    // Le mode courant est PRÉ-SÉLECTIONNÉ.
+    assert.equal(await page.inputValue('#quota-cpu_mode'), 'shared');
+    // …et le champ qui lui correspond est là, les autres non (§1.4).
+    assert.ok(await page.$('#quota-cpu_reservation'));
+    assert.equal(await page.$('#quota-cpu_max'), null);
+
+    // Basculer en « plafonné » CHANGE les champs offerts.
+    await page.selectOption('#quota-cpu_mode', 'capped');
+    await page.waitForSelector('dialog.modale[open] #quota-cpu_max', { timeout: 10000 });
+    assert.equal(await page.$('#quota-cpu_reservation'), null);
+
+    await page.fill('#quota-cpu_max', '1');
+    await page.click('dialog.modale[open] [data-engage="quotas"]');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 15000 });
+
+    // Effet BACKEND (§29.3 : on lit pour constater).
+    const apres = await pile.lireSparkd('/v1/sparks/boutique');
+    assert.equal(apres.corps.cpu_mode, 'capped');
+    assert.equal(apres.corps.cpu_max, 1);
+    // §49.2 : les réglages de l'ANCIEN mode ne survivent pas — une réservation
+    // sur un Spark plafonné serait une valeur que rien n'emploie.
+    assert.equal(apres.corps.cpu_reservation, null);
+
+    // On rend la pile à l'état du seed.
+    await page.focus('[data-ouvre="quotas"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #quota-cpu_mode', { timeout: 10000 });
+    await page.selectOption('#quota-cpu_mode', 'shared');
+    await page.waitForSelector('dialog.modale[open] #quota-cpu_reservation', { timeout: 10000 });
+    await page.fill('#quota-cpu_reservation', String(avant.corps.cpu_reservation));
+    await page.click('dialog.modale[open] [data-engage="quotas"]');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 15000 });
+    const rendu = await pile.lireSparkd('/v1/sparks/boutique');
+    assert.equal(rendu.corps.cpu_mode, 'shared');
+    assert.equal(rendu.corps.cpu_reservation, avant.corps.cpu_reservation);
+  });
+});
+
 test('un quota REFUSÉ reste dans la modale, sans effacer la saisie', async () => {
   await parcours('quotas-refus', async () => {
     // §6.27 : une modale qui se refermerait sur un refus ferait perdre le
