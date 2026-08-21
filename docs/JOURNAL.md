@@ -5949,3 +5949,56 @@ sur une Forge réelle : la prise à chaud du disque et du changement de mode CPU
 fixe ligne à ligne, il n'y a plus qu'à coder. SPK-51 attend deux vérifications
 extérieures ; SPK-53, SPK-54 et l'arbitrage sur le nom de l'objet dans l'alerte
 hors bande attendent une décision du responsable.
+
+---
+
+## 2026-08-21 · SPK-57 — le geste de redimensionnement, côté serveur
+
+**Unité reprise** au §4.2 point 1. Sa spécification existait (§49) : conformément
+à l'exception du §3.2, elle n'a pas été réécrite — la session est allée droit au
+code.
+
+### Ce qui a été construit
+
+`PATCH /v1/sparks/{name}` ajuste mémoire, réservation et plafond CPU, mode CPU,
+débit réseau et taille de disque. Le nom, l'image et l'adresse privée sont
+refusés : ce sont des identités, pas des quotas.
+
+Le registre s'écrit d'abord, dans une transaction qui couvre l'admission et
+l'écriture. Rien n'est encore posé sur Incus — c'est l'ordre du §49.2, et la
+seconde moitié reste à faire.
+
+### Trois refus, et ils ne se confondent pas
+
+C'est le point qui a demandé le plus de soin. `423 Locked` sur un Spark protégé,
+`409 admission_refused` quand la Forge n'a pas la place, et `409 shrink_refused`
+quand ce qu'on veut retirer est **utilisé dans la cellule**. Mélanger les deux
+derniers enverrait l'exploitant libérer de la place sur la Forge alors que le
+problème est ailleurs.
+
+### Deux choses corrigées parce qu'elles étaient fausses
+
+- **ma preuve attendait `403` pour un Spark protégé** ; le produit rend `423
+  Locked`, sa convention existante. C'est la preuve — et la docstring que je
+  venais d'écrire — qui étaient fausses, pas le produit. En inventer une seconde
+  convention aurait fait traiter le même refus de deux façons dans la console ;
+- **mes preuves supposaient une Forge de 98 Gio.** Mesuré : la Forge factice
+  n'offre que ~7,35 Gio allouables, le commentaire de la fixture disant autre
+  chose. Les chiffres ont été alignés sur le mesuré, et l'écart est noté à
+  l'endroit où il trompait.
+
+### Vérifications
+
+861 preuves Python (843 + 18), contrat régénéré et conforme. Aucune capture :
+**aucun écran n'offre encore ce geste**.
+
+**SPK-57 reste `[~]`**, quatre écarts nommés : aucun écran ni parcours ni manuel ;
+rien n'est posé sur Incus ; l'usage relevé ne porte que la mémoire, donc le refus
+du §49.3 sur le disque est prouvé au service mais pas atteignable par la route ;
+et la prise à chaud du disque et du mode CPU exige une Forge réelle —
+**nécessite une action humaine**.
+
+**Où reprendre.** SPK-57 : poser les quotas sur Incus après le registre, puis
+l'écran et son parcours. SPK-51 attend deux vérifications extérieures ; SPK-53,
+SPK-54 et l'arbitrage sur le nom de l'objet dans l'alerte hors bande attendent une
+décision du responsable.

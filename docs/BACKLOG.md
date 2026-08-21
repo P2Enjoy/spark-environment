@@ -2863,15 +2863,38 @@ avant la première ligne de code.
 - **Preuves** : 7, dont celle qui montre le défaut évité — la même demande est
   REFUSÉE sans exclusion et admise avec. 843 preuves Python au total.
 
-- **Reste avant `[x]`, et c'est la majeure partie du geste** :
-  1. **aucune route ne redimensionne encore.** Le §49.2 fixe l'ordre — registre
-     d'abord, Incus ensuite — et le §49.5 les refus dus : Spark protégé, état
-     transitoire. Rien de cela n'est codé ;
-  2. **les refus de RÉTRÉCISSEMENT du §49.3** — mémoire sous l'usage courant,
-     disque sous l'occupation — ne sont pas codés. Ils ne se confondent pas avec
-     un refus d'admission : l'un dit « il n'y a pas la place », l'autre « ce que
-     vous voulez retirer est utilisé » ;
-  3. **aucun écran, aucun parcours, aucun manuel** ;
+**Le geste est livré côté serveur le 2026-08-21.**
+
+- **`PATCH /v1/sparks/{name}`** ajuste mémoire, réservation et plafond CPU, mode
+  CPU, débit réseau et taille de disque. Le nom, l'image et l'adresse privée sont
+  refusés : ce sont des identités, pas des quotas (§49.2).
+- **Le registre d'abord, Incus ensuite** (§49.2, §14.2), dans une transaction qui
+  couvre l'admission et l'écriture.
+- **Trois refus, et ils ne se confondent PAS** : `423 Locked` sur un Spark
+  protégé — le code que le produit emploie déjà, en inventer un second ferait
+  traiter le même refus de deux façons dans la console ; `409 admission_refused`,
+  chiffré comme à la création ; `409 shrink_refused`, qui dit « ce que vous
+  voulez retirer est UTILISÉ » et non « il n'y a pas la place ». Les mélanger
+  enverrait l'exploitant libérer de la place sur la Forge alors que le problème
+  est dans la cellule (§49.3).
+- **Un Spark en état transitoire est refusé** (§49.5) : un quota écrit pendant
+  une transition le serait sur un état qui n'existe déjà plus.
+- **L'usage de la cellule est RELEVÉ avant d'agir**, et son absence est une
+  RÉPONSE, pas une panne : sans mesure, les refus de rétrécissement ne sont
+  simplement pas prononcés, et le code le dit au lieu d'inventer une occupation.
+- **Preuves** : 18 — 7 de l'admission, 11 du service et de la route, dont celle
+  qui montre le point de l'unité : une demande de 7 Gio est REFUSÉE à la création
+  et ADMISE en redimensionnement, puisque le Spark rend ses 6. 861 preuves Python
+  au total.
+
+- **Reste avant `[x]`** :
+  1. **aucun écran, aucun parcours, aucun manuel.** Le geste existe à l'API ;
+     personne ne peut encore le faire depuis la console ;
+  2. **rien n'est posé sur Incus.** Le registre est écrit, la cellule ne l'est
+     pas : c'est l'ordre du §49.2, mais la seconde moitié manque ;
+  3. **l'usage relevé ne porte que la MÉMOIRE.** L'occupation du disque n'est pas
+     mesurée, donc le refus du §49.3 sur le disque ne se déclenche pas en
+     production — il est prouvé au service, pas atteignable par la route ;
   4. **ce que le §49.4 laisse à mesurer** — la prise à chaud du disque et du
      changement de mode CPU — exige une Forge réelle : **nécessite une action
      humaine**. Tant que ce n'est pas mesuré, l'écran devra annoncer un

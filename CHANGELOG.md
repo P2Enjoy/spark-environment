@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
+  `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
+  détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de
+  place sur la Forge (`409 admission_refused`), et « ce que vous voulez retirer
+  est utilisé dans la cellule » (`409 shrink_refused`). *Aucun écran ne l'offre
+  encore, et rien n'est encore posé sur Incus.*
 - **L'admission sait compter un redimensionnement** (SPK-57, `docs/DAT.md` §49.1) :
   `pools(..., sauf=<id>)` et `admit(..., sauf=<id>)` rendent au pool le Spark
   visé avant d'évaluer sa nouvelle demande. Un agrandissement tenable n'est plus
