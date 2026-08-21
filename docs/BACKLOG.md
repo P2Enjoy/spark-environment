@@ -3750,7 +3750,7 @@ build déployée au dépôt et nomme les six situations. Elle ne le fait pas pou
   signal à l'écran ; captures observées ; le signal nomme le geste, prouvé sur son
   texte.
 
-### [~] SPK-66 · `sparkd` s'installe comme un paquet, pas comme une copie du dépôt
+### [x] SPK-66 · `sparkd` s'installe comme un paquet, pas comme une copie du dépôt
 
 Question du responsable, 2026-08-21 : « pourquoi `sparkd` n'est pas simplement une
 dépendance Python qu'on installerait par `pip install git+…` ? Le dépôt est
@@ -3820,9 +3820,17 @@ trouvé qu'il ne fallait pas résoudre le lien symbolique du Python du venv, sou
 peine d'écrire `/usr/bin/python…` dans `ExecStart` et de perdre le paquet. Le
 correctif a été publié puis installé depuis l'URL Git publique : la Forge sert
 maintenant `c95a7fcea`, les 13 contrôles de préflight et `/readyz` sont verts, et
-les routes d'environnement auparavant en `500` répondent de nouveau. Restent la
-preuve complète sur la Forge neuve, le changement de commit puis son retour
-arrière mesuré, avant de cocher l'unité.
+les routes d'environnement auparavant en `500` répondent de nouveau.
+
+**Clôturé le 2026-08-21.** La Forge neuve `212.47.246.142` contient le paquet dans
+`/opt/sparkd/venv` (`0.post1.dev592+g4420cfb97`) et **aucun** dépôt sous
+`/opt/sparkd`; son service reste volontairement inactif tant que SPK-68 n'a pas
+posé Incus, Caddy et le pool. Sur `51.158.54.202`, la mise à jour et le retour
+arrière ont réellement servi, dans cet ordre,
+`c95a7fceac37 → 0e8c41f40bd8 → c95a7fceac37 → 0e8c41f40bd8`; chaque étape a
+relancé l'installateur de paquet, passé les 13 contrôles de préflight et servi le
+commit attendu à `/healthz`. Le wheel construit localement porte les migrations
+SQL et les deux unités systemd ; 71 preuves de paquet sont vertes.
 
 ### [ ] SPK-68 · Assistant complet d'installation distante d'une Forge
 

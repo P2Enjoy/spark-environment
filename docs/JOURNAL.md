@@ -7541,8 +7541,8 @@ La build `c95a7fcea` est ensuite installée directement depuis le dépôt public
 sans checkout sous `/opt/sparkd`. `/healthz` porte sa version de métadonnées,
 `/readyz` est `ready` et les 13 contrôles du préflight sont verts. Les réponses
 `/v1/env` et `/v1/sparks/helo/env` contiennent de nouveau `selected_by` au lieu
-des deux `500` observés pendant SPK-43. L'installation de la Forge neuve, la
-mesure de mise à jour et son retour arrière restent à jouer avant la clôture.
+des deux `500` observés pendant SPK-43. La mesure de clôture est consignée
+ci-dessous, afin de ne pas présenter l'état intermédiaire comme l'état final.
 
 ---
 
@@ -7570,3 +7570,28 @@ stabilisation de cette vue, pas pendant son squelette de chargement.
 Les six scénarios de `console-build` — commit avancé, égalité, dépôt reculé,
 absence de dépôt, arbre illisible et dépendance exclue — ainsi que la route sans
 tunnel sont verts. SPK-65 est `[x]`.
+
+---
+
+## 2026-08-21 · SPK-66 — le paquet est mesuré sur les deux Forges
+
+La Forge neuve `root@212.47.246.142` confirme la partie qui ne pouvait pas être
+déduite d'un wheel local : `sparkd` est importé depuis
+`/opt/sparkd/venv/lib/python3.14/site-packages`, sa métadonnée est
+`0.post1.dev592+g4420cfb97`, et `/opt/sparkd/.git` est absent. Son `spark.slice`
+est installé et actif ; `sparkd.service` reste inactif car la machine n'a pas
+encore son Incus, Caddy ni son pool — le travail d'une Forge complète est SPK-68,
+pas une raison de copier un dépôt pour SPK-66.
+
+Sur la Forge existante, l'exercice demandé a réellement installé et servi
+`c95a7fceac37`, puis `0e8c41f40bd8`, est revenu à `c95a7fceac37`, et a fini sur
+`0e8c41f40bd8`. Après chaque pose, `/healthz` a porté le commit attendu,
+`/readyz` a été `ready` et les 13 contrôles du préflight ont été verts. La mesure
+finale reste lisible : version `0.post1.dev591+g0e8c41f40`, sans dépôt sous
+`/opt/sparkd`.
+
+Enfin, 71 tests d'installation/build/préflight sont verts ; un wheel neuf porte
+les 11 migrations SQL, `sparkd.install`, `sparkd.service` et `spark.slice`.
+La version dérivée de Git progresse (`dev596` pour le wheel courant), ce qui
+empêche à nouveau `pip` de confondre une mise à jour avec « déjà satisfait ».
+SPK-66 est `[x]`.
