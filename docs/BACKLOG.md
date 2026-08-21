@@ -1272,7 +1272,7 @@ verifications: preflight 12/0/0 · 2 Sparks avec leurs etats reels
      lancée avec son tunnel, que l'exercice n'a pas monté. Le comportement
      attendu reste écrit, il n'est pas mesuré.
 
-### [~] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
+### [x] SPK-37 · Un acteur réel dans le journal, et un journal qu'on ne récrit pas par mégarde
 
 Le champ `actor` vaut aujourd'hui la chaîne littérale « responsable » ou
 « sparkd » : le journal ne sait pas qui agit. Toute idée de signature bute d'abord
@@ -1321,13 +1321,46 @@ là-dessus (§36.7).
   maintenant l'identité déclarée, ce qui rend deux refus consécutifs
   distinguables par qui les a demandés. L'écart subsiste sur le **nom demandé**,
   toujours absent du message, et un test le constate au lieu de le masquer.
-- **Reste à prouver, et c'est le seul écart** : le relevé de l'empreinte SSH
-  n'est éprouvé que sur la **forme documentée** d'OpenSSH, par test unitaire.
-  Aucun `sshd` ni agent ne répond sur la machine de cette session (`ss -lntp`
-  ne montre aucun port 22, `ssh-add -l` rend « Could not open a connection »),
-  donc rien n'établit ici qu'un vrai tunnel émet bien cette ligne. Tant que ce
-  n'est pas mesuré contre un serveur réel, l'unité reste `[~]`. Le reste du
-  contrat — verrou, classes, contexte, en-tête, affichage — est prouvé.
+**MESURÉ CONTRE UN VRAI `sshd` le 2026-08-21**, sur la Forge de validation — et
+la mesure a trouvé que **le relevé ne fonctionnait pas du tout**.
+
+- **Le produit demandait le mauvais niveau de journalisation.** `Server accepts
+  key` est un message `debug1:` ; le produit posait `LogLevel=VERBOSE`, qui
+  s'arrête un cran avant. Mesuré, tunnel ouvert avec les options exactes du
+  produit :
+
+  ```
+  LogLevel=VERBOSE ->  1 ligne,  0 « Server accepts key »
+  LogLevel=DEBUG1  -> 81 lignes, 1 « Server accepts key »
+  ```
+
+  La branche « empreinte déterminée » du §21.6.3 ne se produisait donc
+  **jamais**. Et rien ne le signalait : l'en-tête retombait sur
+  `console/<serveur>`, une valeur de repli légitime, impossible à distinguer
+  d'un repli mérité. **Corrigé** en `DEBUG1`.
+- **L'analyseur, lui, était juste** : sur le flux réel il rend l'empreinte du
+  poste et **ignore celle de l'HÔTE**, qui apparaît pourtant AVANT dans le flux.
+  Une expression qui aurait pris « la première `SHA256:` » aurait attribué chaque
+  geste à l'empreinte du serveur — identique pour tous, donc une identité qui
+  n'identifie personne. Une preuve garde désormais ce piège.
+- **Second défaut, trouvé en corrigeant le premier** : le flux d'erreur était lu
+  **bloc par bloc**, et seule la première ligne du bloc était testée. Tout ce qui
+  suivait une ligne bénigne atterrissait dans `lastError`, que `describe()`
+  publie — un diagnostic affiché sur un tunnel qui va bien. Sous VERBOSE, la
+  seule ligne émise, « Authenticated to … », y tombait à chaque tunnel réussi.
+  Le passage à 81 lignes en aurait fait la règle. **Corrigé** : lecture ligne par
+  ligne, et le succès d'authentification n'est plus pris pour une panne.
+- **La chaîne entière est prouvée sur la Forge** — tunnel réel, geste réel,
+  journal réel :
+
+  ```
+  env.set | classe: human | acteur: console/validation key=SHA256:Vf2N7ryPnZ…
+  ```
+
+  Les entrées antérieures au correctif portent, dans le même journal,
+  `console/forge1` **sans clé** : l'avant et l'après se lisent côte à côte.
+- **Preuves** : 4 de plus (29 sur le tunnel), dont deux vérifiées comme
+  **échouant sans le correctif**.
 
 ### [x] SPK-38 · Chaîne d'intégrité du journal et ancre tenue par la console
 
