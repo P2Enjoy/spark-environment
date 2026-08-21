@@ -1970,7 +1970,7 @@ enregistrement technique, et c'est la **console** qui traduit à l'affichage.
   comme un registre qu'on ne tient plus. Il réapparaîtra au premier écart
   constaté.
 
-### [~] SPK-43 · Terminal dans un Spark depuis la console
+### [x] SPK-43 · Terminal dans un Spark depuis la console
 
 Le transport de tous les outils du §37, et le premier d'entre eux.
 
@@ -2157,12 +2157,16 @@ du §37.2 :
 Le `sshd` que l'image de base n'embarque pas est bien installe et actif : c'est
 SPK-54 qui l'a pose, et le relevé d'amorcage le confirme sur la vraie cellule.
 
-- **Reste avant `[x]`, et l'ecart est RESSERRE** : les deux commandes du
-  depannage ont ete executees pour de vrai, mais la route `GET
-  /api/terminal/diagnostic` de l'hote console ne l'a pas ete de bout en bout —
-  elle exige l'hote lance avec son tunnel, ce que cette session n'a pas monte.
-  Ce qui reste n'est donc plus « la commande est un doublon » mais « le chemin
-  d'appel n'a pas ete parcouru ».
+**Clôturé sur la Forge de validation le 2026-08-21.** Une console d'exploitation
+lancée avec son tunnel a suivi le parcours visible *Sparks* → `helo` → *Terminal* :
+`echo SPK43-REAL-CLOSE-AUDIT; exit` a répondu dans la cellule, la terminaison
+distante a déclenché `GET /api/terminal/diagnostic` et l'écran a établi que le
+serveur SSH répondait. Le journal de la fiche du Spark montre ensuite l'ouverture
+et la fermeture (`distant_termine`) au bon identifiant immuable, sans la commande.
+La preuve a trouvé deux défauts réels, corrigés et testés : une fin de shell ne
+déclarait pas sa fermeture, et les événements de terminal visaient le nom plutôt
+que l'identifiant du Spark, donc restaient invisibles dans cette fiche. Captures
+observées : `/tmp/spk43-journal-real-forge-fixed.png`.
 
 ### [x] SPK-44 · Onglet Docker : inventaire, mesures et inspection
 

@@ -7480,3 +7480,41 @@ Le diagnostic isolé des deux fichiers runtime a atteint 90 s sans sortie dans
 cet environnement, alors que la campagne complète venait de les couvrir au vert ;
 aucune régression ne lui est attribuée. La prochaine session reprend une unité
 productive selon le §4.2.
+
+---
+
+## 2026-08-21 · SPK-43 — le terminal réel ferme et s'inscrit enfin au bon Spark
+
+### Mesure sur la Forge
+
+La console d'exploitation a été lancée avec l'inventaire qui ouvre un tunnel vers
+`ubuntu@51.158.54.202`. Depuis l'accueil, le parcours a suivi *Sparks* → `helo`
+→ *Terminal*. La commande non sensible `echo SPK43-REAL-CLOSE-AUDIT; exit` a été
+vue dans le shell du Spark, puis l'écran a affiché « Le serveur SSH de ce Spark
+répond. » : `GET /api/terminal/diagnostic` a donc été joué à travers l'hôte
+console et le tunnel, pas seulement par une commande directe.
+
+### Deux défauts trouvés en situation réelle
+
+1. La fin du shell fermait l'écran mais n'écrivait aucune fermeture au journal.
+   Le gestionnaire de sessions porte maintenant l'unique notification : geste
+   explicite, fin distante, inactivité et coupure du flux la partagent. Une fin
+   reste brièvement rejouable au flux arrivé en retard, sans redevenir une session
+   vivante. Commit `7c13eea` ; 82 tests ciblés verts.
+2. Les événements de terminal visaient le **nom** du Spark alors que la fiche
+   filtre le journal avec son identifiant immuable. La console les attache
+   désormais à `spark.id`, pour les terminaux de Spark comme de conteneur.
+   Commit `e43704e` ; 84 tests d'hôte ciblés verts.
+
+La capture observée montre dans la fiche de `helo` l'ouverture et la fermeture
+`distant_termine`, avec l'acteur et la durée. La commande `SPK43-REAL-CLOSE-AUDIT`
+n'y apparaît pas. SPK-43 est donc `[x]`.
+
+### Écart distinct relevé pendant la passe réelle
+
+Le chargement de la fiche a aussi rendu deux `500` sur `/v1/env` et
+`/v1/sparks/helo/env`. Le journal de `sparkd` établit un déploiement hybride :
+`app.py` attend `Entree.selected_by` tandis que le module d'environnement installé
+ne le fournit pas. La Forge reste utilisable pour le terminal, mais sa mise à jour
+doit devenir atomique et vérifiable : c'est précisément l'objet de SPK-69, qui
+reste ouvert. Ce défaut ne doit pas être masqué comme une limite de SPK-43.
