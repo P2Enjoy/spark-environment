@@ -251,3 +251,92 @@ def test_une_variable_du_Spark_MASQUE_un_secret_de_la_Forge(db, cle):
     rendu = env.resoudre(db, cle, "S1")
     assert rendu["variables"] == {"TOKEN": "ordinaire"}
     assert rendu["secrets"] == {}
+
+
+# --- L'écriture dans le fichier (§43.9.7, MESURÉ sur Compose v5.1.4) --------
+
+
+def test_une_valeur_contenant_un_DOLLAR_est_echappee():
+    """@verifies docs/DAT.md §43.9.7
+
+    MESURÉ : sans échappement, `abc$def` arrive comme `abc` dans le conteneur —
+    Compose substitue, et la variable étant inconnue, la fin disparaît. Un mot
+    de passe serait tronqué en silence."""
+    assert env.citer("abc$def") == '"abc\\$def"'
+
+
+def test_une_APOSTROPHE_ne_casse_pas_le_fichier_entier():
+    """MESURÉ : l'idiome du shell `'ab'\\''cd'` fait ÉCHOUER la lecture du
+    fichier entier, donc une seule apostrophe dans un mot de passe viderait
+    tout l'environnement de la pile. Les guillemets doubles la laissent
+    passer."""
+    assert env.citer("ab'cd") == '"ab\'cd"'
+
+
+def test_les_GUILLEMETS_et_la_BARRE_sont_echappes():
+    assert env.citer('ab"cd') == '"ab\\"cd"'
+    assert env.citer("a\\b") == '"a\\\\b"'
+
+
+def test_l_ordre_des_echappements_ne_DOUBLE_pas_les_barres():
+    """La barre oblique s'échappe EN PREMIER : la traiter en dernier doublerait
+    celles que les autres échappements viennent d'introduire."""
+    assert env.citer('a\\"b') == '"a\\\\\\"b"'
+
+
+def test_les_BLANCS_de_tete_et_de_fin_sont_conserves():
+    """MESURÉ : sans guillemets, Compose les ROGNE. Un mot de passe finissant
+    par une espace serait alors faux."""
+    assert env.citer("  garde  ") == '"  garde  "'
+
+
+def test_les_caracteres_de_CONTROLE_sont_rendus_par_leur_echappement():
+    assert env.citer("a\nb") == '"a\\nb"'
+    assert env.citer("a\tb") == '"a\\tb"'
+
+
+# --- Les trois fichiers (§43.1, §43.5.2) -----------------------------------
+
+
+def test_les_secrets_ne_sont_PAS_dans_le_fichier_qui_entre_en_INSTANTANE(db, cle):
+    """@verifies docs/DAT.md §43.5.2, §43.9.7
+
+    C'est le point qui justifie la séparation : `/etc/spark/env` et
+    `/etc/profile.d/spark-env.sh` vivent sur le jeu de données, donc DANS les
+    instantanés. Un secret qui s'y trouverait ressusciterait à la première
+    restauration ancienne, en silence."""
+    env.poser(db, cle, "forge", None, "TZ", "Europe/Paris")
+    env.poser(db, cle, "spark", "S1", "STRIPE_API_KEY", "sk_live_42", secret=True)
+
+    rendu = env.fichiers(db, cle, "S1")
+
+    assert "sk_live_42" not in rendu[env.FICHIER_VARIABLES]
+    assert "sk_live_42" not in rendu[env.FICHIER_PROFIL]
+    assert "sk_live_42" in rendu[env.FICHIER_SECRETS], "il est bien LIVRÉ, ailleurs"
+    assert "TZ" in rendu[env.FICHIER_VARIABLES]
+
+
+def test_le_fichier_de_confort_emploie_la_grammaire_du_SHELL(db, cle):
+    """§43.9.7 : deux consommateurs, deux grammaires. L'idiome `'\\''` que
+    Compose REFUSE est exactement celui qu'il faut au shell."""
+    env.poser(db, cle, "spark", "S1", "MSG", "l'accent")
+    rendu = env.fichiers(db, cle, "S1")
+    assert "export MSG='l'\\''accent'\n" in rendu[env.FICHIER_PROFIL]
+    assert 'MSG="l\'accent"\n' in rendu[env.FICHIER_VARIABLES]
+
+
+def test_un_RETRAIT_retire_vraiment_du_fichier(db, cle):
+    """Le fichier est régénéré EN ENTIER, jamais complété (§43.2). C'est ce qui
+    distingue « retiré » de « laissé là »."""
+    env.poser(db, cle, "spark", "S1", "OBSOLETE", "x")
+    assert "OBSOLETE" in env.fichiers(db, cle, "S1")[env.FICHIER_VARIABLES]
+    env.retirer(db, "spark", "S1", "OBSOLETE")
+    assert "OBSOLETE" not in env.fichiers(db, cle, "S1")[env.FICHIER_VARIABLES]
+
+
+def test_les_fichiers_ANNONCENT_qu_ils_sont_ecrits_par_le_produit(db, cle):
+    """Un fichier modifié à la main serait écrasé sans prévenir. Il le dit."""
+    rendu = env.fichiers(db, cle, "S1")
+    for chemin in (env.FICHIER_VARIABLES, env.FICHIER_SECRETS, env.FICHIER_PROFIL):
+        assert "Écrit par sparkd" in rendu[chemin]
+    assert "CONFORT" in rendu[env.FICHIER_PROFIL], "et le confort dit sa limite"

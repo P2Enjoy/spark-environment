@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from sparkd.app import create_app
 from sparkd.config import load
+from sparkd.db import connect
 
 
 def client(tmp_path=None):
@@ -895,3 +896,87 @@ def test_un_runtime_MUET_ne_prononce_AUCUN_refus_de_retrecissement(tmp_path):
     vu = c.patch("/v1/sparks/crm-production", json={"storage_bytes": 256 * 1024**2})
     assert vu.status_code == 200, "sans mesure, le refus n'est pas prononcé"
     assert vu.json()["storage_bytes"] == 256 * 1024**2
+
+
+# --- SPK-58 · la matérialisation dans la cellule (docs/DAT.md §43.2) --------
+
+
+def _cellule(app, nom="crm-production"):
+    """Les fichiers que le doublon a réellement reçus pour cette cellule."""
+    return (app.state.incus.created.get(nom) or {}).get("files") or {}
+
+
+def test_l_environnement_est_POSE_des_la_creation_de_la_cellule(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-58 · docs/DAT.md §43.7
+
+    Posé DÈS la création, de sorte qu'un `env_file:` du locataire ne casse pas
+    sa pile au premier démarrage en désignant un fichier qui n'existe pas."""
+    from sparkd import environnement as env
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "e.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    fichiers = _cellule(app)
+    assert env.FICHIER_VARIABLES in fichiers
+    assert env.FICHIER_SECRETS in fichiers
+    assert env.FICHIER_PROFIL in fichiers
+
+
+def test_le_fichier_des_SECRETS_est_repose_a_chaque_DEMARRAGE(tmp_path):
+    """@verifies docs/DAT.md §43.5.2
+
+    Il vit dans un tmpfs : il DISPARAÎT à l'arrêt de la cellule. Sans cette
+    repose, un Spark redémarré perdrait ses secrets."""
+    from sparkd import environnement as env
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "d.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    # Un secret est posé APRÈS la création : sans repose au démarrage, il
+    # n'atteindrait jamais la cellule.
+    with connect(tmp_path / "d.db") as registre:
+        cle = env.charger_cle(app.state.config.secret_key_file)
+        spark = registre.execute(
+            "SELECT id FROM spark WHERE name = 'crm-production'").fetchone()
+        env.poser(registre, cle, "spark", spark["id"], "TOKEN", "sk_42", secret=True)
+        registre.commit()
+    # On efface ce que la cellule avait reçu : c'est ce que fait un tmpfs.
+    app.state.incus.created["crm-production"]["files"].pop(env.FICHIER_SECRETS)
+
+    c.post("/v1/sparks/crm-production/start")
+    assert "sk_42" in _cellule(app)[env.FICHIER_SECRETS]
+
+
+def test_une_RESTAURATION_ne_laisse_pas_l_ancien_environnement_en_place(tmp_path):
+    """@verifies docs/DAT.md §43.2
+
+    Une restauration ramène l'ANCIEN fichier dans la cellule. L'état voulu
+    reprend la main derrière — sans quoi le registre et la cellule diraient deux
+    choses différentes, et c'est la cellule qui gagnerait."""
+    from sparkd import environnement as env
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "r.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+    c.post("/v1/sparks/crm-production/snapshots", json={"name": "avant"})
+
+    with connect(tmp_path / "r.db") as registre:
+        cle = env.charger_cle(app.state.config.secret_key_file)
+        spark = registre.execute(
+            "SELECT id FROM spark WHERE name = 'crm-production'").fetchone()
+        env.poser(registre, cle, "spark", spark["id"], "APRES_INSTANTANE", "oui")
+        registre.commit()
+    # Ce que la restauration ramènerait : un fichier d'AVANT.
+    app.state.incus.created["crm-production"]["files"][env.FICHIER_VARIABLES] = "# ancien\n"
+
+    vu = c.post("/v1/sparks/crm-production/snapshots/avant/restore")
+    assert vu.status_code == 200, vu.json()
+    assert "APRES_INSTANTANE" in _cellule(app)[env.FICHIER_VARIABLES]
