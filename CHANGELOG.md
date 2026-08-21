@@ -62,6 +62,21 @@
   contention » — vrai, mais trop modeste.
 
 ### Corrigé
+- **Un Spark dont la cellule a disparu reste manœuvrable** (SPK-36). Demander son
+  démarrage rendait une erreur interne et le laissait **stablement** en cours de
+  démarrage, sans aucune commande offerte et sans dire pourquoi : depuis la
+  console, il n'était plus possible ni de le reconstruire ni de le supprimer. Le
+  chemin de reprise existait pourtant déjà — c'était une porte fermée devant un
+  escalier construit. Le Spark passe désormais en panne, l'écran nomme la perte,
+  et les deux issues sont offertes : « Reprendre » reconstruit la cellule,
+  « Supprimer » rend sa place au pool. Mesuré sur la Forge de validation, puis
+  éprouvé depuis la console.
+- **Le préflight voit une ligne de registre qui déclare une cellule absente**
+  (SPK-36, contrôle `REG-FANTOME`). La Forge de validation en portait une depuis
+  deux jours sans que rien ne le signale : trois fois trop de processeur compté,
+  et un poids de tranche quatre fois trop élevé, pendant que le préflight
+  annonçait « 0 bloquant ». Le contrôle nomme les Sparks concernés **et ce qu'ils
+  coûtent**.
 - **Le journal nomme enfin la clé qui a agi** (SPK-37). L'empreinte de la clé
   SSH n'atteignait **jamais** le journal : la console demandait à OpenSSH un
   niveau de diagnostic qui n'émet pas la ligne nommant la clé acceptée. Chaque

@@ -7156,3 +7156,85 @@ rien faire. Le premier était la console périmée qui servait du code mort, le
 second l'empreinte SSH que `LogLevel=VERBOSE` n'atteignait jamais. À chaque fois,
 rien ne rougit, et c'est le responsable qui paie la découverte.
 
+
+---
+
+## 2026-08-21 · SPK-36 — jouer l'entrée fantôme, et trouver la porte fermée
+
+**Problème.** Le §4.4 de `docs/CONTINGENCE.md` venait d'affirmer que la bonne
+réponse à une entrée fantôme est **parfois de reconstruire** la cellule plutôt
+que d'effacer la ligne. Affirmation non vérifiée. La DoD de SPK-36 nomme
+précisément la reconstruction d'un Spark comme la moitié de l'exercice réel qui
+restait à jouer.
+
+**Observations.** Sur la Forge de validation, sur un Spark **jetable** créé pour
+cela — `helo` n'a pas été touché et a été vérifié intact après coup — la cellule
+a été détruite hors du produit. Demander un démarrage a rendu **500**, et laissé
+le Spark ainsi, stable à vingt secondes :
+
+```
+etat      : starting
+commandes : []
+erreur    : null
+```
+
+Un état transitoire dont on ne sort plus, sans commande offerte et sans même
+dire pourquoi. Depuis la console, plus rien : ni reconstruire, ni supprimer.
+
+**Cause.** `InstanceAbsente` n'hérite pas d'`IncusError`, et c'est délibéré : le
+§33.3 interdit de confondre « le pilote RAPPORTE que ce n'est pas là » et « je
+n'ai pas pu demander ». SPK-52 avait nommé l'absence pour la suppression ; la
+branche du cycle de vie ne la nommait pas. Elle s'échappait, `finish` n'était
+jamais appelé, et l'état transitoire — posé **avant** l'appel au pilote — ne se
+refermait plus. Le second appel du redémarrage vivait de surcroît hors de toute
+garde.
+
+**Pourquoi neuf cents preuves ne l'ont pas vu.** Le pilote factice rendait
+`IncusError` là où le vrai rend `InstanceAbsente`. La route attrapait donc
+proprement en preuve ce qu'elle laissait fuir en production. Le principe était
+pourtant déjà écrit dans le fichier, trois lignes plus bas, à côté de
+`delete_instance` : « le pilote factice doit la rendre comme le vrai, sans quoi
+la règle serait éprouvée sur une forme qui ne tournera jamais en production ». Il
+n'avait été appliqué qu'à une méthode. **Un principe écrit à un seul endroit
+n'est pas une règle, c'est une note.** SPK-67 est ouverte pour trancher jusqu'où
+va la fidélité exigée du doublon.
+
+**Décision.** La perte conduit le Spark en **panne**, seul état d'où le produit
+offre les deux remèdes que le contrôle `REG-FANTOME` annonce. À la différence de
+la suppression, l'absence ne vaut **pas** réussite ici : la ligne survit au
+geste, et un succès de façade laisserait au registre un fantôme silencieux —
+exactement ce que le §4 cherche à rendre impossible.
+
+**Ce que l'exercice a appris, au-delà du défaut.** Le chemin de reconstruction
+**existait déjà** : `State.ERROR` autorise `retry` et `delete` depuis toujours.
+Ce n'était pas une fonctionnalité manquante, c'était une porte fermée devant un
+escalier construit. Un plan de reprise qu'on relit ne montre pas cela ; un plan
+qu'on joue, si.
+
+**Une réserve, et elle a décidé du correctif.** Le Spark coincé n'était pas
+perdu : la reprise des états transitoires au démarrage du service (§14.3) le
+ramenait en panne. Vérifié. Mais elle exige de **redémarrer le démon**, ce qu'un
+exploitant ne peut pas faire depuis la console. Un recours qui suppose un accès
+administrateur à la machine n'est pas un recours pour la personne qui tient la
+console — c'est pourquoi le défaut a été corrigé plutôt que documenté comme
+contournable.
+
+**Vérifications.** Sur la Forge : le contrôle vu **rouge** puis vert, le refus
+nommé, `retry` reconstruisant réellement la cellule à deux reprises sur le vrai
+Incus, `delete` rendant la place, le Spark jetable détruit et `helo` intact. En
+preuve : 8 unités pour la reprise, 4 pour le contrôle, un parcours qui part de
+l'accueil et ne fait que cliquer.
+
+**Ce que la vérification visuelle a sorti, et que rien d'autre ne pouvait voir.**
+Le message de refus disait « retry » et « delete » pendant que les boutons, deux
+centimètres plus bas, portaient « Reprendre » et « Supprimer ». Il envoyait
+chercher des commandes qui ne s'appellent pas ainsi dans la console. Corrigé, avec
+sa preuve. Le §16 ne demande pas de regarder par acquit de conscience.
+
+**Une faute de méthode, et sa leçon.** Un `git add -A` a emporté dans mon commit
+120 lignes en cours de la session voisine — nous partageons le même `.git`, pas
+seulement le même répertoire — et a laissé `main` rouge : du code sans sa
+migration. Le fichier n'a pas été touché sur le disque, la session voisine a été
+prévenue immédiatement et a poussé la suite. Le reste de la session a été
+committé chemin par chemin. `git add -A` n'est pas un raccourci sur une branche
+partagée, c'est un pari sur ce que personne d'autre n'a écrit depuis.
