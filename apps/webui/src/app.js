@@ -1,16 +1,18 @@
 /**
  * Point d'entrée de la console dans le navigateur.
  *
- * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21 ·
+ * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21, docs/BACKLOG.md#SPK-64 ·
  *       docs/DAT.md §26 (les trois panneaux d'administration, §26.2 le contrat
  *       d'interaction, §26.5 l'ordre refus-puis-acceptation) ·
  *       docs/BACKLOG.md#SPK-22 · docs/DAT.md §27 (l'écran des pools) ·
+ *       docs/DAT.md §43.6 révisé (la Forge propose, le Spark choisit) ·
  *       docs/DESIGN_SYSTEM.md §5.1, §6.13, §6.22, §9.1, §9.7
  */
 
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spark-detail.js';
 import { ENV_VIDE } from './components/spark-env.js';
+import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
@@ -74,6 +76,12 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                           chain: null, anchor: null, checking: false },
                catalogue: { status: 'loading', images: [], error: null,
                             ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } },
+               // SPK-64 · §43.6 : le catalogue de la Forge est une destination
+               // propre. Il ne se mélange pas au catalogue d'images, qui a un
+               // autre sujet et un autre contrat de saisie.
+               catalogueEnv: { status: 'loading', entrees: [], error: null,
+                               ui: { ...CATALOGUE_ENV_VIDE,
+                                     values: { ...CATALOGUE_ENV_VIDE.values } } },
                // SPK-54 · §42 : l'amorçage. Vide tant qu'on n'a rien demandé —
                // le relevé exécute une commande dans la cellule du locataire.
                amorcage: { ...AMORCAGE_VIDE },
@@ -93,7 +101,7 @@ function marquerNavigation() {
   // les onglets du second degré portent leur propre `aria-current` (§34.1).
   const courant = etat.route === 'serveurs' ? '#/serveurs'
     : etat.route === 'manuel' ? '#/manuel'
-    : ['forge', 'images', 'journal'].includes(etat.route) ? '#/forge' : '#/sparks';
+    : ['forge', 'images', 'environnement', 'journal'].includes(etat.route) ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -112,6 +120,8 @@ function peindre() {
       ? '<div class="carte bloc" aria-busy="true"><p class="sr-only" role="status">Chargement…</p></div>'
       : etat.route === 'images'
       ? renderOngletsForge('#/forge/images') + renderCatalogue(etat.catalogue)
+      : etat.route === 'environnement'
+      ? renderForgeEnv(etat.catalogueEnv)
       : etat.route === 'journal'
       ? renderJournalForgePage(etat.journal)
       : etat.route === 'serveurs'
@@ -177,6 +187,7 @@ function brancher() {
     ?.addEventListener('click', () => comparerBuild());
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
+  brancherCatalogueEnv();
   brancherJournal();
   brancherServeurs();
 
@@ -232,6 +243,8 @@ function brancher() {
       etat.admin.refusal = null;
       etat.catalogue.ui.open = false;
       etat.catalogue.ui.refusal = null;
+      etat.catalogueEnv.ui.open = false;
+      etat.catalogueEnv.ui.refusal = null;
       etat.catalogueServeurs.ui.open = false;
       etat.catalogueServeurs.ui.refusal = null;
       etat.catalogueServeurs.ui.probe = null;
@@ -950,6 +963,14 @@ function brancherPanneaux() {
     bouton.addEventListener('click', () => retirerEnv(
       bouton.dataset.envRetire, bouton.dataset.envPortee));
   }
+  for (const bouton of racine.querySelectorAll('[data-env-decocher]')) {
+    bouton.addEventListener('click', () => changerSelectionEnv(
+      bouton.dataset.envDecocher, false));
+  }
+  for (const caseACocher of racine.querySelectorAll('[data-descend]')) {
+    caseACocher.addEventListener('change', () => changerSelectionEnv(
+      caseACocher.dataset.descend, caseACocher.checked));
+  }
   for (const niveau of ['forge', 'spark']) {
     const formulaire = racine.querySelector(`[data-modale="env-${niveau}"]`);
     if (!formulaire) continue;
@@ -1239,6 +1260,34 @@ async function retirerEnv(nom, portee) {
     return peindre();
   }
   await router();
+}
+
+/**
+ * Coche ou décoche une entrée du catalogue pour CE Spark (SPK-64, §43.6).
+ *
+ * La case ne décide rien seule : le registre applique la sélection puis réécrit
+ * les fichiers de la cellule (§43.2). Après sa réponse, on relit donc le détail
+ * complet, plutôt que de conserver une coche optimiste qui pourrait mentir.
+ */
+async function changerSelectionEnv(nom, coche) {
+  const chemin = `/v1/sparks/${encodeURIComponent(etat.spark.name)}`
+    + `/env/selection/${encodeURIComponent(nom)}`;
+  let vu;
+  try {
+    vu = await appel(coche ? 'POST' : 'DELETE', chemin);
+  } catch (erreur) {
+    etat.envUi.refusal = { niveau: 'selection',
+                           message: `La requête n’a pas abouti : ${erreur.message}` };
+    return peindre();
+  }
+  if (!vu.ok) {
+    etat.envUi.refusal = { niveau: 'selection',
+                           message: vu.corps?.detail?.message
+                             ?? 'Le serveur a refusé cette sélection.' };
+    return peindre();
+  }
+  etat.envUi.refusal = null;
+  await chargerDetail(etat.spark.name, etat.facette);
 }
 
 async function appliquerQuotas() {
@@ -1893,6 +1942,92 @@ async function chargerCatalogue() {
   peindre();
 }
 
+/** Catalogue d'environnement de la Forge (SPK-64, docs/DAT.md §43.6). */
+async function chargerCatalogueEnv() {
+  etat.route = 'environnement';
+  etat.catalogueEnv.status = 'loading';
+  etat.catalogueEnv.error = null;
+  peindre();
+  try {
+    etat.catalogueEnv.entrees = (await api('/v1/env')).env;
+    etat.catalogueEnv.status = 'ready';
+  } catch (erreur) {
+    etat.catalogueEnv.error = erreur;
+    etat.catalogueEnv.status = 'error';
+  }
+  peindre();
+}
+
+/** La première réponse sur un Spark protégé demande une acceptation explicite. */
+async function ecrireCatalogueEnv(methode, nom, corps = {}, accepter = false) {
+  const ui = etat.catalogueEnv.ui;
+  ui.busy = true;
+  ui.refusal = null;
+  peindre();
+  let vu;
+  try {
+    vu = await appel(methode, `/v1/env/${encodeURIComponent(nom)}`,
+                     { ...corps, ...(accepter ? { accept_protected: true } : {}) });
+  } catch (erreur) {
+    ui.busy = false;
+    ui.refusal = `La requête n’a pas abouti : ${erreur.message}`;
+    return peindre();
+  }
+  ui.busy = false;
+  const detail = vu.corps?.detail;
+  if (!vu.ok && detail?.error === 'protected_sparks_affected') {
+    ui.confirming = { methode, nom, corps, message: detail.message,
+                      protected_sparks: detail.protected_sparks ?? [] };
+    return peindre();
+  }
+  if (!vu.ok) {
+    ui.refusal = detail?.message ?? 'Le serveur a refusé cette écriture.';
+    return peindre();
+  }
+  ui.confirming = null;
+  ui.open = false;
+  ui.values = { ...CATALOGUE_ENV_VIDE.values };
+  await chargerCatalogueEnv();
+}
+
+function brancherCatalogueEnv() {
+  const ui = etat.catalogueEnv.ui;
+  racine.querySelector('[data-ouvre="catalogue-env"]')?.addEventListener('click', () => {
+    ui.open = true;
+    ui.refusal = null;
+    ui.confirming = null;
+    ui.values = { ...CATALOGUE_ENV_VIDE.values };
+    peindre();
+  });
+  for (const bouton of racine.querySelectorAll('[data-retire-catalogue]')) {
+    bouton.addEventListener('click', () => ecrireCatalogueEnv(
+      'DELETE', bouton.dataset.retireCatalogue));
+  }
+  racine.querySelector('[data-annule-catalogue]')?.addEventListener('click', () => {
+    ui.confirming = null;
+    peindre();
+  });
+  racine.querySelector('[data-accepte-catalogue]')?.addEventListener('click', () => {
+    const c = ui.confirming;
+    if (c) ecrireCatalogueEnv(c.methode, c.nom, c.corps, true);
+  });
+
+  const formulaire = racine.querySelector('[data-modale="catalogue-env"]');
+  if (!formulaire) return;
+  for (const controle of formulaire.querySelectorAll('input')) {
+    controle.addEventListener('input', () => {
+      ui.values[controle.name] = controle.type === 'checkbox'
+        ? controle.checked : controle.value;
+    });
+  }
+  formulaire.addEventListener('submit', (evenement) => {
+    evenement.preventDefault();
+    ecrireCatalogueEnv('PUT', String(ui.values.name ?? '').trim(), {
+      value: ui.values.value, secret: Boolean(ui.values.secret),
+    });
+  });
+}
+
 /** Relevé explicite (§33.3). Il ne détruit rien : aucune confirmation (§6.24). */
 async function releverImages() {
   etat.catalogue.ui.syncing = true;
@@ -2213,6 +2348,7 @@ function router() {
   if (chapitre) return chargerManuel(chapitre[1] ?? null);
   if (location.hash === '#/serveurs') return chargerServeurs();
   if (location.hash === '#/forge/journal') return chargerJournal();
+  if (location.hash === '#/forge/environnement') return chargerCatalogueEnv();
   if (location.hash === '#/forge/images') return chargerCatalogue();
   if (location.hash === '#/forge') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();

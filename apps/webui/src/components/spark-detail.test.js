@@ -110,6 +110,18 @@ test('une absence qui informe est NOMMEE', () => {
   assert.match(rendu('instantanes'), /Aucun instantané/);
 });
 
+/**
+ * @verifies docs/BACKLOG.md#SPK-64 · docs/DAT.md §43.6 révisé (la Forge
+ *           propose, le Spark choisit) · docs/DESIGN_SYSTEM.md §1.2
+ */
+test('la facette Environnement transmet le catalogue à ses cases', () => {
+  const html = renderSparkDetail({
+    status: 'ready', spark: SPARK, facette: 'environnement',
+    catalogue: [{ name: 'OBJECT_STORAGE_URL', is_secret: false }],
+  });
+  assert.match(html, /data-descend="OBJECT_STORAGE_URL"/);
+});
+
 test('une valeur absente n est simplement PAS rendue', () => {
   const html = renderSparkDetail({
     status: 'ready', spark: { ...SPARK, ipv4_address: null, image: null },

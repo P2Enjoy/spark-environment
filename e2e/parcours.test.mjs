@@ -605,7 +605,7 @@ test('le disque OCCUPÉ refuse d’être rétréci, et le dit autrement', async 
   });
 });
 
-// --- SPK-58 · L'ENVIRONNEMENT D'UN SPARK (§43) -----------------------------
+// --- SPK-58 / SPK-64 · L'ENVIRONNEMENT D'UN SPARK (§43) -------------------
 
 test('l’environnement se lit avec l’ORIGINE de chaque valeur', async () => {
   await parcours('env-origines', async () => {
@@ -618,8 +618,8 @@ test('l’environnement se lit avec l’ORIGINE de chaque valeur', async () => {
     await page.waitForSelector('#titre-env-forge', { timeout: 10000 });
 
     const ecran = await page.innerText('body');
-    assert.match(ecran, /Héritée de la Forge/);
-    assert.match(ecran, /Surcharge la Forge/);
+    assert.match(ecran, /Cochée au catalogue/);
+    assert.match(ecran, /Masque une entrée cochée/);
     assert.match(ecran, /Propre à ce Spark/);
 
     // La surcharge porte bien la valeur DU SPARK, pas celle de la Forge.
@@ -675,7 +675,7 @@ test('poser une variable AU CLAVIER, et la retirer', async () => {
     const apres = await pile.lireSparkd('/v1/sparks/boutique/env');
     const posee = apres.corps.env.find((e) => e.name === 'PARCOURS_E2E');
     assert.equal(posee?.value, 'valeur-du-parcours');
-    assert.equal(posee?.origin, 'spark', 'elle est PROPRE au Spark, pas héritée');
+    assert.equal(posee?.origin, 'spark', 'elle est PROPRE au Spark, pas cochée au catalogue');
 
     // On rend la pile à l'état du seed.
     await page.click('[data-env-retire="PARCOURS_E2E"]');
@@ -717,6 +717,65 @@ test('un nom REFUSÉ reste dans la modale, et « Échap » la ferme', async () =
     await page.keyboard.press('Escape');
     await page.waitForFunction(
       () => !document.querySelector('dialog.modale[open]'), { timeout: 10000 });
+  });
+});
+
+test('le catalogue ne descend qu’après une case cochée, puis le décochage le retire', async () => {
+  await parcours('env-selection', async () => {
+    // Le catalogue s'atteint par la navigation de la Forge, jamais par une URL
+    // profonde ou un appel d'API. Ajouter ici n'est PAS distribuer : c'est la
+    // propriété de sécurité de SPK-64 que le parcours va constater.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/forge/environnement"]');
+    await page.waitForSelector('#titre-catalogue-forge', { timeout: 10000 });
+
+    await page.focus('[data-ouvre="catalogue-env"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #catalogue-env-nom', { timeout: 10000 });
+    await page.fill('#catalogue-env-nom', 'PARCOURS_SELECTION');
+    await page.fill('#catalogue-env-valeur', 'choisi-explicitement');
+    await page.click('dialog.modale[open] [data-engage="catalogue-env"]');
+    // Une entrée nouvelle n'a encore aucun destinataire : même si la Forge
+    // contient un Spark protégé, elle s'ajoute sans confirmation ni effet.
+    await page.waitForFunction(
+      () => document.querySelector('[data-retire-catalogue="PARCOURS_SELECTION"]'),
+      { timeout: 15000 });
+    assert.match(await page.innerText('body'), /Ne descend nulle part/);
+
+    await ouvrir('boutique', 'environnement');
+    const caseSelection = '[data-descend="PARCOURS_SELECTION"]';
+    await page.waitForSelector(caseSelection, { timeout: 15000 });
+    assert.equal(await page.isChecked(caseSelection), false,
+      'une entrée nouvelle ne change aucun Spark tant qu’elle n’est pas cochée');
+    let etatBackend = await pile.lireSparkd('/v1/sparks/boutique/env');
+    assert.equal(etatBackend.corps.env.some((e) => e.name === 'PARCOURS_SELECTION'), false);
+
+    await page.click(caseSelection);
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Cochée au catalogue'), { timeout: 15000 });
+    etatBackend = await pile.lireSparkd('/v1/sparks/boutique/env');
+    assert.equal(etatBackend.corps.env.find((e) => e.name === 'PARCOURS_SELECTION')?.origin,
+      'forge', 'la Forge confirme ce que la case a sélectionné');
+
+    await page.click(caseSelection);
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('PARCOURS_SELECTION'), { timeout: 15000 });
+    etatBackend = await pile.lireSparkd('/v1/sparks/boutique/env');
+    assert.equal(etatBackend.corps.env.some((e) => e.name === 'PARCOURS_SELECTION'), false,
+      'décocher retire réellement la valeur du jeu résolu');
+
+    // On retire ensuite l'entrée du catalogue par son propre écran : la pile
+    // retrouve exactement le seed pour les parcours suivants.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/forge/environnement"]');
+    await page.waitForSelector('[data-retire-catalogue="PARCOURS_SELECTION"]', { timeout: 10000 });
+    await page.click('[data-retire-catalogue="PARCOURS_SELECTION"]');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('PARCOURS_SELECTION'), { timeout: 15000 });
   });
 });
 

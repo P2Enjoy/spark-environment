@@ -14,15 +14,17 @@
  */
 
 import { renderOngletsForge } from './forge-images.js';
+import { renderModale } from './modale.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 export const CATALOGUE_VIDE = {
-  open: null,       // 'ajout'
+  open: false,
   busy: false,
   refusal: null,
+  confirming: null,
   values: { name: '', value: '', secret: false },
 };
 
@@ -53,13 +55,16 @@ function cellule(entree) {
 }
 
 function lignes(entrees) {
-  return `<div class="table-defilante">
+  return `<div class="tableau-enveloppe">
+  <p class="tableau-indice">Le tableau défile horizontalement.</p>
   <table>
-    <thead><tr><th>Nom</th><th>Valeur</th><th>Portée</th><th>Modifié</th><th></th></tr></thead>
+    <thead><tr><th scope="col">Nom</th><th scope="col">Valeur</th>
+    <th scope="col">Portée</th><th scope="col">Modifié</th>
+    <th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
     <tbody>${entrees.map((e) => {
       const d = decrireDescente(e.selected_by ?? 0);
       return `<tr>
-        <td class="technique">${echapper(e.name)}</td>
+        <th scope="row" class="technique">${echapper(e.name)}</th>
         ${cellule(e)}
         <td><span class="badge badge--${d.token}"><span class="badge__point" aria-hidden="true"></span>${
           echapper(d.texte)}</span></td>
@@ -72,6 +77,52 @@ function lignes(entrees) {
 </div>`;
 }
 
+function renderAjout(ui) {
+  return renderModale({
+    ouverte: ui.open, id: 'catalogue-env', titre: 'Catalogue d’environnement',
+    engagement: 'Ajouter au catalogue', refus: ui.refusal, occupee: ui.busy,
+    corps: `
+      <div class="champ">
+        <label for="catalogue-env-nom">Nom</label>
+        <input class="controle technique" id="catalogue-env-nom" name="name" type="text"
+               autocomplete="off" placeholder="SMTP_HOST" value="${echapper(ui.values.name)}">
+        <p class="champ__aide">Une lettre ou un souligné, puis des lettres, chiffres
+        et soulignés. C’est la grammaire que le shell sait exporter.</p>
+      </div>
+      <div class="champ">
+        <label for="catalogue-env-valeur">Valeur</label>
+        <input class="controle" id="catalogue-env-valeur" name="value" type="text"
+               autocomplete="off" value="${echapper(ui.values.value)}">
+      </div>
+      <div class="champ">
+        <label for="catalogue-env-secret">
+          <input type="checkbox" id="catalogue-env-secret" name="secret"
+                 ${ui.values.secret ? 'checked' : ''}> Déclarer cette valeur secrète
+        </label>
+        <p class="champ__aide">Une valeur secrète n’est plus jamais affichée, ni
+        rendue par l’API, ni portée au journal. On la remplace ; on ne la relit pas.</p>
+      </div>
+      <p class="note">Ajouter une entrée ne la distribue dans aucun Spark. Chaque
+      Spark doit la cocher depuis sa facette Environnement.</p>`,
+  });
+}
+
+function renderConfirmation(confirmation) {
+  if (!confirmation) return '';
+  const proteges = confirmation.protected_sparks ?? [];
+  return `<div class="confirmation" role="group" aria-label="Confirmer l’écriture au catalogue">
+    <p><strong>${echapper(confirmation.message)}</strong></p>
+    ${proteges.length ? `<p class="note">Spark${proteges.length > 1 ? 's' : ''} concerné${
+      proteges.length > 1 ? 's' : ''} : ${echapper(proteges.join(', '))}.</p>` : ''}
+    <p class="confirmation__consequence">Aucune protection ne sera levée.</p>
+    <p class="confirmation__actions">
+      <button type="button" class="bouton bouton--primaire" data-accepte-catalogue>
+        Continuer malgré les protections</button>
+      <button type="button" class="bouton" data-annule-catalogue>Annuler</button>
+    </p>
+  </div>`;
+}
+
 /**
  * L'écran entier.
  *
@@ -79,8 +130,7 @@ function lignes(entrees) {
  * il ne se distingue pas d'un chargement raté si on le laisse en blanc.
  */
 export function renderForgeEnv({ status = 'loading', entrees = [],
-                                 ui = CATALOGUE_VIDE, error = null } = {},
-                               renderModale = () => '') {
+                                 ui = CATALOGUE_VIDE, error = null } = {}) {
   const onglets = renderOngletsForge('#/forge/environnement');
 
   if (status === 'loading') {
@@ -107,11 +157,11 @@ export function renderForgeEnv({ status = 'loading', entrees = [],
   d’elle-même : chaque Spark coche ce qu’il reçoit, dans sa facette
   <em>Environnement</em>. <a href="#/manuel/M8">Manuel M8</a></p>
   ${corps}
-  ${ui.refusal ? `<div class="refus" role="alert"><p>${echapper(ui.refusal.message)}</p></div>` : ''}
+  ${renderConfirmation(ui.confirming)}
   <p class="formulaire__actions">
-    <button type="button" class="bouton bouton--primaire" data-ouvre="catalogue">
+    <button type="button" class="bouton bouton--primaire" data-ouvre="catalogue-env">
       Ajouter une entrée</button>
   </p>
 </section>
-${renderModale(ui)}`;
+${renderAjout(ui)}`;
 }

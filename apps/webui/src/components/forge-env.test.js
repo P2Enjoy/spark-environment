@@ -65,9 +65,10 @@ test('les états de la vue sont traités', () => {
   assert.match(vide, /Rien ne descend dans aucun/);
 });
 
-test('le tableau défile dans SON conteneur', () => {
+test('le tableau défile dans SON conteneur et le signale', () => {
   const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES });
-  assert.match(rendu, /class="table-defilante"/);
+  assert.match(rendu, /class="tableau-enveloppe"/);
+  assert.match(rendu, /Le tableau défile horizontalement/);
 });
 
 test('un nom d’entrée est ÉCHAPPÉ avant d’atteindre l’écran', () => {
@@ -82,4 +83,23 @@ test('un nom d’entrée est ÉCHAPPÉ avant d’atteindre l’écran', () => {
 test('l’onglet du catalogue est marqué courant', () => {
   const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES, ui: CATALOGUE_VIDE });
   assert.match(rendu, /href="#\/forge\/environnement"[^>]*aria-current="page"/);
+});
+
+test('la saisie du catalogue précise qu’elle ne distribue rien', () => {
+  const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES,
+                                 ui: { ...CATALOGUE_VIDE, open: true } });
+  assert.match(rendu, /data-modale="catalogue-env"/);
+  assert.match(rendu, /ne la distribue dans aucun Spark/);
+});
+
+test('une écriture qui atteint un Spark protégé demande une confirmation explicite', () => {
+  const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES,
+    ui: { ...CATALOGUE_VIDE, confirming: {
+      message: 'Poser « SMTP_HOST » touche 1 Spark protégé : analytics.',
+      protected_sparks: ['analytics'],
+    } },
+  });
+  assert.match(rendu, /analytics/);
+  assert.match(rendu, /Continuer malgré les protections/);
+  assert.match(rendu, /Aucune protection ne sera levée/);
 });

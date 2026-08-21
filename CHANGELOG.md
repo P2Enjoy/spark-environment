@@ -22,6 +22,13 @@
 - Unité SPK-64 : l'héritage de l'environnement devient une **sélection**. La Forge
   tient un catalogue, chaque Spark coche ce qui descend chez lui — correction d'un
   défaut de sécurité de SPK-58, relevé par le responsable.
+- SPK-64 : la console rend maintenant ce modèle utilisable. L'onglet
+  **Environnement** de la Forge décrit le catalogue et combien de Sparks reçoivent
+  chaque entrée ; la facette du Spark coche, décoche et nomme les valeurs qu'elle
+  reçoit. Une entrée nouvelle ne descend nulle part avant un geste explicite. Les
+  valeurs propres restent distinctes et disent quand elles masquent une entrée
+  cochée. Un geste de Forge qui toucherait un Spark protégé le nomme et demande
+  confirmation, sans lever de protection.
 - **L'environnement d'un Spark : le magasin** (SPK-58, `docs/DAT.md` §43.9) —
   première tranche. Le registre sait porter des variables d'environnement à deux
   niveaux, la Forge et le Spark, la seconde surchargeant la première **nom par
@@ -41,17 +48,17 @@
   troisième tranche. Six routes posent, lisent et retirent une variable, au
   niveau de la **Forge** ou d'un **Spark**, et l'écriture repose aussitôt les
   fichiers dans la cellule. La lecture d'un Spark dit **d'où vient chaque
-  valeur** — héritée, propre, ou masquant celle de la Forge. Un Spark protégé
+  valeur** — cochée au catalogue, propre, ou masquant une entrée cochée. Un Spark protégé
   refuse l'écriture qui le vise ; un geste de Forge qui toucherait des Sparks
   protégés les **nomme** d'abord et n'aboutit qu'au second appel. Les données de
   démonstration couvrent les trois origines et deux secrets.
 - **L'environnement d'un Spark : l'écran** (SPK-58, `docs/DESIGN_SYSTEM.md` §6.27)
-  — quatrième tranche. La fenêtre d'un Spark porte un onglet **Environnement**,
-  avec une section pour les variables de la Forge et une pour les siennes. Chaque
-  ligne dit **d'où vient sa valeur**, et la valeur d'un secret n'est jamais
-  affichée : seuls son nom, une empreinte et sa date. Poser une variable se fait
+  — quatrième tranche. La fenêtre d'un Spark porte un onglet **Environnement**
+  qui rend les variables propres et leur origine, sans jamais afficher une valeur
+  secrète : seuls son nom, une empreinte et sa date. Poser une variable se fait
   depuis la section, et l'écran annonce que **rien ne redémarre** — la pile du
-  locataire lira la nouvelle valeur à son prochain démarrage. Le manuel M6
+  locataire lira la nouvelle valeur à son prochain démarrage. SPK-64 a depuis
+  séparé le catalogue Forge de la sélection explicite par Spark. Le manuel M6
   explique au locataire comment attacher les fichiers à ses services, et le
   manuel M8 explique à l'exploitant ce qu'une déclaration de secret engage.
 

@@ -1,8 +1,8 @@
 /**
  * Captures de l'écran liste des Sparks.
  *
- * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21, #SPK-22 ·
- *           docs/DAT.md §24, §25, §26, §27 · docs/DESIGN_SYSTEM.md §13 (les captures
+ * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21, #SPK-22, #SPK-64 ·
+ *           docs/DAT.md §24, §25, §26, §27, §43.6 · docs/DESIGN_SYSTEM.md §13 (les captures
  *           sont une preuve), §13.1 (validation attendue) · CLAUDE.md §16
  *
  * Les états sont produits depuis un faux `sparkd` local : la DoD demande de voir
@@ -351,8 +351,25 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         return new Response(JSON.stringify(s ? { ...s, id: 'S1' } : { detail: { message: 'inconnu' } }),
                             { status: s ? 200 : 404 });
       }
-      // SPK-58 · §43.9.4 : les TROIS origines et un secret. Une capture qui n'en
-      // montrerait qu'une ne dirait pas ce que la colonne existe pour distinguer.
+      // SPK-64 · §43.6 : le catalogue de la Forge est distinct du jeu RÉSOLU
+      // d'un Spark. Les deux formes seraient confondues par une seule réponse,
+      // et la capture ne montrerait jamais qu'une entrée peut ne descendre nulle
+      // part.
+      if (url.includes('/v1/env?')) {
+        return new Response(JSON.stringify({ env: [
+          { name: 'TZ', is_secret: false, value: 'Europe/Paris', fingerprint: null,
+            selected_by: 2, updated_at: '2026-08-21T08:00:00' },
+          { name: 'SMTP_HOST', is_secret: false, value: 'relais.interne.example', fingerprint: null,
+            selected_by: 1, updated_at: '2026-08-21T08:05:00' },
+          { name: 'SMTP_PASSWORD', is_secret: true, value: null,
+            fingerprint: 'a41f0c9e2b77', selected_by: 1, updated_at: '2026-08-20T17:30:00' },
+          { name: 'OBJECT_STORAGE_URL', is_secret: false, value: 'https://s3.example',
+            fingerprint: null, selected_by: 0, updated_at: '2026-08-21T08:20:00' },
+        ] }), { status: 200 });
+      }
+      // SPK-58 / SPK-64 · §43.9.4 : les trois origines et un secret. Une
+      // capture qui n'en montrerait qu'une ne dirait pas ce que la colonne existe
+      // pour distinguer.
       if (url.includes('/env')) {
         return new Response(JSON.stringify({ env: [
           { name: 'TZ', is_secret: false, value: 'Europe/Paris', fingerprint: null,
@@ -1401,6 +1418,20 @@ await page.click('[data-ouvre-env="spark"]');
 await page.waitForSelector('dialog.modale[open] #env-nom-spark', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '57-environnement-modale.png') });
 console.log('  57-environnement-modale.png');
+
+// SPK-64 · §43.6 : l'autre moitié visible du parcours. Le catalogue appartient
+// à la Forge ; on y va par la navigation réelle, puis on constate l'entrée qui
+// ne descend dans aucun Spark. Une capture du seul détail ne montrerait pas où
+// elle se définit ni que ce geste ne distribue rien.
+await page.keyboard.press('Escape');
+await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('nav a[href="#/forge"]', { timeout: 8000 });
+await page.click('nav a[href="#/forge"]');
+await page.waitForSelector('#titre-pools', { timeout: 8000 });
+await page.click('.onglet[href="#/forge/environnement"]');
+await page.waitForSelector('#titre-catalogue-forge', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '82-environnement-catalogue-forge.png'), fullPage: true });
+console.log('  82-environnement-catalogue-forge.png');
 ctx.server.close();
 
 await navigateur.close();

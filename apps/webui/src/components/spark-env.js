@@ -1,10 +1,10 @@
 /**
  * Facette *Environnement* d'un Spark : ce que sa pile recevra.
  *
- * @spec docs/BACKLOG.md#SPK-58 · docs/DAT.md §43 (l'environnement d'un Spark),
- *       §43.3 (la différence est DÉCLARÉE), §43.6 (général d'abord, surcharge
- *       ensuite), §43.7 (quand cela prend effet), §43.9.4 (l'origine de chaque
- *       valeur), §43.9.5 (les refus) ·
+ * @spec docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-64 · docs/DAT.md §43
+ *       (l'environnement d'un Spark), §43.3 (la différence est DÉCLARÉE),
+ *       §43.6 révisé (la Forge propose, le Spark choisit), §43.7 (quand cela
+ *       prend effet), §43.9.4 (l'origine de chaque valeur), §43.9.5 (les refus) ·
  *       docs/DESIGN_SYSTEM.md §5.4 (les degrés), §6.27 (fenêtre, sections,
  *       modale), §6.13 (états d'une vue), §6.14 (tableau), §9.9 (désactivé mais
  *       visible), §14.5 (l'absence se nomme), §14.6 (trois états distincts) ·
@@ -55,7 +55,7 @@ function cellule(entree) {
     <span class="technique">${echapper(entree.fingerprint)}</span></td>`;
 }
 
-function lignes(entrees) {
+function lignes(entrees, { selection = false } = {}) {
   // §8.1 et §14.2 : le tableau défile dans son PROPRE conteneur, et le
   // débordement est SIGNALÉ — un débordement muet est un contenu caché.
   return `<div class="tableau-enveloppe">
@@ -71,9 +71,12 @@ function lignes(entrees) {
       ${cellule(e)}
       <td><span class="badge badge--${origine.token}">${echapper(origine.libelle)}</span></td>
       <td class="technique">${echapper((e.updated_at || '').slice(0, 10))}</td>
-      <td><span class="actions-ligne"><button type="button" class="bouton bouton--compact"
-        data-env-retire="${echapper(e.name)}" data-env-portee="${echapper(e.scope)}"
-        >Retirer</button></span></td>
+      <td><span class="actions-ligne">${selection
+        ? `<button type="button" class="bouton bouton--compact"
+             data-env-decocher="${echapper(e.name)}">Décocher</button>`
+        : `<button type="button" class="bouton bouton--compact"
+             data-env-retire="${echapper(e.name)}" data-env-portee="${echapper(e.scope)}"
+             >Retirer</button>`}</span></td>
     </tr>`;
   }).join('')}</tbody></table></div>`;
 }
@@ -85,23 +88,23 @@ function lignes(entrees) {
  */
 function section(niveau, spark, entrees, ui, renderModale) {
   const forge = niveau === 'forge';
-  const titre = forge ? 'Variables de la Forge' : 'Variables de ce Spark';
+  const titre = forge ? 'Entrées du catalogue cochées ici' : 'Variables propres à ce Spark';
   const id = `titre-env-${niveau}`;
   const propres = entrees.filter((e) => (e.scope === 'forge') === forge);
 
   // §14.5 : l'absence est un FAIT, et il se nomme. Un tableau vide ne dirait
   // pas si rien n'est posé ou si le relevé a échoué.
-  const corps = propres.length ? lignes(propres) : `<p class="absence">${forge
-    ? 'Aucune variable commune : chaque Spark ne reçoit que les siennes.'
-    : 'Aucune variable propre : ce Spark ne reçoit que celles de la Forge.'}</p>`;
+  const corps = propres.length ? lignes(propres, { selection: forge }) : `<p class="absence">${forge
+    ? 'Aucune entrée du catalogue ne descend dans ce Spark.'
+    : 'Aucune variable propre : ce Spark ne reçoit que les entrées cochées du catalogue.'}</p>`;
 
   // §9.9 : sur un Spark protégé, la commande RESTE visible et désactivée, avec
   // sa raison. La faire disparaître ferait croire que le produit ne sait pas
   // poser de variable.
-  const gele = !forge && spark.protected;
-  const commande = `<p class="formulaire__actions">
+  const gele = spark.protected;
+  const commande = forge ? '' : `<p class="formulaire__actions">
     <button type="button" class="bouton" data-ouvre-env="${niveau}"${gele ? ' disabled' : ''}>
-      ${forge ? 'Poser une variable commune' : 'Poser une variable'}</button>
+      Poser une variable</button>
     ${gele ? '<span class="note">Ce Spark est protégé : levez la protection d’abord.</span>' : ''}
   </p>`;
 
@@ -109,8 +112,8 @@ function section(niveau, spark, entrees, ui, renderModale) {
 <section class="carte bloc" aria-labelledby="${id}">
   <h2 id="${id}">${titre}</h2>
   <p class="note">${forge
-    ? 'Elles descendent dans tous les Sparks. Une variable du même nom posée sur un Spark les remplace, nom par nom.'
-    : 'Elles ne concernent que ce Spark, et remplacent celles de la Forge qui portent le même nom.'}</p>
+    ? 'Elles sont définies au catalogue de la Forge, puis cochées pour ce Spark. Décocher les retire de sa cellule.'
+    : 'Elles ne concernent que ce Spark et masquent une entrée cochée du même nom, nom par nom.'}</p>
   ${corps}
   ${commande}
   ${renderModale({
@@ -156,7 +159,9 @@ function section(niveau, spark, entrees, ui, renderModale) {
  */
 export function renderEnvPanel(spark, entrees = [], ui = ENV_VIDE,
                                renderModale = () => '', catalogue = []) {
-  return renderCatalogueCases(spark, catalogue, entrees)
+  const refusSelection = ui.refusal?.niveau === 'selection'
+    ? `<div class="refus" role="alert"><p>${echapper(ui.refusal.message)}</p></div>` : '';
+  return refusSelection + renderCatalogueCases(spark, catalogue, entrees)
        + section('forge', spark, entrees, ui, renderModale)
        + section('spark', spark, entrees, ui, renderModale);
 }
@@ -195,7 +200,7 @@ export function renderCatalogueCases(spark, catalogue = [], entrees = []) {
     return `<li class="case-catalogue">
       <label for="${id}">
         <input type="checkbox" id="${id}" data-descend="${echapper(e.name)}"
-               ${coche ? 'checked' : ''} />
+               ${coche ? 'checked' : ''}${spark?.protected ? ' disabled' : ''} />
         <span class="technique">${echapper(e.name)}</span>
         ${e.is_secret ? '<span class="badge badge--neutral">Secret</span>' : ''}
       </label>
@@ -210,5 +215,6 @@ export function renderCatalogueCases(spark, catalogue = [], entrees = []) {
   <p class="note">Cocher fait descendre l’entrée dans ce Spark. Décocher la retire
   de sa cellule. <a href="#/manuel/M8">Manuel M8</a></p>
   <ul class="liste-cases">${cases}</ul>
+  ${spark?.protected ? '<p class="note">Ce Spark est protégé : levez la protection avant de modifier ses sélections.</p>' : ''}
 </section>`;
 }

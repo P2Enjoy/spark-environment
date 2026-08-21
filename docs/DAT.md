@@ -1,8 +1,8 @@
 # DAT — Dossier d'architecture technique
 
 Projet : **Spark Environment**
-Statut : socle documentaire posé, Forge cible relevé, implémentation non commencée
-Dernière mise à jour : 2026-08-18
+Statut : architecture implémentée par unités, éprouvée sur la Forge de validation
+Dernière mise à jour : 2026-08-21
 
 Ce document fait autorité sur l'architecture. Lorsqu'il diverge du code, c'est un
 défaut à corriger, pas une tolérance.
@@ -6397,7 +6397,7 @@ exigeait. Forge de validation, Docker 29.7.2, Compose v5.5.0, Spark `helo` :
 
 | Ce qui a été posé par l'API | Ce que le conteneur a reçu |
 |---|---|
-| `SPARK_DEMO_TZ` au niveau **Forge** | `Europe/Paris` — l'héritage traverse |
+| `SPARK_DEMO_TZ` au catalogue de la **Forge**, coché pour `helo` | `Europe/Paris` — la sélection traverse |
 | `APP_NAME` au niveau **Spark** | `helo-demo` |
 | `DEMO_TOKEN` **déclaré secret** | sa valeur, depuis `/run/spark/secrets` |
 | `AJOUTEE_APRES`, posée **après** le premier démarrage | arrivée **sans que le fichier de composition la nomme** |
@@ -6719,21 +6719,22 @@ entier — restent hors périmètre de cette section. Ils poseraient d'autres
 questions (taille, format, permissions par fichier) et méritent leur propre
 arbitrage plutôt qu'un élargissement silencieux de celui-ci.
 
-### 43.9 Le contrat vérifiable (écrit le 2026-08-21, avant la première ligne)
+### 43.9 Le contrat vérifiable (révisé le 2026-08-21, livré)
 
 Les sections précédentes tranchent la doctrine. Celle-ci dit ce qui s'écrit, ce
 qui se refuse et ce qui se prouve — le reste ne serait qu'une intention.
 
-#### 43.9.1 Le modèle : une seule table, deux portées
+#### 43.9.1 Le modèle : une table d'entrées, une table de sélections
 
     env_entry(id, scope, spark_id, name, is_secret,
               value, value_enc, fingerprint, updated_at)
 
-**Une table et non deux.** Les deux niveaux du §43.6 partagent exactement les
-mêmes colonnes et les mêmes règles ; deux tables imposeraient d'écrire deux fois
-la validation du nom, deux fois le chiffrement, deux fois la résolution — et de
-les faire diverger. `scope` vaut `forge` ou `spark`, et `spark_id` est NULL si et
-seulement si la portée est `forge`.
+**Une table d'entrées et non deux.** Le catalogue de la Forge et les entrées
+propres aux Sparks partagent exactement les mêmes colonnes et les mêmes règles ;
+deux tables imposeraient d'écrire deux fois la validation du nom, deux fois le
+chiffrement, deux fois la résolution — et de les faire diverger. `scope` vaut
+`forge` ou `spark`, et `spark_id` est NULL si et seulement si la portée est
+`forge`.
 
 **L'unicité tient en DEUX index partiels**, et c'est une contrainte de SQLite,
 pas un choix de style : un `UNIQUE (scope, spark_id, name)` ne protégerait rien
@@ -6756,6 +6757,27 @@ refuse, et la panne se lirait chez le locataire, loin du geste qui l'a causée.
 Une ligne secrète qui porterait une valeur en clair serait précisément la fuite
 que l'unité existe pour empêcher : la base la refuse plutôt que de compter sur
 le code appelant.
+
+La descente n'est **pas** une colonne de `env_entry`. C'est une relation
+plusieurs-à-plusieurs, distincte, qui garde le moment du choix :
+
+    env_selection(spark_id, entry_id, selected_at)
+
+`(spark_id, entry_id)` est la clé primaire : cocher deux fois conserve le même
+état, même si deux consoles le demandent ensemble. Les deux colonnes sont des
+clés étrangères avec suppression en cascade. `entry_id`, et non le nom, est
+référencé : renommer une entrée conserve les coches et retirer l'entrée retire
+ses sélections, sans orphelin.
+
+Seule une entrée de portée `forge` peut être sélectionnée. Cette règle porte sur
+une autre table, donc un `CHECK` ne suffit pas : un déclencheur refuse son
+insertion pour toute autre portée. Une entrée propre est déjà dans son Spark ;
+lui ajouter une sélection inventerait deux mécanismes pour le même effet.
+
+La migration qui a créé cette relation coche, pour chaque Spark déjà présent,
+toutes les entrées de Forge qu'il recevait auparavant. La correction ne retire
+donc aucune valeur à une pile existante ; ce sont les entrées ajoutées ensuite
+qui ne descendent nulle part tant qu'un geste explicite ne les coche pas.
 
 #### 43.9.2 Le chiffrement : AES-256-GCM, et pourquoi pas autrement
 
@@ -6812,12 +6834,12 @@ La résolution rend, pour un Spark, la liste des noms avec leur **origine** :
 
 | Origine | Ce que cela veut dire |
 |---|---|
-| `forge` | définie au niveau de la Forge, et non surchargée |
-| `spark` | définie sur ce Spark seul |
-| `overridden` | définie aux deux niveaux ; c'est la valeur du Spark qui s'applique |
+| `forge` | définie au catalogue de la Forge et **cochée** pour ce Spark |
+| `spark` | définie sur ce Spark seul ; l'entrée de catalogue de même nom n'est pas cochée ici, si elle existe |
+| `overridden` | cochée au catalogue et définie sur ce Spark ; c'est la valeur du Spark qui s'applique |
 
 **La surcharge se fait nom par nom**, jamais jeu par jeu (§43.6) : surcharger
-`SMTP_HOST` sur un Spark ne doit pas lui faire perdre le `SMTP_PORT` hérité.
+`SMTP_HOST` sur un Spark ne doit pas lui faire perdre le `SMTP_PORT` coché.
 
 **Un secret et une variable ordinaire du même nom ne cohabitent pas** aux deux
 niveaux sans conséquence : la ligne retenue décide du fichier de destination, et
@@ -6831,6 +6853,8 @@ dans un fichier où elle n'est pas.
 |---|---|
 | Spark protégé | `423 Locked` — c'est déjà la convention du produit pour toute écriture visant un Spark gelé (§35.2) |
 | nom hors grammaire du shell | `422` avec le nom fautif |
+| entrée absente du catalogue lors d'une sélection | `404 unknown_entry` — ce qui manque est l'entrée, pas la forme du geste |
+| entrée déjà décochée | succès idempotent, `changed: false` : l'état voulu est déjà atteint |
 | valeur d'un secret relue par l'API | jamais rendue — il n'y a pas de route pour cela, ce n'est pas un refus mais une absence |
 | Spark inconnu | `404` |
 
@@ -6838,18 +6862,19 @@ dans un fichier où elle n'est pas.
 rende : on le remplace, ou on le retire. Une route de révélation, même protégée,
 finirait par être appelée par un outil branché sur l'API, et le §43.3 tomberait.
 
-**Les routes, écrites le 2026-08-21 avant de les coder.** Elles suivent le couple
-que le produit emploie déjà pour les clés (§17) — un jeu de la Forge, un geste
-par Spark :
+**Les routes.** Elles séparent le catalogue de la Forge, les valeurs propres au
+Spark et les deux gestes de sélection :
 
 | Route | Ce qu'elle fait |
 |---|---|
-| `GET /v1/env` | le jeu de la **Forge** |
-| `PUT /v1/env/{nom}` | pose ou remplace une entrée de la Forge |
+| `GET /v1/env` | le **catalogue** de la Forge ; chaque entrée porte `selected_by`, le nombre de Sparks qui l'ont cochée |
+| `PUT /v1/env/{nom}` | pose ou remplace une entrée du catalogue de la Forge |
 | `DELETE /v1/env/{nom}` | la retire |
 | `GET /v1/sparks/{nom}/env` | le jeu **RÉSOLU** du Spark, avec l'origine de chaque valeur |
 | `PUT /v1/sparks/{nom}/env/{variable}` | pose ou remplace une entrée du Spark |
 | `DELETE /v1/sparks/{nom}/env/{variable}` | la retire |
+| `POST /v1/sparks/{nom}/env/selection/{variable}` | coche une entrée du catalogue pour ce Spark |
+| `DELETE /v1/sparks/{nom}/env/selection/{variable}` | la décoche pour ce Spark |
 
 Le corps d'un `PUT` porte `{"value": "…", "secret": true|false}`.
 
@@ -6861,39 +6886,43 @@ différents selon que l'entrée existait ou non.
 
 **Écrire repose les fichiers**, c'est le « au changement » du §43.2. Sans cela,
 le registre et la cellule diraient deux choses différentes jusqu'au prochain
-démarrage.
+démarrage. Cela vaut aussi pour cocher et décocher : le premier fait descendre
+l'entrée, le second la retire réellement de la cellule.
 
 #### 43.9.5 bis Un geste de FORGE face à un Spark protégé
 
 Le §43.9.5 dit qu'un Spark protégé refuse une écriture qui LE vise : `423`. Il ne
-disait pas ce qu'il advient d'une écriture au niveau de la **Forge** qui le
-touche par héritage — et la question est réelle, puisqu'une variable de la Forge
-descend dans tous ses Sparks.
+disait pas ce qu'il advient d'une écriture au niveau du **catalogue de la Forge**
+qui change une entrée déjà cochée par un Spark protégé. Poser une entrée nouvelle
+ne touche personne ; modifier ou retirer une entrée existante ne touche que les
+Sparks qui l'ont choisie.
 
 **Décision : la convention EXISTE déjà dans le produit**, posée pour la
 révocation d'une clé (§35.2, route `DELETE /v1/ssh-keys/{label}`), et on s'y
 range plutôt que d'en inventer une troisième — **informer, puis accepter** :
 
-1. le premier appel **nomme** les Sparks protégés touchés et refuse en `409
-   protected_sparks_affected` ;
+1. le premier appel **nomme uniquement les Sparks protégés qui ont coché cette
+   entrée** et refuse en `409 protected_sparks_affected` ;
 2. le second porte `accept_protected` et aboutit.
 
-Aucun mot de passe n'est demandé, aucune protection n'est levée. S'il n'y a aucun
-Spark protégé, il n'y a **aucun refus**.
+Au moment d'une suppression, les destinataires sont relevés **avant** que la
+cascade ne retire leurs sélections, puis leurs fichiers sont régénérés depuis
+l'état voulu. Aucun mot de passe n'est demandé, aucune protection n'est levée.
+S'il n'y a aucun destinataire protégé, il n'y a **aucun refus**.
 
-Le motif de ne pas refuser sèchement est le même qu'aux clés : un refus ferme
-gèlerait toute la Forge dès qu'un seul Spark est protégé, et l'exploitant
-lèverait alors la protection pour contourner — ce qui protégerait moins, pas
-plus. Le refus par défaut sert à ce qu'on ne touche pas un Spark gelé **sans le
-savoir**, pas à l'interdire.
+Le motif de ne pas refuser sèchement est le même qu'aux clés : l'exploitant doit
+savoir qu'un geste va traverser une protection, sans devoir la lever pour le
+faire. La confirmation porte donc exactement sur les destinataires, jamais sur
+un Spark protégé qui n'a pas choisi l'entrée.
 
 #### 43.9.6 Le découpage, et où en est l'unité
 
-Cette unité est trop large pour une session ; le découpage est écrit ici plutôt
-que laissé à la mémoire d'une conversation (`CLAUDE.md` §5) :
+Cette unité a été livrée en quatre tranches, afin de rendre chaque frontière
+vérifiable plutôt que de les mélanger dans un changement opaque :
 
 1. **le magasin** — migration, chiffrement, empreinte, service de lecture et
-   d'écriture, résolution des deux niveaux, audit sans valeur ;
+   d'écriture, résolution des deux niveaux, audit sans valeur ; puis la
+   sélection explicite, sa migration de compatibilité et son compte `selected_by` ;
 2. **la matérialisation** — les deux fichiers du §43.5.2 posés dans la cellule à
    la création, au changement, au démarrage et après restauration d'instantané ;
 3. **l'écran** — onglet *Environnement*, une section par niveau, l'origine de

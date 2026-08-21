@@ -1200,12 +1200,24 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(status_code=503, detail={
                 "error": "secret_key_unavailable", "message": str(erreur)}) from erreur
 
-    def _sparks_proteges_touches(connection) -> list[str]:
-        """Les Sparks GELÉS qu'une écriture au niveau de la Forge atteindrait."""
-        return [r["name"] for r in connection.execute(
-            "SELECT name FROM spark WHERE protected_at IS NOT NULL ORDER BY name")]
+    def _sparks_cibles_du_catalogue(connection, nom: str) -> list[dict]:
+        """Les Sparks qui ont choisi cette entrée précise du catalogue.
 
-    def _garde_de_forge(connection, body: dict, geste: str) -> None:
+        Depuis SPK-64, une entrée de Forge n'atteint pas tous les Sparks : elle
+        ne change que ceux dont la sélection référence cette entrée. Réemployer
+        ici la liste entière des Sparks protégés ferait demander une confirmation
+        pour une cellule que le geste ne touche pas.
+        """
+        return [dict(r) for r in connection.execute(
+            "SELECT spark.id, spark.name, spark.incus_name, spark.protected_at"
+            " FROM spark"
+            " JOIN env_selection selection ON selection.spark_id = spark.id"
+            " JOIN env_entry entry ON entry.id = selection.entry_id"
+            " WHERE entry.scope = 'forge' AND entry.name = ?"
+            " ORDER BY spark.name", (nom,))]
+
+    def _garde_de_forge(connection, body: dict, geste: str,
+                         cibles: list[dict]) -> None:
         """Informer, puis accepter — la convention du produit (§43.9.5 bis).
 
         Un refus ferme gèlerait toute la Forge dès qu'un seul Spark est protégé,
@@ -1213,7 +1225,7 @@ def create_app(config: Config) -> FastAPI:
         protégerait moins, pas plus. Le refus par défaut sert à ce qu'on ne
         touche pas un Spark gelé SANS LE SAVOIR.
         """
-        proteges = _sparks_proteges_touches(connection)
+        proteges = [spark["name"] for spark in cibles if spark["protected_at"] is not None]
         if proteges and not bool((body or {}).get("accept_protected")):
             raise HTTPException(status_code=409, detail={
                 "error": "protected_sparks_affected",
@@ -1226,20 +1238,24 @@ def create_app(config: Config) -> FastAPI:
                 "override": "Renvoyer avec {\"accept_protected\": true}.",
             })
 
-    def _reposer_partout(connection) -> None:
-        """Repose les fichiers sur TOUS les Sparks : une variable de Forge y
-        descend (§43.6). Un Spark injoignable n'interrompt pas les autres —
-        l'écart sera repris à son prochain démarrage (§43.5.2)."""
-        for rangee in connection.execute(
-                "SELECT id FROM spark WHERE incus_name IS NOT NULL").fetchall():
+    def _reposer_cibles_du_catalogue(connection, cibles: list[dict]) -> None:
+        """Repose l'entrée modifiée chez les seuls Sparks qui l'avaient choisie.
+
+        Un Spark injoignable n'interrompt pas les autres : l'écart sera repris à
+        son prochain démarrage (§43.5.2). Les cibles sont relevées AVANT une
+        suppression du catalogue, dont la cascade retire ensuite les sélections.
+        """
+        for spark in cibles:
+            if not spark["incus_name"]:
+                continue
             try:
-                _apply_env(connection, service.get(connection, rangee["id"]))
+                _apply_env(connection, service.get(connection, spark["id"]))
             except (IncusError, InstanceAbsente, env_service.CleError, service.NotFound):
                 continue
 
     @app.get("/v1/env", tags=["environnement"])
     def list_forge_env() -> dict:
-        """Le jeu de la FORGE, hérité par tous ses Sparks (§43.6)."""
+        """Le catalogue de la Forge, sélectionné Spark par Spark (§43.6)."""
         with registry() as connection:
             return {"env": [_rendu_env(e) for e in env_service.lister(connection)]}
 
@@ -1252,7 +1268,8 @@ def create_app(config: Config) -> FastAPI:
         état, pas une seconde entrée (§43.9.5).
         """
         with registry() as connection:
-            _garde_de_forge(connection, body, f"Poser « {name} »")
+            cibles = _sparks_cibles_du_catalogue(connection, name)
+            _garde_de_forge(connection, body, f"Poser « {name} »", cibles)
             try:
                 entree = env_service.poser(
                     connection, _cle_de_forge(), "forge", None, name,
@@ -1263,15 +1280,16 @@ def create_app(config: Config) -> FastAPI:
                     "error": "invalid_name", "message": str(erreur)}) from erreur
             # §43.2 : le registre écrit, la cellule suit. Sans cela, les deux
             # diraient deux choses différentes jusqu'au prochain démarrage.
-            _reposer_partout(connection)
+            _reposer_cibles_du_catalogue(connection, cibles)
             return _rendu_env(entree)
 
     @app.delete("/v1/env/{name}", tags=["environnement"])
     def unset_forge_env(name: str, body: dict = Body(default={})) -> dict:
         with registry() as connection:
-            _garde_de_forge(connection, body, f"Retirer « {name} »")
+            cibles = _sparks_cibles_du_catalogue(connection, name)
+            _garde_de_forge(connection, body, f"Retirer « {name} »", cibles)
             retire = env_service.retirer(connection, "forge", None, name)
-            _reposer_partout(connection)
+            _reposer_cibles_du_catalogue(connection, cibles)
             # §14.5 : ne pas trouver n'est pas une erreur — l'état voulu est
             # « cette variable n'est pas définie », et il est atteint.
             return {"name": name, "removed": retire}

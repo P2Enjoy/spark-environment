@@ -1,10 +1,11 @@
 /**
  * Écran « détail d'un Spark ».
  *
- * @spec docs/BACKLOG.md#SPK-19, #SPK-21, #SPK-33 ·
+ * @spec docs/BACKLOG.md#SPK-19, #SPK-21, #SPK-33, #SPK-64 ·
  *       docs/DESIGN_SYSTEM.md §5.4 (degré 3 : la fenêtre d'un objet), §6.27
  *       (fenêtre, sections, facettes en onglets) · docs/DAT.md §34.1 ·
- *       docs/DAT.md §24 (le runtime publie ce qui est possible), §24.2
+ *       docs/DAT.md §24 (le runtime publie ce qui est possible), §24.2,
+ *       §43.6 révisé (la sélection du catalogue Forge par Spark)
  *       (confirmations), §24.3 (l'identité d'abord), §26 (les trois panneaux
  *       d'administration, portés par `spark-admin.js`) ·
  *       docs/DESIGN_SYSTEM.md §6.3, §6.4, §6.6, §6.22, §6.23, §14.9 ·
@@ -561,7 +562,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     error = null, confirming = null,
                                     admin = ADMIN_VIDE, facette = '',
                                     quotas = QUOTAS_VIDE,
-                                    env = [], envUi = ENV_VIDE } = {}) {
+                                    env = [], envUi = ENV_VIDE,
+                                    catalogue = [] } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();

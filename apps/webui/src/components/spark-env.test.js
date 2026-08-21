@@ -1,7 +1,8 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-58 · docs/DAT.md §43.3 (la valeur d'un secret ne
- * s'affiche jamais), §43.6 (général d'abord, surcharge ensuite), §43.7 (écrire
- * ne redémarre rien), §43.9.4 (l'origine de chaque valeur) ·
+ * @verifies docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-64 · docs/DAT.md §43.3
+ * (la valeur d'un secret ne s'affiche jamais), §43.6 révisé (la Forge propose,
+ * le Spark choisit), §43.7 (écrire ne redémarre rien), §43.9.4 (l'origine de
+ * chaque valeur) ·
  * docs/DESIGN_SYSTEM.md §6.27, §9.9, §14.5, §14.6
  */
 
@@ -55,7 +56,7 @@ test('chaque niveau a SA section, et chacune nomme son absence', () => {
   assert.match(rendu, /id="titre-env-forge"/);
   assert.match(rendu, /id="titre-env-spark"/);
   // §14.5 : l’absence est un FAIT, et il se nomme.
-  assert.match(rendu, /Aucune variable commune/);
+  assert.match(rendu, /Aucune entrée du catalogue ne descend/);
   assert.match(rendu, /Aucune variable propre/);
 });
 
@@ -75,8 +76,12 @@ test('un Spark PROTÉGÉ garde la commande, DÉSACTIVÉE, avec sa raison', () =>
   const rendu = renderEnvPanel({ ...SPARK, protected: true }, [], ENV_VIDE, renderModale);
   assert.match(rendu, /data-ouvre-env="spark" disabled/);
   assert.match(rendu, /levez la protection/i);
-  // La Forge, elle, reste ouverte : son geste suit le §43.9.5 bis, pas le 423.
-  assert.match(rendu, /data-ouvre-env="forge"(?! disabled)/);
+  // Les cases sont aussi des écritures qui visent ce Spark : elles restent
+  // visibles mais inertes, avec la même raison que le bouton de saisie.
+  const avecCatalogue = renderEnvPanel({ ...SPARK, protected: true }, [], ENV_VIDE,
+    renderModale, [{ name: 'SMTP_HOST', is_secret: false }]);
+  assert.match(avecCatalogue, /data-descend="SMTP_HOST"\s+disabled/);
+  assert.match(avecCatalogue, /modifier ses sélections/);
 });
 
 test('la modale ANNONCE que rien ne redémarre', () => {
@@ -142,6 +147,13 @@ test('une entrée MASQUÉE reste cochée, et le dit', () => {
 
   assert.match(rendu, /data-descend="SMTP_HOST"[^>]*checked/);
   assert.match(rendu, /masquée par une entrée propre/);
+});
+
+test('une entrée cochée se retire par le geste de sélection, jamais du catalogue', () => {
+  const rendu = renderEnvPanel(SPARK, [entree({ name: 'TZ', scope: 'forge', origin: 'forge' })],
+    ENV_VIDE, renderModale, [{ name: 'TZ', is_secret: false }]);
+  assert.match(rendu, /data-env-decocher="TZ"/);
+  assert.doesNotMatch(rendu, /data-env-retire="TZ" data-env-portee="forge"/);
 });
 
 test('un catalogue vide se NOMME et dit où en ajouter une', () => {

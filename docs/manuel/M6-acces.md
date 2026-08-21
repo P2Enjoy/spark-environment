@@ -179,8 +179,12 @@ services:
       - /run/spark/secrets
 ```
 
-**Écrit une fois, et c'est tout** : toute variable ajoutée ensuite depuis la
-console arrive sans que vous retouchiez votre fichier de composition.
+**Écrit une fois, et c'est tout** : une valeur que vous avez sélectionnée arrive
+sans que vous retouchiez votre fichier de composition. La console ne distribue
+jamais une entrée de Forge automatiquement : elle tient un catalogue, puis chaque
+Spark choisit ce qu'il reçoit. Depuis l'onglet *Environnement* du Spark, cochez
+l'entrée voulue ; la décocher la retire de ses fichiers. Ajouter plus tard une
+entrée au catalogue ne change donc aucune de vos piles par surprise.
 
 Trois choses valent d'être sues :
 

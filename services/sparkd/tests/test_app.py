@@ -1048,10 +1048,12 @@ def test_un_geste_de_FORGE_informe_des_Sparks_geles_puis_aboutit(tmp_path):
     """@verifies docs/DAT.md §43.9.5 bis
 
     Informer, PUIS accepter — la convention que le produit emploie déjà pour la
-    révocation d'une clé. Un refus ferme gèlerait toute la Forge dès qu'un seul
-    Spark est protégé, et l'exploitant lèverait la protection pour contourner."""
+    révocation d'une clé. Ici le Spark a DÉJÀ choisi l'entrée : le changement du
+    catalogue le touche donc réellement."""
     c = _app(tmp_path)
     c.post("/v1/sparks", json=_spec())
+    assert c.put("/v1/env/TZ", json={"value": "Europe/Paris"}).status_code == 200
+    assert c.post("/v1/sparks/crm-production/env/selection/TZ").status_code == 200
     c.post("/v1/sparks/crm-production/protection", json={"password": "protege-moi"})
 
     premier = c.put("/v1/env/TZ", json={"value": "UTC"})
@@ -1063,6 +1065,28 @@ def test_un_geste_de_FORGE_informe_des_Sparks_geles_puis_aboutit(tmp_path):
     second = c.put("/v1/env/TZ", json={"value": "UTC", "accept_protected": True})
     assert second.status_code == 200
     assert c.get("/v1/env").json()["env"][0]["value"] == "UTC"
+
+
+def test_un_geste_de_catalogue_ne_nomme_que_les_proteges_qui_l_ont_choisi(tmp_path):
+    """SPK-64 : une entrée nouvelle ne touche personne, et une mise à jour ne
+    touche que ses destinataires. Nommer un Spark protégé non sélectionné serait
+    une fausse alerte et demanderait une acceptation sans effet réel."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks", json=_spec(name="analytics"))
+    c.put("/v1/env/TZ", json={"value": "Europe/Paris"})
+    c.post("/v1/sparks/crm-production/env/selection/TZ")
+    c.post("/v1/sparks/crm-production/protection", json={"password": "protege-moi"})
+    c.post("/v1/sparks/analytics/protection", json={"password": "protege-moi"})
+
+    # Une nouvelle entrée ne descend nulle part : même deux Sparks protégés ne
+    # sont pas concernés par son ajout.
+    assert c.put("/v1/env/NOUVELLE", json={"value": "sans-destinataire"}).status_code == 200
+
+    # `analytics` est protégé, mais n'a pas coché TZ : il ne doit pas être nommé.
+    refus = c.put("/v1/env/TZ", json={"value": "UTC"})
+    assert refus.status_code == 409
+    assert refus.json()["detail"]["protected_sparks"] == ["crm-production"]
 
 
 def test_sans_Spark_protege_un_geste_de_Forge_ne_demande_RIEN(tmp_path):
