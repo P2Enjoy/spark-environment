@@ -6924,3 +6924,80 @@ prétend pas le contraire.
   canal muet perd le message, et le compteur le dit. Un mécanisme de remise
   garantie demanderait une file durable, donc un état à défendre — hors de
   proportion avec ce que l'unité apporte.
+
+## 48. Durcir la Forge : contrat (SPK-55)
+
+L'audit du 2026-08-20, mené sur la Forge réelle, a trouvé la posture bonne sur
+l'essentiel — seuls `22`, `80` et `443` répondent depuis l'extérieur, `sparkd` et
+l'API d'administration de Caddy sont sur la boucle locale, l'API d'Incus n'est
+exposée qu'en socket unix, `sshd` refuse les mots de passe. Trois points restent,
+et cette section fixe ce qui s'écrit pour chacun.
+
+### 48.1 Le point qui décide : un Spark ne remonte pas vers sa Forge
+
+**Mesuré depuis `helo`**, un Spark en service :
+
+```
+10.77.0.1:9876  (sparkd)       →  injoignable   ← la propriété attendue
+10.77.0.1:2019  (Caddy admin)  →  injoignable   ← la propriété attendue
+10.77.0.1:22    (sshd)         →  RÉPOND        ← ce qui ne va pas
+```
+
+**Le sens du produit est à sens unique.** Le §37.2 fait entrer la console dans un
+Spark *depuis* la Forge ; le §37.3 exécute `incus` *sur* la Forge. Aucun chemin du
+produit ne part d'un Spark vers la Forge. Un locataire n'a donc **aucune raison**
+d'atteindre le service qui l'héberge, et le `sshd` est précisément celui qu'il ne
+doit pas atteindre : c'est la porte que le §46 vient de refermer côté clé.
+
+La cause est nue : la chaîne `input` du bridge privé est en `policy accept`. Ce
+qui n'est pas joignable ne l'est que parce que rien ne s'y lie — et le `sshd`, lui,
+se lie partout.
+
+**Ce que le durcissement ne doit PAS casser**, et c'est la moitié difficile : un
+Spark garde son **DNS** — `dnsmasq` écoute sur `10.77.0.1:53`, porté par le bridge
+lui-même — et sa **sortie internet**, qui passe par le NAT du même bridge. Une
+règle qui fermerait tout rendrait chaque Spark muet, ce qui est une panne, pas une
+protection. Le contrôle de préflight doit donc vérifier les DEUX moitiés.
+
+### 48.2 Ce que le préflight vérifie, et ce qu'il ne fait pas
+
+Le préflight **ne répare rien** (§31.3) : il relève et propose un remède. C'est
+vrai de tous ses contrôles, et cela le reste ici — poser une règle de pare-feu est
+un geste d'installation, pas de diagnostic.
+
+Deux contrôles nouveaux :
+
+- **`NET-REMONTEE`** — la chaîne `input` du bridge privé n'est pas en `accept`
+  par défaut, et le port 22 de la Forge n'est pas atteignable depuis le réseau des
+  Sparks. Le relevé cite la politique lue ; le remède donne la règle exacte.
+- **`SSH-X11`** — `X11Forwarding` est à `yes` sans usage. Ce n'est pas une faille
+  ouverte, c'est une surface qui ne sert à rien : le produit n'ouvre jamais de
+  fenêtre. Verdict d'AVERTISSEMENT, pas d'échec — refuser l'installation d'une
+  Forge pour cela serait disproportionné.
+
+Et une décision écrite, qui n'est pas un contrôle :
+
+- **`sparkd` tourne en `root`, et c'est ASSUMÉ.** Il repondère `spark.slice` par
+  `systemd`, et parle à la socket d'Incus, qui donne de toute façon le contrôle
+  des instances. Le descendre d'un cran demanderait des capacités précises et un
+  groupe dédié, pour un gain nul tant que la socket d'Incus reste atteignable :
+  qui l'atteint peut créer une instance privilégiée. Le §35.1 assume déjà `root`
+  sur la Forge. `ProtectSystem=strict`, `PrivateTmp` et `NoNewPrivileges` restent
+  posés, et c'est ce qui limite les dégâts d'un défaut de `sparkd` lui-même.
+
+### 48.3 Ce qui n'est pas retenu, et pourquoi
+
+- **Activer `ufw`** — écarté comme geste du produit. Un pare-feu général sur une
+  machine qui porte des instances Incus produit deux jeux de règles qui se
+  recouvrent, et le jour où l'un bloque ce que l'autre autorise, personne ne sait
+  lequel a tranché. La règle du §48.1 est posée là où elle porte : sur le bridge
+  privé, par la configuration d'Incus, donc au même endroit que le reste du
+  réseau des Sparks.
+- **Fermer le port 53 aux Sparks** — écarté : c'est leur résolveur.
+
+### 48.4 Ce que cette unité ne prétend pas
+
+Elle ne protège pas la Forge de qui y détient déjà `root` (§35.1), ni d'un Spark
+qui sortirait de son isolation — un *system container* partage le noyau, et le
+§11 l'assume. Elle ferme un chemin qui n'aurait jamais dû être ouvert, et rend la
+posture **vérifiable** plutôt que constatée une fois.
