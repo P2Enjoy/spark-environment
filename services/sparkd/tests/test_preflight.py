@@ -32,7 +32,7 @@ LISTEN 0 4096 [::]:22 [::]:*
 
 
 def hote(commandes: dict[str, str | None] = None, fichiers: dict[str, str] = None,
-         binaires: set[str] = None) -> Hote:
+         binaires: set[str] = None, declarations=None) -> Hote:
     commandes = commandes or {}
     fichiers = fichiers or {}
     binaires = binaires if binaires is not None else {"caddy"}
@@ -40,6 +40,9 @@ def hote(commandes: dict[str, str | None] = None, fichiers: dict[str, str] = Non
         executer=lambda c: commandes.get(" ".join(c)),
         lire=lambda p: fichiers.get(p),
         presence=lambda b: b in binaires,
+        # SPK-36 : par défaut AUCUNE déclaration, donc aucun fantôme possible.
+        # Les preuves qui visent ce contrôle fournissent leur propre relevé.
+        declarations=declarations if declarations is not None else (lambda: []),
     )
 
 
@@ -469,3 +472,69 @@ def test_un_avertissement_est_COMPTE_a_part_dans_le_rendu():
     ])
     assert "1 signalé(s)" in texte
     assert "0 bloquant(s)" in texte
+
+
+# --- l'entrée fantôme au registre (SPK-36, docs/CONTINGENCE.md §4) -----------
+
+def _declare(nom, cellule, cpu=1.0, memoire=2147483648):
+    return {"name": nom, "incus_name": cellule, "state": "error",
+            "cpu_reservation": cpu, "memory_reservation_bytes": memoire}
+
+
+def test_une_cellule_declaree_mais_ABSENTE_est_signalee_avec_son_cout():
+    """@verifies docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §4.2, §4.4
+
+    MESURÉ sur la Forge de validation : une ligne fantôme y consommait 1,0 CPU
+    et 2 Gio, et faisait passer le poids de `spark.slice` de **43 à 180** —
+    quatre fois trop. La Forge est restée ainsi deux jours en rendant
+    « 0 bloquant » : l'écart joue en faveur des Sparks vivants, donc personne ne
+    s'en plaint, donc personne ne le voit.
+
+    Le chiffre fait partie du signal : sans lui, on ne sait pas s'il faut agir
+    aujourd'hui ou la semaine prochaine.
+    """
+    v = preflight.registre_sans_fantome(hote(
+        commandes={"incus list --format csv -c n": "helo\n"},
+        declarations=lambda: [_declare("helo", "helo", 0.5, 1),
+                              _declare("mesure-cpu", "mesure-cpu", 1.0, 2147483648)]))
+    assert v.code == "REG-FANTOME"
+    assert v.etat == preflight.ECHEC
+    assert "mesure-cpu" in v.releve
+    assert "helo" not in v.releve, "un Spark dont la cellule VIT n'est pas un fantôme"
+    assert "1 CPU" in v.releve and "2147483648" in v.releve, "le coût est CHIFFRÉ"
+    assert v.remede, "le contrôle dit quoi faire"
+
+
+def test_un_Spark_SANS_cellule_declaree_n_est_PAS_un_fantome():
+    """§4.4 : un Spark « pending », jamais appliqué, n'a jamais prétendu avoir de
+    cellule. Le confondre avec un fantôme ferait crier au défaut sur le
+    déroulement NORMAL d'une création — et le contrôle deviendrait du bruit."""
+    # Le lecteur du registre ne rend que les lignes portant `incus_name` : un
+    # Spark sans cellule n'arrive donc jamais jusqu'ici. La preuve garde ce
+    # contrat côté contrôle.
+    v = preflight.registre_sans_fantome(hote(
+        commandes={"incus list --format csv -c n": ""},
+        declarations=lambda: []))
+    assert v.etat == preflight.OK
+
+
+def test_un_registre_ILLISIBLE_rend_non_mesure_et_non_fautif():
+    """§31.2 : « pas mesuré » n'est pas « mesuré fautif ». Conclure sur une
+    absence de réponse ferait signaler comme fantômes tous les Sparks d'une
+    Forge dont on n'a simplement pas pu lire l'état — et l'exploitant
+    supprimerait des Sparks bien vivants."""
+    v = preflight.registre_sans_fantome(hote(
+        commandes={"incus list --format csv -c n": "helo\n"},
+        declarations=lambda: None))
+    assert v.etat == preflight.INCONNU
+    assert "illisible" in v.releve
+
+
+def test_INCUS_injoignable_rend_non_mesure_aussi():
+    """Même raison, symétrique : sans la liste des cellules vivantes, toute
+    déclaration paraîtrait fantôme."""
+    v = preflight.registre_sans_fantome(hote(
+        commandes={},
+        declarations=lambda: [_declare("helo", "helo")]))
+    assert v.etat == preflight.INCONNU
+    assert "injoignable" in v.releve
