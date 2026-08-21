@@ -223,8 +223,63 @@ function renderRessources(spark, usage) {
   ])}
   <p class="note">Seul le plafond réseau est appliqué par le noyau.
   <a href="#/manuel/M5">Manuel M5 — Ce que « 0,5 CPU » veut dire</a></p>
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-ouvre="quotas"
+      ${spark.protected ? 'disabled' : ''}>Modifier les quotas</button>
+    ${spark.protected
+      // §9.9 : l'action EXISTE, elle est indisponible dans un état connu, et la
+      // raison reste lisible. La faire disparaître ferait croire que le produit
+      // ne sait pas redimensionner.
+      ? '<span class="champ__aide">Ce Spark est protégé : levez la protection d’abord.</span>'
+      : ''}
+  </p>
 </section>`;
 }
+
+/**
+ * Modifier les quotas d'un Spark, sans le détruire (SPK-57).
+ *
+ * @spec docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.2 (ce que le geste modifie),
+ *       §49.3 (rétrécir n'est pas agrandir), §49.4 (l'écran dit le redémarrage
+ *       AVANT d'agir), §49.5 (ce que le geste refuse) ·
+ *       docs/DESIGN_SYSTEM.md §6.27 (une commande de section ouvre une modale
+ *       dont le sujet est CETTE section), §6.9 (structure d'un champ), §14.6
+ *
+ * **Le point du §49.4** : tant que la prise à chaud d'un champ n'est pas
+ * MESURÉE sur une Forge réelle, l'écran annonce un redémarrage. Promettre moins
+ * que ce qu'on fait est une erreur sans conséquence ; l'inverse coupe un service
+ * en production.
+ */
+export function renderQuotas(spark, ui = QUOTAS_VIDE) {
+  const v = ui.values;
+  const champ = (id, libelle, valeur, aide, unite) => `
+    <div class="champ">
+      <label for="quota-${id}">${echapper(libelle)}</label>
+      <input class="controle" id="quota-${id}" name="${id}" type="number"
+             min="0" step="1" value="${echapper(valeur)}">
+      <p class="champ__aide">${echapper(unite)}${aide ? ` · ${aide}` : ''}</p>
+    </div>`;
+
+  return renderModale({
+    ouverte: ui.open, id: 'quotas', titre: 'Ressources',
+    engagement: 'Appliquer les quotas',
+    refus: ui.refusal, occupee: ui.busy,
+    corps: `
+      ${champ('memory', 'Mémoire', v.memory_gib, '', 'en Gio')}
+      ${champ('storage', 'Disque', v.storage_gib,
+              '<strong>exige un redémarrage</strong>', 'en Gio')}
+      ${champ('network', 'Plafond réseau', v.network_mbps, '', 'en Mbit/s')}
+      <p class="note">Ce que vous retirez doit être libre : réduire la mémoire
+      sous ce que la cellule emploie, ou le disque sous ce qu'il contient, sera
+      refusé. <a href="#/manuel/M8">Manuel M8 — Exploiter au quotidien</a></p>`,
+  });
+}
+
+/** Valeurs de la modale des quotas. Vide tant qu'on ne l'a pas ouverte. */
+export const QUOTAS_VIDE = {
+  open: false, busy: false, refusal: null,
+  values: { memory_gib: '', storage_gib: '', network_mbps: '' },
+};
 
 function renderAcces(spark) {
   return `
@@ -466,7 +521,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     docker = DOCKER_VIDE,
                                     amorcage = AMORCAGE_VIDE,
                                     error = null, confirming = null,
-                                    admin = ADMIN_VIDE, facette = '' } = {}) {
+                                    admin = ADMIN_VIDE, facette = '',
+                                    quotas = QUOTAS_VIDE } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -476,7 +532,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
 
   const facettes = {
     '': () => `<div class="detail">
-      <div class="detail__principal">${renderRessources(spark, usage)}
+      <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas)}
         ${renderProtection(spark, admin)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}
         ${renderAmorcage(spark, amorcage)}</div>
