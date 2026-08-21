@@ -355,6 +355,29 @@ bouton qui prétendrait pouvoir le faire. Un processus ne se relance jamais sous
 les mains de l'exploitant. L'absence de dépôt, un dépôt qui a reculé, et une
 comparaison impossible restent des faits nommés, jamais « à jour » par défaut.
 
+### SPK-DS-12 · Installer est un parcours visible, jamais une barre qui promet
+
+**Date** : 2026-08-22 · introduit par SPK-68.
+
+L'installation d'une Forge est une suite de changements sur une machine qui peut
+porter des données. Elle ne peut donc pas prendre la forme d'un bouton isolé ni
+d'une progression décorative. La destination Forge rend un panneau dédié avec :
+
+- le transport SSH et `sparkd` sur **deux lignes distinctes** ; « SSH établi »
+  ne reçoit jamais le vert de « Forge prête » ;
+- les phases nommées, dans leur ordre réel, et un statut textuel `à faire`, `en
+  cours`, `terminée`, `avertissement`, `échec` ou `interrompue` ;
+- le relevé utile sous la phase qui l'a produit, sans sortie de terminal brute ni
+  secret ;
+- un plan avant l'engagement, puis une confirmation séparée pour tout disque ou
+  fichier de pool qui sera créé.
+
+Un disque exclu reste visible avec son motif ; le masquer ferait passer son
+absence de proposition pour une incapacité de l'outil. La phase finale ne dit
+jamais « prête » avant les réponses mesurées de `/healthz` et `/readyz`. Une
+déconnexion conserve l'étape interrompue et offre **Reprendre le diagnostic**,
+pas « Reprendre » comme si une écriture avait nécessairement continué.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

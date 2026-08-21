@@ -3906,13 +3906,20 @@ relancé l'installateur de paquet, passé les 13 contrôles de préflight et ser
 commit attendu à `/healthz`. Le wheel construit localement porte les migrations
 SQL et les deux unités systemd ; 71 preuves de paquet sont vertes.
 
-### [ ] SPK-68 · Assistant complet d'installation distante d'une Forge
+### [~] SPK-68 · Assistant complet d'installation distante d'une Forge
 
 **Besoin exprimé le 2026-08-21.** Une Forge peut être atteignable en SSH tout en
 n'ayant jamais reçu `sparkd` — ou après la perte de son environnement Python.
 Aujourd'hui, la console assimile ce cas à un tunnel rompu, car elle exige
 `/healthz` pour le déclarer prêt. Elle ne peut donc ni le nommer correctement, ni
 proposer le remède qui convient.
+
+**En cours le 2026-08-22.** Le contrat détaillé est désormais fixé dans le
+`DAT.md` §50 : deux états séparés pour SSH et `sparkd`, diagnostic sans écriture,
+stockage sans choix implicite, confirmations distinctes et reprise fondée sur un
+nouveau relevé. L'implémentation commence par ce chemin de diagnostic, qui est le
+seul geste possible sans décider à la place du responsable du disque ou de la
+taille du pool.
 
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
   seulement le paquet Python. C'est un **assistant de bout en bout** qui part

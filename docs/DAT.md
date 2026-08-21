@@ -8175,3 +8175,115 @@ Elle ne redimensionne pas ce que le locataire a mis DANS sa cellule : un volume
 Docker plein reste plein après un agrandissement du jeu de données, et c'est au
 locataire d'en disposer. Elle ne promet rien non plus sur la **durée** d'un
 redimensionnement de disque, qui dépend du pool et non du produit.
+
+## 50. Installer une Forge distante depuis la console (SPK-68)
+
+Une destination SSH et une Forge sont deux choses distinctes. Une machine peut
+accepter la clé du responsable alors que `sparkd` n'a jamais été installé, que
+son unité est arrêtée, ou que ses prérequis sont incomplets. Assimiler ces cas à
+un tunnel cassé retirerait précisément le chemin qui permet de les réparer.
+
+### 50.1 Deux vérités, deux états
+
+Le tunnel publie séparément :
+
+| État | Ce qu'il établit | Ce qu'il n'établit pas |
+|---|---|---|
+| transport SSH | OpenSSH a authentifié le poste et le processus de redirection reste vivant | que `sparkd` écoute ou que la Forge est exploitable |
+| plan de contrôle | `/healthz` a répondu à travers cette redirection | qu'Incus, Caddy et le registre sont prêts |
+| Forge prête | `/readyz` a répondu après la recette finale | que le DNS public, extérieur au produit, est publié |
+
+`ready` garde son sens existant : seul `/healthz` le produit. Un transport SSH
+établi avec un plan de contrôle absent est donc visible comme **SSH établi —
+sparkd sans réponse**, jamais comme une Forge prête, ni comme une panne SSH.
+Les appels d'administration ordinaires continuent d'exiger `ready` ; seul le
+diagnostic d'installation peut utiliser le transport seul.
+
+### 50.2 Le diagnostic est un contrat fermé et en lecture seule
+
+L'hôte console exécute, par OpenSSH, un script **versionné et immuable** dont les
+arguments viennent exclusivement de l'entrée validée de l'inventaire. Ni le
+navigateur ni un champ de formulaire ne construisent une commande distante. Le
+script ne reçoit aucun secret et ne demande jamais de mot de passe : il relève
+uniquement l'identité du système, l'architecture, la mémoire et l'espace libre,
+les montages et périphériques bloc, la version d'Incus, les unités `sparkd` et
+leurs derniers états, Caddy, et la disponibilité de `sudo -n`.
+
+Son résultat est une structure bornée, non la sortie brute d'un shell. Les lignes
+de diagnostic restent affichables et journalisables après filtrage ; une erreur
+SSH, une clé d'hôte modifiée, un mot de passe `sudo` requis, un paquet absent ou
+un relevé partiel gardent leur motif exact. Une absence n'est jamais convertie en
+zéro ni en une étape réussie.
+
+Le diagnostic ne modifie pas la Forge et peut donc être lancé sur une machine de
+production. Il est réutilisé avant toute reprise : l'assistant ne déduit jamais
+l'état courant de son dernier écran.
+
+### 50.3 Proposition de stockage, sans choix implicite
+
+Le résultat classe chaque support, avec sa taille, son montage, ses signatures et
+la raison de son exclusion. Le disque qui porte `/`, toute partition montée, tout
+périphérique avec signature ou données, et toute information ambiguë sont exclus
+du choix natif.
+
+L'ordre de proposition est strict :
+
+1. un pool Incus/ZFS déjà conforme est réutilisé sans le recréer ;
+2. une paire de disques entiers, réellement libres et sans signature, peut former
+   le miroir natif de SPK-28 ;
+3. seulement sans paire sûre, l'assistant peut proposer un pool fichier, en
+   nommant son système de fichiers, son chemin, sa taille demandée, l'espace
+   libre relevé et la réserve qu'il conservera.
+
+Il ne déduit ni disques ni taille. La proposition sur fichier reste une
+proposition : elle ne rend pas un petit disque racine soudain capable d'héberger
+la capacité minimale du produit. Elle rappelle que les quotas et instantanés
+fonctionnent, mais qu'elle n'apporte pas le miroir matériel contre une corruption
+silencieuse. Une machine qui ne peut accueillir aucune disposition conforme est
+diagnostiquée, pas « installée partiellement ».
+
+### 50.4 Plan, engagement et reprise
+
+Avant toute écriture, l'écran rend un plan lisible, phase par phase : dépendances
+(Incus ≥ 6.19, ZFS, Python, Caddy), pool/ARC, réseau privé, durcissement, paquet
+`sparkd`, unités systemd et recette finale. Chaque ligne dit si elle sera
+conservée, installée, modifiée ou bloquée.
+
+La confirmation du plan autorise seulement les écritures non destructives déjà
+énumérées. Le miroir natif demande en plus une confirmation distincte qui répète
+exactement chacun des périphériques et la perte de leur contenu. Le pool fichier
+demande une confirmation qui répète le chemin et la taille. Une demande de
+confirmation ne peut ni accepter une nouvelle clé d'hôte, ni répondre à `sudo`,
+ni transformer un diagnostic ambigu en décision.
+
+Une installation est une suite d'événements structurés : `pending`, `running`,
+`done`, `warning`, `failed` ou `interrupted`, avec date, phase, message sûr et
+résultat mesuré. Ils sont conservés dans l'état local de la console, séparément
+des secrets et de l'inventaire des serveurs. Rouvrir la vue reprend le journal
+et relance d'abord le diagnostic ; deux écritures simultanées pour une même Forge
+sont refusées. La reprise saute uniquement les invariants de nouveau constatés
+conformes : elle ne recrée jamais un pool, un registre ou une instance existante.
+
+### 50.5 Exécuteur d'installation et recette
+
+Après une confirmation valide, l'hôte lance uniquement l'installateur versionné
+du paquet avec un contrat d'options validé. Il n'envoie pas le checkout à la
+Forge et n'offre aucun terminal général. L'installateur est idempotent : chaque
+phase relit l'état, applique seulement son écart, puis le vérifie. Un échec est
+arrêté à sa phase ; il n'est pas masqué par la poursuite des étapes suivantes.
+
+La dernière phase appelle la liste unique de préflight (§13 et SPK-26), puis
+`/healthz`, `/readyz`, le relevé de topologie et la comparaison de build. Ces
+quatre résultats restent distincts. L'assistant ne rend « Forge prête » que si
+les trois premières mesures sont vertes ; la comparaison de build dit seulement
+quelle version est servie. Les actions humaines qui sortent du périmètre — DNS
+public, politique d'email ou acceptation d'une clé d'hôte — restent explicitement
+listées, sans bouton qui les simule.
+
+### 50.6 Surface d'accès restreint
+
+SPK-61 ne gagne aucun shell général par cet assistant. Si la clé restreinte est
+un jour autorisée à installer, sa garde n'accepte que le sous-ensemble fermé de
+l'installateur versionné et de ses options validées. Tant que cette extension
+n'est pas livrée et vérifiée séparément, l'installation demande une identité SSH
+administrative déjà autorisée ; un `sudo` interactif est un blocage nommé.

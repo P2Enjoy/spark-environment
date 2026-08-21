@@ -7815,3 +7815,14 @@ donc prêtes à recevoir une recette DNS. Le contrat et le backlog ont été cor
 avant tout code : il faut le choix explicite d'un relais compatible ou de
 l'émission directe, ses conditions/quota, puis le domaine et l'ouverture vérifiée
 du port 25 entrant. SPK-51 passe à `[~]`; aucun comportement n'est déclaré livré.
+
+---
+
+## 2026-08-22 · SPK-68 — contrat de l'assistant d'installation distante
+
+Le diagnostic de Forge distingue désormais, dans son contrat, le transport SSH,
+la réponse de `sparkd` et la disponibilité finale. Le disque racine, les supports
+montés ou ambigus ne seront jamais proposés pour un miroir ; aucune installation
+réelle ne commence sans confirmation explicite du plan et, le cas échéant, des
+supports ou du fichier de pool. Référence : `DAT.md` §50 et
+`DESIGN_SYSTEM_APP.md` SPK-DS-12.
