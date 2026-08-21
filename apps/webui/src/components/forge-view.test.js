@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
-  renderBuild,
+  renderBuild, renderNotify,
 } from './forge-view.js';
 
 const GIO = 1024 ** 3;
@@ -447,4 +447,59 @@ test('la section vit sur l’écran de la Forge, et le bouton de comparaison aus
     build: { verdict: 'a_jour', titre: 'À jour', detail: 'x' } });
   assert.match(rendu, /id="titre-build"/);
   assert.match(rendu, /data-action="comparer-build"/);
+});
+
+/* --- L'alerte hors bande (SPK-62, docs/DAT.md §47.6) ---------------------- */
+
+test('sans canal configure, l ecran DIT que rien n est surveille', () => {
+  // §14.6 : les compteurs valent alors zero, et zero ressemble a « tout va
+  // bien ». Il faut dire l'inverse en toutes lettres.
+  const html = renderNotify({ configured: false, sent: 0, failed: 0, dropped: 0 });
+  assert.match(html, /Aucun canal n’est configuré/);
+  assert.match(html, /rien\s+n’est surveillé/);
+  // §47.3 : ce n'est pas une panne, et l'ecran ne doit pas le peindre comme tel.
+  assert.ok(!html.includes('role="alert"'));
+  assert.ok(!html.includes('refus'));
+});
+
+test('des envois en echec sont dits, SANS laisser croire a un refus', () => {
+  // §25.1 : le rouge est reserve au refus du serveur. Ici la Forge n'a rien
+  // refuse — les gestes ont abouti, seule la detection manque.
+  const html = renderNotify({ configured: true, sent: 4, failed: 3, dropped: 1,
+                              last_error: 'connexion refusée' });
+  assert.match(html, /4 alerte\(s\)\s+ne sont pas parties/);
+  assert.match(html, /ont abouti/);
+  assert.match(html, /connexion refusée/);
+  assert.match(html, /avertissement/);
+  assert.ok(!html.includes('badge--danger'));
+});
+
+test('un canal qui va bien le dit en VERT, et seulement lui', () => {
+  const html = renderNotify({ configured: true, sent: 12, failed: 0, dropped: 0 });
+  assert.match(html, /succes/);
+  assert.match(html, /Toutes les alertes sont parties/);
+  assert.ok(!html.includes('avertissement'));
+});
+
+test('les compteurs disent leur PORTEE : depuis le dernier demarrage', () => {
+  // §47.6 : ils ne survivent pas a un redemarrage, et l'ecran ne pretend pas le
+  // contraire.
+  const html = renderNotify({ configured: true, sent: 1, failed: 0, dropped: 0 });
+  assert.match(html, /repartent de zéro à chaque redémarrage/);
+});
+
+test('une Forge qui ne rend pas encore ce champ n est pas une Forge SANS canal', () => {
+  // §14.5 : ne rien affirmer vaut mieux qu'affirmer faux.
+  assert.equal(renderNotify(undefined), '');
+  assert.equal(renderNotify(null), '');
+});
+
+test('le bloc est rendu dans la vue de la Forge', () => {
+  const html = renderForgeView({
+    status: 'ready',
+    host: { hostname: 'f', pools: {}, addresses: { capacity: 1, used: 0, free: 1 },
+            reserves: {}, topology_synced_at: 't',
+            notify: { configured: false, sent: 0, failed: 0, dropped: 0 } },
+  });
+  assert.match(html, /titre-notify/);
 });

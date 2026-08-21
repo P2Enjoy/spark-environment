@@ -324,6 +324,63 @@ export function renderBuild(build) {
 </section>`;
 }
 
+/**
+ * Ce que le canal hors bande a fait, ou n'a pas pu faire.
+ *
+ * @spec docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.6 (l'échec est DIT), §47.3
+ *       (absente, la fonction se désactive et ce n'est pas une panne), §47.7
+ *       (ce qu'elle ne prétend pas) · docs/DESIGN_SYSTEM.md §14.5 (une absence
+ *       se NOMME), §14.6 (zéro n'est pas « rien à signaler »), §25.1 (le rouge
+ *       est réservé au refus du serveur)
+ *
+ * **Le point qui décide de ce bloc** : sans canal, les compteurs valent zéro — et
+ * zéro ressemble à « tout va bien ». Il faut donc dire l'inverse en toutes
+ * lettres : rien n'est surveillé. C'est exactement le §14.6.
+ *
+ * En ACCENT et jamais en rouge quand des envois échouent : la Forge n'a rien
+ * refusé, les gestes ont abouti. Ce qui manque est la détection, pas l'action.
+ */
+export function renderNotify(notify) {
+  // §14.5 : une Forge qui ne rend pas encore ce champ n'est pas une Forge sans
+  // canal. Ne rien affirmer vaut mieux qu'affirmer faux.
+  if (!notify) return '';
+
+  const entete = '<h2 id="titre-notify">Alerte hors bande</h2>';
+
+  if (!notify.configured) {
+    return `
+<section class="carte bloc" aria-labelledby="titre-notify">
+  ${entete}
+  <p class="absence"><strong>Aucun canal n’est configuré</strong> : aucune alerte
+  n’est envoyée lorsqu’un Spark est supprimé, qu’une protection est levée ou
+  qu’un accès est donné. Ce n’est pas une panne — la Forge fonctionne — mais rien
+  n’est surveillé.</p>
+  <p class="note"><a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>
+</section>`;
+  }
+
+  const echecs = Number(notify.failed ?? 0) + Number(notify.dropped ?? 0);
+  const bilan = echecs > 0
+    ? `<p class="avertissement" role="status"><strong>${echapper(String(echecs))} alerte(s)
+       ne sont pas parties.</strong> Les gestes, eux, ont abouti : un canal muet
+       n’empêche jamais d’agir. ${notify.last_error
+         ? `Dernier motif : ${echapper(notify.last_error)}.` : ''}</p>`
+    : `<p class="succes">Toutes les alertes sont parties.</p>`;
+
+  return `
+<section class="carte bloc" aria-labelledby="titre-notify">
+  ${entete}
+  ${bilan}
+  <div class="definitions">
+    <div class="def"><dt>Envoyées</dt><dd>${echapper(String(notify.sent ?? 0))}</dd></div>
+    <div class="def"><dt>En échec</dt><dd>${echapper(String(notify.failed ?? 0))}</dd></div>
+    <div class="def"><dt>Abandonnées</dt><dd>${echapper(String(notify.dropped ?? 0))}</dd></div>
+  </div>
+  <p class="note">Ces compteurs repartent de zéro à chaque redémarrage du
+  serveur : ils disent ce qui s’est passé depuis, pas depuis toujours.</p>
+</section>`;
+}
+
 export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
                                  build = null, syncing = false } = {}) {
@@ -360,6 +417,7 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
   </div>
   <div class="detail__secondaire">
     ${renderBuild(build)}
+    ${renderNotify(host.notify)}
     ${renderAddresses(host.addresses)}
   </div>
 </div>`;
