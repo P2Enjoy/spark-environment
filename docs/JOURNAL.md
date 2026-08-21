@@ -6047,6 +6047,21 @@ relevé ne porte que la mémoire, donc le refus du §49.3 sur le disque est prou
 au service mais pas atteignable par la route ; et la prise à chaud du disque et
 du mode CPU exige une Forge réelle — **nécessite une action humaine**.
 
+### INC-11 réapparaît, et l'observation change le diagnostic
+
+La campagne rend **72 parcours verts et 1 échec** : « entrer dans le terminal »,
+vert lorsqu'on le joue seul dans la minute qui suit. Le relevé que l'entrée du
+registre demandait a été fait, et il apporte l'information qui manquait : l'écran
+montrait « SSH » puis « **Session fermée.** » — la session **s'est ouverte** puis
+**s'est refermée** avant la fin des assertions.
+
+Le défaut n'est donc pas « la session ne s'ouvre pas » mais « elle ne dure pas »,
+ce qui resserre la piste sur trois mécanismes documentés qui ferment une session.
+Consigné en INC-11, comportement inchangé : trois causes plausibles, une seule
+est la bonne, et le §18 exige de reproduire avant de traiter. Rien n'établit non
+plus qu'il soit imputable à cette unité — le redimensionnement ne touche ni au
+terminal ni aux sessions.
+
 **Où reprendre.** SPK-57 : l'écran de redimensionnement et son parcours. Le §49.4
 impose qu'il annonce un redémarrage AVANT d'agir pour les champs dont la prise à
 chaud n'est pas mesurée. SPK-51 attend deux vérifications extérieures ; SPK-53,

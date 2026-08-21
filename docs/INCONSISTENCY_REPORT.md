@@ -300,3 +300,44 @@ reviendrait à poser une temporisation ou un contournement, que le §3.1 du
 diagnostic `e2e/captures/echecs/terminal.txt`, l'ordre exact des parcours joués
 avant lui, et si la machine était chargée — deux séries E2E tournaient en
 parallèle dans la session où il est apparu.
+
+---
+
+**DEUXIÈME OCCURRENCE, le 2026-08-21 à 04h30**, et elle apporte l'observation qui
+manquait. Le relevé demandé ci-dessus a été fait.
+
+```
+série complète         =>  72 parcours verts, 1 échec — le même
+le parcours JOUÉ SEUL  =>  ok, dans la minute qui suit
+```
+
+**Ce que l'écran montrait au moment de l'échec** — et c'est nouveau :
+
+```
+Terminal
+SSH
+Quitter cet onglet termine la session.
+Session fermée.
+```
+
+La session **s'est ouverte**, puis **s'est refermée** avant que le parcours
+n'achève ses assertions. Le défaut n'est donc PAS « la session ne s'ouvre pas »,
+comme la première occurrence le laissait croire — c'est « elle ne dure pas ».
+
+Cela déplace le diagnostic vers trois mécanismes qui ferment une session, tous
+trois documentés, et dont aucun n'est encore mis en cause :
+
+- la **fermeture du flux tue la session** (§37.4.2) — un flux d'évènements que le
+  navigateur laisse tomber sous charge suffirait ;
+- l'**inactivité** ferme après un délai (§37.4.3) ;
+- le **distant qui se termine** ferme aussi : le doublon du harnais est `cat`,
+  qui rend la main dès que son entrée se ferme.
+
+**Toujours pas corrigé, et toujours délibérément** : trois causes plausibles, une
+seule est la bonne, et le §18 exige de reproduire avant de traiter. Le parcours
+passe seul, ce qui interdit d'incriminer le produit sans mesure supplémentaire.
+
+**Ce que la prochaine occurrence doit relever**, maintenant que la piste est
+resserrée : le journal de l'hôte console pour CE parcours — il dit lequel des
+trois motifs de fermeture a été employé (`DISTANT_TERMINE`, inactivité, ou
+fermeture du flux). C'est ce motif, et lui seul, qui tranche.
