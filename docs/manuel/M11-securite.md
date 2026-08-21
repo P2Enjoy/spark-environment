@@ -27,11 +27,39 @@ libellé et l'empreinte d'une clé, jamais son corps.
   virtuelle, pas un durcissement du mode conteneur.
 - **Qui atteint la Forge atteint le réseau privé.** Le rebond SSH simplifie
   l'accès ; il ne cloisonne pas la Forge des Sparks.
+- **Une clé restreinte reste une clé.** Volée, elle donne encore tous les gestes
+  du produit ; elle ne donne plus la Forge elle-même (voir ci-dessous).
 - **La réservation CPU n'est pas absolue** aujourd'hui : elle n'est
   proportionnelle qu'entre Sparks (voir [M4](M4-pools.md)).
 - **La réservation réseau est une comptabilité**, pas une garantie de bande
   passante : seul le plafond est appliqué par le noyau.
 - **Un instantané n'est pas une sauvegarde** (voir [M9](M9-instantanes.md)).
+
+## Votre clé d'accès peut être restreinte
+
+Par défaut, la clé SSH qui vous donne accès à la Forge y ouvre aussi un **shell**.
+Or qui a un shell sur la Forge a le registre : aucun contrôle placé devant
+l'interface ne protège de cela.
+
+Le produit fournit de quoi refermer cette porte **sans rien vous retirer**. Une
+fois posée, votre clé garde exactement trois usages :
+
+- la console ouvre son tunnel vers le serveur ;
+- vous ouvrez un terminal dans un Spark ;
+- vous ouvrez le dépannage d'un Spark dont le SSH ne répond plus.
+
+Et elle perd les autres : plus de session interactive sur la Forge, plus de
+lecture de ses fichiers, plus d'accès à un autre service qu'elle héberge.
+
+**Ce que cela ne fait pas** : cela ne rend pas votre clé inoffensive si on vous la
+vole. Une clé restreinte volée donne toujours les gestes — arrêter, supprimer,
+lever une protection. Ce qu'elle change est ailleurs : un accès total et
+silencieux devient un accès aux gestes, et **tous les gestes sont journalisés**
+(voir [M12](M12-annexes.md)).
+
+La marche à suivre s'adresse à qui administre la Forge : elle est dans le
+`README.md` du produit, section *Restreindre la clé d'accès du responsable*.
+Gardez une seconde session ouverte pendant l'opération.
 
 ## Toute règle d'accès est appliquée côté serveur
 

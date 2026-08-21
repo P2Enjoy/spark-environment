@@ -2325,7 +2325,7 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
   est SPK-51 et dépend de SPK-43 pour lire la clé DKIM dans le Spark. La recette
   `relais-transactionnel` livrée ici couvre l'ÉMISSION seule.
 
-### [ ] SPK-61 · Restreindre la clé d'accès du responsable au seul tunnel
+### [~] SPK-61 · Restreindre la clé d'accès du responsable au seul tunnel
 
 Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.3), et **préalable à tout
 second facteur** : tant que cette clé ouvre un shell sur la Forge, un facteur
@@ -2347,6 +2347,50 @@ devant l'API de `sparkd` ne protège de rien contre une clé volée.
   chemins du produit sont éprouvés avec elle — tunnel, terminal d'un Spark,
   dépannage, gestes Docker ; un test prouve qu'un shell interactif est refusé ;
   le README et `docs/PROD_MIGRATIONS.md` portent la marche à suivre.
+
+**Mesurée, spécifiée et construite le 2026-08-21** — `docs/DAT.md` §46, écrit et
+committé avant la première ligne de code.
+
+- **Le résultat qui décide de tout, et il inverse une intuition** : `restrict`
+  est un FAUX AMI. Il retire le pseudo-terminal, l'agent, le X11 — il ne retire
+  **pas** l'exécution d'une commande. MESURÉ sur un `sshd` réel : avec
+  `restrict,port-forwarding,permitopen=…`, `ssh forge "cat <fichier>"` rend `0`
+  et lit. Une clé « restreinte » à ce seul sens laisse le registre entier
+  lisible, et l'unité aurait été réputée faite sans l'être.
+- **`command=` ferme la porte, et ne casse ni le tunnel ni le rebond** : `-L` et
+  `-W` sont des canaux `direct-tcpip`, auxquels `command=` ne s'applique pas.
+  MESURÉ.
+- **Le dépannage (§37.3) est le seul chemin cassé**, et c'est le piège que
+  l'unité annonçait. Résolu par une GARDE : `scripts/garde-ssh.sh`, posée en
+  `command=`, n'accepte que `incus exec <nom> -- <shell>` et refuse tout le
+  reste. Contrat FERMÉ — énumérer laisse passer trop peu, ce qui se voit ;
+  filtrer les interdits laisse passer ce qu'on n'a pas prévu.
+- **Une condition SERVEUR, découverte en montant le banc** : sans
+  `AllowTcpForwarding local`, tout tombe, y compris avec une clé sans aucune
+  option. Certaines distributions l'ont à `no` par défaut. La ligne seule
+  donnerait une console en panne, pas une console protégée.
+- **`permitopen` n'interprète aucun motif d'ADRESSE** — MESURÉ, `172.17.0.*:22`
+  est refusé. Le joker d'HÔTE, lui, fonctionne : `permitopen="*:22"` s'écrit une
+  fois et survit à chaque création de Spark. Concession écrite au §46.5.
+- **La ligne est PRODUITE**, pas recopiée : `scripts/cle-restreinte.sh`. Une
+  ligne d'`authorized_keys` recopiée est une ligne où l'on oublie une virgule, et
+  `sshd` n'avertit de rien.
+- **Deux défauts trouvés par les preuves elles-mêmes** : sans `set -f`,
+  `incus exec * -- /bin/bash` se développait sur le répertoire courant et la
+  garde LANÇAIT un dépannage que personne n'avait nommé ; et `${2:-9876}`
+  confondait un port vide avec un port absent, rendant silencieusement une ligne
+  sur le mauvais port.
+- **Preuves** : 32, dont le contrat fermé de la garde éprouvé sur 18 commandes
+  refusées, et une preuve CROISÉE qui garde que le shell admis par la garde est
+  celui que la console lance. Plus **six chemins mesurés de bout en bout** contre
+  un `sshd` réel, avec la ligne réellement produite par le dépôt et la garde
+  réellement posée.
+
+- **Reste avant `[x]`, et cela ne dépend pas d'une session** : la clé n'est pas
+  posée sur une Forge de validation. Le banc de mesure est un `sshd` jetable, pas
+  la Forge du produit ; les chemins y sont éprouvés avec un `incus` de doublon.
+  Poser la ligne sur la vraie Forge est un geste humain (`CLAUDE.md` §9), et
+  OP-10 le décrit pas à pas — **nécessite une action humaine**.
 
 ### [ ] SPK-62 · Notification hors bande des actions sensibles
 

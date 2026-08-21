@@ -3,6 +3,14 @@
 ## [Non publié]
 
 ### Ajouté
+- **La clé d'accès du responsable peut être restreinte** (SPK-61, `docs/DAT.md`
+  §46) : elle garde le tunnel, le rebond vers un Spark et le dépannage, et perd
+  le shell interactif, la lecture des fichiers de la Forge et l'accès à ses
+  autres services. `scripts/garde-ssh.sh` est la garde posée en `command=` ;
+  `scripts/cle-restreinte.sh` **produit** la ligne `authorized_keys` au lieu de
+  la faire recopier. Marche à suivre : `docs/PROD_MIGRATIONS.md` OP-10.
+  **Mesuré** : `restrict` seul ne ferme pas l'exécution de commande — une clé
+  restreinte sans `command=` lit encore tout le registre.
 - **Le journal dit, ligne à ligne, ce que la Forge a vérifié de la signature**
   (SPK-40, `docs/DAT.md` §36.10.9) : « signée » sur les gestes dont la Forge a
   vérifié la signature à la réception, « non signée » sur ceux arrivés sans elle
