@@ -304,3 +304,83 @@ def resoudre(connection: sqlite3.Connection, cle: bytes, spark_id: str) -> dict[
         else:
             variables[entree.name] = rangee["value"]
     return {"variables": variables, "secrets": secrets}
+
+
+#: §43.1 et §43.5.2 : deux fichiers à chemins stables, désignés explicitement par
+#: le locataire dans son `env_file:`. Le second vit dans un tmpfs, donc il
+#: n'entre dans aucun instantané — c'est ce qui empêche une restauration de
+#: ressusciter un secret révoqué.
+FICHIER_VARIABLES = "/etc/spark/env"
+FICHIER_SECRETS = "/run/spark/secrets"
+#: Le confort du §43.1, nommé comme tel : il sert au `docker compose up` tapé à
+#: la main, et n'existe PAS pour ce que systemd démarre (mesure D du §43.0).
+FICHIER_PROFIL = "/etc/profile.d/spark-env.sh"
+
+
+def citer(valeur: str) -> str:
+    """Encode une valeur pour `env_file:` de Compose (§43.9.7, MESURÉ).
+
+    L'analyseur de Compose n'est PAS littéral : sans guillemets, `abc$def`
+    arrive comme `abc`, les guillemets sont retirés et les blancs de tête et de
+    fin rognés. Un mot de passe contenant `$` serait donc tronqué en silence.
+
+    L'apostrophe simple ne sauve pas : l'idiome `'ab'\\''cd'` fait échouer la
+    lecture du FICHIER ENTIER, donc une seule apostrophe dans un mot de passe
+    viderait tout l'environnement de la pile.
+
+    L'ordre des remplacements compte : échapper la barre oblique en dernier
+    doublerait celles que les autres échappements viennent d'introduire.
+    """
+    sortie = (valeur.replace("\\", "\\\\")
+                    .replace('"', '\\"')
+                    .replace("$", "\\$")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r")
+                    .replace("\t", "\\t"))
+    return f'"{sortie}"'
+
+
+def _citer_shell(valeur: str) -> str:
+    """Encode pour un script de SHELL — grammaire différente (§43.9.7).
+
+    Le shell n'a pas d'échappement à l'intérieur d'apostrophes simples : on
+    ferme, on insère un guillemet échappé, on rouvre. C'est exactement l'idiome
+    que Compose refuse, et c'est pourquoi les deux fichiers ne partagent pas
+    leur encodage.
+    """
+    return "'" + valeur.replace("'", "'\\''") + "'"
+
+
+def _lignes(entete: str, valeurs: dict[str, str]) -> str:
+    return entete + "".join(
+        f"{nom}={citer(valeurs[nom])}\n" for nom in sorted(valeurs))
+
+
+def fichiers(connection: sqlite3.Connection, cle: bytes,
+             spark_id: str) -> dict[str, str]:
+    """Le CONTENU des trois fichiers à poser, depuis l'état voulu.
+
+    Régénérés EN ENTIER, jamais complétés : c'est ce qui fait qu'un retrait
+    retire réellement (§43.2, comme `authorized_keys` au §17.1).
+    """
+    rendu = resoudre(connection, cle, spark_id)
+    avis = ("# Écrit par sparkd depuis le registre. Toute modification à la main\n"
+            "# sera perdue à la prochaine application (docs/DAT.md §43.2).\n")
+    # Le fichier de confort ne porte AUCUN secret, et ce n'est pas une omission :
+    # il vit dans `/etc`, donc sur le jeu de données, donc DANS les instantanés.
+    # Y écrire les secrets annulerait exactement ce que le §43.5.2 protège — une
+    # restauration ancienne ressusciterait un secret révoqué, par ce fichier-là.
+    profil = (
+        "# Écrit par sparkd. CONFORT seulement : ce fichier sert au shell de\n"
+        "# connexion, et PAS à ce que systemd démarre (docs/DAT.md §43.0, D).\n"
+        "# La garantie, c'est `env_file:` (docs/DAT.md §43.1).\n"
+        "# Les SECRETS n'y sont pas : ce fichier entre dans les instantanés\n"
+        "# (docs/DAT.md §43.5.2). Ils ne vivent que dans /run/spark/secrets.\n"
+    ) + "".join(
+        f"export {nom}={_citer_shell(v)}\n"
+        for nom, v in sorted(rendu["variables"].items()))
+    return {
+        FICHIER_VARIABLES: _lignes(avis, rendu["variables"]),
+        FICHIER_SECRETS: _lignes(avis, rendu["secrets"]),
+        FICHIER_PROFIL: profil,
+    }

@@ -6494,6 +6494,13 @@ règles-là** : c'est un script de shell, et le shell a sa propre grammaire. Il 
 rendue par l'idiome `'\''` — celui-là même que Compose refuse. Deux
 consommateurs, deux grammaires : les confondre casserait l'un ou l'autre.
 
+**Et ce complément ne porte AUCUN secret**, décidé en codant : il vit dans
+`/etc`, donc sur le jeu de données, donc **dans les instantanés**. Y écrire les
+secrets annulerait précisément ce que le §43.5.2 protège — une restauration
+ancienne ressusciterait un secret révoqué, par ce fichier-là plutôt que par
+l'autre. Le confort s'arrête donc aux variables ordinaires, et le fichier le dit
+en tête.
+
 
 ## 44. Le briefing d'un Spark : ce qu'un agent doit savoir en entrant
 
