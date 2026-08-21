@@ -3297,9 +3297,24 @@ fenetre 25 s sur 8 threads — 200 s-CPU disponibles
 optimiste : le `H` reel vaut 200 en pratique, et la tranche obtient
 systematiquement **plus** que la part visee.
 
-**Ce qui reste a trancher, et c'est un ARBITRAGE, non une mesure** : la loi
-atteint `r / C` seulement si `H` vaut ce qu'on a posé. Deux voies s'offrent, et
-elles ne se valent pas :
+**Arbitrage rendu par le responsable le 2026-08-21 : la première voie, `H = 300`
+posé.** La réservation est un **plancher** — tenu sous contention totale,
+dépassé dès qu'une tranche de la Forge est au repos.
+
+Motif du choix, écrit ici pour qu'il ne se rediscute pas à chaque relecture : une
+égalité stricte obligerait à **retirer** du CPU à un locataire quand la Forge est
+au repos, c'est-à-dire à supprimer le burst pour être exact. Et elle ferait bouger
+le poids de la tranche sur un signal qui n'est **pas** un changement d'allocation
+— l'activité des tranches de la Forge —, ce qui casse le modèle où le poids ne se
+recalcule qu'à la création, la suppression et le redimensionnement.
+
+Conséquence sur ce que le produit a le droit de dire : la réservation cesse
+d'être annoncée comme « non garantie sous contention », ce qui était vrai mais
+trop modeste. Elle est un **plancher garanti sous contention totale, dépassé
+sinon** — et c'est la mesure du 2026-08-21 qui l'établit, pas une intention.
+
+Les deux voies restent décrites ci-dessous, parce qu'une décision sans son
+alternative se rediscute sans fin :
 
 - **garder `H = 300` pose** : la reservation reste un **plancher** tenu et
   depasse — c'est ce que le produit fait aujourd'hui, c'est favorable au
@@ -3308,8 +3323,9 @@ elles ne se valent pas :
   recalculer : la reservation devient une egalite, au prix d'un poids qui bouge
   quand l'activite de la Forge change, donc d'un ordonnancement moins previsible.
 
-Tant que l'arbitrage n'est pas rendu, la premiere voie tient, et la console
-continue de **ne pas** presenter la reservation comme une garantie absolue.
+La seconde voie n'est pas retenue. Elle reste écrite au cas où la Forge changerait
+de nature — une machine dédiée sans `user.slice` chargée, par exemple, où l'écart
+entre `H` posé et `H` réel disparaîtrait.
 
 ### 32.3 La Forge garde une part, et c'est ce qui rend la loi définie
 
@@ -7210,11 +7226,83 @@ le renommerait.
 sans cette règle, un canal en panne produirait une boucle infinie de notifications
 d'échec de notification.
 
-### 47.3 Le canal : un webhook, et le motif de ce choix
+### 47.3 Deux canaux, configurés depuis la console — décision du 2026-08-21
 
-`SPARKD_NOTIFY_URL` — une URL, et un `POST` de JSON dessus. Rien d'autre.
+**Révise la première rédaction**, qui ne retenait qu'un webhook posé par
+`SPARKD_NOTIFY_URL`. Le responsable a tranché : **deux canaux, réglés depuis un
+onglet de la Forge, activables et désactivables séparément.**
 
-Pourquoi celui-là plutôt qu'un courriel, un SMS ou un service nommé :
+| Canal | Ce qu'il porte | Pourquoi il est retenu |
+|---|---|---|
+| **Webhook** | une URL, un `POST` de JSON, **et un gabarit** | atteint Slack, Discord, `ntfy`, un script maison ; aucun compte, aucune dépense |
+| **SMTP** | un serveur, un compte, une adresse de destination | atteint quelqu'un qui ne regarde pas ses outils de discussion — et laisse une trace archivable |
+
+Les deux peuvent être actifs **ensemble**. Chacun s'active et se désactive seul,
+et **l'échec de l'un n'empêche pas l'autre de partir** : ce sont deux témoins
+indépendants, pas une chaîne.
+
+Ce que la configuration quitte, et pourquoi : une variable d'environnement se
+règle par un redémarrage du service et ne se voit nulle part. Un canal qu'on ne
+peut ni voir ni éprouver depuis l'écran est un canal dont on ne sait pas s'il
+veille. La configuration vit donc **au registre**, et l'onglet la rend visible et
+essayable.
+
+#### 47.3.1 Le gabarit du webhook
+
+Le corps par défaut est celui du §47.4. Un **gabarit** permet de le mettre à la
+forme qu'attend le service visé — Slack veut `{"text": …}`, Discord `{"content":
+…}`, Matrix autre chose encore.
+
+Trois règles, et elles ne sont pas négociables :
+
+- le gabarit ne peut référencer que les **champs nommés** que le §47.4 publie.
+  Un nom inconnu est refusé à l'enregistrement, pas à l'envoi — sinon la panne
+  se découvre le jour de l'incident ;
+- c'est une **substitution de texte, jamais une exécution.** Pas de code, pas
+  d'appel, pas de lecture de fichier. Un gabarit est une donnée ;
+- le rendu passe par le **même filtre** que le journal (§21.2). Un gabarit ne
+  peut pas faire sortir ce que le §47.4 interdit de faire sortir — sans quoi il
+  suffirait d'un gabarit pour contourner la règle qui protège les secrets.
+
+L'écran montre le rendu **avant** d'enregistrer, sur un événement d'exemple. Un
+gabarit qu'on ne peut pas voir rendu se vérifie le jour où il sert, c'est-à-dire
+trop tard.
+
+#### 47.3.2 Ce que le canal SMTP suppose, et ce qu'il coûte
+
+Serveur, port, mode TLS, compte, mot de passe, adresse d'envoi et adresse de
+destination. Le mot de passe est un **secret** au sens du §43.3 : chiffré au
+repos, jamais rendu par l'API, jamais réaffiché, jamais journalisé.
+
+Il faut le dire clairement : **SMTP est une dépendance sortante qui peut pendre.**
+Un serveur qui accepte la connexion puis ne répond plus tient la socket ouverte,
+et c'est exactement le cas que le §47.5 traite — délai borné, échec avalé,
+jamais de geste bloqué.
+
+#### 47.3.3 Toute modification demande un mot de passe
+
+**Décision du responsable.** Modifier un canal — l'activer, le désactiver, changer
+une URL, un gabarit, un serveur — exige un mot de passe, **fixé au premier
+usage**.
+
+Motif : un canal de notification est la mesure qui sert **quand tout le reste a
+échoué**. Qui peut le désactiver en silence peut agir sans témoin. C'est
+précisément le geste qu'un attaquant tenterait en premier, et c'est pourquoi il
+ne doit pas être aussi facile que les autres.
+
+**Un seul mécanisme**, celui de la protection d'un Spark (§35.3) : dérivation
+`scrypt`, sel propre, empreinte au registre, jamais la valeur. En écrire un second
+donnerait deux endroits où un mot de passe peut fuir.
+
+Et la même honnêteté qu'au §35.1 : cela ne protège pas de `root` sur la Forge,
+qui atteint le registre. Cela protège de la console, de l'API, et d'un geste trop
+rapide. Une **désactivation notifie**, par le canal qu'on désactive et pendant
+qu'il fonctionne encore — sans quoi la coupure serait le seul geste dont personne
+n'entendrait parler.
+
+### 47.3 bis Pourquoi un webhook plutôt qu'un service nommé
+
+Pourquoi celui-là plutôt qu'un SMS ou un service nommé :
 
 - il n'introduit **aucune dépendance payante ni aucun compte** (`CLAUDE.md` §19) ;
 - il atteint tout ce que le responsable voudra : Slack, Discord, `ntfy`, un

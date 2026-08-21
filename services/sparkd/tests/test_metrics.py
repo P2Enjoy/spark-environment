@@ -124,7 +124,7 @@ def test_la_garantie_cpu_reste_honnete():
     suivi = metrics.RateTracker()
     suivi.observe("S1", metrics.Sample(0.0, 0, 0, 0))
     u = metrics.usage(SPARK, ETAT, suivi.observe("S1", metrics.Sample(2.0, 0, 0, 0)))
-    assert u["cpu"]["guarantee"] == "proportional_between_sparks_only"
+    assert u["cpu"]["guarantee"] == "floor_under_contention"
     assert u["cpu"]["reservation"] == 0.5
 
 

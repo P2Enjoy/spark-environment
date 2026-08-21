@@ -41,6 +41,12 @@ export const GARANTIES = {
   // §1.5 bis : ce n'est pas une explication mais une QUALIFICATION de la valeur —
   // « 2,5 CPU alloués » se lirait comme une garantie sans elle. Elle reste donc à
   // l'écran, et reste LUE dans la réponse (§27.6), jamais écrite en dur.
+  // §32.2, arbitrage du 2026-08-21 : la réservation est un PLANCHER. Le dire
+  // « non garantie » était vrai et trop modeste ; le dire « garantie » serait
+  // faux dès qu'une tranche de la Forge est au repos, car le Spark obtient alors
+  // PLUS. Le mot juste est celui-ci.
+  floor_under_contention:
+    'Réservation garantie sous contention totale, dépassée sinon.',
   proportional_between_sparks_only:
     'Réservation proportionnelle entre Sparks — non garantie sous contention.',
   absolute:

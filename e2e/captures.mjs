@@ -216,7 +216,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
           addresses: { capacity: 200, used: 4, free: 196,
                        dhcp_dynamic_range: '10.77.0.240-10.77.0.254' },
           topology_synced_at: '2026-08-19T14:05:00',
-          reservation_guarantee: 'proportional_between_sparks_only',
+          reservation_guarantee: 'floor_under_contention',
         }), { status: 200 });
       }
       // SPK-21 : la restauration d'un instantané ancien est refusée tant que des

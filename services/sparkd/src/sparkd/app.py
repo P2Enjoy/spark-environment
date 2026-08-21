@@ -438,7 +438,11 @@ def create_app(config: Config) -> FastAPI:
             "notify": app.state.notify.etat(),
             # docs/DAT.md §7.3 bis : ne jamais présenter la réservation comme
             # une garantie absolue tant que SPK-29 n'est pas livrée.
-            "reservation_guarantee": "proportional_between_sparks_only",
+            # docs/DAT.md §32.2 : arbitrage du 2026-08-21. La reservation est un
+            # PLANCHER — tenu sous contention totale, depasse des qu'une tranche
+            # de la Forge est au repos. Mesure du 2026-08-21 : 47,9 % obtenus
+            # pour 47,4 % predits. La valeur est LUE par l'ecran (§27.6).
+            "reservation_guarantee": "floor_under_contention",
         }
 
     @app.post("/v1/forge/sync", tags=["forge"], status_code=200)

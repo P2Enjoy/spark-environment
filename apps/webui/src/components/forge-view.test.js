@@ -32,7 +32,7 @@ const HOTE = {
   },
   addresses: { capacity: 200, used: 4, free: 196, dhcp_dynamic_range: '10.77.0.240-10.77.0.254' },
   topology_synced_at: '2026-08-19T14:05:00',
-  reservation_guarantee: 'proportional_between_sparks_only',
+  reservation_guarantee: 'floor_under_contention',
 };
 const CORES = {
   physical_cores: 4,
@@ -169,13 +169,13 @@ test('sans relevé des cœurs, la carte ne rend rien', () => {
 
 test('la portée de la réservation est LUE dans la réponse, pas écrite en dur', () => {
   const proportionnelle = renderForgeView({ status: 'ready', host: HOTE });
-  assert.ok(proportionnelle.includes('proportionnelle entre Sparks'));
+  assert.ok(proportionnelle.includes('garantie sous contention totale'));
 
   // Le jour où SPK-29 est livrée, le runtime change cette valeur et l'écran suit.
   const absolue = renderForgeView({ status: 'ready',
     host: { ...HOTE, reservation_guarantee: 'absolute' } });
   assert.ok(absolue.includes('garantie sous contention'));
-  assert.ok(!absolue.includes('proportionnelle entre Sparks'));
+  assert.ok(!absolue.includes('dépassée sinon'));
 });
 
 test('une portée inconnue n’affiche rien plutôt qu’une phrase inventée', () => {

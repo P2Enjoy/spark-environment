@@ -137,7 +137,7 @@ def test_sync_puis_host_expose_les_pools(tmp_path):
     assert corps["pools"]["cpu"]["available"] == 4.0
     assert corps["pools"]["network"]["capacity"] == 1_000_000_000
     # docs/DAT.md §7.3 bis : la garantie annoncee reste exacte.
-    assert corps["reservation_guarantee"] == "proportional_between_sparks_only"
+    assert corps["reservation_guarantee"] == "floor_under_contention"
 
 
 def test_host_expose_les_termes_de_la_reserve_memoire(tmp_path):
