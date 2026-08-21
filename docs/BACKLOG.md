@@ -2436,9 +2436,11 @@ avant la première ligne de code.
   montre. Sans canal, il écrit en toutes lettres que **rien n'est surveillé** —
   les compteurs valent alors zéro, et zéro ressemble à « tout va bien » (§14.6).
 - **Preuves** : 33 du module, sur un VRAI serveur HTTP local et non un doublon de
-  la fonction d'envoi ; 6 de l'écran ; 2 parcours E2E depuis un geste réel au
-  clavier. Le canal est branché sur la pile de TOUS les parcours : s'il cassait
-  un geste, la série entière le dirait.
+  la fonction d'envoi ; 6 de l'écran ; 1 parcours E2E depuis un geste réel au
+  clavier — la levée d'une protection, choisie parce qu'elle est RÉVERSIBLE. Le
+  canal est branché sur la pile de TOUS les parcours : s'il cassait un geste, la
+  série entière le dirait. Captures observées : `e2e/captures/50-notify-sans-canal.png`
+  et `51-notify-en-echec.png`.
 
 - **Reste avant `[x]`, et ce sont deux écarts nommés** :
   1. **l'alerte ne NOMME pas l'objet en clair.** MESURÉ : le message de
