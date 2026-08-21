@@ -240,6 +240,12 @@ function brancher() {
       // afficherait une surface que l'utilisateur croit avoir refermée.
       etat.quotas.open = false;
       etat.quotas.refusal = null;
+      // SPK-58 : la facette Environnement suit le MÊME contrat, et l'oublier
+      // ici RÉOUVRAIT la modale — MESURÉ par le parcours E2E du refus :
+      // `close()` s'exécutait, puis la repeinte trouvait `open` encore vrai et
+      // rappelait `showModal()`. « Échap » paraissait sans effet.
+      etat.envUi.open = null;
+      etat.envUi.refusal = null;
       peindre();
     },
   });

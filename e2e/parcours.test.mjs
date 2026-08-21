@@ -646,6 +646,40 @@ test('la valeur d’un SECRET ne s’affiche NULLE PART à l’écran', async ()
   });
 });
 
+test('un nom REFUSÉ reste dans la modale, et « Échap » la ferme', async () => {
+  await parcours('env-refus', async () => {
+    // §6.27 : une modale qui se refermerait sur un refus ferait perdre le
+    // travail ET cacherait la raison. Et « Échap » DOIT la fermer — ce parcours
+    // a trouvé le défaut inverse : `onFermer` oubliait l'état de la facette,
+    // donc la repeinte rouvrait aussitôt la modale que `close()` venait de
+    // fermer, et « Échap » paraissait sans effet.
+    await ouvrir('boutique', 'environnement');
+    await page.waitForSelector('#titre-env-spark', { timeout: 10000 });
+    await page.click('[data-ouvre-env="spark"]');
+    await page.waitForSelector('dialog.modale[open] #env-nom-spark', { timeout: 10000 });
+
+    await page.fill('#env-nom-spark', 'AVEC-TIRET');
+    await page.fill('#env-valeur-spark', 'x');
+    await page.click('dialog.modale[open] [data-engage="env-spark"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 15000 });
+
+    const refus = await page.textContent('dialog.modale[open] .refus');
+    // Le refus NOMME ce qui ne va pas, et dit la règle plutôt que « invalide ».
+    assert.match(refus, /AVEC-TIRET/);
+    assert.match(refus, /souligné/);
+    // La saisie survit : on corrige, on ne recommence pas.
+    assert.equal(await page.inputValue('#env-nom-spark'), 'AVEC-TIRET');
+
+    // Rien n'a bougé côté Forge : un refus ne laisse aucune trace.
+    const { corps } = await pile.lireSparkd('/v1/sparks/boutique/env');
+    assert.equal(corps.env.find((e) => e.name === 'AVEC-TIRET'), undefined);
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 10000 });
+  });
+});
+
 // --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
 
 test('un geste sensible envoie une alerte hors bande, un geste ordinaire non', async () => {
