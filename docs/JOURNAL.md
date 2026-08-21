@@ -5812,5 +5812,15 @@ de TOUS les parcours : s'il cassait un geste, la série entière le dirait.
    `51-notify-en-echec.png` — sont produites par le harnais ; leur observation
    est dite dans le compte rendu de la session, qui seul fait foi sur ce point.
 
-**Où reprendre.** L'arbitrage ci-dessus, puis SPK-51 ou SPK-55, premières `[ ]`
-suivantes. SPK-53 et SPK-54 attendent une décision du responsable.
+**Campagne complète** : 827 Python, contrat conforme, 814 de console, 8 de
+gestes, 7 du manuel, `build`. **71 parcours E2E sur 72** — un échec, consigné au
+registre en **INC-11** et non tranché : « entrer dans le terminal » est VERT
+lorsqu'on le joue seul, et rouge dans la série. Le parcours de SPK-62 ne touche
+ni à « crm-production » ni au terminal, et rend la pile à l'état du seed ; rien
+n'établit donc qu'il en soit la cause, et le §2.4 interdit de conclure sans
+ligne de base.
+
+**Où reprendre.** INC-11 d'abord si la campagne suivante le retrouve — une
+instabilité de harnais rend tous les verdicts suivants douteux. Puis l'arbitrage
+sur le nom de l'objet dans l'alerte, puis SPK-51 ou SPK-55. SPK-53 et SPK-54
+attendent une décision du responsable.

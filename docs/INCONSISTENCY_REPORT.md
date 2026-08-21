@@ -240,3 +240,40 @@ ouverte, et le §37.4 est tenu. C'est un écran qui décrit ce qui n'est pas là
 trancher ce que le bandeau doit dire hors session — disparaître, ou annoncer
 « aucune session » —, et cela touche l'écran du terminal dans son ensemble, pas
 l'unité qui y a ajouté un troisième chemin.
+
+
+### INC-11 · Un parcours du terminal est vert SEUL et rouge dans la série
+
+**Observé le 2026-08-21**, en livrant SPK-62. Consigné sans être tranché : rien
+n'établit qu'il soit imputable à cette unité, et le §2.4 interdit de conclure à
+une régression sans ligne de base.
+
+**Ce qui est mesuré, et rien de plus :**
+
+```
+node --test --test-name-pattern="entrer dans le terminal" e2e/parcours.test.mjs
+  => ok 1, pass 1, fail 0
+
+make e2e (série complète, même dépôt, même minute)
+  => ✖ entrer dans le terminal, écrire, voir répondre, quitter, et le distant meurt
+     échec en 707 ms ; l'écran capturé montre « Ouvrir un terminal », donc AUCUNE
+     session ouverte, là où le parcours en attend une.
+```
+
+Les 71 autres parcours sont verts, y compris les trois autres qui ouvrent une
+session — « quitter l'ONGLET », « un distant qui MEURT », « confirmer le
+dépannage ».
+
+**Ce qui n'est PAS établi** : la cause. Trois pistes, aucune vérifiée —
+l'inactivité qui ferme une session (§37.4.3) pendant qu'un parcours antérieur
+occupe la pile ; un reste d'état du gestionnaire de sessions entre parcours ; une
+course entre l'ouverture du flux et la première assertion.
+
+**Ce qui a été écarté** : le parcours de SPK-62 ne touche ni à
+« crm-production », ni au terminal. Il démarre puis arrête « boutique », lève
+puis réarme la protection d'« analytics », et rend la pile à l'état du seed —
+vérifié par une assertion du parcours lui-même.
+
+**Comportement laissé inchangé.** L'arbitrage appartient au responsable :
+diagnostiquer une instabilité de harnais est une unité en soi, et la traiter au
+passage aurait mêlé deux sujets.
