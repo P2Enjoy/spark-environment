@@ -909,6 +909,13 @@ function brancherPanneaux() {
       memory_gib: String(Math.round(etat.spark.memory_reservation_bytes / 1024 ** 3)),
       storage_gib: String(Math.round(etat.spark.storage_bytes / 1024 ** 3)),
       network_mbps: String(Math.round(etat.spark.network_burst_bps / 1e6)),
+      // §49.2 : le mode CPU se redimensionne, et ses réglages DÉPENDENT de lui.
+      // On les pré-remplit tous les trois : changer de mode puis revenir ne doit
+      // pas avoir effacé ce qu'on n'a pas touché.
+      cpu_mode: etat.spark.cpu_mode,
+      cpu_reservation: etat.spark.cpu_reservation ?? '',
+      cpu_max: etat.spark.cpu_max ?? '',
+      cpu_cores: etat.spark.cpu_cores ?? '',
     };
     peindre();
     // Le focus entrant, `Échap` et la restitution du focus sont tenus par
@@ -921,10 +928,19 @@ function brancherPanneaux() {
       controle.addEventListener('input', () => {
         // On ne repeint PAS à chaque frappe : `innerHTML` reconstruirait la
         // modale et arracherait le focus au clavier (§14.3).
-        etat.quotas.values[`${controle.name}_${
-          controle.name === 'network' ? 'mbps' : 'gib'}`] = controle.value;
+        etat.quotas.values[CLES_QUOTA[controle.name] ?? controle.name] = controle.value;
       });
     }
+    // Le MODE, lui, repeint : il décide des champs affichés, et en laisser
+    // saisir qui seront ignorés serait un contrôle mort (§1.4). C'est un
+    // `select`, donc le focus se replace dessus sans être arraché en cours de
+    // frappe — le motif du §14.3 ne s'applique pas ici.
+    const modeCpu = quotas.querySelector('[name="cpu_mode"]');
+    modeCpu?.addEventListener('change', () => {
+      etat.quotas.values.cpu_mode = modeCpu.value;
+      peindre();
+      racine.querySelector('[name="cpu_mode"]')?.focus();
+    });
     quotas.addEventListener('submit', (evenement) => {
       evenement.preventDefault();
       appliquerQuotas();
@@ -1095,6 +1111,12 @@ function noterSignature(reponse) {
   peindreSignature();
 }
 
+/** Du nom d'un champ de la modale vers sa clé d'état (SPK-57). Les unités font
+ *  partie du nom d'état : « memory_gib » dit ce qu'on y met, « memory » non. */
+const CLES_QUOTA = {
+  memory: 'memory_gib', storage: 'storage_gib', network: 'network_mbps',
+};
+
 /**
  * Applique les nouveaux quotas d'un Spark (SPK-57, docs/DAT.md §49).
  *
@@ -1112,7 +1134,20 @@ async function appliquerQuotas() {
   q.refusal = null;
   peindre();
 
+  // §49.2 : on n'envoie QUE les réglages CPU du mode retenu. Envoyer les trois
+  // ferait porter au registre une réservation sur un Spark plafonné — une valeur
+  // que rien n'emploie, et que le prochain lecteur croirait vraie.
+  const mode = q.values.cpu_mode || etat.spark.cpu_mode;
+  const cpu = ['shared', 'shared-pinned'].includes(mode)
+      ? { cpu_reservation: Number(q.values.cpu_reservation), cpu_max: null,
+          cpu_cores: mode === 'shared-pinned' ? Number(q.values.cpu_cores) : null }
+    : mode === 'capped'
+      ? { cpu_max: Number(q.values.cpu_max), cpu_reservation: null, cpu_cores: null }
+    : { cpu_cores: Number(q.values.cpu_cores), cpu_reservation: null, cpu_max: null };
+
   const corps = {
+    cpu_mode: mode,
+    ...cpu,
     memory_reservation_bytes: Math.round(Number(q.values.memory_gib) * 1024 ** 3),
     storage_bytes: Math.round(Number(q.values.storage_gib) * 1024 ** 3),
     network_reservation_bps: Math.round(Number(q.values.network_mbps) * 1e6),

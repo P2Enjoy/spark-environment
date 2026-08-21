@@ -21,6 +21,12 @@ import { renderTerminal, TERMINAL_VIDE } from './spark-terminal.js';
 import { renderDocker, DOCKER_VIDE } from './spark-docker.js';
 import { renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
+// §12.5 : la table des modes CPU vit à UN SEUL endroit. En recopier une
+// seconde ici ferait diverger deux libellés pour le même mode.
+// `MODES` est DÉJÀ pris dans ce fichier par les modes d'amorçage : on nomme donc
+// celui-ci pour ce qu'il est. Deux tables homonymes dans un même module finiraient
+// par être confondues.
+import { MODES as MODES_CPU } from './spark-create.js';
 import { formatDate } from './forge-view.js';
 
 const echapper = (v) =>
@@ -252,19 +258,47 @@ function renderRessources(spark, usage) {
  */
 export function renderQuotas(spark, ui = QUOTAS_VIDE) {
   const v = ui.values;
-  const champ = (id, libelle, valeur, aide, unite) => `
+  const champ = (id, libelle, valeur, aide, unite, pas = '1') => `
     <div class="champ">
       <label for="quota-${id}">${echapper(libelle)}</label>
       <input class="controle" id="quota-${id}" name="${id}" type="number"
-             min="0" step="1" value="${echapper(valeur)}">
+             min="0" step="${echapper(pas)}" value="${echapper(valeur)}">
       <p class="champ__aide">${echapper(unite)}${aide ? ` · ${aide}` : ''}</p>
     </div>`;
+
+  // §49.2 : le mode CPU se redimensionne, et le §49.4 impose de dire qu'il
+  // exige un redémarrage tant que sa prise à chaud n'est pas MESURÉE sur une
+  // Forge réelle.
+  //
+  // Les champs qui suivent DÉPENDENT du mode : un mode partagé se règle par une
+  // réservation, un mode plafonné par un plafond, un mode dédié par un nombre de
+  // cœurs. Afficher les trois ensemble ferait saisir des valeurs que le produit
+  // ignorera (§1.4).
+  const mode = v.cpu_mode || spark.cpu_mode;
+  const options = Object.entries(MODES_CPU).map(([cle, libelle]) =>
+    `<option value="${echapper(cle)}"${cle === mode ? ' selected' : ''}>${
+      echapper(libelle)}</option>`).join('');
+
+  const champsCpu = ['shared', 'shared-pinned'].includes(mode)
+      ? champ('cpu_reservation', 'Réservation CPU', v.cpu_reservation,
+              'droit d’ordonnancement sous contention, pas un plafond', 'en CPU', '0.1')
+    : mode === 'capped'
+      ? champ('cpu_max', 'Plafond CPU', v.cpu_max,
+              'jamais dépassé, pas de burst', 'en CPU', '0.1')
+    : champ('cpu_cores', 'Cœurs dédiés', v.cpu_cores,
+            'cœurs physiques entiers, frères SMT compris', 'en cœurs', '1');
 
   return renderModale({
     ouverte: ui.open, id: 'quotas', titre: 'Ressources',
     engagement: 'Appliquer les quotas',
     refus: ui.refusal, occupee: ui.busy,
     corps: `
+      <div class="champ">
+        <label for="quota-cpu_mode">Mode CPU</label>
+        <select class="controle" id="quota-cpu_mode" name="cpu_mode">${options}</select>
+        <p class="champ__aide"><strong>exige un redémarrage</strong></p>
+      </div>
+      ${champsCpu}
       ${champ('memory', 'Mémoire', v.memory_gib, '', 'en Gio')}
       ${champ('storage', 'Disque', v.storage_gib,
               '<strong>exige un redémarrage</strong>', 'en Gio')}
@@ -278,7 +312,8 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE) {
 /** Valeurs de la modale des quotas. Vide tant qu'on ne l'a pas ouverte. */
 export const QUOTAS_VIDE = {
   open: false, busy: false, refusal: null,
-  values: { memory_gib: '', storage_gib: '', network_mbps: '' },
+  values: { memory_gib: '', storage_gib: '', network_mbps: '',
+            cpu_mode: '', cpu_reservation: '', cpu_max: '', cpu_cores: '' },
 };
 
 function renderAcces(spark) {
