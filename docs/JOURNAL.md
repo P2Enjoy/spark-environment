@@ -6871,3 +6871,62 @@ l'écran et de leurs fixtures — `test_app`, `test_metrics`, `forge-view.test.j
 `gestes.test.mjs`, `captures.mjs`. Aucune campagne E2E lancée : la machine est
 partagée, et le §F du runbook l'interdit sans annonce.
 
+
+## 2026-08-21 · L'arbitrage rendu, et le plan de reprise enfin joué
+
+### Du travail non committé récupéré au démarrage (§1.2)
+
+L'arbre de travail portait neuf fichiers modifiés et non committés : **l'arbitrage
+du responsable sur SPK-29** — la réservation est un **plancher** —, déjà propagé
+au runtime, à l'écran et aux preuves. Préservé par `git stash`, restauré,
+vérifié (915 preuves Python, 836 de console) puis committé et poussé.
+
+Motif de l'arbitrage, écrit au §32.2 : une égalité stricte obligerait à
+**retirer** du CPU à un locataire quand la Forge est au repos — donc à supprimer
+le burst pour être exact — et ferait bouger le poids sur un signal qui n'est pas
+un changement d'allocation.
+
+### SPK-29 close, et le mensonge retiré partout
+
+L'arbitrage rendu, l'unité n'attendait plus que lui. Sa **DoD a été révisée** —
+l'ancienne décrivait une règle qui n'est plus celle du produit, et elle n'est pas
+conservée à côté de la nouvelle.
+
+Puis j'ai cherché ce que l'arbitrage rendait **faux ailleurs**, et retiré chaque
+mention : DAT §7.3 et §27.6, module d'admission, deux commentaires du runtime, et
+le manuel M4 — qui disait lui-même « l'écran le dira autrement le jour où ce sera
+faux ». Ce jour était venu.
+
+**La mécanique de lecture du §27.6 a fait exactement ce pour quoi elle existait** :
+l'écran lisait la portée auprès de la Forge plutôt que de l'écrire en dur, et il a
+suivi le changement de règle sans qu'on y touche. Vérifié en capture.
+
+### SPK-36 : le plan de reprise n'est plus une fiction
+
+L'exercice réel de restauration a été **joué de bout en bout** sur la Forge, avec
+les seules commandes du document :
+
+```
+sauvegarde   : 253 952 octets, 0,10 s, service en marche
+restauration : 0,08 s
+interruption : ~20 s, dominee par l'arret et le redemarrage de sparkd
+preflight 12/0/0 · 2 Sparks avec leurs etats reels
+GET /v1/audit/verify -> intact: true, 51 entrees
+```
+
+**La perte a été démontrée plutôt qu'affirmée** : une variable posée *après* la
+sauvegarde n'existe plus après restauration, celles posées avant sont là. Et le
+dispositif s'est comporté comme écrit — refus de restaurer sous service actif,
+ancien registre déplacé et non écrasé.
+
+La Forge a été rendue à son état, données de démonstration reposées.
+
+### Où reprendre
+
+**SPK-36** garde trois écarts nommés : les neuf autres scénarios à instruire, la
+**reconstruction d'un Spark** après perte de sa cellule — l'autre moitié de
+l'exercice —, et l'ancre de la console, qui exige l'hôte lancé avec son tunnel.
+
+Restent bloquées : **SPK-28** (une machine à commander), **SPK-61** (poser la clé
+restreinte, geste délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel),
+**SPK-43** (route de dépannage de bout en bout), **SPK-17** (CI jamais exécutée).
