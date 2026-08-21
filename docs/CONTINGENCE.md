@@ -169,4 +169,75 @@ laisser croire qu'elle est comblée.
 | fuite d'une clé SSH | le geste existe (§35.2) ; l'ordre des opérations, non |
 | mot de passe de protection perdu (§35.3) | la levée se fait sur l'hôte, la procédure n'est pas écrite |
 | Spark compromis de l'intérieur | que fait-on du Spark, de ses routes, de ses instantanés |
-| entrée fantôme au registre (INC-03) | une ressource comptée pour un Spark disparu |
+| entrée fantôme au registre | **INSTRUIT le 2026-08-21**, voir §4 |
+
+
+## 4. Entrée fantôme au registre : une ressource comptée pour un Spark disparu
+
+**Premier scénario instruit, et il l'a été sur un cas RÉEL** — pas un cas
+fabriqué. La Forge de validation en portait un depuis deux jours sans que
+personne ne le sache.
+
+### 4.1 Ce que c'est
+
+Une ligne du registre qui déclare une cellule (`incus_name` renseigné) alors
+qu'`incus list` ne la connaît pas. Le Spark est en `error`, et son `last_error`
+raconte l'histoire :
+
+```
+Incus a refuse DELETE /1.0/instances/mesure-cpu : Client error '404 Not Found'
+```
+
+Une suppression a échoué parce que l'instance était **déjà** absente. C'était le
+comportement d'avant SPK-52 ; la ligne, elle, est restée.
+
+### 4.2 Ce que cela COÛTE, mesuré
+
+Le fantôme n'est pas inerte : **il consomme de l'allocation réelle**, puisque
+l'admission compte ce que le registre déclare.
+
+| | avec le fantôme | après sa suppression |
+|---|---|---|
+| CPU alloué | 1,5 | **0,5** |
+| poids de `spark.slice` | **180** | **43** |
+
+Le second chiffre est le plus coûteux, et il ne saute pas aux yeux. Le poids de
+la tranche vaut `H × f / (1 − f)` avec `f = Σr / C` (§32.2) : une réservation
+fantôme de 1,0 CPU sur une capacité de 4 faisait peser la tranche **quatre fois
+trop**. Les Sparks vivants recevaient donc un plancher calculé sur des
+réservations que personne ne détient.
+
+L'écart joue en leur faveur — ils obtiennent plus, jamais moins —, et c'est
+précisément pourquoi **rien ne s'en plaint**. Un défaut qui ne lèse personne
+immédiatement est un défaut qui dure.
+
+### 4.3 Le geste
+
+**Supprimer le Spark par le produit.** Depuis SPK-52, une instance déjà absente
+vaut suppression réussie : le registre se nettoie, l'admission se recalcule, et
+la tranche se repondère toute seule. Vérifié sur la Forge — `200`,
+`{"deleted": …}`, puis 0,5 CPU alloué et poids 43 sans autre intervention.
+
+Sauvegarder le registre AVANT (§2.3) : la suppression est irréversible, et une
+ligne fantôme est parfois moins fantôme qu'on ne le croit.
+
+### 4.4 Le signal qui manquait
+
+Aucun des douze contrôles du préflight ne regardait cette cohérence. La Forge a
+donc été mal pondérée pendant deux jours **en rendant « 0 bloquant »**.
+
+Un contrôle est ajouté — `REG-FANTOME` — qui compare ce que le registre déclare
+à ce qu'Incus connaît. Il **relève, il ne répare pas** (§48.2) : le geste reste
+au responsable, parce que supprimer une ligne de registre détruit une déclaration
+d'intention, et que la bonne réponse est parfois de **reconstruire** la cellule
+plutôt que d'effacer la ligne.
+
+Ce que le contrôle dit, et ce qu'il ne dit pas :
+
+- il nomme les Sparks concernés, et **ce qu'ils coûtent** — sans le chiffre, on
+  ne sait pas s'il faut agir aujourd'hui ou la semaine prochaine ;
+- un Spark **sans** `incus_name` — `pending`, jamais appliqué — n'est PAS un
+  fantôme : il n'a jamais prétendu avoir de cellule. Les confondre ferait crier
+  au défaut sur le déroulement normal d'une création ;
+- Incus injoignable rend « non mesuré », jamais « fautif » (§31.2) : conclure
+  sur une absence de réponse ferait supprimer des Sparks bien vivants.
