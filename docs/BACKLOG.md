@@ -2788,7 +2788,7 @@ Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle traite les menace
   existante. Captures `13-` et `111-` observées, plus
   `docs/manuel/images/m10-suppression-nom-frappe.png`. Manuel M10 complété.
 
-### [ ] SPK-51 · Un Spark qui héberge une messagerie, et sa recette DNS
+### [~] SPK-51 · Un Spark qui héberge une messagerie, et sa recette DNS
 
 - Spécification : `docs/DAT.md` §38.6, §38.7, §39 · manuel M7 et M8.
 - Dépend de : SPK-49 (les ports 25, 465, 587, 143, 993 ne passent pas par le
@@ -2815,6 +2815,20 @@ Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle traite les menace
   Le fonctionnement réel d'un envoi **ne pourra pas être prouvé** tant que le
   port 25 sortant n'est pas débloqué par l'hébergeur : cette limite est écrite
   dans l'unité, elle n'est pas contournée par une simulation.
+
+**Prérequis re-mesurés le 2026-08-21, avant toute ligne de code.** La
+documentation officielle de TEM le limite aux e-mails transactionnels générés
+par une application; elle n'établit pas que le relais peut porter la
+correspondance de boîtes humaines. En outre, la Forge de validation n'écoute pas
+sur TCP/25 et une tentative de connexion externe expire. L'architecture candidate
+« réception locale + relais TEM » n'est donc ni autorisée ni déployable à ce
+stade.
+
+**Nécessite une action humaine** : choisir et autoriser un relais compatible
+avec des boîtes humaines (ou l'émission directe), ses conditions et ses quotas;
+choisir le domaine et la Forge de réception; puis ouvrir et vérifier TCP/25
+entrant. Sans ces décisions, aucune recette DNS ni préconfiguration de serveur
+ne peut être écrite honnêtement.
 
 ### [x] SPK-52 · Une instance déjà absente vaut suppression réussie
 

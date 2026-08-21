@@ -5831,36 +5831,51 @@ messagerie, il en prend la moitié.
 | Service transactionnel du fournisseur | oui, c'est son métier | **non** |
 | Serveur de messagerie dans un Spark | oui | oui — boîtes, IMAP, alias |
 
-**L'architecture retenue** — et c'est la configuration recommandée d'un serveur
-de messagerie en environnement infonuagique :
+**L'architecture candidate**, tant que le fournisseur l'autorise explicitement,
+est celle d'un serveur de messagerie en environnement infonuagique :
 
 - le serveur du Spark **reçoit** : le `MX` du domaine pointe vers la Forge, et le
   port 25 **entrant** est publié (§39) ;
 - il n'émet pas lui-même : il **remet au relais** du fournisseur, sur un port
   chiffré, avec les identifiants du compte.
 
-**Trois des limites du §38.7 disparaissent dans cette architecture**, et c'est la
-raison de la préférer :
+**Trois des limites du §38.7 disparaîtraient dans cette architecture** :
 
 1. le port 25 **sortant** n'est plus employé — donc plus rien à faire débloquer ;
 2. le `PTR` qui compte devient celui du relais, déjà cohérent ;
 3. la réputation est celle du fournisseur, déjà établie, et non celle d'une
    adresse neuve.
 
-**Deux points restent à vérifier auprès du fournisseur, et ils décident du
-reste** — ils sont écrits ici pour ne pas être découverts à l'implémentation :
+**Mesure des prérequis le 2026-08-21.** La documentation actuelle de
+[Transactional Email](https://www.scaleway.com/en/docs/transactional-email/)
+décrit des messages automatisés émis par une application (notifications, reçus,
+réinitialisations) ; elle ne donne pas d'autorisation pour relayer la
+correspondance humaine de boîtes aux lettres. Ses
+[capacités et limites](https://www.scaleway.com/en/docs/transactional-email/reference-content/tem-capabilities-and-limits/)
+soumettent en outre les capacités à validation et aux règles anti-spam. Le relais
+TEM ne peut donc pas être choisi pour SPK-51 par simple déduction de sa présence
+sur `noreply` : il faut soit une confirmation contractuelle explicite, soit un
+relais conçu pour cet usage.
 
-- les **quotas, la tarification et les conditions d'usage** du service
-  transactionnel lorsqu'il achemine la correspondance de vraies boîtes aux
-  lettres, et non des messages applicatifs. Le produit est vendu comme
-  *transactionnel* ; rien ne garantit que l'usage visé entre dans son périmètre ;
-- que le port 25 **entrant** soit bien ouvert sur le type de serveur retenu. Le
-  blocage porte classiquement sur le sortant, mais cela se constate, cela ne se
-  suppose pas.
+La même mesure sur la Forge de validation ne trouve aucun processus à l'écoute
+sur TCP/25 et une connexion externe au port expire. Le produit ne peut pas
+prétendre recevoir du courrier tant qu'un serveur choisi n'écoute pas, que le
+pare-feu laisse entrer ce port et que l'acheminement est vérifié.
 
-Tant que ces deux points ne sont pas tranchés, SPK-51 ne peut pas choisir entre
-« émettre par le relais » et « émettre en direct » — et c'est ce choix qui décide
-si les trois limites ci-dessus tombent ou demeurent.
+**Trois décisions restent à prendre avant l'implémentation**, pour qu'elles ne
+soient pas découvertes après avoir posé une recette DNS :
+
+- le relais compatible, ses quotas, son prix et ses conditions d'usage pour la
+  correspondance de boîtes humaines ;
+- le serveur et le domaine qui recevront, avec le port 25 **entrant** réellement
+  ouvert et vérifié ;
+- si l'émission reste directe, l'autorisation du port 25 sortant, le PTR et la
+  réputation de l'adresse; sinon les identifiants du relais choisi.
+
+Tant que ces décisions ne sont pas rendues, SPK-51 ne choisit ni « émettre par
+un relais » ni « émettre en direct ». Une recette DNS ou un préréglage de
+messagerie codé avant ce choix promettrait une architecture que le responsable
+n'a pas autorisée.
 
 ### 38.7 Ce que le DNS ne peut pas faire, et qu'il faut dire avant
 

@@ -7797,3 +7797,21 @@ une autorisation explicite pour réconcilier `known_hosts`, puis lire le briefin
 avec SSH et y déployer la même pile. SPK-54 et SPK-60 restent `[~]` jusque-là;
 la campagne `make test` reste également non verte à cause du blocage AnyIO déjà
 consigné.
+
+---
+
+## 2026-08-21 · SPK-51 — le relais transactionnel n'autorise pas la messagerie humaine
+
+Avant d'écrire le préréglage de messagerie, les deux prérequis du §38.6 bis ont
+été mesurés. La documentation TEM actuelle de Scaleway le décrit comme un service
+d'e-mails transactionnels automatisés par une application, soumis à des quotas
+et à l'anti-spam; elle ne confirme pas qu'il peut relayer les boîtes humaines que
+SPK-51 veut héberger. La présence du relais sur `noreply` ne constitue donc pas
+une autorisation d'usage.
+
+La Forge de validation n'avait aucun écouteur TCP/25 et une tentative de
+connexion externe a expiré. Ni la réception locale ni l'émission par TEM ne sont
+donc prêtes à recevoir une recette DNS. Le contrat et le backlog ont été corrigés
+avant tout code : il faut le choix explicite d'un relais compatible ou de
+l'émission directe, ses conditions/quota, puis le domaine et l'ouverture vérifiée
+du port 25 entrant. SPK-51 passe à `[~]`; aucun comportement n'est déclaré livré.
