@@ -2,7 +2,8 @@
             AMONT), §42.1 (détecter d'abord, n'installer que les manques),
             §42.5 (exec_capture, et le code de sortie qui n'est pas une erreur),
             §42.6 (ce que la détection exécute), §42.7 (le contrat d'API),
-            §42.8 (ce que le journal reçoit) · §35 (un Spark protégé)
+            §42.8 (ce que le journal reçoit), §42.2 bis (reprise rootless) ·
+            §35 (un Spark protégé)
 
 Ce que ces preuves gardent, et c'est LE point de l'unité : la détection porte sur
 l'**origine** du paquet Docker, pas sur sa présence. Un `docker.io` de
@@ -378,10 +379,60 @@ def test_l_option_rootless_installe_ce_qu_il_faut_pour_qu_il_SURVIVE(tmp_path):
     assert corps["mode"] == bootstrap.ROOTLESS
     lances = json.dumps(client.app.state.incus.created[nom]["commands"])
     assert "docker-ce-rootless-extras" in lances
+    assert "systemd-container" in lances, "machinectl vient de ce paquet"
     assert "dockerd-rootless-setuptool" in lances
     assert "enable-linger" in lances
     # Deux démons sur la même cellule se disputeraient stockage et réseaux.
     assert "systemctl disable --now docker.service" in lances
+
+
+def test_un_rootless_interrompu_est_repris_sans_basculer_un_docker_enracine(tmp_path):
+    """La Forge réelle a trouvé ce cas : les paquets existent, le démon
+    utilisateur non. Rejouer la seule préparation est sûr car le mode root ne
+    tourne pas; rejouer tout Docker ne le serait pas (§42.2 bis)."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    pilote = client.app.state.incus
+    _poser_runtime(
+        client, nom, sshd="active", depot="present",
+        docker="Docker version 29.7.2", origine="docker-ce",
+        compose="Docker Compose version v5.5.0",
+        cles=bootstrap.empreinte(pilote.created[nom]["files"]["/root/.ssh/authorized_keys"]),
+    )
+    avant = len(pilote.created[nom].get("commands", []))
+
+    response = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
+    assert response.status_code == 200, response.text
+    corps = response.json()
+    assert corps["changed"] is True
+    reprise = next(item for item in corps["items"] if item["key"] == "rootless")
+    assert reprise["outcome"] == "installé"
+    assert reprise["mode"] == bootstrap.ROOTLESS
+    lancees = pilote.created[nom]["commands"][avant:]
+    assert any("systemd-container" in commande[-1] for commande in lancees)
+    assert not any("systemctl enable --now docker" in commande[-1] for commande in lancees)
+    audit = client.get("/v1/audit?action=spark.bootstrap").json()["entries"][0]
+    assert "rootless" in json.loads(audit["payload"])["items"]
+
+
+def test_un_code_non_nul_d_installation_refuse_le_succes_et_l_audit(tmp_path):
+    """Le non-zéro est une réponse POUR LE RELEVÉ, pas pour apt (§42.5)."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    pilote = client.app.state.incus
+    original = pilote.exec_capture
+
+    def echouer_installation(name, command):
+        if "apt-get install" in command[-1]:
+            return 42, "", ""
+        return original(name, command)
+
+    pilote.exec_capture = echouer_installation
+    response = client.post(f"/v1/sparks/{nom}/bootstrap")
+    assert response.status_code == 502
+    assert response.json()["detail"]["error"] == "bootstrap_failed"
+    assert "code 42" in response.json()["detail"]["message"]
+    assert client.get("/v1/audit?action=spark.bootstrap").json()["entries"] == []
 
 
 def test_le_MODE_est_observe_et_rendu_par_le_releve(tmp_path):

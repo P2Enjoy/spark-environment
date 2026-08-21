@@ -7709,3 +7709,14 @@ Cette règle ne vaut pas pour l'installation. Un script qui rend non zéro doit
 faire échouer le POST et empêcher l'audit de succès; le correctif la pose aussi,
 afin qu'une prochaine dépendance manquante ne soit pas silencieusement traitée
 comme un amorçage accompli.
+
+### Correctif local, attente de la même cellule réelle
+
+Le runtime installe désormais `systemd-container`, relance la seule préparation
+rootless lorsqu'un Docker CE sans mode est explicitement redemandé, et ajoute
+alors une ligne `rootless` au compte rendu et au journal. Un faux démon enraciné
+actif reste un `409`; un code de sortie `42` simulé rend `502 bootstrap_failed`
+et aucune ligne d'audit de succès. Les **77 preuves ciblées** sont vertes. Le
+prochain geste est volontairement la même cellule `briefing-e2e`, restée dans
+l'état incomplet mesuré, afin de prouver une reprise et non une installation
+neuve.

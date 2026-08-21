@@ -1628,6 +1628,8 @@ def create_app(config: Config) -> FastAPI:
 
             try:
                 a_faire = bootstrap_service.manques(avant)
+                reprise_rootless = bootstrap_service.reprise_rootless(avant, mode)
+                actions = list(a_faire)
                 for cle in a_faire:
                     if cle == "cles":
                         _apply_keys(connection, spark)
@@ -1635,24 +1637,42 @@ def create_app(config: Config) -> FastAPI:
                     commande = bootstrap_service.script_pour(
                         cle, rootless=mode == bootstrap_service.ROOTLESS)
                     if commande:
-                        app.state.incus.exec_capture(spark["incus_name"], commande)
+                        code, _, _ = app.state.incus.exec_capture(
+                            spark["incus_name"], commande)
+                        # §42.5 : un code non nul est acceptable pour une
+                        # DÉTECTION, jamais pour l'installation elle-même.
+                        if code:
+                            raise bootstrap_service.BootstrapFailed(
+                                f"L'installation de « {cle} » a échoué (code {code}).")
+                if reprise_rootless:
+                    code, _, _ = app.state.incus.exec_capture(
+                        spark["incus_name"], bootstrap_service.script_rootless())
+                    if code:
+                        raise bootstrap_service.BootstrapFailed(
+                            f"La reprise rootless a échoué (code {code}).")
+                    actions.append("rootless")
                 # §44.3, §44.8 : le briefing ne devine pas les versions depuis
                 # un vieux texte. Le relevé initial suffit si l'amorçage n'a
                 # rien fait; après une écriture, on le rejoue pour dater l'état
                 # qu'elle a effectivement produit.
-                if a_faire:
+                if actions:
                     brut_final, apres = _lire_amorcage(connection, spark)
                 else:
                     brut_final, apres = brut_avant, avant
+                if reprise_rootless:
+                    bootstrap_service.verifier_reprise_rootless(apres)
             except InstanceAbsente as erreur:
                 raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
+            except bootstrap_service.BootstrapFailed as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "bootstrap_failed", "message": str(erreur)}) from erreur
 
-            lignes = bootstrap_service.compte_rendu(avant, apres, a_faire)
+            lignes = bootstrap_service.compte_rendu(avant, apres, actions)
             briefing_service.enregistrer_observation(
-                connection, spark["id"], brut_final, a_faire)
+                connection, spark["id"], brut_final, actions)
             _rattraper_briefing(connection, service.by_name(connection, name))
             # §42.8 : un amorçage qui ne change RIEN est quand même journalisé.
             # Savoir que quelqu'un a demandé le geste et que rien n'était à faire
@@ -1660,16 +1680,16 @@ def create_app(config: Config) -> FastAPI:
             # tenté.
             audit_service.record(
                 connection, None, "spark.bootstrap", "ok",
-                bootstrap_service.message(name, a_faire, mode),
+                bootstrap_service.message(name, actions, mode),
                 target_type="spark", target_id=spark["id"],
                 # §42.2 bis : le mode figure au journal MÊME quand rien n'a été
                 # fait. C'est ce qu'on cherchera le jour où une pile ne démarre
                 # pas, et il ne se retrouve nulle part ailleurs.
-                payload={"path": "incus_exec", "changed": bool(a_faire),
-                         "mode": mode, "items": a_faire},
+                payload={"path": "incus_exec", "changed": bool(actions),
+                         "mode": mode, "items": actions},
             )
             return {"spark": name, "path": "incus_exec", "mode": mode,
-                    "changed": bool(a_faire), "items": lignes,
+                    "changed": bool(actions), "items": lignes,
                     "complete": bootstrap_service.complet(apres)}
 
     @app.post("/v1/sparks/{name}/ssh-keys/{label}", tags=["cles"])

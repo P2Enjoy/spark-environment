@@ -3662,7 +3662,7 @@ l'implémentation et les preuves, dont la Forge réelle dépend de SPK-54.
 le relevé daté; le briefing JSON, le Markdown et le panneau `/etc/motd` sont
 écrits depuis le même modèle, avec permissions `0600`, `0600`, `0644`. Les
 routes, ports, variables, quotas et protection le reposent depuis le registre;
-les 75 preuves ciblées cherchent une valeur de secret dans chaque projection,
+les 77 preuves ciblées cherchent une valeur de secret dans chaque projection,
 jouent les réécritures et gardent le cas d'un Docker déjà présent. Le contrat
 d'API reste vert.
 
@@ -3680,6 +3680,9 @@ pas `machinectl` : le script installait les paquets rootless mais s'arrêtait
 avant le service utilisateur; Docker apparaissait présent, sans mode, et un
 second geste ne savait pas reprendre. Contrat corrigé et poussé avant le code :
 DAT §42.2 bis distingue cette reprise d'une bascule et exige `systemd-container`.
+Le correctif local est couvert : une reprise n'exécute pas le démon root, et un
+code d'installation non nul répond `bootstrap_failed` sans audit de succès. La
+preuve reste à rejouer sur `briefing-e2e` avec le paquet corrigé.
 
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 

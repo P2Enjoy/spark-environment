@@ -70,6 +70,9 @@ LIBELLES = {
     "depot": "dépôt Docker amont",
     "docker": "moteur Docker",
     "compose": "greffon Compose",
+    # Ne figure pas dans le relevé ordinaire : cette ligne n'apparaît que dans
+    # le compte rendu d'une reprise rootless interrompue (§42.2 bis).
+    "rootless": "démon Docker rootless",
 }
 
 
@@ -230,7 +233,9 @@ SCRIPTS = {
 #: à la fin de sa session, ce qui donnerait une cellule qui marche jusqu'au
 #: premier redémarrage — et cela ne se verrait qu'alors.
 SCRIPT_ROOTLESS = APT + (
-    "apt-get install -y -qq docker-ce-rootless-extras uidmap dbus-user-session\n"
+    # `machinectl` ne fait PAS partie de l'image Debian minimale : l'omettre
+    # installe les paquets puis échoue juste avant le service utilisateur.
+    "apt-get install -y -qq docker-ce-rootless-extras uidmap dbus-user-session systemd-container\n"
     f"id {COMPTE_ROOTLESS} >/dev/null 2>&1 || "
     f"useradd -m -s /bin/bash {COMPTE_ROOTLESS}\n"
     f"loginctl enable-linger {COMPTE_ROOTLESS}\n"
@@ -241,6 +246,43 @@ SCRIPT_ROOTLESS = APT + (
     "XDG_RUNTIME_DIR=/run/user/$(id -u %s) dockerd-rootless-setuptool.sh install\n"
     % COMPTE_ROOTLESS
 )
+
+
+class BootstrapFailed(RuntimeError):
+    """Une commande d'installation a refusé de produire l'état voulu.
+
+    @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.5 (le code non nul d'une
+          installation échoue), §42.7 (bootstrap_failed)
+    """
+
+
+def reprise_rootless(vus: list[dict[str, Any]], voulu: str) -> bool:
+    """Une demande rootless doit-elle reprendre le seul démon inachevé ?
+
+    Un Docker CE présent sans mode ne vaut PAS un Docker enraciné : le service
+    root est absent et aucun conteneur ne change donc de propriétaire. C'est le
+    seul état où la reprise est sûre; `enracine` continue par `verifier_mode` à
+    refuser toute bascule (§42.2 bis).
+    """
+    docker = next((vu for vu in vus if vu["key"] == "docker"), None)
+    return bool(voulu == ROOTLESS and docker
+                and docker["state"] == PRESENT and docker.get("mode") is None)
+
+
+def script_rootless() -> list[str]:
+    """La seule préparation à rejouer après une interruption (§42.2 bis)."""
+    return _shell(SCRIPT_ROOTLESS)
+
+
+def verifier_reprise_rootless(vus: list[dict[str, Any]]) -> None:
+    """Refuse un compte rendu de succès sans démon utilisateur observable."""
+    docker = next((vu for vu in vus if vu["key"] == "docker"), None)
+    if docker and docker.get("mode") == ROOTLESS:
+        return
+    raise BootstrapFailed(
+        "La reprise rootless a terminé sans démon utilisateur détectable. "
+        "Aucun succès n'est inscrit : vérifiez le service de spark-docker."
+    )
 
 
 class ModeConflit(RuntimeError):
@@ -336,6 +378,19 @@ def compte_rendu(avant: list[dict[str, Any]], apres: list[dict[str, Any]],
         if "mode" in arrive:
             ligne["mode"] = arrive["mode"]
         lignes.append(ligne)
+    if "rootless" in agis:
+        # §42.2 bis : ce n'est pas un sixième élément de la détection. C'est la
+        # seule action supplémentaire rendue quand une pose rootless a été
+        # interrompue après Docker CE, avant son démon utilisateur.
+        docker = next((vu for vu in apres if vu["key"] == "docker"), {})
+        mode = docker.get("mode")
+        lignes.append({
+            "key": "rootless", "label": LIBELLES["rootless"],
+            "state": PRESENT if mode == ROOTLESS else DEFECT,
+            "detail": "service utilisateur détecté" if mode == ROOTLESS else "absent",
+            "action": "amorcé", "outcome": "installé" if mode == ROOTLESS else "échoué",
+            "mode": mode,
+        })
     return lignes
 
 
