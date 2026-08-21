@@ -7351,3 +7351,112 @@ campagne occupait la machine, et le §F du runbook interdit d'en lancer une
 seconde. Je referai la mesure sous mes propres yeux avec la vérification
 visuelle de SPK-64, qui est due de toute façon.
 
+---
+
+## 2026-08-21 — Les dix incohérences ouvertes sont décidées, le registre est libéré
+
+**Instruction du responsable.** Le registre avait servi à constater des écarts,
+mais plusieurs attendaient désormais un choix de produit ou de méthode. Le
+responsable demande que ces choix soient rendus ici, à leur place chronologique,
+plutôt que de laisser le fichier d'incohérences devenir une seconde file de
+travail. Les corrections restent des unités explicites : aucune n'est glissée
+dans cette séance d'arbitrage.
+
+### INC-05 — Conserver la preuve réelle et la rendre exécutable
+
+`e2e/reel.mjs` reste la preuve distincte de la console contre un `sparkd` réel.
+Il doit suivre la navigation visible — cliquer *Routes* avant de chercher son
+titre — et être exposé par une cible `make reel`, séparée de `make captures` :
+le premier exige une pile réelle déjà lancée et seedée, le second monte sa pile
+jetable. La cible annoncera ce prérequis et échouera sur toute erreur de console.
+Les captures `40-reel-*` redeviennent ainsi régénérables sans faire d'une pile
+réelle une dépendance cachée de la campagne ordinaire.
+
+### INC-06 — Les quatre classes portent une intention et reçoivent leur style
+
+Elles ne sont pas retirées. `controle--compact` exprime la densité du sélecteur,
+`epreuve--ok` et `epreuve--absent` les deux verdicts de la sonde, et
+`recette-lignes` la structure à deux informations d'une recette DNS. Chacune
+reçoit donc un sélecteur CSS et une preuve visuelle de son écran. `CONNUES` ne
+perdra une classe qu'en même temps que son style ; il ne doit pas devenir une
+liste de styles « prévus ».
+
+### INC-08 — Après une tentative, l'erreur locale suit la valeur
+
+La première validation locale reste à la soumission : l'écran n'accueille pas
+une personne avec des erreurs avant toute tentative. Dès qu'une soumission a
+échoué pour la forme, chaque modification revalide la forme locale et met à jour
+le message du contrôle concerné sans reconstruire le formulaire ni voler le
+focus. Une erreur ne peut donc plus décrire une valeur qui n'est plus celle du
+champ ; la capacité reste, elle, du seul ressort de `sparkd` à la soumission.
+
+### INC-09 — La déclaration rend l'entrée effectivement inscrite
+
+`POST /v1/audit` rendra l'entrée sérialisée qui vient d'être ajoutée à la chaîne,
+dans la même forme que sa lecture par `GET /v1/audit`. C'est le seul sens cohérent
+du champ déjà nommé `entry` : un identifiant seul obligerait l'appelant à relire,
+et l'omettre contredirait le contrat actuel. La valeur est produite après
+l'écriture et la chaîne ; `null` n'est plus une réponse possible à un `201`.
+Le contrat partagé et ses types changent avec cette décision.
+
+### INC-10 — Sans session, pas de bannière de session
+
+La bannière décrit exclusivement une session ouverte. Elle n'est rendue que
+lorsqu'une session active porte son identifiant et son chemin réels. Hors session,
+l'écran conserve ses commandes et son éventuel motif de fermeture, mais ne dit ni
+« SSH » ni que quitter l'onglet terminera quelque chose. Une absence est un état
+nommé par l'écran, jamais une session supposée.
+
+### INC-11 — Aucune cause n'est inventée ; la prochaine occurrence doit la nommer
+
+Le défaut intermittent n'autorise ni temporisation ni correctif préventif : les
+trois causes possibles ont des remèdes incompatibles. La décision est de ne pas
+modifier le produit tant qu'une série n'a pas relevé le motif de fermeture du
+terminal. À la prochaine occurrence, le diagnostic du parcours conserve ce motif
+(`distant_termine`, `inactivite` ou `flux_ferme`) avec l'ordre des parcours ; ce
+seul relevé ouvrira une unité de correction. Le vert isolé et les reproductions
+infructueuses ne sont pas traités comme une panne résolue ni comme une régression.
+
+### INC-12 — Les refus humains emploient l'unité du contrôle
+
+Les nombres structurés de l'API restent en unités machine. La console construit
+en revanche tous les refus lisibles par un humain depuis ces champs structurés,
+par un formateur unique : mémoire et disque s'expriment exactement dans la grille
+Gio/Mio du contrôle, réseau en Mbit/s et CPU en CPU. Admission et
+rétrécissement emploient cette même frontière de rendu ; aucun des deux ne garde
+un texte en octets bruts à côté d'une saisie en Gio.
+
+### INC-13 — Une capture ne réussit jamais avec une console non vierge
+
+Le harnais rendra l'URL et le type de chaque évènement de console ou erreur de
+page, puis échouera sans liste blanche pour une erreur applicative. Entre deux
+piles, il détachera la page du serveur précédent et attendra la fin de ce
+changement avant de fermer le serveur : fermer un port pendant qu'une page le
+consulte n'est pas un bruit acceptable. Si un message subsiste après cette borne,
+il est une erreur reproductible à corriger, non un avertissement que la campagne
+masque.
+
+### INC-14 — Un tunnel `ready` efface son erreur passée
+
+`lastError` décrit l'échec courant d'un tunnel, non son histoire complète. Tout
+passage à `ready`, tant à l'ouverture qu'au sondage périodique, l'efface. Un
+échec pendant l'établissement peut rester interne à la boucle de reprise, mais
+ne paraît jamais dans `describe()` après une sonde réussie. L'écran distingue
+ainsi bien l'établissement, la panne et la santé retrouvée.
+
+### INC-15 — Clôturée : le constat a déjà été pris en charge par SPK-67
+
+Cette entrée était déjà périmée. SPK-67 a uniformisé le `404` en
+`InstanceAbsente`, puis les routes concernées — instantanés, amorçage et clés —
+la nomment désormais avant `IncusError`. Elles ne laissent donc plus s'échapper
+en `500`. Le titre « six routes » et son tableau décrivent l'état intermédiaire,
+pas le dépôt actuel ; aucune nouvelle correction n'est due pour INC-15.
+
+### Conséquence documentaire
+
+Les dix entrées ont maintenant une décision explicite ou, pour INC-15, une
+clôture vérifiée. `docs/INCONSISTENCY_REPORT.md` est donc supprimé dans ce même
+changement, conformément à sa propre règle et à `CLAUDE.md` §5. Le journal garde
+les décisions ; les travaux qui en découlent devront être ouverts comme unités
+explicites, avec leur spécification et leurs preuves, et non recréés comme des
+incohérences ouvertes.

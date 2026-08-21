@@ -572,8 +572,10 @@ manuel est mis au niveau de ce qui est réellement outillé.
   la même chose ne distingue pas un serveur sain d'un serveur en panne, et c'est
   de lui que dépend la vérification de déploiement. Il sonde désormais.
 - **OP-02 était présenté comme en attente alors qu'il est appliqué.** Corrigé.
-- Reste hors outillage, et le chapitre M2 le dit : la mise en place des
-  prérequis, et le repartitionnement du stockage (SPK-28).
+- Reste hors de CETTE unité, et le chapitre M2 le dit : la mise en place des
+  prérequis et le choix du stockage. SPK-28 en a livré les deux dispositions et
+  le geste de création ; SPK-68 doit désormais les intégrer au parcours complet
+  d'installation distante.
 
 ### [x] SPK-27 · Vérification par mesure des hypothèses du DAT §13
 
@@ -2854,8 +2856,9 @@ d'incohérences — retirée dans le même changement.
   `docs/DESIGN_SYSTEM.md` §14.6 (« inconnue » n'est pas zéro).
 - Portée : `build.json` écrit à l'installation ; `sparkd.build` qui le lit ;
   `/healthz` et `/v1/forge` qui le publient ; comparaison côté console avec le
-  dépôt local et les **cinq** situations du §40.3 ; commande de mise à jour depuis
-  l'écran de la Forge.
+  dépôt local et les **cinq** situations du §40.3. La commande qui modifie une
+  Forge est volontairement séparée dans SPK-69 : comparer est une lecture,
+  mettre à jour est un geste d'administration.
 - **Livré et vérifié le 2026-08-20 pour le runtime** : module `build.py`,
   4 tests d'unité, estampille écrite par `scripts/install-serveur.sh`, et
   `/healthz` de la Forge réelle qui rend le commit déployé.
@@ -2888,11 +2891,10 @@ d'incohérences — retirée dans le même changement.
   Manuel M4 complété.
 
 - **Reste à livrer, et c'est le seul écart** : la **commande de mise à jour**
-  depuis l'écran de la Forge. Le §40 ne la spécifie pas, et elle n'est pas une
-  finition : elle ferait redéployer `sparkd` sur une machine en service depuis un
-  bouton. Ce que « mettre à jour » veut dire — quel artefact, quelle
-  confirmation, quel retour arrière — demande une décision du responsable avant
-  la première ligne de code (`CLAUDE.md` §9).
+  depuis l'écran de la Forge. Sa décision de produit est désormais portée par
+  SPK-69 : elle installe le paquet pip défini par SPK-66, avec confirmation,
+  compte rendu et retour arrière mesurable. La comparaison reste ici, car elle
+  ne modifie jamais la Forge.
 
 ### [~] SPK-54 · Amorcer un Spark depuis la console
 
@@ -3431,9 +3433,10 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   cette unité le montre : 64 Gio demandés, 64 Gio libres annoncés, aucun mot. Il
   se rafraîchit maintenant sans repeindre le formulaire, ce qui arracherait la
   poignée en cours de glissement.
-- **Défaut voisin NON corrigé, et consigné** : `docs/INCONSISTENCY_REPORT.md`
-  **INC-08** — l'erreur d'un champ survit à sa correction jusqu'à la soumission
-  suivante. Antérieur à cette unité, mesuré sur la capture d'avant.
+- **Défaut voisin alors non corrigé** : **INC-08** — l'erreur d'un champ survit
+  à sa correction jusqu'à la soumission suivante. Antérieur à cette unité,
+  mesuré sur la capture d'avant ; sa décision est désormais consignée dans
+  `docs/JOURNAL.md` (2026-08-21).
 - **Amendement du responsable, 2026-08-20, livré le même jour** : la mémoire se
   règle par pas de **256 Mio** et non de 1 Gio. Le gibioctet rendait inatteignables
   les 512 Mio que le seed emploie, et n'offrait que cinq crans sur le pool de 5,4
@@ -3649,7 +3652,7 @@ aller-retour.
   réelle qu'un agent partant du seul briefing déploie une pile joignable ; manuel
   M6 et `docs/AGENT_RUNBOOK.md` mis à jour.
 
-### [~] SPK-64 · L'héritage de l'environnement devient une sélection
+### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 
 **Correction d'un défaut de sécurité de SPK-58**, relevé par le responsable le
 2026-08-21. Le modèle livré fait descendre **toute** entrée de la Forge dans
@@ -3659,16 +3662,16 @@ dans trente cellules, dont celles qui n'en ont aucun usage et celle qu'un
 locataire compromettra.
 
 - Spécification : `docs/DAT.md` **§43.6 révisé** · §43.2 (réécriture en entier
-  depuis l'état voulu) · §43.5.1 · `docs/SCHEMA.md` (migration due).
+  depuis l'état voulu) · §43.5.1 · `docs/SCHEMA.md` §10 quater.
 - Portée : la Forge tient un **catalogue** ; chaque Spark **coche** ce qui descend
   chez lui. Une entrée de catalogue n'a **aucun effet** tant qu'aucun Spark ne l'a
   cochée. Un Spark garde ses entrées propres, qui **gagnent** sur une entrée
   cochée de même nom.
-- Migration : les sélections n'existent pas encore. Elle doit **cocher pour chaque
-  Spark existant tout ce qu'il recevait déjà**, sinon la mise à jour retirerait en
-  silence des variables dont des piles dépendent. Le comportement observable ne
-  change pas au moment de la migration ; ce sont les **ajouts suivants** qui
-  cessent de descendre tout seuls.
+- Migration : `011_env_selection.sql` coche pour chaque Spark existant tout ce
+  qu'il recevait déjà, sinon la mise à jour retirerait en silence des variables
+  dont des piles dépendent. Le comportement observable ne change pas au moment
+  de la migration ; ce sont les **ajouts suivants** qui cessent de descendre
+  tout seuls.
 - Écran : l'onglet de la Forge porte le catalogue ; la facette *Environnement* d'un
   Spark porte les cases et ses entrées propres. Chaque valeur dit **d'où elle
   vient** — cochée, propre, ou propre en **masquant** une cochée.
@@ -3683,10 +3686,11 @@ locataire compromettra.
   coche ce qu'il faut **et laisse une entrée cochée nulle part**, seul moyen de
   montrer à l'écran une valeur définie qui ne descend pas. **938 preuves Python
   vertes**, contrat régénéré.
-- **Reste avant `[x]`** : les deux écrans — l'onglet du catalogue côté Forge et
-  les cases dans la facette du Spark —, leurs preuves de composant, les parcours
-  E2E et les captures. Tant que l'écran ne montre pas la différence, l'unité
-  n'est pas éprouvée là où le responsable la verra.
+- **Interface, preuve et manuel livrés** : l'onglet Forge rend le catalogue et
+  son compte `selected_by`, la facette du Spark porte les cases et distingue une
+  entrée cochée d'une valeur propre qui la masque. Les preuves de composant, le
+  parcours canonique et la capture du catalogue couvrent l'ajout sans descente,
+  le cochage puis le décochage réel. Les manuels M6/M8 décrivent le même modèle.
 - DoD : un test prouve qu'une entrée ajoutée au catalogue **ne change
   l'environnement d'aucun Spark existant** ; un test prouve que **décocher retire
   réellement** de la cellule, et pas seulement du registre ; un test prouve qu'une
@@ -3797,6 +3801,140 @@ documents. Rien de tout cela n'y sert.
   un retour à une version antérieure est joué et mesuré ;
   le préflight reste vert ; `PROD_MIGRATIONS.md` OP-04 et le runbook §A.2 réécrits
   dans le même changement.
+
+### [ ] SPK-68 · Assistant complet d'installation distante d'une Forge
+
+**Besoin exprimé le 2026-08-21.** Une Forge peut être atteignable en SSH tout en
+n'ayant jamais reçu `sparkd` — ou après la perte de son environnement Python.
+Aujourd'hui, la console assimile ce cas à un tunnel rompu, car elle exige
+`/healthz` pour le déclarer prêt. Elle ne peut donc ni le nommer correctement, ni
+proposer le remède qui convient.
+
+- **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
+  seulement le paquet Python. C'est un **assistant de bout en bout** qui part
+  d'une machine accessible par SSH et la rend Forge utilisable, en montrant
+  chaque étape et son résultat.
+- Dépend de : SPK-26 pour la liste unique de contrôles, SPK-28 pour les deux
+  dispositions du pool et le geste `creer-pool.sh`, SPK-31 pour la version
+  minimale d'Incus, SPK-55 pour le durcissement, et SPK-66 pour le paquet pip.
+  L'assistant orchestre ces contrats ; il ne maintient pas une seconde recette
+  d'installation qui pourrait diverger.
+- Portée : distinguer l'**accès SSH établi** de la **réponse de `sparkd`** dans
+  l'état du tunnel. Quand le transport est vivant mais que `127.0.0.1:9876` ne
+  répond pas, un relevé SSH borné distingue le paquet absent, l'unité arrêtée,
+  l'unité en échec et l'installation incomplète. L'assistant « Installer cette
+  Forge » est proposé quand elle n'est pas installée, ou pour reprendre une
+  installation incomplète ; un service simplement arrêté reçoit son geste de
+  démarrage, pas une réinstallation. La console ne présente jamais la Forge
+  comme utilisable avant le retour de `/healthz` puis de `/readyz`.
+
+**Parcours de l'assistant.** Chaque phase affiche `à faire`, `en cours`,
+`terminée`, `avertissement` ou `échec`, avec la sortie utile au fil de l'eau :
+
+1. **Accès et relevé initial** — vérifier l'identité de la machine, le système,
+   l'architecture, l'accès Internet, l'espace libre et un droit d'administration
+   non interactif ; relever ce qui est déjà installé sans rien modifier.
+2. **Plan d'installation** — montrer ce qui sera conservé, installé ou configuré
+   et recueillir les valeurs de la Forge : nom du pool et du bridge, réserves CPU
+   et mémoire, plafond ARC, ports réservés et réglages facultatifs de `sparkd`.
+   Les défauts viennent du contrat de déploiement, jamais du composant d'écran.
+3. **Choix du stockage** — chercher d'abord un pool Incus conforme et proposer de
+   le réutiliser. À défaut, inventorier une paire de périphériques bloc réellement
+   libres et sans signature pour la disposition native en miroir ; ne jamais
+   proposer le disque racine, un périphérique monté ou porteur de données. S'il
+   n'existe aucune paire sûre, proposer la disposition sur fichier dans le
+   système de fichiers courant, comme sur `spark-experiment`, avec emplacement,
+   taille, espace disponible et avertissement explicite : quotas et instantanés
+   fonctionnent, mais ZFS ne protège alors pas le miroir contre la corruption
+   silencieuse. Aucun périphérique n'est effacé ni choisi automatiquement.
+4. **Dépendances et runtimes** — installer les paquets système requis, le dépôt
+   amont et Incus ≥ 6.19, ZFS, Python/venv/pip et Caddy. Une version Incus trop
+   ancienne est remplacée avant la création du moindre Spark, conformément à
+   SPK-31.
+5. **Socle de la Forge** — initialiser Incus si nécessaire ; créer ou retenir le
+   pool choisi avec compression ; poser et persister `zfs_arc_max` ; créer le
+   bridge privé, le NAT et la plage DHCP disjointe ; régler Caddy et son API
+   locale ; poser les règles réseau et SSH retenues par SPK-55. Chaque sous-étape
+   est idempotente et vérifie son état après écriture.
+6. **Plan de contrôle** — installer `sparkd` depuis le paquet pip de SPK-66,
+   écrire `/etc/sparkd/sparkd.env`, poser `spark.slice` et `sparkd.service`, faire
+   `systemctl daemon-reload`, activer les unités au démarrage et démarrer le
+   démon. Le dépôt n'est jamais copié sur la Forge.
+7. **Recette finale** — exécuter la liste de préflight de SPK-26, appeler
+   `/healthz` et `/readyz`, relever la topologie dans le registre, vérifier la
+   build servie et rappeler les seules actions humaines restantes, notamment le
+   DNS public. La Forge ne devient `prête` qu'après cette phase.
+
+- **Progression réelle, pas animation locale** : l'hôte console diffuse des
+  événements structurés produits par l'installation distante. Fermer puis
+  rouvrir l'écran retrouve l'étape et le journal courants ; une déconnexion SSH
+  marque l'étape interrompue et permet de reprendre après reconnexion. Deux
+  installations simultanées sur la même Forge sont refusées.
+- **Reprise** : relancer l'assistant relit d'abord l'état et saute les étapes déjà
+  conformes. Il ne réinstalle pas un runtime sain et ne recrée jamais un pool.
+  Une reprise après échec recommence à la première étape non conforme ; le
+  registre, un pool existant et les instances éventuelles sont toujours
+  conservés.
+- **Engagements dangereux** : le plan complet est confirmé avant la première
+  écriture. La création sur périphériques porte une confirmation séparée qui
+  nomme chacun d'eux et ce qu'il perdra. Le pool sur fichier nomme sa taille et
+  son coût dans le système de fichiers courant. Une modification d'un service
+  déjà présent est annoncée ; un constat ambigu bloque cette étape au lieu de
+  deviner.
+- Le geste reste borné : l'hôte console lance un installateur versionné avec des
+  arguments validés, sans shell libre ni commande construite par le navigateur.
+  Un mot de passe `sudo` demandé, une clé SSH refusée, un dépôt inaccessible ou
+  un prérequis incompatible sont des résultats nommés, pas une invite cachée ni
+  un faux succès. Le flux et le compte rendu filtrent les secrets.
+- Articulation avec SPK-61 à décider dans la spécification : la clé restreinte ne
+  doit pas retrouver un shell général. Si une garde SSH évolue pour porter ce
+  geste, elle n'accepte que le contrat fermé de l'installateur, pas une commande
+  construite depuis l'interface.
+- DoD : depuis la console, une machine Ubuntu neuve accessible en SSH devient une
+  Forge complète sans copie du dépôt. Deux parcours réels sont joués : un avec
+  périphériques libres pour le pool natif, un sans périphérique libre où
+  l'assistant propose puis crée le pool sur fichier. La progression de chaque
+  phase est observée ; Incus, ZFS, bridge, DHCP, Caddy, durcissement, paquet pip,
+  unités systemd et configuration sont vérifiés ; les trois sondes (`SSH`,
+  `/healthz`, `/readyz`) deviennent vertes et la topologie est relevée. Une panne
+  au milieu est reprise sans refaire les étapes conformes ; un second lancement
+  ne détruit ni pool, ni registre, ni instance ; refus d'autorisation, absence
+  d'Internet, périphérique occupé et échec pip gardent un diagnostic exploitable.
+  Tests de l'installateur et de l'hôte, parcours E2E, captures desktop/mobile et
+  manuel M2/M3 mis à jour.
+
+### [ ] SPK-69 · Mettre à jour `sparkd` à distance et recharger son unité
+
+**Suite de SPK-68, demandée le 2026-08-21.** Quand une Forge déjà joignable dit
+que sa build est en retard sur le dépôt du poste, l'écran sait le signaler
+(SPK-53) mais oblige encore à se connecter à la machine et à rejouer le
+déploiement. Avec l'installation par pip de SPK-66, cette mise à jour doit être
+un geste de la console, pas une procédure parallèle.
+
+- Dépend de : SPK-53 pour le verdict de version, SPK-66 pour l'artefact et
+  SPK-68 pour le transport et le contrat d'administration à distance.
+- Portée : proposer « Mettre à jour `sparkd` » **seulement** quand la comparaison
+  établit que la build de la Forge est un ancêtre de celle du poste. Une build
+  locale en retard, une histoire divergente, une build inconnue ou l'absence de
+  dépôt ne proposent jamais une mise à jour : l'action pourrait régresser ou
+  remplacer un code dont la console ne connaît pas l'origine.
+- Après une confirmation qui nomme l'interruption brève du plan de contrôle,
+  l'hôte console exécute le chemin de mise à jour du paquet : `pip install -U`
+  de la source retenue par SPK-66, mise à jour des unités qu'elle fournit,
+  `systemctl daemon-reload`, puis redémarrage de `sparkd`. Aucune commande libre,
+  aucun mot de passe et aucun jeton ne traversent le navigateur.
+- Le résultat n'est un succès qu'après reconnexion et lecture de `/healthz`,
+  `/readyz` et de la build : la version servie doit avoir changé dans le sens
+  attendu. Un téléchargement réussi suivi d'un service arrêté, d'une sonde
+  dégradée ou d'une version inchangée est un échec qui conserve son diagnostic.
+  Le contrat décide aussi le retour arrière vers la version précédente et le
+  mesure ; un redémarrage seul ne vaut pas mise à jour.
+- DoD : une Forge de banc en retard est mise à jour par l'écran, `daemon-reload`
+  et le redémarrage sont observés, puis la build et les sondes concordent ; les
+  quatre verdicts non sûrs n'exposent aucun bouton ; une erreur pip et un échec
+  au redémarrage restent lisibles sans masquer la dernière build connue ; un
+  retour arrière est joué ; tests d'hôte et de composant, parcours E2E, captures,
+  journal d'administration et manuel M2/M4/M8 mis à jour.
 
 ---
 
