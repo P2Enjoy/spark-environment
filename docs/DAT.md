@@ -6293,14 +6293,17 @@ qui donnerait une cellule qui marche jusqu'au premier redémarrage.
 les paquets, puis échouait avant de créer le service utilisateur. Une première
 correction a ensuite confondu l'existence du compte `spark-docker` avec celle du
 démon : le compte était bien créé, mais le service était `inactive` et son socket
-injoignable. Le relevé ne rend donc `rootless` que si **les deux** sont vrais :
-le service utilisateur est `active` et `docker info`, pointé explicitement vers
-`/run/user/<uid>/docker.sock`, répond. Sinon il rend `null`. Lorsqu'un appel
-demande **rootless** et trouve exactement cet état — démon root absent, aucun
-démon rootless utilisable — il réexécute la seule préparation rootless, avec
-`systemd-container`; il ne réinstalle ni ne démarre le démon root et ne déplace
-aucun conteneur. Le compte rendu ajoute la ligne `rootless` pour que `changed:
-true` nomme ce qui a été repris.
+injoignable. La mesure suivante a trouvé pourquoi : pour joindre le bus
+utilisateur **local**, `machinectl shell` comme `systemctl --user -M` exigent la
+cible explicite `spark-docker@.host`; `spark-docker@` cherche une machine de ce
+nom et n'installe rien. Le relevé ne rend donc `rootless` que si **les deux**
+sont vrais : le service utilisateur de `spark-docker@.host` est `active` et
+`docker info`, pointé explicitement vers `/run/user/<uid>/docker.sock`, répond.
+Sinon il rend `null`. Lorsqu'un appel demande **rootless** et trouve exactement
+cet état — démon root absent, aucun démon rootless utilisable — il réexécute la
+seule préparation rootless, avec `systemd-container`; il ne réinstalle ni ne
+démarre le démon root et ne déplace aucun conteneur. Le compte rendu ajoute la
+ligne `rootless` pour que `changed: true` nomme ce qui a été repris.
 
 Si un démon root tourne, le mode est `enracine` et le refus de bascule reste
 `409`, sans exception. Si le second relevé ne trouve toujours pas `rootless`, le
@@ -6381,7 +6384,7 @@ compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
 rootless=absent
 if id spark-docker >/dev/null 2>&1; then
   uid=$(id -u spark-docker)
-  if systemctl --user -M spark-docker@ is-active docker.service >/dev/null 2>&1 \
+  if systemctl --user -M spark-docker@.host is-active docker.service >/dev/null 2>&1 \
      && runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
           DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info >/dev/null 2>&1; then
     rootless=active
