@@ -6628,3 +6628,58 @@ Il ne reste à SPK-58 que la preuve du §43.0 essai F **refaite sur le fichier q
 le produit écrit** — un `docker compose` du locataire qui consomme réellement
 `/etc/spark/env`. Elle **exige une Forge réelle** : nécessite une action humaine.
 L'unité suivante du plan est donc SPK-60, le briefing d'un Spark (§44).
+
+## 2026-08-21 · La Forge de validation, sur instruction du responsable
+
+Le responsable a demandé en cours de session de **finir sur la Forge réelle** ce
+qui l'attendait. Cinq unités étaient bloquées là-dessus depuis des jours. La
+build du jour a été installée, la migration `010` s'est appliquée, et les mesures
+ont été faites. **Deux d'entre elles ont trouvé des défauts.**
+
+### Ce que la Forge a prouvé
+
+- **SPK-58, essai F** : un `docker compose` du locataire reçoit les trois valeurs
+  — héritée de la Forge, propre au Spark, et le secret depuis le fichier
+  volatil. Une quatrième, posée **après** le premier démarrage, arrive sans que
+  le fichier de composition la nomme. L'unité est **close** ;
+- **SPK-57** : le disque ET le mode CPU prennent **à chaud** — la cellule voit la
+  nouvelle taille sans redémarrer, le noyau porte le nouveau `cpu.max`. Et une
+  instance **arrêtée** rend bien `disk.root.usage`, là où `memory.usage` tombe à
+  zéro. L'unité est **close** ;
+- **SPK-43** : la connexion atteint réellement un Spark, par les deux chemins —
+  `incus exec` rend l'OS du Spark, et `ssh -J` aboutit avec la clé posée par le
+  registre ;
+- **SPK-44 et SPK-45** : `docker ps`, `inspect`, `logs`, le sondage de shell et
+  un geste de conteneur, tous lus **à travers le tunnel** sur une pile réelle.
+  Closes ;
+- **SPK-55** : OP-11 et OP-12 appliquées et persistées. Préflight : **12
+  contrôles, 0 bloquant, 0 signalé**.
+
+### Les deux défauts, et ils étaient graves
+
+**1. `applied: true` mentait.** La route de redimensionnement posait la seule
+*configuration* de l'instance ; or la taille du disque vit dans le **device**
+`root`. Le registre passait à 12 Gio, Incus restait à 10 — le pire des cas que
+la DoD de SPK-57 nomme, affirmé vrai par la réponse. Corrigé, avec une preuve
+qui regarde le device.
+
+**2. Mon propre durcissement coupait la Forge de ses Sparks.** La recette d'OP-11
+n'acceptait pas les connexions **déjà établies** : les réponses du Spark
+revenaient par `sparkbr0` et tombaient sur le `drop`. La Forge ne joignait plus
+le port 22 de son propre Spark — le produit va de la Forge VERS ses Sparks. Ma
+première vérification ne l'a pas vu parce qu'elle n'éprouvait que le sens
+inverse. Corrigé, et la recette porte désormais la vérification manquante.
+
+OP-11 avait par ailleurs trois autres omissions, toutes trouvées en l'appliquant :
+la table `inet filter` n'existait pas, le DHCP et l'ICMP utile devaient être
+acceptés, et le `/etc/nftables.conf` d'Ubuntu commence par un `flush ruleset` qui
+aurait effacé la table d'Incus au premier redémarrage.
+
+### Où reprendre
+
+Restent bloquées sur la Forge, non traitées faute de temps : **SPK-61** (poser la
+clé restreinte — geste à faire avec précaution, il touche la seule voie
+d'accès), **SPK-54** (rootless), **SPK-40** (un agent SSH réel signe), **SPK-29**
+(contention totale), **SPK-30** (niveau 3), **SPK-36** (exercice de restauration).
+**SPK-43** n'attend plus qu'une chose : la route de dépannage de l'hôte console
+parcourue de bout en bout, ce qui exige l'hôte lancé avec son tunnel.
