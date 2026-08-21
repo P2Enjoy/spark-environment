@@ -980,3 +980,153 @@ def test_une_RESTAURATION_ne_laisse_pas_l_ancien_environnement_en_place(tmp_path
     vu = c.post("/v1/sparks/crm-production/snapshots/avant/restore")
     assert vu.status_code == 200, vu.json()
     assert "APRES_INSTANTANE" in _cellule(app)[env.FICHIER_VARIABLES]
+
+
+# --- SPK-58 · les routes d'environnement (docs/DAT.md §43.9.5) -------------
+
+
+def test_poser_une_variable_par_HTTP_et_la_relire_avec_son_ORIGINE(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-58 · docs/DAT.md §43.6, §43.9.4
+
+    La surcharge se fait NOM PAR NOM : surcharger `SMTP_HOST` ne doit pas faire
+    perdre le `SMTP_PORT` hérité."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+
+    assert c.put("/v1/env/SMTP_HOST", json={"value": "relais.forge"}).status_code == 200
+    c.put("/v1/env/SMTP_PORT", json={"value": "587"})
+    c.put("/v1/sparks/crm-production/env/SMTP_HOST", json={"value": "relais.crm"})
+
+    rendu = {e["name"]: e for e in
+             c.get("/v1/sparks/crm-production/env").json()["env"]}
+    assert rendu["SMTP_HOST"]["value"] == "relais.crm"
+    assert rendu["SMTP_HOST"]["origin"] == "overridden"
+    assert rendu["SMTP_PORT"]["value"] == "587"
+    assert rendu["SMTP_PORT"]["origin"] == "forge"
+
+
+def test_aucune_route_ne_REVELE_un_secret(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-58 (Definition of Done) · §43.3
+
+    On cherche la valeur dans CHAQUE sortie de l'API, pas seulement dans celle
+    qu'on soupçonne."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.put("/v1/sparks/crm-production/env/STRIPE_API_KEY",
+          json={"value": "sk_live_42", "secret": True})
+
+    pose = c.put("/v1/sparks/crm-production/env/AUTRE", json={"value": "x"})
+    for reponse in (c.get("/v1/sparks/crm-production/env"), c.get("/v1/env"),
+                    c.get("/v1/sparks/crm-production"), c.get("/v1/audit"), pose):
+        assert "sk_live_42" not in reponse.text, reponse.url
+
+    entree = next(e for e in c.get("/v1/sparks/crm-production/env").json()["env"]
+                  if e["name"] == "STRIPE_API_KEY")
+    assert entree["value"] is None and entree["is_secret"] is True
+    assert entree["fingerprint"], "l'empreinte, elle, est rendue : elle compare"
+
+
+def test_un_Spark_PROTEGE_refuse_l_ecriture_qui_LE_vise(tmp_path):
+    """§35.2, §43.9.5 : le verrou porte sur l'objet, et poser une variable est
+    une écriture. Le code est celui que le produit emploie déjà."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/protection", json={"password": "protege-moi"})
+
+    assert c.put("/v1/sparks/crm-production/env/TZ",
+                 json={"value": "UTC"}).status_code == 423
+    assert c.delete("/v1/sparks/crm-production/env/TZ").status_code == 423
+    assert c.get("/v1/sparks/crm-production/env").json()["env"] == [], \
+        "un refus ne laisse rien derrière lui"
+
+
+def test_un_geste_de_FORGE_informe_des_Sparks_geles_puis_aboutit(tmp_path):
+    """@verifies docs/DAT.md §43.9.5 bis
+
+    Informer, PUIS accepter — la convention que le produit emploie déjà pour la
+    révocation d'une clé. Un refus ferme gèlerait toute la Forge dès qu'un seul
+    Spark est protégé, et l'exploitant lèverait la protection pour contourner."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/protection", json={"password": "protege-moi"})
+
+    premier = c.put("/v1/env/TZ", json={"value": "UTC"})
+    assert premier.status_code == 409
+    detail = premier.json()["detail"]
+    assert detail["error"] == "protected_sparks_affected"
+    assert detail["protected_sparks"] == ["crm-production"], "ils sont NOMMÉS"
+
+    second = c.put("/v1/env/TZ", json={"value": "UTC", "accept_protected": True})
+    assert second.status_code == 200
+    assert c.get("/v1/env").json()["env"][0]["value"] == "UTC"
+
+
+def test_sans_Spark_protege_un_geste_de_Forge_ne_demande_RIEN(tmp_path):
+    """Le refus par défaut sert à ne pas toucher un Spark gelé sans le savoir.
+    Sans Spark gelé, il n'a aucune raison d'être."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    assert c.put("/v1/env/TZ", json={"value": "UTC"}).status_code == 200
+
+
+def test_un_nom_hors_grammaire_du_shell_est_refuse_en_422(tmp_path):
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    vu = c.put("/v1/sparks/crm-production/env/AVEC-TIRET", json={"value": "x"})
+    assert vu.status_code == 422
+    assert vu.json()["detail"]["error"] == "invalid_name"
+
+
+def test_ecrire_par_HTTP_REPOSE_les_fichiers_dans_la_cellule(tmp_path):
+    """@verifies docs/DAT.md §43.2
+
+    C'est le « au changement ». Sans lui, le registre et la cellule diraient
+    deux choses différentes jusqu'au prochain démarrage."""
+    from sparkd import environnement as env
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "h.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    c.put("/v1/sparks/crm-production/env/APP_NAME", json={"value": "crm"})
+    assert "APP_NAME" in _cellule(app)[env.FICHIER_VARIABLES]
+
+    # Et un RETRAIT retire du fichier : il est régénéré en entier.
+    c.delete("/v1/sparks/crm-production/env/APP_NAME")
+    assert "APP_NAME" not in _cellule(app)[env.FICHIER_VARIABLES]
+
+
+def test_une_variable_de_FORGE_descend_dans_la_cellule_du_Spark(tmp_path):
+    """§43.6 : ce qui est posé au niveau général est hérité, et doit donc
+    atteindre la cellule sans qu'on touche au Spark."""
+    from sparkd import environnement as env
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "f.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+    c.post("/v1/sparks/crm-production/apply")
+
+    c.put("/v1/env/TZ", json={"value": "Europe/Paris"})
+    assert 'TZ="Europe/Paris"' in _cellule(app)[env.FICHIER_VARIABLES]
+
+
+def test_retirer_ce_qui_n_existe_pas_repond_sans_ERREUR(tmp_path):
+    """§14.5 : l'état voulu est « cette variable n'est pas définie », et il est
+    atteint dans les deux cas. Le rendu dit lequel s'est produit."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    vu = c.delete("/v1/sparks/crm-production/env/JAMAIS_POSEE")
+    assert vu.status_code == 200 and vu.json()["removed"] is False
+
+
+def test_les_routes_d_environnement_sont_au_CONTRAT(tmp_path):
+    """Une route absente du contrat n'existe pas pour la console (SPK-17)."""
+    c = _app(tmp_path)
+    chemins = c.get("/openapi.json").json()["paths"]
+    assert "get" in chemins["/v1/env"]
+    assert {"put", "delete"} <= set(chemins["/v1/env/{name}"])
+    assert "get" in chemins["/v1/sparks/{name}/env"]
+    assert {"put", "delete"} <= set(chemins["/v1/sparks/{name}/env/{variable}"])
