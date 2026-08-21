@@ -3675,6 +3675,12 @@ trois noms d'environnement et le seul nom de secret, sans sa valeur. Il reste le
 déploiement d'une pile joignable depuis le seul briefing, qui partagera la
 preuve matérielle de SPK-54.
 
+**Écart réel relevé dans la preuve rootless le 2026-08-21.** Debian 13 ne porte
+pas `machinectl` : le script installait les paquets rootless mais s'arrêtait
+avant le service utilisateur; Docker apparaissait présent, sans mode, et un
+second geste ne savait pas reprendre. Contrat corrigé et poussé avant le code :
+DAT §42.2 bis distingue cette reprise d'une bascule et exige `systemd-container`.
+
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 
 **Correction d'un défaut de sécurité de SPK-58**, relevé par le responsable le

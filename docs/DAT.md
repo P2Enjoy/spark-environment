@@ -6262,7 +6262,7 @@ la vérité est dans la cellule et qu'un registre qui la doublerait divergerait.
 |---|---|
 | `enracine` | le démon tourne en root dans la cellule |
 | `rootless` | le démon tourne sous un compte non privilégié |
-| `null` | Docker est absent, ou son origine est le paquet de distribution |
+| `null` | Docker est absent, vient de la distribution, ou un amorçage rootless a été interrompu avant son démon utilisateur |
 
 Le mode est une observation, pas une préférence : il dit ce qui EST.
 
@@ -6282,10 +6282,25 @@ Corollaire : sur une cellule vierge, les deux modes sont ouverts, et c'est le
 seul moment où le choix se fait sans rien casser. L'écran le dit.
 
 **Ce que l'installation change.** Le mode rootless ajoute
-`docker-ce-rootless-extras`, crée le compte de service, exécute
+`docker-ce-rootless-extras`, `systemd-container` (qui fournit `machinectl`),
+crée le compte de service, exécute
 `dockerd-rootless-setuptool.sh install` pour lui, et pose `loginctl
 enable-linger` — sans quoi le démon meurt à la fin de la session du compte, ce
 qui donnerait une cellule qui marche jusqu'au premier redémarrage.
+
+**Reprendre une pose rootless interrompue n'est pas basculer.** Mesuré le
+2026-08-21 : l'image Debian ne porte pas `machinectl`; l'ancien script installait
+les paquets, puis échouait avant de créer le service utilisateur. Le relevé
+voyait alors `docker-ce`, mais aucun mode. Lorsqu'un appel demande **rootless**
+et trouve exactement cet état — démon root absent, aucun démon rootless — il
+réexécute la seule préparation rootless, avec `systemd-container`; il ne réinstalle
+ni ne démarre le démon root et ne déplace aucun conteneur. Le compte rendu ajoute
+la ligne `rootless` pour que `changed: true` nomme ce qui a été repris.
+
+Si un démon root tourne, le mode est `enracine` et le refus de bascule reste
+`409`, sans exception. Si le second relevé ne trouve toujours pas `rootless`, le
+geste échoue en `502 bootstrap_failed` et n'écrit pas d'audit de succès : dire
+« amorcé » sans service serait précisément le défaut mesuré.
 
 **Ce que l'écran doit dire, et non vendre** (§42.2) : les trois coûts, en toutes
 lettres, à côté de la case — les ports sous 1024 deviennent impossibles dans la
@@ -6396,6 +6411,11 @@ L'amorçage rend le même relevé, plus le sort de chaque ligne :
 `changed: false` est la réponse d'un second amorçage, et l'écran le dit en toutes
 lettres. C'est le point que la DoD éprouve : un geste qui réinstallerait « au cas
 où » redémarrerait le démon Docker du locataire, donc sa production, pour rien.
+
+Lors de la seule reprise décrite au §42.2 bis, `items` contient en plus
+`{"key":"rootless", "action":"amorcé"}`. Ce n'est pas un sixième composant
+relevé par `GET` : c'est le compte rendu d'un démon utilisateur inachevé,
+explicitement demandé à nouveau.
 
 **Refus, et leur forme :**
 

@@ -112,6 +112,11 @@ Le choix se fait donc **au premier amorçage**, tant que rien ne tourne — et
 l'écran ne vous propose la case qu'à ce moment-là. Ensuite, la ligne *moteur
 Docker* vous rappelle dans quel mode votre Spark tourne.
 
+Si un premier amorçage rootless a été interrompu avant que son démon utilisateur
+ne démarre, redemander **le même mode rootless** le reprend. Ce n'est pas une
+bascule : aucun démon root ne tourne alors, et rien de votre pile n'est déplacé.
+Un démon enraciné réellement actif, lui, reste refusé comme ci-dessus.
+
 ### Ce que l'amorçage ne fait pas
 
 Il n'installe pas votre application, ne pose pas vos variables, ne gère pas vos

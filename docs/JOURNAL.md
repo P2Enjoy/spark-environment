@@ -7683,3 +7683,22 @@ texte ni dans le JSON relu au même instant. L'adresse publique reste
 explicitement inconnue, parce qu'aucune configuration
 `SPARKD_FORGE_PUBLIC_ADDRESS` n'a été posée : l'inventer depuis l'IP de connexion
 aurait contredit le contrat.
+
+---
+
+## 2026-08-21 · SPK-54 — la première preuve rootless trouve une reprise impossible
+
+Le Spark éphémère `briefing-e2e` a été créé sur la Forge de validation avec les
+trois clés déjà autorisées, puis amorcé en rootless. La pose a installé Docker
+CE, Compose, `docker-ce-rootless-extras`, le compte `spark-docker` et son
+linger, mais n'a écrit aucun audit de succès. Le relevé rend Docker présent et
+un mode `null`; dans la cellule, `systemctl --user` ne trouve aucun bus et aucun
+`docker.service` utilisateur n'existe.
+
+La cause est mesurée, pas supposée : `machinectl` est absent de l'image Debian
+13. C'est la dernière commande du script; elle l'arrête après les paquets et
+avant `dockerd-rootless-setuptool.sh install`. Un second amorçage ne le reprenait
+pas parce que les cinq composants ordinaires sont présents. Le contrat DAT
+§42.2 bis est donc complété et poussé avant le correctif : `systemd-container`
+est une dépendance explicite, et la demande rootless reprend le seul service
+utilisateur inachevé sans basculer un démon enraciné.
