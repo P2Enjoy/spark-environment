@@ -19,7 +19,7 @@ import { EventEmitter } from 'node:events';
 
 import {
   analyser, attacher, classer, relever, ETATS, INVENTAIRE, MESURES,
-  OK, SANS_CONTENEUR, DOCKER_ABSENT, MOTEUR_MUET, SSHD_MUET, INJOIGNABLE,
+  OK, SANS_CONTENEUR, DOCKER_ABSENT, MOTEUR_MUET, SSHD_MUET, CLE_HOTE_CHANGEE, INJOIGNABLE,
   analyserInspection, analyserReseaux, analyserMontages, analyserJournaux,
   inspecter, journaux, quoter, inspecterConteneur, lireJournaux,
   CONTENEUR_INCONNU, doublonPour,
@@ -80,6 +80,13 @@ test('un ssh en échec rend le cas du §37.2, pas un diagnostic Docker', () => {
   assert.equal(classer(255, '', 'ssh: connect to host 10.77.0.17 port 22: Connection refused'),
                SSHD_MUET);
   assert.match(ETATS[SSHD_MUET].detail, /Terminal/);
+});
+
+test("une clé d’hôte changée est distinguée d’un Spark injoignable", () => {
+  assert.equal(classer(255, '', 'REMOTE HOST IDENTIFICATION HAS CHANGED!'),
+               CLE_HOTE_CHANGEE);
+  assert.match(ETATS[CLE_HOTE_CHANGEE].detail, /Aucune commande Docker/);
+  assert.match(ETATS[CLE_HOTE_CHANGEE].detail, /ne l’accepte ni ne l’efface/);
 });
 
 test('un échec ssh NON RECONNU ne se déclare pas « sshd muet »', () => {

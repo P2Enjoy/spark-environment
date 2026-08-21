@@ -308,6 +308,16 @@ test('une clé refusée est nommée AUTREMENT, et renvoie ailleurs', () => {
   assert.ok(!/Aucun serveur SSH ne répond/.test(rendu));
 });
 
+test("une clé d’hôte changée est nommée sans jamais proposer de l’accepter", () => {
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine',
+    diagnostic: { motif: 'cle_hote_changee', ouvert: false } }));
+  assert.match(rendu, /clé d’hôte SSH de ce Spark a changé/);
+  assert.match(rendu, /Aucune commande n’a été envoyée/);
+  assert.match(rendu, /ne l’accepte ni ne l’efface/);
+  assert.match(rendu, /role="alert"/);
+});
+
 test('un sshd qui RÉPOND ne déclenche aucune alerte', () => {
   // Une région d'alerte sur un Spark joignable userait le signal.
   const rendu = renderTerminal(SPARK, etat({

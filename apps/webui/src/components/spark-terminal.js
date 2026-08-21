@@ -96,6 +96,12 @@ const DIAGNOSTICS = {
       + 'Réaccordez la clé depuis l’onglet Clés — le dépannage n’est pas la '
       + 'réponse, et il vous sera refusé.',
   },
+  cle_hote_changee: {
+    titre: 'La clé d’hôte SSH de ce Spark a changé.',
+    detail: 'Aucune commande n’a été envoyée. Vérifiez le remplacement de la '
+      + 'cellule puis réconciliez l’empreinte avec OpenSSH ; la console ne '
+      + 'l’accepte ni ne l’efface elle-même.',
+  },
   ssh_disponible: {
     titre: 'Le serveur SSH de ce Spark répond.',
     detail: 'Le shell distant s’est donc terminé pour une autre raison — une '
@@ -271,7 +277,8 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
             // Une panne qui ouvre le dépannage est une ALERTE : c'est elle qui
             // justifie d'employer un pouvoir d'exception, et le §9.7 veut
             // qu'elle soit annoncée. Un Spark joignable ne l'est pas.
-            const grave = etat.diagnostic.ouvert || etat.diagnostic.motif === 'cle_refusee';
+            const grave = etat.diagnostic.ouvert
+              || ['cle_refusee', 'cle_hote_changee'].includes(etat.diagnostic.motif);
             return `<div class="${grave ? 'refus' : 'note'}"${grave ? ' role="alert"' : ' role="status"'}>
                       <p><strong>${echapper(cas.titre)}</strong></p>
                       <p>${echapper(cas.detail)}</p>

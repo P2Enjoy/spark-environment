@@ -49,6 +49,7 @@ export const CHEMIN_CONTENEUR = 'container';
 /** Motifs qui OUVRENT le dépannage, et qui entrent au journal (§37.3). */
 export const EN_ERREUR = 'spark_en_erreur';
 export const SSHD_MUET = 'sshd_muet';
+export const CLE_HOTE_CHANGEE = 'cle_hote_changee';
 
 /**
  * Classe l'échec d'une connexion SSH vers un Spark.
@@ -69,6 +70,10 @@ export function classerEchecSsh(code, stderr = '') {
   if (/Connection refused|Connection timed out|No route to host|Network is unreachable|Operation timed out/i
       .test(texte)) {
     return { repond: false, motif: SSHD_MUET };
+  }
+  if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key .* has changed|Offending .*known_hosts/i
+      .test(texte)) {
+    return { repond: true, motif: CLE_HOTE_CHANGEE };
   }
   if (/Permission denied|Too many authentication failures|publickey/i.test(texte)) {
     return { repond: true, motif: 'cle_refusee' };
@@ -115,6 +120,12 @@ export function depannageOuvert(spark, sondage = null) {
              explication: 'Le « sshd » de ce Spark répond mais refuse la clé. '
                + "C'est un problème d'accès, pas de dépannage : réaccordez la clé "
                + "depuis l'onglet Clés." };
+  }
+  if (sondage && sondage.motif === CLE_HOTE_CHANGEE) {
+    return { ouvert: false, motif: CLE_HOTE_CHANGEE,
+             explication: "La clé d'hôte SSH de ce Spark a changé. Vérifiez le "
+               + "remplacement de la cellule puis réconciliez l'empreinte avec "
+               + "OpenSSH; la console ne l'accepte ni ne l'efface." };
   }
   return { ouvert: false, motif: 'ssh_disponible',
            explication: 'Le chemin normal est disponible : le dépannage est réservé '

@@ -20,7 +20,7 @@
 
 import { spawn } from 'node:child_process';
 
-import { classerEchecSsh } from './terminal.js';
+import { classerEchecSsh, CLE_HOTE_CHANGEE as CLE_HOTE_SSH } from './terminal.js';
 import { dansContexteDocker } from './docker-context.js';
 
 export const OK = 'ok';
@@ -28,6 +28,7 @@ export const SANS_CONTENEUR = 'sans_conteneur';
 export const DOCKER_ABSENT = 'docker_absent';
 export const MOTEUR_MUET = 'moteur_muet';
 export const SSHD_MUET = 'sshd_muet';
+export const CLE_HOTE_CHANGEE = 'cle_hote_changee';
 export const INJOIGNABLE = 'injoignable';
 
 /**
@@ -79,6 +80,12 @@ export const ETATS = {
     detail: 'Cet onglet passe par le même chemin que le terminal. Sans « sshd », '
       + 'la console ne peut rien lire — voyez l’onglet Terminal.',
   },
+  [CLE_HOTE_CHANGEE]: {
+    titre: "La clé d’hôte SSH de ce Spark a changé",
+    detail: "Aucune commande Docker n’a été envoyée. Vérifiez le remplacement de "
+      + "la cellule puis réconciliez l’empreinte avec OpenSSH ; la console ne "
+      + "l’accepte ni ne l’efface elle-même.",
+  },
   [INJOIGNABLE]: {
     titre: 'La console n’a pas pu interroger ce Spark',
     detail: 'La cause n’est pas établie. Rien n’est affirmé de ce qui y tourne.',
@@ -87,7 +94,7 @@ export const ETATS = {
 
 /** Les états qui n'ont rien à lister, et qui se disent (§6.13, §14.5). */
 export const SANS_LISTE = [SANS_CONTENEUR, DOCKER_ABSENT, MOTEUR_MUET,
-                           SSHD_MUET, INJOIGNABLE];
+                           SSHD_MUET, CLE_HOTE_CHANGEE, INJOIGNABLE];
 
 /**
  * Le verdict, à partir du code de sortie (§37.6 bis).
@@ -101,6 +108,7 @@ export function classer(code, sortie = '', erreurs = '') {
   // `ssh` rend 255 quand c'est LUI qui a échoué, jamais la commande distante.
   if (code === 255) {
     const ssh = classerEchecSsh(code, erreurs);
+    if (ssh.motif === CLE_HOTE_SSH) return CLE_HOTE_CHANGEE;
     return ssh.repond === false ? SSHD_MUET : INJOIGNABLE;
   }
   if (code === 127) return DOCKER_ABSENT;

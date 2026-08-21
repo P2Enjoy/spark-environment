@@ -17,7 +17,7 @@ import { EventEmitter } from 'node:events';
 import {
   CHEMIN_DEPANNAGE, CHEMIN_SSH, classerEchecSsh, commandePour, depannageOuvert,
   DISTANT_TERMINE, EN_ERREUR, FLUX_FERME, INACTIVITE, Session, SessionManager,
-  sonderSshd, SORTIE, SSHD_MUET, TerminalError,
+  sonderSshd, SORTIE, SSHD_MUET, CLE_HOTE_CHANGEE, TerminalError,
 } from './terminal.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -372,6 +372,16 @@ test('une clé REFUSÉE n’ouvre PAS le dépannage, et l’écran dit quoi fair
   assert.equal(verdict.ouvert, false);
   assert.equal(verdict.motif, 'cle_refusee');
   assert.match(verdict.explication, /onglet Clés/);
+});
+
+test("une clé d’hôte CHANGÉE est nommée et n’ouvre pas le dépannage", () => {
+  const sondage = classerEchecSsh(255,
+    'WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\nHost key has changed');
+  assert.deepEqual(sondage, { repond: true, motif: CLE_HOTE_CHANGEE });
+  const verdict = depannageOuvert(CELLULE, sondage);
+  assert.equal(verdict.ouvert, false);
+  assert.equal(verdict.motif, CLE_HOTE_CHANGEE);
+  assert.match(verdict.explication, /ne l.accepte ni ne l.efface/i);
 });
 
 test('un échec NON RECONNU n’ouvre pas le dépannage', () => {
