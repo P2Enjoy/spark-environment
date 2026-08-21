@@ -167,12 +167,14 @@ export class Session {
   #abonnes = new Set();
   #minuterie = null;
   #preavis = null;
+  #notifierFermeture = null;
+  #fermeturePromise = null;
 
   constructor({ tunnel, spark, spawn: spawnFn = spawn, commande = null,
                 chemin = CHEMIN_SSH, motifDepannage = null,
                 conteneur = null, shell = null,
                 inactiviteMs = INACTIVITE_MS, preavisMs = PREAVIS_MS,
-                maintenant = () => Date.now() } = {}) {
+                maintenant = () => Date.now(), notifierFermeture = null } = {}) {
     if (!tunnel) throw new TerminalError('Aucun tunnel : le Spark est injoignable.');
     if (!spark) throw new TerminalError('Aucun Spark visé.');
     // §37.4.4 : l'identifiant est OPAQUE et imprévisible. Il ouvre un shell ;
@@ -210,6 +212,10 @@ export class Session {
     this.inactiviteMs = inactiviteMs;
     this.preavisMs = preavisMs;
     this.maintenant = maintenant;
+    // La fin peut venir du shell, de l'inactivité, du flux ou d'un geste. La
+    // route qui a ouvert le terminal ne les voit pas toutes ; ce rappel les
+    // réunit donc avant que la session ne disparaisse du gestionnaire.
+    this.#notifierFermeture = notifierFermeture;
   }
 
   /**
@@ -376,7 +382,22 @@ export class Session {
     } catch { /* déjà mort : rien à tuer */ }
     this.#diffuser('fin', motif);
     this.#abonnes.clear();
+    // La fermeture du distant est asynchrone par nature. Ne pas attendre
+    // l'écriture du journal ici — l'évènement `exit` ne le permet pas — mais
+    // conserver sa promesse permet aux routes explicites de répondre après la
+    // même déclaration, sans créer de seconde voie.
+    // À l'arrêt de l'hôte, le gestionnaire retire volontairement son
+    // observateur avant de tuer les enfants : il n'y a alors ni tunnel ni
+    // journal joignable. Ne créons pas une promesse vide dans ce cas.
+    this.#fermeturePromise = this.#notifierFermeture
+      ? Promise.resolve(this.#notifierFermeture(this)).catch(() => false)
+      : null;
     return this;
+  }
+
+  /** Attend la déclaration de fermeture, quand un appel HTTP peut le faire. */
+  attendreFermeture() {
+    return this.#fermeturePromise ?? Promise.resolve(false);
   }
 
   /** Durée en secondes, pour le journal (§37.4.5). */
@@ -455,10 +476,17 @@ export function commandePour(commande, spark, chemin = CHEMIN_SSH) {
 /** Les sessions vivantes, et rien d'autre. */
 export class SessionManager {
   #sessions = new Map();
+  // Une session qui meurt avant que l'EventSource n'ait fini de se connecter
+  // doit pouvoir lui rejouer son motif de fin. Elle ne reste PAS vivante pour
+  // autant : cette seconde table est bornée et n'entre jamais dans `list()`.
+  #fermees = new Map();
+  #purges = new Map();
+  #notifierFermeture = null;
 
   constructor({ spawn: spawnFn = spawn, commande = null,
                 inactiviteMs = INACTIVITE_MS,
-                preavisMs = PREAVIS_MS, maintenant = () => Date.now() } = {}) {
+                preavisMs = PREAVIS_MS, maintenant = () => Date.now(),
+                notifierFermeture = null } = {}) {
     this.spawnFn = spawnFn;
     this.commande = commande;
     // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
@@ -467,24 +495,56 @@ export class SessionManager {
     this.inactiviteMs = inactiviteMs;
     this.preavisMs = preavisMs;
     this.maintenant = maintenant;
+    this.#notifierFermeture = notifierFermeture;
   }
 
-  ouvrir({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null,
-           conteneur = null, shell = null }) {
+  /**
+   * Prépare une session et la rend joignable au gestionnaire, sans lancer son
+   * processus. L'hôte peut ainsi inscrire l'OUVERTURE avant que le distant très
+   * court (un `sshd` muet, par exemple) n'écrive sa fermeture.
+   */
+  preparer({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null,
+             conteneur = null, shell = null }) {
     const session = new Session({
       tunnel, spark, spawn: this.spawnFn, commande: commandePour(this.commande, spark, chemin),
       chemin, motifDepannage, conteneur, shell,
       inactiviteMs: this.inactiviteMs,
       preavisMs: this.preavisMs, maintenant: this.maintenant,
-    }).demarrer();
+      notifierFermeture: (fermee) => this.#sessionFermee(fermee),
+    });
     this.#sessions.set(session.id, session);
     return session;
   }
 
+  ouvrir(options) {
+    return this.preparer(options).demarrer();
+  }
+
+  /** Installe l'unique observateur de toute fermeture, quel qu'en soit le motif. */
+  notifierFermeture(notifier) {
+    this.#notifierFermeture = typeof notifier === 'function' ? notifier : null;
+  }
+
+  #sessionFermee(session) {
+    this.#sessions.delete(session.id);
+    this.#fermees.set(session.id, session);
+    const purge = setTimeout(() => this.oublier(session.id), 30_000);
+    purge.unref?.();
+    this.#purges.set(session.id, purge);
+    return this.#notifierFermeture?.(session);
+  }
+
   get(id) {
-    const session = this.#sessions.get(id);
+    const session = this.#sessions.get(id) ?? this.#fermees.get(id);
     if (!session) throw new TerminalError(`Aucune session « ${id} ».`);
     return session;
+  }
+
+  /** La fin a été rejouée au flux : elle n'a plus aucune raison d'être gardée. */
+  oublier(id) {
+    clearTimeout(this.#purges.get(id));
+    this.#purges.delete(id);
+    this.#fermees.delete(id);
   }
 
   fermer(id, motif = SORTIE) {

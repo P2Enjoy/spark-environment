@@ -160,12 +160,14 @@ test('fermer TUE le distant', () => {
 });
 
 test('le distant qui se termine ferme la session, avec SON motif', () => {
-  const { session, enfant } = pile();
+  const { manager, session, enfant } = pile();
   const vus = [];
   session.abonner((type, data) => vus.push([type, data]));
   enfant.emit('exit', 0);
   assert.equal(session.motif, DISTANT_TERMINE);
   assert.deepEqual(vus.at(-1), ['fin', DISTANT_TERMINE]);
+  assert.equal(manager.list().length, 0,
+    'une session que le distant a terminée ne reste pas affichée comme vivante');
 });
 
 test('l’arrêt de l’hôte console ne laisse AUCUN shell derrière lui', () => {

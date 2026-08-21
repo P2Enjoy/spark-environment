@@ -247,6 +247,12 @@ export function createConsoleHost(options = {}) {
       reason: session.motif, duration_seconds: session.dureeSecondes() });
   }
 
+  // Une fin ne vient pas toujours d'une route HTTP : le shell distant et le
+  // délai d'inactivité ferment directement leur session. Le gestionnaire est
+  // donc l'unique endroit qui les voit toutes. Cette installation vaut aussi
+  // pour un gestionnaire injecté par les preuves.
+  terminaux.notifierFermeture((session) => declarerFermeture(tunnels, session));
+
   const routes = {
     'GET /api/servers': async () => {
       const fichier = await loadFile(inventoryPath);
@@ -943,12 +949,13 @@ export function createConsoleHost(options = {}) {
           return { status: 409, body: { error: 'container_shell_unavailable',
                                         reason: sonde.state, ...sonde } };
         }
-        const session = terminaux.ouvrir({
+        const session = terminaux.preparer({
           tunnel, spark: decrit, chemin: CHEMIN_CONTENEUR,
           conteneur, shell: sonde.shell });
         await declarerGeste(tunnel, {
           action: 'spark.container_terminal_open', spark: decrit.name,
           container: conteneur, resultat: 'ok' });
+        session.demarrer();
         return { status: 201, body: session.describe() };
       }
 
@@ -969,7 +976,7 @@ export function createConsoleHost(options = {}) {
         }
         motifDepannage = verdict.motif;
       }
-      const session = terminaux.ouvrir({ tunnel, spark: decrit, chemin, motifDepannage });
+      const session = terminaux.preparer({ tunnel, spark: decrit, chemin, motifDepannage });
       // §37.4.5 : on DÉCLARE l'ouverture. Si `sparkd` est injoignable, la
       // session s'ouvre quand même — refuser un terminal parce que le journal
       // est indisponible transformerait une panne de traçabilité en panne
@@ -980,6 +987,7 @@ export function createConsoleHost(options = {}) {
       await declarerAudit(tunnel,
         chemin === CHEMIN_DEPANNAGE ? 'spark.rescue_exec' : 'spark.terminal_open',
         { spark: decrit.name, path: chemin, reason: motifDepannage ?? undefined });
+      session.demarrer();
       return { status: 201, body: session.describe() };
     },
 
@@ -1018,7 +1026,7 @@ export function createConsoleHost(options = {}) {
       const id = String(url?.searchParams.get('id') ?? '');
       const session = terminaux.fermer(id, FLUX_FERME);
       if (!session) return { status: 204, body: null };
-      await declarerFermeture(tunnels, session);
+      await session.attendreFermeture();
       return { status: 204, body: null };
     },
 
@@ -1029,7 +1037,7 @@ export function createConsoleHost(options = {}) {
       if (!session) {
         return { status: 404, body: { error: 'unknown_session', message: `Aucune session « ${id} ».` } };
       }
-      await declarerFermeture(tunnels, session);
+      await session.attendreFermeture();
       return { status: 200, body: session.describe() };
     },
 
@@ -1076,7 +1084,15 @@ export function createConsoleHost(options = {}) {
   });
 
   // §37.4.2 : aucun shell ne survit à l'hôte console.
-  server.on('close', () => { terminaux.fermerToutes(); tunnels.closeAll(); });
+  server.on('close', () => {
+    // L'hôte s'arrête avec ses tunnels : une tentative de journalisation à ce
+    // moment ne peut plus être fiable et ne doit pas retarder la fin du
+    // processus. Toutes les fermetures pendant que l'hôte sert encore passent
+    // déjà par l'observateur central ci-dessus.
+    terminaux.notifierFermeture(null);
+    terminaux.fermerToutes();
+    tunnels.closeAll();
+  });
   return { server, tunnels, terminals: terminaux };
 }
 
@@ -1231,12 +1247,16 @@ function servirFlux(url, reponse, terminaux) {
   // pas rediffusée à tous — seul ce flux la reçoit, et il se referme aussitôt.
   if (session.fermeA) {
     reponse.write(`event: fin\ndata: ${JSON.stringify(session.motif)}\n\n`);
+    terminaux.oublier(id);
     return reponse.end();
   }
 
   const desabonner = session.abonner((type, data) => {
     reponse.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
-    if (type === 'fin') reponse.end();
+    if (type === 'fin') {
+      terminaux.oublier(id);
+      reponse.end();
+    }
   });
   reponse.on('close', () => {
     desabonner();

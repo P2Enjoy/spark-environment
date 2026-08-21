@@ -145,6 +145,23 @@ test('fermer TUE le distant et déclare la fermeture avec sa durée', async () =
   fermer();
 });
 
+test('la fin du shell déclare elle aussi UNE fermeture, sans retenir son contenu', async () => {
+  // Le shell peut rendre la main sans que le navigateur clique « Fermer ».
+  // Cette voie était la seule à contourner le journal : elle doit maintenant
+  // partager la déclaration unique de toutes les fermetures.
+  const { base, fermer, enfants, declarees } = await pile();
+  await ouvrir(base);
+  enfants[0].stdout.emit('data', Buffer.from('sortie qui ne doit pas être journalisée'));
+  enfants[0].emit('exit', 0);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const fermetures = declarees.filter((d) => d.action === 'spark.terminal_close');
+  assert.equal(fermetures.length, 1);
+  assert.equal(fermetures[0].payload.reason, 'distant_termine');
+  assert.ok(!JSON.stringify(fermetures).includes('sortie qui ne doit pas être journalisée'));
+  fermer();
+});
+
 test('AUCUN octet de la session n’atteint le journal', async () => {
   // §37.5, et c'est LA règle : le journal dira qu'une session a eu lieu, jamais
   // ce qui y a été fait.
