@@ -394,6 +394,15 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- **La réservation CPU est un plancher, et le produit le dit enfin.** Arbitrage du
+  responsable : `H = 300` reste posé, donc `r/C` est garanti sous contention
+  totale et dépassé sinon. Le runtime publie `floor_under_contention` et l'écran
+  annonce « garantie sous contention totale, dépassée sinon » — plus vrai que le
+  « non garantie » précédent, qui était exact mais trop modeste.
+- `docs/DAT.md` §47.3 réécrit : **deux canaux de notification** réglés depuis un
+  onglet de la Forge — webhook avec gabarit, SMTP avec destination —, activables
+  séparément, et toute modification protégée par un mot de passe fixé au premier
+  usage. La configuration quitte les variables d'environnement pour le registre.
 - **Le pool sur fichier n'est plus « provisoire »** : le DAT §8.5 énonce **deux
   dispositions**, chacune avec ce qu'elle apporte et ce qu'elle ne protège pas.
   Sous la disposition sur fichier, la protection contre la corruption silencieuse

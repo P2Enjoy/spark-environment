@@ -2476,12 +2476,37 @@ elle **détecte**, et c'est la seule mesure qui serve encore quand tout le reste
 - Portée : sur les gestes destructifs et sur les levées de protection, un envoi
   vers un canal choisi par le responsable. Le contenu NOMME l'objet et le geste,
   et ne porte **aucun secret** — c'est le §21.2 appliqué à une sortie.
-- Ce qu'il faut trancher dans l'unité : le canal introduit une **dépendance
-  sortante** que le produit n'a pas aujourd'hui. Un canal injoignable ne doit
-  jamais faire échouer le geste — ce serait transformer une panne de traçabilité
-  en panne d'exploitation (§37.4.5) —, et l'écart doit être visible.
-- DoD : un geste destructif produit une notification ; un canal injoignable
-  laisse le geste aboutir et le SIGNALE ; aucun secret n'y transite, prouvé sur
+- **Tranché le 2026-08-21 (§47.3)** : **deux canaux**, réglés depuis un **onglet
+  de la Forge**, activables et désactivables **séparément** —
+  1. un **webhook** avec un **gabarit** : substitution de texte sur les champs
+     nommés du §47.4, jamais une exécution, rendu **montré avant** enregistrement,
+     et passé par le filtre du §21.2 pour qu'un gabarit ne puisse pas faire sortir
+     ce que le contenu interdit ;
+  2. un **SMTP** — serveur, port, TLS, compte, mot de passe **traité en secret**
+     (§43.3), adresse d'envoi et de destination.
+  Les deux peuvent être actifs ensemble, et **l'échec de l'un n'empêche pas
+  l'autre** : deux témoins indépendants, pas une chaîne.
+- **Toute modification exige un mot de passe, fixé au premier usage** (§47.3.3),
+  et c'est le **même mécanisme** que la protection d'un Spark (§35.3) — `scrypt`,
+  sel propre, empreinte au registre, jamais la valeur. Motif : qui peut couper le
+  témoin en silence peut agir sans témoin, et c'est le premier geste qu'un
+  attaquant tenterait. Une **désactivation notifie**, par le canal qu'elle coupe
+  et pendant qu'il fonctionne encore.
+- La configuration quitte les variables d'environnement pour le **registre** : un
+  canal qu'on ne peut ni voir ni éprouver depuis l'écran est un canal dont on ne
+  sait pas s'il veille.
+- Un canal injoignable ne doit jamais faire échouer le geste — ce serait
+  transformer une panne de traçabilité en panne d'exploitation (§37.4.5) —, et
+  l'écart doit être visible.
+- DoD : un geste destructif produit une notification **sur chacun des deux
+  canaux** ; un canal injoignable laisse le geste aboutir, le SIGNALE, et
+  **n'empêche pas l'autre canal** — prouvé en coupant l'un des deux ; un gabarit
+  qui référence un champ inconnu est refusé **à l'enregistrement** et non à
+  l'envoi ; un gabarit ne peut pas faire sortir ce que le §47.4 interdit, prouvé
+  en tentant explicitement ; une modification sans mot de passe est refusée, et la
+  **désactivation d'un canal part par ce canal** avant qu'il ne se taise ; les
+  trois états — aucun canal, configuré mais désactivé, actif en échec — sont
+  distingués à l'écran ; aucun secret n'y transite, prouvé sur
   ce que l'envoi porte réellement ; l'absence de canal configuré n'est pas une
   panne, la fonction se désactive et l'écran le dit (§14.5).
 

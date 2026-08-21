@@ -6805,3 +6805,69 @@ Restent bloquées sur la Forge : **SPK-61** (poser la clé restreinte, geste
 délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel), **SPK-36**
 (exercice de restauration), **SPK-43** (route de dépannage de bout en bout).
 **SPK-29** attend un arbitrage.
+
+## 2026-08-21 — La réservation devient un plancher assumé, et le témoin gagne deux canaux
+
+Deux arbitrages rendus par le responsable, persistés avant toute autre chose.
+
+### La réservation CPU : `H = 300` reste posé
+
+La mesure du 2026-08-21 avait vérifié le mécanisme au pour-cent près — 47,9 %
+obtenus pour 47,4 % prédits — et corrigé la loi une seconde fois : `init.scope`
+n'étant **jamais exécutable**, le `H` réel vaut 200 là où le calcul en pose 300.
+La tranche obtient donc systématiquement **plus** que la part visée.
+
+Restait un choix, et il ne portait plus sur du code : garder `H = 300` — la
+réservation est un plancher tenu et dépassé — ou mesurer `H` pour en faire une
+égalité.
+
+**Le responsable a choisi le plancher**, et c'est le bon choix pour trois raisons
+que j'écris ici pour qu'elles ne se rediscutent pas. Une égalité stricte
+obligerait à **retirer** du CPU à un locataire quand la Forge est au repos,
+c'est-à-dire à supprimer le burst pour être exact. Elle ferait bouger le poids sur
+un signal qui n'est pas un changement d'allocation, cassant le modèle où il ne se
+recalcule qu'à la création, la suppression et le redimensionnement. Et « au moins
+0,5 CPU, souvent plus » est une promesse qu'on tient toujours, là où « exactement
+0,5 CPU » est une promesse qu'on doit défendre dans les deux sens.
+
+Conséquence immédiate, et c'est elle qui compte : **le produit cesse de se
+sous-vendre.** Il annonçait « réservation proportionnelle entre Sparks — non
+garantie sous contention », ce qui était vrai et trop modeste. Il annonce
+désormais « garantie sous contention totale, dépassée sinon ». Le runtime publie
+`floor_under_contention`, l'écran le lit — jamais écrit en dur (§27.6) —, et les
+preuves suivent : 915 Python, 836 console.
+
+### Le témoin gagne deux canaux, et une serrure
+
+Le §47.3 ne retenait qu'un webhook posé par variable d'environnement. Le
+responsable demande **deux canaux réglés depuis un onglet de la Forge** — webhook
+avec gabarit, SMTP avec adresse de destination — activables séparément, et **toute
+modification protégée par un mot de passe fixé au premier usage**.
+
+Trois points valaient d'être écrits plutôt que déduits à l'implémentation :
+
+- **le gabarit est une donnée, jamais une exécution.** Substitution de texte sur
+  les seuls champs nommés du §47.4, nom inconnu refusé **à l'enregistrement** et
+  non à l'envoi — sinon la panne se découvre le jour de l'incident —, et rendu
+  passé par le filtre du §21.2. Sans cette dernière règle, il suffirait d'un
+  gabarit pour contourner ce qui protège les secrets ;
+- **la serrure a un motif précis** : un canal de notification sert quand tout le
+  reste a échoué. Qui peut le couper en silence peut agir sans témoin, et c'est le
+  premier geste qu'un attaquant tenterait. D'où une conséquence que la DoD
+  retient : **désactiver un canal notifie, par ce canal, pendant qu'il fonctionne
+  encore** ;
+- **un seul mécanisme de mot de passe**, celui de la protection d'un Spark
+  (§35.3). En écrire un second donnerait deux endroits où un secret peut fuir.
+
+La configuration quitte les variables d'environnement pour le registre. Motif :
+une variable se règle par un redémarrage et ne se voit nulle part ; un canal qu'on
+ne peut ni voir ni éprouver depuis l'écran est un canal dont on ne sait pas s'il
+veille.
+
+### Vérifications
+
+915 preuves Python et 836 de console, vertes après l'alignement du runtime, de
+l'écran et de leurs fixtures — `test_app`, `test_metrics`, `forge-view.test.js`,
+`gestes.test.mjs`, `captures.mjs`. Aucune campagne E2E lancée : la machine est
+partagée, et le §F du runbook l'interdit sans annonce.
+

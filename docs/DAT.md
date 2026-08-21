@@ -7311,9 +7311,12 @@ Pourquoi celui-là plutôt qu'un SMS ou un service nommé :
   `SPARK_DNS_BASE_URL` le fait déjà pour le fournisseur DNS (§38.1). Une preuve
   peut donc mesurer ce qui part réellement, et non ce qu'on croit envoyer.
 
-**Absente, la fonction se DÉSACTIVE, et ce n'est pas une panne** (§14.5). Une
-Forge sans canal fonctionne exactement comme aujourd'hui. L'écran de la Forge le
-DIT, au lieu de laisser croire qu'un canal veille.
+**Aucun canal actif, la fonction se DÉSACTIVE, et ce n'est pas une panne**
+(§14.5). Une Forge sans canal fonctionne exactement comme aujourd'hui. L'onglet
+le **DIT**, au lieu de laisser croire qu'un canal veille — et c'est là que la
+distinction du §14.6 compte : « aucun canal configuré », « configuré mais
+désactivé » et « actif, dernier envoi en échec » sont trois états différents, et
+le deuxième est celui qui trompe.
 
 ### 47.4 Ce que l'envoi porte, et ce qu'il ne portera jamais
 
