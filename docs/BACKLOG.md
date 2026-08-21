@@ -608,7 +608,7 @@ Les points listés au §13 du DAT, chacun mesuré sur l'hôte cible et consigné
   chaque requête et non persistée, et affichée face à son plafond. Vérifié sur
   l'hôte réel — 0,80 Gio annoncés, 0,80 Gio dans `arcstats`.
 
-### [~] SPK-29 · Regrouper les Sparks sous un parent cgroup de poids maîtrisé
+### [x] SPK-29 · Regrouper les Sparks sous un parent cgroup de poids maîtrisé
 
 Mesuré le 2026-08-18 : Incus place chaque Spark à la **racine** de cgroup v2, frère
 de `system.slice`, `user.slice` et `init.scope`, tous à `cpu.weight=100`. Le poids
@@ -630,9 +630,14 @@ centrale du produit.
 - La tranche est une **unité systemd** : créée à la main elle disparaît au
   redémarrage, et la réservation redeviendrait proportionnelle en silence (§32.4).
 
-- DoD : sous contention totale provoquée, un Spark à réservation *r* obtient
-  effectivement `r / capacité` de la machine, mesuré et archivé. Tant que ce n'est
-  pas prouvé, la console ne présente pas la réservation comme une garantie absolue.
+- DoD **RÉVISÉE le 2026-08-21 par l'arbitrage du responsable**, et le motif est
+  écrit au §32.2 : l'égalité stricte `r / capacité` obligerait à **retirer** du
+  CPU à un locataire quand la Forge est au repos — donc à supprimer le burst pour
+  être exact — et ferait bouger le poids sur un signal qui n'est pas un
+  changement d'allocation. La DoD devient donc : **la réservation est un
+  plancher**, tenu sous contention totale et dépassé sinon, mesuré et archivé.
+  L'ancienne formulation n'est pas conservée à côté : elle décrivait une règle
+  qui n'est plus celle du produit.
 
 **Le mécanisme est LIVRÉ et prouvé sur l'hôte ; la DoD ne l'est pas encore.**
 
@@ -671,8 +676,20 @@ et elle a trouve un DEFAUT GRAVE avant de pouvoir rien mesurer.
   ce que le produit fait et annonce aujourd'hui — ou **mesurer `H`** pour que la
   reservation devienne une egalite, au prix d'un poids qui bouge avec l'activite
   de la Forge. Les deux voies sont ecrites au §32.2.
-- La console continue donc de **ne pas** présenter la réservation comme une
-  garantie absolue, conformément à la DoD.
+**CLOSE le 2026-08-21.** L'arbitrage rendu, la DoD révisée est satisfaite :
+
+- **le mécanisme est mesuré au pour-cent près** — 47,9 % obtenus pour 47,4 %
+  prédits, sous contention des trois tranches ;
+- **la portée est ÉNONCÉE par le produit**, et lue et non écrite en dur : le
+  runtime publie `floor_under_contention`, l'écran des pools rend
+  « Réservation garantie sous contention totale, dépassée sinon » — vérifié en
+  capture (`e2e/captures/29-hote-pools.png`). La mécanique de lecture posée au
+  §27.6 a fait exactement ce pour quoi elle existait : l'écran a suivi le
+  changement de règle sans qu'on y touche ;
+- **le manuel M4 dit la même chose**, avec le chiffre de la mesure ;
+- **les mentions devenues fausses ont été RETIRÉES** partout où elles vivaient —
+  DAT §7.3, §27.6, module d'admission, runtime, manuel — et non doublées d'une
+  note.
 
 ### [x] SPK-30 · Marge de métadonnées au-dessus du quota vendu
 
