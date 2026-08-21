@@ -158,6 +158,43 @@ se déclare dans la console (voir [M7](M7-domaine.md)) : c'est le registre qui
 connaît l'adresse de votre Spark, et deux mécanismes écrivant la même
 configuration finissent par diverger.
 
+### Recevoir vos variables d'environnement
+
+La console peut déposer des variables dans votre Spark — une adresse de relais
+SMTP, un point d'entrée S3, un jeton d'API. Elles arrivent dans **deux fichiers**,
+à des chemins stables :
+
+```
+/etc/spark/env        vos variables ordinaires
+/run/spark/secrets    vos valeurs déclarées SECRÈTES
+```
+
+Pour que votre pile les reçoive, **attachez les deux** à vos services :
+
+```yaml
+services:
+  app:
+    env_file:
+      - /etc/spark/env
+      - /run/spark/secrets
+```
+
+**Écrit une fois, et c'est tout** : toute variable ajoutée ensuite depuis la
+console arrive sans que vous retouchiez votre fichier de composition.
+
+Trois choses valent d'être sues :
+
+- **rien ne redémarre tout seul.** Votre pile lira les nouvelles valeurs à son
+  prochain démarrage — `docker compose up -d` suffit ;
+- **le second fichier est volatil.** Il vit en mémoire et disparaît à l'arrêt du
+  Spark ; la console le repose à chaque démarrage. C'est ce qui empêche un
+  ancien instantané de ressusciter un secret que vous avez remplacé ;
+- **une valeur peut contenir n'importe quoi** — espaces, guillemets, `$`,
+  apostrophes. La console les écrit de façon à ce que Compose les rende intactes.
+
+> Un Spark démarré **hors de la console** — un `incus start` à la main sur la
+> Forge — n'aura pas ses secrets tant que la console ne l'a pas rattrapé.
+
 > **Mesuré sur matériel réel**, pas sur la pile de développement : une pile
 > Compose complète tourne dans un Spark non privilégié, sous AppArmor actif et
 > sans contournement. La pile de développement, elle, ne lance aucun conteneur —
