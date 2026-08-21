@@ -6750,3 +6750,58 @@ Restent bloquées sur la Forge : **SPK-61** (poser la clé restreinte, geste
 délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel), **SPK-30**
 (niveau 3), **SPK-36** (exercice de restauration), **SPK-43** (route de dépannage
 de bout en bout).
+
+## 2026-08-21 · SPK-30 — le niveau 3, qui a d'abord infirmé la promesse
+
+**Unité choisie au §4.2 point 2** : SPK-29 n'attend plus qu'un arbitrage, SPK-30
+suit dans l'ordre du plan et son seul écart — le niveau 3 — exige la Forge.
+
+### Ce que la mesure a établi
+
+Un Spark à 1 Gio, marge de 64 Mio, rempli de données **incompressibles** jusqu'au
+refus. Premier enseignement, redécouvert au passage : la compression ZFS avale
+les zéros — 2 Gio de `/dev/zero` n'occupent rien. Le §8.7 le disait ; il fallait
+s'en souvenir pour saturer réellement.
+
+Sur ce dataset saturé, les deux gestes séparément :
+
+```
+ecrire la CONFIGURATION -> ECHEC : backup.yaml: disk quota exceeded
+agrandir le DEVICE      -> REUSSIT, la cellule respire aussitot
+```
+
+**La marge ne protège pas ce que le §8.8.1 affirmait.** Le quota ZFS porte sur le
+jeu de données entier : le `df` de la cellule montre `vendue + marge`, et le
+locataire remplit donc la marge. Elle n'est ni invisible ni inaccessible.
+
+### Le défaut, et sa correction
+
+Le produit posait **la configuration avant le disque**. Il échouait donc
+précisément sur un Spark plein — le seul cas où l'agrandissement est urgent, et
+celui que toute cette unité existe pour traiter.
+
+**Corrigé : le disque d'abord, la configuration ensuite.** Grandir libère la
+place que `backup.yaml` réclame. Une preuve garde l'ordre : rien d'autre ne
+dirait qu'il compte, et une réorganisation future le perdrait.
+
+### Le niveau 3, de bout en bout, par le produit
+
+```
+Spark sature, 0 octet libre, ecriture refusee
+PATCH storage_bytes=10 Gio -> applied: true, aucune erreur
+le locataire ecrit de nouveau
+```
+
+La cellule a été rendue à son état exact — `df` identique à l'octet près après
+que ZFS a libéré.
+
+### Où reprendre
+
+**SPK-30 est close.** Un arbitrage y reste attaché, écrit au §8.8.1 : accepter
+que la marge soit consommable — la promesse tient par l'ordre des gestes — ou
+piloter `refquota`, ce qui contournerait l'abstraction d'Incus.
+
+Restent bloquées sur la Forge : **SPK-61** (poser la clé restreinte, geste
+délicat), **SPK-54** (rootless), **SPK-40** (agent SSH réel), **SPK-36**
+(exercice de restauration), **SPK-43** (route de dépannage de bout en bout).
+**SPK-29** attend un arbitrage.

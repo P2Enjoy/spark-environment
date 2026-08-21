@@ -52,6 +52,11 @@
   à la première reconciliation : la réservation retombait à presque rien, sans
   qu'aucun contrôle ne le signale. Le poids se pose désormais par systemd, qui
   le réaffirme. Mesuré sur matériel réel, avant et après reconciliation.
+- **Un Spark dont le disque est plein peut de nouveau être agrandi** (SPK-30).
+  Le produit écrivait la configuration de la cellule avant sa taille de disque ;
+  or, disque plein, écrire la configuration échoue. L'agrandissement — le seul
+  geste qui débloque la situation — était donc refusé précisément quand il
+  devenait urgent. Mesuré et corrigé sur matériel réel.
 - **Redimensionner un Spark met à jour l'allocation** (SPK-57) : changer le mode
   CPU ne rendait pas ses cœurs dédiés au pool commun et ne recalculait pas le
   poids de la tranche. Un simple redimensionnement pouvait donc rompre la
