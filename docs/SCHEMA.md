@@ -21,6 +21,7 @@ Toute évolution passe par une migration versionnée dans
         │
         └── spark ──┬── spark_cpu_pin
                     ├── ingress_route
+                    ├── spark_bootstrap_observation
                     ├── spark_ssh_key ──── ssh_key
                     ├── snapshot
                     └── backup
@@ -366,6 +367,30 @@ mauvais échange.
 l'environnement effectif de chaque Spark **redevient** le catalogue entier — le
 comportement d'avant SPK-64, donc le défaut qu'elle corrige. Un retour arrière
 sur cette migration se décide en connaissance de cause.
+
+## 10 quinquies. `spark_bootstrap_observation` : ce que l'amorçage a constaté (SPK-60)
+
+Migration `012_briefing.sql`. Contrat : `docs/DAT.md` §44.3, §44.4 et §44.8.
+
+| Colonne | Type | Contenu |
+|---|---|---|
+| `spark_id` | TEXT PK | Spark observé, `ON DELETE CASCADE` |
+| `observed_at` | TEXT | date du relevé d'amorçage qui a produit le rapport |
+| `openssh_version` | TEXT nullable | version d'`openssh-server` alors observée |
+| `docker_version` | TEXT nullable | version de `docker-ce` alors observée |
+| `compose_version` | TEXT nullable | version du greffon Compose alors observée |
+| `docker_mode` | TEXT nullable | `enracine` ou `rootless`, si Docker est utilisable |
+| `managed_items` | TEXT JSON | composants effectivement installés ou réparés par `sparkd` |
+
+Une ligne est remplacée après chaque amorçage, parce qu'un relevé daté doit dire
+ce qu'il a vu à cette date. `managed_items` conserve l'historique minimal des
+composants que le plan de contrôle a posés : un composant seulement trouvé déjà
+présent n'est jamais réécrit rétrospectivement comme « installé par sparkd ».
+Cette donnée est informative et non une autorisation; son contenu sera de toute
+façon visible dans une cellule dont le locataire est `root`.
+
+La cascade est nécessaire : un briefing sans Spark n'a aucun sens et ne doit pas
+survivre à la libération de ses ressources.
 
 ## 11. Retour arrière
 

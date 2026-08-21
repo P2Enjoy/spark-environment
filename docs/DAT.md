@@ -7186,6 +7186,52 @@ gabarit de déploiement, ni un fichier de configuration. Il ne décrit pas
 l'application du locataire : il décrit **la cellule qui l'accueille**, et s'arrête
 là où le §1 s'arrête.
 
+### 44.8 Le modèle unique et sa réécriture (SPK-60)
+
+Le Markdown et le JSON ne sont pas deux descriptions maintenues en parallèle.
+`sparkd` construit **un unique modèle de briefing**, puis rend
+`/etc/spark/briefing.json` directement depuis ce modèle et
+`/etc/spark/BRIEFING.md` comme sa présentation humaine. Une modification de la
+forme ne peut donc pas faire dire au Markdown qu'un port est publié quand le JSON
+dit l'inverse. Les deux fichiers sont posés en `0600`; le panneau indicateur
+`/etc/motd`, lui, est `0644` et ne contient que les trois lignes du §44.1.
+
+Le modèle porte, sans valeurs d'environnement :
+
+- son format `spark-briefing/v1`, sa date d'écriture et `sparkd, plan de
+  contrôle` comme auteur ;
+- l'identité du Spark, son IPv4 privée, sa protection, et l'adresse publique de
+  la Forge **si elle est configurée** ;
+- chaque quota et sa sémantique, les routes et ports publiés qui visent ce Spark,
+  et les noms séparés des variables ordinaires et secrètes ;
+- les chemins `/etc/spark/env` et `/run/spark/secrets`, l'état du dernier
+  amorçage, et les cinq pièges du §44.5 ;
+- l'avertissement du §44.6 : fichier produit par le plan de contrôle mais
+  modifiable par `root` dans la cellule, donc jamais preuve d'autorisation.
+
+L'adresse publique ne se déduit ni de l'IP privée ni d'un appel à un service
+extérieur : ce serait inventer un fait réseau. `SPARKD_FORGE_PUBLIC_ADDRESS`
+porte une adresse IP ou un nom publiquement joignable. S'il est vide, le modèle
+rend `null` et le Markdown dit explicitement que le plan de contrôle ne la
+connaît pas.
+
+Le relevé d'amorçage est conservé dans `spark_bootstrap_observation` : horodatage,
+versions observées de `openssh-server`, `docker-ce` et du greffon Compose, mode
+Docker, et liste des composants que **cette** installation par le plan de
+contrôle a effectivement modifiés. Une composante déjà présente n'est jamais
+présentée comme installée par `sparkd`. Une absence de relevé est rendue comme
+« amorçage jamais relevé », non comme une liste de paquets prétendument fraîche.
+
+Après une écriture du plan de contrôle, les fichiers sont régénérés entièrement
+depuis ce modèle — jamais complétés — lorsque la cellule existe. Cela arrive
+après un amorçage, une route ou un port ajouté ou retiré, une modification de
+l'environnement, un redimensionnement, une protection armée ou levée, une
+création, un démarrage et une restauration. Une cellule momentanément absente ou
+un pilote indisponible ne fait pas annuler le geste qui a déjà écrit le registre :
+le briefing est rattrapé au prochain démarrage. Cette règle est la même que pour
+les clés et les fichiers d'environnement : l'état voulu reste dans le registre,
+la cellule en est une projection.
+
 
 
 ## 45. Modèle de menace des actions sensibles (SPK-35)

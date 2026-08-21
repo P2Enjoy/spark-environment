@@ -3605,7 +3605,7 @@ Relevé au même instant dans la cellule : les deux fichiers en `root:root 0600`
 le secret absent du fichier persistant et du fichier de confort, et la clé de
 chiffrement créée en `0600` à côté du registre.
 
-### [ ] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
+### [~] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
 
 Un agent qui entre dans une cellule fraîche ne sait rien : ni ses quotas, ni où
 lire l'environnement injecté, ni ce qui est installé, ni pourquoi certaines
@@ -3651,6 +3651,12 @@ aller-retour.
   sans shell interactif**, ce qui est le cas d'usage réel ; preuve sur la Forge
   réelle qu'un agent partant du seul briefing déploie une pile joignable ; manuel
   M6 et `docs/AGENT_RUNBOOK.md` mis à jour.
+
+**Contrat de données écrit le 2026-08-21, avant le code** : DAT §44.8 et SCHEMA
+§10 quinquies. Les deux formats viennent d'un modèle unique; le relevé daté de
+l'amorçage est conservé sans jamais transformer un composant déjà présent en
+installation prétendument faite par le plan de contrôle. La suite est
+l'implémentation et les preuves, dont la Forge réelle dépend de SPK-54.
 
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 

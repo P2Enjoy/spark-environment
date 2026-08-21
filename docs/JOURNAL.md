@@ -7626,3 +7626,20 @@ tests Spark/notification sont verts ; le contrat OpenAPI a été régénéré ap
 dérive de version du paquet. Il reste une seule preuve : recevoir ce corps sur un
 vrai canal choisi par le responsable, ce qui nécessite son URL et l'autorisation
 de jouer un geste sensible. SPK-62 reste `[~]`.
+
+---
+
+## 2026-08-21 · SPK-60 — le briefing a un état, pas deux textes
+
+Avant d'écrire le code, le contrat précise le point qui ne pouvait pas rester
+implicite : les versions relevées à l'amorçage et l'auteur d'une installation ne
+se déduisent ni de l'état courant de la cellule, ni d'un texte Markdown. Une
+ligne `spark_bootstrap_observation` porte le relevé daté et la liste minimale de
+ce que le plan de contrôle a effectivement modifié. Trouver Docker déjà présent
+ne devient donc jamais, par relecture, « Docker installé par sparkd ».
+
+Le JSON est le modèle source et le Markdown sa seule présentation humaine ; les
+deux sont réécrits en entier à chaque changement de plan qui les concerne. Une
+adresse publique de Forge est elle aussi un fait configuré, jamais une
+supposition tirée de l'adresse privée : absente, elle est dite inconnue. SPK-60
+passe à `[~]` : le contrat est poussé avant l'implémentation.

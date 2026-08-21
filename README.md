@@ -290,6 +290,7 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_ALLOWED_SIGNERS` | fichier `allowed_signers` d'OpenSSH — clés **publiques** autorisées à signer un geste (`docs/DAT.md` §36.10) | chemin absolu | non | vide, la vérification est désactivée |
 | `SPARKD_SECRET_KEY_FILE` | clé de chiffrement des **secrets d'environnement** — 32 octets, `0600`, créée si absente et jamais remplacée (`docs/DAT.md` §43.9.2) | chemin absolu | non | `secret.key` **à côté du registre** |
 | `SPARKD_NOTIFY_URL` | canal d'**alerte hors bande** : un `POST` de JSON y part sur chaque geste sensible (`docs/DAT.md` §47) | URL | non | vide, la fonction est désactivée |
+| `SPARKD_FORGE_PUBLIC_ADDRESS` | adresse ou nom public de la Forge, rendu dans le briefing d'un Spark (`docs/DAT.md` §44.8) | IPv4, IPv6 ou nom sans schéma | non | vide : l'adresse est inconnue du plan de contrôle |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
