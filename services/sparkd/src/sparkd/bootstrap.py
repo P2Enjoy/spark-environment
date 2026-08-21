@@ -48,7 +48,7 @@ compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/nul
 rootless=absent
 if id spark-docker >/dev/null 2>&1; then
   uid=$(id -u spark-docker)
-  if systemctl --user -M spark-docker@ is-active docker.service >/dev/null 2>&1 \
+  if systemctl --user -M spark-docker@.host is-active docker.service >/dev/null 2>&1 \
      && runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
           DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info >/dev/null 2>&1; then
     rootless=active
@@ -251,7 +251,9 @@ SCRIPT_ROOTLESS = APT + (
     # Le démon enraciné est ARRÊTÉ : deux démons sur la même cellule se
     # disputeraient le stockage et les réseaux.
     "systemctl disable --now docker.service docker.socket 2>/dev/null || true\n"
-    f"machinectl shell {COMPTE_ROOTLESS}@ /usr/bin/env "
+    # `.host` est indispensable : sans lui, `machinectl` cherche une machine
+    # appelée `spark-docker@` au lieu du bus utilisateur local.
+    f"machinectl shell {COMPTE_ROOTLESS}@.host /usr/bin/env "
     "XDG_RUNTIME_DIR=/run/user/$(id -u %s) dockerd-rootless-setuptool.sh install\n"
     % COMPTE_ROOTLESS
 )

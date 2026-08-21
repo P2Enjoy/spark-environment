@@ -143,7 +143,7 @@ def test_le_releve_rootless_exige_un_SERVICE_et_un_SOCKET_utilisable(tmp_path):
     """Un compte de service seul n'est pas un démon. Le cas réel avait bien
     `spark-docker`, mais `docker.service` était inactive et aucun client ne
     pouvait joindre le socket rootless (§42.2 bis)."""
-    assert "systemctl --user -M spark-docker@ is-active docker.service" in bootstrap.RELEVE
+    assert "systemctl --user -M spark-docker@.host is-active docker.service" in bootstrap.RELEVE
     assert "DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info" in bootstrap.RELEVE
     assert "id spark-docker >/dev/null 2>&1 && echo rootless" not in bootstrap.RELEVE
 
@@ -390,6 +390,7 @@ def test_l_option_rootless_installe_ce_qu_il_faut_pour_qu_il_SURVIVE(tmp_path):
     assert "docker-ce-rootless-extras" in lances
     assert "systemd-container" in lances, "machinectl vient de ce paquet"
     assert "dockerd-rootless-setuptool" in lances
+    assert "machinectl shell spark-docker@.host" in lances
     assert "enable-linger" in lances
     # Deux démons sur la même cellule se disputeraient stockage et réseaux.
     assert "systemctl disable --now docker.service" in lances
