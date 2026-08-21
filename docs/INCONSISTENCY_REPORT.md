@@ -448,28 +448,44 @@ laissé inchangé (CloudWorker §3.1).
 appartient au contrat du §22.3 : un champ « dernière erreur » qui survit à la
 guérison ment dans le sens le plus coûteux — il fait chercher une panne éteinte.
 
-### INC-15 · Neuf routes de lecture rendent 500 là où elles promettent 502
+### INC-15 · Six routes rendent 500 là où elles promettent 502
 
-**Relevé le 2026-08-21**, en corrigeant SPK-36. Mesuré par lecture du code,
-**non reproduit sur la Forge** : c'est une déduction du même mécanisme, et elle
-est présentée comme telle.
+**Relevé le 2026-08-21** en corrigeant SPK-36, puis **CORRIGÉ le même jour** :
+le relevé initial était en partie faux, et la mesure de SPK-67 l'a montré. Il
+annonçait neuf routes ; il y en a **six**. Le titre disait « neuf ».
+
+La déduction initiale supposait un client réel homogène. Il ne l'est pas : il
+emploie **trois** aides privées, et `_get` comme `_raw_push` rendent `IncusError`
+même sur un 404. Les routes qui passent par elles — les mesures d'un Spark, la
+pose des clés — attrapent donc déjà proprement, et ne fuient pas. Le tableau
+ci-dessous ne garde que celles qui passent par `_request`, seule aide à
+distinguer l'absence aujourd'hui.
+
+C'est exactement le défaut que le §12.1 du DAT nomme : une distinction qui dépend
+d'un détail d'implémentation ne se transporte pas, et fait se tromper jusqu'à qui
+la relève.
 
 `InstanceAbsente` n'hérite pas d'`IncusError` — à dessein, et le §33.3 explique
 pourquoi. La conséquence est que toute branche `except IncusError` qui peut
 rencontrer une instance absente la laisse s'échapper. Vingt-et-une branches
 attrapent `IncusError` dans `services/sparkd/src/sparkd/app.py` ; **une seule**
-nommait l'absence avant aujourd'hui (SPK-52, la suppression), deux la nomment
+nommait l'absence avant le 2026-08-21 (SPK-52, la suppression), deux la nomment
 désormais (SPK-36, le cycle de vie).
+
+**Cette entrée est PRISE EN CHARGE par SPK-67**, qui rend le contrat d'échec du
+pilote uniforme (`docs/DAT.md` §12.1) : uniformiser le contrat rend le traitement
+de ces routes obligatoire au lieu de facultatif, puisqu'il crée l'absence là où
+elles n'en voyaient pas.
 
 Restent celles-ci, toutes sur des routes qui interrogent ou modifient une
 cellule sans passer par un état transitoire :
 
-| Ligne | Route | Appel au pilote |
-|---|---|---|
-| 657 | mesures d'un Spark | `instance_state` |
-| 701, 744, 758 | instantanés : créer, restaurer, supprimer | service d'instantanés |
-| 1382, 1411, 1439 | amorçage : relevé et pose | `exec_capture` |
-| 1474, 1506 | clés SSH : accorder, révoquer | `_apply_keys` |
+| Ligne | Route | Appel au pilote | Fuit ? |
+|---|---|---|---|
+| 657 | mesures d'un Spark | `instance_state` → `_get` | **non**, `IncusError` |
+| 701, 744, 758 | instantanés : créer, restaurer, supprimer | `_request` | oui |
+| 1382, 1411, 1439 | amorçage : relevé et pose | `exec_capture` → `_request` | oui |
+| 1474, 1506 | clés SSH : accorder, révoquer | `push_file` → `_raw_push` | **non**, `IncusError` |
 
 **Ce que cela coûte, et ce que cela ne coûte pas.** Le refus sort en **500**
 au lieu du **502** annoncé par le contrat : l'exploitant lit « erreur interne »

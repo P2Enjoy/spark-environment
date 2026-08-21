@@ -1257,6 +1257,114 @@ serveur de production :
 Un pilote factice sert à tester la traduction et l'admission control. Il ne prouve
 jamais qu'un quota est appliqué : cette preuve exige une Forge Incus réelle.
 
+### 12.1 Le contrat d'échec du pilote, et ce que le doublon en doit
+
+**Mesuré le 2026-08-21** (SPK-67), méthode par méthode, sur le code des deux
+pilotes. Ce chapitre est le contrat que l'unité établit ; il n'existait pas, et
+son absence a coûté un défaut de production (§14.6).
+
+#### 12.1.1 Le fait : trois transports, trois formes d'échec
+
+Le client réel parle à Incus par **trois** aides privées, et elles ne rendent pas
+la même chose sur la même condition :
+
+| Aide | Employée par | Sur une instance absente |
+|---|---|---|
+| `_get` | `resources`, `storage_pool_resources`, `server_info`, `instances`, `snapshots`, `instance_state`, et la lecture de `set_publication_devices` et `update_root_size` | `IncusError` |
+| `_request` | `create_instance`, `set_instance_state`, `delete_instance`, `update_instance_config`, `exec_command`, `exec_capture`, les trois gestes d'instantané | `InstanceAbsente` |
+| `_raw_push` | `push_file` | `IncusError` |
+
+`InstanceAbsente` existe pour dire « le pilote RAPPORTE que ce n'est pas là », par
+opposition à « je n'ai pas pu demander » (§33.3). Cette distinction commande des
+décisions réelles : elle autorise une suppression à réussir (§14.5) et une
+reconstruction à être proposée (§14.6).
+
+**Or elle n'est pas fiable.** Qu'une absence soit rapportée comme telle ou noyée
+dans une panne générique dépend de l'aide privée qu'une méthode emploie — un
+détail d'implémentation qu'aucun appelant ne peut connaître ni ne devrait avoir à
+connaître. Une distinction qui ne tient qu'à cela ne se transporte pas : un
+appelant qui la respecte scrupuleusement se trompe quand même.
+
+#### 12.1.2 La règle : le contrat est UNIFORME
+
+Une absence **rapportée** par Incus lève `InstanceAbsente`, quelle que soit la
+méthode et quel que soit son transport. Tout le reste — socket injoignable,
+refus, réponse illisible — lève `IncusError`.
+
+Concrètement : les trois aides mappent le **404** vers `InstanceAbsente`, et rien
+d'autre ne le fait. Un code d'erreur applicatif `404` dans l'enveloppe d'Incus
+compte comme un 404, comme c'est déjà le cas dans `_request`.
+
+Deux bornes, qui empêchent la règle de devenir un mensonge :
+
+- une **collection** n'est pas une instance. `instances()` rend une liste vide
+  quand il n'y a pas de Spark : c'est une réponse, pas une absence ;
+- un **code de sortie non nul** d'`exec_capture` reste une réponse, jamais une
+  panne (§42.5). Le contrat porte sur la joignabilité de l'instance, pas sur le
+  résultat de ce qu'on y exécute.
+
+#### 12.1.3 Ce que le doublon doit, et ce qu'il admet ne pas savoir
+
+Le §12 pose déjà la borne haute : **un pilote factice ne prouve jamais qu'un
+quota est appliqué.** Elle est inchangée, et c'est une limite de nature, pas une
+dette.
+
+Ce que le doublon **doit**, en revanche, et qui n'était écrit nulle part :
+
+1. **la même exception que le vrai, pour la même condition.** Méthode par
+   méthode. Un doublon qui rend une autre exception que le vrai fabrique des
+   preuves vertes pour du code faux — mesuré : `set_instance_state` rendait
+   `IncusError` là où le vrai rend `InstanceAbsente`, la route du cycle de vie
+   attrapait donc l'une en preuve et laissait fuir l'autre en production ;
+2. **ne pas répondre à la place d'Incus quand Incus ne répondrait pas.** Mesuré :
+   `snapshots()` sur une instance absente rendait `[]`. Le doublon affirmait
+   « cette instance n'a pas d'instantané » là où le vrai dit « je ne la trouve
+   pas ». C'est le pire écart des deux, parce qu'il est **silencieux** ;
+3. **relire son état à chaque opération** lorsqu'il est persisté. Le vrai pilote
+   n'a aucun cache : il interroge Incus à chaque appel. Un doublon qui charge son
+   état une fois au démarrage ne peut pas voir une cellule disparaître sous le
+   produit — c'est-à-dire précisément l'évènement que `docs/CONTINGENCE.md` §4
+   instruit, et il devient injouable contre la pile de développement sans
+   redémarrer le service.
+
+Ce que le doublon **n'a pas** à imiter, et qui doit rester écrit à côté de lui :
+
+- l'application effective d'un quota (§12) ;
+- les délais réels, la latence, les états intermédiaires d'une opération
+  asynchrone d'Incus ;
+- le comportement du noyau, d'AppArmor ou du cgroup.
+
+Toute divergence assumée est **écrite près du code** avec ce qu'elle empêche de
+prouver. Une divergence non écrite est un piège pour la session suivante.
+
+#### 12.1.4 Ce que la règle exige des appelants
+
+Rendre le contrat uniforme **crée** des absences là où les appelants n'en
+voyaient pas : une route qui n'attrapait qu'`IncusError` laisserait désormais
+fuir `InstanceAbsente` en erreur interne. Le contrat n'est donc pas tenu tant que
+chaque appelant qui peut rencontrer une cellule absente ne la nomme pas.
+
+**La réponse est la même partout, et c'est délibéré** : `409` avec le code
+`cellule_absente`, un message qui nomme le Spark et les deux issues du §14.6.
+Un exploitant n'a pas à apprendre une réponse différente par écran pour un seul
+et même incident.
+
+Une seule route fait davantage : celle du **cycle de vie**, qui a posé un état
+transitoire avant d'appeler le pilote et doit donc le refermer en panne (§14.6).
+Les autres ne touchent à aucun état : elles refusent et n'écrivent rien.
+
+Routes concernées, relevées le 2026-08-21 :
+
+| Route | Appel au pilote |
+|---|---|
+| mesures d'un Spark en marche | `instance_state` |
+| instantanés : créer, restaurer, supprimer | gestes d'instantané |
+| amorçage : relevé et pose | `exec_capture` |
+| cycle de vie : démarrer, arrêter, redémarrer | `set_instance_state` (§14.6) |
+
+Les routes qui n'écrivent que par `push_file` — la pose des clés — rencontrent
+l'absence par le même chemin et suivent la même règle.
+
 ## 13. Vérifications dues avant toute déclaration de conformité
 
 Statut au 2026-08-18, après une première campagne de mesures sur la Forge.
