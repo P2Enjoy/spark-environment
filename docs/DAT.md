@@ -6282,9 +6282,9 @@ Corollaire : sur une cellule vierge, les deux modes sont ouverts, et c'est le
 seul moment où le choix se fait sans rien casser. L'écran le dit.
 
 **Ce que l'installation change.** Le mode rootless ajoute
-`docker-ce-rootless-extras`, `systemd-container` (qui fournit `machinectl`),
-crée le compte de service, exécute
-`dockerd-rootless-setuptool.sh install` pour lui, et pose `loginctl
+`docker-ce-rootless-extras`, `uidmap` et `dbus-user-session`, crée le compte de
+service, exécute `dockerd-rootless-setuptool.sh install` sous ce compte avec son
+`XDG_RUNTIME_DIR` **et** son `DBUS_SESSION_BUS_ADDRESS`, et pose `loginctl
 enable-linger` — sans quoi le démon meurt à la fin de la session du compte, ce
 qui donnerait une cellule qui marche jusqu'au premier redémarrage.
 
@@ -6293,17 +6293,20 @@ qui donnerait une cellule qui marche jusqu'au premier redémarrage.
 les paquets, puis échouait avant de créer le service utilisateur. Une première
 correction a ensuite confondu l'existence du compte `spark-docker` avec celle du
 démon : le compte était bien créé, mais le service était `inactive` et son socket
-injoignable. La mesure suivante a trouvé pourquoi : pour joindre le bus
-utilisateur **local**, `machinectl shell` comme `systemctl --user -M` exigent la
-cible explicite `spark-docker@.host`; `spark-docker@` cherche une machine de ce
-nom et n'installe rien. Le relevé ne rend donc `rootless` que si **les deux**
-sont vrais : le service utilisateur de `spark-docker@.host` est `active` et
-`docker info`, pointé explicitement vers `/run/user/<uid>/docker.sock`, répond.
-Sinon il rend `null`. Lorsqu'un appel demande **rootless** et trouve exactement
-cet état — démon root absent, aucun démon rootless utilisable — il réexécute la
-seule préparation rootless, avec `systemd-container`; il ne réinstalle ni ne
-démarre le démon root et ne déplace aucun conteneur. Le compte rendu ajoute la
-ligne `rootless` pour que `changed: true` nomme ce qui a été repris.
+injoignable. Une tentative avec `machinectl shell` a d'abord visé une machine
+inexistante, puis, même corrigée avec `.host`, a quitté sans créer d'unité. Le
+bus est pourtant disponible : mesuré avec `runuser -u spark-docker`,
+`XDG_RUNTIME_DIR=/run/user/<uid>` et
+`DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<uid>/bus`, `systemctl --user`
+répond `active`. C'est donc ce chemin explicite, sans `machinectl`, qui installe
+et relève le démon. Le relevé ne rend `rootless` que si **les deux** sont vrais :
+le service utilisateur sous ce bus est `active` et `docker info`, pointé
+explicitement vers `/run/user/<uid>/docker.sock`, répond. Sinon il rend `null`.
+Lorsqu'un appel demande **rootless** et trouve exactement cet état — démon root
+absent, aucun démon rootless utilisable — il réexécute la seule préparation
+rootless; il ne réinstalle ni ne démarre le démon root et ne déplace aucun
+conteneur. Le compte rendu ajoute la ligne `rootless` pour que `changed: true`
+nomme ce qui a été repris.
 
 Si un démon root tourne, le mode est `enracine` et le refus de bascule reste
 `409`, sans exception. Si le second relevé ne trouve toujours pas `rootless`, le
@@ -6384,7 +6387,9 @@ compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
 rootless=absent
 if id spark-docker >/dev/null 2>&1; then
   uid=$(id -u spark-docker)
-  if systemctl --user -M spark-docker@.host is-active docker.service >/dev/null 2>&1 \
+  if runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
+          DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus \
+          systemctl --user is-active docker.service >/dev/null 2>&1 \
      && runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
           DOCKER_HOST=unix:///run/user/$uid/docker.sock docker info >/dev/null 2>&1; then
     rootless=active
