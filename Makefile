@@ -67,10 +67,17 @@ seed:
 # Aucun sparkd ne tourne ici : la console en atteint un par tunnel SSH, sur la
 # machine qui le porte. Lancer un sparkd local en croyant faire de la production
 # donnerait une console qui administre un registre vide.
+#
+# Le PORT differe de celui de runDev, et ce n'est pas un detail : les deux
+# cibles servent deux consoles differentes — l'une sur un sparkd factice,
+# l'autre sur de vraies Forges — et l'on veut pouvoir comparer les deux a
+# l'ecran. Un port partage obligeait a en arreter une pour voir l'autre.
+runProd: SPARK_CONSOLE_PORT ?= 5175
 runProd:
-	@echo "Console d'exploitation — inventaire : $${SPARK_CONSOLE_STATE:-$$HOME/.config/spark/servers.json}"
+	@echo "Console d'exploitation — http://127.0.0.1:$(SPARK_CONSOLE_PORT)"
+	@echo "Inventaire : $${SPARK_CONSOLE_STATE:-$$HOME/.config/spark/servers.json}"
 	@echo "Aucun sparkd local : les Forges sont atteintes par tunnel SSH."
-	cd apps/webui && node host/main.js
+	cd apps/webui && SPARK_CONSOLE_PORT=$(SPARK_CONSOLE_PORT) node host/main.js
 
 # Les parcours navigateur font partie de la campagne : un test hors campagne
 # cesse d'etre execute, puis cesse d'etre vrai.

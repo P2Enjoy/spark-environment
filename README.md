@@ -237,7 +237,7 @@ pas encore sont marquées.
 | `make contract-check` | échoue si le contrat committé a dérivé du code | **oui** |
 | `make gestes` | parcours navigateur des gestes d'administration | **oui** |
 | `make runDev` | pile de développement : `sparkd` **factice** + console, inventaire jetable | **oui** |
-| `make runProd` | **console d'exploitation seule** : inventaire du poste, tunnels vers de vraies Forges | **oui** |
+| `make runProd` | **console d'exploitation seule** sur `:5175` : inventaire du poste, tunnels vers de vraies Forges. Port distinct de `runDev`, donc les deux tournent ensemble | **oui** |
 | `make seed` | recrée le registre de développement et le peuple | **oui** |
 | `make captures` | captures d'interface, à observer | **oui** |
 | `make build` | build de tous les paquets | **oui** |

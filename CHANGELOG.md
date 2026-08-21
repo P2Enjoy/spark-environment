@@ -418,6 +418,10 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- `make runProd` écoute sur **5175**, et non plus sur le port de `runDev` : les
+  deux consoles servent deux mondes différents — un `sparkd` factice d'un côté,
+  de vraies Forges de l'autre — et devaient pouvoir tourner ensemble. Un port
+  partagé obligeait à en arrêter une pour voir l'autre.
 - `docs/CloudWorker.md` §2.1 ter : `pkill -f vite` remplacé par un geste qui ne
   vise **que ce qui tient le port 4173**. Mesuré : `-f` fait correspondre la ligne
   de commande entière, donc la commande tuait tout processus mentionnant ce mot —
