@@ -94,6 +94,10 @@ class Config:
     #: des clés PUBLIQUES — le §11 garde les privées sur le poste. Absent ou
     #: vide, la vérification se DÉSACTIVE au lieu de tomber en panne.
     allowed_signers: str
+    #: SPK-62 · §47.3 : l'URL du canal hors bande. VIDE, la fonction se DÉSACTIVE
+    #: et ce n'est pas une panne (§14.5) — une Forge sans canal fonctionne
+    #: exactement comme avant.
+    notify_url: str
     memory_reserve_bytes: int
     cpu_reserve: float
     storage_metadata_margin_bytes: int
@@ -216,6 +220,7 @@ def load(env: dict[str, str] | None = None) -> Config:
         # donnees qui n'est pas celui du pool.
         storage_dataset=source.get("SPARKD_STORAGE_DATASET", "") or pool,
         allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", ""),
+        notify_url=source.get("SPARKD_NOTIFY_URL", "").strip(),
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,
         storage_metadata_margin_bytes=marge,
