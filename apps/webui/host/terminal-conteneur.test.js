@@ -141,6 +141,20 @@ test('l’ouverture porte une action DISTINCTE de celle du Spark', async () => {
   fermer();
 });
 
+test('le terminal de conteneur cible aussi l’identifiant immuable du Spark', async () => {
+  const { base, fermer, declarees } = await pile({
+    spark: { name: 'crm', id: 'spark-immutable-42', ipv4_address: '10.77.0.16',
+             incus_name: 'crm', state: 'running', protected: false },
+  });
+  const session = await (await ouvrir(base, { container: 'crm-web-1' })).json();
+  await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE' });
+
+  const terminal = declarees.filter((d) => d.action.includes('container_terminal'));
+  assert.deepEqual(terminal.map((d) => d.target_id),
+    ['spark-immutable-42', 'spark-immutable-42']);
+  fermer();
+});
+
 test('la FERMETURE porte l’action du conteneur, sa durée et son motif', async () => {
   const { base, fermer, declarees } = await pile();
   const session = await (await ouvrir(base, { container: 'crm-web-1' })).json();

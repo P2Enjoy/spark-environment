@@ -120,7 +120,9 @@ export function createConsoleHost(options = {}) {
    * Un échec ne remonte pas : le §37.4.5 le dit, une panne de journal n'est pas
    * une panne d'exploitation.
    */
-  async function declarerAudit(tunnel, action, { spark, path, reason, duration_seconds }) {
+  async function declarerAudit(tunnel, action, {
+    spark, sparkId = spark, path, reason, duration_seconds,
+  }) {
     if (!tunnel?.localPort) return false;
     try {
       const reponse = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/audit`, {
@@ -128,7 +130,7 @@ export function createConsoleHost(options = {}) {
         headers: { 'content-type': 'application/json',
                    'x-spark-actor': tunnel.actorHeader },
         body: JSON.stringify({
-          action, result: 'ok', target_type: 'spark', target_id: spark,
+          action, result: 'ok', target_type: 'spark', target_id: sparkId,
           message: action === 'spark.terminal_open'
             ? `Session de terminal ouverte sur « ${spark} » par ${path}.`
             // §37.3 : le message NOMME le pouvoir employé, comme la
@@ -159,8 +161,9 @@ export function createConsoleHost(options = {}) {
    * Un échec de déclaration ne défait rien : le geste est déjà parti. La console
    * le SIGNALE plutôt que de le taire, comme au §37.4.5.
    */
-  async function declarerGeste(tunnel, { action, spark, container, resultat,
-                                        raison, dureeSecondes = null }) {
+  async function declarerGeste(tunnel, { action, spark, sparkId = spark,
+                                        container, resultat, raison,
+                                        dureeSecondes = null }) {
     if (!tunnel?.localPort) return false;
     const geste = Object.values(GESTES).find((g) => g.action === action);
     try {
@@ -169,7 +172,7 @@ export function createConsoleHost(options = {}) {
         headers: { 'content-type': 'application/json',
                    'x-spark-actor': tunnel.actorHeader },
         body: JSON.stringify({
-          action, result: resultat, target_type: 'spark', target_id: spark,
+          action, result: resultat, target_type: 'spark', target_id: sparkId,
           message: action === 'spark.container_terminal_open'
             ? `Terminal ouvert dans « ${container} » du Spark « ${spark} ».`
             : action === 'spark.container_terminal_close'
@@ -239,11 +242,13 @@ export function createConsoleHost(options = {}) {
     if (session.chemin === CHEMIN_CONTENEUR) {
       return declarerGeste(tunnel, {
         action: 'spark.container_terminal_close', spark: session.spark.name,
+        sparkId: session.spark.id,
         container: session.conteneur, resultat: 'ok',
         raison: session.motif, dureeSecondes: session.dureeSecondes() });
     }
     return declarerAudit(tunnel, 'spark.terminal_close', {
       spark: session.spark.name, path: session.chemin,
+      sparkId: session.spark.id,
       reason: session.motif, duration_seconds: session.dureeSecondes() });
   }
 
@@ -873,6 +878,7 @@ export function createConsoleHost(options = {}) {
       if (vu.refus === 'protege') {
         const declare = await declarerGeste(tunnel, {
           action: GESTES[geste].action, spark: nomSpark, container: conteneur,
+          sparkId: decrit.id,
           resultat: 'denied', raison: 'protege' });
         return { status: 423, body: { ...vu, journalise: declare } };
       }
@@ -884,6 +890,7 @@ export function createConsoleHost(options = {}) {
       const abouti = vu.state === 'abouti';
       const declare = await declarerGeste(tunnel, {
         action: GESTES[geste].action, spark: nomSpark, container: conteneur,
+        sparkId: decrit.id,
         resultat: abouti ? 'ok' : 'denied',
         raison: abouti ? null : vu.state });
       return { status: 200, body: { ...vu, journalise: declare } };
@@ -954,6 +961,7 @@ export function createConsoleHost(options = {}) {
           conteneur, shell: sonde.shell });
         await declarerGeste(tunnel, {
           action: 'spark.container_terminal_open', spark: decrit.name,
+          sparkId: decrit.id,
           container: conteneur, resultat: 'ok' });
         session.demarrer();
         return { status: 201, body: session.describe() };
@@ -986,7 +994,8 @@ export function createConsoleHost(options = {}) {
       // journal ne pourrait pas dire combien de fois cette voie a servi.
       await declarerAudit(tunnel,
         chemin === CHEMIN_DEPANNAGE ? 'spark.rescue_exec' : 'spark.terminal_open',
-        { spark: decrit.name, path: chemin, reason: motifDepannage ?? undefined });
+        { spark: decrit.name, sparkId: decrit.id,
+          path: chemin, reason: motifDepannage ?? undefined });
       session.demarrer();
       return { status: 201, body: session.describe() };
     },

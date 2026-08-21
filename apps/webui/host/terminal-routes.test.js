@@ -145,6 +145,20 @@ test('fermer TUE le distant et déclare la fermeture avec sa durée', async () =
   fermer();
 });
 
+test('le journal cible l’identifiant immuable du Spark, jamais son nom', async () => {
+  const { base, fermer, declarees } = await pile({
+    spark: { name: 'crm', id: 'spark-immutable-42', ipv4_address: '10.77.0.16',
+             incus_name: 'crm' },
+  });
+  const { id } = await (await ouvrir(base)).json();
+  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE' });
+
+  const terminal = declarees.filter((d) => d.action.startsWith('spark.terminal_'));
+  assert.deepEqual(terminal.map((d) => d.target_id),
+    ['spark-immutable-42', 'spark-immutable-42']);
+  fermer();
+});
+
 test('la fin du shell déclare elle aussi UNE fermeture, sans retenir son contenu', async () => {
   // Le shell peut rendre la main sans que le navigateur clique « Fermer ».
   // Cette voie était la seule à contourner le journal : elle doit maintenant
