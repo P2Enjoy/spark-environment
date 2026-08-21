@@ -995,6 +995,10 @@ def test_poser_une_variable_par_HTTP_et_la_relire_avec_son_ORIGINE(tmp_path):
 
     assert c.put("/v1/env/SMTP_HOST", json={"value": "relais.forge"}).status_code == 200
     c.put("/v1/env/SMTP_PORT", json={"value": "587"})
+    # SPK-64 : le catalogue ne descend que COCHÉ. Sans ces deux gestes, il n'y a
+    # rien à surcharger et rien à hériter.
+    c.post("/v1/sparks/crm-production/env/selection/SMTP_HOST")
+    c.post("/v1/sparks/crm-production/env/selection/SMTP_PORT")
     c.put("/v1/sparks/crm-production/env/SMTP_HOST", json={"value": "relais.crm"})
 
     rendu = {e["name"]: e for e in
@@ -1098,9 +1102,15 @@ def test_ecrire_par_HTTP_REPOSE_les_fichiers_dans_la_cellule(tmp_path):
     assert "APP_NAME" not in _cellule(app)[env.FICHIER_VARIABLES]
 
 
-def test_une_variable_de_FORGE_descend_dans_la_cellule_du_Spark(tmp_path):
-    """§43.6 : ce qui est posé au niveau général est hérité, et doit donc
-    atteindre la cellule sans qu'on touche au Spark."""
+def test_une_variable_du_catalogue_ne_descend_QU_UNE_FOIS_COCHEE(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-64 · docs/DAT.md §43.6 révisé
+
+    RÉVISÉ : ce test s'appelait « …de FORGE descend dans la cellule » et prouvait
+    l'héritage automatique. C'était le défaut. Poser un secret une fois à la Forge
+    le déposait en clair dans toutes les cellules, y compris celles qui n'en
+    avaient aucun usage — mesuré sur la Forge réelle le 2026-08-21.
+
+    Les deux moitiés comptent, et la première plus que la seconde."""
     from sparkd import environnement as env
 
     app = create_app(load({"SPARKD_DB": str(tmp_path / "f.db"), "SPARKD_DRIVER": "fake"}))
@@ -1110,7 +1120,35 @@ def test_une_variable_de_FORGE_descend_dans_la_cellule_du_Spark(tmp_path):
     c.post("/v1/sparks/crm-production/apply")
 
     c.put("/v1/env/TZ", json={"value": "Europe/Paris"})
+    assert "TZ" not in _cellule(app)[env.FICHIER_VARIABLES], (
+        "une entrée du catalogue ne descend NULLE PART tant qu'on ne l'a pas cochée")
+
+    assert c.post("/v1/sparks/crm-production/env/selection/TZ").status_code == 200
     assert 'TZ="Europe/Paris"' in _cellule(app)[env.FICHIER_VARIABLES]
+
+    # Et décocher RETIRE réellement : la case décochée sans réécriture ferait
+    # croire à une révocation qui n'a pas eu lieu.
+    assert c.delete("/v1/sparks/crm-production/env/selection/TZ").status_code == 200
+    assert "TZ" not in _cellule(app)[env.FICHIER_VARIABLES]
+
+
+def test_cocher_une_entree_ABSENTE_du_catalogue_est_un_404(tmp_path):
+    """Ce qui manque est l'entrée, pas la forme de la demande."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    reponse = c.post("/v1/sparks/crm-production/env/selection/JAMAIS_POSEE")
+    assert reponse.status_code == 404
+    assert "catalogue" in reponse.json()["detail"]["message"]
+
+
+def test_decocher_ce_qui_n_etait_pas_coche_n_est_pas_une_erreur(tmp_path):
+    """§14.5 : l'état voulu — « cette entrée ne descend pas ici » — est atteint."""
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec())
+    c.put("/v1/env/TZ", json={"value": "Europe/Paris"})
+    reponse = c.delete("/v1/sparks/crm-production/env/selection/TZ")
+    assert reponse.status_code == 200
+    assert reponse.json()["changed"] is False
 
 
 def test_retirer_ce_qui_n_existe_pas_repond_sans_ERREUR(tmp_path):

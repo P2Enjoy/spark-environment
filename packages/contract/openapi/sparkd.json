@@ -59,7 +59,7 @@
   "info": {
     "description": "Runtime serveur du plan de controle Spark. Ecoute exclusivement sur la boucle locale.",
     "title": "sparkd",
-    "version": "0.0.0"
+    "version": "0.post1.dev561+g9761d83c2.d20260821"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1164,6 +1164,112 @@
           }
         },
         "summary": "List Spark Env",
+        "tags": [
+          "environnement"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/env/selection/{variable}": {
+      "delete": {
+        "description": "Cesse de faire descendre une entree. La valeur QUITTE la cellule.\n\nLe retrait effectif vient de `_apply_env`, qui reecrit les fichiers en\nentier depuis l'etat voulu (§43.2). Decocher sans reappliquer laisserait\nla valeur en place et ferait croire a une revocation qui n'a pas eu lieu.",
+        "operationId": "deselect_spark_env_v1_sparks__name__env_selection__variable__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "variable",
+            "required": true,
+            "schema": {
+              "title": "Variable",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Deselect Spark Env V1 Sparks  Name  Env Selection  Variable  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deselect Spark Env",
+        "tags": [
+          "environnement"
+        ]
+      },
+      "post": {
+        "description": "Fait descendre une entree du catalogue dans CE Spark.",
+        "operationId": "select_spark_env_v1_sparks__name__env_selection__variable__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "variable",
+            "required": true,
+            "schema": {
+              "title": "Variable",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Select Spark Env V1 Sparks  Name  Env Selection  Variable  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Spark Env",
         "tags": [
           "environnement"
         ]

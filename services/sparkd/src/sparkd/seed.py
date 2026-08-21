@@ -278,15 +278,31 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
         # date. Sa valeur ne ressort par aucune route (§43.3).
         ("spark", "crm-production", "DATABASE_URL",
          "postgres://demo:demo@db.interne.example/crm", True),
-        # un secret HÉRITÉ : la surcharge du §43.6 vaut aussi pour eux, et
-        # l'écran doit le montrer sur un Spark qui ne l'a pas déclaré.
+        # un secret du CATALOGUE, coché plus bas : l'écran doit le montrer sur un
+        # Spark qui ne l'a pas déclaré lui-même.
         ("forge", None, "SMTP_PASSWORD", "mot-de-passe-de-demonstration", True),
+        # SPK-64 · §43.6 révisé : une entrée du catalogue que PERSONNE n'a cochée.
+        # C'est l'état que l'écran doit savoir dire — « définie, ne descend nulle
+        # part » —, et sans elle la démonstration ne montrerait que le cas où tout
+        # est coché, donc jamais la différence que l'unité existe pour établir.
+        ("forge", None, "OBJECT_STORAGE_URL", "https://s3.interne.example", False),
     ]
     for portee, spark, nom, valeur, secret in environnement:
         route = (f"/v1/env/{nom}" if portee == "forge"
                  else f"/v1/sparks/{spark}/env/{nom}")
         _attendu(client.put(route, json={"value": valeur, "secret": secret}),
                  200, quoi=f"variable « {nom} » ({portee})")
+        compte["environnement"] = compte.get("environnement", 0) + 1
+
+    # SPK-64 · §43.6 révisé : le catalogue ne descend QUE COCHÉ. Sans ces gestes,
+    # `crm-production` ne verrait que ses propres entrées, et les origines
+    # « forge » et « overridden » seraient inatteignables à l'écran.
+    #
+    # `OBJECT_STORAGE_URL` n'est cochée NULLE PART, à dessein : c'est le seul
+    # moyen de montrer une entrée définie qui ne descend pas.
+    for nom in ("TZ", "SMTP_HOST", "SMTP_PASSWORD"):
+        _attendu(client.post(f"/v1/sparks/crm-production/env/selection/{nom}"),
+                 200, quoi=f"case « {nom} » cochée sur crm-production")
         compte["environnement"] = compte.get("environnement", 0) + 1
 
     # --- Un Spark PROTÉGÉ (SPK-34, docs/DAT.md §35). Sans lui, l'écran ne peut
@@ -340,6 +356,20 @@ def verify(client: TestClient) -> None:
         raise SeedError(
             "l'environnement seedé doit couvrir les trois origines, il n'en "
             f"couvre que {sorted(origines)}")
+    # SPK-64 : une entrée du catalogue que personne n'a cochée doit exister, et
+    # NE PAS apparaître chez le Spark. C'est la propriété que l'unité établit ;
+    # un seed qui ne la montrerait pas laisserait l'écran sans le cas.
+    catalogue = client.get("/v1/env").json()["env"]
+    orphelines = [e for e in catalogue if e.get("selected_by") == 0]
+    if not orphelines:
+        raise SeedError(
+            "aucune entrée du catalogue n'est laissée non cochée : l'écran ne "
+            "pourrait pas montrer une entrée qui ne descend nulle part (§43.6)")
+    if any(e["name"] == orphelines[0]["name"] for e in env_crm):
+        raise SeedError(
+            f"« {orphelines[0]['name']} » n'est cochée nulle part et apparaît "
+            "pourtant chez crm-production : le catalogue descend tout seul")
+
     secrets = [e for e in env_crm if e["is_secret"]]
     if not secrets:
         raise SeedError("aucun secret seedé : l'écran ne pourrait pas montrer "

@@ -487,6 +487,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/env/selection/{variable}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Spark Env
+         * @description Fait descendre une entree du catalogue dans CE Spark.
+         */
+        post: operations["select_spark_env_v1_sparks__name__env_selection__variable__post"];
+        /**
+         * Deselect Spark Env
+         * @description Cesse de faire descendre une entree. La valeur QUITTE la cellule.
+         *
+         *     Le retrait effectif vient de `_apply_env`, qui reecrit les fichiers en
+         *     entier depuis l'etat voulu (§43.2). Decocher sans reappliquer laisserait
+         *     la valeur en place et ferait croire a une revocation qui n'a pas eu lieu.
+         */
+        delete: operations["deselect_spark_env_v1_sparks__name__env_selection__variable__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/env/{variable}": {
         parameters: {
             query?: never;
@@ -1553,6 +1581,74 @@ export interface operations {
             header?: never;
             path: {
                 name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_spark_env_v1_sparks__name__env_selection__variable__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                variable: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deselect_spark_env_v1_sparks__name__env_selection__variable__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                variable: string;
             };
             cookie?: never;
         };

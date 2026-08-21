@@ -1127,6 +1127,11 @@ def create_app(config: Config) -> FastAPI:
             "value": entree.value, "fingerprint": entree.fingerprint,
             "scope": entree.scope, "origin": entree.origin,
             "updated_at": entree.updated_at,
+            # SPK-64 : sur une entree du CATALOGUE, combien de Sparks l'ont
+            # cochee. `0` dit qu'elle ne descend nulle part — sans ce compte, une
+            # entree definie ressemble a une entree active, et l'on croit avoir
+            # pose une valeur qu'aucune cellule ne recoit.
+            "selected_by": entree.selected_by,
         }
 
     def _cle_de_forge():
@@ -1249,6 +1254,64 @@ def create_app(config: Config) -> FastAPI:
                 # démarrage. Le geste n'échoue pas pour autant (§43.5.2).
                 pass
             return _rendu_env(entree)
+
+    # --- SPK-64 · la selection (docs/DAT.md §43.6 revise) -------------------
+    #
+    # Le catalogue de la Forge ne descend plus tout seul. Il descend ou on le
+    # COCHE. Sans cela, poser un secret une fois a la Forge le deposait en clair
+    # dans toutes les cellules, y compris celles qui n'en avaient aucun usage.
+
+    @app.post("/v1/sparks/{name}/env/selection/{variable}", tags=["environnement"])
+    def select_spark_env(name: str, variable: str) -> dict:
+        """Fait descendre une entree du catalogue dans CE Spark."""
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                # §35.2 : cocher est une ecriture qui VISE ce Spark — elle change
+                # ce que sa cellule recoit.
+                protection_service.ensure_writable(connection, name, "env")
+                entree = env_service.cocher(connection, spark["id"], variable)
+                try:
+                    _apply_env(connection, service.by_name(connection, name))
+                except (IncusError, env_service.CleError):
+                    # Meme regle qu'a la pose : le registre est ecrit, la cellule
+                    # sera rattrapee au prochain demarrage (§43.5.2).
+                    pass
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except env_service.EnvError as erreur:
+                # L'entree n'est pas au catalogue : il n'y a rien a faire
+                # descendre. C'est un 404 et non un 422 — ce qui manque est
+                # l'entree, pas la forme de la demande.
+                raise HTTPException(status_code=404, detail={
+                    "error": "unknown_entry", "message": str(erreur)}) from erreur
+            return _rendu_env(entree)
+
+    @app.delete("/v1/sparks/{name}/env/selection/{variable}", tags=["environnement"])
+    def deselect_spark_env(name: str, variable: str) -> dict:
+        """Cesse de faire descendre une entree. La valeur QUITTE la cellule.
+
+        Le retrait effectif vient de `_apply_env`, qui reecrit les fichiers en
+        entier depuis l'etat voulu (§43.2). Decocher sans reappliquer laisserait
+        la valeur en place et ferait croire a une revocation qui n'a pas eu lieu.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "env")
+                decoche = env_service.decocher(connection, spark["id"], variable)
+                try:
+                    _apply_env(connection, service.by_name(connection, name))
+                except (IncusError, env_service.CleError):
+                    pass
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            # §14.5 : ne pas trouver n'est pas une erreur. L'etat voulu — « cette
+            # entree ne descend pas ici » — est atteint dans les deux cas.
+            return {"spark": name, "name": variable, "selected": False,
+                    "changed": decoche}
 
     @app.delete("/v1/sparks/{name}/env/{variable}", tags=["environnement"])
     def unset_spark_env(name: str, variable: str) -> dict:

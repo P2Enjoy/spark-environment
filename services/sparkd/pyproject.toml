@@ -1,11 +1,16 @@
 # @spec docs/BACKLOG.md#SPK-01 · docs/DAT.md §10.1 (Choix des langages)
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sparkd"
-version = "0.0.0"
+# La version n'est PAS ecrite ici : elle est derivee du depot a la construction
+# (docs/DAT.md §40.4). Une constante posee a la main a deja produit deux defauts
+# le 2026-08-21 — une Forge qui ne savait pas quel code elle executait, et un
+# « pip install -U » qui se serait declare satisfait sans rien reinstaller,
+# puisqu'il aurait compare 0.0.0 a 0.0.0.
+dynamic = ["version"]
 description = "Runtime serveur du plan de controle Spark, ecoute exclusivement sur la boucle locale"
 requires-python = ">=3.11"
 dependencies = [
@@ -37,3 +42,19 @@ sparkd = ["schema/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools_scm]
+# Le depot est DEUX niveaux au-dessus : le paquet vit dans « services/sparkd »
+# d'un monorepo. Sans cette ligne, setuptools-scm ne trouve pas « .git » et
+# retombe silencieusement sur la version de repli — mesure du 2026-08-21.
+root = "../.."
+relative_to = "pyproject.toml"
+# Le numero CROIT a chaque commit — « dev560 », « dev561 ». C'est ce qui fait
+# qu'un « pip install -U » reinstalle vraiment : avec la constante 0.0.0, pip
+# comparait 0.0.0 a 0.0.0 et se declarait satisfait sans rien faire.
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+# Le numero PORTE le commit : c'est la seule chose qu'on veut pouvoir lire d'une
+# Forge en service. Sans depot — une copie sans « .git » —, on ne devine pas : la
+# version le DIT (§40.2), et « inconnue » reste une reponse.
+fallback_version = "0"
