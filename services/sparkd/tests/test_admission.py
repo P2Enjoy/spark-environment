@@ -74,6 +74,9 @@ def poser_spark(db, cpu_mode="shared", state="running", **champs):
     colonnes = ", ".join(valeurs)
     db.execute(f"INSERT INTO spark ({colonnes}) VALUES ({', '.join('?' * len(valeurs))})",
                tuple(valeurs.values()))
+    # RENDU depuis SPK-57 : le compteur est global au module, et écrire « S1 »
+    # dans une preuve la rendrait dépendante de l'ordre d'exécution.
+    return valeurs["id"]
 
 
 def demande(**champs):
@@ -321,3 +324,100 @@ def test_dedie_admis_si_la_place_existe(db):
     poser_hote(db)
     poser_spark(db, cpu_reservation=1.0)
     assert admit(db, demande(cpu_mode="dedicated", cpu_reservation=None, cpu_cores=2)).admitted
+
+
+# --- SPK-57 · l'admission d'un REDIMENSIONNEMENT (docs/DAT.md §49.1) ---------
+
+
+def test_un_spark_exclu_rend_sa_memoire_au_pool(db):
+    """§49.1 : un Spark qui existe est DÉJÀ compté. L'exclure rend ce qu'il
+    occupe, et c'est ce qui permet d'admettre un agrandissement tenable."""
+    poser_hote(db, memory_total_bytes=10 * GIO)
+    cible = poser_spark(db, cpu_reservation=0.5, memory_reservation_bytes=6 * GIO)
+
+    avant = pools(db)
+    apres = pools(db, sauf=cible)
+    assert avant.memory.allocated == 6 * GIO
+    assert apres.memory.allocated == 0
+    assert apres.memory.available == avant.memory.available + 6 * GIO
+
+
+def test_agrandir_un_spark_qui_TIENT_est_admis(db):
+    """8 Gio demandés sur une Forge de 10 par un Spark qui en occupe déjà 6 :
+    l'agrandissement ne prend que 2 Gio, et il tient."""
+    poser_hote(db, memory_total_bytes=10 * GIO)
+    cible = poser_spark(db, cpu_reservation=0.5, memory_reservation_bytes=6 * GIO)
+    demande = Request(cpu_mode="shared", cpu_reservation=0.5,
+                      memory_bytes=8 * GIO, network_bps=10_000_000,
+                      storage_bytes=10 * GIO)
+
+    # Sans exclusion, la même demande est refusée : c'est le défaut que
+    # l'exclusion existe pour éviter, et il faut le montrer.
+    assert not admit(db, demande, metadata_margin=0).admitted
+    assert admit(db, demande, metadata_margin=0, sauf=cible).admitted
+
+
+def test_RETRECIR_ne_peut_jamais_manquer_de_place(db):
+    """Rendre de la mémoire ne peut pas manquer de mémoire. Sans exclusion, une
+    Forge saturée refuserait de rétrécir — ce qui est absurde (§49.1)."""
+    poser_hote(db, memory_total_bytes=10 * GIO)
+    cible = poser_spark(db, cpu_reservation=0.5, memory_reservation_bytes=10 * GIO)
+    demande = Request(cpu_mode="shared", cpu_reservation=0.5,
+                      memory_bytes=4 * GIO, network_bps=10_000_000,
+                      storage_bytes=10 * GIO)
+    assert admit(db, demande, metadata_margin=0, sauf=cible).admitted
+
+
+def test_le_refus_porte_les_chiffres_SAISIS_et_non_un_delta(db):
+    """§49.1 : « il manque 2 Gio sur une demande de 2 Gio » à qui en demande 8
+    serait un message exact sur des chiffres faux. On rend d'abord, on admet
+    ensuite — jamais on ne soustrait."""
+    poser_hote(db, memory_total_bytes=10 * GIO)
+    cible = poser_spark(db, cpu_reservation=0.5, memory_reservation_bytes=6 * GIO)
+    demande = Request(cpu_mode="shared", cpu_reservation=0.5,
+                      memory_bytes=40 * GIO, network_bps=10_000_000,
+                      storage_bytes=10 * GIO)
+    decision = admit(db, demande, metadata_margin=0, sauf=cible)
+    assert not decision.admitted
+    manque = next(m for m in decision.shortfalls if m.resource is Resource.MEMORY)
+    assert manque.requested == 40 * GIO, "le chiffre est celui qu'on a saisi"
+    assert manque.available == 10 * GIO, "et le pool, celui que le Spark a rendu"
+
+
+def test_un_spark_DEDIE_rend_ses_coeurs_a_la_capacite_partagee(db):
+    """C'est là que la règle compte le plus : passer de « dedicated » à
+    « shared » rend des cœurs PHYSIQUES, donc augmente la capacité du pool
+    partagé. Sans exclusion, la Forge évaluerait la demande contre un pool
+    encore amputé (§49.1)."""
+    poser_hote(db)
+    cible = poser_spark(db, cpu_mode="dedicated", cpu_cores=2)
+
+    avant = pools(db)
+    apres = pools(db, sauf=cible)
+    assert avant.dedicated_cores == 2
+    assert apres.dedicated_cores == 0
+    assert apres.cpu.capacity > avant.cpu.capacity, "les cœurs reviennent au pool"
+
+
+def test_l_exclusion_ne_touche_QUE_le_spark_nomme(db):
+    """Un pool cohérent et un autre faux mélangeraient deux comptabilités dans
+    le même refus : les trois relevés portent la même exclusion, et elle ne
+    porte que sur l'identifiant donné."""
+    poser_hote(db)
+    cible = poser_spark(db, cpu_reservation=0.5, memory_reservation_bytes=3 * GIO,
+                        storage_bytes=20 * GIO, network_reservation_bps=50_000_000)
+    poser_spark(db, cpu_reservation=0.5, memory_reservation_bytes=5 * GIO,
+                storage_bytes=30 * GIO, network_reservation_bps=70_000_000)
+    apres = pools(db, sauf=cible, metadata_margin=0)
+    assert apres.memory.allocated == 5 * GIO
+    assert apres.storage.allocated == 30 * GIO
+    assert apres.network.allocated == 70_000_000
+
+
+def test_un_identifiant_INCONNU_n_exclut_rien(db):
+    """Exclure un Spark qui n'existe pas ne doit pas silencieusement vider un
+    pool : ce serait admettre n'importe quoi sur une faute de frappe."""
+    poser_hote(db)
+    cible = poser_spark(db, cpu_reservation=0.5, memory_reservation_bytes=3 * GIO)
+    assert pools(db, sauf="S-inexistant").memory.allocated == 3 * GIO
+    assert pools(db, sauf=None).memory.allocated == 3 * GIO

@@ -178,11 +178,24 @@ def _host_row(connection: sqlite3.Connection) -> sqlite3.Row:
 def pools(
     connection: sqlite3.Connection,
     metadata_margin: int = DEFAULT_METADATA_MARGIN,
+    sauf: str | None = None,
 ) -> Pools:
     """Photographie des pools : capacité, alloué, disponible.
 
     Tous les Sparks du registre comptent, quel que soit leur état (DAT §7.7) :
     la ressource n'est rendue qu'à la disparition de la ligne.
+
+    `sauf` EXCLUT un Spark du calcul de l'alloué (SPK-57, §49.1). Il sert au
+    redimensionnement : un Spark qui existe est déjà compté, et lui demander
+    8 Gio alors qu'il en a 6 ne prend au pool que 2 Gio. Rejouer l'admission sur
+    la demande entière refuserait des agrandissements tenables — et refuserait
+    même de RÉTRÉCIR un Spark sur une Forge saturée, ce qui est absurde : rendre
+    de la mémoire ne peut pas manquer de mémoire.
+
+    Le paramètre nomme un Spark à NE PAS COMPTER, jamais une valeur à retrancher.
+    La différence se voit dans le refus rendu : les chiffres restent ceux que
+    l'exploitant a saisis, là où une soustraction ferait lire « il manque 2 Gio
+    sur une demande de 2 Gio » à qui en demande 8 (§49.1).
 
     L'alloué du pool de stockage inclut la **marge de métadonnées** de chaque
     Spark (§8.8.2 règle 4) : elle est posée sur le jeu de données, donc réellement
@@ -191,26 +204,38 @@ def pools(
     """
     host = _host_row(connection)
 
+    # L'exclusion est un fragment de clause, ajouté aux TROIS relevés : n'en
+    # oublier qu'un rendrait un pool cohérent et un autre faux, et le refus
+    # mélangerait les deux comptabilités.
+    exclusion = " AND id != ?" if sauf else ""
+    hors = (sauf,) if sauf else ()
+
     marques = ", ".join("?" * len(CPU_POOL_MODES))
     cpu_alloue = connection.execute(
         f"""SELECT COALESCE(SUM(
                 CASE cpu_mode WHEN 'capped' THEN cpu_max ELSE cpu_reservation END
             ), 0) AS total
-            FROM spark WHERE cpu_mode IN ({marques})""",
-        CPU_POOL_MODES,
+            FROM spark WHERE cpu_mode IN ({marques}){exclusion}""",
+        (*CPU_POOL_MODES, *hors),
     ).fetchone()["total"]
 
+    # Les cœurs DÉDIÉS aussi : passer de « dedicated » à « shared » rend des
+    # cœurs physiques au pool partagé, donc augmente sa CAPACITÉ. Sans cette
+    # exclusion, la Forge évaluerait la nouvelle demande contre un pool encore
+    # amputé des cœurs qu'on lui rend (§49.1).
     coeurs_dedies = connection.execute(
         "SELECT COALESCE(SUM(cpu_cores), 0) AS total FROM spark "
-        "WHERE cpu_mode = 'dedicated'"
+        f"WHERE cpu_mode = 'dedicated'{exclusion}",
+        hors,
     ).fetchone()["total"]
 
     autres = connection.execute(
-        """SELECT COALESCE(SUM(memory_reservation_bytes), 0)  AS memoire,
-                  COALESCE(SUM(network_reservation_bps), 0)   AS reseau,
-                  COALESCE(SUM(storage_bytes), 0)             AS stockage,
-                  COUNT(*)                                    AS nombre
-           FROM spark"""
+        f"""SELECT COALESCE(SUM(memory_reservation_bytes), 0)  AS memoire,
+                   COALESCE(SUM(network_reservation_bps), 0)   AS reseau,
+                   COALESCE(SUM(storage_bytes), 0)             AS stockage,
+                   COUNT(*)                                    AS nombre
+            FROM spark WHERE 1=1{exclusion}""",
+        hors,
     ).fetchone()
     # Le registre stocke la taille VENDUE (§8.8.2 règle 1) ; la marge est une
     # valeur dérivée, ajoutée ici plutôt que dupliquée en base.
@@ -257,8 +282,14 @@ def admit(
     connection: sqlite3.Connection,
     request: Request,
     metadata_margin: int = DEFAULT_METADATA_MARGIN,
+    sauf: str | None = None,
 ) -> Decision:
     """Décide si la demande tient dans ce qui reste.
+
+    `sauf` sert au REDIMENSIONNEMENT (SPK-57, §49.1) : le Spark visé est rendu au
+    pool avant que sa nouvelle demande n'y soit évaluée. C'est « rendre d'abord,
+    admettre ensuite », et non « admettre le delta » — les chiffres du refus
+    restent ainsi ceux que l'exploitant a saisis.
 
     Toutes les ressources sont évaluées, et non seulement la première qui
     manque : corriger une demande pour se heurter à la suivante est une perte de
@@ -268,7 +299,7 @@ def admit(
     vendue **plus** marge de métadonnées (§8.8.2 règle 4). Le refus reste un refus
     sur `storage`, dans la forme du §7.7 : il n'existe pas de refus « marge ».
     """
-    etat = pools(connection, metadata_margin)
+    etat = pools(connection, metadata_margin, sauf=sauf)
     manques: list[Shortfall] = []
 
     def controle(pool: Pool, demande: float) -> None:
