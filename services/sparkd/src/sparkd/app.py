@@ -436,8 +436,9 @@ def create_app(config: Config) -> FastAPI:
             # compteurs valent alors zéro parce que rien n'est surveillé, et
             # l'écran doit le dire autrement (§14.6).
             "notify": app.state.notify.etat(),
-            # docs/DAT.md §7.3 bis : ne jamais présenter la réservation comme
-            # une garantie absolue tant que SPK-29 n'est pas livrée.
+            # docs/DAT.md §7.3 bis, §32.2 : la reservation est un PLANCHER
+            # depuis l'arbitrage du 2026-08-21. Ni « garantie absolue », ni
+            # « non garantie » — les deux seraient faux.
             # docs/DAT.md §32.2 : arbitrage du 2026-08-21. La reservation est un
             # PLANCHER — tenu sous contention totale, depasse des qu'une tranche
             # de la Forge est au repos. Mesure du 2026-08-21 : 47,9 % obtenus

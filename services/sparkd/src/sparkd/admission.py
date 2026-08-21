@@ -12,11 +12,11 @@ n'applique que des proportions ; c'est l'invariant
 
 maintenu ici qui rend ces proportions signifiantes.
 
-Portée exacte de cette garantie, à ne pas surestimer : elle assure la
-proportionnalité ENTRE Sparks, pas la valeur absolue d'une réservation, parce que
-les Sparks sont arbitrés contre les tranches de la Forge (DAT §7.3 bis). Tant que
-SPK-29 n'est pas livrée, rien de ce module ne doit être présenté comme une
-garantie absolue.
+Portée exacte de cette garantie, à ne pas surestimer NI SOUS-ESTIMER : depuis
+SPK-29 et l'arbitrage du 2026-08-21 (DAT §32.2), la réservation est un
+**plancher** — garanti sous contention totale, dépassé dès qu'une tranche de la
+Forge est au repos. Ce module compte donc ce qui est VENDU ; ce que la machine
+rend ensuite est le fait de la tranche parente, pas de l'admission.
 """
 
 from __future__ import annotations

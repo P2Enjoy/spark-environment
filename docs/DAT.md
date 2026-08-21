@@ -541,9 +541,12 @@ Trois voies possibles, à trancher par mesure (unité SPK-29) :
 3. relever le poids des Sparks pour rendre celui de la Forge négligeable, ce qui
    revient à ne plus protéger la Forge — écarté.
 
-La voie 1 est la seule qui rende la réservation littéralement vraie. Tant qu'elle
-n'est pas mise en œuvre et mesurée, la console ne doit pas présenter la
-réservation comme une garantie absolue.
+La voie 1 est la seule qui rende la réservation littéralement vraie. **Elle a été
+mise en œuvre et mesurée** — c'est SPK-29, §32 — et l'arbitrage du 2026-08-21 en
+a tiré la conséquence : la réservation est un **plancher**, garanti sous
+contention totale et dépassé dès qu'une tranche de la Forge est au repos. C'est
+ce que la console énonce désormais (§27.6), et ce n'est ni « garantie absolue »
+ni « non garantie ».
 
 ### 7.4 Le pool dédié se découpe dynamiquement
 
@@ -2839,16 +2842,19 @@ en porte un — et **le stockage n'en porte aucun**. Cette asymétrie est délib
 panne dure) et l'écran la nomme, plutôt que de laisser un blanc inexpliqué là où
 les autres ressources ont un chiffre.
 
-### 27.6 La réservation n'est pas une garantie, et l'écran le relaie
+### 27.6 La portée de la réservation est LUE, jamais écrite en dur
 
-Le runtime publie `reservation_guarantee`, qui vaut aujourd'hui
-`proportional_between_sparks_only` (§7.3 bis). C'est la dette SPK-29. L'écran des
-pools est l'endroit où cette nuance compte le plus : c'est là qu'on lit
-« 2,5 CPU alloués » et qu'on pourrait croire ces 2,5 CPU garantis.
+Le runtime publie `reservation_guarantee`. Depuis l'arbitrage du 2026-08-21
+(§32.2), il vaut `floor_under_contention` : la réservation est un **plancher**,
+garanti sous contention totale et dépassé sinon. L'écran des pools est l'endroit
+où cette nuance compte le plus : c'est là qu'on lit « 2,5 CPU alloués » et qu'on
+pourrait croire ces 2,5 CPU garantis en toutes circonstances — ou, à l'inverse,
+ne rien croire du tout.
 
-L'écran énonce donc la portée réelle de la réservation, et il la lit dans la
-réponse **plutôt que de l'écrire en dur** : le jour où SPK-29 est livrée, le
-runtime changera cette valeur et l'écran suivra sans qu'on ait à y penser.
+**La mécanique de lecture a fait exactement ce pour quoi elle a été posée.**
+L'écran lisait déjà la valeur dans la réponse plutôt que de l'écrire en dur ; le
+jour où le runtime a changé de valeur, l'écran a suivi sans qu'on y touche. Il
+n'a fallu ajouter qu'une entrée à la table des libellés.
 
 ### 27.7 Les adresses sont un pool, et il s'épuise en silence
 
