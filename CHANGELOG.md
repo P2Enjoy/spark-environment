@@ -40,6 +40,13 @@
 - **La modale d'environnement se ferme désormais par « Échap »** (SPK-58). Elle
   se rouvrait dans le même tour : la fermeture s'exécutait, puis la repeinte la
   rappelait aussitôt. La touche paraissait sans effet.
+- **Un redimensionnement de disque prend désormais réellement effet** (SPK-57).
+  La taille était écrite au registre et annoncée comme appliquée, alors qu'elle
+  n'était **jamais posée** sur la cellule : elle vit dans le device racine, et
+  non dans la configuration de l'instance. Trouvé sur la Forge de validation.
+- **Le disque et le mode CPU n'annoncent plus de redémarrage** (SPK-57) : la
+  prise à chaud a été mesurée sur matériel réel, les deux prennent effet
+  immédiatement. L'écran promettait moins que ce que le produit tient.
 - **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de
