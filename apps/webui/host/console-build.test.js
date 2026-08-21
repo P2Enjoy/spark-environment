@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { capture, compare, describe, A_JOUR, PERIMEE, DEPOT_RECULE } from './console-build.js';
+import { capture, compare, describe, latestMtime,
+         A_JOUR, PERIMEE, DEPOT_RECULE } from './console-build.js';
 
 // Les règles Git sont unitaires : les simuler rend le test portable dans le
 // harnais, qui interdit à Node de créer un sous-processus. Le chemin réel est
@@ -50,4 +51,15 @@ test('un dépôt revenu en arrière ne pousse jamais à redémarrer vers un code
 test('sans dépôt, les dates identiques ne produisent aucun faux avertissement', () => {
   const start = { kind: 'files', mtime: 42 };
   assert.equal(compare(start, '/absent', { latestMtime: () => 42 }).verdict, A_JOUR);
+});
+
+test('le repli fichiers ne confond pas une dépendance avec le code servi', () => {
+  const arbres = {
+    '/console': { isDirectory: () => true },
+    '/console/app.js': { isDirectory: () => false, isFile: () => true, mtimeMs: 20 },
+    '/console/node_modules': { isDirectory: () => true, isFile: () => false },
+  };
+  const stat = (path) => arbres[path];
+  const read = (path) => (path === '/console' ? ['app.js', 'node_modules'] : []);
+  assert.equal(latestMtime('/console', stat, read), 20);
 });
