@@ -3,6 +3,10 @@
 ## [Non publié]
 
 ### Ajouté
+- Unité SPK-66 : `sparkd` s'installe comme un **paquet**, pas comme une copie du
+  dépôt. Le paquet existe déjà à moitié ; c'est la copie qui est en trop. Effet
+  qui justifie l'unité à lui seul : l'estampille de build cesse d'être passée à la
+  main, donc plus personne ne peut l'oublier.
 - Unité SPK-65 : la console dit quand elle sert du code périmé. Trois symptômes
   rapportés en deux jours — manuel vide, build inconnue, onglet Docker en 404 —
   avaient la même cause : un processus plus ancien que le dépôt.

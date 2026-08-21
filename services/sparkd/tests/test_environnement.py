@@ -194,6 +194,8 @@ def test_la_surcharge_se_fait_NOM_PAR_NOM_et_l_origine_est_dite(db, cle):
     Surcharger `SMTP_HOST` ne doit pas faire perdre le `SMTP_PORT` hérité."""
     env.poser(db, cle, "forge", None, "SMTP_HOST", "relais.forge")
     env.poser(db, cle, "forge", None, "SMTP_PORT", "587")
+    env.cocher(db, "S1", "SMTP_HOST")
+    env.cocher(db, "S1", "SMTP_PORT")
     env.poser(db, cle, "spark", "S1", "SMTP_HOST", "relais.boutique")
     env.poser(db, cle, "spark", "S1", "APP_NAME", "boutique")
 
@@ -230,6 +232,7 @@ def test_les_secrets_vont_dans_le_fichier_VOLATIL_les_variables_dans_l_autre(db,
     n'entre dans aucun instantané, donc une restauration ne ressuscite pas un
     secret révoqué."""
     env.poser(db, cle, "forge", None, "TZ", "Europe/Paris")
+    env.cocher(db, "S1", "TZ")   # SPK-64 : le catalogue ne descend que coché
     env.poser(db, cle, "spark", "S1", "DATABASE_URL", "postgres://secret", secret=True)
 
     rendu = env.resoudre(db, cle, "S1")
@@ -237,16 +240,34 @@ def test_les_secrets_vont_dans_le_fichier_VOLATIL_les_variables_dans_l_autre(db,
     assert rendu["secrets"] == {"DATABASE_URL": "postgres://secret"}
 
 
-def test_un_secret_HERITE_de_la_Forge_arrive_dans_la_cellule(db, cle):
-    """La surcharge du §43.6 vaut pour les secrets comme pour le reste."""
+def test_un_secret_COCHE_arrive_dans_la_cellule(db, cle):
+    """@verifies docs/DAT.md §43.6 révisé
+
+    RÉVISÉ par SPK-64 : ce test s'appelait « HÉRITÉ » et prouvait qu'un secret de
+    la Forge descendait tout seul. C'était le défaut, pas la fonctionnalité."""
     env.poser(db, cle, "forge", None, "SMTP_PASSWORD", "du-relais", secret=True)
+    env.cocher(db, "S1", "SMTP_PASSWORD")
     assert env.resoudre(db, cle, "S1")["secrets"] == {"SMTP_PASSWORD": "du-relais"}
+
+
+def test_un_secret_NON_coche_n_arrive_PAS_dans_la_cellule(db, cle):
+    """@verifies docs/DAT.md §43.6 révisé, §43.5.1
+
+    LA preuve de l'unité, et le miroir de la précédente. Mesuré sur la Forge le
+    2026-08-21 : un secret posé au niveau Forge arrivait EN CLAIR dans
+    `/run/spark/secrets` d'un Spark qui ne l'avait jamais demandé."""
+    env.poser(db, cle, "forge", None, "SMTP_PASSWORD", "du-relais", secret=True)
+    rendu = env.resoudre(db, cle, "S1")
+    assert rendu["secrets"] == {}, (
+        "un secret du catalogue ne doit atteindre que les cellules qui l'ont coché")
+    assert "du-relais" not in str(rendu)
 
 
 def test_une_variable_du_Spark_MASQUE_un_secret_de_la_Forge(db, cle):
     """§43.9.4 : la ligne retenue décide du FICHIER de destination. Le contraire
     ferait chercher une valeur dans un fichier où elle n'est pas."""
     env.poser(db, cle, "forge", None, "TOKEN", "secret-de-la-forge", secret=True)
+    env.cocher(db, "S1", "TOKEN")   # sans la case, il n'y a rien à masquer
     env.poser(db, cle, "spark", "S1", "TOKEN", "ordinaire")
     rendu = env.resoudre(db, cle, "S1")
     assert rendu["variables"] == {"TOKEN": "ordinaire"}
@@ -306,6 +327,7 @@ def test_les_secrets_ne_sont_PAS_dans_le_fichier_qui_entre_en_INSTANTANE(db, cle
     instantanés. Un secret qui s'y trouverait ressusciterait à la première
     restauration ancienne, en silence."""
     env.poser(db, cle, "forge", None, "TZ", "Europe/Paris")
+    env.cocher(db, "S1", "TZ")
     env.poser(db, cle, "spark", "S1", "STRIPE_API_KEY", "sk_live_42", secret=True)
 
     rendu = env.fichiers(db, cle, "S1")

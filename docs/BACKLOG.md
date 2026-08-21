@@ -3601,6 +3601,60 @@ build déployée au dépôt et nomme les six situations. Elle ne le fait pas pou
   signal à l'écran ; captures observées ; le signal nomme le geste, prouvé sur son
   texte.
 
+### [ ] SPK-66 · `sparkd` s'installe comme un paquet, pas comme une copie du dépôt
+
+Question du responsable, 2026-08-21 : « pourquoi `sparkd` n'est pas simplement une
+dépendance Python qu'on installerait par `pip install git+…` ? Le dépôt est
+public, on ne devrait pas cloner le dépôt sur chaque Forge, et la mise à jour se
+ferait par `pip install -U`. »
+
+Elle est juste, et le paquet existe déjà à moitié : `services/sparkd` porte un
+`pyproject.toml` complet, et `install-serveur.sh` fait déjà
+`pip install "$SOURCE/services/sparkd"` — depuis une copie locale du dépôt.
+**C'est la copie qui est en trop, pas le paquet.**
+
+Ce que le déploiement actuel envoie sur une Forge pour installer un service
+Python : la console Node, les parcours E2E, le manuel, les captures, les
+documents. Rien de tout cela n'y sert.
+
+- Spécification à produire : section du DAT · `docs/PROD_MIGRATIONS.md` (OP-04
+  réécrite) · `docs/AGENT_RUNBOOK.md` §A.2 · `README.md`.
+- Portée : rendre le paquet installable depuis l'URL du dépôt ; **embarquer les
+  unités systemd** (`sparkd.service`, `spark.slice`) et le schéma SQL comme
+  données de paquet, sans quoi l'installation resterait à moitié dans le dépôt ;
+  une commande d'installation exposée par le paquet lui-même — `python -m
+  sparkd.install` ou un `console_script` — qui fasse ce que le script fait
+  aujourd'hui ; `AGENT_RUNBOOK.md` §A.2 réécrite autour de deux lignes plutôt que
+  d'un `rsync`.
+- **Ce que cela résout au-delà de la commodité**, et qui justifie l'unité à soi
+  seul : l'estampille de build (§40) cesse d'être passée à la main. Le responsable
+  a constaté ce matin une Forge en `0.0.0+inconnue` parce qu'une réinstallation
+  avait oublié `SPARKD_BUILD_COMMIT`. Un paquet installé porte sa version dans ses
+  métadonnées ; `importlib.metadata.version()` la lit, et **plus personne ne peut
+  l'oublier**. Le mécanisme actuel est un rappel à la vigilance ; celui-ci est une
+  propriété.
+- **Ce qu'il faut trancher, et ne pas décider en écrivant le code** :
+  1. `pip install -U` **sans version épinglée** met à jour vers ce qui traîne sur
+     la branche. Une Forge en service ne se met pas à jour par surprise : le
+     produit doit-il installer une **étiquette** (`@v0.4.2`), un **commit précis**,
+     ou laisser le choix ? Écrire lequel, et pourquoi ;
+  2. l'installation devient **tributaire du réseau sortant** vers l'hébergeur du
+     dépôt. Aujourd'hui elle ne demande qu'un SSH depuis le poste. Une Forge sans
+     sortie Internet peut être installée aujourd'hui et ne le pourrait plus —
+     à nommer, et à traiter si le cas doit rester couvert ;
+  3. le dépôt est public **aujourd'hui**. S'il devenait privé, `pip` réclamerait
+     un jeton **sur la Forge**, ce que le §22.4 refuse pour la console. Dire dès
+     maintenant ce qui se passerait.
+- Ne change **rien** côté poste : la console reste servie depuis le dépôt, puisque
+  c'est une application Node servie telle quelle. Le dépôt disparaît de la
+  **Forge**, pas du poste.
+- DoD : une Forge neuve est installée **sans qu'aucun fichier du dépôt n'y soit
+  copié**, prouvé sur la machine ex-novo `212.47.246.142` ; `/healthz` rend une
+  version **issue des métadonnées du paquet**, sans variable passée à la main ;
+  une mise à jour puis un retour à la version précédente sont joués et mesurés ;
+  le préflight reste vert ; `PROD_MIGRATIONS.md` OP-04 et le runbook §A.2 réécrits
+  dans le même changement.
+
 ---
 
 ## Réservé, non planifié
