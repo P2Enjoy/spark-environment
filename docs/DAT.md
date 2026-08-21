@@ -3277,6 +3277,39 @@ l'installation et activée au démarrage, au même titre que `sparkd` (§31.4). 
 contrôle `RUN-SPARKD` gagne un pendant : la tranche existe et porte ses
 contrôleurs.
 
+#### 32.4 bis Le poids se pose PAR systemd, jamais dans le fichier cgroup
+
+**MESURÉ le 2026-08-21 sur la Forge de validation**, et c'est un defaut grave que
+seule la machine reelle pouvait rendre :
+
+```
+poids courant : 1
+on ecrit 180 dans /sys/fs/cgroup/spark.slice/cpu.weight
+apres ecriture       : 180
+apres daemon-reload  : 1
+apres systemd-run    : 1
+```
+
+Faire de `spark.slice` une unite systemd a un corollaire que le §32.4 ne tirait
+pas : **systemd devient l'autorite sur ses proprietes de cgroup.** L'unite porte
+`CPUWeight=1` comme point de depart, et systemd le **reaffirme** a chaque
+reconciliation — un `daemon-reload`, la creation d'une unite transitoire,
+n'importe quel geste qui touche l'arbre.
+
+Ecrire directement dans `cpu.weight` « marche » donc, et se defait plus tard,
+**en silence**. C'est le pire mode de panne du produit : la promesse centrale —
+la reservation devient absolue sous contention — s'evapore sans qu'aucun controle
+ne rougisse, puisque le registre et le calcul, eux, restent justes.
+
+**Decision : le poids se pose par `systemctl set-property spark.slice
+CPUWeight=<W>`.** systemd ecrit alors un fragment de configuration, l'applique
+immediatement, et le **reaffirme** lui-meme a chaque reconciliation — au lieu de
+l'ecraser. L'ecriture directe reste en repli pour un hote sans systemd, et
+seulement la.
+
+**Consequence sur la verification** : constater le poids juste apres l'avoir pose
+ne prouve rien. Le controle qui compte lit le poids APRES une reconciliation.
+
 ### 32.5 Ce que cette section ne prétend pas
 
 La réservation devient absolue **sous contention CPU**. Elle ne dit rien de la
