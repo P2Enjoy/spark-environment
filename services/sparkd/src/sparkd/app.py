@@ -1574,6 +1574,13 @@ def create_app(config: Config) -> FastAPI:
                     metadata_margin=config.storage_metadata_margin_bytes,
                     usage=usage,
                 )
+                # L'ALLOCATION A CHANGÉ, et deux choses en dépendent. La
+                # portée de SPK-57 les nomme toutes les deux, et ni l'une ni
+                # l'autre n'était faite — MESURÉ le 2026-08-21 sur la Forge de
+                # validation, où `spark.slice` pesait **1** après un aller-retour
+                # de mode : la promesse centrale du produit était rompue par un
+                # simple redimensionnement.
+                _suivre_l_allocation(connection, apres)
                 # §49.2 : le registre est écrit, la cellule vient ENSUITE. Le
                 # champ `applied` dit laquelle des trois situations on est —
                 # posé, promis mais pas posé, ou rien à poser.
@@ -1607,6 +1614,46 @@ def create_app(config: Config) -> FastAPI:
             except service.SparkError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "refused", "message": str(erreur)}) from erreur
+
+    def _suivre_l_allocation(connection, spark: dict) -> None:
+        """Ce qui doit suivre un changement d'allocation (SPK-57, §7.4 bis, §32.2).
+
+        Deux effets, et la portée de l'unité les nomme tous les deux :
+
+        - **les cœurs ÉPINGLÉS suivent le mode.** Passer de `dedicated` à
+          `shared` REND des cœurs au pool commun ; l'inverse en prend. Sans cela,
+          un Spark passé en dédié n'aurait aucun cœur, et un Spark qui en sort
+          garderait les siens marqués pris — de la capacité perdue que rien ne
+          rendrait ;
+        - **le poids de la tranche suit la somme des réservations** (§32.2). Le
+          poids n'est pas une constante : il vaut `H × f / (1 − f)`. MESURÉ le
+          2026-08-21 : après un aller-retour `shared` → `capped` → `shared`, la
+          tranche de la Forge de validation pesait **1** au lieu de la vingtaine
+          que la loi prescrit. La réservation ne valait plus rien.
+
+        Un échec d'allocation de cœurs n'annule PAS le redimensionnement : le
+        registre est déjà écrit (§14.2), et l'écart se voit à la carte des cœurs.
+        """
+        epingle = spark["cpu_mode"] in ("dedicated", "shared-pinned")
+        deja = core_pool.dedicated_cpus(connection, spark["id"])
+        try:
+            if epingle and len(deja) != (spark["cpu_cores"] or 0):
+                # Le nombre a changé, ou rien n'était épinglé : on rend puis on
+                # reprend. Reprendre sans rendre laisserait les anciens cœurs
+                # marqués pris.
+                if deja:
+                    _redistribute(connection, core_pool.release(connection, spark["id"]))
+                _redistribute(connection,
+                              core_pool.carve(connection, spark["id"], spark["cpu_cores"]))
+            elif not epingle and deja:
+                _redistribute(connection, core_pool.release(connection, spark["id"]))
+        except core_pool.CoreAllocationError:
+            # L'admission a déjà dit que la place existe ; si le découpage
+            # échoue quand même, le registre reste écrit et la carte des cœurs
+            # (§27.4) montre l'écart. Faire échouer ici défairait un quota déjà
+            # accordé.
+            pass
+        _reponderer_la_tranche(connection)
 
     def _poser_les_quotas(connection, spark: dict) -> tuple[bool | None, str | None]:
         """Pose sur la cellule les quotas que le registre vient d'écrire (§49.2).

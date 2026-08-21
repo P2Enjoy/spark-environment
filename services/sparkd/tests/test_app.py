@@ -1158,3 +1158,70 @@ def test_la_taille_du_disque_est_posee_sur_le_DEVICE_pas_la_config(tmp_path):
     # taille posée SUIT la demande, pas qu'elle lui est égale.
     assert int(racine["size"]) >= 12 * 1024**3
     assert int(racine["size"]) < 13 * 1024**3
+
+
+def test_redimensionner_REPONDERE_la_tranche(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §32.2
+
+    DÉFAUT MESURÉ sur la Forge de validation le 2026-08-21 : après un
+    aller-retour `shared` → `capped` → `shared`, `spark.slice` pesait **1** au
+    lieu de la vingtaine que la loi prescrit. Le poids n'est pas une constante,
+    et le §32.2 dit qu'il se recalcule à chaque changement d'allocation —
+    « création, suppression, REDIMENSIONNEMENT ». Le troisième manquait.
+
+    Conséquence : un simple redimensionnement rompait la promesse centrale du
+    produit, en silence.
+    """
+    from sparkd import cgroup
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "p.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec())
+
+    poses = []
+    app.state  # le service est monté
+    reel = cgroup.apply_weight
+    try:
+        cgroup.apply_weight = lambda poids: poses.append(poids)
+        # On repart d'une liste vide pour ne compter QUE le redimensionnement.
+        poses.clear()
+        vu = c.patch("/v1/sparks/crm-production",
+                     json={"cpu_reservation": 1.5})
+        assert vu.status_code == 200, vu.json()
+    finally:
+        cgroup.apply_weight = reel
+
+    assert poses, "le redimensionnement doit repondérer la tranche (§32.2)"
+
+
+def test_quitter_le_mode_DEDIE_rend_ses_coeurs_au_pool(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §7.4 bis
+
+    La portée de SPK-57 le dit : « passer de `dedicated` à `shared` rend des
+    cœurs qu'il faut redistribuer ». Sans cela, la capacité partagée reste
+    amputée de cœurs que plus personne n'emploie — de la ressource perdue que
+    rien ne rendrait jamais.
+    """
+    from sparkd import cores as core_pool
+
+    app = create_app(load({"SPARKD_DB": str(tmp_path / "c.db"), "SPARKD_DRIVER": "fake"}))
+    c = TestClient(app)
+    c.post("/v1/forge/sync")
+    c.post("/v1/sparks", json=_spec(cpu_mode="dedicated", cpu_cores=1,
+                                    cpu_reservation=None))
+    c.post("/v1/sparks/crm-production/apply")
+
+    with connect(tmp_path / "c.db") as registre:
+        spark = registre.execute(
+            "SELECT id FROM spark WHERE name = 'crm-production'").fetchone()
+        assert core_pool.dedicated_cpus(registre, spark["id"]), "il a bien des cœurs"
+
+    vu = c.patch("/v1/sparks/crm-production",
+                 json={"cpu_mode": "shared", "cpu_reservation": 0.5,
+                       "cpu_cores": None})
+    assert vu.status_code == 200, vu.json()
+
+    with connect(tmp_path / "c.db") as registre:
+        assert core_pool.dedicated_cpus(registre, spark["id"]) == [], \
+            "les cœurs sont RENDUS au pool commun"
