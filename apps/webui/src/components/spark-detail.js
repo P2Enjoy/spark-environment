@@ -582,7 +582,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                   + renderPortsPanel(spark, ports, admin, reservedPorts),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin),
     instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
-    environnement: () => renderEnvPanel(spark, env, envUi, renderModale),
+    environnement: () => renderEnvPanel(spark, env, envUi, renderModale, catalogue),
     terminal: () => renderTerminal(spark, terminal),
     docker: () => renderDocker(spark, docker),
     journal: () => renderJournal(audit) ||

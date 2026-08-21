@@ -1767,7 +1767,7 @@ async function chargerDetail(nom, facette = '') {
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
-           env] = await Promise.all([
+           env, catalogue] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -1782,11 +1782,15 @@ async function chargerDetail(nom, facette = '') {
       // surcharge est une règle métier, et l'écran n'en est pas l'autorité
       // (DESIGN_SYSTEM.md §1.2).
       api(`/v1/sparks/${encodeURIComponent(nom)}/env`).then((r) => r.env).catch(() => []),
+      // SPK-64 · §43.6 révisé : le CATALOGUE de la Forge, pour que la facette
+      // puisse offrir une case par entrée. Il est demandé même quand rien n'est
+      // coché — c'est justement l'écran qui doit montrer ce qui NE descend pas.
+      api('/v1/env').then((r) => r.env).catch(() => []),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
                     snapshots, audit,
                     ports: (publies.ports ?? []).filter((p) => p.spark_id === etat.spark.id),
-                    reservedPorts: publies.reserved ?? [], env };
+                    reservedPorts: publies.reserved ?? [], env, catalogue };
     etat.status = 'ready';
   } catch (erreur) {
     etat.status = 'error';
