@@ -3214,13 +3214,33 @@ quatre moments qui manquait.
 - **Preuves** : 10 de plus, dont celle de la DoD qui cherche la valeur du secret
   dans **chaque** sortie de l'API. 909 preuves Python. Contrat d'API régénéré.
 
-- **Reste avant `[x]`**, dans l'ordre du §43.9.6 :
-  1. **l'écran** — onglet *Environnement*, une section par niveau, l'origine de
-     chaque valeur, le champ de secret en écriture seule. Le seed est prêt à le
-     démontrer, et aucun parcours E2E n'est possible avant lui ;
-  2. **le manuel** M6 et M8 — délibérément non écrits tant que l'écran n'existe
-     pas : le manuel décrit ce qu'on fait à l'écran, et documenter aujourd'hui un
-     geste qui n'a pas de surface décrirait une fonctionnalité inatteignable ;
+**Tranche 3 — l'écran — livrée le 2026-08-21.** Une facette *Environnement* dans
+la fenêtre d'un Spark, **deux sections, une par niveau** (§43.6).
+`docs/DESIGN_SYSTEM.md` relu intégralement avant (`CLAUDE.md` §4).
+
+- **Le tableau rend le jeu RÉSOLU**, avec l'**origine** de chaque valeur —
+  héritée, propre, ou surchargeant celle de la Forge. Montrer deux jeux sans les
+  résoudre ferait faire le calcul de tête, et c'est le calcul qu'on se trompe à
+  faire. La surcharge est une règle métier : l'écran la demande au serveur plutôt
+  que de croiser deux listes (`DESIGN_SYSTEM.md` §1.2).
+- **La valeur d'un secret n'est jamais rendue** : un badge « Secret » et son
+  empreinte. Un blanc laisserait croire qu'aucun secret n'est posé (§14.6).
+- **La modale annonce que rien ne redémarre** (§43.7), et dit ce qu'une
+  déclaration de secret engage. Un refus y reste, sans effacer la saisie.
+- **Un Spark protégé garde la commande, DÉSACTIVÉE, avec sa raison** (§9.9) ;
+  celle de la Forge reste ouverte, son geste suivant le §43.9.5 bis.
+- **Deux défauts trouvés par la CAPTURE et le contrôle de classes**, invisibles
+  aux tests : la colonne *Nom* était centrée — un `th scope="row"` hérite du
+  centrage par défaut là où le §6.14 veut le texte à gauche — et une classe
+  `tableau` inventée ne peignait rien, le produit ayant déjà `tableau-enveloppe`.
+- **Preuves** : 11 de composant, 836 preuves de console. Captures
+  `56-environnement.png` et `57-environnement-modale.png` observées.
+
+- **Reste avant `[x]`** :
+  1. **un parcours E2E** depuis le parcours canonique : poser une variable, la
+     surcharger, lire son origine, en déclarer une secrète et vérifier que sa
+     valeur ne s'affiche nulle part. Le seed le permet ;
+  2. **le manuel** M6 et M8 ;
   3. **la preuve du §43.0 essai F refaite sur le fichier que le produit écrit** —
      celle-là **nécessite une Forge réelle**.
 

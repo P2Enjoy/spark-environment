@@ -25,8 +25,14 @@
   valeur** — héritée, propre, ou masquant celle de la Forge. Un Spark protégé
   refuse l'écriture qui le vise ; un geste de Forge qui toucherait des Sparks
   protégés les **nomme** d'abord et n'aboutit qu'au second appel. Les données de
-  démonstration couvrent les trois origines et deux secrets. **L'écran n'existe
-  pas encore** : c'est la tranche suivante.
+  démonstration couvrent les trois origines et deux secrets.
+- **L'environnement d'un Spark : l'écran** (SPK-58, `docs/DESIGN_SYSTEM.md` §6.27)
+  — quatrième tranche. La fenêtre d'un Spark porte un onglet **Environnement**,
+  avec une section pour les variables de la Forge et une pour les siennes. Chaque
+  ligne dit **d'où vient sa valeur**, et la valeur d'un secret n'est jamais
+  affichée : seuls son nom, une empreinte et sa date. Poser une variable se fait
+  depuis la section, et l'écran annonce que **rien ne redémarre** — la pile du
+  locataire lira la nouvelle valeur à son prochain démarrage.
 - **Redimensionner un Spark existant** (SPK-57, `docs/DAT.md` §49) :
   `PATCH /v1/sparks/{name}` ajuste mémoire, CPU, réseau et disque **sans
   détruire la cellule**. Trois refus distincts : Spark protégé (`423`), pas de

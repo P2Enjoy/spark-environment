@@ -6479,3 +6479,55 @@ seule. Le seed est prêt à le démontrer. Lire `docs/DESIGN_SYSTEM.md`
 INTÉGRALEMENT avant (`CLAUDE.md` §4). Puis la tranche 4 : manuel M6/M8, et la
 preuve du §43.0 essai F refaite sur le fichier que le produit écrit — celle-là
 **exige une Forge réelle**.
+
+## 2026-08-21 · SPK-58 — la facette Environnement
+
+**Unité reprise** au §4.2 point 1 : tranche 3 du §43.9.6.
+`docs/DESIGN_SYSTEM.md` a été relu **intégralement** avant de toucher à
+l'interface (`CLAUDE.md` §4).
+
+### Ce qui a été construit
+
+Une facette *Environnement* dans la fenêtre d'un Spark, **deux sections, une par
+niveau** (§43.6). Le tableau rend le jeu RÉSOLU — ce que la pile recevra
+vraiment —, avec l'**origine** de chaque valeur : héritée, propre, ou surchargeant
+celle de la Forge. Montrer deux jeux sans les résoudre ferait faire le calcul de
+tête, et c'est précisément le calcul qu'on se trompe à faire.
+
+**La valeur d'un secret n'est jamais rendue** : un badge « Secret » et son
+empreinte. Un blanc laisserait croire qu'aucun secret n'est posé (§14.6).
+
+La modale annonce que **rien ne redémarre** (§43.7), et dit ce qu'une déclaration
+de secret engage. Sur un Spark protégé, la commande reste visible et
+**désactivée** avec sa raison (§9.9) ; celle de la Forge reste ouverte, son geste
+suivant le §43.9.5 bis.
+
+### Ce que les captures ont trouvé, et que les tests ne voyaient pas
+
+La colonne *Nom* était **centrée** : un `th scope="row"` hérite du centrage par
+défaut du navigateur, là où le §6.14 veut le texte à gauche. Corrigé dans la
+feuille de style, pas dans le composant (§12.1).
+
+Le contrôle des classes (§12.3) a par ailleurs refusé une classe `tableau` que
+j'avais inventée : le produit a déjà `tableau-enveloppe`, avec son indice de
+défilement. C'est exactement ce que cette preuve existe pour attraper.
+
+### Vérifications
+
+**836 preuves de console** (825 + 11). Captures `56-environnement.png` et
+`57-environnement-modale.png` produites et **observées**.
+
+### Ce qui a été consigné, pas corrigé
+
+**INC-13** : le harnais de captures finit sur une console non vierge
+(`ERR_CONNECTION_REFUSED`). **Ligne de base établie** (§2.4) : le message est
+rendu à l'identique sur `cfe5b87`, avant tout changement de cette session. Ce
+n'est donc pas une régression, et la facette n'en est pas la cause.
+
+### Où reprendre
+
+Un **parcours E2E** depuis le parcours canonique : poser une variable, la
+surcharger, lire son origine, en déclarer une secrète et vérifier que sa valeur
+ne s'affiche nulle part. Le seed le permet. Puis la tranche 4 : manuel M6 et M8,
+et la preuve du §43.0 essai F refaite sur le fichier que le produit écrit —
+celle-là **exige une Forge réelle**.
