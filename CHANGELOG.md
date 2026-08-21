@@ -403,6 +403,11 @@
   `sshd` muet, où `ssh` sort en quelques millisecondes.
 
 ### Modifié
+- **La pile de développement n'efface plus les serveurs saisis.** `scripts/dev.sh`
+  réécrivait l'inventaire en entier à chaque démarrage : les deux serveurs de la
+  pile revenaient, et tout ce qui avait été ajouté depuis la console disparaissait.
+  Ils sont désormais **fusionnés** — le port du serveur local suit `SPARKD_BIND`,
+  le reste est conservé, ancres comprises.
 - `docs/DAT.md` §43.6 révisé : l'héritage automatique déposait un secret **en
   clair** dans toutes les cellules, y compris celles qui n'en ont aucun usage.
   La doctrine du général vers le particulier vaut pour ce qu'on **lit**, pas pour

@@ -30,17 +30,46 @@ mkdir -p "$ETAT"
 # le catalogue doit montrer un serveur qu'on n'atteint pas, sinon l'ecran ne
 # presenterait jamais que le cas heureux (CLAUDE.md §8).
 PORT="${SPARKD_BIND##*:}"
-cat > "$SPARK_CONSOLE_STATE" <<JSON
-{
-  "version": 1,
-  "current": "local",
-  "servers": [
-    {"name":"local","kind":"local","host":"127.0.0.1","port":$PORT},
-    {"name":"recette","kind":"alias","sshHost":"spark-recette","remotePort":9876}
-  ],
-  "anchors": {}
-}
-JSON
+
+# CORRECTION du 2026-08-21 : ce fichier etait REECRIT a chaque demarrage, donc
+# tout serveur ajoute depuis la console disparaissait au redemarrage suivant. Le
+# responsable devait les ressaisir a chaque fois.
+#
+# Les deux serveurs de developpement restent garantis — sans eux la pile ne
+# montre ni le selecteur ni un tunnel ferme —, mais ils sont FUSIONNES dans
+# l'inventaire existant au lieu de l'ecraser. Un fichier de developpement peut
+# etre recree ; ce qu'un humain y a saisi, non.
+python3 - "$SPARK_CONSOLE_STATE" "$PORT" <<'FUSION'
+import json, sys
+from pathlib import Path
+
+chemin, port = Path(sys.argv[1]), int(sys.argv[2])
+attendus = [
+    {"name": "local", "kind": "local", "host": "127.0.0.1", "port": port},
+    {"name": "recette", "kind": "alias", "sshHost": "spark-recette",
+     "remotePort": 9876},
+]
+
+etat = {"version": 1, "current": "local", "servers": [], "anchors": {}}
+try:
+    lu = json.loads(chemin.read_text(encoding="utf-8"))
+    if isinstance(lu, dict) and isinstance(lu.get("servers"), list):
+        etat = lu
+except (OSError, ValueError):
+    pass   # fichier absent ou illisible : on repart du modele
+
+# Les entrees du responsable sont conservees telles quelles ; seules celles que
+# la pile garantit sont remises a jour — le port de `local` change avec
+# SPARKD_BIND.
+noms = {s.get("name") for s in attendus}
+etat["servers"] = attendus + [s for s in etat["servers"] if s.get("name") not in noms]
+if not any(s.get("name") == etat.get("current") for s in etat["servers"]):
+    etat["current"] = "local"
+etat.setdefault("anchors", {})
+etat.setdefault("version", 1)
+chemin.write_text(json.dumps(etat, ensure_ascii=False, indent=2) + "\n",
+                  encoding="utf-8")
+FUSION
 
 case "${1:-up}" in
   seed)
