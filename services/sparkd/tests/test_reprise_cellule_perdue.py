@@ -56,6 +56,23 @@ def _etat(client, nom):
     return corps["state"], corps["allowed_commands"]
 
 
+def _perdre_la_cellule(application, nom):
+    """Fait disparaître la cellule HORS du produit, pour de bon.
+
+    RÉVISÉ le 2026-08-21 par SPK-67. Ces preuves faisaient
+    `incus.created.pop(nom)`, ce qui ne retirait la cellule que de la MÉMOIRE du
+    doublon pendant que son état persisté la gardait. Tant que le doublon ne
+    relisait jamais son fichier, l'illusion tenait. Depuis que le §12.1.3 lui
+    impose de relire — parce que le vrai pilote n'a aucun cache —, cette
+    simulation est inerte : la cellule reparaît à l'appel suivant.
+
+    Le geste fidèle écrit la perte, comme elle s'écrit sur une vraie Forge quand
+    quelqu'un supprime l'instance derrière le produit.
+    """
+    application.state.incus.created.pop(nom, None)
+    application.state.incus._persist()
+
+
 # --- le pilote factice doit MENTIR AUTANT que le vrai, c'est-à-dire pas -------
 
 
@@ -79,7 +96,7 @@ def test_DEMARRER_une_cellule_disparue_ne_coince_pas_le_spark(tmp_path):
     """LE cœur de l'unité : le Spark doit rester manœuvrable."""
     client, application = _pile(tmp_path)
     nom = _spark(client)
-    application.state.incus.created.pop(nom)   # la cellule disparaît hors du produit
+    _perdre_la_cellule(application, nom)   # la cellule disparaît hors du produit
 
     reponse = client.post(f"/v1/sparks/{nom}/start")
     assert reponse.status_code == 409, reponse.text
@@ -95,7 +112,7 @@ def test_le_refus_DIT_la_perte_et_ne_la_devine_pas(tmp_path):
     """Un exploitant doit comprendre sans lire le code ni le journal."""
     client, application = _pile(tmp_path)
     nom = _spark(client)
-    application.state.incus.created.pop(nom)
+    _perdre_la_cellule(application, nom)
 
     message = client.post(f"/v1/sparks/{nom}/start").json()["detail"]["message"]
     assert nom in message, "le message nomme le Spark concerné"
@@ -122,7 +139,7 @@ def test_ARRETER_une_cellule_disparue_le_DIT_au_lieu_de_faire_semblant(tmp_path)
     client, application = _pile(tmp_path)
     nom = _spark(client)
     assert client.post(f"/v1/sparks/{nom}/start").status_code == 200
-    application.state.incus.created.pop(nom)
+    _perdre_la_cellule(application, nom)
 
     reponse = client.post(f"/v1/sparks/{nom}/stop")
     assert reponse.status_code == 409, reponse.text
@@ -139,7 +156,7 @@ def test_apres_le_refus_le_spark_se_RECONSTRUIT_par_le_produit(tmp_path):
     à la base à la main."""
     client, application = _pile(tmp_path)
     nom = _spark(client)
-    application.state.incus.created.pop(nom)
+    _perdre_la_cellule(application, nom)
     assert client.post(f"/v1/sparks/{nom}/start").status_code == 409
 
     assert client.post(f"/v1/sparks/{nom}/retry").status_code in (200, 202)
@@ -153,7 +170,7 @@ def test_l_autre_remede_reste_ouvert_la_suppression(tmp_path):
     """SPK-52 doit continuer de fonctionner depuis cet état-là aussi."""
     client, application = _pile(tmp_path)
     nom = _spark(client)
-    application.state.incus.created.pop(nom)
+    _perdre_la_cellule(application, nom)
     assert client.post(f"/v1/sparks/{nom}/start").status_code == 409
 
     assert client.post(f"/v1/sparks/{nom}/delete").status_code == 200

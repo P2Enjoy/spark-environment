@@ -44,6 +44,23 @@ def _journal(client, nom_action="spark.delete"):
             if e["action"] == nom_action]
 
 
+def _perdre_la_cellule(application, nom):
+    """Fait disparaître la cellule HORS du produit, pour de bon.
+
+    RÉVISÉ le 2026-08-21 par SPK-67. Ces preuves faisaient
+    `incus.created.pop(nom)`, ce qui ne retirait la cellule que de la MÉMOIRE du
+    doublon pendant que son état persisté la gardait. Tant que le doublon ne
+    relisait jamais son fichier, l'illusion tenait. Depuis que le §12.1.3 lui
+    impose de relire — parce que le vrai pilote n'a aucun cache —, cette
+    simulation est inerte : la cellule reparaît à l'appel suivant.
+
+    Le geste fidèle écrit la perte, comme elle s'écrit sur une vraie Forge quand
+    quelqu'un supprime l'instance derrière le produit.
+    """
+    application.state.incus.created.pop(nom, None)
+    application.state.incus._persist()
+
+
 # --- la règle (§14.5) --------------------------------------------------------
 
 
@@ -59,7 +76,7 @@ def test_une_instance_DEJA_ABSENTE_fait_reussir_la_suppression(tmp_path):
     nom = _spark(client)
 
     # L'instance disparaît HORS du produit, comme cela s'est réellement produit.
-    application.state.incus.created.pop(nom)
+    _perdre_la_cellule(application, nom)
 
     reponse = client.post(f"/v1/sparks/{nom}/delete")
     assert reponse.status_code == 200, reponse.text
@@ -76,7 +93,7 @@ def test_la_ressource_est_RENDUE_et_l_admission_la_recupere(tmp_path):
     # la place revenir, et c'est donc là qu'on la constate.
     avant = client.get("/v1/forge").json()["pools"]["memory"]["allocated"]
 
-    application.state.incus.created.pop(nom)
+    _perdre_la_cellule(application, nom)
     assert client.post(f"/v1/sparks/{nom}/delete").status_code == 200
 
     apres = client.get("/v1/forge").json()["pools"]["memory"]["allocated"]
@@ -92,7 +109,7 @@ def test_l_ecart_est_LISIBLE_au_journal_et_ne_se_confond_pas(tmp_path):
     assert client.post(f"/v1/sparks/{ordinaire}/delete").status_code == 200
 
     disparu = _spark(client, "disparu")
-    application.state.incus.created.pop(disparu)
+    _perdre_la_cellule(application, disparu)
     assert client.post(f"/v1/sparks/{disparu}/delete").status_code == 200
 
     entrees = _journal(client)
@@ -137,7 +154,7 @@ def test_un_spark_PROTEGE_reste_refuse_meme_sans_instance(tmp_path):
     assert client.post(f"/v1/sparks/{nom}/protection",
                        json={"password": "mot-de-passe-long"}).status_code == 200
 
-    application.state.incus.created.pop(nom)
+    _perdre_la_cellule(application, nom)
     reponse = client.post(f"/v1/sparks/{nom}/delete")
     assert reponse.status_code == 423, reponse.text
     assert client.get(f"/v1/sparks/{nom}").status_code == 200

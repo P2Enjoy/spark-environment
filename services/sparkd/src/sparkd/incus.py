@@ -110,11 +110,24 @@ class UnixSocketIncus:
                 response = client.get(f"http://incus{path}")
                 response.raise_for_status()
                 body = response.json()
+        except httpx.HTTPStatusError as error:
+            # §12.1.2 : le 404 se lit PAREIL sur les trois transports. Il ne le
+            # faisait pas — `_request` distinguait l'absence, `_get` la noyait —
+            # de sorte que « la cellule a disparu » était dicible pour un geste
+            # et indicible pour une lecture, sans qu'aucun appelant puisse
+            # savoir lequel il tenait.
+            if error.response.status_code == 404:
+                raise InstanceAbsente(f"Incus ne connaît pas {path}.") from error
+            raise IncusError(
+                f"Incus injoignable sur {self.socket_path} ({path}) : {error}"
+            ) from error
         except httpx.HTTPError as error:
             raise IncusError(
                 f"Incus injoignable sur {self.socket_path} ({path}) : {error}"
             ) from error
 
+        if body.get("error_code") == 404:
+            raise InstanceAbsente(f"Incus ne connaît pas {path}.")
         if body.get("error_code"):
             raise IncusError(f"Incus a refuse {path} : {body.get('error')}")
         metadata = body.get("metadata")
@@ -267,6 +280,15 @@ class UnixSocketIncus:
                 if kind == "directory" and reponse.status_code in (400, 409, 500):
                     return  # le repertoire existe deja : ce n'est pas une erreur
                 reponse.raise_for_status()
+        except httpx.HTTPStatusError as error:
+            # §12.1.2 : troisième transport, même règle. Sans elle, poser une clé
+            # dans une cellule disparue se lisait comme un refus d'écriture.
+            if error.response.status_code == 404:
+                raise InstanceAbsente(
+                    f"Incus ne connaît pas l'instance « {name} ».") from error
+            raise IncusError(
+                f"Écriture de {path} dans « {name} » refusée : {error}"
+            ) from error
         except httpx.HTTPError as error:
             raise IncusError(
                 f"Écriture de {path} dans « {name} » refusée : {error}"
@@ -408,6 +430,40 @@ class FakeIncus:
         if self.state_path is not None and self.state_path.exists():
             self.created = json.loads(self.state_path.read_text(encoding="utf-8"))
 
+    def _recharger(self) -> None:
+        """Relit l'état persisté AVANT chaque opération (docs/DAT.md §12.1.3).
+
+        Le vrai pilote n'a AUCUN cache : il interroge Incus à chaque appel. Le
+        doublon chargeait le sien une fois pour toutes, si bien qu'une cellule
+        disparue hors du produit lui restait invisible tant que le service
+        tournait — c'est-à-dire que l'évènement instruit par
+        `docs/CONTINGENCE.md` §4 était injouable contre la pile de développement
+        sans redémarrer `sparkd`.
+
+        Un état ILLISIBLE ne lève pas : `_persist` écrit de façon atomique, mais
+        rien n'interdit qu'un autre processus soit en train d'écrire. On garde
+        alors ce qu'on a plutôt que de faire échouer une opération pour une
+        course de lecture.
+        """
+        if self.state_path is None or not self.state_path.exists():
+            return
+        try:
+            self.created = json.loads(self.state_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+
+    def _vivante(self, name: str) -> dict[str, Any]:
+        """L'instance, ou l'absence RAPPORTÉE (docs/DAT.md §12.1.2).
+
+        Un seul endroit pour cette réponse : c'est parce qu'elle était réécrite
+        à chaque méthode que six d'entre elles ont divergé du vrai pilote sans
+        que rien ne rougisse.
+        """
+        self._recharger()
+        if name not in self.created:
+            raise InstanceAbsente(f"Instance « {name} » absente.")
+        return self.created[name]
+
     def _persist(self) -> None:
         if self.state_path is None:
             return
@@ -443,9 +499,7 @@ class FakeIncus:
         referme (§39.2).
         """
         self._maybe_fail("set_publication_devices")
-        instance = self.created.get(name)
-        if instance is None:
-            raise IncusError(f"Instance « {name} » absente.")
+        instance = self._vivante(name)
         conservees = {
             nom: valeurs for nom, valeurs in (instance.get("devices") or {}).items()
             if not nom.startswith("pub-")
@@ -459,9 +513,7 @@ class FakeIncus:
         quoi une preuve verte ici ne dirait rien de la Forge (SPK-57, §49.2).
         """
         self._maybe_fail("update_root_size")
-        instance = self.created.get(name)
-        if instance is None:
-            raise IncusError(f"Instance « {name} » absente.")
+        instance = self._vivante(name)
         devices = dict(instance.get("devices") or {})
         racine = dict(devices.get("root") or {"type": "disk", "path": "/"})
         racine["size"] = size
@@ -478,15 +530,11 @@ class FakeIncus:
         self._persist()
 
     def set_instance_state(self, name: str, action: str) -> None:
-        # SPK-36 · §14.5 : le VRAI pilote lève `InstanceAbsente` sur tout 404,
-        # donc ici aussi. Le factice rendait `IncusError`, que la route du cycle
-        # de vie attrapait : la panne était invisible en preuve et bien réelle
-        # sur la Forge. C'est exactement l'écart que le commentaire de
-        # `delete_instance`, juste dessous, interdit.
+        # SPK-36 · §14.5, puis SPK-67 · §12.1 : le VRAI pilote lève
+        # `InstanceAbsente` sur tout 404, donc ici aussi — et par l'aide
+        # commune, qui RELIT l'état avant de conclure (§12.1.3, point 3).
         self._maybe_fail("set_instance_state")
-        if name not in self.created:
-            raise InstanceAbsente(f"Instance « {name} » absente.")
-        self.created[name]["status"] = "Running" if action == "start" else "Stopped"
+        self._vivante(name)["status"] = "Running" if action == "start" else "Stopped"
         self._persist()
 
     def delete_instance(self, name: str) -> None:
@@ -494,21 +542,16 @@ class FakeIncus:
         # doit la rendre comme le vrai, sans quoi la règle serait éprouvée sur
         # une forme qui ne tournera jamais en production.
         self._maybe_fail("delete_instance")
-        if name not in self.created:
-            raise InstanceAbsente(f"Instance « {name} » absente.")
+        self._vivante(name)
         del self.created[name]
         self._persist()
 
     def update_instance_config(self, name: str, config: dict[str, Any]) -> None:
-        if name not in self.created:
-            raise IncusError(f"Instance « {name} » absente.")
-        self.created[name].setdefault("config", {}).update(config)
+        self._vivante(name).setdefault("config", {}).update(config)
         self._persist()
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
-        if name not in self.created:
-            raise IncusError(f"Instance « {name} » absente.")
-        self.created[name].setdefault("files", {})[path] = content
+        self._vivante(name).setdefault("files", {})[path] = content
         # Écrire `authorized_keys` change ce que le relevé du §42.6 y lira : sur
         # une vraie cellule, `sha256sum` suit le fichier. Sans cela, l'amorçage
         # réécrirait les clés à chaque passage et ne serait jamais idempotent —
@@ -522,9 +565,7 @@ class FakeIncus:
         self._persist()
 
     def exec_command(self, name: str, command: list[str]) -> None:
-        if name not in self.created:
-            raise IncusError(f"Instance « {name} » absente.")
-        self.created[name].setdefault("commands", []).append(command)
+        self._vivante(name).setdefault("commands", []).append(command)
         self._persist()
 
     def exec_capture(self, name: str, command: list[str]) -> tuple[int, str, str]:
@@ -536,9 +577,7 @@ class FakeIncus:
         une cellule vierge, c'est-à-dire jamais sur le cas qui compte : celle qui
         est déjà complète.
         """
-        if name not in self.created:
-            raise IncusError(f"Instance « {name} » absente.")
-        self.created[name].setdefault("commands", []).append(command)
+        self._vivante(name).setdefault("commands", []).append(command)
         script = command[-1] if command else ""
         runtime = self.created[name].setdefault("runtime", {})
 
@@ -572,15 +611,13 @@ class FakeIncus:
         return (0, lignes, "")
 
     def create_snapshot(self, name: str, snapshot: str) -> None:
-        if name not in self.created:
-            raise IncusError(f"Instance « {name} » absente.")
-        self.created[name].setdefault("snapshots", []).append(
+        self._vivante(name).setdefault("snapshots", []).append(
             {"name": snapshot, "stateful": False, "size": 0}
         )
         self._persist()
 
     def restore_snapshot(self, name: str, snapshot: str, force: bool = False) -> None:
-        pris = [s["name"] for s in self.created.get(name, {}).get("snapshots", [])]
+        pris = [s["name"] for s in self._vivante(name).get("snapshots", [])]
         if snapshot not in pris:
             raise IncusError(f"Instantané « {snapshot} » absent.")
         if not force and pris[-1] != snapshot:
@@ -593,21 +630,21 @@ class FakeIncus:
         self._persist()
 
     def delete_snapshot(self, name: str, snapshot: str) -> None:
-        instance = self.created.get(name)
-        if instance is None:
-            raise IncusError(f"Instance « {name} » absente.")
+        instance = self._vivante(name)
         instance["snapshots"] = [
             s for s in instance.get("snapshots", []) if s["name"] != snapshot
         ]
         self._persist()
 
     def snapshots(self, name: str) -> list[dict[str, Any]]:
-        return list(self.created.get(name, {}).get("snapshots", []))
+        # §12.1.3, point 2 : rendait `[]` sur une instance absente. Le doublon
+        # affirmait « pas d'instantané » là où le vrai dit « je ne la trouve
+        # pas » — l'écart le plus SILENCIEUX des trois, car aucun appelant ne
+        # pouvait s'en apercevoir.
+        return list(self._vivante(name).get("snapshots", []))
 
     def instance_state(self, name: str) -> dict[str, Any]:
-        instance = self.created.get(name)
-        if instance is None:
-            raise IncusError(f"Instance « {name} » absente.")
+        instance = self._vivante(name)
         return instance.get("state") or {
             "status": instance.get("status", "Running"),
             "cpu": {"usage": instance.get("cpu_ns", 1_000_000_000)},

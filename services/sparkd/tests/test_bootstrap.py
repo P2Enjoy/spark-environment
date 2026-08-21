@@ -333,11 +333,23 @@ def test_exec_capture_rend_un_TRIPLET_sans_lever(tmp_path):
 
 
 def test_exec_capture_sur_une_instance_ABSENTE_leve(tmp_path):
-    """Là, en revanche, c'est bien une panne : il n'y a rien où exécuter."""
-    client = _client(tmp_path)
-    from sparkd.incus import IncusError  # noqa: PLC0415
+    """Là, en revanche, c'est bien une panne : il n'y a rien où exécuter.
 
-    with pytest.raises(IncusError):
+    RÉVISÉE le 2026-08-21 par SPK-67, et la nuance n'est pas cosmétique. Cette
+    preuve attendait `IncusError`, c'est-à-dire « je n'ai pas pu demander ». Le
+    §12.1.2 du DAT tranche que l'absence RAPPORTÉE porte son propre type sur les
+    trois transports : ici Incus répond, et il répond que la cellule n'existe
+    pas. C'est une absence, pas une ignorance (§33.3), et l'amorçage doit
+    pouvoir les distinguer — la première se répare en reconstruisant la cellule,
+    la seconde en réparant le pilote.
+
+    L'ancienne attente n'est pas conservée à côté : elle décrivait une règle qui
+    n'est plus celle du produit.
+    """
+    client = _client(tmp_path)
+    from sparkd.incus import InstanceAbsente  # noqa: PLC0415
+
+    with pytest.raises(InstanceAbsente):
         client.app.state.incus.exec_capture("inexistant", ["bash", "-lc", "true"])
 
 
