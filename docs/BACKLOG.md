@@ -3591,7 +3591,7 @@ aller-retour.
   réelle qu'un agent partant du seul briefing déploie une pile joignable ; manuel
   M6 et `docs/AGENT_RUNBOOK.md` mis à jour.
 
-### [ ] SPK-64 · L'héritage de l'environnement devient une sélection
+### [~] SPK-64 · L'héritage de l'environnement devient une sélection
 
 **Correction d'un défaut de sécurité de SPK-58**, relevé par le responsable le
 2026-08-21. Le modèle livré fait descendre **toute** entrée de la Forge dans
@@ -3619,6 +3619,16 @@ locataire compromettra.
   défaut de formulaire, pas un héritage — la sélection resterait stockée par
   Spark, donc changer le défaut plus tard ne changerait rien aux Sparks existants.
   Utile si cocher les cinq mêmes entrées trente fois devient pénible.
+- **Livré et prouvé le 2026-08-21, côté runtime** : migration `011` avec son
+  déclencheur et la reprise de l'existant ; `catalogue()`, `cocher()`,
+  `decocher()` ; les deux routes de sélection ; `selected_by` publié ; le seed
+  coche ce qu'il faut **et laisse une entrée cochée nulle part**, seul moyen de
+  montrer à l'écran une valeur définie qui ne descend pas. **938 preuves Python
+  vertes**, contrat régénéré.
+- **Reste avant `[x]`** : les deux écrans — l'onglet du catalogue côté Forge et
+  les cases dans la facette du Spark —, leurs preuves de composant, les parcours
+  E2E et les captures. Tant que l'écran ne montre pas la différence, l'unité
+  n'est pas éprouvée là où le responsable la verra.
 - DoD : un test prouve qu'une entrée ajoutée au catalogue **ne change
   l'environnement d'aucun Spark existant** ; un test prouve que **décocher retire
   réellement** de la cellule, et pas seulement du registre ; un test prouve qu'une

@@ -3,6 +3,11 @@
 ## [Non publié]
 
 ### Ajouté
+- La version de `sparkd` est **dérivée du dépôt** : elle porte le commit et croît
+  à chaque commit, ce qui rend `pip install -U` effectif et supprime la variable
+  d'estampille qu'on pouvait oublier.
+- `env_selection` (migration `011`) et ses deux routes : le catalogue de la Forge
+  ne descend plus que dans les Sparks qui l'ont **coché**.
 - Unité SPK-66 : `sparkd` s'installe comme un **paquet**, pas comme une copie du
   dépôt. Le paquet existe déjà à moitié ; c'est la copie qui est en trop. Effet
   qui justifie l'unité à lui seul : l'estampille de build cesse d'être passée à la

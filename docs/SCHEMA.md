@@ -324,6 +324,49 @@ plutôt que de compter sur le code appelant, comme au §10 bis pour la signature
 sont perdus, et c'est irréversible même en réappliquant la migration : le
 chiffré part avec la ligne.
 
+## 10 quater. `env_selection` : ce qui descend, et où (SPK-64)
+
+Migration `011_env_selection.sql`. Contrat : `docs/DAT.md` §43.6 révisé.
+
+| Colonne | Type | Contenu |
+|---|---|---|
+| `spark_id` | TEXT | le Spark qui reçoit, `ON DELETE CASCADE` |
+| `entry_id` | TEXT | l'entrée **du catalogue** cochée, `ON DELETE CASCADE` |
+| `selected_at` | TEXT | horodatage de la case cochée |
+
+Clé primaire `(spark_id, entry_id)` : cocher deux fois n'a pas de sens, et la clé
+suffit à l'interdire. Le geste est donc **idempotent par construction**, ce qui
+importe quand deux consoles cochent en même temps — aucune ne doit rougir pour un
+état qu'elles voulaient toutes les deux.
+
+**Pourquoi cette table existe.** Avant elle, toute entrée de portée `forge`
+descendait dans **tous** les Sparks. Comme la valeur redevient en clair dans la
+cellule (§43.5.1), définir un secret une fois à la Forge le déposait en clair dans
+trente cellules — y compris celles qui n'en avaient aucun usage. Mesuré sur la
+Forge réelle le 2026-08-21 : `SMTP_PASSWORD`, posé au niveau Forge, est arrivé
+dans `/run/spark/secrets` d'un Spark qui ne l'avait jamais demandé.
+
+**On référence l'identifiant, jamais le nom.** Renommer une entrée du catalogue
+garde donc les cases cochées, et la supprimer les retire toutes par cascade —
+sans quoi une case survivrait à ce qu'elle désigne.
+
+**Un déclencheur refuse de cocher une entrée de portée `spark`.** Une entrée
+propre à un Spark est déjà chez lui : la cocher n'aurait aucun sens et laisserait
+croire à un second mécanisme. La contrainte porte sur une autre table, donc elle
+ne peut pas s'écrire en `CHECK`.
+
+**La migration coche l'existant.** Avant elle, chaque Spark recevait tout le
+catalogue ; ne rien cocher aurait retiré, au premier geste suivant, des variables
+dont des piles en marche dépendent. Le comportement observable ne change donc
+**pas** au moment de la migration — ce sont les ajouts **suivants** qui cessent de
+descendre tout seuls. Une correction de sécurité qui casse la production est un
+mauvais échange.
+
+**Retour arrière** : le `down` supprime la table. Les cases sont perdues, et
+l'environnement effectif de chaque Spark **redevient** le catalogue entier — le
+comportement d'avant SPK-64, donc le défaut qu'elle corrige. Un retour arrière
+sur cette migration se décide en connaissance de cause.
+
 ## 11. Retour arrière
 
 Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sans
