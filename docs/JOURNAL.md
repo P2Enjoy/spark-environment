@@ -7770,3 +7770,30 @@ les 122 preuves Node touchées, le pytest pur du briefing rootless, le typecheck
 `make contract-check` et `make build` sont verts. La session suivante reprend
 par la réconciliation SSH puis rejoue la campagne complète dans un environnement
 où le portail TestClient progresse.
+
+---
+
+## 2026-08-21 · SPK-54 / SPK-60 — Compose rootless prouvé, mais pas encore par l'agent SSH
+
+Le paquet courant `c5bff4e` a été posé sur `51.158.54.202` : l'installateur a
+terminé et ses **13 contrôles de préflight** sont verts. L'amorçage rootless
+idempotent de `briefing-e2e` est complet; son briefing déployé contient bien le
+mode, le compte `spark-docker` et le gabarit du socket rootless.
+
+Dans cette cellule réelle, sous `spark-docker` et le socket utilisateur, une
+composition `nginx:alpine` a été lancée avec Compose v5.5.0. `rootless-e2e-web-1`
+était `running` dans `rootless-e2e_default`, et la Forge a obtenu **HTTP 200**
+sur `10.77.0.16:18080`. Le conteneur et le réseau de test ont immédiatement été
+supprimés : le port ne répond plus et les filtres Docker ne trouvent plus aucune
+ressource du projet. Cela prouve le démon rootless, Compose et le réseau privé
+sur une Forge réelle.
+
+Cette preuve est honnêtement distincte de la DoD agent : elle a été menée par
+`incus exec`, car le rebond SSH de la console refuse toujours la clé d'hôte
+changée. La clé ED25519 servie a été comparée avec celle lue dans la cellule via
+la Forge authentifiée, et correspond; néanmoins aucune empreinte locale n'a été
+retirée ni remplacée. Le produit promet précisément ce refus sûr. Il faut donc
+une autorisation explicite pour réconcilier `known_hosts`, puis lire le briefing
+avec SSH et y déployer la même pile. SPK-54 et SPK-60 restent `[~]` jusque-là;
+la campagne `make test` reste également non verte à cause du blocage AnyIO déjà
+consigné.

@@ -2990,17 +2990,25 @@ et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
      capable de `docker compose up` : elle exige une Forge réelle avec Incus, et
      c'est la même limite qu'au §39.7.
 
-**Reprise réelle du 2026-08-21.** Le relevé de `briefing-e2e`, réamorcée sur la
-Forge `51.158.54.202`, rend désormais Docker **rootless**, Docker CE et Compose
-installés : le démon utilisateur et son socket répondent réellement. La console
-a été corrigée pour choisir ce socket sous `spark-docker` pour la lecture, les
-gestes et les terminaux de conteneur; le briefing porte le même contexte. La
-comparaison visuelle garde `helo` lisible sur Docker enraciné. La cellule
-rootless ne peut pas encore achever la même lecture : OpenSSH constate que sa
-clé d'hôte a changé. C'est nommé explicitement à l'écran, sans aucune commande
-Docker envoyée et sans effacement automatique de `known_hosts`. Il reste à
-vérifier puis réconcilier cette empreinte, et à rejouer le Compose joignable
-depuis le seul briefing sur le paquet qui contient ces deux corrections.
+**Reprise réelle du 2026-08-21.** Le paquet courant `c5bff4e` est posé sur la
+Forge `51.158.54.202` (préflight 13/13), puis l'amorçage idempotent de
+`briefing-e2e` rend Docker **rootless**, Docker CE et Compose installés : le
+démon utilisateur et son socket répondent réellement. Le briefing réel porte
+le contexte `spark-docker` et son gabarit de socket. La console a été corrigée
+pour choisir ce socket pour la lecture, les gestes et les terminaux de
+conteneur; la comparaison visuelle garde `helo` lisible sur Docker enraciné.
+
+Une pile Compose réelle sous `spark-docker` a joint `rootless-e2e-web-1` à son
+réseau privé et répondu `HTTP 200` sur `10.77.0.16:18080`; elle a ensuite été
+retirée (conteneur et réseau absents, port fermé). Cette preuve directe par
+`incus exec` établit le démon, Compose et le réseau rootless, **pas** le parcours
+agent partant du seul briefing. Celui-ci reste bloqué : OpenSSH constate que la
+clé d'hôte a changé. Son empreinte présentée a été comparée avec succès à la clé
+publique lue depuis la cellule par la Forge, mais aucune entrée `known_hosts`
+n'a été modifiée. C'est nommé explicitement à l'écran, sans commande Docker
+envoyée et sans effacement automatique. Il faut une décision explicite de
+réconciliation de cette empreinte, puis rejouer le Compose depuis SSH et le seul
+briefing.
 La campagne complète `make test` reste également à rejouer : son `sparkd-test`
 se fige dans le portail TestClient de cet environnement avant les suites web et
 E2E; les preuves ciblées, le contrat et la build sont verts.
@@ -3703,9 +3711,10 @@ preuve reste à rejouer sur `briefing-e2e` avec le paquet corrigé.
 Docker et, lorsqu'il est rootless, `spark-docker`, le socket
 `/run/user/<uid>/docker.sock` et la source de cet UID. Ni valeur de secret ni
 privilège supplémentaire ne sont introduits. Le manuel et le runbook disent le
-même contexte. La preuve pure est verte; la projection réelle attend la pose du
-paquet courant et la réconciliation explicite de la clé d'hôte changée de
-`briefing-e2e`, avant le Compose joignable qui clôturera avec SPK-54.
+même contexte. La preuve pure est verte et la projection réelle est maintenant
+posée sur `briefing-e2e`; le Compose lancé directement dans la cellule a répondu
+et a été retiré. La dernière preuve, qui doit partir **du seul briefing via
+SSH**, attend la réconciliation explicitement autorisée de sa clé d'hôte changée.
 
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 
