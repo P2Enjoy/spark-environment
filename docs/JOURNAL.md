@@ -7595,3 +7595,18 @@ les 11 migrations SQL, `sparkd.install`, `sparkd.service` et `spark.slice`.
 La version dérivée de Git progresse (`dev596` pour le wheel courant), ce qui
 empêche à nouveau `pip` de confondre une mise à jour avec « déjà satisfait ».
 SPK-66 est `[x]`.
+
+---
+
+## 2026-08-21 · SPK-53 — la lecture de build est close, le geste reste SPK-69
+
+La comparaison avait déjà toutes ses branches et ses captures, mais son état
+`[~]` portait encore la commande de mise à jour qui vit désormais explicitement
+dans SPK-69. Cette confusion faisait attendre à une lecture qu'elle administre
+une Forge, alors que c'est précisément la frontière du produit.
+
+Les 10 scénarios d'ascendance du comparateur, 53 contrôles de rendu de la vue
+Forge et les 6 routes ciblées sont verts. La passe Chromium sur la Forge réelle
+de validation a de plus rendu « En retard — 4 commits d'écart », avec le commit
+du paquet installé et celui du poste : le verdict a donc été observé à travers
+le tunnel, sans geste de mise à jour. SPK-53 est `[x]`; SPK-69 reste `[ ]`.

@@ -2854,7 +2854,7 @@ d'incohérences — retirée dans le même changement.
     seedés, et celle qui **figeait leur nombre** à cinq — le compte se lit
     désormais sur le registre, ce qui est ce que la preuve voulait dire.
 
-### [~] SPK-53 · La build installée se nomme, et la console dit si la pile est en retard
+### [x] SPK-53 · La build installée se nomme, et la console dit si la pile est en retard
 
 - Spécification : `docs/DAT.md` §40 · `docs/PROD_MIGRATIONS.md` OP-04 ·
   `docs/DESIGN_SYSTEM.md` §14.6 (« inconnue » n'est pas zéro).
@@ -2894,11 +2894,10 @@ d'incohérences — retirée dans le même changement.
   `docs/manuel/images/m4-code-deploye.png` produite depuis la pile réelle.
   Manuel M4 complété.
 
-- **Reste à livrer, et c'est le seul écart** : la **commande de mise à jour**
-  depuis l'écran de la Forge. Sa décision de produit est désormais portée par
-  SPK-69 : elle installe le paquet pip défini par SPK-66, avec confirmation,
-  compte rendu et retour arrière mesurable. La comparaison reste ici, car elle
-  ne modifie jamais la Forge.
+- **Frontière explicitement tenue** : la commande de mise à jour depuis l'écran
+  est SPK-69, qui a son propre contrat de confirmation, de compte rendu et de
+  retour arrière. SPK-53 reste une lecture : elle compare sans jamais modifier
+  la Forge.
 
 ### [~] SPK-54 · Amorcer un Spark depuis la console
 
