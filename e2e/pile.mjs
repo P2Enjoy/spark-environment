@@ -58,7 +58,7 @@ function lancer(commande, args, env, journal) {
  * son état dans un fichier voisin du registre (docs/DAT.md §28.4), et peupler
  * après coup laisserait le processif servir un registre qu'il n'a pas relu.
  */
-export async function monterPile({ dns = null } = {}) {
+export async function monterPile({ dns = null, notify = null } = {}) {
   const dossier = await mkdtemp(join(tmpdir(), 'spark-e2e-'));
   const registre = join(dossier, 'spark.db');
   const inventaire = join(dossier, 'servers.json');
@@ -86,6 +86,10 @@ export async function monterPile({ dns = null } = {}) {
     SPARKD_DRIVER: 'fake',
     SPARKD_BIND: `127.0.0.1:${portSparkd}`,
     SPARKD_ALLOWED_SIGNERS: signataires,
+    // SPK-62 · §47.3 : le canal hors bande. Absent, la fonction se DÉSACTIVE et
+    // ce n'est pas une panne — c'est l'état par défaut des autres parcours, et
+    // c'est aussi ce que le produit fait sans réglage.
+    ...(notify ? { SPARKD_NOTIFY_URL: notify } : {}),
     PYTHONPATH: join(RACINE, 'services', 'sparkd', 'src'),
   };
 

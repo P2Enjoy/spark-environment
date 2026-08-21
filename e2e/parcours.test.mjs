@@ -25,6 +25,7 @@ import { join } from 'node:path';
 
 import { monterPile } from './pile.mjs';
 import { monterDoublonDns } from './dns-doublon.mjs';
+import { monterCanalNotify } from './notify-doublon.mjs';
 // Le motif du SERVEUR, employé tel quel : une seconde heuristique écrite
 // ici dériverait de celle qui est réellement appliquée (§22.4).
 import { SECRET_HINT } from '../apps/webui/host/inventory.js';
@@ -33,6 +34,7 @@ const ECHECS = new URL('./captures/echecs/', import.meta.url).pathname;
 
 let pile;
 let dns;
+let canal;
 let navigateur;
 let page;
 /** Messages écrits par l'APPLICATION. Le journal réseau de Chromium est à part. */
@@ -47,7 +49,11 @@ before(async () => {
   // automatique ne doit atteindre un compte réel, et la pile impose de toute
   // façon son propre fichier d'environnement (docs/DAT.md §28.1).
   dns = await monterDoublonDns();
-  pile = await monterPile({ dns });
+  // SPK-62 · §47.3 : la pile des parcours a un canal hors bande, comme une Forge
+  // configurée. Les autres parcours y envoient donc leurs gestes sensibles — et
+  // c'est voulu : si le canal cassait un geste, TOUTE la série le dirait.
+  canal = await monterCanalNotify();
+  pile = await monterPile({ dns, notify: canal.baseUrl });
   navigateur = await chromium.launch();
   page = await navigateur.newPage();
   page.on('console', (m) => {
@@ -61,6 +67,7 @@ after(async () => {
   await navigateur?.close();
   await pile?.demonter();
   await dns?.demonter();
+  await canal?.demonter();
 });
 
 beforeEach(async () => {
@@ -397,6 +404,72 @@ test('l’onglet Journal s’atteint par la navigation, se filtre, et se vérifi
     // La vérification est elle-même journalisée (§36.7).
     const { corps: apres } = await pile.lireSparkd('/v1/audit?action=audit.verify&limit=10');
     assert.ok(apres.entries.length > 0, 'le relevé laisse sa trace');
+  });
+});
+
+// --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
+
+test('supprimer un Spark envoie une alerte hors bande, et l’écran le dit', async () => {
+  await parcours('notify-suppression', async () => {
+    // §47.1 : l'alerte part du journal, donc d'un geste RÉEL fait à l'écran —
+    // pas d'un appel qu'on aurait fabriqué pour la déclencher.
+    canal.oublier();
+    await ouvrir('site-vitrine');
+    await page.click('[data-commande="delete"]');
+    await page.waitForSelector('#suppression-nom', { timeout: 10000 });
+    await page.fill('#suppression-nom', 'site-vitrine');
+    await page.click('[data-confirme="delete"]');
+    await page.waitForFunction(
+      () => location.hash === '#/sparks', { timeout: 15000 });
+
+    const recus = await canal.attendre(1);
+    assert.equal(recus.length, 1, 'une alerte, et une seule');
+    const vu = recus[0];
+    assert.equal(vu.action, 'spark.delete');
+    assert.equal(vu.result, 'ok');
+    assert.equal(vu.actor_class, 'human');
+    assert.equal(vu.actor, 'console/local',
+      'l’alerte nomme qui a agi, tel que le journal l’inscrit');
+    // ÉCART MESURÉ le 2026-08-21, et il est nommé au backlog plutôt que masqué :
+    // l'alerte porte l'IDENTIFIANT de l'objet, pas son nom. Le message de
+    // `spark.delete` est une transition d'état — « error » → « deleting » —, et
+    // le nom ne vit que dans `spark.deleted`, la ligne d'ACHÈVEMENT. Détecter la
+    // DEMANDE reste le bon choix (une suppression qui échoue à mi-chemin doit
+    // quand même alerter), mais l'alerte n'est pas encore exploitable seule.
+    assert.ok(vu.target_id, 'la cible est désignée, fût-ce par son identifiant');
+    assert.equal(vu.target_type, 'spark');
+    assert.equal(vu.version, 'spark-notify-v1');
+    // §47.4 : le payload n'y est PAS. Un champ qu'on n'envoie pas ne fuit pas.
+    assert.ok(!('payload' in vu));
+
+    // …et l'écran de la Forge le DIT (§47.6), atteint par la navigation.
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-notify', { timeout: 10000 });
+    const dit = await page.innerText('#titre-notify ~ *');
+    assert.match(dit, /Toutes les alertes sont parties/);
+  });
+});
+
+test('un geste de CONSTRUCTION n’envoie aucune alerte', async () => {
+  await parcours('notify-silence', async () => {
+    // §47.2 : un canal qui crie tout le temps n'est plus lu, et c'est la panne
+    // la plus probable de ce dispositif. Prendre un instantané ne détruit rien.
+    canal.oublier();
+    await ouvrir('crm-production', 'instantanes');
+    await page.focus('[data-ouvre="snapshot"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #instantane-nom');
+    await page.fill('#instantane-nom', 'sans-alerte');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => !document.querySelector('dialog.modale[open]'), { timeout: 10000 });
+
+    // Le geste a bien eu lieu — sinon la preuve mesurerait un silence sans cause.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=snapshot.create&limit=5');
+    assert.ok(corps.entries.some((e) => e.message.includes('sans-alerte')));
+
+    await canal.attendre(1, { tentatives: 8 });
+    assert.deepEqual(canal.recus, [], 'aucune alerte pour un geste qui construit');
   });
 });
 
