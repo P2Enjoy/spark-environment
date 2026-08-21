@@ -254,6 +254,41 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
                  201, quoi=f"instantané « {nom} »")
         compte["instantanes"] += 1
 
+    # --- Environnement (SPK-58, docs/DAT.md §43). Les cinq situations que
+    # l'écran devra distinguer, et pas une de moins : sans elles, l'onglet
+    # *Environnement* se démontrerait sur un tableau vide.
+    #
+    # Posé AVANT l'armement de la protection : un geste de Forge devrait sinon
+    # porter `accept_protected` (§43.9.5 bis), ce qui ferait du seed une
+    # démonstration du refus plutôt que de la fonctionnalité.
+    #
+    # Aucune valeur n'est un vrai secret : ce sont des données de DÉMONSTRATION,
+    # comme le mot de passe de protection plus bas. Aucun secret réel n'entre au
+    # dépôt (CLAUDE.md §3).
+    environnement = [
+        # héritée, et jamais surchargée : l'origine « forge » se montre.
+        ("forge", None, "TZ", "Europe/Paris", False),
+        # héritée PUIS surchargée : c'est l'origine « overridden », celle qui
+        # explique pourquoi une valeur n'est pas celle qu'on a écrite ailleurs.
+        ("forge", None, "SMTP_HOST", "relais.interne.example", False),
+        ("spark", "crm-production", "SMTP_HOST", "relais.crm.example", False),
+        # propre au Spark : l'origine « spark ».
+        ("spark", "crm-production", "APP_NAME", "crm-production", False),
+        # un SECRET du Spark : l'écran n'en montre que le nom, l'empreinte et la
+        # date. Sa valeur ne ressort par aucune route (§43.3).
+        ("spark", "crm-production", "DATABASE_URL",
+         "postgres://demo:demo@db.interne.example/crm", True),
+        # un secret HÉRITÉ : la surcharge du §43.6 vaut aussi pour eux, et
+        # l'écran doit le montrer sur un Spark qui ne l'a pas déclaré.
+        ("forge", None, "SMTP_PASSWORD", "mot-de-passe-de-demonstration", True),
+    ]
+    for portee, spark, nom, valeur, secret in environnement:
+        route = (f"/v1/env/{nom}" if portee == "forge"
+                 else f"/v1/sparks/{spark}/env/{nom}")
+        _attendu(client.put(route, json={"value": valeur, "secret": secret}),
+                 200, quoi=f"variable « {nom} » ({portee})")
+        compte["environnement"] = compte.get("environnement", 0) + 1
+
     # --- Un Spark PROTÉGÉ (SPK-34, docs/DAT.md §35). Sans lui, l'écran ne peut
     # montrer ni le badge, ni le refus 423, ni la confirmation de révocation qui
     # nomme les Sparks protégés. Le mot de passe est celui du manuel M8 : c'est
@@ -295,6 +330,22 @@ def verify(client: TestClient) -> None:
     for nom, etat in attendus.items():
         if etats.get(nom) != etat:
             raise SeedError(f"« {nom} » devrait être « {etat} », il est « {etats.get(nom)} »")
+
+    # SPK-58 · §43.9.4 : les TROIS origines doivent être atteignables depuis
+    # l'écran. Il en manquerait une que la démonstration serait muette sur le
+    # point le plus difficile à expliquer — d'où vient une valeur.
+    env_crm = client.get("/v1/sparks/crm-production/env").json()["env"]
+    origines = {e["origin"] for e in env_crm}
+    if not {"forge", "spark", "overridden"} <= origines:
+        raise SeedError(
+            "l'environnement seedé doit couvrir les trois origines, il n'en "
+            f"couvre que {sorted(origines)}")
+    secrets = [e for e in env_crm if e["is_secret"]]
+    if not secrets:
+        raise SeedError("aucun secret seedé : l'écran ne pourrait pas montrer "
+                        "un champ en écriture seule ni une empreinte")
+    if any(e["value"] is not None for e in secrets):
+        raise SeedError("un secret seedé rend sa valeur : le §43.3 est violé")
 
     routes = client.get("/v1/ingress").json()["routes"]
     if not any(r["applied_at"] for r in routes):
