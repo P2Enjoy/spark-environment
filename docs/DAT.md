@@ -1914,11 +1914,23 @@ Sans cette distinction, chaque exploitant signalera le même faux défaut.
 
 ### 20.4 Un Spark arrêté n'a pas d'usage nul, il n'en a pas
 
-Interroger l'état d'un Spark arrêté ne rend aucune métrique. Le produit répond
-alors que l'usage est **indisponible**, et non nul : un disque occupé reste
-occupé même quand rien ne tourne, et afficher `0` sur les quatre ressources
-laisserait croire qu'un Spark arrêté ne coûte rien. Il coûte son disque, et sa
-place dans la comptabilité (§7.7).
+Le produit répond que l'usage est **indisponible**, et non nul : afficher `0` sur
+les quatre ressources laisserait croire qu'un Spark arrêté ne coûte rien. Il
+coûte son disque, et sa place dans la comptabilité (§7.7).
+
+**PRÉCISÉ par la mesure du 2026-08-21**, Forge de validation, Incus 7.3 sur ZFS.
+Interroger l'état d'un Spark arrêté ne rend pas *rien* : cela dépend de la
+grandeur.
+
+| Grandeur | Ce que rend une instance ARRÊTÉE |
+|---|---|
+| `memory.usage` | `0` — et ce zéro ne veut rien dire, la cellule n'existe plus |
+| `disk.root.usage` | **la vraie occupation** — 598029312 octets sur `helo` |
+
+C'est ce qui rend le refus de rétrécissement du §49.3 atteignable sur un Spark
+arrêté, et c'est pourquoi le produit demande le disque quel que soit l'état et la
+mémoire seulement en marche. Éprouvé sur la Forge : descendre le disque de
+`helo` sous son occupation est refusé, avec le chiffre mesuré.
 
 ## 21. Journal d'audit
 
@@ -7399,18 +7411,39 @@ mesure n'est pas faite.
 **Ce que le produit sait déjà**, par ses sections existantes : le `cpuset` se
 reconfigure à chaud (§13), et la mémoire d'une cellule aussi.
 
-**Ce qui reste à MESURER sur une Forge réelle**, et qui n'est donc pas promis
-tant que ce n'est pas fait :
+**MESURÉ le 2026-08-21 sur la Forge de validation** — Incus 7.3, ZFS, Spark
+`helo` en marche, sur instruction explicite du responsable. Les deux questions
+qui restaient ouvertes sont tranchées, et **les deux prennent à chaud** :
 
-- le **disque** — agrandir un jeu de données ZFS est immédiat ; que la cellule le
-  voie sans redémarrer reste à établir ;
-- le **mode CPU** — passer de `dedicated` à `shared` change le `cpuset` **et** la
-  pondération : à vérifier que les deux prennent sans redémarrage.
+| Ce qui change | Ce que la mesure a montré, SANS redémarrage |
+|---|---|
+| **disque**, 10 → 12 Gio | `incus config device get helo root size` passe à 12952010752, et la cellule le voit : `df` rend 13161594880 |
+| **disque**, 12 → 10 Gio | le rétrécissement prend aussi : la cellule revient à 11014111232 |
+| **mode CPU**, `shared` → `capped` 0,5 | le NOYAU porte `cpu.max = 50000 100000` dans `/sys/fs/cgroup/spark.slice/helo` |
+| **mode CPU**, retour à `shared` | `cpu.max` redevient `max` — le burst est rendu |
 
 **L'écran le dit AVANT d'agir, jamais après.** Un geste qui redémarre une cellule
 sans l'avoir annoncé coupe un service en production. Tant qu'une prise à chaud
 n'est pas mesurée, le champ concerné est annoncé comme exigeant un redémarrage :
 promettre moins que ce qu'on fait est une erreur sans conséquence, l'inverse pas.
+C'est ce que l'écran fait encore pour le disque et le mode CPU, et il promet donc
+désormais **moins** que ce que le produit tient. Le corriger est un geste
+d'interface, pas de contrat.
+
+#### 49.4 bis Le défaut que cette mesure a trouvé
+
+La première tentative a rendu `applied: true` **sans rien poser** : le registre
+passait à 12 Gio, `incus config device get helo root size` restait à 10.
+
+Cause : la taille du disque ne vit pas dans la **configuration** de l'instance
+mais dans son **device** `root`, et la route ne posait que la configuration.
+C'était exactement le pire des cas que la Definition of Done de SPK-57 nomme —
+« un quota changé au registre mais pas dans le noyau » —, aggravé par un `applied`
+qui affirmait le contraire.
+
+Corrigé le même jour : la pose écrit aussi le device racine, relu puis réécrit
+complet. Une preuve d'unité garde le point, et elle regarde le **device**, pas la
+configuration.
 
 ### 49.5 Ce que le geste refuse toujours
 
