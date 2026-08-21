@@ -7001,3 +7001,101 @@ Elle ne protège pas la Forge de qui y détient déjà `root` (§35.1), ni d'un 
 qui sortirait de son isolation — un *system container* partage le noyau, et le
 §11 l'assume. Elle ferme un chemin qui n'aurait jamais dû être ouvert, et rend la
 posture **vérifiable** plutôt que constatée une fois.
+
+## 49. Redimensionner un Spark : contrat (SPK-57)
+
+Le produit crée et supprime ; il ne sait pas **ajuster**. Agrandir un Spark
+suppose aujourd'hui de le supprimer et de le recréer : on perd la cellule, ses
+images Docker, ses volumes et sa configuration. Pour un produit dont l'unité
+**est** une cellule à quota, c'est le geste d'exploitation le plus courant qui
+manque.
+
+### 49.1 Le point qui décide de tout : l'admission compte le DELTA
+
+Un Spark qui existe est **déjà compté** dans l'alloué (§7.7 : « tous les Sparks du
+registre comptent, quel que soit leur état »). Lui demander 8 Gio alors qu'il en a
+déjà 6 ne prend au pool que **2 Gio**. Rejouer l'admission sur la demande entière
+refuserait des agrandissements parfaitement tenables — et refuserait même de
+RÉTRÉCIR un Spark sur une Forge saturée, ce qui est absurde : rendre de la mémoire
+ne peut pas manquer de mémoire.
+
+**Comment le delta est compté, et pourquoi pas par soustraction.** Deux voies
+possibles, et une seule donne des refus vrais :
+
+- **soustraire** — admettre `nouveau − ancien`. Rejetée : le refus du §7.7 porte
+  `requested`, `available` et `capacity`, et l'exploitant lirait « il manque
+  2 Gio sur une demande de 2 Gio » alors qu'il en demande 8. Un message exact sur
+  des chiffres faux est pire qu'un message absent ;
+- **rendre d'abord, admettre ensuite** — retenue. Le Spark visé est **exclu** du
+  calcul de l'alloué, puis la demande **entière** est admise contre le pool ainsi
+  augmenté. Les chiffres du refus restent ceux que l'exploitant a saisis.
+
+C'est `pools(connection, sauf=<id>)`, et `admit(..., sauf=<id>)` par-dessus. Le
+paramètre nomme un Spark à ne pas compter, jamais une valeur à retrancher : la
+différence se voit dans le refus rendu.
+
+Le CPU **dédié** suit la même règle et c'est là qu'elle compte le plus : passer de
+`dedicated` à `shared` **rend des cœurs physiques** au pool partagé, ce qui
+augmente sa capacité. Sans exclusion, la Forge évaluerait la nouvelle demande
+contre un pool encore amputé des cœurs qu'on lui rend.
+
+### 49.2 Ce que le geste modifie, et dans quel ordre
+
+Modifiables : mémoire, plafond et réservation CPU, débit réseau, taille de
+disque, et le **mode CPU**. Ce qui ne se modifie pas : le nom, l'image, l'adresse
+privée — ce sont des identités, pas des quotas.
+
+L'ordre est celui du §14.2, et il n'est pas négociable : **le registre d'abord,
+Incus ensuite.** Un quota posé sur la cellule sans ligne au registre est une
+ressource prise que l'admission ne voit pas ; l'inverse est une ligne fausse que
+le prochain relevé corrige.
+
+### 49.3 Rétrécir n'est pas agrandir
+
+Un agrandissement ne peut échouer que sur l'admission. Un rétrécissement a ses
+propres refus, et chacun est nommé :
+
+| Ce qu'on demande | Ce qui se passe | Verdict |
+|---|---|---|
+| mémoire **sous l'usage courant** | l'OOM killer tue des processus dans la cellule | **refus**, avec l'usage mesuré |
+| disque **sous ce qu'il contient** | perte de données, ou échec du redimensionnement | **refus**, avec l'occupation mesurée |
+| `dedicated` → `shared` | des cœurs reviennent au pool, qu'il faut redistribuer (§7.4 bis) puis repondérer (§32.2) | **admis**, et les deux opérations suivent |
+| débit réseau à la baisse | rien ne casse : un plafond plus bas ralentit, il ne détruit pas | **admis** |
+
+**Un refus de rétrécissement n'est pas un refus d'admission**, et ne doit pas se
+présenter comme tel : l'admission dit « il n'y a pas la place », celui-ci dit
+« ce que vous voulez retirer est utilisé ». Les confondre enverrait l'exploitant
+libérer de la place sur la Forge alors que le problème est dans la cellule.
+
+### 49.4 À chaud ou non : ce qui est ÉTABLI, et ce qui reste à mesurer
+
+**Ce que le produit sait déjà**, par ses sections existantes : le `cpuset` se
+reconfigure à chaud (§13), et la mémoire d'une cellule aussi.
+
+**Ce qui reste à MESURER sur une Forge réelle**, et qui n'est donc pas promis
+tant que ce n'est pas fait :
+
+- le **disque** — agrandir un jeu de données ZFS est immédiat ; que la cellule le
+  voie sans redémarrer reste à établir ;
+- le **mode CPU** — passer de `dedicated` à `shared` change le `cpuset` **et** la
+  pondération : à vérifier que les deux prennent sans redémarrage.
+
+**L'écran le dit AVANT d'agir, jamais après.** Un geste qui redémarre une cellule
+sans l'avoir annoncé coupe un service en production. Tant qu'une prise à chaud
+n'est pas mesurée, le champ concerné est annoncé comme exigeant un redémarrage :
+promettre moins que ce qu'on fait est une erreur sans conséquence, l'inverse pas.
+
+### 49.5 Ce que le geste refuse toujours
+
+- **un Spark protégé** (§35.2). Le verrou porte sur l'objet, et redimensionner est
+  une écriture. La protection se lève d'abord, par un geste distinct ;
+- **un Spark dans un état transitoire** — `creating`, `deleting`, `starting`,
+  `stopping`. Le §14.3 l'impose pour les commandes ; un quota changé pendant une
+  transition serait écrit sur un état qui n'existe déjà plus.
+
+### 49.6 Ce que cette unité ne prétend pas
+
+Elle ne redimensionne pas ce que le locataire a mis DANS sa cellule : un volume
+Docker plein reste plein après un agrandissement du jeu de données, et c'est au
+locataire d'en disposer. Elle ne promet rien non plus sur la **durée** d'un
+redimensionnement de disque, qui dépend du pool et non du produit.
