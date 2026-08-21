@@ -392,9 +392,22 @@ def test_l_option_rootless_installe_ce_qu_il_faut_pour_qu_il_SURVIVE(tmp_path):
     assert "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" in lances
     assert "dockerd-rootless-setuptool" in lances
     assert "machinectl shell" not in lances
+    assert "/proc/self/uid_map" in lances and "/proc/self/gid_map" in lances
+    assert "subuid_count" in lances and "subgid_count" in lances
     assert "enable-linger" in lances
     # Deux démons sur la même cellule se disputeraient stockage et réseaux.
     assert "systemctl disable --now docker.service" in lances
+
+
+def test_le_script_rootless_reserve_une_sous_plage_DANS_l_idmap_incus(tmp_path):
+    """`useradd` choisit 100000:65536, hors d'une cellule Incus mappée
+    0:65536. Le script doit donc mesurer l'idmap et n'écrire que la sous-plage
+    déléguable au compte de service (§42.2 bis)."""
+    script = bootstrap.script_rootless()[-1]
+    assert "/proc/self/uid_map" in script and "/proc/self/gid_map" in script
+    assert "subuid_count" in script and "subgid_count" in script
+    assert "idmap Incus insuffisant" in script
+    assert "sed -i '/^spark-docker:/d' /etc/subuid /etc/subgid" in script
 
 
 def test_un_rootless_interrompu_est_repris_sans_basculer_un_docker_enracine(tmp_path):
