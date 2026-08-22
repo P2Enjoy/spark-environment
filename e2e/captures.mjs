@@ -446,6 +446,20 @@ page.on('console', (m) => {
 });
 page.on('pageerror', (e) => bruits.push(`[pageerror] ${e.message}`));
 
+/**
+ * Ferme un contexte comme le ferait l'utilisateur : la page part d'abord,
+ * puis l'hôte s'arrête. Depuis SPK-70, le registre sonde les sessions vivantes ;
+ * couper le serveur sous une page encore affichée fabriquait donc un
+ * `ERR_CONNECTION_REFUSED` propre au harnais et masquait les vrais bruits.
+ */
+async function fermerContexte(contexte) {
+  await page.goto('about:blank');
+  await new Promise((resolve, reject) => contexte.server.close((erreur) => {
+    if (erreur) reject(erreur);
+    else resolve();
+  }));
+}
+
 let ctx = await demarrer();
 await capturer(page, ctx.base, '01-liste-chargee');
 await capturer(page, ctx.base, '02-liste-mobile', { largeur: 390, hauteur: 844 });
@@ -460,27 +474,27 @@ await page.keyboard.press('Enter');
 await page.waitForTimeout(200);
 await page.screenshot({ path: join(SORTIE, '04-tri-au-clavier.png') });
 console.log('  04-tri-au-clavier.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 ctx = await demarrer({ sparks: [] });
 await capturer(page, ctx.base, '05-etat-vide', { attendre: '.etat-vue' });
-ctx.server.close();
+await fermerContexte(ctx);
 
 ctx = await demarrer({ casse: true });
 await capturer(page, ctx.base, '06-etat-erreur', { attendre: '.etat-vue--erreur' });
-ctx.server.close();
+await fermerContexte(ctx);
 
 ctx = await demarrer({ lent: true });
 await capturer(page, ctx.base, '07-etat-chargement', { attendre: '.squelette' });
-ctx.server.close();
+await fermerContexte(ctx);
 
 ctx = await demarrer({ sparks: LONGS });
 await capturer(page, ctx.base, '08-donnees-longues');
-ctx.server.close();
+await fermerContexte(ctx);
 
 ctx = await demarrer({ tunnelRompu: true });
 await capturer(page, ctx.base, '09-tunnel-rompu', { attendre: '.bandeau-tunnel' });
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Écran détail (SPK-19) ------------------------------------------------
 ctx = await demarrer();
@@ -526,7 +540,7 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.entete-entite');
 await page.screenshot({ path: join(SORTIE, '14-detail-mobile.png') });
 console.log('  14-detail-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- LE MANUEL, destination de premier degré (SPK-56, §1.5 bis) -----------
 // Il n'avait aucune capture, alors qu'il est désormais l'endroit où les écrans
@@ -541,7 +555,7 @@ for (const [nom, largeur, hauteur] of [['108-manuel', 1440, 1000],
   await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
   console.log(`  ${nom}.png`);
 }
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Écran de création (SPK-20) -------------------------------------------
 ctx = await demarrer();
@@ -584,7 +598,7 @@ await page.waitForTimeout(150);
 await page.setViewportSize({ width: 1440, height: 1100 });
 await page.screenshot({ path: join(SORTIE, '17-creation-avertissement.png') });
 console.log('  17-creation-avertissement.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // Refus du serveur : la saisie survit.
 ctx = await demarrer({ refusCreation: true });
@@ -600,7 +614,7 @@ console.log('  18-creation-refus-serveur.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '19-creation-mobile.png') });
 console.log('  19-creation-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // SPK-59 · §6.9 bis, condition 1 : sans capacité relevée, il n'y a pas de
 // bornes, donc pas de curseur. Les quotas redeviennent des saisies, et le
@@ -611,7 +625,7 @@ await page.goto(`${ctx.base}/#/creer`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#formulaire-spark');
 await page.screenshot({ path: join(SORTIE, '19b-creation-sans-capacite.png') });
 console.log('  19b-creation-sans-capacite.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Panneaux d'administration (SPK-21) -----------------------------------
 // docs/DAT.md §26. Le parcours est celui de l'utilisateur : on ouvre le Spark,
@@ -676,7 +690,7 @@ await page.click('[data-restaure="avant-deploiement"]');
 await page.waitForSelector('.confirmation', { timeout: 4000 });
 await page.screenshot({ path: join(SORTIE, '25-instantane-restauration.png') });
 console.log('  25-instantane-restauration.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // LE CŒUR DE L'UNITÉ (§26.5) : le refus nomme les instantanés qui bloquent, et
 // l'acceptation de leur perte n'apparaît qu'À CE MOMENT.
@@ -688,7 +702,7 @@ await page.click('[data-confirme-restauration]');
 await page.waitForSelector('[data-accepte-perte]', { timeout: 6000 });
 await page.screenshot({ path: join(SORTIE, '26-restauration-bloquee.png') });
 console.log('  26-restauration-bloquee.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // Une seule clé autorisée : la conséquence de la révocation est nommée.
 // Et une route enregistrée mais non appliquée (§18.5).
@@ -702,7 +716,7 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#titre-routes', { timeout: 15000 });
 await page.screenshot({ path: join(SORTIE, '28-panneaux-mobile.png'), fullPage: true });
 console.log('  28-panneaux-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Écran des pools de la Forge (SPK-22) -----------------------------------
 // docs/DAT.md §27. On y va PAR LA NAVIGATION, comme un utilisateur.
@@ -717,7 +731,7 @@ console.log('  29-hote-pools.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '30-hote-mobile.png'), fullPage: true });
 console.log('  30-hote-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // Base migrée mais pas encore relevée : la somme sans sa répartition inventée.
 ctx = await demarrer({ sansDetailMemoire: true });
@@ -727,7 +741,7 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#titre-memoire', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '31-hote-reserve-sans-detail.png') });
 console.log('  31-hote-reserve-sans-detail.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // §27.8 : topologie jamais relevée — un état nommé, avec son remède en bouton.
 ctx = await demarrer({ hoteNonReleve: true });
@@ -736,7 +750,7 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-action="relever"]', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '32-hote-non-releve.png') });
 console.log('  32-hote-non-releve.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Catalogue d'images (SPK-32) et sa modale (SPK-33) --------------------
 // docs/DAT.md §33, §34.1. On y va PAR LA NAVIGATION : accueil, Forge, onglet
@@ -767,7 +781,7 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(150);
 await page.screenshot({ path: join(SORTIE, '35-images-modale-mobile.png') });
 console.log('  35-images-modale-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Le catalogue des serveurs (SPK-41) ------------------------------------
 // docs/DAT.md §22.4.7 bis. On y va PAR LA NAVIGATION, comme un exploitant.
@@ -799,7 +813,7 @@ await page.click('[data-modifie-serveur="recette"]');
 await page.waitForSelector('dialog.modale[open] #serveur-nom', { timeout: 4000 });
 await page.screenshot({ path: join(SORTIE, '47-serveurs-modifier.png') });
 console.log('  47-serveurs-modifier.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // L'état « aucun serveur enregistré », que la DoD nomme.
 ctx = await demarrer({ sansServeur: true });
@@ -809,7 +823,7 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#titre-serveurs', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '46-serveurs-aucun.png') });
 console.log('  46-serveurs-aucun.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- L'onglet de supervision du journal (SPK-39) --------------------------
 // docs/DAT.md §36.8. On y va PAR LA NAVIGATION : accueil, Forge, onglet Journal.
@@ -835,7 +849,7 @@ console.log('  41-journal-integrite.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '42-journal-mobile.png'), fullPage: true });
 console.log('  42-journal-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // La CHAÎNE ROMPUE : l'écran doit désigner la ligne exacte et dire ce qui s'est
 // passé. C'est l'état pour lequel tout ce dispositif existe.
@@ -849,7 +863,7 @@ await page.waitForFunction(
   () => document.body.innerText.includes('Chaîne rompue'), { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '43-journal-chaine-rompue.png') });
 console.log('  43-journal-chaine-rompue.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // L'ANCRE QUI ALERTE (SPK-38, docs/DAT.md §36.1, §36.9.6). C'est le cas le plus
 // important du dispositif : la chaîne est INTACTE, et pourtant il manque des
@@ -875,7 +889,7 @@ console.log('  44-journal-ancre-alerte.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '45-journal-ancre-mobile.png'), fullPage: true });
 console.log('  45-journal-ancre-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- L'ONGLET DOCKER (SPK-44, §37.6) --------------------------------------
 // L'inventaire, et surtout les DEUX absences qui se confondent à l'œil : Docker
@@ -915,7 +929,7 @@ ctx.server.close();
       { timeout: 8000 });
     await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
     console.log(`  ${nom}.png`);
-    ctx.server.close();
+    await fermerContexte(ctx);
   }
 
   // --- Le conteneur OUVERT (§37.6 ter) --------------------------------------
@@ -969,7 +983,7 @@ ctx.server.close();
       { timeout: 8000 });
     await page.screenshot({ path: join(SORTIE, `${nom}.png`) });
     console.log(`  ${nom}.png`);
-    ctx.server.close();
+    await fermerContexte(ctx);
   }
 
   // --- SPK-45 · LES GESTES SUR UN CONTENEUR (§37.7) -------------------------
@@ -987,7 +1001,7 @@ ctx.server.close();
   await page.waitForSelector('.confirmation', { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '102-geste-confirmation-tuer.png') });
   console.log('  102-geste-confirmation-tuer.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 
   // Le succès : vert, et il est le SEUL à l'être (SPK-DS-08).
   ctx = await demarrer({
@@ -1007,7 +1021,7 @@ ctx.server.close();
   await page.waitForSelector('.succes', { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '103-geste-abouti.png') });
   console.log('  103-geste-abouti.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 
   // Le gel : les gestes PRÉSENTS, désactivés et expliqués, la lecture entière.
   ctx = await demarrer({ sparks: SPARKS.map((s) => s.name === DETAIL
@@ -1023,7 +1037,7 @@ ctx.server.close();
   await page.waitForSelector('button[data-geste="stop"]', { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '104-geste-gele.png') });
   console.log('  104-geste-gele.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 
   // --- LE TERMINAL DANS UN CONTENEUR (SPK-45 tranche 2, §37.4.7) ------------
   // Deux écrans, atteints par le VRAI parcours — on ouvre le conteneur puis on
@@ -1044,7 +1058,7 @@ ctx.server.close();
     await page.waitForSelector('.bandeau-terminal .badge--accent', { timeout: 15000 });
     await page.screenshot({ path: join(SORTIE, '105-terminal-conteneur.png') });
     console.log('  105-terminal-conteneur.png');
-    ctx.server.close();
+    await fermerContexte(ctx);
   }
 
   // Le conteneur SANS SHELL : le refus le plus important de cette tranche. Une
@@ -1069,7 +1083,7 @@ ctx.server.close();
     await page.waitForSelector('.avertissement', { timeout: 8000 });
     await page.screenshot({ path: join(SORTIE, '106-terminal-conteneur-sans-shell.png') });
     console.log('  106-terminal-conteneur-sans-shell.png');
-    ctx.server.close();
+    await fermerContexte(ctx);
   }
 
   // Un conteneur ouvert sur 390 px : les journaux ne doivent pas faire déborder
@@ -1083,7 +1097,7 @@ ctx.server.close();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: join(SORTIE, '101-docker-conteneur-mobile.png') });
   console.log('  101-docker-conteneur-mobile.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 
   // Le format étroit : cinq colonnes ne tiennent pas sur 390 px, le tableau doit
   // défiler dans SON conteneur et la page ne doit pas déborder (§8.1).
@@ -1093,7 +1107,7 @@ ctx.server.close();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: join(SORTIE, '97-docker-mobile.png'), fullPage: true });
   console.log('  97-docker-mobile.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 }
 
 // --- LE CODE DÉPLOYÉ (SPK-53, §40.3) --------------------------------------
@@ -1114,7 +1128,7 @@ ctx.server.close();
     () => document.body.innerText.includes('commits d’écart'), { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '90-forge-build-en-retard.png'), fullPage: true });
   console.log('  90-forge-build-en-retard.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 
   // À JOUR : la seule situation où la console affirme que tout va bien.
   ctx = await demarrer({ buildCommit: tete });
@@ -1125,7 +1139,7 @@ ctx.server.close();
     () => document.body.innerText.includes('À jour'), { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '91-forge-build-a-jour.png'), fullPage: true });
   console.log('  91-forge-build-a-jour.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 
   // NON ESTAMPILLÉE : « inconnue » est une réponse, pas « à jour » (§40.2).
   ctx = await demarrer();
@@ -1136,7 +1150,7 @@ ctx.server.close();
     () => document.body.innerText.includes('non estampillée'), { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '92-forge-build-inconnue.png'), fullPage: true });
   console.log('  92-forge-build-inconnue.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 }
 
 // --- L'AMORÇAGE (SPK-54, §41, §42) ----------------------------------------
@@ -1169,7 +1183,7 @@ console.log('  87-amorcage-compte-rendu.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '88-amorcage-mobile.png'), fullPage: true });
 console.log('  88-amorcage-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Le TERMINAL DE DÉPANNAGE (SPK-43, §37.3) -----------------------------
 // Les quatre conditions du §37.3 se voient ou ne se voient pas : la
@@ -1202,7 +1216,7 @@ ctx.server.close();
   await page.screenshot({ path: join(SORTIE, '81-terminal-depannage-mobile.png'),
                           fullPage: true });
   console.log('  81-terminal-depannage-mobile.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 }
 
 // --- LA GRILLE ET LE REGISTRE DE SESSIONS (SPK-70, §37.4) -----------------
@@ -1235,7 +1249,7 @@ ctx.server.close();
   await page.screenshot({ path: join(SORTIE, '108-terminal-xterm-registre-mobile.png'),
                           fullPage: true });
   console.log('  108-terminal-xterm-registre-mobile.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 }
 
 // Le SSHD MUET (§37.2) : l'écran doit NOMMER ce qui manque, et proposer la
@@ -1256,7 +1270,7 @@ ctx.server.close();
     { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '83-terminal-sshd-muet.png') });
   console.log('  83-terminal-sshd-muet.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 }
 
 // La clé REFUSÉE : la panne ressemble à la précédente et n'appelle pas le même
@@ -1275,7 +1289,7 @@ ctx.server.close();
     () => document.body.innerText.includes('il refuse la clé'), { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '84-terminal-cle-refusee.png') });
   console.log('  84-terminal-cle-refusee.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 }
 
 // Le REFUS du dépannage : le chemin normal reste offert, l'écran ne se ferme pas.
@@ -1290,7 +1304,7 @@ ctx.server.close();
     () => document.body.innerText.includes('Dépannage refusé'), { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '82-terminal-depannage-refuse.png') });
   console.log('  82-terminal-depannage-refuse.png');
-  ctx.server.close();
+  await fermerContexte(ctx);
 }
 
 // --- Le journal et son auteur (SPK-37) ------------------------------------
@@ -1300,7 +1314,7 @@ ctx = await demarrer();
 await ouvrirDetail(ctx.base, { facette: 'journal', hauteur: 700 });
 await page.screenshot({ path: join(SORTIE, '39-journal-auteur.png') });
 console.log('  39-journal-auteur.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- Les Sparks protégés (SPK-34) -----------------------------------------
 // docs/DAT.md §35. On ouvre le Spark PAR SON LIEN dans la liste, comme un
@@ -1322,7 +1336,7 @@ await page.keyboard.press('Enter');
 await page.waitForSelector('dialog.modale[open] #protection-mot', { timeout: 4000 });
 await page.screenshot({ path: join(SORTIE, '38-protection-modale.png') });
 console.log('  38-protection-modale.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- SPK-40 · CE QUE L'ÉCRAN DIT DE LA SIGNATURE (§36.10.9) ---------------
 // Deux écrans, et ils répondent à deux questions différentes : ce que la Forge a
@@ -1337,7 +1351,7 @@ await page.click('.onglet[href="#/forge/journal"]');
 await page.waitForSelector('#titre-journal-forge', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '47-journal-signature.png') });
 console.log('  47-journal-signature.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // L'ÉCHEC DIT. Le geste a eu lieu — la Forge l'a accepté —, seule la trace
 // manque : accent, jamais rouge (§25.1). Il vit dans la barre latérale parce que
@@ -1358,7 +1372,7 @@ console.log('  48-signature-echec.png');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.screenshot({ path: join(SORTIE, '49-signature-echec-mobile.png'), fullPage: true });
 console.log('  49-signature-echec-mobile.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- SPK-62 · L'ALERTE HORS BANDE (§47.6) ---------------------------------
 // Les deux situations qui ne se confondent pas : « rien n'est surveillé » et
@@ -1370,7 +1384,7 @@ await page.goto(`${ctx.base}/#/forge`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#titre-notify', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '50-notify-sans-canal.png'), fullPage: true });
 console.log('  50-notify-sans-canal.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 ctx = await demarrer({ notify: { configured: true, sent: 14, failed: 3, dropped: 1,
                                  last_error: 'connexion refusée',
@@ -1379,7 +1393,7 @@ await page.goto(`${ctx.base}/#/forge`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#titre-notify', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '51-notify-en-echec.png'), fullPage: true });
 console.log('  51-notify-en-echec.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // --- SPK-57 · REDIMENSIONNER UN SPARK (§49) -------------------------------
 // La section Ressources porte SA commande, et la modale s'ouvre PRÉ-REMPLIE.
@@ -1404,7 +1418,7 @@ console.log('  54-quotas-mobile.png');
 // d'admission (§49.3) : il annonce l'occupation mesurée de la cellule et
 // renvoie l'exploitant DANS son Spark, pas sur la Forge. Un refus ne laisse
 // aucune trace, donc cette capture ne modifie rien.
-ctx.server.close();
+await fermerContexte(ctx);
 
 ctx = await demarrer({ refusRetrecissement: true });
 await ouvrirDetail(ctx.base, { hauteur: 1000 });
@@ -1416,7 +1430,7 @@ await page.click('dialog.modale[open] [data-engage="quotas"]');
 await page.waitForSelector('dialog.modale[open] .refus', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '55-quotas-refus-disque.png') });
 console.log('  55-quotas-refus-disque.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 // SPK-58 · §43 : la facette Environnement, ses deux sections et ses secrets
 // masqués. Puis la modale, qui annonce que rien ne redémarre (§43.7).
@@ -1444,7 +1458,7 @@ await page.click('.onglet[href="#/forge/environnement"]');
 await page.waitForSelector('#titre-catalogue-forge', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '82-environnement-catalogue-forge.png'), fullPage: true });
 console.log('  82-environnement-catalogue-forge.png');
-ctx.server.close();
+await fermerContexte(ctx);
 
 await navigateur.close();
 console.log('\n  captures dans e2e/captures/');
