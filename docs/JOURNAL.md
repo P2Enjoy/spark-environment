@@ -4,6 +4,22 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-22 — SPK-68 compose un plan depuis les deux Forges réelles
+
+L'assistant recueille les valeurs de la Forge et du stockage, refait son relevé
+SSH au moment du geste, puis produit les six phases sans écrire. La Forge
+existante conserve son pool ZFS ; le serveur neuf, disque racine unique de 10 Go
+et 5,2 Gio libres, refuse 20 Gio + 1 Gio de réserve puis rend le plan explicite
+4 Gio + 1 Gio. Les vues desktop et 390 px ont été observées. Elles ont trouvé
+une contradiction réelle : le paquet installé dans `/opt/sparkd/venv` paraissait
+absent malgré l'unité active ; le diagnostic reconnaît désormais ce venv.
+
+Aucun driver local ou factice n'a servi de preuve. La Forge existante rend
+préflight 13/13, `healthz=ok`, `readyz=ready`. SPK-68 reste `[~]` : il manque
+l'exécuteur d'écriture, les confirmations persistées et les deux installations
+réelles ; le serveur neuf exige une taille explicitement choisie et ne peut pas
+fournir le parcours miroir faute de deux supports libres.
+
 ## 2026-08-22 — SPK-17 renforcé, GitHub Actions reste sans aucune exécution
 
 La vérification du contrat est désormais un job GitHub indépendant : elle

@@ -3943,6 +3943,28 @@ desktop/mobile sont vertes. Il manque encore l'exécuteur versionné, ses
 confirmations de stockage, sa reprise persistée et les deux installations réelles
 de la DoD : l'unité reste donc honnêtement ouverte.
 
+**Deuxième tranche livrée le 2026-08-22, exclusivement contre les Forges
+réelles.** L'écran recueille maintenant pool, bridge, réserves CPU/mémoire,
+plafond ARC et — sans défaut implicite — taille du pool fichier et espace à
+laisser libre. L'hôte refait le diagnostic SSH au moment du geste puis compose
+un contrat fermé : `sudo` interactif, mémoire entièrement réservée, capacité
+insuffisante et supports qui ne sont plus ceux du relevé sont refusés avant
+toute écriture. Sur `spark-experiment`, le plan conserve le pool ZFS `spark` ;
+sur `212.47.246.142`, une demande de 20 Gio + 1 Gio a été refusée face aux
+5,2 Gio réellement libres, puis un plan explicite 4 Gio + 1 Gio a été rendu sans
+être exécuté. Les vues desktop et 390 px ont été observées. Le diagnostic du
+paquet a aussi été corrigé après que la vue réelle eut montré une contradiction :
+le venv `/opt/sparkd` est désormais reconnu et l'unité active ne paraît plus
+« non installée ».
+
+**Reste avant `[x]`** : l'exécuteur versionné qui applique et persiste les six
+phases, leurs confirmations séparées et leur reprise ; puis les deux installations
+réelles de la DoD. Le serveur neuf fourni n'a qu'un disque racine de 10 Go,
+5,2 Gio libres et aucune paire native : aucune taille d'exploitation n'en est
+déduite et aucune écriture n'y a été faite. Une taille de pool fichier doit être
+choisie explicitement pour cette machine, et une seconde machine avec deux
+supports libres reste nécessaire pour le parcours miroir.
+
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
   seulement le paquet Python. C'est un **assistant de bout en bout** qui part
   d'une machine accessible par SSH et la rend Forge utilisable, en montrant
