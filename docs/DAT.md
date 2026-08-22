@@ -6223,8 +6223,12 @@ confirmation.
 
 Le navigateur ne transmet que le **nom du serveur inventorié**. Il ne transmet
 ni commit, ni URL, ni commande, ni option, ni secret. L'hôte retient lui-même le
-commit servi avant le geste et la tête cible, tous deux des empreintes Git
-complètes. Il ouvre OpenSSH depuis l'inventaire, en `BatchMode`, sans accepter de
+commit servi avant le geste et la tête cible, tous deux sous forme d'empreintes
+Git complètes. Une Forge historique peut publier l'abréviation unique portée par
+`setuptools-scm` : l'hôte la résout dans son dépôt avant de l'admettre, puis
+confronte de la même façon les abréviations rendues après installation. Une
+abréviation inconnue ou ambiguë reste un refus, jamais une cible. Il ouvre
+OpenSSH depuis l'inventaire, en `BatchMode`, sans accepter de
 nouvelle clé d'hôte, puis fournit sur l'entrée standard un script fermé et
 versionné. Ce script :
 
