@@ -47,11 +47,13 @@ def test_le_chemin_du_venv_n_est_pas_resolu_vers_le_python_systeme(monkeypatch):
 def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_path):
     cible = paths(tmp_path)
     commandes: list[list[str]] = []
+    jalons: list[tuple[str, str]] = []
     monkeypatch.setattr(install, "commit_du_paquet", lambda: "abc123def456")
     monkeypatch.setattr(install, "__version__", "0.post1.dev1+gabc123def456")
 
     install.install(cible, runner=commandes.append, healthcheck=lambda: True,
-                    preflight=lambda: 0, uid=0, sleep=lambda _: None)
+                    preflight=lambda: 0, uid=0, sleep=lambda _: None,
+                    announce=lambda phase, state: jalons.append((phase, state)))
 
     service = (cible.systemd / "sparkd.service").read_text(encoding="utf-8")
     assert f"ExecStart={cible.python} -m sparkd" in service
@@ -65,6 +67,13 @@ def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_
     build = json.loads(cible.build.read_text(encoding="utf-8"))
     assert build["commit"] == "abc123def456"
     assert build["installed_from"] == "paquet sparkd 0.post1.dev1+gabc123def456"
+    assert jalons == [
+        ("units", "in_progress"), ("units", "done"),
+        ("daemon_reload", "in_progress"), ("daemon_reload", "done"),
+        ("restart", "in_progress"), ("restart", "done"),
+        ("healthz", "in_progress"), ("healthz", "done"),
+        ("preflight", "in_progress"), ("preflight", "done"),
+    ]
 
 
 def test_no_start_ne_fait_pas_passer_une_forge_incomplete_pour_prete(tmp_path):

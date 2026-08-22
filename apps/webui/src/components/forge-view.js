@@ -1,7 +1,7 @@
 /**
  * Écran « pools de ressources de la Forge ».
  *
- * @spec docs/BACKLOG.md#SPK-22 · docs/DAT.md §27 (rendre l'admission control
+ * @spec docs/BACKLOG.md#SPK-22, docs/BACKLOG.md#SPK-69 · docs/DAT.md §27 (rendre l'admission control
  *       observable), §27.2 (trois grandeurs), §27.3 (la soustraction mémoire),
  *       §8.8.2 (la marge de métadonnées est nommée à l'écran des pools),
  *       §27.4 (le CPU à deux endroits), §27.5 (le surengagement s'affiche),
@@ -273,7 +273,117 @@ const TOKENS_BUILD = {
   sans_depot: 'neutral',
 };
 
-export function renderBuild(build) {
+export const UPDATE_VIDE = { status: 'idle', kind: null, confirmation: null, result: null };
+
+const PHASES_UPDATE = [
+  ['package', 'Paquet'], ['units', 'Unités'], ['daemon_reload', 'daemon-reload'],
+  ['restart', 'Redémarrage'], ['healthz', 'healthz'], ['readyz', 'readyz'],
+  ['build', 'Build'],
+];
+
+const LIBELLES_PHASE = {
+  pending: 'à faire', in_progress: 'en cours', done: 'terminée', failed: 'échec',
+};
+
+function phaseState(operation, phase) {
+  if (operation.status === 'running') return phase === 'package' ? 'in_progress' : 'pending';
+  const result = operation.result;
+  if (!result) return 'pending';
+  if (result.stages?.[phase]) {
+    return result.state === 'failed' && result.stages[phase] === 'in_progress'
+      ? 'failed' : result.stages[phase];
+  }
+  const verification = result.verification;
+  if (phase === 'healthz') {
+    if (!verification) return 'pending';
+    return verification?.healthz?.status === 200 && verification.healthz.commit === result.target
+      ? 'done' : 'failed';
+  }
+  if (phase === 'readyz') {
+    if (!verification) return 'pending';
+    return verification?.readyz?.status === 200 && verification.readyz.state === 'ready'
+      ? 'done' : 'failed';
+  }
+  if (phase === 'build') {
+    if (!verification) return 'pending';
+    return verification?.build?.commit === result.target
+      ? 'done' : 'failed';
+  }
+  return 'pending';
+}
+
+function renderUpdateProgress(operation) {
+  if (!['running', 'success', 'failed'].includes(operation.status)) return '';
+  const result = operation.result;
+  const rollback = operation.kind === 'rollback';
+  const outcome = operation.status === 'success'
+    ? `<div class="succes" role="status"><p><strong>${rollback
+      ? 'Retour arrière prouvé.' : 'Mise à jour prouvée.'}</strong>
+       La Forge sert <span class="technique">${echapper(result.target?.slice(0, 12))}</span>
+       et ses dépendances répondent.</p>${result.journaled === false
+         ? '<p>La build est prouvée, mais son inscription au journal a échoué.</p>' : ''}</div>`
+    : operation.status === 'failed'
+      ? `<div class="refus" role="alert"><p><strong>${rollback
+        ? 'Retour arrière en échec.' : 'Mise à jour en échec.'}</strong>
+         ${echapper(result?.message ?? 'Les preuves distantes ne concordent pas.')}</p>
+         ${result?.rollback
+           ? `<p>Retour arrière : ${result.rollback.state === 'success'
+             ? `build précédente rétablie et prouvée (${echapper(result.rollback.target?.slice(0, 12))}).`
+             : `échec — ${echapper(result.rollback.message ?? result.rollback.error)}.`}</p>` : ''}</div>`
+      : '';
+  return `
+  <div class="progression" role="status"${operation.status === 'running'
+    ? ' aria-busy="true"' : ''}>
+    <ol>${PHASES_UPDATE.map(([phase, label]) => {
+      const state = phaseState(operation, phase);
+      return `<li><span>${label}</span> <strong>${LIBELLES_PHASE[state] ?? state}</strong></li>`;
+    }).join('')}</ol>
+  </div>
+  ${outcome}`;
+}
+
+function renderUpdateActions(build, operation) {
+  if (operation.confirmation === 'update') {
+    return `<div class="confirmation confirmation--sensible" role="group"
+      aria-labelledby="titre-confirmation-update">
+      <h3 id="titre-confirmation-update">Mettre à jour sparkd ?</h3>
+      <p>L’API du plan de contrôle sera brièvement interrompue. La build
+      <span class="technique">${echapper(build.forge?.commit?.slice(0, 12))}</span>
+      sera remplacée par <span class="technique">${echapper(build.local?.head?.slice(0, 12))}</span>.</p>
+      <p class="formulaire__actions">
+        <button type="button" class="bouton" data-action="confirmer-update">Mettre à jour sparkd</button>
+        <button type="button" class="bouton bouton--secondaire" data-action="annuler-update">Annuler</button>
+      </p>
+    </div>`;
+  }
+  if (operation.confirmation === 'rollback') {
+    return `<div class="confirmation confirmation--sensible" role="group"
+      aria-labelledby="titre-confirmation-rollback">
+      <h3 id="titre-confirmation-rollback">Revenir à la build précédente ?</h3>
+      <p>Le code régressera de
+      <span class="technique">${echapper(build.rollback?.current?.slice(0, 12))}</span>
+      à <span class="technique">${echapper(build.rollback?.previous?.slice(0, 12))}</span>
+      et l’API sera de nouveau brièvement interrompue.</p>
+      <p class="formulaire__actions">
+        <button type="button" class="bouton" data-action="confirmer-rollback">Revenir à cette build</button>
+        <button type="button" class="bouton bouton--secondaire" data-action="annuler-update">Annuler</button>
+      </p>
+    </div>`;
+  }
+  if (operation.status === 'running') return '';
+  const actions = [
+    build.update?.allowed
+      ? '<button type="button" class="bouton" data-action="demander-update">Mettre à jour sparkd</button>' : '',
+    build.rollback?.available
+      ? '<button type="button" class="bouton" data-action="demander-rollback">Revenir à la build précédente</button>' : '',
+    '<button type="button" class="bouton bouton--compact" data-action="comparer-build">Comparer à nouveau</button>',
+  ].filter(Boolean).join('\n');
+  return `<p class="formulaire__actions">${actions}</p>
+    ${build.verdict === 'forge_en_retard' && build.update && !build.update.allowed
+      ? `<p class="note">Mise à jour indisponible : ${echapper(build.update.reason)}</p>` : ''}`;
+}
+
+export function renderBuild(build, operation = UPDATE_VIDE) {
   // §14.6 : « pas encore relevé » n'est ni « à jour », ni une panne. Tant que la
   // console n'a pas comparé, elle ne dit rien plutôt qu'une supposition.
   if (!build) {
@@ -323,11 +433,8 @@ export function renderBuild(build) {
            ${build.local.branch ? `sur ${echapper(build.local.branch)}` : ''}</dd></div>`
       : ''}
   </div>
-  <p class="formulaire__actions">
-    <button type="button" class="bouton bouton--compact" data-action="comparer-build">
-      Comparer à nouveau
-    </button>
-  </p>
+  ${renderUpdateProgress(operation)}
+  ${renderUpdateActions(build, operation)}
 </section>`;
 }
 
@@ -391,7 +498,7 @@ export function renderNotify(notify) {
 export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
                                  build = null, syncing = false,
-                                 installer = null } = {}) {
+                                 installer = null, updateUi = UPDATE_VIDE } = {}) {
   // SPK-68 · §50.1 : l'assistant doit rester visible quand /healthz manque ;
   // le cacher derrière l'erreur du plan de contrôle rendrait son cas d'usage
   // inatteignable.
@@ -427,7 +534,7 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
     ${renderCores(cores, sparkNames)}
   </div>
   <div class="detail__secondaire">
-    ${renderBuild(build)}
+    ${renderBuild(build, updateUi)}
     ${renderNotify(host.notify)}
     ${renderAddresses(host.addresses)}
   </div>

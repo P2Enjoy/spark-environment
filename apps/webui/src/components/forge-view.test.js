@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
-  renderBuild, renderNotify,
+  renderBuild, renderNotify, UPDATE_VIDE,
 } from './forge-view.js';
 
 const GIO = 1024 ** 3;
@@ -447,6 +447,65 @@ test('la section vit sur l’écran de la Forge, et le bouton de comparaison aus
     build: { verdict: 'a_jour', titre: 'À jour', detail: 'x' } });
   assert.match(rendu, /id="titre-build"/);
   assert.match(rendu, /data-action="comparer-build"/);
+});
+
+// --- SPK-69 · MISE À JOUR DISTANTE FERMÉE (§40.6) -------------------------
+
+test('seul le verdict sûr expose le bouton de mise à jour', () => {
+  const safe = renderBuild({
+    verdict: 'forge_en_retard', titre: 'En retard', detail: 'x',
+    forge: { commit: 'a'.repeat(40) }, local: { head: 'b'.repeat(40) },
+    update: { allowed: true }, rollback: { available: false },
+  });
+  assert.match(safe, /data-action="demander-update"/);
+  for (const verdict of ['a_jour', 'poste_en_retard', 'etrangere',
+                          'non_estampillee', 'sans_depot']) {
+    assert.doesNotMatch(renderBuild({ verdict, titre: verdict, detail: 'x',
+                                     update: { allowed: false } }),
+                        /data-action="demander-update"/);
+  }
+});
+
+test('la confirmation nomme interruption et deux builds', () => {
+  const html = renderBuild({
+    verdict: 'forge_en_retard', titre: 'En retard', detail: 'x',
+    forge: { commit: 'a'.repeat(40) }, local: { head: 'b'.repeat(40) },
+    update: { allowed: true },
+  }, { ...UPDATE_VIDE, confirmation: 'update' });
+  assert.match(html, /brièvement interrompue/);
+  assert.match(html, /aaaaaaaaaaaa/);
+  assert.match(html, /bbbbbbbbbbbb/);
+  assert.match(html, /confirmation--sensible/);
+  assert.match(html, /data-action="confirmer-update"/);
+});
+
+test('le succès ne verdit qu après les preuves et garde le journal muet visible', () => {
+  const html = renderBuild({ verdict: 'a_jour', titre: 'À jour', detail: 'x' }, {
+    status: 'success', confirmation: null,
+    result: {
+      state: 'success', target: 'b'.repeat(40), journaled: false,
+      stages: { package: 'done', units: 'done', daemon_reload: 'done', restart: 'done' },
+      verification: {
+        healthz: { status: 200, commit: 'b'.repeat(40) },
+        readyz: { status: 200, state: 'ready' }, build: { commit: 'b'.repeat(40) },
+      },
+    },
+  });
+  assert.match(html, /Mise à jour prouvée/);
+  assert.match(html, /inscription au journal a échoué/);
+  assert.equal((html.match(/terminée/g) || []).length, 7);
+});
+
+test('un échec distingue le geste initial du retour arrière', () => {
+  const html = renderBuild({ verdict: 'forge_en_retard', titre: 'En retard', detail: 'x' }, {
+    status: 'failed', confirmation: null,
+    result: { state: 'failed', target: 'b'.repeat(40), message: 'readyz dégradé',
+              stages: { package: 'done' },
+              rollback: { state: 'success', target: 'a'.repeat(40) } },
+  });
+  assert.match(html, /Mise à jour en échec/);
+  assert.match(html, /readyz dégradé/);
+  assert.match(html, /build précédente rétablie et prouvée/);
 });
 
 /* --- L'alerte hors bande (SPK-62, docs/DAT.md §47.6) ---------------------- */

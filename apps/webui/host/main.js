@@ -23,6 +23,9 @@ import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
 import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.js';
+import {
+  ForgeUpdateManager, ForgeUpdateError, updateEligibility,
+} from './forge-update.js';
 import { capture as capturerConsole, compare as comparerConsole,
          describe as decrireConsole } from './console-build.js';
 import { relever as releverDocker, inspecterConteneur, lireJournaux }
@@ -81,6 +84,9 @@ export function createConsoleHost(options = {}) {
   // sparkd n'est pas encore là. Injectable afin de prouver la route sans une
   // machine distante ; l'implémentation réelle n'accepte aucune commande web.
   const diagnosticForge = options.diagnoseForge ?? diagnostiquerForge;
+  // SPK-69 · §40.6 : le gestionnaire porte le verrou et le reçu de retour
+  // arrière. Sa durée est donc celle de l'hôte console, jamais celle d'une page.
+  const misesAJour = options.forgeUpdates ?? new ForgeUpdateManager();
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
   // processus. Il est lu UNE fois : le relire à chaque requête ferait dépendre
@@ -207,6 +213,45 @@ export function createConsoleHost(options = {}) {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Déclare le changement de paquet que sparkd ne peut pas voir pendant son
+   * propre arrêt. Les deux empreintes viennent de l'hôte, jamais du navigateur.
+   */
+  async function declarerMiseAJour(tunnel, action, previousCommit, targetCommit) {
+    if (!tunnel?.localPort) return false;
+    try {
+      const rollback = action === 'forge.sparkd_rollback';
+      const response = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/audit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json',
+                   'x-spark-actor': tunnel.actorHeader },
+        body: JSON.stringify({
+          action, result: 'ok', target_type: 'forge', target_id: tunnel.server.name,
+          message: rollback
+            ? `Retour à la build ${targetCommit.slice(0, 12)} engagé depuis ${previousCommit.slice(0, 12)}.`
+            : `sparkd mis à jour de ${previousCommit.slice(0, 12)} à ${targetCommit.slice(0, 12)}.`,
+          payload: { path: 'ssh', previous_commit: previousCommit,
+                     target_commit: targetCommit },
+        }),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Lit puis confronte la build par le tunnel déjà résolu. */
+  async function lireBuild(tunnel) {
+    const upstream = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/forge`,
+                                   { headers: { 'x-spark-actor': tunnel.actorHeader } });
+    if (!upstream.ok) {
+      throw new ForgeUpdateError(
+        'forge_unreadable', `La Forge a répondu ${upstream.status}.`);
+    }
+    const forge = await upstream.json();
+    return { forge, comparison: await comparerBuild(forge?.build ?? null, racineDepot) };
   }
 
   /**
@@ -418,21 +463,86 @@ export function createConsoleHost(options = {}) {
       } catch (erreur) {
         return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
       }
-      const amont = await fetchFn(`http://127.0.0.1:${tunnel.localPort}/v1/forge`,
-                                  { headers: { 'x-spark-actor': tunnel.actorHeader } });
-      if (!amont.ok) {
-        return { status: 502, body: { error: 'forge_unreadable',
-                                      message: `La Forge a répondu ${amont.status}.` } };
+      let forge;
+      let vu;
+      try {
+        ({ forge, comparison: vu } = await lireBuild(tunnel));
+      } catch (error) {
+        return { status: 502, body: { error: error.code ?? 'forge_unreadable',
+                                      message: error.message } };
       }
-      const forge = await amont.json();
-      // Une Forge qui ne publie AUCUNE build est traitée comme non estampillée,
-      // pas comme une panne : `comparer` sait déjà le dire (§40.2).
-      const vu = await comparerBuild(forge?.build ?? null, racineDepot);
       // Les libellés du §40.3 partent AVEC le verdict : ils sont le contrat, pas
       // une formulation d'écran, et une copie côté navigateur en ferait une
       // seconde vérité qui divergerait.
       return { status: 200,
-               body: { server: nom, ...vu, ...(VERDICTS_BUILD[vu.verdict] ?? {}) } };
+               body: { server: nom, ...vu, ...(VERDICTS_BUILD[vu.verdict] ?? {}),
+                       update: updateEligibility(vu),
+                       rollback: misesAJour.rollbackOffer(nom, forge?.build?.commit) } };
+    },
+
+    /**
+     * SPK-69 · §40.6 : le corps ne désigne qu'un serveur inventorié. Verdict,
+     * commit avant, cible publiée et script sont tous recalculés ici.
+     */
+    'POST /api/forge/update': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const serveur = (await load(inventoryPath)).find((candidate) => candidate.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      let tunnel;
+      try {
+        tunnel = tunnels.require(nom);
+        const { comparison } = await lireBuild(tunnel);
+        const eligible = updateEligibility(comparison);
+        if (!eligible.allowed) {
+          return { status: 409, body: { error: 'unsafe_update', message: eligible.reason } };
+        }
+        const result = await misesAJour.update({
+          server: serveur, localPort: tunnel.localPort,
+          before: eligible.before, target: eligible.target,
+          audit: (action, before, target) =>
+            declarerMiseAJour(tunnel, action, before, target),
+        });
+        // Le gestionnaire a prouvé /healthz directement. Le tunnel doit lui
+        // aussi sortir de l'éventuel état broken observé pendant le restart,
+        // sinon la lecture suivante refuserait une Forge pourtant revenue.
+        await tunnel.probe?.().catch(() => null);
+        return { status: result.state === 'success' ? 200 : 502, body: result };
+      } catch (error) {
+        const known = error instanceof ForgeUpdateError;
+        return { status: known && ['update_busy', 'invalid_commit'].includes(error.code) ? 409 : 502,
+                 body: { error: known ? error.code : 'update_failed',
+                         message: error.message } };
+      }
+    },
+
+    /** Retour borné au reçu gardé par l'hôte ; aucune version n'est acceptée. */
+    'POST /api/forge/rollback': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const serveur = (await load(inventoryPath)).find((candidate) => candidate.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      try {
+        const tunnel = tunnels.require(nom);
+        const { forge } = await lireBuild(tunnel);
+        const result = await misesAJour.rollback({
+          server: serveur, localPort: tunnel.localPort,
+          currentCommit: forge?.build?.commit,
+          audit: (action, before, target) =>
+            declarerMiseAJour(tunnel, action, before, target),
+        });
+        await tunnel.probe?.().catch(() => null);
+        return { status: result.state === 'success' ? 200 : 502, body: result };
+      } catch (error) {
+        const known = error instanceof ForgeUpdateError;
+        return { status: known && ['update_busy', 'rollback_unavailable'].includes(error.code)
+          ? 409 : 502,
+        body: { error: known ? error.code : 'rollback_failed', message: error.message } };
+      }
     },
 
     /**
@@ -1162,7 +1272,7 @@ export function createConsoleHost(options = {}) {
     terminaux.fermerToutes();
     tunnels.closeAll();
   });
-  return { server, tunnels, terminals: terminaux };
+  return { server, tunnels, terminals: terminaux, forgeUpdates: misesAJour };
 }
 
 /**

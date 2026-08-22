@@ -980,13 +980,19 @@ def create_app(config: Config) -> FastAPI:
                            #: entré dans un conteneur » doit se répondre par un
                            #: filtre, pas en lisant les charges.
                            "spark.container_terminal_open",
-                           "spark.container_terminal_close")
+                           "spark.container_terminal_close",
+                           #: SPK-69 · §40.6 : l'hôte console est seul à voir
+                           #: le paquet changer pendant que sparkd s'arrête.
+                           #: Ces deux traces nomment ce pouvoir de Forge sans
+                           #: ouvrir une action arbitraire au navigateur.
+                           "forge.sparkd_update", "forge.sparkd_rollback")
 
     #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
     #: secrets en clair que le §37.5 interdit précisément.
     #: `container` (§37.7.4) : la cible reste le SPARK — c'est lui qui est
     #: protégé, facturé et retrouvé —, et le nom du conteneur entre ici.
-    CLES_DECLARABLES = ("path", "reason", "duration_seconds", "container")
+    CLES_DECLARABLES = ("path", "reason", "duration_seconds", "container",
+                        "previous_commit", "target_commit")
 
     #: SPK-45 · §37.7.4 : un geste REFUSÉ se journalise comme refusé. Ne
     #: journaliser que les succès laisserait invisible une tentative répétée sur

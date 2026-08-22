@@ -1,6 +1,7 @@
 """Installation autonome du paquet ``sparkd`` sur une Forge.
 
-@spec docs/BACKLOG.md#SPK-66 · docs/DAT.md §40.4 ·
+@spec docs/BACKLOG.md#SPK-66, docs/BACKLOG.md#SPK-69 · docs/DAT.md §40.4,
+      §40.6 ·
       docs/PROD_MIGRATIONS.md#OP-04
 
 Le dépôt n'est volontairement pas une entrée de ce module. Une Forge reçoit le
@@ -70,6 +71,17 @@ class Paths:
 Runner = Callable[[list[str]], None]
 Healthcheck = Callable[[], bool]
 Preflight = Callable[[], int]
+Announcer = Callable[[str, str], None]
+
+
+def _announce(phase: str, state: str) -> None:
+    """Publie un jalon fermé que l'hôte console sait interpréter.
+
+    Ce n'est pas une sortie de terminal destinée au navigateur : les deux
+    valeurs viennent exclusivement de ce module et le préfixe permet à
+    l'exécuteur SPK-69 d'écarter tout le reste.
+    """
+    print(f"SPARK_INSTALL\t{phase}\t{state}", flush=True)
 
 
 def _run(command: list[str]) -> None:
@@ -145,7 +157,7 @@ def write_build(paths: Paths, *, now: Callable[[], datetime] =
 def install(paths: Paths | None = None, *, runner: Runner = _run,
             healthcheck: Healthcheck = _healthz, preflight: Preflight = _preflight,
             uid: int | None = None, sleep: Callable[[float], None] = time.sleep,
-            start: bool = True) -> None:
+            start: bool = True, announce: Announcer = _announce) -> None:
     """Pose les unités du paquet et démarre la build nouvellement installée.
 
     ``--no-start`` sert seulement à préparer une Forge dont les dépendances ne
@@ -162,11 +174,15 @@ def install(paths: Paths | None = None, *, runner: Runner = _run,
     paths.prefix.mkdir(parents=True, exist_ok=True)
     paths.state.mkdir(parents=True, exist_ok=True)
     paths.state.chmod(0o750)
+    announce("units", "in_progress")
     write_build(paths)
     for name in UNIT_NAMES:
         _write(paths.systemd / name, _render_unit(name, paths.python), 0o644)
+    announce("units", "done")
 
+    announce("daemon_reload", "in_progress")
     runner(["systemctl", "daemon-reload"])
+    announce("daemon_reload", "done")
     runner(["systemctl", "start", "spark.slice"])
 
     # systemd ne délègue pas ces contrôleurs à une tranche vide. L'absence de la
@@ -182,16 +198,22 @@ def install(paths: Paths | None = None, *, runner: Runner = _run,
         return
 
     runner(["systemctl", "enable", "sparkd"])
+    announce("restart", "in_progress")
     runner(["systemctl", "restart", "sparkd"])
+    announce("restart", "done")
+    announce("healthz", "in_progress")
     for _ in range(20):
         if healthcheck():
             break
         sleep(1)
     else:
         raise InstallationError("sparkd ne répond pas sur 127.0.0.1:9876/healthz")
+    announce("healthz", "done")
 
+    announce("preflight", "in_progress")
     if preflight() != 0:
         raise InstallationError("préflight rouge après installation")
+    announce("preflight", "done")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -2,7 +2,8 @@
  * Point d'entrée de la console dans le navigateur.
  *
  * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21, docs/BACKLOG.md#SPK-64,
- *       docs/BACKLOG.md#SPK-70 · docs/DAT.md §37.4 ·
+ *       docs/BACKLOG.md#SPK-69, docs/BACKLOG.md#SPK-70 · docs/DAT.md §37.4,
+ *       §40.6 ·
  *       docs/DAT.md §26 (les trois panneaux d'administration, §26.2 le contrat
  *       d'interaction, §26.5 l'ordre refus-puis-acceptation) ·
  *       docs/BACKLOG.md#SPK-22 · docs/DAT.md §27 (l'écran des pools) ·
@@ -22,7 +23,7 @@ import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEF
   from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
   from './components/spark-admin.js';
-import { renderForgeView } from './components/forge-view.js';
+import { renderForgeView, UPDATE_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
@@ -60,7 +61,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        // SPK-53 · §40.3 : quel code cette Forge exécute, et
                        // comment il se situe. `null` tant qu'on n'a pas comparé
                        // — « pas encore su » n'est ni « à jour », ni une panne.
-                       build: null,
+                       build: null, updateUi: { ...UPDATE_VIDE },
                        installer: { ...INSTALLER_VIDE } },
                facette: '',
                // SPK-43 · §37.4 : la session de terminal. Les OCTETS n'y sont
@@ -197,6 +198,16 @@ function brancher() {
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
   racine.querySelector('[data-action="comparer-build"]')
     ?.addEventListener('click', () => comparerBuild());
+  racine.querySelector('[data-action="demander-update"]')
+    ?.addEventListener('click', () => demanderMiseAJour('update'));
+  racine.querySelector('[data-action="demander-rollback"]')
+    ?.addEventListener('click', () => demanderMiseAJour('rollback'));
+  racine.querySelector('[data-action="annuler-update"]')
+    ?.addEventListener('click', annulerMiseAJour);
+  racine.querySelector('[data-action="confirmer-update"]')
+    ?.addEventListener('click', () => executerMiseAJour('update'));
+  racine.querySelector('[data-action="confirmer-rollback"]')
+    ?.addEventListener('click', () => executerMiseAJour('rollback'));
   racine.querySelector('[data-action="diagnostiquer-forge"]')
     ?.addEventListener('click', diagnostiquerForge);
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
@@ -2116,10 +2127,12 @@ async function chargerHote() {
  * Ne conclut jamais à la place du serveur : les six verdicts viennent de l'hôte
  * console, qui a le tunnel ET le dépôt.
  */
-async function comparerBuild() {
+async function comparerBuild({ silencieux = false } = {}) {
   const f = etat.forge;
-  f.build = 'en-cours';
-  peindre();
+  if (!silencieux) {
+    f.build = 'en-cours';
+    peindre();
+  }
   try {
     const reponse = await fetch(
       `/api/forge/build?server=${encodeURIComponent(etat.server)}`);
@@ -2136,6 +2149,52 @@ async function comparerBuild() {
                 detail: erreur?.message ?? String(erreur) };
   }
   peindre();
+}
+
+/** Ouvre dans le flux la confirmation sensible du geste choisi. */
+function demanderMiseAJour(kind) {
+  etat.forge.updateUi.kind = kind;
+  etat.forge.updateUi.confirmation = kind;
+  etat.forge.updateUi.result = null;
+  etat.forge.updateUi.status = 'idle';
+  peindre();
+  racine.querySelector(`[data-action="confirmer-${kind}"]`)?.focus();
+}
+
+function annulerMiseAJour() {
+  const kind = etat.forge.updateUi.confirmation;
+  etat.forge.updateUi.confirmation = null;
+  peindre();
+  racine.querySelector(`[data-action="demander-${kind}"]`)?.focus();
+}
+
+/**
+ * Le corps ne porte que le serveur. Empreintes, URL et script restent chez
+ * l'hôte console (§40.6), y compris pour le retour arrière.
+ */
+async function executerMiseAJour(kind) {
+  const ui = etat.forge.updateUi;
+  ui.kind = kind;
+  ui.confirmation = null;
+  ui.status = 'running';
+  ui.result = null;
+  peindre();
+  try {
+    const response = await fetch(`/api/forge/${kind}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server: etat.server }),
+    });
+    const body = await response.json();
+    ui.result = response.ok ? body : { state: 'failed', ...body };
+    ui.status = response.ok && body.state === 'success' ? 'success' : 'failed';
+  } catch (error) {
+    ui.status = 'failed';
+    ui.result = { state: 'failed', error: 'network_error',
+                  message: error?.message ?? String(error) };
+  }
+  // La comparaison relit la build sans effacer le compte rendu que l'on vient
+  // d'obtenir. C'est elle qui rend aussi l'éventuel reçu de retour arrière.
+  await comparerBuild({ silencieux: true });
 }
 
 async function relever() {
@@ -2756,6 +2815,7 @@ async function ouvrirTunnel(nom) {
 async function changerDeServeur(nom) {
   if (!nom || nom === etat.server) return;
   etat.server = nom;
+  etat.forge.updateUi = { ...UPDATE_VIDE };
   etat.tunnel = { name: nom, state: 'connecting' };
   peindreContexte();
   await fetch('/api/servers/current', {

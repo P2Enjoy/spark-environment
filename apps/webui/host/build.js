@@ -1,7 +1,8 @@
 /**
  * Comparer la build d'une Forge à l'état du dépôt local.
  *
- * @spec docs/BACKLOG.md#SPK-53 · docs/DAT.md §40 (la build installée se nomme),
+ * @spec docs/BACKLOG.md#SPK-53, docs/BACKLOG.md#SPK-69 ·
+ *       docs/DAT.md §40 (la build installée se nomme),
  *       §40.2 (« inconnue » est une réponse, pas un défaut),
  *       §40.3 (ce que la console en fait, et ses cinq situations) ·
  *       docs/DESIGN_SYSTEM.md §14.6 (« inconnue » n'est pas zéro)
@@ -98,7 +99,14 @@ function git(args, cwd) {
 export async function etatDepot(racine) {
   const tete = await git(['rev-parse', 'HEAD'], racine);
   if (!tete) return null;
-  return { head: tete, branch: await git(['rev-parse', '--abbrev-ref', 'HEAD'], racine) };
+  return {
+    head: tete,
+    branch: await git(['rev-parse', '--abbrev-ref', 'HEAD'], racine),
+    // SPK-69 · §40.6 : la Forge télécharge depuis GitHub. Une tête seulement
+    // locale ne peut donc jamais être une cible, même si son ascendance est
+    // sûre. La comparaison reste une lecture ; la route de geste tranche.
+    published: await git(['rev-parse', 'origin/main'], racine),
+  };
 }
 
 /**
