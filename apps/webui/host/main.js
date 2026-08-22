@@ -460,7 +460,10 @@ export function createConsoleHost(options = {}) {
       const tunnel = await tunnels.open(serveur);
       // On rend l'état RÉEL, y compris « broken » : annoncer un succès parce
       // que la commande a été lancée serait un succès simulé.
-      return { status: tunnel.state === READY ? 200 : 502, body: tunnel.describe() };
+      // SPK-68 : un SSH authentifié est toutefois une ouverture RÉUSSIE même
+      // lorsque seul sparkd manque. L'objet garde les deux vérités distinctes.
+      return { status: tunnel.state === READY || tunnel.transportState === READY ? 200 : 502,
+               body: tunnel.describe() };
     },
 
     /**

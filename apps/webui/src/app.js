@@ -2129,6 +2129,15 @@ async function chargerHote() {
   // Le journal ne dépend pas de `/healthz` : il reste donc visible sur une
   // machine neuve ou après une coupure du plan de contrôle.
   await chargerEtatInstallation({ restaurer: true });
+  // SPK-68 · §50.1 : SSH peut être établi alors que sparkd ne répond pas. Dans
+  // ce cas, l'assistant est précisément le seul parcours utile ; appeler quand
+  // même les routes ordinaires produirait un 502 trompeur dans le navigateur.
+  if (etat.tunnel?.state !== 'ready') {
+    etat.forge.error = new Error(etat.tunnel?.lastError ?? 'Le plan de contrôle ne répond pas.');
+    etat.forge.status = 'error';
+    peindre();
+    return;
+  }
   try {
     etat.forge.host = await api('/v1/forge');
     const [cores, sparks] = await Promise.all([

@@ -87,6 +87,27 @@ test('ouvrir un tunnel sain rend 200 et son etat', async () => {
   server.close();
 });
 
+test('SSH etabli sans sparkd rend 200 avec les deux etats distincts', async () => {
+  const tunnel = {
+    state: 'broken', transportState: 'ready',
+    describe: () => ({ name: 'prod', state: 'broken', transportState: 'ready',
+                       lastError: 'fetch failed' }),
+  };
+  const tunnels = {
+    open: async () => tunnel, list: () => [], closeAll: () => {},
+  };
+  const { base, server } = await hote({ tunnels });
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  const r = await fetch(`${base}/api/tunnels`, {
+    method: 'POST', body: JSON.stringify({ name: 'prod' }),
+  });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), {
+    name: 'prod', state: 'broken', transportState: 'ready', lastError: 'fetch failed',
+  });
+  server.close();
+});
+
 test('un tunnel qui ne repond pas rend 502, PAS 200', async () => {
   // Annoncer un succes parce que la commande a ete lancee serait un succes
   // simule (CLAUDE.md §18).
