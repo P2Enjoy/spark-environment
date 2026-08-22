@@ -4,6 +4,22 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-22 — SPK-68 exécute et reprend son plan sur les Forges réelles
+
+Le paquet porte l'exécuteur fermé version 1 : confirmations exactes, phases JSON,
+réemploi du pool, dépendances, ARC, bridge configurable, durcissement, unités et
+recette finale. Sur `51.158.54.202`, le commit `6570b954b` sert 13/13 contrôles,
+`healthz=ok`, `readyz=ready` et une topologie synchronisée. Un second passage
+identique a rendu `changed:false` sur les quatre phases mutantes et conservé la
+date de build. Aucun driver local ou factice n'a servi de preuve.
+
+Sur `212.47.246.142`, le paquet inactif a été mis à niveau puis une confirmation
+fichier volontairement fausse a été refusée dès `access`; le service est resté
+inactif, sans pool ni fichier créé. SPK-68 reste `[~]` : reprendre par
+l'orchestration hôte, la persistance/verrou/reprise des événements et l'écran de
+progression. La création fichier attend une taille explicitement décidée ; la
+preuve miroir attend toujours deux supports réellement libres.
+
 ## 2026-08-22 — SPK-68 compose un plan depuis les deux Forges réelles
 
 L'assistant recueille les valeurs de la Forge et du stockage, refait son relevé

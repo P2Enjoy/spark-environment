@@ -3957,12 +3957,27 @@ paquet a aussi été corrigé après que la vue réelle eut montré une contradi
 le venv `/opt/sparkd` est désormais reconnu et l'unité active ne paraît plus
 « non installée ».
 
-**Reste avant `[x]`** : l'exécuteur versionné qui applique et persiste les six
-phases, leurs confirmations séparées et leur reprise ; puis les deux installations
-réelles de la DoD. Le serveur neuf fourni n'a qu'un disque racine de 10 Go,
-5,2 Gio libres et aucune paire native : aucune taille d'exploitation n'en est
-déduite et aucune écriture n'y a été faite. Une taille de pool fichier doit être
-choisie explicitement pour cette machine, et une seconde machine avec deux
+**Troisième tranche livrée le 2026-08-22, exclusivement contre les Forges
+réelles.** Le paquet porte maintenant `sparkd-forge-install`, exécuteur fermé du
+plan version 1. Il revalide Ubuntu, architecture, mémoire, stockage et
+confirmations avant toute écriture ; installe ou conserve les dépendances, le
+pool ZFS et son ARC, le bridge/DHCP/durcissement, la configuration et les unités,
+puis exige préflight, `/healthz`, `/readyz` et la synchronisation de topologie.
+Le bridge choisi est désormais lu par le runtime et par la liste unique de
+préflight. Sur `51.158.54.202`, le premier passage a servi `6570b954b`, 13/13
+contrôles et `readyz=ready`; le second passage identique a rendu
+`changed:false` pour dépendances, stockage, socle et contrôle sans changer la
+date de build. Sur `212.47.246.142`, une confirmation volontairement fausse du
+plan fichier a été refusée dans la phase `access`; après le refus, le service
+restait inactif, le fichier absent et la liste des pools vide.
+
+**Reste avant `[x]`** : l'hôte console doit lancer ce contrat, persister et
+reprendre ses événements, et refuser deux exécutions simultanées ; l'écran doit
+porter les confirmations séparées et la progression réelle. Il faut ensuite les
+deux créations réelles de la DoD et leurs captures/manuels. Le serveur neuf
+fourni n'a qu'un disque racine de 10 Go, 5,2 Gio libres et aucune paire native :
+aucune taille d'exploitation n'en est déduite. Une taille de pool fichier doit
+être choisie explicitement pour cette machine, et une seconde machine avec deux
 supports libres reste nécessaire pour le parcours miroir.
 
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose

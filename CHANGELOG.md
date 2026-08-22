@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **Exécuteur versionné d'installation de Forge** (troisième tranche de SPK-68,
+  `docs/DAT.md` §50.4-§50.6) : le paquet consomme exclusivement le plan fermé de
+  la console, répète le diagnostic et les confirmations sur la machine, puis
+  applique chaque écart jusqu'à la recette `préflight`, `healthz`, `readyz` et
+  synchronisation de topologie. Le pool existant n'est jamais recréé et un
+  second passage conforme ne réécrit ni stockage, ni réseau, ni unités.
 - **Mise à jour distante et retour arrière mesuré de `sparkd`** (SPK-69,
   `docs/DAT.md` §40.6) : pour une Forge dont le commit est un ancêtre sûr de
   `origin/main`, la console installe le paquet épinglé, repose les unités,
