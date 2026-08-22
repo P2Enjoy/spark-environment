@@ -275,8 +275,8 @@ export function renderForgeInstaller(installer = INSTALLER_VIDE) {
          ${echapper(installer.error ?? 'Cause inconnue.')}</p><p>La Forge n’a reçu aucune
          commande d’installation.</p></div>`
       : ['ready', 'planning', 'planned'].includes(installer.status) && installer.result
-        ? resultView(installer.result) + (executionRunning || installer.execution?.status === 'done'
-          ? '' : planForm(installer)) + planView(installer.plan, installer)
+        ? resultView(installer.result) + (executionRunning ? '' : planForm(installer))
+          + planView(installer.plan, installer)
         : `<p>Cette destination peut accepter SSH sans encore porter ` + '`sparkd`' + `.
            Le diagnostic distingue ces deux faits avant toute décision de stockage.</p>`;
   return `

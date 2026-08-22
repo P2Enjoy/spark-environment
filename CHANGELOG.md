@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **Orchestration hôte de l'installation distante** (quatrième tranche de
+  SPK-68) : la console reconstruit le plan sur un dernier diagnostic, exige la
+  confirmation du plan et celle du stockage, lance uniquement l'exécuteur
+  versionné, refuse deux installations concurrentes et persiste son journal hors
+  inventaire. La vue rend les phases et mesures distantes, restaure le compte
+  rendu après redémarrage et relit la Forge avant toute reprise.
 - **Exécuteur versionné d'installation de Forge** (troisième tranche de SPK-68,
   `docs/DAT.md` §50.4-§50.6) : le paquet consomme exclusivement le plan fermé de
   la console, répète le diagnostic et les confirmations sur la machine, puis

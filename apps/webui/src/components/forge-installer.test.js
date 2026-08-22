@@ -71,3 +71,12 @@ test('le journal rend les statuts et les mesures sans sortie terminal brute', ()
   assert.match(html, /terminée/);
   assert.match(html, /interrompue/);
 });
+
+test('un journal terminé n’empêche pas de recomposer un plan idempotent', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: {
+    report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },
+    storage: { disks: [], nativeMirror: { eligible: false, disks: [] }, filePool: {} },
+  }, execution: { status: 'done', plan: PLAN, events: [] } });
+  assert.match(html, /id="formulaire-plan-forge"/);
+  assert.match(html, /Forge prête — recette finale mesurée/);
+});

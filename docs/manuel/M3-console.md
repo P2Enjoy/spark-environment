@@ -58,6 +58,12 @@ montre les supports exclus et ne sélectionne rien automatiquement ; aucun pool,
 service ou paquet n'est modifié par ce diagnostic. Consultez [M2](M2-installer.md)
 pour interpréter le relevé et les prérequis restants.
 
+Après composition, le plan demande une confirmation générale puis, pour un
+fichier ou des disques, une phrase exacte séparée. La progression vient de la
+Forge et reste lisible après fermeture de la page ou redémarrage de la console.
+Une installation interrompue affiche **Reprendre le diagnostic** : la console
+relit d'abord la machine et ne rejoue jamais aveuglément l'ancien plan.
+
 ### Basculer, et retirer
 
 Le serveur que vous regardez est signalé **courant** dans la liste, et son nom

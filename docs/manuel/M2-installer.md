@@ -1,11 +1,8 @@
 # M2 · Installer le serveur
 
-Ce chapitre décrit l'installation de `sparkd` sur un serveur qui porte déjà
-Incus, un pool de stockage, un bridge privé et Caddy.
-
-> La console sait maintenant **diagnostiquer** une Forge distante neuve, sans
-> rien y écrire. L'exécution automatisée du plan de prérequis reste à livrer :
-> elle ne doit jamais choisir un disque ou une taille à votre place.
+Ce chapitre décrit le diagnostic, le plan et l'installation de `sparkd` sur une
+destination SSH. La console ne choisit jamais un disque ni une taille à votre
+place.
 
 ## Diagnostiquer une Forge neuve depuis la console
 
@@ -20,8 +17,31 @@ disponibilité que prouvera plus tard `/readyz`. Ainsi, **SSH établi** avec
 Le panneau relève le système, les services et les périphériques. Il affiche un
 disque exclu avec son motif — racine, montage, partition ou signature — et ne le
 sélectionne jamais. S'il n'y a pas deux disques sûrs, il n'invente pas un miroir
-ni la taille d'un pool fichier. L'écran le dit, puis s'arrête : aucune commande
+ni la taille d'un pool fichier. Le diagnostic seul s'arrête là : aucune commande
 d'installation, aucun redémarrage et aucune modification ne sont partis.
+
+## Composer et confirmer le plan
+
+Le formulaire reprend les valeurs du contrat d'exploitation : pool, bridge,
+réserves CPU et mémoire, plafond ARC. En l'absence de deux supports sûrs, vous
+devez aussi saisir la taille du pool fichier et l'espace qui restera libre sur
+la racine. **Vérifier et composer le plan** relance d'abord le diagnostic : le
+plan affiché ne repose donc pas sur un relevé resté ouvert dans un onglet.
+
+Relisez ensuite chaque phase et cochez la confirmation du plan. Une création de
+pool fichier demande en plus de recopier exactement son chemin et sa taille ; un
+miroir natif demande les deux périphériques qui seront effacés. Le bouton reste
+désactivé tant que les deux engagements ne concordent pas.
+
+L'exécution affiche les événements réellement produits sur la Forge : `à faire`,
+`en cours`, `terminée`, `avertissement`, `échec` ou `interrompue`. Le résultat
+utile — version Incus, pool, ARC, bridge, version de `sparkd`, préflight,
+`/healthz` et `/readyz` — reste sous sa phase, sans sortie de terminal brute.
+Deux installations simultanées sur la même Forge sont refusées.
+
+Le journal vit sur le poste, séparément de l'inventaire. Fermer puis rouvrir la
+vue, ou redémarrer la console, le conserve. Avant toute reprise, **Reprendre le
+diagnostic** relit la machine ; il ne continue jamais sur la seule foi du journal.
 
 ## Vérifier une Forge déjà équipée
 
@@ -142,13 +162,15 @@ Deux vérifications restent donc manuelles :
 2. **un Spark de test** qui se crée, démarre, obtient son adresse privée, et dont
    le quota disque refuse effectivement l'écriture au-delà de la limite.
 
-## Ce qui n'est pas encore outillé
+## Ce qui demande encore une décision extérieure
 
-- **L'exécution du plan de prérequis** — Incus, le pool, le bridge, Caddy — se
-  fait encore à la main. La console en fait le relevé sûr, mais n'enchaîne pas
-  encore les écritures ni leurs confirmations.
-- **La disposition du stockage attend un arbitrage.** Le pool de validation est
-  un fichier de 200 Gio, ce qui fonctionne mais ajoute une couche de traduction.
-  Un pool sur périphériques dédiés suppose de repartitionner les disques, ce qui
-  est destructif : la décision appartient au responsable (unité SPK-28 du
-  [backlog](../BACKLOG.md)).
+- **Une taille de pool fichier n'a aucun défaut caché.** Tant que vous ne l'avez
+  pas choisie, l'assistant ne crée rien.
+- **Le miroir natif exige deux supports réellement libres.** Si la machine n'en
+  possède pas, aucun parcours d'écran ne peut en fabriquer la preuve.
+- **Une Ubuntu totalement nue doit d'abord recevoir l'exécuteur versionné dans
+  `/opt/sparkd`.** L'automatisation de cet amorçage initial reste ouverte ; une
+  absence produit un échec nommé, jamais un shell général ou une installation
+  improvisée.
+- Le DNS public et les choix de messagerie restent des opérations humaines :
+  `/readyz` ne prétend pas les avoir effectuées.

@@ -3971,14 +3971,28 @@ date de build. Sur `212.47.246.142`, une confirmation volontairement fausse du
 plan fichier a été refusée dans la phase `access`; après le refus, le service
 restait inactif, le fichier absent et la liste des pools vide.
 
-**Reste avant `[x]`** : l'hôte console doit lancer ce contrat, persister et
-reprendre ses événements, et refuser deux exécutions simultanées ; l'écran doit
-porter les confirmations séparées et la progression réelle. Il faut ensuite les
-deux créations réelles de la DoD et leurs captures/manuels. Le serveur neuf
-fourni n'a qu'un disque racine de 10 Go, 5,2 Gio libres et aucune paire native :
-aucune taille d'exploitation n'en est déduite. Une taille de pool fichier doit
-être choisie explicitement pour cette machine, et une seconde machine avec deux
-supports libres reste nécessaire pour le parcours miroir.
+**Quatrième tranche livrée le 2026-08-22, exclusivement contre les Forges
+réelles.** L'hôte reconstruit le plan sur un dernier diagnostic, exige la
+confirmation générale puis celle du stockage et ne lance que l'exécuteur fermé.
+Son journal borné vit dans un fichier privé distinct de l'inventaire ; le verrou
+est posé avant la première attente et un second lancement sur la même Forge rend
+`409 install_in_progress`. Après redémarrage du processus console, la vue a
+retrouvé les douze événements puis lancé exactement un nouveau diagnostic SSH.
+Sur `spark-experiment`, les six phases ont toutes rendu `changed:false`, Incus
+7.3, pool `spark`, ARC 16 Gio et bridge `sparkbr0`; la recette finale a mesuré
+13 contrôles sans blocage, `/healthz=ok`, `/readyz=ready` et la topologie. Les
+vues desktop et 390 px ont été observées sans débordement de page. La build a
+ensuite été alignée sur `0b8c60acd` et comparée `a_jour` au commit publié.
+
+**Reste avant `[x]`** : le serveur neuf fourni n'a qu'un disque racine de 10 Go,
+5,2 Gio libres et aucune paire native. Le plan 3 Gio + 1 Gio a été observé mais
+n'a pas été engagé, faute d'un choix de capacité explicitement donné par le
+responsable ; aucune taille d'exploitation n'est déduite. Une seconde machine
+avec deux supports libres reste nécessaire pour le parcours miroir. Enfin, une
+Ubuntu totalement nue où `/opt/sparkd` est absent demande encore un bootstrap
+fermé du paquet avant que l'exécuteur puisse être lancé. Les deux créations
+réelles de la DoD, la panne médiane/reprise et leurs illustrations restent donc
+à produire ; l'unité demeure honnêtement `[~]`.
 
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
   seulement le paquet Python. C'est un **assistant de bout en bout** qui part

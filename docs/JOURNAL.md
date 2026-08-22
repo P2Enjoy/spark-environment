@@ -7995,3 +7995,34 @@ utilisé. Aucun service ni règle réseau n'a été modifié par ce relevé.
 SPK-55 reste `[~]` : automatiser la création du bridge et de ses règles dans
 l'installateur exige toujours la décision explicite de confier ce réseau au
 produit; le contrôle et la recette appliquée sont déjà vérifiés.
+
+---
+
+## 2026-08-22 · SPK-68 — l'hôte porte enfin le journal et le verrou réels
+
+La console lance désormais uniquement l'exécuteur versionné avec le plan fermé
+reconstruit après un dernier diagnostic. Le plan général et le stockage se
+confirment séparément. Les événements JSON sont filtrés, bornés puis écrits dans
+un fichier privé distinct de `servers.json`; un `running` orphelin devient
+`interrupted`, et toute reprise repasse par le diagnostic. Le verrou par Forge
+est posé avant la première attente.
+
+Toute la preuve fonctionnelle a ciblé les Forges SSH réelles. Depuis l'accueil,
+le parcours de `spark-experiment` a conservé le pool `spark` puis reçu douze
+événements : les quatre phases mutantes ont rendu `changed:false`, Incus 7.3,
+ARC 16 Gio et bridge `sparkbr0`; la dernière a rendu préflight 13/13,
+`/healthz=ok`, `/readyz=ready` et la topologie. Une deuxième requête simultanée a
+été refusée en `409`. Après arrêt puis redémarrage de l'hôte console avec le même
+état, le journal est revenu et la page a émis exactement un nouveau diagnostic
+SSH. Les captures desktop et 390 px ont été observées ; la chaîne Caddy qui
+débordait sur mobile a été corrigée, et la largeur finale reste 390 px.
+
+La Forge existante a ensuite été mise à jour vers le paquet
+`0.post1.dev654+g0b8c60acd`; le commit complet servi et `origin/main` sont
+identiques et la vue rend `À jour`. Sur la nouvelle machine, le diagnostic rend
+toujours 5,2 Gio libres et aucune paire native. Le plan explicite observé est de
+3 Gio avec 1 Gio de réserve, mais sa création n'a pas été engagée : choisir cette
+capacité à la place du responsable serait précisément l'inférence interdite par
+le contrat. SPK-68 reste `[~]` en attendant ce choix, une Forge à deux supports
+libres pour le miroir, et le bootstrap fermé d'une Ubuntu où l'exécuteur est
+entièrement absent.
