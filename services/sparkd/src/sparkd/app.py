@@ -620,7 +620,7 @@ def create_app(config: Config) -> FastAPI:
             # L'écart reste visible par `applied_at` (§39.5).
             pass
 
-    config_network = "sparkbr0"
+    config_network = config.network_bridge
     config_pool = config.storage_pool
 
     def _apply_keys(connection, spark: dict) -> None:

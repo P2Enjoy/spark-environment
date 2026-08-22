@@ -68,7 +68,7 @@ export function createInstallPlan(diagnostic, input = {}) {
     input.memoryReserveGib ?? INSTALL_DEFAULTS.memoryReserveGib,
     'La réserve mémoire', { allowZero: true });
   const arcMaxGib = positiveNumber(input.arcMaxGib ?? INSTALL_DEFAULTS.arcMaxGib,
-    'Le plafond ARC', { allowZero: true });
+    'Le plafond ARC');
   const memoryBytes = report.system?.memoryBytes;
   if (Number.isFinite(memoryBytes) && (memoryReserveGib + arcMaxGib) * GIB >= memoryBytes) {
     throw new ForgeInstallError('memory_too_small',

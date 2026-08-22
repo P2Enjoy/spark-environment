@@ -34,6 +34,7 @@ dev = [
 [project.scripts]
 sparkd = "sparkd.__main__:main"
 sparkd-install = "sparkd.install:main"
+sparkd-forge-install = "sparkd.forge_install:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

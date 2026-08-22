@@ -29,6 +29,7 @@ DEFAULT_INCUS_SOCKET = "/var/lib/incus/unix.socket"
 DEFAULT_CADDY_ADMIN = "http://127.0.0.1:2019"
 DEFAULT_DRIVER = "incus"
 DEFAULT_STORAGE_POOL = "spark"
+DEFAULT_NETWORK_BRIDGE = "sparkbr0"
 DEFAULT_MEMORY_RESERVE = "2GiB"
 #: Part de processeur que l'hote garde pour lui. Elle rend DEFINIE la loi de
 #: poids du §32.2 : sans elle, une machine entierement vendue donnerait un poids
@@ -97,6 +98,7 @@ class Config:
     log_level: str
     storage_pool: str
     storage_dataset: str
+    network_bridge: str
     #: SPK-40 · §36.10.5 : le fichier `allowed_signers` d'OpenSSH. Il ne porte que
     #: des clés PUBLIQUES — le §11 garde les privées sur le poste. Absent ou
     #: vide, la vérification se DÉSACTIVE au lieu de tomber en panne.
@@ -242,6 +244,10 @@ def load(env: dict[str, str] | None = None) -> Config:
         # desynchroniser en silence ferait verifier la compression d'un jeu de
         # donnees qui n'est pas celui du pool.
         storage_dataset=source.get("SPARKD_STORAGE_DATASET", "") or pool,
+        network_bridge=(
+            source.get("SPARKD_NETWORK_BRIDGE", DEFAULT_NETWORK_BRIDGE).strip()
+            or DEFAULT_NETWORK_BRIDGE
+        ),
         allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", ""),
         secret_key_file=_cle_par_defaut(source),
         notify_url=source.get("SPARKD_NOTIFY_URL", "").strip(),

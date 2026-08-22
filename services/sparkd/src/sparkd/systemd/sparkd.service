@@ -25,6 +25,7 @@ Environment=SPARKD_BIND=127.0.0.1:9876
 Environment=SPARKD_DB=/var/lib/sparkd/spark.db
 Environment=SPARKD_DRIVER=incus
 Environment=SPARKD_STORAGE_POOL=spark
+Environment=SPARKD_NETWORK_BRIDGE=sparkbr0
 EnvironmentFile=-/etc/sparkd/sparkd.env
 
 # Le plan de contrôle parle à Incus par sa socket, qui appartient à root.

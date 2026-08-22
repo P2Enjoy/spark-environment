@@ -52,6 +52,7 @@ class Reglages(NamedTuple):
 
     storage_pool: str
     storage_dataset: str
+    network_bridge: str
     pool_file_size: str
 
 
@@ -68,6 +69,7 @@ def reglages(source: dict[str, str] | None = None) -> Reglages:
     return Reglages(
         storage_pool=config.storage_pool,
         storage_dataset=config.storage_dataset,
+        network_bridge=config.network_bridge,
         pool_file_size=brut.get("SPARK_POOL_FILE_SIZE") or DEFAUT_TAILLE_FICHIER,
     )
 
@@ -278,7 +280,8 @@ def arc_plafonne(hote: Hote) -> Verdict:
     return Verdict("MEM-ARC", "Plafond de l'ARC ZFS", OK, f"{valeur / GIO:.1f} Gio")
 
 
-def bridge_prive(hote: Hote, nom: str = "sparkbr0") -> Verdict:
+def bridge_prive(hote: Hote, nom: str | None = None) -> Verdict:
+    nom = nom or reglages().network_bridge
     adresse = hote.executer(["incus", "network", "get", nom, "ipv4.address"])
     if not adresse:
         return Verdict("NET-BRIDGE", f"Bridge privé « {nom} »", ECHEC, "absent",
@@ -287,8 +290,9 @@ def bridge_prive(hote: Hote, nom: str = "sparkbr0") -> Verdict:
     return Verdict("NET-BRIDGE", f"Bridge privé « {nom} »", OK, adresse)
 
 
-def plage_dhcp_disjointe(hote: Hote, nom: str = "sparkbr0") -> Verdict:
+def plage_dhcp_disjointe(hote: Hote, nom: str | None = None) -> Verdict:
     """docs/PROD_MIGRATIONS.md OP-02 — sinon dnsmasq distribue une adresse déjà promise."""
+    nom = nom or reglages().network_bridge
     brut = hote.executer(["incus", "network", "get", nom, "ipv4.dhcp.ranges"])
     if not brut:
         return Verdict("NET-DHCP", "Plage DHCP disjointe du registre", ECHEC,
@@ -374,7 +378,7 @@ def surface_reseau(hote: Hote) -> Verdict:
                    f"exposés : {', '.join(sorted(exposes)) or 'aucun'}")
 
 
-def remontee_vers_la_forge(hote: Hote, nom: str = "sparkbr0") -> Verdict:
+def remontee_vers_la_forge(hote: Hote, nom: str | None = None) -> Verdict:
     """Un Spark ne doit pas atteindre le `sshd` de sa Forge (§48.1).
 
     @spec docs/BACKLOG.md#SPK-55 · docs/DAT.md §48.1 (le sens du produit est à
@@ -392,6 +396,7 @@ def remontee_vers_la_forge(hote: Hote, nom: str = "sparkbr0") -> Verdict:
     tout rendrait chaque Spark muet : une panne, pas une protection. Le remède
     proposé ouvre donc explicitement le 53 avant de fermer le reste.
     """
+    nom = nom or reglages().network_bridge
     politique = hote.executer(
         ["incus", "network", "get", nom, "ipv4.firewall"])
     regles = hote.executer(
