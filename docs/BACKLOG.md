@@ -3981,8 +3981,10 @@ retrouvé les douze événements puis lancé exactement un nouveau diagnostic SS
 Sur `spark-experiment`, les six phases ont toutes rendu `changed:false`, Incus
 7.3, pool `spark`, ARC 16 Gio et bridge `sparkbr0`; la recette finale a mesuré
 13 contrôles sans blocage, `/healthz=ok`, `/readyz=ready` et la topologie. Les
-vues desktop et 390 px ont été observées sans débordement de page. La build a
-ensuite été alignée sur `0b8c60acd` et comparée `a_jour` au commit publié.
+vues desktop et 390 px ont été observées sans débordement de page. Après la
+correction qui rend le formulaire de nouveau disponible sous un journal terminé,
+un second passage complet a encore rendu tous les écarts à `false`, cette fois
+avec le paquet `b712c4c37`; la build a été comparée `a_jour` au commit publié.
 
 **Reste avant `[x]`** : le serveur neuf fourni n'a qu'un disque racine de 10 Go,
 5,2 Gio libres et aucune paire native. Le plan 3 Gio + 1 Gio a été observé mais

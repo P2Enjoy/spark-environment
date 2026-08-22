@@ -8017,9 +8017,12 @@ ARC 16 Gio et bridge `sparkbr0`; la dernière a rendu préflight 13/13,
 SSH. Les captures desktop et 390 px ont été observées ; la chaîne Caddy qui
 débordait sur mobile a été corrigée, et la largeur finale reste 390 px.
 
-La Forge existante a ensuite été mise à jour vers le paquet
-`0.post1.dev654+g0b8c60acd`; le commit complet servi et `origin/main` sont
-identiques et la vue rend `À jour`. Sur la nouvelle machine, le diagnostic rend
+La Forge existante a ensuite été mise à jour. Le premier essai de second passage
+a trouvé que le journal `done` masquait encore le formulaire : seul `running`
+doit l'interdire. Après correction, l'écran a recomposé et exécuté le plan ; le
+paquet `0.post1.dev655+gb712c4c37` a rendu toutes les phases mutantes à
+`changed:false`, et le commit complet servi concordait avec `origin/main`. Sur la
+nouvelle machine, le diagnostic rend
 toujours 5,2 Gio libres et aucune paire native. Le plan explicite observé est de
 3 Gio avec 1 Gio de réserve, mais sa création n'a pas été engagée : choisir cette
 capacité à la place du responsable serait précisément l'inférence interdite par
