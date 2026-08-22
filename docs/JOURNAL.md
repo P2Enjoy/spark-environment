@@ -8029,3 +8029,40 @@ capacité à la place du responsable serait précisément l'inférence interdite
 le contrat. SPK-68 reste `[~]` en attendant ce choix, une Forge à deux supports
 libres pour le miroir, et le bootstrap fermé d'une Ubuntu où l'exécuteur est
 entièrement absent.
+
+---
+
+## 2026-08-22 · SPK-68 — une Forge vierge reçoit son exécuteur fermé
+
+L'hôte console amorce désormais, avant le plan, le paquet épinglé sur le commit
+complet qu'il a chargé et qu'il relit comme `main` publié. Le script est fermé :
+seule cette empreinte validée varie, la source est fixée dans le code, et le
+navigateur ne fournit ni commande, ni URL, ni branche. Le shell d'amorçage et
+l'enveloppe JSON utilisent deux processus SSH distincts ; aucun checkout n'est
+laissé sur la Forge.
+
+Toute la preuve fonctionnelle a ciblé les deux Forges SSH réelles. Sur
+`212.47.246.142`, l'amorçage a fait passer le paquet de `6570b954b` à
+`a9705e5ea`, puis le second passage a rendu `package unchanged`. Le service est
+resté inactif et aucun pool n'a été créé : la taille du pool fichier demeure une
+décision extérieure. Sur `51.158.54.202`, le parcours complet a amorcé cette
+build, puis conservé Incus 7.3, le pool `spark`, l'ARC 16 Gio et `sparkbr0` ; la
+recette a rendu 13/13 contrôles, `healthz=ok`, `readyz=ready` et une topologie.
+Le second parcours complet a rendu `changed:false` pour l'amorçage, les
+dépendances, le stockage, le socle et le plan de contrôle.
+
+Les captures 1440 et 390 px ont ensuite découvert trois contradictions du cas
+sans `sparkd` : amorçage écrasé par l'événement d'accès suivant, deux réponses
+`502` attendues mais bruyantes, puis l'en-tête « Tunnel rompu » face à « SSH
+établi ». La progression garde maintenant une ligne **Paquet d'installation** ;
+l'en-tête rend **SSH établi · sparkd sans réponse** sans proposer de reconnexion,
+et la carte des ressources désigne l'assistant sans refus rouge ni
+`fetch failed`. Les captures finales des deux Forges n'ont ni débordement de
+page, ni réponse HTTP en erreur, ni erreur console.
+
+SPK-68 reste `[~]` : le serveur neuf n'a que 5,2 Gio libres et aucune paire de
+disques ; engager 3 Gio + 1 Gio sans choix du responsable serait une décision de
+capacité inventée. Le parcours miroir exige encore une machine à deux supports
+réellement libres. Les deux créations, la panne médiane/reprise et leurs
+illustrations restent dues. La prochaine session reprend donc SPK-68 à ce point,
+toujours sans driver local ni factice.

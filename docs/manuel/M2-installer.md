@@ -168,9 +168,9 @@ Deux vérifications restent donc manuelles :
   pas choisie, l'assistant ne crée rien.
 - **Le miroir natif exige deux supports réellement libres.** Si la machine n'en
   possède pas, aucun parcours d'écran ne peut en fabriquer la preuve.
-- **Une Ubuntu totalement nue doit d'abord recevoir l'exécuteur versionné dans
-  `/opt/sparkd`.** L'automatisation de cet amorçage initial reste ouverte ; une
-  absence produit un échec nommé, jamais un shell général ou une installation
-  improvisée.
+- **Une Ubuntu totalement nue est amorcée par la console après confirmation du
+  plan.** Elle pose seulement l'environnement Python et le paquet `sparkd`
+  épinglé sur la build `main` publiée que la console exécute. Aucun checkout
+  n'est laissé sur la Forge ; un second passage conforme ne réinstalle rien.
 - Le DNS public et les choix de messagerie restent des opérations humaines :
   `/readyz` ne prétend pas les avoir effectuées.

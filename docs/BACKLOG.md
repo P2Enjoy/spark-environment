@@ -3986,15 +3986,29 @@ correction qui rend le formulaire de nouveau disponible sous un journal terminé
 un second passage complet a encore rendu tous les écarts à `false`, cette fois
 avec le paquet `b712c4c37`; la build a été comparée `a_jour` au commit publié.
 
+**Cinquième tranche livrée le 2026-08-22, exclusivement contre les Forges
+réelles.** La console sait maintenant amorcer le paquet avant l'exécuteur : le
+commit complet vient de la build chargée, doit être `main` publié, et ni URL, ni
+branche, ni commande ne viennent du navigateur. Le script shell et le plan JSON
+passent par deux SSH distincts. Sur `212.47.246.142`, le paquet est passé de
+`6570b954b` à `a9705e5ea`; aucun checkout, pool ou démarrage de service n'a été
+produit, puis le second passage a rendu `package unchanged`. Sur
+`51.158.54.202`, le parcours complet a amorcé le même paquet, conservé Incus
+7.3, le pool `spark`, l'ARC 16 Gio et `sparkbr0`, puis rendu 13/13 contrôles,
+`healthz=ok`, `readyz=ready` et la topologie. Le passage suivant a rendu
+`changed:false` pour l'amorçage et les quatre phases mutantes. La vue conserve
+la ligne d'amorçage, distingue **SSH établi · sparkd sans réponse** du plan de
+contrôle, et ne produit plus de faux `502`, de refus rouge ni de faux bouton de
+reconnexion. Les vues 1440 et 390 px des deux Forges n'ont ni débordement ni
+erreur navigateur.
+
 **Reste avant `[x]`** : le serveur neuf fourni n'a qu'un disque racine de 10 Go,
 5,2 Gio libres et aucune paire native. Le plan 3 Gio + 1 Gio a été observé mais
 n'a pas été engagé, faute d'un choix de capacité explicitement donné par le
 responsable ; aucune taille d'exploitation n'est déduite. Une seconde machine
-avec deux supports libres reste nécessaire pour le parcours miroir. Enfin, une
-Ubuntu totalement nue où `/opt/sparkd` est absent demande encore un bootstrap
-fermé du paquet avant que l'exécuteur puisse être lancé. Les deux créations
-réelles de la DoD, la panne médiane/reprise et leurs illustrations restent donc
-à produire ; l'unité demeure honnêtement `[~]`.
+avec deux supports libres reste nécessaire pour le parcours miroir. Les deux
+créations réelles de la DoD, la panne médiane/reprise et leurs illustrations
+restent donc à produire ; l'unité demeure honnêtement `[~]`.
 
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
   seulement le paquet Python. C'est un **assistant de bout en bout** qui part
