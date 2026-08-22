@@ -242,6 +242,16 @@ def _atomic_write(path: Path, content: str, mode: int) -> None:
     temporary.replace(path)
 
 
+def _atomic_write_if_changed(path: Path, content: str, mode: int) -> bool:
+    try:
+        if path.read_text(encoding="utf-8") == content and (path.stat().st_mode & 0o777) == mode:
+            return False
+    except OSError:
+        pass
+    _atomic_write(path, content, mode)
+    return True
+
+
 def _pool_driver(pool: str) -> str | None:
     result = _run(["incus", "storage", "show", pool], check=False)
     if result.returncode:
@@ -283,7 +293,11 @@ def phase_storage(plan: dict[str, Any]) -> dict[str, object]:
         _run(["incus", "storage", "create", pool, "zfs", f"source={pool}"], timeout=900)
         changed = True
 
-    _run(["zfs", "set", "compression=on", pool])
+    compression = _run(["zfs", "get", "-H", "-o", "value", "compression", pool],
+                       check=False).stdout.strip()
+    if compression in {"", "off", "-"}:
+        _run(["zfs", "set", "compression=on", pool])
+        changed = True
     arc = int(float(plan["config"]["arcMaxGib"]) * GIB)
     zfs_config = Path("/etc/modprobe.d/zfs.conf")
     lines = zfs_config.read_text(encoding="utf-8").splitlines() if zfs_config.exists() else []
@@ -301,8 +315,12 @@ def phase_storage(plan: dict[str, Any]) -> dict[str, object]:
             rendered.append(line)
     if not found_arc:
         rendered.append(f"options zfs zfs_arc_max={arc}")
-    _atomic_write(zfs_config, "\n".join(rendered) + "\n", 0o644)
-    Path("/sys/module/zfs/parameters/zfs_arc_max").write_text(f"{arc}\n", encoding="utf-8")
+    changed = _atomic_write_if_changed(
+        zfs_config, "\n".join(rendered) + "\n", 0o644) or changed
+    arc_runtime = Path("/sys/module/zfs/parameters/zfs_arc_max")
+    if arc_runtime.read_text(encoding="utf-8").strip() != str(arc):
+        arc_runtime.write_text(f"{arc}\n", encoding="utf-8")
+        changed = True
     return {"changed": changed, "pool": pool, "arcMaxBytes": arc}
 
 
@@ -310,15 +328,25 @@ def _network_exists(name: str) -> bool:
     return _run(["incus", "network", "show", name], check=False).returncode == 0
 
 
-def _ensure_device(profile: str, device: str, kind: str, properties: dict[str, str]) -> None:
+def _ensure_device(profile: str, device: str, kind: str,
+                   properties: dict[str, str]) -> bool:
     shown = _run(["incus", "profile", "device", "show", profile]).stdout
     if re.search(rf"^{re.escape(device)}:\s*$", shown, re.MULTILINE):
+        changed = False
         for key, value in properties.items():
-            _run(["incus", "profile", "device", "set", profile, device, key, value])
+            current = _run(
+                ["incus", "profile", "device", "get", profile, device, key],
+                check=False,
+            ).stdout.strip()
+            if current != value:
+                _run(["incus", "profile", "device", "set", profile, device, key, value])
+                changed = True
+        return changed
     else:
         arguments = ["incus", "profile", "device", "add", profile, device, kind]
         arguments.extend(f"{key}={value}" for key, value in properties.items())
         _run(arguments)
+        return True
 
 
 def phase_foundation(plan: dict[str, Any]) -> dict[str, object]:
@@ -332,12 +360,25 @@ def phase_foundation(plan: dict[str, Any]) -> dict[str, object]:
     else:
         for key, value in (("ipv4.address", "10.77.0.1/24"), ("ipv4.nat", "true"),
                            ("ipv4.dhcp.ranges", "10.77.0.240-10.77.0.254")):
-            _run(["incus", "network", "set", bridge, key, value])
+            current = _run(["incus", "network", "get", bridge, key],
+                           check=False).stdout.strip()
+            if current != value:
+                _run(["incus", "network", "set", bridge, key, value])
+                created = True
     if _run(["incus", "profile", "show", "default"], check=False).returncode:
         _run(["incus", "profile", "create", "default"])
-    _ensure_device("default", "root", "disk", {"path": "/", "pool": pool})
-    _ensure_device("default", "eth0", "nic", {"network": bridge})
-    _run(["systemctl", "enable", "--now", "caddy"])
+        created = True
+    created = _ensure_device(
+        "default", "root", "disk", {"path": "/", "pool": pool}) or created
+    created = _ensure_device(
+        "default", "eth0", "nic", {"network": bridge}) or created
+    caddy_enabled = _run(
+        ["systemctl", "is-enabled", "--quiet", "caddy"], check=False).returncode == 0
+    caddy_active = _run(
+        ["systemctl", "is-active", "--quiet", "caddy"], check=False).returncode == 0
+    if not caddy_enabled or not caddy_active:
+        _run(["systemctl", "enable", "--now", "caddy"])
+        created = True
 
     policy = _run(["incus", "network", "get", bridge, "user.spark.input_policy"],
                   check=False).stdout.strip().lower()
@@ -375,14 +416,20 @@ WantedBy=multi-user.target
         _run(["systemctl", "enable", "--now", "spark-firewall.service"])
         _run(["incus", "network", "set", bridge, "user.spark.input_policy=drop"])
 
-    _atomic_write(Path("/etc/ssh/sshd_config.d/90-spark.conf"), "X11Forwarding no\n", 0o644)
-    _run(["sshd", "-t"])
-    ssh_unit = "ssh.service" if _run(["systemctl", "status", "ssh.service"], check=False).returncode == 0 else "sshd.service"
-    _run(["systemctl", "reload", ssh_unit])
-    return {"changed": created or policy not in {"drop", "reject"}, "bridge": bridge}
+    ssh_changed = _atomic_write_if_changed(
+        Path("/etc/ssh/sshd_config.d/90-spark.conf"), "X11Forwarding no\n", 0o644)
+    if ssh_changed:
+        _run(["sshd", "-t"])
+        ssh_unit = "ssh.service" if _run(
+            ["systemctl", "cat", "ssh.service"], check=False).returncode == 0 else "sshd.service"
+        _run(["systemctl", "reload", ssh_unit])
+    return {
+        "changed": created or policy not in {"drop", "reject"} or ssh_changed,
+        "bridge": bridge,
+    }
 
 
-def _merge_environment(updates: dict[str, str]) -> None:
+def _merge_environment(updates: dict[str, str]) -> bool:
     path = Path("/etc/sparkd/sparkd.env")
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     pending = dict(updates)
@@ -398,13 +445,13 @@ def _merge_environment(updates: dict[str, str]) -> None:
         else:
             rendered.append(line)
     rendered.extend(f"{key}={value}" for key, value in sorted(pending.items()))
-    _atomic_write(path, "\n".join(rendered) + "\n", 0o640)
+    return _atomic_write_if_changed(path, "\n".join(rendered) + "\n", 0o640)
 
 
 def phase_control(plan: dict[str, Any]) -> dict[str, object]:
     config = plan["config"]
     extra_ports = sorted(set(config["reservedPorts"]) - {22, 80, 443})
-    _merge_environment({
+    environment_changed = _merge_environment({
         "SPARKD_STORAGE_POOL": config["poolName"],
         "SPARKD_STORAGE_DATASET": config["poolName"],
         "SPARKD_NETWORK_BRIDGE": config["bridgeName"],
@@ -412,14 +459,32 @@ def phase_control(plan: dict[str, Any]) -> dict[str, object]:
         "SPARKD_CPU_RESERVE": f"{float(config['cpuReserve']):g}",
         "SPARKD_RESERVED_PORTS": ",".join(map(str, extra_ports)),
     })
+    paths = package_install.Paths.installed()
+    units_match = all(
+        (paths.systemd / name).exists()
+        and (paths.systemd / name).read_text(encoding="utf-8")
+        == package_install._render_unit(name, paths.python)
+        for name in package_install.UNIT_NAMES
+    )
+    active = _run(
+        ["systemctl", "is-active", "--quiet", "sparkd"], check=False).returncode == 0
+    try:
+        running_version = _json_request("/healthz").get("version") if active else None
+    except ForgeInstallationError:
+        running_version = None
+    if not environment_changed and units_match and active and running_version == __version__:
+        return {"changed": False, "version": __version__,
+                "environment": "/etc/sparkd/sparkd.env"}
     try:
         package_install.install(
+            paths=paths,
             runner=lambda command: _run(command), preflight=lambda: 0,
             announce=lambda _phase, _state: None,
         )
     except package_install.InstallationError as error:
         raise ForgeInstallationError(str(error)) from error
-    return {"version": __version__, "environment": "/etc/sparkd/sparkd.env"}
+    return {"changed": True, "version": __version__,
+            "environment": "/etc/sparkd/sparkd.env"}
 
 
 def _json_request(path: str, method: str = "GET") -> dict[str, object]:
