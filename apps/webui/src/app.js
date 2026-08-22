@@ -31,7 +31,7 @@ import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journa
 import { renderManuel } from './components/manuel-view.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
-import { tunnelOf, signatureMotifOf } from './components/tokens.js';
+import { tunnelContextOf, signatureMotifOf } from './components/tokens.js';
 
 const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
@@ -2880,10 +2880,9 @@ async function charger() {
  *       destinations, pas une destination)
  */
 function peindreContexte() {
-  // Le vocabulaire vit dans `tokens.js`, à un seul endroit : le bandeau du
-  // §22.3 le partage (docs/DESIGN_SYSTEM.md §14.7).
-  const { label, token } = tunnelOf(etat.tunnel?.state ?? 'closed');
-  const rompu = etat.tunnel?.state === 'broken';
+  // Le vocabulaire vit dans `tokens.js`, à un seul endroit. SPK-68 y distingue
+  // aussi un transport SSH établi d'un plan de contrôle sans réponse.
+  const { label, token, reconnect } = tunnelContextOf(etat.tunnel);
   const connexion = etat.tunnel?.state === 'connecting';
 
   // Un SÉLECTEUR dès qu'il y a le choix. Un select à une seule option serait un
@@ -2899,14 +2898,14 @@ function peindreContexte() {
 
   // §22.4.6 : un tunnel rompu porte SA commande. La seule issue était de
   // recharger la console, ce qui n'est pas un remède mais une superstition.
-  const reconnexion = rompu
+  const reconnexion = reconnect
     ? `<button type="button" class="bouton bouton--compact" data-action="reconnecter">Reconnecter</button>`
     : '';
 
   racine.querySelector('.entete__contexte').innerHTML =
     choix +
     `<span class="badge badge--${token}"${connexion ? ' aria-live="polite"' : ''}>` +
-    `<span class="badge__point" aria-hidden="true"></span>Tunnel ${label}</span>` +
+    `<span class="badge__point" aria-hidden="true"></span>${label}</span>` +
     reconnexion;
 
   racine.querySelector('#selecteur-serveur')?.addEventListener('change', (evenement) => {

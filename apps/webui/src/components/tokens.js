@@ -65,6 +65,16 @@ export function tunnelOf(value) {
   return TUNNEL_STATES[value] ?? { label: String(value ?? 'inconnu'), token: 'neutral' };
 }
 
+/** Deux vérités SPK-68 : transport SSH et plan de contrôle ne partagent pas un verdict. */
+export function tunnelContextOf(tunnel) {
+  if (tunnel?.state === 'broken' && tunnel?.transportState === 'ready') {
+    return { label: 'SSH établi · sparkd sans réponse', token: 'accent', reconnect: false };
+  }
+  const state = tunnelOf(tunnel?.state ?? 'closed');
+  return { label: `Tunnel ${state.label}`, token: state.token,
+           reconnect: tunnel?.state === 'broken' };
+}
+
 const OCTETS = ['o', 'Kio', 'Mio', 'Gio', 'Tio'];
 
 /** Le produit est en français : la virgule est le séparateur décimal.

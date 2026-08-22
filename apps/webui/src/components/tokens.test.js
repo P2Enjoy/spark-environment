@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE,
-  TUNNEL_STATES, tunnelOf, traduireMessage, formatOctetsExact,
+  TUNNEL_STATES, tunnelContextOf, tunnelOf, traduireMessage, formatOctetsExact,
   SIGNATURE_MOTIFS, signatureMotifOf,
 } from './tokens.js';
 // La table de l'hôte console est la RÉFÉRENCE des jetons : on l'importe plutôt
@@ -101,6 +101,15 @@ test('les etats de tunnel portent des libelles francais distincts', () => {
 test('un etat de tunnel inconnu ne casse rien et reste visible', () => {
   assert.equal(tunnelOf('quelque-chose').label, 'quelque-chose');
   assert.equal(tunnelOf(undefined).label, 'inconnu');
+});
+
+test('SSH etabli sans sparkd n est ni un tunnel rompu ni a reconnecter', () => {
+  assert.deepEqual(tunnelContextOf({ state: 'broken', transportState: 'ready' }), {
+    label: 'SSH établi · sparkd sans réponse', token: 'accent', reconnect: false,
+  });
+  assert.deepEqual(tunnelContextOf({ state: 'broken', transportState: 'broken' }), {
+    label: 'Tunnel rompu', token: 'danger', reconnect: true,
+  });
 });
 
 // --- la traduction des messages (SPK-46, docs/DAT.md §21.5 bis) ------------
