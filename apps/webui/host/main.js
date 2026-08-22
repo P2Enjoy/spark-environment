@@ -1226,8 +1226,11 @@ export function createConsoleHost(options = {}) {
       // le registre l'oublie : aucun shell ne reste orphelin sous une ligne qui
       // prétendrait encore être ouverte (§37.4.2, SPK-70).
       const fermees = terminaux.fermerPourForge(nom);
-      tunnels.close(nom);
+      // La fermeture durable se déclare SUR ce tunnel. Le couper avant
+      // `attendreFermeture()` tuait bien le shell, mais perdait précisément
+      // l'entrée `spark.terminal_close` lors d'une déconnexion réelle.
       await Promise.all(fermees.map((session) => session.attendreFermeture()));
+      tunnels.close(nom);
       return { status: 200, body: { closed: nom, sessionsClosed: fermees.length } };
     },
   };

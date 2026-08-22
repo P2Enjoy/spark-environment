@@ -53,13 +53,14 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
   const sondages = [];
   const enfants = [];
   const declarees = [];
+  let tunnelFerme = false;
   const dossier = await mkdtemp(join(tmpdir(), 'spark-term-'));
   const faux = { name: 'prod', localPort: 9876, actorHeader: 'console/prod',
                  jumpArgs: () => ['-J', 'ubuntu@203.0.113.10:22'],
                  forgeArgs: () => ['-p', '22', 'ubuntu@203.0.113.10'] };
   const { server } = createConsoleHost({
     tunnels: { require: () => faux, get: () => faux, list: () => [faux],
-               close() {}, closeAll() {} },
+               close() { tunnelFerme = true; }, closeAll() {} },
     inventoryPath: join(dossier, 'servers.json'),
     anchorPath: join(dossier, 'anchors.json'),
     env: {},
@@ -74,6 +75,7 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
     fetch: async (url, options = {}) => {
       if (String(url).includes('/v1/audit')) {
         if (journalMuet) throw new Error('sparkd injoignable');
+        if (tunnelFerme) throw new Error('tunnel déjà fermé');
         declarees.push(JSON.parse(options.body));
         return new Response('{"recorded":"ok"}', { status: 201 });
       }
@@ -169,7 +171,7 @@ test('le registre ne rend que les métadonnées d’une session encore vivante',
 });
 
 test('déconnecter une Forge tue ses sessions et les retire du registre', async () => {
-  const { base, fermer, enfants } = await pile();
+  const { base, fermer, enfants, declarees } = await pile();
   await ouvrir(base);
   const r = await fetch(`${base}/api/tunnels`, {
     method: 'DELETE', body: JSON.stringify({ name: 'prod' }),
@@ -178,6 +180,8 @@ test('déconnecter une Forge tue ses sessions et les retire du registre', async 
   assert.equal((await r.json()).sessionsClosed, 1);
   assert.deepEqual(enfants[0].tue, ['SIGKILL']);
   assert.deepEqual((await (await fetch(`${base}/api/terminal/sessions`)).json()).sessions, []);
+  assert.ok(declarees.some((d) => d.action === 'spark.terminal_close'),
+    'la fermeture doit être déclarée avant de couper son tunnel');
   fermer();
 });
 
