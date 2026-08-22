@@ -393,6 +393,30 @@ jamais « prête » avant les réponses mesurées de `/healthz` et `/readyz`. Un
 déconnexion conserve l'étape interrompue et offre **Reprendre le diagnostic**,
 pas « Reprendre » comme si une écriture avait nécessairement continué.
 
+### SPK-DS-13 · Mettre à jour conserve l'avant et prouve l'après
+
+**Date** : 2026-08-22 · introduit par SPK-69.
+
+Une mise à jour de `sparkd` interrompt brièvement le plan de contrôle sans
+détruire les Sparks. Sa confirmation emploie donc l'accent et un bouton
+ordinaire, selon SPK-DS-09. Elle vit dans le bloc *Code déployé* : c'est là que
+l'écart est constaté, et déplacer le geste dans une page générique ferait perdre
+la build que l'on remplace.
+
+Le bloc ne disparaît pas pendant l'opération. Il conserve la dernière build
+connue, puis présente les phases `paquet`, `unités`, `daemon-reload`,
+`redémarrage`, `healthz`, `readyz` et `build`. Une phase terminée n'est pas
+verte par anticipation : seul l'ensemble des trois preuves distantes donne le
+bloc `.succes` de SPK-DS-08. L'échec reste `.refus` et montre séparément l'issue
+du retour arrière ; masquer l'ancien commit ferait perdre précisément le point
+de reprise utile.
+
+Le bouton de mise à jour n'existe que lorsque l'ascendance rend le sens sûr. Les
+autres verdicts ne reçoivent pas un bouton désactivé : ils expliquent pourquoi
+aucun geste n'est proposé. Après un succès, **Revenir à la build précédente**
+est un geste sensible distinct, confirmé avec les deux empreintes. Il disparaît
+dès que le reçu n'est plus cohérent avec la build réellement servie.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

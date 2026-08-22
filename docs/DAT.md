@@ -2,7 +2,7 @@
 
 Projet : **Spark Environment**
 Statut : architecture implémentée par unités, éprouvée sur la Forge de validation
-Dernière mise à jour : 2026-08-21
+Dernière mise à jour : 2026-08-22
 
 Ce document fait autorité sur l'architecture. Lorsqu'il diverge du code, c'est un
 défaut à corriger, pas une tolérance.
@@ -6208,6 +6208,70 @@ d'un exploitant est plus grave que le décalage qu'on signale. Le message persis
 dans la coquille, et non dans la seule vue Forge, car sa cause survit à toute
 navigation (`DESIGN_SYSTEM_APP.md` SPK-DS-11). Il nomme l'action utile :
 « Console démarrée avant N commits · redémarrer pour en bénéficier ».
+
+### 40.6 Mettre à jour sans donner un shell à la page (SPK-69)
+
+La proposition de mise à jour appartient au verdict, mais le geste ne lui fait
+pas confiance. Le bouton **Mettre à jour `sparkd`** n'est rendu que pour
+`forge_en_retard`; au moment de l'engagement, l'hôte console relit `/v1/forge`,
+recalcule l'ascendance et relit la tête du dépôt. Une Forge à jour, un poste en
+retard, deux histoires divergentes, une build non estampillée ou l'absence de
+dépôt refusent le geste. La tête cible doit en outre être exactement la tête
+locale publiée sur `origin/main` : demander à une Forge de télécharger un commit
+qui n'existe que dans le checkout produirait une panne certaine après la
+confirmation.
+
+Le navigateur ne transmet que le **nom du serveur inventorié**. Il ne transmet
+ni commit, ni URL, ni commande, ni option, ni secret. L'hôte retient lui-même le
+commit servi avant le geste et la tête cible, tous deux des empreintes Git
+complètes. Il ouvre OpenSSH depuis l'inventaire, en `BatchMode`, sans accepter de
+nouvelle clé d'hôte, puis fournit sur l'entrée standard un script fermé et
+versionné. Ce script :
+
+1. exige root ou `sudo -n`, le venv `/opt/sparkd/venv` et deux empreintes de
+   quarante caractères hexadécimaux ;
+2. exécute `pip install --upgrade --force-reinstall` sur l'URL publique fixe du
+   §40.4, épinglée au commit cible ;
+3. exécute le `python -m sparkd.install` du venv. C'est lui qui réécrit les deux
+   unités depuis le paquet, lance `systemctl daemon-reload`, puis redémarre
+   `sparkd` ;
+4. émet seulement des jalons bornés — paquet, unités, rechargement, redémarrage,
+   sondes — et une erreur filtrée. La page ne reçoit jamais un terminal brut.
+
+Une seule opération peut agir sur une Forge à la fois. La confirmation, rendue
+dans le bloc *Code déployé*, nomme l'interruption brève de l'API de contrôle et
+conserve à l'écran la dernière build connue. Pendant le geste, chaque phase est
+nommée ; « commande terminée » n'est pas une conclusion.
+
+Le succès exige, après reprise du tunnel, les trois constats **distants** :
+`/healthz` répond 200 et sert exactement le commit cible, `/readyz` répond 200,
+et `/v1/forge.build.commit` vaut ce même commit. Le commit doit différer de celui
+relevé avant le geste. Une version inchangée, une sonde dégradée, une réponse
+illisible ou un délai dépassé est un échec, même si pip est sorti avec zéro.
+
+Le retour arrière est borné à la build estampillée relevée juste avant le geste.
+Il rejoue le même script et la même URL épinglée, puis exige les mêmes trois
+preuves avec l'ancien commit. Il ne reçoit jamais une version saisie dans la
+page et ne descend jamais les migrations SQL automatiquement : effacer des
+données pour rétablir le binaire serait une seconde opération, irréversible,
+que cette confirmation ne couvre pas. Deux chemins le déclenchent :
+
+- après une mutation suivie d'un échec d'installation ou de preuve, l'hôte le
+  tente automatiquement et rend séparément l'échec initial et l'issue du retour
+  arrière ; un échec pip avant mutation conserve simplement la build connue ;
+- après un succès, l'hôte conserve en mémoire le reçu `{serveur, avant, après}`
+  et peut proposer **Revenir à la build précédente**. Une seconde confirmation
+  nomme la régression de code et la nouvelle interruption. Le reçu, la build
+  actuellement servie et l'ascendance doivent encore concorder ; sinon le
+  geste est refusé.
+
+Une mise à jour aboutie est inscrite dans le journal de la Forge sous
+`forge.sparkd_update`, avec les commits avant/après et sans sortie de commande.
+Le retour arrière volontaire est annoncé au journal courant avant l'arrêt sous
+`forge.sparkd_rollback`; son issue reste dans le compte rendu de l'hôte, car la
+build restaurée peut être antérieure à cette action déclarable. Une panne de
+journal est dite mais ne transforme pas une build prouvée en échec, comme pour
+les sessions du §37.4.5.
 
 
 ## 41. Le runtime d'un Spark : ce que l'image ne donne pas
