@@ -4002,6 +4002,17 @@ contrôle, et ne produit plus de faux `502`, de refus rouge ni de faux bouton de
 reconnexion. Les vues 1440 et 390 px des deux Forges n'ont ni débordement ni
 erreur navigateur.
 
+**Preuve complémentaire le 2026-08-22, exclusivement sur la nouvelle Forge
+réelle.** L'ancien venv a été conservé par déplacement réversible vers
+`/opt/sparkd.pre-bootstrap-a9c5ee57-20260822`, puis l'absence effective de
+`/opt/sparkd` a été contrôlée avant l'appel. L'amorceur exact de la console a
+installé le commit publié complet `a9c5ee57db800634cd89a99f575b884aab4c19ed`
+(`0.post1.dev666+ga9c5ee57d`) et rendu `package done`. Le point d'entrée
+`sparkd-forge-install` est exécutable, aucun checkout ni pool n'existe et le
+service reste inactif. Un second appel identique a rendu immédiatement
+`package unchanged`; l'ancienne build `a9705e5ea` demeure récupérable dans la
+sauvegarde. Aucun driver local ou factice n'a servi de preuve.
+
 **Reste avant `[x]`** : le serveur neuf fourni n'a qu'un disque racine de 10 Go,
 5,2 Gio libres et aucune paire native. Le plan 3 Gio + 1 Gio a été observé mais
 n'a pas été engagé, faute d'un choix de capacité explicitement donné par le

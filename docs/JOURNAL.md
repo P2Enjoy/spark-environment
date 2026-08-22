@@ -4,6 +4,27 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-22 — SPK-68 amorce réellement une Forge sans `/opt/sparkd`
+
+La nouvelle Forge `212.47.246.142` a été reprise service `sparkd` inactif,
+registre vide et sans pool Incus. Son ancien environnement Python a été déplacé,
+sans suppression, vers `/opt/sparkd.pre-bootstrap-a9c5ee57-20260822` :
+`/opt/sparkd` était donc réellement absent avant l'appel. L'amorceur exact exporté
+par la console, ciblant le commit complet `a9c5ee57db800634cd89a99f575b884aab4c19ed`
+égal à `origin/main`, a rendu `package in_progress` puis `package done`.
+
+Le contrôle indépendant sur la Forge retrouve le paquet
+`0.post1.dev666+ga9c5ee57d`, le point d'entrée `sparkd-forge-install` exécutable,
+aucun checkout Git, le service toujours inactif et zéro pool. L'ancien paquet
+`a9705e5ea` reste récupérable dans la sauvegarde. Le second appel strictement
+identique a rendu immédiatement `package unchanged`. Aucun driver local ou
+factice n'a servi de preuve.
+
+Cette mesure ferme la lacune « exécuteur entièrement absent », mais pas SPK-68 :
+la création fichier attend toujours une taille choisie par le responsable, le
+miroir exige une machine à deux supports libres, puis les deux créations, la
+panne médiane/reprise et les illustrations restent dues.
+
 ## 2026-08-22 — SPK-68 exécute et reprend son plan sur les Forges réelles
 
 Le paquet porte l'exécuteur fermé version 1 : confirmations exactes, phases JSON,
