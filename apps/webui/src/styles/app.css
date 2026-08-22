@@ -646,6 +646,7 @@ tbody tr:hover { background: var(--color-hover); }
 .installation__etat > div { border: 1px solid var(--color-border); border-radius: var(--radius-2); padding: var(--space-3); }
 .installation__etat p { margin: var(--space-2) 0 0; color: var(--color-text-2); }
 .installation__releve h3, .installation__stockage h3 { margin-top: 0; }
+.installation__releve dd { min-width: 0; overflow-wrap: anywhere; }
 .installation__stockage { margin-top: var(--space-4); }
 .installation__plan { margin-top: var(--space-4); }
 .installation__dimensions {
