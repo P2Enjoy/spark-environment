@@ -27,6 +27,18 @@ function fauxSsh() {
   e.stdin = { ecrit: [], write(d) { this.ecrit.push(String(d)); } };
   e.tue = [];
   e.kill = (s) => e.tue.push(s);
+  e.onData = (ecouter) => {
+    const sortie = (data) => ecouter(String(data));
+    e.stdout.on('data', sortie); e.stderr.on('data', sortie);
+    return { dispose: () => { e.stdout.off('data', sortie); e.stderr.off('data', sortie); } };
+  };
+  e.onExit = (ecouter) => {
+    const sortie = (code, signal) => ecouter({ exitCode: code ?? 0, signal: signal ?? null });
+    e.on('exit', sortie);
+    return { dispose: () => e.off('exit', sortie) };
+  };
+  e.write = (data) => e.stdin.write(data);
+  e.resize = () => {};
   return e;
 }
 
@@ -49,7 +61,7 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
     env: {},
     probeShell: async (args) => { sondes.push(args); return sonde; },
     terminals: new SessionManager({
-      spawn: (commande, args) => {
+      ptySpawn: (commande, args) => {
         const enfant = fauxSsh();
         enfant.commande = commande; enfant.args = args;
         enfants.push(enfant); return enfant;

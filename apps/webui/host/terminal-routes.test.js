@@ -25,6 +25,19 @@ function fauxSsh() {
   e.stdin = { ecrit: [], write(d) { this.ecrit.push(String(d)); } };
   e.tue = [];
   e.kill = (s) => e.tue.push(s);
+  e.onData = (ecouter) => {
+    const sortie = (data) => ecouter(String(data));
+    e.stdout.on('data', sortie); e.stderr.on('data', sortie);
+    return { dispose: () => { e.stdout.off('data', sortie); e.stderr.off('data', sortie); } };
+  };
+  e.onExit = (ecouter) => {
+    const sortie = (code, signal) => ecouter({ exitCode: code ?? 0, signal: signal ?? null });
+    e.on('exit', sortie);
+    return { dispose: () => e.off('exit', sortie) };
+  };
+  e.write = (data) => e.stdin.write(data);
+  e.redimensionnements = [];
+  e.resize = (cols, rows) => e.redimensionnements.push({ cols, rows });
   return e;
 }
 
@@ -51,7 +64,7 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
     env: {},
     probeSshd: async (args) => { sondages.push(args); return sondage; },
     terminals: new SessionManager({
-      spawn: (commande, args) => {
+      ptySpawn: (commande, args) => {
         const enfant = fauxSsh();
         enfant.commande = commande; enfant.args = args;
         enfants.push(enfant); return enfant;
@@ -122,14 +135,48 @@ test('un Spark inconnu du serveur rend 404', async () => {
   fermer();
 });
 
-test('les octets traversent, et le redimensionnement passe par stty', async () => {
+test('les octets traversent, et le redimensionnement ne devient pas une frappe', async () => {
   const { base, fermer, enfants } = await pile();
   const { id } = await (await ouvrir(base)).json();
   assert.equal((await fetch(`${base}/api/terminal/entree?id=${id}`, {
     method: 'POST', body: JSON.stringify({ data: 'ls -la\n' }) })).status, 204);
   assert.equal((await fetch(`${base}/api/terminal/taille?id=${id}`, {
     method: 'POST', body: JSON.stringify({ rows: 40, cols: 120 }) })).status, 204);
-  assert.deepEqual(enfants[0].stdin.ecrit, ['ls -la\n', 'stty rows 40 cols 120\n']);
+  assert.deepEqual(enfants[0].stdin.ecrit, ['ls -la\n']);
+  assert.deepEqual(enfants[0].redimensionnements, [{ cols: 120, rows: 40 }]);
+  fermer();
+});
+
+test('le registre ne rend que les métadonnées d’une session encore vivante', async () => {
+  const { base, fermer, enfants } = await pile();
+  const { id } = await (await ouvrir(base)).json();
+  enfants[0].stdout.emit('data', Buffer.from('mot-de-passe-qui-ne-doit-pas-sortir'));
+  const sessions = await (await fetch(`${base}/api/terminal/sessions`)).json();
+  assert.equal(sessions.sessions.length, 1);
+  const session = sessions.sessions[0];
+  assert.equal(session.id, id);
+  assert.equal(session.forge, 'prod');
+  assert.equal(session.type, 'spark');
+  assert.equal(session.state, 'open');
+  assert.ok(typeof session.openedAt === 'string');
+  assert.ok(typeof session.lastActivity === 'string');
+  assert.ok(!JSON.stringify(sessions).includes('mot-de-passe-qui-ne-doit-pas-sortir'));
+  enfants[0].emit('exit', 0);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual((await (await fetch(`${base}/api/terminal/sessions`)).json()).sessions, []);
+  fermer();
+});
+
+test('déconnecter une Forge tue ses sessions et les retire du registre', async () => {
+  const { base, fermer, enfants } = await pile();
+  await ouvrir(base);
+  const r = await fetch(`${base}/api/tunnels`, {
+    method: 'DELETE', body: JSON.stringify({ name: 'prod' }),
+  });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).sessionsClosed, 1);
+  assert.deepEqual(enfants[0].tue, ['SIGKILL']);
+  assert.deepEqual((await (await fetch(`${base}/api/terminal/sessions`)).json()).sessions, []);
   fermer();
 });
 
@@ -245,6 +292,29 @@ test('le flux d’évènements porte la sortie, et sa fermeture TUE la session',
   await lecteur.cancel();
   await new Promise((r) => setTimeout(r, 100));
   assert.deepEqual(enfants[0].tue, ['SIGKILL'], 'le flux fermé doit tuer le distant');
+  fermer();
+});
+
+test('un flux quitté ne tue pas une session encore suivie par une autre grille', async () => {
+  // Le registre peut reprendre une session dans une autre vue. Le premier flux
+  // qui part ne doit donc pas tuer le shell sous l'autre grille ; le DERNIER
+  // garde toujours le contrat historique de fermeture.
+  const { base, fermer, enfants } = await pile();
+  const { id } = await (await ouvrir(base)).json();
+  const premier = await fetch(`${base}/api/terminal/flux?id=${id}`);
+  const second = await fetch(`${base}/api/terminal/flux?id=${id}`);
+  const lecteurPremier = premier.body.getReader();
+  const lecteurSecond = second.body.getReader();
+  await lecteurPremier.read();
+  await lecteurSecond.read();
+
+  await lecteurPremier.cancel();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(enfants[0].tue, [], 'l’autre grille regarde encore la session');
+
+  await lecteurSecond.cancel();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(enfants[0].tue, ['SIGKILL'], 'le dernier flux ferme le shell');
   fermer();
 });
 

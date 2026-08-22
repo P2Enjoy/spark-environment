@@ -2188,30 +2188,71 @@ test('sans la frappe du nom, la suppression ne s’engage PAS', async () => {
 
 // --- LE TERMINAL (SPK-43, docs/DAT.md §37.4) -------------------------------
 
-test('entrer dans le terminal, écrire, voir répondre, quitter, et le distant meurt', async () => {
-  // LE parcours de la DoD. Le transport est doublé (§37.4.2 bis) : « cat »
-  // renvoie ce qu'on lui donne, donc la boucle complète — saisie, flux, sortie —
-  // est celle de la production, seule la commande lancée change.
+test('entrer dans le terminal ANSI, écrire, coller, répondre à DSR, redimensionner et quitter', async () => {
+  // LE parcours de la DoD. Le transport est doublé (§37.4.2 bis) : un relai
+  // brut renvoie les octets, donc la boucle complète — vraie grille xterm,
+  // touches, collage, flux, réponse terminal et sortie — est celle de la
+  // production, seule la commande lancée change.
   await parcours('terminal', async () => {
     await ouvrir('crm-production', 'terminal');
     await page.waitForSelector('#titre-terminal');
 
-    // Fermé, la saisie est verrouillée : rien ne part vers un Spark sans session.
-    assert.ok(await page.isDisabled('#terminal-entree'));
+    // Il n'y a pas de champ parallèle : ce serait lui qui volerait les touches
+    // de contrôle, la sélection et le collage à l'émulateur.
+    assert.equal(await page.$('#terminal-entree'), null);
 
     await page.click('[data-terminal="ouvrir"]');
     await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
-    assert.equal(await page.isDisabled('#terminal-entree'), false);
+    const grille = page.locator('.terminal--emulateur .xterm-helper-textarea');
+    await grille.waitFor({ state: 'attached', timeout: 20000 });
 
-    // Une commande, au CLAVIER, et sa réponse.
-    await page.fill('#terminal-entree', 'bonjour depuis le parcours');
-    await page.press('#terminal-entree', 'Enter');
+    // Une commande, au CLAVIER, et sa réponse : elle traverse la vraie grille.
+    await grille.pressSequentially('bonjour depuis le parcours');
+    await grille.press('Enter');
     await page.waitForFunction(
-      () => document.querySelector('#terminal-sortie')
-        ?.textContent.includes('bonjour depuis le parcours'),
+      () => document.querySelector('.xterm-rows')?.innerText.includes('bonjour depuis le parcours'),
       null, { timeout: 20000 });
-    assert.equal(await page.inputValue('#terminal-entree'), '',
-      'la saisie se vide après envoi');
+
+    // Un collage est lui aussi livré à xterm, pas à un champ caché.
+    const coller = (texte) => grille.evaluate((element, valeur) => {
+      const pressePapier = new DataTransfer();
+      pressePapier.setData('text/plain', valeur);
+      element.dispatchEvent(new ClipboardEvent('paste', {
+        bubbles: true, cancelable: true, clipboardData: pressePapier,
+      }));
+    }, texte);
+    await coller('collage direct');
+    await page.waitForFunction(
+      () => document.querySelector('.xterm-rows')?.innerText.includes('collage direct'),
+      null, { timeout: 20000 });
+
+    // Une touche de contrôle part par le même flux ; le vrai terminal répond à
+    // CSI 6n. Le relai réémet la demande et xterm produit alors son rapport CPR.
+    const entreeDeTerminal = (requete) => {
+      if (!requete.url().includes('/api/terminal/entree')) return null;
+      try { return JSON.parse(requete.postData() ?? '').data; } catch { return null; }
+    };
+    const controle = page.waitForRequest((requete) => entreeDeTerminal(requete) === '\f',
+                                          { timeout: 10000 });
+    await grille.press('Control+L');
+    await controle;
+    const dsr = page.waitForRequest((requete) => /^\x1b\[\d+;\d+R$/.test(
+      entreeDeTerminal(requete) ?? ''), { timeout: 10000 });
+    await coller('\u001b[6n');
+    await dsr;
+    assert.equal(await page.locator('#terminal-sortie').evaluate(
+      (element) => element.innerText.includes('\u001b[')), false,
+    'une séquence ANSI reste interprétée, jamais rendue comme texte brut');
+
+    // xterm publie sa géométrie au PTY. Le corps ne contient aucun `stty` : le
+    // programme distant déjà ouvert recevra son SIGWINCH réel.
+    const taille = page.waitForRequest((requete) =>
+      requete.url().includes('/api/terminal/taille'), { timeout: 10000 });
+    await page.setViewportSize({ width: 1200, height: 1000 });
+    const requeteTaille = await taille;
+    const dimensions = JSON.parse(requeteTaille.postData());
+    assert.ok(dimensions.rows > 0 && dimensions.cols > 0);
+    assert.ok(!requeteTaille.postData().includes('stty'));
 
     // EFFET côté sparkd : le journal porte l'OUVERTURE, et rien de ce qui a été
     // tapé (§37.5).
@@ -2253,6 +2294,71 @@ test('quitter l’ONGLET termine la session, sans la fermer soi-même', async ()
       const { entries } = await r.json();
       return entries.filter((e) => e.action === 'spark.terminal_close').length > n;
     }, avant, { timeout: 20000 });
+  });
+});
+
+test('le registre retrouve deux sessions, en reprend une et ferme explicitement la bonne', async () => {
+  await parcours('registre-sessions', async () => {
+    // Première fenêtre : un shell de Spark, ouvert par l'interface.
+    await ouvrir('crm-production', 'terminal');
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+    // Seconde fenêtre : le shell du conteneur. Les deux doivent rester vivants
+    // et être décrits par le même registre local, sans jamais lire leur sortie.
+    const autre = await navigateur.newPage();
+    autre.on('console', (m) => {
+      if (['error', 'warning'].includes(m.type()) && !JOURNAL_RESEAU.test(m.text())) {
+        bruits.push(`[registre/${m.type()}] ${m.text()}`);
+      }
+    });
+    autre.on('pageerror', (e) => bruits.push(`[registre/pageerror] ${e.message}`));
+    try {
+      await autre.setViewportSize({ width: 1440, height: 1000 });
+      await autre.goto(pile.base, { waitUntil: 'domcontentloaded' });
+      await autre.waitForSelector('tbody a', { timeout: 20000 });
+      await autre.click('tbody a:has-text("crm-production")');
+      await autre.waitForSelector('.entete-entite', { timeout: 10000 });
+      await autre.click('.onglet[href$="/docker"]');
+      await autre.waitForSelector('tbody tr', { timeout: 15000 });
+      await autre.click('button[data-conteneur="helo-web-1"]');
+      await autre.waitForSelector('button[data-docker="terminal"]', { timeout: 10000 });
+      await autre.click('button[data-docker="terminal"]');
+      await autre.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+      await page.waitForFunction(
+        () => document.querySelectorAll('.registre-sessions__ligne').length === 2,
+        null, { timeout: 10000 });
+      const registre = await page.textContent('.registre-sessions');
+      assert.match(registre, /Spark · crm-production/);
+      assert.match(registre, /Conteneur · crm-production \/ helo-web-1/);
+      assert.ok(!/bonjour depuis le parcours|collage direct/.test(registre),
+        'le registre ne réutilise jamais la sortie de terminal');
+
+      // La fermeture est confirmée et vise la ligne Spark, pas le conteneur.
+      const ligneSpark = page.locator('.registre-sessions__ligne')
+        .filter({ hasText: 'Spark · crm-production' });
+      await ligneSpark.getByRole('button', { name: 'Fermer', exact: true }).click();
+      await ligneSpark.getByRole('button', { name: 'Fermer et tuer le shell' }).click();
+      await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 15000 });
+      await page.waitForFunction(
+        () => document.querySelectorAll('.registre-sessions__ligne').length === 1,
+        null, { timeout: 10000 });
+      assert.ok(await autre.$('[data-terminal="fermer"]'),
+        'fermer une ligne ne tue pas le terminal du conteneur voisin');
+
+      // La ligne restante se sélectionne : la première grille reprend la vraie
+      // session conteneur sans produire de troisième shell.
+      await page.locator('[data-session-select]').click();
+      await page.waitForSelector('[data-terminal="fermer"]', { timeout: 15000 });
+      assert.match(await page.textContent('.bandeau-terminal'), /Conteneur/);
+    } finally {
+      await autre.locator('[data-terminal="fermer"]').click().catch(() => {});
+      await autre.close();
+      // La sélection a pu recevoir la fin de l'autre vue ; quitter la première
+      // ne doit laisser aucune session du parcours suivant.
+      await page.locator('[data-terminal="fermer"]').click().catch(() => {});
+    }
   });
 });
 
@@ -2991,7 +3097,9 @@ test('entrer dans un conteneur : la bannière le NOMME, le journal le distingue'
     // La session vit sur l'onglet Terminal (SPK-DS-04), pas sous Docker.
     await page.waitForSelector('.onglet[href$="/terminal"][aria-current="page"]',
                                { timeout: 15000 });
-    await page.waitForSelector('.bandeau-terminal', { timeout: 15000 });
+    // Le bandeau existe aussi pendant l'ouverture ; la commande « Fermer »
+    // prouve que la réponse du serveur a bien apporté le chemin conteneur.
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 15000 });
 
     const bandeau = await page.textContent('.bandeau-terminal');
     // §9.8 : la couleur seule ne distingue pas — le libellé le dit en toutes
@@ -3025,7 +3133,7 @@ test('quitter l’onglet ferme la session, et le journal porte sa DURÉE', async
   await parcours('terminal-conteneur-ferme', async () => {
     await ouvrirConteneur('helo-web-1');
     await page.click('button[data-docker="terminal"]');
-    await page.waitForSelector('.bandeau-terminal', { timeout: 15000 });
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 15000 });
 
     // §37.4 : quitter l'onglet TERMINE la session. Un shell qui survivrait à
     // son écran serait un shell abandonné dont personne ne se souvient.
@@ -3108,7 +3216,7 @@ test('un Spark GELÉ laisse entrer dans un conteneur (§37.7)', async () => {
       assert.equal(bouton, false, 'le terminal reste offert sous gel');
 
       await page.click('button[data-docker="terminal"]');
-      await page.waitForSelector('.bandeau-terminal', { timeout: 15000 });
+      await page.waitForSelector('[data-terminal="fermer"]', { timeout: 15000 });
       const bandeau = await page.textContent('.bandeau-terminal');
       assert.match(bandeau, /helo-web-1/);
       // …et la bannière rappelle que ce Spark est protégé (§35.4).

@@ -8,6 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2323468C'/><path d='M18 5 9 18h6l-2 9 10-14h-6z' fill='%23fff'/></svg>" />
   <link rel="stylesheet" href="/src/styles/tokens.css" />
   <link rel="stylesheet" href="/src/styles/app.css" />
+  <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
 </head>
 <body>
   <div id="racine" class="page">
@@ -36,6 +37,18 @@
         <a href="#/manuel" class="destination">Manuel</a>
       </nav>
     </div>
+    <!-- SPK-70 : un registre local des shells vivants, sans aucun octet de
+         session. À l'étroit son contenu devient un tiroir, pas une colonne qui
+         écraserait la grille du terminal. -->
+    <aside class="registre-sessions" aria-labelledby="titre-registre-sessions">
+      <div class="registre-sessions__entete">
+        <h2 id="titre-registre-sessions">Sessions ouvertes</h2>
+        <button type="button" class="bouton bouton--compact registre-sessions__bascule"
+                data-registre="basculer" aria-expanded="false"
+                aria-controls="contenu-registre-sessions">Afficher</button>
+      </div>
+      <div id="contenu-registre-sessions" class="registre-sessions__contenu"></div>
+    </aside>
     <main class="principal"></main>
   </div>
   <script type="module" src="/src/app.js"></script>

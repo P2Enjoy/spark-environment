@@ -4814,12 +4814,20 @@ terminal sans dire par quoi les octets passent. Trois voies existaient :
    par saisie pour l'entrée ;
 3. un sondage périodique.
 
-**La deuxième est retenue.** La console n'a **aucune dépendance d'exécution** —
-mesuré : `apps/webui/package.json` ne déclare que TypeScript, en développement.
-Node ne porte pas de serveur WebSocket, il faudrait donc en ajouter un ; le
-navigateur, lui, porte `EventSource` nativement. Le §19 de `CLAUDE.md` demande de
-vérifier qu'une dépendance est nécessaire avant de l'ajouter, et elle ne l'est
-pas ici.
+**La deuxième est retenue.** Le transport réseau reste donc sans WebSocket : Node
+ne porte pas de serveur WebSocket et le navigateur porte `EventSource`
+nativement. Le §19 de `CLAUDE.md` demande de vérifier qu'une dépendance est
+nécessaire avant de l'ajouter ; elle ne l'est pas pour le transport.
+
+Le rendu, lui, est une autre responsabilité. La console sert
+`@xterm/xterm` **6.0.0** et `@xterm/addon-fit` **0.11.0**, MIT, directement
+depuis les paquets verrouillés par `pnpm` : ce sont l'émulateur ECMA-48 et la
+mesure de sa grille, pas un second canal. Ils remplacent le `pre` qui affichait
+littéralement les séquences de contrôle. Le navigateur leur remet les octets du
+flux tels quels ; il ne les analyse, ne les caviarde et ne les conserve pas.
+L'émulateur couvre notamment SGR, CR, effacement et déplacement du curseur,
+et répond lui-même à `CSI 6 n` par son `onData`, qui emprunte ensuite l'entrée
+existante.
 
 Le sondage est écarté : il ajoute une latence à chaque frappe, ce qu'un terminal
 ne pardonne pas.
@@ -4833,9 +4841,14 @@ la WebSocket redeviendra justifiable — avec sa dépendance, et une raison écr
 
 #### 37.4.2 La session : ce qui la crée, ce qui la tue
 
-`ssh -tt` **alloue un pseudo-terminal sur le Spark** : c'est le côté distant qui
-le fournit, l'hôte console n'en crée aucun localement. Cela évite `node-pty`, un
-module natif, pour la même raison qu'au §37.4.1.
+`ssh -tt` **alloue un pseudo-terminal sur le Spark**. L'hôte console porte aussi
+un pseudo-terminal local avec `node-pty` **1.1.0** : MIT, sans dépendance de
+production hors `node-addon-api`, mais natif et lourd (environ 64 Mio dépaquetés).
+Son coût est nécessaire et borné : c'est le seul moyen, avec le client OpenSSH
+inchangé, de lui transmettre un vrai changement de fenêtre et donc un
+`SIGWINCH` distant. Des tubes `stdio` ne le permettent pas. Il ne change ni le
+rebond, ni la clé, ni le protocole SSH ; il remplace seulement le tube local qui
+portait auparavant ses octets.
 
 Le processus est lancé **par le tunnel existant**, avec la clé du responsable
 (§37.1). `sparkd` n'est pas dans ce chemin.
@@ -4870,20 +4883,19 @@ Forge réelle — même limite qu'au §39.7.
 La variable est **absente en production** : son absence est le cas normal, et le
 produit lance alors `ssh`.
 
-#### 37.4.3 Le redimensionnement, et sa limite
+#### 37.4.3 Le redimensionnement est un vrai événement de terminal
 
-`ssh` en ligne de commande ne sait pas transmettre un changement de taille sans
-terminal de contrôle local. La console envoie donc, sur le canal d'entrée, la
-commande que taperait un humain :
+L'`addon-fit` mesure la grille xterm rendue et appelle la route de taille avec ses
+colonnes et lignes. L'hôte appelle alors `pty.resize(cols, rows)` : OpenSSH reçoit
+le changement de fenêtre et le transmet au pseudo-terminal distant. Aucun
+`stty rows … cols` n'est écrit sur le canal de saisie ; cette ancienne solution
+affichait la commande de la console dans le shell, mélangeait infrastructure et
+frappe de l'opérateur, et ne réveillait pas les programmes plein écran.
 
-```
-stty rows <lignes> cols <colonnes>
-```
-
-**Ce que cela ne fait pas** : rien pour un programme plein écran **déjà en
-cours** — celui-ci ne recevra pas `SIGWINCH`. Redimensionner pendant qu'un
-éditeur tourne ne le réparera pas ; il faut le relancer. C'est écrit ici plutôt
-que laissé à découvrir, et c'est le prix de n'avoir pas de dépendance native.
+Les bornes 1 à 1000 restent contrôlées par l'hôte. La taille initiale est 80×24,
+puis la première mesure de la grille la remplace dès que celle-ci est montée.
+Le navigateur et le pseudo-terminal ont donc la même géométrie, y compris après
+un redimensionnement.
 
 #### 37.4.4 La surface d'API
 
@@ -4893,6 +4905,7 @@ GET    /api/terminal/{id}/flux                      text/event-stream : la sorti
 POST   /api/terminal/{id}/entree   { data }         les octets saisis
 POST   /api/terminal/{id}/taille   { rows, cols }   le redimensionnement
 DELETE /api/terminal/{id}                           ferme, et TUE le distant
+GET    /api/terminal/sessions                       métadonnées des vivantes
 ```
 
 Elle vit sur l'**hôte console**, comme le reste du §37 : le plan de contrôle n'y
@@ -4900,6 +4913,19 @@ est pas.
 
 Un identifiant de session est **opaque et imprévisible** — tiré au hasard, jamais
 dérivé du nom du Spark : il ouvre un shell, et le deviner reviendrait à l'obtenir.
+
+`GET /api/terminal/sessions` ne rend que les sessions encore vivantes de CET
+hôte console : identifiant opaque, Forge, Spark, chemin, type dérivé du chemin,
+conteneur éventuel, heures d'ouverture et de dernière activité, état `open`.
+Il ne rend ni tampon, ni frappe, ni sortie. Une session finie quitte cette liste
+dans le même geste qui tue le processus ; il n'existe ni historique, ni état
+« fermé » à ressusciter.
+
+Plusieurs grilles peuvent observer une même session quand le registre la retrouve
+dans une autre vue. La fermeture d'un flux retire seulement son abonnement ;
+**la fermeture du dernier flux** tue le processus avec `flux_ferme`. Quitter son
+unique onglet garde donc le contrat de SPK-43, sans qu'une sélection depuis le
+registre détruise le shell encore observé ailleurs.
 
 #### 37.4.5 Ce que le journal reçoit de l'hôte console
 

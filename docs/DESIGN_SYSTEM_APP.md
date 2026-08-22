@@ -153,6 +153,21 @@ Règles propres :
   façons ;
 - le mode lecteur d'écran est activable et son réglage persiste.
 
+SPK-70 précise la surface sans en faire une exception à la navigation : la grille
+xterm reçoit le focus et la frappe directement — ni champ miroir, ni bouton
+« envoyer ». Elle garde la sélection, le copier-coller et les touches de contrôle
+du terminal. Son mode lecteur d'écran expose la restitution textuelle interprétée
+sans jamais montrer les séquences brutes.
+
+Le registre des sessions est un second repère de l'exploitation, pas une nouvelle
+destination : à large écran, il occupe le bord gauche de la console et reste
+visible pendant la navigation. Il liste le type, Forge, Spark, conteneur s'il y
+en a un, chemin, ouverture et dernière activité ; une ligne mène à la session.
+« Fermer » demande confirmation et nomme la session visée. Sous 1024 px, ce
+registre devient un tiroir déclenché par un bouton libellé, avec focus rendu à son
+déclencheur à la fermeture ; il ne réduit jamais la grille au point de la rendre
+inutilisable.
+
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 
 Les mesures d'un Spark viennent du runtime et se comparent à ses quotas

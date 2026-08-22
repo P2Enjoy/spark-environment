@@ -29,6 +29,21 @@ function fauxSsh() {
   e.stdin = { ecrit: [], write(d) { this.ecrit.push(String(d)); } };
   e.tue = [];
   e.kill = (signal) => e.tue.push(signal);
+  // Le double garde aussi l'interface d'un PTY : la sortie est un seul flux,
+  // et la taille est un appel dédié, jamais une commande tapée dans le shell.
+  e.onData = (ecouter) => {
+    const sortie = (data) => ecouter(String(data));
+    e.stdout.on('data', sortie); e.stderr.on('data', sortie);
+    return { dispose: () => { e.stdout.off('data', sortie); e.stderr.off('data', sortie); } };
+  };
+  e.onExit = (ecouter) => {
+    const sortie = (code, signal) => ecouter({ exitCode: code ?? 0, signal: signal ?? null });
+    e.on('exit', sortie);
+    return { dispose: () => e.off('exit', sortie) };
+  };
+  e.write = (data) => e.stdin.write(data);
+  e.redimensionnements = [];
+  e.resize = (cols, rows) => e.redimensionnements.push({ cols, rows });
   return e;
 }
 
@@ -42,7 +57,7 @@ function pile({ tunnel, spark, chemin, motifDepannage,
     enfants.push(enfant);
     return enfant;
   };
-  const manager = new SessionManager({ spawn: spawnFn, ...options });
+  const manager = new SessionManager({ ptySpawn: spawnFn, ...options });
   const session = manager.ouvrir({
     tunnel: tunnel ?? { jumpArgs: () => ['-J', 'ubuntu@203.0.113.10:22'] },
     spark: spark ?? SPARK, chemin, motifDepannage, conteneur, shell,
@@ -106,8 +121,9 @@ test('ce que la session DÉCRIT ne porte aucun contenu', () => {
   // `shell-conteneur.test.js` garde la règle. Ici, on éprouve qu'aucun contenu
   // de session n'y arrive.
   assert.deepEqual(Object.keys(session.describe()).sort(),
-    ['closed', 'container', 'durationSeconds', 'id', 'openedAt', 'path',
-     'rescueReason', 'reason', 'shell', 'spark'].sort());
+    ['closed', 'container', 'durationSeconds', 'forge', 'id', 'lastActivity',
+     'openedAt', 'path', 'rescueReason', 'reason', 'shell', 'spark', 'state',
+     'type'].sort());
   // Et le nouveau champ est BORNÉ : il ne prend que des motifs connus, jamais
   // un texte venu de la session. Sinon il rouvrirait exactement la fuite que ce
   // test existe pour fermer.
@@ -214,10 +230,11 @@ test('une frappe REPOUSSE la fermeture pour inactivité', async () => {
 
 // --- le redimensionnement, et sa limite (§37.4.3) ---------------------------
 
-test('le redimensionnement passe par « stty » sur le canal d’entrée', () => {
+test('le redimensionnement appelle le PTY sans écrire dans le shell', () => {
   const { session, enfant } = pile();
   session.redimensionner(40, 120);
-  assert.deepEqual(enfant.stdin.ecrit, ['stty rows 40 cols 120\n']);
+  assert.deepEqual(enfant.redimensionnements, [{ cols: 120, rows: 40 }]);
+  assert.deepEqual(enfant.stdin.ecrit, []);
 });
 
 test('une taille hors bornes est refusée en NOMMANT la dimension', () => {
@@ -251,7 +268,7 @@ test('le DOUBLON remplace la commande lancée, pas le mécanisme', () => {
   const enfants = [];
   const manager = new SessionManager({
     commande: '/bin/sh -i',
-    spawn: (commande, args) => {
+    ptySpawn: (commande, args) => {
       const e = fauxSsh(); e.commande = commande; e.args = args;
       enfants.push(e); return e;
     },

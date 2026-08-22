@@ -1058,7 +1058,7 @@ export function createConsoleHost(options = {}) {
       }
     },
 
-    /** Le redimensionnement, avec la limite du §37.4.3. */
+    /** Le vrai redimensionnement du pseudo-terminal (§37.4.3). */
     'POST /api/terminal/taille': async (corps, url) => {
       try {
         terminaux.get(String(url?.searchParams.get('id') ?? ''))
@@ -1069,6 +1069,11 @@ export function createConsoleHost(options = {}) {
         return { status: 409, body: { error: 'resize_refused', message: erreur.message } };
       }
     },
+
+    /** Les seules métadonnées des sessions VIVANTES, jamais leurs octets. */
+    'GET /api/terminal/sessions': async () => ({
+      status: 200, body: { sessions: terminaux.list() },
+    }),
 
     /**
      * Fermeture par BALISE, quand la page se démonte (§37.4.2).
@@ -1098,8 +1103,15 @@ export function createConsoleHost(options = {}) {
     },
 
     'DELETE /api/tunnels': async (corps) => {
-      tunnels.close(corps?.name);
-      return { status: 200, body: { closed: corps?.name } };
+      const nom = String(corps?.name ?? '');
+      // Une session que son hôte console ne peut plus rattacher à sa Forge n'est
+      // plus une session pilotable. On la tue au même moment que le tunnel et
+      // le registre l'oublie : aucun shell ne reste orphelin sous une ligne qui
+      // prétendrait encore être ouverte (§37.4.2, SPK-70).
+      const fermees = terminaux.fermerPourForge(nom);
+      tunnels.close(nom);
+      await Promise.all(fermees.map((session) => session.attendreFermeture()));
+      return { status: 200, body: { closed: nom, sessionsClosed: fermees.length } };
     },
   };
 
@@ -1265,8 +1277,9 @@ async function relayer(url, requete, reponse, tunnels, fetchFn,
 /**
  * Sert la sortie d'une session en flux d'évènements (§37.4.1).
  *
- * La fermeture du flux TUE la session (§37.4.2) : c'est ce qui fait qu'un onglet
- * fermé ne laisse pas un shell root derrière lui.
+ * La fermeture du DERNIER flux TUE la session (§37.4.2) : c'est ce qui fait
+ * qu'un onglet fermé ne laisse pas un shell root derrière lui, sans tuer une
+ * session que le registre vient aussi d'ouvrir dans une autre vue.
  */
 function servirFlux(url, reponse, terminaux) {
   const id = String(url.searchParams.get('id') ?? '');
@@ -1316,7 +1329,7 @@ function servirFlux(url, reponse, terminaux) {
   });
   reponse.on('close', () => {
     desabonner();
-    terminaux.fermer(id, FLUX_FERME);
+    if (session.nombreAbonnes() === 0) terminaux.fermer(id, FLUX_FERME);
   });
   return reponse;
 }
@@ -1328,12 +1341,21 @@ const RACINE_DEPOT = join(RACINE, '..', '..');
 // Le manuel est servi depuis sa SOURCE UNIQUE (§30). Le recopier dans la
 // console en ferait une seconde version, qui divergerait.
 const RACINE_MANUEL = join(RACINE_DEPOT, 'docs', 'manuel');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
                 '.svg': 'image/svg+xml', '.json': 'application/json' };
+
+// Ces trois fichiers sont les SEULS artefacts de dépendance que la console sert
+// au navigateur. Une URL arbitraire ne peut jamais explorer `node_modules` : la
+// table ferme la frontière et le lockfile fixe les versions (§37.4.1).
+const DEPENDANCES_NAVIGATEUR = {
+  '/vendor/xterm/xterm.mjs': join(RACINE, 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.mjs'),
+  '/vendor/xterm/addon-fit.mjs': join(RACINE, 'node_modules', '@xterm', 'addon-fit', 'lib', 'addon-fit.mjs'),
+  '/vendor/xterm/xterm.css': join(RACINE, 'node_modules', '@xterm', 'xterm', 'css', 'xterm.css'),
+};
 
 async function servirStatique(chemin, reponse) {
   const relatif = normalize(chemin === '/' ? '/index.html' : chemin).replace(/^(\.\.[/\\])+/, '');
-  const fichier = join(RACINE, relatif);
+  const fichier = DEPENDANCES_NAVIGATEUR[relatif] ?? join(RACINE, relatif);
   if (!fichier.startsWith(RACINE)) {
     return repondre(reponse, 403, { error: 'forbidden', message: 'Chemin refusé.' });
   }

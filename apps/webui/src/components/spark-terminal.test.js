@@ -16,10 +16,11 @@ import { renderTerminal, TERMINAL_VIDE, CHAMP_TERMINAL } from './spark-terminal.
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16', protected: 0 };
 const etat = (surcharge = {}) => ({ ...TERMINAL_VIDE, ...surcharge });
 
-test('fermé, l’écran propose d’OUVRIR et la saisie est désactivée', () => {
+test('fermé, l’écran propose d’OUVRIR sans champ de saisie séparé', () => {
   const rendu = renderTerminal(SPARK);
   assert.ok(rendu.includes('Ouvrir un terminal'));
-  assert.match(rendu, /id="terminal-entree"[^>]*disabled/);
+  assert.ok(!rendu.includes('terminal-entree'));
+  assert.ok(rendu.includes(`id="${CHAMP_TERMINAL}"`));
 });
 
 test('pendant l’ouverture, le bouton le DIT et ne se re-clique pas', () => {
@@ -28,10 +29,11 @@ test('pendant l’ouverture, le bouton le DIT et ne se re-clique pas', () => {
   assert.match(rendu, /data-terminal="ouvrir"[^>]*disabled/);
 });
 
-test('ouvert, la saisie est active et la session peut se fermer', () => {
+test('ouvert, la grille directe et la fermeture sont offertes', () => {
   const rendu = renderTerminal(SPARK, etat({
     status: 'ouvert', session: { id: 'a', path: 'ssh' } }));
-  assert.ok(!/id="terminal-entree"[^>]*disabled/.test(rendu));
+  assert.ok(rendu.includes('terminal--emulateur'));
+  assert.ok(!rendu.includes('terminal-entree'));
   assert.ok(rendu.includes('Fermer la session'));
 });
 
@@ -131,30 +133,26 @@ test('le mode lecteur d’écran est ACTIVABLE et son état se voit', () => {
   assert.match(allume, /data-terminal="lecteur"[^>]*checked/);
 });
 
-test('le mode lecteur d’écran fait du terminal une région ANNONCÉE', () => {
-  // Un terminal est utilisable au clavier par construction, mais il n'est pas
-  // LISIBLE par défaut : sans cela, la sortie défile sans être lue.
+test('le mode lecteur d’écran garde le réglage sans réintroduire la sortie brute', () => {
+  // La restitution accessible est créée par xterm au montage. Le composant ne
+  // fabrique aucun second flux ni tampon texte, qui finirait par réexposer ANSI.
   const allume = renderTerminal(SPARK, etat({ status: 'ouvert', lecteurEcran: true }));
-  assert.match(allume, /role="log"/);
-  assert.match(allume, /aria-live="polite"/);
-
-  const eteint = renderTerminal(SPARK, etat({ status: 'ouvert' }));
-  assert.match(eteint, /role="region"/);
-  assert.ok(!eteint.includes('aria-live'));
+  assert.match(allume, /data-terminal="lecteur"[^>]*checked/);
+  assert.ok(!allume.includes('<pre'));
+  assert.ok(!allume.includes('aria-live'));
 });
 
-test('la sortie a un conteneur nommé, atteignable au clavier', () => {
+test('la grille a un conteneur nommé ; xterm y porte le focus', () => {
   const rendu = renderTerminal(SPARK, etat({ status: 'ouvert' }));
   assert.ok(rendu.includes(`id="${CHAMP_TERMINAL}"`));
-  assert.match(rendu, /tabindex="0"/);
-  assert.ok(rendu.includes('aria-label="Sortie du terminal"'));
+  assert.ok(rendu.includes('terminal--emulateur'));
+  assert.ok(rendu.includes('aria-label="Terminal interactif"'));
 });
 
-test('la limite du redimensionnement est DITE, pas laissée à découvrir', () => {
-  // §37.4.3 : « stty » ne réveille pas un programme plein écran déjà en cours.
+test('le redimensionnement réel est DIT, sans la limite stty historique', () => {
   const rendu = renderTerminal(SPARK, etat({ status: 'ouvert' }));
-  assert.ok(rendu.includes('déjà lancé'));
-  assert.ok(rendu.includes('relancer'));
+  assert.ok(rendu.includes('programmes plein écran reçoivent'));
+  assert.ok(!rendu.includes('stty'));
 });
 
 test('sans Spark, l’écran ne rend RIEN plutôt qu’un cadre vide', () => {
@@ -251,7 +249,7 @@ test('un refus de dépannage n’EFFACE pas l’écran du terminal', () => {
     status: 'refus',
     refus: { error: 'rescue_refused', reason: 'cle_refusee',
              message: 'Le « sshd » de ce Spark répond mais refuse la clé.' } }));
-  assert.match(rendu, /id="terminal-entree"/, 'la surface du terminal survit');
+  assert.match(rendu, new RegExp(`id="${CHAMP_TERMINAL}"`), 'la surface du terminal survit');
   assert.match(rendu, /refuse la clé/);
 });
 
@@ -260,7 +258,7 @@ test('un Spark sans cellule reste un refus PLEIN ÉCRAN, lui', () => {
   const rendu = renderTerminal(SPARK, etat({
     status: 'refus',
     refus: { error: 'spark_not_reachable', message: 'pas encore de cellule' } }));
-  assert.ok(!rendu.includes('id="terminal-entree"'));
+  assert.ok(!rendu.includes(`id="${CHAMP_TERMINAL}"`));
   assert.match(rendu, /doit être <strong>créé<\/strong>/);
 });
 

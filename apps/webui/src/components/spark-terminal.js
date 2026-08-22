@@ -20,7 +20,7 @@ const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-/** État de l'écran. Les octets ne vivent PAS ici : voir `TERMINAL_VIDE.lignes`. */
+/** État de l'écran. Les octets ne vivent PAS ici : ils restent dans xterm. */
 export const TERMINAL_VIDE = {
   status: 'ferme',      // 'ferme' | 'ouverture' | 'ouvert' | 'refus'
   session: null,        // { id, path, rescueReason }
@@ -286,28 +286,21 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
           })()
         : '';
 
-  // Le mode lecteur d'écran fait du terminal une région annoncée : sans lui, la
-  // sortie défile sans qu'aucune synthèse vocale ne la lise (SPK-DS-04).
-  const region = etat.lecteurEcran
-    ? ' role="log" aria-live="polite" aria-label="Sortie du terminal"'
-    : ' role="region" aria-label="Sortie du terminal"';
-
   return `
 <section class="carte bloc" aria-labelledby="titre-terminal">
   <h2 id="titre-terminal">Terminal</h2>
   ${bandeau}
   ${refusDepannage}
   ${refusConteneur}
-  ${avis}${fin}${diagnostic}
-  <pre class="terminal" id="${CHAMP_TERMINAL}" tabindex="0"${region}></pre>
-  <label class="sr-only" for="terminal-entree">Saisie du terminal</label>
-  <input class="controle technique" id="terminal-entree" type="text" autocomplete="off"
-         spellcheck="false" placeholder="Tapez une commande, Entrée pour l’envoyer"
-         ${etat.status === 'ouvert' ? '' : 'disabled'}>
+  <div id="terminal-evenements">${avis}${fin}${diagnostic}</div>
+  <!-- xterm crée son propre champ de focus. Un second input ferait perdre les
+       touches de contrôle, la sélection et le collage au vrai terminal. -->
+  <div class="terminal terminal--emulateur" id="${CHAMP_TERMINAL}"
+       role="region" aria-label="Terminal interactif"></div>
   <p class="champ__aide">Redimensionner la fenêtre propage la taille ${
     etat.session?.container ? 'au conteneur' : 'au Spark'}.
-  Un programme plein écran <strong>déjà lancé</strong> ne s’en apercevra pas : il
-  faut le relancer.</p>
+  Les programmes plein écran reçoivent aussi ce changement. La frappe, le
+  collage, la sélection et la copie se font directement dans cette grille.</p>
   ${commandes}
 </section>`;
 }

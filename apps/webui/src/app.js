@@ -15,6 +15,7 @@ import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
+import { renderSessionRegistry } from './components/session-registry.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
   from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
@@ -71,6 +72,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                    } catch { return false; }
                  })(),
                },
+               // SPK-70 : seulement les métadonnées que l'hôte décrit. Aucun
+               // octet de terminal n'entre dans l'état de la SPA.
+               sessions: { items: [], confirmation: null, tiroirOuvert: false },
                servers: [],
                catalogueServeurs: { status: 'loading', servers: [], tunnels: [],
                                     current: null, error: null,
@@ -146,6 +150,7 @@ function peindre() {
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
         + renderSparksView(etat);
   brancher();
+  peindreRegistreSessions();
 }
 
 /**
@@ -305,6 +310,106 @@ function brancher() {
  * formulaire à l'ouverture, l'annulation le rend au déclencheur, et un refus du
  * serveur ne touche pas à la saisie.
  */
+/* ----------------------------------------------------- registre des sessions */
+
+let sessionAReprendre = null;
+let minuterieSessions = null;
+
+function peindreRegistreSessions() {
+  const panneau = racine.querySelector('.registre-sessions');
+  const contenu = racine.querySelector('#contenu-registre-sessions');
+  const bascule = racine.querySelector('[data-registre="basculer"]');
+  if (!panneau || !contenu || !bascule) return;
+  panneau.classList.toggle('registre-sessions--ouvert', etat.sessions.tiroirOuvert);
+  bascule.setAttribute('aria-expanded', String(etat.sessions.tiroirOuvert));
+  bascule.textContent = etat.sessions.tiroirOuvert ? 'Masquer' : 'Afficher';
+  contenu.innerHTML = renderSessionRegistry({
+    sessions: etat.sessions.items, confirmation: etat.sessions.confirmation,
+  });
+  brancherRegistreSessions();
+}
+
+async function releverSessions() {
+  try {
+    const reponse = await fetch('/api/terminal/sessions');
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    etat.sessions.items = corps.sessions ?? [];
+    if (!etat.sessions.items.some((session) => session.id === etat.sessions.confirmation)) {
+      etat.sessions.confirmation = null;
+    }
+  } catch {
+    // Le registre est une aide locale : une erreur de rafraîchissement ne doit
+    // ni inventer une ligne, ni fermer une session dont le sort est inconnu.
+  }
+  peindreRegistreSessions();
+}
+
+function programmerReleveSessions() {
+  clearTimeout(minuterieSessions);
+  // La liste est locale et minuscule ; cette cadence garde l'inactivité et une
+  // fin distante visibles sans sonder un Spark ni toucher à son contenu.
+  minuterieSessions = setTimeout(async () => {
+    await releverSessions();
+    programmerReleveSessions();
+  }, 3000);
+}
+
+async function selectionnerSession(id) {
+  const session = etat.sessions.items.find((candidate) => candidate.id === id);
+  if (!session) return;
+  if (etat.terminal.session && etat.terminal.session.id !== id) {
+    // Une fenêtre ne peut présenter qu'une grille à la fois. La quitter garde
+    // le contrat historique : elle tue SON shell avant d'en suivre un autre.
+    await fermerTerminal('sortie');
+  }
+  // Une session appartient à sa Forge. Le contexte est basculé avant la route,
+  // sinon on afficherait un homonyme d'un autre serveur sous le mauvais shell.
+  if (session.forge && session.forge !== etat.server) await changerDeServeur(session.forge);
+  sessionAReprendre = session;
+  const cible = `#/sparks/${encodeURIComponent(session.spark)}/terminal`;
+  if (location.hash === cible) await router();
+  else location.hash = cible;
+}
+
+function brancherRegistreSessions() {
+  const bascule = racine.querySelector('[data-registre="basculer"]');
+  // Le bouton vit dans la coquille, contrairement au contenu qu'on remplace à
+  // chaque relevé. Ne l'abonner qu'une fois : plusieurs écouteurs inverseraient
+  // le tiroir autant de fois et le laisseraient fermé après un rafraîchissement.
+  if (bascule && !bascule.dataset.registreBranche) {
+    bascule.dataset.registreBranche = 'true';
+    bascule.addEventListener('click', () => {
+      etat.sessions.tiroirOuvert = !etat.sessions.tiroirOuvert;
+      peindreRegistreSessions();
+      if (etat.sessions.tiroirOuvert) racine.querySelector('[data-session-select]')?.focus();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-session-select]')) {
+    bouton.addEventListener('click', () => selectionnerSession(bouton.dataset.sessionSelect));
+  }
+  for (const bouton of racine.querySelectorAll('[data-session-close]')) {
+    bouton.addEventListener('click', () => {
+      etat.sessions.confirmation = bouton.dataset.sessionClose;
+      peindreRegistreSessions();
+      racine.querySelector('[data-session-close-confirm]')?.focus();
+    });
+  }
+  racine.querySelector('[data-session-close-cancel]')?.addEventListener('click', () => {
+    etat.sessions.confirmation = null;
+    peindreRegistreSessions();
+  });
+  for (const bouton of racine.querySelectorAll('[data-session-close-confirm]')) {
+    bouton.addEventListener('click', async () => {
+      const id = bouton.dataset.sessionCloseConfirm;
+      etat.sessions.confirmation = null;
+      await fetch(`/api/terminal?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+      if (etat.terminal.session?.id === id) await fermerTerminal(null);
+      await releverSessions();
+    });
+  }
+}
+
 /* ------------------------------------------------------------- le terminal */
 
 /**
@@ -312,6 +417,73 @@ function brancher() {
  * ouverte, pas une donnée d'écran, et la peindre n'aurait aucun sens.
  */
 let fluxTerminal = null;
+
+// SPK-70 : l'émulateur vit hors de l'état comme le flux. Garder son tampon dans
+// `etat` le sérialiserait avec les autres données d'écran et créerait un
+// historique de session ; il est détruit dès que la session quitte sa surface.
+let emulateurTerminal = null;
+let ajusteurTerminal = null;
+let observateurTerminal = null;
+let chargementEmulateur = null;
+// Une fermeture demandée par cette surface laisse le flux ouvert le temps que
+// DELETE atteigne l'hôte. Son évènement `fin` ne doit pas démonter la grille
+// avant que cette fonction ait achevé la fermeture explicitement demandée.
+let fermetureLocaleTerminal = null;
+
+async function modulesTerminal() {
+  chargementEmulateur ??= Promise.all([
+    import('/vendor/xterm/xterm.mjs'),
+    import('/vendor/xterm/addon-fit.mjs'),
+  ]).then(([xterm, fit]) => ({ Terminal: xterm.Terminal, FitAddon: fit.FitAddon }));
+  return chargementEmulateur;
+}
+
+function detruireEmulateurTerminal() {
+  observateurTerminal?.disconnect();
+  observateurTerminal = null;
+  ajusteurTerminal?.dispose?.();
+  ajusteurTerminal = null;
+  emulateurTerminal?.dispose?.();
+  emulateurTerminal = null;
+}
+
+/** Monte xterm dans la grille actuellement rendue, sans jamais garder ses octets. */
+async function monterEmulateurTerminal({ focus = false } = {}) {
+  const cible = racine.querySelector(`#${CHAMP_TERMINAL}`);
+  if (!cible) return false;
+  if (emulateurTerminal?.element === cible) {
+    if (focus) emulateurTerminal.focus();
+    return true;
+  }
+  detruireEmulateurTerminal();
+  const { Terminal, FitAddon } = await modulesTerminal();
+  // Une navigation peut avoir remplacé la surface pendant le chargement du
+  // module : ne montons jamais un terminal détaché dans une ancienne vue.
+  const courant = racine.querySelector(`#${CHAMP_TERMINAL}`);
+  if (!courant || courant !== cible) return false;
+  const terminal = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: getComputedStyle(courant).fontFamily || 'monospace',
+    // Le lecteur d'écran est le tampon ACCESSIBLE de xterm : il reçoit le texte
+    // déjà interprété, jamais les séquences ANSI brutes.
+    screenReaderMode: Boolean(etat.terminal.lecteurEcran),
+  });
+  const fit = new FitAddon();
+  terminal.loadAddon(fit);
+  terminal.open(courant);
+  terminal.onData((octets) => envoyerAuTerminal(octets));
+  terminal.onResize(({ rows, cols }) => propagerTaille(rows, cols));
+  emulateurTerminal = terminal;
+  ajusteurTerminal = fit;
+  observateurTerminal = new ResizeObserver(() => {
+    if (emulateurTerminal === terminal) fit.fit();
+  });
+  observateurTerminal.observe(courant);
+  fit.fit();
+  if (focus) terminal.focus();
+  return true;
+}
 
 /**
  * Les octets en attente d'envoi (SPK-43, §37.4.1).
@@ -326,10 +498,18 @@ let envoiPlanifie = null;
 
 /** La sortie va DIRECTEMENT au DOM : l'état n'en garde aucune trace (§37.5). */
 function ecrireSortie(texte) {
-  const bloc = racine.querySelector(`#${CHAMP_TERMINAL}`);
-  if (!bloc) return;
-  bloc.append(texte);
-  bloc.scrollTop = bloc.scrollHeight;
+  emulateurTerminal?.write(texte);
+}
+
+/** Met à jour l'avis sans repeindre la grille, donc sans perdre son écran. */
+function rendreAvertissementTerminal(texte) {
+  const zone = racine.querySelector('#terminal-evenements');
+  if (!zone) return;
+  const avis = document.createElement('p');
+  avis.className = 'avertissement';
+  avis.setAttribute('role', 'status');
+  avis.textContent = texte;
+  zone.replaceChildren(avis);
 }
 
 /**
@@ -457,15 +637,9 @@ function brancherTerminal() {
     try {
       sessionStorage.setItem('spark.terminal.lecteur', String(lecteur.checked));
     } catch { /* stockage refusé : la préférence vaut pour cet écran seulement */ }
-    peindre();
-  });
-
-  const saisie = racine.querySelector('#terminal-entree');
-  saisie?.addEventListener('keydown', (evenement) => {
-    if (evenement.key !== 'Enter') return;
-    evenement.preventDefault();
-    envoyerAuTerminal(`${saisie.value}\n`);
-    saisie.value = '';
+    // xterm fournit sa propre restitution accessible. Changer cette option ne
+    // repeint pas la page : un rerendu détruirait l'écran courant du shell.
+    if (emulateurTerminal) emulateurTerminal.options.screenReaderMode = lecteur.checked;
   });
 }
 
@@ -526,6 +700,20 @@ async function diagnostiquerTerminal() {
  *                  le serveur choisit alors « container ».
  */
 async function ouvrirTerminal(chemin = 'ssh', conteneur = null) {
+  // L'ouverture depuis un conteneur change d'abord la facette. Attendre la
+  // grille rend ce passage déterministe : sans cela la requête pouvait partir
+  // avant que le routeur ait rendu « Terminal », et l'émulateur refusait une
+  // surface qui allait apparaître à l'image suivante.
+  const limite = Date.now() + 3000;
+  while (!racine.querySelector(`#${CHAMP_TERMINAL}`) && Date.now() < limite) {
+    await new Promise((resoudre) => requestAnimationFrame(resoudre));
+  }
+  if (!racine.querySelector(`#${CHAMP_TERMINAL}`)) {
+    etat.terminal.status = 'refus';
+    etat.terminal.refus = { error: 'emulator_unavailable',
+                            message: 'La surface du terminal n’a pas pu être rendue.' };
+    return peindre();
+  }
   const t = etat.terminal;
   t.status = 'ouverture';
   t.refus = null;
@@ -536,6 +724,15 @@ async function ouvrirTerminal(chemin = 'ssh', conteneur = null) {
   t.diagnostic = null;
   t.session = null;
   peindre();
+
+  try {
+    if (!await monterEmulateurTerminal()) throw new Error('Surface du terminal absente.');
+  } catch (erreur) {
+    t.status = 'refus';
+    t.refus = { error: 'emulator_unavailable',
+                message: `L’émulateur de terminal n’a pas pu être chargé : ${erreur.message}` };
+    return peindre();
+  }
 
   let corps;
   try {
@@ -556,28 +753,42 @@ async function ouvrirTerminal(chemin = 'ssh', conteneur = null) {
       t.status = corps?.error === 'rescue_refused'
         || corps?.error === 'container_shell_unavailable' ? 'ferme' : 'refus';
       t.refus = corps;
+      detruireEmulateurTerminal();
       return peindre();
     }
   } catch (erreur) {
     t.status = 'refus';
     t.refus = { error: 'console_unreachable', message: erreur.message };
+    detruireEmulateurTerminal();
     return peindre();
   }
 
-  t.session = corps;
-  t.status = 'ouvert';
-  peindre();
+  await suivreSessionTerminal(corps);
+}
 
+/** Attache la grille à une session ouverte par cette fenêtre ou le registre. */
+async function suivreSessionTerminal(session) {
+  const t = etat.terminal;
+  t.session = session;
+  t.status = 'ouvert';
+  t.refus = null;
+  t.fin = null;
+  t.avertissement = null;
+  peindre();
+  await monterEmulateurTerminal({ focus: true });
+
+  fluxTerminal?.close();
   fluxTerminal = new EventSource(
-    `/api/terminal/flux?id=${encodeURIComponent(corps.id)}`);
+    `/api/terminal/flux?id=${encodeURIComponent(session.id)}`);
   fluxTerminal.addEventListener('sortie', (e) => ecrireSortie(JSON.parse(e.data)));
   fluxTerminal.addEventListener('avertissement', (e) => {
     etat.terminal.avertissement = JSON.parse(e.data);
-    peindre();
+    rendreAvertissementTerminal(etat.terminal.avertissement);
   });
   fluxTerminal.addEventListener('fin', (e) => {
     const motif = JSON.parse(e.data);
     const finie = etat.terminal.session;
+    if (fermetureLocaleTerminal === finie?.id) return;
     etat.terminal.fin = motif;
     etat.terminal.status = 'ferme';
     // La session est CONSERVÉE à l'affichage : le §37.3 veut qu'on n'oublie pas
@@ -586,33 +797,20 @@ async function ouvrirTerminal(chemin = 'ssh', conteneur = null) {
     // prochaine ouverture, pas ici.
     fluxTerminal?.close();
     fluxTerminal = null;
+    detruireEmulateurTerminal();
     peindre();
 
     // §37.2 : un shell distant qui MEURT sur le chemin normal appelle une
     // explication. « sortie » est un départ volontaire et n'en appelle aucune.
     if (motif === 'distant_termine' && finie?.path !== 'rescue') diagnostiquerTerminal();
   });
-
-  propagerTaille();
-  racine.querySelector('#terminal-entree')?.focus();
+  releverSessions();
 }
 
-/**
- * Propage la taille (§37.4.3), déduite du conteneur de sortie.
- *
- * La limite est écrite à l'écran : un programme plein écran DÉJÀ lancé ne
- * recevra pas `SIGWINCH` et ne s'en apercevra pas.
- */
-async function propagerTaille() {
+/** Propage la géométrie exacte de xterm au vrai pseudo-terminal (§37.4.3). */
+async function propagerTaille(rows, cols) {
   const t = etat.terminal;
-  const bloc = racine.querySelector(`#${CHAMP_TERMINAL}`);
-  if (!t.session || !bloc) return;
-  const style = getComputedStyle(bloc);
-  const hauteurLigne = parseFloat(style.lineHeight) || 18;
-  // La largeur d'un caractère en fonte à chasse fixe vaut environ 0,6 em.
-  const largeurCar = (parseFloat(style.fontSize) || 13) * 0.6;
-  const rows = Math.max(4, Math.floor(bloc.clientHeight / hauteurLigne));
-  const cols = Math.max(20, Math.floor(bloc.clientWidth / largeurCar));
+  if (!t.session || !Number.isInteger(rows) || !Number.isInteger(cols)) return;
   await fetch(`/api/terminal/taille?id=${encodeURIComponent(t.session.id)}`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ rows, cols }),
@@ -622,18 +820,25 @@ async function propagerTaille() {
 /** Ferme la session, et TUE le distant (§37.4). */
 async function fermerTerminal(motif = 'sortie') {
   const t = etat.terminal;
+  const session = t.session;
+  // Le DELETE doit partir AVANT de couper EventSource : fermer ce dernier
+  // faisait auparavant gagner `flux_ferme` à la course contre la fermeture
+  // explicitement demandée, et perdait le motif exact au journal.
+  if (session && motif) {
+    fermetureLocaleTerminal = session.id;
+    await fetch(`/api/terminal?id=${encodeURIComponent(session.id)}`,
+                { method: 'DELETE' }).catch(() => {});
+  }
   fluxTerminal?.close();
   fluxTerminal = null;
-  const session = t.session;
+  detruireEmulateurTerminal();
   t.session = null;
   t.status = 'ferme';
   t.avertissement = null;
   if (motif) t.fin = motif;
   peindre();
-  if (session) {
-    await fetch(`/api/terminal?id=${encodeURIComponent(session.id)}`,
-                { method: 'DELETE' }).catch(() => {});
-  }
+  if (fermetureLocaleTerminal === session?.id) fermetureLocaleTerminal = null;
+  releverSessions();
 }
 
 /**
@@ -902,7 +1107,8 @@ window.addEventListener('pagehide', () => {
     `/api/terminal/fermeture?id=${encodeURIComponent(session.id)}`, new Blob());
 });
 // §37.4.3 : le redimensionnement de la fenêtre se propage au Spark.
-window.addEventListener('resize', () => { if (etat.terminal.session) propagerTaille(); });
+// Le `ResizeObserver` posé sur la grille xterm couvre aussi les changements de
+// largeur qui ne passent pas par `window.resize` (tiroir de sessions, zoom).
 
 function brancherPanneaux() {
   const admin = etat.admin;
@@ -1853,6 +2059,12 @@ async function chargerDetail(nom, facette = '') {
     etat.error = erreur;
   }
   peindre();
+  const reprise = sessionAReprendre;
+  if (reprise && etat.status === 'ready' && facette === 'terminal'
+      && reprise.spark === etat.spark?.name && (!reprise.forge || reprise.forge === etat.server)) {
+    sessionAReprendre = null;
+    await suivreSessionTerminal(reprise);
+  }
   // SPK-44 · §37.6 : la collecte commence à l'OUVERTURE de l'onglet, pas avant.
   // Un Spark dont on ne regarde pas le Docker n'est jamais interrogé.
   if (etat.facette === 'docker' && etat.status === 'ready') {
@@ -2550,7 +2762,7 @@ async function changerDeServeur(nom) {
   await ouvrirTunnel(nom);
   // Tout ce qui était affiché appartenait à l'AUTRE serveur : on relit plutôt
   // que de laisser des données d'un serveur sous le nom d'un autre.
-  router();
+  return router();
 }
 
 async function demarrer() {
@@ -2585,6 +2797,8 @@ async function demarrer() {
 
   peindreContexte();
   await router();
+  await releverSessions();
+  programmerReleveSessions();
 }
 
 demarrer();

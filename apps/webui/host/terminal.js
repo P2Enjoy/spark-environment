@@ -16,7 +16,17 @@
 
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { dansContexteDocker, quoterShell } from './docker-context.js';
+
+const require = createRequire(import.meta.url);
+
+// `node-pty` est natif. Le charger paresseusement évite d'initialiser son addon
+// dans les processus qui ne font qu'inventorier ou tester la console ; il n'est
+// requis que lorsqu'une vraie session va naître (§37.4.2).
+function spawnPty(...args) {
+  return require('node-pty').spawn(...args);
+}
 
 /** Délai d'inactivité avant fermeture (§37.4.2). Averti AVANT, jamais après. */
 export const INACTIVITE_MS = 15 * 60 * 1000;
@@ -182,7 +192,7 @@ export class Session {
   #notifierFermeture = null;
   #fermeturePromise = null;
 
-  constructor({ tunnel, spark, spawn: spawnFn = spawn, commande = null,
+  constructor({ tunnel, spark, ptySpawn = spawnPty, commande = null,
                 chemin = CHEMIN_SSH, motifDepannage = null,
                 conteneur = null, shell = null,
                 inactiviteMs = INACTIVITE_MS, preavisMs = PREAVIS_MS,
@@ -198,7 +208,7 @@ export class Session {
     this.fermeA = null;
     this.motif = null;
     this.derniereActivite = this.ouvertA;
-    this.spawnFn = spawnFn;
+    this.ptySpawn = ptySpawn;
     // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
     // Tout le reste du chemin est celui qui tournera en production.
     this.commande = commande;
@@ -235,7 +245,8 @@ export class Session {
    * comme pour le tunnel (§22.1).
    *
    * `-tt` force l'allocation d'un pseudo-terminal SUR LE SPARK : c'est le côté
-   * distant qui le fournit, et c'est ce qui évite un module natif ici (§37.4.2).
+   * distant qui le fournit. Le PTY local transmet aussi sa taille à OpenSSH
+   * (§37.4.2).
    */
   sshArgs() {
     return [
@@ -313,18 +324,22 @@ export class Session {
 
   demarrer() {
     const { programme, arguments_ } = this.argv();
-    this.#child = this.spawnFn(programme, arguments_, { stdio: ['pipe', 'pipe', 'pipe'] });
-    const pousser = (canal) => (bloc) => this.#diffuser(canal, bloc.toString('utf8'));
-    this.#child.stdout?.on('data', pousser('sortie'));
-    // La sortie d'erreur de `ssh` porte le motif d'un refus — « clé refusée »,
-    // « connexion fermée ». La taire obligerait à deviner (§22.3).
-    this.#child.stderr?.on('data', pousser('sortie'));
-    this.#child.on('exit', () => this.fermer(DISTANT_TERMINE));
-    this.#child.on('error', (erreur) => {
+    try {
+      // §37.4.2-3 : ce PTY LOCAL ne remplace pas le SSH ni son rebond. Il donne
+      // au client OpenSSH un terminal de contrôle afin qu'il propage un vrai
+      // changement de fenêtre au pseudo-terminal distant, sans écrire `stty`
+      // dans le shell de l'opérateur.
+      this.#child = this.ptySpawn(programme, arguments_, {
+        name: 'xterm-256color', cols: 80, rows: 24, cwd: process.cwd(), env: process.env,
+      });
+    } catch (erreur) {
       this.#diffuser('sortie',
         `\r\n[la console n'a pas pu lancer ${programme} : ${erreur.message}]\r\n`);
       this.fermer(DISTANT_TERMINE);
-    });
+      return this;
+    }
+    this.#child.onData((bloc) => this.#diffuser('sortie', bloc));
+    this.#child.onExit(() => this.fermer(DISTANT_TERMINE));
     this.#armerInactivite();
     return this;
   }
@@ -335,7 +350,15 @@ export class Session {
     return () => this.#abonnes.delete(envoyer);
   }
 
+  /** Nombre de grilles qui regardent encore cette session, sans son contenu. */
+  nombreAbonnes() { return this.#abonnes.size; }
+
   #diffuser(type, data) {
+    // « dernière activité » est une métadonnée de session, pas son contenu.
+    // Une sortie la met à jour pour que le registre ne fasse pas passer un
+    // shell occupé pour abandonné ; elle ne réarme pas l'inactivité, qui reste
+    // volontairement liée à une action de l'opérateur (§37.4.2).
+    if (type === 'sortie') this.derniereActivite = this.maintenant();
     for (const envoyer of this.#abonnes) {
       try {
         envoyer(type, data);
@@ -352,21 +375,22 @@ export class Session {
     if (!this.#child || this.fermeA) {
       throw new TerminalError('La session est fermée.');
     }
-    this.#child.stdin?.write(data);
+    this.#child.write(data);
     this.#armerInactivite();
   }
 
-  /**
-   * Redimensionne, avec la limite du §37.4.3 : `stty` ne réveille pas un
-   * programme plein écran DÉJÀ en cours, qui ne recevra pas `SIGWINCH`.
-   */
+  /** Redimensionne le PTY ; OpenSSH transmet alors `SIGWINCH` au distant. */
   redimensionner(rows, cols) {
     for (const [nom, valeur] of [['rows', rows], ['cols', cols]]) {
       if (!Number.isInteger(valeur) || valeur < 1 || valeur > 1000) {
         throw new TerminalError(`Taille « ${nom} = ${valeur} » hors bornes : 1 à 1000.`);
       }
     }
-    this.ecrire(`stty rows ${rows} cols ${cols}\n`);
+    if (!this.#child || this.fermeA) {
+      throw new TerminalError('La session est fermée.');
+    }
+    this.#child.resize(cols, rows);
+    this.#armerInactivite();
   }
 
   #armerInactivite() {
@@ -426,8 +450,10 @@ export class Session {
    * éprouvé : le §37.5 en fait une règle, pas une intention.
    */
   describe() {
+    const forge = this.tunnel?.name ?? this.tunnel?.server?.name ?? null;
     return {
       id: this.id, spark: this.spark.name,
+      forge,
       // §37.3 : le chemin RÉELLEMENT emprunté, pas une constante. C'est lui qui
       // fait tenir la bannière toute la session, et c'est lui que le journal
       // reçoit — un « ssh » écrit en dur mentirait sur les deux.
@@ -439,6 +465,10 @@ export class Session {
       container: this.conteneur,
       shell: this.shell,
       openedAt: new Date(this.ouvertA).toISOString(),
+      lastActivity: new Date(this.derniereActivite).toISOString(),
+      type: this.chemin === CHEMIN_DEPANNAGE ? 'rescue'
+        : this.chemin === CHEMIN_CONTENEUR ? 'container' : 'spark',
+      state: this.fermeA ? 'closed' : 'open',
       closed: Boolean(this.fermeA), reason: this.motif,
       durationSeconds: this.dureeSecondes(),
     };
@@ -499,12 +529,11 @@ export class SessionManager {
   #purges = new Map();
   #notifierFermeture = null;
 
-  constructor({ spawn: spawnFn = spawn, commande = null,
+  constructor({ ptySpawn = spawnPty, commande = null,
                 inactiviteMs = INACTIVITE_MS,
                 preavisMs = PREAVIS_MS, maintenant = () => Date.now(),
                 notifierFermeture = null } = {}) {
-    this.spawnFn = spawnFn;
-    this.commande = commande;
+    this.ptySpawn = ptySpawn;
     // §37.4.2 bis : le doublon remplace la COMMANDE lancée, pas le mécanisme.
     // Tout le reste du chemin est celui qui tournera en production.
     this.commande = commande;
@@ -522,7 +551,7 @@ export class SessionManager {
   preparer({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null,
              conteneur = null, shell = null }) {
     const session = new Session({
-      tunnel, spark, spawn: this.spawnFn, commande: commandePour(this.commande, spark, chemin),
+      tunnel, spark, ptySpawn: this.ptySpawn, commande: commandePour(this.commande, spark, chemin),
       chemin, motifDepannage, conteneur, shell,
       inactiviteMs: this.inactiviteMs,
       preavisMs: this.preavisMs, maintenant: this.maintenant,
@@ -573,6 +602,18 @@ export class SessionManager {
 
   list() {
     return [...this.#sessions.values()].map((s) => s.describe());
+  }
+
+  /** Ferme les sessions d'une Forge qui vient d'être déconnectée. */
+  fermerPourForge(forge, motif = FLUX_FERME) {
+    const fermees = [];
+    for (const session of [...this.#sessions.values()]) {
+      if (session.describe().forge === forge) {
+        this.fermer(session.id, motif);
+        fermees.push(session);
+      }
+    }
+    return fermees;
   }
 
   /** Ferme TOUT : l'hôte console s'arrête, aucun shell ne lui survit. */

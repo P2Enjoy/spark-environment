@@ -267,7 +267,9 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       + ' -n spark-audit "$0" ;;'
       + ' esac',
     SPARK_TERMINAL_COMMAND: JSON.stringify({
-      '*': 'cat',
+      // Le relai brut est nécessaire pour éprouver CSI/DSR : `cat` laisse le
+      // pilote canonique transformer ESC en `^[` avant de le réémettre.
+      '*': 'node e2e/terminal-doublon.mjs',
       'site-vitrine': { ssh: 'false', rescue: 'cat' },
     }),
     // Le `.env` du poste ne doit pas se réintroduire par l'environnement hérité.

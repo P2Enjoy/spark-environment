@@ -76,6 +76,18 @@ const USAGE = {
 
 function fauxSsh() { const e = new EventEmitter(); e.stderr = new EventEmitter(); e.kill = () => {}; return e; }
 
+/** Un PTY minimal : il garde le contrat unifié de node-pty, sans faux stdio. */
+function fauxPty(commande, args) {
+  const e = new EventEmitter();
+  e.commande = commande; e.args = args;
+  e.write = () => {};
+  e.resize = () => {};
+  e.kill = () => {};
+  e.onData = (ecouter) => { e.on('data', ecouter); return { dispose: () => e.off('data', ecouter) }; };
+  e.onExit = (ecouter) => { e.on('exit', ecouter); return { dispose: () => e.off('exit', ecouter) }; };
+  return e;
+}
+
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
                           // SPK-57 · §49.3 : le refus de RÉTRÉCISSEMENT. Il ne se
@@ -1017,15 +1029,7 @@ ctx.server.close();
   // clique. La bannière doit NOMMER le conteneur : sans elle on croit piloter le
   // Spark, et une commande tapée là n'a pas les mêmes effets.
   {
-    const terminaux = new SessionManager({
-      spawn: (commande, args) => {
-        const e = new EventEmitter();
-        e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
-        e.stdin = { write() {} }; e.kill = () => {};
-        e.commande = commande; e.args = args;
-        return e;
-      },
-    });
+    const terminaux = new SessionManager({ ptySpawn: fauxPty });
     ctx = await demarrer({
       terminaux,
       dockerReleve: { state: 'ok', containers: inventaire },
@@ -1036,7 +1040,7 @@ ctx.server.close();
     await page.click('button[data-conteneur="crm-web-1"]');
     await page.waitForSelector('[data-docker="terminal"]', { timeout: 8000 });
     await page.click('[data-docker="terminal"]');
-    await page.waitForSelector('.bandeau-terminal .badge--accent', { timeout: 8000 });
+    await page.waitForSelector('.bandeau-terminal .badge--accent', { timeout: 15000 });
     await page.screenshot({ path: join(SORTIE, '105-terminal-conteneur.png') });
     console.log('  105-terminal-conteneur.png');
     ctx.server.close();
@@ -1047,12 +1051,7 @@ ctx.server.close();
   // locataire — pas une panne, donc pas de rouge.
   {
     ctx = await demarrer({
-      terminaux: new SessionManager({ spawn: () => {
-        const e = new EventEmitter();
-        e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
-        e.stdin = { write() {} }; e.kill = () => {};
-        return e;
-      } }),
+      terminaux: new SessionManager({ ptySpawn: fauxPty }),
       dockerReleve: { state: 'ok', containers: inventaire },
       dockerConteneur: ouverts[0][1], dockerJournaux: ouverts[0][2],
       probeShell: async () => ({
@@ -1177,12 +1176,8 @@ ctx.server.close();
 {
   const enfants = [];
   const terminaux = new SessionManager({
-    spawn: (commande, args) => {
-      const e = new EventEmitter();
-      e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
-      e.stdin = { write() {} }; e.kill = () => {};
-      e.commande = commande; e.args = args; enfants.push(e);
-      return e;
+    ptySpawn: (commande, args) => {
+      const e = fauxPty(commande, args); enfants.push(e); return e;
     },
   });
   ctx = await demarrer({ terminaux, sondageSshd: { repond: false, motif: 'sshd_muet' } });
@@ -1209,18 +1204,45 @@ ctx.server.close();
   ctx.server.close();
 }
 
+// --- LA GRILLE ET LE REGISTRE DE SESSIONS (SPK-70, §37.4) -----------------
+// Ces deux vues prouvent ensemble le terminal interprété, le registre sans
+// contenu et son tiroir mobile. Le PTY factice n'est qu'un transport : la grille
+// xterm, le flux SSE et le registre sont ceux de l'application.
+{
+  const enfants = [];
+  const terminaux = new SessionManager({
+    ptySpawn: (commande, args) => {
+      const e = fauxPty(commande, args); enfants.push(e); return e;
+    },
+  });
+  ctx = await demarrer({ terminaux, sondageSshd: { repond: true, motif: null } });
+  await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
+  await page.click('[data-terminal="ouvrir"]');
+  await page.waitForSelector('.terminal--emulateur .xterm-rows', { timeout: 8000 });
+  enfants[0].emit('data', '\x1b[1;32mTerminal ANSI prêt\x1b[0m\r\n');
+  await page.waitForFunction(
+    () => document.querySelector('.xterm-rows')?.innerText.includes('Terminal ANSI prêt'),
+    { timeout: 8000 });
+  await page.waitForSelector('.registre-sessions__ligne', { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '107-terminal-xterm-registre.png') });
+  console.log('  107-terminal-xterm-registre.png');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.click('[data-registre="basculer"]');
+  await page.waitForSelector('.registre-sessions--ouvert .registre-sessions__ligne',
+                             { timeout: 8000 });
+  await page.screenshot({ path: join(SORTIE, '108-terminal-xterm-registre-mobile.png'),
+                          fullPage: true });
+  console.log('  108-terminal-xterm-registre-mobile.png');
+  ctx.server.close();
+}
+
 // Le SSHD MUET (§37.2) : l'écran doit NOMMER ce qui manque, et proposer la
 // suite. C'est le cas pour lequel le chemin de dépannage existe.
 {
   const enfants = [];
   const terminaux = new SessionManager({
-    spawn: () => {
-      const e = new EventEmitter();
-      e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
-      e.stdin = { write() {} }; e.kill = () => {};
-      enfants.push(e);
-      return e;
-    },
+    ptySpawn: () => { const e = fauxPty(); enfants.push(e); return e; },
   });
   ctx = await demarrer({ terminaux, sondageSshd: { repond: false, motif: 'sshd_muet' } });
   await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
@@ -1241,13 +1263,7 @@ ctx.server.close();
 {
   const enfants = [];
   const terminaux = new SessionManager({
-    spawn: () => {
-      const e = new EventEmitter();
-      e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
-      e.stdin = { write() {} }; e.kill = () => {};
-      enfants.push(e);
-      return e;
-    },
+    ptySpawn: () => { const e = fauxPty(); enfants.push(e); return e; },
   });
   ctx = await demarrer({ terminaux, sondageSshd: { repond: true, motif: 'cle_refusee' } });
   await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
@@ -1263,12 +1279,7 @@ ctx.server.close();
 
 // Le REFUS du dépannage : le chemin normal reste offert, l'écran ne se ferme pas.
 {
-  const terminaux = new SessionManager({ spawn: () => {
-    const e = new EventEmitter();
-    e.stdout = new EventEmitter(); e.stderr = new EventEmitter();
-    e.stdin = { write() {} }; e.kill = () => {};
-    return e;
-  } });
+  const terminaux = new SessionManager({ ptySpawn: fauxPty });
   ctx = await demarrer({ terminaux, sondageSshd: { repond: true, motif: null } });
   await ouvrirDetail(ctx.base, { facette: 'terminal', hauteur: 900 });
   await page.click('[data-terminal="depanner"]');
