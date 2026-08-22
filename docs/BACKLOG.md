@@ -4030,7 +4030,7 @@ de la DoD : l'unité reste donc honnêtement ouverte.
   Tests de l'installateur et de l'hôte, parcours E2E, captures desktop/mobile et
   manuel M2/M3 mis à jour.
 
-### [ ] SPK-69 · Mettre à jour `sparkd` à distance et recharger son unité
+### [~] SPK-69 · Mettre à jour `sparkd` à distance et recharger son unité
 
 **Suite de SPK-68, demandée le 2026-08-21.** Quand une Forge déjà joignable dit
 que sa build est en retard sur le dépôt du poste, l'écran sait le signaler
@@ -4063,7 +4063,20 @@ un geste de la console, pas une procédure parallèle.
   retour arrière est joué ; tests d'hôte et de composant, parcours E2E, captures,
   journal d'administration et manuel M2/M4/M8 mis à jour.
 
-### [~] SPK-70 · Terminal interactif fiable et sessions visibles
+**Livré et éprouvé sur la Forge réelle le 2026-08-22.** Le parcours a mis à
+jour `c5bff4e28` jusqu'à `6ab7974f9`, joué un retour volontaire, gardé un échec
+pip sans mutation, puis provoqué un échec réel de redémarrage : les sept phases,
+la tentative automatique de retour et la dernière build connue sont restées
+lisibles. Après retrait du drop-in de preuve, la Forge est revenue `ready` et la
+mise à jour a réussi. Les verdicts *poste en retard*, *build étrangère* et
+*aucun dépôt* ont été observés contre cette Forge sans bouton. Reste à observer
+*build non estampillée* sur une Forge réelle : neutraliser temporairement les
+deux estampilles du paquet a été refusé par la garde d'exécution, et aucune
+installation normale actuelle ne peut produire cet état. L'unité reste `[~]`
+jusqu'à une autorisation explicite de cette perturbation réversible ou la mise à
+disposition d'une Forge réellement non estampillée.
+
+### [x] SPK-70 · Terminal interactif fiable et sessions visibles
 
 **Besoin exprimé le 2026-08-21.** Le terminal intégré affiche actuellement les
 séquences de contrôle ANSI telles quelles — par exemple `\x1b[1;34m`,

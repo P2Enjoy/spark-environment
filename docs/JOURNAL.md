@@ -4,6 +4,27 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-22 — SPK-70 clos sur la Forge réelle ; audit de déconnexion corrigé
+
+Sur `51.158.54.202`, le vrai terminal SSH de `helo` interprète ANSI sans octet
+ESC visible, répond à DSR, propage le redimensionnement de `24×95` à `24×64`,
+reçoit `Ctrl+C` et un collage dans la grille. Le terminal du conteneur réel
+`helo-web-1` a coexisté avec celui du Spark dans le registre ; sa fermeture n'a
+pas interrompu le shell du Spark. `exit`, le changement direct vers
+`briefing-e2e`, l'inactivité ramenée à quatre secondes et la coupure du tunnel
+ont chacun retiré la bonne ligne.
+
+Cette dernière preuve a révélé que la route coupait le tunnel avant la fin de
+la déclaration d'audit. Le code attend désormais les fermetures tant que le
+tunnel existe, puis le coupe. Après push et mise à jour réelle vers `deb1cfa3d`,
+la paire d'entrées 158/159 porte `spark.terminal_open` puis
+`spark.terminal_close` avec `reason=flux_ferme`. Les marqueurs saisis et rendus
+sont absents des 40 dernières entrées, et la chaîne est intacte sur 147 entrées.
+SPK-70 passe à `[x]`. SPK-69 reste `[~]` pour son seul verdict non estampillé,
+dont la perturbation réelle réversible a été refusée par la garde d'exécution.
+La prochaine session reprend la première unité produit `[~]` selon l'ordre du
+backlog ; elle ne doit pas utiliser le driver local ou factice comme preuve.
+
 ## 2026-08-22 — SPK-70 implémenté, validation sur Forge réelle encore due
 
 La grille xterm remplace le rendu littéral et son champ de saisie : ANSI, DSR,
