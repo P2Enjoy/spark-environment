@@ -89,6 +89,13 @@ function git(args, cwd) {
   });
 }
 
+/** Résout une empreinte complète ou abrégée ; `null` couvre inconnue ET ambiguë. */
+export async function resoudreCommit(commit, racine) {
+  if (!/^[0-9a-f]{7,40}$/.test(String(commit ?? ''))) return null;
+  const resolved = await git(['rev-parse', `${commit}^{commit}`], racine);
+  return /^[0-9a-f]{40}$/.test(resolved ?? '') ? resolved : null;
+}
+
 /**
  * L'état du dépôt de ce poste. `null` quand il n'y en a pas.
  *
@@ -122,30 +129,34 @@ export async function comparer(forge, racine, depot = undefined) {
   if (!commit) return { verdict: NON_ESTAMPILLEE, forge: forge ?? null, local };
   if (!local) return { verdict: SANS_DEPOT, forge, local: null };
 
-  // Le commit est-il seulement CONNU d'ici ? `cat-file -e` répond sans rien
-  // supposer. Sans cette question, les `merge-base` qui suivent échoueraient et
-  // l'on conclurait « étrangère » pour la bonne raison mais par accident.
-  const connu = await git(['cat-file', '-e', `${commit}^{commit}`], racine);
-  if (connu === null) return { verdict: ETRANGERE, forge, local };
+  // Les paquets setuptools-scm historiques publient une abréviation unique.
+  // `rev-parse` la résout ET refuse une abréviation ambiguë : la route de mise
+  // à jour ne reçoit donc jamais autre chose qu'une empreinte complète.
+  const forgeCommit = await resoudreCommit(commit, racine);
+  if (forgeCommit === null) return { verdict: ETRANGERE, forge, local };
 
-  if (commit === local.head) return { verdict: A_JOUR, forge, local, behind: 0 };
+  if (forgeCommit === local.head) {
+    return { verdict: A_JOUR, forge, forgeCommit, local, behind: 0 };
+  }
 
   const forgeAncetre = await git(
-    ['merge-base', '--is-ancestor', commit, local.head], racine);
+    ['merge-base', '--is-ancestor', forgeCommit, local.head], racine);
   if (forgeAncetre !== null) {
-    const compte = await git(['rev-list', '--count', `${commit}..${local.head}`], racine);
-    return { verdict: FORGE_EN_RETARD, forge, local, behind: Number(compte ?? 0) };
+    const compte = await git(['rev-list', '--count', `${forgeCommit}..${local.head}`], racine);
+    return { verdict: FORGE_EN_RETARD, forge, forgeCommit, local,
+             behind: Number(compte ?? 0) };
   }
 
   const localAncetre = await git(
-    ['merge-base', '--is-ancestor', local.head, commit], racine);
+    ['merge-base', '--is-ancestor', local.head, forgeCommit], racine);
   if (localAncetre !== null) {
-    const compte = await git(['rev-list', '--count', `${local.head}..${commit}`], racine);
-    return { verdict: POSTE_EN_RETARD, forge, local, ahead: Number(compte ?? 0) };
+    const compte = await git(['rev-list', '--count', `${local.head}..${forgeCommit}`], racine);
+    return { verdict: POSTE_EN_RETARD, forge, forgeCommit, local,
+             ahead: Number(compte ?? 0) };
   }
 
   // Connu, mais ni ancêtre ni descendant : les deux histoires ont divergé. Le
   // §40.3 ne nomme pas ce cas séparément, et « étrangère » le décrit bien —
   // aucune conclusion n'est possible sur qui est en avance.
-  return { verdict: ETRANGERE, forge, local };
+  return { verdict: ETRANGERE, forge, forgeCommit, local };
 }

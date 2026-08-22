@@ -296,7 +296,8 @@ function phaseState(operation, phase) {
   const verification = result.verification;
   if (phase === 'healthz') {
     if (!verification) return 'pending';
-    return verification?.healthz?.status === 200 && verification.healthz.commit === result.target
+    return verification?.healthz?.status === 200 &&
+      verification.healthz.resolvedCommit === result.target
       ? 'done' : 'failed';
   }
   if (phase === 'readyz') {
@@ -306,7 +307,7 @@ function phaseState(operation, phase) {
   }
   if (phase === 'build') {
     if (!verification) return 'pending';
-    return verification?.build?.commit === result.target
+    return verification?.build?.resolvedCommit === result.target
       ? 'done' : 'failed';
   }
   return 'pending';
@@ -348,7 +349,7 @@ function renderUpdateActions(build, operation) {
       aria-labelledby="titre-confirmation-update">
       <h3 id="titre-confirmation-update">Mettre à jour sparkd ?</h3>
       <p>L’API du plan de contrôle sera brièvement interrompue. La build
-      <span class="technique">${echapper(build.forge?.commit?.slice(0, 12))}</span>
+      <span class="technique">${echapper((build.forgeCommit ?? build.forge?.commit)?.slice(0, 12))}</span>
       sera remplacée par <span class="technique">${echapper(build.local?.head?.slice(0, 12))}</span>.</p>
       <p class="formulaire__actions">
         <button type="button" class="bouton" data-action="confirmer-update">Mettre à jour sparkd</button>

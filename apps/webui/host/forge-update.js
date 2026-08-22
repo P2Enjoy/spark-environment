@@ -36,7 +36,7 @@ export function updateEligibility(comparison) {
   if (comparison?.verdict !== FORGE_EN_RETARD) {
     return { allowed: false, reason: 'La build de la Forge n’est pas un ancêtre sûr de ce poste.' };
   }
-  const before = comparison?.forge?.commit;
+  const before = comparison?.forgeCommit;
   const target = comparison?.local?.head;
   if (!COMMIT_PATTERN.test(before ?? '') || !COMMIT_PATTERN.test(target ?? '')) {
     return { allowed: false, reason: 'Les empreintes avant et cible ne sont pas complètes.' };
@@ -223,7 +223,7 @@ async function readJson(fetchFn, url) {
  */
 export async function verifyForge(localPort, expectedCommit, {
   fetchFn = fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  timeoutMs = VERIFY_TIMEOUT_MS,
+  timeoutMs = VERIFY_TIMEOUT_MS, resolveCommit = async (commit) => commit,
 } = {}) {
   if (!Number.isInteger(localPort) || localPort <= 0 ||
       !COMMIT_PATTERN.test(expectedCommit ?? '')) {
@@ -232,24 +232,34 @@ export async function verifyForge(localPort, expectedCommit, {
   const base = `http://127.0.0.1:${localPort}`;
   const deadline = Date.now() + timeoutMs;
   let last = null;
+  const resolved = new Map();
+  const resolve = async (commit) => {
+    if (!resolved.has(commit)) resolved.set(commit, await resolveCommit(commit));
+    return resolved.get(commit);
+  };
   do {
     const [health, ready, forge] = await Promise.all([
       readJson(fetchFn, `${base}/healthz`),
       readJson(fetchFn, `${base}/readyz`),
       readJson(fetchFn, `${base}/v1/forge`),
     ]);
+    const healthCommit = health.body?.build?.commit ?? null;
+    const forgeCommit = forge.body?.build?.commit ?? null;
+    const [healthResolved, forgeResolved] = await Promise.all([
+      resolve(healthCommit), resolve(forgeCommit),
+    ]);
     last = {
       healthz: { status: health.status, state: health.body?.status ?? null,
-                 commit: health.body?.build?.commit ?? null },
+                 commit: healthCommit, resolvedCommit: healthResolved },
       readyz: { status: ready.status, state: ready.body?.status ?? null,
                 detail: ready.body?.detail ?? ready.error ?? null },
-      build: { status: forge.status, commit: forge.body?.build?.commit ?? null,
+      build: { status: forge.status, commit: forgeCommit, resolvedCommit: forgeResolved,
                version: forge.body?.build?.version ?? null },
     };
     if (health.ok && health.body?.status === 'ok' &&
-        health.body?.build?.commit === expectedCommit &&
+        healthResolved === expectedCommit &&
         ready.ok && ready.body?.status === 'ready' &&
-        forge.ok && forge.body?.build?.commit === expectedCommit) {
+        forge.ok && forgeResolved === expectedCommit) {
       return { ok: true, expectedCommit, ...last };
     }
     if (Date.now() < deadline) await sleep(1_000);

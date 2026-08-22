@@ -15,7 +15,7 @@ const SERVER = { name: 'prod', kind: 'ssh', host: '203.0.113.10', user: 'ubuntu'
 
 function comparison(overrides = {}) {
   return {
-    verdict: 'forge_en_retard', forge: { commit: OLD },
+    verdict: 'forge_en_retard', forge: { commit: OLD.slice(0, 9) }, forgeCommit: OLD,
     local: { head: NEW, branch: 'main', published: NEW }, ...overrides,
   };
 }

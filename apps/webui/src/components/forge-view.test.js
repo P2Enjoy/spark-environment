@@ -486,8 +486,10 @@ test('le succès ne verdit qu après les preuves et garde le journal muet visibl
       state: 'success', target: 'b'.repeat(40), journaled: false,
       stages: { package: 'done', units: 'done', daemon_reload: 'done', restart: 'done' },
       verification: {
-        healthz: { status: 200, commit: 'b'.repeat(40) },
-        readyz: { status: 200, state: 'ready' }, build: { commit: 'b'.repeat(40) },
+        healthz: { status: 200, commit: 'b'.repeat(12),
+                   resolvedCommit: 'b'.repeat(40) },
+        readyz: { status: 200, state: 'ready' },
+        build: { commit: 'b'.repeat(12), resolvedCommit: 'b'.repeat(40) },
       },
     },
   });

@@ -22,9 +22,10 @@ import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
-import { comparer as comparerBuild, VERDICTS as VERDICTS_BUILD } from './build.js';
+import { comparer as comparerBuild, resoudreCommit,
+         VERDICTS as VERDICTS_BUILD } from './build.js';
 import {
-  ForgeUpdateManager, ForgeUpdateError, updateEligibility,
+  ForgeUpdateManager, ForgeUpdateError, updateEligibility, verifyForge,
 } from './forge-update.js';
 import { capture as capturerConsole, compare as comparerConsole,
          describe as decrireConsole } from './console-build.js';
@@ -86,7 +87,13 @@ export function createConsoleHost(options = {}) {
   const diagnosticForge = options.diagnoseForge ?? diagnostiquerForge;
   // SPK-69 · §40.6 : le gestionnaire porte le verrou et le reçu de retour
   // arrière. Sa durée est donc celle de l'hôte console, jamais celle d'une page.
-  const misesAJour = options.forgeUpdates ?? new ForgeUpdateManager();
+  const misesAJour = options.forgeUpdates ?? new ForgeUpdateManager({
+    // Les builds setuptools-scm publient légitimement une empreinte abrégée.
+    // La preuve la résout dans CE dépôt et compare ensuite quarante caractères.
+    verify: (port, commit) => verifyForge(port, commit, {
+      fetchFn, resolveCommit: (value) => resoudreCommit(value, racineDepot),
+    }),
+  });
 
   // SPK-47 · §38.1 : le jeton du fournisseur DNS vit dans l'environnement de CE
   // processus. Il est lu UNE fois : le relire à chaque requête ferait dépendre

@@ -60,6 +60,14 @@ test('commit de la Forge ANCÊTRE du dépôt : elle est en retard, et de combien
   await d.nettoyer();
 });
 
+test('une empreinte setuptools-scm ABREGEE est résolue avant tout geste', async () => {
+  const d = await depotJetable(3);
+  const vu = await comparer({ commit: d.commits[0].slice(0, 9) }, d.racine);
+  assert.equal(vu.verdict, FORGE_EN_RETARD);
+  assert.equal(vu.forgeCommit, d.commits[0]);
+  await d.nettoyer();
+});
+
 test('commit local ancêtre de celui de la Forge : c’est le POSTE qui est en retard', async () => {
   // Le cas qu'on oublie, et celui qui trompe le plus : l'écran dirait « en
   // retard » et l'exploitant redéploierait une version PLUS ANCIENNE.
