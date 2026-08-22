@@ -8316,6 +8316,14 @@ sparkd sans réponse**, jamais comme une Forge prête, ni comme une panne SSH.
 Les appels d'administration ordinaires continuent d'exiger `ready` ; seul le
 diagnostic d'installation peut utiliser le transport seul.
 
+L'ouverture du tunnel elle-même rend donc un succès HTTP dès que le transport
+SSH est établi, même si son objet conserve `state: broken` pour le plan de
+contrôle et `transportState: ready` pour SSH. La page ne lance alors aucun appel
+d'administration ordinaire : elle charge seulement le journal local et offre le
+diagnostic d'installation. Rendre `502` pour l'ouverture ou tenter aussitôt
+`/v1/forge` ferait apparaître dans la console navigateur deux pannes réseau là où
+le produit vient précisément de mesurer un accès SSH utilisable.
+
 ### 50.2 Le diagnostic est un contrat fermé et en lecture seule
 
 L'hôte console exécute, par OpenSSH, un script **versionné et immuable** dont les
