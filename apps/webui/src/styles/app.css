@@ -1,7 +1,8 @@
 /**
  * Console Spark — mise en page et composants.
  *
- * @spec docs/DESIGN_SYSTEM.md §5 (architecture), §6.7 (boutons), §6.8 (badges),
+ * @spec docs/BACKLOG.md#SPK-70 · docs/DAT.md §37.4 ·
+ *       docs/DESIGN_SYSTEM.md §5 (architecture), §6.7 (boutons), §6.8 (badges),
  *       §6.13 (états systématiques), §6.14 (tableau), §8 (responsive),
  *       §9 (accessibilité) · docs/DESIGN_SYSTEM_APP.md
  *
@@ -29,7 +30,10 @@
 }
 .registre-sessions__entete { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .registre-sessions__entete h2 { margin: 0; font-size: var(--text-body); }
-.registre-sessions__bascule { display: none; }
+/* La règle porte une spécificité supérieure à `.bouton`, déclaré plus bas.
+   Sinon sa propriété `display: inline-flex` ressuscite la commande sur grand
+   écran alors que le registre est déjà entièrement visible (§14.4). */
+.registre-sessions .registre-sessions__bascule { display: none; }
 .registre-sessions__contenu { margin-top: var(--space-3); }
 .registre-sessions__liste { display: grid; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
 .registre-sessions__ligne { padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
@@ -62,7 +66,7 @@
   .destination[aria-current="page"] { border-bottom-color: var(--color-brand); }
   .registre-sessions { padding: 0; border-right: 0; border-bottom: 1px solid var(--color-border); }
   .registre-sessions__entete { padding: var(--space-3) var(--space-4); }
-  .registre-sessions__bascule { display: inline-flex; }
+  .registre-sessions .registre-sessions__bascule { display: inline-flex; }
   .registre-sessions__contenu { display: none; margin: 0; padding: 0 var(--space-4) var(--space-4); }
   .registre-sessions--ouvert .registre-sessions__contenu { display: block; }
 }
