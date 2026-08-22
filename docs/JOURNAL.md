@@ -4,6 +4,27 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-22 — SPK-17 renforcé, GitHub Actions reste sans aucune exécution
+
+La vérification du contrat est désormais un job GitHub indépendant : elle
+régénère l'OpenAPI et les types TypeScript, puis exige un diff vide. Elle peut
+aussi être lancée par `workflow_dispatch`. Ce chemin ne démarre aucun driver
+Spark local ou factice et ne peut plus être sauté parce qu'une suite précédente
+échoue.
+
+Le push `5867c63` n'a pourtant créé aucun run après dix relevés. L'API publique
+voit bien le workflow `Vérification` actif, mais compte zéro exécution pour tout
+le dépôt. L'API de déclenchement manuel répond `401 Requires authentication` et
+la page Actions publique répond `404`. Aucun client `gh` n'est installé ; le
+connecteur GitHub disponible sait lire ou relancer un run existant, pas en créer
+un. SPK-17 reste donc `[~]` : il faut activer GitHub Actions sur le dépôt ou
+fournir un accès Actions authentifié, déclencher le job puis observer son
+résultat. Aucun test local ou sur driver factice n'a été utilisé comme preuve.
+
+Si cet accès n'est pas disponible à la prochaine session, la règle du
+CloudWorker conduit à SPK-28, première unité `[~]` qui porte encore du
+comportement à livrer.
+
 ## 2026-08-22 — SPK-70 clos sur la Forge réelle ; audit de déconnexion corrigé
 
 Sur `51.158.54.202`, le vrai terminal SSH de `helo` interprète ANSI sans octet

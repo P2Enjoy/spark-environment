@@ -276,9 +276,15 @@ opération manuelle et n'est pas planifié.
   TypeScript dérivées par `openapi-typescript` ; `make contract-check` sort en
   code 1 sur une vraie dérive provoquée, avec le diff et la marche à suivre.
 - **Reste, et c'est pourquoi l'unité n'est pas `[x]`** : la CI est écrite
-  (`.github/workflows/verification.yml`) mais **jamais exécutée**. Je ne peux pas
-  la déclencher ni observer son résultat depuis ici. Tant qu'une exécution n'a
-  pas eu lieu, « dérive détectée en CI » reste une intention, pas une preuve.
+  (`.github/workflows/verification.yml`) mais **jamais exécutée**. Le 2026-08-22,
+  le contrôle du contrat et de ses types a été isolé dans un job indépendant et
+  `workflow_dispatch` a été ajouté : une panne antérieure de la campagne ne peut
+  plus le masquer. Après le push `5867c63`, l'API publique GitHub déclarait le
+  workflow `active` mais toujours **zéro run** ; le déclenchement manuel répond
+  `401 Requires authentication` et la page Actions publique répond `404`.
+  Tant qu'Actions n'est pas activé ou qu'un accès authentifié ne déclenche pas
+  puis n'observe pas ce job, « dérive détectée en CI » reste une intention, pas
+  une preuve.
 
 ### [x] SPK-18 · Écran liste des Sparks
 
