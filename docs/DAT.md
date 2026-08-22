@@ -6244,8 +6244,9 @@ conserve à l'écran la dernière build connue. Pendant le geste, chaque phase e
 nommée ; « commande terminée » n'est pas une conclusion.
 
 Le succès exige, après reprise du tunnel, les trois constats **distants** :
-`/healthz` répond 200 et sert exactement le commit cible, `/readyz` répond 200,
-et `/v1/forge.build.commit` vaut ce même commit. Le commit doit différer de celui
+`/healthz` répond 200 et sert exactement le commit cible, `/readyz` répond 200
+avec `status = ready`, et `/v1/forge.build.commit` vaut ce même commit. Le
+commit doit différer de celui
 relevé avant le geste. Une version inchangée, une sonde dégradée, une réponse
 illisible ou un délai dépassé est un échec, même si pip est sorti avec zéro.
 
