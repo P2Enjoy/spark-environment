@@ -35,9 +35,9 @@ export function dansContexteDocker(argumentsDocker) {
     'if [ -n "$uid" ] && [ -S "$socket" ] && runuser -u '
       + `${COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR="/run/user/$uid" `
       + 'DOCKER_HOST="unix://$socket" docker info >/dev/null 2>&1; then',
-    `exec runuser -u ${COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR="/run/user/$uid" `
+    `  exec runuser -u ${COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR="/run/user/$uid" `
       + `DOCKER_HOST="unix://$socket" docker ${args}`,
     'fi',
     `exec docker ${args}`,
-  ].join('; ');
+  ].join('\n');
 }

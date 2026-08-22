@@ -1,7 +1,8 @@
 /**
  * Pile jetable pour les parcours E2E.
  *
- * @spec docs/BACKLOG.md#SPK-24 · docs/DAT.md §29.2 (le harnais monte sa propre
+ * @spec docs/BACKLOG.md#SPK-24, docs/BACKLOG.md#SPK-70 ·
+ *       docs/DAT.md §29.2 (le harnais monte sa propre
  *       pile), §28 (la pile de développement et le seed)
  *
  * Le harnais démarre `sparkd` et l'hôte console lui-même, sur des ports libres,

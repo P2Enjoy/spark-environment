@@ -1,7 +1,8 @@
 /**
  * Point d'entrée de la console dans le navigateur.
  *
- * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21, docs/BACKLOG.md#SPK-64 ·
+ * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21, docs/BACKLOG.md#SPK-64,
+ *       docs/BACKLOG.md#SPK-70 · docs/DAT.md §37.4 ·
  *       docs/DAT.md §26 (les trois panneaux d'administration, §26.2 le contrat
  *       d'interaction, §26.5 l'ordre refus-puis-acceptation) ·
  *       docs/BACKLOG.md#SPK-22 · docs/DAT.md §27 (l'écran des pools) ·
@@ -14,7 +15,8 @@ import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spar
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
-import { TERMINAL_VIDE, CHAMP_TERMINAL } from './components/spark-terminal.js';
+import { TERMINAL_VIDE, CHAMP_TERMINAL, destinationPorteSession }
+  from './components/spark-terminal.js';
 import { renderSessionRegistry } from './components/session-registry.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
   from './components/spark-create.js';
@@ -1094,7 +1096,8 @@ window.addEventListener('pagehide', arreterDocker);
 // §37.4 : quitter l'onglet TERMINE la session. Sans cela, un shell root
 // survivrait à l'écran qui l'a ouvert, et personne ne s'en souviendrait.
 window.addEventListener('hashchange', () => {
-  if (etat.terminal.session && !location.hash.endsWith('/terminal')) {
+  if (etat.terminal.session
+      && !destinationPorteSession(location.hash, etat.server, etat.terminal.session)) {
     fermerTerminal('sortie');
   }
 });

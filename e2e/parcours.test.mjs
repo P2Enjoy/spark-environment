@@ -1,7 +1,8 @@
 /**
  * Parcours E2E contre la pile réelle.
  *
- * @verifies docs/BACKLOG.md#SPK-24 · docs/DAT.md §29 (éprouver le produit par où
+ * @verifies docs/BACKLOG.md#SPK-24, docs/BACKLOG.md#SPK-70 ·
+ *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
  *           §29.5 (un échec dit pourquoi), §29.6 (la console fait partie du
@@ -2294,6 +2295,32 @@ test('quitter l’ONGLET termine la session, sans la fermer soi-même', async ()
       const { entries } = await r.json();
       return entries.filter((e) => e.action === 'spark.terminal_close').length > n;
     }, avant, { timeout: 20000 });
+  });
+});
+
+test('passer directement au terminal d’un autre Spark tue la première session', async () => {
+  await parcours('terminal-changement-spark', async () => {
+    await ouvrir('boutique', 'terminal');
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+    const avant = (await pile.lireSparkd('/v1/audit?limit=200')).corps.entries
+      .filter((e) => e.action === 'spark.terminal_close').length;
+
+    // Les deux destinations finissent par `/terminal` : l'identité du Spark,
+    // et non ce suffixe commun, doit décider de la fermeture.
+    await page.evaluate(() => { location.hash = '#/sparks/crm-production/terminal'; });
+    await page.waitForFunction(
+      () => document.querySelector('.entete-entite')?.textContent.includes('crm-production'),
+      null, { timeout: 20000 });
+    await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 20000 });
+
+    await page.waitForFunction(async (n) => {
+      const r = await fetch('/api/v1/audit?limit=200&server=local');
+      const { entries } = await r.json();
+      return entries.filter((e) => e.action === 'spark.terminal_close').length > n;
+    }, avant, { timeout: 20000 });
+    assert.equal(await page.$$eval('.registre-sessions__ligne', (l) => l.length), 0);
   });
 });
 

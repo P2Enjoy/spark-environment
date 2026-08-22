@@ -1,7 +1,8 @@
 /**
  * Hôte console : serveur local, inventaire et proxy vers les tunnels.
  *
- * @spec docs/BACKLOG.md#SPK-16 · docs/DAT.md §6, §22.3 (une panne se signale)
+ * @spec docs/BACKLOG.md#SPK-16, docs/BACKLOG.md#SPK-70 · docs/DAT.md §6,
+ *       §22.3 (une panne se signale), §37.4.4 (registre et cycle de session)
  *
  * Le navigateur ne sait rien de SSH. Il parle à ce processus, qui porte les
  * tunnels — parce qu'un navigateur ne peut pas et ne doit pas le faire.

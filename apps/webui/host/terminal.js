@@ -1,7 +1,8 @@
 /**
  * Sessions de terminal vers un Spark, portées par l'hôte console.
  *
- * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.1 (la frontière tient : c'est
+ * @spec docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70 ·
+ *       docs/DAT.md §37.1 (la frontière tient : c'est
  *       la CONSOLE qui parle au Spark, pas `sparkd`), §37.2 (le chemin normal :
  *       SSH, et ce qu'il suppose), §37.4 (le contrat du terminal),
  *       §37.4.1 (le transport), §37.4.2 (ce qui crée et ce qui tue une session),

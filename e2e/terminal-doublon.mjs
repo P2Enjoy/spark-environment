@@ -1,6 +1,8 @@
 /**
  * Relai de terminal brut pour le parcours E2E.
  *
+ * @verifies docs/BACKLOG.md#SPK-70 · docs/DAT.md §37.4.1, §37.4.2 bis
+ *
  * `cat` est presque le bon doublon, mais le pilote de terminal canonique
  * réaffiche ESC sous la forme `^[` avant que `cat` ne le relise. Cette petite
  * commande ne fait que relayer les octets reçus, en mode brut, afin que CSI 6n

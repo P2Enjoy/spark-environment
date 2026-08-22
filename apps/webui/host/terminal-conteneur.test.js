@@ -1,5 +1,6 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-45 · docs/DAT.md §37.4.7 (le terminal DANS un
+ * @verifies docs/BACKLOG.md#SPK-45, docs/BACKLOG.md#SPK-70 ·
+ *           docs/DAT.md §37.4.7 (le terminal DANS un
  *           conteneur), §37.4.5 (ce que le journal reçoit), §37.4.6 (la porte
  *           étroite), §37.7 (le gel laisse le terminal) ·
  *           docs/DESIGN_SYSTEM.md §14.5

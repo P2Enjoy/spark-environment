@@ -1,5 +1,6 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.4.4 (la surface d'API),
+ * @verifies docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70 ·
+ *           docs/DAT.md §37.4.4 (la surface d'API),
  *           §37.4.5 (ce que le journal reçoit), §37.2 (un Spark sans `sshd`),
  *           §37.5 (rien du contenu) · §15.1 (l'adresse vient du REGISTRE)
  *

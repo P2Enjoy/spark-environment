@@ -1,5 +1,6 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.2 (un Spark sans `sshd`),
+ * @verifies docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70 ·
+ *           docs/DAT.md §37.2 (un Spark sans `sshd`),
  *           §37.4 (le contrat), §37.4.3 (la limite du redimensionnement) ·
  *           docs/DESIGN_SYSTEM_APP.md SPK-DS-04 · docs/DESIGN_SYSTEM.md §6.13
  *
@@ -11,10 +12,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { renderTerminal, TERMINAL_VIDE, CHAMP_TERMINAL } from './spark-terminal.js';
+import { renderTerminal, TERMINAL_VIDE, CHAMP_TERMINAL, destinationPorteSession }
+  from './spark-terminal.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16', protected: 0 };
 const etat = (surcharge = {}) => ({ ...TERMINAL_VIDE, ...surcharge });
+
+test('une session ne suit jamais la facette Terminal d’un autre Spark', () => {
+  const session = { forge: 'prod', spark: 'alpha' };
+  assert.equal(destinationPorteSession('#/sparks/alpha/terminal', 'prod', session), true);
+  assert.equal(destinationPorteSession('#/sparks/beta/terminal', 'prod', session), false);
+  assert.equal(destinationPorteSession('#/sparks/alpha/docker', 'prod', session), false);
+  assert.equal(destinationPorteSession('#/sparks/alpha/terminal', 'secours', session), false);
+  assert.equal(destinationPorteSession('#/sparks/nom%20encode/terminal', 'prod',
+                                       { forge: 'prod', spark: 'nom encode' }), true);
+});
 
 test('fermé, l’écran propose d’OUVRIR sans champ de saisie séparé', () => {
   const rendu = renderTerminal(SPARK);

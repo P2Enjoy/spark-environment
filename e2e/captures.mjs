@@ -1,7 +1,8 @@
 /**
  * Captures de l'écran liste des Sparks.
  *
- * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21, #SPK-22, #SPK-64 ·
+ * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21, #SPK-22,
+ *           #SPK-64, #SPK-70 ·
  *           docs/DAT.md §24, §25, §26, §27, §43.6 · docs/DESIGN_SYSTEM.md §13 (les captures
  *           sont une preuve), §13.1 (validation attendue) · CLAUDE.md §16
  *

@@ -1,7 +1,8 @@
 /**
  * Le terminal d'un Spark : une surface d'interaction continue.
  *
- * @spec docs/BACKLOG.md#SPK-43 · docs/DAT.md §37.1 (la console parle au Spark),
+ * @spec docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70 ·
+ *       docs/DAT.md §37.1 (la console parle au Spark),
  *       §37.2 (le chemin normal, et ce qu'il suppose : un `sshd` DANS le Spark),
  *       §37.3 (le dépannage : borné, confirmé, nommé, journalisé à part),
  *       §37.4 (le contrat), §37.4.1 (le transport), §37.4.3 (la limite du
@@ -121,6 +122,21 @@ const DIAGNOSTICS = {
  * quitte l'écran.
  */
 export const CHAMP_TERMINAL = 'terminal-sortie';
+
+/**
+ * La destination qui porte encore une session est le couple Forge + Spark.
+ * Comparer seulement le suffixe `/terminal` garderait le shell de A sous B.
+ */
+export function destinationPorteSession(hash, forge, session) {
+  if (!session || (session.forge && session.forge !== forge)) return false;
+  const route = String(hash ?? '').match(/^#\/sparks\/([^/]+)\/terminal$/);
+  if (!route) return false;
+  try {
+    return decodeURIComponent(route[1]) === session.spark;
+  } catch {
+    return false;
+  }
+}
 
 /** Les motifs de fermeture, dits en français (§14.7). */
 const FINS = {
