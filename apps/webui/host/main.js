@@ -470,10 +470,9 @@ export function createConsoleHost(options = {}) {
       } catch (erreur) {
         return { status: 502, body: { error: 'tunnel_unavailable', message: erreur.message } };
       }
-      let forge;
       let vu;
       try {
-        ({ forge, comparison: vu } = await lireBuild(tunnel));
+        ({ comparison: vu } = await lireBuild(tunnel));
       } catch (error) {
         return { status: 502, body: { error: error.code ?? 'forge_unreadable',
                                       message: error.message } };
@@ -484,7 +483,7 @@ export function createConsoleHost(options = {}) {
       return { status: 200,
                body: { server: nom, ...vu, ...(VERDICTS_BUILD[vu.verdict] ?? {}),
                        update: updateEligibility(vu),
-                       rollback: misesAJour.rollbackOffer(nom, forge?.build?.commit) } };
+                       rollback: misesAJour.rollbackOffer(nom, vu.forgeCommit) } };
     },
 
     /**
@@ -535,10 +534,10 @@ export function createConsoleHost(options = {}) {
       }
       try {
         const tunnel = tunnels.require(nom);
-        const { forge } = await lireBuild(tunnel);
+        const { comparison } = await lireBuild(tunnel);
         const result = await misesAJour.rollback({
           server: serveur, localPort: tunnel.localPort,
-          currentCommit: forge?.build?.commit,
+          currentCommit: comparison.forgeCommit,
           audit: (action, before, target) =>
             declarerMiseAJour(tunnel, action, before, target),
         });
