@@ -396,6 +396,12 @@ jamais « prête » avant les réponses mesurées de `/healthz` et `/readyz`. Un
 déconnexion conserve l'étape interrompue et offre **Reprendre le diagnostic**,
 pas « Reprendre » comme si une écriture avait nécessairement continué.
 
+Quand SSH est établi mais que `sparkd` ne répond pas, la carte des ressources ne
+devient pas un refus rouge avec une sortie technique et **Réessayer** : aucune
+ressource n'est encore lisible, et rejouer la même route ne constitue pas un
+remède. Elle rend un état accent **Plan de contrôle sans réponse**, explique que
+le transport reste disponible, puis désigne l'assistant présent juste dessous.
+
 ### SPK-DS-13 · Mettre à jour conserve l'avant et prouve l'après
 
 **Date** : 2026-08-22 · introduit par SPK-69.
