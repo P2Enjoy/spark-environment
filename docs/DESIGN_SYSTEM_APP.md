@@ -382,6 +382,9 @@ d'une progression décorative. La destination Forge rend un panneau dédié avec
   ne reçoit jamais le vert de « Forge prête » ;
 - les phases nommées, dans leur ordre réel, et un statut textuel `à faire`, `en
   cours`, `terminée`, `avertissement`, `échec` ou `interrompue` ;
+- quand la Forge doit d'abord recevoir l'exécuteur, une ligne **Paquet
+  d'installation** précède ces phases et conserve son propre résultat — amorcé
+  ou déjà conforme. La relecture suivante du plan ne l'écrase pas ;
 - le relevé utile sous la phase qui l'a produit, sans sortie de terminal brute ni
   secret ;
 - un plan avant l'engagement, puis une confirmation séparée pour tout disque ou
