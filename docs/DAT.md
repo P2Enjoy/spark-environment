@@ -8389,6 +8389,18 @@ Forge et n'offre aucun terminal général. L'installateur est idempotent : chaqu
 phase relit l'état, applique seulement son écart, puis le vérifie. Un échec est
 arrêté à sa phase ; il n'est pas masqué par la poursuite des étapes suivantes.
 
+Une Forge vierge n'a pas encore ce paquet. Avant de lancer l'installateur,
+l'hôte peut donc exécuter un **amorceur fermé**, livré avec la console : sa seule
+valeur variable est l'empreinte complète de la build chargée par ce processus,
+et cette empreinte doit être publiée sur `origin/main`. L'amorceur obtient les
+seuls prérequis nécessaires à Python et à son environnement virtuel, puis pose
+depuis la source publique le paquet épinglé sur cette empreinte. Ni l'URL, ni une
+branche, ni une commande ne viennent du navigateur. Aucun checkout n'est laissé
+sur la Forge. Si l'environnement virtuel porte déjà cette build et expose
+l'exécuteur, l'amorceur ne le réinstalle pas. Le script d'amorçage et l'enveloppe
+JSON du plan empruntent deux processus SSH distincts : les données du plan ne
+peuvent ainsi jamais devenir la suite d'un script shell.
+
 La dernière phase appelle la liste unique de préflight (§13 et SPK-26), puis
 `/healthz`, `/readyz`, le relevé de topologie et la comparaison de build. Ces
 quatre résultats restent distincts. L'assistant ne rend « Forge prête » que si
