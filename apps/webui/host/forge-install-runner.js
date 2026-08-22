@@ -4,10 +4,10 @@
  * @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.4-§50.6 ·
  *       docs/DESIGN_SYSTEM_APP.md#SPK-DS-12
  *
- * Le navigateur ne fournit jamais une commande. Ce module ne lance que
- * l'exécuteur versionné déjà publié dans `/opt/sparkd`, avec le plan fermé
- * produit par `forge-install.js`. Son journal est durable et distinct de
- * l'inventaire : aucune clé ni sortie de terminal brute n'y entre.
+ * Le navigateur ne fournit jamais une commande. Ce module amorce au besoin le
+ * paquet épinglé sur la build publiée de la console, puis lance son exécuteur
+ * versionné avec le plan fermé produit par `forge-install.js`. Son journal est
+ * durable et distinct de l'inventaire : aucune clé ni sortie brute n'y entre.
  */
 
 import { spawn } from 'node:child_process';
@@ -18,12 +18,88 @@ export const INSTALL_TIMEOUT_MS = 45 * 60 * 1000;
 export const MAX_OUTPUT_BYTES = 256 * 1024;
 export const MAX_EVENTS = 256;
 export const STATE_VERSION = 1;
+export const COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 
 const PHASES = new Set([
   'access', 'dependencies', 'storage', 'foundation', 'control', 'verification',
 ]);
 const STATUSES = new Set(['pending', 'running', 'done', 'warning', 'failed', 'interrupted']);
 const PYTHON = '/opt/sparkd/venv/bin/python';
+const SOURCE = 'git+https://github.com/P2Enjoy/spark-environment.git';
+
+/**
+ * Script POSIX fermé : seul le commit complet, validé côté hôte, est variable.
+ * Le marqueur est la seule sortie que le journal sait interpréter.
+ */
+export const BOOTSTRAP_SCRIPT = String.raw`#!/bin/sh
+set -eu
+
+target="__DOLLAR__{1-}"
+if ! printf '%s\n' "$target" | grep -Eq '^[0-9a-f]{40}$'; then
+  printf '%s\t%s\t%s\n' SPARK_BOOTSTRAP package failed
+  exit 64
+fi
+
+as_root() {
+  if [ "$(id -u)" = 0 ]; then
+    "$@"
+  else
+    sudo -n "$@"
+  fi
+}
+
+if [ "$(id -u)" != 0 ] && ! sudo -n true 2>/dev/null; then
+  printf '%s\t%s\t%s\n' SPARK_BOOTSTRAP package failed
+  exit 77
+fi
+
+python=/opt/sparkd/venv/bin/python
+pip=/opt/sparkd/venv/bin/pip
+package_matches() {
+  [ -x "$python" ] && [ -x "$pip" ] && as_root "$python" - "$target" <<'PY'
+import sys
+
+try:
+    from sparkd.build import commit_du_paquet
+    from sparkd.forge_install import main
+except Exception:
+    raise SystemExit(1)
+
+commit = commit_du_paquet()
+raise SystemExit(0 if commit and sys.argv[1].startswith(commit) and callable(main) else 1)
+PY
+}
+
+if package_matches; then
+  printf '%s\t%s\t%s\n' SPARK_BOOTSTRAP package unchanged
+  exit 0
+fi
+
+failed=1
+on_exit() {
+  code=$?
+  if [ "$failed" = 1 ] && [ "$code" != 0 ]; then
+    printf '%s\t%s\t%s\n' SPARK_BOOTSTRAP package failed
+  fi
+  exit "$code"
+}
+trap on_exit EXIT
+
+printf '%s\t%s\t%s\n' SPARK_BOOTSTRAP package in_progress
+as_root env DEBIAN_FRONTEND=noninteractive apt-get -qq update
+as_root env DEBIAN_FRONTEND=noninteractive apt-get -qq install -y \
+  ca-certificates git python3 python3-venv
+as_root mkdir -p /opt/sparkd
+if [ ! -x "$python" ] || [ ! -x "$pip" ]; then
+  as_root python3 -m venv --clear /opt/sparkd/venv
+fi
+as_root env PIP_DISABLE_PIP_VERSION_CHECK=1 "$pip" install --quiet \
+  --upgrade --force-reinstall "${SOURCE}@$target#subdirectory=services/sparkd"
+package_matches
+failed=0
+trap - EXIT
+printf '%s\t%s\t%s\n' SPARK_BOOTSTRAP package done
+`.replaceAll('__DOLLAR__', '$');
 
 export class ForgeInstallRunError extends Error {
   constructor(code, message) {
@@ -114,6 +190,28 @@ export function installSshArgs(server) {
   return [...common, ...destination, ...command];
 }
 
+/** L'amorceur et le JSON utilisent volontairement deux connexions distinctes. */
+export function bootstrapSshArgs(server, target) {
+  if (!COMMIT_PATTERN.test(target ?? '')) {
+    throw new ForgeInstallRunError('invalid_commit', 'Empreinte Git invalide pour l’amorçage.');
+  }
+  if (server?.kind === 'local') {
+    throw new ForgeInstallRunError(
+      'local_server', 'L’installation distante ne s’applique pas à une Forge locale.');
+  }
+  const common = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10'];
+  const destination = server?.kind === 'alias'
+    ? [server.sshHost]
+    : ['-p', String(server?.port ?? 22), `${server?.user}@${server?.host}`];
+  return [...common, ...destination, 'sh', '-s', '--', target];
+}
+
+export function parseBootstrapMarker(line) {
+  const match = String(line).match(
+    /^SPARK_BOOTSTRAP\tpackage\t(in_progress|done|unchanged|failed)$/);
+  return match?.[1] ?? null;
+}
+
 function emptyFile() {
   return { version: STATE_VERSION, installations: {} };
 }
@@ -129,12 +227,13 @@ function publicState(state) {
  */
 export class ForgeInstallManager {
   constructor({ path, spawnFn = spawn, timeoutMs = INSTALL_TIMEOUT_MS,
-                maxOutputBytes = MAX_OUTPUT_BYTES } = {}) {
+                maxOutputBytes = MAX_OUTPUT_BYTES, resolveTarget } = {}) {
     if (!path) throw new Error('Le chemin du journal d’installation est requis.');
     this.path = path;
     this.spawnFn = spawnFn;
     this.timeoutMs = timeoutMs;
     this.maxOutputBytes = maxOutputBytes;
+    this.resolveTarget = resolveTarget ?? (async () => null);
     this.active = new Map();
     this.writeQueue = Promise.resolve();
   }
@@ -223,8 +322,14 @@ export class ForgeInstallManager {
     // le même tour de boucle ne peuvent pas franchir ensemble l'écriture disque.
     this.active.set(name, { child: null });
     try {
+      const target = await this.resolveTarget();
+      if (!COMMIT_PATTERN.test(target ?? '')) {
+        throw new ForgeInstallRunError(
+          'bootstrap_unpublished',
+          'La build chargée par cette console n’est pas publiée sur origin/main. Redémarrez-la depuis main publié.');
+      }
       await this._replace(name, () => state);
-      this._launch(server, state, { plan, confirmation }).catch(() => {
+      this._launch(server, state, { plan, confirmation }, target).catch(() => {
         // `_launch` transforme chaque issue en état durable. Cette garde évite
         // seulement une promesse rejetée orpheline si le disque local tombe.
       });
@@ -235,23 +340,8 @@ export class ForgeInstallManager {
     }
   }
 
-  async _launch(server, state, envelope) {
+  async _launch(server, state, envelope, target) {
     const name = server.name;
-    let child;
-    try {
-      child = this.spawnFn('ssh', installSshArgs(server), { stdio: ['pipe', 'pipe', 'pipe'] });
-      this.active.set(name, { child });
-    } catch (error) {
-      await this._finish(name, state, 'interrupted',
-        `OpenSSH n’a pas pu démarrer : ${safeText(error.message)}`);
-      return;
-    }
-
-    let buffer = '';
-    let stderr = '';
-    let bytes = 0;
-    let overflow = false;
-    let closed = false;
     let writes = Promise.resolve();
     const appendEvent = (event) => {
       writes = writes.then(async () => {
@@ -260,69 +350,122 @@ export class ForgeInstallManager {
         state.events = [...state.events, event].slice(-MAX_EVENTS);
         await this._replace(name, () => state);
       });
+      return writes;
     };
-    const consume = (chunk) => {
-      bytes += Buffer.byteLength(chunk);
-      if (bytes > this.maxOutputBytes) {
-        overflow = true;
-        child.kill?.('SIGTERM');
-        return;
-      }
-      buffer += String(chunk);
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        const event = parseInstallEvent(line);
-        if (event) appendEvent(event);
-      }
-    };
-    child.stdout?.on('data', consume);
-    child.stderr?.on('data', (chunk) => {
-      bytes += Buffer.byteLength(chunk);
-      if (bytes > this.maxOutputBytes) {
-        overflow = true;
-        child.kill?.('SIGTERM');
-      }
-      stderr = safeText(`${stderr} ${String(chunk)}`, 4_000);
-    });
-    child.on('error', (error) => {
-      stderr = safeText(`${stderr} ${error.message}`, 4_000);
-    });
 
-    const timer = setTimeout(() => {
-      overflow = true;
-      stderr = 'L’installation distante a dépassé quarante-cinq minutes.';
-      child.kill?.('SIGTERM');
-    }, this.timeoutMs);
-    timer.unref?.();
-
-    child.on('close', async (code, signal) => {
-      if (closed) return;
-      closed = true;
-      clearTimeout(timer);
-      if (buffer) {
-        const event = parseInstallEvent(buffer);
-        if (event) appendEvent(event);
+    await appendEvent({
+      date: now(), phase: 'access', status: 'running',
+      message: 'Vérification du paquet d’installation publié',
+    });
+    let bootstrapStatus = null;
+    const bootstrap = await this._runProcess(
+      name, bootstrapSshArgs(server, target), BOOTSTRAP_SCRIPT,
+      (line) => { bootstrapStatus = parseBootstrapMarker(line) ?? bootstrapStatus; });
+    if (bootstrap.code !== 0 || bootstrap.signal || bootstrap.overflow ||
+        !['done', 'unchanged'].includes(bootstrapStatus)) {
+      const interrupted = bootstrap.code === 255 || bootstrap.code == null ||
+        bootstrap.signal || bootstrap.overflow;
+      if (!interrupted) {
+        await appendEvent({
+          date: now(), phase: 'access', status: 'failed',
+          message: 'Le paquet d’installation n’a pas pu être amorcé',
+        });
       }
       await writes;
-      const final = [...state.events].reverse().find((event) => event.phase === 'verification');
-      if (code === 0 && final?.status === 'done' && !overflow) {
-        await this._finish(name, state, 'done', null);
-      } else {
-        const remoteFailure = state.events.some((event) => event.status === 'failed');
-        const interrupted = !remoteFailure && (code === 255 || signal || overflow);
-        const detail = overflow
-          ? stderr || 'La sortie distante a dépassé la limite de sécurité.'
-          : stderr || (interrupted
-            ? 'La connexion SSH s’est interrompue.'
-            : `L’installateur distant s’est arrêté avec le code ${code}.`);
-        await this._finish(name, state, interrupted ? 'interrupted' : 'failed', detail);
+      await this._finishProcessFailure(name, state, bootstrap, 'amorceur');
+      return;
+    }
+    await appendEvent({
+      date: now(), phase: 'access', status: 'done',
+      message: bootstrapStatus === 'unchanged'
+        ? 'Paquet d’installation déjà conforme à la build publiée'
+        : 'Paquet d’installation amorcé depuis la build publiée',
+      result: { changed: bootstrapStatus === 'done', commit: target.slice(0, 12) },
+    });
+
+    const execution = await this._runProcess(
+      name, installSshArgs(server), JSON.stringify(envelope),
+      (line) => {
+        const event = parseInstallEvent(line);
+        if (event) appendEvent(event);
+      });
+    await writes;
+    const final = [...state.events].reverse().find((event) => event.phase === 'verification');
+    if (execution.code === 0 && final?.status === 'done' && !execution.overflow) {
+      await this._finish(name, state, 'done', null);
+      return;
+    }
+    await this._finishProcessFailure(name, state, execution, 'installateur');
+  }
+
+  _runProcess(name, args, input, consumeLine) {
+    return new Promise((resolve) => {
+      let child;
+      try {
+        child = this.spawnFn('ssh', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+        this.active.set(name, { child });
+      } catch (error) {
+        resolve({ code: null, signal: null, overflow: false,
+                  stderr: `OpenSSH n’a pas pu démarrer : ${safeText(error.message)}` });
+        return;
       }
+      let buffer = '';
+      let stderr = '';
+      let bytes = 0;
+      let overflow = false;
+      let closed = false;
+      const count = (chunk) => {
+        bytes += Buffer.byteLength(chunk);
+        if (bytes > this.maxOutputBytes) {
+          overflow = true;
+          child.kill?.('SIGTERM');
+        }
+      };
+      child.stdout?.on('data', (chunk) => {
+        count(chunk);
+        if (overflow) return;
+        buffer += String(chunk);
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) consumeLine(line);
+      });
+      child.stderr?.on('data', (chunk) => {
+        count(chunk);
+        stderr = safeText(`${stderr} ${String(chunk)}`, 4_000);
+      });
+      child.on('error', (error) => {
+        stderr = safeText(`${stderr} ${error.message}`, 4_000);
+      });
+      child.stdin?.on('error', (error) => {
+        stderr = safeText(`${stderr} ${error.message}`, 4_000);
+      });
+      const timer = setTimeout(() => {
+        overflow = true;
+        stderr = 'L’installation distante a dépassé quarante-cinq minutes.';
+        child.kill?.('SIGTERM');
+      }, this.timeoutMs);
+      timer.unref?.();
+      child.on('close', (code, signal) => {
+        if (closed) return;
+        closed = true;
+        clearTimeout(timer);
+        if (buffer && !overflow) consumeLine(buffer);
+        resolve({ code, signal, overflow, stderr });
+      });
+      child.stdin?.end(input);
     });
-    child.stdin?.on('error', (error) => {
-      stderr = safeText(`${stderr} ${error.message}`, 4_000);
-    });
-    child.stdin?.end(JSON.stringify(envelope));
+  }
+
+  async _finishProcessFailure(name, state, process, label) {
+    const remoteFailure = state.events.some((event) => event.status === 'failed');
+    const interrupted = !remoteFailure &&
+      (process.code === 255 || process.code == null || process.signal || process.overflow);
+    const detail = process.overflow
+      ? process.stderr || 'La sortie distante a dépassé la limite de sécurité.'
+      : process.stderr || (interrupted
+        ? 'La connexion SSH s’est interrompue.'
+        : `L’${label} distant s’est arrêté avec le code ${process.code}.`);
+    await this._finish(name, state, interrupted ? 'interrupted' : 'failed', detail);
   }
 
   async _finish(name, state, status, error) {

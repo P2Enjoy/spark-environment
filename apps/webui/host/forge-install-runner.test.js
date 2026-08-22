@@ -9,9 +9,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
-  ForgeInstallManager, ForgeInstallRunError, installSshArgs,
+  BOOTSTRAP_SCRIPT, ForgeInstallManager, ForgeInstallRunError,
+  bootstrapSshArgs, installSshArgs, parseBootstrapMarker,
   parseInstallEvent, requiredStorageConfirmation,
 } from './forge-install-runner.js';
+
+const TARGET = 'b'.repeat(40);
 
 const SERVER = {
   name: 'prod', kind: 'ssh', host: '203.0.113.10', user: 'ubuntu', port: 22,
@@ -38,7 +41,10 @@ function child() {
 
 async function manager(spawnFn) {
   const directory = await mkdtemp(join(tmpdir(), 'spark-install-'));
-  return new ForgeInstallManager({ path: join(directory, 'installations.json'), spawnFn });
+  return new ForgeInstallManager({
+    path: join(directory, 'installations.json'), spawnFn,
+    resolveTarget: async () => TARGET,
+  });
 }
 
 test('la commande SSH ne reprend aucun argument libre du navigateur', () => {
@@ -47,6 +53,11 @@ test('la commande SSH ne reprend aucun argument libre du navigateur', () => {
   ]);
   assert.equal(requiredStorageConfirmation(PLAN),
     'CREER /var/lib/incus/disks/spark.img 4GiB');
+  assert.deepEqual(bootstrapSshArgs(SERVER, TARGET).slice(-5),
+                   ['sh', '-s', '--', TARGET]);
+  assert.ok(BOOTSTRAP_SCRIPT.includes('P2Enjoy/spark-environment.git'));
+  assert.equal(parseBootstrapMarker('SPARK_BOOTSTRAP\tpackage\tunchanged'), 'unchanged');
+  assert.equal(parseBootstrapMarker('sortie apt'), null);
 });
 
 test('une ligne distante inconnue ne devient jamais du journal présentable', () => {
@@ -63,10 +74,15 @@ test('une ligne distante inconnue ne devient jamais du journal présentable', ()
 });
 
 test('les événements réels sont persistés et le succès exige la vérification finale', async () => {
+  const bootstrap = child();
   const remote = child();
-  const installations = await manager(() => remote);
+  const children = [bootstrap, remote];
+  const installations = await manager(() => children.shift());
   await installations.start({ server: SERVER, plan: PLAN, values: {},
     confirmation: 'CREER /var/lib/incus/disks/spark.img 4GiB' });
+  bootstrap.stdout.write('SPARK_BOOTSTRAP\tpackage\tunchanged\n');
+  bootstrap.emit('close', 0, null);
+  await new Promise((resolve) => setTimeout(resolve, 10));
   for (const phase of PLAN.phases.map(({ id }) => id)) {
     remote.stdout.write(JSON.stringify({ date: new Date().toISOString(), phase,
       status: 'running', message: `${phase} en cours` }) + '\n');
@@ -82,8 +98,8 @@ test('les événements réels sont persistés et le succès exige la vérificati
 });
 
 test('le verrou est posé avant le premier await et refuse un second lancement', async () => {
-  const remote = child();
-  const installations = await manager(() => remote);
+  const bootstrap = child();
+  const installations = await manager(() => bootstrap);
   const first = installations.start({ server: SERVER, plan: PLAN, values: {},
     confirmation: 'CREER /var/lib/incus/disks/spark.img 4GiB' });
   await assert.rejects(
@@ -91,7 +107,7 @@ test('le verrou est posé avant le premier await et refuse un second lancement',
       confirmation: 'CREER /var/lib/incus/disks/spark.img 4GiB' }),
     (error) => error instanceof ForgeInstallRunError && error.code === 'install_in_progress');
   await first;
-  remote.emit('close', 2, null);
+  bootstrap.emit('close', 2, null);
 });
 
 test('un running orphelin est conservé comme interrompu au redémarrage', async () => {

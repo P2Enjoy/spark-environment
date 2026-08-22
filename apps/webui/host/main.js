@@ -23,7 +23,7 @@ import { sshHosts, probeServer } from './discovery.js';
 import { TunnelManager, TunnelError, READY } from './tunnel.js';
 import { load as loadAnchors, save as saveAnchors, confronter as confronterAncre }
   from './anchor.js';
-import { comparer as comparerBuild, resoudreCommit,
+import { comparer as comparerBuild, etatDepot, resoudreCommit,
          VERDICTS as VERDICTS_BUILD } from './build.js';
 import {
   ForgeUpdateManager, ForgeUpdateError, updateEligibility, verifyForge,
@@ -96,6 +96,15 @@ export function createConsoleHost(options = {}) {
     path: options.forgeInstallStatePath
       ?? process.env.SPARK_FORGE_INSTALL_STATE
       ?? join(dirname(inventoryPath ?? DEFAULT_INVENTORY_PATH), 'forge-installations.json'),
+    resolveTarget: options.resolveForgeInstallTarget ?? (async () => {
+      const depot = await etatDepot(racineDepot);
+      const chargee = consoleAuDemarrage?.kind === 'git' ? consoleAuDemarrage.head : null;
+      // Le processus doit installer le code qu'il a réellement chargé, pas un
+      // HEAD qui aurait avancé sous ses pieds. Une console périmée se redémarre.
+      if (!depot || depot.branch !== 'main' || depot.head !== chargee ||
+          depot.published !== chargee) return null;
+      return chargee;
+    }),
   });
   // SPK-69 · §40.6 : le gestionnaire porte le verrou et le reçu de retour
   // arrière. Sa durée est donc celle de l'hôte console, jamais celle d'une page.
@@ -666,7 +675,7 @@ export function createConsoleHost(options = {}) {
         const known = erreur instanceof ForgeInstallError ||
           erreur instanceof ForgeDiagnosticError || erreur instanceof ForgeInstallRunError;
         const conflict = erreur instanceof ForgeInstallRunError &&
-          erreur.code === 'install_in_progress';
+          ['install_in_progress', 'bootstrap_unpublished'].includes(erreur.code);
         const invalid = erreur instanceof ForgeInstallError ||
           (erreur instanceof ForgeInstallRunError &&
            ['local_server', 'storage_confirmation_required'].includes(erreur.code));

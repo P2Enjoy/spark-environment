@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **Amorçage fermé d'une Forge vierge** (cinquième tranche de SPK-68) : avant
+  l'exécuteur, la console pose au besoin l'environnement Python et le paquet
+  `sparkd` exactement épinglé sur la build qu'elle a chargée, à condition que
+  celle-ci soit `main` publiée. Le navigateur ne fournit ni URL, ni branche, ni
+  commande ; le script shell et le plan JSON passent par deux connexions SSH
+  distinctes, et un paquet déjà conforme n'est pas réinstallé.
 - **Orchestration hôte de l'installation distante** (quatrième tranche de
   SPK-68) : la console reconstruit le plan sur un dernier diagnostic, exige la
   confirmation du plan et celle du stockage, lance uniquement l'exécuteur
