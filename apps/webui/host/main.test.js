@@ -850,3 +850,56 @@ test('le diagnostic ne reçoit qu’un serveur connu et nomme le refus', async (
   assert.equal((await reponse.json()).error, 'unknown_server');
   server.close();
 });
+
+test('l’exécution refait le diagnostic et refuse un plan non confirmé', async () => {
+  let diagnostics = 0;
+  let launched = null;
+  const journal = {
+    isRunning: () => false,
+    read: async () => null,
+    start: async (input) => {
+      launched = input;
+      return { server: input.server.name, status: 'running', events: [], plan: input.plan };
+    },
+    closeAll: () => {},
+  };
+  const diagnoseForge = async () => {
+    diagnostics += 1;
+    return {
+      transport: 'established',
+      report: { system: { os: 'ubuntu 24.04', architecture: 'x86_64',
+        memoryBytes: 32 * 1024 ** 3 }, access: { sudo: 'oui' }, pools: ['spark,zfs'] },
+      storage: { nativeMirror: { eligible: false, disks: [] },
+        filePool: { availableBytes: 20 * 1024 ** 3 } },
+    };
+  };
+  const { base, server } = await hote({ diagnoseForge, forgeInstallations: journal });
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+
+  let response = await fetch(`${base}/api/forge/install`, {
+    method: 'POST', body: JSON.stringify({ server: 'prod', values: {} }),
+  });
+  assert.equal(response.status, 422);
+  assert.equal(diagnostics, 0, 'un plan non confirmé ne sonde même pas la Forge');
+
+  response = await fetch(`${base}/api/forge/install`, {
+    method: 'POST', body: JSON.stringify({ server: 'prod', values: {}, accepted: true }),
+  });
+  assert.equal(response.status, 202);
+  assert.equal(diagnostics, 1, 'le plan est reconstruit sur un nouveau relevé');
+  assert.equal(launched.plan.storage.kind, 'reuse');
+  assert.equal(launched.confirmation, '');
+  server.close();
+});
+
+test('le journal d’installation reste lisible sans tunnel sparkd', async () => {
+  const expected = { server: 'prod', status: 'interrupted', events: [] };
+  const journal = { isRunning: () => false, read: async () => expected,
+    start: async () => null, closeAll: () => {} };
+  const { base, server } = await hote({ forgeInstallations: journal });
+  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  const response = await fetch(`${base}/api/forge/install?server=prod`);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).installation, expected);
+  server.close();
+});

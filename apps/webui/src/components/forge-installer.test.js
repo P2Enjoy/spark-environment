@@ -22,7 +22,7 @@ test('SSH établi et sparkd absent ont leurs deux lignes distinctes', () => {
   assert.match(html, /SSH établi/);
   assert.match(html, /sans réponse ou non installé/);
   assert.match(html, /Aucune paire de disques sûre/);
-  assert.match(html, /L’exécution du plan reste\s+désactivée/);
+  assert.match(html, /Vérifier et composer le plan/);
 });
 
 test('un disque exclu reste affiché avec son motif', () => {
@@ -33,4 +33,41 @@ test('un disque exclu reste affiché avec son motif', () => {
   } });
   assert.match(html, /\/dev\/sda/);
   assert.match(html, /porte la racine/);
+});
+
+const PLAN = {
+  storage: { kind: 'file', poolName: 'spark', path: '/var/lib/incus/disks/spark.img',
+    sizeGib: 4, reserveGib: 1 },
+  phases: ['access', 'dependencies', 'storage', 'foundation', 'control', 'verification']
+    .map((id) => ({ id, label: id, status: id === 'access' ? 'done' : 'pending' })),
+};
+
+test('le plan fichier exige deux confirmations distinctes et exactes', () => {
+  const base = {
+    status: 'planned', result: {
+      report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },
+      storage: { disks: [], nativeMirror: { eligible: false, disks: [] }, filePool: {} },
+    }, plan: PLAN, accepted: true,
+  };
+  let html = renderForgeInstaller({ ...base, confirmation: '' });
+  assert.match(html, /J’ai relu la destination/);
+  assert.match(html, /CREER \/var\/lib\/incus\/disks\/spark\.img 4GiB/);
+  assert.match(html, /data-action="executer-installation-forge" disabled/);
+  html = renderForgeInstaller({ ...base,
+    confirmation: 'CREER /var/lib/incus/disks/spark.img 4GiB' });
+  assert.match(html, /data-action="executer-installation-forge">/);
+});
+
+test('le journal rend les statuts et les mesures sans sortie terminal brute', () => {
+  const html = renderForgeInstaller({ status: 'idle', execution: {
+    status: 'interrupted', currentPhase: 'storage', plan: PLAN,
+    error: 'Connexion interrompue.', events: [
+      { phase: 'access', status: 'done', message: 'Plan concordant', result: {} },
+      { phase: 'storage', status: 'interrupted', message: 'Connexion interrompue' },
+    ],
+  } });
+  assert.match(html, /Installation interrompue/);
+  assert.match(html, /Reprendre le diagnostic/);
+  assert.match(html, /terminée/);
+  assert.match(html, /interrompue/);
 });

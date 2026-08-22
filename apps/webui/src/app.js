@@ -2,6 +2,7 @@
  * Point d'entrée de la console dans le navigateur.
  *
  * @spec docs/BACKLOG.md#SPK-18, docs/BACKLOG.md#SPK-21, docs/BACKLOG.md#SPK-64,
+ *       docs/BACKLOG.md#SPK-68,
  *       docs/BACKLOG.md#SPK-69, docs/BACKLOG.md#SPK-70 · docs/DAT.md §37.4,
  *       §40.6 ·
  *       docs/DAT.md §26 (les trois panneaux d'administration, §26.2 le contrat
@@ -209,8 +210,9 @@ function brancher() {
     ?.addEventListener('click', () => executerMiseAJour('update'));
   racine.querySelector('[data-action="confirmer-rollback"]')
     ?.addEventListener('click', () => executerMiseAJour('rollback'));
-  racine.querySelector('[data-action="diagnostiquer-forge"]')
-    ?.addEventListener('click', diagnostiquerForge);
+  for (const bouton of racine.querySelectorAll('[data-action="diagnostiquer-forge"]')) {
+    bouton.addEventListener('click', diagnostiquerForge);
+  }
   const formulairePlanForge = racine.querySelector('#formulaire-plan-forge');
   if (formulairePlanForge) {
     for (const controle of formulairePlanForge.querySelectorAll('input')) {
@@ -220,6 +222,22 @@ function brancher() {
     }
     formulairePlanForge.addEventListener('submit', planifierForge);
   }
+  const acceptationInstallation = racine.querySelector('[data-installation-accepted]');
+  const confirmationInstallation = racine.querySelector('#confirmation-stockage-forge');
+  const boutonInstallation = racine.querySelector('[data-action="executer-installation-forge"]');
+  const ajusterEngagement = () => {
+    etat.forge.installer.accepted = Boolean(acceptationInstallation?.checked);
+    etat.forge.installer.confirmation = confirmationInstallation?.value ?? '';
+    const plan = etat.forge.installer.plan;
+    const attendu = plan?.storage?.kind === 'file'
+      ? `CREER ${plan.storage.path} ${Number(plan.storage.sizeGib)}GiB`
+      : plan?.storage?.kind === 'native' ? `EFFACER ${plan.storage.devices.join(' ')}` : '';
+    if (boutonInstallation) boutonInstallation.disabled = !etat.forge.installer.accepted ||
+      Boolean(attendu && etat.forge.installer.confirmation !== attendu);
+  };
+  acceptationInstallation?.addEventListener('change', ajusterEngagement);
+  confirmationInstallation?.addEventListener('input', ajusterEngagement);
+  boutonInstallation?.addEventListener('click', executerInstallationForge);
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
   brancherCatalogueEnv();
@@ -2108,6 +2126,9 @@ async function chargerHote() {
   etat.forge.status = 'loading';
   etat.forge.error = null;
   peindre();
+  // Le journal ne dépend pas de `/healthz` : il reste donc visible sur une
+  // machine neuve ou après une coupure du plan de contrôle.
+  await chargerEtatInstallation({ restaurer: true });
   try {
     etat.forge.host = await api('/v1/forge');
     const [cores, sparks] = await Promise.all([
@@ -2228,8 +2249,13 @@ async function relever() {
  */
 async function diagnostiquerForge() {
   const installer = etat.forge.installer;
+  if (installer.execution?.status === 'running') return;
   installer.status = 'running';
   installer.error = null;
+  installer.planError = null;
+  installer.plan = null;
+  installer.confirmation = '';
+  installer.accepted = false;
   peindre();
   try {
     const reponse = await fetch('/api/forge/diagnostic', {
@@ -2262,6 +2288,8 @@ async function planifierForge(evenement) {
   installer.error = null;
   installer.planError = null;
   installer.plan = null;
+  installer.confirmation = '';
+  installer.accepted = false;
   peindre();
   try {
     const reponse = await fetch('/api/forge/install/plan', {
@@ -2278,6 +2306,95 @@ async function planifierForge(evenement) {
     installer.planError = erreur?.message ?? String(erreur);
   }
   peindre();
+}
+
+let minuterieInstallation = null;
+
+/**
+ * Relit le journal LOCAL produit par l'hôte. Seuls ses événements structurés
+ * atteignent la page ; aucune sortie SSH ou ligne de terminal n'est relayée.
+ */
+async function chargerEtatInstallation({ restaurer = false } = {}) {
+  const serveur = etat.server;
+  if (!serveur) return;
+  try {
+    const reponse = await fetch(
+      `/api/forge/install?server=${encodeURIComponent(serveur)}`);
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    if (serveur !== etat.server) return;
+    const installation = corps.installation ?? null;
+    etat.forge.installer.execution = installation;
+    if (installation?.values) {
+      etat.forge.installer.values = {
+        ...INSTALLER_VIDE.values, ...installation.values,
+      };
+    }
+    if (installation?.status === 'running') {
+      etat.forge.installer.status = 'planned';
+      etat.forge.installer.plan = installation.plan;
+      programmerInstallation();
+    } else {
+      clearTimeout(minuterieInstallation);
+      minuterieInstallation = null;
+    }
+    peindre();
+    // §50.4 : une vue rouverte retrouve le journal, puis relit la machine. Elle
+    // ne propose jamais un bouton qui continuerait sur le seul état persistant.
+    if (restaurer && installation && installation.status !== 'running') {
+      await diagnostiquerForge();
+    }
+  } catch (erreur) {
+    if (serveur !== etat.server) return;
+    etat.forge.installer.planError = erreur?.message ?? String(erreur);
+    peindre();
+  }
+}
+
+function programmerInstallation() {
+  clearTimeout(minuterieInstallation);
+  minuterieInstallation = setTimeout(async () => {
+    if (etat.route !== 'forge' || etat.forge.installer.execution?.status !== 'running') return;
+    const avant = etat.forge.installer.execution?.status;
+    await chargerEtatInstallation();
+    const apres = etat.forge.installer.execution?.status;
+    if (avant === 'running' && apres === 'done') {
+      // La recette distante a mesuré healthz et readyz. Ouvrir ensuite le
+      // tunnel rend ces vérités disponibles au reste de la console et à la
+      // comparaison de build, sans transformer le seul SSH en succès.
+      await ouvrirTunnel(etat.server);
+      if (etat.route === 'forge') await chargerHote();
+    }
+  }, 750);
+}
+
+/** Engage le plan affiché ; l'hôte le reconstruit sur un dernier diagnostic. */
+async function executerInstallationForge() {
+  const installer = etat.forge.installer;
+  if (!installer.plan || !installer.accepted || installer.execution?.status === 'running') return;
+  installer.planError = null;
+  peindre();
+  try {
+    const reponse = await fetch('/api/forge/install', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        server: etat.server, values: installer.values, accepted: true,
+        confirmation: installer.confirmation,
+      }),
+    });
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    installer.result = corps.diagnostic;
+    installer.plan = corps.plan;
+    installer.execution = corps.installation;
+    installer.status = 'planned';
+    installer.accepted = false;
+    peindre();
+    programmerInstallation();
+  } catch (erreur) {
+    installer.planError = erreur?.message ?? String(erreur);
+    peindre();
+  }
 }
 
 /** Catalogue d'images (docs/DAT.md §33, §34.1). */
@@ -2858,8 +2975,12 @@ async function ouvrirTunnel(nom) {
 /** Bascule de serveur courant. Le choix est RETENU côté console (§22.4.5). */
 async function changerDeServeur(nom) {
   if (!nom || nom === etat.server) return;
+  clearTimeout(minuterieInstallation);
+  minuterieInstallation = null;
   etat.server = nom;
   etat.forge.updateUi = { ...UPDATE_VIDE };
+  etat.forge.installer = { ...INSTALLER_VIDE,
+    values: { ...INSTALLER_VIDE.values } };
   etat.tunnel = { name: nom, state: 'connecting' };
   peindreContexte();
   await fetch('/api/servers/current', {

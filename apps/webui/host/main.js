@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 
 import {
+  DEFAULT_PATH as DEFAULT_INVENTORY_PATH,
   load, loadFile, save, saveFile, validate, InventoryError,
 } from './inventory.js';
 import { sshHosts, probeServer } from './discovery.js';
@@ -41,6 +42,8 @@ import { SessionManager, TerminalError, FLUX_FERME,
          depannageOuvert, sonderSshd } from './terminal.js';
 import { runDiagnostic as diagnostiquerForge, ForgeDiagnosticError } from './forge-diagnostic.js';
 import { createInstallPlan, ForgeInstallError } from './forge-install.js';
+import { ForgeInstallManager, ForgeInstallRunError }
+  from './forge-install-runner.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -86,6 +89,14 @@ export function createConsoleHost(options = {}) {
   // sparkd n'est pas encore là. Injectable afin de prouver la route sans une
   // machine distante ; l'implémentation réelle n'accepte aucune commande web.
   const diagnosticForge = options.diagnoseForge ?? diagnostiquerForge;
+  // §50.4 : journal et verrous vivent sur l'hôte, séparément de l'inventaire
+  // sans secret. Le chemin suit celui de l'inventaire uniquement pour rester
+  // dans le même répertoire privé de configuration.
+  const installationsForge = options.forgeInstallations ?? new ForgeInstallManager({
+    path: options.forgeInstallStatePath
+      ?? process.env.SPARK_FORGE_INSTALL_STATE
+      ?? join(dirname(inventoryPath ?? DEFAULT_INVENTORY_PATH), 'forge-installations.json'),
+  });
   // SPK-69 · §40.6 : le gestionnaire porte le verrou et le reçu de retour
   // arrière. Sa durée est donc celle de l'hôte console, jamais celle d'une page.
   const misesAJour = options.forgeUpdates ?? new ForgeUpdateManager({
@@ -598,6 +609,70 @@ export function createConsoleHost(options = {}) {
         return { status: erreur instanceof ForgeInstallError ? 422 : 502,
           body: { error: known ? erreur.code : 'install_plan_failed',
                   message: known ? erreur.message : `Le plan a échoué : ${erreur.message}` } };
+      }
+    },
+
+    /** Journal durable, borné et propre à la Forge. */
+    'GET /api/forge/install': async (_corps, url) => {
+      const nom = String(url.searchParams.get('server') ?? '');
+      const serveur = (await load(inventoryPath)).find((candidate) => candidate.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      try {
+        return { status: 200, body: { server: nom,
+          installation: await installationsForge.read(nom) } };
+      } catch (erreur) {
+        const known = erreur instanceof ForgeInstallRunError;
+        return { status: 500, body: {
+          error: known ? erreur.code : 'install_state_failed',
+          message: known ? erreur.message : `Le journal d’installation est indisponible : ${erreur.message}`,
+        } };
+      }
+    },
+
+    /**
+     * §50.4-§50.6 : nouveau diagnostic, nouveau plan, confirmation explicite,
+     * puis uniquement l'exécuteur publié. La requête rend immédiatement 202 ;
+     * la progression réelle est relue par la route GET ci-dessus.
+     */
+    'POST /api/forge/install': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const serveur = (await load(inventoryPath)).find((candidate) => candidate.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      if (installationsForge.isRunning(nom)) {
+        return { status: 409, body: { error: 'install_in_progress',
+          message: `Une installation est déjà en cours sur « ${nom} ».` } };
+      }
+      if (corps?.accepted !== true) {
+        return { status: 422, body: { error: 'plan_confirmation_required',
+          message: 'Relisez et confirmez explicitement le plan avant son exécution.' } };
+      }
+      try {
+        // Un plan affiché n'est jamais rejoué : les deux appels suivants
+        // reconstruisent le contrat depuis CE nouvel état distant.
+        const diagnostic = await diagnosticForge(serveur);
+        const plan = createInstallPlan(diagnostic, corps?.values);
+        const installation = await installationsForge.start({
+          server: serveur, plan, values: corps?.values,
+          confirmation: String(corps?.confirmation ?? ''),
+        });
+        return { status: 202, body: { server: nom, diagnostic, plan, installation } };
+      } catch (erreur) {
+        const known = erreur instanceof ForgeInstallError ||
+          erreur instanceof ForgeDiagnosticError || erreur instanceof ForgeInstallRunError;
+        const conflict = erreur instanceof ForgeInstallRunError &&
+          erreur.code === 'install_in_progress';
+        const invalid = erreur instanceof ForgeInstallError ||
+          (erreur instanceof ForgeInstallRunError &&
+           ['local_server', 'storage_confirmation_required'].includes(erreur.code));
+        return { status: conflict ? 409 : invalid ? 422 : 502,
+          body: { error: known ? erreur.code : 'install_start_failed',
+                  message: known ? erreur.message : `L’installation n’a pas démarré : ${erreur.message}` } };
       }
     },
 
@@ -1304,9 +1379,11 @@ export function createConsoleHost(options = {}) {
     // déjà par l'observateur central ci-dessus.
     terminaux.notifierFermeture(null);
     terminaux.fermerToutes();
+    installationsForge.closeAll();
     tunnels.closeAll();
   });
-  return { server, tunnels, terminals: terminaux, forgeUpdates: misesAJour };
+  return { server, tunnels, terminals: terminaux, forgeUpdates: misesAJour,
+           forgeInstallations: installationsForge };
 }
 
 /**

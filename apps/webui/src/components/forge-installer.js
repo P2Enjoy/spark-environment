@@ -10,6 +10,7 @@ const echapper = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
 
 export const INSTALLER_VIDE = {
   status: 'idle', result: null, error: null, plan: null, planError: null,
+  execution: null, confirmation: '', accepted: false,
   values: { poolName: 'spark', bridgeName: 'sparkbr0', cpuReserve: '0.5',
     memoryReserveGib: '2', arcMaxGib: '16', storageKind: 'file',
     filePoolSizeGib: '', rootReserveGib: '' },
@@ -149,20 +150,114 @@ function planForm(installer) {
   </form>`;
 }
 
-function planView(plan) {
+function expectedConfirmation(plan) {
+  if (plan?.storage?.kind === 'file') {
+    return `CREER ${plan.storage.path} ${Number(plan.storage.sizeGib)}GiB`;
+  }
+  if (plan?.storage?.kind === 'native') return `EFFACER ${plan.storage.devices.join(' ')}`;
+  return '';
+}
+
+function planView(plan, installer) {
   if (!plan) return '';
   const storageText = plan.storage.kind === 'reuse'
     ? `conserver le pool « ${plan.storage.poolName} »`
     : plan.storage.kind === 'native'
       ? `créer le miroir sur ${plan.storage.devices.join(' et ')}`
       : `créer ${plan.storage.sizeGib} Gio dans ${plan.storage.path} et conserver ${plan.storage.reserveGib} Gio libres`;
+  const expected = expectedConfirmation(plan);
+  const confirmation = expected ? `
+    <label for="confirmation-stockage-forge">Confirmation séparée du stockage
+      <span class="note">Recopiez exactement <span class="technique">${echapper(expected)}</span>.</span>
+      <input id="confirmation-stockage-forge" class="controle technique"
+        value="${echapper(installer.confirmation)}" autocomplete="off" spellcheck="false">
+    </label>` : '<p class="note">Le pool existant est conservé : aucune confirmation destructive n’est demandée.</p>';
+  const confirmed = installer.accepted && (!expected || installer.confirmation === expected);
   return `<section class="progression" aria-labelledby="titre-plan-valide">
     <h3 id="titre-plan-valide">Plan vérifié sur un nouveau relevé</h3>
     <p><strong>Stockage :</strong> ${echapper(storageText)}.</p>
     <ol>${plan.phases.map((phase) => `<li><strong>${echapper(phase.label)}</strong> — ${
       phase.status === 'done' ? 'terminée' : 'à faire'}</li>`).join('')}</ol>
-    <p class="avertissement">Aucune écriture n’a encore eu lieu. L’exécution restera impossible
-      jusqu’à la confirmation séparée de ce plan par l’installateur versionné.</p>
+    <div class="confirmation confirmation--sensible" role="group" aria-labelledby="titre-confirmation-plan">
+      <p id="titre-confirmation-plan"><strong>Confirmer l’engagement du plan</strong></p>
+      <p class="confirmation__consequence">Cette confirmation autorise seulement les écritures
+        non destructives énumérées ci-dessus. Le plan sera reconstruit après un dernier diagnostic.</p>
+      <label><input type="checkbox" data-installation-accepted${installer.accepted ? ' checked' : ''}>
+        J’ai relu la destination, les réserves et chaque phase du plan.</label>
+      ${confirmation}
+      <div class="confirmation__actions">
+        <button type="button" class="bouton" data-action="executer-installation-forge"${
+          confirmed ? '' : ' disabled'}>Exécuter le plan vérifié</button>
+      </div>
+    </div>
+  </section>`;
+}
+
+const STATUS = {
+  pending: ['neutral', 'à faire'], running: ['accent', 'en cours'],
+  done: ['success', 'terminée'], warning: ['accent', 'avertissement'],
+  failed: ['danger', 'échec'], interrupted: ['accent', 'interrompue'],
+};
+
+function measured(event) {
+  const result = event?.result;
+  if (!result || typeof result !== 'object') return '';
+  const changed = result.changed === false ? 'aucun écart appliqué'
+    : result.changed === true ? 'écarts appliqués' : null;
+  const parts = [];
+  if (changed) parts.push(changed);
+  if (event.phase === 'dependencies' && result.incus) parts.push(`Incus ${result.incus}`);
+  if (event.phase === 'storage') {
+    if (result.pool) parts.push(`pool ${result.pool}`);
+    if (Number.isFinite(result.arcMaxBytes)) parts.push(`ARC ${bytes(result.arcMaxBytes)}`);
+  }
+  if (event.phase === 'foundation' && result.bridge) parts.push(`bridge ${result.bridge}`);
+  if (event.phase === 'control' && result.version) parts.push(`sparkd ${result.version}`);
+  if (event.phase === 'verification') {
+    if (Number.isFinite(result.preflight?.checks)) {
+      parts.push(`préflight ${result.preflight.checks} contrôle(s), ${
+        result.preflight.blocking?.length ?? 0} bloquant(s)`);
+    }
+    if (result.healthz?.status) parts.push(`/healthz ${result.healthz.status}`);
+    if (result.readyz?.status) parts.push(`/readyz ${result.readyz.status}`);
+    if (result.packageVersion) parts.push(`paquet ${result.packageVersion}`);
+  }
+  return parts.length ? `<p class="installation__mesure">${echapper(parts.join(' · '))}</p>` : '';
+}
+
+function executionView(execution) {
+  if (!execution) return '';
+  const byPhase = new Map();
+  for (const event of execution.events ?? []) byPhase.set(event.phase, event);
+  const phases = execution.plan?.phases ?? [];
+  const status = STATUS[execution.status] ?? ['neutral', execution.status ?? 'inconnu'];
+  const title = execution.status === 'done' ? 'Forge prête — recette finale mesurée'
+    : execution.status === 'running' ? 'Installation réelle en cours'
+      : execution.status === 'interrupted' ? 'Installation interrompue'
+        : execution.status === 'failed' ? 'Installation arrêtée sur un échec'
+          : 'Journal d’installation';
+  const rows = phases.map((phase) => {
+    const event = byPhase.get(phase.id);
+    const phaseStatus = event?.status ?? 'pending';
+    const token = STATUS[phaseStatus] ?? STATUS.pending;
+    return `<li class="installation__phase installation__phase--${echapper(phaseStatus)}">
+      <div><strong>${echapper(phase.label)}</strong>${badge(...token)}</div>
+      ${event ? `<p>${echapper(event.message)}</p>${measured(event)}`
+        : '<p class="note">Cette phase n’a pas encore produit de mesure.</p>'}
+    </li>`;
+  }).join('');
+  const error = execution.error
+    ? `<div class="${execution.status === 'failed' ? 'refus' : 'avertissement'}" role="status">${
+      echapper(execution.error)}</div>` : '';
+  const resume = ['failed', 'interrupted'].includes(execution.status)
+    ? '<button type="button" class="bouton" data-action="diagnostiquer-forge">Reprendre le diagnostic</button>'
+    : '';
+  return `<section class="progression installation__execution" aria-labelledby="titre-execution-forge"
+      ${execution.status === 'running' ? 'aria-live="polite"' : ''}>
+    <div class="installation__execution-entete"><h3 id="titre-execution-forge">${echapper(title)}</h3>
+      ${badge(...status)}</div>
+    <ol>${rows}</ol>
+    ${error}${resume}
   </section>`;
 }
 
@@ -171,15 +266,17 @@ export function renderForgeInstaller(installer = INSTALLER_VIDE) {
   // `null` est la valeur qu'une vue parente emploie tant que son état n'est pas
   // initialisé : elle signifie le même « pas encore lancé » que `undefined`.
   installer = installer ?? INSTALLER_VIDE;
-  const running = ['running', 'planning'].includes(installer.status);
-  const content = running
+  const executionRunning = installer.execution?.status === 'running';
+  const running = ['running', 'planning'].includes(installer.status) || executionRunning;
+  const diagnostic = installer.status === 'running'
     ? '<p role="status" aria-busy="true">Diagnostic SSH en cours…</p>'
     : installer.status === 'error'
       ? `<div class="avertissement" role="status"><p><strong>Diagnostic impossible.</strong>
          ${echapper(installer.error ?? 'Cause inconnue.')}</p><p>La Forge n’a reçu aucune
          commande d’installation.</p></div>`
       : ['ready', 'planning', 'planned'].includes(installer.status) && installer.result
-        ? resultView(installer.result) + planForm(installer) + planView(installer.plan)
+        ? resultView(installer.result) + (executionRunning || installer.execution?.status === 'done'
+          ? '' : planForm(installer)) + planView(installer.plan, installer)
         : `<p>Cette destination peut accepter SSH sans encore porter ` + '`sparkd`' + `.
            Le diagnostic distingue ces deux faits avant toute décision de stockage.</p>`;
   return `
@@ -189,9 +286,7 @@ export function renderForgeInstaller(installer = INSTALLER_VIDE) {
     <button type="button" class="bouton bouton--compact" data-action="diagnostiquer-forge"
       ${running ? 'disabled' : ''}>${running ? 'Diagnostic…' : 'Diagnostiquer la Forge'}</button>
   </div>
-  ${content}
-  ${['ready', 'planned'].includes(installer.status) ? `<p class="note">L’exécution du plan reste
-  désactivée tant que son installateur versionné et ses confirmations de stockage
-  ne sont pas livrés. Ce panneau ne simule aucun succès.</p>` : ''}
+  ${diagnostic}
+  ${executionView(installer.execution)}
 </section>`;
 }
