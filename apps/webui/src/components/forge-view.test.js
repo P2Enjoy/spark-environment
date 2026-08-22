@@ -13,9 +13,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced, renderHostError, renderHostSkeleton, fillRatio, formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
+  renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced,
+  renderHostError, renderControlUnavailable, renderHostSkeleton, fillRatio,
+  formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
   renderBuild, renderNotify, UPDATE_VIDE,
 } from './forge-view.js';
+
+test('SSH sans sparkd désigne l assistant sans refus rouge ni faux remède', () => {
+  const rendu = renderForgeView({ status: 'control-unavailable' });
+  assert.match(rendu, /Plan de contrôle sans réponse/);
+  assert.match(rendu, /transport SSH est établi/);
+  assert.match(rendu, /Installer cette Forge/);
+  assert.ok(!rendu.includes('etat-vue--erreur'));
+  assert.ok(!rendu.includes('Réessayer'));
+  assert.ok(!rendu.includes('fetch failed'));
+  assert.equal(renderControlUnavailable().includes('role="status"'), true);
+});
 
 const GIO = 1024 ** 3;
 const HOTE = {

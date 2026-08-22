@@ -2133,8 +2133,10 @@ async function chargerHote() {
   // ce cas, l'assistant est précisément le seul parcours utile ; appeler quand
   // même les routes ordinaires produirait un 502 trompeur dans le navigateur.
   if (etat.tunnel?.state !== 'ready') {
-    etat.forge.error = new Error(etat.tunnel?.lastError ?? 'Le plan de contrôle ne répond pas.');
-    etat.forge.status = 'error';
+    etat.forge.status = etat.tunnel?.transportState === 'ready'
+      ? 'control-unavailable' : 'error';
+    etat.forge.error = etat.forge.status === 'error'
+      ? new Error(etat.tunnel?.lastError ?? 'Le transport SSH ne répond pas.') : null;
     peindre();
     return;
   }

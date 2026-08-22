@@ -119,7 +119,9 @@
   états distincts, puis la page réserve les routes d'administration à un plan de
   contrôle prêt. Le diagnostic d'installation reste accessible sans appeler
   `/v1/forge` par anticipation. L'en-tête dit alors **SSH établi · sparkd sans
-  réponse**, sans proposer une reconnexion qui ne redémarrerait pas le service.
+  réponse**, sans proposer une reconnexion qui ne redémarrerait pas le service ;
+  la carte des ressources désigne l'assistant, sans refus rouge, sortie
+  `fetch failed` ni bouton **Réessayer** sans effet.
 - **Deux régressions d'exploitation introduites dans les douze dernières
   heures** : passer directement du terminal d'un Spark à celui d'un autre ferme
   désormais le premier shell, et le sélecteur de contexte Docker produit de

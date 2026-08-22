@@ -505,6 +505,9 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
   // inatteignable.
   if (status === 'loading') return renderHostSkeleton() + renderForgeInstaller(installer);
   if (status === 'not-synced') return renderNotSynced(error, syncing) + renderForgeInstaller(installer);
+  if (status === 'control-unavailable') {
+    return renderControlUnavailable() + renderForgeInstaller(installer);
+  }
   if (status === 'error') return renderHostError(error) + renderForgeInstaller(installer);
   if (!host) return renderHostError(null) + renderForgeInstaller(installer);
 
@@ -574,5 +577,14 @@ export function renderHostError(error) {
   <h2>Les ressources de la Forge n’ont pas pu être lues</h2>
   <p>${echapper(error?.message ?? 'Cause inconnue.')}</p>
   <p style="margin-top:var(--space-4)"><button type="button" class="bouton" data-action="reessayer">Réessayer</button></p>
+</div></div>`;
+}
+
+export function renderControlUnavailable() {
+  return `
+<div class="carte"><div class="etat-vue" role="status">
+  <h2>Plan de contrôle sans réponse</h2>
+  <p>Le transport SSH est établi, mais les ressources ne sont pas encore
+  lisibles. Utilisez l’assistant d’installation ci-dessous.</p>
 </div></div>`;
 }
