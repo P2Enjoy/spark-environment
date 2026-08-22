@@ -3,6 +3,12 @@
 ## [Non publié]
 
 ### Ajouté
+- **Terminal interactif et registre de sessions** (SPK-70, `docs/DAT.md` §37.4) :
+  xterm interprète désormais ANSI/ECMA-48, reçoit directement clavier, collage
+  et touches de contrôle, répond à DSR et propage la taille au vrai PTY. Le
+  registre local retrouve les shells Spark, conteneur et dépannage sur toutes
+  les Forges sans conserver aucun octet saisi ou affiché ; il ferme le processus
+  distant après confirmation et devient un tiroir sur écran étroit.
 - **Diagnostic d’installation distante de Forge** (première tranche de SPK-68,
   `DAT.md` §50) : la console distingue désormais « SSH établi » de l’API
   `sparkd`, même quand `/healthz` ne répond pas. Son script fermé relève en

@@ -4063,7 +4063,7 @@ un geste de la console, pas une procédure parallèle.
   retour arrière est joué ; tests d'hôte et de composant, parcours E2E, captures,
   journal d'administration et manuel M2/M4/M8 mis à jour.
 
-### [ ] SPK-70 · Terminal interactif fiable et sessions visibles
+### [x] SPK-70 · Terminal interactif fiable et sessions visibles
 
 **Besoin exprimé le 2026-08-21.** Le terminal intégré affiche actuellement les
 séquences de contrôle ANSI telles quelles — par exemple `\x1b[1;34m`,

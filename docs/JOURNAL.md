@@ -4,6 +4,25 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-22 — SPK-70 clos : terminal ECMA-48 et sessions retrouvables
+
+La grille xterm remplace le rendu littéral et son champ de saisie : ANSI, DSR,
+clavier, contrôle, collage, copie et redimensionnement traversent le PTY réel.
+Le registre ne conserve que les métadonnées vivantes, retrouve ensemble un shell
+de Spark et un shell de conteneur, ferme uniquement la ligne confirmée et retire
+les sessions terminées. Changer directement de Forge ou de Spark ferme aussi la
+session qui n'appartient plus à la surface affichée. L'audit ne reçoit toujours
+ni frappe ni sortie.
+
+Les preuves ciblées sont vertes : **136/136** tests hôte/composants, dont le
+script Docker analysé par le vrai `sh`, puis **3/3** parcours E2E — ANSI/DSR,
+changement direct de Spark et deux sessions simultanées. `make captures` a
+régénéré les vues desktop/mobile avec une console Chromium vierge. L'observation
+confirme la grille colorée, le registre fixe sans commande de tiroir inutile sur
+desktop, et le tiroir libellé sans débordement de page sur mobile. Le manuel M8,
+le contrat et la spécification visuelle décrivent les mêmes gestes. SPK-70 passe
+à `[x]`.
+
 ## 2026-08-22 — Deux régressions croisées : identité du terminal et syntaxe Docker
 
 Le changement de `Spark A / Terminal` vers `Spark B / Terminal` gardait la
