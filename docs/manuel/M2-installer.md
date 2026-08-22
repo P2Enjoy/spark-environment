@@ -85,6 +85,31 @@ l'**active au démarrage**, puis relance la vérification.
 > opération. C'est pourquoi le contrôle exige que le service soit **activé au
 > démarrage**, et pas seulement démarré.
 
+## Mettre à jour une Forge déjà installée
+
+Quand **Forge → Code déployé** dit que la Forge est *En retard*, le bouton
+**Mettre à jour `sparkd`** remplace la procédure SSH. Il n'apparaît que si le
+commit installé est un ancêtre certain de la branche `main` publiée par votre
+poste. Une build étrangère, inconnue, plus récente ou un dépôt absent ne propose
+aucun geste : la console ne prend jamais le risque de régresser un serveur.
+
+La confirmation nomme l'interruption brève du plan de contrôle. Les Sparks et
+leurs conteneurs continuent de tourner ; seule leur API d'administration est
+redémarrée. La console installe le paquet épinglé au commit publié, repose les
+unités, exécute `daemon-reload`, redémarre `sparkd`, puis vérifie successivement
+`/healthz`, `/readyz` et la build servie. Un téléchargement terminé ne suffit
+donc jamais à afficher un succès.
+
+Après un succès, **Revenir à la build précédente** permet un retour immédiat et
+borné au seul commit remplacé. Il redémarre encore le plan de contrôle et exige
+les mêmes preuves. Il ne descend pas automatiquement les migrations de données :
+une suppression de données demanderait une opération distincte et sa propre
+confirmation.
+
+Un échec conserve la dernière build connue et sa cause. S'il survient après que
+le paquet a changé, la console tente automatiquement de réinstaller la build
+précédente et affiche séparément l'issue de ce retour arrière.
+
 ## Après l'installation
 
 Un registre neuf ignore la capacité de la machine. Relevez-la :

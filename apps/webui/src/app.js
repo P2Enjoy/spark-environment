@@ -2127,7 +2127,7 @@ async function chargerHote() {
  * Ne conclut jamais à la place du serveur : les six verdicts viennent de l'hôte
  * console, qui a le tunnel ET le dépôt.
  */
-async function comparerBuild({ silencieux = false } = {}) {
+async function comparerBuild({ silencieux = false, conserverEnEchec = false } = {}) {
   const f = etat.forge;
   if (!silencieux) {
     f.build = 'en-cours';
@@ -2145,8 +2145,13 @@ async function comparerBuild({ silencieux = false } = {}) {
     f.build = corps;
   } catch (erreur) {
     // §14.6 : ne pas avoir pu comparer n'est pas « à jour ». On le DIT.
-    f.build = { verdict: 'indisponible', titre: 'Comparaison impossible',
-                detail: erreur?.message ?? String(erreur) };
+    // Après un GESTE, la dernière build connue reste toutefois le point de
+    // reprise. La masquer pendant l'interruption serait perdre l'information
+    // au seul moment où elle sert (§40.6, SPK-DS-13).
+    if (!conserverEnEchec) {
+      f.build = { verdict: 'indisponible', titre: 'Comparaison impossible',
+                  detail: erreur?.message ?? String(erreur) };
+    }
   }
   peindre();
 }
@@ -2194,7 +2199,7 @@ async function executerMiseAJour(kind) {
   }
   // La comparaison relit la build sans effacer le compte rendu que l'on vient
   // d'obtenir. C'est elle qui rend aussi l'éventuel reçu de retour arrière.
-  await comparerBuild({ silencieux: true });
+  await comparerBuild({ silencieux: true, conserverEnEchec: true });
 }
 
 async function relever() {

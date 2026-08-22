@@ -107,7 +107,7 @@ Six réponses, et une seule dit que tout va bien :
 | Ce que vous lisez | Ce que cela veut dire | Que faire |
 |---|---|---|
 | **À jour** | même code des deux côtés | rien |
-| **En retard — N commits d'écart** | votre dépôt porte du code que la Forge n'exécute pas | redéployer |
+| **En retard — N commits d'écart** | votre dépôt porte du code que la Forge n'exécute pas | mettre à jour depuis ce bloc |
 | **C'est ce poste qui est en retard** | la Forge exécute du code plus récent que le vôtre | récupérer, **ne pas redéployer** |
 | **Build étrangère à ce dépôt** | son commit est inconnu ici | rien à conclure |
 | **Build non estampillée** | elle ne dit pas quel code elle exécute | réinstaller |
@@ -131,6 +131,31 @@ on corrige parfois en urgence, mais la console ne vous le cache pas.
 
 La comparaison se refait avec **Comparer à nouveau**. Elle ne touche pas à la
 Forge : elle relit ce que celle-ci publie déjà, et regarde votre dépôt local.
+
+### Mettre à jour depuis le verdict
+
+**Mettre à jour `sparkd`** n'apparaît que pour *En retard*. La page ne choisit
+ni URL ni commande : elle ne transmet que la Forge sélectionnée, puis l'hôte
+recalcule le verdict et exige que la tête soit publiée sur `origin/main`.
+
+Après confirmation de la brève interruption, sept lignes rendent le chemin
+observable : paquet, unités, `daemon-reload`, redémarrage, `healthz`, `readyz`
+et build. Elles ne deviennent toutes *terminées* qu'après les réponses de la
+Forge réelle.
+
+![La mise à jour est prouvée phase par phase sur la Forge réelle](images/m4-update.png)
+
+Le succès conserve un reçu local et propose **Revenir à la build précédente**.
+La seconde confirmation montre les deux empreintes et rappelle la nouvelle
+interruption. Le reçu disparaît si la build servie ne concorde plus : vous ne
+pouvez pas saisir arbitrairement une version à restaurer.
+
+![Le retour arrière nomme les deux builds avant de repartir](images/m4-update-rollback.png)
+
+Sur écran étroit, le même compte rendu reste une seule colonne, sans supprimer
+les empreintes ni les phases.
+
+![Le compte rendu de mise à jour sur mobile](images/m4-update-mobile.png)
 
 ## Ce que vaut exactement une réservation CPU
 

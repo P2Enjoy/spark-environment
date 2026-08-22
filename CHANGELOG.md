@@ -3,6 +3,13 @@
 ## [Non publié]
 
 ### Ajouté
+- **Mise à jour distante et retour arrière mesuré de `sparkd`** (SPK-69,
+  `docs/DAT.md` §40.6) : pour une Forge dont le commit est un ancêtre sûr de
+  `origin/main`, la console installe le paquet épinglé, repose les unités,
+  observe `daemon-reload` et le redémarrage, puis exige `healthz`, `readyz=ready`
+  et la build attendue. Le navigateur ne fournit aucune commande ni version ;
+  un échec après mutation tente la build précédente, et le retour volontaire
+  reste borné au reçu du geste. Les deux chemins sont journalisés.
 - **Terminal interactif et registre de sessions** (SPK-70, `docs/DAT.md` §37.4) :
   xterm interprète désormais ANSI/ECMA-48, reçoit directement clavier, collage
   et touches de contrôle, répond à DSR et propage la taille au vrai PTY. Le
