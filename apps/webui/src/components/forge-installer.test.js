@@ -72,6 +72,21 @@ test('le journal rend les statuts et les mesures sans sortie terminal brute', ()
   assert.match(html, /interrompue/);
 });
 
+test('l amorcage garde sa ligne quand le plan produit ensuite un evenement access', () => {
+  const html = renderForgeInstaller({ status: 'idle', execution: {
+    status: 'done', plan: PLAN, events: [
+      { phase: 'access', status: 'done',
+        message: 'Paquet d’installation déjà conforme à la build publiée',
+        result: { changed: false, commit: 'a9705e5ea0dc' } },
+      { phase: 'access', status: 'done', message: 'Plan version 1 et Forge concordants' },
+    ],
+  } });
+  assert.match(html, /<strong>Paquet d’installation<\/strong>/);
+  assert.match(html, /déjà conforme à la build publiée/);
+  assert.match(html, /aucun écart appliqué/);
+  assert.match(html, /Plan version 1 et Forge concordants/);
+});
+
 test('un journal terminé n’empêche pas de recomposer un plan idempotent', () => {
   const html = renderForgeInstaller({ status: 'ready', result: {
     report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },

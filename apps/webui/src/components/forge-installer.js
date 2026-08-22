@@ -229,6 +229,8 @@ function executionView(execution) {
   if (!execution) return '';
   const byPhase = new Map();
   for (const event of execution.events ?? []) byPhase.set(event.phase, event);
+  const bootstrap = [...(execution.events ?? [])].reverse().find((event) =>
+    String(event.message ?? '').toLocaleLowerCase('fr').includes("paquet d’installation"));
   const phases = execution.plan?.phases ?? [];
   const status = STATUS[execution.status] ?? ['neutral', execution.status ?? 'inconnu'];
   const title = execution.status === 'done' ? 'Forge prête — recette finale mesurée'
@@ -236,7 +238,14 @@ function executionView(execution) {
       : execution.status === 'interrupted' ? 'Installation interrompue'
         : execution.status === 'failed' ? 'Installation arrêtée sur un échec'
           : 'Journal d’installation';
-  const rows = phases.map((phase) => {
+  const bootstrapRow = bootstrap ? (() => {
+    const token = STATUS[bootstrap.status] ?? STATUS.pending;
+    return `<li class="installation__phase installation__phase--${echapper(bootstrap.status)}">
+      <div><strong>Paquet d’installation</strong>${badge(...token)}</div>
+      <p>${echapper(bootstrap.message)}</p>${measured(bootstrap)}
+    </li>`;
+  })() : '';
+  const rows = bootstrapRow + phases.map((phase) => {
     const event = byPhase.get(phase.id);
     const phaseStatus = event?.status ?? 'pending';
     const token = STATUS[phaseStatus] ?? STATUS.pending;
