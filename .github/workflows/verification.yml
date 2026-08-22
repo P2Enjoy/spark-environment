@@ -10,8 +10,42 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
+  # SPK-17 : ce contrôle est indépendant de la campagne. Une panne des tests
+  # runtime ne doit jamais empêcher GitHub de dire si le contrat committé a
+  # dérivé, et il n'emploie aucun driver Spark local ou factice.
+  contrat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Installer le producteur et le générateur du contrat
+        run: |
+          python -m venv services/sparkd/.venv
+          services/sparkd/.venv/bin/pip install --quiet -e "services/sparkd[dev]"
+          pnpm install --frozen-lockfile
+
+      - name: Le contrat et ses types n'ont pas dérivé
+        run: |
+          services/sparkd/.venv/bin/python scripts/contract.py check
+          pnpm --filter @spark/contract generate
+          git diff --exit-code -- packages/contract/openapi/sparkd.json packages/contract/src/types.d.ts
+
   campagne:
     runs-on: ubuntu-latest
     steps:
