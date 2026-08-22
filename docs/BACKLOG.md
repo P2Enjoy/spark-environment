@@ -4109,6 +4109,10 @@ conteneur et dépannage — sans devoir deviner quel onglet les porte.
   la fermeture distante, le changement d'onglet et la déconnexion de la Forge ;
   il ne ressuscite jamais une session terminée. En vue étroite, il devient un
   tiroir accessible plutôt qu'un panneau qui masque le terminal.
+- **Identité de la surface** : une session reste attachée à sa Forge et à son
+  Spark. Naviguer directement de `Spark A / Terminal` vers `Spark B / Terminal`
+  ferme et tue la session de A avant d'afficher B ; le nom identique de la
+  facette ne constitue jamais une raison de la conserver.
 - Ce que l'unité ne fait pas : elle ne fournit pas un shell libre sur une Forge,
   ne conserve pas un historique de commandes et ne transforme pas le journal
   d'audit en enregistreur de frappes.
@@ -4121,7 +4125,11 @@ conteneur et dépannage — sans devoir deviner quel onglet les porte.
   sortie ; un parcours ouvre un terminal de Spark et un de conteneur, les voit
   tous deux dans le panneau, ferme l'un depuis ce panneau et constate que seul
   son processus distant meurt ; fermeture distante, inactivité et déconnexion
-  retirent chacune la ligne ; captures desktop/mobile et manuel M8 mis à jour.
+  retirent chacune la ligne ; un parcours passe directement du terminal d'un
+  Spark à celui d'un autre et constate la fermeture du premier. Le script de
+  sélection du contexte Docker est soumis au vrai parseur `sh`, afin qu'un
+  relevé positif ne puisse pas coexister avec un onglet cassé par une syntaxe
+  invalide ; captures desktop/mobile et manuel M8 mis à jour.
 
 ---
 

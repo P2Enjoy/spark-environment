@@ -81,6 +81,11 @@
   contention » — vrai, mais trop modeste.
 
 ### Corrigé
+- **Deux régressions d'exploitation introduites dans les douze dernières
+  heures** : passer directement du terminal d'un Spark à celui d'un autre ferme
+  désormais le premier shell, et le sélecteur de contexte Docker produit de
+  nouveau une commande `sh` valide. L'amorçage ne peut donc plus annoncer un
+  Docker présent pendant que l'onglet échoue avant même de lancer le client.
 - **Les procédures d'exploitation emploient maintenant le Python du paquet**
   (SPK-55 / SPK-66) : préflight, sauvegarde et restauration passent par
   `/opt/sparkd/venv/bin/python`, comme le service systemd. Le Python système ne

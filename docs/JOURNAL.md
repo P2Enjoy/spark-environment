@@ -4,6 +4,20 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-22 — Deux régressions croisées : identité du terminal et syntaxe Docker
+
+Le changement de `Spark A / Terminal` vers `Spark B / Terminal` gardait la
+session de A : le garde-fou ne comparait que le suffixe `/terminal`, commun aux
+deux destinations. La règle est désormais portée par l'identité complète Forge
++ Spark ; une même facette sous un autre objet est bien un départ de la surface.
+
+En parallèle, le relevé d'amorçage pouvait constater Docker utilisable tandis
+que l'onglet Docker échouait. Les deux chemins ne lançaient pas le même script :
+le nouveau sélecteur rootless de la console assemblait `then;`, syntaxe refusée
+par `sh`, avant tout appel à `docker info`. La preuve précédente ne contrôlait
+que des fragments de chaîne et avait donc entériné l'erreur. La correction doit
+faire analyser le script complet par le vrai shell et garder la preuve ciblée.
+
 ## 2026-08-18 — Récupération de l'idée fondatrice et pose du socle
 
 ### Problème

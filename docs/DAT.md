@@ -4864,6 +4864,12 @@ Trois façons de mourir, et une seule est normale :
 - **le shell distant se termine** de lui-même — `exit`, `Ctrl-D` : la session
   s'arrête et l'écran le dit.
 
+La surface appartient au couple **Forge + Spark** qui l'a ouverte, pas au seul
+nom de facette `terminal`. Passer directement du terminal d'un Spark à celui
+d'un autre termine donc la première session avant de rendre le second Spark :
+rester sur une URL qui finit encore par `/terminal` ne conserve jamais un shell
+sous la fenêtre d'une autre cellule.
+
 #### 37.4.2 bis Le doublon du transport, pour éprouver sans Spark
 
 `ssh -tt` exige un `sshd` **dans** le Spark, que la pile de développement n'a pas
@@ -5125,6 +5131,12 @@ les journaux, le cycle de vie (§37.7) et le terminal de conteneur (§37.4.7) :
 une console qui lirait rootless mais agirait sur root aurait deux vérités selon
 l'onglet. Le test du socket n'écrit rien et un simple compte `spark-docker` sans
 démon ne change jamais le chemin.
+
+Le sélecteur de contexte est lui-même une commande `sh` exécutable, validée par
+le parseur du shell avant d'être confiée à SSH. Le relevé d'amorçage et l'onglet
+Docker ne peuvent autrement donner deux verdicts opposés : le premier constater
+un démon utilisable, tandis qu'une erreur de syntaxe locale empêche le second de
+lancer jusqu'à `docker info`.
 
 **Ce qu'on exécute.** Une seule commande par relevé, en lecture, qui ne modifie
 rien :
