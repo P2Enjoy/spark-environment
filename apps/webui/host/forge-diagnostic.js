@@ -73,7 +73,11 @@ fi
 commande incus_version incus version
 commande caddy_version caddy version
 commande python_version python3 --version
-commande sparkd_version sparkd --version
+if [ -x /opt/sparkd/venv/bin/python ]; then
+  dit sparkd_version "$(/opt/sparkd/venv/bin/python -c 'from importlib.metadata import version; print(version("sparkd"))' 2>/dev/null || true)"
+else
+  commande sparkd_version sparkd --version
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
   dit sparkd_actif "$(systemctl is-active sparkd.service 2>/dev/null || true)"

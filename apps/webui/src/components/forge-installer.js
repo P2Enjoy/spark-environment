@@ -40,9 +40,9 @@ function definition(term, value) {
 
 function transport(result) {
   const report = result.report;
-  const sparkdPresent = Boolean(report.runtimes?.sparkd);
   const active = report.services?.sparkd === 'active';
-  const api = sparkdPresent && active
+  const sparkdPresent = Boolean(report.runtimes?.sparkd) || active;
+  const api = active
     ? ['accent', 'installé, API à vérifier']
     : sparkdPresent
       ? ['accent', `installé, unité ${report.services?.sparkd ?? 'inconnue'}`]
