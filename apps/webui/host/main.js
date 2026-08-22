@@ -40,6 +40,7 @@ import { SessionManager, TerminalError, FLUX_FERME,
          CHEMIN_SSH, CHEMIN_DEPANNAGE, CHEMIN_CONTENEUR,
          depannageOuvert, sonderSshd } from './terminal.js';
 import { runDiagnostic as diagnostiquerForge, ForgeDiagnosticError } from './forge-diagnostic.js';
+import { createInstallPlan, ForgeInstallError } from './forge-install.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -573,6 +574,30 @@ export function createConsoleHost(options = {}) {
           body: { error: known ? erreur.code : 'diagnostic_failed',
                   message: known ? erreur.message : `Le diagnostic a échoué : ${erreur.message}` },
         };
+      }
+    },
+
+    /**
+     * SPK-68 · §50.3-50.4 : le plan est toujours fondé sur un nouveau relevé
+     * réel. Un écran resté ouvert ne peut donc pas engager un disque ou une
+     * capacité qui auraient changé entre-temps.
+     */
+    'POST /api/forge/install/plan': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const serveur = (await load(inventoryPath)).find((candidate) => candidate.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      try {
+        const diagnostic = await diagnosticForge(serveur);
+        return { status: 200,
+          body: { server: nom, diagnostic, plan: createInstallPlan(diagnostic, corps?.values) } };
+      } catch (erreur) {
+        const known = erreur instanceof ForgeInstallError || erreur instanceof ForgeDiagnosticError;
+        return { status: erreur instanceof ForgeInstallError ? 422 : 502,
+          body: { error: known ? erreur.code : 'install_plan_failed',
+                  message: known ? erreur.message : `Le plan a échoué : ${erreur.message}` } };
       }
     },
 

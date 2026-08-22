@@ -8,7 +8,12 @@
 const echapper = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-export const INSTALLER_VIDE = { status: 'idle', result: null, error: null };
+export const INSTALLER_VIDE = {
+  status: 'idle', result: null, error: null, plan: null, planError: null,
+  values: { poolName: 'spark', bridgeName: 'sparkbr0', cpuReserve: '0.5',
+    memoryReserveGib: '2', arcMaxGib: '16', storageKind: 'file',
+    filePoolSizeGib: '', rootReserveGib: '' },
+};
 
 function bytes(value) {
   if (!Number.isFinite(value)) return 'inconnu';
@@ -96,20 +101,85 @@ function resultView(result) {
   l’installation, ne crée pas de pool et ne change aucun service.</p>`;
 }
 
+function planForm(installer) {
+  const result = installer.result;
+  const values = { ...INSTALLER_VIDE.values, ...(installer.values ?? {}) };
+  const existingPool = (result.report?.pools ?? []).some((line) =>
+    String(line).split(',')[0] === values.poolName && String(line).split(',')[1] === 'zfs');
+  const native = result.storage?.nativeMirror?.eligible;
+  const storageChoice = existingPool
+    ? `<p class="succes">Le pool ZFS « ${echapper(values.poolName)} » sera conservé.</p>`
+    : native
+      ? `<fieldset><legend>Disposition de stockage</legend>
+          <label><input type="radio" name="storageKind" value="native"${
+            values.storageKind === 'native' ? ' checked' : ''}> Miroir natif sur ${echapper(
+              result.storage.nativeMirror.disks.map((d) => `/dev/${d}`).join(' et '))}</label>
+          <label><input type="radio" name="storageKind" value="file"${
+            values.storageKind !== 'native' ? ' checked' : ''}> Pool sur fichier</label>
+        </fieldset>`
+      : `<input type="hidden" name="storageKind" value="file">
+         <p class="note">Aucune paire sûre : seule la disposition sur fichier peut être planifiée.</p>`;
+  const fileFields = existingPool ? '' : `
+    <div class="installation__dimensions">
+      <label>Taille du pool fichier (Gio)
+        <input class="controle" name="filePoolSizeGib" type="number" min="0.1" step="0.1"
+          value="${echapper(values.filePoolSizeGib)}" required></label>
+      <label>Espace à laisser libre sur / (Gio)
+        <input class="controle" name="rootReserveGib" type="number" min="0" step="0.1"
+          value="${echapper(values.rootReserveGib)}" required></label>
+    </div>`;
+  return `${installer.planError ? `<div class="refus" role="status">${
+    echapper(installer.planError)}</div>` : ''}<form id="formulaire-plan-forge" class="formulaire-panneau installation__plan">
+    <h3>Plan d’installation</h3>
+    <p class="note">Les valeurs ci-dessous viennent du contrat de déploiement ; elles restent
+      modifiables avant l’engagement.</p>
+    <div class="installation__dimensions">
+      <label>Pool <input class="controle" name="poolName" value="${echapper(values.poolName)}" required></label>
+      <label>Bridge <input class="controle" name="bridgeName" value="${echapper(values.bridgeName)}" required></label>
+      <label>Réserve CPU <input class="controle" name="cpuReserve" type="number" min="0" step="0.1"
+        value="${echapper(values.cpuReserve)}" required></label>
+      <label>Réserve mémoire (Gio) <input class="controle" name="memoryReserveGib" type="number" min="0" step="0.1"
+        value="${echapper(values.memoryReserveGib)}" required></label>
+      <label>Plafond ARC (Gio) <input class="controle" name="arcMaxGib" type="number" min="0" step="0.1"
+        value="${echapper(values.arcMaxGib)}" required></label>
+    </div>
+    ${storageChoice}${fileFields}
+    <button type="submit" class="bouton"${installer.status === 'planning' ? ' disabled' : ''}>${
+      installer.status === 'planning' ? 'Nouveau relevé…' : 'Vérifier et composer le plan'}</button>
+  </form>`;
+}
+
+function planView(plan) {
+  if (!plan) return '';
+  const storageText = plan.storage.kind === 'reuse'
+    ? `conserver le pool « ${plan.storage.poolName} »`
+    : plan.storage.kind === 'native'
+      ? `créer le miroir sur ${plan.storage.devices.join(' et ')}`
+      : `créer ${plan.storage.sizeGib} Gio dans ${plan.storage.path} et conserver ${plan.storage.reserveGib} Gio libres`;
+  return `<section class="progression" aria-labelledby="titre-plan-valide">
+    <h3 id="titre-plan-valide">Plan vérifié sur un nouveau relevé</h3>
+    <p><strong>Stockage :</strong> ${echapper(storageText)}.</p>
+    <ol>${plan.phases.map((phase) => `<li><strong>${echapper(phase.label)}</strong> — ${
+      phase.status === 'done' ? 'terminée' : 'à faire'}</li>`).join('')}</ol>
+    <p class="avertissement">Aucune écriture n’a encore eu lieu. L’exécution restera impossible
+      jusqu’à la confirmation séparée de ce plan par l’installateur versionné.</p>
+  </section>`;
+}
+
 /** Panneau présent même si /healthz est absent : c'est son cas d'usage. */
 export function renderForgeInstaller(installer = INSTALLER_VIDE) {
   // `null` est la valeur qu'une vue parente emploie tant que son état n'est pas
   // initialisé : elle signifie le même « pas encore lancé » que `undefined`.
   installer = installer ?? INSTALLER_VIDE;
-  const running = installer.status === 'running';
+  const running = ['running', 'planning'].includes(installer.status);
   const content = running
     ? '<p role="status" aria-busy="true">Diagnostic SSH en cours…</p>'
     : installer.status === 'error'
       ? `<div class="avertissement" role="status"><p><strong>Diagnostic impossible.</strong>
          ${echapper(installer.error ?? 'Cause inconnue.')}</p><p>La Forge n’a reçu aucune
          commande d’installation.</p></div>`
-      : installer.status === 'ready' && installer.result
-        ? resultView(installer.result)
+      : ['ready', 'planning', 'planned'].includes(installer.status) && installer.result
+        ? resultView(installer.result) + planForm(installer) + planView(installer.plan)
         : `<p>Cette destination peut accepter SSH sans encore porter ` + '`sparkd`' + `.
            Le diagnostic distingue ces deux faits avant toute décision de stockage.</p>`;
   return `
@@ -120,7 +190,7 @@ export function renderForgeInstaller(installer = INSTALLER_VIDE) {
       ${running ? 'disabled' : ''}>${running ? 'Diagnostic…' : 'Diagnostiquer la Forge'}</button>
   </div>
   ${content}
-  ${installer.status === 'ready' ? `<p class="note">L’exécution du plan reste
+  ${['ready', 'planned'].includes(installer.status) ? `<p class="note">L’exécution du plan reste
   désactivée tant que son installateur versionné et ses confirmations de stockage
   ne sont pas livrés. Ce panneau ne simule aucun succès.</p>` : ''}
 </section>`;

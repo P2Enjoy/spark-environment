@@ -647,6 +647,12 @@ tbody tr:hover { background: var(--color-hover); }
 .installation__etat p { margin: var(--space-2) 0 0; color: var(--color-text-2); }
 .installation__releve h3, .installation__stockage h3 { margin-top: 0; }
 .installation__stockage { margin-top: var(--space-4); }
+.installation__plan { margin-top: var(--space-4); }
+.installation__dimensions {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3); margin: var(--space-3) 0;
+}
+.installation__dimensions label { display: grid; gap: var(--space-1); }
 
 /* SPK-69 · SPK-DS-13 — les phases restent lisibles comme un compte rendu,
    sans devenir une fausse barre de progression temporelle. */

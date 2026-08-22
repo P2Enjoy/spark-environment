@@ -62,7 +62,8 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        // comment il se situe. `null` tant qu'on n'a pas comparé
                        // — « pas encore su » n'est ni « à jour », ni une panne.
                        build: null, updateUi: { ...UPDATE_VIDE },
-                       installer: { ...INSTALLER_VIDE } },
+                       installer: { ...INSTALLER_VIDE,
+                                    values: { ...INSTALLER_VIDE.values } } },
                facette: '',
                // SPK-43 · §37.4 : la session de terminal. Les OCTETS n'y sont
                // pas — ils vont directement au DOM (§37.5).
@@ -210,6 +211,15 @@ function brancher() {
     ?.addEventListener('click', () => executerMiseAJour('rollback'));
   racine.querySelector('[data-action="diagnostiquer-forge"]')
     ?.addEventListener('click', diagnostiquerForge);
+  const formulairePlanForge = racine.querySelector('#formulaire-plan-forge');
+  if (formulairePlanForge) {
+    for (const controle of formulairePlanForge.querySelectorAll('input')) {
+      controle.addEventListener('input', () => {
+        etat.forge.installer.values[controle.name] = controle.value;
+      });
+    }
+    formulairePlanForge.addEventListener('submit', planifierForge);
+  }
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
   brancherCatalogueEnv();
@@ -2237,6 +2247,35 @@ async function diagnostiquerForge() {
     installer.status = 'error';
     installer.error = erreur?.message ?? String(erreur);
     installer.result = null;
+  }
+  peindre();
+}
+
+/**
+ * Le plan n'emploie jamais le relevé affiché : l'hôte refait le diagnostic au
+ * moment du geste et refuse si disque, capacité ou sudo ont changé (§50.4).
+ */
+async function planifierForge(evenement) {
+  evenement.preventDefault();
+  const installer = etat.forge.installer;
+  installer.status = 'planning';
+  installer.error = null;
+  installer.planError = null;
+  installer.plan = null;
+  peindre();
+  try {
+    const reponse = await fetch('/api/forge/install/plan', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server: etat.server, values: installer.values }),
+    });
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    installer.status = 'planned';
+    installer.result = corps.diagnostic;
+    installer.plan = corps.plan;
+  } catch (erreur) {
+    installer.status = 'ready';
+    installer.planError = erreur?.message ?? String(erreur);
   }
   peindre();
 }
