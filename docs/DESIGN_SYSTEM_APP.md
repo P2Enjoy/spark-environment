@@ -1,7 +1,14 @@
 # Design System Extension : Spark Environment
 
 Référence complémentaire à `docs/DESIGN_SYSTEM.md`, qui reste la référence
-commune. Seules les règles propres à ce produit figurent ici.
+commune et globale. **Ce fichier est le jumeau local `DESIGN_SYSTEM_APP.md` : toute
+référence, terminologie, architecture, mesure, preuve ou exception propre à Spark
+Environment doit vivre ici et ne doit pas contaminer `DESIGN_SYSTEM.md`.**
+
+Inversement, une règle devenue réellement transversale ne doit pas être dupliquée
+ici : elle remonte dans `DESIGN_SYSTEM.md` sous une forme abstraite et réutilisable,
+tandis que son exemple, sa preuve et sa décision propres à Spark Environment restent
+ici.
 
 ## 1. Architecture spécifique
 
@@ -54,6 +61,11 @@ Ce qui prime sur le tableau, et qui ne se négocie pas à la livraison : ce qui
 s'affiche et ce qui se saisit ne partagent pas la même surface, chaque surface a
 un seul sujet, et une action sensible se confirme (`DESIGN_SYSTEM.md` §5.4,
 §6.23).
+
+Les exemples de navigation retirés du socle global restent donc explicitement ici :
+`Sparks` → `Instances` → fenêtre du Spark → `Infos`, `Routes`, `Clés`,
+`Instantanés`, `Journal`, `Docker`, `Terminal`. Une modale ouverte depuis la section
+`Routes` ne modifie que les routes ; le même principe vaut pour chaque autre section.
 
 ## 2. Terminologie métier
 
@@ -235,6 +247,12 @@ jamais ce qui reste libre. Ce n'est pas un détail d'implémentation :
 Le panneau *Capacité restante* le dit en toutes lettres. Un curseur qui va
 jusqu'à 76 Gio à côté d'un panneau annonçant 64 Gio libres se lirait autrement
 comme une contradiction.
+
+Une valeur de capacité ou de quota ambiguë est toujours qualifiée par son référentiel.
+Lorsque l’interface exprime un facteur, elle affiche par exemple `8,0 CPU (facteur ×2)`
+et non `8,0 CPU` seul. Les exemples CPU, Mio, Gio et ports restent documentés ici
+parce qu’ils appartiennent au domaine de Spark Environment ; le socle global ne
+conserve que la règle abstraite.
 
 Lorsque la capacité n'a pas pu être relevée, les quotas se rendent en **saisie
 numérique** : sans bornes, pas de curseur (§6.9 bis, condition 1).
@@ -425,6 +443,20 @@ autres verdicts ne reçoivent pas un bouton désactivé : ils expliquent pourquo
 aucun geste n'est proposé. Après un succès, **Revenir à la build précédente**
 est un geste sensible distinct, confirmé avec les deux empreintes. Il disparaît
 dès que le reçu n'est plus cohérent avec la build réellement servie.
+
+### SPK-DS-14 · Les valeurs dérivées d’une route ou d’une entrée restent lisibles sans paraître éditables
+
+Les champs techniques dérivés d’une **route publique** ou de l’identité d’une entrée
+suivent `DESIGN_SYSTEM.md` §6.9 : ils restent focusables et copiables lorsqu’ils
+sont en lecture seule, mais leur apparence ne doit pas suggérer une saisie possible.
+
+Le texte d’aide nomme l’origine réelle de la valeur. Exemples propres au produit :
+
+- « Provient de la route publique » ;
+- « Le nom identifie l’entrée ».
+
+Ces formulations sont spécifiques à Spark Environment et restent donc dans
+`DESIGN_SYSTEM_APP.md`, jamais dans le socle global.
 
 ## 5. Responsive spécifique
 
