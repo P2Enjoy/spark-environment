@@ -6,11 +6,31 @@ Référence maîtresse pour l’interface des applications P2Enjoy. Elle dérive
 
 Tout changement d’interface doit être vérifié contre ce document avant commit.
 
+## Périmètre impératif : socle global uniquement
+
+**`DESIGN_SYSTEM.md` est GLOBAL à toutes les applications P2Enjoy. Il ne doit contenir AUCUNE trace d’un projet précis.**
+
+Cette interdiction couvre notamment :
+
+* le nom d’un produit, d’un projet ou d’une application ;
+* une entité métier propre à un projet ;
+* un nom d’écran, d’onglet, de route, de section ou de commande propre à un produit ;
+* une architecture fonctionnelle particulière ;
+* un état, un quota, une mesure, une valeur, une terminologie ou un comportement propre au métier courant ;
+* un identifiant de ticket, de backlog ou de décision ;
+* une capture, un chemin de preuve ou un résultat de test propre à un dépôt ;
+* une exception décidée pour une seule application ;
+* un exemple qui ne peut être compris qu’en connaissant le projet ayant servi à produire la règle.
+
+Le test d’admission est simple : **une règle ou un exemple ne reste ici que s’il peut être compris, appliqué et réutilisé sans connaître le projet courant**. Dans le cas contraire, il appartient au fichier jumelé `docs/DESIGN_SYSTEM_APP.md`.
+
+`DESIGN_SYSTEM_APP.md` est l’extension locale obligatoire dès qu’un projet possède des références, décisions, terminologies, composants, mesures ou exceptions spécifiques. Il référence les sections de ce socle au lieu de les recopier.
+
 Lorsqu’une règle nouvelle apparaît :
 
-* si elle est applicable à plusieurs applications, elle est ajoutée ici ;
-* si elle relève du métier ou d’un produit particulier, elle reste dans la documentation du projet ;
-* si une application doit déroger à une règle commune, l’écart est documenté dans sa propre section ou son propre fichier d’extension, avec justification, date et preuve lorsque celle-ci existe.
+* si elle est réutilisable entre plusieurs applications sans connaître leur métier, elle est ajoutée ici ;
+* si elle relève du métier, du produit ou de l’implémentation du projet courant, elle est ajoutée à `DESIGN_SYSTEM_APP.md` ;
+* si une application doit déroger à une règle commune, l’écart est documenté uniquement dans `DESIGN_SYSTEM_APP.md`, avec justification, date et preuve lorsque celle-ci existe.
 
 Le design system définit **comment une information ou une interaction doit être représentée**. Il ne définit pas les règles métier qui décident quelles informations, permissions, transitions ou données existent.
 
@@ -93,7 +113,7 @@ Le test : si la phrase reste vraie quand toutes les valeurs de l’écran change
 elle n’appartient pas à l’écran. Elle appartient au manuel.
 
 Ce n’est pas une invitation à rendre l’interface muette. Une valeur ambiguë est
-**qualifiée** — « 8,0 CPU (facteur ×2) » et non « 8,0 CPU » —, une absence est
+**qualifiée** par son unité et son référentiel lorsque ceux-ci sont nécessaires à sa compréhension, une absence est
 **nommée** (§14.5, §14.6), et un renvoi mène au chapitre du manuel qui explique.
 Le renvoi remplace le paragraphe ; il ne remplace pas le mot juste.
 
@@ -331,9 +351,8 @@ quand il clique.
 
 **Cette hiérarchie est une orientation, pas une loi.** Elle donne la forme par
 défaut de chaque niveau ; elle n’interdit pas un niveau de plus lorsqu’il rend
-l’écran plus clair. Exemple légitime : barre latérale « Sparks » → onglet
-« Instances » → liste cliquable → fenêtre de l’instance, portant à son tour des
-onglets *Infos*, *Routes*, *Clés*, *Instantanés*, *Journal*.
+l’écran plus clair. Un niveau supplémentaire est légitime lorsqu’il sépare une
+facette réellement distincte d’un objet, sans introduire une navigation redondante.
 
 Ce qui n’est **pas** négociable, en revanche, tient en trois points — et c’est ce
 que la hiérarchie sert à obtenir, pas l’inverse :
@@ -653,7 +672,7 @@ Un champ en lecture seule porte donc, en plus de l'attribut :
 * un fond `--color-bg`, distinct du blanc des contrôles modifiables ;
 * un curseur `default`, jamais le curseur de saisie ;
 * un texte d'aide qui dit **d'où vient la valeur**, pas seulement qu'elle est
-  figée — « il vient de la route publique », « le nom identifie l'entrée ».
+  figée, par exemple « valeur fournie par une source externe » ou « valeur définie par le système ».
 
 Il reste **focusable** au clavier et sélectionnable à la souris : la valeur doit
 pouvoir être lue par une synthèse vocale et copiée. C'est ce qui distingue
@@ -690,8 +709,8 @@ Un curseur seul est illisible : la poignée ne dit pas où elle est. Il porte do
 toujours
 
 * sa **valeur en clair**, formatée avec son unité, à côté de la piste ;
-* `aria-valuetext` avec cette même chaîne — sans quoi la synthèse annonce
-  « 16 » là où l'écran montre « 16 Gio » ;
+* `aria-valuetext` avec cette même chaîne, sans quoi la synthèse peut annoncer
+  une valeur nue alors que l’écran affiche une valeur qualifiée par son unité ;
 * ses **deux bornes**, écrites sous la piste ;
 * une phrase disant **d'où vient la borne haute** lorsque celle-ci n'est pas
   évidente. Une limite sans origine se lit comme un interdit arbitraire.
@@ -701,7 +720,7 @@ curseur ne doit pas pouvoir produire une valeur invalide (§1.4).
 
 **La valeur affichée est EXACTE sur la grille du curseur.** Un format qui arrondit
 convient à une mesure qu'on lit — la dernière décimale n'y apprend rien — mais pas
-à un réglage qu'on transmet : un curseur qui affiche « 10 Gio » pour 10,25 Gio
+à un réglage qu'on transmet : un curseur qui affiche « 10 unités » pour 10,25 unités
 ment sur ce qu'il va envoyer, et l'utilisateur qui déplace la poignée d'un cran
 voit un chiffre immobile. Choisir le pas, c'est donc aussi choisir un format
 capable de le rendre ; si aucun format ne le peut, c'est le pas qui est mauvais.
@@ -710,11 +729,10 @@ Le curseur est nativement utilisable au clavier — flèches, `Origine`, `Fin`,
 `Page préc.` et `Page suiv.` — et cet usage ne se remplace pas par un raccourci
 maison. Sa hauteur cliquable atteint `--size-target` (§4.4).
 
-Contre-exemple retenu : un **numéro de port**. Ses bornes sont pourtant connues,
-1 à 65 535 ; mais la plage compte 65 534 crans à l'unité, la condition 2 tombe, et
-la condition 3 interdit de l'arrondir — un port voisin n'est pas « presque » le
-bon port. Un port se saisit, et il se recopie le plus souvent depuis un fichier
-de configuration : un geste qu'un curseur ne sait pas faire.
+Contre-exemple générique : un **identifiant numérique**. Même lorsqu’il est composé
+de chiffres et possède des bornes formelles, il ne représente pas une grandeur
+continue que l’on approxime. Une valeur voisine n’est pas « presque » correcte.
+Un identifiant se saisit ou se recopie ; un curseur n’est donc pas le bon contrôle.
 
 Lorsque les bornes ne sont **pas connues à l'exécution** — la mesure qui les donne
 a échoué —, l'écran se rabat sur la saisie et nomme l'absence (§14.6). Il
@@ -1229,8 +1247,8 @@ une fenêtre —, rendues en paires terme / valeur (§6.4).
 
 Lorsque l’objet a plusieurs facettes, la fenêtre les répartit en **onglets**, et
 chaque onglet porte à son tour ses sections. Une facette regroupe ce qui se lit
-ensemble : l’identité et les mesures d’un côté, les éléments liés — routes, clés,
-sauvegardes, journal — de l’autre.
+ensemble : l’identité et les mesures d’un côté, les paramètres, relations,
+activités ou historiques associés de l’autre.
 
 Une fenêtre est en **lecture**. Elle ne porte pas de champ de formulaire
 permanent : elle porte des valeurs, et chaque section porte la ou les commandes
@@ -1255,7 +1273,7 @@ Deux usages, un seul composant :
 
 Le choix entre les deux ne change pas la surface, seulement son titre et son
 bouton d’engagement. Ce qui compte est la **portée** : une modale ouverte depuis
-la section « Routes » ne touche que les routes.
+une section ne modifie que le sujet de cette section.
 
 Une modale est chère : elle impose un voile, un piège de focus, une gestion
 d’`Échap` et une restitution du focus. Ce prix se paie pour **recueillir une
@@ -1826,25 +1844,19 @@ est fondamentale.
 
 ---
 
-# 15. Contrat d’extension par application
+# 15. Contrat du fichier jumelé `DESIGN_SYSTEM_APP.md`
 
-Cette référence reste volontairement générique.
-
-Chaque application peut créer un fichier complémentaire, par exemple :
+Cette référence est **strictement globale**. Dès qu’une application possède une règle, une référence, une terminologie, une preuve ou une exception propre au projet, celle-ci vit dans :
 
 ```text
 docs/DESIGN_SYSTEM_APP.md
 ```
 
-ou :
+Ce fichier est le **jumeau local** de `DESIGN_SYSTEM.md`. Il ne recopie pas la présente référence et la présente référence ne recopie pas son contenu.
 
-```text
-docs/design-system/APP_REFERENCE.md
-```
+`DESIGN_SYSTEM.md` ne doit jamais accueillir temporairement une information spécifique sous prétexte qu’elle a servi à découvrir une règle générique. La règle générique peut remonter ici après abstraction ; l’exemple, la mesure, la preuve, le nom métier et l’exception restent dans `DESIGN_SYSTEM_APP.md`.
 
-Ce fichier ne recopie pas la présente référence.
-
-Il contient uniquement ce qui est spécifique au produit.
+Tout élément nécessitant de connaître le projet pour être compris appartient à `DESIGN_SYSTEM_APP.md`.
 
 ## 15.1 Informations autorisées dans l’extension
 
@@ -1937,7 +1949,7 @@ Décision :
 
 # 16. Gestion des écarts
 
-Tout écart au design system commun est explicite.
+Tout écart au design system commun est explicite et documenté dans `DESIGN_SYSTEM_APP.md`.
 
 Il comporte au minimum :
 
