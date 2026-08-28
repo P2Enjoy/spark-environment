@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+### Corrigé
+- **Schéma de partitionnement du README conforme à l'API Elastic Metal**
+  (SPK-28) : `disks` et `raids` deviennent des listes et non des objets indexés
+  par périphérique, les libellés inexistants `bios` et `pool` cèdent la place à
+  `legacy` et `data`, et `size: 0` cède la place à des tailles qui totalisent la
+  capacité réelle des disques. Le pool reste délibérément non déclaré à
+  l'hébergeur : le créer à l'installation ferait refuser les périphériques par
+  `scripts/creer-pool.sh`. Les preuves tiennent désormais la forme et les
+  énumérations de l'API, au lieu de la forme qu'elles supposaient.
+
 ### Ajouté
 - **Amorçage fermé d'une Forge vierge** (cinquième tranche de SPK-68) : avant
   l'exécuteur, la console pose au besoin l'environnement Python et le paquet

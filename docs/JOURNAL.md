@@ -4,6 +4,51 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-28 — Le schéma de partitionnement du README n'avait pas la forme de l'API
+
+**Problème.** Le README porte depuis SPK-28 un schéma JSON présenté comme « à
+fournir à Scaleway à la création du serveur ». Confronté au schéma qu'une Forge
+réelle renvoie, il ne lui ressemblait pas.
+
+**Observations.** Relecture de `scaleway.baremetal.v1.Schema` dans le contrat
+OpenAPI publié de l'API Elastic Metal. Quatre écarts, tous rédhibitoires :
+
+- `disks` et `raids` étaient des **objets indexés** par périphérique ; l'API
+  déclare des **listes**. C'est l'écart de fond : la forme se lit très bien et
+  n'est jamais acceptée ;
+- `"label": "bios"` et `"label": "pool"` n'existent pas. L'énumération est
+  fermée : `uefi`, `legacy`, `root`, `boot`, `swap`, `data`, `home`, `raid`,
+  `zfs`. La partition d'amorçage BIOS se dit `legacy` — ce que la Forge réelle
+  écrit déjà ;
+- `size: 0` ne signifie rien. Le champ qui veut dire « tout l'espace restant »
+  s'appelle `use_all_available_space` ;
+- une partition nommée `pool` ne crée aucun pool : un pool se déclare dans
+  `zfs.pools[]`.
+
+**Pourquoi les preuves n'ont rien vu.** Elles relisaient bien le README, ce qui
+était le bon réflexe, mais elles y vérifiaient la forme **qu'elles avaient
+elles-mêmes supposée**. Une preuve qui n'a pour référence que l'objet qu'elle
+garde ne peut pas le contredire.
+
+**Décision.** Refaire le schéma sur la géométrie réelle des disques de la Forge —
+5 986 713 600 000 octets par disque, dont les tailles totalisent exactement la
+capacité — et **ne pas** déclarer le pool à l'hébergeur, bien que l'API le
+permette. Un pool créé à l'installation laisserait une signature `zfs_member` sur
+`sda5` et `sdb5`, et `scripts/creer-pool.sh` refuserait ensuite d'écrire dessus.
+La frontière du §8.5 bis tient : l'hébergeur livre des partitions, la Forge crée
+son pool.
+
+**Conséquences.** Les preuves tiennent désormais ce qui engage vraiment : listes
+et non objets indexés, libellés et formats pris dans les énumérations de l'API,
+numéros contigus, somme des tailles égale à la capacité, `zfs` nul, et la paire
+toujours absente des RAID comme des systèmes de fichiers.
+
+**Vérifications.** Les quatre preuves du schéma passent, et l'ancienne forme est
+bien refusée par la nouvelle. `pytest` n'a pas pu être installé sur cette machine
+(ni `pip` ni `ensurepip`) : la campagne complète n'a **pas** été rejouée, et le
+schéma n'a **toujours pas** été soumis à `partitioning-schemas/validate`, faute
+de clé. SPK-28 reste `[~]` pour ce motif, inchangé.
+
 ## 2026-08-22 — SPK-68 amorce réellement une Forge sans `/opt/sparkd`
 
 La nouvelle Forge `212.47.246.142` a été reprise service `sparkd` inactif,

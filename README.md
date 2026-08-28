@@ -158,49 +158,78 @@ Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
 
 ```json
 {
-  "disks": {
-    "/dev/sda": {
+  "disks": [
+    {
       "device": "/dev/sda",
-      "partitions": {
-        "bios":  { "label": "bios",  "number": 1, "size": 536870912 },
-        "swap":  { "label": "swap",  "number": 2, "size": 4294967296 },
-        "boot":  { "label": "boot",  "number": 3, "size": 536870912 },
-        "root":  { "label": "root",  "number": 4, "size": 214748364800 },
-        "pool":  { "label": "pool",  "number": 5, "size": 0 }
-      }
+      "partitions": [
+        { "label": "legacy", "number": 1, "size": 536870912 },
+        { "label": "swap",   "number": 2, "size": 4294967296 },
+        { "label": "boot",   "number": 3, "size": 536870912 },
+        { "label": "root",   "number": 4, "size": 214748364800 },
+        { "label": "data",   "number": 5, "size": 5766596526080 }
+      ]
     },
-    "/dev/sdb": {
+    {
       "device": "/dev/sdb",
-      "partitions": {
-        "bios":  { "label": "bios",  "number": 1, "size": 536870912 },
-        "swap":  { "label": "swap",  "number": 2, "size": 4294967296 },
-        "boot":  { "label": "boot",  "number": 3, "size": 536870912 },
-        "root":  { "label": "root",  "number": 4, "size": 214748364800 },
-        "pool":  { "label": "pool",  "number": 5, "size": 0 }
-      }
+      "partitions": [
+        { "label": "legacy", "number": 1, "size": 536870912 },
+        { "label": "swap",   "number": 2, "size": 4294967296 },
+        { "label": "boot",   "number": 3, "size": 536870912 },
+        { "label": "root",   "number": 4, "size": 214748364800 },
+        { "label": "data",   "number": 5, "size": 5766596526080 }
+      ]
     }
-  },
-  "raids": {
-    "/dev/md0": { "name": "/dev/md0", "level": "raid_level_1",
-                  "devices": ["/dev/sda3", "/dev/sdb3"] },
-    "/dev/md1": { "name": "/dev/md1", "level": "raid_level_1",
-                  "devices": ["/dev/sda4", "/dev/sdb4"] }
-  },
+  ],
+  "raids": [
+    { "name": "/dev/md0", "level": "raid_level_1",
+      "devices": ["/dev/sda3", "/dev/sdb3"] },
+    { "name": "/dev/md1", "level": "raid_level_1",
+      "devices": ["/dev/sda4", "/dev/sdb4"] }
+  ],
   "filesystems": [
     { "device": "/dev/md0", "format": "ext4", "mountpoint": "/boot" },
     { "device": "/dev/md1", "format": "ext4", "mountpoint": "/" }
-  ]
+  ],
+  "zfs": null
 }
 ```
 
+C'est la forme exacte de `scaleway.baremetal.v1.Schema` : `disks`, `raids` et
+`filesystems` sont des **listes**, pas des objets indexés par périphérique. Les
+tailles sont en octets et **totalisent la capacité du disque** — ici
+5 986 713 600 000 octets par disque. Sur des disques d'une autre taille, ajuster
+la dernière partition, ou lui donner `"use_all_available_space": true` au lieu
+d'une taille.
+
 Ce qu'il produit, et pourquoi :
 
-- `size: 0` sur la partition `pool` signifie « tout l'espace restant » ;
+- les libellés viennent d'une **énumération fermée** — `uefi`, `legacy`, `root`,
+  `boot`, `swap`, `data`, `home`, `raid`, `zfs`. `legacy` est la partition
+  d'amorçage BIOS : cette machine n'amorce pas en UEFI, donc **pas de partition
+  `uefi` ni de `/boot/efi` en fat32**. `data` ne désigne ici qu'une partition
+  que rien ne réclame ;
 - **`sda5` et `sdb5` n'apparaissent ni dans `raids` ni dans `filesystems`** :
   elles restent des périphériques bloc nus, ce qu'exige la disposition A. Les
   confier à `md` reproduirait exactement le problème que le miroir ZFS résout ;
+- **`"zfs": null` est délibéré.** Déclarer le pool ici le ferait créer par
+  l'hébergeur à l'installation ; `creer-pool.sh` verrait alors une signature
+  `zfs_member` sur les deux périphériques et **refuserait** d'écrire dessus. Le
+  pool se crée après livraison, par le geste paramétré, ou pas du tout ;
 - le système reste sur un RAID1 de ~200 Gio, largement suffisant : la Forge de
   validation en consomme 2,7 Gio.
+
+Par l'API, ce bloc se place sous `install.partitioning_schema`. L'hébergeur sait
+le vérifier avant toute installation, et c'est la seule réponse qui engage :
+
+```bash
+curl -i -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"offer_id":"…","os_id":"…","partitioning_schema":{…}}' \
+  https://api.scaleway.com/baremetal/v1/zones/fr-par-2/partitioning-schemas/validate
+```
+
+Un `204` vaut acceptation. Le partitionnement ne se change plus après coup :
+seule une réinstallation le refait.
 
 Une fois la machine livrée, il ne reste qu'à créer le pool :
 

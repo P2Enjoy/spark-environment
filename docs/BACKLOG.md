@@ -857,11 +857,20 @@ réclame ici.
   éprouvé, exécuté pour de vrai avec `id`, `incus` et `wipefs` doublés —, plus
   4 du préflight configurable. 722 preuves Python au total.
 
+- **Corrigé le 2026-08-28** : le schéma publié n'avait pas la forme de
+  `scaleway.baremetal.v1.Schema`. `disks` et `raids` y étaient des objets indexés
+  par périphérique là où l'API attend des **listes**, deux libellés — `bios`,
+  `pool` — n'existent pas dans l'énumération, et `size: 0` ne vaut pas « tout
+  l'espace restant ». Aucune preuve ne pouvait le voir : elles lisaient la forme
+  qu'elles avaient elles-mêmes supposée. Le schéma est refait sur la géométrie
+  réelle des disques de la Forge, et les preuves tiennent désormais la forme et
+  les énumérations de l'API.
 - **Reste avant `[x]`, et c'est le seul écart** : le schéma JSON n'a **jamais été
-  soumis à un hébergeur**. Il est valide, et une preuve le relit depuis le README
-  pour garder que la paire reste libre — mais « un exploitant qui suit le README
-  obtient les partitions attendues » demande une machine commandée, que la
-  session ne peut pas fournir. **Nécessite une action humaine.**
+  soumis à un hébergeur**. Il est conforme au schéma publié de l'API, et une
+  preuve le relit depuis le README pour garder que la paire reste libre — mais
+  « un exploitant qui suit le README obtient les partitions attendues » demande
+  soit un appel à `partitioning-schemas/validate`, soit une machine commandée,
+  que la session ne peut pas fournir. **Nécessite une action humaine.**
 
 ### [x] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
 

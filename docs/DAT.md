@@ -964,6 +964,12 @@ sda4 / sdb4   ~200 Go  md1  → /  ext4
 sda5 / sdb5   ~5,2 To  zpool miroir    — À CRÉER
 ```
 
+Le schéma de partitionnement remis à l'hébergeur (README) **ne déclare pas** le
+pool, alors que l'API de Scaleway saurait le créer. Ce n'est pas un oubli : un
+pool créé à l'installation laisserait une signature `zfs_member` sur `sda5` et
+`sdb5`, et `scripts/creer-pool.sh` refuserait alors d'écrire dessus (§8.5 bis).
+La frontière tient : l'hébergeur livre des partitions, la Forge crée son pool.
+
 Le passage de la disposition actuelle à celle-ci suppose de réduire `md1`, ce que
 `resize2fs` ne sait pas faire à chaud sur un système de fichiers racine monté. Deux
 voies, la décision appartenant au responsable :

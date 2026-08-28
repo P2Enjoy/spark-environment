@@ -175,14 +175,56 @@ def _schema_du_readme() -> dict:
     return json.loads(bloc.group(1))
 
 
-def test_le_schema_du_README_est_un_JSON_VALIDE():
+# Énumérations fermées de `scaleway.baremetal.v1.Schema`. Un libellé inventé —
+# « bios », « pool » — est refusé par l'hébergeur, et rien dans le dépôt ne le
+# dirait avant la commande d'une machine.
+LIBELLES = {
+    "unknown_partition_label", "uefi", "legacy", "root",
+    "boot", "swap", "data", "home", "raid", "zfs",
+}
+FORMATS = {"unknown_format", "fat32", "ext4", "swap", "zfs", "xfs"}
+NIVEAUX_RAID = {
+    "unknown_raid_level", "raid_level_0", "raid_level_1",
+    "raid_level_5", "raid_level_6", "raid_level_10",
+}
+
+
+def test_le_schema_du_README_a_la_FORME_QUE_L_HEBERGEUR_ATTEND():
     """Un schéma qu'on copie-colle et que l'hébergeur refuse ne sert à rien.
 
     Il est relu depuis le README, pas depuis une copie : une copie divergerait,
-    et c'est celle du README qui serait employée.
+    et c'est celle du README qui serait employée. La preuve tient la forme de
+    `scaleway.baremetal.v1.Schema` — des LISTES, et des valeurs prises dans les
+    énumérations — parce que c'est exactement ce qui avait été manqué : un objet
+    indexé par périphérique se lit très bien et n'est jamais accepté.
     """
     schema = _schema_du_readme()
     assert set(schema) >= {"disks", "raids", "filesystems"}
+    assert isinstance(schema["disks"], list)
+    assert isinstance(schema["raids"], list)
+    assert isinstance(schema["filesystems"], list)
+
+    for disque in schema["disks"]:
+        assert disque["device"].startswith("/dev/")
+        numeros = [p["number"] for p in disque["partitions"]]
+        assert numeros == list(range(1, len(numeros) + 1))
+        for partition in disque["partitions"]:
+            assert partition["label"] in LIBELLES, partition["label"]
+            assert partition["size"] > 0
+
+    for raid in schema["raids"]:
+        assert raid["level"] in NIVEAUX_RAID
+    for systeme in schema["filesystems"]:
+        assert systeme["format"] in FORMATS
+
+
+def test_les_partitions_REMPLISSENT_le_disque():
+    """Une somme qui ne tombe pas juste laisse un reliquat inatteignable, ou
+    fait refuser le schéma. La capacité est celle des disques de la Forge."""
+    CAPACITE = 5_986_713_600_000
+    for disque in _schema_du_readme()["disks"]:
+        somme = sum(p["size"] for p in disque["partitions"])
+        assert somme == CAPACITE, f"{disque['device']} totalise {somme}"
 
 
 def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
@@ -190,18 +232,19 @@ def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
 
     Confier « sda5 » et « sdb5 » à `md` reproduirait exactement le problème que
     le miroir ZFS résout : `md` ne sait pas laquelle des deux copies est la
-    bonne. La preuve garde donc qu'elles n'apparaissent NI dans un RAID, NI dans
-    un système de fichiers.
+    bonne. Les confier à l'hébergeur via `zfs` serait pire encore : le pool
+    existerait, `creer-pool.sh` verrait une signature et refuserait. La preuve
+    garde donc qu'elles n'apparaissent NI dans un RAID, NI dans un système de
+    fichiers, NI dans un pool.
     """
     schema = _schema_du_readme()
-    for disque in ("/dev/sda", "/dev/sdb"):
-        partitions = schema["disks"][disque]["partitions"]
-        assert "pool" in partitions, f"{disque} doit porter une partition de pool"
-        # « size: 0 » vaut « tout l'espace restant » : la borner ici gâcherait
-        # la fin des disques sans rien apporter.
-        assert partitions["pool"]["size"] == 0
+    for disque in schema["disks"]:
+        derniere = disque["partitions"][-1]
+        assert derniere["number"] == 5, f"{disque['device']} doit porter 5 partitions"
 
-    engagees = {d for r in schema["raids"].values() for d in r["devices"]}
+    assert schema.get("zfs") is None, "le pool ne se déclare PAS à l'hébergeur"
+
+    engagees = {d for r in schema["raids"] for d in r["devices"]}
     engagees |= {f["device"] for f in schema["filesystems"]}
     for libre in ("/dev/sda5", "/dev/sdb5"):
         assert libre not in engagees, f"{libre} doit rester un périphérique NU"
@@ -210,7 +253,7 @@ def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
 def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
     """La disposition A réduit « / », elle ne le laisse pas sans redondance."""
     schema = _schema_du_readme()
-    for raid in schema["raids"].values():
+    for raid in schema["raids"]:
         assert raid["level"] == "raid_level_1"
         assert len(raid["devices"]) == 2
     montages = {f["mountpoint"] for f in schema["filesystems"]}
