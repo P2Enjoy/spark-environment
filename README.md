@@ -109,7 +109,9 @@ La procédure complète et son retour arrière sont dans le
 ## Le stockage : deux dispositions
 
 Le produit ne suppose ni le nom du pool, ni son emplacement, ni sa taille. Le pool
-se crée par un geste, et **toutes** ses valeurs viennent de l'environnement :
+arrive déjà créé quand la machine a été livrée avec le schéma de partitionnement
+par défaut ci-dessous ; sinon il se crée par un geste, et **toutes** ses valeurs
+viennent de l'environnement :
 
 ```bash
 sudo scripts/creer-pool.sh
@@ -128,13 +130,18 @@ montre ce qu'il y a trouvé.
 
 ### Disposition A — miroir natif sur périphériques dédiés
 
-```bash
-sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
-```
-
 Ce qu'elle apporte en propre : **ZFS gère lui-même le miroir**, donc il détecte
-et **répare** la corruption silencieuse. Elle exige deux périphériques vides, donc
-une machine partitionnée pour cela dès sa création — voir le schéma ci-dessous.
+et **répare** la corruption silencieuse. Deux chemins y mènent :
+
+- **la machine est livrée avec son pool** — le schéma de partitionnement par
+  défaut ci-dessous le fait créer par l'hébergeur à l'installation. Après
+  livraison, rien à créer : le pool s'**adopte**, et le cloud-init du README le
+  fait seul ;
+- **la machine offre deux périphériques vides** — le geste les consomme :
+
+  ```bash
+  sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
+  ```
 
 ### Disposition B — pool sur fichier
 
@@ -150,11 +157,18 @@ protection contre la corruption silencieuse est donc **absente**, pas dégradée
 Une mesure de débit disque menée sur cette disposition ne caractérise pas la
 machine : elle traverse deux systèmes de fichiers.
 
-### Obtenir d'emblée une machine partitionnée pour la disposition A
+### Obtenir d'emblée une machine livrée avec son pool (disposition A)
 
 Chez un hébergeur qui accepte un schéma de partitionnement à la création du
-serveur — Scaleway le fait —, le fournir évite tout repartitionnement ultérieur.
-Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
+serveur — Scaleway le fait —, le fournir évite tout repartitionnement et tout
+geste de création ultérieurs. Le schéma **par défaut** ci-dessous fait **livrer
+la machine avec son pool** : un miroir ZFS `spark` sur `sda5` et `sdb5`, créé
+par l'hébergeur à l'installation.
+
+La forme du JSON est documentée par Scaleway — [configurer un partitionnement
+personnalisé](https://www.scaleway.com/en/docs/elastic-metal/how-to/configure-disk-partitions/) —
+et sa référence exacte (`scaleway.baremetal.v1.Schema`, énumérations comprises)
+vit dans l'[API Elastic Metal](https://www.scaleway.com/en/developers/api/elastic-metal/).
 
 ```json
 {
@@ -166,7 +180,7 @@ Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
         { "label": "swap",   "number": 2, "size": 4294967296 },
         { "label": "boot",   "number": 3, "size": 536870912 },
         { "label": "root",   "number": 4, "size": 214748364800 },
-        { "label": "data",   "number": 5, "size": 5766596526080 }
+        { "label": "data",   "number": 5, "use_all_available_space": true }
       ]
     },
     {
@@ -176,7 +190,7 @@ Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
         { "label": "swap",   "number": 2, "size": 4294967296 },
         { "label": "boot",   "number": 3, "size": 536870912 },
         { "label": "root",   "number": 4, "size": 214748364800 },
-        { "label": "data",   "number": 5, "size": 5766596526080 }
+        { "label": "data",   "number": 5, "use_all_available_space": true }
       ]
     }
   ],
@@ -190,33 +204,42 @@ Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
     { "device": "/dev/md0", "format": "ext4", "mountpoint": "/boot" },
     { "device": "/dev/md1", "format": "ext4", "mountpoint": "/" }
   ],
-  "zfs": null
+  "lvm": null,
+  "zfs": {
+    "pools": [
+      { "name": "spark", "type": "mirror",
+        "devices": ["/dev/sda5", "/dev/sdb5"],
+        "options": ["ashift=12"],
+        "filesystem_options": [] }
+    ]
+  }
 }
 ```
 
 C'est la forme exacte de `scaleway.baremetal.v1.Schema` : `disks`, `raids` et
-`filesystems` sont des **listes**, pas des objets indexés par périphérique. Les
-tailles sont en octets et **totalisent la capacité du disque** — ici
-5 986 713 600 000 octets par disque. Sur des disques d'une autre taille, ajuster
-la dernière partition, ou lui donner `"use_all_available_space": true` au lieu
-d'une taille.
+`filesystems` sont des **listes**, pas des objets indexés par périphérique, et
+les tailles sont en octets.
 
 Ce qu'il produit, et pourquoi :
 
+- **aucune taille à calculer** : les quatre premières partitions sont fixes, la
+  cinquième porte `"use_all_available_space": true` et prend tout le reste du
+  disque. C'est ce drapeau — et non une taille totalisée — qui rend le même
+  schéma valable **quelle que soit la capacité** des disques ;
+- **le pool est déclaré dans `zfs.pools`**, donc créé par l'hébergeur : la
+  machine arrive avec son miroir géré par ZFS, qui détecte et **répare** la
+  corruption silencieuse dès la livraison. `spark` est le défaut du produit
+  (`SPARKD_STORAGE_POOL`) ; `ashift=12` dit des secteurs physiques de 4 Kio, et
+  le libellé `data` sur la paire suit l'exemple officiel de la documentation ;
 - les libellés viennent d'une **énumération fermée** — `uefi`, `legacy`, `root`,
   `boot`, `swap`, `data`, `home`, `raid`, `zfs`. `legacy` est la partition
   d'amorçage BIOS : cette machine n'amorce pas en UEFI, donc **pas de partition
-  `uefi` ni de `/boot/efi` en fat32**. `data` ne désigne ici qu'une partition
-  que rien ne réclame ;
+  `uefi` ni de `/boot/efi` en fat32** ;
 - **`sda5` et `sdb5` n'apparaissent ni dans `raids` ni dans `filesystems`** :
-  elles restent des périphériques bloc nus, ce qu'exige la disposition A. Les
-  confier à `md` reproduirait exactement le problème que le miroir ZFS résout ;
-- **`"zfs": null` est délibéré.** Déclarer le pool ici le ferait créer par
-  l'hébergeur à l'installation ; `creer-pool.sh` verrait alors une signature
-  `zfs_member` sur les deux périphériques et **refuserait** d'écrire dessus. Le
-  pool se crée après livraison, par le geste paramétré, ou pas du tout ;
-- le système reste sur un RAID1 de ~200 Gio, largement suffisant : la Forge de
-  validation en consomme 2,7 Gio.
+  le miroir de la paire appartient à ZFS. Les confier à `md` reproduirait
+  exactement le problème que le miroir ZFS résout ;
+- le système reste sur un RAID1 `md` de ~200 Gio, largement suffisant : la
+  Forge de validation en consomme 2,7 Gio.
 
 Par l'API, ce bloc se place sous `install.partitioning_schema`. L'hébergeur sait
 le vérifier avant toute installation, et c'est la seule réponse qui engage :
@@ -231,11 +254,121 @@ curl -i -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" \
 Un `204` vaut acceptation. Le partitionnement ne se change plus après coup :
 seule une réinstallation le refait.
 
-Une fois la machine livrée, il ne reste qu'à créer le pool :
+Une fois la machine livrée, le pool existe déjà : il ne se **crée** pas, il
+s'**adopte**. Ce n'est pas un geste pour `creer-pool.sh` — la signature
+`zfs_member` qu'il verrait sur la paire est ici l'état **attendu** d'une machine
+livrée, pas un danger (DAT §8.6) :
 
 ```bash
-sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
+sudo incus storage create spark zfs source=spark
 ```
+
+Le cloud-init ci-dessous fait ce geste, et tout le reste, au premier démarrage.
+
+### Amorcer la Forge au premier démarrage : cloud-init
+
+À coller tel quel dans les *user data* cloud-init proposées à l'installation du
+serveur — [supporté sur Elastic
+Metal](https://www.scaleway.com/en/docs/elastic-metal/concepts/#cloud-init). Il
+**attend une machine livrée avec le schéma ci-dessus** — le zpool `spark` déjà
+présent — et rend une Forge prête à servir : Incus ≥ 6.19 depuis le dépôt
+amont, pool adopté, Caddy, bridge privé et pare-feu, `sparkd` en service
+systemd, préflight vert, `/healthz`, `/readyz` et topologie relevée.
+
+```yaml
+#cloud-config
+write_files:
+  - path: /opt/spark-amorce.sh
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      # Amorce une Forge sur une machine livrée avec le schéma de
+      # partitionnement du README : le zpool existe déjà, rien n'est formaté.
+      set -eu
+      POOL=spark            # nom du zpool livré par le schéma
+      BRIDGE=sparkbr0       # bridge privé des Sparks
+      ARC_GIB=16            # plafond ARC ZFS, soustrait de la mémoire allouable
+      MEM_RESERVE_GIB=2     # réserve mémoire de la Forge, hors ARC
+      CPU_RESERVE=0.5       # cœurs que la Forge garde pour elle
+      export DEBIAN_FRONTEND=noninteractive
+
+      apt-get update -q
+      apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg git python3-venv
+
+      # Incus ≥ 6.19 : dépôt amont Zabbly, empreinte vérifiée avant confiance.
+      curl -fsSL https://pkgs.zabbly.com/key.asc -o /run/zabbly.asc
+      gpg --show-keys --with-colons /run/zabbly.asc | grep '^fpr:' \
+        | grep -q '4EFC590696CB15B87C73A3AD82CC8797C838DCFD'
+      install -D -m 0644 /run/zabbly.asc /etc/apt/keyrings/zabbly.asc
+      cat > /etc/apt/sources.list.d/zabbly-incus-stable.sources <<EOF
+      Enabled: yes
+      Types: deb
+      URIs: https://pkgs.zabbly.com/incus/stable
+      Suites: $(. /etc/os-release && echo "$VERSION_CODENAME")
+      Components: main
+      Architectures: $(dpkg --print-architecture)
+      Signed-By: /etc/apt/keyrings/zabbly.asc
+      EOF
+      apt-get update -q
+      apt-get install -y incus zfsutils-linux
+
+      # Le pool livré par l'hébergeur : l'importer si besoin, puis le confier
+      # à Incus. Aucune création, aucun formatage — le pool s'adopte.
+      modprobe zfs
+      zpool list "$POOL" >/dev/null 2>&1 || zpool import -f "$POOL"
+      incus storage show "$POOL" >/dev/null 2>&1 \
+        || incus storage create "$POOL" zfs "source=$POOL"
+
+      # Paquet sparkd, sans checkout du dépôt sur la Forge (runbook §A.2).
+      [ -x /opt/sparkd/venv/bin/python ] || python3 -m venv /opt/sparkd/venv
+      /opt/sparkd/venv/bin/pip install --upgrade \
+        "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"
+
+      # L'exécuteur du produit joue le reste, à l'identique de la console :
+      # Caddy, nftables, ARC, bridge, durcissement SSH, unités systemd, puis
+      # préflight, /healthz, /readyz et relevé de topologie.
+      /opt/sparkd/venv/bin/python - "$POOL" "$BRIDGE" "$CPU_RESERVE" \
+        "$MEM_RESERVE_GIB" "$ARC_GIB" <<'PY'
+      import json, platform, subprocess, sys
+      pool, bridge, cpu, mem, arc = sys.argv[1:6]
+      plan = {
+          "version": 1,
+          "system": {"os": "ubuntu", "architecture": platform.machine()},
+          "storage": {"kind": "reuse", "poolName": pool, "driver": "zfs",
+                      "destructive": False},
+          "config": {"poolName": pool, "bridgeName": bridge,
+                     "cpuReserve": float(cpu), "memoryReserveGib": float(mem),
+                     "arcMaxGib": float(arc), "reservedPorts": [22, 80, 443]},
+          "phases": [{"id": p, "label": p, "status": "pending"} for p in (
+              "access", "dependencies", "storage", "foundation",
+              "control", "verification")],
+      }
+      run = subprocess.run(
+          [sys.executable, "-m", "sparkd.forge_install"],
+          input=json.dumps({"plan": plan, "confirmation": ""}), text=True)
+      sys.exit(run.returncode)
+      PY
+runcmd:
+  - [/opt/spark-amorce.sh]
+```
+
+Trois valeurs à relire avant de coller. `ARC_GIB` et `MEM_RESERVE_GIB` sont
+celles du contrat de la Forge cible (94 Gio de RAM) : sur une machine plus
+petite, les réduire — l'amorçage **refuse** une combinaison qui ne laisserait
+aucune mémoire aux Sparks. `CPU_RESERVE` est la part de processeur que la Forge
+garde pour elle.
+
+Le journal d'exécution est dans `/var/log/cloud-init-output.log` : chaque phase
+y rend un événement JSON, le dernier étant la recette — `verification`, `done`.
+Vérifier ensuite comme au runbook §A.3, depuis la machine :
+`curl -s http://127.0.0.1:9876/healthz`. Ce cloud-init n'a pas encore tourné
+sur une machine réellement livrée (SPK-28) : la première exécution réelle est
+une mesure à archiver.
+
+Sans cloud-init, les mêmes gestes se jouent à la main : adopter le pool — la
+commande ci-dessus — puis dérouler le
+[runbook d'agent](docs/AGENT_RUNBOOK.md#A-déployer-sparkd-sur-une-nouvelle-forge).
 
 ## Stack
 

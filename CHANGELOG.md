@@ -5,14 +5,35 @@
 ### Corrigé
 - **Schéma de partitionnement du README conforme à l'API Elastic Metal**
   (SPK-28) : `disks` et `raids` deviennent des listes et non des objets indexés
-  par périphérique, les libellés inexistants `bios` et `pool` cèdent la place à
-  `legacy` et `data`, et `size: 0` cède la place à des tailles qui totalisent la
-  capacité réelle des disques. Le pool reste délibérément non déclaré à
-  l'hébergeur : le créer à l'installation ferait refuser les périphériques par
-  `scripts/creer-pool.sh`. Les preuves tiennent désormais la forme et les
-  énumérations de l'API, au lieu de la forme qu'elles supposaient.
+  par périphérique, et les libellés inexistants `bios` et `pool` cèdent la
+  place à ceux de l'énumération fermée. Les preuves tiennent désormais la forme
+  et les énumérations de l'API, au lieu de la forme qu'elles supposaient.
+- **`sparkd` s'importe de nouveau sous Python 3.11** : une f-string de
+  `preflight.py` imbriquait le même guillemet — valide seulement à partir de
+  Python 3.12, alors que le paquet annonce `requires-python >= 3.11`. Le module
+  ne s'importait pas du tout en 3.11 ; la CI, en 3.12, ne pouvait pas le voir.
 
 ### Ajouté
+- **Le schéma de partitionnement par défaut fait livrer la machine avec son
+  pool** (SPK-28, DAT §8.6, décision du responsable du 2026-08-30) : le pool
+  `spark` est déclaré à l'hébergeur dans `zfs.pools[]` — miroir sur
+  `sda5`/`sdb5`, `ashift=12` — et la dernière partition de chaque disque porte
+  `use_all_available_space` au lieu d'une taille totalisée, ce qui rend le même
+  schéma valable pour toute capacité de disque. Le README renvoie à la
+  documentation Scaleway du schéma JSON et à la référence de l'API. Après
+  livraison le pool ne se crée pas, il s'**adopte**
+  (`incus storage create … source=…`) ; `scripts/creer-pool.sh` reste le geste
+  des machines non livrées ainsi.
+- **Un cloud-init copiable amorce une Forge complète au premier démarrage**
+  (README) : sur une machine livrée avec le schéma par défaut, il pose le dépôt
+  Zabbly après vérification d'empreinte, installe Incus et ZFS, adopte le pool
+  livré, installe le paquet `sparkd` sans checkout, puis confie le reste à
+  `sparkd.forge_install` en plan `reuse` — Caddy, nftables, ARC, bridge,
+  durcissement, unités systemd, préflight, `/healthz`, `/readyz` et relevé de
+  topologie. Une preuve soumet le shell embarqué à `sh -n`, le Python embarqué
+  à `ast.parse`, et tient l'empreinte Zabbly, les phases et le pool par défaut
+  identiques à ceux de l'exécuteur. **Jamais exécuté sur une machine réellement
+  livrée** : la première exécution réelle reste une mesure à archiver.
 - **Amorçage fermé d'une Forge vierge** (cinquième tranche de SPK-68) : avant
   l'exécuteur, la console pose au besoin l'environnement Python et le paquet
   `sparkd` exactement épinglé sur la build qu'elle a chargée, à condition que
@@ -307,7 +328,8 @@
   seul périphérique, et refuse d'écrire sur un périphérique non vide — en
   montrant ce qu'il y a trouvé.
 - **Le README porte le schéma de partitionnement** à fournir à la création d'un
-  serveur, pour obtenir d'emblée une paire de partitions libres.
+  serveur, pour obtenir d'emblée une machine prête pour la disposition A —
+  depuis le 2026-08-30, livrée avec son pool.
 - `SPARKD_STORAGE_DATASET` : le jeu de données dont la compression est vérifiée,
   qui suit le pool par défaut.
 - **Les écrans renvoient au manuel au lieu de recopier son raisonnement**

@@ -490,7 +490,7 @@ def tranche_des_sparks(hote: Hote) -> Verdict:
         return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
                        f"controleurs delegues : {controleurs.strip()!r}",
                        "Les limites ne s'appliquent pas dans la tranche. "
-                       f"echo '+{" +".join(manquants)}' > "
+                       f"echo '+{' +'.join(manquants)}' > "
                        "/sys/fs/cgroup/spark.slice/cgroup.subtree_control")
     if etat not in ("enabled", "static", "enabled-runtime"):
         return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,

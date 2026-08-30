@@ -1,5 +1,6 @@
 """@verifies docs/BACKLOG.md#SPK-28 · docs/DAT.md §8.5 (les deux dispositions),
-            §8.5 bis (aucune valeur codée en dur, et le refus d'écraser)
+            §8.5 bis (aucune valeur codée en dur, et le refus d'écraser),
+            §8.6 (le schéma par défaut livre le pool, et l'amorçage cloud-init)
 
 Ce que ces preuves gardent : **le script ne détruit rien sans le dire**, et il
 n'invente aucune valeur.
@@ -210,7 +211,13 @@ def test_le_schema_du_README_a_la_FORME_QUE_L_HEBERGEUR_ATTEND():
         assert numeros == list(range(1, len(numeros) + 1))
         for partition in disque["partitions"]:
             assert partition["label"] in LIBELLES, partition["label"]
-            assert partition["size"] > 0
+            # Une partition dit SA taille, ou dit qu'elle prend le RESTE —
+            # jamais les deux, jamais aucune : `size: 0` ne veut rien dire, et
+            # une taille posée À CÔTÉ du drapeau serait une taille morte.
+            if partition.get("use_all_available_space"):
+                assert "size" not in partition, partition
+            else:
+                assert partition["size"] > 0
 
     for raid in schema["raids"]:
         assert raid["level"] in NIVEAUX_RAID
@@ -218,36 +225,48 @@ def test_le_schema_du_README_a_la_FORME_QUE_L_HEBERGEUR_ATTEND():
         assert systeme["format"] in FORMATS
 
 
-def test_les_partitions_REMPLISSENT_le_disque():
-    """Une somme qui ne tombe pas juste laisse un reliquat inatteignable, ou
-    fait refuser le schéma. La capacité est celle des disques de la Forge."""
-    CAPACITE = 5_986_713_600_000
+def test_la_DERNIERE_partition_remplit_le_disque_par_le_DRAPEAU():
+    """Décision du 2026-08-30 : une somme totalisée ne vaut que pour UNE
+    capacité de disque ; `use_all_available_space` rend le même schéma valable
+    pour toutes. La preuve garde que le drapeau est porté par la dernière
+    partition de chaque disque, et par elle SEULE : deux partitions qui
+    demandent « tout le reste » ne veulent rien dire."""
     for disque in _schema_du_readme()["disks"]:
-        somme = sum(p["size"] for p in disque["partitions"])
-        assert somme == CAPACITE, f"{disque['device']} totalise {somme}"
+        partitions = disque["partitions"]
+        assert partitions[-1].get("use_all_available_space") is True, (
+            f"{disque['device']} doit finir par le drapeau de remplissage")
+        for fixe in partitions[:-1]:
+            assert not fixe.get("use_all_available_space"), fixe
+            assert fixe["size"] > 0
 
 
-def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
-    """C'est tout l'objet du schéma (§8.6, disposition A).
+def test_le_schema_LIVRE_le_pool_sur_la_paire():
+    """C'est tout l'objet du schéma par défaut (§8.6, disposition A).
 
-    Confier « sda5 » et « sdb5 » à `md` reproduirait exactement le problème que
-    le miroir ZFS résout : `md` ne sait pas laquelle des deux copies est la
-    bonne. Les confier à l'hébergeur via `zfs` serait pire encore : le pool
-    existerait, `creer-pool.sh` verrait une signature et refuserait. La preuve
-    garde donc qu'elles n'apparaissent NI dans un RAID, NI dans un système de
-    fichiers, NI dans un pool.
+    Le pool est déclaré à l'hébergeur : la machine arrive avec son miroir ZFS,
+    au NOM QUE LE PRODUIT LIT PAR DÉFAUT — un pool livré sous un autre nom
+    serait invisible du plan de contrôle. La paire reste absente des RAID `md`
+    et des systèmes de fichiers : son miroir appartient à ZFS, sans quoi `md`
+    reproduirait exactement le problème que ZFS résout.
     """
+    from sparkd import config
+
     schema = _schema_du_readme()
     for disque in schema["disks"]:
         derniere = disque["partitions"][-1]
         assert derniere["number"] == 5, f"{disque['device']} doit porter 5 partitions"
 
-    assert schema.get("zfs") is None, "le pool ne se déclare PAS à l'hébergeur"
+    pools = (schema.get("zfs") or {}).get("pools")
+    assert pools and len(pools) == 1, "le pool se déclare à l'hébergeur (§8.6)"
+    pool = pools[0]
+    assert pool["name"] == config.DEFAULT_STORAGE_POOL
+    assert pool["type"] == "mirror"
+    assert pool["devices"] == ["/dev/sda5", "/dev/sdb5"]
 
     engagees = {d for r in schema["raids"] for d in r["devices"]}
     engagees |= {f["device"] for f in schema["filesystems"]}
-    for libre in ("/dev/sda5", "/dev/sdb5"):
-        assert libre not in engagees, f"{libre} doit rester un périphérique NU"
+    for livre in pool["devices"]:
+        assert livre not in engagees, f"{livre} appartient au miroir ZFS, pas à md"
 
 
 def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
@@ -258,6 +277,67 @@ def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
         assert len(raid["devices"]) == 2
     montages = {f["mountpoint"] for f in schema["filesystems"]}
     assert montages == {"/", "/boot"}
+
+
+# --- Le cloud-init du README (§8.6) ------------------------------------------
+
+
+def _cloud_init_du_readme() -> str:
+    import re
+
+    readme = (Path(__file__).resolve().parents[3] / "README.md").read_text("utf-8")
+    bloc = re.search(r"```yaml\n(#cloud-config\n.*?)\n```", readme, re.S)
+    assert bloc, "le README doit porter l'amorçage cloud-init (§8.6)"
+    return bloc.group(1)
+
+
+def _script_embarque(cloud_init: str) -> str:
+    """Le shell sous `content: |`, désindenté comme cloud-init le posera."""
+    lignes = cloud_init.splitlines()
+    debut = next(i for i, l in enumerate(lignes) if l.strip() == "content: |") + 1
+    corps = []
+    for ligne in lignes[debut:]:
+        if ligne.strip() and not ligne.startswith("      "):
+            break
+        corps.append(ligne[6:])
+    return "\n".join(corps) + "\n"
+
+
+def test_le_cloud_init_est_EXECUTABLE_et_dit_la_meme_chose_que_l_executeur():
+    """Un amorçage qu'on copie-colle et qui casse à la première ligne ne sert à
+    rien — et un amorçage qui contredit l'exécuteur du produit est pire.
+
+    Le shell embarqué passe par `sh -n` et le Python embarqué par `ast.parse` :
+    c'est la syntaxe de ce qui tournera réellement qui est tenue, pas une
+    relecture à l'œil. Puis les valeurs qui doivent être CELLES DU PRODUIT le
+    sont : l'empreinte de la clé Zabbly, la liste fermée des phases, le pool
+    par défaut que `sparkd` lira, le plan `reuse` — le pool livré s'adopte, il
+    ne se recrée pas — et le paquet pris dans `services/sparkd` du dépôt.
+    """
+    import ast
+    import re
+
+    from sparkd import config, forge_install
+
+    cloud_init = _cloud_init_du_readme()
+    assert cloud_init.startswith("#cloud-config")
+    script = _script_embarque(cloud_init)
+
+    verdict = subprocess.run(["sh", "-n"], input=script,
+                             capture_output=True, text=True)
+    assert verdict.returncode == 0, verdict.stderr
+
+    heredoc = re.search(r"<<'PY'\n(.*?)\nPY\n", script, re.S)
+    assert heredoc, "l'enveloppe du plan doit passer par un heredoc quoté"
+    ast.parse(heredoc.group(1))
+
+    assert forge_install.ZABBLY_FINGERPRINT in script
+    assert re.search(rf"^POOL={config.DEFAULT_STORAGE_POOL}\b", script, re.M)
+    assert "#subdirectory=services/sparkd" in script
+    assert '"kind": "reuse"' in heredoc.group(1)
+    assert '"sparkd.forge_install"' in heredoc.group(1)
+    assert re.search(".*".join(forge_install.PHASES), heredoc.group(1), re.S), (
+        "les phases doivent être la liste fermée de l'exécuteur")
 
 
 def test_le_defaut_du_REMEDE_et_celui_du_SCRIPT_sont_le_MEME():
