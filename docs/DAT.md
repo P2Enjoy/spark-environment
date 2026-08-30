@@ -961,14 +961,38 @@ sda1 / sdb1   537 Mo   bios_grub
 sda2 / sdb2   4,3 Go   swap            — présent, actuellement inutilisé
 sda3 / sdb3   537 Mo   md0  → /boot
 sda4 / sdb4   ~200 Go  md1  → /  ext4
-sda5 / sdb5   ~5,2 To  zpool miroir    — À CRÉER
+sda5 / sdb5   reste    zpool miroir « spark » — LIVRÉ par l'hébergeur (README)
 ```
 
-Le schéma de partitionnement remis à l'hébergeur (README) **ne déclare pas** le
-pool, alors que l'API de Scaleway saurait le créer. Ce n'est pas un oubli : un
-pool créé à l'installation laisserait une signature `zfs_member` sur `sda5` et
-`sdb5`, et `scripts/creer-pool.sh` refuserait alors d'écrire dessus (§8.5 bis).
-La frontière tient : l'hébergeur livre des partitions, la Forge crée son pool.
+**RÉVISÉ le 2026-08-30 par instruction du responsable.** Le schéma de
+partitionnement remis à l'hébergeur (README) **déclare le pool** dans
+`zfs.pools[]` — miroir `spark` sur la paire, `ashift=12` — et la dernière
+partition de chaque disque porte `use_all_available_space` au lieu d'une taille
+totalisée. Deux conséquences voulues : le même schéma vaut pour **toute
+capacité** de disque, et la machine est **livrée avec son pool**.
+
+La version précédente laissait la paire nue, avec un motif exact : un pool créé
+à l'installation laisse une signature `zfs_member`, et `scripts/creer-pool.sh`
+refuse d'écrire sur un périphérique signé. Ce motif ne disparaît pas — il cesse
+de s'appliquer, parce que sur ce chemin le pool **ne se crée pas, il s'adopte** :
+
+```bash
+incus storage create spark zfs source=spark
+```
+
+C'est le geste que `sparkd.forge_install` joue déjà après son propre
+`zpool create` sur le chemin natif ; ici, le `zpool create` a simplement été
+fait par l'hébergeur. La signature `zfs_member` sur la paire est l'état
+**attendu** d'une machine livrée, pas un danger. Le cloud-init du README
+enchaîne ce geste, puis `sparkd.forge_install` en plan `reuse`, au premier
+démarrage : la machine se livre Forge prête, préflight compris.
+
+`scripts/creer-pool.sh` n'est pas modifié et garde son emploi : il reste le
+geste des machines qui n'ont **pas** été livrées avec le schéma — deux
+périphériques vides pour la disposition A, rien pour la disposition B — et son
+refus d'écrire sur un périphérique signé reste sa protection sur son propre
+chemin. La frontière du §8.5 bis tient inchangée : `sparkd` ne crée aucun pool ;
+qui le crée change selon le chemin, pas qui le lit.
 
 Le passage de la disposition actuelle à celle-ci suppose de réduire `md1`, ce que
 `resize2fs` ne sait pas faire à chaud sur un système de fichiers racine monté. Deux

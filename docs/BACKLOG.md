@@ -865,12 +865,25 @@ réclame ici.
   qu'elles avaient elles-mêmes supposée. Le schéma est refait sur la géométrie
   réelle des disques de la Forge, et les preuves tiennent désormais la forme et
   les énumérations de l'API.
-- **Reste avant `[x]`, et c'est le seul écart** : le schéma JSON n'a **jamais été
-  soumis à un hébergeur**. Il est conforme au schéma publié de l'API, et une
-  preuve le relit depuis le README pour garder que la paire reste libre — mais
-  « un exploitant qui suit le README obtient les partitions attendues » demande
-  soit un appel à `partitioning-schemas/validate`, soit une machine commandée,
-  que la session ne peut pas fournir. **Nécessite une action humaine.**
+- **Révisé le 2026-08-30, sur instruction du responsable** (`docs/JOURNAL.md`,
+  DAT §8.6) : le schéma **par défaut** déclare désormais le pool `spark` dans
+  `zfs.pools[]` — miroir sur `sda5` / `sdb5`, `ashift=12` — et la dernière
+  partition de chaque disque porte `use_all_available_space` au lieu d'une
+  taille totalisée : le même schéma vaut pour toute capacité de disque. Le
+  README gagne le lien vers la documentation Scaleway du schéma JSON et un
+  **cloud-init copiable** qui, au premier démarrage d'une machine livrée,
+  adopte le pool (`incus storage create … source=…`) puis rejoue
+  `sparkd.forge_install` en plan `reuse` jusqu'au préflight, `/healthz`,
+  `/readyz` et au relevé de topologie. Les preuves gardent désormais : le
+  drapeau de remplissage sur la seule dernière partition, le pool déclaré sur
+  la paire au nom du défaut du produit, la paire toujours absente des RAID et
+  des systèmes de fichiers, et un cloud-init YAML parsable.
+- **Reste avant `[x]`** : le schéma JSON n'a **jamais été soumis à un
+  hébergeur** — « un exploitant qui suit le README obtient les partitions
+  attendues » demande soit un appel à `partitioning-schemas/validate`, soit une
+  machine commandée, que la session ne peut pas fournir — et le cloud-init n'a
+  jamais tourné sur une machine réellement livrée. **Nécessite une action
+  humaine.**
 
 ### [x] SPK-32 · Catalogue d'images vérifié et choix par liste à la création
 

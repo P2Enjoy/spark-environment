@@ -129,8 +129,11 @@ Motif         : cette machine est une machine de DÉMONSTRATION. Y inscrire une
                 Une dette qu'on ne rembourse pas n'est pas une dette.
 Ce qui reste  : rien à faire sur cette Forge. Ce qui est dû est ailleurs, et est
                 livré : le README porte le schéma de partitionnement à fournir à
-                la création d'un serveur pour obtenir d'emblée la disposition A,
-                et « scripts/creer-pool.sh » crée le pool dans l'une ou l'autre
+                la création d'un serveur — depuis le 2026-08-30 il fait LIVRER
+                la machine avec son pool « spark » en miroir (disposition A,
+                DAT §8.6) et un cloud-init copiable amorce la Forge complète au
+                premier démarrage. « scripts/creer-pool.sh » reste le geste des
+                machines non livrées ainsi, dans l'une ou l'autre disposition,
                 sans qu'aucune valeur soit codée en dur.
 À SAVOIR      : sous la disposition en place, la protection contre la corruption
                 silencieuse est ABSENTE — le miroir est géré par « md », qui ne

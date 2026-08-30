@@ -4,6 +4,72 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-08-30 — Le schéma par défaut fait livrer le pool, et un cloud-init amorce la Forge
+
+**Problème.** Le schéma du README, refait le 2026-08-28 sur la forme réelle de
+l'API, restait prisonnier d'une géométrie : ses tailles totalisaient la capacité
+exacte des disques de la Forge de validation, et il laissait la paire `sda5` /
+`sdb5` nue — le pool restait un geste manuel post-livraison. Une machine d'une
+autre capacité exigeait de recalculer la dernière partition, et une machine
+livrée restait une machine à amorcer à la main.
+
+**Décision du responsable.** Le schéma **par défaut** change sur deux points, et
+le README gagne un troisième livrable :
+
+1. la dernière partition de chaque disque ne porte plus de taille manuelle :
+   elle porte `"use_all_available_space": true`. Le même schéma vaut désormais
+   pour toute capacité de disque ;
+2. le pool est **déclaré à l'hébergeur** : `zfs.pools[]` porte un miroir
+   `spark` sur `sda5` / `sdb5`, avec `ashift=12` comme l'exemple officiel. La
+   machine est livrée avec son pool ;
+3. un **cloud-init copiable** est ajouté au README : collé dans les user data à
+   l'installation du serveur, il amorce la Forge complète au premier démarrage —
+   dépôt Zabbly vérifié par empreinte, Incus et ZFS, adoption du pool livré,
+   paquet `sparkd`, puis `sparkd.forge_install` en plan `reuse` pour tout le
+   reste : Caddy, nftables, ARC, bridge, durcissement, unités, préflight,
+   `/healthz`, `/readyz` et relevé de topologie.
+
+**Ce qui est abandonné, et ce qui n'en meurt pas.** La décision du 2026-08-28 de
+ne pas déclarer le pool avait un motif exact : `scripts/creer-pool.sh` refuse
+d'écrire sur un périphérique signé `zfs_member`. Ce motif ne disparaît pas — il
+cesse de s'appliquer, parce que sur ce chemin **le pool ne se crée pas, il
+s'adopte** : `incus storage create spark zfs source=spark`, exactement le geste
+que `forge_install` joue déjà après son propre `zpool create` sur le chemin
+natif. La signature `zfs_member` sur la paire devient l'état **attendu** d'une
+machine livrée, pas un danger. `creer-pool.sh` n'est pas modifié : il reste le
+geste des machines qui n'ont pas été livrées ainsi, et son refus reste sa
+protection sur son propre chemin. La frontière du §8.5 bis tient toujours :
+`sparkd` ne crée aucun pool — qui le crée change, pas qui le lit.
+
+**Observations.** Relecture de la documentation Scaleway du schéma JSON
+(<https://www.scaleway.com/en/docs/elastic-metal/how-to/configure-disk-partitions/>)
+et de la référence API/CLI. Confirmé : la forme API est bien en `snake_case`
+(`use_all_available_space`, `zfs.pools[].{name,type,devices,options,filesystem_options}`) ;
+`type` vient d'une énumération fermée (`no_raid`, `mirror`, `raidz1`, `raidz2`) ;
+l'exemple officiel d'un pool déclare `mirror` avec `ashift=12` et garde le
+libellé `data` sur les partitions que le pool consomme ; les exemples portent
+aussi `"lvm": null`. Le cloud-init est supporté sur Elastic Metal — user data en
+`text/plain`, fourni à l'installation
+(<https://www.scaleway.com/en/docs/elastic-metal/concepts/#cloud-init>). Un
+billet tiers montre la même structure exposée en camelCase par la console : la
+forme qui engage reste celle de l'API, en snake_case.
+
+**Conséquences.** Les preuves du schéma changent de contrat : la somme des
+tailles ne peut plus égaler une capacité — elles gardent désormais que la
+dernière partition de chaque disque porte le drapeau de remplissage et aucune
+taille manuelle, que le pool est déclaré sur la paire au nom du défaut du
+produit (`config.DEFAULT_STORAGE_POOL`), en miroir, et que la paire reste
+absente des RAID comme des systèmes de fichiers. Le README remplace « créer le
+pool après livraison » par « adopter le pool livré », et le cloud-init le fait
+seul.
+
+**Vérifications.** Preuves du schéma refaites et rejouées ; le YAML du
+cloud-init est parsé par une preuve dédiée. **Non vérifié**, et dit tel quel :
+le schéma n'a toujours pas été soumis à `partitioning-schemas/validate` (aucune
+clé d'API disponible ici), et le cloud-init n'a jamais tourné sur une machine
+réellement livrée — les deux demandent une machine ou une clé que cette session
+n'a pas. **Nécessite une action humaine.** SPK-28 reste `[~]`.
+
 ## 2026-08-28 — Le schéma de partitionnement du README n'avait pas la forme de l'API
 
 **Problème.** Le README porte depuis SPK-28 un schéma JSON présenté comme « à
