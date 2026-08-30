@@ -176,41 +176,118 @@ vit dans l'[API Elastic Metal](https://www.scaleway.com/en/developers/api/elasti
     {
       "device": "/dev/sda",
       "partitions": [
-        { "label": "legacy", "number": 1, "size": 536870912 },
-        { "label": "swap",   "number": 2, "size": 4294967296 },
-        { "label": "boot",   "number": 3, "size": 536870912 },
-        { "label": "root",   "number": 4, "size": 214748364800 },
-        { "label": "data",   "number": 5, "use_all_available_space": true }
+        {
+          "label": "legacy",
+          "number": 1,
+          "size": 536870912,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "swap",
+          "number": 2,
+          "size": 4294967296,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "boot",
+          "number": 3,
+          "size": 536870912,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "root",
+          "number": 4,
+          "size": 214748364800,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "data",
+          "number": 5,
+          "size": 0,
+          "useAllAvailableSpace": true
+        }
       ]
     },
     {
       "device": "/dev/sdb",
       "partitions": [
-        { "label": "legacy", "number": 1, "size": 536870912 },
-        { "label": "swap",   "number": 2, "size": 4294967296 },
-        { "label": "boot",   "number": 3, "size": 536870912 },
-        { "label": "root",   "number": 4, "size": 214748364800 },
-        { "label": "data",   "number": 5, "use_all_available_space": true }
+        {
+          "label": "legacy",
+          "number": 1,
+          "size": 536870912,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "swap",
+          "number": 2,
+          "size": 4294967296,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "boot",
+          "number": 3,
+          "size": 536870912,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "root",
+          "number": 4,
+          "size": 214748364800,
+          "useAllAvailableSpace": false
+        },
+        {
+          "label": "data",
+          "number": 5,
+          "size": 0,
+          "useAllAvailableSpace": true
+        }
       ]
     }
   ],
   "raids": [
-    { "name": "/dev/md0", "level": "raid_level_1",
-      "devices": ["/dev/sda3", "/dev/sdb3"] },
-    { "name": "/dev/md1", "level": "raid_level_1",
-      "devices": ["/dev/sda4", "/dev/sdb4"] }
+    {
+      "name": "/dev/md0",
+      "level": "raid_level_1",
+      "devices": [
+        "/dev/sda3",
+        "/dev/sdb3"
+      ]
+    },
+    {
+      "name": "/dev/md1",
+      "level": "raid_level_1",
+      "devices": [
+        "/dev/sda4",
+        "/dev/sdb4"
+      ]
+    }
   ],
   "filesystems": [
-    { "device": "/dev/md0", "format": "ext4", "mountpoint": "/boot" },
-    { "device": "/dev/md1", "format": "ext4", "mountpoint": "/" }
+    {
+      "device": "/dev/md0",
+      "format": "ext4",
+      "mountpoint": "/boot"
+    },
+    {
+      "device": "/dev/md1",
+      "format": "ext4",
+      "mountpoint": "/"
+    }
   ],
-  "lvm": null,
   "zfs": {
     "pools": [
-      { "name": "spark", "type": "mirror",
-        "devices": ["/dev/sda5", "/dev/sdb5"],
-        "options": ["ashift=12"],
-        "filesystem_options": [] }
+      {
+        "name": "spark",
+        "type": "mirror",
+        "devices": [
+          "/dev/sda5",
+          "/dev/sdb5"
+        ],
+        "options": [
+          "ashift=12"
+        ],
+        "filesystemOptions": []
+      }
     ]
   }
 }
