@@ -8132,3 +8132,111 @@ capacité inventée. Le parcours miroir exige encore une machine à deux support
 réellement libres. Les deux créations, la panne médiane/reprise et leurs
 illustrations restent dues. La prochaine session reprend donc SPK-68 à ce point,
 toujours sans driver local ni factice.
+
+---
+
+## 2026-09-01 · Forge réinstallée : `RUN-SLICE` rouge, et `CPUAccounting=` qui ne délègue plus rien
+
+**Problème.** Après réinstallation complète de la Forge `spark-experiment`
+(`51.158.54.202`) depuis le schéma de partitionnement JSON, `cloud-init` se
+termine en `status: error`. Le responsable soupçonne un `sparkd` absent ou mal
+configuré.
+
+**Observations, en lecture seule sur la machine.** `sparkd` n'est pas en cause :
+l'unité est `active` et `enabled`, `/healthz` rend `ok` sur le commit attendu
+(`2ce2079a2`), `/readyz` rend `ready` avec registre, Incus et Caddy tous
+`ready`, et le registre est en schéma 12. La panne est ailleurs :
+
+```
+cloud-init : ('scripts_user', RuntimeError('Runparts: 1 failures (runcmd)'))
+/var/log/cloud-init-output.log :
+  {"phase":"control",     "status":"done"}
+  {"phase":"verification","status":"failed",
+   "message":"le préflight reste rouge : RUN-SLICE"}
+```
+
+Le préflight rend **12 verts, 1 signalé, 1 bloquant** :
+
+```
+[ECHEC ] RUN-SLICE   relevé : controleurs delegues : ''
+```
+
+Relevés qui isolent la cause :
+
+| Sonde | Valeur |
+|---|---|
+| `/sys/fs/cgroup/spark.slice/cgroup.subtree_control` | vide |
+| `/sys/fs/cgroup/spark.slice/cgroup.controllers` | `cpuset cpu io memory pids` — tous disponibles |
+| `systemctl show spark.slice -p Delegate` | `Delegate=no`, `DelegateControllers=` |
+| `systemctl status spark.slice` | `spark.slice:14: Support for option CPUAccounting= has been removed and it is ignored` |
+
+**Hypothèse, puis chaîne causale retenue.** La réinstallation a changé le
+système sous le produit : la Forge est passée d'Ubuntu 24.04.3 / noyau 6.8 /
+systemd 255 à **Ubuntu 26.04.1 / noyau 7.0.0-15 / systemd 259**, avec Incus 7.4
+et un pool ZFS natif `spark`. Or `spark.slice` s'en remettait à
+`CPUAccounting=` / `MemoryAccounting=` / `IOAccounting=` et **ne portait aucun
+`Delegate=`**. systemd 259 a retiré `CPUAccounting=` et le journalise. Avec
+`Delegate=no` et zéro unité fille, systemd n'a aucune raison d'activer
+`cpu`/`cpuset`/`memory` dans le `subtree_control` de la tranche — et il l'efface
+à chaque réalisation de l'arbre cgroup.
+
+L'écriture unique de `install.py` (`+cpu +cpuset +memory +io +pids`) est bien
+tentée, mais défaite dans la foulée : le journal d'installation montre `control`
+`done` et `verification` `failed` **à la même seconde**, `22:01:38`. Entre les
+deux, `systemctl enable sparkd` puis `restart sparkd` provoquent la réalisation
+qui remet le fichier à vide.
+
+C'est exactement la famille de panne du §32.4 bis — systemd est l'autorité sur
+les propriétés cgroup d'une unité — mais appliquée cette fois à la **délégation**
+et non au poids.
+
+**Conséquence, et elle n'est pas cosmétique.** Sans ces contrôleurs, les limites
+posées par Incus ne s'appliquent pas *dans* la tranche : la réservation
+redevient proportionnelle en silence, ce que le §32.4 existe précisément pour
+empêcher. Aucun locataire n'est lésé aujourd'hui — la Forge porte **zéro Spark**
+(`incus list` vide, `/v1/sparks` vide) —, mais toute création future l'aurait été.
+
+**Solutions envisagées.**
+
+1. Rejouer l'écriture du `subtree_control` à intervalle régulier. Écarté :
+   c'est courir après systemd, et le trou entre deux écritures reste ouvert.
+2. Poser `Delegate=` sur la tranche. Retenu : `man 5 systemd.resource-control`
+   sur cette machine énonce « *Setting Delegate= enables any delegated
+   controllers for that unit* », et ajoute que systemd « *refrains from
+   manipulating control groups* » sous une unité déléguée. C'est le mécanisme
+   dont Incus et Docker dépendent déjà.
+
+**Décision.** `spark.slice` porte `Delegate=cpu cpuset io memory pids`.
+`CPUAccounting=` est retiré — l'option n'existe plus et la comptabilité CPU est
+désormais toujours active. `MemoryAccounting=` et `IOAccounting=` sont retirés
+aussi : ils n'ont jamais peuplé le `subtree_control` de la tranche, seulement
+celui de son parent, et les garder entretiendrait la croyance qui a produit ce
+défaut. Le repli d'écriture directe de `install.py` et la réaffirmation par
+`cgroup.ensure_delegation()` **restent** : ils couvrent un systemd qui ignorerait
+`Delegate=` sur une tranche, et ne coûtent rien quand la délégation tient.
+
+**Second défaut, trouvé en chemin : `SSH-X11` est un faux positif permanent.**
+Le préflight signale `X11Forwarding yes` alors que la machine répond
+`x11forwarding no` à `sshd -T`. `phase_foundation` écrit pourtant bien
+`/etc/ssh/sshd_config.d/90-spark.conf`. Le contrôle lisait `/etc/ssh/sshd_config`
+seul et ignorait les fragments `sshd_config.d/` — donc le fichier que
+l'installateur écrit lui-même. Le contrôle ne pouvait structurellement jamais
+passer au vert sur une Forge correctement installée. Un préflight qui ment sur un
+contrôle apprend à ignorer les autres. **Décision** : le contrôle interroge la
+configuration **effective** par `sshd -T`, et ne retombe sur la lecture du
+fichier que si `sshd -T` est indisponible.
+
+**Troisième point, soulevé par le responsable : l'amorce doit être rejouable.**
+`/opt/spark-amorce.sh` n'existait que sur la machine — ni versionné, ni
+relisible, ni testable. Il entre au dépôt sous `deploy/cloud-init/`. Le script
+est déjà idempotent par construction, et l'exécuteur `forge_install` l'est aussi
+(stockage `kind: reuse`, `destructive: false`) ; `install.py` ne touche jamais
+`/var/lib/sparkd/spark.db` et les migrations sont additives — un rejeu **ne
+réinitialise donc pas les Sparks existants**. Ce qui manquait est la procédure :
+`runcmd` ne s'exécute qu'une fois par instance, et le rejeu passe par
+`sudo /opt/spark-amorce.sh`, pas par `cloud-init`.
+
+**Vérifications réalisées à ce stade.** Diagnostic intégralement en lecture
+seule : aucun écrit sur la Forge. Les preuves d'application du correctif —
+`subtree_control` peuplé, survivant à `daemon-reload`, et préflight
+intégralement vert — sont consignées à l'entrée suivante, après déploiement.

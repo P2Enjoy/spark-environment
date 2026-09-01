@@ -4239,6 +4239,110 @@ conteneur et dépannage — sans devoir deviner quel onglet les porte.
 
 ---
 
+### [~] SPK-71 · La tranche des Sparks délègue ses contrôleurs, sur le systemd d'aujourd'hui
+
+**Trouvé le 2026-09-01 sur la Forge réinstallée**, et c'est la promesse centrale
+du produit qui tombait en silence. Après réinstallation depuis le schéma JSON, la
+machine est passée à **Ubuntu 26.04.1 / noyau 7.0.0-15 / systemd 259**. Le
+préflight rend `RUN-SLICE` rouge : `controleurs delegues : ''`.
+
+- Spécification : `docs/DAT.md` **§32.4 ter** (le mécanisme retenu), §32.4 (la
+  tranche survit au redémarrage), §32.4 bis (systemd est l'autorité).
+- **Cause mesurée.** `spark.slice` s'en remettait à `CPUAccounting=` /
+  `MemoryAccounting=` / `IOAccounting=` et ne portait **aucun `Delegate=`**.
+  systemd 259 a retiré `CPUAccounting=` — il le journalise mot pour mot. Avec
+  `Delegate=no` et zéro unité fille, systemd n'active jamais `cpu`/`cpuset`/
+  `memory` dans le `subtree_control` de la tranche, et l'efface à chaque
+  réalisation de l'arbre.
+- Les trois options d'`Accounting` n'ont d'ailleurs **jamais** peuplé le
+  `subtree_control` de la tranche elle-même, seulement celui de son parent. Le
+  mécanisme sur lequel l'unité reposait n'était donc pas seulement périmé : il
+  était mal compris. Les garder entretiendrait la croyance qui a produit le
+  défaut.
+- **L'écriture unique de `install.py` ne suffit pas et ne peut pas suffire** :
+  le journal d'installation montre `control` `done` et `verification` `failed` à
+  la **même seconde**, `22:01:38`. `systemctl enable` puis `restart sparkd`
+  réalisent l'arbre entre les deux et remettent le fichier à vide.
+- **Conséquence si on ne corrige pas** : les limites posées par Incus ne
+  s'appliquent pas *dans* la tranche ; la réservation redevient proportionnelle
+  sans qu'aucun contrôle ne rougisse une fois le préflight passé outre. Aucun
+  locataire lésé au moment du constat — la Forge portait **zéro Spark**.
+- Correctif : `Delegate=cpu cpuset io memory pids` dans `[Slice]`, et retrait des
+  trois `…Accounting=`. Le repli d'écriture directe de `install.py` et la
+  réaffirmation par `cgroup.ensure_delegation()` **restent** — ils couvrent un
+  systemd qui ignorerait `Delegate=` sur une tranche, et ne coûtent rien sinon.
+- Ce que l'unité ne fait pas : elle ne change ni la loi de poids du §32.2, ni la
+  pose du poids par `systemctl set-property` (§32.4 bis).
+- DoD : un test unitaire prouve que l'unité empaquetée porte `Delegate=` avec les
+  cinq contrôleurs et **ne porte plus** `CPUAccounting=` ; un test prouve que le
+  préflight refuse une tranche dont le `subtree_control` n'a pas les trois
+  contrôleurs requis ; sur la Forge réelle, `subtree_control` contient
+  `cpuset cpu io memory pids` **après un `daemon-reload`** — la vérification qui
+  compte est celle d'après la réconciliation (§32.4 bis) — et le préflight rend
+  `RUN-SLICE` vert ; `cloud-init` rejoué se termine sans erreur.
+
+---
+
+### [~] SPK-72 · Le préflight lit la configuration SSH EFFECTIVE, pas un seul fichier
+
+**Trouvé le 2026-09-01, en diagnostiquant SPK-71.** Le contrôle `SSH-X11`
+signalait `X11Forwarding yes` sur une Forge où `sshd -T` répond
+`x11forwarding no`. Faux positif **structurel**, et pas un cas limite.
+
+- Spécification : `docs/DAT.md` **§48.2** (ce que le préflight vérifie).
+- Cause : `x11_sans_usage` lisait `/etc/ssh/sshd_config` seul. Or
+  `phase_foundation` écrit sa règle dans `/etc/ssh/sshd_config.d/90-spark.conf`,
+  et le fichier principal garde le `X11Forwarding yes` de la distribution. Le
+  contrôle ignorait donc précisément le fichier que l'installateur écrit
+  lui-même : il ne pouvait **jamais** passer au vert sur une Forge correctement
+  installée.
+- Le coût réel n'est pas le verdict : c'est qu'un préflight qui ment sur un
+  contrôle apprend à passer outre les treize autres.
+- Correctif : interroger la configuration effective par `sshd -T`, qui applique
+  les fragments et la règle du premier gagnant. La lecture du fichier reste en
+  **repli** pour un hôte où `sshd` n'est pas invocable, et le relevé dit alors
+  laquelle des deux sources a parlé.
+- DoD : un test prouve le vert quand `sshd -T` rend `x11forwarding no` alors que
+  `/etc/ssh/sshd_config` porte encore `yes` — le cas réel de la Forge ; un test
+  prouve l'avertissement quand `sshd -T` rend `yes` ; un test prouve le repli sur
+  le fichier quand `sshd -T` échoue, et `INCONNU` quand aucune source ne répond ;
+  sur la Forge réelle, `SSH-X11` est vert et le préflight est **intégralement**
+  vert.
+
+---
+
+### [~] SPK-73 · L'amorce d'une Forge est un artefact versionné et rejouable
+
+**Demandé par le responsable le 2026-09-01** : « les serveurs sont désormais
+créés au format JSON et le cloud-init doit être idempotent — rejouable, il remet
+l'installation d'aplomb sans réinitialiser les Sparks existants ».
+
+- Spécification : `docs/DAT.md` §50.4-§50.6 (l'exécuteur fermé), `README.md`
+  (schéma de partitionnement et amorçage), `docs/AGENT_RUNBOOK.md` §A.
+- Constat : le script d'amorce n'existait **que sur la machine**
+  (`/opt/spark-amorce.sh`), produit par le `user_data` du serveur. Ni versionné,
+  ni relisible en revue, ni testable. Une Forge ne pouvait pas être reconstruite
+  depuis le dépôt.
+- L'idempotence, elle, est déjà réelle et se démontre plutôt qu'elle ne
+  s'ajoute : gardes `zpool list || import`, `incus storage show || create`,
+  `[ -x venv ] ||` ; exécuteur `forge_install` fermé, stockage `kind: reuse` et
+  `destructive: false` ; `install.py` ne touche jamais `/var/lib/sparkd/spark.db`
+  et les migrations sont additives.
+- Ce qui manquait est la **procédure de rejeu** : `runcmd` ne s'exécute qu'une
+  fois par instance ; le rejeu passe par `sudo /opt/spark-amorce.sh`, jamais par
+  `cloud-init` seul. Non écrit, ce détail transforme un correctif en
+  réinstallation.
+- Ce que l'unité ne fait pas : elle ne rend pas `runcmd` réexécutable par
+  `cloud-init`, et ne provisionne aucun serveur — la création reste le geste de
+  l'hébergeur.
+- DoD : le script vit dans `deploy/cloud-init/` avec son en-tête `@spec` ; un test
+  le soumet au vrai parseur `sh` pour qu'une syntaxe invalide ne puisse pas
+  passer la revue ; le `README.md` documente le rejeu et ce qu'il préserve ; sur
+  la Forge réelle, un second passage complet se termine **sans erreur** et laisse
+  le registre intact.
+
+---
+
 ## Réservé, non planifié
 
 - `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc

@@ -3,6 +3,33 @@
 ## [Non publié]
 
 ### Corrigé
+- **La tranche des Sparks délègue à nouveau ses contrôleurs** (SPK-71,
+  `docs/DAT.md` §32.4 ter) : `spark.slice` porte `Delegate=cpu cpuset io memory
+  pids` et perd ses trois `…Accounting=`. Sur systemd 259, `CPUAccounting=` a été
+  retiré et les deux autres ne peuplaient de toute façon que le `subtree_control`
+  du parent : la tranche se retrouvait sans `cpu`, `cpuset` ni `memory` délégués,
+  donc les limites d'Incus ne s'appliquaient plus *dans* la tranche et la
+  réservation redevenait proportionnelle en silence. Le préflight `RUN-SLICE`
+  rougissait, et faisait échouer `cloud-init` en fin d'installation.
+- **Le préflight lit la configuration SSH effective** (SPK-72, `docs/DAT.md`
+  §48.2) : `SSH-X11` interroge `sshd -T` au lieu du seul
+  `/etc/ssh/sshd_config`, et retombe sur le fichier quand `sshd` n'est pas
+  invocable. Le contrôle ignorait le fragment `sshd_config.d/90-spark.conf` que
+  l'installateur écrit lui-même, et ne pouvait donc jamais passer au vert sur une
+  Forge correctement installée.
+- **La documentation décrit la Forge réinstallée** : Ubuntu 26.04.1, noyau 7.0,
+  systemd 259, Incus 7.4, ZFS 2.4.1, et surtout la **disposition A** — miroir ZFS
+  natif sur `sda5`+`sdb5` — au lieu de la disposition sur fichier. La « contrainte
+  structurante » d'absence de périphérique bloc libre est levée et énoncée comme
+  telle, au lieu d'être laissée à côté de la nouvelle réalité.
+
+### Ajouté
+- **L'amorce d'une Forge entre au dépôt** (SPK-73) : `deploy/cloud-init/` porte
+  le script `spark-amorce.sh` et son gabarit `user-data.yaml`, jusqu'ici présents
+  seulement sur la machine, donc ni versionnés ni relisibles. Le `README.md`
+  documente le rejeu — `sudo /opt/spark-amorce.sh`, pas `cloud-init` — et ce
+  qu'il préserve : le pool est adopté, le registre n'est jamais touché, les
+  migrations sont additives, donc les Sparks existants survivent.
 - **Schéma de partitionnement du README conforme à l'API Elastic Metal**
   (SPK-28) : `disks` et `raids` deviennent des listes et non des objets indexés
   par périphérique, les libellés inexistants `bios` et `pool` cèdent la place à

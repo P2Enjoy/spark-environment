@@ -70,25 +70,29 @@ n'a jamais tourné ailleurs que sur cette Forge-là. Le détail est au §13 du
 
 ## Forge cible
 
-Dell PowerEdge R320, relevé le 2026-08-18.
+Dell PowerEdge R320, relevé le 2026-09-01, après réinstallation complète depuis
+le schéma de partitionnement JSON ci-dessous.
 
 | Ressource | Capacité physique | Remarque |
 |---|---|---|
 | CPU | Xeon E5-1410 v2, **4 cœurs / 8 threads**, 1 socket, 1 nœud NUMA | SMT actif, frères `(0,4) (1,5) (2,6) (3,7)` |
 | RAM | **94 Gio** (4 × 16 Gio DDR3-1600) | aucun swap actif |
-| Stockage | **5,4 Tio** utiles | 2 × 6 To Toshiba MG08 **7200 tr/min**, RAID1 mdadm |
+| Stockage | **200 Gio** système + **5,25 Tio** de pool | 2 × 6 To Toshiba MG08 **7200 tr/min** ; `md1` RAID1 → `/`, `sda5`+`sdb5` miroir ZFS natif → pool `spark` |
 | Réseau | **1 Gbit/s** (`eno1`) | `eno2` non raccordé |
-| Système | Ubuntu 24.04.3, noyau 6.8, cgroup v2 | VT-x présent, donc `runtime: vm` possible |
+| Système | Ubuntu 26.04.1, noyau 7.0, systemd 259, cgroup v2 | Incus 7.4, ZFS 2.4.1 ; VT-x présent, donc `runtime: vm` possible |
 
 Les pools réels sont donc plus petits que ceux évoqués dans la conversation
 d'origine — 94 Gio et non 256, 1 Gbit/s et non 3. Sur 4 cœurs physiques, dédier
 un cœur coûte un quart de la machine : le mode partagé n'est pas seulement le
 défaut, c'est le mode normal sur cette machine.
 
-**Contrainte structurante :** sur cette machine, les deux disques sont
-entièrement consommés par un unique RAID1 `ext4` monté sur `/`. Il n'existe aucun
-périphérique bloc libre pour un pool de stockage natif — d'où la disposition sur
-fichier décrite ci-dessous. Voir le §8 du [DAT](docs/DAT.md).
+**Ce que le partitionnement à la commande a débloqué :** cette machine a
+d'abord été livrée avec ses deux disques entièrement consommés par un unique
+RAID1 `ext4` monté sur `/`, sans aucun périphérique bloc libre — la disposition
+sur fichier était alors la seule possible. Le schéma JSON fourni à la création
+réserve désormais `sda5` et `sdb5`, et la Forge tourne sur un **miroir ZFS
+natif** (disposition A). Le partitionnement ne se change plus après la
+livraison : il se décide à la commande. Voir le §8 du [DAT](docs/DAT.md).
 
 ### Installer le plan de contrôle sans copier le dépôt
 
@@ -236,6 +240,36 @@ Une fois la machine livrée, il ne reste qu'à créer le pool :
 ```bash
 sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
 ```
+
+### Amorcer la Forge au premier démarrage, et rejouer l'amorce
+
+Le script d'amorce est [`deploy/cloud-init/spark-amorce.sh`](deploy/cloud-init/spark-amorce.sh).
+Il se fournit à l'hébergeur en `user_data` `cloud-init`, avec
+[`deploy/cloud-init/user-data.yaml`](deploy/cloud-init/user-data.yaml) pour
+gabarit. Il installe Incus depuis le dépôt amont Zabbly, **adopte** le pool
+livré par le schéma ci-dessus sans jamais le formater, pose le paquet `sparkd`,
+puis laisse l'exécuteur `sparkd.forge_install` poser Caddy, `nftables`, l'ARC, le
+bridge, le durcissement SSH et les unités systemd, et finir par la recette
+`préflight` / `healthz` / `readyz`.
+
+**L'amorce est idempotente et se rejoue :**
+
+```bash
+ssh <compte>@<forge> 'sudo /opt/spark-amorce.sh'
+```
+
+Un second passage réinstalle et remet d'aplomb ce qui a dérivé, et **ne
+réinitialise pas les Sparks existants** : le pool est adopté (`kind: reuse`,
+jamais `destructive`), le registre `/var/lib/sparkd/spark.db` n'est jamais
+touché par l'installation, et les migrations de schéma sont additives. Ce que le
+rejeu refait, ce sont les paquets, les unités, la configuration du socle et la
+recette finale.
+
+Le rejeu passe par le script, **pas par `cloud-init`** : `runcmd` ne s'exécute
+qu'une seule fois par instance, et `cloud-init clean` effacerait aussi l'état et
+les journaux de la première installation. Le script est déposé en
+`/opt/spark-amorce.sh` par `cloud-init` au premier démarrage ; il peut aussi être
+copié à la main sur une Forge existante.
 
 ## Stack
 
@@ -406,10 +440,11 @@ héritage.
 - Le relevé de topologie est explicite : la capacité n'est pas rafraîchie à
   chaque requête. L'écran de la Forge affiche la date du dernier relevé et offre
   un bouton pour le refaire.
-- La Forge de validation emploie la **disposition sur fichier** : quotas, copie
-  sur écriture et instantanés fonctionnent, mais la corruption silencieuse n'y
-  est pas couverte. Ce n'est pas une dette — c'est une disposition, et le §8.5
-  du DAT dit ce que chacune apporte.
+- La Forge de validation emploie la **disposition A** — miroir ZFS natif sur
+  `sda5`+`sdb5` — depuis la réinstallation du 2026-08-30 : la corruption
+  silencieuse y est donc détectée et réparée. La disposition sur fichier reste
+  décrite et prise en charge pour une machine qu'on ne peut pas repartitionner ;
+  le §8.5 du DAT dit ce que chacune apporte.
 - La réservation CPU est un **plancher** : garantie sous contention totale,
   dépassée sinon. Mesuré sur la Forge de validation le 2026-08-21 — 47,9 %
   obtenus pour 47,4 % prédits, sous contention des trois tranches. Ce n'est pas

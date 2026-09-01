@@ -770,7 +770,8 @@ manuel — doit rester exacte sur ce point tant que SPK-29 n'est pas livrée.
 
 ### 8.1 Ce que la machine est réellement
 
-Relevé le 2026-08-18 sur `51.158.54.202`, Dell PowerEdge R320 :
+Relevé le 2026-09-01 sur `51.158.54.202`, Dell PowerEdge R320, **après la
+réinstallation complète depuis le schéma de partitionnement JSON** :
 
 ```
 CPU        Xeon E5-1410 v2 @ 2.80 GHz — 1 socket, 4 cœurs, 8 threads, SMT actif
@@ -779,11 +780,18 @@ CPU        Xeon E5-1410 v2 @ 2.80 GHz — 1 socket, 4 cœurs, 8 threads, SMT act
            VT-x présent — runtime: vm techniquement possible
 RAM        94 Gio (4 × 16 Gio DDR3-1600), aucun swap actif
 DISQUES    2 × Toshiba MG08ADA600E, 6 To, 7200 tr/min — MÉCANIQUES
-           RAID1 mdadm : md0 511 Mio → /boot, md1 5,44 Tio ext4 → /
+           RAID1 mdadm : md0 511 Mio → /boot, md1 196 Gio ext4 → /
+           sda5 + sdb5 : miroir ZFS natif 5,25 Tio → pool « spark »
 RÉSEAU     eno1 1 Gbit/s (up), eno2 non raccordé
-SYSTÈME    Ubuntu 24.04.3, noyau 6.8.0-88, cgroup v2
-PAQUETS    incus 6.0.0 et zfsutils-linux 2.2.2 disponibles ; btrfs-progs installé
+SYSTÈME    Ubuntu 26.04.1, noyau 7.0.0-15, systemd 259, cgroup v2
+PAQUETS    incus 7.4 (dépôt Zabbly) et zfsutils-linux 2.4.1
 ```
+
+Ce que la réinstallation a changé par rapport au relevé du 2026-08-18, et qui
+compte pour l'architecture : le disque n'est plus un unique `ext4` de 5,44 Tio
+sur `/` — le schéma JSON réserve `sda5` et `sdb5`, et la **disposition A du
+§8.5 est désormais celle de la machine**. Le système est monté de deux versions
+majeures, ce qui a fait tomber `spark.slice` (§32.4 ter).
 
 Les pools réels sont plus petits que ceux imaginés dans la conversation
 d'origine : 94 Gio et non 256, 1 Gbit/s et non 3, 5,4 Tio et non 6 To. Le
@@ -794,11 +802,19 @@ Sur 4 cœurs physiques, un cœur dédié coûte 25 % de la machine. Le mode part
 n'est donc pas seulement le défaut : c'est le mode normal ici, et `dedicated`
 devient une exception à justifier.
 
-### 8.2 La contrainte : aucun périphérique bloc libre
+### 8.2 La contrainte est levée : la paire dédiée existe
 
-`sda4` et `sdb4` s'étendent jusqu'à la fin des disques et forment `md1`, occupé
-par un unique `ext4` monté sur `/`. Il ne reste **ni partition libre, ni espace
-non alloué**. Un pool de stockage natif exige donc un repartitionnement.
+Elle a existé, et elle dictait la disposition sur fichier : `sda4` et `sdb4`
+s'étendaient jusqu'à la fin des disques et formaient un `md1` occupé par un
+unique `ext4` monté sur `/`, sans partition libre ni espace non alloué. Un pool
+natif aurait exigé un repartitionnement, impossible après coup chez l'hébergeur.
+
+**Depuis la réinstallation du 2026-08-30, ce n'est plus le cas.** Le schéma de
+partitionnement fourni à la création borne `md1` à 200 Gio et laisse `sda5` et
+`sdb5` vides ; le pool `spark` est un **miroir ZFS natif** de 5,25 Tio sur cette
+paire (`zpool status` : `mirror-0`, `sda5`, `sdb5`, `ONLINE`). La leçon qui
+reste vraie n'est pas la contrainte, c'est sa cause : le partitionnement ne se
+change plus après la livraison, donc il se décide à la commande.
 
 ### 8.3 Pourquoi un pool à copie sur écriture, et pourquoi ce n'est pas une question de sauvegarde
 
@@ -853,8 +869,8 @@ l'ordre :
 
 Deux contreparties assumées :
 
-- **Module hors arbre.** Ubuntu 24.04 le fournit et le maintient
-  (`zfsutils-linux` 2.2.2) ; le risque se limite aux mises à jour de noyau.
+- **Module hors arbre.** Ubuntu 26.04 le fournit et le maintient
+  (`zfsutils-linux` 2.4.1) ; le risque se limite aux mises à jour de noyau.
 - **L'ARC consomme de la RAM hors du registre.** C'est le point le plus important,
   et il interfère directement avec la comptabilité mémoire du §7 : par défaut
   l'ARC peut prendre jusqu'à la moitié de la RAM, que le registre croirait
@@ -3619,6 +3635,64 @@ seulement la.
 
 **Consequence sur la verification** : constater le poids juste apres l'avoir pose
 ne prouve rien. Le controle qui compte lit le poids APRES une reconciliation.
+
+#### 32.4 ter La délégation se pose PAR `Delegate=`, pas par `…Accounting=`
+
+**MESURÉ le 2026-09-01 sur la Forge réinstallée**, et c'est le pendant exact du
+§32.4 bis : là, systemd écrasait le **poids** ; ici, il efface la
+**délégation**.
+
+La machine est passée à systemd 259. L'unité s'en remettait à
+`CPUAccounting=yes`, `MemoryAccounting=yes` et `IOAccounting=yes`, et ne portait
+aucun `Delegate=`. Relevé :
+
+```
+/sys/fs/cgroup/spark.slice/cgroup.subtree_control   → vide
+/sys/fs/cgroup/spark.slice/cgroup.controllers       → cpuset cpu io memory pids
+systemctl show spark.slice -p Delegate              → Delegate=no
+journal : spark.slice:14: Support for option CPUAccounting= has been
+          removed and it is ignored
+```
+
+Deux faits distincts, et il faut les séparer :
+
+1. **systemd 259 a retiré `CPUAccounting=`.** L'option est ignorée et le
+   journal le dit. La comptabilité CPU est désormais toujours active.
+2. **Aucune des trois options n'a jamais fait ce qu'on croyait.** Un
+   `…Accounting=` porté par une tranche active le contrôleur dans le
+   `subtree_control` de son **parent**, afin que la tranche elle-même soit
+   mesurée. Il ne peuple jamais le `subtree_control` de la tranche. Ce que le
+   produit exige — que les limites d'Incus s'appliquent **dans** la tranche —
+   n'en a donc jamais découlé.
+
+Ce qui tenait jusque-là, c'était l'écriture directe de l'installateur. Elle ne
+tient plus, et le journal d'installation le montre à la seconde près : phase
+`control` `done` et phase `verification` `failed` à `22:01:38`. Entre les deux,
+`systemctl enable sparkd` puis `restart sparkd` réalisent l'arbre cgroup ;
+`Delegate=no` et zéro unité fille donnent à systemd toutes les raisons de vider
+le fichier.
+
+**Décision : l'unité porte `Delegate=cpu cpuset io memory pids`**, et les trois
+`…Accounting=` sont retirés — l'un n'existe plus, les deux autres
+entretiendraient la croyance qui a produit le défaut.
+`systemd.resource-control(5)` sur cette machine : « *Setting Delegate= enables
+any delegated controllers for that unit* », et systemd « *refrains from
+manipulating control groups* » sous une unité déléguée. C'est le mécanisme dont
+Incus et Docker dépendent déjà.
+
+L'écriture directe de `install.py` et la réaffirmation par
+`cgroup.ensure_delegation()` **restent en repli** : elles couvrent un systemd
+qui ignorerait `Delegate=` sur une tranche, et ne coûtent rien quand la
+délégation tient.
+
+**Conséquence sur la vérification, identique au §32.4 bis** : constater les
+contrôleurs juste après les avoir écrits ne prouve rien. Le contrôle qui compte
+lit `subtree_control` **après un `daemon-reload`**.
+
+**Ce que ce défaut coûtait s'il passait inaperçu** : les limites d'Incus ne
+s'appliquant pas dans la tranche, la réservation redevenait proportionnelle en
+silence — le défaut même que tout le §32 corrige, revenu par la porte du
+système d'exploitation.
 
 ### 32.5 Ce que cette section ne prétend pas
 
@@ -8094,6 +8168,17 @@ Deux contrôles nouveaux :
   ouverte, c'est une surface qui ne sert à rien : le produit n'ouvre jamais de
   fenêtre. Verdict d'AVERTISSEMENT, pas d'échec — refuser l'installation d'une
   Forge pour cela serait disproportionné.
+
+  **Le contrôle lit la configuration EFFECTIVE, par `sshd -T`** (corrigé le
+  2026-09-01). Il lisait `/etc/ssh/sshd_config` seul, et signalait donc `yes` sur
+  une Forge où `sshd -T` répond `no` : `phase_foundation` écrit sa règle dans
+  `/etc/ssh/sshd_config.d/90-spark.conf`, tandis que le fichier principal garde
+  le `X11Forwarding yes` de la distribution. Le contrôle ignorait précisément le
+  fichier que l'installateur écrit lui-même, et ne pouvait **jamais** passer au
+  vert sur une Forge correctement installée. La lecture du fichier reste en
+  **repli** quand `sshd` n'est pas invocable, et le relevé nomme alors la source
+  qui a parlé. Le coût d'un faux positif n'est pas son verdict : c'est qu'un
+  préflight qui ment sur un contrôle apprend à passer outre les treize autres.
 
 Et une décision écrite, qui n'est pas un contrôle :
 
