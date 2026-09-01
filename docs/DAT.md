@@ -1868,6 +1868,51 @@ atteindre le réseau privé. Le rebond simplifie l'accès, il ne cloisonne pas
 la Forge des Sparks — et le §11 reste la référence sur ce que l'isolation garantit.
 
 
+### 17.5 L'identité que le Spark PRÉSENTE, et pourquoi elle ne remonte pas
+
+@spec docs/BACKLOG.md#SPK-74
+
+Le §17 jusqu'ici décrit qui entre dans un Spark. Cette section décrit le sens
+inverse : ce que le Spark **présente** quand il sort — à GitHub, pour cloner un
+dépôt privé en clé de déploiement.
+
+Ce sont deux objets différents et l'écran doit les nommer différemment. Une clé
+d'accès autorise quelqu'un à entrer ; une identité authentifie la cellule
+auprès d'un tiers. Les confondre mettrait une clé publique de l'exploitant dans
+`~/.ssh/id_ed25519.pub` du Spark, ce qui n'ouvre rien, ou la clé du Spark dans
+`authorized_keys`, ce qui donnerait au dépôt distant un accès à la cellule.
+
+**La clé privée naît dans la cellule et n'en sort pas.** `ssh-keygen -t ed25519`
+est exécuté **dans** le Spark par `exec_capture` (§42.5). L'API rend la clé
+publique et l'empreinte ; elle ne lit jamais la clé privée, et le journal
+d'audit retient le geste et l'empreinte, jamais un corps de clé. Le §17.2 est
+ainsi tenu par la construction : on ne demande rien au registre, donc rien
+d'interdit ne peut y entrer.
+
+**La cellule est la seule source, et il n'y a pas de copie au registre.** Une
+copie divergerait au premier `ssh-keygen` lancé à la main dans le Spark, et la
+console afficherait alors une clé publique qui n'ouvre plus le dépôt — une
+panne que rien ne signalerait, puisque les deux côtés seraient
+individuellement cohérents. C'est le même raisonnement qu'au §18.1 : on relit,
+on ne duplique pas.
+
+**Conséquence assumée : un Spark arrêté n'a pas d'identité lisible.** L'écran
+dit « Spark arrêté », et non « aucune identité ». Le §14.6 du design system
+s'applique à la lettre — zéro, en cours et indisponible sont trois états, et les
+fondre ferait créer une seconde identité en croyant réparer la première.
+
+**Régénérer est un geste destructeur.** Remplacer l'identité invalide la clé de
+déploiement déjà posée chez le tiers : le dépôt cesse d'être clonable, et rien
+sur la Forge ne le sait. Le remplacement exige donc le drapeau explicite côté
+API, et la frappe du nom côté console (§26.4, SPK-63). La création d'une
+identité absente, elle, ne détruit rien et ne confirme pas — demander une
+confirmation pour un geste sans conséquence apprend à confirmer sans lire.
+
+**Ce que le produit ne fait pas.** Il ne pose aucune clé chez GitHub : cela
+demanderait un jeton d'API du dépôt, donc un secret de plus sur la Forge, pour
+remplacer un copier-coller que l'exploitant fait une fois. Le produit s'arrête
+où commence le compte du tiers.
+
 ## 18. Réconciliation de l'ingress
 
 Le §9 pose le contrat `domaine → spark → port`. Cette section dit **comment** la

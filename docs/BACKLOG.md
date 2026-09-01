@@ -4427,6 +4427,65 @@ responsable : c'est du chargeur d'amorçage sur une machine nue distante.
 
 ---
 
+### [ ] SPK-74 · Le Spark présente une identité SSH, et la console en donne la clé publique
+
+**Demandé par le responsable le 2026-09-01** : « d'un bouton on crée une clé
+privée SSH, la clé publique est visible dans l'interface et copiable au
+presse-papier, pour que je puisse ensuite ajouter la clé du Spark au dépôt GitHub
+concerné ».
+
+Le besoin est le **sens inverse** de SPK-11. Les clés de SPK-11 laissent entrer
+dans un Spark ; celle-ci laisse le Spark **sortir** — se présenter à GitHub pour
+cloner un dépôt privé, en clé de déploiement. Confondre les deux mettrait une
+clé d'accès là où il faut une identité, et l'écran le dirait mal.
+
+- Spécification : `docs/DAT.md` **§17.5** · `docs/SCHEMA.md` §7 (ce qui n'y entre
+  pas) · `docs/DESIGN_SYSTEM.md` (section, copie au presse-papier) ·
+  `docs/MANUAL_PLAN.md` M6 (déployer sa pile, donc cloner un dépôt privé).
+- Dépend de : SPK-11 pour l'écran des clés qui l'accueille, SPK-54 pour
+  `exec_capture`, qui est le seul moyen de faire naître la clé **dans** la
+  cellule.
+
+**La clé privée ne quitte jamais le Spark, et ne peut pas le quitter.** Elle naît
+dans la cellule par `ssh-keygen`, y reste, et rien ne la lit — ni l'API, ni la
+console, ni le journal d'audit. C'est la règle du §17.2 tenue par la
+construction et pas par la consigne : le registre porte une contrainte
+`CHECK (public_key NOT LIKE '%PRIVATE KEY%')`, et ici on ne lui demande même
+rien.
+
+- **Pas de seconde vérité.** L'identité n'est pas recopiée au registre : la
+  cellule en est la source, et la console la relit. Une copie au registre
+  divergerait dès qu'on régénère la clé à la main dans le Spark, et l'écran
+  afficherait alors une clé publique qui n'ouvre plus rien.
+- **Un Spark éteint ne ment pas.** La clé ne se lit que dans une cellule qui
+  tourne. Éteint, l'écran dit « Spark arrêté », pas « aucune identité » : §14.6
+  du design system — ne pas confondre zéro, en cours et indisponible.
+- **Régénérer est destructeur et se confirme.** Remplacer l'identité invalide la
+  clé de déploiement déjà posée chez GitHub, et le dépôt cesse d'être clonable
+  sans que rien sur la Forge ne le signale. Le geste demande donc la frappe du
+  nom du Spark (SPK-63), et l'écran dit ce qui casse **avant** le geste. Créer
+  une identité qui n'existe pas encore n'est, lui, pas destructeur et ne
+  confirme pas.
+- **La copie au presse-papier a un repli.** `navigator.clipboard` n'existe pas
+  hors contexte sûr et peut être refusée. Le bloc reste donc sélectionnable et
+  le bouton dit ce qui s'est passé — copié, ou « copie refusée, sélectionnez le
+  texte ». Un bouton qui ne fait rien en silence est pire que pas de bouton.
+- Ce que l'unité ne fait pas : elle ne pose aucune clé chez GitHub — aucun jeton
+  d'API n'entre dans le produit —, ne gère pas plusieurs identités par Spark, et
+  ne connaît ni `known_hosts` ni configuration `~/.ssh/config`.
+- DoD : un test unitaire prouve que la génération refuse d'écraser une identité
+  existante sans le drapeau de remplacement ; un test prouve que la clé privée
+  n'apparaît dans aucune réponse ni dans le journal d'audit ; un test prouve que
+  le relevé d'un Spark arrêté rend « indisponible » et non « absente » ; un test
+  d'API couvre les trois codes — créée, déjà présente, Spark arrêté ; un test de
+  composant prouve le rendu des trois états et la présence du bouton de copie ;
+  un parcours E2E crée l'identité depuis l'écran des clés, lit l'empreinte,
+  copie au presse-papier et vérifie le contenu copié ; la vérification visuelle
+  part de l'accueil et passe par la souris et le clavier seuls ; manuel M6 et
+  captures mis à jour.
+
+---
+
 ## Réservé, non planifié
 
 - `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc

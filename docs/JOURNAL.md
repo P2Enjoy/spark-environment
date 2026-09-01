@@ -8379,3 +8379,55 @@ machine nue distante : une erreur ne se rattrape pas par SSH. Le redémarrage de
 vérification de SPK-71 attend la même décision — rebooter une machine dont
 `dpkg` est à moitié configuré n'est pas un risque à prendre pour une preuve qui
 peut attendre.
+
+
+---
+
+## 2026-09-01 · SPK-74 — l'identité que le Spark présente, et le sens qu'il ne fallait pas confondre
+
+**Demande.** Un bouton crée une clé privée SSH ; la clé publique s'affiche et se
+copie, pour être ajoutée ensuite au dépôt GitHub concerné.
+
+**Le point qui décide de toute l'unité : c'est le sens INVERSE de SPK-11.** Les
+clés existantes laissent *entrer* dans un Spark — elles finissent dans
+`authorized_keys`. Celle-ci laisse le Spark *sortir* : il se présente à GitHub
+en clé de déploiement pour cloner un dépôt privé. Deux objets, deux écrans
+possibles, et une confusion coûteuse dans les deux sens : la clé publique de
+l'exploitant posée en identité du Spark n'ouvre rien, et l'identité du Spark
+posée en `authorized_keys` donnerait au dépôt distant un accès à la cellule.
+L'écran doit donc les nommer distinctement, sur la même facette « Clés ».
+
+**Où vit la clé privée.** Dans la cellule, et nulle part ailleurs. Le §17.2
+interdit déjà toute clé privée au registre, et la base le fait respecter par une
+contrainte `CHECK`. Plutôt que de contourner cette contrainte, l'unité s'arrange
+pour n'avoir rien à lui demander : `ssh-keygen` s'exécute **dans** le Spark par
+`exec_capture`, et seule la clé publique remonte. La règle est ainsi tenue par
+la construction et non par la vigilance.
+
+**Décision : pas de copie au registre.** La cellule est la seule source, la
+console relit. Une copie paraîtrait plus pratique — l'écran resterait lisible
+Spark éteint — mais elle divergerait au premier `ssh-keygen` lancé à la main
+dans le Spark, et la console afficherait alors une clé publique qui n'ouvre plus
+le dépôt. Les deux côtés seraient individuellement cohérents et l'ensemble faux :
+exactement le mode de panne que le §18.1 évite en relisant plutôt qu'en
+dupliquant.
+
+**Conséquence assumée.** Un Spark arrêté n'a pas d'identité lisible, et l'écran
+doit dire « Spark arrêté » plutôt que « aucune identité ». Le §14.6 du design
+system s'applique tel quel : zéro, en cours et indisponible sont trois états, et
+les fondre ferait créer une seconde identité en croyant réparer la première.
+
+**Régénérer est destructeur, créer ne l'est pas.** Remplacer l'identité invalide
+la clé de déploiement déjà posée chez le tiers ; le dépôt cesse d'être clonable
+et rien sur la Forge ne le sait. Le remplacement exige donc un drapeau explicite
+à l'API et la frappe du nom à la console (SPK-63). La création d'une identité
+absente ne détruit rien : lui demander une confirmation apprendrait à confirmer
+sans lire.
+
+**Ce que le produit ne fera pas, et pourquoi c'est écrit ici.** Poser la clé chez
+GitHub à la place de l'exploitant demanderait un jeton d'API du dépôt — un
+secret de plus sur la Forge, permanent, pour remplacer un copier-coller fait une
+fois. Le produit s'arrête où commence le compte du tiers.
+
+Spécification écrite avant toute ligne de code : `docs/DAT.md` §17.5 et l'unité
+SPK-74.
