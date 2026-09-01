@@ -28,6 +28,16 @@
   telle, au lieu d'être laissée à côté de la nouvelle réalité.
 
 ### Ajouté
+- **Le Spark présente une identité SSH, et la console en donne la clé publique**
+  (SPK-74, `docs/DAT.md` §17.5) : sur la facette « Clés », une section crée d'un
+  bouton une paire de clés **dans la cellule**, affiche la clé publique et son
+  empreinte en monospace, et la copie au presse-papier — pour la poser en
+  *deploy key* sur le dépôt GitHub à cloner. C'est le sens inverse des clés de
+  SPK-11 : celles-là laissent entrer, celle-ci laisse sortir. La clé privée
+  naît dans le Spark et n'en sort jamais ; aucune copie n'entre au registre, la
+  cellule étant la seule source. Un Spark arrêté rend « illisible » et non
+  « aucune identité », et remplacer une identité existante exige la frappe du
+  nom, parce que la clé déjà posée chez le tiers cesse alors d'être valide.
 - **L'amorce d'une Forge entre au dépôt** (SPK-73) : `deploy/cloud-init/` porte
   le script `spark-amorce.sh` et son gabarit `user-data.yaml`, jusqu'ici présents
   seulement sur la machine, donc ni versionnés ni relisibles. Le `README.md`

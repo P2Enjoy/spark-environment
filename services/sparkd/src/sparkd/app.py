@@ -40,6 +40,7 @@ from . import signature as signature_service
 from . import notification as notification_service
 from . import audit as audit_service
 from . import bootstrap as bootstrap_service
+from . import identity as identity_service
 from . import briefing as briefing_service
 from . import metrics as metrics_service
 from . import snapshots as snapshot_service
@@ -1697,6 +1698,82 @@ def create_app(config: Config) -> FastAPI:
             return {"spark": name, "path": "incus_exec", "mode": mode,
                     "changed": bool(actions), "items": lignes,
                     "complete": bootstrap_service.complet(apres)}
+
+    @app.get("/v1/sparks/{name}/identity", tags=["cles"])
+    def read_identity(name: str) -> dict:
+        """La clé PUBLIQUE que le Spark présente. N'écrit rien (§17.5).
+
+        @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §14.6
+
+        Lire ne refuse PAS sur un Spark arrêté, contrairement à créer : on doit
+        pouvoir regarder l'écran des clés d'un Spark éteint sans tomber sur une
+        erreur. L'état rendu est alors « indisponible », jamais « absente » —
+        les fondre ferait créer une seconde identité en croyant réparer la
+        première, et invaliderait la clé déjà posée chez le tiers.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            indisponible = {
+                "spark": name, "state": identity_service.INDISPONIBLE,
+                "public_key": None, "fingerprint": None, "comment": None,
+                "key_type": None, "path": identity_service.CHEMIN_PRIVEE,
+            }
+            if not spark.get("incus_name") or spark.get("state") != "running":
+                return indisponible
+            try:
+                return {"spark": name, **identity_service.relever(
+                    app.state.incus, spark["incus_name"])}
+            except (IncusError, InstanceAbsente):
+                # Une cellule qui ne répond pas n'est pas une identité absente.
+                return indisponible
+            except identity_service.IdentityError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "identity_unreadable", "message": str(erreur)}) from erreur
+
+    @app.post("/v1/sparks/{name}/identity", tags=["cles"], status_code=201)
+    def create_identity(name: str, body: dict = Body(default={})) -> dict:
+        """Fait naître l'identité DANS la cellule (§17.5).
+
+        @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §17.2, §42.5
+
+        La clé privée ne traverse jamais cette route : `ssh-keygen` s'exécute
+        dans le Spark et seule la partie publique remonte. Le journal reçoit
+        l'empreinte, jamais un corps de clé (§21.2).
+
+        `replace` est refusé par défaut : régénérer invalide la clé de
+        déploiement déjà posée chez le tiers, et rien sur la Forge ne le sait.
+        """
+        remplacer = bool((body or {}).get("replace"))
+        with registry() as connection:
+            spark = _cellule_ou_refus(connection, name)
+            # §35 : écrire dans la cellule est exactement ce que la protection
+            # arrête, et elle se lève par son geste distinct.
+            protection_service.ensure_writable(connection, name, "identity")
+            try:
+                cree = identity_service.creer(
+                    app.state.incus, spark["incus_name"], name, remplacer=remplacer)
+            except InstanceAbsente as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
+            except IncusError as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "identity_failed", "message": str(erreur)}) from erreur
+            except identity_service.IdentityError as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "identity_exists", "message": str(erreur)}) from erreur
+            audit_service.record(
+                connection, None, "spark.identity.create", "ok",
+                ("Identité SSH remplacée" if remplacer else "Identité SSH créée")
+                + f" pour « {name} » ({cree['fingerprint']}).",
+                target_type="spark", target_id=spark["id"],
+                # §21.2 : l'EMPREINTE, jamais le corps de la clé.
+                payload={"fingerprint": cree["fingerprint"],
+                         "replaced": remplacer},
+            )
+            return {"spark": name, **cree}
 
     @app.post("/v1/sparks/{name}/ssh-keys/{label}", tags=["cles"])
     def grant_key(name: str, label: str) -> dict:

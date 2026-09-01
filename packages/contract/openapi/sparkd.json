@@ -59,7 +59,7 @@
   "info": {
     "description": "Runtime serveur du plan de controle Spark. Ecoute exclusivement sur la boucle locale.",
     "title": "sparkd",
-    "version": "0.post1.dev622+gd7cd9b1dd"
+    "version": "0.post1.dev675+g592b4cb62.d20260901"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1388,6 +1388,106 @@
         "summary": "Set Spark Env",
         "tags": [
           "environnement"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/identity": {
+      "get": {
+        "description": "La clé PUBLIQUE que le Spark présente. N'écrit rien (§17.5).\n\n@spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §14.6\n\nLire ne refuse PAS sur un Spark arrêté, contrairement à créer : on doit\npouvoir regarder l'écran des clés d'un Spark éteint sans tomber sur une\nerreur. L'état rendu est alors « indisponible », jamais « absente » —\nles fondre ferait créer une seconde identité en croyant réparer la\npremière, et invaliderait la clé déjà posée chez le tiers.",
+        "operationId": "read_identity_v1_sparks__name__identity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Identity V1 Sparks  Name  Identity Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Identity",
+        "tags": [
+          "cles"
+        ]
+      },
+      "post": {
+        "description": "Fait naître l'identité DANS la cellule (§17.5).\n\n@spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §17.2, §42.5\n\nLa clé privée ne traverse jamais cette route : `ssh-keygen` s'exécute\ndans le Spark et seule la partie publique remonte. Le journal reçoit\nl'empreinte, jamais un corps de clé (§21.2).\n\n`replace` est refusé par défaut : régénérer invalide la clé de\ndéploiement déjà posée chez le tiers, et rien sur la Forge ne le sait.",
+        "operationId": "create_identity_v1_sparks__name__identity_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "default": {},
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Identity V1 Sparks  Name  Identity Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Identity",
+        "tags": [
+          "cles"
         ]
       }
     },

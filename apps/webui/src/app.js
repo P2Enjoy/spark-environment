@@ -14,6 +14,7 @@
 
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spark-detail.js';
+import { IDENTITE_VIDE } from './components/spark-identity.js';
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
@@ -101,7 +102,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                amorcage: { ...AMORCAGE_VIDE },
                // SPK-44 · §37.6 : ce qui tourne dans le Spark. Relevé tant que
                // l'onglet est ouvert, et ARRÊTÉ dès qu'il est quitté.
-               docker: { ...DOCKER_VIDE } };
+               docker: { ...DOCKER_VIDE },
+               // SPK-74 · §17.5 : lue par `incus exec`, donc SEULEMENT quand
+               // sa facette est ouverte.
+               identite: { ...IDENTITE_VIDE } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -151,6 +155,7 @@ function peindre() {
                             envUi: etat.envUi,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
+                            identite: etat.identite,
                             ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
         + renderSparksView(etat);
@@ -1399,6 +1404,54 @@ function brancherPanneaux() {
   geste('confirme-restauration', (nom) => restaurer(nom, false));
   // §26.5 : l'acceptation de la perte n'est atteignable qu'APRÈS le refus.
   geste('accepte-perte', (nom) => restaurer(nom, true));
+
+  // SPK-74 · §17.5 : l'identité que le Spark présente.
+  const identite = etat.identite;
+  for (const bouton of racine.querySelectorAll('[data-identite-relire]')) {
+    bouton.addEventListener('click', () => releverIdentite());
+  }
+  for (const bouton of racine.querySelectorAll('[data-identite-creer]')) {
+    bouton.addEventListener('click', () => creerIdentite(false));
+  }
+  for (const bouton of racine.querySelectorAll('[data-identite-copie]')) {
+    bouton.addEventListener('click', () => copierIdentite());
+  }
+  for (const bouton of racine.querySelectorAll('[data-identite-remplacer]')) {
+    bouton.addEventListener('click', () => {
+      identite.confirming = 'identite';
+      identite.frappe = '';
+      identite.erreur = null;
+      peindre();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-identite-annule]')) {
+    bouton.addEventListener('click', () => {
+      identite.confirming = null;
+      identite.frappe = '';
+      peindre();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-identite-remplace]')) {
+    bouton.addEventListener('click', () => creerIdentite(true));
+  }
+  // La frappe ne repeint PAS la section : `innerHTML` arracherait le focus au
+  // clavier (§14.3). Seuls l'aide et l'état du bouton suivent la saisie.
+  const champFrappe = racine.querySelector('[data-frappe-identite]');
+  if (champFrappe) {
+    champFrappe.addEventListener('input', () => {
+      identite.frappe = champFrappe.value;
+      const correspond = identite.frappe === etat.spark?.name;
+      const engage = racine.querySelector('[data-identite-remplace]');
+      const aide = racine.querySelector('#identite-aide');
+      if (engage) engage.disabled = !correspond || identite.busy;
+      if (aide) {
+        aide.textContent = correspond
+          ? 'Le nom correspond.'
+          : 'Le nom n\u2019est pas encore celui du Spark : le remplacement '
+            + 'n\u2019est pas engageable.';
+      }
+    });
+  }
 }
 
 /**
@@ -2112,6 +2165,85 @@ async function chargerDetail(nom, facette = '') {
   if (etat.facette === 'docker' && etat.status === 'ready') {
     releverDocker({ premier: true });
   }
+  // SPK-74 · §17.5 : l'identité se lit en exécutant une commande DANS la
+  // cellule. On ne la relève donc qu'à l'ouverture de sa facette — la lire à
+  // chaque affichage exécuterait un `incus exec` chez le locataire pour un
+  // écran que personne ne regarde, exactement le motif du §37.6.
+  if (etat.facette === 'cles' && etat.status === 'ready') {
+    releverIdentite();
+  }
+}
+
+/**
+ * Relève l'identité SSH que le Spark présente (SPK-74, docs/DAT.md §17.5).
+ *
+ * Lire ne refuse pas sur un Spark arrêté : le runtime rend l'état
+ * « indisponible », que la section distingue de « absente » (§14.6). Les
+ * fondre ferait créer une seconde identité en croyant réparer la première.
+ */
+async function releverIdentite() {
+  const i = etat.identite;
+  i.status = 'chargement';
+  i.erreur = null;
+  peindre();
+  try {
+    i.releve = await api(`/v1/sparks/${encodeURIComponent(etat.spark.name)}/identity`);
+    i.status = 'pret';
+  } catch (erreur) {
+    i.status = 'erreur';
+    i.erreur = erreur?.message ?? String(erreur);
+  }
+  peindre();
+}
+
+/**
+ * Fait naître l'identité DANS la cellule, puis RELIT (§26.6).
+ *
+ * Aucun optimisme d'interface : la clé affichée doit être celle que la cellule
+ * porte, pas celle que la réponse annonce. `remplacer` est un geste distinct,
+ * confirmé par la frappe du nom (§6.23).
+ */
+async function creerIdentite(remplacer = false) {
+  const i = etat.identite;
+  i.busy = true;
+  i.erreur = null;
+  i.copie = null;
+  peindre();
+  const { ok, corps } = await appel(
+    'POST', `/v1/sparks/${encodeURIComponent(etat.spark.name)}/identity`,
+    remplacer ? { replace: true } : {});
+  i.busy = false;
+  if (!ok) {
+    i.erreur = corps?.detail?.message ?? corps?.message ?? 'Le geste a échoué.';
+    peindre();
+    return;
+  }
+  i.confirming = null;
+  i.frappe = '';
+  await releverIdentite();
+}
+
+/**
+ * Copie la clé publique, et ne dit « copié » qu'une fois le presse-papier
+ * d'accord (§1.3 : pas de succès simulé).
+ *
+ * `navigator.clipboard` n'existe pas hors contexte sûr et peut être refusée.
+ * Le refus renvoie alors au bloc, qui reste sélectionnable : un bouton qui
+ * échouerait en silence serait pire que pas de bouton.
+ */
+async function copierIdentite() {
+  const i = etat.identite;
+  const cle = i.releve?.public_key;
+  if (!cle) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('presse-papier indisponible');
+    await navigator.clipboard.writeText(cle);
+    i.copie = { ok: true, message: 'Clé publique copiée dans le presse-papier.' };
+  } catch {
+    i.copie = { ok: false, message: 'Copie refusée par le navigateur : '
+                + 'sélectionnez le texte de la clé ci-dessus pour la copier.' };
+  }
+  peindre();
 }
 
 /**

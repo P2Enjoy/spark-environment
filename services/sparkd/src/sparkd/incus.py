@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+import base64
+import hashlib
 import json
 
 import httpx
@@ -392,6 +394,19 @@ class UnixSocketIncus:
         return self._get(f"/1.0/instances/{name}/state")
 
 
+def _faux_ed25519(graine: str) -> str:
+    """Corps de cle ed25519 STRUCTURELLEMENT valide, pour le doublon (§28.4).
+
+    `sshkeys.parse` verifie le base64 ET que le blob annonce bien son type. Une
+    chaine quelconque serait refusee, et les preuves d'identite passeraient a
+    cote de l'analyseur qu'elles doivent exercer.
+    """
+    brut = hashlib.sha256(graine.encode()).digest()
+    blob = (len("ssh-ed25519").to_bytes(4, "big") + b"ssh-ed25519"
+            + (32).to_bytes(4, "big") + brut)
+    return base64.b64encode(blob).decode()
+
+
 @dataclass
 class FakeIncus:
     """Pilote factice, pour les tests et le developpement local.
@@ -619,6 +634,28 @@ class FakeIncus:
         script = command[-1] if command else ""
         runtime = self.created[name].setdefault("runtime", {})
 
+        # SPK-74 · §17.5 : le doublon porte l'EFFET de la creation d'identite,
+        # pas seulement son passage. Sans lui, un second appel retrouverait la
+        # cellule vierge et le refus d'ecrasement — qui est le point de la DoD —
+        # serait ineprouvable. La reconnaissance porte sur la COMMANDE entiere :
+        # l'identite passe son script en `sh -c <script> sh <commentaire> <oui>`,
+        # donc le dernier argument n'est pas le script.
+        entier = " ".join(command)
+        if "ssh-keygen -t ed25519" in entier:
+            remplacer = command[-1] == "oui"
+            if runtime.get("identity") and not remplacer:
+                return (3, "", "")
+            comment = command[-2] if len(command) >= 2 else "spark"
+            graine = f"{name}:{comment}:{len(runtime.get('identity_history', []))}"
+            runtime["identity"] = f"ssh-ed25519 {_faux_ed25519(graine)} {comment}"
+            runtime.setdefault("identity_history", []).append(runtime["identity"])
+            self._persist()
+            return (0, runtime["identity"] + "\n", "")
+        if "id_ed25519.pub" in entier:
+            if not runtime.get("identity"):
+                return (4, "", "")
+            return (0, runtime["identity"] + "\n", "")
+
         # Le doublon représente l'EFFET de la commande, pas seulement son
         # passage. Sans cela, un second amorçage retrouverait la cellule vierge
         # et réinstallerait tout — l'idempotence, qui est le point de la DoD,
@@ -648,7 +685,10 @@ class FakeIncus:
             runtime["compose_version"] = "2.40.0-1"
         self._persist()
 
-        lignes = "".join(f"{cle}={valeur}\n" for cle, valeur in runtime.items())
+        # L'identite n'est pas un element du releve du §42.6 : la recracher en
+        # ligne `cle=valeur` la ferait apparaitre dans l'amorcage.
+        lignes = "".join(f"{cle}={valeur}\n" for cle, valeur in runtime.items()
+                         if not cle.startswith("identity"))
         return (0, lignes, "")
 
     def create_snapshot(self, name: str, snapshot: str) -> None:
