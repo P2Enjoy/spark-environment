@@ -4303,9 +4303,32 @@ préflight rend `RUN-SLICE` rouge : `controleurs delegues : ''`.
   compte est celle d'après la réconciliation (§32.4 bis) — et le préflight rend
   `RUN-SLICE` vert.
 
+**PROUVÉ SUR LA FORGE le 2026-09-01**, par le chemin réel du produit — paquet
+depuis `main`, puis `sparkd.forge_install` :
+
+```
+systemctl show spark-delegation.service -p DelegateControllers
+                              → cpu cpuset io memory pids
+subtree_control               → cpuset cpu io memory pids
+après daemon-reload           → cpuset cpu io memory pids
+après restart de sparkd       → cpuset cpu io memory pids
+après systemd-run transitoire → cpuset cpu io memory pids
+```
+
+Le préflight rend **13 contrôles, 0 bloquant, 0 signalé** — vert intégral pour la
+première fois sur cette Forge. `RUN-SLICE` relève « presente, controleurs cpuset
+cpu io memory pids, static, delegation enabled ».
+
+**Reste avant `[x]`, et une seule chose** : la preuve du **redémarrage**. L'unité
+est `enabled` et §32.4 exige qu'elle revienne d'elle-même, mais la machine n'a
+pas été redémarrée. Le redémarrage est différé volontairement : `grub-pc` est
+resté à moitié configuré par l'installation de l'hébergeur (voir SPK-73), et
+rebooter une machine nue distante dans cet état n'est pas un risque à prendre
+pour une vérification qui peut attendre que `dpkg` soit sain.
+
 ---
 
-### [~] SPK-72 · Le préflight lit la configuration SSH EFFECTIVE, pas un seul fichier
+### [x] SPK-72 · Le préflight lit la configuration SSH EFFECTIVE, pas un seul fichier
 
 **Trouvé le 2026-09-01, en diagnostiquant SPK-71.** Le contrôle `SSH-X11`
 signalait `X11Forwarding yes` sur une Forge où `sshd -T` répond
@@ -4330,6 +4353,12 @@ signalait `X11Forwarding yes` sur une Forge où `sshd -T` répond
   le fichier quand `sshd -T` échoue, et `INCONNU` quand aucune source ne répond ;
   sur la Forge réelle, `SSH-X11` est vert et le préflight est **intégralement**
   vert.
+
+**CLOSE le 2026-09-01.** Les cinq preuves unitaires passent. Sur la Forge,
+`SSH-X11` relève « désactivé (sshd -T) » alors que `/etc/ssh/sshd_config` porte
+toujours `X11Forwarding yes` à sa ligne 113 — c'est exactement le cas qui
+rendait le contrôle faux. Le préflight rend 13 contrôles, 0 bloquant,
+**0 signalé**.
 
 ---
 
@@ -4362,6 +4391,39 @@ l'installation d'aplomb sans réinitialiser les Sparks existants ».
   passer la revue ; le `README.md` documente le rejeu et ce qu'il préserve ; sur
   la Forge réelle, un second passage complet se termine **sans erreur** et laisse
   le registre intact.
+
+**Fait le 2026-09-01** : le script est versionné sous `deploy/cloud-init/`, avec
+son gabarit `user-data`, et il est identique bit pour bit à celui posé sur la
+Forge (`sha256` comparé). Sept preuves unitaires le couvrent, dont le passage au
+vrai parseur `sh`, l'absence de tout geste destructeur sur le pool et l'absence
+de toute mention du registre dans le CODE — cette dernière a d'ailleurs échoué
+d'abord sur un commentaire du script, ce qui a fait distinguer la prose du code
+dans la preuve elle-même. La **queue** de l'amorce (paquet + exécuteur, sans la
+tête `apt`) a été rejouée deux fois sur la Forge : `changed: false` sur
+`dependencies`, `storage` et `foundation`, registre intact, `{"sparks":[]}`
+inchangé.
+
+**BLOQUÉ avant `[x]` par un défaut de la MACHINE, pas du produit.** Le passage
+complet échoue à sa première commande `apt-get install`, parce que l'image de
+l'hébergeur a laissé `dpkg` dans un état incohérent :
+
+```
+grub-pc  iF  (half-configured)   grub2  iU  (unpacked, non configuré)
+postinst : mdadm: /dev/md does not appear to be an md device
+           grub-install: error: ioctl RAID_VERSION error
+```
+
+`grub-pc/install_devices` est **vide** avec `cloud_style_installation: true`, et
+le postinst sonde un `/dev/md` qui n'est pas un nœud de périphérique. Aucun
+`apt-get install` ne peut aboutir tant que ce paquet n'est pas configuré — donc
+aucune amorce complète non plus.
+
+Relevé pour l'arbitrage, en lecture seule : GRUB est **déjà** dans le MBR de
+`/dev/sda` et `/dev/sdb`, `/boot/grub/i386-pc` existe, les deux disques portent
+une partition `BIOS boot` de 512 Mio, et la machine démarre. Poser
+`grub-pc/install_devices` sur les deux disques puis `dpkg --configure -a`
+réécrirait le même GRUB sur les mêmes disques. La décision revient au
+responsable : c'est du chargeur d'amorçage sur une machine nue distante.
 
 ---
 

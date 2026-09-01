@@ -8319,3 +8319,63 @@ ne délègue rien. §32.4 ter, second temps : `Delegate=` sur une tranche est
 ignoré. Trois fois, le produit a cru configurer un cgroup que systemd
 possède. La vérification qui compte n'est jamais « la valeur est posée » mais
 « la valeur est **encore** posée après une réconciliation ».
+
+
+---
+
+## 2026-09-01 · Forge intégralement verte, et un `dpkg` cassé par l'image de l'hébergeur
+
+**Résultat.** Le correctif de SPK-71 et celui de SPK-72 sont déployés par le
+chemin réel du produit — paquet depuis `main`, puis `sparkd.forge_install`. La
+Forge rend pour la première fois **13 contrôles, 0 bloquant, 0 signalé**.
+`RUN-SLICE` : « presente, controleurs cpuset cpu io memory pids, static,
+delegation enabled ». `SSH-X11` : « désactivé (sshd -T) ». Registre intact,
+`{"sparks":[]}` inchangé de bout en bout.
+
+La délégation tient après `daemon-reload`, après redémarrage de `sparkd` et
+après création d'une unité transitoire — les trois réconciliations qui la
+vidaient avant.
+
+**Ce qui reste dû sur SPK-71 : la preuve du redémarrage.** L'unité est
+`enabled`, ce que §32.4 exige, mais la machine n'a pas été redémarrée. Et il y a
+une raison de ne pas le faire aujourd'hui.
+
+**Découverte en rejouant l'amorce : `dpkg` est incohérent depuis l'installation
+de l'hébergeur.** Le rejeu complet échoue à sa **première** commande
+`apt-get install` :
+
+```
+grub-pc  iF  (half-configured)   grub2  iU  (unpacked, non configuré)
+postinst : mdadm: /dev/md does not appear to be an md device
+           grub-install: error: ioctl RAID_VERSION error
+```
+
+`grub-pc/install_devices` est vide, avec `cloud_style_installation: true`, et le
+postinst sonde un `/dev/md` qui n'est pas un nœud de périphérique. Tant que ce
+paquet n'est pas configuré, **aucun** `apt-get install` n'aboutit sur cette
+machine — donc aucune amorce complète. Ce n'est pas un défaut du produit ; c'est
+l'état dans lequel la réinstallation a laissé la machine, et il était là avant
+toute intervention de ma part.
+
+Ce que le rejeu a tout de même prouvé : la **queue** de l'amorce — paquet plus
+exécuteur, sans la tête `apt` — a tourné deux fois de suite, avec
+`changed: false` sur `dependencies`, `storage` et `foundation`, et sans jamais
+toucher le registre. L'idempotence tient sur tout ce qui a pu être joué.
+
+**Relevé pour l'arbitrage, en lecture seule.** GRUB est **déjà** installé dans le
+MBR de `/dev/sda` et de `/dev/sdb`, `/boot/grub/i386-pc` existe, les deux disques
+portent une partition `BIOS boot` de 512 Mio, et la machine démarre. Poser
+`grub-pc/install_devices` sur les deux disques puis `dpkg --configure -a`
+réécrirait donc le même GRUB sur les mêmes disques qui l'amorcent déjà.
+
+Un détail penche même pour le faire plutôt que l'éviter : `grub-pc` est
+*unpacked* en 2.14-2ubuntu2.1 alors que `/boot/grub/i386-pc` porte encore les
+modules de la version précédente — ils sont cohérents avec le MBR actuel, donc
+la machine démarre, mais la moitié posée et la moitié non posée ne demandent
+qu'à diverger à la prochaine mise à jour.
+
+**Décision différée au responsable.** C'est du chargeur d'amorçage sur une
+machine nue distante : une erreur ne se rattrape pas par SSH. Le redémarrage de
+vérification de SPK-71 attend la même décision — rebooter une machine dont
+`dpkg` est à moitié configuré n'est pas un risque à prendre pour une preuve qui
+peut attendre.
