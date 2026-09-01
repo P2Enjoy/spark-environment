@@ -19,6 +19,47 @@ le panneau vous le dit avant le geste.
 Retirer une clé du **registre commun** — donc de tous les Sparks à la fois — ne
 se fait pas depuis cet écran.
 
+## Cloner un dépôt privé : l'identité du Spark
+
+![La section Identité du Spark : la clé publique, son empreinte, et le bouton de copie](images/m6-identite.png)
+
+Le panneau **Identité du Spark**, sous les clés autorisées, sert au sens
+**inverse** : il ne s'agit plus de qui entre dans votre Spark, mais de ce que
+votre Spark **présente** quand il sort — à GitHub par exemple, pour cloner un
+dépôt privé.
+
+Ne confondez pas les deux. Une clé autorisée laisse quelqu'un entrer ; l'identité
+authentifie la cellule auprès d'un tiers. Coller l'identité du Spark dans les
+clés autorisées donnerait au dépôt distant un accès à votre Spark.
+
+**Créer l'identité** fabrique une paire de clés **dans** le Spark. La clé privée
+y naît et n'en sort jamais : ni la console, ni l'API, ni le journal ne la lisent.
+Seule la partie publique s'affiche.
+
+Ensuite :
+
+1. **Copier la clé publique** la met dans votre presse-papier. Si votre
+   navigateur refuse la copie — cela arrive hors connexion sécurisée —, le texte
+   reste sélectionnable : prenez-le à la souris, l'écran vous le dit.
+2. Sur GitHub, ouvrez le dépôt → *Settings* → *Deploy keys* → *Add deploy key*,
+   et collez-la. Laissez **Allow write access** décoché si votre Spark n'a qu'à
+   cloner.
+3. Dans le Spark, `git clone git@github.com:…` fonctionne alors sans mot de
+   passe.
+
+Le commentaire de la clé porte le nom du Spark (`spark:mon-spark`) : dans une
+liste de clés de déploiement, vous saurez laquelle retirer le jour venu.
+
+**Un Spark arrêté ne montre pas son identité.** L'écran dit alors *illisible*, et
+non *aucune identité* — ce n'est pas la même chose, et le geste attendu est de
+démarrer le Spark, pas d'en créer une seconde.
+
+**Remplacer une identité est irréversible.** L'ancienne clé cesse aussitôt d'être
+valide : tout dépôt où vous l'aviez posée refusera ce Spark jusqu'à ce que vous y
+ajoutiez la nouvelle. C'est pourquoi l'écran vous demande de frapper le nom du
+Spark avant d'engager le geste. Créer une identité qui n'existe pas encore, en
+revanche, ne casse rien et ne demande rien.
+
 ## Amorcer le Spark, une fois
 
 **Un Spark neuf n'a ni serveur SSH ni moteur Docker.** L'image de base n'en

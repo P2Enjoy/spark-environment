@@ -4427,7 +4427,7 @@ responsable : c'est du chargeur d'amorçage sur une machine nue distante.
 
 ---
 
-### [ ] SPK-74 · Le Spark présente une identité SSH, et la console en donne la clé publique
+### [x] SPK-74 · Le Spark présente une identité SSH, et la console en donne la clé publique
 
 **Demandé par le responsable le 2026-09-01** : « d'un bouton on crée une clé
 privée SSH, la clé publique est visible dans l'interface et copiable au
@@ -4483,6 +4483,22 @@ rien.
   copie au presse-papier et vérifie le contenu copié ; la vérification visuelle
   part de l'accueil et passe par la souris et le clavier seuls ; manuel M6 et
   captures mis à jour.
+
+**CLOSE le 2026-09-01.** 14 preuves serveur, 12 de composant, 3 parcours E2E
+contre la pile réelle — création avec lecture du **presse-papier**, remplacement
+par la frappe du nom avec la clé réellement changée côté cellule, et Spark
+arrêté qui rend « illisible » sans offrir de créer. Contrat d'API régénéré ;
+manuel M6 et sa capture posés.
+
+**La vérification visuelle a trouvé un défaut que rien d'autre n'a vu**, et c'est
+le cas du §12.3 du design system : la clé publique était affichée dans le même
+conteneur que le fragment `ssh_config`, qui **défile**. Une clé n'a pas de
+lignes — la capture l'a montrée coupée net au bord droit, en 1440 px comme en
+390 px, alors que les 12 preuves de composant étaient vertes : elles cherchaient
+la classe dans la chaîne rendue, pas ce qu'elle peint. Trois des quatre classes
+écrites ne peignaient d'ailleurs **rien**, ce que la preuve `classes.test.js` a
+dit dès qu'elle a été lancée. Corrigé en repliant la clé au lieu de la faire
+défiler, et la règle est écrite : `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-15**.
 
 ---
 

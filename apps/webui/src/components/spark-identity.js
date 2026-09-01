@@ -31,7 +31,10 @@ export const IDENTITE_VIDE = {
  * bouton de copie serait une impasse le jour où il échoue (§1.3).
  */
 function bloc(cle) {
-  return `<pre class="technique bloc-cle" tabindex="0"
+  // `fragment technique` est la MÊME présentation que le fragment ssh_config
+  // voisin (§3.1) ; `bloc-cle` n'ajoute que le repli, parce qu'une clé publique
+  // est un seul jeton très long que le défilement cacherait presque entier.
+  return `<pre class="fragment technique bloc-cle" tabindex="0"
   aria-label="Clé publique du Spark">${echapper(cle)}</pre>`;
 }
 
@@ -47,37 +50,37 @@ export function renderIdentityPanel(spark, ui = IDENTITE_VIDE) {
   const nom = spark?.name ?? '';
   const releve = ui.releve;
   const entete = `<h2>Identité du Spark</h2>
-    <p class="section__aide">Ce que ce Spark <strong>présente</strong> quand il sort —
+    <p class="note">Ce que ce Spark <strong>présente</strong> quand il sort —
     à GitHub par exemple, en clé de déploiement, pour cloner un dépôt privé.
     C’est l’inverse des clés autorisées ci-dessus, qui laissent entrer.
     La clé <strong>privée</strong> reste dans la cellule et n’en sort jamais.</p>`;
 
   if (ui.status === 'chargement' || ui.status === 'vide') {
-    return `<section class="carte bloc" aria-busy="true">${entete}
+    return `<section class="carte bloc identite" aria-busy="true">${entete}
       <p class="absence" role="status">Lecture de l’identité…</p></section>`;
   }
 
   if (ui.status === 'erreur') {
-    return `<section class="carte bloc">${entete}
+    return `<section class="carte bloc identite">${entete}
       <div class="refus" role="alert"><p><strong>${echapper(ui.erreur)}</strong></p></div>
-      <p class="section__actions"><button type="button" class="bouton"
+      <p class="formulaire__actions"><button type="button" class="bouton"
         data-identite-relire>Réessayer</button></p></section>`;
   }
 
   if (releve?.state === 'indisponible') {
     // §14.6 : ce n'est PAS « aucune identité ». Le geste attendu est de démarrer
     // le Spark, pas d'en créer une seconde.
-    return `<section class="carte bloc">${entete}
+    return `<section class="carte bloc identite">${entete}
       <p class="absence" role="status">Identité <strong>illisible</strong> : la cellule
       ne répond pas. Un Spark arrêté ne peut pas montrer sa clé — ce n’est pas la
       preuve qu’il n’en a pas. Démarrez-le pour la lire.</p></section>`;
   }
 
   if (releve?.state === 'absente') {
-    return `<section class="carte bloc">${entete}
+    return `<section class="carte bloc identite">${entete}
       <p class="absence">Aucune identité : ce Spark ne peut pas s’authentifier
       auprès d’un dépôt privé.</p>
-      <p class="section__actions"><button type="button" class="bouton bouton--primaire"
+      <p class="formulaire__actions"><button type="button" class="bouton bouton--primaire"
         data-identite-creer ${ui.busy ? 'disabled' : ''}>${
         ui.busy ? 'Création…' : 'Créer l’identité'}</button></p>
       ${ui.erreur ? `<div class="refus" role="alert"><p><strong>${
@@ -111,13 +114,15 @@ export function renderIdentityPanel(spark, ui = IDENTITE_VIDE) {
        </div>`
     : '';
 
-  return `<section class="carte bloc">${entete}
+  return `<section class="carte bloc identite">${entete}
     ${bloc(releve.public_key)}
-    <dl class="paires">
-      <dt>Empreinte</dt><dd class="technique">${echapper(releve.fingerprint)}</dd>
-      <dt>Dans la cellule</dt><dd class="technique">${echapper(releve.path)}</dd>
+    <dl class="definitions">
+      <div class="def"><dt>Empreinte</dt>
+        <dd class="technique">${echapper(releve.fingerprint)}</dd></div>
+      <div class="def"><dt>Dans la cellule</dt>
+        <dd class="technique">${echapper(releve.path)}</dd></div>
     </dl>
-    <p class="section__actions">
+    <p class="formulaire__actions">
       <button type="button" class="bouton bouton--primaire" data-identite-copie>Copier la clé publique</button>
       <button type="button" class="bouton" data-identite-remplacer>Remplacer…</button>
     </p>
@@ -130,7 +135,7 @@ export function renderIdentityPanel(spark, ui = IDENTITE_VIDE) {
     ${ui.erreur ? `<div class="refus" role="alert"><p><strong>${
       echapper(ui.erreur)}</strong></p></div>` : ''}
     ${remplacement}
-    <p class="section__aide">Ajoutez cette clé au dépôt GitHub concerné, en
+    <p class="note">Ajoutez cette clé au dépôt GitHub concerné, en
     <em>Deploy key</em> — en lecture seule si le Spark n’a qu’à cloner.</p>
   </section>`;
 }

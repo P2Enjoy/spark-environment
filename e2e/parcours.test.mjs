@@ -1158,6 +1158,100 @@ test('révoquer une clé malgré le gel, par la confirmation qui NOMME', async (
   });
 });
 
+// --- SPK-74 · l'identité que le Spark PRÉSENTE (docs/DAT.md §17.5) ----------
+
+test('l’identité se crée d’un bouton, et sa clé publique se copie au presse-papier', async () => {
+  await parcours('identite-creation', async () => {
+    // §29.3 : on y va à la souris, jamais par une URL profonde.
+    await ouvrir('crm-production', 'cles');
+    await page.waitForSelector('#titre-cles', { timeout: 10000 });
+
+    // D'ABORD absente, et l'écran le dit sans le confondre avec « illisible ».
+    await page.waitForSelector('[data-identite-creer]', { timeout: 20000 });
+    const avant = await page.textContent('section.identite');
+    assert.match(avant, /Aucune identité/);
+    assert.ok(!/illisible/.test(avant), '« absente » n’est pas « illisible » (§14.6)');
+
+    await page.click('[data-identite-creer]');
+    await page.waitForSelector('.bloc-cle', { timeout: 20000 });
+
+    const cle = (await page.textContent('.bloc-cle')).trim();
+    assert.match(cle, /^ssh-ed25519 /, 'la clé publique est affichée en entier');
+    assert.ok(!/PRIVATE KEY/i.test(await page.content()),
+      'la clé privée n’atteint JAMAIS l’écran (§17.2)');
+
+    // L'EFFET est constaté sur `sparkd`, jamais supposé depuis l'écran.
+    const { corps } = await pile.lireSparkd('/v1/sparks/crm-production/identity');
+    assert.equal(corps.state, 'presente');
+    assert.equal(corps.public_key, cle, 'l’écran montre ce que la CELLULE porte');
+    assert.match(corps.comment, /^spark:crm-production$/);
+
+    // La copie au presse-papier, par le bouton, et vérifiée dans le presse-papier.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.click('[data-identite-copie]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('copiée dans le presse-papier'),
+      { timeout: 10000 });
+    const colle = await page.evaluate(() => navigator.clipboard.readText());
+    assert.equal(colle, cle, 'c’est bien la clé publique qui est dans le presse-papier');
+  });
+});
+
+test('remplacer une identité exige la FRAPPE DU NOM, et change réellement la clé', async () => {
+  await parcours('identite-remplacement', async () => {
+    await ouvrir('crm-production', 'cles');
+    await page.waitForSelector('.bloc-cle', { timeout: 20000 });
+    const avant = (await page.textContent('.bloc-cle')).trim();
+
+    await page.click('[data-identite-remplacer]');
+    await page.waitForSelector('[data-frappe-identite]', { timeout: 10000 });
+
+    // §9.9 : le bouton est PRÉSENT et désactivé, pas absent — et l'écran dit ce
+    // qui casse avant le geste.
+    assert.equal(await page.isDisabled('[data-identite-remplace]'), true);
+    const consequence = await page.textContent('.confirmation__consequence');
+    assert.match(consequence, /cesse d’être valide/);
+
+    // Un nom approchant ne suffit pas : la comparaison est EXACTE.
+    await page.fill('[data-frappe-identite]', 'crm-production ');
+    assert.equal(await page.isDisabled('[data-identite-remplace]'), true);
+
+    await page.fill('[data-frappe-identite]', 'crm-production');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-identite-remplace]').disabled,
+      { timeout: 10000 });
+    await page.click('[data-identite-remplace]');
+
+    await page.waitForFunction(
+      (ancienne) => {
+        const bloc = document.querySelector('.bloc-cle');
+        return bloc && bloc.textContent.trim() !== ancienne;
+      }, avant, { timeout: 20000 });
+
+    const { corps } = await pile.lireSparkd('/v1/sparks/crm-production/identity');
+    assert.notEqual(corps.public_key, avant, 'la cellule porte une NOUVELLE clé');
+    assert.equal(corps.public_key, (await page.textContent('.bloc-cle')).trim());
+  });
+});
+
+test('un Spark ARRÊTÉ dit son identité illisible, et n’offre pas d’en créer une', async () => {
+  await parcours('identite-spark-arrete', async () => {
+    // « boutique » est arrêté par le seed. §14.6 : « illisible » n'est pas
+    // « aucune » — le geste attendu est de démarrer, pas de créer une seconde
+    // identité, ce qui invaliderait la clé déjà posée chez le tiers.
+    await ouvrir('boutique', 'cles');
+    await page.waitForSelector('#titre-cles', { timeout: 10000 });
+    await page.waitForFunction(
+      () => document.body.innerText.includes('illisible'), { timeout: 20000 });
+
+    const section = await page.textContent('section.identite');
+    assert.ok(!/Aucune identité/.test(section),
+      '« illisible » ne doit jamais se lire « aucune » (§14.6)');
+    assert.equal(await page.locator('[data-identite-creer]').count(), 0,
+      'un Spark arrêté ne propose pas de créer une identité');
+  });
+});
+
 // --- SPK-30 · LA MARGE DE MÉTADONNÉES (§8.8) --------------------------------
 
 test("l’écart entre les tailles vendues et l’alloué du disque est EXPLIQUÉ", async () => {

@@ -458,6 +458,34 @@ Le texte d’aide nomme l’origine réelle de la valeur. Exemples propres au pr
 Ces formulations sont spécifiques à Spark Environment et restent donc dans
 `DESIGN_SYSTEM_APP.md`, jamais dans le socle global.
 
+### SPK-DS-15 · Une valeur technique d'un seul jeton se REPLIE, elle ne défile pas
+
+@spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5
+
+Le §8.2 du socle demande qu'un débordement horizontal défile dans son propre
+conteneur et soit signalé. C'est la bonne règle pour un fragment `ssh_config` :
+il a des lignes, on en lit une, on fait défiler pour la suite.
+
+**Une clé publique SSH n'a pas de lignes.** C'est un seul jeton de plusieurs
+centaines de caractères. Dans un conteneur qui défile, on en voit le début et
+rien d'autre ; il faut faire défiler pour vérifier qu'on copie la bonne, et la
+sélection à la souris devient un geste d'adresse.
+
+**Règle** : une valeur technique constituée d'un jeton unique et long se replie
+— `white-space: pre-wrap` et `overflow-wrap: anywhere` — au lieu de défiler.
+Elle tient alors sous les yeux, se relit d'un coup d'œil et se sélectionne d'un
+geste. Le §8.2 n'a plus rien à signaler puisqu'il n'y a plus de débordement.
+
+Ce qui continue de défiler : ce qui a une structure de lignes, et dont le
+repli casserait l'alignement — fragments de configuration, sorties de commande,
+tableaux.
+
+**Mesuré le 2026-09-01.** La première version affichait la clé dans le même
+conteneur que le fragment `ssh_config`. La capture a montré la clé coupée net au
+bord droit, en 1440 px comme en 390 px ; les preuves de composant, elles, étaient
+vertes — elles cherchaient la classe dans la chaîne rendue, pas ce qu'elle peint.
+C'est le cas du §12.3, et c'est la capture qui l'a trouvé.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

@@ -504,6 +504,18 @@ tbody tr:hover { background: var(--color-hover); }
   font-size: var(--text-compact); line-height: 1.5;
 }
 
+/* SPK-74 · docs/DAT.md §17.5 — l'identité que le Spark PRÉSENTE.
+   Une clé publique est UN seul jeton de plusieurs centaines de caractères. La
+   faire défiler comme un fragment ssh_config la cacherait presque entière, et
+   obligerait à faire défiler pour la relire avant de la coller. On la REPLIE :
+   elle tient alors sous les yeux, se sélectionne d'un geste, et le §8.2 n'a
+   aucun débordement à signaler puisqu'il n'y en a plus.
+   MESURÉ le 2026-09-01 : sans ce repli, la clé était coupée net au bord droit
+   en 1440 px comme en 390 px — la capture l'a montré, pas les preuves. */
+.identite > * + * { margin-top: var(--space-3); }
+.identite dd { min-width: 0; overflow-wrap: anywhere; }
+.bloc-cle { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }
+
 /* SPK-22 · docs/DAT.md §27 — l'écran des pools de l'hôte. */
 .pools { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
 @media (min-width: 768px)  { .pools { grid-template-columns: repeat(2, 1fr); } }

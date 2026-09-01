@@ -36,7 +36,7 @@ test('la section dit le SENS : ce que le Spark présente, pas qui entre', () => 
 
 test('la clé publique et l’empreinte sont en MONOSPACE (§3.1)', () => {
   const rendu = renderIdentityPanel(SPARK, ui({ releve: PRESENTE }));
-  assert.match(rendu, /class="technique bloc-cle"/);
+  assert.match(rendu, /class="fragment technique bloc-cle"/);
   assert.match(rendu, /<dd class="technique">SHA256:/);
   assert.ok(rendu.includes(CLE), 'la clé publique est affichée en entier');
 });
@@ -45,7 +45,7 @@ test('le bloc de clé reste SÉLECTIONNABLE : la copie a un repli', () => {
   // `navigator.clipboard` peut manquer ou être refusée. Sans repli manuel, le
   // bouton serait une impasse le jour où il échoue.
   const rendu = renderIdentityPanel(SPARK, ui({ releve: PRESENTE }));
-  assert.match(rendu, /<pre class="technique bloc-cle" tabindex="0"/);
+  assert.match(rendu, /<pre class="fragment technique bloc-cle" tabindex="0"/);
   assert.match(rendu, /data-identite-copie/);
 });
 

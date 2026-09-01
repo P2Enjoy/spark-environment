@@ -8431,3 +8431,51 @@ fois. Le produit s'arrête où commence le compte du tiers.
 
 Spécification écrite avant toute ligne de code : `docs/DAT.md` §17.5 et l'unité
 SPK-74.
+
+---
+
+## 2026-09-01 · SPK-74 livrée, et ce que seule la capture a vu
+
+Le mécanisme est en place et prouvé : la clé naît dans la cellule, seule la
+partie publique remonte, le presse-papier reçoit bien la clé — vérifié dans le
+presse-papier, pas sur l'écran —, un Spark arrêté rend « illisible », et
+remplacer exige la frappe du nom. 14 preuves serveur, 12 de composant, 3
+parcours E2E contre la pile réelle.
+
+**Puis la vérification visuelle a trouvé ce que 26 preuves vertes ne disaient
+pas.** La clé publique était rendue dans `.fragment`, le conteneur du fragment
+`ssh_config`, qui **défile horizontalement**. C'est la bonne règle pour un
+`ssh_config` : il a des lignes. Une clé publique n'en a pas — c'est un jeton
+unique de plusieurs centaines de caractères. La capture l'a montrée **coupée net
+au bord droit**, en 1440 px comme en 390 px. On voyait le début de la clé et
+rien d'autre.
+
+Deux choses valent d'être notées, parce qu'elles se répètent.
+
+**La première : les preuves de composant étaient vertes.** Elles cherchaient
+`class="… bloc-cle"` dans la chaîne rendue, ce qui prouve qu'on a écrit la
+classe, pas qu'elle peint quoi que ce soit. C'est mot pour mot le cas que le
+§12.3 du design system décrit, et pour lequel `classes.test.js` existe — écrit
+après le même défaut sur `bouton--danger` le 2026-08-20. Lancée, cette preuve a
+dit aussitôt que **trois** des quatre classes que j'avais écrites — `paires`,
+`section__aide`, `section__actions` — n'existaient nulle part dans la feuille de
+style. J'aurais dû la lancer avant de regarder l'écran, et non l'inverse.
+
+**La seconde : j'avais inventé des noms de classes au lieu de lire ceux qui
+existent.** `definitions`/`def`, `note` et `formulaire__actions` étaient déjà là
+et faisaient exactement le travail. Le composant les emploie désormais, et
+n'ajoute que ce qui manquait vraiment : `.identite` et `.bloc-cle`.
+
+**Décision, écrite en règle** : une valeur technique constituée d'un jeton unique
+et long se **replie** au lieu de défiler — elle tient sous les yeux, se relit
+d'un coup d'œil et se sélectionne d'un geste, et le §8.2 n'a plus de débordement
+à signaler. Ce qui a une structure de lignes continue de défiler.
+`docs/DESIGN_SYSTEM_APP.md` **SPK-DS-15**.
+
+**Limite de l'environnement, dite telle quelle** : la campagne E2E complète n'a
+pas été jouée. Le poste n'a pas de compilateur C++, `node-pty` ne se construit
+pas, et `pnpm install` échoue à cette étape ; les parcours ciblés passent parce
+que l'hôte console charge `node-pty` paresseusement et qu'aucun d'eux n'ouvre de
+terminal. Les suites serveur et console sont vertes hors trois preuves d'hôte et
+une de classes, **antérieures** à ce travail et vérifiées telles quelles sur
+l'arbre d'avant.
