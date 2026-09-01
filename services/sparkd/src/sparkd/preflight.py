@@ -421,32 +421,83 @@ def remontee_vers_la_forge(hote: Hote, nom: str | None = None) -> Verdict:
         f"puis marquer l’état : incus network set {nom} user.spark.input_policy=drop")
 
 
-def x11_sans_usage(hote: Hote) -> Verdict:
-    """`X11Forwarding` est ouvert sans que le produit s'en serve (§48.2).
+#: Remède du contrôle SSH-X11. Il nomme le fragment que l'installation écrit
+#: elle-même (`forge_install.phase_foundation`) et non le fichier principal :
+#: une consigne qui contredit l'installateur apprend à se méfier des deux.
+REMEDE_X11 = ("X11Forwarding no dans /etc/ssh/sshd_config.d/90-spark.conf, "
+              "puis systemctl reload ssh")
 
-    @spec docs/BACKLOG.md#SPK-55 · docs/DAT.md §48.2
 
-    AVERTISSEMENT et non échec, et le motif est écrit : ce n'est pas une faille
-    ouverte, c'est une surface qui ne sert à rien. Refuser l'installation d'une
-    Forge pour cela serait disproportionné, et un préflight qui échoue pour un
-    détail apprend à passer outre ses échecs.
+def _x11_effectif(hote: Hote) -> bool | None:
+    """Ce que `sshd` applique VRAIMENT, fragments et préséance compris.
+
+    Rend `None` quand `sshd -T` n'a pas répondu — hôte sans `sshd`, binaire
+    absent du chemin, ou appel sans les droits — pour que l'appelant retombe sur
+    la lecture du fichier plutôt que de conclure sur un silence.
+    """
+    rendu = hote.executer(["sshd", "-T"])
+    if rendu is None:
+        return None
+    valeur: bool | None = None
+    for ligne in rendu.splitlines():
+        mots = ligne.strip().split()
+        if len(mots) >= 2 and mots[0].lower() == "x11forwarding":
+            valeur = mots[1].lower() == "yes"
+    return valeur
+
+
+def _x11_du_fichier(hote: Hote) -> bool | None:
+    """Repli : le seul `/etc/ssh/sshd_config`, sans ses fragments.
+
+    La DERNIÈRE valeur lue fait foi alors que `sshd` retient la première. C'est
+    délibérément plus SÉVÈRE : en repli on signale un fichier ambigu au lieu de
+    le déclarer sain.
     """
     brut = hote.lire("/etc/ssh/sshd_config")
     if brut is None:
-        return Verdict("SSH-X11", "X11Forwarding inutile est désactivé", INCONNU,
-                       "sshd_config illisible", "")
+        return None
     actif = False
     for ligne in brut.splitlines():
         mots = ligne.strip().split()
         if len(mots) >= 2 and mots[0].lower() == "x11forwarding":
             actif = mots[1].lower() == "yes"
+    return actif
+
+
+def x11_sans_usage(hote: Hote) -> Verdict:
+    """`X11Forwarding` est ouvert sans que le produit s'en serve (§48.2).
+
+    @spec docs/BACKLOG.md#SPK-55, docs/BACKLOG.md#SPK-72 · docs/DAT.md §48.2
+
+    AVERTISSEMENT et non échec, et le motif est écrit : ce n'est pas une faille
+    ouverte, c'est une surface qui ne sert à rien. Refuser l'installation d'une
+    Forge pour cela serait disproportionné, et un préflight qui échoue pour un
+    détail apprend à passer outre ses échecs.
+
+    **Le contrôle lit la configuration EFFECTIVE** (SPK-72, corrigé le
+    2026-09-01). Il lisait `/etc/ssh/sshd_config` seul et signalait donc `yes`
+    sur une Forge où `sshd -T` répond `no` : l'installation écrit sa règle dans
+    `/etc/ssh/sshd_config.d/90-spark.conf`, tandis que le fichier principal garde
+    le `X11Forwarding yes` de la distribution. Le contrôle ignorait précisément
+    le fichier que l'installateur pose, et ne pouvait JAMAIS passer au vert sur
+    une Forge correctement installée. Le coût d'un faux positif n'est pas son
+    verdict : c'est qu'un préflight qui ment sur un contrôle apprend à passer
+    outre les treize autres.
+    """
+    actif = _x11_effectif(hote)
+    source = "sshd -T"
+    if actif is None:
+        actif = _x11_du_fichier(hote)
+        source = "/etc/ssh/sshd_config, repli — sshd -T muet"
+    if actif is None:
+        return Verdict("SSH-X11", "X11Forwarding inutile est désactivé", INCONNU,
+                       "ni sshd -T ni sshd_config n’ont répondu", "")
     if actif:
         return Verdict("SSH-X11", "X11Forwarding inutile est désactivé", AVERTISSEMENT,
-                       "X11Forwarding yes — le produit n’ouvre jamais de fenêtre",
-                       "X11Forwarding no dans /etc/ssh/sshd_config, "
-                       "puis systemctl reload ssh")
+                       f"X11Forwarding yes ({source}) — le produit n’ouvre "
+                       "jamais de fenêtre", REMEDE_X11)
     return Verdict("SSH-X11", "X11Forwarding inutile est désactivé", OK,
-                   "désactivé")
+                   f"désactivé ({source})")
 
 
 def sparkd_survit_au_redemarrage(hote: Hote) -> Verdict:

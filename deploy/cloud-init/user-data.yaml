@@ -1,0 +1,29 @@
+#cloud-config
+# Gabarit de `user_data` pour une Forge neuve.
+#
+# @spec docs/BACKLOG.md#SPK-73 · README.md (schema de partitionnement, amorcage)
+#       · docs/AGENT_RUNBOOK.md §A
+#
+# Se fournit a l'hebergeur a la CREATION du serveur, avec le schema de
+# partitionnement du README sous `install.partitioning_schema`. Le schema laisse
+# sda5 et sdb5 nues ; l'amorce les adopte sans jamais les formater.
+#
+# `runcmd` ne s'execute QU'UNE FOIS par instance. Le rejeu de l'amorce ne passe
+# donc pas par cloud-init mais par le script depose :
+#
+#     ssh <compte>@<forge> 'sudo /opt/spark-amorce.sh'
+#
+# Remplacer le contenu de `/opt/spark-amorce.sh` ci-dessous par
+# `deploy/cloud-init/spark-amorce.sh` — il est reproduit tel quel, sans
+# substitution.
+
+write_files:
+  - path: /opt/spark-amorce.sh
+    permissions: '0755'
+    owner: root:root
+    encoding: text/plain
+    content: |
+      # <<< contenu integral de deploy/cloud-init/spark-amorce.sh, indente ici >>>
+
+runcmd:
+  - '/opt/spark-amorce.sh'

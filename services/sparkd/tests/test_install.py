@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from sparkd import install
+from sparkd import cgroup, install
 
 
 def paths(tmp_path: Path) -> install.Paths:
@@ -30,6 +30,42 @@ def test_les_unites_sont_lues_depuis_le_paquet():
     slice_ = install.packaged_unit("spark.slice")
     assert "@SPARKD_PYTHON@ -m sparkd" in service
     assert "CPUWeight=1" in slice_
+
+
+def test_la_tranche_DELEGUE_ses_controleurs_par_Delegate():
+    """@verifies docs/BACKLOG.md#SPK-71 · docs/DAT.md §32.4 ter
+
+    MESURÉ le 2026-09-01 sur la Forge réinstallée : sans cette ligne, le
+    `cgroup.subtree_control` de la tranche reste VIDE, les limites d'Incus ne
+    s'appliquent pas dedans, et la réservation redevient proportionnelle en
+    silence. `RUN-SLICE` rougit et `cloud-init` échoue en fin d'installation.
+
+    Les trois contrôleurs de `cgroup.REQUIRED_CONTROLLERS` doivent y être : ce
+    sont ceux sans lesquels le quota n'est pas applique.
+    """
+    slice_ = install.packaged_unit("spark.slice")
+    ligne = [l for l in slice_.splitlines() if l.startswith("Delegate=")]
+    assert len(ligne) == 1, "une seule directive Delegate=, sinon la derniere gagne"
+    delegues = ligne[0].split("=", 1)[1].split()
+    for controleur in cgroup.REQUIRED_CONTROLLERS:
+        assert controleur in delegues, f"{controleur} doit etre delegue a la tranche"
+    assert "io" in delegues and "pids" in delegues
+
+
+def test_la_tranche_ne_s_appuie_plus_sur_un_Accounting_retire():
+    """@verifies docs/BACKLOG.md#SPK-71 · docs/DAT.md §32.4 ter
+
+    `CPUAccounting=` a été RETIRÉ de systemd 259, qui le journalise et l'ignore.
+    Les deux autres n'ont jamais peuplé le `subtree_control` de la tranche —
+    un `…Accounting=` active le contrôleur chez le PARENT. Les garder
+    entretiendrait la croyance qui a produit le défaut, donc on prouve leur
+    absence plutôt que de la constater un jour de panne.
+    """
+    slice_ = install.packaged_unit("spark.slice")
+    directives = [l.split("=", 1)[0] for l in slice_.splitlines()
+                  if l and not l.startswith("#") and "=" in l]
+    for retiree in ("CPUAccounting", "MemoryAccounting", "IOAccounting"):
+        assert retiree not in directives, f"{retiree}= ne delegue rien a la tranche"
 
 
 def test_le_chemin_du_venv_n_est_pas_resolu_vers_le_python_systeme(monkeypatch):

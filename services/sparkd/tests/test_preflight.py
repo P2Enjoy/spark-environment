@@ -430,35 +430,69 @@ def test_un_reseau_ILLISIBLE_ne_conclut_a_rien():
     assert not verdict.bloquant
 
 
+#: Relevé RÉEL de `sshd -T` sur la Forge, le 2026-09-01. C'est ce relevé qui a
+#: montré que le contrôle SSH-X11 mentait : le fichier principal porte encore
+#: `X11Forwarding yes`, et `sshd` applique pourtant `no`.
+SSHD_T_FORGE = "permitrootlogin no\nx11forwarding no\nx11displayoffset 10\n"
+
+
 def test_X11_ouvert_est_SIGNALE_sans_bloquer():
     """§48.2 : ce n'est pas une faille ouverte, c'est une surface qui ne sert à
     rien. Un préflight qui échoue pour un détail apprend à passer outre ses
     échecs."""
     verdict = preflight.x11_sans_usage(
-        hote(fichiers={"/etc/ssh/sshd_config": "X11Forwarding yes\nPermitRootLogin no\n"}))
+        hote(commandes={"sshd -T": "x11forwarding yes\npermitrootlogin no\n"}))
     assert verdict.etat == preflight.AVERTISSEMENT
     assert not verdict.bloquant, "un avertissement ne refuse pas une installation"
     assert "X11Forwarding no" in verdict.remede
 
 
+def test_la_configuration_EFFECTIVE_fait_foi_contre_le_fichier():
+    """@verifies docs/BACKLOG.md#SPK-72 · docs/DAT.md §48.2
+
+    LE CAS RÉEL DE LA FORGE, relevé le 2026-09-01. `phase_foundation` écrit sa
+    règle dans `/etc/ssh/sshd_config.d/90-spark.conf` ; le fichier principal
+    garde le `X11Forwarding yes` de la distribution. L'ancien contrôle lisait ce
+    seul fichier et ne pouvait donc JAMAIS passer au vert sur une Forge
+    correctement installée.
+    """
+    verdict = preflight.x11_sans_usage(hote(
+        commandes={"sshd -T": SSHD_T_FORGE},
+        fichiers={"/etc/ssh/sshd_config": "X11Forwarding yes\n"}))
+    assert verdict.etat == OK, verdict.releve
+    assert "sshd -T" in verdict.releve, "le relevé doit nommer la source qui a parlé"
+
+
 def test_X11_ferme_ou_absent_est_OK():
-    # Absent du fichier : le défaut d'OpenSSH est « yes », mais le produit ne
+    # Absent du relevé : le défaut d'OpenSSH est « yes », mais le produit ne
     # conclut que sur ce qu'il LIT — deviner ferait signaler des Forges saines.
     for contenu in ("X11Forwarding no\n", "PermitRootLogin no\n"):
         verdict = preflight.x11_sans_usage(hote(fichiers={"/etc/ssh/sshd_config": contenu}))
         assert verdict.etat == OK, contenu
 
 
-def test_la_DERNIERE_valeur_lue_fait_foi():
-    # `sshd` retient la PREMIÈRE ; ce contrôle retient la dernière, ce qui est
-    # plus SÉVÈRE et donc plus sûr : il signale un fichier ambigu au lieu de le
+def test_le_fichier_sert_de_REPLI_quand_sshd_ne_repond_pas():
+    """@verifies docs/BACKLOG.md#SPK-72
+
+    Un hôte sans `sshd` invocable — ou un préflight lancé sans les droits — ne
+    doit pas perdre le contrôle : il retombe sur le fichier, et le DIT.
+    """
+    verdict = preflight.x11_sans_usage(
+        hote(fichiers={"/etc/ssh/sshd_config": "X11Forwarding yes\n"}))
+    assert verdict.etat == preflight.AVERTISSEMENT
+    assert "repli" in verdict.releve, "le relevé doit avouer qu'il n'a pas lu l'effectif"
+
+
+def test_la_DERNIERE_valeur_lue_fait_foi_EN_REPLI():
+    # `sshd` retient la PREMIÈRE ; le repli retient la dernière, ce qui est plus
+    # SÉVÈRE et donc plus sûr : il signale un fichier ambigu au lieu de le
     # déclarer sain. Écrit ici pour que l'écart soit vu, pas découvert.
     verdict = preflight.x11_sans_usage(
         hote(fichiers={"/etc/ssh/sshd_config": "X11Forwarding no\nX11Forwarding yes\n"}))
     assert verdict.etat == preflight.AVERTISSEMENT
 
 
-def test_un_sshd_config_illisible_ne_conclut_a_rien():
+def test_aucune_source_lisible_ne_conclut_a_rien():
     verdict = preflight.x11_sans_usage(hote())
     assert verdict.etat == INCONNU
     assert not verdict.bloquant

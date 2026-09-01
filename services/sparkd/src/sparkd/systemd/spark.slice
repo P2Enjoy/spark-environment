@@ -1,6 +1,9 @@
 # Tranche cgroup parente des cellules Spark.
 #
-# @spec docs/BACKLOG.md#SPK-66 · docs/DAT.md §32.4
+# @spec docs/BACKLOG.md#SPK-66, docs/BACKLOG.md#SPK-29, docs/BACKLOG.md#SPK-71
+#       · docs/DAT.md §32.4 (la tranche survit au redémarrage), §32.4 bis (le
+#       poids se pose PAR systemd), §32.4 ter (la délégation se pose PAR
+#       Delegate=)
 
 [Unit]
 Description=Tranche des cellules Spark
@@ -11,6 +14,19 @@ Before=incus.service
 # `sparkd` recalcule ce poids à chaque changement d'allocation : il doit valoir
 # ce que les Sparks ont acheté. Cette valeur n'est qu'un point de départ.
 CPUWeight=1
-CPUAccounting=yes
-MemoryAccounting=yes
-IOAccounting=yes
+
+# Sans ces contrôleurs délégués, les limites posées par Incus ne s'appliquent
+# pas DANS la tranche : la réservation redevient proportionnelle, en silence.
+#
+# MESURÉ le 2026-09-01 (§32.4 ter). L'unité s'en remettait auparavant à
+# CPUAccounting= / MemoryAccounting= / IOAccounting=, et c'était faux deux fois :
+# systemd 259 a RETIRÉ CPUAccounting=, et aucune des trois n'a jamais peuplé le
+# cgroup.subtree_control de la tranche — un ...Accounting= active le contrôleur
+# chez le PARENT, pour que la tranche soit mesurée. Résultat : subtree_control
+# vide, RUN-SLICE rouge, et cloud-init en échec.
+#
+# Delegate= est le mécanisme qui répond vraiment à ce besoin :
+# systemd.resource-control(5) — « Setting Delegate= enables any delegated
+# controllers for that unit » — et systemd cesse alors de manipuler l'arbre sous
+# la tranche au lieu de le vider à chaque réconciliation.
+Delegate=cpu cpuset io memory pids

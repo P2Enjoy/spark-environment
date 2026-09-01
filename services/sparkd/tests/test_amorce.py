@@ -1,0 +1,108 @@
+"""Preuves de l'amorce cloud-init d'une Forge.
+
+@verifies docs/BACKLOG.md#SPK-73 · docs/DAT.md §50.4-§50.6 (l'executeur ferme),
+          §8.2 (le pool livre par le schema JSON s'adopte) · README.md (rejeu de
+          l'amorce)
+
+Le script vivait auparavant SEULEMENT sur la machine, produit par le `user_data`
+du serveur : ni versionne, ni relisible en revue, ni testable. Ces preuves
+existent pour qu'il ne puisse plus repartir a la derive sans qu'on le voie.
+"""
+
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+RACINE = Path(__file__).resolve().parents[3]
+AMORCE = RACINE / "deploy" / "cloud-init" / "spark-amorce.sh"
+
+
+def source() -> str:
+    return AMORCE.read_text(encoding="utf-8")
+
+
+def code() -> str:
+    """Le script SANS ses commentaires : ce que la machine execute vraiment.
+
+    Les commentaires citent legitimement des chemins que le script ne doit pas
+    toucher — dire « on ne touche jamais spark.db » est precisement ce qu'on
+    veut lire. Les confondre avec du code ferait echouer la preuve sur sa propre
+    documentation.
+    """
+    return "\n".join(l for l in source().splitlines()
+                      if not l.lstrip().startswith("#"))
+
+
+def test_l_amorce_est_versionnee_et_executable():
+    assert AMORCE.is_file(), "l'amorce doit vivre au depot, pas seulement sur la Forge"
+    assert source().startswith("#!/bin/sh"), "interprete explicite"
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="aucun sh sur cet hote")
+def test_l_amorce_passe_le_VRAI_parseur_sh():
+    """Un releve positif ne doit pas pouvoir coexister avec un script casse.
+
+    Relire un shell a l'oeil laisse passer exactement ce qui casse a 3 h du
+    matin sur une machine neuve, quand plus personne ne peut la reparer.
+    """
+    rendu = subprocess.run(["sh", "-n", str(AMORCE)], capture_output=True, text=True)
+    assert rendu.returncode == 0, rendu.stderr
+
+
+def test_l_amorce_ADOPTE_le_pool_et_ne_le_formate_jamais():
+    """Le pool est livre par le schema de partitionnement (§8.2).
+
+    Le creer ou le formater detruirait les Sparks d'une Forge en service : c'est
+    precisement ce qu'un rejeu ne doit JAMAIS faire.
+    """
+    texte = code()
+    assert "zpool import" in texte, "le pool s'importe s'il n'est pas monte"
+    assert '"kind": "reuse"' in texte
+    assert '"destructive": False' in texte
+    for destructeur in ("zpool create", "mkfs", "sgdisk", "wipefs", "parted",
+                        "zpool destroy", "zpool labelclear"):
+        assert destructeur not in texte, f"l'amorce ne doit jamais appeler {destructeur}"
+
+
+def test_l_amorce_est_IDEMPOTENTE_sur_chacun_de_ses_gestes():
+    """Chaque pose couteuse est gardee : SPK-73 en fait un contrat.
+
+    Sans ces gardes, un rejeu recreerait un venv, reimporterait un pool deja
+    monte, ou redemanderait a Incus un stockage qu'il connait deja.
+    """
+    texte = source()
+    assert re.search(r'zpool list "\$POOL" >/dev/null 2>&1 \|\| zpool import', texte)
+    assert re.search(r'incus storage show "\$POOL" >/dev/null 2>&1 \\\n\s*\|\| incus storage create', texte)
+    assert re.search(r'\[ -x /opt/sparkd/venv/bin/python \] \|\| python3 -m venv', texte)
+
+
+def test_l_amorce_ne_touche_JAMAIS_le_registre_des_Sparks():
+    """Le rejeu remet l'installation d'aplomb, pas le registre.
+
+    `spark.db` porte les Sparks declares. Un amorcage qui l'effacerait
+    transformerait une reparation en perte de production.
+    """
+    texte = code()
+    assert "spark.db" not in texte
+    assert "/var/lib/sparkd" not in texte
+
+
+def test_l_empreinte_du_depot_amont_est_VERIFIEE_avant_confiance():
+    """Incus vient d'un depot tiers : la cle se verifie, elle ne se suppose pas."""
+    texte = source()
+    assert "4EFC590696CB15B87C73A3AD82CC8797C838DCFD" in texte
+    empreinte = texte.index("4EFC590696CB15B87C73A3AD82CC8797C838DCFD")
+    installation = texte.index("apt-get install -y incus")
+    assert empreinte < installation, "verifier APRES avoir installe ne verifie rien"
+
+
+def test_le_gabarit_cloud_init_depose_le_script_et_l_appelle():
+    gabarit = (RACINE / "deploy" / "cloud-init" / "user-data.yaml").read_text(encoding="utf-8")
+    assert gabarit.startswith("#cloud-config")
+    assert "/opt/spark-amorce.sh" in gabarit
+    assert "runcmd:" in gabarit
