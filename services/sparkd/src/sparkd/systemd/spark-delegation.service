@@ -1,0 +1,67 @@
+# Maintient la délégation des contrôleurs cgroup à `spark.slice`.
+#
+# @spec docs/BACKLOG.md#SPK-71, docs/BACKLOG.md#SPK-29 · docs/DAT.md §32.4 ter
+#
+# CETTE UNITÉ N'EXISTE QUE POUR SON CGROUP. Elle ne rend aucun service, et son
+# processus ne fait rien — c'est délibéré, et c'est le seul mécanisme que
+# systemd offre ici.
+#
+# MESURÉ le 2026-09-01 sur la Forge. systemd n'active un contrôleur dans le
+# `cgroup.subtree_control` d'une tranche que si une UNITÉ SOUS ELLE le réclame,
+# et il efface le fichier à chaque réconciliation sinon :
+#
+#   écriture directe  -> cpuset cpu io memory pids
+#   daemon-reload     -> (vide)
+#
+# `Delegate=` posé sur la tranche elle-même ne sert à RIEN : la délégation n'est
+# honorée que pour les unités de service et de portée, jamais pour une tranche
+# (`systemctl show spark.slice -p Delegate` rend `no` même quand l'unité le
+# porte). Posé sur une unité PLACÉE DANS la tranche, il fait exactement ce qu'il
+# faut — systemd.resource-control(5) : « any controllers that are delegated will
+# be enabled for the parent and sibling units of the unit with delegation ».
+#
+# Vérifié sur la Forge : la tranche garde `cpuset cpu io memory pids` après
+# `daemon-reload` ET après redémarrage de `sparkd` ; retirer cette unité vide le
+# fichier aussitôt.
+#
+# Les Sparks ne sont pas des unités systemd — Incus les place par
+# `lxc.cgroup.dir.container` — donc systemd n'apprendra jamais leur existence.
+# Sans cette unité, rien ne réclame les contrôleurs et la réservation redevient
+# proportionnelle EN SILENCE (§32.4).
+
+[Unit]
+Description=Délégation des contrôleurs cgroup de la tranche Spark
+Documentation=https://github.com/P2Enjoy/spark-environment
+Before=incus.service
+RequiresMountsFor=/sys/fs/cgroup
+
+[Service]
+Slice=spark.slice
+Type=exec
+ExecStart=/bin/sleep infinity
+Restart=always
+RestartSec=1s
+
+# Ce que systemd doit déléguer, et donc activer chez le parent. La liste vaut
+# celle de `cgroup.REQUIRED_CONTROLLERS`, plus `io` et `pids`.
+Delegate=cpu cpuset io memory pids
+
+# Le processus ne s'exécute jamais, mais s'il le faisait il ne doit rien peser
+# dans l'arbitrage des Sparks (§32.2).
+CPUWeight=1
+MemoryMax=16M
+TasksMax=8
+
+# Il ne lit rien, n'écrit rien et ne parle à personne.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

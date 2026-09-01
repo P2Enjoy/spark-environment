@@ -8206,7 +8206,8 @@ empêcher. Aucun locataire n'est lésé aujourd'hui — la Forge porte **zéro S
    manipulating control groups* » sous une unité déléguée. C'est le mécanisme
    dont Incus et Docker dépendent déjà.
 
-**Décision.** `spark.slice` porte `Delegate=cpu cpuset io memory pids`.
+**Décision — INFIRMÉE le jour même par la mesure ; lire l'entrée suivante.**
+`spark.slice` porte `Delegate=cpu cpuset io memory pids`.
 `CPUAccounting=` est retiré — l'option n'existe plus et la comptabilité CPU est
 désormais toujours active. `MemoryAccounting=` et `IOAccounting=` sont retirés
 aussi : ils n'ont jamais peuplé le `subtree_control` de la tranche, seulement
@@ -8240,3 +8241,81 @@ réinitialise donc pas les Sparks existants**. Ce qui manquait est la procédure
 seule : aucun écrit sur la Forge. Les preuves d'application du correctif —
 `subtree_control` peuplé, survivant à `daemon-reload`, et préflight
 intégralement vert — sont consignées à l'entrée suivante, après déploiement.
+
+
+---
+
+## 2026-09-01 · `Delegate=` sur une tranche ne fait rien : la mesure corrige la correction
+
+**Problème.** Le correctif décidé à l'entrée précédente a été déployé sur la
+Forge par le chemin réel du produit — paquet pip depuis `main`, puis
+`sparkd.forge_install`. Les six phases sont passées, `SSH-X11` est devenu vert…
+et `RUN-SLICE` est resté rouge, à l'identique.
+
+**Observation qui tranche.** L'unité posée porte bien la directive, et systemd
+n'en tient aucun compte :
+
+```
+/etc/systemd/system/spark.slice        → Delegate=cpu cpuset io memory pids
+systemctl show spark.slice -p Delegate → Delegate=no
+cgroup.subtree_control                 → (vide)
+```
+
+Aucun avertissement au journal, contrairement à `CPUAccounting=`. La directive
+est acceptée en silence et ignorée : **`Delegate=` n'est honoré que pour les
+unités de service et de portée, jamais pour une tranche.** J'avais lu la phrase
+du manuel — « *Setting Delegate= enables any delegated controllers for that
+unit* » — sans vérifier à quels types d'unités elle s'applique. Elle est vraie,
+et elle ne s'appliquait pas ici.
+
+**Ce que la mesure a établi ensuite.** D'abord que systemd est bien le coupable,
+et pas une écriture qui échoue :
+
+```
+écriture directe de +cpu +cpuset +memory +io +pids → cpuset cpu io memory pids
+daemon-reload                                      → (vide)
+restart sparkd                                     → (vide)
+```
+
+Puis le mécanisme réel, qui est dans la phrase SUIVANTE du même manuel — « *any
+controllers that are delegated will be enabled for the parent and sibling units
+of the unit with delegation* ». Ce n'est donc pas la tranche qu'il faut
+déléguer, mais une unité **placée dans** la tranche :
+
+```
+unité déléguée démarrée dans spark.slice → cpuset cpu io memory pids
+après daemon-reload                      → cpuset cpu io memory pids
+après restart de sparkd                  → cpuset cpu io memory pids
+unité arrêtée                            → (vide)
+```
+
+C'est l'arrêt qui vide le fichier qui établit la causalité, et pas seulement la
+corrélation. Sans lui, j'aurais pu attribuer le succès au `daemon-reload`.
+
+**Décision.** Le paquet pose `spark-delegation.service` : `Slice=spark.slice`,
+`Delegate=cpu cpuset io memory pids`, `ExecStart=/bin/sleep infinity`,
+`Restart=always`, activée au démarrage. Elle ne rend aucun service — elle
+n'existe que pour son cgroup, et c'est écrit en tête de l'unité. Un processus
+**vivant** est nécessaire : un cgroup sans tâche disparaît, et avec lui la raison
+qu'a systemd d'activer les contrôleurs chez le parent. `CPUWeight=1`,
+`MemoryMax=16M`, `TasksMax=8`, et tout le durcissement possible puisqu'elle ne
+lit ni n'écrit rien.
+
+**Conséquence qui change la portée du défaut.** Les Sparks ne sont pas des
+unités systemd — Incus les place par `lxc.cgroup.dir.container`. Aucune unité
+n'a donc **jamais** réclamé ces contrôleurs, y compris sur une Forge pleine. Le
+défaut n'attendait pas une machine vide : une Forge en production l'aurait subi
+au premier `daemon-reload`, sur des Sparks vivants, sans rien afficher. Ce que la
+réinstallation a changé, c'est seulement qu'il est devenu visible tout de suite.
+
+**Le contrôle est renforcé en conséquence.** `RUN-SLICE` exigeait les
+contrôleurs ; il exige désormais aussi l'unité qui les maintient. Vert sur le
+seul relevé du fichier serait vert à l'instant du contrôle et faux une minute
+plus tard — pire que rouge, parce qu'on ne chercherait plus la panne.
+
+**Leçon, et c'est la troisième fois sur la même tranche.** §32.4 bis : le poids
+écrit à la main est écrasé par systemd. §32.4 ter, premier temps : l'accounting
+ne délègue rien. §32.4 ter, second temps : `Delegate=` sur une tranche est
+ignoré. Trois fois, le produit a cru configurer un cgroup que systemd
+possède. La vérification qui compte n'est jamais « la valeur est posée » mais
+« la valeur est **encore** posée après une réconciliation ».

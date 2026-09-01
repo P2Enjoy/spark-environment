@@ -3672,18 +3672,69 @@ tient plus, et le journal d'installation le montre à la seconde près : phase
 `Delegate=no` et zéro unité fille donnent à systemd toutes les raisons de vider
 le fichier.
 
-**Décision : l'unité porte `Delegate=cpu cpuset io memory pids`**, et les trois
-`…Accounting=` sont retirés — l'un n'existe plus, les deux autres
-entretiendraient la croyance qui a produit le défaut.
-`systemd.resource-control(5)` sur cette machine : « *Setting Delegate= enables
-any delegated controllers for that unit* », et systemd « *refrains from
-manipulating control groups* » sous une unité déléguée. C'est le mécanisme dont
-Incus et Docker dépendent déjà.
+**Première décision, ESSAYÉE PUIS INFIRMÉE PAR LA MESURE le 2026-09-01 :**
+poser `Delegate=cpu cpuset io memory pids` sur `spark.slice`. Déployée sur la
+Forge, elle n'a rien changé :
+
+```
+/etc/systemd/system/spark.slice     → Delegate=cpu cpuset io memory pids
+systemctl show spark.slice -p Delegate → Delegate=no
+subtree_control                     → (vide)
+```
+
+**`Delegate=` est ignoré sur une tranche.** La délégation n'est honorée que pour
+les unités de service et de portée. La phrase du manuel — « *Setting Delegate=
+enables any delegated controllers for that unit* » — est vraie, mais elle ne
+s'applique pas aux tranches, et rien dans le journal ne le signale : la
+directive est acceptée en silence. C'est le troisième piège de la même famille,
+après le poids écrasé et l'accounting qui ne délègue rien.
+
+**Le mécanisme réel est dans la phrase suivante du même manuel** : « *any
+controllers that are delegated will be enabled for the parent and sibling units
+of the unit with delegation* ». Ce n'est donc pas la tranche qu'il faut
+déléguer, mais **une unité placée DANS la tranche**. Mesuré sur la Forge :
+
+```
+unité déléguée démarrée dans spark.slice → cpuset cpu io memory pids
+après daemon-reload                      → cpuset cpu io memory pids
+après restart de sparkd                  → cpuset cpu io memory pids
+unité arrêtée                            → (vide)
+```
+
+L'arrêt qui vide le fichier est ce qui établit la causalité, et pas seulement la
+corrélation.
+
+**Décision : le paquet pose `spark-delegation.service`**, une unité
+`Slice=spark.slice` portant `Delegate=cpu cpuset io memory pids`. Elle ne rend
+aucun service : elle n'existe que pour son cgroup, et son processus
+(`sleep infinity`) ne fait rien. Un processus **vivant** est nécessaire — un
+cgroup sans tâche disparaît, et avec lui la raison qu'a systemd d'activer les
+contrôleurs chez le parent. Elle est `enable`d, donc la tranche retrouve ses
+contrôleurs après un redémarrage (§32.4). `CPUWeight=1`, `MemoryMax=16M` et
+`TasksMax=8` la rendent négligeable dans l'arbitrage du §32.2, et elle ne
+consomme de toute façon jamais de CPU.
+
+Les trois `…Accounting=` sont retirés de la tranche — l'un n'existe plus, les
+deux autres entretiendraient la croyance qui a produit le défaut — et
+`Delegate=` n'y est **pas** posé, avec le motif écrit dans l'unité pour que
+personne ne le rajoute en croyant faire mieux.
+
+**Pourquoi aucune unité systemd ne réclamait ces contrôleurs.** Les Sparks n'en
+sont pas : Incus les place par `lxc.cgroup.dir.container` (§32.1), donc systemd
+n'apprend jamais leur existence. La tranche pouvait ainsi héberger des Sparks
+sans qu'aucune unité ne justifie un seul contrôleur. Le défaut n'attendait pas
+une Forge vide pour se produire — une Forge pleine l'aurait subi au premier
+`daemon-reload`, en silence, sur des Sparks en production.
 
 L'écriture directe de `install.py` et la réaffirmation par
-`cgroup.ensure_delegation()` **restent en repli** : elles couvrent un systemd
-qui ignorerait `Delegate=` sur une tranche, et ne coûtent rien quand la
-délégation tient.
+`cgroup.ensure_delegation()` **restent en repli**, et ne sont plus que cela :
+elles tiennent jusqu'à la prochaine réconciliation, ce qui suffit à un hôte où
+l'unité déléguée n'a pas pu démarrer, et ne suffit à rien d'autre.
+
+**Le préflight contrôle les deux.** `RUN-SLICE` exige les contrôleurs présents
+ET `spark-delegation.service` activée. Vert sur le seul relevé du fichier serait
+vert à l'instant du contrôle et faux une minute plus tard : pire que rouge,
+parce qu'on ne chercherait plus la panne.
 
 **Conséquence sur la vérification, identique au §32.4 bis** : constater les
 contrôleurs juste après les avoir écrits ne prouve rien. Le contrôle qui compte

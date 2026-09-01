@@ -32,24 +32,45 @@ def test_les_unites_sont_lues_depuis_le_paquet():
     assert "CPUWeight=1" in slice_
 
 
-def test_la_tranche_DELEGUE_ses_controleurs_par_Delegate():
+def test_une_unite_DELEGUEE_placee_DANS_la_tranche_maintient_les_controleurs():
     """@verifies docs/BACKLOG.md#SPK-71 · docs/DAT.md §32.4 ter
 
-    MESURÉ le 2026-09-01 sur la Forge réinstallée : sans cette ligne, le
-    `cgroup.subtree_control` de la tranche reste VIDE, les limites d'Incus ne
-    s'appliquent pas dedans, et la réservation redevient proportionnelle en
-    silence. `RUN-SLICE` rougit et `cloud-init` échoue en fin d'installation.
+    MESURÉ le 2026-09-01 sur la Forge réinstallée :
 
-    Les trois contrôleurs de `cgroup.REQUIRED_CONTROLLERS` doivent y être : ce
-    sont ceux sans lesquels le quota n'est pas applique.
+        écriture directe -> cpuset cpu io memory pids
+        daemon-reload    -> (vide)
+
+    systemd n'active un contrôleur dans le `subtree_control` d'une tranche que
+    si une UNITÉ SOUS ELLE le réclame. Les Sparks ne sont pas des unités systemd
+    — Incus les place par `lxc.cgroup.dir.container` — donc sans cette unité
+    déléguée, rien ne réclame jamais rien : les limites ne s'appliquent pas dans
+    la tranche et la réservation redevient proportionnelle EN SILENCE.
     """
-    slice_ = install.packaged_unit("spark.slice")
-    ligne = [l for l in slice_.splitlines() if l.startswith("Delegate=")]
+    unite = install.packaged_unit(install.DELEGATION_UNIT)
+    assert "Slice=spark.slice" in unite, "sans quoi elle ne delegue pas au bon parent"
+    ligne = [l for l in unite.splitlines() if l.startswith("Delegate=")]
     assert len(ligne) == 1, "une seule directive Delegate=, sinon la derniere gagne"
     delegues = ligne[0].split("=", 1)[1].split()
     for controleur in cgroup.REQUIRED_CONTROLLERS:
-        assert controleur in delegues, f"{controleur} doit etre delegue a la tranche"
+        assert controleur in delegues, f"{controleur} doit etre delegue"
     assert "io" in delegues and "pids" in delegues
+    # Un processus VIVANT est necessaire : un cgroup sans tache disparait, et
+    # avec lui la raison qu'a systemd d'activer les controleurs chez le parent.
+    assert "ExecStart=" in unite and "Restart=always" in unite
+
+
+def test_la_tranche_ne_porte_PAS_de_Delegate_qui_serait_ignore():
+    """@verifies docs/BACKLOG.md#SPK-71 · docs/DAT.md §32.4 ter
+
+    MESURÉ : `Delegate=` sur une tranche est ignore — la delegation n'est
+    honoree que pour les unites de service et de portee. Sur la Forge,
+    `systemctl show spark.slice -p Delegate` rendait `no` alors que l'unite
+    portait la directive. La laisser ferait croire le probleme resolu.
+    """
+    slice_ = install.packaged_unit("spark.slice")
+    directives = [l.split("=", 1)[0] for l in slice_.splitlines()
+                  if l and not l.startswith("#") and "=" in l]
+    assert "Delegate" not in directives
 
 
 def test_la_tranche_ne_s_appuie_plus_sur_un_Accounting_retire():
@@ -94,9 +115,14 @@ def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_
     service = (cible.systemd / "sparkd.service").read_text(encoding="utf-8")
     assert f"ExecStart={cible.python} -m sparkd" in service
     assert (cible.systemd / "spark.slice").is_file()
+    assert (cible.systemd / install.DELEGATION_UNIT).is_file()
     assert commandes == [
         ["systemctl", "daemon-reload"],
         ["systemctl", "start", "spark.slice"],
+        # `enable` autant que `restart` : la tranche doit retrouver ses
+        # controleurs apres un redemarrage (docs/DAT.md §32.4).
+        ["systemctl", "enable", install.DELEGATION_UNIT],
+        ["systemctl", "restart", install.DELEGATION_UNIT],
         ["systemctl", "enable", "sparkd"],
         ["systemctl", "restart", "sparkd"],
     ]
@@ -124,7 +150,12 @@ def test_no_start_ne_fait_pas_passer_une_forge_incomplete_pour_prete(tmp_path):
 
     install.install(cible, runner=commandes.append, healthcheck=lambda: False,
                     preflight=preflight, uid=0, sleep=lambda _: None, start=False)
-    assert commandes == [["systemctl", "daemon-reload"], ["systemctl", "start", "spark.slice"]]
+    assert commandes == [
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "start", "spark.slice"],
+        ["systemctl", "enable", install.DELEGATION_UNIT],
+        ["systemctl", "restart", install.DELEGATION_UNIT],
+    ]
     assert called is False
 
 

@@ -523,33 +523,57 @@ def sparkd_survit_au_redemarrage(hote: Hote) -> Verdict:
                    "Poser l'unité systemd : scripts/install-serveur.sh")
 
 
+#: Ce qui FAIT TENIR la delegation (docs/DAT.md §32.4 ter). Nomme ici pour que
+#: le remede du preflight designe le vrai mecanisme, et non l'ecriture directe
+#: qu'un `daemon-reload` defait aussitot.
+UNITE_DELEGATION = "spark-delegation.service"
+
+REMEDE_DELEGATION = (f"systemctl enable --now {UNITE_DELEGATION} — l'ecriture "
+                     "directe dans cgroup.subtree_control est defaite au premier "
+                     "daemon-reload (mesure).")
+
+
 def tranche_des_sparks(hote: Hote) -> Verdict:
-    """docs/DAT.md §32.4 — sans elle, la reservation redevient proportionnelle.
+    """docs/DAT.md §32.4, §32.4 ter — sinon la reservation redevient proportionnelle.
 
     Le piege est qu'une tranche absente ne casse RIEN de visible : les Sparks
     demarrent, tournent, et leur reservation cesse simplement d'etre absolue.
     C'est pourquoi elle se controle plutot que de se constater a l'usage.
+
+    Le controle regarde DEUX choses, et il le faut : les controleurs presents
+    maintenant, et ce qui les y maintiendra. MESURE le 2026-09-01 — des
+    controleurs ecrits a la main disparaissent au premier `daemon-reload`. Une
+    tranche verte sur le seul relevé du fichier serait donc verte a l'instant du
+    controle et fausse une minute plus tard, ce qui est pire que rouge.
     """
     etat = hote.executer(["systemctl", "is-enabled", "spark.slice"])
+    delegation = hote.executer(["systemctl", "is-enabled", UNITE_DELEGATION])
     controleurs = hote.lire("/sys/fs/cgroup/spark.slice/cgroup.subtree_control")
     if controleurs is None:
         return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
                        "/sys/fs/cgroup/spark.slice absente",
-                       "Poser l'unite : scripts/install-serveur.sh")
+                       "Poser les unites : python -m sparkd.install")
     manquants = [c for c in ("cpu", "cpuset", "memory") if c not in controleurs.split()]
     if manquants:
         return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
-                       f"controleurs delegues : {controleurs.strip()!r}",
+                       f"controleurs delegues : {controleurs.strip()!r} — "
+                       f"manque {' '.join(manquants)}",
                        "Les limites ne s'appliquent pas dans la tranche. "
-                       f"echo '+{" +".join(manquants)}' > "
-                       "/sys/fs/cgroup/spark.slice/cgroup.subtree_control")
+                       + REMEDE_DELEGATION)
     if etat not in ("enabled", "static", "enabled-runtime"):
         return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
                        f"presente mais is-enabled = {etat or 'absent'}",
                        "Creee a la main, elle disparait au redemarrage et la "
                        "reservation redevient proportionnelle en silence.")
+    if delegation not in ("enabled", "static", "enabled-runtime"):
+        return Verdict("RUN-SLICE", "Tranche parente des Sparks", ECHEC,
+                       f"controleurs {controleurs.strip()}, mais "
+                       f"{UNITE_DELEGATION} est {delegation or 'absente'} : "
+                       "rien ne les maintiendra",
+                       REMEDE_DELEGATION)
     return Verdict("RUN-SLICE", "Tranche parente des Sparks", OK,
-                   f"presente, controleurs {controleurs.strip()}, {etat}")
+                   f"presente, controleurs {controleurs.strip()}, {etat}, "
+                   f"delegation {delegation}")
 
 
 def registre_sans_fantome(hote: Hote) -> Verdict:

@@ -313,7 +313,7 @@ def test_une_tranche_absente_est_bloquante():
     """
     verdict = preflight.tranche_des_sparks(hote())
     assert verdict.etat == ECHEC
-    assert "install-serveur.sh" in verdict.remede
+    assert "sparkd.install" in verdict.remede
 
 
 def test_une_tranche_sans_controleurs_delegues_est_bloquante():
@@ -322,7 +322,10 @@ def test_une_tranche_sans_controleurs_delegues_est_bloquante():
         commandes={"systemctl is-enabled spark.slice": "enabled"},
         fichiers={"/sys/fs/cgroup/spark.slice/cgroup.subtree_control": "pids\n"}))
     assert verdict.etat == ECHEC
-    assert "cpu" in verdict.remede
+    # Le releve NOMME ce qui manque : « corriger » sans savoir quoi coute un
+    # aller-retour sur une machine distante.
+    assert "cpu" in verdict.releve and "memory" in verdict.releve
+    assert preflight.UNITE_DELEGATION in verdict.remede
 
 
 def test_une_tranche_non_activee_au_demarrage_est_bloquante():
@@ -335,12 +338,30 @@ def test_une_tranche_non_activee_au_demarrage_est_bloquante():
     assert "redemarrage" in verdict.releve or "redemarrage" in verdict.remede
 
 
-def test_une_tranche_conforme():
+def test_des_controleurs_que_RIEN_ne_maintiendra_sont_bloquants():
+    """@verifies docs/BACKLOG.md#SPK-71 · docs/DAT.md §32.4 ter
+
+    MESURE le 2026-09-01 : ecrits a la main, les controleurs disparaissent au
+    premier `daemon-reload`. Vert sur le seul relevé du fichier serait vert a
+    l'instant du controle et faux une minute plus tard — pire que rouge, parce
+    qu'on ne chercherait plus la panne.
+    """
     verdict = preflight.tranche_des_sparks(hote(
         commandes={"systemctl is-enabled spark.slice": "enabled"},
         fichiers={"/sys/fs/cgroup/spark.slice/cgroup.subtree_control":
                   "cpuset cpu io memory pids\n"}))
-    assert verdict.etat == OK
+    assert verdict.etat == ECHEC, "sans l'unite deleguee, rien ne les maintient"
+    assert preflight.UNITE_DELEGATION in verdict.releve
+    assert "daemon-reload" in verdict.remede
+
+
+def test_une_tranche_conforme():
+    verdict = preflight.tranche_des_sparks(hote(
+        commandes={"systemctl is-enabled spark.slice": "enabled",
+                   f"systemctl is-enabled {preflight.UNITE_DELEGATION}": "enabled"},
+        fichiers={"/sys/fs/cgroup/spark.slice/cgroup.subtree_control":
+                  "cpuset cpu io memory pids\n"}))
+    assert verdict.etat == OK, verdict.releve
 
 
 # --- SPK-28 · La vérification LIT sa configuration (§8.5 bis) ---------------

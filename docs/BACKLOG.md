@@ -4267,19 +4267,41 @@ préflight rend `RUN-SLICE` rouge : `controleurs delegues : ''`.
   s'appliquent pas *dans* la tranche ; la réservation redevient proportionnelle
   sans qu'aucun contrôle ne rougisse une fois le préflight passé outre. Aucun
   locataire lésé au moment du constat — la Forge portait **zéro Spark**.
-- Correctif : `Delegate=cpu cpuset io memory pids` dans `[Slice]`, et retrait des
-  trois `…Accounting=`. Le repli d'écriture directe de `install.py` et la
-  réaffirmation par `cgroup.ensure_delegation()` **restent** — ils couvrent un
-  systemd qui ignorerait `Delegate=` sur une tranche, et ne coûtent rien sinon.
+- **Premier correctif ESSAYÉ PUIS INFIRMÉ, le 2026-09-01** : poser
+  `Delegate=cpu cpuset io memory pids` sur la tranche. Déployé sur la Forge, il
+  n'a rien changé — `systemctl show spark.slice -p Delegate` rend `no` alors que
+  l'unité porte la directive, et rien ne le signale. **`Delegate=` est ignoré
+  sur une tranche** : la délégation n'est honorée que pour les unités de service
+  et de portée.
+- **Correctif retenu, mesuré** : le paquet pose `spark-delegation.service`, une
+  unité `Slice=spark.slice` portant `Delegate=cpu cpuset io memory pids`. Le
+  manuel le dit à la phrase suivante — « *any controllers that are delegated
+  will be enabled for the parent and sibling units of the unit with
+  delegation* » — donc ce n'est pas la tranche qu'on délègue, mais une unité
+  DEDANS. Relevé sur la Forge : unité démarrée → `cpuset cpu io memory pids`,
+  après `daemon-reload` → inchangé, unité arrêtée → vide. C'est l'arrêt qui
+  établit la causalité.
+- Elle ne rend aucun service : elle n'existe que pour son cgroup. Un processus
+  **vivant** est nécessaire — un cgroup sans tâche disparaît, et avec lui la
+  raison qu'a systemd d'activer les contrôleurs chez le parent.
+- **Pourquoi rien ne les réclamait** : les Sparks ne sont pas des unités systemd,
+  Incus les place par `lxc.cgroup.dir.container`. Le défaut n'attendait donc pas
+  une Forge vide : une Forge pleine l'aurait subi au premier `daemon-reload`.
+- Les trois `…Accounting=` sont retirés, et `Delegate=` n'est **pas** posé sur la
+  tranche, avec le motif écrit dans l'unité pour que personne ne le rajoute.
+- Le repli d'écriture directe de `install.py` et la réaffirmation par
+  `cgroup.ensure_delegation()` **restent**, et ne sont plus que cela : ils
+  tiennent jusqu'à la prochaine réconciliation.
 - Ce que l'unité ne fait pas : elle ne change ni la loi de poids du §32.2, ni la
   pose du poids par `systemctl set-property` (§32.4 bis).
-- DoD : un test unitaire prouve que l'unité empaquetée porte `Delegate=` avec les
-  cinq contrôleurs et **ne porte plus** `CPUAccounting=` ; un test prouve que le
-  préflight refuse une tranche dont le `subtree_control` n'a pas les trois
-  contrôleurs requis ; sur la Forge réelle, `subtree_control` contient
+- DoD : un test unitaire prouve que `spark-delegation.service` est
+  `Slice=spark.slice`, porte les cinq contrôleurs et garde un processus vivant ;
+  un test prouve que la tranche ne porte **pas** `Delegate=` ni aucun
+  `…Accounting=` ; un test prouve que `RUN-SLICE` refuse des contrôleurs que
+  rien ne maintiendra ; sur la Forge réelle, `subtree_control` contient
   `cpuset cpu io memory pids` **après un `daemon-reload`** — la vérification qui
   compte est celle d'après la réconciliation (§32.4 bis) — et le préflight rend
-  `RUN-SLICE` vert ; `cloud-init` rejoué se termine sans erreur.
+  `RUN-SLICE` vert.
 
 ---
 

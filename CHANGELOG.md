@@ -4,13 +4,17 @@
 
 ### Corrigé
 - **La tranche des Sparks délègue à nouveau ses contrôleurs** (SPK-71,
-  `docs/DAT.md` §32.4 ter) : `spark.slice` porte `Delegate=cpu cpuset io memory
-  pids` et perd ses trois `…Accounting=`. Sur systemd 259, `CPUAccounting=` a été
-  retiré et les deux autres ne peuplaient de toute façon que le `subtree_control`
-  du parent : la tranche se retrouvait sans `cpu`, `cpuset` ni `memory` délégués,
-  donc les limites d'Incus ne s'appliquaient plus *dans* la tranche et la
-  réservation redevenait proportionnelle en silence. Le préflight `RUN-SLICE`
-  rougissait, et faisait échouer `cloud-init` en fin d'installation.
+  `docs/DAT.md` §32.4 ter) : le paquet pose `spark-delegation.service`, une unité
+  `Slice=spark.slice` déléguée qui n'existe que pour son cgroup. systemd n'active
+  un contrôleur dans le `subtree_control` d'une tranche que si une unité sous
+  elle le réclame — et les Sparks n'en sont pas, Incus les place par
+  `lxc.cgroup.dir.container`. La tranche se retrouvait donc sans `cpu`, `cpuset`
+  ni `memory` délégués : les limites d'Incus ne s'appliquaient plus *dans* la
+  tranche et la réservation redevenait proportionnelle en silence. Le préflight
+  `RUN-SLICE` rougissait et faisait échouer `cloud-init`. Il exige désormais les
+  contrôleurs **et** l'unité qui les maintient. Les trois `…Accounting=` sont
+  retirés de la tranche : `CPUAccounting=` n'existe plus sur systemd 259, et
+  aucun n'a jamais délégué quoi que ce soit à la tranche.
 - **Le préflight lit la configuration SSH effective** (SPK-72, `docs/DAT.md`
   §48.2) : `SSH-X11` interroge `sshd -T` au lieu du seul
   `/etc/ssh/sshd_config`, et retombe sur le fichier quand `sshd` n'est pas

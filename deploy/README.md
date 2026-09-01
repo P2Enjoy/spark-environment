@@ -16,9 +16,9 @@ dans `services/sparkd/src/sparkd/systemd/`, et posees par `python -m
 sparkd.install` (`docs/DAT.md` §40.4). `deploy/spark.slice` et
 `deploy/sparkd.service` en etaient des copies, retirees le 2026-09-01 : elles
 avaient derive — la copie du service avait perdu `SPARKD_NETWORK_BRIDGE` et
-figeait le chemin du Python — et celle de la tranche ne portait pas le
-`Delegate=` de SPK-71. Deux sources pour une meme unite, c'est une source fausse
-sur deux.
+figeait le chemin du Python — et aucune des deux ne connaissait
+`spark-delegation.service`, l'unite de SPK-71 qui fait tenir la delegation des
+controleurs. Deux sources pour une meme unite, c'est une source fausse sur deux.
 
 Un pilote factice sert a eprouver la traduction et l'admission control. Il ne
 prouve jamais qu'un quota est applique : cette preuve exige un hote Incus reel

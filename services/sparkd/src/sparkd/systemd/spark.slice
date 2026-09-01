@@ -15,18 +15,20 @@ Before=incus.service
 # ce que les Sparks ont acheté. Cette valeur n'est qu'un point de départ.
 CPUWeight=1
 
-# Sans ces contrôleurs délégués, les limites posées par Incus ne s'appliquent
-# pas DANS la tranche : la réservation redevient proportionnelle, en silence.
+# CETTE UNITÉ NE PORTE VOLONTAIREMENT AUCUNE DIRECTIVE DE DÉLÉGATION.
 #
-# MESURÉ le 2026-09-01 (§32.4 ter). L'unité s'en remettait auparavant à
-# CPUAccounting= / MemoryAccounting= / IOAccounting=, et c'était faux deux fois :
-# systemd 259 a RETIRÉ CPUAccounting=, et aucune des trois n'a jamais peuplé le
-# cgroup.subtree_control de la tranche — un ...Accounting= active le contrôleur
-# chez le PARENT, pour que la tranche soit mesurée. Résultat : subtree_control
-# vide, RUN-SLICE rouge, et cloud-init en échec.
+# MESURÉ le 2026-09-01 sur la Forge, et les deux pièges se ressemblent (§32.4
+# ter) :
 #
-# Delegate= est le mécanisme qui répond vraiment à ce besoin :
-# systemd.resource-control(5) — « Setting Delegate= enables any delegated
-# controllers for that unit » — et systemd cesse alors de manipuler l'arbre sous
-# la tranche au lieu de le vider à chaque réconciliation.
-Delegate=cpu cpuset io memory pids
+#   - `CPUAccounting=` / `MemoryAccounting=` / `IOAccounting=` ne délèguent rien
+#     à la tranche. Un `...Accounting=` active le contrôleur chez le PARENT,
+#     pour que la tranche soit mesurée. systemd 259 a de plus RETIRÉ
+#     `CPUAccounting=`, qu'il journalise et ignore ;
+#   - `Delegate=` posé ICI est ignoré : la délégation n'est honorée que pour les
+#     unités de service et de portée. `systemctl show spark.slice -p Delegate`
+#     rend `no` même quand l'unité porte la directive. Mesuré, pas suppose.
+#
+# Ce qui peuple réellement `cgroup.subtree_control` de la tranche est une unité
+# DÉLÉGUÉE PLACÉE DANS la tranche : `spark-delegation.service`. Ne pas rajouter
+# `Delegate=` ici en croyant faire mieux — ce serait réintroduire la panne que
+# `RUN-SLICE` a mis au jour.

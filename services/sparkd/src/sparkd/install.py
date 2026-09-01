@@ -32,7 +32,11 @@ from .build import commit_du_paquet
 
 DEFAULT_STATE = Path("/var/lib/sparkd")
 DEFAULT_SYSTEMD = Path("/etc/systemd/system")
-UNIT_NAMES = ("spark.slice", "sparkd.service")
+#: `spark-delegation.service` n'est pas un service : c'est ce qui fait tenir
+#: la délégation des contrôleurs à la tranche (docs/DAT.md §32.4 ter). Il se
+#: pose avec la tranche, avant `sparkd`.
+UNIT_NAMES = ("spark.slice", "spark-delegation.service", "sparkd.service")
+DELEGATION_UNIT = "spark-delegation.service"
 
 
 class InstallationError(RuntimeError):
@@ -185,8 +189,18 @@ def install(paths: Paths | None = None, *, runner: Runner = _run,
     announce("daemon_reload", "done")
     runner(["systemctl", "start", "spark.slice"])
 
-    # systemd ne délègue pas ces contrôleurs à une tranche vide. L'absence de la
-    # possibilité d'écrire (conteneur de test, ancien noyau) reste visible au
+    # Ce qui fait TENIR la délégation (docs/DAT.md §32.4 ter). systemd n'active
+    # un contrôleur dans le `subtree_control` d'une tranche que si une unité
+    # sous elle le réclame, et efface le fichier à chaque réconciliation sinon.
+    # Les Sparks ne sont pas des unités systemd : sans cette unité déléguée,
+    # rien ne réclame jamais rien. `enable` autant que `restart` : la tranche
+    # doit retrouver ses contrôleurs après un redémarrage (§32.4).
+    runner(["systemctl", "enable", DELEGATION_UNIT])
+    runner(["systemctl", "restart", DELEGATION_UNIT])
+
+    # REPLI, et seulement cela : un hôte où l'unité déléguée n'a pas pu démarrer
+    # garde au moins les contrôleurs jusqu'à la prochaine réconciliation. Ne pas
+    # pouvoir écrire (conteneur de test, ancien noyau) reste visible au
     # préflight, qui est précisément chargé de le signaler.
     try:
         (Path("/sys/fs/cgroup/spark.slice") / "cgroup.subtree_control").write_text(
