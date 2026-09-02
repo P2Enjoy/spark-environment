@@ -267,6 +267,58 @@ Le contrat complet, côté produit, est au §37.6 bis du [DAT](DAT.md).
 
 ---
 
+### C.5 `apt` refuse tout : `grub-pc` ne sait pas installer sur un `/boot` en RAID
+
+**Mesuré sur la Forge `spark-experiment` le 2026-09-02.** `apt full-upgrade`
+refusait, en laissant `grub-pc` en `iF` et `grub2` en `iU` — donc `dpkg`
+incohérent, donc **toute** installation bloquée, y compris celles de l'amorçage.
+
+L'erreur :
+
+```
+Installing for i386-pc platform.
+mdadm: /dev/md does not appear to be an md device
+grub-install: error: ioctl RAID_VERSION error: Inappropriate ioctl for device.
+```
+
+**La cause est dans le postinst du paquet**, pas dans la machine :
+
+```sh
+elif get_cloud_style_installation "grub-pc"; then
+  basedev=$(grub-probe -t device /boot/ | sed -Ee 's/[0-9]+$//' -e 's/([0-9])p$/\1/')
+  grub-install --target=i386-pc "$basedev"
+```
+
+`grub-probe` rend `/dev/md0` ; le `sed` retire les chiffres finaux pour passer
+d'une partition à son disque, et produit **`/dev/md`**, qui n'existe pas. Ce
+chemin « cloud style » suppose un `/boot` sur une partition ordinaire. Un serveur
+dédié dont le `/boot` est un RAID1 le prend en défaut à chaque fois.
+
+**Le correctif**, sur une machine BIOS + GPT + RAID1 — vérifier les trois avant
+d'agir, `[ -d /sys/firmware/efi ]` pour le premier :
+
+```sh
+A=/dev/disk/by-id/ata-…   # premier disque du RAID
+B=/dev/disk/by-id/ata-…   # second
+printf 'grub-pc grub-pc/install_devices multiselect %s, %s\n' "$A" "$B" \
+  | sudo debconf-set-selections
+echo "SET grub-pc/cloud_style_installation false" | sudo debconf-communicate
+sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+```
+
+Nommer les **deux** disques n'est pas une précaution : c'est ce qui fait que la
+machine démarre encore quand l'un des deux lâche, ce pour quoi le RAID1 est là.
+Vérifier ensuite que l'amorce est bien sur les deux :
+
+```sh
+for d in /dev/sda /dev/sdb; do sudo dd if=$d bs=512 count=1 2>/dev/null | grep -qa GRUB \
+  && echo "$d ok"; done
+```
+
+**Avant de redémarrer une Forge**, s'assurer que le module ZFS existe pour le
+noyau visé — `modinfo -k <version> zfs`. Un noyau sans ZFS laisse le pool des
+Sparks indisponible au démarrage, et cela ne se voit qu'après le redémarrage.
+
 ## D. Déployer une application dans un Spark
 
 Structure attendue côté dépôt applicatif : des fichiers Compose par

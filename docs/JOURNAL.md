@@ -243,6 +243,56 @@ préexiste dans `main`, ne concerne pas l'amorçage, et n'est pas corrigée ici.
 
 ---
 
+## 2026-09-02 — `apt` bloqué sur la Forge : un postinst qui ne sait pas lire un RAID
+
+**Problème.** Signalé par le responsable : la Forge refuse `apt full-upgrade`.
+
+**Observation.** `dpkg` portait `grub-pc` en `iF` et `grub2` en `iU`. Un `dpkg`
+incohérent bloque **toute** installation — y compris celles que l'amorçage d'un
+Spark déclenche. Ce n'était donc pas une gêne d'exploitation, c'était une panne
+latente du produit.
+
+**Cause, lue dans le postinst du paquet et non devinée :**
+
+```sh
+basedev=$(grub-probe -t device /boot/ | sed -Ee 's/[0-9]+$//' …)
+grub-install --target=i386-pc "$basedev"
+```
+
+`grub-probe` rend `/dev/md0`. Le `sed` retire les chiffres finaux — la règle qui
+fait passer d'une partition à son disque — et produit `/dev/md`. Ce chemin
+« cloud style » suppose un `/boot` sur une partition ordinaire ; le `/boot` de
+cette Forge est un RAID1.
+
+**Ce que j'ai vérifié avant d'agir**, parce qu'une erreur ici rend un serveur non
+amorçable : pas de `/sys/firmware/efi` et `efibootmgr` sans variables — donc BIOS
+hérité ; une partition *BIOS boot* de 512 Mio sur chaque disque ; `grub-efi-amd64`
+absent. `grub-pc` était donc bien le paquet qui convient, et le défaut portait sur
+sa **cible**, pas sur son choix.
+
+**Décision.** Nommer explicitement les deux disques du RAID à
+`grub-pc/install_devices`, et retirer `cloud_style_installation`. Les deux, et
+pas seulement le premier : c'est ce qui fait que la machine démarre encore quand
+un disque lâche, ce pour quoi le RAID1 existe.
+
+**Vérifications.** `grub-install` réussit sur `/dev/sda` et `/dev/sdb` ; l'amorce
+GRUB est présente dans le secteur 0 des deux ; `dpkg` ne porte plus aucun paquet
+en défaut ; `apt full-upgrade` ne refuse plus — il ne reste que trois paquets
+différés par le déploiement progressif d'Ubuntu, ce qui n'est pas une erreur. Le
+pool `spark` est ONLINE, `incus` et `sparkd` actifs, `ubuntu-demo` toujours en
+marche.
+
+**Signalé et non fait.** Un redémarrage est en attente : la machine tourne sur
+`7.0.0-15` alors que `7.0.0-30` est installé. Le module ZFS existe pour les deux
+noyaux — je l'ai vérifié, faute de quoi le pool serait indisponible au
+redémarrage — mais redémarrer une Forge arrête les Sparks de son locataire. Ce
+geste appartient au responsable.
+
+**Consigné au runbook §C.5**, parce que toute Forge dont le `/boot` est en RAID
+rencontrera exactement ce défaut.
+
+---
+
 ## 2026-09-02 — La Forge de test a trouvé en un relevé ce que 1058 preuves taisaient
 
 Premier passage de SPK-76 sur du matériel réel, la Forge de test étant à jour.
