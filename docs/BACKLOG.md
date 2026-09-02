@@ -4852,6 +4852,47 @@ Spark le sert par accident.
   refus, en laissant à l'écran une liste périmée où le retrait déjà fait
   paraissait encore à faire.
 
+### [~] SPK-83 · Affecter une entrée DNS trouvée à un Spark, depuis l'inventaire
+
+Demandé par le responsable le 2026-09-02, en lisant l'inventaire de SPK-77 : « si
+on a des routes trouvées non affectées, on doit pouvoir les affecter directement
+depuis la page à un Spark disponible sur la Forge ».
+
+Une entrée qu'aucune route ne sert est le plus souvent un **geste laissé à
+moitié** : le DNS est posé, la route ne l'est pas. N'offrir que le retrait, c'est
+offrir la destruction là où l'exploitant voulait terminer son geste.
+
+- Spécification : `docs/DAT.md` **§38.8.5 bis** (écrite et committée avant la
+  première ligne de code), §38.8.6 · §18.3 bis (les bornes et la préséance),
+  §18.4 (l'unicité portée par la base), §35 (la protection) ·
+  `docs/DESIGN_SYSTEM.md` §1.5 bis, §6.13, §6.27 · manuel M7.
+- Dépend de : SPK-77 pour l'inventaire et ses verdicts, SPK-12 pour la
+  déclaration de route.
+- Portée : chaque entrée sans route porte **deux** issues — l'affecter ou la
+  retirer —, sans hiérarchie ; une modale qui recueille le Spark, le port interne
+  et le TLS ; la déclaration passe par `POST /v1/ingress`, celui-là même que
+  l'écran d'un Spark emploie ; relevé refait après coup.
+- **Affecter n'écrit RIEN dans la zone**, et l'écran le dit : l'enregistrement
+  pointe déjà vers la Forge. Sur une page dont le sujet est le DNS, on peut
+  légitimement croire l'inverse.
+- **Aucune route neuve côté hôte console** (§38.8.6) : en ajouter une ferait deux
+  chemins vers la même écriture, donc deux endroits où la garde du §18.3 bis
+  pourrait diverger.
+- **La liste des Sparks n'écarte personne d'avance** : un Spark protégé refuse
+  l'écriture, et c'est le refus RÉEL qui doit s'afficher (§1.5 bis).
+- DoD : tests d'écran des deux issues et du refus ; parcours E2E depuis l'accueil
+  qui affecte une entrée trouvée, constate qu'elle passe à « servi », et
+  qu'**aucune écriture n'est partie vers le fournisseur DNS** ; un second
+  parcours prouve le refus d'un domaine déjà routé ; captures observées ; manuel
+  M7 mis à jour ; `@spec` / `@verifies` posés.
+- **Implémenté et vérifié en local le 2026-09-02**, statut `[~]` : 9 preuves
+  d'écran, 2 parcours E2E — l'un constate la route posée dans le registre de la
+  Forge ET que le nombre de requêtes reçues par le fournisseur DNS n'a pas bougé.
+  Captures observées, dont un refus RÉEL — « analytics » protégé — rendu dans la
+  modale sans effacer la saisie.
+- **Reste à faire pour passer `[x]`** : le commit et le push, puis OP-14 comme
+  SPK-77, dont cette unité dépend pour le relevé.
+
 ### [~] SPK-78 · Une écriture DNS se vérifie, et l'état DNS d'une route se voit
 
 Signalé par le responsable le 2026-09-02 : « j'ai appliqué une recette et elle est

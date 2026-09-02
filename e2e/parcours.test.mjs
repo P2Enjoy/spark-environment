@@ -2322,6 +2322,78 @@ test('l’inventaire DNS sépare ce qui est servi de ce qui s’est perdu, et ne
   });
 });
 
+// --- SPK-83 · AFFECTER UNE ENTRÉE TROUVÉE (docs/DAT.md §38.8.5 bis) --------
+
+test('une entrée trouvée s’AFFECTE à un Spark, sans rien écrire dans la zone', async () => {
+  await parcours('dns-affecter', async () => {
+    dns.poser([
+      { name: 'a-terminer', type: 'A', data: '203.0.113.10' },
+      { name: '', type: 'MX', data: '10 mail.exemple.test.', ttl: 3600 },
+    ]);
+    const avant = dns.recus().length;
+
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('.onglet[href="#/forge/dns"]', { timeout: 15000 });
+    await page.click('.onglet[href="#/forge/dns"]');
+    await page.waitForSelector('table tbody tr', { timeout: 15000 });
+
+    const ligne = 'tr:has-text("a-terminer.exemple.test")';
+    assert.match(await page.textContent(ligne), /Aucune route ne le sert/);
+
+    await page.click(`${ligne} [data-dns-affecter]`);
+    await page.waitForSelector('dialog.modale[open] #affect-spark', { timeout: 10000 });
+    // Le geste DIT qu'il ne touche pas la zone.
+    assert.match(await page.textContent('dialog.modale[open]'),
+      /Rien ne sera écrit dans la zone/);
+    assert.equal(await page.inputValue('#affect-domaine'), 'a-terminer.exemple.test');
+
+    await page.selectOption('#affect-spark', 'boutique');
+    await page.fill('#affect-port', '9100');
+    await page.click('[data-engage="dns-affectation"]');
+
+    // Le relevé refait dit « servi » parce que la FORGE le dit.
+    await page.waitForSelector('#dns-affectee', { timeout: 20000 });
+    assert.match(await page.textContent('#dns-affectee'), /boutique/);
+    await page.waitForSelector(`${ligne} .badge--success`, { timeout: 15000 });
+    assert.match(await page.textContent(ligne), /Servi/);
+    assert.match(await page.textContent(ligne), /boutique/);
+
+    // EFFET, constaté chez le fournisseur : la zone n'a pas bougé d'un octet.
+    assert.equal(dns.recus().length, avant,
+      'affecter ne doit envoyer AUCUNE écriture au fournisseur DNS');
+    assert.ok(dns.enregistrements().some((r) => r.name === 'a-terminer'));
+    assert.ok(dns.enregistrements().some((r) => r.type === 'MX'));
+
+    // EFFET, constaté sur la Forge : la route existe vraiment.
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    const posee = corps.routes.find((r) => r.domain === 'a-terminer.exemple.test');
+    assert.ok(posee, 'la route doit exister dans le registre');
+    assert.equal(posee.spark_name, 'boutique');
+    assert.equal(posee.target_port, 9100);
+  });
+});
+
+test('affecter un domaine DÉJÀ routé est refusé DANS la modale', async () => {
+  await parcours('dns-affecter-refus', async () => {
+    dns.poser([{ name: 'deja-pris', type: 'A', data: '203.0.113.10' }]);
+    // La route existe déjà, déclarée depuis le parcours canonique.
+    await declarerRoute('boutique', 'deja-pris.exemple.test', '8095');
+
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('.onglet[href="#/forge/dns"]', { timeout: 15000 });
+    await page.click('.onglet[href="#/forge/dns"]');
+    await page.waitForSelector('table tbody tr', { timeout: 15000 });
+
+    // Servie, donc aucune issue : il n'y a rien à terminer.
+    const ligne = 'tr:has-text("deja-pris.exemple.test")';
+    assert.match(await page.textContent(ligne), /Servi/);
+    assert.equal(await page.locator(`${ligne} [data-dns-affecter]`).count(), 0,
+      'une entrée servie n’offre pas d’affectation');
+  });
+});
+
 // --- SPK-67 · LE CONTRAT D'ÉCHEC DU PILOTE (docs/DAT.md §12.1.4) -----------
 
 test('un geste ORDINAIRE sur une cellule disparue est refusé DANS la modale', async () => {

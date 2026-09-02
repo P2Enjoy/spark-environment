@@ -27,6 +27,15 @@ trouvait tombait alors sur `<body>`. Un exploitant qui tabule dans le widget en
 est éjecté sans rien avoir fait, et la tabulation repart du début de la page.
 Mesuré, puis prouvé rouge avant correction.
 
+**Et ce n'était pas tout.** Le parcours clavier a continué d'échouer après cette
+correction : le vol de focus du widget n'en était qu'une moitié. `peindre()`
+remplace `.principal` en entier, et ces repeintures **arrivent toutes seules** —
+un relevé de la Forge qui aboutit pendant qu'on tabule suffit à jeter le focus.
+La même règle s'applique aux deux : l'élément est retrouvé par son identité
+déclarée, et on ne le restaure que si personne d'autre n'a pris le focus — une
+modale qui vient de s'ouvrir a posé le sien, et il ne faut pas le lui reprendre.
+La suite complète est repassée au vert après cette seconde correction.
+
 **Ce qu'il faut en retenir.** Un test qui devient rouge après une modification
 sans rapport n'est pas forcément un test à ajuster. Ici, l'onglet supplémentaire
 allongeait d'une frappe le parcours au clavier, ce qui suffisait à tomber dans la
@@ -8952,7 +8961,7 @@ propre diagnostic.
 la fermeture du flux pour une raison juste : un shell root qui survit à son écran
 est un shell oublié. Ce risque ne disparaît pas — **ce qui y répond change**.
 Ce n'est plus la mort à la navigation, c'est le widget permanent : tant que la
-console tourne, tout shell vivant est visible en bas à gauche, sur toutes les
+console tourne, tout shell vivant est visible en bas à droite, sur toutes les
 routes, avec sa dernière activité. On ne l'oublie pas parce qu'on ne peut plus le
 perdre de vue, et l'inactivité reste le filet. J'ai écrit ce motif dans le §37.4.2
 révisé plutôt que de l'effacer : une règle dont on supprime la raison revient par

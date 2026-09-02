@@ -3283,8 +3283,12 @@ async function chargerInventaireDns() {
     corps = { error: 'dns_unavailable',
               message: `Fournisseur DNS injoignable : ${erreur.message}` };
   }
+  // SPK-83 · §38.8.5 bis : les Sparks de la Forge, pour pouvoir AFFECTER une
+  // entrée trouvée. La liste n'écarte personne — un Spark protégé refusera
+  // l'écriture, et c'est ce refus réel qu'il faut montrer (§1.5 bis).
+  const sparks = await api('/v1/sparks').then((r) => r.sparks ?? []).catch(() => []);
   etat.forgeDns = {
-    ...etat.forgeDns, chargement: false,
+    ...etat.forgeDns, chargement: false, sparks,
     configured: corps.configured ?? null,
     // §38.1.1 : un refus du fournisseur — ou une Forge qui ne peut pas
     // rapprocher — n'est ni une absence de jeton ni une absence d'entrées.
@@ -3312,9 +3316,42 @@ function brancherInventaireDns() {
     });
   }
   racine.querySelector('[data-dns-nettoyer]')?.addEventListener('click', () => {
-    vue.confirmation = true; vue.refus = null;
+    // Une seule surface à la fois (§6.27) : ouvrir le nettoyage ferme
+    // l'affectation, sinon deux modales coexisteraient et la seconde serait
+    // inatteignable.
+    vue.confirmation = true; vue.refus = null; vue.affectation = null;
     peindre();
   });
+  for (const bouton of racine.querySelectorAll('[data-dns-affecter]')) {
+    bouton.addEventListener('click', () => {
+      const cle = bouton.dataset.dnsAffecter;
+      const entree = (vue.entries ?? []).find((e) => cleEntree(e) === cle);
+      if (!entree) return;
+      vue.affectation = entree;
+      vue.confirmation = false;
+      vue.refusAffectation = null;
+      vue.affectee = null;
+      vue.valeurs = { ...FORGE_DNS_VIDE.valeurs };
+      peindre();
+      // Le focus entrant appartient à `brancherModale` (§6.27).
+    });
+  }
+  const formulaireAffectation = racine.querySelector('[data-modale="dns-affectation"]');
+  if (formulaireAffectation) {
+    for (const controle of formulaireAffectation.querySelectorAll('input, select')) {
+      controle.addEventListener('input', () => {
+        vue.valeurs[controle.name] = controle.type === 'checkbox'
+          ? controle.checked
+          : (controle.type === 'number' ? Number(controle.value) : controle.value);
+      });
+    }
+    formulaireAffectation.addEventListener('submit', async (evenement) => {
+      evenement.preventDefault();
+      await affecterEntreeDns();
+    });
+    racine.querySelector('[data-annule-modale="dns-affectation"]')
+      ?.addEventListener('click', () => { vue.affectation = null; peindre(); });
+  }
   const formulaire = racine.querySelector('[data-modale="dns-nettoyage"]');
   if (!formulaire) return;
   formulaire.addEventListener('submit', async (evenement) => {
@@ -3323,6 +3360,49 @@ function brancherInventaireDns() {
   });
   racine.querySelector('[data-annule-modale="dns-nettoyage"]')
     ?.addEventListener('click', () => { vue.confirmation = false; peindre(); });
+}
+
+/**
+ * Affecte une entrée trouvée à un Spark (SPK-83, §38.8.5 bis).
+ *
+ * @spec docs/BACKLOG.md#SPK-83 · docs/DAT.md §38.8.5 bis, §18.3 bis, §18.4, §35
+ *
+ * Rien n'est écrit dans la zone : l'enregistrement pointe déjà vers la Forge. Ce
+ * geste déclare une ROUTE, par le même `POST /v1/ingress` que l'écran d'un Spark
+ * — une seconde route ferait deux chemins vers la même écriture, donc deux
+ * endroits où la garde du §18.3 bis pourrait diverger.
+ */
+async function affecterEntreeDns() {
+  const vue = etat.forgeDns;
+  const entree = vue.affectation;
+  if (!entree) return;
+  vue.busy = true; vue.refusAffectation = null;
+  peindre();
+  const v = vue.valeurs;
+  const resultat = await appel('POST', '/v1/ingress', {
+    spark: v.spark, domain: entree.fqdn,
+    port: Number(v.port), tls: Boolean(v.tls),
+  });
+  vue.busy = false;
+  if (!resultat.ok) {
+    // Le refus vient du serveur — domaine déjà routé, Spark protégé, borne du
+    // §18.3 bis — et la saisie reste intacte (§6.22).
+    const detail = resultat.corps?.detail ?? resultat.corps ?? {};
+    vue.refusAffectation = detail.message ?? 'Le serveur a refusé cette route.';
+    return peindre();
+  }
+  const route = resultat.corps ?? {};
+  vue.affectation = null;
+  // On relève de nouveau : l'entrée doit repasser à « servi » parce que la Forge
+  // le dit, jamais parce que l'écran l'a supposé (§38.8.5 bis).
+  await chargerInventaireDns();
+  etat.forgeDns.affectee = {
+    domain: entree.fqdn, spark: v.spark,
+    // §18.3 bis : une déclaration qui prend le pas sur un joker doit NOMMER ce
+    // qu'elle dépasse.
+    supersedes: route.supersedes ?? null,
+  };
+  peindre();
 }
 
 /**

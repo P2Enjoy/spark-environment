@@ -6339,6 +6339,47 @@ Une Forge dont l'adresse publique n'est ni **déclarée** (`publicAddress`,
 la page le dit et ne relève rien, plutôt que de rapprocher sur une adresse
 inventée.
 
+#### 38.8.5 bis Affecter, plutôt que retirer
+
+**Demandé par le responsable le 2026-09-02**, en lisant l'inventaire : « si on a
+des routes trouvées non affectées, on doit pouvoir les affecter directement
+depuis la page à un Spark disponible sur la Forge ».
+
+La demande corrige un déséquilibre de la première version. Une entrée qu'aucune
+route ne sert n'est pas d'abord un déchet : **c'est le plus souvent un geste
+laissé à moitié**. Le DNS a été posé, la route ne l'a pas été — parce qu'on a
+changé de Spark, parce que la route a été retirée sans son enregistrement, parce
+qu'on a préparé le nom avant l'application. N'offrir que le retrait, c'était
+offrir la destruction là où l'exploitant voulait **terminer** son geste.
+
+Chaque entrée sans route porte donc deux issues, et l'écran ne les hiérarchise
+pas : l'affecter à un Spark, ou la retirer.
+
+**Affecter n'écrit RIEN dans la zone**, et l'écran le dit. L'enregistrement
+pointe déjà vers la Forge : il n'y a rien à changer chez le fournisseur. Le geste
+déclare une **route d'ingress**, et rien d'autre. Le rappeler n'est pas une
+politesse : sur une page dont le sujet est le DNS, on peut légitimement croire
+que tout geste y touche.
+
+**Ce que l'affectation exige, et qu'elle ne devine pas.** Le Spark, le **port
+interne** sur lequel sa pile écoute, et le TLS. Le port ne se déduit d'aucun
+enregistrement DNS — le §26.3 le dit déjà de la déclaration ordinaire, et ce
+chemin-ci n'a aucune raison d'en savoir plus.
+
+**Les refus viennent du serveur, et l'écran ne les rejoue pas** : un domaine déjà
+routé est refusé par l'unicité que porte la base (§18.4) ; un Spark protégé
+refuse l'écriture d'ingress (§35) ; un domaine hors des bornes du §18.3 bis est
+refusé en les nommant. La liste des Sparks n'écarte donc personne d'avance : le
+produit laisse tenter et montre le refus réel (`docs/DESIGN_SYSTEM.md` §1.5 bis).
+
+**Un joker s'affecte comme un nom exact.** Un enregistrement `*` relevé dans une
+zone donne le nom `*.zone`, que `sparkd` accepte comme route. La préséance du
+§18.3 bis s'applique alors sans changement, et si la déclaration prend le pas sur
+une autre, le serveur le dit et l'écran le NOMME.
+
+**Après l'affectation, on relève de nouveau.** L'entrée doit repasser au verdict
+« servi » parce que la Forge le dit, jamais parce que l'écran l'a supposé.
+
 #### 38.8.6 La surface d'API
 
 ```
@@ -6347,6 +6388,11 @@ DELETE /api/dns/record          {zone, name, type} retire UNE entrée perdue, ap
 ```
 
 Elles vivent sur l'**hôte console**, comme tout le §38.
+
+L'**affectation** (§38.8.5 bis) n'a pas de route à elle : elle emploie
+`POST /v1/ingress` de `sparkd`, exactement comme la déclaration depuis l'écran
+d'un Spark. En ajouter une seconde ferait deux chemins vers la même écriture,
+donc deux endroits où la garde du §18.3 bis pourrait diverger.
 
 ### 38.9 Une écriture DNS se vérifie, et son compte rendu n'est pas la seule trace
 

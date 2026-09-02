@@ -3,6 +3,16 @@
 ## [Non publié]
 
 ### Ajouté
+- **Une entrée DNS trouvée s'affecte à un Spark, depuis l'inventaire** (SPK-83,
+  `docs/DAT.md` §38.8.5 bis) : une entrée qu'aucune route ne sert est le plus
+  souvent un **geste laissé à moitié** — le DNS est posé, la route ne l'est pas.
+  N'offrir que le retrait, c'était offrir la destruction là où l'exploitant
+  voulait terminer son geste. Chaque entrée sans route porte désormais **deux**
+  issues, sans hiérarchie : l'affecter à un Spark, ou la retirer. **Affecter
+  n'écrit rien dans la zone** — l'enregistrement pointe déjà vers la Forge — et
+  l'écran le dit. La déclaration passe par la même route que l'écran d'un Spark ;
+  un domaine déjà routé, un Spark protégé ou un domaine hors bornes sont refusés
+  par le serveur, et c'est ce refus réel qui s'affiche.
 - **La Forge dit ce qui pointe vers elle, et laisse nettoyer ce qui s'est perdu**
   (SPK-77, `docs/DAT.md` §38.8) : une section `Forge → DNS` relève dans les zones
   du compte les seuls enregistrements `A`/`AAAA` dont la valeur est **exactement**

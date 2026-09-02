@@ -252,6 +252,33 @@ Le second n'est pas un verdict d'inutilité : le produit sait seulement qu'aucun
 de vos routes ne sert ce nom. Si vous le servez autrement sur la machine, lui
 seul le sait.
 
+### Affecter, plutôt que retirer
+
+Une entrée que personne ne sert est le plus souvent un **geste laissé à moitié** :
+le nom a été posé dans le DNS, la route ne l'a jamais été — ou elle a été retirée
+sans son enregistrement.
+
+Chaque entrée sans route porte donc deux boutons, et l'un ne vaut pas mieux que
+l'autre : **Affecter**, ou la cocher pour la retirer.
+
+**Affecter** ouvre une fenêtre qui vous demande le Spark, le **port interne** sur
+lequel sa pile écoute, et si vous voulez un certificat TLS. Le domaine, lui, vient
+de l'enregistrement : il n'est pas modifiable.
+
+**Cette fenêtre n'écrit rien dans votre zone.** L'enregistrement pointe déjà vers
+la Forge : il n'y a rien à y changer. Elle déclare une route, exactement comme le
+bouton « Ajouter une route » de l'onglet Routes d'un Spark.
+
+Tous vos Sparks vous sont proposés, y compris les protégés — signalés comme tels.
+Si vous en choisissez un qui refuse, c'est son refus réel qui s'affiche, dans la
+fenêtre, sans effacer votre saisie. De même si le domaine est déjà routé
+ailleurs : le premier qui l'a pris le garde.
+
+Après coup, la page relève de nouveau : l'entrée passe à **Servi** parce que la
+Forge le dit, pas parce que l'écran l'a supposé. Si votre déclaration prend le pas
+sur un joker, la page vous **nomme** la route dépassée et le Spark qu'elle
+servait.
+
 ### Ce que cette page ne montre pas
 
 Uniquement les enregistrements **A** et **AAAA** dont la valeur est *exactement*

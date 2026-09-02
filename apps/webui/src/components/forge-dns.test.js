@@ -1,4 +1,8 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-83 · docs/DAT.md §38.8.5 bis (affecter plutot que
+ *           retirer ; affecter n'ecrit RIEN dans la zone) · §18.3 bis (la
+ *           preseance nommee), §35 (la protection) ·
+ *           docs/DESIGN_SYSTEM.md §1.5 bis (laisser tenter, montrer le refus)
  * @verifies docs/BACKLOG.md#SPK-77 · docs/DAT.md §38.8 (l'inventaire DNS),
  *           §38.8.1 (le perimetre), §38.8.2 (les deux verdicts et la prudence
  *           du second), §38.8.3 (la confirmation ENUMERE), §38.8.5 (une section
@@ -159,4 +163,85 @@ test('un nettoyage PARTIEL rend le sort de chaque ligne, jamais un verdict globa
   assert.ok(rendu.includes('ne désigne pas cette Forge'));
   assert.ok(rendu.includes('avertissement'),
     'un resultat partiel n’est pas une reussite');
+});
+
+// --- SPK-83 · AFFECTER PLUTOT QUE RETIRER (docs/DAT.md §38.8.5 bis) ---------
+//
+// Une entree qu'aucune route ne sert est le plus souvent un GESTE LAISSE A
+// MOITIE : le DNS est pose, la route ne l'est pas. N'offrir que le retrait,
+// c'etait offrir la destruction la ou l'exploitant voulait terminer son geste.
+
+const SPARKS = [{ name: 'boutique' }, { name: 'analytics', protected: true }];
+
+test('une entree sans route porte DEUX issues, sans hierarchie', () => {
+  const rendu = renderForgeDns(vue({ entries: [PERDUE] }));
+  assert.ok(rendu.includes('data-dns-affecter'), 'affecter doit etre offert');
+  assert.ok(rendu.includes('data-dns-entree'), 'retirer aussi');
+});
+
+test('une entree SERVIE n’offre ni l’une ni l’autre', () => {
+  const rendu = renderForgeDns(vue({ entries: [SERVIE] }));
+  assert.ok(!rendu.includes('data-dns-affecter'),
+    'il n’y a rien a terminer sur une entree deja servie');
+  assert.ok(!rendu.includes('data-dns-entree'));
+});
+
+test('la modale DIT qu’affecter n’ecrit RIEN dans la zone', () => {
+  // Sur une page dont le sujet est le DNS, on peut legitimement croire l'inverse.
+  const rendu = renderForgeDns(vue({ entries: [PERDUE], affectation: PERDUE,
+                                     sparks: SPARKS }));
+  assert.ok(rendu.includes('id="dns-affectation"'));
+  assert.ok(/Rien ne sera écrit dans la zone/.test(rendu));
+  assert.ok(rendu.includes('ancien.exemple.tech'), 'le domaine vient du relevé');
+  assert.ok(/readonly/.test(rendu), 'le domaine ne se ressaisit pas');
+});
+
+test('la modale RECLAME le port interne, qu’aucun enregistrement ne dit', () => {
+  const rendu = renderForgeDns(vue({ entries: [PERDUE], affectation: PERDUE,
+                                     sparks: SPARKS }));
+  assert.ok(rendu.includes('id="affect-port"'));
+  assert.ok(/pas celui de la Forge/.test(rendu));
+});
+
+test('un Spark PROTEGE reste proposable, et signale sa protection', () => {
+  // §1.5 bis : on laisse tenter, et c'est le refus REEL du serveur qui tranche.
+  const rendu = renderForgeDns(vue({ entries: [PERDUE], affectation: PERDUE,
+                                     sparks: SPARKS }));
+  assert.ok(rendu.includes('value="analytics"'), 'aucun Spark n’est ecarte d’avance');
+  assert.ok(rendu.includes('(protégé)'), 'sa protection est DITE');
+});
+
+test('une Forge SANS Spark le dit, au lieu d’offrir une liste vide et muette', () => {
+  const rendu = renderForgeDns(vue({ entries: [PERDUE], affectation: PERDUE, sparks: [] }));
+  assert.ok(rendu.includes('id="affect-sans-spark"'));
+  assert.ok(/aucun Spark/.test(rendu));
+});
+
+test('un refus du serveur s’affiche DANS la modale, sans effacer la saisie', () => {
+  const rendu = renderForgeDns(vue({
+    entries: [PERDUE], affectation: PERDUE, sparks: SPARKS,
+    valeurs: { spark: 'boutique', port: 9000, tls: true },
+    refusAffectation: 'Le domaine « ancien.exemple.tech » est déjà routé vers crm.' }));
+  assert.ok(rendu.includes('déjà routé'));
+  assert.ok(rendu.includes('value="9000"'), 'la saisie survit au refus');
+});
+
+test('une affectation qui PREND LE PAS nomme ce qu’elle dépasse', () => {
+  // §18.3 bis : le silence produirait une panne cherchee du mauvais cote.
+  const rendu = renderForgeDns(vue({
+    entries: [], configured: true,
+    affectee: { domain: 'api.exemple.tech', spark: 'api',
+                supersedes: { domain: '*.exemple.tech', spark_name: 'vitrine' } } }));
+  assert.ok(rendu.includes('id="dns-affectee"'));
+  assert.ok(rendu.includes('*.exemple.tech'));
+  assert.ok(rendu.includes('vitrine'));
+  assert.ok(/prend le pas/.test(rendu));
+});
+
+test('une affectation ORDINAIRE ne parle d’aucune préséance', () => {
+  const rendu = renderForgeDns(vue({
+    entries: [], configured: true,
+    affectee: { domain: 'ancien.exemple.tech', spark: 'boutique', supersedes: null } }));
+  assert.ok(rendu.includes('boutique'));
+  assert.ok(!/prend le pas/.test(rendu));
 });
