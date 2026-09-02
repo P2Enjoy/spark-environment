@@ -281,6 +281,17 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
         compte["cles"] += 1
     _attendu(client.post("/v1/sparks/crm-production/ssh-keys/poste-responsable"), 200,
              quoi="attribution de la clé au CRM")
+    # SPK-82 · §42.10.4 : un Spark sans aucune clé accordée n'est PAS complet —
+    # il est fermé à tout le monde. Les Sparks qui portent la démonstration d'une
+    # cellule complète en reçoivent donc une, sans quoi le seed montrerait un
+    # état qui n'existe pas.
+    #
+    # « boutique », « site-vitrine » et « orphelin » n'en reçoivent aucune, et
+    # c'est délibéré : il faut que l'écran ait de quoi montrer l'absence, qui est
+    # le cas d'un Spark neuf.
+    for spark in ("postgres-dedie", "ubuntu-24"):
+        _attendu(client.post(f"/v1/sparks/{spark}/ssh-keys/poste-responsable"), 200,
+                 quoi=f"attribution de la clé à « {spark} »")
 
     # --- Instantanés : un ancien puis un plus récent, pour que le refus de
     # restauration du §19.1 soit atteignable depuis l'interface.
