@@ -124,6 +124,21 @@
   dernière ligne passait. La sortie d'erreur, jusqu'ici jetée, accompagne
   désormais le code dans le refus ; elle ne traverse pas le journal d'audit, qui
   n'a pas à porter les paquets du locataire.
+- **L'amorçage rend la cellule joignable, et plus seulement équipée** (SPK-82,
+  `docs/DAT.md` §42.10) : il accorde désormais au Spark la clé que la console
+  emploie pour joindre la Forge — celle qu'OpenSSH y présente, identifiée par son
+  empreinte, jamais une autre du poste. La confirmation la nomme **avant** le
+  geste, et la clé passe par le **registre**, où elle reste visible et
+  révocable : posée directement dans la cellule, elle aurait fonctionné puis
+  disparu au premier changement de clés, `authorized_keys` y étant réécrit en
+  entier depuis le registre. Quand la console n'emploie aucune clé — serveur
+  local, agent muet —, l'écran le dit et prévient que la connexion n'aboutira pas.
+- **Un Spark sans aucune clé accordée n'est plus dit « en place »** (SPK-82,
+  `docs/DAT.md` §42.10.4) : la ligne comparait une empreinte à une autre, et deux
+  vides correspondent. Relevé sur une Forge dont le registre ne portait aucune
+  clé, l'amorçage affichait « clés d'accès — en place, conformes au registre »
+  puis concluait « cette cellule est joignable en SSH », sur un Spark que
+  personne ne pouvait atteindre.
 - **Un paquet Docker installé mais muet n'est plus dit « en place »** (SPK-76,
   `docs/DAT.md` §42.9.8, mesuré sur la Forge de test) : le relevé construisait
   trois de ses lignes par un pipeline terminé par `|| echo absent`, qui ne se

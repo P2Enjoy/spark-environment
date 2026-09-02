@@ -122,6 +122,13 @@ def test_le_briefing_est_reecrit_apres_route_variable_port_et_protection(tmp_pat
 def test_une_presence_preexistante_ne_devient_pas_une_installation_par_sparkd(tmp_path):
     client = _client(tmp_path)
     name = _spark(client)
+    # SPK-82 · §42.10.4 : une cellule complète a une clé accordée. Sans elle,
+    # elle est fermée à tout le monde et l'amorçage a quelque chose à faire.
+    assert client.post("/v1/ssh-keys", json={
+        "label": "poste",
+        "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILklM4dl9E+GCZog4f8+"
+                      "fV4q3fR0CvBnyFDMmDcrFbYT poste"}).status_code == 201
+    assert client.post(f"/v1/sparks/{name}/ssh-keys/poste").status_code == 200
     files = client.app.state.incus.created[name]["files"]
     client.app.state.incus.created[name].setdefault("runtime", {}).update({
         "sshd": "active", "openssh_version": "1:9.8p1-1",

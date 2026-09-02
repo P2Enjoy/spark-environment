@@ -104,6 +104,11 @@ Cinq éléments, chacun avec son état :
 | moteur Docker | ce qui fait tourner votre pile |
 | greffon Compose | `docker compose` |
 
+**Aucune clé accordée n'est jamais « en place ».** Un Spark sans clé autorisée
+est fermé à tout le monde : la ligne dit *absent*, et le dit en toutes lettres.
+Un fichier vide qui correspond à un registre vide reste un Spark que personne
+n'atteint.
+
 Trois états, et le troisième mérite une explication : **« à corriger »**. Il ne
 veut pas dire « absent ». Il veut dire présent *et* inutilisable.
 
@@ -136,6 +141,25 @@ d'autre : une ligne qui se dit présente sans pouvoir se décrire n'est pas une
 ligne présente.
 
 ### Puis amorcer
+
+### La clé de la console est accordée au passage
+
+L'amorçage n'équipe pas seulement la cellule : il vous en **ouvre l'accès**.
+
+La clé que votre console emploie pour joindre la Forge — celle qu'OpenSSH y
+présente, pas une autre — est accordée à ce Spark. La confirmation vous dit
+laquelle, sous son nom, **avant** que vous n'engagiez le geste.
+
+Elle entre au **registre**, comme n'importe quelle clé autorisée : vous la
+retrouvez dans l'onglet *Clés*, et vous pouvez l'y révoquer. Ce n'est pas un
+détail d'implémentation. Une clé posée directement dans la cellule aurait
+fonctionné, puis **disparu** au premier changement de clés — le fichier y est
+réécrit en entier depuis le registre à chaque fois.
+
+**Si la console n'emploie aucune clé** — un serveur local n'en a pas besoin, un
+agent SSH muet n'en déclare aucune —, l'écran le dit et n'en accorde aucune. Le
+Spark sera équipé, mais vous ne pourrez pas vous y connecter tant que vous
+n'aurez pas autorisé une clé depuis l'onglet *Clés*.
 
 **Amorcer ce Spark** demande une confirmation, et elle dit ce qui va se passer :
 la console exécute des commandes **en root dans la cellule**, sans passer par

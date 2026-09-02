@@ -359,6 +359,11 @@ export const AMORCAGE_VIDE = {
   rootless: false,
   busy: false,
   erreur: null,
+  // SPK-82 · §42.10.2 : quelle clé du poste ouvre cette Forge, lue à l'ouverture
+  // de la confirmation. `null` tant qu'on n'a pas demandé.
+  identite: null,
+  // Ce que l'octroi a donné, pour que le compte rendu le DISE.
+  octroi: null,
 };
 
 /** Les deux modes, dits en français (§14.7). */
@@ -409,6 +414,35 @@ function ligneAmorcage(ligne) {
       ni rootless. Le moteur est installé, mais rien ne tourne — relevez à
       nouveau après l’avoir démarré.</span>` : ''}
   </li>`;
+}
+
+/**
+ * Ce que l'amorçage va accorder comme accès (SPK-82, docs/DAT.md §42.10).
+ *
+ * @spec docs/BACKLOG.md#SPK-82 · docs/DAT.md §42.10.2, §42.10.3 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-08
+ *
+ * Dit dans la confirmation, donc AVANT le geste : accorder un accès sans qu'il
+ * se voie contredirait le §10. Et quand aucune clé ne sera accordée, on le dit
+ * aussi — c'est ce qui décide si la connexion du manuel M6 aboutira.
+ */
+export function renderCleConsole(identite) {
+  if (!identite) {
+    return '<p class="note" role="status">Lecture de la clé de la console…</p>';
+  }
+  if (identite.publicKey) {
+    return `<p class="note">La clé que cette console emploie pour joindre la Forge
+      sera <strong>accordée</strong> à ce Spark, sous le nom
+      <span class="technique">${echapper(identite.label ?? 'console')}</span>.
+      Elle entre au registre : elle restera visible et révocable dans l’onglet
+      <em>Clés</em>.</p>`;
+  }
+  return `<div class="avertissement">
+    <p><strong>Aucune clé ne sera accordée.</strong>
+    ${echapper(identite.message ?? 'La console n’a pas identifié la clé qu’elle emploie.')}</p>
+    <p>Le Spark sera équipé, mais vous ne pourrez pas vous y connecter tant
+    qu’une clé n’y aura pas été autorisée depuis l’onglet <em>Clés</em>.</p>
+  </div>`;
 }
 
 export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
@@ -485,6 +519,18 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
        en SSH et capable de faire tourner une pile Compose.</p>`
     : '';
 
+  // SPK-82 : ce que l'octroi a donné. Il précède l'amorçage, donc il se dit même
+  // quand l'amorçage échoue ensuite — c'est un fait acquis, pas un détail.
+  const octroi = etat.octroi && etat.resultat
+    ? (etat.octroi.accordee
+        ? `<p class="note" role="status">Clé
+           <span class="technique">${echapper(etat.octroi.label)}</span> accordée à
+           ce Spark.</p>`
+        : `<p class="note" role="status">Aucune clé n’a été accordée : la
+           connexion SSH ne fonctionnera pas tant qu’une clé n’aura pas été
+           autorisée depuis l’onglet <em>Clés</em>.</p>`)
+    : '';
+
   // §42.1 : un second amorçage ne fait rien, et l'écran le DIT.
   const rien = etat.resultat && etat.resultat.changed === false && !etat.erreur
     ? `<p class="note" role="status">Rien n’a été fait : tout était déjà en place.</p>`
@@ -530,6 +576,7 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
          pas encore sur un Spark neuf.</p>
          <p class="note">Seuls les éléments manquants sont installés ; ce qui est
          déjà en place n’est pas touché.</p>
+         ${renderCleConsole(etat.identite)}
          ${option}
          <p class="confirmation__actions">
            <button type="button" class="bouton bouton--destructif" data-amorcage="engager">
@@ -546,7 +593,7 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
   <p class="note">L’amorçage relève ce qui manque dans la cellule et ne pose que
   cela. <a href="#/manuel/M6">Manuel M6 — Amorcer le Spark, une fois</a></p>
   ${corps}
-  ${verdict}${rien}
+  ${octroi}${verdict}${rien}
   ${confirmation}
   <p class="formulaire__actions">
     <button type="button" class="bouton" data-amorcage="relever"

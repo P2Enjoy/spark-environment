@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   renderSparkDetail, renderCommands, renderDetailNotFound, renderProtection,
-  renderAuteur, renderAmorcage, AMORCAGE_VIDE, COMMANDES,
+  renderAuteur, renderAmorcage, renderCleConsole, AMORCAGE_VIDE, COMMANDES,
   renderQuotas, QUOTAS_VIDE,
 } from './spark-detail.js';
 
@@ -980,4 +980,61 @@ test('un moteur ABSENT ne réclame pas de mode', () => {
     },
   }));
   assert.ok(!/mode indéterminé/.test(rendu));
+});
+
+// --- SPK-82 · la clé que l'amorçage accorde (docs/DAT.md §42.10) -----------
+//
+// @verifies docs/BACKLOG.md#SPK-82 · docs/DAT.md §42.10.1, §42.10.2, §42.10.3
+
+test('la confirmation DIT quelle clé sera accordée, avant le geste', () => {
+  // §10 : accorder un accès sans qu'il se voie serait un octroi silencieux.
+  const rendu = renderCleConsole({
+    publicKey: 'ssh-ed25519 AAAA… poste', label: 'console-login', reason: null });
+  assert.match(rendu, /sera <strong>accordée<\/strong>/);
+  assert.match(rendu, /console-login/);
+  // Et elle dit qu'elle passe par le REGISTRE, donc qu'elle reste révocable.
+  assert.match(rendu, /registre/);
+  assert.match(rendu, /révocable/);
+});
+
+test('la clé PUBLIQUE elle-même n’est pas recopiée à l’écran', () => {
+  // Elle n'apprendrait rien : c'est le libellé qu'on retrouvera dans l'onglet
+  // Clés, et une clé entière encombre un écran qui doit se lire d'un coup.
+  const rendu = renderCleConsole({
+    publicKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISECRETMATERIAL poste',
+    label: 'console-login', reason: null });
+  assert.ok(!/SECRETMATERIAL/.test(rendu));
+});
+
+test('quand AUCUNE clé ne sera accordée, l’écran le dit et dit la conséquence', () => {
+  // §42.10.3 : un serveur local n'emploie pas de clé, un agent muet n'en donne
+  // aucune. Taire le fait laisserait croire que le Spark sera joignable.
+  const rendu = renderCleConsole({
+    publicKey: null, reason: 'no_key',
+    message: 'OpenSSH n’a déclaré aucune clé pour ce serveur.' });
+  assert.match(rendu, /Aucune clé ne sera accordée/);
+  assert.match(rendu, /vous ne pourrez pas vous y connecter/);
+  assert.match(rendu, /class="avertissement"/);
+  assert.ok(!/class="refus"/.test(rendu), 'ce n’est pas une panne du serveur');
+});
+
+test('tant que la clé n’est pas lue, l’écran ne PRÉTEND rien', () => {
+  assert.match(renderCleConsole(null), /Lecture de la clé/);
+});
+
+test('le compte rendu DIT que la clé a été accordée', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    resultat: { items: [], changed: true, complete: true },
+    octroi: { accordee: true, label: 'console-login' },
+  }));
+  assert.match(rendu, /console-login<\/span> accordée/);
+});
+
+test('un octroi MANQUÉ est dit dans le compte rendu, pas passé sous silence', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    resultat: { items: [], changed: true, complete: true },
+    octroi: { accordee: false, raison: 'no_key' },
+  }));
+  assert.match(rendu, /Aucune clé n’a été accordée/);
+  assert.match(rendu, /ne fonctionnera pas/);
 });

@@ -618,6 +618,9 @@ function brancherAmorcage() {
       a.confirme = true;
       peindre();
       racine.querySelector('[data-amorcage="engager"]')?.focus();
+      // SPK-82 · §42.10.2 : la confirmation DIT quelle clé sera accordée, et
+      // le dit avant le geste. Une lecture — elle n'accorde rien.
+      lireIdentiteConsole();
     });
 
   racine.querySelector('[data-amorcage="annuler"]')
@@ -641,6 +644,69 @@ function brancherAmorcage() {
     });
 }
 
+/**
+ * Quelle clé du poste sera accordée au Spark (SPK-82, docs/DAT.md §42.10.2).
+ *
+ * Une LECTURE, faite à l'ouverture de la confirmation : l'écran doit dire ce
+ * qu'il va accorder avant qu'on l'engage, pas après. Un échec n'interrompt rien
+ * — l'amorçage reste possible, il dira simplement qu'aucune clé n'a été posée.
+ */
+async function lireIdentiteConsole() {
+  const a = etat.amorcage;
+  try {
+    const reponse = await relais(
+      `/api/console/identity?server=${encodeURIComponent(etat.server)}`);
+    a.identite = await reponse.json();
+  } catch {
+    a.identite = { publicKey: null, reason: 'unreadable',
+      message: 'La console n’a pas pu lire sa propre clé.' };
+  }
+  if (a.confirme) peindre();
+}
+
+/**
+ * Enregistre la clé de la console au REGISTRE, puis l'accorde au Spark.
+ *
+ * @spec docs/BACKLOG.md#SPK-82 · docs/DAT.md §42.10.1
+ *
+ * Par le registre, jamais par une écriture directe dans la cellule :
+ * `authorized_keys` y est régénéré EN ENTIER depuis le registre (§17.1), donc
+ * une clé posée hors registre disparaîtrait au premier changement de clés —
+ * après avoir fonctionné. Le piège serait pire que le manque.
+ *
+ * Rend ce qui s'est passé, pour que le compte rendu le DISE. Un échec n'arrête
+ * pas l'amorçage : équiper la cellule reste utile même si l'accès manque.
+ */
+async function accorderCleConsole(nom) {
+  const identite = etat.amorcage.identite;
+  if (!identite?.publicKey) return { accordee: false, raison: identite?.reason ?? 'inconnue' };
+  const label = identite.label;
+  try {
+    // 409 : la clé est déjà au registre. Ce n'est pas une erreur — c'est
+    // l'idempotence, et un second amorçage doit rester silencieux.
+    const pose = await relais(`/api/v1/ssh-keys?server=${encodeURIComponent(etat.server)}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ label, public_key: identite.publicKey }),
+    });
+    if (!pose.ok && pose.status !== 409) {
+      const corps = await pose.json().catch(() => ({}));
+      return { accordee: false, raison: 'refus_registre',
+               message: corps?.detail?.message ?? `HTTP ${pose.status}` };
+    }
+    const octroi = await relais(
+      `/api/v1/sparks/${encodeURIComponent(nom)}/ssh-keys/${encodeURIComponent(label)}`
+      + `?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+    if (!octroi.ok) {
+      const corps = await octroi.json().catch(() => ({}));
+      return { accordee: false, raison: 'refus_octroi',
+               message: corps?.detail?.message ?? `HTTP ${octroi.status}` };
+    }
+    return { accordee: true, label };
+  } catch (erreur) {
+    return { accordee: false, raison: 'injoignable', message: String(erreur?.message ?? erreur) };
+  }
+}
+
 async function amorcageAppel(methode) {
   const a = etat.amorcage;
   a.erreur = null;
@@ -652,6 +718,11 @@ async function amorcageAppel(methode) {
     a.releve = 'en-cours';
     a.resultat = null;
   }
+  // SPK-82 · §42.10.1 : la clé entre au REGISTRE avant l'amorçage, pour que la
+  // ligne « clés d'accès » de l'amorçage l'écrive dans la cellule. L'ordre
+  // compte : accorder après coup laisserait la cellule fermée jusqu'au relevé
+  // suivant.
+  if (methode !== 'GET') a.octroi = await accorderCleConsole(etat.spark.name);
   peindre();
   const chemin = `/api/v1/sparks/${encodeURIComponent(etat.spark.name)}/bootstrap`
     + `?server=${encodeURIComponent(etat.server)}`;

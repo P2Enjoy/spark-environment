@@ -52,6 +52,23 @@ def _creer(client, nom="helo", demarrer=True):
     return nom
 
 
+#: Une clé publique valide, pour rendre une cellule RÉELLEMENT complète.
+#: SPK-82 · §42.10.4 : une cellule sans aucune clé accordée n'est pas complète,
+#: elle est fermée à tout le monde. Les preuves d'idempotence montaient jusqu'ici
+#: des cellules « complètes » que personne n'aurait pu atteindre.
+CLE_PUBLIQUE = ("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILklM4dl9E+GCZog4f8+fV4q3f"
+                "R0CvBnyFDMmDcrFbYT poste")
+
+
+def _accorder_cle(client, nom, label="poste"):
+    """Enregistre une clé au registre et l'accorde au Spark."""
+    reponse = client.post("/v1/ssh-keys",
+                          json={"label": label, "public_key": CLE_PUBLIQUE})
+    assert reponse.status_code in (201, 409), reponse.text
+    assert client.post(f"/v1/sparks/{nom}/ssh-keys/{label}").status_code == 200
+    return label
+
+
 def _poser_runtime(client, nom, **valeurs):
     """Pose l'état de RUNTIME de la cellule factice (§28.4, §42.5).
 
@@ -223,6 +240,9 @@ def test_un_amorcage_sur_cellule_COMPLETE_ne_fait_rien_et_le_DIT(tmp_path):
     redémarrerait le démon Docker pour rien."""
     client = _client(tmp_path)
     nom = _creer(client)
+    # SPK-82 · §42.10.4 : une cellule COMPLÈTE a une clé. Sans elle, elle est
+    # fermée à tout le monde, et la preuve montait un état qui n'existe pas.
+    _accorder_cle(client, nom)
     _poser_runtime(client, nom, sshd="active", os_id="debian",
                    os_suite="trixie", depot_distro="debian",
                    depot_suite="trixie",
@@ -254,6 +274,9 @@ def test_un_amorcage_qui_ne_change_RIEN_est_quand_meme_journalise(tmp_path):
     tenté."""
     client = _client(tmp_path)
     nom = _creer(client)
+    # SPK-82 · §42.10.4 : une cellule COMPLÈTE a une clé. Sans elle, elle est
+    # fermée à tout le monde, et la preuve montait un état qui n'existe pas.
+    _accorder_cle(client, nom)
     _poser_runtime(client, nom, sshd="active", os_id="debian",
                    os_suite="trixie", depot_distro="debian",
                    depot_suite="trixie",
@@ -538,6 +561,9 @@ def test_redemander_le_MEME_mode_reste_idempotent(tmp_path):
     les deux rendrait un second amorçage impossible."""
     client = _client(tmp_path)
     nom = _creer(client)
+    # SPK-82 · §42.10.4 : une cellule COMPLÈTE a une clé. Sans elle, elle est
+    # fermée à tout le monde, et la preuve montait un état qui n'existe pas.
+    _accorder_cle(client, nom)
     client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
     reponse = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
     assert reponse.status_code == 200, reponse.text
@@ -549,6 +575,9 @@ def test_le_journal_porte_le_MODE_meme_quand_rien_n_a_ete_fait(tmp_path):
     et il ne se retrouve nulle part ailleurs."""
     client = _client(tmp_path)
     nom = _creer(client)
+    # SPK-82 · §42.10.4 : une cellule COMPLÈTE a une clé. Sans elle, elle est
+    # fermée à tout le monde, et la preuve montait un état qui n'existe pas.
+    _accorder_cle(client, nom)
     client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
     client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True})
     entrees = client.get("/v1/audit?action=spark.bootstrap").json()["entries"]
@@ -570,6 +599,9 @@ def test_le_compte_rendu_de_l_amorcage_PORTE_le_mode(tmp_path):
     """
     client = _client(tmp_path)
     nom = _creer(client)
+    # SPK-82 · §42.10.4 : une cellule COMPLÈTE a une clé. Sans elle, elle est
+    # fermée à tout le monde, et la preuve montait un état qui n'existe pas.
+    _accorder_cle(client, nom)
     corps = client.post(f"/v1/sparks/{nom}/bootstrap", json={"rootless": True}).json()
     docker = next(v for v in corps["items"] if v["key"] == "docker")
     assert docker["mode"] == bootstrap.ROOTLESS
@@ -743,6 +775,9 @@ def test_un_amorcage_sur_UBUNTU_pose_le_depot_d_ubuntu(tmp_path):
     paquets sont ensuite refusés par `apt` sur `noble`."""
     client = _client(tmp_path)
     nom = _creer(client, "ubuntu-demo")
+    # SPK-82 · §42.10.4 : une cellule COMPLÈTE a une clé. Sans elle, elle est
+    # fermée à tout le monde, et la preuve montait un état qui n'existe pas.
+    _accorder_cle(client, nom)
     pilote = client.app.state.incus
     pilote.created[nom]["alias"] = "ubuntu/24.04"
     pilote._persist()
@@ -838,3 +873,63 @@ def test_un_moteur_MUET_fait_purger_docker_ce_avant_de_le_reposer(tmp_path):
     ordinaire = bootstrap.script_docker(purger_ce=False)
     assert "docker.io" in ordinaire
     assert "purge -y -qq docker-ce" not in ordinaire
+
+
+# --- SPK-82 · joignable, et pas seulement équipée (§42.10) -----------------
+#
+# @verifies docs/BACKLOG.md#SPK-82 · docs/DAT.md §42.10.4
+
+
+def test_aucune_cle_accordee_n_est_PAS_un_element_en_place(tmp_path):
+    """§42.10.4, relevé sur la Forge : le registre ne portait aucune clé, le
+    fichier de la cellule était donc vide, et les deux vides CORRESPONDAIENT.
+    L'écran concluait « joignable en SSH » sur un Spark que nul n'atteint."""
+    vide = bootstrap.empreinte("")
+    vus = bootstrap.juger({"os_id": "debian", "os_suite": "trixie",
+                           "cles": vide},
+                          cles_voulues=vide, cles_accordees=0)
+    cles = next(v for v in vus if v["key"] == "cles")
+    assert cles["state"] == bootstrap.ABSENT
+    assert cles["state"] != bootstrap.PRESENT, "deux vides ne font pas un accès"
+    assert "personne ne peut s’y connecter" in cles["detail"].replace("'", "’")
+    assert "cles" in bootstrap.manques(vus)
+
+
+def test_une_cle_accordee_et_conforme_reste_en_place(tmp_path):
+    """La règle ne doit pas rendre toute cellule incomplète : c'est le NOMBRE
+    de clés accordées qui décide, pas la correspondance seule."""
+    vus = bootstrap.juger({"os_id": "debian", "os_suite": "trixie",
+                           "cles": "a" * 64},
+                          cles_voulues="a" * 64, cles_accordees=1)
+    cles = next(v for v in vus if v["key"] == "cles")
+    assert cles["state"] == bootstrap.PRESENT
+    assert "conformes au registre" in cles["detail"]
+
+
+def test_sans_information_sur_le_registre_on_ne_conclut_PAS_a_l_absence(tmp_path):
+    """§14.6 : ne pas savoir combien de clés sont accordées n'autorise pas à
+    dire qu'il n'y en a aucune. `None` n'est pas `0`."""
+    vus = bootstrap.juger({"os_id": "debian", "os_suite": "trixie",
+                           "cles": "a" * 64}, cles_voulues=None,
+                          cles_accordees=None)
+    cles = next(v for v in vus if v["key"] == "cles")
+    assert cles["state"] == bootstrap.PRESENT
+    assert "non vérifiée" in cles["detail"]
+
+
+def test_une_cellule_SANS_cle_n_est_pas_declaree_complete(tmp_path):
+    """Le bout du sujet : l'amorçage promet « joignable en SSH ». Il ne doit pas
+    le conclure d'une cellule fermée à tout le monde."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    _poser_runtime(client, nom, sshd="active", os_id="debian",
+                   os_suite="trixie", depot_distro="debian",
+                   depot_suite="trixie",
+                   docker="Docker version 29.7.2", origine="docker-ce",
+                   docker_version="5:29.7.2-1~debian.13~trixie",
+                   compose="Docker Compose version v2")
+    releve = client.get(f"/v1/sparks/{nom}/bootstrap")
+    assert releve.status_code == 200, releve.text
+    assert releve.json()["complete"] is False, "une cellule fermée n'est pas complète"
+    cles = next(i for i in releve.json()["items"] if i["key"] == "cles")
+    assert cles["state"] == bootstrap.ABSENT

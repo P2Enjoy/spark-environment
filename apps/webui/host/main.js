@@ -28,6 +28,8 @@ import { comparer as comparerBuild, etatDepot, resoudreCommit,
 import {
   ForgeUpdateManager, ForgeUpdateError, updateEligibility, verifyForge,
 } from './forge-update.js';
+// SPK-82 · §42.10.2 : quelle clé du poste ouvre cette Forge.
+import { cleCorrespondante, libelleConsole } from './identite-console.js';
 import { capture as capturerConsole, compare as comparerConsole,
          describe as decrireConsole } from './console-build.js';
 import { relever as releverDocker, inspecterConteneur, lireJournaux }
@@ -694,6 +696,52 @@ export function createConsoleHost(options = {}) {
       status: 200,
       body: decrireConsole(comparerCetteConsole(consoleAuDemarrage, racineConsole)),
     }),
+
+    /**
+     * La clé publique du POSTE qui ouvre cette Forge (SPK-82, §42.10.2).
+     *
+     * Lecture pure : elle n'ouvre aucun tunnel — un tunnel déjà ouvert a
+     * l'empreinte, un tunnel fermé ne l'a pas, et en ouvrir un pour répondre
+     * ferait d'une question un geste.
+     *
+     * Rend `publicKey: null` avec une RAISON quand rien ne correspond. Le
+     * §42.10.3 l'exige : la console dit alors qu'elle n'accordera rien, plutôt
+     * que de laisser croire que le Spark sera joignable.
+     */
+    'GET /api/console/identity': async (_corps, url) => {
+      const nom = String(url?.searchParams?.get('server') ?? '');
+      // `get` et non `require` : un tunnel rompu porte quand même l'empreinte
+      // de la clé qui l'avait ouvert, et refuser ici priverait d'une réponse
+      // que l'on a. `require` lève, ce qui ferait d'une lecture un refus.
+      const tunnel = tunnels.get(nom);
+      const empreinte = tunnel?.keyFingerprint ?? null;
+      if (!nom) {
+        return { status: 400, body: { error: 'server_required',
+          message: 'Nommer le serveur dont on veut l’identité.' } };
+      }
+      if (!tunnel) {
+        return { status: 200, body: { server: nom, fingerprint: null,
+          publicKey: null, reason: 'no_tunnel',
+          message: 'Aucun tunnel ouvert vers ce serveur : la console ne sait pas '
+                   + 'encore quelle clé OpenSSH y emploie.' } };
+      }
+      if (!empreinte) {
+        return { status: 200, body: { server: nom, fingerprint: null,
+          publicKey: null, reason: 'no_key',
+          message: 'OpenSSH n’a déclaré aucune clé pour ce serveur : un serveur '
+                   + 'local n’en emploie pas, et un agent muet n’en donne pas.' } };
+      }
+      const cle = await cleCorrespondante(empreinte);
+      if (!cle) {
+        return { status: 200, body: { server: nom, fingerprint: empreinte,
+          publicKey: null, reason: 'no_match',
+          message: 'La clé qu’OpenSSH emploie n’a pas été retrouvée parmi celles '
+                   + 'de ce poste. Aucune clé ne sera accordée : en accorder une '
+                   + 'autre serait un octroi au hasard.' } };
+      }
+      return { status: 200, body: { server: nom, fingerprint: empreinte,
+        publicKey: cle, label: libelleConsole(cle), reason: null } };
+    },
 
     'POST /api/anchor': async (corps) => {
       const nom = String(corps?.name ?? '');

@@ -255,11 +255,16 @@ def releve_brut(driver: Any, incus_name: str) -> dict[str, str]:
     return lignes
 
 
-def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[str, Any]]:
+def juger(brut: dict[str, str], cles_voulues: str | None = None,
+          cles_accordees: int | None = None) -> list[dict[str, Any]]:
     """Traduit le relevé en états, dans l'ordre du §42.1.
 
     `cles_voulues` est l'empreinte tronquée des clés que le REGISTRE veut voir
     (§17.1). Elle est comparée, jamais affichée en entier.
+
+    `cles_accordees` est le NOMBRE de clés que le registre accorde. Il décide de
+    ce qu'une correspondance veut dire (§42.10.4) : deux vides correspondent, et
+    la ligne concluait `present` sur une cellule que personne ne peut atteindre.
     """
     vus: list[dict[str, Any]] = []
 
@@ -271,7 +276,15 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
     })
 
     empreinte = brut.get("cles", "absent") or "absent"
-    if empreinte == "absent":
+    if cles_accordees == 0:
+        # §42.10.4 : le registre n'accorde RIEN. Le fichier de la cellule a beau
+        # correspondre — deux vides correspondent —, la cellule est fermée à tout
+        # le monde. La dire « en place » faisait conclure « joignable en SSH » à
+        # l'écran sur un Spark que nul n'atteint.
+        etat_cles = ABSENT
+        detail_cles = ("aucune clé n'est accordée à ce Spark : personne ne peut "
+                       "s'y connecter, même une fois le serveur SSH installé")
+    elif empreinte == "absent":
         etat_cles, detail_cles = ABSENT, "aucun fichier authorized_keys"
     elif cles_voulues is None:
         # Le registre ne dit pas ce qu'il veut : on constate la présence sans

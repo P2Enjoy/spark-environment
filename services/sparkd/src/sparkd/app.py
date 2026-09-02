@@ -1568,7 +1568,12 @@ def create_app(config: Config) -> FastAPI:
         """Le relevé brut et son jugement, lus une seule fois (§42.6)."""
         brut = bootstrap_service.releve_brut(app.state.incus, spark["incus_name"])
         voulu = sshkeys.authorized_keys_content(connection, spark["id"])
-        return brut, bootstrap_service.juger(brut, bootstrap_service.empreinte(voulu))
+        # §42.10.4 : le NOMBRE de clés accordées décide de ce qu'une
+        # correspondance signifie. Sans lui, un registre vide et une cellule vide
+        # se correspondaient, et la ligne se disait « en place ».
+        accordees = len(sshkeys.desired_keys(connection, spark["id"]))
+        return brut, bootstrap_service.juger(
+            brut, bootstrap_service.empreinte(voulu), accordees)
 
     @app.get("/v1/sparks/{name}/bootstrap", tags=["amorcage"])
     def read_bootstrap(name: str) -> dict:
