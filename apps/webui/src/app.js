@@ -680,18 +680,32 @@ async function lireIdentiteConsole() {
 async function accorderCleConsole(nom) {
   const identite = etat.amorcage.identite;
   if (!identite?.publicKey) return { accordee: false, raison: identite?.reason ?? 'inconnue' };
-  const label = identite.label;
+  let label = identite.label;
   try {
-    // 409 : la clé est déjà au registre. Ce n'est pas une erreur — c'est
-    // l'idempotence, et un second amorçage doit rester silencieux.
-    const pose = await relais(`/api/v1/ssh-keys?server=${encodeURIComponent(etat.server)}`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ label, public_key: identite.publicKey }),
-    });
-    if (!pose.ok && pose.status !== 409) {
-      const corps = await pose.json().catch(() => ({}));
-      return { accordee: false, raison: 'refus_registre',
-               message: corps?.detail?.message ?? `HTTP ${pose.status}` };
+    // La clé est-elle DÉJÀ au registre ? On la cherche par son EMPREINTE, pas
+    // par son libellé et surtout pas par le texte d'un refus : réenregistrer
+    // une clé connue rend `422`, et un second amorçage doit rester silencieux.
+    //
+    // Mesuré sur la Forge le 2026-09-02 : la première version ne tolérait qu'un
+    // `409`, que le runtime n'émet pas. Un amorçage rejoué après une révocation
+    // n'accordait donc rien, et le compte rendu disait « échoué » sans dire que
+    // c'était l'enregistrement qui avait buté.
+    const connues = await relais(
+      `/api/v1/ssh-keys?server=${encodeURIComponent(etat.server)}`)
+      .then((r) => r.json()).catch(() => ({ keys: [] }));
+    const deja = (connues.keys ?? []).find((k) => k.fingerprint === identite.fingerprint);
+    if (deja) {
+      label = deja.label;
+    } else {
+      const pose = await relais(`/api/v1/ssh-keys?server=${encodeURIComponent(etat.server)}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label, public_key: identite.publicKey }),
+      });
+      if (!pose.ok) {
+        const corps = await pose.json().catch(() => ({}));
+        return { accordee: false, raison: 'refus_registre',
+                 message: corps?.detail?.message ?? `HTTP ${pose.status}` };
+      }
     }
     const octroi = await relais(
       `/api/v1/sparks/${encodeURIComponent(nom)}/ssh-keys/${encodeURIComponent(label)}`

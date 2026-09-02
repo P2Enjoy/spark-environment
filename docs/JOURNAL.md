@@ -98,6 +98,98 @@ préexiste dans `main`, ne concerne pas l'amorçage, et n'est pas corrigée ici.
 
 ---
 
+## 2026-09-02 — La Forge de test a trouvé en un relevé ce que 1058 preuves taisaient
+
+Premier passage de SPK-76 sur du matériel réel, la Forge de test étant à jour.
+Le relevé de `ubuntu-demo` rend d'emblée le défaut que le responsable avait
+signalé, correctement nommé : *dépôt Docker amont — à corriger, pointe « debian
+trixie » alors que la cellule est une « ubuntu noble »*.
+
+**Puis deux lignes que je n'attendais pas** : `moteur Docker` et `greffon
+Compose` se disaient **en place avec un détail VIDE**.
+
+La cause est dans le shell, et elle précède mon travail. Le §42.6 écrivait
+`docker --version 2>/dev/null | head -1 || echo absent`. Le `||` porte sur le
+**pipeline**, dont le code est celui de sa dernière commande, et `head` réussit
+sur une entrée vide. Le repli n'était donc **jamais** pris : un binaire absent
+rendait la chaîne vide, que le jugement lisait comme une présence. Trois lignes
+étaient touchées — `cles`, `docker`, `compose`.
+
+Le pire n'est pas l'affichage. C'est l'enchaînement : l'amorçage aurait réparé le
+dépôt, **sauté** le moteur en le croyant en place (§42.1), et rendu une cellule
+inutilisable en la déclarant complète. Exactement le mode de panne que l'unité
+existe pour empêcher.
+
+**Pourquoi aucune preuve ne le voyait.** Le doublon d'Incus rend des valeurs
+**bien formées** — « Docker version 29.7.2 » ou rien du tout. Une vraie cellule
+rend du **vide**, qui n'est ni l'un ni l'autre. Un doublon qui ne sait mentir que
+proprement ne prouve pas grand-chose, et c'est la leçon que je retiens de la
+journée.
+
+**Amorçage réel, ensuite.** Sur la cellule Ubuntu 24.04 : dépôt réécrit en
+`ubuntu noble`, `docker-ce` reposé, Compose installé. `docker --version` rend
+29.7.2, `docker compose version` rend v5.5.0. Un second amorçage ne fait rien et
+le dit. C'est la Definition of Done de SPK-76 sur son point Ubuntu.
+
+**Une fragilité corrigée en chemin, de ma main.** La décision de purger
+`docker-ce` avant de le reposer se prenait en cherchant la tournure « autre
+distribution » dans le message **affiché**. Reformuler une phrase aurait
+silencieusement changé ce que l'amorçage installe. La raison voyage désormais en
+clé stable. J'avais commis exactement le défaut que le §42.9.9 interdit
+maintenant, et c'est le cas réel — un paquet muet, pas un mauvais dépôt — qui l'a
+révélé.
+
+---
+
+## 2026-09-02 — Équipée n'est pas joignable : la clé que personne n'avait
+
+Signalé par le responsable juste après : « l'amorçage devrait aussi pousser la
+clef publique courante de la console dans le spark sinon on peut pas s'y
+connecter ».
+
+En le vérifiant, la moitié cachée du sujet est apparue : **le registre de la
+Forge ne portait aucune clé**. `authorized_keys` était donc vide dans la cellule,
+et l'amorçage affichait *clés d'accès — en place, conformes au registre*, puis
+concluait *« cette cellule est joignable en SSH »*. Deux vides qui se
+correspondent. Littéralement exact, et faux de bout en bout.
+
+**La solution évidente était un piège.** Pousser la clé directement dans la
+cellule aurait marché — puis aurait cessé de marcher au premier changement de
+clés, `_apply_keys` régénérant `authorized_keys` en ENTIER depuis le registre
+(§17.1). Un accès qui fonctionne, puis ne fonctionne plus, sans geste apparent,
+est le genre de panne qu'on cherche des heures. La clé passe donc par le
+registre, où elle reste visible et révocable.
+
+**Quelle clé** : pas une du poste, **celle qu'OpenSSH emploie pour cette Forge**.
+Le tunnel en capte déjà l'empreinte (§21.6.3) ; la console la croise avec l'agent
+et `~/.ssh/*.pub`. Sans correspondance, on n'accorde rien — accorder une clé
+qu'on n'a pas identifiée serait un octroi au hasard.
+
+**Éprouvé sur la Forge de test, le cycle entier :**
+
+| Geste | Constat |
+|---|---|
+| amorcer | `ssh -J` **aboutit** : `ubuntu-demo`, Ubuntu 24.04.4, Docker 29.7.2 |
+| révoquer dans l'onglet Clés | `Permission denied (publickey)` — la cellule est réellement fermée |
+| relever | *clés d'accès — absent, personne ne peut s'y connecter*, verdict retiré |
+| amorcer à nouveau | la clé est ré-accordée, `ssh -J` aboutit de nouveau |
+
+**Un défaut trouvé par cette dernière ligne, et il valait le détour.** Le
+premier amorçage rejoué n'accordait rien : la clé était déjà au registre, et
+réenregistrer une clé connue rend **`422`**, que mon code ne tolérait pas — il
+n'attendait qu'un `409` que le runtime n'émet jamais. La correction ne consiste
+pas à tolérer le `422` : la console cherche désormais la clé par son
+**empreinte** avant d'écrire. Se fier au code ou au texte d'un refus aurait été
+le même défaut que celui que je venais de corriger dans `bootstrap.py` quelques
+minutes plus tôt.
+
+**Limite connue.** L'octroi vit dans le SPA, que le harnais de preuves n'atteint
+pas ; il est prouvé sur matériel réel, deux fois, mais pas gardé par un test
+automatique. La pile de développement ne peut pas l'éprouver : son serveur
+`local` n'emploie aucune clé SSH, donc le chemin heureux n'y existe pas.
+
+---
+
 ## 2026-09-02 — Ce que la vérification visuelle a trouvé, et que les tests ne pouvaient pas voir
 
 Trois défauts, tous découverts en produisant les captures de SPK-76, aucun

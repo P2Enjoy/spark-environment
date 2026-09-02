@@ -4850,7 +4850,7 @@ clé choisit les opérations d'écriture une par une ».
 
 ---
 
-### [ ] SPK-82 · L'amorçage rend la cellule JOIGNABLE, pas seulement équipée
+### [~] SPK-82 · L'amorçage rend la cellule JOIGNABLE, pas seulement équipée
 
 Demandé par le responsable le 2026-09-02, après l'amorçage réel de `ubuntu-demo`
 (SPK-76) : « l'amorçage devrait aussi pousser la clef publique courante de la
@@ -4885,6 +4885,25 @@ l'écran le confirme sur une cellule que nul n'atteint.
 - Cas à traiter, et à ne pas deviner : la console peut n'avoir **aucune** clé —
   un serveur local n'en emploie pas, un agent muet n'en déclare pas. L'écran le
   DIT alors, au lieu de laisser croire que la cellule sera joignable.
+**Livrée et ÉPROUVÉE SUR FORGE RÉELLE le 2026-09-02. Reste `[~]` pour un seul
+point, nommé plus bas.**
+
+- Cycle complet mesuré sur `ubuntu-demo` : après amorçage, `ssh -J` **aboutit**
+  (Ubuntu 24.04.4, Docker 29.7.2) ; la révocation depuis l'onglet Clés rend
+  `Permission denied (publickey)` et le relevé passe en *absent — personne ne
+  peut s'y connecter*, verdict retiré ; un nouvel amorçage rétablit l'accès.
+- **Défaut trouvé par le dernier geste** : réenregistrer une clé déjà connue rend
+  `422`, et le code n'attendait qu'un `409` que le runtime n'émet pas. Un
+  amorçage rejoué après révocation n'accordait donc rien. La console cherche
+  désormais la clé par son **empreinte** avant d'écrire — se fier au code ou au
+  texte d'un refus aurait répété le défaut corrigé au §42.9.9 le même jour.
+- **Ce qui manque pour `[x]`** : l'octroi vit dans le SPA, que le harnais de
+  preuves n'atteint pas. Il est prouvé sur matériel réel, deux fois, et **non
+  gardé par un test automatique**. La pile de développement ne peut pas
+  l'éprouver telle quelle : son serveur `local` n'emploie aucune clé SSH, donc le
+  chemin heureux n'y existe pas. Une instrumentation de test — au sens du §15 —
+  est à prévoir.
+
 - DoD : après un amorçage sur une Forge réelle, `ssh <spark>` par rebond
   **aboutit** depuis le poste qui a lancé l'amorçage — prouvé par une connexion
   réelle, pas par la présence du fichier ; la clé apparaît au panneau Clés et sa
