@@ -134,11 +134,25 @@ Après         : RIEN d'automatique. Les trois colonnes naissent NULL sur les
 Vérification  : sparkd démarre, et `sqlite3 <registre>
                 ".schema spark_bootstrap_observation"` montre `os_id`,
                 `os_suite` et `arch`.
-Retour arrière: fourni. Le `down` retire les trois colonnes ; le reste de la
-                ligne — versions, mode, composants gérés — survit intact.
+Retour arrière: le `down` de la migration retire les trois colonnes ; le reste
+                de la ligne — versions, mode, composants gérés — survit intact.
+                MAIS il n'est JAMAIS joué tout seul : le §40.6 du DAT interdit à
+                « Revenir à la build précédente » de descendre une migration.
+Piège, MESURÉ le 2026-09-02 : une fois la 013 appliquée, **la build précédente
+                refuse de servir**. `check_registry` migre puis VÉRIFIE au
+                démarrage (docs/SCHEMA.md §12.4), et une base qui porte une
+                migration dont le code n'a pas le fichier est rejetée — « cette
+                base a été migrée par un autre code que celui-ci ». sparkd ne
+                démarre pas, `/healthz` ne répond pas, et le retour arrière
+                échoue à ses propres preuves. Ce n'est pas propre à cette
+                migration : c'est vrai de toute mise à jour qui en porte une.
+                Pour revenir en arrière POUR DE BON : jouer le `down` de la 013
+                sur le registre — sauvegarde du §2 bis d'abord —, puis
+                réinstaller l'ancienne build. Sinon, avancer.
 Risque        : nul pour les données. Trois colonnes nullables ajoutées à une
                 table informative, qu'aucune règle d'admission ni d'autorisation
-                ne consulte.
+                ne consulte. Le risque est celui du retour arrière ci-dessus,
+                et il porte sur la DISPONIBILITÉ, pas sur les données.
 ```
 
 ### OP-14 · Mettre à jour `sparkd` pour l'inventaire DNS (SPK-77)

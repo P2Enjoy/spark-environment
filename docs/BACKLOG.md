@@ -5093,8 +5093,14 @@ précis où l'on prépare.
   chemin que prennent le parcours E2E, l'illustration du manuel et les captures.
   Le `verify` du seed exige en revanche que le dossier soit **lisible** sur un
   Spark jamais amorcé, et qu'il nomme les deux secrets seedés sans leurs valeurs.
-- **Reste à faire pour passer `[x]`** : le commit et le push, puis OP-15 — la
-  migration `013` sur la Forge. Tant qu'elle n'est pas appliquée, le dossier des
+- **Reste à faire pour passer `[x]`** : la mise à jour de la Forge. La migration
+  `013` n'est PAS un geste manuel — `check_registry` l'applique au démarrage de
+  `sparkd`, donc au redémarrage que `sparkd.install` déclenche depuis
+  « Mettre à jour sparkd ». Ce qui reste humain, c'est la décision de déployer,
+  la sauvegarde du registre (§2 bis), et de savoir qu'**après cette mise à jour,
+  « Revenir à la build précédente » ne rétablit plus rien** : mesuré le
+  2026-09-02, l'ancienne build refuse de servir une base migrée au-delà d'elle.
+  Consigné en OP-15 et au §40.6 du DAT. Tant qu'elle n'est pas appliquée, le dossier des
   Sparks déjà amorcés dira « système non relevé » jusqu'à leur amorçage suivant.
 
 ### [~] SPK-82 · L'amorçage rend la cellule JOIGNABLE, pas seulement équipée

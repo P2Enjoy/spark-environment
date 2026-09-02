@@ -6925,7 +6925,19 @@ Il rejoue le même script et la même URL épinglée, puis exige les mêmes troi
 preuves avec l'ancien commit. Il ne reçoit jamais une version saisie dans la
 page et ne descend jamais les migrations SQL automatiquement : effacer des
 données pour rétablir le binaire serait une seconde opération, irréversible,
-que cette confirmation ne couvre pas. Deux chemins le déclenchent :
+que cette confirmation ne couvre pas.
+
+**Conséquence, mesurée le 2026-09-02 (SPK-85) : quand la mise à jour a appliqué
+une migration, le retour arrière ÉCHOUE, et il échoue proprement.** Le §12.4 du
+[SCHEMA](SCHEMA.md) fait vérifier le registre au démarrage : une base qui porte
+une migration dont le code n'a pas le fichier est rejetée — « cette base a été
+migrée par un autre code que celui-ci ». L'ancienne build ne sert donc pas,
+`/healthz` ne répond pas, et les trois preuves du retour arrière ne sont pas
+réunies. Le geste ne détruit rien ; il ne rétablit rien non plus, et il laisse le
+plan de contrôle arrêté jusqu'à ce que la build migrée soit réinstallée. Revenir
+en arrière au-delà d'une migration est donc une opération HUMAINE, décrite au
+contrat de déploiement : jouer le `down`, puis réinstaller. Deux chemins
+déclenchent le geste automatique :
 
 - après une mutation suivie d'un échec d'installation ou de preuve, l'hôte le
   tente automatiquement et rend séparément l'échec initial et l'issue du retour
