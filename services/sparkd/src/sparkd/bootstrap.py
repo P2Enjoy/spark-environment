@@ -107,6 +107,19 @@ COMPTE_ROOTLESS = "spark-docker"
 ENRACINE = "enracine"
 ROOTLESS = "rootless"
 
+#: Les raisons d'un `defect` sur le moteur (§42.9.9). Clés STABLES : la reprise
+#: dure — purger `docker-ce` avant de le reposer — se décidait en cherchant une
+#: tournure dans le message affiché, si bien que reformuler une phrase changeait
+#: ce que l'amorçage installe.
+PAQUET_DISTRIBUTION = "paquet_distribution"   # `docker.io` (§41.2)
+DEPOT_ETRANGER = "depot_etranger"             # `docker-ce` d'une autre suite (§42.9.4)
+MOTEUR_MUET = "moteur_muet"                   # paquet posé, moteur sans réponse (§42.9.8)
+
+#: Les deux raisons qui exigent de RETIRER `docker-ce` avant de le reposer.
+#: `docker.io` n'en fait pas partie : il porte un autre nom de paquet, et le
+#: script le purge de toute façon.
+REPRISES_DURES = (DEPOT_ETRANGER, MOTEUR_MUET)
+
 #: L'ordre compte : le dépôt avant Docker, Docker avant Compose.
 ELEMENTS = ("sshd", "cles", "depot", "docker", "compose")
 
@@ -302,6 +315,11 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
     # LE point de l'unité (§41.2) : l'origine, pas la présence.
     origine = brut.get("origine", "absent") or "absent"
     version = brut.get("docker", "absent") or "absent"
+    # §42.9.9 : la RAISON du défaut voyage à part, en clé stable. Elle décidait
+    # jusqu'ici d'une reprise plus dure — purger `docker-ce` —, et cette décision
+    # se prenait en cherchant une tournure dans le message en PROSE. Reformuler
+    # une phrase aurait silencieusement changé ce que l'amorçage installe.
+    raison_docker = None
     if origine == "docker-ce" and version == "absent":
         # §42.9.8, MESURÉ sur la Forge de test le 2026-09-02 : `dpkg` connaît
         # `docker-ce`, et `docker --version` ne répond RIEN. C'est l'état que
@@ -312,7 +330,7 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
         # dépôt puis SAUTAIT le moteur, en le croyant en place, et laissait la
         # cellule inutilisable. La présence du paquet ne prouve pas le moteur —
         # c'est la leçon du §41.2, appliquée à l'installation inachevée.
-        etat_docker = DEFECT
+        etat_docker, raison_docker = DEFECT, MOTEUR_MUET
         detail_docker = (
             "le paquet « docker-ce » est installé mais le moteur ne répond pas : "
             "`docker --version` ne rend rien. L'installation n'est pas allée à "
@@ -323,7 +341,7 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
         # celui qui convient — même leçon qu'au §41.2, un cran plus haut.
         marque = origine_paquet(brut.get("docker_version", ""))
         if attendu is not None and marque is not None and marque != attendu[1]:
-            etat_docker = DEFECT
+            etat_docker, raison_docker = DEFECT, DEPOT_ETRANGER
             detail_docker = (
                 f"{version} — paquet « {marque} », posé depuis le dépôt d'une "
                 f"autre distribution que cette cellule « {attendu[1]} ». "
@@ -332,7 +350,7 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
         else:
             etat_docker, detail_docker = PRESENT, version
     elif origine == "docker.io":
-        etat_docker = DEFECT
+        etat_docker, raison_docker = DEFECT, PAQUET_DISTRIBUTION
         detail_docker = (
             f"{version} — paquet « docker.io » de la distribution. Son profil "
             "AppArmor refuse socketpair() sous imbrication : les conteneurs "
@@ -347,7 +365,8 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
     mode = releve_mode if (etat_docker == PRESENT
                            and releve_mode in (ENRACINE, ROOTLESS)) else None
     vus.append({"key": "docker", "label": LIBELLES["docker"],
-                "state": etat_docker, "detail": detail_docker, "mode": mode})
+                "state": etat_docker, "detail": detail_docker, "mode": mode,
+                "reason": raison_docker})
 
     # §42.9.8 : même garde. `docker compose version` muet ne prouve pas un
     # greffon — il prouve qu'il n'y a rien pour répondre.

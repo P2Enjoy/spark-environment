@@ -803,3 +803,38 @@ def test_le_releve_GARDE_chaque_ligne_construite_par_un_pipeline(tmp_path):
     for cle in ("cles", "docker", "compose"):
         assert f'[ -n "${cle}" ] || {cle}=absent' in bootstrap.RELEVE, (
             f"« {cle} » peut encore rendre une chaîne vide")
+
+
+def test_la_raison_d_un_defaut_est_une_CLE_pas_une_tournure(tmp_path):
+    """§42.9.9 : la reprise dure — purger `docker-ce` — se décidait en cherchant
+    « autre distribution » dans le message AFFICHÉ. Reformuler une phrase
+    changeait donc silencieusement ce que l'amorçage installe."""
+    def raison(brut):
+        return next(v for v in bootstrap.juger(brut) if v["key"] == "docker")["reason"]
+
+    commun = {"os_id": "ubuntu", "os_suite": "noble", "os_like": "debian"}
+    assert raison({**commun, "origine": "docker-ce", "docker": "",
+                   "docker_version": ""}) == bootstrap.MOTEUR_MUET
+    assert raison({**commun, "origine": "docker-ce", "docker": "Docker version 29",
+                   "docker_version": "5:29~debian.13~trixie"}) == bootstrap.DEPOT_ETRANGER
+    assert raison({**commun, "origine": "docker.io", "docker": "Docker version 26"
+                   }) == bootstrap.PAQUET_DISTRIBUTION
+    # Un moteur sain n'a pas de raison : on ne prête pas un défaut à ce qui va bien.
+    assert raison({**commun, "origine": "docker-ce", "docker": "Docker version 29",
+                   "docker_version": "5:29~ubuntu.24.04~noble"}) is None
+    # Les deux reprises dures sont celles qui exigent de RETIRER le paquet.
+    assert set(bootstrap.REPRISES_DURES) == {bootstrap.DEPOT_ETRANGER,
+                                             bootstrap.MOTEUR_MUET}
+
+
+def test_un_moteur_MUET_fait_purger_docker_ce_avant_de_le_reposer(tmp_path):
+    """C'est l'état réel de `ubuntu-demo` : le paquet est là, dépaqueté et
+    inutilisable. Le reposer sans le retirer laisserait `apt` conclure qu'il n'a
+    rien à faire si la version en place est la plus haute."""
+    script = bootstrap.script_docker(purger_ce=True)
+    assert "purge" in script
+    assert script.index("docker-ce docker-ce-cli") < script.index("apt-get install")
+    # …et sans reprise dure, on ne retire QUE le paquet de distribution (§41.2).
+    ordinaire = bootstrap.script_docker(purger_ce=False)
+    assert "docker.io" in ordinaire
+    assert "purge -y -qq docker-ce" not in ordinaire

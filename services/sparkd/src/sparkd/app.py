@@ -1671,8 +1671,7 @@ def create_app(config: Config) -> FastAPI:
                     # version est plus haute que celle du bon dépôt.
                     ce_a_purger = cle == "docker" and any(
                         v["key"] == "docker"
-                        and v["state"] == bootstrap_service.DEFECT
-                        and "autre distribution" in (v.get("detail") or "")
+                        and v.get("reason") in bootstrap_service.REPRISES_DURES
                         for v in avant)
                     commande = bootstrap_service.script_pour(
                         cle, brut_avant,
