@@ -4638,6 +4638,61 @@ créer une seconde.
 
 ---
 
+### [ ] SPK-76 · L'amorçage relève la famille de la cellule, et refuse ce qu'il ne sert pas
+
+Signalé par le responsable le 2026-09-02, sur deux cellules réelles. `alpine-demo`
+rend `Operation Incus en echec (POST …/exec) : Command not found`, et une cellule
+Ubuntu 24.04 rend `L'installation de « docker » a échoué (code 1)` — en ayant
+tout de même installé Docker.
+
+Même cause, et elle est de spécification : le §42.6 a été écrit en regardant
+`images:debian/13`, rien ne vérifiait que la cellule était celle-là, et le
+catalogue du §33 en propose **quatre**. Trois des quatre images proposées par le
+produit ne sont pas amorçables correctement, et rien ne le disait avant l'échec.
+
+- Spécification : `docs/DAT.md` **§42.9** (écrite et committée avant la première
+  ligne de code), §41.2 amendé, §42.6 et §42.7 mis en accord · manuel M6.
+- Portée : relevé de `/etc/os-release` ; exécution en `sh -c` avec `PATH` posé,
+  au lieu de `bash -lc` ; dépôt Docker amont construit depuis le relevé —
+  distribution **et** suite — au lieu des constantes `linux/debian` / `trixie` ;
+  `docker.list` jugé sur son **contenu** ; `docker-ce` venu d'un autre dépôt
+  rendu `defect` ; refus `409 bootstrap_unsupported_os` pour une famille non
+  servie ; `set -e` sur les scripts de pose et remontée du `stderr` dans
+  `bootstrap_failed` ; le catalogue d'images dit ce que l'amorçage sait servir.
+- **Hors périmètre, et c'est un choix** : servir Alpine. La doctrine du §41.2 —
+  Docker vient du dépôt amont — n'y a pas d'équivalent : Docker ne publie aucun
+  dépôt Alpine. Ce serait une seconde doctrine, à mesurer, pas une traduction de
+  commandes (§42.9.5).
+- Dépend de : SPK-54, dont elle corrige la spécification, et SPK-32 pour le
+  catalogue qui propose les images.
+- Point qui décide de l'unité : **un dépôt joignable n'est pas un dépôt juste.**
+  `download.docker.com/linux/debian` publie réellement `trixie` ; posé sur une
+  Ubuntu `noble`, `apt-get update` réussit et rien ne signale l'erreur avant
+  qu'`apt` ne refuse les paquets. C'est pourquoi la détection porte sur la
+  **correspondance** entre le dépôt et la cellule, jamais sur la présence du
+  fichier.
+- Second point, indépendant de la famille : **un script de pose sans `set -e`
+  rend le code de sa dernière ligne.** Une installation ratée suivie d'un
+  `systemctl` réussi rendait « succès ». Le défaut est symétrique de celui que
+  le responsable a vu, et plus grave que lui.
+- DoD : un amorçage réussit de bout en bout sur une cellule **Ubuntu 24.04** et
+  sur une **Debian 13**, prouvé sur Forge réelle depuis le parcours canonique ;
+  une cellule Alpine rend un refus qui **nomme** sa distribution, sans qu'aucune
+  commande de pose ne soit exécutée — prouvé par un test qui compte les
+  exécutions ; un `docker.list` pointant la mauvaise distribution est rendu
+  `defect` puis réécrit ; un script de pose qui échoue en son **milieu** rend
+  `bootstrap_failed` avec sa cause, prouvé par un test ; l'écran de création dit
+  quelles images sont amorçables ; captures observées ; manuel M6 et M5 mis à
+  jour ; `@spec` / `@verifies` posés.
+- Reste à trancher avec le responsable : la **progression** pendant l'amorçage,
+  signalée le même jour — « on n'a pas de *progress* quand on amorce un Spark ».
+  Une pose complète dure plusieurs minutes derrière un `POST` synchrone muet.
+  Une progression *honnête* exige que le serveur rende la main pendant qu'il
+  travaille ; l'afficher sans cela serait une animation qui invente son
+  avancement. Non couvert par cette unité, à spécifier séparément.
+
+---
+
 ## Réservé, non planifié
 
 - `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc

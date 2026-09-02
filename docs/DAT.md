@@ -6575,6 +6575,8 @@ protection pour **tous** les conteneurs du locataire, et il faudrait l'écrire
 dans chaque fichier Compose. On ne troque pas une protection contre un symptôme.
 
 **Décision : le runtime d'un Spark s'installe depuis le dépôt amont de Docker.**
+Lequel dépend de la cellule : Docker publie un dépôt **par distribution et par
+suite**, et le §42.9.2 le construit depuis le relevé au lieu de le réciter.
 C'est exactement la leçon de SPK-31 pour Incus, une couche plus haut : sur ce
 terrain, le paquet de la distribution est trop ancien pour l'imbrication.
 
@@ -6796,9 +6798,17 @@ mesurer.
 
 Une seule commande par cellule, et elle n'écrit rien. Elle rend une ligne par
 élément, `<clé>=<valeur>`, ce qui la rend lisible à l'œil dans le journal d'audit
-comme au débogage :
+comme au débogage.
+
+Elle s'exécute sous **`sh -c`**, en posant elle-même son `PATH`, et non plus sous
+`bash -lc` : une cellule sans `bash` doit pouvoir être RELEVÉE, sans quoi le
+diagnostic exige ce qu'il vient diagnostiquer (§42.9.1). Elle lit en outre
+`/etc/os-release`, dont dépend tout le reste (§42.9.2) :
 
 ```sh
+os_id=$(. /etc/os-release 2>/dev/null && echo "$ID")
+os_suite=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
+os_like=$(. /etc/os-release 2>/dev/null && echo "$ID_LIKE")
 sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
 cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64 || echo absent)
 depot=$([ -f /etc/apt/sources.list.d/docker.list ] && echo present || echo absent)
@@ -6819,6 +6829,10 @@ fi
 mode=$(systemctl is-active docker.service >/dev/null 2>&1 && echo enracine \
        || ([ "$rootless" = active ] && echo rootless || echo absent))
 ```
+
+`depot` ne se contente plus d'exister : son **contenu** est comparé à la
+distribution et à la suite relevées, parce qu'un `docker.list` présent peut
+nommer une autre distribution que la cellule (§42.9.3).
 
 **`origine` est le champ qui décide de l'unité.** Il vaut `docker-ce` (bon),
 `docker.io` (défaut à corriger, §41.2) ou `absent`. Un amorçage qui se
@@ -6843,6 +6857,8 @@ Le relevé rend, pour chacun des cinq éléments du §42.1 :
 
 ```json
 { "spark": "helo", "reachable": true,
+  "os": { "id": "debian", "suite": "trixie", "family": "apt" },
+  "supported": true,
   "items": [ { "key": "sshd", "state": "present|absent|defect",
                "detail": "active", "action": null } ],
   "complete": false }
@@ -6876,7 +6892,11 @@ explicitement demandé à nouveau.
 | Spark sans cellule | `409` | `spark_not_reachable` |
 | cellule à l'arrêt | `409` | `spark_not_running` |
 | Spark protégé (§35) | `423` | `spark_protected` |
+| famille non servie (§42.9.5) | `409` | `bootstrap_unsupported_os` |
 | Incus refuse l'exécution | `502` | `bootstrap_failed` |
+
+`bootstrap_failed` porte le code de sortie **et** les dernières lignes de la
+sortie d'erreur (§42.9.7) : un code sans cause n'est pas un diagnostic.
 
 Le Spark **protégé** refuse en **`423`**, et non en `409` : c'est le code que le
 §35.5 a déjà fixé pour toute écriture visant un Spark protégé, et une seconde
@@ -6904,6 +6924,169 @@ locataire sans qu'on en ait besoin.
 Un amorçage qui ne change rien est **quand même journalisé** : savoir que
 quelqu'un a demandé le geste et que rien n'était à faire est une information, et
 son absence ferait croire que le geste n'a pas été tenté.
+
+### 42.9 La famille de la cellule, et pourquoi elle décide — écrit le 2026-09-02
+
+Signalé par le responsable, sur deux cellules réelles :
+
+```
+alpine-demo   → Operation Incus en echec (POST /1.0/instances/…/exec) : Command not found
+ubuntu 24.04  → L'installation de « docker » a échoué (code 1).
+```
+
+Les deux ont la **même** cause, et elle est de spécification : le §42.6 a été
+écrit en regardant `images:debian/13`, et rien n'a jamais vérifié que la cellule
+était bien celle-là. Or le catalogue du §33 en propose **quatre**.
+
+| Image proposée par le §33 | Ce que l'amorçage faisait |
+|---|---|
+| `images:debian/13` | correct — la seule mesurée |
+| `images:debian/12` | dépôt Docker **`trixie`** posé sur `bookworm` |
+| `images:ubuntu/24.04` | dépôt **`linux/debian` `trixie`** posé sur `noble` |
+| `images:alpine/3.21` | échec immédiat : ni `bash`, ni `dpkg`, ni `systemd` |
+
+Le cas Ubuntu est le plus instructif : `download.docker.com/linux/debian`
+publie réellement `trixie`, donc `apt-get update` **réussit**. Rien ne signale
+l'erreur avant qu'`apt` ne refuse des paquets `trixie` sur `noble`. Un dépôt
+joignable n'est pas un dépôt juste.
+
+**Décision : l'amorçage relève la famille de la cellule et refuse ce qu'il ne
+sait pas servir.** Il sert la famille **apt** — Debian et Ubuntu —, et le dépôt
+Docker amont se construit depuis le relevé, jamais depuis une constante.
+
+#### 42.9.1 Le relevé ne présuppose plus `bash`
+
+`bash -lc` était le premier geste de toute exécution, relevé compris. Sur une
+cellule sans `bash`, le refus vient donc d'Incus — « Command not found » — avant
+que le produit n'ait pu dire quoi que ce soit. **Un diagnostic qui exige ce
+qu'il vient diagnostiquer ne diagnostique rien.**
+
+Le relevé passe en `sh -c`, présent partout, et pose lui-même le `PATH` complet
+au lieu de l'attendre d'un shell de connexion :
+
+```sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+```
+
+C'était la seule raison invoquée pour `bash -lc` — `sshd` vit dans `/usr/sbin`.
+La poser explicitement est plus sûr que de la déduire d'un profil de connexion,
+et cela vaut sur les trois familles.
+
+Le relevé gagne trois lignes, lues dans `/etc/os-release` :
+
+```sh
+os_id=$(. /etc/os-release 2>/dev/null && echo "$ID")
+os_suite=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
+os_like=$(. /etc/os-release 2>/dev/null && echo "$ID_LIKE")
+```
+
+#### 42.9.2 Le dépôt se construit, il ne se récite pas
+
+`SUITE = "trixie"` et `linux/debian` étaient des constantes de module. Elles
+deviennent une fonction du relevé :
+
+| `os_id` | URL du dépôt amont | suite |
+|---|---|---|
+| `debian` | `download.docker.com/linux/debian` | `VERSION_CODENAME` |
+| `ubuntu` | `download.docker.com/linux/ubuntu` | `VERSION_CODENAME` |
+
+Une distribution dérivée est servie par son parent lorsqu'`ID_LIKE` le nomme :
+c'est ce que Docker documente lui-même pour les dérivés d'Ubuntu.
+
+Sans `VERSION_CODENAME` lisible, l'amorçage **refuse** plutôt que de deviner :
+poser une suite fausse est précisément le défaut qu'on corrige.
+
+#### 42.9.3 Un dépôt présent peut être un dépôt faux
+
+Le §42.6 concluait `depot=present` sur la seule **existence** de
+`/etc/apt/sources.list.d/docker.list`. La cellule Ubuntu du responsable en avait
+un, et il était faux.
+
+La détection lit donc son **contenu** et le compare à ce que la cellule appelle.
+Trois états, comme partout ailleurs (§42.7) :
+
+- `absent` — pas de fichier ;
+- `present` — il nomme la bonne distribution **et** la bonne suite ;
+- `defect` — il existe et ne les nomme pas. Réparer, c'est le réécrire.
+
+C'est la même leçon qu'au §41.2, un cran plus haut : la **présence** ne prouve
+pas l'**utilisabilité**.
+
+#### 42.9.4 Un `docker-ce` peut venir du mauvais dépôt
+
+Corollaire du précédent, et c'est l'état réel de la cellule Ubuntu. Les paquets
+amont portent leur origine dans leur **version** :
+
+```
+5:29.7.2-1~debian.13~trixie      ← posé par le dépôt Debian
+5:29.7.2-1~ubuntu.24.04~noble    ← posé par le dépôt Ubuntu
+```
+
+Un `docker-ce` dont la version nomme une autre distribution que celle de la
+cellule est rendu **`defect`**, au même titre qu'un `docker.io` (§41.2) : il est
+là, et il n'est pas celui qui convient. Sa réparation purge `docker-ce` avant de
+reposer le bon — le §42.1 autorise d'agir sur un `defect`, c'est sa raison
+d'être.
+
+Le volume `/var/lib/docker` n'est **pas** touché par cette purge : les images et
+les volumes du locataire survivent, seul le démon redémarre.
+
+#### 42.9.5 Ce qui n'est pas servi est REFUSÉ, et le refus se lit
+
+Une cellule dont la famille n'est pas `apt` — Alpine, et tout ce qui viendra —
+n'est pas une panne. C'est un refus, et il se rend comme les autres refus du
+§42.7 :
+
+| Situation | Code | `error` |
+|---|---|---|
+| famille non servie par l'amorçage | `409` | `bootstrap_unsupported_os` |
+
+Le message **nomme la distribution relevée** et dit ce que l'amorçage sert. Le
+relevé (`GET`) ne lève pas pour autant : il rend ce qu'il a vu, avec
+`supported: false` et le bloc `os`, parce que regarder doit rester possible même
+quand agir ne l'est pas. C'est la règle du §42.7 — on peut regarder sans agir —
+et elle vaut a fortiori ici.
+
+**Ce refus n'est pas une limite qu'on lèvera par principe.** La doctrine du
+§41.2 — Docker vient du dépôt amont — n'a pas d'équivalent Alpine : Docker n'y
+publie aucun dépôt, et le paquet vient de la distribution elle-même. Servir
+Alpine demanderait une seconde doctrine, mesurée, pas une traduction de
+commandes.
+
+#### 42.9.6 Le catalogue dit ce que l'amorçage sait servir
+
+Le §33 propose une image ; le §42 sait ou non l'amorcer. Les deux ne se
+parlaient pas, et c'est ce silence qui a produit `alpine-demo`.
+
+Le catalogue porte donc, pour chaque entrée, ce que l'amorçage en fait. Ce
+n'est **pas** un filtre : l'entrée reste choisissable — le produit sert des
+cellules, pas seulement des cellules amorçables, et un locataire qui sait ce
+qu'il fait peut vouloir une Alpine. Mais l'écran de création le **dit avant**,
+au lieu de le laisser découvrir à l'amorçage.
+
+#### 42.9.7 Ce que l'échec d'une pose doit dire
+
+Deux défauts trouvés en lisant le rapport du responsable, et ils sont
+indépendants de la famille.
+
+**Les scripts de pose ne s'arrêtaient pas au premier échec.** Aucun `set -e` :
+`apt-get install` échouait, le script continuait sur `dpkg --configure -a` puis
+`systemctl enable --now docker`, et le code rendu était celui de la **dernière**
+ligne. D'où « docker installé malgré l'erreur ». Le symétrique est pire : une
+installation ratée suivie d'un `systemctl` réussi rendait **succès**.
+
+Tout script de pose commence donc par `set -e`. La ligne qui a le droit
+d'échouer le dit elle-même — `|| true` —, ce qui rend ce droit visible au lieu
+de l'accorder à toutes.
+
+**Le `stderr` était jeté.** `code, _, _ = exec_capture(...)` : le produit lisait
+la cause et la laissait tomber, pour ne rendre qu'« a échoué (code 1) ». Un code
+de sortie sans cause n'est pas un diagnostic. Le refus `bootstrap_failed` porte
+désormais les dernières lignes de la sortie d'erreur, bornées, en plus du code.
+
+Elles ne traversent **pas** le journal d'audit : le §42.8 l'interdit, et une
+sortie d'`apt` nomme les paquets du locataire. Elles vont à qui a demandé le
+geste, dans la réponse, et nulle part ailleurs.
 
 
 ## 43. L'environnement d'un Spark : variables et secrets

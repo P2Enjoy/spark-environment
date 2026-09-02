@@ -68,6 +68,22 @@ décrite plus bas ne peut pas aboutir tant que ce premier geste n'a pas eu lieu.
 
 La section **Amorçage**, sur la fiche du Spark, s'en charge.
 
+### Sur quelles images il fonctionne
+
+L'amorçage sert les distributions de la famille **Debian** : Debian et Ubuntu.
+Il lit la distribution **dans** votre cellule et pose le dépôt Docker officiel
+qui lui correspond — celui de Debian pour une Debian, celui d'Ubuntu pour une
+Ubuntu, à la bonne version.
+
+Sur une image d'une autre famille — **Alpine**, par exemple —, l'amorçage
+**refuse**, et le refus nomme la distribution qu'il a trouvée. Ce n'est pas une
+panne : c'est un geste que le produit ne sait pas faire là. Un tel Spark
+fonctionne, il tourne, vous pouvez y entrer par la console — mais vous y
+installerez SSH et Docker vous-même, et le produit ne le fera pas à votre place.
+
+L'écran de création vous le dit **avant** de créer le Spark, au moment où le
+choix ne coûte encore rien.
+
 ![L'amorçage relève ce qui manque avant d'agir](images/m6-amorcage.png)
 
 ### Relever d'abord
@@ -84,7 +100,7 @@ Cinq éléments, chacun avec son état :
 |---|---|
 | serveur SSH | ce qui vous laissera entrer |
 | clés d'accès | celles que vous avez autorisées |
-| dépôt Docker amont | d'où vient le moteur |
+| dépôt Docker amont | d'où vient le moteur, et pour quelle distribution |
 | moteur Docker | ce qui fait tourner votre pile |
 | greffon Compose | `docker compose` |
 
@@ -100,6 +116,17 @@ désactiver.
 
 C'est pour ce cas que l'écran distingue trois états et non deux : un Spark où
 Docker est « présent » peut être un Spark où rien ne tournera.
+
+**« À corriger » couvre un second cas, celui du dépôt qui ne correspond pas.** Un
+Spark peut porter un dépôt Docker parfaitement joignable, mais qui nomme une
+autre distribution que la sienne — une Ubuntu servie par le dépôt Debian, par
+exemple. Rien ne s'en plaint tant qu'on ne demande pas de paquet : c'est à
+l'installation que tout s'arrête. La ligne *dépôt Docker amont*, et le cas
+échéant la ligne *moteur Docker*, passent alors en « à corriger », et l'amorçage
+réécrit le dépôt puis repose le moteur depuis le bon.
+
+Vos images et vos volumes Docker ne sont **pas** touchés par cette réparation :
+seul le moteur est remplacé, et il redémarre.
 
 ### Puis amorcer
 
@@ -117,6 +144,16 @@ l'amorçage sans risque — s'il n'y a rien à faire, il ne fait rien et vous le
 Le compte rendu donne le sort de **chaque** ligne : inchangé, installé, ou
 échoué. Jamais un « succès » global, qui laisserait croire que tout a été fait
 alors qu'on n'a agi que sur une partie.
+
+**Une installation qui échoue s'arrête là, et dit pourquoi.** Elle ne poursuit
+pas les lignes suivantes, et le message ne se réduit pas à un code : il porte les
+dernières lignes de l'erreur, telles que la cellule les a écrites. C'est
+généralement `apt` qui parle, et c'est lui qu'il faut lire.
+
+**Comptez plusieurs minutes.** L'amorçage télécharge et installe de vrais
+paquets ; l'écran reste occupé pendant tout ce temps, sans détailler son
+avancement. Ne relancez pas le geste : le compte rendu arrive à la fin, et il
+dira ce qui a été fait.
 
 ### Le mode rootless, si vous le voulez
 

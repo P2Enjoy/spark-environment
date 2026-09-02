@@ -14,6 +14,28 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **L'amorçage sert enfin l'image que la cellule fait tourner** (SPK-76,
+  `docs/DAT.md` §42.9) : le geste avait été écrit en regardant `images:debian/13`
+  et rien ne vérifiait que la cellule était celle-là — or le catalogue en propose
+  quatre. Une cellule **Alpine** échouait sur `Command not found`, l'amorçage
+  exigeant `bash` avant même de pouvoir relever quoi que ce soit ; une cellule
+  **Ubuntu 24.04** recevait le dépôt Docker `linux/debian` suite `trixie`, qui
+  répond — d'où un `apt-get update` réussi — et dont les paquets sont ensuite
+  refusés par `apt`. Le relevé lit désormais `/etc/os-release`, s'exécute en
+  `sh -c` sans exiger `bash`, et le dépôt amont se construit depuis la
+  distribution et la suite relevées. Un `docker.list` qui nomme une autre
+  distribution que la cellule, et un `docker-ce` installé depuis un autre dépôt,
+  sont rendus **« à corriger »** au lieu de « présent ». Une famille non servie —
+  Alpine — est **refusée** en nommant sa distribution, au lieu de laisser fuiter
+  un refus d'Incus.
+- **Un amorçage qui échoue dit enfin pourquoi, et s'arrête** (SPK-76,
+  `docs/DAT.md` §42.9.7) : les scripts de pose n'avaient pas de `set -e`. Une
+  installation ratée n'interrompait rien et le code rendu était celui de la
+  dernière ligne du script — d'où un Docker installé « malgré l'erreur », et,
+  symétriquement, des installations ratées rendues **réussies** dès que la
+  dernière ligne passait. La sortie d'erreur, jusqu'ici jetée, accompagne
+  désormais le code dans le refus ; elle ne traverse pas le journal d'audit, qui
+  n'a pas à porter les paquets du locataire.
 - **Le pool natif se pose enfin là où le partitionnement l'attend** (SPK-68,
   `docs/DAT.md` §50.3, §8.6) : la proposition ne considérait que des **disques
   entiers** et écartait tout disque portant une partition. Sur un serveur dédié

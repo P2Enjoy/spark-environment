@@ -4,6 +4,100 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-09-02 — Trois images proposées sur quatre n'étaient pas amorçables
+
+**Problème.** Deux signalements du responsable, à quelques minutes d'écart, sur
+deux cellules réelles :
+
+```
+alpine-demo   Operation Incus en echec (POST /1.0/instances/alpine-demo/exec)
+              : Command not found
+ubuntu 24.04  L'installation de « docker » a échoué (code 1).
+              … « et malgré l'erreur le docker a été installé »
+```
+
+**Hypothèse de départ, et elle était trop étroite.** J'ai d'abord lu le premier
+signalement comme un incident Alpine : pas de `bash`, donc `incus exec` refuse.
+C'est exact, mais ce n'est pas le défaut.
+
+**Observation qui a élargi le sujet.** En relisant `bootstrap.py` contre
+`images.py`, le catalogue du §33 propose **quatre** images et l'amorçage n'en
+sert qu'**une** :
+
+| Image | Ce que l'amorçage faisait |
+|---|---|
+| `images:debian/13` | correct — la seule jamais mesurée |
+| `images:debian/12` | dépôt `trixie` posé sur `bookworm` |
+| `images:ubuntu/24.04` | dépôt `linux/debian` `trixie` posé sur `noble` |
+| `images:alpine/3.21` | échec immédiat |
+
+`SUITE = "trixie"` et `linux/debian` étaient des **constantes de module**. Le
+produit offrait donc des images qu'il ne pouvait pas honorer, sans le dire nulle
+part avant l'échec.
+
+**Le détail qui rend le cas Ubuntu vicieux.** `download.docker.com/linux/debian`
+publie réellement `trixie`. `apt-get update` réussit donc, la ligne `depot` est
+rendue « présente », et rien ne signale quoi que ce soit jusqu'à ce qu'`apt`
+refuse des paquets `trixie` sur `noble`. **Un dépôt joignable n'est pas un dépôt
+juste** — c'est la phrase qui a fixé la forme de la détection : elle porte
+désormais sur la *correspondance* entre le fichier et la cellule, pas sur
+l'existence du fichier.
+
+**Deux défauts trouvés en cherchant celui-là**, et ils sont indépendants de la
+famille de distribution :
+
+1. **aucun `set -e` dans les scripts de pose.** `apt-get install` échouait, le
+   script continuait sur `dpkg --configure -a` puis `systemctl enable --now
+   docker`, et le code rendu était celui de la **dernière** ligne. C'est ce que
+   le responsable décrit — « malgré l'erreur le docker a été installé ». Le
+   symétrique est pire et n'avait été vu de personne : une installation ratée
+   suivie d'un `systemctl` réussi rendait **succès**, et le compte rendu écrivait
+   « installé » ;
+2. **le `stderr` était jeté.** `code, _, _ = exec_capture(...)`. Le produit lisait
+   la cause de l'échec et la laissait tomber pour n'afficher qu'« a échoué
+   (code 1) ». Un code de sortie sans cause n'est pas un diagnostic, et c'est
+   exactement ce que le CLAUDE.md §18 interdit.
+
+**Solutions envisagées.** Trois, soumises au responsable parce qu'elles ne
+représentaient pas le même travail : (a) rester à Debian 13 et refuser le reste ;
+(b) servir la famille **apt** — Debian et Ubuntu — depuis le relevé, et refuser
+Alpine ; (c) servir toutes les familles, Alpine comprise.
+
+**Décision du responsable : (b).** Retenue aussi parce qu'(c) n'est pas une
+traduction de commandes : la doctrine du §41.2 — Docker vient du dépôt **amont**
+— n'a pas d'équivalent Alpine, Docker n'y publiant aucun dépôt. Ce serait une
+seconde doctrine, à mesurer.
+
+**Conséquences.**
+
+- le relevé cesse d'exiger `bash`. Il passe en `sh -c` et pose lui-même son
+  `PATH` — la seule raison qu'avait `bash -lc` était `/usr/sbin` pour `sshd`, et
+  l'écrire est plus sûr que de l'attendre d'un profil de connexion. **Un
+  diagnostic qui exige ce qu'il vient diagnostiquer ne diagnostique rien** : une
+  cellule Alpine doit pouvoir être *relevée* pour être *refusée* lisiblement ;
+- le dépôt se construit depuis `/etc/os-release`, distribution et suite ;
+- `docker.list` est jugé sur son contenu, et un `docker-ce` dont la version nomme
+  une autre distribution (`5:29.7.2-1~debian.13~trixie` sur une `noble`) devient
+  `defect` — même leçon qu'au §41.2 : la présence ne prouve pas l'utilisabilité ;
+- une famille non servie rend `409 bootstrap_unsupported_os`, jamais une panne.
+  Le `GET` continue de répondre, avec `supported: false` : on peut regarder même
+  quand on ne peut pas agir.
+
+**Ce que je n'ai pas fait, et pourquoi.** La **progression** pendant l'amorçage,
+signalée dans le même message. Une pose complète dure plusieurs minutes derrière
+un `POST` synchrone muet, et c'est une vraie gêne. Mais une progression honnête
+exige que le serveur rende la main pendant qu'il travaille ; l'afficher sans cela
+serait une animation qui **invente** son avancement, ce qui est le contraire de
+ce que le produit promet partout ailleurs. Consigné dans SPK-76 comme à
+spécifier séparément, pas traité en douce.
+
+**Limite de l'arbre de travail.** `make sparkd-test` rendait **déjà**
+`test_agrandir_est_ADMIS_alors_que_la_meme_demande_a_neuf_ne_le_serait_pas` en
+échec avant ma première modification, sur un `services/` intact. Cette rougeur
+préexiste dans `main`, ne concerne pas l'amorçage, et n'est pas corrigée ici.
+
+---
+
 ## 2026-08-28 — Le schéma de partitionnement du README n'avait pas la forme de l'API
 
 **Problème.** Le README porte depuis SPK-28 un schéma JSON présenté comme « à
