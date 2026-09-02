@@ -39,6 +39,16 @@ let base;
 let appels = [];
 /** Refus à servir sur la prochaine restauration, posé par le test qui l'exige. */
 let refuseLaRestauration = false;
+/**
+ * Tunnel FIGÉ sur la prochaine liste des Sparks, posé par le test qui l'exige.
+ *
+ * Ce n'est pas un refus de `sparkd` : c'est la requête qui n'aboutit PAS à
+ * travers le tunnel, donc un `fetch` qui LÈVE — exactement ce que produit un
+ * `ssh` figé (docs/DAT.md §22.2).
+ */
+let figeLaListe = false;
+/** Refus de `sparkd` LUI-MÊME sur la prochaine liste : le tunnel n'y est pour rien. */
+let refuseLaListe = false;
 
 function fauxSsh() {
   const e = new EventEmitter(); e.stderr = new EventEmitter(); e.kill = () => {}; return e;
@@ -112,6 +122,18 @@ function repondre(url, init) {
     memory: { used_bytes: 1e8 }, disk: { used_bytes: 1e8 },
   }), { status: 200 });
   if (/\/v1\/sparks\/[^/?]+(\?|$)/.test(url)) return new Response(JSON.stringify(SPARK), { status: 200 });
+  if (figeLaListe) {
+    figeLaListe = false;
+    throw new TypeError('fetch failed');
+  }
+  if (refuseLaListe) {
+    refuseLaListe = false;
+    // La forme d'un refus de `sparkd` : sous `detail`, et SANS un mot du
+    // tunnel — il n'a pas à en dire, la requête lui est bien parvenue.
+    return new Response(JSON.stringify({ detail: {
+      error: 'internal_error', message: 'Le registre est indisponible.',
+    } }), { status: 500 });
+  }
   return new Response(JSON.stringify({ sparks: [SPARK] }), { status: 200 });
 }
 
@@ -303,4 +325,78 @@ test('la modale tient son contrat, et l’annulation rend le focus', async () =>
                              { timeout: 6000 });
   const focus = await page.evaluate(() => document.activeElement?.getAttribute('data-ouvre'));
   assert.equal(focus, 'route', 'le focus revient au déclencheur');
+});
+
+/**
+ * Une liste qui échoue ne fait pas accuser le transport SSH.
+ *
+ * @verifies docs/BACKLOG.md#SPK-68, docs/BACKLOG.md#SPK-16 ·
+ *           docs/DAT.md §22.3 (une panne se signale avec SON motif, jamais par
+ *           un 502 anonyme), §50.1 (SSH et `sparkd` ne partagent pas un verdict)
+ *
+ * REPRODUIT le 2026-09-02 contre la Forge réelle : une requête qui n'aboutissait
+ * pas à travers le tunnel tombait dans le filet générique de l'hôte, qui rendait
+ * un 500 sans dire de quel tunnel il parlait. La console recopiait ce silence —
+ * `null` — par-dessus l'état connu du tunnel, et l'écran des pools annonçait
+ * ensuite « Le transport SSH ne répond pas » à côté d'un en-tête affichant
+ * « Tunnel ouvert », sur un tunnel qui l'était.
+ *
+ * Le parcours est celui de l'exploitant : la liste, puis l'onglet Forge.
+ */
+test('une liste qui échoue ne fait pas accuser le transport SSH sur l’écran des pools', async () => {
+  figeLaListe = true;
+  await page.setViewportSize({ width: 1440, height: 1400 });
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.etat-vue--erreur', { timeout: 10000 });
+
+  // §22.3 : la panne porte SON motif, et non un 502 anonyme.
+  const panne = await page.textContent('.etat-vue--erreur');
+  assert.match(panne, /n’a pas répondu à travers le tunnel|n'a pas répondu à travers le tunnel/,
+    'la liste dit ce qui a échoué');
+
+  // L'en-tête ne ment pas non plus : le tunnel resondé est rendu tel quel.
+  assert.match(await page.textContent('.entete__contexte'), /Tunnel ouvert/);
+
+  await page.click('.destination[href="#/forge"]');
+  // L'écran est là quand SON onglet porte la page courante : attendre
+  // `.principal` se libérerait avant même la repeinture.
+  await page.waitForSelector('.onglet[href="#/forge"][aria-current="page"]', { timeout: 10000 });
+  await page.waitForFunction(
+    () => !document.querySelector('.principal [aria-busy="true"]'), { timeout: 10000 });
+
+  const forge = await page.textContent('.principal');
+  assert.doesNotMatch(forge, /transport SSH/,
+    'un tunnel ouvert ne doit pas être présenté comme un transport muet');
+  assert.doesNotMatch(forge, /Les ressources de la Forge n’ont pas pu être lues/,
+    'les pools sont lisibles : le tunnel n’a jamais cessé de l’être');
+  assert.match(forge, /Processeur|Mémoire/, 'l’écran des pools est bien celui qui s’affiche');
+});
+
+/**
+ * Un refus de `sparkd` ne dit RIEN du tunnel, et n'efface donc pas ce qu'on en sait.
+ *
+ * @verifies docs/BACKLOG.md#SPK-68 · docs/DAT.md §22.3, §50.1
+ *
+ * C'est l'autre moitié du même défaut : la console recopiait sur l'état du
+ * tunnel le silence d'une erreur qui ne parlait pas de lui. Le tunnel reste ici
+ * parfaitement ouvert, et la requête lui est bien parvenue — c'est le registre
+ * qui refuse.
+ */
+test('un refus de sparkd n’efface pas l’état du tunnel, et l’écran des pools reste lisible', async () => {
+  refuseLaListe = true;
+  await page.setViewportSize({ width: 1440, height: 1400 });
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.etat-vue--erreur', { timeout: 10000 });
+  assert.match(await page.textContent('.etat-vue--erreur'), /registre est indisponible/,
+    'le refus est rendu tel que `sparkd` l’a formulé');
+
+  await page.click('.destination[href="#/forge"]');
+  await page.waitForSelector('.onglet[href="#/forge"][aria-current="page"]', { timeout: 10000 });
+  await page.waitForFunction(
+    () => !document.querySelector('.principal [aria-busy="true"]'), { timeout: 10000 });
+
+  const forge = await page.textContent('.principal');
+  assert.doesNotMatch(forge, /transport SSH/,
+    'le tunnel n’a pas bougé : rien ne permet de l’accuser');
+  assert.match(forge, /Processeur|Mémoire/, 'les pools sont lus par le même tunnel');
 });

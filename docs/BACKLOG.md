@@ -266,6 +266,14 @@ opération manuelle et n'est pas planifié.
   - **Fermeture** propre.
 - Défaut trouvé par la preuve réelle : la première sonde courait plus vite que
   l'établissement du tunnel, et déclarait rompu un tunnel qui se connectait.
+- **Deux défauts trouvés le 2026-09-02, sur la Forge réelle du responsable**
+  (`docs/DAT.md` §22.3, journal du même jour). Une requête qui n'aboutissait pas
+  **à travers** le tunnel n'était rattrapée nulle part : elle rendait un `500`
+  anonyme, sans nommer le tunnel — d'où un écran des pools qui accusait le
+  transport SSH sur un tunnel ouvert. Elle rend désormais
+  `502 forge_unreachable`, avec le motif et le tunnel resondé. Et le motif
+  rapporté par `ssh` était recouvert par le `fetch failed` de la sonde, qui
+  s'exécute toutes les cinq secondes : il prime maintenant sur elle.
 - 36 tests pour l'hôte console.
 
 ### [~] SPK-17 · Contrat d'API partagé

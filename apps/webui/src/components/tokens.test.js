@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 
 import {
   SPARK_STATES, stateOf, formatBytes, formatBps, formatCpu, MEASURE,
-  TUNNEL_STATES, tunnelContextOf, tunnelOf, traduireMessage, formatOctetsExact,
+  TUNNEL_STATES, tunnelContextOf, tunnelFailureMessage, tunnelOf, traduireMessage,
+  formatOctetsExact,
   SIGNATURE_MOTIFS, signatureMotifOf,
 } from './tokens.js';
 // La table de l'hôte console est la RÉFÉRENCE des jetons : on l'importe plutôt
@@ -110,6 +111,30 @@ test('SSH etabli sans sparkd n est ni un tunnel rompu ni a reconnecter', () => {
   assert.deepEqual(tunnelContextOf({ state: 'broken', transportState: 'broken' }), {
     label: 'Tunnel rompu', token: 'danger', reconnect: true,
   });
+});
+
+/**
+ * @verifies docs/BACKLOG.md#SPK-68 · docs/DAT.md §22.3 (une panne se signale
+ *           avec SON motif), §50.1
+ *
+ * L'écran des pools nommait le transport SSH dans TOUS les cas où le tunnel
+ * n'était pas ouvert — y compris quand rien n'en était connu. MESURÉ le
+ * 2026-09-02 contre la Forge réelle : « Le transport SSH ne répond pas » sur un
+ * tunnel ouvert, dont un échec de liste avait effacé l'état.
+ */
+test('un tunnel qui n’est pas ouvert est dit par SON motif, jamais par un diagnostic inventé', () => {
+  // Le motif d'`ssh` passe avant tout : c'est lui qui dit pourquoi.
+  assert.equal(tunnelFailureMessage({ state: 'broken', lastError: 'Permission denied (publickey).' }),
+               'Permission denied (publickey).');
+  // Rien de connu : on ne met pas SSH en cause.
+  assert.doesNotMatch(tunnelFailureMessage(null), /transport SSH/);
+  assert.doesNotMatch(tunnelFailureMessage(undefined), /transport SSH/);
+  assert.match(tunnelFailureMessage(null), /Aucun tunnel/);
+  // Un tunnel qu'on OUVRE n'est pas un transport muet.
+  assert.match(tunnelFailureMessage({ state: 'connecting' }), /en cours d’ouverture/);
+  assert.match(tunnelFailureMessage({ state: 'closed' }), /fermé/);
+  // Rompu sans motif : là, et là seulement, le transport est en cause.
+  assert.equal(tunnelFailureMessage({ state: 'broken' }), 'Le transport SSH ne répond pas.');
 });
 
 // --- la traduction des messages (SPK-46, docs/DAT.md §21.5 bis) ------------

@@ -113,6 +113,36 @@ test("l'erreur rapportee par ssh est conservee", async () => {
   assert.match(t.lastError, /Permission denied/);
 });
 
+/**
+ * @verifies docs/BACKLOG.md#SPK-16 · docs/DAT.md §22.3 (le motif d'une panne est
+ *           l'erreur rapportee par `ssh`)
+ *
+ * MESURE le 2026-09-02 contre un hote injoignable : la sonde echoue toutes les
+ * cinq secondes, et son « fetch failed » recouvrait la seule phrase qui disait
+ * pourquoi. L'ecran des pools n'affichait donc que le nom de l'outil qui avait
+ * echoue.
+ */
+test("la sonde qui echoue ne recouvre pas le motif rapporte par ssh", async () => {
+  const t = tunnel({
+    // `ssh` parle des qu'il est lance, avant meme la premiere sonde : c'est
+    // l'ordre reel, et c'est celui qui faisait perdre le motif.
+    spawn: () => {
+      const enfant = fauxSsh();
+      queueMicrotask(() => enfant.stderr.emit(
+        'data', 'connect to host 203.0.113.10 port 22: Connection refused'));
+      return enfant;
+    },
+    probe: async () => { throw new Error('fetch failed'); },
+    openTimeoutMs: 300,
+  });
+  await t.open();
+  assert.equal(t.state, BROKEN);
+  assert.match(t.lastError, /Connection refused/, 'le motif d’ssh survit aux sondes');
+  await t.probe();
+  assert.match(t.describe().lastError, /Connection refused/,
+    'et il survit a CHAQUE sonde suivante, pas seulement a la premiere');
+});
+
 test('un ssh absent du poste est signale clairement', async () => {
   let enfant;
   const t = tunnel({ spawn: () => (enfant = fauxSsh()) });

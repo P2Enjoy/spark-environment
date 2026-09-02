@@ -2497,9 +2497,25 @@ motif : le dernier état connu, l'heure de la dernière réponse, et l'erreur
 rapportée par `ssh`. Elle n'attend pas l'expiration d'un délai réseau, et elle ne
 rend pas un `502` anonyme.
 
+Il y a **deux** façons d'échouer, et toutes deux nomment le tunnel. Le tunnel
+refusé **avant** la requête rend `502 tunnel_unavailable`. La requête qui
+n'aboutit pas **à travers** lui — le tunnel figé ou coupé sous elle — rend
+`502 forge_unreachable`, avec le motif et l'état du tunnel **resondé à
+l'instant**, jamais recopié du dernier relevé. Aucune des deux ne tombe dans le
+filet générique : un `500` anonyme ne dit pas de quel tunnel il parle, et la
+console n'a alors plus rien à dire de la panne.
+
+Le motif est l'erreur rapportée par **`ssh`**, et elle prime sur celle de l'outil
+qui l'a rencontrée. La sonde `/healthz` échoue toutes les cinq secondes sur une
+Forge injoignable ; son `fetch failed` nomme l'outil, jamais la cause, et ne doit
+pas recouvrir `connect to host … : Connection refused`.
+
 La console ne doit **jamais** afficher des données obtenues avant la panne comme
 si elles étaient à jour. Une valeur périmée présentée comme actuelle est pire
 qu'une erreur : l'exploitant prend une décision sur un état qui n'existe plus.
+**Ni un état qu'elle ignore comme un état qu'elle a mesuré** : une erreur qui ne
+parle pas du tunnel ne remplace pas ce qu'on en sait, et un tunnel dont rien
+n'est connu se dit ainsi — il ne se rend pas comme un transport muet.
 
 ### 22.4 L'inventaire ne contient aucun secret
 

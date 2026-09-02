@@ -103,6 +103,27 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **L'écran des pools n'accuse plus le transport SSH d'une panne qui n'est pas la
+  sienne** (SPK-68, SPK-16, `docs/DAT.md` §22.3) : sur la Forge réelle, il
+  annonçait *« Le transport SSH ne répond pas »* à côté d'un en-tête affichant
+  *« Tunnel ouvert »*, sur un tunnel qui l'était. Trois défauts se cumulaient.
+  Une requête qui n'aboutissait pas **à travers** le tunnel — le cas du tunnel
+  figé — tombait dans le filet générique de l'hôte console, qui rendait un `500`
+  anonyme, sans dire de quel tunnel il parlait ; elle rend désormais un
+  `502 forge_unreachable` qui porte le motif et l'état du tunnel, resondé à
+  l'instant. La console recopiait ensuite ce silence — `null` — **par-dessus**
+  l'état connu du tunnel, alors qu'un refus de `sparkd` ne dit rien de lui : seule
+  une erreur qui parle du tunnel le remplace maintenant, et l'en-tête est repeint
+  avec. Enfin, un tunnel dont on ne savait rien était rendu comme un transport
+  muet : il est dit pour ce qu'il est — aucun tunnel, une ouverture en cours, un
+  tunnel fermé — et le transport n'est mis en cause que lorsqu'il l'est.
+- **Le motif rapporté par `ssh` n'est plus recouvert par la sonde** (SPK-16,
+  `docs/DAT.md` §22.3) : la sonde `/healthz` échoue toutes les cinq secondes sur
+  une Forge injoignable, et son `fetch failed` écrasait
+  *« connect to host … : Connection refused »* — la seule phrase qui disait
+  **pourquoi**. Le motif d'OpenSSH prime désormais sur celui de l'outil, et
+  survit à chaque sonde suivante ; une réouverture repart d'une page blanche.
+  Mesuré contre un hôte réel qui refuse la connexion.
 - **Le registre flottant ne vole plus le focus du clavier** (SPK-75,
   `docs/DESIGN_SYSTEM.md` §14.3) : le widget est reconstruit toutes les trois
   secondes, et le focus qui s'y trouvait tombait alors sur `<body>` — un

@@ -1734,8 +1734,15 @@ function signerIntention(intention, tunnel) {
 /**
  * Relaie une requête vers `sparkd`, à travers le tunnel du serveur nommé.
  *
+ * @spec docs/BACKLOG.md#SPK-16, docs/BACKLOG.md#SPK-23 · docs/DAT.md §22.3 (une
+ *       panne se signale, avec son motif et jamais par un 502 anonyme)
+ *
  * Le refus d'un tunnel rompu remonte tel quel : la console doit voir la panne,
- * pas un `502` anonyme (docs/DAT.md §22.3).
+ * pas un `502` anonyme (docs/DAT.md §22.3). Les DEUX façons d'échouer le
+ * disent : le tunnel refusé AVANT la requête (`tunnel_unavailable`) et la
+ * requête qui n'aboutit pas à travers lui (`forge_unreachable`). Toutes deux
+ * portent l'état du tunnel, faute de quoi la console n'a plus aucun moyen de
+ * savoir de quoi la panne parle.
  */
 async function relayer(url, requete, reponse, tunnels, fetchFn,
                        { signer: signerFn = signerIntention, avertir } = {}) {
@@ -1792,7 +1799,7 @@ async function relayer(url, requete, reponse, tunnels, fetchFn,
     if (motif && avertir) avertir(nom, motif);
   }
 
-  const amont = await fetchFn(cible.toString(), {
+  const envoi = {
     method: requete.method,
     headers: {
       'content-type': requete.headers['content-type'] ?? 'application/json',
@@ -1807,7 +1814,29 @@ async function relayer(url, requete, reponse, tunnels, fetchFn,
       'x-spark-actor': tunnel.actorHeader,
     },
     body: ['GET', 'HEAD'].includes(requete.method) ? undefined : corps,
-  });
+  };
+
+  let amont;
+  try {
+    amont = await fetchFn(cible.toString(), envoi);
+  } catch (erreur) {
+    // §22.3 : une requête qui n'aboutit PAS à travers le tunnel est le cas même
+    // du tunnel FIGÉ ou coupé sous la requête — celui que ce module nomme dès
+    // sa première ligne. Elle tombait jusqu'ici dans le filet générique du
+    // serveur, qui rend un 500 anonyme : ni le motif, ni le tunnel dont il
+    // s'agit. La console n'avait alors plus rien à dire de la panne, et l'écran
+    // des pools l'attribuait au transport SSH sans rien en savoir.
+    //
+    // On RESONDE avant de répondre : l'état rendu doit être constaté à
+    // l'instant, pas recopié de la dernière fois qu'on a regardé (§22.2).
+    await tunnel.probe?.().catch(() => null);
+    return repondre(reponse, 502, {
+      error: 'forge_unreachable',
+      message: `La Forge n'a pas répondu à travers le tunnel : ${erreur.message}`,
+      tunnel: tunnel.describe?.() ?? null,
+      stale_data_warning: 'Ne pas afficher de données antérieures comme actuelles.',
+    });
+  }
   const texte = await amont.text();
   reponse.writeHead(amont.status, {
     'content-type': 'application/json; charset=utf-8',

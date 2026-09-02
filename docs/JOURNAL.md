@@ -4,6 +4,107 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-09-02 — « Le transport SSH ne répond pas », sur un tunnel ouvert
+
+**Le constat vient du responsable, sur sa Forge réelle** : l'écran des pools
+annonçait *« Les ressources de la Forge n'ont pas pu être lues — Le transport SSH
+ne répond pas »*, pendant que l'en-tête, à quelques centimètres, affichait
+*« Tunnel ouvert »*. Les deux ne peuvent pas être vrais.
+
+**Hypothèse écartée d'abord** : le tunnel. Éprouvé contre `51.158.54.202` — `ssh`
+authentifié par clé, `sparkd` `active`, `/healthz` en `200`, et la classe
+`Tunnel` ouvre, sonde et rend `ready`. Le transport n'avait rien.
+
+**Reproduit ensuite dans le navigateur**, du parcours canonique : une liste des
+Sparks qui échoue une fois, puis un clic sur *Forge*. L'écran rendait exactement
+les deux phrases du constat. La chaîne est celle-ci :
+
+1. une requête qui n'aboutit pas **à travers** le tunnel — le tunnel figé, le cas
+   que le module nomme dès sa première ligne — n'était rattrapée nulle part et
+   tombait dans le filet générique de l'hôte console : un `500` portant
+   `fetch failed`, sans un mot du tunnel dont il parlait. Le §22.3 interdit
+   précisément ce 502 anonyme ;
+2. la console recopiait ce silence par-dessus l'état du tunnel. `erreur.tunnel`
+   valait `null` — non pas « aucun tunnel », mais « cette erreur n'en dit rien » —
+   et l'écrire effaçait ce qu'on savait. Un refus de `sparkd`, qui ne concerne pas
+   le tunnel, produisait le même effacement ;
+3. l'écran des pools, qui lit ce même état, nommait alors le transport SSH faute
+   de savoir quoi dire. Un diagnostic inventé, sur la foi d'une absence.
+
+**Décision.** Chacun des trois répond là où il est. L'hôte rend un
+`502 forge_unreachable` qui porte le motif ET l'état du tunnel, resondé à
+l'instant plutôt que recopié. La console ne remplace l'état du tunnel que sur une
+erreur qui en parle — « absent » et `null` cessent d'être confondus — et repeint
+l'en-tête avec, sans quoi l'état adopté resterait invisible là où on le lit. Le
+vocabulaire partagé dit un tunnel qui n'est pas ouvert pour ce qu'il est : aucun
+tunnel, une ouverture en cours, un tunnel fermé ; le transport n'est mis en cause
+que lorsqu'il l'est.
+
+**Un quatrième défaut est sorti de la vérification visuelle**, en montant une
+console jetable vers une Forge qui refuse la connexion : l'écran disait
+`fetch failed`. La sonde `/healthz` échoue toutes les cinq secondes et écrasait
+`ssh: connect to host … : Connection refused` — la seule phrase qui disait
+pourquoi, et celle que le §22.3 exige. Le motif d'OpenSSH prime désormais sur
+celui de l'outil, et une réouverture repart d'une page blanche.
+
+**Vérifications.** Les quatre défauts sont prouvés **rouges avant correction** :
+deux parcours navigateur ajoutés à `e2e/gestes.test.mjs` — la requête qui
+n'aboutit pas, et le refus de `sparkd` qui ne dit rien du tunnel — et deux tests
+unitaires, sur le vocabulaire et sur la précédence du motif. Visuellement, sur la
+Forge réelle : la liste rend le refus, l'en-tête reste juste, et l'onglet *Forge*
+affiche ses pools ; sur la Forge injoignable : *« Tunnel rompu »*, la phrase
+d'OpenSSH, et le bouton *Reconnecter*. Desktop et 390 px.
+
+**Conséquence à retenir** : un état qu'on ne connaît pas ne doit jamais être
+rendu comme un état qu'on a mesuré. C'est la même règle que le §22.3 pose pour
+les données périmées, appliquée à l'absence.
+
+---
+
+## 2026-09-02 — Une recette qui livrait la moitié du résultat
+
+**Trois constats du responsable, le même jour, sur la même page.**
+
+**« Pourquoi je ne peux pas sélectionner un port ? Pourquoi la recette ne crée
+pas la route ? »** Le fait d'abord, vérifié et non supposé : `git log -S` sur
+`recettes.js` ne rend rien — **elle ne l'a jamais fait**. Le §38.6.1 définissait
+une recette comme un jeu d'enregistrements, et c'est tout ce qu'elle a écrit.
+
+Mais cette définition était trop étroite, et le constat le prouve. La recette se
+lance depuis les **routes** d'un Spark ; elle écrit une adresse qui désigne la
+Forge ; et sans route, la Forge répond une erreur pour ce nom — ou pire, le joker
+d'un autre Spark le capte. Elle livrait la moitié du résultat et laissait deviner
+l'autre, alors qu'une recette existe précisément pour éviter cela.
+
+**L'ordre n'est pas une commodité, il choisit le mode de panne.** Les deux effets
+vivent sur deux systèmes, et l'un peut échouer sans l'autre. DNS d'abord, une
+route ratée laisse un nom qui pointe vers une Forge qui ne le sert pas — c'est
+exactement l'entrée « perdue » que l'inventaire du §38.8 apprend à trouver après
+coup. Route d'abord, un DNS raté laisse une route que rien ne désigne : personne
+ne le voit. On prend l'échec inoffensif.
+
+**« La présentation et la vérif sont moches. »** Ce n'était pas un jugement de
+goût, et c'était mesurable : la classe `recette-lignes` que les trois blocs
+emploient **ne peignait rien** — elle figurait dans les manquantes connues de la
+preuve de style (§12.3). Trois blocs disent la même liste à trois moments : ce qui
+sera écrit, ce qui a été écrit, ce que la zone porte. Ils partagent désormais un
+seul gabarit. Trois gabarits, ce serait trois endroits où la colonne se décale.
+
+**« Il n'est pas possible de modifier le port d'une route existante. »** Exact,
+et c'était un trou : une route n'avait que deux gestes. Corriger un port
+supposait de retirer puis redéclarer — donc de couper le service entre les deux,
+et de perdre l'identifiant de la route, sa place au journal et la trace de ce
+qu'elle avait dépassé. **Un port n'est pas une identité** : ce qui identifie une
+route est son domaine, celui qui porte l'unicité et que Caddy filtre. Le port et
+le TLS sont des propriétés de la cible, et une propriété se corrige. Le domaine
+et le Spark, non : les changer n'est pas une correction, et déplacer une route
+vers un autre Spark doit se voir dans le journal des deux.
+
+**Décision.** Trois unités, spécifiées avant tout code : SPK-84 pour la recette
+et sa présentation, SPK-85 pour la correction d'une route, et une révision de
+SPK-83 — après une affectation, l'écran ouvre les routes du Spark, parce que la
+route vient d'y être posée et que c'est là qu'elle vit.
+
 ## 2026-09-02 — Le 405 de la Forge, et le focus que le widget volait
 
 **Deux constats faits en éprouvant SPK-77, et aucun des deux par relecture.**

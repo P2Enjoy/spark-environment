@@ -65,6 +65,26 @@ export function tunnelOf(value) {
   return TUNNEL_STATES[value] ?? { label: String(value ?? 'inconnu'), token: 'neutral' };
 }
 
+/**
+ * Ce qu'on peut DIRE d'un tunnel qui n'est pas ouvert.
+ *
+ * @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §22.3 (une panne se signale avec
+ *       son motif), §50.1 (SSH et `sparkd` ne partagent pas un verdict)
+ *
+ * Le motif rapporté par `ssh` passe AVANT tout : c'est lui qui dit « clé
+ * refusée » ou « hôte inconnu ». Sans motif, on ne nomme que ce qui est établi —
+ * un tunnel qu'on ouvre n'est pas un transport muet, et un tunnel dont on ne
+ * sait rien ne prouve pas que SSH est en cause. Écrire « le transport SSH ne
+ * répond pas » dans ces deux cas était un diagnostic inventé.
+ */
+export function tunnelFailureMessage(tunnel) {
+  if (tunnel?.lastError) return tunnel.lastError;
+  if (!tunnel?.state) return "Aucun tunnel n’est ouvert vers cette Forge.";
+  if (tunnel.state === 'connecting') return 'Le tunnel SSH est en cours d’ouverture.';
+  if (tunnel.state === 'closed') return 'Le tunnel SSH est fermé.';
+  return 'Le transport SSH ne répond pas.';
+}
+
 /** Deux vérités SPK-68 : transport SSH et plan de contrôle ne partagent pas un verdict. */
 export function tunnelContextOf(tunnel) {
   if (tunnel?.state === 'broken' && tunnel?.transportState === 'ready') {

@@ -72,6 +72,19 @@ export function lireEmpreinte(texte) {
 export class Tunnel {
   #child = null;
   #timer = null;
+  /**
+   * Ce que `ssh` LUI-MÊME a dit, quand il a dit quelque chose.
+   *
+   * @spec docs/BACKLOG.md#SPK-16 · docs/DAT.md §22.3 (le motif d'une panne est
+   *       l'erreur rapportée par `ssh`)
+   *
+   * MESURÉ le 2026-09-02 contre un hôte injoignable : la sonde échoue toutes
+   * les cinq secondes et écrivait `fetch failed` par-dessus
+   * « connect to host … : Connection refused ». L'écran ne montrait donc jamais
+   * la seule phrase qui disait POURQUOI — remplacée par le nom d'un échec de
+   * `fetch`, qui n'apprend rien à personne.
+   */
+  #motifSsh = null;
 
   constructor(server, options = {}) {
     this.server = server;
@@ -202,6 +215,9 @@ export class Tunnel {
     this.transportState = CONNECTING;
     this.#setState(CONNECTING);
     this.lastError = null;
+    // Une réouverture ne traîne pas le motif de la précédente : il parlerait
+    // d'une connexion qui n'existe plus.
+    this.#motifSsh = null;
 
     this.#child = this.spawnFn('ssh', this.sshArgs(this.localPort), {
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -236,18 +252,21 @@ export class Tunnel {
           this.transportState = READY;
           continue;
         }
+        this.#motifSsh = texte;
         this.lastError = texte;
       }
     });
     this.#child.on('exit', (code) => {
       if (this.state !== CLOSED) {
-        this.lastError = this.lastError ?? `ssh s'est arrêté (code ${code}).`;
+        this.#motifSsh = this.#motifSsh ?? `ssh s'est arrêté (code ${code}).`;
+        this.lastError = this.#motifSsh;
         this.transportState = BROKEN;
         this.#setState(BROKEN);
       }
     });
     this.#child.on('error', (erreur) => {
-      this.lastError = `ssh est introuvable ou n'a pas pu démarrer : ${erreur.message}`;
+      this.#motifSsh = `ssh est introuvable ou n'a pas pu démarrer : ${erreur.message}`;
+      this.lastError = this.#motifSsh;
       this.transportState = BROKEN;
       this.#setState(BROKEN);
     });
@@ -276,7 +295,9 @@ export class Tunnel {
         this.#setState(READY);
         return this.state;
       } catch (erreur) {
-        this.lastError = erreur.message;
+        // §22.3 : ce que `ssh` a dit prime. « fetch failed » nomme l'outil qui a
+        // échoué, jamais la cause ; le motif, lui, la nomme.
+        this.lastError = this.#motifSsh ?? erreur.message;
         if (this.#child?.exitCode !== null && this.#child?.exitCode !== undefined) {
           this.#setState(BROKEN);
           return this.state;
@@ -304,7 +325,9 @@ export class Tunnel {
       if (!this.isLocal) this.transportState = READY;
       this.#setState(READY);
     } catch (erreur) {
-      this.lastError = erreur.message;
+      // Idem §22.3 : la sonde qui échoue toutes les cinq secondes ne doit pas
+      // effacer la phrase d'`ssh`, qui est la seule à dire pourquoi.
+      this.lastError = this.#motifSsh ?? erreur.message;
       this.#setState(BROKEN);
     }
     return this.state;

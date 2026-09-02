@@ -35,7 +35,8 @@ import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
 import { renderManuel } from './components/manuel-view.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
-import { tunnelContextOf, signatureMotifOf } from './components/tokens.js';
+import { tunnelContextOf, tunnelFailureMessage, signatureMotifOf }
+  from './components/tokens.js';
 
 const racine = document.getElementById('racine');
 const etat = { status: 'loading', sparks: [], usage: {}, error: null,
@@ -2390,10 +2391,16 @@ async function api(chemin) {
   const corps = await reponse.json();
   if (!reponse.ok) {
     const erreur = new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
-    erreur.tunnel = corps?.tunnel ?? null;
+    // §22.3 : « absent » et `null` ne disent PAS la même chose. Un refus qui
+    // PARLE du tunnel rend son état, fût-il `null` — aucun tunnel n'est alors
+    // ouvert. Une erreur qui n'en parle pas ne doit rien laisser croire de lui :
+    // la recopier en `null` effaçait ce qu'on savait du tunnel, et l'écran des
+    // pools concluait ensuite au silence du transport SSH (voir `charger`).
+    erreur.tunnel = corps && 'tunnel' in corps ? corps.tunnel : undefined;
     // Le runtime nomme ses refus ; l'appelant en a besoin pour distinguer un
-    // état nommé d'une panne (docs/DAT.md §27.8).
-    erreur.code = corps?.detail?.error ?? null;
+    // état nommé d'une panne (docs/DAT.md §27.8). `sparkd` les niche sous
+    // `detail`, l'hôte console les pose à plat : les deux sont des refus nommés.
+    erreur.code = corps?.detail?.error ?? corps?.error ?? null;
     throw erreur;
   }
   return corps;
@@ -2792,8 +2799,10 @@ async function chargerHote() {
   if (etat.tunnel?.state !== 'ready') {
     etat.forge.status = etat.tunnel?.transportState === 'ready'
       ? 'control-unavailable' : 'error';
+    // Le motif vient du tunnel, jamais d'une supposition : un tunnel dont on ne
+    // sait rien n'est pas un transport en panne (§22.3, vocabulaire partagé).
     etat.forge.error = etat.forge.status === 'error'
-      ? new Error(etat.tunnel?.lastError ?? 'Le transport SSH ne répond pas.') : null;
+      ? new Error(tunnelFailureMessage(etat.tunnel)) : null;
     peindre();
     return;
   }
@@ -3716,7 +3725,20 @@ async function charger() {
   } catch (erreur) {
     etat.status = 'error';
     etat.error = erreur;
-    etat.tunnel = erreur.tunnel;
+    // Seule une erreur qui PARLE du tunnel remplace ce qu'on en savait (§22.3).
+    //
+    // MESURÉ le 2026-09-02 contre la Forge réelle : un refus de `sparkd` — ou
+    // une requête qui n'aboutit pas à travers un tunnel figé — ne dit RIEN du
+    // tunnel, et `erreur.tunnel` valait alors `null`. L'écrire quand même
+    // effaçait l'état connu ; l'écran des pools, qui lit ce même état, annonçait
+    // ensuite « Le transport SSH ne répond pas » à côté d'un en-tête affichant
+    // « Tunnel ouvert », sur un tunnel qui l'était.
+    if (erreur.tunnel !== undefined) {
+      etat.tunnel = erreur.tunnel;
+      // L'en-tête porte le badge du tunnel et `peindre` ne le touche pas :
+      // sans cela, l'état adopté ici resterait invisible là où on le lit.
+      peindreContexte();
+    }
   }
   peindre();
 }
