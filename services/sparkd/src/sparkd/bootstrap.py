@@ -53,21 +53,30 @@ CHEMIN = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 #:
 #: L'empreinte des clés est TRONQUÉE à 64 caractères et ne sert qu'à comparer :
 #: le §21.2 interdit qu'une clé publique entière traverse le journal.
+#:
+#: SPK-76 · §42.9.8 — chaque ligne construite par un PIPELINE se garde ensuite
+#: par `[ -n "$x" ] || x=absent`. Un `|| echo absent` accroché à un pipeline ne
+#: se déclenche jamais : c'est le code de sa DERNIÈRE commande qui compte, et
+#: `head` comme `cut` réussissent sur une entrée vide. Une commande absente
+#: rendait donc la chaîne VIDE, que le jugement lisait comme « présent ».
 RELEVE = r"""
 os_id=$(. /etc/os-release 2>/dev/null && echo "$ID")
 os_suite=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
 os_like=$(. /etc/os-release 2>/dev/null && echo "$ID_LIKE")
 sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
 openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null || echo absent)
-cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64 || echo absent)
+cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64)
+[ -n "$cles" ] || cles=absent
 depot_ligne=$(grep -h '^deb' /etc/apt/sources.list.d/docker.list 2>/dev/null | head -1)
 depot_distro=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/\([a-z][a-z]*\).*|\1|p')
 depot_suite=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/[a-z][a-z]* \([^ ][^ ]*\).*|\1|p')
-docker=$(docker --version 2>/dev/null | head -1 || echo absent)
+docker=$(docker --version 2>/dev/null | head -1)
+[ -n "$docker" ] || docker=absent
 docker_version=$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null || echo absent)
 origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null \
           || dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
-compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
+compose=$(docker compose version 2>/dev/null | head -1)
+[ -n "$compose" ] || compose=absent
 compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/null || echo absent)
 rootless=absent
 if id spark-docker >/dev/null 2>&1; then
@@ -248,7 +257,7 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
         "detail": actif,
     })
 
-    empreinte = brut.get("cles", "absent")
+    empreinte = brut.get("cles", "absent") or "absent"
     if empreinte == "absent":
         etat_cles, detail_cles = ABSENT, "aucun fichier authorized_keys"
     elif cles_voulues is None:
@@ -291,9 +300,24 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
                 "state": etat_depot, "detail": detail_depot})
 
     # LE point de l'unité (§41.2) : l'origine, pas la présence.
-    origine = brut.get("origine", "absent")
-    version = brut.get("docker", "absent")
-    if origine == "docker-ce":
+    origine = brut.get("origine", "absent") or "absent"
+    version = brut.get("docker", "absent") or "absent"
+    if origine == "docker-ce" and version == "absent":
+        # §42.9.8, MESURÉ sur la Forge de test le 2026-09-02 : `dpkg` connaît
+        # `docker-ce`, et `docker --version` ne répond RIEN. C'est l'état que
+        # laisse une installation interrompue — le paquet est dépaqueté, pas
+        # configuré —, exactement celle que le dépôt faux du §42.9.3 provoque.
+        #
+        # Le déclarer « présent » était le pire des cas : l'amorçage réparait le
+        # dépôt puis SAUTAIT le moteur, en le croyant en place, et laissait la
+        # cellule inutilisable. La présence du paquet ne prouve pas le moteur —
+        # c'est la leçon du §41.2, appliquée à l'installation inachevée.
+        etat_docker = DEFECT
+        detail_docker = (
+            "le paquet « docker-ce » est installé mais le moteur ne répond pas : "
+            "`docker --version` ne rend rien. L'installation n'est pas allée à "
+            "son terme, et rien ne tournera tant qu'elle ne sera pas reprise.")
+    elif origine == "docker-ce":
         # §42.9.4 : `docker-ce` ne suffit plus. Un paquet du dépôt Debian posé
         # sur une Ubuntu porte sa suite dans sa version, et il est là SANS être
         # celui qui convient — même leçon qu'au §41.2, un cran plus haut.
@@ -325,7 +349,9 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None) -> list[dict[st
     vus.append({"key": "docker", "label": LIBELLES["docker"],
                 "state": etat_docker, "detail": detail_docker, "mode": mode})
 
-    compose = brut.get("compose", "absent")
+    # §42.9.8 : même garde. `docker compose version` muet ne prouve pas un
+    # greffon — il prouve qu'il n'y a rien pour répondre.
+    compose = brut.get("compose", "absent") or "absent"
     vus.append({
         "key": "compose", "label": LIBELLES["compose"],
         "state": ABSENT if compose == "absent" else PRESENT,

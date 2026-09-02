@@ -124,6 +124,16 @@
   dernière ligne passait. La sortie d'erreur, jusqu'ici jetée, accompagne
   désormais le code dans le refus ; elle ne traverse pas le journal d'audit, qui
   n'a pas à porter les paquets du locataire.
+- **Un paquet Docker installé mais muet n'est plus dit « en place »** (SPK-76,
+  `docs/DAT.md` §42.9.8, mesuré sur la Forge de test) : le relevé construisait
+  trois de ses lignes par un pipeline terminé par `|| echo absent`, qui ne se
+  déclenche jamais — le `||` porte sur le pipeline, et `head` réussit sur une
+  entrée vide. Un binaire absent rendait donc une chaîne **vide**, que le
+  jugement lisait comme une présence. Sur une cellule dont l'installation avait
+  été interrompue, `docker` et `greffon Compose` s'affichaient « en place » sans
+  aucun détail, et l'amorçage **sautait** le moteur en le croyant posé. Un
+  `docker-ce` dont `docker --version` ne répond rien est désormais rendu
+  **« à corriger »**.
 - **L'amorçage ne se contredit plus, et ne tait plus le mode Docker** (SPK-76,
   `docs/DAT.md` §42.2 bis, §42.9.7) : signalé sur la Forge, l'écran affichait
   « La reprise rootless a échoué (code 1). » et, juste en dessous, « Cette

@@ -758,3 +758,48 @@ def test_un_amorcage_sur_UBUNTU_pose_le_depot_d_ubuntu(tmp_path):
 
     # Et le second amorçage ne fait toujours RIEN (§42.1).
     assert client.post(f"/v1/sparks/{nom}/bootstrap").json()["changed"] is False
+
+
+# --- SPK-76 · §42.9.8 · MESURÉ sur la Forge de test le 2026-09-02 ----------
+#
+# @verifies docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.9.8
+
+
+def test_un_paquet_docker_ce_dont_le_MOTEUR_ne_repond_pas_est_un_defaut(tmp_path):
+    """L'état réel de la cellule `ubuntu-demo` : `dpkg` connaît `docker-ce`,
+    `docker --version` ne rend rien. C'est ce que laisse une installation
+    interrompue — celle que le dépôt faux du §42.9.3 provoque.
+
+    Le déclarer présent est le PIRE des cas : l'amorçage répare le dépôt puis
+    SAUTE le moteur, et laisse la cellule inutilisable en la disant complète."""
+    vus = bootstrap.juger({
+        "os_id": "ubuntu", "os_suite": "noble", "os_like": "debian",
+        "depot_distro": "debian", "depot_suite": "trixie",
+        "docker": "", "origine": "docker-ce", "docker_version": "",
+        "compose": ""})
+    docker = next(v for v in vus if v["key"] == "docker")
+    assert docker["state"] == bootstrap.DEFECT
+    assert docker["state"] != bootstrap.PRESENT, "le paquet n'est pas le moteur"
+    assert "ne répond pas" in docker["detail"]
+    # …et il entre dans les manques : c'est tout l'intérêt de le voir.
+    assert "docker" in bootstrap.manques(vus)
+
+
+def test_une_sortie_VIDE_n_est_jamais_lue_comme_une_presence(tmp_path):
+    """§42.9.8 : `docker --version | head -1 || echo absent` n'écrit JAMAIS
+    « absent » — le `||` porte sur le pipeline, et `head` réussit sur une entrée
+    vide. Un binaire absent rendait donc la chaîne vide, lue comme présente."""
+    vus = bootstrap.juger({"os_id": "debian", "os_suite": "trixie",
+                           "cles": "", "compose": "", "origine": ""})
+    etats = {v["key"]: v["state"] for v in vus}
+    assert etats["compose"] == bootstrap.ABSENT
+    assert etats["cles"] == bootstrap.ABSENT
+    assert etats["docker"] == bootstrap.ABSENT
+
+
+def test_le_releve_GARDE_chaque_ligne_construite_par_un_pipeline(tmp_path):
+    """La correction est dans le script, pas seulement dans le jugement : une
+    ligne vide ne doit pas sortir de la cellule."""
+    for cle in ("cles", "docker", "compose"):
+        assert f'[ -n "${cle}" ] || {cle}=absent' in bootstrap.RELEVE, (
+            f"« {cle} » peut encore rendre une chaîne vide")

@@ -7110,6 +7110,57 @@ sortie d'`apt` nomme les paquets du locataire. Elles vont à qui a demandé le
 geste, dans la réponse, et nulle part ailleurs.
 
 
+#### 42.9.8 Un paquet n'est pas un moteur — mesuré sur la Forge, 2026-09-02
+
+Le relevé de la cellule `ubuntu-demo`, première exécution du §42.9 sur du
+matériel réel, a rendu ceci :
+
+```
+depot    defect   pointe « debian trixie » alors que la cellule est « ubuntu noble »
+docker   present  (détail VIDE)
+compose  present  (détail VIDE)
+```
+
+Le §42.9.3 a fait son travail. Les deux lignes suivantes, non : elles se disaient
+**présentes sans rien dire**, et c'est un défaut plus grave que celui qu'on
+venait corriger.
+
+**La cause est dans le shell, et elle est ancienne.** Le §42.6 écrivait :
+
+```sh
+docker=$(docker --version 2>/dev/null | head -1 || echo absent)
+```
+
+Le `||` porte sur le **pipeline**, dont le code de sortie est celui de sa
+DERNIÈRE commande. `head` réussit sur une entrée vide. Le `|| echo absent` ne se
+déclenche donc **jamais** : un binaire absent rend la chaîne **vide**, et le
+jugement lisait le vide comme une présence. Les trois lignes construites par un
+pipeline étaient touchées — `cles`, `docker`, `compose`.
+
+Chacune se garde désormais explicitement :
+
+```sh
+docker=$(docker --version 2>/dev/null | head -1)
+[ -n "$docker" ] || docker=absent
+```
+
+**Et le jugement cesse de croire le paquet sur parole.** Sur cette cellule,
+`dpkg` connaît `docker-ce` — le paquet est dépaqueté — tandis que le moteur ne
+répond pas : c'est l'état que laisse l'installation interrompue, celle que le
+dépôt faux du §42.9.3 provoque précisément. Un `docker-ce` dont
+`docker --version` est muet est donc rendu **`defect`**, pas `present`.
+
+Le déclarer présent était le pire des enchaînements possibles : l'amorçage
+réparait le dépôt, **sautait** le moteur en le croyant en place (§42.1), et
+rendait une cellule inutilisable en la disant complète. C'est la leçon du §41.2
+— la présence ne prouve pas l'utilisabilité — appliquée cette fois à
+l'installation **inachevée** et non au mauvais paquet.
+
+**Ce que cet épisode établit** : la mesure sur matériel réel a trouvé en un
+relevé ce que 1058 preuves ne voyaient pas, parce que le doublon d'Incus rendait
+des valeurs bien formées là où une vraie cellule rend du vide. Un doublon qui ne
+sait mentir que proprement ne prouve pas grand-chose.
+
 ## 43. L'environnement d'un Spark : variables et secrets
 
 Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doit

@@ -128,6 +128,13 @@ réécrit le dépôt puis repose le moteur depuis le bon.
 Vos images et vos volumes Docker ne sont **pas** touchés par cette réparation :
 seul le moteur est remplacé, et il redémarre.
 
+**Troisième cas : le paquet est là, le moteur ne répond pas.** Une installation
+interrompue laisse le paquet posé sans qu'il soit utilisable — c'est ce qui
+arrive après un échec dû à un dépôt qui ne correspondait pas. La ligne dit alors
+« à corriger » et l'explique. Elle ne dira jamais « en place » sans rien
+d'autre : une ligne qui se dit présente sans pouvoir se décrire n'est pas une
+ligne présente.
+
 ### Puis amorcer
 
 **Amorcer ce Spark** demande une confirmation, et elle dit ce qui va se passer :
