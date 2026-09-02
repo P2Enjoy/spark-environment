@@ -139,7 +139,7 @@ test('un support qui n’est plus déclaré libre est refusé, avec sa cause', (
     'bloc\tNAME="vda" TYPE="disk" SIZE="90000000000" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
     'bloc\tNAME="vda1" TYPE="part" SIZE="89000000000" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="vda" PARTTYPE=""',
   ].join('\n'));
-  assert.throws(() => createInstallPlan(vps, { storageKind: 'native' }),
+  assert.throws(() => createInstallPlan(vps, {}),
     (error) => error instanceof ForgeInstallError && /aucun support libre/.test(error.message));
   // §8.5 révisé : il n'y a PLUS de disposition de repli. La machine est refusée,
   // et le refus nomme le geste qui le lève — en amont de la console.
