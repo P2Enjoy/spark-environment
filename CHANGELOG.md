@@ -3,6 +3,17 @@
 ## [Non publié]
 
 ### Ajouté
+- **Un Spark donne son dossier de déploiement, à coller à un agent** (SPK-85,
+  `docs/DAT.md` §44.9) : la fenêtre d'un Spark porte une section *Dossier pour un
+  agent* et un bouton qui en copie le texte. Il décrit la cellule telle que le
+  plan de contrôle la connaît — quotas et leur sémantique, distribution, suite et
+  architecture relevées, versions d'`openssh-server`, `docker-ce` et du greffon
+  Compose, mode Docker et socket, routes d'ingress avec le port qu'elles visent,
+  ports publiés, noms des variables et des secrets, chemins d'injection, accès
+  SSH par rebond et pièges connus. **Aucune valeur de secret n'y figure**, et le
+  texte le dit avant qu'on le copie. C'est le briefing du SPK-60, servi à l'autre
+  bout du câble : le fichier de la cellule est en `0600`, donc illisible au moment
+  précis où l'on prépare le déploiement.
 - **Une entrée DNS trouvée s'affecte à un Spark, depuis l'inventaire** (SPK-83,
   `docs/DAT.md` §38.8.5 bis) : une entrée qu'aucune route ne sert est le plus
   souvent un **geste laissé à moitié** — le DNS est posé, la route ne l'est pas.

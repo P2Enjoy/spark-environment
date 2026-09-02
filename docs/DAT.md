@@ -7080,12 +7080,23 @@ diagnostic exige ce qu'il vient diagnostiquer (§42.9.1). Elle lit en outre
 os_id=$(. /etc/os-release 2>/dev/null && echo "$ID")
 os_suite=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
 os_like=$(. /etc/os-release 2>/dev/null && echo "$ID_LIKE")
+arch=$(uname -m 2>/dev/null)
+[ -n "$arch" ] || arch=absent
 sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
-cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64 || echo absent)
-depot=$([ -f /etc/apt/sources.list.d/docker.list ] && echo present || echo absent)
-docker=$(docker --version 2>/dev/null | head -1 || echo absent)
-origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null ||           dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
-compose=$(docker compose version 2>/dev/null | head -1 || echo absent)
+openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null || echo absent)
+cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64)
+[ -n "$cles" ] || cles=absent
+depot_ligne=$(grep -h '^deb' /etc/apt/sources.list.d/docker.list 2>/dev/null | head -1)
+depot_distro=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/\([a-z][a-z]*\).*|\1|p')
+depot_suite=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/[a-z][a-z]* \([^ ][^ ]*\).*|\1|p')
+docker=$(docker --version 2>/dev/null | head -1)
+[ -n "$docker" ] || docker=absent
+docker_version=$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null || echo absent)
+origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null \
+          || dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
+compose=$(docker compose version 2>/dev/null | head -1)
+[ -n "$compose" ] || compose=absent
+compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/null || echo absent)
 rootless=absent
 if id spark-docker >/dev/null 2>&1; then
   uid=$(id -u spark-docker)
@@ -7100,6 +7111,13 @@ fi
 mode=$(systemctl is-active docker.service >/dev/null 2>&1 && echo enracine \
        || ([ "$rootless" = active ] && echo rootless || echo absent))
 ```
+
+**`arch` est relevé pour ceux qui préparent le déploiement AILLEURS** (SPK-85,
+§44.9). L'agent qui travaille dans la cellule lit `uname -m` quand il veut ; celui
+qui compose un `docker-compose.yml` sur son poste ne le peut pas, et une image
+tirée pour la mauvaise architecture ne se découvre qu'au premier `docker compose
+up` — à l'autre bout du geste. Le relevé le rend donc `absent` plutôt que de le
+supposer `x86_64`, sur le même principe que le reste de cette commande.
 
 `depot` ne se contente plus d'exister : son **contenu** est comparé à la
 distribution et à la suite relevées, parce qu'un `docker.list` présent peut
@@ -8320,6 +8338,10 @@ Le modèle porte, sans valeurs d'environnement :
 - le relevé Docker : son mode, ou `null` s'il n'est pas utilisable, puis en mode
   rootless le compte `spark-docker` et le socket utilisateur qui doivent porter
   les commandes ;
+- le **système relevé à l'amorçage** — distribution, suite et architecture —, ou
+  `null` tant qu'aucun amorçage n'a eu lieu (SPK-85). Il est daté comme le reste
+  du relevé : ce n'est pas une affirmation sur ce que la cellule est
+  aujourd'hui, c'est ce qu'elle disait d'elle-même ce jour-là ;
 - les chemins `/etc/spark/env` et `/run/spark/secrets`, l'état du dernier
   amorçage, et les cinq pièges du §44.5 ;
 - l'avertissement du §44.6 : fichier produit par le plan de contrôle mais
@@ -8333,8 +8355,8 @@ connaît pas.
 
 Le relevé d'amorçage est conservé dans `spark_bootstrap_observation` : horodatage,
 versions observées de `openssh-server`, `docker-ce` et du greffon Compose, mode
-Docker, et liste des composants que **cette** installation par le plan de
-contrôle a effectivement modifiés. Une composante déjà présente n'est jamais
+Docker, **distribution, suite et architecture** relevées, et liste des composants
+que **cette** installation par le plan de contrôle a effectivement modifiés. Une composante déjà présente n'est jamais
 présentée comme installée par `sparkd`. Une absence de relevé est rendue comme
 « amorçage jamais relevé », non comme une liste de paquets prétendument fraîche.
 
@@ -8348,6 +8370,131 @@ le briefing est rattrapé au prochain démarrage. Cette règle est la même que 
 les clés et les fichiers d'environnement : l'état voulu reste dans le registre,
 la cellule en est une projection.
 
+
+
+### 44.9 Le dossier de déploiement, pour l'agent qui prépare depuis son poste (SPK-85)
+
+Demandé par le responsable le 2026-09-02 : un bouton qui compose, dans le
+presse-papier, le texte à coller à un agent afin qu'il prépare **sur son dépôt
+local** un déploiement prêt à lancer sur un Spark donné.
+
+Ce n'est pas le §44 refait. C'est le même modèle, servi à l'autre bout du câble.
+
+#### 44.9.1 Le point qui décide : le briefing de la cellule est invisible d'avant
+
+Le briefing du §44.1 vit dans `/etc/spark/BRIEFING.md`, en `0600`, à l'intérieur
+de la cellule. Pour le lire, il faut y entrer ; pour y entrer, il faut une clé
+accordée, un rebond par la Forge et une cellule amorcée. **Tout ce qui décide de
+la préparation est donc hors de portée au moment où l'on prépare.**
+
+L'agent qui écrit un `docker-compose.yml` sur le poste du responsable travaille
+précisément AVANT cet instant. Il ne connaît ni les quotas, ni le port que la
+route publique attend, ni les noms des variables injectées, ni l'architecture des
+images à tirer. Il découvre tout au premier essai, et chaque essai coûte un
+aller-retour — c'est le constat du §44, déplacé d'un cran en amont.
+
+**Décision : la console publie le même modèle, sous forme d'un texte que l'on
+copie.** Un unique modèle (§44.8), deux présentations : le Markdown posé dans la
+cellule pour l'agent qui y entre, et le dossier copié pour celui qui n'y est pas
+encore. Une seconde collecte de faits, tenue à part, finirait par dire autre
+chose que la première ; c'est exactement ce que le §44.8 interdit entre le JSON
+et le Markdown, et la règle ne change pas parce que le lecteur est ailleurs.
+
+#### 44.9.2 Ce que le dossier porte de plus que le briefing de la cellule
+
+Trois blocs, et aucun n'est un fait nouveau : ce sont des faits que le plan de
+contrôle possède déjà et que la cellule ne porte pas.
+
+1. **Par où l'on entre.** Le fragment `ssh_config` du §17 — nom d'hôte, adresse
+   privée, compte `root`, `ProxyJump spark-host` — et les empreintes des clés
+   autorisées, jamais leur contenu. Un Spark n'expose jamais `22` sur l'extérieur
+   (§17.4) : un agent qui l'ignore essaie l'adresse publique de la Forge, échoue,
+   et conclut que la cellule est éteinte.
+2. **Ce que la cellule EST**, daté du dernier amorçage : distribution, suite,
+   architecture, versions d'`openssh-server`, de `docker-ce` et du greffon
+   Compose, mode Docker et socket qui le porte. C'est la réponse aux deux
+   questions qu'un agent pose toujours en premier — *quelle image puis-je tirer*
+   et *avec quel Docker*.
+3. **Le contrat que la pile doit respecter.** Il ne s'invente pas, il se lit dans
+   le registre :
+   - les **deux `env_file:`** — `/etc/spark/env` et `/run/spark/secrets` —, sans
+     lesquels aucune variable injectée n'atteint un conteneur (§44.5) ;
+   - pour chaque route d'ingress, le **port que Caddy vise dans la cellule** : la
+     pile doit écouter là, sans quoi le domaine rendra `502` alors que tout
+     paraîtra sain des deux côtés ;
+   - pour chaque port publié, le couple **port public → port de la cellule** et
+     son protocole ;
+   - les noms des variables et des secrets, séparés, avec le rappel que les
+     valeurs ne sont **pas** dans ce texte et n'ont pas à l'être : la pile les
+     lira dans les fichiers.
+
+**Ce sont des fragments contractuels, pas un gabarit.** Le §44.7 reste entier :
+le produit ne décrit toujours pas l'application du locataire, ne propose pas de
+squelette de service, ne choisit pas d'image et ne prescrit aucune politique de
+redémarrage. Il énonce les quelques lignes que la pile **doit** contenir pour
+fonctionner dans cette cellule-là, parce qu'il est le seul à les connaître.
+
+#### 44.9.3 Ce qu'il ne porte jamais
+
+Le §44.3 s'applique mot pour mot, et deux points méritent d'être redits ici parce
+que le trajet du texte est différent :
+
+- **aucune valeur de secret, aucune clé privée.** Un dossier est copié dans une
+  conversation avec un modèle tiers — c'est sa raison d'être. C'est le pire
+  trajet possible pour un secret, et le seul moyen sûr est qu'il n'y entre jamais ;
+- **rien des autres Sparks**, ni de l'intérieur de la Forge au-delà de cette
+  cellule. Le dossier d'un Spark ne renseigne pas sur ses voisins.
+
+Le §44.6 s'applique aussi, et le dossier le porte en toutes lettres : il énonce
+des faits, il ne donne pas d'ordre, et il ne prouve **aucune** autorisation. Un
+agent qui le lit ne doit pas en déduire ce qu'il a le droit de faire ; les
+autorisations se jouent côté Forge, où le locataire n'atteint rien (§35.1).
+
+#### 44.9.4 La surface d'API
+
+    GET /v1/sparks/{name}/briefing → 200
+      { "spark", "written_at", "markdown", "model" }
+
+Trois propriétés, et chacune est une décision :
+
+- la route **n'entre pas dans la cellule**. Elle lit le registre et le relevé
+  d'amorçage déjà conservé (§44.8) : elle n'exécute rien chez le locataire, ne
+  redémarre rien, et **répond sur un Spark arrêté** — c'est justement quand une
+  cellule est éteinte qu'on prépare son déploiement ;
+- elle rend le **modèle** et sa **présentation** ensemble. La console copie le
+  Markdown sans le recomposer : si elle le fabriquait à partir du modèle, une
+  troisième présentation naîtrait, et le §44.8 recommencerait à être vrai à un
+  endroit et faux à un autre ;
+- un Spark **jamais amorcé** répond `200`, pas une erreur. Le dossier dit alors
+  « amorçage jamais relevé », ne prétend aucune version, et le §14.6 du design
+  system est respecté : « pas encore relevé » n'est ni « rien » ni « à jour ».
+
+Un Spark sans cellule — jamais appliqué — se refuse en `409`, comme partout
+ailleurs : il n'y a pas d'adresse à donner, donc pas d'accès à décrire.
+
+#### 44.9.5 Ce que la console en fait
+
+Une **section** de la fenêtre du Spark, sur la facette qui porte son identité, et
+un bouton qui copie. Pas de modale : le §6.27 du design system réserve la modale
+à la saisie, et afficher une information mérite une section — c'est précisément
+son contre-exemple.
+
+Trois règles, toutes déjà écrites ailleurs :
+
+- « Copié » ne s'affiche qu'**après** l'accord du presse-papier (§1.3), et le
+  refus renvoie au texte, qui reste lisible et sélectionnable — `navigator.clipboard`
+  n'existe pas hors contexte sûr et peut être refusée ;
+- le texte est **replié**, pas caché : on doit pouvoir vérifier ce qu'on colle
+  avant de le coller ;
+- un Spark protégé n'y change rien. Le dossier ne modifie rien, et le §6.23 ne
+  concerne que les écritures.
+
+#### 44.9.6 Ce que ce n'est pas
+
+Ni un déclencheur de déploiement — le §1 exclut toujours le déploiement
+applicatif du périmètre —, ni une commande à exécuter, ni un canal par lequel un
+agent obtiendrait un accès. C'est un texte, il se lit, et tout ce qu'il décrit
+reste protégé par ce qui le protégeait avant qu'il n'existe.
 
 
 ## 45. Modèle de menace des actions sensibles (SPK-35)

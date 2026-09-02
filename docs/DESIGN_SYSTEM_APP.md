@@ -610,6 +610,41 @@ ligne, c'est-à-dire le message.
 Un refus d'une seule ligne reste un `<p>` ordinaire : lui donner une chasse fixe
 le ferait passer pour une sortie technique alors que c'est une phrase du produit.
 
+### SPK-DS-19 · Un texte fait pour être collé se montre, se copie, et ne se cache pas
+
+@spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9.5
+
+Un écran produit parfois un texte dont la destination n'est **pas** l'écran : on
+le copie pour le coller ailleurs — dans une conversation avec un modèle, dans un
+ticket, dans un terminal.
+
+`DESIGN_SYSTEM.md` §6.27 tranche la surface : « l'**affichage** d'une information
+— si elle mérite d'être lue, elle mérite une section de la fenêtre ». Donc une
+**section**, jamais une modale : il n'y a rien à saisir, donc aucun point
+d'engagement à isoler, et le voile plus le piège de focus se paieraient pour
+rien.
+
+**Règles, et chacune répond à un défaut précis :**
+
+- le texte est **visible et sélectionnable**, replié dans un `<details>` fermé par
+  défaut. Fermé, parce qu'un pavé de cinquante lignes noierait la section qui le
+  porte ; ouvrable, parce qu'on doit pouvoir vérifier ce qu'on colle **avant** de
+  le coller — surtout quand la destination est un tiers ;
+- il garde ses **lignes** et **replie** les longues, comme SPK-DS-18 : c'est du
+  Markdown, sa structure de lignes porte le sens, et un défilement horizontal
+  cacherait la fin de celles qui comptent ;
+- « Copié » ne s'écrit qu'**après** l'accord du presse-papier
+  (`DESIGN_SYSTEM.md` §1.3), et un refus renvoie **explicitement** à la sélection
+  manuelle du bloc. `navigator.clipboard` n'existe pas hors contexte sûr et peut
+  être refusée : sans ce repli nommé, le bouton serait une impasse le jour où il
+  échoue ;
+- la section **dit ce que le texte contient et ce qu'il ne contient pas** avant
+  qu'on le copie. Un texte destiné à sortir du produit doit annoncer qu'aucun
+  secret n'y figure, sans quoi c'est à l'utilisateur de le vérifier ligne à ligne ;
+- l'état non relevé se **nomme** (§14.6) : « pas encore composé », « aucun relevé
+  d'amorçage » et « le dossier n'a pas pu être lu » sont trois textes distincts,
+  jamais un bloc vide.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

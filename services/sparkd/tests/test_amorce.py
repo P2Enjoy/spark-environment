@@ -106,3 +106,62 @@ def test_le_gabarit_cloud_init_depose_le_script_et_l_appelle():
     assert gabarit.startswith("#cloud-config")
     assert "/opt/spark-amorce.sh" in gabarit
     assert "runcmd:" in gabarit
+
+
+# --- SPK-84 · prevenir le grub-pc casse (docs/DAT.md §50.7.1) --------------
+#
+# @verifies docs/BACKLOG.md#SPK-84 · docs/DAT.md §50.7.1
+
+
+def test_les_gardes_ne_sont_PAS_eprouvables_en_processus_ici():
+    """Ce que ces preuves NE font pas, et pourquoi c'est dit plutôt que masqué.
+
+    Les gardes de `preparer_grub_sur_raid` lisent des chemins ABSOLUS —
+    `/sys/firmware/efi`, `/sys/block/<md>/slaves` — qu'on ne peut pas simuler
+    dans le processus de test. Deux preuves de comportement ont d'abord été
+    écrites ici ; toutes deux étaient vertes sans rien garder :
+
+    - celle de la garde EFI passait parce que le poste de développement EST en
+      EFI : la fonction sortait à la première ligne, et la preuve aurait viré au
+      rouge sur une machine BIOS sans que le code ait changé ;
+    - celle de la garde RAID doublait `grub-probe` par une fonction shell, or
+      `dash` refuse un nom de fonction à tiret. Le script échouait en erreur de
+      syntaxe, et l'absence de pose était lue comme un succès.
+
+    Ce qui garde donc réellement cette unité : les assertions de SOURCE
+    ci-dessous, et la mesure faite sur la Forge réelle — écritures neutralisées,
+    la fonction y a retrouvé d'elle-même les deux disques du RAID
+    (`docs/JOURNAL.md`, 2026-09-02).
+    """
+    fonction = re.search(r"^preparer_grub_sur_raid\(\) \{.*?^\}", source(), re.S | re.M)
+    assert fonction, "la fonction de preparation doit exister dans l'amorce"
+
+
+def test_la_pose_est_CONDITIONNELLE_et_DERIVEE_dans_le_script():
+    """Les deux propriétés qui font la correction, lues dans le code lui-même :
+    sans la garde EFI ni la garde RAID, la pose deviendrait une régression ;
+    sans la dérivation, une Forge en NVMe serait rendue non amorçable."""
+    corps = code()
+    assert "/sys/firmware/efi" in corps, "la garde EFI"
+    assert "/dev/md*" in corps, "la garde RAID"
+    assert "slaves" in corps, "les disques se DEDUISENT des membres du RAID"
+    assert "/dev/disk/by-id" in corps, "identifiant stable entre deux demarrages"
+    assert "/dev/sda" not in corps, "aucun disque ecrit en dur"
+    assert "/dev/sdb" not in corps, "aucun disque ecrit en dur"
+
+
+def test_la_preparation_precede_le_PREMIER_apt():
+    """Tout l'objet de l'unite : posee apres, elle ne previendrait rien, le
+    premier apt-get install ayant deja echoue sous set -eu."""
+    corps = code()
+    assert corps.index("preparer_grub_sur_raid\n") < corps.index("apt-get update")
+
+
+def test_la_preparation_est_IDEMPOTENTE():
+    """SPK-73 : un second passage de l'amorce ne doit rien changer. Poser une
+    reponse debconf deja posee est sans effet — mais elle ne doit pas etre
+    AJOUTEE a une liste, ce qui la ferait croitre a chaque rejeu."""
+    corps = code()
+    assert corps.count("debconf-set-selections") == 1
+    assert ">>" not in corps.split("preparer_grub_sur_raid()")[1].split("}")[0], \
+        "la reponse se POSE, elle ne s'ajoute pas"

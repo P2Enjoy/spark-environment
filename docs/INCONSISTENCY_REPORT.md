@@ -33,3 +33,32 @@ la correction du 2026-09-02, qui n'a fait que rendre l'état de refus lisible.
 
 **Demandé au responsable.** Arbitrer : rendre l'engagement facultatif dans
 `renderModale`, ou rabattre ces états sur une fenêtre plutôt qu'une modale.
+
+---
+
+## 2. Deux unités de backlog portent le même identifiant `SPK-84`
+
+**Constaté le 2026-09-02**, en attribuant un identifiant à SPK-85.
+
+**Le document.** `docs/BACKLOG.md`, en tête : « Un identifiant `SPK-NN` est
+**stable** : il est cité par les commentaires `@spec` du code et `@verifies` des
+tests. Il ne se renumérote pas. »
+
+**Le fait.** Deux unités distinctes portent `SPK-84` : « Une recette pose AUSSI sa
+route, et les trois blocs se ressemblent » et « L'amorce prévient le `grub-pc`
+cassé, et le préflight le nomme ». Les deux sont `[ ]`, donc aucune n'est encore
+citée par un `@spec` ou un `@verifies` — c'est ce qui rend la correction encore
+possible sans toucher au code.
+
+**Pourquoi ce n'est pas corrigé ici.** Renuméroter l'une des deux est un
+arbitrage sur des unités qui n'appartiennent pas à la tâche en cours, et les deux
+identifiants ont pu être cités ailleurs qu'ici — un message de commit, une note.
+Le journal du 2026-09-02 rappelle que `SPK-79`, `SPK-80` et `SPK-81` ont été
+rendus et ne seront **pas réemployés** : ils ne peuvent donc pas servir à
+départager.
+
+**Ce qui a été fait à la place.** La nouvelle unité prend `SPK-85`, le premier
+identifiant libre au-delà du doublon.
+
+**Demandé au responsable.** Arbitrer laquelle des deux unités `SPK-84` conserve
+l'identifiant, et si la seconde doit prendre `SPK-86`.

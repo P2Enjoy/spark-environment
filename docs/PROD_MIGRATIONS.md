@@ -115,6 +115,32 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-15 · Migration `013_briefing_systeme` du registre (SPK-85)
+
+```
+Objectif      : le relevé d'amorçage conserve la distribution, la suite et
+                l'architecture de la cellule, pour que le dossier de déploiement
+                puisse les donner sans entrer dans le Spark (docs/DAT.md §44.9.2,
+                docs/SCHEMA.md §10 quinquies).
+Dépend de     : 012_briefing (la table `spark_bootstrap_observation`).
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : RIEN d'automatique. Les trois colonnes naissent NULL sur les
+                lignes déjà écrites, et le restent : le produit ne reconstitue
+                pas rétrospectivement ce qu'une cellule déclarait à une date
+                passée. Elles se remplissent au premier amorçage suivant, et le
+                dossier des Sparks amorcés AVANT la migration dit « système non
+                relevé » jusque-là. Relever à nouveau ne suffit pas : c'est
+                l'amorçage qui écrit cette ligne.
+Vérification  : sparkd démarre, et `sqlite3 <registre>
+                ".schema spark_bootstrap_observation"` montre `os_id`,
+                `os_suite` et `arch`.
+Retour arrière: fourni. Le `down` retire les trois colonnes ; le reste de la
+                ligne — versions, mode, composants gérés — survit intact.
+Risque        : nul pour les données. Trois colonnes nullables ajoutées à une
+                table informative, qu'aucune règle d'admission ni d'autorisation
+                ne consulte.
+```
+
 ### OP-14 · Mettre à jour `sparkd` pour l'inventaire DNS (SPK-77)
 
 ```

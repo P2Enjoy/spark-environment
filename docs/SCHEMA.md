@@ -381,6 +381,9 @@ Migration `012_briefing.sql`. Contrat : `docs/DAT.md` §44.3, §44.4 et §44.8.
 | `compose_version` | TEXT nullable | version du greffon Compose alors observée |
 | `docker_mode` | TEXT nullable | `enracine` ou `rootless`, si Docker est utilisable |
 | `managed_items` | TEXT JSON | composants effectivement installés ou réparés par `sparkd` |
+| `os_id` | TEXT nullable | distribution que la cellule déclarait alors (`ID` d'`os-release`) |
+| `os_suite` | TEXT nullable | suite déclarée (`VERSION_CODENAME`) |
+| `arch` | TEXT nullable | architecture relevée (`uname -m`) |
 
 Une ligne est remplacée après chaque amorçage, parce qu'un relevé daté doit dire
 ce qu'il a vu à cette date. `managed_items` conserve l'historique minimal des
@@ -388,6 +391,17 @@ composants que le plan de contrôle a posés : un composant seulement trouvé d�
 présent n'est jamais réécrit rétrospectivement comme « installé par sparkd ».
 Cette donnée est informative et non une autorisation; son contenu sera de toute
 façon visible dans une cellule dont le locataire est `root`.
+
+Les trois dernières colonnes viennent de la migration `013_briefing_systeme.sql`
+(SPK-85, `docs/DAT.md` §44.9.2). Elles sont **nullables et le restent** : une
+ligne écrite avant cette migration n'a jamais porté ces valeurs, et les
+reconstituer depuis l'état courant de la cellule contredirait le motif même de
+cette table — un relevé daté dit ce qu'il a vu à cette date. Elles se remplissent
+au premier amorçage suivant.
+
+L'architecture y figure parce qu'elle décide des images qu'une pile peut tirer, et
+qu'elle n'est lisible que **depuis** la cellule : celui qui prépare le
+déploiement ailleurs ne peut ni la lire ni la deviner (§44.9.2).
 
 La cascade est nécessaire : un briefing sans Spark n'a aucun sens et ne doit pas
 survivre à la libération de ses ressources.

@@ -4927,6 +4927,56 @@ disparu, alors qu'elle était bien posée dans le DNS ».
 
 ---
 
+---
+
+### [ ] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
+
+Demandé par le responsable le 2026-09-02 : « pour un Spark configuré, un bouton
+*LLM* comme le font certains sites — un texte copié dans le presse-papier, à
+coller à un agent, pour qu'il prépare sur son dépôt local le déploiement prêt à
+lancer le `docker compose` sur le Spark cible ».
+
+Le briefing du SPK-60 existe déjà, mais il vit **dans** la cellule, en `0600` :
+pour le lire il faut y entrer, donc être amorcé, avoir une clé accordée et passer
+le rebond. Tout ce qui décide de la préparation est hors de portée au moment
+précis où l'on prépare.
+
+- Spécification : `docs/DAT.md` **§44.9** (écrite et committée avant la première
+  ligne de code), §44.8 révisé et §42.6 révisé · `docs/SCHEMA.md` §10 quinquies ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-19 · manuel M8.
+- Identifiant : `SPK-85` et non `SPK-84`, **déjà porté par deux unités** — le
+  doublon est consigné au `docs/INCONSISTENCY_REPORT.md` §2 et laissé inchangé.
+- Dépend de : SPK-60 pour le modèle unique, SPK-54 pour le relevé d'amorçage,
+  SPK-11 pour le fragment `ssh_config`.
+- Portée : une route `GET /v1/sparks/{name}/briefing` qui rend le **modèle** du
+  §44.8 et sa présentation Markdown ; une section « Dossier pour un agent » sur la
+  facette *Infos* de la fenêtre d'un Spark, avec le texte replié et un bouton qui
+  le copie ; la persistance de la distribution, de la suite et de l'architecture
+  au relevé d'amorçage (migration `013`).
+- **Un seul modèle, trois présentations** (§44.9.1) : le JSON et le Markdown posés
+  dans la cellule, et le dossier copié depuis la console. La console **ne
+  recompose pas** le texte à partir du modèle : elle copie celui que le runtime
+  rend, sans quoi une troisième vérité naîtrait et divergerait comme le §44.8
+  l'interdit déjà entre les deux premières.
+- **Des fragments contractuels, jamais un gabarit** (§44.9.2) : les deux
+  `env_file:`, le port que chaque route vise dans la cellule, les ports publiés,
+  l'accès par rebond. Le §44.7 reste entier — aucune image choisie, aucun service
+  proposé, aucune politique de redémarrage.
+- **La route n'entre pas dans la cellule** (§44.9.4) : elle lit le registre, donc
+  elle répond sur un Spark **arrêté**, ce qui est justement l'état où l'on prépare
+  un déploiement. Un Spark jamais amorcé répond `200` et le dossier dit « amorçage
+  jamais relevé » ; un Spark sans cellule se refuse en `409`.
+- **Aucune valeur de secret, aucune clé privée** (§44.9.3) : ce texte est fait
+  pour être collé dans une conversation avec un modèle tiers. C'est le pire trajet
+  possible pour un secret, et le seul moyen sûr est qu'il n'y entre jamais.
+- DoD : un test prouve qu'aucune valeur de secret n'entre dans le dossier, en
+  posant un secret puis en cherchant sa valeur dans le texte rendu ; tests d'API
+  des trois états — amorcé, jamais amorcé, sans cellule ; preuves d'écran de la
+  section et de ses états ; parcours E2E qui part de l'accueil, ouvre un Spark,
+  copie le dossier et **relit le presse-papier** ; captures observées ; seed
+  amorçant un Spark pour que la section ne soit pas vide ; manuel M8 mis à jour ;
+  `@spec` / `@verifies` posés ; migration inscrite au contrat de déploiement.
+
 ### [~] SPK-82 · L'amorçage rend la cellule JOIGNABLE, pas seulement équipée
 
 Demandé par le responsable le 2026-09-02, après l'amorçage réel de `ubuntu-demo`

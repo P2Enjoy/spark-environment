@@ -243,6 +243,61 @@ préexiste dans `main`, ne concerne pas l'amorçage, et n'est pas corrigée ici.
 
 ---
 
+## 2026-09-02 — Porter le correctif GRUB dans l'amorce, et deux preuves vertes qui ne gardaient rien
+
+Demandé par le responsable après la réparation manuelle : « on devrait pas
+ajouter ces étapes au setup voire au cloud init ? ».
+
+**Oui, et pour une raison plus forte que le confort.** L'amorce d'une Forge
+(`deploy/cloud-init/spark-amorce.sh`) fait, en deuxième ligne utile,
+`apt-get install ca-certificates curl gnupg git python3-venv` sous `set -eu`. Sur
+une Forge dont `grub-pc` est en `iF`, cette ligne échoue et interrompt toute
+l'installation — en désignant `ca-certificates`, jamais GRUB. Le défaut n'est
+donc pas une gêne d'exploitation : c'est une panne de l'installation du produit,
+et une panne de l'amorçage de chaque Spark.
+
+**Où l'étape ne va pas** : dans le `user-data` brut. `runcmd` ne joue qu'une fois
+par instance et le §50.6 fait du rejeu par `sudo /opt/spark-amorce.sh` un
+contrat. Hors du script, l'étape ne serait ni rejouable, ni versionnée.
+
+**Deux propriétés font la correction**, et sans elles ce serait une régression :
+conditionnelle — rien n'est écrit sur une machine EFI ni sur un `/boot` hors
+RAID, où `grub-pc` n'est pas en cause ; et dérivée — les disques se lisent dans
+`/sys/block/<md>/slaves` puis se résolvent en `by-id`, jamais écrits en dur. Une
+Forge en NVMe présente `/dev/nvme0n1` ; un `/dev/sda` figé la rendrait non
+amorçable.
+
+**Mesuré sur la Forge**, écritures neutralisées : la fonction a retrouvé
+**d'elle-même** les deux mêmes disques que j'avais nommés à la main une heure
+plus tôt.
+
+**Le préflight gagne `PKG-DPKG`.** Prévenir ne suffit pas : les Forges déjà
+installées existent, et le défaut y est muet. Le contrôle rend `ECHEC` dès qu'un
+paquet n'est ni `ii` ni `rc` — les `rc` sont l'état normal d'un paquet retiré, et
+les signaler ferait crier au loup sur toute Forge. Observé sur la Forge réelle,
+en deuxième position : *ok — aucun paquet en défaut*, sur 915 paquets relevés.
+
+**Ce que j'ai raté, et qui vaut d'être écrit.** J'avais d'abord ajouté deux
+preuves de comportement pour les gardes. Toutes deux étaient **vertes sans rien
+garder** :
+
+- la preuve de la garde EFI passait parce que le poste de développement est en
+  EFI — la fonction sortait à sa première ligne. Sur une machine BIOS, elle
+  aurait rougi sans qu'aucun code ait changé ;
+- la preuve de la garde RAID doublait `grub-probe` par une fonction shell, or
+  **`dash` refuse un nom de fonction à tiret** : le script mourait en erreur de
+  syntaxe, et l'absence de pose se lisait comme un succès.
+
+Je les ai retirées plutôt que rafistolées, et j'ai écrit à leur place ce que ces
+preuves ne savent pas faire. Les gardes lisent des chemins absolus qu'on ne peut
+pas simuler en processus ; ce qui garde l'unité, ce sont les assertions de source
+et la mesure sur la Forge. C'est la troisième fois de la journée qu'une preuve
+verte ne gardait rien — après celle du débordement d'état et celle du
+recouvrement du widget. Le motif est chaque fois le même : la preuve passait par
+un chemin où le défaut ne pouvait pas se produire.
+
+---
+
 ## 2026-09-02 — `apt` bloqué sur la Forge : un postinst qui ne sait pas lire un RAID
 
 **Problème.** Signalé par le responsable : la Forge refuse `apt full-upgrade`.
@@ -9394,3 +9449,52 @@ trompeur.
 
 **Vérifications réalisées.** Aucune, et il n'y en a pas à faire : rien n'a jamais
 été implémenté sur ce sujet.
+
+## 2026-09-02 · Le briefing existait déjà — mais du mauvais côté du câble
+
+**Demande du responsable** : un bouton « LLM » sur un Spark configuré, qui compose
+dans le presse-papier le texte à coller à un agent pour qu'il prépare, **sur son
+dépôt local**, un déploiement prêt à lancer sur ce Spark.
+
+**Le problème, tel qu'il s'est révélé.** Presque tout le contenu demandé existe
+déjà : `sparkd` construit depuis SPK-60 un modèle unique de briefing — quotas et
+leur sémantique, chemins d'environnement, noms des variables et des secrets,
+routes, ports publiés, mode Docker, pièges — et le projette dans la cellule
+(§44.8). Il n'y manquait rien d'essentiel. **Il manquait un lecteur.** Ce fichier
+vit en `0600` dans `/etc/spark/`, donc derrière une clé accordée, un rebond et un
+amorçage. L'agent qui prépare travaille précisément avant tout cela.
+
+**Hypothèse écartée : recomposer le texte dans la console.** La console possède
+déjà, à l'ouverture d'un Spark, presque toutes les pièces — quotas, routes, ports,
+environnement résolu, fragment `ssh_config`. Un texte fabriqué là aurait évité une
+route. Il aurait aussi créé une **troisième** présentation du même modèle, à côté
+du JSON et du Markdown de la cellule, dont le §44.8 dit exactement pourquoi elles
+ne doivent pas être maintenues en parallèle. La console copie donc ce que le
+runtime rend, sans le recomposer.
+
+**Décision, prise avec le responsable avant toute ligne de code.** Le dossier
+porte les faits **et** les fragments contractuels — les deux `env_file:`, le port
+que chaque route vise dans la cellule, les ports publiés, l'accès par rebond —,
+mais aucun squelette applicatif : le §44.7 reste entier. Ce sont les lignes que le
+plan de contrôle est **seul** à connaître, pas une pile qu'il prescrirait.
+
+**Ce qui manquait vraiment au modèle, et qui a coûté une migration.** La
+distribution et l'architecture de la cellule ne sont relevées qu'à l'amorçage et
+n'étaient **pas** conservées. Un agent dans la cellule lit `uname -m` quand il
+veut ; celui qui compose un `docker-compose.yml` ailleurs ne le peut pas, et une
+image tirée pour la mauvaise architecture ne se découvre qu'au premier
+`docker compose up`. Trois colonnes nullables sont donc ajoutées au relevé daté
+(`013_briefing_systeme`, OP-15), et le relevé du §42.6 gagne `arch`. Elles
+naissent NULL sur les lignes existantes et le restent : reconstituer après coup ce
+qu'une cellule déclarait à une date passée détruirait le seul intérêt d'un relevé
+daté.
+
+**Un doublon d'identifiant découvert en chemin.** `SPK-84` est porté par **deux**
+unités du backlog. Aucune n'étant commencée, aucun `@spec` ne les cite ; le
+doublon est consigné au rapport d'incohérences et laissé inchangé — arbitrer
+lequel garde le numéro n'appartient pas à cette tâche. La nouvelle unité prend
+`SPK-85`.
+
+**Vérifications réalisées.** Aucune à ce stade : cette entrée consigne la
+décision et la spécification, committées avant le code, comme l'exige le
+`CLAUDE.md` §5.
