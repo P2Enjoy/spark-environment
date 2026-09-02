@@ -185,6 +185,16 @@
   dernière ligne passait. La sortie d'erreur, jusqu'ici jetée, accompagne
   désormais le code dans le refus ; elle ne traverse pas le journal d'audit, qui
   n'a pas à porter les paquets du locataire.
+- **Redémarrer la Forge depuis la console** (SPK-87, `docs/DAT.md` §51) : après
+  une mise à jour de noyau, la machine continue de tourner sur l'ancien tant
+  qu'elle n'a pas redémarré, et le seul recours était `ssh` à la main. Le panneau
+  relève d'abord ce que le geste coûterait — le noyau qui démarrera, les Sparks
+  nommés qui s'arrêteront, et si un redémarrage est seulement nécessaire — puis
+  demande de **frapper le nom de la Forge**, le sélecteur en portant plusieurs.
+  **Un noyau dépourvu de module ZFS fait disparaître le geste** au lieu de
+  l'assortir d'un avertissement : le pool serait indisponible au démarrage, donc
+  tous les Sparks, et cela ne se verrait qu'après. Un avertissement se clique ;
+  celui-là coûterait la production du locataire.
 - **Un système de paquets cassé est prévenu à l'amorce, et nommé par le
   préflight** (SPK-84, `docs/DAT.md` §50.7) : sur une Forge dont le `/boot` est
   en RAID, le postinst de `grub-pc` dérive sa cible en `/dev/md` — un nom qui

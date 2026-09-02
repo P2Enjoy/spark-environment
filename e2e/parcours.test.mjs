@@ -3115,6 +3115,39 @@ test('en 390 px, le widget flottant ne rend AUCUNE action incliquable', async ()
   });
 });
 
+// --- SPK-87 · REDEMARRER LA FORGE (§51) ------------------------------------
+//
+// @verifies docs/BACKLOG.md#SPK-87 · docs/DAT.md §51.1 (ce que le geste refuse),
+//           §51.2 (le relevé) · docs/DESIGN_SYSTEM_APP.md SPK-DS-19
+
+test('un noyau sans module ZFS fait DISPARAÎTRE le geste de redémarrage', async () => {
+  await parcours('redemarrage-refuse', async () => {
+    // §51.1 : un redémarrage vers un noyau sans ZFS laisse le pool
+    // indisponible, donc TOUS les Sparks à terre — et cela ne se voit qu'après.
+    // Ce n'est pas un avertissement qu'on clique : le geste n'est pas offert.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-redemarrage', { timeout: 20000 });
+
+    await page.click('[data-redemarrage="relever"]');
+    await page.waitForFunction(
+      () => /Noyau après redémarrage/.test(document.body.innerText),
+      null, { timeout: 30000 });
+
+    const section = await page.$eval('#titre-redemarrage',
+                                     (h) => h.closest('section').innerText);
+    assert.match(section, /7\.0\.0-31-generic/, 'le noyau visé est nommé');
+    assert.match(section, /module ZFS/, 'et la raison du refus aussi');
+
+    // SPK-DS-19 : le geste est ABSENT, pas désactivé.
+    assert.equal(await page.$('[data-redemarrage="demander"]'), null,
+      'offrir le geste inviterait à insister sur ce qui ne doit pas avoir lieu');
+    assert.equal(await page.$('[data-redemarrage="engager"]'), null);
+    // Et c'est un refus, pas un avertissement qu'on passe outre.
+    assert.ok(await page.$('#titre-redemarrage ~ .refus, .refus'));
+  });
+});
+
 test('l’écran de création DIT quelles images l’amorçage sait servir', async () => {
   await parcours('creation-images-amorcables', async () => {
     // §42.9.6 : le §33 proposait une image que le §42 ne savait pas équiper, et

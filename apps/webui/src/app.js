@@ -24,9 +24,9 @@ import { INVENTAIRE_VIDE, renderSessionRegistry } from './components/session-reg
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
   from './components/spark-create.js';
 import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour,
-         renderVerification }
+         renderVerification, refusEcritureRecette }
   from './components/spark-admin.js';
-import { renderForgeView, UPDATE_VIDE } from './components/forge-view.js';
+import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
@@ -67,6 +67,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        // comment il se situe. `null` tant qu'on n'a pas comparé
                        // — « pas encore su » n'est ni « à jour », ni une panne.
                        build: null, updateUi: { ...UPDATE_VIDE },
+                       // SPK-87 · §51 : le redémarrage. `releve` est `null` tant
+                       // qu'on n'a pas demandé — il exécute des commandes SUR la
+                       // Forge, et l'ouvrir ne doit pas y entrer.
+                       rebootUi: { ...REBOOT_VIDE }, sparks: [],
                        installer: { ...INSTALLER_VIDE,
                                     values: { ...INSTALLER_VIDE.values } } },
                facette: '',
@@ -262,6 +266,37 @@ function brancher() {
     ?.addEventListener('click', () => executerMiseAJour('update'));
   racine.querySelector('[data-action="confirmer-rollback"]')
     ?.addEventListener('click', () => executerMiseAJour('rollback'));
+
+  // SPK-87 · §51 : le redémarrage de la Forge.
+  racine.querySelector('[data-redemarrage="relever"]')
+    ?.addEventListener('click', () => releverRedemarrage());
+  racine.querySelector('[data-redemarrage="demander"]')
+    ?.addEventListener('click', () => {
+      etat.forge.rebootUi.confirme = true;
+      etat.forge.rebootUi.frappe = '';
+      peindre();
+      racine.querySelector('[data-redemarrage="frappe"]')?.focus();
+    });
+  racine.querySelector('[data-redemarrage="annuler"]')
+    ?.addEventListener('click', () => {
+      etat.forge.rebootUi.confirme = false;
+      etat.forge.rebootUi.frappe = '';
+      peindre();
+      racine.querySelector('[data-redemarrage="demander"]')?.focus();
+    });
+  const frappeForge = racine.querySelector('[data-redemarrage="frappe"]');
+  if (frappeForge) {
+    frappeForge.addEventListener('input', (evenement) => {
+      // §« Frapper le nom » : la comparaison est EXACTE — ni bordures ignorées,
+      // ni insensibilité à la casse. On ne repeint que le bouton, sinon la
+      // saisie perdrait le focus à chaque touche.
+      etat.forge.rebootUi.frappe = evenement.target.value;
+      const engager = racine.querySelector('[data-redemarrage="engager"]');
+      if (engager) engager.disabled = evenement.target.value !== (etat.forge.host?.hostname ?? '');
+    });
+  }
+  racine.querySelector('[data-redemarrage="engager"]')
+    ?.addEventListener('click', () => engagerRedemarrage());
   for (const bouton of racine.querySelectorAll('[data-action="diagnostiquer-forge"]')) {
     bouton.addEventListener('click', diagnostiquerForge);
   }
@@ -2444,6 +2479,126 @@ async function creer() {
     etat.creation.submitting = false;
     peindre();
   }
+}
+
+/**
+ * Ce qu'un redémarrage coûterait (SPK-87, docs/DAT.md §51.2).
+ *
+ * Une LECTURE. Elle ne part pas d'elle-même : elle exécute des commandes SUR la
+ * Forge, et l'ouverture de l'écran ne doit pas y entrer.
+ */
+async function releverRedemarrage() {
+  const r = etat.forge.rebootUi;
+  r.erreur = null;
+  r.releve = 'en-cours';
+  r.busy = true;
+  peindre();
+  try {
+    const reponse = await relais(
+      `/api/forge/reboot?server=${encodeURIComponent(etat.server)}`);
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    r.releve = corps;
+    // Les Sparks qui vont s'arrêter : c'est la production d'un tiers, et le
+    // §51.2 en fait une des trois lignes qui décident.
+    r.busy = true;
+    const liste = await relais(`/api/v1/sparks?server=${encodeURIComponent(etat.server)}`)
+      .then((x) => x.json()).catch(() => ({ sparks: [] }));
+    etat.forge.sparks = liste.sparks ?? [];
+  } catch (erreur) {
+    r.erreur = erreur?.message ?? String(erreur);
+    r.releve = null;
+  }
+  r.busy = false;
+  peindre();
+}
+
+/**
+ * Le geste (docs/DAT.md §51.1, §51.4).
+ *
+ * L'hôte relève de nouveau et refuse sur place si le noyau visé n'a pas de
+ * module ZFS : l'écran ne décide pas, il montre.
+ */
+async function engagerRedemarrage() {
+  const r = etat.forge.rebootUi;
+  r.erreur = null;
+  r.busy = true;
+  peindre();
+  try {
+    const reponse = await relais('/api/forge/reboot', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ server: etat.server, confirm: r.frappe }),
+    });
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    r.engage = true;
+    r.confirme = false;
+  } catch (erreur) {
+    r.erreur = erreur?.message ?? String(erreur);
+  }
+  r.busy = false;
+  peindre();
+}
+
+/**
+ * Le dossier de déploiement d'un Spark (SPK-85, docs/DAT.md §44.9).
+ *
+ * La console ne le COMPOSE pas : elle demande au runtime le texte rendu depuis
+ * l'unique modèle de briefing (§44.8), et se contente d'y joindre par où l'on
+ * saute. Le fabriquer ici créerait une troisième vérité à côté des deux
+ * projections posées dans la cellule.
+ */
+async function chargerDossier(nom) {
+  const d = etat.dossier;
+  d.status = 'chargement';
+  d.texte = null;
+  d.copie = null;
+  d.message = null;
+  const acces = rebondDuServeur(etat.servers.find((s) => s.name === etat.server));
+  const parametres = new URLSearchParams();
+  if (acces.jump) parametres.set('jump', acces.jump);
+  if (acces.direct) parametres.set('direct', 'true');
+  const suffixe = parametres.toString() ? `?${parametres}` : '';
+  try {
+    const rendu = await api(
+      `/v1/sparks/${encodeURIComponent(nom)}/briefing${suffixe}`);
+    d.status = 'pret';
+    d.texte = rendu.markdown;
+    d.ecritLe = (rendu.written_at ?? '').slice(0, 16).replace('T', ' ');
+    d.amorce = Boolean(rendu.model?.bootstrap);
+  } catch (erreur) {
+    // §14.6 : un Spark sans cellule n'est pas une panne du dossier. Les deux
+    // états portent des textes distincts, et le remède de l'un n'est pas
+    // l'autre — créer la cellule, ou signaler une lecture qui a échoué.
+    d.status = erreur?.code === 'no_instance' ? 'absent' : 'erreur';
+    d.message = erreur?.message ?? String(erreur);
+  }
+}
+
+/**
+ * Copie le dossier, et ne dit « copié » qu'une fois le presse-papier d'accord.
+ *
+ * @spec docs/BACKLOG.md#SPK-85 · docs/DESIGN_SYSTEM.md §1.3 (pas de succès
+ *       simulé) · docs/DESIGN_SYSTEM_APP.md SPK-DS-19
+ *
+ * Même règle que la clé publique du SPK-74 : `navigator.clipboard` n'existe pas
+ * hors contexte sûr et peut être refusée. Le refus renvoie au texte, qui reste
+ * dépliable et sélectionnable — un bouton qui échouerait en silence serait pire
+ * que pas de bouton.
+ */
+async function copierDossier() {
+  const d = etat.dossier;
+  if (!d.texte) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('presse-papier indisponible');
+    await navigator.clipboard.writeText(d.texte);
+    d.copie = { ok: true, message: 'Dossier copié dans le presse-papier : '
+                + 'collez-le à votre agent.' };
+  } catch {
+    d.copie = { ok: false, message: 'Copie refusée par le navigateur : '
+                + 'dépliez le texte ci-dessous et sélectionnez-le pour le copier.' };
+  }
+  peindre();
 }
 
 async function chargerDetail(nom, facette = '') {

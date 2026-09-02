@@ -157,6 +157,41 @@ les empreintes ni les phases.
 
 ![Le compte rendu de mise à jour sur mobile](images/m4-update-mobile.png)
 
+## Redémarrer la Forge
+
+Le panneau **Redémarrage**, sous *Code déployé*, arrête et relance la machine.
+C'est le geste le plus lourd du produit : **tous les Sparks s'arrêtent avec
+elle**, et la console perd le contact jusqu'au retour.
+
+**Relever d'abord.** Le bouton **Relever l'état** interroge la machine sans rien
+changer, et rend trois choses :
+
+| Ce qu'il dit | Pourquoi cela décide |
+|---|---|
+| le noyau en marche, et celui qui démarrera | ils diffèrent après une mise à jour |
+| les Sparks qui s'arrêteront, nommés | c'est la production de leur locataire |
+| si un redémarrage est *nécessaire* | pour ne pas le faire par habitude |
+
+**Un cas fait disparaître le bouton, et ce n'est pas un caprice.** Si le noyau qui
+démarrera n'a pas de module ZFS, le pool de stockage serait indisponible au
+démarrage — donc tous vos Sparks, et vous ne le verriez qu'après, la console
+ayant déjà perdu le contact. Dans ce cas l'écran affiche un refus et **n'offre
+pas** le geste. Ce n'est pas un avertissement qu'on peut passer outre : il faut
+d'abord installer le module pour ce noyau.
+
+**Il faut frapper le nom de la Forge.** Une confirmation ordinaire prouve qu'on a
+vu l'écran ; frapper le nom prouve qu'on a lu **laquelle** — et le sélecteur en
+porte plusieurs. La comparaison est exacte : ni la casse, ni un espace en trop ne
+passent. Tant que le nom ne correspond pas, le bouton reste visible et inactif.
+
+**Après le geste**, l'écran dit que le contact est perdu, et c'est normal.
+Reconnectez-vous quand la machine aura redémarré ; rien de ce qui est affiché
+entretemps n'est à jour.
+
+> Un Spark **protégé** n'empêche pas le redémarrage. La protection garde les
+> écritures qui visent un Spark, pas l'arrêt de la machine qui l'héberge —
+> prétendre le contraire vous donnerait une garantie fausse.
+
 ## Ce que vaut exactement une réservation CPU
 
 **Un plancher.** Sous contention totale — quand la Forge et tous ses Sparks

@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
+import { renderRedemarrage, REBOOT_VIDE,
   renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced,
   renderHostError, renderControlUnavailable, renderHostSkeleton, fillRatio,
   formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
@@ -576,4 +576,95 @@ test('le bloc est rendu dans la vue de la Forge', () => {
             notify: { configured: false, sent: 0, failed: 0, dropped: 0 } },
   });
   assert.match(html, /titre-notify/);
+});
+
+// --- SPK-87 · redémarrer la Forge (docs/DAT.md §51) ------------------------
+//
+// @verifies docs/BACKLOG.md#SPK-87 · docs/DAT.md §51.1, §51.2, §51.3 ·
+//           docs/DESIGN_SYSTEM_APP.md SPK-DS-19 ·
+//           docs/DESIGN_SYSTEM.md « Frapper le nom »
+
+const HOTE_REBOOT = { hostname: 'spark-experiment' };
+const SPARKS_REBOOT = [{ name: 'ubuntu-demo', state: 'running' },
+                { name: 'crm', state: 'running' },
+                { name: 'boutique', state: 'stopped' }];
+const reboot = (partiel = {}) => ({ ...REBOOT_VIDE, ...partiel });
+const AUTORISE = { autorise: true, refus: null, noyauCourant: '7.0.0-15',
+                   noyauCible: '7.0.0-30', redemarrageRequis: true };
+const REFUSE = { autorise: false, noyauCourant: '7.0.0-15', noyauCible: '7.0.0-31',
+                 refus: { code: 'zfs_absent',
+                          message: 'Le noyau 7.0.0-31 n’a pas de module ZFS.' } };
+
+test('sans relevé, l’écran ne PRÉTEND rien sur la Forge', () => {
+  const rendu = renderRedemarrage(HOTE_REBOOT, reboot(), SPARKS_REBOOT);
+  assert.match(rendu, /n’a pas encore été relevé/);
+  assert.ok(!/data-redemarrage="demander"/.test(rendu),
+    'on n’offre pas d’engager ce qu’on n’a pas mesuré');
+});
+
+test('un noyau sans ZFS RETIRE le geste, il ne le désactive pas', () => {
+  // SPK-DS-19 : ailleurs une action indisponible reste présente et désactivée
+  // (§9.9) ; ici l'état n'est pas « indisponible » mais « ne doit pas avoir
+  // lieu », et l'offrir inviterait à insister.
+  const rendu = renderRedemarrage(HOTE_REBOOT, reboot({ releve: REFUSE }), SPARKS_REBOOT);
+  assert.equal(/data-redemarrage="demander"/.test(rendu), false);
+  assert.equal(/data-redemarrage="engager"/.test(rendu), false);
+  assert.match(rendu, /class="refus"/, 'un refus, pas un avertissement');
+  assert.match(rendu, /7\.0\.0-31/, 'et il nomme le noyau en cause');
+});
+
+test('le relevé NOMME les Sparks qui vont s’arrêter', () => {
+  // §51.2 : c'est la production d'un tiers, et cela change la décision.
+  const rendu = renderRedemarrage(HOTE_REBOOT, reboot({ releve: AUTORISE }), SPARKS_REBOOT);
+  assert.match(rendu, /ubuntu-demo/);
+  assert.match(rendu, /crm/);
+  assert.ok(!/boutique/.test(rendu), 'un Spark déjà arrêté ne s’arrêtera pas');
+});
+
+test('la confirmation demande de FRAPPER le nom de la Forge', () => {
+  const rendu = renderRedemarrage(
+    HOTE_REBOOT, reboot({ releve: AUTORISE, confirme: true }), SPARKS_REBOOT);
+  assert.match(rendu, /Frappez <strong>spark-experiment<\/strong>/);
+  assert.match(rendu, /data-redemarrage="frappe"/);
+  assert.match(rendu, /2 Sparks en marche/, 'la conséquence est chiffrée');
+});
+
+test('tant que la frappe ne correspond pas, le bouton est PRÉSENT et désactivé', () => {
+  // DESIGN_SYSTEM.md : pas absent — l'action existe, elle est indisponible dans
+  // un état connu, et la raison reste lisible (§9.9).
+  const rendu = renderRedemarrage(
+    HOTE_REBOOT, reboot({ releve: AUTORISE, confirme: true, frappe: 'spark-experi' }), SPARKS_REBOOT);
+  assert.match(rendu, /data-redemarrage="engager"[^>]*disabled/);
+  assert.match(rendu, /aria-describedby="redemarrage-aide"/);
+});
+
+test('la comparaison est EXACTE : ni casse ni bordures ignorées', () => {
+  for (const frappe of ['Spark-Experiment', ' spark-experiment', 'spark-experiment ']) {
+    const rendu = renderRedemarrage(
+      HOTE_REBOOT, reboot({ releve: AUTORISE, confirme: true, frappe }), SPARKS_REBOOT);
+    assert.match(rendu, /data-redemarrage="engager"[^>]*disabled/,
+      `« ${frappe} » ne doit pas engager`);
+  }
+});
+
+test('la frappe EXACTE arme le bouton', () => {
+  const rendu = renderRedemarrage(
+    HOTE_REBOOT, reboot({ releve: AUTORISE, confirme: true, frappe: 'spark-experiment' }), SPARKS_REBOOT);
+  assert.ok(!/data-redemarrage="engager"[^>]*disabled/.test(rendu));
+});
+
+test('un redémarrage NON nécessaire est un avertissement, pas un refus', () => {
+  const rendu = renderRedemarrage(
+    HOTE_REBOOT, reboot({ releve: { ...AUTORISE, redemarrageRequis: false } }), SPARKS_REBOOT);
+  assert.match(rendu, /class="avertissement"/);
+  assert.ok(!/class="refus"/.test(rendu));
+  assert.match(rendu, /data-redemarrage="demander"/, 'on peut engager quand même');
+});
+
+test('une fois engagé, l’écran dit que le contact est PERDU', () => {
+  // §22.3 : aucune donnée antérieure ne s'affiche comme actuelle.
+  const rendu = renderRedemarrage(HOTE_REBOOT, reboot({ engage: true }), SPARKS_REBOOT);
+  assert.match(rendu, /perdu le contact/);
+  assert.match(rendu, /c'est attendu|c’est attendu/);
+  assert.ok(!/data-redemarrage="engager"/.test(rendu));
 });

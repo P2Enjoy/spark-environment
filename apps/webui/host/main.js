@@ -30,6 +30,11 @@ import {
 } from './forge-update.js';
 // SPK-82 · §42.10.2 : quelle clé du poste ouvre cette Forge.
 import { cleCorrespondante, libelleConsole } from './identite-console.js';
+// SPK-87 · §51 : redémarrer la Forge, et refuser quand c'est dangereux.
+import {
+  RELEVE_SCRIPT, REBOOT_SCRIPT, REBOOT_TIMEOUT_MS,
+  executerSurLaForge, lireReleve, ForgeRebootError,
+} from './forge-reboot.js';
 import { capture as capturerConsole, compare as comparerConsole,
          describe as decrireConsole } from './console-build.js';
 import { relever as releverDocker, inspecterConteneur, lireJournaux }
@@ -800,6 +805,77 @@ export function createConsoleHost(options = {}) {
       }
       return { status: 200, body: { server: nom, fingerprint: empreinte,
         publicKey: cle, label: libelleConsole(cle), reason: null } };
+    },
+
+    /**
+     * Ce qu'un redémarrage coûterait (SPK-87, docs/DAT.md §51.2).
+     *
+     * Une LECTURE : elle n'écrit rien et ne se journalise pas (§36.7). On peut
+     * regarder sans agir, et c'est ici que la condition de refus se lit.
+     */
+    'GET /api/forge/reboot': async (_corps, url) => {
+      const nom = String(url?.searchParams?.get('server') ?? '');
+      const serveur = (await load(inventoryPath)).find((c) => c.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      try {
+        const vu = lireReleve(await executerSurLaForge(serveur, RELEVE_SCRIPT));
+        return { status: 200, body: { server: nom, ...vu } };
+      } catch (erreur) {
+        return { status: 502, body: { error: erreur.code ?? 'releve_failed',
+          message: erreur.message } };
+      }
+    },
+
+    /**
+     * Le geste (docs/DAT.md §51.1, §51.4).
+     *
+     * Il RELÈVE de nouveau avant d'engager, et refuse sur place si le noyau visé
+     * n'a pas de module ZFS. Se fier au relevé que l'écran a lu laisserait une
+     * fenêtre entre le coup d'œil et le clic — or c'est le pool du locataire qui
+     * est en jeu, pas une préférence d'affichage.
+     */
+    'POST /api/forge/reboot': async (corps) => {
+      const nom = String(corps?.server ?? '');
+      const serveur = (await load(inventoryPath)).find((c) => c.name === nom);
+      if (!serveur) {
+        return { status: 404,
+                 body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
+      }
+      // §51.3 : la frappe du nom est vérifiée AUSSI ici. Un contrôle qui ne vit
+      // que dans l'écran n'est pas un contrôle (CLAUDE.md §10).
+      if (String(corps?.confirm ?? '') !== nom) {
+        return { status: 422, body: { error: 'name_mismatch',
+          message: 'Le nom frappé ne correspond pas à la Forge visée.' } };
+      }
+      let vu;
+      try {
+        vu = lireReleve(await executerSurLaForge(serveur, RELEVE_SCRIPT));
+      } catch (erreur) {
+        return { status: 502, body: { error: erreur.code ?? 'releve_failed',
+          message: erreur.message } };
+      }
+      if (!vu.autorise) {
+        return { status: 409, body: { error: vu.refus?.code ?? 'refus',
+          message: vu.refus?.message ?? 'Redémarrage refusé.', ...vu } };
+      }
+      try {
+        await executerSurLaForge(serveur, REBOOT_SCRIPT,
+                                 { timeoutMs: REBOOT_TIMEOUT_MS });
+      } catch (erreur) {
+        // Un `close` non nul APRÈS `systemctl reboot --no-block` n'est pas un
+        // échec : la machine coupe la connexion. Seul un refus AVANT l'ordre en
+        // est un, et il porte alors son propre code.
+        if (!(erreur instanceof ForgeRebootError) || erreur.code === 'ssh_start_failed') {
+          return { status: 502, body: { error: 'reboot_failed', message: erreur.message } };
+        }
+      }
+      // La console perd le contact : on ferme le tunnel plutôt que de laisser
+      // croire qu'il tient (§22.3).
+      try { tunnels.close(nom); } catch { /* déjà fermé */ }
+      return { status: 200, body: { server: nom, engaged: true, ...vu } };
     },
 
     'POST /api/anchor': async (corps) => {

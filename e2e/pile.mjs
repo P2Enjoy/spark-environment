@@ -277,6 +277,12 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       '*': 'node e2e/terminal-doublon.mjs',
       'site-vitrine': { ssh: 'false', rescue: 'cat' },
     }),
+    // SPK-87 · §51.1 : la pile de preuves n'a pas de Forge a redemarrer, et le
+    // REFUS est justement ce qu'il faut eprouver. Le doublon rend un noyau cible
+    // SANS module ZFS : c'est l'etat qui doit faire disparaitre le geste.
+    SPARK_REBOOT_COMMAND:
+      "cat >/dev/null; printf 'courant=7.0.0-15-generic\\ncible=7.0.0-31-generic"
+      + "\\nzfs=absent\\nrequis=oui\\n'",
     // Le `.env` du poste ne doit pas se réintroduire par l'environnement hérité.
     SCW_SECRET_KEY: '', SCW_DEFAULT_ORGANIZATION_ID: '', SPARK_DNS_ALLOW_PATTERN: '',
     SPARK_DNS_BASE_URL: '',

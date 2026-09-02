@@ -275,6 +275,149 @@ const TOKENS_BUILD = {
 
 export const UPDATE_VIDE = { status: 'idle', kind: null, confirmation: null, result: null };
 
+/**
+ * Le redémarrage de la Forge (SPK-87, docs/DAT.md §51).
+ *
+ * `releve` est `null` tant qu'on n'a pas demandé : il exécute des commandes SUR
+ * la Forge, et le lancer à l'ouverture de l'écran ferait entrer la console chez
+ * l'exploitant à chaque coup d'œil — même raison qu'au §42.
+ */
+export const REBOOT_VIDE = {
+  releve: null,      // null | 'en-cours' | { autorise, refus, noyauCible, … }
+  confirme: false,
+  frappe: '',        // §51.3 : le nom de la Forge, frappé
+  busy: false,
+  erreur: null,
+  engage: false,
+};
+
+/**
+ * Le panneau de redémarrage (SPK-87, docs/DAT.md §51 ·
+ * docs/DESIGN_SYSTEM_APP.md SPK-DS-19 · docs/DESIGN_SYSTEM.md « Frapper le nom »).
+ *
+ * Deux situations, et leur différence EST le sujet : ce qui s'avertit — des
+ * Sparks vont s'arrêter — et ce qui se refuse — le noyau visé n'a pas de module
+ * ZFS. Le second ne prend jamais la forme d'un avertissement : un avertissement
+ * se clique, et celui-ci coûterait le pool, donc tous les Sparks.
+ */
+export function renderRedemarrage(host, etat = REBOOT_VIDE, sparks = []) {
+  const nom = host?.hostname ?? '';
+  const vu = etat.releve && etat.releve !== 'en-cours' ? etat.releve : null;
+  const enMarche = sparks.filter((s) => s.state === 'running');
+
+  if (etat.engage) {
+    return `
+<section class="carte bloc" aria-labelledby="titre-redemarrage">
+  <h2 id="titre-redemarrage">Redémarrage</h2>
+  <div class="avertissement" role="status">
+    <p><strong>Le redémarrage est engagé.</strong> La console a perdu le contact
+    avec cette Forge : c'est attendu, la machine s'arrête.</p>
+    <p>Rien de ce qui est affiché ailleurs n'est à jour tant que le tunnel n'est
+    pas rouvert. Reconnectez-vous quand la machine aura redémarré.</p>
+  </div>
+</section>`;
+  }
+
+  const corps = etat.erreur
+    ? `<div class="refus" role="alert"><p>${echapper(etat.erreur)}</p></div>`
+    : etat.releve === 'en-cours'
+      ? '<p class="note" role="status" aria-busy="true">Relevé de la Forge en cours…</p>'
+      : !vu
+        ? `<p class="absence">L’état de cette Forge n’a pas encore été relevé. Le
+           relevé exécute des commandes <strong>sur</strong> la machine : il est
+           demandé, jamais lancé de lui-même.</p>`
+        : renderReleveRedemarrage(vu, enMarche);
+
+  // SPK-DS-19 : sur un refus, le bouton d'engagement n'est pas rendu DU TOUT.
+  // Ailleurs une action indisponible reste présente et désactivée (§9.9) ; ici
+  // l'état n'est pas « indisponible pour l'instant » mais « ne doit pas avoir
+  // lieu », et l'offrir inviterait à insister.
+  const engageable = Boolean(vu?.autorise);
+  const frappeJuste = etat.frappe === nom && nom.length > 0;
+
+  const confirmation = etat.confirme && engageable
+    ? `<div class="confirmation confirmation--sensible" role="group"
+         aria-labelledby="titre-confirme-redemarrage">
+         <h3 id="titre-confirme-redemarrage">Redémarrer « ${echapper(nom)} » ?</h3>
+         <p>La machine s’arrête. <strong>${enMarche.length} Spark${
+           enMarche.length > 1 ? 's' : ''} en marche</strong> s’arrête${
+           enMarche.length > 1 ? 'nt' : ''} avec elle, et la console perd le
+         contact jusqu’au retour.</p>
+         <p class="champ">
+           <label for="redemarrage-nom">Frappez <strong>${echapper(nom)}</strong>
+           pour confirmer</label>
+           <input type="text" id="redemarrage-nom" class="controle"
+                  data-redemarrage="frappe" autocomplete="off" spellcheck="false"
+                  aria-describedby="redemarrage-aide"
+                  value="${echapper(etat.frappe)}">
+         </p>
+         <p class="champ__aide" id="redemarrage-aide">Une confirmation ordinaire
+         prouve qu’on a vu l’écran ; frapper le nom prouve qu’on a lu
+         <em>laquelle</em> des Forges.</p>
+         <p class="confirmation__actions">
+           <button type="button" class="bouton bouton--destructif"
+                   data-redemarrage="engager" ${frappeJuste ? '' : 'disabled'}>
+             Redémarrer la Forge
+           </button>
+           <button type="button" class="bouton"
+                   data-redemarrage="annuler">Annuler</button>
+         </p>
+       </div>`
+    : '';
+
+  return `
+<section class="carte bloc" aria-labelledby="titre-redemarrage">
+  <h2 id="titre-redemarrage">Redémarrage</h2>
+  <p class="note">Redémarrer arrête tous les Sparks de cette Forge.
+  <a href="#/manuel/M4">Manuel M4 — La Forge</a></p>
+  ${corps}
+  ${confirmation}
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-redemarrage="relever"
+            ${etat.busy ? 'disabled' : ''}>
+      ${vu ? 'Relever à nouveau' : 'Relever l’état'}
+    </button>
+    ${etat.confirme || !engageable ? '' : `<button type="button"
+            class="bouton" data-redemarrage="demander"
+            ${etat.busy ? 'disabled' : ''}>Redémarrer la Forge</button>`}
+  </p>
+</section>`;
+}
+
+/** Les trois lignes du §51.2, dont chacune change la décision. */
+function renderReleveRedemarrage(vu, enMarche) {
+  const noms = enMarche.map((s) => s.name).join(', ');
+  const lignes = `
+  <div class="definitions">
+    <div class="def"><dt>Noyau en marche</dt>
+      <dd><span class="technique">${echapper(vu.noyauCourant ?? '—')}</span></dd></div>
+    <div class="def"><dt>Noyau après redémarrage</dt>
+      <dd><span class="technique">${echapper(vu.noyauCible ?? '—')}</span></dd></div>
+    <div class="def"><dt>Sparks qui s’arrêteront</dt>
+      <dd>${enMarche.length === 0 ? 'aucun'
+            : `${enMarche.length} — ${echapper(noms)}`}</dd></div>
+  </div>`;
+
+  if (!vu.autorise) {
+    // SPK-DS-19 : un refus, pas un avertissement.
+    return `${lignes}
+  <div class="refus" role="alert">
+    <p>${echapper(vu.refus?.message ?? 'Redémarrage refusé.')}</p>
+  </div>`;
+  }
+  if (!vu.redemarrageRequis) {
+    return `${lignes}
+  <div class="avertissement">
+    <p>Aucun redémarrage n’est <strong>nécessaire</strong> : la machine ne
+    signale rien à appliquer. Redémarrer reste possible, mais arrêterait les
+    Sparks sans que rien ne l’exige.</p>
+  </div>`;
+  }
+  return `${lignes}
+  <p class="note" role="status">Un redémarrage est <strong>nécessaire</strong> :
+  la machine tourne sur un noyau plus ancien que celui qui est installé.</p>`;
+}
+
 const PHASES_UPDATE = [
   ['package', 'Paquet'], ['units', 'Unités'], ['daemon_reload', 'daemon-reload'],
   ['restart', 'Redémarrage'], ['healthz', 'healthz'], ['readyz', 'readyz'],
@@ -353,7 +496,7 @@ function renderUpdateActions(build, operation) {
       sera remplacée par <span class="technique">${echapper(build.local?.head?.slice(0, 12))}</span>.</p>
       <p class="formulaire__actions">
         <button type="button" class="bouton" data-action="confirmer-update">Mettre à jour sparkd</button>
-        <button type="button" class="bouton bouton--secondaire" data-action="annuler-update">Annuler</button>
+        <button type="button" class="bouton" data-action="annuler-update">Annuler</button>
       </p>
     </div>`;
   }
@@ -367,7 +510,7 @@ function renderUpdateActions(build, operation) {
       et l’API sera de nouveau brièvement interrompue.</p>
       <p class="formulaire__actions">
         <button type="button" class="bouton" data-action="confirmer-rollback">Revenir à cette build</button>
-        <button type="button" class="bouton bouton--secondaire" data-action="annuler-update">Annuler</button>
+        <button type="button" class="bouton" data-action="annuler-update">Annuler</button>
       </p>
     </div>`;
   }
@@ -499,7 +642,9 @@ export function renderNotify(notify) {
 export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
                                  build = null, syncing = false,
-                                 installer = null, updateUi = UPDATE_VIDE } = {}) {
+                                 installer = null, updateUi = UPDATE_VIDE,
+                                 // SPK-87 · §51 : le redémarrage et son relevé.
+                                 rebootUi = REBOOT_VIDE, sparks = [] } = {}) {
   // SPK-68 · §50.1 : l'assistant doit rester visible quand /healthz manque ;
   // le cacher derrière l'erreur du plan de contrôle rendrait son cas d'usage
   // inatteignable.
@@ -539,6 +684,7 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
   </div>
   <div class="detail__secondaire">
     ${renderBuild(build, updateUi)}
+    ${renderRedemarrage(host, rebootUi, sparks)}
     ${renderNotify(host.notify)}
     ${renderAddresses(host.addresses)}
   </div>
