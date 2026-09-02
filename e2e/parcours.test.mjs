@@ -501,6 +501,14 @@ test('changer le MODE CPU depuis l’écran, au clavier', async () => {
     // …et le champ qui lui correspond est là, les autres non (§1.4).
     assert.ok(await page.$('#quota-cpu_reservation'));
     assert.equal(await page.$('#quota-cpu_max'), null);
+    // Amendement du responsable, 2026-09-02 (docs/DESIGN_SYSTEM_APP.md
+    // SPK-DS-07) : la grille du CPU est le QUART de CPU, borne basse comprise.
+    // La réservation du seed vaut 1 CPU, donc elle tombe sur un cran et le
+    // réglage reste un curseur.
+    assert.deepEqual(
+      await page.locator('#quota-cpu_reservation')
+        .evaluate((el) => ({ type: el.type, min: el.min, step: el.step })),
+      { type: 'range', min: '0.25', step: '0.25' });
 
     // Basculer en « plafonné » CHANGE les champs offerts.
     await page.selectOption('#quota-cpu_mode', 'capped');

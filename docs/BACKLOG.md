@@ -3544,6 +3544,16 @@ manipulables, et que ce pas ne détruit pas la granularité que la valeur signif
   2026-08-20 dans `docs/AGENT_RUNBOOK.md` §F, avec le chiffre qui la rend non
   négociable : la VM de développement dispose de **7,5 Gio**, pas de la mémoire
   de la machine hôte.
+- **Amendement du responsable, 2026-09-02, livré le même jour** : la réservation
+  et le plafond CPU se règlent par pas de **0,25 CPU**, borne basse comprise, et
+  non plus de 0,05. Motif : 0,25 CPU est la plus petite part que le produit
+  partage ; les quatre crans intermédiaires ne correspondaient à aucune part
+  demandée, et la borne basse tombait sur 0,05 CPU, que personne ne demande. Ce
+  n'est **pas** une limite de la machine — `sparkd` sait poser plus fin, environ
+  0,024 CPU sur un pool de 4 CPU à la priorité par défaut (`docs/DAT.md`
+  §7.2 bis) —, et le motif que la table du SPK-DS-07 portait pour 0,05 CPU,
+  « la plus petite part que le produit sait poser », était donc faux. Détail au
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-07, manuel M5 mis à jour.
 
 **Spécifiée et commencée le 2026-08-21.** `docs/DAT.md` **§43.9** et
 `docs/SCHEMA.md` §10 ter écrits et committés **avant la première ligne de code** :

@@ -146,10 +146,17 @@ function nombre(id, valeur, pas, erreur, aide) {
  * d'admission deviendrait inatteignable depuis le parcours canonique.
  */
 export const QUOTAS = {
-  cpu_reservation: { pas: 0.05, min: 0.05,
+  // 0,25 CPU, décision du responsable (SPK-DS-07) : c'est la plus petite part
+  // que le produit accepte de PARTAGER, donc la plus petite qu'un curseur doive
+  // savoir viser. Le pas de 0,05 offrait quatre crans intermédiaires dont aucun
+  // ne correspondait à une part vendable, et il posait la borne basse sur une
+  // valeur — 0,05 CPU — que personne ne demande.
+  cpu_reservation: { pas: 0.25, min: 0.25,
                      borne: (c) => c.pools?.cpu?.capacity,
                      format: (v) => `${formatCpu(v)} CPU` },
-  cpu_max:         { pas: 0.05, min: 0.05,
+  // Même grille pour le plafond : deux quotas de la même unité sur le même
+  // écran ne peuvent pas avancer par crans différents.
+  cpu_max:         { pas: 0.25, min: 0.25,
                      borne: (c) => c.pools?.cpu?.capacity,
                      format: (v) => `${formatCpu(v)} CPU` },
   cpu_cores:       { pas: 1, min: 1,

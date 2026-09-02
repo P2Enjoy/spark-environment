@@ -323,6 +323,35 @@ test('la memoire avance par pas de 256 Mio', () => {
   assert.equal(formatQuota('memory_gib', 0.5), '512 Mio');
 });
 
+test('la reservation et le plafond CPU avancent par pas de 0,25 CPU', () => {
+  // Decision du responsable (SPK-DS-07) : 0,25 CPU est la plus petite part que
+  // le produit partage. Un pas de 0,05 offrait quatre crans intermediaires
+  // qu'aucune part vendable n'occupe, et posait la borne basse a 0,05 CPU.
+  assert.equal(QUOTAS.cpu_reservation.pas, 0.25);
+  assert.equal(QUOTAS.cpu_reservation.min, 0.25);
+  assert.equal(QUOTAS.cpu_max.pas, 0.25);
+  assert.equal(QUOTAS.cpu_max.min, 0.25);
+  const partage = renderSparkCreate({ values: { ...DEFAUTS, name: 'ok' }, ...CONTEXTE });
+  assert.match(partage, /id="cpu_reservation"[^>]*step="0.25"/);
+  assert.match(partage, /id="cpu_reservation"[^>]*min="0.25"/);
+  const plafonne = renderSparkCreate(
+    { values: { ...DEFAUTS, name: 'ok', cpu_mode: 'capped' }, ...CONTEXTE });
+  assert.match(plafonne, /id="cpu_max"[^>]*step="0.25"/);
+  assert.match(plafonne, /id="cpu_max"[^>]*min="0.25"/);
+});
+
+test('les parts du SEED restent atteignables au curseur', () => {
+  // 0,25 et 0,5 CPU : ce que le seed pose. Une grille qui les manquerait
+  // renverrait l'ecran a la saisie sur ses propres donnees de demonstration.
+  const max = borneHaute('cpu_reservation', CONTEXTE);
+  for (const part of [0.25, 0.5, 1]) {
+    const html = renderSparkCreate(
+      { values: { ...DEFAUTS, name: 'ok', cpu_reservation: part }, ...CONTEXTE });
+    assert.match(html, new RegExp(`<input type="range"[^>]*id="cpu_reservation"`),
+      `${part} CPU doit tomber sur un cran (borne haute ${max})`);
+  }
+});
+
 test('la valeur affichee est EXACTE sur la grille, jamais arrondie', () => {
   // §6.9 bis : un curseur qui affiche « 10 Gio » pour 10,25 ment sur ce qu'il
   // envoie, et trois crans sur quatre deviennent invisibles.

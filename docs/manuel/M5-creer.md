@@ -20,9 +20,11 @@ avancent d'un cran, `Origine` et `Fin` vont aux extrémités, `Page préc.` et
 
 Chaque quota a son propre pas, choisi sur ce que la valeur signifie : la
 **mémoire avance de 256 Mio**, le disque d'un gibioctet, le débit de 10 Mbit/s,
-la réservation CPU de 0,05 CPU. La mémoire est plus fine que les autres parce que
-des Sparks utiles tiennent en 512 Mio : un pas d'un gibioctet aurait rendu cette
-valeur impossible à choisir.
+la réservation CPU — comme le plafond CPU — de **0,25 CPU**. La mémoire est plus
+fine que les autres parce que des Sparks utiles tiennent en 512 Mio : un pas d'un
+gibioctet aurait rendu cette valeur impossible à choisir. Le CPU, lui, avance par
+quarts parce que c'est la plus petite part que le produit partage : les crans
+intermédiaires ne correspondaient à aucune part demandée.
 
 La valeur affichée est toujours **exacte** — « 512 Mio », « 1,25 Gio » — et jamais
 arrondie. C'est délibéré : un curseur qui afficherait « 10 Gio » pour 10,25

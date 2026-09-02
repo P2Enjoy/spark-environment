@@ -292,11 +292,29 @@ numérique** : sans bornes, pas de curseur (§6.9 bis, condition 1).
 
 | Quota | Pas | Motif |
 |---|---|---|
-| réservation et plafond CPU | 0,05 CPU | la plus petite part que le produit sait poser |
+| réservation et plafond CPU | **0,25 CPU** | décision du responsable, 2026-09-02 |
 | cœurs | 1 | un cœur physique ne se coupe pas |
 | **mémoire** | **256 Mio** | décision du responsable, 2026-08-20 |
 | disque | 1 Gio | le quota compte l'écrit après compression, au gibioctet |
 | débit | 10 Mbit/s | la comptabilité du lien ne descend pas plus bas |
+
+**0,25 CPU est la plus petite part que le produit partage**, et c'est une
+décision de produit, non une limite de la machine. `sparkd` sait poser plus fin :
+à l'échelle ×1000 du `docs/DAT.md` §7.2 bis, le plancher d'une réservation vaut
+`11 − priorité` pour mille du pool partagé, soit environ 0,024 CPU sur un pool de
+4 CPU à la priorité par défaut. Le pas de 0,05 CPU offrait donc quatre crans
+intermédiaires entre deux parts vendables, dont aucun ne correspond à une part
+que quiconque demande, et il posait la borne basse du curseur sur 0,05 CPU. Le
+pas de 0,25 CPU place chaque cran sur une part réelle — 0,25, 0,50, 0,75, 1 CPU —
+et fait tomber le curseur d'un pool de 4 CPU de 80 crans à 16.
+
+Le plafond suit la même grille que la réservation : deux quotas de la même unité
+sur le même écran ne peuvent pas avancer par crans différents (§6.9 bis).
+
+Les parts que le seed emploie — 0,25 et 0,50 CPU — restent sur un cran, donc
+atteignables au curseur. Une réservation déjà posée hors de cette grille se rend
+en **saisie**, par la règle générale : l'écran n'arrondit jamais en silence ce
+qu'il s'apprête à envoyer.
 
 Le gibioctet était trop grossier pour la mémoire, et la mesure le dit : le seed
 pose des Sparks à **512 Mio**, valeur qu'un pas de 1 Gio rend inatteignable. Sur
