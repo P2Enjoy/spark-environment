@@ -7480,6 +7480,64 @@ ligne qui se dit présente sans que rien ne soit utilisable ment — et que pour
 manuel M6, qui avertit déjà que révoquer la dernière clé « ferme le Spark à tout
 le monde ».
 
+### 50.7 Un `dpkg` incohérent est une panne du produit — écrit le 2026-09-02
+
+Mesuré sur `spark-experiment`. Le postinst de `grub-pc` dérive la cible de
+`grub-install` en retirant les chiffres finaux de `grub-probe -t device /boot`,
+pour passer d'une partition à son disque. Sur un `/boot` en RAID, `/dev/md0`
+devient `/dev/md`, qui n'existe pas, et le paquet reste en `iF`.
+
+**Pourquoi cela nous regarde.** Un `dpkg` incohérent fait échouer *toute*
+installation. Deux gestes du produit en dépendent directement :
+
+| Geste | Ce qui casse |
+|---|---|
+| amorce d'une Forge (§50.4) | `apt-get install` en tête de script, sous `set -eu` |
+| amorçage d'un Spark (§42) | `apt-get install` de `sshd`, du dépôt, de Docker |
+
+Dans les deux cas, le message désigne le paquet qu'on demandait — jamais GRUB.
+
+#### 50.7.1 Prévenir : l'amorce pose la réponse avant son premier `apt`
+
+L'amorce répond à `debconf` **avant** d'installer quoi que ce soit, pour que
+`grub-pc` se configure correctement le jour où il sera mis à jour — par l'amorce
+elle-même, ou par les mises à jour automatiques de la distribution.
+
+Deux propriétés font la correction, et leur absence en ferait une régression :
+
+- **conditionnelle.** Seulement si la machine démarre en BIOS *et* que `/boot`
+  est sur un RAID. Sur une Forge EFI, ou à disque simple, `grub-pc` n'est pas
+  concerné et écrire dans son `debconf` reviendrait à décider à sa place ;
+- **dérivée.** Les disques se lisent dans les membres du RAID
+  (`/sys/block/<md>/slaves`), et jamais en dur. Une Forge en NVMe présente
+  `/dev/nvme0n1` ; un `/dev/sda` figé la rendrait non amorçable.
+
+**Les deux disques sont nommés**, pas seulement le premier. C'est ce qui fait que
+la machine démarre encore quand l'un des deux lâche — la raison d'être du RAID1.
+N'en poser qu'un donnerait une redondance de façade.
+
+L'étape vit dans le **script** d'amorce, pas dans le `user-data` : `runcmd` ne
+joue qu'une fois par instance, et le §50.6 fait du rejeu par
+`sudo /opt/spark-amorce.sh` un contrat. Une étape hors du script ne serait ni
+rejouable, ni versionnée.
+
+#### 50.7.2 Nommer : le préflight lit l'état du système de paquets
+
+Prévenir ne suffit pas : les Forges déjà installées existent, et le défaut y est
+muet. Le préflight (§31) gagne donc un contrôle qui lit l'état de `dpkg` et rend
+**`ECHEC`** dès qu'un paquet n'est ni `ii` ni `rc`.
+
+Les `rc` — configuration résiduelle d'un paquet retiré — ne comptent pas : ils
+sont l'état normal de ce qu'on a désinstallé, et les signaler ferait crier au
+loup sur toute Forge.
+
+Un `dpkg` **illisible** rend `INCONNU`, jamais `OK` : le §31.2 vaut ici comme
+ailleurs, « pas mesuré » n'est pas « mesuré sain ».
+
+Le remède nomme les paquets en défaut et renvoie au runbook §C.5, parce que la
+commande à taper dépend de ce qui est cassé et qu'un préflight ne répare rien
+(§31.3).
+
 ## 43. L'environnement d'un Spark : variables et secrets
 
 Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doit

@@ -4990,6 +4990,55 @@ point, nommé plus bas.**
 
 ---
 
+### [ ] SPK-84 · L'amorce prévient le `grub-pc` cassé, et le préflight le nomme
+
+Mesuré sur la Forge `spark-experiment` le 2026-09-02, à la demande du
+responsable : `apt full-upgrade` refusait, `grub-pc` restant en `iF` et `grub2`
+en `iU`. Détail de la cause au `docs/AGENT_RUNBOOK.md` §C.5 — le postinst du
+paquet dérive la cible de `grub-install` en retirant les chiffres finaux de
+`grub-probe -t device /boot`, ce qui transforme `/dev/md0` en `/dev/md`.
+
+**Ce n'est pas une gêne d'exploitation, c'est une panne du produit.** Un `dpkg`
+incohérent fait échouer toute installation, donc :
+
+- l'**amorce d'une Forge** (`deploy/cloud-init/spark-amorce.sh`) s'interrompt à
+  sa deuxième ligne utile — `apt-get install ca-certificates curl gnupg …` sous
+  `set -eu` — en désignant ces paquets et jamais GRUB ;
+- l'**amorçage de chaque Spark** (SPK-76) échoue à `apt-get install`, et la
+  console ne dit rien de la vraie raison.
+
+- Spécification : `docs/DAT.md` §50.7 (à écrire et committer avant le code) ·
+  `docs/AGENT_RUNBOOK.md` §C.5 déjà posé · `docs/DAT.md` §31 (le préflight).
+- Portée, deux volets :
+  1. **prévenir** — l'amorce pose les réponses `debconf` **avant son premier
+     `apt`** : `grub-pc/install_devices` sur les disques du RAID, et
+     `grub-pc/cloud_style_installation` à faux ;
+  2. **nommer** — le préflight gagne un contrôle « système de paquets cohérent »
+     qui rend `ECHEC` quand `dpkg` porte un paquet en défaut, avec le remède.
+- **Le point qui décide du premier volet** : la pose est **conditionnelle et
+  dérivée**. Conditionnelle — seulement si la machine démarre en BIOS *et* que
+  `/boot` est sur un RAID ; sur une Forge EFI ou à disque simple, écrire dans le
+  `debconf` de GRUB serait une régression, pas une précaution. Dérivée — les
+  disques se lisent dans les membres du RAID (`/sys/block/<md>/slaves`), jamais
+  écrits en dur : une Forge en NVMe donne `/dev/nvme0n1`, et un `sda` figé la
+  casserait.
+- **Les DEUX disques**, jamais le premier seul : c'est ce qui fait que la machine
+  démarre encore quand l'un lâche, ce pour quoi le RAID1 est là.
+- **Où cela ne va pas** : dans le `user-data` brut. `runcmd` ne joue qu'une fois
+  par instance et le rejeu passe par `sudo /opt/spark-amorce.sh` (SPK-73). Une
+  étape posée hors du script ne serait ni rejouable, ni versionnée, ni éprouvée.
+- Dépend de : SPK-73 pour l'amorce rejouable, SPK-76 pour l'amorçage qu'un `dpkg`
+  cassé empêche.
+- DoD : l'amorce reste **idempotente** — un second passage ne change rien —
+  prouvé par un test ; sur une Forge EFI ou sans RAID simulée, elle n'écrit
+  **aucune** réponse `debconf`, prouvé par un test ; le contrôle de préflight
+  rend `ECHEC` sur un relevé `dpkg` portant un `iF`, `OK` sur un relevé sain et
+  `INCONNU` quand `dpkg` est illisible — « pas mesuré » n'est pas « mesuré
+  sain » ; le préflight est relevé sur la Forge réelle et l'écran observé ;
+  `@spec` / `@verifies` posés.
+
+---
+
 ## Réservé, non planifié
 
 - **Serveur MCP sur un Spark** : piste étudiée le 2026-09-02 et laissée hors
