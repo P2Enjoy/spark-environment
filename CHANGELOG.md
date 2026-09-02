@@ -82,6 +82,12 @@
   s'y abonne — un événement à un coup, perdu, si bien que l'installateur n'était
   jamais lancé. Les temporisations fixes qui masquaient cette course sont
   remplacées par une attente de condition.
+- **Le widget flottant ne rend plus une action incliquable** (SPK-75,
+  `docs/DESIGN_SYSTEM_APP.md`) : la réserve que la page devait laisser à la
+  pastille repliée était écrite avant les raccourcis `padding:` de `.principal`,
+  qui l'effaçaient — elle ne s'appliquait donc nulle part. Mesuré en 390 px :
+  16 px réservés pour un widget qui en occupe 54, et le dernier bouton d'une
+  fiche restait sous la pastille, impossible à cliquer à la souris.
 - **Le pool natif se pose enfin là où le partitionnement l'attend** (SPK-68,
   `docs/DAT.md` §50.3, §8.6) : la proposition ne considérait que des **disques
   entiers** et écartait tout disque portant une partition. Sur un serveur dédié

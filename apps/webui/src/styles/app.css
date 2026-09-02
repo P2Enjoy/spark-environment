@@ -36,7 +36,10 @@
    La réserve vaut quel que soit le bord d'ancrage.
    Déplié, le panneau recouvre volontairement le contenu : c'est une surface
    qu'on vient d'ouvrir, et la pastille la referme. */
-.principal { padding-bottom: calc(var(--size-target) + 2 * var(--space-3)); }
+/* La réserve vit avec les AUTRES paddings de `.principal`, plus bas : écrite
+   ici, elle était écrasée par les raccourcis `padding:` qui suivent — et ne
+   s'appliquait donc nulle part. Mesuré le 2026-09-02 en 390 px : réserve
+   effective 16 px pour un widget qui en occupe 54, bouton incliquable. */
 .widget-inv {
   position: fixed; right: var(--space-3); bottom: var(--space-3); z-index: 60;
   width: min(24rem, calc(100vw - 2 * var(--space-3)));
@@ -151,6 +154,9 @@
 
 .principal {
   padding: var(--space-6) var(--space-4); flex: 1;
+  /* SPK-75 : la page réserve la hauteur de la pastille repliée, qui est
+     toujours là. APRÈS le raccourci, sans quoi il l'efface. */
+  padding-bottom: var(--reserve-widget);
   /* Une piste de grille ne rétrécit pas sous la largeur minimale de son contenu.
      Sans cela, le tableau des Sparks pousse la PAGE ENTIÈRE et la fait défiler
      horizontalement, ce que le §8.1 interdit — alors que le tableau a déjà son
@@ -326,7 +332,8 @@ tbody tr:hover { background: var(--color-hover); }
 /* --- Responsive (§8, SPK-DS-05) ------------------------------------------ */
 @media (max-width: 767px) {
   .colonne-secondaire { display: none; }
-  .principal { padding: var(--space-4) var(--space-2); }
+  .principal { padding: var(--space-4) var(--space-2);
+               padding-bottom: var(--reserve-widget); }
 }
 
 /* --- Détail d'une entité (§6.3, §6.4) ------------------------------------ */

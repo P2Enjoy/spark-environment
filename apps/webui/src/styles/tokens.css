@@ -61,6 +61,12 @@
      paraît dans le flux alors qu'il le recouvre se lit mal. */
   --shadow-flottant: 0 6px 24px rgb(0 0 0 / 0.16);
   --size-target: 40px;
+  /* SPK-75 · DESIGN_SYSTEM_APP.md §« widget flottant » — ce que la pastille
+     REPLIÉE occupe en bas de l'écran, et que le contenu doit donc réserver :
+     sa hauteur minimale, ses deux paddings, ses deux bordures, son décalage au
+     bord, plus une respiration. Mesuré : sans cette réserve effective, le
+     dernier bouton d'une fiche est INCLIQUABLE en 390 px. */
+  --reserve-widget: calc(var(--size-target) + 2 * var(--space-2) + 2px + 2 * var(--space-3));
 
   /* Typographie (§3) */
   --font-sans: ui-sans-serif, system-ui, sans-serif;

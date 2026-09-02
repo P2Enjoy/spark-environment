@@ -2708,6 +2708,47 @@ test('un Spark PROTÉGÉ refuse l’amorçage, et le refus est LISIBLE', async (
   });
 });
 
+test('en 390 px, le widget flottant ne rend AUCUNE action incliquable', async () => {
+  await parcours('widget-ne-recouvre-pas', async () => {
+    // SPK-75 · DESIGN_SYSTEM_APP.md : « le widget ne masque jamais une action du
+    // contenu ». La réserve existait mais était ÉCRASÉE par les raccourcis
+    // `padding:` qui la suivaient — elle ne s'appliquait donc nulle part.
+    //
+    // Trouvé en produisant les captures de SPK-76 : Playwright ne POUVAIT PAS
+    // cliquer « Relever l'état », le widget interceptant le pointeur. Mesuré
+    // alors : réserve effective 16 px pour un widget qui en occupe 54.
+    await page.setViewportSize({ width: 390, height: 844 });
+    try {
+      // Un Spark du seed de base : la preuve ne doit dépendre d'aucun ajout.
+      await ouvrir('crm-production');
+      await page.waitForSelector('[data-amorcage="relever"]', { timeout: 10000 });
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+      // On éprouve l'INVARIANT, pas une géométrie de circonstance : selon la
+      // hauteur de la fiche, le dernier bouton tombe ou non sous le widget, et
+      // une preuve qui en dépendrait serait verte un jour sur deux.
+      //
+      // La règle est : la réserve du contenu couvre ce que la pastille occupe.
+      const vu = await page.evaluate(() => {
+        const principal = document.querySelector('.principal');
+        const widget = document.querySelector('.widget-inv');
+        const reserve = parseFloat(getComputedStyle(principal).paddingBottom);
+        const occupe = window.innerHeight - widget.getBoundingClientRect().top;
+        return { reserve, occupe };
+      });
+      assert.ok(vu.reserve >= vu.occupe,
+        `la page réserve ${vu.reserve} px pour un widget qui en occupe `
+        + `${vu.occupe} : le contenu passe dessous et devient incliquable`);
+
+      // …et le clic passe VRAIMENT, pas seulement la géométrie.
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.click('[data-amorcage="relever"]', { timeout: 5000 });
+    } finally {
+      await page.setViewportSize({ width: 1440, height: 1300 });
+    }
+  });
+});
+
 test('cocher le rootless amorce dans ce mode, et le journal le PORTE', async () => {
   await parcours('amorcage-rootless', async () => {
     // §42.2 : l'option est offerte, jamais imposée. On la coche depuis la
