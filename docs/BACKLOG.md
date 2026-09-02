@@ -4561,7 +4561,7 @@ défiler, et la règle est écrite : `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-15**.
 
 ---
 
-### [ ] SPK-75 · Le registre devient un widget flottant permanent, et un terminal survit à la navigation
+### [x] SPK-75 · Le registre devient un widget flottant permanent, et un terminal survit à la navigation
 
 **Constaté avec le responsable le 2026-09-02**, et mesuré avant d'être discuté :
 
@@ -4645,6 +4645,32 @@ créer une seconde.
   1440 px et en 390 px, widget replié et déplié ; manuel M8 et captures mis à
   jour ; le §37.4.2, SPK-DS-04 et la ligne de SPK-70 qui promettait la mort à la
   navigation sont **corrigés**, pas doublés d'une note.
+
+**CLOSE le 2026-09-02.** Le reproche est vérifié avant d'être traité :
+
+```
+avant : terminal ouvert → sessions = 1 ; clic sur « Forge » → 0, panneau vide
+après : terminal ouvert → sessions = 1 ; clic sur « Forge » → 1, widget la montre
+```
+
+29 preuves de route d'hôte — dont celle qui établit qu'un flux fermé ne tue plus
+et qu'un second abonnement retrouve la session —, 11 de composant, 4 parcours
+E2E nouveaux et 3 révisés, vérification visuelle en 1440 px et 390 px avec un
+shell vivant montré depuis une autre page. Manuel M8 et sa capture.
+
+**Deux défauts trouvés par la vérification, pas par la relecture** :
+
+- le widget déplié **interceptait le clic** sur « Fermer la session » du
+  terminal. Le parcours a refusé de cliquer en nommant l'élément qui
+  s'interposait — la règle « le widget ne masque jamais une action du contenu »
+  était écrite dans SPK-DS-16 et pas implémentée. La page réserve désormais la
+  hauteur de la pastille ; déplié, le panneau recouvre volontairement, et la
+  pastille le referme ;
+- le widget rendait les états **bruts** — « running », « stopped » — pendant que
+  le tableau voisin disait « En marche », « Arrêté ». Il emploie maintenant la
+  même table (SPK-DS-01). Trouvé à la capture, pas aux preuves.
+
+L'ancienne route de fermeture par balise est retirée : plus rien ne l'appelait.
 
 ---
 
