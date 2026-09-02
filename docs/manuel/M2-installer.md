@@ -14,11 +14,25 @@ remplacent pas : le transport SSH, le plan de contrôle `sparkd`, puis la
 disponibilité que prouvera plus tard `/readyz`. Ainsi, **SSH établi** avec
 `sparkd` absent n'est ni une Forge prête ni une panne SSH.
 
-Le panneau relève le système, les services et les périphériques. Il affiche un
-disque exclu avec son motif — racine, montage, partition ou signature — et ne le
-sélectionne jamais. S'il n'y a pas deux disques sûrs, il n'invente pas un miroir
-ni la taille d'un pool fichier. Le diagnostic seul s'arrête là : aucune commande
-d'installation, aucun redémarrage et aucune modification ne sont partis.
+Le panneau relève le système, les services et les périphériques. Il affiche
+chaque support exclu avec son motif — racine, montage, signature, partition
+système ou volume porté — et ne le sélectionne jamais. Le diagnostic seul
+s'arrête là : aucune commande d'installation, aucun redémarrage et aucune
+modification ne sont partis.
+
+**Un support n'est pas forcément un disque entier.** Une Forge n'est jamais
+vide. Sur un serveur dédié partitionné à la commande, le schéma laisse deux
+partitions vierges — `sda5` et `sdb5` — qui sont précisément ce sur quoi le pool
+doit se poser, alors que les disques qui les portent hébergent le système. Le
+tableau nomme donc la nature de chaque support : *disque* ou *partition*.
+
+Un miroir exige **deux supports sur deux disques physiques distincts**. Deux
+partitions du même disque n'en font pas un : la panne de ce disque emporterait
+les deux copies. Quand le miroir n'est pas proposé, l'écran dit laquelle des
+trois situations vous avez — aucun support libre, un seul, ou tous sur le même
+disque — parce qu'elles appellent deux gestes, tous deux **en amont de la
+console** : commander la machine avec le schéma de partitionnement, ou lui
+ajouter un disque.
 
 Le relevé demande à la Forge le droit d'administration qu'il a constaté pour
 `sudo`. Sans ce droit, il ne peut lire ni les pools, ni les réseaux, ni la
@@ -40,6 +54,26 @@ présence du paquet ou sur une unité active. Quand les dix sont verts, le panne
 le dit et n'a rien à écrire : une Forge déjà en service ne reçoit pas l'écran
 d'une machine nue.
 
+## Une Forge exige deux disques
+
+Il n'y a **qu'une** disposition de stockage : un miroir ZFS natif sur deux
+supports portés par deux disques distincts, ou un pool ZFS déjà présent qu'on
+réutilise. Une machine qui n'a ni l'un ni l'autre n'est pas installable, et
+l'assistant vous le dit au lieu de proposer un repli.
+
+C'est une règle, pas une limite passagère : le produit promet le quota, les
+instantanés **et** le miroir. Un pool posé sur un fichier tiendrait les deux
+premiers et pas le troisième — ZFS n'y gère plus la redondance, et la corruption
+silencieuse n'y est plus réparée. Cette disposition existait jusqu'au
+2026-09-02 ; elle est retirée. Une Forge déjà installée ainsi continue de
+fonctionner, et le préflight la signale en avertissement.
+
+**Votre pool existe peut-être déjà sans qu'Incus le sache.** C'est le cas après
+une réinstallation du système qui conserve les disques de données : le zpool est
+intact sur ses partitions, mais le nouvel Incus l'ignore. L'assistant le
+reconnaît, l'importe si besoin et le déclare — sans jamais rien écrire sur vos
+données.
+
 ## Composer et confirmer le plan
 
 Le formulaire reprend les valeurs que **la Forge déclare** — pool, bridge,
@@ -48,12 +82,10 @@ configuration. Le contrat d'exploitation ne fournit un défaut que lorsque la
 machine ne déclare encore rien. Modifier une de ces valeurs, c'est donc demander
 explicitement sa réécriture ; les laisser telles quelles ne change rien.
 
-Un pool conforme est **conservé**, jamais recréé, et aucune disposition de
-rechange n'est alors proposée. Sinon, vous choisissez : le miroir natif quand
-deux supports libres le permettent, sinon le pool fichier — pour lequel vous
-devez saisir la taille et l'espace qui restera libre sur la racine. Le miroir
-reprend les deux supports que le diagnostic vient de nommer ; rien n'est effacé
-avant que vous n'ayez recopié `EFFACER /dev/… /dev/…`.
+Un pool conforme est **conservé**, jamais recréé. Sinon, l'assistant compose le
+miroir sur les deux supports que le diagnostic vient de nommer ; rien n'est
+effacé avant que vous n'ayez recopié `EFFACER /dev/… /dev/…`. Il n'y a pas
+d'autre choix à faire : c'est cela, ou un refus nommé.
 
 Chaque phase du plan porte le statut que le relevé justifie : une phase dont les
 invariants sont de nouveau constatés conformes s'affiche **terminée** avant même
@@ -63,10 +95,10 @@ faire, pas une installation entière à rejouer.
 **Vérifier et composer le plan** relance d'abord le diagnostic : le plan affiché
 ne repose donc pas sur un relevé resté ouvert dans un onglet.
 
-Relisez ensuite chaque phase et cochez la confirmation du plan. Une création de
-pool fichier demande en plus de recopier exactement son chemin et sa taille ; un
-miroir natif demande les deux périphériques qui seront effacés. Le bouton reste
-désactivé tant que les deux engagements ne concordent pas.
+Relisez ensuite chaque phase et cochez la confirmation du plan. La création d'un
+miroir demande en plus de recopier les deux supports qui seront effacés — c'est
+la seule écriture destructive du parcours. Le bouton reste désactivé tant que
+les deux engagements ne concordent pas.
 
 L'exécution affiche les événements réellement produits sur la Forge : `à faire`,
 `en cours`, `terminée`, `avertissement`, `échec` ou `interrompue`. Le résultat
@@ -199,10 +231,10 @@ Deux vérifications restent donc manuelles :
 
 ## Ce qui demande encore une décision extérieure
 
-- **Une taille de pool fichier n'a aucun défaut caché.** Tant que vous ne l'avez
-  pas choisie, l'assistant ne crée rien.
-- **Le miroir natif exige deux supports réellement libres.** Si la machine n'en
-  possède pas, aucun parcours d'écran ne peut en fabriquer la preuve.
+- **Le miroir exige deux supports réellement libres, sur deux disques.** Si la
+  machine n'en possède pas, aucun parcours d'écran ne peut en fabriquer la
+  preuve : le remède est de commander la machine partitionnée, ou de lui ajouter
+  un disque.
 - **Une Ubuntu totalement nue est amorcée par la console après confirmation du
   plan.** Elle pose seulement l'environnement Python et le paquet `sparkd`
   épinglé sur la build `main` publiée que la console exécute. Aucun checkout

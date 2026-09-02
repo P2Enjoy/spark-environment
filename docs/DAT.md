@@ -289,10 +289,12 @@ Trois pièges, tous rencontrés à la mesure :
   registre stocke des bit/s : la conversion est explicite, jamais implicite. Les
   ports dont `link_detected` est faux sont ignorés — `eno2` n'est pas raccordé et
   n'ajoute aucune capacité.
-- **La capacité de stockage est celle du POOL Incus, pas celle du disque.** Sur
-  la Forge de validation, le pool sur fichier ne rend que 192,8 Gio là où le disque
-  en porte 5,4 Tio. Lire le disque ferait promettre vingt-huit fois la place
-  réellement disponible.
+- **La capacité de stockage est celle du POOL Incus, pas celle du disque.**
+  Mesuré le 2026-08-19, quand la Forge de validation tenait encore son pool sur
+  fichier : le pool rendait 192,8 Gio là où le disque en portait 5,4 Tio. Lire le
+  disque aurait fait promettre vingt-huit fois la place réellement disponible.
+  Le piège subsiste avec un miroir natif — le pool n'est pas le disque —, mais
+  l'écart y est moindre.
 
 **Cinquième piège, et il coûte cher : `memory.total` d'Incus est la RAM
 PHYSIQUE, pas celle que le noyau peut allouer.** Mesuré le 2026-08-19 : Incus
@@ -884,39 +886,57 @@ noyau. Sa contrepartie est que la comptabilité des quotas repose sur les
 `qgroups`, dont le coût croît avec le nombre d'instantanés — c'est-à-dire
 précisément sur le mécanisme dont dépend la promesse de quota.
 
-**RÉVISÉ le 2026-08-20 par arbitrage du responsable (SPK-28).** Ce qui précède
-énonçait une cible et un repli. Ce n'est plus la façon de le dire : il y a **deux
-dispositions**, chacune avec ce qu'elle apporte et ce qu'elle ne protège pas. Le
-choix appartient à qui installe, et il dépend de ce que la machine sert.
+**RÉVISÉ le 2026-09-02 par arbitrage du responsable (SPK-28, SPK-68). Il n'y a
+plus qu'UNE disposition.** Le pool de la Forge est un **miroir ZFS natif sur deux
+supports dédiés, portés par deux disques physiques distincts** — disques entiers
+ou partitions réservées, indifféremment (§8.6). C'est ce que décrit tout ce qui
+précède, et c'est désormais la seule disposition que le produit crée.
 
-**Disposition A — pool natif, en miroir sur une paire de partitions dédiées.**
-Ce que les motifs ci-dessus décrivent. Elle exige que la machine ait été
-partitionnée pour cela **avant** d'être installée (§8.6, et le schéma du
-`README.md`). Ce qu'elle apporte en propre : ZFS gère lui-même le miroir, donc
-détecte et **répare** la corruption silencieuse.
+**Ce que cette révision remplace, et pourquoi.** L'arbitrage du 2026-08-20 avait
+posé deux dispositions de rang égal : le miroir natif, et un pool sur fichier
+posé sur le système de fichiers existant. La seconde est retirée, pour trois
+raisons qui se cumulent :
 
-**Disposition B — pool sur fichier, posé sur le système de fichiers existant.**
-C'est le chemin par défaut d'`incus admin init`. Le quota, la copie sur écriture,
-le clonage et les instantanés fonctionnent **tous** : c'est le même ZFS. Ce
-qu'elle n'apporte pas, et qu'il faut savoir : elle empile deux systèmes de
-fichiers, et le miroir reste géré par ce qui est dessous — `md` ici, qui ne sait
-pas laquelle des deux copies est la bonne. La protection contre la corruption
-silencieuse est donc **absente**, pas dégradée.
+- **elle ne protège pas ce que le pool existe pour protéger.** Elle empile deux
+  systèmes de fichiers, et le miroir reste géré par ce qui est dessous — `md`,
+  qui ne sait pas laquelle des deux copies est la bonne. La protection contre la
+  corruption silencieuse est absente, pas dégradée. La présenter à côté du miroir
+  natif, dans le même choix, laissait croire à deux moyens d'obtenir la même
+  chose ;
+- **elle n'a jamais été exécutée sur une Forge réelle.** Le plan a été composé et
+  refusé sur capacité insuffisante, jamais engagé. C'était donc du code non
+  éprouvé transporté comme s'il fonctionnait ;
+- **elle portait la plus grande part de la surface d'installation** : taille du
+  fichier, réserve à conserver, revalidation de l'espace libre, confirmation
+  recopiée, deux codes de refus propres. Tout cela pour un chemin qu'on
+  déconseillait dans la même page.
 
-Ce qui a changé, et pourquoi : la disposition B avait été retenue « à titre
-provisoire » sur une machine de **démonstration**. Y voir une dette revenait à
-inscrire au contrat de déploiement une réinstallation qu'aucun usage de cette
-machine ne réclame. Une dette qu'on ne compte pas rembourser n'est pas une dette :
-c'est une disposition, et elle se documente comme telle.
+**Règle d'éligibilité, qui en découle et qu'il faut énoncer comme telle : une
+Forge exige deux disques.** Une machine qui n'a ni pool ZFS existant, ni deux
+supports libres sur deux disques distincts, n'est pas une Forge installable.
+Sont donc hors périmètre, explicitement :
+
+- le VPS à disque unique entièrement alloué à `/`, qui ne se repartitionne pas
+  après livraison — c'est l'argument du §8.2, appliqué au VPS ;
+- toute machine n'offrant qu'**un seul** support libre.
+
+Ce n'est pas un manque, c'est une frontière : le produit promet le quota, les
+instantanés **et** le miroir. Le remède est en amont — commander la machine avec
+le schéma de partitionnement du §8.6, ou lui ajouter un disque —, jamais une
+disposition de repli qui tiendrait deux des trois promesses en silence.
+
+**Ce qu'il advient d'une Forge déjà installée sur fichier.** Elle continue de
+fonctionner : c'est le même ZFS, et le produit ne casse pas ce qui tourne. Le
+préflight la relève en **avertissement** — pool valide, disposition qui n'est
+plus prise en charge — et l'assistant d'installation ne la reproduira jamais.
+Aucune mesure de débit disque conduite sur un tel pool ne caractérise la
+machine : elle traverse deux systèmes de fichiers.
 
 Le repli en pilote, lui, demeure : si le module hors arbre est refusé, **btrfs**
 en `raid1` apporte aussi sommes de contrôle et réparation, et vit dans le noyau.
 Sa contrepartie est que la comptabilité des quotas repose sur les `qgroups`, dont
 le coût croît avec le nombre d'instantanés — c'est-à-dire précisément sur le
 mécanisme dont dépend la promesse de quota.
-
-**Conséquence à ne pas perdre de vue sous la disposition B** : aucune mesure de
-débit disque menée sur ce pool ne caractérise la machine.
 
 ### 8.5 bis Le stockage se configure — aucune valeur codée en dur
 
@@ -945,12 +965,13 @@ ferait vérifier la compression d'un jeu de données qui n'est pas celui du pool
 |---|---|---|---|
 | `SPARK_POOL_NAME` | nom du pool à créer | nom | `spark` |
 | `SPARK_POOL_DRIVER` | pilote Incus | `zfs` \| `btrfs` \| `dir` | `zfs` |
-| `SPARK_POOL_SOURCE` | disposition A : les périphériques du miroir, séparés par une virgule. Vide → disposition B | chemins | vide |
-| `SPARK_POOL_FILE_SIZE` | disposition B : taille du fichier creux | taille Incus, p. ex. `200GiB` | `200GiB` |
+| `SPARK_POOL_SOURCE` | les deux supports du miroir, séparés par une virgule — **obligatoire** | chemins | aucun |
 
-`SPARK_POOL_SOURCE` **décide de la disposition**, et c'est délibéré : un drapeau
-séparé permettrait de demander la disposition A sans dire sur quoi, ce qui ne veut
-rien dire. Renseigner les périphériques EST le choix de la disposition A.
+`SPARK_POOL_SOURCE` est **obligatoire depuis le 2026-09-02** : il n'y a plus
+qu'une disposition (§8.5), donc plus rien à décider par l'absence d'une valeur.
+Vide, le geste refuse au lieu de créer un pool sur fichier — un défaut qui
+bascule en silence vers une disposition retirée serait exactement ce que le
+§8.5 bis interdit.
 
 **Ce que ces variables ne font pas.** Elles ne repartitionnent rien et ne
 détruisent rien. Créer un pool sur des périphériques qui portent des données les
@@ -8835,37 +8856,45 @@ amorçage BIOS ou EFI —, et toute information ambiguë.
 **Un support n'est pas un disque** (corrigé le 2026-09-02). Une Forge n'est
 jamais vide : elle est soit un serveur dédié partitionné à la commande, dont le
 schéma réserve `sda5` et `sdb5` au pool (§8.6), soit un VPS dont les disques sont
-montés. Ne considérer que des disques ENTIERS rendait donc le miroir natif
-impossible à proposer sur le matériel même que le produit vise — les partitions
-réservées pour lui étaient invisibles, et le pool fichier restait le seul chemin
-offert. Un candidat est donc un **disque entier libre ou une partition libre**,
-y compris sur un disque qui porte le système : c'est la disposition A du §8.5.
+montés. Ne considérer que des disques ENTIERS rendait le miroir natif impossible
+à proposer sur le matériel même que le produit vise. Un candidat est donc un
+**disque entier libre ou une partition libre**, y compris sur un disque qui porte
+le système.
 
-L'ordre de proposition est strict :
+**L'ordre de proposition, et il n'a plus que deux branches** (§8.5 révisé) :
 
-1. un pool Incus/ZFS déjà conforme est réutilisé sans le recréer, et aucune
-   disposition de rechange n'est alors proposée à côté ;
-2. deux supports libres — disques entiers ou partitions dédiées — portés par
-   **deux disques physiques distincts** peuvent former le miroir natif de
-   SPK-28. Deux partitions du même disque ne le peuvent pas : ce serait le mot
-   « miroir » sans ce qu'il promet, puisque la panne de ce disque emporterait
-   les deux membres ;
-3. seulement sans paire sûre, l'assistant peut proposer un pool fichier, en
-   nommant son système de fichiers, son chemin, sa taille demandée, l'espace
-   libre relevé et la réserve qu'il conservera.
+1. **Un pool ZFS existant est réutilisé, jamais recréé.** Le relevé ne se
+   contente pas d'interroger Incus : le zpool et le pool Incus sont deux objets
+   distincts, le second ne portant qu'un `zfs.pool_name` qui référence le
+   premier. Trois constats, trois gestes, tous NON destructifs :
 
-Le refus du miroir est **nommé**, jamais tu : aucun support libre, un seul
-support libre, ou tous sur le même disque physique. « Aucune paire sûre » ne
-disait pas laquelle des trois situations on avait sous les yeux, alors qu'elles
-appellent trois gestes différents — repartitionner, ajouter un disque, ou
-accepter la disposition B.
+   | Constat | Geste |
+   |---|---|
+   | zpool importé **et** pool Incus déclaré | réutiliser, aucune écriture |
+   | zpool importé, Incus l'ignore | déclarer le pool Incus sur ce zpool |
+   | supports `zfs_member`, zpool non importé | importer le zpool, puis le déclarer |
 
-Il ne déduit ni disques ni taille. La proposition sur fichier reste une
-proposition : elle ne rend pas un petit disque racine soudain capable d'héberger
-la capacité minimale du produit. Elle rappelle que les quotas et instantanés
-fonctionnent, mais qu'elle n'apporte pas le miroir matériel contre une corruption
-silencieuse. Une machine qui ne peut accueillir aucune disposition conforme est
-diagnostiquée, pas « installée partiellement ».
+   Les deux derniers cas sont l'état exact d'une machine dont l'OS a été
+   réinstallé en conservant les disques de données — la reprise la plus probable
+   en exploitation. Les traiter comme « aucun pool » aurait conduit à proposer
+   d'écrire sur des supports qui portent déjà le pool.
+
+2. **À défaut, deux supports libres portés par deux disques physiques
+   distincts** forment le miroir natif. Deux supports du même disque ne le
+   peuvent pas : ce serait le mot « miroir » sans ce qu'il promet, puisque la
+   panne de ce disque emporterait les deux membres.
+
+3. **Sinon, un refus nommé.** Il n'y a pas de troisième disposition vers
+   laquelle basculer : le pool sur fichier est retiré (§8.5). Le refus dit
+   laquelle des trois situations on a — aucun support libre, un seul, ou tous
+   sur le même disque physique — et nomme le geste humain qui la lève :
+   commander la machine avec le schéma du §8.6, ou lui ajouter un disque. Une
+   machine qui ne peut accueillir aucune disposition conforme est diagnostiquée,
+   pas « installée partiellement ».
+
+Il ne déduit ni supports ni taille, et n'efface rien : le miroir demande une
+confirmation distincte qui répète exactement chaque périphérique et la perte de
+son contenu.
 
 ### 50.4 Plan, engagement et reprise
 
@@ -8890,8 +8919,9 @@ supplémentaires relevés sont conservés, jamais retirés en silence.
 
 La confirmation du plan autorise seulement les écritures non destructives déjà
 énumérées. Le miroir natif demande en plus une confirmation distincte qui répète
-exactement chacun des périphériques et la perte de leur contenu. Le pool fichier
-demande une confirmation qui répète le chemin et la taille. Une demande de
+exactement chacun des périphériques et la perte de leur contenu — c'est la seule
+confirmation destructive du parcours, puisque la réutilisation d'un pool
+n'écrit rien et que le pool sur fichier est retiré (§8.5). Une demande de
 confirmation ne peut ni accepter une nouvelle clé d'hôte, ni répondre à `sudo`,
 ni transformer un diagnostic ambigu en décision.
 

@@ -44,7 +44,7 @@ Ubuntu 24.04.3 / noyau 6.8 / cgroup v2, VT-x présent.
 ### [x] SPK-03 · Installation Incus, pool de stockage et bridge privé sur l'hôte
 
 - Spécification : `docs/DAT.md` §3, §5, §8.5, §16
-- Dépend de : SPK-28 pour l'exploitation réelle — le pool reste sur fichier
+- Dépend de : SPK-28 pour l'exploitation réelle
 - **Clos le 2026-08-19.** Les quatre exigences sont satisfaites et archivées :
   Incus 7.3 installé depuis le dépôt amont, pool ZFS et bridge créés, un
   conteneur démarre et obtient `10.77.0.16` sur `sparkbr0`, le quota `size`
@@ -579,9 +579,8 @@ manuel est mis au niveau de ce qui est réellement outillé.
   de lui que dépend la vérification de déploiement. Il sonde désormais.
 - **OP-02 était présenté comme en attente alors qu'il est appliqué.** Corrigé.
 - Reste hors de CETTE unité, et le chapitre M2 le dit : la mise en place des
-  prérequis et le choix du stockage. SPK-28 en a livré les deux dispositions et
-  le geste de création ; SPK-68 doit désormais les intégrer au parcours complet
-  d'installation distante.
+  prérequis et le choix du stockage. SPK-28 en a livré le geste de création ;
+  SPK-68 doit désormais l'intégrer au parcours complet d'installation distante.
 
 ### [x] SPK-27 · Vérification par mesure des hypothèses du DAT §13
 
@@ -805,16 +804,23 @@ le contourne pas puisque le profil fautif est celui du Spark. Le correctif est d
 
 ### [~] SPK-28 · Partitionnement fourni à la création du serveur
 
-**Arbitrage du responsable, 2026-08-20.** L'environnement de validation est une
-**démonstration** : le pool sur fichier y suffit, et il cesse d'être « provisoire ».
-Ce qui est dû n'est plus un repartitionnement de la machine existante, mais le
-moyen d'obtenir d'emblée une machine bien partitionnée — et de rendre le reste
-configurable.
+**Arbitrage du responsable, 2026-09-02. Il n'y a plus qu'une disposition.** Le
+pool de la Forge est un miroir ZFS natif sur deux supports portés par deux
+disques physiques distincts — disques entiers ou partitions réservées —, ou un
+pool ZFS existant qu'on réutilise. Le pool sur fichier est **retiré** : il
+n'apportait pas la protection contre la corruption silencieuse, n'a jamais été
+exécuté sur une Forge réelle, et portait la plus grande part de la surface
+d'installation. Il en découle une **règle d'éligibilité** : une Forge exige deux
+disques ; une machine à disque unique, ou n'offrant qu'un seul support libre,
+n'est pas installable, et le diagnostic le nomme au lieu de basculer vers un
+repli (`docs/DAT.md` §8.5 révisé).
 
-L'unité change donc de nature, et son ancienne DoD — « une paire de partitions
-dédiées existe » — est abandonnée avec sa raison : repartitionner une machine de
-démonstration coûterait une réinstallation pour un gain qu'aucun usage réel ne
-réclame ici.
+Ce qui reste vrai de l'arbitrage du 2026-08-20 qu'il remplace : ce qui est dû
+n'est pas un repartitionnement de la machine existante, mais le moyen d'obtenir
+d'emblée une machine bien partitionnée, et de rendre le reste configurable. Ce
+qui cesse d'être vrai : les « deux dispositions de rang égal ». La Forge de
+validation tourne d'ailleurs sur un miroir natif depuis la réinstallation du
+2026-08-30, ce qui a retiré à la disposition sur fichier son dernier usage réel.
 
 - Spécification : `docs/DAT.md` §8.2, §8.5, §8.6 · `README.md`.
 - Portée :
@@ -822,20 +828,19 @@ réclame ici.
      Scaleway à la création du serveur, qui laisse d'emblée une paire de
      partitions libres pour le pool ZFS en miroir. Un exploitant qui part d'une
      machine neuve n'a alors rien à repartitionner ;
-  2. **tout est configurable** : chemin du pool, taille du fichier lorsque c'est
-     un pool fichier, nom du pool, point de montage. Aucune de ces valeurs ne
-     reste codée en dur, ni dans les scripts, ni dans le contrat de déploiement.
-- Le §8.5 cesse de présenter le pool natif comme « la cible » et le pool fichier
-  comme un repli : il énonce les deux comme deux dispositions, avec ce que
-  chacune apporte et ce qu'elle ne protège pas — sur fichier, ZFS ne gère pas le
+  2. **tout est configurable** : supports du miroir, nom du pool, pilote. Aucune
+     de ces valeurs ne reste codée en dur, ni dans les scripts, ni dans le
+     contrat de déploiement.
+- Le §8.5 énonce UNE disposition, et dit ce que la disposition retirée
+  n'apportait pas — sur fichier, ZFS ne gère pas le
   miroir et ne répare pas la corruption silencieuse.
 - DoD : le schéma JSON figure au README, avec ce qu'il produit et comment le
   fournir ; un exploitant qui suit le README obtient les partitions attendues ;
   aucune valeur de stockage n'est codée en dur — vérifié par une recherche, pas
   par mémoire ; le §8.5 et le contrat de déploiement disent la même chose que le
   README.
-- Note d'exploitation conservée : aucune mesure de débit disque menée sur le pool
-  fichier ne caractérise la machine.
+- Note d'exploitation conservée : aucune mesure de débit disque menée sur un pool
+  sur fichier ne caractérise la machine — elle traverse deux systèmes de fichiers.
 
 **Livré le 2026-08-20.**
 
@@ -4061,6 +4066,18 @@ constatée conforme. Sur `spark-experiment`, le diagnostic rend désormais
 `ready: true`, et le plan `reuse` avec ses six phases terminées. Voir
 `docs/DAT.md` §50.2 bis et §50.4.
 
+**Arbitrage du responsable, 2026-09-02 : le stockage n'a plus que deux
+branches.** Soit un pool ZFS existe et il est réutilisé, soit deux supports
+libres sur deux disques distincts forment le miroir, soit la machine n'est pas
+une Forge et le refus le dit. Le pool sur fichier est retiré du produit
+(`docs/DAT.md` §8.5 révisé, SPK-28). Le premier test porte sur le **zpool**, non
+sur le pool Incus : ce sont deux objets distincts — mesuré le 2026-09-02, le pool
+Incus ne porte qu'un `zfs.pool_name` qui référence le zpool —, si bien qu'une
+machine dont l'OS a été réinstallé en conservant ses disques de données a son
+pool intact et invisible pour la console. Trois constats, trois gestes non
+destructifs : réutiliser, déclarer le pool Incus sur un zpool importé, ou
+importer le zpool puis le déclarer.
+
 **Correction complémentaire du 2026-09-02, sur arbitrage du responsable.** La
 proposition de stockage ne considérait que des **disques entiers** et écartait
 tout disque portant une partition. Or une Forge n'est jamais vide : elle est
@@ -4152,11 +4169,11 @@ illustrations restent à produire ; l'unité demeure honnêtement `[~]`.
   registre, un pool existant et les instances éventuelles sont toujours
   conservés.
 - **Engagements dangereux** : le plan complet est confirmé avant la première
-  écriture. La création sur périphériques porte une confirmation séparée qui
-  nomme chacun d'eux et ce qu'il perdra. Le pool sur fichier nomme sa taille et
-  son coût dans le système de fichiers courant. Une modification d'un service
-  déjà présent est annoncée ; un constat ambigu bloque cette étape au lieu de
-  deviner.
+  écriture. La création du miroir porte une confirmation séparée qui nomme chacun
+  des deux supports et ce qu'il perdra — c'est la seule écriture destructive du
+  parcours, la réutilisation d'un pool n'en produisant aucune. Une modification
+  d'un service déjà présent est annoncée ; un constat ambigu bloque cette étape
+  au lieu de deviner.
 - Le geste reste borné : l'hôte console lance un installateur versionné avec des
   arguments validés, sans shell libre ni commande construite par le navigateur.
   Un mot de passe `sudo` demandé, une clé SSH refusée, un dépôt inaccessible ou
@@ -4166,11 +4183,14 @@ illustrations restent à produire ; l'unité demeure honnêtement `[~]`.
   doit pas retrouver un shell général. Si une garde SSH évolue pour porter ce
   geste, elle n'accepte que le contrat fermé de l'installateur, pas une commande
   construite depuis l'interface.
-- DoD : depuis la console, une machine Ubuntu neuve accessible en SSH devient une
-  Forge complète sans copie du dépôt. Deux parcours réels sont joués : un avec
-  périphériques libres pour le pool natif, un sans périphérique libre où
-  l'assistant propose puis crée le pool sur fichier. La progression de chaque
-  phase est observée ; Incus, ZFS, bridge, DHCP, Caddy, durcissement, paquet pip,
+- DoD : depuis la console, une machine Ubuntu accessible en SSH devient une
+  Forge complète sans copie du dépôt. Deux parcours réels sont joués : un sur
+  **deux supports libres**, où l'assistant crée le miroir natif ; un sur une
+  machine dont le **pool ZFS existe déjà**, où il le réutilise sans rien écrire —
+  y compris le cas où le zpool est là mais qu'Incus l'ignore. Un troisième
+  constat est vérifié sans être un parcours : une machine **inéligible** — un
+  seul disque, ou un seul support libre — reçoit un refus nommé et aucune
+  proposition de repli. La progression de chaque phase est observée ; Incus, ZFS, bridge, DHCP, Caddy, durcissement, paquet pip,
   unités systemd et configuration sont vérifiés ; les trois sondes (`SSH`,
   `/healthz`, `/readyz`) deviennent vertes et la topologie est relevée. Une panne
   au milieu est reprise sans refaire les étapes conformes ; un second lancement

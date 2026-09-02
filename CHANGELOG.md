@@ -3,6 +3,34 @@
 ## [Non publié]
 
 ### Modifié
+- **Une Forge exige deux disques : le pool sur fichier est retiré** (SPK-28,
+  SPK-68, `docs/DAT.md` §8.5 révisé, arbitrage du responsable du 2026-09-02). Il
+  n'y a plus qu'une disposition de stockage : un miroir ZFS natif sur deux
+  supports portés par deux disques physiques distincts, ou un pool ZFS existant
+  qu'on réutilise. La disposition sur fichier n'apportait pas la protection
+  contre la corruption silencieuse — le miroir y restait géré par `md`, qui
+  ignore laquelle des deux copies est la bonne —, n'a jamais été exécutée sur une
+  Forge réelle, et portait la plus grande part de la surface d'installation :
+  taille, réserve, revalidation d'espace, confirmation recopiée, deux codes de
+  refus propres. La présenter à côté du miroir natif laissait croire à deux
+  moyens d'obtenir la même chose.
+- **Conséquence assumée du point précédent, écrite comme règle d'éligibilité** :
+  une machine à disque unique entièrement alloué à `/`, ou n'offrant qu'un seul
+  support libre, n'est pas une Forge installable. Le diagnostic le nomme et
+  désigne le geste qui le lève — commander la machine partitionnée, ou lui
+  ajouter un disque — au lieu de basculer vers un repli. `SPARK_POOL_SOURCE`
+  devient obligatoire dans `scripts/creer-pool.sh`. Une Forge déjà installée sur
+  fichier continue de fonctionner ; le préflight la relève en avertissement et
+  l'assistant n'en reproduira pas.
+- **Le zpool est reconnu même quand Incus l'ignore** (SPK-68, `docs/DAT.md`
+  §50.3) : mesuré le 2026-09-02, le pool Incus et le zpool sont deux objets
+  distincts, le premier ne portant qu'un `zfs.pool_name` qui référence le
+  second. Une machine dont l'OS a été réinstallé en conservant ses disques de
+  données a donc son pool intact et invisible pour la console, qui proposait
+  d'écrire sur des supports portant déjà le pool. Le relevé lit désormais les
+  zpools importés et importables ; trois constats, trois gestes non destructifs :
+  réutiliser, déclarer le pool Incus sur un zpool importé, ou importer le zpool
+  puis le déclarer.
 - **Les curseurs CPU avancent par quarts de CPU** (`docs/DESIGN_SYSTEM_APP.md`
   SPK-DS-07) : la réservation et le plafond se règlent désormais par pas de
   **0,25 CPU**, avec 0,25 CPU pour borne basse, au lieu de 0,05 CPU. Décision du

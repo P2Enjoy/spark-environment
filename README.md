@@ -91,7 +91,7 @@ d'abord été livrée avec ses deux disques entièrement consommés par un uniqu
 RAID1 `ext4` monté sur `/`, sans aucun périphérique bloc libre — la disposition
 sur fichier était alors la seule possible. Le schéma JSON fourni à la création
 réserve désormais `sda5` et `sdb5`, et la Forge tourne sur un **miroir ZFS
-natif** (disposition A). Le partitionnement ne se change plus après la
+natif**. Le partitionnement ne se change plus après la
 livraison : il se décide à la commande. Voir le §8 du [DAT](docs/DAT.md).
 
 ### Installer le plan de contrôle sans copier le dépôt
@@ -110,51 +110,54 @@ Le second geste redémarre brièvement le plan de contrôle et ne réussit qu'ap
 La procédure complète et son retour arrière sont dans le
 [runbook d'agent](docs/AGENT_RUNBOOK.md#A-déployer-sparkd-sur-une-nouvelle-forge).
 
-## Le stockage : deux dispositions
+## Le stockage : un miroir ZFS natif, et rien d'autre
 
 Le produit ne suppose ni le nom du pool, ni son emplacement, ni sa taille. Le pool
 se crée par un geste, et **toutes** ses valeurs viennent de l'environnement :
 
 ```bash
-sudo scripts/creer-pool.sh
+sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
 ```
 
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `SPARK_POOL_NAME` | nom du pool à créer | `spark` |
 | `SPARK_POOL_DRIVER` | pilote Incus — `zfs`, `btrfs`, `dir` | `zfs` |
-| `SPARK_POOL_SOURCE` | périphériques du miroir, séparés par une virgule. **Vide → disposition sur fichier** | vide |
-| `SPARK_POOL_FILE_SIZE` | taille du fichier creux, disposition sur fichier | `200GiB` |
+| `SPARK_POOL_SOURCE` | les **deux** supports du miroir, séparés par une virgule — obligatoire | aucun |
 
 Le script est **idempotent** : sur un pool déjà en place, il ne touche à rien. Il
-**refuse** de créer un pool sur un périphérique qui porte déjà des données, et
-montre ce qu'il y a trouvé.
+**refuse** de créer un pool sur un support qui porte déjà des données, et montre
+ce qu'il y a trouvé. Il refuse aussi de créer un pool sans miroir.
 
-### Disposition A — miroir natif sur périphériques dédiés
+Ce que le miroir natif apporte en propre : **ZFS gère lui-même la redondance**,
+donc il détecte **et répare** la corruption silencieuse. Un `md` RAID1 ne le peut
+pas — il ignore laquelle des deux copies est la bonne.
 
-```bash
-sudo SPARK_POOL_SOURCE=/dev/sda5,/dev/sdb5 scripts/creer-pool.sh
-```
+### Une Forge exige deux disques
 
-Ce qu'elle apporte en propre : **ZFS gère lui-même le miroir**, donc il détecte
-et **répare** la corruption silencieuse. Elle exige deux périphériques vides, donc
-une machine partitionnée pour cela dès sa création — voir le schéma ci-dessous.
+Depuis le 2026-09-02, c'est une **règle d'éligibilité**, pas un manque
+(`docs/DAT.md` §8.5). Une machine qui n'a ni pool ZFS existant, ni deux supports
+libres sur deux disques physiques distincts, n'est pas une Forge installable.
+Sont hors périmètre :
 
-### Disposition B — pool sur fichier
+- le VPS à disque unique entièrement alloué à `/`, qui ne se repartitionne pas
+  après livraison ;
+- toute machine n'offrant qu'un seul support libre.
 
-```bash
-sudo scripts/creer-pool.sh          # ou SPARK_POOL_FILE_SIZE=1TiB
-```
+Un support est un **disque entier libre ou une partition libre** — y compris sur
+un disque qui porte le système, ce qui est précisément le cas du schéma
+ci-dessous. Le remède à une machine inéligible est en amont : la commander
+partitionnée, ou lui ajouter un disque. Le produit promet le quota, les
+instantanés **et** le miroir ; il n'offre pas de repli qui n'en tiendrait que
+deux en silence.
 
-Quotas, copie sur écriture, clonage et instantanés fonctionnent **tous** : c'est
-le même ZFS. Ce qu'elle n'apporte pas : le miroir reste géré par ce qui est
-dessous — `md` ici, qui ne sait pas laquelle des deux copies est la bonne. La
-protection contre la corruption silencieuse est donc **absente**, pas dégradée.
+Le pool sur fichier, décrit ici jusqu'au 2026-09-02, est retiré : il n'apportait
+pas la protection contre la corruption silencieuse, n'a jamais été exécuté sur
+une Forge réelle, et portait la plus grande part de la surface d'installation.
+Une Forge déjà installée ainsi continue de fonctionner ; le préflight la relève
+en avertissement et l'assistant n'en reproduira pas.
 
-Une mesure de débit disque menée sur cette disposition ne caractérise pas la
-machine : elle traverse deux systèmes de fichiers.
-
-### Obtenir d'emblée une machine partitionnée pour la disposition A
+### Obtenir d'emblée une machine partitionnée
 
 Chez un hébergeur qui accepte un schéma de partitionnement à la création du
 serveur — Scaleway le fait —, le fournir évite tout repartitionnement ultérieur.
@@ -213,7 +216,7 @@ Ce qu'il produit, et pourquoi :
   `uefi` ni de `/boot/efi` en fat32**. `data` ne désigne ici qu'une partition
   que rien ne réclame ;
 - **`sda5` et `sdb5` n'apparaissent ni dans `raids` ni dans `filesystems`** :
-  elles restent des périphériques bloc nus, ce qu'exige la disposition A. Les
+  elles restent des périphériques bloc nus, ce qu'exige le miroir natif. Les
   confier à `md` reproduirait exactement le problème que le miroir ZFS résout ;
 - **`"zfs": null` est délibéré.** Déclarer le pool ici le ferait créer par
   l'hébergeur à l'installation ; `creer-pool.sh` verrait alors une signature
@@ -440,11 +443,13 @@ héritage.
 - Le relevé de topologie est explicite : la capacité n'est pas rafraîchie à
   chaque requête. L'écran de la Forge affiche la date du dernier relevé et offre
   un bouton pour le refaire.
-- La Forge de validation emploie la **disposition A** — miroir ZFS natif sur
-  `sda5`+`sdb5` — depuis la réinstallation du 2026-08-30 : la corruption
-  silencieuse y est donc détectée et réparée. La disposition sur fichier reste
-  décrite et prise en charge pour une machine qu'on ne peut pas repartitionner ;
-  le §8.5 du DAT dit ce que chacune apporte.
+- **Une Forge exige deux disques** (`docs/DAT.md` §8.5, arbitré le 2026-09-02).
+  Le pool est un miroir ZFS natif sur deux supports portés par deux disques
+  distincts, ou un pool ZFS déjà existant qu'on réutilise. Une machine à disque
+  unique, ou n'offrant qu'un seul support libre, n'est pas installable — et le
+  diagnostic le nomme au lieu de basculer vers un repli. La Forge de validation
+  tourne sur `sda5`+`sdb5` depuis la réinstallation du 2026-08-30 : la corruption
+  silencieuse y est détectée et réparée.
 - La réservation CPU est un **plancher** : garantie sous contention totale,
   dépassée sinon. Mesuré sur la Forge de validation le 2026-08-21 — 47,9 %
   obtenus pour 47,4 % prédits, sous contention des trois tranches. Ce n'est pas

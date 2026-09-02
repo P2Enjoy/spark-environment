@@ -8811,3 +8811,69 @@ avancer par crans différents.
 **Vérifications.** Tests de composant sur les deux quotas — pas, borne basse,
 attributs `step` et `min` du curseur — et sur les parts du seed. 51 tests de
 `spark-create.test.js` verts.
+
+---
+
+## 2026-09-02 · SPK-28 / SPK-68 — le stockage n'a plus qu'une disposition
+
+**Arbitrage du responsable.** « Il serait donc plus sage de : soit trouver une
+partition ZFS, soit trouver deux partitions libres sur deux disques différents et
+proposer de créer la partition ZFS — et donc abandonner les autres options ? »
+Réponse : oui. Décision prise le 2026-09-02, écrite ici et dans le DAT avant
+toute ligne de code.
+
+**Ce que la mesure a ajouté à la question.** Le premier test — « trouver une
+partition ZFS » — est plus large que ce que la console cherchait. Relevé sur
+`spark-experiment`, en lecture seule :
+
+```
+zpool list                → spark  5.25T  ONLINE   (mirror-0 : sda5, sdb5)
+incus storage show spark  → driver: zfs, zfs.pool_name: spark
+```
+
+Le zpool et le pool Incus sont **deux objets distincts** : le second ne fait que
+référencer le premier. Or le diagnostic n'interrogeait que `incus storage list`.
+Conséquence : une machine dont le zpool est intact sur ses partitions mais
+qu'Incus ne connaît pas — **l'état exact après une réinstallation d'OS qui
+conserve les disques de données**, c'est-à-dire la reprise la plus probable en
+exploitation — était une impasse. Le pool n'était pas « trouvé », les partitions
+étaient exclues pour `signature zfs_member`, et le seul chemin restant aurait été
+d'écrire ailleurs sur une machine dont le pool était là, sous les yeux.
+
+Le premier test porte donc sur le **zpool**, avec trois constats et trois gestes,
+tous non destructifs : réutiliser ; déclarer le pool Incus sur un zpool déjà
+importé ; importer le zpool puis le déclarer.
+
+**Ce qui est abandonné, et ce que ça coûte.** Le pool sur fichier sort du
+produit. Trois raisons qui se cumulent : il n'apporte pas la protection contre
+la corruption silencieuse — c'est précisément ce pour quoi le pool existe ; il
+n'a jamais été exécuté sur une Forge réelle, donc c'était du code non éprouvé
+transporté comme s'il fonctionnait ; et il portait la plus grande part de la
+surface d'installation pour un chemin qu'on déconseillait dans la même page.
+
+Le coût a été énoncé **avant** la décision, et accepté : une machine à disque
+unique entièrement alloué à `/`, qui ne se repartitionne pas après livraison, ou
+n'offrant qu'un seul support libre, cesse d'être installable. Ce n'est plus un
+manque implicite, c'est une **règle d'éligibilité** : une Forge exige deux
+disques. Elle est écrite comme telle au README, au §8.5 et au manuel M2. Le
+produit promet le quota, les instantanés **et** le miroir ; il n'offre pas de
+repli qui n'en tiendrait que deux en silence.
+
+**Ce que la décision remplace.** L'arbitrage du 2026-08-20 avait créé les deux
+dispositions de rang égal, en refusant de traiter le pool sur fichier comme une
+dette — le motif était que la machine de validation était une démonstration et
+qu'aucun de ses usages ne réclamait une réinstallation. Ce motif a disparu de
+lui-même : la Forge a été réinstallée le 2026-08-30 depuis le schéma de
+partitionnement, et tourne sur un miroir natif. La disposition sur fichier avait
+donc perdu son dernier usage réel avant d'être retirée. Le §8.5 énonce la
+nouvelle décision et la raison du changement ; il ne conserve pas les deux
+versions côte à côte.
+
+**Ce qui reste à faire, et qui n'est pas encore vrai.** Cette entrée persiste la
+décision. Le code, lui, porte encore la branche fichier dans
+`apps/webui/host/forge-install.js`, `services/sparkd/src/sparkd/forge_install.py`
+— `validate_envelope` et `phase_storage` —, le formulaire de l'écran et la
+disposition B de `scripts/creer-pool.sh`. Le relevé n'interroge pas encore les
+zpools. Tant que ce n'est pas fait, la documentation décrit une décision, pas
+l'état du code : le commit suivant doit refermer cet écart.
+

@@ -118,24 +118,25 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-01 · CLOSE le 2026-08-20 — la disposition du stockage est tranchée
 
 ```
-État          : CLOSE. Arbitrage du responsable, 2026-08-20 (SPK-28).
+État          : CLOSE, et par les faits. Réinstallation du 2026-08-30, puis
+                arbitrage du responsable du 2026-09-02 (SPK-28).
 Ce qui change : cette opération demandait de libérer une paire de partitions pour
-                un pool ZFS natif, et tenait le pool sur fichier pour une dette.
-                Il n'y a plus une cible et un repli : il y a DEUX dispositions,
-                documentées au DAT §8.5 et au README.
-Motif         : cette machine est une machine de DÉMONSTRATION. Y inscrire une
-                réinstallation qu'aucun de ses usages ne réclame revenait à
-                porter au contrat une dette qu'on ne comptait pas rembourser.
-                Une dette qu'on ne rembourse pas n'est pas une dette.
-Ce qui reste  : rien à faire sur cette Forge. Ce qui est dû est ailleurs, et est
-                livré : le README porte le schéma de partitionnement à fournir à
-                la création d'un serveur pour obtenir d'emblée la disposition A,
-                et « scripts/creer-pool.sh » crée le pool dans l'une ou l'autre
-                sans qu'aucune valeur soit codée en dur.
-À SAVOIR      : sous la disposition en place, la protection contre la corruption
-                silencieuse est ABSENTE — le miroir est géré par « md », qui ne
-                sait pas laquelle des deux copies est la bonne. Et aucune mesure
-                de débit disque conduite sur ce pool ne caractérise la machine.
+                un pool ZFS natif. C'est FAIT : la machine a été réinstallée
+                depuis le schéma de partitionnement JSON, « sda5 » et « sdb5 »
+                sont libres, et le pool « spark » est un miroir ZFS natif sur
+                cette paire.
+Motif         : le partitionnement ne se change pas après livraison ; il se
+                décide à la commande. La réinstallation était la voie la moins
+                risquée sur une machine encore vide.
+Ce qui reste  : rien à faire sur cette Forge. Le README porte le schéma de
+                partitionnement à fournir à la création d'un serveur, et
+                « scripts/creer-pool.sh » crée le miroir sans qu'aucune valeur
+                soit codée en dur.
+À SAVOIR      : le pool sur fichier, qui fut la disposition de cette machine
+                jusqu'au 2026-08-30, est retiré du produit depuis le 2026-09-02
+                (DAT §8.5). Une Forge exige désormais deux disques. La corruption
+                silencieuse est ici détectée ET réparée, puisque c'est ZFS qui
+                gère le miroir.
 ```
 
 ### OP-02 · Restreindre la plage DHCP dynamique du bridge privé — **APPLIQUÉ le 2026-08-19**
