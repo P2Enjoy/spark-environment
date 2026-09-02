@@ -645,6 +645,29 @@ rien.
   d'amorçage » et « le dossier n'a pas pu être lu » sont trois textes distincts,
   jamais un bloc vide.
 
+### SPK-DS-19 · Le redémarrage de la Forge : un refus qui ne se clique pas
+
+@spec docs/BACKLOG.md#SPK-87 · docs/DAT.md §51.1
+
+Le panneau de redémarrage rend **deux** situations, et leur différence est le
+sujet :
+
+- **ce qui s'avertit** — des Sparks vont s'arrêter, un redémarrage n'est pas
+  nécessaire. Bloc `.avertissement` (accent, SPK-DS-08). On engage quand même :
+  c'est une conséquence, pas un empêchement ;
+- **ce qui se refuse** — le noyau qui démarrera n'a pas de module ZFS. Bloc
+  `.refus`, et **le bouton d'engagement n'est pas rendu du tout**.
+
+**Règle** : ce second cas ne prend jamais la forme d'un avertissement. Un
+avertissement se clique — c'est précisément sa fonction —, et celui-ci coûterait
+le pool de stockage, donc tous les Sparks du locataire. Une conséquence qu'on
+accepte et une condition qui manque ne se rendent pas de la même façon.
+
+C'est le pendant du §9.9 : ailleurs, une action indisponible reste **présente et
+désactivée** pour que sa raison se lise. Ici elle est **absente**, parce que
+l'état n'est pas « indisponible pour l'instant » mais « ne doit pas avoir lieu ».
+Le refus, lui, reste affiché et nomme le noyau en cause.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

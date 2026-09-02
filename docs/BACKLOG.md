@@ -5089,6 +5089,58 @@ incohérent fait échouer toute installation, donc :
 
 ---
 
+### [ ] SPK-87 · Redémarrer la Forge depuis la console, et refuser quand c'est dangereux
+
+Demandé par le responsable le 2026-09-02 : « il devrait y avoir un bouton
+redémarrer la forge pour convenance mais il faudrait double confirmer ».
+
+Le besoin est réel : après une mise à jour de noyau, la Forge tourne sur l'ancien
+tant qu'elle n'a pas redémarré — mesuré le jour même, `7.0.0-15` en marche pour
+`7.0.0-30` installé — et le seul recours était `ssh` à la main.
+
+*(`SPK-86` est laissé libre : le `docs/INCONSISTENCY_REPORT.md` §2 le réserve à
+l'arbitrage de la collision `SPK-84`.)*
+
+- Spécification : `docs/DAT.md` §51 (à écrire et committer avant le code) ·
+  `docs/DESIGN_SYSTEM.md` §« Frapper le nom » · `docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-19 · manuel M4.
+- **Le point qui décide de l'unité, et ce n'est pas le bouton** : ce que le geste
+  REFUSE. Un redémarrage vers un noyau dépourvu de module ZFS laisse le pool
+  indisponible au démarrage, donc **tous les Sparks à terre**, et cela ne se voit
+  qu'après. Le relevé du 2026-09-02 l'a évité à la main ; le produit doit
+  l'éviter par construction.
+- Portée : un relevé — ce qu'un redémarrage coûterait — puis le geste ;
+  confirmation **par frappe du nom de la Forge** (`DESIGN_SYSTEM.md`, les trois
+  conditions tiennent : irréversible, une Forge parmi plusieurs au sélecteur,
+  nom court et visible) ; passage par le même exécuteur SSH que la mise à jour ;
+  action d'audit distincte.
+- Ce que le relevé doit dire, parce que chaque ligne change la décision :
+  1. le **noyau** qui démarrera, et s'il porte un module ZFS — sinon **refus** ;
+  2. combien de **Sparks en marche** vont s'arrêter, et lesquels ;
+  3. si un redémarrage est seulement **nécessaire** (`/var/run/reboot-required`),
+     pour ne pas le proposer comme une routine.
+- **Un Spark protégé n'empêche PAS le redémarrage** (§35) : la protection garde
+  les écritures qui visent un Spark, pas l'arrêt de la machine qui les héberge.
+  Prétendre le contraire donnerait une garantie fausse. Le relevé nomme en
+  revanche les Sparks protégés qui vont s'arrêter.
+- La console **perd le contact** après le geste : l'écran le dit d'avance et
+  n'affiche aucune donnée antérieure comme actuelle (§22.3).
+- Dépend de : SPK-69 pour l'exécuteur SSH réutilisé, SPK-84 pour le préflight qui
+  lit déjà l'état de l'hôte.
+- DoD : le refus « pas de module ZFS pour le noyau visé » est prouvé par un test,
+  et **aucune commande n'est envoyée** dans ce cas — prouvé en comptant les
+  exécutions ; la frappe d'un nom faux laisse le bouton présent et désactivé
+  (`DESIGN_SYSTEM.md`) ; le relevé nomme les Sparks qui vont s'arrêter ; un
+  parcours E2E depuis l'accueil ouvre la confirmation, frappe le nom et constate
+  le refus sur une Forge simulée sans ZFS ; captures observées ; manuel M4 et
+  changelog mis à jour ; `@spec` / `@verifies` posés.
+- **Non couvert** : le redémarrage réel d'une Forge de production. Il sera
+  éprouvé sur la Forge de test, sur instruction explicite du responsable — un
+  redémarrage arrête les Sparks de son locataire, et ce n'est pas un geste
+  d'agent (§9, §G du runbook).
+
+---
+
 ## Réservé, non planifié
 
 - **Serveur MCP sur un Spark** : piste étudiée le 2026-09-02 et laissée hors

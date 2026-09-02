@@ -7556,6 +7556,73 @@ Le remède nomme les paquets en défaut et renvoie au runbook §C.5, parce que l
 commande à taper dépend de ce qui est cassé et qu'un préflight ne répare rien
 (§31.3).
 
+## 51. Redémarrer la Forge
+
+Demandé le 2026-09-02. Le besoin naît d'un fait mesuré le même jour : après une
+mise à jour de noyau, la Forge continue de tourner sur l'ancien tant qu'elle n'a
+pas redémarré — `7.0.0-15` en marche, `7.0.0-30` installé — et le seul recours
+était `ssh` à la main.
+
+### 51.1 Ce que le geste REFUSE, avant ce qu'il fait
+
+C'est l'essentiel de la section, et l'inverse de l'ordre habituel.
+
+**Un redémarrage vers un noyau dépourvu de module ZFS laisse le pool
+indisponible au démarrage.** Tous les Sparks tombent, et cela ne se voit
+qu'après — quand la console a déjà perdu le contact. Le 2026-09-02, cette
+vérification a été faite **à la main** avant de recommander un redémarrage
+(`modinfo -k <version> zfs`) ; un produit qui offre le bouton doit la faire par
+construction.
+
+La règle : **pas de module ZFS pour le noyau qui démarrera → refus**, et aucune
+commande n'est envoyée. Ce n'est pas un avertissement qu'on peut passer outre.
+Un avertissement se clique ; celui-ci coûterait la production du locataire.
+
+**Un Spark protégé n'empêche pas le redémarrage** (§35). La protection garde les
+écritures qui VISENT un Spark, pas l'arrêt de la machine qui l'héberge :
+prétendre le contraire donnerait une garantie fausse. Le relevé les nomme, en
+revanche, parce que c'est ce qu'on veut savoir avant d'engager.
+
+### 51.2 Le relevé, avant le geste
+
+Trois lignes, et chacune change la décision :
+
+| Ligne | Pourquoi elle décide |
+|---|---|
+| noyau qui démarrera, et son module ZFS | seule condition de refus (§51.1) |
+| Sparks en marche qui vont s'arrêter | c'est la production d'un tiers |
+| redémarrage nécessaire ou non | ne pas offrir comme routine ce qui n'est pas dû |
+
+Le relevé n'écrit rien et ne se journalise pas (§36.7), comme celui de
+l'amorçage (§42.7) : on peut regarder sans agir.
+
+### 51.3 La confirmation : frapper le nom
+
+Le `DESIGN_SYSTEM.md` pose trois conditions pour l'exiger, et **les trois
+tiennent** :
+
+1. **irréversible** — on ne dé-redémarre pas ; les Sparks s'arrêtent ;
+2. **un objet parmi d'autres qui se ressemblent** — le sélecteur porte plusieurs
+   Forges, et se tromper de Forge est exactement le geste qu'on redoute ;
+3. **nom court et visible** — l'écran de la Forge l'affiche en titre.
+
+C'est ce que le responsable a demandé par « double confirmer », dans l'idiome que
+le produit possède déjà. Inventer une seconde boîte de dialogue aurait ajouté un
+motif là où il en existait un, éprouvé et documenté.
+
+### 51.4 Par où il passe, et ce qu'il laisse
+
+Par le **même exécuteur SSH que la mise à jour** (§50), depuis l'hôte console.
+`sparkd` ne reçoit pas le pouvoir de redémarrer sa propre machine : ce serait
+donner à un service exposé une capacité dont il n'a aucun usage propre.
+
+La console **perd le contact** aussitôt. L'écran le dit d'avance, et le §22.3
+s'applique sans exception : aucune donnée antérieure ne s'affiche comme
+actuelle. Un tunnel rompu se dit rompu.
+
+L'audit reçoit une action **distincte**, `forge.reboot` : la confondre avec la
+mise à jour empêcherait de compter les arrêts de production.
+
 ## 43. L'environnement d'un Spark : variables et secrets
 
 Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doit
