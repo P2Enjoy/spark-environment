@@ -8968,3 +8968,218 @@ un jour autorisée à installer, sa garde n'accepte que le sous-ensemble fermé 
 l'installateur versionné et de ses options validées. Tant que cette extension
 n'est pas livrée et vérifiée séparément, l'installation demande une identité SSH
 administrative déjà autorisée ; un `sudo` interactif est un blocage nommé.
+
+---
+
+## 51. Le serveur MCP d'un Spark : contrat (SPK-79, SPK-80, SPK-81)
+
+**Rien de cette section n'est mesuré.** Elle est écrite avant la première ligne
+de code, sur arbitrage du responsable du 2026-09-02, et elle sera corrigée par
+la mesure comme le §3.1 et le §8.8.1 l'ont été avant elle. Ce qui suit est une
+décision, pas un constat.
+
+### 51.1 Ce que c'est, et ce que ce n'est pas
+
+Un Spark peut se voir attacher un **serveur MCP** : une surface par laquelle un
+agent conduit *cette cellule-là*, à travers le plan de contrôle et non à côté de
+lui.
+
+Ce n'est pas une nouvelle API. C'est un **rétrécissement** de l'API existante à
+un seul objet, plus une identité qui la porte. Toute opération exposée s'appuie
+sur une route déjà spécifiée du §… correspondant ; aucune ne crée de chemin
+d'écriture qui n'existerait pas déjà pour la console.
+
+La conséquence tient en une phrase : **ce que la console ne peut pas faire, un
+agent ne le peut pas non plus.** L'inverse, en revanche, est vrai et voulu — la
+console peut beaucoup de choses qu'aucune clé d'agent n'atteindra jamais (§51.8).
+
+### 51.2 Il tourne sur la Forge, jamais dans la cellule
+
+Le serveur vit à côté de `sparkd`, sur la Forge. Trois raisons, dont deux sont
+rédhibitoires pour l'alternative :
+
+- un agent qui arrête son propre Spark ne doit pas couper le lien qui permet de
+  le redémarrer. Hébergé dans la cellule, le serveur se supprime lui-même au
+  premier `stop` ;
+- le locataire est `root` chez lui (§44.3). Un serveur hébergé dans la cellule
+  serait donc réécrit par celui-là même dont il fait respecter les quotas ;
+- le plan de contrôle reste en un seul endroit, avec un seul registre et un seul
+  journal.
+
+### 51.3 Le DNS reste un geste humain — arbitrage du responsable
+
+L'agent **consulte** ce qui est configuré pour son Spark ; il n'écrit **jamais**
+chez le fournisseur DNS.
+
+Ce n'est pas une restriction de prudence ajoutée après coup, c'est la seule
+position cohérente avec le §38.1 : le jeton du fournisseur vit sur le **poste**,
+`sparkd` ne le voit jamais, ne l'écrit jamais et ne le journalise jamais. Un
+serveur MCP hébergé sur la Forge (§51.2) n'a donc structurellement pas de quoi
+écrire un enregistrement — et le doter de ce moyen reviendrait à poser sur la
+Forge le secret que le §38.1 en écarte.
+
+Ce que l'agent obtient à la place, et qui n'exige aucun secret :
+
+- les **routes d'ingress** qui servent son Spark, et les **ports publiés** qui
+  l'atteignent — `sparkd` les tient au registre ;
+- une **résolution DNS ordinaire** du nom, comparée à l'adresse publique de la
+  Forge, qui rend un diagnostic honnête : *routé mais ne résout pas*, *résout
+  ailleurs*, *cohérent*. C'est une observation du monde, pas une lecture de la
+  zone ; le §38.4 reste entier — l'écran, ou ici l'agent, dit ce que le monde
+  répond, jamais ce que le fournisseur porte.
+
+Poser la route d'ingress reste, elle, un geste d'écriture disponible (§51.6) :
+elle appartient à Caddy et à la Forge, pas au fournisseur.
+
+### 51.4 Transport : HTTP streamable derrière Caddy
+
+Le serveur est atteint en HTTP streamable, **par Caddy**, sur le port 443 déjà
+ouvert. Aucun port supplémentaire n'est ouvert sur la Forge : le contrôle
+`SEC-PORTS` du préflight n'admet que 22, 80 et 443, et cette section ne demande
+pas de l'assouplir.
+
+Le transport `stdio` a été écarté : il ne sert qu'un agent déjà présent sur la
+Forge, et vide de son sens la clé à durée de vie, qui n'existe que pour un
+appelant distant.
+
+### 51.5 La clé : durée de vie obligatoire, écritures cochées une par une
+
+**Aucune écriture n'est accordée par défaut.** À la création de la clé,
+l'exploitant coche **opération par opération** ce que cet agent-là pourra
+écrire. Une clé sans aucune case cochée est une clé de lecture, et c'est la clé
+que produit un formulaire qu'on valide sans rien décider.
+
+Le choix de la granularité est délibéré. Des portées larges — « configuration »,
+« instantanés » — auraient obligé à justifier chaque exception et auraient donné
+à un agent chargé de poser deux variables le droit de redimensionner la cellule.
+Le §35.2 a tranché l'inverse pour la protection, dont la portée est *entière* et
+non négociée cas par cas ; la raison y était que l'interrupteur doit supprimer
+les surprises. Ici la raison est symétrique : ce qui n'a pas été explicitement
+donné n'existe pas, et l'exploitant qui coche voit exactement ce qu'il donne.
+
+La clé porte donc :
+
+- **un Spark**, et un seul. Une clé n'est jamais forgée pour une Forge ;
+- **une échéance obligatoire**. Le formulaire n'offre pas de valeur « illimitée ».
+  L'expiration est vérifiée **à chaque appel**, côté serveur, jamais à la
+  connexion seulement ;
+- **la liste des opérations d'écriture accordées**, vide par défaut ;
+- **une empreinte**, jamais la valeur. Le modèle est celui du §35.3 : `scrypt`,
+  paramètres de coût écrits à côté de l'empreinte, de sorte qu'une empreinte
+  posée aujourd'hui reste vérifiable le jour où le défaut change ;
+- **un libellé**, qui est ce qui apparaîtra au journal.
+
+La valeur est montrée **une seule fois**, à la création. Elle n'est pas relisible
+— ni par la console, ni par l'API, ni par l'agent lui-même.
+
+Un outil `spark_cle_etat` rend la validité restante et la liste des opérations
+accordées. Sans lui, un agent découvre l'expiration au milieu d'une tâche, par un
+refus qu'il ne sait pas interpréter ; avec lui, il peut prévenir avant d'agir.
+
+### 51.6 Ce qui est exposé
+
+**Lecture — toujours, sans case à cocher.** Décrire le Spark (le briefing du
+§44, qui est déjà écrit pour être lu par un agent) ; sa consommation réelle face
+à ses quotas ; ses variables, valeurs des secrets masquées selon le §43 ; son
+exposition (§51.3) ; sa chaîne de connexion SSH ; ses instantanés, avec pour
+chacun ce que le restaurer détruirait (§19.1) ; l'état de son amorçage (§42) ;
+**son journal d'audit filtré sur lui**, qui est ce qui rend un agent capable de
+relire ce qu'il a fait au lieu de le supposer ; et la marge dont il dispose pour
+un redimensionnement, **exprimée depuis lui** et sans divulguer ce que consomment
+les autres locataires.
+
+**Écriture — chacune cochée séparément, ou absente.** Poser et retirer une
+variable ; sélectionner une variable de Forge ; amorcer la cellule ; ajouter et
+retirer une route d'ingress ; publier et retirer un port ; prendre, restaurer et
+supprimer un instantané ; démarrer, arrêter et redémarrer ; redimensionner ;
+octroyer et révoquer une clé SSH.
+
+Toutes sont soumises à la protection du §35 exactement comme les gestes de la
+console : une clé qui a coché « prendre un instantané » n'en prend aucun sur un
+Spark protégé. C'est la raison d'être du §35 — « une protection que seule
+l'interface respecterait ne protégerait pas du cas le plus fréquent : le script,
+pas l'humain ». Un agent MCP *est* ce script.
+
+**Ressources et invites.** Le serveur expose aussi, en lecture, le briefing et le
+runbook d'agent. Le second contient des pièges *mesurés* — le paquet Docker de la
+distribution refuse `socketpair()` sous imbrication (§3.1), l'image de base n'a
+pas de `sshd`, un conteneur n'hérite pas de l'environnement de sa cellule (§43).
+Un agent qui les lit avant d'agir ne les redécouvre pas à ses frais. C'est la
+règle du §44.6 étendue : donnée, et non consigne.
+
+### 51.7 Le point de retour : ce qu'aucune case ne dispense de faire
+
+Une restauration est refusée tant que l'**état courant** n'a pas son propre
+instantané.
+
+Cette règle ne fait pas doublon avec le §19.1. Les deux protègent des choses
+opposées : le §19.1 refuse de détruire sans prévenir les instantanés **plus
+récents** que la cible — ce qui a été capturé ; celle-ci refuse d'écraser ce qui
+ne l'a **jamais** été.
+
+Le refus est préféré à l'instantané automatique. Un instantané pris en douce
+consomme le quota disque du locataire, or le quota *est* le contrat du produit
+(§8.7) ; et une opération qui en déclenche silencieusement une autre est
+exactement la surprise que le §19.1 refuse. Le refus nomme donc l'outil à
+appeler avant de réessayer, conformément au contrat d'échec uniforme du §12.1.2 :
+la cause, et le geste qui la lève.
+
+La même exigence vaut pour la suppression d'un instantané qui serait le dernier
+point de retour de la cellule.
+
+### 51.8 Ce qu'aucune clé n'atteint, quelles que soient les cases cochées
+
+- **supprimer le Spark.** Irréversible, et le §G du runbook l'interdit déjà à un
+  agent sans instruction explicite ;
+- **lever la protection.** Si l'agent que l'interrupteur protège peut le lever,
+  l'interrupteur ne protège rien ;
+- **créer une clé, en prolonger une, en élargir les opérations.** Pas
+  d'auto-escalade, pas d'auto-prolongation ;
+- **écrire chez le fournisseur DNS** (§51.3) ;
+- **tout le plan Forge** : lister ou créer d'autres Sparks, `forge/sync`,
+  l'environnement de Forge, le catalogue d'images, les clés SSH globales,
+  l'inventaire matériel.
+
+Ces interdits ne sont pas des cases décochées : ils n'ont pas de case.
+
+### 51.9 Ce que le journal doit dire, et la classe d'acteur qui manquait
+
+Le §21.6.1 ne connaît que deux classes : `human`, un geste demandé par une
+personne, et `runtime`, un événement produit par `sparkd` lui-même. Un geste
+d'agent n'est ni l'un ni l'autre. Le classer `human` **fabriquerait** une
+attribution — précisément ce que le §21.6.1 dit être « bien pire » que d'en
+perdre une ; le classer `runtime` ferait passer pour un automatisme du plan de
+contrôle ce qu'une clé délivrée à un tiers a décidé.
+
+`actor_class` gagne donc une troisième valeur, `agent`, et l'acteur porte le
+libellé de la clé. Le défaut reste `runtime` pour la raison inchangée du §21.6.1.
+
+### 51.10 Opérations longues : un identifiant, et un état à interroger
+
+Amorcer, restaurer et redimensionner dépassent la durée d'un appel. Ces
+opérations rendent la main immédiatement avec un **identifiant d'opération**, et
+un outil dédié en rend l'état.
+
+L'alternative — un appel bloquant idempotent — a été écartée : un amorçage
+dépasse largement le délai d'un client, l'agent verrait un échec là où
+l'opération réussit, et le réessai deviendrait sa seule source d'information. Les
+seules notifications de progression du protocole ne suffisent pas non plus : une
+connexion coupée perdrait toute trace, et il faudrait de toute façon un registre
+pour la retrouver.
+
+Le registre des opérations est donc **persisté** (`docs/SCHEMA.md` §10 septies),
+et sa reprise au démarrage suit la règle du §14.3 : un état transitoire ne
+survit pas à un redémarrage de `sparkd` sans être tranché.
+
+### 51.11 Ce que ce contrat ne garantit pas
+
+- **Il ne protège pas d'un agent hostile en possession d'une clé valide.** Comme
+  le §35.1 pour la protection, c'est un garde-fou de portée et de traçabilité,
+  pas un contrôle d'accès contre un adversaire. Ce qui borne les dégâts est
+  l'étroitesse des cases cochées et la brièveté de l'échéance.
+- **Il ne protège pas de la fuite de la clé.** Une clé est un secret porteur ;
+  elle vaut ce que vaut l'endroit où l'agent la range.
+- **Il ne dit rien de la consommation de ressources par l'agent lui-même.** Les
+  appels sont comptés au journal, mais aucune limitation de débit n'est
+  spécifiée ici ; si la mesure montre qu'elle est nécessaire, elle sera écrite
+  avant d'être codée.

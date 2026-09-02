@@ -4760,6 +4760,96 @@ produit ne sont pas amorçables correctement, et rien ne le disait avant l'éche
 
 ---
 
+### [ ] SPK-79 · La clé d'agent d'un Spark : échéance obligatoire, écritures cochées une par une
+
+Demandé par le responsable le 2026-09-02 : « on peut activer un serveur MCP sur
+un spark, dans ce cas il faut créer une clé d'API et lui affecter une durée de
+vie », puis, en arbitrage : « aucune écriture par défaut, et la création de la
+clé choisit les opérations d'écriture une par une ».
+
+- Spécification : `docs/DAT.md` **§51.5**, §51.8, §51.9 (écrites et committées
+  avant la première ligne de code) · `docs/SCHEMA.md` §10 sexies ·
+  `docs/DESIGN_SYSTEM_APP.md` pour le panneau · manuel M6.
+- Dépend de : SPK-34 (la protection, que toute écriture d'agent respecte),
+  SPK-37 (`actor_class`, qui gagne `agent`), SPK-38 (la chaîne d'audit).
+- Portée : la table `mcp_key` et ses octrois ; création depuis la fiche d'un
+  Spark avec échéance obligatoire et cases d'écriture décochées ; valeur montrée
+  une seule fois ; révocation ; expiration vérifiée à chaque appel ; panneau
+  « Agent » sur la fiche — clé active, temps restant, opérations accordées, 20
+  derniers gestes, bouton révoquer.
+- **C'est la première surface d'authentification du produit.** `sparkd` n'en a
+  aucune aujourd'hui : il écoute sur `127.0.0.1:9876` et la confiance vient
+  d'être sur la machine. Cette unité introduit un secret porteur, et rien de ce
+  qui suit ne peut être écrit avant elle.
+- **L'empreinte suit le modèle du §35.3** : `scrypt`, paramètres de coût écrits à
+  côté de l'empreinte, pour qu'une clé posée aujourd'hui reste vérifiable le jour
+  où le défaut change.
+- **Sans panneau, la fonctionnalité est invisible et non auditable** : une clé
+  qu'on ne peut ni voir expirer ni révoquer depuis la console n'est pas livrable.
+- DoD : test unitaire de l'empreinte, de l'expiration et du refus d'une opération
+  non cochée ; **test d'API prouvant qu'une clé sans case cochée se voit refuser
+  chaque écriture, et qu'une clé expirée est refusée à l'appel** — la preuve
+  passe par l'API, jamais par l'écran ; parcours E2E depuis l'accueil : créer une
+  clé, la voir une seule fois, la révoquer ; captures observées ; manuel M6 et
+  design system mis à jour ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-80 · Le serveur MCP d'un Spark : transport, lecture, ressources
+
+- Spécification : `docs/DAT.md` **§51.1** à **§51.4**, **§51.6** (partie lecture)
+  · manuel M6.
+- Dépend de : SPK-79 pour la clé, SPK-60 pour le briefing qu'il réemploie,
+  SPK-13 pour les instantanés qu'il décrit.
+- Portée : un serveur MCP hébergé **sur la Forge**, atteint en HTTP streamable
+  **par Caddy** sur 443 ; la surface de lecture du §51.6 ; le briefing et le
+  runbook exposés en ressources.
+- **Aucun port supplémentaire n'est ouvert** : `SEC-PORTS` n'admet que 22, 80 et
+  443, et cette unité ne demande pas de l'assouplir. Un préflight rouge en
+  permanence serait le prix d'un raccourci.
+- **Il ne tourne pas dans la cellule** (§51.2) : le locataire y est `root` et
+  réécrirait le serveur qui fait respecter ses quotas ; et un « arrête ce Spark »
+  couperait le lien qui permet de le redémarrer.
+- **Le DNS est en lecture seule** (§51.3, arbitrage du responsable) : l'agent
+  voit les routes et les ports qui servent son Spark, et obtient une résolution
+  ordinaire du nom comparée à l'adresse de la Forge. Il n'écrit jamais chez le
+  fournisseur — le jeton vit sur le poste (§38.1) et n'a rien à faire ici.
+- **Le journal filtré est la fonction la plus utile de la lecture** : c'est ce
+  qui permet à un agent de relire ce qu'il a fait au lieu de le supposer.
+- DoD : test unitaire de la surface de lecture et du masquage des secrets ; test
+  d'API prouvant qu'une clé d'un Spark **ne lit rien d'un autre Spark** ni aucune
+  ressource de plan Forge ; parcours E2E depuis l'accueil qui active le serveur
+  sur un Spark seedé et obtient sa description ; captures observées ; manuel M6
+  mis à jour ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-81 · Les écritures d'un agent, et le point de retour avant restauration
+
+- Spécification : `docs/DAT.md` **§51.6** (partie écriture), **§51.7**, **§51.10**
+  · `docs/SCHEMA.md` §10 septies · manuel M6.
+- Dépend de : SPK-79, SPK-80, SPK-34 (protection), SPK-13 (§19.1).
+- Portée : les gestes d'écriture du §51.6, chacun conditionné à son octroi ; le
+  refus de restaurer tant que l'état courant n'a pas son instantané ; le registre
+  `mcp_operation` et l'outil d'état pour amorcer, restaurer et redimensionner.
+- **La règle du point de retour ne fait pas doublon avec le §19.1** : celui-ci
+  refuse de détruire les instantanés **plus récents** que la cible — ce qui a été
+  capturé ; celle-ci refuse d'écraser ce qui ne l'a **jamais** été.
+- **Refuser, et non prendre l'instantané d'office** (§51.7) : un instantané
+  automatique consomme en silence le quota disque du locataire, or le quota *est*
+  le contrat du produit. Le refus nomme l'outil à appeler, comme l'exige le
+  contrat d'échec du §12.1.2.
+- **La protection prime sur toute case cochée** : une clé autorisée à prendre un
+  instantané n'en prend aucun sur un Spark protégé. C'est le cas d'usage même du
+  §35 — le script, pas l'humain.
+- **Les interdits du §51.8 n'ont pas de case** : supprimer le Spark, lever la
+  protection, créer ou prolonger une clé, écrire au DNS, toucher au plan Forge.
+- DoD : test unitaire du refus de restauration sans point de retour et de la
+  reprise d'un `en_cours` au démarrage (§14.3) ; **test d'API prouvant que chaque
+  interdit du §51.8 est refusé avec une clé portant toutes les cases cochées**, et
+  que la protection armée refuse une écriture accordée ; parcours E2E depuis
+  l'accueil : un agent pose une variable, tente une restauration, obtient le refus
+  nommé, prend l'instantané, restaure ; captures observées ; manuel M6 mis à jour ;
+  `@spec` / `@verifies` posés.
+
+---
+
 ## Réservé, non planifié
 
 - `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc

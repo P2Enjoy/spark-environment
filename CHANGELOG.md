@@ -2,6 +2,26 @@
 
 ## [Non publié]
 
+### Ajouté
+- **Le serveur MCP d'un Spark est spécifié, avant toute ligne de code** (SPK-79,
+  SPK-80, SPK-81, `docs/DAT.md` §51, `docs/SCHEMA.md` §10 sexies et §10 septies,
+  demande et arbitrages du responsable du 2026-09-02). Un Spark pourra se voir
+  attacher un serveur MCP, hébergé **sur la Forge** et atteint en HTTP streamable
+  derrière Caddy — aucun port supplémentaire, `SEC-PORTS` reste à 22, 80, 443. La
+  clé qui l'ouvre porte **un seul Spark**, une **échéance obligatoire** vérifiée à
+  chaque appel, et **aucune écriture par défaut** : chaque opération d'écriture se
+  coche une par une à la création. Le **DNS reste un geste humain** — l'agent
+  consulte les routes et les ports qui servent son Spark et résout le nom pour le
+  comparer à l'adresse de la Forge, mais n'écrit jamais chez le fournisseur, dont
+  le jeton n'a rien à faire sur la Forge (§38.1). Une **restauration est refusée**
+  tant que l'état courant n'a pas son propre instantané, et le refus nomme le
+  geste qui le lève plutôt que de prendre l'instantané en silence aux dépens du
+  quota. Cinq gestes n'ont pas de case et n'en auront pas : supprimer le Spark,
+  lever la protection, créer ou prolonger une clé, écrire au DNS, toucher au plan
+  Forge. `actor_class` gagnera une troisième valeur, `agent` : classer un geste
+  d'agent en `human` fabriquerait une attribution. Rien n'est implémenté ; la
+  section §51 dit elle-même qu'aucune de ses affirmations n'est mesurée.
+
 ### Modifié
 - **Une Forge exige deux disques : le pool sur fichier est retiré** (SPK-28,
   SPK-68, `docs/DAT.md` §8.5 révisé, arbitrage du responsable du 2026-09-02). Il

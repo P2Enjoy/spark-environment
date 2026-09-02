@@ -8958,3 +8958,78 @@ l'étaient pour de vraies raisons — pas par flottement :
   remplacées par une attente de CONDITION (`CLAUDE.md` §18) ; la preuve passe
   maintenant trois fois de suite.
 
+## 2026-09-02 · Ce qu'un agent peut conduire sur un Spark, et ce qu'il ne pourra jamais
+
+**Problème.** Demande du responsable : « on peut activer un serveur MCP sur un
+spark, dans ce cas il faut créer une clé d'API et lui affecter une durée de vie.
+Une fois connecté, un agent peut configurer des variables, des noms de domaines,
+amorcer le dockerd, demander une description du spark, la chaîne SSH, faire des
+snapshots ou en restaurer un — il faut interdire de restaurer si on n'a pas fait
+un snapshot de l'actuel avant. Qu'est-ce qui pourrait être utile d'exposer ? »
+
+**Observations.** Le terrain était déjà préparé, à trois endroits qu'il ne
+fallait surtout pas réinventer :
+
+- le **briefing** (SPK-60) est déjà un modèle écrit pour être lu par un agent, et
+  le §44.6 le déclare « donnée et non consigne » — c'est déjà la réponse à
+  « décris-moi ce Spark » ;
+- la **protection** (SPK-34) refuse cinq gestes nommés *côté runtime*, avec la
+  justification suivante, qui décrit exactement un agent MCP : « une protection
+  que seule l'interface respecterait ne protégerait pas du cas le plus fréquent
+  — le script, pas l'humain » ;
+- la **chaîne d'audit** (SPK-38) donne la traçabilité, à condition d'avoir une
+  classe d'acteur pour l'agent.
+
+Un fait décide de la forme générale : `sparkd` n'a **aucune authentification**.
+Il écoute sur `127.0.0.1:9876` et la confiance vient d'être sur la machine. Une
+clé d'API est donc la première surface d'authentification du produit, et non un
+détail d'une fonctionnalité MCP.
+
+**Ce qui a été écarté, et pourquoi.**
+
+*Héberger le serveur dans la cellule.* Rédhibitoire deux fois : le locataire y
+est `root` et réécrirait le serveur qui fait respecter ses propres quotas ; et un
+« arrête ce Spark » couperait le lien qui permettrait de le redémarrer.
+
+*Héberger le serveur sur l'hôte console.* C'était la seule façon d'offrir une
+configuration de domaine complète, DNS compris, puisque la console détient le
+jeton du fournisseur. Le responsable a tranché autrement : **le DNS reste un
+geste humain**, l'agent le consulte sans jamais l'écrire. L'argument tombe, et
+le plan de contrôle reste en un seul endroit. Le §38.1 est préservé sans effort :
+le jeton n'a jamais à approcher la Forge.
+
+*Un transport `stdio`.* Ne sert qu'un agent déjà présent sur la Forge, et vide de
+son sens la clé à durée de vie. Retenu : HTTP streamable **derrière Caddy**, sur
+le 443 déjà ouvert — `SEC-PORTS` reste vert sans qu'on ait à l'assouplir.
+
+*Des appels bloquants idempotents pour les opérations longues.* Un amorçage
+dépasse le délai d'un client MCP : l'agent verrait un échec là où l'opération
+réussit. Retenu : identifiant d'opération, registre persisté, outil d'état, et
+reprise au démarrage selon le §14.3.
+
+*Des portées larges pour la clé.* C'était ma proposition — « lecture +
+configuration » par défaut. Le responsable l'a corrigée : **aucune écriture par
+défaut, et les opérations d'écriture se cochent une par une à la création**. La
+correction est meilleure, et pour une raison qui se dit simplement : une portée
+« configuration » donnerait à un agent chargé de poser deux variables le droit de
+redimensionner la cellule. Ce qui n'a pas été explicitement donné n'existe pas.
+
+**La règle du point de retour.** La demande — interdire une restauration sans
+instantané préalable de l'état courant — n'est pas le doublon qu'elle paraît :
+`snapshots.py` refuse déjà une restauration qui détruirait des instantanés *plus
+récents* (§19.1). Les deux protègent des choses opposées : le §19.1 protège ce
+qui **a** été capturé, la nouvelle règle ce qui ne l'a **jamais** été. Décidé de
+refuser plutôt que de prendre l'instantané d'office : un instantané automatique
+consomme en silence le quota disque, or le quota *est* le contrat du produit.
+
+**Conséquences.** `actor_class` gagne une troisième valeur, `agent` : classer un
+geste d'agent en `human` **fabriquerait** une attribution, ce que le §21.6.1 dit
+être bien pire que d'en perdre une. Trois unités écrites : SPK-79 (la clé),
+SPK-80 (le serveur et la lecture), SPK-81 (les écritures et le point de retour).
+
+**Vérifications réalisées.** Aucune : rien n'est implémenté, et cette entrée ne
+consigne qu'une décision. La lecture qui la fonde est celle des 48 opérations de
+`packages/contract/openapi/sparkd.json`, de `protection.py`, `snapshots.py`,
+`briefing.py` et du runbook d'agent. Le §51 le dit à son premier paragraphe :
+rien n'y est mesuré, et la mesure le corrigera comme elle a corrigé le §3.1 et
+le §8.8.1.
