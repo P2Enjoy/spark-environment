@@ -223,9 +223,6 @@ besoin.
 
 `actor_class` ∈ {`human`, `runtime`}, `NOT NULL`, défaut `runtime`.
 
-Une troisième valeur, `agent`, est spécifiée au §10 sexies et n'est pas encore
-appliquée : le déclencheur en place n'admet toujours que les deux ci-dessus.
-
 Le défaut est `runtime` **délibérément** : une écriture qui oublierait de se
 déclarer sera classée comme un événement de la machine, jamais comme un geste
 humain. Se tromper dans ce sens fait perdre une attribution ; se tromper dans
@@ -394,81 +391,6 @@ façon visible dans une cellule dont le locataire est `root`.
 
 La cascade est nécessaire : un briefing sans Spark n'a aucun sens et ne doit pas
 survivre à la libération de ses ressources.
-
-## 10 sexies. `mcp_key` et `mcp_key_grant` : la clé d'agent d'un Spark (SPK-79)
-
-Migration `013_cle_agent.sql` — le numéro est attribué à l'implémentation si une
-autre unité prend `013` d'ici là. Contrat complet : `docs/DAT.md` §51.5, §51.8,
-§51.9.
-
-`mcp_key`
-
-| Colonne | Type | Contenu |
-|---|---|---|
-| `id` | TEXT PK | identifiant de la clé |
-| `spark_id` | TEXT | Spark porté, `NOT NULL`, `ON DELETE CASCADE` |
-| `label` | TEXT | libellé, unique par Spark ; c'est lui qui paraît au journal |
-| `hash` | TEXT | empreinte `scrypt` de la valeur — **jamais la valeur** |
-| `params` | TEXT JSON | paramètres de coût, écrits à côté de l'empreinte (§4.1) |
-| `created_at` | TEXT | date de création |
-| `expires_at` | TEXT | échéance, `NOT NULL` — il n'existe pas de clé sans échéance |
-| `revoked_at` | TEXT nullable | date de révocation, ou `NULL` |
-| `last_used_at` | TEXT nullable | dernier appel authentifié |
-
-`expires_at` est `NOT NULL` **par le schéma** et non par une garde applicative :
-une colonne nullable finirait par porter des `NULL`, et le premier serait une clé
-éternelle que personne n'a décidée.
-
-La cascade suit le §10 quinquies : une clé sans Spark ne désigne plus rien.
-
-`mcp_key_grant`
-
-| Colonne | Type | Contenu |
-|---|---|---|
-| `key_id` | TEXT | clé concernée, `ON DELETE CASCADE` |
-| `operation` | TEXT | l'opération d'écriture accordée, une par ligne |
-| `granted_at` | TEXT | date de l'octroi |
-
-Clé primaire `(key_id, operation)`.
-
-**Une table et non une colonne de portées.** Le §51.5 accorde les écritures une
-par une ; une colonne `scopes` porterait un ensemble de commodité qu'il faudrait
-ensuite interpréter, et la première portée large réintroduirait le pouvoir qu'on
-vient de refuser. Une clé sans aucune ligne ici est une clé de lecture, ce qui
-est **l'état par défaut** : l'absence de ligne n'est pas une donnée manquante,
-c'est la réponse.
-
-`operation` est contrainte à la liste fermée du §51.6 par un déclencheur, sur le
-modèle de `actor_class` (§9.1) : une opération inconnue est refusée à l'écriture
-plutôt que silencieusement inopérante.
-
-**`actor_class` s'élargit dans la même migration.** Le déclencheur de §9.1
-n'admet aujourd'hui que `human` et `runtime` ; il admettra `agent`, pour la
-raison donnée au §51.9. Les lignes existantes ne sont pas reclassées : aucune n'a
-été écrite par un agent.
-
-## 10 septies. `mcp_operation` : les opérations longues (SPK-81)
-
-Même migration. Contrat : `docs/DAT.md` §51.10.
-
-| Colonne | Type | Contenu |
-|---|---|---|
-| `id` | TEXT PK | identifiant rendu à l'appelant |
-| `spark_id` | TEXT | Spark concerné, `ON DELETE CASCADE` |
-| `key_id` | TEXT nullable | clé qui l'a demandée, `NULL` si le geste vient de la console |
-| `operation` | TEXT | `bootstrap`, `snapshot.restore`, `resize` |
-| `state` | TEXT | `en_cours`, `réussie`, `échouée`, `interrompue` |
-| `started_at` | TEXT | début |
-| `ended_at` | TEXT nullable | fin, ou `NULL` tant qu'elle court |
-| `detail` | TEXT nullable | cause de l'échec, dans les termes du §12.1.2 |
-
-L'état est persisté parce qu'une opération dont la trace vit dans la connexion
-disparaît avec elle, et qu'un agent qui se reconnecte doit pouvoir savoir ce
-qu'il a lancé.
-
-`interrompue` existe pour le §14.3 : un `en_cours` ne survit pas au redémarrage
-de `sparkd` sans être tranché. Le laisser tel quel ferait attendre indéfiniment
-un agent devant une opération que plus personne ne conduit.
 
 ## 11. Retour arrière
 

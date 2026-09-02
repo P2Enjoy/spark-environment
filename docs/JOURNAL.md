@@ -9295,3 +9295,43 @@ consigne qu'une décision. La lecture qui la fonde est celle des 48 opérations 
 `briefing.py` et du runbook d'agent. Le §51 le dit à son premier paragraphe :
 rien n'y est mesuré, et la mesure le corrigera comme elle a corrigé le §3.1 et
 le §8.8.1.
+
+## 2026-09-02 · Le serveur MCP sort du backlog et devient exploratoire
+
+**Décision du responsable**, le jour même où le sujet a été spécifié : garder tout
+l'arbre de travail MCP hors du backlog, et le poser en exploratoire non réalisé.
+
+**Conséquence documentaire, appliquée dans le même changement.** Une section de
+DAT décrit l'architecture réelle et un tableau de SCHEMA décrit le registre réel ;
+laisser le §51 et les tables `mcp_*` y figurer aurait fait décrire un contrat que
+rien n'a vocation à honorer. Ils sont donc **retirés**, avec les trois unités de
+backlog, l'annotation qui promettait une classe d'acteur `agent`, et l'entrée de
+changelog qui annonçait la spécification — remplacée par ce qui est vrai
+maintenant, et non complétée d'une note.
+
+Tout est repris dans `docs/EXPLORATION_MCP.md`, marqué exploratoire dès sa
+première ligne, plus une ligne dans « Réservé, non planifié ».
+
+**Ce qui a été délibérément conservé.** Les raisons, pas seulement les
+conclusions : pourquoi un démon distinct plutôt qu'un module de `sparkd` — la
+chaîne d'audit n'admet qu'un seul écrivain, et `sparkd` refuse une adresse
+routable —, pourquoi le cloisonnement doit être appliqué par le noyau et non par
+la qualité du code, et pourquoi l'absence d'écriture par défaut vaut mieux que des
+portées larges. Une piste rangée sans ses raisons se re-débat entièrement au
+premier retour du sujet.
+
+**Un point est noté à part parce qu'il ne dépend pas de MCP** : `sparkd` n'a
+aucune authentification, et la piste d'un défi signé en SSHSIG — la primitive de
+SPK-40 existe déjà — vaut indépendamment. Elle est consignée au §5 du document
+d'exploration avec ce qui la rendrait dangereuse si elle était mal faite : un
+digest stable serait rejouable, un espace de noms partagé avec `spark-audit`
+rendrait une attestation d'intention rejouable en identifiant de session, et un
+`allowed_signers` vide enfermerait l'exploitant hors de sa propre Forge.
+
+**Identifiants.** `SPK-79`, `SPK-80` et `SPK-81` ont été attribués puis rendus le
+même jour. Ils ne seront pas réemployés : ils ont paru dans un message de commit
+poussé, et les rattacher plus tard à un autre sujet rendrait l'historique
+trompeur.
+
+**Vérifications réalisées.** Aucune, et il n'y en a pas à faire : rien n'a jamais
+été implémenté sur ce sujet.
