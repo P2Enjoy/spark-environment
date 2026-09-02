@@ -5029,22 +5029,35 @@ portait auparavant ses octets.
 Le processus est lancé **par le tunnel existant**, avec la clé du responsable
 (§37.1). `sparkd` n'est pas dans ce chemin.
 
-Trois façons de mourir, et une seule est normale :
+**RÉVISÉ le 2026-09-02 par l'arbitrage du responsable (SPK-75).** Quatre façons
+de mourir, et le flux n'en est plus une :
 
-- **le flux se ferme** — l'onglet est fermé, la page rechargée, le réseau tombe :
-  le processus distant est **tué**. C'est le contrat du §37.4, et c'est celui qui
-  compte : une session qui survivrait à son écran serait un shell root abandonné
-  dont personne ne se souvient ;
+- **la fermeture explicite** — le bouton, dans la facette ou dans le widget ;
 - **l'inactivité** dépasse le délai : la session se ferme, après un avertissement
-  **affiché avant**, jamais après ;
+  **affiché avant**, jamais après. Le délai est inchangé ;
 - **le shell distant se termine** de lui-même — `exit`, `Ctrl-D` : la session
-  s'arrête et l'écran le dit.
+  s'arrête et l'écran le dit ;
+- **l'arrêt de la console**, qui emporte l'hôte qui les porte.
 
-La surface appartient au couple **Forge + Spark** qui l'a ouverte, pas au seul
-nom de facette `terminal`. Passer directement du terminal d'un Spark à celui
-d'un autre termine donc la première session avant de rendre le second Spark :
-rester sur une URL qui finit encore par `/terminal` ne conserve jamais un shell
-sous la fenêtre d'une autre cellule.
+**Ni le changement de page, ni le rechargement, ni la fermeture de l'onglet du
+navigateur.** Le flux d'évènements peut se rompre et se rétablir : la session lui
+survit, et un second abonnement la retrouve.
+
+La version précédente tuait à la fermeture du flux, et son motif était juste :
+*une session qui survit à son écran est un shell root abandonné dont personne ne
+se souvient.* Ce motif n'a pas disparu — **ce qui y répond a changé**. Ce n'est
+plus la mort à la navigation, c'est le widget permanent du §37.4.8 : tant que la
+console tourne, tout shell vivant est visible en bas à gauche, sur toutes les
+routes, avec sa cible et sa dernière activité. On ne l'oublie pas parce qu'on ne
+peut plus le perdre de vue, et l'inactivité reste le filet.
+
+Ce que l'ancienne règle coûtait, et qui a décidé du changement : **le travail
+était perdu au moindre changement de page.** Regarder les routes d'un Spark
+pendant qu'une commande tourne tuait la commande.
+
+La surface appartient toujours au couple **Forge + Spark** qui l'a ouverte. Mais
+ouvrir le terminal d'un autre Spark n'en tue plus aucun : les deux vivent, et le
+widget les montre tous les deux.
 
 #### 37.4.2 bis Le doublon du transport, pour éprouver sans Spark
 
@@ -5064,6 +5077,32 @@ Forge réelle — même limite qu'au §39.7.
 
 La variable est **absente en production** : son absence est le cas normal, et le
 produit lance alors `ssh`.
+
+#### 37.4.8 L'inventaire permanent, et ce qu'il coûte
+
+@spec docs/BACKLOG.md#SPK-75
+
+Le registre du §37.4.4 listait les shells vivants. Il devient l'**inventaire de
+la Forge courante**, et le point de départ des terminaux :
+
+- **tous les Sparks, en permanence**, tant que la console est branchée. Ils sont
+  déjà en mémoire : les lister ne coûte aucune requête ;
+- **les conteneurs d'un Spark quand on le déplie**, et seulement là. Un relevé
+  Docker est un `incus exec` chez le locataire ; le §37.6 interdit d'interroger
+  un Spark qu'on ne regarde pas, et cette règle tient ici sans exception. Le
+  relevé se rafraîchit tant que le Spark reste déplié, et s'arrête au repli ;
+- une entrée qui porte une **session vivante** le dit et y ramène ; une entrée
+  sans session en ouvre une.
+
+**Ce qui ne change pas :** aucun octet de session ne traverse cet inventaire. Il
+ne reçoit que `describe()` (§37.5) — ni frappe, ni sortie, ni historique. Une
+colonne de contenu ici resterait une violation directe.
+
+**La reprise.** Au chargement de la console, les sessions vivantes de l'hôte sont
+relues et **réattachées** : le widget les montre, et ouvrir la facette Terminal
+d'un Spark qui en porte une reprend la sienne au lieu d'en créer une seconde.
+C'est la contrepartie directe du §37.4.2 révisé — faire survivre un shell sans
+savoir le retrouver ne ferait que le cacher.
 
 #### 37.4.3 Le redimensionnement est un vrai événement de terminal
 

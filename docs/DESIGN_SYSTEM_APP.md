@@ -158,7 +158,10 @@ Règles propres :
 - l'état protégé du Spark (`docs/DAT.md` §35) et le chemin employé — SSH ou
   dépannage (§37.3) — restent affichés **pendant toute la session**, pas seulement
   à l'ouverture ;
-- quitter l'onglet termine la session, et l'écran le dit avant de le faire ;
+- quitter l'onglet **ne termine plus** la session (SPK-75, `docs/DAT.md`
+  §37.4.2 révisé) : elle survit à la navigation et au rechargement, et le
+  widget du SPK-DS-16 la montre en permanence. L'écran ne promet donc plus
+  une fin qui n'a pas lieu ; il dit où retrouver la session ;
 - le terminal ne porte aucun bouton d'action Docker : les gestes appartiennent à
   l'onglet *Docker*, où ils sont nommés et confirmés (§6.23). Un bouton posé à
   côté d'un shell laisserait croire que les deux font la même chose de deux
@@ -171,14 +174,42 @@ xterm reçoit le focus et la frappe directement — ni champ miroir, ni bouton
 du terminal. Son mode lecteur d'écran expose la restitution textuelle interprétée
 sans jamais montrer les séquences brutes.
 
-Le registre des sessions est un second repère de l'exploitation, pas une nouvelle
-destination : à large écran, il occupe le bord gauche de la console et reste
-visible pendant la navigation. Il liste le type, Forge, Spark, conteneur s'il y
-en a un, chemin, ouverture et dernière activité ; une ligne mène à la session.
-« Fermer » demande confirmation et nomme la session visée. Sous 1024 px, ce
-registre devient un tiroir déclenché par un bouton libellé, avec focus rendu à son
-déclencheur à la fermeture ; il ne réduit jamais la grille au point de la rendre
-inutilisable.
+Le registre des sessions n'occupe plus une colonne : il est devenu le widget
+flottant du **SPK-DS-16**, décrit là-bas.
+
+### SPK-DS-16 · L'inventaire est un widget flottant, jamais une colonne
+
+@spec docs/BACKLOG.md#SPK-75 · docs/DAT.md §37.4.8
+
+**Mesuré le 2026-09-02.** Le registre occupait une colonne permanente d'environ
+355 px entre la navigation et le contenu. Elle portait une carte et beaucoup de
+vide, et elle rétrécissait la grille du terminal — l'écran même qu'elle
+accompagne. Un repère permanent ne doit pas coûter en largeur ce qu'il apporte en
+mémoire.
+
+**Forme.** Un widget **flottant, ancré en bas à gauche**, au-dessus du contenu,
+présent sur **toutes** les routes. Replié, c'est une pastille qui porte le nombre
+de sessions vivantes. Dépliée, une liste bornée en hauteur qui défile dans son
+propre conteneur, jamais la page. Il ne prend aucune largeur au contenu, à aucune
+taille d'écran ; en vue étroite il reste la même pastille et sa liste s'ouvre
+au-dessus du contenu.
+
+**Contenu.** L'inventaire de la Forge courante, pas seulement les shells :
+tous les Sparks en permanence, et les conteneurs d'un Spark **quand on le
+déplie** (§37.4.8 — un Spark qu'on ne regarde pas n'est jamais interrogé). Une
+entrée qui porte une session vivante le montre et y ramène ; une entrée sans
+session en ouvre une.
+
+**Règles.**
+
+- l'état replié/déplié **survit au changement de page** : un repère qui se
+  referme à chaque navigation cesse d'être un repère ;
+- le widget ne masque jamais une action du contenu : la page réserve en bas à
+  gauche la place de la pastille repliée ;
+- il reste atteignable au clavier, et le repli rend le focus à la pastille ;
+- il ne montre **aucun octet** de session (§37.5) : type, cible, chemin,
+  ouverture, dernière activité. Rien d'autre ;
+- « Fermer » demande confirmation et nomme la session visée — inchangé.
 
 ### SPK-DS-05 · Deux origines de mesure ne partagent pas une jauge
 

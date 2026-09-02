@@ -8479,3 +8479,64 @@ que l'hôte console charge `node-pty` paresseusement et qu'aucun d'eux n'ouvre d
 terminal. Les suites serveur et console sont vertes hors trois preuves d'hôte et
 une de classes, **antérieures** à ce travail et vérifiées telles quelles sur
 l'arbre d'avant.
+
+---
+
+## 2026-09-02 · Le panneau de sessions : ce que je n'avais pas essayé, et ce que la mesure a dit
+
+**Reproche du responsable, et il porte.** J'ai livré SPK-74 en vérifiant
+visuellement la facette « Clés », et le panneau des sessions figurait sur toutes
+mes captures en disant « Aucune session ouverte ». Je ne l'ai pas essayé. Il
+était sous mes yeux, vide, et je ne me suis pas demandé pourquoi.
+
+**Mesure, avant toute discussion.** Depuis l'accueil, un terminal ouvert sur
+`crm-production`, puis un clic sur « Forge » :
+
+```
+terminal ouvert     → /api/terminal/sessions = 1   panneau : « Spark · crm-production … »
+clic sur « Forge »  → /api/terminal/sessions = 0   panneau : « Aucune session ouverte. »
+```
+
+Le shell est **tué par la navigation**. Ce n'est pas un défaut d'affichage : le
+§37.4.2 le prescrit, et la facette l'annonce — « Quitter cet onglet **termine**
+la session ». Le panneau n'est pas vide par accident ; il est vide parce qu'il
+n'y a plus rien.
+
+La capture montre le second reproche : le registre est une **colonne permanente**
+d'environ 355 px, entre la navigation et le contenu, portant une carte et
+beaucoup de vide, et rétrécissant la grille du terminal — l'écran même qu'elle
+accompagne.
+
+**Ce que le harnais m'a d'abord caché.** Aucun terminal ne s'ouvrait sur ce
+poste : `node-pty` est natif, ne publie de binaires que pour macOS et Windows, et
+se compile sur Linux. J'ai conclu trop vite qu'il n'y avait pas de compilateur —
+un `which` qui n'a rien rendu — et je suis parti compiler sur la Forge. Le
+responsable a corrigé : `g++ 15.2` et `build-essential` sont bien là. Un
+`pnpm install` a suffi. **La leçon n'est pas sur node-pty** : c'est qu'un outil
+qui ne répond pas ne prouve pas une absence, exactement le §14.6 appliqué à mon
+propre diagnostic.
+
+**Arbitrages du responsable, 2026-09-02.**
+
+1. *Ce qui tue une session* : fermeture explicite, inactivité de 15 minutes,
+   mort du shell distant, arrêt de la console. **Plus rien d'autre** — ni
+   navigation, ni rechargement, ni fermeture de l'onglet.
+2. *Les conteneurs* : tous les Sparks listés en permanence, les conteneurs d'un
+   Spark relevés **quand on le déplie** seulement. Le §37.6 tient : interroger
+   Docker en boucle sur chaque Spark ferait tourner une commande en continu chez
+   chaque locataire.
+
+**Ce que la révision doit garder du texte qu'elle remplace.** Le §37.4.2 tuait à
+la fermeture du flux pour une raison juste : un shell root qui survit à son écran
+est un shell oublié. Ce risque ne disparaît pas — **ce qui y répond change**.
+Ce n'est plus la mort à la navigation, c'est le widget permanent : tant que la
+console tourne, tout shell vivant est visible en bas à gauche, sur toutes les
+routes, avec sa dernière activité. On ne l'oublie pas parce qu'on ne peut plus le
+perdre de vue, et l'inactivité reste le filet. J'ai écrit ce motif dans le §37.4.2
+révisé plutôt que de l'effacer : une règle dont on supprime la raison revient par
+la porte de derrière à la première relecture.
+
+Spécification écrite avant toute ligne de code : unité **SPK-75**, `docs/DAT.md`
+§37.4.2 révisé et §37.4.8, `docs/DESIGN_SYSTEM_APP.md` SPK-DS-04 révisé et
+SPK-DS-16, et la ligne de SPK-70 qui promettait la mort à la navigation est
+corrigée sur place.

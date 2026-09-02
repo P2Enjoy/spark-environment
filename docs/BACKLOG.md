@@ -4216,9 +4216,12 @@ conteneur et dépannage — sans devoir deviner quel onglet les porte.
   il ne ressuscite jamais une session terminée. En vue étroite, il devient un
   tiroir accessible plutôt qu'un panneau qui masque le terminal.
 - **Identité de la surface** : une session reste attachée à sa Forge et à son
-  Spark. Naviguer directement de `Spark A / Terminal` vers `Spark B / Terminal`
-  ferme et tue la session de A avant d'afficher B ; le nom identique de la
-  facette ne constitue jamais une raison de la conserver.
+  Spark ; le nom identique de la facette ne constitue jamais une raison de
+  présenter le shell de A sous la fenêtre de B.
+  **RÉVISÉ par SPK-75 le 2026-09-02** : naviguer de `Spark A / Terminal` vers
+  `Spark B / Terminal` ne tue plus la session de A. Les deux vivent, et le
+  widget les montre toutes les deux. La règle d'origine tuait A, et c'est
+  précisément ce qui faisait perdre le travail au moindre changement de page.
 - Ce que l'unité ne fait pas : elle ne fournit pas un shell libre sur une Forge,
   ne conserve pas un historique de commandes et ne transforme pas le journal
   d'audit en enregistreur de frappes.
@@ -4499,6 +4502,93 @@ la classe dans la chaîne rendue, pas ce qu'elle peint. Trois des quatre classes
 écrites ne peignaient d'ailleurs **rien**, ce que la preuve `classes.test.js` a
 dit dès qu'elle a été lancée. Corrigé en repliant la clé au lieu de la faire
 défiler, et la règle est écrite : `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-15**.
+
+---
+
+### [ ] SPK-75 · Le registre devient un widget flottant permanent, et un terminal survit à la navigation
+
+**Constaté avec le responsable le 2026-09-02**, et mesuré avant d'être discuté :
+
+```
+terminal ouvert     → /api/terminal/sessions = 1, le panneau montre la ligne
+clic sur « Forge »  → /api/terminal/sessions = 0, « Aucune session ouverte. »
+```
+
+Le shell est **tué par la navigation**. Ce n'est pas un défaut d'affichage :
+c'est le contrat du §37.4.2, appliqué exactement. Et l'écran le dit lui-même —
+« Quitter cet onglet **termine** la session ».
+
+Deux reproches distincts, et il faut les traiter tous les deux.
+
+- **Le panneau est impraticable là où il est.** C'est une colonne permanente
+  d'environ 355 px, entre la navigation et le contenu, qui porte une carte et
+  beaucoup de vide, et qui rétrécit la grille du terminal — l'écran même qu'elle
+  accompagne.
+- **Il est vide au moindre changement de page**, parce que la session n'existe
+  plus.
+
+- Spécification : `docs/DAT.md` **§37.4.2 révisé** (ce qui tue une session),
+  **§37.4.8** (l'inventaire permanent et sa reprise) ·
+  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-04 révisé** et **SPK-DS-16** (le widget
+  flottant) · `docs/MANUAL_PLAN.md` M8.
+- Dépend de : SPK-70 pour le registre et le transport, SPK-43 pour la session,
+  SPK-44 pour le relevé Docker.
+
+**Ce qui tue une session, désormais.** Arbitrage du responsable, 2026-09-02 :
+la fermeture explicite, l'inactivité de 15 minutes — le délai existe déjà et ne
+change pas —, la mort du shell distant, et l'arrêt de la console. **Plus rien
+d'autre.** Ni le changement de page, ni le rechargement, ni la fermeture de
+l'onglet du navigateur. C'est ce qui rend « retrouver son terminal à la
+reconnexion » possible : sans cela il n'y aurait rien à retrouver.
+
+Le §37.4.2 disait l'inverse, et il le disait pour une raison qu'il faut nommer
+plutôt qu'effacer : un shell root qui survit à son écran est un shell dont
+personne ne se souvient. **Ce qui répond à ce risque n'est plus la mort à la
+navigation, c'est le widget** : tant que la console tourne, tout shell vivant est
+visible en permanence, en bas à gauche, avec sa cible et sa dernière activité.
+On ne l'oublie pas parce qu'on ne peut plus le perdre de vue. L'inactivité reste
+le filet.
+
+**Le widget.** Flottant en bas à gauche, au-dessus du contenu, **toujours
+visible**, sur toutes les routes. Il n'occupe plus de colonne et ne rétrécit plus
+rien. Il porte l'inventaire de la Forge courante :
+
+- **tous les Sparks, en permanence**, tant que la console est branchée à la
+  Forge — ils sont déjà en mémoire, les lister ne coûte rien ;
+- **les conteneurs d'un Spark quand on le déplie** : un relevé Docker à ce
+  moment-là, rafraîchi tant qu'il reste déplié, et plus rien quand on le replie.
+  Arbitrage du responsable : le §37.6 tient — un Spark qu'on ne regarde pas
+  n'est jamais interrogé. Interroger Docker en boucle sur chaque Spark ferait
+  exécuter une commande en continu chez chaque locataire ;
+- une entrée qui porte une **session vivante** le montre, et un clic y retourne ;
+  une entrée sans session ouvre un terminal. Le widget devient donc le point de
+  départ des terminaux, pas seulement leur liste.
+- Il se **replie** en une pastille qui compte les sessions vivantes, et son état
+  replié/déplié survit au changement de page. En vue étroite il reste une
+  pastille et son contenu s'ouvre au-dessus du contenu, jamais à côté.
+
+**La reprise.** Au chargement de la console — donc après un rechargement, une
+reconnexion du tunnel, ou la réouverture de l'onglet —, les sessions vivantes de
+l'hôte sont relues et **réattachées** : le widget les montre, et ouvrir la
+facette Terminal d'un Spark qui en porte une **reprend la sienne** au lieu d'en
+créer une seconde.
+
+- Ce que l'unité ne fait pas : elle ne retient toujours **aucun octet** de
+  session (§37.5) — ni frappe, ni sortie, ni historique ; le widget ne montre
+  que ce que `describe()` rend. Elle ne fait pas survivre un shell à l'arrêt de
+  la console, et ne rend pas les sessions partageables entre deux postes.
+- DoD : un test d'hôte prouve qu'un flux qui se ferme **ne tue plus** la session
+  et qu'un second abonnement la retrouve ; un test prouve que l'inactivité et la
+  fermeture explicite la tuent toujours ; un test de composant couvre le widget
+  replié, déplié, avec et sans session, et un Spark déplié montrant ses
+  conteneurs ; un parcours E2E ouvre un terminal, **change de page**, constate
+  que la session vit encore et que le widget la montre, y revient par le widget
+  et retrouve sa grille ; un parcours **recharge la page** et retrouve la
+  session ; un parcours déplie un Spark et voit ses conteneurs sans qu'aucun
+  autre Spark n'ait été interrogé ; vérification visuelle depuis l'accueil, en
+  1440 px et en 390 px, widget replié et déplié ; manuel M8 et captures mis à
+  jour ; le §37.4.2, SPK-DS-04 et la ligne de SPK-70 qui promettait la mort à la
+  navigation sont **corrigés**, pas doublés d'une note.
 
 ---
 
