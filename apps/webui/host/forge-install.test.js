@@ -86,6 +86,50 @@ test('une phase n’est terminée que sur un constat, jamais sur une intention',
   assert.equal(change.control, 'pending');
 });
 
+/** Serveur dédié partitionné à la commande, pool pas encore créé (§8.6). */
+const METAL_NEUF = [
+  'os\tubuntu 26.04', 'architecture\tx86_64', 'memoire_octets\t101193396224',
+  'racine\t/dev/md1', 'espace_racine\t210108399616:193670443008', 'sudo\tracine',
+  'incus_version\tClient version: 7.4', 'caddy_version\t2.6.2',
+  'python_version\tPython 3.14.4', 'caddy_actif\tactive', 'pools\t',
+  'bloc\tNAME="sda" TYPE="disk" SIZE="6001175126016" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+  'bloc\tNAME="sda4" TYPE="part" SIZE="214748364800" FSTYPE="linux_raid_member" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+  'bloc\tNAME="md1" TYPE="raid1" SIZE="214613098496" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="sda4" PARTTYPE=""',
+  'bloc\tNAME="sda5" TYPE="part" SIZE="5781055938048" FSTYPE="" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+  'bloc\tNAME="sdb" TYPE="disk" SIZE="6001175126016" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+  'bloc\tNAME="sdb4" TYPE="part" SIZE="214748364800" FSTYPE="linux_raid_member" MOUNTPOINT="" PKNAME="sdb" PARTTYPE=""',
+  'bloc\tNAME="md1" TYPE="raid1" SIZE="214613098496" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="sdb4" PARTTYPE=""',
+  'bloc\tNAME="sdb5" TYPE="part" SIZE="5781055938048" FSTYPE="" MOUNTPOINT="" PKNAME="sdb" PARTTYPE=""',
+].join('\n');
+
+test('le miroir se pose sur les partitions dédiées du disque système', () => {
+  // Sans désignation, le plan reprend la paire que CE relevé déclare libre ;
+  // la confirmation destructive nomme ensuite chaque support.
+  const plan = createInstallPlan(diagnostic(METAL_NEUF), { storageKind: 'native' });
+  assert.deepEqual(plan.storage, { kind: 'native', poolName: 'spark', driver: 'zfs',
+    devices: ['/dev/sda5', '/dev/sdb5'], destructive: true });
+  assert.equal(plan.phases.find((phase) => phase.id === 'storage').label,
+    'Créer le pool « spark »');
+});
+
+test('un support qui n’est plus déclaré libre est refusé, avec sa cause', () => {
+  const diag = diagnostic(METAL_NEUF);
+  assert.throws(() => createInstallPlan(diag, { storageKind: 'native', devices: ['sda4', 'sdb5'] }),
+    (error) => error instanceof ForgeInstallError && error.code === 'unsafe_devices');
+  // Une machine sans aucun support libre nomme le motif du refus.
+  const vps = diagnostic([
+    'os\tubuntu 26.04', 'architecture\tx86_64', 'memoire_octets\t68719476736',
+    'racine\t/dev/vda1', 'espace_racine\t100000000000:50000000000', 'sudo\tracine',
+    'bloc\tNAME="vda" TYPE="disk" SIZE="90000000000" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+    'bloc\tNAME="vda1" TYPE="part" SIZE="89000000000" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="vda" PARTTYPE=""',
+  ].join('\n'));
+  assert.throws(() => createInstallPlan(vps, { storageKind: 'native' }),
+    (error) => error instanceof ForgeInstallError && /aucun support libre/.test(error.message));
+  // Le même VPS accepte en revanche le pool fichier, dimensionné explicitement.
+  assert.equal(createInstallPlan(vps,
+    { storageKind: 'file', filePoolSizeGib: 20, rootReserveGib: 5 }).storage.kind, 'file');
+});
+
 test('un bridge absent rouvre le socle réseau, et lui seul', () => {
   const report = parseDiagnostic(
     CONFORME.replace('reseau\tsparkbr0,bridge,YES,10.77.0.1/24,none,,1,CREATED',

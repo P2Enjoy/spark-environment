@@ -16,23 +16,48 @@ test('SSH établi et sparkd absent ont leurs deux lignes distinctes', () => {
     report: { system: { os: 'ubuntu 24.04', architecture: 'x86_64', rootAvailableBytes: 5000 },
               access: { sudo: 'racine' }, runtimes: { sparkd: null, incus: null, caddy: null },
               services: { sparkd: null }, blocks: [] },
-    storage: { disks: [], nativeMirror: { eligible: false, disks: [] },
+    storage: { supports: [], nativeMirror: { eligible: false, devices: [], refusal: 'aucun support libre' },
                filePool: { availableBytes: 5000 } },
   } });
   assert.match(html, /SSH établi/);
   assert.match(html, /sans réponse ou non installé/);
-  assert.match(html, /Aucune paire de disques sûre/);
+  assert.match(html, /Pas de miroir natif proposé — aucun support libre/);
   assert.match(html, /Vérifier et composer le plan/);
 });
 
-test('un disque exclu reste affiché avec son motif', () => {
+test('un support exclu reste affiché avec sa nature et son motif', () => {
   const html = renderForgeInstaller({ status: 'ready', result: {
     report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },
-    storage: { disks: [{ name: 'sda', sizeBytes: 1000, reasons: ['porte la racine'] }],
-               nativeMirror: { eligible: false, disks: [] }, filePool: {} },
+    storage: { supports: [
+      { name: 'sda', type: 'disk', sizeBytes: 1000, reasons: ['porte la racine'] },
+      { name: 'sda5', type: 'part', sizeBytes: 900, reasons: [] },
+    ], nativeMirror: { eligible: false, devices: [], refusal: 'un seul support libre' },
+      filePool: {} },
   } });
   assert.match(html, /\/dev\/sda/);
   assert.match(html, /porte la racine/);
+  // Une PARTITION libre est visible et nommée comme telle : c'est sur elle que
+  // le pool se pose sur un serveur partitionné à la commande (§8.6).
+  assert.match(html, /\/dev\/sda5/);
+  assert.match(html, /partition/);
+  assert.match(html, /support libre à confirmer/);
+  // Le refus du miroir nomme sa cause au lieu de basculer en silence.
+  assert.match(html, /un seul support libre/);
+});
+
+test('la paire proposée nomme les deux supports et les deux disques', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: {
+    report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },
+    storage: { supports: [
+      { name: 'sda5', type: 'part', sizeBytes: 900, reasons: [] },
+      { name: 'sdb5', type: 'part', sizeBytes: 900, reasons: [] },
+    ], nativeMirror: { eligible: true, devices: ['sda5', 'sdb5'], refusal: null },
+      filePool: { availableBytes: 1000 } },
+  } });
+  assert.match(html, /disques physiques distincts/);
+  assert.match(html, /\/dev\/sda5, \/dev\/sdb5/);
+  assert.match(html, /Miroir natif sur \/dev\/sda5 et \/dev\/sdb5/);
+  assert.ok(!/Pas de miroir natif proposé/.test(html));
 });
 
 const PLAN = {
@@ -46,7 +71,7 @@ test('le plan fichier exige deux confirmations distinctes et exactes', () => {
   const base = {
     status: 'planned', result: {
       report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },
-      storage: { disks: [], nativeMirror: { eligible: false, disks: [] }, filePool: {} },
+      storage: { supports: [], nativeMirror: { eligible: false, devices: [], refusal: 'aucun support libre' }, filePool: {} },
     }, plan: PLAN, accepted: true,
   };
   let html = renderForgeInstaller({ ...base, confirmation: '' });
@@ -90,7 +115,7 @@ test('l amorcage garde sa ligne quand le plan produit ensuite un evenement acces
 test('un journal terminé n’empêche pas de recomposer un plan idempotent', () => {
   const html = renderForgeInstaller({ status: 'ready', result: {
     report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },
-    storage: { disks: [], nativeMirror: { eligible: false, disks: [] }, filePool: {} },
+    storage: { supports: [], nativeMirror: { eligible: false, devices: [], refusal: 'aucun support libre' }, filePool: {} },
   }, execution: { status: 'done', plan: PLAN, events: [] } });
   assert.match(html, /id="formulaire-plan-forge"/);
   assert.match(html, /Forge prête — recette finale mesurée/);
@@ -111,7 +136,7 @@ const CONFORME = {
               memoryReserveGib: 2, reservedPorts: [], arcMaxGib: 16 },
     blocks: [],
   },
-  storage: { disks: [], nativeMirror: { eligible: false, disks: [] },
+  storage: { supports: [], nativeMirror: { eligible: false, devices: [], refusal: 'aucun support libre' },
              filePool: { availableBytes: 193670443008 } },
   conformity: { checks: [
     { id: 'pool', label: 'Pool ZFS « spark »', ok: true, detail: 'spark' },

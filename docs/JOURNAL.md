@@ -8626,3 +8626,94 @@ final dans `forge-install-runner.test.js`, le motif `agent_muet` dans
 `signature.test.js`, et `bouton--secondaire` employée par `forge-view.js` sans
 exister dans la feuille de style. Aucun de ces fichiers n'est touché ici ; elles
 sont signalées, pas corrigées au passage.
+
+---
+
+## 2026-09-02 · SPK-68 — un support n'est pas un disque
+
+**Arbitrage du responsable, le même jour.** « La Forge ne sera jamais totalement
+vide, et le cas où le pool ZFS doit être créé sur le disque existant n'est pas à
+exclure complètement. Une Forge est soit un serveur dédié configuré avec le JSON
+des partitions et cloud-init, soit un VPS classique avec des disques montés. »
+
+**Ce que le code faisait.** `storageProposal` ne considérait que des blocs de
+type `disk`, et excluait tout disque portant une partition. Sur la Forge cible —
+`sda`/`sdb`, chacun portant `sda1..sda5` avec `sda5` réservée au pool par le
+schéma du §8.6 — aucun disque n'était donc jamais candidat. Le miroir natif,
+c'est-à-dire la **disposition A** que le §8.5 retient et que la Forge de
+validation exécute réellement, était impossible à proposer depuis la console. Le
+pool fichier restait le seul chemin offert, sur le matériel même conçu pour
+l'autre.
+
+Autrement dit : la console savait *décrire* la disposition A et ne savait pas la
+*proposer*. Le relevé était juste, la proposition ne l'était pas.
+
+**Trois défauts trouvés en tirant le fil.**
+
+1. Le chemin natif était **inatteignable depuis l'écran**. Le formulaire
+   n'émettait aucun champ `devices`, et `createInstallPlan` exigeait exactement
+   deux périphériques ; cocher « miroir natif » aurait toujours rendu
+   `unsafe_devices`. Le plan reprend désormais la paire que le relevé vient de
+   déclarer libre — celle que le libellé du choix nomme —, et l'engagement
+   continue d'exiger la frappe de `EFFACER /dev/… /dev/…`, qui nomme chaque
+   support. Le choix reste donc explicite ; c'est la saisie du nom qui le rend
+   tel, pas une case cochée.
+2. Une partition d'amorçage BIOS n'a **ni système de fichiers ni montage**. Elle
+   passait donc pour un support libre de 537 Mo, et pouvait être proposée au
+   miroir. Le relevé lit maintenant le type GPT (`PARTTYPE`) et nomme ces
+   partitions au lieu de les offrir.
+3. `md1` est répété par `lsblk` sous chacun de ses deux membres. L'ancien code
+   ne retenait que le premier : `sda` portait « la racine », `sdb` non — alors
+   que les deux la portent à travers le miroir logiciel. L'ascendance est
+   maintenant remontée pour chaque montage, en suivant **tous** les parents.
+
+**Ce qui n'a pas été changé, et pourquoi.** Un pool natif sur un seul support
+reste refusé. Ce n'est pas un oubli : le §8.5 et `scripts/creer-pool.sh` le
+refusent avec un motif — sans miroir, ZFS détecte la corruption silencieuse mais
+ne la répare pas —, et l'exécuteur comme `validate_envelope` exigent deux
+périphériques. Le refus est désormais **nommé** au lieu d'être tu : « aucun
+support libre », « un seul support libre », « tous les supports libres sont sur
+le même disque physique ». Trois situations, trois gestes — repartitionner,
+ajouter un disque, accepter la disposition B — que « aucune paire sûre » ne
+distinguait pas. Si le responsable veut un pool natif mono-support, c'est une
+décision qui touche le §8.5, l'exécuteur et le geste de pool : elle demande son
+arbitrage, pas une exception glissée dans l'écran.
+
+**Vérifications.** Contre `spark-experiment` : `sda5` et `sdb5` sont
+correctement écartées avec `signature zfs_member` — le pool y existe déjà et est
+réutilisé —, `sda1`/`sdb1` sont nommées « partition d'amorçage BIOS », et les
+**deux** disques portent la racine. Les preuves unitaires couvrent les deux
+formes de Forge : le serveur dédié neuf, dont la paire `sda5`/`sdb5` est
+proposée, et le VPS aux disques montés, dont le refus est nommé et qui accepte
+le pool fichier.
+
+## 2026-09-02 · Le curseur CPU avance par quarts de CPU
+
+**Décision du responsable** : puisque le produit ne partage pas moins de
+0,25 CPU, le curseur de réservation et celui de plafond avancent par pas de
+0,25 CPU, et leur borne basse vaut 0,25 CPU. Ils avançaient par 0,05 CPU depuis
+SPK-59.
+
+**Ce que la mesure dit du plancher, et qu'il ne faut pas confondre avec la
+décision.** `sparkd` sait poser plus fin que 0,25 CPU. Depuis l'échelle ×1000 du
+`docs/DAT.md` §7.2 bis, `allowance_percent` refuse en dessous de
+`11 − priorité` pour mille du pool partagé, soit environ **0,024 CPU** sur un
+pool de 4 CPU à la priorité par défaut 5 ; le plafond, lui, descend à
+`1ms/100ms`, soit 0,01 CPU. Le 0,25 CPU n'est donc **pas** une limite de la
+machine — c'est la plus petite part que le produit accepte de vendre. Le motif
+que portait la table du SPK-DS-07 pour le pas de 0,05 CPU — « la plus petite part
+que le produit sait poser » — était faux dans les deux sens : ni la plus petite
+posable, ni une part vendue.
+
+**Conséquences.** Les quatre crans intermédiaires entre deux quarts de CPU
+disparaissent ; aucun d'eux ne correspondait à une part demandée. Le curseur d'un
+pool de 4 CPU passe de 80 crans à 16. Les parts du seed — 0,25 et 0,50 CPU —
+restent sur un cran, donc atteignables au curseur ; une valeur déjà posée hors
+grille se rend en saisie, par la règle générale du §6.9 bis, l'écran n'arrondit
+jamais en silence ce qu'il va envoyer. Le plafond suit la même grille que la
+réservation : deux quotas de la même unité sur le même écran ne peuvent pas
+avancer par crans différents.
+
+**Vérifications.** Tests de composant sur les deux quotas — pas, borne basse,
+attributs `step` et `min` du curseur — et sur les parts du seed. 51 tests de
+`spark-create.test.js` verts.

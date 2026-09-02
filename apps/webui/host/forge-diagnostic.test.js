@@ -29,9 +29,11 @@ test('un support racine, une partition ou une signature ne sont jamais proposés
     'bloc\tNAME="sdd" TYPE="disk" SIZE="100000" FSTYPE="" MOUNTPOINT="" PKNAME=""',
   ].join('\n'));
   const storage = storageProposal(report);
-  assert.deepEqual(storage.nativeMirror, { eligible: true, disks: ['sdb', 'sdd'] });
-  assert.match(storage.disks.find((disk) => disk.name === 'sda').reasons.join(' '), /racine/);
-  assert.match(storage.disks.find((disk) => disk.name === 'sdc').reasons.join(' '), /signature/);
+  assert.deepEqual(storage.nativeMirror.devices.sort(), ['sdb', 'sdd']);
+  assert.equal(storage.nativeMirror.eligible, true);
+  const motif = (nom) => storage.supports.find((support) => support.name === nom).reasons.join(' ');
+  assert.match(motif('sda'), /racine/);
+  assert.match(motif('sdc'), /signature/);
   assert.equal(storage.filePool.sizeBytes, null, 'une taille n’est jamais devinée');
 });
 
@@ -49,8 +51,8 @@ test('les noms complets de lsblk rejoignent la source de la racine', () => {
     'bloc\tNAME="/dev/nvme0n1p1" TYPE="part" SIZE="90" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="/dev/nvme0n1"',
   ].join('\n'));
   const storage = storageProposal(report);
-  assert.equal(storage.disks[0].name, 'nvme0n1');
-  assert.match(storage.disks[0].reasons.join(' '), /racine/);
+  assert.equal(storage.supports[0].name, 'nvme0n1');
+  assert.match(storage.supports[0].reasons.join(' '), /racine/);
 });
 
 function fakeSsh({ stdout = '', stderr = '', code = 0 } = {}) {
@@ -177,4 +179,88 @@ test('le verdict suit le pool DEMANDÉ, pas seulement celui que la Forge déclar
   const report = parseDiagnostic(FORGE_CONFORME);
   assert.equal(conformity(report, { poolName: 'tank', bridgeName: 'sparkbr0' })
     .checks.find((check) => check.id === 'pool').ok, false);
+});
+
+/**
+ * Serveur dédié partitionné à la commande (docs/DAT.md §8.6), AVANT que le pool
+ * n'existe : `sda5`/`sdb5` sont réservées et vides. C'est le matériel que le
+ * produit vise, et le miroir natif y était pourtant impossible à proposer.
+ */
+const METAL_NEUF = [
+  'racine\t/dev/md1', 'espace_racine\t210108399616:193670443008',
+  'bloc\tNAME="sda" TYPE="disk" SIZE="6001175126016" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+  'bloc\tNAME="sda1" TYPE="part" SIZE="536870912" FSTYPE="" MOUNTPOINT="" PKNAME="sda" PARTTYPE="21686148-6449-6e6f-744e-656564454649"',
+  'bloc\tNAME="sda2" TYPE="part" SIZE="4294967296" FSTYPE="swap" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+  'bloc\tNAME="sda3" TYPE="part" SIZE="536870912" FSTYPE="linux_raid_member" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+  'bloc\tNAME="md0" TYPE="raid1" SIZE="535822336" FSTYPE="ext4" MOUNTPOINT="/boot" PKNAME="sda3" PARTTYPE=""',
+  'bloc\tNAME="sda4" TYPE="part" SIZE="214748364800" FSTYPE="linux_raid_member" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+  'bloc\tNAME="md1" TYPE="raid1" SIZE="214613098496" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="sda4" PARTTYPE=""',
+  'bloc\tNAME="sda5" TYPE="part" SIZE="5781055938048" FSTYPE="" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+  'bloc\tNAME="sdb" TYPE="disk" SIZE="6001175126016" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+  'bloc\tNAME="sdb1" TYPE="part" SIZE="536870912" FSTYPE="" MOUNTPOINT="" PKNAME="sdb" PARTTYPE="21686148-6449-6e6f-744e-656564454649"',
+  'bloc\tNAME="sdb2" TYPE="part" SIZE="4294967296" FSTYPE="swap" MOUNTPOINT="" PKNAME="sdb" PARTTYPE=""',
+  'bloc\tNAME="sdb3" TYPE="part" SIZE="536870912" FSTYPE="linux_raid_member" MOUNTPOINT="" PKNAME="sdb" PARTTYPE=""',
+  'bloc\tNAME="md0" TYPE="raid1" SIZE="535822336" FSTYPE="ext4" MOUNTPOINT="/boot" PKNAME="sdb3" PARTTYPE=""',
+  'bloc\tNAME="sdb4" TYPE="part" SIZE="214748364800" FSTYPE="linux_raid_member" MOUNTPOINT="" PKNAME="sdb" PARTTYPE=""',
+  'bloc\tNAME="md1" TYPE="raid1" SIZE="214613098496" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="sdb4" PARTTYPE=""',
+  'bloc\tNAME="sdb5" TYPE="part" SIZE="5781055938048" FSTYPE="" MOUNTPOINT="" PKNAME="sdb" PARTTYPE=""',
+].join('\n');
+
+test('une paire de PARTITIONS dédiées forme le miroir, sur le disque du système', () => {
+  // Le défaut du 2026-09-02 : seuls les disques ENTIERS étaient candidats, donc
+  // le miroir n'était jamais proposable sur le matériel que le produit vise.
+  const storage = storageProposal(parseDiagnostic(METAL_NEUF));
+  assert.deepEqual(storage.nativeMirror.devices.sort(), ['sda5', 'sdb5']);
+  assert.equal(storage.nativeMirror.eligible, true);
+  assert.equal(storage.nativeMirror.refusal, null);
+  const motif = (nom) => storage.supports.find((support) => support.name === nom).reasons;
+  assert.deepEqual(motif('sda5'), [], 'la partition réservée est libre');
+  // Le disque qui la porte reste exclu EN TANT QUE DISQUE, avec son motif.
+  assert.match(motif('sda').join(' '), /porte la racine.*porte des partitions/);
+  // Les DEUX disques portent la racine à travers le miroir logiciel.
+  assert.match(motif('sdb').join(' '), /porte la racine/);
+  // Une partition d'amorçage n'a ni signature ni montage : sans son type GPT,
+  // elle passerait pour un support libre de 537 Mo.
+  assert.match(motif('sda1').join(' '), /amorçage BIOS/);
+  assert.deepEqual(storage.supports.filter((s) => s.reasons.length === 0)
+    .map((s) => s.name).sort(), ['sda5', 'sdb5']);
+});
+
+test('deux supports libres sur le MÊME disque ne font pas un miroir', () => {
+  const storage = storageProposal(parseDiagnostic([
+    'racine\t/dev/sda1',
+    'bloc\tNAME="sda" TYPE="disk" SIZE="900" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+    'bloc\tNAME="sda1" TYPE="part" SIZE="300" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="sda" PARTTYPE=""',
+    'bloc\tNAME="sda2" TYPE="part" SIZE="300" FSTYPE="" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+    'bloc\tNAME="sda3" TYPE="part" SIZE="300" FSTYPE="" MOUNTPOINT="" PKNAME="sda" PARTTYPE=""',
+  ].join('\n')));
+  assert.equal(storage.nativeMirror.eligible, false);
+  assert.equal(storage.nativeMirror.refusal,
+    'tous les supports libres sont sur le même disque physique');
+  assert.deepEqual(storage.free.sort(), ['sda2', 'sda3']);
+});
+
+test('un VPS dont les disques sont montés nomme son refus, il ne le tait pas', () => {
+  const storage = storageProposal(parseDiagnostic([
+    'racine\t/dev/vda1', 'espace_racine\t100000:50000',
+    'bloc\tNAME="vda" TYPE="disk" SIZE="90000" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+    'bloc\tNAME="vda1" TYPE="part" SIZE="89000" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="vda" PARTTYPE=""',
+    'bloc\tNAME="vdb" TYPE="disk" SIZE="50000" FSTYPE="ext4" MOUNTPOINT="/data" PKNAME="" PARTTYPE=""',
+  ].join('\n')));
+  assert.equal(storage.nativeMirror.eligible, false);
+  assert.equal(storage.nativeMirror.refusal, 'aucun support libre');
+  assert.equal(storage.filePool.possible, true);
+  assert.match(storage.supports.find((s) => s.name === 'vdb').reasons.join(' '), /monté sur \/data/);
+});
+
+test('un seul support libre n’est pas un miroir, et le refus le DIT', () => {
+  const storage = storageProposal(parseDiagnostic([
+    'racine\t/dev/vda1',
+    'bloc\tNAME="vda" TYPE="disk" SIZE="90000" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+    'bloc\tNAME="vda1" TYPE="part" SIZE="89000" FSTYPE="ext4" MOUNTPOINT="/" PKNAME="vda" PARTTYPE=""',
+    'bloc\tNAME="vdb" TYPE="disk" SIZE="50000" FSTYPE="" MOUNTPOINT="" PKNAME="" PARTTYPE=""',
+  ].join('\n')));
+  assert.equal(storage.nativeMirror.eligible, false);
+  assert.equal(storage.nativeMirror.refusal, 'un seul support libre');
+  assert.deepEqual(storage.free, ['vdb']);
 });

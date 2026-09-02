@@ -2609,6 +2609,14 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
     pendant la relecture, faisant rétrécir la modale et **dérober le bouton
     d'engagement entre l'appui et le relâchement** — même défaut qu'au §38.5.2,
     même correction.
+- **Défaut corrigé le 2026-09-02** (`docs/DAT.md` §38.1.1) : la clé du poste
+  ayant expiré, le fournisseur refusait la lecture des zones et le sélecteur de
+  la modale des recettes restait **vide et muet**. Le chargement ne retenait la
+  raison que lorsque le poste n'avait AUCUN jeton ; un refus du fournisseur —
+  corps `{error, message}` sans champ `configured` — passait au travers. La
+  raison est désormais un état propre (`zonesRefus`), affiché sous le champ, et
+  que la remise à zéro de l'aperçu n'efface plus.
+
 - **Ce qui n'est PAS dans cette unité** : la recette de messagerie complète, qui
   est SPK-51 et dépend de SPK-43 pour lire la clé DKIM dans le Spark. La recette
   `relais-transactionnel` livrée ici couvre l'ÉMISSION seule.
@@ -4043,13 +4051,30 @@ constatée conforme. Sur `spark-experiment`, le diagnostic rend désormais
 `ready: true`, et le plan `reuse` avec ses six phases terminées. Voir
 `docs/DAT.md` §50.2 bis et §50.4.
 
-**Reste avant `[x]`** : le serveur neuf fourni n'a qu'un disque racine de 10 Go,
-5,2 Gio libres et aucune paire native. Le plan 3 Gio + 1 Gio a été observé mais
-n'a pas été engagé, faute d'un choix de capacité explicitement donné par le
-responsable ; aucune taille d'exploitation n'est déduite. Une seconde machine
-avec deux supports libres reste nécessaire pour le parcours miroir. Les deux
-créations réelles de la DoD, la panne médiane/reprise et leurs illustrations
-restent donc à produire ; l'unité demeure honnêtement `[~]`.
+**Correction complémentaire du 2026-09-02, sur arbitrage du responsable.** La
+proposition de stockage ne considérait que des **disques entiers** et écartait
+tout disque portant une partition. Or une Forge n'est jamais vide : elle est
+soit un serveur dédié partitionné à la commande — dont le schéma réserve `sda5`
+et `sdb5` au pool (`docs/DAT.md` §8.6) —, soit un VPS aux disques montés. Le
+miroir natif était donc impossible à proposer sur le matériel que le produit
+vise, et le pool fichier restait le seul chemin offert. Un candidat est
+désormais un disque entier libre **ou une partition libre**, y compris sur le
+disque qui porte le système ; la paire doit tenir sur deux disques physiques
+distincts, sans quoi le miroir ne promettrait rien. Les partitions système GPT
+— amorçage BIOS, EFI — sont nommées et écartées, et le refus du miroir dit
+laquelle des trois situations on a sous les yeux. Le chemin natif était en outre
+inatteignable depuis l'écran : le formulaire n'envoyait aucun périphérique et le
+plan refusait systématiquement ; il reprend maintenant la paire que le relevé
+vient de déclarer libre, l'engagement continuant d'exiger la frappe de
+`EFFACER /dev/… /dev/…`.
+
+**Reste avant `[x]`** : les deux créations réelles de la DoD n'ont pas été
+jouées. Le parcours miroir demande une machine dont les partitions dédiées sont
+encore vierges — sur `spark-experiment` le pool existe déjà et est réutilisé,
+donc `sda5`/`sdb5` portent leur signature `zfs_member`. Le parcours fichier
+demande un choix de capacité explicitement donné par le responsable ; aucune
+taille d'exploitation n'est déduite. La panne médiane/reprise et ses
+illustrations restent à produire ; l'unité demeure honnêtement `[~]`.
 
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
   seulement le paquet Python. C'est un **assistant de bout en bout** qui part
@@ -4566,11 +4591,11 @@ Le §37.4.2 disait l'inverse, et il le disait pour une raison qu'il faut nommer
 plutôt qu'effacer : un shell root qui survit à son écran est un shell dont
 personne ne se souvient. **Ce qui répond à ce risque n'est plus la mort à la
 navigation, c'est le widget** : tant que la console tourne, tout shell vivant est
-visible en permanence, en bas à gauche, avec sa cible et sa dernière activité.
+visible en permanence, en bas à droite, avec sa cible et sa dernière activité.
 On ne l'oublie pas parce qu'on ne peut plus le perdre de vue. L'inactivité reste
 le filet.
 
-**Le widget.** Flottant en bas à gauche, au-dessus du contenu, **toujours
+**Le widget.** Flottant en bas à droite, au-dessus du contenu, **toujours
 visible**, sur toutes les routes. Il n'occupe plus de colonne et ne rétrécit plus
 rien. Il porte l'inventaire de la Forge courante :
 

@@ -5047,7 +5047,7 @@ La version précédente tuait à la fermeture du flux, et son motif était juste
 *une session qui survit à son écran est un shell root abandonné dont personne ne
 se souvient.* Ce motif n'a pas disparu — **ce qui y répond a changé**. Ce n'est
 plus la mort à la navigation, c'est le widget permanent du §37.4.8 : tant que la
-console tourne, tout shell vivant est visible en bas à gauche, sur toutes les
+console tourne, tout shell vivant est visible en bas à droite, sur toutes les
 routes, avec sa cible et sa dernière activité. On ne l'oublie pas parce qu'on ne
 peut plus le perdre de vue, et l'inactivité reste le filet.
 
@@ -5781,6 +5781,38 @@ Conséquences, et elles ne sont pas négociables :
 - il est lu depuis l'environnement du processus de l'hôte console, et **rien
   d'autre**. Un jeton absent n'est pas une panne : la fonctionnalité se désactive
   et l'écran le dit.
+
+#### 38.1.1 Trois états, pas deux : sans jeton, refusé, sans zone
+
+**Mesuré le 2026-09-02**, sur le compte du responsable : la clé Scaleway posée
+dans le `.env` avait EXPIRÉ. Le fournisseur répondait
+`401 {"reason":"expired"}`, la console rendait bien un `502 dns_unavailable`
+portant ce message — et l'écran des recettes affichait un sélecteur de zones
+**vide, sans un mot**. L'exploitant voyait une liste vide et une clé en place :
+rien ne lui disait laquelle des deux était en cause.
+
+La faute n'est pas au fournisseur, elle est dans la lecture de sa réponse. Trois
+états doivent être distingués, et chacun se dit autrement :
+
+- **aucun jeton** (`configured: false`) : la fonction est désactivée, et l'écran
+  invite à poser un `SCW_SECRET_KEY` (§38.1). C'est le cas NORMAL d'un poste qui
+  n'a pas configuré de fournisseur ;
+- **jeton refusé, ou fournisseur injoignable** (`502 dns_unavailable`) : ce n'est
+  ni une absence de configuration, ni une absence de zones. Le message du
+  fournisseur est rendu **tel quel**, parce qu'« expired » et « permission
+  denied » n'appellent pas le même geste ;
+- **compte sans zone** (`configured: true`, `zones: []`) : la lecture a réussi et
+  elle a rendu zéro.
+
+Deux règles en découlent, et elles sont générales (`docs/DESIGN_SYSTEM.md` §6.13,
+§14.5) :
+
+1. un sélecteur vide porte TOUJOURS la raison de son vide, sous le champ
+   lui-même. Une liste vide n'est pas une réponse ;
+2. cette raison est un état **propre** au chargement des zones, distinct du refus
+   d'aperçu. Mesuré : les confondre effaçait la raison au premier changement de
+   recette, puisque l'aperçu remet son erreur à zéro avant chaque relecture
+   (§38.6.3) — le sélecteur redevenait vide et muet.
 
 ### 38.2 Ce que le produit fait, et ce qu'il ne fait pas
 
@@ -8611,19 +8643,39 @@ console relevait les versions et ne concluait jamais.
 
 ### 50.3 Proposition de stockage, sans choix implicite
 
-Le résultat classe chaque support, avec sa taille, son montage, ses signatures et
-la raison de son exclusion. Le disque qui porte `/`, toute partition montée, tout
-périphérique avec signature ou données, et toute information ambiguë sont exclus
-du choix natif.
+Le résultat classe chaque support, avec sa taille, sa nature, son montage, ses
+signatures et la raison de son exclusion. Sont exclus du choix natif : ce qui
+porte `/` et toute son ascendance, tout ce qui porte un montage, tout support
+avec signature, tout support qui en porte un autre, une partition système GPT —
+amorçage BIOS ou EFI —, et toute information ambiguë.
+
+**Un support n'est pas un disque** (corrigé le 2026-09-02). Une Forge n'est
+jamais vide : elle est soit un serveur dédié partitionné à la commande, dont le
+schéma réserve `sda5` et `sdb5` au pool (§8.6), soit un VPS dont les disques sont
+montés. Ne considérer que des disques ENTIERS rendait donc le miroir natif
+impossible à proposer sur le matériel même que le produit vise — les partitions
+réservées pour lui étaient invisibles, et le pool fichier restait le seul chemin
+offert. Un candidat est donc un **disque entier libre ou une partition libre**,
+y compris sur un disque qui porte le système : c'est la disposition A du §8.5.
 
 L'ordre de proposition est strict :
 
-1. un pool Incus/ZFS déjà conforme est réutilisé sans le recréer ;
-2. une paire de disques entiers, réellement libres et sans signature, peut former
-   le miroir natif de SPK-28 ;
+1. un pool Incus/ZFS déjà conforme est réutilisé sans le recréer, et aucune
+   disposition de rechange n'est alors proposée à côté ;
+2. deux supports libres — disques entiers ou partitions dédiées — portés par
+   **deux disques physiques distincts** peuvent former le miroir natif de
+   SPK-28. Deux partitions du même disque ne le peuvent pas : ce serait le mot
+   « miroir » sans ce qu'il promet, puisque la panne de ce disque emporterait
+   les deux membres ;
 3. seulement sans paire sûre, l'assistant peut proposer un pool fichier, en
    nommant son système de fichiers, son chemin, sa taille demandée, l'espace
    libre relevé et la réserve qu'il conservera.
+
+Le refus du miroir est **nommé**, jamais tu : aucun support libre, un seul
+support libre, ou tous sur le même disque physique. « Aucune paire sûre » ne
+disait pas laquelle des trois situations on avait sous les yeux, alors qu'elles
+appellent trois gestes différents — repartitionner, ajouter un disque, ou
+accepter la disposition B.
 
 Il ne déduit ni disques ni taille. La proposition sur fichier reste une
 proposition : elle ne rend pas un petit disque racine soudain capable d'héberger

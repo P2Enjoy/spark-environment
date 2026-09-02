@@ -124,13 +124,24 @@ export function poolReutilise(report, poolName) {
 }
 
 function storage(storage, reuse) {
-  const disks = storage?.disks ?? [];
-  const rows = disks.length ? disks.map((disk) => `
-    <tr><td class="technique">/dev/${echapper(disk.name)}</td><td>${echapper(bytes(disk.sizeBytes))}</td>
-      <td>${disk.reasons?.length
-        ? echapper(disk.reasons.join(' · '))
-        : 'support libre à confirmer'}</td></tr>`).join('')
-    : '<tr><td colspan="3">Aucun périphérique bloc exploitable n’a été relevé.</td></tr>';
+  // Disques ENTIERS et partitions : sur un serveur partitionné à la commande,
+  // le pool va sur une partition dédiée, pas sur le disque (docs/DAT.md §8.6).
+  const supports = storage?.supports ?? [];
+  // §5 de DESIGN_SYSTEM_APP : sous 768 px, nature et taille cèdent AVANT
+  // l'identité et la décision. Elles ne disparaissent pas pour autant — elles
+  // reviennent sous le nom du support, où le motif d'exclusion reste lisible.
+  const rows = supports.length ? supports.map((support) => {
+    const nature = support.type === 'part' ? 'partition' : 'disque';
+    return `
+    <tr><td class="technique">/dev/${echapper(support.name)}
+        <span class="cellule-repli">${echapper(`${nature} · ${bytes(support.sizeBytes)}`)}</span></td>
+      <td class="colonne-secondaire">${echapper(nature)}</td>
+      <td class="colonne-secondaire">${echapper(bytes(support.sizeBytes))}</td>
+      <td>${support.reasons?.length
+        ? echapper(support.reasons.join(' · '))
+        : 'support libre à confirmer'}</td></tr>`;
+  }).join('')
+    : '<tr><td colspan="4">Aucun périphérique bloc exploitable n’a été relevé.</td></tr>';
   // §50.3 : l’ordre de proposition est strict. Un pool conforme se réutilise, et
   // proposer alors un pool fichier à côté ferait croire à un choix qui n’existe
   // pas — c’est ce qui donnait l’écran d’une machine nue à une Forge installée.
@@ -138,10 +149,16 @@ function storage(storage, reuse) {
     ? `<p class="succes">Le pool existant est conservé : aucun de ces supports ne
        sera touché, et aucune disposition de rechange n’est proposée.</p>`
     : storage?.nativeMirror?.eligible
-      ? `<p class="avertissement" role="status">Deux supports libres sont détectés :
-         <span class="technique">${echapper(storage.nativeMirror.disks.map((d) => `/dev/${d}`).join(', '))}</span>.
+      ? `<p class="avertissement" role="status">Deux supports libres sont détectés, sur deux
+         disques physiques distincts :
+         <span class="technique">${echapper(storage.nativeMirror.devices.map((d) => `/dev/${d}`).join(', '))}</span>.
          Ils ne seront jamais effacés sans confirmation séparée.</p>`
-      : `<p class="note">Aucune paire de disques sûre n’est proposée. Le pool fichier
+      // Le motif du refus est nommé : « aucune paire sûre » ne disait pas si la
+      // machine n’a rien de libre, ou un seul support, ou deux sur le même disque.
+      : `<p class="note">Pas de miroir natif proposé — ${
+           echapper(storage?.nativeMirror?.refusal ?? 'relevé de stockage incomplet')}.
+         Un miroir exige deux supports sur deux disques distincts : sans lui, ZFS
+         détecte la corruption silencieuse mais ne la répare pas. Le pool fichier
          reste envisageable sur ${storage?.filePool?.availableBytes == null
            ? 'un espace non mesuré'
            : `${bytes(storage.filePool.availableBytes)} libres`}, mais sa taille n’est pas devinée.</p>`;
@@ -149,7 +166,9 @@ function storage(storage, reuse) {
 <section class="carte bloc installation__stockage" aria-labelledby="titre-installation-stockage">
   <h3 id="titre-installation-stockage">Stockage relevé</h3>
   <div class="tableau-defilant"><table><thead><tr><th scope="col">Support</th>
-    <th scope="col">Taille</th><th scope="col">Décision</th></tr></thead>
+    <th scope="col" class="colonne-secondaire">Nature</th>
+    <th scope="col" class="colonne-secondaire">Taille</th>
+    <th scope="col">Décision</th></tr></thead>
     <tbody>${rows}</tbody></table></div>
   ${mirror}
 </section>`;
@@ -197,12 +216,14 @@ function planForm(installer) {
       ? `<fieldset><legend>Disposition de stockage</legend>
           <label><input type="radio" name="storageKind" value="native"${
             values.storageKind === 'native' ? ' checked' : ''}> Miroir natif sur ${echapper(
-              result.storage.nativeMirror.disks.map((d) => `/dev/${d}`).join(' et '))}</label>
+              result.storage.nativeMirror.devices.map((d) => `/dev/${d}`).join(' et '))}</label>
           <label><input type="radio" name="storageKind" value="file"${
             values.storageKind !== 'native' ? ' checked' : ''}> Pool sur fichier</label>
         </fieldset>`
       : `<input type="hidden" name="storageKind" value="file">
-         <p class="note">Aucune paire sûre : seule la disposition sur fichier peut être planifiée.</p>`;
+         <p class="note">Pas de miroir natif ici — ${echapper(
+           result.storage?.nativeMirror?.refusal ?? 'relevé de stockage incomplet')} :
+           seule la disposition sur fichier peut être planifiée.</p>`;
   const fileFields = existingPool ? '' : `
     <div class="installation__dimensions">
       <label>Taille du pool fichier (Gio)

@@ -49,9 +49,11 @@ machine ne déclare encore rien. Modifier une de ces valeurs, c'est donc demande
 explicitement sa réécriture ; les laisser telles quelles ne change rien.
 
 Un pool conforme est **conservé**, jamais recréé, et aucune disposition de
-rechange n'est alors proposée. En l'absence de pool et de deux supports sûrs,
-vous devez saisir la taille du pool fichier et l'espace qui restera libre sur
-la racine.
+rechange n'est alors proposée. Sinon, vous choisissez : le miroir natif quand
+deux supports libres le permettent, sinon le pool fichier — pour lequel vous
+devez saisir la taille et l'espace qui restera libre sur la racine. Le miroir
+reprend les deux supports que le diagnostic vient de nommer ; rien n'est effacé
+avant que vous n'ayez recopié `EFFACER /dev/… /dev/…`.
 
 Chaque phase du plan porte le statut que le relevé justifie : une phase dont les
 invariants sont de nouveau constatés conformes s'affiche **terminée** avant même

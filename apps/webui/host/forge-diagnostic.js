@@ -142,7 +142,7 @@ fi
 if command -v lsblk >/dev/null 2>&1; then
   # --raw et --pairs sont exclusifs. La forme --pairs, compacte et sans
   # tableau JSON à décoder sur la Forge, conserve une ligne structurée par bloc.
-  lsblk -b -P -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINT,PKNAME 2>/dev/null |
+  lsblk -b -P -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINT,PKNAME,PARTTYPE 2>/dev/null |
     while IFS= read -r ligne; do dit bloc "$ligne"; done
 fi
 `.replaceAll('__DOLLAR__', '$');
@@ -170,6 +170,9 @@ export function parseBlock(line) {
     filesystem: values.fstype || null,
     mountpoint: values.mountpoint || null,
     parent: values.pkname ? device(values.pkname) : null,
+    // GUID de type GPT. Une partition d'amorçage n'a ni système de fichiers ni
+    // montage : sans son type, elle passerait pour un support libre.
+    partType: values.parttype ? values.parttype.toLowerCase() : null,
   };
 }
 
@@ -355,37 +358,123 @@ export function conformity(report, { poolName, bridgeName } = {}) {
 }
 
 /**
- * Classe le stockage sans décider. Une partition, un montage ou une signature
- * rend le disque parent impropre au miroir : l'incertitude est une exclusion.
+ * Types GPT d'une partition qui appartient à l'amorçage, jamais au pool.
+ *
+ * Elles n'ont ni système de fichiers ni montage : sans leur type, une partition
+ * `bios_grub` de 537 Mo passerait pour un support libre et pourrait être
+ * proposée au miroir.
+ */
+export const PARTITIONS_SYSTEME = new Map([
+  ['21686148-6449-6e6f-744e-656564454649', 'partition d’amorçage BIOS'],
+  ['c12a7328-f81f-11d2-ba4b-00a0c93ec93b', 'partition système EFI'],
+  ['bc13c2ff-59e6-4262-a352-b275fd6f7172', 'partition d’amorçage étendue'],
+]);
+
+/**
+ * Classe le stockage sans décider (docs/DAT.md §50.3).
+ *
+ * **Corrigé le 2026-09-02.** La version précédente ne considérait que des
+ * DISQUES ENTIERS, et excluait tout disque portant une partition. Or une Forge
+ * n'est jamais vide : elle est soit un serveur dédié partitionné à la commande —
+ * dont le schéma réserve précisément `sda5` et `sdb5` au pool (§8.6) —, soit un
+ * VPS dont les disques sont montés. Sur le matériel même que le produit vise, le
+ * miroir natif n'était donc jamais proposable : les partitions réservées pour lui
+ * étaient invisibles, et le pool fichier restait le seul chemin offert.
+ *
+ * Un support candidat est donc un disque entier libre **ou une partition libre**,
+ * y compris sur un disque qui porte le système. L'incertitude reste une
+ * exclusion, et chaque support écarté garde son motif (SPK-DS-12).
  */
 export function storageProposal(report) {
   const blocks = report?.blocks ?? [];
-  const rootDevice = String(report?.system?.rootSource ?? '').replace(/^\/dev\//, '');
-  const rootBlock = blocks.find((block) => block.name === rootDevice);
-  const rootName = rootBlock?.parent ?? rootDevice.replace(/\d+$/, '');
-  const reasons = new Map();
+  // `lsblk -P` répète un `md` sous chacun de ses membres : on indexe par NOM,
+  // et un support peut avoir DEUX parents — c'est ce qui fait qu'un miroir
+  // logiciel occupe bien ses deux disques, pas seulement le premier.
+  const parents = new Map();
+  const enfants = new Map();
+  const parNom = new Map();
   for (const block of blocks) {
-    const disk = block.type === 'disk' ? block.name : block.parent;
-    if (!disk) continue;
-    const reasonsForDisk = reasons.get(disk) ?? [];
-    if (block.name === rootName || block.parent === rootName) reasonsForDisk.push('porte la racine');
-    if (block.mountpoint) reasonsForDisk.push(`monté sur ${block.mountpoint}`);
-    if (block.filesystem) reasonsForDisk.push(`signature ${block.filesystem}`);
-    if (block.type !== 'disk' && !reasonsForDisk.includes('porte une partition')) {
-      reasonsForDisk.push('porte une partition');
-    }
-    reasons.set(disk, [...new Set(reasonsForDisk)]);
+    if (!parNom.has(block.name)) parNom.set(block.name, block);
+    if (!parents.has(block.name)) parents.set(block.name, new Set());
+    if (!block.parent) continue;
+    parents.get(block.name).add(block.parent);
+    if (!enfants.has(block.parent)) enfants.set(block.parent, new Set());
+    enfants.get(block.parent).add(block.name);
   }
-  const disks = blocks.filter((block) => block.type === 'disk').map((disk) => ({
-    ...disk,
-    reasons: reasons.get(disk.name) ?? ['information de stockage incomplète'],
-  }));
-  const eligible = disks.filter((disk) => disk.reasons.length === 0);
+
+  /** Tout ce qui porte un montage : le support monté et TOUTE son ascendance. */
+  const occupe = new Map();
+  const remonter = (nom, motif) => {
+    if (!nom || occupe.get(nom)?.has(motif)) return;
+    occupe.set(nom, (occupe.get(nom) ?? new Set()).add(motif));
+    for (const parent of parents.get(nom) ?? []) remonter(parent, motif);
+  };
+  const rootDevice = String(report?.system?.rootSource ?? '').replace(/^\/dev\//, '');
+  remonter(rootDevice, 'porte la racine');
+  for (const block of blocks) {
+    // Le même mot pour le même fait : « porte / » et « porte la racine »
+    // affichés côte à côte se liraient comme deux motifs d'exclusion distincts.
+    if (block.mountpoint) {
+      remonter(block.name, block.mountpoint === '/' ? 'porte la racine'
+        : `porte ${block.mountpoint}`);
+    }
+  }
+
+  /** Le disque physique auquel un support appartient, en remontant les parents. */
+  const disquePhysique = (nom, vus = new Set()) => {
+    if (!nom || vus.has(nom)) return null;
+    vus.add(nom);
+    if (parNom.get(nom)?.type === 'disk') return nom;
+    for (const parent of parents.get(nom) ?? []) {
+      const disque = disquePhysique(parent, vus);
+      if (disque) return disque;
+    }
+    return null;
+  };
+
+  // Seuls un disque entier et une partition peuvent recevoir un pool. Un `md`,
+  // un volume logique ou un chiffré n'apparaissent que comme motif d'exclusion.
+  const supports = blocks
+    .filter((block, index) =>
+      ['disk', 'part'].includes(block.type) &&
+      blocks.findIndex((autre) => autre.name === block.name) === index)
+    .map((block) => {
+      const reasons = [...(occupe.get(block.name) ?? [])];
+      if (block.mountpoint) reasons.push(`monté sur ${block.mountpoint}`);
+      if (block.filesystem) reasons.push(`signature ${block.filesystem}`);
+      if ((enfants.get(block.name)?.size ?? 0) > 0) {
+        reasons.push(block.type === 'disk' ? 'porte des partitions' : 'porte un volume');
+      }
+      const systeme = PARTITIONS_SYSTEME.get(block.partType ?? '');
+      if (systeme) reasons.push(systeme);
+      return { ...block, disk: disquePhysique(block.name) ?? block.name,
+               reasons: [...new Set(reasons)] };
+    });
+
+  // Deux supports libres portés par DEUX disques physiques distincts. Deux
+  // partitions du même disque donneraient un miroir qui ne survit pas à la
+  // panne de ce disque : ce serait le mot « miroir » sans ce qu'il promet.
+  const libres = supports.filter((support) => support.reasons.length === 0)
+    .sort((a, b) => b.sizeBytes - a.sizeBytes);
+  const pair = [];
+  for (const support of libres) {
+    if (!pair.some((retenu) => retenu.disk === support.disk)) pair.push(support);
+    if (pair.length === 2) break;
+  }
+  const eligible = pair.length === 2;
   return {
-    disks,
-    nativeMirror: eligible.length >= 2
-      ? { eligible: true, disks: eligible.slice(0, 2).map((disk) => disk.name) }
-      : { eligible: false, disks: [] },
+    supports,
+    free: libres.map((support) => support.name),
+    nativeMirror: {
+      eligible,
+      devices: eligible ? pair.map((support) => support.name) : [],
+      // §8.5 : un pool natif sans miroir détecte la corruption silencieuse sans
+      // la réparer. Le refus est donc NOMMÉ, au lieu de basculer en silence.
+      refusal: eligible ? null
+        : libres.length === 0 ? 'aucun support libre'
+          : libres.length === 1 ? 'un seul support libre'
+            : 'tous les supports libres sont sur le même disque physique',
+    },
     filePool: {
       possible: Number.isFinite(report?.system?.rootAvailableBytes),
       filesystem: report?.system?.rootSource ?? null,

@@ -547,6 +547,15 @@ Le tableau des Sparks défile dans son propre conteneur sous 1024 px
 Sous 768 px, les colonnes secondaires — adresse, image — sont retirées avant les
 colonnes d'identité et d'état, conformément à l'ordre de sacrifice du §5.3.
 
+**Une colonne sacrifiée n'est pas une donnée perdue** (2026-09-02). Le tableau
+des supports de stockage porte quatre colonnes : support, nature, taille et
+motif d'exclusion. Sous 768 px, nature et taille cèdent — ce sont les
+secondaires —, mais elles reparaissent en `.cellule-repli` sous le nom du
+support, en typographie compacte. Ce qui gagne la place ainsi libérée est le
+**motif**, qui s'enroule au lieu de partir derrière un défilement horizontal :
+c'est lui qui explique pourquoi un support n'est pas proposé, et un motif qu'il
+faut aller chercher se lit comme une incapacité de l'outil.
+
 ## 6. Écarts au design system commun
 
 ### SPK-DS-E01 · Pas de Tailwind

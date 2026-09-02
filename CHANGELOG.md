@@ -2,7 +2,38 @@
 
 ## [Non publié]
 
+### Modifié
+- **Les curseurs CPU avancent par quarts de CPU** (`docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-07) : la réservation et le plafond se règlent désormais par pas de
+  **0,25 CPU**, avec 0,25 CPU pour borne basse, au lieu de 0,05 CPU. Décision du
+  responsable : 0,25 CPU est la plus petite part que le produit partage, et les
+  quatre crans intermédiaires ne correspondaient à aucune part demandée. Sur un
+  pool de 4 CPU, le curseur passe de 80 crans à 16. Ce n'est pas une limite de la
+  machine — `sparkd` sait poser plus fin (`docs/DAT.md` §7.2 bis) — mais une
+  grille de produit. Les parts du seed, 0,25 et 0,50 CPU, restent atteignables au
+  curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
+
 ### Corrigé
+- **Le pool natif se pose enfin là où le partitionnement l'attend** (SPK-68,
+  `docs/DAT.md` §50.3, §8.6) : la proposition ne considérait que des **disques
+  entiers** et écartait tout disque portant une partition. Sur un serveur dédié
+  partitionné à la commande — dont le schéma réserve précisément `sda5` et
+  `sdb5` au pool — le miroir natif n'était donc jamais proposable, et le pool
+  fichier restait le seul chemin. Un candidat est désormais un disque entier
+  libre **ou une partition libre**, y compris sur le disque qui porte le
+  système. La paire doit tenir sur deux disques physiques distincts : deux
+  partitions du même disque ne font pas un miroir. Les partitions système GPT
+  (amorçage BIOS, EFI) sont nommées et écartées au lieu de passer pour libres,
+  et les deux disques d'un miroir logiciel portent bien tous deux « la racine ».
+- **Le chemin natif était inatteignable depuis l'écran** (SPK-68) : le
+  formulaire n'envoyait aucun périphérique et le plan refusait donc
+  systématiquement le miroir. Il reprend maintenant la paire que le diagnostic
+  vient de déclarer libre — celle que le choix nomme —, l'engagement continuant
+  d'exiger la frappe de `EFFACER /dev/… /dev/…`.
+- **Le refus du miroir dit sa cause** (SPK-68) : « aucune paire sûre » ne
+  distinguait pas *aucun support libre*, *un seul support libre* et *tous sur le
+  même disque physique* — trois situations qui appellent trois gestes
+  différents.
 - **L'assistant d'installation voit enfin la Forge telle qu'elle est** (SPK-68,
   `docs/DAT.md` §50.2 bis, §50.4) : le relevé interrogeait `incus` sous
   l'identité SSH ordinaire, à qui la socket du démon est refusée. La commande

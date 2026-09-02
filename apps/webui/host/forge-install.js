@@ -143,10 +143,24 @@ export function createInstallPlan(diagnostic, input = {}) {
   if (existing) {
     storagePlan = { kind: 'reuse', poolName, driver: 'zfs', destructive: false };
   } else if (input.storageKind === 'native') {
-    const eligible = storage.nativeMirror?.disks ?? [];
-    const requested = Array.isArray(input.devices) ? input.devices.map(String) : [];
-    if (!storage.nativeMirror?.eligible || requested.length !== 2 ||
-        requested.some((device) => !eligible.includes(device))) {
+    // Les supports acceptés sont ceux que le NOUVEAU relevé déclare libres —
+    // disques entiers ou partitions dédiées —, jamais ceux d'un écran resté
+    // ouvert. Le refus nomme sa cause plutôt que de renvoyer au pool fichier.
+    const eligible = storage.nativeMirror?.devices ?? [];
+    // Sans désignation explicite, le plan reprend LA paire que ce diagnostic
+    // vient de déclarer libre — celle-là même que l'écran nomme dans son choix.
+    // Ce n'est pas un effacement automatique : l'engagement exige encore la
+    // frappe de « EFFACER /dev/… /dev/… », qui nomme chaque support (§50.4).
+    const requested = Array.isArray(input.devices) ? input.devices.map(String)
+      : typeof input.devices === 'string' && input.devices.trim()
+        ? input.devices.split(',').map((device) => device.trim()).filter(Boolean)
+        : eligible;
+    if (!storage.nativeMirror?.eligible) {
+      throw new ForgeInstallError('unsafe_devices',
+        `Le miroir natif n’est pas proposable : ${
+          storage.nativeMirror?.refusal ?? 'le relevé ne déclare aucun support libre'}.`);
+    }
+    if (requested.length !== 2 || requested.some((device) => !eligible.includes(device))) {
       throw new ForgeInstallError('unsafe_devices',
         'Le miroir doit reprendre exactement deux supports déclarés libres par le nouveau diagnostic.');
     }

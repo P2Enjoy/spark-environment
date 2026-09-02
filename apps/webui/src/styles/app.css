@@ -701,6 +701,8 @@ tbody tr:hover { background: var(--color-hover); }
   font-size: var(--text-compact);
   overflow-wrap: anywhere;
 }
+/* Le repli d'une colonne secondaire : invisible tant que sa colonne existe. */
+.cellule-repli { display: none; }
 
 /* SPK-69 · SPK-DS-13 — les phases restent lisibles comme un compte rendu,
    sans devenir une fausse barre de progression temporelle. */
@@ -719,6 +721,19 @@ tbody tr:hover { background: var(--color-hover); }
      comprimer les deux colonnes utiles (docs/DESIGN_SYSTEM.md §8.1). */
   .installation__controle { grid-template-columns: max-content minmax(0, 1fr); }
   .installation__controle .technique { grid-column: 2; }
+}
+/* Quand nature et taille cèdent leur colonne, elles reviennent sous le nom du
+   support : le motif d'exclusion garde la largeur, et rien n'est perdu. */
+@media (max-width: 767px) {
+  .cellule-repli {
+    display: block;
+    color: var(--color-text-2);
+    font-size: var(--text-compact);
+  }
+  /* Réduit à deux colonnes, ce tableau TIENT : lever son plancher lui fait
+     enrouler ses motifs au lieu de les envoyer derrière un défilement
+     (docs/DESIGN_SYSTEM.md §8.2 — on ne signale que ce qui déborde vraiment). */
+  .installation__stockage .tableau-defilant table { min-width: 0; }
 }
 /* Un `select` tire sa largeur INTRINSÈQUE de son option la plus longue. Une zone
    DNS privée en porte deux UUID : le contrôle réclamait ~700 px dans une modale
