@@ -3,6 +3,28 @@
 ## [Non publié]
 
 ### Ajouté
+- **La Forge dit ce qui pointe vers elle, et laisse nettoyer ce qui s'est perdu**
+  (SPK-77, `docs/DAT.md` §38.8) : une section `Forge → DNS` relève dans les zones
+  du compte les seuls enregistrements `A`/`AAAA` dont la valeur est **exactement**
+  l'adresse publique de la Forge, et rapproche chaque nom des routes déclarées.
+  Deux verdicts : *servi*, avec le Spark et la route nommés ; ou *aucune route ne
+  le sert* — jamais « inutile », parce que le produit ignore si le nom est servi
+  autrement sur la Forge. Ces derniers peuvent être désignés puis retirés ; la
+  confirmation **énumère** ce qui va partir, et la Forge revérifie les conditions
+  au moment du retrait. Tout le reste des zones — messagerie, vérifications,
+  services tiers — reste hors périmètre et n'est jamais touché.
+- **Une écriture DNS se vérifie, et l'état DNS d'une route se voit** (SPK-78,
+  `docs/DAT.md` §38.9) : le compte rendu d'une recette porte une action
+  « Vérifier dans le DNS » qui **relit la zone** et rend, ligne par ligne,
+  *conforme*, *différent* — en nommant la valeur trouvée — ou *absent*. La
+  facette « Routes » d'un Spark affiche pour chaque route l'état relevé chez le
+  fournisseur : *DNS ici*, *DNS → autre adresse*, *aucun enregistrement*, ou
+  *zone hors du compte*. Le produit ne persiste toujours aucun compte rendu : un
+  souvenir vieillirait sans le dire, alors qu'une relecture, non.
+- **L'adresse publique d'une Forge peut être déclarée** (`publicAddress`,
+  `docs/DAT.md` §22.4.1) : elle ne se déduit pas toujours du transport — un alias
+  SSH la cache dans le `ssh_config`, une Forge locale est atteinte par une boucle
+  locale. Ce champ facultatif lève cette limite ; une boucle locale y est refusée.
 - **Le serveur MCP d'un Spark est spécifié, avant toute ligne de code** (SPK-79,
   SPK-80, SPK-81, `docs/DAT.md` §51, `docs/SCHEMA.md` §10 sexies et §10 septies,
   demande et arbitrages du responsable du 2026-09-02). Un Spark pourra se voir
@@ -23,6 +45,13 @@
   section §51 dit elle-même qu'aucune de ses affirmations n'est mesurée.
 
 ### Modifié
+- **Le produit s'autorise UNE suppression DNS, et une seule** (`docs/DAT.md`
+  §38.2 révisé, §38.8.3) : la règle « ne supprime jamais un enregistrement qu'il
+  n'a pas posé » était inapplicable — le produit ne tient aucun registre de ses
+  écritures, et un `A` posé par lui est en tout point identique à un `A` posé à
+  la main. Elle est remplacée par quatre conditions, dont trois sont
+  **reconstatées par le serveur** avant chaque retrait : le type, la valeur, et
+  l'absence de route qui serve le nom.
 - **Une Forge exige deux disques : le pool sur fichier est retiré** (SPK-28,
   SPK-68, `docs/DAT.md` §8.5 révisé, arbitrage du responsable du 2026-09-02). Il
   n'y a plus qu'une disposition de stockage : un miroir ZFS natif sur deux
@@ -62,6 +91,14 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Le registre flottant ne vole plus le focus du clavier** (SPK-75,
+  `docs/DESIGN_SYSTEM.md` §14.3) : le widget est reconstruit toutes les trois
+  secondes, et le focus qui s'y trouvait tombait alors sur `<body>` — un
+  exploitant qui tabulait dedans en était éjecté sans rien avoir fait, et la
+  tabulation repartait du début de la page. Le contrôle est désormais retrouvé
+  par son **identité déclarée**, jamais par sa position : la liste change entre
+  deux relevés, et un index désignerait un autre bouton. Trouvé en éprouvant la
+  navigation au clavier, pas par relecture.
 - **Un terminal survit à la navigation, et l'inventaire devient un widget
   flottant** (SPK-75, `docs/DAT.md` §37.4.2 révisé et §37.4.8) : changer de
   page, recharger ou fermer l'onglet du navigateur ne tue plus le shell — on le
@@ -74,6 +111,18 @@
   quand on le déplie, dit lesquels portent un shell, et ne prend aucune largeur
   au contenu. Le risque que l'ancienne règle évitait — un shell root oublié — est
   désormais couvert par ce widget, qui le garde sous les yeux.
+- **Un sélecteur de zones vide dit enfin pourquoi il est vide** (SPK-47, SPK-50,
+  `docs/DAT.md` §38.1.1) : quand le fournisseur DNS refusait la lecture des
+  zones — cas mesuré le 2026-09-02 avec une clé Scaleway **expirée**, qui rend
+  `401 {"reason":"expired"}` —, la modale « Appliquer une recette DNS »
+  n'affichait qu'un sélecteur vide et muet. La console lisait la réponse comme
+  une absence de zones, parce que le corps d'un refus (`{error, message}`) ne
+  porte pas de champ `configured` ; et la raison, logée dans l'état de l'aperçu,
+  était de toute façon effacée au premier changement de recette. Trois états
+  sont désormais distingués et dits séparément : **aucun jeton**, **jeton
+  refusé** et **compte sans zone**. Le panneau « Pointer le domaine » cesse en
+  outre de conseiller de poser un jeton lorsqu'il y en a un que le fournisseur
+  a rejeté.
 - **L'amorçage sert enfin l'image que la cellule fait tourner** (SPK-76,
   `docs/DAT.md` §42.9) : le geste avait été écrit en regardant `images:debian/13`
   et rien ne vérifiait que la cellule était celle-là — or le catalogue en propose

@@ -4,6 +4,8 @@
       §18.1 (on régénère), §18.4 (unicité) · docs/SCHEMA.md §6
 @spec docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker de premier
       niveau, ses trois bornes, et la préséance du plus spécifique)
+@spec docs/BACKLOG.md#SPK-77 · docs/DAT.md §38.8.4 (le rapprochement d'un nom
+      DNS avec les routes se fait ICI, jamais dans la console)
 
 On régénère la configuration entière, on ne la rapièce pas. Une configuration
 rapiécée diverge ; une configuration régénérée ne le peut pas.
@@ -95,6 +97,41 @@ def covering(connection: sqlite3.Connection, domain: str,
     ]
     candidates.sort(key=lambda r: specificity(r["domain"]))
     return candidates[0] if candidates else None
+
+
+def match(connection: sqlite3.Connection, domains: list[str]) -> dict:
+    """Pour chaque nom, la route qui le SERT, ou `None` (§38.8.4).
+
+    La console relève dans le DNS les noms qui pointent vers la Forge et doit
+    savoir lesquels sont servis. Elle ne fait pas ce rapprochement elle-même :
+    `covers` doit rester identique à ce que fait Caddy, et une seconde
+    implémentation en JavaScript divergerait à la première correction. Le
+    désaccord se solderait par un nom déclaré perdu alors qu'il est servi —
+    c'est-à-dire par une suppression fausse.
+
+    Une route DÉSACTIVÉE ne sert rien : Caddy ne la porte pas. La compter ici
+    ferait passer pour servi un nom qui rend une erreur.
+
+    La clé rendue est le nom TEL QU'IL A ÉTÉ DEMANDÉ : l'appelant a relevé ses
+    noms dans une zone et doit pouvoir s'y retrouver sans refaire la
+    normalisation.
+    """
+    routes = [
+        dict(r) for r in connection.execute(
+            "SELECT r.domain, s.name AS spark_name FROM ingress_route r"
+            " JOIN spark s ON s.id = r.spark_id WHERE r.enabled = 1"
+        )
+    ]
+    resultat: dict = {}
+    for brut in domains:
+        nom = str(brut).strip().lower().rstrip(".")
+        servantes = [r for r in routes if covers(r["domain"], nom)]
+        servantes.sort(key=lambda r: specificity(r["domain"]))
+        resultat[brut] = (
+            {"domain": servantes[0]["domain"], "spark_name": servantes[0]["spark_name"]}
+            if servantes else None
+        )
+    return resultat
 
 
 class IngressError(RuntimeError):

@@ -4594,6 +4594,15 @@ défiler, et la règle est écrite : `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-15**.
 
 ### [x] SPK-75 · Le registre devient un widget flottant permanent, et un terminal survit à la navigation
 
+- **Défaut trouvé et corrigé le 2026-09-02**, en éprouvant la navigation au
+  clavier pendant SPK-77 : le widget est reconstruit toutes les trois secondes,
+  et le focus qui s'y trouvait tombait sur `<body>`. La tabulation repartait du
+  début de la page, sans que l'exploitant ait rien fait
+  (`docs/DESIGN_SYSTEM.md` §14.3). Le focus est maintenant rendu au contrôle
+  retrouvé par son **identité déclarée** — jamais par sa position, la liste
+  changeant entre deux relevés. Preuve rouge avant correction, parcours E2E
+  dédié.
+
 **Constaté avec le responsable le 2026-09-02**, et mesuré avant d'être discuté :
 
 ```
@@ -4751,12 +4760,129 @@ produit ne sont pas amorçables correctement, et rien ne le disait avant l'éche
   `bootstrap_failed` avec sa cause, prouvé par un test ; l'écran de création dit
   quelles images sont amorçables ; captures observées ; manuel M6 et M5 mis à
   jour ; `@spec` / `@verifies` posés.
+**Implémentée et prouvée localement le 2026-09-02. Reste `[~]` : la DoD exige une
+preuve sur Forge RÉELLE, qui n'a pas eu lieu.**
+
+- Contrat écrit et poussé AVANT la première ligne de code (commit `e35be09`) :
+  `docs/DAT.md` §42.9, §41.2 amendé, §42.6 et §42.7 mis en accord.
+- Le relevé passe en `sh -c` avec son `PATH` posé ; le dépôt amont se construit
+  depuis `/etc/os-release` ; `docker.list` et la version de `docker-ce` sont
+  jugés sur leur CORRESPONDANCE avec la cellule ; `set -e` sur les poses, et le
+  `stderr` remonte avec le code.
+- **Trois défauts trouvés en chemin, aucun par les tests**, tous par la §16 du
+  CLAUDE.md : le relevé d'un Spark débordait sur la fiche du suivant ; un échec
+  cohabitait avec le verdict « cellule complète » ; un moteur dont le mode était
+  illisible n'affichait rien. Détail au `docs/JOURNAL.md` du 2026-09-02.
+- **Preuves** : 13 d'unité et d'API propres à l'unité (1058 vertes au total,
+  hors une rougeur qui préexiste dans `main` sur l'admission au
+  redimensionnement) ; 5 de composant ; 4 parcours E2E depuis l'accueil, dont
+  le refus d'une Alpine qui COMPTE les exécutions pour prouver qu'aucune pose
+  n'est partie ; captures `spk76-` en 1440 et 390 px, observées.
+- Seed enrichi de `ubuntu-24` et `alpine-demo` : sans eux, le seed ne démontrait
+  que le cas où l'amorçage fonctionne, et c'est ce biais qui a laissé passer le
+  défaut.
+- **Ce qui manque pour `[x]`** : l'amorçage n'a été éprouvé que contre le pilote
+  factice. La DoD demande un amorçage complet sur une cellule **Ubuntu 24.04**
+  et une **Debian 13** réelles, et un refus observé sur une **Alpine** réelle.
+  Le code n'est pas déployé sur la Forge du responsable, dont les deux cellules
+  ont produit le signalement.
 - Reste à trancher avec le responsable : la **progression** pendant l'amorçage,
   signalée le même jour — « on n'a pas de *progress* quand on amorce un Spark ».
   Une pose complète dure plusieurs minutes derrière un `POST` synchrone muet.
   Une progression *honnête* exige que le serveur rende la main pendant qu'il
   travaille ; l'afficher sans cela serait une animation qui invente son
   avancement. Non couvert par cette unité, à spécifier séparément.
+
+### [~] SPK-77 · L'inventaire DNS de la Forge, et le nettoyage des entrées perdues
+
+Demandé par le responsable le 2026-09-02 : « on doit pouvoir lister depuis une
+Forge tous les DNS qui pointent vers elle, retrouver vers quoi ils pointent ou
+s'ils sont perdus, et nettoyer les entrées perdues ».
+
+Un nom qui pointe vers la Forge n'est pas une donnée inerte : la Forge reçoit son
+trafic. Sans route pour le servir, elle rend une erreur — ou le joker d'un autre
+Spark le sert par accident.
+
+- Spécification : `docs/DAT.md` **§38.8** (écrite et committée avant la première
+  ligne de code), §38.2 révisé, §18.3 bis pour le rapprochement ·
+  `docs/DESIGN_SYSTEM.md` §6.13, §14.5 · manuel M7.
+- Dépend de : SPK-47 (les zones, le jeton, la garde), SPK-48 (le joker et sa
+  préséance).
+- Portée : une section `#/forge/dns` ; relevé des zones du compte, filtré aux
+  seuls `A`/`AAAA` portant **exactement** l'adresse publique de la Forge
+  courante ; rapprochement avec les routes déclarées ; deux verdicts ; sélection
+  et suppression des entrées qu'aucune route ne sert.
+- **Le périmètre est étroit par nécessité** (§38.8.1) : tout ce qui ne pointe pas
+  vers cette Forge est hors sujet. Ce n'est pas une simplification, c'est ce qui
+  borne le pouvoir de suppression.
+- **« Aucune route ne le sert » n'est pas « inutile »** (§38.8.2) : le produit ne
+  sait pas si l'exploitant sert ce nom autrement sur la Forge. Le libellé qui
+  affirmerait l'inutilité ferait supprimer ce qui marchait.
+- **Le §38.2 est révisé, pas contourné** (§38.8.3) : la règle « ne supprime
+  jamais ce qu'il n'a pas posé » était inapplicable — le produit ne tient aucun
+  registre de ses écritures. Elle est remplacée par quatre conditions, dont trois
+  sont **reconstatées par le serveur** avant chaque suppression.
+- **Le rapprochement se fait chez `sparkd`** (§38.8.4) : `covers` doit rester
+  identique à ce que fait Caddy, et une seconde implémentation en JavaScript
+  divergerait — au prix d'une suppression fausse. Nouvelle route
+  `POST /v1/ingress/match`.
+- DoD : test unitaire du filtre et des verdicts ; test d'API prouvant qu'une
+  suppression est **refusée** quand l'entrée est servie, quand elle pointe
+  ailleurs, et quand elle n'est pas un `A`/`AAAA` — la preuve passe par l'API,
+  pas par l'écran ; parcours E2E depuis l'accueil contre le doublon local, y
+  compris le refus ; captures observées ; manuel M7 mis à jour ; `@spec` /
+  `@verifies` posés.
+- **Implémenté et vérifié en local le 2026-09-02**, statut `[~]` : 12 preuves du
+  module d'inventaire, 7 preuves d'API — dont les trois refus, prouvés par l'API
+  et non par l'écran —, 6 preuves du rapprochement côté `sparkd`, 14 preuves
+  d'écran, 1 parcours E2E depuis l'accueil, captures observées en 1440 px et
+  420 px.
+- **Reste à faire pour passer `[x]`** : le commit et le push (tenus par le
+  responsable), puis **OP-14** — mettre à jour `sparkd` sur la Forge.
+  **Mesuré le 2026-09-02 sur la Forge du responsable** : une Forge antérieure à
+  cette unité n'a pas `POST /v1/ingress/match`, l'appel y tombe sur
+  `DELETE /v1/ingress/{domain}` et rend **405**. La console le dit désormais en
+  nommant le geste, au lieu de rendre un code nu — mais la page reste inopérante
+  jusqu'à la mise à jour, et c'est voulu : sans rapprochement, déclarer « perdu »
+  offrirait de supprimer des routes en service.
+- **Constaté au parcours, et corrigé** : deux défauts trouvés à la capture et non
+  par relecture. Le doublon DNS du harnais servait les mêmes enregistrements pour
+  **toutes** ses zones, faisant apparaître chaque nom deux fois ; et un nettoyage
+  partiel — une entrée retirée, une refusée — se présentait comme un simple
+  refus, en laissant à l'écran une liste périmée où le retrait déjà fait
+  paraissait encore à faire.
+
+### [~] SPK-78 · Une écriture DNS se vérifie, et l'état DNS d'une route se voit
+
+Signalé par le responsable le 2026-09-02 : « j'ai appliqué une recette et elle est
+restée en suspens, pas moyen de faire une vérification ; au rechargement elle a
+disparu, alors qu'elle était bien posée dans le DNS ».
+
+- Spécification : `docs/DAT.md` **§38.9** (écrite et committée avant la première
+  ligne de code), §38.4 et §38.5.2 inchangés · manuel M7.
+- Dépend de : SPK-47, SPK-50, et SPK-77 pour le relevé qu'elle réemploie.
+- Portée : une action « Vérifier » sur le compte rendu d'une recette, qui relit
+  la zone et rend ligne par ligne `conforme` / `différent` / `absent` ; l'état
+  DNS relevé par route dans la facette « Routes » d'un Spark.
+- **On relit, on ne persiste pas** (§38.9.1) : un compte rendu persisté
+  vieillirait sans le dire, et affirmerait ce qui a été écrit une fois au lieu de
+  ce qui est en place. C'est la faute que le §38.4 interdit.
+- **Conforme ne veut pas dire résolu** (§38.9.2) : le §38.4 reste entier, l'écran
+  dit ce que le fournisseur porte, jamais ce que le monde répond.
+- DoD : test unitaire des trois états de vérification ; parcours E2E qui écrit
+  une recette, vérifie, **modifie la valeur chez le fournisseur** et vérifie de
+  nouveau pour obtenir `différent` ; captures observées ; manuel M7 mis à jour ;
+  `@spec` / `@verifies` posés.
+- **Implémenté et vérifié en local le 2026-09-02**, statut `[~]` : 7 preuves du
+  module, 3 preuves d'API, 7 preuves d'écran, **2 parcours E2E** — l'un déplace
+  la valeur chez le fournisseur entre deux vérifications et obtient
+  `différent` avec la valeur trouvée nommée ; captures observées.
+- **Quatre états de route, et non trois** : le relevé distingue *zone hors du
+  compte* de *aucun enregistrement*. Les confondre ferait chercher un oubli là où
+  le DNS du nom est simplement tenu ailleurs.
+- **Reste à faire pour passer `[x]`** : le commit et le push (tenus par le
+  responsable). L'état DNS des routes ne dépend PAS de la version de la Forge —
+  contrairement à SPK-77, il ne demande aucun rapprochement.
 
 ---
 

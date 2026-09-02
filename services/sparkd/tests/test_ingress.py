@@ -372,3 +372,61 @@ def test_un_joker_plus_LONG_surcharge_aussi_le_plus_court(db):
     ingress.declare(db, "01J1", "*.eu.monapi.fr", 9090)
     joker = next(r for r in ingress.listing(db) if r["domain"] == "*.monapi.fr")
     assert joker["superseded_by"] == []
+
+
+# --- SPK-77 · LE RAPPROCHEMENT D'UN NOM DNS (docs/DAT.md §38.8.4) ------------
+#
+# La console releve dans le DNS les noms qui pointent vers la Forge et demande
+# ICI lesquels sont servis. Une seconde implementation en JavaScript divergerait
+# de `covers` a la premiere correction, et le desaccord se solderait par une
+# suppression fausse.
+
+def test_match_rend_la_route_qui_sert_le_nom(db):
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    vu = ingress.match(db, ["crm.example.com"])
+    assert vu["crm.example.com"]["spark_name"] == "crm"
+    assert vu["crm.example.com"]["domain"] == "crm.example.com"
+
+
+def test_match_rend_None_pour_un_nom_que_RIEN_ne_sert(db):
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    assert ingress.match(db, ["ancien.example.com"]) == {"ancien.example.com": None}
+
+
+def test_match_applique_la_preseance_du_plus_SPECIFIQUE(db):
+    # §18.3 bis : Caddy retient la premiere route dont le filtre correspond, et
+    # un nom exact passe avant tout joker. Rendre le joker ici nommerait le
+    # mauvais Spark dans l'inventaire.
+    poser_spark(db, "S1", "vitrine")
+    poser_spark(db, "S2", "api", adresse="10.77.0.17")
+    ingress.declare(db, "S1", "*.example.com", 8080)
+    ingress.declare(db, "S2", "api.example.com", 8080)
+    vu = ingress.match(db, ["api.example.com", "autre.example.com"])
+    assert vu["api.example.com"]["spark_name"] == "api"
+    assert vu["autre.example.com"]["spark_name"] == "vitrine"
+
+
+def test_match_ignore_une_route_DESACTIVEE(db):
+    # Caddy ne porte pas une route desactivee : la compter ferait passer pour
+    # servi un nom qui rend une erreur — et empecherait de le nettoyer.
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    db.execute("UPDATE ingress_route SET enabled = 0 WHERE domain = 'crm.example.com'")
+    assert ingress.match(db, ["crm.example.com"]) == {"crm.example.com": None}
+
+
+def test_match_normalise_la_casse_et_le_point_final(db):
+    # Le nom vient d'une zone DNS, ou « CRM.Example.com. » designe le meme hote.
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    vu = ingress.match(db, ["CRM.Example.com."])
+    assert vu["CRM.Example.com."]["spark_name"] == "crm", (
+        "la cle rendue est le nom TEL QU'IL A ETE DEMANDE")
+
+
+def test_match_un_joker_ne_couvre_qu_UN_niveau(db):
+    poser_spark(db, "S1", "vitrine")
+    ingress.declare(db, "S1", "*.example.com", 8080)
+    assert ingress.match(db, ["a.b.example.com"]) == {"a.b.example.com": None}

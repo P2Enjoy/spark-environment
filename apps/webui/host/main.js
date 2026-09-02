@@ -38,6 +38,11 @@ import { agir as agirConteneur, GESTES } from './gestes-docker.js';
 import { sonderShell, SHELL_TROUVE } from './shell-conteneur.js';
 import * as signatureService from './signature.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
+// SPK-77 · §38.8 : le verdict est calculé par un module PUR, que la route de
+// suppression rejoue tel quel pour reconstater ses conditions (§38.8.3).
+import { inventorier, nomsARapprocher, refusDeSuppression, fqdn,
+         confronter, etatDuNom }
+  from './dns-inventaire.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError,
          CHEMIN_SSH, CHEMIN_DEPANNAGE, CHEMIN_CONTENEUR,
@@ -146,14 +151,68 @@ export function createConsoleHost(options = {}) {
    *
    * La console la connaît par son inventaire. La faire ressaisir dans chaque
    * recette serait demander ce qu'on sait déjà — et une recette existe pour
-   * simplifier. Rend `null` quand elle n'est pas connaissable : une Forge locale
-   * n'en a pas, un alias `ssh` la cache dans le `ssh_config`.
+   * simplifier.
+   *
+   * RÉVISÉ par SPK-77 (§38.8.5) : elle est DÉCLARABLE. Un alias `ssh` la cachait
+   * dans le `ssh_config` et une Forge locale n'en avait aucune ; `publicAddress`
+   * lève cette limite. Rend `null` seulement quand rien n'est ni déclaré ni
+   * déductible.
    */
   async function adresseForgeCourante() {
+    return (await forgeCourante()).adresse;
+  }
+
+  /**
+   * La Forge courante, NOMMÉE et adressée (SPK-77, §38.8.5).
+   *
+   * L'inventaire a besoin des deux : l'adresse pour filtrer les enregistrements,
+   * le nom pour joindre le bon `sparkd` par son tunnel.
+   */
+  async function forgeCourante() {
     const etat = await loadFile(inventoryPath);
     const courant = etat.servers.find((s) => s.name === etat.current)
       ?? etat.servers[0] ?? null;
-    return adressePublique(courant);
+    return { nom: courant?.name ?? null, adresse: adressePublique(courant) };
+  }
+
+  /**
+   * Quelles routes servent ces noms ? Demandé à `sparkd` (§38.8.4).
+   *
+   * Le rapprochement N'EST PAS refait ici : `covers` doit rester identique à ce
+   * que fait Caddy, et une seconde implémentation divergerait — au prix d'un nom
+   * déclaré perdu alors qu'il est servi, donc d'une suppression fausse.
+   *
+   * Une erreur n'est pas rattrapée : sans rapprochement, il n'y a pas de
+   * verdict. Rendre « perdu » faute de réponse offrirait de supprimer des routes
+   * en service, ce qui est exactement l'accident à empêcher.
+   */
+  async function rapprocher(serveur, noms) {
+    if (!noms.length) return {};
+    const tunnel = tunnels.require(serveur);
+    const reponse = await fetchFn(
+      `http://127.0.0.1:${tunnel.localPort}/v1/ingress/match`,
+      { method: 'POST',
+        headers: { 'content-type': 'application/json',
+                   'x-spark-actor': tunnel.actorHeader },
+        body: JSON.stringify({ domains: noms }) });
+    if (!reponse.ok) {
+      // MESURÉ le 2026-09-02 sur la Forge du responsable : une Forge antérieure
+      // à SPK-77 n'a pas cette route, et `/v1/ingress/match` y tombe sur
+      // `DELETE /v1/ingress/{domain}` — d'où un 405, et non un 404. Rendre
+      // « HTTP 405 » nu ferait chercher un défaut du DNS là où il n'y a qu'une
+      // Forge à mettre à jour (§38.8.4).
+      if ([404, 405].includes(reponse.status)) {
+        throw new DnsError(
+          `Cette Forge exécute un « sparkd » antérieur à SPK-77 : elle ne sait pas `
+          + `encore rapprocher un nom DNS de ses routes (HTTP ${reponse.status}). `
+          + `Mettez-la à jour depuis Forge, bouton « Mettre à jour sparkd », puis `
+          + `relevez de nouveau.`);
+      }
+      throw new DnsError(
+        `La Forge n'a pas pu rapprocher ces noms de ses routes (HTTP ${reponse.status}).`);
+    }
+    const { matches = {} } = await reponse.json();
+    return matches;
   }
 
   /** Rend le fournisseur, ou `null` avec la raison. Un jeton absent n'est PAS une panne. */
@@ -824,6 +883,155 @@ export function createConsoleHost(options = {}) {
       }
       try {
         return { status: 200, body: { zone, records: await bilan.provider.records(zone) } };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /**
+     * Ce que la zone porte MAINTENANT (SPK-78, §38.9.1).
+     *
+     * C'est une LECTURE, pas un souvenir. Le compte rendu d'une recette dit ce
+     * qui a été écrit une fois ; cette route dit ce qui est en place — et c'est
+     * la seule des deux qui vieillit correctement.
+     */
+    'POST /api/dns/verifier': async (corps) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 409, body: { error: 'dns_not_configured', message: bilan.reason } };
+      }
+      const zone = String(corps?.zone ?? '').trim();
+      const attendus = Array.isArray(corps?.records) ? corps.records : [];
+      if (!zone || !attendus.length) {
+        return { status: 422,
+                 body: { error: 'missing_records',
+                         message: 'Préciser la zone et les enregistrements à vérifier.' } };
+      }
+      try {
+        const records = await bilan.provider.records(zone);
+        return { status: 200,
+                 // §38.9.2 : l'écran dit ce que le FOURNISSEUR porte, jamais ce
+                 // qu'un résolveur du monde répond. Le §38.4 reste entier.
+                 body: { zone, checked: confronter({ attendus, records }) } };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /**
+     * L'état DNS de noms de routes (SPK-78, §38.9.1).
+     *
+     * Les noms sont FOURNIS : l'écran affiche déjà les routes du Spark, et la
+     * réponse décrit exactement ce qu'il montre. Aller les rechercher chez
+     * `sparkd` ajouterait une dépendance sans rien fiabiliser — cette lecture ne
+     * décide de rien, contrairement au rapprochement du §38.8.4.
+     */
+    'POST /api/dns/etat-routes': async (corps) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 200,
+                 body: { configured: false, reason: bilan.reason, states: [] } };
+      }
+      const domains = Array.isArray(corps?.domains) ? corps.domains : [];
+      if (!domains.length) return { status: 200, body: { configured: true, states: [] } };
+      const forge = await forgeCourante();
+      try {
+        const zones = await bilan.provider.zones();
+        const releves = [];
+        for (const z of zones) {
+          releves.push({ zone: z.zone, records: await bilan.provider.records(z.zone) });
+        }
+        return { status: 200,
+                 body: { configured: true, forge,
+                         states: domains.map((d) => etatDuNom(d, releves, forge.adresse)) } };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /**
+     * Ce qui pointe vers CETTE Forge, et ce qui s'y est perdu (SPK-77, §38.8).
+     *
+     * Le relevé est étroit par nécessité (§38.8.1) : seuls les `A`/`AAAA` dont
+     * la donnée est EXACTEMENT l'adresse publique de la Forge. Tout le reste des
+     * zones du compte est hors sujet — et c'est ce qui borne le pouvoir de
+     * suppression de la route ci-dessous.
+     */
+    'GET /api/dns/inventaire': async () => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 200,
+                 body: { configured: false, reason: bilan.reason, entries: [] } };
+      }
+      const forge = await forgeCourante();
+      if (!forge.adresse) {
+        // Une Forge locale n'a pas d'adresse publique (§38.8.5). Ce n'est pas
+        // une panne : il n'y a simplement rien qui puisse pointer vers elle.
+        return { status: 200,
+                 body: { configured: true, forge, entries: [],
+                         reason: "Cette Forge n'a pas d'adresse publique : rien "
+                                 + "ne peut pointer vers elle depuis le DNS." } };
+      }
+      try {
+        const zones = await bilan.provider.zones();
+        const releves = [];
+        for (const z of zones) {
+          releves.push({ zone: z.zone, records: await bilan.provider.records(z.zone) });
+        }
+        const matches = await rapprocher(
+          forge.nom, nomsARapprocher(releves, forge.adresse));
+        return { status: 200,
+                 body: { configured: true, forge,
+                         zones: zones.map((z) => z.zone),
+                         entries: inventorier(
+                           { zones: releves, adresse: forge.adresse, matches }) } };
+      } catch (erreur) {
+        return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
+      }
+    },
+
+    /**
+     * Retire UNE entrée perdue (§38.8.3).
+     *
+     * Les trois premières conditions sont RECONSTATÉES ici, depuis une lecture
+     * fraîche de la zone et un rapprochement neuf. Rien de ce que l'écran envoie
+     * n'est cru : entre l'affichage de la liste et le clic, une route a pu être
+     * déclarée, et retirer alors couperait un service en marche.
+     */
+    'DELETE /api/dns/record': async (corps) => {
+      const bilan = await fournisseur();
+      if (!bilan.configured) {
+        return { status: 409, body: { error: 'dns_not_configured', message: bilan.reason } };
+      }
+      const zone = String(corps?.zone ?? '').trim();
+      const name = String(corps?.name ?? '');
+      const type = String(corps?.type ?? '').toUpperCase();
+      if (!zone || !type) {
+        return { status: 422, body: { error: 'missing_record',
+                                      message: 'Préciser la zone, le nom et le type.' } };
+      }
+      const forge = await forgeCourante();
+      if (!forge.adresse) {
+        return { status: 409, body: { error: 'no_public_address',
+                                      message: "Cette Forge n'a pas d'adresse publique." } };
+      }
+      try {
+        const nom = fqdn(name, zone);
+        const enregistrement = await bilan.provider.existant({ zone, name, type });
+        const matches = await rapprocher(forge.nom, [nom]);
+        const refus = refusDeSuppression(
+          { enregistrement, adresse: forge.adresse, servie: matches[nom] ?? null });
+        if (refus) {
+          return { status: 409, body: { error: 'delete_refused', message: refus } };
+        }
+        await bilan.provider.deleteRecord({ zone, name, type });
+        // On rend ce qui a été RETIRÉ, jamais « le nom ne répond plus » : un
+        // résolveur qui a l'ancienne réponse en cache la sert encore (§38.4).
+        return { status: 200,
+                 body: { zone, name, type, fqdn: nom, deleted: true,
+                         propagation: `Enregistrement retiré. Un résolveur peut `
+                           + `encore servir l'ancienne réponse pendant la durée `
+                           + `de son TTL.` } };
       } catch (erreur) {
         return { status: 502, body: { error: 'dns_unavailable', message: erreur.message } };
       }

@@ -680,6 +680,52 @@
         ]
       }
     },
+    "/v1/ingress/match": {
+      "post": {
+        "description": "Quelles routes servent ces noms ? (SPK-77, docs/DAT.md §38.8.4)\n\nUne LECTURE, malgré le `POST` : une liste de noms n'a pas sa place dans\nune chaîne de requête, et la console en envoie autant que la zone en\nporte. Rien n'est écrit, rien n'entre au journal.\n\n`sparkd` ne voit que des noms : le jeton du fournisseur DNS reste sur\nl'hôte console (§38.1).",
+        "operationId": "match_routes_v1_ingress_match_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Match Routes V1 Ingress Match Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Match Routes",
+        "tags": [
+          "ingress"
+        ]
+      }
+    },
     "/v1/ingress/reconcile": {
       "post": {
         "description": "Reconstruit intégralement la configuration de Caddy depuis le registre.",

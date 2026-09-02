@@ -113,13 +113,26 @@ Deux écritures sont refusées, et le refus dit ce qu'il protège :
 * un domaine qui n'est **pas dans** la zone choisie ;
 * tout ce qui n'est pas une adresse IP.
 
-### Si rien n'est configuré
+### Si la liste des zones est vide
 
-Le jeton du fournisseur vit sur le **poste** qui fait tourner la console, dans un
-fichier `.env` qui n'entre jamais dans le dépôt — jamais sur le serveur, où il
-serait lisible par qui y détient l'administration. Sans jeton, la fenêtre le dit
-et n'offre aucune saisie : ce n'est pas une panne, c'est une configuration
-absente.
+Une liste vide n'est jamais laissée sans explication : la fenêtre dit toujours
+**laquelle** des trois situations vous concerne.
+
+**Aucun jeton.** Le jeton du fournisseur vit sur le **poste** qui fait tourner la
+console, dans un fichier `.env` qui n'entre jamais dans le dépôt — jamais sur le
+serveur, où il serait lisible par qui y détient l'administration. Sans jeton, la
+fenêtre le dit et n'offre aucune saisie : ce n'est pas une panne, c'est une
+configuration absente.
+
+**Le fournisseur a refusé.** Le jeton est là, mais il a été rejeté : le plus
+souvent parce qu'il a **expiré**, parfois parce qu'il lui manque la permission
+de lire les zones. La fenêtre affiche alors le message du fournisseur tel quel —
+c'est lui qui dit lequel des deux cas s'applique. Le geste est de renouveler la
+clé, ou de lui donner la permission, dans la console de votre fournisseur ; en
+poser une seconde sur le poste ne servirait à rien.
+
+**Le compte ne porte aucune zone.** La lecture a réussi et n'a rien trouvé : il
+faut créer la zone chez le fournisseur avant de pouvoir y écrire.
 
 ## Un domaine déjà pris
 
@@ -188,8 +201,84 @@ refuser un au milieu. La fenêtre ne vous annonce donc ni succès ni échec glob
 elle rend **la liste**, chaque ligne avec son sort, et le motif de chaque refus.
 
 **Ce qui est passé n'est pas défait.** Le produit ne connaît pas la valeur
-d'avant — il ne l'a pas retenue — et il ne supprime jamais ce qu'il n'a pas posé.
-Vous voyez l'état réel, et vous décidez.
+d'avant — il ne l'a pas retenue. La seule suppression qu'il s'autorise est celle
+décrite plus bas, « Nettoyer ce qui s'est perdu », et elle ne touche que des
+adresses qui pointent vers votre Forge sans qu'aucune route ne les serve. Vous
+voyez l'état réel, et vous décidez.
+
+### Vérifier ce qui est réellement en place
+
+Le compte rendu vous dit ce qui a été **écrit**, à cet instant-là. Il disparaît
+quand vous rechargez la page, et c'est normal : ce n'est pas lui la vérité.
+
+Le bouton **« Vérifier dans le DNS »**, sous le compte rendu, relit la zone chez
+votre fournisseur et vous rend, ligne par ligne :
+
+* **conforme** — la zone porte bien cette valeur ;
+* **différent** — elle porte autre chose, et la valeur trouvée vous est donnée ;
+* **absent** — l'enregistrement n'y est plus.
+
+Vous pouvez le demander autant de fois que vous voulez, aujourd'hui ou dans un
+mois. Attention : *conforme* veut dire que **votre fournisseur** porte la bonne
+valeur. Cela ne veut pas dire que le monde entier la voit déjà — un résolveur
+sert encore l'ancienne réponse pendant la durée du TTL.
+
+## L'état DNS de vos routes
+
+Dans l'onglet **Routes** d'un Spark, chaque route porte l'état relevé chez votre
+fournisseur :
+
+* **DNS ici** — un enregistrement pointe vers cette Forge ;
+* **DNS → une autre adresse** — ce nom part ailleurs, et l'adresse vous est
+  donnée. Le trafic n'arrivera pas sur cette Forge ;
+* **Aucun enregistrement** — la zone existe chez vous, mais ce nom n'y est pas ;
+* **Zone hors du compte** — aucune de vos zones ne contient ce nom. Son DNS est
+  tenu ailleurs, et le produit n'a rien à en dire.
+
+## Nettoyer ce qui s'est perdu
+
+Un nom qui pointe vers votre Forge n'est pas une donnée inerte : la Forge reçoit
+son trafic. Si plus aucune route ne le sert, elle répond une erreur — ou, pire,
+le joker d'un autre Spark le sert par accident.
+
+La section **Forge → DNS** vous montre, pour la Forge courante, **tout ce qui
+pointe vers elle**, avec pour chaque nom :
+
+* **Servi** — une route le sert, et le Spark est nommé ;
+* **Aucune route ne le sert** — la Forge reçoit ce trafic sans savoir qu'en
+  faire.
+
+Le second n'est pas un verdict d'inutilité : le produit sait seulement qu'aucune
+de vos routes ne sert ce nom. Si vous le servez autrement sur la machine, lui
+seul le sait.
+
+### Ce que cette page ne montre pas
+
+Uniquement les enregistrements **A** et **AAAA** dont la valeur est *exactement*
+l'adresse publique de votre Forge. Votre messagerie, vos vérifications de
+propriété, vos services tiers, et les adresses de vos autres machines ne sont ni
+listés ni touchés. Ce n'est pas un gestionnaire de DNS.
+
+### Retirer
+
+Cochez les entrées que personne ne sert, puis **Retirer les entrées désignées**.
+La fenêtre **énumère** ce qui va partir, nom et valeur — pas un compte. Retirer
+le **domaine nu** vous est signalé à part : c'est le domaine entier qui cesse de
+pointer ici.
+
+Au moment du retrait, la Forge revérifie les trois conditions : que c'est bien un
+`A` ou un `AAAA`, que la valeur est bien son adresse, et qu'aucune route ne sert
+ce nom. Si l'une d'elles a changé depuis l'affichage — vous venez de déclarer la
+route, par exemple — le retrait est **refusé** et vous dit pourquoi.
+
+Le nettoyage se fait entrée par entrée. Si l'une passe et l'autre est refusée,
+vous voyez le sort de chacune : une suppression DNS ne se défait pas.
+
+### Si la Forge n'a pas d'adresse publique
+
+La page ne relève rien et le dit. Le produit déduit l'adresse de la façon dont
+vous atteignez la Forge, et un alias SSH ou une Forge locale n'en donnent aucune.
+Déclarez-la dans **Serveurs**, champ *Adresse publique*.
 
 ## Publier un port — pour ce qui ne parle pas HTTP
 

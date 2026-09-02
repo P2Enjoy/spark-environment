@@ -23,12 +23,15 @@ import { TERMINAL_VIDE, CHAMP_TERMINAL, destinationPorteSession }
 import { INVENTAIRE_VIDE, renderSessionRegistry } from './components/session-registry.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
   from './components/spark-create.js';
-import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour }
+import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour,
+         renderVerification }
   from './components/spark-admin.js';
 import { renderForgeView, UPDATE_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
+import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
+  from './components/forge-dns.js';
 import { renderManuel } from './components/manuel-view.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
@@ -91,6 +94,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                journal: { status: 'loading', entries: [], error: null,
                           filtres: { ...FILTRES_VIDES },
                           chain: null, anchor: null, checking: false },
+               // SPK-77 · §38.8 : ce qui pointe vers la Forge. Une section de la
+               // Forge, parce qu'elle couvre TOUS les Sparks et les noms qui
+               // n'appartiennent à aucun (§38.8.5).
+               forgeDns: { ...FORGE_DNS_VIDE, selection: [] },
                catalogue: { status: 'loading', images: [], error: null,
                             ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } },
                // SPK-64 · §43.6 : le catalogue de la Forge est une destination
@@ -121,7 +128,7 @@ function marquerNavigation() {
   // les onglets du second degré portent leur propre `aria-current` (§34.1).
   const courant = etat.route === 'serveurs' ? '#/serveurs'
     : etat.route === 'manuel' ? '#/manuel'
-    : ['forge', 'images', 'environnement', 'journal'].includes(etat.route) ? '#/forge' : '#/sparks';
+    : ['forge', 'images', 'environnement', 'journal', 'forgedns'].includes(etat.route) ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -131,8 +138,38 @@ function marquerNavigation() {
 /** État de l'écran du manuel (SPK-56). */
 const manuel = { status: 'loading', chapters: [], current: null, markdown: '', error: null };
 
+/**
+ * L'identité DÉCLARÉE d'un élément, pour le retrouver après une repeinture.
+ *
+ * @spec docs/DESIGN_SYSTEM.md §14.3 (le focus ne se perd pas quand le contrôle
+ *       est reconstruit), §9.1 (toute fonction est utilisable sans souris)
+ *
+ * Jamais sa position : une liste change entre deux relevés, et un index
+ * désignerait un autre contrôle — donc ferait agir sur autre chose que ce que
+ * l'on croit tenir. Un élément sans identité déclarée n'en a pas, et on ne
+ * restaure alors rien plutôt que de poser le focus au hasard.
+ */
+function identiteFocus(element) {
+  if (!element || element === document.body) return null;
+  if (element.id) return `#${CSS.escape(element.id)}`;
+  const attributs = Object.entries(element.dataset ?? {})
+    .map(([cle, valeur]) =>
+      `[data-${cle.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}="${CSS.escape(valeur)}"]`)
+    .join('');
+  if (attributs) return attributs;
+  const lien = element.getAttribute?.('href');
+  return lien ? `a[href="${CSS.escape(lien)}"]` : null;
+}
+
 function peindre() {
   marquerNavigation();
+  // MESURÉ le 2026-09-02, en éprouvant la navigation au clavier : une repeinture
+  // remplace `.principal` en entier, et le focus qui s'y trouvait tombe sur
+  // `<body>`. Or les repeintures ARRIVENT toutes seules — un relevé de la Forge
+  // qui aboutit, une collecte qui rend la main. Un exploitant au clavier était
+  // donc éjecté sans rien avoir fait, et sa tabulation repartait du début de la
+  // page (DESIGN_SYSTEM.md §14.3).
+  const avantPeinture = identiteFocus(document.activeElement);
   racine.querySelector('.principal').innerHTML =
     etat.route === 'manuel'
       ? renderManuel(manuel)
@@ -144,6 +181,8 @@ function peindre() {
       ? renderForgeEnv(etat.catalogueEnv)
       : etat.route === 'journal'
       ? renderJournalForgePage(etat.journal)
+      : etat.route === 'forgedns'
+      ? renderOngletsForge('#/forge/dns') + renderForgeDns(etat.forgeDns)
       : etat.route === 'serveurs'
       ? renderServeurs(etat.catalogueServeurs)
       : etat.route === 'forge'
@@ -163,6 +202,12 @@ function peindre() {
         + renderSparksView(etat);
   brancher();
   peindreRegistreSessions();
+  // On ne restaure QUE si personne d'autre n'a pris le focus : une modale qui
+  // vient de s'ouvrir, une confirmation qui appelle son champ, ont posé le leur
+  // et il ne faut pas le leur reprendre (§6.27, §6.22).
+  if (avantPeinture && (!document.activeElement || document.activeElement === document.body)) {
+    racine.querySelector(avantPeinture)?.focus();
+  }
 }
 
 /**
@@ -249,6 +294,7 @@ function brancher() {
   brancherCatalogue();
   brancherCatalogueEnv();
   brancherJournal();
+  brancherInventaireDns();
   brancherServeurs();
 
   const formulaire = racine.querySelector('#formulaire-spark');
@@ -369,6 +415,22 @@ function peindreRegistreSessions() {
   // routes, replié ou déplié, sans se refermer à chaque navigation.
   const hote = document.querySelector('.widget-inv');
   if (!hote) return;
+  // MESURÉ le 2026-09-02, en éprouvant la navigation au clavier : ce bloc est
+  // reconstruit toutes les trois secondes, et le focus qui s'y trouvait tombait
+  // alors sur `<body>`. Un exploitant qui tabule dans le widget en était éjecté
+  // sans rien avoir fait — et la tabulation repartait du début de la page
+  // (DESIGN_SYSTEM.md §14.3 : le focus ne se perd pas quand le contrôle est
+  // reconstruit).
+  //
+  // On retrouve l'élément par son IDENTITÉ déclarée, jamais par sa position :
+  // la liste change entre deux relevés, et un index désignerait un autre bouton.
+  const actif = document.activeElement;
+  const marque = hote.contains(actif) && actif !== hote
+    ? (actif.id ? `#${CSS.escape(actif.id)}`
+       : Object.entries(actif.dataset ?? {})
+           .map(([cle, valeur]) => `[data-${cle.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}="${CSS.escape(valeur)}"]`)
+           .join(''))
+    : null;
   hote.innerHTML = renderSessionRegistry({
     sessions: etat.sessions.items, confirmation: etat.sessions.confirmation,
     sparks: etat.sparks ?? [], ouvert: etat.sessions.ouvert,
@@ -376,6 +438,10 @@ function peindreRegistreSessions() {
     forge: etat.server ?? null,
   });
   brancherRegistreSessions();
+  // Rendu APRÈS le branchement : l'élément restauré doit porter ses écouteurs.
+  // Une marque vide — un bouton sans identité déclarée — ne restaure rien
+  // plutôt que de poser le focus au hasard.
+  if (marque) hote.querySelector(marque)?.focus();
 }
 
 /**
@@ -1353,6 +1419,11 @@ function brancherPanneaux() {
       // Le focus entrant appartient à `brancherModale` (§6.27).
     });
   }
+  // SPK-78 · §38.9.1 : relire la zone, à la demande. C'est une lecture chez le
+  // fournisseur, pas un rafraîchissement d'affichage — elle ne part donc pas
+  // toute seule.
+  racine.querySelector('[data-verifier-recette]')
+    ?.addEventListener('click', verifierRecette);
   // SPK-57 · §49 : la modale des quotas. Elle a son propre état parce que son
   // SUJET est la section « Ressources » et non les panneaux d'administration —
   // les mêler ferait qu'ouvrir l'une fermerait l'autre (§6.27).
@@ -1924,12 +1995,18 @@ async function ouvrirDns(domaine) {
   try {
     corps = await (await fetch('/api/dns/zones')).json();
   } catch (erreur) {
-    corps = { configured: false, reason: `Fournisseur DNS injoignable : ${erreur.message}` };
+    corps = { error: 'dns_unavailable',
+              message: `Fournisseur DNS injoignable : ${erreur.message}` };
   }
+  // §38.1.1 : « aucun jeton » et « jeton refusé » ne sont pas le même état. Le
+  // second n'appelle pas à poser un jeton — il y en a un — mais à le renouveler
+  // ou à lui donner la permission que le message nomme.
+  const raison = refusZones(corps);
   admin.dns = {
     ...admin.dns, loading: false,
-    configured: corps.configured ?? false,
-    reason: corps.reason ?? corps.message ?? null,
+    configured: corps.configured ?? null,
+    reason: corps.configured === false ? raison : null,
+    refus: corps.configured === false ? null : raison,
     zones: corps.zones ?? [],
   };
   // La zone la plus spécifique est PRÉ-CHOISIE, jamais imposée : on peut la
@@ -2048,12 +2125,17 @@ async function chargerRecettes() {
       fetch('/api/dns/recipes').then((r) => r.json()),
       fetch('/api/dns/zones').then((r) => r.json()),
     ]);
+    // §38.1.1 : un refus du fournisseur — jeton expiré, permission manquante —
+    // rend `{error, message}` SANS champ `configured`. Le lire comme une
+    // absence de zones laissait le sélecteur vide et muet. La raison vit dans
+    // `zonesRefus`, que la remise à zéro de l'aperçu n'efface pas.
     admin.recettes = { ...ADMIN_VIDE.recettes,
                        catalogue: catalogue.recipes ?? [],
                        zones: zones.zones ?? [],
-                       erreur: zones.configured === false ? zones.reason : null };
+                       zonesRefus: refusZones(zones) };
   } catch (erreur) {
-    admin.recettes = { ...ADMIN_VIDE.recettes, erreur: erreur.message };
+    admin.recettes = { ...ADMIN_VIDE.recettes,
+                       zonesRefus: `Fournisseur DNS injoignable : ${erreur.message}` };
   }
   peindre();
 }
@@ -2122,9 +2204,92 @@ async function ecrireRecette() {
                : { detail: { message: corps?.message ?? 'Refus du fournisseur DNS.' } } };
   });
   if (resultat?.ok) {
-    etat.admin.recettes = { ...etat.admin.recettes, resultat: resultat.corps };
+    // La zone voyage AVEC le compte rendu : `values` est remis à zéro entre
+    // deux gestes, et la vérification du §38.9.1 doit savoir quoi relire.
+    etat.admin.recettes = { ...etat.admin.recettes,
+                            resultat: { ...resultat.corps, zone: v.recette_zone },
+                            verification: null, verificationErreur: null };
     peindre();
   }
+}
+
+/**
+ * Relit la zone et confronte le compte rendu à ce qu'elle porte (SPK-78, §38.9).
+ *
+ * Ce n'est pas un rafraîchissement d'affichage : c'est une lecture chez le
+ * fournisseur. Le compte rendu dit ce qui a été écrit une fois ; ceci dit ce qui
+ * est en place maintenant.
+ */
+async function verifierRecette() {
+  const recettes = etat.admin.recettes;
+  const fait = recettes.resultat;
+  if (!fait) return;
+  const montrer = () => {
+    const bloc = racine.querySelector('#recette-verification');
+    if (bloc) bloc.innerHTML = renderVerification(etat.admin.recettes);
+  };
+  etat.admin.recettes = { ...recettes, verifieEnCours: true,
+                          verification: null, verificationErreur: null };
+  montrer();
+  try {
+    const reponse = await fetch('/api/dns/verifier', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        zone: fait.zone,
+        // On ne vérifie que ce qui a été ÉCRIT : une ligne refusée n'a rien à
+        // confronter, et l'afficher « absente » ferait passer un refus connu
+        // pour une découverte.
+        records: (fait.records ?? []).filter((r) => r.written)
+          .map((r) => ({ name: r.name, type: r.type, data: r.data })),
+      }),
+    });
+    const corps = await reponse.json();
+    etat.admin.recettes = reponse.ok
+      ? { ...etat.admin.recettes, verifieEnCours: false, verification: corps.checked }
+      : { ...etat.admin.recettes, verifieEnCours: false,
+          verificationErreur: corps.message ?? 'Relecture impossible.' };
+  } catch (erreur) {
+    etat.admin.recettes = { ...etat.admin.recettes, verifieEnCours: false,
+                            verificationErreur: erreur.message };
+  }
+  montrer();
+}
+
+/**
+ * Relève l'état DNS des routes affichées (SPK-78, §38.9.1).
+ *
+ * Les noms partent d'ici : l'écran les affiche déjà, et la réponse décrit
+ * exactement ce qu'il montre.
+ */
+async function chargerEtatDnsRoutes(routes = []) {
+  const domaines = routes.map((r) => r.domain).filter(Boolean);
+  if (!domaines.length) {
+    etat.admin.dnsRoutes = { ...ADMIN_VIDE.dnsRoutes };
+    return;
+  }
+  etat.admin.dnsRoutes = { ...ADMIN_VIDE.dnsRoutes, chargement: true };
+  let corps;
+  try {
+    const reponse = await fetch('/api/dns/etat-routes', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ domains: domaines }),
+    });
+    corps = await reponse.json();
+  } catch (erreur) {
+    corps = { error: 'dns_unavailable', message: erreur.message };
+  }
+  const etats = {};
+  for (const e of corps.states ?? []) etats[String(e.domain).toLowerCase()] = e;
+  etat.admin.dnsRoutes = {
+    chargement: false,
+    configured: corps.configured ?? null,
+    reason: corps.configured === false ? corps.reason : null,
+    // Un relevé impossible ne se déguise pas en « aucun enregistrement » : sans
+    // lecture, l'écran ne dit rien plutôt que de dire faux.
+    erreur: corps.error ? (corps.message ?? null) : null,
+    etats,
+  };
+  peindre();
 }
 
 async function autoriserCle() {
@@ -2344,6 +2509,13 @@ async function chargerDetail(nom, facette = '') {
     etat.error = erreur;
   }
   peindre();
+  // SPK-78 · §38.9.1 : l'état DNS des routes, relevé chez le fournisseur. Il
+  // part APRÈS la peinture et seulement sur la facette qui le montre : le détail
+  // d'un Spark ne doit pas attendre un service extérieur dont il n'a pas besoin
+  // (même raison qu'au §38.6 pour le catalogue des recettes).
+  if (facette === 'routes' && etat.status === 'ready') {
+    chargerEtatDnsRoutes(etat.detail?.routes ?? []);
+  }
   // SPK-75 · §37.4.8 : la reprise. Une session choisie dans le widget, ou —
   // faute de choix explicite — celle que ce Spark porte déjà. Sans ce second
   // cas, revenir sur la facette après un rechargement en ouvrirait une SECONDE
@@ -3094,6 +3266,110 @@ function brancherJournal() {
     ?.addEventListener('click', verifierChaine);
 }
 
+/**
+ * Relève ce qui pointe vers la Forge (SPK-77, §38.8).
+ *
+ * @spec docs/BACKLOG.md#SPK-77 · docs/DAT.md §38.8, §38.1.1 (les trois états
+ *       d'un relevé qui ne rend rien)
+ */
+async function chargerInventaireDns() {
+  etat.route = 'forgedns';
+  etat.forgeDns = { ...FORGE_DNS_VIDE, chargement: true, selection: [] };
+  peindre();
+  let corps;
+  try {
+    corps = await (await fetch('/api/dns/inventaire')).json();
+  } catch (erreur) {
+    corps = { error: 'dns_unavailable',
+              message: `Fournisseur DNS injoignable : ${erreur.message}` };
+  }
+  etat.forgeDns = {
+    ...etat.forgeDns, chargement: false,
+    configured: corps.configured ?? null,
+    // §38.1.1 : un refus du fournisseur — ou une Forge qui ne peut pas
+    // rapprocher — n'est ni une absence de jeton ni une absence d'entrées.
+    reason: corps.configured === false ? corps.reason : (corps.reason ?? null),
+    refus: corps.error ? (corps.message ?? null) : null,
+    forge: corps.forge ?? null,
+    entries: corps.entries ?? [],
+  };
+  peindre();
+}
+
+function brancherInventaireDns() {
+  const vue = etat.forgeDns;
+  for (const case_ of racine.querySelectorAll('[data-dns-entree]')) {
+    case_.addEventListener('change', () => {
+      const cle = case_.dataset.dnsEntree;
+      const prises = new Set(vue.selection ?? []);
+      if (case_.checked) prises.add(cle); else prises.delete(cle);
+      vue.selection = [...prises];
+      peindre();
+      // §14.3 : la repeinture ne doit pas emporter le focus du contrôle qu'on
+      // vient d'actionner — sans cela, la sélection au clavier s'interrompt à
+      // chaque case.
+      racine.querySelector(`[data-dns-entree="${CSS.escape(cle)}"]`)?.focus();
+    });
+  }
+  racine.querySelector('[data-dns-nettoyer]')?.addEventListener('click', () => {
+    vue.confirmation = true; vue.refus = null;
+    peindre();
+  });
+  const formulaire = racine.querySelector('[data-modale="dns-nettoyage"]');
+  if (!formulaire) return;
+  formulaire.addEventListener('submit', async (evenement) => {
+    evenement.preventDefault();
+    await retirerEntreesDns();
+  });
+  racine.querySelector('[data-annule-modale="dns-nettoyage"]')
+    ?.addEventListener('click', () => { vue.confirmation = false; peindre(); });
+}
+
+/**
+ * Retire les entrées désignées, UNE PAR UNE (§38.8.3).
+ *
+ * Chaque retrait est une requête, et chacune est revérifiée par le serveur. Un
+ * refus au milieu de la liste n'annule pas ce qui est déjà parti — on ne peut
+ * pas défaire une suppression DNS — donc l'écran rend le sort de chaque ligne,
+ * jamais un verdict global (même règle qu'au §38.6.3).
+ */
+async function retirerEntreesDns() {
+  const vue = etat.forgeDns;
+  vue.busy = true; vue.refus = null;
+  peindre();
+  const refus = [];
+  const retires = [];
+  for (const entree of choisies(vue)) {
+    try {
+      const reponse = await fetch('/api/dns/record', {
+        method: 'DELETE', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ zone: entree.zone, name: entree.name, type: entree.type }),
+      });
+      const corps = await reponse.json();
+      if (reponse.ok) retires.push(corps);
+      else refus.push({ fqdn: entree.fqdn, message: corps.message ?? 'Retrait refusé.' });
+    } catch (erreur) {
+      refus.push({ fqdn: entree.fqdn, message: erreur.message });
+    }
+  }
+  vue.busy = false;
+  // RIEN n'est parti : c'est un refus pur. Il reste DANS la modale, près du
+  // bouton d'engagement, et la désignation survit (DESIGN_SYSTEM.md §6.22).
+  if (!retires.length) {
+    vue.refus = refus.map((r) => `${r.fqdn} : ${r.message}`).join(' · ');
+    return peindre();
+  }
+  // Quelque chose EST parti : le geste a eu lieu, et on ne défait pas une
+  // suppression DNS. Garder la modale afficherait une liste périmée, où les
+  // entrées déjà retirées paraîtraient encore à retirer. On relève donc de
+  // nouveau — la liste doit être ce que la zone PORTE — et le compte rendu dit
+  // le sort de chaque ligne (§38.6.3).
+  vue.confirmation = false;
+  await chargerInventaireDns();
+  etat.forgeDns.resultat = { retires, refus };
+  peindre();
+}
+
 function brancherCatalogue() {
   const ui = etat.catalogue.ui;
   racine.querySelector('[data-ouvre="image"]')?.addEventListener('click', () => {
@@ -3165,6 +3441,7 @@ function router() {
   const chapitre = location.hash.match(/^#\/manuel(?:\/([A-Za-z0-9-]+))?/);
   if (chapitre) return chargerManuel(chapitre[1] ?? null);
   if (location.hash === '#/serveurs') return chargerServeurs();
+  if (location.hash === '#/forge/dns') return chargerInventaireDns();
   if (location.hash === '#/forge/journal') return chargerJournal();
   if (location.hash === '#/forge/environnement') return chargerCatalogueEnv();
   if (location.hash === '#/forge/images') return chargerCatalogue();

@@ -43,7 +43,7 @@ export const CATALOGUE_SERVEURS_VIDE = {
   open: false, busy: false, refusal: null, confirming: null,
   probe: null, probing: false, hosts: [],
   values: { name: '', kind: 'ssh', host: '', user: 'root', port: 22,
-            remotePort: 9876, sshHost: '', signingKey: '' },
+            remotePort: 9876, sshHost: '', signingKey: '', publicAddress: '' },
 };
 
 /**
@@ -78,6 +78,20 @@ export function renderEpreuve(probe) {
  * un état normal, pas une panne (§36.10.8), et l'aide le dit pour qu'on ne
  * cherche pas un défaut là où il n'y en a pas (§14.5).
  */
+function champAdressePublique(v) {
+  return `
+    <div class="champ">
+      <label for="serveur-publique">Adresse publique</label>
+      <input class="controle technique" id="serveur-publique" name="publicAddress"
+             type="text" autocomplete="off" placeholder="203.0.113.10"
+             value="${echapper(v.publicAddress ?? '')}">
+      <p class="champ__aide">L’adresse par laquelle le <strong>monde</strong>
+      atteint cette Forge — celle que le DNS doit désigner. Laissée vide, elle est
+      déduite de l’hôte ; un alias SSH ou une Forge locale n’en donnent aucune, et
+      l’inventaire DNS ne peut alors rien rapprocher.</p>
+    </div>`;
+}
+
 function champSignature(v) {
   return `
     <div class="champ">
@@ -140,7 +154,7 @@ function champs(ui) {
              value="${echapper(v.remotePort)}">
       <p class="champ__aide">OpenSSH ne le connaît pas : c’est le produit qui sait
       où sparkd écoute à l’autre bout.</p>
-    </div>${champSignature(v)}`;
+    </div>${champAdressePublique(v)}${champSignature(v)}`;
   }
   if (v.kind === 'local') {
     return `${commun}
@@ -148,7 +162,7 @@ function champs(ui) {
       <label for="serveur-port-local">Port de sparkd</label>
       <input class="controle" id="serveur-port-local" name="port" type="number" min="1" max="65535"
              value="${echapper(v.port)}">
-    </div>${champSignature(v)}`;
+    </div>${champAdressePublique(v)}${champSignature(v)}`;
   }
   return `${commun}
     <div class="champ">
@@ -170,7 +184,7 @@ function champs(ui) {
       <label for="serveur-sparkd-ssh">Port de sparkd</label>
       <input class="controle" id="serveur-sparkd-ssh" name="remotePort" type="number" min="1" max="65535"
              value="${echapper(v.remotePort)}">
-    </div>${champSignature(v)}`;
+    </div>${champAdressePublique(v)}${champSignature(v)}`;
 }
 
 function ligne(serveur, courant, tunnels, ui) {

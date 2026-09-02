@@ -110,8 +110,12 @@ export async function monterPile({ dns = null, notify = null } = {}) {
   await writeFile(inventaire, JSON.stringify([
     // `signingKey` désigne une clé PUBLIQUE (§36.10.8) : aucun secret n'entre
     // dans l'inventaire, et c'est vrai ici comme en production.
+    // SPK-77 · §38.8.5 : l'adresse par laquelle le MONDE atteint cette Forge est
+    // DÉCLARÉE. Le transport de la pile est une boucle locale — comme celui
+    // d'un alias `ssh` en exploitation —, et sans cette déclaration l'inventaire
+    // DNS n'aurait rien à rapprocher.
     { name: 'local', kind: 'local', host: '127.0.0.1', port: portSparkd,
-      signingKey: `${cle}.pub` },
+      publicAddress: '203.0.113.10', signingKey: `${cle}.pub` },
   ]));
 
   // 4. L'hôte console.

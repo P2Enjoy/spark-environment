@@ -432,6 +432,274 @@ test('une entrée invalide est refusée par l’épreuve, sans tunnel', async ()
 
 const JETON = { SCW_SECRET_KEY: 'jeton-de-test', SCW_DEFAULT_ORGANIZATION_ID: 'org' };
 
+// --- SPK-77 · L'INVENTAIRE DNS ET SA SUPPRESSION (docs/DAT.md §38.8) ---------
+//
+// Ces preuves passent par l'API, jamais par l'ecran : le §38.8.3 dit que les
+// conditions sont RECONSTATEES par le serveur, et une garde qui ne serait tenue
+// que par l'ecran ne protegerait de rien.
+
+const FORGE_IP = '203.0.113.10';
+
+/**
+ * Un fournisseur DNS et un `sparkd` de doublon, distingues par leur URL.
+ * `zone` porte les enregistrements ; `routes` ce que la Forge dit servir.
+ */
+function amontInventaire({ records, routes = {}, patchs = [] }) {
+  return async (url, options = {}) => {
+    const cible = String(url);
+    if (cible.includes('/v1/ingress/match')) {
+      const { domains } = JSON.parse(options.body);
+      const matches = {};
+      for (const d of domains) matches[d] = routes[d] ?? null;
+      return new Response(JSON.stringify({ matches }), { status: 200 });
+    }
+    if (cible.includes('/dns-zones?')) {
+      return new Response(JSON.stringify({ dns_zones: [
+        { domain: 'exemple.tech', subdomain: '', status: 'active', ns: ['a'] },
+      ] }), { status: 200 });
+    }
+    if (cible.includes('/records')) {
+      if (options.method === 'PATCH') {
+        patchs.push(JSON.parse(options.body));
+        return new Response('{}', { status: 200 });
+      }
+      return new Response(JSON.stringify({ records }), { status: 200 });
+    }
+    return new Response('{"ok":true}', { status: 200 });
+  };
+}
+
+async function forgeInventoriee(options) {
+  const monte = await hote({ env: JETON, ...options });
+  await fetch(`${monte.base}/api/servers`, {
+    method: 'POST', body: JSON.stringify(SERVEUR),
+  });
+  await fetch(`${monte.base}/api/tunnels`, {
+    method: 'POST', body: JSON.stringify({ name: 'prod' }),
+  });
+  return monte;
+}
+
+test('l inventaire ne retient QUE ce qui pointe vers la Forge', async () => {
+  const { base, server } = await forgeInventoriee({
+    amont: amontInventaire({
+      records: [
+        { id: '1', name: 'crm', type: 'A', data: FORGE_IP, ttl: 300 },
+        { id: '2', name: 'ancien', type: 'A', data: FORGE_IP, ttl: 300 },
+        { id: '3', name: 'nas', type: 'A', data: '198.51.100.9', ttl: 300 },
+        { id: '4', name: '', type: 'MX', data: '10 mail.exemple.tech.', ttl: 3600 },
+      ],
+      routes: { 'crm.exemple.tech': { domain: 'crm.exemple.tech', spark_name: 'crm' } },
+    }),
+  });
+  const r = await fetch(`${base}/api/dns/inventaire`);
+  assert.equal(r.status, 200);
+  const { entries, forge } = await r.json();
+  assert.equal(forge.adresse, FORGE_IP);
+  assert.deepEqual(entries.map((e) => e.fqdn),
+    ['ancien.exemple.tech', 'crm.exemple.tech']);
+  assert.equal(entries[0].served, false);
+  assert.equal(entries[1].spark, 'crm');
+  server.close();
+});
+
+test('une Forge SANS rapprochement ne declare RIEN perdu', async () => {
+  // Le point qui decide : sans reponse de la Forge, rendre « perdu » offrirait
+  // de supprimer des routes en service. Le relevé echoue, franchement.
+  const { base, server } = await forgeInventoriee({
+    amont: async (url) => {
+      if (String(url).includes('/v1/ingress/match')) {
+        return new Response('nope', { status: 500 });
+      }
+      if (String(url).includes('/dns-zones?')) {
+        return new Response(JSON.stringify({ dns_zones: [
+          { domain: 'exemple.tech', subdomain: '', status: 'active', ns: [] }] }),
+          { status: 200 });
+      }
+      return new Response(JSON.stringify({ records: [
+        { id: '1', name: 'crm', type: 'A', data: FORGE_IP, ttl: 300 }] }), { status: 200 });
+    },
+  });
+  const r = await fetch(`${base}/api/dns/inventaire`);
+  assert.equal(r.status, 502);
+  assert.match((await r.json()).message, /rapprocher/);
+  server.close();
+});
+
+test('une Forge trop ANCIENNE est nommee comme telle, pas rendue en « HTTP 405 »', async () => {
+  // Mesuré le 2026-09-02 : `/v1/ingress/match` tombe sur `DELETE
+  // /v1/ingress/{domain}` sur une Forge anterieure a SPK-77 — d'ou un 405. Un
+  // code nu ferait chercher un defaut du DNS la ou il n'y a qu'a mettre a jour.
+  const { base, server } = await forgeInventoriee({
+    amont: async (url) => {
+      if (String(url).includes('/v1/ingress/match')) {
+        return new Response('{"detail":"Method Not Allowed"}', { status: 405 });
+      }
+      if (String(url).includes('/dns-zones?')) {
+        return new Response(JSON.stringify({ dns_zones: [
+          { domain: 'exemple.tech', subdomain: '', status: 'active', ns: [] }] }),
+          { status: 200 });
+      }
+      return new Response(JSON.stringify({ records: [
+        { id: '1', name: 'crm', type: 'A', data: FORGE_IP, ttl: 300 }] }), { status: 200 });
+    },
+  });
+  const r = await fetch(`${base}/api/dns/inventaire`);
+  assert.equal(r.status, 502);
+  const { message } = await r.json();
+  assert.match(message, /antérieur à SPK-77/);
+  assert.match(message, /Mettre à jour sparkd/, 'le refus nomme le GESTE, pas seulement la cause');
+  server.close();
+});
+
+test('retirer une entree SERVIE est refuse, et n ecrit RIEN', async () => {
+  const patchs = [];
+  const { base, server } = await forgeInventoriee({
+    amont: amontInventaire({
+      records: [{ id: '1', name: 'crm', type: 'A', data: FORGE_IP, ttl: 300 }],
+      routes: { 'crm.exemple.tech': { domain: '*.exemple.tech', spark_name: 'crm' } },
+      patchs,
+    }),
+  });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'DELETE',
+    body: JSON.stringify({ zone: 'exemple.tech', name: 'crm', type: 'A' }),
+  });
+  assert.equal(r.status, 409);
+  assert.match((await r.json()).message, /couperait une route en service/);
+  assert.deepEqual(patchs, [], 'un refus ne doit rien ecrire chez le fournisseur');
+  server.close();
+});
+
+test('retirer un enregistrement qui pointe AILLEURS est refuse', async () => {
+  const patchs = [];
+  const { base, server } = await forgeInventoriee({
+    amont: amontInventaire({
+      records: [{ id: '1', name: 'nas', type: 'A', data: '198.51.100.9', ttl: 300 }],
+      patchs,
+    }),
+  });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'DELETE',
+    body: JSON.stringify({ zone: 'exemple.tech', name: 'nas', type: 'A' }),
+  });
+  assert.equal(r.status, 409);
+  assert.match((await r.json()).message, /ne désigne pas cette Forge/);
+  assert.deepEqual(patchs, []);
+  server.close();
+});
+
+test('retirer un MX est refuse, meme s il porte l adresse de la Forge', async () => {
+  const patchs = [];
+  const { base, server } = await forgeInventoriee({
+    amont: amontInventaire({
+      records: [{ id: '1', name: 'mail', type: 'MX', data: FORGE_IP, ttl: 300 }],
+      patchs,
+    }),
+  });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'DELETE',
+    body: JSON.stringify({ zone: 'exemple.tech', name: 'mail', type: 'MX' }),
+  });
+  assert.equal(r.status, 409);
+  assert.match((await r.json()).message, /route d'ingress/);
+  assert.deepEqual(patchs, []);
+  server.close();
+});
+
+test('retirer une entree PERDUE vise le nom ET le type exacts', async () => {
+  const patchs = [];
+  const { base, server } = await forgeInventoriee({
+    amont: amontInventaire({
+      records: [
+        { id: '1', name: 'ancien', type: 'A', data: FORGE_IP, ttl: 300 },
+        { id: '2', name: 'ancien', type: 'TXT', data: 'preuve', ttl: 3600 },
+      ],
+      patchs,
+    }),
+  });
+  const r = await fetch(`${base}/api/dns/record`, {
+    method: 'DELETE',
+    body: JSON.stringify({ zone: 'exemple.tech', name: 'ancien', type: 'A' }),
+  });
+  assert.equal(r.status, 200);
+  const rendu = await r.json();
+  assert.equal(rendu.deleted, true);
+  assert.equal(rendu.fqdn, 'ancien.exemple.tech');
+  assert.match(rendu.propagation, /TTL/, 'on ne promet jamais que le nom ne repond plus');
+  assert.deepEqual(patchs[0].changes[0].delete.id_fields, { name: 'ancien', type: 'A' },
+    'le TXT du meme nom ne doit pas etre vise');
+  server.close();
+});
+
+// --- SPK-78 · RELIRE PLUTOT QUE PERSISTER (docs/DAT.md §38.9) --------------
+
+test('la verification rend ce que la zone PORTE, ligne a ligne', async () => {
+  const { base, server } = await hote({
+    env: JETON,
+    amont: async () => new Response(JSON.stringify({ records: [
+      { id: '1', name: 'www', type: 'A', data: '203.0.113.10', ttl: 300 },
+      { id: '2', name: '', type: 'A', data: '198.51.100.9', ttl: 300 },
+    ] }), { status: 200 }),
+  });
+  const r = await fetch(`${base}/api/dns/verifier`, {
+    method: 'POST',
+    body: JSON.stringify({ zone: 'exemple.tech', records: [
+      { name: 'www', type: 'A', data: '203.0.113.10' },
+      { name: '', type: 'A', data: '203.0.113.10' },
+      { name: 'vieux', type: 'A', data: '203.0.113.10' },
+    ] }),
+  });
+  assert.equal(r.status, 200);
+  const { checked } = await r.json();
+  assert.deepEqual(checked.map((l) => l.etat), ['conforme', 'different', 'absent']);
+  assert.equal(checked[1].trouve, '198.51.100.9');
+  server.close();
+});
+
+test('l etat DNS de noms de routes distingue ICI, AILLEURS, ABSENT et HORS ZONE', async () => {
+  const { base, server } = await forgeInventoriee({
+    amont: amontInventaire({
+      records: [
+        { id: '1', name: 'crm', type: 'A', data: FORGE_IP, ttl: 300 },
+        { id: '2', name: 'vitrine', type: 'A', data: '198.51.100.9', ttl: 300 },
+      ],
+    }),
+  });
+  const r = await fetch(`${base}/api/dns/etat-routes`, {
+    method: 'POST',
+    body: JSON.stringify({ domains: ['crm.exemple.tech', 'vitrine.exemple.tech',
+                                     'rien.exemple.tech', 'ailleurs.autre-compte.fr'] }),
+  });
+  assert.equal(r.status, 200);
+  const { states } = await r.json();
+  assert.deepEqual(states.map((s) => s.etat), ['ici', 'ailleurs', 'absent', 'hors-zone']);
+  assert.equal(states[1].data, '198.51.100.9');
+  server.close();
+});
+
+test('sans jeton, l etat des routes DIT que rien n est configure', async () => {
+  const { base, server } = await hote();
+  const r = await fetch(`${base}/api/dns/etat-routes`, {
+    method: 'POST', body: JSON.stringify({ domains: ['a.exemple.tech'] }),
+  });
+  assert.equal(r.status, 200);
+  const corps = await r.json();
+  assert.equal(corps.configured, false);
+  assert.deepEqual(corps.states, []);
+  server.close();
+});
+
+test('sans jeton, l inventaire DIT que rien n est configure, sans crier a la panne', async () => {
+  const { base, server } = await hote();
+  const r = await fetch(`${base}/api/dns/inventaire`);
+  assert.equal(r.status, 200);
+  const corps = await r.json();
+  assert.equal(corps.configured, false);
+  assert.deepEqual(corps.entries, []);
+  server.close();
+});
+
 test('sans jeton, les zones rendent 200 et DISENT que rien n est configure', async () => {
   // Un poste sans fournisseur est le cas NORMAL : rendre une erreur ferait
   // chercher une panne la ou il n'y a qu'une absence de configuration (§38.1).

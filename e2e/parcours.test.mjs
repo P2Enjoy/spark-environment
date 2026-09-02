@@ -2106,6 +2106,222 @@ test('la recette du relais RÉCLAME sa clé et se dit incomplète sans elle', as
   });
 });
 
+test('un fournisseur qui REFUSE ne laisse pas un sélecteur vide et muet', async () => {
+  // Défaut mesuré le 2026-09-02 (§38.1.1) : la clé du poste avait expiré, le
+  // fournisseur répondait `401 {"reason":"expired"}` — et la modale des
+  // recettes montrait un sélecteur de zones vide, sans un mot. L'exploitant
+  // voyait une liste vide et une clé en place, sans savoir laquelle accuser.
+  dns.refuserZones({ message: 'authentication is denied',
+                     method: 'api_key', reason: 'expired',
+                     type: 'denied_authentication' });
+  try {
+    await parcours('recette-zones-refusees', async () => {
+      await ouvrir('boutique', 'routes');
+      await page.waitForSelector('#titre-routes');
+      await page.click('[data-ouvre="recette"]');
+      await page.waitForSelector('dialog.modale[open] #recette-zone', { timeout: 15000 });
+
+      // Le sélecteur ne porte que son invite : il n'y a rien à choisir…
+      const options = await page.$$eval('#recette-zone option', (o) => o.map((e) => e.value));
+      assert.deepEqual(options, [''], 'aucune zone ne doit être proposée');
+
+      // … et il DIT pourquoi, avec le message du fournisseur tel quel.
+      await page.waitForSelector('#recette-zones-vides', { timeout: 10000 });
+      const raison = await page.textContent('#recette-zones-vides');
+      assert.match(raison, /401/, 'le refus du fournisseur doit être nommé');
+      assert.match(raison, /expired/, 'sa raison doit être rendue TELLE QUELLE');
+      assert.ok(!/aucune zone DNS/i.test(raison),
+        'un refus n’est pas un compte sans zone');
+      assert.equal(await page.getAttribute('#recette-zone', 'aria-describedby'),
+        'recette-zones-vides', 'le champ doit décrire son propre vide');
+
+      // La raison SURVIT au geste qui remettait l'aperçu à zéro : c'est là que
+      // le message disparaissait, et que le sélecteur redevenait muet.
+      await page.selectOption('#recette-id', 'site-web');
+      // Repère DÉTERMINISTE de la repeinture : les paramètres de la recette
+      // choisie apparaissent. Attendre un délai ne prouverait rien.
+      await page.waitForSelector('[data-param="address"]', { timeout: 10000 });
+      assert.match(await page.textContent('#recette-zones-vides'), /expired/);
+    });
+  } finally {
+    dns.refuserZones(null);
+  }
+});
+
+test('le widget qui se rafraîchit NE VOLE PAS le focus du clavier', async () => {
+  await parcours('widget-focus-clavier', async () => {
+    // MESURÉ le 2026-09-02 : le registre est reconstruit toutes les trois
+    // secondes. Le focus qui s'y trouvait tombait sur `<body>`, et la tabulation
+    // repartait du début de la page — un exploitant au clavier était éjecté sans
+    // rien avoir fait (DESIGN_SYSTEM.md §14.3).
+    await accueil();
+    await page.focus('[data-widget="basculer"]');
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.dataset?.widget), 'basculer');
+
+    // Deux cadences complètes : le rafraîchissement a forcément eu lieu.
+    await page.waitForFunction(
+      () => document.activeElement?.dataset?.widget !== 'basculer', null,
+      { timeout: 7000 })
+      .then(() => { throw new Error('le focus a quitté la pastille tout seul'); },
+            () => {});
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.dataset?.widget), 'basculer',
+      'le focus doit survivre à la reconstruction du widget');
+  });
+});
+
+// --- SPK-78 · UNE ÉCRITURE DNS SE VÉRIFIE (docs/DAT.md §38.9) --------------
+
+test('le compte rendu d’une recette se VÉRIFIE, et voit l’écart quand il y en a un', async () => {
+  await parcours('recette-verification', async () => {
+    dns.poser([{ name: '', type: 'MX', data: '10 mail.exemple.test.', ttl: 3600 }]);
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-routes');
+    await page.click('[data-ouvre="recette"]');
+    await page.waitForSelector('dialog.modale[open] #recette-id', { timeout: 15000 });
+
+    await page.selectOption('#recette-id', 'site-web');
+    await page.selectOption('#recette-zone', 'exemple.test');
+    await page.fill('[data-param="domain"]', 'exemple.test');
+    await page.fill('[data-param="address"]', '203.0.113.10');
+    await page.dispatchEvent('[data-param="address"]', 'change');
+    await page.waitForSelector('#recette-apercu .recette-lignes', { timeout: 15000 });
+    await page.click('[data-engage="recette"]');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+
+    // §38.9.1 : le compte rendu dit ce qui a été écrit UNE FOIS. La vérification
+    // relit la zone, et dit ce qui est en place MAINTENANT.
+    await page.click('[data-verifier-recette]');
+    await page.waitForSelector('#recette-verification .note-transitoire', { timeout: 15000 });
+    const conforme = await page.textContent('#recette-verification');
+    assert.match(conforme, /chaque ligne est en place/);
+    assert.match(conforme, /TTL/, '§38.9.2 : conforme ne veut pas dire résolu');
+
+    // On déplace la valeur chez le fournisseur : la relecture doit le VOIR, et
+    // nommer ce qu'elle trouve. C'est ce qu'un compte rendu persisté ne saurait
+    // pas faire.
+    dns.poser([{ name: '', type: 'MX', data: '10 mail.exemple.test.', ttl: 3600 },
+               { name: '', type: 'A', data: '198.51.100.77' }]);
+    await page.click('[data-verifier-recette]');
+    await page.waitForSelector('#recette-verification .avertissement', { timeout: 15000 });
+    const ecart = await page.textContent('#recette-verification');
+    assert.match(ecart, /des écarts subsistent/);
+    assert.match(ecart, /198\.51\.100\.77/, 'la valeur TROUVÉE est nommée');
+    assert.match(ecart, /absent/, 'le « www » retiré chez le fournisseur est vu absent');
+  });
+});
+
+test('la facette Routes MONTRE l’état DNS de chaque route', async () => {
+  await parcours('routes-etat-dns', async () => {
+    dns.poser([
+      { name: 'ici', type: 'A', data: '203.0.113.10' },
+      { name: 'ailleurs', type: 'A', data: '198.51.100.9' },
+    ]);
+    await declarerRoute('boutique', 'ici.exemple.test', '8091');
+    await declarerRoute('boutique', 'ailleurs.exemple.test', '8092');
+    await declarerRoute('boutique', 'sans-dns.exemple.test', '8093');
+
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-routes');
+    // Le relevé part APRÈS la peinture : on attend le premier badge.
+    await page.waitForSelector('li:has-text("ici.exemple.test") .badge', { timeout: 20000 });
+
+    assert.match(await page.textContent('li:has-text("ici.exemple.test")'), /DNS ici/);
+    const ailleurs = await page.textContent('li:has-text("ailleurs.exemple.test")');
+    assert.match(ailleurs, /198\.51\.100\.9/,
+      'une route qui pointe ailleurs doit dire OÙ');
+    assert.match(await page.textContent('li:has-text("sans-dns.exemple.test")'),
+      /Aucun enregistrement/);
+  });
+});
+
+// --- SPK-77 · L'INVENTAIRE DNS DE LA FORGE (docs/DAT.md §38.8) -------------
+
+const ZONE_INVENTAIRE = [
+  // Servi : une route de cette Forge porte ce nom.
+  { name: 'servi', type: 'A', data: '203.0.113.10' },
+  // Perdu : la Forge reçoit ce trafic et n'a rien à en faire.
+  { name: 'perdu', type: 'A', data: '203.0.113.10' },
+  // Hors périmètre : une AUTRE machine, et un type que le produit ne retire pas.
+  { name: 'nas', type: 'A', data: '198.51.100.9' },
+  { name: '', type: 'MX', data: '10 mail.exemple.test.', ttl: 3600 },
+];
+
+test('l’inventaire DNS sépare ce qui est servi de ce qui s’est perdu, et nettoie', async () => {
+  await parcours('dns-inventaire', async () => {
+    // Le parcours part d'un état de zone DÉTERMINISTE : les parcours d'écriture
+    // qui précèdent ont laissé la zone dans un état qui leur appartient.
+    dns.poser(ZONE_INVENTAIRE);
+    await declarerRoute('boutique', 'servi.exemple.test', '8090');
+
+    // Depuis l'accueil, par la Forge et son onglet — le chemin d'un exploitant.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('.onglet[href="#/forge/dns"]', { timeout: 15000 });
+    await page.click('.onglet[href="#/forge/dns"]');
+    await page.waitForSelector('#titre-dns', { timeout: 15000 });
+    await page.waitForSelector('table tbody tr', { timeout: 15000 });
+
+    // Le PÉRIMÈTRE : ni le `A` d'une autre machine, ni le `MX`.
+    const tableau = await page.textContent('table');
+    assert.ok(tableau.includes('servi.exemple.test'));
+    assert.ok(tableau.includes('perdu.exemple.test'));
+    assert.ok(!tableau.includes('nas.exemple.test'),
+      'un A qui pointe ailleurs n’est pas dans le périmètre');
+    assert.ok(!/\bMX\b/.test(tableau), 'un autre type n’est pas dans le périmètre');
+
+    // Les DEUX VERDICTS, et le Spark nommé.
+    const ligneServie = 'tr:has-text("servi.exemple.test")';
+    assert.match(await page.textContent(ligneServie), /Servi/);
+    assert.match(await page.textContent(ligneServie), /boutique/);
+    const lignePerdue = 'tr:has-text("perdu.exemple.test")';
+    assert.match(await page.textContent(lignePerdue), /Aucune route ne le sert/);
+
+    // Une entrée SERVIE n'est pas désignable : le serveur la refuserait.
+    assert.equal(await page.locator(`${ligneServie} input[type=checkbox]`).count(), 0);
+
+    // On désigne la perdue, et la confirmation l'ÉNUMÈRE.
+    await page.click(`${lignePerdue} input[type=checkbox]`);
+    await page.click('[data-dns-nettoyer]');
+    await page.waitForSelector('dialog.modale[open]', { timeout: 10000 });
+    const confirmation = await page.textContent('dialog.modale[open]');
+    assert.ok(confirmation.includes('perdu.exemple.test'));
+    assert.ok(confirmation.includes('203.0.113.10'),
+      'la valeur est montrée : c’est ce qui rend le geste relisable');
+
+    // LE POINT QUI DÉCIDE (§38.8.3) : la condition est RECONSTATÉE au moment du
+    // retrait. On fait changer l'enregistrement sous les doigts — exactement la
+    // course que la règle protège — et le serveur refuse.
+    dns.poser([...ZONE_INVENTAIRE.filter((r) => r.name !== 'perdu'),
+               { name: 'perdu', type: 'A', data: '198.51.100.42' }]);
+    await page.click('[data-engage="dns-nettoyage"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 15000 });
+    assert.match(await page.textContent('dialog.modale[open] .refus'),
+      /ne désigne pas cette Forge/);
+    assert.ok(dns.enregistrements().some((r) => r.name === 'perdu'),
+      'un refus ne doit RIEN retirer');
+
+    // Remis dans l'état affiché, le retrait passe.
+    dns.poser(ZONE_INVENTAIRE);
+    await page.click('[data-engage="dns-nettoyage"]');
+    await page.waitForSelector('#dns-resultat', { timeout: 20000 });
+    const bilan = await page.textContent('#dns-resultat');
+    assert.match(bilan, /1 retirée\(s\)/);
+    assert.ok(!bilan.includes('refusée'), 'rien ne devait être refusé cette fois');
+    assert.match(bilan, /TTL/, 'on ne promet jamais que le nom ne répond plus');
+
+    // EFFET, constaté chez le fournisseur.
+    const zone = dns.enregistrements();
+    assert.ok(!zone.some((r) => r.name === 'perdu'), 'l’entrée perdue doit avoir disparu');
+    assert.ok(zone.some((r) => r.name === 'servi'), 'la route servie ne bouge pas');
+    assert.ok(zone.some((r) => r.type === 'MX'),
+      'la messagerie n’est jamais emportée par un nettoyage d’ingress');
+    assert.ok(zone.some((r) => r.name === 'nas'),
+      'un A qui pointe ailleurs n’est jamais retiré');
+  });
+});
+
 // --- SPK-67 · LE CONTRAT D'ÉCHEC DU PILOTE (docs/DAT.md §12.1.4) -----------
 
 test('un geste ORDINAIRE sur une cellule disparue est refusé DANS la modale', async () => {

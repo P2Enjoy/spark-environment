@@ -2561,6 +2561,17 @@ les connaître, et ils seraient faux dès qu'un `ProxyJump` s'interpose.
 `ssh` reste accepté et n'est pas déprécié : le cas simple ne doit pas exiger un
 `ssh_config`.
 
+**`publicAddress`, facultative, tous genres confondus (SPK-77, §38.8.5).**
+L'adresse par laquelle le **monde** atteint cette Forge — celle que le DNS doit
+désigner. Elle ne se confond pas avec le transport : un `alias` ne porte aucun
+hôte, et un `local` est atteint par une boucle locale alors que la machine peut
+très bien avoir une adresse publique. Absente, elle est déduite comme avant :
+l'`host` d'un `ssh`, et rien pour les deux autres. Une **boucle locale** y est
+refusée — l'accepter ferait rapprocher l'inventaire DNS sur une adresse que
+personne ne peut atteindre, donc déclarer « servi » ce qui ne l'est pas. Ce champ
+lève la limite que le §38.6.5 constatait : une Forge par alias n'avait aucune
+adresse connaissable.
+
 #### 22.4.2 Le fichier porte sa version
 
 ```json
@@ -5835,6 +5846,12 @@ Deux règles en découlent, et elles sont générales (`docs/DESIGN_SYSTEM.md` �
    recette, puisque l'aperçu remet son erreur à zéro avant chaque relecture
    (§38.6.3) — le sélecteur redevenait vide et muet.
 
+La même confusion existait sur le drapeau de chargement : les deux lectures — les
+zones, puis l'aperçu — le partagent, et l'écran annonçait « lecture de ce qui est
+déjà en place » avant qu'aucune zone ne soit choisie, en même temps que le champ
+« Zone » annonçait la sienne. Deux annonces pour une seule lecture. La demande en
+cours (`lu`) sépare les deux : elle n'existe que pour un aperçu.
+
 ### 38.2 Ce que le produit fait, et ce qu'il ne fait pas
 
 **Il fait** : lire les zones du compte, lire les enregistrements d'une zone, et
@@ -5845,9 +5862,20 @@ créer ou mettre à jour **un** enregistrement pour un domaine d'ingress.
 - il n'**achète** aucun domaine, et ne renouvelle rien. Une opération qui engage
   de l'argent ne se déclenche pas depuis un écran d'administration ;
 - il ne **transfère** aucune zone, ne change aucun serveur de noms ;
-- il ne **supprime** jamais un enregistrement qu'il n'a pas posé. Une zone réelle
-  porte des enregistrements de messagerie, de vérification et de service dont la
-  suppression casse des choses qui n'ont rien à voir avec le produit ;
+- il ne **supprime** aucun enregistrement, **sauf** dans le cas unique et borné
+  du §38.8.3 : une route d'ingress **perdue**, c'est-à-dire un `A`/`AAAA` qui
+  porte exactement l'adresse de la Forge courante et qu'aucune route de cette
+  Forge ne sert. Une zone réelle porte des enregistrements de messagerie, de
+  vérification et de service dont la suppression casse des choses qui n'ont rien
+  à voir avec le produit ;
+
+  **RÉVISÉ le 2026-09-02.** La règle disait « jamais un enregistrement qu'il n'a
+  pas posé ». C'était une règle que le produit ne pouvait pas appliquer : il ne
+  tient aucun registre de ses écritures, et un `A` posé par lui est en tout point
+  identique à un `A` posé à la main. Ce qui protégeait réellement la zone était
+  l'autre règle, celle du couple nom + type exact — et elle, elle est vérifiable.
+  Le §38.8.3 la remplace par des conditions que le serveur peut RECONSTATER
+  avant chaque suppression ;
 - il ne touche **aucun** enregistrement dont le nom ne correspond pas au domaine
   demandé, ni d'un autre type que celui qu'il écrit. Le rapprochement se fait sur
   le couple nom + type exacts, jamais sur un préfixe. C'est cette règle, et non
@@ -6202,6 +6230,182 @@ Une recette de messagerie affiche donc ces trois points comme des **actions
 humaines restantes**, nommées, à côté de ce qu'elle a écrit. C'est la seule
 façon honnête de livrer cette fonction : le produit fait la part qui lui revient
 et dit précisément où s'arrête son pouvoir.
+
+### 38.8 L'inventaire DNS d'une Forge : ce qui pointe vers elle
+
+**Demandé par le responsable le 2026-09-02.** Le produit sait écrire un
+enregistrement et lire une zone. Il ne sait pas répondre à la question que se
+pose réellement un exploitant : **qu'est-ce qui pointe vers cette Forge, et
+est-ce que cela sert encore à quelque chose ?**
+
+Un nom qui pointe vers la Forge n'est pas une donnée inerte. La Forge reçoit son
+trafic. Si aucune route ne le sert, elle répond une erreur — ou pire, le joker
+d'un autre Spark le sert par accident (§18.3 bis). Une entrée oubliée n'est donc
+pas un déchet : c'est une adresse qui répond, et dont personne ne sait plus
+pourquoi.
+
+#### 38.8.1 Le périmètre, et pourquoi il est aussi étroit
+
+L'inventaire ne retient qu'un enregistrement qui réunit **les deux** conditions :
+
+1. son type est `A` ou `AAAA` ;
+2. sa donnée est **exactement** l'adresse publique de la Forge courante.
+
+Tout le reste des zones du compte est **hors périmètre** : les `MX`, les `TXT`,
+le `A` d'une machine qui n'est pas cette Forge, le `CNAME` d'un service tiers.
+
+Deux raisons, et la seconde est la plus importante :
+
+- un inventaire qui montrerait tout ferait de la console un gestionnaire de DNS,
+  produit que le §38.2 refuse d'être ;
+- le pouvoir de **suppression** du §38.8.3 n'a de sens que sur des
+  enregistrements dont la seule raison d'être possible était de désigner cette
+  Forge. Élargir le périmètre élargirait ce pouvoir, et c'est exactement ce
+  qu'il ne faut pas faire.
+
+#### 38.8.2 Deux verdicts, et la prudence du second
+
+Chaque nom relevé est rapproché des routes déclarées sur cette Forge :
+
+- **servi** — une route sert ce nom, exactement ou par joker. L'écran **nomme**
+  le Spark qui le sert ;
+- **aucune route ne le sert** — la Forge reçoit ce trafic et n'a rien à en
+  faire.
+
+Le second verdict se dit ainsi, et **jamais « inutile »**. Le produit sait
+seulement qu'aucune route de sa base ne sert ce nom ; il ne sait pas si
+l'exploitant sert ce nom sur la Forge par un autre moyen — un site posé à la
+main dans Caddy, une redirection. Annoncer « inutile » serait affirmer ce qu'on
+n'a pas mesuré, et ferait supprimer ce qui marchait.
+
+#### 38.8.3 La suppression : quatre conditions, revérifiées côté serveur
+
+Une entrée peut être retirée **si et seulement si** :
+
+1. son type est `A` ou `AAAA` ;
+2. sa donnée est exactement l'adresse publique de la Forge courante ;
+3. aucune route de cette Forge ne sert son nom ;
+4. l'exploitant l'a **désignée** et a confirmé une liste qui l'**énumère**.
+
+Les trois premières conditions sont **reconstatées par le serveur** au moment de
+la suppression, depuis une lecture fraîche de la zone et des routes — jamais sur
+la foi de ce que l'écran a envoyé (§10 des conventions : la règle vit derrière
+l'API, l'écran n'en est que l'aide). Une entrée devenue servie entre l'affichage
+et le clic est donc refusée, en le disant.
+
+La quatrième est une règle d'écran : la sélection se fait entrée par entrée, et
+la confirmation **liste ce qui va partir**, nom et valeur. Pas de « tout
+nettoyer » qui ne montrerait qu'un compte.
+
+Ce qui reste interdit, sans exception : supprimer un autre type, supprimer un
+`A` qui pointe ailleurs — fût-ce dans la même zone —, supprimer une zone.
+
+#### 38.8.4 Le rapprochement se fait chez `sparkd`, jamais dans la console
+
+La règle qui décide si une route sert un nom est `covers` (§18.3 bis) : le joker
+couvre **un seul niveau**, parce que c'est ce que fait Caddy. La réécrire en
+JavaScript dans la console créerait une **seconde vérité**, qui divergerait à la
+première correction — et le désaccord se solderait par un nom déclaré perdu
+alors qu'il est servi, donc par une suppression fausse.
+
+La console envoie donc les noms relevés à `sparkd`, qui rend pour chacun la
+route qui le sert ou `null` :
+
+```
+POST /v1/ingress/match  {domains: [...]}  →  {matches: {<domain>: {domain, spark_name} | null}}
+```
+
+Une seule implémentation, un contrat explicite. Le jeton DNS, lui, ne quitte
+toujours pas la console : `sparkd` ne voit que des noms (§38.1).
+
+**La page dépend donc de la VERSION de la Forge, et doit le dire.** Mesuré le
+2026-09-02 sur la Forge du responsable : une Forge antérieure à SPK-77 n'a pas
+cette route, et `POST /v1/ingress/match` y tombe sur `DELETE /v1/ingress/{domain}`
+— d'où un **405**, et non un 404. Rendre « HTTP 405 » tel quel ferait chercher un
+défaut du fournisseur DNS là où il n'y a qu'une Forge à mettre à jour. La console
+traduit donc 404 et 405 en une phrase qui nomme la cause **et le geste** : mettre
+à jour `sparkd` (§40).
+
+#### 38.8.5 Où vit la page
+
+Sous la **Forge**, `#/forge/dns`, à côté des pools, des images, de
+l'environnement et du journal. Ce n'est pas une facette d'un Spark : elle couvre
+tous les Sparks, et surtout les noms qui n'appartiennent à **aucun** — qui sont
+précisément l'objet de la page. Même raisonnement qu'au §36.8.1 pour le journal
+et qu'au §43.6 pour le catalogue.
+
+Une Forge dont l'adresse publique n'est ni **déclarée** (`publicAddress`,
+§22.4.1) ni déductible de son transport n'a rien qui puisse pointer vers elle :
+la page le dit et ne relève rien, plutôt que de rapprocher sur une adresse
+inventée.
+
+#### 38.8.6 La surface d'API
+
+```
+GET    /api/dns/inventaire      ce qui pointe vers la Forge, zone par zone, avec son verdict
+DELETE /api/dns/record          {zone, name, type} retire UNE entrée perdue, après revérification
+```
+
+Elles vivent sur l'**hôte console**, comme tout le §38.
+
+### 38.9 Une écriture DNS se vérifie, et son compte rendu n'est pas la seule trace
+
+**Signalé par le responsable le 2026-09-02** : « j'ai appliqué une recette et
+elle est restée en suspens, pas moyen de faire une vérification ; au
+rechargement elle a disparu, alors qu'elle était bien posée dans le DNS. »
+
+Trois faits distincts, et il ne faut pas les confondre :
+
+1. le compte rendu ne vit que dans la mémoire de l'onglet. Un rechargement
+   l'efface. Ce n'est pas un défaut d'affichage : **le produit ne garde aucune
+   trace de ce qu'il a écrit** ;
+2. rien ne permettait de **vérifier**. Le §38.4 dit, à raison, qu'on n'annonce
+   jamais « le domaine est prêt » — mais annoncer « la propagation prend le
+   temps du TTL » sans offrir de relire laisse l'exploitant sans recours. Le
+   compte rendu se lit alors comme une promesse en suspens ;
+3. le Spark ne montre **nulle part** l'état DNS de ses routes.
+
+#### 38.9.1 La décision : relire, plutôt que persister
+
+La source de vérité est **la zone**, jamais un journal local. Un compte rendu
+persisté vieillirait sans le dire : il affirmerait ce qui a été écrit une fois,
+et non ce qui est en place maintenant. C'est exactement la faute que le §38.4
+interdit.
+
+Donc :
+
+- le compte rendu d'une recette porte une action **« Vérifier »**. Elle relit la
+  zone chez le fournisseur et rend, **ligne par ligne**, ce qui s'y trouve
+  maintenant : `conforme`, `différent` — en nommant la valeur trouvée — ou
+  `absent`. C'est une lecture, pas un souvenir ;
+- le compte rendu reste transitoire, et c'est assumé — mais il **cesse d'être la
+  seule trace** : la page du §38.8 dit ce que le DNS porte, et la modale du
+  §38.5.2 le dit route par route ;
+- la liste des routes d'un Spark porte, pour chaque route, l'**état DNS relevé**
+  chez le fournisseur : *pointe vers cette Forge*, *pointe ailleurs* — la valeur
+  trouvée est nommée —, ou *aucun enregistrement*. C'est la réponse à « je ne
+  vois plus rien dans les pages du Spark ».
+
+#### 38.9.2 Ce qu'un état DNS ne dit pas
+
+Un enregistrement conforme ne veut pas dire que le nom résout déjà : le §38.4
+reste entier. L'écran dit ce que **le fournisseur porte**, jamais ce qu'un
+résolveur du monde répond. Un cache chaud sert encore l'ancienne réponse pendant
+le TTL, et aucun de ces écrans ne peut le savoir.
+
+#### 38.9.3 La surface d'API
+
+```
+POST /api/dns/verifier     {zone, records:[{name,type,data}]}  ce que la zone porte MAINTENANT
+POST /api/dns/etat-routes  {domains:[...]}                     l'état DNS de ces noms
+```
+
+`etat-routes` reçoit les **noms**, il ne va pas les chercher : l'écran affiche
+déjà les routes du Spark, et la réponse décrit exactement ce qu'il montre.
+Interroger `sparkd` une seconde fois pour retrouver ce que l'écran tient déjà
+ajouterait une dépendance sans rien fiabiliser — la lecture ne porte aucune règle
+d'autorisation, contrairement au rapprochement du §38.8.4, qui décide d'une
+suppression.
 
 ## 39. Les ports publiés : ce qui ne parle pas HTTP
 

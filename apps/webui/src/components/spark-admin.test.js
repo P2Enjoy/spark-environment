@@ -3,8 +3,16 @@
  *           §39.2, §39.3, §39.5
  * @verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la
  *           preseance du plus specifique, la vue depuis le joker) · §14.7, §14.8
+ * @verifies docs/BACKLOG.md#SPK-78 · docs/DAT.md §38.9 (une ecriture DNS se
+ *           verifie), §38.9.1 (relire plutot que persister), §38.9.2 (conforme
+ *           ne veut pas dire resolu) · docs/DESIGN_SYSTEM.md §14.5
  * @verifies docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
- *           perimetre), §38.3, §38.4, §38.5 — pour « Pointer le domaine ».
+ *           perimetre), §38.1.1 (trois etats : sans jeton, refuse, sans zone),
+ *           §38.3, §38.4, §38.5 — pour « Pointer le domaine ».
+ * @verifies docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.1.1 ·
+ *           docs/DESIGN_SYSTEM.md §6.13 (« vide » et « erreur » sont deux
+ *           etats), §14.5 (une absence utile est NOMMEE) — le selecteur de
+ *           zones porte la raison de son vide.
  * @verifies docs/BACKLOG.md#SPK-21 · docs/DAT.md §26 (les trois surfaces),
  *           §26.2, §26.3, §26.4, §26.5 · §17.2, §18.4, §18.5, §19.3, §19.4 ·
  *           docs/DESIGN_SYSTEM.md §6.19, §6.22, §6.23, §6.24, §14.7
@@ -19,7 +27,7 @@ import assert from 'node:assert/strict';
 import {
   renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
   renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation, zonePour,
-  renderPortsPanel,
+  renderPortsPanel, refusZones, renderEtatDns, renderVerification,
 } from './spark-admin.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -774,10 +782,24 @@ test('une recette ENTIEREMENT ecrite n’est pas presentee comme un avertissemen
 });
 
 test('tant que la lecture n’a pas eu lieu, l’apercu ne PRETEND rien', () => {
-  const enCours = renderRoutesPanel(SPARK, [], recetteUi({ chargement: true }));
+  // `lu` porte la demande en cours : un apercu qui se lit en a TOUJOURS une.
+  const enCours = renderRoutesPanel(SPARK, [],
+    recetteUi({ chargement: true, lu: 'site-web|exemple.tech|{}' }));
   assert.ok(enCours.includes('Lecture de ce qui est déjà en place'));
   const rien = renderRoutesPanel(SPARK, [], recetteUi());
   assert.ok(!rien.includes('Sera écrit'));
+});
+
+test('la lecture des ZONES ne se fait pas passer pour celle de l’apercu', () => {
+  // §38.1.1 : les deux lectures portent le meme drapeau `chargement`. Sans
+  // garde, la modale annoncait « lecture de ce qui est deja en place » avant
+  // meme qu'une zone soit choisie — et le disait en double, le champ « Zone »
+  // annoncant deja la sienne.
+  const rendu = renderRoutesPanel(SPARK, [],
+    recetteUi({ zones: [], chargement: true, lu: null }));
+  assert.ok(rendu.includes('Lecture des zones du compte'));
+  assert.ok(!rendu.includes('Lecture de ce qui est déjà en place'),
+    'une seule lecture est en cours, et l’ecran n’en annonce qu’une');
 });
 
 // --- un port n'est PAS un curseur (SPK-59, DESIGN_SYSTEM.md §6.9 bis) -------
@@ -798,4 +820,141 @@ test('le fragment SSH dit pourquoi il porte un rebond, et renvoie (§1.5 bis)', 
     { keys: [CLE], sshConfig: { config: 'Host crm\n  ProxyJump forge' } }, ui());
   assert.match(rendu, /n’expose jamais son port 22/);
   assert.match(rendu, /href="#\/manuel\/M6"/);
+});
+
+// --- LE VIDE DIT SA RAISON (SPK-47/SPK-50 revises, docs/DAT.md §38.1.1) -----
+// Mesure le 2026-09-02 : la cle du poste avait EXPIRE, le fournisseur refusait,
+// et le selecteur de zones restait vide SANS un mot. Une liste vide n'est pas
+// une reponse.
+
+test('un refus du fournisseur est lu comme tel, pas comme une absence de zones', () => {
+  // Le corps d'un 502 ne porte PAS de champ `configured` : c'est exactement ce
+  // qu'un `configured === false` laissait passer.
+  assert.equal(
+    refusZones({ error: 'dns_unavailable',
+                 message: 'Le fournisseur DNS a refusé (HTTP 401) : expired' }),
+    'Le fournisseur DNS a refusé (HTTP 401) : expired');
+});
+
+test('un poste sans jeton garde sa raison propre', () => {
+  assert.equal(refusZones({ configured: false, reason: 'Aucun jeton DNS sur ce poste.' }),
+    'Aucun jeton DNS sur ce poste.');
+});
+
+test('un compte qui n’a REELLEMENT aucune zone n’est pas un refus', () => {
+  assert.equal(refusZones({ configured: true, zones: [] }), null);
+  assert.equal(refusZones(null), null);
+});
+
+test('le selecteur de zones vide PORTE la raison de son vide', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi(
+    { zones: [], zonesRefus: 'Le fournisseur DNS a refusé (HTTP 401) : expired' },
+    { recette: 'site-web' }));
+  assert.ok(rendu.includes('id="recette-zones-vides"'));
+  assert.ok(rendu.includes('HTTP 401'), 'le message du fournisseur est rendu TEL QUEL');
+  assert.ok(rendu.includes('aria-describedby="recette-zones-vides"'),
+    'le champ doit decrire son propre vide');
+});
+
+test('un compte sans zone le DIT, et ne prend pas la couleur du refus', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({ zones: [] }, { recette: 'site-web' }));
+  assert.ok(rendu.includes('ne porte aucune zone DNS'));
+  assert.ok(!rendu.includes('champ__erreur'), 'un fait n’est pas une erreur');
+});
+
+test('tant qu’on lit les zones, l’ecran ne conclut PAS a leur absence', () => {
+  const rendu = renderRoutesPanel(SPARK, [],
+    recetteUi({ zones: [], chargement: true }, { recette: 'site-web' }));
+  assert.ok(rendu.includes('Lecture des zones du compte'));
+  assert.ok(!rendu.includes('ne porte aucune zone DNS'));
+});
+
+test('la raison du vide SURVIT a la remise a zero de l’apercu', () => {
+  // C'est le coeur du defaut : `erreur` est remise a null avant chaque
+  // relecture d'apercu. Une raison logee la disparaissait au premier
+  // changement de recette, et le selecteur redevenait vide et muet.
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi(
+    { zones: [], zonesRefus: 'Le fournisseur DNS a refusé (HTTP 401) : expired',
+      erreur: null, apercu: null },
+    { recette: 'site-web' }));
+  assert.ok(rendu.includes('HTTP 401'));
+});
+
+test('un refus du fournisseur n’envoie PAS poser un jeton qui est deja la', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], ui({
+    open: 'dns',
+    dns: { ...ADMIN_VIDE.dns, domain: ROUTE_DNS.domain, configured: null, zones: [],
+           refus: 'Le fournisseur DNS a refusé (HTTP 401) : expired' },
+  }));
+  assert.ok(rendu.includes('id="dns-refus"'));
+  assert.ok(rendu.includes('HTTP 401'));
+  assert.ok(!rendu.includes('Le jeton vit sur ce poste'),
+    'conseiller de poser un jeton enverrait chercher au mauvais endroit');
+  assert.ok(!rendu.includes('ne porte aucune zone DNS'),
+    'un refus n’est pas un compte vide');
+});
+
+// --- SPK-78 · L'ETAT DNS D'UNE ROUTE, ET LA VERIFICATION (§38.9) -----------
+
+test('tant que rien n’est relevé, la route n’affiche AUCUN etat', () => {
+  // « pas encore su » n'est pas « aucun enregistrement » : afficher un etat
+  // avant la lecture ferait croire a un fait mesure.
+  assert.equal(renderEtatDns({ etats: {} }, 'crm.exemple.tech'), '');
+  assert.equal(renderEtatDns(undefined, 'crm.exemple.tech'), '');
+});
+
+test('les quatre etats DNS d’une route se distinguent, et nomment ce qu’ils savent', () => {
+  const etats = {
+    'a.exemple.tech': { domain: 'a.exemple.tech', etat: 'ici' },
+    'b.exemple.tech': { domain: 'b.exemple.tech', etat: 'ailleurs', data: '198.51.100.9' },
+    'c.exemple.tech': { domain: 'c.exemple.tech', etat: 'absent', zone: 'exemple.tech' },
+    'd.autre.fr': { domain: 'd.autre.fr', etat: 'hors-zone' },
+  };
+  assert.match(renderEtatDns({ etats }, 'a.exemple.tech'), /DNS ici/);
+  const ailleurs = renderEtatDns({ etats }, 'b.exemple.tech');
+  assert.match(ailleurs, /198\.51\.100\.9/, 'pointer ailleurs SANS dire ou n’apprend rien');
+  assert.match(ailleurs, /badge--danger/, 'le trafic n’arrive pas ici : c’est un defaut');
+  assert.match(renderEtatDns({ etats }, 'c.exemple.tech'), /Aucun enregistrement/);
+  const dehors = renderEtatDns({ etats }, 'd.autre.fr');
+  assert.match(dehors, /hors du compte/);
+  assert.ok(!/Aucun enregistrement/.test(dehors),
+    'un nom dont la zone est ailleurs n’est pas un oubli');
+});
+
+test('la casse d’un domaine ne fait pas perdre son etat', () => {
+  const etats = { 'crm.exemple.tech': { domain: 'crm.exemple.tech', etat: 'ici' } };
+  assert.match(renderEtatDns({ etats }, 'CRM.Exemple.tech'), /DNS ici/);
+});
+
+test('la verification dit ce que la zone PORTE, sans promettre la resolution', () => {
+  const rendu = renderVerification({ verification: [
+    { name: 'www', type: 'A', etat: 'conforme' },
+    { name: '', type: 'A', etat: 'different', trouve: '198.51.100.9' },
+    { name: 'vieux', type: 'A', etat: 'absent' },
+  ] });
+  assert.ok(rendu.includes('des écarts subsistent'));
+  assert.ok(rendu.includes('198.51.100.9'), 'la valeur trouvee est NOMMEE');
+  assert.ok(rendu.includes('@ A'), 'l’apex se note « @ »');
+  assert.ok(rendu.includes('TTL'), '§38.9.2 : conforme ne veut pas dire resolu');
+  assert.ok(!/en ligne|résout|prêt/i.test(rendu));
+});
+
+test('une verification SANS ecart n’est pas presentee comme un avertissement', () => {
+  const rendu = renderVerification({ verification: [
+    { name: 'www', type: 'A', etat: 'conforme' }] });
+  assert.ok(rendu.includes('chaque ligne est en place'));
+  assert.ok(!rendu.includes('avertissement'));
+});
+
+test('une relecture IMPOSSIBLE le dit, et ne conclut pas a la conformite', () => {
+  const rendu = renderVerification({
+    verificationErreur: 'Le fournisseur DNS a refusé (HTTP 401) : expired' });
+  assert.ok(rendu.includes('HTTP 401'));
+  assert.ok(!/conforme|en place/.test(rendu));
+});
+
+test('tant que la relecture court, l’ecran ne conclut RIEN', () => {
+  const rendu = renderVerification({ verifieEnCours: true });
+  assert.ok(rendu.includes('Relecture de la zone'));
+  assert.ok(!/conforme|absent/.test(rendu));
 });

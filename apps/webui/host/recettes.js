@@ -189,7 +189,15 @@ export function catalogue({ adresseForge = null } = {}) {
  * serait pire que ne rien proposer (docs/DESIGN_SYSTEM.md §14.6).
  */
 export function adressePublique(serveur) {
-  if (!serveur || serveur.kind === 'local') return null;
+  if (!serveur) return null;
+  // SPK-77 · §38.8.5 : ce qui est DÉCLARÉ prime sur ce qui est déduit. Le
+  // transport ne porte pas toujours l'adresse publique — un alias `ssh` la cache
+  // dans le `ssh_config`, et une Forge locale est atteinte par une boucle
+  // locale alors que la machine, elle, peut très bien avoir une adresse
+  // publique. C'est ce qui lève la limite connue du §38.6.5.
+  const declaree = String(serveur.publicAddress ?? '').trim();
+  if (declaree) return declaree;
+  if (serveur.kind === 'local') return null;
   const hote = String(serveur.host ?? '').trim();
   if (!hote || hote === '127.0.0.1' || hote === 'localhost') return null;
   return hote;

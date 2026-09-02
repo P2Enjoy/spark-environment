@@ -209,3 +209,15 @@ test('une Forge locale ou déclarée par alias n’a pas d’adresse publique', 
   assert.equal(adressePublique({ kind: 'ssh', host: '51.158.54.202' }), '51.158.54.202');
   assert.equal(adressePublique(null), null);
 });
+
+test('l’adresse DECLAREE prime sur celle qu’on deduirait du transport (SPK-77)', () => {
+  // §38.8.5 : c'est ce qui leve la limite connue du §38.6.5 — un alias `ssh` et
+  // une Forge locale n'avaient AUCUNE adresse connaissable.
+  assert.equal(adressePublique({ kind: 'alias', sshHost: 'ma-forge',
+                                 publicAddress: '203.0.113.10' }), '203.0.113.10');
+  assert.equal(adressePublique({ kind: 'local', host: '127.0.0.1',
+                                 publicAddress: '203.0.113.10' }), '203.0.113.10');
+  assert.equal(adressePublique({ kind: 'ssh', host: '51.158.54.202',
+                                 publicAddress: '203.0.113.10' }), '203.0.113.10',
+               'la declaration prime : le transport peut passer par un rebond');
+});

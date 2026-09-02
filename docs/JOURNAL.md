@@ -4,6 +4,142 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-09-02 — Le 405 de la Forge, et le focus que le widget volait
+
+**Deux constats faits en éprouvant SPK-77, et aucun des deux par relecture.**
+
+**Le premier vient du responsable, sur sa Forge réelle** : la page « Forge → DNS »
+rendait « HTTP 405 ». La cause n'est pas le DNS. La page demande à `sparkd`
+quelles routes servent les noms relevés (`POST /v1/ingress/match`) ; sur une
+Forge antérieure à SPK-77, ce chemin n'existe pas et tombe sur
+`DELETE /v1/ingress/{domain}` — d'où un **405**, et non le 404 qu'on attendrait.
+Un code nu envoyait chercher un défaut du fournisseur là où il n'y avait qu'une
+Forge à mettre à jour. La console traduit désormais 404 et 405 en une phrase qui
+nomme la cause **et le geste**, et l'opération est consignée en OP-14. La page
+reste inopérante jusqu'à la mise à jour, et c'est voulu : sans rapprochement,
+déclarer « perdu » offrirait de supprimer des routes en service.
+
+**Le second est sorti du parcours clavier**, qui s'est mis à échouer après l'ajout
+de l'onglet DNS — et seulement dans la suite complète, jamais isolé. L'ajout d'un
+onglet n'était pas la cause : il a rendu visible un défaut plus ancien. Le
+registre flottant est reconstruit toutes les trois secondes, et le focus qui s'y
+trouvait tombait alors sur `<body>`. Un exploitant qui tabule dans le widget en
+est éjecté sans rien avoir fait, et la tabulation repart du début de la page.
+Mesuré, puis prouvé rouge avant correction.
+
+**Ce qu'il faut en retenir.** Un test qui devient rouge après une modification
+sans rapport n'est pas forcément un test à ajuster. Ici, l'onglet supplémentaire
+allongeait d'une frappe le parcours au clavier, ce qui suffisait à tomber dans la
+fenêtre de trois secondes. Le réflexe — élargir le budget de frappes — aurait
+enterré un vrai défaut d'accessibilité.
+
+**Décision.** Le focus est rendu au contrôle retrouvé par son **identité
+déclarée**, jamais par sa position : la liste des sessions change entre deux
+relevés, et un index désignerait un autre bouton. C'est la même règle qu'au
+§6.27 pour la modale, dont le déclencheur est retrouvé par son identifiant.
+
+## 2026-09-02 — Ce qui pointe vers la Forge, et ce qu'une écriture laisse derrière elle
+
+**Problème.** Deux demandes du responsable, le même jour, et elles se répondent :
+
+1. « on doit pouvoir lister depuis une Forge tous les DNS qui pointent vers lui,
+   retrouver vers quoi ils pointent ou s'ils sont perdus, et nettoyer les entrées
+   perdues » ;
+2. « j'ai appliqué une recette et elle est restée en suspens, pas moyen de faire
+   une vérification ; au rechargement elle a disparu, alors qu'elle était bien
+   posée dans le DNS ».
+
+**Observations.** Le produit sait écrire un enregistrement et lire une zone. Il
+ne sait rien dire de l'ensemble. Le compte rendu d'une recette vit dans
+`etat.admin.recettes.resultat`, c'est-à-dire dans la mémoire de l'onglet ; aucune
+écriture DNS ne laisse de trace ailleurs, puisqu'elle ne passe pas par `sparkd`
+et n'entre donc pas au journal d'audit.
+
+**Trois décisions structurantes.**
+
+*Le périmètre de l'inventaire est étroit, et c'est ce qui le rend sûr* (§38.8.1).
+On ne retient qu'un `A`/`AAAA` portant **exactement** l'adresse de la Forge. Ce
+n'est pas de la simplicité : c'est ce qui borne le pouvoir de suppression aux
+enregistrements dont la seule raison d'être possible était de désigner cette
+Forge.
+
+*Le §38.2 est révisé, et il faut le dire franchement.* La règle « ne supprime
+jamais un enregistrement qu'il n'a pas posé » était **inapplicable** : le produit
+ne tient aucun registre de ses écritures, et un `A` posé par lui est identique à
+un `A` posé à la main. Ce qui protégeait vraiment la zone était l'autre règle,
+celle du couple nom + type exact. Quatre conditions la remplacent (§38.8.3), dont
+trois sont reconstatées par le serveur avant chaque suppression — jamais sur la
+foi de l'écran.
+
+*Le rapprochement se fait chez `sparkd`* (§38.8.4). `covers` doit rester
+identique à ce que fait Caddy ; une seconde implémentation en JavaScript
+divergerait à la première correction, et le désaccord se solderait par un nom
+déclaré perdu alors qu'il est servi — donc par une suppression fausse. Une route
+`POST /v1/ingress/match` garde une seule vérité. Le jeton DNS ne quitte pas la
+console pour autant : `sparkd` ne voit que des noms.
+
+**Sur la seconde demande : relire, plutôt que persister** (§38.9.1). Persister le
+compte rendu aurait été le réflexe ; il aurait vieilli sans le dire, affirmant ce
+qui a été écrit une fois au lieu de ce qui est en place. C'est précisément la
+faute que le §38.4 interdit depuis SPK-47. Le compte rendu gagne donc une action
+qui **relit la zone**, et l'état DNS d'une route devient visible dans la facette
+« Routes » du Spark.
+
+**Conséquence.** Deux unités ouvertes, SPK-77 et SPK-78, spécifiées avant tout
+code. SPK-78 dépend de SPK-77 pour le relevé qu'elle réemploie.
+
+## 2026-09-02 — Un sélecteur vide n'est pas une réponse : la clé avait expiré
+
+**Problème.** Signalé par le responsable : « le sélecteur de domaines, malgré la
+clé API de Scaleway, il est vide ». La clé est bien dans le `.env` du poste, et
+l'écran ne dit rien.
+
+**Observations.** Interrogation directe de l'API, en lecture seule, avec la clé
+du `.env` :
+
+```
+GET https://api.scaleway.com/domain/v2beta1/dns-zones → 401
+{"message":"authentication is denied","method":"api_key","reason":"expired",
+ "type":"denied_authentication"}
+```
+
+La clé n'est pas fausse : elle a **expiré**. Le produit n'y peut rien, et c'est
+au responsable de la renouveler dans la console Scaleway.
+
+Mais la console, elle, a un vrai défaut : elle n'a rien dit. Le chemin complet,
+relu :
+
+1. `GET /api/dns/zones` rend correctement un `502 dns_unavailable` portant le
+   message du fournisseur — jusque-là, tout est juste ;
+2. `chargerRecettes` ne retenait la raison que si `zones.configured === false`.
+   Or le corps d'un refus est `{error, message}` : il ne porte **aucun** champ
+   `configured`. La raison passait donc au travers, et `zones: []` faisait le
+   reste ;
+3. même en la retenant, elle était logée dans `recettes.erreur`, qui porte le
+   refus d'**aperçu** et que `lireApercuRecette` remet à `null` avant chaque
+   relecture. Elle aurait disparu au premier changement de recette.
+
+**Décision.** Trois états, pas deux (`docs/DAT.md` §38.1.1) : *aucun jeton*,
+*jeton refusé*, *compte sans zone*. Chacun se dit autrement, parce que chacun
+appelle un geste différent — poser une clé, la renouveler, ou créer une zone.
+La raison du vide devient un état **propre** (`zonesRefus`), affiché sous le
+champ qu'il vide, et que la remise à zéro de l'aperçu n'atteint pas.
+
+**Conséquence collatérale, et elle comptait.** Le panneau « Pointer le domaine »
+traitait lui aussi le refus comme une absence de jeton : il affichait le message
+du fournisseur, mais l'accompagnait de l'aide « le jeton vit sur ce poste,
+jamais sur la Forge ». Devant une clé expirée, ce conseil envoie chercher au
+mauvais endroit. Le refus a maintenant son rendu à lui, sans cette aide.
+
+**Vérifications.** Sept tests d'écran neufs, rouges avant correction ; un
+parcours E2E depuis l'accueil contre le doublon local, à qui l'on apprend à
+refuser la lecture des zones avec le corps **réel** du fournisseur ; captures du
+sélecteur refusé et du panneau refusé, observées.
+
+**Limite assumée.** Le harnais prouve que l'écran dit le refus ; il ne prouve pas
+que Scaleway rend ce corps-là — cela, c'est la mesure du jour ci-dessus qui
+l'établit, et elle est consignée ici pour cette raison.
+
 ## 2026-09-02 — Trois images proposées sur quatre n'étaient pas amorçables
 
 **Problème.** Deux signalements du responsable, à quelques minutes d'écart, sur
@@ -8384,6 +8520,40 @@ capacité inventée. Le parcours miroir exige encore une machine à deux support
 réellement libres. Les deux créations, la panne médiane/reprise et leurs
 illustrations restent dues. La prochaine session reprend donc SPK-68 à ce point,
 toujours sans driver local ni factice.
+
+---
+
+## 2026-08-22 · SPK-68 — interruption réelle produite, reprise visuelle encore à observer
+
+La console d'exploitation a été lancée depuis `main` publié (`50a953fa9981`),
+avec un inventaire isolé qui ne contient que `51.158.54.202` et
+`212.47.246.142`. Aucun driver local ou factice n'a servi de preuve. Depuis
+l'accueil, la Forge existante a rendu ses deux Sparks, son pool ZFS `spark`,
+Incus 7.3 et son plan d'installation : **conserver** le pool, sans confirmation
+destructive. Le plan a été relu puis engagé dans l'interface réelle.
+
+Pendant que la ligne « Paquet d'installation » était réellement `en cours`, le
+processus hôte de la console a été interrompu brutalement. Le journal privé est
+resté sur disque avec `status: running`, `currentPhase: access`, le plan de
+réutilisation du pool et l'événement « Vérification du paquet d'installation
+publié ». La même console a ensuite redémarré avec exactement le même inventaire
+et le même journal : c'est le cas réel que le gestionnaire doit convertir en
+`interrupted` à la première relecture.
+
+Les captures produites et observées localement sont
+`spk68-real-01-existing-baseline.png`, `spk68-real-02-existing-plan.png` et
+`spk68-real-03-in-progress-before-interruption.png`. Une dernière vérification
+SSH en lecture seule de `systemctl`, `healthz` et `readyz` a été demandée après
+la coupure, mais le même quota d'outil l'a refusée avant toute connexion ; elle
+n'est donc pas déclarée faite.
+
+La navigation visuelle suivant ce redémarrage n'a pas pu être achevée : l'outil
+de navigateur a refusé le clic depuis l'accueil en raison de sa limite de quota
+d'usage. Aucun détour programmatique n'a remplacé cette observation. Il reste
+donc à ouvrir *Forge* après autorisation explicite, constater visuellement
+« Installation interrompue » et **Reprendre le diagnostic**, puis rejouer le
+plan jusqu'aux preuves `healthz`, `readyz`, topologie et build. SPK-68 reste
+`[~]`; aucune fonctionnalité n'est déclarée codée ni validée par cette session.
 
 ---
 

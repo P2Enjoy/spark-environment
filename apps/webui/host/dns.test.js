@@ -249,13 +249,39 @@ test('une écriture vise le nom ET le type exacts, et interdit de créer une zon
   assert.ok(!('ready' in ecrit), 'poser un enregistrement ne le fait pas RÉSOUDRE (§38.4)');
 });
 
-test('aucune méthode ne SUPPRIME : le produit ne défait pas ce qu’il n’a pas posé', () => {
-  // §38.2. La preuve porte sur la surface publique du client, parce que c'est
-  // elle qu'un écran pourrait appeler.
+test('la surface du client reste CLOSE : une seule suppression, et rien d’autre', () => {
+  // §38.2, RÉVISÉ le 2026-09-02 (§38.8.3). La règle disait « ne supprime jamais
+  // un enregistrement qu'il n'a pas posé » — inapplicable, puisque le produit
+  // ne tient aucun registre de ses écritures et qu'un `A` posé par lui est
+  // identique à un `A` posé à la main.
+  //
+  // Ce que la preuve établit est INCHANGÉ dans son intention : la surface du
+  // client est close, et rien ne s'y ajoute sans passer par la spécification.
+  // `deleteRecord` n'y entre pas seule : les quatre conditions du §38.8.3 sont
+  // vérifiées par l'appelant, et `host/dns-inventaire.test.js` les éprouve.
   const client = new ScalewayDns({ token: 't', organizationId: 'o', fetch: async () => {} });
   const surface = Object.getOwnPropertyNames(Object.getPrototypeOf(client));
   assert.deepEqual(surface.sort(),
-                   ['constructor', 'existant', 'records', 'setRecord', 'zones']);
+                   ['constructor', 'deleteRecord', 'existant', 'records',
+                    'setRecord', 'zones']);
+});
+
+test('la suppression vise le nom ET le type exacts, jamais un préfixe', async () => {
+  // §38.8.3 : c'est cette précision qui protège le `MX` ou le `TXT` du MÊME nom.
+  const envoyes = [];
+  const client = new ScalewayDns({
+    token: 't', organizationId: 'o',
+    fetch: async (_url, options) => {
+      envoyes.push(JSON.parse(options.body));
+      return new Response('{}', { status: 200 });
+    },
+  });
+  const rendu = await client.deleteRecord(
+    { zone: 'lelabs.tech', name: 'ancien', type: 'A' });
+  assert.equal(rendu.deleted, true);
+  assert.deepEqual(envoyes[0].changes[0].delete.id_fields,
+                   { name: 'ancien', type: 'A' });
+  assert.equal(envoyes[0].disallow_new_zone_creation, true);
 });
 
 test('un refus du fournisseur remonte SON message, pas un « HTTP 403 » nu', async () => {

@@ -115,6 +115,29 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-14 · Mettre à jour `sparkd` pour l'inventaire DNS (SPK-77)
+
+```
+État          : EN ATTENTE. Constaté le 2026-09-02 sur la Forge du responsable.
+Pourquoi      : la page « Forge → DNS » demande à la Forge quelles routes servent
+                les noms relevés (`POST /v1/ingress/match`, docs/DAT.md §38.8.4).
+                Une Forge antérieure à SPK-77 n'a pas cette route ; l'appel y
+                tombe sur `DELETE /v1/ingress/{domain}` et rend **405**.
+Symptôme      : la page affiche « Cette Forge exécute un sparkd antérieur à
+                SPK-77 ». Aucun relevé n'est possible tant que la mise à jour
+                n'est pas faite — et c'est voulu : sans rapprochement, déclarer
+                « perdu » offrirait de supprimer des routes en service.
+Ce qu'il faut : 1. committer et pousser le code de SPK-77 ;
+                2. console → Forge → « Mettre à jour sparkd » ;
+                3. rouvrir Forge → DNS et relever.
+Migration     : AUCUNE. La route est en lecture seule, ne touche pas le registre,
+                et n'ajoute aucune colonne.
+Retour arrière: « Revenir à la build précédente » depuis le même écran. La page
+                DNS redevient alors inopérante, en le disant.
+Risque        : nul pour les données. La route ne lit que la table des routes.
+```
+
+
 ### OP-01 · CLOSE le 2026-08-20 — la disposition du stockage est tranchée
 
 ```

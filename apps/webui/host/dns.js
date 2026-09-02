@@ -8,6 +8,8 @@
  *       périmètre), §38.1 (où vit le secret), §38.2 (ce que le produit ne fait
  *       pas), §38.3 (ce qu'écrit un enregistrement d'ingress), §38.5 (la garde
  *       d'écriture) · docs/DAT.md §22.4 (l'inventaire ne porte aucun secret)
+ * @spec docs/BACKLOG.md#SPK-77 · docs/DAT.md §38.8.3 (la seule suppression que
+ *       le produit s'autorise) · §38.2 révisé le 2026-09-02
  *
  * Le jeton vit dans l'environnement de CE processus, jamais sur la Forge et
  * jamais dans `servers.json`. Un jeton absent n'est pas une panne : la fonction
@@ -314,6 +316,30 @@ export class ScalewayDns {
     // propagation prend le temps du TTL et un cache chaud sert encore
     // l'ancienne réponse (§38.4).
     return { ...prepare, fqdn: `${name}.${zone}`, written: true };
+  }
+
+  /**
+   * Retire l'enregistrement de CE nom et de CE type, et rien d'autre (§38.8.3).
+   *
+   * Cette méthode ne juge RIEN : elle exécute. Les quatre conditions du §38.8.3
+   * sont vérifiées par l'appelant, sur une lecture fraîche, avant d'arriver ici.
+   * Les dédoubler ici ferait deux règles à maintenir, dont une finirait par
+   * mentir.
+   *
+   * `id_fields` vise le couple nom + type exact — la même précision qu'à
+   * l'écriture (§38.2) : un `MX` ou un `TXT` du même nom n'est pas touché.
+   */
+  async deleteRecord({ zone, name, type }) {
+    const corps = {
+      changes: [{ delete: { id_fields: { name, type } } }],
+      return_all_records: false,
+      disallow_new_zone_creation: true,
+    };
+    await this.#appel(`/dns-zones/${encodeURIComponent(normaliser(zone))}/records`, {
+      method: 'PATCH',
+      body: JSON.stringify(corps),
+    });
+    return { zone: normaliser(zone), name, type, deleted: true };
   }
 }
 

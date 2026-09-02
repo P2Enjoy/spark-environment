@@ -226,3 +226,36 @@ test('aller-retour d’un serveur local', async () => {
   await save([local], chemin);
   assert.deepEqual(await load(chemin), [local]);
 });
+
+// --- SPK-77 · L'ADRESSE PUBLIQUE DÉCLARÉE (docs/DAT.md §38.8.5) -------------
+
+test('une adresse publique DECLAREE survit a l’aller-retour, quel que soit le genre', () => {
+  // Le transport ne porte pas toujours l'adresse publique : un alias `ssh` la
+  // cache dans le `ssh_config`, une Forge locale est atteinte par une boucle
+  // locale. Sans ce champ, l'inventaire DNS n'a rien a rapprocher.
+  assert.equal(validate({ name: 'a', kind: 'alias', sshHost: 'ma-forge',
+                           publicAddress: '203.0.113.10' }).publicAddress,
+               '203.0.113.10');
+  assert.equal(validate({ name: 'b', kind: 'local', host: '127.0.0.1', port: 9876,
+                           publicAddress: '203.0.113.10' }).publicAddress,
+               '203.0.113.10');
+  assert.equal(validate({ name: 'c', kind: 'ssh', host: '51.158.54.202',
+                           publicAddress: '203.0.113.10' }).publicAddress,
+               '203.0.113.10');
+});
+
+test('une adresse publique ABSENTE ne pose aucun champ', () => {
+  assert.ok(!('publicAddress' in validate({ name: 'a', kind: 'ssh', host: 'h' })));
+  assert.ok(!('publicAddress' in validate({ name: 'a', kind: 'ssh', host: 'h',
+                                            publicAddress: '  ' })));
+});
+
+test('une BOUCLE LOCALE est refusee comme adresse publique', () => {
+  // L'accepter ferait rapprocher l'inventaire DNS sur une adresse que personne
+  // ne peut atteindre — et declarer « servi » ce qui ne l'est pas.
+  for (const boucle of ['127.0.0.1', 'localhost', '::1']) {
+    assert.throws(
+      () => validate({ name: 'a', kind: 'ssh', host: 'h', publicAddress: boucle }),
+      /boucle locale/);
+  }
+});

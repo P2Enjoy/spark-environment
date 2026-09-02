@@ -159,6 +159,7 @@ en avertissement et l'assistant n'en reproduira pas.
 
 ### Obtenir d'emblée une machine partitionnée
 
+
 Chez un hébergeur qui accepte un schéma de partitionnement à la création du
 serveur — Scaleway le fait —, le fournir évite tout repartitionnement ultérieur.
 Ce schéma laisse **`sda5` et `sdb5` libres** pour le pool :
@@ -421,6 +422,12 @@ ignoré par Git — jamais sur la Forge, où il serait lisible par qui y détien
 `root`, et jamais dans `servers.json`, dont le contrat interdit tout secret.
 Une variable exportée **vide** n'écrase pas le fichier : elle neutralise un
 héritage.
+
+Un jeton présent ne veut pas dire un jeton valide. Une clé **expirée** ou privée
+de la permission de lire les zones fait répondre `401` au fournisseur ; la
+console rend alors son message tel quel, sous le champ « Zone » de l'écran, et ne
+le confond ni avec l'absence de jeton, ni avec un compte sans zone
+(`docs/DAT.md` §38.1.1).
 
 ## Sécurité
 

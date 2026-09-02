@@ -1081,6 +1081,25 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             return {"routes": ingress_service.listing(connection)}
 
+    @app.post("/v1/ingress/match", tags=["ingress"])
+    def match_routes(body: dict = Body(...)) -> dict:
+        """Quelles routes servent ces noms ? (SPK-77, docs/DAT.md §38.8.4)
+
+        Une LECTURE, malgré le `POST` : une liste de noms n'a pas sa place dans
+        une chaîne de requête, et la console en envoie autant que la zone en
+        porte. Rien n'est écrit, rien n'entre au journal.
+
+        `sparkd` ne voit que des noms : le jeton du fournisseur DNS reste sur
+        l'hôte console (§38.1).
+        """
+        domains = body.get("domains", [])
+        if not isinstance(domains, list):
+            raise HTTPException(status_code=422, detail={
+                "error": "bad_domains",
+                "message": "« domains » doit être une liste de noms."})
+        with registry() as connection:
+            return {"matches": ingress_service.match(connection, domains)}
+
     @app.post("/v1/ingress", tags=["ingress"], status_code=201)
     def add_route(body: dict = Body(...)) -> dict:
         with registry() as connection:

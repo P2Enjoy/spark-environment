@@ -202,6 +202,10 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
                              // qu'il décrit la Forge et non un Spark. Ce qui
                              // descend se décide en revanche Spark par Spark.
                              ['#/forge/environnement', 'Environnement'],
+                             // SPK-77 · §38.8.5 : le DNS décrit la Forge, pas un
+                             // Spark — la page couvre TOUS les Sparks, et
+                             // surtout les noms qui n'appartiennent à aucun.
+                             ['#/forge/dns', 'DNS'],
                              ['#/forge/journal', 'Journal']];
 
 /** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */

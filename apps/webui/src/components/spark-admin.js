@@ -16,8 +16,12 @@
  *       et que l'écran doit dire)
  * @spec docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la préséance
  *       du plus spécifique, et la vue depuis le joker) · §18.4
+ * @spec docs/BACKLOG.md#SPK-78 · docs/DAT.md §38.9 (une écriture DNS se
+ *       vérifie), §38.9.1 (relire plutôt que persister), §38.9.2 (conforme ne
+ *       veut pas dire résolu)
  * @spec docs/BACKLOG.md#SPK-47 · docs/DAT.md §38 (le DNS entre dans le
- *       périmètre), §38.3 (ce qu'écrit un enregistrement d'ingress),
+ *       périmètre), §38.1.1 (trois états, pas deux : sans jeton, refusé, sans
+ *       zone), §38.3 (ce qu'écrit un enregistrement d'ingress),
  *       §38.4 (poser n'est pas résoudre) — pour le panneau « Pointer le
  *       domaine » de la section des routes publiques.
  *
@@ -60,15 +64,33 @@ export const ADMIN_VIDE = {
   // SPK-50 · §38.6 : le catalogue, l'aperçu ligne à ligne, et le compte rendu.
   recettes: { catalogue: [], zones: [], apercu: null, resultat: null,
               chargement: false, erreur: null,
+              // SPK-78 · §38.9.1 : ce que la zone porte MAINTENANT, relu à la
+              // demande. Ce n'est pas un souvenir du compte rendu.
+              verification: null, verifieEnCours: false,
+              verificationErreur: null,
+              // §38.1.1 : pourquoi la liste des zones est vide. C'est un état
+              // DISTINCT de `erreur`, qui porte le refus d'aperçu et se remet à
+              // zéro avant chaque relecture — les confondre effaçait la raison
+              // au premier changement de recette.
+              zonesRefus: null,
               // La demande en cours, pour qu'une réponse tardive n'écrase pas
               // une réponse plus récente (§38.5.2, même garde).
               lu: null },
+  // SPK-78 · §38.9.1 : l'état DNS relevé, route par route. C'est la réponse à
+  // « je ne vois plus rien dans les pages du Spark » : le compte rendu d'une
+  // écriture est transitoire, mais l'état, lui, se relit.
+  dnsRoutes: { chargement: false, configured: null, reason: null,
+               etats: {}, erreur: null },
   // SPK-47 · §38.1 : ce que la console SAIT du fournisseur. `configured` vaut
   // `null` tant qu'on n'a pas demandé — « pas encore su » n'est pas « pas
   // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
   // constatée.
   dns: { domain: null, configured: null, reason: null, zones: [],
          loading: false, written: null,
+         // §38.1.1 : le fournisseur a REFUSÉ — jeton expiré, permission
+         // manquante, service injoignable. Ce n'est ni « pas de jeton » ni
+         // « pas de zone », et le geste à faire n'est pas le même.
+         refus: null,
          // Ce qui a DÉJÀ été lu, pour ne pas relire à l'identique (§38.5.2).
          lu: null,
          // §38.5.2 : ce qui occupe DÉJÀ le couple nom + type visé. `effet` vaut
@@ -76,6 +98,25 @@ export const ADMIN_VIDE = {
          // est nul — et l'écran dit alors qu'il vérifie, pas qu'il n'y a rien.
          apercu: null, apercuEnCours: false },
 };
+
+/**
+ * Pourquoi les zones n'ont pas pu être listées, ou `null` (§38.1.1).
+ *
+ * @spec docs/BACKLOG.md#SPK-47 · docs/DAT.md §38.1.1 (trois états, pas deux) ·
+ *       docs/DESIGN_SYSTEM.md §6.13 (« vide » et « erreur » sont deux états)
+ *
+ * Trois réponses arrivent ici et deux seulement portent une raison : le poste
+ * sans jeton (`configured: false`), et le refus du fournisseur — un corps
+ * `{error, message}` SANS champ `configured`, qu'un simple `configured === false`
+ * laissait passer. Le compte qui n'a réellement aucune zone ne dit rien ici : ce
+ * n'est pas un refus, et l'écran le nomme autrement.
+ */
+export function refusZones(corps) {
+  if (!corps || typeof corps !== 'object') return null;
+  if (corps.configured === false) return corps.reason ?? corps.message ?? null;
+  if (corps.error) return corps.message ?? corps.reason ?? null;
+  return null;
+}
 
 /**
  * Zone la plus SPÉCIFIQUE qui contienne le domaine (§38.5).
@@ -152,6 +193,8 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           : '';
         return `<li><span class="technique">${echapper(r.domain)}</span>` +
           ` → port ${echapper(r.target_port)} du Spark` +
+          // SPK-78 · §38.9.1 : l'état DNS RELEVÉ, pas un souvenir d'écriture.
+          `${renderEtatDns(ui.dnsRoutes, r.domain)}` +
           `${r.tls ? '' : ' <span class="badge badge--neutral">sans TLS</span>'}${attente}` +
           `<span class="actions-ligne">${reappliquer}` +
           // SPK-47 · §38 : pointer le DNS est un geste de CETTE route, pas de la
@@ -232,13 +275,15 @@ function renderRecetteModale(ui) {
     </div>
     <div class="champ">
       <label for="recette-zone">Zone</label>
-      <select class="controle" id="recette-zone" name="recette_zone">
+      <select class="controle" id="recette-zone" name="recette_zone"${
+        etat.zones.length ? '' : ' aria-describedby="recette-zones-vides"'}>
         <option value="">— choisir une zone —</option>
         ${etat.zones.map((z) =>
           `<option value="${echapper(z.zone)}"`
           + `${ui.values.recette_zone === z.zone ? ' selected' : ''}>`
           + `${echapper(z.zone)}</option>`).join('')}
       </select>
+      ${renderZonesVides(etat)}
     </div>`;
 
   // §38.6.5 : un paramètre `dansLaZone` ne redemande PAS ce que la zone dit
@@ -283,6 +328,34 @@ function renderRecetteModale(ui) {
   });
 }
 
+/**
+ * La raison du vide, sous le champ « Zone » (§38.1.1).
+ *
+ * @spec docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.1.1 ·
+ *       docs/DESIGN_SYSTEM.md §6.13 (état vide et état d'erreur sont distincts),
+ *       §14.5 (une absence utile est NOMMÉE)
+ *
+ * Un refus du fournisseur prend la couleur du refus ; un compte réellement sans
+ * zone est un fait, pas une erreur, et reste une aide de champ. Tant qu'on lit,
+ * on ne conclut rien : « pas encore su » n'est pas « pas de zone ».
+ */
+export function renderZonesVides(etat) {
+  if (etat.zones?.length) return '';
+  if (etat.zonesRefus) {
+    // `champ__erreur` et non `refus` : le refus vit ICI, sous le champ qu'il
+    // vide, et non en tête de modale où il se lirait comme un refus de
+    // l'écriture (DESIGN_SYSTEM.md §6.12).
+    return `<p class="champ__erreur" id="recette-zones-vides">`
+           + `${echapper(etat.zonesRefus)}</p>`;
+  }
+  if (etat.chargement) {
+    return '<p class="champ__aide" id="recette-zones-vides" aria-busy="true">'
+           + 'Lecture des zones du compte…</p>';
+  }
+  return '<p class="champ__aide" id="recette-zones-vides">'
+         + 'Le compte ne porte aucune zone DNS.</p>';
+}
+
 /** L'aperçu ligne à ligne, remplacé SUR PLACE comme celui du §38.5.2. */
 export function renderRecetteApercu(etat) {
   const vu = etat.apercu;
@@ -292,7 +365,12 @@ export function renderRecetteApercu(etat) {
   // bouton d'engagement se dérobe entre l'appui et le relâchement — le clic ne
   // part jamais. `change` se déclenche AUSSI à la perte du focus, donc au moment
   // même où l'on clique. C'est la même correction qu'au §38.5.2.
-  if (etat.chargement && !vu && !etat.erreur) {
+  // `lu` distingue les deux lectures qui portent le MÊME drapeau `chargement` :
+  // celle des zones, au chargement de la modale, et celle de l'aperçu. Sans
+  // cette garde, l'écran annonçait « lecture de ce qui est déjà en place »
+  // alors qu'aucune zone n'était encore choisie — et le disait EN MÊME TEMPS
+  // que le champ « Zone » annonçait sa propre lecture (§38.1.1).
+  if (etat.chargement && etat.lu && !vu && !etat.erreur) {
     return '<p class="note" aria-busy="true">Lecture de ce qui est déjà en place…</p>';
   }
   if (etat.erreur) return `<p class="refus">${echapper(etat.erreur)}</p>`;
@@ -338,6 +416,49 @@ function renderRecetteResultat(ui) {
       .join('')}</ul>
     ${fait.incomplete ? `<p>${echapper(fait.incomplete)}</p>` : ''}
     <p class="note">${echapper(fait.propagation ?? '')}</p>
+    <p class="formulaire__actions">
+      <button type="button" class="bouton bouton--compact" data-verifier-recette
+        ${ui.recettes?.verifieEnCours ? 'disabled' : ''}>Vérifier dans le DNS</button>
+    </p>
+    <div id="recette-verification">${renderVerification(ui.recettes)}</div>
+  </div>`;
+}
+
+/**
+ * Ce que la zone porte MAINTENANT (SPK-78, §38.9.1).
+ *
+ * @spec docs/BACKLOG.md#SPK-78 · docs/DAT.md §38.9 (une écriture se vérifie),
+ *       §38.9.1 (relire plutôt que persister), §38.9.2 (conforme ≠ résolu) ·
+ *       docs/DESIGN_SYSTEM.md §6.13
+ *
+ * Le compte rendu au-dessus dit ce qui a été ÉCRIT, une fois. Ce bloc-ci dit ce
+ * qui EST en place, à l'instant où on le demande. Les deux ne se remplacent pas :
+ * le premier vieillit, le second se relit.
+ */
+export function renderVerification(recettes) {
+  if (recettes?.verificationErreur) {
+    return `<p class="champ__erreur" id="recette-verification-refus">${
+      echapper(recettes.verificationErreur)}</p>`;
+  }
+  if (recettes?.verifieEnCours && !recettes?.verification) {
+    return '<p class="note" aria-busy="true">Relecture de la zone…</p>';
+  }
+  const vu = recettes?.verification;
+  if (!vu) return '';
+  const ecart = vu.some((l) => l.etat !== 'conforme');
+  return `<div class="${ecart ? 'avertissement' : 'note-transitoire'}" role="status">
+    <p><strong>Relevé du fournisseur</strong> — ${
+      ecart ? 'des écarts subsistent' : 'chaque ligne est en place'}.</p>
+    <ul class="liste-simple">${vu.map((l) => `
+      <li><span class="technique">${echapper(l.name || '@')} ${echapper(l.type)}</span> ${
+        l.etat === 'conforme' ? 'conforme'
+        : l.etat === 'absent' ? '<strong>absent</strong> de la zone'
+        // La valeur TROUVÉE est nommée : « différent » seul n'apprend pas quoi
+        // corriger.
+        : `<strong>différent</strong> — la zone porte
+           <span class="technique">${echapper(l.trouve)}</span>`}</li>`).join('')}</ul>
+    <p class="note">Ce relevé dit ce que le fournisseur PORTE. Un résolveur peut
+    encore servir l’ancienne réponse pendant la durée du TTL.</p>
   </div>`;
 }
 
@@ -404,6 +525,43 @@ function renderDnsEcrit(ui) {
 }
 
 /**
+ * L'état DNS d'une route, relevé chez le fournisseur (SPK-78, §38.9.1).
+ *
+ * @spec docs/BACKLOG.md#SPK-78 · docs/DAT.md §38.9.1, §38.9.2 ·
+ *       docs/DESIGN_SYSTEM.md §14.5 (une absence utile est NOMMÉE)
+ *
+ * Quatre états, et le dernier compte autant que les autres : un domaine dont
+ * aucune zone du compte ne relève n'est pas « sans enregistrement ». Le produit
+ * n'en sait rien, et dire « absent » ferait chercher un oubli là où il n'y a
+ * rien à voir.
+ *
+ * Conforme ne veut pas dire résolu (§38.9.2) : le titre le rappelle, parce que
+ * le §38.4 reste entier.
+ */
+export function renderEtatDns(dnsRoutes, domaine) {
+  const etat = dnsRoutes?.etats?.[String(domaine ?? '').toLowerCase()];
+  if (!etat) return '';
+  const badge = (classe, texte, titre) =>
+    ` <span class="badge ${classe}" title="${echapper(titre)}">${echapper(texte)}</span>`;
+  if (etat.etat === 'ici') {
+    return badge('badge--success', 'DNS ici',
+      "Le fournisseur porte un enregistrement vers cette Forge. La résolution "
+      + "peut demander le temps du TTL.");
+  }
+  if (etat.etat === 'ailleurs') {
+    return badge('badge--danger', `DNS → ${etat.data}`,
+      "Ce nom pointe ailleurs que vers cette Forge : le trafic n'arrivera pas ici.");
+  }
+  if (etat.etat === 'absent') {
+    return badge('badge--accent', 'Aucun enregistrement',
+      `La zone « ${etat.zone} » ne porte aucun A ou AAAA pour ce nom.`);
+  }
+  return badge('badge--neutral', 'Zone hors du compte',
+    "Aucune zone de ce compte ne contient ce nom : son DNS est tenu ailleurs, "
+    + "et le produit n'a rien à en dire.");
+}
+
+/**
  * « Pointer le domaine » : modale limitée à la section des routes (§6.27).
  *
  * Le domaine n'est PAS saisissable : il vient de la route qu'on pointe. Le
@@ -421,6 +579,11 @@ function renderDnsModale(ui) {
          <p class="champ__aide">Le jeton vit sur ce poste, jamais sur la Forge :
          un jeton déposé sur la Forge serait lisible par qui y détient
          l’administration.</p>`
+      // §38.1.1 : un refus se dit AVANT le vide, et sans l'aide sur la place du
+      // jeton — le jeton EST là, c'est le fournisseur qui l'a rejeté, et
+      // conseiller d'en poser un enverrait chercher au mauvais endroit.
+      : dns.refus
+        ? `<p class="refus" id="dns-refus">${echapper(dns.refus)}</p>`
       : dns.zones.length === 0
         ? '<p class="absence">Le compte ne porte aucune zone DNS.</p>'
         : `

@@ -20,8 +20,12 @@ export const DEFAULT_PATH =
 // `signingKey` (SPK-40, §36.10.8) : un chemin vers une clé PUBLIQUE. Aucun
 // secret n'entre ici — le §11 garde les clés privées sur le poste, et c'est
 // l'agent qui signe.
+// `publicAddress` (SPK-77, §38.8.5) : l'adresse par laquelle le MONDE atteint
+// cette Forge. Elle ne se déduit pas toujours du transport — un alias `ssh` la
+// cache dans le `ssh_config`, et l'hôte d'une Forge locale est une boucle
+// locale. Facultative : absente, elle est déduite comme avant.
 const ALLOWED = ['name', 'kind', 'host', 'user', 'port', 'remotePort', 'sshHost',
-                 'signingKey'];
+                 'signingKey', 'publicAddress'];
 
 /**
  * Version de la forme du fichier (docs/DAT.md §22.4.2).
@@ -112,6 +116,16 @@ export function validate(server) {
   // la Forge.
   const signature = server.signingKey
     ? { signingKey: String(server.signingKey) } : {};
+  // SPK-77 · §38.8.5 : DÉCLARÉE, jamais devinée. Une boucle locale n'est pas une
+  // adresse publique, et l'accepter ferait rapprocher l'inventaire DNS sur une
+  // adresse que personne ne peut atteindre.
+  const declaree = String(server.publicAddress ?? '').trim();
+  if (declaree && ['127.0.0.1', 'localhost', '::1'].includes(declaree)) {
+    throw new InventoryError(
+      `« publicAddress » ne peut pas être une boucle locale pour « ${nom} » : `
+      + `c'est l'adresse par laquelle le monde atteint cette Forge.`);
+  }
+  const publique = declaree ? { publicAddress: declaree } : {};
 
   if (alias) {
     // Ni `user` ni `port` : le produit ne prétend pas les connaître.
@@ -119,7 +133,8 @@ export function validate(server) {
     if (!Number.isInteger(distantAlias) || distantAlias < 1 || distantAlias > 65535) {
       throw new InventoryError(`« remotePort » hors bornes pour « ${nom} » : ${distantAlias}.`);
     }
-    return { name: nom, kind: genre, sshHost, remotePort: distantAlias, ...signature };
+    return { name: nom, kind: genre, sshHost, remotePort: distantAlias,
+             ...signature, ...publique };
   }
   const port = local
     // `port` d'abord, `remotePort` ensuite : l'aller-retour doit rendre ce qui
@@ -136,10 +151,11 @@ export function validate(server) {
     }
   }
 
-  if (local) return { name: nom, kind: genre, host: hote, port, ...signature };
+  if (local) return { name: nom, kind: genre, host: hote, port,
+                      ...signature, ...publique };
   return { name: nom, kind: genre, host: hote,
            user: String(server.user ?? 'root'), port, remotePort: distant,
-           ...signature };
+           ...signature, ...publique };
 }
 
 /**
