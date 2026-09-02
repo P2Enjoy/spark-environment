@@ -2708,6 +2708,84 @@ test('un Spark PROTÉGÉ refuse l’amorçage, et le refus est LISIBLE', async (
   });
 });
 
+// --- SPK-76 · LA FAMILLE DE LA CELLULE (§42.9) ------------------------------
+//
+// @verifies docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.9.5, §42.9.6
+
+test('une cellule que l’amorçage ne sert pas est REFUSÉE, et le refus la nomme', async () => {
+  await parcours('amorcage-non-servi', async () => {
+    // Le cas réel du responsable : `alpine-demo` rendait le refus brut d'Incus,
+    // « Command not found », qui ne désigne pas sa cause. Depuis l'accueil, à
+    // la souris — c'est le parcours canonique qui doit le dire.
+    await ouvrir('alpine-demo');
+    await page.waitForSelector('#titre-amorcage');
+
+    await page.click('[data-amorcage="relever"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('ne sait pas servir'), { timeout: 15000 });
+
+    const ecran = await page.textContent('.principal');
+    assert.match(ecran, /alpine/, 'le refus NOMME la distribution relevée');
+    assert.match(ecran, /Debian et Ubuntu/, 'et dit ce qu’il sert');
+    assert.ok(!/Command not found/.test(ecran),
+      'le refus d’Incus ne fuit plus jusqu’à l’écran');
+
+    // §1.4 : le geste n'est pas offert, puisqu'il sera refusé à coup sûr.
+    assert.equal(await page.$('[data-amorcage="amorcer"]'), null);
+  });
+});
+
+test('un amorçage sur UBUNTU pose le dépôt d’Ubuntu, pas celui de Debian', async () => {
+  await parcours('amorcage-ubuntu', async () => {
+    // La seconde cellule du responsable. Elle recevait `linux/debian trixie` :
+    // le dépôt RÉPOND, donc rien ne prévenait avant qu'`apt` ne refuse ses
+    // paquets sur `noble`.
+    await ouvrir('ubuntu-24');
+    await page.waitForSelector('#titre-amorcage');
+
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+    await page.click('[data-amorcage="engager"]');
+    await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+
+    const lignes = await page.$$eval('.ligne-amorcage', (l) => l.map((x) => x.textContent));
+    const depot = lignes.find((l) => l.includes('dépôt Docker amont'));
+    assert.match(depot, /ubuntu noble/, 'le dépôt suit la distribution de la cellule');
+    assert.ok(!/debian trixie/.test(depot));
+
+    const ecran = await page.textContent('.principal');
+    assert.match(ecran, /Cette cellule est complète/);
+  });
+});
+
+test('le relevé d’un Spark ne DÉBORDE pas sur la fiche du suivant', async () => {
+  await parcours('amorcage-pas-de-debordement', async () => {
+    // §42.6 : un relevé porte sur UNE cellule. L'état n'était jamais remis à
+    // zéro entre deux fiches — même défaut que celui que le §37.6 corrige pour
+    // Docker. Trouvé en produisant les captures, pas par une preuve de rendu :
+    // celles-ci peignent une fiche à la fois et ne peuvent pas le voir.
+    await ouvrir('alpine-demo');
+    await page.waitForSelector('#titre-amorcage');
+    await page.click('[data-amorcage="relever"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('ne sait pas servir'), { timeout: 15000 });
+
+    // On NAVIGUE dans l'application, sans recharger : `ouvrir()` repasse par
+    // l'accueil et remettrait l'état à zéro tout seul — le défaut ne se
+    // reproduirait pas, et la preuve serait verte sans rien garder.
+    await page.click('nav a[href="#/sparks"]');
+    await page.waitForSelector('tbody a:has-text("ubuntu-24")', { timeout: 10000 });
+    await page.click('tbody a:has-text("ubuntu-24")');
+    await page.waitForSelector('#titre-amorcage');
+    const section = await page.$eval(
+      '#titre-amorcage', (h) => h.closest('section').innerText);
+    assert.ok(!/ne sait pas servir/.test(section),
+      'la fiche d’ubuntu-24 hérite du refus d’alpine-demo');
+    assert.ok(await page.$('[data-amorcage="amorcer"]'),
+      'un Spark amorçable doit garder son geste');
+  });
+});
+
 test('en 390 px, le widget flottant ne rend AUCUNE action incliquable', async () => {
   await parcours('widget-ne-recouvre-pas', async () => {
     // SPK-75 · DESIGN_SYSTEM_APP.md : « le widget ne masque jamais une action du
@@ -2746,6 +2824,24 @@ test('en 390 px, le widget flottant ne rend AUCUNE action incliquable', async ()
     } finally {
       await page.setViewportSize({ width: 1440, height: 1300 });
     }
+  });
+});
+
+test('l’écran de création DIT quelles images l’amorçage sait servir', async () => {
+  await parcours('creation-images-amorcables', async () => {
+    // §42.9.6 : le §33 proposait une image que le §42 ne savait pas équiper, et
+    // rien ne le disait avant l'échec. C'est ce silence qui a produit la cellule
+    // du responsable.
+    await accueil();
+    await page.click('.titre-vue .bouton--primaire');
+    await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
+
+    const options = await page.$$eval('#image option', (o) => o.map((x) => x.textContent));
+    const alpine = options.find((o) => o.includes('alpine'));
+    assert.match(alpine, /amorçage non pris en charge/);
+    // …et elle reste CHOISISSABLE : le produit sert des cellules, pas seulement
+    // des cellules amorçables (§25 — montrer sans décider).
+    assert.equal(await page.$eval('#image', (s) => s.disabled), false);
   });
 });
 

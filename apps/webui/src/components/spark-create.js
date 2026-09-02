@@ -127,9 +127,9 @@ function champ({ id, libelle, aide, erreur, controle }) {
 </div>`;
 }
 
-function nombre(id, valeur, pas, erreur, aide) {
+function nombre(id, name, valeur, pas, erreur, aide) {
   const decrits = [aide ? `${id}-aide` : '', erreur ? `${id}-erreur` : ''].filter(Boolean).join(' ');
-  return `<input type="number" id="${id}" name="${id}" value="${echapper(valeur)}" step="${pas}" min="0"
+  return `<input type="number" id="${id}" name="${name}" value="${echapper(valeur)}" step="${pas}" min="0"
     class="controle${erreur ? ' controle--erreur' : ''}"${decrits ? ` aria-describedby="${decrits}"` : ''}${erreur ? ' aria-invalid="true"' : ''} />`;
 }
 
@@ -235,19 +235,19 @@ function surLeCran(valeur, q, max) {
  * annonce déjà sa valeur, et un `<output>` — région vive — parlerait à chaque
  * cran d'un glissement.
  */
-function curseur(id, valeur, max, erreur, aide) {
-  const q = QUOTAS[id];
+function curseur(nom, id, name, valeur, max, erreur, aide) {
+  const q = QUOTAS[nom];
   const decrits = [aide ? `${id}-aide` : '', erreur ? `${id}-erreur` : ''].filter(Boolean).join(' ');
-  const texte = formatQuota(id, valeur);
+  const texte = formatQuota(nom, valeur);
   return `<div class="curseur">
-    <input type="range" class="curseur__piste" id="${id}" name="${id}"
+    <input type="range" class="curseur__piste" id="${id}" name="${name}"
       min="${q.min}" max="${max}" step="${q.pas}" value="${echapper(valeur)}"
       aria-valuetext="${echapper(texte)}"${decrits ? ` aria-describedby="${decrits}"` : ''}${erreur ? ' aria-invalid="true"' : ''} />
-    <span class="curseur__valeur" data-valeur-de="${id}" aria-hidden="true">${echapper(texte)}</span>
+    <span class="curseur__valeur" data-valeur-de="${name}" aria-hidden="true">${echapper(texte)}</span>
   </div>
   <p class="curseur__bornes" aria-hidden="true">
-    <span>${echapper(formatQuota(id, q.min))}</span>
-    <span>${echapper(formatQuota(id, max))}</span>
+    <span>${echapper(formatQuota(nom, q.min))}</span>
+    <span>${echapper(formatQuota(nom, max))}</span>
   </p>`;
 }
 
@@ -258,16 +258,17 @@ function curseur(id, valeur, max, erreur, aide) {
  * son unité à côté de la poignée ; « Mémoire (Gio) » y répéterait ce que la
  * valeur dit mieux. Une saisie, elle, ne dit pas dans quelle unité taper.
  */
-function champQuota(nom, { libelle, unite = null, aide, erreur, valeur, contexte }) {
+export function champQuota(nom, { libelle, unite = null, aide, erreur, valeur, contexte,
+                                  id = nom, name = nom }) {
   const q = QUOTAS[nom];
   const max = borneHaute(nom, contexte);
   const auCurseur = max !== null && surLeCran(valeur, q, max);
   return champ({
-    id: nom, aide, erreur,
+    id, aide, erreur,
     libelle: auCurseur || !unite ? libelle : `${libelle} (${unite})`,
     controle: auCurseur
-      ? curseur(nom, valeur, max, erreur, Boolean(aide))
-      : nombre(nom, valeur, String(q.pas), erreur, Boolean(aide)),
+      ? curseur(nom, id, name, valeur, max, erreur, Boolean(aide))
+      : nombre(id, name, valeur, String(q.pas), erreur, Boolean(aide)),
   });
 }
 
@@ -319,13 +320,23 @@ export function renderChoixImage(courante, images = []) {
         <option>— catalogue vide —</option></select>`,
     });
   }
+  // §42.9.6 : l'entrée reste CHOISISSABLE — le produit sert des cellules, pas
+  // seulement des cellules amorçables. Mais l'option le dit, et l'aide le dit
+  // aussi, au moment où le choix ne coûte encore rien.
   const options = images.map((i) =>
     `<option value="${echapper(i.reference)}"${i.reference === courante ? ' selected' : ''}>` +
-    `${echapper(i.label)} — ${echapper(i.reference)}</option>`).join('');
+    `${echapper(i.label)} — ${echapper(i.reference)}` +
+    `${i.bootstrappable === false ? ' (amorçage non pris en charge)' : ''}</option>`).join('');
+  const nonAmorcables = images.filter((i) => i.bootstrappable === false);
   return champ({
     id: 'image', libelle: 'Image',
     aide: 'Les images proposées sont celles que le dernier relevé du catalogue a '
-      + 'trouvées chez leur dépôt.',
+      + 'trouvées chez leur dépôt.'
+      + (nonAmorcables.length
+        ? ' L’amorçage automatique — SSH et Docker posés pour vous — ne sert que '
+          + 'la famille Debian : Debian et Ubuntu. Les autres images fonctionnent, '
+          + 'mais vous les équiperez vous-même.'
+        : ''),
     controle: `<select id="image" name="image" class="controle">${options}</select>`,
   });
 }

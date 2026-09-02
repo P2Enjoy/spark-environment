@@ -37,6 +37,13 @@ def test_le_seed_produit_les_cinq_etats_annonces(seede):
     le distingue a l'ecran tant qu'on ne tente pas de le supprimer. Ce que la
     preuve etablit — les cinq etats existent — est inchange ; c'est la liste des
     Sparks qui a grandi.
+
+    REVISE par SPK-76 (§42.9) : le seed porte aussi « ubuntu-24 » et
+    « alpine-demo », dont l'IMAGE n'est pas Debian 13. Ils n'ajoutent aucun état
+    non plus — tous deux sont `running` —, mais ils portent le seul écran où
+    l'amorçage REFUSE, et celui où le dépôt amont suit une autre distribution.
+    Sans eux, le seed ne démontrait que le cas où l'amorçage fonctionne, et
+    c'est ce biais qui a laissé passer le défaut d'`alpine-demo`.
     """
     etats = {s["name"]: s["state"] for s in seede.get("/v1/sparks").json()["sparks"]}
     assert etats == {
@@ -46,6 +53,8 @@ def test_le_seed_produit_les_cinq_etats_annonces(seede):
         "analytics": "pending",
         "site-vitrine": "error",
         "orphelin": "stopped",
+        "ubuntu-24": "running",
+        "alpine-demo": "running",
     }
 
 

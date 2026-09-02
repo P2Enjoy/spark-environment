@@ -327,6 +327,11 @@ def create_app(config: Config) -> FastAPI:
         """
         with registry() as connection:
             entrees = images_service.listing(connection)
+            # §42.9.6 : le catalogue dit ce que l'amorçage saura faire de chaque
+            # entrée. Sans cela, le §33 propose une image que le §42 ne sait pas
+            # équiper, et rien ne le signale avant l'échec.
+            for entree in entrees:
+                entree["bootstrappable"] = images_service.amorcable(entree["alias"])
             return {
                 "images": entrees,
                 "selectable": [e["reference"] for e in entrees
@@ -1565,10 +1570,6 @@ def create_app(config: Config) -> FastAPI:
         voulu = sshkeys.authorized_keys_content(connection, spark["id"])
         return brut, bootstrap_service.juger(brut, bootstrap_service.empreinte(voulu))
 
-    def _relever_amorcage(connection, spark: dict) -> list[dict]:
-        """Le relevé du §42.6, jugé selon le §42.1."""
-        return _lire_amorcage(connection, spark)[1]
-
     @app.get("/v1/sparks/{name}/bootstrap", tags=["amorcage"])
     def read_bootstrap(name: str) -> dict:
         """Relevé de l'amorçage. N'écrit RIEN (docs/DAT.md §42.7).
@@ -1582,13 +1583,22 @@ def create_app(config: Config) -> FastAPI:
         with registry() as connection:
             spark = _cellule_ou_refus(connection, name)
             try:
-                vus = _relever_amorcage(connection, spark)
+                # UNE seule exécution dans la cellule (§42.6) : le relevé brut
+                # sert à la fois au jugement et au bloc `os`. Le relire serait
+                # entrer deux fois chez le locataire pour un seul coup d'œil.
+                brut, vus = _lire_amorcage(connection, spark)
             except InstanceAbsente as erreur:
                 raise _refus_cellule_perdue(spark) from erreur
             except IncusError as erreur:
                 raise HTTPException(status_code=502, detail={
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
+            # §42.9.5 : le relevé RÉPOND même quand l'amorçage ne saurait pas
+            # agir. On peut regarder sans agir (§42.7), et cela vaut a fortiori
+            # pour une cellule qu'on va refuser : c'est là qu'il faut pouvoir
+            # lire ce qu'elle est.
             return {"spark": name, "reachable": True, "items": vus,
+                    "os": bootstrap_service.identite(brut),
+                    "supported": bootstrap_service.servie(brut),
                     "complete": bootstrap_service.complet(vus)}
 
     @app.post("/v1/sparks/{name}/bootstrap", tags=["amorcage"], status_code=200)
@@ -1620,6 +1630,20 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=502, detail={
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
 
+            # §42.9.5 : une famille non servie est un REFUS, pas une panne. Il
+            # arrive AVANT toute pose : la cellule ne doit pas recevoir une seule
+            # commande d'installation qu'on ne saurait pas mener à son terme.
+            if not bootstrap_service.servie(brut_avant):
+                vue = bootstrap_service.identite(brut_avant)
+                try:
+                    bootstrap_service.cible_apt(brut_avant)
+                    raison = ""
+                except bootstrap_service.OSNonServi as erreur:
+                    raison = str(erreur)
+                raise HTTPException(status_code=409, detail={
+                    "error": "bootstrap_unsupported_os", "message": raison,
+                    "os": vue})
+
             # §42.2 bis : basculer un Docker en place déplacerait le démon sous un
             # autre compte, et avec lui la production du locataire. On refuse, on
             # ne bascule pas.
@@ -1641,22 +1665,35 @@ def create_app(config: Config) -> FastAPI:
                     if cle == "cles":
                         _apply_keys(connection, spark)
                         continue
+                    # §42.9.4 : un `docker-ce` venu du dépôt d'une autre
+                    # distribution doit être PURGÉ avant d'être reposé — `apt`
+                    # ne remplace pas de lui-même un paquet de même nom dont la
+                    # version est plus haute que celle du bon dépôt.
+                    ce_a_purger = cle == "docker" and any(
+                        v["key"] == "docker"
+                        and v["state"] == bootstrap_service.DEFECT
+                        and "autre distribution" in (v.get("detail") or "")
+                        for v in avant)
                     commande = bootstrap_service.script_pour(
-                        cle, rootless=mode == bootstrap_service.ROOTLESS)
+                        cle, brut_avant,
+                        rootless=mode == bootstrap_service.ROOTLESS,
+                        purger_ce=ce_a_purger)
                     if commande:
-                        code, _, _ = app.state.incus.exec_capture(
+                        code, _, err = app.state.incus.exec_capture(
                             spark["incus_name"], commande)
                         # §42.5 : un code non nul est acceptable pour une
                         # DÉTECTION, jamais pour l'installation elle-même.
+                        # §42.9.7 : et il ne voyage plus seul — un code de sortie
+                        # sans cause n'est pas un diagnostic.
                         if code:
                             raise bootstrap_service.BootstrapFailed(
-                                f"L'installation de « {cle} » a échoué (code {code}).")
+                                bootstrap_service.echec(cle, code, err))
                 if reprise_rootless:
-                    code, _, _ = app.state.incus.exec_capture(
+                    code, _, err = app.state.incus.exec_capture(
                         spark["incus_name"], bootstrap_service.script_rootless())
                     if code:
                         raise bootstrap_service.BootstrapFailed(
-                            f"La reprise rootless a échoué (code {code}).")
+                            bootstrap_service.echec("rootless", code, err))
                     actions.append("rootless")
                 # §44.3, §44.8 : le briefing ne devine pas les versions depuis
                 # un vieux texte. Le relevé initial suffit si l'amorçage n'a
@@ -1697,6 +1734,7 @@ def create_app(config: Config) -> FastAPI:
             )
             return {"spark": name, "path": "incus_exec", "mode": mode,
                     "changed": bool(actions), "items": lignes,
+                    "os": bootstrap_service.identite(brut_final), "supported": True,
                     "complete": bootstrap_service.complet(apres)}
 
     @app.get("/v1/sparks/{name}/identity", tags=["cles"])

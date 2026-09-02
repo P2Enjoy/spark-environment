@@ -125,7 +125,9 @@ def test_une_presence_preexistante_ne_devient_pas_une_installation_par_sparkd(tm
     files = client.app.state.incus.created[name]["files"]
     client.app.state.incus.created[name].setdefault("runtime", {}).update({
         "sshd": "active", "openssh_version": "1:9.8p1-1",
-        "depot": "present", "docker": "Docker version 29.7.2",
+        "os_id": "debian", "os_suite": "trixie",
+        "depot_distro": "debian", "depot_suite": "trixie",
+        "docker": "Docker version 29.7.2",
         "docker_version": "5:29.7.2-1", "origine": "docker-ce",
         "compose": "Docker Compose version v2.40.0", "compose_version": "2.40.0-1",
         "mode": "enracine",

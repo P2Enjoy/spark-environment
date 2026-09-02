@@ -465,3 +465,38 @@ test('un refus du serveur fait taire l estimation locale, la aussi', () => {
   assert.equal(renderAvertissement({ ...DEFAUTS, memory_gib: 76 }, POOLS,
                                    { shortfalls: [] }), '');
 });
+
+// --- SPK-76 · le catalogue dit ce que l'amorçage sait servir ---------------
+//
+// @verifies docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.9.6
+
+test('une image que l’amorçage ne sert pas est SIGNALÉE dans la liste', () => {
+  // §42.9.6 : le §33 proposait une image que le §42 ne savait pas équiper, et
+  // rien ne le disait avant l'échec. C'est ce silence qui a produit `alpine-demo`.
+  const rendu = renderChoixImage('images:debian/13', [
+    { reference: 'images:debian/13', label: 'Debian 13', bootstrappable: true },
+    { reference: 'images:alpine/3.21', label: 'Alpine 3.21', bootstrappable: false },
+  ]);
+  assert.match(rendu, /Alpine 3\.21 — images:alpine\/3\.21 \(amorçage non pris en charge\)/);
+  assert.match(rendu, /famille Debian/);
+});
+
+test('une image non amorçable reste CHOISISSABLE', () => {
+  // §42.9.6 : ce n'est pas un filtre. Le produit sert des cellules, pas
+  // seulement des cellules amorçables — la retirer déciderait à la place du
+  // locataire (§25, montrer sans décider).
+  const rendu = renderChoixImage('images:debian/13', [
+    { reference: 'images:alpine/3.21', label: 'Alpine 3.21', bootstrappable: false },
+  ]);
+  assert.match(rendu, /<option value="images:alpine\/3\.21"/);
+  assert.ok(!/disabled/.test(rendu));
+});
+
+test('sans catalogue non amorçable, l’aide ne parle pas d’amorçage', () => {
+  // Une aide qui énonce une restriction inexistante fait chercher un problème
+  // qui n'est pas là.
+  const rendu = renderChoixImage('images:debian/13', [
+    { reference: 'images:debian/13', label: 'Debian 13', bootstrappable: true },
+  ]);
+  assert.ok(!/famille Debian/.test(rendu));
+});

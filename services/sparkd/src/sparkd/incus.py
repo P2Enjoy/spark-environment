@@ -18,6 +18,7 @@ from typing import Any, Protocol
 import base64
 import hashlib
 import json
+import re
 
 import httpx
 
@@ -394,6 +395,25 @@ class UnixSocketIncus:
         return self._get(f"/1.0/instances/{name}/state")
 
 
+#: SPK-76 · §42.9 : ce que le doublon répond à `/etc/os-release`, par image du
+#: catalogue (§33). Alpine y figure DÉLIBÉRÉMENT : c'est la cellule que
+#: l'amorçage doit refuser, et une preuve du refus exige de pouvoir la monter.
+_OS_PAR_ALIAS = {
+    "debian/13": {"os_id": "debian", "os_suite": "trixie", "os_like": ""},
+    "debian/12": {"os_id": "debian", "os_suite": "bookworm", "os_like": ""},
+    "ubuntu/24.04": {"os_id": "ubuntu", "os_suite": "noble", "os_like": "debian"},
+    "alpine/3.21": {"os_id": "alpine", "os_suite": "", "os_like": ""},
+}
+
+#: Une image inconnue du doublon est traitée comme la Debian 13 par défaut du
+#: catalogue : le doublon ne doit pas rendre inamorçable ce que la Forge amorce.
+_OS_DEFAUT = _OS_PAR_ALIAS["debian/13"]
+
+
+def _os_de_alias(alias: str) -> dict[str, str]:
+    return dict(_OS_PAR_ALIAS.get(alias, _OS_DEFAUT))
+
+
 def _faux_ed25519(graine: str) -> str:
     """Corps de cle ed25519 STRUCTURELLEMENT valide, pour le doublon (§28.4).
 
@@ -570,7 +590,13 @@ class FakeIncus:
         nom = payload["name"]
         if nom in self.created:
             raise IncusError(f"Instance « {nom} » deja presente.")
-        self.created[nom] = {"name": nom, "status": "Stopped", "config": payload.get("config", {})}
+        # SPK-76 · §42.9 : le doublon retient l'ALIAS de l'image. La famille de
+        # la cellule décide désormais de tout l'amorçage ; sans elle ici, une
+        # preuve verte ne dirait rien d'une Forge où les images diffèrent, et le
+        # refus d'une Alpine serait inéprouvable.
+        self.created[nom] = {"name": nom, "status": "Stopped",
+                             "config": payload.get("config", {}),
+                             "alias": (payload.get("source") or {}).get("alias", "")}
         self._persist()
 
     def set_instance_state(self, name: str, action: str) -> None:
@@ -633,6 +659,7 @@ class FakeIncus:
         self._vivante(name).setdefault("commands", []).append(command)
         script = command[-1] if command else ""
         runtime = self.created[name].setdefault("runtime", {})
+        runtime.update(_os_de_alias(self.created[name].get("alias", "")))
 
         # SPK-74 · §17.5 : le doublon porte l'EFFET de la creation d'identite,
         # pas seulement son passage. Sans lui, un second appel retrouverait la
@@ -668,11 +695,19 @@ class FakeIncus:
         if installe and "openssh-server" in script:
             runtime["sshd"] = "active"
             runtime["openssh_version"] = "1:9.8p1-1"
-        if "> /etc/apt/sources.list.d/docker.list" in script:
-            runtime["depot"] = "present"
+        # SPK-76 · §42.9.3 : le doublon retient CE QUE le dépôt nomme, pas le
+        # fait qu'il existe. Un `depot=present` opaque rendait le défaut du
+        # §42.9.3 — un dépôt qui pointe une autre distribution — inéprouvable.
+        marque = re.search(r"download\.docker\.com/linux/([a-z]+) (\S+) stable", script)
+        if marque and "> /etc/apt/sources.list.d/docker.list" in script:
+            runtime["depot_distro"], runtime["depot_suite"] = marque.groups()
         if installe and "docker-ce" in script:
             runtime["docker"] = "Docker version 29.7.2"
-            runtime["docker_version"] = "5:29.7.2-1"
+            # §42.9.4 : la version PORTE l'origine du paquet, et c'est ce qui
+            # permet de voir un `docker-ce` venu du mauvais dépôt.
+            suite = runtime.get("depot_suite") or runtime.get("os_suite") or "trixie"
+            distro = runtime.get("depot_distro") or runtime.get("os_id") or "debian"
+            runtime["docker_version"] = f"5:29.7.2-1~{distro}.1~{suite}"
             runtime["origine"] = "docker-ce"
             # §42.2 bis : le mode que la cellule PORTE après l'installation. Sans
             # lui, un second amorçage ne verrait aucun mode en place et le refus

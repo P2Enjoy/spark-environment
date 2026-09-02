@@ -662,11 +662,26 @@ async function amorcageAppel(methode) {
     });
     const corps = await reponse.json();
     if (!reponse.ok) {
+      // §42.9.5 : une famille non servie n'est pas une panne, et ne se peint
+      // donc pas en rouge. Le serveur vient de dire ce qu'EST la cellule : on
+      // bascule l'écran sur son refus calme, qui retire aussi le geste — sans
+      // quoi on inviterait à réessayer ce qui sera toujours refusé.
+      if (corps?.detail?.error === 'bootstrap_unsupported_os') {
+        a.releve = { items: [], complete: false, supported: false,
+                     os: corps.detail.os ?? null };
+        a.resultat = null;
+        a.busy = false;
+        peindre();
+        return;
+      }
       // Le runtime NOMME ses refus (§42.7) : « pas de cellule », « à l'arrêt »,
       // « protégé ». Les remplacer par un code HTTP ferait deviner.
       throw new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
     }
-    a.releve = { items: corps.items, complete: corps.complete };
+    // §42.9.5 : `os` et `supported` voyagent jusqu'à l'écran. Les laisser
+    // tomber ici rendrait le refus indicible côté console.
+    a.releve = { items: corps.items, complete: corps.complete,
+                 supported: corps.supported !== false, os: corps.os ?? null };
     // Le compte rendu n'existe qu'après un amorçage : un relevé seul ne dit pas
     // ce qui a été fait, il dit ce qui est.
     if (methode !== 'GET') {
@@ -2195,11 +2210,21 @@ async function chargerDetail(nom, facette = '') {
   // changeant de Spark afficherait le conteneur de l'un sous le nom de l'autre.
   else Object.assign(etat.docker, { ouvert: null, detail: null, journaux: null,
                                     confirme: null, enCours: null, issue: null });
+  // SPK-76 · §42.6 : le relevé d'amorçage porte sur UNE cellule. Il n'était
+  // jamais remis à zéro : l'état d'un Spark s'affichait donc sur la fiche du
+  // suivant — même symptôme que celui que le §37.6 corrige juste au-dessus pour
+  // Docker, et pour la même raison.
+  //
+  // Trouvé en produisant les captures : après le refus d'`alpine-demo`, la fiche
+  // d'`ubuntu-24` — parfaitement amorçable — n'offrait plus le geste, parce
+  // qu'elle héritait du `supported: false` de l'autre. Aucune preuve de rendu ne
+  // pouvait l'attraper : elles peignent une fiche à la fois.
+  if (etat.spark?.name !== nom) etat.amorcage = { ...AMORCAGE_VIDE };
   peindre();
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
-           env, catalogue] = await Promise.all([
+           env, catalogue, forge] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),

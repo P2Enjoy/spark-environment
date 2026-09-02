@@ -4705,7 +4705,7 @@ L'ancienne route de fermeture par balise est retirée : plus rien ne l'appelait.
 
 ---
 
-### [ ] SPK-76 · L'amorçage relève la famille de la cellule, et refuse ce qu'il ne sert pas
+### [~] SPK-76 · L'amorçage relève la famille de la cellule, et refuse ce qu'il ne sert pas
 
 Signalé par le responsable le 2026-09-02, sur deux cellules réelles. `alpine-demo`
 rend `Operation Incus en echec (POST …/exec) : Command not found`, et une cellule

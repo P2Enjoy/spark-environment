@@ -692,6 +692,22 @@ const SPARK_LIBRE = {
   ipv4_address: '10.77.0.10', image: 'images:debian/13', protected: false,
 };
 
+const QUOTAS_REMPLIS = {
+  ...QUOTAS_VIDE, open: true,
+  values: {
+    memory_gib: '2', storage_gib: '10', network_mbps: '100',
+    cpu_mode: 'shared', cpu_reservation: '0.5', cpu_max: '0.5', cpu_cores: '1',
+  },
+};
+
+const CAPACITE = {
+  pools: {
+    cpu: { capacity: 8 }, memory: { capacity: 16 * GIO },
+    storage: { capacity: 200 * GIO }, network: { capacity: 1_000_000_000 },
+  },
+  cores: 8,
+};
+
 test('la section Ressources porte SA commande, comme le §6.27 le veut', () => {
   const html = renderSparkDetail({ status: 'ready', spark: SPARK_LIBRE });
   assert.match(html, /data-ouvre="quotas"/);
@@ -717,6 +733,30 @@ test('la modale a pour SUJET la section, et un seul point d’engagement', () =>
   assert.match(html, /modale__titre[^>]*>Ressources</);
   assert.match(html, /data-engage="quotas"/);
   assert.equal((html.match(/bouton--primaire/g) || []).length, 1);
+});
+
+test('modifier emploie les MEMES curseurs et bornes que creer', () => {
+  const html = renderQuotas(SPARK_LIBRE, QUOTAS_REMPLIS, CAPACITE);
+  assert.match(html, /<input type="range"[^>]*id="quota-cpu_reservation"[^>]*max="8"/);
+  assert.match(html, /<input type="range"[^>]*id="quota-memory"[^>]*max="16"/);
+  assert.match(html, /<input type="range"[^>]*id="quota-storage"[^>]*max="200"/);
+  assert.match(html, /<input type="range"[^>]*id="quota-network"[^>]*max="1000"/);
+  assert.match(html, /data-valeur-de="memory" aria-hidden="true">2 Gio</);
+});
+
+test('modifier se replie en saisies si la capacite est inconnue', () => {
+  const html = renderQuotas(SPARK_LIBRE, QUOTAS_REMPLIS);
+  assert.equal(/<input[^>]*type="range"/.test(html), false);
+  assert.match(html, /<input type="number"[^>]*id="quota-memory"/);
+});
+
+test('le mode epingle partage regle reservation ET coeurs', () => {
+  const html = renderQuotas(SPARK_LIBRE, {
+    ...QUOTAS_REMPLIS,
+    values: { ...QUOTAS_REMPLIS.values, cpu_mode: 'shared-pinned' },
+  }, CAPACITE);
+  assert.match(html, /name="cpu_reservation"/);
+  assert.match(html, /name="cpu_cores"/);
 });
 
 test('le DISQUE dit qu’il est pris en compte IMMÉDIATEMENT', () => {
@@ -807,4 +847,137 @@ test('les quatre modes du produit sont proposés, et aucun autre', () => {
     assert.match(html, new RegExp(`value="${mode}"`), mode);
   }
   assert.equal((html.match(/<option /g) || []).length, 4);
+});
+
+// --- SPK-76 · une famille non servie (docs/DAT.md §42.9.5, §42.9.7) --------
+//
+// @verifies docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.9.5 (le refus se lit),
+//           §42.9.7 (l'échec porte sa cause) ·
+//           docs/DESIGN_SYSTEM_APP.md SPK-DS-18
+
+test('une cellule que l’amorçage ne sert pas le DIT, et NOMME sa distribution', () => {
+  // §42.9.5 : c'est le défaut d'`alpine-demo`. L'écran laissait fuiter le refus
+  // brut d'Incus — « Command not found » —, qui ne désigne pas sa cause.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { items: [], complete: false, supported: false, os: { id: 'alpine' } },
+  }));
+  assert.match(rendu, /ne sait pas servir/);
+  assert.match(rendu, /alpine/);
+  assert.match(rendu, /Debian et Ubuntu/);
+});
+
+test('sur une cellule non servie, le geste d’amorçage n’est PAS proposé', () => {
+  // §1.4 : ne pas offrir un geste dont on tient du serveur qu'il sera refusé.
+  // L'écran ne le SUPPOSE pas — il vient de le relever.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { items: [], complete: false, supported: false, os: { id: 'alpine' } },
+  }));
+  assert.ok(!/data-amorcage="amorcer"/.test(rendu),
+    'proposer d’amorcer une Alpine invite à un refus certain');
+  // …mais relever reste possible : regarder n'est pas agir (§42.7).
+  assert.match(rendu, /data-amorcage="relever"/);
+});
+
+test('une cellule non servie n’est pas peinte comme une PANNE', () => {
+  // §42.9.5 : elle tourne, elle répond, et rien n'est cassé. `.refus` est rouge
+  // et réservé à une erreur du serveur (DESIGN_SYSTEM_APP.md §4).
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { items: [], complete: false, supported: false, os: { id: 'alpine' } },
+  }));
+  assert.ok(!/class="refus"/.test(rendu));
+  assert.match(rendu, /reste utilisable/);
+  // SPK-DS-08 : « un fait signalé qui n'est ni un refus ni un succès » prend
+  // l'accent. Pas `.absence`, qui est l'italique gris d'une donnée MANQUANTE —
+  // or rien ne manque ici : la cellule tourne et répond.
+  assert.match(rendu, /class="avertissement"/);
+  assert.ok(!/class="absence">L’amorçage ne sait pas/.test(rendu));
+});
+
+test('la sortie d’erreur d’une pose garde ses LIGNES', () => {
+  // §42.9.7 et SPK-DS-18 : ce qui compte dans une sortie d'`apt`, c'est quelle
+  // ligne porte l'erreur. Un `<p>` les écraserait en un pavé.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    erreur: 'L’installation de « moteur Docker » a échoué (code 100). '
+      + 'La cellule a écrit :\nE: Impossible de trouver le paquet docker-ce\n'
+      + 'E: Le paquet « containerd.io » n’a pas de version candidate',
+  }));
+  assert.match(rendu, /<pre class="refus__sortie">/);
+  assert.match(rendu, /docker-ce/);
+});
+
+test('un refus d’une seule ligne reste une PHRASE, pas une sortie technique', () => {
+  // SPK-DS-18 : lui donner une chasse fixe le ferait passer pour une sortie de
+  // commande alors que c'est le produit qui parle.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    erreur: '« helo » n’est pas en marche.',
+  }));
+  assert.ok(!/refus__sortie/.test(rendu));
+  assert.match(rendu, /<div class="refus" role="alert"><p>/);
+});
+
+// --- SPK-76 · deux défauts signalés sur la Forge le 2026-09-02 -------------
+//
+// @verifies docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.2 bis (le mode observé),
+//           §42.9.7 · docs/DESIGN_SYSTEM.md §14.6
+
+test('un échec n’affiche PAS « cellule complète » juste en dessous', () => {
+  // Signalé tel quel : « La reprise rootless a échoué (code 1). » suivi de
+  // « Cette cellule est complète ». Le verdict venait du relevé PRÉCÉDENT, que
+  // l'échec n'avait pas invalidé. Deux affirmations contraires sur le même
+  // écran ne laissent pas choisir : elles font douter des deux.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: { items: [{ key: 'sshd', label: 'serveur SSH', state: 'present' }],
+              complete: true, supported: true },
+    erreur: 'La reprise rootless a échoué (code 1).',
+  }));
+  assert.match(rendu, /reprise rootless a échoué/);
+  assert.ok(!/Cette cellule est complète/.test(rendu),
+    'l’écran affirme la réussite et l’échec en même temps');
+});
+
+test('un second amorçage RATÉ ne dit pas « rien n’a été fait »', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    resultat: { items: [], changed: false, complete: true },
+    erreur: 'L’installation de « moteur Docker » a échoué (code 100).',
+  }));
+  assert.ok(!/Rien n’a été fait/.test(rendu));
+});
+
+test('un moteur présent dont le MODE est illisible le DIT', () => {
+  // §14.6 : « pas su » n'est pas « pas de mode ». Signalé en ces termes :
+  // « impossible de savoir s'il est en rootless ou pas ».
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: {
+      items: [{ key: 'docker', label: 'moteur Docker', state: 'present',
+                detail: 'Docker version 29.7.2', mode: null }],
+      complete: false, supported: true,
+    },
+  }));
+  assert.match(rendu, /mode indéterminé/);
+  assert.match(rendu, /ni enraciné,\s*ni rootless/);
+});
+
+test('un moteur dont le mode EST connu ne dit pas « indéterminé »', () => {
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: {
+      items: [{ key: 'docker', label: 'moteur Docker', state: 'present',
+                detail: 'Docker version 29.7.2', mode: 'rootless' }],
+      complete: true, supported: true,
+    },
+  }));
+  assert.match(rendu, /rootless/);
+  assert.ok(!/mode indéterminé/.test(rendu));
+});
+
+test('un moteur ABSENT ne réclame pas de mode', () => {
+  // §42.2 bis : on n'attribue pas un mode à ce qui ne tourne pas, et on ne
+  // s'étonne pas non plus de ne pas en trouver.
+  const rendu = renderAmorcage(CELLULE, amorcage({
+    releve: {
+      items: [{ key: 'docker', label: 'moteur Docker', state: 'absent',
+                detail: 'absent', mode: null }],
+      complete: false, supported: true,
+    },
+  }));
+  assert.ok(!/mode indéterminé/.test(rendu));
 });

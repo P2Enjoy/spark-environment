@@ -150,6 +150,10 @@ pas les lignes suivantes, et le message ne se réduit pas à un code : il porte 
 dernières lignes de l'erreur, telles que la cellule les a écrites. C'est
 généralement `apt` qui parle, et c'est lui qu'il faut lire.
 
+**Après un échec, l'écran ne conclut plus rien.** Le verdict « cette cellule est
+complète » disparaît, même s'il était vrai avant le geste : ce qu'on savait
+n'est plus su. Relevez à nouveau pour retrouver l'état réel.
+
 **Comptez plusieurs minutes.** L'amorçage télécharge et installe de vrais
 paquets ; l'écran reste occupé pendant tout ce temps, sans détailler son
 avancement. Ne relancez pas le geste : le compte rendu arrive à la fin, et il
@@ -189,6 +193,13 @@ en place et lequel vous avez demandé.
 Le choix se fait donc **au premier amorçage**, tant que rien ne tourne — et
 l'écran ne vous propose la case qu'à ce moment-là. Ensuite, la ligne *moteur
 Docker* vous rappelle dans quel mode votre Spark tourne.
+
+**Si elle affiche « mode indéterminé »**, c'est que le moteur est bien installé
+mais qu'**aucun démon ne tourne** — ni enraciné, ni rootless. Ce n'est pas la
+même chose qu'un mode absent : l'écran ne le devine pas, il vous dit qu'il ne
+l'a pas trouvé. Démarrez le démon, puis relevez à nouveau. C'est l'état typique
+d'un amorçage rootless interrompu avant que son service utilisateur n'ait
+démarré.
 
 Si un premier amorçage rootless a été interrompu avant que son démon utilisateur
 ne démarre, redemander **le même mode rootless** le reprend. Ce n'est pas une

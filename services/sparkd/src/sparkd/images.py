@@ -51,6 +51,27 @@ DEFAULTS = (
 )
 
 
+#: SPK-76 · §42.9.6 : ce que l'amorçage sait servir, dit PAR le catalogue.
+#: Le §33 propose une image, le §42 sait ou non l'amorcer, et les deux ne se
+#: parlaient pas — c'est ce silence qui a produit `alpine-demo`.
+#:
+#: Ce n'est **pas** un filtre : l'entrée reste choisissable. Le produit sert des
+#: cellules, pas seulement des cellules amorçables, et un locataire qui sait ce
+#: qu'il fait peut vouloir une Alpine. Mais l'écran de création le DIT avant, au
+#: lieu de le laisser découvrir à l'amorçage.
+FAMILLES_AMORCABLES = ("debian", "ubuntu")
+
+
+def amorcable(alias: str) -> bool:
+    """L'amorçage sait-il équiper une cellule issue de cet alias ? (§42.9.6)
+
+    La vérité reste ce que la CELLULE déclare dans `/etc/os-release` : c'est le
+    §42.9 qui décide, et lui seul. Ceci n'est qu'une annonce faite avant la
+    création, sur la seule information qu'on ait alors — le nom de l'image.
+    """
+    return (alias or "").split("/", 1)[0].strip().lower() in FAMILLES_AMORCABLES
+
+
 class ImageError(RuntimeError):
     """La référence demandée n'est pas utilisable."""
 

@@ -509,6 +509,15 @@ tbody tr:hover { background: var(--color-hover); }
   border-radius: var(--radius-sm); font-size: var(--text-compact);
 }
 .refus p { margin: 0; }
+/* SPK-DS-18 · SPK-76 · docs/DAT.md §42.9.7 — la sortie d'erreur d'une pose.
+   Elle garde ses lignes (c'est laquelle qui porte l'erreur qui compte) et se
+   replie quand même : un défilement horizontal dans un bloc étroit cacherait
+   la fin de la ligne, donc le message. */
+.refus__sortie {
+  margin: var(--space-2) 0 0; font-family: var(--font-mono);
+  font-size: var(--text-compact);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .refus .liste-simple { margin-top: var(--space-2); }
 .refus .liste-simple li { min-height: auto; }
 

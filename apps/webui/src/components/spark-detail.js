@@ -29,7 +29,7 @@ import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
 // `MODES` est DÉJÀ pris dans ce fichier par les modes d'amorçage : on nomme donc
 // celui-ci pour ce qu'il est. Deux tables homonymes dans un même module finiraient
 // par être confondues.
-import { MODES as MODES_CPU } from './spark-create.js';
+import { MODES as MODES_CPU, champQuota } from './spark-create.js';
 import { formatDate } from './forge-view.js';
 
 const echapper = (v) =>
@@ -259,15 +259,11 @@ function renderRessources(spark, usage) {
  * que ce qu'on fait est une erreur sans conséquence ; l'inverse coupe un service
  * en production.
  */
-export function renderQuotas(spark, ui = QUOTAS_VIDE) {
+export function renderQuotas(spark, ui = QUOTAS_VIDE, contexte = {}) {
   const v = ui.values;
-  const champ = (id, libelle, valeur, aide, unite, pas = '1') => `
-    <div class="champ">
-      <label for="quota-${id}">${echapper(libelle)}</label>
-      <input class="controle" id="quota-${id}" name="${id}" type="number"
-             min="0" step="${echapper(pas)}" value="${echapper(valeur)}">
-      <p class="champ__aide">${echapper(unite)}${aide ? ` · ${aide}` : ''}</p>
-    </div>`;
+  const quota = (nom, id, name, libelle, valeur, aide, unite) => champQuota(nom, {
+    id: `quota-${id}`, name, libelle, valeur, contexte, unite, aide,
+  });
 
   // §49.2 : le mode CPU se redimensionne. Le §49.4 imposait d'annoncer un
   // redémarrage tant que la prise à chaud n'était pas MESURÉE — elle l'a été le
@@ -284,14 +280,21 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE) {
     `<option value="${echapper(cle)}"${cle === mode ? ' selected' : ''}>${
       echapper(libelle)}</option>`).join('');
 
-  const champsCpu = ['shared', 'shared-pinned'].includes(mode)
-      ? champ('cpu_reservation', 'Réservation CPU', v.cpu_reservation,
-              'droit d’ordonnancement sous contention, pas un plafond', 'en CPU', '0.1')
-    : mode === 'capped'
-      ? champ('cpu_max', 'Plafond CPU', v.cpu_max,
-              'jamais dépassé, pas de burst', 'en CPU', '0.1')
-    : champ('cpu_cores', 'Cœurs dédiés', v.cpu_cores,
-            'cœurs physiques entiers, frères SMT compris', 'en cœurs', '1');
+  const champsCpu = [
+    ['shared', 'shared-pinned'].includes(mode)
+      ? quota('cpu_reservation', 'cpu_reservation', 'cpu_reservation',
+              'Réservation CPU', v.cpu_reservation,
+              'Droit d’ordonnancement sous contention, pas un plafond.')
+      : '',
+    mode === 'capped'
+      ? quota('cpu_max', 'cpu_max', 'cpu_max', 'Plafond CPU', v.cpu_max,
+              'Jamais dépassé, pas de burst.')
+      : '',
+    ['dedicated', 'shared-pinned'].includes(mode)
+      ? quota('cpu_cores', 'cpu_cores', 'cpu_cores', 'Cœurs dédiés', v.cpu_cores,
+              'Cœurs physiques entiers, frères SMT compris.')
+      : '',
+  ].join('');
 
   return renderModale({
     ouverte: ui.open, id: 'quotas', titre: 'Ressources',
@@ -304,10 +307,11 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE) {
         <p class="champ__aide">pris en compte immédiatement</p>
       </div>
       ${champsCpu}
-      ${champ('memory', 'Mémoire', v.memory_gib, '', 'en Gio')}
-      ${champ('storage', 'Disque', v.storage_gib,
-              'pris en compte immédiatement', 'en Gio')}
-      ${champ('network', 'Plafond réseau', v.network_mbps, '', 'en Mbit/s')}
+      ${quota('memory_gib', 'memory', 'memory', 'Mémoire', v.memory_gib, '', 'Gio')}
+      ${quota('storage_gib', 'storage', 'storage', 'Disque', v.storage_gib,
+              'pris en compte immédiatement', 'Gio')}
+      ${quota('network_mbit', 'network', 'network', 'Plafond réseau', v.network_mbps,
+              '', 'Mbit/s')}
       <p class="note">Ce que vous retirez doit être libre : réduire la mémoire
       sous ce que la cellule emploie, ou le disque sous ce qu’il contient, sera
       refusé. <a href="#/manuel/M8">Manuel M8 — Exploiter au quotidien</a></p>`,
@@ -332,8 +336,10 @@ function renderAcces(spark) {
 /**
  * L'amorçage d'un Spark (SPK-54, docs/DAT.md §41, §42).
  *
- * @spec docs/BACKLOG.md#SPK-54 · docs/DAT.md §42.1 (détecter d'abord),
- *       §42.3 (par où il passe), §42.7 (le contrat) ·
+ * @spec docs/BACKLOG.md#SPK-54 · docs/BACKLOG.md#SPK-76 ·
+ *       docs/DAT.md §42.1 (détecter d'abord),
+ *       §42.3 (par où il passe), §42.7 (le contrat),
+ *       §42.9.5 (une famille non servie se REFUSE, et le refus se lit) ·
  *       docs/DESIGN_SYSTEM.md §6.13 (les états d'une vue), §6.22
  *       (confirmation dans le flux), §6.23 (une action sensible se confirme),
  *       §14.6 (« pas encore relevé » n'est pas « rien à faire »)
@@ -383,12 +389,25 @@ function ligneAmorcage(ligne) {
   // a un — un Docker absent, ou de distribution, n'en a pas, et lui en prêter un
   // ferait croire à un choix là où rien ne tourne.
   const mode = ligne.mode ? MODES[ligne.mode] ?? ligne.mode : null;
+  // SPK-76 · §14.6 : un moteur PRÉSENT dont on n'a lu aucun mode n'est pas un
+  // moteur sans mode — c'est un mode qu'on ne sait pas. Ne rien afficher le
+  // taisait, et le responsable l'a dit en ces termes : « impossible de savoir
+  // s'il est en rootless ou pas ».
+  //
+  // Le cas est réel et pas théorique : il se produit quand aucun démon n'est
+  // actif — un rootless interrompu, ou un démon arrêté. C'est justement là
+  // qu'il faut le dire, puisque c'est là qu'on cherche.
+  const modeInconnu = ligne.key === 'docker' && !mode && ligne.state === 'present';
   return `<li class="ligne-amorcage">
     <span class="badge badge--${etat.token}">${echapper(etat.libelle)}</span>
     <strong>${echapper(ligne.label ?? ligne.key)}</strong>
     ${sort ? `<span class="badge badge--${sort.token}">${echapper(sort.libelle)}</span>` : ''}
     ${mode ? `<span class="badge badge--neutral">${echapper(mode)}</span>` : ''}
+    ${modeInconnu ? '<span class="badge badge--accent">mode indéterminé</span>' : ''}
     ${utile ? `<span class="note">${echapper(detail)}</span>` : ''}
+    ${modeInconnu ? `<span class="note">Aucun démon Docker actif : ni enraciné,
+      ni rootless. Le moteur est installé, mais rien ne tourne — relevez à
+      nouveau après l’avoir démarré.</span>` : ''}
   </li>`;
 }
 
@@ -407,10 +426,42 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
   const releve = etat.releve;
   const lignes = etat.resultat?.items ?? (releve && releve !== 'en-cours' ? releve.items : null);
 
+  // §42.9.5 : la cellule tourne, elle répond, et l'amorçage ne sait pas la
+  // servir. Ce n'est pas une panne — l'écran ne l'écrit donc pas en `refus`,
+  // qui est le rendu d'une erreur. Et il RETIRE le geste au lieu de le proposer
+  // pour qu'il soit refusé (§1.4), exactement comme pour le mode déjà en place.
+  const os = etat.resultat?.os ?? (releve && releve !== 'en-cours' ? releve.os : null);
+  const servie = (releve && releve !== 'en-cours') ? releve.supported !== false : true;
+  if (!servie) {
+    return `
+<section class="carte bloc" aria-labelledby="titre-amorcage">
+  <h2 id="titre-amorcage">Amorçage</h2>
+  <p class="note">L’amorçage relève ce qui manque dans la cellule et ne pose que
+  cela. <a href="#/manuel/M6">Manuel M6 — Amorcer le Spark, une fois</a></p>
+  <div class="avertissement">
+    <p>L’amorçage ne sait pas servir
+    <strong>${echapper(os?.id || 'cette distribution')}</strong>. Il installe SSH et
+    Docker sur les distributions de la famille Debian — Debian et Ubuntu —, dont il
+    pose le dépôt Docker officiel.</p>
+    <p>Cette cellule tourne et reste utilisable : vous pouvez y entrer par la
+    console et l’équiper vous-même.</p>
+  </div>
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-amorcage="relever"
+            ${etat.busy ? 'disabled' : ''}>Relever à nouveau</button>
+  </p>
+</section>`;
+  }
+
   // §6.13 et §14.6 : « pas encore relevé » n'est NI « rien à faire », NI « tout
   // va bien ». L'écran ne prétend pas savoir ce qu'il n'a pas mesuré.
+  // §42.9.7 : le refus porte désormais la sortie d'erreur de la cellule, sur
+  // plusieurs lignes. Un `<p>` les écraserait en un pavé illisible — or c'est
+  // précisément ce texte-là qui dit POURQUOI la pose a échoué.
   const corps = etat.erreur
-    ? `<div class="refus" role="alert"><p>${echapper(etat.erreur)}</p></div>`
+    ? `<div class="refus" role="alert">${etat.erreur.includes('\n')
+         ? `<pre class="refus__sortie">${echapper(etat.erreur)}</pre>`
+         : `<p>${echapper(etat.erreur)}</p>`}</div>`
     : releve === 'en-cours'
       ? '<p class="note" role="status" aria-busy="true">Relevé de la cellule en cours…</p>'
       : !lignes
@@ -421,13 +472,21 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
 
   const complet = etat.resultat?.complete ?? (releve && releve !== 'en-cours'
     ? releve.complete : null);
-  const verdict = lignes && complet
+  // SPK-76 : un ÉCHEC efface le verdict. Il était rendu depuis le relevé
+  // PRÉCÉDENT, que l'échec n'a pas invalidé : l'écran affichait donc « La
+  // reprise rootless a échoué » et, juste dessous, « Cette cellule est
+  // complète ». Signalé par le responsable le 2026-09-02 sur sa Forge.
+  //
+  // Deux affirmations contraires sur le même écran ne laissent pas le lecteur
+  // choisir : elles lui font perdre confiance dans les deux. Après un échec, ce
+  // qu'on savait AVANT n'est plus su — il faut relever à nouveau.
+  const verdict = lignes && complet && !etat.erreur
     ? `<p class="note" role="status">Cette cellule est complète : elle est joignable
        en SSH et capable de faire tourner une pile Compose.</p>`
     : '';
 
   // §42.1 : un second amorçage ne fait rien, et l'écran le DIT.
-  const rien = etat.resultat && etat.resultat.changed === false
+  const rien = etat.resultat && etat.resultat.changed === false && !etat.erreur
     ? `<p class="note" role="status">Rien n’a été fait : tout était déjà en place.</p>`
     : '';
 
@@ -565,7 +624,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     quotas = QUOTAS_VIDE,
                                     env = [], envUi = ENV_VIDE,
                                     identite = IDENTITE_VIDE,
-                                    catalogue = [] } = {}) {
+                                    catalogue = [], pools = null, cores = null } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -575,7 +634,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
 
   const facettes = {
     '': () => `<div class="detail">
-      <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas)}
+      <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas, { pools, cores })}
         ${renderProtection(spark, admin)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}
         ${renderAmorcage(spark, amorcage)}</div>

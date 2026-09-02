@@ -1,4 +1,6 @@
-"""@verifies docs/BACKLOG.md#SPK-54 · docs/DAT.md §41.2 (Docker vient du dépôt
+"""@verifies docs/BACKLOG.md#SPK-54 · docs/BACKLOG.md#SPK-76 ·
+            docs/DAT.md §42.9 (la famille de la cellule décide) ·
+            docs/DAT.md §41.2 (Docker vient du dépôt
             AMONT), §42.1 (détecter d'abord, n'installer que les manques),
             §42.5 (exec_capture, et le code de sortie qui n'est pas une erreur),
             §42.6 (ce que la détection exécute), §42.7 (le contrat d'API),
@@ -70,7 +72,8 @@ def test_un_docker_io_de_DISTRIBUTION_est_un_DEFAUT_et_pas_un_etat_acceptable(tm
     `socketpair()` sous imbrication. Le déclarer bon ferait dire à l'amorçage
     qu'un Spark est prêt alors qu'aucune pile n'y tournera."""
     vus = bootstrap.juger({
-        "sshd": "active", "cles": "absent", "depot": "absent",
+        "os_id": "debian", "os_suite": "trixie",
+        "sshd": "active", "cles": "absent",
         "docker": "Docker version 26.1.5", "origine": "docker.io",
         "compose": "absent"})
     docker = next(v for v in vus if v["key"] == "docker")
@@ -84,8 +87,11 @@ def test_un_docker_io_de_DISTRIBUTION_est_un_DEFAUT_et_pas_un_etat_acceptable(tm
 
 def test_un_docker_ce_du_depot_AMONT_est_present(tmp_path):
     vus = bootstrap.juger({
-        "sshd": "active", "cles": "absent", "depot": "present",
+        "os_id": "debian", "os_suite": "trixie",
+        "sshd": "active", "cles": "absent",
+        "depot_distro": "debian", "depot_suite": "trixie",
         "docker": "Docker version 29.7.2", "origine": "docker-ce",
+        "docker_version": "5:29.7.2-1~debian.13~trixie",
         "compose": "Docker Compose version v2"})
     docker = next(v for v in vus if v["key"] == "docker")
     assert docker["state"] == bootstrap.PRESENT
@@ -105,7 +111,8 @@ def test_l_installation_de_docker_RETIRE_d_abord_le_paquet_de_distribution(tmp_p
     assert "purge" in script and "docker.io" in script
     assert script.index("purge") < script.index("docker-ce")
     # Et il vient du dépôt amont, pas de la distribution.
-    depot = bootstrap.script_pour("depot")[-1]
+    depot = bootstrap.script_pour(
+        "depot", {"os_id": "debian", "os_suite": "trixie"})[-1]
     assert "download.docker.com" in depot
 
 
@@ -216,7 +223,9 @@ def test_un_amorcage_sur_cellule_COMPLETE_ne_fait_rien_et_le_DIT(tmp_path):
     redémarrerait le démon Docker pour rien."""
     client = _client(tmp_path)
     nom = _creer(client)
-    _poser_runtime(client, nom, sshd="active", depot="present",
+    _poser_runtime(client, nom, sshd="active", os_id="debian",
+                   os_suite="trixie", depot_distro="debian",
+                   depot_suite="trixie",
                    docker="Docker version 29.7.2", origine="docker-ce",
                    compose="Docker Compose version v2",
                    cles=bootstrap.empreinte(
@@ -245,7 +254,9 @@ def test_un_amorcage_qui_ne_change_RIEN_est_quand_meme_journalise(tmp_path):
     tenté."""
     client = _client(tmp_path)
     nom = _creer(client)
-    _poser_runtime(client, nom, sshd="active", depot="present",
+    _poser_runtime(client, nom, sshd="active", os_id="debian",
+                   os_suite="trixie", depot_distro="debian",
+                   depot_suite="trixie",
                    docker="Docker version 29.7.2", origine="docker-ce",
                    compose="Docker Compose version v2",
                    cles=bootstrap.empreinte(
@@ -568,3 +579,182 @@ def test_le_compte_rendu_de_l_amorcage_PORTE_le_mode(tmp_path):
     assert encore["changed"] is False
     assert next(v for v in encore["items"]
                 if v["key"] == "docker")["mode"] == bootstrap.ROOTLESS
+
+
+# --- SPK-76 · La famille de la cellule décide (§42.9) -----------------------
+#
+# @verifies docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.9.1 (le relevé n'exige plus
+#           `bash`), §42.9.2 (le dépôt se construit), §42.9.3 (un dépôt présent
+#           peut être faux), §42.9.4 (un `docker-ce` du mauvais dépôt),
+#           §42.9.5 (le refus), §42.9.7 (l'échec qui dit sa cause)
+
+
+def test_le_releve_n_exige_PAS_bash_puisqu_il_vient_le_diagnostiquer(tmp_path):
+    """§42.9.1. C'est le défaut d'`alpine-demo` : `bash -lc` faisait refuser
+    l'exécution par Incus — « Command not found » — avant que le produit n'ait pu
+    NOMMER la distribution qu'il venait constater."""
+    commande = bootstrap._shell("vrai")
+    assert commande[0] == "sh", "une cellule sans bash doit pouvoir être RELEVÉE"
+    assert "bash" not in commande[0]
+    # Le motif d'origine de `bash -lc` reste honoré, mais explicitement.
+    assert "/usr/sbin" in commande[-1], "sshd vit dans /usr/sbin"
+
+
+def test_le_depot_amont_suit_la_DISTRIBUTION_de_la_cellule(tmp_path):
+    """§42.9.2 : c'était `linux/debian` et `trixie`, constantes de module."""
+    assert bootstrap.cible_apt({"os_id": "debian", "os_suite": "trixie"}) == (
+        "debian", "trixie")
+    assert bootstrap.cible_apt({"os_id": "debian", "os_suite": "bookworm"}) == (
+        "debian", "bookworm")
+    assert bootstrap.cible_apt({"os_id": "ubuntu", "os_suite": "noble"}) == (
+        "ubuntu", "noble")
+    script = bootstrap.script_pour("depot", {"os_id": "ubuntu", "os_suite": "noble"})[-1]
+    assert "download.docker.com/linux/ubuntu noble stable" in script
+    assert "linux/debian" not in script, "le défaut mesuré sur la cellule Ubuntu"
+
+
+def test_une_derivee_est_servie_par_son_PARENT_quand_ID_LIKE_le_nomme(tmp_path):
+    assert bootstrap.cible_apt(
+        {"os_id": "linuxmint", "os_suite": "virginia", "os_like": "ubuntu debian"}
+    ) == ("ubuntu", "virginia")
+
+
+def test_sans_VERSION_CODENAME_on_REFUSE_au_lieu_de_deviner(tmp_path):
+    """§42.9.2 : poser une suite fausse est le défaut qu'on corrige. Le dépôt
+    répondrait, et l'échec n'arriverait qu'à l'installation."""
+    with pytest.raises(bootstrap.OSNonServi):
+        bootstrap.cible_apt({"os_id": "debian", "os_suite": ""})
+
+
+def test_une_cellule_ALPINE_n_est_pas_servie_et_ce_n_est_pas_une_panne(tmp_path):
+    """§42.9.5. Le type est distinct de `BootstrapFailed` à dessein : « je ne
+    sais pas faire ça » n'est pas « ça a raté »."""
+    brut = {"os_id": "alpine", "os_suite": "", "os_like": ""}
+    assert bootstrap.servie(brut) is False
+    assert bootstrap.identite(brut)["family"] == "alpine"
+    with pytest.raises(bootstrap.OSNonServi) as refus:
+        bootstrap.cible_apt(brut)
+    assert "alpine" in str(refus.value), "le refus NOMME la distribution trouvée"
+    assert not issubclass(bootstrap.OSNonServi, bootstrap.BootstrapFailed)
+
+
+def test_un_depot_qui_pointe_une_AUTRE_distribution_est_un_DEFAUT(tmp_path):
+    """§42.9.3 — le cas mesuré : `linux/debian trixie` sur une Ubuntu `noble`.
+    Le dépôt RÉPOND, donc rien ne s'en plaignait jusqu'à `apt-get install`."""
+    vus = bootstrap.juger({
+        "os_id": "ubuntu", "os_suite": "noble", "os_like": "debian",
+        "depot_distro": "debian", "depot_suite": "trixie",
+        "docker": "absent", "origine": "absent", "compose": "absent"})
+    depot = next(v for v in vus if v["key"] == "depot")
+    assert depot["state"] == bootstrap.DEFECT
+    assert depot["state"] != bootstrap.PRESENT, "présent n'est pas juste"
+    assert "debian" in depot["detail"] and "ubuntu" in depot["detail"]
+    assert "depot" in bootstrap.manques(vus)
+
+
+def test_un_docker_ce_venu_du_MAUVAIS_depot_est_un_defaut(tmp_path):
+    """§42.9.4 : les paquets amont portent leur origine dans leur version."""
+    vus = bootstrap.juger({
+        "os_id": "ubuntu", "os_suite": "noble", "os_like": "debian",
+        "depot_distro": "ubuntu", "depot_suite": "noble",
+        "docker": "Docker version 29.7.2", "origine": "docker-ce",
+        "docker_version": "5:29.7.2-1~debian.13~trixie", "compose": "absent"})
+    docker = next(v for v in vus if v["key"] == "docker")
+    assert docker["state"] == bootstrap.DEFECT
+    assert "trixie" in docker["detail"]
+    # …et on ne lui attribue AUCUN mode : il ne tourne pas utilement (§42.2 bis).
+    assert docker["mode"] is None
+
+
+def test_un_paquet_SANS_marque_d_origine_n_est_pas_declare_defectueux(tmp_path):
+    """§33.3 appliqué ici : ne pas savoir n'est pas savoir que c'est faux. Un
+    paquet reconstruit localement ne doit pas être purgé sur un doute."""
+    assert bootstrap.origine_paquet("5:29.7.2-1") is None
+    vus = bootstrap.juger({
+        "os_id": "debian", "os_suite": "trixie",
+        "depot_distro": "debian", "depot_suite": "trixie",
+        "docker": "Docker version 29.7.2", "origine": "docker-ce",
+        "docker_version": "5:29.7.2-1", "compose": "absent"})
+    assert next(v for v in vus if v["key"] == "docker")["state"] == bootstrap.PRESENT
+
+
+def test_un_script_de_pose_S_ARRETE_au_premier_echec(tmp_path):
+    """§42.9.7 : sans `set -e`, le code rendu était celui de la DERNIÈRE ligne.
+    D'où un Docker installé « malgré l'erreur » — et, symétriquement, des poses
+    ratées rendues réussies dès que la dernière ligne passait."""
+    for cle, brut in (("sshd", {}), ("compose", {}),
+                      ("depot", {"os_id": "debian", "os_suite": "trixie"}),
+                      ("docker", {})):
+        script = bootstrap.script_pour(cle, brut)[-1]
+        assert "set -e" in script, f"« {cle} » poursuit après un échec"
+
+
+def test_l_echec_d_une_pose_porte_sa_CAUSE_et_pas_seulement_un_code(tmp_path):
+    """§42.9.7 : `code, _, _ = exec_capture(...)` jetait le stderr. Un code de
+    sortie sans cause n'est pas un diagnostic (CLAUDE.md §18)."""
+    message = bootstrap.echec("docker", 100, "Lecture des listes...\n"
+                              "E: Impossible de trouver le paquet docker-ce\n")
+    assert "code 100" in message
+    assert "Impossible de trouver le paquet docker-ce" in message
+    # Sans sortie, on le DIT au lieu de laisser croire qu'on n'a pas regardé.
+    assert "rien écrit" in bootstrap.echec("docker", 1, "")
+
+
+def test_le_releve_REPOND_sur_une_cellule_qu_on_ne_saurait_pas_amorcer(tmp_path):
+    """§42.9.5 : on peut regarder sans agir, et cela vaut a fortiori ici — c'est
+    là qu'il faut pouvoir lire ce que la cellule EST."""
+    client = _client(tmp_path)
+    nom = _creer(client, "alpine-demo")
+    client.app.state.incus.created[nom]["alias"] = "alpine/3.21"
+    client.app.state.incus._persist()
+
+    releve = client.get(f"/v1/sparks/{nom}/bootstrap")
+    assert releve.status_code == 200, releve.text
+    assert releve.json()["supported"] is False
+    assert releve.json()["os"]["id"] == "alpine"
+
+
+def test_une_cellule_non_servie_est_REFUSEE_sans_qu_une_seule_pose_ne_parte(tmp_path):
+    """§42.9.5. Le point de la preuve : elle COMPTE les exécutions. Un refus qui
+    aurait déjà installé la moitié de quelque chose ne serait pas un refus."""
+    client = _client(tmp_path)
+    nom = _creer(client, "alpine-demo")
+    pilote = client.app.state.incus
+    pilote.created[nom]["alias"] = "alpine/3.21"
+    pilote._persist()
+    assert client.get(f"/v1/sparks/{nom}/bootstrap").status_code == 200
+    avant = len(pilote.created[nom].get("commands", []))
+
+    refus = client.post(f"/v1/sparks/{nom}/bootstrap")
+    assert refus.status_code == 409, refus.text
+    detail = refus.json()["detail"]
+    assert detail["error"] == "bootstrap_unsupported_os"
+    assert "alpine" in detail["message"], "le refus NOMME la distribution"
+    assert detail["os"]["id"] == "alpine"
+
+    # Une seule commande de plus : le relevé. Aucune pose.
+    apres = pilote.created[nom]["commands"][avant:]
+    assert len(apres) == 1, f"{len(apres)} commandes, dont des poses : {apres}"
+    assert "apt-get install" not in " ".join(apres[0])
+
+
+def test_un_amorcage_sur_UBUNTU_pose_le_depot_d_ubuntu(tmp_path):
+    """La cellule du responsable. Elle recevait `linux/debian trixie`, dont les
+    paquets sont ensuite refusés par `apt` sur `noble`."""
+    client = _client(tmp_path)
+    nom = _creer(client, "ubuntu-demo")
+    pilote = client.app.state.incus
+    pilote.created[nom]["alias"] = "ubuntu/24.04"
+    pilote._persist()
+
+    amorce = client.post(f"/v1/sparks/{nom}/bootstrap")
+    assert amorce.status_code == 200, amorce.text
+    assert amorce.json()["os"]["id"] == "ubuntu"
+    assert amorce.json()["complete"] is True
+
+    poses = " ".join(" ".join(c) for c in pilote.created[nom]["commands"])
+    assert "download.docker.com/linux/ubuntu noble stable" in poses
+    assert "linux/debian trixie" not in poses
+
+    # Et le second amorçage ne fait toujours RIEN (§42.1).
+    assert client.post(f"/v1/sparks/{nom}/bootstrap").json()["changed"] is False

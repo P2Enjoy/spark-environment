@@ -114,6 +114,26 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
            "cpu_max": 0.25, "memory_bytes": 512 * MIO, "storage_bytes": 5 * GIO,
            "network_bps": 50 * MBIT}, appliquer=False, demarrer=False)
 
+    # --- SPK-76 · §42.9 : deux cellules dont l'IMAGE n'est pas Debian 13.
+    #
+    # Sans elles, le seed ne montrait que le cas où l'amorçage fonctionne, et
+    # c'est précisément ce biais qui a laissé passer le défaut : le catalogue
+    # propose quatre images, le produit n'en démontrait qu'une.
+    #
+    # « ubuntu-24 » prouve que le dépôt amont suit la distribution — il recevait
+    # `linux/debian trixie`, dont les paquets sont ensuite refusés par `apt`.
+    creer({"name": "ubuntu-24", "image": "images:ubuntu/24.04", "cpu_mode": "shared",
+           "cpu_reservation": 0.25, "memory_bytes": 512 * MIO,
+           "storage_bytes": 5 * GIO, "network_bps": 50 * MBIT})
+
+    # « alpine-demo » porte le nom de la cellule réelle du responsable. C'est la
+    # cellule que l'amorçage REFUSE (§42.9.5) : elle tourne, elle répond, et le
+    # produit ne sait pas l'équiper. L'écran de refus n'est démontrable que si
+    # une telle cellule existe.
+    creer({"name": "alpine-demo", "image": "images:alpine/3.21", "cpu_mode": "shared",
+           "cpu_reservation": 0.25, "memory_bytes": 512 * MIO,
+           "storage_bytes": 5 * GIO, "network_bps": 50 * MBIT})
+
     # --- Spark en ERREUR, atteint par le VRAI chemin d'erreur (§28.3).
     # On fait échouer le pilote sur le démarrage : la route appelle alors
     # `finish(success=False)`, qui pose l'état `error`, renseigne `last_error`

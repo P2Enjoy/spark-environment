@@ -98,6 +98,72 @@ préexiste dans `main`, ne concerne pas l'amorçage, et n'est pas corrigée ici.
 
 ---
 
+## 2026-09-02 — Ce que la vérification visuelle a trouvé, et que les tests ne pouvaient pas voir
+
+Trois défauts, tous découverts en produisant les captures de SPK-76, aucun
+attrapable par une preuve de rendu. Ils partagent une propriété : chacun n'existe
+qu'entre deux écrans, ou entre deux couches, là où les preuves de composant
+peignent une fiche à la fois.
+
+**1. Le relevé d'un Spark s'affichait sur la fiche du suivant.** `etat.amorcage`
+n'était jamais remis à zéro en changeant de Spark — le §37.6 corrige exactement
+cela pour Docker, deux lignes plus haut dans le même fichier, et l'amorçage avait
+été oublié. Sans SPK-76 le symptôme était discret : on voyait l'état d'un autre.
+Avec le refus d'une famille non servie, il devenait grave : la fiche
+d'`ubuntu-24`, parfaitement amorçable, héritait du `supported: false`
+d'`alpine-demo` et **n'offrait plus le geste**.
+
+La preuve E2E a dû être écrite deux fois. La première passait sans le correctif :
+elle employait l'aide `ouvrir()`, qui repasse par l'accueil et remet donc l'état
+à zéro toute seule. Une preuve qui recharge la page ne peut pas éprouver un état
+qui survit à la navigation. La seconde NAVIGUE, et elle est rouge sans le
+correctif.
+
+**2. Le widget flottant rendait une action incliquable en 390 px.** Playwright a
+refusé de cliquer « Relever l'état » : le widget interceptait le pointeur.
+Mesuré : réserve effective **16 px** pour un widget qui en occupe **54**.
+
+La cause n'est pas une réserve absente — elle était écrite, `\.principal {
+padding-bottom: calc(...) }` — mais **écrasée** par les deux raccourcis
+`padding:` qui la suivaient dans la feuille, l'un pour le cas général, l'autre
+dans la requête média. Elle ne s'appliquait donc nulle part, à aucune largeur,
+depuis son écriture. La règle du design system était juste ; c'est sa mise en
+œuvre qui était morte.
+
+Ici encore la preuve a dû être reprise : éprouver la géométrie du bouton la
+rendait dépendante de la hauteur de la fiche, donc verte un jour sur deux. La
+preuve porte désormais sur l'INVARIANT — la réserve couvre ce que la pastille
+occupe —, qui ne dépend d'aucun contenu.
+
+**3. Deux affirmations contraires sur le même écran.** Signalé par le
+responsable depuis sa Forge : « La reprise rootless a échoué (code 1). » et,
+juste en dessous, « Cette cellule est complète ». Le verdict était rendu depuis
+le relevé PRÉCÉDENT, que l'échec n'invalidait pas. Après un échec, ce qu'on
+savait avant n'est plus su : le verdict disparaît, et il faut relever à nouveau.
+
+**4. Et un silence, signalé dans le même message** : « impossible de savoir s'il
+est en rootless ou pas ». Un moteur Docker présent dont aucun démon n'est actif
+n'avait AUCUN mode affiché — le §42.2 bis dit de ne pas attribuer de mode à ce
+qui ne tourne pas, ce que le code faisait en n'affichant rien. Mais « pas de
+mode » et « mode pas su » ne sont pas la même chose (§14.6), et c'est justement
+quand on ne sait pas qu'on vient regarder. La ligne dit désormais « mode
+indéterminé » et nomme la raison.
+
+**Ce que j'en retiens.** Les quatre défauts sont sortis de la §16 du CLAUDE.md —
+lancer l'application et regarder — et aucun des 1058 tests de `sparkd` ni des 990
+de la console ne les voyait. Deux d'entre eux ont même produit une preuve VERTE
+avant que je ne la reprenne. Une preuve qui n'échoue pas sans son correctif ne
+garde rien.
+
+**Faute commise en chemin, consignée.** J'ai employé `git checkout --` sur
+`app.css` pour annuler une neutralisation temporaire, et cette commande
+destructive a effacé mes modifications non committées du fichier. Elles ont été
+réécrites. Le §9 du CLAUDE.md interdit la commande destructive « par
+commodité » ; c'était exactement ce cas, et le fait qu'aucun travail d'autrui
+n'ait été perdu tient à la chance, pas à la méthode.
+
+---
+
 ## 2026-08-28 — Le schéma de partitionnement du README n'avait pas la forme de l'API
 
 **Problème.** Le README porte depuis SPK-28 un schéma JSON présenté comme « à
