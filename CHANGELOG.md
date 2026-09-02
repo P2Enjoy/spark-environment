@@ -14,6 +14,18 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Un terminal survit à la navigation, et l'inventaire devient un widget
+  flottant** (SPK-75, `docs/DAT.md` §37.4.2 révisé et §37.4.8) : changer de
+  page, recharger ou fermer l'onglet du navigateur ne tue plus le shell — on le
+  retrouve. Le travail n'est plus perdu parce qu'on est allé regarder les routes
+  d'un Spark. Ce qui ferme une session devient la fermeture explicite,
+  l'inactivité, la fin du shell distant et l'arrêt de la console. Le registre,
+  qui occupait une colonne permanente de 355 px rétrécissant la grille du
+  terminal, devient un **widget flottant en bas à droite** présent sur toutes
+  les routes : il liste tous les Sparks en permanence, les conteneurs d'un Spark
+  quand on le déplie, dit lesquels portent un shell, et ne prend aucune largeur
+  au contenu. Le risque que l'ancienne règle évitait — un shell root oublié — est
+  désormais couvert par ce widget, qui le garde sous les yeux.
 - **L'amorçage sert enfin l'image que la cellule fait tourner** (SPK-76,
   `docs/DAT.md` §42.9) : le geste avait été écrit en regardant `images:debian/13`
   et rien ne vérifiait que la cellule était celle-là — or le catalogue en propose

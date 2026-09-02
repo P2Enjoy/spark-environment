@@ -37,7 +37,7 @@ import { sonderShell, SHELL_TROUVE } from './shell-conteneur.js';
 import * as signatureService from './signature.js';
 import { DnsError, fournisseurDepuis, preparer, readDotEnv } from './dns.js';
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
-import { SessionManager, TerminalError, FLUX_FERME,
+import { SessionManager, TerminalError,
          CHEMIN_SSH, CHEMIN_DEPANNAGE, CHEMIN_CONTENEUR,
          depannageOuvert, sonderSshd } from './terminal.js';
 import { runDiagnostic as diagnostiquerForge, ForgeDiagnosticError } from './forge-diagnostic.js';
@@ -1304,22 +1304,6 @@ export function createConsoleHost(options = {}) {
       status: 200, body: { sessions: terminaux.list() },
     }),
 
-    /**
-     * Fermeture par BALISE, quand la page se démonte (§37.4.2).
-     *
-     * `navigator.sendBeacon` ne sait que POSTer, et c'est le seul envoi qui
-     * parte encore quand l'onglet se ferme — un `fetch` y serait abandonné.
-     * Sans cette route, fermer l'onglet du navigateur laisserait un shell root
-     * vivant jusqu'au délai d'inactivité.
-     */
-    'POST /api/terminal/fermeture': async (_corps, url) => {
-      const id = String(url?.searchParams.get('id') ?? '');
-      const session = terminaux.fermer(id, FLUX_FERME);
-      if (!session) return { status: 204, body: null };
-      await session.attendreFermeture();
-      return { status: 204, body: null };
-    },
-
     /** Ferme, et TUE le distant (§37.4). */
     'DELETE /api/terminal': async (_corps, url) => {
       const id = String(url?.searchParams.get('id') ?? '');
@@ -1561,9 +1545,17 @@ function servirFlux(url, reponse, terminaux) {
       reponse.end();
     }
   });
+  // SPK-75 · §37.4.2 RÉVISÉ : un flux qui se ferme NE TUE PLUS la session. Le
+  // changement de page, le rechargement et la fermeture de l'onglet rompent ce
+  // flux ; la session leur survit et un second abonnement la retrouve. Ce qui
+  // la tue est ailleurs : la fermeture explicite, l'inactivité, la mort du
+  // shell distant, l'arrêt de la console.
+  //
+  // Ce que l'ancienne règle évitait — un shell root oublié — reste évité, mais
+  // par le widget permanent du §37.4.8, qui le garde sous les yeux sur toutes
+  // les routes, et par l'inactivité qui reste le filet.
   reponse.on('close', () => {
     desabonner();
-    if (session.nombreAbonnes() === 0) terminaux.fermer(id, FLUX_FERME);
   });
   return reponse;
 }

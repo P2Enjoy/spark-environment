@@ -123,6 +123,22 @@ async function ouvrir(nom, facette = '') {
   }
 }
 
+/** Déplie le widget d'inventaire (SPK-75), par sa pastille. */
+async function ouvrirWidget(cible = page) {
+  const pastille = cible.locator('[data-widget="basculer"]');
+  if ((await pastille.getAttribute('aria-expanded')) !== 'true') await pastille.click();
+  await cible.waitForSelector('.widget-inv__contenu', { timeout: 10000 });
+}
+
+/** Replie le widget. Déplié il RECOUVRE le contenu, comme toute surface qu'on
+ *  vient d'ouvrir : on la referme avant d'agir dessous, comme un exploitant. */
+async function replierWidget(cible = page) {
+  const pastille = cible.locator('[data-widget="basculer"]');
+  if ((await pastille.getAttribute('aria-expanded')) === 'true') await pastille.click();
+  await cible.waitForFunction(
+    () => !document.querySelector('.widget-inv__contenu'), null, { timeout: 10000 });
+}
+
 // --- LE PARCOURS NOMINAL ----------------------------------------------------
 
 test('la console affiche les Sparks seedés, avec leurs états réels', async () => {
@@ -2376,53 +2392,125 @@ test('entrer dans le terminal ANSI, écrire, coller, répondre à DSR, redimensi
   });
 });
 
-test('quitter l’ONGLET termine la session, sans la fermer soi-même', async () => {
-  // §37.4 : une session qui survivrait à son écran serait un shell root
-  // abandonné dont personne ne se souvient.
-  await parcours('terminal-quitter', async () => {
+test('changer de page NE TUE PLUS la session, et le widget la montre', async () => {
+  // SPK-75 · §37.4.2 RÉVISÉ. C'est LE reproche qui a ouvert l'unité : le
+  // travail était perdu au moindre changement de page. Regarder le journal
+  // pendant qu'une commande tourne ne doit plus tuer la commande.
+  await parcours('terminal-survit-a-la-navigation', async () => {
     await ouvrir('boutique', 'terminal');
     await page.click('[data-terminal="ouvrir"]');
     await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
-
-    const avant = (await pile.lireSparkd('/v1/audit?limit=200')).corps.entries
-      .filter((e) => e.action === 'spark.terminal_close').length;
 
     // On CHANGE d'onglet, sans rien fermer.
     await page.click('.onglet[href$="/journal"]');
     await page.waitForSelector('.onglet[href$="/journal"][aria-current="page"]',
                                { timeout: 10000 });
 
-    await page.waitForFunction(async (n) => {
-      const r = await fetch('/api/v1/audit?limit=200&server=local');
-      const { entries } = await r.json();
-      return entries.filter((e) => e.action === 'spark.terminal_close').length > n;
-    }, avant, { timeout: 20000 });
+    // La session vit toujours, côté HÔTE — constaté, pas supposé.
+    await page.waitForFunction(async () => {
+      const r = await fetch('/api/terminal/sessions');
+      return (await r.json()).sessions.length === 1;
+    }, null, { timeout: 10000 });
+
+    // …et le widget la montre, sur une route qui n'est pas celle du terminal.
+    await ouvrirWidget();
+    const ligne = page.locator('.widget-inv__ligne').filter({ hasText: 'boutique' }).first();
+    await ligne.waitFor({ timeout: 10000 });
+    assert.match(await ligne.textContent(), /shell ouvert/);
+
+    // On y REVIENT par le widget, et on retrouve sa grille.
+    await ligne.locator('[data-widget-spark="boutique"]').click();
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+    await replierWidget();
+    await page.locator('[data-terminal="fermer"]').click();
+    await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 15000 });
   });
 });
 
-test('passer directement au terminal d’un autre Spark tue la première session', async () => {
+test('la session se RETROUVE après un rechargement de la page', async () => {
+  // SPK-75 · §37.4.8 : faire survivre un shell sans savoir le retrouver ne
+  // ferait que le cacher. Le rechargement est le cas qui le prouve.
+  await parcours('terminal-reprise-apres-rechargement', async () => {
+    await ouvrir('boutique', 'terminal');
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('.entete-entite', { timeout: 20000 });
+
+    // La grille est REPRISE, pas rouverte : une seule session côté hôte.
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+    const listees = await page.evaluate(async () =>
+      (await (await fetch('/api/terminal/sessions')).json()).sessions);
+    assert.equal(listees.length, 1, 'aucune seconde session n’a été ouverte');
+
+    await replierWidget();
+    await page.locator('[data-terminal="fermer"]').click();
+    await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 15000 });
+  });
+});
+
+test('passer au terminal d’un autre Spark NE TUE PLUS le premier', async () => {
   await parcours('terminal-changement-spark', async () => {
     await ouvrir('boutique', 'terminal');
     await page.click('[data-terminal="ouvrir"]');
     await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
 
-    const avant = (await pile.lireSparkd('/v1/audit?limit=200')).corps.entries
-      .filter((e) => e.action === 'spark.terminal_close').length;
-
-    // Les deux destinations finissent par `/terminal` : l'identité du Spark,
-    // et non ce suffixe commun, doit décider de la fermeture.
+    // Les deux destinations finissent par `/terminal` : la fenêtre suit bien le
+    // second Spark, mais le shell du premier CONTINUE (SPK-75).
     await page.evaluate(() => { location.hash = '#/sparks/crm-production/terminal'; });
     await page.waitForFunction(
       () => document.querySelector('.entete-entite')?.textContent.includes('crm-production'),
       null, { timeout: 20000 });
     await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 20000 });
 
-    await page.waitForFunction(async (n) => {
-      const r = await fetch('/api/v1/audit?limit=200&server=local');
-      const { entries } = await r.json();
-      return entries.filter((e) => e.action === 'spark.terminal_close').length > n;
-    }, avant, { timeout: 20000 });
-    assert.equal(await page.$$eval('.registre-sessions__ligne', (l) => l.length), 0);
+    const listees = await page.evaluate(async () =>
+      (await (await fetch('/api/terminal/sessions')).json()).sessions);
+    assert.equal(listees.length, 1, 'le shell de « boutique » vit encore');
+    assert.equal(listees[0].spark, 'boutique');
+
+    // Le widget le montre, alors qu'on regarde un AUTRE Spark.
+    await ouvrirWidget();
+    const ligne = page.locator('.widget-inv__ligne').filter({ hasText: 'boutique' }).first();
+    assert.match(await ligne.textContent(), /shell ouvert/);
+
+    await ligne.locator('[data-session-close]').click();
+    await ligne.locator('[data-session-close-confirm]').click();
+    await page.waitForFunction(async () =>
+      (await (await fetch('/api/terminal/sessions')).json()).sessions.length === 0,
+      null, { timeout: 15000 });
+  });
+});
+
+test('déplier un Spark relève SES conteneurs, et n’interroge aucun autre', async () => {
+  // SPK-75 · §37.4.8 : le §37.6 tient — un Spark qu'on ne regarde pas n'est
+  // jamais interrogé. Interroger Docker en boucle sur chaque Spark ferait
+  // tourner une commande en continu chez chaque locataire.
+  await parcours('widget-conteneurs', async () => {
+    await accueil();
+    await ouvrirWidget();
+
+    // §F.4 du runbook : ce parcours déplie « postgres-dedie » et NON
+    // « crm-production », qui est le Spark des parcours Docker. Déplier lance un
+    // relevé sur la même route qu'eux ; les tenir sur deux Sparks distincts
+    // garde les deux familles indépendantes, quoi qu'elles gagnent plus tard.
+    const cible = page.locator('.widget-inv__ligne').filter({ hasText: 'postgres-dedie' }).first();
+    await cible.waitFor({ timeout: 10000 });
+    assert.equal(await page.locator('[data-widget-conteneur]').count(), 0,
+      'aucun conteneur n’est listé tant que rien n’est déplié');
+
+    await page.locator('[data-widget-deplier="postgres-dedie"]').click();
+    await page.waitForSelector('[data-widget-conteneur="postgres-dedie"]', { timeout: 20000 });
+
+    // Le Spark voisin n'a rien demandé.
+    assert.equal(await page.locator('[data-widget-conteneur="crm-production"]').count(), 0);
+
+    // Replier arrête le relevé.
+    await page.locator('[data-widget-deplier="postgres-dedie"]').click();
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-widget-conteneur]').length === 0,
+      null, { timeout: 10000 });
   });
 });
 
@@ -2455,30 +2543,37 @@ test('le registre retrouve deux sessions, en reprend une et ferme explicitement 
       await autre.click('button[data-docker="terminal"]');
       await autre.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
 
+      await ouvrirWidget();
+      // Le widget déplie le Spark pour montrer le conteneur qui porte le shell.
+      await page.locator('[data-widget-deplier="crm-production"]').click();
+      await page.waitForSelector('[data-widget-conteneur="crm-production"]', { timeout: 20000 });
       await page.waitForFunction(
-        () => document.querySelectorAll('.registre-sessions__ligne').length === 2,
-        null, { timeout: 10000 });
-      const registre = await page.textContent('.registre-sessions');
-      assert.match(registre, /Spark · crm-production/);
-      assert.match(registre, /Conteneur · crm-production \/ helo-web-1/);
-      assert.ok(!/bonjour depuis le parcours|collage direct/.test(registre),
-        'le registre ne réutilise jamais la sortie de terminal');
+        () => document.querySelectorAll('[data-vivante="oui"]').length === 2,
+        null, { timeout: 15000 });
+
+      const inventaire = await page.textContent('.widget-inv');
+      assert.match(inventaire, /crm-production/);
+      assert.match(inventaire, /helo-web-1/);
+      assert.ok(!/bonjour depuis le parcours|collage direct/.test(inventaire),
+        'le widget ne réutilise jamais la sortie de terminal (§37.5)');
 
       // La fermeture est confirmée et vise la ligne Spark, pas le conteneur.
-      const ligneSpark = page.locator('.registre-sessions__ligne')
-        .filter({ hasText: 'Spark · crm-production' });
-      await ligneSpark.getByRole('button', { name: 'Fermer', exact: true }).click();
-      await ligneSpark.getByRole('button', { name: 'Fermer et tuer le shell' }).click();
+      const ligneSpark = page.locator('.widget-inv__ligne')
+        .filter({ has: page.locator('[data-widget-spark="crm-production"]') });
+      await ligneSpark.locator('[data-session-close]').click();
+      await ligneSpark.locator('[data-session-close-confirm]').click();
       await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 15000 });
       await page.waitForFunction(
-        () => document.querySelectorAll('.registre-sessions__ligne').length === 1,
-        null, { timeout: 10000 });
+        () => document.querySelectorAll('[data-vivante="oui"]').length === 1,
+        null, { timeout: 15000 });
       assert.ok(await autre.$('[data-terminal="fermer"]'),
         'fermer une ligne ne tue pas le terminal du conteneur voisin');
 
       // La ligne restante se sélectionne : la première grille reprend la vraie
       // session conteneur sans produire de troisième shell.
-      await page.locator('[data-session-select]').click();
+      // Trois conteneurs sont listés : on vise CELUI qui porte le shell.
+      await page.locator('[data-widget-conteneur="crm-production"][data-conteneur="helo-web-1"]')
+        .click();
       await page.waitForSelector('[data-terminal="fermer"]', { timeout: 15000 });
       assert.match(await page.textContent('.bandeau-terminal'), /Conteneur/);
     } finally {
@@ -3258,19 +3353,17 @@ test('entrer dans un conteneur : la bannière le NOMME, le journal le distingue'
   });
 });
 
-test('quitter l’onglet ferme la session, et le journal porte sa DURÉE', async () => {
+test('fermer la session d’un conteneur, et le journal porte sa DURÉE', async () => {
   await parcours('terminal-conteneur-ferme', async () => {
     await ouvrirConteneur('helo-web-1');
     await page.click('button[data-docker="terminal"]');
     await page.waitForSelector('[data-terminal="fermer"]', { timeout: 15000 });
 
-    // §37.4 : quitter l'onglet TERMINE la session. Un shell qui survivrait à
-    // son écran serait un shell abandonné dont personne ne se souvient.
-    await page.click('.onglet[href$="/journal"]');
-    await page.waitForSelector('.onglet[href$="/journal"][aria-current="page"]',
-                               { timeout: 10000 });
-    await page.waitForFunction(
-      () => new Promise((r) => setTimeout(() => r(true), 1500)), { timeout: 5000 });
+    // SPK-75 : quitter l'onglet ne ferme plus rien. C'est la fermeture
+    // EXPLICITE qui termine la session — et c'est elle qui doit porter la durée
+    // au journal, puisque c'est désormais le seul geste d'arrêt de l'opérateur.
+    await page.locator('[data-terminal="fermer"]').click();
+    await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 15000 });
 
     const { corps } = await pile.lireSparkd(
       '/v1/audit?action=spark.container_terminal_close');

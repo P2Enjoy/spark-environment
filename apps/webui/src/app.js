@@ -20,10 +20,10 @@ import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './componen
 import { DOCKER_VIDE } from './components/spark-docker.js';
 import { TERMINAL_VIDE, CHAMP_TERMINAL, destinationPorteSession }
   from './components/spark-terminal.js';
-import { renderSessionRegistry } from './components/session-registry.js';
+import { INVENTAIRE_VIDE, renderSessionRegistry } from './components/session-registry.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
   from './components/spark-create.js';
-import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
+import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour }
   from './components/spark-admin.js';
 import { renderForgeView, UPDATE_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
@@ -80,7 +80,9 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                },
                // SPK-70 : seulement les métadonnées que l'hôte décrit. Aucun
                // octet de terminal n'entre dans l'état de la SPA.
-               sessions: { items: [], confirmation: null, tiroirOuvert: false },
+               // SPK-75 · SPK-DS-16 : l'inventaire flottant. `ouvert`,
+               // `deplies` et `conteneurs` survivent au changement de page.
+               sessions: { ...INVENTAIRE_VIDE },
                servers: [],
                catalogueServeurs: { status: 'loading', servers: [], tunnels: [],
                                     current: null, error: null,
@@ -362,17 +364,43 @@ let sessionAReprendre = null;
 let minuterieSessions = null;
 
 function peindreRegistreSessions() {
-  const panneau = racine.querySelector('.registre-sessions');
-  const contenu = racine.querySelector('#contenu-registre-sessions');
-  const bascule = racine.querySelector('[data-registre="basculer"]');
-  if (!panneau || !contenu || !bascule) return;
-  panneau.classList.toggle('registre-sessions--ouvert', etat.sessions.tiroirOuvert);
-  bascule.setAttribute('aria-expanded', String(etat.sessions.tiroirOuvert));
-  bascule.textContent = etat.sessions.tiroirOuvert ? 'Masquer' : 'Afficher';
-  contenu.innerHTML = renderSessionRegistry({
+  // SPK-75 : le widget FLOTTE hors de `.principal`, donc `peindre()` ne
+  // l'efface jamais. C'est ce qui lui permet de rester visible sur toutes les
+  // routes, replié ou déplié, sans se refermer à chaque navigation.
+  const hote = document.querySelector('.widget-inv');
+  if (!hote) return;
+  hote.innerHTML = renderSessionRegistry({
     sessions: etat.sessions.items, confirmation: etat.sessions.confirmation,
+    sparks: etat.sparks ?? [], ouvert: etat.sessions.ouvert,
+    deplies: etat.sessions.deplies, conteneurs: etat.sessions.conteneurs,
+    forge: etat.server ?? null,
   });
   brancherRegistreSessions();
+}
+
+/**
+ * Les conteneurs d'UN Spark, relevés parce qu'on l'a déplié (§37.4.8).
+ *
+ * Un Spark replié n'est jamais interrogé : le §37.6 vaut ici sans exception,
+ * et interroger Docker en boucle sur chaque Spark ferait tourner une commande
+ * en continu chez chaque locataire.
+ */
+async function releverConteneursDe(nom) {
+  const c = etat.sessions.conteneurs;
+  c[nom] = { status: 'chargement', items: [], erreur: null };
+  peindreRegistreSessions();
+  try {
+    const reponse = await fetch(
+      `/api/spark/docker?server=${encodeURIComponent(etat.server)}`
+      + `&spark=${encodeURIComponent(nom)}`);
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
+    c[nom] = { status: 'pret', items: corps.containers ?? [], erreur: null };
+  } catch (erreur) {
+    // §14.6 : ne pas avoir pu lire n'est pas « aucun conteneur ».
+    c[nom] = { status: 'erreur', items: [], erreur: erreur?.message ?? String(erreur) };
+  }
+  peindreRegistreSessions();
 }
 
 async function releverSessions() {
@@ -404,11 +432,10 @@ function programmerReleveSessions() {
 async function selectionnerSession(id) {
   const session = etat.sessions.items.find((candidate) => candidate.id === id);
   if (!session) return;
-  if (etat.terminal.session && etat.terminal.session.id !== id) {
-    // Une fenêtre ne peut présenter qu'une grille à la fois. La quitter garde
-    // le contrat historique : elle tue SON shell avant d'en suivre un autre.
-    await fermerTerminal('sortie');
-  }
+  // SPK-75 · §37.4.2 révisé : une fenêtre ne présente qu'une grille à la fois,
+  // mais quitter celle-ci NE TUE PLUS son shell. On s'en détache, il continue,
+  // et le widget le montre toujours.
+  if (etat.terminal.session && etat.terminal.session.id !== id) detacherTerminal();
   // Une session appartient à sa Forge. Le contexte est basculé avant la route,
   // sinon on afficherait un homonyme d'un autre serveur sous le mauvais shell.
   if (session.forge && session.forge !== etat.server) await changerDeServeur(session.forge);
@@ -419,33 +446,45 @@ async function selectionnerSession(id) {
 }
 
 function brancherRegistreSessions() {
-  const bascule = racine.querySelector('[data-registre="basculer"]');
-  // Le bouton vit dans la coquille, contrairement au contenu qu'on remplace à
-  // chaque relevé. Ne l'abonner qu'une fois : plusieurs écouteurs inverseraient
-  // le tiroir autant de fois et le laisseraient fermé après un rafraîchissement.
-  if (bascule && !bascule.dataset.registreBranche) {
-    bascule.dataset.registreBranche = 'true';
-    bascule.addEventListener('click', () => {
-      etat.sessions.tiroirOuvert = !etat.sessions.tiroirOuvert;
-      peindreRegistreSessions();
-      if (etat.sessions.tiroirOuvert) racine.querySelector('[data-session-select]')?.focus();
+  const hote = document.querySelector('.widget-inv');
+  if (!hote) return;
+  hote.querySelector('[data-widget="basculer"]')?.addEventListener('click', () => {
+    etat.sessions.ouvert = !etat.sessions.ouvert;
+    peindreRegistreSessions();
+    // §9.1 : le repli rend le focus à la pastille, qui reste le point d'entrée.
+    document.querySelector('[data-widget="basculer"]')?.focus();
+  });
+  for (const bouton of hote.querySelectorAll('[data-widget-deplier]')) {
+    bouton.addEventListener('click', () => {
+      const nom = bouton.dataset.widgetDeplier;
+      const deplie = !etat.sessions.deplies[nom];
+      etat.sessions.deplies[nom] = deplie;
+      if (deplie) releverConteneursDe(nom);
+      else { delete etat.sessions.conteneurs[nom]; peindreRegistreSessions(); }
     });
   }
-  for (const bouton of racine.querySelectorAll('[data-session-select]')) {
+  for (const bouton of hote.querySelectorAll('[data-widget-spark]')) {
+    bouton.addEventListener('click', () => ciblerDepuisWidget(bouton.dataset.widgetSpark));
+  }
+  for (const bouton of hote.querySelectorAll('[data-widget-conteneur]')) {
+    bouton.addEventListener('click', () => ciblerDepuisWidget(
+      bouton.dataset.widgetConteneur, bouton.dataset.conteneur));
+  }
+  for (const bouton of hote.querySelectorAll('[data-session-select]')) {
     bouton.addEventListener('click', () => selectionnerSession(bouton.dataset.sessionSelect));
   }
-  for (const bouton of racine.querySelectorAll('[data-session-close]')) {
+  for (const bouton of hote.querySelectorAll('[data-session-close]')) {
     bouton.addEventListener('click', () => {
       etat.sessions.confirmation = bouton.dataset.sessionClose;
       peindreRegistreSessions();
-      racine.querySelector('[data-session-close-confirm]')?.focus();
+      document.querySelector('[data-session-close-confirm]')?.focus();
     });
   }
-  racine.querySelector('[data-session-close-cancel]')?.addEventListener('click', () => {
+  hote.querySelector('[data-session-close-cancel]')?.addEventListener('click', () => {
     etat.sessions.confirmation = null;
     peindreRegistreSessions();
   });
-  for (const bouton of racine.querySelectorAll('[data-session-close-confirm]')) {
+  for (const bouton of hote.querySelectorAll('[data-session-close-confirm]')) {
     bouton.addEventListener('click', async () => {
       const id = bouton.dataset.sessionCloseConfirm;
       etat.sessions.confirmation = null;
@@ -863,6 +902,42 @@ async function propagerTaille(rows, cols) {
   }).catch(() => {});
 }
 
+/**
+ * Quitte la grille SANS tuer le distant (SPK-75, §37.4.2 révisé).
+ *
+ * C'est ce que fait désormais un changement de page : on coupe le flux et on
+ * démonte l'émulateur, la session continue de vivre chez l'hôte, et le widget
+ * la montre. Un second abonnement la retrouve telle qu'on l'a laissée.
+ */
+function detacherTerminal() {
+  const t = etat.terminal;
+  if (!t.session) return;
+  fluxTerminal?.close();
+  fluxTerminal = null;
+  detruireEmulateurTerminal();
+  t.session = null;
+  t.status = 'ferme';
+  t.avertissement = null;
+  t.fin = null;
+  releverSessions();
+}
+
+/**
+ * Le widget est le point de DÉPART des terminaux (§37.4.8).
+ *
+ * Une cible qui porte déjà un shell y ramène ; une cible sans shell en ouvre
+ * un. Le libellé de l'entrée dit lequel des deux va se produire.
+ */
+async function ciblerDepuisWidget(spark, conteneur = null) {
+  const vivante = etat.sessions.items.find((s) => s.spark === spark
+    && (conteneur ? s.container === conteneur : !s.container));
+  if (vivante) return selectionnerSession(vivante.id);
+  if (etat.terminal.session) detacherTerminal();
+  const cible = `#/sparks/${encodeURIComponent(spark)}/${conteneur ? 'docker' : 'terminal'}`;
+  if (location.hash === cible) await router();
+  else location.hash = cible;
+}
+
 /** Ferme la session, et TUE le distant (§37.4). */
 async function fermerTerminal(motif = 'sortie') {
   const t = etat.terminal;
@@ -1137,21 +1212,21 @@ window.addEventListener('hashchange', () => {
 });
 window.addEventListener('pagehide', arreterDocker);
 
-// §37.4 : quitter l'onglet TERMINE la session. Sans cela, un shell root
-// survivrait à l'écran qui l'a ouvert, et personne ne s'en souviendrait.
+// SPK-75 · §37.4.2 RÉVISÉ : quitter l'onglet NE TERMINE PLUS la session. On s'en
+// détache — le flux se coupe, la grille se démonte — et le shell continue. Le
+// travail n'est plus perdu parce qu'on est allé regarder les routes du Spark.
+//
+// Ce que l'ancienne règle évitait — un shell root oublié — reste évité, mais par
+// le widget permanent (§37.4.8) qui le garde sous les yeux sur toutes les
+// routes, et par l'inactivité qui reste le filet.
+//
+// Fermer l'onglet du navigateur ne tue plus rien non plus : c'est exactement ce
+// qui permet de RETROUVER son terminal à la reconnexion.
 window.addEventListener('hashchange', () => {
   if (etat.terminal.session
       && !destinationPorteSession(location.hash, etat.server, etat.terminal.session)) {
-    fermerTerminal('sortie');
+    detacherTerminal();
   }
-});
-// Fermer l'onglet du navigateur vaut quitter : `sendBeacon` part même quand la
-// page se démonte, là où un `fetch` serait abandonné.
-window.addEventListener('pagehide', () => {
-  const session = etat.terminal.session;
-  if (!session) return;
-  navigator.sendBeacon?.(
-    `/api/terminal/fermeture?id=${encodeURIComponent(session.id)}`, new Blob());
 });
 // §37.4.3 : le redimensionnement de la fenêtre se propage au Spark.
 // Le `ResizeObserver` posé sur la grille xterm couvre aussi les changements de
@@ -2143,18 +2218,31 @@ async function chargerDetail(nom, facette = '') {
       // puisse offrir une case par entrée. Il est demandé même quand rien n'est
       // coché — c'est justement l'écran qui doit montrer ce qui NE descend pas.
       api('/v1/env').then((r) => r.env).catch(() => []),
+      // Les mêmes bornes qu'à la création : capacité TOTALE de la Forge et
+      // nombre de cœurs physiques. Si le relevé échoue, chaque quota se replie
+      // localement en saisie numérique (§6.9 bis).
+      api('/v1/forge').catch(() => null),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
                     snapshots, audit,
                     ports: (publies.ports ?? []).filter((p) => p.spark_id === etat.spark.id),
-                    reservedPorts: publies.reserved ?? [], env, catalogue };
+                    reservedPorts: publies.reserved ?? [], env, catalogue,
+                    pools: forge?.pools ?? null, cores: forge?.cpu?.cores_total ?? null };
     etat.status = 'ready';
   } catch (erreur) {
     etat.status = 'error';
     etat.error = erreur;
   }
   peindre();
-  const reprise = sessionAReprendre;
+  // SPK-75 · §37.4.8 : la reprise. Une session choisie dans le widget, ou —
+  // faute de choix explicite — celle que ce Spark porte déjà. Sans ce second
+  // cas, revenir sur la facette après un rechargement en ouvrirait une SECONDE
+  // à côté de la première, qu'on ne retrouverait jamais.
+  const reprise = sessionAReprendre
+    ?? (facette === 'terminal'
+      ? etat.sessions.items.find((s) => s.spark === etat.spark?.name && !s.container
+          && (!s.forge || s.forge === etat.server))
+      : null);
   if (reprise && etat.status === 'ready' && facette === 'terminal'
       && reprise.spark === etat.spark?.name && (!reprise.forge || reprise.forge === etat.server)) {
     sessionAReprendre = null;
@@ -3172,8 +3260,12 @@ async function demarrer() {
   if (etat.tunnel?.state !== 'ready') await ouvrirTunnel(etat.server);
 
   peindreContexte();
-  await router();
+  // SPK-75 · §37.4.8 : les sessions vivantes sont relues AVANT la première
+  // route. Après un rechargement, `chargerDetail` doit déjà savoir que ce Spark
+  // porte un shell — sinon la reprise n'a rien à reprendre et une seconde
+  // session naît à côté de la première, qu'on ne retrouverait jamais.
   await releverSessions();
+  await router();
   programmerReleveSessions();
 }
 

@@ -56,6 +56,10 @@
   --radius-lg: 14px;
 
   --shadow-card: 0 1px 3px rgb(0 0 0 / 0.06);
+  /* SPK-75 · SPK-DS-16 : une surface FLOTTANTE se pose au-dessus du contenu.
+     L'ombre de carte (§4.3) ne l'en détacherait pas, et un panneau qui
+     paraît dans le flux alors qu'il le recouvre se lit mal. */
+  --shadow-flottant: 0 6px 24px rgb(0 0 0 / 0.16);
   --size-target: 40px;
 
   /* Typographie (§3) */

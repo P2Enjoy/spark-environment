@@ -187,7 +187,7 @@ vide, et elle rétrécissait la grille du terminal — l'écran même qu'elle
 accompagne. Un repère permanent ne doit pas coûter en largeur ce qu'il apporte en
 mémoire.
 
-**Forme.** Un widget **flottant, ancré en bas à gauche**, au-dessus du contenu,
+**Forme.** Un widget **flottant, ancré en bas à droite**, au-dessus du contenu,
 présent sur **toutes** les routes. Replié, c'est une pastille qui porte le nombre
 de sessions vivantes. Dépliée, une liste bornée en hauteur qui défile dans son
 propre conteneur, jamais la page. Il ne prend aucune largeur au contenu, à aucune
@@ -200,12 +200,18 @@ déplie** (§37.4.8 — un Spark qu'on ne regarde pas n'est jamais interrogé). 
 entrée qui porte une session vivante le montre et y ramène ; une entrée sans
 session en ouvre une.
 
+**Token.** `--shadow-flottant` (`0 6px 24px rgb(0 0 0 / .16)`) : l'ombre de
+carte du §4.3 ne détache pas une surface qui **recouvre** le contenu, et un
+panneau qui paraît dans le flux alors qu'il le surplombe se lit mal.
+
 **Règles.**
 
 - l'état replié/déplié **survit au changement de page** : un repère qui se
   referme à chaque navigation cesse d'être un repère ;
-- le widget ne masque jamais une action du contenu : la page réserve en bas à
-  gauche la place de la pastille repliée ;
+- le widget ne masque jamais une action du contenu : la page réserve en bas la
+  hauteur de la pastille repliée, qui est toujours là. **Déplié**, le panneau
+  recouvre volontairement le contenu — c'est une surface qu'on vient d'ouvrir,
+  et la pastille la referme ;
 - il reste atteignable au clavier, et le repli rend le focus à la pastille ;
 - il ne montre **aucun octet** de session (§37.5) : type, cible, chemin,
   ouverture, dernière activité. Rien d'autre ;
@@ -556,6 +562,53 @@ conteneur que le fragment `ssh_config`. La capture a montré la clé coupée net
 bord droit, en 1440 px comme en 390 px ; les preuves de composant, elles, étaient
 vertes — elles cherchaient la classe dans la chaîne rendue, pas ce qu'elle peint.
 C'est le cas du §12.3, et c'est la capture qui l'a trouvé.
+
+### SPK-DS-17 · Un message venu d'un tiers se replie, comme une valeur technique
+
+@spec docs/BACKLOG.md#SPK-47 · docs/DAT.md §38.1.1
+
+Le §38.1.1 impose de rendre le message du fournisseur DNS **tel quel** : c'est
+lui, et non un résumé de notre cru, qui distingue une clé expirée d'une
+permission manquante. Ce message est souvent un corps JSON d'un seul tenant.
+
+Un texte que NOUS écrivons a des espaces et se coupe tout seul. Un corps rendu
+par un tiers n'en a pas la garantie, et le bloc de refus n'est pas plus large
+qu'une modale.
+
+**Règle** : tout bloc qui affiche un texte venu d'un tiers — `.refus`,
+`.champ__erreur` — porte `overflow-wrap: anywhere`, pour la même raison que
+SPK-DS-15 : mieux vaut replier que couper.
+
+**Mesuré le 2026-09-02.** Au format 420 px, le refus `401 … "reason":"expired"`
+sortait de la modale : le mot qui portait toute l'information — « expired » —
+était précisément celui qu'on ne voyait pas.
+
+### SPK-DS-18 · Une sortie de commande garde ses lignes, et se replie quand même
+
+@spec docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.9.7
+
+Quand une pose d'amorçage échoue, le refus porte les dernières lignes que la
+cellule a écrites sur sa sortie d'erreur. C'est généralement `apt` qui parle, et
+c'est le seul texte qui dit **pourquoi**.
+
+Ce texte relève des deux règles précédentes à la fois, et elles tirent en sens
+inverse : SPK-DS-15 laisse défiler ce qui a une structure de lignes — une sortie
+de commande est nommément citée —, tandis que SPK-DS-17 replie ce qui vient d'un
+tiers.
+
+**Règle** : les deux sont honorées ensemble. Le bloc conserve ses **retours à la
+ligne** (`white-space: pre-wrap`, dans un `<pre>` en `--font-mono`) et replie les
+lignes trop longues (`overflow-wrap: anywhere`) au lieu de défiler
+horizontalement.
+
+Le motif : ce qui compte dans une sortie d'`apt`, c'est **quelle ligne** porte
+l'erreur — l'écraser en un pavé la noierait. Mais ses lignes sont de la prose
+longue, pas des colonnes alignées : les replier ne casse aucun alignement, alors
+qu'un défilement horizontal dans un bloc de refus étroit cacherait la fin de la
+ligne, c'est-à-dire le message.
+
+Un refus d'une seule ligne reste un `<p>` ordinaire : lui donner une chasse fixe
+le ferait passer pour une sortie technique alors que c'est une phrase du produit.
 
 ## 5. Responsive spécifique
 

@@ -264,9 +264,11 @@ test('le journal INJOIGNABLE n’empêche pas d’ouvrir un terminal', async () 
   fermer();
 });
 
-test('le flux d’évènements porte la sortie, et sa fermeture TUE la session', async () => {
-  // §37.4.1 et §37.4.2 : c'est ce qui fait qu'un onglet fermé ne laisse pas un
-  // shell root derrière lui.
+test('le flux porte la sortie, et sa fermeture NE TUE PLUS la session', async () => {
+  // SPK-75 · §37.4.2 RÉVISÉ. La règle d'avant tuait ici, pour éviter un shell
+  // root oublié ; ce risque est désormais couvert par le widget permanent
+  // (§37.4.8) et par l'inactivité. Ce que la révision achète est mesurable :
+  // le travail n'est plus perdu au moindre changement de page.
   const { base, fermer, enfants } = await pile();
   const { id } = await (await ouvrir(base)).json();
 
@@ -296,14 +298,42 @@ test('le flux d’évènements porte la sortie, et sa fermeture TUE la session',
   // le lecteur attaché, et le processus de test ne rend alors jamais la main.
   await lecteur.cancel();
   await new Promise((r) => setTimeout(r, 100));
-  assert.deepEqual(enfants[0].tue, ['SIGKILL'], 'le flux fermé doit tuer le distant');
+  assert.deepEqual(enfants[0].tue, [], 'le flux fermé ne tue plus le distant');
+
+  // Et la session est TOUJOURS LÀ : c'est ce qui rend la reprise possible.
+  const listees = await (await fetch(`${base}/api/terminal/sessions`)).json();
+  assert.equal(listees.sessions.length, 1, 'la session survit à son flux');
+  assert.equal(listees.sessions[0].id, id);
+
+  // Un second abonnement la RETROUVE, telle qu'on l'a laissée.
+  const repris = await fetch(`${base}/api/terminal/flux?id=${id}`);
+  assert.equal(repris.status, 200, 'on se réabonne à la même session');
+  await repris.body.getReader().cancel();
   fermer();
 });
 
-test('un flux quitté ne tue pas une session encore suivie par une autre grille', async () => {
-  // Le registre peut reprendre une session dans une autre vue. Le premier flux
-  // qui part ne doit donc pas tuer le shell sous l'autre grille ; le DERNIER
-  // garde toujours le contrat historique de fermeture.
+test('la fermeture EXPLICITE tue toujours le distant', async () => {
+  // SPK-75 : ce qui tue devient la fermeture explicite, l'inactivité, la mort
+  // du shell, l'arrêt de la console. Retirer la mort à la navigation ne doit
+  // pas retirer celle-ci — sans elle, plus rien ne fermerait à la demande.
+  const { base, fermer, enfants } = await pile();
+  const { id } = await (await ouvrir(base)).json();
+  const flux = await fetch(`${base}/api/terminal/flux?id=${id}`);
+  await flux.body.getReader().read();
+
+  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE' });
+  await new Promise((r) => setTimeout(r, 100));
+  assert.deepEqual(enfants[0].tue, ['SIGKILL'], 'la demande explicite tue');
+  const listees = await (await fetch(`${base}/api/terminal/sessions`)).json();
+  assert.equal(listees.sessions.length, 0, 'et la session disparaît du registre');
+  fermer();
+});
+
+test('AUCUN flux quitté ne tue la session, même le dernier', async () => {
+  // SPK-75 : le cas « une autre grille regarde encore » n'est plus un cas
+  // particulier — plus aucun départ de flux ne tue, qu'il reste des abonnés ou
+  // non. C'est ce qui permet de fermer l'onglet du navigateur et de retrouver
+  // son terminal à la reconnexion.
   const { base, fermer, enfants } = await pile();
   const { id } = await (await ouvrir(base)).json();
   const premier = await fetch(`${base}/api/terminal/flux?id=${id}`);
@@ -315,11 +345,13 @@ test('un flux quitté ne tue pas une session encore suivie par une autre grille'
 
   await lecteurPremier.cancel();
   await new Promise((r) => setTimeout(r, 50));
-  assert.deepEqual(enfants[0].tue, [], 'l’autre grille regarde encore la session');
+  assert.deepEqual(enfants[0].tue, []);
 
   await lecteurSecond.cancel();
   await new Promise((r) => setTimeout(r, 50));
-  assert.deepEqual(enfants[0].tue, ['SIGKILL'], 'le dernier flux ferme le shell');
+  assert.deepEqual(enfants[0].tue, [], 'le dernier flux ne ferme plus le shell');
+  const listees = await (await fetch(`${base}/api/terminal/sessions`)).json();
+  assert.equal(listees.sessions.length, 1, 'la session attend qu\'on revienne');
   fermer();
 });
 
@@ -330,38 +362,6 @@ test('le flux d’une session inconnue rend 404, pas un flux vide', async () => 
   assert.equal((await r.json()).error, 'unknown_session');
   fermer();
 });
-
-test('la fermeture par BALISE tue le distant et déclare la fermeture', async () => {
-  // §37.4.2 : `sendBeacon` ne sait que POSTer, et c'est le seul envoi qui parte
-  // encore quand l'onglet se ferme. Sans cette route, fermer le navigateur
-  // laisserait un shell root vivant jusqu'au délai d'inactivité.
-  const { base, fermer, enfants, declarees } = await pile();
-  const { id } = await (await ouvrir(base)).json();
-
-  const r = await fetch(`${base}/api/terminal/fermeture?id=${id}`, { method: 'POST' });
-  assert.equal(r.status, 204);
-  assert.deepEqual(enfants[0].tue, ['SIGKILL']);
-
-  const fermeture = declarees.find((d) => d.action === 'spark.terminal_close');
-  assert.ok(fermeture);
-  assert.equal(fermeture.payload.reason, 'flux_ferme',
-    'la balise dit que la CONNEXION est partie, pas qu’on a quitté volontairement');
-  fermer();
-});
-
-test('une balise sur une session inconnue ne fâche personne', async () => {
-  // Une balise part quand la page se démonte : elle peut arriver après que la
-  // session a déjà été fermée autrement. La refuser n'apprendrait rien.
-  const { base, fermer } = await pile();
-  assert.equal((await fetch(`${base}/api/terminal/fermeture?id=nulle`,
-                            { method: 'POST' })).status, 204);
-  fermer();
-});
-
-// --- SPK-43, tranche 4 · LE DÉPANNAGE SE CONTRÔLE AU BACKEND (§37.3) --------
-//
-// L'écran n'est pas l'autorité : la requête reste formable à la main. Ces
-// preuves passent donc TOUTES par la route, jamais par le composant.
 
 test('le dépannage est REFUSÉ quand le chemin normal est disponible', async () => {
   const { base, fermer, enfants, declarees } = await pile({

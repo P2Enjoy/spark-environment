@@ -1238,14 +1238,14 @@ await fermerContexte(ctx);
   await page.waitForFunction(
     () => document.querySelector('.xterm-rows')?.innerText.includes('Terminal ANSI prêt'),
     { timeout: 8000 });
-  await page.waitForSelector('.registre-sessions__ligne', { timeout: 8000 });
+  // SPK-75 : l'inventaire est un widget flottant, déplié par sa pastille.
+  await page.click('[data-widget="basculer"]');
+  await page.waitForSelector('.widget-inv__ligne', { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '107-terminal-xterm-registre.png') });
   console.log('  107-terminal-xterm-registre.png');
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.click('[data-registre="basculer"]');
-  await page.waitForSelector('.registre-sessions--ouvert .registre-sessions__ligne',
-                             { timeout: 8000 });
+  await page.waitForSelector('.widget-inv__contenu', { timeout: 8000 });
   await page.screenshot({ path: join(SORTIE, '108-terminal-xterm-registre-mobile.png'),
                           fullPage: true });
   console.log('  108-terminal-xterm-registre-mobile.png');

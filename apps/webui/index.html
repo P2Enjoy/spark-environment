@@ -37,20 +37,13 @@
         <a href="#/manuel" class="destination">Manuel</a>
       </nav>
     </div>
-    <!-- SPK-70 : un registre local des shells vivants, sans aucun octet de
-         session. À l'étroit son contenu devient un tiroir, pas une colonne qui
-         écraserait la grille du terminal. -->
-    <aside class="registre-sessions" aria-labelledby="titre-registre-sessions">
-      <div class="registre-sessions__entete">
-        <h2 id="titre-registre-sessions">Sessions ouvertes</h2>
-        <button type="button" class="bouton bouton--compact registre-sessions__bascule"
-                data-registre="basculer" aria-expanded="false"
-                aria-controls="contenu-registre-sessions">Afficher</button>
-      </div>
-      <div id="contenu-registre-sessions" class="registre-sessions__contenu"></div>
-    </aside>
     <main class="principal"></main>
   </div>
+  <!-- SPK-75 · SPK-DS-16 : l'inventaire FLOTTE en bas à droite, au-dessus du
+       contenu, sur toutes les routes. Il est hors de la grille : il ne prend
+       aucune largeur au contenu, là où la colonne qu'il remplace rétrécissait
+       la grille du terminal qu'elle accompagnait. -->
+  <aside class="widget-inv" aria-label="Sparks, conteneurs et shells ouverts"></aside>
   <script type="module" src="/src/app.js"></script>
 </body>
 </html>
