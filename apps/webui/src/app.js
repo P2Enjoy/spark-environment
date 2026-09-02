@@ -15,6 +15,7 @@
 import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spark-detail.js';
 import { IDENTITE_VIDE } from './components/spark-identity.js';
+import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
@@ -119,7 +120,12 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                docker: { ...DOCKER_VIDE },
                // SPK-74 · §17.5 : lue par `incus exec`, donc SEULEMENT quand
                // sa facette est ouverte.
-               identite: { ...IDENTITE_VIDE } };
+               identite: { ...IDENTITE_VIDE },
+               // SPK-85 · §44.9 : le dossier de déploiement. Il ne coûte qu'une
+               // lecture du registre — la route n'entre PAS dans la cellule —,
+               // et il est demandé avec le détail pour que la copie parte du
+               // même geste que le clic (§44.9.5).
+               dossier: { ...DOSSIER_VIDE } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -201,7 +207,7 @@ function peindre() {
                             envUi: etat.envUi,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
-                            identite: etat.identite,
+                            identite: etat.identite, dossier: etat.dossier,
                             ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
         + renderSparksView(etat);
@@ -1698,6 +1704,21 @@ function brancherPanneaux() {
   for (const bouton of racine.querySelectorAll('[data-identite-copie]')) {
     bouton.addEventListener('click', () => copierIdentite());
   }
+  // SPK-85 · §44.9.5 : le dossier de déploiement. Le texte est DÉJÀ chargé —
+  // le clic ne déclenche donc aucune requête, et le presse-papier reçoit
+  // l'écriture dans l'activation du geste.
+  for (const bouton of racine.querySelectorAll('[data-dossier-copie]')) {
+    bouton.addEventListener('click', () => copierDossier());
+  }
+  // Le repli survit à la repeinture. On NE repeint PAS ici : `innerHTML`
+  // reconstruirait la section et arracherait le focus au clavier (§14.3) — on
+  // ne fait que retenir ce que l'exploitant vient d'ouvrir.
+  const repliDossier = racine.querySelector('.dossier .repli');
+  if (repliDossier) {
+    repliDossier.addEventListener('toggle', () => {
+      etat.dossier.deplie = repliDossier.open;
+    });
+  }
   for (const bouton of racine.querySelectorAll('[data-identite-remplacer]')) {
     bouton.addEventListener('click', () => {
       identite.confirming = 'identite';
@@ -2659,6 +2680,13 @@ async function chargerDetail(nom, facette = '') {
       // nombre de cœurs physiques. Si le relevé échoue, chaque quota se replie
       // localement en saisie numérique (§6.9 bis).
       api('/v1/forge').catch(() => null),
+      // SPK-85 · §44.9.4 : le dossier de déploiement, en parallèle du reste. Il
+      // ne coûte qu'une lecture du registre — cette route n'exécute RIEN dans la
+      // cellule —, et il est chargé AVEC le détail pour que le bouton copie sans
+      // attendre : un `await` glissé entre le clic et `writeText` perd
+      // l'activation du geste sur certains navigateurs, et la copie échoue alors
+      // sans raison lisible.
+      chargerDossier(nom),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
                     snapshots, audit,

@@ -792,6 +792,61 @@
         "tags": [
           "ingress"
         ]
+      },
+      "patch": {
+        "description": "Corrige la CIBLE d'une route (SPK-85, docs/DAT.md §18.3 ter).\n\nLe port et le TLS, jamais le domaine ni le Spark : le domaine identifie\nla route, et la déplacer d'un Spark à un autre doit se voir dans le\njournal des deux — ce geste-là se fait en retirant et en déclarant.",
+        "operationId": "update_route_v1_ingress__domain__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Route V1 Ingress  Domain  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Route",
+        "tags": [
+          "ingress"
+        ]
       }
     },
     "/v1/ports": {
@@ -1165,6 +1220,77 @@
           }
         },
         "summary": "Run Bootstrap",
+        "tags": [
+          "amorcage"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/briefing": {
+      "get": {
+        "description": "Le dossier de déploiement, pour un agent hors de la cellule.\n\n@spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.4\n      (la surface d'API), §44.8 (le modèle unique)\n\nElle **n'entre pas dans la cellule** : tout vient du registre et du relevé\nd'amorçage déjà conservé. Elle répond donc sur un Spark **arrêté**, ce qui\nest justement l'état où l'on prépare un déploiement.\n\n`jump` porte la cible de rebond que la console tient de son inventaire —\nle plan de contrôle ne la connaît pas (§44.9.2). Une valeur qui n'est pas\nun `[compte@]hôte[:port]` ne produit AUCUNE commande, plutôt qu'une\ncommande piégée. `direct` dit l'autre cas : une console servie **sur** la\nForge n'a rien à sauter, et un `-J` y désignerait un hôte déjà présent.",
+        "operationId": "read_briefing_v1_sparks__name__briefing_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "jump",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Jump"
+            }
+          },
+          {
+            "in": "query",
+            "name": "direct",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Direct",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Briefing V1 Sparks  Name  Briefing Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Briefing",
         "tags": [
           "amorcage"
         ]

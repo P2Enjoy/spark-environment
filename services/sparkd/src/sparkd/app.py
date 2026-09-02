@@ -1136,6 +1136,39 @@ def create_app(config: Config) -> FastAPI:
                 relue["supersedes"] = route["supersedes"]
             return relue
 
+    @app.patch("/v1/ingress/{domain}", tags=["ingress"])
+    def update_route(domain: str, body: dict = Body(...)) -> dict:
+        """Corrige la CIBLE d'une route (SPK-85, docs/DAT.md §18.3 ter).
+
+        Le port et le TLS, jamais le domaine ni le Spark : le domaine identifie
+        la route, et la déplacer d'un Spark à un autre doit se voir dans le
+        journal des deux — ce geste-là se fait en retirant et en déclarant.
+        """
+        with registry() as connection:
+            try:
+                actuelle = ingress_service.by_domain(connection, domain)
+                spark = service.get(connection, actuelle["spark_id"])
+                protection_service.ensure_writable(connection, spark["name"], "ingress")
+                route = ingress_service.update(
+                    connection, domain, int(body.get("port", 0)),
+                    bool(body.get("tls", True)),
+                )
+            except (ingress_service.IngressError, ValueError, TypeError) as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "route_refused", "message": str(erreur)}) from erreur
+            try:
+                _reconcile_ingress(connection)
+            except ingress_service.IngressError as erreur:
+                # La correction est enregistrée ; l'écart reste visible par
+                # applied_at (§18.5) plutôt que masqué par un succès simulé.
+                raise HTTPException(status_code=502, detail={
+                    "error": "caddy_unavailable",
+                    "message": str(erreur),
+                    "route": route["domain"],
+                    "note": "Correction enregistrée mais non appliquée.",
+                }) from erreur
+            return ingress_service.by_domain(connection, route["domain"])
+
     @app.delete("/v1/ingress/{domain}", tags=["ingress"])
     def remove_route(domain: str) -> dict:
         with registry() as connection:
@@ -1889,6 +1922,31 @@ def create_app(config: Config) -> FastAPI:
                     "error": "incus_failed", "message": str(erreur)}) from erreur
             return {"spark": name, "revoked": label}
 
+    def _acces_ssh(connection, spark: dict) -> dict:
+        """L'accès SSH d'un Spark : fragment, hôte et empreintes autorisées.
+
+        @spec docs/BACKLOG.md#SPK-11 · docs/BACKLOG.md#SPK-85 ·
+              docs/DAT.md §17.4 (aucun port SSH public), §44.9.2
+
+        Écrit UNE fois : la route `ssh-config` et le dossier de déploiement le
+        rendent tous les deux, et deux fragments qui divergeraient enverraient
+        l'un des deux lecteurs sur un chemin qui n'existe pas.
+        """
+        return {
+            "host": spark["name"],
+            "hostname": spark["ipv4_address"],
+            "config": (
+                f"Host {spark['name']}\n"
+                f"    HostName {spark['ipv4_address']}\n"
+                f"    User {briefing_service.COMPTE_CELLULE}\n"
+                f"    ProxyJump {briefing_service.ALIAS_REBOND}\n"
+            ),
+            "keys": [
+                {"label": k["label"], "fingerprint": k["fingerprint"]}
+                for k in sshkeys.desired_keys(connection, spark["id"])
+            ],
+        }
+
     @app.get("/v1/sparks/{name}/ssh-config", tags=["cles"])
     def ssh_config(name: str) -> dict:
         """Fragment de configuration SSH, par rebond sur la Forge.
@@ -1905,19 +1963,55 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=409, detail={
                     "error": "no_address",
                     "message": "Ce Spark n'a pas encore d'adresse."})
+            return _acces_ssh(connection, spark)
+
+    @app.get("/v1/sparks/{name}/briefing", tags=["amorcage"])
+    def read_briefing(name: str, jump: str | None = None,
+                      direct: bool = False) -> dict:
+        """Le dossier de déploiement, pour un agent hors de la cellule.
+
+        @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.4
+              (la surface d'API), §44.8 (le modèle unique)
+
+        Elle **n'entre pas dans la cellule** : tout vient du registre et du relevé
+        d'amorçage déjà conservé. Elle répond donc sur un Spark **arrêté**, ce qui
+        est justement l'état où l'on prépare un déploiement.
+
+        `jump` porte la cible de rebond que la console tient de son inventaire —
+        le plan de contrôle ne la connaît pas (§44.9.2). Une valeur qui n'est pas
+        un `[compte@]hôte[:port]` ne produit AUCUNE commande, plutôt qu'une
+        commande piégée. `direct` dit l'autre cas : une console servie **sur** la
+        Forge n'a rien à sauter, et un `-J` y désignerait un hôte déjà présent.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            if not spark["incus_name"]:
+                # §44.9.4 : sans cellule, il n'y a ni adresse ni accès à décrire.
+                # Le refus est celui de partout ailleurs, pas un dossier vide.
+                raise HTTPException(status_code=409, detail={
+                    "error": "no_instance",
+                    "message": "Ce Spark n'a pas encore de cellule : il doit être "
+                               "créé avant qu'on puisse décrire son déploiement."})
+            acces = _acces_ssh(connection, spark)
+            model = briefing_service.modele(
+                spark,
+                forge_public_address=config.forge_public_address,
+                routes=ingress_service.listing(connection),
+                ports=ports_service.listing(connection),
+                environment=env_service.lister(connection, spark["id"]),
+                bootstrap=briefing_service.observation(connection, spark["id"]),
+            )
             return {
-                "host": spark["name"],
-                "hostname": spark["ipv4_address"],
-                "config": (
-                    f"Host {spark['name']}\n"
-                    f"    HostName {spark['ipv4_address']}\n"
-                    f"    User root\n"
-                    f"    ProxyJump spark-host\n"
-                ),
-                "keys": [
-                    {"label": k["label"], "fingerprint": k["fingerprint"]}
-                    for k in sshkeys.desired_keys(connection, spark["id"])
-                ],
+                "spark": name,
+                "written_at": model["written_at"],
+                "model": model,
+                "markdown": briefing_service.dossier(
+                    model, ssh_config=acces["config"], keys=acces["keys"],
+                    jump=jump, direct=direct),
             }
 
     @app.get("/v1/forge/cores", tags=["forge"])

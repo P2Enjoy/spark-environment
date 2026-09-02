@@ -179,3 +179,155 @@ def test_le_briefing_rootless_nomme_le_compte_et_le_socket_sans_inventer_le_uid(
     assert "Compte : spark-docker" in rendered
     assert "Socket : /run/user/<uid>/docker.sock" in rendered
     assert "/run/user/1000/docker.sock" not in rendered
+
+
+# --- Le dossier de déploiement (SPK-85, docs/DAT.md §44.9) --------------------
+#
+# @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9.2 (ce qu'il porte de
+#           plus), §44.9.3 (ce qu'il ne porte jamais), §44.9.4 (la surface d'API)
+#
+# Ces preuves portent sur ce que le texte DIT, parce que c'est tout ce que le
+# produit livre ici : personne ne lit le modèle, on colle le Markdown.
+
+
+def test_le_dossier_ne_porte_aucune_valeur_de_secret(tmp_path):
+    """§44.9.3 : la propriété qui décide de tout. Ce texte est fait pour être
+    collé dans une conversation avec un tiers ; un secret qui y entre est sorti."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    secret = "valeur-qui-ne-doit-jamais-etre-collee-4f21"
+    assert client.put(f"/v1/sparks/{name}/env/SMTP_PASSWORD", json={
+        "value": secret, "secret": True}).status_code == 200
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+
+    rendu = client.get(f"/v1/sparks/{name}/briefing")
+    assert rendu.status_code == 200, rendu.text
+    corps = rendu.json()
+    assert secret not in corps["markdown"]
+    assert secret not in json.dumps(corps["model"], ensure_ascii=False)
+    # Le NOM y est, lui : c'est ce qui permet d'écrire la pile.
+    assert "`SMTP_PASSWORD`" in corps["markdown"]
+
+
+def test_le_dossier_donne_la_commande_ssh_avec_son_rebond(tmp_path):
+    """§44.9.2 : le rebond est obligatoire, et sa cible n'est connue que de la
+    console. Fournie, elle produit une ligne prête à coller."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+    adresse = client.get(f"/v1/sparks/{name}").json()["ipv4_address"]
+
+    corps = client.get(f"/v1/sparks/{name}/briefing",
+                       params={"jump": "responsable@forge.example.test"}).json()
+    assert f"ssh -J responsable@forge.example.test root@{adresse}" in corps["markdown"]
+    # Le fragment ssh_config reste rendu à côté : les deux chemins mènent au même
+    # endroit, et l'un des deux suppose un alias que l'autre n'exige pas.
+    assert "ProxyJump spark-host" in corps["markdown"]
+
+
+def test_un_rebond_non_reconnu_ne_produit_AUCUNE_commande(tmp_path):
+    """§44.9.2 : cette valeur entre dans une ligne que quelqu'un collera dans un
+    shell. On refuse ce qu'on ne reconnaît pas plutôt que de l'échapper."""
+    client = _client(tmp_path)
+    name = _spark(client)
+
+    for piege in ("forge.test; rm -rf /", "$(id)", "a b", "forge.test'\"",
+                  "-oProxyCommand=touch /tmp/x"):
+        corps = client.get(f"/v1/sparks/{name}/briefing",
+                           params={"jump": piege}).json()
+        assert "ssh -J" not in corps["markdown"], piege
+        assert piege not in corps["markdown"], piege
+        assert "n'a pas pu être composée" in corps["markdown"]
+
+
+def test_le_dossier_nomme_le_systeme_releve_et_le_port_attendu_par_la_route(tmp_path):
+    """§44.9.2 : les deux faits qu'un agent ne peut trouver nulle part ailleurs —
+    l'architecture des images à tirer, et le port que Caddy vise déjà."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+    assert client.post("/v1/ingress", json={
+        "spark": name, "domain": "app.example.test", "port": 8080, "tls": True,
+    }).status_code == 201
+
+    corps = client.get(f"/v1/sparks/{name}/briefing").json()
+    systeme = corps["model"]["system"]
+    assert systeme["os_id"] == "debian" and systeme["os_suite"] == "trixie"
+    assert systeme["arch"]
+    assert f"- Architecture : {systeme['arch']}" in corps["markdown"]
+    assert "Distribution : debian trixie" in corps["markdown"]
+    assert "la pile doit écouter sur **8080**" in corps["markdown"]
+    # Les deux lignes sans lesquelles aucune variable n'atteint un conteneur.
+    assert "env_file:" in corps["markdown"]
+    assert f"      - {briefing.FICHIER_VARIABLES}" in corps["markdown"]
+    assert f"      - {briefing.FICHIER_SECRETS}" in corps["markdown"]
+
+
+def test_le_dossier_repond_sur_un_spark_ARRETE_et_jamais_amorce(tmp_path):
+    """§44.9.4 : on prépare un déploiement AVANT de démarrer quoi que ce soit. La
+    route ne lit que le registre, donc elle répond — en nommant ce qu'elle ignore."""
+    client = _client(tmp_path)
+    name = _spark(client, "endormi")
+    assert client.post(f"/v1/sparks/{name}/stop").status_code == 200
+
+    corps = client.get(f"/v1/sparks/{name}/briefing").json()
+    assert corps["model"]["bootstrap"] is None
+    assert corps["model"]["system"] is None
+    assert "Amorçage jamais relevé" in corps["markdown"]
+    assert "Non relevé" in corps["markdown"]
+    # §14.6 : ne pas savoir n'est pas savoir que non. Le dossier ne prétend
+    # aucune version, et ne déclare pas Docker absent non plus.
+    assert "Aucun Docker utilisable n'a été relevé" in corps["markdown"]
+
+
+def test_un_spark_sans_cellule_refuse_le_dossier_au_lieu_d_en_inventer_un(tmp_path):
+    """§44.9.4 : sans cellule, il n'y a ni adresse ni accès. Un dossier rendu là
+    décrirait un déploiement qui n'a nulle part où aller."""
+    client = _client(tmp_path)
+    assert client.post("/v1/sparks", json={
+        "name": "declare", "image": "images:debian/13", "cpu_mode": "shared",
+        "cpu_reservation": 0.25, "memory_bytes": GIO // 2,
+        "storage_bytes": GIO, "network_bps": 10_000_000,
+    }).status_code == 201
+
+    refus = client.get("/v1/sparks/declare/briefing")
+    assert refus.status_code == 409, refus.text
+    assert refus.json()["detail"]["error"] == "no_instance"
+
+
+def test_le_dossier_dit_l_absence_de_cle_parce_qu_elle_decide_de_la_connexion(tmp_path):
+    """§44.9.2 et §14.5 : sans clé accordée, la commande ci-dessus échouera. Le
+    taire ferait chercher une panne de réseau là où il n'y a qu'un accès manquant."""
+    client = _client(tmp_path)
+    name = _spark(client)
+
+    sans = client.get(f"/v1/sparks/{name}/briefing").json()["markdown"]
+    assert "Aucune clé n'est autorisée sur ce Spark" in sans
+
+    assert client.post("/v1/ssh-keys", json={
+        "label": "poste", "public_key":
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBERERERERERERERERERERERERERERERERERERERERER",
+    }).status_code == 201
+    assert client.post(f"/v1/sparks/{name}/ssh-keys/poste").status_code == 200
+
+    avec = client.get(f"/v1/sparks/{name}/briefing").json()["markdown"]
+    assert "Aucune clé n'est autorisée" not in avec
+    assert "- poste — `SHA256:" in avec
+
+
+def test_une_console_servie_SUR_la_forge_donne_une_commande_directe(tmp_path):
+    """§44.9.2 : depuis la Forge, il n'y a rien à sauter. Écrire un `-J` y
+    désignerait un hôte déjà présent ; ne rien écrire priverait de la commande."""
+    client = _client(tmp_path)
+    name = _spark(client)
+    adresse = client.get(f"/v1/sparks/{name}").json()["ipv4_address"]
+
+    corps = client.get(f"/v1/sparks/{name}/briefing",
+                       params={"direct": "true"}).json()
+    assert f"ssh root@{adresse}" in corps["markdown"]
+    assert "ssh -J" not in corps["markdown"]
+
+    # Un rebond nommé PRIME : la console qui en donne un sait où elle est.
+    avec = client.get(f"/v1/sparks/{name}/briefing",
+                      params={"direct": "true", "jump": "forge.test"}).json()
+    assert f"ssh -J forge.test root@{adresse}" in avec["markdown"]

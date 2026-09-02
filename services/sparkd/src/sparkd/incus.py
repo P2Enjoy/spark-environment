@@ -18,6 +18,7 @@ from typing import Any, Protocol
 import base64
 import hashlib
 import json
+import platform
 import re
 
 import httpx
@@ -398,11 +399,18 @@ class UnixSocketIncus:
 #: SPK-76 · §42.9 : ce que le doublon répond à `/etc/os-release`, par image du
 #: catalogue (§33). Alpine y figure DÉLIBÉRÉMENT : c'est la cellule que
 #: l'amorçage doit refuser, et une preuve du refus exige de pouvoir la monter.
+#: SPK-85 · §44.9.2 : `arch` accompagne la distribution. Le doublon rend celle du
+#: poste qui l'exécute — une valeur inventée ferait éprouver le dossier contre
+#: une architecture que rien ne porte.
 _OS_PAR_ALIAS = {
-    "debian/13": {"os_id": "debian", "os_suite": "trixie", "os_like": ""},
-    "debian/12": {"os_id": "debian", "os_suite": "bookworm", "os_like": ""},
-    "ubuntu/24.04": {"os_id": "ubuntu", "os_suite": "noble", "os_like": "debian"},
-    "alpine/3.21": {"os_id": "alpine", "os_suite": "", "os_like": ""},
+    "debian/13": {"os_id": "debian", "os_suite": "trixie", "os_like": "",
+                  "arch": platform.machine()},
+    "debian/12": {"os_id": "debian", "os_suite": "bookworm", "os_like": "",
+                  "arch": platform.machine()},
+    "ubuntu/24.04": {"os_id": "ubuntu", "os_suite": "noble", "os_like": "debian",
+                     "arch": platform.machine()},
+    "alpine/3.21": {"os_id": "alpine", "os_suite": "", "os_like": "",
+                    "arch": platform.machine()},
 }
 
 #: Une image inconnue du doublon est traitée comme la Debian 13 par défaut du

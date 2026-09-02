@@ -572,6 +572,30 @@ tbody tr:hover { background: var(--color-hover); }
 .identite dd { min-width: 0; overflow-wrap: anywhere; }
 .bloc-cle { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: visible; }
 
+/* SPK-85 · docs/DAT.md §44.9.5 · DESIGN_SYSTEM_APP.md SPK-DS-19 — le dossier de
+   déploiement, un texte fait pour être COLLÉ ailleurs.
+   Replié par défaut : cinquante lignes de Markdown noieraient la section qui les
+   porte. Ouvrable, parce qu'on doit pouvoir vérifier ce qu'on colle avant de le
+   coller — surtout quand la destination est un tiers.
+   Le texte garde ses LIGNES et replie les longues (SPK-DS-18) : sa structure de
+   lignes porte le sens, et un défilement horizontal cacherait la fin de celles
+   qui comptent. Il est borné en hauteur et défile dans son propre conteneur,
+   jamais la page (§8.1). */
+.dossier > * + * { margin-top: var(--space-3); }
+.repli > summary {
+  min-height: var(--size-target); display: flex; align-items: center;
+  gap: var(--space-2); cursor: pointer; color: var(--color-brand);
+  font-size: var(--text-compact); font-weight: 600;
+}
+.repli > summary:focus-visible {
+  outline: 2px solid var(--color-brand); outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.dossier__texte {
+  margin-top: var(--space-2); max-height: 24rem; overflow-y: auto;
+  overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
 /* SPK-22 · docs/DAT.md §27 — l'écran des pools de l'hôte. */
 .pools { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
 @media (min-width: 768px)  { .pools { grid-template-columns: repeat(2, 1fr); } }

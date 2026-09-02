@@ -1,6 +1,6 @@
 """Données de démonstration de la pile de développement.
 
-@spec docs/BACKLOG.md#SPK-23 · docs/DAT.md §28 (la pile et le seed),
+@spec docs/BACKLOG.md#SPK-23 · docs/BACKLOG.md#SPK-85 · docs/DAT.md §28 (la pile et le seed),
       §28.3 (les mêmes chemins que l'application), §28.5 (ce qu'il démontre),
       §28.6 (rejouable à l'identique) · CLAUDE.md §8
 
@@ -369,6 +369,18 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     # La clé lui est accordée AVANT l'armement — l'octroi étant justement refusé
     # sur un Spark protégé (§35.2). C'est ce qui rend atteignable, depuis
     # l'écran, la confirmation de révocation qui NOMME les Sparks touchés.
+    # SPK-85 · §44.9 : le seed n'amorce AUCUN Spark, et c'est une décision, pas
+    # un oubli. Le dossier de déploiement se démontrerait mieux sur une cellule
+    # amorcée — il porterait la distribution, l'architecture et les versions —,
+    # mais l'amorçage est précisément ce que les parcours de SPK-54 et SPK-76
+    # viennent éprouver : un seed qui l'aurait déjà fait leur ferait constater
+    # « rien n'a été fait » là où ils vérifient que ce qui manque est posé.
+    # Mesuré : deux parcours d'amorçage rougissent dès que le seed amorce
+    # « crm-production ».
+    #
+    # La démonstration complète reste atteignable en UN clic depuis l'écran —
+    # « Amorcer ce Spark » —, et c'est le chemin que prennent les parcours et
+    # les illustrations du dossier.
     _attendu(client.post("/v1/sparks/analytics/ssh-keys/ci-deploiement"), 200,
              quoi="attribution de la clé au futur Spark protégé")
     _attendu(client.post("/v1/sparks/analytics/protection",
@@ -415,6 +427,26 @@ def verify(client: TestClient) -> None:
         raise SeedError(
             f"« {orphelines[0]['name']} » n'est cochée nulle part et apparaît "
             "pourtant chez crm-production : le catalogue descend tout seul")
+
+    # SPK-85 · §44.9 : le dossier doit être LISIBLE sur un Spark seedé, y compris
+    # avant tout amorçage — c'est justement l'état où l'on prépare un
+    # déploiement. Un 409 ici signifierait que l'écran ne montre rien.
+    dossier = client.get("/v1/sparks/crm-production/briefing")
+    if dossier.status_code != 200:
+        raise SeedError(
+            f"le dossier de « crm-production » répond {dossier.status_code} ; "
+            "il devrait être lisible")
+    # §44.9.3 : la propriété qui compte plus que toutes les autres. Elle est
+    # vérifiée ICI, sur des secrets réellement posés, et pas seulement en test.
+    valeurs = [e["value"] for e in client.get("/v1/env").json()["env"]
+               if e["is_secret"]]
+    if any(valeurs):
+        raise SeedError("le catalogue rend une valeur de secret")
+    for secrete in ("DATABASE_URL", "SMTP_PASSWORD"):
+        if secrete not in dossier.json()["markdown"]:
+            raise SeedError(
+                f"le dossier ne nomme pas le secret « {secrete} » : la pile ne "
+                "saurait pas quelles variables elle recevra")
 
     secrets = [e for e in env_crm if e["is_secret"]]
     if not secrets:

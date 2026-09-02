@@ -4937,7 +4937,7 @@ disparu, alors qu'elle était bien posée dans le DNS ».
 
 ---
 
-### [ ] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
+### [~] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
 
 Demandé par le responsable le 2026-09-02 : « pour un Spark configuré, un bouton
 *LLM* comme le font certains sites — un texte copié dans le presse-papier, à
@@ -4984,6 +4984,36 @@ précis où l'on prépare.
   copie le dossier et **relit le presse-papier** ; captures observées ; seed
   amorçant un Spark pour que la section ne soit pas vide ; manuel M8 mis à jour ;
   `@spec` / `@verifies` posés ; migration inscrite au contrat de déploiement.
+- **Implémenté et vérifié en local le 2026-09-02**, statut `[~]` : 8 preuves de
+  service et d'API — dont l'absence d'une valeur de secret réellement posée, le
+  refus de cinq cibles de rebond piégées, et le dossier rendu sur un Spark
+  arrêté et jamais amorcé —, 15 preuves d'écran, **2 parcours E2E** qui partent
+  de l'accueil, cliquent, et **relisent le presse-papier** pour y constater la
+  commande d'entrée, les deux `env_file:`, les noms des secrets et l'absence de
+  leurs valeurs. Six captures observées —
+  bureau, texte déplié, après copie, focus clavier, Spark jamais amorcé, 390 px
+  — sans débordement horizontal ni message de console. Les captures sont
+  reproductibles : `node e2e/dossier.mjs` monte sa propre pile seedée et les
+  refait, comme `e2e/manuel.mjs` refait les illustrations.
+- **La commande d'entrée est venue d'une demande du responsable en cours de
+  route** : le dossier ne portait que le fragment `ssh_config`, qui suppose un
+  alias défini sur le poste. Il porte désormais la ligne complète, composée par
+  le runtime à partir de la cible que la console tient de son inventaire — le
+  plan de contrôle ne la connaît pas. Une cible qui n'est pas un
+  `[compte@]hôte[:port]` ne produit AUCUNE commande : ce texte est collé dans un
+  shell, et le seul échappement sûr est de ne pas écrire ce qu'on ne reconnaît
+  pas. Une console servie SUR la Forge rend une commande directe, sans `-J`.
+- **Le seed n'amorce AUCUN Spark, et c'est une décision mesurée.** Amorcer
+  « crm-production » au seed rendait le dossier complet dès l'ouverture, mais
+  faisait rougir **deux parcours de SPK-54** : ils viennent constater que
+  l'amorçage pose ce qui manque, et trouvaient « rien n'a été fait ». La
+  démonstration complète reste à un clic — « Amorcer ce Spark » —, et c'est le
+  chemin que prennent le parcours E2E, l'illustration du manuel et les captures.
+  Le `verify` du seed exige en revanche que le dossier soit **lisible** sur un
+  Spark jamais amorcé, et qu'il nomme les deux secrets seedés sans leurs valeurs.
+- **Reste à faire pour passer `[x]`** : le commit et le push, puis OP-15 — la
+  migration `013` sur la Forge. Tant qu'elle n'est pas appliquée, le dossier des
+  Sparks déjà amorcés dira « système non relevé » jusqu'à leur amorçage suivant.
 
 ### [~] SPK-82 · L'amorçage rend la cellule JOIGNABLE, pas seulement équipée
 

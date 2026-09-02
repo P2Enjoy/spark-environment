@@ -1,7 +1,7 @@
 /**
  * Écran « détail d'un Spark ».
  *
- * @spec docs/BACKLOG.md#SPK-19, #SPK-21, #SPK-33, #SPK-64 ·
+ * @spec docs/BACKLOG.md#SPK-19, #SPK-21, #SPK-33, #SPK-64, #SPK-85 ·
  *       docs/DESIGN_SYSTEM.md §5.4 (degré 3 : la fenêtre d'un objet), §6.27
  *       (fenêtre, sections, facettes en onglets) · docs/DAT.md §34.1 ·
  *       docs/DAT.md §24 (le runtime publie ce qui est possible), §24.2,
@@ -9,6 +9,7 @@
  *       (confirmations), §24.3 (l'identité d'abord), §26 (les trois panneaux
  *       d'administration, portés par `spark-admin.js`) ·
  *       docs/DESIGN_SYSTEM.md §6.3, §6.4, §6.6, §6.22, §6.23, §14.9 ·
+ *       docs/DAT.md §44.9.5 (le dossier de déploiement est une SECTION) ·
  *       docs/DESIGN_SYSTEM_APP.md
  *
  * Les commandes affichées viennent de `allowed_commands`, publié par le runtime.
@@ -24,6 +25,7 @@ import { renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
+import { DOSSIER_VIDE, renderDossier } from './spark-dossier.js';
 // §12.5 : la table des modes CPU vit à UN SEUL endroit. En recopier une
 // seconde ici ferait diverger deux libellés pour le même mode.
 // `MODES` est DÉJÀ pris dans ce fichier par les modes d'amorçage : on nomme donc
@@ -671,6 +673,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     quotas = QUOTAS_VIDE,
                                     env = [], envUi = ENV_VIDE,
                                     identite = IDENTITE_VIDE,
+                                    dossier = DOSSIER_VIDE,
                                     catalogue = [], pools = null, cores = null } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
@@ -682,7 +685,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
   const facettes = {
     '': () => `<div class="detail">
       <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas, { pools, cores })}
-        ${renderProtection(spark, admin)}</div>
+        ${renderProtection(spark, admin)}
+        ${renderDossier(spark, dossier)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}
         ${renderAmorcage(spark, amorcage)}</div>
     </div>`,

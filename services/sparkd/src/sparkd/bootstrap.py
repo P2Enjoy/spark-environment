@@ -6,7 +6,9 @@
       §42.1 (détecter d'abord), §42.5 (exec_capture), §42.6 (la détection,
       exactement), §42.7 (le contrat d'API), §42.8 (ce que le journal reçoit) ·
       §37.3 (le chemin `incus exec`) · §21.2 (ce qui ne traverse pas le journal) ·
-      docs/BACKLOG.md#SPK-60 · docs/DAT.md §44.3 (versions du relevé)
+      docs/BACKLOG.md#SPK-60 · docs/DAT.md §44.3 (versions du relevé) ·
+      docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9.2 (l'architecture, que seul le
+      relevé peut lire)
 
 Le point qui décide de ce module : **détecter Docker présent ne suffit pas**. Un
 `docker.io` de distribution est présent *et* inutilisable — son profil AppArmor
@@ -63,6 +65,8 @@ RELEVE = r"""
 os_id=$(. /etc/os-release 2>/dev/null && echo "$ID")
 os_suite=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
 os_like=$(. /etc/os-release 2>/dev/null && echo "$ID_LIKE")
+arch=$(uname -m 2>/dev/null)
+[ -n "$arch" ] || arch=absent
 sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
 openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null || echo absent)
 cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64)
@@ -91,8 +95,8 @@ if id spark-docker >/dev/null 2>&1; then
 fi
 mode=$(systemctl is-active docker.service >/dev/null 2>&1 && echo enracine \
        || ([ "$rootless" = active ] && echo rootless || echo absent))
-printf 'os_id=%s\nos_suite=%s\nos_like=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\n' \
-  "$os_id" "$os_suite" "$os_like" \
+printf 'os_id=%s\nos_suite=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\n' \
+  "$os_id" "$os_suite" "$os_like" "$arch" \
   "$sshd" "$openssh_version" "$cles" "$depot_distro" "$depot_suite" \
   "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode"
 """

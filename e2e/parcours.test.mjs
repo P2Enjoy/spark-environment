@@ -4044,3 +4044,104 @@ test('l’ancre SIGNALE une histoire qui ne prolonge pas la précédente', async
       'un relevé de plus ne doit pas absoudre la Forge');
   });
 });
+
+// --- LE DOSSIER DE DÉPLOIEMENT (SPK-85, docs/DAT.md §44.9) -------------------
+
+/**
+ * @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.2
+ *           (ce qu'il porte de plus), §44.9.3 (aucune valeur de secret),
+ *           §44.9.5 (une section, pas une modale) · CLAUDE.md §15, §16
+ *
+ * Le presse-papier est RELU. Vérifier que le bouton affiche « copié » ne
+ * prouverait que le rendu — or c'est ce qui est collé ailleurs qui est le
+ * produit ici.
+ */
+test('copier le dossier d’un Spark, et relire ce que le presse-papier a reçu',
+     async () => {
+  await parcours('dossier-copie', async () => {
+    // Le presse-papier n'est pas accessible sans permission accordée, et
+    // l'accorder est le geste que le navigateur ferait à la demande d'un humain.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'],
+                                          { origin: pile.base });
+    // §29.3 : depuis l'accueil, en cliquant. Aucune URL profonde.
+    //
+    // On AMORCE d'abord, par le geste de l'écran. Le seed ne le fait pas — il
+    // rendrait inéprouvables les parcours de SPK-54 et SPK-76, qui exigent une
+    // cellule que rien n'a amorcée — et sans relevé le dossier ne porterait ni
+    // distribution, ni architecture, ni version de Docker, c'est-à-dire pas ce
+    // que ce parcours vient constater.
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-amorcage', { timeout: 10000 });
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+    await page.click('[data-amorcage="engager"]');
+    await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+    // Le dossier est composé au CHARGEMENT de l'écran : on y revient, comme le
+    // ferait un exploitant qui vient d'amorcer.
+    await ouvrir('crm-production');
+    await page.waitForSelector('.dossier [data-dossier-copie]', { timeout: 10000 });
+
+    // Le texte est lisible AVANT d'être collé (SPK-DS-19) : on le déplie comme
+    // le ferait quelqu'un qui vérifie ce qu'il envoie à un tiers.
+    await page.click('.dossier .repli > summary');
+    const affiche = await page.textContent('.dossier__texte');
+    assert.match(affiche, /Dossier de déploiement/);
+
+    await page.click('.dossier [data-dossier-copie]');
+    await page.waitForSelector('.dossier .succes', { timeout: 10000 });
+
+    const copie = await page.evaluate(() => navigator.clipboard.readText());
+    // 1. Ce qu'un agent ne peut trouver nulle part ailleurs : par où l'on entre.
+    const { corps } = await pile.lireSparkd('/v1/sparks/crm-production');
+    assert.ok(copie.includes(`ssh root@${corps.ipv4_address}`),
+      `le dossier doit porter la commande d’entrée : ${copie.slice(0, 400)}`);
+    assert.match(copie, /ProxyJump spark-host/);
+
+    // 2. Le contrat que la pile doit respecter.
+    assert.match(copie, /env_file:/);
+    assert.ok(copie.includes('- /etc/spark/env'));
+    assert.ok(copie.includes('- /run/spark/secrets'));
+
+    // 3. Les NOMS des variables et des secrets seedés, jamais leurs valeurs.
+    assert.match(copie, /`DATABASE_URL`/);
+    assert.match(copie, /`SMTP_PASSWORD`/);
+    assert.ok(!copie.includes('postgres://demo:demo@db.interne.example/crm'),
+      'une valeur de secret a été copiée — c’est exactement ce que le §44.9.3 interdit');
+    assert.ok(!copie.includes('mot-de-passe-de-demonstration'),
+      'une valeur de secret du catalogue a été copiée');
+
+    // 4. Le système relevé et le port que la route attend déjà.
+    assert.match(copie, /Distribution : debian trixie/);
+    assert.match(copie, /- Architecture : /);
+    assert.match(copie, /la pile doit écouter sur \*\*8080\*\*/);
+  });
+});
+
+test('un Spark jamais amorcé donne quand même son dossier, et le DIT', async () => {
+  await parcours('dossier-jamais-amorce', async () => {
+    // « site-vitrine » et non « boutique ». Le premier écrit ici l'était, et il
+    // passait SEUL en échouant dans la campagne : le parcours du rootless amorce
+    // « boutique » plus haut, si bien que le dossier y portait un relevé. C'est
+    // la signature d'un parcours qui dépend de l'état laissé par un autre, et le
+    // §29 la proscrit — même remarque que celle écrite au-dessus du rootless.
+    //
+    // « site-vitrine » a une cellule — son `apply` a réussi —, aucun amorçage ne
+    // le vise, et le seed ne lui accorde AUCUNE clé. Il porte donc les deux
+    // absences que ce parcours doit montrer.
+    await ouvrir('site-vitrine');
+    await page.waitForSelector('.dossier [data-dossier-copie]', { timeout: 10000 });
+    const avertissement = await page.textContent('.dossier .avertissement');
+    assert.match(avertissement, /jamais été amorcé/);
+
+    await page.click('.dossier .repli > summary');
+    const texte = await page.textContent('.dossier__texte');
+    assert.match(texte, /Amorçage jamais relevé/);
+    // Ni distribution inventée, ni Docker déclaré présent.
+    assert.match(texte, /Non relevé/);
+    // §44.9.2 : l'absence de clé DÉCIDE si la connexion aboutira. Le taire
+    // ferait chercher une panne de réseau là où il n'y a qu'un accès manquant.
+    // L'apostrophe est DROITE : ce texte est rendu par le runtime, pas par
+    // l'écran, et le briefing du §44 emploie la même depuis SPK-60.
+    assert.match(texte, /Aucune clé n'est autorisée sur ce Spark/);
+  });
+});

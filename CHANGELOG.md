@@ -9,8 +9,12 @@
   plan de contrôle la connaît — quotas et leur sémantique, distribution, suite et
   architecture relevées, versions d'`openssh-server`, `docker-ce` et du greffon
   Compose, mode Docker et socket, routes d'ingress avec le port qu'elles visent,
-  ports publiés, noms des variables et des secrets, chemins d'injection, accès
-  SSH par rebond et pièges connus. **Aucune valeur de secret n'y figure**, et le
+  ports publiés, noms des variables et des secrets, chemins d'injection et pièges
+  connus. Il porte la **commande SSH complète, rebond compris** — `ssh -J
+  <forge> root@<adresse privée>` —, composée par le runtime à partir de la cible
+  que la console tient de son inventaire : le plan de contrôle ne la connaît pas,
+  et une cible qui n'est pas un `[compte@]hôte[:port]` ne produit aucune commande
+  plutôt qu'une ligne piégée. **Aucune valeur de secret n'y figure**, et le
   texte le dit avant qu'on le copie. C'est le briefing du SPK-60, servi à l'autre
   bout du câble : le fichier de la cellule est en `0600`, donc illisible au moment
   précis où l'on prépare le déploiement.

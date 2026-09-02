@@ -36,7 +36,7 @@ la correction du 2026-09-02, qui n'a fait que rendre l'état de refus lisible.
 
 ---
 
-## 2. Deux unités de backlog portent le même identifiant `SPK-84`
+## 2. Quatre unités de backlog se partagent DEUX identifiants, `SPK-84` et `SPK-85`
 
 **Constaté le 2026-09-02**, en attribuant un identifiant à SPK-85.
 
@@ -44,21 +44,67 @@ la correction du 2026-09-02, qui n'a fait que rendre l'état de refus lisible.
 **stable** : il est cité par les commentaires `@spec` du code et `@verifies` des
 tests. Il ne se renumérote pas. »
 
-**Le fait.** Deux unités distinctes portent `SPK-84` : « Une recette pose AUSSI sa
-route, et les trois blocs se ressemblent » et « L'amorce prévient le `grub-pc`
-cassé, et le préflight le nomme ». Les deux sont `[ ]`, donc aucune n'est encore
-citée par un `@spec` ou un `@verifies` — c'est ce qui rend la correction encore
-possible sans toucher au code.
+**Le fait, constaté en deux temps.** Deux unités distinctes portent `SPK-84` :
+« Une recette pose AUSSI sa route, et les trois blocs se ressemblent » et
+« L'amorce prévient le `grub-pc` cassé, et le préflight le nomme ». Les deux sont
+`[ ]`, donc aucune n'est encore citée par un `@spec` ou un `@verifies`.
 
-**Pourquoi ce n'est pas corrigé ici.** Renuméroter l'une des deux est un
-arbitrage sur des unités qui n'appartiennent pas à la tâche en cours, et les deux
-identifiants ont pu être cités ailleurs qu'ici — un message de commit, une note.
-Le journal du 2026-09-02 rappelle que `SPK-79`, `SPK-80` et `SPK-81` ont été
-rendus et ne seront **pas réemployés** : ils ne peuvent donc pas servir à
-départager.
+**Puis `SPK-85` a été attribué deux fois le même jour**, par deux sessions
+travaillant en parallèle sur cette branche : « Corriger le port d'une route, sans
+la refaire » et « Le dossier de déploiement d'un Spark, copié pour un agent ».
+Cette seconde collision est d'une autre nature : la seconde unité est `[~]`, et
+son identifiant est **déjà cité** par `docs/DAT.md` §44.9, `docs/SCHEMA.md`
+§10 quinquies, `docs/PROD_MIGRATIONS.md` OP-15, la migration `013`, six fichiers
+de code et leurs preuves — tous committés. La renuméroter unilatéralement
+casserait ces références sans garantie qu'un autre identifiant ne soit pas pris
+dans la minute qui suit.
 
-**Ce qui a été fait à la place.** La nouvelle unité prend `SPK-85`, le premier
-identifiant libre au-delà du doublon.
+**Pourquoi ce n'est pas corrigé ici.** Renuméroter est un arbitrage sur des
+unités qui n'appartiennent pas à la tâche en cours, et les identifiants ont pu
+être cités ailleurs — un message de commit, une note. Le journal du 2026-09-02
+rappelle que `SPK-79`, `SPK-80` et `SPK-81` ont été rendus et ne seront **pas
+réemployés** : ils ne peuvent pas servir à départager. `SPK-86` et `SPK-87` sont
+déjà pris.
 
-**Demandé au responsable.** Arbitrer laquelle des deux unités `SPK-84` conserve
-l'identifiant, et si la seconde doit prendre `SPK-86`.
+**La cause, et elle n'est pas documentaire.** Rien dans le dépôt ne réserve un
+identifiant : deux sessions qui lisent le backlog à la même seconde y voient le
+même « premier libre ». Tant que plusieurs agents travaillent sur cette branche,
+la collision se reproduira.
+
+**Demandé au responsable.** Arbitrer qui conserve `SPK-84` et qui conserve
+`SPK-85`, et par quoi la renumérotation passe — les références `@spec` et
+`@verifies` de l'unité `[~]` sont déjà committées, celles des unités `[ ]` n'ont
+pas encore de code. Décider aussi s'il faut un mécanisme d'attribution, faute de
+quoi le prochain identifiant sera repris de la même façon.
+
+---
+
+## 3. `make manuel` détruit cinq illustrations qu'il ne sait plus produire
+
+**Constaté le 2026-09-02**, en produisant l'illustration de SPK-85.
+
+**Le document.** `docs/DAT.md` §30.1 : « les illustrations sont produites, jamais
+collectées à la main » ; §30.2 : le lien manuel-image est vérifié dans les deux
+sens.
+
+**Le fait.** `e2e/manuel.mjs` vide `docs/manuel/images/` puis reproduit 24 images.
+Or le manuel en cite 29 : `m4-update.png`, `m4-update-rollback.png`,
+`m4-update-mobile.png`, `m6-identite.png` et `m8-widget.png` sont **committées**
+mais aucun bloc du harnais ne les produit. Une exécution de `make manuel` les
+supprime donc, et `e2e/manuel.test.mjs` rougit aussitôt sur « ces images sont
+citées mais absentes ». Ces cinq-là ne sont pas reproductibles : elles violent
+le §30.1 depuis leur commit.
+
+**Ce qui a été fait.** Les cinq fichiers ont été **restaurés** depuis `HEAD` après
+l'exécution, avec les dix-neuf autres que la régénération avait réécrites. Seule
+`m8-dossier.png`, produite par un bloc ajouté au harnais, est conservée.
+
+**Pourquoi ce n'est pas corrigé ici.** Écrire les blocs manquants demande
+d'atteindre quatre écrans qui appartiennent à SPK-69, SPK-74 et SPK-75 — dont
+l'un exige une build distante comparable et un autre le widget flottant — et de
+statuer sur ce que chaque image doit montrer. C'est le travail de ces unités,
+pas de celle-ci.
+
+**Demandé au responsable.** Décider qui reprend ces cinq illustrations. En
+l'état, personne ne peut lancer `make manuel` sans casser le manuel, ce qui rend
+la cible inutilisable pour tout le monde.

@@ -301,6 +301,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ingress/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match Routes
+         * @description Quelles routes servent ces noms ? (SPK-77, docs/DAT.md §38.8.4)
+         *
+         *     Une LECTURE, malgré le `POST` : une liste de noms n'a pas sa place dans
+         *     une chaîne de requête, et la console en envoie autant que la zone en
+         *     porte. Rien n'est écrit, rien n'entre au journal.
+         *
+         *     `sparkd` ne voit que des noms : le jeton du fournisseur DNS reste sur
+         *     l'hôte console (§38.1).
+         */
+        post: operations["match_routes_v1_ingress_match_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ingress/reconcile": {
         parameters: {
             query?: never;
@@ -335,7 +362,15 @@ export interface paths {
         delete: operations["remove_route_v1_ingress__domain__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Route
+         * @description Corrige la CIBLE d'une route (SPK-85, docs/DAT.md §18.3 ter).
+         *
+         *     Le port et le TLS, jamais le domaine ni le Spark : le domaine identifie
+         *     la route, et la déplacer d'un Spark à un autre doit se voir dans le
+         *     journal des deux — ce geste-là se fait en retirant et en déclarant.
+         */
+        patch: operations["update_route_v1_ingress__domain__patch"];
         trace?: never;
     };
     "/v1/ports": {
@@ -467,6 +502,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/briefing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Briefing
+         * @description Le dossier de déploiement, pour un agent hors de la cellule.
+         *
+         *     @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.4
+         *           (la surface d'API), §44.8 (le modèle unique)
+         *
+         *     Elle **n'entre pas dans la cellule** : tout vient du registre et du relevé
+         *     d'amorçage déjà conservé. Elle répond donc sur un Spark **arrêté**, ce qui
+         *     est justement l'état où l'on prépare un déploiement.
+         *
+         *     `jump` porte la cible de rebond que la console tient de son inventaire —
+         *     le plan de contrôle ne la connaît pas (§44.9.2). Une valeur qui n'est pas
+         *     un `[compte@]hôte[:port]` ne produit AUCUNE commande, plutôt qu'une
+         *     commande piégée. `direct` dit l'autre cas : une console servie **sur** la
+         *     Forge n'a rien à sauter, et un `-J` y désignerait un hôte déjà présent.
+         */
+        get: operations["read_briefing_v1_sparks__name__briefing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/env": {
         parameters: {
             query?: never;
@@ -528,6 +596,47 @@ export interface paths {
         post?: never;
         /** Unset Spark Env */
         delete: operations["unset_spark_env_v1_sparks__name__env__variable__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Identity
+         * @description La clé PUBLIQUE que le Spark présente. N'écrit rien (§17.5).
+         *
+         *     @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §14.6
+         *
+         *     Lire ne refuse PAS sur un Spark arrêté, contrairement à créer : on doit
+         *     pouvoir regarder l'écran des clés d'un Spark éteint sans tomber sur une
+         *     erreur. L'état rendu est alors « indisponible », jamais « absente » —
+         *     les fondre ferait créer une seconde identité en croyant réparer la
+         *     première, et invaliderait la clé déjà posée chez le tiers.
+         */
+        get: operations["read_identity_v1_sparks__name__identity_get"];
+        put?: never;
+        /**
+         * Create Identity
+         * @description Fait naître l'identité DANS la cellule (§17.5).
+         *
+         *     @spec docs/BACKLOG.md#SPK-74 · docs/DAT.md §17.5, §17.2, §42.5
+         *
+         *     La clé privée ne traverse jamais cette route : `ssh-keygen` s'exécute
+         *     dans le Spark et seule la partie publique remonte. Le journal reçoit
+         *     l'empreinte, jamais un corps de clé (§21.2).
+         *
+         *     `replace` est refusé par défaut : régénérer invalide la clé de
+         *     déploiement déjà posée chez le tiers, et rien sur la Forge ne le sait.
+         */
+        post: operations["create_identity_v1_sparks__name__identity_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1225,6 +1334,43 @@ export interface operations {
             };
         };
     };
+    match_routes_v1_ingress_match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reconcile_routes_v1_ingress_reconcile_post: {
         parameters: {
             query?: never;
@@ -1257,6 +1403,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_route_v1_ingress__domain__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1575,6 +1760,42 @@ export interface operations {
             };
         };
     };
+    read_briefing_v1_sparks__name__briefing_get: {
+        parameters: {
+            query?: {
+                jump?: string | null;
+                direct?: boolean;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_spark_env_v1_sparks__name__env_get: {
         parameters: {
             query?: never;
@@ -1730,6 +1951,78 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_identity_v1_sparks__name__identity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_identity_v1_sparks__name__identity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

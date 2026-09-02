@@ -144,6 +144,25 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await ouvrir('site-vitrine');
     await capturer('m8-erreur', { hauteur: 1000 });
 
+    // --- M8 · Le dossier pour un agent (SPK-85, §44.9) -----------------------
+    // Déplié : le chapitre décrit un texte qu'on VÉRIFIE avant de le coller, et
+    // une image du seul bouton ne montrerait pas ce qu'on vérifie.
+    // Le seed n'amorce aucun Spark (il rendrait inéprouvables les parcours de
+    // SPK-54). On amorce donc ici, par le geste de l'écran, pour que
+    // l'illustration montre un dossier COMPLET — c'est ce que le chapitre décrit.
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-amorcage', { timeout: 10000 });
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+    await page.click('[data-amorcage="engager"]');
+    await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-dossier', { timeout: 10000 });
+    await page.click('.dossier .repli > summary');
+    await page.waitForSelector('.dossier__texte', { timeout: 10000 });
+    await page.locator('.dossier').scrollIntoViewIfNeeded();
+    await capturer('m8-dossier', { hauteur: 1000 });
+
     // --- M8 · Protéger un Spark (SPK-34) -------------------------------------
     // « analytics » est protégé par le seed. On l'ouvre PAR SON LIEN, comme un
     // exploitant, et la fenêtre montre les deux choses à la fois : la barre qui
