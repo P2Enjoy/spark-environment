@@ -26,6 +26,53 @@ MEM_RESERVE_GIB=2     # reserve memoire de la Forge, hors ARC
 CPU_RESERVE=0.5       # coeurs que la Forge garde pour elle
 export DEBIAN_FRONTEND=noninteractive
 
+# SPK-84 · docs/DAT.md §50.7.1 · runbook §C.5 — AVANT le premier apt.
+#
+# Le postinst de grub-pc derive la cible de grub-install en retirant les chiffres
+# finaux de « grub-probe -t device /boot ». Sur un /boot en RAID, /dev/md0 devient
+# /dev/md, qui n existe pas : le paquet reste en iF, dpkg devient incoherent, et
+# TOUTE installation echoue ensuite — a commencer par l apt-get install juste en
+# dessous, sous set -eu, qui designerait ca-certificates et jamais GRUB.
+#
+# Conditionnel et derive, et les deux comptent : sur une Forge EFI ou a disque
+# simple on n ecrit RIEN — grub-pc n y est pas concerne, et repondre a sa place
+# serait une regression. Les disques se lisent dans les membres du RAID, jamais
+# en dur : une Forge en NVMe presente /dev/nvme0n1, et un /dev/sda fige la
+# rendrait non amorcable.
+preparer_grub_sur_raid() {
+  [ -d /sys/firmware/efi ] && return 0                      # EFI : hors sujet
+  dpkg-query -W -f='${Status}' grub-pc 2>/dev/null | grep -q "install ok" || return 0
+  command -v grub-probe >/dev/null 2>&1 || return 0
+
+  boot_dev=$(grub-probe -t device /boot/ 2>/dev/null) || return 0
+  case "$boot_dev" in /dev/md*) ;; *) return 0 ;; esac      # pas de RAID : rien a faire
+
+  md=$(basename "$(readlink -f "$boot_dev")")
+  disques=""
+  for membre in /sys/block/"$md"/slaves/*; do
+    [ -e "$membre" ] || continue
+    # La partition membre (sda3) appartient a un disque (sda) : c est le disque
+    # qui porte l amorce, jamais la partition.
+    parent=$(basename "$(dirname "$(readlink -f "$membre")")")
+    [ -b "/dev/$parent" ] || continue
+    # Identifiant STABLE : un /dev/sdX peut changer de nom d un demarrage a
+    # l autre, et une reponse debconf survit aux redemarrages.
+    lien=$(find /dev/disk/by-id -lname "*/$parent" 2>/dev/null \
+             | grep -v -- "-part" | grep -- "-" | sort | head -1)
+    [ -n "$lien" ] || lien="/dev/$parent"
+    case " $disques " in *" $lien "*) ;; *) disques="$disques $lien" ;; esac
+  done
+  [ -n "$disques" ] || return 0
+
+  # Les DEUX disques : c est ce qui fait que la machine demarre encore quand
+  # l un lache, ce pour quoi le RAID1 est la.
+  liste=$(echo "$disques" | sed -e "s/^ //" -e "s/ /, /g")
+  echo "amorce: grub-pc installera sur : $liste"
+  printf 'grub-pc grub-pc/install_devices multiselect %s\n' "$liste" | debconf-set-selections
+  echo "SET grub-pc/cloud_style_installation false" | debconf-communicate >/dev/null
+}
+preparer_grub_sur_raid
+
 apt-get update -q
 apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg git python3-venv

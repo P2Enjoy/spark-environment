@@ -280,6 +280,47 @@ def arc_plafonne(hote: Hote) -> Verdict:
     return Verdict("MEM-ARC", "Plafond de l'ARC ZFS", OK, f"{valeur / GIO:.1f} Gio")
 
 
+def paquets_coherents(hote: Hote) -> Verdict:
+    """Le système de paquets est-il en état d'installer ? (docs/DAT.md §50.7.2)
+
+    @spec docs/BACKLOG.md#SPK-84 · docs/DAT.md §50.7 (un `dpkg` incohérent est
+          une panne du produit), §31.2 (« pas mesuré » n'est pas « mesuré sain »),
+          §31.3 (un contrôle ne répare rien) · docs/AGENT_RUNBOOK.md §C.5
+
+    Ce n'est pas de l'hygiène système : un `dpkg` incohérent fait échouer TOUTE
+    installation, donc l'amorce d'une Forge (§50.4) comme l'amorçage de chaque
+    Spark (§42). Mesuré le 2026-09-02 — `grub-pc` en `iF` sur un `/boot` en RAID
+    — et le symptôme désignait à chaque fois le paquet qu'on demandait, jamais
+    celui qui bloquait.
+
+    Les `rc` ne comptent pas : c'est l'état normal d'un paquet retiré dont la
+    configuration reste, et les signaler ferait crier au loup sur toute Forge.
+    """
+    brut = hote.executer(
+        ["dpkg-query", "-W", "-f=${db:Status-Abbrev} ${binary:Package}\n"])
+    if brut is None:
+        return Verdict("PKG-DPKG", "Système de paquets cohérent", INCONNU,
+                       "dpkg-query illisible",
+                       "Sans cette lecture, on ne sait pas si une installation "
+                       "aboutira — ni l'amorce d'une Forge, ni celle d'un Spark.")
+    casses = []
+    for ligne in brut.splitlines():
+        etat, _, paquet = ligne.strip().partition(" ")
+        if not paquet or etat in ("ii", "rc"):
+            continue
+        casses.append(f"{etat} {paquet.strip()}")
+    if not casses:
+        return Verdict("PKG-DPKG", "Système de paquets cohérent", OK,
+                       "aucun paquet en défaut")
+    return Verdict(
+        "PKG-DPKG", "Système de paquets cohérent", ECHEC,
+        ", ".join(casses[:6]) + (f" (+{len(casses) - 6})" if len(casses) > 6 else ""),
+        "Tant que dpkg est incohérent, AUCUNE installation n'aboutit : ni "
+        "l'amorce de cette Forge, ni l'amorçage d'un Spark. Reprendre par "
+        "`sudo dpkg --configure -a` ; si c'est grub-pc sur un /boot en RAID, "
+        "voir docs/AGENT_RUNBOOK.md §C.5.")
+
+
 def bridge_prive(hote: Hote, nom: str | None = None) -> Verdict:
     nom = nom or reglages().network_bridge
     adresse = hote.executer(["incus", "network", "get", nom, "ipv4.address"])
@@ -633,6 +674,7 @@ def registre_sans_fantome(hote: Hote) -> Verdict:
 
 CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     incus_assez_recent,
+    paquets_coherents,
     pool_de_stockage,
     compression_active,
     arc_plafonne,

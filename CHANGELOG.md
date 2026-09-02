@@ -174,6 +174,17 @@
   dernière ligne passait. La sortie d'erreur, jusqu'ici jetée, accompagne
   désormais le code dans le refus ; elle ne traverse pas le journal d'audit, qui
   n'a pas à porter les paquets du locataire.
+- **Un système de paquets cassé est prévenu à l'amorce, et nommé par le
+  préflight** (SPK-84, `docs/DAT.md` §50.7) : sur une Forge dont le `/boot` est
+  en RAID, le postinst de `grub-pc` dérive sa cible en `/dev/md` — un nom qui
+  n'existe pas — et reste en échec. `dpkg` devient alors incohérent, et **plus
+  aucune installation n'aboutit** : ni l'amorce de la Forge, qui s'interrompt sur
+  son premier `apt-get install`, ni l'amorçage d'un Spark, dont l'échec désignait
+  `openssh-server` ou `docker-ce` et jamais la vraie cause. L'amorce pose
+  désormais la réponse `debconf` avant tout `apt`, en déduisant les disques des
+  membres du RAID et seulement si la machine est en BIOS ; le préflight gagne un
+  contrôle qui rend `ECHEC` dès qu'un paquet n'est ni installé ni simplement
+  désinstallé.
 - **L'amorçage rend la cellule joignable, et plus seulement équipée** (SPK-82,
   `docs/DAT.md` §42.10) : il accorde désormais au Spark la clé que la console
   emploie pour joindre la Forge — celle qu'OpenSSH y présente, identifiée par son

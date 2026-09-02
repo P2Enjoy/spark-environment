@@ -265,6 +265,9 @@ def test_chaque_controle_porte_un_code_stable_et_unique():
         "INC-VERSION", "STO-POOL", "STO-COMPRESSION", "MEM-ARC",
         "NET-BRIDGE", "NET-DHCP", "ING-CADDY", "SEC-PORTS", "RUN-SPARKD",
         "RUN-SLICE", "NET-REMONTEE", "SSH-X11", "REG-FANTOME",
+        # SPK-84 · §50.7.2 : un dpkg incohérent empêche TOUTE installation,
+        # donc l'amorce d'une Forge comme l'amorçage d'un Spark.
+        "PKG-DPKG",
     }
 
 
@@ -595,3 +598,60 @@ def test_INCUS_injoignable_rend_non_mesure_aussi():
         declarations=lambda: [_declare("helo", "helo")]))
     assert v.etat == preflight.INCONNU
     assert "injoignable" in v.releve
+
+
+# --- SPK-84 · un dpkg incoherent est une panne du produit (§50.7.2) --------
+#
+# @verifies docs/BACKLOG.md#SPK-84 · docs/DAT.md §50.7.2, §31.2 (« pas mesuré »
+#           n'est pas « mesuré sain »), §31.3 (un contrôle ne répare rien)
+
+
+def _dpkg(sortie):
+    return Hote(executer=lambda args: sortie, lire=lambda chemin: None)
+
+
+def test_un_paquet_en_defaut_BLOQUE_car_plus_aucune_installation_n_aboutit():
+    """Mesuré le 2026-09-02 : `grub-pc` en `iF` sur un `/boot` en RAID. Ni
+    l'amorce d'une Forge ni l'amorçage d'un Spark ne peuvent plus installer, et
+    le message désignait à chaque fois le paquet demandé, jamais le bloquant."""
+    verdict = preflight.paquets_coherents(
+        _dpkg("ii  bash\niF  grub-pc\niU  grub2\n"))
+    assert verdict.etat == ECHEC
+    assert verdict.bloquant
+    assert "grub-pc" in verdict.releve and "grub2" in verdict.releve
+    # Le remède RENVOIE au runbook : la commande dépend de ce qui est cassé, et
+    # un contrôle ne répare rien (§31.3).
+    assert "C.5" in verdict.remede
+    assert "dpkg --configure -a" in verdict.remede
+
+
+def test_les_paquets_RETIRES_ne_font_pas_crier_au_loup():
+    """`rc` est l'état normal d'un paquet désinstallé dont la configuration
+    reste. Toute Forge en porte : les signaler rendrait le contrôle inutile."""
+    verdict = preflight.paquets_coherents(
+        _dpkg("ii  bash\nrc  cryptsetup\nrc  dracut\nrc  tiny-initramfs\n"))
+    assert verdict.etat == OK
+    assert "aucun paquet en défaut" in verdict.releve
+
+
+def test_un_dpkg_ILLISIBLE_est_inconnu_et_jamais_sain():
+    """§31.2 : conclure « sain » d'une absence de réponse ferait déclarer prête
+    une Forge sur laquelle rien ne s'installera."""
+    verdict = preflight.paquets_coherents(_dpkg(None))
+    assert verdict.etat == INCONNU
+    assert verdict.etat != OK
+    assert not verdict.bloquant
+
+
+def test_la_liste_des_paquets_casses_est_BORNEE():
+    """Un relevé qui déborde l'écran ne se lit pas. On en montre six, et on dit
+    combien restent — taire le reste ferait croire à un défaut plus petit."""
+    sortie = "".join(f"iF  paquet-{n}\n" for n in range(10))
+    verdict = preflight.paquets_coherents(_dpkg(sortie))
+    assert verdict.etat == ECHEC
+    assert "(+4)" in verdict.releve
+
+
+def test_le_controle_figure_dans_la_serie():
+    """Un contrôle qui n'est pas dans CONTROLES ne s'exécute jamais."""
+    assert preflight.paquets_coherents in preflight.CONTROLES
