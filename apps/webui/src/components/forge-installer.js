@@ -12,8 +12,7 @@ export const INSTALLER_VIDE = {
   status: 'idle', result: null, error: null, plan: null, planError: null,
   execution: null, confirmation: '', accepted: false,
   values: { poolName: 'spark', bridgeName: 'sparkbr0', cpuReserve: '0.5',
-    memoryReserveGib: '2', arcMaxGib: '16', storageKind: 'file',
-    filePoolSizeGib: '', rootReserveGib: '' },
+    memoryReserveGib: '2', arcMaxGib: '16' },
 };
 
 function bytes(value) {
@@ -114,13 +113,27 @@ export function observedValues(report) {
   return values;
 }
 
-/** Le pool que le plan RÉUTILISERA, s'il existe déjà avec le bon driver (§50.3). */
+/**
+ * Ce que le relevé trouve DÉJÀ, et le geste non destructif qui l'adopte (§50.3).
+ *
+ * Trois constats : le pool Incus est là ; le zpool est là mais Incus l'ignore ;
+ * le zpool est seulement importable. Aucun des trois n'écrit sur une donnée —
+ * ils déclarent. Le quatrième cas, `null`, est celui où il faut créer.
+ */
 export function poolReutilise(report, poolName) {
   const cible = String(poolName ?? report?.config?.poolName ?? INSTALLER_VIDE.values.poolName);
-  return (report?.pools ?? []).some((line) => {
+  const incus = (report?.pools ?? []).some((line) => {
     const [name, driver] = String(line).split(',').map((value) => value.trim());
     return name === cible && driver === 'zfs';
   });
+  if (incus) return { kind: 'reuse', zpool: cible };
+  if ((report?.zpools ?? []).some((pool) => pool.name === cible)) {
+    return { kind: 'adopt', zpool: cible, imported: true };
+  }
+  if ((report?.importableZpools ?? []).includes(cible)) {
+    return { kind: 'adopt', zpool: cible, imported: false };
+  }
+  return null;
 }
 
 function storage(storage, reuse) {
@@ -142,26 +155,30 @@ function storage(storage, reuse) {
         : 'support libre à confirmer'}</td></tr>`;
   }).join('')
     : '<tr><td colspan="4">Aucun périphérique bloc exploitable n’a été relevé.</td></tr>';
-  // §50.3 : l’ordre de proposition est strict. Un pool conforme se réutilise, et
-  // proposer alors un pool fichier à côté ferait croire à un choix qui n’existe
-  // pas — c’est ce qui donnait l’écran d’une machine nue à une Forge installée.
-  const mirror = reuse
+  // §50.3 : l’ordre est strict et n’a que deux branches. Un pool existant
+  // s’adopte ; à défaut, deux supports libres sur deux disques distincts font le
+  // miroir ; sinon la machine n’est pas une Forge, et le refus le dit — il n’y a
+  // plus de disposition de repli vers laquelle basculer (§8.5 révisé).
+  const mirror = reuse?.kind === 'reuse'
     ? `<p class="succes">Le pool existant est conservé : aucun de ces supports ne
-       sera touché, et aucune disposition de rechange n’est proposée.</p>`
-    : storage?.nativeMirror?.eligible
-      ? `<p class="avertissement" role="status">Deux supports libres sont détectés, sur deux
-         disques physiques distincts :
-         <span class="technique">${echapper(storage.nativeMirror.devices.map((d) => `/dev/${d}`).join(', '))}</span>.
-         Ils ne seront jamais effacés sans confirmation séparée.</p>`
-      // Le motif du refus est nommé : « aucune paire sûre » ne disait pas si la
-      // machine n’a rien de libre, ou un seul support, ou deux sur le même disque.
-      : `<p class="note">Pas de miroir natif proposé — ${
-           echapper(storage?.nativeMirror?.refusal ?? 'relevé de stockage incomplet')}.
-         Un miroir exige deux supports sur deux disques distincts : sans lui, ZFS
-         détecte la corruption silencieuse mais ne la répare pas. Le pool fichier
-         reste envisageable sur ${storage?.filePool?.availableBytes == null
-           ? 'un espace non mesuré'
-           : `${bytes(storage.filePool.availableBytes)} libres`}, mais sa taille n’est pas devinée.</p>`;
+       sera touché.</p>`
+    : reuse?.kind === 'adopt'
+      ? `<p class="succes">Le zpool « ${echapper(reuse.zpool)} » est déjà présent${
+        reuse.imported ? '' : ' et sera d’abord importé'} : il sera déclaré à Incus,
+        sans qu’aucune donnée ne soit touchée.</p>`
+      : storage?.nativeMirror?.eligible
+        ? `<p class="avertissement" role="status">Deux supports libres sont détectés, sur deux
+           disques physiques distincts :
+           <span class="technique">${echapper(storage.nativeMirror.devices.map((d) => `/dev/${d}`).join(', '))}</span>.
+           Ils ne seront jamais effacés sans confirmation séparée.</p>`
+        // Le motif du refus est nommé : « aucune paire sûre » ne disait pas si la
+        // machine n’a rien de libre, un seul support, ou deux sur le même disque.
+        : `<p class="refus" role="status"><strong>Cette machine n’est pas une Forge
+           installable</strong> — ${echapper(
+             storage?.nativeMirror?.refusal ?? 'relevé de stockage incomplet')}.
+           Une Forge exige un pool ZFS existant, ou deux supports libres sur deux
+           disques distincts. Le remède est en amont de cette console : commander
+           la machine partitionnée, ou lui ajouter un disque.</p>`;
   return `
 <section class="carte bloc installation__stockage" aria-labelledby="titre-installation-stockage">
   <h3 id="titre-installation-stockage">Stockage relevé</h3>
@@ -207,32 +224,22 @@ function resultView(result, reuse) {
 function planForm(installer) {
   const result = installer.result;
   const values = { ...INSTALLER_VIDE.values, ...(installer.values ?? {}) };
-  const existingPool = (result.report?.pools ?? []).some((line) =>
-    String(line).split(',')[0] === values.poolName && String(line).split(',')[1] === 'zfs');
+  // Il n'y a plus de disposition à CHOISIR : le relevé la détermine (§8.5
+  // révisé). L'écran annonce donc ce qui sera fait, il ne pose plus une
+  // question dont une seule réponse était acceptable.
+  const decision = poolReutilise(result.report, values.poolName);
   const native = result.storage?.nativeMirror?.eligible;
-  const storageChoice = existingPool
+  const storageChoice = decision?.kind === 'reuse'
     ? `<p class="succes">Le pool ZFS « ${echapper(values.poolName)} » sera conservé.</p>`
-    : native
-      ? `<fieldset><legend>Disposition de stockage</legend>
-          <label><input type="radio" name="storageKind" value="native"${
-            values.storageKind === 'native' ? ' checked' : ''}> Miroir natif sur ${echapper(
-              result.storage.nativeMirror.devices.map((d) => `/dev/${d}`).join(' et '))}</label>
-          <label><input type="radio" name="storageKind" value="file"${
-            values.storageKind !== 'native' ? ' checked' : ''}> Pool sur fichier</label>
-        </fieldset>`
-      : `<input type="hidden" name="storageKind" value="file">
-         <p class="note">Pas de miroir natif ici — ${echapper(
-           result.storage?.nativeMirror?.refusal ?? 'relevé de stockage incomplet')} :
-           seule la disposition sur fichier peut être planifiée.</p>`;
-  const fileFields = existingPool ? '' : `
-    <div class="installation__dimensions">
-      <label>Taille du pool fichier (Gio)
-        <input class="controle" name="filePoolSizeGib" type="number" min="0.1" step="0.1"
-          value="${echapper(values.filePoolSizeGib)}" required></label>
-      <label>Espace à laisser libre sur / (Gio)
-        <input class="controle" name="rootReserveGib" type="number" min="0" step="0.1"
-          value="${echapper(values.rootReserveGib)}" required></label>
-    </div>`;
+    : decision?.kind === 'adopt'
+      ? `<p class="succes">Le zpool « ${echapper(decision.zpool)} » sera${
+        decision.imported ? '' : ' importé puis'} déclaré à Incus. Aucune donnée n’est touchée.</p>`
+      : native
+        ? `<p class="avertissement" role="status">Le miroir sera créé sur ${echapper(
+            result.storage.nativeMirror.devices.map((d) => `/dev/${d}`).join(' et '))}.
+           Leur contenu sera perdu, et une confirmation séparée le nommera.</p>`
+        : `<p class="refus" role="status">Aucun plan de stockage n’est possible ici —
+           ${echapper(result.storage?.nativeMirror?.refusal ?? 'relevé de stockage incomplet')}.</p>`;
   return `${installer.planError ? `<div class="refus" role="status">${
     echapper(installer.planError)}</div>` : ''}<form id="formulaire-plan-forge" class="formulaire-panneau installation__plan">
     <h3>Plan d’installation</h3>
@@ -250,16 +257,14 @@ function planForm(installer) {
       <label>Plafond ARC (Gio) <input class="controle" name="arcMaxGib" type="number" min="0" step="0.1"
         value="${echapper(values.arcMaxGib)}" required></label>
     </div>
-    ${storageChoice}${fileFields}
+    ${storageChoice}
     <button type="submit" class="bouton"${installer.status === 'planning' ? ' disabled' : ''}>${
       installer.status === 'planning' ? 'Nouveau relevé…' : 'Vérifier et composer le plan'}</button>
   </form>`;
 }
 
+/** La création du miroir est la seule écriture destructive du parcours (§8.5). */
 function expectedConfirmation(plan) {
-  if (plan?.storage?.kind === 'file') {
-    return `CREER ${plan.storage.path} ${Number(plan.storage.sizeGib)}GiB`;
-  }
   if (plan?.storage?.kind === 'native') return `EFFACER ${plan.storage.devices.join(' ')}`;
   return '';
 }
@@ -268,9 +273,10 @@ function planView(plan, installer) {
   if (!plan) return '';
   const storageText = plan.storage.kind === 'reuse'
     ? `conserver le pool « ${plan.storage.poolName} »`
-    : plan.storage.kind === 'native'
-      ? `créer le miroir sur ${plan.storage.devices.join(' et ')}`
-      : `créer ${plan.storage.sizeGib} Gio dans ${plan.storage.path} et conserver ${plan.storage.reserveGib} Gio libres`;
+    : plan.storage.kind === 'adopt'
+      ? `adopter le zpool « ${plan.storage.zpool} » déjà présent${
+        plan.storage.imported ? '' : ', après l’avoir importé'} — aucune donnée n’est touchée`
+      : `créer le miroir sur ${plan.storage.devices.join(' et ')}`;
   const expected = expectedConfirmation(plan);
   const confirmation = expected ? `
     <label for="confirmation-stockage-forge">Confirmation séparée du stockage

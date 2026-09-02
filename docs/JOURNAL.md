@@ -8869,11 +8869,26 @@ donc perdu son dernier usage réel avant d'être retirée. Le §8.5 énonce la
 nouvelle décision et la raison du changement ; il ne conserve pas les deux
 versions côte à côte.
 
-**Ce qui reste à faire, et qui n'est pas encore vrai.** Cette entrée persiste la
-décision. Le code, lui, porte encore la branche fichier dans
-`apps/webui/host/forge-install.js`, `services/sparkd/src/sparkd/forge_install.py`
-— `validate_envelope` et `phase_storage` —, le formulaire de l'écran et la
-disposition B de `scripts/creer-pool.sh`. Le relevé n'interroge pas encore les
-zpools. Tant que ce n'est pas fait, la documentation décrit une décision, pas
-l'état du code : le commit suivant doit refermer cet écart.
+**L'écart entre la décision et le code est refermé** par le commit suivant :
+le relevé interroge `zpool list` et `zpool import` — ce dernier, sans argument,
+ne fait que lister —, `poolDecision` distingue les trois constats, la branche
+fichier sort de `forge-install.js`, de `validate_envelope`, de `phase_storage`,
+du formulaire et de `creer-pool.sh`, et `SPARK_POOL_SOURCE` devient obligatoire.
+Le préflight rend désormais un **avertissement** sur un pool sur fichier : la
+machine fonctionne, sa disposition est sortie du périmètre, et un rouge ferait
+croire à une panne.
+
+**Deux preuves rouges de longue date sont tombées en chemin**, et elles
+l'étaient pour de vraies raisons — pas par flottement :
+
+- `bootstrapSshArgs(...).slice(-5)` comparait **cinq** éléments à quatre, la
+  destination SSH étant reprise dans la tranche. La preuve était rouge depuis
+  qu'elle existe ; elle garde la queue fermée de la commande, qui en compte
+  quatre ;
+- la preuve du journal d'installation émettait `close` sur l'amorceur **avant**
+  que le gestionnaire ne s'y abonne. `close` est un événement à un coup : perdu,
+  l'installateur n'était jamais lancé, et le `setTimeout` de 10 ms qui tenait
+  lieu de synchronisation masquait une course. Les temporisations fixes sont
+  remplacées par une attente de CONDITION (`CLAUDE.md` §18) ; la preuve passe
+  maintenant trois fois de suite.
 

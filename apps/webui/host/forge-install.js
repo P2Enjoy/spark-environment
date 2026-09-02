@@ -9,7 +9,7 @@
  * uniquement ce contrat, sans accepter de commande construite par la page.
  */
 
-import { conformity, GIB } from './forge-diagnostic.js';
+import { conformity, poolDecision, GIB } from './forge-diagnostic.js';
 
 export { GIB };
 export const INSTALL_DEFAULTS = Object.freeze({
@@ -37,11 +37,6 @@ function positiveNumber(value, label, { allowZero = false } = {}) {
       allowZero ? 'positif ou nul' : 'strictement positif'}.`);
   }
   return number;
-}
-
-function poolFrom(line) {
-  const [name, driver] = String(line ?? '').split(',').map((value) => value.trim());
-  return name && driver ? { name, driver } : null;
 }
 
 /**
@@ -96,6 +91,7 @@ export function phaseStatuses(report, config, storagePlan) {
     // Un pool ZFS listé prouve la pile ZFS ; Incus, Caddy et Python sont relevés.
     dependencies: ok('incus') && ok('caddy') && ok('pool') && Boolean(report?.runtimes?.python)
       ? 'done' : 'pending',
+    // Adopter reste une écriture : le pool Incus n'existe pas encore.
     storage: storagePlan.kind === 'reuse' ? 'done' : 'pending',
     foundation: ok('bridge') ? 'done' : 'pending',
     control: ok('package') && ok('unit') && configUnchanged ? 'done' : 'pending',
@@ -137,28 +133,34 @@ export function createInstallPlan(diagnostic, input = {}) {
       'La réserve mémoire et le plafond ARC laisseraient zéro mémoire allouable aux Sparks.');
   }
 
-  const pools = (report.pools ?? []).map(poolFrom).filter(Boolean);
-  const existing = pools.find((pool) => pool.name === poolName && pool.driver === 'zfs');
+  // §8.5 révisé : DEUX branches, et pas de troisième. Soit un pool ZFS existe et
+  // on l'adopte sans rien écrire sur les données, soit deux supports libres sur
+  // deux disques distincts forment le miroir, soit la machine n'est pas une
+  // Forge — et le refus le nomme au lieu de basculer vers un repli.
+  const existing = poolDecision(report, poolName);
   let storagePlan;
-  if (existing) {
+  if (existing?.kind === 'reuse') {
     storagePlan = { kind: 'reuse', poolName, driver: 'zfs', destructive: false };
-  } else if (input.storageKind === 'native') {
-    // Les supports acceptés sont ceux que le NOUVEAU relevé déclare libres —
-    // disques entiers ou partitions dédiées —, jamais ceux d'un écran resté
-    // ouvert. Le refus nomme sa cause plutôt que de renvoyer au pool fichier.
+  } else if (existing?.kind === 'adopt') {
+    storagePlan = { kind: 'adopt', poolName, driver: 'zfs', zpool: existing.zpool,
+      imported: existing.imported, destructive: false };
+  } else {
     const eligible = storage.nativeMirror?.devices ?? [];
     // Sans désignation explicite, le plan reprend LA paire que ce diagnostic
-    // vient de déclarer libre — celle-là même que l'écran nomme dans son choix.
-    // Ce n'est pas un effacement automatique : l'engagement exige encore la
-    // frappe de « EFFACER /dev/… /dev/… », qui nomme chaque support (§50.4).
+    // vient de déclarer libre — celle-là même que l'écran nomme. Ce n'est pas un
+    // effacement automatique : l'engagement exige encore la frappe de
+    // « EFFACER /dev/… /dev/… », qui nomme chaque support (§50.4).
     const requested = Array.isArray(input.devices) ? input.devices.map(String)
       : typeof input.devices === 'string' && input.devices.trim()
         ? input.devices.split(',').map((device) => device.trim()).filter(Boolean)
         : eligible;
     if (!storage.nativeMirror?.eligible) {
-      throw new ForgeInstallError('unsafe_devices',
-        `Le miroir natif n’est pas proposable : ${
-          storage.nativeMirror?.refusal ?? 'le relevé ne déclare aucun support libre'}.`);
+      throw new ForgeInstallError('not_eligible',
+        `Cette machine n’est pas une Forge installable : ${
+          storage.nativeMirror?.refusal ?? 'le relevé ne déclare aucun support libre'}. ` +
+        'Une Forge exige un pool ZFS existant, ou deux supports libres sur deux ' +
+        'disques distincts. Le remède est en amont : commander la machine ' +
+        'partitionnée, ou lui ajouter un disque.');
     }
     if (requested.length !== 2 || requested.some((device) => !eligible.includes(device))) {
       throw new ForgeInstallError('unsafe_devices',
@@ -166,24 +168,6 @@ export function createInstallPlan(diagnostic, input = {}) {
     }
     storagePlan = { kind: 'native', poolName, driver: 'zfs',
       devices: requested.map((device) => `/dev/${device}`), destructive: true };
-  } else if (input.storageKind === 'file') {
-    const sizeGib = positiveNumber(input.filePoolSizeGib, 'La taille du pool fichier');
-    const reserveGib = positiveNumber(input.rootReserveGib,
-      'La réserve conservée sur la racine', { allowZero: true });
-    const requiredBytes = (sizeGib + reserveGib) * GIB;
-    if (!Number.isFinite(storage.filePool?.availableBytes)) {
-      throw new ForgeInstallError('storage_unknown',
-        'L’espace libre de la racine n’a pas été mesuré ; le pool fichier est refusé.');
-    }
-    if (requiredBytes > storage.filePool.availableBytes) {
-      throw new ForgeInstallError('storage_too_small',
-        `${sizeGib} Gio de pool et ${reserveGib} Gio de réserve dépassent l’espace libre mesuré.`);
-    }
-    storagePlan = { kind: 'file', poolName, driver: 'zfs', sizeGib, reserveGib,
-      path: `/var/lib/incus/disks/${poolName}.img`, destructive: false };
-  } else {
-    throw new ForgeInstallError('storage_choice_required',
-      'Choisissez explicitement le miroir natif ou le pool fichier.');
   }
 
   const config = { poolName, bridgeName, cpuReserve, memoryReserveGib, arcMaxGib,
@@ -194,8 +178,9 @@ export function createInstallPlan(diagnostic, input = {}) {
   const phases = [
     ['access', 'Accès et nouveau relevé'],
     ['dependencies', 'Dépendances et runtimes'],
-    ['storage', storagePlan.kind === 'reuse' ? `Conserver le pool « ${poolName} »`
-      : `Créer le pool « ${poolName} »`],
+    ['storage', { reuse: `Conserver le pool « ${poolName} »`,
+      adopt: `Adopter le pool ZFS « ${poolName} » déjà présent`,
+      native: `Créer le pool « ${poolName} »` }[storagePlan.kind]],
     ['foundation', `Socle réseau « ${bridgeName} » et durcissement`],
     ['control', 'Paquet sparkd et unités systemd'],
     ['verification', 'Préflight, healthz, readyz et topologie'],

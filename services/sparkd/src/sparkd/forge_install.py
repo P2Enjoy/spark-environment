@@ -151,16 +151,20 @@ def validate_envelope(envelope: object) -> dict[str, Any]:
             raise ForgeInstallationError("le contrat de réutilisation est invalide")
         if confirmation not in (None, ""):
             raise ForgeInstallationError("une réutilisation ne demande aucune confirmation destructive")
-    elif kind == "file":
-        if set(storage) != {"kind", "poolName", "driver", "sizeGib", "reserveGib", "path", "destructive"}:
-            raise ForgeInstallationError("le contrat du pool fichier est invalide")
-        size = _number(storage.get("sizeGib"), "la taille du pool fichier")
-        _number(storage.get("reserveGib"), "la réserve disque", zero=True)
-        path = f"/var/lib/incus/disks/{pool}.img"
-        if storage.get("path") != path or storage.get("destructive") is not False:
-            raise ForgeInstallationError("le chemin du pool fichier est invalide")
-        if confirmation != f"CREER {path} {size:g}GiB":
-            raise ForgeInstallationError("la confirmation du pool fichier ne répète pas son chemin et sa taille")
+    elif kind == "adopt":
+        # §50.3 : le zpool existe, Incus l'ignore. Le declarer — et l'importer
+        # d'abord s'il ne l'est pas — n'ecrit sur aucune donnee, donc n'exige
+        # aucune confirmation destructive. C'est l'etat d'une machine dont l'OS
+        # a ete reinstalle en conservant ses disques.
+        if set(storage) != {"kind", "poolName", "driver", "zpool", "imported", "destructive"}:
+            raise ForgeInstallationError("le contrat d'adoption est invalide")
+        if storage.get("destructive") is not False:
+            raise ForgeInstallationError("une adoption n'est jamais destructive")
+        if not isinstance(storage.get("imported"), bool):
+            raise ForgeInstallationError("l'état d'importation du zpool est invalide")
+        _name(storage.get("zpool"), "le nom du zpool")
+        if confirmation not in (None, ""):
+            raise ForgeInstallationError("une adoption ne demande aucune confirmation destructive")
     elif kind == "native":
         if set(storage) != {"kind", "poolName", "driver", "devices", "destructive"}:
             raise ForgeInstallationError("le contrat du miroir natif est invalide")
@@ -172,7 +176,13 @@ def validate_envelope(envelope: object) -> dict[str, Any]:
         if confirmation != "EFFACER " + " ".join(devices):
             raise ForgeInstallationError("la confirmation ne répète pas les deux périphériques effacés")
     else:
-        raise ForgeInstallationError("la disposition de stockage est inconnue")
+        # §8.5 revise : il n'y a plus de pool sur fichier. Un plan qui en
+        # demanderait un vient d'une console anterieure a la decision du
+        # 2026-09-02 ; le refuser vaut mieux que de creer une disposition que le
+        # produit ne prend plus en charge.
+        raise ForgeInstallationError(
+            "la disposition de stockage est inconnue : seuls la reutilisation, "
+            "l'adoption d'un zpool existant et le miroir natif sont acceptes")
 
     expected_os = str(system.get("os") or "").lower()
     os_release = Path("/etc/os-release").read_text(encoding="utf-8").lower()
@@ -252,6 +262,26 @@ def _atomic_write_if_changed(path: Path, content: str, mode: int) -> bool:
     return True
 
 
+def _zpool_importe(nom: str) -> bool:
+    """Le zpool est-il DEJA importe ? `zpool list` ne voit que ceux qui le sont."""
+    resultat = _run(["zpool", "list", "-H", "-o", "name"], check=False)
+    if resultat.returncode:
+        return False
+    return nom in resultat.stdout.split()
+
+
+def _zpools_importables() -> set[str]:
+    """`zpool import` SANS argument ne fait que lister : il n'importe rien."""
+    resultat = _run(["zpool", "import"], check=False, timeout=300)
+    if resultat.returncode:
+        return set()
+    return {
+        ligne.split(":", 1)[1].strip()
+        for ligne in resultat.stdout.splitlines()
+        if ligne.strip().startswith("pool:")
+    }
+
+
 def _pool_driver(pool: str) -> str | None:
     result = _run(["incus", "storage", "show", pool], check=False)
     if result.returncode:
@@ -270,16 +300,18 @@ def phase_storage(plan: dict[str, Any]) -> dict[str, object]:
             raise ForgeInstallationError(f"le pool « {pool} » existe avec un pilote autre que ZFS")
     elif storage["kind"] == "reuse":
         raise ForgeInstallationError(f"le pool ZFS « {pool} » à réutiliser n'existe plus")
-    elif storage["kind"] == "file":
-        path = Path(storage["path"])
-        available = os.statvfs(path.parent if path.parent.exists() else "/var/lib").f_bavail * os.statvfs(
-            path.parent if path.parent.exists() else "/var/lib").f_frsize
-        required = (float(storage["sizeGib"]) + float(storage["reserveGib"])) * GIB
-        if available < required:
-            raise ForgeInstallationError("l'espace libre relu ne conserve plus la réserve du plan")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        _run(["incus", "storage", "create", pool, "zfs", f"source={path}",
-              f"size={float(storage['sizeGib']):g}GiB"], timeout=900)
+    elif storage["kind"] == "adopt":
+        # Le zpool est relu ICI, pas repris du plan : entre le diagnostic et
+        # l'ecriture, il a pu etre importe par ailleurs.
+        zpool = storage["zpool"]
+        if not _zpool_importe(zpool):
+            if zpool not in _zpools_importables():
+                raise ForgeInstallationError(
+                    f"le zpool « {zpool} » n'est ni importé ni importable")
+            _run(["zpool", "import", zpool], timeout=900)
+            if not _zpool_importe(zpool):
+                raise ForgeInstallationError(f"l'importation du zpool « {zpool} » a échoué")
+        _run(["incus", "storage", "create", pool, "zfs", f"source={zpool}"], timeout=900)
         changed = True
     else:
         devices = storage["devices"]

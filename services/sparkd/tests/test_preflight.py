@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from sparkd import preflight
-from sparkd.preflight import ECHEC, INCONNU, OK, Hote, Verdict
+from sparkd.preflight import AVERTISSEMENT, ECHEC, INCONNU, OK, Hote, Verdict
 
 GIO = 1024**3
 
@@ -146,44 +146,45 @@ def test_arc_illisible_est_INCONNU():
 # --- stockage ----------------------------------------------------------------
 
 
-def test_un_pool_sur_fichier_passe_et_dit_CE_QU_IL_NE_COUVRE_PAS():
-    """RÉVISÉE le 2026-08-20 par SPK-28, arbitrage du responsable.
+def test_un_pool_sur_fichier_AVERTIT_sans_declarer_la_Forge_en_panne():
+    """RÉVISÉE le 2026-09-02 par SPK-28, arbitrage du responsable.
 
-    La preuve exigeait le mot « provisoire » et un renvoi à SPK-28. Le §8.5 ne
-    dit plus cela : il y a DEUX dispositions, pas une cible et un repli, et une
-    dette qu'on ne compte pas rembourser n'est pas une dette.
+    La preuve précédente exigeait un verdict VERT : il y avait alors deux
+    dispositions de rang égal. Il n'y en a plus qu'une, et le pool sur fichier
+    est retiré du produit. Le verdict change donc de niveau — mais pas jusqu'à
+    l'échec, et c'est le point : ce pool FONCTIONNE, c'est le même ZFS, et le
+    produit ne casse pas ce qui tourne. Un rouge ferait croire à une panne là où
+    il n'y a qu'une disposition sortie du périmètre.
 
-    Ce que la preuve gardait vraiment est INCHANGÉ, et mieux dit : le verdict
-    nomme ce que cette disposition N'APPORTE PAS. Le taire laisserait croire
-    qu'un pool ZFS protège toujours de la corruption silencieuse, alors qu'ici le
-    miroir est géré en dessous et que « md » ne sait pas laquelle des deux copies
-    est la bonne.
-
-    Et ce n'est PAS un remède : on ne répare pas une disposition qu'on a choisie.
+    Ce que la preuve gardait déjà, et qui reste : le verdict nomme ce que cette
+    disposition N'APPORTE PAS. Le taire laisserait croire qu'un pool ZFS protège
+    toujours de la corruption silencieuse, alors qu'ici le miroir est géré en
+    dessous et que « md » ne sait pas laquelle des deux copies est la bonne.
     """
     montre = "driver: zfs\nconfig:\n  source: /var/lib/incus/disks/spark.img\n"
     verdict = preflight.pool_de_stockage(hote({"incus storage show spark": montre}))
-    assert verdict.etat == OK
+    assert verdict.etat == AVERTISSEMENT
+    assert verdict.etat != ECHEC, "un pool qui fonctionne n'est pas une panne"
     assert "corruption silencieuse" in verdict.releve
     assert "NON couverte" in verdict.releve
-    # Ce qui FONCTIONNE est dit aussi : sans cela, le relevé se lirait comme un
-    # défaut, et c'est le même ZFS.
-    assert "quotas" in verdict.releve
-    assert verdict.remede == ""
+    assert "retirée" in verdict.releve
+    # Le remède ne presse pas : migrer suppose deux supports libres, que cette
+    # machine n'a probablement pas — sinon elle ne serait pas sur fichier.
+    assert "urgence" in verdict.remede
 
 
-def test_un_pool_NATIF_est_distingue_du_pool_sur_fichier():
-    """§8.5 : deux dispositions, donc deux relevés qui ne se confondent pas."""
+def test_un_pool_NATIF_est_le_seul_verdict_VERT():
+    """§8.5 révisé : une seule disposition passe au vert, et elle est nommée."""
     montre = "driver: zfs\nconfig:\n  source: /dev/sda5\n"
     verdict = preflight.pool_de_stockage(hote({"incus storage show spark": montre}))
     assert verdict.etat == OK
-    assert "disposition native" in verdict.releve
+    assert "miroir ZFS natif" in verdict.releve
     assert "NON couverte" not in verdict.releve
 
 
 def test_un_pool_absent_est_bloquant():
     verdict = preflight.pool_de_stockage(hote({}))
-    assert verdict.etat == ECHEC and verdict.remede.startswith("incus storage create")
+    assert verdict.etat == ECHEC and "creer-pool.sh" in verdict.remede
 
 
 def test_un_pool_qui_n_est_pas_zfs_est_bloquant():
@@ -382,13 +383,14 @@ def test_le_nom_du_pool_vient_de_la_CONFIGURATION_pas_d_un_defaut():
     assert "tank" in verdict.titre
 
 
-def test_le_REMEDE_propose_la_taille_configuree():
-    """Une consigne de réparation qui contredit le script d'installation apprend
-    à se méfier des deux."""
-    reglages = preflight.reglages({"SPARK_POOL_FILE_SIZE": "1TiB"})
-    verdict = preflight.pool_de_stockage(hote({}), taille=reglages.pool_file_size)
+def test_le_REMEDE_d_un_pool_ABSENT_designe_le_geste_qui_existe():
+    """Il ne propose PLUS « size= » : ce serait créer un pool sur fichier, qui
+    est retiré du produit depuis le 2026-09-02 (§8.5 révisé)."""
+    verdict = preflight.pool_de_stockage(hote({}))
     assert verdict.etat == ECHEC
-    assert "size=1TiB" in verdict.remede
+    assert "creer-pool.sh" in verdict.remede
+    assert "SPARK_POOL_SOURCE" in verdict.remede
+    assert "size=" not in verdict.remede
 
 
 def test_le_jeu_de_donnees_SUIT_le_pool_par_defaut():

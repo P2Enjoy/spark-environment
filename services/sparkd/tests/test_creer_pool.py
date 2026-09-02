@@ -1,4 +1,4 @@
-"""@verifies docs/BACKLOG.md#SPK-28 · docs/DAT.md §8.5 (les deux dispositions),
+"""@verifies docs/BACKLOG.md#SPK-28 · docs/DAT.md §8.5 (UNE disposition),
             §8.5 bis (aucune valeur codée en dur, et le refus d'écraser)
 
 Ce que ces preuves gardent : **le script ne détruit rien sans le dire**, et il
@@ -128,32 +128,39 @@ def test_un_chemin_qui_n_est_PAS_un_peripherique_bloc_est_refuse(tmp_path):
     assert "storage create" not in appels
 
 
-# --- Les deux dispositions (§8.5) -------------------------------------------
+# --- UNE seule disposition (§8.5 révisé le 2026-09-02) ----------------------
 
 
-def test_disposition_SUR_FICHIER_par_defaut(tmp_path):
-    """Sans source nommée, c'est la disposition B — et la taille est la sienne."""
+def test_SANS_source_le_geste_REFUSE_au_lieu_de_creer_sur_fichier(tmp_path):
+    """Le pool sur fichier est retiré : l'absence de source ne bascule plus.
+
+    Un défaut qui glisse en silence vers une disposition retirée serait
+    exactement ce que le §8.5 bis interdit. Le refus nomme le remède, qui est en
+    amont de ce script : commander la machine partitionnée, ou lui ajouter un
+    disque.
+    """
     vu, appels = _lancer(tmp_path, {})
-    assert vu.returncode == 0, vu.stderr
-    assert "incus storage create spark zfs size=200GiB" in appels
-    # Elle DIT ce qu'elle ne couvre pas, au moment où on la crée.
-    assert "corruption" in vu.stdout
-    assert "n'est PAS couverte" in vu.stdout
+    assert vu.returncode == 2
+    assert "SPARK_POOL_SOURCE est obligatoire" in vu.stderr
+    assert "deux disques" in vu.stderr
+    assert "storage create" not in appels, "aucun pool n'est créé sans supports"
 
 
-def test_la_taille_le_nom_et_le_pilote_sont_CONFIGURABLES(tmp_path):
+@besoin_de_blocs
+def test_le_nom_et_le_pilote_restent_CONFIGURABLES(tmp_path):
     """Aucune de ces valeurs ne reste codée en dur (§8.5 bis)."""
     vu, appels = _lancer(tmp_path, {
         "SPARK_POOL_NAME": "tank",
         "SPARK_POOL_DRIVER": "btrfs",
-        "SPARK_POOL_FILE_SIZE": "1TiB"})
+        "SPARK_POOL_SOURCE": ",".join(BLOCS[:2])})
     assert vu.returncode == 0, vu.stderr
-    assert "incus storage create tank btrfs size=1TiB" in appels
+    assert (f"incus storage create tank btrfs "
+            f"source=mirror {BLOCS[0]} {BLOCS[1]}") in appels
 
 
 @besoin_de_blocs
-def test_disposition_NATIVE_quand_deux_peripheriques_VIDES_sont_nommes(tmp_path):
-    """`SPARK_POOL_SOURCE` DÉCIDE de la disposition : le renseigner EST le choix."""
+def test_le_miroir_NATIF_sur_deux_peripheriques_VIDES(tmp_path):
+    """La seule disposition : deux supports nommés, et rien d'autre."""
     vu, appels = _lancer(tmp_path, {"SPARK_POOL_SOURCE": ",".join(BLOCS[:2])})
     assert vu.returncode == 0, vu.stderr
     assert (f"incus storage create spark zfs "
@@ -228,7 +235,7 @@ def test_les_partitions_REMPLISSENT_le_disque():
 
 
 def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
-    """C'est tout l'objet du schéma (§8.6, disposition A).
+    """C'est tout l'objet du schéma (§8.6).
 
     Confier « sda5 » et « sdb5 » à `md` reproduirait exactement le problème que
     le miroir ZFS résout : `md` ne sait pas laquelle des deux copies est la
@@ -251,7 +258,7 @@ def test_le_schema_LAISSE_une_paire_de_partitions_LIBRE():
 
 
 def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
-    """La disposition A réduit « / », elle ne le laisse pas sans redondance."""
+    """Le schéma réduit « / », il ne le laisse pas sans redondance."""
     schema = _schema_du_readme()
     for raid in schema["raids"]:
         assert raid["level"] == "raid_level_1"
@@ -260,14 +267,18 @@ def test_le_systeme_reste_sur_un_RAID_en_MIROIR():
     assert montages == {"/", "/boot"}
 
 
-def test_le_defaut_du_REMEDE_et_celui_du_SCRIPT_sont_le_MEME():
-    """Une consigne de réparation qui contredit le script d'installation apprend
+def test_le_REMEDE_du_preflight_DESIGNE_le_geste_qui_existe():
+    """Une consigne de réparation qui contredit le geste d'installation apprend
     à se méfier des deux.
 
-    Les deux valeurs vivent à deux endroits — le remède est en Python, le geste
-    en shell — et rien d'autre qu'une preuve ne peut les tenir ensemble.
+    Le remède vit en Python, le geste en shell ; rien d'autre qu'une preuve ne
+    peut les tenir ensemble. Depuis le retrait du pool sur fichier, le remède ne
+    doit surtout plus proposer « incus storage create … size= » : cela créerait
+    la disposition qu'on vient de retirer.
     """
     from sparkd import preflight
 
-    script = SCRIPT.read_text("utf-8")
-    assert f'SPARK_POOL_FILE_SIZE:-{preflight.DEFAUT_TAILLE_FICHIER}' in script
+    assert "creer-pool.sh" in preflight.REMEDE_POOL
+    assert "SPARK_POOL_SOURCE" in preflight.REMEDE_POOL
+    assert "size=" not in preflight.REMEDE_POOL
+    assert "SPARK_POOL_SOURCE" in SCRIPT.read_text("utf-8")

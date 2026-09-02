@@ -162,12 +162,15 @@ export function parseInstallEvent(line) {
   return event;
 }
 
-/** Confirmation destructive attendue par l'exécuteur embarqué. */
+/**
+ * Confirmation destructive attendue par l'exécuteur embarqué.
+ *
+ * §8.5 révisé : la création du miroir est la SEULE écriture destructive du
+ * parcours. Réutiliser un pool ou adopter un zpool existant ne demande rien —
+ * ces gestes déclarent, ils n'effacent pas.
+ */
 export function requiredStorageConfirmation(plan) {
   const storage = plan?.storage;
-  if (storage?.kind === 'file') {
-    return `CREER ${storage.path} ${Number(storage.sizeGib)}GiB`;
-  }
   if (storage?.kind === 'native') return `EFFACER ${storage.devices.join(' ')}`;
   return '';
 }

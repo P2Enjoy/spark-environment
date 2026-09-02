@@ -4095,13 +4095,24 @@ plan refusait systématiquement ; il reprend maintenant la paire que le relevé
 vient de déclarer libre, l'engagement continuant d'exiger la frappe de
 `EFFACER /dev/… /dev/…`.
 
+**Livré le 2026-09-02, après l'arbitrage.** Le relevé interroge `zpool list` et
+`zpool import` — sans argument, ce dernier ne fait que lister —, distingue les
+trois constats de pool, et l'écran n'offre plus de choix de disposition : il
+annonce ce qui sera fait. La branche fichier est sortie du plan, de
+`validate_envelope`, de `phase_storage`, du formulaire et de `creer-pool.sh` ;
+`SPARK_POOL_SOURCE` est obligatoire. Le préflight rend un avertissement sur un
+pool sur fichier au lieu d'un vert. Sur `spark-experiment`, le relevé rend
+`zpool spark ONLINE` à côté du pool Incus, les douze supports avec leur motif, et
+le plan conserve le pool sans rien écrire ; les vues 1440 et 390 px ont été
+observées, sans débordement ni erreur navigateur.
+
 **Reste avant `[x]`** : les deux créations réelles de la DoD n'ont pas été
 jouées. Le parcours miroir demande une machine dont les partitions dédiées sont
 encore vierges — sur `spark-experiment` le pool existe déjà et est réutilisé,
-donc `sda5`/`sdb5` portent leur signature `zfs_member`. Le parcours fichier
-demande un choix de capacité explicitement donné par le responsable ; aucune
-taille d'exploitation n'est déduite. La panne médiane/reprise et ses
-illustrations restent à produire ; l'unité demeure honnêtement `[~]`.
+donc `sda5`/`sdb5` portent leur signature `zfs_member`. Le parcours d'adoption
+demande une machine dont le zpool survit à une réinstallation d'OS, et n'est
+donc prouvé que par les tests. La panne médiane/reprise et ses illustrations
+restent à produire ; l'unité demeure honnêtement `[~]`.
 
 - **Décision complétée le 2026-08-21** : le remède n'est pas un bouton qui pose
   seulement le paquet Python. C'est un **assistant de bout en bout** qui part

@@ -28,11 +28,13 @@ from typing import Callable, NamedTuple
 
 GIO = 1024**3
 
-#: Taille par défaut du fichier d'un pool sous la disposition B (§8.5 bis). Elle
-#: est ici pour que le REMÈDE proposé corresponde à ce que l'installation aurait
-#: posé : une consigne de réparation qui contredit le script d'installation
-#: apprend à se méfier des deux.
-DEFAUT_TAILLE_FICHIER = "200GiB"
+#: Le remède d'un pool absent, tel que le geste d'installation le pose (§8.5 bis).
+#: Une consigne de réparation qui contredit le script d'installation apprend à se
+#: méfier des deux — et depuis le 2026-09-02, le pool sur fichier est retiré :
+#: proposer « incus storage create … size=200GiB » créerait une disposition que
+#: le produit ne prend plus en charge.
+REMEDE_POOL = ("SPARK_POOL_SOURCE=/dev/…,/dev/… scripts/creer-pool.sh "
+               "— une Forge exige deux supports sur deux disques (docs/DAT.md §8.5)")
 
 #: Version d'Incus sans laquelle AUCUN conteneur Docker ne démarre dans un Spark
 #: (docs/DAT.md §3.1). Ce n'est pas une préférence de version.
@@ -45,15 +47,14 @@ ARC_MAXIMUM = 16 * GIO
 class Reglages(NamedTuple):
     """Ce que la vérification lit au lieu de le supposer (§8.5 bis).
 
-    Le nom du pool et celui du jeu de données viennent de la configuration du
-    runtime ; la taille du fichier vient de l'environnement d'INSTALLATION,
-    parce que sparkd ne crée aucun pool et n'a donc aucun usage de cette valeur.
+    Le nom du pool, celui du jeu de données et celui du bridge viennent de la
+    configuration du runtime. `SPARK_POOL_FILE_SIZE` a disparu avec le pool sur
+    fichier (§8.5 révisé le 2026-09-02) : plus rien ne dimensionne un pool ici.
     """
 
     storage_pool: str
     storage_dataset: str
     network_bridge: str
-    pool_file_size: str
 
 
 def reglages(source: dict[str, str] | None = None) -> Reglages:
@@ -70,7 +71,6 @@ def reglages(source: dict[str, str] | None = None) -> Reglages:
         storage_pool=config.storage_pool,
         storage_dataset=config.storage_dataset,
         network_bridge=config.network_bridge,
-        pool_file_size=brut.get("SPARK_POOL_FILE_SIZE") or DEFAUT_TAILLE_FICHIER,
     )
 
 
@@ -203,8 +203,7 @@ def incus_assez_recent(hote: Hote) -> Verdict:
     return Verdict("INC-VERSION", "Incus installé et assez récent", OK, brut)
 
 
-def pool_de_stockage(hote: Hote, nom: str | None = None,
-                     taille: str | None = None) -> Verdict:
+def pool_de_stockage(hote: Hote, nom: str | None = None) -> Verdict:
     """Le pool doit exister, porter des quotas et compresser (docs/DAT.md §8).
 
     Le NOM vient de la configuration, jamais d'un défaut de fonction (§8.5 bis) :
@@ -213,34 +212,35 @@ def pool_de_stockage(hote: Hote, nom: str | None = None,
     s'appelle « tank » et fonctionne.
     """
     nom = nom or reglages().storage_pool
-    taille = taille or reglages().pool_file_size
     brut = hote.executer(["incus", "storage", "show", nom])
     if brut is None:
         return Verdict("STO-POOL", f"Pool de stockage « {nom} »", ECHEC,
-                       "absent",
-                       f"incus storage create {nom} zfs size={taille}")
+                       "absent", REMEDE_POOL)
     pilote = re.search(r"^driver:\s*(\S+)", brut, re.M)
     if not pilote or pilote.group(1) != "zfs":
         return Verdict("STO-POOL", f"Pool de stockage « {nom} »", ECHEC,
                        f"pilote {pilote.group(1) if pilote else 'inconnu'}, attendu zfs",
                        "Le quota, la copie sur écriture et les instantanés "
                        "supposent ZFS (docs/DAT.md §8).")
-    # SPK-28 · §8.5 : DEUX dispositions, pas une cible et un repli. Le pool sur
-    # fichier n'est plus « provisoire » — l'arbitrage du 2026-08-20 l'a tranché.
-    # Ce qu'il faut dire est ce qu'il N'APPORTE PAS, et le dire une fois :
-    # le miroir reste géré par ce qui est dessous, donc la protection contre la
-    # corruption silencieuse est absente. Ce n'est pas un remède, c'est un fait —
-    # d'où un relevé qui le nomme et non une consigne de réparation.
+    # SPK-28 · §8.5 RÉVISÉ le 2026-09-02 : il n'y a plus qu'une disposition, le
+    # miroir ZFS natif. Un pool posé sur fichier continue de FONCTIONNER — c'est
+    # le même ZFS, et le produit ne casse pas ce qui tourne —, mais il n'est plus
+    # une disposition prise en charge : ni créée, ni proposée. D'où un
+    # AVERTISSEMENT, et non un échec : la machine marche, sa disposition est
+    # sortie du périmètre, et ce qu'elle n'apporte pas est nommé.
     source = re.search(r"^\s*source:\s*(\S+)", brut, re.M)
     sur_fichier = bool(source and source.group(1).endswith(".img"))
     releve = f"zfs, source {source.group(1) if source else 'inconnue'}"
     if sur_fichier:
-        return Verdict("STO-POOL", f"Pool de stockage « {nom} »", OK,
-                       releve + " — disposition sur fichier : quotas, copie sur "
-                       "écriture et instantanés actifs ; corruption silencieuse "
-                       "NON couverte, le miroir est géré en dessous")
+        return Verdict("STO-POOL", f"Pool de stockage « {nom} »", AVERTISSEMENT,
+                       releve + " — pool sur fichier : disposition retirée du "
+                       "produit le 2026-09-02, corruption silencieuse NON "
+                       "couverte car le miroir est géré en dessous",
+                       "Le pool fonctionne et n'est pas à recréer dans l'urgence. "
+                       "Une migration vers un miroir natif suppose deux supports "
+                       "libres sur deux disques (docs/DAT.md §8.5).")
     return Verdict("STO-POOL", f"Pool de stockage « {nom} »", OK,
-                   releve + " — disposition native")
+                   releve + " — miroir ZFS natif")
 
 
 def compression_active(hote: Hote, dataset: str | None = None) -> Verdict:

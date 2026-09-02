@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
 import { parseDiagnostic, storageProposal, sshArgs, runDiagnostic, conformity,
-         parseNetwork, parseForgeConfig, GIB,
+         parseNetwork, parseForgeConfig, poolDecision, GIB,
          DIAGNOSTIC_SCRIPT, ForgeDiagnosticError } from './forge-diagnostic.js';
 
 const SERVER = { name: 'neuve', kind: 'ssh', host: '203.0.113.8', user: 'root', port: 22 };
@@ -263,4 +263,42 @@ test('un seul support libre n’est pas un miroir, et le refus le DIT', () => {
   assert.equal(storage.nativeMirror.eligible, false);
   assert.equal(storage.nativeMirror.refusal, 'un seul support libre');
   assert.deepEqual(storage.free, ['vdb']);
+});
+
+test('le zpool est relevé, et « zpool import » ne fait que LISTER', () => {
+  // §50.3 : sans argument, `zpool import` énumère les candidats ; il n'importe
+  // rien. Un relevé qui importerait cesserait d'être en lecture seule.
+  assert.match(DIAGNOSTIC_SCRIPT, /admin zpool list -H -o name,health/);
+  assert.match(DIAGNOSTIC_SCRIPT, /admin zpool import\b/);
+  assert.ok(!/zpool import -a|zpool import [a-z]/.test(DIAGNOSTIC_SCRIPT));
+  assert.ok(!/zpool (create|destroy|add|remove|replace)/.test(DIAGNOSTIC_SCRIPT));
+
+  const report = parseDiagnostic([
+    'zpool\tspark ONLINE', 'zpool\ttank DEGRADED',
+    'zpool_importable\tvieux', 'zpool_importable\tvieux',
+    'zpool_importable\t  no pools available to import',
+  ].join('\n'));
+  assert.deepEqual(report.zpools,
+    [{ name: 'spark', health: 'ONLINE' }, { name: 'tank', health: 'DEGRADED' }]);
+  assert.deepEqual(report.importableZpools, ['vieux'], 'dédoublonné, et le bruit écarté');
+});
+
+test('le zpool et le pool Incus sont DEUX objets : la décision les distingue', () => {
+  // Mesuré le 2026-09-02 : le pool Incus ne porte qu'un `zfs.pool_name` qui
+  // référence le zpool. Une machine réinstallée en conservant ses disques a donc
+  // son pool intact et invisible d'Incus.
+  const incusEtZpool = parseDiagnostic('pools\tspark,zfs,,1,CREATED;\nzpool\tspark ONLINE');
+  assert.deepEqual(poolDecision(incusEtZpool, 'spark'),
+    { kind: 'reuse', zpool: 'spark', imported: true });
+
+  const zpoolSeul = parseDiagnostic('zpool\tspark ONLINE');
+  assert.deepEqual(poolDecision(zpoolSeul, 'spark'),
+    { kind: 'adopt', zpool: 'spark', imported: true });
+
+  const importable = parseDiagnostic('zpool_importable\tspark');
+  assert.deepEqual(poolDecision(importable, 'spark'),
+    { kind: 'adopt', zpool: 'spark', imported: false });
+
+  assert.equal(poolDecision(parseDiagnostic('os\tubuntu 26.04'), 'spark'), null);
+  assert.equal(poolDecision(zpoolSeul, 'tank'), null, 'un AUTRE nom n’est pas adopté');
 });

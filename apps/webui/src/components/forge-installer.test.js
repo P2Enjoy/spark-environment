@@ -21,7 +21,8 @@ test('SSH établi et sparkd absent ont leurs deux lignes distinctes', () => {
   } });
   assert.match(html, /SSH établi/);
   assert.match(html, /sans réponse ou non installé/);
-  assert.match(html, /Pas de miroir natif proposé — aucun support libre/);
+  assert.match(html, /n’est pas une Forge\s+installable/);
+  assert.match(html, /aucun support libre/);
   assert.match(html, /Vérifier et composer le plan/);
 });
 
@@ -56,8 +57,10 @@ test('la paire proposée nomme les deux supports et les deux disques', () => {
   } });
   assert.match(html, /disques physiques distincts/);
   assert.match(html, /\/dev\/sda5, \/dev\/sdb5/);
-  assert.match(html, /Miroir natif sur \/dev\/sda5 et \/dev\/sdb5/);
-  assert.ok(!/Pas de miroir natif proposé/.test(html));
+  // Il n'y a plus de choix à faire : l'écran ANNONCE ce qui sera créé.
+  assert.match(html, /Le miroir sera créé sur \/dev\/sda5 et \/dev\/sdb5/);
+  assert.ok(!/type="radio"/.test(html), 'aucune disposition de rechange à choisir');
+  assert.ok(!/n’est pas une Forge/.test(html));
 });
 
 const PLAN = {
@@ -67,20 +70,29 @@ const PLAN = {
     .map((id) => ({ id, label: id, status: id === 'access' ? 'done' : 'pending' })),
 };
 
-test('le plan fichier exige deux confirmations distinctes et exactes', () => {
-  const base = {
-    status: 'planned', result: {
-      report: { system: {}, access: {}, runtimes: {}, services: {}, blocks: [] },
-      storage: { supports: [], nativeMirror: { eligible: false, devices: [], refusal: 'aucun support libre' }, filePool: {} },
-    }, plan: PLAN, accepted: true,
-  };
-  let html = renderForgeInstaller({ ...base, confirmation: '' });
-  assert.match(html, /J’ai relu la destination/);
-  assert.match(html, /CREER \/var\/lib\/incus\/disks\/spark\.img 4GiB/);
-  assert.match(html, /data-action="executer-installation-forge" disabled/);
-  html = renderForgeInstaller({ ...base,
-    confirmation: 'CREER /var/lib/incus/disks/spark.img 4GiB' });
-  assert.match(html, /data-action="executer-installation-forge">/);
+test('le miroir exige deux confirmations distinctes et exactes', () => {
+  const plan = { ...PLAN, storage: { kind: 'native', poolName: 'spark', driver: 'zfs',
+    devices: ['/dev/sda5', '/dev/sdb5'], destructive: true } };
+  const html = renderForgeInstaller({ status: 'planned', result: CONFORME, plan,
+    accepted: false, confirmation: '' });
+  assert.match(html, /EFFACER \/dev\/sda5 \/dev\/sdb5/);
+  assert.match(html, /data-installation-accepted/);
+  assert.match(html, /data-action="executer-installation-forge"[^>]* disabled/);
+  // Les deux engagements concordent : le bouton s'ouvre.
+  const pret = renderForgeInstaller({ status: 'planned', result: CONFORME, plan,
+    accepted: true, confirmation: 'EFFACER /dev/sda5 /dev/sdb5' });
+  assert.ok(!/data-action="executer-installation-forge"[^>]* disabled/.test(pret));
+});
+
+test('adopter un zpool n’est PAS une écriture destructive', () => {
+  const plan = { ...PLAN, storage: { kind: 'adopt', poolName: 'spark', driver: 'zfs',
+    zpool: 'spark', imported: false, destructive: false } };
+  const html = renderForgeInstaller({ status: 'planned', result: CONFORME, plan,
+    accepted: true, confirmation: '' });
+  assert.match(html, /adopter le zpool « spark » déjà présent, après l’avoir importé/);
+  assert.match(html, /aucune donnée n’est touchée/);
+  assert.ok(!/EFFACER|CREER/.test(html), 'aucune confirmation destructive');
+  assert.ok(!/data-action="executer-installation-forge"[^>]* disabled/.test(html));
 });
 
 test('le journal rend les statuts et les mesures sans sortie terminal brute', () => {
@@ -179,11 +191,19 @@ test('la configuration relevée devient la valeur de départ du formulaire', () 
 });
 
 test('un pool conservé ne se voit pas proposer une disposition de rechange', () => {
-  assert.equal(poolReutilise(CONFORME.report, 'spark'), true);
-  assert.equal(poolReutilise(CONFORME.report, 'tank'), false);
+  // La décision n'est plus un booléen : elle NOMME le geste non destructif.
+  assert.deepEqual(poolReutilise(CONFORME.report, 'spark'),
+    { kind: 'reuse', zpool: 'spark' });
+  assert.equal(poolReutilise(CONFORME.report, 'tank'), null);
+  assert.deepEqual(
+    poolReutilise({ ...CONFORME.report, pools: [], zpools: [{ name: 'tank' }] }, 'tank'),
+    { kind: 'adopt', zpool: 'tank', imported: true });
+  assert.deepEqual(
+    poolReutilise({ ...CONFORME.report, pools: [], zpools: [], importableZpools: ['tank'] }, 'tank'),
+    { kind: 'adopt', zpool: 'tank', imported: false });
   const html = renderForgeInstaller({ status: 'ready', result: CONFORME });
   assert.match(html, /Le pool existant est conservé/);
-  assert.ok(!/Le pool fichier\s+reste envisageable/.test(html));
+  assert.ok(!/type="radio"/.test(html), 'aucune disposition de rechange à choisir');
   // Le formulaire n'annonce plus le contrat quand la Forge déclare sa config.
   assert.match(html, /celles que la Forge déclare aujourd’hui/);
 });
@@ -193,5 +213,7 @@ test('une Forge muette retombe sur le contrat, et le DIT', () => {
                 conformity: { checks: [], missing: ['pool'], installed: false, ready: false } };
   const html = renderForgeInstaller({ status: 'ready', result: nue });
   assert.match(html, /ne déclare encore aucune configuration/);
-  assert.match(html, /Le pool fichier/);
+  // §8.5 révisé : plus aucun repli n'est offert, le refus est nommé.
+  assert.match(html, /n’est pas une Forge\s+installable/);
+  assert.ok(!/pool fichier|sur fichier/i.test(html));
 });

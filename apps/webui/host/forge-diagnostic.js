@@ -119,6 +119,19 @@ else
   dit pools ""
 fi
 
+# Le zpool et le pool Incus sont DEUX objets : le second ne porte qu'un
+# zfs.pool_name qui reference le premier. Une machine reinstallee en conservant
+# ses disques a donc son zpool intact et invisible d'Incus (DAT §50.3). On releve
+# donc les deux, et aussi ce qui est IMPORTABLE : « zpool import » sans argument
+# ne fait que lister les candidats, il n'importe rien.
+if command -v zpool >/dev/null 2>&1; then
+  admin zpool list -H -o name,health 2>/dev/null | head -n 16 |
+    while IFS= read -r ligne; do dit zpool "$ligne"; done
+  admin zpool import 2>/dev/null | head -n 200 |
+    sed -n 's/^[[:space:]]*pool:[[:space:]]*\(.*\)$/\1/p' | head -n 16 |
+    while IFS= read -r ligne; do dit zpool_importable "$ligne"; done
+fi
+
 # Configuration RÉELLE de la Forge, et elle seule : cinq clés nommées une à une.
 # Lire le fichier entier ferait remonter SPARKD_NOTIFY_URL et tout secret qu'un
 # exploitant y aurait posé (CLAUDE.md §20).
@@ -183,6 +196,9 @@ export function parseBlock(line) {
  */
 const POOL_LINE = /^[a-z0-9][a-z0-9._-]*,[a-z0-9]+(,|$)/i;
 
+/** Un nom de zpool, tel que ZFS l'accepte. Tout le reste est du bruit de sortie. */
+const POOL_NAME = /^[a-z][a-z0-9._:-]{0,254}$/i;
+
 /** `nom,type,gere,adresse,...` — les quatre premières colonnes suffisent ici. */
 export function parseNetwork(line) {
   const columns = String(line ?? '').split(',');
@@ -236,6 +252,8 @@ export function parseDiagnostic(output) {
   const blocks = [];
   const networks = [];
   const configLines = [];
+  const zpools = [];
+  const importable = [];
   for (const line of String(output ?? '').split('\n')) {
     const index = line.indexOf('\t');
     if (index < 1) continue;
@@ -249,6 +267,11 @@ export function parseDiagnostic(output) {
       if (network) networks.push(network);
     } else if (key === 'configuration') {
       configLines.push(value);
+    } else if (key === 'zpool') {
+      const [name, health] = value.split(/\s+/);
+      if (POOL_NAME.test(name ?? '')) zpools.push({ name, health: health || null });
+    } else if (key === 'zpool_importable') {
+      if (POOL_NAME.test(value)) importable.push(value);
     } else if (/^[a-z_]+$/.test(key)) {
       values[key] = value || null;
     }
@@ -268,6 +291,11 @@ export function parseDiagnostic(output) {
     // Deux codes HTTP mesurés, jamais déduits de la présence du paquet.
     api: { healthz: httpCode(values.healthz), readyz: httpCode(values.readyz) },
     pools: (values.pools ? values.pools.split(';') : []).filter((line) => POOL_LINE.test(line)),
+    // Les zpools IMPORTÉS et ceux qui sont seulement importables. Un pool Incus
+    // n'apparaît pas ici : ce sont deux objets, et les confondre ferait proposer
+    // d'écrire sur des supports qui portent déjà le pool (docs/DAT.md §50.3).
+    zpools,
+    importableZpools: [...new Set(importable)],
     networks,
     config: parseForgeConfig(configLines, values.arc_max),
     blocks,
@@ -355,6 +383,36 @@ export function conformity(report, { poolName, bridgeName } = {}) {
       .every((check) => check.ok),
     ready: missing.length === 0,
   };
+}
+
+/**
+ * Ce qu'il y a DÉJÀ, et le geste non destructif qui l'adopte (docs/DAT.md §50.3).
+ *
+ * Le zpool et le pool Incus sont deux objets : le second ne porte qu'un
+ * `zfs.pool_name` qui référence le premier. Une machine dont l'OS a été
+ * réinstallé en conservant ses disques de données a donc son pool intact et
+ * invisible d'Incus — la reprise la plus probable en exploitation. La traiter
+ * comme « aucun pool » conduisait à proposer d'écrire sur des supports qui
+ * portent déjà le pool.
+ *
+ * Aucun de ces trois gestes n'écrit sur une donnée : ils déclarent, ils
+ * n'effacent pas.
+ */
+export function poolDecision(report, poolName) {
+  const cible = String(poolName ?? '');
+  if (!cible) return null;
+  const incus = (report?.pools ?? []).some((line) => {
+    const [name, driver] = String(line).split(',').map((value) => value.trim());
+    return name === cible && driver === 'zfs';
+  });
+  if (incus) return { kind: 'reuse', zpool: cible, imported: true };
+  if ((report?.zpools ?? []).some((pool) => pool.name === cible)) {
+    return { kind: 'adopt', zpool: cible, imported: true };
+  }
+  if ((report?.importableZpools ?? []).includes(cible)) {
+    return { kind: 'adopt', zpool: cible, imported: false };
+  }
+  return null;
 }
 
 /**

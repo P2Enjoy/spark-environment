@@ -76,6 +76,12 @@
   dernière ligne passait. La sortie d'erreur, jusqu'ici jetée, accompagne
   désormais le code dans le refus ; elle ne traverse pas le journal d'audit, qui
   n'a pas à porter les paquets du locataire.
+- **Deux preuves de l'installateur étaient rouges depuis leur écriture** (SPK-68) :
+  `bootstrapSshArgs(...).slice(-5)` comparait cinq éléments à quatre, et la
+  preuve du journal émettait `close` sur l'amorceur avant que le gestionnaire ne
+  s'y abonne — un événement à un coup, perdu, si bien que l'installateur n'était
+  jamais lancé. Les temporisations fixes qui masquaient cette course sont
+  remplacées par une attente de condition.
 - **Le pool natif se pose enfin là où le partitionnement l'attend** (SPK-68,
   `docs/DAT.md` §50.3, §8.6) : la proposition ne considérait que des **disques
   entiers** et écartait tout disque portant une partition. Sur un serveur dédié
