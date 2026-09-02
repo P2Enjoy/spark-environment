@@ -1,6 +1,11 @@
 /**
  * @verifies docs/BACKLOG.md#SPK-49 · docs/DAT.md §39 (les ports publies),
  *           §39.2, §39.3, §39.5
+ * @verifies docs/BACKLOG.md#SPK-89 · docs/DAT.md §18.3 ter (la cible d'une route
+ *           se corrige : le port et le TLS, jamais le domaine ni le Spark),
+ *           §18.5 (l'ecart reste visible)
+ * @verifies docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 bis (une recette pose
+ *           AUSSI sa route), §38.6.4 ter (un seul gabarit pour trois blocs)
  * @verifies docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la
  *           preseance du plus specifique, la vue depuis le joker) · §14.7, §14.8
  * @verifies docs/BACKLOG.md#SPK-78 · docs/DAT.md §38.9 (une ecriture DNS se
@@ -28,6 +33,7 @@ import {
   renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
   renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation, zonePour,
   renderPortsPanel, refusZones, renderEtatDns, renderVerification,
+  refusEcritureRecette,
 } from './spark-admin.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -736,9 +742,49 @@ test('l’apercu montre CHAQUE ligne, son role et son effet', () => {
   }, { recette: 'site-web', recette_zone: 'exemple.tech' }));
   assert.ok(rendu.includes('@ A'), 'l’apex se note « @ »');
   assert.ok(rendu.includes('Le domaine lui-même.'));
-  assert.ok(rendu.includes('remplacera'));
-  assert.ok(rendu.includes('198.51.100.1'), 'la valeur remplacee doit etre LUE');
-  assert.ok(rendu.includes('sera posé'));
+  // §38.6.4 ter : l'etat prend un badge, aux memes places dans les trois blocs.
+  assert.ok(rendu.includes('remplace 198.51.100.1'),
+    'la valeur remplacee doit etre LUE dans l’etat');
+  assert.ok(rendu.includes('à poser'));
+  assert.ok(rendu.includes('recette-ligne__etat'));
+});
+
+test('l’apercu montre les ROUTES avant les enregistrements (§38.6.4 bis)', () => {
+  // L'ordre affiche est l'ordre REEL : la route d'abord, le DNS ensuite. Montrer
+  // l'inverse ferait mal lire un echec.
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({
+    apercu: { label: 'Site web', incomplete: null,
+      routes: [{ domain: 'exemple.tech', port: 8080, role: 'Le domaine nu.',
+                 etat: 'poser' }],
+      records: [{ name: '', type: 'A', data: '203.0.113.7', role: 'Le domaine.',
+                  effet: 'pose' }] },
+  }, { recette: 'site-web', recette_zone: 'exemple.tech' }));
+  assert.ok(rendu.includes('route exemple.tech'));
+  assert.ok(rendu.includes('port 8080'));
+  assert.ok(rendu.includes('à déclarer'));
+  assert.ok(rendu.indexOf('route exemple.tech') < rendu.indexOf('@ A'),
+    'la route se lit AVANT l’enregistrement');
+});
+
+test('une route deja tenue par un AUTRE Spark est nommee comme telle', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({
+    apercu: { label: 'Site web', incomplete: null,
+      routes: [{ domain: 'exemple.tech', port: 8080, role: 'Le domaine nu.',
+                 etat: 'occupee', spark: 'vitrine' }],
+      records: [] },
+  }, { recette: 'site-web', recette_zone: 'exemple.tech' }));
+  assert.ok(rendu.includes('tenue par vitrine'));
+});
+
+test('une route DEJA en place vers le meme Spark n’est pas un refus', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({
+    apercu: { label: 'Site web', incomplete: null,
+      routes: [{ domain: 'exemple.tech', port: 8080, role: 'Le domaine nu.',
+                 etat: 'deja' }],
+      records: [] },
+  }, { recette: 'site-web', recette_zone: 'exemple.tech' }));
+  assert.ok(rendu.includes('déjà en place'));
+  assert.ok(!rendu.includes('badge--danger'), 'un etat atteint n’est pas un echec');
 });
 
 test('une recette INCOMPLETE le dit des l’apercu', () => {
@@ -957,4 +1003,82 @@ test('tant que la relecture court, l’ecran ne conclut RIEN', () => {
   const rendu = renderVerification({ verifieEnCours: true });
   assert.ok(rendu.includes('Relecture de la zone'));
   assert.ok(!/conforme|absent/.test(rendu));
+});
+
+// --- SPK-89 · CORRIGER LA CIBLE D'UNE ROUTE (docs/DAT.md §18.3 ter) --------
+
+const ROUTE_A_CORRIGER = { domain: 'crm.exemple.tech', target_port: 8080, tls: 1,
+                           applied_at: '2026-09-02T10:00' };
+
+test('chaque route offre de CORRIGER sa cible', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_A_CORRIGER], ui());
+  assert.ok(rendu.includes('data-modifie-route="crm.exemple.tech"'));
+});
+
+test('la correction porte le port et le TLS, JAMAIS le domaine', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_A_CORRIGER], ui({
+    editing: 'crm.exemple.tech',
+    values: { route_port: 8080, route_tls: true } }));
+  assert.ok(rendu.includes('id="route-edition"'));
+  assert.ok(rendu.includes('id="edit-port"'));
+  assert.ok(rendu.includes('id="edit-tls"'));
+  // Le domaine est MONTRE et non saisissable : le changer ne serait pas une
+  // correction mais une autre route.
+  assert.ok(/id="edit-domaine"[^>]*readonly/.test(rendu));
+  assert.ok(/ne se corrige\s+pas/.test(rendu));
+  // Le Spark n'y figure pas du tout : ce geste-la se fait en retirant et en
+  // declarant, pour qu'il se voie dans le journal des DEUX.
+  assert.ok(!rendu.includes('id="edit-spark"'));
+});
+
+test('la correction ANNONCE que la route redevient non appliquee', () => {
+  // §18.5 : un succes annonce avant la reprise de Caddy ferait chercher la
+  // panne du mauvais cote.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_A_CORRIGER], ui({
+    editing: 'crm.exemple.tech', values: { route_port: 9000, route_tls: true } }));
+  assert.ok(/non appliquée/.test(rendu));
+});
+
+test('un refus de la correction s’affiche DANS sa modale', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_A_CORRIGER], ui({
+    editing: 'crm.exemple.tech',
+    values: { route_port: 9000, route_tls: true },
+    refusal: { panel: 'route-edition', message: '« crm » est protégé.' } }));
+  assert.ok(rendu.includes('« crm » est protégé.'));
+  assert.ok(rendu.includes('value="9000"'), 'la saisie survit au refus');
+});
+
+// --- SPK-88 · LE PORT D'UNE RECETTE (docs/DAT.md §38.6.4 bis) --------------
+
+test('un parametre de PORT se saisit comme un port, avec ses bornes', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({
+    catalogue: [{ id: 'site-web', label: 'Site web', description: 'x',
+                  parametres: [{ nom: 'port', label: 'Port du Spark', port: true,
+                                 defaut: '8080' }],
+                  actionsHumaines: [] }],
+  }, { recette: 'site-web', recette_zone: 'exemple.tech' }));
+  assert.ok(/data-param="port"[^>]*type="number"/.test(rendu));
+  assert.ok(/max="65535"/.test(rendu));
+});
+
+test('ecrire une recette a routes SANS apercu est refuse, et le DIT', () => {
+  // §38.6.4 bis : sans apercu, on n'ecrirait que le DNS — donc un nom qui pointe
+  // vers une Forge qui ne le sert pas. C'est l'ordre que la regle refuse.
+  const catalogue = [{ id: 'site-web', label: 'Site web', poseDesRoutes: true }];
+  const refus = refusEcritureRecette({ catalogue, apercu: null },
+                                     { recette: 'site-web', recette_zone: 'exemple.tech' });
+  assert.match(refus, /déclare des routes/);
+  assert.match(refus, /ne le\s+sert pas/);
+});
+
+test('une recette SANS route n’exige pas d’apercu', () => {
+  const catalogue = [{ id: 'relais', label: 'Relais', poseDesRoutes: false }];
+  assert.equal(refusEcritureRecette({ catalogue, apercu: null },
+                                    { recette: 'relais', recette_zone: 'exemple.tech' }), null);
+});
+
+test('l’apercu present leve la garde', () => {
+  const catalogue = [{ id: 'site-web', label: 'Site web', poseDesRoutes: true }];
+  assert.equal(refusEcritureRecette({ catalogue, apercu: { records: [], routes: [] } },
+                                    { recette: 'site-web', recette_zone: 'exemple.tech' }), null);
 });

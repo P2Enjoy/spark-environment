@@ -1466,6 +1466,37 @@ function brancherPanneaux() {
   // toute seule.
   racine.querySelector('[data-verifier-recette]')
     ?.addEventListener('click', verifierRecette);
+  // SPK-89 · §18.3 ter : corriger la cible d'une route. Les valeurs viennent de
+  // la route AFFICHÉE, jamais de champs vides : faire ressaisir de mémoire ce
+  // qui est déjà à l'écran invite à se tromper.
+  for (const bouton of racine.querySelectorAll('[data-modifie-route]')) {
+    bouton.addEventListener('click', () => {
+      const domaine = bouton.dataset.modifieRoute;
+      const route = (etat.detail?.routes ?? []).find((r) => r.domain === domaine);
+      if (!route) return;
+      admin.editing = domaine;
+      admin.open = null;
+      admin.refusal = null;
+      admin.values.route_port = route.target_port;
+      admin.values.route_tls = Boolean(route.tls);
+      peindre();
+    });
+  }
+  const formulaireEdition = racine.querySelector('[data-modale="route-edition"]');
+  if (formulaireEdition) {
+    for (const controle of formulaireEdition.querySelectorAll('input')) {
+      controle.addEventListener('input', () => {
+        admin.values[controle.name] = controle.type === 'checkbox'
+          ? controle.checked : Number(controle.value);
+      });
+    }
+    formulaireEdition.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      corrigerRoute();
+    });
+    racine.querySelector('[data-annule-modale="route-edition"]')
+      ?.addEventListener('click', () => { admin.editing = null; peindre(); });
+  }
   // SPK-57 · §49 : la modale des quotas. Elle a son propre état parce que son
   // SUJET est la section « Ressources » et non les panneaux d'administration —
   // les mêler ferait qu'ouvrir l'une fermerait l'autre (§6.27).
@@ -2234,6 +2265,8 @@ async function lireApercuRecette() {
     });
     const corps = await reponse.json();
     if (admin.recettes.lu !== cle) return;
+    if (reponse.ok) corps.routes = await etatDesRoutes(corps.routes ?? []);
+    if (admin.recettes.lu !== cle) return;
     admin.recettes = reponse.ok
       ? { ...admin.recettes, apercu: corps, chargement: false, erreur: null }
       : { ...admin.recettes, apercu: null, chargement: false,
@@ -2246,19 +2279,97 @@ async function lireApercuRecette() {
   montrer();
 }
 
+/**
+ * Corrige la cible d'une route (SPK-89, §18.3 ter).
+ *
+ * @spec docs/BACKLOG.md#SPK-89 · docs/DAT.md §18.3 ter, §18.5, §35
+ *
+ * Le port et le TLS, jamais le domaine ni le Spark. La route garde son identité,
+ * sa place au journal et la trace de ce qu'elle a dépassé — ce que retirer puis
+ * redéclarer perdrait, en coupant le service entre les deux.
+ */
+async function corrigerRoute() {
+  const admin = etat.admin;
+  const domaine = admin.editing;
+  if (!domaine) return;
+  const resultat = await agir('route-edition', () => appel(
+    'PATCH', `/v1/ingress/${encodeURIComponent(domaine)}`,
+    { port: Number(admin.values.route_port), tls: Boolean(admin.values.route_tls) },
+  ), { ferme: false });
+  if (resultat?.ok) admin.editing = null;
+  peindre();
+}
+
+/**
+ * L'état de chaque route qu'une recette déclarera (SPK-88, §38.6.4 bis).
+ *
+ * @spec docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 bis, §18.4
+ *
+ * Le rapprochement se fait sur le domaine EXACT : l'unicité porte sur lui, et
+ * mêler le `covers` du §18.3 bis ici recréerait la seconde vérité que le
+ * §38.8.4 refuse.
+ *
+ * Une route déjà là vers le MÊME Spark n'est pas un refus : l'état visé est
+ * atteint. Vers un autre, c'en est un, et il NOMME ce Spark.
+ */
+async function etatDesRoutes(routes) {
+  if (!routes.length) return routes;
+  const posees = await api('/v1/ingress').then((r) => r.routes ?? []).catch(() => []);
+  const parDomaine = new Map(posees.map((r) => [String(r.domain).toLowerCase(), r]));
+  return routes.map((r) => {
+    const deja = parDomaine.get(String(r.domain).toLowerCase());
+    if (!deja) return { ...r, etat: 'poser' };
+    return deja.spark_name === etat.spark?.name
+      ? { ...r, etat: 'deja' }
+      : { ...r, etat: 'occupee', spark: deja.spark_name };
+  });
+}
+
 /** Écrit la recette, et rend le sort de chaque ligne (§38.6.3). */
 async function ecrireRecette() {
   const v = etat.admin.values;
+  // §38.6.4 bis : les routes de l'APERÇU, celui-là même qui a été relu et
+  // montré. Les recomposer ici ferait diverger ce qui a été montré de ce qui est
+  // écrit — c'est la mesure du §38.6.5.
+  const routesVisees = etat.admin.recettes.apercu?.routes ?? [];
+  // §38.6.4 bis : sans aperçu, on n'écrirait que le DNS — donc un nom qui pointe
+  // vers une Forge qui ne le sert pas. Mieux vaut ne rien faire et le dire.
+  const empeche = refusEcritureRecette(etat.admin.recettes, v);
+  if (empeche) {
+    etat.admin.refusal = { panel: 'recette', message: empeche };
+    return peindre();
+  }
   const resultat = await agir('recette', async () => {
+    // LA ROUTE D'ABORD (§38.6.4 bis). Les deux effets vivent sur deux systèmes,
+    // et l'ordre choisit le mode de panne : un DNS posé sans route laisse un nom
+    // qui pointe vers une Forge qui ne le sert pas — au pire capté par le joker
+    // d'un autre Spark. Une route sans DNS ne se voit pas.
+    const routes = [];
+    for (const r of routesVisees) {
+      if (r.etat === 'deja') {
+        routes.push({ ...r, declared: true, already: true });
+        continue;
+      }
+      const pose = await appel('POST', '/v1/ingress', {
+        spark: etat.spark.name, domain: r.domain, port: r.port, tls: r.tls !== false,
+      });
+      routes.push(pose.ok
+        ? { ...r, declared: true }
+        : { ...r, declared: false,
+            error: (pose.corps?.detail ?? pose.corps ?? {}).message ?? 'Route refusée.' });
+    }
     const reponse = await fetch('/api/dns/recipe', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ recipe: v.recette, zone: v.recette_zone,
                              params: v.recette_params ?? {} }),
     });
     const corps = await reponse.json().catch(() => null);
+    // Une écriture DNS refusée n'efface pas les routes déjà posées : on ne
+    // défait rien, et le compte rendu dit le sort de CHAQUE ligne (§38.6.3).
     return { ok: reponse.ok,
-             corps: reponse.ok ? corps
-               : { detail: { message: corps?.message ?? 'Refus du fournisseur DNS.' } } };
+             corps: reponse.ok ? { ...corps, routes }
+               : { detail: { message: corps?.message ?? 'Refus du fournisseur DNS.' },
+                   routes } };
   });
   if (resultat?.ok) {
     // La zone voyage AVEC le compte rendu : `values` est remis à zéro entre
@@ -3585,16 +3696,15 @@ async function affecterEntreeDns() {
   }
   const route = resultat.corps ?? {};
   vue.affectation = null;
-  // On relève de nouveau : l'entrée doit repasser à « servi » parce que la Forge
-  // le dit, jamais parce que l'écran l'a supposé (§38.8.5 bis).
-  await chargerInventaireDns();
-  etat.forgeDns.affectee = {
-    domain: entree.fqdn, spark: v.spark,
-    // §18.3 bis : une déclaration qui prend le pas sur un joker doit NOMMER ce
-    // qu'elle dépasse.
-    supersedes: route.supersedes ?? null,
-  };
-  peindre();
+  // §18.3 bis : une déclaration qui prend le pas sur un joker doit NOMMER ce
+  // qu'elle dépasse. La prise de pas voyage vers l'écran des ROUTES, où elle
+  // s'annonce comme celle d'une déclaration ordinaire — c'est le même fait, et
+  // il n'a aucune raison de se dire deux fois autrement.
+  etat.admin.supersedes = route.supersedes ?? null;
+  // §38.8.5 bis : la route vient d'être posée, et sa place est dans la facette
+  // qui la porte — avec ses voisines, son état d'application et son état DNS.
+  // Rester sur l'inventaire obligerait à aller la vérifier de mémoire, ailleurs.
+  location.hash = `#/sparks/${encodeURIComponent(v.spark)}/routes`;
 }
 
 /**

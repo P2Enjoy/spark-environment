@@ -14,6 +14,9 @@
  * @spec docs/BACKLOG.md#SPK-49 · docs/DAT.md §39 (les ports publiés),
  *       §39.2 (une ressource de la Forge), §39.3 (ce qu'un port fait perdre,
  *       et que l'écran doit dire)
+ * @spec docs/BACKLOG.md#SPK-89 · docs/DAT.md §18.3 ter (la cible d'une route se
+ *       corrige : son port et son TLS, jamais son domaine ni son Spark),
+ *       §18.5 (l'écart reste visible) · docs/DESIGN_SYSTEM.md §6.27
  * @spec docs/BACKLOG.md#SPK-48 · docs/DAT.md §18.3 bis (le joker, la préséance
  *       du plus spécifique, et la vue depuis le joker) · §18.4
  * @spec docs/BACKLOG.md#SPK-78 · docs/DAT.md §38.9 (une écriture DNS se
@@ -49,7 +52,10 @@ export const ADMIN_VIDE = {
   confirming: null,  // { kind, id }
   refusal: null,     // { panel, message, blocking? }
   busy: false,
+  // SPK-89 · §18.3 ter : la route qu'on CORRIGE, et sa nouvelle cible.
+  editing: null,
   values: { domain: '', port: 8080, tls: true,
+            route_port: 8080, route_tls: true,
             key_label: '', new_label: '', public_key: '',
             snapshot: '', password: '',
             // SPK-49 · §39 : la publication d'un port de la Forge.
@@ -200,10 +206,49 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           // SPK-47 · §38 : pointer le DNS est un geste de CETTE route, pas de la
           // section — deux routes du même Spark ont deux domaines distincts.
           `<button type="button" class="bouton bouton--compact" data-dns-route="${echapper(r.domain)}">DNS</button>` +
+          // SPK-89 · §18.3 ter : un port se CORRIGE. Retirer puis redéclarer
+          // couperait le service entre les deux et perdrait l'identité de la
+          // route, sa place au journal et ce qu'elle a dépassé.
+          `<button type="button" class="bouton bouton--compact" data-modifie-route="${echapper(r.domain)}">Modifier</button>` +
           `<button type="button" class="bouton bouton--compact" data-retire-route="${echapper(r.domain)}">Retirer</button></span>` +
           `${renderSurcharges(r)}${confirme}</li>`;
       }).join('')}</ul>`
     : '<p class="absence">Aucune route publique ne pointe vers ce Spark.</p>';
+
+  // SPK-89 · §18.3 ter : corriger la CIBLE d'une route. Le domaine est montré et
+  // non saisissable — le changer ne serait pas une correction mais une autre
+  // route (§22.4.7 ter), et déplacer vers un autre Spark doit se voir dans le
+  // journal des deux.
+  const edition = renderModale({
+    ouverte: Boolean(ui.editing), id: 'route-edition',
+    titre: 'Corriger la cible de la route',
+    engagement: 'Corriger la route',
+    refus: ui.refusal?.panel === 'route-edition' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps: `
+         <div class="champ">
+           <label for="edit-domaine">Domaine</label>
+           <input class="controle technique" id="edit-domaine" type="text" readonly
+                  value="${echapper(ui.editing ?? '')}">
+           <p class="champ__aide">Le domaine identifie la route : il ne se corrige
+           pas. Pour servir un autre nom, déclarez-en une et retirez celle-ci.</p>
+         </div>
+         <div class="champ">
+           <label for="edit-port">Port du Spark</label>
+           <input class="controle" id="edit-port" name="route_port" type="number"
+                  min="1" max="65535" value="${echapper(ui.values.route_port)}">
+         </div>
+         <div class="champ">
+           <label for="edit-tls">
+             <input id="edit-tls" name="route_tls" type="checkbox"${
+               ui.values.route_tls ? ' checked' : ''}>
+             Certificat TLS automatique
+           </label>
+         </div>
+         <p class="champ__aide">La route redevient « non appliquée » le temps que
+         le proxy reprenne la configuration : c’est un état réel, et l’écran le
+         dit plutôt que d’annoncer un succès qu’il n’a pas constaté.</p>`,
+  });
 
   const modale = renderModale({
     ouverte: ui.open === 'route', id: 'route', titre: 'Routes publiques',
@@ -246,6 +291,7 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
     <button type="button" class="bouton" data-ouvre="recette">Appliquer une recette DNS</button>
   </p>
   ${modale}
+  ${edition}
   ${renderDnsModale(ui)}
   ${renderRecetteModale(ui)}
 </section>`;
@@ -294,9 +340,17 @@ function renderRecetteModale(ui) {
   const parametres = choisie
     ? choisie.parametres.map((p) => {
         const relatif = p.dansLaZone && zoneChoisie;
-        const controle = `<input class="controle" id="recette-p-${echapper(p.nom)}"
+        // §6.9 bis : un port se SAISIT, avec ses bornes — il ne se fait pas
+        // glisser, et une saisie libre laisserait passer « 70000 » jusqu'au
+        // refus du serveur.
+        const valeur = ui.values.recette_params?.[p.nom] ?? p.defaut ?? '';
+        const controle = p.port
+          ? `<input class="controle" id="recette-p-${echapper(p.nom)}"
+                 data-param="${echapper(p.nom)}" type="number" min="1" max="65535"
+                 value="${echapper(valeur)}">`
+          : `<input class="controle" id="recette-p-${echapper(p.nom)}"
                  data-param="${echapper(p.nom)}" type="text" autocomplete="off"
-                 value="${echapper(ui.values.recette_params?.[p.nom] ?? p.defaut ?? '')}">`;
+                 value="${echapper(valeur)}">`;
         return `
         <div class="champ">
           <label for="recette-p-${echapper(p.nom)}">${echapper(p.label)}${
@@ -356,6 +410,74 @@ export function renderZonesVides(etat) {
          + 'Le compte ne porte aucune zone DNS.</p>';
 }
 
+/**
+ * Peut-on écrire cette recette ? Rend le refus MOTIVÉ, ou `null` (§38.6.4 bis).
+ *
+ * @spec docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 bis (la route AVANT le DNS)
+ *
+ * Une recette qui pose des routes les prend de l'APERÇU — celui-là même qui a
+ * été relu et montré. Sans aperçu, on n'écrirait que le DNS : le nom pointerait
+ * vers une Forge qui ne le sert pas, et c'est exactement l'ordre que le
+ * §38.6.4 bis refuse. Mieux vaut ne rien faire et le dire.
+ */
+export function refusEcritureRecette(recettes, values) {
+  const choisie = (recettes?.catalogue ?? []).find((r) => r.id === values?.recette);
+  if (!choisie) return 'Choisissez une recette.';
+  if (!values?.recette_zone) return 'Choisissez une zone.';
+  if (choisie.poseDesRoutes && !recettes?.apercu) {
+    return "L'aperçu n'a pas pu être lu : cette recette déclare des routes, et "
+      + "les écrire sans elles ferait pointer un nom vers une Forge qui ne le "
+      + "sert pas. Corrigez les paramètres, puis réessayez.";
+  }
+  return null;
+}
+
+/**
+ * Le gabarit d'une ligne de recette (§38.6.4 ter).
+ *
+ * @spec docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 ter (trois blocs, un seul
+ *       gabarit) · docs/DESIGN_SYSTEM.md §12.3 (une classe qui ne peint rien est
+ *       un défaut), §6.14, §14.5
+ *
+ * Trois blocs disent la même liste à trois moments : ce qui SERA écrit, ce qui A
+ * ÉTÉ écrit, et ce que la zone PORTE. Trois gabarits, ce serait trois endroits
+ * où la colonne se décale et où un état s'oublie.
+ *
+ * Une ligne porte quatre choses, toujours aux mêmes places : ce qu'elle vise, ce
+ * qui y va, son rôle, et son état. Seul l'état change d'un bloc à l'autre.
+ */
+const TONS = {
+  attendu: 'badge--neutral', change: 'badge--accent',
+  fait: 'badge--success', manque: 'badge--danger',
+};
+
+export function renderLignesRecette(lignes = []) {
+  if (!lignes.length) return '';
+  return `<ul class="recette-lignes">${lignes.map((l) => `
+    <li class="recette-ligne${l.route ? ' recette-ligne--route' : ''}">
+      <span class="recette-ligne__quoi">
+        <span class="recette-ligne__cible technique">${echapper(l.cible)}</span>
+        <span class="recette-ligne__valeur technique">${echapper(l.valeur)}</span>
+      </span>
+      <span class="recette-ligne__etat badge ${TONS[l.ton] ?? TONS.attendu}"
+        >${echapper(l.etat)}</span>
+      <span class="recette-ligne__role">${echapper(l.role ?? '')}</span>
+    </li>`).join('')}</ul>`;
+}
+
+/** Une ligne DNS : le nom et le type visés, la valeur, le rôle. */
+function ligneRecord(r, etat, ton) {
+  return { cible: `${r.name || '@'} ${r.type}`, valeur: r.data,
+           role: r.role, etat, ton };
+}
+
+/** Une ligne de ROUTE. Elle se range comme les autres — même grammaire, et une
+ *  marque de plus pour dire qu'il s'agit d'une route et non d'un nom (§38.6.4 ter). */
+function ligneRoute(r, etat, ton) {
+  return { route: true, cible: `route ${r.domain}`,
+           valeur: `→ port ${r.port}`, role: r.role, etat, ton };
+}
+
 /** L'aperçu ligne à ligne, remplacé SUR PLACE comme celui du §38.5.2. */
 export function renderRecetteApercu(etat) {
   const vu = etat.apercu;
@@ -376,23 +498,40 @@ export function renderRecetteApercu(etat) {
   if (etat.erreur) return `<p class="refus">${echapper(etat.erreur)}</p>`;
   if (!vu) return '';
   const occupe = etat.chargement ? ' aria-busy="true"' : '';
-  return `<p class="note"${occupe}><strong>Sera écrit :</strong></p>
-    <ul class="liste-simple recette-lignes">${vu.records.map((r) => `
-      <li><span class="technique">${echapper(r.name || '@')} ${echapper(r.type)}
-          → ${echapper(r.data)}</span>
-        <span class="note">${echapper(r.role ?? '')}</span>
-        ${renderEffetLigne(r)}</li>`).join('')}</ul>
-    ${vu.incomplete ? `<p class="avertissement" role="status">${echapper(vu.incomplete)}</p>` : ''}`;
+  // §38.6.4 bis : la route AVANT le DNS, à l'aperçu comme à l'écriture. L'ordre
+  // affiché est l'ordre réel — montrer l'inverse ferait mal lire un échec.
+  const lignes = [
+    ...(vu.routes ?? []).map((r) => ligneRoute(r, ...etatRoute(r))),
+    ...vu.records.map((r) => ligneRecord(r, ...etatApercu(r))),
+  ];
+  return `<div class="recette-bloc"${occupe}>
+    <p class="recette-bloc__titre"><strong>Sera appliqué :</strong></p>
+    ${renderLignesRecette(lignes)}
+    ${vu.incomplete
+      ? `<p class="avertissement" role="status">${echapper(vu.incomplete)}</p>` : ''}
+  </div>`;
 }
 
-function renderEffetLigne(r) {
-  if (r.effet === 'inchange') return '<span class="note">déjà à cette valeur</span>';
-  if (r.effet === 'remplace') {
-    return `<span class="note">remplacera <span class="technique">`
-      + `${echapper(r.current?.data ?? '')}</span></span>`;
-  }
-  return '<span class="note">sera posé</span>';
+/** L'état d'un enregistrement AVANT écriture (§38.5.2). */
+function etatApercu(r) {
+  if (r.effet === 'inchange') return ['déjà à cette valeur', 'fait'];
+  if (r.effet === 'remplace') return [`remplace ${r.current?.data ?? ''}`, 'change'];
+  return ['à poser', 'attendu'];
 }
+
+/**
+ * L'état d'une route AVANT déclaration (§38.6.4 bis).
+ *
+ * Une route déjà là vers le MÊME Spark n'est pas un refus : l'état visé est
+ * atteint. Vers un autre, c'en est un, et il NOMME ce Spark — l'unicité est
+ * portée par la base (§18.4).
+ */
+function etatRoute(r) {
+  if (r.etat === 'deja') return ['déjà en place', 'fait'];
+  if (r.etat === 'occupee') return [`tenue par ${r.spark ?? 'un autre Spark'}`, 'manque'];
+  return ['à déclarer', 'attendu'];
+}
+
 
 /**
  * Le compte rendu APRÈS écriture (§38.6.3, DESIGN_SYSTEM §6.13 « résultat
@@ -405,15 +544,22 @@ function renderEffetLigne(r) {
 function renderRecetteResultat(ui) {
   const fait = ui.recettes?.resultat;
   if (!fait) return '';
-  const partiel = fait.failed > 0;
-  return `<div class="${partiel ? 'avertissement' : 'note-transitoire'}"
+  const partiel = fait.failed > 0 || (fait.routes ?? []).some((r) => !r.declared);
+  // §38.6.4 ter : le MÊME gabarit que l'aperçu et le relevé. Les routes en tête,
+  // parce que c'est l'ordre réel de l'écriture (§38.6.4 bis).
+  const lignes = [
+    ...(fait.routes ?? []).map((r) => ligneRoute(r,
+      r.declared ? (r.already ? 'déjà en place' : 'déclarée') : `refusée : ${r.error ?? ''}`,
+      r.declared ? 'fait' : 'manque')),
+    ...fait.records.map((r) => ligneRecord(r,
+      r.written ? 'écrit' : `refusé : ${r.error ?? ''}`, r.written ? 'fait' : 'manque')),
+  ];
+  return `<div class="recette-bloc ${partiel ? 'avertissement' : 'note-transitoire'}"
                role="status" id="recette-resultat">
-    <p><strong>${echapper(fait.label)}</strong> — ${echapper(fait.written)} écrit(s)${
+    <p class="recette-bloc__titre"><strong>${echapper(fait.label)}</strong> — ${
+      echapper(fait.written)} écrit(s)${
       partiel ? `, ${echapper(fait.failed)} en échec` : ''}.</p>
-    <ul class="liste-simple">${fait.records.map((r) => `
-      <li><span class="technique">${echapper(r.name || '@')} ${echapper(r.type)}</span>
-        ${r.written ? 'écrit' : `<strong>refusé</strong> : ${echapper(r.error ?? '')}`}</li>`)
-      .join('')}</ul>
+    ${renderLignesRecette(lignes)}
     ${fait.incomplete ? `<p>${echapper(fait.incomplete)}</p>` : ''}
     <p class="note">${echapper(fait.propagation ?? '')}</p>
     <p class="formulaire__actions">
@@ -446,17 +592,20 @@ export function renderVerification(recettes) {
   const vu = recettes?.verification;
   if (!vu) return '';
   const ecart = vu.some((l) => l.etat !== 'conforme');
-  return `<div class="${ecart ? 'avertissement' : 'note-transitoire'}" role="status">
-    <p><strong>Relevé du fournisseur</strong> — ${
+  // §38.6.4 ter : le même gabarit que l'aperçu et le compte rendu.
+  const lignes = vu.map((l) => ligneRecord(
+    // La valeur TROUVÉE prend la place de l'attendue : « différent » seul
+    // n'apprend pas quoi corriger.
+    { ...l, data: l.etat === 'different' ? l.trouve : l.data },
+    l.etat === 'conforme' ? 'conforme'
+      : l.etat === 'absent' ? 'absent de la zone'
+      : 'différent — valeur trouvée',
+    l.etat === 'conforme' ? 'fait' : l.etat === 'absent' ? 'manque' : 'change'));
+  return `<div class="recette-bloc ${ecart ? 'avertissement' : 'note-transitoire'}"
+               role="status">
+    <p class="recette-bloc__titre"><strong>Relevé du fournisseur</strong> — ${
       ecart ? 'des écarts subsistent' : 'chaque ligne est en place'}.</p>
-    <ul class="liste-simple">${vu.map((l) => `
-      <li><span class="technique">${echapper(l.name || '@')} ${echapper(l.type)}</span> ${
-        l.etat === 'conforme' ? 'conforme'
-        : l.etat === 'absent' ? '<strong>absent</strong> de la zone'
-        // La valeur TROUVÉE est nommée : « différent » seul n'apprend pas quoi
-        // corriger.
-        : `<strong>différent</strong> — la zone porte
-           <span class="technique">${echapper(l.trouve)}</span>`}</li>`).join('')}</ul>
+    ${renderLignesRecette(lignes)}
     <p class="note">Ce relevé dit ce que le fournisseur PORTE. Un résolveur peut
     encore servir l’ancienne réponse pendant la durée du TTL.</p>
   </div>`;

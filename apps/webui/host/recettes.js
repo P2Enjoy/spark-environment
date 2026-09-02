@@ -1,6 +1,9 @@
 /**
  * Recettes DNS : un jeu d'enregistrements posé ENSEMBLE.
  *
+ * @spec docs/BACKLOG.md#SPK-88 · docs/DAT.md §38.6.4 bis (une recette pose
+ *       AUSSI sa route ; la route AVANT le DNS ; une route déjà là vers le même
+ *       Spark n'est pas un refus) · §26.3 (le port ne se devine pas)
  * @spec docs/BACKLOG.md#SPK-50 · docs/DAT.md §38.6 (les recettes),
  *       §38.6.1 (une recette est une fonction, pas une donnée stockée),
  *       §38.6.2 (la garde élargie), §38.6.3 (le compte rendu),
@@ -77,6 +80,12 @@ export const RECETTES = {
       // porte déjà — et une recette existe pour simplifier, pas pour interroger.
       { nom: 'address', label: 'Adresse publique de la Forge', adresseForge: true,
         aide: "C'est l'adresse de la FORGE, pas celle du Spark." },
+      // SPK-88 · §38.6.4 bis : sans route, la Forge répond une erreur pour ce
+      // nom — la recette livrait la moitié du résultat. Le port ne se devine
+      // d'aucun enregistrement DNS (§26.3).
+      { nom: 'port', label: 'Port du Spark', defaut: '8080', port: true,
+        aide: "Le port sur lequel écoute la pile DANS le Spark, pas celui de la "
+          + "Forge. Aucun enregistrement DNS ne le dit." },
     ],
     actionsHumaines: [],
     composer({ domain, address }, zone) {
@@ -87,6 +96,27 @@ export const RECETTES = {
           role: 'Le domaine lui-même répond sur cette Forge.' },
         { domain: `www.${nu}`, type: 'A', data: address,
           role: 'Le « www » y répond aussi.' },
+      ];
+    },
+    /**
+     * Les routes qui rendent ces enregistrements utiles (§38.6.4 bis).
+     *
+     * Les deux noms écrits pointent vers la Forge ; sans route, elle ne les sert
+     * pas. Ce sont donc les mêmes deux noms, et pas un de plus : une recette ne
+     * déclare que ce qu'elle a écrit.
+     */
+    routes({ domain, port }, zone) {
+      const nu = dansLaZone(domain, zone);
+      if (!nu) throw new DnsError('Aucune zone choisie.');
+      const cible = Number(port);
+      if (!Number.isInteger(cible) || cible < 1 || cible > 65535) {
+        throw new DnsError(`Port « ${port} » hors bornes : 1 à 65535.`);
+      }
+      return [
+        { domain: nu, port: cible, tls: true,
+          role: 'Le domaine nu est servi par ce Spark.' },
+        { domain: `www.${nu}`, port: cible, tls: true,
+          role: 'Le « www » aussi.' },
       ];
     },
   },
@@ -176,6 +206,9 @@ export function catalogue({ adresseForge = null } = {}) {
           aide: `${p.aide} Pré-rempli depuis le serveur courant.` }
       : p)),
     actionsHumaines: r.actionsHumaines,
+    // L'écran doit pouvoir DIRE, avant de choisir, qu'une recette déclarera des
+    // routes : ce n'est pas le même geste qu'une écriture DNS seule.
+    poseDesRoutes: Boolean(r.routes),
   }));
 }
 
@@ -238,6 +271,10 @@ export function composer(id, params = {}, { zone, ttl, motif = null,
       }),
       role: ligne.role,
     })),
+    // §38.6.4 bis : toutes les recettes n'en posent pas. `relais-transactionnel`
+    // ne sert aucun trafic HTTP, et lui en inventer une serait inventer un
+    // besoin. C'est une propriété de la recette, pas une option de l'écran.
+    routes: recette.routes ? recette.routes(complets, zone) : [],
     actionsHumaines: recette.actionsHumaines ?? [],
     incomplete: recette.incomplete ? recette.incomplete(params) : null,
   };

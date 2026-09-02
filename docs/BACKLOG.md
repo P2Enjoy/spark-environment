@@ -4860,6 +4860,84 @@ Spark le sert par accident.
   refus, en laissant à l'écran une liste périmée où le retrait déjà fait
   paraissait encore à faire.
 
+### [ ] SPK-89 · Corriger le port d'une route, sans la refaire
+
+Constat du responsable le 2026-09-02 : « il n'est pas possible de modifier le
+port d'affectation d'une route existante ». C'est exact : une route n'avait que
+deux gestes, la déclarer et la retirer. Corriger un port supposait de retirer
+puis redéclarer — donc de couper le service entre les deux, et de perdre
+l'identifiant de la route, sa place dans le journal et la trace de ce qu'elle
+avait dépassé.
+
+- Spécification : `docs/DAT.md` **§18.3 ter** (écrite et committée avant la
+  première ligne de code) · §18.4 (l'unicité porte sur le domaine), §18.5
+  (l'écart reste visible), §35 (la protection), §21.1 (le journal) ·
+  `docs/SCHEMA.md` §6 · manuel M7.
+- Dépend de : SPK-12.
+- Portée : `PATCH /v1/ingress/{domain}` qui change le **port** et le **TLS** ;
+  `applied_at` remis à zéro puis réconciliation ; action de journal
+  `ingress.update` portant l'ANCIENNE et la nouvelle valeur ; un geste
+  « Modifier » sur chaque route de la facette.
+- **Un port n'est pas une identité** : ce qui identifie une route est son
+  domaine. Le port et le TLS sont des propriétés de la cible, et une propriété se
+  corrige.
+- **Le domaine et le Spark ne se modifient PAS** : changer le domaine créerait un
+  doublon au lieu de déplacer (§22.4.7 ter) ; déplacer une route vers un autre
+  Spark change qui répond sans que l'exploitant du premier l'apprenne — ce
+  geste-là doit se voir dans le journal des deux, donc se fait en retirant et en
+  déclarant.
+- **Le journal porte l'avant ET l'après** : une entrée qui ne dirait que la
+  nouvelle valeur ne permettrait pas de savoir ce qu'on a corrigé.
+- **AUCUNE migration** : `target_port` et `tls` existent déjà, seule leur
+  mutabilité est nouvelle.
+- DoD : tests unitaires de la mise à jour, du refus sur Spark protégé, du refus
+  d'un port hors bornes, et du journal qui porte les deux valeurs ; test d'API ;
+  parcours E2E qui corrige un port depuis la facette et constate la nouvelle
+  valeur dans le registre ET l'état « non appliquée » puis appliqué ; captures
+  observées ; manuel M7 mis à jour ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-88 · Une recette pose AUSSI sa route, et les trois blocs se ressemblent
+
+Constat du responsable le 2026-09-02 : « quand on fait une recette DNS, pourquoi
+je ne peux pas sélectionner un port sur le Spark ? et pourquoi la recette ne crée
+pas la route ? Sans compter que la présentation et la vérif sont moches. »
+
+**Le fait** : la recette ne l'a jamais fait — le §38.6.1 la définissait comme un
+jeu d'enregistrements. Cette définition était trop étroite : la recette se lance
+depuis les ROUTES d'un Spark, écrit une adresse qui désigne la Forge, et sans
+route la Forge répond une erreur pour ce nom.
+
+- Spécification : `docs/DAT.md` **§38.6.4 bis** et **§38.6.4 ter** (écrites et
+  committées avant la première ligne de code), §38.6.1 révisé, §38.6.5 ·
+  §18.4 (l'unicité), §26.3 (le port ne se devine pas) ·
+  `docs/DESIGN_SYSTEM.md` §12.3 (une classe qui ne peint rien est un défaut) ·
+  manuel M7.
+- Dépend de : SPK-50 pour les recettes, SPK-12 pour la déclaration de route,
+  SPK-83 pour le chemin d'écriture réemployé.
+- Portée : `site-web` gagne un paramètre **port** et déclare les routes de son
+  domaine et de son `www` ; l'aperçu montre l'état de chaque route comme il
+  montre celui de chaque enregistrement ; le compte rendu rend le sort des deux
+  familles ; un gabarit unique pour l'aperçu, le compte rendu et le relevé.
+- **La route AVANT le DNS** (§38.6.4 bis) : les deux effets vivent sur deux
+  systèmes, et l'ordre choisit le mode de panne. DNS d'abord, une route ratée
+  laisse un nom qui pointe vers une Forge qui ne le sert pas — au pire capté par
+  le joker d'un autre Spark. Route d'abord, un DNS raté laisse une route que rien
+  ne désigne : personne ne le voit. On choisit l'échec inoffensif.
+- **Une route déjà là vers le MÊME Spark n'est pas un refus** : l'état visé est
+  atteint, et l'écran dit « déjà en place ». Vers un autre, c'est un refus qui
+  NOMME ce Spark.
+- **Le rapprochement se fait sur le domaine EXACT** : l'unicité porte sur lui, et
+  mêler `covers` ici recréerait la seconde vérité que le §38.8.4 refuse.
+- **`recette-lignes` ne peignait rien** : elle figure dans les manquantes connues
+  de `src/styles/classes.test.js`. La corriger retire l'exemption — une liste
+  d'exemptions qui survit à sa correction masque le retour du même défaut.
+- DoD : tests unitaires des routes composées et de leurs trois états ; test
+  d'écran du gabarit commun ; parcours E2E qui applique `site-web` et constate
+  **la route posée dans le registre ET l'enregistrement dans la zone**, dans cet
+  ordre ; un parcours prouve qu'une route déjà tenue par un autre Spark est
+  refusée sans empêcher le reste ; captures observées ; `recette-lignes` retirée
+  des manquantes connues ; manuel M7 mis à jour ; `@spec` / `@verifies` posés.
+
 ### [~] SPK-83 · Affecter une entrée DNS trouvée à un Spark, depuis l'inventaire
 
 Demandé par le responsable le 2026-09-02, en lisant l'inventaire de SPK-77 : « si
@@ -4898,6 +4976,10 @@ offrir la destruction là où l'exploitant voulait terminer son geste.
   Forge ET que le nombre de requêtes reçues par le fournisseur DNS n'a pas bougé.
   Captures observées, dont un refus RÉEL — « analytics » protégé — rendu dans la
   modale sans effacer la saisie.
+- **RÉVISÉ le 2026-09-02** (§38.8.5 bis) : après une affectation réussie, l'écran
+  ouvre les **routes du Spark**. La route vient d'être posée ; sa place est dans
+  la facette qui la porte, avec ses voisines et son état DNS. Rester sur
+  l'inventaire obligeait à aller la vérifier de mémoire, ailleurs.
 - **Reste à faire pour passer `[x]`** : le commit et le push, puis OP-14 comme
   SPK-77, dont cette unité dépend pour le relevé.
 

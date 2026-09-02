@@ -6,6 +6,8 @@
       niveau, ses trois bornes, et la préséance du plus spécifique)
 @spec docs/BACKLOG.md#SPK-77 · docs/DAT.md §38.8.4 (le rapprochement d'un nom
       DNS avec les routes se fait ICI, jamais dans la console)
+@spec docs/BACKLOG.md#SPK-89 · docs/DAT.md §18.3 ter (la cible d'une route se
+      corrige, elle ne se refait pas) · §18.5 (l'écart reste visible)
 
 On régénère la configuration entière, on ne la rapièce pas. Une configuration
 rapiécée diverge ; une configuration régénérée ne le peut pas.
@@ -245,6 +247,55 @@ def declare(
         route["supersedes"] = {"domain": prise["domain"],
                                "spark_name": prise["spark_name"]}
     return route
+
+
+def update(
+    connection: sqlite3.Connection, domain: str, port: int, tls: bool,
+    actor: str | None = None,
+) -> dict:
+    """Corrige la CIBLE d'une route : son port et son TLS (§18.3 ter).
+
+    Ni le domaine ni le Spark : le domaine identifie la route et porte l'unicité
+    (§18.4) ; déplacer une route d'un Spark à un autre change qui répond sans que
+    l'exploitant du premier l'apprenne, et ce geste-là doit se voir dans le
+    journal des deux — il se fait en retirant et en déclarant.
+
+    `applied_at` retombe à zéro : tant que Caddy n'a pas repris la configuration,
+    la route est enregistrée mais NON APPLIQUÉE, et l'écran doit pouvoir le dire
+    (§18.5). Un succès annoncé avant la reprise ferait chercher la panne du
+    mauvais côté.
+    """
+    nom = domain.strip().lower()
+    if not 1 <= port <= 65535:
+        raise IngressError(f"Port {port} hors bornes.")
+    with transaction(connection):
+        avant = connection.execute(
+            "SELECT * FROM ingress_route WHERE domain = ?", (nom,)
+        ).fetchone()
+        if avant is None:
+            raise IngressError(f"Aucune route pour « {nom} ».")
+        if avant["target_port"] == port and bool(avant["tls"]) == bool(tls):
+            # Rien à corriger : ne pas réécrire, ne pas remettre `applied_at` à
+            # zéro, ne pas inscrire au journal une correction qui n'a rien
+            # changé. Un journal qui compte des non-événements se lit moins bien.
+            return dict(avant)
+        connection.execute(
+            "UPDATE ingress_route SET target_port = ?, tls = ?, applied_at = NULL"
+            " WHERE id = ?",
+            (port, 1 if tls else 0, avant["id"]),
+        )
+        _audit(connection, actor, "ingress.update", avant["id"],
+               {"domain": nom,
+                "port_avant": avant["target_port"], "port": port,
+                "tls_avant": bool(avant["tls"]), "tls": bool(tls)},
+               "ok",
+               # L'AVANT et l'APRÈS : une entrée qui ne dirait que la nouvelle
+               # valeur ne permettrait pas de savoir ce qu'on a corrigé.
+               f"{nom} : port {avant['target_port']} → {port}"
+               + ("" if bool(avant["tls"]) == bool(tls)
+                  else f", TLS {'oui' if avant['tls'] else 'non'}"
+                       f" → {'oui' if tls else 'non'}") + ".")
+    return by_domain(connection, nom)
 
 
 def get(connection: sqlite3.Connection, route_id: str) -> dict:

@@ -430,3 +430,69 @@ def test_match_un_joker_ne_couvre_qu_UN_niveau(db):
     poser_spark(db, "S1", "vitrine")
     ingress.declare(db, "S1", "*.example.com", 8080)
     assert ingress.match(db, ["a.b.example.com"]) == {"a.b.example.com": None}
+
+
+# --- SPK-89 · CORRIGER LA CIBLE D'UNE ROUTE (docs/DAT.md §18.3 ter) ---------
+#
+# Un port n'est pas une identite : ce qui identifie une route est son domaine.
+# Corriger un port supposait de retirer puis redeclarer — donc de couper le
+# service, et de perdre l'identifiant, la place au journal et la trace de ce que
+# la route avait depasse.
+
+def test_update_corrige_le_port_sans_changer_l_identite(db):
+    poser_spark(db, "S1", "crm")
+    posee = ingress.declare(db, "S1", "crm.example.com", 8080)
+    corrigee = ingress.update(db, "crm.example.com", 9000, True)
+    assert corrigee["target_port"] == 9000
+    assert corrigee["id"] == posee["id"], "la route reste LA MEME route"
+    assert corrigee["spark_id"] == "S1"
+    assert corrigee["domain"] == "crm.example.com"
+
+
+def test_update_remet_applied_at_a_ZERO(db):
+    # §18.5 : tant que Caddy n'a pas repris la configuration, la route est
+    # enregistree mais NON APPLIQUEE, et l'ecran doit pouvoir le dire.
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    db.execute("UPDATE ingress_route SET applied_at = 'hier'"
+               " WHERE domain = 'crm.example.com'")
+    assert ingress.update(db, "crm.example.com", 9000, True)["applied_at"] is None
+
+
+def test_update_SANS_changement_n_ecrit_rien(db):
+    # Un journal qui compte des non-evenements se lit moins bien, et remettre
+    # `applied_at` a zero ferait croire a un ecart qui n'existe pas.
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    db.execute("UPDATE ingress_route SET applied_at = 'hier'"
+               " WHERE domain = 'crm.example.com'")
+    avant = db.execute("SELECT COUNT(*) c FROM audit_log").fetchone()["c"]
+    inchangee = ingress.update(db, "crm.example.com", 8080, True)
+    assert inchangee["applied_at"] == "hier"
+    assert db.execute("SELECT COUNT(*) c FROM audit_log").fetchone()["c"] == avant
+
+
+def test_update_journalise_l_AVANT_et_l_APRES(db):
+    # Une entree qui ne dirait que la nouvelle valeur ne permettrait pas de
+    # savoir ce qu'on a corrige.
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    ingress.update(db, "crm.example.com", 9000, False)
+    ligne = db.execute(
+        "SELECT * FROM audit_log WHERE action = 'ingress.update'").fetchone()
+    assert ligne is not None
+    assert "8080" in ligne["message"] and "9000" in ligne["message"]
+    assert "TLS" in ligne["message"], "le TLS change doit se lire aussi"
+
+
+def test_update_refuse_un_port_hors_bornes(db):
+    poser_spark(db, "S1", "crm")
+    ingress.declare(db, "S1", "crm.example.com", 8080)
+    with pytest.raises(ingress.IngressError, match="hors bornes"):
+        ingress.update(db, "crm.example.com", 70000, True)
+    assert ingress.by_domain(db, "crm.example.com")["target_port"] == 8080
+
+
+def test_update_refuse_un_domaine_INCONNU(db):
+    with pytest.raises(ingress.IngressError, match="Aucune route"):
+        ingress.update(db, "absent.example.com", 9000, True)

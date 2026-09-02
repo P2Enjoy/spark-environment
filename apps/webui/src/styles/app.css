@@ -502,6 +502,44 @@ tbody tr:hover { background: var(--color-hover); }
 .avertissement--laterale a { color: inherit; }
 .succes .note { margin-top: var(--space-2); }
 
+/* SPK-88 · docs/DAT.md §38.6.4 ter — les trois blocs d'une recette.
+   L'aperçu, le compte rendu et le relevé disent la MÊME liste à trois moments.
+   Un seul gabarit, donc un seul style : quatre colonnes stables, dont seule la
+   dernière — l'état — change d'un bloc à l'autre.
+
+   MESURÉ le 2026-09-02 : `recette-lignes` ne peignait RIEN — elle figurait dans
+   les manquantes connues de la preuve de style (§12.3), et les lignes
+   s'affichaient à l'état brut. */
+.recette-bloc { margin: 0; padding: var(--space-3); border-radius: var(--radius-sm); }
+.recette-bloc__titre { margin: 0 0 var(--space-2); }
+.recette-lignes { list-style: none; margin: 0; padding: 0; display: grid;
+                  gap: var(--space-1); }
+.recette-ligne {
+  /* MESURÉ le 2026-09-02 : quatre colonnes sur une ligne écrasaient le rôle à un
+     mot par ligne dès qu'un nom de route était long. Deux rangées, donc : ce
+     qu'on vise et son état d'abord, le rôle dessous, sur toute la largeur. */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline; gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
+}
+.recette-ligne:first-child { border-top: 0; }
+/* Une route n'est pas un enregistrement : une barre la distingue sans lui donner
+   une autre grammaire (§38.6.4 ter). */
+.recette-ligne--route { border-left: 2px solid var(--color-brand); padding-left: var(--space-2); }
+.recette-ligne__quoi {
+  grid-column: 1; grid-row: 1; min-width: 0;
+  display: flex; flex-wrap: wrap; gap: 0 var(--space-2);
+}
+.recette-ligne__cible { font-weight: 700; overflow-wrap: anywhere; }
+.recette-ligne__valeur { color: var(--color-text-2); overflow-wrap: anywhere; }
+.recette-ligne__etat { grid-column: 2; grid-row: 1; justify-self: end; white-space: nowrap; }
+.recette-ligne__role {
+  grid-column: 1 / -1; grid-row: 2;
+  color: var(--color-text-3); font-size: var(--text-compact);
+}
+.recette-ligne__role:empty { display: none; }
+
 /* Seul le refus du serveur est rouge. */
 .refus {
   margin: 0; padding: var(--space-3);

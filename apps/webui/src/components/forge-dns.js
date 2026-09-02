@@ -46,7 +46,6 @@ export const FORGE_DNS_VIDE = {
   sparks: [],
   valeurs: { spark: '', port: 8080, tls: true },
   refusAffectation: null,
-  affectee: null,
   // Le sort de CHAQUE ligne, jamais un verdict global : un nettoyage peut
   // retirer deux entrées et s'en faire refuser une troisième, et on ne défait
   // pas une suppression DNS (même règle qu'au §38.6.3).
@@ -234,21 +233,6 @@ function renderAffectation(etat) {
   });
 }
 
-/** Ce qui vient d'être affecté. Transitoire : le relevé qui suit fait foi. */
-function renderAffectee(etat) {
-  if (!etat.affectee) return '';
-  const { domain, spark, supersedes } = etat.affectee;
-  return `<p class="note-transitoire" role="status" id="dns-affectee">
-    <span class="technique">${echapper(domain)}</span> est désormais servi par le
-    Spark <strong>${echapper(spark)}</strong>.${supersedes
-      // §18.3 bis : une déclaration qui prend le pas sur un joker doit NOMMER ce
-      // qu'elle dépasse — le silence produit une panne cherchée du mauvais côté.
-      ? ` Cette route prend le pas sur <span class="technique">${
-          echapper(supersedes.domain)}</span>, qui menait au Spark
-          <strong>${echapper(supersedes.spark_name)}</strong>.`
-      : ''}</p>`;
-}
-
 /** Le corps de la page, selon l'état (§6.13). */
 function renderCorps(etat) {
   if (etat.chargement && !etat.entries.length) {
@@ -314,7 +298,6 @@ export function renderForgeDns(etat = FORGE_DNS_VIDE) {
   zones du compte — messagerie, vérifications, services tiers — ne la concernent
   pas et ne sont jamais touchés.</p>
   ${renderResultat(etat)}
-  ${renderAffectee(etat)}
   ${renderCorps(etat)}
 </div>
 ${renderConfirmation(etat)}

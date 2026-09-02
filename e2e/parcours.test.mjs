@@ -2322,6 +2322,87 @@ test('l’inventaire DNS sépare ce qui est servi de ce qui s’est perdu, et ne
   });
 });
 
+// --- SPK-88 · UNE RECETTE POSE AUSSI SA ROUTE (docs/DAT.md §38.6.4 bis) ----
+
+test('une recette de site web pose sa ROUTE avant son enregistrement', async () => {
+  await parcours('recette-avec-route', async () => {
+    dns.poser([{ name: '', type: 'MX', data: '10 mail.exemple.test.', ttl: 3600 }]);
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-routes');
+    await page.click('[data-ouvre="recette"]');
+    await page.waitForSelector('dialog.modale[open] #recette-id', { timeout: 15000 });
+
+    await page.selectOption('#recette-id', 'site-web');
+    await page.selectOption('#recette-zone', 'staging.exemple.test');
+    await page.fill('[data-param="domain"]', '');
+    await page.fill('[data-param="address"]', '203.0.113.10');
+    // §26.3 : le port ne se devine d'aucun enregistrement DNS.
+    await page.fill('[data-param="port"]', '9300');
+    await page.dispatchEvent('[data-param="port"]', 'change');
+
+    // L'aperçu montre les ROUTES avant les enregistrements — l'ordre affiché est
+    // l'ordre réel (§38.6.4 bis).
+    await page.waitForSelector('#recette-apercu .recette-ligne--route', { timeout: 15000 });
+    const apercu = await page.textContent('#recette-apercu');
+    assert.ok(apercu.includes('route staging.exemple.test'));
+    assert.ok(apercu.includes('port 9300'));
+    assert.ok(apercu.includes('à déclarer'));
+    assert.ok(apercu.indexOf('route staging.exemple.test') < apercu.indexOf('@ A'),
+      'la route se lit AVANT l’enregistrement');
+
+    await page.click('[data-engage="recette"]');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+    const bilan = await page.textContent('#recette-resultat');
+    assert.ok(bilan.includes('déclarée'), 'le sort de la ROUTE est rendu');
+    assert.ok(bilan.includes('écrit'), 'celui de l’enregistrement aussi');
+
+    // EFFET sur la Forge : les deux routes existent, sur le port demandé.
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    for (const nom of ['staging.exemple.test', 'www.staging.exemple.test']) {
+      const posee = corps.routes.find((r) => r.domain === nom);
+      assert.ok(posee, `la route ${nom} doit exister`);
+      assert.equal(posee.spark_name, 'boutique');
+      assert.equal(posee.target_port, 9300);
+    }
+    // EFFET chez le fournisseur : les deux enregistrements aussi.
+    const zone = dns.enregistrements('staging.exemple.test');
+    assert.ok(zone.some((r) => r.name === '' && r.type === 'A'));
+    assert.ok(zone.some((r) => r.name === 'www' && r.type === 'A'));
+  });
+});
+
+// --- SPK-89 · CORRIGER LA CIBLE D'UNE ROUTE (docs/DAT.md §18.3 ter) --------
+
+test('le port d’une route se CORRIGE, sans que la route change d’identité', async () => {
+  await parcours('route-corriger-port', async () => {
+    await declarerRoute('boutique', 'a-corriger.exemple.test', '8080');
+    const { corps: avant } = await pile.lireSparkd('/v1/ingress');
+    const ancienne = avant.routes.find((r) => r.domain === 'a-corriger.exemple.test');
+    assert.equal(ancienne.target_port, 8080);
+
+    await ouvrir('boutique', 'routes');
+    await page.click(`${ligneRoute('a-corriger.exemple.test')} [data-modifie-route]`);
+    await page.waitForSelector('dialog.modale[open] #edit-port', { timeout: 10000 });
+    // Le domaine est montré et NON saisissable : il identifie la route.
+    assert.equal(await page.inputValue('#edit-domaine'), 'a-corriger.exemple.test');
+    assert.equal(await page.getAttribute('#edit-domaine', 'readonly'), '');
+    // Les valeurs viennent de la route AFFICHÉE, pas de champs vides.
+    assert.equal(await page.inputValue('#edit-port'), '8080');
+
+    await page.fill('#edit-port', '9500');
+    await page.click('[data-engage="route-edition"]');
+    await page.waitForFunction(
+      () => !document.querySelector('#route-edition[open]'), null, { timeout: 15000 });
+
+    // EFFET : la route est LA MÊME, sur un autre port.
+    const { corps: apres } = await pile.lireSparkd('/v1/ingress');
+    const corrigee = apres.routes.find((r) => r.domain === 'a-corriger.exemple.test');
+    assert.equal(corrigee.target_port, 9500);
+    assert.equal(corrigee.id, ancienne.id, 'la route garde son identité');
+    assert.equal(corrigee.spark_name, 'boutique');
+  });
+});
+
 // --- SPK-83 · AFFECTER UNE ENTRÉE TROUVÉE (docs/DAT.md §38.8.5 bis) --------
 
 test('une entrée trouvée s’AFFECTE à un Spark, sans rien écrire dans la zone', async () => {
@@ -2352,12 +2433,16 @@ test('une entrée trouvée s’AFFECTE à un Spark, sans rien écrire dans la zo
     await page.fill('#affect-port', '9100');
     await page.click('[data-engage="dns-affectation"]');
 
-    // Le relevé refait dit « servi » parce que la FORGE le dit.
-    await page.waitForSelector('#dns-affectee', { timeout: 20000 });
-    assert.match(await page.textContent('#dns-affectee'), /boutique/);
-    await page.waitForSelector(`${ligne} .badge--success`, { timeout: 15000 });
-    assert.match(await page.textContent(ligne), /Servi/);
-    assert.match(await page.textContent(ligne), /boutique/);
+    // §38.8.5 bis : l'écran ouvre les ROUTES du Spark. La route vient d'être
+    // posée, et sa place est dans la facette qui la porte.
+    await page.waitForSelector('#titre-routes', { timeout: 20000 });
+    assert.match(page.url(), /#\/sparks\/boutique\/routes$/);
+    await page.waitForSelector('li:has-text("a-terminer.exemple.test")', { timeout: 15000 });
+    // Et son état DNS y est relevé (§38.9.1) : ce nom pointe bien ici.
+    await page.waitForSelector('li:has-text("a-terminer.exemple.test") .badge--success',
+                               { timeout: 20000 });
+    assert.match(await page.textContent('li:has-text("a-terminer.exemple.test")'),
+                 /DNS ici/);
 
     // EFFET, constaté chez le fournisseur : la zone n'a pas bougé d'un octet.
     assert.equal(dns.recus().length, avant,

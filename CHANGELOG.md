@@ -3,6 +3,30 @@
 ## [Non publié]
 
 ### Ajouté
+- **Une recette de site web pose AUSSI sa route** (SPK-88, `docs/DAT.md`
+  §38.6.4 bis) : elle ne l'avait jamais fait — le §38.6.1 la définissait comme un
+  jeu d'enregistrements. C'était trop étroit : la recette se lance depuis les
+  **routes** d'un Spark, écrit une adresse qui désigne la Forge, et sans route la
+  Forge répond une erreur pour ce nom. `site-web` gagne donc un paramètre
+  **port** et déclare les routes du domaine et de son `www`. **La route part
+  avant le DNS** : l'ordre choisit le mode de panne — un DNS posé sans route
+  laisse un nom qui pointe vers une Forge qui ne le sert pas, quand une route
+  sans DNS ne se voit pas. Une route déjà là vers le même Spark n'est pas un
+  refus mais un état atteint ; vers un autre Spark, le refus le **nomme**.
+- **Le port d'une route se corrige, sans la refaire** (SPK-89, `docs/DAT.md`
+  §18.3 ter) : une route n'avait que deux gestes, la déclarer et la retirer.
+  Corriger un port supposait de retirer puis redéclarer — donc de couper le
+  service entre les deux, et de perdre l'identifiant de la route, sa place au
+  journal et la trace de ce qu'elle avait dépassé. Un port n'est pas une
+  identité : ce qui identifie une route est son **domaine**. Le port et le TLS
+  se corrigent depuis la facette « Routes » ; le domaine et le Spark, non — les
+  changer n'est pas une correction. Le journal porte l'**ancienne** et la
+  nouvelle valeur, et la route redevient « non appliquée » le temps que le proxy
+  reprenne la configuration.
+- **Après une affectation, l'écran ouvre les routes du Spark** (SPK-83 révisé,
+  `docs/DAT.md` §38.8.5 bis) : la route vient d'être posée, et sa place est dans
+  la facette qui la porte — avec ses voisines, son état d'application et son état
+  DNS. Rester sur l'inventaire obligeait à aller la vérifier ailleurs.
 - **Un Spark donne son dossier de déploiement, à coller à un agent** (SPK-85,
   `docs/DAT.md` §44.9) : la fenêtre d'un Spark porte une section *Dossier pour un
   agent* et un bouton qui en copie le texte. Il décrit la cellule telle que le
@@ -107,6 +131,14 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Les trois blocs d'une recette peignent enfin quelque chose** (SPK-88,
+  `docs/DAT.md` §38.6.4 ter, `docs/DESIGN_SYSTEM.md` §12.3) : la classe
+  `recette-lignes` que l'aperçu, le compte rendu et le relevé employaient
+  **n'existait dans aucune feuille de style** — elle figurait dans les manquantes
+  connues de la preuve de style, et les lignes s'affichaient à l'état brut. Les
+  trois blocs disent la même liste à trois moments ; ils partagent désormais un
+  seul gabarit : ce qui est visé, ce qui y va, le rôle, et l'état — seul ce
+  dernier change d'un bloc à l'autre. L'exemption est retirée de la preuve.
 - **L'écran des pools n'accuse plus le transport SSH d'une panne qui n'est pas la
   sienne** (SPK-68, SPK-16, `docs/DAT.md` §22.3) : sur la Forge réelle, il
   annonçait *« Le transport SSH ne répond pas »* à côté d'un en-tête affichant

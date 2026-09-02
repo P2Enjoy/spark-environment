@@ -134,6 +134,23 @@ poser une seconde sur le poste ne servirait à rien.
 **Le compte ne porte aucune zone.** La lecture a réussi et n'a rien trouvé : il
 faut créer la zone chez le fournisseur avant de pouvoir y écrire.
 
+## Corriger une route
+
+Chaque route porte un bouton **Modifier**. Il change ce qui peut l'être : le
+**port** du Spark et le certificat **TLS**.
+
+Ce qui ne change pas : le **domaine** — c'est lui qui identifie la route — et le
+**Spark**. Pour servir un autre nom, déclarez une route et retirez celle-ci ;
+pour changer de Spark, faites de même, afin que le geste se voie dans le journal
+des deux.
+
+Après correction, la route redevient **« non appliquée »** le temps que le proxy
+reprenne la configuration. Ce n'est pas une panne : c'est l'état réel, et l'écran
+préfère le dire plutôt que d'annoncer un succès qu'il n'a pas constaté.
+
+Le journal garde l'ancienne **et** la nouvelle valeur : sans les deux, on ne
+saurait pas ce qui a été corrigé.
+
 ## Un domaine déjà pris
 
 Deux Sparks ne peuvent pas revendiquer le même nom. Le refus vient de la base de
@@ -193,6 +210,26 @@ elle est produite par votre fournisseur, et une clé inventée produirait une
 signature invalide — exactement l'effet qu'on cherche à éviter. Laissée vide, la
 recette est posée quand même, et la fenêtre vous dit alors qu'elle est
 **incomplète** : les messages partiront sans signature.
+
+### La recette pose aussi vos routes
+
+Une recette de **site web** ne se contente pas d'écrire le DNS : elle déclare
+aussi les **routes** qui font répondre ces noms sur votre Spark. C'est pour cela
+qu'elle vous demande un **port** — celui sur lequel votre pile écoute *dans* le
+Spark. Aucun enregistrement DNS ne le dit, et sans route la Forge répondrait une
+erreur pour un nom qui pointe pourtant vers elle.
+
+L'aperçu montre les routes **avant** les enregistrements, parce que c'est l'ordre
+réel : la route part d'abord. Si le DNS échouait ensuite, vous auriez une route
+que rien ne désigne — invisible et sans conséquence. Dans l'autre sens, vous
+auriez un nom qui mène à une Forge qui ne le sert pas.
+
+Chaque route porte son état, comme chaque enregistrement : *à déclarer*, *déjà en
+place* si elle existe déjà vers ce Spark — ce n'est pas une erreur, c'est un état
+déjà atteint —, ou *tenue par* un autre Spark, qui la garde.
+
+La recette de **relais transactionnel** ne déclare aucune route : elle ne sert
+aucun trafic web.
 
 ### Après : ce qui est passé, et ce qui ne l'est pas
 
@@ -274,10 +311,10 @@ Si vous en choisissez un qui refuse, c'est son refus réel qui s'affiche, dans l
 fenêtre, sans effacer votre saisie. De même si le domaine est déjà routé
 ailleurs : le premier qui l'a pris le garde.
 
-Après coup, la page relève de nouveau : l'entrée passe à **Servi** parce que la
-Forge le dit, pas parce que l'écran l'a supposé. Si votre déclaration prend le pas
-sur un joker, la page vous **nomme** la route dépassée et le Spark qu'elle
-servait.
+Après coup, l'écran vous emmène dans l'onglet **Routes** du Spark : la route vient
+d'être posée, et c'est là qu'elle vit — avec ses voisines, son état d'application
+et son état DNS. Si votre déclaration prend le pas sur un joker, la page vous
+**nomme** la route dépassée et le Spark qu'elle servait.
 
 ### Ce que cette page ne montre pas
 

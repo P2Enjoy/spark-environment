@@ -46,7 +46,6 @@ const CONNUES = new Set([
   'controle--compact',    // app.js
   'epreuve--absent',      // servers-view.js
   'epreuve--ok',          // servers-view.js
-  'recette-lignes',       // spark-admin.js
 ]);
 
 function classesDefinies() {

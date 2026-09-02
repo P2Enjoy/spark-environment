@@ -225,23 +225,3 @@ test('un refus du serveur s’affiche DANS la modale, sans effacer la saisie', (
   assert.ok(rendu.includes('déjà routé'));
   assert.ok(rendu.includes('value="9000"'), 'la saisie survit au refus');
 });
-
-test('une affectation qui PREND LE PAS nomme ce qu’elle dépasse', () => {
-  // §18.3 bis : le silence produirait une panne cherchee du mauvais cote.
-  const rendu = renderForgeDns(vue({
-    entries: [], configured: true,
-    affectee: { domain: 'api.exemple.tech', spark: 'api',
-                supersedes: { domain: '*.exemple.tech', spark_name: 'vitrine' } } }));
-  assert.ok(rendu.includes('id="dns-affectee"'));
-  assert.ok(rendu.includes('*.exemple.tech'));
-  assert.ok(rendu.includes('vitrine'));
-  assert.ok(/prend le pas/.test(rendu));
-});
-
-test('une affectation ORDINAIRE ne parle d’aucune préséance', () => {
-  const rendu = renderForgeDns(vue({
-    entries: [], configured: true,
-    affectee: { domain: 'ancien.exemple.tech', spark: 'boutique', supersedes: null } }));
-  assert.ok(rendu.includes('boutique'));
-  assert.ok(!/prend le pas/.test(rendu));
-});

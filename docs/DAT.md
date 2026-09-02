@@ -2063,6 +2063,43 @@ possible pour la première fois, puisque la console sait écrire dans la zone ;
 elle n'est pas pour autant implémentée, et le §18.3 continue de valoir : l'écran
 n'affirme jamais qu'un certificat est émis.
 
+### 18.3 ter La cible d'une route se corrige, elle ne se refait pas
+
+**Constat du responsable, 2026-09-02** : « il n'est pas possible de modifier le
+port d'affectation d'une route existante ».
+
+C'est exact, et c'était un trou. Une route n'avait que deux gestes : la déclarer
+et la retirer. Corriger un port supposait donc de **retirer puis redéclarer** —
+c'est-à-dire de couper le service entre les deux, et de perdre en chemin ce que
+la route porte : son identifiant, sa place dans le journal, et la trace de ce
+qu'elle a dépassé.
+
+**Un port n'est pas une identité.** Ce qui identifie une route est son
+**domaine** : c'est lui qui porte l'unicité (§18.4), lui que Caddy filtre, lui
+que le DNS désigne. Le port et le TLS sont des propriétés de la cible, et une
+propriété se corrige.
+
+Ce qui se modifie : le **port** et le **TLS**. Ce qui ne se modifie pas :
+
+- le **domaine** — le changer ne serait pas une correction mais une autre route,
+  et le §22.4.7 ter dit déjà pourquoi renommer par une modification crée un
+  doublon au lieu de déplacer ;
+- le **Spark** — déplacer une route d'un Spark à un autre change qui répond, sans
+  que l'exploitant du premier l'apprenne. Ce geste-là se fait en retirant et en
+  déclarant, parce qu'il doit se voir dans le journal des deux Sparks.
+
+**La protection s'applique** (§35) : modifier une route est une écriture
+d'ingress, et un Spark protégé la refuse comme il refuse la déclaration.
+
+**La réconciliation suit, et l'écart reste visible.** La modification remet
+`applied_at` à zéro : tant que Caddy n'a pas repris la configuration, l'écran dit
+« non appliquée » (§18.5). Une modification enregistrée mais non appliquée est un
+état réel, et le masquer par un succès ferait chercher la panne du mauvais côté.
+
+Le journal reçoit une action propre, `ingress.update`, qui porte l'**ancienne**
+et la **nouvelle** valeur. Une entrée qui ne dirait que la nouvelle ne permettrait
+pas de savoir ce qu'on a corrigé.
+
 ### 18.4 L'unicité du domaine appartient à la base
 
 `ingress_route.domain` est `UNIQUE` (`docs/SCHEMA.md` §6). Deux Sparks ne peuvent
@@ -6044,8 +6081,14 @@ nom ET un type exacts.
 #### 38.6.1 Ce qu'une recette EST dans le produit
 
 Une recette n'est **pas une donnée stockée**. C'est une **fonction** : elle prend
-un domaine, une adresse de Forge et quelques paramètres, et rend une liste
-d'enregistrements prêts à écrire. Rien n'est retenu au registre.
+un domaine, une adresse de Forge et quelques paramètres, et rend ce qu'il faut
+appliquer. Rien n'est retenu au registre.
+
+**RÉVISÉ le 2026-09-02 (§38.6.4 bis).** Ce qu'elle rend n'est plus seulement une
+liste d'enregistrements : c'est aussi les **routes d'ingress** qui les rendent
+utiles. La définition d'origine était trop étroite — une recette qui écrit une
+adresse désignant la Forge, sans la route qui la sert, livre la moitié du
+résultat.
 
 Le motif est le même qu'au §18.1 : une recette enregistrée divergerait de la
 recette du code dès la première correction, et deux vérités coexisteraient sans
@@ -6057,6 +6100,7 @@ Une recette porte donc, et rien de plus :
 - un **identifiant** stable et un libellé lisible ;
 - les **paramètres** qu'elle réclame, chacun avec ce qu'il attend ;
 - la liste des enregistrements qu'elle produit ;
+- les **routes** qu'elle déclare, s'il y en a — toutes n'en ont pas (§38.6.4 bis) ;
 - les **actions humaines restantes** qu'elle ne peut pas accomplir (§38.7).
 
 #### 38.6.2 La garde élargie : ce que chaque type exige
@@ -6139,6 +6183,81 @@ Le `MX` vers un `blackhole` est délibéré et doit être dit : ce sous-domaine
 censé recevoir du courrier le couperait — c'est écrit dans la description de la
 recette, pas seulement dans ce document.
 
+#### 38.6.4 bis Une recette de site web pose AUSSI sa route
+
+**Constat du responsable, 2026-09-02** : « quand on fait une recette DNS,
+pourquoi je ne peux pas sélectionner un port sur le Spark ? et pourquoi la
+recette ne crée pas la route ? »
+
+**Le fait d'abord** : elle ne l'a jamais fait. Le §38.6.1 définissait une recette
+comme un jeu d'**enregistrements**, et c'est tout ce qu'elle a jamais écrit.
+
+**Et cette définition était trop étroite.** La recette se lance depuis les
+**routes** d'un Spark ; elle écrit une adresse qui désigne la Forge ; et sans
+route, la Forge répond une erreur pour ce nom — ou pire, le joker d'un autre
+Spark le capte (§18.3 bis). Elle livrait donc la moitié du résultat, et laissait
+deviner l'autre. Une recette existe pour éviter exactement cela.
+
+**Révision du §38.6.1.** Une recette est un jeu d'enregistrements DNS **et** les
+routes d'ingress qui les rendent utiles. Toutes n'en posent pas :
+`relais-transactionnel` ne sert aucun trafic HTTP, et lui en ajouter une serait
+inventer un besoin. C'est une propriété de la recette, pas une option de l'écran.
+
+**Le port est un paramètre, et il ne se devine pas.** Aucun enregistrement DNS ne
+dit sur quel port la pile écoute DANS le Spark ; le §26.3 le dit déjà de la
+déclaration ordinaire, et ce chemin-ci n'en sait pas plus.
+
+##### L'ordre : la route d'abord, le DNS ensuite
+
+Les deux effets vivent sur **deux systèmes** — le registre de la Forge et la zone
+du fournisseur — et l'un peut échouer sans l'autre. L'ordre n'est donc pas une
+commodité, il choisit le mode de panne :
+
+- **DNS d'abord, route ensuite.** Si la route échoue, le nom pointe vers une
+  Forge qui ne le sert pas. Au mieux une erreur visible, au pire le joker d'un
+  autre Spark répond à sa place — et c'est précisément le nom « perdu » que
+  l'inventaire du §38.8 apprend à trouver après coup ;
+- **route d'abord, DNS ensuite.** Si le DNS échoue, la route existe et rien ne la
+  désigne. Personne ne le voit, rien ne répond de travers.
+
+On choisit l'échec **inoffensif** : la route d'abord.
+
+##### Une route déjà là n'est pas un échec
+
+Si le domaine est déjà routé vers **le même** Spark, l'état visé est atteint :
+l'aperçu dit « déjà en place », et l'application ne le compte pas comme un refus.
+S'il est routé vers un **autre** Spark, c'est un refus, et il NOMME ce Spark —
+l'unicité est portée par la base (§18.4), et la contourner n'est pas au programme.
+
+Le rapprochement se fait ici sur le domaine **exact** : une route se déclare pour
+un nom exact, et c'est sur lui que porte l'unicité. Le `covers` du §18.3 bis n'a
+rien à faire dans ce calcul, et l'y mêler recréerait la seconde vérité que le
+§38.8.4 refuse.
+
+#### 38.6.4 ter Ce que trois blocs identiques doivent avoir en commun
+
+**Constat du même jour** : « la présentation et la vérif sont moches ». C'est
+mesurable, et ce n'était pas un jugement de goût : la classe `recette-lignes` que
+les trois blocs emploient **ne peint rien** — elle figure dans la liste des
+classes manquantes connues de la preuve de style (§12.3 du design system). Les
+lignes s'affichaient donc à l'état brut.
+
+Trois blocs disent la même liste à trois moments : ce qui **sera** écrit
+(l'aperçu, §38.5.2), ce qui **a été** écrit (le compte rendu, §38.6.3), et ce que
+la zone **porte** (le relevé, §38.9.1). Ils partagent donc un seul gabarit, et
+c'est la règle :
+
+**Une ligne de recette porte quatre choses, toujours aux mêmes places** : ce
+qu'elle vise (le nom et le type), ce qui y va (la valeur), son rôle en une
+phrase, et son **état**. Seul l'état change d'un bloc à l'autre — `à poser`,
+`remplace`, `déjà en place`, `écrit`, `refusé`, `conforme`, `différent`,
+`absent`.
+
+Trois gabarits pour la même liste, ce serait trois endroits où la colonne se
+décale et où un état s'oublie. Les routes s'y rangent comme les enregistrements :
+même ligne, même grammaire, une colonne de plus pour dire qu'il s'agit d'une
+route et non d'un nom.
+
 #### 38.6.5 La surface d'API
 
 ```
@@ -6146,6 +6265,12 @@ GET  /api/dns/recipes                    les recettes, leurs paramètres, leurs 
 POST /api/dns/recipe/preview  {recipe, params}   ce qui SERA écrit, et l'effet de chaque ligne
 POST /api/dns/recipe          {recipe, params}   écrit, et rend le sort de chaque ligne
 ```
+
+L'aperçu et le catalogue portent aussi les **routes** que la recette déclarera
+(§38.6.4 bis). Elles ne sont pas écrites par ces routes-là : la déclaration passe
+par `POST /v1/ingress` de `sparkd`, comme au §38.8.5 bis et pour la même raison —
+un second chemin vers la même écriture ferait deux gardes à maintenir. C'est
+l'écran qui enchaîne les deux effets, dans l'ordre que le §38.6.4 bis impose.
 
 Elle vit sur l'**hôte console**, comme le reste du §38 : le jeton n'atteint
 jamais la Forge.
@@ -6395,6 +6520,13 @@ une autre, le serveur le dit et l'écran le NOMME.
 
 **Après l'affectation, on relève de nouveau.** L'entrée doit repasser au verdict
 « servi » parce que la Forge le dit, jamais parce que l'écran l'a supposé.
+
+**Puis on ouvre les routes du Spark** (demandé le 2026-09-02). La route vient
+d'être posée : sa place est dans la facette qui la porte, avec ses voisines, son
+état d'application et son état DNS (§38.9.1). Rester sur l'inventaire obligerait
+à aller la vérifier de mémoire, ailleurs. L'inventaire répond à « qu'est-ce qui
+pointe ici » ; une fois la question réglée pour un nom, l'écran suivant est celui
+du Spark.
 
 #### 38.8.6 La surface d'API
 
