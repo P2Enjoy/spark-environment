@@ -445,6 +445,28 @@ jamais « prête » avant les réponses mesurées de `/healthz` et `/readyz`. Un
 déconnexion conserve l'étape interrompue et offre **Reprendre le diagnostic**,
 pas « Reprendre » comme si une écriture avait nécessairement continué.
 
+**Un assistant qui relève doit conclure** (ajouté le 2026-09-02). Le panneau
+rendait dix versions et zéro verdict : une Forge intégralement installée y
+recevait exactement l'écran d'une machine nue. Il porte donc une liste de
+**conformité constatée** — un contrôle par ligne, son libellé, et la valeur
+mesurée qui le justifie. Trois règles, qui vont ensemble :
+
+- le **vert** de « Forge prête » ne s'écrit que sur les deux codes HTTP mesurés
+  de `/healthz` et `/readyz` (`DESIGN_SYSTEM.md` §14.9). La présence du paquet et
+  une unité active donnent l'accent, jamais le vert ;
+- un contrôle **non lisible** — la commande a été refusée, la valeur n'a pas été
+  relevée — reste `à faire` avec son motif à côté. Il n'est pas conforme par
+  défaut : un relevé partiel ne doit pas se lire comme un relevé rassurant ;
+- quand un invariant est de nouveau constaté conforme, sa phase s'affiche
+  `terminée` avant même l'engagement, et l'écran ne propose plus la disposition
+  de rechange qui n'a plus de sujet — un pool conservé ne se voit pas offrir un
+  pool fichier à côté.
+
+Le formulaire du plan affiche les valeurs que **la Forge déclare**, pas les
+défauts du contrat de déploiement, et le dit. Une valeur reproposée par défaut
+sur une machine qui en déclare une autre ferait de l'écran l'auteur d'une
+réécriture que personne n'a demandée.
+
 Quand SSH est établi mais que `sparkd` ne répond pas, la carte des ressources ne
 devient pas un refus rouge avec une sortie technique et **Réessayer** : aucune
 ressource n'est encore lisible, et rejouer la même route ne constitue pas un

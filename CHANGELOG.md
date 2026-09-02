@@ -3,6 +3,29 @@
 ## [Non publié]
 
 ### Corrigé
+- **L'assistant d'installation voit enfin la Forge telle qu'elle est** (SPK-68,
+  `docs/DAT.md` §50.2 bis, §50.4) : le relevé interrogeait `incus` sous
+  l'identité SSH ordinaire, à qui la socket du démon est refusée. La commande
+  rendait son mode d'emploi, le pool ZFS existant devenait invisible, et
+  l'assistant proposait de **créer un pool fichier sur une Forge qui portait déjà
+  son miroir**. Le droit d'administration déjà constaté pour `sudo` sert
+  désormais aux lectures qui l'exigent, et une sortie sans la forme attendue est
+  écartée au décodage au lieu de devenir une donnée.
+- **Le plan reprend la configuration déclarée par la Forge, plus les défauts du
+  contrat** (SPK-68, `docs/DAT.md` §50.4) : cinq clés nommées de
+  `/etc/sparkd/sparkd.env` et le plafond ARC sont relevés. Une Forge installée
+  sur `tank`/`br1` ne se voit plus reproposer `spark`/`sparkbr0`, et les ports
+  réservés supplémentaires ne sont plus retirés en silence. Le fichier n'est
+  jamais lu en entier : `SPARKD_NOTIFY_URL` et les autres valeurs sensibles ne
+  remontent pas.
+- **Le diagnostic conclut, au lieu de seulement relever** (SPK-68,
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-12) : dix contrôles mesurés — dont les codes
+  HTTP de `/healthz` et `/readyz` — disent si la Forge est installée, et si elle
+  est prête. Une phase de nouveau constatée conforme s'affiche `terminée` avant
+  l'engagement. Une Forge intégralement installée ne reçoit plus exactement le
+  même écran qu'une machine nue. « Forge prête » n'est écrit que sur les deux
+  codes mesurés ; un contrôle non lisible reste un défaut, pas un succès par
+  défaut.
 - **La tranche des Sparks délègue à nouveau ses contrôleurs** (SPK-71,
   `docs/DAT.md` §32.4 ter) : le paquet pose `spark-delegation.service`, une unité
   `Slice=spark.slice` déléguée qui n'existe que pour son cgroup. systemd n'active

@@ -8540,3 +8540,89 @@ Spécification écrite avant toute ligne de code : unité **SPK-75**, `docs/DAT.
 §37.4.2 révisé et §37.4.8, `docs/DESIGN_SYSTEM_APP.md` SPK-DS-04 révisé et
 SPK-DS-16, et la ligne de SPK-70 qui promettait la mort à la navigation est
 corrigée sur place.
+
+---
+
+## 2026-09-02 · SPK-68 — l'assistant lisait la Forge sans le droit de la lire
+
+**Problème signalé.** « Installer cette Forge » et « Diagnostiquer cette Forge »
+paraissent inadéquats à la configuration réelle du serveur, et l'assistant ne
+repère pas si tout est correctement installé.
+
+**Observation.** Le diagnostic a été rejoué tel quel contre `spark-experiment`,
+Forge réelle intégralement installée. Il rendait :
+
+```
+pools: ["Usage: incus storage list [<remote>:] [<filter>...]",
+        "                          ┅┅┅┅┅┅┅┅┅┅┅"]
+```
+
+Le script lançait toutes ses commandes sous l'identité SSH de l'inventaire —
+`ubuntu`, un compte ordinaire. `incus` parle au démon par
+`/var/lib/incus/unix.socket`, réservée au groupe d'administration : sans ce
+droit, il rend son mode d'emploi. Ces deux lignes traversaient le décodage, et
+`createInstallPlan` n'y trouvant aucun pool, refusait `reuse` et exigeait un
+choix de stockage. Aucune paire native n'étant éligible sur cette machine, le
+**seul** chemin offert était la création d'un pool fichier — sur une Forge qui
+tourne sur un miroir ZFS natif nommé `spark`. Le relevé était en lecture seule ;
+il n'était pas juste, et c'est une distinction qui manquait au §50.2.
+
+Deux autres manques sont apparus en tirant le fil :
+
+- rien ne lisait `/etc/sparkd/sparkd.env`. Le formulaire reproposait donc
+  `spark`, `sparkbr0`, 0,5 CPU, 2 Gio et 16 Gio d'ARC quelle que soit la
+  configuration installée. Sur une Forge posée sur `tank`/`br1`, engager ce plan
+  aurait réécrit une configuration que personne n'avait demandé de changer ;
+- rien n'appelait `/healthz` ni `/readyz`. Le panneau ne pouvait donc pas
+  conclure : il affichait « installé, API à vérifier » sur une Forge dont les
+  deux sondes répondent `200`, et listait ses six phases « à faire ».
+
+**Hypothèse écartée.** Élever le droit à l'exécution du plan seulement, en
+laissant le diagnostic aveugle. Elle ne tient pas : c'est précisément le
+diagnostic qui décide s'il faut créer un pool, et une décision prise sur une
+donnée fausse reste fausse quand elle est exécutée avec les bons droits.
+
+**Décision.** Le droit d'administration est établi une fois — le même que celui
+déjà constaté pour la ligne `sudo` — et réemployé par les lectures qui l'exigent.
+Une lecture privilégiée impossible reste une absence nommée : la commande n'est
+pas tentée, et le contrôle correspondant est en défaut plutôt que vert par
+défaut. Une sortie qui n'a pas la forme attendue est écartée au décodage, pour
+qu'un message d'erreur ne redevienne jamais une donnée.
+
+Le relevé lit en outre cinq clés **nommées une à une** de `sparkd.env` et le
+plafond ARC, et mesure les deux codes HTTP sur `127.0.0.1:9876`. Lire le fichier
+entier a été refusé : il peut porter `SPARKD_NOTIFY_URL`, et le §21.3 interdit de
+faire remonter une valeur sensible dans un relevé affichable.
+
+**Conséquences.** Le diagnostic conclut désormais par dix contrôles ;
+`installée` décrit le socle, `prête` exige en plus les deux codes mesurés —
+SPK-DS-12 interdisant d'écrire « prête » sur autre chose qu'une mesure. Le plan
+reprend la configuration déclarée par la Forge et ne recourt au contrat de
+déploiement que là où la machine ne dit rien. Le statut de chaque phase vient du
+relevé : une phase de nouveau constatée conforme s'affiche `terminée` avant
+l'engagement, ce que le §50.4 demandait déjà sans que rien ne le réalise.
+
+**Vérifications.** Contre la Forge réelle, sans driver local ni factice, le
+diagnostic rend `pools: ["spark,zfs,,1,CREATED"]`, `bridgeName: sparkbr0`,
+`arcMaxGib: 16`, `healthz: 200`, `readyz: 200`, `missing: []`, `ready: true`, et
+le plan rend `storage.kind: reuse` avec ses six phases `done`. Les preuves
+unitaires du diagnostic, du plan et du panneau sont vertes.
+
+Le parcours visuel est rejouable par `e2e/forge-conformite.mjs` : il part de
+l'accueil, rejoint *Forge* par la navigation et clique **Diagnostiquer la
+Forge**. Captures produites et observées :
+`e2e/captures/spk68-02-conformite-1440.jpg` et
+`e2e/captures/spk68-03-conformite-390.jpg`. Aucun débordement horizontal en
+390 px, aucune erreur ni avertissement navigateur.
+
+**Ce qui reste non observé.** Le cas *partiellement conforme* — une machine à
+qui il manque le pool, le bridge ou l'unité — n'est prouvé que par les tests
+unitaires : la seule Forge accessible est complète. Il faut une machine nue pour
+l'observer, ce que le « Reste avant `[x]` » de SPK-68 demandait déjà.
+
+**Quatre preuves rouges, antérieures et étrangères à ce changement**, constatées
+au même moment sur `main` : `installSshArgs`/`bootstrapSshArgs` et le succès
+final dans `forge-install-runner.test.js`, le motif `agent_muet` dans
+`signature.test.js`, et `bouton--secondaire` employée par `forge-view.js` sans
+exister dans la feuille de style. Aucun de ces fichiers n'est touché ici ; elles
+sont signalées, pas corrigées au passage.

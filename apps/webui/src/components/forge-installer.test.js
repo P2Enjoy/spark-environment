@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderForgeInstaller } from './forge-installer.js';
+import { renderForgeInstaller, observedValues, poolReutilise } from './forge-installer.js';
 
 test('le panneau explique le diagnostic sans promettre une installation', () => {
   const html = renderForgeInstaller();
@@ -94,4 +94,79 @@ test('un journal terminé n’empêche pas de recomposer un plan idempotent', ()
   }, execution: { status: 'done', plan: PLAN, events: [] } });
   assert.match(html, /id="formulaire-plan-forge"/);
   assert.match(html, /Forge prête — recette finale mesurée/);
+});
+
+/** Le résultat que l'hôte rend pour une Forge réellement installée. */
+const CONFORME = {
+  report: {
+    system: { os: 'ubuntu 26.04', architecture: 'x86_64', rootAvailableBytes: 193670443008 },
+    access: { sudo: 'oui' },
+    runtimes: { incus: 'Client version: 7.4', caddy: '2.6.2', python: 'Python 3.14.4',
+                sparkd: '0.post1.dev674+g5d1906e79' },
+    services: { sparkd: 'active', sparkdEnabled: 'enabled', caddy: 'active' },
+    api: { healthz: 200, readyz: 200 },
+    pools: ['spark,zfs,,1,CREATED'],
+    networks: [{ name: 'sparkbr0', type: 'bridge', managed: true }],
+    config: { poolName: 'spark', bridgeName: 'sparkbr0', cpuReserve: 0.5,
+              memoryReserveGib: 2, reservedPorts: [], arcMaxGib: 16 },
+    blocks: [],
+  },
+  storage: { disks: [], nativeMirror: { eligible: false, disks: [] },
+             filePool: { availableBytes: 193670443008 } },
+  conformity: { checks: [
+    { id: 'pool', label: 'Pool ZFS « spark »', ok: true, detail: 'spark' },
+    { id: 'healthz', label: '/healthz mesuré', ok: true, detail: '200' },
+  ], missing: [], installed: true, ready: true },
+};
+
+test('une Forge déjà installée est DITE conforme, contrôle par contrôle', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: CONFORME });
+  assert.match(html, /Conformité constatée/);
+  assert.match(html, /Pool ZFS « spark »/);
+  assert.match(html, /Forge prête — \/healthz et \/readyz mesurés/);
+  assert.match(html, /contrôles sont verts/);
+  // Le relevé montre la configuration RÉELLE, pas les défauts du contrat.
+  assert.match(html, /Pool déclaré par la Forge/);
+  assert.match(html, /Bridge déclaré par la Forge/);
+  assert.match(html, /16 Gio/);
+  assert.match(html, /installée et prête/);
+});
+
+test('« Forge prête » n’est jamais écrit sans les deux codes mesurés', () => {
+  const html = renderForgeInstaller({ status: 'ready', result: { ...CONFORME,
+    conformity: { ...CONFORME.conformity,
+      checks: [{ id: 'readyz', label: '/readyz mesuré', ok: false, detail: 'sans réponse' }],
+      missing: ['readyz'], installed: true, ready: false } } });
+  assert.ok(!/Forge prête/.test(html));
+  assert.match(html, /installé, API à vérifier/);
+  assert.match(html, /Le socle est en place/);
+  // SPK-DS-12 : « SSH établi » garde sa ligne distincte, jamais confondue.
+  assert.match(html, /SSH établi/);
+});
+
+test('la configuration relevée devient la valeur de départ du formulaire', () => {
+  assert.deepEqual(observedValues(CONFORME.report), {
+    poolName: 'spark', bridgeName: 'sparkbr0', cpuReserve: '0.5',
+    memoryReserveGib: '2', arcMaxGib: '16',
+  });
+  // Une Forge nue ne déclare rien : le contrat de déploiement reste le défaut.
+  assert.deepEqual(observedValues({ config: null }), {});
+});
+
+test('un pool conservé ne se voit pas proposer une disposition de rechange', () => {
+  assert.equal(poolReutilise(CONFORME.report, 'spark'), true);
+  assert.equal(poolReutilise(CONFORME.report, 'tank'), false);
+  const html = renderForgeInstaller({ status: 'ready', result: CONFORME });
+  assert.match(html, /Le pool existant est conservé/);
+  assert.ok(!/Le pool fichier\s+reste envisageable/.test(html));
+  // Le formulaire n'annonce plus le contrat quand la Forge déclare sa config.
+  assert.match(html, /celles que la Forge déclare aujourd’hui/);
+});
+
+test('une Forge muette retombe sur le contrat, et le DIT', () => {
+  const nue = { ...CONFORME, report: { ...CONFORME.report, pools: [], config: null },
+                conformity: { checks: [], missing: ['pool'], installed: false, ready: false } };
+  const html = renderForgeInstaller({ status: 'ready', result: nue });
+  assert.match(html, /ne déclare encore aucune configuration/);
+  assert.match(html, /Le pool fichier/);
 });

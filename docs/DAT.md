@@ -8570,6 +8570,45 @@ Le diagnostic ne modifie pas la Forge et peut donc être lancé sur une machine 
 production. Il est réutilisé avant toute reprise : l'assistant ne déduit jamais
 l'état courant de son dernier écran.
 
+### 50.2 bis Lire en lecture seule n'est pas lire sans droit
+
+**Mesuré le 2026-09-02 sur `spark-experiment`, Forge intégralement installée.**
+Le relevé était lancé entièrement sous l'identité SSH de l'inventaire — un compte
+ordinaire. Or `incus` parle au démon par `/var/lib/incus/unix.socket`, réservée au
+groupe d'administration : invoquée sans ce droit, la commande rend son **mode
+d'emploi**, pas une liste. La console recevait donc deux pseudo-lignes de pool,
+concluait qu'aucun pool n'existait, et proposait de **créer un pool fichier sur
+une Forge qui portait déjà son miroir ZFS `spark`**. Le relevé était en lecture
+seule ; il n'était pas juste.
+
+Trois règles en découlent, et elles ne s'annulent pas entre elles :
+
+- le droit d'administration est établi **une fois**, au même endroit que
+  `sudo`, puis réemployé par les lectures qui l'exigent — pools, réseaux et
+  configuration. Un relevé n'interroge pas le socle sans le droit d'y accéder ;
+- une lecture privilégiée **impossible** reste une absence nommée, jamais une
+  valeur : sans le droit, la commande n'est pas tentée, et le contrôle
+  correspondant est en défaut — il n'est pas déclaré conforme par défaut ;
+- une sortie qui n'a pas la **forme** attendue est écartée au décodage. Une ligne
+  de pool doit ressembler à une ligne CSV d'`incus storage list` ; un message
+  d'erreur ne devient jamais une donnée.
+
+Le relevé lit en outre la configuration **réelle** de la Forge : cinq clés
+nommées une à une dans `/etc/sparkd/sparkd.env` — pool, bridge, réserves CPU et
+mémoire, ports réservés supplémentaires — et le plafond ARC dans
+`/sys/module/zfs/parameters/zfs_arc_max`. Le fichier n'est jamais lu en entier :
+il peut porter `SPARKD_NOTIFY_URL` ou d'autres valeurs sensibles, et le §21.3
+interdit de les faire remonter. Enfin, le relevé mesure les deux codes HTTP de
+`http://127.0.0.1:9876/healthz` et `/readyz` — l'adresse que l'unité livrée
+impose et que l'exécuteur interroge déjà.
+
+**Ce que le relevé conclut.** Dix contrôles, chacun avec sa valeur mesurée :
+système, droit d'administration, Incus ≥ 6.19, Caddy actif, pool ZFS demandé,
+bridge géré, paquet `sparkd`, unité active et activée, `/healthz`, `/readyz`.
+`installée` décrit les huit premiers ; `prête` exige les dix. Sans ce verdict,
+une Forge complète recevait exactement le même écran qu'une machine nue : la
+console relevait les versions et ne concluait jamais.
+
 ### 50.3 Proposition de stockage, sans choix implicite
 
 Le résultat classe chaque support, avec sa taille, son montage, ses signatures et
@@ -8599,6 +8638,20 @@ Avant toute écriture, l'écran rend un plan lisible, phase par phase : dépenda
 (Incus ≥ 6.19, ZFS, Python, Caddy), pool/ARC, réseau privé, durcissement, paquet
 `sparkd`, unités systemd et recette finale. Chaque ligne dit si elle sera
 conservée, installée, modifiée ou bloquée.
+
+Le statut de chaque phase vient du **relevé**, pas d'une intention : une phase
+dont les invariants sont de nouveau constatés conformes est présentée `terminée`
+avant même l'engagement, et `verification` ne l'est qu'après les deux codes
+mesurés de `/healthz` et `/readyz` (§50.2 bis). L'exécuteur reste seul juge :
+il relit chaque état et n'applique que son écart.
+
+Les **valeurs** du plan viennent d'abord de la Forge, ensuite du contrat de
+déploiement. Une machine qui déclare déjà son pool, son bridge, ses réserves et
+son ARC voit ces valeurs reprises telles quelles ; le contrat ne fournit un
+défaut que là où la machine ne dit encore rien. L'inverse — reproposer `spark` et
+`sparkbr0` à une Forge installée sur `tank` et `br1` — ferait réécrire une
+configuration que personne n'a demandé de changer. Les ports réservés
+supplémentaires relevés sont conservés, jamais retirés en silence.
 
 La confirmation du plan autorise seulement les écritures non destructives déjà
 énumérées. Le miroir natif demande en plus une confirmation distincte qui répète

@@ -26,7 +26,7 @@ import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEF
 import { ADMIN_VIDE, apercu, renderEffet, renderRecetteApercu, zonePour }
   from './components/spark-admin.js';
 import { renderForgeView, UPDATE_VIDE } from './components/forge-view.js';
-import { INSTALLER_VIDE } from './components/forge-installer.js';
+import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
 import { renderManuel } from './components/manuel-view.js';
@@ -2409,6 +2409,12 @@ async function diagnostiquerForge() {
     if (!reponse.ok) throw new Error(corps?.message ?? `HTTP ${reponse.status}`);
     installer.status = 'ready';
     installer.result = corps;
+    // §50.4 : le formulaire repart de ce que la Forge DÉCLARE, pas des défauts
+    // du contrat de déploiement. Sans cela, une Forge installée sur un pool
+    // « tank » se voyait reproposer « spark » à chaque relevé, et le plan
+    // écrivait une configuration que personne n'avait demandé de changer.
+    installer.values = { ...INSTALLER_VIDE.values, ...installer.values,
+                         ...observedValues(corps.report) };
   } catch (erreur) {
     // Une erreur de transport ou de clé d'hôte n'est pas un refus de Forge :
     // le panneau l'annonce sans rouge et sans prétendre que l'installation a

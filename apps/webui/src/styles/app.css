@@ -682,6 +682,25 @@ tbody tr:hover { background: var(--color-hover); }
 }
 .installation__phase p { margin: var(--space-1) 0 0; }
 .installation__mesure { color: var(--color-text-2); font-size: var(--text-compact); }
+/* SPK-68 · SPK-DS-12 : la liste de conformité tient en trois colonnes — verdict,
+   contrôle, valeur relevée — et rend la valeur sous le libellé en vue étroite. */
+.installation__conformite { margin-top: var(--space-4); }
+.installation__conformite h3 { margin-top: 0; }
+.installation__controles { list-style: none; margin: 0 0 var(--space-3); padding: 0; }
+.installation__controle {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) minmax(0, auto);
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.installation__controle:last-child { border-bottom: 0; }
+.installation__controle .technique {
+  color: var(--color-text-2);
+  font-size: var(--text-compact);
+  overflow-wrap: anywhere;
+}
 
 /* SPK-69 · SPK-DS-13 — les phases restent lisibles comme un compte rendu,
    sans devenir une fausse barre de progression temporelle. */
@@ -696,6 +715,10 @@ tbody tr:hover { background: var(--color-hover); }
   .installation__entete { align-items: stretch; flex-direction: column; }
   .installation__entete .bouton { align-self: flex-start; }
   .installation__etat { grid-template-columns: 1fr; }
+  /* En vue étroite la valeur relevée passe sous son libellé plutôt que de
+     comprimer les deux colonnes utiles (docs/DESIGN_SYSTEM.md §8.1). */
+  .installation__controle { grid-template-columns: max-content minmax(0, 1fr); }
+  .installation__controle .technique { grid-column: 2; }
 }
 /* Un `select` tire sa largeur INTRINSÈQUE de son option la plus longue. Une zone
    DNS privée en porte deux UUID : le contrôle réclamait ~700 px dans une modale

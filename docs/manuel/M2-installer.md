@@ -20,13 +20,46 @@ sélectionne jamais. S'il n'y a pas deux disques sûrs, il n'invente pas un miro
 ni la taille d'un pool fichier. Le diagnostic seul s'arrête là : aucune commande
 d'installation, aucun redémarrage et aucune modification ne sont partis.
 
+Le relevé demande à la Forge le droit d'administration qu'il a constaté pour
+`sudo`. Sans ce droit, il ne peut lire ni les pools, ni les réseaux, ni la
+configuration : ces contrôles apparaissent alors **à faire** avec la mention
+« non lisible », et jamais comme conformes. C'est voulu — un relevé partiel ne
+doit pas se lire comme un relevé rassurant.
+
+## Lire la conformité constatée
+
+Sous le relevé, **Conformité constatée** répond à une seule question : cette
+Forge est-elle déjà installée, et est-elle prête ? Dix contrôles, chacun avec la
+valeur mesurée qui le justifie : système, droit d'administration, Incus ≥ 6.19,
+Caddy actif, pool ZFS, bridge privé, paquet `sparkd`, unité active et activée au
+démarrage, `/healthz` et `/readyz`.
+
+Les huit premiers décrivent le socle ; les deux derniers sont des **codes HTTP
+mesurés sur la Forge**. « Forge prête » n'est donc jamais écrit sur la seule
+présence du paquet ou sur une unité active. Quand les dix sont verts, le panneau
+le dit et n'a rien à écrire : une Forge déjà en service ne reçoit pas l'écran
+d'une machine nue.
+
 ## Composer et confirmer le plan
 
-Le formulaire reprend les valeurs du contrat d'exploitation : pool, bridge,
-réserves CPU et mémoire, plafond ARC. En l'absence de deux supports sûrs, vous
-devez aussi saisir la taille du pool fichier et l'espace qui restera libre sur
-la racine. **Vérifier et composer le plan** relance d'abord le diagnostic : le
-plan affiché ne repose donc pas sur un relevé resté ouvert dans un onglet.
+Le formulaire reprend les valeurs que **la Forge déclare** — pool, bridge,
+réserves CPU et mémoire, plafond ARC —, telles qu'elles se trouvent dans sa
+configuration. Le contrat d'exploitation ne fournit un défaut que lorsque la
+machine ne déclare encore rien. Modifier une de ces valeurs, c'est donc demander
+explicitement sa réécriture ; les laisser telles quelles ne change rien.
+
+Un pool conforme est **conservé**, jamais recréé, et aucune disposition de
+rechange n'est alors proposée. En l'absence de pool et de deux supports sûrs,
+vous devez saisir la taille du pool fichier et l'espace qui restera libre sur
+la racine.
+
+Chaque phase du plan porte le statut que le relevé justifie : une phase dont les
+invariants sont de nouveau constatés conformes s'affiche **terminée** avant même
+l'engagement. C'est ce qui rend une reprise lisible — vous voyez ce qui reste à
+faire, pas une installation entière à rejouer.
+
+**Vérifier et composer le plan** relance d'abord le diagnostic : le plan affiché
+ne repose donc pas sur un relevé resté ouvert dans un onglet.
 
 Relisez ensuite chaque phase et cochez la confirmation du plan. Une création de
 pool fichier demande en plus de recopier exactement son chemin et sa taille ; un

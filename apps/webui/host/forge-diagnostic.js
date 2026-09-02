@@ -12,6 +12,7 @@
 
 import { spawn } from 'node:child_process';
 
+export const GIB = 1024 ** 3;
 export const DIAGNOSTIC_TIMEOUT_MS = 20_000;
 export const MAX_OUTPUT_BYTES = 96 * 1024;
 
@@ -62,13 +63,28 @@ dit memoire_octets "$(awk '/MemTotal:/ { print $2 * 1024; exit }' /proc/meminfo 
 dit racine "$(findmnt -n -o SOURCE / 2>/dev/null || true)"
 dit espace_racine "$(df -B1 --output=size,avail / 2>/dev/null | awk 'NR == 2 { print $1 ":" $2 }')"
 
+# Le droit d'administration est établi UNE fois, puis réemployé. Un relevé qui
+# interrogerait le socle sans lui rendrait le refus du démon, pas l'absence.
 if [ "$(id -u 2>/dev/null || printf x)" = 0 ]; then
+  administration=racine
   dit sudo "racine"
 elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+  administration=sudo
   dit sudo "oui"
 else
+  administration=non
   dit sudo "non"
 fi
+
+# Lecture qui EXIGE le droit d'administration. Sans ce droit elle n'est pas
+# tentée : mieux vaut une absence nommée qu'un message d'erreur promu en valeur.
+admin() {
+  case "$administration" in
+    racine) "$@" ;;
+    sudo) sudo -n "$@" ;;
+    *) return 127 ;;
+  esac
+}
 
 commande incus_version incus version
 commande caddy_version caddy version
@@ -89,10 +105,38 @@ else
   dit caddy_actif ""
 fi
 
+# La commande incus parle au démon par une socket réservée au groupe
+# d'administration : lancée sans ce droit, elle rend son mode d'emploi, jamais
+# la liste. Le pool existant devenait alors invisible, et l'assistant proposait
+# d'en créer un second sur une Forge qui en portait déjà un (DAT §50.2 bis).
 if command -v incus >/dev/null 2>&1; then
-  dit pools "$(incus storage list --format csv 2>/dev/null | tr '\n' ';' || true)"
+  dit pools "$(admin incus storage list --format csv 2>/dev/null | head -n 32 | tr '\n' ';' || true)"
+  # Une ligne par réseau plutôt qu'une valeur jointe : le bridge cherché ne doit
+  # pas pouvoir disparaître dans la troncature d'une ligne trop longue.
+  admin incus network list --format csv 2>/dev/null | head -n 32 |
+    while IFS= read -r ligne; do dit reseau "$ligne"; done
 else
   dit pools ""
+fi
+
+# Configuration RÉELLE de la Forge, et elle seule : cinq clés nommées une à une.
+# Lire le fichier entier ferait remonter SPARKD_NOTIFY_URL et tout secret qu'un
+# exploitant y aurait posé (CLAUDE.md §20).
+admin sed -n \
+  's/^\(SPARKD_\(STORAGE_POOL\|NETWORK_BRIDGE\|CPU_RESERVE\|MEMORY_RESERVE\|RESERVED_PORTS\)=.*\)$/\1/p' \
+  /etc/sparkd/sparkd.env 2>/dev/null | head -n 8 |
+  while IFS= read -r ligne; do dit configuration "$ligne"; done
+dit arc_max "$(cat /sys/module/zfs/parameters/zfs_arc_max 2>/dev/null || true)"
+
+# sparkd refuse toute adresse routable, et son unité livrée écoute
+# 127.0.0.1:9876 ; l'exécuteur interroge la même. Ces deux codes sont les seules
+# preuves qui autorisent à écrire « prête » (DAT §50.5).
+if command -v curl >/dev/null 2>&1; then
+  dit healthz "$(curl -sS -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:9876/healthz 2>/dev/null || true)"
+  dit readyz "$(curl -sS -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:9876/readyz 2>/dev/null || true)"
+else
+  dit healthz ""
+  dit readyz ""
 fi
 
 if command -v lsblk >/dev/null 2>&1; then
@@ -129,10 +173,66 @@ export function parseBlock(line) {
   };
 }
 
+/**
+ * Une ligne de pool n'est retenue que si elle a la FORME d'une ligne CSV
+ * d'`incus storage list`. Sans ce filtre, le mode d'emploi rendu par un `incus`
+ * sans droit devenait deux « pools » aux noms absurdes (docs/DAT.md §50.2 bis).
+ */
+const POOL_LINE = /^[a-z0-9][a-z0-9._-]*,[a-z0-9]+(,|$)/i;
+
+/** `nom,type,gere,adresse,...` — les quatre premières colonnes suffisent ici. */
+export function parseNetwork(line) {
+  const columns = String(line ?? '').split(',');
+  const [name, type, managed] = columns.map((value) => value.trim());
+  if (!name || !type || columns.length < 3) return null;
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(name)) return null;
+  return { name, type, managed: /^(yes|oui|true)$/i.test(managed) };
+}
+
+/**
+ * Les cinq clés de `/etc/sparkd/sparkd.env` que le plan possède, et elles
+ * seules. Le relevé décrit ainsi la configuration RÉELLE de la Forge au lieu de
+ * laisser l'écran reproposer les défauts du contrat de déploiement (§50.4).
+ */
+export function parseForgeConfig(lines, arcMaxBytes) {
+  const brut = {};
+  for (const line of lines ?? []) {
+    const index = String(line).indexOf('=');
+    if (index < 1) continue;
+    brut[String(line).slice(0, index).trim()] = String(line).slice(index + 1).trim();
+  }
+  const gibioctets = (value) => {
+    const match = /^([0-9]+(?:\.[0-9]+)?)\s*(Gi?B|Mi?B|Ki?B|B)?$/i.exec(String(value ?? ''));
+    if (!match) return null;
+    const facteur = { g: GIB, m: 1024 ** 2, k: 1024, b: 1 }[
+      String(match[2] ?? 'GiB')[0].toLowerCase()] ?? GIB;
+    return Number(match[1]) * facteur / GIB;
+  };
+  const config = {};
+  if (brut.SPARKD_STORAGE_POOL) config.poolName = brut.SPARKD_STORAGE_POOL;
+  if (brut.SPARKD_NETWORK_BRIDGE) config.bridgeName = brut.SPARKD_NETWORK_BRIDGE;
+  const cpu = Number(brut.SPARKD_CPU_RESERVE);
+  if (brut.SPARKD_CPU_RESERVE !== undefined && Number.isFinite(cpu) && cpu >= 0) {
+    config.cpuReserve = cpu;
+  }
+  const memoire = gibioctets(brut.SPARKD_MEMORY_RESERVE);
+  if (memoire !== null) config.memoryReserveGib = memoire;
+  if (brut.SPARKD_RESERVED_PORTS !== undefined) {
+    config.reservedPorts = String(brut.SPARKD_RESERVED_PORTS).split(',')
+      .map((port) => Number(port.trim()))
+      .filter((port) => Number.isInteger(port) && port >= 1 && port <= 65535);
+  }
+  const arc = numberOrNull(arcMaxBytes);
+  if (arc) config.arcMaxGib = arc / GIB;
+  return Object.keys(config).length ? config : null;
+}
+
 /** Le protocole de DIAGNOSTIC_SCRIPT devient une donnée bornée et typée. */
 export function parseDiagnostic(output) {
   const values = {};
   const blocks = [];
+  const networks = [];
+  const configLines = [];
   for (const line of String(output ?? '').split('\n')) {
     const index = line.indexOf('\t');
     if (index < 1) continue;
@@ -141,6 +241,11 @@ export function parseDiagnostic(output) {
     if (key === 'bloc') {
       const block = parseBlock(value);
       if (block) blocks.push(block);
+    } else if (key === 'reseau') {
+      const network = parseNetwork(value);
+      if (network) networks.push(network);
+    } else if (key === 'configuration') {
+      configLines.push(value);
     } else if (/^[a-z_]+$/.test(key)) {
       values[key] = value || null;
     }
@@ -157,13 +262,96 @@ export function parseDiagnostic(output) {
                 python: values.python_version ?? null, sparkd: values.sparkd_version ?? null },
     services: { sparkd: values.sparkd_actif ?? null, sparkdEnabled: values.sparkd_active ?? null,
                 caddy: values.caddy_actif ?? null },
-    pools: values.pools ? values.pools.split(';').filter(Boolean) : [],
+    // Deux codes HTTP mesurés, jamais déduits de la présence du paquet.
+    api: { healthz: httpCode(values.healthz), readyz: httpCode(values.readyz) },
+    pools: (values.pools ? values.pools.split(';') : []).filter((line) => POOL_LINE.test(line)),
+    networks,
+    config: parseForgeConfig(configLines, values.arc_max),
     blocks,
   };
 }
 
 function numberOrNull(value) {
   return Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+}
+
+/** `000` est le code que `curl` rend quand rien n'a répondu : ce n'est pas 0. */
+function httpCode(value) {
+  const code = Number(value);
+  return Number.isInteger(code) && code >= 100 && code <= 599 ? code : null;
+}
+
+/** La version majeure/mineure d'Incus, telle que sa première ligne la donne. */
+export function incusVersion(value) {
+  const match = /(\d+)\.(\d+)/.exec(String(value ?? ''));
+  return match ? [Number(match[1]), Number(match[2])] : null;
+}
+
+export const INCUS_MINIMUM = [6, 19];
+
+/**
+ * Ce que le relevé PROUVE de l'installation, contrôle par contrôle.
+ *
+ * §50.4 exige que la reprise saute les invariants « de nouveau constatés
+ * conformes » ; encore faut-il les constater. Sans ce verdict, une Forge
+ * intégralement installée recevait le même écran qu'une machine nue, et
+ * l'exploitant n'avait aucun moyen de lire depuis la console que tout était en
+ * place. La conclusion n'est JAMAIS déduite du transport ni de la présence du
+ * paquet : `prête` demande les deux codes mesurés de `/healthz` et `/readyz`
+ * (§50.5, SPK-DS-12).
+ */
+export function conformity(report, { poolName, bridgeName } = {}) {
+  const pool = poolName ?? report?.config?.poolName ?? null;
+  const bridge = bridgeName ?? report?.config?.bridgeName ?? null;
+  const pools = (report?.pools ?? []).map((line) => {
+    const [name, driver] = String(line).split(',').map((value) => value.trim());
+    return { name, driver };
+  });
+  const incus = incusVersion(report?.runtimes?.incus);
+  const admin = ['racine', 'oui'].includes(report?.access?.sudo);
+  const checks = [
+    { id: 'system', label: 'Système Ubuntu relevé',
+      ok: /ubuntu/i.test(report?.system?.os ?? ''), detail: report?.system?.os },
+    { id: 'admin', label: 'Administration sans invite',
+      ok: admin, detail: report?.access?.sudo },
+    { id: 'incus', label: `Incus ≥ ${INCUS_MINIMUM.join('.')}`,
+      ok: Boolean(incus) && (incus[0] > INCUS_MINIMUM[0] ||
+        (incus[0] === INCUS_MINIMUM[0] && incus[1] >= INCUS_MINIMUM[1])),
+      detail: report?.runtimes?.incus },
+    { id: 'caddy', label: 'Caddy actif',
+      ok: report?.services?.caddy === 'active', detail: report?.services?.caddy },
+    { id: 'pool', label: pool ? `Pool ZFS « ${pool} »` : 'Pool ZFS de la Forge',
+      // Sans droit d'administration, la liste des pools n'est pas lisible : le
+      // contrôle est en défaut, il n'est pas déclaré vert par défaut.
+      ok: Boolean(pool) && pools.some((p) => p.name === pool && p.driver === 'zfs'),
+      detail: admin ? pools.map((p) => p.name).join(', ') || 'aucun' : 'non lisible' },
+    { id: 'bridge', label: bridge ? `Bridge « ${bridge} »` : 'Bridge privé de la Forge',
+      ok: Boolean(bridge) && (report?.networks ?? []).some(
+        (network) => network.name === bridge && network.managed),
+      detail: (report?.networks ?? []).filter((n) => n.managed)
+        .map((n) => n.name).join(', ') || 'aucun réseau géré relevé' },
+    { id: 'package', label: 'Paquet sparkd installé',
+      ok: Boolean(report?.runtimes?.sparkd), detail: report?.runtimes?.sparkd },
+    { id: 'unit', label: 'Unité sparkd active et activée au démarrage',
+      ok: report?.services?.sparkd === 'active' && report?.services?.sparkdEnabled === 'enabled',
+      detail: [report?.services?.sparkd, report?.services?.sparkdEnabled]
+        .filter(Boolean).join(' · ') },
+    { id: 'healthz', label: '/healthz mesuré',
+      ok: report?.api?.healthz === 200,
+      detail: report?.api?.healthz === null ? 'sans réponse' : String(report?.api?.healthz) },
+    { id: 'readyz', label: '/readyz mesuré',
+      ok: report?.api?.readyz === 200,
+      detail: report?.api?.readyz === null ? 'sans réponse' : String(report?.api?.readyz) },
+  ].map((check) => ({ ...check, detail: check.detail || null }));
+  const missing = checks.filter((check) => !check.ok);
+  return {
+    checks,
+    missing: missing.map((check) => check.id),
+    // « Installée » décrit le socle ; « prête » ajoute les deux mesures d'API.
+    installed: checks.filter((check) => !['healthz', 'readyz'].includes(check.id))
+      .every((check) => check.ok),
+    ready: missing.length === 0,
+  };
 }
 
 /**
@@ -255,7 +443,8 @@ export function runDiagnostic(server, {
       if (!report.system.os && !report.blocks.length) return reject(new ForgeDiagnosticError(
         'invalid_report', 'Le diagnostic distant n’a pas rendu un relevé exploitable.',
       ));
-      resolve({ transport: 'established', report, storage: storageProposal(report) });
+      resolve({ transport: 'established', report, storage: storageProposal(report),
+                conformity: conformity(report) });
     });
     child.stdin?.end(DIAGNOSTIC_SCRIPT);
   });

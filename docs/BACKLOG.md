@@ -4022,6 +4022,27 @@ service reste inactif. Un second appel identique a rendu immédiatement
 `package unchanged`; l'ancienne build `a9705e5ea` demeure récupérable dans la
 sauvegarde. Aucun driver local ou factice n'a servi de preuve.
 
+**Correction du 2026-09-02, constatée sur la Forge réelle `spark-experiment`.**
+L'assistant était inadéquat à la configuration réelle du serveur et ne concluait
+pas. Trois causes, toutes mesurées : le relevé lançait `incus storage list` sous
+l'identité SSH ordinaire, à qui la socket du démon est refusée — le mode d'emploi
+d'`incus` remontait à la place de la liste, le pool ZFS `spark` devenait
+invisible, et le plan proposait de **créer un pool fichier** sur une Forge qui
+portait déjà son miroir ; le relevé ne lisait pas `/etc/sparkd/sparkd.env`, si
+bien que le formulaire reproposait toujours `spark`/`sparkbr0` et les réserves du
+contrat, quelle que soit la configuration installée ; et rien n'appelait
+`/healthz` ni `/readyz`, donc aucune conclusion n'était possible.
+
+Depuis, le droit d'administration constaté pour `sudo` sert aussi aux lectures
+qui l'exigent, une sortie sans la forme attendue est écartée au décodage, cinq
+clés nommées de `sparkd.env` et le plafond ARC sont relevés, et les deux codes
+HTTP sont mesurés. Le relevé conclut par dix contrôles ; le plan reprend la
+configuration déclarée par la Forge et présente `terminée` toute phase de nouveau
+constatée conforme. Sur `spark-experiment`, le diagnostic rend désormais
+`pool spark,zfs`, `bridge sparkbr0`, ARC 16 Gio, `healthz=200`, `readyz=200`,
+`ready: true`, et le plan `reuse` avec ses six phases terminées. Voir
+`docs/DAT.md` §50.2 bis et §50.4.
+
 **Reste avant `[x]`** : le serveur neuf fourni n'a qu'un disque racine de 10 Go,
 5,2 Gio libres et aucune paire native. Le plan 3 Gio + 1 Gio a été observé mais
 n'a pas été engagé, faute d'un choix de capacité explicitement donné par le

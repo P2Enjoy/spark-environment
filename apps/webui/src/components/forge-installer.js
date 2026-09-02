@@ -41,13 +41,19 @@ function definition(term, value) {
 
 function transport(result) {
   const report = result.report;
+  const verdict = result.conformity;
   const active = report.services?.sparkd === 'active';
   const sparkdPresent = Boolean(report.runtimes?.sparkd) || active;
-  const api = active
-    ? ['accent', 'installé, API à vérifier']
-    : sparkdPresent
-      ? ['accent', `installé, unité ${report.services?.sparkd ?? 'inconnue'}`]
-      : ['accent', 'sans réponse ou non installé'];
+  // SPK-DS-12 : « SSH établi » ne prend jamais le vert de « Forge prête ». Le
+  // vert de la seconde ligne s’écrit sur les deux codes MESURÉS, pas sur la
+  // présence du paquet ni sur l’état de l’unité (DESIGN_SYSTEM.md §14.9).
+  const api = verdict?.ready
+    ? ['success', 'Forge prête — /healthz et /readyz mesurés']
+    : active
+      ? ['accent', 'installé, API à vérifier']
+      : sparkdPresent
+        ? ['accent', `installé, unité ${report.services?.sparkd ?? 'inconnue'}`]
+        : ['accent', 'sans réponse ou non installé'];
   return `
 <section class="installation__etat" aria-label="État constaté">
   <div>${badge('success', 'SSH établi')}<p>Le relevé SSH s’est terminé ; cela ne prouve pas encore l’API.</p></div>
@@ -55,7 +61,69 @@ function transport(result) {
 </section>`;
 }
 
-function storage(storage) {
+/**
+ * Ce que le relevé PROUVE, contrôle par contrôle (docs/DAT.md §50.2 bis).
+ *
+ * Sans cette liste, une Forge intégralement installée recevait le même écran
+ * qu’une machine nue : l’assistant relevait bien les versions, mais ne concluait
+ * jamais. Le bilan vert n’est écrit que lorsque les dix contrôles le sont, dont
+ * les deux codes mesurés — un contrôle non lisible reste un défaut, pas un
+ * succès par défaut.
+ */
+function conformite(verdict) {
+  if (!verdict) return '';
+  const lignes = verdict.checks.map((check) => `
+    <li class="installation__controle">
+      ${badge(check.ok ? 'success' : 'accent', check.ok ? 'conforme' : 'à faire')}
+      <span>${echapper(check.label)}</span>
+      <span class="technique">${echapper(check.detail ?? 'non relevé')}</span>
+    </li>`).join('');
+  const bilan = verdict.ready
+    ? `<p class="succes">Les ${verdict.checks.length} contrôles sont verts : cette Forge est
+       déjà installée et prête. L’assistant n’a rien à y écrire.</p>`
+    : verdict.installed
+      ? `<p class="avertissement" role="status">Le socle est en place, mais l’API n’a pas
+         encore répondu : ${echapper(verdict.missing.join(', '))}. La Forge n’est donc pas
+         dite prête.</p>`
+      : `<p class="avertissement" role="status">${verdict.missing.length} contrôle(s) manquent
+         encore : ${echapper(verdict.missing.join(', '))}. Le plan ci-dessous ne reprend que
+         les phases correspondantes.</p>`;
+  return `
+<section class="carte bloc installation__conformite" aria-labelledby="titre-installation-conformite">
+  <h3 id="titre-installation-conformite">Conformité constatée</h3>
+  <ul class="installation__controles">${lignes}</ul>
+  ${bilan}
+</section>`;
+}
+
+/**
+ * Les valeurs que la Forge DÉCLARE déjà, pour que le formulaire ne repropose pas
+ * le contrat de déploiement à la place de la configuration réelle (§50.4).
+ */
+export function observedValues(report) {
+  const config = report?.config;
+  if (!config) return {};
+  const values = {};
+  if (config.poolName) values.poolName = String(config.poolName);
+  if (config.bridgeName) values.bridgeName = String(config.bridgeName);
+  for (const [cle, valeur] of [['cpuReserve', config.cpuReserve],
+                               ['memoryReserveGib', config.memoryReserveGib],
+                               ['arcMaxGib', config.arcMaxGib]]) {
+    if (Number.isFinite(Number(valeur))) values[cle] = String(Number(valeur));
+  }
+  return values;
+}
+
+/** Le pool que le plan RÉUTILISERA, s'il existe déjà avec le bon driver (§50.3). */
+export function poolReutilise(report, poolName) {
+  const cible = String(poolName ?? report?.config?.poolName ?? INSTALLER_VIDE.values.poolName);
+  return (report?.pools ?? []).some((line) => {
+    const [name, driver] = String(line).split(',').map((value) => value.trim());
+    return name === cible && driver === 'zfs';
+  });
+}
+
+function storage(storage, reuse) {
   const disks = storage?.disks ?? [];
   const rows = disks.length ? disks.map((disk) => `
     <tr><td class="technique">/dev/${echapper(disk.name)}</td><td>${echapper(bytes(disk.sizeBytes))}</td>
@@ -63,14 +131,20 @@ function storage(storage) {
         ? echapper(disk.reasons.join(' · '))
         : 'support libre à confirmer'}</td></tr>`).join('')
     : '<tr><td colspan="3">Aucun périphérique bloc exploitable n’a été relevé.</td></tr>';
-  const mirror = storage?.nativeMirror?.eligible
-    ? `<p class="avertissement" role="status">Deux supports libres sont détectés :
-       <span class="technique">${echapper(storage.nativeMirror.disks.map((d) => `/dev/${d}`).join(', '))}</span>.
-       Ils ne seront jamais effacés sans confirmation séparée.</p>`
-    : `<p class="note">Aucune paire de disques sûre n’est proposée. Le pool fichier
-       reste envisageable sur ${storage?.filePool?.availableBytes == null
-         ? 'un espace non mesuré'
-         : `${bytes(storage.filePool.availableBytes)} libres`}, mais sa taille n’est pas devinée.</p>`;
+  // §50.3 : l’ordre de proposition est strict. Un pool conforme se réutilise, et
+  // proposer alors un pool fichier à côté ferait croire à un choix qui n’existe
+  // pas — c’est ce qui donnait l’écran d’une machine nue à une Forge installée.
+  const mirror = reuse
+    ? `<p class="succes">Le pool existant est conservé : aucun de ces supports ne
+       sera touché, et aucune disposition de rechange n’est proposée.</p>`
+    : storage?.nativeMirror?.eligible
+      ? `<p class="avertissement" role="status">Deux supports libres sont détectés :
+         <span class="technique">${echapper(storage.nativeMirror.disks.map((d) => `/dev/${d}`).join(', '))}</span>.
+         Ils ne seront jamais effacés sans confirmation séparée.</p>`
+      : `<p class="note">Aucune paire de disques sûre n’est proposée. Le pool fichier
+         reste envisageable sur ${storage?.filePool?.availableBytes == null
+           ? 'un espace non mesuré'
+           : `${bytes(storage.filePool.availableBytes)} libres`}, mais sa taille n’est pas devinée.</p>`;
   return `
 <section class="carte bloc installation__stockage" aria-labelledby="titre-installation-stockage">
   <h3 id="titre-installation-stockage">Stockage relevé</h3>
@@ -81,7 +155,7 @@ function storage(storage) {
 </section>`;
 }
 
-function resultView(result) {
+function resultView(result, reuse) {
   const report = result.report;
   return `
   ${transport(result)}
@@ -95,9 +169,18 @@ function resultView(result) {
       ${definition('Caddy', report.runtimes?.caddy)}
       ${definition('Unité sparkd', report.services?.sparkd)}
       ${definition('Espace disponible sur /', bytes(report.system?.rootAvailableBytes))}
+      ${definition('Pool déclaré par la Forge', report.config?.poolName ?? 'aucun sparkd.env lisible')}
+      ${definition('Bridge déclaré par la Forge', report.config?.bridgeName ?? 'aucun sparkd.env lisible')}
+      ${definition('Plafond ARC déclaré', Number.isFinite(report.config?.arcMaxGib)
+        ? `${report.config.arcMaxGib.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} Gio`
+        : 'non relevé')}
     </dl>
+    <p class="note">Les trois dernières valeurs viennent de la Forge elle-même,
+    et le plan les reprend telles quelles : le contrat de déploiement ne sert de
+    défaut que là où la machine ne déclare encore rien.</p>
   </section>
-  ${storage(result.storage)}
+  ${conformite(result.conformity)}
+  ${storage(result.storage, reuse)}
   <p class="note">Ce relevé est strictement en lecture seule. Il ne lance pas
   l’installation, ne crée pas de pool et ne change aucun service.</p>`;
 }
@@ -132,8 +215,10 @@ function planForm(installer) {
   return `${installer.planError ? `<div class="refus" role="status">${
     echapper(installer.planError)}</div>` : ''}<form id="formulaire-plan-forge" class="formulaire-panneau installation__plan">
     <h3>Plan d’installation</h3>
-    <p class="note">Les valeurs ci-dessous viennent du contrat de déploiement ; elles restent
-      modifiables avant l’engagement.</p>
+    <p class="note">${result.report?.config
+      ? 'Les valeurs ci-dessous sont celles que la Forge déclare aujourd’hui ; les modifier, c’est demander leur réécriture.'
+      : 'Cette Forge ne déclare encore aucune configuration : les valeurs ci-dessous viennent du contrat de déploiement.'}
+      Elles restent modifiables avant l’engagement.</p>
     <div class="installation__dimensions">
       <label>Pool <input class="controle" name="poolName" value="${echapper(values.poolName)}" required></label>
       <label>Bridge <input class="controle" name="bridgeName" value="${echapper(values.bridgeName)}" required></label>
@@ -284,14 +369,23 @@ export function renderForgeInstaller(installer = INSTALLER_VIDE) {
          ${echapper(installer.error ?? 'Cause inconnue.')}</p><p>La Forge n’a reçu aucune
          commande d’installation.</p></div>`
       : ['ready', 'planning', 'planned'].includes(installer.status) && installer.result
-        ? resultView(installer.result) + (executionRunning ? '' : planForm(installer))
+        ? resultView(installer.result,
+                     poolReutilise(installer.result.report,
+                                   (installer.values ?? INSTALLER_VIDE.values).poolName))
+          + (executionRunning ? '' : planForm(installer))
           + planView(installer.plan, installer)
         : `<p>Cette destination peut accepter SSH sans encore porter ` + '`sparkd`' + `.
            Le diagnostic distingue ces deux faits avant toute décision de stockage.</p>`;
+  // Le titre ne change pas : c'est le point d'entrée, conforme ou non. La note,
+  // elle, dit ce que le dernier relevé a constaté — annoncer « préparation » à
+  // qui vient de voir dix contrôles verts ferait douter du verdict.
+  const intention = installer.result?.conformity?.ready
+    ? 'Le dernier relevé a trouvé cette Forge installée et prête ; l’assistant n’a rien à y écrire.'
+    : 'Assistant de préparation — aucune écriture distante sans un plan confirmé.';
   return `
 <section class="carte bloc installation" aria-labelledby="titre-installation">
   <div class="installation__entete"><div><h2 id="titre-installation">Installer cette Forge</h2>
-    <p class="note">Assistant de préparation — aucune écriture distante sans un plan confirmé.</p></div>
+    <p class="note">${echapper(intention)}</p></div>
     <button type="button" class="bouton bouton--compact" data-action="diagnostiquer-forge"
       ${running ? 'disabled' : ''}>${running ? 'Diagnostic…' : 'Diagnostiquer la Forge'}</button>
   </div>
