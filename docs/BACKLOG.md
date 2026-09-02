@@ -4850,6 +4850,50 @@ clé choisit les opérations d'écriture une par une ».
 
 ---
 
+### [ ] SPK-82 · L'amorçage rend la cellule JOIGNABLE, pas seulement équipée
+
+Demandé par le responsable le 2026-09-02, après l'amorçage réel de `ubuntu-demo`
+(SPK-76) : « l'amorçage devrait aussi pousser la clef publique courante de la
+console dans le spark sinon on peut pas s'y connecter ».
+
+Constat qui l'accompagne, relevé sur la même Forge : le **registre commun ne
+contient aucune clé**. `authorized_keys` est donc vide dans la cellule, et
+l'amorçage affiche pourtant *clés d'accès — en place, conformes au registre*.
+C'est littéralement vrai — un vide correspond à un vide — et pratiquement faux :
+**personne ne peut entrer**. Le §42 promet une cellule « joignable en SSH » et
+l'écran le confirme sur une cellule que nul n'atteint.
+
+- Spécification : `docs/DAT.md` §42.10 (à écrire et committer avant le code) ·
+  `docs/DESIGN_SYSTEM.md` §6.23 · manuel M6.
+- Portée : la console détermine **quelle** clé du poste OpenSSH emploie pour
+  joindre CETTE Forge, en croisant l'empreinte que le tunnel capte déjà
+  (§21.6.3) avec les clés de l'agent et de `~/.ssh/*.pub` ; l'amorçage
+  l'**enregistre au registre** puis l'accorde au Spark, par les routes de clés
+  existantes ; la ligne *clés d'accès* cesse de rendre `present` quand aucune
+  clé n'est accordée.
+- **Le point qui décide** : la clé passe par le **registre**, jamais par une
+  écriture directe dans la cellule. `_apply_keys` régénère `authorized_keys` en
+  ENTIER depuis le registre (§17.1) — c'est ce qui fait qu'une révocation
+  révoque réellement. Une clé poussée hors registre fonctionnerait après
+  l'amorçage puis disparaîtrait au premier changement de clés, sans que rien ne
+  le dise. Le piège serait pire que le manque qu'il corrige.
+- Corollaire : la clé devient **visible et révocable** dans le panneau Clés, ce
+  qu'une injection silencieuse n'aurait pas été. Accorder un accès sans qu'il se
+  voie contredirait le §10.
+- Dépend de : SPK-37 pour l'empreinte que le tunnel capte, SPK-11 pour le
+  registre de clés, SPK-76 pour l'amorçage qu'elle complète.
+- Cas à traiter, et à ne pas deviner : la console peut n'avoir **aucune** clé —
+  un serveur local n'en emploie pas, un agent muet n'en déclare pas. L'écran le
+  DIT alors, au lieu de laisser croire que la cellule sera joignable.
+- DoD : après un amorçage sur une Forge réelle, `ssh <spark>` par rebond
+  **aboutit** depuis le poste qui a lancé l'amorçage — prouvé par une connexion
+  réelle, pas par la présence du fichier ; la clé apparaît au panneau Clés et sa
+  révocation la retire effectivement de la cellule ; une cellule sans aucune clé
+  accordée n'est plus dite « en place » ; un test prouve que la clé passe par le
+  registre et non par une écriture directe ; manuel M6 et captures mis à jour.
+
+---
+
 ## Réservé, non planifié
 
 - `runtime: vm` pour charges non maîtrisées — VT-x est présent sur l'hôte, donc

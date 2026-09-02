@@ -7161,6 +7161,75 @@ relevé ce que 1058 preuves ne voyaient pas, parce que le doublon d'Incus rendai
 des valeurs bien formées là où une vraie cellule rend du vide. Un doublon qui ne
 sait mentir que proprement ne prouve pas grand-chose.
 
+### 42.10 Joignable, et pas seulement équipée — écrit le 2026-09-02
+
+Demandé par le responsable après le premier amorçage réel : « l'amorçage devrait
+aussi pousser la clef publique courante de la console dans le spark sinon on peut
+pas s'y connecter ».
+
+Relevé sur la même Forge, et c'est la moitié cachée du sujet : le registre commun
+ne portait **aucune** clé. `authorized_keys` était donc vide dans la cellule, et
+l'amorçage affichait *clés d'accès — en place, conformes au registre*. Un vide
+qui correspond à un vide. Littéralement exact, pratiquement faux : la cellule
+n'était joignable par personne, et l'écran concluait « joignable en SSH ».
+
+#### 42.10.1 La clé passe par le REGISTRE, jamais par la cellule
+
+C'est le point qui décide de toute l'unité, et il interdit la solution évidente.
+
+`_apply_keys` régénère `authorized_keys` **en entier** depuis le registre
+(§17.1) : c'est précisément ce qui fait qu'une révocation révoque réellement.
+Une clé poussée directement dans la cellule fonctionnerait donc après
+l'amorçage, puis **disparaîtrait au premier changement de clés**, sans que rien
+ne l'annonce.
+
+Ce piège serait pire que le manque qu'il corrige : un accès qui marche, puis ne
+marche plus, sans geste apparent, est le genre de panne qu'on cherche des heures.
+
+L'amorçage **enregistre** donc la clé au registre et l'**accorde** au Spark, par
+les routes existantes. Deux conséquences, toutes deux voulues :
+
+- la clé est **visible** au panneau Clés, et **révocable** comme les autres.
+  Accorder un accès sans qu'il se voie contredirait le §10 ;
+- le registre reste la source unique de vérité. Aucune seconde vérité n'apparaît
+  dans la cellule.
+
+#### 42.10.2 Quelle clé, et comment la console la connaît
+
+Pas n'importe laquelle du poste : **celle qu'OpenSSH emploie pour joindre cette
+Forge**. Le tunnel la capte déjà — le §21.6.3 lit `debug1: Server accepts key:
+… SHA256:…` et n'en retient que l'empreinte, le chemin nommant un fichier du
+poste et non une identité.
+
+La console croise cette empreinte avec les clés publiques dont elle dispose —
+l'agent (`ssh-add -L`) puis `~/.ssh/*.pub` — et retient celle dont l'empreinte
+correspond. C'est une **correspondance**, pas une supposition : si rien ne
+correspond, on ne pousse rien.
+
+**Ce qu'on ne fait pas** : pousser toutes les clés du poste, ni la première
+trouvée. Accorder un accès à une clé qu'on n'a pas identifiée serait un octroi
+au hasard.
+
+#### 42.10.3 Quand la console n'a pas de clé, elle le DIT
+
+Un serveur local n'emploie aucune clé ; un agent muet n'en déclare aucune. Ces
+cas ne sont pas des pannes, et l'amorçage ne s'y interrompt pas : il équipe la
+cellule et **dit** que rien n'a été accordé, donc que la connexion décrite au
+manuel M6 n'aboutira pas tant qu'une clé ne l'aura pas été.
+
+Le §14.6 s'applique tel quel : ne pas savoir n'est pas savoir que tout va bien.
+
+#### 42.10.4 Aucune clé accordée n'est pas un élément « en place »
+
+La ligne *clés d'accès* comparait une empreinte à une autre. Deux vides
+correspondent, donc elle concluait `present`.
+
+Une cellule dont **aucune** clé n'est accordée est désormais rendue `absent`,
+avec le détail qui le dit. C'est le même raisonnement que pour le §42.9.8 — une
+ligne qui se dit présente sans que rien ne soit utilisable ment — et que pour le
+manuel M6, qui avertit déjà que révoquer la dernière clé « ferme le Spark à tout
+le monde ».
+
 ## 43. L'environnement d'un Spark : variables et secrets
 
 Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doit
