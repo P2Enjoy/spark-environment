@@ -55,6 +55,33 @@ class IncusError(RuntimeError):
     """Incus est injoignable, ou a refuse la requete."""
 
 
+def _raison(erreur: httpx.HTTPError) -> str:
+    """Ce qu'Incus a DIT, plutôt que ce que `httpx` en pense (§5.3).
+
+    @spec docs/BACKLOG.md#SPK-90 · docs/DAT.md §5.3
+
+    Signalé le 2026-09-02 : supprimer un Spark rendait « Client error '400 Bad
+    Request' … For more information check https://developer.mozilla.org/… »,
+    quand le corps de la réponse portait `{"error":"Instance is running"}`.
+
+    Le corps d'Incus fait autorité sur la CAUSE ; le statut HTTP ne dit que la
+    catégorie. Renvoyer l'exception donnait à l'exploitant un lien vers MDN là
+    où le serveur avait écrit la raison en trois mots.
+
+    Rend le texte de l'exception quand le corps ne porte rien d'exploitable : ne
+    pas savoir n'autorise pas à inventer une cause.
+    """
+    reponse = getattr(erreur, "response", None)
+    if reponse is not None:
+        try:
+            corps = reponse.json()
+        except (ValueError, TypeError):
+            corps = None
+        if isinstance(corps, dict) and corps.get("error"):
+            return str(corps["error"])
+    return str(erreur)
+
+
 class IncusClient(Protocol):
     """Contrat minimal attendu par l'inventaire.
 
@@ -124,7 +151,7 @@ class UnixSocketIncus:
             if error.response.status_code == 404:
                 raise InstanceAbsente(f"Incus ne connaît pas {path}.") from error
             raise IncusError(
-                f"Incus injoignable sur {self.socket_path} ({path}) : {error}"
+                f"Incus a refusé {path} : {_raison(error)}"
             ) from error
         except httpx.HTTPError as error:
             raise IncusError(
@@ -160,9 +187,10 @@ class UnixSocketIncus:
             if error.response.status_code == 404:
                 raise InstanceAbsente(
                     f"Incus ne connaît pas {path}.") from error
-            raise IncusError(f"Incus a refuse {method} {path} : {error}") from error
+            raise IncusError(
+                f"Incus a refusé {method} {path} : {_raison(error)}") from error
         except httpx.HTTPError as error:
-            raise IncusError(f"Incus a refuse {method} {path} : {error}") from error
+            raise IncusError(f"Incus a refusé {method} {path} : {error}") from error
 
         if envelope.get("error_code") == 404:
             raise InstanceAbsente(f"Incus ne connaît pas {path}.")
@@ -205,6 +233,34 @@ class UnixSocketIncus:
         )
 
     def delete_instance(self, name: str) -> None:
+        """Arrête la cellule, puis la détruit (docs/DAT.md §5.4).
+
+        @spec docs/BACKLOG.md#SPK-90 · docs/DAT.md §5.4
+
+        Incus REFUSE `DELETE` sur une instance en marche — « Instance is
+        running », mesuré le 2026-09-02. Sans cet arrêt, supprimer un Spark
+        démarré échouait donc toujours, ce qui est le cas ordinaire et non un cas
+        limite.
+
+        L'arrêt est FORCÉ : une cellule qui refuse de s'arrêter proprement ne
+        doit pas bloquer une suppression que l'exploitant a déjà confirmée. On
+        détruit la cellule ; l'arrêter n'ajoute aucune perte.
+
+        Une cellule DÉJÀ arrêtée ne fait pas échouer la suppression : l'arrêt est
+        un moyen, pas une condition. Incus refuse alors l'arrêt, et ce refus-là
+        n'a pas à remonter.
+        """
+        try:
+            self.set_instance_state(name, "stop")
+        except InstanceAbsente:
+            # §14.5 : l'instance n'est plus là. La suppression a donc abouti, et
+            # l'appelant le lira au `DELETE` qui suit.
+            raise
+        except IncusError:
+            # Déjà arrêtée, ou un arrêt qu'Incus n'a pas voulu : on ne renonce
+            # pas pour autant. Si la cellule tourne encore, le `DELETE` le dira
+            # avec les mots d'Incus (§5.3) — bien mieux que ce refus-ci.
+            pass
         self._request("DELETE", f"/1.0/instances/{name}", None)
 
     def update_instance_config(self, name: str, config: dict[str, str]) -> None:
@@ -292,7 +348,7 @@ class UnixSocketIncus:
                 raise InstanceAbsente(
                     f"Incus ne connaît pas l'instance « {name} ».") from error
             raise IncusError(
-                f"Écriture de {path} dans « {name} » refusée : {error}"
+                f"Écriture de {path} dans « {name} » refusée : {_raison(error)}"
             ) from error
         except httpx.HTTPError as error:
             raise IncusError(

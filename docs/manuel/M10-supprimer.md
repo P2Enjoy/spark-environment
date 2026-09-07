@@ -51,6 +51,15 @@ Aucun autre geste du produit ne le demande, et c'est délibéré : une frappe
 demandée plusieurs fois par jour deviendrait un réflexe, et un réflexe ne lit
 plus.
 
+## Un Spark en marche s'arrête tout seul
+
+Vous n'avez pas à arrêter un Spark avant de le supprimer : la console s'en
+charge. L'arrêt fait partie du geste — on détruit la cellule, l'arrêter n'y
+ajoute aucune perte — et il est **forcé**, pour qu'une cellule qui refuse de
+s'arrêter proprement ne bloque pas une suppression que vous avez déjà confirmée.
+
+Un Spark déjà arrêté se supprime de la même façon, sans rien de particulier.
+
 ## Quand la cellule a déjà disparu
 
 Il arrive qu'une cellule soit supprimée **en dehors du produit** — par une

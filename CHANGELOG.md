@@ -131,6 +131,16 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Supprimer un Spark en marche fonctionne enfin, et un refus d'Incus se lit**
+  (SPK-90, `docs/DAT.md` §5.3, §5.4) : signalé sur la Forge de démonstration, la
+  suppression rendait « Client error '400 Bad Request' » suivi d'un lien vers
+  MDN. Incus disait en réalité **« Instance is running »** : le pilote envoyait
+  un `DELETE` sans arrêter la cellule — donc supprimer un Spark démarré échouait
+  toujours, ce qui est le cas ordinaire — et ses trois transports formataient
+  l'exception HTTP au lieu de lire la cause écrite dans le corps de la réponse.
+  La suppression arrête désormais la cellule d'abord, et **tout** refus d'Incus
+  arrive avec les mots d'Incus. Un `404` reste une absence rapportée, pas une
+  panne.
 - **Les trois blocs d'une recette peignent enfin quelque chose** (SPK-88,
   `docs/DAT.md` §38.6.4 ter, `docs/DESIGN_SYSTEM.md` §12.3) : la classe
   `recette-lignes` que l'aperçu, le compte rendu et le relevé employaient
