@@ -3954,23 +3954,40 @@ création : la faire disparaître ferait croire qu'elle n'a jamais existé.
 point qui change le code.
 
 La voie est bien celle qui était pressentie : `/streams/v1/index.json` donne
-`streams/v1/images.json`, qui publie **272 produits**. Mais la façon d'y trouver
-un alias n'était pas celle qu'on aurait supposée.
+`streams/v1/images.json`. Mais la façon d'y trouver un alias n'était pas celle
+qu'on aurait supposée.
 
 ```
 clé de produit : debian:trixie:amd64:default     ← nom de CODE, pas « 13 »
 aliases        : "debian/13,debian/trixie,…"     ← champ à part, séparé par des virgules
 ```
 
-Trois conséquences :
+**Le dépôt grossit tout seul**, et c'est une propriété du problème, pas un détail
+de mesure — le catalogue, lui, ne bouge pas :
+
+| Relevé | Produits publiés | Alias distincts | Au catalogue |
+|---|---|---|---|
+| 2026-08-19 | 272 | 230 | 4 |
+| 2026-09-07 | 296 | 229 | 4 |
+
+Quatre conséquences :
 
 - **l'alias ne se déduit pas de la clé.** `debian:13:amd64` ne correspond à rien :
   la clé porte `trixie`. Il faut lire le champ `aliases` de chaque produit et
-  construire la table inverse — 230 alias distincts pour 272 produits ;
+  construire la table inverse ;
 - **l'architecture n'est pas dans l'alias.** `debian/13/amd64` est **absent** de
-  la table des alias ; `debian/13` y renvoie aux quatre produits
-  `amd64`, `arm64`, `armhf`, `riscv64`. L'architecture se lit dans la clé, pas
-  dans ce que l'exploitant saisit ;
+  la table des alias ; `debian/13` y renvoie aux cinq produits `amd64`, `arm64`,
+  `armhf`, `loong64`, `riscv64`. L'architecture se lit dans la clé, pas dans ce
+  que l'exploitant saisit ;
+- **la variante, elle, EST dans l'alias**, et l'écran doit en tenir compte.
+  `debian/13`, `debian/13/default` et `debian/13/cloud` coexistent. Mesuré le
+  2026-09-07 : `debian/13` et `debian/13/default` renvoient aux **mêmes cinq
+  produits** — ce sont des synonymes, pas deux images ; `debian/13/cloud` en
+  désigne cinq autres. Sur les 229 alias : **70 racines** « famille/version »,
+  **155** portant une variante, et **4** sans version du tout — `archlinux`,
+  `kali`, `slackware`, `voidlinux`, des distributions à publication continue.
+  Quatorze variantes distinctes sont publiées (`cloud`, `desktop`, `desktop-kde`,
+  `musl`, `openrc`, `systemd`, `zfs`, `ufs`…) ;
 - **un alias inexistant est bien absent.** `debian/31` ne figure nulle part, ce
   qui est la propriété dont dépend tout le §33.2.
 
@@ -4005,6 +4022,106 @@ l'ouverture de l'écran et la soumission. L'existence d'un alias, elle, ne se
 périme pas dans le même intervalle, et la contrainte est ici de **forme**, comme
 celle du nom au §25.3 : on ne propose pas une valeur dont on sait qu'elle sera
 refusée.
+
+
+### 33.6 Le dépôt se lit en direct, et le catalogue se coche
+
+Le §33.2 a fait de l'ajout un geste explicite, et c'était juste. Mais la forme
+retenue — un champ texte libre — en est la version la plus faible : elle laisse
+écrire `images:debian/31`, crée une ligne `unknown`, et il faut un second geste,
+le relevé, pour apprendre que la référence n'existe pas. Surtout, elle
+n'apprend rien à l'exploitant : le produit propose 4 entrées pendant que le dépôt
+en publie 296, et rien à l'écran ne dit que l'écart existe.
+
+**Décision : la modale d'ajout lit le dépôt au moment où elle s'ouvre, et propose
+ce qu'il publie. Cocher une entrée l'ajoute au catalogue.**
+
+#### Pourquoi une lecture directe, et non un listing persisté
+
+Mesuré le 2026-09-07, depuis un poste de développement :
+
+| | Taille | Durée |
+|---|---|---|
+| `streams/v1/index.json` | 9 Kio | 0,37 s |
+| `streams/v1/images.json` | **1,13 Mio** | 0,93 s |
+
+Le téléchargement est **côté `sparkd`**, jamais côté navigateur : ce que la
+console reçoit, ce sont les alias groupés, quelques kibioctets. 1,3 s sur un
+geste d'administration rare est un coût acceptable.
+
+Une table de listing persistée coûterait un schéma, une migration, une question
+de fraîcheur et une synchronisation, pour économiser ces 1,3 s. Elle n'est pas
+retenue : **aucun changement de schéma n'est nécessaire**, `image_catalog` porte
+déjà tout ce qu'il faut.
+
+#### Pourquoi le §28.1 ne s'y oppose pas
+
+Le §28.1 garantit que le produit tient **sans réseau sortant une fois les images
+en cache**. Or ajouter une image au catalogue, c'est vouloir en déployer une qui
+n'y est précisément **pas** : son téléchargement depuis ce même dépôt est requis
+de toute façon, un peu plus loin dans le même geste. Exiger que le dépôt soit
+joignable pour *choisir* n'ajoute donc aucune dépendance nouvelle — elle est déjà
+là, et l'écran ne fait que la rendre visible plus tôt.
+
+#### Le serveur ne croit pas le client
+
+Une entrée cochée naît **`verified`**, ce qui abolit le double pas « ajouter puis
+relever ». Mais l'état ne vient pas du navigateur : `sparkd` **reconfirme** les
+alias contre le dépôt au moment de l'ajout, et date `verified_at` de **sa** propre
+lecture. Accepter l'état déclaré par le client serait le succès simulé que le
+`DESIGN_SYSTEM.md` §1.3 interdit partout ailleurs, et le §33.3 avec lui : l'état
+vient du relevé, jamais d'une déclaration. Cocher n'est pas une déclaration —
+c'est une sélection dans un relevé —, mais seul le serveur peut en attester.
+
+Corollaire de forme : l'ajout est un **lot**. Cocher plusieurs entrées et valider
+une fois ne coûte qu'une lecture, là où un ajout par entrée en coûterait autant
+que de cases cochées.
+
+#### Ce que la modale propose
+
+Les **70 racines** « famille/version », jamais les 229 alias bruts. `debian/13`
+et `debian/13/default` désignant les mêmes produits, les afficher côte à côte se
+lirait comme un doublon incompréhensible. Les variantes sont un choix **dans**
+une version, offert seulement là où elles existent.
+
+- Ce qui est **déjà au catalogue** s'y voit coché et inerte : la modale ne sert
+  pas à retirer, et une entrée déjà tenue n'est pas une entrée à ajouter.
+- L'**amorçabilité** s'y annonce comme à la création (§42.9.6) : 24 familles sont
+  publiées, 2 sont amorçables. C'est une annonce, jamais un filtre — le produit
+  sert des cellules, pas seulement des cellules amorçables.
+
+#### Repli obligatoire
+
+Un dépôt injoignable ne bloque pas l'ajout : la modale le **dit**, et continue
+d'offrir la **saisie libre**. Celle-ci ne disparaît pas, car elle reste la seule
+voie vers un alias publié depuis la dernière lecture, ou vers un dépôt absent de
+`REMOTES`. Une référence saisie à la main naît `unknown`, comme aujourd'hui : là,
+l'exploitant déclare, et une déclaration ne prouve rien.
+
+### 33.7 Retirer une entrée du catalogue
+
+Cocher ajoute ; il faut donc pouvoir retirer, sans quoi la commande serait
+irréversible. Le retrait est un geste du tableau du catalogue, pas de la modale
+d'ajout.
+
+Deux refus, et ils ne se valent pas :
+
+1. **Un Spark référence l'image.** Le refus **nomme** les Sparks concernés.
+   Ce n'est pas l'intégrité qui est en jeu : `ensure_selectable` n'est appelé
+   qu'à la **création** (§14.2), jamais à la reprise, donc un Spark existant
+   continue de tourner et de se reprendre sans son entrée. C'est la **lisibilité**
+   qui l'est. Le catalogue est ce qui explique sur quoi tourne une cellule ; le
+   retirer pendant qu'un Spark s'en réclame ferait croire que cette origine n'a
+   jamais existé — exactement ce que le §33.3 interdit déjà pour une entrée
+   `missing`.
+2. **L'entrée est celle par défaut** (`is_default`). L'écran de création s'en sert
+   comme présélection (§33.5) ; la retirer le laisserait sans point de départ.
+
+**Limite connue, assumée par cette décision** : désigner une *autre* entrée par
+défaut n'est pas un geste existant — `is_default` n'est posé que par le
+pré-renseignement. L'entrée par défaut n'est donc retirable par personne
+aujourd'hui. Cette décision ne l'ouvre pas ; elle le note, plutôt que de laisser
+croire que le refus est temporaire.
 
 
 ## 34. L'architecture de navigation de la console

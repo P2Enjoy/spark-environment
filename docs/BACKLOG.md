@@ -5405,6 +5405,63 @@ Mesuré sur la même Forge, en interrogeant la socket directement, Incus disait 
   `404` lève toujours `InstanceAbsente` ; manuel M10 et changelog mis à jour ;
   `@spec` / `@verifies` posés.
 
+### [ ] SPK-92 · Le dépôt d'images se lit en direct, et le catalogue se coche
+
+Demandé par le responsable le 2026-09-07, en constatant que la liste des images
+déployables — Debian 13, Debian 12, Ubuntu 24.04, Alpine 3.21 — ne vient d'aucune
+source vivante : ce sont **quatre tuples écrits en dur** dans `images.DEFAULTS`,
+posés au démarrage par `seed_defaults()`.
+
+Mesuré le même jour sur `images.linuxcontainers.org` : le dépôt publie **296
+produits** et **229 alias**, dans **24 familles**. Le produit en propose 4, et
+l'écart se creuse tout seul — 272 produits le 2026-08-19, 286 au relevé du
+responsable, 296 aujourd'hui. Rien à l'écran ne dit que cet écart existe.
+
+Ajouter une image se fait aujourd'hui en **tapant une référence à la main**. C'est
+la forme la plus faible du geste explicite voulu par le §33.2 : elle accepte
+`images:debian/31`, écrit une ligne `unknown`, et il faut un second geste — le
+relevé — pour apprendre que la référence n'existe pas.
+
+- Spécification : `docs/DAT.md` §33.6 (la lecture directe et le lot), §33.7 (le
+  retrait et ses deux refus), §33.3 **corrigé** (la variante est dans l'alias) ·
+  `DESIGN_SYSTEM.md` §6.10 (cases à cocher), §6.27 (modale limitée à une
+  section), §1.3 (pas de succès simulé), §6.13 (états systématiques d'une vue) ·
+  §42.9.6 (annoncer l'amorçabilité) · manuel M5. **Écrite et committée avant le
+  code.**
+- Portée : `GET /v1/images/depot`, qui lit le dépôt en direct et rend les alias
+  **groupés** famille → version, variantes en second niveau, chacun marqué
+  « déjà au catalogue » et « amorçable » ; ajout **en lot** de références cochées,
+  reconfirmées par le serveur contre le dépôt avant écriture, nées `verified` et
+  datées de **sa** lecture ; `DELETE /v1/images/{id}` avec ses deux refus ; la
+  modale d'ajout devient une liste à cocher filtrable, la saisie libre y restant
+  offerte en repli.
+- **Aucune migration** : `image_catalog` porte déjà tout. Si une migration devient
+  nécessaire, c'est que le dessin a dérivé du §33.6.
+- Ce que l'unité ne doit PAS casser : une entrée saisie à la main naît toujours
+  `unknown` (§33.3) ; une entrée `missing` reste **visible** au catalogue ; le
+  relevé explicite existant (`POST /v1/images/verify`) n'est pas remplacé — il
+  couvre les entrées déjà tenues, la lecture du dépôt couvre celles qu'on
+  pourrait tenir ; la création n'accepte toujours que `verified`.
+- Le repli est **obligatoire** : dépôt injoignable, la modale le nomme et la
+  saisie libre reste utilisable. Un écran qui se contenterait d'échouer
+  supprimerait la seule voie existante.
+- En pilote `fake`, `fake_fetch` rend les 4 alias pré-renseignés : la liste en
+  montre 4, sans réseau, comme `FakeIncus` et `FakeCaddy`.
+- Dépend de : SPK-32, dont elle prolonge le catalogue sans le remplacer, et
+  SPK-76 pour l'annonce d'amorçabilité.
+- DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis
+  Forge → Images —, cocher une image absente du catalogue l'y ajoute **déjà
+  vérifiée**, et elle est immédiatement choisissable à la création d'un Spark,
+  prouvé de bout en bout ; un dépôt injoignable rend un écran qui le **nomme** et
+  laisse la saisie libre opérante, prouvé par un test ; une référence cochée dont
+  le serveur ne retrouve pas l'alias à la reconfirmation est **refusée**, jamais
+  écrite `verified` ; retirer une image employée par un Spark est refusé avec le
+  **nom** des Sparks ; retirer l'entrée par défaut est refusé ; tests unitaires,
+  tests d'API et test E2E propres à l'unité ; captures observées aux principaux
+  formats, états de chargement, d'erreur et de repli compris ; manuel M5, DAT,
+  design system et changelog mis à jour ; `@spec` / `@verifies` posés.
+
+
 ---
 
 ## Réservé, non planifié

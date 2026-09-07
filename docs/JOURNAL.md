@@ -4,6 +4,64 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-09-07 — Quatre images en dur devant un dépôt qui en publie 296
+
+**Le constat vient du responsable**, en trois questions de plus en plus précises :
+d'où vient la liste Debian 13 / Debian 12 / Ubuntu 24.04 / Alpine 3.21 ? Y a-t-il
+un catalogue dynamique ? La réponse est qu'il n'y en a pas : `images.DEFAULTS`
+tient **quatre tuples écrits en dur**, `seed_defaults()` les pose au démarrage, et
+la liste déroulante de la création n'est que cette table filtrée sur `verified`.
+
+**Ce que la conversation a mis au jour, et qui n'était pas visible.** Le relevé du
+responsable affichait « 286 produits » là où le §33.3 en documentait 272. Les deux
+sont vrais : la mesure du DAT est datée du 2026-08-19, et le dépôt grossit. Le
+compte affiché est d'ailleurs celui des **produits**, pas des alias — deux nombres
+distincts que le §33.3 mêlait sans le dire.
+
+**Mesuré le 2026-09-07**, et deux résultats changent le dessin.
+
+- Le coût : `index.json` 9 Kio en 0,37 s, `images.json` **1,13 Mio** en 0,93 s.
+  Soit ~1,3 s côté `sparkd`, pour 296 produits, 229 alias, 24 familles. Le
+  navigateur, lui, ne reçoit que les alias groupés.
+- La forme des alias : `debian/13` et `debian/13/default` renvoient aux **mêmes
+  cinq produits**. Ce sont des synonymes, pas deux images. Sur 229 alias, 70 sont
+  des racines « famille/version », 155 portent une variante, 4 n'ont pas de
+  version (`archlinux`, `kali`, `slackware`, `voidlinux`). Le §33.3 notait que
+  l'architecture n'est pas dans l'alias ; il ne disait pas que la **variante** y
+  est. Une liste à cocher bâtie sur les 229 alias bruts aurait affiché des
+  doublons incompréhensibles.
+
+**Hypothèse posée puis abandonnée.** J'ai d'abord proposé de **persister** le
+listing du dépôt dans une table datée, au motif du §28.1 — le produit tient sans
+réseau sortant. Le responsable a tranché pour la lecture directe, et il a raison :
+le §28.1 garantit le fonctionnement **une fois les images en cache**. Ajouter une
+image au catalogue, c'est vouloir en déployer une qui n'y est pas ; son
+téléchargement depuis ce même dépôt est requis de toute façon, plus loin dans le
+même geste. La lecture directe n'ajoute aucune dépendance, et elle économise un
+schéma, une migration et une synchronisation.
+
+**Décision** (`docs/DAT.md` §33.6, §33.7). La modale d'ajout lit le dépôt à
+l'ouverture et propose les 70 racines, variantes en second niveau. Cocher ajoute,
+en **lot**. Une entrée cochée naît `verified` — mais l'état vient de la
+**reconfirmation par le serveur**, jamais du navigateur, sans quoi l'ajout serait
+la déclaration que le §33.3 refuse depuis l'origine. La saisie libre demeure, en
+repli d'un dépôt injoignable et comme seule voie vers un alias plus récent que la
+lecture. Retirer une entrée est refusé si un Spark la référence — pour la
+lisibilité, non pour l'intégrité : vérification faite, `ensure_selectable` n'est
+appelé qu'à la création, jamais à la reprise.
+
+**Conséquences.** Aucune migration. Le relevé explicite existant n'est pas
+remplacé : il couvre ce que le catalogue tient, la lecture du dépôt couvre ce
+qu'il pourrait tenir. Reste une limite assumée : `is_default` n'étant posé que par
+le pré-renseignement, l'entrée par défaut n'est retirable par personne.
+
+**Vérifications réalisées à ce stade** : les mesures ci-dessus, sur le dépôt réel ;
+la lecture des appels de `ensure_selectable` dans `sparkd` ; le décompte des trois
+routes images existantes. Le code de l'unité SPK-92 n'est pas écrit — cette entrée
+et la spécification le précèdent, conformément au CLAUDE.md.
+
+---
+
 ## 2026-09-02 — « Le transport SSH ne répond pas », sur un tunnel ouvert
 
 **Le constat vient du responsable, sur sa Forge réelle** : l'écran des pools
