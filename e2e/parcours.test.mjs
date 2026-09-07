@@ -2758,6 +2758,72 @@ test('supprimer un Spark dont l’instance a disparu RÉUSSIT depuis la console'
   });
 });
 
+// --- SPK-90 · SUPPRIMER UN SPARK EN MARCHE (docs/DAT.md §5.3, §5.4) --------
+//
+// @verifies docs/BACKLOG.md#SPK-90 · docs/DAT.md §5.3 (le corps d'Incus fait
+//           autorité), §5.4 (l'arrêt fait partie de la suppression), §14.4 (ce
+//           qui est rendu l'est entièrement) · manuel M10
+
+test('supprimer un Spark EN MARCHE aboutit, sans l’arrêter d’abord soi-même', async () => {
+  // Mesuré le 2026-09-02 sur la Forge : le geste rendait « Client error '400
+  // Bad Request' » et un lien vers MDN, parce que le pilote envoyait un `DELETE`
+  // sans arrêter la cellule. C'est le cas ORDINAIRE — un Spark qu'on supprime
+  // tourne presque toujours —, et il n'était couvert par aucun parcours.
+  //
+  // Le Spark est créé PAR L'ÉCRAN et détruit dans le même parcours : le §29.2
+  // veut la pile rendue à l'état du seed, et supprimer un Spark seedé priverait
+  // les parcours suivants de ce qu'ils éprouvent.
+  await parcours('suppression-en-marche', async () => {
+    const { corps: avant } = await pile.lireSparkd('/v1/forge');
+    const placeAvant = avant.pools.memory.allocated;
+
+    await accueil();
+    await page.click('.titre-vue .bouton--primaire');
+    await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
+    await page.fill('#name', 'ephemere');
+    await page.click('button[type="submit"]');
+    await page.waitForSelector('.entete-entite', { timeout: 20000 });
+
+    // Appliquer puis démarrer : on veut une cellule qui TOURNE, sans quoi la
+    // preuve retomberait sur le cas déjà couvert du Spark arrêté.
+    await page.click('[data-commande="apply"]');
+    await page.waitForSelector('[data-commande="start"]', { timeout: 30000 });
+    await page.click('[data-commande="start"]');
+    await page.waitForFunction(
+      () => document.querySelector('[data-commande="stop"]') !== null,
+      null, { timeout: 30000 });
+    const { corps: enMarche } = await pile.lireSparkd('/v1/sparks/ephemere');
+    assert.equal(enMarche.state, 'running', 'le parcours doit partir d’un Spark qui TOURNE');
+
+    // Le geste : on ne l'arrête PAS. L'arrêt appartient à la suppression (§5.4).
+    await page.click('[data-commande="delete"]');
+    await page.waitForSelector('[data-frappe="delete"]', { timeout: 10000 });
+    await page.fill('[data-frappe="delete"]', 'ephemere');
+    await page.click('[data-confirme]');
+
+    await page.waitForSelector('tbody a', { timeout: 30000 });
+    await page.waitForFunction(
+      () => ![...document.querySelectorAll('tbody a')]
+        .some((a) => a.textContent.trim() === 'ephemere'),
+      null, { timeout: 30000 });
+
+    // EFFET côté sparkd : la ligne est partie, et la place est intégralement
+    // rendue (§14.4) — pas seulement l'écran qui l'oublie.
+    const { status } = await pile.lireSparkd('/v1/sparks/ephemere');
+    assert.equal(status, 404);
+    const { corps: apres } = await pile.lireSparkd('/v1/forge');
+    assert.equal(apres.pools.memory.allocated, placeAvant,
+      'la mémoire du Spark supprimé doit revenir exactement au pool');
+
+    // Le journal porte le passage par « deleting » : c'est là qu'on lira, le
+    // jour où une suppression échoue, si elle a seulement été tentée.
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=200');
+    const siennes = journal.entries.filter((e) => (e.message ?? '').includes('ephemere'));
+    assert.ok(siennes.some((e) => e.action === 'spark.delete' && e.result === 'ok'),
+      'la suppression aboutie doit se lire au journal');
+  });
+});
+
 // --- SPK-63 · FRAPPER LE NOM (§6.23) ---------------------------------------
 
 test('sans la frappe du nom, la suppression ne s’engage PAS', async () => {

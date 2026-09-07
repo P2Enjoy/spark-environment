@@ -5350,7 +5350,7 @@ l'arbitrage de la collision `SPK-84`.)*
 
 ---
 
-### [ ] SPK-90 · Supprimer arrête d'abord, et un refus d'Incus se lit
+### [x] SPK-90 · Supprimer arrête d'abord, et un refus d'Incus se lit
 
 Signalé par le responsable le 2026-09-02, sur la Forge de démonstration :
 
@@ -5404,6 +5404,24 @@ Mesuré sur la même Forge, en interrogeant la socket directement, Incus disait 
   prouvé par un test sur le corps réel `{"error":"Instance is running"}` ; le
   `404` lève toujours `InstanceAbsente` ; manuel M10 et changelog mis à jour ;
   `@spec` / `@verifies` posés.
+- **CLOSE le 2026-09-07, et le backlog avait dérivé.** Le code, les preuves et le
+  manuel étaient livrés depuis le 2026-09-02 — quatre commits — mais l'unité était
+  restée `[ ]`, ce que la relecture de ce jour a corrigé. Deux manques réels ont
+  été comblés :
+  - la **suppression réelle sur Forge**, jamais faite : la cellule
+    `rootless-mesure`, **en marche**, a été supprimée depuis la console de la
+    Forge de test. Aboutie en 4 s, cellule disparue chez Incus, ligne partie du
+    registre, journal portant « running » → « deleting » puis « supprimé,
+    ressources rendues ». Capture `spk90-apres-suppression.jpg` — qui remplace
+    un fichier du même nom ne montrant qu'un squelette de chargement, donc ne
+    prouvant rien ;
+  - le **parcours E2E propre à l'unité**, absent : les parcours couvraient le
+    Spark orphelin et la frappe du nom, jamais le cas ordinaire d'un Spark qui
+    tourne. Le nouveau crée son Spark par l'écran, le démarre, le supprime sans
+    l'arrêter, et constate le `404` et la mémoire rendue **exactement** au pool.
+  Les cinq preuves d'unité couvraient déjà l'arrêt avant destruction, la cellule
+  déjà arrêtée, l'autorité du corps d'Incus, l'absence de cause inventée et le
+  `404` qui reste une absence.
 
 ### [x] SPK-92 · Le dépôt d'images se lit en direct, et le catalogue se coche
 
