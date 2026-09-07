@@ -13,6 +13,7 @@
 
 import { chromium } from 'playwright';
 import { createConsoleHost } from '../apps/webui/host/main.js';
+import { ForgeUpdateManager } from '../apps/webui/host/forge-update.js';
 import { TunnelManager } from '../apps/webui/host/tunnel.js';
 import { SessionManager } from '../apps/webui/host/terminal.js';
 import { mkdtemp, writeFile } from 'node:fs/promises';
@@ -102,6 +103,11 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           // Un VRAI commit du dépôt, pour que la comparaison
                           // porte sur une ascendance réelle et non simulée.
                           buildCommit = null,
+                          // SPK-85 · §40.6 : le reçu de retour arrière. Il ne se
+                          // fabrique pas — il est SEMÉ par le vrai `update()`,
+                          // avec des doublons d'installation et de vérification.
+                          // Le reste du chemin est celui de la production.
+                          forgeUpdates = null,
                           // SPK-44 · §37.6 : le relevé Docker que la console
                           // rendra. Les états d'absence ne se provoquent pas sur
                           // un faux `sshd` — ils se posent.
@@ -159,6 +165,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
   });
   const { server } = createConsoleHost({
     tunnels, inventoryPath: chemin, anchorPath: cheminAncres,
+    ...(forgeUpdates ? { forgeUpdates } : {}),
     // SPK-43 · §37.3 : le terminal lance un vrai `ssh` et sonde un vrai port.
     // Les captures ont besoin des ÉCRANS, pas d'un réseau : on injecte donc le
     // gestionnaire de sessions et le sondage, comme le font les preuves de
@@ -1140,6 +1147,48 @@ await fermerContexte(ctx);
   await page.screenshot({ path: join(SORTIE, '91-forge-build-a-jour.png'), fullPage: true });
   console.log('  91-forge-build-a-jour.png');
   await fermerContexte(ctx);
+
+  // SPK-85 · §40.6 : LE RETOUR ARRIÈRE APRÈS UNE MIGRATION.
+  //
+  // Mesuré le 2026-09-02 : une base portant une migration dont le code n'a pas
+  // le fichier est rejetée au démarrage. Le geste ne rétablit donc rien, et la
+  // confirmation doit le dire AVANT qu'on l'engage.
+  for (const [nom, avant, apres, attendu] of [
+    ['spk85-07-rollback-migration', 12, 13, 'refusera de servir'],
+    ['spk85-08-rollback-sans-migration', 13, 13, 'n’a pas migré le registre'],
+  ]) {
+    const misesAJour = new ForgeUpdateManager({
+      install: async () => ({ stages: { package: 'done' } }),
+      verify: async (_port, commit) => ({ ok: true, expectedCommit: commit,
+                                          readyz: { schemaVersion: apres } }),
+      probeSchema: async () => avant,
+    });
+    // Le reçu passe par le VRAI chemin : c'est lui qui décide de l'offre.
+    // Le nom DOIT être celui de l'inventaire : le reçu est classé par serveur,
+    // et l'offre ne vaut que pour la Forge qui l'a produit (§40.6).
+    await misesAJour.update({ server: { name: 'validation', kind: 'ssh',
+                                        host: '203.0.113.10', user: 'ubuntu', port: 22 },
+                              localPort: 1, before: ancien, target: tete });
+    ctx = await demarrer({ buildCommit: tete, forgeUpdates: misesAJour });
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('tbody a');
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('[data-action="demander-rollback"]', { timeout: 8000 });
+    if (avant !== apres) {
+      // AVANT d'ouvrir la confirmation : c'est là qu'on cherche comment revenir
+      // en arrière, et c'est donc là qu'il faut lire que ce bouton ne le fera pas.
+      await page.screenshot({ path: join(SORTIE, 'spk85-09-rollback-mention.png'),
+                              fullPage: true });
+      console.log('  spk85-09-rollback-mention.png');
+    }
+    await page.click('[data-action="demander-rollback"]');
+    await page.waitForFunction(
+      (texte) => document.body.innerText.includes(texte), attendu, { timeout: 8000 });
+    await page.screenshot({ path: join(SORTIE, `${nom}.png`), fullPage: true });
+    console.log(`  ${nom}.png`);
+    await fermerContexte(ctx);
+  }
 
   // NON ESTAMPILLÉE : « inconnue » est une réponse, pas « à jour » (§40.2).
   ctx = await demarrer();

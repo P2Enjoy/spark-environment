@@ -486,6 +486,51 @@ function renderUpdateProgress(operation) {
   ${outcome}`;
 }
 
+/**
+ * Ce qu'un retour arrière ne rétablira PAS (SPK-85, docs/DAT.md §40.6).
+ *
+ * @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §40.6 (mesuré le 2026-09-02) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-13 · docs/DESIGN_SYSTEM.md §14.6
+ *
+ * Mesuré : une base qui porte une migration dont le code n'a pas le fichier est
+ * REJETÉE au démarrage (`docs/SCHEMA.md` §12.4). Après une mise à jour qui a
+ * migré, la build précédente ne démarre donc pas — le geste ne détruit rien,
+ * mais il ne rétablit rien non plus et laisse le plan de contrôle arrêté.
+ *
+ * Trois états, trois textes (§14.6) : la version a monté, elle n'a pas bougé,
+ * ou l'une des deux mesures manque. Le troisième ne se range PAS avec le
+ * deuxième — c'est là qu'on mentirait par omission.
+ */
+export function renderMigrationFranchie(rollback) {
+  if (rollback?.migrated === true) {
+    return `<div class="avertissement">
+      <p><strong>Cette mise à jour a migré le registre</strong> — schéma
+      <span class="technique">${echapper(rollback.schemaBefore)}</span> →
+      <span class="technique">${echapper(rollback.schemaAfter)}</span>. Revenir
+      au code ne défait pas la migration, et la build précédente
+      <strong>refusera de servir</strong> un registre migré au-delà d’elle :
+      elle ne démarrera pas, et le plan de contrôle restera arrêté.</p>
+      <p>Ce geste ne détruit aucune donnée, mais il ne rétablit rien non plus.
+      Pour revenir en arrière pour de bon : sauvegarder le registre, jouer le
+      retour arrière de la migration, puis réinstaller cette build. La procédure
+      est au contrat de déploiement.</p>
+    </div>`;
+  }
+  if (rollback?.migrated === false) {
+    // §14.6 : dire aussi le cas favorable. Sans lui, l'absence d'avertissement
+    // se lirait comme un oubli, et le silence n'est pas une réponse.
+    return `<p class="note">Cette mise à jour n’a pas migré le registre (schéma
+      <span class="technique">${echapper(rollback.schemaAfter)}</span> inchangé) :
+      la build précédente saura le servir.</p>`;
+  }
+  return `<div class="avertissement">
+    <p><strong>La version du schéma n’a pas pu être relevée</strong> avant ou
+    après cette mise à jour. Si elle a migré le registre, la build précédente
+    refusera de le servir et le plan de contrôle restera arrêté. Sauvegardez le
+    registre avant d’engager.</p>
+  </div>`;
+}
+
 function renderUpdateActions(build, operation) {
   if (operation.confirmation === 'update') {
     return `<div class="confirmation confirmation--sensible" role="group"
@@ -508,6 +553,7 @@ function renderUpdateActions(build, operation) {
       <span class="technique">${echapper(build.rollback?.current?.slice(0, 12))}</span>
       à <span class="technique">${echapper(build.rollback?.previous?.slice(0, 12))}</span>
       et l’API sera de nouveau brièvement interrompue.</p>
+      ${renderMigrationFranchie(build.rollback)}
       <p class="formulaire__actions">
         <button type="button" class="bouton" data-action="confirmer-rollback">Revenir à cette build</button>
         <button type="button" class="bouton" data-action="annuler-update">Annuler</button>
@@ -523,6 +569,12 @@ function renderUpdateActions(build, operation) {
     '<button type="button" class="bouton bouton--compact" data-action="comparer-build">Comparer à nouveau</button>',
   ].filter(Boolean).join('\n');
   return `<p class="formulaire__actions">${actions}</p>
+    ${build.rollback?.available && build.rollback.migrated === true
+      // Le savoir AVANT d'ouvrir la confirmation : un exploitant qui cherche
+      // comment revenir en arrière doit lire ici que ce bouton ne le fera pas.
+      ? `<p class="note">Cette mise à jour a migré le registre : « Revenir à la
+         build précédente » ne rétablira pas un plan de contrôle qui démarre.</p>`
+      : ''}
     ${build.verdict === 'forge_en_retard' && build.update && !build.update.allowed
       ? `<p class="note">Mise à jour indisponible : ${echapper(build.update.reason)}</p>` : ''}`;
 }

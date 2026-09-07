@@ -16,7 +16,7 @@ import { renderRedemarrage, REBOOT_VIDE,
   renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced,
   renderHostError, renderControlUnavailable, renderHostSkeleton, fillRatio,
   formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
-  renderBuild, renderNotify, UPDATE_VIDE,
+  renderBuild, renderNotify, UPDATE_VIDE, renderMigrationFranchie,
 } from './forge-view.js';
 
 test('SSH sans sparkd désigne l assistant sans refus rouge ni faux remède', () => {
@@ -667,4 +667,59 @@ test('une fois engagé, l’écran dit que le contact est PERDU', () => {
   assert.match(rendu, /perdu le contact/);
   assert.match(rendu, /c'est attendu|c’est attendu/);
   assert.ok(!/data-redemarrage="engager"/.test(rendu));
+});
+
+// --- SPK-85 · §40.6 : le bouton de retour arrière dit ce qu'il ne fera pas ---
+//
+// @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §40.6 · docs/SCHEMA.md §12.4 ·
+//           docs/DESIGN_SYSTEM.md §14.6 (trois états distincts), §1.3
+
+test('une mise à jour qui a MIGRÉ dit que le retour arrière ne rétablira rien', () => {
+  const rendu = renderMigrationFranchie(
+    { available: true, migrated: true, schemaBefore: 12, schemaAfter: 13 });
+  assert.match(rendu, /class="avertissement"/);
+  assert.match(rendu, /refusera de servir/);
+  assert.match(rendu, /restera arrêté/);
+  // Les deux bornes sont CHIFFRÉES : « une migration » sans numéro n'aide pas à
+  // retrouver laquelle jouer en retour arrière.
+  assert.match(rendu, /12/);
+  assert.match(rendu, /13/);
+});
+
+test('sans migration, l’écran le DIT au lieu de se taire (§14.6)', () => {
+  const rendu = renderMigrationFranchie(
+    { available: true, migrated: false, schemaBefore: 12, schemaAfter: 12 });
+  assert.match(rendu, /n’a pas migré le registre/);
+  assert.match(rendu, /saura le servir/);
+  assert.doesNotMatch(rendu, /class="avertissement"/);
+});
+
+test('une mesure manquante énonce le risque, elle ne conclut pas', () => {
+  for (const rollback of [{ migrated: null }, {}, undefined]) {
+    const rendu = renderMigrationFranchie(rollback);
+    assert.match(rendu, /class="avertissement"/);
+    assert.match(rendu, /n’a pas pu être relevée/);
+    // On ne prétend NI qu'il y a eu migration, NI qu'il n'y en a pas eu.
+    assert.match(rendu, /Si elle a migré/);
+  }
+});
+
+test('la confirmation de retour arrière PORTE l’avertissement', () => {
+  const rendu = renderBuild(
+    { verdict: 'a_jour', titre: 'À jour', detail: 'x',
+      rollback: { available: true, previous: 'b'.repeat(40), current: 'a'.repeat(40),
+                  migrated: true, schemaBefore: 12, schemaAfter: 13 } },
+    { ...UPDATE_VIDE, confirmation: 'rollback' });
+  assert.match(rendu, /Revenir à la build précédente \?/);
+  assert.match(rendu, /refusera de servir/);
+});
+
+test('le bouton le dit AVANT qu’on ouvre la confirmation', () => {
+  const rendu = renderBuild(
+    { verdict: 'a_jour', titre: 'À jour', detail: 'x',
+      rollback: { available: true, previous: 'b'.repeat(40), current: 'a'.repeat(40),
+                  migrated: true, schemaBefore: 12, schemaAfter: 13 } },
+    UPDATE_VIDE);
+  assert.match(rendu, /data-action="demander-rollback"/);
+  assert.match(rendu, /ne rétablira pas un plan de contrôle qui démarre/);
 });

@@ -252,6 +252,10 @@ export async function verifyForge(localPort, expectedCommit, {
       healthz: { status: health.status, state: health.body?.status ?? null,
                  commit: healthCommit, resolvedCommit: healthResolved },
       readyz: { status: ready.status, state: ready.body?.status ?? null,
+                // SPK-85 · §40.6 : la plus haute migration appliquée. C'est le
+                // seul fait qui distingue un retour arrière qui rétablit d'un
+                // retour arrière qui laisse la Forge arrêtée.
+                schemaVersion: ready.body?.schema_version ?? null,
                 detail: ready.body?.detail ?? ready.error ?? null },
       build: { status: forge.status, commit: forgeCommit, resolvedCommit: forgeResolved,
                version: forge.body?.build?.version ?? null },
@@ -267,20 +271,53 @@ export async function verifyForge(localPort, expectedCommit, {
   return { ok: false, expectedCommit, ...last };
 }
 
+/**
+ * La version de schéma que la Forge sert MAINTENANT (SPK-85, docs/DAT.md §40.6).
+ *
+ * `/readyz` la publie déjà (§31.4). On la relève AVANT la mutation : après, le
+ * démarrage de la nouvelle build a déjà migré, et la comparaison serait perdue.
+ *
+ * Rend `null` quand elle n'a pas pu être lue — et `null` n'est pas zéro : le
+ * §14.6 du design system interdit de conclure d'une mesure absente.
+ */
+export async function probeSchemaVersion(localPort, { fetchFn = fetch } = {}) {
+  if (!Number.isInteger(localPort) || localPort <= 0) return null;
+  const ready = await readJson(fetchFn, `http://127.0.0.1:${localPort}/readyz`);
+  const version = ready.body?.schema_version;
+  return Number.isInteger(version) ? version : null;
+}
+
 /** Une opération par Forge et un seul reçu de retour arrière, en mémoire. */
 export class ForgeUpdateManager {
-  constructor({ install = runRemoteInstall, verify = verifyForge } = {}) {
+  constructor({ install = runRemoteInstall, verify = verifyForge,
+                probeSchema = probeSchemaVersion } = {}) {
     this.install = install;
     this.verify = verify;
+    this.probeSchema = probeSchema;
     this.busy = new Set();
     this.receipts = new Map();
   }
 
+  /**
+   * Ce que le retour arrière rétablirait, et ce qu'il ne rétablirait pas.
+   *
+   * @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §40.6
+   *
+   * `migrated` porte TROIS valeurs, et pas deux : `true` quand la version du
+   * schéma a monté pendant la mise à jour — la build précédente refusera alors
+   * de servir ce registre —, `false` quand elle n'a pas bougé, et `null` quand
+   * l'une des deux mesures manque. Un booléen aurait rangé « je ne sais pas »
+   * avec « tout va bien », ce qui est exactement le mensonge à éviter ici.
+   */
   rollbackOffer(serverName, currentCommit) {
     const receipt = this.receipts.get(serverName);
-    return receipt && receipt.target === currentCommit
-      ? { available: true, previous: receipt.before, current: receipt.target }
-      : { available: false };
+    if (!receipt || receipt.target !== currentCommit) return { available: false };
+    const { schemaBefore = null, schemaAfter = null } = receipt;
+    const migrated = Number.isInteger(schemaBefore) && Number.isInteger(schemaAfter)
+      ? schemaAfter > schemaBefore
+      : null;
+    return { available: true, previous: receipt.before, current: receipt.target,
+             migrated, schemaBefore, schemaAfter };
   }
 
   async #rollback(server, localPort, before, target) {
@@ -305,6 +342,9 @@ export class ForgeUpdateManager {
     }
     this.busy.add(name);
     try {
+      // Relevé AVANT toute mutation : après, la nouvelle build a déjà migré au
+      // démarrage, et la comparaison n'existe plus (§40.6).
+      const schemaBefore = await this.probeSchema(localPort).catch(() => null);
       let execution;
       try {
         execution = await this.install(server, target, before);
@@ -324,7 +364,11 @@ export class ForgeUpdateManager {
                  rollback: await this.#rollback(server, localPort, before, target) };
       }
       const journaled = await audit('forge.sparkd_update', before, target);
-      const receipt = { server: name, before, target };
+      // SPK-85 · §40.6 : les deux bornes du schéma. `schemaAfter` vient de la
+      // vérification qui vient d'aboutir — donc de la build servie, pas d'une
+      // seconde lecture qui pourrait tomber ailleurs.
+      const receipt = { server: name, before, target, schemaBefore,
+                        schemaAfter: verification.readyz?.schemaVersion ?? null };
       this.receipts.set(name, receipt);
       return { state: 'success', before, target, stages: execution.stages,
                verification, journaled, receipt };

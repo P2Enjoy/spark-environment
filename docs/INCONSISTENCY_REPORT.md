@@ -36,50 +36,7 @@ la correction du 2026-09-02, qui n'a fait que rendre l'état de refus lisible.
 
 ---
 
-## 2. Quatre unités de backlog se partagent DEUX identifiants, `SPK-84` et `SPK-85`
-
-**Constaté le 2026-09-02**, en attribuant un identifiant à SPK-85.
-
-**Le document.** `docs/BACKLOG.md`, en tête : « Un identifiant `SPK-NN` est
-**stable** : il est cité par les commentaires `@spec` du code et `@verifies` des
-tests. Il ne se renumérote pas. »
-
-**Le fait, constaté en deux temps.** Deux unités distinctes portent `SPK-84` :
-« Une recette pose AUSSI sa route, et les trois blocs se ressemblent » et
-« L'amorce prévient le `grub-pc` cassé, et le préflight le nomme ». Les deux sont
-`[ ]`, donc aucune n'est encore citée par un `@spec` ou un `@verifies`.
-
-**Puis `SPK-85` a été attribué deux fois le même jour**, par deux sessions
-travaillant en parallèle sur cette branche : « Corriger le port d'une route, sans
-la refaire » et « Le dossier de déploiement d'un Spark, copié pour un agent ».
-Cette seconde collision est d'une autre nature : la seconde unité est `[~]`, et
-son identifiant est **déjà cité** par `docs/DAT.md` §44.9, `docs/SCHEMA.md`
-§10 quinquies, `docs/PROD_MIGRATIONS.md` OP-15, la migration `013`, six fichiers
-de code et leurs preuves — tous committés. La renuméroter unilatéralement
-casserait ces références sans garantie qu'un autre identifiant ne soit pas pris
-dans la minute qui suit.
-
-**Pourquoi ce n'est pas corrigé ici.** Renuméroter est un arbitrage sur des
-unités qui n'appartiennent pas à la tâche en cours, et les identifiants ont pu
-être cités ailleurs — un message de commit, une note. Le journal du 2026-09-02
-rappelle que `SPK-79`, `SPK-80` et `SPK-81` ont été rendus et ne seront **pas
-réemployés** : ils ne peuvent pas servir à départager. `SPK-86` et `SPK-87` sont
-déjà pris.
-
-**La cause, et elle n'est pas documentaire.** Rien dans le dépôt ne réserve un
-identifiant : deux sessions qui lisent le backlog à la même seconde y voient le
-même « premier libre ». Tant que plusieurs agents travaillent sur cette branche,
-la collision se reproduira.
-
-**Demandé au responsable.** Arbitrer qui conserve `SPK-84` et qui conserve
-`SPK-85`, et par quoi la renumérotation passe — les références `@spec` et
-`@verifies` de l'unité `[~]` sont déjà committées, celles des unités `[ ]` n'ont
-pas encore de code. Décider aussi s'il faut un mécanisme d'attribution, faute de
-quoi le prochain identifiant sera repris de la même façon.
-
----
-
-## 3. `make manuel` détruit cinq illustrations qu'il ne sait plus produire
+## 2. `make manuel` détruit cinq illustrations qu'il ne sait plus produire
 
 **Constaté le 2026-09-02**, en produisant l'illustration de SPK-85.
 

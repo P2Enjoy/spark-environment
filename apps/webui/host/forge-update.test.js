@@ -101,3 +101,83 @@ test('un echec APRES mutation tente automatiquement l ancienne build', async () 
   assert.equal(result.rollback.state, 'success');
   assert.deepEqual(installs, [[NEW, OLD], [OLD, NEW]]);
 });
+
+// --- SPK-85 · §40.6 : ce qu'un retour arrière ne rétablira pas --------------
+//
+// @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §40.6 · docs/SCHEMA.md §12.4
+//
+// Mesuré le 2026-09-02 : une base portant une migration dont le code n'a pas le
+// fichier est REJETÉE au démarrage. Le reçu doit donc retenir de quoi le dire.
+
+test('le recu retient les DEUX versions de schema, et conclut à la migration', async () => {
+  const manager = new ForgeUpdateManager({
+    install: async () => ({ stages: { package: 'done' } }),
+    verify: async (_port, commit) => ({ ok: true, expectedCommit: commit,
+                                        readyz: { schemaVersion: 13 } }),
+    probeSchema: async () => 12,
+  });
+  await manager.update({ server: SERVER, localPort: 1234, before: OLD, target: NEW });
+
+  const offre = manager.rollbackOffer('prod', NEW);
+  assert.equal(offre.available, true);
+  assert.equal(offre.migrated, true);
+  assert.equal(offre.schemaBefore, 12);
+  assert.equal(offre.schemaAfter, 13);
+});
+
+test('une version INCHANGEE ne fait pas croire à une migration', async () => {
+  const manager = new ForgeUpdateManager({
+    install: async () => ({ stages: { package: 'done' } }),
+    verify: async (_port, commit) => ({ ok: true, expectedCommit: commit,
+                                        readyz: { schemaVersion: 12 } }),
+    probeSchema: async () => 12,
+  });
+  await manager.update({ server: SERVER, localPort: 1234, before: OLD, target: NEW });
+  assert.equal(manager.rollbackOffer('prod', NEW).migrated, false);
+});
+
+test('une mesure MANQUANTE ne se range pas avec « pas de migration »', async () => {
+  // §14.6 : « je ne sais pas » et « tout va bien » sont deux états distincts.
+  // Les confondre ferait taire l'avertissement précisément quand la console est
+  // le moins sûre d'elle.
+  for (const [avant, apres] of [[null, 13], [12, null], [null, null]]) {
+    const manager = new ForgeUpdateManager({
+      install: async () => ({ stages: { package: 'done' } }),
+      verify: async (_port, commit) => ({ ok: true, expectedCommit: commit,
+                                          readyz: { schemaVersion: apres } }),
+      probeSchema: async () => avant,
+    });
+    await manager.update({ server: SERVER, localPort: 1234, before: OLD, target: NEW });
+    assert.equal(manager.rollbackOffer('prod', NEW).migrated, null,
+                 `avant=${avant} apres=${apres}`);
+  }
+});
+
+test('la version du schema est relevee AVANT la mutation, jamais apres', async () => {
+  // Après l'installation, la nouvelle build a déjà migré au démarrage : relever
+  // là ne comparerait plus rien.
+  const ordre = [];
+  const manager = new ForgeUpdateManager({
+    install: async () => { ordre.push('install'); return { stages: {} }; },
+    verify: async (_port, commit) => ({ ok: true, expectedCommit: commit,
+                                        readyz: { schemaVersion: 13 } }),
+    probeSchema: async () => { ordre.push('probe'); return 12; },
+  });
+  await manager.update({ server: SERVER, localPort: 1234, before: OLD, target: NEW });
+  assert.deepEqual(ordre, ['probe', 'install']);
+});
+
+test('verifyForge rapporte la version de schema que readyz publie', async () => {
+  const bodies = {
+    '/healthz': { status: 'ok', build: { commit: NEW } },
+    '/readyz': { status: 'ready', schema_version: 13 },
+    '/v1/forge': { build: { commit: NEW } },
+  };
+  const result = await verifyForge(1234, NEW, {
+    timeoutMs: 1, sleep: async () => {},
+    fetchFn: async (url) => new Response(JSON.stringify(bodies[new URL(url).pathname]),
+                                        { status: 200 }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.readyz.schemaVersion, 13);
+});

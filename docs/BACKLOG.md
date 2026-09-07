@@ -5034,8 +5034,6 @@ précis où l'on prépare.
 - Spécification : `docs/DAT.md` **§44.9** (écrite et committée avant la première
   ligne de code), §44.8 révisé et §42.6 révisé · `docs/SCHEMA.md` §10 quinquies ·
   `docs/DESIGN_SYSTEM_APP.md` SPK-DS-19 · manuel M8.
-- Identifiant : `SPK-85` et non `SPK-84`, **déjà porté par deux unités** — le
-  doublon est consigné au `docs/INCONSISTENCY_REPORT.md` §2 et laissé inchangé.
 - Dépend de : SPK-60 pour le modèle unique, SPK-54 pour le relevé d'amorçage,
   SPK-11 pour le fragment `ssh_config`.
 - Portée : une route `GET /v1/sparks/{name}/briefing` qui rend le **modèle** du
@@ -5093,6 +5091,15 @@ précis où l'on prépare.
   chemin que prennent le parcours E2E, l'illustration du manuel et les captures.
   Le `verify` du seed exige en revanche que le dossier soit **lisible** sur un
   Spark jamais amorcé, et qu'il nomme les deux secrets seedés sans leurs valeurs.
+- **Étendue le 2026-09-02, sur constat du responsable** : « le bouton revenir à
+  la version précédente ne sert à rien si on ne backupe pas la BDD […] il faut
+  que le bouton de rollback exprime bien cela ». La confirmation de
+  « Revenir à la build précédente » (SPK-69, §40.6) dit désormais si la mise à
+  jour a **franchi une migration**, et ce que cela coûte : la build précédente
+  refusera de servir le registre migré, l'API restera arrêtée, la remise en état
+  est manuelle. La console le SAIT — `/readyz` publie `schema_version`, relevée
+  avant la mise à jour et relue après — au lieu de le supposer ; quand elle n'a
+  pas pu relever, elle le dit et énonce le risque au conditionnel.
 - **Reste à faire pour passer `[x]`** : la mise à jour de la Forge. La migration
   `013` n'est PAS un geste manuel — `check_registry` l'applique au démarrage de
   `sparkd`, donc au redémarrage que `sparkd.install` déclenche depuis

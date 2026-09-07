@@ -3,6 +3,17 @@
 ## [Non publié]
 
 ### Ajouté
+- **Le retour arrière de `sparkd` dit ce qu'il ne rétablira pas** (SPK-85,
+  `docs/DAT.md` §40.6) : une base qui porte une migration dont le code n'a pas le
+  fichier est **rejetée au démarrage** — mesuré. Après une mise à jour qui a
+  migré le registre, « Revenir à la build précédente » régresse donc le binaire
+  **sans rien rétablir** : l'ancienne build ne démarre pas et le plan de contrôle
+  reste arrêté. La console le **sait** au lieu de le supposer — `/readyz` publie
+  `schema_version`, relevée avant la mise à jour et relue après — et la
+  confirmation le dit en chiffrant les deux bornes, avec la procédure qui, elle,
+  ramène vraiment en arrière. Quand la mesure manque, l'écran énonce le risque au
+  conditionnel plutôt que de conclure ; quand rien n'a migré, il le dit aussi.
+  Le geste reste offert : l'écran nomme la conséquence, il ne décide pas.
 - **Une recette de site web pose AUSSI sa route** (SPK-88, `docs/DAT.md`
   §38.6.4 bis) : elle ne l'avait jamais fait — le §38.6.1 la définissait comme un
   jeu d'enregistrements. C'était trop étroit : la recette se lance depuis les

@@ -6936,8 +6936,27 @@ migrée par un autre code que celui-ci ». L'ancienne build ne sert donc pas,
 réunies. Le geste ne détruit rien ; il ne rétablit rien non plus, et il laisse le
 plan de contrôle arrêté jusqu'à ce que la build migrée soit réinstallée. Revenir
 en arrière au-delà d'une migration est donc une opération HUMAINE, décrite au
-contrat de déploiement : jouer le `down`, puis réinstaller. Deux chemins
-déclenchent le geste automatique :
+contrat de déploiement : jouer le `down`, puis réinstaller.
+
+**L'écran le DIT avant le geste, et il le SAIT au lieu de le supposer.**
+`/readyz` publie déjà `schema_version`, la plus haute migration appliquée
+(§31.4). La console la relève **avant** la mise à jour et la relit dans la
+vérification qui suit ; le reçu du retour arrière porte donc les deux valeurs.
+Trois états, trois textes, et jamais le même :
+
+| Ce que la console a relevé | Ce que la confirmation dit |
+|---|---|
+| la version a monté pendant la mise à jour | le retour arrière **ne rétablira rien** : la build précédente refusera de servir ce registre, l'API restera arrêtée, et la remise en état est manuelle |
+| la version n'a pas bougé | le texte ordinaire : régression de code, interruption brève |
+| une des deux versions n'a pas été relevée | on ne conclut pas : l'écran dit qu'il n'a pas pu vérifier, et énonce le risque au conditionnel |
+
+Le geste **reste offert** dans les trois cas. Il n'est pas refusé par le
+serveur, et le responsable peut vouloir régresser le binaire en sachant qu'il
+jouera le `down` ensuite : le §14.9 du design system interdit de retirer une
+action qui existe parce que l'écran croit savoir qu'elle finira mal. Ce que
+l'écran doit, c'est **nommer la conséquence**, pas décider à la place.
+
+Deux chemins déclenchent le geste automatique :
 
 - après une mutation suivie d'un échec d'installation ou de preuve, l'hôte le
   tente automatiquement et rend séparément l'échec initial et l'issue du retour
