@@ -321,6 +321,16 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **`make manuel` détruisait cinq illustrations qu'il ne savait plus produire**
+  (`docs/DAT.md` §30.1, arbitré le 2026-09-08) : le harnais vidait le dossier des
+  images puis en reproduisait 25 sur les 30 que le manuel cite. Lancer la cible
+  cassait donc le manuel, et personne ne pouvait plus s'en servir. Deux des cinq
+  sont **récupérées** — l'identité d'un Spark et le widget d'inventaire, tous
+  deux atteignables depuis la pile de développement. Les trois autres montrent
+  une mise à jour distante réussie, que la pile ne peut atteindre sans doubler
+  d'un coup l'exécuteur SSH, la vérification qui suit et la sonde de schéma : le
+  harnais les **nomme** et les **épargne** au lieu de les effacer. `make manuel`
+  rend 27 illustrations, code 0, et le manuel reste complet.
 - **Le doublon Incus annonçait un disque de 10 Gio pour toute cellule** (SPK-57,
   `docs/DAT.md` §12.1.3, §49.3 — arbitré le 2026-09-08) : il rendait une taille
   constante et une occupation tirée du seul nom, de 300 à 1200 Mio. La taille

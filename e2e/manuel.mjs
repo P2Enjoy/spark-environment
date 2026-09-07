@@ -26,12 +26,37 @@ const IMAGES = fileURLToPath(new URL('../docs/manuel/images/', import.meta.url))
 /** Largeur du manuel : un écran de travail ordinaire, pas un mur de pixels. */
 const LARGEUR = 1280;
 
+/**
+ * Les illustrations que ce harnais ne produit PAS, et pourquoi.
+ *
+ * Arbitré le 2026-09-08. Elles montrent une mise à jour distante RÉUSSIE, ses
+ * phases prouvées et son retour arrière. Les fabriquer ici demanderait de
+ * doubler d'un coup les trois bords de l'hôte console qui y participent —
+ * l'exécuteur SSH, la vérification qui suit l'installation, et la sonde de
+ * schéma —, par des points d'injection ajoutés au code de production pour la
+ * seule fabrication d'une image. Le §30.1 existe pour qu'une illustration ne
+ * mente jamais ; trois coutures ouvertes dans le produit pour manufacturer un
+ * écran que la pile n'atteint pas coûteraient plus cher que la photo ne vaut.
+ *
+ * Elles sont donc produites contre une Forge RÉELLE, à la main, au moment où le
+ * geste a lieu — et ce harnais les ÉPARGNE au lieu de les détruire. Il les
+ * nomme à chaque exécution, pour que leur nature reste visible.
+ */
+const HORS_HARNAIS = new Set([
+  'm4-update', 'm4-update-rollback', 'm4-update-mobile',
+]);
+
 export async function produireIllustrations({ silencieux = false } = {}) {
   await mkdir(IMAGES, { recursive: true });
   // On repart d'un dossier vide : une image dont le parcours a disparu ne doit
-  // pas survivre à l'exécution qui ne la produit plus (§30.1).
+  // pas survivre à l'exécution qui ne la produit plus (§30.1). Les illustrations
+  // que ce harnais ne SAIT PAS produire sont épargnées, et nommées à la fin :
+  // les détruire en silence rendait `make manuel` inutilisable pour tout le
+  // monde, puisque son exécution cassait le manuel qu'elle prétend tenir à jour.
   for (const fichier of await readdir(IMAGES)) {
-    if (fichier.endsWith('.png')) await rm(join(IMAGES, fichier));
+    if (!fichier.endsWith('.png')) continue;
+    if (HORS_HARNAIS.has(fichier.replace(/\.png$/, ''))) continue;
+    await rm(join(IMAGES, fichier));
   }
 
   const pile = await monterPile();
@@ -141,6 +166,18 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await ouvrir('crm-production', 'cles');
     await page.waitForSelector('#titre-cles', { timeout: 10000 });
     await capturer('m6-cles', { hauteur: 800 });
+
+    // --- M6 · L'IDENTITÉ DU SPARK (SPK-74, §17.5) ----------------------------
+    // Ce que le Spark PRÉSENTE quand il sort, l'inverse des clés ci-dessus. Le
+    // chapitre montre la clé publique, son empreinte et le bouton de copie :
+    // l'identité est donc créée depuis l'écran, comme le lecteur le fera.
+    if (await page.$('[data-identite-creer]')) {
+      await page.click('[data-identite-creer]');
+    }
+    // L'identité créée porte sa clé publique et son bouton de copie : c'est
+    // exactement ce que le chapitre montre.
+    await page.waitForSelector('[data-identite-copie]', { timeout: 20000 });
+    await capturer('m6-identite', { hauteur: 900 });
 
     // --- M7 · Exposer un domaine ---------------------------------------------
     await ouvrir('crm-production', 'routes');
@@ -264,6 +301,30 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('.bandeau-terminal .badge--accent', { timeout: 15000 });
     await capturer('m8-terminal-conteneur', { hauteur: 700 });
 
+    // --- M8 · LE WIDGET D'INVENTAIRE (SPK-75, §37.4.2) -----------------------
+    // La légende annonce un shell ouvert : le widget est donc capturé avec une
+    // session RÉELLE, ouverte depuis l'écran. Un widget vide illustrerait
+    // l'autre moitié du sujet.
+    //
+    // Sur « crm-production », qui TOURNE dans le seed. Démarrer un Spark arrêté
+    // pour l'occasion donnait une ligne « Arrêté · shell ouvert » — le badge
+    // d'état du widget suit l'inventaire, qui ne s'était pas encore rafraîchi —,
+    // et l'illustration se contredisait à l'œil. Elle obligeait en outre à rendre
+    // le Spark à son état ensuite (§29.2), pour une image qui n'y gagnait rien.
+    await ouvrir('crm-production');
+    await page.click('.onglet[href$="/terminal"]');
+    await page.waitForSelector('#titre-terminal', { timeout: 10000 });
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+    const pastille = page.locator('[data-widget="basculer"]');
+    if ((await pastille.getAttribute('aria-expanded')) !== 'true') await pastille.click();
+    await page.waitForSelector('.widget-inv__ligne', { timeout: 10000 });
+    await capturer('m8-widget', { hauteur: 900 });
+
+    await page.click('[data-terminal="fermer"]');
+    await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 20000 });
+
     // --- M8 · LE SSHD MUET (SPK-43, §37.2) -----------------------------------
     // « site-vitrine » : son chemin normal meurt aussitôt dans la pile de
     // vérification, comme le fait `ssh` face à un port fermé.
@@ -320,6 +381,13 @@ export async function produireIllustrations({ silencieux = false } = {}) {
   } finally {
     await navigateur.close();
     await pile.demonter();
+  }
+
+  // Ce que le manuel cite et que personne ne produit : un écart qui se NOMME.
+  // Muet, il redevient la destruction silencieuse que cet arbitrage a levée.
+  if (!silencieux && HORS_HARNAIS.size) {
+    console.log(`\n  ${HORS_HARNAIS.size} illustration(s) hors harnais, conservées :`);
+    for (const nom of HORS_HARNAIS) console.log(`    ${nom}.png — produite contre une Forge réelle`);
   }
 
   if (bruits.length) {

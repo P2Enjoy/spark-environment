@@ -4,6 +4,69 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-09-08 — Les quatre incohérences arbitrées, et ce qu'elles cachaient
+
+Le responsable a rendu l'arbitrage sur le rapport d'incohérences. Les quatre
+entrées sont closes, le fichier est **supprimé** — il n'a plus rien à porter.
+Trois d'entre elles cachaient un défaut plus grand que celui qu'elles nommaient.
+
+**L'identifiant en double** était le cas simple. `SPK-DS-19` portait deux règles
+sans rapport, et six fichiers s'y référaient depuis les deux camps. SPK-85, la
+plus ancienne, le garde ; le refus de redémarrage devient `SPK-DS-22` — **après**
+le plus haut en usage, et non dans le trou libre plus bas : un numéro antérieur
+le ferait passer pour une règle que suivent des règles plus récentes, ce qui est
+exactement le genre de faux ordre qu'un identifiant est censé empêcher.
+
+**La modale qui proposait une écriture impossible** a demandé de trouver le bon
+critère. Le premier énoncé — « une modale dont le corps est vide n'offre pas de
+l'engager » — était trop étroit : « Écrire la recette » garde ses champs quand le
+compte n'a aucune zone, et son bouton envoyait pourtant une requête que le
+serveur refuse. Le critère juste est **« une écriture est-elle composable ? »**,
+et il porte les deux cas. Le composant partagé accepte `engagement: null` ; le
+bouton restant dit « Fermer », puisqu'il n'y a rien à annuler.
+
+**Le refus de rétrécissement n'était plus atteignable**, et la cause était dans le
+doublon, pas dans le produit. `FakeIncus` annonçait 10 Gio pour toute cellule et
+une occupation tirée du seul nom — 300 à 1200 Mio. Deux choses fausses d'un coup :
+la taille contredisait le manifeste que le produit venait de poser, et la borne
+basse du curseur étant 1 Gio, **aucune valeur atteignable à l'écran** ne pouvait
+provoquer le refus du §49.3. Sur une Forge réelle une cellule occupe plusieurs
+gibioctets ; c'est la démonstrabilité qui avait été perdue, en silence, le jour où
+les quotas sont devenus des curseurs. Le doublon retient désormais les `devices`
+qu'on lui passe et occupe une **part** du quota vendu.
+
+**Trois parcours ne tenaient pas en campagne**, et aucun n'était fautif de la même
+façon :
+
+- l'un ouvrait `orphelin`, qu'un parcours antérieur **supprime**. Son commentaire
+  racontait qu'il avait quitté `boutique` pour cette raison même : la dépendance
+  avait été déplacée, pas levée. Aucun Spark du seed n'est à la fois arrêté et
+  intouché — il crée donc sa propre cellule et attend un tic RÉEL de l'historien ;
+- deux autres attendaient un signal **déjà vrai** — la disparition d'un bloc de
+  journaux, la présence d'une ligne de route — puis lisaient l'écran avant que la
+  réponse ne soit arrivée. Ils gagnaient la course joués seuls et la perdaient en
+  campagne. C'est le mode de panne le plus coûteux d'un harnais : il n'accuse
+  jamais le bon endroit.
+
+**Ce que je retiens des trois derniers.** Un refus qu'on ne peut plus provoquer,
+un parcours qui dépend de son voisin, une attente posée sur le mauvais signal :
+aucun des trois ne se voit en relisant le code, et tous les trois se voient en
+exécutant la campagne entière. Elle ne l'était plus.
+
+**`make manuel` cesse de détruire ce qu'il ne sait pas produire.** Deux des cinq
+illustrations manquantes sont récupérées — l'identité d'un Spark et le widget
+d'inventaire, tous deux atteignables depuis la pile. Les trois autres montrent une
+mise à jour distante réussie : les fabriquer ici demanderait de doubler d'un coup
+les trois bords de l'hôte console qui y participent, par des coutures ouvertes
+dans le code de production pour la seule fabrication d'une image. Le §30.1 existe
+pour qu'une illustration ne mente pas ; il ne demande pas de percer le produit
+pour en obtenir une. Elles sont donc **nommées** dans le harnais, produites contre
+une Forge réelle, et **épargnées** au lieu d'être effacées. Le geste rend
+désormais 27 illustrations, code 0, et le manuel reste complet — ce qui était tout
+le sujet de la plainte.
+
+---
+
 ## 2026-09-07 — La seconde porte n'existait pas : ce que la Forge de test a répondu
 
 Premier amorçage rootless de bout en bout sur la **Forge de test**, cellule

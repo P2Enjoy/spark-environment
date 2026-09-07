@@ -5411,8 +5411,9 @@ Le besoin est réel : après une mise à jour de noyau, la Forge tourne sur l'an
 tant qu'elle n'a pas redémarré — mesuré le jour même, `7.0.0-15` en marche pour
 `7.0.0-30` installé — et le seul recours était `ssh` à la main.
 
-*(`SPK-86` est laissé libre : le `docs/INCONSISTENCY_REPORT.md` §2 le réserve à
-l'arbitrage de la collision `SPK-84`.)*
+*(`SPK-86` n'est employé par aucune unité. Il avait été réservé le temps
+d'arbitrer une collision sur `SPK-84`, tranchée depuis : l'identifiant est
+simplement libre, et rien n'est en attente derrière lui.)*
 
 - Spécification : `docs/DAT.md` §51 (à écrire et committer avant le code) ·
   `docs/DESIGN_SYSTEM.md` §« Frapper le nom » · `docs/DESIGN_SYSTEM_APP.md`
