@@ -41,6 +41,32 @@
   « clés conformes » ; et l'audit du terminal nomme le compte, sans quoi le
   journal ne distinguerait plus une session administrative d'une session
   applicative.
+- **Le dépôt d'images se lit en direct, et le catalogue se coche** (SPK-92,
+  `docs/DAT.md` §33.6, §33.7, §33.3 corrigé, `DESIGN_SYSTEM.md` §6.28, manuel
+  M5) : la liste des images déployables était **quatre références écrites en
+  dur**, devant un dépôt qui en publie 296. Pour en ajouter une cinquième, il
+  fallait taper sa référence de mémoire — la forme la plus faible du geste
+  explicite, puisqu'elle accepte `images:debian/31`, écrit une ligne morte, et
+  n'apprend l'erreur qu'au relevé suivant. **Forge → Images** porte désormais
+  *Ajouter depuis le dépôt* : la fenêtre interroge le dépôt à cet instant, rend
+  ses 229 alias en **59 lignes** groupées famille → version, variantes en second
+  niveau, et l'on coche. Cocher ne peut produire qu'une référence publiée : la
+  faute de frappe disparaît par construction. L'entrée naît **vérifiée**, mais
+  l'état vient de la reconfirmation que `sparkd` fait lui-même — croire le
+  navigateur serait le succès simulé que le produit refuse partout ailleurs —,
+  et l'ajout se fait en **lot**, parce que la preuve est commune. Le double pas
+  « ajouter puis relever » disparaît : l'image est choisissable aussitôt.
+  La **saisie libre demeure**, en repli d'un dépôt muet et comme seule voie vers
+  un alias plus récent que la lecture ; elle naît toujours non relevée. Chaque
+  ligne du catalogue porte enfin son **retrait**, confirmé dans le flux et refusé
+  dans deux cas : l'entrée par défaut, et une image qu'un Spark emploie — le
+  refus **nomme** alors les Sparks. Le groupement a demandé trois mesures
+  successives, car les données réelles portent quatre doublons qu'un jeu d'essai
+  naïf ne reproduit pas : la variante par défaut redit sa base, le nom de code
+  redit le numéro, une variante peut être composée, et une variante peut pendre
+  sous une autre. Propriété tenue et vérifiée sur le dépôt réel : **229 alias
+  publiés, 229 atteignables** — aucun ne disparaît, les doublons deviennent des
+  synonymes cherchables. Aucune migration : le registre portait déjà tout.
 - **Spécification de la supervision continue** (SPK-93, `docs/DAT.md` §52,
   `docs/SCHEMA.md` §10 sexies, `DESIGN_SYSTEM_APP.md` SPK-DS-20) : le produit
   rendait l'usage d'un Spark **à l'instant où on le demande** et rien d'autre —

@@ -64,17 +64,64 @@ engagés, et le refus n'arrivait qu'à l'application. Une faute de frappe coûta
 un Spark en erreur à supprimer.
 
 Pour employer une image absente de la liste, il faut l'**ajouter au catalogue** —
-un geste distinct, qui déclenche sa vérification. Le formulaire de création ne
-sert pas de porte d'entrée à une référence inconnue.
+un geste distinct. Le formulaire de création ne sert pas de porte d'entrée à une
+référence inconnue.
 
 Le catalogue vit sous **Forge → Images**, parce qu'il décrit le serveur et non un
-Spark. Le bouton *Ajouter une image* y ouvre une saisie limitée à cette section.
+Spark. Deux commandes y ajoutent une image, et elles ne se valent pas.
 
-![Le catalogue d'images, et la saisie d'une nouvelle référence](images/m5-catalogue.png)
+![Le catalogue d'images, et ses deux commandes](images/m5-catalogue.png)
 
-Une entrée ajoutée naît **non relevée** : elle n'est pas encore proposée à la
-création. C'est *Relever le catalogue* qui interroge le dépôt et tranche. L'état
-vient donc toujours d'une vérification, jamais d'une déclaration.
+### Ajouter depuis le dépôt
+
+C'est la voie normale. Le bouton *Ajouter depuis le dépôt* **interroge le dépôt à
+cet instant** et vous montre ce qu'il publie : les distributions, leurs versions,
+et leurs variantes. Vous cochez, vous validez, et les images entrent au catalogue
+**déjà vérifiées** — le serveur a relu le dépôt pour l'établir lui-même.
+
+Vous pouvez en cocher plusieurs et ne valider qu'une fois.
+
+![La liste du dépôt, une famille dépliée](images/m5-depot.png)
+
+Quelques repères pour s'y retrouver :
+
+- **la recherche accepte les noms de code.** Taper « trixie » trouve Debian 13,
+  « noble » trouve Ubuntu 24.04. Le dépôt publie les deux noms ; l'écran n'en
+  affiche qu'un, et vous dit lequel est son synonyme ;
+- **les variantes vivent sous leur version.** `cloud`, `desktop`, `musl` ne sont
+  pas des versions à part : elles apparaissent en retrait sous la version dont
+  elles dérivent ;
+- **une image déjà au catalogue s'y voit cochée et grisée.** Cette fenêtre sert à
+  ajouter, jamais à retirer ;
+- **chaque famille dit si l'amorçage automatique la sert.** Seules Debian et
+  Ubuntu le sont. Les autres fonctionnent, mais vous les équiperez vous-même —
+  voir [M6](M6-acces.md).
+
+La liste n'est pas conservée d'une ouverture à l'autre : elle est relue à chaque
+fois, parce que le dépôt publie de nouvelles images sans prévenir.
+
+### Saisir une référence
+
+C'est le repli. Il sert dans deux cas : le dépôt ne répond pas, ou l'image que
+vous voulez a été publiée depuis la dernière lecture.
+
+Une entrée saisie à la main naît **non relevée** : elle n'est pas encore proposée
+à la création, parce que vous l'avez *déclarée*, et qu'une déclaration ne prouve
+rien. C'est *Relever le catalogue* qui interroge le dépôt et tranche.
+
+### Retirer une image
+
+Chaque ligne du catalogue porte un bouton *Retirer*, et la confirmation vous dit
+ce que vous perdez : l'image ne sera plus proposée à la création. Les Sparks qui
+l'emploient déjà ne sont pas touchés, et l'entrée se recoche depuis le dépôt.
+
+Deux retraits sont refusés, et l'écran dit lequel s'applique :
+
+- **l'image proposée par défaut** ne peut pas être retirée. Le produit n'offre
+  pas encore de geste pour en désigner une autre ;
+- **une image qu'un Spark emploie** ne peut pas l'être non plus, et le refus
+  **nomme** les Sparks concernés. Le catalogue est ce qui explique sur quoi vos
+  cellules tournent ; le retirer effacerait cette explication.
 
 ### Ce catalogue n'est pas un registre d'images
 

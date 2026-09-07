@@ -990,3 +990,37 @@ tbody tr:hover { background: var(--color-hover); }
 .case-catalogue { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .case-catalogue label { display: inline-flex; align-items: center; gap: var(--space-2);
   min-height: var(--size-target); cursor: pointer; }
+
+/* SPK-92 · docs/DAT.md §33.6 — le dépôt d'images, lu en direct et coché.
+   §6.10 : la case peut rester compacte, sa LIGNE atteint la cible du §4.4 —
+   `.case-catalogue label` s'en charge déjà. Ce qui manque ici est la
+   hiérarchie : une variante appartient à sa version, et doit se voir en
+   retrait plutôt que d'être une ligne sœur (§33.6). */
+.depot-familles { display: grid; gap: var(--space-2); }
+.depot-famille > summary { flex-wrap: wrap; }
+/* Les familles sont nombreuses — 24 au dernier relevé — et la modale défile
+   dans son propre conteneur (§6.27). Le repli garde la liste parcourable. */
+.depot-famille > .liste-cases { margin-top: var(--space-2); }
+.liste-cases--variantes {
+  margin-top: var(--space-2); margin-left: var(--space-4);
+  padding-left: var(--space-3); border-left: 2px solid var(--color-border);
+}
+.case-catalogue--variante { font-size: var(--text-compact); }
+/* Une cellule qui ne porte qu'une commande. Elle reste une CELLULE — lui poser
+   `display:flex` la sortirait du modèle de tableau, et le bouton chevaucherait
+   le séparateur de la ligne suivante (mesuré). */
+.cellule-action { text-align: right; white-space: nowrap; }
+/* Un état de vue RENDU DANS UNE MODALE. Le centrage et le grand rembourrage de
+   `.etat-vue` conviennent à une page vide ; dans une surface étroite, ils
+   produisent trois lignes ragged et noient le titre (mesuré en capture). */
+.etat-vue--dans-modale {
+  padding: var(--space-3); text-align: left; border-radius: var(--radius-sm);
+}
+.etat-vue--dans-modale p { margin-left: 0; margin-right: 0; }
+.etat-vue--dans-modale > * + * { margin-top: var(--space-2); }
+/* La confirmation du retrait occupe toute la largeur du tableau, sous la ligne
+   qu'elle concerne (§6.22) : la placer ailleurs obligerait à retrouver de quelle
+   image on parle. */
+.ligne-retrait > td { padding-top: 0; }
+
+/* --------------------------------------------------- supervision continue */

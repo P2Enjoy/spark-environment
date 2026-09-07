@@ -331,11 +331,37 @@ def test_le_pilote_factice_lit_le_depot_SANS_reseau_sortant(tmp_path):
     assert vue.status_code == 200
 
     corps = vue.json()
-    alias = [v["alias"] for f in corps["familles"] for v in f["versions"]]
-    assert sorted(alias) == sorted(a for _, _, _, a, _ in images.DEFAULTS)
-    assert all(v["au_catalogue"]
-               for f in corps["familles"] for v in f["versions"]), \
-        "les quatre pre-renseignees sont deja tenues"
+    lignes = {v["alias"]: v for f in corps["familles"] for v in f["versions"]}
+    tenues = {a for _, _, _, a, _ in images.DEFAULTS}
+    assert tenues <= set(lignes), "les pre-renseignees sont proposees"
+    assert all(lignes[a]["au_catalogue"] for a in tenues), "et deja tenues"
+
+
+def test_le_depot_factice_propose_PLUS_que_ce_que_le_catalogue_tient(tmp_path):
+    """Sans cela, la liste a cocher serait vide et l'unite indemontrable.
+
+    Le seed est un contrat (CLAUDE.md §8) : il doit permettre de demontrer ce qui
+    est livre. Un depot factice reduit aux quatre references deja posees rendrait
+    l'ecran veridique et inutile.
+    """
+    client = _client(tmp_path)
+    corps = client.get("/v1/images/depot").json()
+    a_cocher = [v["alias"] for f in corps["familles"] for v in f["versions"]
+                if not v["au_catalogue"]]
+    assert a_cocher, "il y a de quoi cocher dans la pile de developpement"
+
+
+def test_le_depot_factice_a_la_MEME_FORME_que_le_vrai(tmp_path):
+    """Les trois doublons du §33.3 s'eprouvent donc sans reseau sortant."""
+    client = _client(tmp_path)
+    corps = client.get("/v1/images/depot").json()
+    debian = next(f for f in corps["familles"] if f["famille"] == "debian")
+    treize = next(v for v in debian["versions"] if v["alias"] == "debian/13")
+
+    assert "debian/trixie" in treize["synonymes"], "le nom de code"
+    assert "debian/13/default" in treize["synonymes"], "la variante par defaut"
+    assert [v["alias"] for v in treize["variantes"]] == ["debian/13/cloud"], \
+        "et la variante nommee, qui reste une ligne a part"
 
 
 def test_un_depot_injoignable_rend_un_502_qui_le_NOMME(tmp_path, monkeypatch):

@@ -1323,6 +1323,33 @@ Cette confirmation est rendue **dans le flux** de la surface qui l’a déclench
 * l’**affichage** d’une information — si elle mérite d’être lue, elle mérite une
   section de la fenêtre.
 
+## 6.28 Regrouper sans rendre introuvable
+
+Lorsqu'une liste reçoit des entrées qui désignent **la même chose sous plusieurs
+noms**, elle n'en affiche qu'un. Les afficher toutes produit des lignes que le
+lecteur ne peut pas départager : il ne sait pas laquelle choisir, ni si le choix
+a une conséquence.
+
+Mais un nom écarté n'est pas un nom mort. Quelqu'un le connaît, et c'est celui-là
+qu'il tapera dans une recherche. Un regroupement qui le supprime **rend
+introuvable ce qu'il rendait lisible** : l'utilisateur cherche, ne trouve rien, et
+conclut que l'élément n'existe pas.
+
+Les noms écartés restent donc :
+
+* **cherchables** — la recherche les accepte et mène à l'entrée retenue ;
+* **affichés avec elle**, à titre secondaire, pour que le lecteur reconnaisse
+  celui qu'il avait en tête et comprenne qu'il s'agit du même objet.
+
+La propriété à tenir se formule simplement, et se teste : **toute valeur reçue
+est atteignable dans la vue** — comme entrée, comme élément d'un groupe, ou comme
+synonyme de l'un des deux. Une valeur qui n'est nulle part est une valeur perdue,
+et le regroupement l'a perdue sans le dire.
+
+Cela vaut aussi pour les entrées **hiérarchiques** : une sous-entrée se rend sous
+celle dont elle dérive, jamais à côté d'elle. Rendre une variante comme une
+entrée de premier rang invente une distinction que la donnée ne porte pas.
+
 ### Articulation avec le §6.5
 
 Le §6.5 conserve son domaine : l’**en-tête d’une entité**, dont plusieurs valeurs

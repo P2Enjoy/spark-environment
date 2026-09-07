@@ -1,7 +1,12 @@
 /**
  * Écran « catalogue d'images » — onglet Images sous Forge.
  *
- * @spec docs/BACKLOG.md#SPK-32 · docs/DAT.md §33 (le catalogue), §33.2 (ajouter
+ * @spec docs/BACKLOG.md#SPK-32 · docs/BACKLOG.md#SPK-92 · docs/DAT.md §33.6 (le
+ *       dépôt se lit en direct et le catalogue se coche), §33.7 (retirer une
+ *       entrée, et ses deux refus) · docs/DESIGN_SYSTEM.md §6.22 (une
+ *       confirmation reste dans le flux), §6.23 (une action sensible se
+ *       confirme) · DESIGN_SYSTEM_APP.md SPK-DS-09 (accent, pas rouge) ·
+ *       docs/DAT.md §33 (le catalogue), §33.2 (ajouter
  *       est un geste explicite), §33.3 (le relevé, ses trois états, sa date),
  *       §33.4 (ce que le catalogue n'est pas), §34.1 (l'onglet Images est la
  *       surface du catalogue : il décrit la Forge, pas un Spark) ·
@@ -16,6 +21,7 @@
 
 import { formatDate } from './forge-view.js';
 import { renderModale } from './modale.js';
+import { renderDepotModale, DEPOT_VIDE } from './forge-depot.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -52,9 +58,36 @@ export function dernierReleve(images = []) {
   return dates.length ? dates[dates.length - 1] : null;
 }
 
-function renderLigne(image) {
+/**
+ * La confirmation du retrait, RENDUE DANS LE FLUX du tableau (§6.22).
+ *
+ * Retirer une entrée est une action **sensible** au sens du §6.23 : son effet
+ * porte au-delà de la surface courante, puisque l'image cesse d'être proposée à
+ * la création. Elle n'est pas destructive pour autant — l'entrée se recoche
+ * depuis le dépôt —, donc l'accent et un bouton ordinaire, jamais le rouge de ce
+ * qui détruit (SPK-DS-09).
+ */
+function renderRetrait(image, refus) {
+  return `<tr class="ligne-retrait"><td colspan="6">
+  <div class="confirmation confirmation--sensible" role="group"
+       aria-label="Confirmer le retrait de ${echapper(image.label)}">
+    <p><strong>Retirer « ${echapper(image.label)} » du catalogue ?</strong></p>
+    <p class="confirmation__consequence">Elle ne sera plus proposée à la création.
+    Les Sparks qui l’emploient déjà ne sont pas touchés, et l’entrée se recoche
+    depuis le dépôt.</p>
+    ${refus ? `<p class="refus" role="alert"><strong>${echapper(refus)}</strong></p>` : ''}
+    <p class="confirmation__actions">
+      <button type="button" class="bouton" data-confirme-retrait="${echapper(image.id)}">
+        Retirer du catalogue</button>
+      <button type="button" class="bouton" data-annule-retrait>Annuler</button>
+    </p>
+  </div>
+</td></tr>`;
+}
+
+function renderLigne(image, ui) {
   const { label, token, sens } = etatOf(image.state);
-  return `<tr>
+  const ligne = `<tr>
   <td class="cellule-nom">${echapper(image.label)}${
     image.is_default ? ' <span class="badge badge--neutral">par défaut</span>' : ''}</td>
   <td class="technique cellule-dense">${echapper(image.reference)}</td>
@@ -62,7 +95,18 @@ function renderLigne(image) {
     `<span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span></td>
   <td class="technique">${echapper(formatDate(image.verified_at)) || '—'}</td>
   <td>${echapper(image.detail)}</td>
+  ${/* Pas de `.actions-ligne` ici : elle pose `display:flex`, ce qui sort la
+       cellule du modèle de tableau. MESURÉ — la cellule tombait à 40 px dans une
+       ligne de 68, et le bouton chevauchait le séparateur de la ligne suivante
+       (DESIGN_SYSTEM.md §13.2 : le genre de défaut que seule la capture montre). */ ''}
+  <td class="cellule-action">
+    <button type="button" class="bouton bouton--compact" data-retire="${echapper(image.id)}"
+      aria-label="Retirer ${echapper(image.label)} du catalogue">Retirer</button>
+  </td>
 </tr>`;
+  return ui.retrait === image.id
+    ? ligne + renderRetrait(image, ui.retraitRefus)
+    : ligne;
 }
 
 /**
@@ -99,18 +143,40 @@ function renderAjout(ui) {
              autocomplete="off" value="${echapper(ui.values.label)}">
     </div>`,
   });
-  return `<p class="formulaire__actions"><button type="button" class="bouton"
-      data-ouvre="image">Ajouter une image</button></p>${modale}`;
+  return modale;
+}
+
+/**
+ * Les deux commandes de la section « Catalogue », et rien d'autre (§6.27).
+ *
+ * Elles ne prouvent pas la même chose, et c'est pourquoi elles restent deux
+ * (§33.6). Cocher dans le dépôt ne peut produire qu'une référence publiée, et le
+ * serveur la reconfirme : l'entrée naît vérifiée. Saisir une référence est une
+ * **déclaration**, qui ne prouve rien : l'entrée naît non relevée.
+ *
+ * La saisie libre ne disparaît pas pour autant. Elle reste la seule voie quand le
+ * dépôt ne répond pas, et vers un alias publié depuis la dernière lecture.
+ */
+function renderCommandes() {
+  return `<p class="formulaire__actions">
+    <button type="button" class="bouton bouton--primaire" data-ouvre="depot">
+      Ajouter depuis le dépôt</button>
+    <button type="button" class="bouton" data-ouvre="image">
+      Saisir une référence</button>
+  </p>`;
 }
 
 export const CATALOGUE_VIDE = {
   open: false, busy: false, refusal: null, syncing: false,
   values: { reference: '', label: '' },
+  // §33.7 : le retrait se confirme DANS le flux, ligne par ligne. On retient
+  // donc quelle ligne est en cours de confirmation, et le refus qu'elle a reçu.
+  retrait: null, retraitRefus: null,
 };
 
 /** Vue complète du catalogue. */
 export function renderCatalogue({ status = 'loading', images = [], error = null,
-                                  ui = CATALOGUE_VIDE } = {}) {
+                                  ui = CATALOGUE_VIDE, depot = DEPOT_VIDE } = {}) {
   if (status === 'loading') {
     return `<div class="carte bloc" aria-busy="true">
       <p class="sr-only" role="status">Chargement du catalogue…</p>
@@ -137,8 +203,9 @@ export function renderCatalogue({ status = 'loading', images = [], error = null,
         <th scope="col">Image</th><th scope="col">Référence</th>
         <th scope="col">État</th><th scope="col">Dernier relevé</th>
         <th scope="col">Ce que le relevé a constaté</th>
+        <th scope="col"><span class="sr-only">Actions</span></th>
       </tr></thead>
-      <tbody>${images.map(renderLigne).join('')}</tbody>
+      <tbody>${images.map((i) => renderLigne(i, ui)).join('')}</tbody>
     </table>
   </div>`
     : `<div class="etat-vue">
@@ -170,7 +237,10 @@ export function renderCatalogue({ status = 'loading', images = [], error = null,
       pas proposées à la création. Les faire disparaître ferait croire qu’elles
       n’ont jamais existé.</p>`
     : ''}
-  ${renderAjout(ui)}
+  ${renderCommandes()}
+  ${/* Une seule modale à la fois (§6.27) : l'état garantit l'exclusivité, le
+       rendu ne fait que la refléter. */ ''}
+  ${depot.open ? renderDepotModale(depot) : renderAjout(ui)}
   <p class="note">Les images <strong>système</strong> avec lesquelles une cellule
   se crée — pas un registre, et pas les images Docker de vos piles.
   <a href="#/manuel/M5">Manuel M5 — Ce catalogue n’est pas un registre d’images</a></p>

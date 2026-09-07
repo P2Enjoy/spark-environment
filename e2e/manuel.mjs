@@ -125,9 +125,17 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('#titre-pools', { timeout: 10000 });
     await page.click('.onglet[href="#/forge/images"]');
     await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
-    await page.click('[data-ouvre="image"]');
-    await page.waitForSelector('dialog.modale[open] #image-reference', { timeout: 10000 });
+    // SPK-92 : le catalogue porte DEUX commandes, et M5 les distingue. La
+    // capture les montre donc ensemble, sans modale par-dessus.
     await capturer('m5-catalogue', { hauteur: 800 });
+
+    // Puis la liste du dépôt, une famille dépliée : c'est ce que M5 décrit
+    // quand il dit « vous cochez, vous validez ».
+    await page.click('[data-ouvre="depot"]');
+    await page.waitForSelector('dialog.modale[open] #depot-filtre', { timeout: 15000 });
+    await page.click('.depot-famille:has-text("debian") > summary');
+    await capturer('m5-depot', { hauteur: 800 });
+    await page.keyboard.press('Escape');
 
     // --- M6 · Déployer sa pile : clés et configuration SSH -------------------
     await ouvrir('crm-production', 'cles');

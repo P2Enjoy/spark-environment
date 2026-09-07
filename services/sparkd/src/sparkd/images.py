@@ -297,27 +297,54 @@ def fetch_remote(url: str, client: httpx.Client | None = None) -> Catalogue:
     return Catalogue(frozenset(publications), len(produits), publications)
 
 
+#: Ce que le dépôt FACTICE publie (docs/DAT.md §28.1, CLAUDE.md §8).
+#:
+#: Il ne se limite pas aux quatre références pré-renseignées, et c'est délibéré :
+#: un dépôt factice qui ne publierait que ce que le catalogue tient déjà rendrait
+#: la liste à cocher **vide**, et la pile de développement ne saurait pas
+#: démontrer l'unité. Le seed est un contrat, il doit couvrir les états livrés.
+#:
+#: Il reproduit donc aussi les formes de doublon mesurées le 2026-09-07 sur le
+#: vrai dépôt — nom de code, variante par défaut, variante nommée — de sorte que
+#: le regroupement du §33.6 s'éprouve **sans réseau sortant**.
+FAKE_PUBLICATIONS = (
+    # alias, système, publication, variant
+    ("debian/13", "Debian", "trixie", "default"),
+    ("debian/13/default", "Debian", "trixie", "default"),
+    ("debian/13/cloud", "Debian", "trixie", "cloud"),
+    ("debian/trixie", "Debian", "trixie", "default"),
+    ("debian/12", "Debian", "bookworm", "default"),
+    ("debian/11", "Debian", "bullseye", "default"),
+    ("ubuntu/24.04", "Ubuntu", "noble", "default"),
+    ("ubuntu/noble", "Ubuntu", "noble", "default"),
+    ("ubuntu/22.04", "Ubuntu", "jammy", "default"),
+    ("alpine/3.21", "Alpine", "3.21", "default"),
+    ("alpine/3.22", "Alpine", "3.22", "default"),
+    ("archlinux", "Archlinux", "current", "default"),
+    ("archlinux/cloud", "Archlinux", "current", "cloud"),
+)
+
+
 def fake_fetch(url: str, client=None) -> Catalogue:
     """Relevé factice, pour la pile de développement et les tests.
 
     Au même titre que `FakeIncus` et `FakeCaddy` : le produit doit tenir **sans
-    réseau sortant** (docs/DAT.md §28.1). Il publie exactement les alias
-    pré-renseignés — ni plus, ni moins — de sorte qu'une référence inventée y soit
-    `missing` comme elle le serait sur le vrai dépôt.
+    réseau sortant** (docs/DAT.md §28.1). Il publie un dépôt réduit mais de même
+    FORME que le vrai, de sorte qu'une référence inventée y soit `missing` comme
+    elle le serait chez le dépôt.
 
     Il ne prouve jamais qu'une image existe réellement : cela exige le dépôt.
     """
     publications = {
         alias: Publication(
-            alias=alias,
-            os=libelle.split(" ")[0],
-            release=alias.split("/", 1)[1] if "/" in alias else alias,
-            variante="default",
-            architectures=frozenset({"amd64"}),
+            alias=alias, os=systeme, release=release, variante=variante,
+            architectures=frozenset({"amd64", "arm64"}),
         )
-        for _, libelle, _, alias, _ in DEFAULTS
+        for alias, systeme, release, variante in FAKE_PUBLICATIONS
     }
-    return Catalogue(frozenset(publications), len(DEFAULTS), publications)
+    # Un alias couvre ses architectures : le compte de produits est celui d'un
+    # dépôt, pas celui des alias.
+    return Catalogue(frozenset(publications), len(publications) * 2, publications)
 
 
 def verify(
@@ -674,6 +701,18 @@ def remove(
     if entree is None:
         raise ImageError("Cette image n'est pas au catalogue.")
 
+    # L'entrée par défaut est examinée EN PREMIER, et l'ordre porte du sens :
+    # son refus est structurel — personne ne peut la retirer aujourd'hui —, là
+    # où la liste des Sparks décrit une situation qui, elle, peut changer.
+    # Nommer d'abord les Sparks laisserait croire qu'en les supprimant on
+    # débloquerait le retrait, ce qui est faux.
+    if entree["is_default"]:
+        raise ImageError(
+            f"« {entree['reference']} » est l'image proposée par défaut à la "
+            "création. Le produit n'offre pas encore de geste pour en désigner "
+            "une autre : elle n'est donc pas retirable."
+        )
+
     porteurs = [
         r["name"]
         for r in connection.execute(
@@ -687,13 +726,6 @@ def remove(
             + ", ".join(porteurs)
             + ". Retirer l'entrée effacerait ce qui explique sur quoi "
             "ces Sparks tournent."
-        )
-
-    if entree["is_default"]:
-        raise ImageError(
-            f"« {entree['reference']} » est l'image proposée par défaut à la "
-            "création. Le produit n'offre pas encore de geste pour en désigner "
-            "une autre : elle n'est donc pas retirable."
         )
 
     with transaction(connection):

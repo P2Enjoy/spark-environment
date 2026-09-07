@@ -1575,6 +1575,127 @@ test('ajouter une image la crée NON RELEVÉE, puis le relevé tranche', async (
   });
 });
 
+// --- LE DÉPÔT LU EN DIRECT, ET COCHÉ (SPK-92, docs/DAT.md §33.6, §33.7) ----
+
+/** Va au catalogue d'images comme un exploitant : par la navigation (§29.3). */
+async function allerAuCatalogue() {
+  await accueil();
+  await page.click('nav a[href="#/forge"]');
+  await page.waitForSelector('.onglets', { timeout: 10000 });
+  await page.click('.onglet[href="#/forge/images"]');
+  await page.waitForSelector('#titre-catalogue', { timeout: 10000 });
+}
+
+test('cocher une image du dépôt l’ajoute DÉJÀ VÉRIFIÉE, et elle devient choisissable',
+     async () => {
+  await parcours('depot-cocher', async () => {
+    await allerAuCatalogue();
+
+    // L'image n'est pas encore au catalogue : c'est ce que le parcours va changer.
+    const avant = await pile.lireSparkd('/v1/images');
+    assert.ok(!avant.corps.images.some((i) => i.reference === 'images:debian/11'),
+      'le point de départ : le catalogue ne la tient pas');
+
+    await page.click('[data-ouvre="depot"]');
+    await page.waitForSelector('dialog.modale[open] #depot-filtre', { timeout: 15000 });
+
+    // §9.9 : l'engagement est PRÉSENT et désactivé, avec sa raison lisible.
+    const engagement = page.locator('dialog.modale[open] [data-engage="depot"]');
+    assert.equal(await engagement.isDisabled(), true,
+      'rien n’est coché : l’action existe mais reste indisponible');
+    assert.match(await page.innerText('dialog.modale[open]'), /Cochez au moins une image/);
+
+    // On cherche par le NOM DE CODE, que l'alias ne porte pas.
+    await page.fill('#depot-filtre', 'bullseye');
+    const caseDebian11 = 'dialog.modale[open] [data-coche="images:debian/11"]';
+    await page.waitForSelector(caseDebian11, { timeout: 10000 });
+
+    await page.check(caseDebian11);
+    assert.equal(await engagement.isDisabled(), false);
+    assert.match(await engagement.innerText(), /Ajouter au catalogue/);
+
+    await engagement.click();
+    // On attend la LIGNE DU TABLEAU, pas le texte de la page : l'alias figure
+    // déjà dans la case cochée, et attendre le texte serait satisfait par la
+    // modale encore ouverte — un test vert sans rien avoir posé.
+    await page.waitForSelector('tbody tr:has-text("images:debian/11")', { timeout: 15000 });
+
+    // §33.6 : elle naît VÉRIFIÉE, parce que le serveur a reconfirmé lui-même.
+    const { corps } = await pile.lireSparkd('/v1/images');
+    const posee = corps.images.find((i) => i.reference === 'images:debian/11');
+    assert.equal(posee.state, 'verified', 'cocher n’est pas déclarer : le serveur a relu');
+    assert.ok(posee.verified_at, 'et la date est celle de SA lecture');
+    assert.ok(corps.selectable.includes('images:debian/11'));
+
+    // Elle est utilisable AUSSITÔT : plus de « ajouter puis relever ».
+    await accueil();
+    await page.click('.titre-vue .bouton--primaire');
+    await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
+    const options = await page.$$eval('#image option', (o) => o.map((x) => x.value));
+    assert.ok(options.includes('images:debian/11'),
+      'l’écran de création la propose sans qu’un relevé ait été demandé');
+  });
+});
+
+test('retirer une image EMPLOYÉE est refusé, et le refus nomme le Spark', async () => {
+  await parcours('depot-retrait-refus', async () => {
+    await allerAuCatalogue();
+
+    // `ubuntu-24` du seed tourne sur cette image (§33.7).
+    await page.click('tr:has-text("images:ubuntu/24.04") [data-retire]');
+    await page.waitForSelector('.confirmation--sensible', { timeout: 10000 });
+    // SPK-DS-09 : le geste est sensible, pas destructeur — accent, pas rouge.
+    assert.match(await page.innerText('.confirmation--sensible'),
+                 /Retirer .* du catalogue \?/);
+
+    await page.click('[data-confirme-retrait]');
+    await page.waitForSelector('.confirmation--sensible .refus', { timeout: 15000 });
+    assert.match(await page.innerText('.confirmation--sensible .refus'), /ubuntu-24/,
+      'le refus NOMME le Spark, il ne le compte pas');
+
+    // Et rien n'a bougé : le refus vient du serveur, pas de l'écran.
+    const { corps } = await pile.lireSparkd('/v1/images');
+    assert.ok(corps.images.some((i) => i.reference === 'images:ubuntu/24.04'));
+  });
+});
+
+test('l’entrée par défaut n’est pas retirable, et l’écran dit pourquoi', async () => {
+  await parcours('depot-retrait-defaut', async () => {
+    await allerAuCatalogue();
+    // `images:debian/13` est l'entrée par défaut ET la plus employée du seed.
+    // Le refus rendu est le STRUCTUREL : nommer d'abord les Sparks laisserait
+    // croire qu'en les supprimant on débloquerait le retrait (§33.7).
+    await page.click('tr:has-text("images:debian/13") [data-retire]');
+    await page.click('[data-confirme-retrait]');
+    await page.waitForSelector('.confirmation--sensible .refus', { timeout: 15000 });
+    const refus = await page.innerText('.confirmation--sensible .refus');
+    assert.match(refus, /par défaut/);
+    assert.ok(!/employée par/.test(refus),
+      'un seul refus à la fois : celui qu’on ne peut pas lever');
+  });
+});
+
+test('retirer une image libre aboutit, et la retire de la création', async () => {
+  await parcours('depot-retrait', async () => {
+    await allerAuCatalogue();
+    // Celle que le parcours « depot-cocher » a posée : la pile retrouve son seed.
+    // On CONSTATE d'abord qu'elle est là, sans quoi le parcours passerait au
+    // vert en ne retirant rien.
+    const avant = await pile.lireSparkd('/v1/images');
+    assert.ok(avant.corps.images.some((i) => i.reference === 'images:debian/11'),
+      'le parcours précédent l’a bien posée');
+    await page.click('tr:has-text("images:debian/11") [data-retire]');
+    await page.waitForSelector('.confirmation--sensible', { timeout: 10000 });
+    await page.click('[data-confirme-retrait]');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('images:debian/11'), { timeout: 15000 });
+
+    const { corps } = await pile.lireSparkd('/v1/images');
+    assert.ok(!corps.images.some((i) => i.reference === 'images:debian/11'));
+    assert.ok(!corps.selectable.includes('images:debian/11'));
+  });
+});
+
 // --- LE CONTRAT CLAVIER DES TROIS DEGRÉS (SPK-33, §5.4, §9.1) --------------
 
 test('les trois degrés s’atteignent au clavier, et annoncent où l’on est', async () => {

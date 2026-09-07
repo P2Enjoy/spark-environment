@@ -5405,7 +5405,7 @@ Mesuré sur la même Forge, en interrogeant la socket directement, Incus disait 
   `404` lève toujours `InstanceAbsente` ; manuel M10 et changelog mis à jour ;
   `@spec` / `@verifies` posés.
 
-### [ ] SPK-92 · Le dépôt d'images se lit en direct, et le catalogue se coche
+### [x] SPK-92 · Le dépôt d'images se lit en direct, et le catalogue se coche
 
 Demandé par le responsable le 2026-09-07, en constatant que la liste des images
 déployables — Debian 13, Debian 12, Ubuntu 24.04, Alpine 3.21 — ne vient d'aucune

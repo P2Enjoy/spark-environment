@@ -4129,9 +4129,16 @@ Cocher ajoute ; il faut donc pouvoir retirer, sans quoi la commande serait
 irréversible. Le retrait est un geste du tableau du catalogue, pas de la modale
 d'ajout.
 
-Deux refus, et ils ne se valent pas :
+Deux refus, et ils ne se valent pas — d'où l'ordre dans lequel ils sont
+examinés. Le premier est **structurel** : personne ne peut retirer l'entrée par
+défaut aujourd'hui. Le second décrit une situation qui, elle, peut changer.
+Nommer d'abord les Sparks laisserait croire qu'en les supprimant on débloquerait
+le retrait, ce qui est faux.
 
-1. **Un Spark référence l'image.** Le refus **nomme** les Sparks concernés.
+1. **L'entrée est celle par défaut** (`is_default`). L'écran de création s'en
+   sert comme présélection (§33.5) ; la retirer le laisserait sans point de
+   départ.
+2. **Un Spark référence l'image.** Le refus **nomme** les Sparks concernés.
    Ce n'est pas l'intégrité qui est en jeu : `ensure_selectable` n'est appelé
    qu'à la **création** (§14.2), jamais à la reprise, donc un Spark existant
    continue de tourner et de se reprendre sans son entrée. C'est la **lisibilité**
@@ -4139,8 +4146,6 @@ Deux refus, et ils ne se valent pas :
    retirer pendant qu'un Spark s'en réclame ferait croire que cette origine n'a
    jamais existé — exactement ce que le §33.3 interdit déjà pour une entrée
    `missing`.
-2. **L'entrée est celle par défaut** (`is_default`). L'écran de création s'en sert
-   comme présélection (§33.5) ; la retirer le laisserait sans point de départ.
 
 **Limite connue, assumée par cette décision** : désigner une *autre* entrée par
 défaut n'est pas un geste existant — `is_default` n'est posé que par le

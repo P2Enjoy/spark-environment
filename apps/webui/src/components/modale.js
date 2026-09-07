@@ -4,7 +4,9 @@
  * @spec docs/BACKLOG.md#SPK-33 · docs/DESIGN_SYSTEM.md §6.27 (fenêtre, sections,
  *       et modale limitée à une section), §5.4 (ce qu'on affiche et ce qu'on
  *       saisit ne partagent pas la même surface), §6.22 (une confirmation reste
- *       dans le flux), §9.1 (clavier) · docs/DAT.md §34.2
+ *       dans le flux), §9.1 (clavier), §9.9 (une action indisponible dans un
+ *       état connu reste visible et dit pourquoi) · docs/BACKLOG.md#SPK-92 ·
+ *       docs/DAT.md §34.2, §33.6
  *
  * Une fenêtre **montre** ; une modale **recueille**. Un écran qui mélange les
  * deux ne dit plus ce qui fait foi.
@@ -28,10 +30,17 @@ const echapper = (v) =>
  *
  * `engagement` nomme l'action. Un bouton « Enregistrer » ne dit pas ce qu'il
  * couvre ; « Déclarer la route » le dit.
+ *
+ * `desactivee` et `indication` couvrent le cas du §9.9 : l'action existe, mais
+ * elle est indisponible dans un état CONNU — rien n'est encore coché, la frappe
+ * ne correspond pas encore. Le bouton reste alors **présent et désactivé**, avec
+ * sa raison lisible et rattachée par `aria-describedby`. Il ne prend pas la
+ * couleur du refus : rien n'a été tenté, ce n'est pas un échec (§6.23).
  */
 export function renderModale({ ouverte = false, id = 'modale', titre = '',
                                corps = '', engagement = 'Enregistrer',
-                               refus = null, occupee = false } = {}) {
+                               refus = null, occupee = false,
+                               desactivee = false, indication = null } = {}) {
   if (!ouverte) return '';
   return `
 <dialog class="modale" id="${echapper(id)}" aria-labelledby="${echapper(id)}-titre">
@@ -44,9 +53,18 @@ export function renderModale({ ouverte = false, id = 'modale', titre = '',
       // cacherait la raison.
       ? `<div class="refus" role="alert"><p><strong>${echapper(refus)}</strong></p></div>`
       : ''}
+    ${indication
+      // §9.9 : l'engagement EXISTE mais reste indisponible dans un état connu.
+      // La raison est lisible, et rattachée au bouton pour la synthèse vocale.
+      // Ce n'est PAS un refus (§6.23) : rien n'a encore été tenté, donc pas de
+      // couleur d'erreur.
+      ? `<p class="note" id="${echapper(id)}-indication">${echapper(indication)}</p>`
+      : ''}
     <p class="modale__actions">
       <button type="submit" class="bouton bouton--primaire" data-engage="${echapper(id)}"
-        ${occupee ? 'disabled' : ''}>${echapper(occupee ? 'Envoi…' : engagement)}</button>
+        ${occupee || desactivee ? 'disabled' : ''}${
+          indication ? ` aria-describedby="${echapper(id)}-indication"` : ''
+        }>${echapper(occupee ? 'Envoi…' : engagement)}</button>
       <button type="button" class="bouton" data-annule-modale="${echapper(id)}">Annuler</button>
     </p>
   </form>

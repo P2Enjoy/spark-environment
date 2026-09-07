@@ -30,6 +30,8 @@ import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zoneP
 import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
+import { DEPOT_VIDE, libelleEngagement, libelleIndication }
+  from './components/forge-depot.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
 import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
   from './components/forge-dns.js';
@@ -106,6 +108,11 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                forgeDns: { ...FORGE_DNS_VIDE, selection: [] },
                catalogue: { status: 'loading', images: [], error: null,
                             ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } },
+               // SPK-92 · §33.6 : ce que le DÉPÔT publie, lu à l'ouverture de la
+               // modale et jamais conservé. Un listing gardé d'une fois sur
+               // l'autre se donnerait pour frais alors qu'il aurait vieilli — le
+               // dépôt a gagné 24 produits en trois semaines.
+               depot: { ...DEPOT_VIDE, cochees: [] },
                // SPK-64 · §43.6 : le catalogue de la Forge est une destination
                // propre. Il ne se mélange pas au catalogue d'images, qui a un
                // autre sujet et un autre contrat de saisie.
@@ -187,7 +194,8 @@ function peindre() {
       : etat.route === 'creation' && etat.status === 'loading'
       ? '<div class="carte bloc" aria-busy="true"><p class="sr-only" role="status">Chargement…</p></div>'
       : etat.route === 'images'
-      ? renderOngletsForge('#/forge/images') + renderCatalogue(etat.catalogue)
+      ? renderOngletsForge('#/forge/images')
+        + renderCatalogue({ ...etat.catalogue, depot: etat.depot })
       : etat.route === 'environnement'
       ? renderForgeEnv(etat.catalogueEnv)
       : etat.route === 'journal'
@@ -391,6 +399,11 @@ function brancher() {
       etat.admin.refusal = null;
       etat.catalogue.ui.open = false;
       etat.catalogue.ui.refusal = null;
+      // SPK-92 : la modale du dépôt suit le MÊME contrat. L'oublier ici la
+      // laisserait ouverte après « Échap », et l'écran montrerait une surface
+      // que l'exploitant croit avoir refermée.
+      etat.depot.open = false;
+      etat.depot.refusal = null;
       etat.catalogueEnv.ui.open = false;
       etat.catalogueEnv.ui.refusal = null;
       etat.catalogueServeurs.ui.open = false;
@@ -3758,14 +3771,128 @@ async function retirerEntreesDns() {
   peindre();
 }
 
-function brancherCatalogue() {
+/**
+ * Lit le dépôt d'images, en direct (SPK-92, docs/DAT.md §33.6).
+ *
+ * La lecture n'est PAS conservée d'une ouverture à l'autre : le dépôt bouge —
+ * 272 produits le 2026-08-19, 296 le 2026-09-07 —, et une liste gardée se
+ * donnerait pour fraîche alors qu'elle aurait vieilli.
+ */
+async function lireLeDepot() {
+  const depot = etat.depot;
+  depot.status = 'loading';
+  depot.error = null;
+  peindre();
+  try {
+    depot.listing = await api('/v1/images/depot');
+    depot.status = 'ready';
+  } catch (erreur) {
+    // §33.6 : un dépôt injoignable ne bloque pas l'ajout. L'écran le NOMME, et
+    // la saisie libre reste offerte par l'autre commande de la section.
+    depot.error = erreur;
+    depot.status = 'error';
+  }
+  peindre();
+}
+
+/** Le retrait d'une entrée, confirmé DANS le flux du tableau (§6.22, §33.7). */
+function brancherRetraitImage() {
   const ui = etat.catalogue.ui;
-  racine.querySelector('[data-ouvre="image"]')?.addEventListener('click', () => {
-    ui.open = true; ui.refusal = null;
+  for (const bouton of racine.querySelectorAll('[data-retire]')) {
+    bouton.addEventListener('click', () => {
+      ui.retrait = bouton.dataset.retire;
+      ui.retraitRefus = null;
+      peindre();
+      // §14.3 : le déclencheur disparaît sous la confirmation qui s'ouvre. Le
+      // focus va donc DANS la confirmation, jamais laissé au hasard.
+      racine.querySelector('[data-confirme-retrait]')?.focus();
+    });
+  }
+  racine.querySelector('[data-annule-retrait]')?.addEventListener('click', () => {
+    const identifiant = ui.retrait;
+    ui.retrait = null;
+    ui.retraitRefus = null;
     peindre();
-    // Le focus entrant, `Échap` et la restitution du focus sont tenus par
-    // `brancherModale` (§6.27) : un seul endroit pour un seul contrat.
+    racine.querySelector(`[data-retire="${identifiant}"]`)?.focus();
   });
+  racine.querySelector('[data-confirme-retrait]')?.addEventListener('click', async () => {
+    const identifiant = ui.retrait;
+    const reponse = await relais(
+      `/api/v1/images/${encodeURIComponent(identifiant)}?server=${encodeURIComponent(etat.server)}`,
+      { method: 'DELETE' },
+    ).catch((e) => ({ ok: false, json: async () => ({ detail: { message: e.message } }) }));
+    if (!reponse.ok) {
+      // Le refus NOMME les Sparks concernés (§33.7). Il reste sous la ligne : le
+      // faire disparaître avec la confirmation cacherait la raison.
+      const rendu = await reponse.json().catch(() => ({}));
+      ui.retraitRefus = rendu?.detail?.message ?? 'Le serveur a refusé ce retrait.';
+      return peindre();
+    }
+    ui.retrait = null;
+    ui.retraitRefus = null;
+    await chargerCatalogue();
+  });
+}
+
+/** La modale « Ajouter depuis le dépôt » : cocher, puis poser le lot. */
+function brancherModaleDepot() {
+  const depot = etat.depot;
+  const formulaire = racine.querySelector('[data-modale="depot"]');
+  if (!formulaire) return;
+
+  const filtre = formulaire.querySelector('#depot-filtre');
+  filtre?.addEventListener('input', () => {
+    depot.filtre = filtre.value;
+    // La liste change : il faut repeindre. Le focus revient au champ par son
+    // identifiant (§14.3), c'est pourquoi ce champ EN A un.
+    peindre();
+  });
+
+  const engagement = formulaire.querySelector('[data-engage="depot"]');
+  for (const case_ of formulaire.querySelectorAll('[data-coche]')) {
+    case_.addEventListener('change', () => {
+      const reference = case_.dataset.coche;
+      depot.cochees = case_.checked
+        ? [...depot.cochees, reference]
+        : depot.cochees.filter((r) => r !== reference);
+      // On NE repeint PAS : la repeinture rendrait le focus au premier contrôle
+      // de la modale — le champ de recherche —, et cocher trois cases au clavier
+      // deviendrait impossible (§14.3). Seul l'engagement change, on le met donc
+      // à jour sur place.
+      if (!engagement) return;
+      const compte = depot.cochees.length;
+      engagement.disabled = compte === 0;
+      engagement.textContent = libelleEngagement(compte);
+      const indication = formulaire.querySelector('#depot-indication');
+      if (indication) indication.textContent = libelleIndication(compte);
+    });
+  }
+
+  formulaire.addEventListener('submit', async (evenement) => {
+    evenement.preventDefault();
+    if (!depot.cochees.length) return;
+    depot.busy = true; depot.refusal = null;
+    peindre();
+    const reponse = await relais(`/api/v1/images?server=${encodeURIComponent(etat.server)}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ references: depot.cochees }),
+    }).catch((e) => ({ ok: false, json: async () => ({ detail: { message: e.message } }) }));
+    depot.busy = false;
+    if (!reponse.ok) {
+      // Le refus s'affiche DANS la modale, et rien n'est décoché (§6.27).
+      const rendu = await reponse.json().catch(() => ({}));
+      depot.refusal = rendu?.detail?.message ?? 'Le serveur a refusé cet ajout.';
+      return peindre();
+    }
+    depot.open = false;
+    depot.cochees = [];
+    await chargerCatalogue();
+  });
+}
+
+/** La modale « Saisir une référence » : le repli du §33.6. */
+function brancherModaleImage() {
+  const ui = etat.catalogue.ui;
   const formulaire = racine.querySelector('[data-modale="image"]');
   if (!formulaire) return;
   for (const controle of formulaire.querySelectorAll('input')) {
@@ -3790,6 +3917,31 @@ function brancherCatalogue() {
     ui.values = { ...CATALOGUE_VIDE.values };
     await chargerCatalogue();
   });
+}
+
+function brancherCatalogue() {
+  const ui = etat.catalogue.ui;
+  const depot = etat.depot;
+
+  racine.querySelector('[data-ouvre="image"]')?.addEventListener('click', () => {
+    ui.open = true; ui.refusal = null;
+    // §6.27 : une seule modale à la fois. L'exclusivité se tient dans l'état,
+    // le rendu ne fait que la refléter.
+    depot.open = false;
+    peindre();
+    // Le focus entrant, `Échap` et la restitution du focus sont tenus par
+    // `brancherModale` (§6.27) : un seul endroit pour un seul contrat.
+  });
+
+  racine.querySelector('[data-ouvre="depot"]')?.addEventListener('click', () => {
+    ui.open = false; ui.refusal = null;
+    Object.assign(depot, { ...DEPOT_VIDE, open: true, status: 'loading', cochees: [] });
+    lireLeDepot();
+  });
+
+  brancherRetraitImage();
+  brancherModaleDepot();
+  brancherModaleImage();
 }
 
 /**
