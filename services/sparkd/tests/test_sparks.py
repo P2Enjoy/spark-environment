@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from sparkd import audit, images, migrations, sparks
+from sparkd import admission, audit, images, migrations, sparks
 from sparkd.db import connect
 from sparkd.incus import FakeIncus
 from sparkd.inventory import sync
@@ -309,16 +309,34 @@ def test_agrandir_la_memoire_ecrit_le_registre(db):
 
 def test_agrandir_est_ADMIS_alors_que_la_meme_demande_a_neuf_ne_le_serait_pas(db):
     """§49.1 : le Spark visé est DÉJÀ compté. C'est le point qui décide de toute
-    l'unité, et il se montre en comparant les deux chemins."""
-    sparks.create(db, spec(memory_bytes=6 * GIO))
-    # Une création de 7 Gio échouerait : 6 sont déjà pris sur les ~7,35 Gio
-    # allouables de la Forge factice (mesuré, et non les 98 que le commentaire
-    # de la fixture annonce).
+    l'unité, et il se montre en comparant les deux chemins.
+
+    Les chiffres sont **dérivés de la Forge**, jamais écrits en dur. La mémoire
+    du relevé ne vient pas du doublon Incus mais de `/proc/meminfo` de la machine
+    qui exécute les tests (`inventory.sync` → `hostmem.measure`, et c'est
+    délibéré : le total d'Incus est la RAM physique, pas ce que le noyau peut
+    allouer). Une preuve chiffrée en dur passait donc sur le poste où elle a été
+    écrite et tombait ailleurs — mesuré le 2026-09-07 sur une machine plus
+    grande, où la création « refusée » était admise. Un test dont le verdict
+    dépend de la RAM du développeur n'éprouve pas le produit.
+    """
+    libre = admission.pools(db).memory.available
+    # Le Spark prend la QUASI-TOTALITÉ du disponible : ce qui reste après lui ne
+    # doit pas suffire à en créer un second de la même taille.
+    prise = int(libre * 0.9)
+    sparks.create(db, spec(memory_bytes=prise))
+    assert admission.pools(db).memory.available < prise, \
+        "la mise en scène exige qu’il ne reste pas de quoi refaire le même Spark"
+
+    # Créer le MÊME chiffre à neuf est refusé : le pool ne l'a plus.
     with pytest.raises(sparks.AdmissionRefused):
-        sparks.create(db, spec(name="second", memory_bytes=7 * GIO))
-    # Le MÊME chiffre passe en redimensionnement, puisque le Spark rend ses 6.
-    apres = sparks.resize(db, "crm-production", {"memory_reservation_bytes": 7 * GIO})
-    assert apres["memory_reservation_bytes"] == 7 * GIO
+        sparks.create(db, spec(name="second", memory_bytes=prise))
+
+    # Le MÊME chiffre passe en redimensionnement, puisque le Spark rend ce qu'il
+    # tient déjà. C'est tout le §49.1, et la comparaison des deux chemins ne
+    # tient que parce que le chiffre est identique de part et d'autre.
+    apres = sparks.resize(db, "crm-production", {"memory_reservation_bytes": prise})
+    assert apres["memory_reservation_bytes"] == prise
 
 
 def test_RETRECIR_passe_meme_sur_une_forge_saturee(db):

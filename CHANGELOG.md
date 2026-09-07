@@ -296,6 +296,17 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Une preuve d'admission dépendait de la RAM du développeur** (SPK-05, SPK-57,
+  `docs/DAT.md` §49.1) : `test_agrandir_est_ADMIS…` comparait deux chemins sur
+  des chiffres écrits en dur — 6 Gio pris, 7 Gio refusés à la création puis
+  admis au redimensionnement. Or la mémoire du relevé ne vient pas du doublon
+  Incus mais de `/proc/meminfo` de la machine qui exécute les tests, et c'est
+  délibéré : le total d'Incus est la RAM physique, pas ce que le noyau peut
+  allouer. La preuve passait donc sur le poste où elle a été écrite et tombait
+  ailleurs — mesuré sur une machine plus grande, où la création « refusée »
+  était admise. Les chiffres sont désormais **dérivés de la Forge** et la mise
+  en scène est vérifiée avant d'être éprouvée. La suite serveur repasse à
+  1222 preuves, zéro échec.
 - **`make captures` n'allait plus jusqu'au bout** (SPK-93, CLAUDE.md §16) :
   l'outil qui produit les captures d'interface mourait en chemin, et depuis
   assez longtemps pour que les vues de supervision n'aient jamais existé.
