@@ -138,17 +138,26 @@ Retour arrière: le `down` de la migration retire les trois colonnes ; le reste
                 de la ligne — versions, mode, composants gérés — survit intact.
                 MAIS il n'est JAMAIS joué tout seul : le §40.6 du DAT interdit à
                 « Revenir à la build précédente » de descendre une migration.
-Piège, MESURÉ le 2026-09-02 : une fois la 013 appliquée, **la build précédente
-                refuse de servir**. `check_registry` migre puis VÉRIFIE au
+Retour arrière: RÉVISÉ le 2026-09-02 (SPK-91). « Revenir à la build
+                précédente » restaure désormais AUSSI le registre de sparkd,
+                depuis la sauvegarde que la mise à jour prend juste avant de
+                muter, et l'écran annonce sa date. Le piège ci-dessous ne vaut
+                donc plus que pour une mise à jour SANS sauvegarde — celles
+                conduites par une console antérieure à SPK-91.
+Piège, MESURÉ le 2026-09-02 : sans restauration du registre, une fois la 013
+                appliquée, **la build précédente refuse de servir**. `check_registry` migre puis VÉRIFIE au
                 démarrage (docs/SCHEMA.md §12.4), et une base qui porte une
                 migration dont le code n'a pas le fichier est rejetée — « cette
                 base a été migrée par un autre code que celui-ci ». sparkd ne
                 démarre pas, `/healthz` ne répond pas, et le retour arrière
                 échoue à ses propres preuves. Ce n'est pas propre à cette
                 migration : c'est vrai de toute mise à jour qui en porte une.
-                Pour revenir en arrière POUR DE BON : jouer le `down` de la 013
-                sur le registre — sauvegarde du §2 bis d'abord —, puis
-                réinstaller l'ancienne build. Sinon, avancer.
+                Pour revenir en arrière POUR DE BON dans ce cas : jouer le
+                `down` de la 013 sur le registre — sauvegarde du §2 bis
+                d'abord —, puis réinstaller l'ancienne build. Sinon, avancer.
+Espace disque : chaque mise à jour dépose désormais une sauvegarde datée dans
+                /var/lib/sparkd/sauvegardes. Le produit n'en purge aucune : la
+                rétention est une décision humaine (docs/DAT.md §40.7.4).
 Risque        : nul pour les données. Trois colonnes nullables ajoutées à une
                 table informative, qu'aucune règle d'admission ni d'autorisation
                 ne consulte. Le risque est celui du retour arrière ci-dessus,

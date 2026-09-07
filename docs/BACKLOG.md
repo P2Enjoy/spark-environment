@@ -5019,6 +5019,49 @@ disparu, alors qu'elle était bien posée dans le DNS ».
 
 ---
 
+---
+
+### [ ] SPK-91 · Le retour arrière de `sparkd` ramène AUSSI le registre, et dit à quelle date
+
+Constat du responsable, 2026-09-02, après la livraison de l'avertissement de
+SPK-85 : « un bouton qui rétablit mais casse l'outil, il faut être crétin pour le
+proposer. Si on rétablit, on rollback TOUT et il faut informer qu'on va tout
+rétablir à la date xxxx, date de la dernière sauvegarde ».
+
+Il a raison, et l'avertissement livré la veille traitait le symptôme : la build
+précédente refuse de servir un registre migré au-delà d'elle (§12.4, mesuré), et
+« Revenir à la build précédente » laissait donc la Forge arrêtée. Nommer la
+panne valait mieux que la taire, mais ne valait pas la corriger.
+
+- Spécification : `docs/DAT.md` **§40.7** et §40.6 révisé (écrits et committés
+  avant la première ligne de code) · `docs/CONTINGENCE.md` §2 (le mécanisme de
+  sauvegarde, inchangé) · `docs/PROD_MIGRATIONS.md` · manuel M8.
+- Dépend de : SPK-36 pour la sauvegarde et la restauration du registre, SPK-69
+  pour la recette de mise à jour et son reçu.
+- **Périmètre, à ne pas confondre** : le **registre de `sparkd`** — l'état du
+  plan de contrôle. Rien à voir avec les **instantanés d'un Spark** (§19), qui
+  appartiennent au locataire et qu'aucune mise à jour ne touche.
+- Portée : la recette gagne une phase `sauvegarde`, qui précède toute mutation
+  et **fait échouer la mise à jour** si elle ne peut pas aboutir ; le reçu porte
+  le fichier produit et sa date ; le retour arrière arrête `sparkd`, restaure ce
+  fichier, puis réinstalle la build précédente — dans cet ordre ; la
+  confirmation **annonce la date** et ce qui sera perdu.
+- **On ne mute pas ce qu'on ne sait pas rendre** (§40.7.1) : c'est le seul refus
+  que la recette s'autorise à opposer à une mise à jour par ailleurs éligible.
+- **L'ordre décide** (§40.7.2) : restaurer AVANT de réinstaller. L'inverse ferait
+  démarrer l'ancienne build sur le registre migré, donc le refus du §12.4.
+- **Le chemin de la sauvegarde ne vient jamais de la page** : il vient du reçu,
+  et la console le refuse s'il ne ressemble pas à ce que SPK-36 produit. Il finit
+  dans une commande exécutée en root sur la Forge.
+- **Ce que la restauration ne rattrape pas** (§40.7.3) : le registre est l'état
+  voulu, la machine l'état réel. L'écart se traite avec les outils existants, et
+  l'ancre du journal signalera une histoire raccourcie — ce qui est vrai.
+- DoD : preuves d'hôte de la phase `sauvegarde`, de son échec bloquant, de
+  l'ordre restauration → réinstallation, et du refus d'un chemin non conforme ;
+  preuves d'écran des deux confirmations — avec sauvegarde datée, et sans ;
+  captures observées ; manuel M8 mis à jour ; contrat de déploiement mis à jour ;
+  `@spec` / `@verifies` posés.
+
 ### [~] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
 
 Demandé par le responsable le 2026-09-02 : « pour un Spark configuré, un bouton

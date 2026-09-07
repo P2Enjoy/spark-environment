@@ -6923,38 +6923,59 @@ illisible ou un délai dépassé est un échec, même si pip est sorti avec zér
 Le retour arrière est borné à la build estampillée relevée juste avant le geste.
 Il rejoue le même script et la même URL épinglée, puis exige les mêmes trois
 preuves avec l'ancien commit. Il ne reçoit jamais une version saisie dans la
-page et ne descend jamais les migrations SQL automatiquement : effacer des
-données pour rétablir le binaire serait une seconde opération, irréversible,
-que cette confirmation ne couvre pas.
+page.
 
-**Conséquence, mesurée le 2026-09-02 (SPK-85) : quand la mise à jour a appliqué
-une migration, le retour arrière ÉCHOUE, et il échoue proprement.** Le §12.4 du
-[SCHEMA](SCHEMA.md) fait vérifier le registre au démarrage : une base qui porte
-une migration dont le code n'a pas le fichier est rejetée — « cette base a été
-migrée par un autre code que celui-ci ». L'ancienne build ne sert donc pas,
-`/healthz` ne répond pas, et les trois preuves du retour arrière ne sont pas
-réunies. Le geste ne détruit rien ; il ne rétablit rien non plus, et il laisse le
-plan de contrôle arrêté jusqu'à ce que la build migrée soit réinstallée. Revenir
-en arrière au-delà d'une migration est donc une opération HUMAINE, décrite au
-contrat de déploiement : jouer le `down`, puis réinstaller.
+**Il restaure AUSSI le registre de `sparkd` — arbitrage du responsable,
+2026-09-02 (SPK-91).** La règle antérieure — « il ne descend jamais les
+migrations SQL » — produisait un geste qui régresse le binaire et laisse la Forge
+**arrêtée** dès qu'une migration a été franchie (§12.4 du [SCHEMA](SCHEMA.md),
+mesuré le 2026-09-02) : un bouton qui casse l'outil au lieu de le rétablir.
 
-**L'écran le DIT avant le geste, et il le SAIT au lieu de le supposer.**
-`/readyz` publie déjà `schema_version`, la plus haute migration appliquée
-(§31.4). La console la relève **avant** la mise à jour et la relit dans la
-vérification qui suit ; le reçu du retour arrière porte donc les deux valeurs.
-Trois états, trois textes, et jamais le même :
+Le responsable a tranché : **un retour arrière ramène TOUT** — le code ET le
+registre — à l'état d'avant la mise à jour, et **l'écran annonce la date** à
+laquelle il ramène. Ramener le code sans le registre n'était pas un demi-retour
+arrière : c'était un arrêt.
+
+**Périmètre, et il faut le dire parce que deux mécanismes portent le même mot.**
+Il s'agit du **registre de `sparkd`** — `spark.db`, l'état du plan de contrôle —
+sauvegardé et restauré par le mécanisme du §36 de ce document et du §2 de
+[CONTINGENCE](CONTINGENCE.md). Cela **n'a aucun rapport** avec les *instantanés
+d'un Spark* (§19), qui appartiennent au locataire, vivent dans son pool ZFS, et
+qu'aucune mise à jour du plan de contrôle ne touche. Un retour arrière de
+`sparkd` ne restaure aucune cellule et n'en détruit aucune.
+
+**Ce qu'un retour arrière rétablit donc**, et que la confirmation énumère : le
+code servi, et le registre à sa date — les Sparks déclarés, leurs quotas, les
+routes, les ports publiés, les clés autorisées, l'environnement, et le journal
+d'audit. Ce que la Forge a enregistré **depuis** cette date est perdu ; ce qui
+tourne sur la machine, lui, continue de tourner.
+
+Le registre remplacé n'est jamais écrasé : le §36 le **déplace** à côté, daté.
+Un retour arrière malheureux se rattrape donc à la main.
+
+#### Quand il n'y a pas de sauvegarde
+
+Une mise à jour conduite par une console antérieure à SPK-91 n'en a pas produit,
+et le §40.7 fait échouer celle qui n'a pas pu en prendre une. Il reste donc un
+cas où le reçu n'en porte aucune, et l'écran ne doit pas laisser croire qu'il
+restaurera : il **le dit**, et il redevient ce que le §40.6 décrivait avant —
+une régression de binaire seule.
+
+C'est là que la comparaison des versions de schéma garde son utilité.
+`/readyz` publie `schema_version` (§31.4) ; la console la relève **avant** la
+mise à jour et la relit dans la vérification qui suit. Trois états, trois textes,
+et « je ne sais pas » ne se range pas avec « rien n'a bougé » :
 
 | Ce que la console a relevé | Ce que la confirmation dit |
 |---|---|
-| la version a monté pendant la mise à jour | le retour arrière **ne rétablira rien** : la build précédente refusera de servir ce registre, l'API restera arrêtée, et la remise en état est manuelle |
-| la version n'a pas bougé | le texte ordinaire : régression de code, interruption brève |
-| une des deux versions n'a pas été relevée | on ne conclut pas : l'écran dit qu'il n'a pas pu vérifier, et énonce le risque au conditionnel |
+| la version a monté | sans sauvegarde, la build précédente **refusera de servir** ce registre : elle ne démarrera pas, et la remise en état est manuelle |
+| la version n'a pas bougé | la régression de code seule, sans conséquence sur le registre |
+| une des deux mesures manque | on ne conclut pas : l'écran énonce le risque au conditionnel |
 
-Le geste **reste offert** dans les trois cas. Il n'est pas refusé par le
-serveur, et le responsable peut vouloir régresser le binaire en sachant qu'il
-jouera le `down` ensuite : le §14.9 du design system interdit de retirer une
-action qui existe parce que l'écran croit savoir qu'elle finira mal. Ce que
-l'écran doit, c'est **nommer la conséquence**, pas décider à la place.
+Le geste **reste offert** dans tous les cas : le §14.9 du design system interdit
+de retirer une action qui existe parce que l'écran croit savoir qu'elle finira
+mal. Ce que l'écran doit, c'est **nommer la conséquence**, pas décider à la
+place.
 
 Deux chemins déclenchent le geste automatique :
 
@@ -6974,6 +6995,80 @@ Le retour arrière volontaire est annoncé au journal courant avant l'arrêt sou
 build restaurée peut être antérieure à cette action déclarable. Une panne de
 journal est dite mais ne transforme pas une build prouvée en échec, comme pour
 les sessions du §37.4.5.
+
+
+### 40.7 La sauvegarde du registre autour d'une mise à jour (SPK-91)
+
+Le §40.6 promet un retour arrière qui ramène le registre à sa date. Cette
+section dit d'où vient cette date.
+
+#### 40.7.1 La mise à jour sauvegarde AVANT de muter, et échoue si elle ne peut pas
+
+La première phase de la recette n'est plus `paquet` mais **`sauvegarde`** :
+
+    /opt/sparkd/venv/bin/python -m sparkd.sauvegarde --chemin /var/lib/sparkd/sauvegardes
+
+Elle emploie le mécanisme du §36 — l'API de sauvegarde en ligne de SQLite, pas
+une copie de fichier, parce qu'en mode WAL une copie perd les transactions
+validées sans le dire (mesuré, `CONTINGENCE` §2.2). Le fichier produit est
+**vérifié** avant que la phase soit close : structure SQLite et chaîne d'audit.
+
+**Une sauvegarde impossible arrête la mise à jour, avant toute mutation.** Le
+motif tient en une phrase : on ne mute pas ce qu'on ne sait pas rendre. Rien
+n'est installé, la Forge continue de servir la build qu'elle servait, et la
+phase `sauvegarde` porte l'échec avec sa cause. C'est le seul refus que cette
+recette s'autorise à opposer à une mise à jour par ailleurs éligible.
+
+#### 40.7.2 Le retour arrière restaure, puis réinstalle, dans cet ordre
+
+La même recette sert les deux sens ; ce qui les distingue est un troisième
+argument, le fichier à restaurer. Vide, on sauvegarde et on installe ; présent,
+on restaure et on installe :
+
+1. `systemctl stop sparkd` — le §36 refuse de restaurer sous un service actif,
+   et il a raison : deux vérités coexisteraient, celle du fichier et celle des
+   connexions ouvertes ;
+2. `python -m sparkd.sauvegarde --restaurer <fichier>` — le registre remplacé
+   est **déplacé**, daté, jamais écrasé ;
+3. `pip install` de la build précédente, puis `sparkd.install`, qui redémarre et
+   exige `/healthz`.
+
+L'ordre n'est pas indifférent. Restaurer après la réinstallation ferait démarrer
+l'ancienne build sur le registre migré — précisément le refus du §12.4 — et la
+Forge serait arrêtée entre les deux étapes.
+
+**Le chemin de la sauvegarde n'est jamais saisi dans la page.** Il vient du reçu,
+donc de la sortie de la recette elle-même, et la console le refuse s'il ne
+ressemble pas exactement à ce que le §36 produit :
+`/var/lib/sparkd/sauvegardes/spark-AAAAMMJJ-HHMMSS.db`. Ce texte finit dans une
+ligne de commande exécutée en root sur la Forge ; le seul échappement sûr est de
+ne pas écrire ce qu'on ne reconnaît pas — même règle qu'au §44.9.2.
+
+#### 40.7.3 Ce que la restauration ne rattrape pas
+
+Le registre est l'état **voulu** ; la machine porte l'état **réel**. Les
+ramener à des dates différentes crée un écart, et le produit sait déjà le
+nommer : une cellule créée après la sauvegarde existe toujours sur la Forge sans
+que le registre la connaisse, et une route écrite dans Caddy y reste jusqu'à la
+prochaine réconciliation (§18.1), qui la retirera puisqu'elle régénère depuis le
+registre.
+
+Le produit ne prétend donc pas remonter le temps de la machine. Il rétablit
+`sparkd`, dit à quelle date, et laisse l'exploitant traiter l'écart avec les
+outils qui existent — l'inventaire des Sparks, la réconciliation d'ingress.
+
+Le **journal d'audit** revient lui aussi à sa date : la chaîne redevient celle
+d'alors, et l'ancre de la console (§36.2) constatera au relevé suivant que
+l'histoire a **raccourci**. Ce n'est pas une fausse alerte : elle dit exactement
+ce qui s'est produit. L'écran de retour arrière l'annonce, pour qu'on ne la
+prenne pas pour une atteinte au journal.
+
+#### 40.7.4 Ce que cette unité ne prétend pas
+
+Ni sauvegarde périodique, ni rétention, ni purge : la mise à jour dépose un
+fichier daté et s'arrête là. Le §2 de [CONTINGENCE](CONTINGENCE.md) reste le
+document de la sauvegarde d'exploitation, et l'espace occupé par ces fichiers
+est une affaire humaine, inscrite au contrat de déploiement.
 
 
 ## 41. Le runtime d'un Spark : ce que l'image ne donne pas
