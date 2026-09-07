@@ -456,10 +456,28 @@ tbody tr:hover { background: var(--color-hover); }
   font-family: var(--font-mono); line-height: 1.5; resize: vertical;
   white-space: pre; overflow-wrap: normal;
 }
+/* Le pas de relecture est un TABLEAU de quatre colonnes, et 34 rem n'en donnent
+   pas trois cents pixels a la valeur : `relais.neuf.example` s'y rendait sur
+   trois lignes, coupe en plein milieu — MESURE, capture 129 du 2026-09-08. La
+   modale d'import est donc la seule a s'elargir, et seulement la ou l'ecran le
+   permet : sous 768 px elle occupe deja tout l'ecran (§6.27). */
+@media (min-width: 768px) {
+  .modale#env-import { width: min(52rem, calc(100vw - 2 * var(--space-4))); }
+}
 /* SPK-DS-15 : une valeur technique d'un seul jeton se REPLIE, elle ne defile
    pas. Un jeton de deux cents caracteres dans un conteneur qui defile ne montre
-   que son debut, et c'est la fin qu'on verifie. */
-.import-valeur { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 22rem; }
+   que son debut, et c'est la fin qu'on verifie. `anywhere` ramene la largeur
+   minimale de la colonne a UN caractere : le plancher l'empeche de se refermer
+   sur une valeur ordinaire. */
+.import-valeur {
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  min-width: 11rem; max-width: 22rem;
+}
+/* Une liste de refus n'est PAS une `liste-simple` : celle-ci pose `display: flex`
+   sur ses elements, et la ligne citee se rangeait a COTE de sa raison au lieu de
+   dessous — MESURE, capture 131 du 2026-09-08. */
+.import-refus { margin: 0; padding-left: var(--space-4); }
+.import-refus li + li { margin-top: var(--space-2); }
 /* La ligne refusee est citee TELLE QU'ELLE A ETE COLLEE : sans elle, « ligne 7 »
    oblige a compter les lignes dans la zone de texte. */
 .import-source {

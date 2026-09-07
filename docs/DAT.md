@@ -9153,6 +9153,7 @@ l'idempotence qui décide ici de la forme.
 
 | Situation | Réponse |
 |---|---|
+| corps qui ne porte pas `entries`, ou une entrée sans nom exploitable | `422 invalid_body` — c'est la FORME de la demande qui est en cause, pas un nom : renvoyer la grammaire du shell à qui a envoyé autre chose qu'une liste n'apprendrait rien |
 | lot vide | `422 empty_import` — il n'y a rien à écrire, et le dire vaut mieux qu'un succès qui n'a rien fait |
 | un ou plusieurs noms hors grammaire du shell | `422 invalid_name` avec **tous** les noms fautifs, jamais le premier seul : on corrige un lot en une fois, pas en quarante allers-retours |
 | deux entrées du même nom dans le lot | `422 duplicate_name` — le serveur ne choisit pas laquelle gagne |

@@ -1,7 +1,9 @@
 /**
  * Parcours navigateur des trois panneaux d'administration.
  *
- * @verifies docs/BACKLOG.md#SPK-21 · docs/DAT.md §26, §26.2, §26.5, §26.6 ·
+ * @verifies docs/BACKLOG.md#SPK-21, docs/BACKLOG.md#SPK-97 (un lot part en UN
+ *           appel, docs/DAT.md §43.10.3, §43.9.5 bis) ·
+ *           docs/DAT.md §26, §26.2, §26.5, §26.6 ·
  *           CLAUDE.md §15 (le comportement s'éprouve, il ne se suppose pas)
  *
  * Les tests unitaires de `spark-admin.js` éprouvent le RENDU. Ici on éprouve ce
@@ -49,6 +51,10 @@ let refuseLaRestauration = false;
 let figeLaListe = false;
 /** Refus de `sparkd` LUI-MÊME sur la prochaine liste : le tunnel n'y est pour rien. */
 let refuseLaListe = false;
+/** SPK-97 : refus du prochain import, sur un nom hors grammaire du shell. */
+let refuseLImport = false;
+/** SPK-97 · §43.9.5 bis : le prochain import de Forge touche un Spark protégé. */
+let exigeAcceptation = false;
 
 function fauxSsh() {
   const e = new EventEmitter(); e.stderr = new EventEmitter(); e.kill = () => {}; return e;
@@ -116,6 +122,42 @@ function repondre(url, init) {
     topology_synced_at: '2026-08-19T14:05:00',
     reservation_guarantee: 'floor_under_contention',
   }), { status: 200 });
+  // SPK-97 · §43.10 : l'import en lot. Le doublon distingue la Forge du Spark par
+  // le CHEMIN — la chaîne de requête ne survit pas au relais (§22.4).
+  if (url.includes('/env/import')) {
+    if (refuseLImport) {
+      refuseLImport = false;
+      return new Response(JSON.stringify({ detail: {
+        error: 'invalid_name',
+        message: '1 nom(s) hors grammaire du shell : A-DEUX. Le lot n’a PAS été écrit.',
+      } }), { status: 422 });
+    }
+    if (exigeAcceptation && !corps?.accept_protected) {
+      return new Response(JSON.stringify({ detail: {
+        error: 'protected_sparks_affected',
+        message: 'Importer 2 entree(s) au niveau de la Forge touche 1 Spark(s) '
+               + 'protégé(s) : crm-production. Aucune protection ne sera levée.',
+        protected_sparks: ['crm-production'],
+      } }), { status: 409 });
+    }
+    exigeAcceptation = false;
+    return new Response(JSON.stringify({
+      entries: [], written: (corps?.entries ?? []).length, replaced: [],
+    }), { status: 200 });
+  }
+  if (/\/v1\/env(?:\?|$)/.test(url)) {
+    return new Response(JSON.stringify({ env: [
+      { name: 'TZ', is_secret: false, value: 'Europe/Paris', fingerprint: null,
+        scope: 'forge', origin: 'forge', selected_by: 1,
+        updated_at: '2026-09-08T08:00:00' },
+    ] }), { status: 200 });
+  }
+  if (url.includes('/env')) {
+    return new Response(JSON.stringify({ env: [
+      { name: 'APP_NAME', is_secret: false, value: 'crm', fingerprint: null,
+        scope: 'spark', origin: 'spark', updated_at: '2026-09-08T08:00:00' },
+    ] }), { status: 200 });
+  }
   if (url.includes('/v1/audit')) return new Response(JSON.stringify({ entries: [] }), { status: 200 });
   if (url.includes('/usage')) return new Response(JSON.stringify({
     cpu: { used: 0.4, reservation: 0.5, over_limit: false },
@@ -399,4 +441,98 @@ test('un refus de sparkd n’efface pas l’état du tunnel, et l’écran des p
   assert.doesNotMatch(forge, /transport SSH/,
     'le tunnel n’a pas bougé : rien ne permet de l’accuser');
   assert.match(forge, /Processeur|Mémoire/, 'les pools sont lus par le même tunnel');
+});
+
+// --- SPK-97 · l'import d'un lot collé (docs/DAT.md §43.10) ------------------
+
+test('importer un lot part en UN SEUL appel, avec la déclaration de chaque secret', async () => {
+  // §43.10.3 : un lot, un appel. Le rendu ne peut pas prouver cela — il faut
+  // regarder ce qui sort réellement vers `sparkd`.
+  await ouvrirDepuisLaListe('environnement');
+  await page.click('[data-ouvre="env-import"]');
+  await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 8000 });
+  await page.fill('#import-env-texte', 'A_UN=alpha\nA_DEUX="beta"');
+  await page.click('dialog.modale[open] [data-engage="env-import"]');
+  await page.waitForSelector('[data-import-secret="A_UN"]', { timeout: 8000 });
+
+  // L'analyse n'envoie RIEN : elle est locale, et c'est ce qui permet de relire
+  // avant d'écrire.
+  assert.deepEqual(appels, [], 'analyser ne doit toucher à rien');
+
+  await page.check('[data-import-secret="A_DEUX"]');
+  await page.click('dialog.modale[open] [data-engage="env-import"]');
+  await attendreRelecture();
+
+  assert.deepEqual(appels.map((a) => `${a.methode} ${a.url}`),
+                   ['POST /v1/sparks/crm-production/env/import'],
+                   'un lot, un appel — pas un appel par entrée');
+  assert.deepEqual(appels[0].corps.entries, [
+    { name: 'A_UN', value: 'alpha', secret: false },
+    { name: 'A_DEUX', value: 'beta', secret: true },
+  ], 'les guillemets sont retirés, et la déclaration de secret suit sa ligne');
+  assert.equal(appels[0].corps.accept_protected, undefined,
+    'aucune acceptation n’est envoyée tant que rien n’a été demandé');
+});
+
+test('un lot refusé garde la modale ouverte ET le texte collé intact', async () => {
+  // §6.27 : une modale qui se refermerait sur un refus ferait perdre le travail
+  // et cacherait la raison. Un lot de quarante lignes se corrige, il ne se
+  // recolle pas.
+  await ouvrirDepuisLaListe('environnement');
+  await page.click('[data-ouvre="env-import"]');
+  await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 8000 });
+  const colle = 'A_UN=alpha\nA_DEUX=beta';
+  await page.fill('#import-env-texte', colle);
+  await page.click('dialog.modale[open] [data-engage="env-import"]');
+  await page.waitForSelector('[data-import-secret="A_UN"]', { timeout: 8000 });
+
+  refuseLImport = true;
+  await page.click('dialog.modale[open] [data-engage="env-import"]');
+  await page.waitForFunction(
+    () => document.querySelector('dialog.modale[open]')?.innerText.includes('A-DEUX'),
+    { timeout: 8000 });
+
+  // Le refus du serveur est rendu tel qu'il le nomme, dans la modale.
+  assert.match(await page.innerText('dialog.modale[open]'), /n’a PAS été écrit/);
+  // Et la saisie survit : on revient au texte, il est là.
+  await page.click('dialog.modale[open] [data-import-retour]');
+  await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 8000 });
+  assert.equal(await page.inputValue('#import-env-texte'), colle);
+});
+
+test('un import de catalogue qui touche un Spark protégé confirme AVANT d’écrire', async () => {
+  // §43.9.5 bis : informer, puis accepter. Une seule question pour tout le lot,
+  // et l'acceptation n'est envoyée qu'APRÈS le refus — jamais d'avance.
+  appels = [];
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('nav a[href="#/forge"]', { timeout: 8000 });
+  await page.click('nav a[href="#/forge"]');
+  await page.waitForSelector('#titre-pools', { timeout: 8000 });
+  await page.click('.onglet[href="#/forge/environnement"]');
+  await page.waitForSelector('#titre-catalogue-forge', { timeout: 8000 });
+  appels = [];
+
+  await page.click('[data-ouvre="env-import"]');
+  await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 8000 });
+  await page.fill('#import-env-texte', 'TZ=Europe/Lisbon\nB_DEUX=beta');
+  await page.click('dialog.modale[open] [data-engage="env-import"]');
+  await page.waitForSelector('[data-import-secret="TZ"]', { timeout: 8000 });
+
+  exigeAcceptation = true;
+  await page.click('dialog.modale[open] [data-engage="env-import"]');
+  await page.waitForSelector('dialog.modale[open] .confirmation', { timeout: 8000 });
+
+  const vu = await page.innerText('dialog.modale[open]');
+  assert.match(vu, /crm-production/, 'le Spark protégé est NOMMÉ');
+  assert.match(vu, /Aucune protection ne sera levée/);
+  assert.equal(appels[0].corps.accept_protected, undefined,
+    'la première tentative ne porte AUCUNE acceptation');
+
+  // L'engagement change de nom : il n'engage plus la même chose.
+  await page.click('dialog.modale[open] [data-engage="env-import"]');
+  await attendreRelecture();
+  assert.equal(appels.length, 2, 'une seule question, une seule reprise');
+  assert.equal(appels[1].corps.accept_protected, true);
+  assert.deepEqual(appels[1].corps.entries.map((e) => e.name), ['TZ', 'B_DEUX'],
+    'le lot relu est envoyé tel quel, sans qu’on ait à le recoller');
 });

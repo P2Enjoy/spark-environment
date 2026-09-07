@@ -5987,7 +5987,7 @@ ce que la mesure a dû faire à la main (`docker import`) pour éprouver SPK-94.
   déploiement et changelog mis à jour ; `@spec` / `@verifies` posés.
 
 
-### [ ] SPK-97 · Coller un `.env` : importer variables et secrets en un geste
+### [x] SPK-97 · Coller un `.env` : importer variables et secrets en un geste
 
 Demandé par le responsable le 2026-09-08 : « on devrait pouvoir importer des
 variables et des secrets comme le fait Netlify : on ouvre une modale avec une
@@ -6042,6 +6042,33 @@ prochaine réécriture depuis l'état voulu l'effacera sans prévenir (§43.2).
   et côté service, tests d'API, test E2E propres à l'unité ; captures observées
   aux principaux formats, états de refus compris ; manuel M8, DAT, design system,
   contrat d'API et changelog mis à jour ; `@spec` / `@verifies` posés.
+- **Clos le 2026-09-08.** `POST /v1/env/import` et
+  `POST /v1/sparks/{nom}/env/import` livrées, contrat d'API régénéré. **19
+  preuves** côté service et API — dont l'atomicité, éprouvée en cassant
+  volontairement la troisième écriture d'un lot de trois, et l'absence de la
+  valeur d'un secret **cherchée** dans quatre routes —, **27 côté console** pour
+  l'analyseur et la modale, et **3 gestes navigateur** qui prouvent ce qu'un rendu
+  ne peut pas dire : un lot part en **un seul appel**, un refus garde la modale et
+  le texte collé intacts, et l'acceptation du §43.9.5 bis n'est envoyée
+  qu'**après** la question, jamais d'avance.
+- Deux parcours E2E contre la pile réelle, depuis la page d'accueil : coller un
+  `.env` de cinq lignes dans un Spark, en déclarer une secrète, importer, et
+  constater les trois entrées à l'écran **et** sur `sparkd` — la ligne fautive,
+  nommée par son numéro, n'ayant rien écrit, et la valeur secrète n'apparaissant
+  ni dans le corps de la route ni à l'écran ; puis un lot importé au **catalogue**
+  qui ne descend dans aucun Spark.
+- Captures observées : `spk97-import-relecture.jpg`, `spk97-import-pose.jpg` et
+  `spk97-import-catalogue.jpg` depuis la pile réelle, `127` à `131` du harnais —
+  les deux pas, en 1440 px et en 390 px, plus l'état sans aucune ligne
+  exploitable. **Trois défauts n'ont été trouvés que par elles** : la modale à
+  34 rem coupait `relais.neuf.example` sur trois lignes, la règle qui l'élargit
+  défaisait le plein écran sous 768 px, et la ligne refusée se rangeait à côté de
+  sa raison au lieu de dessous.
+- Un défaut **étranger à l'unité** a été trouvé en relisant ces captures, puis
+  corrigé sur arbitrage du responsable : la fixture de `e2e/captures.mjs`
+  choisissait sa réponse d'environnement sur une chaîne de requête que le relais
+  supprime, si bien que la capture censée prouver le §43.6 montrait le jeu résolu
+  d'un Spark — **depuis SPK-64**. Journal du 2026-09-08.
 
 
 ---

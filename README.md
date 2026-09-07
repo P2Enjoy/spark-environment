@@ -39,7 +39,7 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 92 unités : 75 closes, 16
+**Le plan de contrôle tourne sur une Forge réelle.** 93 unités : 77 closes, 15
 partielles, 1 non commencée. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 

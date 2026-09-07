@@ -217,6 +217,30 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('#titre-protection', { timeout: 10000 });
     await capturer('m8-protection', { hauteur: 900 });
 
+    // --- M8 · Importer un lot de variables (SPK-97, §43.10) ------------------
+    // Le pas de RELECTURE, et non la zone de texte : ce que le chapitre décrit,
+    // c'est ce que l'écran dit AVANT d'écrire — ce qui sera remplacé, ce qui est
+    // refusé et pourquoi. Une image de la zone vide ne montrerait que le geste.
+    //
+    // Rien n'est importé : la modale est refermée par « Échap » et le seed reste
+    // celui des autres illustrations (§29.2).
+    await ouvrir('boutique', 'environnement');
+    await page.waitForSelector('#titre-env-spark', { timeout: 10000 });
+    await page.click('[data-ouvre="env-import"]');
+    await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 10000 });
+    await page.fill('#import-env-texte', [
+      '# collé depuis le .env du locataire',
+      'APP_ENV=production',
+      'export SMTP_HOST=mail.exemple.fr',
+      'SMTP_PASSWORD="mot de passe"',
+      'SMTP-PORT=587',
+    ].join('\n'));
+    await page.click('dialog.modale[open] [data-engage="env-import"]');
+    await page.waitForSelector('[data-import-secret="APP_ENV"]', { timeout: 10000 });
+    await page.check('[data-import-secret="SMTP_PASSWORD"]');
+    await capturer('m8-import', { hauteur: 900 });
+    await page.keyboard.press('Escape');
+
     // --- M9 · Instantanés : le refus qui protège -----------------------------
     await ouvrir('crm-production', 'instantanes');
     await page.waitForSelector('#titre-instantanes');

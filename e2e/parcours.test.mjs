@@ -1,7 +1,8 @@
 /**
  * Parcours E2E contre la pile réelle.
  *
- * @verifies docs/BACKLOG.md#SPK-24, docs/BACKLOG.md#SPK-70 ·
+ * @verifies docs/BACKLOG.md#SPK-24, docs/BACKLOG.md#SPK-70,
+ *           docs/BACKLOG.md#SPK-97 (l'import d'un lot collé, docs/DAT.md §43.10) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -823,6 +824,115 @@ test('le catalogue ne descend qu’après une case cochée, puis le décochage l
     await page.click('[data-retire-catalogue="PARCOURS_SELECTION"]');
     await page.waitForFunction(
       () => !document.body.innerText.includes('PARCOURS_SELECTION'), { timeout: 15000 });
+  });
+});
+
+// --- SPK-97 · COLLER UN LOT (§43.10) ---------------------------------------
+
+test('coller un .env dans un Spark : analyser, déclarer un secret, importer', async () => {
+  await parcours('env-import-spark', async () => {
+    // Le geste complet depuis le parcours canonique, et il est RÉVERSIBLE : le
+    // parcours rend la pile à l'état du seed (§29.2). Le texte collé porte
+    // exprès une ligne fautive : ce que l'unité doit prouver n'est pas qu'un
+    // texte propre passe, c'est qu'un texte réel dit ce qu'il jette.
+    await ouvrir('boutique', 'environnement');
+    await page.waitForSelector('#titre-env-spark', { timeout: 10000 });
+
+    await page.focus('[data-ouvre="env-import"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 10000 });
+    // §43.10 : le premier pas n'écrit rien, et il le dit avant qu'on colle.
+    assert.match(await page.innerText('dialog.modale[open]'), /Rien n’est écrit à cette étape/);
+
+    await page.fill('#import-env-texte', [
+      '# collé depuis le .env du locataire',
+      'IMPORT_HOTE=mail.exemple.fr',
+      'export IMPORT_PORT=587',
+      'IMPORT_JETON="sk_ne_doit_pas_sortir"',
+      'IMPORT-FAUTIF=1',
+    ].join('\n'));
+    await page.click('dialog.modale[open] [data-engage="env-import"]');
+
+    // Le pas de relecture : trois lignes lues, une refusée AVEC son numéro.
+    await page.waitForSelector('[data-import-secret="IMPORT_HOTE"]', { timeout: 10000 });
+    const relecture = await page.innerText('dialog.modale[open]');
+    assert.match(relecture, /Importer 3 entrées/);
+    assert.match(relecture, /ligne 5/, 'la ligne refusée est nommée par son numéro');
+    assert.match(relecture, /IMPORT-FAUTIF/);
+    assert.match(relecture, /nouvelle entrée/);
+    // §43.10.2 : rien n'est coché par le produit. La déclaration est un geste.
+    assert.equal(await page.isChecked('[data-import-secret="IMPORT_JETON"]'), false);
+    await capturer('spk97-import-relecture');
+
+    await page.check('[data-import-secret="IMPORT_JETON"]');
+    await page.click('dialog.modale[open] [data-engage="env-import"]');
+    // On attend la LIGNE du tableau, pas un texte : le pas de relecture porte
+    // déjà les mêmes noms, et attendre le texte revenait à ne rien attendre —
+    // la lecture de `sparkd` partait avant que l'écriture ait abouti.
+    await page.waitForSelector('[data-env-retire="IMPORT_HOTE"]', { timeout: 15000 });
+
+    // Effet BACKEND (§29.3 : on lit pour constater, jamais pour agir).
+    const apres = await pile.lireSparkd('/v1/sparks/boutique/env');
+    const par = Object.fromEntries(apres.corps.env.map((e) => [e.name, e]));
+    assert.equal(par.IMPORT_HOTE?.value, 'mail.exemple.fr');
+    assert.equal(par.IMPORT_PORT?.value, '587', '« export » est toléré');
+    assert.equal(par.IMPORT_HOTE?.origin, 'spark');
+    assert.equal(par['IMPORT-FAUTIF'], undefined, 'la ligne refusée n’a rien écrit');
+    // §43.3 : la valeur déclarée secrète ne revient par aucune route.
+    assert.equal(par.IMPORT_JETON?.is_secret, true);
+    assert.equal(par.IMPORT_JETON?.value, null);
+    assert.ok(par.IMPORT_JETON?.fingerprint, 'l’empreinte la rend comparable');
+    assert.doesNotMatch(JSON.stringify(apres.corps), /sk_ne_doit_pas_sortir/,
+      'la route ne rend la valeur d’un secret nulle part dans son corps');
+    assert.doesNotMatch(await page.innerText('body'), /sk_ne_doit_pas_sortir/,
+      'un secret importé ne s’affiche pas davantage qu’un secret saisi');
+    await capturer('spk97-import-pose');
+
+    // On rend la pile à l'état du seed, par l'écran.
+    for (const nom of ['IMPORT_HOTE', 'IMPORT_PORT', 'IMPORT_JETON']) {
+      await page.click(`[data-env-retire="${nom}"]`);
+      await page.waitForFunction(
+        (n) => !document.body.innerText.includes(n), nom, { timeout: 15000 });
+    }
+    const rendu = await pile.lireSparkd('/v1/sparks/boutique/env');
+    assert.equal(rendu.corps.env.some((e) => e.name.startsWith('IMPORT_')), false);
+  });
+});
+
+test('un lot importé au CATALOGUE ne descend dans aucun Spark', async () => {
+  await parcours('env-import-forge', async () => {
+    // §43.6 révisé : c'est la propriété de sécurité de SPK-64, et un import en
+    // lot est exactement le geste qui la mettrait en défaut — quarante entrées
+    // qui descendraient d'un coup dans toutes les cellules.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/forge/environnement"]');
+    await page.waitForSelector('#titre-catalogue-forge', { timeout: 10000 });
+
+    await page.click('[data-ouvre="env-import"]');
+    await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 10000 });
+    await page.fill('#import-env-texte', 'LOT_UN=alpha\nLOT_DEUX=beta');
+    await page.click('dialog.modale[open] [data-engage="env-import"]');
+    await page.waitForSelector('[data-import-secret="LOT_UN"]', { timeout: 10000 });
+    await page.click('dialog.modale[open] [data-engage="env-import"]');
+
+    await page.waitForSelector('[data-retire-catalogue="LOT_UN"]', { timeout: 15000 });
+    const catalogue = await page.innerText('body');
+    assert.match(catalogue, /LOT_DEUX/);
+    // §14.6 : « ne descend nulle part » est un état à part, et il se lit.
+    assert.match(catalogue, /Ne descend nulle part/);
+    await capturer('spk97-import-catalogue');
+
+    const chez = await pile.lireSparkd('/v1/sparks/boutique/env');
+    assert.equal(chez.corps.env.some((e) => e.name.startsWith('LOT_')), false,
+      'un lot au catalogue ne change AUCUNE cellule tant qu’il n’est pas coché');
+
+    for (const nom of ['LOT_UN', 'LOT_DEUX']) {
+      await page.click(`[data-retire-catalogue="${nom}"]`);
+      await page.waitForFunction(
+        (n) => !document.body.innerText.includes(n), nom, { timeout: 15000 });
+    }
   });
 });
 

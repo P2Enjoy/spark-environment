@@ -2,7 +2,7 @@
  * Captures de l'écran liste des Sparks.
  *
  * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21, #SPK-22,
- *           #SPK-64, #SPK-70 ·
+ *           #SPK-64, #SPK-70, #SPK-97 ·
  *           docs/DAT.md §24, §25, §26, §27, §43.6 · docs/DESIGN_SYSTEM.md §13 (les captures
  *           sont une preuve), §13.1 (validation attendue) · CLAUDE.md §16
  *
@@ -486,7 +486,15 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
       // d'un Spark. Les deux formes seraient confondues par une seule réponse,
       // et la capture ne montrerait jamais qu'une entrée peut ne descendre nulle
       // part.
-      if (url.includes('/v1/env?')) {
+      // La route se reconnait a son CHEMIN, jamais a sa chaine de requete :
+      // l'hote console relaie vers le tunnel en reconstruisant l'URL et ne
+      // recopie PAS `server`, seul parametre de cette route (`relayer`, dans
+      // `apps/webui/host/main.js`). Un test sur « /v1/env? » n'etait donc jamais
+      // vrai, et l'ecran du catalogue recevait le jeu RESOLU d'un Spark —
+      // `APP_NAME` et `DATABASE_URL` a la place d'`OBJECT_STORAGE_URL`, et
+      // « Ne descend nulle part » sur toutes les lignes, y compris celles que la
+      // fixture declare cochees. Mesure du 2026-09-08, capture 82.
+      if (/\/v1\/env(?:\?|$)/.test(url)) {
         return new Response(JSON.stringify({ env: [
           { name: 'TZ', is_secret: false, value: 'Europe/Paris', fingerprint: null,
             selected_by: 2, updated_at: '2026-08-21T08:00:00' },
@@ -1640,6 +1648,50 @@ await page.click('.onglet[href="#/forge/environnement"]');
 await page.waitForSelector('#titre-catalogue-forge', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '82-environnement-catalogue-forge.png'), fullPage: true });
 console.log('  82-environnement-catalogue-forge.png');
+
+// SPK-97 · §43.10, SPK-DS-23 : la modale d'import, à ses DEUX pas. Le second est
+// celui qui compte — c'est le seul endroit où l'on voit ce qui sera remplacé, ce
+// qui est refusé et ce qui est supplanté, avant que rien ne soit écrit.
+await page.click('[data-ouvre="env-import"]');
+await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '127-import-coller.png') });
+console.log('  127-import-coller.png');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '128-import-coller-mobile.png') });
+console.log('  128-import-coller-mobile.png');
+await page.setViewportSize({ width: 1440, height: 1100 });
+
+// Un texte RÉEL : une entrée qui remplace, une qui est neuve, un secret à
+// déclarer, une ligne fautive et un doublon. Un texte propre ne montrerait rien
+// de ce que le pas de relecture existe pour dire.
+await page.fill('#import-env-texte', [
+  '# collé depuis le .env du locataire',
+  'SMTP_HOST=relais.neuf.example',
+  'export SMTP_USER=postier',
+  'SMTP_PASSWORD="mot de passe à déclarer"',
+  'SMTP-PORT=587',
+  'SMTP_USER=postier-corrige',
+].join('\n'));
+await page.click('dialog.modale[open] [data-engage="env-import"]');
+await page.waitForSelector('[data-import-secret="SMTP_HOST"]', { timeout: 8000 });
+await page.check('[data-import-secret="SMTP_PASSWORD"]');
+await page.screenshot({ path: join(SORTIE, '129-import-relecture.png') });
+console.log('  129-import-relecture.png');
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '130-import-relecture-mobile.png'), fullPage: true });
+console.log('  130-import-relecture-mobile.png');
+await page.setViewportSize({ width: 1440, height: 1100 });
+
+// §9.9 : un texte sans aucune ligne exploitable. L'action RESTE visible et
+// désactivée, avec sa raison — la faire disparaître ferait croire que le produit
+// ne sait pas importer.
+await page.click('dialog.modale[open] [data-import-retour]');
+await page.waitForSelector('dialog.modale[open] #import-env-texte', { timeout: 8000 });
+await page.fill('#import-env-texte', 'du texte qui ne définit rien\nVAR2)value2');
+await page.click('dialog.modale[open] [data-engage="env-import"]');
+await page.waitForSelector('dialog.modale[open] .absence', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '131-import-sans-ligne.png') });
+console.log('  131-import-sans-ligne.png');
 await fermerContexte(ctx);
 
 /* ---------------------------------------- supervision continue (SPK-93, §52) */

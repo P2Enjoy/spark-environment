@@ -3,6 +3,38 @@
 ## [Non publié]
 
 ### Ajouté
+- **Coller un `.env` : importer variables et secrets en un geste** (SPK-97,
+  `docs/DAT.md` §43.10, `DESIGN_SYSTEM_APP.md` SPK-DS-23, manuel M8) : l'écran ne
+  savait poser qu'**une entrée à la fois**, quand le `.env` d'une pile de
+  locataire en porte vingt à quarante. Vingt ouvertures de modale ne sont pas une
+  lenteur, c'est une raison de ne pas se servir de l'écran — et ce que fait alors
+  l'exploitant est prévisible : il écrit le fichier à la main dans la cellule, où
+  la réécriture depuis l'état voulu (§43.2) l'effacera **sans prévenir**, puisque
+  le produit régénère ces fichiers en entier. L'import n'est donc pas un confort
+  de saisie : c'est ce qui garde le registre vrai. Le bouton **Importer un lot**,
+  au catalogue de la Forge comme sur la facette d'un Spark, ouvre une zone où l'on
+  colle le texte tel quel ; l'analyse est **demandée**, jamais déclenchée à la
+  frappe, et le pas de relecture dit ce qui sera **remplacé**, ce qui est
+  **refusé** avec son numéro de ligne, et ce qui est **supplanté** par une ligne
+  plus bas — la dernière l'emportant, comme dans un shell. L'analyseur est
+  l'**inverse exact** de l'encodage du §43.9.7 : une valeur relevée dans
+  `/etc/spark/env` et recollée redonne la même valeur, `$`, guillemets, blancs de
+  bord et sauts de ligne compris ; les littéraux sont épinglés des deux côtés,
+  Forge et console. Trois choses ne sont jamais devinées : un `#` n'ouvre un
+  commentaire qu'en **début** de ligne — `p@ss#word` garde sa moitié droite —,
+  rien n'est substitué, et une valeur **multiligne** est refusée plutôt que
+  tronquée en silence, parce qu'une clé privée coupée ne se voit qu'au démarrage
+  de la pile. **Aucune case « Secret » n'est cochée par le produit** : le §43.3 a
+  mesuré que la détection par le nom échoue précisément là où elle importe
+  (`DATABASE_URL`), et coller quarante lignes aggrave le fait au lieu de le
+  changer. Côté Forge, `POST /v1/env/import` et `POST /v1/sparks/{nom}/env/import`
+  écrivent le lot dans une **transaction unique** — un import à moitié posé ferait
+  démarrer une pile à moitié configurée, ce qui ne se voit pas —, valident **tous**
+  les noms avant la première écriture, ne posent qu'**une** question de protection
+  (§43.9.5 bis) et ne réécrivent qu'**une fois** les fichiers de chaque cellule.
+  Un lot importé au catalogue **ne descend nulle part** de lui-même : le §43.6
+  révisé reste entier. L'import n'enlève rien, ne compare rien à un fichier de
+  référence, et n'a **pas d'inverse** : un export porterait la valeur des secrets.
 - **Redémarrer la Forge depuis la console, et le refus qui compte plus que le
   bouton** (SPK-87, `docs/DAT.md` §51, `DESIGN_SYSTEM_APP.md` SPK-DS-19,
   manuel M4) : après une mise à jour de noyau, la Forge continue de tourner sur
@@ -329,6 +361,17 @@
   « Architecture : x86_64 ».
 
 ### Corrigé
+- **La capture du catalogue d'environnement montrait le jeu résolu d'un Spark**
+  (SPK-64, `docs/DAT.md` §43.6, trouvé et corrigé le 2026-09-08) : le faux
+  `sparkd` du harnais de captures choisissait sa réponse sur `url.includes(
+  '/v1/env?')`, condition jamais vraie — l'hôte console reconstruit l'URL avant
+  de relayer et ne recopie pas `server`, seul paramètre de cette route. L'écran
+  *Catalogue d'environnement* était donc illustré par des entrées de Spark, sans
+  celle que la fixture déclare « ne descend nulle part » à dessein, et toutes ses
+  lignes portaient cet état. La route se reconnaît désormais à son **chemin**.
+  Les deux illustrations concernées montrent maintenant ce qu'elles existent pour
+  prouver : les trois états de portée d'une entrée, et les cases du catalogue
+  avec leur état réel sur un Spark.
 - **Le terminal ouvert en `spark-docker` expliquait sa mort avec la clé de
   root** (SPK-95, `docs/DAT.md` §37.4.9) : sur un Spark rootless dont la seconde
   porte est absente, la session s'ouvrait, mourait aussitôt, et l'écran

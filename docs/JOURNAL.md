@@ -10349,3 +10349,42 @@ l'écran, toutes passées du rouge au vert — et par la Forge réelle, parcouru
 depuis l'accueil jusqu'au message, captures observées à 1440 et 390 px. Le
 combler demande un second Spark rootless dans la campagne ; c'est une tâche à
 part, et elle est inscrite au SPK-95.
+
+## 2026-09-08 · La capture censée prouver le §43.6 prouvait autre chose
+
+**Trouvé en relisant les captures produites pour SPK-97.** L'écran *Catalogue
+d'environnement* de la Forge y apparaissait peuplé d'entrées de **Spark** —
+`APP_NAME`, `DATABASE_URL` —, sans `OBJECT_STORAGE_URL`, et toutes ses lignes
+portaient « Ne descend nulle part », y compris celle que la fixture déclare
+cochée par un Spark.
+
+**La cause, mesurée.** Le faux `sparkd` de `e2e/captures.mjs` distingue bien les
+deux réponses — le catalogue de la Forge et le jeu résolu d'un Spark — et son
+commentaire dit pourquoi : sans cette distinction, « la capture ne montrerait
+jamais qu'une entrée peut ne descendre nulle part ». Mais il choisissait la
+première sur `url.includes('/v1/env?')`, et **cette condition n'est jamais
+vraie** : l'hôte console reconstruit l'URL avant de relayer vers le tunnel, et il
+ne recopie pas `server`, seul paramètre de cette route. Le doublon voyait donc
+`/v1/env` sans `?`, et répondait par la seconde branche.
+
+**Deux captures étaient fausses depuis SPK-64** : celle du catalogue, et le bloc
+de cases à cocher de la facette d'un Spark, alimenté par la même route.
+
+**Arbitrage du responsable, le même jour : corriger plutôt que consigner.** La
+correction avait d'abord été écrite au registre des incohérences, la fixture
+appartenant à SPK-64 et non à l'unité en cours ; le responsable a tranché
+l'inverse. La route se reconnaît désormais à son **chemin** — `/v1/env` en fin de
+chaîne — et non à une chaîne de requête que le relais supprime. Le registre des
+incohérences, redevenu vide, est de nouveau supprimé du dépôt.
+
+**Ce que les captures montrent maintenant**, et ne montraient pas : les trois
+états de portée côte à côte — « Descend dans 2 Sparks », « Descend dans 1 Spark »
+et « Ne descend nulle part » —, et, sur la facette d'un Spark, les quatre cases
+du catalogue avec leur état réel, dont celle qui est masquée par une entrée
+propre.
+
+**La leçon, et elle vaut au-delà de cette fixture** : un doublon qui choisit sa
+réponse d'après la **forme de l'URL** est fragile dès qu'un relais la
+reconstruit. Ce qui se lit dans une capture ne dit pas d'où vient la donnée ; ici
+la seule chose qui l'a révélé est d'avoir relu l'image en cherchant une entrée
+précise, `OBJECT_STORAGE_URL`, et de ne pas l'avoir trouvée.

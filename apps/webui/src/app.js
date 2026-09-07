@@ -363,7 +363,8 @@ function brancher() {
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
   brancherCatalogueEnv();
-  if (etat.route === 'environnement') brancherImportEnv('forge');
+  // SPK-97 · §43.10 : une seule modale d'import, donc un seul branchement.
+  brancherImportEnv();
   brancherJournal();
   brancherInventaireDns();
   brancherServeurs();
@@ -1652,8 +1653,6 @@ function brancherPanneaux() {
     caseACocher.addEventListener('change', () => changerSelectionEnv(
       caseACocher.dataset.descend, caseACocher.checked));
   }
-  // SPK-97 · §43.10 : l'import en lot, sur la portée « propre au Spark ».
-  brancherImportEnv('spark');
   for (const niveau of ['forge', 'spark']) {
     const formulaire = racine.querySelector(`[data-modale="env-${niveau}"]`);
     if (!formulaire) continue;
@@ -3416,11 +3415,17 @@ async function ecrireCatalogueEnv(methode, nom, corps = {}, accepter = false) {
  * Les gestes de la modale d'import (SPK-97, docs/DAT.md §43.10).
  *
  * Deux écrans l'emploient — le catalogue de la Forge et la facette d'un Spark —
- * et un seul est affiché à la fois : `portee` dit lequel a ouvert la modale, et
- * c'est ce qui décide de la route.
+ * et un seul est affiché à la fois. La portée vient donc de l'ÉCRAN, et le
+ * branchement est UNIQUE.
+ *
+ * MESURÉ par le parcours E2E : brancher les deux écrans séparément posait deux
+ * gestionnaires de soumission sur la même modale. Sur l'écran de Forge, le
+ * second partait chercher `etat.spark.name` — nul hors d'un Spark —, et la
+ * modale restait sur « Envoi… » pendant que l'import, lui, avait abouti.
  */
-function brancherImportEnv(portee) {
+function brancherImportEnv() {
   const ui = etat.envImport;
+  const portee = etat.route === 'environnement' ? 'forge' : 'spark';
   racine.querySelector('[data-ouvre="env-import"]')?.addEventListener('click', () => {
     Object.assign(ui, { ...IMPORT_VIDE, lignes: [], refus: [], supplantees: [],
                         open: portee });

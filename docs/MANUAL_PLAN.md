@@ -88,7 +88,11 @@ tournait pas, ou personne ne relevait. Comprendre un Spark en erreur. Protéger
 un Spark contre la modification accidentelle, et lever cette protection — en
 disant clairement ce dont elle protège, et ce dont elle ne protège pas.
 
-Unités : SPK-09, SPK-14, SPK-34, SPK-93.
+Passer des variables et des secrets à la pile du locataire : le catalogue de la
+Forge, ce que chaque Spark en coche, et l'**import d'un `.env` collé** — le pas
+de relecture qui dit ce qui sera remplacé et ce qui est refusé avant d'écrire.
+
+Unités : SPK-09, SPK-14, SPK-34, SPK-58, SPK-64, SPK-93, SPK-97.
 
 ## M9 · Sauvegarder et restaurer
 

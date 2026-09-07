@@ -218,7 +218,7 @@ function renderRelire(ui, existantes, cochees) {
   const refuses = refus.length ? `<div class="refus" role="alert">
     <p><strong>${refus.length} ligne${refus.length > 1 ? 's' : ''} ne ser${
       refus.length > 1 ? 'ont' : 'a'} pas importée${refus.length > 1 ? 's' : ''}</strong></p>
-    <ul class="liste-simple">${refus.map((r) => `<li>
+    <ul class="import-refus">${refus.map((r) => `<li>
       <span class="technique">ligne ${r.ligne}</span> — ${echapper(r.raison)}
       <span class="import-source technique">${echapper(r.texte)}</span></li>`).join('')}</ul>
   </div>` : '';
@@ -238,10 +238,16 @@ function renderRelire(ui, existantes, cochees) {
     <p class="confirmation__consequence">Aucune protection ne sera levée.</p>
   </div>` : '';
 
+  const entete = lignes.length
+    ? `<p class="note">${lignes.length} entrée${lignes.length > 1 ? 's' : ''} lue${
+        lignes.length > 1 ? 's' : ''} dans le texte collé. Cochez ce qui doit être
+      déclaré secret : une valeur secrète ne se relit plus jamais.</p>`
+    // §1.4 : pas de commande morte. Inviter à cocher sous zéro ligne demande un
+    // geste sans objet ; ce qu'il faut lire est le refus, juste dessous.
+    : '';
+
   return `
-  <p class="note">${lignes.length} entrée${lignes.length > 1 ? 's' : ''} lue${
-    lignes.length > 1 ? 's' : ''} dans le texte collé. Cochez ce qui doit être
-  déclaré secret : une valeur secrète ne se relit plus jamais.</p>
+  ${entete}
   <p class="formulaire__actions">
     <button type="button" class="bouton" data-import-retour>Corriger le texte</button>
   </p>
