@@ -5553,7 +5553,12 @@ même.
 portaient le Spark et rien d'autre. Avec deux portes, le journal ne distinguerait
 plus une session administrative d'une session applicative — et c'est exactement ce
 qu'on cherchera le jour où quelque chose aura été changé dans une cellule sans
-qu'on sache par où. Le compte voyage donc dans la charge, à côté du Spark.
+qu'on sache par où. Le compte voyage donc dans la charge, à côté du Spark, à
+l'ouverture **comme** à la fermeture — sans quoi un relevé du journal ne pourrait
+pas apparier les deux.
+
+Il n'y figure PAS pour `spark.rescue_exec` : ce chemin passe par `incus exec`, et
+son message nomme déjà l'exécution en root. L'y répéter n'apprendrait rien.
 
 **Ce qui ne change pas.** Le chemin de dépannage du §37.3 reste root : il passe par
 `incus exec`, précisément parce qu'il n'y a pas de `sshd`, et un compte de service

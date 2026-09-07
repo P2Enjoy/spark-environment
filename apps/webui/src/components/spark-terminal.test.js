@@ -419,3 +419,64 @@ test('l’aide du redimensionnement nomme la BONNE destination', () => {
     session: { id: 'a', path: 'ssh', container: null, shell: null } });
   assert.match(spark, /propage la taille au Spark/);
 });
+
+// --- SPK-95 / SPK-DS-21 : le sélecteur de compte ---------------------------
+
+test('aucun sélecteur quand il n’y a qu’une porte : un menu à une entrée n’est pas un choix', () => {
+  // §14.4 appliqué en ABSENCE et non en désactivation : sur un Spark enraciné,
+  // un contrôle sans objet ne serait qu'un obstacle de plus avant d'ouvrir un
+  // terminal.
+  const html = renderTerminal(SPARK, {
+    ...TERMINAL_VIDE, comptes: [{ user: 'root', role: 'administrer la cellule' }] });
+  assert.ok(!html.includes('data-terminal="compte"'));
+});
+
+test('deux portes : le sélecteur apparaît, root présélectionné, chacune DIT son rôle', () => {
+  const html = renderTerminal(SPARK, {
+    ...TERMINAL_VIDE,
+    comptes: [{ user: 'root', role: 'administrer la cellule' },
+              { user: 'spark-docker', role: 'faire tourner la pile' }] });
+  assert.ok(html.includes('data-terminal="compte"'));
+  assert.match(html, /<option value="root" selected>/);
+  assert.ok(html.includes('administrer la cellule'));
+  assert.ok(html.includes('faire tourner la pile'));
+});
+
+test('portes non lues : aucun sélecteur, et root reste le défaut', () => {
+  // §14.6 : « pas encore lu » n'est pas « une seule porte ». Ni l'un ni l'autre
+  // n'affiche de sélecteur, mais l'écran ne prétend rien savoir.
+  const html = renderTerminal(SPARK, TERMINAL_VIDE);
+  assert.ok(!html.includes('data-terminal="compte"'));
+  assert.equal(TERMINAL_VIDE.compte, 'root');
+});
+
+test('la bannière PORTE le compte pendant toute la session', () => {
+  // SPK-DS-21 : deux fenêtres sur le même Spark par deux portes différentes
+  // sont indiscernables autrement, et l'une peut tout casser.
+  const html = renderTerminal(SPARK, {
+    ...TERMINAL_VIDE, status: 'ouvert',
+    session: { id: 'x', path: 'ssh', account: 'spark-docker' } });
+  assert.ok(html.includes('spark-docker'));
+});
+
+test('sans compte dans la session, la bannière n’invente rien', () => {
+  const html = renderTerminal(SPARK, {
+    ...TERMINAL_VIDE, status: 'ouvert', session: { id: 'x', path: 'ssh' } });
+  assert.ok(!html.includes('spark-docker'));
+});
+
+test('l’absence de seconde porte se NOMME, et ses deux causes se distinguent', () => {
+  // §14.5 : un écran muet laisserait chercher un sélecteur qui n'existe pas.
+  // Les deux causes n'appellent pas le même geste — un choix d'amorçage, ou un
+  // relevé qui n'a jamais eu lieu.
+  const seule = [{ user: 'root', role: 'administrer la cellule' }];
+  const enracine = renderTerminal(SPARK, {
+    ...TERMINAL_VIDE, comptes: seule, modeDocker: 'enracine' });
+  assert.ok(enracine.includes('enraciné'));
+  const jamais = renderTerminal(SPARK, {
+    ...TERMINAL_VIDE, comptes: seule, modeDocker: null });
+  assert.ok(jamais.includes('jamais été relevé'));
+  // Tant que rien n'est lu, l'écran ne prétend rien : ni sélecteur, ni cause.
+  const vierge = renderTerminal(SPARK, TERMINAL_VIDE);
+  assert.ok(!vierge.includes('jamais été relevé'));
+});

@@ -926,7 +926,7 @@ async function amorcageAppel(methode) {
  * refus d'ouvrir un terminal administratif parce qu'une lecture accessoire a
  * échoué serait une panne fabriquée (§14.9).
  */
-async function relverPortesTerminal() {
+async function releverPortesTerminal() {
   const nom = etat.spark?.name;
   if (!nom) return;
   try {
@@ -934,6 +934,7 @@ async function relverPortesTerminal() {
     const portes = rendu?.model?.access?.accounts;
     if (!Array.isArray(portes) || portes.length === 0) return;
     etat.terminal.comptes = portes;
+    etat.terminal.modeDocker = rendu?.model?.docker?.mode ?? null;
     // SPK-DS-21 : `root` reste présélectionné. Si le mode a changé sous nous et
     // que la porte choisie n'existe plus, on y retombe plutôt que d'envoyer une
     // session contre un compte que le Spark n'offre pas.
@@ -2920,7 +2921,7 @@ async function chargerDetail(nom, facette = '') {
   // toujours, spark-docker si le mode relevé est rootless » vit dans `sparkd` :
   // la recopier ici ferait deux vérités qui divergeraient.
   if (etat.facette === 'terminal' && etat.status === 'ready') {
-    relverPortesTerminal();
+    releverPortesTerminal();
   }
   // SPK-44 · §37.6 : la collecte commence à l'OUVERTURE de l'onglet, pas avant.
   // Un Spark dont on ne regarde pas le Docker n'est jamais interrogé.

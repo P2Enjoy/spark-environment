@@ -82,6 +82,8 @@ sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
 openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null || echo absent)
 cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64)
 [ -n "$cles" ] || cles=absent
+cles_rootless=$(sha256sum /home/spark-docker/.ssh/authorized_keys 2>/dev/null | cut -c1-64)
+[ -n "$cles_rootless" ] || cles_rootless=absent
 depot_ligne=$(grep -h '^deb' /etc/apt/sources.list.d/docker.list 2>/dev/null | head -1)
 depot_distro=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/\([a-z][a-z]*\).*|\1|p')
 depot_suite=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/[a-z][a-z]* \([^ ][^ ]*\).*|\1|p')
@@ -120,9 +122,9 @@ if [ -d /etc/update-motd.d ]; then
     if [ -f "$script" ] && [ -x "$script" ]; then motd_distro=present; break; fi
   done
 fi
-printf 'os_id=%s\nos_suite=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\n' \
+printf 'os_id=%s\nos_suite=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ncles_rootless=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\n' \
   "$os_id" "$os_suite" "$os_like" "$arch" \
-  "$sshd" "$openssh_version" "$cles" "$depot_distro" "$depot_suite" \
+  "$sshd" "$openssh_version" "$cles" "$cles_rootless" "$depot_distro" "$depot_suite" \
   "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode" \
   "$rootless_uid" "$rootless_gid" "$motd_distro"
 """
@@ -131,6 +133,14 @@ printf 'os_id=%s\nos_suite=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\
 #: détection, et le laisser choisir rendrait le mode illisible d'un amorçage à
 #: l'autre (§42.2 bis).
 COMPTE_ROOTLESS = "spark-docker"
+
+#: SPK-95 · §42.2 quater : la SECONDE porte. Root reste la porte administrative
+#: et le défaut ; celle-ci n'est offerte que lorsque le relevé dit `rootless`.
+#:
+#: Le fichier reste écrit par `root` : le §17.1 veut un seul écrivain, et un
+#: compte qui pourrait réécrire ses propres clés sortirait du registre.
+FOYER_ROOTLESS = f"/home/{COMPTE_ROOTLESS}"
+AUTHORIZED_KEYS_ROOTLESS = f"{FOYER_ROOTLESS}/.ssh/authorized_keys"
 
 #: Les deux modes du §42.2 bis. `None` quand Docker est absent ou vient de la
 #: distribution : on n'attribue pas un mode à ce qui ne tourne pas.
@@ -365,6 +375,24 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None,
     else:
         # Ni absentes ni bonnes : c'est exactement ce que `defect` nomme.
         etat_cles, detail_cles = DEFECT, "différentes de ce que le registre déclare"
+    # SPK-95 · §42.2 quater : en rootless, la SECONDE porte compte autant que la
+    # première. Ne juger que `/root` afficherait « clés conformes » pendant que
+    # `spark-docker` est fermé ou périmé — un agent enverrait alors sa session
+    # contre une porte que le produit vient de déclarer bonne. Le jugement ne
+    # peut que DESCENDRE ici : une seconde porte en ordre ne rachète pas une
+    # première qui ne l'est pas.
+    if brut.get("mode") == ROOTLESS and etat_cles == PRESENT:
+        seconde = brut.get("cles_rootless", "absent") or "absent"
+        if seconde == "absent":
+            etat_cles = DEFECT
+            detail_cles = (
+                f"posées pour root, absentes pour « {COMPTE_ROOTLESS} » : la "
+                "seconde porte de ce Spark rootless n'est ouverte à personne")
+        elif cles_voulues is not None and seconde != cles_voulues:
+            etat_cles = DEFECT
+            detail_cles = (
+                f"celles de « {COMPTE_ROOTLESS} » diffèrent de ce que le "
+                "registre déclare : une clé retirée peut y survivre")
     vus.append({"key": "cles", "label": LIBELLES["cles"],
                 "state": etat_cles, "detail": detail_cles})
 

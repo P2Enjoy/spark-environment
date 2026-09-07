@@ -39,7 +39,18 @@ export const TERMINAL_VIDE = {
   // confondent pas (§6.13, §14.6) : `null` = pas de mesure demandée,
   // `'en-cours'` = mesure lancée, objet = verdict rendu.
   diagnostic: null,
+  // SPK-95 · §42.2 quater, SPK-DS-21 : les PORTES de cette cellule, telles que
+  // le plan de contrôle les déclare. `null` = pas encore lues — distinct d'une
+  // liste à une seule entrée, qui est un fait (§14.6).
+  comptes: null,
+  compte: 'root',
+  // Le mode relevé, pour NOMMER l'absence de seconde porte (§14.5) : « amorcé
+  // en enraciné » et « mode jamais relevé » n'appellent pas le même geste.
+  modeDocker: null,
 };
+
+/** Le compte administratif, présélectionné partout (SPK-DS-21). */
+export const COMPTE_ADMIN = 'root';
 
 /**
  * Les deux chemins d'entrée, tels que l'écran les nomme (§37.2, §37.3).
@@ -207,9 +218,16 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
     ? ` <strong>« ${echapper(etat.session.container)} »</strong>
         <span class="technique">${echapper(etat.session.shell ?? '')}</span>`
     : '';
+  // SPK-DS-21 : le compte choisi reste VISIBLE pendant la session. Deux fenêtres
+  // ouvertes sur le même Spark par deux portes différentes sont indiscernables
+  // autrement, et l'une peut tout casser quand l'autre ne le peut pas.
+  const parQui = etat.session?.account
+    ? `<span class="badge badge--neutral"><span class="badge__point" aria-hidden="true"></span>${
+        echapper(etat.session.account)}</span>`
+    : '';
   const bandeau = `<p class="bandeau-terminal">
       <span class="badge badge--${chemin.token}"><span class="badge__point" aria-hidden="true"></span>${
-        echapper(chemin.pastille)}</span>
+        echapper(chemin.pastille)}</span>${parQui}
       ${chemin.nomme ? `<strong>${echapper(chemin.nomme)}</strong>` : ''}${dansConteneur}
       ${spark.protected
         ? '<span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>Spark protégé</span>'
@@ -251,6 +269,37 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
          Terminal de dépannage
        </button>`;
 
+  // SPK-95 · SPK-DS-21 : un sélecteur de compte n'apparaît QUE s'il y a un
+  // compte à choisir. Le §14.4 s'applique ici en absence, pas en désactivation :
+  // un menu à une seule entrée n'est pas un choix, c'est un obstacle de plus
+  // avant d'ouvrir un terminal. Chaque option DIT à quoi elle sert — « root ou
+  // spark-docker » seul ne renseigne personne.
+  const portes = Array.isArray(etat.comptes) ? etat.comptes : [];
+  const selecteurCompte = portes.length > 1
+    ? `<p class="formulaire__champ">
+         <label for="terminal-compte">Entrer en tant que</label>
+         <select id="terminal-compte" data-terminal="compte"
+                 ${etat.status === 'ouverture' ? 'disabled' : ''}>
+           ${portes.map((porte) => `
+             <option value="${echapper(porte.user)}"${
+               porte.user === (etat.compte ?? COMPTE_ADMIN) ? ' selected' : ''}>
+               ${echapper(porte.user)} — ${echapper(porte.role)}
+             </option>`).join('')}
+         </select>
+       </p>`
+    : '';
+
+  // §14.5 : l'absence de seconde porte se NOMME, au lieu de laisser un écran
+  // muet. Les deux causes n'appellent pas le même geste — l'une est un choix
+  // d'amorçage, l'autre un relevé qui n'a jamais eu lieu.
+  const porteUnique = Array.isArray(etat.comptes) && portes.length === 1
+    ? `<p class="note">${etat.modeDocker === 'enracine'
+        ? `Ce Spark est amorcé en mode <strong>enraciné</strong> : Docker
+           appartient à « root », et il n’y a qu’une porte.`
+        : `Le mode Docker de ce Spark n’a jamais été relevé. Amorcez-le pour
+           savoir s’il offre un second compte.`}</p>`
+    : '';
+
   const commandes = etat.status === 'ouvert'
     ? `<p class="formulaire__actions">
          <button type="button" class="bouton" data-terminal="fermer">Fermer la session</button>
@@ -261,6 +310,7 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
          </label>
        </p>`
     : `${confirmation}
+       ${selecteurCompte}${porteUnique}
        <p class="formulaire__actions">
          <button type="button" class="bouton bouton--primaire" data-terminal="ouvrir"
                  ${etat.status === 'ouverture' ? 'disabled' : ''}>

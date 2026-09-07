@@ -48,7 +48,7 @@ function fauxSsh() {
 }
 
 function pile({ tunnel, spark, chemin, motifDepannage,
-                conteneur, shell, ...options } = {}) {
+                conteneur, shell, compte, ...options } = {}) {
   const enfants = [];
   const spawnFn = (commande, args) => {
     const enfant = fauxSsh();
@@ -60,7 +60,7 @@ function pile({ tunnel, spark, chemin, motifDepannage,
   const manager = new SessionManager({ ptySpawn: spawnFn, ...options });
   const session = manager.ouvrir({
     tunnel: tunnel ?? { jumpArgs: () => ['-J', 'ubuntu@203.0.113.10:22'] },
-    spark: spark ?? SPARK, chemin, motifDepannage, conteneur, shell,
+    spark: spark ?? SPARK, chemin, motifDepannage, conteneur, shell, compte,
   });
   return { manager, session, enfant: enfants[0], enfants };
 }
@@ -120,10 +120,15 @@ test('ce que la session DÉCRIT ne porte aucun contenu', () => {
   // rouvrir la fuite : il est borné à un CHEMIN ABSOLU par le sondage, dont
   // `shell-conteneur.test.js` garde la règle. Ici, on éprouve qu'aucun contenu
   // de session n'y arrive.
+  // RÉVISÉE le 2026-09-07, SPK-95 : `account` s'ajoute (§37.4.9). C'est une
+  // MÉTADONNÉE du même genre que `spark` — par quelle PORTE l'on est entré —,
+  // et elle est bornée à deux noms par `compteValide`, donc aucun texte venu de
+  // la session ne peut s'y glisser. La liste reste exhaustive : c'est elle qui
+  // interdit qu'un champ libre y apparaisse un jour.
   assert.deepEqual(Object.keys(session.describe()).sort(),
-    ['closed', 'container', 'durationSeconds', 'forge', 'id', 'lastActivity',
-     'openedAt', 'path', 'rescueReason', 'reason', 'shell', 'spark', 'state',
-     'type'].sort());
+    ['account', 'closed', 'container', 'durationSeconds', 'forge', 'id',
+     'lastActivity', 'openedAt', 'path', 'rescueReason', 'reason', 'shell',
+     'spark', 'state', 'type'].sort());
   // Et le nouveau champ est BORNÉ : il ne prend que des motifs connus, jamais
   // un texte venu de la session. Sinon il rouvrirait exactement la fuite que ce
   // test existe pour fermer.
@@ -558,4 +563,61 @@ test('on n’entre PAS dans un conteneur sans shell sondé', () => {
 
 test('un chemin d’entrée INVENTÉ est refusé', () => {
   assert.throws(() => pile({ chemin: 'docker' }), /Chemin d'entrée inconnu/);
+});
+
+// --- SPK-95 : la seconde porte, et le compte de la session (§37.4.9) --------
+
+test('le terminal entre par le COMPTE demandé, pas par root en dur', () => {
+  // §42.2 quater : un agent dont le travail est de faire tourner la pile n'a
+  // rien à faire en root. `docker` répond sous ce compte sans incantation.
+  const { enfant } = pile({ compte: 'spark-docker' });
+  assert.equal(enfant.args.at(-1), 'spark-docker@10.77.0.16');
+});
+
+test('root reste le DÉFAUT quand rien n’est demandé', () => {
+  assert.equal(pile().enfant.args.at(-1), 'root@10.77.0.16');
+});
+
+test('un compte inconnu retombe sur root au lieu d’ouvrir n’importe quoi', () => {
+  // Le champ entre dans une ligne de commande : le seul traitement sûr d'un nom
+  // qu'on ne reconnaît pas est de ne pas l'écrire.
+  const { enfant, session } = pile({ compte: 'postgres; rm -rf /' });
+  assert.equal(enfant.args.at(-1), 'root@10.77.0.16');
+  assert.equal(session.compte, 'root');
+});
+
+test('le DÉPANNAGE reste root : il passe par incus, pas par un compte', () => {
+  // §37.3 : le chemin de dépannage donne un shell root DANS la cellule,
+  // précisément parce qu'il n'y a pas de `sshd`. Un compte de service n'y
+  // apporterait rien et casserait le seul recours quand tout est cassé.
+  const { session } = pile({
+    tunnel: { jumpArgs: () => [], forgeArgs: () => [] },
+    spark: { name: 'crm', ipv4_address: '10.77.0.16', incus_name: 'spark-crm' },
+    chemin: CHEMIN_DEPANNAGE, motifDepannage: SSHD_MUET, compte: 'spark-docker',
+  });
+  assert.equal(session.compte, 'root');
+});
+
+test('la sonde vise le compte QU’ON VA EMPLOYER, pas root en dur', async () => {
+  // §37.3.1 : la sonde emprunte EXACTEMENT le chemin du terminal. Viser root
+  // aurait conclu « sshd répond » depuis SA clé, puis la session aurait échoué
+  // sur l'autre porte sans que rien n'ait prévenu.
+  const vus = [];
+  const faux = (commande, args) => {
+    vus.push(args.at(-2));
+    const e = fauxSsh();
+    queueMicrotask(() => e.emit('exit', 0));
+    return e;
+  };
+  const tunnel = { jumpArgs: () => [] };
+  await sonderSshd({ tunnel, spark: SPARK, spawn: faux, compte: 'spark-docker' });
+  await sonderSshd({ tunnel, spark: SPARK, spawn: faux });
+  assert.deepEqual(vus, ['spark-docker@10.77.0.16', 'root@10.77.0.16']);
+});
+
+test('la session DIT par quelle porte elle est entrée', () => {
+  // SPK-DS-21 : deux fenêtres ouvertes sur le même Spark par deux portes
+  // différentes sont indiscernables autrement, et l'une peut tout casser.
+  assert.equal(pile({ compte: 'spark-docker' }).session.describe().account,
+    'spark-docker');
 });

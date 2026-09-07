@@ -5622,7 +5622,7 @@ comprenne pas qu'il doit lire le briefing.
   `@verifies` posés.
 
 
-### [ ] SPK-95 · La seconde porte : entrer dans un Spark rootless en `spark-docker`
+### [~] SPK-95 · La seconde porte : entrer dans un Spark rootless en `spark-docker`
 
 Demandée par le responsable le 2026-09-07 : « le terminal intégré doit laisser
 choisir si entrer en root ou en spark-docker, sinon en root seulement ; et le
@@ -5660,6 +5660,14 @@ pas casser la cellule.
   par commande.
 - Dépend de : SPK-94, dont elle réutilise le uid et le gid relevés, et SPK-43
   (le terminal et son sondage).
+- **État au 2026-09-07 — `[~]`, et ce qui manque est nommé.** Le serveur, l'hôte
+  console et l'écran sont écrits et éprouvés : clés sur les deux comptes, relevé
+  qui juge les deux portes, sélecteur conforme à SPK-DS-21, sonde et audit qui
+  nomment le compte, deux commandes de rebond au dossier. Restent dus : le
+  parcours E2E, les captures observées, et la MESURE de `StrictModes` sur une
+  cellule réelle — `sshd` est tatillon sur le propriétaire et les droits de
+  `/home/spark-docker` et de son `.ssh`, et son refus ne s'explique pas de
+  lui-même.
 - DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un
   Spark rootless → Terminal —, le sélecteur propose les deux comptes, la session
   ouverte en `spark-docker` répond à `docker ps` **sans incantation**, et celle

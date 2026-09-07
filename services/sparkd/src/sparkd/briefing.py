@@ -252,7 +252,7 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
     """Construit l'unique modèle public, sans aucune valeur d'environnement."""
     variables = sorted(entry.name for entry in environment if not entry.is_secret)
     secrets = sorted(entry.name for entry in environment if entry.is_secret)
-    return {
+    modele_rendu: dict[str, Any] = {
         "format": FORMAT,
         "written_at": written_at or _now(),
         "written_by": WRITER,
@@ -292,6 +292,12 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
         "docker": _docker(bootstrap),
         "pitfalls": list(PIEGES),
     }
+    # SPK-95 · §42.2 quater : les PORTES ouvertes sur cette cellule. La règle vit
+    # ici et non dans la console : « root toujours, spark-docker si le mode relevé
+    # est rootless » est une décision du plan de contrôle, et la recopier à
+    # l'écran ferait deux vérités qui divergeraient (§44.8).
+    modele_rendu["access"] = {"accounts": comptes_du_spark(modele_rendu)}
+    return modele_rendu
 
 
 def _lignes_systeme(model: dict[str, Any]) -> list[str]:
@@ -377,6 +383,11 @@ def markdown(model: dict[str, Any]) -> str:
             "- Mode : rootless",
             f"- Compte : {docker['user']}",
             f"- Socket : {docker['socket']} (<uid> = {docker['socket_uid_source']})",
+            # SPK-95 · §42.2 quater : depuis l'intérieur aussi, on doit savoir
+            # qu'il existe une seconde porte — sinon on cherche à faire tourner
+            # la pile en root, où Docker ne répond pas.
+            f"- Ce compte accepte SSH avec les mêmes clés que {COMPTE_CELLULE} : "
+            "entrez par lui pour lancer la pile, par root pour administrer.",
         ])
     else:
         lines.extend([
@@ -438,7 +449,7 @@ def _debit(valeur: int | None) -> str:
 
 
 def commande_ssh(model: dict[str, Any], jump: str | None, *,
-                 direct: bool = False) -> str | None:
+                 direct: bool = False, compte: str = COMPTE_CELLULE) -> str | None:
     """La ligne de commande qui entre dans la cellule, ou `None` (§44.9.2).
 
     @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9.2, §17.4
@@ -463,10 +474,35 @@ def commande_ssh(model: dict[str, Any], jump: str | None, *,
     if not adresse:
         return None
     if jump and REBOND_VALIDE.match(jump):
-        return f"ssh -J {jump} {COMPTE_CELLULE}@{adresse}"
+        return f"ssh -J {jump} {compte}@{adresse}"
     if direct and not jump:
-        return f"ssh {COMPTE_CELLULE}@{adresse}"
+        return f"ssh {compte}@{adresse}"
     return None
+
+
+def comptes_du_spark(model: dict[str, Any]) -> list[dict[str, str]]:
+    """Les portes ouvertes sur cette cellule, et ce que chacune sert (§42.2 quater).
+
+    @spec docs/BACKLOG.md#SPK-95 · docs/DAT.md §42.2 quater, §44.10
+
+    `root` toujours : c'est la porte administrative, et la seule qui répare une
+    cellule dont le reste est cassé. `spark-docker` **seulement** si le relevé
+    dit `rootless` — l'annoncer sur un Spark enraciné enverrait frapper à une
+    porte qui n'existe pas, et l'annoncer parce qu'un compte existe
+    contredirait le §42.2 bis, où le mode est une observation.
+    """
+    portes = [{
+        "user": COMPTE_CELLULE,
+        "role": "administrer la cellule : installer des paquets, écrire dans "
+                "/srv, lire ce dossier, réparer un amorçage",
+    }]
+    if model["docker"]["mode"] == "rootless":
+        portes.append({
+            "user": COMPTE_ROOTLESS,
+            "role": "faire tourner la pile : `docker` y répond sans incantation, "
+                    "et ce compte ne peut pas casser la cellule",
+        })
+    return portes
 
 
 def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
@@ -487,6 +523,7 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
     docker = model["docker"]
     ressources = model["resources"]
     bootstrap = model["bootstrap"]
+    portes = comptes_du_spark(model)
     commande = commande_ssh(model, jump, direct=direct)
 
     lignes = [
@@ -503,7 +540,15 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "",
     ]
     if commande:
-        lignes.extend(["```sh", commande, "```", ""])
+        # SPK-95 · §42.2 quater : une porte par compte, et chacune DIT à quoi
+        # elle sert. Une seule ligne `ssh root@…` laissait deviner ; deux lignes
+        # nommées ne laissent rien à deviner.
+        for porte in portes:
+            ligne = commande_ssh(model, jump, direct=direct, compte=porte["user"])
+            if not ligne:
+                continue
+            lignes.extend([f"**{porte['user']}** — {porte['role']} :", "",
+                           "```sh", ligne, "```", ""])
     else:
         lignes.extend([
             "La commande complète n'a pas pu être composée : la console n'a pas "
@@ -516,7 +561,8 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         lignes.extend(["Fragment `ssh_config` équivalent :", "", "```",
                        ssh_config.rstrip("\n"), "```", ""])
     lignes.extend([
-        f"- Compte dans la cellule : `{COMPTE_CELLULE}`.",
+        "- Comptes dans la cellule : " + ", ".join(
+            f"`{porte['user']}`" for porte in portes) + ".",
         f"- Adresse privée : `{spark['private_ipv4'] or 'aucune'}` — joignable "
         "**uniquement** depuis la Forge, jamais depuis Internet.",
         "- **Le rebond est obligatoire** : un Spark n'expose jamais son port 22 sur "

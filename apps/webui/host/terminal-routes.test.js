@@ -94,9 +94,34 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
            fermer, enfants, declarees, sondages };
 }
 
-const ouvrir = (base, path) => fetch(`${base}/api/terminal`, {
+const ouvrir = (base, path, account) => fetch(`${base}/api/terminal`, {
   method: 'POST',
-  body: JSON.stringify({ server: 'prod', spark: 'crm', ...(path ? { path } : {}) }) });
+  body: JSON.stringify({ server: 'prod', spark: 'crm', ...(path ? { path } : {}),
+                         ...(account ? { account } : {}) }) });
+
+// --- SPK-95 : la seconde porte, jusqu'au journal (§37.4.9) -----------------
+
+test('ouvrir par la SECONDE porte entre sous ce compte, et le journal le nomme', async () => {
+  const { base, fermer, enfants, declarees } = await pile();
+  const r = await ouvrir(base, null, 'spark-docker');
+  assert.equal(r.status, 201);
+  assert.equal(enfants[0].args.at(-1), 'spark-docker@10.77.0.16');
+  const ouverture = declarees.find((d) => d.action === 'spark.terminal_open');
+  assert.deepEqual(ouverture.payload, { path: 'ssh', account: 'spark-docker' });
+  assert.match(ouverture.message, /en spark-docker\./);
+  fermer();
+});
+
+test('un compte INCONNU n’ouvre rien d’arbitraire : il retombe sur root', async () => {
+  // Le champ vient du navigateur et entre dans une ligne de commande. Le seul
+  // traitement sûr d'un nom qu'on ne reconnaît pas est de ne pas l'écrire —
+  // et retomber sur root plutôt que refuser, car un terminal administratif ne
+  // doit pas devenir inatteignable à cause d'une valeur inconnue.
+  const { base, fermer, enfants } = await pile();
+  assert.equal((await ouvrir(base, null, 'postgres')).status, 201);
+  assert.equal(enfants[0].args.at(-1), 'root@10.77.0.16');
+  fermer();
+});
 
 test('ouvrir lance ssh vers le Spark et DÉCLARE l’ouverture au journal', async () => {
   const { base, fermer, enfants, declarees } = await pile();
@@ -113,7 +138,12 @@ test('ouvrir lance ssh vers le Spark et DÉCLARE l’ouverture au journal', asyn
 
   const ouverture = declarees.find((d) => d.action === 'spark.terminal_open');
   assert.ok(ouverture, 'l’ouverture doit être déclarée');
-  assert.deepEqual(ouverture.payload, { path: 'ssh' });
+  // SPK-95 · §37.4.9 : le COMPTE entre en charge. Sans lui, le journal ne
+  // distinguerait plus une session administrative d'une session applicative —
+  // et c'est ce qu'on cherchera le jour où une cellule aura changé sans qu'on
+  // sache par où.
+  assert.deepEqual(ouverture.payload, { path: 'ssh', account: 'root' });
+  assert.match(ouverture.message, /en root\./);
   fermer();
 });
 
@@ -419,6 +449,8 @@ test('le dépannage écrit une action DISTINCTE, qui NOMME le pouvoir employé',
   const entree = declarees.find((d) => d.action === 'spark.rescue_exec');
   assert.ok(entree, 'l’action distincte est écrite');
   assert.match(entree.message, /exécution en root dans la cellule, depuis le plan de contrôle/);
+  // SPK-95 · §37.4.9 : le dépannage ne porte PAS de compte. Il passe par
+  // `incus exec`, et son message nomme déjà l'exécution en root.
   assert.deepEqual(entree.payload, { path: 'rescue', reason: 'sshd_muet' });
   fermer();
 });

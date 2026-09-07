@@ -753,11 +753,19 @@ def create_app(config: Config) -> FastAPI:
             return service.State.STOPPED
         return None
 
-    def _apply_keys(connection, spark: dict) -> None:
+    def _apply_keys(connection, spark: dict, rootless: bool | None = None) -> None:
         """Réécrit `authorized_keys` dans le Spark depuis l'état voulu.
 
         Régénéré en entier, jamais complété : c'est ce qui fait qu'un retrait
-        retire réellement (docs/DAT.md §17.1).
+        retire réellement (docs/DAT.md §17.1). Avec la seconde porte du §42.2
+        quater, cet invariant vaut des DEUX côtés — une clé révoquée qui
+        survivrait dans le fichier qu'on oublie est le défaut même que le §17.1
+        existe pour empêcher.
+
+        `rootless` force la décision au lieu de la lire dans le dernier relevé.
+        L'amorçage en a besoin : il pose la seconde porte dans le même geste que
+        celui qui vient de créer le compte, donc AVANT que l'observation ne soit
+        écrite. Partout ailleurs, `None` laisse le relevé décider.
         """
         if not spark.get("incus_name"):
             return
@@ -765,6 +773,20 @@ def create_app(config: Config) -> FastAPI:
         app.state.incus.push_file(
             spark["incus_name"], sshkeys.AUTHORIZED_KEYS, contenu, mode="0600"
         )
+        # SPK-95 · §42.2 quater : la SECONDE porte, et seulement quand le relevé
+        # dit rootless. Le MÊME contenu, régénéré en entier des deux côtés — une
+        # clé révoquée qui survivrait dans le fichier qu'on oublie est
+        # exactement le défaut que le §17.1 existe pour empêcher.
+        #
+        # Root reste la porte administrative : ce second fichier s'ajoute, il ne
+        # remplace rien. Il reste écrit par root, de sorte que le compte de
+        # service ne puisse pas se réécrire ses propres accès.
+        seconde_porte = (rootless if rootless is not None
+                         else _identite_rootless(connection, spark) is not None)
+        if seconde_porte:
+            app.state.incus.push_file(
+                spark["incus_name"], bootstrap_service.AUTHORIZED_KEYS_ROOTLESS,
+                contenu, mode="0600")
 
     def _identite_rootless(connection, spark: dict) -> dict[str, int] | None:
         """L'identité du compte rootless de CE Spark, ou `None` (SPK-94, §42.2 ter).
@@ -2083,6 +2105,17 @@ def create_app(config: Config) -> FastAPI:
                         raise bootstrap_service.BootstrapFailed(
                             bootstrap_service.echec("rootless", code, err))
                     actions.append("rootless")
+                # §42.2 quater : la SECONDE porte ne peut s'écrire qu'une fois
+                # le compte créé, donc APRÈS la pose de Docker rootless — jamais
+                # dans la boucle des manques ci-dessus, qui s'exécute quand le
+                # foyer n'existe pas encore. Y poser un `/home/spark-docker/.ssh`
+                # avant `useradd -m` laisserait d'ailleurs ce foyer à root.
+                #
+                # La condition porte sur le travail RÉEL : sur une cellule déjà
+                # complète, rien n'a été installé et il n'y a rien à reposer. Un
+                # bandeau tu ne compte pas comme une installation.
+                if mode == bootstrap_service.ROOTLESS and (a_faire or reprise_rootless):
+                    _apply_keys(connection, spark, rootless=True)
                 # §44.3, §44.8 : le briefing ne devine pas les versions depuis
                 # un vieux texte. Le relevé initial suffit si l'amorçage n'a
                 # rien fait; après une écriture, on le rejoue pour dater l'état

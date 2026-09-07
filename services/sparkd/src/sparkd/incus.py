@@ -838,7 +838,10 @@ class FakeIncus:
         if path.endswith("/authorized_keys"):
             import hashlib
 
-            self.created[name].setdefault("runtime", {})["cles"] = (
+            # SPK-95 · §42.2 quater : deux portes, deux empreintes. Les confondre
+            # ferait passer une seconde porte vide pour une premiere en ordre.
+            cle = "cles_rootless" if "/home/" in path else "cles"
+            self.created[name].setdefault("runtime", {})[cle] = (
                 hashlib.sha256(content.encode("utf-8")).hexdigest()[:64]
             )
         self._persist()

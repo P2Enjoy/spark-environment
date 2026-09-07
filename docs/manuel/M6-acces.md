@@ -302,8 +302,26 @@ ssh mon-spark
 cd /srv && docker compose up -d
 ```
 
-Pour un Spark rootless, remplacez la dernière commande par le même contexte que
-celui indiqué dans le briefing :
+**Sur un Spark rootless, entrez par le second compte** — c'est la voie simple, et
+`docker` y répond sans rien de particulier :
+
+```
+ssh spark-docker@mon-spark
+cd /srv && docker compose up -d
+```
+
+Ce compte reçoit **les mêmes clés** que `root` : ce que vous accordez au Spark
+ouvre les deux portes. Il ne sert qu'à faire tourner la pile — il ne peut pas
+installer de paquets ni modifier la cellule, et c'est voulu : un agent qui lance
+votre pile n'a aucune raison d'avoir ces pouvoirs. Pour administrer, entrez en
+`root` comme avant.
+
+Le terminal de la console propose le même choix : un sélecteur *Entrer en tant
+que* apparaît sur les Sparks rootless, `root` présélectionné. Sur un Spark
+enraciné il n'y a rien à choisir, et l'écran le dit.
+
+Si vous devez rester en `root` — un script existant, une session déjà ouverte —,
+la voie longue reste valable, et c'est celle que le briefing indique :
 
 ```
 uid=$(id -u spark-docker)

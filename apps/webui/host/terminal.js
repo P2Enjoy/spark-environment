@@ -163,7 +163,26 @@ export function depannageOuvert(spark, sondage = null) {
  * Le verdict passe par `classerEchecSsh` : un refus de clé n'est pas un `sshd`
  * muet, et cette fonction ne tranche pas elle-même.
  */
+/**
+ * Les deux portes d'une cellule (§42.2 quater).
+ *
+ * `root` est le DÉFAUT partout : c'est la porte administrative, et la seule qui
+ * répare une cellule dont le reste est cassé. `spark-docker` n'est offert que
+ * sur un Spark dont le relevé dit `rootless` — l'offrir parce qu'un compte
+ * existe contredirait le §42.2 bis, où le mode est une observation.
+ */
+export const COMPTE_ADMIN = 'root';
+export const COMPTE_PILE = 'spark-docker';
+export const COMPTES = [COMPTE_ADMIN, COMPTE_PILE];
+
+/** Le compte demandé, ou le défaut. Jamais un nom arbitraire : il entre dans
+ *  une ligne de commande. */
+export function compteValide(demande) {
+  return COMPTES.includes(demande) ? demande : COMPTE_ADMIN;
+}
+
 export function sonderSshd({ tunnel, spark, spawn: spawnFn = spawn,
+                             compte = COMPTE_ADMIN,
                              timeoutSecondes = 5 } = {}) {
   return new Promise((resoudre) => {
     const enfant = spawnFn('ssh', [
@@ -171,7 +190,11 @@ export function sonderSshd({ tunnel, spark, spawn: spawnFn = spawn,
       '-o', 'StrictHostKeyChecking=accept-new',
       '-o', `ConnectTimeout=${timeoutSecondes}`,
       ...tunnel.jumpArgs(),
-      `root@${spark.ipv4_address}`,
+      // §37.4.9 : la sonde emprunte EXACTEMENT le chemin du terminal, compte
+      // compris. Viser `root` en dur aurait conclu « sshd répond » depuis la
+      // clé de root, puis la session aurait échoué sur l'autre porte sans que
+      // rien n'ait prévenu.
+      `${compteValide(compte)}@${spark.ipv4_address}`,
       'true',
     ], { stdio: ['ignore', 'ignore', 'pipe'] });
     let erreurs = '';
@@ -195,7 +218,7 @@ export class Session {
 
   constructor({ tunnel, spark, ptySpawn = spawnPty, commande = null,
                 chemin = CHEMIN_SSH, motifDepannage = null,
-                conteneur = null, shell = null,
+                conteneur = null, shell = null, compte = COMPTE_ADMIN,
                 inactiviteMs = INACTIVITE_MS, preavisMs = PREAVIS_MS,
                 maintenant = () => Date.now(), notifierFermeture = null } = {}) {
     if (!tunnel) throw new TerminalError('Aucun tunnel : le Spark est injoignable.');
@@ -229,6 +252,11 @@ export class Session {
         'Un terminal de conteneur exige le conteneur ET son shell sondé.');
     }
     this.chemin = chemin;
+    // §37.4.9 : le compte ne vaut que pour le terminal du SPARK. Le dépannage
+    // passe par `incus exec` et donne un shell root dans la cellule ; le
+    // terminal de conteneur enveloppe ses commandes dans `runuser`, ce qui
+    // exige root. Les laisser choisir aurait cassé les deux.
+    this.compte = chemin === CHEMIN_SSH ? compteValide(compte) : COMPTE_ADMIN;
     this.motifDepannage = chemin === CHEMIN_DEPANNAGE ? motifDepannage : null;
     this.conteneur = chemin === CHEMIN_CONTENEUR ? conteneur : null;
     this.shell = chemin === CHEMIN_CONTENEUR ? shell : null;
@@ -259,7 +287,7 @@ export class Session {
       // Le rebond vient du TUNNEL : c'est lui qui sait comment on atteint sa
       // Forge, et le dupliquer ici ferait diverger les deux (§17.4).
       ...this.tunnel.jumpArgs(),
-      `root@${this.spark.ipv4_address}`,
+      `${this.compte}@${this.spark.ipv4_address}`,
     ];
   }
 
@@ -459,6 +487,11 @@ export class Session {
       // fait tenir la bannière toute la session, et c'est lui que le journal
       // reçoit — un « ssh » écrit en dur mentirait sur les deux.
       path: this.chemin,
+      // §37.4.9 : par quelle PORTE la session est entrée. La bannière doit le
+      // tenir toute la session — deux fenêtres ouvertes sur le même Spark par
+      // deux comptes différents sont indiscernables autrement, et l'une peut
+      // tout casser quand l'autre ne le peut pas.
+      account: this.compte,
       rescueReason: this.motifDepannage,
       // §37.4.7 : la session dit DANS QUOI elle est entrée. Sans cela, l'écran
       // ne saurait pas distinguer un shell du Spark d'un shell de conteneur, et
@@ -550,10 +583,10 @@ export class SessionManager {
    * court (un `sshd` muet, par exemple) n'écrive sa fermeture.
    */
   preparer({ tunnel, spark, chemin = CHEMIN_SSH, motifDepannage = null,
-             conteneur = null, shell = null }) {
+             conteneur = null, shell = null, compte = COMPTE_ADMIN }) {
     const session = new Session({
       tunnel, spark, ptySpawn: this.ptySpawn, commande: commandePour(this.commande, spark, chemin),
-      chemin, motifDepannage, conteneur, shell,
+      chemin, motifDepannage, conteneur, shell, compte,
       inactiviteMs: this.inactiviteMs,
       preavisMs: this.preavisMs, maintenant: this.maintenant,
       notifierFermeture: (fermee) => this.#sessionFermee(fermee),

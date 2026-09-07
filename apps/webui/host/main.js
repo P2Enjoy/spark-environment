@@ -51,7 +51,7 @@ import { inventorier, nomsARapprocher, refusDeSuppression, fqdn,
 import { catalogue, composer, adressePublique, ValeurManquante } from './recettes.js';
 import { SessionManager, TerminalError,
          CHEMIN_SSH, CHEMIN_DEPANNAGE, CHEMIN_CONTENEUR,
-         depannageOuvert, sonderSshd } from './terminal.js';
+         depannageOuvert, sonderSshd, compteValide } from './terminal.js';
 import { runDiagnostic as diagnostiquerForge, ForgeDiagnosticError } from './forge-diagnostic.js';
 import { createInstallPlan, ForgeInstallError } from './forge-install.js';
 import { ForgeInstallManager, ForgeInstallRunError }
@@ -237,7 +237,7 @@ export function createConsoleHost(options = {}) {
    * une panne d'exploitation.
    */
   async function declarerAudit(tunnel, action, {
-    spark, sparkId = spark, path, reason, duration_seconds,
+    spark, sparkId = spark, path, reason, duration_seconds, account,
   }) {
     if (!tunnel?.localPort) return false;
     try {
@@ -248,7 +248,12 @@ export function createConsoleHost(options = {}) {
         body: JSON.stringify({
           action, result: 'ok', target_type: 'spark', target_id: sparkId,
           message: action === 'spark.terminal_open'
-            ? `Session de terminal ouverte sur « ${spark} » par ${path}.`
+            // §37.4.9 : le COMPTE, sans quoi le journal ne distingue plus une
+            // session administrative d'une session applicative — et c'est
+            // justement ce qu'on cherchera le jour où une cellule aura changé
+            // sans qu'on sache par où.
+            ? `Session de terminal ouverte sur « ${spark} » par ${path}`
+              + `${account ? `, en ${account}` : ''}.`
             // §37.3 : le message NOMME le pouvoir employé, comme la
             // confirmation le fait à l'écran. Un « ouverture de dépannage »
             // laisserait croire à un mode dégradé anodin.
@@ -257,7 +262,8 @@ export function createConsoleHost(options = {}) {
                 + `cellule, depuis le plan de contrôle (${reason}).`
               : `Session de terminal fermée sur « ${spark} » après `
                 + `${duration_seconds} s (${reason}).`,
-          payload: { path, ...(reason ? { reason } : {}),
+          payload: { path, ...(account ? { account } : {}),
+                     ...(reason ? { reason } : {}),
                      ...(duration_seconds == null ? {} : { duration_seconds }) },
         }),
       });
@@ -403,6 +409,9 @@ export function createConsoleHost(options = {}) {
     }
     return declarerAudit(tunnel, 'spark.terminal_close', {
       spark: session.spark.name, path: session.chemin,
+      // §37.4.9 : la fermeture nomme la même porte que l'ouverture, sinon un
+      // relevé du journal ne pourrait pas apparier les deux.
+      account: session.chemin === CHEMIN_SSH ? session.compte : undefined,
       sparkId: session.spark.id,
       reason: session.motif, duration_seconds: session.dureeSecondes() });
   }
@@ -1592,7 +1601,12 @@ export function createConsoleHost(options = {}) {
         }
         motifDepannage = verdict.motif;
       }
-      const session = terminaux.preparer({ tunnel, spark: decrit, chemin, motifDepannage });
+      // §37.4.9 : la porte est un CHOIX de l'appelant, borné à deux noms.
+      // `compteValide` retombe sur root plutôt que de refuser : une valeur
+      // inconnue ne doit pas empêcher d'ouvrir un terminal administratif.
+      const compte = compteValide(corps?.account);
+      const session = terminaux.preparer({
+        tunnel, spark: decrit, chemin, motifDepannage, compte });
       // §37.4.5 : on DÉCLARE l'ouverture. Si `sparkd` est injoignable, la
       // session s'ouvre quand même — refuser un terminal parce que le journal
       // est indisponible transformerait une panne de traçabilité en panne
@@ -1603,7 +1617,12 @@ export function createConsoleHost(options = {}) {
       await declarerAudit(tunnel,
         chemin === CHEMIN_DEPANNAGE ? 'spark.rescue_exec' : 'spark.terminal_open',
         { spark: decrit.name, sparkId: decrit.id,
-          path: chemin, reason: motifDepannage ?? undefined });
+          path: chemin,
+          // §37.4.9 : le compte ne voyage QUE sur le chemin SSH. Le dépannage
+          // passe par `incus exec` et son message nomme déjà l'exécution en
+          // root ; l'y répéter en charge n'apprendrait rien.
+          account: chemin === CHEMIN_SSH ? session.compte : undefined,
+          reason: motifDepannage ?? undefined });
       session.demarrer();
       return { status: 201, body: session.describe() };
     },
