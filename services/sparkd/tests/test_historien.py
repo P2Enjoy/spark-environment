@@ -343,6 +343,24 @@ def test_l_agregat_SOMME_et_dit_combien_de_sparks_il_somme(db):
     assert [p["cpu"] for p in total] == [0.4, 1.4]
 
 
+def test_un_spark_ARRETE_ne_compte_PAS_parmi_ceux_que_la_somme_somme(db):
+    """§52.7 : `sparks` doit EXPLIQUER la marche, donc ne compter que ceux qui
+    ajoutent quelque chose. Un Spark arrete a bien une ligne — sans quoi son
+    arret serait indiscernable d'une panne de la supervision (§52.4) — mais il
+    n'ajoute rien : le compter ferait annoncer « somme de 8 Sparks » sous une
+    courbe qui n'en somme que quatre."""
+    marche = _poser(db, "marche", "running", "marche")
+    dort = _poser(db, "dort", "stopped", "dort")
+    _remplir(db, marche, [0.4])
+    _remplir(db, dort, [None])
+
+    seul = historian.agregat(db, T0, pas=15.0, points=1)[0]
+
+    assert seul["sparks"] == 1, "un seul Spark a contribue a la somme"
+    assert seul["samples"] == 2, "mais DEUX releves ont bien ete pris"
+    assert seul["cpu"] == 0.4
+
+
 def test_un_seau_sans_aucun_spark_reste_null_dans_l_agregat(db):
     _poser(db, "un", "running", "un")
     total = historian.agregat(db, T0, pas=15.0, points=3)

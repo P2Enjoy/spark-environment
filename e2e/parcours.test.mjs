@@ -4351,3 +4351,162 @@ test('un Spark jamais amorcé donne quand même son dossier, et le DIT', async (
     assert.match(texte, /Aucune clé n'est autorisée sur ce Spark/);
   });
 });
+
+/* ------------------------------------------------ supervision continue (SPK-93) */
+
+/** Va sur « Forge → Supervision » en CLIQUANT, comme un exploitant (§29.3). */
+async function ouvrirSupervision() {
+  await accueil();
+  await page.click('a.destination[href="#/forge"]');
+  await page.waitForSelector('.onglet[href="#/forge"]', { timeout: 10000 });
+  await page.click('.onglet[href="#/forge/supervision"]');
+  await page.waitForSelector('.onglet[href="#/forge/supervision"][aria-current="page"]',
+                             { timeout: 10000 });
+  await page.waitForSelector('.graphique', { timeout: 15000 });
+}
+
+test('la Forge trace ses quatre ressources, avec leur référence et leur pas', async () => {
+  await parcours('supervision-forge', async () => {
+    await ouvrirSupervision();
+
+    // Les quatre ressources demandées, chacune avec sa courbe.
+    for (const titre of ['Processeur', 'Mémoire', 'Réseau entrant', 'Disque']) {
+      assert.ok(await page.locator(`.graphique__titre:has-text("${titre}")`).count(),
+                `« ${titre} » manque à l’écran de supervision`);
+    }
+    assert.ok(await page.locator('.graphique__trace').count() > 0,
+              'aucune courbe n’est tracée alors que le seed a produit un historique');
+
+    // §52.6 : le pas de seau est ÉCRIT. Une valeur agrégée sans son pas n'est
+    // pas interprétable.
+    const entete = await page.textContent('.principal');
+    assert.match(entete, /un point toutes les \d+ s/);
+    assert.match(entete, /Dernier relevé/);
+
+    // §52.8 : chaque courbe porte sa ligne de référence, NOMMÉE avec sa valeur.
+    assert.match(entete, /Pool allouable : [\d ,]+ CPU/);
+
+    // §52.7 : la somme dit combien de Sparks elle somme. Deux formes, selon
+    // que ce nombre bouge ou non sur la periode — et c'est justement quand il
+    // bouge que la phrase compte, puisqu'elle explique alors une marche que
+    // rien n'a produite dans la machine.
+    assert.match(entete,
+      /(Somme de \d+ Spark|Le nombre de Sparks mesurés varie sur la période)/);
+
+    // §52.11 : l'écran de Forge a pour sujet la Forge — aucun geste sur un
+    // Spark n'y est offert, la répartition y RAMÈNE.
+    const repartition = page.locator('section:has(#titre-repartition)');
+    assert.equal(await repartition.locator('button').count(), 0,
+                 'l’écran de Forge ne porte aucun geste sur un Spark (§52.11)');
+    assert.ok(await repartition.locator('a[href$="/mesures"]').count() > 0);
+  });
+});
+
+test('changer de fenêtre change le pas, et l’adresse le retient', async () => {
+  await parcours('supervision-fenetre', async () => {
+    await ouvrirSupervision();
+    await page.click('.fenetre:has-text("24 h")');
+    // On attend la NOUVELLE réponse, pas seulement le nouveau libellé : c'est
+    // la distinction que ce parcours a fait apparaître le 2026-09-07 — l'onglet
+    // « 24 h » s'allumait au-dessus du pas de la fenêtre précédente.
+    await page.waitForFunction(
+      () => document.querySelector('.principal')?.innerText.includes('24h — un point'),
+      null, { timeout: 15000 });
+
+    const texte = await page.textContent('.principal');
+    assert.match(texte, /24h — un point toutes les \d+ min/);
+    // §52.11 : la fenêtre est une DESTINATION. Un rechargement doit rendre la
+    // même période, sans quoi ce serait un réglage volatil.
+    assert.ok(page.url().includes('fenetre=24h'), `adresse : ${page.url()}`);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('.fenetre--courante:has-text("24 h")', { timeout: 15000 });
+  });
+});
+
+test('la répartition ramène à la fenêtre du Spark, où ses courbes sont les SIENNES',
+     async () => {
+  await parcours('supervision-vers-spark', async () => {
+    await ouvrirSupervision();
+    await page.click('section:has(#titre-repartition) a[href$="/mesures"]:has-text("crm-production")');
+    await page.waitForSelector('.onglet[href$="/mesures"][aria-current="page"]',
+                               { timeout: 15000 });
+    await page.waitForSelector('.graphique__trace', { timeout: 15000 });
+
+    const texte = await page.textContent('.principal');
+    assert.match(texte, /Mesures — crm-production/);
+    // §20.3 : le réseau se compare au PLAFOND, jamais à la réservation.
+    assert.match(texte, /Plafond : [\d ,]+ Mbit\/s/);
+    // SPK-DS-02 : la réservation, et le burst nommé comme normal.
+    assert.match(texte, /Réservation : [\d,]+ CPU/);
+    assert.match(texte, /c’est le produit qui fonctionne/);
+
+    // Les mesures sont bien celles de CE Spark : le plafond publié est celui du
+    // registre, pas celui d'un autre.
+    const { corps } = await pile.lireSparkd('/v1/sparks/crm-production');
+    const attendu = Math.round(corps.network_burst_bps / 1e6);
+    assert.ok(texte.includes(`Plafond : ${attendu} Mbit/s`),
+              `le plafond affiché doit être celui du registre (${attendu} Mbit/s)`);
+  });
+});
+
+test('un Spark ARRÊTÉ nomme l’arrêt, et ne trace pas une ligne à zéro', async () => {
+  await parcours('supervision-spark-arrete', async () => {
+    // §52.4 · SPK-DS-03 : « arrêté » et « personne n'a relevé » font le même
+    // trou à l'écran, et ne disent pas du tout la même chose. Zéro dirait qu'il
+    // ne consommait rien — une mesure que personne n'a faite.
+    //
+    // « orphelin » et non « boutique » : le parcours du rootless DÉMARRE
+    // « boutique » plus haut dans la campagne, et ce parcours passait seul puis
+    // rougissait en série. C'est la signature d'un parcours qui dépend de
+    // l'état laissé par un autre, et le §29 la proscrit. « orphelin » est
+    // arrêté au seed et aucun parcours ne le démarre.
+    await ouvrir('orphelin', 'mesures');
+    await page.waitForSelector('.graphique', { timeout: 15000 });
+
+    const texte = await page.textContent('.principal');
+    assert.match(texte, /Arrêté — aucune mesure d’exécution/);
+    assert.equal(await page.locator('.graphique__trace').count(), 0,
+                 'un Spark arrêté ne doit porter AUCUNE courbe');
+    // §14.6 : et surtout pas un zéro, qui serait une mesure affirmée.
+    assert.doesNotMatch(texte, /0,00 CPU/);
+  });
+});
+
+test('la lecture d’un seau se fait AUSSI au clavier, sur les quatre courbes', async () => {
+  await parcours('supervision-clavier', async () => {
+    // §9.1 · SPK-DS-20 : une info-bulle flottante ne se vise pas au clavier.
+    await ouvrirSupervision();
+    await page.locator('.graphique__cadre').first().focus();
+    await page.keyboard.press('ArrowLeft');
+    // Un `<line>` SVG n'a pas de boîte : Playwright ne le dit jamais « visible »,
+    // et `waitForSelector` y expire alors qu'il en trouve quatre.
+    await page.waitForFunction(
+      () => document.querySelectorAll('.graphique__curseur').length > 0,
+      null, { timeout: 10000 });
+
+    // Le curseur est PARTAGÉ : on compare quatre grandeurs au même instant.
+    const curseurs = await page.locator('.graphique__curseur').count();
+    const cadres = await page.locator('.graphique__cadre').count();
+    assert.equal(curseurs, cadres,
+                 'le curseur de lecture doit valoir pour les quatre courbes');
+
+    // §9.2 : la donnée est rendue AUSSI sous une forme qu'un lecteur d'écran
+    // parcourt, et le SVG reste décoratif.
+    assert.ok(await page.locator('.graphique__donnees table').count() > 0);
+    assert.equal(await page.locator('.graphique__svg[aria-hidden="true"]').count(), cadres);
+  });
+});
+
+test('la Forge REFUSE une fenêtre qu’elle n’offre pas, et le refus la nomme', async () => {
+  await parcours('supervision-fenetre-refusee', async () => {
+    // §52.6 : la borne est appliquée au SERVEUR, pas seulement à l'écran. On la
+    // lit directement — c'est un contrôle de bord, que l'interface ne propose
+    // pas et ne doit pas proposer (CLAUDE.md §10).
+    const refus = await pile.lireSparkd('/v1/forge/metrics?window=1an');
+    assert.equal(refus.status, 422);
+    assert.equal(refus.corps.detail.error, 'fenetre_invalide');
+    assert.ok(refus.corps.detail.windows.includes('7d'),
+              'le refus doit énumérer ce qu’il accepte');
+  });
+});

@@ -1024,3 +1024,195 @@ tbody tr:hover { background: var(--color-hover); }
 .ligne-retrait > td { padding-top: 0; }
 
 /* --------------------------------------------------- supervision continue */
+/* SPK-93 · docs/DESIGN_SYSTEM_APP.md SPK-DS-20 (la courbe), SPK-DS-02 (le burst
+   n'est pas un dépassement) · docs/DESIGN_SYSTEM.md §1.5 (jamais la couleur
+   seule), §6.13 (états systématiques), §8.1 (aucun défilement horizontal de
+   page), §9.5 (focus perceptible).
+
+   Une ressource, un token, le même sur l'écran de Forge et dans la fenêtre d'un
+   Spark. Les couleurs sont CONSOMMÉES, jamais recopiées (§12.1). */
+
+.fenetres { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+
+.fenetre {
+  display: inline-flex; align-items: center;
+  min-height: var(--size-target);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-2);
+  font-size: var(--text-compact);
+  text-decoration: none;
+}
+
+.fenetre:hover { background: var(--color-hover); }
+
+/* §1.5 : la période retenue ne se distingue pas que par la couleur — elle est
+   aussi la seule en gras, et elle porte `aria-current`. */
+.fenetre--courante {
+  background: var(--color-brand-soft);
+  border-color: var(--color-brand);
+  color: var(--color-brand-on-soft);
+  font-weight: 700;
+}
+
+.graphiques {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.graphiques__entete {
+  display: flex; flex-wrap: wrap; gap: var(--space-3);
+  align-items: center; justify-content: space-between;
+}
+
+.graphique { padding: var(--space-4); }
+
+/* Un graphique sans donnée garde sa PLACE : sans hauteur minimale, la grille se
+   réorganise dès qu'une courbe apparaît, et les trois autres sautent sous les
+   yeux de qui les lisait (§14.3). */
+.graphique--vide { display: flex; flex-direction: column; justify-content: space-between; }
+
+.graphique__entete {
+  display: flex; flex-wrap: wrap; gap: var(--space-2);
+  align-items: baseline; justify-content: space-between;
+}
+
+.graphique__titre { font-size: var(--text-h3); }
+
+.graphique__valeur {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-h3);
+  font-weight: 700;
+}
+
+/* §14.6 : une mesure absente porte un TEXTE, jamais un blanc ni un zéro. */
+.graphique__absente {
+  font-family: var(--font-sans); font-weight: 400;
+  font-size: var(--text-compact); color: var(--color-text-3);
+}
+
+.graphique__vide {
+  margin: var(--space-6) 0;
+  text-align: center;
+  color: var(--color-text-3);
+  font-size: var(--text-compact);
+}
+
+.graphique__cadre {
+  margin-top: var(--space-3);
+  border-radius: var(--radius-sm);
+  /* Le cadre reçoit le focus : les flèches y déplacent le curseur de lecture. */
+  cursor: crosshair;
+}
+
+.graphique__svg { display: block; width: 100%; height: 150px; }
+
+.graphique__base, .graphique__reference, .graphique__curseur, .graphique__trace,
+.graphique__point, .micro polyline, .micro circle {
+  /* Le viewBox est étiré en largeur : sans cela, un trait de 1,5 px devient une
+     barre sur un écran large et disparaît sur un écran étroit. */
+  vector-effect: non-scaling-stroke;
+}
+
+.graphique__base { stroke: var(--color-border); stroke-width: 1; }
+
+/* §52.8 : la ligne de référence est TRACÉE et NOMMÉE dans la légende. */
+.graphique__reference {
+  stroke: var(--color-text-3); stroke-width: 1; stroke-dasharray: 4 4;
+}
+
+.graphique__trace { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.graphique__point { stroke-width: 0; }
+.graphique__curseur { stroke: var(--color-text-2); stroke-width: 1; stroke-dasharray: 2 3; }
+
+/* SPK-DS-02 : le burst est un aplat `accent`, JAMAIS du rouge. Au-delà de sa
+   réservation, un Spark fait un usage optimal de la machine. */
+.graphique__burst { fill: var(--color-accent); opacity: 0.35; stroke: none; }
+
+.graphique--brand .graphique__trace, .graphique--brand .graphique__point,
+.micro--brand polyline, .micro--brand circle { stroke: var(--color-brand); fill: none; }
+.graphique--brand .graphique__point, .micro--brand circle { fill: var(--color-brand); }
+
+.graphique--success .graphique__trace, .graphique--success .graphique__point,
+.micro--success polyline, .micro--success circle { stroke: var(--color-success); fill: none; }
+.graphique--success .graphique__point, .micro--success circle { fill: var(--color-success); }
+
+.graphique--accent .graphique__trace, .graphique--accent .graphique__point,
+.micro--accent polyline, .micro--accent circle { stroke: var(--color-accent-on-soft); fill: none; }
+.graphique--accent .graphique__point, .micro--accent circle { fill: var(--color-accent-on-soft); }
+
+.graphique--neutre .graphique__trace, .graphique--neutre .graphique__point,
+.micro--neutre polyline, .micro--neutre circle { stroke: var(--color-text-2); fill: none; }
+.graphique--neutre .graphique__point, .micro--neutre circle { fill: var(--color-text-2); }
+
+.graphique__lecture {
+  margin: var(--space-2) 0 0;
+  min-height: 1.4em;
+  font-size: var(--text-compact);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-2);
+}
+
+.graphique__legende {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-compact);
+  color: var(--color-text-3);
+}
+
+.graphique__cle {
+  display: inline-block; width: 14px; height: 0;
+  margin: 0 var(--space-1) 0 var(--space-3);
+  border-top-width: 2px; border-top-style: solid;
+}
+.graphique__legende .graphique__cle:first-child { margin-left: 0; }
+.graphique__cle--trace { border-top-color: currentColor; }
+.graphique--brand .graphique__cle--trace { border-top-color: var(--color-brand); }
+.graphique--success .graphique__cle--trace { border-top-color: var(--color-success); }
+.graphique--accent .graphique__cle--trace { border-top-color: var(--color-accent-on-soft); }
+.graphique--neutre .graphique__cle--trace { border-top-color: var(--color-text-2); }
+.graphique__cle--reference { border-top-style: dashed; border-top-color: var(--color-text-3); }
+.graphique__cle--burst {
+  height: 10px; border-top: 0;
+  background: var(--color-accent); opacity: 0.35; border-radius: 2px;
+}
+.graphique__sans-reference { font-style: italic; }
+/* La référence est trop haute pour partager l'échelle : le trait n'est pas
+   peint, la valeur reste écrite (SPK-DS-20). */
+.graphique__hors-cadre { font-style: italic; }
+
+/* §9.2 : la donnée est rendue AUSSI sous une forme qu'un lecteur d'écran
+   parcourt. Le SVG, lui, porte `aria-hidden`.
+
+   Le masquage est porté par l'ENVELOPPE, pas par la table. Mesuré le
+   2026-09-07 : sur un `<table>`, `height` n'est qu'un minimum — les 240 lignes
+   d'une série poussaient la page à 10 556 px de haut, sous une carte qui en
+   occupe 400. */
+.graphique__donnees {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* La répartition par Spark : une comparaison entre objets (§6.14). */
+.micro { display: block; width: 100px; height: 28px; fill: none; }
+.micro polyline { fill: none; stroke-width: 1.5; }
+.micro--vide { color: var(--color-text-3); font-size: var(--text-compact); }
+.mesure { white-space: nowrap; }
+.mesure__valeur {
+  display: block;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--text-compact); color: var(--color-text-2);
+}
+
+/* §8.1 : sous 1024 px les quatre courbes s'empilent en une colonne. Deux
+   graphiques côte à côte sur 480 px ne se lisent plus — la comparaison qu'ils
+   permettent coûte alors plus qu'elle n'apporte. */
+@media (max-width: 1024px) {
+  .graphiques { grid-template-columns: minmax(0, 1fr); }
+}

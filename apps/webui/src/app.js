@@ -38,6 +38,8 @@ import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
 import { renderManuel } from './components/manuel-view.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
+import { renderSupervisionForge, SUPERVISION_VIDE }
+  from './components/supervision.js';
 import { tunnelContextOf, tunnelFailureMessage, signatureMotifOf }
   from './components/tokens.js';
 
@@ -55,6 +57,12 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // SPK-65 · §40.5 : l'hôte dit si CE processus Node a démarré
                // avant le code du poste. Cela ne dépend d'aucune Forge.
                consoleBuild: null,
+               // SPK-93 · §52.11 : les deux surfaces de supervision. Elles ont
+               // chacune leur etat parce qu'elles ont chacune leur sujet — la
+               // Forge d'un cote, un Spark de l'autre — et que la fenetre
+               // choisie sur l'une ne decide pas de celle de l'autre.
+               supervision: { ...SUPERVISION_VIDE },
+               mesures: { ...SUPERVISION_VIDE },
                // SPK-57 · §49 : la modale de redimensionnement. Fermée tant
                // qu'on ne l'a pas ouverte, et ses valeurs sont celles du Spark
                // AU MOMENT DE L'OUVERTURE — pas des champs vides qui feraient
@@ -146,7 +154,8 @@ function marquerNavigation() {
   // les onglets du second degré portent leur propre `aria-current` (§34.1).
   const courant = etat.route === 'serveurs' ? '#/serveurs'
     : etat.route === 'manuel' ? '#/manuel'
-    : ['forge', 'images', 'environnement', 'journal', 'forgedns'].includes(etat.route) ? '#/forge' : '#/sparks';
+    : ['forge', 'images', 'environnement', 'journal', 'forgedns',
+       'supervision'].includes(etat.route) ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -202,6 +211,9 @@ function peindre() {
       ? renderJournalForgePage(etat.journal)
       : etat.route === 'forgedns'
       ? renderOngletsForge('#/forge/dns') + renderForgeDns(etat.forgeDns)
+      : etat.route === 'supervision'
+      ? renderOngletsForge('#/forge/supervision')
+        + renderSupervisionForge(etat.supervision)
       : etat.route === 'serveurs'
       ? renderServeurs(etat.catalogueServeurs)
       : etat.route === 'forge'
@@ -216,6 +228,7 @@ function peindre() {
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
                             identite: etat.identite, dossier: etat.dossier,
+                            mesures: etat.mesures,
                             ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
         + renderSparksView(etat);
@@ -267,6 +280,7 @@ function brancher() {
     });
   }
   racine.querySelector('[data-action="reessayer"]')?.addEventListener('click', router);
+  brancherGraphiques();
   // §27.8 : le relevé ne détruit rien et n'a aucun paramètre — pas de confirmation.
   racine.querySelector('[data-action="relever"]')?.addEventListener('click', relever);
   racine.querySelector('[data-action="comparer-build"]')
@@ -904,6 +918,32 @@ async function amorcageAppel(methode) {
   peindre();
 }
 
+/**
+ * Les comptes par lesquels on peut entrer dans ce Spark (SPK-95, §42.2 quater).
+ *
+ * Un échec ne bloque RIEN : sans portes lues, l'écran n'affiche pas de
+ * sélecteur et le terminal s'ouvre en `root`, qui est le défaut partout. Un
+ * refus d'ouvrir un terminal administratif parce qu'une lecture accessoire a
+ * échoué serait une panne fabriquée (§14.9).
+ */
+async function relverPortesTerminal() {
+  const nom = etat.spark?.name;
+  if (!nom) return;
+  try {
+    const rendu = await api(`/v1/sparks/${encodeURIComponent(nom)}/briefing`);
+    const portes = rendu?.model?.access?.accounts;
+    if (!Array.isArray(portes) || portes.length === 0) return;
+    etat.terminal.comptes = portes;
+    // SPK-DS-21 : `root` reste présélectionné. Si le mode a changé sous nous et
+    // que la porte choisie n'existe plus, on y retombe plutôt que d'envoyer une
+    // session contre un compte que le Spark n'offre pas.
+    if (!portes.some((porte) => porte.user === etat.terminal.compte)) {
+      etat.terminal.compte = portes[0].user;
+    }
+    peindre();
+  } catch { /* §14.9 : sans portes lues, root reste le défaut et le seul offert */ }
+}
+
 function brancherTerminal() {
   const etatT = etat.terminal;
 
@@ -933,6 +973,14 @@ function brancherTerminal() {
       etatT.confirmeDepannage = false;
       ouvrirTerminal('rescue');
     });
+
+  // SPK-DS-21 : le choix de la porte. Il ne vaut que pour la PROCHAINE
+  // ouverture — changer de compte ne déplace pas une session en cours, et
+  // prétendre le contraire serait le succès simulé que le §1.3 refuse.
+  const compte = racine.querySelector('[data-terminal="compte"]');
+  compte?.addEventListener('change', () => {
+    etatT.compte = compte.value;
+  });
 
   const lecteur = racine.querySelector('[data-terminal="lecteur"]');
   lecteur?.addEventListener('change', () => {
@@ -1046,6 +1094,11 @@ async function ouvrirTerminal(chemin = 'ssh', conteneur = null) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ server: etat.server, spark: etat.spark.name,
                              path: chemin,
+                             // §42.2 quater : la porte demandée. L'hôte la borne
+                             // à deux noms et retombe sur root si elle est
+                             // inconnue — ce champ n'ouvre donc aucun compte
+                             // arbitraire.
+                             ...(t.compte ? { account: t.compte } : {}),
                              ...(conteneur ? { container: conteneur } : {}) }),
     });
     corps = await reponse.json();
@@ -2836,6 +2889,17 @@ async function chargerDetail(nom, facette = '') {
   if (facette === 'routes' && etat.status === 'ready') {
     chargerEtatDnsRoutes(etat.detail?.routes ?? []);
   }
+  // SPK-93 · §52.11 : les courbes partent APRES la peinture et SEULEMENT sur la
+  // facette qui les montre. Une serie de deux cent quarante seaux n'a rien a
+  // faire dans le chargement des six autres facettes.
+  if (facette === 'mesures' && etat.status === 'ready') {
+    chargerMesuresSpark(nom);
+  } else if (facette !== 'mesures') {
+    // Les mesures appartiennent a l'ecran qui les a demandees : les garder
+    // afficherait la serie d'un Spark sous le nom du suivant, exactement le
+    // defaut que le §37.6 corrige pour Docker.
+    etat.mesures = { ...SUPERVISION_VIDE, fenetre: etat.mesures.fenetre };
+  }
   // SPK-75 · §37.4.8 : la reprise. Une session choisie dans le widget, ou —
   // faute de choix explicite — celle que ce Spark porte déjà. Sans ce second
   // cas, revenir sur la facette après un rechargement en ouvrirait une SECONDE
@@ -2849,6 +2913,14 @@ async function chargerDetail(nom, facette = '') {
       && reprise.spark === etat.spark?.name && (!reprise.forge || reprise.forge === etat.server)) {
     sessionAReprendre = null;
     await suivreSessionTerminal(reprise);
+  }
+  // SPK-95 · §42.2 quater, SPK-DS-21 : les PORTES de la cellule. Elles se lisent
+  // au REGISTRE — le briefing n'entre pas dans le Spark (§44.9.4) —, donc à
+  // l'ouverture de la facette et non à chaque peinture. La règle « root
+  // toujours, spark-docker si le mode relevé est rootless » vit dans `sparkd` :
+  // la recopier ici ferait deux vérités qui divergeraient.
+  if (etat.facette === 'terminal' && etat.status === 'ready') {
+    relverPortesTerminal();
   }
   // SPK-44 · §37.6 : la collecte commence à l'OUVERTURE de l'onglet, pas avant.
   // Un Spark dont on ne regarde pas le Docker n'est jamais interrogé.
@@ -3977,7 +4049,148 @@ async function chargerManuel(chapitre) {
   peindre();
 }
 
+/* ----------------------------------------------- supervision continue (SPK-93) */
+
+/**
+ * Le rafraichissement des courbes suit la CADENCE de l'historien.
+ *
+ * @spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.11 (« demander plus souvent
+ *       que la Forge ne releve ne produit aucun point nouveau, seulement du
+ *       trafic »), §52.2 (cadence nulle : rien a attendre)
+ */
+let minuterieSupervision = null;
+
+function arreterSupervision() {
+  clearTimeout(minuterieSupervision);
+  minuterieSupervision = null;
+}
+
+function programmerSupervision(donnees, relire) {
+  arreterSupervision();
+  // Historien desactive : il n'y a rien a attendre, et repoller ferait battre
+  // la console contre une Forge qui ne relevera jamais (§52.2).
+  if (!donnees || donnees.enabled === false) return;
+  const cadence = Math.max(5, Number(donnees.interval_seconds) || 15);
+  minuterieSupervision = setTimeout(relire, cadence * 1000);
+}
+
+/**
+ * Ecran « Forge -> Supervision » (§52.11).
+ *
+ * Le rafraichissement est SILENCIEUX : repasser par l'etat de chargement toutes
+ * les quinze secondes ferait clignoter quatre graphiques et perdre le curseur
+ * que l'exploitant vient de poser (DESIGN_SYSTEM.md §14.3).
+ */
+async function chargerSupervisionForge(fenetre, { silencieux = false } = {}) {
+  etat.route = 'supervision';
+  const ui = etat.supervision;
+  if (fenetre && fenetre !== ui.fenetre) {
+    ui.fenetre = fenetre;
+    ui.curseur = null;
+    // MESURE en E2E le 2026-09-07 : garder la reponse precedente sous le
+    // nouveau libelle affichait « 24 h » selectionne AU-DESSUS de « 1h — un
+    // point toutes les 15 s ». Changer de periode est une nouvelle question ;
+    // la reponse d'avant n'y repond pas.
+    ui.donnees = null;
+  }
+  if (!silencieux) { ui.status = ui.donnees ? 'pret' : 'loading'; ui.error = null; peindre(); }
+  try {
+    ui.donnees = await api(`/v1/forge/metrics?window=${encodeURIComponent(ui.fenetre)}`);
+    ui.status = 'pret';
+    ui.error = null;
+  } catch (erreur) {
+    ui.status = 'erreur';
+    ui.error = erreur.message;
+    // §22.3 : une panne se signale, elle ne se masque pas. Sans cela, VU À
+    // L'ÉCRAN le 2026-09-07 : « Tunnel ouvert » dans l'en-tête au-dessus d'un
+    // refus qui nommait le tunnel rompu. Seule une erreur qui PARLE du tunnel
+    // remplace ce qu'on en savait — un refus muet n'efface rien.
+    if (erreur.tunnel !== undefined) {
+      etat.tunnel = erreur.tunnel;
+      peindreContexte();
+    }
+  }
+  peindre();
+  if (etat.route === 'supervision') {
+    programmerSupervision(ui.donnees,
+      () => chargerSupervisionForge(null, { silencieux: true }));
+  }
+}
+
+/** Facette « Mesures » d'un Spark (§52.11). */
+async function chargerMesuresSpark(nom, { silencieux = false } = {}) {
+  const ui = etat.mesures;
+  if (!silencieux) { ui.status = ui.donnees ? 'pret' : 'loading'; ui.error = null; peindre(); }
+  try {
+    ui.donnees = await api(
+      `/v1/sparks/${encodeURIComponent(nom)}/metrics?window=${encodeURIComponent(ui.fenetre)}`);
+    ui.status = 'pret';
+    ui.error = null;
+  } catch (erreur) {
+    ui.status = 'erreur';
+    ui.error = erreur.message;
+    // §22.3 : une panne se signale, elle ne se masque pas. Sans cela, VU À
+    // L'ÉCRAN le 2026-09-07 : « Tunnel ouvert » dans l'en-tête au-dessus d'un
+    // refus qui nommait le tunnel rompu. Seule une erreur qui PARLE du tunnel
+    // remplace ce qu'on en savait — un refus muet n'efface rien.
+    if (erreur.tunnel !== undefined) {
+      etat.tunnel = erreur.tunnel;
+      peindreContexte();
+    }
+  }
+  peindre();
+  if (etat.route === 'detail' && etat.facette === 'mesures' && etat.spark?.name === nom) {
+    programmerSupervision(ui.donnees,
+      () => chargerMesuresSpark(nom, { silencieux: true }));
+  }
+}
+
+/**
+ * Le curseur de lecture, partage par les quatre courbes (SPK-DS-20).
+ *
+ * Il est PARTAGE a dessein : on compare quatre grandeurs au meme instant, et
+ * quatre curseurs independants obligeraient a les aligner a la main.
+ */
+function brancherGraphiques() {
+  const cadres = racine.querySelectorAll('.graphique__cadre');
+  if (!cadres.length) return;
+  const ui = etat.route === 'supervision' ? etat.supervision : etat.mesures;
+
+  const poser = (index, total) => {
+    const borne = Math.max(0, Math.min(total - 1, index));
+    if (ui.curseur === borne) return;
+    ui.curseur = borne;
+    peindre();
+  };
+
+  for (const cadre of cadres) {
+    const total = Number(cadre.dataset.points) || 0;
+    if (!total) continue;
+
+    cadre.addEventListener('pointermove', (evenement) => {
+      const boite = cadre.getBoundingClientRect();
+      if (!boite.width) return;
+      const part = (evenement.clientX - boite.left) / boite.width;
+      poser(Math.round(part * (total - 1)), total);
+    });
+
+    // §9.1 : la lecture se fait AUSSI au clavier. Une info-bulle flottante
+    // qu'on ne peut viser qu'a la souris rendrait la courbe illisible sans elle.
+    cadre.addEventListener('keydown', (evenement) => {
+      const depart = Number.isInteger(ui.curseur) ? ui.curseur : total - 1;
+      if (evenement.key === 'ArrowRight') { evenement.preventDefault(); poser(depart + 1, total); }
+      else if (evenement.key === 'ArrowLeft') { evenement.preventDefault(); poser(depart - 1, total); }
+      else if (evenement.key === 'Home') { evenement.preventDefault(); poser(0, total); }
+      else if (evenement.key === 'End') { evenement.preventDefault(); poser(total - 1, total); }
+      else if (evenement.key === 'Escape' && ui.curseur !== null) {
+        evenement.preventDefault(); ui.curseur = null; peindre();
+      }
+    });
+  }
+}
+
 function router() {
+  arreterSupervision();
   const chapitre = location.hash.match(/^#\/manuel(?:\/([A-Za-z0-9-]+))?/);
   if (chapitre) return chargerManuel(chapitre[1] ?? null);
   if (location.hash === '#/serveurs') return chargerServeurs();
@@ -3985,6 +4198,14 @@ function router() {
   if (location.hash === '#/forge/journal') return chargerJournal();
   if (location.hash === '#/forge/environnement') return chargerCatalogueEnv();
   if (location.hash === '#/forge/images') return chargerCatalogue();
+  // SPK-93 · §52.11 : la fenetre observee voyage dans l'adresse, pour qu'un
+  // rechargement rende la meme periode — c'est une destination, pas un reglage
+  // volatil (DESIGN_SYSTEM.md §5.4).
+  const superviser = location.hash.match(/^#\/forge\/supervision(?:\?fenetre=([a-z0-9]+))?$/);
+  if (superviser) {
+    arreterSupervision();
+    return chargerSupervisionForge(superviser[1] ?? etat.supervision.fenetre);
+  }
   if (location.hash === '#/forge') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();
   // Chaque facette d'un Spark est une véritable destination : on doit pouvoir
@@ -3993,8 +4214,17 @@ function router() {
   // adresse. L'omettre ici le rendait inatteignable au rechargement — et
   // l'onglet menait à la facette « Infos ». Mesuré.
   const detail = location.hash.match(
-    /^#\/sparks\/([^/]+)(?:\/(routes|cles|instantanes|environnement|terminal|docker|journal))?$/);
-  if (detail) return chargerDetail(decodeURIComponent(detail[1]), detail[2] ?? '');
+    /^#\/sparks\/([^/?]+)(?:\/(routes|cles|instantanes|mesures|environnement|terminal|docker|journal))?(?:\?fenetre=([a-z0-9]+))?$/);
+  if (detail) {
+    if (detail[3] && detail[3] !== etat.mesures.fenetre) {
+      etat.mesures.fenetre = detail[3];
+      etat.mesures.curseur = null;
+      // Meme raison qu'a la Forge : la serie d'avant ne repond pas a la
+      // periode qu'on vient de demander.
+      etat.mesures.donnees = null;
+    }
+    return chargerDetail(decodeURIComponent(detail[1]), detail[2] ?? '');
+  }
   etat.route = 'liste';
   etat.spark = null;
   return charger();

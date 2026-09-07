@@ -5463,7 +5463,7 @@ relevé — pour apprendre que la référence n'existe pas.
   design system et changelog mis à jour ; `@spec` / `@verifies` posés.
 
 
-### [ ] SPK-93 · La supervision continue : courbes d'usage de la Forge et de chaque Spark
+### [~] SPK-93 · La supervision continue : courbes d'usage de la Forge et de chaque Spark
 
 Demandé par le responsable le 2026-09-07 : « voir les statistiques en direct de
 tous les Sparks, comme un mini Grafana pour une Forge et tous ses Sparks, et le

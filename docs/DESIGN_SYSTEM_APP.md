@@ -742,6 +742,19 @@ La **ligne de référence** — quota, plafond ou capacité de pool (`docs/DAT.m
 dans la légende** avec sa valeur. Une courbe sans son référentiel est un chiffre
 faux (SPK-DS-05), et un trait sans légende n'est pas un référentiel.
 
+**La référence ne partage l'échelle que tant qu'elle ne l'écrase pas.**
+MESURÉ le 2026-09-07 sur la pile de développement : un Spark consommant
+`2 Mbit/s` sous un plafond de `100 Mbit/s`, et `489 Mio` sous un quota de
+`10 Gio`. Mis à l'échelle de leur référence, **deux des quatre graphiques
+devenaient un trait posé au sol** — la courbe ne montrait plus rien de ce qu'on
+était venu y voir, sur un écran par ailleurs impeccable.
+
+Au-delà d'un rapport de **4** entre la référence et la plus haute mesure,
+l'échelle suit donc la **donnée**. La référence reste alors **nommée dans la
+légende, avec sa valeur**, suivie de « hors du cadre ». On perd le trait, jamais
+l'information — et l'écran dit lequel des deux manque, plutôt que de laisser
+croire à une courbe plate.
+
 Le SPK-DS-02 tient sur une courbe comme sur une jauge : la part au-delà de la
 réservation est du **burst**, elle se distingue par un aplat `accent` sous la
 courbe et jamais par du rouge. `danger` n'apparaît que lorsque `over_limit` est

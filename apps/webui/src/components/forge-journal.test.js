@@ -36,10 +36,12 @@ test('le journal est un onglet de l’FORGE, à côté de Pools et Images', () =
   const chemins = ONGLETS_FORGE.map(([href]) => href);
   // SPK-64 a inséré le catalogue d'environnement entre les images et le journal,
   // SPK-77 l'inventaire DNS après lui (§38.8.5) : le DNS décrit la Forge, et la
-  // page couvre les noms qui n'appartiennent à aucun Spark.
+  // page couvre les noms qui n'appartiennent à aucun Spark. SPK-93 y ajoute la
+  // supervision (§52.11), pour la même raison : elle décrit la Forge — la somme
+  // de ses Sparks et leur répartition —, pas un Spark en particulier.
   assert.deepEqual(chemins, ['#/forge', '#/forge/images',
                              '#/forge/environnement', '#/forge/dns',
-                             '#/forge/journal']);
+                             '#/forge/supervision', '#/forge/journal']);
 });
 
 test('l’écran dit qu’il couvre TOUS les Sparks', () => {

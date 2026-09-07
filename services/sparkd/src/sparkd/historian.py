@@ -329,14 +329,25 @@ def agregat(connection: sqlite3.Connection, debut: datetime, pas: float,
             seau = points_spark[index]
             if seau["samples"] == 0:
                 continue
-            point["sparks"] += 1
+            # `samples` compte TOUS les releves, y compris ceux d'un Spark
+            # arrete : c'est ce qui distingue « il dormait » de « personne n'a
+            # releve » (§52.4).
             point["samples"] += seau["samples"]
+            porte = False
             for colonne in MESURES:
                 nom = PUBLIE[colonne]
                 if seau[nom] is None:
                     continue
+                porte = True
                 cumuls[nom] = (cumuls[nom] or 0) + seau[nom]
                 compte_par_mesure[nom] += 1
+            # `sparks` ne compte que ceux qui ont CONTRIBUE a la somme. Un Spark
+            # arrete a bien une ligne, mais il n'ajoute rien : l'inclure ferait
+            # annoncer « somme de 8 Sparks » sous une courbe qui n'en somme que
+            # quatre, et le nombre n'expliquerait plus la marche qu'il existe
+            # pour expliquer (§52.7).
+            if porte:
+                point["sparks"] += 1
         for colonne in MESURES:
             nom = PUBLIE[colonne]
             valeur = cumuls[nom]

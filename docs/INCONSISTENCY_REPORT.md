@@ -101,3 +101,40 @@ livrées pointer vers un identifiant qui a bougé sous elles.
 `SPK-DS-19` — la plus ancienne, SPK-85, est le candidat naturel — et autoriser la
 renumérotation de l'autre avec ses références. En attendant, SPK-93 prend
 `SPK-DS-20`, qui reste libre et sans ambiguïté.
+
+---
+
+## 4. `make captures` s'arrête avant la fin, et cette panne précède SPK-93
+
+**Constaté le 2026-09-07**, en ajoutant les captures de supervision.
+
+**Le fait.** `node e2e/captures.mjs` échoue à la capture
+`107-terminal-xterm-registre.png` : `waiting for locator('.widget-inv__ligne')`
+expire au bout de huit secondes, après le dépliage de la pastille du widget
+d'inventaire (SPK-75, SPK-DS-16). Le script est un programme de haut niveau sans
+reprise sur erreur : **tout ce qui suit cette ligne n'est jamais produit**.
+
+**Ce n'est pas SPK-93.** La même panne, au même endroit, se reproduit en
+exécutant le `e2e/captures.mjs` de `HEAD` — extrait par `git show` et lancé tel
+quel. Elle est donc antérieure, et indépendante des captures ajoutées à la fin
+du fichier par cette unité.
+
+**Ce que cela coûte.** Les captures `83` à `90` de SPK-93 — écran de Forge,
+curseur de lecture, facette d'un Spark, Spark arrêté, format étroit, absence de
+relevé, historien désactivé, lecture en échec — **n'ont jamais été produites par
+ce harnais**. Les mêmes états ont été observés autrement, contre la pile de
+développement RÉELLE et non un doublon de réponses : historien désactivé par
+`SPARKD_METRICS_INTERVAL=0`, absence de relevé sur une Forge neuve jamais seedée,
+lecture en échec en coupant `sparkd` sous la console. Ces observations ont
+d'ailleurs trouvé trois défauts, corrigés dans l'unité.
+
+**Pourquoi ce n'est pas corrigé ici.** La cause est dans le parcours du terminal
+et du widget d'inventaire — une session xterm, un faux `sshd`, une sonde de
+sessions vivantes —, c'est-à-dire trois unités closes qui ne sont pas celle en
+cours. Diagnostiquer et réparer ce parcours mêlerait à SPK-93 un travail qui ne
+la concerne pas.
+
+**Ce qui est demandé au responsable.** Autoriser une tâche dédiée à la remise en
+marche de `make captures`. Tant qu'elle n'est pas faite, la campagne de captures
+ne prouve plus rien de ce qui suit la ligne 1399, pour SPK-93 comme pour les
+unités qui viendront.

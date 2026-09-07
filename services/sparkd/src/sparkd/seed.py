@@ -18,13 +18,17 @@ Spark est obtenu en faisant réellement échouer le pilote — pas en écrivant
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from . import historian, metrics
 from .app import create_app
 from .config import Config, load
-from .incus import InstanceAbsente
+from .db import connect
+from .incus import _PROFIL_ORIGINE as PROFIL_ORIGINE
+from .incus import InstanceAbsente, etat_simule
 
 #: Mot de passe de la protection de démonstration (SPK-34). Ce n'est PAS un
 #: secret : la protection est un garde-fou, pas un contrôle d'accès (§35.1), et
@@ -391,6 +395,82 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     return compte
 
 
+def _historiser(config: Config, heures: float = 6.0) -> int:
+    """Constitue l'historique d'usage de la pile de développement (SPK-93).
+
+    @spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.10 (le profil du doublon),
+          §52.9 (l'historien ne remplit pas le passé) · CLAUDE.md §8
+
+    **Pourquoi il faut le faire, et pourquoi ce n'est pas une trace fabriquée.**
+    L'historien ne remplit jamais le passé (§52.9) : sur une pile fraîche, les
+    écrans de supervision restent vides pendant des minutes, et aucune capture
+    n'est possible. Le seed produit donc l'historique par le **vrai** écrivain —
+    `historian.ecrire` —, alimenté par le **vrai** module de taux, sur des états
+    rendus par le **doublon** à des instants passés. Aucune ligne n'est
+    fabriquée à la main.
+
+    Ce que cela vaut, et ne vaut pas : la FORME est celle que produira la Forge,
+    et c'est ce que les écrans doivent éprouver. Les valeurs, elles, ne mesurent
+    rien — le §12 est inchangé.
+
+    Les Sparks ARRÊTÉS reçoivent leurs lignes aussi, sans mesure : c'est le cas
+    du §52.3 que la pile doit pouvoir montrer, et il est le plus facile à rendre
+    de travers.
+    """
+    # Le registre est celui de la CONFIGURATION reçue, jamais celui de
+    # l'environnement : les preuves passent un chemin temporaire, et relire
+    # l'environnement ferait écrire dans /var/lib/sparkd depuis un test.
+    connection = connect(config.database)
+    try:
+        sparks = connection.execute(
+            "SELECT id, name, state, incus_name FROM spark ORDER BY name"
+        ).fetchall()
+        pas = 15.0
+        tics = int(heures * 3600 / pas)
+        depart = datetime.now(timezone.utc) - timedelta(seconds=tics * pas)
+        rates = metrics.RateTracker()
+        lignes: list[dict] = []
+
+        for tic in range(tics):
+            instant = depart + timedelta(seconds=tic * pas)
+            horodatage = instant.isoformat(timespec="seconds")
+            for spark in sparks:
+                vide = {
+                    "spark_id": spark["id"], "sampled_at": horodatage,
+                    "state": spark["state"], "window_seconds": None,
+                    **{colonne: None for colonne in historian.MESURES},
+                }
+                if spark["state"] != "running" or not spark["incus_name"]:
+                    lignes.append(vide)
+                    continue
+                # Le doublon rend l'état d'une cellule qui tourne depuis `tic`
+                # cadences. Le taux est calculé par le module du §20, sur la
+                # même fenêtre que celle de l'historien.
+                # Le meme temps que celui du pilote en marche (§52.10) : sans
+                # cette continuite, l'historique du seed et les releves qui le
+                # suivent formeraient une marche que rien n'a produite.
+                etat = etat_simule(spark["incus_name"],
+                                   instant.timestamp() - PROFIL_ORIGINE)
+                taux = rates.observe(
+                    spark["id"],
+                    metrics.read_sample(etat, now=tic * pas))
+                memoire, disque = metrics.instantanees(etat)
+                lignes.append({
+                    **vide,
+                    "window_seconds": taux["window_seconds"],
+                    "cpu_used": taux["cpu"],
+                    "memory_bytes": memoire,
+                    "disk_bytes": disque,
+                    "net_rx_bps": taux["network_rx_bps"],
+                    "net_tx_bps": taux["network_tx_bps"],
+                })
+
+        historian.ecrire(connection, lignes)
+        return len(lignes)
+    finally:
+        connection.close()
+
+
 def verify(client: TestClient) -> None:
     """Vérifie que le seed a produit ce que le §28.5 annonce.
 
@@ -500,6 +580,11 @@ def run(config: Config | None = None) -> dict[str, int]:
     client = TestClient(app)
     compte = populate(client, app.state.incus, app.state.caddy)
     verify(client)
+    # SPK-93 · §52.9 : l'historien ne remplit jamais le passé. Sans cet
+    # historique, tout écran de supervision démarre vide pendant des minutes et
+    # aucune capture n'est possible. Il vient APRÈS la vérification : ce sont
+    # les Sparks qui font le seed, les mesures les décrivent.
+    compte["mesures"] = _historiser(config)
     return compte
 
 
@@ -513,7 +598,8 @@ def main(argv: list[str] | None = None) -> int:
         f"seed appliqué : {compte['sparks']} Sparks, {compte['routes']} routes, "
         f"{compte['cles']} clés, {compte['instantanes']} instantanés, "
         f"{compte['refus']} refus d'admission réel, "
-        f"{compte.get('proteges', 0)} Spark protégé."
+        f"{compte.get('proteges', 0)} Spark protégé, "
+        f"{compte.get('mesures', 0)} relevés d'usage."
     )
     return 0
 

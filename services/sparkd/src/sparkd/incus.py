@@ -509,7 +509,17 @@ def _faux_ed25519(graine: str) -> str:
 #: Il ne mesure RIEN. Il donne a la supervision une FORME a eprouver, jamais une
 #: consommation a croire : la borne du §12 est inchangee.
 _PROFIL_PERIODE = 900.0
-_PROFIL_ORIGINE = time.monotonic()
+#: Origine du temps du profil : un instant FIXE, et non le demarrage du
+#: processus.
+#:
+#: MESURE le 2026-09-07 : ancree sur le demarrage, l'origine faisait repartir le
+#: disque de sa base a chaque lancement. L'historique constitue par le seed et
+#: les releves qui le suivaient formaient alors une MARCHE, visible a l'ecran,
+#: que rien n'avait produite. Un doublon qui se contredit d'un processus a
+#: l'autre n'imite plus rien (§12.1.3).
+#:
+#: 2026-01-01T00:00:00Z, en secondes depuis l'epoque Unix.
+_PROFIL_ORIGINE = 1_767_225_600.0
 
 
 def _profil(name: str) -> dict[str, float]:
@@ -527,16 +537,27 @@ def _profil(name: str) -> dict[str, float]:
         "tx": 3_000.0 + (graine // 17 % 250_000),
         # Memoire de base : de 96 a 608 Mio.
         "memoire": (96 + (graine // 23 % 512)) * 1024.0 ** 2,
-        # Disque de base, et sa croissance lente.
+        # Disque de base : de 300 a 1200 Mio, sous le plus petit quota vendu.
         "disque": (300 + (graine // 29 % 900)) * 1024.0 ** 2,
-        "croissance": 400.0 + (graine // 31 % 4_000),
     }
+
+
+#: Rapport de la seconde harmonique a la premiere. Irrationnel a dessein : une
+#: seule periode dessinerait quatre bosses IDENTIQUES par heure, forme qu'aucun
+#: systeme reel ne produit et qui n'eprouve ni la mise a l'echelle ni l'oeil.
+_HARMONIQUE = 3.7
+#: Les deux amplitudes somment a 0,85 x amplitude au pire : le facteur reste
+#: strictement positif, donc le compteur reste croissant (§52.10).
+_POIDS = (0.60, 0.25)
 
 
 def _module(secondes: float, profil: dict[str, float]) -> float:
     """Facteur de modulation a l'instant donne. Strictement positif."""
     omega = 2 * math.pi / _PROFIL_PERIODE
-    return 1.0 + profil["amplitude"] * math.sin(omega * secondes + profil["phase"])
+    return (1.0
+            + _POIDS[0] * profil["amplitude"] * math.sin(omega * secondes + profil["phase"])
+            + _POIDS[1] * profil["amplitude"] * math.sin(
+                _HARMONIQUE * omega * secondes + 2 * profil["phase"]))
 
 
 def _integrale(secondes: float, profil: dict[str, float]) -> float:
@@ -550,8 +571,11 @@ def _integrale(secondes: float, profil: dict[str, float]) -> float:
         compteur(t) = c (t - (a/w) cos(w t + p))
     """
     omega = 2 * math.pi / _PROFIL_PERIODE
-    return secondes - (profil["amplitude"] / omega) * math.cos(
-        omega * secondes + profil["phase"])
+    return (secondes
+            - (_POIDS[0] * profil["amplitude"] / omega)
+            * math.cos(omega * secondes + profil["phase"])
+            - (_POIDS[1] * profil["amplitude"] / (_HARMONIQUE * omega))
+            * math.cos(_HARMONIQUE * omega * secondes + 2 * profil["phase"]))
 
 
 def etat_simule(name: str, secondes: float) -> dict[str, Any]:
@@ -574,9 +598,20 @@ def etat_simule(name: str, secondes: float) -> dict[str, Any]:
         },
         "disk": {"root": {
             "total": 10 * 1024 ** 3,
-            # Un disque ne respire pas : il croit. Le faire osciller ferait
-            # lire une liberation d'espace que rien n'a produite.
-            "usage": int(profil["disque"] + profil["croissance"] * secondes),
+            # Le disque DERIVE lentement, il ne croit pas sans fin.
+            #
+            # MESURE le 2026-09-07 : une croissance monotone de quelques kio par
+            # seconde, rapportee a une origine fixe vieille de huit mois, portait
+            # l'occupation a 93 Gio SOUS UN QUOTA DE 10 Gio. Un doublon qui
+            # depasse la limite qu'il est cense respecter ne montre plus rien de
+            # ce que le produit refuse (§49.3).
+            #
+            # Une derive lente est aussi plus juste qu'une croissance pure : un
+            # disque reel monte ET descend, les journaux tournent et les images
+            # se purgent.
+            "usage": int(profil["disque"] * (1 + 0.06 * math.sin(
+                2 * math.pi * secondes / (6 * _PROFIL_PERIODE)
+                + profil["phase"]))),
         }},
         "network": {
             "eth0": {"counters": {
@@ -966,7 +1001,7 @@ class FakeIncus:
         # Le temps ecoule depuis le demarrage du processus fait la duree : deux
         # lectures separees d'une cadence rendent donc un taux, et non `null`
         # a l'infini.
-        etat = etat_simule(name, time.monotonic() - _PROFIL_ORIGINE)
+        etat = etat_simule(name, time.time() - _PROFIL_ORIGINE)
         etat["status"] = instance.get("status", "Running")
         return etat
 

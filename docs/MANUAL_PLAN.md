@@ -82,11 +82,13 @@ Unités : SPK-12.
 ## M8 · Exploiter au quotidien
 
 Démarrer, arrêter, redimensionner. Lire les métriques d'usage face aux quotas.
-Comprendre un Spark en erreur. Protéger un Spark contre la modification
-accidentelle, et lever cette protection — en disant clairement ce dont elle
-protège, et ce dont elle ne protège pas.
+Suivre la consommation **dans le temps** : les courbes de la Forge et celles
+d'un Spark, comment lire un point, et ce qu'un trou veut dire — le Spark ne
+tournait pas, ou personne ne relevait. Comprendre un Spark en erreur. Protéger
+un Spark contre la modification accidentelle, et lever cette protection — en
+disant clairement ce dont elle protège, et ce dont elle ne protège pas.
 
-Unités : SPK-09, SPK-14, SPK-34.
+Unités : SPK-09, SPK-14, SPK-34, SPK-93.
 
 ## M9 · Sauvegarder et restaurer
 

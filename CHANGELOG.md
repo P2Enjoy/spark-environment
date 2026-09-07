@@ -67,6 +67,44 @@
   sous une autre. Propriété tenue et vérifiée sur le dépôt réel : **229 alias
   publiés, 229 atteignables** — aucun ne disparaît, les doublons deviennent des
   synonymes cherchables. Aucune migration : le registre portait déjà tout.
+- **Supervision continue : la Forge relève l'usage en continu, et le trace**
+  (SPK-93, `docs/DAT.md` §52, `docs/SCHEMA.md` §10 sexies,
+  `DESIGN_SYSTEM_APP.md` SPK-DS-20) : le produit rendait l'usage d'un Spark **à
+  l'instant où on le demande**, et rien d'autre — une console fermée ne mesurait
+  rien. Un **historien** vit désormais dans `sparkd` : un relevé de tous les
+  Sparks toutes les 15 secondes, conservé 7 jours, purgé au même tic. Deux
+  écrans le rendent : **Forge → Supervision** — la somme des Sparks, plus une
+  ligne par Spark — et la facette **Mesures** d'un Spark, comparée à **ses**
+  quotas. Quatre ressources, cinq périodes de 15 minutes à 7 jours, la période
+  retenue dans l'adresse.
+
+  Ce que l'unité tranche, et qui ne se voit pas à l'écran : l'historien ne
+  partage pas le traqueur de taux de `/usage` — deux consommateurs d'un même
+  compteur calculeraient chacun leur taux sur la fenêtre de l'autre, et les
+  deux seraient faux sans que rien ne le signale ; une ligne est écrite même
+  pour un Spark **arrêté**, sans quoi « il ne tournait pas » et « personne n'a
+  relevé » feraient le même trou ; un seau sans mesure rend `null`, jamais `0`,
+  et **la courbe ne relie pas** les deux points qui l'encadrent.
+
+  Trois défauts que **seule la vérification visuelle** a montrés, et qu'aucune
+  preuve de rendu ne pouvait attraper : le tableau de données masqué pour les
+  lecteurs d'écran ne masquait **rien** — `height` n'est qu'un minimum sur une
+  `<table>`, et la page atteignait **10 556 px** de haut ; la ligne de référence
+  mise à l'échelle **écrasait la courbe au ras du sol** dès qu'elle la dépassait
+  d'un facteur 4 — deux des quatre graphiques ne montraient plus rien ; et
+  l'état vide nommait sa situation **deux fois** par carte. Un quatrième est
+  venu de l'E2E : changer de période allumait le nouveau libellé **au-dessus des
+  données de l'ancienne**.
+
+  Le pilote factice fait désormais **avancer** ses compteurs, depuis une origine
+  fixe : ils étaient constants, ce qui rendait inéprouvables le
+  ré-échantillonnage, la distinction du burst et la mise à l'échelle d'un axe.
+  Son disque **dérive** au lieu de croître sans fin — mesuré : une croissance
+  monotone portait l'occupation à `93 Gio` sous un quota de `10 Gio`.
+
+  **Non vérifié sur une Forge réelle** : le coût des écritures sous charge et le
+  temps de réponse des deux routes sur une base pleine à sept jours restent un
+  calcul (§52.12), pas une mesure.
 - **Spécification de la supervision continue** (SPK-93, `docs/DAT.md` §52,
   `docs/SCHEMA.md` §10 sexies, `DESIGN_SYSTEM_APP.md` SPK-DS-20) : le produit
   rendait l'usage d'un Spark **à l'instant où on le demande** et rien d'autre —

@@ -276,12 +276,20 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
                              // Spark — la page couvre TOUS les Sparks, et
                              // surtout les noms qui n'appartiennent à aucun.
                              ['#/forge/dns', 'DNS'],
+                             // SPK-93 · §52.11 : la supervision decrit la FORGE
+                             // — la somme de ses Sparks et leur repartition. Ce
+                             // qu'un Spark consomme se regarde dans sa fenetre.
+                             ['#/forge/supervision', 'Supervision'],
                              ['#/forge/journal', 'Journal']];
 
 /** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */
 export const FACETTES_SPARK = [
   ['', 'Infos'], ['routes', 'Routes'], ['cles', 'Clés'],
   ['instantanes', 'Instantanés'],
+  // SPK-93 · §52.11 : les courbes de CE Spark, comparees a SES quotas. Elles
+  // se lisent, comme les infos ; la facette vient donc avant celles qui
+  // s'emploient.
+  ['mesures', 'Mesures'],
   // SPK-58 · §43 : ce que la pile du locataire RECEVRA. La facette vient après
   // les instantanés et avant le terminal : elle se lit, quand celui-ci s'emploie.
   ['environnement', 'Environnement'],

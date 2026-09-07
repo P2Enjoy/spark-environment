@@ -90,6 +90,96 @@ function fauxPty(commande, args) {
   return e;
 }
 
+/* ------------------------------------------------ supervision (SPK-93, §52) */
+
+const MIO = 1024 ** 2;
+
+/** Une série de seaux, de la FORME que le §52.6 publie. */
+function seaux(points, valeur) {
+  const debut = Date.parse('2026-09-07T17:00:00Z');
+  return Array.from({ length: points }, (_, i) => ({
+    at: new Date(debut + i * 15000).toISOString(),
+    samples: 1,
+    states: ['running'],
+    sparks: 4,
+    ...valeur(i),
+  }));
+}
+
+/** Un profil qui respire, pour que la mise à l'échelle ait quelque chose à faire. */
+const respire = (base, amplitude) => (i) =>
+  base * (1 + amplitude * Math.sin(i / 7) + (amplitude / 3) * Math.sin(i / 2.3));
+
+const CADENCE = {
+  enabled: true, interval_seconds: 15, retention_seconds: 604800,
+  window: { name: '1h', seconds: 3600, points: 60, bucket_seconds: 60 },
+  last_sample_at: '2026-09-07T17:14:45Z',
+};
+
+const ETEINT = {
+  enabled: false, interval_seconds: 0, retention_seconds: 604800,
+  window: { name: '1h', seconds: 3600, points: 60, bucket_seconds: 60 },
+  last_sample_at: null,
+};
+
+function serieDe(etat, echelle = 1) {
+  if (etat === 'vide' || etat === 'desactive') {
+    return Array.from({ length: 60 }, (_, i) => ({
+      at: new Date(Date.parse('2026-09-07T17:00:00Z') + i * 60000).toISOString(),
+      samples: 0, states: [], sparks: 0,
+      cpu: null, memory_bytes: null, disk_bytes: null, rx_bps: null, tx_bps: null,
+    }));
+  }
+  const cpu = respire(0.31 * echelle, 0.42);
+  const mem = respire(560 * MIO * echelle, 0.18);
+  const rx = respire(2.2e6 * echelle, 0.5);
+  const disque = respire(487 * MIO * echelle, 0.02);
+  return seaux(60, (i) => ({
+    cpu: Math.round(cpu(i) * 1e4) / 1e4,
+    memory_bytes: Math.round(mem(i)),
+    disk_bytes: Math.round(disque(i)),
+    rx_bps: Math.round(rx(i)),
+    tx_bps: Math.round(rx(i) / 3),
+  }));
+}
+
+const QUOTAS = {
+  cpu: 0.5, cpu_mode: 'shared', cpu_capped: false,
+  memory_bytes: 2 * GIO, disk_bytes: 10 * GIO, net_bps: 100_000_000,
+};
+
+function metriquesForge(etat) {
+  const socle = etat === 'desactive' ? ETEINT : CADENCE;
+  return {
+    ...socle,
+    total: serieDe(etat, 3.4),
+    limits: { cpu: 3, memory_bytes: 12 * GIO, disk_bytes: 193 * GIO, net_bps: 1e9 },
+    spark_points: 60,
+    sparks: SPARKS.map((s) => ({
+      spark: s.name,
+      state: s.state,
+      limits: QUOTAS,
+      series: s.state === 'running' ? serieDe(etat, 0.9) : serieDe('vide'),
+    })),
+  };
+}
+
+function metriquesSpark(nom, etat) {
+  const declare = SPARKS.find((s) => s.name === nom);
+  const arrete = declare && declare.state !== 'running';
+  const socle = etat === 'desactive' ? ETEINT : CADENCE;
+  return {
+    ...socle,
+    spark: nom,
+    state: declare?.state ?? 'running',
+    limits: QUOTAS,
+    series: arrete
+      // §52.3 : un Spark arrêté a bien une LIGNE par tic — sans mesure.
+      ? serieDe('vide').map((p) => ({ ...p, samples: 1, states: [declare.state] }))
+      : serieDe(etat),
+  };
+}
+
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
                           // SPK-57 · §49.3 : le refus de RÉTRÉCISSEMENT. Il ne se
@@ -120,6 +210,11 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
                           // afficher « en marche » sous « arrêt réussi » — la
                           // contradiction même que le §37.7.2 existe pour
                           // éviter, et une capture qui la montre est fausse.
+                          // SPK-93 · §52 : ce que les routes de supervision
+                          // rendent. Les états VIDE, « historien désactivé » et
+                          // « lecture en échec » ne se provoquent pas contre une
+                          // Forge en marche : ils se posent.
+                          metriques = 'pleines',
                           gesteRendu = null, dockerConteneurApres = null,
                           // SPK-45 tranche 2 : le sondage du shell (§37.4.7).
                           probeShell = null,
@@ -407,6 +502,17 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
             fingerprint: '07acff4bc411', scope: 'spark', origin: 'spark',
             updated_at: '2026-08-21T08:15:00' },
         ] }), { status: 200 });
+      }
+      if (url.includes('/metrics')) {
+        if (metriques === 'erreur') {
+          return new Response(JSON.stringify({
+            detail: { error: 'incus_failed', message: 'Le tunnel SSH est rompu.' },
+          }), { status: 502 });
+        }
+        const spark = url.match(/sparks\/([^/]+)\/metrics/);
+        return new Response(JSON.stringify(
+          spark ? metriquesSpark(decodeURIComponent(spark[1]), metriques)
+                : metriquesForge(metriques)), { status: 200 });
       }
       if (url.includes('/usage')) {
         const nom = decodeURIComponent(url.match(/sparks\/([^/]+)\/usage/)[1]);
@@ -1508,6 +1614,76 @@ await page.click('.onglet[href="#/forge/environnement"]');
 await page.waitForSelector('#titre-catalogue-forge', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '82-environnement-catalogue-forge.png'), fullPage: true });
 console.log('  82-environnement-catalogue-forge.png');
+await fermerContexte(ctx);
+
+/* ---------------------------------------- supervision continue (SPK-93, §52) */
+
+/** Va sur « Forge → Supervision » en cliquant, comme un exploitant. */
+async function ouvrirSupervision(base, { largeur = 1440, hauteur = 1400,
+                                         attendre = '.graphique' } = {}) {
+  await page.setViewportSize({ width: largeur, height: hauteur });
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('nav a[href="#/forge"]', { timeout: 8000 });
+  await page.click('nav a[href="#/forge"]');
+  await page.waitForSelector('.onglet[href="#/forge/supervision"]', { timeout: 8000 });
+  await page.click('.onglet[href="#/forge/supervision"]');
+  await page.waitForSelector(attendre, { timeout: 8000 });
+}
+
+ctx = await demarrer();
+await ouvrirSupervision(ctx.base);
+await page.screenshot({ path: join(SORTIE, '83-supervision-forge.png'), fullPage: true });
+console.log('  83-supervision-forge.png');
+
+// La lecture d'un seau, au CLAVIER (§9.1) : le repère vaut pour les quatre.
+await page.locator('.graphique__cadre').first().focus();
+for (let i = 0; i < 12; i += 1) await page.keyboard.press('ArrowLeft');
+await page.screenshot({ path: join(SORTIE, '84-supervision-curseur.png'), fullPage: true });
+console.log('  84-supervision-curseur.png');
+
+// La facette d'un Spark, avec ses propres quotas. On y arrive par la
+// répartition, qui RAMÈNE à la fenêtre du Spark (§52.11).
+await page.click('section:has(#titre-repartition) a[href$="/mesures"]');
+await page.waitForSelector('.graphique__trace', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '85-supervision-spark.png'), fullPage: true });
+console.log('  85-supervision-spark.png');
+
+// Un Spark ARRÊTÉ : une ligne par tic, sans mesure (§52.3, SPK-DS-03).
+await ouvrirDetail(ctx.base, { facette: 'mesures' });
+await page.click('.lien-spark');
+await page.waitForSelector('tbody a', { timeout: 8000 });
+await page.click('tbody a:has-text("boutique")');
+await page.waitForSelector('.onglet[href$="/mesures"]', { timeout: 8000 });
+await page.click('.onglet[href$="/mesures"]');
+await page.waitForSelector('.graphique--vide', { timeout: 8000 });
+await page.screenshot({ path: join(SORTIE, '86-supervision-arrete.png'), fullPage: true });
+console.log('  86-supervision-arrete.png');
+
+// Format étroit : les quatre courbes s'empilent (§8.1).
+await page.setViewportSize({ width: 390, height: 844 });
+await page.screenshot({ path: join(SORTIE, '87-supervision-mobile.png'), fullPage: true });
+console.log('  87-supervision-mobile.png');
+await fermerContexte(ctx);
+
+// AUCUN relevé sur la période : le trou se NOMME, il ne se peint pas à zéro.
+ctx = await demarrer({ metriques: 'vide' });
+await ouvrirSupervision(ctx.base, { hauteur: 1000 });
+await page.screenshot({ path: join(SORTIE, '88-supervision-sans-releve.png'), fullPage: true });
+console.log('  88-supervision-sans-releve.png');
+await fermerContexte(ctx);
+
+// Historien DÉSACTIVÉ : une configuration, pas une panne (§14.5, §52.2).
+ctx = await demarrer({ metriques: 'desactive' });
+await ouvrirSupervision(ctx.base, { hauteur: 1000 });
+await page.screenshot({ path: join(SORTIE, '89-supervision-desactivee.png'), fullPage: true });
+console.log('  89-supervision-desactivee.png');
+await fermerContexte(ctx);
+
+// La LECTURE échoue : les Sparks, eux, tournent toujours (§6.13).
+ctx = await demarrer({ metriques: 'erreur' });
+await ouvrirSupervision(ctx.base, { hauteur: 900, attendre: '[role="alert"]' });
+await page.screenshot({ path: join(SORTIE, '90-supervision-erreur.png'), fullPage: true });
+console.log('  90-supervision-erreur.png');
 await fermerContexte(ctx);
 
 await navigateur.close();

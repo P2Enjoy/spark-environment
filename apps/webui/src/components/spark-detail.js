@@ -23,6 +23,7 @@ import { renderTerminal, TERMINAL_VIDE } from './spark-terminal.js';
 import { renderDocker, DOCKER_VIDE } from './spark-docker.js';
 import { renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
+import { renderSupervisionSpark, SUPERVISION_VIDE } from './supervision.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
 import { DOSSIER_VIDE, renderDossier } from './spark-dossier.js';
@@ -674,6 +675,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     env = [], envUi = ENV_VIDE,
                                     identite = IDENTITE_VIDE,
                                     dossier = DOSSIER_VIDE,
+                                    mesures = SUPERVISION_VIDE,
                                     catalogue = [], pools = null, cores = null } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
@@ -697,6 +699,9 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin)
                + renderIdentityPanel(spark, identite),
     instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),
+    // SPK-93 · §52.11 : la meme lecture que l'ecran de Forge, bornee a CE Spark
+    // et comparee a SES quotas.
+    mesures: () => renderSupervisionSpark(mesures),
     environnement: () => renderEnvPanel(spark, env, envUi, renderModale, catalogue),
     terminal: () => renderTerminal(spark, terminal),
     docker: () => renderDocker(spark, docker),

@@ -10595,8 +10595,16 @@ du SPK-DS-02 n'est éprouvable contre la pile de développement.
 Le §12.1.3 tranche déjà le cas : le doublon doit **la même forme de réponse que
 le vrai pour la même condition**. Or un compteur qui n'avance pas n'est pas un
 compteur. Le doublon dérive donc ses compteurs du temps écoulé, selon un profil
-**déterministe** propre à chaque instance — même Spark, même durée, même série,
-sinon les captures cesseraient d'être reproductibles (§30.1).
+**déterministe** propre à chaque instance : une fonction pure du nom et de
+l'instant, sans aucun tirage — même Spark, même instant, même valeur, sinon les
+captures cesseraient d'être reproductibles (§30.1).
+
+**L'origine de ce temps est un instant FIXE, et non le démarrage du processus.**
+Mesuré le 2026-09-07 : ancrée sur le démarrage, elle faisait repartir le disque
+de sa base à chaque lancement, et l'historique constitué par le seed formait
+avec les relevés suivants une **marche** parfaitement visible à l'écran, que rien
+n'avait produite. Un doublon qui se contredit d'un processus à l'autre n'imite
+plus rien.
 
 Ce que le profil fait bouger, et pourquoi chaque grandeur ne bouge pas de la
 même façon :
@@ -10605,7 +10613,7 @@ même façon :
 |---|---|---|
 | CPU, réseau | compteurs, **intégrale** d'un taux qui respire | un compteur cumule ; poser `compteur = taux × t` rendrait un taux constant à la dérivée, donc les mêmes lignes plates |
 | mémoire | jauge, modulée autour d'une base propre à l'instance | une cellule réelle respire ; une mémoire figée ne met aucun axe à l'épreuve |
-| disque | base propre à l'instance, **croissance lente et monotone** | un disque ne respire pas, il croît ; le faire osciller ferait lire une libération d'espace que rien n'a produite |
+| disque | base propre à l'instance, **dérive lente** de quelques pour cent | mesuré le 2026-09-07 : une croissance monotone rapportée à une origine fixe portait l'occupation à `93 Gio` **sous un quota de `10 Gio`** — un doublon qui dépasse la limite qu'il est censé respecter ne montre plus rien de ce que le produit refuse (§49.3) |
 
 Le relevé énumère aussi `docker0`, comme le vrai (§20.2), avec un trafic
 délibérément bien supérieur à celui d'`eth0` : sans lui, la règle « seule `eth0`
