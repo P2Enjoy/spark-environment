@@ -5308,6 +5308,13 @@ Mesuré sur la même Forge, en interrogeant la socket directement, Incus disait 
 - Une cellule **déjà arrêtée** ne doit pas faire échouer la suppression : l'arrêt
   est un moyen, pas une condition.
 - Dépend de : SPK-52 pour `InstanceAbsente`, qui ne doit pas régresser.
+- **Troisième défaut, signalé dans la foulée** (§5.5) : après l'échec, reprendre
+  le Spark rendait `POST /1.0/instances : Instance "ubuntu-demo" already exists`
+  — une **création**. `settle` mettait le Spark en `error`, alors que sa propre
+  documentation prescrit l'inverse pour la suppression, et depuis `error` la
+  table des transitions fait de `RETRY` une création. Une suppression ratée rend
+  désormais le Spark à l'état que la machine MONTRE, relu chez Incus, d'où la
+  suppression se relance.
 - DoD : supprimer un Spark **en marche** aboutit, prouvé par un test qui compte
   les appels au pilote — arrêt puis suppression — et par une suppression réelle
   sur la Forge de démonstration ; un refus d'Incus affiche **le texte d'Incus**,

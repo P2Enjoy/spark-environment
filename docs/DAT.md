@@ -7829,6 +7829,39 @@ Une cellule **déjà arrêtée** ne fait pas échouer la suppression : l'arrêt 
 moyen, pas une condition. Une absence rapportée pendant l'arrêt vaut ce qu'elle
 vaut au §14.5 — l'instance n'est plus là, la suppression a réussi.
 
+### 5.5 Une suppression ratée ne met pas le Spark en « error »
+
+Signalé le 2026-09-02, dans la foulée du précédent. Après l'échec de la
+suppression, reprendre le Spark rendait :
+
+```
+Incus a refusé POST /1.0/instances : Instance "ubuntu-demo" already exists
+```
+
+Un `POST /1.0/instances` est une **création**. Le produit essayait de recréer une
+cellule qu'il venait d'échouer à supprimer.
+
+**La règle existait déjà, écrite, et n'avait jamais été implémentée.** La
+documentation de `lifecycle.settle` dit :
+
+> Une opération transitoire qui échoue mène à `error`, **sauf la suppression** :
+> une suppression ratée laisse le Spark là où il était, pas dans un état d'où
+> l'on ne pourrait plus rien faire.
+
+Le code faisait `if not success: return State.ERROR`, sans exception. Et depuis
+`error`, la table des transitions donne `RETRY → CREATING` : « reprendre »
+signifie donc **créer**, ce qui est juste après une création ratée et absurde
+après une suppression ratée.
+
+**Décision.** Une suppression ratée rend le Spark à l'état que la machine
+MONTRE — `running` ou `stopped` —, d'où la suppression peut être relancée
+(`_ALLOWED` l'autorise depuis les deux). On ne l'invente pas : l'état est relu
+chez Incus. Quand cette lecture échoue à son tour, on retombe sur `error`, parce
+que ne pas savoir n'autorise pas à écrire un état qu'on n'a pas observé (§14.6).
+
+C'est le §14.3 appliqué à chaud : la même règle que la réconciliation au
+démarrage, confronter le registre à la réalité plutôt que de deviner.
+
 ## 43. L'environnement d'un Spark : variables et secrets
 
 Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doit
