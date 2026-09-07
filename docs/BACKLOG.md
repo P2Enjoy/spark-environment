@@ -5267,6 +5267,56 @@ l'arbitrage de la collision `SPK-84`.)*
 
 ---
 
+### [ ] SPK-90 · Supprimer arrête d'abord, et un refus d'Incus se lit
+
+Signalé par le responsable le 2026-09-02, sur la Forge de démonstration :
+
+```
+Incus a refuse DELETE /1.0/instances/ubuntu-demo : Client error '400 Bad Request'
+for url 'http://incus/1.0/instances/ubuntu-demo' For more information check:
+https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+```
+
+Mesuré sur la même Forge, en interrogeant la socket directement, Incus disait :
+
+```json
+{"error_code":400,"error":"Instance is running"}
+```
+
+**Deux défauts, et le second dépasse largement la suppression.**
+
+1. **Le geste est incomplet.** `delete_instance` envoie un `DELETE` sans arrêter
+   la cellule. Incus refuse de supprimer une instance en marche, donc supprimer
+   un Spark démarré échoue toujours — et c'est le cas ordinaire, pas un cas
+   limite.
+2. **Le produit jette l'explication d'Incus.** Les trois transports du pilote
+   formatent l'**exception HTTP** au lieu de lire le champ `error` du corps.
+   L'exploitant reçoit un lien vers MDN là où le serveur avait écrit la cause en
+   trois mots. Cela vaut pour **tout** refus d'Incus, pas seulement celui-ci.
+
+- Spécification : `docs/DAT.md` §5.3 (à écrire et committer avant le code) ·
+  §14.5 (l'absence rapportée reste distincte) · manuel M10.
+- Portée : une aide unique qui extrait `error` du corps, employée par `_get`,
+  `_request` et `_raw_push` ; l'arrêt de la cellule avant sa suppression.
+- **Ce que la correction du message ne doit PAS casser** : le `404` continue de
+  lever `InstanceAbsente` et non `IncusError` (§14.5). Confondre les deux ferait
+  effacer une ligne du registre parce qu'on n'a pas pu poser la question.
+- **L'arrêt fait partie de la suppression**, il ne se demande pas à part : on
+  détruit la cellule, l'arrêter n'ajoute aucune perte. Mais il est **forcé**, car
+  une cellule qui refuse de s'arrêter proprement bloquerait une suppression que
+  l'exploitant a déjà confirmée.
+- Une cellule **déjà arrêtée** ne doit pas faire échouer la suppression : l'arrêt
+  est un moyen, pas une condition.
+- Dépend de : SPK-52 pour `InstanceAbsente`, qui ne doit pas régresser.
+- DoD : supprimer un Spark **en marche** aboutit, prouvé par un test qui compte
+  les appels au pilote — arrêt puis suppression — et par une suppression réelle
+  sur la Forge de démonstration ; un refus d'Incus affiche **le texte d'Incus**,
+  prouvé par un test sur le corps réel `{"error":"Instance is running"}` ; le
+  `404` lève toujours `InstanceAbsente` ; manuel M10 et changelog mis à jour ;
+  `@spec` / `@verifies` posés.
+
+---
+
 ## Réservé, non planifié
 
 - **Serveur MCP sur un Spark** : piste étudiée le 2026-09-02 et laissée hors

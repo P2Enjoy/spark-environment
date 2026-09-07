@@ -7783,6 +7783,52 @@ actuelle. Un tunnel rompu se dit rompu.
 L'audit reçoit une action **distincte**, `forge.reboot` : la confondre avec la
 mise à jour empêcherait de compter les arrêts de production.
 
+### 5.3 Un refus d'Incus se lit — écrit le 2026-09-02
+
+Signalé sur la Forge de démonstration. Supprimer un Spark rendait :
+
+```
+Incus a refuse DELETE /1.0/instances/ubuntu-demo : Client error '400 Bad Request'
+for url 'http://incus/1.0/…' For more information check: https://developer.mozilla.org/…
+```
+
+Interrogé directement, Incus disait ceci — et c'est tout ce qu'il fallait
+savoir :
+
+```json
+{"error_code":400,"error":"Instance is running"}
+```
+
+**Le pilote formatait l'exception HTTP au lieu du corps.** `httpx` lève sur un
+statut d'erreur, et les trois transports — `_get`, `_request`, `_raw_push` —
+interpolaient l'exception. Le serveur avait écrit la cause en trois mots ; le
+produit rendait un lien vers MDN.
+
+La correction est une aide unique : sur un statut d'erreur, on lit `error` dans
+le corps JSON et on le rend TEL QUEL. Le corps d'Incus fait autorité sur la
+cause ; le statut HTTP ne dit que la catégorie.
+
+**Ce que la correction ne casse pas** : un `404` continue de lever
+`InstanceAbsente`, jamais `IncusError` (§14.5). C'est la seule réponse qui
+autorise à conclure que la chose n'est pas là, et la confondre avec une panne
+ferait effacer une ligne du registre parce qu'on n'a pas pu poser la question.
+
+### 5.4 Supprimer une cellule, c'est l'arrêter puis la détruire
+
+Incus refuse `DELETE` sur une instance en marche. Le pilote n'arrêtait pas :
+supprimer un Spark démarré échouait donc **toujours**, ce qui est le cas
+ordinaire et non un cas limite.
+
+L'arrêt fait partie de la suppression et ne se demande pas séparément : on
+détruit la cellule, l'arrêter n'ajoute aucune perte. Il est **forcé**, parce
+qu'une cellule qui refuse de s'arrêter proprement bloquerait un geste que
+l'exploitant a déjà confirmé — et le §14.9 veut qu'une confirmation obtenue soit
+honorée.
+
+Une cellule **déjà arrêtée** ne fait pas échouer la suppression : l'arrêt est un
+moyen, pas une condition. Une absence rapportée pendant l'arrêt vaut ce qu'elle
+vaut au §14.5 — l'instance n'est plus là, la suppression a réussi.
+
 ## 43. L'environnement d'un Spark : variables et secrets
 
 Demandé par le responsable le 2026-08-20. Cette section dit **où la valeur doit
