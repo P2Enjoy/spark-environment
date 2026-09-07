@@ -114,6 +114,25 @@ def test_en_mode_capped_la_reference_CPU_devient_le_plafond(tmp_path):
     assert limites["cpu_capped"] is True
 
 
+def test_un_spark_a_COEURS_DEDIES_a_bien_une_reference_CPU(tmp_path):
+    """§7.2, §52.8 : les QUATRE modes, pas deux.
+
+    Le registre interdit `cpu_reservation` en mode `dedicated` (SCHEMA §4). Ne
+    lire qu'elle laissait la courbe de CPU d'un Spark a coeurs dedies SANS rien a
+    quoi se comparer — une courbe sans referentiel est un chiffre faux. Vu a
+    l'ecran le 2026-09-08 sur un Spark seede en `dedicated`.
+    """
+    client = _app(tmp_path)
+    nom = _spark_en_marche(client, cpu_mode="dedicated", cpu_cores=1,
+                           cpu_reservation=None)
+
+    limites = client.get(f"/v1/sparks/{nom}/metrics").json()["limits"]
+
+    assert limites["cpu"] == 1, "un coeur dedie EST la reference"
+    assert limites["cpu_mode"] == "dedicated"
+    assert limites["cpu_capped"] is False
+
+
 def test_un_spark_ARRETE_a_des_seaux_qui_NOMMENT_l_arret(tmp_path):
     """§52.4, SPK-DS-03 : « arrete » et « personne n'a releve » font le meme trou
     a l'ecran, et ne veulent pas du tout dire la meme chose."""

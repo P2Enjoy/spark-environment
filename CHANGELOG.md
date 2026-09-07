@@ -97,6 +97,31 @@
   sous une autre. Propriété tenue et vérifiée sur le dépôt réel : **229 alias
   publiés, 229 atteignables** — aucun ne disparaît, les doublons deviennent des
   synonymes cherchables. Aucune migration : le registre portait déjà tout.
+- **Une mesure non nulle ne s'écrit plus « zéro », et chaque courbe porte son
+  échelle** (SPK-93, `DESIGN_SYSTEM.md` §14.6, `DESIGN_SYSTEM_APP.md`
+  SPK-DS-20) : signalé par le responsable sur une Forge réelle — une courbe
+  montrait des pics francs, et le curseur posé **sur un pic** lisait
+  `0,00 CPU`. La mesure existait ; `formatCpu` l'écrasait à deux décimales, et
+  `formatBps` arrondissait `180 bit/s` à `0 kbit/s`. Une cellule presque au
+  repos consomme quelques **millièmes** de CPU : deux décimales y affirment un
+  zéro que personne n'a mesuré. Les formateurs gagnent désormais des décimales
+  ou descendent d'unité plutôt que d'arrondir vers un chiffre qui dit autre
+  chose ; la précision fixe reste la règle partout où elle ne ment pas.
+
+  Faute d'échelle, rien ne permettait de trancher entre « la mesure est nulle »
+  et « l'écriture l'a écrasée ». Chaque courbe porte maintenant sa graduation —
+  sommet et zéro, séparés d'un trait médian —, et le **sommet est un palier** :
+  calée sur la mesure la plus haute, l'échelle changeait à chaque
+  rafraîchissement et la courbe se déformait toutes les quinze secondes sans
+  qu'aucune consommation n'ait bougé.
+
+  Deux causes trouvées en cherchant celle-là. Le **doublon** modélisait huit
+  Sparks tous chargés, quand un parc réel est majoritairement au repos : la
+  cellule presque inactive — celle qui met l'écriture à l'épreuve — n'était
+  atteignable par **aucun parcours**. Et un Spark en **cœurs dédiés** n'avait
+  aucune référence CPU : le registre interdit `cpu_reservation` dans ce mode, et
+  le produit ne lisait qu'elle ; sa courbe flottait sans rien à quoi se
+  comparer.
 - **Supervision continue : la Forge relève l'usage en continu, et le trace**
   (SPK-93, `docs/DAT.md` §52, `docs/SCHEMA.md` §10 sexies,
   `DESIGN_SYSTEM_APP.md` SPK-DS-20) : le produit rendait l'usage d'un Spark **à
@@ -296,6 +321,28 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Le doublon Incus annonçait un disque de 10 Gio pour toute cellule** (SPK-57,
+  `docs/DAT.md` §12.1.3, §49.3 — arbitré le 2026-09-08) : il rendait une taille
+  constante et une occupation tirée du seul nom, de 300 à 1200 Mio. La taille
+  contredisait donc le manifeste que le produit venait de poser, et surtout le
+  refus de rétrécissement du §49.3 était devenu **inatteignable depuis l'écran** —
+  le curseur descend à 1 Gio, et aucune cellule en marche du seed n'occupait
+  autant. Le produit n'était pas en cause : sur une Forge réelle une cellule
+  occupe plusieurs gibioctets. C'est sa démonstrabilité qui était perdue, et un
+  refus qu'on ne peut plus provoquer cesse d'être éprouvé. Le doublon retient
+  désormais les `devices` que le produit lui passe, rend la taille du device
+  `root`, et en occupe une **part stable** de 12 à 45 %. Une grande cellule
+  occupe plus qu'une petite, et jamais plus qu'elle n'a.
+- **Deux parcours E2E dépendaient de l'état laissé par un autre, et un
+  troisième lisait un écran en transit** (`docs/DAT.md` §29, §29.2) : le
+  parcours du Spark arrêté ouvrait `orphelin`, qu'un parcours antérieur
+  **supprime** — la dépendance avait été déplacée de `boutique`, que celui du
+  rootless démarre, sans être levée. Il crée désormais sa propre cellule, attend
+  un tic réel de l'historien plutôt qu'un délai, et la supprime en sortant. Les
+  deux autres attendaient un signal **déjà vrai** — la disparition d'un bloc de
+  journaux, la présence d'une ligne de route — puis vérifiaient l'écran avant que
+  la réponse ne soit arrivée : ils gagnaient la course joués seuls et la
+  perdaient en campagne. Ils attendent maintenant l'issue.
 - **Deux modales proposaient d'engager une écriture qu'aucune saisie ne pouvait
   composer** (`docs/DESIGN_SYSTEM.md` §6.27, arbitré le 2026-09-08 · §6.13) :
   dans « Pointer le domaine », lorsqu'aucun jeton DNS n'est posé, que le

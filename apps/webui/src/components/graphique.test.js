@@ -18,8 +18,12 @@ import assert from 'node:assert/strict';
 
 import {
   segments, borneHaute, etatDeLaSerie, dernierPoint, renderGraphique,
-  renderMicroCourbe,
+  renderMicroCourbe, palier,
 } from './graphique.js';
+// Le VRAI formateur, et non le doublon local : ce test porte précisément sur
+// l'écriture des très petites mesures, et un doublon qui arrondirait autrement
+// prouverait l'inverse de ce qu'on cherche.
+import { formatCpu } from './tokens.js';
 
 const point = (at, cpu, extra = {}) => ({
   at, cpu, samples: cpu === null ? 0 : 1, states: cpu === null ? [] : ['running'],
@@ -176,6 +180,49 @@ test('une série entièrement nulle garde une échelle utilisable', () => {
 
 test('une série sans aucune valeur n’a pas d’échelle du tout', () => {
   assert.equal(borneHaute([point('a', null)], 'cpu', null), null);
+});
+
+/* ------------------------------------------------------------ la graduation */
+
+test('la courbe porte son ÉCHELLE : sans elle, un pic ne vaut rien', () => {
+  // SIGNALÉ le 2026-09-08 : une courbe montrait des pics et chaque lecture
+  // disait zéro. Sans graduation, rien ne permettait de trancher entre « la
+  // mesure est nulle » et « l'écriture l'a écrasée ».
+  const html = renderGraphique({
+    cle: 'cpu', titre: 'Processeur', serie: [point('a', 0.0041), point('b', 0.0012)],
+    format: (v) => `${formatCpu(v)} CPU` });
+  assert.match(html, /class="graphique__echelle"/);
+  // Le sommet est un PALIER — 0,005 pour un pic à 0,0041 —, et il s'écrit avec
+  // assez de décimales pour ne pas devenir « 0,01 », soit le double.
+  assert.match(html, /0,0050 CPU/);
+  // Le bas est un zéro NU : « 0,00 CPU » sous « 0,0050 CPU » juxtaposerait deux
+  // précisions sur un même axe.
+  assert.match(html, /<span>0<\/span>/);
+  // Une médiane CHIFFRÉE aurait le même défaut : elle peut tomber de l'autre
+  // côté du seuil de précision de son sommet. Le trait reste, le chiffre non.
+  assert.match(html, /graphique__grille/);
+  // La médiane rattache l'étiquette du milieu à un trait.
+  assert.match(html, /graphique__grille/);
+});
+
+test('la graduation est MASQUÉE aux lecteurs d’écran, qui ont le tableau', () => {
+  const html = renderGraphique({ cle: 'cpu', titre: 'CPU', serie: SERIE, format: CPU });
+  assert.match(html, /<div class="graphique__echelle" aria-hidden="true">/);
+});
+
+test('le sommet est un PALIER, pour que l’échelle ne saute pas', () => {
+  // Bornée à la mesure la plus haute plus 8 %, l'échelle changeait à chaque
+  // rafraîchissement et la courbe entière se déformait toutes les quinze
+  // secondes sans qu'aucune consommation n'ait bougé.
+  assert.equal(palier(0.0041), 0.005);
+  assert.equal(palier(0.0044), 0.005);   // même palier : l'échelle ne bouge pas
+  assert.equal(palier(1.3), 2);
+  assert.equal(palier(7), 10);
+  assert.equal(palier(0), 1);
+  // Deux relevés voisins d'une même série tiennent sur la MÊME échelle.
+  const a = borneHaute([point('x', 0.0041)], 'cpu', null);
+  const b = borneHaute([point('x', 0.0044)], 'cpu', null);
+  assert.equal(a, b);
 });
 
 /* ----------------------------------------------- burst, légende, référence */

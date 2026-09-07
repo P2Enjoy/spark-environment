@@ -10671,6 +10671,7 @@ même façon :
 |---|---|---|
 | CPU, réseau | compteurs, **intégrale** d'un taux qui respire | un compteur cumule ; poser `compteur = taux × t` rendrait un taux constant à la dérivée, donc les mêmes lignes plates |
 | mémoire | jauge, modulée autour d'une base propre à l'instance | une cellule réelle respire ; une mémoire figée ne met aucun axe à l'épreuve |
+| l'ensemble | réparti de façon **exponentielle** entre les instances | signalé le 2026-09-08 : le doublon modélisait huit Sparks tous **chargés**, quand un parc réel est majoritairement au repos. La cellule qui consomme quelques millièmes de CPU n'était atteignable par aucun parcours — et c'est elle qui a montré que « 0,00 CPU » s'écrivait sous une courbe pleine de pics |
 | disque | base propre à l'instance, **dérive lente** de quelques pour cent | mesuré le 2026-09-07 : une croissance monotone rapportée à une origine fixe portait l'occupation à `93 Gio` **sous un quota de `10 Gio`** — un doublon qui dépasse la limite qu'il est censé respecter ne montre plus rien de ce que le produit refuse (§49.3) |
 
 Le relevé énumère aussi `docker0`, comme le vrai (§20.2), avec un trafic

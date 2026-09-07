@@ -82,7 +82,25 @@ export function borneHaute(serie, cle, reference) {
   const haut = utile ? Math.max(mesure, reference) : mesure;
   // Une série entièrement à zéro est une VRAIE mesure — le §14.6 la distingue
   // de l'absence. Elle a besoin d'une échelle quand même.
-  return haut > 0 ? haut * 1.08 : 1;
+  return haut > 0 ? palier(haut) : 1;
+}
+
+/**
+ * Le premier palier « rond » au-dessus d'une valeur : 1, 2 ou 5 fois une
+ * puissance de dix.
+ *
+ * Deux raisons, et la seconde est la vraie. D'abord une graduation lisible :
+ * « 0,005 CPU » se lit, « 0,00443 CPU » non. Ensuite, et surtout, une échelle
+ * **stable** : bornée à la mesure la plus haute plus 8 %, elle changeait à
+ * chaque rafraîchissement, et la courbe entière se déformait toutes les quinze
+ * secondes sans qu'aucune consommation n'ait bougé.
+ */
+export function palier(maximum) {
+  if (!(maximum > 0)) return 1;
+  const ordre = 10 ** Math.floor(Math.log10(maximum));
+  const reste = maximum / ordre;
+  const cran = reste <= 1 ? 1 : reste <= 2 ? 2 : reste <= 5 ? 5 : 10;
+  return cran * ordre;
 }
 
 function abscisse(index, total) {
@@ -267,12 +285,27 @@ export function renderGraphique({
     + `<div class="graphique__cadre" tabindex="0" role="group"`
     + ` aria-label="${echapper(titre)} — parcourir les points avec les flèches"`
     + ` data-graphique="${echapper(cle)}" data-points="${total}">`
+    // La graduation est en HTML, pas en SVG : le viewBox est étiré en largeur
+    // (`preserveAspectRatio="none"`), ce qui déformerait tout texte qu'il
+    // porterait. Elle est masquée aux lecteurs d'écran — le tableau de données
+    // ci-dessous porte déjà chaque point avec sa valeur.
+    // DEUX étiquettes, et pas trois. Une médiane portant une valeur pouvait
+    // tomber de l'autre côté du seuil de précision de son sommet — « 0,01 » au
+    // sommet et « 0,0050 » au milieu, sur le même axe. Le trait médian reste,
+    // il aide à lire la hauteur sans prétendre à un chiffre.
+    //
+    // Le bas est TOUJOURS zéro, et un zéro n'a pas de précision.
+    + `<div class="graphique__echelle" aria-hidden="true">`
+    + `<span>${echapper(format(haut))}</span>`
+    + `<span>0</span></div>`
     + `<svg class="graphique__svg" viewBox="0 0 ${CADRE.largeur} ${CADRE.hauteur}"`
     + ` preserveAspectRatio="none" aria-hidden="true" focusable="false">`
     + (yReference !== null
       ? `<defs><clipPath id="${identifiant}-clip"><rect x="0" y="0"`
         + ` width="${CADRE.largeur}" height="${yReference.toFixed(1)}" /></clipPath></defs>`
       : '')
+    + `<line class="graphique__grille" x1="${CADRE.gauche}" y1="${ordonnee(haut / 2, haut).toFixed(1)}"`
+    + ` x2="${CADRE.largeur - CADRE.droite}" y2="${ordonnee(haut / 2, haut).toFixed(1)}" />`
     + `<line class="graphique__base" x1="${CADRE.gauche}" y1="${CADRE.hauteur - CADRE.bas}"`
     + ` x2="${CADRE.largeur - CADRE.droite}" y2="${CADRE.hauteur - CADRE.bas}" />`
     + (yReference !== null

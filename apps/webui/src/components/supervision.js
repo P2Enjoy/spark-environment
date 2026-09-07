@@ -65,11 +65,15 @@ function reference(ressource, limites, { spark = false } = {}) {
   if (!limites) return { valeur: null, nom: null };
   switch (ressource.cle) {
     case 'cpu':
+      // Les quatre modes du §7.2 ne garantissent pas la même chose, et le nom
+      // doit le dire : un plafond se dépasse, une réservation se déborde, des
+      // cœurs dédiés sont à soi.
       return {
         valeur: limites.cpu,
-        nom: spark
-          ? (limites.cpu_capped ? 'Plafond' : 'Réservation')
-          : 'Pool allouable',
+        nom: !spark ? 'Pool allouable'
+          : limites.cpu_capped ? 'Plafond'
+          : limites.cpu_mode === 'dedicated' ? 'Cœurs dédiés'
+          : 'Réservation',
       };
     case 'memory_bytes':
       return { valeur: limites.memory_bytes, nom: spark ? 'Réservation' : 'Pool allouable' };

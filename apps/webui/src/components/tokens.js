@@ -136,11 +136,26 @@ export function formatOctetsExact(value) {
   return `${virgule(String(Number(n.toFixed(2))))} ${OCTETS[i]}`;
 }
 
+/**
+ * Formate un débit. **Une mesure non nulle ne s'écrit jamais « 0 ».**
+ *
+ * @spec docs/BACKLOG.md#SPK-93 · docs/DESIGN_SYSTEM.md §14.6 (zéro et « on ne
+ *       sait pas » sont distincts) · docs/DESIGN_SYSTEM_APP.md SPK-DS-20
+ *
+ * SIGNALÉ le 2026-09-08 par le responsable, sur une Forge réelle : un Spark
+ * presque au repos affichait « 0 kbit/s » sous une courbe qui montrait des
+ * pics. `Math.round(180 / 1e3)` vaut `0` — la mesure existait, l'écriture la
+ * détruisait. Le §14.6 interdit de confondre zéro et une mesure ; il l'interdit
+ * aussi au formateur, qui est le dernier endroit où la confusion peut naître.
+ *
+ * En deçà du kilobit, on descend donc d'unité plutôt que d'arrondir à zéro.
+ */
 export function formatBps(value) {
   if (value === null || value === undefined) return null;
   if (value >= 1e9) return `${virgule((value / 1e9).toFixed(1))} Gbit/s`;
   if (value >= 1e6) return `${Math.round(value / 1e6)} Mbit/s`;
-  return `${Math.round(value / 1e3)} kbit/s`;
+  if (value >= 1e3) return `${Math.round(value / 1e3)} kbit/s`;
+  return `${Math.round(value)} bit/s`;
 }
 
 /**
@@ -151,6 +166,21 @@ export function formatBps(value) {
  */
 export function formatCpu(value) {
   if (value === null || value === undefined) return null;
+  if (value === 0) return virgule((0).toFixed(2));
+  // SPK-93 · §14.6 : une mesure NON NULLE ne s'écrit jamais « 0,00 ».
+  //
+  // SIGNALÉ le 2026-09-08 sur une Forge réelle : une cellule presque au repos
+  // consomme quelques MILLIÈMES de CPU. Deux décimales les écrasent toutes sur
+  // « 0,00 », et l'écran affirme alors une mesure — zéro — que personne n'a
+  // faite, sous une courbe qui montre pourtant des pics. La précision fixe reste
+  // la règle PARTOUT ailleurs : elle ne cède que là où elle mentirait.
+  // Le seuil est 0,01 et non 0,005, pour que les PALIERS d'un axe s'écrivent
+  // tous de la même façon : `0,005` arrondi à deux décimales rendrait « 0,01 »,
+  // soit le double du sommet réellement tracé.
+  if (Math.abs(value) < 0.01) {
+    const fin = value.toFixed(4);
+    return Number(fin) === 0 ? '< 0,0001' : virgule(fin);
+  }
   return virgule(value.toFixed(2));
 }
 

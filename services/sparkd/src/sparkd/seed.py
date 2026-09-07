@@ -423,7 +423,8 @@ def _historiser(config: Config, heures: float = 6.0) -> int:
     connection = connect(config.database)
     try:
         sparks = connection.execute(
-            "SELECT id, name, state, incus_name FROM spark ORDER BY name"
+            "SELECT id, name, state, incus_name, storage_bytes FROM spark "
+            "ORDER BY name"
         ).fetchall()
         pas = 15.0
         tics = int(heures * 3600 / pas)
@@ -449,8 +450,15 @@ def _historiser(config: Config, heures: float = 6.0) -> int:
                 # Le meme temps que celui du pilote en marche (§52.10) : sans
                 # cette continuite, l'historique du seed et les releves qui le
                 # suivent formeraient une marche que rien n'a produite.
+                # Le quota du Spark est passe au doublon, comme le pilote en
+                # marche le fait. VU A L'ECRAN le 2026-09-08 : sans lui, le
+                # doublon retombait sur sa taille par defaut et l'historique
+                # sautait de 2,3 a 9,1 Gio au premier releve vivant — une marche
+                # que rien n'avait produite, exactement ce que le §52.10
+                # reproche a une origine de temps mal ancree.
                 etat = etat_simule(spark["incus_name"],
-                                   instant.timestamp() - PROFIL_ORIGINE)
+                                   instant.timestamp() - PROFIL_ORIGINE,
+                                   spark["storage_bytes"])
                 taux = rates.observe(
                     spark["id"],
                     metrics.read_sample(etat, now=tic * pas))

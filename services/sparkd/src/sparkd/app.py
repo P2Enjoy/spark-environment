@@ -1017,10 +1017,22 @@ def create_app(config: Config) -> FastAPI:
         pas ; le CPU se compare a la reservation, sauf en mode `capped` ou un
         plafond existe reellement.
         """
-        plafonne = spark.get("cpu_mode") == "capped"
+        mode = spark.get("cpu_mode")
+        plafonne = mode == "capped"
+        # Les QUATRE modes du §7.2, et non deux. Le registre interdit a
+        # `cpu_reservation` d'exister en mode `dedicated` (SCHEMA §4) : ne lire
+        # qu'elle laissait un Spark a coeurs dedies SANS aucune reference — sa
+        # courbe de CPU flottait alors sans rien a quoi se comparer, ce que le
+        # §52.8 interdit. Vu a l'ecran le 2026-09-08 sur « postgres-dedie ».
+        if plafonne:
+            reference_cpu = spark.get("cpu_max")
+        elif mode == "dedicated":
+            reference_cpu = spark.get("cpu_cores")
+        else:
+            reference_cpu = spark.get("cpu_reservation")
         return {
-            "cpu": spark.get("cpu_max") if plafonne else spark.get("cpu_reservation"),
-            "cpu_mode": spark.get("cpu_mode"),
+            "cpu": reference_cpu,
+            "cpu_mode": mode,
             "cpu_capped": plafonne,
             "memory_bytes": spark.get("memory_reservation_bytes"),
             "disk_bytes": spark.get("storage_bytes"),

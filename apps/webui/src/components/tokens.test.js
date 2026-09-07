@@ -62,6 +62,25 @@ test('les debits sont lisibles', () => {
   assert.equal(formatBps(1_000_000_000), '1,0 Gbit/s');
 });
 
+test('une mesure NON NULLE ne s ecrit jamais « zero »', () => {
+  // SPK-93 · §14.6, SIGNALE le 2026-09-08 sur une Forge reelle : un Spark
+  // presque au repos affichait « 0,00 CPU » et « 0 kbit/s » SOUS une courbe qui
+  // montrait des pics. La mesure existait ; c'est l'ecriture qui la detruisait.
+  // Le formateur est le dernier endroit ou la confusion du §14.6 peut naitre.
+  assert.notEqual(formatCpu(0.0041), '0,00');
+  assert.equal(formatCpu(0.0041), '0,0041');
+  assert.equal(formatCpu(0.0005), '0,0005');
+  assert.notEqual(formatBps(180), '0 kbit/s');
+  assert.equal(formatBps(180), '180 bit/s');
+
+  // Zero reste zero : c'est une mesure, et elle a droit a son ecriture.
+  assert.equal(formatCpu(0), '0,00');
+  assert.equal(formatBps(0), '0 bit/s');
+
+  // Et sous le seuil de la derniere decimale, on le DIT plutot que d'arrondir.
+  assert.equal(formatCpu(0.00004), '< 0,0001');
+});
+
 test('le separateur decimal est la virgule, pas le point', () => {
   // Le produit est entierement francophone : « 2.0 Gio » est un anglicisme.
   assert.equal(formatCpu(1.996), '2,00');

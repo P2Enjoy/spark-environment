@@ -760,6 +760,33 @@ réservation est du **burst**, elle se distingue par un aplat `accent` sous la
 courbe et jamais par du rouge. `danger` n'apparaît que lorsque `over_limit` est
 vrai, ce qui n'existe qu'en mode `capped`.
 
+**La courbe porte son échelle**, et deux étiquettes suffisent : le **sommet** et
+le **zéro**, séparés par un trait médian sans chiffre.
+
+SIGNALÉ le 2026-09-08 par le responsable, sur une Forge réelle : une courbe
+montrait des pics francs, et chaque lecture affichait `0,00 CPU`. Sans
+graduation, rien ne permettait de trancher entre « la mesure est nulle » et
+« l'écriture l'a écrasée » — c'était la seconde (`DESIGN_SYSTEM.md` §14.6, règle
+du formateur). Une courbe sans échelle ne montre qu'une **forme** ; elle ne dit
+pas de combien.
+
+Trois conséquences, chacune tirée de ce relevé :
+
+- le **sommet est un palier** — 1, 2 ou 5 fois une puissance de dix — et non la
+  mesure la plus haute majorée d'un pourcentage. Une échelle calée sur la mesure
+  changeait à chaque rafraîchissement : la courbe entière se déformait toutes les
+  quinze secondes sans qu'aucune consommation n'ait bougé ;
+- la **médiane ne porte pas de chiffre**. Elle peut tomber de l'autre côté du
+  seuil de précision de son sommet — « 0,01 » en haut et « 0,0050 » au milieu, sur
+  le même axe. Le trait aide à lire la hauteur, il ne prétend pas à une valeur ;
+- le **zéro s'écrit nu**, sans unité ni décimale. « 0,00 CPU » sous
+  « 0,0020 CPU » juxtaposerait deux précisions sur un même axe.
+
+La graduation est en **HTML**, jamais en SVG : le tracé est étiré en largeur
+(`preserveAspectRatio="none"`), ce qui déformerait tout texte qu'il porterait.
+Elle est masquée aux lecteurs d'écran — le tableau de données porte déjà chaque
+point avec sa valeur.
+
 **L'information ne repose jamais sur la seule couleur** (`DESIGN_SYSTEM.md`
 §1.5). Chaque courbe porte son intitulé et sa valeur courante en toutes lettres
 au-dessus de son tracé ; la légende nomme chaque trait. Un graphique lu en

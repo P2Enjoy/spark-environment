@@ -526,20 +526,42 @@ def _profil(name: str) -> dict[str, float]:
     """Signature stable d'une instance, tiree de son nom. Sans hasard."""
     graine = int(hashlib.sha256(name.encode()).hexdigest()[:12], 16)
     return {
-        # Part de CPU moyenne : de 0,03 a 0,42 coeur.
-        "cpu": 0.03 + (graine % 40) / 100.0,
+        # Part de CPU moyenne, repartie de facon EXPONENTIELLE : de ~0,0009 a
+        # ~0,5 coeur.
+        #
+        # SIGNALE le 2026-09-08 par le responsable, et c'est un defaut du
+        # doublon autant que de l'ecran. Il modelisait huit Sparks tous
+        # CHARGES — 0,03 a 0,42 CPU —, quand un parc reel est majoritairement au
+        # repos. La cellule presque inactive, celle qui consomme quelques
+        # milliemes de CPU, n'etait donc atteignable par AUCUN parcours : c'est
+        # elle qui a montre que « 0,00 CPU » s'ecrivait sous une courbe pleine de
+        # pics. Un doublon qui ne sait pas etre au repos cache la moitie des
+        # ecritures du produit (§12.1.3).
+        "cpu": 0.0009 * (1.4 ** (graine % 19)),
         # Amplitude de la respiration, de 0,25 a 0,80 de la moyenne.
         "amplitude": 0.25 + (graine // 41 % 56) / 100.0,
         # Dephasage, pour que deux Sparks ne montent pas ensemble.
         "phase": (graine // 977 % 360) * math.pi / 180.0,
-        # Octets par seconde : de 6 ko/s a ~500 ko/s en entree.
-        "rx": 6_000.0 + (graine // 13 % 500_000),
-        "tx": 3_000.0 + (graine // 17 % 250_000),
+        # Octets par seconde, repartis de meme : de ~60 o/s — soit quelques
+        # CENTAINES de bits par seconde, sous le kilobit — a ~600 ko/s. Le bas
+        # de la plage est celui qui met le formateur a l'epreuve.
+        "rx": 60.0 * (1.35 ** (graine // 13 % 24)),
+        "tx": 30.0 * (1.35 ** (graine // 17 % 24)),
         # Memoire de base : de 96 a 608 Mio.
         "memoire": (96 + (graine // 23 % 512)) * 1024.0 ** 2,
-        # Disque de base : de 300 a 1200 Mio, sous le plus petit quota vendu.
-        "disque": (300 + (graine // 29 % 900)) * 1024.0 ** 2,
+        # Part du quota reellement occupee : de 12 a 45 %. Une PART et non une
+        # taille absolue — une cellule de 40 Gio n'occupe pas ce qu'occupe une
+        # cellule de 5 Gio, et une taille figee rendait le refus du §49.3
+        # inatteignable sur les tailles ordinaires (§12.1.3).
+        "part_disque": 0.12 + (graine // 29 % 34) / 100.0,
     }
+
+
+#: Taille rendue quand l'instance ne porte pas de device `root` — le cas des
+#: preuves qui creent une cellule nue. Le doublon avoue ce qu'il ne sait pas
+#: (§12.1.3) : il garde une valeur plausible plutot que de rendre `None`, ce qui
+#: ferait passer une absence de manifeste pour une absence de mesure (§14.6).
+_DISQUE_PAR_DEFAUT = 10 * 1024 ** 3
 
 
 #: Rapport de la seconde harmonique a la premiere. Irrationnel a dessein : une
@@ -578,7 +600,28 @@ def _integrale(secondes: float, profil: dict[str, float]) -> float:
             * math.cos(_HARMONIQUE * omega * secondes + 2 * profil["phase"]))
 
 
-def etat_simule(name: str, secondes: float) -> dict[str, Any]:
+def _taille_racine(instance: dict[str, Any]) -> int | None:
+    """La taille vendue, lue dans le device `root` de l'instance (§12.1.3).
+
+    Le vrai Incus la porte la, et le produit l'y pose a la creation comme au
+    redimensionnement (`translate.devices`, `update_root_size`). La lire ici
+    plutot que de figer une constante est ce qui fait que le doublon rend une
+    cellule de 40 Gio quand on a vendu 40 Gio.
+
+    Rend `None` — et non zero — quand rien n'est pose : une cellule creee sans
+    manifeste n'est pas une cellule sans disque, et les confondre ferait rendre
+    une occupation nulle la ou l'on ne sait simplement pas (§14.6).
+    """
+    taille = ((instance.get("devices") or {}).get("root") or {}).get("size")
+    try:
+        valeur = int(str(taille))
+    except (TypeError, ValueError):
+        return None
+    return valeur if valeur > 0 else None
+
+
+def etat_simule(name: str, secondes: float,
+                disque_total: int | None = None) -> dict[str, Any]:
     """Etat plausible d'une cellule apres `secondes` de fonctionnement.
 
     @spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.10, §12.1.3
@@ -589,6 +632,12 @@ def etat_simule(name: str, secondes: float) -> dict[str, Any]:
     """
     profil = _profil(name)
     cumul = _integrale(secondes, profil) - _integrale(0.0, profil)
+    # Le disque est une FRACTION du quota vendu, stable par cellule : une grande
+    # cellule occupe plus qu'une petite, et jamais plus qu'elle n'a. La marge de
+    # 6 % de la derive ci-dessous reste sous le quota parce que la part plafonne
+    # a 45 %.
+    total = int(disque_total or _DISQUE_PAR_DEFAUT)
+    occupation = total * profil["part_disque"]
     return {
         "status": "Running",
         "cpu": {"usage": int(profil["cpu"] * cumul * 1e9)},
@@ -597,7 +646,12 @@ def etat_simule(name: str, secondes: float) -> dict[str, Any]:
             "total": 2 * 1024 ** 3,
         },
         "disk": {"root": {
-            "total": 10 * 1024 ** 3,
+            # SPK-57 · §12.1.3, arbitre le 2026-09-08 : la taille est celle du
+            # MANIFESTE, la ou le vrai pilote la porte — le device `root`. Une
+            # constante de 10 Gio contredisait le quota que le produit venait de
+            # poser, et rendait le refus du §49.3 inatteignable depuis l'ecran :
+            # le curseur descend a 1 Gio, et aucune cellule n'occupait autant.
+            "total": total,
             # Le disque DERIVE lentement, il ne croit pas sans fin.
             #
             # MESURE le 2026-09-07 : une croissance monotone de quelques kio par
@@ -609,7 +663,7 @@ def etat_simule(name: str, secondes: float) -> dict[str, Any]:
             # Une derive lente est aussi plus juste qu'une croissance pure : un
             # disque reel monte ET descend, les journaux tournent et les images
             # se purgent.
-            "usage": int(profil["disque"] * (1 + 0.06 * math.sin(
+            "usage": int(occupation * (1 + 0.06 * math.sin(
                 2 * math.pi * secondes / (6 * _PROFIL_PERIODE)
                 + profil["phase"]))),
         }},
@@ -798,6 +852,11 @@ class FakeIncus:
         # refus d'une Alpine serait inéprouvable.
         self.created[nom] = {"name": nom, "status": "Stopped",
                              "config": payload.get("config", {}),
+                             # SPK-57 · §12.1.3 : les devices sont RETENUS, la
+                             # ou le vrai Incus les garde. Sans eux, la taille du
+                             # disque rendue plus tard contredirait le manifeste
+                             # que le produit vient de poser.
+                             "devices": payload.get("devices", {}),
                              "alias": (payload.get("source") or {}).get("alias", "")}
         self._persist()
 
@@ -1004,7 +1063,8 @@ class FakeIncus:
         # Le temps ecoule depuis le demarrage du processus fait la duree : deux
         # lectures separees d'une cadence rendent donc un taux, et non `null`
         # a l'infini.
-        etat = etat_simule(name, time.time() - _PROFIL_ORIGINE)
+        etat = etat_simule(name, time.time() - _PROFIL_ORIGINE,
+                           _taille_racine(instance))
         etat["status"] = instance.get("status", "Running")
         return etat
 

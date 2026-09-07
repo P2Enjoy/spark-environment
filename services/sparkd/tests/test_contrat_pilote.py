@@ -216,3 +216,69 @@ def test_le_CONTRAT_ne_gagne_pas_de_methode_en_silence():
         "les deux pilotes, soit exclue AVEC son motif dans _HORS_COMPARAISON "
         "(docs/DAT.md §12.1.3)")
     assert all(_HORS_COMPARAISON.values()), "une exclusion sans motif n'en est pas une"
+
+
+# --- Le disque simulé suit le quota VENDU (§12.1.3) -------------------------
+#
+# @verifies docs/BACKLOG.md#SPK-57 · docs/DAT.md §12.1.3 (le doublon rend la
+#           même FORME que le vrai pilote), §49.3 (le refus de rétrécissement)
+#
+# Arbitré le 2026-09-08. Le doublon annonçait un disque de 10 Gio pour TOUTE
+# cellule, quelle que soit sa taille vendue, et une occupation tirée du seul nom
+# — de 300 à 1200 Mio. Deux conséquences, toutes deux fausses :
+#
+#   - la taille rendue contredisait le manifeste que le produit venait de poser ;
+#   - le refus du §49.3 devenait INATTEIGNABLE depuis l'écran, la borne basse du
+#     curseur étant 1 Gio et aucune cellule en marche du seed n'occupant autant.
+#
+# Le refus existe pourtant, et il est juste : sur une Forge réelle une cellule
+# occupe plusieurs gibioctets. C'est sa démonstrabilité qui était perdue.
+
+
+def _cellule(tmp_path, nom="essai", gio=20):
+    fake = FakeIncus(state_path=tmp_path / "incus.json")
+    fake.create_instance({
+        "name": nom, "config": {}, "source": {"alias": "images:debian/13"},
+        "devices": {"root": {"type": "disk", "path": "/", "size": str(gio * GIO)}},
+    })
+    fake.set_instance_state(nom, "start")
+    return fake
+
+
+def test_le_disque_rendu_est_celui_du_MANIFESTE_pas_une_constante(tmp_path):
+    """Le total vient du device `root`, là où le vrai pilote le porte."""
+    for gio in (5, 20, 40):
+        fake = _cellule(tmp_path / f"c{gio}", gio=gio)
+        racine = fake.instance_state("essai")["disk"]["root"]
+        assert racine["total"] == gio * GIO, f"{gio} Gio vendus, {racine['total']} rendus"
+
+
+def test_l_occupation_reste_SOUS_le_quota_et_le_suit(tmp_path):
+    """Une cellule ne peut pas occuper plus que ce qu'on lui a vendu, et une
+    grande cellule occupe plus qu'une petite — sans quoi le refus du §49.3 ne se
+    provoque jamais sur les tailles ordinaires."""
+    petite = _cellule(tmp_path / "p", nom="essai", gio=5).instance_state("essai")
+    grande = _cellule(tmp_path / "g", nom="essai", gio=40).instance_state("essai")
+    for vu, quota in ((petite, 5 * GIO), (grande, 40 * GIO)):
+        assert 0 < vu["disk"]["root"]["usage"] < quota
+    assert grande["disk"]["root"]["usage"] > petite["disk"]["root"]["usage"]
+
+
+def test_une_cellule_ORDINAIRE_occupe_plus_que_la_borne_basse_du_curseur(tmp_path):
+    """Le point de l'arbitrage : le refus de rétrécissement doit se provoquer
+    depuis l'écran. Le curseur descend à 1 Gio ; une cellule de 20 Gio doit donc
+    occuper davantage, sans quoi le geste n'a aucune valeur atteignable."""
+    vu = _cellule(tmp_path, gio=20).instance_state("essai")
+    assert vu["disk"]["root"]["usage"] > GIO
+
+
+def test_sans_device_racine_le_doublon_garde_son_defaut(tmp_path):
+    """Une cellule créée sans manifeste — le cas des preuves plus anciennes —
+    ne doit pas se mettre à rendre `None` : le doublon avoue ce qu'il ne sait
+    pas, il n'invente pas et ne casse pas (§12.1.3)."""
+    fake = FakeIncus(state_path=tmp_path / "incus.json")
+    fake.create_instance({"name": "nu", "config": {},
+                          "source": {"alias": "images:debian/13"}})
+    fake.set_instance_state("nu", "start")
+    racine = fake.instance_state("nu")["disk"]["root"]
+    assert racine["total"] > 0 and 0 < racine["usage"] < racine["total"]

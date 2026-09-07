@@ -2485,7 +2485,15 @@ test('une recette de site web pose sa ROUTE avant son enregistrement', async () 
 
     // L'aperçu montre les ROUTES avant les enregistrements — l'ordre affiché est
     // l'ordre réel (§38.6.4 bis).
-    await page.waitForSelector('#recette-apercu .recette-ligne--route', { timeout: 15000 });
+    //
+    // On attend l'aperçu QUI PORTE LE PORT SAISI, et non la simple présence
+    // d'une ligne de route : celle-ci est déjà là, tracée avant la saisie, et
+    // s'y arrêter fait lire l'aperçu PRÉCÉDENT. Mesuré le 2026-09-08 — le
+    // parcours passait, puis a rougi quand la campagne a changé de rythme, ce
+    // qui est la signature d'une attente posée sur un signal déjà vrai (§29).
+    await page.waitForFunction(
+      () => document.querySelector('#recette-apercu')?.textContent.includes('port 9300'),
+      null, { timeout: 15000 });
     const apercu = await page.textContent('#recette-apercu');
     assert.ok(apercu.includes('route staging.exemple.test'));
     assert.ok(apercu.includes('port 9300'));
@@ -3996,8 +4004,15 @@ test('un conteneur DISPARU pendant qu’on le regarde est dit, sans crier à la 
     await page.waitForSelector('pre.terminal', { timeout: 15000 });
 
     await page.click('button[data-docker="relire"]');
-    await page.waitForFunction(
-      () => !document.querySelector('pre.terminal'), { timeout: 15000 });
+    // On attend l'ISSUE, pas la disparition du terminal. Celle-ci survient dès
+    // que la relecture COMMENCE : entre elle et la réponse du doublon, l'écran
+    // ne porte ni journaux ni verdict, et une preuve qui s'y arrête juge un
+    // état transitoire. Mesuré le 2026-09-08 — ce parcours gagnait la course
+    // joué seul et la perdait en campagne, ce qui est la signature exacte d'une
+    // attente posée sur le mauvais signal (§29).
+    await page.waitForSelector('.avertissement', { timeout: 15000 });
+    assert.equal(await page.$('pre.terminal'), null,
+      'les journaux d’un conteneur disparu ne restent pas à l’écran');
 
     const ecran = await page.textContent('.principal');
     // Le fait est DIT, et il n'est pas présenté comme un défaut de la console.
@@ -4005,7 +4020,6 @@ test('un conteneur DISPARU pendant qu’on le regarde est dit, sans crier à la 
     // §25.1 : le rouge est réservé au refus du serveur. Une course perdue est un
     // avertissement — la dire en rouge contredirait à l'œil le texte qui la dit.
     assert.equal(await page.$$eval('.refus', (l) => l.length), 0);
-    assert.ok(await page.$('.avertissement'));
     // Et le retour à la liste reste offert : on n'est pas coincé sur un absent.
     await page.click('button[data-docker="fermer"]');
     await page.waitForSelector('.table-defilante table tbody tr', { timeout: 15000 });
@@ -4699,12 +4713,39 @@ test('un Spark ARRÊTÉ nomme l’arrêt, et ne trace pas une ligne à zéro', a
     // trou à l'écran, et ne disent pas du tout la même chose. Zéro dirait qu'il
     // ne consommait rien — une mesure que personne n'a faite.
     //
-    // « orphelin » et non « boutique » : le parcours du rootless DÉMARRE
-    // « boutique » plus haut dans la campagne, et ce parcours passait seul puis
-    // rougissait en série. C'est la signature d'un parcours qui dépend de
-    // l'état laissé par un autre, et le §29 la proscrit. « orphelin » est
-    // arrêté au seed et aucun parcours ne le démarre.
-    await ouvrir('orphelin', 'mesures');
+    // Ce parcours CRÉE sa cellule et ne la démarre pas, au lieu d'emprunter un
+    // Spark du seed. Les deux tentatives précédentes ont échoué pour la même
+    // raison, et c'est ce qui a décidé l'arbitrage du 2026-09-08 : « boutique »
+    // est DÉMARRÉ par le parcours du rootless, et « orphelin » est SUPPRIMÉ par
+    // celui de la cellule disparue. Aucun Spark du seed n'est à la fois arrêté
+    // et intouché ; déplacer la dépendance d'un voisin à l'autre ne fait que
+    // changer lequel casse (§29.2).
+    //
+    // Une cellule appliquée mais jamais démarrée porte des relevés d'état SANS
+    // mesure d'exécution : c'est exactement le trou que cette preuve regarde.
+    await accueil();
+    await page.click('.titre-vue .bouton--primaire');
+    await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
+    await page.fill('#name', 'en-veille');
+    await page.click('button[type="submit"]');
+    await page.waitForSelector('.entete-entite', { timeout: 20000 });
+    await page.click('[data-commande="apply"]');
+    await page.waitForSelector('[data-commande="start"]', { timeout: 30000 });
+
+    // L'historien relève à sa cadence : sans au moins un tic, l'écran dirait
+    // « aucun relevé pour l'instant », qui est l'AUTRE trou — celui dont cette
+    // preuve doit justement le distinguer. On CONSTATE le tic chez sparkd
+    // (§29.3), on ne le devine pas à un délai fixe.
+    const attendu = Date.now() + 60000;
+    for (;;) {
+      const { corps } = await pile.lireSparkd('/v1/sparks/en-veille/metrics?window=15m');
+      if ((corps?.series ?? []).some((p) => p.samples > 0)) break;
+      assert.ok(Date.now() < attendu,
+        'l’historien n’a relevé « en-veille » dans aucun seau en 60 s');
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    await page.click('.onglet[href$="/mesures"]');
     await page.waitForSelector('.graphique', { timeout: 15000 });
 
     const texte = await page.textContent('.principal');
@@ -4713,6 +4754,19 @@ test('un Spark ARRÊTÉ nomme l’arrêt, et ne trace pas une ligne à zéro', a
                  'un Spark arrêté ne doit porter AUCUNE courbe');
     // §14.6 : et surtout pas un zéro, qui serait une mesure affirmée.
     assert.doesNotMatch(texte, /0,00 CPU/);
+
+    // §29.2 : la pile est rendue à l'état du seed. Le Spark de ce parcours
+    // n'appartient à personne d'autre, et le laisser fausserait le compte des
+    // Sparks que lisent les écrans de supervision suivants.
+    await ouvrir('en-veille');
+    await page.click('[data-commande="delete"]');
+    await page.waitForSelector('[data-frappe="delete"]', { timeout: 10000 });
+    await page.fill('[data-frappe="delete"]', 'en-veille');
+    await page.click('[data-confirme]');
+    await page.waitForFunction(
+      () => ![...document.querySelectorAll('tbody a')]
+        .some((a) => a.textContent.trim() === 'en-veille'),
+      null, { timeout: 30000 });
   });
 });
 

@@ -1863,6 +1863,19 @@ Ne jamais confondre :
 
 Ces états utilisent des textes distincts.
 
+**La règle s'applique aussi au formateur**, et c'est le dernier endroit où la
+confusion peut naître. Un formateur ne rend jamais « zéro » pour une valeur qui
+ne l'est pas : lorsque la précision d'affichage écraserait une mesure réelle, on
+gagne des décimales ou l'on descend d'unité, on n'arrondit pas vers un chiffre
+qui affirme autre chose.
+
+Le cas est d'autant plus traître qu'il ne se voit sur aucun écran de
+démonstration : les valeurs d'exemple sont toujours confortables. Il n'apparaît
+que sur un système au repos, c'est-à-dire l'état le plus fréquent en
+exploitation. Les jeux de données de développement doivent donc comporter au
+moins un objet **presque inactif**, faute de quoi l'écriture des petites valeurs
+n'est éprouvée nulle part.
+
 ## 14.7 Donnée inconnue
 
 Une valeur technique inconnue reçue du backend ne doit jamais devenir `undefined` dans l’interface.
