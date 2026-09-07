@@ -1130,3 +1130,70 @@ test('une recette dont TOUT passe, routes comprises, ne dit aucun échec', () =>
   assert.ok(rendu.includes('2 écrit(s)'));
   assert.ok(!rendu.includes('en échec'));
 });
+
+// --- Une modale qui ne recueille RIEN n'offre pas de l'engager --------------
+//
+// @verifies docs/DESIGN_SYSTEM.md §6.27 (« une modale qui ne recueille rien
+//           n'offre pas de l'engager », arbitré le 2026-09-08), §6.13 (un état
+//           vide ne propose une action que si une action existe) ·
+//           docs/BACKLOG.md#SPK-47
+
+test('sans jeton, « Pointer le domaine » n’offre PAS de poser l’enregistrement', () => {
+  // Le bouton envoyait une écriture sans zone ni adresse, que le serveur
+  // refusait. Ce refus n'apprenait rien : il n'y avait rien à écrire.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS],
+    dnsUi({ configured: false, reason: 'Aucun jeton DNS n’est configuré.' }));
+  assert.match(rendu, /Aucun jeton DNS/);
+  assert.ok(!/data-engage="dns"/.test(rendu),
+    'aucun point d’engagement là où rien ne peut être composé');
+  // La modale reste une modale, et on peut en sortir.
+  assert.match(rendu, /data-annule-modale="dns"/);
+  assert.match(rendu, /Fermer<\/button>/, 'il n’y a rien à annuler');
+});
+
+test('un REFUS du fournisseur n’offre pas davantage d’engager', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS],
+    dnsUi({ refus: 'Le fournisseur a refusé le jeton (401).' }));
+  assert.match(rendu, /a refusé le jeton/);
+  assert.ok(!/data-engage="dns"/.test(rendu));
+});
+
+test('un compte SANS ZONE n’offre pas d’engager', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi({ zones: [] }));
+  assert.match(rendu, /ne porte aucune zone/);
+  assert.ok(!/data-engage="dns"/.test(rendu));
+});
+
+test('dès qu’il y a une zone, l’engagement REVIENT', () => {
+  // La symétrie : retirer le bouton là où il sert serait le défaut inverse.
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_DNS], dnsUi());
+  assert.match(rendu, /data-engage="dns"/);
+  assert.match(rendu, /Poser l’enregistrement/);
+  assert.ok(!/Fermer<\/button>/.test(rendu), 'là où l’on saisit, on ANNULE');
+});
+
+test('« Écrire la recette » disparaît quand aucune zone ne peut la recevoir', () => {
+  // Même règle, même cause : la modale porte encore ses champs — le choix de la
+  // recette —, mais aucune combinaison d'entre eux ne compose une écriture sans
+  // zone. Le critère est « une écriture est-elle composable ? », pas « le corps
+  // est-il vide ? ».
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({ zones: [] },
+    { recette: 'site-web' }));
+  assert.match(rendu, /ne porte aucune zone/);
+  assert.ok(!/data-engage="recette"/.test(rendu));
+  assert.match(rendu, /Fermer<\/button>/);
+});
+
+test('un fournisseur qui REFUSE retire aussi l’engagement de la recette', () => {
+  const rendu = renderRoutesPanel(SPARK, [],
+    recetteUi({ zones: [], zonesRefus: 'Le fournisseur a refusé le jeton (401).' },
+              { recette: 'site-web' }));
+  assert.match(rendu, /a refusé le jeton/);
+  assert.ok(!/data-engage="recette"/.test(rendu));
+});
+
+test('avec une zone, la recette s’engage normalement', () => {
+  const rendu = renderRoutesPanel(SPARK, [], recetteUi({}, { recette: 'site-web' }));
+  assert.match(rendu, /data-engage="recette"/);
+  assert.match(rendu, /Écrire la recette/);
+});

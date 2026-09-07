@@ -581,7 +581,7 @@ test('le bloc est rendu dans la vue de la Forge', () => {
 // --- SPK-87 · redémarrer la Forge (docs/DAT.md §51) ------------------------
 //
 // @verifies docs/BACKLOG.md#SPK-87 · docs/DAT.md §51.1, §51.2, §51.3 ·
-//           docs/DESIGN_SYSTEM_APP.md SPK-DS-19 ·
+//           docs/DESIGN_SYSTEM_APP.md SPK-DS-22 ·
 //           docs/DESIGN_SYSTEM.md « Frapper le nom »
 
 const HOTE_REBOOT = { hostname: 'spark-experiment' };
@@ -603,7 +603,7 @@ test('sans relevé, l’écran ne PRÉTEND rien sur la Forge', () => {
 });
 
 test('un noyau sans ZFS RETIRE le geste, il ne le désactive pas', () => {
-  // SPK-DS-19 : ailleurs une action indisponible reste présente et désactivée
+  // SPK-DS-22 : ailleurs une action indisponible reste présente et désactivée
   // (§9.9) ; ici l'état n'est pas « indisponible » mais « ne doit pas avoir
   // lieu », et l'offrir inviterait à insister.
   const rendu = renderRedemarrage(HOTE_REBOOT, reboot({ releve: REFUSE }), SPARKS_REBOOT);

@@ -5416,7 +5416,7 @@ l'arbitrage de la collision `SPK-84`.)*
 
 - Spécification : `docs/DAT.md` §51 (à écrire et committer avant le code) ·
   `docs/DESIGN_SYSTEM.md` §« Frapper le nom » · `docs/DESIGN_SYSTEM_APP.md`
-  SPK-DS-19 · manuel M4.
+  SPK-DS-22 · manuel M4.
 - **Le point qui décide de l'unité, et ce n'est pas le bouton** : ce que le geste
   REFUSE. Un redémarrage vers un noyau dépourvu de module ZFS laisse le pool
   indisponible au démarrage, donc **tous les Sparks à terre**, et cela ne se voit

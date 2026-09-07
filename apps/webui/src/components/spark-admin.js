@@ -372,9 +372,16 @@ function renderRecetteModale(ui) {
        </div>`
     : '';
 
+  // §6.27 « une modale qui ne recueille rien n'offre pas de l'engager ». La
+  // modale porte encore ses champs — le choix de la recette —, mais sans zone
+  // aucune combinaison d'entre eux ne compose une écriture : le préalable
+  // manquant ne se saisit pas ici. Le critère est celui de la règle, « une
+  // écriture est-elle composable ? », et non « le corps est-il vide ? ».
+  const recueille = Boolean(etat.zones?.length);
+
   return renderModale({
     ouverte: ui.open === 'recette', id: 'recette', titre: 'Appliquer une recette DNS',
-    engagement: 'Écrire la recette',
+    engagement: recueille ? 'Écrire la recette' : null,
     refus: ui.refusal?.panel === 'recette' ? ui.refusal.message : null,
     occupee: ui.busy,
     corps: `${choix}${parametres}${humaines}
@@ -774,10 +781,18 @@ function renderDnsModale(ui) {
            TTL 300 s. Rien d’autre n’est touché dans la zone.</p>
          <div id="dns-effet">${renderEffet(dns)}</div>`;
 
+  // §6.27 « une modale qui ne recueille rien n'offre pas de l'engager » : les
+  // quatre états ci-dessus n'ont AUCUN champ — pas de jeton, un fournisseur qui
+  // refuse, aucune zone, ou la lecture en cours. Le bouton y envoyait une
+  // écriture sans zone ni adresse, que le serveur refusait ; ce refus
+  // n'apprenait rien, puisqu'il n'y avait rien à écrire.
+  const recueille = !dns.loading && dns.configured !== false && !dns.refus
+    && dns.zones.length > 0;
+
   return renderModale({
     ouverte: ui.open === 'dns', id: 'dns',
     titre: 'Pointer le domaine',
-    engagement: 'Poser l’enregistrement',
+    engagement: recueille ? 'Poser l’enregistrement' : null,
     refus: ui.refusal?.panel === 'dns' ? ui.refusal.message : null,
     occupee: ui.busy,
     corps,

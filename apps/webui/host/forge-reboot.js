@@ -3,7 +3,7 @@
  *
  * @spec docs/BACKLOG.md#SPK-87 · docs/DAT.md §51.1 (ce que le geste REFUSE),
  *       §51.2 (le relevé), §51.4 (par où il passe) · docs/DAT.md §50 (le même
- *       exécuteur SSH que la mise à jour) · docs/DESIGN_SYSTEM_APP.md SPK-DS-19
+ *       exécuteur SSH que la mise à jour) · docs/DESIGN_SYSTEM_APP.md SPK-DS-22
  *
  * Le point de ce module n'est pas de redémarrer — une ligne suffirait — mais de
  * REFUSER quand il ne faut pas. Un redémarrage vers un noyau dépourvu de module

@@ -10124,12 +10124,13 @@ l'effet réel des écritures sur le RAID1 système sous charge, et le temps de
 réponse des deux routes de lecture sur une base pleine à sept jours. Le §52.12
 est un **calcul**, pas une mesure, et il le dit.
 
-**Une incohérence documentaire trouvée en chemin, laissée en l'état.** Deux
-règles distinctes du design system portent l'identifiant `SPK-DS-19` — le texte à
-coller de SPK-85 et le refus de redémarrage de SPK-87 — et six fichiers s'y
-réfèrent depuis les deux camps. Renuméroter en passant mêlerait à SPK-93 un
-changement qui ne la concerne pas : consigné en entrée 3 du rapport
-d'incohérences, la règle de courbe prenant `SPK-DS-20`.
+**Une incohérence documentaire trouvée en chemin.** Deux règles distinctes du
+design system portaient l'identifiant `SPK-DS-19` — le texte à coller de SPK-85 et
+le refus de redémarrage de SPK-87 — et six fichiers s'y référaient depuis les deux
+camps. Renuméroter en passant aurait mêlé à SPK-93 un changement qui ne la
+concernait pas : consigné au rapport d'incohérences, la règle de courbe prenant
+`SPK-DS-20`. **Arbitré et corrigé le 2026-09-08** : SPK-85, la plus ancienne,
+garde `SPK-DS-19` ; le refus de redémarrage devient `SPK-DS-22`.
 
 **État à la fin de cette session de spécification.** Aucune ligne de code écrite.
 Les documents sont committés d'abord, comme le veut CLAUDE.md §5 : DAT §52,

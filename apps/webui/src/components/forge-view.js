@@ -293,7 +293,7 @@ export const REBOOT_VIDE = {
 
 /**
  * Le panneau de redémarrage (SPK-87, docs/DAT.md §51 ·
- * docs/DESIGN_SYSTEM_APP.md SPK-DS-19 · docs/DESIGN_SYSTEM.md « Frapper le nom »).
+ * docs/DESIGN_SYSTEM_APP.md SPK-DS-22 · docs/DESIGN_SYSTEM.md « Frapper le nom »).
  *
  * Deux situations, et leur différence EST le sujet : ce qui s'avertit — des
  * Sparks vont s'arrêter — et ce qui se refuse — le noyau visé n'a pas de module
@@ -328,7 +328,7 @@ export function renderRedemarrage(host, etat = REBOOT_VIDE, sparks = []) {
            demandé, jamais lancé de lui-même.</p>`
         : renderReleveRedemarrage(vu, enMarche);
 
-  // SPK-DS-19 : sur un refus, le bouton d'engagement n'est pas rendu DU TOUT.
+  // SPK-DS-22 : sur un refus, le bouton d'engagement n'est pas rendu DU TOUT.
   // Ailleurs une action indisponible reste présente et désactivée (§9.9) ; ici
   // l'état n'est pas « indisponible pour l'instant » mais « ne doit pas avoir
   // lieu », et l'offrir inviterait à insister.
@@ -399,7 +399,7 @@ function renderReleveRedemarrage(vu, enMarche) {
   </div>`;
 
   if (!vu.autorise) {
-    // SPK-DS-19 : un refus, pas un avertissement.
+    // SPK-DS-22 : un refus, pas un avertissement.
     return `${lignes}
   <div class="refus" role="alert">
     <p>${echapper(vu.refus?.message ?? 'Redémarrage refusé.')}</p>

@@ -676,7 +676,7 @@ rien.
   d'amorçage » et « le dossier n'a pas pu être lu » sont trois textes distincts,
   jamais un bloc vide.
 
-### SPK-DS-19 · Le redémarrage de la Forge : un refus qui ne se clique pas
+### SPK-DS-22 · Le redémarrage de la Forge : un refus qui ne se clique pas
 
 @spec docs/BACKLOG.md#SPK-87 · docs/DAT.md §51.1
 

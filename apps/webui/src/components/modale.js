@@ -36,6 +36,16 @@ const echapper = (v) =>
  * ne correspond pas encore. Le bouton reste alors **présent et désactivé**, avec
  * sa raison lisible et rattachée par `aria-describedby`. Il ne prend pas la
  * couleur du refus : rien n'a été tenté, ce n'est pas un échec (§6.23).
+ *
+ * `engagement: null` dit tout autre chose, et la distinction est le sujet du
+ * §6.27 « une modale qui ne recueille rien n'offre pas de l'engager » : la
+ * modale n'a, à cet instant, **rien à recueillir** — pas de jeton, un
+ * fournisseur qui refuse, aucune zone au compte. Son corps explique au lieu de
+ * demander, et le point d'engagement n'est alors **pas rendu du tout**. Ce n'est
+ * pas une action indisponible : c'est une action sans objet, et un bouton qui la
+ * proposerait enverrait une écriture vide dont le refus n'apprendrait rien.
+ *
+ * Le bouton restant dit alors « Fermer » : il n'y a rien à annuler.
  */
 export function renderModale({ ouverte = false, id = 'modale', titre = '',
                                corps = '', engagement = 'Enregistrer',
@@ -61,11 +71,12 @@ export function renderModale({ ouverte = false, id = 'modale', titre = '',
       ? `<p class="note" id="${echapper(id)}-indication">${echapper(indication)}</p>`
       : ''}
     <p class="modale__actions">
-      <button type="submit" class="bouton bouton--primaire" data-engage="${echapper(id)}"
+      ${engagement === null ? '' : `<button type="submit" class="bouton bouton--primaire" data-engage="${echapper(id)}"
         ${occupee || desactivee ? 'disabled' : ''}${
           indication ? ` aria-describedby="${echapper(id)}-indication"` : ''
-        }>${echapper(occupee ? 'Envoi…' : engagement)}</button>
-      <button type="button" class="bouton" data-annule-modale="${echapper(id)}">Annuler</button>
+        }>${echapper(occupee ? 'Envoi…' : engagement)}</button>`}
+      <button type="button" class="bouton${engagement === null ? ' bouton--primaire' : ''}"
+        data-annule-modale="${echapper(id)}">${engagement === null ? 'Fermer' : 'Annuler'}</button>
     </p>
   </form>
 </dialog>`;

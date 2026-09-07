@@ -1296,6 +1296,37 @@ Contrat, non négociable :
 Une modale a **un point d’engagement** : un bouton primaire qui nomme l’action.
 L’annulation est secondaire.
 
+### Une modale qui ne recueille rien n’offre pas de l’engager
+
+Arbitré le 2026-09-08, après un défaut constaté sur « Pointer le domaine ».
+
+Une modale ouverte peut se trouver **hors d’état de composer son écriture** :
+le jeton du fournisseur manque, le fournisseur a refusé, le compte ne porte
+aucune zone, la lecture est encore en cours. Il lui manque alors un préalable
+qu’elle **ne recueille pas elle-même** — et aucune saisie, dans cette modale, ne
+peut le fournir. Son corps explique au lieu de demander ; il peut encore porter
+des champs, mais aucune combinaison d’entre eux ne compose une écriture valide.
+
+Dans cet état, le point d’engagement **n’est pas rendu**. Ce n’est pas le §9.9,
+qui garde visible et désactivée une action *qui existe* et dont l’indisponibilité
+est temporaire et nommable : ici l’action n’a pas d’objet. Un bouton
+« Poser l’enregistrement » sous un texte qui dit qu’aucune zone n’existe promet
+une écriture que rien ne peut composer — l’appuyer envoie une requête incomplète,
+que le serveur refuse, et ce refus n’apprend rien à personne : il redit ce que
+l’écran affichait déjà. Le critère n’est donc pas « le corps est-il vide ? » mais
+**« une écriture est-elle composable ? »**. C’est le §6.13 appliqué
+à une modale : *un état vide ne propose une action que lorsqu’une action
+pertinente existe réellement*.
+
+La surface, elle, **reste une modale** et ne devient pas une fenêtre : elle a été
+ouverte par une commande de section, elle est transitoire, et son contenu
+disparaîtra dès que la cause sera levée. Une fenêtre (§6.27) est une surface de
+lecture durable, atteinte par navigation ; ce n’est pas ce qu’on regarde ici.
+
+Le bouton restant dit alors **« Fermer »** et non « Annuler » : il n’y a rien à
+annuler. La fermeture garde tout le reste du contrat — `Échap`, restitution du
+focus, inertie de l’arrière-plan.
+
 Un refus du serveur s’affiche **dans la modale**, près du bouton d’engagement, et
 n’efface aucune saisie. Une modale qui se referme sur un refus ferait perdre le
 travail et cacherait la raison.

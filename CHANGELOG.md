@@ -296,6 +296,20 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Deux modales proposaient d'engager une écriture qu'aucune saisie ne pouvait
+  composer** (`docs/DESIGN_SYSTEM.md` §6.27, arbitré le 2026-09-08 · §6.13) :
+  dans « Pointer le domaine », lorsqu'aucun jeton DNS n'est posé, que le
+  fournisseur a refusé ou que le compte ne porte aucune zone, la modale
+  n'affichait plus aucun champ — mais son bouton « Poser l'enregistrement »
+  restait présent et actionnable. L'appuyer envoyait une requête sans zone ni
+  adresse, que le serveur refusait ; ce refus n'apprenait rien, puisqu'il redisait
+  ce que l'écran affichait déjà. Même chose pour « Écrire la recette » sans zone,
+  où la modale garde pourtant ses champs : le critère n'est pas « le corps est-il
+  vide ? » mais **« une écriture est-elle composable ? »**. Le composant partagé
+  accepte désormais `engagement: null` — le point d'engagement n'est alors pas
+  rendu du tout, et le bouton restant dit « Fermer », puisqu'il n'y a rien à
+  annuler. Ce n'est pas le §9.9, qui garde visible et désactivée une action *qui
+  existe* : ici l'action n'a pas d'objet. Défaut présent depuis SPK-47.
 - **Un parcours de refus de quota ne pouvait plus s'exécuter** (SPK-59,
   `docs/DAT.md` §6.9 bis) : « un quota REFUSÉ reste dans la modale » remplissait
   `#quota-memory` avec `page.fill`, qui rend « Malformed value » sur un

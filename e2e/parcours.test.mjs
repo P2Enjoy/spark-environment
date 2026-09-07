@@ -3469,7 +3469,7 @@ test('en 390 px, le widget flottant ne rend AUCUNE action incliquable', async ()
 // --- SPK-87 · REDEMARRER LA FORGE (§51) ------------------------------------
 //
 // @verifies docs/BACKLOG.md#SPK-87 · docs/DAT.md §51.1 (ce que le geste refuse),
-//           §51.2 (le relevé) · docs/DESIGN_SYSTEM_APP.md SPK-DS-19
+//           §51.2 (le relevé) · docs/DESIGN_SYSTEM_APP.md SPK-DS-22
 
 test('un noyau sans module ZFS fait DISPARAÎTRE le geste de redémarrage', async () => {
   await parcours('redemarrage-refuse', async () => {
@@ -3490,7 +3490,7 @@ test('un noyau sans module ZFS fait DISPARAÎTRE le geste de redémarrage', asyn
     assert.match(section, /7\.0\.0-31-generic/, 'le noyau visé est nommé');
     assert.match(section, /module ZFS/, 'et la raison du refus aussi');
 
-    // SPK-DS-19 : le geste est ABSENT, pas désactivé.
+    // SPK-DS-22 : le geste est ABSENT, pas désactivé.
     assert.equal(await page.$('[data-redemarrage="demander"]'), null,
       'offrir le geste inviterait à insister sur ce qui ne doit pas avoir lieu');
     assert.equal(await page.$('[data-redemarrage="engager"]'), null);
@@ -4530,7 +4530,7 @@ test('copier le dossier d’un Spark, et relire ce que le presse-papier a reçu'
     await ouvrir('crm-production');
     await page.waitForSelector('.dossier [data-dossier-copie]', { timeout: 10000 });
 
-    // Le texte est lisible AVANT d'être collé (SPK-DS-19) : on le déplie comme
+    // Le texte est lisible AVANT d'être collé (SPK-DS-22) : on le déplie comme
     // le ferait quelqu'un qui vérifie ce qu'il envoie à un tiers.
     await page.click('.dossier .repli > summary');
     const affiche = await page.textContent('.dossier__texte');
