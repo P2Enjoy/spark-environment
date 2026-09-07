@@ -5588,7 +5588,7 @@ relevé — pour apprendre que la référence n'existe pas.
   design system et changelog mis à jour ; `@spec` / `@verifies` posés.
 
 
-### [~] SPK-93 · La supervision continue : courbes d'usage de la Forge et de chaque Spark
+### [x] SPK-93 · La supervision continue : courbes d'usage de la Forge et de chaque Spark
 
 Demandé par le responsable le 2026-09-07 : « voir les statistiques en direct de
 tous les Sparks, comme un mini Grafana pour une Forge et tous ses Sparks, et le
@@ -5668,6 +5668,35 @@ secondes, rétention 7 jours.**
   erreur et « historien désactivé » compris ; contrat d'API régénéré ; manuel M8,
   DAT, SCHEMA, design system, contrat de déploiement et changelog mis à jour ;
   `@spec` / `@verifies` posés.
+- **CLOSE le 2026-09-07.** Le serveur, les écrans et les preuves étaient livrés ;
+  il manquait les **captures**, et elles manquaient pour une raison qui vaut
+  d'être écrite : `e2e/captures.mjs` **n'allait pas jusqu'à elles**. Quatre
+  défauts du harnais l'arrêtaient en chemin, tous corrigés ce jour — voir le
+  journal. Le script va désormais au bout et rend **109 captures**, console
+  vierge.
+  Les huit vues de supervision sont produites et observées : les quatre
+  ressources tracées avec leur ligne de référence et le dernier relevé daté
+  (`112`), le repère au clavier (`113`), la facette d'un Spark (`114`), les
+  quatre courbes empilées à 390 px (`116`).
+  **Les trois trous se nomment différemment, et c'est le point de l'unité** : un
+  Spark arrêté rend « Arrêté — aucune mesure d'exécution » (`115`), une période
+  sans relevé « Aucun relevé sur cette période » (`117`), et un historien éteint
+  « Supervision désactivée sur cette Forge : `SPARKD_METRICS_INTERVAL` vaut 0 »
+  (`118`) — une configuration, pas une panne. Une lecture en échec dit que « les
+  Sparks continuent de tourner : c'est la lecture des mesures qui a échoué, pas
+  la Forge » (`119`).
+- **Éprouvée sur la Forge RÉELLE le 2026-09-07**, ce que le doublon ne prouve
+  pas : l'historien y tourne depuis son déploiement — cadence 15 s, rétention
+  7 jours —, et l'écran rend de vraies courbes, avec la pointe CPU d'un amorçage
+  et l'avertissement « le nombre de Sparks mesurés varie sur la période (de 1 à
+  2 ; 2 au dernier relevé) ». Capture `spk93-forge-supervision.jpg`.
+  **La cascade est prouvée sur la base réelle** : trois Sparks créés, mesurés
+  puis supprimés dans la journée n'ont laissé **aucune ligne** dans
+  `metric_sample` — 312 lignes restantes, toutes rattachées au seul Spark
+  survivant, zéro orpheline.
+- **Ce qui n'est pas observé, et ne pouvait pas l'être en un jour** : la purge de
+  rétention à sept jours. Elle reste prouvée par ses preuves d'unité ; la Forge
+  de test ne porte pas encore sept jours d'historique.
 
 
 ### [x] SPK-94 · Ce que le compte rootless doit pouvoir lire, et le panneau qu'on enterrait

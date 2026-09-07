@@ -157,6 +157,53 @@ instruction explicite. Le geste est écrit à l'OP-18 avec l'état mesuré.
 
 ---
 
+## 2026-09-07 — `make captures` n'allait plus jusqu'au bout, et personne ne le savait
+
+SPK-93 était complète à une chose près : ses **captures**. En allant les
+produire, j'ai découvert que `e2e/captures.mjs` **mourait en chemin** — et depuis
+un moment. Quatre défauts, en file indienne, chacun masquant le suivant.
+
+**1. Un lien profond au lieu du parcours.** `ouvrirDetail` ouvrait
+`#/sparks/crm-production` puis rechargeait. Or la console tient l'inventaire des
+Sparks **en mémoire** : un atterrissage direct sur une fiche ne le remplit
+jamais. Le widget de sessions (SPK-75) affichait donc « Aucun Spark sur cette
+Forge », et l'attente de sa première ligne expirait. Le script s'arrêtait là.
+C'est aussi, littéralement, ce que le §16 du CLAUDE.md interdit : le harnais qui
+produit les preuves visuelles ne suivait pas le parcours canonique qu'il est
+censé illustrer. Il passe désormais par la liste et clique, comme un exploitant.
+
+**2. `page.fill` sur un curseur.** SPK-59 a fait du disque un `input[type=range]`,
+et Playwright rend « Malformed value » quand on le remplit. Le harnais des
+parcours l'avait appris et s'était doté d'un `auMaximum()` au clavier ; celui des
+captures était resté en arrière. La borne basse se prend maintenant par
+« Origine ».
+
+**3. Une branche d'interception masquée par sa voisine.** C'est le plus
+intéressant. Le faux `sparkd` teste `url.includes('/v1/forge')` **avant**
+`url.includes('/metrics')`. Or `/v1/forge/metrics` contient `/v1/forge` : la
+supervision recevait la fiche des pools, jamais ses relevés, et affichait « Aucun
+relevé pour l'instant » sur un doublon pourtant plein de courbes. Le fichier
+connaissait déjà le piège — `/v1/forge/cores` est testé plus haut exprès —, mais
+la route ajoutée par SPK-93 avait été posée en aval. Une capture verte qui montre
+un écran vide ne se remarque pas : elle ressemble à un état légitime.
+
+**4. Des numéros qui se télescopent.** Treize numéros étaient employés deux fois
+— dont **83 à 90**, partagés entre la supervision et les captures de terminal et
+d'amorçage. Le bloc qui s'exécute en dernier écrase l'autre, sans rien dire. Les
+huit captures de supervision étaient donc écrasées par des captures de terminal
+au moment même où on croyait les avoir. Elles occupent maintenant 112 à 119, et
+les autres collisions sont défaites.
+
+**Ce que je retiens.** Aucun de ces quatre défauts n'était visible sans exécuter
+le script jusqu'au bout, et rien ne l'exécutait : `make captures` n'est pas dans
+les tests, par nature — il produit des images qu'un humain regarde. Un outil de
+preuve qui n'est jamais lancé cesse d'en être un, et il se dégrade dans le sens
+le plus trompeur : il rend des fichiers, au bon nom, montrant autre chose.
+
+Le script rend désormais **109 captures**, console vierge, code de sortie 0.
+
+---
+
 ## 2026-09-07 — Le compte rootless ne pouvait rien lire, et personne n'y entrait
 
 **Le constat vient du responsable**, en une phrase : « mon terminal tombe sur root

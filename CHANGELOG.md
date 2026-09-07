@@ -296,6 +296,20 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **`make captures` n'allait plus jusqu'au bout** (SPK-93, CLAUDE.md §16) :
+  l'outil qui produit les captures d'interface mourait en chemin, et depuis
+  assez longtemps pour que les vues de supervision n'aient jamais existé.
+  Quatre défauts en file, chacun masquant le suivant. Le harnais ouvrait une
+  fiche de Spark **par son URL** au lieu de passer par la liste — ce que le §16
+  interdit, et ce qui laissait la console sans inventaire en mémoire, donc le
+  widget de sessions vide et le script bloqué. Il remplissait un `input[type=range]`
+  avec `page.fill`, qui rend « Malformed value » depuis que les quotas sont des
+  curseurs. Sa branche d'interception `/metrics` était **masquée** par
+  `/v1/forge`, testée avant elle et que le chemin contient : la supervision
+  recevait la fiche des pools et affichait un écran vide sur un doublon pourtant
+  plein. Enfin **treize numéros de capture étaient employés deux fois**, si bien
+  que le bloc exécuté en dernier écrasait l'autre en silence. Le script rend
+  désormais 109 captures, console vierge.
 - **La phase de sauvegarde n'apparaissait pas dans les phases d'une mise à jour**
   (SPK-91, `docs/DAT.md` §40.7.1) : la recette émet son jalon `backup` avant
   toute mutation, et un échec de sauvegarde sort sans rien installer — mais

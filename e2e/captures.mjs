@@ -289,6 +289,22 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         shared: { cores: [0, 1, 2], cpus: [0, 4, 1, 5, 2, 6], capacity: 6 },
         dedicated: [{ core_id: 3, cpus: [3, 7], spark_id: 'S3' }],
       }), { status: 200 });
+      // SPK-93 · §52 : AVANT la branche générique `/v1/forge`, qui contient ce
+      // chemin. Placée après, elle rendait la fiche des pools à la supervision,
+      // qui affichait alors « Aucun relevé pour l'instant » sur un doublon
+      // pourtant plein — et aucune capture de courbe n'a jamais pu être
+      // produite. C'est la même précaution que `/v1/forge/cores` juste au-dessus.
+      if (url.includes('/metrics')) {
+        if (metriques === 'erreur') {
+          return new Response(JSON.stringify({
+            detail: { error: 'incus_failed', message: 'Le tunnel SSH est rompu.' },
+          }), { status: 502 });
+        }
+        const spark = url.match(/sparks\/([^/]+)\/metrics/);
+        return new Response(JSON.stringify(
+          spark ? metriquesSpark(decodeURIComponent(spark[1]), metriques)
+                : metriquesForge(metriques)), { status: 200 });
+      }
       if (url.includes('/v1/forge')) {
         // §27.8 : une topologie jamais relevée n'est pas une panne.
         if (hoteNonReleve) return new Response(JSON.stringify({ detail: {
@@ -502,17 +518,6 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
             fingerprint: '07acff4bc411', scope: 'spark', origin: 'spark',
             updated_at: '2026-08-21T08:15:00' },
         ] }), { status: 200 });
-      }
-      if (url.includes('/metrics')) {
-        if (metriques === 'erreur') {
-          return new Response(JSON.stringify({
-            detail: { error: 'incus_failed', message: 'Le tunnel SSH est rompu.' },
-          }), { status: 502 });
-        }
-        const spark = url.match(/sparks\/([^/]+)\/metrics/);
-        return new Response(JSON.stringify(
-          spark ? metriquesSpark(decodeURIComponent(spark[1]), metriques)
-                : metriquesForge(metriques)), { status: 200 });
       }
       if (url.includes('/usage')) {
         const nom = decodeURIComponent(url.match(/sparks\/([^/]+)\/usage/)[1]);
@@ -747,12 +752,21 @@ const DETAIL = 'crm-production';
 
 // SPK-33 : la fenêtre répartit ses facettes en onglets (§6.27). Chaque capture
 // montre donc la facette qu'elle illustre.
-async function ouvrirDetail(base, { largeur = 1440, hauteur = 1200, facette = '' } = {}) {
+async function ouvrirDetail(base, { largeur = 1440, hauteur = 1200, facette = '',
+                                    spark = DETAIL } = {}) {
   await page.setViewportSize({ width: largeur, height: hauteur });
-  await page.goto(`${base}/#/sparks/${DETAIL}`, { waitUntil: 'domcontentloaded' });
-  // Naviguer vers une URL identique ne recharge pas : sans ce rechargement,
-  // l'état des panneaux d'une capture précédente survivrait dans la suivante.
+  // Par la LISTE, jamais par l'URL de la fiche (CLAUDE.md §16). Ce n'est pas
+  // une politesse de parcours : la console tient l'inventaire des Sparks en
+  // mémoire, et un atterrissage direct sur une fiche ne le remplit pas. Le
+  // widget de sessions (SPK-75) affichait alors « Aucun Spark sur cette Forge »
+  // — ce qui a tué ce script pendant des semaines, avant les captures de
+  // supervision, qui ne se produisaient donc jamais.
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  // Un rechargement franc : sans lui, l'état des panneaux d'une capture
+  // précédente survivrait dans la suivante.
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('tbody a', { timeout: 8000 });
+  await page.click(`tbody a:has-text("${spark}")`);
   await page.waitForSelector('.onglet', { timeout: 8000 });
   if (facette) {
     await page.click(`.onglet[href$="/${facette}"]`);
@@ -904,8 +918,8 @@ await page.goto(ctx.base, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('tbody a');
 await page.click('nav a[href="#/serveurs"]');
 await page.waitForSelector('#titre-serveurs', { timeout: 8000 });
-await page.screenshot({ path: join(SORTIE, '44-serveurs.png') });
-console.log('  44-serveurs.png');
+await page.screenshot({ path: join(SORTIE, '120-serveurs.png') });
+console.log('  120-serveurs.png');
 
 // La modale d'ajout, ouverte AU CLAVIER, sur le genre « alias » qui est celui
 // que le §22.4 bis vient d'introduire.
@@ -916,16 +930,16 @@ await page.fill('#serveur-nom', 'bastion');
 await page.selectOption('#serveur-genre', 'alias');
 await page.waitForSelector('#serveur-alias', { timeout: 4000 });
 await page.fill('#serveur-alias', 'spark-bastion');
-await page.screenshot({ path: join(SORTIE, '45-serveurs-ajout.png') });
-console.log('  45-serveurs-ajout.png');
+await page.screenshot({ path: join(SORTIE, '121-serveurs-ajout.png') });
+console.log('  121-serveurs-ajout.png');
 // La MODIFICATION d'une entrée existante : le nom y est en lecture seule.
 await page.keyboard.press('Escape');
 await page.waitForFunction(() => !document.querySelector('dialog.modale[open]'),
                            { timeout: 4000 });
 await page.click('[data-modifie-serveur="recette"]');
 await page.waitForSelector('dialog.modale[open] #serveur-nom', { timeout: 4000 });
-await page.screenshot({ path: join(SORTIE, '47-serveurs-modifier.png') });
-console.log('  47-serveurs-modifier.png');
+await page.screenshot({ path: join(SORTIE, '122-serveurs-modifier.png') });
+console.log('  122-serveurs-modifier.png');
 await fermerContexte(ctx);
 
 // L'état « aucun serveur enregistré », que la DoD nomme.
@@ -1394,11 +1408,17 @@ await fermerContexte(ctx);
   await page.waitForFunction(
     () => document.querySelector('.xterm-rows')?.innerText.includes('Terminal ANSI prêt'),
     { timeout: 8000 });
-  // SPK-75 : l'inventaire est un widget flottant, déplié par sa pastille.
-  await page.click('[data-widget="basculer"]');
+  // SPK-75 : l'inventaire est un widget flottant, déplié par sa pastille. On
+  // n'appuie que s'il est REPLIÉ : déplié, le même geste le referme, et
+  // l'attente de la ligne expire alors sur un widget qu'on vient de fermer
+  // soi-même. C'est ce qui tuait ce script avant les captures de supervision,
+  // qui n'ont donc jamais été produites. Le harnais des parcours se garde de la
+  // même façon (`ouvrirWidget`).
+  const pastille = page.locator('[data-widget="basculer"]');
+  if ((await pastille.getAttribute('aria-expanded')) !== 'true') await pastille.click();
   await page.waitForSelector('.widget-inv__ligne', { timeout: 8000 });
-  await page.screenshot({ path: join(SORTIE, '107-terminal-xterm-registre.png') });
-  console.log('  107-terminal-xterm-registre.png');
+  await page.screenshot({ path: join(SORTIE, '123-terminal-xterm-registre.png') });
+  console.log('  123-terminal-xterm-registre.png');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForSelector('.widget-inv__contenu', { timeout: 8000 });
@@ -1424,8 +1444,8 @@ await fermerContexte(ctx);
   await page.waitForFunction(
     () => document.body.innerText.includes('Aucun serveur SSH ne répond'),
     { timeout: 8000 });
-  await page.screenshot({ path: join(SORTIE, '83-terminal-sshd-muet.png') });
-  console.log('  83-terminal-sshd-muet.png');
+  await page.screenshot({ path: join(SORTIE, '125-terminal-sshd-muet.png') });
+  console.log('  125-terminal-sshd-muet.png');
   await fermerContexte(ctx);
 }
 
@@ -1443,8 +1463,8 @@ await fermerContexte(ctx);
   enfants[0].emit('exit', 255);
   await page.waitForFunction(
     () => document.body.innerText.includes('il refuse la clé'), { timeout: 8000 });
-  await page.screenshot({ path: join(SORTIE, '84-terminal-cle-refusee.png') });
-  console.log('  84-terminal-cle-refusee.png');
+  await page.screenshot({ path: join(SORTIE, '126-terminal-cle-refusee.png') });
+  console.log('  126-terminal-cle-refusee.png');
   await fermerContexte(ctx);
 }
 
@@ -1458,8 +1478,8 @@ await fermerContexte(ctx);
   await page.click('[data-terminal="depanner-confirme"]');
   await page.waitForFunction(
     () => document.body.innerText.includes('Dépannage refusé'), { timeout: 8000 });
-  await page.screenshot({ path: join(SORTIE, '82-terminal-depannage-refuse.png') });
-  console.log('  82-terminal-depannage-refuse.png');
+  await page.screenshot({ path: join(SORTIE, '124-terminal-depannage-refuse.png') });
+  console.log('  124-terminal-depannage-refuse.png');
   await fermerContexte(ctx);
 }
 
@@ -1581,7 +1601,13 @@ await ouvrirDetail(ctx.base, { hauteur: 1000 });
 await page.waitForSelector('#titre-ressources', { timeout: 8000 });
 await page.click('[data-ouvre="quotas"]');
 await page.waitForSelector('dialog.modale[open] #quota-storage', { timeout: 8000 });
-await page.fill('#quota-storage', '0');
+// SPK-59 · §6.9 bis : le disque se règle au CURSEUR depuis cette unité, et
+// `page.fill` rend « Malformed value » sur un `input[type=range]`. « Origine »
+// est le geste natif qui va à la borne basse — donc sous ce que la cellule
+// occupe, ce que ce refus existe pour montrer. Le harnais des parcours emploie
+// le geste symétrique (`auMaximum`), et cette capture est restée en arrière.
+await page.focus('#quota-storage');
+await page.keyboard.press('Home');
 await page.click('dialog.modale[open] [data-engage="quotas"]');
 await page.waitForSelector('dialog.modale[open] .refus', { timeout: 8000 });
 await page.screenshot({ path: join(SORTIE, '55-quotas-refus-disque.png') });
@@ -1623,6 +1649,11 @@ async function ouvrirSupervision(base, { largeur = 1440, hauteur = 1400,
                                          attendre = '.graphique' } = {}) {
   await page.setViewportSize({ width: largeur, height: hauteur });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
+  // On attend la LISTE avant de quitter l'accueil : la supervision lit
+  // l'inventaire que la console tient en mémoire, et partir trop tôt lui fait
+  // afficher « Aucun Spark sur cette Forge : il n'y a rien à mesurer » —
+  // c'est-à-dire un écran vide au lieu des courbes que ces captures illustrent.
+  await page.waitForSelector('tbody a', { timeout: 8000 });
   await page.waitForSelector('nav a[href="#/forge"]', { timeout: 8000 });
   await page.click('nav a[href="#/forge"]');
   await page.waitForSelector('.onglet[href="#/forge/supervision"]', { timeout: 8000 });
@@ -1632,21 +1663,21 @@ async function ouvrirSupervision(base, { largeur = 1440, hauteur = 1400,
 
 ctx = await demarrer();
 await ouvrirSupervision(ctx.base);
-await page.screenshot({ path: join(SORTIE, '83-supervision-forge.png'), fullPage: true });
-console.log('  83-supervision-forge.png');
+await page.screenshot({ path: join(SORTIE, '112-supervision-forge.png'), fullPage: true });
+console.log('  112-supervision-forge.png');
 
 // La lecture d'un seau, au CLAVIER (§9.1) : le repère vaut pour les quatre.
 await page.locator('.graphique__cadre').first().focus();
 for (let i = 0; i < 12; i += 1) await page.keyboard.press('ArrowLeft');
-await page.screenshot({ path: join(SORTIE, '84-supervision-curseur.png'), fullPage: true });
-console.log('  84-supervision-curseur.png');
+await page.screenshot({ path: join(SORTIE, '113-supervision-curseur.png'), fullPage: true });
+console.log('  113-supervision-curseur.png');
 
 // La facette d'un Spark, avec ses propres quotas. On y arrive par la
 // répartition, qui RAMÈNE à la fenêtre du Spark (§52.11).
 await page.click('section:has(#titre-repartition) a[href$="/mesures"]');
 await page.waitForSelector('.graphique__trace', { timeout: 8000 });
-await page.screenshot({ path: join(SORTIE, '85-supervision-spark.png'), fullPage: true });
-console.log('  85-supervision-spark.png');
+await page.screenshot({ path: join(SORTIE, '114-supervision-spark.png'), fullPage: true });
+console.log('  114-supervision-spark.png');
 
 // Un Spark ARRÊTÉ : une ligne par tic, sans mesure (§52.3, SPK-DS-03).
 await ouvrirDetail(ctx.base, { facette: 'mesures' });
@@ -1656,34 +1687,34 @@ await page.click('tbody a:has-text("boutique")');
 await page.waitForSelector('.onglet[href$="/mesures"]', { timeout: 8000 });
 await page.click('.onglet[href$="/mesures"]');
 await page.waitForSelector('.graphique--vide', { timeout: 8000 });
-await page.screenshot({ path: join(SORTIE, '86-supervision-arrete.png'), fullPage: true });
-console.log('  86-supervision-arrete.png');
+await page.screenshot({ path: join(SORTIE, '115-supervision-arrete.png'), fullPage: true });
+console.log('  115-supervision-arrete.png');
 
 // Format étroit : les quatre courbes s'empilent (§8.1).
 await page.setViewportSize({ width: 390, height: 844 });
-await page.screenshot({ path: join(SORTIE, '87-supervision-mobile.png'), fullPage: true });
-console.log('  87-supervision-mobile.png');
+await page.screenshot({ path: join(SORTIE, '116-supervision-mobile.png'), fullPage: true });
+console.log('  116-supervision-mobile.png');
 await fermerContexte(ctx);
 
 // AUCUN relevé sur la période : le trou se NOMME, il ne se peint pas à zéro.
 ctx = await demarrer({ metriques: 'vide' });
 await ouvrirSupervision(ctx.base, { hauteur: 1000 });
-await page.screenshot({ path: join(SORTIE, '88-supervision-sans-releve.png'), fullPage: true });
-console.log('  88-supervision-sans-releve.png');
+await page.screenshot({ path: join(SORTIE, '117-supervision-sans-releve.png'), fullPage: true });
+console.log('  117-supervision-sans-releve.png');
 await fermerContexte(ctx);
 
 // Historien DÉSACTIVÉ : une configuration, pas une panne (§14.5, §52.2).
 ctx = await demarrer({ metriques: 'desactive' });
 await ouvrirSupervision(ctx.base, { hauteur: 1000 });
-await page.screenshot({ path: join(SORTIE, '89-supervision-desactivee.png'), fullPage: true });
-console.log('  89-supervision-desactivee.png');
+await page.screenshot({ path: join(SORTIE, '118-supervision-desactivee.png'), fullPage: true });
+console.log('  118-supervision-desactivee.png');
 await fermerContexte(ctx);
 
 // La LECTURE échoue : les Sparks, eux, tournent toujours (§6.13).
 ctx = await demarrer({ metriques: 'erreur' });
 await ouvrirSupervision(ctx.base, { hauteur: 900, attendre: '[role="alert"]' });
-await page.screenshot({ path: join(SORTIE, '90-supervision-erreur.png'), fullPage: true });
-console.log('  90-supervision-erreur.png');
+await page.screenshot({ path: join(SORTIE, '119-supervision-erreur.png'), fullPage: true });
+console.log('  119-supervision-erreur.png');
 await fermerContexte(ctx);
 
 await navigateur.close();
