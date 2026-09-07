@@ -581,7 +581,12 @@ test('un quota REFUSÉ reste dans la modale, sans effacer la saisie', async () =
     await page.click('[data-ouvre="quotas"]');
     await page.waitForSelector('dialog.modale[open] #quota-memory', { timeout: 10000 });
 
-    await page.fill('#quota-memory', '900000');
+    // SPK-59 · §6.9 bis : la mémoire est un CURSEUR depuis cette unité, et
+    // `page.fill` y rend « Malformed value ». « Fin » est le geste natif qui va
+    // à la borne haute — la capacité TOTALE de la Forge, donc au-delà de ce qui
+    // reste libre dès qu'un Spark existe. C'est ce qui provoque le refus.
+    await auMaximum('#quota-memory');
+    const demande = await page.inputValue('#quota-memory');
     await page.click('dialog.modale[open] [data-engage="quotas"]');
     await page.waitForSelector('dialog.modale[open] .refus', { timeout: 15000 });
 
@@ -589,7 +594,7 @@ test('un quota REFUSÉ reste dans la modale, sans effacer la saisie', async () =
     assert.match(refus, /Capacité insuffisante/);
     assert.match(refus, /mémoire|memory/, 'la ressource manquante est NOMMÉE');
     // La saisie survit (§25.2) : on corrige, on ne recommence pas.
-    assert.equal(await page.inputValue('#quota-memory'), '900000');
+    assert.equal(await page.inputValue('#quota-memory'), demande);
 
     // Rien n'a bougé côté Forge : un refus ne laisse aucune trace.
     const { corps } = await pile.lireSparkd('/v1/sparks/crm-production');
@@ -621,7 +626,12 @@ test('le disque OCCUPÉ refuse d’être rétréci, et le dit autrement', async 
     await page.keyboard.press('Enter');
     await page.waitForSelector('dialog.modale[open] #quota-storage', { timeout: 10000 });
 
-    await page.fill('#quota-storage', '0');
+    // SPK-59 · §6.9 bis : curseur, donc « Origine » et non `page.fill`, qui rend
+    // « Malformed value » sur un `input[type=range]`. La borne basse est la plus
+    // petite taille offerte — sous l'occupation de la cellule, ce que ce refus
+    // existe pour montrer.
+    await page.focus('#quota-storage');
+    await page.keyboard.press('Home');
     await page.click('dialog.modale[open] [data-engage="quotas"]');
     await page.waitForSelector('dialog.modale[open] .refus', { timeout: 15000 });
 

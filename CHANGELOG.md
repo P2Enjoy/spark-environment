@@ -296,6 +296,14 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Un parcours de refus de quota ne pouvait plus s'exécuter** (SPK-59,
+  `docs/DAT.md` §6.9 bis) : « un quota REFUSÉ reste dans la modale » remplissait
+  `#quota-memory` avec `page.fill`, qui rend « Malformed value » sur un
+  `input[type=range]` — ce que la mémoire est devenue quand les quotas sont
+  passés au curseur. La borne haute se prend désormais au clavier, comme
+  ailleurs dans le harnais. Trouvé en jouant la campagne complète, ce que rien
+  ne faisait plus ; les deux autres parcours qu'elle a révélés rouges demandent
+  un arbitrage et sont consignés au rapport d'incohérences.
 - **Une preuve d'admission dépendait de la RAM du développeur** (SPK-05, SPK-57,
   `docs/DAT.md` §49.1) : `test_agrandir_est_ADMIS…` comparait deux chemins sur
   des chiffres écrits en dur — 6 Gio pris, 7 Gio refusés à la création puis

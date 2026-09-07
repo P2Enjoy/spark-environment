@@ -104,37 +104,65 @@ renumérotation de l'autre avec ses références. En attendant, SPK-93 prend
 
 ---
 
-## 4. `make captures` s'arrête avant la fin, et cette panne précède SPK-93
+## 4. Deux parcours E2E ne peuvent plus atteindre ce qu'ils éprouvent
 
-**Constaté le 2026-09-07**, en ajoutant les captures de supervision.
+**Constaté le 2026-09-07**, en jouant la campagne complète — ce que rien ne
+faisait plus. Trois parcours rougissaient ; l'un est corrigé, les deux autres
+demandent un arbitrage. Aucun des trois ne vient d'un changement de ce jour.
 
-**Le fait.** `node e2e/captures.mjs` échoue à la capture
-`107-terminal-xterm-registre.png` : `waiting for locator('.widget-inv__ligne')`
-expire au bout de huit secondes, après le dépliage de la pastille du widget
-d'inventaire (SPK-75, SPK-DS-16). Le script est un programme de haut niveau sans
-reprise sur erreur : **tout ce qui suit cette ligne n'est jamais produit**.
+**Corrigé sans arbitrage** : « un quota REFUSÉ reste dans la modale » employait
+`page.fill` sur un `input[type=range]`, qui rend « Malformed value » depuis que
+SPK-59 a fait des quotas des curseurs. Le geste passe au clavier, comme ailleurs.
 
-**Ce n'est pas SPK-93.** La même panne, au même endroit, se reproduit en
-exécutant le `e2e/captures.mjs` de `HEAD` — extrait par `git show` et lancé tel
-quel. Elle est donc antérieure, et indépendante des captures ajoutées à la fin
-du fichier par cette unité.
+### 4.a « le disque OCCUPÉ refuse d'être rétréci » n'est plus atteignable
 
-**Ce que cela coûte.** Les captures `83` à `90` de SPK-93 — écran de Forge,
-curseur de lecture, facette d'un Spark, Spark arrêté, format étroit, absence de
-relevé, historien désactivé, lecture en échec — **n'ont jamais été produites par
-ce harnais**. Les mêmes états ont été observés autrement, contre la pile de
-développement RÉELLE et non un doublon de réponses : historien désactivé par
-`SPARKD_METRICS_INTERVAL=0`, absence de relevé sur une Forge neuve jamais seedée,
-lecture en échec en coupant `sparkd` sous la console. Ces observations ont
-d'ailleurs trouvé trois défauts, corrigés dans l'unité.
+**Le document.** `docs/DAT.md` §49.3 : le refus de rétrécissement dit autre chose
+que le refus d'admission, et l'écran doit le montrer · `CLAUDE.md` §8 : les
+données de développement « couvrent les erreurs attendues ».
 
-**Pourquoi ce n'est pas corrigé ici.** La cause est dans le parcours du terminal
-et du widget d'inventaire — une session xterm, un faux `sshd`, une sonde de
-sessions vivantes —, c'est-à-dire trois unités closes qui ne sont pas celle en
-cours. Diagnostiquer et réparer ce parcours mêlerait à SPK-93 un travail qui ne
-la concerne pas.
+**Le fait.** Le refus tombe quand la taille visée passe **sous l'occupation
+mesurée**. Le curseur de disque a pour borne basse **1 Gio**, et le profil du
+doublon donne aux cellules de 300 à 1200 Mio. Or aucun Spark **en marche** du
+seed ne dépasse le gibioctet — `crm-production` 488 Mio, `boutique` 505,
+`postgres-dedie` 1000. Les deux seuls au-dessus, `analytics` (1187 Mio) et
+`orphelin` (1075 Mio), n'ont pas de cellule qui tourne. Aucune valeur
+atteignable au curseur ne peut donc provoquer ce refus, et le parcours échoue en
+attendant une modale de refus qui ne viendra pas.
 
-**Ce qui est demandé au responsable.** Autoriser une tâche dédiée à la remise en
-marche de `make captures`. Tant qu'elle n'est pas faite, la campagne de captures
-ne prouve plus rien de ce qui suit la ligne 1399, pour SPK-93 comme pour les
-unités qui viendront.
+**Le produit n'est pas en cause** : sur une Forge réelle une cellule occupe
+plusieurs gibioctets, et le refus tombe à des valeurs ordinaires — le parcours le
+disait déjà en commentaire. C'est la démonstrabilité qui est perdue.
+
+**Pourquoi ce n'est pas corrigé ici.** Le remède touche au contrat de fidélité du
+doublon (§12.1.3) : faire dépendre l'occupation simulée du quota vendu serait plus
+réaliste et rendrait le refus atteignable, mais changerait les valeurs que lisent
+les courbes de SPK-93 et les preuves d'usage de SPK-14. Ce n'est pas un réglage,
+c'est une décision sur ce que le doublon imite.
+
+**Demandé au responsable.** Trancher : faire croître l'occupation simulée avec le
+quota vendu, ou seeder une cellule volontairement pleine, ou accepter que ce
+refus ne soit prouvé qu'en unité et retirer le parcours en le disant.
+
+### 4.b « un Spark ARRÊTÉ nomme l'arrêt » dépend d'un Spark qu'un autre supprime
+
+**Le document.** `docs/DAT.md` §29.2 : un parcours rend la pile à l'état du seed,
+et ne dépend pas de ce qu'un autre a laissé.
+
+**Le fait.** Ce parcours ouvre `orphelin`. Son commentaire explique qu'il
+employait `boutique` et que le parcours du rootless le **démarre** plus haut dans
+la campagne — la dépendance a donc été déplacée, pas levée : `orphelin` est
+**supprimé** par « supprimer un Spark dont l'instance a disparu », qui s'exécute
+avant. Le parcours passe seul et rougit en campagne, exactement le symptôme que
+son propre commentaire décrit.
+
+**Ce qu'il faudrait, et pourquoi ce n'est pas fait ici.** Un Spark arrêté qu'aucun
+parcours ne touche : le seed n'en a aucun, et en ajouter un engage le contrat du
+seed (§8). L'autre voie — que le parcours crée sa propre cellule sans la démarrer
+— change ce qu'il montre : une cellule jamais démarrée n'a pas de relevé
+« arrêté », elle n'a **aucun** relevé, et les deux trous se nomment
+différemment. C'est précisément la distinction que ce parcours existe pour
+prouver.
+
+**Demandé au responsable.** Décider lequel des deux : un Spark arrêté réservé au
+seed, ou un parcours qui établit lui-même son état en arrêtant le Spark qu'il
+observe et en le rendant ensuite.
