@@ -833,7 +833,13 @@ def test_la_route_PRONONCE_le_refus_du_DISQUE_occupe(tmp_path):
     c.post("/v1/sparks", json=_spec())
     c.post("/v1/sparks/crm-production/apply")  # la cellule existe, à l'arrêt
 
-    # 534 981 632 octets occupés — relevé du runtime. On demande moins.
+    # L'occupation est celle que le PILOTE rapporte, et elle n'est plus une
+    # constante depuis SPK-93 : le doublon fait croître le disque avec le temps
+    # comme une cellule réelle (docs/DAT.md §52.10). La preuve la relit donc au
+    # lieu de la recopier — recopier un nombre du doublon éprouvait le doublon,
+    # pas le refus.
+    cellule = c.get("/v1/sparks/crm-production").json()["incus_name"]
+    occupe = c.app.state.incus.instance_state(cellule)["disk"]["root"]["usage"]
     vu = c.patch("/v1/sparks/crm-production", json={"storage_bytes": 256 * 1024**2})
     assert vu.status_code == 409
     detail = vu.json()["detail"]
@@ -842,7 +848,12 @@ def test_la_route_PRONONCE_le_refus_du_DISQUE_occupe(tmp_path):
     # endroit (§49.3).
     assert detail["error"] == "shrink_refused"
     assert detail["resource"] == "storage"
-    assert detail["in_use"] == 534_981_632, "le refus porte l'occupation MESURÉE"
+    # À la seconde près : les deux lectures sont séparées d'une requête HTTP
+    # locale, et le disque du doublon croît de quelques kio par seconde. Exiger
+    # l'octet exact ferait échouer la preuve sur le temps qu'elle met à passer.
+    assert abs(detail["in_use"] - occupe) < 10_000, (
+        "le refus porte l'occupation MESURÉE, pas une valeur de repli")
+    assert detail["in_use"] > 256 * 1024**2, "sinon le refus n'aurait pas lieu"
     assert detail["requested"] == 256 * 1024**2
     # Un refus ne laisse rien derrière lui.
     assert c.get("/v1/sparks/crm-production").json()["storage_bytes"] == 10 * 1024**3

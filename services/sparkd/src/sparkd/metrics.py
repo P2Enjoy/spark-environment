@@ -1,8 +1,9 @@
 """Métriques d'usage d'un Spark.
 
-@spec docs/BACKLOG.md#SPK-14 · docs/DAT.md §20 (Métriques d'usage),
-      §20.1 (compteurs), §20.2 (seule eth0), §20.3 (à quoi ça se compare),
-      §20.4 (un Spark arrêté) · §7.3 bis, §7.6
+@spec docs/BACKLOG.md#SPK-14 · docs/BACKLOG.md#SPK-93 · docs/DAT.md §20
+      (Métriques d'usage), §20.1 (compteurs), §20.2 (seule eth0), §20.3 (à quoi
+      ça se compare), §20.4 (un Spark arrêté) · §7.3 bis, §7.6 · §52.2
+      (l'historien emploie ce module, avec son PROPRE traqueur)
 
 Un compteur n'est pas un taux. Ce module conserve le relevé précédent pour
 produire un taux **accompagné de sa fenêtre** — un taux sans fenêtre n'est pas
@@ -94,13 +95,23 @@ def read_sample(state: dict, now: float | None = None) -> Sample:
     )
 
 
+def instantanees(state: dict) -> tuple[int | None, int | None]:
+    """Mémoire et disque : les deux grandeurs vraies dès la PREMIÈRE lecture.
+
+    @spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §20.1, §52.3
+
+    Extraites ici plutôt que chez chaque appelant : la route du §20 et
+    l'historien du §52 lisent le même état, et deux extractions séparées
+    finiraient par diverger sur la forme d'un état incomplet.
+    """
+    memoire = (state.get("memory") or {}).get("usage")
+    disque = (((state.get("disk") or {}).get("root")) or {}).get("usage")
+    return memoire, disque
+
+
 def usage(spark: dict, state: dict, rates: dict) -> dict:
     """Assemble l'usage d'un Spark, comparé à ce qui est RÉELLEMENT appliqué."""
-    memoire = state.get("memory") or {}
-    disque = ((state.get("disk") or {}).get("root")) or {}
-
-    mem_usage = memoire.get("usage")
-    disk_usage = disque.get("usage")
+    mem_usage, disk_usage = instantanees(state)
 
     reservation = spark.get("cpu_reservation")
     if spark.get("cpu_mode") == "capped":

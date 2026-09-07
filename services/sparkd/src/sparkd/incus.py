@@ -18,8 +18,10 @@ from typing import Any, Protocol
 import base64
 import hashlib
 import json
+import math
 import platform
 import re
+import time
 
 import httpx
 
@@ -491,6 +493,107 @@ def _faux_ed25519(graine: str) -> str:
     return base64.b64encode(blob).decode()
 
 
+#: SPK-93 · docs/DAT.md §52.10 — le doublon rendait `cpu.usage` CONSTANT, et ses
+#: compteurs reseau aussi. Sur un releve isole la divergence est invisible : le
+#: §20 rend `null` au premier point. Sur une SERIE elle devient structurante —
+#: quatre lignes plates, et ni le re-echantillonnage du §52.6, ni la distinction
+#: burst du SPK-DS-02, ni la mise a l'echelle d'un axe ne sont eprouvables.
+#:
+#: Un compteur qui n'avance pas n'est pas un compteur : le §12.1.3 impose au
+#: doublon la meme FORME de reponse que le vrai pour la meme condition.
+#:
+#: Le profil est DETERMINISTE : aucun tirage aleatoire, une fonction pure de
+#: (nom, secondes ecoulees). Meme Spark, meme duree ecoulee, meme serie — sans
+#: quoi les captures du §30.1 cesseraient d'etre reproductibles.
+#:
+#: Il ne mesure RIEN. Il donne a la supervision une FORME a eprouver, jamais une
+#: consommation a croire : la borne du §12 est inchangee.
+_PROFIL_PERIODE = 900.0
+_PROFIL_ORIGINE = time.monotonic()
+
+
+def _profil(name: str) -> dict[str, float]:
+    """Signature stable d'une instance, tiree de son nom. Sans hasard."""
+    graine = int(hashlib.sha256(name.encode()).hexdigest()[:12], 16)
+    return {
+        # Part de CPU moyenne : de 0,03 a 0,42 coeur.
+        "cpu": 0.03 + (graine % 40) / 100.0,
+        # Amplitude de la respiration, de 0,25 a 0,80 de la moyenne.
+        "amplitude": 0.25 + (graine // 41 % 56) / 100.0,
+        # Dephasage, pour que deux Sparks ne montent pas ensemble.
+        "phase": (graine // 977 % 360) * math.pi / 180.0,
+        # Octets par seconde : de 6 ko/s a ~500 ko/s en entree.
+        "rx": 6_000.0 + (graine // 13 % 500_000),
+        "tx": 3_000.0 + (graine // 17 % 250_000),
+        # Memoire de base : de 96 a 608 Mio.
+        "memoire": (96 + (graine // 23 % 512)) * 1024.0 ** 2,
+        # Disque de base, et sa croissance lente.
+        "disque": (300 + (graine // 29 % 900)) * 1024.0 ** 2,
+        "croissance": 400.0 + (graine // 31 % 4_000),
+    }
+
+
+def _module(secondes: float, profil: dict[str, float]) -> float:
+    """Facteur de modulation a l'instant donne. Strictement positif."""
+    omega = 2 * math.pi / _PROFIL_PERIODE
+    return 1.0 + profil["amplitude"] * math.sin(omega * secondes + profil["phase"])
+
+
+def _integrale(secondes: float, profil: dict[str, float]) -> float:
+    """Primitive de la modulation, pour que le COMPTEUR soit l'integrale du taux.
+
+    Un compteur n'est pas un taux echantillonne : c'est son cumul. Poser
+    `compteur = taux x t` donnerait un taux constant a la derivee, donc les
+    memes lignes plates qu'avant. On integre donc la modulation :
+
+        taux(t)     = c (1 + a sin(w t + p))
+        compteur(t) = c (t - (a/w) cos(w t + p))
+    """
+    omega = 2 * math.pi / _PROFIL_PERIODE
+    return secondes - (profil["amplitude"] / omega) * math.cos(
+        omega * secondes + profil["phase"])
+
+
+def etat_simule(name: str, secondes: float) -> dict[str, Any]:
+    """Etat plausible d'une cellule apres `secondes` de fonctionnement.
+
+    @spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.10, §12.1.3
+
+    Publique et pure : le seed de developpement la rejoue a des instants passes
+    pour constituer un historique par le VRAI ecrivain de l'historien, plutot
+    que d'inventer des lignes a la main (CLAUDE.md §8).
+    """
+    profil = _profil(name)
+    cumul = _integrale(secondes, profil) - _integrale(0.0, profil)
+    return {
+        "status": "Running",
+        "cpu": {"usage": int(profil["cpu"] * cumul * 1e9)},
+        "memory": {
+            "usage": int(profil["memoire"] * _module(secondes, profil)),
+            "total": 2 * 1024 ** 3,
+        },
+        "disk": {"root": {
+            "total": 10 * 1024 ** 3,
+            # Un disque ne respire pas : il croit. Le faire osciller ferait
+            # lire une liberation d'espace que rien n'a produite.
+            "usage": int(profil["disque"] + profil["croissance"] * secondes),
+        }},
+        "network": {
+            "eth0": {"counters": {
+                "bytes_received": int(profil["rx"] * cumul),
+                "bytes_sent": int(profil["tx"] * cumul),
+            }},
+            # docs/DAT.md §20.2 : le vrai releve enumere AUSSI les bridges que
+            # Docker cree dans le Spark. Le doublon les rend, sans quoi la regle
+            # « seule eth0 compte » ne serait eprouvee contre rien.
+            "docker0": {"counters": {
+                "bytes_received": int(profil["rx"] * cumul * 12),
+                "bytes_sent": int(profil["tx"] * cumul * 12),
+            }},
+        },
+    }
+
+
 @dataclass
 class FakeIncus:
     """Pilote factice, pour les tests et le developpement local.
@@ -840,13 +943,15 @@ class FakeIncus:
     def instance_state(self, name: str) -> dict[str, Any]:
         self._maybe_fail("instance_state")
         instance = self._vivante(name)
-        return instance.get("state") or {
-            "status": instance.get("status", "Running"),
-            "cpu": {"usage": instance.get("cpu_ns", 1_000_000_000)},
-            "memory": {"usage": 174_764_032, "total": 2 * 1024**3},
-            "disk": {"root": {"total": 10 * 1024**3, "usage": 534_981_632}},
-            "network": {"eth0": {"counters": {"bytes_received": 461, "bytes_sent": 2192}}},
-        }
+        if instance.get("state"):
+            return instance["state"]
+        # SPK-93 · §52.10 : les compteurs AVANCENT, comme ceux du vrai pilote.
+        # Le temps ecoule depuis le demarrage du processus fait la duree : deux
+        # lectures separees d'une cadence rendent donc un taux, et non `null`
+        # a l'infini.
+        etat = etat_simule(name, time.monotonic() - _PROFIL_ORIGINE)
+        etat["status"] = instance.get("status", "Running")
+        return etat
 
 
 # Releve reel de l'hote de validation, 2026-08-18 : Dell R320, Xeon E5-1410 v2,

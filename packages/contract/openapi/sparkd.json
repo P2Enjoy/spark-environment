@@ -498,6 +498,74 @@
         ]
       }
     },
+    "/v1/forge/metrics": {
+      "get": {
+        "description": "Historique d'usage de la Forge, et de chacun de ses Sparks.\n\n@spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.6, §52.7, §52.8\n\nL'agregat est une SOMME, et il dit combien de Sparks il somme : un Spark\ncree a midi n'a pas de mesure le matin, et une somme dont le nombre de\ntermes varie changerait de marche sans que rien n'ait bouge dans la\nmachine (§52.7).",
+        "operationId": "forge_metrics_v1_forge_metrics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Window"
+            }
+          },
+          {
+            "in": "query",
+            "name": "points",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Points"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forge Metrics V1 Forge Metrics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forge Metrics",
+        "tags": [
+          "metriques"
+        ]
+      }
+    },
     "/v1/forge/sync": {
       "post": {
         "description": "Relève la topologie depuis Incus et l'écrit dans le registre.",
@@ -1751,6 +1819,83 @@
         "summary": "Create Identity",
         "tags": [
           "cles"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/metrics": {
+      "get": {
+        "description": "Historique d'usage d'un Spark, compare a SES quotas (§52.8, §52.11).",
+        "operationId": "spark_metrics_v1_sparks__name__metrics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Window"
+            }
+          },
+          {
+            "in": "query",
+            "name": "points",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Points"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Spark Metrics V1 Sparks  Name  Metrics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spark Metrics",
+        "tags": [
+          "metriques"
         ]
       }
     },

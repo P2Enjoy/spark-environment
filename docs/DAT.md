@@ -10214,6 +10214,16 @@ discipline du §20.1 — `null`, jamais `0` — descend dans les colonnes :
 | Spark en marche, deuxième relevé ou plus | `running` | les cinq |
 | Spark en marche, **premier** relevé | `running` | mémoire et disque seules ; CPU et réseau `NULL` |
 | Spark arrêté, en erreur, transitoire | son état | **aucune**, les cinq `NULL` |
+| Spark en marche que le pilote ne sait pas mesurer | — | **aucune ligne du tout** |
+
+La dernière ligne est celle qu'on écrirait de travers. Cellule absente, Incus
+injoignable : l'historien n'écrit **rien** pour ce Spark à ce tic, et cela le
+range dans le cas « personne n'a relevé » du §52.4 — ce qui est exact, personne
+n'a relevé. Écrire une ligne `running` aux mesures nulles la ferait lire comme un
+premier relevé, c'est-à-dire comme une **mesure en cours**, et l'écran
+annoncerait un calcul qui n'aura jamais lieu. Le tic des autres Sparks n'en est
+pas affecté : une cellule perdue est un fait sur elle, pas une panne de la
+supervision.
 
 La deuxième ligne est celle du §20.1 : mémoire et disque sont des grandeurs
 instantanées, elles sont vraies dès la première lecture ; CPU et réseau sont des
@@ -10291,9 +10301,15 @@ chacun, la **moyenne** des mesures qu'il contient. Trois règles :
 1. un seau qui ne contient **aucune** mesure rend `null` — pas `0`, et pas la
    valeur du seau précédent. Une interpolation ferait apparaître une continuité
    que rien n'a mesurée ;
-2. chaque seau publie `samples`, le nombre de relevés qui l'ont formé. Une
-   moyenne sur un point et une moyenne sur quarante ne valent pas la même chose,
-   et l'écran doit pouvoir le dire ;
+2. chaque seau publie `samples`, le nombre de relevés qui l'ont formé, et
+   `states`, les états distincts qu'il a traversés. Une moyenne sur un point et
+   une moyenne sur quarante ne valent pas la même chose, et l'écran doit pouvoir
+   le dire ; `states` est ce qui porte la distinction du §52.4 jusqu'au tracé —
+   sans lui, un seau vide de mesures ne dirait pas s'il est vide parce que le
+   Spark dormait ou parce que personne ne relevait ;
+2 bis. la moyenne se fait **grandeur par grandeur**, sur les seuls relevés qui
+   la portent. Un premier relevé a une mémoire sans taux : moyenner le seau
+   entier ou rien du tout ferait perdre l'une ou l'autre ;
 3. la **durée du seau** est publiée avec la série. C'est la fenêtre du §20.1
    remontée d'un cran : une courbe sans son pas de temps n'est pas interprétable.
 
@@ -10374,6 +10390,19 @@ le vrai pour la même condition**. Or un compteur qui n'avance pas n'est pas un
 compteur. Le doublon dérive donc ses compteurs du temps écoulé, selon un profil
 **déterministe** propre à chaque instance — même Spark, même durée, même série,
 sinon les captures cesseraient d'être reproductibles (§30.1).
+
+Ce que le profil fait bouger, et pourquoi chaque grandeur ne bouge pas de la
+même façon :
+
+| Grandeur | Comportement du doublon | Raison |
+|---|---|---|
+| CPU, réseau | compteurs, **intégrale** d'un taux qui respire | un compteur cumule ; poser `compteur = taux × t` rendrait un taux constant à la dérivée, donc les mêmes lignes plates |
+| mémoire | jauge, modulée autour d'une base propre à l'instance | une cellule réelle respire ; une mémoire figée ne met aucun axe à l'épreuve |
+| disque | base propre à l'instance, **croissance lente et monotone** | un disque ne respire pas, il croît ; le faire osciller ferait lire une libération d'espace que rien n'a produite |
+
+Le relevé énumère aussi `docker0`, comme le vrai (§20.2), avec un trafic
+délibérément bien supérieur à celui d'`eth0` : sans lui, la règle « seule `eth0`
+compte » ne serait éprouvée contre rien.
 
 Ce que cela ne prouve toujours pas, et qui reste une divergence de nature :
 aucune de ces valeurs ne mesure quoi que ce soit. Le doublon donne à la

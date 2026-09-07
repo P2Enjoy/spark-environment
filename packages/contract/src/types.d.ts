@@ -212,6 +212,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/forge/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Forge Metrics
+         * @description Historique d'usage de la Forge, et de chacun de ses Sparks.
+         *
+         *     @spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.6, §52.7, §52.8
+         *
+         *     L'agregat est une SOMME, et il dit combien de Sparks il somme : un Spark
+         *     cree a midi n'a pas de mesure le matin, et une somme dont le nombre de
+         *     termes varie changerait de marche sans que rien n'ait bouge dans la
+         *     machine (§52.7).
+         */
+        get: operations["forge_metrics_v1_forge_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/forge/sync": {
         parameters: {
             query?: never;
@@ -692,6 +719,26 @@ export interface paths {
          *     déploiement déjà posée chez le tiers, et rien sur la Forge ne le sait.
          */
         post: operations["create_identity_v1_sparks__name__identity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spark Metrics
+         * @description Historique d'usage d'un Spark, compare a SES quotas (§52.8, §52.11).
+         */
+        get: operations["spark_metrics_v1_sparks__name__metrics_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1224,6 +1271,40 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    forge_metrics_v1_forge_metrics_get: {
+        parameters: {
+            query?: {
+                window?: string | null;
+                points?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2145,6 +2226,42 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spark_metrics_v1_sparks__name__metrics_get: {
+        parameters: {
+            query?: {
+                window?: string | null;
+                points?: number | null;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

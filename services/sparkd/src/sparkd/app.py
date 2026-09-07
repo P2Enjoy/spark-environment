@@ -15,7 +15,8 @@ Confondre les deux ferait declarer prete une instance incapable de travailler.
 from __future__ import annotations
 
 import base64
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException
@@ -43,6 +44,7 @@ from . import bootstrap as bootstrap_service
 from . import identity as identity_service
 from . import briefing as briefing_service
 from . import metrics as metrics_service
+from . import historian as historian_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
 from . import environnement as env_service
@@ -113,6 +115,22 @@ def check_registry(config: Config) -> list[int]:
 
 
 def create_app(config: Config) -> FastAPI:
+    @asynccontextmanager
+    async def cycle_de_vie(application: FastAPI):
+        """L'historien releve tant que sparkd sert (SPK-93, docs/DAT.md §52.2).
+
+        Il demarre sur l'evenement de cycle de vie et non a la construction :
+        `create_app` est appele par les preuves, qui n'ont aucune raison de
+        lancer un fil de fond. Une cadence nulle ne le demarre pas du tout.
+        """
+        historien = application.state.historien
+        if historien.actif and not historien.is_alive():
+            historien.start()
+        try:
+            yield
+        finally:
+            historien.arreter()
+
     app = FastAPI(
         title="sparkd",
         version=__version__,
@@ -120,6 +138,7 @@ def create_app(config: Config) -> FastAPI:
             "Runtime serveur du plan de controle Spark. Ecoute exclusivement "
             "sur la boucle locale."
         ),
+        lifespan=cycle_de_vie,
     )
     # SPK-37 · docs/DAT.md §21.6.2 : l'identité de l'appelant entre ICI, à la
     # frontière du service, et vaut pour toute écriture au journal produite
@@ -176,6 +195,16 @@ def create_app(config: Config) -> FastAPI:
     app.state.schema_versions = check_registry(config)
     app.state.incus = make_client(config)
     app.state.rates = metrics_service.RateTracker()
+    # SPK-93 · docs/DAT.md §52.2 : l'historien garde son PROPRE traqueur de taux.
+    # Un compteur ne donne un taux qu'entre deux lectures : partager celui de la
+    # route `/usage` ferait calculer a chacun son taux sur la fenetre ouverte par
+    # l'autre, et les deux seraient faux sans que rien ne le signale.
+    app.state.historien = historian_service.Historien(
+        ouvrir=lambda: connect(config.database),
+        incus=app.state.incus,
+        interval=config.metrics_interval_seconds,
+        retention=config.metrics_retention_seconds,
+    )
     # SPK-62 · docs/DAT.md §47.1 : le canal hors bande est posé sur `audit`, qui
     # est le SEUL chemin vers le journal. S'accrocher à la console laisserait
     # sortir sans un mot les gestes faits en la contournant.
@@ -830,6 +859,136 @@ def create_app(config: Config) -> FastAPI:
         est le mécanisme normal d'application, pas une réparation (§18.1).
         """
         ingress_service.reconcile(connection, app.state.caddy)
+
+    def _bornes(nom: str | None, points: int | None) -> dict:
+        """Valide la fenetre demandee, ou refuse en la NOMMANT (§52.6)."""
+        try:
+            return historian_service.fenetre(
+                nom, points, config.metrics_interval_seconds)
+        except historian_service.FenetreInvalide as refus:
+            raise HTTPException(status_code=422, detail={
+                "error": "fenetre_invalide", "message": str(refus),
+                "windows": list(historian_service.FENETRES)}) from refus
+
+    def _supervision(bornes: dict) -> dict:
+        """Ce que TOUTE reponse de supervision porte, avant ses series.
+
+        La cadence et la retention sont publiees parce que l'ecran doit pouvoir
+        dire « supervision desactivee sur cette Forge » plutot que d'afficher un
+        graphique vide (§14.5, SPK-DS-20). Le pas de seau l'est parce qu'une
+        valeur agregee sans son pas n'est pas interpretable (§52.6, regle 3).
+        """
+        return {
+            "enabled": config.metrics_interval_seconds > 0,
+            "interval_seconds": config.metrics_interval_seconds,
+            "retention_seconds": config.metrics_retention_seconds,
+            "window": {
+                "name": bornes["nom"],
+                "seconds": bornes["seconds"],
+                "points": bornes["points"],
+                "bucket_seconds": round(bornes["bucket_seconds"], 3),
+            },
+        }
+
+    def _quotas_du_spark(spark: dict) -> dict:
+        """A quoi les courbes d'un Spark se comparent (§52.8).
+
+        Les memes references qu'au §20.3, et pour les memes raisons : le reseau
+        se compare au PLAFOND, jamais a la reservation que le noyau n'applique
+        pas ; le CPU se compare a la reservation, sauf en mode `capped` ou un
+        plafond existe reellement.
+        """
+        plafonne = spark.get("cpu_mode") == "capped"
+        return {
+            "cpu": spark.get("cpu_max") if plafonne else spark.get("cpu_reservation"),
+            "cpu_mode": spark.get("cpu_mode"),
+            "cpu_capped": plafonne,
+            "memory_bytes": spark.get("memory_reservation_bytes"),
+            "disk_bytes": spark.get("storage_bytes"),
+            "net_bps": spark.get("network_burst_bps"),
+        }
+
+    @app.get("/v1/forge/metrics", tags=["metriques"])
+    def forge_metrics(window: str | None = None, points: int | None = None) -> dict:
+        """Historique d'usage de la Forge, et de chacun de ses Sparks.
+
+        @spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.6, §52.7, §52.8
+
+        L'agregat est une SOMME, et il dit combien de Sparks il somme : un Spark
+        cree a midi n'a pas de mesure le matin, et une somme dont le nombre de
+        termes varie changerait de marche sans que rien n'ait bouge dans la
+        machine (§52.7).
+        """
+        bornes = _bornes(window, points)
+        debut = historian_service.maintenant() - timedelta(seconds=bornes["seconds"])
+        pas = bornes["bucket_seconds"]
+
+        with registry() as connection:
+            try:
+                etat_pools = pools(
+                    connection, config.storage_metadata_margin_bytes).as_dict()
+            except HostNotConfigured:
+                # La Forge jamais relevee n'a pas de pools. Les courbes restent
+                # tracables, sans ligne de reference : une reference inventee
+                # serait pire que son absence (§14.5).
+                etat_pools = {}
+            lien = connection.execute(
+                "SELECT network_total_bps FROM forge WHERE id = 1").fetchone()
+            total = historian_service.agregat(
+                connection, debut, pas, bornes["points"])
+            micro = min(bornes["points"], historian_service.POINTS_MICRO)
+            pas_micro = bornes["seconds"] / micro
+            par_spark = []
+            for spark in service.listing(connection):
+                par_spark.append({
+                    "spark": spark["name"],
+                    "state": spark["state"],
+                    "limits": _quotas_du_spark(spark),
+                    "series": historian_service.serie(
+                        connection, spark["id"], debut, pas_micro, micro),
+                })
+            dernier = historian_service.dernier_releve(connection)
+
+        return {
+            **_supervision(bornes),
+            "last_sample_at": dernier,
+            "total": total,
+            "limits": {
+                "cpu": (etat_pools.get("cpu") or {}).get("capacity"),
+                "memory_bytes": (etat_pools.get("memory") or {}).get("capacity"),
+                "disk_bytes": (etat_pools.get("storage") or {}).get("capacity"),
+                "net_bps": lien["network_total_bps"] if lien else None,
+            },
+            "sparks": par_spark,
+            "spark_points": micro,
+        }
+
+    @app.get("/v1/sparks/{name}/metrics", tags=["metriques"])
+    def spark_metrics(name: str, window: str | None = None,
+                      points: int | None = None) -> dict:
+        """Historique d'usage d'un Spark, compare a SES quotas (§52.8, §52.11)."""
+        bornes = _bornes(window, points)
+        debut = historian_service.maintenant() - timedelta(seconds=bornes["seconds"])
+
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            serie = historian_service.serie(
+                connection, spark["id"], debut,
+                bornes["bucket_seconds"], bornes["points"])
+            dernier = historian_service.dernier_releve(connection, spark["id"])
+
+        return {
+            **_supervision(bornes),
+            "spark": name,
+            "state": spark["state"],
+            "last_sample_at": dernier,
+            "series": serie,
+            "limits": _quotas_du_spark(spark),
+        }
 
     @app.get("/v1/sparks/{name}/usage", tags=["metriques"])
     def spark_usage(name: str) -> dict:
