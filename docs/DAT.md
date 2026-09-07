@@ -5560,6 +5560,17 @@ pas apparier les deux.
 Il n'y figure PAS pour `spark.rescue_exec` : ce chemin passe par `incus exec`, et
 son message nomme déjà l'exécution en root. L'y répéter n'apprendrait rien.
 
+**La porte étroite du §37.4.6 admet la clé, et BORNE sa valeur.** Ce n'était pas
+optionnel : `account` a d'abord été envoyé sans être déclaré, et la porte l'a
+refusé en `422` — l'ouverture s'est faite, et rien n'est arrivé au journal, parce
+que le §37.4.5 refuse qu'une panne de traçabilité devienne une panne
+d'exploitation. Le défaut s'est vu au parcours E2E, pas aux preuves d'unité, qui
+n'éprouvaient que l'hôte console. La clé est donc déclarée **et** sa valeur
+restreinte aux deux comptes connus : la console la borne déjà, mais elle n'est
+pas une autorité, et un champ libre y deviendrait le dépôt de secrets en clair
+que le §37.5 interdit. Borner la clé sans borner sa valeur n'aurait fermé qu'à
+moitié.
+
 **Ce qui ne change pas.** Le chemin de dépannage du §37.3 reste root : il passe par
 `incus exec`, précisément parce qu'il n'y a pas de `sshd`, et un compte de service
 n'y apporterait rien. Le terminal DANS un conteneur (§37.4.7) ne change pas non

@@ -861,6 +861,12 @@ tbody tr:hover { background: var(--color-hover); }
 .modale__corps, .modale__corps .champ { min-width: 0; }
 .modale__corps .controle { max-width: 100%; }
 .modale__corps select.controle { width: 100%; }
+/* SPK-95 · §8.2 : même défaut hors modale. Le sélecteur de compte du terminal
+   porte des options de plusieurs mots ; sans ces deux lignes il tirait sa
+   largeur intrinsèque de la plus longue et débordait de sa carte à 390 px —
+   MESURÉ, capture `spk95-terminal-selecteur-mobile.jpg` du 2026-09-07. */
+.champ-compte { min-width: 0; margin-bottom: var(--space-3); }
+.champ-compte select.controle { width: 100%; max-width: 100%; }
 /* Une case a cocher precede son libelle : sans cet ecart elle le touche. La
    regle vivait sur `.formulaire-panneau`, classe du formulaire dans le flux que
    la modale a remplace — elle n'avait donc plus de sujet. */

@@ -32,6 +32,7 @@ import { monterCanalNotify } from './notify-doublon.mjs';
 import { SECRET_HINT } from '../apps/webui/host/inventory.js';
 
 const ECHECS = new URL('./captures/echecs/', import.meta.url).pathname;
+const CAPTURES = new URL('./captures/', import.meta.url).pathname;
 
 let pile;
 let dns;
@@ -84,6 +85,17 @@ beforeEach(async () => {
  *
  * Un `expect` rouge sur une page qu'on ne voit pas oblige à rejouer à la main.
  */
+/** Une capture à OBSERVER (CLAUDE.md §16), depuis l'application réellement
+ *  exécutée. JPEG : ces images se regardent, elles ne se comparent pas au pixel. */
+async function capturer(nom, { largeur = 1440, hauteur = 1000 } = {}) {
+  const avant = page.viewportSize();
+  await page.setViewportSize({ width: largeur, height: hauteur });
+  await mkdir(CAPTURES, { recursive: true });
+  await page.screenshot({ path: join(CAPTURES, `${nom}.jpg`), type: 'jpeg',
+                          quality: 82, fullPage: true });
+  if (avant) await page.setViewportSize(avant);
+}
+
 async function parcours(nom, corps) {
   try {
     await corps();
@@ -3142,8 +3154,14 @@ test('amorcer NOMME le pouvoir employé, puis rend le sort de chaque ligne', asy
     await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
 
     const lignes = await page.$$eval('.ligne-amorcage', (l) => l.map((x) => x.textContent));
-    assert.equal(lignes.length, 5);
+    // SPK-94 · §42.2 quater : SIX lignes, pas cinq. Les cinq éléments de la
+    // détection, plus le PANNEAU d'accueil — une action de plus, rendue
+    // seulement quand elle a eu lieu, comme la ligne `rootless` du §42.2 bis.
+    assert.equal(lignes.length, 6);
+    assert.ok(lignes.some((l) => /panneau d’accueil|panneau d'accueil/.test(l)),
+      'le bandeau de la distribution a été tu, et le compte rendu le dit');
     assert.ok(lignes.some((l) => /installé/.test(l)), 'ce qui manquait est posé');
+    await capturer('spk94-amorcage-compte-rendu', { hauteur: 1300 });
 
     // EFFET côté sparkd : le journal porte l'action DISTINCTE, et elle nomme.
     const { corps } = await pile.lireSparkd('/v1/audit?action=spark.bootstrap&limit=10');
@@ -3458,6 +3476,104 @@ test('redemander l’autre mode est REFUSÉ, et le refus nomme les deux', async 
     assert.match(corps.detail.message, /enraciné/);
     assert.match(corps.detail.message, /rootless/);
     assert.match(corps.detail.message, /vider la cellule/);
+  });
+});
+
+// --- SPK-94 / SPK-95 · LA SECONDE PORTE (§42.2 ter, §42.2 quater, §37.4.9) --
+
+test('un Spark rootless ouvre ses fichiers au compte qui lance la pile', async () => {
+  // SPK-94 · §42.2 ter. LE défaut de l'unité : Compose lit `env_file:` CÔTÉ
+  // CLIENT, donc sous `spark-docker`, alors que les fichiers étaient posés
+  // `0600 root` dans un `/etc/spark` en `0700`. La pile ne démarrait pas.
+  //
+  // « boutique » est rootless depuis le parcours précédent. On pose une variable
+  // DEPUIS L'ÉCRAN, puis on constate l'effet dans la cellule.
+  await parcours('rootless-fichiers-ouverts', async () => {
+    await ouvrir('boutique', 'environnement');
+    await page.waitForSelector('#titre-env-spark', { timeout: 10000 });
+    await page.click('[data-ouvre-env="spark"]');
+    await page.waitForSelector('dialog.modale[open] #env-nom-spark', { timeout: 10000 });
+    await page.fill('#env-nom-spark', 'SMTP_HOST_ROOTLESS');
+    await page.fill('#env-valeur-spark', 'smtp.exemple.test');
+    await page.click('dialog.modale[open] [data-engage="env-spark"]');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('SMTP_HOST_ROOTLESS'), { timeout: 15000 });
+
+    // EFFET dans la cellule : les droits sont posés au groupe du compte, et le
+    // dossier porte son bit `x` — sans lui, les fichiers sont inatteignables.
+    // Le nom de la cellule appartient au registre : le deviner ferait passer
+    // l'absence de commandes pour une absence de droits.
+    const { corps: fiche } = await pile.lireSparkd('/v1/sparks/boutique');
+    const commandes = await pile.commandesCellule(fiche.incus_name);
+    const ouverture = commandes.filter((c) => c.includes('chgrp'));
+    assert.ok(ouverture.length > 0, 'aucun droit posé au compte rootless');
+    const tout = ouverture.join('\n');
+    assert.match(tout, /chgrp \d+ \/etc\/spark\/env/);
+    assert.match(tout, /chgrp \d+ \/run\/spark\/secrets/);
+    assert.match(tout, /chmod 0750 \/etc\/spark/);
+
+    // Le parcours rend la pile à l'état du seed (§29.2) : la variable posée ici
+    // ne doit pas décider de ce qu'un parcours suivant lira.
+    await page.click('[data-env-retire="SMTP_HOST_ROOTLESS"]');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('SMTP_HOST_ROOTLESS'), { timeout: 15000 });
+  });
+});
+
+test('sur un Spark rootless, le terminal OFFRE la seconde porte et l’emprunte', async () => {
+  // SPK-95 · §42.2 quater, §37.4.9, SPK-DS-21. Root reste le défaut ; la
+  // seconde porte s'AJOUTE, et le journal doit dire par laquelle on est entré.
+  await parcours('terminal-seconde-porte', async () => {
+    await ouvrir('boutique', 'terminal');
+    await page.waitForSelector('[data-terminal="compte"]', { timeout: 15000 });
+
+    const valeurs = await page.$$eval('[data-terminal="compte"] option',
+      (l) => l.map((o) => o.value));
+    assert.deepEqual(valeurs, ['root', 'spark-docker']);
+    // SPK-DS-21 : root présélectionné, et chaque option DIT à quoi elle sert.
+    assert.equal(await page.$eval('[data-terminal="compte"]', (s) => s.value), 'root');
+    const libelles = await page.textContent('[data-terminal="compte"]');
+    assert.match(libelles, /administrer la cellule/);
+    assert.match(libelles, /faire tourner la pile/);
+    // §8.2 : le détail vit SOUS le contrôle, pas dans l'option — sinon le
+    // select tire sa largeur de la plus longue et déborde de sa carte.
+    assert.match(await page.textContent('#terminal-compte-detail'),
+      /installer des paquets/);
+    await capturer('spk95-terminal-selecteur');
+    await capturer('spk95-terminal-selecteur-mobile', { largeur: 390, hauteur: 844 });
+
+    await page.selectOption('[data-terminal="compte"]', 'spark-docker');
+    await page.click('[data-terminal="ouvrir"]');
+    await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+    // La bannière tient la porte pendant TOUTE la session : deux fenêtres sur le
+    // même Spark par deux comptes sont indiscernables autrement.
+    assert.match(await page.textContent('.bandeau-terminal'), /spark-docker/);
+    await capturer('spk95-terminal-ouvert-seconde-porte');
+
+    // EFFET côté sparkd : le journal NOMME le compte.
+    const { corps } = await pile.lireSparkd(
+      '/v1/audit?action=spark.terminal_open&limit=50');
+    const sienne = corps.entries.find((e) => e.message.includes('boutique')
+      && e.message.includes('spark-docker'));
+    assert.ok(sienne, 'le journal doit nommer la porte employée');
+    assert.equal(JSON.parse(sienne.payload).path, 'ssh');
+
+    await page.click('[data-terminal="fermer"]');
+    await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 20000 });
+  });
+});
+
+test('sur un Spark ENRACINÉ, il n’y a rien à choisir, et l’écran le dit', async () => {
+  // §14.4 appliqué en ABSENCE : un menu à une seule entrée n'est pas un choix.
+  // Mais l'absence se NOMME (§14.5), sinon on cherche un sélecteur inexistant.
+  await parcours('terminal-porte-unique', async () => {
+    await ouvrir('crm-production', 'terminal');
+    await page.waitForSelector('#titre-terminal');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('enraciné'), { timeout: 15000 });
+    assert.equal(await page.$('[data-terminal="compte"]'), null,
+      'aucun sélecteur là où il n’y a rien à choisir');
+    await capturer('spk95-terminal-porte-unique');
   });
 });
 

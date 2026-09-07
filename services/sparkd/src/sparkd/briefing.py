@@ -491,16 +491,22 @@ def comptes_du_spark(model: dict[str, Any]) -> list[dict[str, str]]:
     porte qui n'existe pas, et l'annoncer parce qu'un compte existe
     contredirait le §42.2 bis, où le mode est une observation.
     """
+    # `role` est COURT et `detail` explique. Les fondre donnait une option de
+    # liste déroulante de cent caractères : mesuré à 390 px, le contrôle tirait
+    # sa largeur intrinsèque de cette option et débordait de sa carte — le même
+    # défaut que le §8.2 avait déjà corrigé pour les modales.
     portes = [{
         "user": COMPTE_CELLULE,
-        "role": "administrer la cellule : installer des paquets, écrire dans "
-                "/srv, lire ce dossier, réparer un amorçage",
+        "role": "administrer la cellule",
+        "detail": "installer des paquets, écrire dans /srv, lire ce dossier, "
+                  "réparer un amorçage",
     }]
     if model["docker"]["mode"] == "rootless":
         portes.append({
             "user": COMPTE_ROOTLESS,
-            "role": "faire tourner la pile : `docker` y répond sans incantation, "
-                    "et ce compte ne peut pas casser la cellule",
+            "role": "faire tourner la pile",
+            "detail": "`docker` y répond sans incantation, et ce compte ne peut "
+                      "pas casser la cellule",
         })
     return portes
 
@@ -547,8 +553,9 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
             ligne = commande_ssh(model, jump, direct=direct, compte=porte["user"])
             if not ligne:
                 continue
-            lignes.extend([f"**{porte['user']}** — {porte['role']} :", "",
-                           "```sh", ligne, "```", ""])
+            lignes.extend([
+                f"**{porte['user']}** — {porte['role']} : {porte['detail']}.", "",
+                "```sh", ligne, "```", ""])
     else:
         lignes.extend([
             "La commande complète n'a pas pu être composée : la console n'a pas "

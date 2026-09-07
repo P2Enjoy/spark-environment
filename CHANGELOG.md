@@ -15,7 +15,11 @@
   cellule et jamais inventés, et seulement quand le démon est réellement
   utilisable ; la migration `015` les garde à côté du mode ; les fichiers
   d'environnement et le briefing deviennent `root:spark-docker 0640` (dossiers
-  `0750`) en rootless, et restent `0600 root` en enraciné. Le groupe `docker` a
+  `0750`) en rootless — le fichier de confort `/etc/profile.d/spark-env.sh` avec
+  eux, le dossier système `/etc/profile.d` sans lui —, et restent `0600 root` en
+  enraciné. L'ouverture passe par une commande et non par l'écriture de fichier :
+  l'API d'Incus crée un dossier, elle ne le modifie pas, si bien qu'un
+  `/etc/spark` déjà posé aurait gardé ses droits quel que soit l'en-tête envoyé. Le groupe `docker` a
   été **écarté** au profit du groupe primaire du compte : le premier est l'ACL du
   démon enraciné, donc équivalent-root, et l'employer ici aurait repris d'une
   main les privilèges que le mode rootless retire. Un amorçage rootless réussi
@@ -25,7 +29,11 @@
   l'amorçage : les trois lignes qui renvoient au briefing arrivaient sous une
   dizaine de lignes de documentation de la distribution, ce qui explique qu'un
   agent qui atterrit ne comprenne pas qu'il doit le lire. Le motd devient
-  impératif au lieu de descriptif.
+  impératif au lieu de descriptif. La ligne rendue au compte rendu nomme le
+  **panneau du produit** et non le bandeau retiré : les cinq éléments emploient
+  `present` pour « c'est bon », et l'inverse aurait produit la seule ligne où
+  « absent » est le succès — l'écran aurait affiché « absent » à côté
+  d'« installé ».
 - **Une seconde porte sur les Sparks rootless** (SPK-95, `docs/DAT.md` §37.4.9,
   §42.2 quater, `DESIGN_SYSTEM_APP.md` SPK-DS-21, manuel M6) : entrer en
   `spark-docker` **au lieu** de root a été refusé — le briefing est `0600 root`,
@@ -40,7 +48,10 @@
   les **deux** portes, une seconde porte vide ou périmée étant un défaut et non un
   « clés conformes » ; et l'audit du terminal nomme le compte, sans quoi le
   journal ne distinguerait plus une session administrative d'une session
-  applicative.
+  applicative — à l'ouverture comme à la fermeture, mais pas sur le chemin de
+  dépannage, dont le message nomme déjà l'exécution en root. Le manuel M6 donne
+  désormais `ssh spark-docker@…` comme voie simple, la voie longue en `runuser`
+  restant valable pour une session déjà ouverte en root.
 - **Le dépôt d'images se lit en direct, et le catalogue se coche** (SPK-92,
   `docs/DAT.md` §33.6, §33.7, §33.3 corrigé, `DESIGN_SYSTEM.md` §6.28, manuel
   M5) : la liste des images déployables était **quatre références écrites en

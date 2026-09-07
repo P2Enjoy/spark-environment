@@ -1340,8 +1340,19 @@ def create_app(config: Config) -> FastAPI:
     #: secrets en clair que le §37.5 interdit précisément.
     #: `container` (§37.7.4) : la cible reste le SPARK — c'est lui qui est
     #: protégé, facturé et retrouvé —, et le nom du conteneur entre ici.
+    #: `account` (SPK-95 · §37.4.9) : par quelle PORTE la session est entrée.
+    #: Sans lui, le journal ne distingue plus une session administrative d'une
+    #: session applicative — et c'est ce qu'on cherchera le jour où une cellule
+    #: aura changé sans qu'on sache par où.
     CLES_DECLARABLES = ("path", "reason", "duration_seconds", "container",
-                        "previous_commit", "target_commit")
+                        "account", "previous_commit", "target_commit")
+
+    #: Les seules valeurs qu'`account` peut prendre. La console les borne déjà,
+    #: mais elle n'est pas une autorité : cette porte est étroite précisément
+    #: parce qu'un champ libre y deviendrait le dépôt de secrets en clair que le
+    #: §37.5 interdit. Borner la clé sans borner sa valeur n'aurait fermé qu'à
+    #: moitié.
+    COMPTES_DECLARABLES = ("root", bootstrap_service.COMPTE_ROOTLESS)
 
     #: SPK-45 · §37.7.4 : un geste REFUSÉ se journalise comme refusé. Ne
     #: journaliser que les succès laisserait invisible une tentative répétée sur
@@ -1379,6 +1390,10 @@ def create_app(config: Config) -> FastAPI:
                 "error": "payload_refused",
                 "message": f"Clés refusées : {', '.join(inconnues)}. "
                            f"Admises : {', '.join(CLES_DECLARABLES)}."})
+        if "account" in brut and brut["account"] not in COMPTES_DECLARABLES:
+            raise HTTPException(status_code=422, detail={
+                "error": "payload_refused",
+                "message": f"Compte refusé. Admis : {', '.join(COMPTES_DECLARABLES)}."})
         with registry() as connection:
             # L'acteur vient du CONTEXTE — l'en-tête posé par l'hôte console
             # (§21.6.2) —, jamais du corps. Laisser une requête choisir son

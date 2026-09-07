@@ -275,18 +275,20 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
   // avant d'ouvrir un terminal. Chaque option DIT à quoi elle sert — « root ou
   // spark-docker » seul ne renseigne personne.
   const portes = Array.isArray(etat.comptes) ? etat.comptes : [];
+  const choisie = portes.find((p) => p.user === (etat.compte ?? COMPTE_ADMIN))
+    ?? portes[0];
   const selecteurCompte = portes.length > 1
-    ? `<p class="formulaire__champ">
+    ? `<div class="champ champ-compte">
          <label for="terminal-compte">Entrer en tant que</label>
-         <select id="terminal-compte" data-terminal="compte"
+         <select class="controle" id="terminal-compte" data-terminal="compte"
+                 aria-describedby="terminal-compte-detail"
                  ${etat.status === 'ouverture' ? 'disabled' : ''}>
-           ${portes.map((porte) => `
-             <option value="${echapper(porte.user)}"${
-               porte.user === (etat.compte ?? COMPTE_ADMIN) ? ' selected' : ''}>
-               ${echapper(porte.user)} — ${echapper(porte.role)}
-             </option>`).join('')}
+           ${portes.map((porte) => `<option value="${echapper(porte.user)}"${
+               porte.user === choisie?.user ? ' selected' : ''}>${
+               echapper(porte.user)} — ${echapper(porte.role)}</option>`).join('')}
          </select>
-       </p>`
+         <p class="note" id="terminal-compte-detail">${echapper(choisie?.detail ?? '')}</p>
+       </div>`
     : '';
 
   // §14.5 : l'absence de seconde porte se NOMME, au lieu de laisser un écran

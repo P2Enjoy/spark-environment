@@ -824,6 +824,14 @@ offre qu'une.
 - chaque option dit **ce à quoi elle sert**, pas seulement son nom. « root —
   administrer la cellule » et « spark-docker — faire tourner la pile » ;
   « root ou spark-docker » seul ne renseigne personne ;
+- ce libellé reste **court**, et l'explication vit **sous** le contrôle, liée par
+  `aria-describedby`. Ce n'est pas une préférence : un `select` tire sa largeur
+  intrinsèque de son option la plus longue, et une option d'une centaine de
+  caractères débordait de sa carte à 390 px — MESURÉ le 2026-09-07, capture
+  `spk95-terminal-selecteur-mobile.jpg`. C'est le §8.2 déjà appliqué aux modales,
+  qu'il fallait porter au flux ;
+- l'explication décrit la porte **choisie**, et suit le choix. Laisser celle de
+  l'option précédente décrirait un compte qu'on vient de quitter ;
 - le compte choisi reste **visible pendant la session**, dans l'en-tête du
   terminal. Deux fenêtres ouvertes sur le même Spark par deux portes différentes
   sont indiscernables autrement, et l'une peut tout casser quand l'autre ne le

@@ -301,6 +301,22 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       return { status: r.status, corps: await r.json().catch(() => null) };
     },
     /**
+     * Les commandes que le produit a RÉELLEMENT passées dans une cellule.
+     *
+     * SPK-94 · docs/DAT.md §42.2 ter, §28.4 : le doublon Incus persiste son
+     * état à côté du registre, et il y garde ce qui lui a été demandé. C'est la
+     * seule façon de CONSTATER un effet qui ne se voit pas à l'écran — la pose
+     * de droits dans la cellule n'a pas de rendu, et le §15 de `CLAUDE.md`
+     * exige quand même de la prouver.
+     *
+     * Lecture seule, comme `lireSparkd` : on constate, on n'agit pas (§29.3).
+     */
+    async commandesCellule(nom) {
+      const brut = await readFile(`${registre}.incus.json`, 'utf8').catch(() => '{}');
+      const etat = JSON.parse(brut);
+      return (etat[nom]?.commands ?? []).map((c) => c.join(' '));
+    },
+    /**
      * Écrit sur `sparkd` en CONTOURNANT l'interface (`CLAUDE.md` §10).
      *
      * À ne pas confondre avec `lireSparkd`, qui constate un effet. Ici on agit,

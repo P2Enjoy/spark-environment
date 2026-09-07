@@ -941,7 +941,13 @@ async function releverPortesTerminal() {
     if (!portes.some((porte) => porte.user === etat.terminal.compte)) {
       etat.terminal.compte = portes[0].user;
     }
-    peindre();
+    // On ne REPEINT que si l'écran est encore au repos. Repeindre pendant qu'une
+    // session s'ouvre détruit la surface de l'émulateur que `ouvrirTerminal`
+    // vient d'obtenir, et l'ouverture échoue sur « Surface du terminal absente ».
+    // Trouvé par le parcours E2E du terminal de conteneur, qu'aucune preuve de
+    // composant ne pouvait attraper : elles rendent du HTML, elles ne montent
+    // pas xterm. Le sélecteur n'est de toute façon rendu qu'au repos.
+    if (etat.facette === 'terminal' && etat.terminal.status === 'ferme') peindre();
   } catch { /* §14.9 : sans portes lues, root reste le défaut et le seul offert */ }
 }
 
@@ -981,6 +987,11 @@ function brancherTerminal() {
   const compte = racine.querySelector('[data-terminal="compte"]');
   compte?.addEventListener('change', () => {
     etatT.compte = compte.value;
+    // Le détail affiché sous le contrôle décrit la porte CHOISIE : le laisser
+    // sur l'ancienne décrirait un compte qu'on vient de quitter. Repeindre est
+    // sans risque ici — le sélecteur n'existe qu'au repos (§37.4.9).
+    peindre();
+    racine.querySelector('[data-terminal="compte"]')?.focus();
   });
 
   const lecteur = racine.querySelector('[data-terminal="lecteur"]');

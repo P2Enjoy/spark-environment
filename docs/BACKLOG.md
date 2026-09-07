@@ -5605,10 +5605,11 @@ comprenne pas qu'il doit lire le briefing.
   écrit et éprouvé : relevé, migration 015, ouverture des fichiers et du
   briefing, silence du bandeau, panneau impératif. 15 preuves propres à l'unité,
   dont deux qui passent du ROUGE au vert — vérifié en désactivant le correctif,
-  le geste d'ouverture disparaît et la preuve tombe. Restent dus : le parcours
-  E2E, les captures observées, et surtout la MESURE sur un Spark rootless réel —
-  le défaut lui-même n'est établi que par lecture du code et par le contrat de
-  Compose v2, pas par observation sur la Forge.
+  le geste d'ouverture disparaît et la preuve tombe. Parcours E2E joué contre la
+  pile réelle et captures observées (`spk94-amorcage-compte-rendu.jpg`). **Reste
+  dû, et c'est le seul point** : la MESURE sur un Spark rootless réel — le défaut
+  lui-même n'est établi que par lecture du code et par le contrat de Compose v2,
+  pas par observation sur la Forge.
 - DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un
   Spark → Amorçage en rootless, puis son terminal —, une pile Compose réelle
   portant ses deux `env_file:` démarre sous `spark-docker`, prouvé de bout en
@@ -5663,9 +5664,12 @@ pas casser la cellule.
 - **État au 2026-09-07 — `[~]`, et ce qui manque est nommé.** Le serveur, l'hôte
   console et l'écran sont écrits et éprouvés : clés sur les deux comptes, relevé
   qui juge les deux portes, sélecteur conforme à SPK-DS-21, sonde et audit qui
-  nomment le compte, deux commandes de rebond au dossier. Restent dus : le
-  parcours E2E, les captures observées, et la MESURE de `StrictModes` sur une
-  cellule réelle — `sshd` est tatillon sur le propriétaire et les droits de
+  nomment le compte, deux commandes de rebond au dossier. Trois parcours E2E
+  joués contre la pile réelle, captures observées à 1440 et 390 px
+  (`spk95-terminal-selecteur.jpg`, `-mobile`, `-ouvert-seconde-porte`,
+  `-porte-unique`) — le débordement du sélecteur à 390 px a été trouvé là, et
+  corrigé. **Reste dû, et c'est le seul point** : la MESURE de `StrictModes` sur
+  une cellule réelle — `sshd` est tatillon sur le propriétaire et les droits de
   `/home/spark-docker` et de son `.ssh`, et son refus ne s'explique pas de
   lui-même.
 - DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un

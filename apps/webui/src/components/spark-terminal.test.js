@@ -434,12 +434,22 @@ test('aucun sélecteur quand il n’y a qu’une porte : un menu à une entrée 
 test('deux portes : le sélecteur apparaît, root présélectionné, chacune DIT son rôle', () => {
   const html = renderTerminal(SPARK, {
     ...TERMINAL_VIDE,
-    comptes: [{ user: 'root', role: 'administrer la cellule' },
-              { user: 'spark-docker', role: 'faire tourner la pile' }] });
+    comptes: [{ user: 'root', role: 'administrer la cellule',
+                detail: 'installer des paquets' },
+              { user: 'spark-docker', role: 'faire tourner la pile',
+                detail: 'docker y répond sans incantation' }] });
   assert.ok(html.includes('data-terminal="compte"'));
   assert.match(html, /<option value="root" selected>/);
   assert.ok(html.includes('administrer la cellule'));
   assert.ok(html.includes('faire tourner la pile'));
+  // §8.2 : l'option reste COURTE — un select tire sa largeur de la plus longue,
+  // et le détail y aurait fait déborder la carte à 390 px. Il vit sous le
+  // contrôle, et il décrit la porte CHOISIE.
+  assert.ok(!/<option[^>]*>[^<]{60,}</.test(html), 'option trop longue');
+  assert.ok(html.includes('installer des paquets'));
+  assert.ok(!html.includes('docker y répond sans incantation'),
+    'le détail affiché est celui de la porte choisie, pas des deux');
+  assert.ok(html.includes('class="controle"'), 'le champ suit le design system');
 });
 
 test('portes non lues : aucun sélecteur, et root reste le défaut', () => {

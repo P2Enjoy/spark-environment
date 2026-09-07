@@ -225,3 +225,30 @@ def test_le_briefing_de_la_cellule_NOMME_la_seconde_porte(tmp_path):
     texte = _fichiers(client, nom)[briefing_service.FICHIER_MARKDOWN]
     assert "Mode : rootless" in texte
     assert "mêmes clés" in texte
+
+
+# --- La porte étroite du journal (§37.4.6, §37.4.9) -------------------------
+
+
+def test_le_journal_ADMET_le_compte_mais_en_BORNE_la_valeur(tmp_path):
+    """Le §37.4.6 refuse les clés inconnues parce qu'un champ libre deviendrait
+    le dépôt de secrets en clair que le §37.5 interdit. Admettre `account` sans
+    borner sa valeur n'aurait fermé la porte qu'à moitié — la console la borne
+    déjà, mais elle n'est pas une autorité."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+
+    for compte in ("root", bootstrap.COMPTE_ROOTLESS):
+        reponse = client.post("/v1/audit", json={
+            "action": "spark.terminal_open", "result": "ok",
+            "target_type": "spark", "target_id": nom,
+            "message": f"Session ouverte, en {compte}.",
+            "payload": {"path": "ssh", "account": compte}})
+        assert reponse.status_code == 201, reponse.text
+
+    refus = client.post("/v1/audit", json={
+        "action": "spark.terminal_open", "result": "ok",
+        "target_type": "spark", "target_id": nom, "message": "Session ouverte.",
+        "payload": {"path": "ssh", "account": "mot-de-passe-en-clair"}})
+    assert refus.status_code == 422
+    assert refus.json()["detail"]["error"] == "payload_refused"
