@@ -220,49 +220,6 @@
   s'y abonne — un événement à un coup, perdu, si bien que l'installateur n'était
   jamais lancé. Les temporisations fixes qui masquaient cette course sont
   remplacées par une attente de condition.
-- **L'amorçage sert enfin l'image que la cellule fait tourner** (SPK-76,
-  `docs/DAT.md` §42.9) : le geste avait été écrit en regardant `images:debian/13`
-  et rien ne vérifiait que la cellule était celle-là — or le catalogue en propose
-  quatre. Une cellule **Alpine** échouait sur `Command not found`, l'amorçage
-  exigeant `bash` avant même de pouvoir relever quoi que ce soit ; une cellule
-  **Ubuntu 24.04** recevait le dépôt Docker `linux/debian` suite `trixie`, qui
-  répond — d'où un `apt-get update` réussi — et dont les paquets sont ensuite
-  refusés par `apt`. Le relevé lit désormais `/etc/os-release`, s'exécute en
-  `sh -c` sans exiger `bash`, et le dépôt amont se construit depuis la
-  distribution et la suite relevées. Un `docker.list` qui nomme une autre
-  distribution que la cellule, et un `docker-ce` installé depuis un autre dépôt,
-  sont rendus **« à corriger »** au lieu de « présent ». Une famille non servie —
-  Alpine — est **refusée** en nommant sa distribution, au lieu de laisser fuiter
-  un refus d'Incus.
-- **Un amorçage qui échoue dit enfin pourquoi, et s'arrête** (SPK-76,
-  `docs/DAT.md` §42.9.7) : les scripts de pose n'avaient pas de `set -e`. Une
-  installation ratée n'interrompait rien et le code rendu était celui de la
-  dernière ligne du script — d'où un Docker installé « malgré l'erreur », et,
-  symétriquement, des installations ratées rendues **réussies** dès que la
-  dernière ligne passait. La sortie d'erreur, jusqu'ici jetée, accompagne
-  désormais le code dans le refus ; elle ne traverse pas le journal d'audit, qui
-  n'a pas à porter les paquets du locataire.
-- **Redémarrer la Forge depuis la console** (SPK-87, `docs/DAT.md` §51) : après
-  une mise à jour de noyau, la machine continue de tourner sur l'ancien tant
-  qu'elle n'a pas redémarré, et le seul recours était `ssh` à la main. Le panneau
-  relève d'abord ce que le geste coûterait — le noyau qui démarrera, les Sparks
-  nommés qui s'arrêteront, et si un redémarrage est seulement nécessaire — puis
-  demande de **frapper le nom de la Forge**, le sélecteur en portant plusieurs.
-  **Un noyau dépourvu de module ZFS fait disparaître le geste** au lieu de
-  l'assortir d'un avertissement : le pool serait indisponible au démarrage, donc
-  tous les Sparks, et cela ne se verrait qu'après. Un avertissement se clique ;
-  celui-là coûterait la production du locataire.
-- **Un système de paquets cassé est prévenu à l'amorce, et nommé par le
-  préflight** (SPK-84, `docs/DAT.md` §50.7) : sur une Forge dont le `/boot` est
-  en RAID, le postinst de `grub-pc` dérive sa cible en `/dev/md` — un nom qui
-  n'existe pas — et reste en échec. `dpkg` devient alors incohérent, et **plus
-  aucune installation n'aboutit** : ni l'amorce de la Forge, qui s'interrompt sur
-  son premier `apt-get install`, ni l'amorçage d'un Spark, dont l'échec désignait
-  `openssh-server` ou `docker-ce` et jamais la vraie cause. L'amorce pose
-  désormais la réponse `debconf` avant tout `apt`, en déduisant les disques des
-  membres du RAID et seulement si la machine est en BIOS ; le préflight gagne un
-  contrôle qui rend `ECHEC` dès qu'un paquet n'est ni installé ni simplement
-  désinstallé.
 - **L'amorçage rend la cellule joignable, et plus seulement équipée** (SPK-82,
   `docs/DAT.md` §42.10) : il accorde désormais au Spark la clé que la console
   emploie pour joindre la Forge — celle qu'OpenSSH y présente, identifiée par son
@@ -296,8 +253,6 @@
   le geste n'est plus su. Et un moteur Docker présent dont **aucun démon** n'est
   actif affiche « mode indéterminé » au lieu de ne rien afficher, là où il était
   « impossible de savoir s'il est en rootless ou pas ».
-- **Le relevé d'un Spark ne déborde plus sur la fiche du suivant** (SPK-76) :
-  l'état d'amorçage n'était jamais remis à zéro en changeant de Spark.
 - **Le widget flottant ne rend plus une action incliquable** (SPK-75,
   `docs/DESIGN_SYSTEM_APP.md`) : la réserve que la page devait laisser à la
   pastille repliée était écrite avant les raccourcis `padding:` de `.principal`,

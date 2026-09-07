@@ -233,9 +233,9 @@ function peindre() {
  * focus au clavier. Seuls les deux éléments qui dépendent de la valeur sont
  * réécrits.
  */
-function rafraichirQuota(formulaire, controle) {
+function rafraichirQuota(formulaire, controle, nomQuota = controle.name) {
   if (controle.type === 'range') {
-    const texte = formatQuota(controle.name, controle.value);
+    const texte = formatQuota(nomQuota, controle.value);
     controle.setAttribute('aria-valuetext', texte);
     const vue = formulaire.querySelector(`[data-valeur-de="${controle.name}"]`);
     if (vue) vue.textContent = texte;
@@ -1578,6 +1578,7 @@ function brancherPanneaux() {
         // On ne repeint PAS à chaque frappe : `innerHTML` reconstruirait la
         // modale et arracherait le focus au clavier (§14.3).
         etat.quotas.values[CLES_QUOTA[controle.name] ?? controle.name] = controle.value;
+        rafraichirQuota(quotas, controle, NOMS_QUOTA[controle.name] ?? controle.name);
       });
     }
     // Le MODE, lui, repeint : il décide des champs affichés, et en laisser
@@ -1827,6 +1828,11 @@ function noterSignature(reponse) {
  *  partie du nom d'état : « memory_gib » dit ce qu'on y met, « memory » non. */
 const CLES_QUOTA = {
   memory: 'memory_gib', storage: 'storage_gib', network: 'network_mbps',
+};
+
+/** Du nom du contrôle vers la définition visuelle partagée avec la création. */
+const NOMS_QUOTA = {
+  memory: 'memory_gib', storage: 'storage_gib', network: 'network_mbit',
 };
 
 /**
