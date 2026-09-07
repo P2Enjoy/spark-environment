@@ -144,6 +144,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/env/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Forge Env
+         * @description Ecrit un LOT au catalogue de la Forge (§43.10.3).
+         *
+         *     Le lot ne descend nulle part de lui-meme : le §43.6 revise reste entier,
+         *     et chaque Spark coche ce qu'il recoit. Seules les entrees DEJA cochees
+         *     quelque part ont donc des destinataires, et seuls ceux-la sont nommes par
+         *     la garde du §43.9.5 bis.
+         */
+        post: operations["import_forge_env_v1_env_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/env/{name}": {
         parameters: {
             query?: never;
@@ -632,6 +657,30 @@ export interface paths {
         get: operations["list_spark_env_v1_sparks__name__env_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/env/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Spark Env
+         * @description Ecrit un LOT en propre sur ce Spark (§43.10.3).
+         *
+         *     Contrairement au catalogue, ces entrees valent IMMEDIATEMENT pour ce
+         *     Spark : rien a cocher, elles lui appartiennent. Le verrou du §35.2
+         *     s'applique donc pleinement — le geste vise ce Spark.
+         */
+        post: operations["import_spark_env_v1_sparks__name__env_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1149,6 +1198,43 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    import_forge_env_v1_env_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2009,6 +2095,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_spark_env_v1_sparks__name__env_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

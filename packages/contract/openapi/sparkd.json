@@ -339,6 +339,52 @@
         ]
       }
     },
+    "/v1/env/import": {
+      "post": {
+        "description": "Ecrit un LOT au catalogue de la Forge (§43.10.3).\n\nLe lot ne descend nulle part de lui-meme : le §43.6 revise reste entier,\net chaque Spark coche ce qu'il recoit. Seules les entrees DEJA cochees\nquelque part ont donc des destinataires, et seuls ceux-la sont nommes par\nla garde du §43.9.5 bis.",
+        "operationId": "import_forge_env_v1_env_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Forge Env V1 Env Import Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Forge Env",
+        "tags": [
+          "environnement"
+        ]
+      }
+    },
     "/v1/env/{name}": {
       "delete": {
         "operationId": "unset_forge_env_v1_env__name__delete",
@@ -1495,6 +1541,63 @@
           }
         },
         "summary": "List Spark Env",
+        "tags": [
+          "environnement"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/env/import": {
+      "post": {
+        "description": "Ecrit un LOT en propre sur ce Spark (§43.10.3).\n\nContrairement au catalogue, ces entrees valent IMMEDIATEMENT pour ce\nSpark : rien a cocher, elles lui appartiennent. Le verrou du §35.2\ns'applique donc pleinement — le geste vise ce Spark.",
+        "operationId": "import_spark_env_v1_sparks__name__env_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Spark Env V1 Sparks  Name  Env Import Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Spark Env",
         "tags": [
           "environnement"
         ]

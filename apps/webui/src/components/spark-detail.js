@@ -25,6 +25,7 @@ import { renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
 import { renderSupervisionSpark, SUPERVISION_VIDE } from './supervision.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
+import { IMPORT_VIDE } from './env-import.js';
 import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
 import { DOSSIER_VIDE, renderDossier } from './spark-dossier.js';
 // §12.5 : la table des modes CPU vit à UN SEUL endroit. En recopier une
@@ -673,6 +674,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     admin = ADMIN_VIDE, facette = '',
                                     quotas = QUOTAS_VIDE,
                                     env = [], envUi = ENV_VIDE,
+                                    envImport = IMPORT_VIDE,
                                     identite = IDENTITE_VIDE,
                                     dossier = DOSSIER_VIDE,
                                     mesures = SUPERVISION_VIDE,
@@ -702,7 +704,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     // SPK-93 · §52.11 : la meme lecture que l'ecran de Forge, bornee a CE Spark
     // et comparee a SES quotas.
     mesures: () => renderSupervisionSpark(mesures),
-    environnement: () => renderEnvPanel(spark, env, envUi, renderModale, catalogue),
+    environnement: () => renderEnvPanel(spark, env, envUi, renderModale, catalogue,
+                                        envImport),
     terminal: () => renderTerminal(spark, terminal),
     docker: () => renderDocker(spark, docker),
     journal: () => renderJournal(audit) ||

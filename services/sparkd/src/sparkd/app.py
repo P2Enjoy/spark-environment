@@ -1733,6 +1733,18 @@ def create_app(config: Config) -> FastAPI:
             " WHERE entry.scope = 'forge' AND entry.name = ?"
             " ORDER BY spark.name", (nom,))]
 
+    def _cibles_du_lot(connection, noms: list[str]) -> list[dict]:
+        """Les Sparks destinataires d'AU MOINS UNE entree du lot (§43.10.3).
+
+        Dedupliques par Spark : un lot qui change six entrees cochees par le meme
+        Spark protege doit poser UNE question, et reposer ses fichiers UNE fois.
+        """
+        vus: dict[str, dict] = {}
+        for nom in noms:
+            for spark in _sparks_cibles_du_catalogue(connection, nom):
+                vus.setdefault(spark["id"], spark)
+        return sorted(vus.values(), key=lambda spark: spark["name"])
+
     def _garde_de_forge(connection, body: dict, geste: str,
                          cibles: list[dict]) -> None:
         """Informer, puis accepter — la convention du produit (§43.9.5 bis).
@@ -1794,7 +1806,7 @@ def create_app(config: Config) -> FastAPI:
                     secret=bool((body or {}).get("secret")))
             except env_service.EnvError as erreur:
                 raise HTTPException(status_code=422, detail={
-                    "error": "invalid_name", "message": str(erreur)}) from erreur
+                    "error": erreur.code, "message": str(erreur)}) from erreur
             # §43.2 : le registre écrit, la cellule suit. Sans cela, les deux
             # diraient deux choses différentes jusqu'au prochain démarrage.
             _reposer_cibles_du_catalogue(connection, cibles)
@@ -1810,6 +1822,65 @@ def create_app(config: Config) -> FastAPI:
             # §14.5 : ne pas trouver n'est pas une erreur — l'état voulu est
             # « cette variable n'est pas définie », et il est atteint.
             return {"name": name, "removed": retire}
+
+    # --- SPK-97 · l'import d'un lot colle (docs/DAT.md §43.10) --------------
+    #
+    # Le texte colle n'atteint JAMAIS le serveur : la console l'analyse (§43.10.1)
+    # et n'envoie que des entrees structurees. C'est ce qui permet ici de refuser
+    # sans avoir a deviner ce qu'une ligne voulait dire.
+
+    def _entrees_du_lot(body: dict) -> list[tuple[str, str, bool]]:
+        """Lit `entries` du corps, ou refuse la FORME de la demande.
+
+        Un corps mal forme n'est pas un nom hors grammaire : le distinguer evite
+        de renvoyer la regle du shell a qui a envoye autre chose qu'une liste.
+        """
+        brut = (body or {}).get("entries")
+        if not isinstance(brut, list):
+            raise HTTPException(status_code=422, detail={
+                "error": "invalid_body",
+                "message": "Le corps doit porter « entries », une liste "
+                           "d'objets {name, value, secret} (docs/DAT.md §43.10.3)."})
+        lot: list[tuple[str, str, bool]] = []
+        for rang, element in enumerate(brut, start=1):
+            if not isinstance(element, dict) or not isinstance(element.get("name"), str):
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_body",
+                    "message": f"L'entree n° {rang} du lot n'a pas de nom "
+                               "exploitable : il faut {name, value, secret}."})
+            lot.append((element["name"], str(element.get("value", "")),
+                        bool(element.get("secret"))))
+        return lot
+
+    def _rendu_lot(lot) -> dict:
+        return {"entries": [_rendu_env(e) for e in lot.entrees],
+                "written": len(lot.entrees), "replaced": list(lot.remplacees)}
+
+    @app.post("/v1/env/import", tags=["environnement"])
+    def import_forge_env(body: dict = Body(...)) -> dict:
+        """Ecrit un LOT au catalogue de la Forge (§43.10.3).
+
+        Le lot ne descend nulle part de lui-meme : le §43.6 revise reste entier,
+        et chaque Spark coche ce qu'il recoit. Seules les entrees DEJA cochees
+        quelque part ont donc des destinataires, et seuls ceux-la sont nommes par
+        la garde du §43.9.5 bis.
+        """
+        with registry() as connection:
+            lot = _entrees_du_lot(body)
+            cibles = _cibles_du_lot(connection, [nom for nom, _, _ in lot])
+            _garde_de_forge(connection, body,
+                            f"Importer {len(lot)} entree(s)", cibles)
+            try:
+                ecrit = env_service.importer(
+                    connection, _cle_de_forge(), "forge", None, lot)
+            except env_service.EnvError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": erreur.code, "message": str(erreur)}) from erreur
+            # §43.2 : une SEULE reecriture par cellule, apres tout le lot. Une par
+            # entree laisserait autant de fenetres ou la cellule tient un jeu
+            # partiel, pour un resultat identique a la fin.
+            _reposer_cibles_du_catalogue(connection, cibles)
+            return _rendu_lot(ecrit)
 
     @app.get("/v1/sparks/{name}/env", tags=["environnement"])
     def list_spark_env(name: str) -> dict:
@@ -1842,7 +1913,7 @@ def create_app(config: Config) -> FastAPI:
                     "error": "not_found", "message": str(erreur)}) from erreur
             except env_service.EnvError as erreur:
                 raise HTTPException(status_code=422, detail={
-                    "error": "invalid_name", "message": str(erreur)}) from erreur
+                    "error": erreur.code, "message": str(erreur)}) from erreur
             except (IncusError, InstanceAbsente, env_service.CleError):
                 # Le registre est écrit ; la cellule sera rattrapée au prochain
                 # démarrage. Le geste n'échoue pas pour autant (§43.5.2).
@@ -1923,6 +1994,36 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
             return {"spark": name, "name": variable, "removed": retire}
+
+    @app.post("/v1/sparks/{name}/env/import", tags=["environnement"])
+    def import_spark_env(name: str, body: dict = Body(...)) -> dict:
+        """Ecrit un LOT en propre sur ce Spark (§43.10.3).
+
+        Contrairement au catalogue, ces entrees valent IMMEDIATEMENT pour ce
+        Spark : rien a cocher, elles lui appartiennent. Le verrou du §35.2
+        s'applique donc pleinement — le geste vise ce Spark.
+        """
+        with registry() as connection:
+            lot = _entrees_du_lot(body)
+            try:
+                spark = service.by_name(connection, name)
+                protection_service.ensure_writable(connection, name, "env")
+                ecrit = env_service.importer(
+                    connection, _cle_de_forge(), "spark", spark["id"], lot)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except env_service.EnvError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": erreur.code, "message": str(erreur)}) from erreur
+            try:
+                # Hors du try precedent : une cellule injoignable n'annule pas un
+                # lot deja ecrit au registre, elle sera rattrapee au prochain
+                # demarrage (§43.5.2).
+                _apply_env(connection, service.by_name(connection, name))
+            except (IncusError, InstanceAbsente, env_service.CleError, service.NotFound):
+                pass
+            return _rendu_lot(ecrit)
 
     @app.get("/v1/ssh-keys", tags=["cles"])
     def list_keys() -> dict:

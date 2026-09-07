@@ -18,8 +18,9 @@ import { IDENTITE_VIDE } from './components/spark-identity.js';
 import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
+import { IMPORT_VIDE, analyser } from './components/env-import.js';
 import { DOCKER_VIDE } from './components/spark-docker.js';
-import { TERMINAL_VIDE, CHAMP_TERMINAL, destinationPorteSession }
+import { TERMINAL_VIDE, CHAMP_TERMINAL, COMPTE_ADMIN, destinationPorteSession }
   from './components/spark-terminal.js';
 import { INVENTAIRE_VIDE, renderSessionRegistry } from './components/session-registry.js';
 import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEFAUTS }
@@ -70,6 +71,11 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                quotas: { ...QUOTAS_VIDE, values: { ...QUOTAS_VIDE.values } },
                // SPK-58 · §43 : l'état de la facette Environnement.
                envUi: { ...ENV_VIDE, values: { ...ENV_VIDE.values } },
+               // SPK-97 · §43.10 : la modale d'import, partagée par l'écran de
+               // Forge et la facette d'un Spark. Une seule, parce qu'un seul des
+               // deux écrans est affiché à la fois et qu'une seule modale
+               // s'ouvre à la fois (§6.27) ; `open` porte la portée visée.
+               envImport: { ...IMPORT_VIDE, lignes: [], refus: [], supplantees: [] },
                creation: { values: { ...DEFAUTS }, errors: {}, refusal: null,
                            pools: null, cores: null, submitting: false, images: [] },
                admin: { ...ADMIN_VIDE, values: { ...ADMIN_VIDE.values } },
@@ -206,7 +212,7 @@ function peindre() {
       ? renderOngletsForge('#/forge/images')
         + renderCatalogue({ ...etat.catalogue, depot: etat.depot })
       : etat.route === 'environnement'
-      ? renderForgeEnv(etat.catalogueEnv)
+      ? renderForgeEnv(etat.catalogueEnv, etat.envImport)
       : etat.route === 'journal'
       ? renderJournalForgePage(etat.journal)
       : etat.route === 'forgedns'
@@ -224,7 +230,7 @@ function peindre() {
       ? renderSparkDetail({ status: etat.status, spark: etat.spark, error: etat.error,
                             confirming: etat.confirming, frappe: etat.frappe,
                             admin: etat.admin, quotas: etat.quotas,
-                            envUi: etat.envUi,
+                            envUi: etat.envUi, envImport: etat.envImport,
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
                             identite: etat.identite, dossier: etat.dossier,
@@ -357,6 +363,7 @@ function brancher() {
   racine.querySelector('[data-action="relever-images"]')?.addEventListener('click', releverImages);
   brancherCatalogue();
   brancherCatalogueEnv();
+  if (etat.route === 'environnement') brancherImportEnv('forge');
   brancherJournal();
   brancherInventaireDns();
   brancherServeurs();
@@ -434,6 +441,10 @@ function brancher() {
       // rappelait `showModal()`. « Échap » paraissait sans effet.
       etat.envUi.open = null;
       etat.envUi.refusal = null;
+      // SPK-97 : même contrat, même motif — la repeinte trouverait `open` encore
+      // posé et rappellerait `showModal()` sur la modale qu'on vient de fermer.
+      etat.envImport.open = null;
+      etat.envImport.refusal = null;
       peindre();
     },
   });
@@ -1628,6 +1639,8 @@ function brancherPanneaux() {
     caseACocher.addEventListener('change', () => changerSelectionEnv(
       caseACocher.dataset.descend, caseACocher.checked));
   }
+  // SPK-97 · §43.10 : l'import en lot, sur la portée « propre au Spark ».
+  brancherImportEnv('spark');
   for (const niveau of ['forge', 'spark']) {
     const formulaire = racine.querySelector(`[data-modale="env-${niveau}"]`);
     if (!formulaire) continue;
@@ -3384,6 +3397,122 @@ async function ecrireCatalogueEnv(methode, nom, corps = {}, accepter = false) {
   ui.open = false;
   ui.values = { ...CATALOGUE_ENV_VIDE.values };
   await chargerCatalogueEnv();
+}
+
+/**
+ * Les gestes de la modale d'import (SPK-97, docs/DAT.md §43.10).
+ *
+ * Deux écrans l'emploient — le catalogue de la Forge et la facette d'un Spark —
+ * et un seul est affiché à la fois : `portee` dit lequel a ouvert la modale, et
+ * c'est ce qui décide de la route.
+ */
+function brancherImportEnv(portee) {
+  const ui = etat.envImport;
+  racine.querySelector('[data-ouvre="env-import"]')?.addEventListener('click', () => {
+    Object.assign(ui, { ...IMPORT_VIDE, lignes: [], refus: [], supplantees: [],
+                        open: portee });
+    // §6.27 : une seule modale à la fois. `brancherModale` n'en gère qu'une, et
+    // deux `dialog` ouverts feraient sortir le piège de focus du contrat.
+    etat.catalogueEnv.ui.open = false;
+    etat.envUi.open = null;
+    peindre();
+  });
+
+  const formulaire = racine.querySelector('[data-modale="env-import"]');
+  if (!formulaire) return;
+
+  // §14.3 : la frappe ne repeint PAS. `innerHTML` reconstruirait la zone et
+  // arracherait le curseur au milieu d'un collage de quarante lignes.
+  const zone = formulaire.querySelector('#import-env-texte');
+  zone?.addEventListener('input', () => { ui.texte = zone.value; });
+  const tout = formulaire.querySelector('[name="tout_secret"]');
+  tout?.addEventListener('change', () => { ui.toutSecret = tout.checked; });
+
+  // La case d'une ligne : elle ne repeint pas non plus — la case rend déjà son
+  // propre état, et repeindre ferait perdre la position dans un long tableau.
+  for (const cocher of formulaire.querySelectorAll('[data-import-secret]')) {
+    cocher.addEventListener('change', () => {
+      const ligne = ui.lignes.find((l) => l.nom === cocher.dataset.importSecret);
+      if (ligne) ligne.secret = cocher.checked;
+    });
+  }
+
+  formulaire.querySelector('[data-import-retour]')?.addEventListener('click', () => {
+    // On revient au TEXTE, intact : corriger une ligne ne doit pas coûter un
+    // second collage (SPK-DS-23).
+    ui.pas = 'coller';
+    ui.refusal = null;
+    ui.confirming = null;
+    peindre();
+  });
+
+  formulaire.addEventListener('submit', (evenement) => {
+    evenement.preventDefault();
+    if (ui.pas === 'coller') {
+      // L'analyse n'écrit rien et ne part pas sur le réseau : c'est ce qui
+      // permet de montrer les refus AVANT le premier octet écrit (§43.10).
+      const lu = analyser(ui.texte, { secretParDefaut: ui.toutSecret });
+      Object.assign(ui, { pas: 'relire', lignes: lu.entrees, refus: lu.refus,
+                          supplantees: lu.supplantees, refusal: null,
+                          confirming: null });
+      return peindre();
+    }
+    importerEnv(portee);
+  });
+}
+
+/**
+ * Envoie le lot (SPK-97, docs/DAT.md §43.10.3).
+ *
+ * Un seul appel pour tout le lot : c'est ce qui rend l'écriture atomique, la
+ * confirmation de protection unique et la réécriture des fichiers de la cellule
+ * unique elle aussi.
+ */
+async function importerEnv(portee) {
+  const ui = etat.envImport;
+  ui.busy = true;
+  ui.refusal = null;
+  peindre();
+
+  const chemin = portee === 'forge'
+    ? '/v1/env/import'
+    : `/v1/sparks/${encodeURIComponent(etat.spark.name)}/env/import`;
+  const corps = {
+    entries: ui.lignes.map((l) => ({ name: l.nom, value: l.valeur,
+                                     secret: Boolean(l.secret) })),
+    // La seconde soumission porte l'acceptation, et elle seule (§43.9.5 bis).
+    ...(ui.confirming ? { accept_protected: true } : {}),
+  };
+
+  let vu;
+  try {
+    vu = await appel('POST', chemin, corps);
+  } catch (erreur) {
+    ui.busy = false;
+    ui.refusal = `La requête n’a pas abouti : ${erreur.message}`;
+    return peindre();
+  }
+  ui.busy = false;
+
+  const detail = vu.corps?.detail;
+  if (!vu.ok && detail?.error === 'protected_sparks_affected') {
+    // Informer, puis accepter : la modale garde le lot relu, et le point
+    // d'engagement change de nom (§43.9.5 bis, §6.27).
+    ui.confirming = { message: detail.message,
+                      protected_sparks: detail.protected_sparks ?? [] };
+    return peindre();
+  }
+  if (!vu.ok) {
+    // §6.27 : le refus reste DANS la modale, et n'efface ni le texte ni les
+    // cases cochées. Un lot refusé se corrige, il ne se recolle pas.
+    ui.refusal = detail?.message ?? 'Le serveur a refusé cet import.';
+    return peindre();
+  }
+
+  // §1.3 : rien n'est présenté comme réussi avant que la Forge ne l'ait rendu.
+  Object.assign(ui, { ...IMPORT_VIDE, lignes: [], refus: [], supplantees: [] });
+  if (portee === 'forge') return chargerCatalogueEnv();
+  await chargerDetail(etat.spark.name, etat.facette);
 }
 
 function brancherCatalogueEnv() {

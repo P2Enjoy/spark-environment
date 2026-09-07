@@ -1,10 +1,10 @@
 """Le magasin d'environnement d'un Spark : variables et secrets.
 
-@spec docs/BACKLOG.md#SPK-58 · docs/DAT.md §43 (l'environnement d'un Spark),
-      §43.3 (la différence est DÉCLARÉE, jamais devinée), §43.4 (ce que
-      « secret » ne veut PAS dire), §43.5.1 (qui déchiffre), §43.6 (général
-      d'abord, surcharge ensuite), §43.9 (le contrat vérifiable) ·
-      docs/SCHEMA.md §10 ter
+@spec docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-97 · docs/DAT.md §43
+      (l'environnement d'un Spark), §43.3 (la différence est DÉCLARÉE, jamais
+      devinée), §43.4 (ce que « secret » ne veut PAS dire), §43.5.1 (qui
+      déchiffre), §43.6 (général d'abord, surcharge ensuite), §43.9 (le contrat
+      vérifiable), §43.10 (l'import d'un lot collé) · docs/SCHEMA.md §10 ter
 
 Ce module tient le MAGASIN, et rien d'autre : il ne pose aucun fichier dans une
 cellule. La matérialisation est la tranche suivante du §43.9.6, et les séparer
@@ -30,6 +30,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from . import audit
+from .db import transaction
 
 #: §43.9.1 : la grammaire du shell. Un nom qui ne s'exporte pas produirait un
 #: fichier qu'`env_file:` refuse, et la panne se lirait chez le locataire, loin
@@ -47,7 +48,17 @@ PORTEES = ("forge", "spark")
 
 
 class EnvError(ValueError):
-    """Geste d'environnement refusé."""
+    """Geste d'environnement refusé.
+
+    Le `code` est ce que l'API rend dans `detail.error` (§43.9.5, §43.10.3). Il
+    vaut `invalid_name` par défaut, qui était le seul refus du magasin avant
+    l'import en lot : les refus propres au lot — `empty_import`,
+    `duplicate_name` — se distinguent par lui, et non par la lecture du message.
+    """
+
+    def __init__(self, message: str, code: str = "invalid_name") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class CleError(RuntimeError):
@@ -231,6 +242,93 @@ def poser(connection: sqlite3.Connection, cle: bytes, scope: str, spark_id: str 
 
     return Entree(name=nom, is_secret=secret, value=None if secret else valeur,
                   fingerprint=trace, scope=scope, origin=scope, updated_at=quand)
+
+
+@dataclass(frozen=True)
+class Lot:
+    """Ce qu'un import a écrit (§43.10.3).
+
+    `remplacees` est relevé AVANT la première écriture : après, plus rien ne
+    distingue une entrée créée d'une entrée remplacée, et c'est justement la
+    seule conséquence destructive du geste.
+    """
+
+    entrees: list["Entree"]
+    remplacees: tuple[str, ...]
+
+
+def importer(connection: sqlite3.Connection, cle: bytes, scope: str,
+             spark_id: str | None, entrees, *, actor: str | None = None) -> Lot:
+    """Écrit un LOT d'entrées, ou n'en écrit aucune (§43.10.3).
+
+    `entrees` est une suite de triplets `(nom, valeur, secret)` DÉJÀ structurés :
+    l'analyse du texte collé appartient à la console (§43.10.1), et le serveur ne
+    reçoit jamais le texte. C'est ce qui lui permet de refuser sans deviner.
+
+    Trois raisons de ne pas laisser l'appelant enchaîner des `poser()` :
+
+    1. **les noms sont validés avant la première écriture**, et TOUS les fautifs
+       sont nommés d'un coup. Un lot corrigé nom par nom coûterait autant
+       d'allers-retours qu'il a de fautes ;
+    2. **une transaction unique** : un import à moitié posé ferait démarrer une
+       pile à moitié configurée, ce qui ne se voit pas ;
+    3. **une ligne de journal pour le GESTE** — `env.import`, avec le compte et
+       les noms, jamais les valeurs (§43.3). Sans elle, un lot de quarante lignes
+       et quarante gestes distincts se liraient pareil.
+    """
+    lot = [(str(nom), str(valeur), bool(secret)) for nom, valeur, secret in entrees]
+    if not lot:
+        # §14.5 : un succès qui n'a rien fait ne se distingue pas d'un succès. Un
+        # lot vide vient forcément d'un texte que personne n'a lu.
+        raise EnvError(
+            "Le lot ne contient aucune entrée : il n'y a rien à importer "
+            "(docs/DAT.md §43.10.3).", "empty_import")
+
+    fautifs = [nom for nom, _, _ in lot if not NOM.match(nom)]
+    if fautifs:
+        raise EnvError(
+            f"{len(fautifs)} nom(s) hors grammaire du shell : "
+            f"{', '.join(fautifs)}. Il faut une lettre ou un souligné, puis des "
+            "lettres, chiffres et soulignés (docs/DAT.md §43.9.1). Le lot n'a "
+            "PAS été écrit.")
+
+    vus: set[str] = set()
+    doubles: set[str] = set()
+    for nom, _, _ in lot:
+        if nom in vus:
+            doubles.add(nom)
+        vus.add(nom)
+    if doubles:
+        # La console, elle, applique la règle du shell — la dernière ligne
+        # l'emporte — et le DIT sur la ligne supplantée (§43.10.3). Ici le texte
+        # n'existe plus : choisir serait choisir à l'aveugle.
+        raise EnvError(
+            f"Le lot porte deux fois le même nom : {', '.join(sorted(doubles))}. "
+            "Le serveur ne choisit pas laquelle des deux valeurs l'emporte "
+            "(docs/DAT.md §43.10.3).", "duplicate_name")
+
+    ou = "spark_id IS NULL" if spark_id is None else "spark_id = ?"
+    args = [scope] if spark_id is None else [scope, spark_id]
+    connues = {r["name"] for r in connection.execute(
+        f"SELECT name FROM env_entry WHERE scope = ? AND {ou}", args)}
+    remplacees = tuple(nom for nom, _, _ in lot if nom in connues)
+
+    with transaction(connection):
+        ecrites = [poser(connection, cle, scope, spark_id, nom, valeur,
+                         secret=secret, actor=actor)
+                   for nom, valeur, secret in lot]
+        audit.record(
+            connection, actor, "env.import", "ok",
+            f"{len(ecrites)} entrée(s) importées en un geste "
+            f"({'la Forge' if scope == 'forge' else 'ce Spark'}), dont "
+            f"{len(remplacees)} remplacée(s).",
+            target_type="spark" if spark_id else "forge", target_id=spark_id,
+            # Les NOMS, jamais les valeurs — et pas même le nombre de secrets
+            # rapporté à un nom précis : le §43.3 ne fait pas d'exception pour un
+            # geste de masse.
+            payload={"names": [nom for nom, _, _ in lot], "scope": scope,
+                     "replaced": list(remplacees)})
+    return Lot(entrees=ecrites, remplacees=remplacees)
 
 
 def retirer(connection: sqlite3.Connection, scope: str, spark_id: str | None,

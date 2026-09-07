@@ -1,7 +1,9 @@
 /**
  * Facette *Environnement* d'un Spark : ce que sa pile recevra.
  *
- * @spec docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-64 · docs/DAT.md §43
+ * @spec docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-64,
+ *       docs/BACKLOG.md#SPK-97 (l'import d'un lot, docs/DAT.md §43.10) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-23 · docs/DAT.md §43
  *       (l'environnement d'un Spark), §43.3 (la différence est DÉCLARÉE),
  *       §43.6 révisé (la Forge propose, le Spark choisit), §43.7 (quand cela
  *       prend effet), §43.9.4 (l'origine de chaque valeur), §43.9.5 (les refus) ·
@@ -14,6 +16,8 @@
  * appartient au Spark. Les mélanger ferait perdre l'information la plus
  * difficile à reconstituer — pourquoi une valeur est celle-là et pas une autre.
  */
+
+import { IMPORT_VIDE, renderImportEnv } from './env-import.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -105,6 +109,8 @@ function section(niveau, spark, entrees, ui, renderModale) {
   const commande = forge ? '' : `<p class="formulaire__actions">
     <button type="button" class="bouton" data-ouvre-env="${niveau}"${gele ? ' disabled' : ''}>
       Poser une variable</button>
+    <button type="button" class="bouton" data-ouvre="env-import"${gele ? ' disabled' : ''}>
+      Importer un lot</button>
     ${gele ? '<span class="note">Ce Spark est protégé : levez la protection d’abord.</span>' : ''}
   </p>`;
 
@@ -158,12 +164,23 @@ function section(niveau, spark, entrees, ui, renderModale) {
  * qu'on se trompe à faire (§43.6).
  */
 export function renderEnvPanel(spark, entrees = [], ui = ENV_VIDE,
-                               renderModale = () => '', catalogue = []) {
+                               renderModale = () => '', catalogue = [],
+                               importUi = IMPORT_VIDE) {
   const refusSelection = ui.refusal?.niveau === 'selection'
     ? `<div class="refus" role="alert"><p>${echapper(ui.refusal.message)}</p></div>` : '';
   return refusSelection + renderCatalogueCases(spark, catalogue, entrees)
        + section('forge', spark, entrees, ui, renderModale)
-       + section('spark', spark, entrees, ui, renderModale);
+       + section('spark', spark, entrees, ui, renderModale)
+       // SPK-97 : la modale d'import est rendue UNE fois pour la facette, et non
+       // dans la section — deux `dialog` ouverts en même temps sortiraient du
+       // contrat du §6.27, dont `brancherModale` ne gère qu'une instance.
+       + renderImportEnv({
+           portee: 'spark', ui: importUi, renderModale,
+           existantes: entrees.filter((e) => e.scope === 'spark').map((e) => e.name),
+           // Une entrée COCHÉE du catalogue n'est pas remplacée par un import :
+           // elle est MASQUÉE, et l'écran le dit avant d'écrire (§43.9.4).
+           cochees: entrees.filter((e) => e.origin === 'forge').map((e) => e.name),
+         });
 }
 
 /**

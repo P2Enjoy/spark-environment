@@ -1,7 +1,8 @@
 /**
  * Le catalogue d'environnement de la Forge — quatrième onglet sous Forge.
  *
- * @spec docs/BACKLOG.md#SPK-64 · docs/DAT.md §43.6 révisé (la Forge propose, le
+ * @spec docs/BACKLOG.md#SPK-64, docs/BACKLOG.md#SPK-97 (l'import d'un lot,
+ *       docs/DAT.md §43.10) · docs/DAT.md §43.6 révisé (la Forge propose, le
  *       Spark choisit), §43.3 (le secret est déclaré, sa valeur ne sort jamais),
  *       §43.5.1 (la valeur redevient en clair dans la cellule) ·
  *       docs/DESIGN_SYSTEM.md §5.4, §6.13 (états d'une vue), §6.14 (tableau),
@@ -15,6 +16,7 @@
 
 import { renderOngletsForge } from './forge-images.js';
 import { renderModale } from './modale.js';
+import { IMPORT_VIDE, renderImportEnv } from './env-import.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -130,7 +132,8 @@ function renderConfirmation(confirmation) {
  * il ne se distingue pas d'un chargement raté si on le laisse en blanc.
  */
 export function renderForgeEnv({ status = 'loading', entrees = [],
-                                 ui = CATALOGUE_VIDE, error = null } = {}) {
+                                 ui = CATALOGUE_VIDE, error = null } = {},
+                               importUi = IMPORT_VIDE) {
   const onglets = renderOngletsForge('#/forge/environnement');
 
   if (status === 'loading') {
@@ -161,7 +164,10 @@ export function renderForgeEnv({ status = 'loading', entrees = [],
   <p class="formulaire__actions">
     <button type="button" class="bouton bouton--primaire" data-ouvre="catalogue-env">
       Ajouter une entrée</button>
+    <button type="button" class="bouton" data-ouvre="env-import">Importer un lot</button>
   </p>
 </section>
-${renderAjout(ui)}`;
+${renderAjout(ui)}
+${renderImportEnv({ portee: 'forge', ui: importUi, renderModale,
+                    existantes: entrees.map((e) => e.name) })}`;
 }
