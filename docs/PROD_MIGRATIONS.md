@@ -12,28 +12,30 @@ n'est appliquée en production sans instruction humaine explicite.
 
 ## 1. Baseline de production
 
-**Établie le 2026-08-19**, et relevée par le préflight du paquet sur la Forge de
-validation. Les neuf contrôles initiaux du §31 du [DAT](DAT.md) sont verts.
+**Relevée le 2026-09-07** sur la Forge de test, par le préflight du paquet et par
+lecture directe de la machine. Les **14** contrôles du §31 du [DAT](DAT.md) sont
+verts — 0 bloquant, 0 signalé, 0 non mesuré.
 
 | Élément | État |
 |---|---|
-| Forge cible | `51.158.54.202` — Dell R320, accès obtenu le 2026-08-18, topologie relevée |
-| Système | Ubuntu 24.04.3, noyau 6.8.0-88, cgroup v2 |
-| Disposition disque | 2 × 6 To en RAID1 mdadm, `md1` 5,44 Tio `ext4` sur `/` — **aucun périphérique bloc libre** |
-| Incus | **7.3** installé depuis le dépôt amont Zabbly. Les dépôts Ubuntu (6.0.0) sont **inutilisables**, voir §2.0 |
-| Pool de stockage | pool ZFS `spark`, **disposition sur fichier** (DAT §8.5) — 200 Gio creux dans `/var/lib/incus/disks/spark.img` |
+| Forge cible | `51.158.54.202` — Dell R320, **réinstallée le 2026-09-01** depuis le schéma de partitionnement JSON (SPK-28) |
+| Système | Ubuntu **26.04.1 LTS**, noyau **7.0.0-15**, cgroup v2 |
+| Disposition disque | 2 × 6 To. `md0` RAID1 → `/boot`, `md1` RAID1 200 Gio → `/`, et **`sda5` + `sdb5` libres pour le pool** |
+| Incus | **7.4** installé depuis le dépôt amont Zabbly. Les dépôts Ubuntu sont **inutilisables**, voir §2.0 |
+| Pool de stockage | pool ZFS `spark`, **miroir ZFS natif** sur `sda5`+`sdb5` — 5,25 Tio, `ONLINE`. La disposition sur fichier a été retirée (SPK-28) |
 | `zfs_arc_max` | **16 Gio**, persisté dans `/etc/modprobe.d/zfs.conf` |
-| Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif |
+| Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif, DNS sur `10.77.0.1:53` |
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
-| Caddy | **v2.11.4**, actif, API d'administration sur `127.0.0.1:2019` |
+| Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 002** |
-| Topologie relevée | 4 cœurs / 8 threads, 94,2 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76,2 Gio allouables** |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 015** |
+| Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
-Cette baseline décrit une Forge de **validation**, pas de production. Sa
-disposition de stockage n'est plus une dette : c'est un choix, documenté au
-DAT §8.5 avec ce qu'il apporte et ce qu'il ne couvre pas.
+Cette baseline décrit une Forge de **test**, qui porte néanmoins un Spark en
+service. Sa disposition de stockage n'est plus une dette ni un choix par
+défaut : le partitionnement fourni à la création a libéré deux partitions, et le
+pool est un miroir ZFS natif (DAT §8).
 
 **Comment la revérifier**, en lecture seule et sans rien modifier :
 
@@ -118,6 +120,32 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-18 · Migration `015_identite_rootless`, ouverture des fichiers et de la seconde porte (SPK-94, SPK-95)
 
 ```
+État          : MIGRATION APPLIQUÉE le 2026-09-07 sur la Forge de test — le
+                registre y porte la version de schéma 015 et le paquet installé
+                est 0.post1.dev731+gaf3fa6809.
+
+                UNE ACTION HUMAINE RESTE DUE, et elle vise un Spark EN SERVICE.
+                Relevé le 2026-09-07 sur `sso-p2enjoy`, amorcé en rootless AVANT
+                cette migration :
+
+                  observation      docker_mode=rootless, docker_uid/gid = NULL
+                  /etc/spark       0700 root:root
+                  /etc/spark/env   0600 root:root — ILLISIBLE par spark-docker
+                  seconde porte    /home/spark-docker/.ssh/authorized_keys ABSENT
+
+                Ce Spark est donc dans l'état exact que SPK-94 et SPK-95
+                corrigent : sa pile Compose ne peut pas lire les deux `env_file:`
+                que le briefing lui impose, et l'on ne peut pas y entrer en
+                `spark-docker`. Le §44.4 interdit de reconstituer le relevé
+                rétrospectivement : seul un nouvel amorçage rend le uid et le
+                gid, donc rouvre les fichiers.
+
+                Le geste : console → le Spark → « Amorcer ce Spark », en
+                rootless. Sur une cellule déjà complète il n'installe rien et se
+                contente de relever, puis de reprojeter les droits — mais il
+                exécute des commandes dans la cellule d'un locataire, et
+                CLAUDE.md §9 le réserve à une instruction humaine explicite. Il
+                n'a donc PAS été fait.
 Objectif      : garder le UID et le GID du compte `spark-docker` relevés dans la
                 cellule, pour que les fichiers d'environnement, le briefing ET
                 la seconde porte SSH soient posés `root:spark-docker 0640` sur
@@ -164,9 +192,13 @@ Risque        : faible et borné aux cellules rootless. Deux colonnes nullables
                 cela doit être un choix conscient et non un effet de bord.
 ```
 
-### OP-16 · Migration `014_metriques_historique` et supervision continue (SPK-93)
+### OP-16 · Migration `014_metriques_historique` et supervision continue (SPK-93) — **APPLIQUÉ le 2026-09-07**
 
 ```
+État          : APPLIQUÉ le 2026-09-07 sur la Forge de test. Le registre porte la
+                version de schéma 014, et l'historien tourne réellement :
+                `GET /v1/forge/metrics` rend `enabled=true`, cadence 15 s,
+                rétention 7 jours, avec un relevé daté de la minute courante.
 Objectif      : la Forge relève l'usage de ses Sparks en continu et le conserve,
                 pour que les écrans de supervision puissent tracer des courbes
                 (docs/DAT.md §52, docs/SCHEMA.md §10 sexies).
@@ -208,9 +240,14 @@ Risque        : nul pour les données existantes. Une table neuve, alimentée pa
                 l'unité close — c'est la vérification due nommée au §52.12.
 ```
 
-### OP-15 · Migration `013_briefing_systeme` du registre (SPK-85)
+### OP-15 · Migration `013_briefing_systeme` du registre (SPK-85) — **APPLIQUÉ le 2026-09-07**
 
 ```
+État          : APPLIQUÉ le 2026-09-07 sur la Forge de test — le registre porte la
+                version de schéma 013. Les trois colonnes naissent NULL sur les
+                lignes existantes : le relevé ne se reconstitue pas
+                rétrospectivement, et c'est le même amorçage à redemander que
+                celui de l'OP-18.
 Objectif      : le relevé d'amorçage conserve la distribution, la suite et
                 l'architecture de la cellule, pour que le dossier de déploiement
                 puisse les donner sans entrer dans le Spark (docs/DAT.md §44.9.2,
@@ -257,10 +294,12 @@ Risque        : nul pour les données. Trois colonnes nullables ajoutées à une
                 et il porte sur la DISPONIBILITÉ, pas sur les données.
 ```
 
-### OP-17 · Mettre à jour `sparkd` pour lire le dépôt d'images (SPK-92)
+### OP-17 · Mettre à jour `sparkd` pour lire le dépôt d'images (SPK-92) — **APPLIQUÉ le 2026-09-07**
 
 ```
-État          : EN ATTENTE.
+État          : APPLIQUÉ le 2026-09-07 sur la Forge de test. `GET /v1/images/depot`
+                y rend 200, et le catalogue de la Forge propose cinq images.
+                Constaté auparavant EN ATTENTE.
 Pourquoi      : « Forge → Images → Ajouter depuis le dépôt » demande à la Forge
                 ce que le dépôt publie (`GET /v1/images/depot`), pose les
                 références cochées en lot (`POST /v1/images` avec `references`)
@@ -288,10 +327,15 @@ Risque        : nul pour les données. Le retrait est le seul geste destructif
 ```
 
 
-### OP-14 · Mettre à jour `sparkd` pour l'inventaire DNS (SPK-77)
+### OP-14 · Mettre à jour `sparkd` pour l'inventaire DNS (SPK-77) — **APPLIQUÉ le 2026-09-07**
 
 ```
-État          : EN ATTENTE. Constaté le 2026-09-02 sur la Forge du responsable.
+État          : APPLIQUÉ le 2026-09-07 sur la Forge de test. `POST /v1/ingress/match`
+                y rend 200, et « Forge → DNS » relève réellement : trois
+                enregistrements pointant vers l'adresse de la Forge, dont deux
+                rapprochés de leurs routes et un « aucune route ne le sert ».
+                Le message « antérieur à SPK-77 » a disparu de l'écran.
+                Constaté auparavant EN ATTENTE le 2026-09-02.
 Pourquoi      : la page « Forge → DNS » demande à la Forge quelles routes servent
                 les noms relevés (`POST /v1/ingress/match`, docs/DAT.md §38.8.4).
                 Une Forge antérieure à SPK-77 n'a pas cette route ; l'appel y

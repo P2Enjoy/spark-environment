@@ -4801,7 +4801,7 @@ preuve sur Forge RÉELLE, qui n'a pas eu lieu.**
   travaille ; l'afficher sans cela serait une animation qui invente son
   avancement. Non couvert par cette unité, à spécifier séparément.
 
-### [~] SPK-77 · L'inventaire DNS de la Forge, et le nettoyage des entrées perdues
+### [x] SPK-77 · L'inventaire DNS de la Forge, et le nettoyage des entrées perdues
 
 Demandé par le responsable le 2026-09-02 : « on doit pouvoir lister depuis une
 Forge tous les DNS qui pointent vers elle, retrouver vers quoi ils pointent ou
@@ -4845,14 +4845,24 @@ Spark le sert par accident.
   et non par l'écran —, 6 preuves du rapprochement côté `sparkd`, 14 preuves
   d'écran, 1 parcours E2E depuis l'accueil, captures observées en 1440 px et
   420 px.
-- **Reste à faire pour passer `[x]`** : le commit et le push (tenus par le
-  responsable), puis **OP-14** — mettre à jour `sparkd` sur la Forge.
-  **Mesuré le 2026-09-02 sur la Forge du responsable** : une Forge antérieure à
-  cette unité n'a pas `POST /v1/ingress/match`, l'appel y tombe sur
-  `DELETE /v1/ingress/{domain}` et rend **405**. La console le dit désormais en
-  nommant le geste, au lieu de rendre un code nu — mais la page reste inopérante
-  jusqu'à la mise à jour, et c'est voulu : sans rapprochement, déclarer « perdu »
-  offrirait de supprimer des routes en service.
+- **CLOSE le 2026-09-07.** Le commit `179991b` a livré le code le 2026-09-02, et
+  l'**OP-14** est appliquée : la Forge de test exécute une build postérieure à
+  l'unité, `POST /v1/ingress/match` y rend `200`, et le message « cette Forge
+  exécute un `sparkd` antérieur à SPK-77 » a disparu de l'écran.
+  **Éprouvée sur la Forge réelle le 2026-09-07, depuis le parcours canonique** —
+  accueil, puis Forge → DNS : la page relève les zones du compte, ne retient que
+  les `A`/`AAAA` portant exactement l'adresse publique de la Forge, et rapproche
+  chacun de ses routes. Trois entrées rendues, deux **servies** avec le nom du
+  Spark qui les sert, une **« aucune route ne le sert »**. Le bouton de retrait
+  reste inerte tant que rien n'est désigné. Aucune entrée n'a été supprimée : la
+  zone appartient à un locataire, et le geste destructif n'était pas le sujet de
+  la vérification. Capture observée (`spk77-forge-dns-reel.jpg`).
+  **Ce que la mesure du 2026-09-02 avait établi reste vrai** et garde son sens :
+  une Forge antérieure n'a pas cette route, l'appel y tombe sur
+  `DELETE /v1/ingress/{domain}` et rend **405** ; la console le dit en nommant le
+  geste au lieu de rendre un code nu, et la page reste inopérante jusqu'à la mise
+  à jour — sans rapprochement, déclarer « perdu » offrirait de supprimer des
+  routes en service.
 - **Constaté au parcours, et corrigé** : deux défauts trouvés à la capture et non
   par relecture. Le doublon DNS du harnais servait les mêmes enregistrements pour
   **toutes** ses zones, faisant apparaître chaque nom deux fois ; et un nettoyage
@@ -4965,7 +4975,7 @@ route la Forge répond une erreur pour ce nom.
     pas. Captures `spk88-recette-apercu.jpg`, `-compte-rendu.jpg` et
     `-refus-partiel.jpg`, observées.
 
-### [~] SPK-83 · Affecter une entrée DNS trouvée à un Spark, depuis l'inventaire
+### [x] SPK-83 · Affecter une entrée DNS trouvée à un Spark, depuis l'inventaire
 
 Demandé par le responsable le 2026-09-02, en lisant l'inventaire de SPK-77 : « si
 on a des routes trouvées non affectées, on doit pouvoir les affecter directement
@@ -5007,10 +5017,16 @@ offrir la destruction là où l'exploitant voulait terminer son geste.
   ouvre les **routes du Spark**. La route vient d'être posée ; sa place est dans
   la facette qui la porte, avec ses voisines et son état DNS. Rester sur
   l'inventaire obligeait à aller la vérifier de mémoire, ailleurs.
-- **Reste à faire pour passer `[x]`** : le commit et le push, puis OP-14 comme
-  SPK-77, dont cette unité dépend pour le relevé.
+- **CLOSE le 2026-09-07.** Le commit `12a10e2` a livré le code le 2026-09-02, et
+  l'OP-14 dont l'unité dépend est appliquée. Le geste **Affecter** est présent
+  sur la Forge réelle, et seulement sur l'entrée qu'aucune route ne sert — les
+  deux entrées servies n'en portent pas, ce qui est la règle. L'affectation
+  elle-même n'a pas été jouée sur cette Forge : elle poserait une route sur un
+  nom du locataire, et CLAUDE.md §9 la réserve à une instruction humaine. Elle
+  reste prouvée par ses deux parcours E2E, dont l'un constate que le nombre de
+  requêtes reçues par le fournisseur DNS n'a pas bougé.
 
-### [~] SPK-78 · Une écriture DNS se vérifie, et l'état DNS d'une route se voit
+### [x] SPK-78 · Une écriture DNS se vérifie, et l'état DNS d'une route se voit
 
 Signalé par le responsable le 2026-09-02 : « j'ai appliqué une recette et elle est
 restée en suspens, pas moyen de faire une vérification ; au rechargement elle a
@@ -5038,9 +5054,18 @@ disparu, alors qu'elle était bien posée dans le DNS ».
 - **Quatre états de route, et non trois** : le relevé distingue *zone hors du
   compte* de *aucun enregistrement*. Les confondre ferait chercher un oubli là où
   le DNS du nom est simplement tenu ailleurs.
-- **Reste à faire pour passer `[x]`** : le commit et le push (tenus par le
-  responsable). L'état DNS des routes ne dépend PAS de la version de la Forge —
-  contrairement à SPK-77, il ne demande aucun rapprochement.
+- **CLOSE le 2026-09-07.** Le commit `179991b` a livré le code le 2026-09-02.
+  Cette unité ne dépendait d'aucune opération de déploiement : l'état DNS des
+  routes ne demande aucun rapprochement, contrairement à SPK-77. Vérifiée sur la
+  Forge réelle le 2026-09-07 — la facette « Routes » de `sso-p2enjoy` rend l'état
+  DNS de chacune de ses deux routes, relevé chez le fournisseur et non déduit du
+  registre : les deux portent **« DNS ici »**. C'est **un** des quatre états ;
+  les trois autres — `différent`, `aucun enregistrement`, `zone hors du compte` —
+  restent prouvés par les preuves d'unité et par les deux parcours contre le
+  doublon, dont l'un déplace la valeur chez le fournisseur entre deux
+  vérifications pour obtenir `différent`. Les produire sur cette Forge
+  demanderait d'altérer la zone d'un locataire, ce que la vérification n'a pas
+  fait. Capture observée (`spk78-forge-routes-etat-dns.jpg`).
 
 ---
 
