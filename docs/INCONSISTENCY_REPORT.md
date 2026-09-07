@@ -104,7 +104,7 @@ renumérotation de l'autre avec ses références. En attendant, SPK-93 prend
 
 ---
 
-## 4. Deux parcours E2E ne peuvent plus atteindre ce qu'ils éprouvent
+## 4. Trois parcours E2E ne tiennent pas en campagne
 
 **Constaté le 2026-09-07**, en jouant la campagne complète — ce que rien ne
 faisait plus. Trois parcours rougissaient ; l'un est corrigé, les deux autres
@@ -166,3 +166,25 @@ prouver.
 **Demandé au responsable.** Décider lequel des deux : un Spark arrêté réservé au
 seed, ou un parcours qui établit lui-même son état en arrêtant le Spark qu'il
 observe et en le rendant ensuite.
+
+### 4.c « un conteneur DISPARU pendant qu'on le regarde » est INTERMITTENT
+
+**Constaté le 2026-09-07**, sur deux campagnes complètes consécutives : vert à la
+première, rouge à la seconde, et vert quand on le joue **seul**. Le produit n'est
+pas en cause — c'est la marque d'un parcours qui dépend de l'état laissé par un
+autre.
+
+**La piste, écrite pour la session suivante.** Le doublon Docker garde un
+« témoin » qui fait échouer la **deuxième** lecture des journaux d'un conteneur,
+et le harnais possède déjà `oublierLecturesDocker()` pour le remettre à zéro
+entre deux parcours. La différence entre les deux campagnes est qu'un parcours de
+quotas, jusque-là interrompu par une erreur, va désormais jusqu'à son terme : la
+séquence a changé, et ce parcours-ci a changé de couleur avec elle. Il est
+probable qu'il manque une remise à zéro, ou qu'elle soit posée au mauvais
+endroit.
+
+**Demandé au responsable.** Autoriser une tâche qui rende la campagne
+reproductible — c'est-à-dire qui fasse établir à chaque parcours son propre état
+de départ, au lieu de compter sur celui du précédent. Trois parcours sur ~200 en
+dépendent aujourd'hui (4.a, 4.b, 4.c) ; tant qu'ils rougissent par intermittence,
+la campagne apprend à ignorer le rouge, ce qui coûte plus cher que les trois.
