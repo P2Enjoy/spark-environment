@@ -5166,6 +5166,11 @@ panne valait mieux que la taire, mais ne valait pas la corriger.
   cédé. La sauvegarde ouvre désormais la liste, et c'est elle qui s'annonce « en
   cours » au démarrage plutôt que le paquet, qui n'a pas encore commencé. Trois
   preuves d'écran, toutes trois du rouge au vert.
+  **Le correctif est vérifié sur la Forge réelle**, par une seconde mise à jour
+  distante jouée après son déploiement : l'écran rend désormais **huit** phases,
+  « Sauvegarde du registre » en tête, et le fichier
+  `spark-20260907-195304.db` porte l'horodatage de l'engagement. Capture
+  `spk91-forge-maj-phases.jpg`.
 - **Corrigé et vérifié en local le 2026-09-07** : la panne rejouée à l'identique
   avec la build antérieure, puis la recette RÉELLE exécutée contre cette même
   build — jalons `backup in_progress` / `SPARK_BACKUP <chemin>` / `backup done`,
