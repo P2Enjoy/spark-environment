@@ -131,6 +131,16 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Une suppression ratée ne bloque plus le Spark dans « error »** (SPK-90,
+  `docs/DAT.md` §5.5) : après l'échec, reprendre le Spark rendait
+  `POST /1.0/instances : Instance « … » already exists` — le produit tentait de
+  **recréer** la cellule qu'il venait d'échouer à supprimer. La règle existait
+  pourtant, écrite dans le code : « une opération transitoire qui échoue mène à
+  `error`, **sauf la suppression** ». Elle n'avait jamais été implémentée, et
+  depuis `error` la table des transitions fait de « reprendre » une création. Le
+  Spark revient désormais à l'état que la machine **montre**, relu chez Incus,
+  d'où la suppression se relance ; quand cette lecture échoue à son tour, on
+  retombe sur `error`, faute d'avoir observé quoi que ce soit.
 - **Supprimer un Spark en marche fonctionne enfin, et un refus d'Incus se lit**
   (SPK-90, `docs/DAT.md` §5.3, §5.4) : signalé sur la Forge de démonstration, la
   suppression rendait « Client error '400 Bad Request' » suivi d'un lien vers

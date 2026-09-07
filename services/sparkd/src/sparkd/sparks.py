@@ -398,6 +398,7 @@ def finish(
     success: bool,
     error: str | None = None,
     actor: str = "sparkd",
+    repli: State | None = None,
 ) -> dict | None:
     """Conclut une opération transitoire.
 
@@ -418,7 +419,10 @@ def finish(
                        f"Spark « {spark['name']} » supprimé, ressources rendues.")
             return None
 
-        vise = settle(courant, success)
+        # SPK-90 · §5.5 : une suppression ratée rend le Spark à l'état que la
+        # machine MONTRE, d'où la suppression se relance — et non à `error`,
+        # d'où « reprendre » voudrait dire « créer ».
+        vise = settle(courant, success, repli)
         with transaction(connection):
             connection.execute(
                 "UPDATE spark SET state = ?, updated_at = ?, last_error = ? WHERE id = ?",

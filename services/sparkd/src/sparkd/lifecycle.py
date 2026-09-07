@@ -92,16 +92,31 @@ def next_state(state: State, command: Command) -> State:
         raise TransitionError(state, command) from None
 
 
-def settle(state: State, success: bool) -> State:
+def settle(state: State, success: bool, repli: State | None = None) -> State:
     """État atteint quand une opération transitoire se termine.
+
+    @spec docs/BACKLOG.md#SPK-90 · docs/DAT.md §5.5
 
     Une opération transitoire qui échoue mène à `error`, sauf la suppression :
     une suppression ratée laisse le Spark là où il était, pas dans un état d'où
     l'on ne pourrait plus rien faire.
+
+    **Cette exception était écrite ici et n'était pas implémentée.** Le code
+    rendait `error` sans condition, et depuis `error` la table donne
+    `RETRY → CREATING` : « reprendre » signifiait donc **créer**. Mesuré le
+    2026-09-02 — après l'échec d'une suppression, le produit répondait
+    `POST /1.0/instances : Instance « … » already exists`.
+
+    `repli` est l'état que la MACHINE montre, relu chez Incus par l'appelant. On
+    ne le devine pas : sans lui — quand cette lecture a échoué elle aussi — on
+    retombe sur `error`, parce que ne pas savoir n'autorise pas à écrire un état
+    qu'on n'a pas observé (§14.6).
     """
     if state not in TRANSIENT:
         raise TransitionError(state, Command.APPLY)
     if not success:
+        if state is State.DELETING and repli is not None:
+            return repli
         return State.ERROR
     return {
         State.CREATING: State.STOPPED,

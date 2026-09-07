@@ -629,6 +629,29 @@ def create_app(config: Config) -> FastAPI:
     config_network = config.network_bridge
     config_pool = config.storage_pool
 
+    def _etat_observe(incus_name: str | None) -> service.State | None:
+        """L'état que la MACHINE montre, ou `None` si on n'a pas pu le lire.
+
+        @spec docs/BACKLOG.md#SPK-90 · docs/DAT.md §5.5, §14.3
+
+        Même règle que la réconciliation au démarrage (§14.3) : confronter le
+        registre à la réalité plutôt que de deviner. `None` est un résultat, pas
+        un échec — il fait retomber l'appelant sur `error`, ce qui est honnête
+        quand la machine ne répond plus.
+        """
+        if not incus_name:
+            return None
+        try:
+            etat = app.state.incus.instance_state(incus_name)
+        except (IncusError, InstanceAbsente):
+            return None
+        statut = str((etat or {}).get("status", "")).lower()
+        if statut == "running":
+            return service.State.RUNNING
+        if statut == "stopped":
+            return service.State.STOPPED
+        return None
+
     def _apply_keys(connection, spark: dict) -> None:
         """Réécrit `authorized_keys` dans le Spark depuis l'état voulu.
 
@@ -2400,7 +2423,19 @@ def create_app(config: Config) -> FastAPI:
                         # retrouvent un poids calculé sur la capacité élargie.
                         _redistribute(connection, core_pool.release(connection, apres["id"]))
                 except IncusError as erreur:
-                    service.finish(connection, apres["id"], success=False, error=str(erreur))
+                    # SPK-90 · §5.5 : une suppression ratée ne met PAS le Spark
+                    # en `error`. Depuis `error`, « reprendre » vaut `CREATING`,
+                    # donc un `POST /1.0/instances` sur une cellule qui existe
+                    # encore — mesuré le 2026-09-02, et illisible pour
+                    # l'exploitant.
+                    #
+                    # On rend le Spark à l'état que la machine MONTRE, relu ici.
+                    # On ne le devine pas : si cette lecture échoue à son tour,
+                    # `repli` reste `None` et l'on retombe sur `error` — ne pas
+                    # savoir n'autorise pas à écrire un état non observé.
+                    service.finish(connection, apres["id"], success=False,
+                                   error=str(erreur),
+                                   repli=_etat_observe(apres["incus_name"]))
                     raise HTTPException(status_code=502, detail={
                         "error": "incus_failed", "message": str(erreur)}) from erreur
                 if instance_absente:

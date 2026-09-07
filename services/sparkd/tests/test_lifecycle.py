@@ -165,3 +165,41 @@ def test_chaque_reconciliation_est_motivee():
     for etat in TRANSIENT:
         for existe in (True, False):
             assert reconcile(etat, exists=existe, running=False).reason
+
+
+# --- SPK-90 · une suppression ratée ne met pas en « error » (§5.5) ---------
+#
+# @verifies docs/BACKLOG.md#SPK-90 · docs/DAT.md §5.5, §14.6
+
+
+def test_une_suppression_RATEE_rend_le_Spark_a_l_etat_observe():
+    """La règle était écrite dans `settle` et n'était pas implémentée. Depuis
+    `error`, la table donne `RETRY → CREATING` : « reprendre » signifiait donc
+    CRÉER, d'où le `POST /1.0/instances : already exists` mesuré le 2026-09-02."""
+    assert settle(State.DELETING, False, repli=State.RUNNING) is State.RUNNING
+    assert settle(State.DELETING, False, repli=State.STOPPED) is State.STOPPED
+
+
+def test_sans_etat_OBSERVE_on_retombe_sur_error():
+    """§14.6 : ne pas savoir n'autorise pas à écrire un état qu'on n'a pas vu.
+    Quand la machine ne répond plus, `error` est la réponse honnête."""
+    assert settle(State.DELETING, False) is State.ERROR
+    assert settle(State.DELETING, False, repli=None) is State.ERROR
+
+
+def test_les_AUTRES_echecs_menent_toujours_a_error():
+    """L'exception vaut pour la suppression, et pour elle seule : une création
+    ratée doit rester en `error`, d'où « reprendre » veut bien dire « créer »."""
+    for etat in (State.CREATING, State.STARTING, State.STOPPING):
+        assert settle(etat, False) is State.ERROR
+        assert settle(etat, False, repli=State.RUNNING) is State.ERROR, (
+            f"« {etat.value} » ne doit pas se replier")
+
+
+def test_depuis_l_etat_rendu_la_suppression_se_RELANCE():
+    """C'est tout l'objet du repli : sortir d'un état d'où l'on ne pourrait plus
+    rien faire. Depuis `running` comme depuis `stopped`, supprimer reste offert."""
+    assert Command.DELETE in allowed(State.RUNNING)
+    assert Command.DELETE in allowed(State.STOPPED)
+    assert next_state(State.RUNNING, Command.DELETE) is State.DELETING
+    assert next_state(State.STOPPED, Command.DELETE) is State.DELETING

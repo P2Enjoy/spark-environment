@@ -163,3 +163,40 @@ def test_un_pilote_MUET_reste_une_PANNE_sur_ces_routes_aussi(tmp_path):
     reponse = client.get(f"/v1/sparks/{nom}/usage")
     assert reponse.status_code == 502, reponse.text
     assert reponse.json()["detail"]["error"] == "incus_failed"
+
+# --- SPK-90 · le parcours mesuré le 2026-09-02 (§5.4, §5.5) ---------------
+#
+# @verifies docs/BACKLOG.md#SPK-90 · docs/DAT.md §5.4, §5.5
+
+
+def test_supprimer_un_Spark_EN_MARCHE_aboutit(tmp_path):
+    """§5.4 : Incus refuse `DELETE` sur une instance en marche. Sans l'arrêt
+    préalable, supprimer un Spark démarré échouait TOUJOURS — le cas ordinaire."""
+    client, application = _pile(tmp_path)
+    nom = _spark(client, "a-supprimer")
+    assert client.get(f"/v1/sparks/{nom}").json()["state"] == "running"
+
+    assert client.post(f"/v1/sparks/{nom}/delete").status_code in (200, 202)
+    assert client.get(f"/v1/sparks/{nom}").status_code == 404, "la ligne disparaît"
+
+
+def test_une_suppression_RATEE_laisse_un_Spark_qu_on_peut_encore_supprimer(tmp_path):
+    """§5.5, le second signalement : après l'échec, « reprendre » rendait
+    `POST /1.0/instances : already exists` — une CRÉATION. Le Spark doit revenir
+    à l'état que la machine montre, d'où la suppression se relance."""
+    client, application = _pile(tmp_path)
+    nom = _spark(client, "a-supprimer")
+
+    pilote = application.state.incus
+    pilote.fail_next["delete_instance"] = "Instance is running"
+    assert client.post(f"/v1/sparks/{nom}/delete").status_code == 502
+
+    apres = client.get(f"/v1/sparks/{nom}").json()
+    assert apres["state"] != "error", (
+        "depuis « error », reprendre veut dire CRÉER : le produit tenterait de "
+        "recréer une cellule qui existe encore")
+    assert apres["state"] == "running", "l'état que la machine MONTRE"
+
+    # …et la suppression se relance, elle, sans détour.
+    assert client.post(f"/v1/sparks/{nom}/delete").status_code in (200, 202)
+    assert client.get(f"/v1/sparks/{nom}").status_code == 404
