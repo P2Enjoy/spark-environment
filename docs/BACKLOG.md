@@ -4419,10 +4419,19 @@ cpu io memory pids, static, delegation enabled ».
 
 **Reste avant `[x]`, et une seule chose** : la preuve du **redémarrage**. L'unité
 est `enabled` et §32.4 exige qu'elle revienne d'elle-même, mais la machine n'a
-pas été redémarrée. Le redémarrage est différé volontairement : `grub-pc` est
-resté à moitié configuré par l'installation de l'hébergeur (voir SPK-73), et
-rebooter une machine nue distante dans cet état n'est pas un risque à prendre
-pour une vérification qui peut attendre que `dpkg` soit sain.
+pas été redémarrée.
+
+**La raison de ce report a CHANGÉ, et l'ancienne est levée.** Elle était le
+`grub-pc` à moitié configuré par l'installation de l'hébergeur : rebooter une
+machine nue distante dans cet état n'était pas un risque à prendre. SPK-84 a posé
+le contrôle `PKG-DPKG`, et le préflight relevé sur la Forge le 2026-09-08 rend
+*« Système de paquets cohérent — aucun paquet en défaut »*. `dpkg` est sain, la
+Forge a d'ailleurs été réinstallée depuis (§ baseline du contrat de déploiement).
+
+**Ce qui reste, et c'est autre chose** : la Forge de test porte un Spark **en
+service**, et redémarrer l'arrête. Le geste appartient au responsable —
+SPK-87 le dit de son côté dans les mêmes termes. Il ne demande plus d'attendre
+quoi que ce soit : seulement d'être autorisé, et de choisir son moment.
 
 ---
 
