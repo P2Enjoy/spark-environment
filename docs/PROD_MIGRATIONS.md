@@ -115,13 +115,14 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-18 · Migration `015_identite_rootless` et ouverture des fichiers au compte rootless (SPK-94)
+### OP-18 · Migration `015_identite_rootless`, ouverture des fichiers et de la seconde porte (SPK-94, SPK-95)
 
 ```
 Objectif      : garder le UID et le GID du compte `spark-docker` relevés dans la
-                cellule, pour que les fichiers d'environnement et le briefing
-                soient posés `root:spark-docker 0640` sur un Spark amorcé en
-                rootless (docs/DAT.md §42.2 ter, docs/SCHEMA.md §10 quinquies).
+                cellule, pour que les fichiers d'environnement, le briefing ET
+                la seconde porte SSH soient posés `root:spark-docker 0640` sur
+                un Spark amorcé en rootless (docs/DAT.md §42.2 ter et §42.2
+                quater, docs/SCHEMA.md §10 quinquies).
 Dépend de     : 012_briefing (la table qu'elle étend) et 013_briefing_systeme.
 Commande      : appliquée automatiquement au démarrage de sparkd.
 Après         : AUCUNE action humaine, mais un effet à connaître. Les deux
@@ -129,16 +130,23 @@ Après         : AUCUNE action humaine, mais un effet à connaître. Les deux
                 compris celles des Sparks déjà amorcés en rootless : le relevé
                 ne se reconstitue pas rétrospectivement (§44.4). Leurs fichiers
                 restent donc `0600 root` — donc leur pile Compose reste en
-                échec — jusqu'à ce que l'amorçage soit redemandé sur eux. C'est
-                un geste de la console, sans interruption de service : sur une
-                cellule déjà complète il ne pose rien et se contente de relever.
+                échec, et leur seconde porte SSH fermée — jusqu'à ce que
+                l'amorçage soit redemandé sur eux. C'est un geste de la console,
+                sans interruption de service : sur une cellule déjà complète il
+                ne pose rien et se contente de relever.
 Vérification  : sur un Spark rootless, redemander l'amorçage, puis
                 `incus exec <cellule> -- stat -c '%U:%G %a' /etc/spark/env`
                 rend `root:spark-docker 640`. Puis, sous le compte de service,
                 `docker compose config` sur une pile portant ses deux
                 `env_file:` rend les variables au lieu d'un « permission
-                denied ». Sur un Spark ENRACINÉ, le même `stat` doit rendre
-                `root:root 600` — l'ouverture ne doit pas déborder.
+                denied ». Le même `stat` sur
+                `/home/spark-docker/.ssh/authorized_keys` rend lui aussi
+                `root:spark-docker 640` : sans quoi `sshd` ne sait pas lire la
+                seconde porte et l'entrée en `spark-docker` échoue en
+                « Permission denied (publickey) » (§42.2 quater, mesuré le
+                2026-09-07). Sur un Spark ENRACINÉ, le premier `stat` doit
+                rendre `root:root 600` et le second chemin ne doit pas exister —
+                l'ouverture ne doit pas déborder.
 Retour arrière: le `down` retire les deux colonnes. Les fichiers déjà posés
                 gardent leur groupe : la migration décrit ce que sparkd SAIT,
                 pas ce que la cellule PORTE. Pour revenir aussi sur les

@@ -787,6 +787,18 @@ def create_app(config: Config) -> FastAPI:
             app.state.incus.push_file(
                 spark["incus_name"], bootstrap_service.AUTHORIZED_KEYS_ROOTLESS,
                 contenu, mode="0600")
+            # SPK-95 · §42.2 quater : et on l'OUVRE, sans quoi `sshd` ne peut
+            # pas la lire — mesuré sur la Forge de test, la porte ne s'ouvrait
+            # jamais. L'ouverture vit ICI, au plus près de l'écriture, et non au
+            # seul amorçage : le §17.1 régénère ce fichier en entier à chaque
+            # ajout et à chaque retrait de clé, et `push_file` reposerait un
+            # fichier fermé. Une porte qui marche puis cesse de marcher sans
+            # geste apparent est la panne que le §42.2 ter décrit.
+            #
+            # Sans identité connue — l'amorçage écrit AVANT son observation —,
+            # l'ouverture ne fait rien ici ; l'amorçage la rejoue en sortant.
+            _ouvrir_au_rootless(connection, spark,
+                                *bootstrap_service.CHEMINS_SECONDE_PORTE)
 
     def _identite_rootless(connection, spark: dict) -> dict[str, int] | None:
         """L'identité du compte rootless de CE Spark, ou `None` (SPK-94, §42.2 ter).
@@ -903,6 +915,24 @@ def create_app(config: Config) -> FastAPI:
         try:
             _apply_env(connection, spark)
         except (IncusError, InstanceAbsente, env_service.CleError):
+            pass
+
+    def _rattraper_seconde_porte(connection, spark: dict) -> None:
+        """Ouvre la seconde porte que l'amorçage vient de poser (SPK-95, §42.2 quater).
+
+        Même motif que `_rattraper_env` : l'amorçage a créé le compte dont
+        dépend ce fichier, et l'a écrit avant de connaître son identité. Sans ce
+        rattrapage, la porte resterait fermée jusqu'au prochain changement de
+        clé — c'est-à-dire, pour un locataire qui n'en change jamais, toujours.
+
+        Un échec ne perd rien : le registre fait foi, et le prochain geste sur
+        les clés reprojette. Il ne doit surtout pas faire échouer un amorçage
+        dont tout le reste a réussi.
+        """
+        try:
+            _ouvrir_au_rootless(connection, spark,
+                                *bootstrap_service.CHEMINS_SECONDE_PORTE)
+        except (IncusError, InstanceAbsente):
             pass
 
     def _rattraper_briefing(connection, spark: dict) -> None:
@@ -2165,6 +2195,12 @@ def create_app(config: Config) -> FastAPI:
             # où sa pile ne démarre pas. `_apply_env` reprojette le briefing dans
             # la foulée : un seul appel couvre les deux.
             _rattraper_env(connection, service.by_name(connection, name))
+            # SPK-95 · §42.2 quater : la seconde porte a été écrite plus haut,
+            # AVANT que l'observation ne porte le uid et le gid — elle est donc
+            # posée fermée, et `sshd` ne saurait pas la lire. On l'ouvre ici,
+            # une fois l'identité connue, pour la même raison qui fait
+            # reprojeter l'environnement juste au-dessus.
+            _rattraper_seconde_porte(connection, service.by_name(connection, name))
             # §42.8 : un amorçage qui ne change RIEN est quand même journalisé.
             # Savoir que quelqu'un a demandé le geste et que rien n'était à faire
             # est une information ; son absence ferait croire qu'il n'a pas été

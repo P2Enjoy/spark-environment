@@ -140,7 +140,20 @@ COMPTE_ROOTLESS = "spark-docker"
 #: Le fichier reste écrit par `root` : le §17.1 veut un seul écrivain, et un
 #: compte qui pourrait réécrire ses propres clés sortirait du registre.
 FOYER_ROOTLESS = f"/home/{COMPTE_ROOTLESS}"
-AUTHORIZED_KEYS_ROOTLESS = f"{FOYER_ROOTLESS}/.ssh/authorized_keys"
+DOSSIER_SSH_ROOTLESS = f"{FOYER_ROOTLESS}/.ssh"
+AUTHORIZED_KEYS_ROOTLESS = f"{DOSSIER_SSH_ROOTLESS}/authorized_keys"
+
+#: SPK-95 · §42.2 quater : les deux chemins que la seconde porte doit OUVRIR au
+#: compte, mesuré le 2026-09-07 sur la Forge de test. `sshd` lit
+#: `authorized_keys` APRÈS avoir pris les droits du compte visé : posé
+#: `0600 root:root` par `push_file`, il lui est illisible et la porte ne s'ouvre
+#: jamais — « Permission denied (publickey) », sans autre explication côté
+#: client. Le dossier compte autant que le fichier : sans bit `x` pour le
+#: groupe, `sshd` ne le traverse pas.
+#:
+#: Root garde la propriété — c'est ce qui empêche le compte de service de se
+#: réécrire ses propres accès — et le groupe n'obtient que la lecture.
+CHEMINS_SECONDE_PORTE = ((DOSSIER_SSH_ROOTLESS,), (AUTHORIZED_KEYS_ROOTLESS,))
 
 #: Les deux modes du §42.2 bis. `None` quand Docker est absent ou vient de la
 #: distribution : on n'attribue pas un mode à ce qui ne tourne pas.

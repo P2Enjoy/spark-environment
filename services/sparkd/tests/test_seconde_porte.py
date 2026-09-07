@@ -252,3 +252,81 @@ def test_le_journal_ADMET_le_compte_mais_en_BORNE_la_valeur(tmp_path):
         "payload": {"path": "ssh", "account": "mot-de-passe-en-clair"}})
     assert refus.status_code == 422
     assert refus.json()["detail"]["error"] == "payload_refused"
+
+
+# --- Ce que la Forge de test a mesuré : la porte ne s'ouvrait pas -----------
+#
+# @verifies docs/BACKLOG.md#SPK-95 · docs/DAT.md §42.2 quater (les droits des
+#           deux chemins de la seconde porte, mesurés le 2026-09-07), §42.2 ter
+#           (la règle qu'ils appliquent), §17.1 (régénéré à chaque écriture)
+
+
+def _ouvertures(client, nom):
+    """Les commandes qui posent des droits, et elles seules."""
+    return [" ".join(c) for c in client.app.state.incus.created[nom].get("commands", [])
+            if "chgrp" in " ".join(c)]
+
+
+def test_la_seconde_porte_est_OUVERTE_au_compte_sinon_sshd_ne_la_lit_pas(tmp_path):
+    """Mesuré sur la Forge de test : la porte ne s'ouvrait JAMAIS.
+
+    `sshd` lit `authorized_keys` après avoir pris les droits du compte visé.
+    `push_file` posant le fichier `0600 root:root`, il rendait *Could not open
+    user 'spark-docker' authorized keys … : Permission denied*, que le client
+    présente en « Permission denied (publickey) » sans rien expliquer.
+
+    Le dossier compte autant que le fichier : sans son bit `x` pour le groupe,
+    `sshd` ne le traverse pas et le fichier reste inatteignable.
+    """
+    client = _client(tmp_path)
+    nom = _creer(client)
+    _accorder(client, nom, "poste", CLE_PUBLIQUE)
+    assert client.post(f"/v1/sparks/{nom}/bootstrap",
+                       json={"rootless": True}).status_code == 200
+
+    ensemble = " ".join(_ouvertures(client, nom))
+    dossier = bootstrap.AUTHORIZED_KEYS_ROOTLESS.rsplit("/", 1)[0]
+    # Le GID est celui que la CELLULE a rendu, jamais une constante du produit.
+    assert f"chgrp 1001 {dossier};" in ensemble, \
+        "le dossier .ssh reste fermé : sshd ne le traversera pas"
+    assert f"chgrp 1001 {bootstrap.AUTHORIZED_KEYS_ROOTLESS}" in ensemble, \
+        "la clé de la seconde porte reste illisible pour sshd"
+
+
+def test_un_CHANGEMENT_de_cle_ne_REFERME_pas_la_seconde_porte(tmp_path):
+    """Le piège, et la raison pour laquelle la reprojection vit dans `_apply_keys`.
+
+    Le §17.1 réécrit `authorized_keys` EN ENTIER à chaque ajout et à chaque
+    retrait, par `push_file` — qui repose un fichier fermé. Ouvrir au seul
+    amorçage donnerait une porte qui marche, puis cesse de marcher au premier
+    changement de clé, sans geste apparent : exactement la panne que le §42.2 ter
+    décrit.
+    """
+    client = _client(tmp_path)
+    nom = _creer(client)
+    _accorder(client, nom, "poste", CLE_PUBLIQUE)
+    assert client.post(f"/v1/sparks/{nom}/bootstrap",
+                       json={"rootless": True}).status_code == 200
+    avant = len(_ouvertures(client, nom))
+
+    # Un ajout, puis un retrait : les deux réécrivent le fichier.
+    _accorder(client, nom, "portable", AUTRE_CLE)
+    assert len(_ouvertures(client, nom)) > avant, \
+        "un ajout de clé a reposé un fichier fermé sans le rouvrir"
+
+    apres_ajout = len(_ouvertures(client, nom))
+    assert client.delete(f"/v1/sparks/{nom}/ssh-keys/portable").status_code == 200
+    assert len(_ouvertures(client, nom)) > apres_ajout, \
+        "un retrait de clé a refermé la seconde porte"
+
+
+def test_un_spark_ENRACINE_n_ouvre_toujours_RIEN(tmp_path):
+    """La symétrie du §42.2 ter : sans compte de service, il n'y a personne à
+    qui ouvrir, et déborder ici élargirait un accès que personne n'a demandé."""
+    client = _client(tmp_path)
+    nom = _creer(client)
+    _accorder(client, nom, "poste", CLE_PUBLIQUE)
+    assert client.post(f"/v1/sparks/{nom}/bootstrap").status_code == 200
+
+    ensemble = " ".join(_ouvertures(client, nom))
+    assert bootstrap.FOYER_ROOTLESS not in ensemble
