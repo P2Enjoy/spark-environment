@@ -756,3 +756,53 @@ test('le bouton dit AVANT ouverture ce que revenir ramènera', () => {
     UPDATE_VIDE);
   assert.match(sans, /ne rétablira que le code/);
 });
+
+// --- SPK-91 · la phase de sauvegarde a sa place dans la liste --------------
+//
+// @verifies docs/BACKLOG.md#SPK-91 · docs/DAT.md §40.7.1 (sauvegarder avant de
+//           muter) · docs/DESIGN_SYSTEM.md §14.6 (nommer ce qui a cédé)
+
+const BUILD_EN_RETARD = {
+  verdict: 'en_retard', titre: 'En retard', detail: 'Cinq commits d’écart.',
+  behind: 5, forge: { version: '0.post1.dev731' },
+  local: { head: 'f47bf9c59147', branch: 'main' },
+};
+
+test('la SAUVEGARDE figure dans les phases, et en tête', () => {
+  // La recette émet `SPARK_UPDATE backup in_progress` AVANT le paquet, et son
+  // échec sort en 70 sans rien installer. Une liste qui commence au paquet
+  // laisse donc hors champ la seule phase qui protège le registre.
+  const rendu = renderBuild(BUILD_EN_RETARD, {
+    status: 'failed', kind: 'update', confirmation: null,
+    result: { state: 'failed', message: 'La sauvegarde du registre a échoué.',
+              stages: { backup: 'failed' } },
+  });
+  assert.match(rendu, /Sauvegarde du registre/);
+  assert.ok(rendu.indexOf('Sauvegarde du registre') < rendu.indexOf('Paquet'),
+    'la sauvegarde précède le paquet, comme dans la recette');
+});
+
+test('une sauvegarde en ÉCHEC est nommée, au lieu de sept phases « à faire »', () => {
+  // Mesuré le 2026-09-07 : la console recevait bien le jalon `backup failed`,
+  // mais n'avait aucune ligne pour le rendre. L'exploitant lisait « Paquet à
+  // faire » — exact, et muet sur ce qui avait cédé.
+  const rendu = renderBuild(BUILD_EN_RETARD, {
+    status: 'failed', kind: 'update', confirmation: null,
+    result: { state: 'failed', message: 'La sauvegarde du registre a échoué.',
+              stages: { backup: 'failed' } },
+  });
+  const ligne = rendu.slice(rendu.indexOf('Sauvegarde du registre'));
+  assert.match(ligne.slice(0, 120), /échec/);
+});
+
+test('pendant une mise à jour, c’est la SAUVEGARDE qui est en cours d’abord', () => {
+  // L'ordre affiché est l'ordre réel : annoncer le paquet en cours pendant que
+  // la sauvegarde tourne serait un avancement inventé.
+  const rendu = renderBuild(BUILD_EN_RETARD, {
+    status: 'running', kind: 'update', confirmation: null, result: null,
+  });
+  const ligne = rendu.slice(rendu.indexOf('Sauvegarde du registre'));
+  assert.match(ligne.slice(0, 120), /en cours/);
+  const paquet = rendu.slice(rendu.indexOf('>Paquet<'));
+  assert.match(paquet.slice(0, 120), /à faire/);
+});

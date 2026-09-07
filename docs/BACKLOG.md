@@ -5084,7 +5084,7 @@ disparu, alors qu'elle était bien posée dans le DNS ».
 
 ---
 
-### [~] SPK-91 · Le retour arrière de `sparkd` ramène AUSSI le registre, et dit à quelle date
+### [x] SPK-91 · Le retour arrière de `sparkd` ramène AUSSI le registre, et dit à quelle date
 
 Constat du responsable, 2026-09-02, après la livraison de l'avertissement de
 SPK-85 : « un bouton qui rétablit mais casse l'outil, il faut être crétin pour le
@@ -5147,11 +5147,25 @@ panne valait mieux que la taire, mais ne valait pas la corriger.
   échec)` quittait le script AVANT `SPARK_UPDATE backup failed` : la console
   recevait la sortie brute et ne savait pas quelle phase avait cédé — ce que le
   responsable a vu le 2026-09-07. L'affectation est désormais dans un `if`.
-- **Reste à faire pour passer `[x]`** : la première mise à jour distante réelle,
-  reprise après cette correction. Ce qui est prouvé sur la Forge réelle à ce
-  jour, c'est la phase `sauvegarde` et son **refus bloquant** — rien n'a été
-  installé, la Forge a continué de servir sa build. Le geste complet, lui,
-  n'est encore éprouvé que par ses doublons.
+- **CLOSE le 2026-09-07 : la mise à jour distante réelle est passée**, depuis le
+  bouton de la console, sur la Forge de test. Vingt secondes, sept phases
+  terminées — Paquet, Unités, `daemon-reload`, Redémarrage, `healthz`, `readyz`,
+  Build —, et le verdict « Mise à jour prouvée. La Forge sert `f47bf9c59147` et
+  ses dépendances répondent ». La build est passée de `af3fa6809405` à
+  `f47bf9c59147`.
+  **La phase `sauvegarde` a bien tourné**, et c'était le point : le fichier
+  `/var/lib/sparkd/sauvegardes/spark-20260907-192317.db` porte l'horodatage de la
+  seconde même où le geste a été engagé — donc pris par la build EN PLACE, avant
+  toute mutation, comme le §40.7.1 l'exige. L'écran annonce ensuite ce que le
+  retour arrière rétablirait : *« Revenir rétablira aussi le registre au
+  2026-09-07 19:23 : tout ce qui a été enregistré depuis sera perdu. »*
+- **Un défaut trouvé en regardant cet écran, et corrigé.** La liste des phases
+  commençait au **Paquet** : la recette émet pourtant son jalon `backup` depuis
+  le début, et un échec de sauvegarde sort en 70 sans rien installer. L'écran
+  affichait alors sept phases « à faire » — exact, et muet sur celle qui avait
+  cédé. La sauvegarde ouvre désormais la liste, et c'est elle qui s'annonce « en
+  cours » au démarrage plutôt que le paquet, qui n'a pas encore commencé. Trois
+  preuves d'écran, toutes trois du rouge au vert.
 - **Corrigé et vérifié en local le 2026-09-07** : la panne rejouée à l'identique
   avec la build antérieure, puis la recette RÉELLE exécutée contre cette même
   build — jalons `backup in_progress` / `SPARK_BACKUP <chemin>` / `backup done`,

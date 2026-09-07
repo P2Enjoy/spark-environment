@@ -296,6 +296,16 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **La phase de sauvegarde n'apparaissait pas dans les phases d'une mise à jour**
+  (SPK-91, `docs/DAT.md` §40.7.1) : la recette émet son jalon `backup` avant
+  toute mutation, et un échec de sauvegarde sort sans rien installer — mais
+  l'écran commençait sa liste au **Paquet**. Une sauvegarde en échec affichait
+  donc sept phases « à faire », exactes et muettes sur celle qui avait cédé ; le
+  message disait bien la cause, mais l'exploitant lit d'abord la liste. La
+  sauvegarde ouvre désormais la liste, comme dans la recette, et c'est elle qui
+  s'annonce « en cours » au démarrage plutôt que le paquet, qui n'a pas encore
+  commencé. Trouvé en observant l'écran de la **première mise à jour distante
+  réelle**, jouée le même jour sur la Forge de test.
 - **Le compte rendu d'une recette annonçait « 0 en échec » au-dessus d'une route
   refusée** (SPK-88, `docs/DAT.md` §38.6.4 ter, `DESIGN_SYSTEM.md` §1.3) : le
   total du titre ne comptait que les enregistrements DNS. Une recette dont une

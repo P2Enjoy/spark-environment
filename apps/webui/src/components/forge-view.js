@@ -418,18 +418,30 @@ function renderReleveRedemarrage(vu, enMarche) {
   la machine tourne sur un noyau plus ancien que celui qui est installé.</p>`;
 }
 
+// SPK-91 · §40.7.1 : la SAUVEGARDE ouvre la liste, parce qu'elle ouvre la
+// recette. Elle en était absente alors que le script émet son jalon depuis le
+// début : un échec de sauvegarde — qui sort en 70 sans rien installer — laissait
+// donc sept phases « à faire » et aucune trace de celle qui avait cédé. Le
+// message disait la cause, mais l'exploitant lit d'abord la liste.
 const PHASES_UPDATE = [
+  ['backup', 'Sauvegarde du registre'],
   ['package', 'Paquet'], ['units', 'Unités'], ['daemon_reload', 'daemon-reload'],
   ['restart', 'Redémarrage'], ['healthz', 'healthz'], ['readyz', 'readyz'],
   ['build', 'Build'],
 ];
+
+//: La phase que la recette entame en premier. Annoncer le paquet « en cours »
+//: pendant que la sauvegarde tourne serait un avancement inventé (§1.3).
+const PREMIERE_PHASE_UPDATE = 'backup';
 
 const LIBELLES_PHASE = {
   pending: 'à faire', in_progress: 'en cours', done: 'terminée', failed: 'échec',
 };
 
 function phaseState(operation, phase) {
-  if (operation.status === 'running') return phase === 'package' ? 'in_progress' : 'pending';
+  if (operation.status === 'running') {
+    return phase === PREMIERE_PHASE_UPDATE ? 'in_progress' : 'pending';
+  }
   const result = operation.result;
   if (!result) return 'pending';
   if (result.stages?.[phase]) {
