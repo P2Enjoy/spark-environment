@@ -5545,7 +5545,7 @@ secondes, rétention 7 jours.**
   `@spec` / `@verifies` posés.
 
 
-### [~] SPK-94 · Ce que le compte rootless doit pouvoir lire, et le panneau qu'on enterrait
+### [x] SPK-94 · Ce que le compte rootless doit pouvoir lire, et le panneau qu'on enterrait
 
 Ouverte le 2026-09-07 sur une question du responsable — « quels utilisateurs sont
 réellement installés quand on amorce en rootless ? » —, dont la réponse a mis au
@@ -5601,15 +5601,28 @@ comprenne pas qu'il doit lire le briefing.
   arbitrage — SPK-95 le rend largement inutile.
 - Dépend de : SPK-54 (l'amorçage et son mode), SPK-58 (les fichiers
   d'environnement), SPK-60 (le briefing).
-- **État au 2026-09-07 — `[~]`, et ce qui manque est nommé.** Le serveur est
-  écrit et éprouvé : relevé, migration 015, ouverture des fichiers et du
-  briefing, silence du bandeau, panneau impératif. 15 preuves propres à l'unité,
-  dont deux qui passent du ROUGE au vert — vérifié en désactivant le correctif,
-  le geste d'ouverture disparaît et la preuve tombe. Parcours E2E joué contre la
-  pile réelle et captures observées (`spk94-amorcage-compte-rendu.jpg`). **Reste
-  dû, et c'est le seul point** : la MESURE sur un Spark rootless réel — le défaut
-  lui-même n'est établi que par lecture du code et par le contrat de Compose v2,
-  pas par observation sur la Forge.
+- **MESURÉE SUR FORGE RÉELLE le 2026-09-07, et close.** Le serveur était écrit et
+  éprouvé — relevé, migration 015, ouverture des fichiers et du briefing, silence
+  du bandeau, panneau impératif, 15 preuves dont deux qui passent du ROUGE au
+  vert. Il ne manquait que la mesure ; elle est faite, sur la cellule
+  `rootless-mesure` de la Forge de test, créée et amorcée en rootless depuis la
+  console par le parcours canonique :
+  - la chaîne de permissions est **exactement** le tableau du §42.2 ter —
+    `/etc/spark` `0750 root:spark-docker`, `env`, `BRIEFING.md`, `briefing.json`,
+    `/run/spark/secrets` et `spark-env.sh` en `0640`, `/etc/motd` inchangé en
+    `0644` — et le compte lit les trois fichiers ;
+  - une variable posée **après** l'amorçage garde ces droits : la reprojection
+    tient dans le temps, ce qui était le point de l'unité ;
+  - une **pile Compose réelle** portant ses deux `env_file:` démarre sous
+    `spark-docker` et reçoit les deux valeurs —
+    `RECU_ORDINAIRE=valeur-visible RECU_SECRETE=valeur-cachee`, conteneur sorti
+    en `0` ;
+  - le motd affiché à la connexion ne porte plus le bandeau de la distribution et
+    renvoie au briefing ; les scripts `/etc/update-motd.d/` ont perdu leur bit
+    d'exécution.
+  - **L'image de la pile a dû être fournie sans registre** (`docker import`) :
+    non pour un défaut de cette unité, mais parce que le démon rootless ne résout
+    aucun nom — défaut distinct, mesuré le même jour et ouvert en **SPK-96**.
 - DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un
   Spark → Amorçage en rootless, puis son terminal —, une pile Compose réelle
   portant ses deux `env_file:` démarre sous `spark-docker`, prouvé de bout en
@@ -5623,7 +5636,7 @@ comprenne pas qu'il doit lire le briefing.
   `@verifies` posés.
 
 
-### [~] SPK-95 · La seconde porte : entrer dans un Spark rootless en `spark-docker`
+### [x] SPK-95 · La seconde porte : entrer dans un Spark rootless en `spark-docker`
 
 Demandée par le responsable le 2026-09-07 : « le terminal intégré doit laisser
 choisir si entrer en root ou en spark-docker, sinon en root seulement ; et le
@@ -5674,10 +5687,22 @@ pas casser la cellule.
   joués contre la pile réelle, captures observées à 1440 et 390 px
   (`spk95-terminal-selecteur.jpg`, `-mobile`, `-ouvert-seconde-porte`,
   `-porte-unique`) — le débordement du sélecteur à 390 px a été trouvé là, et
-  corrigé. **Reste dû, et c'est le seul point** : la MESURE de `StrictModes` sur
-  une cellule réelle — `sshd` est tatillon sur le propriétaire et les droits de
-  `/home/spark-docker` et de son `.ssh`, et son refus ne s'explique pas de
-  lui-même.
+  corrigé.
+- **MESURÉE SUR FORGE RÉELLE le 2026-09-07, et close — la mesure a trouvé un
+  défaut, pas une confirmation.** Sur la cellule `rootless-mesure`, la porte ne
+  s'ouvrait **jamais** : `push_file` posait `/home/spark-docker/.ssh` en
+  `0700 root:root` et son `authorized_keys` en `0600 root:root`, or `sshd` lit ce
+  fichier après avoir pris les droits du compte visé. Les preuves étaient vertes
+  parce que le doublon n'exécute pas de `sshd`. Corrigé — les deux chemins passent
+  `root:spark-docker 0750/0640`, root gardant la propriété — et l'ouverture vit
+  dans `_apply_keys`, sans quoi le §17.1 refermerait la porte au premier
+  changement de clé. Trois preuves de plus, dont deux du ROUGE au vert.
+  Éprouvé ensuite **par le produit et non à la main**, sur la même cellule :
+  amorçage redemandé depuis la console → droits posés ; sélecteur offrant les deux
+  comptes ; session `spark-docker` ouverte depuis le terminal intégré, `docker ps`
+  répondant sans incantation ; clé autorisée puis révoquée depuis l'onglet Clés,
+  retirée des **deux** fichiers, la porte restant ouverte après les deux
+  changements.
 - DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un
   Spark rootless → Terminal —, le sélecteur propose les deux comptes, la session
   ouverte en `spark-docker` répond à `docker ps` **sans incantation**, et celle
@@ -5689,6 +5714,78 @@ pas casser la cellule.
   test E2E propres à l'unité ; captures observées aux principaux formats, le
   sélecteur et son état réduit à un seul compte compris ; manuel M6, DAT, design
   system et changelog mis à jour ; `@spec` / `@verifies` posés.
+
+
+### [ ] SPK-96 · Le démon rootless ne résout aucun nom, et l'amorçage promet le contraire
+
+**Trouvé par la mesure le 2026-09-07**, sur la Forge de test, en éprouvant la
+pile Compose de SPK-94 sur la cellule `rootless-mesure` (Ubuntu 24.04, amorcée en
+rootless par la console). Aucune image ne peut être téléchargée :
+
+```
+Error response from daemon: failed to resolve reference
+"docker.io/library/alpine:3.21": … dial tcp: lookup registry-1.docker.io:
+no such host
+```
+
+**La cause, mesurée et non supposée.** La résolution fonctionne partout ailleurs
+dans la cellule — depuis root par `incus exec`, et depuis le shell de
+`spark-docker`, qui rendent l'un et l'autre les enregistrements `A` et `AAAA`.
+Elle échoue dans le **seul** espace réseau du démon rootless :
+
+```
+/etc/resolv.conf de la cellule      : nameserver 127.0.0.53   (stub systemd-resolved)
+/proc/<rootlesskit>/root/etc/resolv.conf : nameserver 127.0.0.53
+```
+
+RootlessKit recopie le `resolv.conf` de la cellule dans son propre espace réseau.
+`127.0.0.53` y désigne une boucle locale **qui n'existe pas** : le stub de
+`systemd-resolved` n'écoute pas dans ce namespace. Le démon n'a donc aucun
+résolveur, et n'en a jamais eu.
+
+**Pourquoi rien ne le voyait.** Le doublon n'exécute ni `dockerd`, ni
+`rootlesskit`, ni `sshd` : il ne peut pas produire ce défaut. Et l'amorçage
+lui-même n'a jamais eu besoin de résoudre depuis le démon — il installe
+`docker-ce` par `apt`, qui passe, lui, par le résolveur de la cellule. Le mode
+enraciné n'est pas touché : son démon partage l'espace réseau de la cellule.
+
+**Ce que cela rend faux, et c'est le vrai sujet.** Le compte rendu d'amorçage
+conclut « Cette cellule est complète : elle est joignable en SSH et **capable de
+faire tourner une pile Compose** ». En rootless, c'est faux au sens du §41.2 :
+présent et inutilisable. Une pile ne démarre que si ses images sont **déjà** là —
+ce que la mesure a dû faire à la main (`docker import`) pour éprouver SPK-94.
+
+- **Un résolveur stable existe déjà dans le dessin du produit** : `10.77.0.1`, la
+  passerelle du bridge `sparkbr0` (§10), qui est précisément l'amont que
+  `systemd-resolved` interroge dans la cellule (`resolvectl status` :
+  *Current DNS Server: 10.77.0.1*). Y pointer le démon rootless n'est pas de la
+  gestion de configuration au sens du §42.4 : c'est employer le réseau que le
+  produit provisionne lui-même.
+- **À arbitrer par le responsable**, et c'est pourquoi l'unité n'est pas
+  commencée : le remède porte sur la cellule, et trois voies existent — écrire un
+  `resolv.conf` statique visant la passerelle, désactiver le stub
+  (`DNSStubListener=no`), ou n'agir que dans l'espace du démon. La première
+  change ce que TOUTE la cellule résout, la dernière ne survit peut-être pas à un
+  redémarrage du service. Le §42.4 borne ce que l'amorçage a le droit de
+  configurer, et cette frontière doit être tranchée avant la première ligne.
+- Ce que l'unité ne doit PAS casser : le mode **enraciné**, qui n'a pas ce défaut
+  et ne doit rien recevoir ; la résolution ordinaire de la cellule, dont dépend
+  `apt` ; le §42.1 — un amorçage rejoué ne doit pas redémarrer le démon pour
+  poser un fichier déjà correct.
+- **Tant que ce n'est pas corrigé, le compte rendu ne doit pas promettre ce
+  qu'il ne tient pas** : soit la cellule sait tirer une image, soit la phrase du
+  §42.10 le dit autrement en rootless. Laisser les deux en l'état est le défaut
+  que le §41.2 nomme.
+- Spécification : à écrire au `docs/DAT.md` §42 (l'amorçage et sa frontière),
+  §10 (le bridge et sa passerelle) · manuel M6. **Écrite et committée avant le
+  code**, comme toute unité.
+- DoD : depuis le parcours canonique, sur un Spark amorcé en rootless, un
+  `docker compose up` sur une pile dont l'image vient d'un registre public
+  **démarre**, prouvé sur la Forge de test ; un Spark **enraciné** est inchangé,
+  prouvé par un test ; la résolution ordinaire de la cellule est intacte après le
+  geste ; un second amorçage ne redémarre pas le démon ; tests unitaires et test
+  E2E propres à l'unité ; captures observées ; DAT, manuel M6, contrat de
+  déploiement et changelog mis à jour ; `@spec` / `@verifies` posés.
 
 
 ---

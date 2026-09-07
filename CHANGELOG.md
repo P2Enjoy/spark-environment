@@ -277,6 +277,29 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **La seconde porte ne s'ouvrait jamais : `sshd` ne pouvait pas lire la clé
+  qu'on posait pour lui** (SPK-95, `docs/DAT.md` §42.2 quater, contrat de
+  déploiement OP-18) — trouvé par la **mesure** sur la Forge de test, sur une
+  cellule Ubuntu 24.04 réellement amorcée en rootless. Entrer en `spark-docker`
+  rendait « Permission denied (publickey) », sans autre explication côté client ;
+  le journal de `sshd` dans la cellule nommait la cause : *Could not open user
+  'spark-docker' authorized keys … : Permission denied*. Ce n'était pas
+  `StrictModes`, que la spécification incriminait d'avance, mais le défaut du
+  §42.2 ter sur un chemin qu'il ne couvrait pas — `push_file` force
+  `uid 0, gid 0`, donc `/home/spark-docker/.ssh` arrivait `0700 root:root` et son
+  `authorized_keys` `0600 root:root`, alors que `sshd` lit ce fichier **après**
+  avoir pris les droits du compte visé. La porte n'était donc ouverte à personne
+  depuis qu'elle existe, et aucune preuve ne pouvait le voir : le doublon
+  n'exécute pas de `sshd`. Les deux chemins passent désormais
+  `root:spark-docker 0750/0640` — root **garde la propriété**, sans quoi le
+  compte de service pourrait se réécrire ses propres accès et ne serait plus un
+  compte à moindre privilège. L'ouverture vit dans `_apply_keys`, au plus près de
+  l'écriture, et non au seul amorçage : le §17.1 régénère ce fichier en entier à
+  chaque ajout et à chaque retrait de clé, si bien qu'ouvrir ailleurs aurait donné
+  une porte qui se referme au premier changement, sans geste apparent. L'amorçage
+  la rejoue en sortant, une fois l'identité du compte connue. **Un Spark rootless
+  déjà amorcé garde sa porte fermée jusqu'à un nouvel amorçage**, geste sans
+  interruption de service que l'OP-18 décrit.
 - **Supprimer un Spark en marche fonctionne enfin, et un refus d'Incus se lit**
   (SPK-90, `docs/DAT.md` §5.3, §5.4) : signalé sur la Forge de démonstration, la
   suppression rendait « Client error '400 Bad Request' » suivi d'un lien vers

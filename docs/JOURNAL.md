@@ -68,6 +68,33 @@ de refuser et de ne pas effacer l'empreinte lui-même ; la réconciliation est u
 geste d'exploitant. À noter pour le manuel : sur une Forge où les adresses se
 recyclent, ce refus est **attendu** après une suppression suivie d'une création.
 
+**Le troisième défaut, et le plus lourd : SPK-96.** En voulant faire démarrer la
+pile Compose que la DoD de SPK-94 exige, aucune image n'a pu être tirée. La
+résolution marche partout dans la cellule — root par `incus exec`, shell de
+`spark-docker`, `A` comme `AAAA` — et échoue dans le seul espace réseau du démon
+rootless. RootlessKit y recopie le `resolv.conf` de la cellule, qui porte
+`nameserver 127.0.0.53` : le stub de `systemd-resolved`, dont la boucle locale
+n'existe pas dans ce namespace. Le démon rootless n'a donc **jamais** eu de
+résolveur.
+
+Cela rend fausse la phrase que l'amorçage conclut lui-même — « capable de faire
+tourner une pile Compose » —, exactement au sens du §41.2. La preuve de SPK-94 a
+donc été faite avec une image bâtie **dans** la cellule par `docker import` : ce
+détour isole le sujet de l'unité — les permissions — du défaut réseau, et la
+pile a bien rendu `RECU_ORDINAIRE=valeur-visible RECU_SECRETE=valeur-cachee`.
+
+Le remède n'est pas écrit ici : il touche à ce que l'amorçage a le droit de
+configurer dans la cellule (§42.4), et cette frontière appartient au responsable.
+Un résolveur stable existe pourtant dans le dessin du produit — `10.77.0.1`, la
+passerelle de `sparkbr0`, qui est déjà l'amont interrogé par la cellule. Les
+trois voies possibles et leurs coûts sont écrits en SPK-96.
+
+**Ce que je retiens de la journée.** Trois défauts, tous invisibles au doublon,
+tous trouvés en moins d'une heure sur du matériel réel : un `sshd` qui n'existe
+pas dans le doublon, un `rootlesskit` qui n'y existe pas non plus, et une clé
+d'hôte que seule une adresse recyclée peut produire. Le §12 le disait déjà ; la
+Forge de test vient de le facturer trois fois.
+
 ---
 
 ## 2026-09-07 — Le compte rootless ne pouvait rien lire, et personne n'y entrait
