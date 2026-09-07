@@ -5430,7 +5430,8 @@ relevé — pour apprendre que la référence n'existe pas.
   code.**
 - Portée : `GET /v1/images/depot`, qui lit le dépôt en direct et rend les alias
   **groupés** famille → version, variantes en second niveau, chacun marqué
-  « déjà au catalogue » et « amorçable » ; ajout **en lot** de références cochées,
+  « déjà au catalogue » et « amorçable » — 229 alias rendus en 59 lignes, sans
+  qu'aucun alias publié ne devienne inatteignable ; ajout **en lot** de références cochées,
   reconfirmées par le serveur contre le dépôt avant écriture, nées `verified` et
   datées de **sa** lecture ; `DELETE /v1/images/{id}` avec ses deux refus ; la
   modale d'ajout devient une liste à cocher filtrable, la saisie libre y restant
@@ -5460,6 +5461,88 @@ relevé — pour apprendre que la référence n'existe pas.
   tests d'API et test E2E propres à l'unité ; captures observées aux principaux
   formats, états de chargement, d'erreur et de repli compris ; manuel M5, DAT,
   design system et changelog mis à jour ; `@spec` / `@verifies` posés.
+
+
+### [ ] SPK-93 · La supervision continue : courbes d'usage de la Forge et de chaque Spark
+
+Demandé par le responsable le 2026-09-07 : « voir les statistiques en direct de
+tous les Sparks, comme un mini Grafana pour une Forge et tous ses Sparks, et le
+même limité au Spark courant sur sa page. Mémoire, CPU, bande passante et disque
+en direct, avec des courbes historiques. »
+
+**Ce que le produit sait faire aujourd'hui, et où il s'arrête.** SPK-14 rend
+l'usage d'un Spark **à l'instant où on le demande** : `GET /v1/sparks/<nom>/usage`,
+quatre ressources, chacune comparée à ce qui est réellement appliqué. C'est un
+contrat complet pour « maintenant », et il ne répond à rien d'autre. Le
+`RateTracker` ne garde qu'**un** point, vit en mémoire, et n'est alimenté que par
+la requête d'un humain : une console fermée ne mesure rien. Il n'existe, à ce
+jour, **aucune donnée historique** dans le produit — ni table, ni fichier, ni
+relevé de fond —, et **aucune courbe** dans la console, qui ne contient pas une
+seule balise SVG.
+
+**Ce que l'accumulation côté console ne peut pas être.** Empiler les réponses de
+`/usage` dans le navigateur ne couvrirait que le temps où l'écran reste ouvert,
+disparaîtrait au rechargement, et ne dirait jamais ce qui s'est passé cette
+nuit — c'est-à-dire le seul moment où l'on regarde une courbe. Ce n'est pas une
+version économique de la fonction, c'est une autre fonction. **Arbitré par le
+responsable le 2026-09-07 : historien persisté dans le registre, cadence 15
+secondes, rétention 7 jours.**
+
+- Spécification : `docs/DAT.md` §52 (l'historien, ses sept sous-contrats),
+  §20 (nature de chaque grandeur, inchangée), §20.3 (les référentiels, appliqués
+  au temps), §20.4 (un Spark arrêté), §12.1.3 (ce que le doublon doit) ·
+  `docs/SCHEMA.md` §10 sexies (`metric_sample`) · `docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-20 (la courbe), SPK-DS-02 (le burst), SPK-DS-03 (nommer l'absence de
+  mesure), SPK-DS-05 (deux origines ne partagent pas un graphique) ·
+  `DESIGN_SYSTEM.md` §6.13 (états systématiques d'une vue), §9.2 et §9.7
+  (accessibilité), §14.6 (mesure indisponible et zéro) · `docs/PROD_MIGRATIONS.md`
+  OP-16 · manuel M8. **Écrite et committée avant le code.**
+- Portée serveur : migration `014_metriques_historique.sql` ; module
+  `historian.py` — fil d'exécution, tic, écriture groupée, purge ;
+  `GET /v1/forge/metrics` et `GET /v1/sparks/<nom>/metrics`, tous deux avec
+  `window` et `points`, ré-échantillonnage par moyenne de seaux **au serveur** ;
+  deux variables d'environnement, `SPARKD_METRICS_INTERVAL` et
+  `SPARKD_METRICS_RETENTION`.
+- Portée console : un composant de graphique en SVG **sans dépendance** — le
+  dépôt n'en a aucune pour cet usage et n'en introduit pas pour quatre courbes —,
+  l'onglet **Forge → Supervision** au second degré, la facette **Mesures** d'un
+  Spark au troisième.
+- Portée doublon : `FakeIncus` fait **avancer** ses compteurs CPU et réseau selon
+  un profil déterministe par instance (§52.10). Un compteur qui n'avance pas
+  n'est pas un compteur, et quatre lignes plates ne prouvent aucune des règles de
+  cette unité. Cela ne prouve toujours pas qu'une mesure est juste : la borne du
+  §12 est inchangée.
+- Portée seed : l'historique de développement est produit en rejouant **le
+  writer de l'historien** contre le doublon sur des horodatages antérieurs, et
+  non par des lignes fabriquées à la main (CLAUDE.md §8). Sans lui, tout écran de
+  supervision démarre vide pendant plusieurs minutes et aucune capture n'est
+  possible.
+- Ce que l'unité ne doit PAS casser : `/v1/sparks/<nom>/usage` garde son contrat
+  et son propre `RateTracker` — deux consommateurs d'un même compteur qui
+  partageraient un traqueur calculeraient chacun leur taux sur la fenêtre de
+  l'autre, et les deux seraient faux (§52.2) ; `null` ne devient jamais `0`, ni
+  en base, ni dans un seau, ni à l'écran ; la mesure d'un conteneur Docker ne
+  rejoint aucune de ces courbes (SPK-DS-05).
+- Ce que l'unité ne livre PAS, et qui est écrit au §52.9 : aucune alerte, aucun
+  seuil, aucune notification ; aucun historique des conteneurs ; aucun historique
+  de l'hôte lui-même ; aucun remplissage du passé.
+- Cadence `0` désactive l'historien, rétention `0` désactive la purge. Les deux
+  sont des décisions d'exploitant, et les écrans les **nomment** au lieu
+  d'afficher un vide.
+- DoD : depuis le parcours canonique — la page d'accueil, puis Forge →
+  Supervision, puis la fenêtre d'un Spark → Mesures — les quatre ressources sont
+  tracées sur les fenêtres offertes, avec leur ligne de référence, et le dernier
+  relevé est daté à l'écran ; un Spark arrêté produit un trou **nommé** « Arrêté
+  — aucune mesure d'exécution », distinct d'une période sans relevé, prouvé de
+  bout en bout ; un seau vide rend `null` et jamais `0`, prouvé par un test ; la
+  somme de la Forge publie le nombre de Sparks de chaque seau ; la purge retire
+  ce qui dépasse la rétention et la suppression d'un Spark emporte ses mesures,
+  prouvé sur la base réelle ; les deux routes refusent une fenêtre ou un nombre
+  de points hors bornes ; tests unitaires, tests d'API et test E2E propres à
+  l'unité ; captures observées à 1440 et 390 px, états de chargement, vide,
+  erreur et « historien désactivé » compris ; contrat d'API régénéré ; manuel M8,
+  DAT, SCHEMA, design system, contrat de déploiement et changelog mis à jour ;
+  `@spec` / `@verifies` posés.
 
 
 ---

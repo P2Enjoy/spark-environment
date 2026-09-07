@@ -9720,3 +9720,89 @@ failed`, sortie 70, rien d'installé. `sh -n` sur la recette rendue. 13 preuves
 **Ce qui reste.** La reprise de la mise à jour distante sur la Forge réelle.
 SPK-91 garde `[~]` : ce qui est prouvé sur une vraie machine, à ce jour, c'est
 la phase `sauvegarde` et son refus bloquant, pas le geste complet.
+
+## 2026-09-07 · SPK-93 — un historique ne peut pas naître dans le navigateur
+
+**La demande.** Le responsable veut « voir les statistiques en direct de tous les
+Sparks, comme un mini Grafana pour une Forge et tous ses Sparks, et le même
+limité au Spark courant sur sa page. Mémoire, CPU, bande passante et disque en
+direct, avec des courbes historiques. »
+
+**Le relevé, avant toute proposition.** Le produit rend déjà les quatre
+ressources demandées : SPK-14, `GET /v1/sparks/<nom>/usage`, chacune comparée à ce
+qui est réellement appliqué. Ce qui manque n'est donc pas la mesure, c'est le
+**temps**. Et il manque totalement : aucune table, aucun fichier, aucun relevé de
+fond, aucun fil d'exécution dans `sparkd` — l'application est un FastAPI purement
+synchrone, sans `lifespan` ni tâche périodique. Côté console, `grep svg` sur les
+quarante composants ne rend **rien** : il n'y a pas une balise de graphique dans
+le produit.
+
+**L'hypothèse la moins chère, et pourquoi elle est écartée.** La console appelle
+déjà `/usage` en boucle sur l'écran de détail. Empiler ces réponses dans un
+tableau JavaScript aurait donné des courbes en quelques dizaines de lignes, sans
+migration, sans thread, sans variable d'environnement.
+
+Elle ne répond à aucune des trois questions qui font qu'on regarde une courbe :
+*a-t-il toujours consommé autant ?*, *qui a saturé la Forge cette nuit ?*, *ce
+disque grossit-il ?* Une accumulation côté navigateur ne couvre que le temps où
+l'écran est resté ouvert et disparaît au rechargement — c'est-à-dire qu'elle est
+vide précisément quand on la consulte, le lendemain matin. Ce n'est pas une
+version économique de la fonction demandée, c'est une autre fonction. **Écartée.**
+
+**Arbitrage du responsable, le même jour** : historien persisté dans le registre,
+cadence **15 s**, rétention **7 jours**. La rétention de sept jours a été
+préférée aux vingt-quatre heures proposées, pour une raison d'exploitation
+simple : un incident du samedi se regarde le lundi.
+
+**Trois décisions que la mesure ou la spécification existante ont tranchées, et
+qui n'étaient pas dans la demande.**
+
+1. **Deux traqueurs de taux, jamais un seul.** Le §20.1 rappelle qu'un compteur
+   ne donne un taux qu'entre **deux lectures**. Si l'historien et la route
+   `/usage` alimentaient le même `RateTracker`, chacun calculerait son taux sur
+   une fenêtre ouverte par l'autre : les deux seraient faux, et de façon
+   invisible. L'historien garde donc son propre état. C'est écrit au §52.2 parce
+   que la mutualisation est la première optimisation qu'on tentera.
+2. **Un relevé par Spark, et non un relevé global.** `GET /1.0/instances?recursion=2`
+   rendrait tous les états en une requête et serait plus économe. Ce chemin n'a
+   **jamais été mesuré** sur la Forge, quand `instance_state` l'est depuis
+   SPK-14 et que le doublon le reproduit fidèlement depuis SPK-67. Un chemin
+   éprouvé vaut mieux qu'un chemin plus économe jamais mesuré, pour un coût
+   calculé à quarante appels par minute sur une socket Unix locale.
+3. **Une ligne est écrite même pour un Spark arrêté.** C'est contre-intuitif :
+   le §20.4 dit qu'un Spark arrêté n'a pas d'usage. Justement — sans cette ligne,
+   « ce Spark était arrêté » et « personne ne relevait » produiraient le même
+   trou dans la même courbe, et l'exploitant chercherait une panne applicative là
+   où le plan de contrôle redémarrait. La colonne `state` existe pour cette
+   distinction seule, et elle ne coûte **aucun** appel au pilote.
+
+**Une limite choisie, écrite pour ne pas être redécouverte comme un défaut.** Le
+§20.4 note que `disk.root.usage` reste vrai sur une instance arrêtée. L'historien
+pourrait donc suivre le disque d'un Spark éteint. Il ne le fait pas : ce serait
+un appel au pilote par Spark éteint et par tic, pour une valeur qui ne bouge pas.
+La courbe de disque s'interrompt pendant l'arrêt, et l'écran dit pourquoi.
+
+**Ce que le doublon devait devenir.** `FakeIncus` rendait `cpu.usage` constant.
+Sur un relevé isolé la divergence est invisible — le §20 rend `null` au premier
+point. Sur une série, elle rend inéprouvables le ré-échantillonnage, la
+distinction burst/réservation et la mise à l'échelle d'un axe : quatre lignes
+plates. Le §12.1.3 tranche déjà — le doublon doit la même **forme** de réponse
+que le vrai pour la même condition, et un compteur qui n'avance pas n'est pas un
+compteur. Ses compteurs dérivent donc du temps écoulé, de façon **déterministe**,
+sans quoi les captures du §30.1 cesseraient d'être reproductibles.
+
+**Ce que rien de tout cela ne prouve**, et qui reste à mesurer sur la Forge :
+l'effet réel des écritures sur le RAID1 système sous charge, et le temps de
+réponse des deux routes de lecture sur une base pleine à sept jours. Le §52.12
+est un **calcul**, pas une mesure, et il le dit.
+
+**Une incohérence documentaire trouvée en chemin, laissée en l'état.** Deux
+règles distinctes du design system portent l'identifiant `SPK-DS-19` — le texte à
+coller de SPK-85 et le refus de redémarrage de SPK-87 — et six fichiers s'y
+réfèrent depuis les deux camps. Renuméroter en passant mêlerait à SPK-93 un
+changement qui ne la concerne pas : consigné en entrée 3 du rapport
+d'incohérences, la règle de courbe prenant `SPK-DS-20`.
+
+**État à la fin de cette session de spécification.** Aucune ligne de code écrite.
+Les documents sont committés d'abord, comme le veut CLAUDE.md §5 : DAT §52,
+SCHEMA §10 sexies, SPK-DS-20, SPK-93, OP-16, README, changelog.

@@ -362,6 +362,8 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |
+| `SPARKD_METRICS_INTERVAL` | cadence de l'**historien d'usage** : à chaque tic, l'usage de chaque Spark en marche est relevé et conservé (`docs/DAT.md` §52) | durée (`15s`, `1m`) | non | `15s` — `0` désactive l'historien |
+| `SPARKD_METRICS_RETENTION` | durée conservée par l'historien ; ce qui dépasse est purgé à chaque tic | durée (`7d`, `24h`) | non | `7d` — `0` désactive la purge, et le registre croît sans limite |
 | `SPARKD_RESERVED_PORTS` | ports que la Forge occupe déjà, jamais attribuables à un Spark — **en plus** de `22`, `80` et `443`, que le produit réserve toujours | entiers séparés par des virgules | non | `9100,9090` |
 
 `SPARKD_BIND` ne peut pas être positionné sur une adresse routable : `sparkd`

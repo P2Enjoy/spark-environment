@@ -699,6 +699,80 @@ désactivée** pour que sa raison se lise. Ici elle est **absente**, parce que
 l'état n'est pas « indisponible pour l'instant » mais « ne doit pas avoir lieu ».
 Le refus, lui, reste affiché et nomme le noyau en cause.
 
+### SPK-DS-20 · La courbe : ce qu'elle trace, et ce qu'elle refuse de relier
+
+@spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.3, §52.4, §52.6, §52.8
+
+Première surface graphique du produit. Elle est en **SVG écrit à la main**, sans
+bibliothèque : quatre courbes ne justifient pas une dépendance (`DESIGN_SYSTEM.md`
+§12.4, CLAUDE.md §19), et une bibliothèque de graphiques apporterait avec elle
+ses propres couleurs, ses propres info-bulles et sa propre idée de l'absence de
+donnée — c'est-à-dire trois décisions que ce document a déjà prises.
+
+**Un trou reste un trou.** Un point sans mesure interrompt le tracé. La courbe ne
+relie jamais les deux points qui l'encadrent : une droite entre eux affirmerait
+une continuité que rien n'a mesurée, et c'est le §14.6 appliqué à une forme
+graphique. Une série entièrement vide ne rend pas un graphique plat à zéro : elle
+rend l'état vide du §6.13, avec son texte.
+
+**Deux trous, deux textes**, et c'est la règle qui distingue cette surface d'un
+graphe ordinaire (`docs/DAT.md` §52.4) :
+
+| Ce que la série porte | Texte |
+|---|---|
+| un relevé, Spark non démarré | « Arrêté — aucune mesure d'exécution » |
+| aucun relevé sur la période | « Aucun relevé sur cette période » |
+| historien désactivé sur la Forge | « Supervision désactivée sur cette Forge » |
+
+Le troisième n'est pas une panne (`DESIGN_SYSTEM.md` §14.5) : c'est une
+configuration, et l'écran la nomme sans peindre en rouge.
+
+**Couleurs.** Une ressource, un token, le même partout — écran de Forge et
+facette d'un Spark :
+
+| Courbe | Token |
+|---|---|
+| CPU | `brand` |
+| mémoire | `success` |
+| réseau | `accent` |
+| disque | `neutral` foncé |
+
+La **ligne de référence** — quota, plafond ou capacité de pool (`docs/DAT.md`
+§52.8) — est tracée en tirets, dans le neutre de texte secondaire, et **nommée
+dans la légende** avec sa valeur. Une courbe sans son référentiel est un chiffre
+faux (SPK-DS-05), et un trait sans légende n'est pas un référentiel.
+
+Le SPK-DS-02 tient sur une courbe comme sur une jauge : la part au-delà de la
+réservation est du **burst**, elle se distingue par un aplat `accent` sous la
+courbe et jamais par du rouge. `danger` n'apparaît que lorsque `over_limit` est
+vrai, ce qui n'existe qu'en mode `capped`.
+
+**L'information ne repose jamais sur la seule couleur** (`DESIGN_SYSTEM.md`
+§1.5). Chaque courbe porte son intitulé et sa valeur courante en toutes lettres
+au-dessus de son tracé ; la légende nomme chaque trait. Un graphique lu en
+niveaux de gris reste complet.
+
+**Accessibilité** (`DESIGN_SYSTEM.md` §9.2, §9.7). Le SVG est décoratif au sens
+ARIA : il porte `aria-hidden`, et la donnée est **aussi** rendue sous une forme
+lisible par un lecteur d'écran — un tableau des seaux, masqué visuellement, avec
+l'horodatage et la valeur de chaque point. Le graphique est atteignable au
+clavier ; les flèches déplacent un curseur de seau en seau, et la lecture du
+seau visé s'affiche sous le tracé, jamais dans une info-bulle flottante qu'un
+clavier ne peut pas viser.
+
+**Le pas de temps est écrit**, à côté de la fenêtre choisie : « 1 h — un point
+toutes les 15 s ». Le §52.6 en donne la raison, et c'est la même qu'au §20.1 :
+une valeur agrégée sans son pas n'est pas interprétable. Un seau formé d'un seul
+relevé n'est pas présenté comme une moyenne.
+
+**Densité.** Sur l'écran de Forge, les quatre ressources sont quatre graphiques
+de même hauteur, empilés en grille de deux sous 1024 px et d'un seul sous 768 px.
+La répartition par Spark est un **tableau** (`DESIGN_SYSTEM.md` §6.14), une ligne
+par Spark, avec une micro-courbe par ressource : c'est une comparaison entre
+objets, pas quatre nouveaux graphiques. Chaque ligne ramène à la fenêtre du Spark
+et ne porte **aucun geste** — l'écran de Forge a pour sujet la Forge
+(`docs/DAT.md` §52.11).
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

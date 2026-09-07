@@ -115,6 +115,50 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-16 · Migration `014_metriques_historique` et supervision continue (SPK-93)
+
+```
+Objectif      : la Forge relève l'usage de ses Sparks en continu et le conserve,
+                pour que les écrans de supervision puissent tracer des courbes
+                (docs/DAT.md §52, docs/SCHEMA.md §10 sexies).
+Dépend de     : 001_socle_registre (la table `spark`, dont la cascade dépend).
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : l'historien démarre AVEC sparkd. Aucune action humaine. Les
+                courbes sont vides jusqu'au premier tic, puis se remplissent à
+                la cadence configurée. Le passé n'est jamais reconstitué : les
+                fenêtres longues restent partiellement vides pendant les
+                premiers jours, et les écrans le disent (§52.9).
+Variables     : SPARKD_METRICS_INTERVAL (défaut 15s) et
+                SPARKD_METRICS_RETENTION (défaut 7d). AUCUNE des deux n'est
+                obligatoire ; ne rien poser donne le comportement par défaut.
+                INTERVAL=0 désactive l'historien, RETENTION=0 désactive la purge
+                — la seconde fait croître le registre sans limite, et c'est une
+                décision d'exploitant, jamais un défaut.
+Vérification  : sparkd démarre, puis `sqlite3 <registre>
+                "SELECT count(*), max(sampled_at) FROM metric_sample"` rend un
+                compte qui augmente d'un par Spark et par tic. Puis, dans la
+                console, Forge → Supervision montre un dernier relevé daté de
+                moins d'une cadence.
+Espace disque : borné par la rétention. À 15 s et 7 jours, ~5 760 lignes par
+                Spark et par jour, soit ~403 000 lignes et ~25 Mio pour dix
+                Sparks (calcul du §52.12, PAS une mesure). Le registre vit sur
+                md1, le RAID1 système, pas sur le pool ZFS : cette taille se
+                prend sur les 200 Gio système.
+Retour arrière: le `down` de la migration supprime la table et ses index. Tout
+                l'historique est perdu, et c'est sans conséquence pour le
+                produit : aucune règle d'admission, d'autorisation ni de cycle
+                de vie ne lit cette table. Comme toute migration, il n'est
+                JAMAIS joué seul — « Revenir à la build précédente » restaure le
+                registre depuis sa sauvegarde (SPK-91, docs/DAT.md §40.7), et
+                le piège de l'OP-15 vaut ici à l'identique : une build
+                antérieure REFUSE de servir une base portant la 014.
+Risque        : nul pour les données existantes. Une table neuve, alimentée par
+                un seul écrivain, qu'aucune règle métier ne consulte. Le risque
+                porte sur les ÉCRITURES : un tic par cadence sur le RAID1
+                système. À vérifier sur la Forge chargée avant de déclarer
+                l'unité close — c'est la vérification due nommée au §52.12.
+```
+
 ### OP-15 · Migration `013_briefing_systeme` du registre (SPK-85)
 
 ```

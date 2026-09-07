@@ -24,7 +24,8 @@ Toute évolution passe par une migration versionnée dans
                     ├── spark_bootstrap_observation
                     ├── spark_ssh_key ──── ssh_key
                     ├── snapshot
-                    └── backup
+                    ├── backup
+                    └── metric_sample
 
       audit_log        (transversal)
       schema_migration (technique)
@@ -405,6 +406,48 @@ déploiement ailleurs ne peut ni la lire ni la deviner (§44.9.2).
 
 La cascade est nécessaire : un briefing sans Spark n'a aucun sens et ne doit pas
 survivre à la libération de ses ressources.
+
+## 10 sexies. `metric_sample` : l'historique d'usage (SPK-93)
+
+Migration `014_metriques_historique.sql`. Contrat : `docs/DAT.md` §52, et §20 pour
+la nature de chaque grandeur.
+
+| Colonne | Type | Contenu |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | ordre d'écriture |
+| `spark_id` | TEXT NOT NULL | Spark relevé, `ON DELETE CASCADE` |
+| `sampled_at` | TEXT NOT NULL | horodatage UTC ISO-8601 du relevé |
+| `state` | TEXT NOT NULL | état du Spark **au moment du relevé** |
+| `window_seconds` | REAL nullable | fenêtre sur laquelle les taux sont calculés |
+| `cpu_used` | REAL nullable | part de CPU consommée, en cœurs |
+| `memory_bytes` | INTEGER nullable | mémoire résidente |
+| `disk_bytes` | INTEGER nullable | occupation du disque racine, instantanés compris |
+| `net_rx_bps` | INTEGER nullable | débit entrant sur `eth0`, en bits par seconde |
+| `net_tx_bps` | INTEGER nullable | débit sortant sur `eth0`, en bits par seconde |
+
+Deux index : `(spark_id, sampled_at)` sert les deux routes de lecture, `(sampled_at)`
+sert la purge. Aucun des deux n'est optionnel à sept jours de rétention.
+
+**Toutes les colonnes de mesure sont nullables, et c'est le cœur du contrat.**
+`NULL` y signifie « non mesuré », jamais « zéro » (`docs/DAT.md` §20.1). Trois cas
+l'écrivent, et le §52.3 les énumère : un Spark qui ne tourne pas n'a aucune
+mesure ; un premier relevé n'a pas de fenêtre, donc ni CPU ni réseau, mais bien
+une mémoire et un disque ; un compteur qui a reculé — la cellule a redémarré —
+rend le taux indisponible sans invalider les grandeurs instantanées.
+
+`state` est écrit à chaque ligne parce qu'une ligne sans mesure et une **absence**
+de ligne ne disent pas la même chose (§52.4). La première est un fait sur le
+Spark, la seconde un fait sur la Forge : personne ne relevait. Sans cette colonne
+les deux seraient indiscernables, et un arrêt planifié se lirait comme une panne
+du plan de contrôle.
+
+Aucune écriture ne vient d'une route HTTP : la table n'est alimentée que par
+l'historien, et vidée que par sa purge. Il n'existe pas de geste qui efface
+sélectivement une période — un historique qu'on peut trouer ne prouve rien.
+
+La cascade suit le §14.4 : la suppression d'un Spark rend ses ressources, et
+emporte ses mesures. Conserver la consommation d'un Spark qui n'existe plus ne
+répondrait à aucune question qu'on puisse encore poser.
 
 ## 11. Retour arrière
 

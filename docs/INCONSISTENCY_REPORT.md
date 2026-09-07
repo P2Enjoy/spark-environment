@@ -65,3 +65,34 @@ pas de celle-ci.
 **Demandé au responsable.** Décider qui reprend ces cinq illustrations. En
 l'état, personne ne peut lancer `make manuel` sans casser le manuel, ce qui rend
 la cible inutilisable pour tout le monde.
+
+---
+
+## 3. Deux règles de design distinctes portent le même identifiant `SPK-DS-19`
+
+**Constaté le 2026-09-07**, en réservant l'identifiant de la règle de courbe de
+SPK-93.
+
+**Le document.** `docs/DESIGN_SYSTEM_APP.md` porte **deux** sections nommées
+`SPK-DS-19` :
+
+- « Un texte fait pour être collé se montre, se copie, et ne se cache pas »
+  (SPK-85, dossier de déploiement) ;
+- « Le redémarrage de la Forge : un refus qui ne se clique pas » (SPK-87).
+
+**Le fait.** L'identifiant n'identifie donc plus rien, et le code s'y réfère
+depuis les deux camps : `spark-dossier.js`, `spark-dossier.test.js` et
+`app.css:613` visent la première ; `forge-view.js`, `forge-view.test.js` et
+`host/forge-reboot.js` visent la seconde. Une recherche sur `SPK-DS-19` rend six
+fichiers qui ne parlent pas du même sujet.
+
+**Pourquoi ce n'est pas corrigé ici.** Renuméroter l'une des deux règles change
+six références `@spec` réparties dans deux fonctionnalités closes, dont aucune
+n'appartient à SPK-93. Le faire en passant mêlerait à l'unité en cours un
+changement qui ne la concerne pas, et laisserait l'historique de deux unités
+livrées pointer vers un identifiant qui a bougé sous elles.
+
+**Ce qui est demandé au responsable.** Trancher laquelle des deux garde
+`SPK-DS-19` — la plus ancienne, SPK-85, est le candidat naturel — et autoriser la
+renumérotation de l'autre avec ses références. En attendant, SPK-93 prend
+`SPK-DS-20`, qui reste libre et sans ambiguïté.

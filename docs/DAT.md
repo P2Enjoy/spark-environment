@@ -3983,11 +3983,17 @@ Quatre conséquences :
   `debian/13`, `debian/13/default` et `debian/13/cloud` coexistent. Mesuré le
   2026-09-07 : `debian/13` et `debian/13/default` renvoient aux **mêmes cinq
   produits** — ce sont des synonymes, pas deux images ; `debian/13/cloud` en
-  désigne cinq autres. Sur les 229 alias : **70 racines** « famille/version »,
-  **155** portant une variante, et **4** sans version du tout — `archlinux`,
-  `kali`, `slackware`, `voidlinux`, des distributions à publication continue.
-  Quatorze variantes distinctes sont publiées (`cloud`, `desktop`, `desktop-kde`,
-  `musl`, `openrc`, `systemd`, `zfs`, `ufs`…) ;
+  désigne cinq autres. Quatorze variantes distinctes sont publiées (`cloud`,
+  `desktop`, `desktop-kde`, `musl`, `openrc`, `systemd`, `zfs`, `ufs`…), et
+  **quatre** alias n'ont pas de version du tout — `archlinux`, `kali`,
+  `slackware`, `voidlinux`, des distributions à publication continue ;
+- **deux autres doublons se cachent derrière celui-là**, et aucun ne se voit sans
+  regarder les données. Le **nom de code redit le numéro** : `debian/trixie` et
+  `debian/13` désignent les mêmes produits, comme `ubuntu/noble` et
+  `ubuntu/24.04`. Et certaines **variantes sont composées** : `freebsd/14.4/ufs`
+  porte le variant `default+ufs`, de sorte que reconnaître une variante à « son
+  dernier segment est le variant » la manquerait et l'afficherait comme une
+  version de FreeBSD ;
 - **un alias inexistant est bien absent.** `debian/31` ne figure nulle part, ce
   qui est la propriété dont dépend tout le §33.2.
 
@@ -4079,10 +4085,23 @@ que de cases cochées.
 
 #### Ce que la modale propose
 
-Les **70 racines** « famille/version », jamais les 229 alias bruts. `debian/13`
-et `debian/13/default` désignant les mêmes produits, les afficher côte à côte se
-lirait comme un doublon incompréhensible. Les variantes sont un choix **dans**
-une version, offert seulement là où elles existent.
+**59 lignes**, jamais les 229 alias bruts — mesuré le 2026-09-07 après
+groupement. Les afficher à plat produirait des doublons que personne ne peut
+départager, sous les trois formes relevées au §33.3.
+
+Le critère de groupement ne dépend que du jeu d'alias, ce qui le rend insensible
+aux conventions propres à chaque distribution : **un alias dont le parent est
+lui-même publié est une variante de ce parent** ; le reste est une base. Les
+bases qui décrivent la même chose — même famille, même publication, même variant
+— sont ensuite fondues, en gardant celle qui ne répète pas le nom de code.
+
+Rien n'est perdu au passage, et c'est une propriété à tenir : chaque alias publié
+est soit une ligne, soit une variante, soit le **synonyme** d'une ligne. Les
+synonymes sont retenus et rendus, parce qu'on cherche « noble » aussi souvent que
+« 24.04 ». Le seul retrait assumé est la variante par défaut qui redit sa base.
+
+Les variantes sont un choix **dans** une version, offert seulement là où elles
+existent.
 
 - Ce qui est **déjà au catalogue** s'y voit coché et inerte : la modale ne sert
   pas à retirer, et une entrée déjà tenue n'est pas une entrée à ajouter.
@@ -10115,3 +10134,284 @@ un jour autorisée à installer, sa garde n'accepte que le sous-ensemble fermé 
 l'installateur versionné et de ses options validées. Tant que cette extension
 n'est pas livrée et vérifiée séparément, l'installation demande une identité SSH
 administrative déjà autorisée ; un `sudo` interactif est un blocage nommé.
+
+## 52. La supervision continue : un historien dans la Forge (SPK-93)
+
+### 52.1 Ce que le §20 ne donne pas, et pourquoi il ne peut pas le donner
+
+Le §20 rend l'usage **à l'instant où on le demande**. C'est un contrat complet
+pour la question « que consomme ce Spark maintenant », et il ne répond à aucune
+autre. Trois questions d'exploitation ordinaires lui échappent :
+
+- *ce Spark a-t-il toujours consommé autant, ou est-ce nouveau depuis ce matin ?*
+- *quel Spark a saturé la Forge pendant la nuit ?*
+- *ce disque grossit-il, et à quelle vitesse ?*
+
+Aucune ne se répond par un relevé. Elles exigent une **suite** de relevés, et
+donc que quelqu'un les prenne quand personne ne regarde. Le `RateTracker` du §20
+ne le fait pas et ne peut pas le faire : il ne garde qu'un point, il vit en
+mémoire, et il n'est alimenté que par la requête d'un humain. Une console fermée
+ne mesure rien.
+
+**Le fait qui décide de l'architecture** : l'historique ne peut pas naître dans
+le navigateur. Une accumulation côté console ne couvre que le temps où l'écran
+est resté ouvert, disparaît au rechargement, et ne dirait jamais ce qui s'est
+passé cette nuit — c'est-à-dire exactement le seul moment où l'on regarde une
+courbe. Ce n'est pas une version économique de la fonction : c'est une autre
+fonction, qui ne répond à aucune des trois questions.
+
+L'historien vit donc **dans la Forge**, et son historique est **persisté**.
+
+### 52.2 L'historien : où il vit, ce qu'il relève, à quelle cadence
+
+Un fil d'exécution de `sparkd`, démarré avec l'application et arrêté avec elle.
+À chaque tic :
+
+1. il lit dans le registre **tous** les Sparks déclarés, avec leur état ;
+2. pour chacun qui est `running`, il appelle `instance_state` — la **même**
+   méthode que la route du §20, déjà éprouvée sur la Forge ;
+3. il en tire un taux par le **même** module `metrics`, avec son propre
+   `RateTracker` ;
+4. il écrit une ligne par Spark dans `metric_sample` (`docs/SCHEMA.md`
+   §10 sexies) ;
+5. il purge ce qui a dépassé la rétention.
+
+**Pourquoi un appel par Spark et non un relevé global.** `GET /1.0/instances?recursion=2`
+rendrait l'état de toutes les instances en une requête, et serait plus économe.
+Ce chemin n'a jamais été mesuré sur la Forge. `instance_state` l'a été, depuis
+SPK-14, et c'est celui que le doublon reproduit fidèlement depuis SPK-67. Un
+chemin éprouvé vaut mieux qu'un chemin plus économe jamais mesuré, pour un coût
+qui reste borné (§52.12). Le jour où le relevé global sera mesuré, il remplacera
+celui-ci sans rien changer au reste.
+
+**Deux traqueurs, jamais un seul.** L'historien n'emploie pas `app.state.rates`,
+celui de la route `/usage`. Un compteur donne un taux **entre deux lectures** :
+si l'historien et la console alimentaient le même traqueur, chacun calculerait
+son taux sur une fenêtre ouverte par l'autre, et les deux seraient faux. Chaque
+consommateur garde donc son point précédent. C'est la conséquence directe du
+§20.1, et elle n'est pas facultative.
+
+**Cadence.** `SPARKD_METRICS_INTERVAL`, 15 secondes par défaut. Elle est
+supérieure à la fenêtre minimale du §20 (`0,5 s`) de deux ordres de grandeur : le
+taux n'est jamais bruité par une fenêtre trop courte. Posée à `0`, la cadence
+**désactive** l'historien — la Forge fonctionne alors exactement comme avant
+SPK-93, et les surfaces de supervision le disent au lieu d'afficher un vide
+(§14.5).
+
+### 52.3 Ce qu'une ligne d'échantillon dit, et ce qu'elle refuse de dire
+
+Une ligne porte l'état du Spark **au moment du relevé**, et cinq mesures. La
+discipline du §20.1 — `null`, jamais `0` — descend dans les colonnes :
+
+| Situation au tic | `state` | mesures écrites |
+|---|---|---|
+| Spark en marche, deuxième relevé ou plus | `running` | les cinq |
+| Spark en marche, **premier** relevé | `running` | mémoire et disque seules ; CPU et réseau `NULL` |
+| Spark arrêté, en erreur, transitoire | son état | **aucune**, les cinq `NULL` |
+
+La deuxième ligne est celle du §20.1 : mémoire et disque sont des grandeurs
+instantanées, elles sont vraies dès la première lecture ; CPU et réseau sont des
+compteurs, et un compteur seul ne fait pas un taux. Écrire `0` en attendant
+inventerait une mesure — et `0` est une valeur plausible, donc indétectable.
+
+La troisième est celle du §20.4 : un Spark arrêté n'a pas un usage nul, il n'en a
+pas. La ligne existe pourtant, et c'est tout son intérêt : elle dit « à cette
+seconde, ce Spark était arrêté ». Sans elle, l'arrêt serait indiscernable d'une
+panne de l'historien (§52.4).
+
+**Ce qu'un tic ne fait PAS** : appeler Incus pour un Spark qui n'est pas en
+marche. Le §20.4 note que `disk.root.usage` reste vrai sur une instance arrêtée,
+et il serait donc possible d'historiser le disque d'un Spark éteint. Le produit
+ne le fait pas : c'est une valeur qui ne bouge pas, contre un appel au pilote par
+Spark éteint et par tic. La courbe de disque d'un Spark arrêté s'interrompt
+pendant son arrêt, et l'écran dit pourquoi. C'est une limite **choisie**, écrite
+ici pour ne pas être redécouverte comme un défaut.
+
+### 52.4 Un trou dans une courbe a deux causes, et elles ne se confondent pas
+
+C'est la règle qui justifie la colonne `state`.
+
+| Ce que la série contient | Ce que cela veut dire | Ce que l'écran écrit |
+|---|---|---|
+| une ligne, `state` ≠ `running`, mesures `NULL` | le Spark ne tournait pas | « Arrêté — aucune mesure d'exécution » |
+| **aucune ligne** sur l'intervalle | personne n'a relevé | « Aucun relevé sur cette période » |
+
+Les deux se ressemblent à l'écran — un trou dans une ligne — et ne disent pas du
+tout la même chose. La première est un fait sur le Spark ; la seconde est un fait
+sur la Forge : `sparkd` était arrêté, mis à jour, ou l'historien désactivé. Les
+confondre ferait chercher une panne applicative là où le plan de contrôle
+redémarrait. C'est l'application au temps du `DESIGN_SYSTEM.md` §14.6 et du
+`DESIGN_SYSTEM_APP.md` SPK-DS-03.
+
+### 52.5 La rétention est une décision, pas un effet de bord
+
+`SPARKD_METRICS_RETENTION`, **7 jours** par défaut. La purge s'exécute à chaque
+tic, sur l'index `(sampled_at)`, et supprime ce qui a dépassé la fenêtre.
+
+Sept jours parce que la question d'exploitation qui motive l'unité — *que s'est-il
+passé cette nuit, ce week-end* — n'est pas atteignable en 24 heures : un incident
+du samedi se regarde le lundi. Le volume qui en découle est borné et connu
+(§52.12).
+
+Une rétention posée à `0` **désactive la purge**, pas l'historien : c'est une
+décision d'exploitant qui accepte de faire croître le registre sans limite, et
+elle doit être explicite. Le produit ne la prend jamais tout seul.
+
+La purge est **le seul** mécanisme d'effacement. Il n'existe aucune route qui
+supprime des mesures : un exploitant qui pourrait effacer sélectivement une
+période détruirait la seule propriété qui rend une courbe utile.
+
+La suppression d'un Spark emporte ses mesures, par cascade (`docs/SCHEMA.md`
+§10 sexies). C'est cohérent avec le §14.4 : ce qui est rendu à la suppression est
+rendu entièrement, et conserver la consommation d'un Spark qui n'existe plus ne
+répondrait à aucune question qu'on puisse encore poser.
+
+### 52.6 Le ré-échantillonnage se fait au serveur, et il est nommé
+
+À 15 secondes, sept jours font **40 320** points par Spark. Aucune courbe ne se
+lit avec 40 000 points, et aucun navigateur ne devrait en recevoir autant.
+
+Les deux routes de lecture prennent donc une **fenêtre** et un **nombre de
+points** :
+
+```
+GET /v1/forge/metrics?window=1h&points=240
+GET /v1/sparks/<nom>/metrics?window=24h&points=240
+```
+
+Le serveur découpe la fenêtre en `points` seaux d'égale durée et rend, pour
+chacun, la **moyenne** des mesures qu'il contient. Trois règles :
+
+1. un seau qui ne contient **aucune** mesure rend `null` — pas `0`, et pas la
+   valeur du seau précédent. Une interpolation ferait apparaître une continuité
+   que rien n'a mesurée ;
+2. chaque seau publie `samples`, le nombre de relevés qui l'ont formé. Une
+   moyenne sur un point et une moyenne sur quarante ne valent pas la même chose,
+   et l'écran doit pouvoir le dire ;
+3. la **durée du seau** est publiée avec la série. C'est la fenêtre du §20.1
+   remontée d'un cran : une courbe sans son pas de temps n'est pas interprétable.
+
+La moyenne, et non le maximum : le maximum d'un seau raconte les pointes et cache
+le régime, la moyenne fait l'inverse. Le produit choisit la moyenne parce que la
+comparaison à un quota — ce que le §20.3 impose partout — porte sur un régime.
+Publier les deux serait doubler chaque série pour une question qui n'est pas
+encore posée.
+
+### 52.7 L'agrégat de la Forge : une somme qui dit combien de Sparks elle somme
+
+L'écran de Forge montre la Forge, pas la juxtaposition de ses Sparks. Chaque seau
+de la série agrégée porte donc la **somme** des moyennes de seau de chaque Spark,
+et le nombre de Sparks qui y ont contribué.
+
+Ce nombre n'est pas décoratif. Les Sparks n'ont pas tous une mesure dans tous les
+seaux : un Spark créé à midi n'en a pas le matin, un Spark arrêté n'en a pas
+pendant son arrêt. Une somme dont le nombre de termes varie **change de marche**
+sans que rien ne l'ait fait dans la machine. En publiant `sparks` par seau,
+l'écran peut nommer la marche au lieu de la faire lire comme un incident.
+
+L'agrégat n'invente aucune grandeur que les Sparks n'ont pas : il ne mesure ni
+l'hôte, ni la part de la Forge elle-même, ni ce que consomment `sparkd`, Incus ou
+Caddy. C'est la somme de ce que consomment les Sparks, et l'écran l'écrit.
+
+### 52.8 À quoi chaque courbe se compare, et à quoi elle ne se compare pas
+
+Le §20.3 fixe déjà les référentiels d'un relevé. Ils sont **inchangés** dans le
+temps, et c'est le point : une courbe sans sa ligne de référence est un chiffre
+sans son référentiel, c'est-à-dire un chiffre faux.
+
+| Courbe | Référence tracée | Origine |
+|---|---|---|
+| CPU d'un Spark | sa réservation, ou son plafond en mode `capped` | §7.2, §20.3 |
+| mémoire d'un Spark | sa réservation mémoire | §7.6 |
+| disque d'un Spark | son quota, instantanés compris | §19.4 |
+| réseau d'un Spark | son **plafond**, jamais sa réservation | §20.3 |
+| CPU de la Forge | le pool CPU allouable | §7.7 |
+| mémoire de la Forge | le pool mémoire allouable | §16 |
+| disque de la Forge | le pool de stockage allouable | §8 |
+| réseau de la Forge | le débit du lien relevé | §5.2 |
+
+Le SPK-DS-02 vaut sur une courbe comme sur une jauge : la part au-delà de la
+réservation est du **burst**, elle se distingue sans se dénoncer, et le rouge
+n'apparaît qu'en mode `capped`. Une courbe de CPU qui franchit sa réservation sur
+une Forge au repos décrit le fonctionnement normal du produit, mesuré à `1,996`
+pour `0,5` réservé (§20.3 bis).
+
+### 52.9 Ce que l'historien ne fait pas
+
+Écrit ici pour ne pas être redemandé comme un défaut :
+
+- **il n'alerte pas.** Aucun seuil, aucune notification, aucune règle. Le canal
+  hors bande du §47 porte les **gestes**, pas les mesures. Une alerte sur mesure
+  suppose des seuils par Spark, une hystérésis et une politique de silence :
+  c'est une unité, pas un effet de bord de celle-ci ;
+- **il n'historise pas les conteneurs Docker.** Ces mesures viennent de
+  l'intérieur de la cellule et se comparent à autre chose (§37.6,
+  SPK-DS-05). Les empiler dans les mêmes courbes serait la faute que cette règle
+  interdit ;
+- **il n'historise pas l'hôte.** Ni la charge de la Forge, ni son ARC ZFS, ni ses
+  pools. Le §27 les montre à l'instant présent ; les mettre dans le temps est une
+  autre unité, et le §52.7 dit déjà pourquoi l'agrégat des Sparks n'en tient pas
+  lieu ;
+- **il ne remplit pas le passé.** Un Spark créé aujourd'hui n'a pas de courbe
+  d'hier, et l'écran le dit plutôt que de tracer une ligne à zéro.
+
+### 52.10 Le doublon : un compteur doit avancer
+
+`FakeIncus` rendait `cpu.usage` **constant**, et les compteurs réseau aussi. Sur
+un relevé isolé, la divergence est invisible : le §20 rend `null` au premier
+point, et la console montre « Mesure en cours ». Sur une série, elle devient
+structurante — quatre lignes plates, et aucune des règles du §52.3, du §52.6 ni
+du SPK-DS-02 n'est éprouvable contre la pile de développement.
+
+Le §12.1.3 tranche déjà le cas : le doublon doit **la même forme de réponse que
+le vrai pour la même condition**. Or un compteur qui n'avance pas n'est pas un
+compteur. Le doublon dérive donc ses compteurs du temps écoulé, selon un profil
+**déterministe** propre à chaque instance — même Spark, même durée, même série,
+sinon les captures cesseraient d'être reproductibles (§30.1).
+
+Ce que cela ne prouve toujours pas, et qui reste une divergence de nature :
+aucune de ces valeurs ne mesure quoi que ce soit. Le doublon donne à la
+supervision une **forme** à éprouver, jamais une consommation à croire. La borne
+du §12 est inchangée : un pilote factice ne prouve jamais qu'un quota est
+appliqué, ni qu'une mesure est juste.
+
+### 52.11 Les surfaces
+
+Deux, et elles ne se dupliquent pas :
+
+- **Forge → Supervision**, onglet du second degré, à côté de *Pools*, *Images*,
+  *Environnement*, *DNS* et *Journal*. Elle porte l'agrégat du §52.7 et la
+  répartition par Spark. C'est la Forge qu'on y regarde ;
+- **la facette *Mesures*** de la fenêtre d'un Spark, au troisième degré. Mêmes
+  quatre ressources, même sélecteur de fenêtre, comparées aux quotas **de ce
+  Spark**. C'est un Spark qu'on y regarde.
+
+Le §34 interdit qu'une surface ait deux sujets. La supervision de la Forge ne
+propose donc aucun geste sur un Spark : elle **ramène** à la fenêtre du Spark, où
+les gestes vivent déjà.
+
+Le rafraîchissement suit la cadence de l'historien : demander plus souvent que la
+Forge ne relève ne produit aucun point nouveau, seulement du trafic. L'écran
+annonce l'heure du dernier relevé reçu.
+
+### 52.12 Le coût, et ses bornes
+
+Calculé pour la Forge cible, et à vérifier sur elle :
+
+| Grandeur | Valeur | D'où elle vient |
+|---|---|---|
+| appels Incus | `1` par Spark en marche et par tic | §52.2 |
+| à 10 Sparks, 15 s | `40` appels/minute | sur une socket Unix locale |
+| lignes écrites | `5 760` par Spark et par jour | `86 400 / 15` |
+| à 10 Sparks, 7 jours | `~403 000` lignes | rétention du §52.5 |
+| volume | `~25 Mio` | ligne courte, index compris |
+
+Le registre vit sur `md1`, le RAID1 système, et non sur le pool ZFS. Une écriture
+par tic, groupée en **une** transaction pour tous les Sparks, est le mode
+d'écriture qui minimise les synchronisations. La purge s'exécute dans la même
+transaction.
+
+**Ce qui n'est pas mesuré à ce jour** : l'effet réel de ces écritures sur une
+Forge chargée, et le temps de réponse des deux routes de lecture sur une base
+pleine à sept jours. Les deux sont des vérifications dues, et tant qu'elles ne
+sont pas faites, ce tableau est un calcul et non une mesure.

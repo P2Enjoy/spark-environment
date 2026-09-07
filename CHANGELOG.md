@@ -3,6 +3,20 @@
 ## [Non publié]
 
 ### Ajouté
+- **Spécification de la supervision continue** (SPK-93, `docs/DAT.md` §52,
+  `docs/SCHEMA.md` §10 sexies, `DESIGN_SYSTEM_APP.md` SPK-DS-20) : le produit
+  rendait l'usage d'un Spark **à l'instant où on le demande** et rien d'autre —
+  aucune table, aucun relevé de fond, aucune courbe. Le contrat d'un **historien
+  persisté dans la Forge** est écrit et committé avant tout code : un tic toutes
+  les 15 secondes, sept jours conservés, une ligne par Spark et par tic, purge
+  comprise. Ce qu'il tranche et qui n'était pas dans la demande : l'historien ne
+  partage pas le traqueur de taux de `/usage` — deux consommateurs d'un même
+  compteur calculeraient chacun leur taux sur la fenêtre de l'autre, et les deux
+  seraient faux ; une ligne est écrite même pour un Spark **arrêté**, sans quoi
+  « ce Spark ne tournait pas » et « personne ne relevait » feraient le même trou
+  dans la même courbe ; un seau sans mesure rend `null`, jamais `0`, et la courbe
+  ne relie pas les deux points qui l'encadrent. Aucun code n'est encore livré :
+  les écrans de supervision n'existent pas.
 - **Le retour arrière de `sparkd` rétablit AUSSI le registre, et annonce sa date**
   (SPK-91, `docs/DAT.md` §40.7) : « Revenir à la build précédente » ne régressait
   que le binaire. Quand la mise à jour avait migré le registre, l'ancienne build
