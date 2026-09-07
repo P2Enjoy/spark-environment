@@ -1082,3 +1082,51 @@ test('l’apercu present leve la garde', () => {
   assert.equal(refusEcritureRecette({ catalogue, apercu: { records: [], routes: [] } },
                                     { recette: 'site-web', recette_zone: 'exemple.tech' }), null);
 });
+
+test('une ROUTE refusée compte dans le total des échecs du compte rendu', () => {
+  // SPK-88 · §38.6.4 ter, DESIGN_SYSTEM §1.3 (pas de succès simulé).
+  //
+  // Mesuré au parcours le 2026-09-07 : `failed` ne porte que les
+  // enregistrements DNS. Une recette dont une ROUTE est refusée et dont les
+  // deux enregistrements passent affichait donc « 2 écrit(s), 0 en échec » —
+  // au-dessus d'une ligne rouge « refusée ». Le bloc était bien en
+  // avertissement, mais son titre disait l'inverse de ce qu'il surmontait.
+  //
+  // Un exploitant lit le titre. C'est exactement le « succès sur une recette à
+  // moitié posée » que le §38.6.3 nomme comme le pire mensonge possible ici.
+  const rendu = renderRoutesPanel(SPARK, [], ui({
+    recettes: { ...ADMIN_VIDE.recettes, resultat: {
+      label: 'Site web', written: 2, failed: 0, incomplete: null,
+      propagation: 'La résolution peut demander jusqu’à 300 secondes.',
+      routes: [
+        { domain: 'prise.exemple.test', port: 9400, declared: false,
+          error: 'Le domaine « prise.exemple.test » est déjà routé vers le '
+                 + 'Spark « crm-production ».' },
+        { domain: 'www.prise.exemple.test', port: 9400, declared: true },
+      ],
+      records: [{ name: 'prise', type: 'A', written: true },
+                { name: 'www.prise', type: 'A', written: true }],
+    } },
+  }));
+  assert.ok(rendu.includes('2 écrit(s), 1 en échec'),
+    'le titre doit compter la route refusée');
+  assert.ok(rendu.includes('crm-production'), 'et le refus NOMME toujours le Spark');
+  assert.ok(rendu.includes('avertissement'));
+});
+
+test('une recette dont TOUT passe, routes comprises, ne dit aucun échec', () => {
+  // La symétrie de la preuve ci-dessus : ajouter les routes au compte ne doit
+  // pas inventer un échec là où il n'y en a pas.
+  const rendu = renderRoutesPanel(SPARK, [], ui({
+    recettes: { ...ADMIN_VIDE.recettes, resultat: {
+      label: 'Site web', written: 2, failed: 0, incomplete: null,
+      propagation: 'La résolution peut demander jusqu’à 300 secondes.',
+      routes: [{ domain: 'neuf.exemple.test', port: 8080, declared: true },
+               { domain: 'www.neuf.exemple.test', port: 8080, declared: true }],
+      records: [{ name: 'neuf', type: 'A', written: true },
+                { name: 'www.neuf', type: 'A', written: true }],
+    } },
+  }));
+  assert.ok(rendu.includes('2 écrit(s)'));
+  assert.ok(!rendu.includes('en échec'));
+});

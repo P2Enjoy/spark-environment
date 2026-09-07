@@ -2482,12 +2482,14 @@ test('une recette de site web pose sa ROUTE avant son enregistrement', async () 
     assert.ok(apercu.includes('à déclarer'));
     assert.ok(apercu.indexOf('route staging.exemple.test') < apercu.indexOf('@ A'),
       'la route se lit AVANT l’enregistrement');
+    await capturer('spk88-recette-apercu', { hauteur: 1200 });
 
     await page.click('[data-engage="recette"]');
     await page.waitForSelector('#recette-resultat', { timeout: 20000 });
     const bilan = await page.textContent('#recette-resultat');
     assert.ok(bilan.includes('déclarée'), 'le sort de la ROUTE est rendu');
     assert.ok(bilan.includes('écrit'), 'celui de l’enregistrement aussi');
+    await capturer('spk88-recette-compte-rendu', { hauteur: 1200 });
 
     // EFFET sur la Forge : les deux routes existent, sur le port demandé.
     const { corps } = await pile.lireSparkd('/v1/ingress');
@@ -2501,6 +2503,50 @@ test('une recette de site web pose sa ROUTE avant son enregistrement', async () 
     const zone = dns.enregistrements('staging.exemple.test');
     assert.ok(zone.some((r) => r.name === '' && r.type === 'A'));
     assert.ok(zone.some((r) => r.name === 'www' && r.type === 'A'));
+  });
+});
+
+test('une route déjà tenue par un AUTRE Spark est refusée, sans bloquer le reste', async () => {
+  // §38.6.4 ter : la recette pose DEUX routes. Si l'une est déjà servie par un
+  // autre Spark, la refuser tout entière punirait l'exploitant pour une moitié
+  // de geste — et taire le refus lui ferait croire que le nom est à lui. Le
+  // compte rendu NOMME donc le Spark qui la tient, et le reste passe.
+  await parcours('recette-route-prise', async () => {
+    // « crm-production » prend le nom nu ; « boutique » demandera la recette.
+    await declarerRoute('crm-production', 'prise.exemple.test', '8080');
+
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('#titre-routes');
+    await page.click('[data-ouvre="recette"]');
+    await page.waitForSelector('dialog.modale[open] #recette-id', { timeout: 15000 });
+    await page.selectOption('#recette-id', 'site-web');
+    await page.selectOption('#recette-zone', 'exemple.test');
+    await page.fill('[data-param="domain"]', 'prise');
+    await page.fill('[data-param="address"]', '203.0.113.10');
+    await page.fill('[data-param="port"]', '9400');
+    await page.dispatchEvent('[data-param="port"]', 'change');
+
+    await page.waitForSelector('#recette-apercu .recette-ligne--route', { timeout: 15000 });
+    await page.click('[data-engage="recette"]');
+    await page.waitForSelector('#recette-resultat', { timeout: 20000 });
+
+    const bilan = await page.textContent('#recette-resultat');
+    assert.match(bilan, /refusée/, 'le refus se lit');
+    assert.match(bilan, /crm-production/,
+      'le refus NOMME le Spark qui tient déjà le nom (§38.6.4 ter)');
+    assert.match(bilan, /déclarée|déjà en place/,
+      'la seconde route passe : un refus partiel n’annule pas le reste');
+    await capturer('spk88-recette-refus-partiel', { hauteur: 1200 });
+
+    // EFFET : le nom pris n'a PAS changé de Spark, et le `www` est bien à
+    // « boutique ». C'est là que se verrait un refus mal borné.
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    const prise = corps.routes.find((r) => r.domain === 'prise.exemple.test');
+    assert.equal(prise.spark_name, 'crm-production', 'la route n’a pas été volée');
+    assert.equal(prise.target_port, 8080, 'ni son port réécrit');
+    const www = corps.routes.find((r) => r.domain === 'www.prise.exemple.test');
+    assert.ok(www, 'la route qui n’était prise par personne doit être posée');
+    assert.equal(www.spark_name, 'boutique');
   });
 });
 
@@ -2521,6 +2567,8 @@ test('le port d’une route se CORRIGE, sans que la route change d’identité',
     assert.equal(await page.getAttribute('#edit-domaine', 'readonly'), '');
     // Les valeurs viennent de la route AFFICHÉE, pas de champs vides.
     assert.equal(await page.inputValue('#edit-port'), '8080');
+    await capturer('spk89-route-modale-modifier');
+    await capturer('spk89-route-modale-modifier-mobile', { largeur: 390, hauteur: 844 });
 
     await page.fill('#edit-port', '9500');
     await page.click('[data-engage="route-edition"]');
@@ -2533,6 +2581,9 @@ test('le port d’une route se CORRIGE, sans que la route change d’identité',
     assert.equal(corrigee.target_port, 9500);
     assert.equal(corrigee.id, ancienne.id, 'la route garde son identité');
     assert.equal(corrigee.spark_name, 'boutique');
+    // §18.5 : l'écart reste visible — la route corrigée repasse « non
+    // appliquée » jusqu'à la réconciliation, et l'écran ne le cache pas.
+    await capturer('spk89-route-corrigee', { hauteur: 1200 });
   });
 });
 

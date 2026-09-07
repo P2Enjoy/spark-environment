@@ -3,6 +3,25 @@
 ## [Non publié]
 
 ### Ajouté
+- **Redémarrer la Forge depuis la console, et le refus qui compte plus que le
+  bouton** (SPK-87, `docs/DAT.md` §51, `DESIGN_SYSTEM_APP.md` SPK-DS-19,
+  manuel M4) : après une mise à jour de noyau, la Forge continue de tourner sur
+  l'ancien tant qu'elle n'a pas redémarré — mesuré le 2026-09-02, `7.0.0-15` en
+  marche pour `7.0.0-30` installé —, et le seul recours était `ssh` à la main.
+  Le panneau **Redémarrage** relève d'abord ce que le geste coûterait : le noyau
+  qui démarrera, combien de Sparks en marche vont s'arrêter et lesquels — les
+  protégés étant nommés, car la protection garde les écritures qui visent un
+  Spark, pas l'arrêt de la machine qui les héberge —, et si un redémarrage est
+  seulement *nécessaire*, pour ne pas le proposer comme une routine. Le point de
+  l'unité n'est pas le bouton mais ce qu'il **refuse** : un redémarrage vers un
+  noyau dépourvu de module ZFS laisse le pool indisponible et **tous** les Sparks
+  à terre, ce qui ne se voit qu'après. Dans ce cas le geste n'est pas désactivé,
+  il est **absent** — l'offrir inviterait à insister sur ce qui ne doit pas avoir
+  lieu — et aucune commande n'est envoyée. La confirmation passe par la frappe du
+  nom de la Forge, et l'écran annonce d'avance qu'il va perdre le contact plutôt
+  que d'afficher des données antérieures comme actuelles. **Le redémarrage réel
+  d'une Forge en service n'est pas couvert** : il arrête les Sparks de son
+  locataire et demande une instruction explicite.
 - **Le compte rootless peut enfin lire ce qu'on pose pour lui, et le panneau
   d'accueil n'est plus enterré** (SPK-94, `docs/DAT.md` §42.2 ter, §44.10,
   `docs/SCHEMA.md` §10 quinquies, manuel M6) : sur un Spark amorcé en rootless,
@@ -277,6 +296,16 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
+- **Le compte rendu d'une recette annonçait « 0 en échec » au-dessus d'une route
+  refusée** (SPK-88, `docs/DAT.md` §38.6.4 ter, `DESIGN_SYSTEM.md` §1.3) : le
+  total du titre ne comptait que les enregistrements DNS. Une recette dont une
+  route est refusée — parce qu'un autre Spark tient déjà le domaine — et dont les
+  deux enregistrements passent affichait donc « 2 écrit(s), 0 en échec » juste
+  au-dessus d'une ligne rouge « refusée ». Le bloc était bien présenté en
+  avertissement, mais son titre démentait la liste qu'il surmonte, et c'est le
+  titre qu'on lit. Le total compte désormais les **deux familles**, routes
+  comprises. Trouvé en observant la capture du parcours de refus partiel, lui-même
+  écrit ce jour : la DoD l'exigeait depuis l'ouverture de l'unité, et il manquait.
 - **La seconde porte ne s'ouvrait jamais : `sshd` ne pouvait pas lire la clé
   qu'on posait pour lui** (SPK-95, `docs/DAT.md` §42.2 quater, contrat de
   déploiement OP-18) — trouvé par la **mesure** sur la Forge de test, sur une

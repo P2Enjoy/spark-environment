@@ -4860,7 +4860,7 @@ Spark le sert par accident.
   refus, en laissant à l'écran une liste périmée où le retrait déjà fait
   paraissait encore à faire.
 
-### [ ] SPK-89 · Corriger le port d'une route, sans la refaire
+### [x] SPK-89 · Corriger le port d'une route, sans la refaire
 
 Constat du responsable le 2026-09-02 : « il n'est pas possible de modifier le
 port d'affectation d'une route existante ». C'est exact : une route n'avait que
@@ -4895,8 +4895,16 @@ avait dépassé.
   parcours E2E qui corrige un port depuis la facette et constate la nouvelle
   valeur dans le registre ET l'état « non appliquée » puis appliqué ; captures
   observées ; manuel M7 mis à jour ; `@spec` / `@verifies` posés.
+- **CLOSE le 2026-09-07, et le backlog avait dérivé.** Livrée au commit `03c416f`
+  du 2026-09-02 — `PATCH /v1/ingress/{domain}`, la modale « Modifier », six
+  preuves d'API dont le port hors bornes, le domaine inconnu, l'`applied_at`
+  remis à zéro et le journal portant l'avant et l'après, le parcours E2E qui
+  corrige un port et constate l'identité conservée —, l'unité était pourtant
+  restée `[ ]`. Le seul manque réel était les **captures**, ajoutées ce jour au
+  parcours : `spk89-route-modale-modifier.jpg`, son état à 390 px, et
+  `spk89-route-corrigee.jpg`. Observées.
 
-### [ ] SPK-88 · Une recette pose AUSSI sa route, et les trois blocs se ressemblent
+### [x] SPK-88 · Une recette pose AUSSI sa route, et les trois blocs se ressemblent
 
 Constat du responsable le 2026-09-02 : « quand on fait une recette DNS, pourquoi
 je ne peux pas sélectionner un port sur le Spark ? et pourquoi la recette ne crée
@@ -4937,6 +4945,25 @@ route la Forge répond une erreur pour ce nom.
   ordre ; un parcours prouve qu'une route déjà tenue par un autre Spark est
   refusée sans empêcher le reste ; captures observées ; `recette-lignes` retirée
   des manquantes connues ; manuel M7 mis à jour ; `@spec` / `@verifies` posés.
+- **CLOSE le 2026-09-07, et le backlog avait dérivé.** Livrée au commit `03c416f`
+  du 2026-09-02 — le paramètre `port`, les deux routes du domaine et de son
+  `www`, le gabarit unique, `recette-lignes` retirée des manquantes connues, le
+  manuel M7 —, l'unité était pourtant restée `[ ]`. Deux manques réels ont été
+  comblés ce jour :
+  - le **parcours du refus partiel**, que la DoD exigeait et qui n'existait pas :
+    il fait poser le nom nu par `crm-production`, demande la recette depuis
+    `boutique`, et constate que le refus NOMME le Spark qui tient le nom, que le
+    `www` passe quand même, et surtout que la route prise n'a **ni changé de
+    Spark ni vu son port réécrit** — c'est là que se verrait un refus mal borné ;
+  - un **défaut trouvé par la capture de ce parcours**, et corrigé : l'en-tête du
+    compte rendu affichait « 2 écrit(s), **0 en échec** » au-dessus d'une ligne
+    rouge « refusée ». `failed` ne compte que les enregistrements DNS ; le total
+    compte désormais les deux familles. Le bloc était déjà en avertissement, mais
+    son titre démentait la liste qu'il surmonte — le succès simulé que le §38.6.3
+    nomme comme le pire mensonge possible ici. Deux preuves d'écran, dont une du
+    rouge au vert, et la symétrie qui garde d'inventer un échec là où il n'y en a
+    pas. Captures `spk88-recette-apercu.jpg`, `-compte-rendu.jpg` et
+    `-refus-partiel.jpg`, observées.
 
 ### [~] SPK-83 · Affecter une entrée DNS trouvée à un Spark, depuis l'inventaire
 
@@ -5249,7 +5276,7 @@ point, nommé plus bas.**
 
 ---
 
-### [ ] SPK-84 · L'amorce prévient le `grub-pc` cassé, et le préflight le nomme
+### [x] SPK-84 · L'amorce prévient le `grub-pc` cassé, et le préflight le nomme
 
 Mesuré sur la Forge `spark-experiment` le 2026-09-02, à la demande du
 responsable : `apt full-upgrade` refusait, `grub-pc` restant en `iF` et `grub2`
@@ -5295,10 +5322,32 @@ incohérent fait échouer toute installation, donc :
   `INCONNU` quand `dpkg` est illisible — « pas mesuré » n'est pas « mesuré
   sain » ; le préflight est relevé sur la Forge réelle et l'écran observé ;
   `@spec` / `@verifies` posés.
+- **CLOSE le 2026-09-07, et le backlog avait dérivé.** Les deux volets sont
+  livrés depuis le 2026-09-02 : la préparation `debconf` conditionnelle et
+  dérivée dans l'amorce, et le contrôle `PKG-DPKG` du préflight avec ses cinq
+  preuves — `ECHEC` sur un `iF`, `OK` sur des `rc` qui sont l'état normal d'un
+  paquet retiré, `INCONNU` sur un `dpkg` illisible, la liste bornée à six, et
+  l'appartenance à la série. Le préflight a été **relevé sur la Forge réelle le
+  2026-09-07**, deux fois : à l'installation de `sparkd` et seul. Résultat
+  observé — *14 contrôles, 0 bloquant, 0 signalé, 0 non mesuré*, dont
+  `PKG-DPKG · Système de paquets cohérent — aucun paquet en défaut`.
+- **Une substitution de preuve, assumée et nommée** (commit `ddeff8d`) : la DoD
+  demandait d'éprouver les gardes EFI et RAID « sur une Forge simulée ». Les deux
+  preuves écrites en ce sens étaient **vertes sans rien garder** — celle de la
+  garde EFI passait parce que le poste de développement EST en EFI, et serait
+  passée au rouge sur une machine BIOS sans qu'aucun code ait changé ; celle de
+  la garde RAID doublait `grub-probe` par une fonction shell à tiret, que `dash`
+  refuse, si bien que l'erreur de syntaxe se lisait comme une absence de pose.
+  Elles ont été retirées et remplacées par des assertions de **source** — gardes
+  présentes, disques dérivés des membres du RAID, aucun `/dev/sda` en dur,
+  préparation avant le premier `apt` — et par la **mesure sur la Forge réelle**,
+  écritures neutralisées, où la fonction a retrouvé d'elle-même les deux disques
+  du RAID. Une preuve verte qui ne garde rien est pire que son absence : elle
+  fait croire le contraire.
 
 ---
 
-### [ ] SPK-87 · Redémarrer la Forge depuis la console, et refuser quand c'est dangereux
+### [x] SPK-87 · Redémarrer la Forge depuis la console, et refuser quand c'est dangereux
 
 Demandé par le responsable le 2026-09-02 : « il devrait y avoir un bouton
 redémarrer la forge pour convenance mais il faudrait double confirmer ».
@@ -5343,6 +5392,14 @@ l'arbitrage de la collision `SPK-84`.)*
   parcours E2E depuis l'accueil ouvre la confirmation, frappe le nom et constate
   le refus sur une Forge simulée sans ZFS ; captures observées ; manuel M4 et
   changelog mis à jour ; `@spec` / `@verifies` posés.
+- **CLOSE le 2026-09-07, et le backlog avait dérivé.** Livrée au commit `e75b15b`
+  du 2026-09-02 — le relevé, le refus sans module ZFS, la frappe du nom, l'audit
+  distinct, le manuel M4, deux preuves d'écran, le parcours E2E et deux captures
+  observées (`spk87-releve.jpg`, `spk87-confirmation.jpg`) —, l'unité était
+  pourtant restée `[ ]`. Le seul manque réel était l'**entrée au changelog**,
+  écrite ce jour. Relevé revérifié à l'écran : le noyau en marche, le noyau visé,
+  les Sparks qui s'arrêteront nommés, et la mention « un redémarrage est
+  nécessaire ».
 - **Non couvert** : le redémarrage réel d'une Forge de production. Il sera
   éprouvé sur la Forge de test, sur instruction explicite du responsable — un
   redémarrage arrête les Sparks de son locataire, et ce n'est pas un geste

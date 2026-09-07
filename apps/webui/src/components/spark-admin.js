@@ -544,7 +544,14 @@ function etatRoute(r) {
 function renderRecetteResultat(ui) {
   const fait = ui.recettes?.resultat;
   if (!fait) return '';
-  const partiel = fait.failed > 0 || (fait.routes ?? []).some((r) => !r.declared);
+  // SPK-88 · §38.6.4 ter : le compte rendu porte DEUX familles, donc le total
+  // les compte toutes les deux. `failed` ne connaît que les enregistrements
+  // DNS ; s'en contenter affichait « 0 en échec » au-dessus d'une route
+  // refusée en rouge — le titre démentait la liste qu'il surmonte, et c'est le
+  // succès simulé que le §38.6.3 nomme comme le pire mensonge possible ici.
+  const routesRefusees = (fait.routes ?? []).filter((r) => !r.declared).length;
+  const echecs = (fait.failed ?? 0) + routesRefusees;
+  const partiel = echecs > 0;
   // §38.6.4 ter : le MÊME gabarit que l'aperçu et le relevé. Les routes en tête,
   // parce que c'est l'ordre réel de l'écriture (§38.6.4 bis).
   const lignes = [
@@ -558,7 +565,7 @@ function renderRecetteResultat(ui) {
                role="status" id="recette-resultat">
     <p class="recette-bloc__titre"><strong>${echapper(fait.label)}</strong> — ${
       echapper(fait.written)} écrit(s)${
-      partiel ? `, ${echapper(fait.failed)} en échec` : ''}.</p>
+      partiel ? `, ${echapper(echecs)} en échec` : ''}.</p>
     ${renderLignesRecette(lignes)}
     ${fait.incomplete ? `<p>${echapper(fait.incomplete)}</p>` : ''}
     <p class="note">${echapper(fait.propagation ?? '')}</p>
