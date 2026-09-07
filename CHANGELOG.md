@@ -329,6 +329,25 @@
   « Architecture : x86_64 ».
 
 ### Corrigé
+- **Le terminal ouvert en `spark-docker` expliquait sa mort avec la clé de
+  root** (SPK-95, `docs/DAT.md` §37.4.9) : sur un Spark rootless dont la seconde
+  porte est absente, la session s'ouvrait, mourait aussitôt, et l'écran
+  répondait « Le serveur SSH de ce Spark répond … Rouvrir devrait marcher ».
+  Mesuré le 2026-09-08 sur la Forge de test : ce verdict était exact — pour
+  root. Le §37.4.9 exigeait déjà que la sonde emprunte la porte employée, et la
+  sonde acceptait déjà un compte ; c'est la route de diagnostic qui ne le lui
+  passait pas et l'écran qui ne l'envoyait pas. Le compte voyage désormais dans
+  la question **et** dans la réponse, et la mesure porte sur la porte de la
+  session qui vient de mourir. Un verdict pris sur une autre porte est pire que
+  l'absence de verdict : il envoie chercher ailleurs.
+- **Un refus de clé sur la seconde porte renvoyait vers un onglet qui ne peut
+  rien** (SPK-95, `docs/DAT.md` §37.4.9, §42.2 ter) : l'écran proposait de
+  réaccorder la clé depuis l'onglet Clés. Or la porte `spark-docker` est posée
+  par l'**amorçage** : sur un Spark amorcé avant qu'elle n'existe, le relevé ne
+  porte ni uid ni gid, la pose des clés ne l'écrit donc pas, et aucun ajout de
+  clé ne la crée. Le message nomme maintenant l'amorçage, rappelle que root
+  reste joignable, et laisse au refus sur root son propre geste — les deux
+  mesures rendent le même motif, seule la porte les distingue.
 - **Un poste sans agent SSH recevait l'échec générique au lieu de la phrase
   utile** (SPK-40, `docs/DAT.md` §36.10.9, §14.7) : la console traduit l'échec
   d'`ssh-keygen` pour ne pas remonter un jeton technique à l'écran, et sa table

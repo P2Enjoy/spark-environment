@@ -487,8 +487,9 @@ test('un chemin INCONNU retombe sur ssh, il n’invente pas un troisième chemin
 
 // --- SPK-43 · POURQUOI LE CHEMIN NORMAL N'A PAS ABOUTI (§37.2, §37.3.1) -----
 
-const diagnostiquer = (base, spark = 'crm') =>
-  fetch(`${base}/api/terminal/diagnostic?server=prod&spark=${spark}`);
+const diagnostiquer = (base, spark = 'crm', account = null) =>
+  fetch(`${base}/api/terminal/diagnostic?server=prod&spark=${spark}`
+        + (account ? `&account=${encodeURIComponent(account)}` : ''));
 
 test('le diagnostic MESURE le sshd au lieu de deviner, et ne journalise rien', async () => {
   // §37.5 : la console ne retient aucun octet de la session, donc elle ne peut
@@ -498,7 +499,9 @@ test('le diagnostic MESURE le sshd au lieu de deviner, et ne journalise rien', a
     sondage: { repond: false, motif: 'sshd_muet' } });
   const corps = await (await diagnostiquer(base)).json();
   assert.equal(sondages.length, 1, 'le verdict vient d’une mesure');
-  assert.deepEqual(corps.sshd, { repond: false, motif: 'sshd_muet' });
+  // §37.4.9 : la mesure porte AUSSI la porte empruntée. Sans compte demandé,
+  // c'est root, le défaut partout.
+  assert.deepEqual(corps.sshd, { repond: false, motif: 'sshd_muet', compte: 'root' });
   assert.equal(corps.rescue.ouvert, true);
   assert.match(corps.rescue.explication, /rien ne répond sur le port 22/i);
   assert.deepEqual(declarees, [], 'un diagnostic est une lecture');
@@ -521,6 +524,43 @@ test('un sshd qui REFUSE LA CLÉ est distingué d’un sshd muet', async () => {
   assert.equal(corps.sshd.repond, true);
   assert.equal(corps.rescue.ouvert, false);
   assert.match(corps.rescue.explication, /onglet Clés/);
+  fermer();
+});
+
+test('le diagnostic sonde la PORTE EMPLOYÉE, pas root', async () => {
+  // SPK-95 · §37.4.9 : « le compte est un argument de la sonde comme de la
+  // session, et les deux reçoivent le même ». MESURÉ le 2026-09-08 sur la Forge
+  // de test : cette route ne le passait pas. Une session ouverte en
+  // `spark-docker` sur un Spark dont la seconde porte est absente mourait
+  // aussitôt, et l'écran répondait « le serveur SSH de ce Spark répond »,
+  // depuis la clé de root. Le verdict était juste — pour l'autre porte.
+  const { base, fermer, sondages } = await pile({
+    sondage: { repond: true, motif: 'cle_refusee' } });
+  const corps = await (await diagnostiquer(base, 'crm', 'spark-docker')).json();
+  assert.equal(sondages.length, 1);
+  assert.equal(sondages[0].compte, 'spark-docker',
+    'la sonde emprunte la porte dont on demande le verdict');
+  assert.equal(corps.sshd.compte, 'spark-docker',
+    'la mesure DIT quelle porte elle a empruntée');
+  fermer();
+});
+
+test('sans compte demandé, le diagnostic reste sur root', async () => {
+  // Root est le défaut PARTOUT (§42.2 quater). Un diagnostic est une lecture :
+  // il ne doit pas devenir inatteignable parce qu'aucune porte n'est nommée.
+  const { base, fermer, sondages } = await pile();
+  const corps = await (await diagnostiquer(base)).json();
+  assert.equal(sondages[0].compte, 'root');
+  assert.equal(corps.sshd.compte, 'root');
+  fermer();
+});
+
+test('un compte INCONNU ne se glisse pas dans la ligne de commande du sondage', async () => {
+  // Le champ vient du navigateur et finit dans un argument de `ssh`. Même règle
+  // qu'à l'ouverture : on ne l'écrit pas, on retombe sur root.
+  const { base, fermer, sondages } = await pile();
+  await diagnostiquer(base, 'crm', 'nobody; rm -rf /');
+  assert.equal(sondages[0].compte, 'root');
   fermer();
 });
 

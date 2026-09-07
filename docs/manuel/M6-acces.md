@@ -320,6 +320,13 @@ Le terminal de la console propose le même choix : un sélecteur *Entrer en tant
 que* apparaît sur les Sparks rootless, `root` présélectionné. Sur un Spark
 enraciné il n'y a rien à choisir, et l'écran le dit.
 
+**Si cette porte refuse votre clé, le geste est l'amorçage, pas l'onglet Clés.**
+Elle est posée par l'amorçage : sur un Spark amorcé avant qu'elle n'existe, elle
+est absente, et y ajouter une clé ne la crée pas. L'onglet **Amorçage** le dit —
+il classe les clés en `defect` avec la raison — et **Amorcer ce Spark** la pose.
+Sur une cellule déjà complète, l'amorçage n'installe rien : il relève, puis
+repose les droits. Pendant tout ce temps, `root` reste joignable.
+
 Si vous devez rester en `root` — un script existant, une session déjà ouverte —,
 la voie longue reste valable, et c'est celle que le briefing indique :
 

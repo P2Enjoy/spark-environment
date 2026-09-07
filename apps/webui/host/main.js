@@ -1376,6 +1376,15 @@ export function createConsoleHost(options = {}) {
      * donc elle ne peut pas — et ne doit pas — inspecter la sortie pour en
      * déduire la cause. Elle sonde le `sshd`, comme le fait le dépannage.
      *
+     * SPK-95 · §37.4.9 : elle sonde la PORTE EMPLOYÉE, pas root. La sonde
+     * acceptait déjà un compte et le §37.4.9 l'exige — « le compte est un
+     * argument de la sonde comme de la session, et les deux reçoivent le
+     * même » —, mais cette route ne le lui passait pas. MESURÉ le 2026-09-08
+     * sur la Forge de test : une session ouverte en `spark-docker` sur un Spark
+     * dont la seconde porte est absente mourait aussitôt, et l'écran répondait
+     * « le serveur SSH de ce Spark répond », depuis la clé de root. Le seul
+     * verdict faux est celui qui envoie chercher ailleurs.
+     *
      * Lecture pure : rien n'est ouvert, rien n'est écrit au journal (§36.7).
      */
     'GET /api/terminal/diagnostic': async (_corps, url) => {
@@ -1395,14 +1404,25 @@ export function createConsoleHost(options = {}) {
                                       message: `Aucun Spark « ${spark} » sur ce serveur.` } };
       }
       const decrit = await amont.json();
+      // §37.4.9 : la porte dont on demande le verdict. `compteValide` retombe
+      // sur root plutôt que de refuser — un diagnostic est une lecture, et une
+      // valeur inconnue ne doit pas priver l'exploitant de sa mesure.
+      const compte = compteValide(url?.searchParams.get('account'));
       // Un Spark en erreur ouvre le dépannage sans sondage : l'état suffit, et
       // sonder ferait attendre cinq secondes pour apprendre ce qu'on sait déjà.
-      const sondage = decrit.state === 'error' ? null : await sonder({ tunnel, spark: decrit });
+      const sondage = decrit.state === 'error'
+        ? null
+        : await sonder({ tunnel, spark: decrit, compte });
       const verdict = depannageOuvert(decrit, sondage);
       return { status: 200, body: {
         spark: decrit.name,
-        // Ce que le sondage a CONSTATÉ, distinct de ce qu'on en conclut.
-        sshd: sondage ? { repond: sondage.repond, motif: sondage.motif } : null,
+        // Ce que le sondage a CONSTATÉ, distinct de ce qu'on en conclut. Le
+        // compte y figure parce qu'il est un attribut de la MESURE : « la clé
+        // est refusée » ne veut pas dire la même chose selon la porte, et
+        // l'écran doit pouvoir nommer laquelle a refusé.
+        sshd: sondage
+          ? { repond: sondage.repond, motif: sondage.motif, compte }
+          : null,
         rescue: { ouvert: verdict.ouvert, motif: verdict.motif,
                   explication: verdict.explication },
       } };

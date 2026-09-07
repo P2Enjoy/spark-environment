@@ -5890,6 +5890,29 @@ pas casser la cellule.
   test E2E propres à l'unité ; captures observées aux principaux formats, le
   sélecteur et son état réduit à un seul compte compris ; manuel M6, DAT, design
   system et changelog mis à jour ; `@spec` / `@verifies` posés.
+- **DÉFAUT TROUVÉ APRÈS COUP, le 2026-09-08, et corrigé — le diagnostic sondait
+  root quelle que soit la porte.** Signalé par le responsable : « le terminal
+  intégré ne semble pas bien fonctionner lorsque l'on choisit le user non root ».
+  Reproduit sur la Forge de test, sur `sso-p2enjoy` : la session `spark-docker`
+  meurt aussitôt — la seconde porte y est réellement absente, c'est l'action
+  humaine encore due de l'OP-18 — et l'écran répondait *« Le serveur SSH de ce
+  Spark répond … Rouvrir devrait marcher »*. Ce verdict venait de la clé de root.
+  Le §37.4.9 exigeait déjà le contraire et `sonderSshd` acceptait déjà un compte :
+  c'est la route `GET /api/terminal/diagnostic` qui ne le lui passait pas, et
+  l'écran qui ne l'envoyait pas. Un verdict d'une autre porte est pire qu'aucun
+  verdict — il envoie chercher ailleurs.
+  Corrigé : le compte voyage dans la question et dans la réponse (`sshd.compte`),
+  la mesure porte sur la porte de la session qui vient de mourir, et le refus de
+  clé sur la SECONDE porte renvoie à l'amorçage — pas à l'onglet Clés, qui ne
+  peut rien pour elle tant que le relevé ne porte ni uid ni gid (§42.2 ter).
+  Quatre preuves de plus, toutes du ROUGE au vert : trois sur la route, une sur
+  l'écran. **Vérifié sur la Forge réelle depuis le parcours canonique**, captures
+  observées.
+- **Reste ouvert, et nommé** : la pile de preuves locale n'a qu'un seul Spark
+  rootless, et le parcours du terminal exige que sa seconde porte VIVE. Le cas du
+  refus sur la seconde porte n'a donc pas de parcours dans la campagne locale ; il
+  est éprouvé par les preuves d'unité et par la Forge réelle. Le combler demande
+  un second Spark rootless dans la campagne, ce qui est une tâche à part.
 
 
 ### [ ] SPK-96 · Le démon rootless ne résout aucun nom, et l'amorçage promet le contraire

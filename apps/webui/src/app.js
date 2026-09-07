@@ -1048,19 +1048,29 @@ function envoyerAuTerminal(data) {
  *
  * La console ne retient AUCUN octet de la session (§37.5) : elle ne peut donc
  * pas déduire la cause de ce qui s'est affiché. Elle la fait mesurer.
+ *
+ * SPK-95 · §37.4.9 : la mesure porte sur la PORTE qui vient de mourir, pas sur
+ * root. Le compte vient de la session fermée et non de `t.compte` : c'est le
+ * fait, là où le sélecteur n'est qu'une intention — l'exploitant peut l'avoir
+ * changé entre l'ouverture et la mort du shell.
  */
-async function diagnostiquerTerminal() {
+async function diagnostiquerTerminal(compte = COMPTE_ADMIN) {
   const t = etat.terminal;
   t.diagnostic = 'en-cours';
   peindre();
   try {
     const reponse = await fetch(
       `/api/terminal/diagnostic?server=${encodeURIComponent(etat.server)}`
-      + `&spark=${encodeURIComponent(etat.spark.name)}`);
+      + `&spark=${encodeURIComponent(etat.spark.name)}`
+      + `&account=${encodeURIComponent(compte)}`);
     if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
     const corps = await reponse.json();
     t.diagnostic = { motif: corps.rescue?.motif ?? null,
-                     ouvert: Boolean(corps.rescue?.ouvert) };
+                     ouvert: Boolean(corps.rescue?.ouvert),
+                     // La porte que la mesure a RÉELLEMENT empruntée. `null`
+                     // quand rien n'a été sondé : l'écran ne doit pas nommer
+                     // une porte au nom d'une mesure qui n'a pas eu lieu.
+                     compte: corps.sshd?.compte ?? null };
   } catch {
     // §14.6 : « mesure impossible » n'est pas « tout va bien ». Taire l'échec
     // du diagnostic laisserait croire que la cause a été établie.
@@ -1184,7 +1194,10 @@ async function suivreSessionTerminal(session) {
 
     // §37.2 : un shell distant qui MEURT sur le chemin normal appelle une
     // explication. « sortie » est un départ volontaire et n'en appelle aucune.
-    if (motif === 'distant_termine' && finie?.path !== 'rescue') diagnostiquerTerminal();
+    // §37.4.9 : et l'explication porte sur la PORTE employée par CETTE session.
+    if (motif === 'distant_termine' && finie?.path !== 'rescue') {
+      diagnostiquerTerminal(finie?.account ?? COMPTE_ADMIN);
+    }
   });
   releverSessions();
 }

@@ -5549,6 +5549,28 @@ session aurait échoué sur `spark-docker` sans que rien n'ait prévenu. Le comp
 donc un **argument** de la sonde comme de la session, et les deux reçoivent le
 même.
 
+**Et la règle vaut pour les DEUX appelants de la sonde — mesuré le 2026-09-08.**
+La phrase ci-dessus était écrite, la sonde acceptait le compte, et la route
+`GET /api/terminal/diagnostic` ne le lui passait pas. Sur la Forge de test, une
+session ouverte en `spark-docker` vers un Spark dont la seconde porte est absente
+mourait aussitôt, et l'écran répondait : *« Le serveur SSH de ce Spark répond. Le
+shell distant s'est donc terminé pour une autre raison. »* Ce verdict était exact
+— pour root. Il envoyait chercher une déconnexion là où la clé était refusée, ce
+qui est pire que l'absence de verdict : le §14.6 n'admet pas qu'une mesure d'autre
+chose passe pour la mesure demandée.
+
+La porte voyage donc dans la question (`account`) **et** dans la réponse : le
+corps rend `sshd.compte`, parce que « la clé est refusée » n'appelle pas le même
+geste selon la porte. Sur root, on réaccorde la clé depuis l'onglet Clés. Sur la
+seconde porte, cela ne sert à RIEN : elle est posée par l'amorçage, et sur un
+Spark amorcé avant qu'elle n'existe le relevé ne porte ni uid ni gid, si bien que
+la pose des clés ne l'écrit pas et qu'aucun ajout de clé ne la crée (§42.2 ter,
+OP-18). L'écran nomme donc l'amorçage, et rappelle que root, lui, reste joignable.
+
+Le verdict de DÉPANNAGE se calcule sur cette même mesure, et n'en est pas faussé :
+« rien n'écoute sur le port 22 » ne dépend pas de la porte, et un refus de clé —
+sur l'une ou sur l'autre — laisse le §37.3 fermé, ce qu'il doit rester.
+
 **L'audit nomme le compte.** `spark.terminal_open` et `spark.terminal_close`
 portaient le Spark et rien d'autre. Avec deux portes, le journal ne distinguerait
 plus une session administrative d'une session applicative — et c'est exactement ce

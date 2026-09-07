@@ -1,6 +1,9 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70 ·
- *           docs/DAT.md §37.2 (un Spark sans `sshd`),
+ * @verifies docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70,
+ *           docs/BACKLOG.md#SPK-95 (le diagnostic nomme la porte employée) ·
+ *           docs/DAT.md §37.2 (un Spark sans `sshd`), §37.4.9 (le compte du
+ *           terminal, et la sonde qui l'emprunte), §42.2 quater (la seconde
+ *           porte, posée par l'amorçage),
  *           §37.4 (le contrat), §37.4.3 (la limite du redimensionnement) ·
  *           docs/DESIGN_SYSTEM_APP.md SPK-DS-04 · docs/DESIGN_SYSTEM.md §6.13
  *
@@ -316,6 +319,34 @@ test('une clé refusée est nommée AUTREMENT, et renvoie ailleurs', () => {
   assert.match(rendu, /onglet Clés/);
   assert.match(rendu, /le dépannage n’est pas la réponse/);
   assert.ok(!/Aucun serveur SSH ne répond/.test(rendu));
+});
+
+test('un refus sur la SECONDE porte renvoie à l’amorçage, pas aux Clés', () => {
+  // SPK-95 · §42.2 quater, §37.4.9. MESURÉ le 2026-09-08 sur la Forge de test :
+  // la seconde porte est posée par l'AMORÇAGE. Sur un Spark amorcé avant qu'elle
+  // n'existe, le relevé ne porte ni uid ni gid, la pose des clés ne l'écrit donc
+  // pas, et AUCUN ajout de clé ne la crée. Renvoyer vers l'onglet Clés ferait
+  // chercher là où il n'y a rien.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine',
+    diagnostic: { motif: 'cle_refusee', ouvert: false, compte: 'spark-docker' } }));
+  assert.match(rendu, /La seconde porte répond, mais elle refuse la clé/);
+  assert.match(rendu, /Amorcer ce Spark/);
+  assert.match(rendu, /root reste joignable/);
+  assert.ok(!/Réaccordez la clé depuis l’onglet Clés/.test(rendu),
+    'le geste de root ne doit pas être proposé pour la seconde porte');
+  assert.match(rendu, /role="alert"/);
+});
+
+test('un refus sur ROOT garde son geste : la porte sondée décide du texte', () => {
+  // La distinction porte sur la PORTE, pas sur le motif : les deux mesures
+  // rendent « cle_refusee », et confondre les deux textes rendrait l'un des
+  // deux faux à coup sûr.
+  const rendu = renderTerminal(SPARK, etat({
+    status: 'ferme', fin: 'distant_termine',
+    diagnostic: { motif: 'cle_refusee', ouvert: false, compte: 'root' } }));
+  assert.match(rendu, /onglet Clés/);
+  assert.ok(!/La seconde porte répond/.test(rendu));
 });
 
 test("une clé d’hôte changée est nommée sans jamais proposer de l’accepter", () => {

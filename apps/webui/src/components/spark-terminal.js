@@ -1,7 +1,9 @@
 /**
  * Le terminal d'un Spark : une surface d'interaction continue.
  *
- * @spec docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70 ·
+ * @spec docs/BACKLOG.md#SPK-43, docs/BACKLOG.md#SPK-70,
+ *       docs/BACKLOG.md#SPK-95 (les deux portes, et le diagnostic de celle
+ *       qu'on a employée) ·
  *       docs/DAT.md §37.1 (la console parle au Spark),
  *       §37.2 (le chemin normal, et ce qu'il suppose : un `sshd` DANS le Spark),
  *       §37.3 (le dépannage : borné, confirmé, nommé, journalisé à part),
@@ -38,6 +40,8 @@ export const TERMINAL_VIDE = {
   // (§37.5) —, alors il le fait MESURER. Trois valeurs, et elles ne se
   // confondent pas (§6.13, §14.6) : `null` = pas de mesure demandée,
   // `'en-cours'` = mesure lancée, objet = verdict rendu.
+  // §37.4.9 : le verdict porte aussi la PORTE sondée, parce qu'un refus de clé
+  // n'appelle pas le même geste selon qu'il vient de root ou de la seconde.
   diagnostic: null,
   // SPK-95 · §42.2 quater, SPK-DS-21 : les PORTES de cette cellule, telles que
   // le plan de contrôle les déclare. `null` = pas encore lues — distinct d'une
@@ -108,6 +112,25 @@ const DIAGNOSTICS = {
       + 'Réaccordez la clé depuis l’onglet Clés — le dépannage n’est pas la '
       + 'réponse, et il vous sera refusé.',
   },
+  // SPK-95 · §42.2 quater, §37.4.9 : la même mesure sur l'AUTRE porte, et le
+  // geste qui y répond n'est pas le même. La seconde porte est posée par
+  // l'AMORÇAGE, pas par l'onglet Clés : sur un Spark amorcé avant qu'elle
+  // n'existe, le relevé ne porte ni uid ni gid, la pose des clés ne l'écrit
+  // donc pas, et aucun ajout de clé ne la crée. Renvoyer vers les Clés y
+  // ferait chercher là où il n'y a rien — MESURÉ le 2026-09-08 sur la Forge
+  // de test, où le relevé d'amorçage dit déjà « absentes pour spark-docker ».
+  //
+  // §1.5 bis : l'écran NOMME le geste, il n'explique pas pourquoi la porte
+  // manque. Ce pourquoi — un Spark amorcé avant que la porte n'existe, dont le
+  // relevé ne porte ni uid ni gid — est au manuel (M8, M6), là où il ne noie
+  // pas le mot juste.
+  cle_refusee_seconde_porte: {
+    titre: 'La seconde porte répond, mais elle refuse la clé.',
+    detail: 'Ce n’est pas une panne du Spark, et root reste joignable. Cette '
+      + 'porte est posée par l’amorçage, pas par l’onglet Clés : redemandez '
+      + '« Amorcer ce Spark ». L’onglet Amorçage dit déjà si les clés de ce '
+      + 'Spark sont conformes.',
+  },
   cle_hote_changee: {
     titre: 'La clé d’hôte SSH de ce Spark a changé.',
     detail: 'Aucune commande n’a été envoyée. Vérifiez le remplacement de la '
@@ -124,6 +147,21 @@ const DIAGNOSTICS = {
     detail: 'Il est déclaré et ses ressources sont réservées, mais rien ne tourne.',
   },
 };
+
+/**
+ * Le cas de diagnostic à rendre, porte comprise (SPK-95, §37.4.9).
+ *
+ * Un refus de clé ne dit pas la même chose selon la porte : sur root il renvoie
+ * aux Clés, sur la seconde porte il renvoie à l'amorçage — c'est lui qui la pose.
+ * Rendre `null` sur un motif inconnu : un jeton technique n'atteint pas l'écran
+ * (§14.7), et un cas qu'on ne sait pas nommer vaut mieux tu qu'inventé.
+ */
+export function casDiagnostic({ motif = null, compte = null } = {}) {
+  if (motif === 'cle_refusee' && compte && compte !== COMPTE_ADMIN) {
+    return DIAGNOSTICS.cle_refusee_seconde_porte;
+  }
+  return DIAGNOSTICS[motif] ?? null;
+}
 
 /**
  * Ce que la console garde à l'écran : les octets reçus, et rien de plus.
@@ -340,7 +378,7 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
          SSH de ce Spark. La cause de l’échec n’est donc pas établie.</p>`
       : etat.diagnostic
         ? (() => {
-            const cas = DIAGNOSTICS[etat.diagnostic.motif];
+            const cas = casDiagnostic(etat.diagnostic);
             if (!cas) return '';
             // Une panne qui ouvre le dépannage est une ALERTE : c'est elle qui
             // justifie d'employer un pouvoir d'exception, et le §9.7 veut

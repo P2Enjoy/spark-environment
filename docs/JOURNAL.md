@@ -10269,3 +10269,83 @@ Les documents sont committés d'abord, comme le veut `CLAUDE.md` §5 : DAT §43.
 et §43.9.5 complété, `SPK-DS-23`, SPK-97. Le changelog, lui, ne bougera qu'avec
 le code : sa section `[Non publié]` décrit ce qui EXISTE (`CLAUDE.md` §6), et y
 annoncer une fonction non écrite en ferait la première ligne fausse du fichier.
+
+## 2026-09-08 · SPK-95 — le diagnostic du terminal répondait pour l'autre porte
+
+**Le problème, tel qu'il a été signalé.** Le responsable : « le terminal intégré
+ne semble pas bien fonctionner lorsque l'on choisit le user non root ». À l'écran,
+sur la Forge de test : la session `spark-docker` s'ouvre, meurt aussitôt, et le
+diagnostic répond *« Le serveur SSH de ce Spark répond. Le shell distant s'est
+donc terminé pour une autre raison — une commande qui rend la main, ou une
+déconnexion. Rouvrir devrait marcher. »* Rouvrir ne marchait pas.
+
+**Ce que la mesure a trouvé, et qui n'était pas une seule chose.**
+
+D'abord l'état de la cellule, qui est réel et déjà connu :
+
+```
+ssh -J ubuntu@<forge> spark-docker@10.77.0.16 true
+  → spark-docker@10.77.0.16: Permission denied (publickey).
+ssh -J ubuntu@<forge> root@10.77.0.16 true
+  → 0
+incus exec sso-p2enjoy -- ls /home/spark-docker/.ssh
+  → No such file or directory
+```
+
+`sparkd` le DIT déjà, dans son relevé d'amorçage : `cles` est en `defect`, avec
+« posées pour root, absentes pour « spark-docker » : la seconde porte de ce Spark
+rootless n'est ouverte à personne ». C'est exactement l'état que l'OP-18 décrit
+et dont il dit que l'action humaine reste due — `sso-p2enjoy` a été amorcé avant
+la migration `015`, son relevé ne porte ni uid ni gid, et le §44.4 interdit de le
+reconstituer après coup. **Ce n'était donc pas le défaut** : le produit ne
+mentait pas sur la cellule.
+
+Le défaut était dans la CONSOLE, et il tenait en une ligne : la route
+`GET /api/terminal/diagnostic` appelait `sonder({ tunnel, spark })` sans compte.
+La sonde acceptait déjà un compte — SPK-95 l'y avait mis —, le §37.4.9 l'exigeait
+en toutes lettres, et l'écran ne l'envoyait pas. Le verdict venait donc de la clé
+de root, sur un Spark où root fonctionne parfaitement.
+
+**Pourquoi c'est plus grave qu'une absence de verdict.** Un écran muet laisse
+chercher ; un écran qui répond « ça répond, c'est autre chose » fait chercher
+AILLEURS. L'exploitant regarde sa commande, sa connexion, son navigateur — tout
+sauf la porte, qui est la seule chose en cause. Le §14.6 refuse déjà qu'un calcul
+impossible passe pour un zéro ; la mesure d'autre chose relève de la même faute.
+
+**Une seconde chose, trouvée en corrigeant la première.** Une fois la porte
+sondée pour de bon, le motif rendu est `cle_refusee`, et l'écran disait alors :
+« Réaccordez la clé depuis l'onglet Clés ». Faux ici, et vérifié dans le code
+avant de l'écrire : `_apply_keys` n'écrit la seconde porte que si le relevé porte
+un uid et un gid. Sur un Spark comme celui-ci, ajouter ou retirer une clé depuis
+l'onglet Clés ne crée RIEN dans `/home/spark-docker/.ssh`. Le geste qui répond
+est l'amorçage — celui-là même que l'OP-18 nomme.
+
+Le message distingue donc les deux portes. Ce n'est pas une nuance de style :
+les deux mesures rendent le même motif, et seule la porte dit lequel des deux
+gestes sert. Root garde le sien, la seconde porte reçoit le sien, et la phrase
+rappelle que root reste joignable — parce que la première question de quelqu'un
+qu'on renvoie à l'amorçage est de savoir s'il est enfermé dehors.
+
+**Ce qui n'a PAS été changé, et pourquoi.**
+
+- *La liste des portes offertes.* Le §42.2 quater la fait dépendre du mode relevé,
+  pas de l'état du fichier. On pourrait n'offrir `spark-docker` que si le relevé
+  juge ses clés conformes ; ce serait une autre décision, et elle appartient au
+  responsable. En attendant, la porte est offerte et son refus est expliqué —
+  ce qui est déjà le contraire de la situation d'avant.
+- *Le verdict de dépannage.* Il se calcule sur la même mesure et n'en est pas
+  faussé : « rien n'écoute sur le port 22 » ne dépend pas de la porte, et un
+  refus de clé — sur l'une ou l'autre — laisse le §37.3 fermé.
+- *La cellule `sso-p2enjoy` elle-même.* Rouvrir sa seconde porte demande de
+  redemander l'amorçage, ce qui exécute des commandes chez un locataire :
+  `CLAUDE.md` §9 le réserve à une instruction humaine explicite. L'OP-18 le dit
+  déjà, il reste dû, et il n'a pas été fait ici.
+
+**Ce qui manque encore, écrit pour ne pas être découvert plus tard.** La campagne
+E2E locale n'a qu'un seul Spark rootless, et son parcours du terminal exige que
+la seconde porte y VIVE. Le cas du refus sur la seconde porte n'y a donc pas de
+parcours : il est éprouvé par quatre preuves d'unité — trois sur la route, une sur
+l'écran, toutes passées du rouge au vert — et par la Forge réelle, parcourue
+depuis l'accueil jusqu'au message, captures observées à 1440 et 390 px. Le
+combler demande un second Spark rootless dans la campagne ; c'est une tâche à
+part, et elle est inscrite au SPK-95.
