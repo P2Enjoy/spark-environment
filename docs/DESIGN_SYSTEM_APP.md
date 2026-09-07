@@ -792,6 +792,33 @@ faut aller chercher se lit comme une incapacité de l'outil.
 
 ## 6. Écarts au design system commun
 
+### SPK-DS-21 · Un sélecteur de compte n'apparaît que s'il y a un compte à choisir
+
+@spec docs/BACKLOG.md#SPK-95 · docs/DAT.md §37.4.9, §42.2 quater
+
+Le terminal d'un Spark **amorcé en rootless** offre deux portes — `root` pour
+administrer, `spark-docker` pour faire tourner la pile. Partout ailleurs il n'en
+offre qu'une.
+
+**Règles :**
+
+- le sélecteur est **absent** quand un seul compte est offert. C'est le §14.4
+  appliqué : un contrôle sans objet ne se désactive pas ici, il ne se rend pas —
+  un menu à une seule entrée n'est pas un choix, c'est un obstacle de plus avant
+  d'ouvrir un terminal ;
+- `root` est **présélectionné** dans tous les cas. C'est la porte administrative,
+  et c'est la seule qui répare une cellule dont le reste est cassé ;
+- chaque option dit **ce à quoi elle sert**, pas seulement son nom. « root —
+  administrer la cellule » et « spark-docker — faire tourner la pile » ;
+  « root ou spark-docker » seul ne renseigne personne ;
+- le compte choisi reste **visible pendant la session**, dans l'en-tête du
+  terminal. Deux fenêtres ouvertes sur le même Spark par deux portes différentes
+  sont indiscernables autrement, et l'une peut tout casser quand l'autre ne le
+  peut pas ;
+- l'indisponibilité de la seconde porte se **nomme** (§14.5) : « ce Spark est
+  amorcé en mode enraciné » n'est pas la même chose que « son mode n'a jamais été
+  relevé », et les deux se disent au lieu de laisser un sélecteur muet.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

@@ -3,6 +3,44 @@
 ## [Non publié]
 
 ### Ajouté
+- **Le compte rootless peut enfin lire ce qu'on pose pour lui, et le panneau
+  d'accueil n'est plus enterré** (SPK-94, `docs/DAT.md` §42.2 ter, §44.10,
+  `docs/SCHEMA.md` §10 quinquies, manuel M6) : sur un Spark amorcé en rootless,
+  Compose tourne sous `spark-docker` et lit `env_file:` **côté client**, alors
+  que `/etc/spark` était `0700 root` et ses fichiers `0600 root:root`. Les deux
+  lignes `env_file:` que le briefing présente comme obligatoires échouaient donc
+  en rootless, quand la même pile fonctionnait en enraciné — un environnement
+  posé consciencieusement pour un compte qui ne pouvait pas l'ouvrir. Le relevé
+  d'amorçage rend désormais le **UID et le GID** du compte, observés dans la
+  cellule et jamais inventés, et seulement quand le démon est réellement
+  utilisable ; la migration `015` les garde à côté du mode ; les fichiers
+  d'environnement et le briefing deviennent `root:spark-docker 0640` (dossiers
+  `0750`) en rootless, et restent `0600 root` en enraciné. Le groupe `docker` a
+  été **écarté** au profit du groupe primaire du compte : le premier est l'ACL du
+  démon enraciné, donc équivalent-root, et l'employer ici aurait repris d'une
+  main les privilèges que le mode rootless retire. Un amorçage rootless réussi
+  **reprojette** ces fichiers en sortant, puisqu'il vient de créer le compte dont
+  ils dépendent. Enfin, le bandeau « Welcome to Ubuntu… » — qui vient des scripts
+  `/etc/update-motd.d/` exécutés **avant** `/etc/motd` — est désactivé par
+  l'amorçage : les trois lignes qui renvoient au briefing arrivaient sous une
+  dizaine de lignes de documentation de la distribution, ce qui explique qu'un
+  agent qui atterrit ne comprenne pas qu'il doit le lire. Le motd devient
+  impératif au lieu de descriptif.
+- **Une seconde porte sur les Sparks rootless** (SPK-95, `docs/DAT.md` §37.4.9,
+  §42.2 quater, `DESIGN_SYSTEM_APP.md` SPK-DS-21, manuel M6) : entrer en
+  `spark-docker` **au lieu** de root a été refusé — le briefing est `0600 root`,
+  le dépannage donne un shell root, et un amorçage à moitié raté est justement le
+  moment où il faut root. Mais un agent dont le travail est de faire tourner la
+  pile n'a rien à faire en root. Les clés sont donc écrites sur les **deux**
+  comptes quand le relevé dit `rootless`, chacun avec son propriétaire ; le
+  terminal intégré **propose** le compte, root présélectionné, et le sélecteur
+  disparaît là où il n'y a rien à choisir ; le sondage `sshd` sonde le compte
+  qu'on va employer au lieu de `root@` en dur, sans quoi il concluait « répond »
+  depuis la clé de root avant d'échouer sur l'autre ; le relevé d'amorçage juge
+  les **deux** portes, une seconde porte vide ou périmée étant un défaut et non un
+  « clés conformes » ; et l'audit du terminal nomme le compte, sans quoi le
+  journal ne distinguerait plus une session administrative d'une session
+  applicative.
 - **Spécification de la supervision continue** (SPK-93, `docs/DAT.md` §52,
   `docs/SCHEMA.md` §10 sexies, `DESIGN_SYSTEM_APP.md` SPK-DS-20) : le produit
   rendait l'usage d'un Spark **à l'instant où on le demande** et rien d'autre —

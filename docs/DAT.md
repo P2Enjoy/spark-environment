@@ -5519,6 +5519,42 @@ n'a ni `sshd` ni Docker dans un Spark. Il éprouve donc le **choix** du shell, l
 refus et l'écran — pas que `docker exec` atteigne un vrai conteneur. Même limite
 qu'au §39.7.
 
+#### 37.4.9 Le compte de la session, quand la cellule en offre deux — écrit le 2026-09-07
+
+Le §42.2 quater ouvre une seconde porte sur les Sparks amorcés en rootless. Le
+terminal doit donc **demander** par laquelle on entre, au lieu de le décider.
+
+**Ce que l'écran propose.** Deux comptes sur un Spark rootless, un seul ailleurs :
+
+| Relevé d'amorçage | Comptes offerts | Défaut |
+|---|---|---|
+| `rootless` | `root`, `spark-docker` | `root` |
+| `enracine`, ou aucun relevé | `root` seul | `root` |
+
+Root reste le défaut **partout**, et le sélecteur disparaît quand il n'y a rien à
+choisir : un menu à une seule entrée n'est pas un choix, c'est un obstacle.
+L'écran nomme ce que chaque compte sert — administrer d'un côté, faire tourner la
+pile de l'autre —, parce que « root ou spark-docker » ne renseigne personne.
+
+**Le sondage doit sonder le compte qu'on va employer.** Le §37.3.1 pose que la
+sonde emprunte EXACTEMENT le chemin du terminal normal, faute de quoi elle mesure
+autre chose que ce qu'elle déclare. `sonderSshd` visait `root@` en dur : sur un
+Spark rootless, elle aurait conclu « `sshd` répond » depuis la clé de root, puis la
+session aurait échoué sur `spark-docker` sans que rien n'ait prévenu. Le compte est
+donc un **argument** de la sonde comme de la session, et les deux reçoivent le
+même.
+
+**L'audit nomme le compte.** `spark.terminal_open` et `spark.terminal_close`
+portaient le Spark et rien d'autre. Avec deux portes, le journal ne distinguerait
+plus une session administrative d'une session applicative — et c'est exactement ce
+qu'on cherchera le jour où quelque chose aura été changé dans une cellule sans
+qu'on sache par où. Le compte voyage donc dans la charge, à côté du Spark.
+
+**Ce qui ne change pas.** Le chemin de dépannage du §37.3 reste root : il passe par
+`incus exec`, précisément parce qu'il n'y a pas de `sshd`, et un compte de service
+n'y apporterait rien. Le terminal DANS un conteneur (§37.4.7) ne change pas non
+plus — il choisit déjà son contexte Docker par commande, et c'est le bon dessin.
+
 ### 37.5 Ce que le journal retient d'une session
 
 **Décision du responsable : l'ouverture et la fermeture, rien du contenu.** Sont
@@ -7470,6 +7506,116 @@ côté de `path` et de `changed`. Sans lui, un relevé du journal ne dirait pas 
 quel mode une cellule a été amorcée, et c'est justement ce qu'on cherchera le
 jour où une pile ne démarre pas.
 
+#### 42.2 ter Ce que le compte rootless doit pouvoir lire — écrit le 2026-09-07
+
+Le §42.2 bis a créé le compte et l'a rendu joignable par la console. Il n'a pas dit
+ce que ce compte doit pouvoir **lire**, et le défaut était là.
+
+**Le défaut.** `push_file` force `X-Incus-uid: 0, X-Incus-gid: 0`. Les fichiers du
+§43 arrivent donc en `root:root 0600`, dans un `/etc/spark` en `0700`. Or Compose
+lit `env_file:` **côté client**, et en rootless ce client tourne sous
+`spark-docker` : il ne peut ni traverser le dossier, ni lire les fichiers. Les
+deux lignes `env_file:` que le §44.5 impose échouent en rootless, alors que la
+même pile fonctionne en enraciné.
+
+C'est la leçon du §41.2 déplacée d'un cran : **poser un fichier ne suffit pas, il
+faut que celui qui doit le lire puisse le lire.** Le produit posait
+consciencieusement un environnement que le seul compte censé s'en servir ne
+pouvait pas ouvrir.
+
+**Pourquoi PAS le groupe `docker`.** C'est la première réponse qui vient, et elle
+est fausse. Ce groupe est l'ACL du démon **enraciné** : il donne accès à
+`/var/run/docker.sock`, donc l'équivalent de root dans la cellule. En rootless il
+ne gouverne rien du tout, le socket appartenant au compte. Lui faire porter un
+second sens — « le groupe qui lit les secrets du locataire » — le rendrait
+illisible, et il redeviendrait une **escalade** le jour où un démon enraciné
+réapparaît sur la cellule. Le §42.2 vend le rootless comme un retrait de
+privilèges ; y rattacher une appartenance au groupe `docker` le reprendrait d'une
+main. Le groupe employé est donc le groupe primaire de `spark-docker`, que
+`useradd` crée avec lui.
+
+**Le uid et le gid sont RELEVÉS, jamais inventés.** Même principe qu'au §44.9.2
+pour le UID du socket : ils appartiennent à la cellule. Le relevé du §42.6 les
+rend, et **seulement quand le démon est réellement utilisable** — un compte
+présent sans socket répondant ne donne ni mode, ni identité, exactement comme il
+ne donne pas de mode au §42.2 bis. Ils sont gardés à côté de `docker_mode` dans
+l'observation d'amorçage, d'où les projections les relisent.
+
+**Ce que chaque fichier devient, en rootless :**
+
+```
+/etc/spark              root:spark-docker  0750
+/etc/spark/env          root:spark-docker  0640
+/etc/spark/BRIEFING.md  root:spark-docker  0640
+/etc/spark/briefing.json root:spark-docker 0640
+/run/spark              root:spark-docker  0750
+/run/spark/secrets      root:spark-docker  0640
+/etc/motd               root:root          0644   (inchangé, §44.1)
+```
+
+En **enraciné**, rien ne change : `root:root 0600` et `0700`. Le mode reste une
+observation, et un Spark qui n'a pas de compte rootless n'a aucune raison
+d'ouvrir ses fichiers à un groupe qui n'existe pas.
+
+**La règle qui évite trois rustines.** Un amorçage rootless **réussi** vient de
+créer le compte dont dépendent les fichiers d'environnement, le briefing et la
+seconde porte du §42.2 quater. Il les **reprojette donc en sortant**, dans le
+même geste. Sans cette règle, les fichiers ne seraient corrects qu'au prochain
+changement de variable — et un locataire qui n'en change jamais garderait
+indéfiniment une cellule où sa pile ne démarre pas.
+
+Le corollaire vaut aussi dans l'autre sens : des variables posées **avant**
+l'amorçage restent `0600 root` et ce n'est pas une erreur. Il n'y a pas encore de
+compte à qui les ouvrir.
+
+#### 42.2 quater La seconde porte, et le panneau qu'on enterrait — écrit le 2026-09-07
+
+**Deux portes, pas une bascule.** La proposition d'entrer en `spark-docker` *au
+lieu* de root est refusée, pour trois raisons qui tiennent chacune seule : le
+briefing est `0600 root`, donc un agent connecté sous le compte de service ne
+pourrait pas lire son propre briefing ; le chemin de dépannage du §37.3 donne un
+shell root ; et un amorçage rootless à moitié raté est précisément le moment où il
+faut root pour réparer. Le §42.2 bis exige de plus que le contexte soit « une
+observation du moment, pas un champ recopié » : choisir l'utilisateur SSH d'après
+un mode stocké rendrait **injoignable** un Spark dont le démon rootless est mort.
+
+L'objection ne tient pas, en revanche, contre une porte **supplémentaire**. Un
+agent dont le travail est de faire tourner la pile n'a rien à faire en root :
+`docker` y marche sans incantation, et il ne peut pas casser la cellule. C'est un
+gain de moindre privilège réel, et il ne coûte rien à root.
+
+**Donc :** `authorized_keys` est écrit sur les deux comptes quand le relevé dit
+`rootless`, chacun avec son propriétaire. Root reste le défaut et la porte
+administrative. Le second compte n'est jamais offert parce qu'un compte existe —
+seulement parce que le mode relevé le dit (§42.2 bis).
+
+**Ce que cela coûte, et qu'il faut tenir.** Le §17.1 régénère `authorized_keys`
+EN ENTIER, et c'est ce qui fait qu'un retrait retire. Avec deux fichiers, cet
+invariant doit être tenu des **deux** côtés : une clé révoquée qui survivrait dans
+celui qu'on oublie est exactement le défaut que le §17.1 existe pour empêcher. Le
+relevé du §42.6 juge donc les deux portes, et une seconde porte vide ou périmée
+est un `defect`, jamais un « clés conformes » — même classe que le §42.10.4.
+
+`StrictModes` de `sshd` est tatillon sur le propriétaire et les droits de
+`/home/spark-docker` et de son `.ssh`, et son refus se présente en « Permission
+denied (publickey) » sans rien expliquer. Ce point est à établir par la **mesure**
+sur une cellule réelle, pas par raisonnement.
+
+**Le panneau qu'on enterrait.** Le bandeau « Welcome to Ubuntu… » ne vient pas de
+`/etc/motd` mais des scripts `/etc/update-motd.d/` que `pam_motd` exécute
+**avant** lui. Les trois lignes du §44.1 — celles qui nomment le Spark et
+renvoient au briefing — arrivaient donc sous une dizaine de lignes de
+documentation de la distribution. Un agent qui atterrit ne comprend pas qu'il doit
+lire le briefing, et c'est mérité.
+
+L'amorçage désactive donc ces scripts, et le motd devient **impératif** au lieu de
+descriptif. Ce n'est pas un pas vers la gestion de configuration que le §42.4
+refuse : le produit écrit **déjà** `/etc/motd`, et laisser le bandeau de la
+distribution au-dessus revient à publier un panneau indicateur que personne ne
+lit. La désactivation est tolérante à l'absence du dossier — une Debian minimale
+n'en a pas toujours — et elle ne retire rien : elle retire le bit d'exécution, ce
+qui se défait d'une commande.
+
 ### 42.3 Par où il passe
 
 Par `incus exec`, et c'est le seul geste du produit qui l'emploie hors dépannage
@@ -9092,6 +9238,37 @@ Ni un déclencheur de déploiement — le §1 exclut toujours le déploiement
 applicatif du périmètre —, ni une commande à exécuter, ni un canal par lequel un
 agent obtiendrait un accès. C'est un texte, il se lit, et tout ce qu'il décrit
 reste protégé par ce qui le protégeait avant qu'il n'existe.
+
+
+### 44.10 Ce que le briefing devient quand la cellule a deux comptes (SPK-94, SPK-95)
+
+**Ses permissions suivent le §42.2 ter.** En rootless, `BRIEFING.md` et
+`briefing.json` passent en `root:spark-docker 0640` : un agent qui entre par la
+seconde porte doit pouvoir lire le texte qui lui explique où il est. Le §44.3
+garantit déjà qu'aucune **valeur** d'environnement n'y figure — seulement des noms
+—, donc l'ouverture ne divulgue rien de plus que ce que le compte peut déjà
+atteindre. `/etc/motd` reste `0644` : il est fait pour être lu par tout le monde.
+
+**Il donne les deux commandes de rebond, et dit à quoi chacune sert.** Une seule
+ligne `ssh root@…` laissait deviner ; deux lignes nommées ne laissent rien à
+deviner :
+
+- `root` — administrer la cellule : installer des paquets, écrire dans `/srv`,
+  lire ce briefing, réparer un amorçage ;
+- `spark-docker` — faire tourner la pile, sur un Spark rootless uniquement.
+  `docker` y répond sans incantation.
+
+La seconde n'apparaît **que** si le relevé dit `rootless`. L'annoncer sur un Spark
+enraciné enverrait vers un compte qui n'existe pas.
+
+**Un sixième piège rejoint ceux du §44.5.** Une pile déposée dans `/srv` par root
+n'est pas lisible par `spark-docker` : `docker compose` échouera à ouvrir le
+`docker-compose.yml` ou ses fichiers montés, avec un « permission denied » qui ne
+nomme pas la cause. C'est le même défaut que celui du §42.2 ter, mais sur les
+fichiers du **locataire** — le produit ne peut pas le corriger à sa place, et un
+`chown` d'office sur `/srv` serait exactement l'ingérence que le §42.4 refuse. Il
+le **nomme**, ce qui est tout ce qu'un briefing peut faire, et c'est déjà ce qui
+évite l'aller-retour.
 
 
 ## 45. Modèle de menace des actions sensibles (SPK-35)

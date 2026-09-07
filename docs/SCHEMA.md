@@ -381,6 +381,8 @@ Migration `012_briefing.sql`. Contrat : `docs/DAT.md` §44.3, §44.4 et §44.8.
 | `docker_version` | TEXT nullable | version de `docker-ce` alors observée |
 | `compose_version` | TEXT nullable | version du greffon Compose alors observée |
 | `docker_mode` | TEXT nullable | `enracine` ou `rootless`, si Docker est utilisable |
+| `docker_uid` | INTEGER nullable | UID du compte rootless, **relevé** dans la cellule |
+| `docker_gid` | INTEGER nullable | GID de son groupe primaire, relevé de même |
 | `managed_items` | TEXT JSON | composants effectivement installés ou réparés par `sparkd` |
 | `os_id` | TEXT nullable | distribution que la cellule déclarait alors (`ID` d'`os-release`) |
 | `os_suite` | TEXT nullable | suite déclarée (`VERSION_CODENAME`) |
@@ -406,6 +408,17 @@ déploiement ailleurs ne peut ni la lire ni la deviner (§44.9.2).
 
 La cascade est nécessaire : un briefing sans Spark n'a aucun sens et ne doit pas
 survivre à la libération de ses ressources.
+
+`docker_uid` et `docker_gid` viennent de la migration `015_identite_rootless.sql`
+(SPK-94, `docs/DAT.md` §42.2 ter). Elles ne sont écrites que lorsque `docker_mode`
+vaut `rootless` : un compte présent sans démon utilisable ne donne pas plus
+d'identité qu'il ne donne de mode (§42.2 bis), et les inventer ferait poser des
+permissions au nom d'un compte qui ne sert pas.
+
+Elles sont **relevées, jamais calculées**. `useradd` ne garantit aucun UID
+particulier, et le §44.9.2 pose déjà que ce qui appartient à la cellule se lit
+depuis la cellule. Les projections d'environnement et de briefing les relisent ici
+pour poser `root:spark-docker`, plutôt que d'exécuter un `id` à chaque écriture.
 
 ## 10 sexies. `metric_sample` : l'historique d'usage (SPK-93)
 

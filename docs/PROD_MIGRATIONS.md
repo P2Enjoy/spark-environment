@@ -115,6 +115,47 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-18 · Migration `015_identite_rootless` et ouverture des fichiers au compte rootless (SPK-94)
+
+```
+Objectif      : garder le UID et le GID du compte `spark-docker` relevés dans la
+                cellule, pour que les fichiers d'environnement et le briefing
+                soient posés `root:spark-docker 0640` sur un Spark amorcé en
+                rootless (docs/DAT.md §42.2 ter, docs/SCHEMA.md §10 quinquies).
+Dépend de     : 012_briefing (la table qu'elle étend) et 013_briefing_systeme.
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : AUCUNE action humaine, mais un effet à connaître. Les deux
+                colonnes naissent NULL sur toutes les lignes existantes, y
+                compris celles des Sparks déjà amorcés en rootless : le relevé
+                ne se reconstitue pas rétrospectivement (§44.4). Leurs fichiers
+                restent donc `0600 root` — donc leur pile Compose reste en
+                échec — jusqu'à ce que l'amorçage soit redemandé sur eux. C'est
+                un geste de la console, sans interruption de service : sur une
+                cellule déjà complète il ne pose rien et se contente de relever.
+Vérification  : sur un Spark rootless, redemander l'amorçage, puis
+                `incus exec <cellule> -- stat -c '%U:%G %a' /etc/spark/env`
+                rend `root:spark-docker 640`. Puis, sous le compte de service,
+                `docker compose config` sur une pile portant ses deux
+                `env_file:` rend les variables au lieu d'un « permission
+                denied ». Sur un Spark ENRACINÉ, le même `stat` doit rendre
+                `root:root 600` — l'ouverture ne doit pas déborder.
+Retour arrière: le `down` retire les deux colonnes. Les fichiers déjà posés
+                gardent leur groupe : la migration décrit ce que sparkd SAIT,
+                pas ce que la cellule PORTE. Pour revenir aussi sur les
+                permissions, il faut redemander l'amorçage avec une build
+                antérieure. Comme toute migration, il n'est jamais joué seul —
+                « Revenir à la build précédente » restaure le registre depuis sa
+                sauvegarde (SPK-91), et le piège de l'OP-15 vaut ici : une build
+                antérieure REFUSE de servir une base portant la 015.
+Risque        : faible et borné aux cellules rootless. Deux colonnes nullables
+                sur une table que rien n'indexe. Le risque réel n'est pas dans
+                le registre mais dans la cellule : ouvrir `/etc/spark` au groupe
+                du compte de service élargit qui peut lire les secrets du
+                locataire à l'intérieur de SON Spark — c'est le compte qui fait
+                déjà tourner ses conteneurs, donc aucun privilège nouveau, mais
+                cela doit être un choix conscient et non un effet de bord.
+```
+
 ### OP-16 · Migration `014_metriques_historique` et supervision continue (SPK-93)
 
 ```
@@ -207,6 +248,37 @@ Risque        : nul pour les données. Trois colonnes nullables ajoutées à une
                 ne consulte. Le risque est celui du retour arrière ci-dessus,
                 et il porte sur la DISPONIBILITÉ, pas sur les données.
 ```
+
+### OP-17 · Mettre à jour `sparkd` pour lire le dépôt d'images (SPK-92)
+
+```
+État          : EN ATTENTE.
+Pourquoi      : « Forge → Images → Ajouter depuis le dépôt » demande à la Forge
+                ce que le dépôt publie (`GET /v1/images/depot`), pose les
+                références cochées en lot (`POST /v1/images` avec `references`)
+                et retire une entrée (`DELETE /v1/images/{id}`). Une Forge
+                antérieure à SPK-92 n'a aucune des trois.
+Symptôme      : la fenêtre du dépôt rend « Le dépôt n'a pas répondu ». Le repli
+                reste opérant : « Saisir une référence » fonctionne sur une
+                Forge non mise à jour, et l'entrée y naît non relevée comme
+                avant. Le retrait, lui, n'est pas offert par l'ancienne build.
+Réseau        : la lecture du dépôt est le SEUL appel sortant de ce geste. La
+                Forge doit joindre `images.linuxcontainers.org` en HTTPS au
+                moment où l'on ouvre la fenêtre — ce qu'elle doit déjà pouvoir
+                faire pour télécharger une image. Aucune ouverture nouvelle.
+Ce qu'il faut : 1. committer et pousser le code de SPK-92 ;
+                2. console → Forge → « Mettre à jour sparkd ».
+Migration     : AUCUNE. `image_catalog` porte déjà toutes les colonnes ; rien
+                n'est ajouté, ni renommé, ni migré.
+Retour arrière: « Revenir à la build précédente » depuis le même écran. Les
+                entrées ajoutées entre-temps RESTENT au catalogue — ce sont des
+                lignes ordinaires — et redeviennent seulement non retirables
+                depuis la console.
+Risque        : nul pour les données. Le retrait est le seul geste destructif
+                ajouté, il porte sur une ligne de catalogue, et il est refusé
+                tant qu'un Spark référence l'image.
+```
+
 
 ### OP-14 · Mettre à jour `sparkd` pour l'inventaire DNS (SPK-77)
 

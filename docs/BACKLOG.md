@@ -5545,6 +5545,126 @@ secondes, rétention 7 jours.**
   `@spec` / `@verifies` posés.
 
 
+### [ ] SPK-94 · Ce que le compte rootless doit pouvoir lire, et le panneau qu'on enterrait
+
+Ouverte le 2026-09-07 sur une question du responsable — « quels utilisateurs sont
+réellement installés quand on amorce en rootless ? » —, dont la réponse a mis au
+jour un défaut que rien ne signalait.
+
+En rootless, Compose tourne sous `spark-docker` et lit `env_file:` **côté
+client**. Or `push_file` force `X-Incus-uid: 0, X-Incus-gid: 0` : `/etc/spark` est
+`0700 root`, `/etc/spark/env` et `/run/spark/secrets` sont `0600 root:root`. Le
+compte ne peut donc ni traverser le dossier ni lire les fichiers, et les deux
+lignes `env_file:` que le briefing présente comme obligatoires (§44.5) échouent —
+alors que la même pile fonctionne en enraciné. Aucun `chown` ni `chgrp` n'existe
+dans le dépôt.
+
+Le responsable proposait le groupe `docker` ; il est **écarté** au profit du
+groupe primaire de `spark-docker`. Le groupe `docker` est l'ACL du démon
+enraciné, équivalent-root, et lui faire porter « le groupe qui lit les secrets du
+locataire » le rendrait à la fois illisible et dangereux le jour où un démon
+enraciné réapparaît sur la cellule. Raisonnement complet au journal du
+2026-09-07.
+
+Second volet, demandé le même jour : le bandeau « Welcome to Ubuntu… » vient des
+scripts `/etc/update-motd.d/` que `pam_motd` exécute **avant** `/etc/motd`. Nos
+trois lignes — celles qui renvoient au briefing — arrivaient sous une dizaine de
+lignes de documentation Canonical, ce qui explique qu'un agent qui atterrit ne
+comprenne pas qu'il doit lire le briefing.
+
+- Spécification : `docs/DAT.md` §42.2 ter (le gid relevé, ce que le compte lit,
+  la reprojection), §44.10 (permissions du briefing, le piège du locataire) ·
+  `docs/SCHEMA.md` §10 septies (migration 015) · manuel M6. **Écrite et
+  committée avant le code.**
+- Portée : le relevé rend le **uid et le gid** du compte rootless — observés dans
+  la cellule, jamais inventés, et seulement quand le démon est réellement
+  utilisable ; migration 015 les garde à côté de `docker_mode` ; `push_file`
+  accepte un propriétaire ; `_apply_env` et `_apply_briefing` posent
+  `root:spark-docker 0640` (dossiers `0750`) en rootless et restent `0600 root`
+  sinon ; l'amorçage désactive `/etc/update-motd.d/*` quand le dossier existe ;
+  le motd devient impératif ; le briefing nomme le piège des fichiers du
+  locataire déposés dans `/srv` par root.
+- **Le défaut d'origine est NON MESURÉ** : la chaîne de permissions est lue dans
+  le code, pas observée sur la Forge. Le §18 s'applique — reproduire d'abord sur
+  un Spark rootless réel, écrire le test qui échoue, puis corriger.
+- Une règle plutôt que trois rustines : un amorçage rootless **réussi** vient de
+  créer le compte dont dépendent ces fichiers ; il les **reprojette** en sortant.
+  Sans cela, tout n'est correct qu'au prochain changement de variable.
+- Ce que l'unité ne doit PAS casser : le mode reste une **observation** (§42.2
+  bis), jamais une préférence stockée ; un compte présent sans démon utilisable
+  ne donne toujours ni mode ni gid ; les variables posées **avant** l'amorçage
+  restent `0600 root` et ne sont pas une erreur ; `/etc/motd` reste `0644` et
+  trois lignes, pas un second briefing (§44.1) ; le silence du bandeau est
+  tolérant à l'absence de `/etc/update-motd.d`.
+- Ce que l'unité ne livre PAS : le raccourci `docker` dans
+  `/etc/profile.d/spark-env.sh` pour le shell root, proposé puis laissé sans
+  arbitrage — SPK-95 le rend largement inutile.
+- Dépend de : SPK-54 (l'amorçage et son mode), SPK-58 (les fichiers
+  d'environnement), SPK-60 (le briefing).
+- DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un
+  Spark → Amorçage en rootless, puis son terminal —, une pile Compose réelle
+  portant ses deux `env_file:` démarre sous `spark-docker`, prouvé de bout en
+  bout ; le même parcours échoue **avant** le correctif, prouvé par un test qui
+  passe du rouge au vert ; le motd affiché à la connexion ne porte plus le
+  bandeau de la distribution et renvoie au briefing ; un Spark amorcé en
+  **enraciné** garde ses fichiers `0600 root`, prouvé par un test ; la migration
+  015 se rejoue et se défait localement ; tests unitaires, tests d'API et test
+  E2E propres à l'unité ; captures observées aux principaux formats ; manuel M6,
+  DAT, SCHEMA, contrat de déploiement et changelog mis à jour ; `@spec` /
+  `@verifies` posés.
+
+
+### [ ] SPK-95 · La seconde porte : entrer dans un Spark rootless en `spark-docker`
+
+Demandée par le responsable le 2026-09-07 : « le terminal intégré doit laisser
+choisir si entrer en root ou en spark-docker, sinon en root seulement ; et le
+briefing donne root pour l'administratif ET le SSH de rebond pour spark-docker si
+le Spark a été amorcé en rootless. »
+
+La proposition initiale — entrer en `spark-docker` **au lieu** de root — a été
+refusée et retenue comme **ajout**. Remplacer root est un défaut : le briefing est
+`0600 root`, le chemin de dépannage donne un shell root, et un amorçage rootless à
+moitié raté est précisément le moment où il faut root. Mais l'objection ne tient
+pas contre une seconde porte : un agent dont le travail est de faire tourner la
+pile n'a rien à faire en root, `docker` y marche sans incantation, et il ne peut
+pas casser la cellule.
+
+- Spécification : `docs/DAT.md` §37.3 ter (le compte du terminal, le sondage,
+  l'audit), §42.2 ter (la seconde porte et le relevé des deux fichiers) ·
+  `DESIGN_SYSTEM.md` (le sélecteur de compte) · manuel M6. **Écrite et committée
+  avant le code.**
+- Portée : `authorized_keys` est écrit sur les **deux** comptes en rootless, avec
+  le propriétaire de chacun ; le relevé d'amorçage juge les **deux** portes ; le
+  terminal intégré propose le compte — root seul hors rootless — et `sshArgs()`
+  comme le sondage `sonderSshd` prennent ce compte au lieu de `root@` en dur ;
+  `spark.terminal_open` et `spark.terminal_close` portent le compte ; le briefing
+  donne les deux commandes de rebond.
+- **`StrictModes` est à établir par la mesure**, pas par raisonnement : `sshd` est
+  tatillon sur le propriétaire et les droits de `/home/spark-docker` et de
+  `.ssh`, et l'échec se présente en « Permission denied (publickey) » sans rien
+  expliquer.
+- Ce que l'unité ne doit PAS casser : **root reste le défaut et la porte
+  administrative** ; le second compte n'est offert que si le relevé dit
+  `rootless`, jamais parce qu'un compte existe (§42.2 bis) ; le fichier reste
+  régénéré EN ENTIER des deux côtés, sans quoi une clé révoquée survivrait dans
+  celui qu'on oublie (§17.1) ; le chemin de dépannage `incus exec` reste root ;
+  le terminal de conteneur (§37.4.7) ne change pas — il choisit déjà son contexte
+  par commande.
+- Dépend de : SPK-94, dont elle réutilise le uid et le gid relevés, et SPK-43
+  (le terminal et son sondage).
+- DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un
+  Spark rootless → Terminal —, le sélecteur propose les deux comptes, la session
+  ouverte en `spark-docker` répond à `docker ps` **sans incantation**, et celle
+  ouverte en root reste administrative, prouvé de bout en bout ; sur un Spark
+  enraciné le sélecteur n'offre que root, prouvé par un test ; retirer une clé la
+  retire des **deux** fichiers, prouvé sur la cellule réelle ; le relevé signale
+  une seconde porte vide ou périmée au lieu d'afficher « clés conformes » ;
+  l'audit nomme le compte de chaque ouverture ; tests unitaires, tests d'API et
+  test E2E propres à l'unité ; captures observées aux principaux formats, le
+  sélecteur et son état réduit à un seul compte compris ; manuel M6, DAT, design
+  system et changelog mis à jour ; `@spec` / `@verifies` posés.
+
+
 ---
 
 ## Réservé, non planifié
