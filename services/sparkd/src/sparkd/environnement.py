@@ -419,6 +419,17 @@ FICHIER_SECRETS = "/run/spark/secrets"
 #: la main, et n'existe PAS pour ce que systemd démarre (mesure D du §43.0).
 FICHIER_PROFIL = "/etc/profile.d/spark-env.sh"
 
+#: SPK-94 · §42.2 ter : ce que le compte rootless doit pouvoir lire. Compose lit
+#: `env_file:` CÔTÉ CLIENT, et ce client tourne sous `spark-docker` : des
+#: fichiers `0600 root` dans un dossier `0700` rendaient la pile impossible à
+#: démarrer, alors que la même pile fonctionne en enraciné.
+#:
+#: `/etc/profile.d` n'est PAS dans les dossiers : c'est un dossier du système,
+#: pas un dossier du produit, et lui imposer `0750` casserait la lecture des
+#: autres profils. Seul notre fichier y est ouvert.
+DOSSIERS_OUVERTS = ("/etc/spark", "/run/spark")
+FICHIERS_OUVERTS = (FICHIER_VARIABLES, FICHIER_SECRETS, FICHIER_PROFIL)
+
 
 def citer(valeur: str) -> str:
     """Encode une valeur pour `env_file:` de Compose (§43.9.7, MESURÉ).

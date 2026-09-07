@@ -61,6 +61,17 @@ CHEMIN = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 #: se déclenche jamais : c'est le code de sa DERNIÈRE commande qui compte, et
 #: `head` comme `cut` réussissent sur une entrée vide. Une commande absente
 #: rendait donc la chaîne VIDE, que le jugement lisait comme « présent ».
+#: SPK-94 · §42.2 ter — le relevé rend aussi l'identité NUMÉRIQUE du compte
+#: rootless, et SEULEMENT quand le mode conclu est `rootless`. `useradd` ne
+#: garantit aucun UID particulier, et c'est cette identité qui décide à qui les
+#: fichiers d'environnement et le briefing sont ouverts. La lier au MODE plutôt
+#: qu'à l'existence du compte applique le §42.2 bis : un compte présent sans
+#: démon utilisable ne donne pas plus d'identité qu'il ne donne de mode.
+#:
+#: SPK-94 · §42.2 quater — et il constate si la distribution garde des scripts
+#: `/etc/update-motd.d` actifs. Ce sont EUX, et non `/etc/motd`, qui écrivent le
+#: bandeau « Welcome to Ubuntu… » : `pam_motd` les exécute AVANT le panneau du
+#: §44.1, qui arrivait donc sous une dizaine de lignes que personne ne lit.
 RELEVE = r"""
 os_id=$(. /etc/os-release 2>/dev/null && echo "$ID")
 os_suite=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
@@ -95,10 +106,25 @@ if id spark-docker >/dev/null 2>&1; then
 fi
 mode=$(systemctl is-active docker.service >/dev/null 2>&1 && echo enracine \
        || ([ "$rootless" = active ] && echo rootless || echo absent))
-printf 'os_id=%s\nos_suite=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\n' \
+rootless_uid=absent
+rootless_gid=absent
+if [ "$mode" = rootless ]; then
+  rootless_uid=$(id -u spark-docker 2>/dev/null)
+  rootless_gid=$(id -g spark-docker 2>/dev/null)
+  [ -n "$rootless_uid" ] || rootless_uid=absent
+  [ -n "$rootless_gid" ] || rootless_gid=absent
+fi
+motd_distro=absent
+if [ -d /etc/update-motd.d ]; then
+  for script in /etc/update-motd.d/*; do
+    if [ -f "$script" ] && [ -x "$script" ]; then motd_distro=present; break; fi
+  done
+fi
+printf 'os_id=%s\nos_suite=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\n' \
   "$os_id" "$os_suite" "$os_like" "$arch" \
   "$sshd" "$openssh_version" "$cles" "$depot_distro" "$depot_suite" \
-  "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode"
+  "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode" \
+  "$rootless_uid" "$rootless_gid" "$motd_distro"
 """
 
 #: Le compte de service du mode rootless. Un nom FIXE : il sert de signal à la
@@ -136,6 +162,14 @@ LIBELLES = {
     # Ne figure pas dans le relevé ordinaire : cette ligne n'apparaît que dans
     # le compte rendu d'une reprise rootless interrompue (§42.2 bis).
     "rootless": "démon Docker rootless",
+    # Même statut : pas un sixième élément de la détection, une action de plus
+    # rendue quand le bandeau de la distribution a été tu (§42.2 quater).
+    #
+    # La ligne nomme le PANNEAU du produit, pas le bandeau qu'on retire, et ce
+    # n'est pas un choix de style : les cinq éléments emploient `present` pour
+    # « c'est bon ». Nommer le bandeau aurait rendu la seule ligne où `absent`
+    # est le succès, et l'écran aurait affiché « absent » à côté d'« installé ».
+    "motd": "panneau d'accueil du Spark",
 }
 
 
@@ -191,6 +225,38 @@ def identite(brut: dict[str, str]) -> dict[str, str]:
 def servie(brut: dict[str, str]) -> bool:
     """L'amorçage sait-il servir cette cellule ? (§42.9.5)"""
     return identite(brut)["family"] == FAMILLE_APT
+
+
+def identite_rootless(brut: dict[str, str]) -> dict[str, int | None]:
+    """L'identité numérique du compte rootless, telle que la cellule la donne.
+
+    @spec docs/BACKLOG.md#SPK-94 · docs/DAT.md §42.2 ter
+
+    Elle décide à qui les fichiers d'environnement et le briefing sont ouverts.
+    Le relevé ne la rend que lorsque le mode conclu est `rootless` ; ici on se
+    contente de la lire, sans jamais la déduire d'autre chose. Rendre `None` sur
+    une valeur illisible plutôt que de tomber : une identité qu'on ne comprend
+    pas ne doit pas décider d'un `chown`.
+    """
+    def entier(cle: str) -> int | None:
+        valeur = (brut.get(cle) or "").strip()
+        if not valeur or valeur == "absent":
+            return None
+        try:
+            nombre = int(valeur)
+        except ValueError:
+            return None
+        # Un UID négatif n'existe pas, et `0` serait root : ni l'un ni l'autre
+        # ne désigne le compte de service. Les refuser évite d'ouvrir un fichier
+        # au nom d'une identité que le relevé n'a pas vraiment lue.
+        return nombre if nombre > 0 else None
+
+    return {"uid": entier("rootless_uid"), "gid": entier("rootless_gid")}
+
+
+def motd_a_taire(brut: dict[str, str]) -> bool:
+    """La distribution garde-t-elle un bandeau d'accueil actif ? (§42.2 quater)"""
+    return (brut.get("motd_distro") or "absent").strip() == "present"
 
 
 def cible_apt(brut: dict[str, str]) -> tuple[str, str]:
@@ -530,6 +596,74 @@ SCRIPT_ROOTLESS = APT + (
 )
 
 
+#: Taire le bandeau de la distribution (§42.2 quater).
+#:
+#: `pam_motd` exécute les scripts d'`/etc/update-motd.d` AVANT `/etc/motd`. Les
+#: trois lignes du §44.1 — celles qui nomment le Spark et renvoient au briefing —
+#: arrivaient donc sous une dizaine de lignes de documentation de la
+#: distribution, ce qui explique qu'un agent qui atterrit ne comprenne pas qu'il
+#: doit lire le briefing.
+#:
+#: On retire le bit d'exécution ; on ne SUPPRIME rien. Le geste se défait d'une
+#: commande, et le §42.4 reste tenu : l'amorçage ne devient pas un gestionnaire
+#: de configuration parce qu'il fait taire un bandeau devant le panneau que le
+#: produit écrit déjà lui-même.
+#:
+#: Sans `set -e` : le dossier peut disparaître entre le relevé et la pose, et un
+#: bandeau qu'on n'a pas pu taire ne justifie pas de déclarer l'amorçage en échec.
+SCRIPT_MOTD = (
+    "if [ -d /etc/update-motd.d ]; then\n"
+    "  chmod -x /etc/update-motd.d/* 2>/dev/null || true\n"
+    "fi\n"
+)
+
+
+def script_motd() -> list[str]:
+    """Le geste qui fait taire le bandeau de la distribution (§42.2 quater)."""
+    return _shell(SCRIPT_MOTD)
+
+
+#: Les droits que le compte rootless doit trouver (§42.2 ter). Deux chiffres,
+#: pas un : un dossier a besoin du bit `x` pour être traversé, un fichier ne doit
+#: pas devenir exécutable.
+MODE_DOSSIER_OUVERT = "0750"
+MODE_FICHIER_OUVERT = "0640"
+
+
+def script_ouverture(gid: int, dossiers: tuple[str, ...],
+                     fichiers: tuple[str, ...]) -> list[str]:
+    """Ouvre au groupe du compte rootless ce que sparkd vient de poser (§42.2 ter).
+
+    @spec docs/BACKLOG.md#SPK-94 · docs/DAT.md §42.2 ter
+
+    **Pourquoi une commande et non l'écriture de fichier elle-même.** L'API de
+    fichiers d'Incus crée un dossier ; elle ne le MODIFIE pas. Le pilote avale
+    d'ailleurs délibérément l'erreur « existe déjà » (§12.1.2), si bien qu'un
+    `/etc/spark` déjà posé en `0700 root:root` garderait ses droits quel que
+    soit l'en-tête envoyé. Poser les droits à l'écriture ne marcherait donc que
+    sur une cellule vierge — c'est-à-dire jamais, puisque l'amorçage rootless
+    arrive après la création.
+
+    Chaque ligne est gardée par une existence : `/run/spark` vit sur un tmpfs
+    (§43.5.2) et peut ne pas être là entre deux démarrages, et un `chgrp` sur un
+    chemin absent ferait échouer une projection qui n'a rien de fautif.
+
+    `gid` est un ENTIER relevé dans la cellule, jamais un nom : le groupe
+    primaire de `spark-docker` s'appelle comme lui sur Debian, et cela n'a rien
+    d'universel.
+    """
+    lignes = ["set -e"]
+    for dossier in dossiers:
+        lignes.append(
+            f"if [ -d {dossier} ]; then chgrp {int(gid)} {dossier}; "
+            f"chmod {MODE_DOSSIER_OUVERT} {dossier}; fi")
+    for fichier in fichiers:
+        lignes.append(
+            f"if [ -f {fichier} ]; then chgrp {int(gid)} {fichier}; "
+            f"chmod {MODE_FICHIER_OUVERT} {fichier}; fi")
+    return _shell("\n".join(lignes) + "\n")
+
+
 class BootstrapFailed(RuntimeError):
     """Une commande d'installation a refusé de produire l'état voulu.
 
@@ -658,7 +792,8 @@ def empreinte(contenu: str) -> str:
 
 
 def compte_rendu(avant: list[dict[str, Any]], apres: list[dict[str, Any]],
-                 agis: list[str]) -> list[dict[str, Any]]:
+                 agis: list[str],
+                 motd_present: bool | None = None) -> list[dict[str, Any]]:
     """Le sort de CHAQUE ligne, jamais un verdict global (§42.7).
 
     Une ligne qu'on n'a pas touchée le dit — « inchangé » —, et une ligne qu'on a
@@ -702,6 +837,27 @@ def compte_rendu(avant: list[dict[str, Any]], apres: list[dict[str, Any]],
             "detail": "service utilisateur détecté" if mode == ROOTLESS else "absent",
             "action": "amorcé", "outcome": "installé" if mode == ROOTLESS else "échoué",
             "mode": mode,
+        })
+    if "motd" in agis:
+        # §42.2 quater : même statut que `rootless`. Pas un sixième élément de la
+        # détection — une action de plus, rendue seulement quand elle a eu lieu.
+        #
+        # Le sort se lit dans le relevé qui SUIT la pose, jamais dans le fait
+        # d'avoir lancé la commande : `chmod` sur un dossier en lecture seule
+        # réussirait sans rien taire, et le compte rendu annoncerait un silence
+        # qui n'existe pas (§1.3 du design system, appliqué au serveur).
+        tu = motd_present is False
+        lignes.append({
+            "key": "motd", "label": LIBELLES["motd"],
+            # `defect` et non `absent` : le panneau EST là — le produit l'écrit à
+            # chaque projection —, il est simplement enterré. C'est exactement ce
+            # que `defect` nomme depuis le §41.2 : présent et inutilisable.
+            "state": PRESENT if tu else DEFECT,
+            "detail": ("le bandeau de la distribution ne s'affiche plus : le "
+                       "panneau du Spark arrive seul") if tu else
+                      ("des scripts d'/etc/update-motd.d s'affichent encore "
+                       "avant lui et l'enterrent"),
+            "action": "amorcé", "outcome": "installé" if tu else "échoué",
         })
     return lignes
 

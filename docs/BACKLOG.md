@@ -5545,7 +5545,7 @@ secondes, rétention 7 jours.**
   `@spec` / `@verifies` posés.
 
 
-### [ ] SPK-94 · Ce que le compte rootless doit pouvoir lire, et le panneau qu'on enterrait
+### [~] SPK-94 · Ce que le compte rootless doit pouvoir lire, et le panneau qu'on enterrait
 
 Ouverte le 2026-09-07 sur une question du responsable — « quels utilisateurs sont
 réellement installés quand on amorce en rootless ? » —, dont la réponse a mis au
@@ -5601,6 +5601,14 @@ comprenne pas qu'il doit lire le briefing.
   arbitrage — SPK-95 le rend largement inutile.
 - Dépend de : SPK-54 (l'amorçage et son mode), SPK-58 (les fichiers
   d'environnement), SPK-60 (le briefing).
+- **État au 2026-09-07 — `[~]`, et ce qui manque est nommé.** Le serveur est
+  écrit et éprouvé : relevé, migration 015, ouverture des fichiers et du
+  briefing, silence du bandeau, panneau impératif. 15 preuves propres à l'unité,
+  dont deux qui passent du ROUGE au vert — vérifié en désactivant le correctif,
+  le geste d'ouverture disparaît et la preuve tombe. Restent dus : le parcours
+  E2E, les captures observées, et surtout la MESURE sur un Spark rootless réel —
+  le défaut lui-même n'est établi que par lecture du code et par le contrat de
+  Compose v2, pas par observation sur la Forge.
 - DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis un
   Spark → Amorçage en rootless, puis son terminal —, une pile Compose réelle
   portant ses deux `env_file:` démarre sous `spark-docker`, prouvé de bout en

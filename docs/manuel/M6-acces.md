@@ -313,6 +313,21 @@ runuser -u spark-docker -- env XDG_RUNTIME_DIR=/run/user/$uid \
 
 Rien à réécrire. Docker vit à l'intérieur du Spark et vous appartient.
 
+**Vos deux fichiers d'environnement sont lisibles par `spark-docker`.** C'est
+nécessaire et ce n'était pas le cas avant : Compose lit `env_file:` sous le compte
+qui lance la pile, et non sous `root`. Sur un Spark rootless, `/etc/spark/env` et
+`/run/spark/secrets` appartiennent donc au groupe de ce compte, en lecture seule.
+Si vous voyez encore un « permission denied » sur l'un des deux, redemandez
+l'amorçage depuis la console : le geste ne réinstalle rien sur une cellule déjà
+complète, il repose seulement ces droits.
+
+**En revanche, vos propres fichiers restent les vôtres.** Une pile déposée dans
+`/srv` par `root` n'est pas lisible par `spark-docker`, et `docker compose`
+échouera à ouvrir votre `docker-compose.yml` ou ce qu'il monte — avec un
+« permission denied » qui ne nomme pas la cause. Déposez-la sous un chemin que ce
+compte peut lire, ou donnez-lui le groupe. Le plan de contrôle ne touche pas à vos
+fichiers : ce serait décider à votre place de qui les lit.
+
 **Ne pilotez pas le proxy de la Forge depuis Compose.** L'exposition d'un domaine
 se déclare dans la console (voir [M7](M7-domaine.md)) : c'est le registre qui
 connaît l'adresse de votre Spark, et deux mécanismes écrivant la même

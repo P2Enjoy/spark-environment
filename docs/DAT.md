@@ -7549,14 +7549,34 @@ l'observation d'amorçage, d'où les projections les relisent.
 **Ce que chaque fichier devient, en rootless :**
 
 ```
-/etc/spark              root:spark-docker  0750
-/etc/spark/env          root:spark-docker  0640
-/etc/spark/BRIEFING.md  root:spark-docker  0640
-/etc/spark/briefing.json root:spark-docker 0640
-/run/spark              root:spark-docker  0750
-/run/spark/secrets      root:spark-docker  0640
-/etc/motd               root:root          0644   (inchangé, §44.1)
+/etc/spark                    root:spark-docker  0750
+/etc/spark/env                root:spark-docker  0640
+/etc/spark/BRIEFING.md        root:spark-docker  0640
+/etc/spark/briefing.json      root:spark-docker  0640
+/run/spark                    root:spark-docker  0750
+/run/spark/secrets            root:spark-docker  0640
+/etc/profile.d/spark-env.sh   root:spark-docker  0640
+/etc/motd                     root:root          0644   (inchangé, §44.1)
+/etc/profile.d                root:root          inchangé
 ```
+
+Deux chemins de cette liste méritent leur ligne. `/etc/profile.d/spark-env.sh`
+est le « confort » du §43.1 — celui qui sert au `docker compose up` tapé à la
+main —, et il n'aurait servi qu'à root sans cette ouverture, c'est-à-dire à
+personne dans le cas qui nous occupe. Le DOSSIER `/etc/profile.d`, lui, n'est pas
+touché : il appartient au système, et lui imposer `0750` casserait la lecture des
+autres profils de la cellule.
+
+**Pourquoi une commande, et non l'écriture de fichier elle-même.** L'API de
+fichiers d'Incus CRÉE un dossier ; elle ne le modifie pas. Le pilote avale
+d'ailleurs délibérément l'erreur « existe déjà » (§12.1.2), de sorte qu'un
+`/etc/spark` déjà posé en `0700 root:root` garderait ses droits quel que soit
+l'en-tête envoyé. Poser les droits à l'écriture n'aurait donc marché que sur une
+cellule vierge — c'est-à-dire jamais, puisque l'amorçage rootless arrive toujours
+après la création. Les fichiers sont donc posés fermés, puis ouverts par une
+commande courte et idempotente, dont chaque ligne est gardée par l'existence du
+chemin : `/run` est un tmpfs (§43.5.2) et peut ne pas porter `/run/spark` entre
+deux démarrages.
 
 En **enraciné**, rien ne change : `root:root 0600` et `0700`. Le mode reste une
 observation, et un Spark qui n'a pas de compte rootless n'a aucune raison
@@ -7614,7 +7634,12 @@ documentation de la distribution. Un agent qui atterrit ne comprend pas qu'il do
 lire le briefing, et c'est mérité.
 
 L'amorçage désactive donc ces scripts, et le motd devient **impératif** au lieu de
-descriptif. Ce n'est pas un pas vers la gestion de configuration que le §42.4
+descriptif. La ligne que le compte rendu ajoute nomme le **panneau du produit**,
+et non le bandeau retiré : les cinq éléments de la détection emploient `present`
+pour dire « c'est bon », et nommer le bandeau aurait produit la seule ligne où
+`absent` est le succès — l'écran aurait affiché « absent » à côté d'« installé ».
+Un panneau enterré est donc un `defect`, au sens exact du §41.2 : présent et
+inutilisable. Ce n'est pas un pas vers la gestion de configuration que le §42.4
 refuse : le produit écrit **déjà** `/etc/motd`, et laisser le bandeau de la
 distribution au-dessus revient à publier un panneau indicateur que personne ne
 lit. La désactivation est tolérante à l'absence du dossier — une Debian minimale

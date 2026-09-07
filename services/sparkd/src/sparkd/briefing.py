@@ -24,6 +24,8 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
+from . import bootstrap
+
 FORMAT = "spark-briefing/v1"
 WRITER = "sparkd, plan de contrôle"
 
@@ -35,6 +37,17 @@ FICHIER_SECRETS = "/run/spark/secrets"
 COMPTE_ROOTLESS = "spark-docker"
 SOCKET_ROOTLESS = "/run/user/<uid>/docker.sock"
 SOCKET_ENRACINE = "/var/run/docker.sock"
+
+#: SPK-94 · §44.10 : un agent qui entre par la seconde porte doit pouvoir lire le
+#: texte qui lui explique où il est. Le §44.3 garantit qu'aucune VALEUR
+#: d'environnement n'y figure — seulement des noms —, donc l'ouverture ne
+#: divulgue rien que le compte ne puisse déjà atteindre.
+#:
+#: `/etc/motd` n'y est pas, et c'est délibéré : il est `0644` parce qu'il est
+#: fait pour être lu par tout le monde. Le restreindre à un groupe le rendrait
+#: invisible au moment précis où il sert — la connexion.
+DOSSIERS_OUVERTS = ("/etc/spark",)
+FICHIERS_OUVERTS = (FICHIER_JSON, FICHIER_MARKDOWN)
 
 #: Le compte par lequel on entre dans une cellule. Le provisionnement du §17.3
 #: pose les clés de `root`, et rien d'autre : nommer un autre compte ici
@@ -106,12 +119,21 @@ def enregistrer_observation(connection: sqlite3.Connection, spark_id: str,
         "os_suite": _absent(releve.get("os_suite")),
         "arch": _absent(releve.get("arch")),
     }
+    # SPK-94 · §42.2 ter : l'identité NUMÉRIQUE du compte rootless, telle que la
+    # cellule la donne. Le relevé ne la rend que lorsque le mode est `rootless`,
+    # et on ne la garde qu'à cette condition : une identité conservée après une
+    # bascule ferait poser un groupe au nom d'un compte qui ne sert plus.
+    identite = bootstrap.identite_rootless(releve)
+    if valeur["docker_mode"] != bootstrap.ROOTLESS:
+        identite = {"uid": None, "gid": None}
+    valeur["docker_uid"] = identite["uid"]
+    valeur["docker_gid"] = identite["gid"]
     connection.execute(
         """INSERT INTO spark_bootstrap_observation (
                spark_id, observed_at, openssh_version, docker_version,
                compose_version, docker_mode, managed_items,
-               os_id, os_suite, arch)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               os_id, os_suite, arch, docker_uid, docker_gid)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(spark_id) DO UPDATE SET
                observed_at = excluded.observed_at,
                openssh_version = excluded.openssh_version,
@@ -121,11 +143,14 @@ def enregistrer_observation(connection: sqlite3.Connection, spark_id: str,
                managed_items = excluded.managed_items,
                os_id = excluded.os_id,
                os_suite = excluded.os_suite,
-               arch = excluded.arch""",
+               arch = excluded.arch,
+               docker_uid = excluded.docker_uid,
+               docker_gid = excluded.docker_gid""",
         (spark_id, valeur["observed_at"], valeur["openssh_version"],
          valeur["docker_version"], valeur["compose_version"],
          valeur["docker_mode"], json.dumps(geres, separators=(",", ":")),
-         valeur["os_id"], valeur["os_suite"], valeur["arch"]),
+         valeur["os_id"], valeur["os_suite"], valeur["arch"],
+         valeur["docker_uid"], valeur["docker_gid"]),
     )
     return valeur
 
@@ -154,6 +179,10 @@ def observation(connection: sqlite3.Connection, spark_id: str) -> dict[str, Any]
         "os_id": row["os_id"],
         "os_suite": row["os_suite"],
         "arch": row["arch"],
+        # SPK-94 · §42.2 ter. `None` hors mode rootless, et sur toute ligne
+        # écrite avant la migration 015 : le relevé ne se reconstitue pas.
+        "docker_uid": row["docker_uid"],
+        "docker_gid": row["docker_gid"],
     }
 
 
@@ -622,11 +651,25 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
 
 
 def motd(model: dict[str, Any]) -> str:
-    """Le panneau indicateur à trois lignes, pas un second briefing."""
+    """Le panneau indicateur à trois lignes, pas un second briefing.
+
+    @spec docs/BACKLOG.md#SPK-94 · docs/DAT.md §44.1, §42.2 quater
+
+    La troisième ligne est IMPÉRATIVE depuis SPK-94, et ce n'est pas une
+    coquetterie de ton. « Briefing : /etc/spark/BRIEFING.md » nommait un chemin
+    sans dire qu'il fallait l'ouvrir, sous une dizaine de lignes de bandeau de la
+    distribution : ni un humain ni un agent n'y voyait une instruction. Le
+    bandeau est tu par l'amorçage (§42.2 quater) et cette ligne dit quoi faire.
+
+    Elle dit aussi CE QU'ON Y TROUVE : « lisez ce fichier » sans son contenu se
+    remet à plus tard, et le §44.2 tient précisément à ce que l'agent apprenne
+    ici ce qu'il ne peut pas déduire de la cellule.
+    """
     return "\n".join((
         f"Spark : {model['spark']['name']}",
         f"Protection : {'armée' if model['spark']['protected'] else 'non armée'}",
-        f"Briefing : {FICHIER_MARKDOWN}",
+        f"Lisez d'abord {FICHIER_MARKDOWN} : quotas réels, contexte Docker, "
+        "variables d'environnement et pièges connus.",
         "",
     ))
 

@@ -70,9 +70,13 @@ def test_le_briefing_n_expose_aucune_valeur_de_secret_dans_aucun_format(tmp_path
     assert model["environment"]["secrets"] == ["SMTP_PASSWORD"]
     assert model["environment"]["variables"] == []
     assert model["forge"]["public_address"] == "forge.example.test"
+    # SPK-94 · §44.1, §42.2 quater : la troisième ligne est IMPÉRATIVE. Elle
+    # nommait un chemin sans dire qu'il fallait l'ouvrir, sous le bandeau de la
+    # distribution — ni un humain ni un agent n'y voyait une instruction.
     assert motd.splitlines() == [
         "Spark : agent", "Protection : non armée",
-        f"Briefing : {briefing.FICHIER_MARKDOWN}",
+        f"Lisez d'abord {briefing.FICHIER_MARKDOWN} : quotas réels, contexte "
+        "Docker, variables d'environnement et pièges connus.",
     ]
     modes = client.app.state.incus.created[name]["file_modes"]
     assert modes[briefing.FICHIER_JSON] == "0600"
@@ -138,6 +142,9 @@ def test_une_presence_preexistante_ne_devient_pas_une_installation_par_sparkd(tm
         "docker_version": "5:29.7.2-1", "origine": "docker-ce",
         "compose": "Docker Compose version v2.40.0", "compose_version": "2.40.0-1",
         "mode": "enracine",
+        # SPK-94 · §42.2 quater : une cellule deja amorcee n'a plus le bandeau
+        # de sa distribution, sinon l'amorcage aurait encore a le taire.
+        "motd_distro": "absent",
     })
     # Les clés déjà posées lors du démarrage font aussi partie de l'état complet.
     from sparkd import bootstrap  # noqa: PLC0415

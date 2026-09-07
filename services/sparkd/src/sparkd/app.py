@@ -766,6 +766,51 @@ def create_app(config: Config) -> FastAPI:
             spark["incus_name"], sshkeys.AUTHORIZED_KEYS, contenu, mode="0600"
         )
 
+    def _identite_rootless(connection, spark: dict) -> dict[str, int] | None:
+        """L'identité du compte rootless de CE Spark, ou `None` (SPK-94, §42.2 ter).
+
+        Elle est LUE dans le dernier relevé d'amorçage, jamais devinée. Trois
+        états se distinguent, et les confondre poserait un groupe au nom d'un
+        compte qui ne sert pas :
+
+        - pas de relevé, ou mode enraciné : il n'y a personne à qui ouvrir ;
+        - mode rootless mais identité absente : c'est une ligne écrite avant la
+          migration 015, et le §44.4 interdit de la reconstituer depuis l'état
+          courant. Les fichiers restent fermés jusqu'au prochain amorçage, que
+          l'OP-18 nomme comme le geste à faire ;
+        - mode rootless et identité connue : on ouvre.
+        """
+        releve = briefing_service.observation(connection, spark["id"])
+        if not releve or releve.get("docker_mode") != bootstrap_service.ROOTLESS:
+            return None
+        uid, gid = releve.get("docker_uid"), releve.get("docker_gid")
+        if uid is None or gid is None:
+            return None
+        return {"uid": int(uid), "gid": int(gid)}
+
+    def _ouvrir_au_rootless(connection, spark: dict, dossiers: tuple[str, ...],
+                            fichiers: tuple[str, ...]) -> None:
+        """Ouvre au groupe du compte rootless ce qu'on vient de poser (§42.2 ter).
+
+        Ne fait rien hors mode rootless : un Spark enraciné n'a pas de compte à
+        qui ouvrir, et ses fichiers restent `0600 root`.
+
+        Un code non nul est une ERREUR ici, contrairement au relevé (§42.5) :
+        des fichiers posés mais restés fermés sont exactement le défaut que
+        cette unité corrige, et les taire le reproduirait en silence.
+        """
+        identite = _identite_rootless(connection, spark)
+        if identite is None:
+            return
+        code, _, err = app.state.incus.exec_capture(
+            spark["incus_name"],
+            bootstrap_service.script_ouverture(identite["gid"], dossiers, fichiers))
+        if code:
+            raise IncusError(
+                "Les fichiers ont été posés dans « {} », mais n'ont pas pu être "
+                "ouverts au compte rootless (code {}) : {}".format(
+                    spark["name"], code, (err or "").strip()[-500:]))
+
     def _apply_env(connection, spark: dict) -> None:
         """Pose les fichiers d'environnement dans le Spark (SPK-58, §43.2).
 
@@ -785,6 +830,12 @@ def create_app(config: Config) -> FastAPI:
                 connection, cle, spark["id"]).items():
             app.state.incus.push_file(
                 spark["incus_name"], chemin, contenu, mode="0600")
+        # SPK-94 · §42.2 ter : posés fermés, puis ouverts au compte rootless
+        # quand il y en a un. Compose lit `env_file:` côté CLIENT, et ce client
+        # tourne sous `spark-docker` : sans cette ligne, la pile du locataire ne
+        # démarre pas alors que le produit a posé son environnement.
+        _ouvrir_au_rootless(connection, spark, env_service.DOSSIERS_OUVERTS,
+                            env_service.FICHIERS_OUVERTS)
         # SPK-60 · §44.4 : une variable posee change le briefing lui-meme
         # (ses NOMS, jamais ses valeurs). Le faire dans le meme chemin evite
         # qu'une nouvelle route d'environnement oublie la seconde projection.
@@ -815,6 +866,22 @@ def create_app(config: Config) -> FastAPI:
         )
         for chemin, (contenu, mode) in briefing_service.fichiers(model).items():
             app.state.incus.push_file(spark["incus_name"], chemin, contenu, mode=mode)
+        # SPK-94 · §44.10 : un agent qui entre par la seconde porte doit pouvoir
+        # lire le texte qui lui explique où il est. `/etc/motd` n'en fait pas
+        # partie — il reste `0644`, sans quoi il serait invisible à la connexion.
+        _ouvrir_au_rootless(connection, spark, briefing_service.DOSSIERS_OUVERTS,
+                            briefing_service.FICHIERS_OUVERTS)
+
+    def _rattraper_env(connection, spark: dict) -> None:
+        """Reprojette l'environnement sans annuler ce qui est déjà écrit.
+
+        Même règle que `_rattraper_briefing` : le registre fait foi, une
+        projection en retard est reprise au prochain démarrage (§43.5.2).
+        """
+        try:
+            _apply_env(connection, spark)
+        except (IncusError, InstanceAbsente, env_service.CleError):
+            pass
 
     def _rattraper_briefing(connection, spark: dict) -> None:
         """Rafraîchit sans annuler un registre déjà écrit (§44.8)."""
@@ -1998,6 +2065,17 @@ def create_app(config: Config) -> FastAPI:
                         if code:
                             raise bootstrap_service.BootstrapFailed(
                                 bootstrap_service.echec(cle, code, err))
+                # §42.2 quater : le bandeau de la distribution enterrait le
+                # panneau du §44.1 sous une dizaine de lignes. Il n'est pas un
+                # sixième élément de la détection — c'est une action de plus,
+                # faite seulement si le relevé l'a trouvé actif.
+                if bootstrap_service.motd_a_taire(brut_avant):
+                    code, _, err = app.state.incus.exec_capture(
+                        spark["incus_name"], bootstrap_service.script_motd())
+                    if code:
+                        raise bootstrap_service.BootstrapFailed(
+                            bootstrap_service.echec("motd", code, err))
+                    actions.append("motd")
                 if reprise_rootless:
                     code, _, err = app.state.incus.exec_capture(
                         spark["incus_name"], bootstrap_service.script_rootless())
@@ -2024,10 +2102,21 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=502, detail={
                     "error": "bootstrap_failed", "message": str(erreur)}) from erreur
 
-            lignes = bootstrap_service.compte_rendu(avant, apres, actions)
+            # §42.2 quater : le sort du bandeau se lit dans le relevé qui SUIT
+            # la pose, jamais dans le fait d'avoir lancé la commande.
+            lignes = bootstrap_service.compte_rendu(
+                avant, apres, actions,
+                motd_present=bootstrap_service.motd_a_taire(brut_final))
             briefing_service.enregistrer_observation(
                 connection, spark["id"], brut_final, actions)
-            _rattraper_briefing(connection, service.by_name(connection, name))
+            # §42.2 ter : l'amorçage vient peut-être de créer le compte dont
+            # dépendent les fichiers d'environnement ET le briefing. Il les
+            # reprojette donc ici, une fois l'observation écrite — sans quoi ils
+            # ne seraient corrects qu'au prochain changement de variable, et un
+            # locataire qui n'en change jamais garderait indéfiniment une cellule
+            # où sa pile ne démarre pas. `_apply_env` reprojette le briefing dans
+            # la foulée : un seul appel couvre les deux.
+            _rattraper_env(connection, service.by_name(connection, name))
             # §42.8 : un amorçage qui ne change RIEN est quand même journalisé.
             # Savoir que quelqu'un a demandé le geste et que rien n'était à faire
             # est une information ; son absence ferait croire qu'il n'a pas été

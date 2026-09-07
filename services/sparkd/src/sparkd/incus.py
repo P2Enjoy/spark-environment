@@ -827,6 +827,13 @@ class FakeIncus:
         script = command[-1] if command else ""
         runtime = self.created[name].setdefault("runtime", {})
         runtime.update(_os_de_alias(self.created[name].get("alias", "")))
+        # SPK-94 · §42.2 quater : une image de distribution ARRIVE avec ses
+        # scripts `/etc/update-motd.d`. Les poser par defaut est ce qui rend le
+        # silence eprouvable : un doublon nait sans bandeau n'aurait jamais fait
+        # passer le geste qui le tait.
+        runtime.setdefault("motd_distro", "present")
+        if "chmod -x /etc/update-motd.d" in script:
+            runtime["motd_distro"] = "absent"
 
         # SPK-74 · §17.5 : le doublon porte l'EFFET de la creation d'identite,
         # pas seulement son passage. Sans lui, un second appel retrouverait la
@@ -882,6 +889,16 @@ class FakeIncus:
             runtime["mode"] = ("rootless"
                                if "dockerd-rootless-setuptool" in script
                                else "enracine")
+            # SPK-94 · §42.2 ter : le releve rend l'identite NUMERIQUE du compte
+            # rootless, et seulement dans ce mode. Le doublon la pose ici pour
+            # la meme raison qu'il pose le mode : sans elle, l'ouverture des
+            # fichiers au compte serait ineprouvable de bout en bout.
+            if runtime["mode"] == "rootless":
+                runtime["rootless_uid"] = "1001"
+                runtime["rootless_gid"] = "1001"
+            else:
+                runtime.pop("rootless_uid", None)
+                runtime.pop("rootless_gid", None)
         if installe and "docker-compose-plugin" in script:
             runtime["compose"] = "Docker Compose version v2.40.0"
             runtime["compose_version"] = "2.40.0-1"

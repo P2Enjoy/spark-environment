@@ -248,6 +248,11 @@ def test_un_amorcage_sur_cellule_COMPLETE_ne_fait_rien_et_le_DIT(tmp_path):
                    depot_suite="trixie",
                    docker="Docker version 29.7.2", origine="docker-ce",
                    compose="Docker Compose version v2",
+                   # SPK-94 · §42.2 quater : une cellule que le produit a deja
+                   # amorcee n'a plus le bandeau de sa distribution. Sans cette
+                   # ligne, « complete » decrirait un etat que l'amorcage
+                   # laisserait encore quelque chose a faire.
+                   motd_distro="absent",
                    cles=bootstrap.empreinte(
                        client.app.state.incus.created[nom]["files"].get(
                            "/root/.ssh/authorized_keys", "")))
@@ -282,6 +287,11 @@ def test_un_amorcage_qui_ne_change_RIEN_est_quand_meme_journalise(tmp_path):
                    depot_suite="trixie",
                    docker="Docker version 29.7.2", origine="docker-ce",
                    compose="Docker Compose version v2",
+                   # SPK-94 · §42.2 quater : une cellule que le produit a deja
+                   # amorcee n'a plus le bandeau de sa distribution. Sans cette
+                   # ligne, « complete » decrirait un etat que l'amorcage
+                   # laisserait encore quelque chose a faire.
+                   motd_distro="absent",
                    cles=bootstrap.empreinte(
                        client.app.state.incus.created[nom]["files"].get(
                            "/root/.ssh/authorized_keys", "")))
@@ -319,7 +329,12 @@ def test_le_compte_rendu_rend_le_sort_de_CHAQUE_ligne(tmp_path):
     _poser_runtime(client, nom, sshd="active")
     corps = client.post(f"/v1/sparks/{nom}/bootstrap").json()
     par_cle = {ligne["key"]: ligne for ligne in corps["items"]}
-    assert set(par_cle) == set(bootstrap.ELEMENTS)
+    # SPK-94 · §42.2 quater : `motd` n'est pas un sixieme ELEMENT de la
+    # detection — c'est une action de plus, rendue seulement quand elle a eu
+    # lieu, exactement comme la ligne `rootless` du §42.2 bis. Les cinq elements
+    # restent tous presents, et c'est ce que ce test garde.
+    assert set(bootstrap.ELEMENTS) <= set(par_cle)
+    assert set(par_cle) - set(bootstrap.ELEMENTS) == {"motd"}
     assert par_cle["sshd"]["outcome"] == "inchangé"
     assert par_cle["sshd"]["action"] == "aucune"
     assert par_cle["docker"]["action"] == "amorcé"
