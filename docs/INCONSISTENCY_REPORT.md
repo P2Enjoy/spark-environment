@@ -44,8 +44,8 @@ la correction du 2026-09-02, qui n'a fait que rendre l'état de refus lisible.
 collectées à la main » ; §30.2 : le lien manuel-image est vérifié dans les deux
 sens.
 
-**Le fait.** `e2e/manuel.mjs` vide `docs/manuel/images/` puis reproduit 24 images.
-Or le manuel en cite 29 : `m4-update.png`, `m4-update-rollback.png`,
+**Le fait.** `e2e/manuel.mjs` vide `docs/manuel/images/` puis reproduit 25 images
+— 24 jusqu'à SPK-92, qui a ajouté `m5-depot.png`. Or le manuel en cite 30 : `m4-update.png`, `m4-update-rollback.png`,
 `m4-update-mobile.png`, `m6-identite.png` et `m8-widget.png` sont **committées**
 mais aucun bloc du harnais ne les produit. Une exécution de `make manuel` les
 supprime donc, et `e2e/manuel.test.mjs` rougit aussitôt sur « ces images sont
@@ -53,8 +53,13 @@ citées mais absentes ». Ces cinq-là ne sont pas reproductibles : elles violen
 le §30.1 depuis leur commit.
 
 **Ce qui a été fait.** Les cinq fichiers ont été **restaurés** depuis `HEAD` après
-l'exécution, avec les dix-neuf autres que la régénération avait réécrites. Seule
-`m8-dossier.png`, produite par un bloc ajouté au harnais, est conservée.
+l'exécution, avec les autres que la régénération avait réécrites sans que leur
+écran ait changé. Seules sont conservées les images dont l'unité en cours a
+réellement modifié l'écran — `m8-dossier.png` pour SPK-85, `m5-catalogue.png` et
+`m5-depot.png` pour SPK-92.
+
+La même conduite s'applique à chaque unité tant que ce défaut n'est pas corrigé :
+lancer `make manuel`, garder ses propres illustrations, restaurer les autres.
 
 **Pourquoi ce n'est pas corrigé ici.** Écrire les blocs manquants demande
 d'atteindre quatre écrans qui appartiennent à SPK-69, SPK-74 et SPK-75 — dont
