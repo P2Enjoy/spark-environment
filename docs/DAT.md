@@ -7637,10 +7637,52 @@ celui qu'on oublie est exactement le défaut que le §17.1 existe pour empêcher
 relevé du §42.6 juge donc les deux portes, et une seconde porte vide ou périmée
 est un `defect`, jamais un « clés conformes » — même classe que le §42.10.4.
 
-`StrictModes` de `sshd` est tatillon sur le propriétaire et les droits de
-`/home/spark-docker` et de son `.ssh`, et son refus se présente en « Permission
-denied (publickey) » sans rien expliquer. Ce point est à établir par la **mesure**
-sur une cellule réelle, pas par raisonnement.
+**Ce que la mesure a trouvé, et qui rendait la seconde porte inutilisable.**
+Mesuré le 2026-09-07 sur une cellule Ubuntu 24.04 réellement amorcée en rootless :
+la porte `spark-docker` ne s'ouvrait **jamais**. Le client rendait « Permission
+denied (publickey) », et le journal de `sshd` nommait la cause que le client tait :
+
+```
+Could not open user 'spark-docker' authorized keys
+'/home/spark-docker/.ssh/authorized_keys': Permission denied
+```
+
+La cause n'est pas `StrictModes`, contrairement à ce que cette section supposait
+avant la mesure. Elle est plus simple, et c'est le défaut du §42.2 ter à
+l'identique, sur un chemin qu'il ne couvrait pas : `push_file` force
+`X-Incus-uid: 0, X-Incus-gid: 0`, donc `/home/spark-docker/.ssh` arrive
+`0700 root:root` et son `authorized_keys` `0600 root:root`. Or `sshd` lit
+`authorized_keys` **après avoir abandonné ses privilèges** pour prendre ceux du
+compte visé : un fichier `0600 root:root` lui est illisible. Le produit écrivait
+consciencieusement une clé que le seul programme censé la lire ne pouvait pas
+ouvrir — la leçon du §41.2, pour la troisième fois.
+
+**Ce que les deux chemins deviennent**, et c'est la règle du §42.2 ter appliquée
+telle quelle :
+
+```
+/home/spark-docker/.ssh                  root:spark-docker  0750
+/home/spark-docker/.ssh/authorized_keys  root:spark-docker  0640
+```
+
+**Le propriétaire reste root, et ce n'est pas un détail.** `spark-docker:spark-docker
+0600` marcherait aussi, et donnerait au compte de service le droit de **réécrire
+ses propres accès** — un compte qui s'ajoute une clé n'est plus un compte à
+moindre privilège. `0640 root:spark-docker` lui donne exactement ce dont `sshd` a
+besoin, la lecture, et rien de plus. OpenSSH accepte un `authorized_keys`
+appartenant à root tant qu'il n'est **écrivable** ni par le groupe ni par les
+autres, ce que `0640` respecte.
+
+**La reprojection suit chaque écriture de clé, pas seulement l'amorçage.** Le
+§17.1 réécrit `authorized_keys` en entier à chaque ajout et à chaque retrait, et
+`push_file` reposerait un fichier fermé : sans reprojection à cet endroit précis,
+la porte se refermerait au premier changement de clé — une panne qui n'apparaît
+qu'après coup, sans geste apparent, exactement celle que le §42.2 ter décrit.
+
+`StrictModes` reste par ailleurs actif et satisfait : `/home/spark-docker` est
+`0750 spark-docker:spark-docker`, et aucun des deux chemins n'est écrivable par
+le groupe. Mesuré vert sur la même cellule : la session s'ouvre, et `docker ps`
+y répond sans incantation.
 
 **Le panneau qu'on enterrait.** Le bandeau « Welcome to Ubuntu… » ne vient pas de
 `/etc/motd` mais des scripts `/etc/update-motd.d/` que `pam_motd` exécute

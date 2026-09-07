@@ -4,6 +4,72 @@ Trace chronologique des décisions et investigations significatives.
 
 ---
 
+## 2026-09-07 — La seconde porte n'existait pas : ce que la Forge de test a répondu
+
+Premier amorçage rootless de bout en bout sur la **Forge de test**, cellule
+`rootless-mesure`, Ubuntu 24.04, créée et amorcée depuis la console par le
+parcours canonique. C'était le seul point restant de SPK-94 et de SPK-95 : la
+**mesure**.
+
+**Ce que SPK-94 voulait établir est vert, et sans surprise.** La chaîne de
+permissions du §42.2 ter est exactement celle que le tableau annonce —
+`/etc/spark` en `0750 root:spark-docker`, `env`, `BRIEFING.md`, `briefing.json`,
+`/run/spark/secrets` et `spark-env.sh` en `0640`, `/etc/motd` inchangé en `0644`.
+Le compte lit les trois fichiers. Une variable posée **après** l'amorçage garde
+ces droits : la reprojection tient dans le temps, ce qui était le point du §42.2
+ter. Les scripts `/etc/update-motd.d/` ont perdu leur bit d'exécution et le
+bandeau de la distribution ne s'affiche plus.
+
+**Ce que SPK-95 voulait établir était rouge, et le diagnostic était faux.** Le
+terminal ouvert en `spark-docker` se fermait aussitôt. La section §42.2 quater
+attribuait d'avance ce refus à `StrictModes` ; c'était une hypothèse, et elle
+était fausse. Le journal de `sshd` dans la cellule nomme la vraie cause :
+
+```
+Could not open user 'spark-docker' authorized keys
+'/home/spark-docker/.ssh/authorized_keys': Permission denied
+```
+
+`sshd` lit `authorized_keys` **après** avoir pris les droits du compte visé.
+`push_file` force `uid 0, gid 0` : le dossier arrivait `0700 root:root` et le
+fichier `0600 root:root`. Illisible. La porte ne s'est donc **jamais** ouverte
+depuis qu'elle existe — les preuves étaient vertes contre le doublon, qui
+n'exécute pas de `sshd` et ne pouvait pas voir ce défaut.
+
+C'est le §42.2 ter à l'identique, sur un chemin qu'il ne couvrait pas. Trois
+fois la même leçon du §41.2 : **poser un fichier ne suffit pas, il faut que
+celui qui doit le lire puisse le lire.**
+
+**Le correctif, et pourquoi pas le plus évident.** `spark-docker:spark-docker
+0600` aurait marché — et aurait donné au compte de service le droit de réécrire
+ses propres accès, c'est-à-dire de s'ajouter une clé. Un compte à moindre
+privilège qui peut s'en accorder n'en est plus un. Les deux chemins passent donc
+`root:spark-docker 0750/0640`, la règle du §42.2 ter sans exception : root garde
+la propriété, le compte obtient la lecture, et rien de plus. OpenSSH accepte un
+`authorized_keys` appartenant à root tant qu'il n'est écrivable ni par le groupe
+ni par les autres.
+
+**Où la reprojection devait aller, et c'est ce qui a demandé le plus de soin.**
+La poser au seul amorçage aurait donné une porte qui s'ouvre, puis se referme au
+**premier changement de clé** : le §17.1 réécrit `authorized_keys` en entier à
+chaque ajout et à chaque retrait, et `push_file` reposerait un fichier fermé. Une
+panne sans geste apparent, du genre qu'on cherche des heures. Elle vit donc dans
+`_apply_keys`, au plus près de l'écriture, et l'amorçage la rejoue une fois
+l'observation écrite — avant elle, l'identité du compte n'est pas encore connue.
+
+**Vérifié sur la même cellule, par le produit et non à la main** : porte ouverte,
+`docker ps` répond sans incantation, et le retrait d'une clé la retire des deux
+fichiers sans refermer la porte.
+
+**Un défaut d'exploitation trouvé en chemin, et qui n'en est pas un.** La console
+a d'abord refusé la session : *la clé d'hôte SSH de ce Spark a changé*. Exact —
+l'adresse `10.77.0.17` avait servi à une cellule précédente. Le produit a raison
+de refuser et de ne pas effacer l'empreinte lui-même ; la réconciliation est un
+geste d'exploitant. À noter pour le manuel : sur une Forge où les adresses se
+recyclent, ce refus est **attendu** après une suppression suivie d'une création.
+
+---
+
 ## 2026-09-07 — Le compte rootless ne pouvait rien lire, et personne n'y entrait
 
 **Le constat vient du responsable**, en une phrase : « mon terminal tombe sur root

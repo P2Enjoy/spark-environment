@@ -5648,10 +5648,16 @@ pas casser la cellule.
   comme le sondage `sonderSshd` prennent ce compte au lieu de `root@` en dur ;
   `spark.terminal_open` et `spark.terminal_close` portent le compte ; le briefing
   donne les deux commandes de rebond.
-- **`StrictModes` est à établir par la mesure**, pas par raisonnement : `sshd` est
-  tatillon sur le propriétaire et les droits de `/home/spark-docker` et de
-  `.ssh`, et l'échec se présente en « Permission denied (publickey) » sans rien
-  expliquer.
+- **Établi par la mesure le 2026-09-07, et ce n'était pas `StrictModes`** : sur
+  une cellule Ubuntu 24.04 réellement amorcée en rootless, la porte
+  `spark-docker` ne s'ouvrait **jamais**. `sshd` lit `authorized_keys` après
+  avoir pris les droits du compte visé, et `push_file` posait
+  `/home/spark-docker/.ssh` en `0700 root:root` avec un `authorized_keys`
+  `0600 root:root` : illisible pour lui. Le journal de `sshd` le nommait —
+  *Could not open user 'spark-docker' authorized keys … : Permission denied* —,
+  le client rendait « Permission denied (publickey) ». Les deux chemins passent
+  donc `root:spark-docker 0750/0640` (§42.2 quater), root gardant la propriété
+  pour que le compte de service ne puisse pas se réécrire ses accès.
 - Ce que l'unité ne doit PAS casser : **root reste le défaut et la porte
   administrative** ; le second compte n'est offert que si le relevé dit
   `rootless`, jamais parce qu'un compte existe (§42.2 bis) ; le fichier reste
