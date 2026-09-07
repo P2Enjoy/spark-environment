@@ -813,6 +813,54 @@ objets, pas quatre nouveaux graphiques. Chaque ligne ramène à la fenêtre du S
 et ne porte **aucun geste** — l'écran de Forge a pour sujet la Forge
 (`docs/DAT.md` §52.11).
 
+### SPK-DS-23 · Un lot collé s'analyse à l'écran avant d'être écrit
+
+@spec docs/BACKLOG.md#SPK-97 · docs/DAT.md §43.10
+
+Coller quarante lignes et cliquer « Importer » écrirait quarante valeurs qu'on
+n'a pas relues. La modale d'import a donc **deux pas**, dans la même surface et
+sous le même titre (`DESIGN_SYSTEM.md` §6.27 — une modale, une section) :
+
+1. **coller** — une zone de texte, l'exemple du format, et l'interrupteur « tout
+   déclarer secret » qui pré-coche les lignes du pas suivant. L'engagement
+   s'appelle **Analyser** : il ne touche rien ;
+2. **relire** — une ligne par variable lue, avec sa valeur, sa case *Secret*, et
+   ce qui lui arrivera. L'engagement s'appelle **Importer N entrées**, et il
+   porte le compte : c'est le seul endroit où l'on peut encore compter.
+
+**L'analyse ne se fait pas à la frappe.** Le §14.3 vaut ici sans exception :
+repeindre à chaque touche arracherait le focus au milieu d'un collage. Le pas
+d'analyse est donc **demandé**, jamais déclenché tout seul, et l'on revient au
+texte par un bouton **Corriger le texte** qui rend la saisie intacte.
+
+**Trois choses se disent au pas de relecture, et aucune n'est décorative :**
+
+- **ce qui sera remplacé.** Une entrée dont le nom existe déjà porte un badge
+  `accent` « remplace la valeur actuelle ». C'est la seule conséquence
+  destructive du geste, et elle doit se voir **avant** ;
+- **ce qui a été refusé, avec son numéro de ligne.** Une ligne sans `=`, un nom
+  hors grammaire, un guillemet non refermé : la ligne est rendue, numérotée,
+  avec sa **raison**. Les jeter en silence donnerait un import « réussi » à qui
+  a collé quarante lignes et en a écrit trente-sept ;
+- **ce qui a été supplanté.** Le même nom deux fois, c'est la dernière ligne qui
+  l'emporte — la règle du shell —, et la ligne perdante le **dit**. Appliquer la
+  règle sans l'écrire ferait chercher longtemps pourquoi la valeur posée n'est
+  pas celle qu'on lit dans son texte.
+
+**Aucune case *Secret* n'est cochée par le produit.** Le `docs/DAT.md` §43.3
+interdit la devinette par le nom, et une case pré-cochée « parce que le nom
+contient `KEY` » serait cette devinette, avec l'autorité de l'écran en plus. Le
+`docs/DAT.md` §43.10.2 dit pourquoi la valeur, elle, reste **lisible** à ce pas :
+elle n'est pas encore écrite, elle vient du presse-papier, et elle est déjà sous
+les yeux dans la zone de texte du pas précédent.
+
+**La zone de texte** suit le §6.9 : libellé, contrôle, aide. Elle est en
+`--font-mono`, ne se redimensionne qu'en hauteur (`resize: vertical`), et garde
+au moins huit lignes visibles — une zone de deux lignes pour un `.env` de
+quarante lignes ferait défiler pour relire ce qu'on vient de coller. C'est le
+pendant en **entrée** de SPK-DS-19, qui traite le texte fait pour être copié en
+**sortie** : le même respect des lignes, pour la raison inverse.
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

@@ -320,6 +320,14 @@
   grille de produit. Les parts du seed, 0,25 et 0,50 CPU, restent atteignables au
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
+### Modifié
+- **Le dossier de déploiement d'un Spark porte enfin sa distribution et son
+  architecture sur la Forge de test** (SPK-85, OP-15) : la migration `013`
+  n'était pas déployée, et le dossier disait « système non relevé » pour tous les
+  Sparks. La Forge exécute désormais la version de schéma 015 ; relu sur elle, le
+  dossier de son Spark en service porte « Distribution : ubuntu resolute » et
+  « Architecture : x86_64 ».
+
 ### Corrigé
 - **`make manuel` détruisait cinq illustrations qu'il ne savait plus produire**
   (`docs/DAT.md` §30.1, arbitré le 2026-09-08) : le harnais vidait le dossier des

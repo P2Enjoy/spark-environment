@@ -5177,7 +5177,7 @@ panne valait mieux que la taire, mais ne valait pas la corriger.
   et sur une sauvegarde impossible, `backup failed` et sortie 70 sans rien
   installer. Deux preuves d'hôte et deux preuves de service ajoutées.
 
-### [~] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
+### [x] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
 
 Demandé par le responsable le 2026-09-02 : « pour un Spark configuré, un bouton
 *LLM* comme le font certains sites — un texte copié dans le presse-papier, à
@@ -5258,7 +5258,14 @@ précis où l'on prépare.
   est manuelle. La console le SAIT — `/readyz` publie `schema_version`, relevée
   avant la mise à jour et relue après — au lieu de le supposer ; quand elle n'a
   pas pu relever, elle le dit et énonce le risque au conditionnel.
-- **Reste à faire pour passer `[x]`** : la mise à jour de la Forge. La migration
+- **CLOSE le 2026-09-08 : la Forge est à jour.** Le seul point restant était le
+  déploiement, fait deux fois le 2026-09-07 — par le paquet puis par le bouton de
+  la console —, et le registre de la Forge de test porte la version de schéma
+  **015**, donc la `013` de cette unité. L'effet est **observable** : le dossier
+  de `sso-p2enjoy`, relu sur la Forge réelle, porte « Distribution : ubuntu
+  resolute » et « Architecture : x86_64 » là où il aurait dit « système non
+  relevé ». L'OP-15 est marquée appliquée au contrat de déploiement.
+- **Ce qui reste vrai, et qui n'est pas un manque** : la migration
   `013` n'est PAS un geste manuel — `check_registry` l'applique au démarrage de
   `sparkd`, donc au redémarrage que `sparkd.install` déclenche depuis
   « Mettre à jour sparkd ». Ce qui reste humain, c'est la décision de déployer,
@@ -5946,6 +5953,63 @@ ce que la mesure a dû faire à la main (`docker import`) pour éprouver SPK-94.
   geste ; un second amorçage ne redémarre pas le démon ; tests unitaires et test
   E2E propres à l'unité ; captures observées ; DAT, manuel M6, contrat de
   déploiement et changelog mis à jour ; `@spec` / `@verifies` posés.
+
+
+### [ ] SPK-97 · Coller un `.env` : importer variables et secrets en un geste
+
+Demandé par le responsable le 2026-09-08 : « on devrait pouvoir importer des
+variables et des secrets comme le fait Netlify : on ouvre une modale avec une
+case de texte et on y colle des variables avec leur valeur, style bash. Et à
+l'import on crée les variables et les secrets dans le Spark ou la Forge. »
+
+L'écran ne sait aujourd'hui poser qu'**une entrée à la fois** : ouvrir la modale,
+nommer, saisir, déclarer, engager. C'est le bon geste pour corriger une valeur.
+Pour installer une pile, dont le `.env` porte couramment vingt à quarante lignes,
+c'est une raison de ne pas se servir de l'écran — et ce que l'exploitant fait
+alors est prévisible : il écrit le fichier à la main dans la cellule, où la
+prochaine réécriture depuis l'état voulu l'effacera sans prévenir (§43.2).
+
+- Spécification : `docs/DAT.md` §43.10 (la grammaire lue, le lot, les refus),
+  §43.10.2 (le secret reste déclaré), §43.10.3 (une route de lot et pas N
+  appels), §43.9.5 (tableau des routes complété) · `DESIGN_SYSTEM_APP.md`
+  SPK-DS-23 · manuel M8. **Écrite et committée avant le code.**
+- Portée : `POST /v1/env/import` et `POST /v1/sparks/{nom}/env/import`, corps
+  `{"entries": [{"name", "value", "secret"}], "accept_protected"}` ; un analyseur
+  de texte collé dans la console, inverse exact de `citer()` (§43.9.7) ; une
+  modale à deux pas — coller, puis relire — sur le catalogue de la Forge **et**
+  sur la facette *Environnement* d'un Spark.
+- **Aucune migration** : `env_entry` porte déjà tout, et un import n'ajoute aucun
+  état. Si une migration devient nécessaire, c'est que le dessin a dérivé du
+  §43.10.4 — « ce n'est pas une synchronisation ».
+- **Aucun changement de seed** : l'import est un geste, pas un état. Le seed
+  couvre déjà les trois origines et un secret ; une entrée née d'un lot ne se
+  distingue pas d'une entrée saisie, et elle ne le doit pas.
+- Ce que l'unité ne doit PAS casser : le §43.3 — aucune valeur de secret n'est
+  rendue par l'API après écriture, l'import n'ouvrant aucune voie de relecture ;
+  le §43.6 révisé — un lot importé au catalogue de la Forge ne descend nulle
+  part de lui-même ; le §43.9.5 bis — les Sparks protégés destinataires sont
+  nommés avant, et aucune protection n'est levée ; le geste unitaire `PUT`, qui
+  reste la voie normale pour une valeur.
+- **Trois refus doivent exister et se distinguer** : une ligne sans `=`, un nom
+  hors grammaire du shell, un guillemet ouvert non refermé — cette dernière étant
+  la valeur multiligne, refusée plutôt que devinée, parce qu'une clé privée
+  tronquée en silence ne se voit qu'au démarrage de la pile.
+- Dépend de : SPK-58 pour le magasin et l'encodage, SPK-64 pour la sélection que
+  l'import ne contourne pas, et SPK-33 pour la modale.
+- DoD : depuis le parcours canonique — connexion sur la page d'accueil, puis
+  Forge → Environnement, et Spark → Environnement —, coller un texte de plusieurs
+  lignes, l'analyser, cocher un secret, importer, et constater les entrées à
+  l'écran **et** sur `sparkd`, prouvé de bout en bout ; une valeur déclarée
+  secrète à l'import n'est **jamais** rendue ensuite, cherchée explicitement dans
+  la réponse d'API ; une ligne fautive est **nommée avec son numéro** et
+  n'empêche pas les autres d'être proposées ; un lot dont un nom est hors
+  grammaire est refusé **en entier**, et la modale garde le texte ; un import au
+  catalogue qui touche un Spark protégé demande sa confirmation avant d'écrire ;
+  la valeur relevée dans `/etc/spark/env` et recollée redonne la même valeur,
+  prouvé par un test sur `citer()` et l'analyseur ; tests unitaires côté console
+  et côté service, tests d'API, test E2E propres à l'unité ; captures observées
+  aux principaux formats, états de refus compris ; manuel M8, DAT, design system,
+  contrat d'API et changelog mis à jour ; `@spec` / `@verifies` posés.
 
 
 ---

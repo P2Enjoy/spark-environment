@@ -8891,6 +8891,8 @@ Spark et les deux gestes de sélection :
 | `DELETE /v1/sparks/{nom}/env/{variable}` | la retire |
 | `POST /v1/sparks/{nom}/env/selection/{variable}` | coche une entrée du catalogue pour ce Spark |
 | `DELETE /v1/sparks/{nom}/env/selection/{variable}` | la décoche pour ce Spark |
+| `POST /v1/env/import` | écrit un **lot** au catalogue de la Forge (§43.10) |
+| `POST /v1/sparks/{nom}/env/import` | écrit un **lot** en propre sur ce Spark (§43.10) |
 
 Le corps d'un `PUT` porte `{"value": "…", "secret": true|false}`.
 
@@ -9013,6 +9015,147 @@ ancienne ressusciterait un secret révoqué, par ce fichier-là plutôt que par
 l'autre. Le confort s'arrête donc aux variables ordinaires, et le fichier le dit
 en tête.
 
+
+### 43.10 Coller un lot : l'import de variables et de secrets
+
+Le §43.9.5 pose **un geste par entrée** : `PUT /v1/env/{nom}`, un nom, une
+valeur, une déclaration. C'est le bon contrat pour **corriger** une valeur, et le
+mauvais pour **installer** une pile : un `docker-compose.yml` de locataire arrive
+avec son `.env`, et celui-ci porte couramment vingt à quarante lignes.
+
+Vingt ouvertures de modale ne sont pas une lenteur : c'est une raison de ne pas
+se servir de l'écran. Ce que fait alors l'exploitant est prévisible — il écrit le
+fichier à la main dans la cellule. Le registre cesse alors de dire ce que la pile
+reçoit, et le §43.2 se retourne contre lui : la prochaine réécriture depuis
+l'état voulu **efface** son fichier, sans prévenir, parce qu'elle régénère en
+entier.
+
+**Demandé par le responsable le 2026-09-08**, en désignant le geste de Netlify :
+« on ouvre une modale avec une case de texte et on y colle des variables avec
+leur valeur, style bash ». La forme est donc reprise d'un produit que
+l'exploitant connaît déjà, plutôt qu'inventée ici — ce que le §43.0 bis fait pour
+le magasin, celui-ci le fait pour la saisie.
+
+**Décision : le texte se colle, s'analyse, puis s'écrit.** Trois moments, et
+celui du milieu n'est pas une politesse — c'est lui qui rend l'import vérifiable
+au lieu de le rendre rapide.
+
+#### 43.10.1 La grammaire lue, et ce qu'elle refuse
+
+| Ligne collée | Lue comme |
+|---|---|
+| `SMTP_HOST=mail.exemple.fr` | `SMTP_HOST` vaut `mail.exemple.fr` |
+| `export SMTP_HOST=mail.exemple.fr` | idem : `export` est toléré, on colle souvent depuis un shell |
+| `# un commentaire` | ignorée |
+| ligne vide | ignorée |
+| `A="ab cd"` | `ab cd` — guillemets doubles retirés, `\n` `\r` `\t` `\\` `\"` `\$` rendus |
+| `A='ab$cd'` | `ab$cd` — apostrophes retirées, contenu **littéral** |
+| `A=  ab  ` | `ab` — les blancs de bord d'une valeur **non citée** sont rognés |
+| `A=` | valeur **vide**, et c'est une valeur : le §14.6 la distingue d'une absence |
+
+**Ce qui n'est délibérément PAS fait**, chaque refus ayant sa raison :
+
+- **aucun commentaire de fin de ligne.** `PASSWORD=p@ss#word` garde son `#`.
+  L'idiome `valeur # commentaire` existe ailleurs, et il coupe un mot de passe en
+  deux sans rien dire. Un `#` n'ouvre un commentaire qu'en **début** de ligne ;
+- **aucune valeur multiligne.** Une valeur qui ouvre un guillemet sans le
+  refermer sur la même ligne est **refusée**, et le refus dit d'employer `\n`.
+  L'accepter obligerait à deviner où elle finit, et une clé privée tronquée en
+  silence est exactement le mode de panne que le §43.0 cherche à éviter ;
+- **aucune substitution.** `A=$B` vaut littéralement `$B`. La valeur entre au
+  registre telle quelle ; c'est `citer()` (§43.9.7) qui l'encode à l'écriture ;
+- **aucun retrait.** Un import ajoute et remplace ; il ne supprime jamais ce que
+  le texte ne mentionne pas. Un `.env` partiel viderait sinon la moitié de
+  l'environnement d'un Spark, et le geste s'appellerait « remplacer », pas
+  « importer ».
+
+**L'import lit ce que le produit écrit.** La grammaire ci-dessus est exactement
+l'inverse de `citer()` du §43.9.7 : une valeur relevée dans `/etc/spark/env` et
+recollée ici redonne la **même** valeur — `$`, guillemets, blancs de bord et
+sauts de ligne compris. Deux grammaires qui ne se répondraient pas feraient du
+fichier posé par le produit la seule chose qu'on ne peut pas lui redonner.
+
+#### 43.10.2 Le secret reste DÉCLARÉ, même en lot
+
+Le §43.3 a mesuré que la détection par le nom échoue précisément là où elle
+importe : `DATABASE_URL` porte un mot de passe et n'est retenue par aucun filtre.
+Coller quarante lignes ne change pas ce fait — cela l'aggrave, puisque personne
+ne relit quarante noms.
+
+**L'écran d'analyse porte donc une case par ligne**, et le pas de collage porte
+un interrupteur « tout déclarer secret » qui les pré-coche d'un geste. Le produit
+ne coche rien de lui-même et n'affiche aucune suggestion : une case pré-cochée
+« parce que le nom contient `KEY` » serait une devinette déguisée en aide, et le
+§43.3 dit déjà pourquoi elle se trompe.
+
+Une valeur collée est **lisible à l'écran d'analyse**, y compris sur une ligne
+qu'on s'apprête à déclarer secrète. Ce n'est pas une entorse au §43.3 : ce
+qu'interdit le §43.3, c'est de **rendre** une valeur que le registre détient. Ici
+la valeur n'est pas encore écrite, elle vient du presse-papier de l'exploitant,
+et elle est déjà sous ses yeux dans la zone de texte. La masquer serait un décor.
+Après écriture, elle ne revient jamais.
+
+#### 43.10.3 Une route de LOT, et pas N appels
+
+| Route | Ce qu'elle fait |
+|---|---|
+| `POST /v1/env/import` | écrit un lot au **catalogue** de la Forge |
+| `POST /v1/sparks/{nom}/env/import` | écrit un lot en **propre** sur ce Spark |
+
+Corps :
+`{"entries": [{"name": "…", "value": "…", "secret": false}], "accept_protected": false}`.
+
+C'est un `POST` sur une collection, et non le `PUT` idempotent du §43.9.5 : un
+lot n'a pas de nom, donc pas de place dans un chemin. Rejouer le même corps
+redonne bien le même état — les entrées sont écrites par nom —, mais ce n'est pas
+l'idempotence qui décide ici de la forme.
+
+**Ce que N appels séparés ne donneraient pas**, et qui justifie la route :
+
+1. **tout passe, ou rien.** Les noms sont validés **avant** la première écriture,
+   et le lot s'écrit dans une transaction unique (`docs/SCHEMA.md` §12.3). Un
+   import à moitié posé laisserait une pile démarrer avec la moitié de sa
+   configuration — pire qu'un import refusé, parce que cela ne se voit pas ;
+2. **une seule confirmation de protection.** Le §43.9.5 bis nomme les Sparks
+   protégés que touche un geste de Forge. Quarante appels poseraient quarante
+   fois la même question, et l'on finirait par la cliquer sans la lire ;
+3. **une seule réécriture des fichiers.** Le §43.2 repose les fichiers de la
+   cellule à chaque écriture. Quarante entrées, c'est quarante fois trois
+   fichiers réécrits, et autant de fenêtres où la cellule tient un jeu partiel ;
+4. **une ligne de journal pour le GESTE.** `env.import` porte le compte et les
+   **noms**, jamais les valeurs (§43.3), à côté des `env.set` de chaque entrée.
+   Sans elle, un import de quarante lignes et quarante gestes distincts se
+   liraient de la même façon au journal.
+
+**Les refus, chacun distinct :**
+
+| Situation | Réponse |
+|---|---|
+| lot vide | `422 empty_import` — il n'y a rien à écrire, et le dire vaut mieux qu'un succès qui n'a rien fait |
+| un ou plusieurs noms hors grammaire du shell | `422 invalid_name` avec **tous** les noms fautifs, jamais le premier seul : on corrige un lot en une fois, pas en quarante allers-retours |
+| deux entrées du même nom dans le lot | `422 duplicate_name` — le serveur ne choisit pas laquelle gagne |
+| Spark protégé | `423 Locked`, comme toute écriture qui vise un Spark gelé (§35.2) |
+| Sparks protégés destinataires d'une entrée du catalogue | `409 protected_sparks_affected`, puis `accept_protected` (§43.9.5 bis) |
+| Spark inconnu | `404` |
+
+Le doublon est refusé **par le serveur** alors que la console, elle, applique la
+règle du shell — la dernière ligne l'emporte — et le **dit** sur la ligne
+supplantée. Les deux ne se contredisent pas : la console résout une ambiguïté du
+texte collé sous les yeux de l'exploitant, l'API reçoit des entrées déjà
+structurées où le même nom deux fois n'a plus aucune résolution visible.
+
+#### 43.10.4 Ce que l'import n'est pas
+
+- **Ce n'est pas un export.** Aucun geste ne rend le texte inverse : il porterait
+  la valeur des secrets, et le §43.3 n'en a aucune route.
+- **Ce n'est pas une synchronisation.** Rien n'est retiré, rien n'est comparé à
+  un fichier de référence, et il n'existe aucun état « importé » : une fois
+  écrite, une entrée venue d'un lot ne se distingue plus d'une entrée saisie à la
+  main, et elle ne le doit pas.
+- **Ce n'est pas une sélection.** Un lot importé au catalogue de la Forge ne
+  descend **nulle part** de lui-même : le §43.6 révisé reste entier, et chaque
+  Spark coche ce qu'il reçoit. Importé sur un Spark, il vaut immédiatement pour
+  lui seul, comme toute variable propre.
 
 ## 44. Le briefing d'un Spark : ce qu'un agent doit savoir en entrant
 

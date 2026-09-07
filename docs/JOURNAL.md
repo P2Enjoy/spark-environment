@@ -10198,3 +10198,74 @@ garde `SPK-DS-19` ; le refus de redémarrage devient `SPK-DS-22`.
 **État à la fin de cette session de spécification.** Aucune ligne de code écrite.
 Les documents sont committés d'abord, comme le veut CLAUDE.md §5 : DAT §52,
 SCHEMA §10 sexies, SPK-DS-20, SPK-93, OP-16, README, changelog.
+
+## 2026-09-08 · SPK-97 — coller un `.env`, et les trois refus qu'un analyseur doit avoir
+
+**Le problème posé par le responsable.** « On devrait pouvoir importer des
+variables et des secrets comme le fait Netlify. » Le geste unitaire du §43.9.5 —
+une entrée, une modale, quatre champs — est le bon pour corriger une valeur. Pour
+installer une pile de locataire, dont le `.env` porte vingt à quarante lignes, il
+ne l'est pas.
+
+**La conséquence, qui est le vrai sujet.** Un exploitant qui ne se sert pas de
+l'écran ne renonce pas aux variables : il écrit le fichier à la main dans la
+cellule. Le registre cesse alors de dire ce que la pile reçoit — et le §43.2, qui
+régénère les fichiers **en entier** depuis l'état voulu, efface son travail à la
+prochaine écriture, sans un mot. L'import n'est donc pas un confort de saisie :
+c'est ce qui garde le registre vrai.
+
+**Trois décisions prises en spécifiant, qui n'étaient pas dans la demande.**
+
+1. **Le pas d'analyse, entre le collage et l'écriture.** Une zone de texte suivie
+   d'un bouton « Importer » écrirait quarante valeurs qu'on n'a pas relues, et le
+   compte rendu arriverait trop tard. Le pas du milieu n'est pas une politesse :
+   c'est le seul endroit où l'on voit encore ce qui sera **remplacé**, ce qui a
+   été **refusé** et ce qui a été **supplanté**. Il est demandé par un bouton, et
+   non déclenché à la frappe — repeindre à chaque touche arracherait le focus en
+   plein collage (§14.3).
+2. **La valeur multiligne est refusée, pas devinée.** C'est le point où j'ai
+   hésité le plus longtemps : une clé privée collée sur douze lignes est un cas
+   réel. L'accepter obligerait à deviner où la valeur se termine, et une clé
+   tronquée en silence ne se voit qu'au démarrage de la pile, loin du geste. Un
+   guillemet ouvert non refermé est donc un refus qui **nomme sa ligne** et dit
+   d'employer `\n`. Refuser bruyamment vaut mieux qu'accepter à moitié.
+3. **Aucun commentaire de fin de ligne.** L'idiome `valeur # commentaire` est
+   répandu, et il couperait `PASSWORD=p@ss#word` en deux. Un `#` n'ouvre un
+   commentaire qu'en **début** de ligne. C'est un écart assumé avec certains
+   analyseurs `.env`, écrit au §43.10.1 pour ne pas être « corrigé » plus tard.
+
+**Ce que la spécification existante a tranché sans discussion.** Le §43.3 a
+mesuré que la détection d'un secret par le nom échoue là où elle importe
+(`DATABASE_URL`). Coller quarante lignes n'y change rien, sinon que personne ne
+relira quarante noms : l'écran d'analyse porte donc une case par ligne, et le
+produit n'en coche aucune. Une case pré-cochée « parce que le nom contient
+`KEY` » serait la devinette du §43.3, avec l'autorité de l'écran en plus.
+
+**Une propriété cherchée, et retenue comme contrat.** L'analyseur est l'inverse
+exact de `citer()` (§43.9.7) : une valeur relevée dans `/etc/spark/env` et
+recollée dans la zone de texte redonne la même valeur — `$`, guillemets, blancs
+de bord et sauts de ligne compris. Sans cette symétrie, le fichier que le produit
+écrit lui-même serait la seule chose qu'on ne peut pas lui redonner.
+
+**Une route de lot plutôt que N appels**, pour quatre raisons dont trois ne sont
+pas des raisons de performance : l'atomicité (un import à moitié posé fait
+démarrer une pile à moitié configurée, et cela ne se voit pas), une seule
+confirmation de protection (§43.9.5 bis — quarante fois la même question finit
+par se cliquer sans se lire), une seule réécriture des fichiers de la cellule, et
+une ligne de journal pour le **geste**. Le serveur, lui, **refuse** un même nom
+deux fois dans un lot, là où la console applique la règle du shell et l'écrit sur
+la ligne perdante : la console résout une ambiguïté du texte sous les yeux de
+l'exploitant, l'API reçoit des entrées structurées où l'ambiguïté n'a plus
+aucune résolution visible.
+
+**Ce que l'unité ne fait pas, écrit pour ne pas être redemandé** : aucun export —
+il porterait la valeur des secrets ; aucune synchronisation — rien n'est retiré
+de ce que le texte ne mentionne pas ; aucune sélection — un lot importé au
+catalogue de la Forge ne descend nulle part de lui-même, le §43.6 révisé restant
+entier.
+
+**État à la fin de cette session de spécification.** Aucune ligne de code écrite.
+Les documents sont committés d'abord, comme le veut `CLAUDE.md` §5 : DAT §43.10
+et §43.9.5 complété, `SPK-DS-23`, SPK-97. Le changelog, lui, ne bougera qu'avec
+le code : sa section `[Non publié]` décrit ce qui EXISTE (`CLAUDE.md` §6), et y
+annoncer une fonction non écrite en ferait la première ligne fausse du fichier.
