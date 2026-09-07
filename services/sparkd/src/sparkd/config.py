@@ -2,7 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-01 · docs/DAT.md §5 (Topologie physique et surface reseau),
       §8.8.3 (la marge de metadonnees et pourquoi elle est configurable),
-      §11 (Securite), §44.8 (adresse publique du briefing) · README.md section
+      §11 (Securite), §44.8 (adresse publique du briefing),
+      §52.2 et §52.5 (cadence et retention de l'historien) · README.md section
       « Variables d'environnement »
 
 La garde d'adresse d'ecoute implemente une invariante de securite du produit,
@@ -44,6 +45,15 @@ DEFAULT_CPU_RESERVE = 0.5
 #: qu'une marge trop juste rendrait le remede intermittent, donc pire qu'absent.
 DEFAULT_STORAGE_METADATA_MARGIN = "64MiB"
 DEFAULT_LOG_LEVEL = "info"
+#: SPK-93 · §52.2 : cadence de l'historien d'usage. 15 s est deux ordres de
+#: grandeur au-dessus de la fenetre minimale du §20 (0,5 s) : le taux n'est
+#: jamais bruite par une fenetre trop courte. `0` DESACTIVE l'historien, et les
+#: ecrans le nomment au lieu d'afficher un vide (§14.5).
+DEFAULT_METRICS_INTERVAL = "15s"
+#: SPK-93 · §52.5 : duree conservee. Sept jours parce qu'un incident du samedi se
+#: regarde le lundi. `0` desactive la PURGE, pas l'historien : le registre croit
+#: alors sans limite, et c'est une decision d'exploitant qui doit etre explicite.
+DEFAULT_METRICS_RETENTION = "7d"
 
 DRIVERS = ("incus", "fake")
 
@@ -83,6 +93,37 @@ def _parse_reserved_ports(raw: str) -> tuple[int, ...]:
     return tuple(sorted(set(ports)))
 
 
+#: Suffixes acceptes par `parse_duration`, en secondes.
+_DUREES = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def parse_duration(raw: str, *, variable: str) -> float:
+    """Duree en secondes, depuis « 15s », « 7d », « 90 » ou « 0 ».
+
+    Sans suffixe, l'unite est la SECONDE : c'est la seule lecture qui ne surprend
+    personne pour une cadence, et la seule qui rende « 0 » sans ambiguite.
+    Une duree negative est refusee — elle n'a de sens ni comme cadence ni comme
+    retention, et l'accepter ferait purger le futur.
+    """
+    texte = str(raw).strip().lower()
+    if not texte:
+        raise ConfigError(f"{variable} : duree vide.")
+    unite = 1
+    if texte[-1] in _DUREES:
+        unite = _DUREES[texte[-1]]
+        texte = texte[:-1].strip()
+    try:
+        valeur = float(texte)
+    except ValueError:
+        raise ConfigError(
+            f"{variable} : « {raw} » n'est pas une duree. Attendu un nombre, "
+            "suivi de s, m, h ou d."
+        ) from None
+    if valeur < 0:
+        raise ConfigError(f"{variable} ne peut pas etre negatif.")
+    return valeur * unite
+
+
 class ConfigError(ValueError):
     """Configuration refusee. Le service ne demarre pas."""
 
@@ -117,6 +158,10 @@ class Config:
     cpu_reserve: float
     storage_metadata_margin_bytes: int
     reserved_ports: tuple[int, ...]
+    #: SPK-93 · §52.2 : cadence de l'historien, en secondes. `0` le desactive.
+    metrics_interval_seconds: float
+    #: SPK-93 · §52.5 : retention, en secondes. `0` desactive la purge.
+    metrics_retention_seconds: float
 
     @property
     def bind(self) -> str:
@@ -257,4 +302,10 @@ def load(env: dict[str, str] | None = None) -> Config:
         storage_metadata_margin_bytes=marge,
         reserved_ports=_parse_reserved_ports(
             source.get("SPARKD_RESERVED_PORTS", "")),
+        metrics_interval_seconds=parse_duration(
+            source.get("SPARKD_METRICS_INTERVAL", DEFAULT_METRICS_INTERVAL),
+            variable="SPARKD_METRICS_INTERVAL"),
+        metrics_retention_seconds=parse_duration(
+            source.get("SPARKD_METRICS_RETENTION", DEFAULT_METRICS_RETENTION),
+            variable="SPARKD_METRICS_RETENTION"),
     )

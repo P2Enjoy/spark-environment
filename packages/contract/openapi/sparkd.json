@@ -546,7 +546,7 @@
         ]
       },
       "post": {
-        "description": "Ajoute une reference. Geste EXPLICITE, hors formulaire de creation.",
+        "description": "Ajoute au catalogue. Geste EXPLICITE, hors formulaire de creation.\n\nDeux voies, et elles ne prouvent pas la meme chose (docs/DAT.md §33.6) :\n\n- `references` : des entrees COCHEES dans le listing du depot. Le serveur\n  relit le depot et reconfirme lui-meme avant d'ecrire — elles naissent\n  `verified`, datees de SA lecture. Croire l'etat annonce par le client\n  serait le succes simule que le design system interdit ;\n- `reference` + `label` : une saisie libre. Elle nait `unknown`, car la\n  declaration de celui qui ajoute ne prouve rien. C'est le repli d'un\n  depot injoignable, et la seule voie vers un alias plus recent que la\n  derniere lecture.",
         "operationId": "add_image_v1_images_post",
         "requestBody": {
           "content": {
@@ -590,6 +590,52 @@
         ]
       }
     },
+    "/v1/images/depot": {
+      "get": {
+        "description": "Ce que le depot publie MAINTENANT, groupe pour etre lisible (§33.6).\n\nLa lecture est directe : ajouter une image au catalogue, c'est vouloir en\ndeployer une qui n'est PAS en cache, donc son telechargement depuis ce\nmeme depot est requis de toute facon. Exiger le depot joignable pour\nchoisir n'ajoute aucune dependance — elle est deja la.",
+        "operationId": "list_depot_v1_images_depot_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "remote",
+            "required": false,
+            "schema": {
+              "default": "images",
+              "title": "Remote",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Depot V1 Images Depot Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Depot",
+        "tags": [
+          "images"
+        ]
+      }
+    },
     "/v1/images/verify": {
       "post": {
         "description": "Releve explicite et date (docs/DAT.md §33.3).\n\nIl n'a pas lieu a chaque ouverture d'un formulaire : cela rendrait la\ncreation tributaire d'un service exterieur, alors que le produit tient\nsans reseau sortant une fois les images en cache.",
@@ -609,6 +655,51 @@
           }
         },
         "summary": "Verify Images",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/v1/images/{image_id}": {
+      "delete": {
+        "description": "Retire une entree du catalogue, avec ses deux refus (§33.7).",
+        "operationId": "remove_image_v1_images__image_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Image V1 Images  Image Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Image",
         "tags": [
           "images"
         ]

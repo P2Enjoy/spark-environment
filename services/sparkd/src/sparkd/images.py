@@ -1,9 +1,11 @@
 """Catalogue d'images système, et son relevé.
 
-@spec docs/BACKLOG.md#SPK-32 · docs/DAT.md §33 (le catalogue d'images),
-      §33.2 (tenu par le registre), §33.3 (la vérification est un relevé),
-      §33.4 (ce que le catalogue n'est pas), §33.5 (l'écran de création) ·
-      docs/SCHEMA.md · §14.2
+@spec docs/BACKLOG.md#SPK-32 · docs/BACKLOG.md#SPK-92 · docs/DAT.md §33 (le
+      catalogue d'images), §33.2 (tenu par le registre), §33.3 (la vérification
+      est un relevé, et ce que l'alias porte), §33.4 (ce que le catalogue n'est
+      pas), §33.5 (l'écran de création), §33.6 (le dépôt se lit en direct et le
+      catalogue se coche), §33.7 (retirer une entrée) · §42.9.6 (annoncer
+      l'amorçabilité) · docs/SCHEMA.md · §14.2
 
 `spark.image` était un texte libre : le seul contrôle portait sur le dépôt, pas
 sur l'alias. `images:debian/31` passait donc tous les contrôles locaux, la ligne
@@ -20,7 +22,7 @@ image. Il tient une liste de références *système*.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from secrets import token_hex
 
@@ -199,11 +201,56 @@ def seed_defaults(connection: sqlite3.Connection) -> int:
 
 
 @dataclass(frozen=True)
+class Publication:
+    """Ce qu'un dépôt publie sous un alias, à l'instant de la lecture (§33.6).
+
+    Le dépôt donne `os`, `release_title`, `arch` et `variant` par produit : le
+    libellé lisible se DÉRIVE donc de ce qu'il publie, au lieu d'être inventé.
+    `debian/13` rend « Debian 13 « trixie » », qui est exactement la forme des
+    entrées pré-renseignées.
+
+    Les architectures sont retenues parce que l'alias n'en porte pas (§33.3) :
+    un alias peut n'exister que pour `arm64`, et écrire « amd64 » sans regarder
+    serait une déclaration de plus.
+    """
+
+    alias: str
+    os: str
+    release: str
+    variante: str
+    architectures: frozenset[str]
+
+    @property
+    def famille(self) -> str:
+        return self.alias.split("/", 1)[0]
+
+    @property
+    def version(self) -> str | None:
+        """`debian/13` → « 13 ». `archlinux`, à publication continue → None."""
+        morceaux = self.alias.split("/")
+        return morceaux[1] if len(morceaux) > 1 else None
+
+    def libelle(self, variante: bool = False) -> str:
+        """Le nom lisible, dérivé de ce que le dépôt publie — jamais inventé."""
+        systeme = self.os or self.famille.capitalize()
+        version = self.version or self.release or ""
+        nom = f"{systeme} {version}".strip()
+        if self.release and self.release != version:
+            nom += f" « {self.release} »"
+        if variante and self.variante:
+            nom += f" ({self.variante})"
+        return nom
+
+
+@dataclass(frozen=True)
 class Catalogue:
     """Alias publiés par un dépôt, à un instant donné."""
 
     aliases: frozenset[str]
     produits: int
+    #: alias -> ce que le dépôt en dit. Vide pour un relevé qui n'a servi qu'à
+    #: trancher present/absent : `verify` n'a besoin que de `aliases`.
+    publications: dict[str, Publication] = field(default_factory=dict)
 
 
 def fetch_remote(url: str, client: httpx.Client | None = None) -> Catalogue:
@@ -225,13 +272,29 @@ def fetch_remote(url: str, client: httpx.Client | None = None) -> Catalogue:
         if ferme:
             client.close()
 
-    alias: set[str] = set()
+    # Un alias couvre plusieurs produits — une architecture chacun (§33.3) —, on
+    # accumule donc leurs architectures au lieu de garder le dernier vu.
+    vus: dict[str, dict] = {}
     for produit in produits.values():
         for nom in (produit.get("aliases") or "").split(","):
             nom = nom.strip()
-            if nom:
-                alias.add(nom)
-    return Catalogue(frozenset(alias), len(produits))
+            if not nom:
+                continue
+            entree = vus.setdefault(nom, {"arch": set(), "produit": produit})
+            entree["arch"].add(produit.get("arch") or "")
+
+    publications = {
+        nom: Publication(
+            alias=nom,
+            os=(v["produit"].get("os") or "").strip(),
+            release=(v["produit"].get("release_title")
+                     or v["produit"].get("release") or "").strip(),
+            variante=(v["produit"].get("variant") or "").strip(),
+            architectures=frozenset(a for a in v["arch"] if a),
+        )
+        for nom, v in vus.items()
+    }
+    return Catalogue(frozenset(publications), len(produits), publications)
 
 
 def fake_fetch(url: str, client=None) -> Catalogue:
@@ -244,7 +307,17 @@ def fake_fetch(url: str, client=None) -> Catalogue:
 
     Il ne prouve jamais qu'une image existe réellement : cela exige le dépôt.
     """
-    return Catalogue(frozenset(alias for _, _, _, alias, _ in DEFAULTS), len(DEFAULTS))
+    publications = {
+        alias: Publication(
+            alias=alias,
+            os=libelle.split(" ")[0],
+            release=alias.split("/", 1)[1] if "/" in alias else alias,
+            variante="default",
+            architectures=frozenset({"amd64"}),
+        )
+        for _, libelle, _, alias, _ in DEFAULTS
+    }
+    return Catalogue(frozenset(publications), len(DEFAULTS), publications)
 
 
 def verify(
@@ -306,3 +379,327 @@ def verify(
                 payload=compte,
             )
         return {"verified_at": horodatage, **compte}
+
+
+# --- lire le dépôt en direct (§33.6) -----------------------------------------
+
+
+def _cle_de_version(version: str | None) -> tuple:
+    """Trie « 24.04 » après « 22.04 », et « 9 » après « 10 » correctement.
+
+    Un tri purement lexical placerait `debian/9` avant `debian/10`, ce qui se lit
+    comme une régression de version.
+    """
+    if not version:
+        return (0,)
+    morceaux = []
+    for bout in version.replace("-", ".").split("."):
+        morceaux.append((1, int(bout)) if bout.isdigit() else (0, bout))
+    return tuple(morceaux)
+
+
+def grouper(publications: dict[str, Publication]) -> list[dict]:
+    """Range 229 alias en 59 lignes lisibles, sans en perdre un seul (§33.6).
+
+    Trois doublons coexistent dans ce que le dépôt publie, et aucun ne se voit
+    sans regarder les données. Mesuré le 2026-09-07 :
+
+    1. **la variante par défaut redit la base.** `debian/13` et
+       `debian/13/default` désignent les MÊMES produits ;
+    2. **le nom de code redit le numéro.** `debian/trixie` et `debian/13` aussi,
+       de même que `ubuntu/noble` et `ubuntu/24.04` ;
+    3. **certaines variantes sont composées.** `freebsd/14.4/ufs` porte le variant
+       `default+ufs` : reconnaître une variante à « le dernier segment est le
+       variant » la manquerait, et l'afficherait comme une version à part.
+
+    D'où le critère retenu, qui ne dépend que du jeu d'alias : **un alias dont le
+    parent est lui-même publié est une variante**, rattachée à la base dont elle
+    descend — par préfixe, car `archlinux/current/cloud` pend sous
+    `archlinux/current`, qui est déjà une variante d'`archlinux`. Le reste est une
+    base. Les bases qui décrivent la même chose — même famille, même publication,
+    même variant — sont ensuite fondues, en gardant celle qui ne répète pas le
+    nom de code ; les autres deviennent des **synonymes**, retenus parce qu'on
+    cherche « noble » aussi souvent que « 24.04 ».
+    """
+    tous = set(publications)
+    bases = [alias for alias in sorted(tous)
+             if "/" not in alias or alias.rsplit("/", 1)[0] not in tous]
+    socles = set(bases)
+
+    groupes: dict[tuple, list[str]] = {}
+    for alias in bases:
+        p = publications[alias]
+        groupes.setdefault((p.famille, p.release, p.variante), []).append(alias)
+
+    retenues: list[tuple[str, list[str]]] = []
+    for candidats in groupes.values():
+        if len(candidats) > 1:
+            # Celle qui ne répète pas le nom de code, puis la plus courte.
+            release = publications[candidats[0]].release
+            preferes = [a for a in candidats
+                        if release not in a.split("/")] or candidats
+        else:
+            preferes = candidats
+        gardee = sorted(preferes, key=lambda a: (len(a), a))[0]
+        retenues.append((gardee, [a for a in candidats if a != gardee]))
+
+    # Les descendants se prennent par PRÉFIXE, et non de parent à enfant :
+    # `archlinux/current/cloud` pend sous `archlinux/current`, qui est lui-même
+    # une variante d'`archlinux`. S'arrêter au premier niveau le perdrait.
+    return [
+        (gardee, synonymes,
+         sorted(a for a in tous
+                if a not in socles
+                and any(a.startswith(base + "/") for base in [gardee, *synonymes])))
+        for gardee, synonymes in retenues
+    ]
+
+
+def depot_listing(
+    connection: sqlite3.Connection,
+    fetch=fetch_remote,
+    remote: str = "images",
+) -> dict:
+    """Ce que le dépôt publie MAINTENANT, groupé pour être lisible (§33.6).
+
+    La lecture est directe, sans table intermédiaire : mesuré le 2026-09-07,
+    l'index et le catalogue pèsent 1,13 Mio pour ~1,3 s, **côté sparkd** — la
+    console ne reçoit que le groupement. Une table de listing coûterait un
+    schéma, une migration et une question de fraîcheur pour économiser cela sur
+    un geste rare.
+    """
+    url = REMOTES.get(remote)
+    if url is None:
+        raise ImageError(
+            f"Le dépôt « {remote} » est inconnu du produit. "
+            f"Connus : {', '.join(sorted(REMOTES))}."
+        )
+
+    catalogue = fetch(url)
+    deja = {e["reference"] for e in listing(connection)}
+    lu_le = _now()
+
+    def entree(alias: str, variante: bool = False) -> dict:
+        publication = catalogue.publications[alias]
+        reference = f"{remote}:{alias}"
+        return {
+            "reference": reference,
+            "alias": alias,
+            "libelle": publication.libelle(variante=variante),
+            "variante": publication.variante,
+            "architectures": sorted(publication.architectures),
+            # Une entrée déjà tenue n'est pas une entrée à ajouter : la modale
+            # la montre cochée et inerte, elle ne sert pas à retirer (§33.6).
+            "au_catalogue": reference in deja,
+        }
+
+    def preferee(alias: list[str], sous: str) -> str:
+        """Parmi des alias synonymes, celui qui se lit le mieux.
+
+        On garde ce qui vit sous la base retenue — `debian/13/cloud` plutôt que
+        `debian/trixie/cloud` —, puis le plus court.
+        """
+        return sorted(alias, key=lambda a: (not a.startswith(sous + "/"),
+                                            len(a), a))[0]
+
+    par_famille: dict[str, list[dict]] = {}
+    for gardee, synonymes, descendants in grouper(catalogue.publications):
+        publication = catalogue.publications[gardee]
+
+        # Les descendants des bases fondues suivent la base retenue : sans cela,
+        # `debian/trixie/cloud` disparaîtrait sans que rien ne le dise.
+        soeurs = descendants
+
+        # Une variante qui porte le variant de la base la REDIT : `debian/13`,
+        # `debian/13/default` et `debian/trixie/default` sont trois noms d'une
+        # seule image. Elles rejoignent les synonymes de la ligne, elles ne
+        # disparaissent pas.
+        redites = [a for a in soeurs
+                   if catalogue.publications[a].variante == publication.variante]
+
+        # Le reste se regroupe par variant : `debian/13/cloud` et
+        # `debian/trixie/cloud` sont la même image sous deux noms.
+        par_variante: dict[str, list[str]] = {}
+        for alias in soeurs:
+            variante = catalogue.publications[alias].variante
+            if variante != publication.variante:
+                par_variante.setdefault(variante, []).append(alias)
+
+        lignes_variantes = []
+        for alias in par_variante.values():
+            retenue = preferee(alias, gardee)
+            vue_variante = entree(retenue, variante=True)
+            vue_variante["synonymes"] = sorted(a for a in alias if a != retenue)
+            lignes_variantes.append(vue_variante)
+
+        ligne = entree(gardee)
+        ligne["version"] = publication.version
+        ligne["synonymes"] = sorted([*synonymes, *redites])
+        ligne["variantes"] = sorted(lignes_variantes,
+                                    key=lambda v: v["variante"] or v["alias"])
+        par_famille.setdefault(publication.famille, []).append(ligne)
+
+    familles = [
+        {
+            "famille": famille,
+            # §42.9.6 : l'amorçage sait équiper « debian » et « ubuntu ». On le
+            # DIT ici comme à la création — annonce, jamais filtre.
+            "amorcable": amorcable(famille),
+            "versions": sorted(lignes,
+                               key=lambda v: _cle_de_version(v["version"]),
+                               reverse=True),
+        }
+        for famille, lignes in sorted(par_famille.items())
+    ]
+
+    return {
+        "remote": remote,
+        "url": url,
+        "read_at": lu_le,
+        "produits": catalogue.produits,
+        "alias": len(catalogue.publications),
+        "familles": familles,
+    }
+
+
+def add_selection(
+    connection: sqlite3.Connection,
+    references: list[str],
+    fetch=fetch_remote,
+    remote: str = "images",
+    actor: str | None = None,
+) -> dict:
+    """Ajoute en LOT des références cochées, reconfirmées par le serveur (§33.6).
+
+    L'entrée naît `verified`, ce qui abolit le double pas « ajouter puis
+    relever ». Mais l'état ne vient PAS du navigateur : on relit le dépôt ici et
+    l'on date `verified_at` de **cette** lecture. Accepter l'état déclaré par le
+    client serait le succès simulé que le `DESIGN_SYSTEM.md` §1.3 interdit — et
+    le §33.3 avec lui : l'état vient du relevé, jamais d'une déclaration.
+
+    C'est un lot parce que la preuve est commune : cocher dix entrées ne coûte
+    qu'une lecture, là où dix ajouts en coûteraient dix.
+    """
+    demandees = [r.strip() for r in references if r and r.strip()]
+    if not demandees:
+        raise ImageError("Aucune image cochée.")
+
+    url = REMOTES.get(remote)
+    if url is None:
+        raise ImageError(
+            f"Le dépôt « {remote} » est inconnu du produit. "
+            f"Connus : {', '.join(sorted(REMOTES))}."
+        )
+
+    catalogue = fetch(url)
+    horodatage = _now()
+
+    # Toutes les références sont confrontées AVANT d'écrire quoi que ce soit :
+    # un lot à moitié posé serait plus difficile à comprendre qu'un refus.
+    inconnues: list[str] = []
+    a_poser: list[tuple[str, str]] = []
+    for reference in dict.fromkeys(demandees):
+        depot, _, alias = reference.partition(":")
+        if depot != remote or not alias or alias not in catalogue.aliases:
+            inconnues.append(reference)
+        else:
+            a_poser.append((reference, alias))
+
+    if inconnues:
+        raise ImageError(
+            "Le dépôt ne publie pas : " + ", ".join(f"« {r} »" for r in inconnues)
+            + ". La lecture a peut-être vieilli — rouvrir la liste."
+        )
+
+    ajoutees: list[dict] = []
+    ignorees: list[str] = []
+    with transaction(connection):
+        for reference, alias in a_poser:
+            if by_reference(connection, reference):
+                # Cochée entre-temps par quelqu'un d'autre : ce n'est pas une
+                # erreur, l'entrée est là et c'est ce qui était voulu.
+                ignorees.append(reference)
+                continue
+            publication = catalogue.publications.get(alias)
+            architectures = publication.architectures if publication else frozenset()
+            identifiant = token_hex(12)
+            connection.execute(
+                "INSERT INTO image_catalog (id, reference, label, remote, alias,"
+                " architecture, state, detail, is_default, created_at, verified_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+                (identifiant, reference,
+                 publication.libelle() if publication else alias,
+                 remote, alias,
+                 # L'architecture n'est pas dans l'alias (§33.3) : on retient ce
+                 # que le dépôt publie, plutôt que d'écrire « amd64 » sans avoir
+                 # regardé.
+                 "amd64" if "amd64" in architectures
+                 else (sorted(architectures)[0] if architectures else "amd64"),
+                 VERIFIED,
+                 f"relevé sur {catalogue.produits} produits publiés",
+                 horodatage, horodatage),
+            )
+            _audit(connection, actor, "image.add", "ok",
+                   f"Image « {reference} » ajoutée au catalogue depuis le dépôt, "
+                   "vérifiée par la même lecture.",
+                   target_type="image", target_id=identifiant,
+                   payload={"reference": reference, "source": "depot"})
+            ajoutees.append(by_reference(connection, reference))
+
+    return {"verified_at": horodatage, "added": ajoutees, "skipped": ignorees}
+
+
+def by_id(connection: sqlite3.Connection, identifiant: str) -> dict | None:
+    ligne = connection.execute(
+        "SELECT * FROM image_catalog WHERE id = ?", (identifiant,)
+    ).fetchone()
+    return dict(ligne) if ligne else None
+
+
+def remove(
+    connection: sqlite3.Connection,
+    identifiant: str,
+    actor: str | None = None,
+) -> dict:
+    """Retire une entrée du catalogue, avec ses deux refus (§33.7).
+
+    Le premier refus ne protège pas l'intégrité : `ensure_selectable` n'est
+    appelé qu'à la CRÉATION (§14.2), jamais à la reprise, donc un Spark existant
+    tourne très bien sans son entrée. Il protège la **lisibilité** — le catalogue
+    est ce qui explique sur quoi tourne une cellule, et le retirer pendant qu'un
+    Spark s'en réclame ferait croire que cette origine n'a jamais existé, ce que
+    le §33.3 interdit déjà pour une entrée `missing`.
+    """
+    entree = by_id(connection, identifiant)
+    if entree is None:
+        raise ImageError("Cette image n'est pas au catalogue.")
+
+    porteurs = [
+        r["name"]
+        for r in connection.execute(
+            "SELECT name FROM spark WHERE image = ? ORDER BY name",
+            (entree["reference"],),
+        )
+    ]
+    if porteurs:
+        raise ImageError(
+            f"« {entree['reference']} » est employée par "
+            + ", ".join(porteurs)
+            + ". Retirer l'entrée effacerait ce qui explique sur quoi "
+            "ces Sparks tournent."
+        )
+
+    if entree["is_default"]:
+        raise ImageError(
+            f"« {entree['reference']} » est l'image proposée par défaut à la "
+            "création. Le produit n'offre pas encore de geste pour en désigner "
+            "une autre : elle n'est donc pas retirable."
+        )
+
+    with transaction(connection):
+        connection.execute("DELETE FROM image_catalog WHERE id = ?", (identifiant,))
+        _audit(connection, actor, "image.remove", "ok",
+               f"Image « {entree['reference']} » retirée du catalogue.",
+               target_type="image", target_id=identifiant,
+               payload={"reference": entree["reference"]})
+    return entree

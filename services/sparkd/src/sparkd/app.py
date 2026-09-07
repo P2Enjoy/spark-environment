@@ -338,15 +338,87 @@ def create_app(config: Config) -> FastAPI:
                                if e["state"] == images_service.VERIFIED],
             }
 
-    @app.post("/v1/images", tags=["images"], status_code=201)
-    def add_image(body: dict = Body(...)) -> dict:
-        """Ajoute une reference. Geste EXPLICITE, hors formulaire de creation."""
+    def _lecteur_de_depot():
+        """Qui interroge le depot, selon le pilote (docs/DAT.md §28.1).
+
+        Avec le pilote factice, le produit doit tenir SANS reseau sortant — au
+        meme titre que `FakeIncus` et `FakeCaddy`. Le relevé du demarrage le
+        faisait deja ; le relevé manuel, lui, partait sur le vrai depot, ce qui
+        rendait la pile de developpement tributaire du reseau pour un geste que
+        le pilote factice est cense couvrir.
+        """
+        return (images_service.fake_fetch if config.driver == "fake"
+                else images_service.fetch_remote)
+
+    @app.get("/v1/images/depot", tags=["images"])
+    def list_depot(remote: str = "images") -> dict:
+        """Ce que le depot publie MAINTENANT, groupe pour etre lisible (§33.6).
+
+        La lecture est directe : ajouter une image au catalogue, c'est vouloir en
+        deployer une qui n'est PAS en cache, donc son telechargement depuis ce
+        meme depot est requis de toute facon. Exiger le depot joignable pour
+        choisir n'ajoute aucune dependance — elle est deja la.
+        """
         with registry() as connection:
             try:
+                return images_service.depot_listing(
+                    connection, fetch=_lecteur_de_depot(), remote=remote)
+            except images_service.ImageError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_image", "message": str(erreur)}) from erreur
+            except Exception as erreur:  # noqa: BLE001 — toute panne doit etre rendue
+                # §33.6 : un depot injoignable ne bloque pas l'ajout. La console
+                # le NOMME et laisse la saisie libre operante ; un 502 muet
+                # supprimerait la seule voie restante.
+                raise HTTPException(status_code=502, detail={
+                    "error": "depot_unreachable",
+                    "message": f"Le depot d'images n'a pas repondu : {erreur}",
+                }) from erreur
+
+    @app.post("/v1/images", tags=["images"], status_code=201)
+    def add_image(body: dict = Body(...)) -> dict:
+        """Ajoute au catalogue. Geste EXPLICITE, hors formulaire de creation.
+
+        Deux voies, et elles ne prouvent pas la meme chose (docs/DAT.md §33.6) :
+
+        - `references` : des entrees COCHEES dans le listing du depot. Le serveur
+          relit le depot et reconfirme lui-meme avant d'ecrire — elles naissent
+          `verified`, datees de SA lecture. Croire l'etat annonce par le client
+          serait le succes simule que le design system interdit ;
+        - `reference` + `label` : une saisie libre. Elle nait `unknown`, car la
+          declaration de celui qui ajoute ne prouve rien. C'est le repli d'un
+          depot injoignable, et la seule voie vers un alias plus recent que la
+          derniere lecture.
+        """
+        with registry() as connection:
+            try:
+                cochees = body.get("references")
+                if cochees is not None:
+                    if not isinstance(cochees, list):
+                        raise images_service.ImageError(
+                            "« references » doit etre une liste de references.")
+                    return images_service.add_selection(
+                        connection, cochees, fetch=_lecteur_de_depot(),
+                        remote=body.get("remote", "images"))
                 return images_service.add(
                     connection, body.get("reference", ""), body.get("label", ""),
                     body.get("architecture", "amd64"),
                 )
+            except images_service.ImageError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_image", "message": str(erreur)}) from erreur
+            except Exception as erreur:  # noqa: BLE001
+                raise HTTPException(status_code=502, detail={
+                    "error": "depot_unreachable",
+                    "message": f"Le depot d'images n'a pas repondu : {erreur}",
+                }) from erreur
+
+    @app.delete("/v1/images/{image_id}", tags=["images"])
+    def remove_image(image_id: str) -> dict:
+        """Retire une entree du catalogue, avec ses deux refus (§33.7)."""
+        with registry() as connection:
+            try:
+                return images_service.remove(connection, image_id)
             except images_service.ImageError as erreur:
                 raise HTTPException(status_code=422, detail={
                     "error": "invalid_image", "message": str(erreur)}) from erreur
@@ -360,7 +432,7 @@ def create_app(config: Config) -> FastAPI:
         sans reseau sortant une fois les images en cache.
         """
         with registry() as connection:
-            return images_service.verify(connection)
+            return images_service.verify(connection, fetch=_lecteur_de_depot())
 
     @app.get("/v1/forge", tags=["forge"])
     def host() -> dict[str, object]:

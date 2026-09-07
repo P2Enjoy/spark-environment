@@ -4091,14 +4091,20 @@ départager, sous les trois formes relevées au §33.3.
 
 Le critère de groupement ne dépend que du jeu d'alias, ce qui le rend insensible
 aux conventions propres à chaque distribution : **un alias dont le parent est
-lui-même publié est une variante de ce parent** ; le reste est une base. Les
-bases qui décrivent la même chose — même famille, même publication, même variant
-— sont ensuite fondues, en gardant celle qui ne répète pas le nom de code.
+lui-même publié est une variante** ; le reste est une base. Une variante se
+rattache à sa base **par préfixe** et non de parent à enfant, car les variantes
+s'imbriquent — `archlinux/current/cloud` pend sous `archlinux/current`, qui est
+déjà une variante d'`archlinux`, et s'arrêter au premier niveau la perdrait.
+Les bases qui décrivent la même chose — même famille, même publication, même
+variant — sont ensuite fondues, en gardant celle qui ne répète pas le nom de
+code ; les variantes le sont à leur tour, par variant.
 
-Rien n'est perdu au passage, et c'est une propriété à tenir : chaque alias publié
-est soit une ligne, soit une variante, soit le **synonyme** d'une ligne. Les
-synonymes sont retenus et rendus, parce qu'on cherche « noble » aussi souvent que
-« 24.04 ». Le seul retrait assumé est la variante par défaut qui redit sa base.
+**Rien n'est perdu au passage, et c'est une propriété à tenir, pas un effet
+heureux** : chaque alias publié est soit une ligne, soit une variante, soit le
+**synonyme** de l'une ou de l'autre. Vérifié sur le dépôt réel : 229 alias
+publiés, 229 atteignables. Les synonymes sont rendus avec la ligne, parce qu'on
+cherche « noble » aussi souvent que « 24.04 », et « trixie » aussi souvent
+que « 13 ».
 
 Les variantes sont un choix **dans** une version, offert seulement là où elles
 existent.

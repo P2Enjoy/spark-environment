@@ -250,9 +250,45 @@ export interface paths {
         put?: never;
         /**
          * Add Image
-         * @description Ajoute une reference. Geste EXPLICITE, hors formulaire de creation.
+         * @description Ajoute au catalogue. Geste EXPLICITE, hors formulaire de creation.
+         *
+         *     Deux voies, et elles ne prouvent pas la meme chose (docs/DAT.md §33.6) :
+         *
+         *     - `references` : des entrees COCHEES dans le listing du depot. Le serveur
+         *       relit le depot et reconfirme lui-meme avant d'ecrire — elles naissent
+         *       `verified`, datees de SA lecture. Croire l'etat annonce par le client
+         *       serait le succes simule que le design system interdit ;
+         *     - `reference` + `label` : une saisie libre. Elle nait `unknown`, car la
+         *       declaration de celui qui ajoute ne prouve rien. C'est le repli d'un
+         *       depot injoignable, et la seule voie vers un alias plus recent que la
+         *       derniere lecture.
          */
         post: operations["add_image_v1_images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/images/depot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Depot
+         * @description Ce que le depot publie MAINTENANT, groupe pour etre lisible (§33.6).
+         *
+         *     La lecture est directe : ajouter une image au catalogue, c'est vouloir en
+         *     deployer une qui n'est PAS en cache, donc son telechargement depuis ce
+         *     meme depot est requis de toute facon. Exiger le depot joignable pour
+         *     choisir n'ajoute aucune dependance — elle est deja la.
+         */
+        get: operations["list_depot_v1_images_depot_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -278,6 +314,26 @@ export interface paths {
          */
         post: operations["verify_images_v1_images_verify_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Image
+         * @description Retire une entree du catalogue, avec ses deux refus (§33.7).
+         */
+        delete: operations["remove_image_v1_images__image_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1253,6 +1309,39 @@ export interface operations {
             };
         };
     };
+    list_depot_v1_images_depot_get: {
+        parameters: {
+            query?: {
+                remote?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     verify_images_v1_images_verify_post: {
         parameters: {
             query?: never;
@@ -1271,6 +1360,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    remove_image_v1_images__image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
