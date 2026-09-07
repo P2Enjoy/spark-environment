@@ -329,6 +329,18 @@
   « Architecture : x86_64 ».
 
 ### Corrigé
+- **Un poste sans agent SSH recevait l'échec générique au lieu de la phrase
+  utile** (SPK-40, `docs/DAT.md` §36.10.9, §14.7) : la console traduit l'échec
+  d'`ssh-keygen` pour ne pas remonter un jeton technique à l'écran, et sa table
+  ne connaissait qu'une des deux tournures qu'OpenSSH emploie pour le même cas —
+  ni agent, ni fichier privé. Mesuré le 2026-08-21 : « Load key "…" : No such
+  file or directory ». Mesuré le 2026-09-08 sur une version plus récente : « No
+  private key found for public key "…" ». La seconde n'étant pas reconnue,
+  l'exploitant lisait un échec sans cause au lieu de « aucun agent ne détient
+  cette clé » — la seule phrase qui dise quoi faire. La reconnaissance reste une
+  **liste de tournures mesurées**, jamais une heuristique : un motif inconnu
+  demeure un échec générique, sans quoi on rangerait dans « agent muet » des
+  pannes qui n'ont rien à voir.
 - **`make manuel` détruisait cinq illustrations qu'il ne savait plus produire**
   (`docs/DAT.md` §30.1, arbitré le 2026-09-08) : le harnais vidait le dossier des
   images puis en reproduisait 25 sur les 30 que le manuel cite. Lancer la cible

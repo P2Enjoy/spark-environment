@@ -71,13 +71,28 @@ export function canonique(intention) {
 /**
  * Traduit l'échec d'`ssh-keygen` en ce qui MANQUE réellement.
  *
- * MESURÉ : sans agent et sans fichier privé, OpenSSH rend « Load key "…" : No
- * such file or directory ». Ce message nomme un fichier que l'exploitant n'a pas
- * demandé, et le §14.7 interdit un jeton technique à l'écran.
+ * MESURÉ, et le message a CHANGÉ entre deux versions d'OpenSSH pour le même
+ * cas — ni agent, ni fichier privé :
+ *
+ *   « Load key "…" : No such file or directory »        (mesuré le 2026-08-21)
+ *   « No private key found for public key "…" »          (mesuré le 2026-09-08)
+ *
+ * Les deux nomment un fichier que l'exploitant n'a pas demandé, et le §14.7
+ * interdit un jeton technique à l'écran : c'est pourquoi on traduit plutôt que
+ * de remonter la phrase. Le second n'était pas reconnu, si bien qu'un poste sans
+ * agent recevait l'échec GÉNÉRIQUE au lieu de « aucun agent ne détient cette
+ * clé » — la seule phrase qui dise quoi faire.
+ *
+ * La reconnaissance reste une LISTE de tournures observées, jamais une
+ * heuristique : un motif inconnu doit rester `ECHEC`, sans quoi on rangerait
+ * dans « agent muet » des pannes qui n'ont rien à voir (§14.6). Le §36.10.9
+ * vaut ici comme ailleurs — se fier au texte d'un tiers oblige à le mesurer, et
+ * à le remesurer quand il change.
  */
 export function classer(code, erreurs = '') {
   if (code === 0) return null;
-  return /No such file|Could not open|not found/i.test(String(erreurs))
+  return /No such file|Could not open|not found|No private key found/i
+    .test(String(erreurs))
     ? AGENT_MUET : ECHEC;
 }
 

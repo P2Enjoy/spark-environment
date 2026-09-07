@@ -114,6 +114,12 @@ test('un échec NON RECONNU n’est pas rangé dans « agent muet »', () => {
   // une clé alors que le défaut est ailleurs.
   assert.equal(classer(0, ''), null);
   assert.equal(classer(255, 'Load key "x": No such file'), AGENT_MUET);
+  // MESURÉ le 2026-09-08 sur un OpenSSH plus récent : le même cas — ni agent, ni
+  // fichier privé — se dit désormais autrement. Non reconnu, il retombait sur
+  // l'échec générique, et l'écran perdait la seule phrase utile : « aucun agent
+  // ne détient cette clé ». Le classement suit le message, il ne le devine pas.
+  assert.equal(
+    classer(255, 'No private key found for public key "/x/resp.pub"'), AGENT_MUET);
   assert.equal(classer(255, 'quelque chose d’autre'), ECHEC);
 });
 
