@@ -1,4 +1,5 @@
-"""@verifies docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §2 (perte ou corruption
+"""@verifies docs/BACKLOG.md#SPK-36 · docs/BACKLOG.md#SPK-91 ·
+             docs/CONTINGENCE.md §2 (perte ou corruption
             du registre), §2.2 (pourquoi une copie de fichier ne suffit pas),
             §2.4 (restaurer) · docs/DAT.md §36.9 (la chaîne d'intégrité)
 
@@ -14,6 +15,7 @@ sauvegarde par un `shutil.copy` rougisse immédiatement.
 
 from __future__ import annotations
 
+import re
 import shutil
 import sqlite3
 from pathlib import Path
@@ -253,3 +255,39 @@ def test_un_fichier_SANS_JOURNAL_est_nommé_au_lieu_de_lever_une_erreur_brute(tm
     with pytest.raises(sauvegarde.SauvegardeError, match="chaîne du journal"):
         sauvegarde.restaurer(autre, tmp_path / "cible.db")
     assert not (tmp_path / "cible.db").exists()
+
+
+# --- SPK-91 · §40.7.1 : la sortie que la recette de mise à jour LIT ----------
+
+
+def test_le_drapeau_chemin_n_ecrit_QUE_le_chemin(tmp_path, capsys):
+    """@verifies docs/BACKLOG.md#SPK-91 · docs/DAT.md §40.7.1
+
+    La recette de mise à jour lit cette ligne pour la porter au reçu, puis la
+    renvoie dans une commande root au retour arrière. Elle doit donc être le
+    chemin, et rien d'autre : extraire un chemin d'une phrase française par un
+    `sed` casserait à la première reformulation — et une reformulation ne se
+    voit pas.
+    """
+    origine = _registre(tmp_path / "reg.db")
+    origine.close()
+    code = sauvegarde.main([str(tmp_path / "sauvegardes"),
+                            "--registre", str(tmp_path / "reg.db"), "--chemin"])
+    assert code == 0
+    sortie = capsys.readouterr().out.splitlines()
+    assert len(sortie) == 1, f"une seule ligne attendue, reçu {sortie}"
+    fichier = Path(sortie[0])
+    assert fichier.exists() and fichier.parent.name == "sauvegardes"
+    # Le NOM porte la date : c'est de lui que la console tire ce qu'elle annonce.
+    assert re.fullmatch(r"spark-\d{8}-\d{6}\.db", fichier.name), fichier.name
+
+
+def test_sans_le_drapeau_le_compte_rendu_reste_lisible(tmp_path, capsys):
+    """Le drapeau AJOUTE une sortie machine ; il n'enlève pas celle de l'humain."""
+    origine = _registre(tmp_path / "reg.db")
+    origine.close()
+    assert sauvegarde.main([str(tmp_path / "sauvegardes"),
+                            "--registre", str(tmp_path / "reg.db")]) == 0
+    sortie = capsys.readouterr().out
+    assert "Sauvegardé :" in sortie
+    assert "structure" in sortie and "journal" in sortie

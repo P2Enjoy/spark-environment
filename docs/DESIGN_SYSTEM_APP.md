@@ -521,27 +521,36 @@ aucun geste n'est proposé. Après un succès, **Revenir à la build précédent
 est un geste sensible distinct, confirmé avec les deux empreintes. Il disparaît
 dès que le reçu n'est plus cohérent avec la build réellement servie.
 
-**Un retour arrière qui ne rétablira rien le DIT, et il le sait** (ajouté le
-2026-09-02, SPK-85 · `docs/DAT.md` §40.6). Mesuré : une base portant une
-migration dont le code n'a pas le fichier est rejetée au démarrage
-(`docs/SCHEMA.md` §12.4). Après une mise à jour qui a migré, « Revenir à la build
-précédente » régresse donc le binaire sans rien rétablir, et laisse le plan de
-contrôle arrêté. Trois règles :
+**Un retour arrière ANNONCE la date qu'il rétablit** (révisé le 2026-09-02,
+SPK-91 · `docs/DAT.md` §40.7). La règle écrite la veille — avertir que le geste
+allait casser la Forge — traitait le symptôme : un bouton qui régresse le binaire
+et laisse le plan de contrôle arrêté n'est pas un retour arrière. Le geste
+restaure désormais **le registre de `sparkd`** avec le code, depuis la sauvegarde
+prise juste avant la mise à jour.
 
-- la console **compare** la version de schéma relevée avant la mise à jour et
-  celle que la vérification a lue après. Elle ne suppose pas : elle mesure, et
-  elle **chiffre** les deux bornes — « schéma 12 → 13 », pas « une migration » ;
-- les **trois** états ont leur texte, et « je ne sais pas » ne se range pas avec
-  « pas de migration » (`DESIGN_SYSTEM.md` §14.6). Une mesure manquante énonce le
-  risque au conditionnel et invite à sauvegarder le registre ; c'est précisément
-  quand la console est le moins sûre d'elle qu'elle ne doit pas se taire ;
-- la mention paraît **deux fois** : sous le bouton, avant qu'on l'ouvre — c'est là
-  qu'on cherche comment revenir en arrière —, et en toutes lettres dans la
-  confirmation. Le geste **reste offert** : le §14.9 interdit de retirer une
-  action qui existe parce que l'écran croit savoir qu'elle finira mal.
+Quatre règles, et la première est la seule qui compte pour l'exploitant :
 
-Preuves observées : `e2e/captures/spk85-07-rollback-migration.png`,
-`spk85-08-rollback-sans-migration.png` et `spk85-09-rollback-mention.png`.
+- la confirmation **nomme la date** rétablie, et **énumère ce qui sera perdu** —
+  Sparks déclarés, quotas, routes, ports, clés, environnement, journal d'audit.
+  Une date sans conséquence ne décide rien, une conséquence sans date non plus ;
+- elle **lève la confusion des deux « restaurer »** : ce geste rétablit `sparkd`,
+  **pas** les instantanés d'un Spark (`docs/DAT.md` §19), qui appartiennent au
+  locataire. Les cellules continuent de tourner, et l'écran le dit ;
+- elle annonce que le **journal raccourcira** et que la supervision le signalera.
+  L'alerte du SPK-DS-06 sera alors *exacte* : la prévenir évite de la lire comme
+  une atteinte au journal ;
+- **sans sauvegarde** — une mise à jour conduite par une console antérieure —,
+  ce n'est pas le même geste, et on ne le maquille pas : l'écran dit qu'il ne
+  rétablira que le code, et la comparaison des versions de schéma reprend son
+  rôle d'avertissement (trois états, `DESIGN_SYSTEM.md` §14.6).
+
+La mention paraît **deux fois** : sous le bouton, avant qu'on l'ouvre — c'est là
+qu'on cherche comment revenir en arrière —, et en toutes lettres dans la
+confirmation. Le geste **reste offert** : le §14.9 interdit de retirer une action
+qui existe parce que l'écran croit savoir qu'elle finira mal.
+
+Preuves observées : `e2e/captures/spk91-01-retablit-a-la-date.png`,
+`spk91-02-sans-sauvegarde.png` et `spk91-03-mention.png`.
 
 ### SPK-DS-14 · Les valeurs dérivées d’une route ou d’une entrée restent lisibles sans paraître éditables
 

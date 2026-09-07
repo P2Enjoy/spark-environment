@@ -1148,24 +1148,25 @@ await fermerContexte(ctx);
   console.log('  91-forge-build-a-jour.png');
   await fermerContexte(ctx);
 
-  // SPK-85 · §40.6 : LE RETOUR ARRIÈRE APRÈS UNE MIGRATION.
+  // SPK-91 · §40.7 : CE QU'UN RETOUR ARRIÈRE RAMÈNE, ET À QUELLE DATE.
   //
-  // Mesuré le 2026-09-02 : une base portant une migration dont le code n'a pas
-  // le fichier est rejetée au démarrage. Le geste ne rétablit donc rien, et la
-  // confirmation doit le dire AVANT qu'on l'engage.
-  for (const [nom, avant, apres, attendu] of [
-    ['spk85-07-rollback-migration', 12, 13, 'refusera de servir'],
-    ['spk85-08-rollback-sans-migration', 13, 13, 'n’a pas migré le registre'],
+  // Le geste rétablit le code ET le registre de `sparkd`, depuis la sauvegarde
+  // prise juste avant la mise à jour. Les deux situations se capturent : celle
+  // qui a une sauvegarde — le cas normal — et celle d'une mise à jour conduite
+  // par une console qui n'en prenait pas.
+  const SAUVEGARDE = '/var/lib/sparkd/sauvegardes/spark-20260902-181500.db';
+  for (const [nom, sauvegarde, attendu] of [
+    ['spk91-01-retablit-a-la-date', SAUVEGARDE, 'Tout sera rétabli tel qu'],
+    ['spk91-02-sans-sauvegarde', null, 'Aucune sauvegarde du registre'],
   ]) {
     const misesAJour = new ForgeUpdateManager({
-      install: async () => ({ stages: { package: 'done' } }),
+      install: async () => ({ stages: { backup: 'done', package: 'done' },
+                              backup: sauvegarde }),
       verify: async (_port, commit) => ({ ok: true, expectedCommit: commit,
-                                          readyz: { schemaVersion: apres } }),
-      probeSchema: async () => avant,
+                                          readyz: { schemaVersion: 13 } }),
+      probeSchema: async () => 12,
     });
     // Le reçu passe par le VRAI chemin : c'est lui qui décide de l'offre.
-    // Le nom DOIT être celui de l'inventaire : le reçu est classé par serveur,
-    // et l'offre ne vaut que pour la Forge qui l'a produit (§40.6).
     await misesAJour.update({ server: { name: 'validation', kind: 'ssh',
                                         host: '203.0.113.10', user: 'ubuntu', port: 22 },
                               localPort: 1, before: ancien, target: tete });
@@ -1175,12 +1176,12 @@ await fermerContexte(ctx);
     await page.waitForSelector('tbody a');
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('[data-action="demander-rollback"]', { timeout: 8000 });
-    if (avant !== apres) {
+    if (sauvegarde) {
       // AVANT d'ouvrir la confirmation : c'est là qu'on cherche comment revenir
-      // en arrière, et c'est donc là qu'il faut lire que ce bouton ne le fera pas.
-      await page.screenshot({ path: join(SORTIE, 'spk85-09-rollback-mention.png'),
+      // en arrière, et ce que cela ramènera décide du geste.
+      await page.screenshot({ path: join(SORTIE, 'spk91-03-mention.png'),
                               fullPage: true });
-      console.log('  spk85-09-rollback-mention.png');
+      console.log('  spk91-03-mention.png');
     }
     await page.click('[data-action="demander-rollback"]');
     await page.waitForFunction(

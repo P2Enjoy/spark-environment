@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   ForgeUpdateManager, parseStages, updateEligibility, updateSshArgs, verifyForge,
+  parseBackup, backupDate, UPDATE_SCRIPT,
 } from './forge-update.js';
 
 const OLD = 'a'.repeat(40);
@@ -180,4 +181,117 @@ test('verifyForge rapporte la version de schema que readyz publie', async () => 
   });
   assert.equal(result.ok, true);
   assert.equal(result.readyz.schemaVersion, 13);
+});
+
+// --- SPK-91 · §40.7 : la sauvegarde du registre autour d'une mise à jour ----
+//
+// @verifies docs/BACKLOG.md#SPK-91 · docs/DAT.md §40.7.1 (sauvegarder avant de
+//           muter), §40.7.2 (restaurer PUIS reinstaller, et le chemin refuse)
+
+const SAUVEGARDE = '/var/lib/sparkd/sauvegardes/spark-20260902-181500.db';
+
+test('la recette porte la phase de sauvegarde AVANT le paquet', () => {
+  // L'ordre est dans le script, pas dans le manager : c'est lui qui garantit
+  // qu'un echec de sauvegarde arrete tout avant la moindre mutation.
+  const script = UPDATE_SCRIPT;
+  assert.ok(script.indexOf('SPARK_UPDATE backup in_progress')
+            < script.indexOf('SPARK_UPDATE package in_progress'),
+            'la sauvegarde doit preceder l installation');
+  assert.match(script, /sparkd\.sauvegarde .*--chemin/);
+  // Un echec de sauvegarde SORT, sans installer.
+  assert.match(script, /SPARK_UPDATE backup failed/);
+  assert.match(script, /exit 70/);
+  // Et le retour arriere arrete sparkd AVANT de restaurer (§40.7.2).
+  assert.ok(script.indexOf('systemctl stop sparkd') < script.indexOf('--restaurer'),
+            'sparkd doit etre arrete avant la restauration');
+});
+
+test('le chemin de sauvegarde est lu dans la sortie, et VALIDE', () => {
+  assert.equal(parseBackup(`SPARK_BACKUP\t${SAUVEGARDE}`), SAUVEGARDE);
+  // Tout ce qui ne ressemble pas a une sauvegarde du §36 est ignore : ce chemin
+  // repart dans une commande root.
+  for (const piege of ['/etc/passwd', '/var/lib/sparkd/sauvegardes/../x.db',
+                       '/var/lib/sparkd/sauvegardes/spark-2026.db', '']) {
+    assert.equal(parseBackup(`SPARK_BACKUP\t${piege}`), null, piege);
+  }
+});
+
+test('la date rendue est celle du NOM du fichier, en UTC', () => {
+  assert.equal(backupDate(SAUVEGARDE), '2026-09-02T18:15:00.000Z');
+  assert.equal(backupDate('/var/lib/sparkd/sauvegardes/x.db'), null);
+  assert.equal(backupDate(null), null);
+});
+
+test('les arguments SSH refusent un chemin de sauvegarde non conforme', () => {
+  const server = { name: 'prod', kind: 'ssh', host: 'f.test', user: 'u', port: 22 };
+  assert.deepEqual(updateSshArgs(server, NEW, OLD).slice(-2), [NEW, OLD]);
+  assert.deepEqual(updateSshArgs(server, NEW, OLD, SAUVEGARDE).slice(-1), [SAUVEGARDE]);
+  assert.throws(() => updateSshArgs(server, NEW, OLD, '/etc/passwd'),
+                /sauvegarde/);
+  assert.throws(() => updateSshArgs(server, NEW, OLD, '; rm -rf /'), /sauvegarde/);
+});
+
+test('le retour arriere RESTAURE le fichier du recu, puis reinstalle', async () => {
+  const appels = [];
+  const manager = new ForgeUpdateManager({
+    install: async (_server, target, previous, options) => {
+      appels.push({ target, previous, restore: options?.restore ?? null });
+      return { stages: { backup: 'done', package: 'done' }, backup: SAUVEGARDE };
+    },
+    verify: async (_port, commit) => ({ ok: true, expectedCommit: commit,
+                                        readyz: { schemaVersion: 13 } }),
+    probeSchema: async () => 12,
+  });
+  await manager.update({ server: SERVER, localPort: 1234, before: OLD, target: NEW });
+
+  const offre = manager.rollbackOffer('prod', NEW);
+  assert.equal(offre.backup, SAUVEGARDE);
+  assert.equal(offre.backupAt, '2026-09-02T18:15:00.000Z');
+
+  await manager.rollback({ server: SERVER, localPort: 1234, currentCommit: NEW });
+  // La mise a jour n'a rien a restaurer ; le retour arriere, si.
+  assert.deepEqual(appels, [
+    { target: NEW, previous: OLD, restore: null },
+    { target: OLD, previous: NEW, restore: SAUVEGARDE },
+  ]);
+});
+
+test('un echec APRES mutation restaure AUSSI, sans quoi la Forge reste arretee', async () => {
+  const appels = [];
+  const manager = new ForgeUpdateManager({
+    install: async (_server, target, previous, options) => {
+      appels.push({ target, restore: options?.restore ?? null });
+      if (target === NEW) {
+        throw Object.assign(new Error('redemarrage casse'), {
+          code: 'remote_install_failed', mutated: true,
+          stages: { backup: 'done', package: 'done' }, backup: SAUVEGARDE,
+        });
+      }
+      return { stages: {} };
+    },
+    verify: async (_port, commit) => ({ ok: true, expectedCommit: commit }),
+    probeSchema: async () => 12,
+  });
+  const rendu = await manager.update({ server: SERVER, localPort: 1234,
+                                       before: OLD, target: NEW });
+  assert.equal(rendu.state, 'failed');
+  assert.equal(appels[1].restore, SAUVEGARDE);
+});
+
+test('sans sauvegarde au recu, le retour arriere reinstalle SEULEMENT', async () => {
+  // Une mise a jour conduite par une console anterieure a SPK-91.
+  const appels = [];
+  const manager = new ForgeUpdateManager({
+    install: async (_server, target, previous, options) => {
+      appels.push(options?.restore ?? null);
+      return { stages: { package: 'done' } };   // aucun `backup`
+    },
+    verify: async (_port, commit) => ({ ok: true, expectedCommit: commit }),
+    probeSchema: async () => 12,
+  });
+  await manager.update({ server: SERVER, localPort: 1234, before: OLD, target: NEW });
+  assert.equal(manager.rollbackOffer('prod', NEW).backupAt, null);
+
+  await manager.rollback({ server: SERVER, localPort: 1234, currentCommit: NEW });
+  assert.deepEqual(appels, [null, null]);
 });

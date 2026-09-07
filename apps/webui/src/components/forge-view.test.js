@@ -16,7 +16,7 @@ import { renderRedemarrage, REBOOT_VIDE,
   renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced,
   renderHostError, renderControlUnavailable, renderHostSkeleton, fillRatio,
   formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
-  renderBuild, renderNotify, UPDATE_VIDE, renderMigrationFranchie,
+  renderBuild, renderNotify, UPDATE_VIDE, renderRetablissement,
 } from './forge-view.js';
 
 test('SSH sans sparkd désigne l assistant sans refus rouge ni faux remède', () => {
@@ -669,57 +669,90 @@ test('une fois engagé, l’écran dit que le contact est PERDU', () => {
   assert.ok(!/data-redemarrage="engager"/.test(rendu));
 });
 
-// --- SPK-85 · §40.6 : le bouton de retour arrière dit ce qu'il ne fera pas ---
+// --- SPK-91 · §40.7 : ce qu'un retour arrière ramène, et à quelle date -------
 //
-// @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §40.6 · docs/SCHEMA.md §12.4 ·
-//           docs/DESIGN_SYSTEM.md §14.6 (trois états distincts), §1.3
+// @verifies docs/BACKLOG.md#SPK-91, #SPK-85 · docs/DAT.md §40.6 révisé, §40.7 ·
+//           docs/SCHEMA.md §12.4 · docs/DESIGN_SYSTEM.md §14.6, §1.3
 
-test('une mise à jour qui a MIGRÉ dit que le retour arrière ne rétablira rien', () => {
-  const rendu = renderMigrationFranchie(
-    { available: true, migrated: true, schemaBefore: 12, schemaAfter: 13 });
-  assert.match(rendu, /class="avertissement"/);
+test('avec une sauvegarde, le retour arrière ANNONCE la date qu’il rétablit', () => {
+  const rendu = renderRetablissement(
+    { available: true, backup: '/var/lib/sparkd/sauvegardes/spark-20260902-181500.db',
+      backupAt: '2026-09-02T18:15:00.000Z', migrated: true,
+      schemaBefore: 12, schemaAfter: 13 });
+  assert.match(rendu, /Tout sera rétabli tel qu'au/);
+  assert.match(rendu, /2026-09-02/);
+  // Ce qui sera PERDU est énuméré : une date sans conséquence ne décide rien.
+  assert.match(rendu, /enregistré depuis sera perdu/);
+  assert.match(rendu, /journal d'audit/);
+  // Le journal raccourcira, et l'alerte de supervision sera EXACTE : le dire
+  // ici évite de la prendre pour une atteinte au journal (§40.7.3).
+  assert.match(rendu, /raccourcira/);
+});
+
+test('le retour arrière NE PARLE PAS des instantanés d’un Spark', () => {
+  // Deux mécanismes portent le mot « restaurer ». Celui-ci rétablit le REGISTRE
+  // de sparkd ; les instantanés (§19) appartiennent au locataire et ne sont pas
+  // touchés. L'écran doit lever la confusion, pas l'entretenir.
+  const rendu = renderRetablissement(
+    { available: true, backupAt: '2026-09-02T18:15:00.000Z' });
+  assert.doesNotMatch(rendu, /instantané/i);
+  assert.match(rendu, /rétablit <strong>sparkd<\/strong>, pas les Sparks/);
+  assert.match(rendu, /continuent de tourner/);
+});
+
+test('sans sauvegarde, on ne maquille pas le geste en retour arrière complet', () => {
+  const rendu = renderRetablissement(
+    { available: true, backupAt: null, migrated: true,
+      schemaBefore: 12, schemaAfter: 13 });
+  assert.match(rendu, /Aucune sauvegarde du registre/);
+  assert.match(rendu, /que le <strong>code<\/strong>/);
+  // Et la conséquence mesurée de SPK-85 reste dite, avec ses deux bornes.
   assert.match(rendu, /refusera de servir/);
-  assert.match(rendu, /restera arrêté/);
-  // Les deux bornes sont CHIFFRÉES : « une migration » sans numéro n'aide pas à
-  // retrouver laquelle jouer en retour arrière.
   assert.match(rendu, /12/);
   assert.match(rendu, /13/);
 });
 
-test('sans migration, l’écran le DIT au lieu de se taire (§14.6)', () => {
-  const rendu = renderMigrationFranchie(
-    { available: true, migrated: false, schemaBefore: 12, schemaAfter: 12 });
-  assert.match(rendu, /n’a pas migré le registre/);
-  assert.match(rendu, /saura le servir/);
-  assert.doesNotMatch(rendu, /class="avertissement"/);
+test('sans sauvegarde et sans migration, l’écran le dit aussi (§14.6)', () => {
+  const rendu = renderRetablissement(
+    { available: true, backupAt: null, migrated: false, schemaAfter: 12 });
+  assert.match(rendu, /n'a pas migré le registre/);
+  assert.match(rendu, /saura\s+le servir/);
 });
 
 test('une mesure manquante énonce le risque, elle ne conclut pas', () => {
   for (const rollback of [{ migrated: null }, {}, undefined]) {
-    const rendu = renderMigrationFranchie(rollback);
-    assert.match(rendu, /class="avertissement"/);
-    assert.match(rendu, /n’a pas pu être relevée/);
-    // On ne prétend NI qu'il y a eu migration, NI qu'il n'y en a pas eu.
-    assert.match(rendu, /Si elle a migré/);
+    const rendu = renderRetablissement(rollback);
+    assert.match(rendu, /Aucune sauvegarde du registre/);
+    assert.match(rendu, /n'a pas pu être relevée/);
+    assert.match(rendu, /Si cette mise à jour a/);
   }
 });
 
-test('la confirmation de retour arrière PORTE l’avertissement', () => {
+test('la confirmation de retour arrière PORTE la date rétablie', () => {
   const rendu = renderBuild(
     { verdict: 'a_jour', titre: 'À jour', detail: 'x',
       rollback: { available: true, previous: 'b'.repeat(40), current: 'a'.repeat(40),
-                  migrated: true, schemaBefore: 12, schemaAfter: 13 } },
+                  backupAt: '2026-09-02T18:15:00.000Z' } },
     { ...UPDATE_VIDE, confirmation: 'rollback' });
   assert.match(rendu, /Revenir à la build précédente \?/);
-  assert.match(rendu, /refusera de servir/);
+  assert.match(rendu, /Tout sera rétabli tel qu'au/);
+  assert.match(rendu, /2026-09-02/);
 });
 
-test('le bouton le dit AVANT qu’on ouvre la confirmation', () => {
-  const rendu = renderBuild(
+test('le bouton dit AVANT ouverture ce que revenir ramènera', () => {
+  const avec = renderBuild(
     { verdict: 'a_jour', titre: 'À jour', detail: 'x',
       rollback: { available: true, previous: 'b'.repeat(40), current: 'a'.repeat(40),
-                  migrated: true, schemaBefore: 12, schemaAfter: 13 } },
+                  backupAt: '2026-09-02T18:15:00.000Z' } },
     UPDATE_VIDE);
-  assert.match(rendu, /data-action="demander-rollback"/);
-  assert.match(rendu, /ne rétablira pas un plan de contrôle qui démarre/);
+  assert.match(avec, /data-action="demander-rollback"/);
+  assert.match(avec, /rétablira aussi le registre au/);
+  assert.match(avec, /sera perdu/);
+
+  const sans = renderBuild(
+    { verdict: 'a_jour', titre: 'À jour', detail: 'x',
+      rollback: { available: true, previous: 'b'.repeat(40), current: 'a'.repeat(40),
+                  backupAt: null } },
+    UPDATE_VIDE);
+  assert.match(sans, /ne rétablira que le code/);
 });

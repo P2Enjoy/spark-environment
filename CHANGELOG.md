@@ -3,17 +3,20 @@
 ## [Non publié]
 
 ### Ajouté
-- **Le retour arrière de `sparkd` dit ce qu'il ne rétablira pas** (SPK-85,
-  `docs/DAT.md` §40.6) : une base qui porte une migration dont le code n'a pas le
-  fichier est **rejetée au démarrage** — mesuré. Après une mise à jour qui a
-  migré le registre, « Revenir à la build précédente » régresse donc le binaire
-  **sans rien rétablir** : l'ancienne build ne démarre pas et le plan de contrôle
-  reste arrêté. La console le **sait** au lieu de le supposer — `/readyz` publie
-  `schema_version`, relevée avant la mise à jour et relue après — et la
-  confirmation le dit en chiffrant les deux bornes, avec la procédure qui, elle,
-  ramène vraiment en arrière. Quand la mesure manque, l'écran énonce le risque au
-  conditionnel plutôt que de conclure ; quand rien n'a migré, il le dit aussi.
-  Le geste reste offert : l'écran nomme la conséquence, il ne décide pas.
+- **Le retour arrière de `sparkd` rétablit AUSSI le registre, et annonce sa date**
+  (SPK-91, `docs/DAT.md` §40.7) : « Revenir à la build précédente » ne régressait
+  que le binaire. Quand la mise à jour avait migré le registre, l'ancienne build
+  **refusait de le servir** — mesuré — et le geste laissait le plan de contrôle
+  arrêté : un bouton qui casse l'outil au lieu de le rétablir. Chaque mise à jour
+  **sauvegarde désormais le registre avant de muter**, et s'arrête si elle ne le
+  peut pas — on ne mute pas ce qu'on ne sait pas rendre. Le retour arrière arrête
+  `sparkd`, restaure cette sauvegarde, puis réinstalle la build précédente, dans
+  cet ordre. La confirmation **nomme la date rétablie** et énumère ce qui sera
+  perdu : Sparks déclarés, quotas, routes, ports, clés, environnement, journal
+  d'audit. Elle dit aussi ce qui n'est **pas** concerné — les cellules continuent
+  de tourner, et les instantanés d'un Spark ne sont pas touchés. Sans sauvegarde
+  — une mise à jour conduite par une console antérieure —, l'écran ne maquille
+  rien : il annonce qu'il ne rétablira que le code.
 - **Une recette de site web pose AUSSI sa route** (SPK-88, `docs/DAT.md`
   §38.6.4 bis) : elle ne l'avait jamais fait — le §38.6.1 la définissait comme un
   jeu d'enregistrements. C'était trop étroit : la recette se lance depuis les
@@ -142,16 +145,6 @@
   curseur ; une valeur déjà posée hors grille continue de se rendre en saisie.
 
 ### Corrigé
-- **Une suppression ratée ne bloque plus le Spark dans « error »** (SPK-90,
-  `docs/DAT.md` §5.5) : après l'échec, reprendre le Spark rendait
-  `POST /1.0/instances : Instance « … » already exists` — le produit tentait de
-  **recréer** la cellule qu'il venait d'échouer à supprimer. La règle existait
-  pourtant, écrite dans le code : « une opération transitoire qui échoue mène à
-  `error`, **sauf la suppression** ». Elle n'avait jamais été implémentée, et
-  depuis `error` la table des transitions fait de « reprendre » une création. Le
-  Spark revient désormais à l'état que la machine **montre**, relu chez Incus,
-  d'où la suppression se relance ; quand cette lecture échoue à son tour, on
-  retombe sur `error`, faute d'avoir observé quoi que ce soit.
 - **Supprimer un Spark en marche fonctionne enfin, et un refus d'Incus se lit**
   (SPK-90, `docs/DAT.md` §5.3, §5.4) : signalé sur la Forge de démonstration, la
   suppression rendait « Client error '400 Bad Request' » suivi d'un lien vers
@@ -162,6 +155,16 @@
   La suppression arrête désormais la cellule d'abord, et **tout** refus d'Incus
   arrive avec les mots d'Incus. Un `404` reste une absence rapportée, pas une
   panne.
+- **Une suppression ratée ne bloque plus le Spark dans « error »** (SPK-90,
+  `docs/DAT.md` §5.5) : après l'échec, reprendre le Spark rendait
+  `POST /1.0/instances : Instance « … » already exists` — le produit tentait de
+  **recréer** la cellule qu'il venait d'échouer à supprimer. La règle existait
+  pourtant, écrite dans le code : « une opération transitoire qui échoue mène à
+  `error`, **sauf la suppression** ». Elle n'avait jamais été implémentée, et
+  depuis `error` la table des transitions fait de « reprendre » une création. Le
+  Spark revient désormais à l'état que la machine **montre**, relu chez Incus,
+  d'où la suppression se relance ; quand cette lecture échoue à son tour, on
+  retombe sur `error`, faute d'avoir observé quoi que ce soit.
 - **Les trois blocs d'une recette peignent enfin quelque chose** (SPK-88,
   `docs/DAT.md` §38.6.4 ter, `docs/DESIGN_SYSTEM.md` §12.3) : la classe
   `recette-lignes` que l'aperçu, le compte rendu et le relevé employaient

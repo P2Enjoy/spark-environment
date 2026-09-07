@@ -5021,7 +5021,7 @@ disparu, alors qu'elle était bien posée dans le DNS ».
 
 ---
 
-### [ ] SPK-91 · Le retour arrière de `sparkd` ramène AUSSI le registre, et dit à quelle date
+### [~] SPK-91 · Le retour arrière de `sparkd` ramène AUSSI le registre, et dit à quelle date
 
 Constat du responsable, 2026-09-02, après la livraison de l'avertissement de
 SPK-85 : « un bouton qui rétablit mais casse l'outil, il faut être crétin pour le
@@ -5061,6 +5061,23 @@ panne valait mieux que la taire, mais ne valait pas la corriger.
   preuves d'écran des deux confirmations — avec sauvegarde datée, et sans ;
   captures observées ; manuel M8 mis à jour ; contrat de déploiement mis à jour ;
   `@spec` / `@verifies` posés.
+- **Implémenté et vérifié en local le 2026-09-02**, statut `[~]` : 7 preuves
+  d'hôte — l'ordre des phases lu dans la recette elle-même, le refus de quatre
+  chemins piégés, la restauration passée au retour arrière volontaire ET au
+  retour arrière automatique, et le cas sans sauvegarde —, 2 preuves de service
+  pour la sortie machine du §36, 6 preuves d'écran, 3 captures observées.
+- **Le retour arrière automatique restaure lui aussi.** Il ne le faisait pas dans
+  la première écriture, et c'était le même défaut : un échec survenu APRÈS que
+  `sparkd.install` a migré laissait la Forge arrêtée, sans que personne n'ait
+  cliqué sur quoi que ce soit.
+- **Le drapeau `--chemin` de `sparkd.sauvegarde`** existe pour que la recette
+  lise le fichier produit sans extraire un chemin d'une phrase française. Une
+  reformulation de compte rendu aurait cassé la mise à jour, et ne se serait pas
+  vue.
+- **Reste à faire pour passer `[x]`** : rien ne prouve encore ce geste sur une
+  Forge réelle — la recette n'est éprouvée que par ses doublons, comme tout le
+  chemin de mise à jour depuis SPK-69. La première mise à jour distante réelle
+  vaudra preuve, et c'est elle qui manque.
 
 ### [~] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
 

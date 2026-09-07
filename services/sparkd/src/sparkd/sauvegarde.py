@@ -2,7 +2,9 @@
 
 @spec docs/BACKLOG.md#SPK-36 · docs/CONTINGENCE.md §2 (perte ou corruption du
       registre), §2.2 (pourquoi une copie de fichier ne suffit pas) ·
-      docs/DAT.md §36.9 (la chaîne d'intégrité) · §31.3 (lire n'est pas réparer)
+      docs/DAT.md §36.9 (la chaîne d'intégrité) · §31.3 (lire n'est pas réparer) ·
+      docs/BACKLOG.md#SPK-91 · docs/DAT.md §40.7 (la sauvegarde autour d'une
+      mise à jour, et le drapeau `--chemin` qu'elle emploie)
 
 **Le point qui décide de ce module.** Le registre est en mode WAL (`db.py`).
 MESURÉ le 2026-08-20, pendant qu'une connexion écrivait :
@@ -178,6 +180,11 @@ def main(argv: list[str] | None = None) -> int:
                            help="registre à remplacer lors d'une restauration")
     analyseur.add_argument("--bind", default="127.0.0.1:9876",
                            help="où sparkd écoute, pour vérifier qu'il est arrêté")
+    # SPK-91 · §40.7.1 : la recette de mise à jour LIT ce chemin pour le porter
+    # au reçu. Le faire extraire d'une phrase française par un `sed` coupait le
+    # script à la première reformulation — et une reformulation ne se voit pas.
+    analyseur.add_argument("--chemin", action="store_true",
+                           help="n'écrire que le chemin du fichier produit")
     args = analyseur.parse_args(sys.argv[1:] if argv is None else argv)
 
     try:
@@ -199,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
             analyseur.error("nommez un répertoire de destination, "
                             "ou employez --restaurer.")
         fichier = sauvegarder(Path(args.registre), Path(args.destination))
+        if args.chemin:
+            print(fichier)
+            return 0
         vu = verifier(fichier)
         print(f"Sauvegardé : {fichier} ({fichier.stat().st_size} octets)")
         print(f"  structure : {vu['structure']}")

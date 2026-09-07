@@ -487,47 +487,58 @@ function renderUpdateProgress(operation) {
 }
 
 /**
- * Ce qu'un retour arrière ne rétablira PAS (SPK-85, docs/DAT.md §40.6).
+ * Ce qu'un retour arrière ramène, et à quelle date (SPK-91, docs/DAT.md §40.7).
  *
- * @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §40.6 (mesuré le 2026-09-02) ·
+ * @spec docs/BACKLOG.md#SPK-91, #SPK-85 · docs/DAT.md §40.6 révisé, §40.7 ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-13 · docs/DESIGN_SYSTEM.md §14.6
  *
- * Mesuré : une base qui porte une migration dont le code n'a pas le fichier est
- * REJETÉE au démarrage (`docs/SCHEMA.md` §12.4). Après une mise à jour qui a
- * migré, la build précédente ne démarre donc pas — le geste ne détruit rien,
- * mais il ne rétablit rien non plus et laisse le plan de contrôle arrêté.
+ * **Le registre de `sparkd`**, et lui seul. Les instantanés d'un Spark (§19)
+ * appartiennent au locataire et ne sont pas concernés : le mot « restaurer »
+ * sert aux deux mécanismes, et les confondre ici ferait croire qu'un retour
+ * arrière du plan de contrôle touche aux cellules. Il n'y touche pas.
  *
- * Trois états, trois textes (§14.6) : la version a monté, elle n'a pas bougé,
- * ou l'une des deux mesures manque. Le troisième ne se range PAS avec le
- * deuxième — c'est là qu'on mentirait par omission.
+ * Deux situations, et la seconde n'est pas une variante de la première :
+ * la mise à jour a laissé une sauvegarde — on rétablit tout, à sa date —, ou
+ * elle n'en a pas laissé, et le geste redevient une régression de binaire seule,
+ * avec ce que cela coûte quand une migration a été franchie (SPK-85).
  */
-export function renderMigrationFranchie(rollback) {
-  if (rollback?.migrated === true) {
+export function renderRetablissement(rollback) {
+  const date = rollback?.backupAt ? formatDate(rollback.backupAt) : null;
+  if (date) {
     return `<div class="avertissement">
-      <p><strong>Cette mise à jour a migré le registre</strong> — schéma
-      <span class="technique">${echapper(rollback.schemaBefore)}</span> →
-      <span class="technique">${echapper(rollback.schemaAfter)}</span>. Revenir
-      au code ne défait pas la migration, et la build précédente
-      <strong>refusera de servir</strong> un registre migré au-delà d’elle :
-      elle ne démarrera pas, et le plan de contrôle restera arrêté.</p>
-      <p>Ce geste ne détruit aucune donnée, mais il ne rétablit rien non plus.
-      Pour revenir en arrière pour de bon : sauvegarder le registre, jouer le
-      retour arrière de la migration, puis réinstaller cette build. La procédure
-      est au contrat de déploiement.</p>
+      <p><strong>Tout sera rétabli tel qu'au ${echapper(date)}</strong> — la
+      sauvegarde du registre prise juste avant cette mise à jour. Le code ET
+      l'état du plan de contrôle reviennent à cet instant.</p>
+      <p><strong>Ce que la Forge a enregistré depuis sera perdu</strong> : les
+      Sparks déclarés, leurs quotas, les routes, les ports publiés, les clés
+      autorisées, l'environnement, et le journal d'audit. Le journal
+      <em>raccourcira</em>, et la supervision le signalera — ce sera exact.</p>
+      <p class="note">Les cellules, elles, continuent de tourner : ce geste
+      rétablit <strong>sparkd</strong>, pas les Sparks. Une cellule créée
+      depuis cette date existera toujours sans que le registre la connaisse.
+      Le registre remplacé est conservé à côté, daté.</p>
     </div>`;
   }
-  if (rollback?.migrated === false) {
-    // §14.6 : dire aussi le cas favorable. Sans lui, l'absence d'avertissement
-    // se lirait comme un oubli, et le silence n'est pas une réponse.
-    return `<p class="note">Cette mise à jour n’a pas migré le registre (schéma
-      <span class="technique">${echapper(rollback.schemaAfter)}</span> inchangé) :
-      la build précédente saura le servir.</p>`;
-  }
+  // §14.6 : sans sauvegarde, ce n'est pas le même geste. On ne le maquille pas
+  // en retour arrière complet.
+  const migre = rollback?.migrated === true
+    ? `<p><strong>Et cette mise à jour a migré le registre</strong> — schéma
+       ${echapper(rollback.schemaBefore)} → ${echapper(rollback.schemaAfter)}. La
+       build précédente <strong>refusera de servir</strong> un registre migré
+       au-delà d'elle : elle ne démarrera pas, et le plan de contrôle restera
+       arrêté jusqu'à une remise en état manuelle.</p>`
+    : rollback?.migrated === false
+      ? `<p>Cette mise à jour n'a pas migré le registre (schéma
+         ${echapper(rollback.schemaAfter)} inchangé) : la build précédente saura
+         le servir.</p>`
+      : `<p>La version du schéma n'a pas pu être relevée. Si cette mise à jour a
+         migré le registre, la build précédente refusera de le servir.</p>`;
   return `<div class="avertissement">
-    <p><strong>La version du schéma n’a pas pu être relevée</strong> avant ou
-    après cette mise à jour. Si elle a migré le registre, la build précédente
-    refusera de le servir et le plan de contrôle restera arrêté. Sauvegardez le
-    registre avant d’engager.</p>
+    <p><strong>Aucune sauvegarde du registre n'accompagne cette mise à jour</strong>
+    — elle a été conduite par une console qui n'en prenait pas. Ce geste ne
+    rétablira donc que le <strong>code</strong> ; l'état du plan de contrôle
+    restera celui d'aujourd'hui.</p>
+    ${migre}
   </div>`;
 }
 
@@ -553,7 +564,7 @@ function renderUpdateActions(build, operation) {
       <span class="technique">${echapper(build.rollback?.current?.slice(0, 12))}</span>
       à <span class="technique">${echapper(build.rollback?.previous?.slice(0, 12))}</span>
       et l’API sera de nouveau brièvement interrompue.</p>
-      ${renderMigrationFranchie(build.rollback)}
+      ${renderRetablissement(build.rollback)}
       <p class="formulaire__actions">
         <button type="button" class="bouton" data-action="confirmer-rollback">Revenir à cette build</button>
         <button type="button" class="bouton" data-action="annuler-update">Annuler</button>
@@ -569,11 +580,15 @@ function renderUpdateActions(build, operation) {
     '<button type="button" class="bouton bouton--compact" data-action="comparer-build">Comparer à nouveau</button>',
   ].filter(Boolean).join('\n');
   return `<p class="formulaire__actions">${actions}</p>
-    ${build.rollback?.available && build.rollback.migrated === true
-      // Le savoir AVANT d'ouvrir la confirmation : un exploitant qui cherche
-      // comment revenir en arrière doit lire ici que ce bouton ne le fera pas.
-      ? `<p class="note">Cette mise à jour a migré le registre : « Revenir à la
-         build précédente » ne rétablira pas un plan de contrôle qui démarre.</p>`
+    ${build.rollback?.available
+      // Le savoir AVANT d'ouvrir la confirmation : c'est ici qu'on cherche
+      // comment revenir en arrière, et ce que cela ramènera décide du geste.
+      ? (build.rollback.backupAt
+        ? `<p class="note">Revenir rétablira aussi le registre au
+           ${echapper(formatDate(build.rollback.backupAt))} : tout ce qui a été
+           enregistré depuis sera perdu.</p>`
+        : `<p class="note">Aucune sauvegarde du registre n’accompagne cette mise à
+           jour : revenir ne rétablira que le code.</p>`)
       : ''}
     ${build.verdict === 'forge_en_retard' && build.update && !build.update.allowed
       ? `<p class="note">Mise à jour indisponible : ${echapper(build.update.reason)}</p>` : ''}`;
