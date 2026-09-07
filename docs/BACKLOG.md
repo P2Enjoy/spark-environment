@@ -4722,7 +4722,7 @@ L'ancienne route de fermeture par balise est retirée : plus rien ne l'appelait.
 
 ---
 
-### [~] SPK-76 · L'amorçage relève la famille de la cellule, et refuse ce qu'il ne sert pas
+### [x] SPK-76 · L'amorçage relève la famille de la cellule, et refuse ce qu'il ne sert pas
 
 Signalé par le responsable le 2026-09-02, sur deux cellules réelles. `alpine-demo`
 rend `Operation Incus en echec (POST …/exec) : Command not found`, et une cellule
@@ -4768,8 +4768,8 @@ produit ne sont pas amorçables correctement, et rien ne le disait avant l'éche
   `bootstrap_failed` avec sa cause, prouvé par un test ; l'écran de création dit
   quelles images sont amorçables ; captures observées ; manuel M6 et M5 mis à
   jour ; `@spec` / `@verifies` posés.
-**Implémentée et prouvée localement le 2026-09-02. Reste `[~]` : la DoD exige une
-preuve sur Forge RÉELLE, qui n'a pas eu lieu.**
+**Implémentée et prouvée localement le 2026-09-02, puis ÉPROUVÉE SUR FORGE
+RÉELLE le 2026-09-07 — les trois cellules exigées par la DoD.**
 
 - Contrat écrit et poussé AVANT la première ligne de code (commit `e35be09`) :
   `docs/DAT.md` §42.9, §41.2 amendé, §42.6 et §42.7 mis en accord.
@@ -4789,11 +4789,22 @@ preuve sur Forge RÉELLE, qui n'a pas eu lieu.**
 - Seed enrichi de `ubuntu-24` et `alpine-demo` : sans eux, le seed ne démontrait
   que le cas où l'amorçage fonctionne, et c'est ce biais qui a laissé passer le
   défaut.
-- **Ce qui manque pour `[x]`** : l'amorçage n'a été éprouvé que contre le pilote
-  factice. La DoD demande un amorçage complet sur une cellule **Ubuntu 24.04**
-  et une **Debian 13** réelles, et un refus observé sur une **Alpine** réelle.
-  Le code n'est pas déployé sur la Forge du responsable, dont les deux cellules
-  ont produit le signalement.
+- **ÉPROUVÉE SUR FORGE RÉELLE le 2026-09-07, et close.** Les trois preuves que la
+  DoD réclamait sont faites sur la Forge de test, chacune depuis le parcours
+  canonique — accueil, création, application, démarrage, puis amorçage :
+  - **Ubuntu 24.04** (`rootless-mesure`) : dépôt réécrit en `ubuntu noble`,
+    Docker 29.8.0, Compose v5.5.1, cellule complète. Déjà obtenu en enraciné le
+    2026-09-02, refait ce jour en rootless ;
+  - **Debian 13** (`debian13-mesure`) : dépôt `debian trixie`, Docker 29.8.0
+    **enraciné**, Compose v5.5.1, cellule complète. Capture
+    `spk76-forge-debian13-amorce.jpg` ;
+  - **Alpine 3.21** (`alpine-mesure`) : le relevé rend un refus qui **nomme la
+    distribution** — « L'amorçage ne sait pas servir *alpine*. Il installe SSH et
+    Docker sur les distributions de la famille Debian » —, dit que la cellule
+    reste utilisable, et **retire le bouton d'amorçage** au lieu de le laisser
+    échouer. Vérifié dans la cellule ensuite : ni `docker`, ni `sshd`, ni dépôt
+    posé. Rien n'a été exécuté. Capture `spk76-forge-alpine-refus.jpg`.
+  Les trois cellules ont été supprimées après mesure.
 - Reste à trancher avec le responsable : la **progression** pendant l'amorçage,
   signalée le même jour — « on n'a pas de *progress* quand on amorce un Spark ».
   Une pose complète dure plusieurs minutes derrière un `POST` synchrone muet.

@@ -97,6 +97,66 @@ Forge de test vient de le facturer trois fois.
 
 ---
 
+## 2026-09-07 — Ce que le backlog disait, et ce que le dépôt contenait
+
+Relecture systématique des unités en attente, en croisant chaque identifiant avec
+l'historique Git. **Cinq unités marquées `[ ]` — non commencées — avaient leur
+code, leurs preuves et leur manuel livrés depuis le 2026-09-02.** SPK-84, SPK-87,
+SPK-88, SPK-89, SPK-90. Le backlog ne mentait pas sur le fond : il n'avait
+simplement pas été rendu à la réalité après le travail.
+
+C'est le défaut que le CLAUDE.md nomme, et il coûte dans les deux sens. Ici il
+faisait croire à cinq chantiers à ouvrir ; il aurait pu tout aussi bien faire
+refaire ce qui existait.
+
+**Mais la relecture n'a pas consisté à cocher des cases.** En reprenant chaque
+DoD ligne à ligne, quatre manques réels sont apparus — et ce sont eux qui
+justifiaient le temps passé :
+
+- **SPK-90** n'avait jamais été supprimé pour de vrai. Sa capture
+  `spk90-apres-suppression.jpg` ne montrait qu'un **squelette de chargement** :
+  un fichier au bon nom, ne prouvant rien. Et aucun parcours ne couvrait le cas
+  ORDINAIRE — un Spark qui tourne — alors que c'est précisément celui que
+  l'unité corrige. Les deux sont faits : suppression réelle sur la Forge, en
+  4 secondes, journal portant `running → deleting → supprimé` ; parcours qui crée
+  son Spark par l'écran, le démarre, le supprime sans l'arrêter, et vérifie que
+  la mémoire revient **exactement** au pool.
+- **SPK-88** n'avait pas le parcours du refus partiel que sa DoD exigeait. En
+  l'écrivant, puis en regardant sa capture, un défaut est sorti : l'en-tête du
+  compte rendu affichait « 2 écrit(s), **0 en échec** » au-dessus d'une ligne
+  rouge « refusée ». `failed` ne compte que les enregistrements DNS. Le bloc
+  était bien en avertissement — mais on lit le titre. C'est le succès simulé que
+  la docstring de cette même fonction nomme comme « le pire des mensonges
+  possibles ici », à trois lignes de l'endroit où il se produisait.
+- **SPK-89** n'avait aucune capture ; **SPK-87** aucune entrée au changelog ;
+  **SPK-84** n'avait jamais vu son préflight relevé sur une Forge réelle.
+
+**Une leçon sur la forme des preuves, à propos de SPK-84.** Sa DoD demandait
+d'éprouver les gardes EFI et RAID « sur une Forge simulée ». Les deux preuves
+écrites en ce sens ont été retirées le 2026-09-02 parce qu'elles étaient
+**vertes sans rien garder** : l'une passait parce que le poste de développement
+est en EFI, l'autre parce qu'une erreur de syntaxe `dash` se lisait comme une
+absence de pose. La substitution — assertions de source plus mesure réelle —
+était excellente et n'existait que dans une docstring. Elle est désormais au
+backlog : un arbitrage qui ne vit que dans un commentaire de test est un
+arbitrage que la session suivante refera.
+
+**Ce que la Forge de test a encore rendu, en passant.** SPK-76 attendait trois
+cellules réelles ; les trois sont faites — Ubuntu 24.04, Debian 13 amorcées, et
+une Alpine 3.21 dont le refus **nomme la distribution**, retire le bouton
+d'amorçage, et ne laisse dans la cellule ni `docker`, ni `sshd`, ni dépôt. Le
+verdict n'est pas une politesse : la cellule est intacte, vérifiée après coup.
+
+**Et un constat qui appartient au responsable.** `sso-p2enjoy`, le Spark en
+service de cette Forge, a été amorcé en rootless **avant** la migration 015 : ses
+fichiers sont restés `0600 root`, sa seconde porte n'existe pas, et sa pile ne
+peut donc pas lire les deux `env_file:` que son propre briefing lui impose. Le
+remède est un simple nouvel amorçage depuis la console. Il n'a pas été fait :
+c'est la cellule d'un locataire, et le §9 du CLAUDE.md la réserve à une
+instruction explicite. Le geste est écrit à l'OP-18 avec l'état mesuré.
+
+---
+
 ## 2026-09-07 — Le compte rootless ne pouvait rien lire, et personne n'y entrait
 
 **Le constat vient du responsable**, en une phrase : « mon terminal tombe sur root
