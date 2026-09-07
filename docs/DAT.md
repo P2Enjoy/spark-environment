@@ -7006,7 +7006,7 @@ section dit d'où vient cette date.
 
 La première phase de la recette n'est plus `paquet` mais **`sauvegarde`** :
 
-    /opt/sparkd/venv/bin/python -m sparkd.sauvegarde --chemin /var/lib/sparkd/sauvegardes
+    /opt/sparkd/venv/bin/python -m sparkd.sauvegarde /var/lib/sparkd/sauvegardes
 
 Elle emploie le mécanisme du §36 — l'API de sauvegarde en ligne de SQLite, pas
 une copie de fichier, parce qu'en mode WAL une copie perd les transactions
@@ -7018,6 +7018,41 @@ motif tient en une phrase : on ne mute pas ce qu'on ne sait pas rendre. Rien
 n'est installé, la Forge continue de servir la build qu'elle servait, et la
 phase `sauvegarde` porte l'échec avec sa cause. C'est le seul refus que cette
 recette s'autorise à opposer à une mise à jour par ailleurs éligible.
+
+##### La sauvegarde est prise par la build EN PLACE, jamais par la build cible
+
+C'est une contrainte, pas une remarque, et elle vaut pour **toute** la recette
+avant la phase `paquet`. La commande ci-dessus s'exécute sur le `sparkd` déjà
+installé — celui qu'on remplace, donc forcément antérieur à celui qu'on
+installe. Elle ne peut employer que ce que **toutes** les builds antérieures
+offrent déjà.
+
+La première écriture l'a ignoré : elle réclamait un drapeau `--chemin` livré par
+la build cible. La première mise à jour distante réelle a échoué le 2026-09-07,
+avant toute mutation :
+
+    sparkd.sauvegarde: error: unrecognized arguments: --chemin
+
+Le refus était correct — rien n'avait été installé — mais il était **définitif**
+et il touchait toutes les Forges à la fois : aucune n'aurait jamais pu franchir
+cette build, puisque la seule qui connaisse le drapeau est celle qu'on ne peut
+pas installer sans lui. Une dépendance circulaire, et le seul mode de panne que
+cette phase ne pouvait pas se permettre.
+
+La recette lit donc le chemin **à sa forme** dans la sortie de la commande :
+
+    /var/lib/sparkd/sauvegardes/spark-AAAAMMJJ-HHMMSS.db
+
+C'est la seule forme que le §36 ait jamais produite, et c'est exactement celle
+que la console exigera pour laisser ce chemin repartir dans une commande root
+(§40.7.2) : **une forme, deux emplois**, écrite une fois dans la recette. Aucun
+mot du compte rendu n'est lu, ni la place d'une ligne — le compte rendu peut
+être reformulé, la forme du nom, non.
+
+Ce qui suit de cette règle, et qu'il faut relire avant de toucher la recette :
+tout ce que la phase `sauvegarde` invoque doit exister dans la build **la plus
+ancienne** qu'on accepte de mettre à jour. `--restaurer` et `systemctl stop`
+satisfont ce critère depuis SPK-36 ; un drapeau neuf, jamais.
 
 #### 40.7.2 Le retour arrière restaure, puis réinstalle, dans cet ordre
 

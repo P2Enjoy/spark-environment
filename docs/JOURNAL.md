@@ -9599,3 +9599,66 @@ lequel garde le numéro n'appartient pas à cette tâche. La nouvelle unité pre
 **Vérifications réalisées.** Aucune à ce stade : cette entrée consigne la
 décision et la spécification, committées avant le code, comme l'exige le
 `CLAUDE.md` §5.
+
+## 2026-09-07 · SPK-91 — la sauvegarde était prise par la build qu'on n'a pas encore installée
+
+**Le problème, tel qu'il s'est présenté.** Première mise à jour distante réelle
+depuis la livraison de SPK-91. Elle échoue, et le compte rendu de la console ne
+porte que ceci :
+
+    Mise à jour en échec.
+    usage: sparkd.sauvegarde [-h] [--registre REGISTRE] [--restaurer FICHIER]
+                             [--vers VERS] [--bind BIND] [destination]
+    sparkd.sauvegarde: error: unrecognized arguments: --chemin
+
+**Reproduit avant de toucher quoi que ce soit.** La build antérieure de
+`sauvegarde.py` rejouée à l'identique (`git show d31cf99:…`) rend exactement ce
+texte et le code 2. Le diagnostic ne demandait pas d'hypothèse : le drapeau
+`--chemin` a été ajouté par le commit `0d45646`, celui-là même que la mise à
+jour cherchait à installer.
+
+**Ce que la mesure a appris, et qui vaut plus que le correctif.** La phase
+`sauvegarde` précède l'installation du paquet — c'est tout l'objet du §40.7.1,
+on ne mute pas ce qu'on ne sait pas rendre. Elle s'exécute donc **avec le
+`sparkd` déjà en place**, celui qu'on remplace. Lui demander une capacité livrée
+par la build cible est une dépendance circulaire : la seule version qui connaît
+le drapeau est celle qu'on ne peut pas installer sans lui.
+
+Le refus était correct — rien n'avait été muté, la Forge a continué de servir sa
+build — mais il était **définitif et général** : aucune Forge, jamais, n'aurait
+franchi cette version. C'est le seul mode de panne que cette phase ne pouvait
+pas se permettre, et il n'a pas été vu parce que la recette n'était éprouvée que
+contre elle-même.
+
+**Hypothèse écartée : installer le paquet d'abord, sauvegarder ensuite.** La
+sauvegarde aurait alors disposé du drapeau. Elle aurait aussi laissé, en cas
+d'échec, un venv portant la nouvelle build sous un service exécutant l'ancienne
+— un état que rien ne nomme et qu'un simple redémarrage ferait basculer en
+silence. L'ordre du §40.7.1 n'est pas négociable pour économiser une ligne.
+
+**Décision.** Le drapeau est retiré de `sparkd.sauvegarde`, et la recette lit le
+chemin **à sa forme** dans le compte rendu :
+`/var/lib/sparkd/sauvegardes/spark-AAAAMMJJ-HHMMSS.db`. Ce n'est pas le `sed`
+sur une phrase française que le drapeau devait éviter — c'est la reconnaissance
+d'un nom de fichier, et cette forme est déjà celle que la console exige pour
+laisser le chemin repartir dans une commande root (§40.7.2). Une forme, deux
+emplois, écrite une seule fois dans le script. Le §36 n'a jamais produit autre
+chose, dans aucune version.
+
+**Un second défaut trouvé en chemin.** Sous `set -e`, l'écriture
+`fichier=$(commande en échec)` quitte le script AVANT la ligne qui devait
+publier `SPARK_UPDATE backup failed`. La console recevait donc la sortie brute
+sans savoir quelle phase avait cédé — exactement ce qu'a vu le responsable.
+L'affectation est passée dans un `if`, et le jalon sort.
+
+**Vérifications réalisées.** La panne rejouée à l'identique avec la build
+antérieure. Puis la recette RÉELLE — rendue depuis `UPDATE_SCRIPT`, seuls les
+deux préfixes absolus déplacés dans un bac à sable — exécutée contre cette même
+build antérieure : `backup in_progress`, `SPARK_BACKUP <chemin>`, `backup done`,
+le fichier présent sur le disque. Sur une sauvegarde impossible : `backup
+failed`, sortie 70, rien d'installé. `sh -n` sur la recette rendue. 13 preuves
+`sparkd` et 20 preuves d'hôte au vert.
+
+**Ce qui reste.** La reprise de la mise à jour distante sur la Forge réelle.
+SPK-91 garde `[~]` : ce qui est prouvé sur une vraie machine, à ce jour, c'est
+la phase `sauvegarde` et son refus bloquant, pas le geste complet.

@@ -67,8 +67,13 @@ valid_commit() {
   printf '%s\n' "$1" | grep -Eq '^[0-9a-f]{40}$'
 }
 
+# SPK-91 · §40.7.1 : UNE forme, deux emplois — reconnaître le fichier que la
+# sauvegarde vient d'écrire, et refuser tout ce qui n'y ressemble pas avant de le
+# renvoyer dans une commande root au retour arrière.
+motif_sauvegarde='/var/lib/sparkd/sauvegardes/spark-[0-9]{8}-[0-9]{6}\.db'
+
 valid_backup() {
-  printf '%s\n' "$1" | grep -Eq '^/var/lib/sparkd/sauvegardes/spark-[0-9]{8}-[0-9]{6}\.db$'
+  printf '%s\n' "$1" | grep -Eq "^$motif_sauvegarde$"
 }
 
 if ! valid_commit "$target" || ! valid_commit "$previous"; then
@@ -116,8 +121,23 @@ if [ -n "$restaurer" ]; then
   printf '%s\t%s\t%s\n' SPARK_UPDATE restore done
 else
   printf '%s\t%s\t%s\n' SPARK_UPDATE backup in_progress
-  fichier=$(as_root "$python" -m sparkd.sauvegarde "$sauvegardes" --chemin)
-  if ! valid_backup "$fichier"; then
+  # SPK-91 · §40.7.1 : cette phase précède l'installation du paquet, donc la
+  # sauvegarde est prise par la build EN PLACE — jamais par celle qu'on installe.
+  # Elle ne peut employer que ce que TOUTES les builds antérieures offrent déjà.
+  # Un drapeau livré par la build cible n'existe pas encore ici : mesuré le
+  # 2026-09-07 sur la Forge réelle, « unrecognized arguments: --chemin », mise à
+  # jour arrêtée avant toute mutation, et pour toujours. Le chemin se lit donc à
+  # sa FORME — celle que le §36 produit depuis qu'il existe —, jamais à un mot du
+  # compte rendu ni à la place d'une ligne.
+  if sortie=$(as_root "$python" -m sparkd.sauvegarde "$sauvegardes"); then
+    fichier=$(printf '%s\n' "$sortie" | grep -Eo "$motif_sauvegarde" | head -n 1)
+  else
+    fichier=
+  fi
+  # Le if autour de l'affectation n'est pas décoratif : sous set -e, un
+  # « fichier=$(commande en échec) » sortait AVANT le jalon, et la console ne
+  # voyait pas quelle phase avait cédé.
+  if [ -z "$fichier" ] || ! valid_backup "$fichier"; then
     printf '%s\t%s\t%s\n' SPARK_UPDATE backup failed
     printf '%s\n' 'La sauvegarde du registre n a pas abouti : rien n a ete installe.' >&2
     exit 70

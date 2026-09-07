@@ -5070,14 +5070,30 @@ panne valait mieux que la taire, mais ne valait pas la corriger.
   la première écriture, et c'était le même défaut : un échec survenu APRÈS que
   `sparkd.install` a migré laissait la Forge arrêtée, sans que personne n'ait
   cliqué sur quoi que ce soit.
-- **Le drapeau `--chemin` de `sparkd.sauvegarde`** existe pour que la recette
-  lise le fichier produit sans extraire un chemin d'une phrase française. Une
-  reformulation de compte rendu aurait cassé la mise à jour, et ne se serait pas
-  vue.
-- **Reste à faire pour passer `[x]`** : rien ne prouve encore ce geste sur une
-  Forge réelle — la recette n'est éprouvée que par ses doublons, comme tout le
-  chemin de mise à jour depuis SPK-69. La première mise à jour distante réelle
-  vaudra preuve, et c'est elle qui manque.
+- **La phase `sauvegarde` s'exécute avec la build EN PLACE** (§40.7.1), et la
+  première écriture l'ignorait : elle réclamait un drapeau `--chemin` que seule
+  la build cible connaissait. La première mise à jour distante réelle a échoué
+  le **2026-09-07** sur `unrecognized arguments: --chemin`, avant toute mutation.
+  Le refus était correct mais **définitif** — la seule build qui connaisse le
+  drapeau est celle qu'on ne peut pas installer sans lui, et aucune Forge
+  n'aurait jamais franchi cette version. Le drapeau est retiré ; la recette lit
+  le chemin **à sa forme** dans le compte rendu, la même forme qui l'autorise
+  ensuite à repartir dans une commande root, écrite une seule fois dans le
+  script.
+- **Le jalon d'échec ne sortait pas.** Sous `set -e`, `fichier=$(commande en
+  échec)` quittait le script AVANT `SPARK_UPDATE backup failed` : la console
+  recevait la sortie brute et ne savait pas quelle phase avait cédé — ce que le
+  responsable a vu le 2026-09-07. L'affectation est désormais dans un `if`.
+- **Reste à faire pour passer `[x]`** : la première mise à jour distante réelle,
+  reprise après cette correction. Ce qui est prouvé sur la Forge réelle à ce
+  jour, c'est la phase `sauvegarde` et son **refus bloquant** — rien n'a été
+  installé, la Forge a continué de servir sa build. Le geste complet, lui,
+  n'est encore éprouvé que par ses doublons.
+- **Corrigé et vérifié en local le 2026-09-07** : la panne rejouée à l'identique
+  avec la build antérieure, puis la recette RÉELLE exécutée contre cette même
+  build — jalons `backup in_progress` / `SPARK_BACKUP <chemin>` / `backup done`,
+  et sur une sauvegarde impossible, `backup failed` et sortie 70 sans rien
+  installer. Deux preuves d'hôte et deux preuves de service ajoutées.
 
 ### [~] SPK-85 · Le dossier de déploiement d'un Spark, copié pour un agent
 

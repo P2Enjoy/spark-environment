@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   ForgeUpdateManager, parseStages, updateEligibility, updateSshArgs, verifyForge,
-  parseBackup, backupDate, UPDATE_SCRIPT,
+  parseBackup, backupDate, UPDATE_SCRIPT, BACKUP_PATTERN,
 } from './forge-update.js';
 
 const OLD = 'a'.repeat(40);
@@ -197,13 +197,47 @@ test('la recette porte la phase de sauvegarde AVANT le paquet', () => {
   assert.ok(script.indexOf('SPARK_UPDATE backup in_progress')
             < script.indexOf('SPARK_UPDATE package in_progress'),
             'la sauvegarde doit preceder l installation');
-  assert.match(script, /sparkd\.sauvegarde .*--chemin/);
   // Un echec de sauvegarde SORT, sans installer.
   assert.match(script, /SPARK_UPDATE backup failed/);
   assert.match(script, /exit 70/);
   // Et le retour arriere arrete sparkd AVANT de restaurer (§40.7.2).
   assert.ok(script.indexOf('systemctl stop sparkd') < script.indexOf('--restaurer'),
             'sparkd doit etre arrete avant la restauration');
+});
+
+test('la sauvegarde n emploie QUE ce que la build EN PLACE offre deja', () => {
+  // MESURE le 2026-09-07, premiere mise a jour distante reelle : la phase
+  // sauvegarde precede l installation du paquet, donc elle s execute avec le
+  // sparkd DEJA installe. La recette lui demandait un drapeau livre par la
+  // build cible, et argparse a repondu « unrecognized arguments: --chemin ».
+  // Le refus etait correct — rien n avait ete mute — mais il etait definitif :
+  // aucune Forge n aurait pu franchir cette build.
+  assert.ok(UPDATE_SCRIPT.indexOf('sparkd.sauvegarde "$sauvegardes"') > 0,
+            'la sauvegarde s invoque avec le seul repertoire de destination');
+  assert.doesNotMatch(UPDATE_SCRIPT, /sparkd\.sauvegarde[^\n]*--chemin/);
+});
+
+test('le chemin se lit dans la sortie REELLE d une build anterieure', () => {
+  // Cette sortie est celle que `sparkd.sauvegarde` produit depuis SPK-36, et
+  // celle que la Forge a effectivement rendue le 2026-09-07 (chemin normalise).
+  const sortie = [
+    'Sauvegarde : /var/lib/sparkd/sauvegardes/spark-20260907-144001.db (253952 octets)',
+    '  structure : ok',
+    '  journal   : 1 entree(s), chaine intacte',
+  ].join('\n');
+  // Le motif vient du SCRIPT lui-meme : on eprouve ce qui sera execute, pas une
+  // copie qui pourrait deriver.
+  const motif = UPDATE_SCRIPT.match(/^motif_sauvegarde='([^']+)'$/m)?.[1];
+  assert.ok(motif, 'la recette doit definir un motif unique de sauvegarde');
+  const trouves = sortie.match(new RegExp(motif, 'g'));
+  assert.deepEqual(trouves, ['/var/lib/sparkd/sauvegardes/spark-20260907-144001.db']);
+  // Et ce que la recette extrait est exactement ce que la console autorisera a
+  // repartir dans une commande root (§40.7.2).
+  assert.ok(BACKUP_PATTERN.test(trouves[0]));
+  // Une phrase reformulee ne change rien : c est la FORME qui est lue.
+  assert.deepEqual('Copie prise vers /var/lib/sparkd/sauvegardes/spark-20260907-144001.db.'
+                     .match(new RegExp(motif, 'g')),
+                   ['/var/lib/sparkd/sauvegardes/spark-20260907-144001.db']);
 });
 
 test('le chemin de sauvegarde est lu dans la sortie, et VALIDE', () => {

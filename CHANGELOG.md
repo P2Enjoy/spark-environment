@@ -16,7 +16,12 @@
   d'audit. Elle dit aussi ce qui n'est **pas** concerné — les cellules continuent
   de tourner, et les instantanés d'un Spark ne sont pas touchés. Sans sauvegarde
   — une mise à jour conduite par une console antérieure —, l'écran ne maquille
-  rien : il annonce qu'il ne rétablira que le code.
+  rien : il annonce qu'il ne rétablira que le code. La sauvegarde est prise par
+  la build **en place**, celle qu'on remplace : la recette n'emploie donc que ce
+  que les versions antérieures offrent déjà, et lit le chemin du fichier à sa
+  forme. La première écriture réclamait un drapeau que seule la build cible
+  connaissait — aucune Forge n'aurait pu franchir cette version (mesuré le
+  2026-09-07, corrigé le même jour).
 - **Une recette de site web pose AUSSI sa route** (SPK-88, `docs/DAT.md`
   §38.6.4 bis) : elle ne l'avait jamais fait — le §38.6.1 la définissait comme un
   jeu d'enregistrements. C'était trop étroit : la recette se lance depuis les

@@ -260,34 +260,51 @@ def test_un_fichier_SANS_JOURNAL_est_nommé_au_lieu_de_lever_une_erreur_brute(tm
 # --- SPK-91 · §40.7.1 : la sortie que la recette de mise à jour LIT ----------
 
 
-def test_le_drapeau_chemin_n_ecrit_QUE_le_chemin(tmp_path, capsys):
+def test_le_compte_rendu_porte_le_chemin_ABSOLU_du_fichier(tmp_path, capsys):
     """@verifies docs/BACKLOG.md#SPK-91 · docs/DAT.md §40.7.1
 
-    La recette de mise à jour lit cette ligne pour la porter au reçu, puis la
-    renvoie dans une commande root au retour arrière. Elle doit donc être le
-    chemin, et rien d'autre : extraire un chemin d'une phrase française par un
-    `sed` casserait à la première reformulation — et une reformulation ne se
-    voit pas.
+    La recette de mise à jour lit ce chemin ici pour le porter au reçu, puis le
+    renvoie dans une commande root au retour arrière. Elle le lit à sa FORME —
+    `<répertoire>/spark-AAAAMMJJ-HHMMSS.db` — et non à un mot de la phrase, qui
+    peut être reformulée.
+
+    Elle ne peut pas faire autrement : la phase `sauvegarde` précède
+    l'installation du paquet, donc elle s'exécute avec la build EN PLACE. Un
+    drapeau ajouté par la build cible n'existe pas encore à cet instant. Une
+    première écriture avait demandé `--chemin` ; la première mise à jour
+    distante réelle a échoué le 2026-09-07 sur `unrecognized arguments:
+    --chemin`, et aucune Forge n'aurait pu franchir cette build. Cette preuve
+    garde donc ce que la recette peut réellement lire.
     """
     origine = _registre(tmp_path / "reg.db")
     origine.close()
     code = sauvegarde.main([str(tmp_path / "sauvegardes"),
-                            "--registre", str(tmp_path / "reg.db"), "--chemin"])
+                            "--registre", str(tmp_path / "reg.db")])
     assert code == 0
-    sortie = capsys.readouterr().out.splitlines()
-    assert len(sortie) == 1, f"une seule ligne attendue, reçu {sortie}"
-    fichier = Path(sortie[0])
-    assert fichier.exists() and fichier.parent.name == "sauvegardes"
-    # Le NOM porte la date : c'est de lui que la console tire ce qu'elle annonce.
-    assert re.fullmatch(r"spark-\d{8}-\d{6}\.db", fichier.name), fichier.name
-
-
-def test_sans_le_drapeau_le_compte_rendu_reste_lisible(tmp_path, capsys):
-    """Le drapeau AJOUTE une sortie machine ; il n'enlève pas celle de l'humain."""
-    origine = _registre(tmp_path / "reg.db")
-    origine.close()
-    assert sauvegarde.main([str(tmp_path / "sauvegardes"),
-                            "--registre", str(tmp_path / "reg.db")]) == 0
     sortie = capsys.readouterr().out
+
+    trouves = re.findall(r"\S+/spark-\d{8}-\d{6}\.db", sortie)
+    assert len(trouves) == 1, f"un seul chemin attendu, reçu {trouves}"
+    fichier = Path(trouves[0])
+    assert fichier.is_absolute(), fichier
+    assert fichier.exists() and fichier.parent.name == "sauvegardes"
+
+    # Et le compte rendu reste celui d'un humain : la lecture machine ne l'a pas
+    # remplacé par une ligne nue.
     assert "Sauvegardé :" in sortie
     assert "structure" in sortie and "journal" in sortie
+
+
+def test_aucun_drapeau_de_sortie_machine_n_est_exige(tmp_path, capsys):
+    """La recette n'emploie QUE ce que les builds antérieures offrent déjà.
+
+    @verifies docs/BACKLOG.md#SPK-91 · docs/DAT.md §40.7.1
+
+    Le jour où quelqu'un rajoutera un drapeau pour « faciliter » la lecture du
+    chemin, cette preuve rougira : ce drapeau ne serait connu que de la build
+    qu'on installe, jamais de celle qui exécute la sauvegarde.
+    """
+    with pytest.raises(SystemExit) as sortie:
+        sauvegarde.main([str(tmp_path / "sauvegardes"), "--chemin"])
+    assert sortie.value.code == 2
+    assert "unrecognized arguments" in capsys.readouterr().err
