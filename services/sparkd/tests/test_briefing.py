@@ -181,6 +181,10 @@ def test_le_briefing_rootless_nomme_le_compte_et_le_socket_sans_inventer_le_uid(
         "mode": "rootless", "user": "spark-docker",
         "socket": "/run/user/<uid>/docker.sock",
         "socket_uid_source": "id -u spark-docker",
+        # SPK-98 · §42.13 : « pas encore relevé » et « n'en aura jamais »
+        # rendaient tous deux `mode: None`. Un agent qui lit ce fichier ne
+        # pouvait pas savoir s'il devait amorcer ou renoncer.
+        "supported": True,
     }
     rendered = briefing.markdown(model)
     assert "Compte : spark-docker" in rendered
@@ -338,3 +342,62 @@ def test_une_console_servie_SUR_la_forge_donne_une_commande_directe(tmp_path):
     avec = client.get(f"/v1/sparks/{name}/briefing",
                       params={"direct": "true", "jump": "forge.test"}).json()
     assert f"ssh -J forge.test root@{adresse}" in avec["markdown"]
+
+
+#: La forme minimale d'une ligne de `spark` telle que le briefing la lit.
+_CELLULE = {
+    "name": "sans-docker", "ipv4_address": "10.77.0.30", "protected": False,
+    "cpu_mode": "shared", "cpu_reservation": 0.5,
+    "memory_reservation_bytes": GIO, "storage_bytes": 5 * GIO,
+    "network_reservation_bps": 10_000_000,
+}
+
+
+def test_une_cellule_SANS_Docker_le_dit_au_lieu_d_envoyer_amorcer(tmp_path):
+    """SPK-98 · §42.13, SPK-DS-24 — « pas relevé » n'est pas « jamais ».
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.13 ·
+              docs/DESIGN_SYSTEM_APP.md SPK-DS-24
+
+    Trouvé À L'ÉCRAN, sur une cellule Alpine réelle, en ouvrant le terminal : le
+    panneau d'accueil promettait un « contexte Docker » à qui entre, et le
+    briefing répondait « Docker n'a pas été relevé comme utilisable » — ce qui
+    envoie amorcer une cellule qui n'aura jamais de Docker.
+    """
+    model = briefing.modele(
+        {**_CELLULE, "docker_enabled": 0},
+        forge_public_address="", routes=[], ports=[], environment=[],
+        bootstrap={"observed_at": "2026-09-08T01:00:00+00:00",
+                   "os_id": "alpine", "os_suite": "", "arch": "x86_64",
+                   "openssh_version": "9.9p2", "docker_version": None,
+                   "compose_version": None, "docker_mode": None,
+                   "managed_items": ["sshd"]})
+    assert model["docker"]["supported"] is False
+
+    texte = briefing.markdown(model)
+    assert "n'en aura pas" in texte
+    assert "Docker n'a pas été relevé comme utilisable" not in texte
+    # Le §41.2 reste dit, mais LÀ où il concerne le lecteur.
+    assert "AppArmor" in texte
+    assert not any("Docker" in p for p in model["pitfalls"]), (
+        "le piège du dépôt amont ne s'adresse qu'à qui peut en installer un")
+
+    # Le panneau d'accueil ne promet plus ce que le fichier ne contient pas.
+    assert "contexte Docker" not in briefing.motd(model)
+    assert "quotas réels" in briefing.motd(model)
+
+
+def test_une_cellule_AVEC_Docker_garde_son_contexte(tmp_path):
+    """Le garde-fou : retirer ne doit pas déborder."""
+    model = briefing.modele(
+        {**_CELLULE, "docker_enabled": 1},
+        forge_public_address="", routes=[], ports=[], environment=[],
+        bootstrap={"observed_at": "2026-09-08T01:00:00+00:00",
+                   "os_id": "debian", "os_suite": "trixie", "arch": "x86_64",
+                   "openssh_version": "1:9", "docker_version": "5:29",
+                   "compose_version": "2.40", "docker_mode": "enracine",
+                   "managed_items": ["docker"]})
+    assert model["docker"]["supported"] is True
+    assert "## Contexte Docker relevé" in briefing.markdown(model)
+    assert "contexte Docker" in briefing.motd(model)
+    assert any("Docker" in p for p in model["pitfalls"])

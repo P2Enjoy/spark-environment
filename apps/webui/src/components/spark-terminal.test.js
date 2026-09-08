@@ -521,3 +521,26 @@ test('l’absence de seconde porte se NOMME, et ses deux causes se distinguent',
   const vierge = renderTerminal(SPARK, TERMINAL_VIDE);
   assert.ok(!vierge.includes('jamais été relevé'));
 });
+
+// --- SPK-98 · le terminal ne renvoie pas à un Docker qui n'existera jamais ---
+//
+// @verifies docs/BACKLOG.md#SPK-98 · docs/DESIGN_SYSTEM_APP.md SPK-DS-24 ·
+//           docs/DAT.md §42.13
+
+test('sans Docker, la porte unique est DÉFINITIVE et ne renvoie à aucun amorçage', () => {
+  // Trouvé à l'écran sur une cellule Alpine réelle : le panneau disait « le mode
+  // Docker de ce Spark n'a jamais été relevé, amorcez-le pour savoir s'il offre
+  // un second compte ». Il n'en offrira jamais — la seconde porte EST le compte
+  // du démon rootless.
+  const html = renderTerminal({ ...SPARK, docker_enabled: 0 },
+    { ...TERMINAL_VIDE, comptes: [{ user: 'root', role: 'administrer la cellule' }] });
+  assert.ok(html.includes('c’est définitif'));
+  assert.ok(!html.includes('Amorcez-le pour'),
+            'l’écran envoie encore chercher une porte qui n’existera jamais');
+});
+
+test('avec Docker, le renvoi à l’amorçage reste — il a un sens', () => {
+  const html = renderTerminal({ ...SPARK, docker_enabled: 1 },
+    { ...TERMINAL_VIDE, comptes: [{ user: 'root', role: 'administrer la cellule' }] });
+  assert.ok(html.includes('Amorcez-le pour'));
+});

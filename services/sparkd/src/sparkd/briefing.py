@@ -219,14 +219,22 @@ def _systeme(bootstrap: dict[str, Any] | None) -> dict[str, str | None] | None:
     return valeurs
 
 
-def _docker(bootstrap: dict[str, Any] | None) -> dict[str, str | None]:
+def _docker(bootstrap: dict[str, Any] | None,
+            servi: bool = True) -> dict[str, Any]:
     """Le seul contexte Docker que le dernier relevé permet d'affirmer.
 
     Le UID du compte rootless appartient à la cellule : le briefing ne l'invente
     donc pas. Il expose le chemin stable avec son emplacement variable et nomme
     la source de ce UID. Un compte présent sans socket répondant a déjà été
     normalisé en ``None`` par le relevé d'amorçage (§42.2 bis).
+
+    SPK-98 · §42.13 : `servi` distingue « pas encore relevé » de « n'en aura
+    jamais ». Les deux rendaient `mode: None`, et un agent qui lit ce fichier ne
+    pouvait pas savoir s'il devait amorcer ou renoncer.
     """
+    if not servi:
+        return {"mode": None, "user": None, "socket": None,
+                "socket_uid_source": None, "supported": False}
     mode = bootstrap.get("docker_mode") if bootstrap else None
     if mode == "rootless":
         return {
@@ -234,6 +242,7 @@ def _docker(bootstrap: dict[str, Any] | None) -> dict[str, str | None]:
             "user": COMPTE_ROOTLESS,
             "socket": SOCKET_ROOTLESS,
             "socket_uid_source": f"id -u {COMPTE_ROOTLESS}",
+            "supported": True,
         }
     if mode == "enracine":
         return {
@@ -241,8 +250,10 @@ def _docker(bootstrap: dict[str, Any] | None) -> dict[str, str | None]:
             "user": "root",
             "socket": SOCKET_ENRACINE,
             "socket_uid_source": None,
+            "supported": True,
         }
-    return {"mode": None, "user": None, "socket": None, "socket_uid_source": None}
+    return {"mode": None, "user": None, "socket": None,
+            "socket_uid_source": None, "supported": True}
 
 
 def modele(spark: dict[str, Any], *, forge_public_address: str,
@@ -289,8 +300,17 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
         },
         "bootstrap": bootstrap,
         "system": _systeme(bootstrap),
-        "docker": _docker(bootstrap),
-        "pitfalls": list(PIEGES),
+        # SPK-98 · §42.13 : la capacité vient du REGISTRE, où la création l'a
+        # posée depuis la famille de l'image et où le relevé la corrige. Le
+        # briefing doit répondre sur un Spark arrêté et jamais amorcé — c'est
+        # justement l'état où l'on prépare un déploiement (§44.9).
+        "docker": _docker(bootstrap, servi=bool(spark.get("docker_enabled", 1))),
+        # SPK-98 : le piège du §41.2 — « Docker doit venir du dépôt amont » —
+        # ne s'adresse qu'à qui peut en installer un. Sur une cellule sans
+        # Docker, la mise en garde vit dans la section qui la concerne, et la
+        # répéter ici la rendrait deux fois plus longue à lire pour rien.
+        "pitfalls": [p for p in PIEGES
+                     if spark.get("docker_enabled", 1) or "Docker" not in p],
     }
     # SPK-95 · §42.2 quater : les PORTES ouvertes sur cette cellule. La règle vit
     # ici et non dans la console : « root toujours, spark-docker si le mode relevé
@@ -375,9 +395,24 @@ def markdown(model: dict[str, Any]) -> str:
         "- Les valeurs ne sont pas recopiées ici.",
     ])
     lines.extend(_lignes_systeme(model))
-    lines.extend(["", "## Contexte Docker relevé"])
-    if docker["mode"] is None:
+    # SPK-98 · §42.13, SPK-DS-24 : sur une cellule dont l'image ne reçoit pas
+    # Docker, cette section décrivait un sujet qui n'existe pas — et « Docker
+    # n'a pas été relevé comme utilisable » envoyait amorcer pour rien.
+    if not docker.get("supported", True):
+        lines.extend([
+            "", "## Docker",
+            "- Cette cellule n'a pas Docker, et n'en aura pas : le dépôt "
+            "officiel n'en publie aucun pour sa distribution.",
+            "- N'installez pas celui de la distribution : son profil AppArmor "
+            "refuse socketpair() sous imbrication, et les conteneurs meurent "
+            "au démarrage.",
+        ])
+    else:
+        lines.extend(["", "## Contexte Docker relevé"])
+    if docker.get("supported", True) and docker["mode"] is None:
         lines.append("- Docker n'a pas été relevé comme utilisable.")
+    elif not docker.get("supported", True):
+        pass
     elif docker["mode"] == "rootless":
         lines.extend([
             "- Mode : rootless",
@@ -721,8 +756,13 @@ def motd(model: dict[str, Any]) -> str:
     return "\n".join((
         f"Spark : {model['spark']['name']}",
         f"Protection : {'armée' if model['spark']['protected'] else 'non armée'}",
-        f"Lisez d'abord {FICHIER_MARKDOWN} : quotas réels, contexte Docker, "
-        "variables d'environnement et pièges connus.",
+        # SPK-98 · SPK-DS-24 : ne pas annoncer un « contexte Docker » à qui
+        # entre dans une cellule qui n'en aura jamais. Trois lignes plus bas,
+        # l'agent ouvrirait le fichier pour y chercher ce qu'on vient de lui
+        # promettre.
+        f"Lisez d'abord {FICHIER_MARKDOWN} : quotas réels, "
+        + ("contexte Docker, " if model["docker"].get("supported", True) else "")
+        + "variables d'environnement et pièges connus.",
         "",
     ))
 

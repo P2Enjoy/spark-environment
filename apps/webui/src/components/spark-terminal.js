@@ -330,10 +330,21 @@ export function renderTerminal(spark, etat = TERMINAL_VIDE) {
     : '';
 
   // §14.5 : l'absence de seconde porte se NOMME, au lieu de laisser un écran
-  // muet. Les deux causes n'appellent pas le même geste — l'une est un choix
+  // muet. Les causes n'appellent pas le même geste — l'une est un choix
   // d'amorçage, l'autre un relevé qui n'a jamais eu lieu.
+  //
+  // SPK-98 · SPK-DS-24 : et la troisième n'appelle AUCUN geste. Sur un Spark
+  // dont la famille n'a pas de Docker, « le mode Docker n'a jamais été relevé,
+  // amorcez-le pour savoir » envoie chercher une seconde porte qui n'existera
+  // jamais — la seconde porte EST le compte du démon rootless. Trouvé à l'écran
+  // sur une cellule Alpine réelle, le 2026-09-08.
+  const sansDocker = spark.docker_enabled != null && !spark.docker_enabled;
   const porteUnique = Array.isArray(etat.comptes) && portes.length === 1
-    ? `<p class="note">${etat.modeDocker === 'enracine'
+    ? `<p class="note">${sansDocker
+        ? `Ce Spark n’a qu’une porte, et c’est définitif : son image ne reçoit
+           pas Docker, et la seconde porte est celle du compte qui ferait
+           tourner le démon.`
+        : etat.modeDocker === 'enracine'
         ? `Ce Spark est amorcé en mode <strong>enraciné</strong> : Docker
            appartient à « root », et il n’y a qu’une porte.`
         : `Le mode Docker de ce Spark n’a jamais été relevé. Amorcez-le pour
