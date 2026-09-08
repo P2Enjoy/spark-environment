@@ -1094,7 +1094,7 @@ def test_chaque_famille_pose_les_commandes_QU_ON_A_MESUREES(tmp_path):
         "dnf": ("dnf install -y -q openssh-server", "systemctl enable --now sshd"),
         "zypper": ("zypper --non-interactive install -y openssh",
                    "systemctl enable --now sshd"),
-        "pacman": ("pacman -Sy --noconfirm --needed openssh",
+        "pacman": ("pacman -S --noconfirm --needed openssh",
                    "systemctl enable --now sshd"),
     }
     for cle, (pose, activation) in attendu.items():
@@ -1273,3 +1273,37 @@ def test_MINT_est_une_derivee_MALGRE_son_depot_connu(tmp_path):
     with pytest.raises(bootstrap.OSNonServi):
         bootstrap.cible_apt({"os_id": "linuxmint", "os_suite": "wilma",
                              "os_like": "ubuntu debian"})
+
+
+def test_ARCH_rafraichit_son_TROUSSEAU_avant_d_installer(tmp_path):
+    """§42.11 — mesuré deux fois, et les deux fois comptent.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11
+
+    Le premier essai de la campagne a réussi sans cette ligne ; le second, joué
+    par le produit quelques minutes plus tard, a échoué : *signature from … is
+    unknown trust*. Une image Arch embarque des clés plus vieilles que les
+    paquets qu'elle va chercher, et `pacman` refuse alors TOUT.
+
+    Une doctrine qui dépend de la date à laquelle on l'essaie n'en est pas une.
+    """
+    script = bootstrap.script_ssh(familles.FAMILLES["pacman"])
+    assert "pacman -Sy --noconfirm archlinux-keyring" in script
+    assert script.index("archlinux-keyring") < script.index("--needed openssh"), (
+        "le trousseau se rafraîchit AVANT, sinon il ne sert à rien")
+
+
+def test_preparer_ne_se_rejoue_pas_a_chaque_paquet(tmp_path):
+    """§42.1 — un amorçage ne doit pas refaire ce qu'il vient de faire.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11
+
+    Fondre la préparation dans la commande d'installation ferait rafraîchir
+    l'index à chaque paquet posé — quatre fois sur une cellule `apt` complète.
+    """
+    debian = {"os_id": "debian", "os_suite": "trixie"}
+    depot = bootstrap.script_pour("depot", debian)[-1]
+    assert depot.count("apt-get update") == 2, (
+        "une fois pour poser curl, une fois après avoir ajouté le dépôt Docker")
+    arch = bootstrap.script_ssh(familles.FAMILLES["pacman"])
+    assert arch.count("archlinux-keyring") == 1

@@ -756,20 +756,49 @@ def _prelude(famille: "familles.Famille") -> str:
 #: `%s` porte la liste des paquets ; l'activation porte le nom du service, qui
 #: diffère d'une famille à l'autre — `ssh` sur Debian, `sshd` ailleurs. Les
 #: confondre laisse un `enable` sans effet et une porte fermée.
+#: Ce qu'une famille exige AVANT d'installer quoi que ce soit, et rien d'autre.
+#:
+#: Séparer préparer d'installer n'est pas une élégance : chaque ligne ci-dessous
+#: a une cause mesurée, et les fondre dans la commande d'installation rendrait
+#: ces causes illisibles — puis, à la première reprise, ferait rejouer un
+#: rafraîchissement de dépôt à chaque paquet posé.
+PREPARER = {
+    # L'index d'`apt` n'existe pas dans une image fraîche.
+    "apt": "apt-get update -qq\n",
+    # `dnf` rafraîchit son cache de lui-même à l'installation.
+    "dnf": "",
+    # Sans lui, `install` rend 104 « paquet introuvable » alors que le paquet
+    # existe. Mesuré sur une openSUSE Tumbleweed fraîche.
+    "zypper": "zypper --non-interactive refresh\n",
+    # MESURÉ le 2026-09-08, et c'est le trousseau, pas l'index : une image Arch
+    # embarque des clés plus vieilles que les paquets qu'elle va chercher, et
+    # `pacman` refuse alors TOUT — « signature from … is unknown trust ».
+    # Le premier essai de la campagne avait réussi sans cette ligne parce que le
+    # trousseau y était encore assez frais ; le second, quelques minutes plus
+    # tard, a échoué. Une doctrine qui dépend de la date n'en est pas une.
+    "pacman": "pacman -Sy --noconfirm archlinux-keyring\n",
+    # `apk add` lit l'index publié à chaque appel.
+    "apk": "",
+}
+
 INSTALLER = {
-    "apt": "apt-get update -qq\napt-get install -y -qq %s\n",
-    # `-q` et non `-y -q` seul : `dnf` demande confirmation sans `-y`, et rend 1
+    "apt": "apt-get install -y -qq %s\n",
+    # `-y` et non `-q` seul : `dnf` demande confirmation sans lui, et rend 1
     # sur une entrée fermée — un refus qu'on lirait comme une panne réseau.
     "dnf": "dnf install -y -q %s\n",
-    # `refresh` est requis sur une image fraîche : sans lui, `install` rend 104
-    # « paquet introuvable » alors que le paquet existe. Mesuré.
-    "zypper": ("zypper --non-interactive refresh\n"
-               "zypper --non-interactive install -y %s\n"),
+    "zypper": "zypper --non-interactive install -y %s\n",
     # `--needed` rend le script rejouable : sans lui, un second amorçage
-    # réinstallerait ce qui est déjà là (§42.1).
-    "pacman": "pacman -Sy --noconfirm --needed %s\n",
+    # réinstallerait ce qui est déjà là (§42.1). `-S` et non `-Sy` : l'index
+    # vient d'être rafraîchi par la préparation, et le refaire ici doublerait
+    # chaque pose.
+    "pacman": "pacman -S --noconfirm --needed %s\n",
     "apk": "apk add --no-cache %s\n",
 }
+
+
+def poser(famille: "familles.Famille", paquets: str) -> str:
+    """Préparer, puis installer. Dans cet ordre, et une seule fois chacun."""
+    return PREPARER[famille.paquets] + INSTALLER[famille.paquets] % paquets
 
 ACTIVER = {
     "systemd": "systemctl enable --now %s\n",
@@ -797,7 +826,7 @@ def script_ssh(famille: "familles.Famille") -> str:
         activation = activation % (famille.service_ssh, famille.service_ssh)
     else:
         activation = activation % famille.service_ssh
-    return _prelude(famille) + INSTALLER[famille.paquets] % paquets + activation
+    return _prelude(famille) + poser(famille, paquets) + activation
 
 
 def script_depot(distribution: str, suite: str,
@@ -823,7 +852,7 @@ def script_depot(distribution: str, suite: str,
         return _depot_rpm(distribution, famille)
     return (
         _prelude(famille)
-        + INSTALLER[famille.paquets] % "ca-certificates curl"
+        + poser(famille, "ca-certificates curl")
         + "install -m 0755 -d /etc/apt/keyrings\n"
         f"curl -fsSL https://download.docker.com/linux/{distribution}/gpg "
         "-o /etc/apt/keyrings/docker.asc\n"
@@ -891,7 +920,7 @@ def script_docker(purger_ce: bool = False,
         # amont. Rien à purger, donc rien qui prétende purger.
         return (
             _prelude(famille)
-            + INSTALLER["dnf"] % "docker-ce docker-ce-cli containerd.io"
+            + poser(famille, "docker-ce docker-ce-cli containerd.io")
             + "systemctl enable --now docker\n"
         )
     purge = "docker.io docker-doc docker-compose podman-docker containerd runc"
@@ -1130,7 +1159,7 @@ def script_pour(cle: str, brut: dict[str, str] | None = None,
         return _shell(script)
     if cle == "compose":
         return _shell(_prelude(famille)
-                      + INSTALLER[famille.paquets] % "docker-compose-plugin")
+                      + poser(famille, "docker-compose-plugin"))
     return None
 
 
