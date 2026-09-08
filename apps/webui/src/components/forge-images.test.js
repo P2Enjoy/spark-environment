@@ -14,9 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  renderCatalogue, renderOngletsForge, dernierReleve, etatOf, ETATS, CATALOGUE_VIDE,
-} from './forge-images.js';
+import { CATALOGUE_VIDE, ETATS, dernierReleve, etatOf, renderCapacites, renderCatalogue, renderOngletsForge } from './forge-images.js';
 
 const IMAGES = [
   { reference: 'images:debian/13', label: 'Debian 13', state: 'verified',
@@ -193,4 +191,44 @@ test('l’onglet courant se signale, et lui seul', () => {
   const rendu = renderOngletsForge('#/forge/images');
   assert.equal((rendu.match(/aria-current="page"/g) || []).length, 1);
   assert.match(rendu, /href="#\/forge\/images"[^>]*aria-current="page"/);
+});
+
+// --- SPK-98 · le catalogue dit AVEC QUOI chaque famille est compatible -------
+//
+// @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.14, §42.11 ·
+//           docs/DESIGN_SYSTEM.md §14.5, §14.6
+
+test('le catalogue annonce ce que l’amorçage pose, famille par famille', () => {
+  const debian = renderCapacites({ family: 'apt', capabilities: {
+    env: true, ssh: true, identity: true, terminal: true,
+    docker: true, compose: true } });
+  assert.ok(debian.includes('SSH + Docker'));
+  assert.ok(debian.includes('apt'), 'la famille est nommée');
+
+  const alpine = renderCapacites({ family: 'apk', capabilities: {
+    env: true, ssh: true, identity: true, terminal: true,
+    docker: false, compose: false } });
+  assert.ok(alpine.includes('SSH seul'));
+  assert.ok(alpine.includes('apk'));
+  assert.ok(alpine.includes('aucun dépôt Docker amont'),
+            'la raison est dite, sinon « SSH seul » ressemble à une panne');
+  // §14.5 : l'absence est nommée UNE fois. On n'énumère pas « pas de Docker,
+  // pas de Compose » à côté d'un libellé qui le dit déjà.
+  assert.ok(!alpine.includes('Compose'));
+});
+
+test('une famille sans doctrine est dite « non servie », pas « en panne »', () => {
+  const busybox = renderCapacites({ family: null, capabilities: {
+    env: true, ssh: false, identity: false, terminal: false,
+    docker: false, compose: false } });
+  assert.ok(busybox.includes('non servie'));
+  assert.ok(busybox.includes('la cellule tourne'),
+            'une cellule qui répond parfaitement n’a rien de cassé');
+  assert.ok(!busybox.includes('badge--danger'), 'ce n’est pas une erreur');
+});
+
+test('un catalogue plus ancien que ce code ne PRÉTEND rien', () => {
+  // §14.6 : « pas relevé » n'est ni « servi » ni « non servi ».
+  assert.equal(renderCapacites({ reference: 'images:debian/13' }),
+               '<span class="note">—</span>');
 });

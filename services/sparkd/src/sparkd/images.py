@@ -93,7 +93,9 @@ def capacites_de_alias(alias: str) -> dict[str, bool]:
     toutes les entrées existantes sans migration, et une copie figée au registre
     serait fausse dès le lendemain.
     """
-    return table_familles.capacites(table_familles.de_alias(alias))
+    return table_familles.capacites(
+        table_familles.de_alias(alias),
+        table_familles.identifiant_de_alias(alias))
 
 
 def amorcable(alias: str) -> bool:

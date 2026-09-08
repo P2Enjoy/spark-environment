@@ -120,7 +120,11 @@ FAMILLES: dict[str, Famille] = {
         # L'ordre compte : une dérivée d'Ubuntu déclare `ubuntu debian`, et
         # c'est `ubuntu` qui la sert. Mettre `debian` d'abord enverrait Linux
         # Mint chercher ses paquets chez Debian.
-        depot_docker={"debian": "debian", "ubuntu": "ubuntu"},
+        # `linuxmint` y figure parce qu'une cellule Mint l'a MONTRÉ : elle
+        # publie `UBUNTU_CODENAME=noble`, donc sa suite amont est lisible. Kali
+        # et Devuan n'y sont pas, pour la raison inverse — mesurée elle aussi.
+        depot_docker={"debian": "debian", "ubuntu": "ubuntu",
+                      "linuxmint": "ubuntu"},
         # L'ordre compte : une dérivée d'Ubuntu déclare « ubuntu debian », et
         # c'est `ubuntu` qui la sert. Mettre `debian` d'abord enverrait Linux
         # Mint chercher ses paquets chez Debian.
@@ -245,10 +249,18 @@ def de_alias(alias: str) -> Famille | None:
     donc essayées — sans quoi le catalogue et le relevé se contrediraient, ce
     qu'ils faisaient jusqu'au 2026-09-08 (§33.3 bis).
     """
+    return de_identite(identifiant_de_alias(alias))
+
+
+def identifiant_de_alias(alias: str) -> str:
+    """L'`ID` que la cellule DIRA, déduit du nom de l'alias (§42.14).
+
+    `mint/wilma` donne `linuxmint`, `oracle/9` donne `ol`. Sans cette traduction,
+    le catalogue et le relevé parlent de deux choses différentes — ce qu'ils
+    faisaient jusqu'au 2026-09-08 (§33.3 bis).
+    """
     nom = (alias or "").split("/", 1)[0].strip().lower()
-    if not nom:
-        return None
-    return de_identite(nom) or de_identite(ALIAS_VERS_ID.get(nom, ""))
+    return ALIAS_VERS_ID.get(nom, nom)
 
 
 #: Les alias du dépôt dont le nom diffère de l'`ID` que la cellule déclare.
@@ -265,7 +277,27 @@ ALIAS_VERS_ID = {
 }
 
 
-def capacites(famille: Famille | None) -> dict[str, bool]:
+def depot_connu(famille: Famille | None, identifiant: str = "",
+                parents: tuple[str, ...] = ()) -> bool:
+    """Docker publie-t-il un dépôt pour CETTE distribution ? (§42.11, §42.14)
+
+    Appartenir à une famille qui a Docker ne suffit pas, et c'est le fait que la
+    campagne a établi trois fois : Kali et Devuan sont des `apt` dont la suite
+    n'existe pas chez Docker ; Oracle et Amazon Linux sont des `dnf` qui se
+    déclarent `fedora` en portant un `$releasever` de RHEL. Répondre par famille
+    leur annonçait un Docker qu'aucun geste ne poserait.
+    """
+    if famille is None or DOCKER not in famille.elements:
+        return False
+    identifiant = (identifiant or "").strip().lower()
+    if identifiant in famille.depot_docker:
+        return True
+    return any((p or "").strip().lower() in famille.depot_docker_parents
+               for p in parents)
+
+
+def capacites(famille: Famille | None, identifiant: str = "",
+              parents: tuple[str, ...] = ()) -> dict[str, bool]:
     """Ce que le produit sait faire de cette famille (§42.12, §42.14).
 
     `env` vaut `true` **partout**, y compris sans famille : c'est le fait que la
@@ -280,11 +312,15 @@ def capacites(famille: Famille | None) -> dict[str, bool]:
     l'autre.
     """
     sert = famille is not None
+    docker = depot_connu(famille, identifiant, parents)
     return {
         "env": True,
         "ssh": sert,
         "identity": sert,
         "terminal": sert,
-        "docker": bool(famille and DOCKER in famille.elements),
-        "compose": bool(famille and COMPOSE in famille.elements),
+        "docker": docker,
+        # Compose est un paquet du dépôt Docker : sans dépôt, pas de greffon.
+        # Le déduire plutôt que de le déclarer évite qu'une famille annonce un
+        # Compose sans moteur, ce qui ne veut rien dire.
+        "compose": docker and bool(famille and COMPOSE in famille.elements),
     }

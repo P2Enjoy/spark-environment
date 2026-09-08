@@ -1223,3 +1223,53 @@ def test_une_cellule_DEBIAN_garde_exactement_ce_que_la_campagne_a_valide(tmp_pat
         "sshd", "cles", "depot", "docker", "compose"]
     assert corps["docker_enabled"] is True
     assert corps["complete"] is True
+
+
+def test_la_capacite_Docker_se_decide_par_DISTRIBUTION_pas_par_famille(tmp_path):
+    """§42.14 — trois fois le même piège, et il ne se voit qu'en balayant.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11, §42.14
+
+    Kali et Devuan sont des `apt` dont la suite n'existe pas chez Docker ; Oracle
+    et Amazon Linux sont des `dnf` qui se déclarent `fedora` en portant un
+    `$releasever` de RHEL. Répondre par famille leur annonçait un Docker
+    qu'aucun geste ne poserait — ce que la capture du catalogue a montré.
+
+    Mint est le contre-exemple qui rend la règle utile : c'est une dérivée, et
+    elle publie `UBUNTU_CODENAME`, donc elle L'A.
+    """
+    from sparkd import images
+
+    attendu = {
+        "debian/13": True, "ubuntu/24.04": True, "mint/wilma": True,
+        "kali/current": False, "devuan/daedalus": False,
+        "almalinux/9": True, "rockylinux/9": True, "centos/9-Stream": True,
+        "fedora/43": True,
+        "oracle/9": False, "amazonlinux/2023": False, "openeuler/24.03": False,
+        "alpine/3.22": False, "archlinux/current": False,
+        "opensuse/tumbleweed": False, "busybox/1.38.0": False,
+    }
+    for alias, docker in attendu.items():
+        vue = images.capacites_de_alias(alias)
+        assert vue["docker"] is docker, f"{alias} : Docker annoncé {vue['docker']}"
+        # Compose suit Docker : un greffon sans moteur ne veut rien dire.
+        assert vue["compose"] is docker, alias
+
+
+def test_MINT_est_une_derivee_MALGRE_son_depot_connu(tmp_path):
+    """§42.9.2 bis — le piège du correctif lui-même.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.9.2 bis
+
+    Inscrire `linuxmint` au dictionnaire des dépôts pourrait la faire passer pour
+    sa propre référence, et lui faire reprendre `VERSION_CODENAME` — « wilma »,
+    qui n'existe pas chez Docker. C'est la famille qui décide ce qui est natif,
+    pas la présence au dictionnaire.
+    """
+    assert bootstrap.cible_apt({
+        "os_id": "linuxmint", "os_suite": "wilma", "os_like": "ubuntu debian",
+        "os_suite_amont": "noble"}) == ("ubuntu", "noble")
+    # Et sans le champ amont, on refuse — même pour une distribution connue.
+    with pytest.raises(bootstrap.OSNonServi):
+        bootstrap.cible_apt({"os_id": "linuxmint", "os_suite": "wilma",
+                             "os_like": "ubuntu debian"})

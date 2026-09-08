@@ -296,7 +296,8 @@ def identite(brut: dict[str, str]) -> dict[str, str]:
     # §42.12 : ce que le produit sait faire de cette cellule. Il voyage avec
     # l'identité parce qu'il en découle entièrement, et que les deux se lisent
     # ensemble à l'écran comme dans un dossier de déploiement.
-    vue["capabilities"] = familles.capacites(famille)
+    vue["capabilities"] = familles.capacites(
+        famille, vue["id"], tuple(vue["like"].split()))
     # SPK-98 · §42.9.2 bis : appartenir à une famille qui a Docker ne suffit pas
     # — encore faut-il qu'un dépôt réponde POUR CETTE CELLULE. Kali est une
     # `apt`, et sa suite « kali-rolling » n'existe pas chez Docker. La capacité
@@ -435,8 +436,12 @@ def cible_apt(brut: dict[str, str]) -> tuple[str, str]:
     # Almalinux déclare « rhel centos fedora » et c'est `centos` qui a été
     # éprouvé sur elle (§42.11).
     parents = vue["like"].split()
+    # Une distribution est sa propre référence quand la famille la sert
+    # NATIVEMENT. Mint figure au dictionnaire des dépôts — sa suite amont est
+    # lisible — et reste pourtant une dérivée : sa propre suite, « wilma »,
+    # n'existe pas chez Docker.
+    derivee = os_id not in famille.os_ids
     distribution = famille.depot_docker.get(os_id)
-    derivee = distribution is None
     if distribution is None:
         distribution = next(
             (cible for lu, cible in famille.depot_docker_parents.items()

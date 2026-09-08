@@ -68,7 +68,7 @@ export function dernierReleve(images = []) {
  * qui détruit (SPK-DS-09).
  */
 function renderRetrait(image, refus) {
-  return `<tr class="ligne-retrait"><td colspan="6">
+  return `<tr class="ligne-retrait"><td colspan="7">
   <div class="confirmation confirmation--sensible" role="group"
        aria-label="Confirmer le retrait de ${echapper(image.label)}">
     <p><strong>Retirer « ${echapper(image.label)} » du catalogue ?</strong></p>
@@ -85,6 +85,42 @@ function renderRetrait(image, refus) {
 </td></tr>`;
 }
 
+/**
+ * Ce que l'amorçage sait poser sur une image, dit PAR le catalogue (SPK-98).
+ *
+ * @spec docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.14 (le catalogue publie une
+ *       table, pas un booléen), §42.11 (la table des familles) ·
+ *       docs/DESIGN_SYSTEM.md §14.5 (une absence se nomme), §14.6, §14.7
+ *
+ * Demandé par le responsable : « il faut signaler dans le registre des images
+ * chaque famille avec quoi elle est compatible ou pas ». Un « amorçage non pris
+ * en charge » ne suffisait plus dès lors qu'une famille peut être servie sans
+ * avoir Docker — il faut dire **laquelle**.
+ *
+ * La colonne nomme donc ce qui SERA posé, et se tait sur le reste. Elle
+ * n'énumère pas les absences : lister « pas de Docker, pas de Compose » sur une
+ * Alpine écrirait deux fois le même fait, et le §14.5 veut qu'une absence soit
+ * nommée une fois. C'est le libellé « SSH seul » qui la porte.
+ */
+export function renderCapacites(image) {
+  const capacites = image.capabilities;
+  // §14.6 : un catalogue plus ancien que ce code ne rend pas ce bloc. « Pas
+  // relevé » n'est ni « servi » ni « non servi » — on ne prétend pas savoir.
+  if (!capacites) return '<span class="note">—</span>';
+  const famille = image.family
+    ? `<span class="technique">${echapper(image.family)}</span>` : '';
+  if (!capacites.ssh) {
+    return `<span class="badge badge--neutral">non servie</span>
+      <span class="note">la cellule tourne ; à équiper soi-même</span>`;
+  }
+  const posee = capacites.docker
+    ? '<span class="badge badge--success">SSH + Docker</span>'
+    : '<span class="badge badge--accent">SSH seul</span>';
+  const pourquoi = capacites.docker ? ''
+    : '<span class="note">aucun dépôt Docker amont pour cette famille</span>';
+  return `${posee} ${famille} ${pourquoi}`;
+}
+
 function renderLigne(image, ui) {
   const { label, token, sens } = etatOf(image.state);
   const ligne = `<tr>
@@ -93,6 +129,7 @@ function renderLigne(image, ui) {
   <td class="technique cellule-dense">${echapper(image.reference)}</td>
   <td><span class="badge badge--${token}" title="${echapper(sens)}">` +
     `<span class="badge__point" aria-hidden="true"></span>${echapper(label)}</span></td>
+  <td>${renderCapacites(image)}</td>
   <td class="technique">${echapper(formatDate(image.verified_at)) || '—'}</td>
   <td>${echapper(image.detail)}</td>
   ${/* Pas de `.actions-ligne` ici : elle pose `display:flex`, ce qui sort la
@@ -201,7 +238,9 @@ export function renderCatalogue({ status = 'loading', images = [], error = null,
     <table>
       <thead><tr>
         <th scope="col">Image</th><th scope="col">Référence</th>
-        <th scope="col">État</th><th scope="col">Dernier relevé</th>
+        <th scope="col">État</th>
+        <th scope="col">Ce que l’amorçage y pose</th>
+        <th scope="col">Dernier relevé</th>
         <th scope="col">Ce que le relevé a constaté</th>
         <th scope="col"><span class="sr-only">Actions</span></th>
       </tr></thead>
