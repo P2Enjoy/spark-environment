@@ -6203,14 +6203,28 @@ un, et le relevé le montre « active, inchangé ». La mention est corrigée.
   --init` puis `--populate`. Et la capacité Docker se décide par
   **distribution**, pas par famille : le catalogue annonçait « SSH + Docker » sur
   Amazon Linux et Devuan, ce qu'une capture a montré.
+- **Preuves.** 1 265 tests serveur, 1 279 preuves d'interface, 126 parcours E2E
+  — dont celui de l'unité : un Spark sans Docker s'amorce, sa fenêtre n'en montre
+  nulle part, l'adresse de la facette retirée retombe sur la facette par défaut,
+  et le registre garde la trace. Le seed porte `busybox-demo` pour que l'écran de
+  refus garde un sujet, et accorde une clé à `alpine-demo` pour que le verdict
+  d'une cellule complète **sans** Docker soit montrable. Captures observées à
+  1440 et 390 px : `spk98-spark-sans-docker.jpg`, `-mobile`,
+  `spk98-spark-avec-docker.jpg`, `spk98-catalogue-capacites.jpg`, `-mobile`.
 - **Ce qui reste, et pourquoi l'unité n'est pas `[x]`** :
-  - les parcours E2E de la campagne locale (`e2e/parcours.test.mjs`) ne
-    couvrent pas encore un Spark sans Docker : les preuves d'écran existent, le
-    parcours de bout en bout contre le doublon reste à écrire ;
   - trois familles portent déjà `sshd` — Void, Gentoo, Alt — et n'attendent
-    qu'une commande d'activation mesurée pour entrer dans la table ;
+    qu'une commande d'activation mesurée pour entrer dans la table. Le catalogue
+    les donne « non servies », ce qui est vrai aujourd'hui et sous-estime ce
+    qu'elles pourraient recevoir ;
   - `zypper` n'a pas été éprouvée contre `linux/sles`, donc openSUSE reste sans
-    Docker par prudence et non par constat.
+    Docker **par prudence et non par constat** ;
+  - Oracle, Amazon Linux et openEuler sont données sans Docker pour la même
+    raison : leur `ID_LIKE` annonce `fedora` alors que leur `$releasever` est
+    celui de RHEL, et le dépôt `linux/centos` n'a pas été essayé sur elles ;
+  - la campagne locale ne monte pas de cellule RPM — arbitrage écrit dans
+    `seed.py` : le pool CPU du doublon ne le permet pas sans faire échouer un
+    autre parcours, et la doctrine `dnf` est portée par les tests d'unité, ceux
+    d'API et la Forge réelle.
 
 
 ---

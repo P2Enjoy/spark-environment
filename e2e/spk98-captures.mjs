@@ -1,5 +1,11 @@
 /**
- * SPK-98 — captures de la campagne, à OBSERVER (CLAUDE.md §16).
+ * SPK-98 — captures contre une Forge RÉELLE, à OBSERVER (CLAUDE.md §16).
+ *
+ * Même statut qu'`e2e/reel.mjs` : hors campagne, parce qu'il exige une vraie
+ * Forge et une console d'exploitation en marche. Il se lance à la main —
+ * `node e2e/spk98-captures.mjs` — avec la console sur `127.0.0.1:5175` et deux
+ * Sparks nommés `val-alpine` et `val-debian`. Les preuves qui doivent tourner
+ * à chaque fois vivent, elles, dans `e2e/parcours.test.mjs`.
  *
  * @verifies docs/BACKLOG.md#SPK-98 · docs/DESIGN_SYSTEM_APP.md SPK-DS-24
  *
