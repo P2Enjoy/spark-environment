@@ -92,7 +92,7 @@ compris.
 | `storage_io_priority` | INTEGER | 0–10, défaut 5 |
 | `ipv4_address` | TEXT UNIQUE | adresse stable sur le bridge privé |
 | `incus_name` | TEXT UNIQUE | nom de l'instance Incus |
-| `docker_enabled` | INTEGER | installation de Docker + Compose à la création |
+| `docker_enabled` | INTEGER | **capacité**, pas préférence (SPK-98, DAT §42.13) : cette cellule peut-elle recevoir Docker ? Posé à la création depuis la famille de l'image, corrigé par le relevé quand la cellule contredit l'étiquette. Aucune route ne l'expose en écriture |
 | `created_at`, `updated_at` | TEXT | ISO 8601 UTC |
 | `last_error` | TEXT | dernière erreur de transition, NULL si aucune |
 | `protected_at` | TEXT | date d'armement de la protection, NULL si désarmée — **c'est cette colonne qui fait foi** |

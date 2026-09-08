@@ -40,10 +40,15 @@ def test_le_seed_produit_les_cinq_etats_annonces(seede):
 
     REVISE par SPK-76 (§42.9) : le seed porte aussi « ubuntu-24 » et
     « alpine-demo », dont l'IMAGE n'est pas Debian 13. Ils n'ajoutent aucun état
-    non plus — tous deux sont `running` —, mais ils portent le seul écran où
-    l'amorçage REFUSE, et celui où le dépôt amont suit une autre distribution.
-    Sans eux, le seed ne démontrait que le cas où l'amorçage fonctionne, et
-    c'est ce biais qui a laissé passer le défaut d'`alpine-demo`.
+    non plus — tous deux sont `running` —, mais ils portent l'écran où le dépôt
+    amont suit une autre distribution. Sans eux, le seed ne démontrait que le cas
+    où l'amorçage fonctionne, et c'est ce biais qui a laissé passer le défaut
+    d'`alpine-demo`.
+
+    REVISE par SPK-98 (§42.11) : « alpine-demo » n'est PLUS la cellule refusée —
+    l'amorçage la sert désormais, sans Docker. Le refus a donc besoin de son
+    propre sujet, « busybox-demo », faute de quoi cet écran perdrait sa preuve au
+    moment même où le produit cesse de le montrer pour Alpine.
     """
     etats = {s["name"]: s["state"] for s in seede.get("/v1/sparks").json()["sparks"]}
     assert etats == {
@@ -54,7 +59,11 @@ def test_le_seed_produit_les_cinq_etats_annonces(seede):
         "site-vitrine": "error",
         "orphelin": "stopped",
         "ubuntu-24": "running",
-        "alpine-demo": "running",
+        # SPK-98 · §42.11 : les trois cas que la table des familles distingue,
+        # chacun montable à l'écran. Sans eux, l'unité n'aurait de preuve que
+        # sur la Forge réelle, et l'écran qui retire Docker aucun sujet.
+        "alpine-demo": "running",    # servie, sans Docker
+        "busybox-demo": "running",   # aucune doctrine : refusée
     }
 
 

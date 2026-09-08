@@ -73,8 +73,10 @@ def test_le_pre_renseignement_est_idempotent(db):
 def test_un_releve_distingue_verifiee_et_absente(db):
     images.add(db, "images:debian/31", "Version inexistante")
     bilan = images.verify(db, fetch=lambda url, client=None: catalogue(
-        "debian/13", "debian/12", "ubuntu/24.04", "alpine/3.21"))
-    assert bilan[VERIFIED] == 4 and bilan[MISSING] == 1
+        "debian/13", "debian/12", "ubuntu/24.04", "alpine/3.21", "almalinux/9"))
+    # SPK-98 : cinq entrées par défaut depuis qu'AlmaLinux y figure — la campagne
+    # du 2026-09-08 l'a mesurée servie, Docker amont compris.
+    assert bilan[VERIFIED] == 5 and bilan[MISSING] == 1
     etats = {e["reference"]: e["state"] for e in images.listing(db)}
     assert etats["images:debian/13"] == VERIFIED
     assert etats["images:debian/31"] == MISSING
@@ -91,7 +93,7 @@ def test_un_depot_injoignable_rend_UNKNOWN_et_jamais_MISSING(db):
         raise OSError("connexion refusée")
 
     bilan = images.verify(db, fetch=panne)
-    assert bilan[UNKNOWN] == 4 and bilan[MISSING] == 0
+    assert bilan[UNKNOWN] == 5 and bilan[MISSING] == 0
     assert all(e["state"] == UNKNOWN for e in images.listing(db))
     assert any("connexion refusée" in e["detail"] for e in images.listing(db))
 

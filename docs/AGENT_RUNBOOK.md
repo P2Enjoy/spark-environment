@@ -174,11 +174,28 @@ compte et le socket qu'il nomme. Le placeholder `<uid>` est celui que rend
 `id -u spark-docker`; un compte présent sans socket répondant n'est pas une
 installation Docker utilisable.
 
-### C.2 Le piège, mesuré : l'image de base n'a pas de `sshd`
+### C.2 Ce que l'image donne, et ce qu'elle ne donne pas
 
-`images:debian/13` n'embarque ni `cloud-init` ni `sshd` (§17.1). `sparkd` a bien
-écrit `authorized_keys`, mais **rien n'écoute**. Amorcer par le plan de contrôle,
-une fois :
+**Corrigé le 2026-09-08 par la campagne du catalogue.** Ce paragraphe affirmait
+qu'`images:debian/13` n'embarque pas de `sshd`. Ce n'est plus vrai : les images
+Debian et Ubuntu d'aujourd'hui en portent un, et le relevé du produit le montre
+« active, inchangé ». Ce qui reste vrai — et qui était le vrai sujet — c'est que
+`sparkd` écrit `authorized_keys` **sans** que rien n'écoute forcément : sur
+Alpine, Arch, openSUSE et les familles RPM, `sshd` est bel et bien absent.
+
+Les 24 familles publiées par le dépôt amont ont chacune eu sa cellule ce jour-là.
+Ce que l'amorçage sait en faire est au `docs/DAT.md` §42.11, et le catalogue
+d'images l'annonce désormais **entrée par entrée**, dans la colonne « Ce que
+l'amorçage y pose ».
+
+L'amorçage se demande par le produit — depuis la console, ou par l'API :
+
+```bash
+curl -s -X POST http://127.0.0.1:19876/v1/sparks/demo-app/bootstrap -d '{}'
+```
+
+Il détecte d'abord et ne pose que les manques. Le chemin manuel ci-dessous reste
+celui du **dépannage** (§37.3) :
 
 ```bash
 ssh <compte>@<forge> 'sudo incus exec demo-app -- bash -lc "

@@ -130,13 +130,40 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
            "cpu_reservation": 0.25, "memory_bytes": 512 * MIO,
            "storage_bytes": 5 * GIO, "network_bps": 50 * MBIT})
 
-    # « alpine-demo » porte le nom de la cellule réelle du responsable. C'est la
-    # cellule que l'amorçage REFUSE (§42.9.5) : elle tourne, elle répond, et le
-    # produit ne sait pas l'équiper. L'écran de refus n'est démontrable que si
-    # une telle cellule existe.
+    # « alpine-demo » porte le nom de la cellule réelle du responsable. Depuis
+    # SPK-98 (§42.11), ce n'est PLUS la cellule qu'on refuse : l'amorçage la sert
+    # — `sshd` et ses clés — et elle n'a simplement pas Docker. C'est le cas que
+    # SPK-DS-24 traite, et il n'est démontrable que si une telle cellule existe.
     creer({"name": "alpine-demo", "image": "images:alpine/3.21", "cpu_mode": "shared",
            "cpu_reservation": 0.25, "memory_bytes": 512 * MIO,
            "storage_bytes": 5 * GIO, "network_bps": 50 * MBIT})
+
+    # SPK-98 : Busybox n'est PAS au catalogue par défaut, et c'est voulu — le
+    # produit ne propose pas d'emblée une image qu'il ne sait pas servir. Le seed
+    # l'ajoute donc par le geste réel du §33.6, celui que l'exploitant emploie :
+    # cocher une entrée du dépôt. La créer autrement fabriquerait une trace que
+    # le produit ne produit jamais (CLAUDE.md §8).
+    _attendu(client.post("/v1/images", json={"references": ["images:busybox/1.38.0"]}),
+             201, quoi="ajout de Busybox au catalogue")
+
+    # SPK-98 · §42.9.5 : la cellule que l'amorçage refuse VRAIMENT. Busybox n'a
+    # ni `/etc/os-release` ni gestionnaire de paquets — mesuré sur la Forge le
+    # 2026-09-08 —, et rien n'y est posable. Sans elle, l'écran de refus perdrait
+    # sa preuve le jour où Alpine a cessé d'être refusée.
+    creer({"name": "busybox-demo", "image": "images:busybox/1.38.0",
+           "cpu_mode": "shared", "cpu_reservation": 0.25, "memory_bytes": 512 * MIO,
+           "storage_bytes": 5 * GIO, "network_bps": 50 * MBIT})
+
+    # SPK-98 : une cellule AlmaLinux n'est PAS seedée, et c'est un arbitrage, pas
+    # un oubli. Le pool CPU du doublon vaut 3 — la vraie Forge a 4 cœurs dont un
+    # dédié —, et chaque Spark seedé en consomme. Y ajouter une famille RPM
+    # laisserait 0,25 libre, de quoi faire échouer le parcours qui redimensionne
+    # « boutique » : la campagne perdrait une preuve pour en gagner une que les
+    # tests d'unité, les tests d'API et la Forge réelle portent déjà.
+    #
+    # Ce que seul le seed peut montrer, il le montre : « alpine-demo » pour une
+    # cellule servie sans Docker, « busybox-demo » pour un refus. La doctrine
+    # `dnf` n'a pas besoin d'un écran de plus pour être vraie.
 
     # --- Spark en ERREUR, atteint par le VRAI chemin d'erreur (§28.3).
     # On fait échouer le pilote sur le démarrage : la route appelle alors
@@ -293,7 +320,11 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     # « boutique », « site-vitrine » et « orphelin » n'en reçoivent aucune, et
     # c'est délibéré : il faut que l'écran ait de quoi montrer l'absence, qui est
     # le cas d'un Spark neuf.
-    for spark in ("postgres-dedie", "ubuntu-24"):
+    # SPK-98 : « alpine-demo » en reçoit une, parce qu'elle porte désormais la
+    # démonstration d'une cellule COMPLÈTE sans Docker. Sans clé, elle resterait
+    # fermée à tout le monde (§42.10.4) et l'écran ne pourrait pas montrer le
+    # verdict qui distingue « joignable » de « capable de faire tourner une pile ».
+    for spark in ("postgres-dedie", "ubuntu-24", "alpine-demo"):
         _attendu(client.post(f"/v1/sparks/{spark}/ssh-keys/poste-responsable"), 200,
                  quoi=f"attribution de la clé à « {spark} »")
 

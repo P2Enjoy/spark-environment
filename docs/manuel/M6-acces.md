@@ -62,24 +62,35 @@ revanche, ne casse rien et ne demande rien.
 
 ## Amorcer le Spark, une fois
 
-**Un Spark neuf n'a ni serveur SSH ni moteur Docker.** L'image de base n'en
-embarque aucun. Vos clés y sont bien écrites, mais rien n'écoute : la connexion
+**Un Spark neuf n'a pas forcément de serveur SSH, et jamais de moteur Docker.**
+Vos clés y sont bien écrites, mais rien n'écoute nécessairement : la connexion
 décrite plus bas ne peut pas aboutir tant que ce premier geste n'a pas eu lieu.
 
 La section **Amorçage**, sur la fiche du Spark, s'en charge.
 
-### Sur quelles images il fonctionne
+### Sur quelles images il fonctionne, et ce qu'il y pose
 
-L'amorçage sert les distributions de la famille **Debian** : Debian et Ubuntu.
-Il lit la distribution **dans** votre cellule et pose le dépôt Docker officiel
-qui lui correspond — celui de Debian pour une Debian, celui d'Ubuntu pour une
-Ubuntu, à la bonne version.
+L'amorçage lit la distribution **dans** votre cellule, et pose ce qu'elle sait
+recevoir. Toutes n'en reçoivent pas autant, et **le catalogue d'images vous le
+dit pour chaque entrée**, dans la colonne *Ce que l'amorçage y pose* :
 
-Sur une image d'une autre famille — **Alpine**, par exemple —, l'amorçage
-**refuse**, et le refus nomme la distribution qu'il a trouvée. Ce n'est pas une
-panne : c'est un geste que le produit ne sait pas faire là. Un tel Spark
-fonctionne, il tourne, vous pouvez y entrer par la console — mais vous y
-installerez SSH et Docker vous-même, et le produit ne le fera pas à votre place.
+| Ce que vous choisissez | Ce que le Spark reçoit |
+|---|---|
+| Debian, Ubuntu, Linux Mint | serveur SSH, vos clés, **Docker et Compose** |
+| Fedora, CentOS, AlmaLinux, Rocky | serveur SSH, vos clés, **Docker et Compose** |
+| Alpine, Arch, openSUSE, Kali, Devuan | serveur SSH et vos clés — **pas de Docker** |
+| Busybox, NixOS, Slackware, OpenWrt… | rien : la cellule tourne, à vous de l'équiper |
+
+**Pourquoi certaines n'ont pas Docker.** Docker ne publie de dépôt officiel que
+pour une partie des distributions. Le paquet livré par la distribution
+elle-même, lui, ne fonctionne pas dans un Spark : son profil de sécurité est
+trop ancien, et vos conteneurs démarreraient pour mourir aussitôt. Le produit
+préfère donc vous le dire que vous poser quelque chose qui ne marchera pas.
+
+**Un Spark sans Docker reste un Spark entier.** Il est joignable en SSH, il
+reçoit ses variables, ses secrets et son briefing, il a son terminal, ses
+routes, ses instantanés et ses mesures. Sa fenêtre n'affiche simplement pas
+d'onglet *Docker* — il n'y aurait rien à y regarder.
 
 L'écran de création vous le dit **avant** de créer le Spark, au moment où le
 choix ne coûte encore rien.

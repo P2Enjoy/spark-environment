@@ -12,6 +12,41 @@
   `nginx:alpine` qui démarre sous AppArmor et seccomp actifs. Relevé complet,
   doctrines mesurées et défauts trouvés : `docs/JOURNAL.md` du 2026-09-08,
   contrat au `docs/DAT.md` §42.11.
+- **SPK-98 — l'amorçage sert par élément, et non plus par tout ou rien.** Cinq
+  familles mesurées vivent dans une table de données : `apt`, `apk`, `dnf`,
+  `zypper`, `pacman`. Chacune déclare son paquet SSH, sa préparation, sa commande
+  d'activation et l'existence ou non d'un dépôt Docker amont. **Alpine, Arch et
+  openSUSE deviennent joignables en SSH** avec les clés du registre ; **la
+  famille RHEL obtient Docker**, mesuré sur Almalinux 9 avec un `nginx:alpine`
+  qui démarre sous AppArmor et seccomp actifs.
+- **SPK-98 — le catalogue d'images dit avec quoi chaque famille est compatible.**
+  Une colonne « Ce que l'amorçage y pose » annonce la famille et ce qu'elle
+  reçoit, avec la raison quand Docker manque. La capacité se décide par
+  distribution : Kali, Devuan, Oracle et Amazon Linux n'ont pas de dépôt amont, et
+  le produit le dit au lieu de le promettre.
+- **SPK-98 — un Spark sans Docker ne montre nulle part Docker.** Ni onglet, ni
+  facette — son adresse retombe sur la facette par défaut —, ni ligne de relevé,
+  ni option rootless, ni « contexte Docker » dans le panneau d'accueil de la
+  cellule ou dans son briefing. Le reste est entier (`SPK-DS-24`).
+
+### Corrigé
+- **SPK-98 — la suite d'une dérivée était recopiée au lieu d'être lue.** Kali
+  posait `linux/debian kali-rolling`, un dépôt qui répond sans avoir de
+  `Release` : le produit répondait pourtant `supported: true` et échouait à
+  `apt-get update`. La suite amont se lit dans `DEBIAN_CODENAME` /
+  `UBUNTU_CODENAME`, et à défaut on refuse le **dépôt** — lui seul, la cellule
+  gardant SSH, clés, variables et briefing.
+- **SPK-98 — `curl` n'était installé qu'en passant**, par l'élément « serveur
+  SSH ». Sur une image qui porte déjà un `sshd` actif, l'amorçage rendait
+  « Command not found », un refus qui ne nommait ni la commande, ni l'élément, ni
+  la cause. Chaque élément installe désormais ce dont il a besoin.
+- **SPK-98 — le catalogue contredisait le relevé.** Il lisait le préfixe de
+  l'alias et ne connaissait que `debian` et `ubuntu` ; le relevé lit `ID_LIKE`
+  dans la cellule. Mint, Kali et Devuan étaient annoncées « non prises en
+  charge » alors que l'amorçage les acceptait. Les deux consultent la même table.
+- **SPK-98 — le trousseau d'une image Arch n'est pas initialisé**, et
+  `archlinux-keyring` ne peut pas se vérifier lui-même. `pacman-key --init` puis
+  `--populate` précèdent toute pose.
 
 - **La piste d'un GPU dans un Spark est consignée hors backlog**
   (`docs/EXPLORATION_GPU.md`, étudiée le 2026-09-08 à la demande du responsable).

@@ -475,10 +475,35 @@ test('une image que l’amorçage ne sert pas est SIGNALÉE dans la liste', () =
   // rien ne le disait avant l'échec. C'est ce silence qui a produit `alpine-demo`.
   const rendu = renderChoixImage('images:debian/13', [
     { reference: 'images:debian/13', label: 'Debian 13', bootstrappable: true },
-    { reference: 'images:alpine/3.21', label: 'Alpine 3.21', bootstrappable: false },
+    { reference: 'images:busybox/1.38.0', label: 'Busybox', bootstrappable: false },
   ]);
-  assert.match(rendu, /Alpine 3\.21 — images:alpine\/3\.21 \(amorçage non pris en charge\)/);
-  assert.match(rendu, /famille Debian/);
+  assert.match(rendu, /Busybox — images:busybox\/1\.38\.0 \(amorçage non pris en charge\)/);
+  assert.match(rendu, /pas amorçables du tout/);
+});
+
+test('SPK-98 · une image SANS DOCKER se distingue d’une image non amorçable', () => {
+  // @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.14
+  //
+  // Un booléen ne suffisait plus : « amorçage non pris en charge » était vrai
+  // d'une Busybox et FAUX d'une Alpine, qui reçoit SSH et ses clés sans jamais
+  // recevoir Docker. Les confondre décourage de choisir une image parfaitement
+  // servie, ou promet Docker sur une qui n'en aura pas.
+  const capacites = (ssh, docker) => ({
+    env: true, ssh, identity: ssh, terminal: ssh, docker, compose: docker });
+  const rendu = renderChoixImage('images:debian/13', [
+    { reference: 'images:debian/13', label: 'Debian 13', bootstrappable: true,
+      capabilities: capacites(true, true) },
+    { reference: 'images:alpine/3.22', label: 'Alpine 3.22', bootstrappable: true,
+      capabilities: capacites(true, false) },
+    { reference: 'images:busybox/1.38.0', label: 'Busybox', bootstrappable: false,
+      capabilities: capacites(false, false) },
+  ]);
+  assert.match(rendu, /Debian 13 — images:debian\/13<\/option>/, 'aucune mention');
+  assert.match(rendu, /Alpine 3\.22 — images:alpine\/3\.22 \(SSH seul, sans Docker\)/);
+  assert.match(rendu, /Busybox — images:busybox\/1\.38\.0 \(amorçage non pris en charge\)/);
+  // Les deux causes sont dites, et distinctement.
+  assert.match(rendu, /ne reçoivent pas Docker/);
+  assert.match(rendu, /pas amorçables du tout/);
 });
 
 test('une image non amorçable reste CHOISISSABLE', () => {
@@ -498,5 +523,6 @@ test('sans catalogue non amorçable, l’aide ne parle pas d’amorçage', () =>
   const rendu = renderChoixImage('images:debian/13', [
     { reference: 'images:debian/13', label: 'Debian 13', bootstrappable: true },
   ]);
-  assert.ok(!/famille Debian/.test(rendu));
+  assert.ok(!/pas amorçables du tout/.test(rendu));
+  assert.ok(!/ne reçoivent pas Docker/.test(rendu));
 });

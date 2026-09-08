@@ -8480,6 +8480,36 @@ tard — `systemd-resolved` n'avait pas fini de s'établir. L'amorçage attend d
 que la résolution réponde avant de poser quoi que ce soit, plutôt que de rendre
 un échec qui n'en est pas un.
 
+**Chaque famille PRÉPARE avant d'installer, et cette préparation a une cause
+mesurée.** Séparer les deux gestes n'est pas une élégance : les fondre rendrait
+ces causes illisibles, puis ferait rejouer un rafraîchissement de dépôt à chaque
+paquet posé.
+
+| Famille | Préparation | Ce que son absence produit |
+|---|---|---|
+| `apt` | `apt-get update -qq` | aucun index dans une image fraîche |
+| `dnf` | *(aucune)* | `dnf` rafraîchit son cache à l'installation |
+| `zypper` | `zypper --non-interactive refresh` | `104`, « paquet introuvable », sur un paquet qui existe |
+| `pacman` | `pacman-key --init` · `pacman-key --populate archlinux` · `pacman -Sy --noconfirm archlinux-keyring` | « signature from … is unknown trust », sur **tout** |
+| `apk` | *(aucune)* | `apk add` lit l'index publié à chaque appel |
+
+**Le cas d'Arch mérite d'être écrit, parce qu'il se mord la queue.** Une image
+Arch arrive avec un trousseau `pacman` **non initialisé**. Poser
+`archlinux-keyring` ne répare rien — ce paquet-là ne peut pas se vérifier
+lui-même :
+
+```
+error: archlinux-keyring: signature from "…" is unknown trust
+error: failed to commit transaction (invalid or corrupted package)
+```
+
+`--init` crée le trousseau, `--populate` y met les clés livrées avec l'image, et
+le paquet est reposé ensuite pour que le trousseau soit celui d'aujourd'hui.
+**Le premier essai de la campagne avait réussi sans rien de tout cela** ; le
+second, joué par le produit quelques minutes plus tard, a échoué. Une doctrine
+qui dépend de la date à laquelle on l'essaie n'en est pas une, et c'est pour
+cela que les trois lignes sont posées quel que soit l'état trouvé.
+
 **OpenRC n'est pas systemd, et le relevé ne doit pas le supposer.** `systemctl
 is-active ssh` n'existe pas sur Alpine. Le relevé du §42.6 interroge donc les
 deux gestionnaires de services et retient la première réponse utile ; il reste
@@ -8611,6 +8641,21 @@ Ce n'est pas une préférence de l'exploitant : c'est un **fait** sur la cellule
 Le champ n'est donc pas modifiable à la main, et aucune route ne l'expose en
 écriture. Le rendre réglable inviterait à cocher « Docker » sur une Alpine, ce
 qui ne produirait rien d'autre qu'une promesse fausse.
+
+**Le briefing le porte aussi, et pas seulement l'écran.** `docker.supported`
+distingue « pas encore relevé » de « n'en aura jamais » : les deux rendaient
+`mode: null`, et un agent qui lit `/etc/spark/BRIEFING.md` ne pouvait pas savoir
+s'il devait amorcer ou renoncer. Sur une cellule sans Docker, le fichier porte
+une section « Docker » qui le dit, la mise en garde du §41.2 y figure — c'est là
+qu'elle sert — et elle SORT de la liste des pièges, qui ne s'adresse qu'à qui
+peut en installer un.
+
+Le panneau d'accueil de la cellule (§44.1) cesse d'annoncer « contexte Docker »
+dans ce cas. Trouvé à l'écran le 2026-09-08, en ouvrant un terminal sur une
+Alpine réelle : l'agent qui entre lisait la promesse, ouvrait le fichier, et n'y
+trouvait rien. **Le briefing doit répondre sur un Spark arrêté et jamais
+amorcé** — c'est l'état où l'on prépare un déploiement (§44.9) —, donc la
+capacité s'y lit au REGISTRE et non au relevé.
 
 ### 42.14 Le catalogue publie une TABLE de capacités, pas un booléen
 

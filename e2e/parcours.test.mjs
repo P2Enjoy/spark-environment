@@ -3471,10 +3471,15 @@ test('un Spark PROTÉGÉ refuse l’amorçage, et le refus est LISIBLE', async (
 
 test('une cellule que l’amorçage ne sert pas est REFUSÉE, et le refus la nomme', async () => {
   await parcours('amorcage-non-servi', async () => {
-    // Le cas réel du responsable : `alpine-demo` rendait le refus brut d'Incus,
-    // « Command not found », qui ne désigne pas sa cause. Depuis l'accueil, à
-    // la souris — c'est le parcours canonique qui doit le dire.
-    await ouvrir('alpine-demo');
+    // Le cas réel du responsable : une cellule non servie rendait le refus brut
+    // d'Incus, « Command not found », qui ne désigne pas sa cause. Depuis
+    // l'accueil, à la souris — c'est le parcours canonique qui doit le dire.
+    //
+    // SPK-98 : le sujet a CHANGÉ, et c'est le point. Ce parcours montait une
+    // Alpine, que l'amorçage sert désormais. La cellule vraiment non servie est
+    // une Busybox : ni `/etc/os-release`, ni gestionnaire de paquets — mesuré
+    // sur la Forge le 2026-09-08.
+    await ouvrir('busybox-demo');
     await page.waitForSelector('#titre-amorcage');
 
     await page.click('[data-amorcage="relever"]');
@@ -3482,8 +3487,7 @@ test('une cellule que l’amorçage ne sert pas est REFUSÉE, et le refus la nom
       () => document.body.innerText.includes('ne sait pas servir'), { timeout: 15000 });
 
     const ecran = await page.textContent('.principal');
-    assert.match(ecran, /alpine/, 'le refus NOMME la distribution relevée');
-    assert.match(ecran, /Debian et Ubuntu/, 'et dit ce qu’il sert');
+    assert.match(ecran, /ne sait pas servir/, 'le refus se lit');
     assert.ok(!/Command not found/.test(ecran),
       'le refus d’Incus ne fuit plus jusqu’à l’écran');
 
@@ -3491,6 +3495,71 @@ test('une cellule que l’amorçage ne sert pas est REFUSÉE, et le refus la nom
     assert.equal(await page.$('[data-amorcage="amorcer"]'), null);
   });
 });
+
+test('SPK-98 · un Spark SANS Docker s’amorce, et sa fenêtre n’en montre nulle part',
+  async () => {
+    await parcours('spk98-sans-docker', async () => {
+      // @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11, §42.12, §42.13 ·
+      //           docs/DESIGN_SYSTEM_APP.md SPK-DS-24
+      //
+      // Le parcours que l'unité réclamait : retirer Docker ne doit RIEN retirer
+      // d'autre. On amorce une Alpine — que le produit refusait en bloc avant le
+      // 2026-09-08 — et l'on vérifie les deux moitiés d'un coup : ce qu'elle
+      // reçoit, et ce que l'écran cesse de promettre.
+      await ouvrir('alpine-demo');
+      await page.waitForSelector('#titre-amorcage');
+
+      // L'onglet n'est pas construit. Ni désactivé, ni masqué : absent.
+      const onglets = await page.$$eval('.onglet', (a) => a.map((x) => x.textContent));
+      assert.ok(!onglets.includes('Docker'), `onglets rendus : ${onglets.join(', ')}`);
+      // …et rien de ce qui ne dépend pas de Docker n'a disparu avec lui.
+      for (const facette of ['Infos', 'Routes', 'Clés', 'Instantanés', 'Mesures',
+                             'Environnement', 'Terminal', 'Journal']) {
+        assert.ok(onglets.includes(facette), `« ${facette} » a disparu`);
+      }
+
+      // La raison est DITE, une fois, là où on la cherche.
+      const section = await page.$eval('#titre-amorcage',
+                                       (h) => h.closest('section').innerText);
+      assert.match(section, /ne reçoit pas Docker/);
+
+      // L'amorçage sert la cellule pour ce qu'elle est.
+      await page.click('[data-amorcage="amorcer"]');
+      await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+      // §42.2 : l'option rootless est un mode d'installation de Docker. Sans
+      // Docker, la case ne peut rien changer — elle n'est pas offerte.
+      assert.equal(await page.$('[data-amorcage="rootless"]'), null);
+      await page.click('[data-amorcage="engager"]');
+      await page.waitForSelector('.liste-amorcage', { timeout: 20000 });
+
+      const lignes = await page.$$eval('.ligne-amorcage', (l) => l.map((x) => x.textContent));
+      assert.equal(lignes.length, 3,
+                   `attendu sshd, clés et panneau — reçu : ${lignes.join(' | ')}`);
+      assert.ok(!lignes.some((l) => /dépôt Docker|moteur Docker|greffon Compose/.test(l)),
+                'une ligne décrit un manque qu’aucun geste ne comblera');
+
+      // Le verdict ne promet pas ce que la cellule ne peut pas. On le lit DANS
+      // la section d'amorçage : « pile Compose » figure ailleurs sur l'écran —
+      // le dossier pour un agent décrit ce qu'un Spark peut porter en général —
+      // et chercher la chaîne partout confondrait deux propos.
+      const verdict = await page.$eval('#titre-amorcage',
+                                       (h) => h.closest('section').innerText);
+      assert.match(verdict, /joignable en SSH, avec ses clés/);
+      assert.ok(!/pile Compose/.test(verdict));
+
+      // Effet BACKEND (§29.3 : on lit pour constater).
+      const fiche = await pile.lireSparkd('/v1/sparks/alpine-demo');
+      assert.equal(fiche.corps.docker_enabled, 0);
+
+      // L'ADRESSE de la facette retirée ne mène nulle part non plus : un favori
+      // pris sur un autre Spark retombe sur la facette par défaut.
+      await page.evaluate(() => { window.location.hash = '#/sparks/alpine-demo/docker'; });
+      await page.waitForFunction(
+        () => document.body.innerText.includes('Ressources'), { timeout: 10000 });
+      assert.equal(await page.$('[data-docker]'), null,
+                   'la facette Docker a été rendue par son adresse');
+    });
+  });
 
 test('un amorçage sur UBUNTU pose le dépôt d’Ubuntu, pas celui de Debian', async () => {
   await parcours('amorcage-ubuntu', async () => {
@@ -3521,7 +3590,7 @@ test('le relevé d’un Spark ne DÉBORDE pas sur la fiche du suivant', async ()
     // zéro entre deux fiches — même défaut que celui que le §37.6 corrige pour
     // Docker. Trouvé en produisant les captures, pas par une preuve de rendu :
     // celles-ci peignent une fiche à la fois et ne peuvent pas le voir.
-    await ouvrir('alpine-demo');
+    await ouvrir('busybox-demo');
     await page.waitForSelector('#titre-amorcage');
     await page.click('[data-amorcage="relever"]');
     await page.waitForFunction(
@@ -3537,7 +3606,7 @@ test('le relevé d’un Spark ne DÉBORDE pas sur la fiche du suivant', async ()
     const section = await page.$eval(
       '#titre-amorcage', (h) => h.closest('section').innerText);
     assert.ok(!/ne sait pas servir/.test(section),
-      'la fiche d’ubuntu-24 hérite du refus d’alpine-demo');
+      'la fiche d’ubuntu-24 hérite du refus de busybox-demo');
     assert.ok(await page.$('[data-amorcage="amorcer"]'),
       'un Spark amorçable doit garder son geste');
   });
@@ -3627,10 +3696,24 @@ test('l’écran de création DIT quelles images l’amorçage sait servir', asy
     await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
 
     const options = await page.$$eval('#image option', (o) => o.map((x) => x.textContent));
+
+    // SPK-98 · §42.14 : trois mentions pour trois cas réels, et les confondre
+    // décourageait de choisir une image parfaitement servie. Alpine reçoit SSH
+    // et ses clés ; Busybox ne reçoit rien ; Debian reçoit tout.
     const alpine = options.find((o) => o.includes('alpine'));
-    assert.match(alpine, /amorçage non pris en charge/);
-    // …et elle reste CHOISISSABLE : le produit sert des cellules, pas seulement
-    // des cellules amorçables (§25 — montrer sans décider).
+    assert.match(alpine, /SSH seul, sans Docker/);
+    const busybox = options.find((o) => o.includes('busybox'));
+    assert.match(busybox, /amorçage non pris en charge/);
+    const debian = options.find((o) => o.includes('debian/13'));
+    assert.ok(!/\(/.test(debian), 'une image qui reçoit tout ne porte aucune mention');
+
+    // L'aide dit les deux causes, distinctement.
+    const aide = await page.$eval('#image-aide', (p) => p.textContent);
+    assert.match(aide, /ne reçoivent pas Docker/);
+    assert.match(aide, /pas amorçables du tout/);
+
+    // …et toutes restent CHOISISSABLES : le produit sert des cellules, pas
+    // seulement des cellules amorçables (§25 — montrer sans décider).
     assert.equal(await page.$eval('#image', (s) => s.disabled), false);
   });
 });

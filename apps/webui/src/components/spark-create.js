@@ -320,22 +320,37 @@ export function renderChoixImage(courante, images = []) {
         <option>— catalogue vide —</option></select>`,
     });
   }
-  // §42.9.6 : l'entrée reste CHOISISSABLE — le produit sert des cellules, pas
-  // seulement des cellules amorçables. Mais l'option le dit, et l'aide le dit
-  // aussi, au moment où le choix ne coûte encore rien.
+  // §42.9.6, §42.14 : l'entrée reste CHOISISSABLE — le produit sert des cellules,
+  // pas seulement des cellules amorçables. Mais l'option DIT ce qu'elle donne, au
+  // moment où le choix ne coûte encore rien.
+  //
+  // SPK-98 : un booléen ne suffisait plus. « Amorçage non pris en charge » était
+  // vrai d'une Busybox et faux d'une Alpine, qui reçoit SSH et ses clés sans
+  // jamais recevoir Docker. Trois mentions, donc, pour trois cas réels.
+  const mention = (i) => {
+    if (!i.capabilities) return i.bootstrappable === false
+      ? ' (amorçage non pris en charge)' : '';
+    if (!i.capabilities.ssh) return ' (amorçage non pris en charge)';
+    return i.capabilities.docker ? '' : ' (SSH seul, sans Docker)';
+  };
   const options = images.map((i) =>
     `<option value="${echapper(i.reference)}"${i.reference === courante ? ' selected' : ''}>` +
     `${echapper(i.label)} — ${echapper(i.reference)}` +
-    `${i.bootstrappable === false ? ' (amorçage non pris en charge)' : ''}</option>`).join('');
-  const nonAmorcables = images.filter((i) => i.bootstrappable === false);
+    `${mention(i)}</option>`).join('');
+  const sansAmorcage = images.filter((i) => mention(i).includes('non pris en charge'));
+  const sansDocker = images.filter((i) => mention(i).includes('SSH seul'));
   return champ({
     id: 'image', libelle: 'Image',
     aide: 'Les images proposées sont celles que le dernier relevé du catalogue a '
       + 'trouvées chez leur dépôt.'
-      + (nonAmorcables.length
-        ? ' L’amorçage automatique — SSH et Docker posés pour vous — ne sert que '
-          + 'la famille Debian : Debian et Ubuntu. Les autres images fonctionnent, '
-          + 'mais vous les équiperez vous-même.'
+      + (sansDocker.length
+        ? ' Certaines ne reçoivent pas Docker : le dépôt officiel n’en publie '
+          + 'aucun pour leur famille. Elles reçoivent le reste — serveur SSH, '
+          + 'clés, variables et briefing — et leur fenêtre n’affiche pas Docker.'
+        : '')
+      + (sansAmorcage.length
+        ? ' D’autres ne sont pas amorçables du tout : elles fonctionnent, mais '
+          + 'vous les équiperez vous-même.'
         : ''),
     controle: `<select id="image" name="image" class="controle">${options}</select>`,
   });

@@ -51,6 +51,11 @@ DEFAULTS = (
     ("images:debian/12", "Debian 12 « bookworm »", "images", "debian/12", False),
     ("images:ubuntu/24.04", "Ubuntu 24.04 LTS", "images", "ubuntu/24.04", False),
     ("images:alpine/3.21", "Alpine 3.21", "images", "alpine/3.21", False),
+    # SPK-98 · §42.11 : une famille RPM au catalogue par défaut, parce que la
+    # campagne du 2026-09-08 l'a mesurée servie — SSH, Docker amont et Compose,
+    # `nginx:alpine` qui démarre. Ne pas la proposer reviendrait à cacher ce que
+    # le produit sait faire.
+    ("images:almalinux/9", "AlmaLinux 9", "images", "almalinux/9", False),
 )
 
 
@@ -358,6 +363,13 @@ FAKE_PUBLICATIONS = (
     ("alpine/3.22", "Alpine", "3.22", "default"),
     ("archlinux", "Archlinux", "current", "default"),
     ("archlinux/cloud", "Archlinux", "current", "cloud"),
+    # SPK-98 · §42.11 : les trois cas que la campagne a distingués doivent être
+    # MONTABLES en local, sans quoi l'écran qui les traite n'a pas de preuve.
+    # Une `dnf` qui reçoit Docker, une `apt` dérivée qui n'en reçoit pas faute de
+    # suite amont, et une cellule qu'aucune doctrine ne sert.
+    ("almalinux/9", "Almalinux", "9", "default"),
+    ("kali/current", "Kali", "current", "default"),
+    ("busybox/1.38.0", "Busybox", "1.38.0", "default"),
 )
 
 

@@ -6071,7 +6071,7 @@ prochaine réécriture depuis l'état voulu l'effacera sans prévenir (§43.2).
   d'un Spark — **depuis SPK-64**. Journal du 2026-09-08.
 
 
-### [ ] SPK-98 · Une famille sert ce qu'elle sait servir, et l'écran ne montre que cela
+### [~] SPK-98 · Une famille sert ce qu'elle sait servir, et l'écran ne montre que cela
 
 Demandée par le responsable le 2026-09-08, à l'issue de la **campagne du
 catalogue** : ajouter les images du catalogue à la Forge de test, créer un Spark
@@ -6173,9 +6173,44 @@ unitaires, tests d'API et test E2E propres à l'unité ; captures observées aux
 principaux formats ; DAT, design system, manuel M6, runbook, `SCHEMA.md` et
 changelog mis à jour ; `@spec` / `@verifies` posés.
 
-**Correction due au passage, trouvée par la campagne** : le runbook §C.2 affirme
+**Correction due au passage, trouvée par la campagne** : le runbook §C.2 affirmait
 que `images:debian/13` n'embarque pas de `sshd`. Les images d'aujourd'hui en ont
 un, et le relevé le montre « active, inchangé ». La mention est corrigée.
+
+- **État au 2026-09-08 — `[~]`, et ce qui reste est nommé.** Le serveur, le
+  catalogue, l'écran, le terminal et le briefing sont écrits, et **éprouvés sur
+  la Forge réelle**, image par image, avec redéploiement du paquet à chaque
+  correction :
+
+  | Famille | Éprouvée sur | Résultat mesuré |
+  |---|---|---|
+  | `apt` | `debian/13` | `sshd`, clés, dépôt `debian trixie`, Docker 29.8.0, Compose v5.5.1, `nginx:alpine` qui démarre |
+  | `apt` sans dépôt | `kali/current` | `docker_enabled = 0` dès la création, aucune commande Docker n'part, complète en 0,8 s |
+  | `apk` | `alpine/3.22` | complète en 7,6 s ; SSH ouvert **depuis le poste** avec la clé du registre ; identité créée ; `docker` absent |
+  | `dnf` | `almalinux/9` | complète en 1 min 14 ; `docker-ce 29.8.0-1.el9` du dépôt `linux/centos` ; `overlayfs · cgroup 2 · [apparmor seccomp cgroupns]` ; `nginx:alpine` qui démarre |
+  | `zypper` | `opensuse/tumbleweed` | complète ; SSH ouvert depuis le poste ; pas de Docker |
+  | `pacman` | `archlinux/current` | complète en 20,7 s après la correction du trousseau ; SSH ouvert depuis le poste |
+
+- **Trois défauts de plus, trouvés PAR L'ÉCRAN et non par un test.** Le terminal
+  d'une Alpine renvoyait à un amorçage pour découvrir un second compte qui
+  n'existera jamais ; le panneau d'accueil de la cellule promettait un « contexte
+  Docker » à qui entre ; le briefing répondait « Docker n'a pas été relevé comme
+  utilisable », ce qui envoie amorcer pour rien. Les trois sont corrigés et
+  couverts (SPK-DS-24 étendu aux surfaces qui vivent DANS la cellule).
+- **Deux défauts de doctrine, trouvés par la mesure et non par la lecture.** Le
+  trousseau `pacman` d'une image Arch n'est pas initialisé, et
+  `archlinux-keyring` ne peut pas se vérifier lui-même — il faut `pacman-key
+  --init` puis `--populate`. Et la capacité Docker se décide par
+  **distribution**, pas par famille : le catalogue annonçait « SSH + Docker » sur
+  Amazon Linux et Devuan, ce qu'une capture a montré.
+- **Ce qui reste, et pourquoi l'unité n'est pas `[x]`** :
+  - les parcours E2E de la campagne locale (`e2e/parcours.test.mjs`) ne
+    couvrent pas encore un Spark sans Docker : les preuves d'écran existent, le
+    parcours de bout en bout contre le doublon reste à écrire ;
+  - trois familles portent déjà `sshd` — Void, Gentoo, Alt — et n'attendent
+    qu'une commande d'activation mesurée pour entrer dans la table ;
+  - `zypper` n'a pas été éprouvée contre `linux/sles`, donc openSUSE reste sans
+    Docker par prudence et non par constat.
 
 
 ---

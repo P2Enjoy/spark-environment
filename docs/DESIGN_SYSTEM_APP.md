@@ -953,7 +953,23 @@ refuser d'installer.
   bruit ;
 - le verdict de complétude change de phrase avec la capacité. « Joignable en SSH
   et capable de faire tourner une pile Compose » est **faux** sur une cellule
-  sans Docker ; elle est complète pour ce qu'elle est, et la phrase le dit.
+  sans Docker ; elle est complète pour ce qu'elle est, et la phrase le dit ;
+- la règle vaut **jusque dans la cellule**, et c'est là qu'on l'a oubliée. Trois
+  endroits promettaient encore Docker, trouvés à l'écran le 2026-09-08 en
+  ouvrant un terminal sur une Alpine réelle :
+  - le panneau du terminal disait « le mode Docker de ce Spark n'a jamais été
+    relevé, amorcez-le pour savoir s'il offre un second compte ». Il n'en offrira
+    **jamais** : la seconde porte EST le compte du démon rootless. La porte
+    unique se dit alors **définitive**, sans renvoyer à un geste ;
+  - le panneau d'accueil de la cellule annonçait « lisez BRIEFING.md : quotas
+    réels, **contexte Docker**, … » à qui entre. Trois lignes plus bas, l'agent
+    ouvrait le fichier pour y chercher ce qu'on venait de lui promettre ;
+  - le briefing répondait « Docker n'a pas été relevé comme utilisable », ce qui
+    envoie amorcer une cellule qui n'aura jamais de Docker.
+
+  **Un écran de la console n'est pas le seul endroit où le produit parle.** Le
+  MOTD et le briefing sont des surfaces au même titre, lues par des agents qui
+  n'ouvriront jamais la console, et la règle s'y applique entière.
 
 ### SPK-DS-E01 · Pas de Tailwind
 
