@@ -7947,8 +7947,13 @@ l'erreur avant qu'`apt` ne refuse des paquets `trixie` sur `noble`. Un dépôt
 joignable n'est pas un dépôt juste.
 
 **Décision : l'amorçage relève la famille de la cellule et refuse ce qu'il ne
-sait pas servir.** Il sert la famille **apt** — Debian et Ubuntu —, et le dépôt
-Docker amont se construit depuis le relevé, jamais depuis une constante.
+sait pas servir.** Le dépôt Docker amont se construit depuis le relevé, jamais
+depuis une constante.
+
+*Révisé le 2026-09-08 (§42.11).* Cette décision ne servait alors qu'`apt` —
+Debian et Ubuntu. Elle en sert cinq : `apt`, `apk`, `dnf`, `zypper`, `pacman`,
+et toutes ne reçoivent pas Docker. Ce qui suit décrit la construction du dépôt,
+qui n'a pas changé pour les familles qui en ont un.
 
 #### 42.9.1 Le relevé ne présuppose plus `bash`
 

@@ -856,24 +856,34 @@ test('les quatre modes du produit sont proposés, et aucun autre', () => {
 //           docs/DESIGN_SYSTEM_APP.md SPK-DS-18
 
 test('une cellule que l’amorçage ne sert pas le DIT, et NOMME sa distribution', () => {
-  // §42.9.5 : c'est le défaut d'`alpine-demo`. L'écran laissait fuiter le refus
-  // brut d'Incus — « Command not found » —, qui ne désigne pas sa cause.
+  // §42.9.5 : c'est le défaut d'origine. L'écran laissait fuiter le refus brut
+  // d'Incus — « Command not found » —, qui ne désigne pas sa cause.
+  //
+  // SPK-98 : le message ne dit plus « la famille Debian — Debian et Ubuntu »,
+  // qui a cessé d'être vrai le 2026-09-08. Il nomme les cinq familles servies et
+  // renvoie au catalogue, qui dit ce que chacune reçoit. Busybox tient ici le
+  // rôle qu'Alpine tenait : elle n'a ni `/etc/os-release` ni gestionnaire de
+  // paquets, ce qui a été mesuré sur la Forge.
   const rendu = renderAmorcage(CELLULE, amorcage({
-    releve: { items: [], complete: false, supported: false, os: { id: 'alpine' } },
+    releve: { items: [], complete: false, supported: false, os: { id: 'busybox' } },
   }));
   assert.match(rendu, /ne sait pas servir/);
-  assert.match(rendu, /alpine/);
-  assert.match(rendu, /Debian et Ubuntu/);
+  assert.match(rendu, /busybox/);
+  for (const famille of ['apt', 'apk', 'dnf', 'zypper', 'pacman']) {
+    assert.match(rendu, new RegExp(famille), `la famille ${famille} n’est pas dite`);
+  }
+  assert.ok(!/Debian et Ubuntu/.test(rendu),
+    'le message annonce encore une restriction qui n’existe plus');
 });
 
 test('sur une cellule non servie, le geste d’amorçage n’est PAS proposé', () => {
   // §1.4 : ne pas offrir un geste dont on tient du serveur qu'il sera refusé.
   // L'écran ne le SUPPOSE pas — il vient de le relever.
   const rendu = renderAmorcage(CELLULE, amorcage({
-    releve: { items: [], complete: false, supported: false, os: { id: 'alpine' } },
+    releve: { items: [], complete: false, supported: false, os: { id: 'busybox' } },
   }));
   assert.ok(!/data-amorcage="amorcer"/.test(rendu),
-    'proposer d’amorcer une Alpine invite à un refus certain');
+    'proposer d’amorcer une cellule non servie invite à un refus certain');
   // …mais relever reste possible : regarder n'est pas agir (§42.7).
   assert.match(rendu, /data-amorcage="relever"/);
 });

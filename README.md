@@ -39,7 +39,7 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 93 unités : 77 closes, 15
+**Le plan de contrôle tourne sur une Forge réelle.** 94 unités : 77 closes, 16
 partielles, 1 non commencée. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
@@ -59,9 +59,17 @@ Ce qui est **établi par la mesure**, et non par intention :
 
 Ce que la mesure a **infirmé** en chemin, et qui est corrigé dans le
 [DAT](docs/DAT.md) : le paquet Docker d'une distribution est inutilisable sous
-imbrication — son profil AppArmor refuse `socketpair()` —, l'image de base
-n'embarque pas de `sshd`, et un conteneur n'hérite jamais de l'environnement
-ambiant de sa cellule.
+imbrication — son profil AppArmor refuse `socketpair()` —, et un conteneur
+n'hérite jamais de l'environnement ambiant de sa cellule.
+
+La **campagne du catalogue** du 2026-09-08 a balayé les 24 familles que publie le
+dépôt amont, une cellule chacune. Elle a établi que cinq d'entre elles sont
+servies — `apt`, `apk`, `dnf`, `zypper`, `pacman` — et que la famille RHEL reçoit
+Docker aussi bien que Debian. Elle a aussi infirmé trois choses que le produit
+tenait pour vraies : les images Debian d'aujourd'hui **embarquent** un `sshd` ;
+la suite d'une distribution dérivée ne se recopie pas de `VERSION_CODENAME` ; et
+une famille sans dépôt Docker n'est pas pour autant une famille qu'on ne sait pas
+équiper. Le détail est au §42.11 du [DAT](docs/DAT.md).
 
 **Ce qui manque encore** tient en trois lignes : le plan de reprise n'est joué
 qu'à moitié, l'installation n'a jamais été rejouée sur une machine neuve, et rien

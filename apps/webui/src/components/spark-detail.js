@@ -478,9 +478,13 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
   cela. <a href="#/manuel/M6">Manuel M6 — Amorcer le Spark, une fois</a></p>
   <div class="avertissement">
     <p>L’amorçage ne sait pas servir
-    <strong>${echapper(os?.id || 'cette distribution')}</strong>. Il installe SSH et
-    Docker sur les distributions de la famille Debian — Debian et Ubuntu —, dont il
-    pose le dépôt Docker officiel.</p>
+    <strong>${echapper(os?.id || 'cette distribution')}</strong> : aucune des
+    doctrines qu’il connaît ne s’applique à cette distribution, et il ne devine
+    pas un gestionnaire de paquets. Il sert les familles <span
+    class="technique">apt</span>, <span class="technique">apk</span>, <span
+    class="technique">dnf</span>, <span class="technique">zypper</span> et <span
+    class="technique">pacman</span> — le catalogue d’images dit, entrée par
+    entrée, ce que chacune reçoit.</p>
     <p>Cette cellule tourne et reste utilisable : vous pouvez y entrer par la
     console et l’équiper vous-même.</p>
   </div>
