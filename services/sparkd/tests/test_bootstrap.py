@@ -24,7 +24,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from sparkd import bootstrap
+from sparkd import bootstrap, familles
 from sparkd.app import create_app
 from sparkd.config import load
 
@@ -123,14 +123,21 @@ def test_les_trois_etats_existent_et_ne_se_reduisent_pas_a_un_booleen(tmp_path):
 def test_l_installation_de_docker_RETIRE_d_abord_le_paquet_de_distribution(tmp_path):
     """Les laisser cohabiter ne réparerait rien : c'est le profil AppArmor du
     paquet de la distribution qui casse, et il resterait posé (§41.2)."""
-    commande = bootstrap.script_pour("docker")
+    # SPK-98 : le brut NOMME la cellule. Sans lui, `script_pour` n'a pas de
+    # famille et ne fabrique — délibérément — aucune commande : on ne pose pas
+    # des paquets Debian sur une distribution qu'on n'a pas identifiée (§42.11).
+    debian = {"os_id": "debian", "os_suite": "trixie"}
+    commande = bootstrap.script_pour("docker", debian)
     script = commande[-1]
     assert "purge" in script and "docker.io" in script
     assert script.index("purge") < script.index("docker-ce")
     # Et il vient du dépôt amont, pas de la distribution.
-    depot = bootstrap.script_pour(
-        "depot", {"os_id": "debian", "os_suite": "trixie"})[-1]
+    depot = bootstrap.script_pour("depot", debian)[-1]
     assert "download.docker.com" in depot
+    # §42.9.2 ter : le dépôt pose `curl` LUI-MÊME. L'hériter de l'élément
+    # « serveur SSH » le laissait absent sur toute image qui a déjà un `sshd` —
+    # mesuré sur Kali, où l'amorçage rendait « Command not found ».
+    assert "curl" in depot and depot.index("curl") < depot.index("docker.asc")
 
 
 # --- La détection, et ce qu'elle n'affirme pas (§42.6, §14.6) ---------------
@@ -522,7 +529,9 @@ def test_le_MODE_est_observe_et_rendu_par_le_releve(tmp_path):
 def test_un_Docker_ABSENT_n_a_PAS_de_mode(tmp_path):
     """§42.2 bis : lui en attribuer un ferait croire à un choix là où rien ne
     tourne (§14.6 — « inconnu » n'est pas une valeur)."""
-    vus = bootstrap.juger({"docker": "absent", "origine": "absent", "mode": "absent"})
+    vus = bootstrap.juger({"os_id": "debian", "os_suite": "trixie",
+                           "docker": "absent", "origine": "absent",
+                           "mode": "absent"})
     docker = next(v for v in vus if v["key"] == "docker")
     assert docker["mode"] is None
 
@@ -530,7 +539,8 @@ def test_un_Docker_ABSENT_n_a_PAS_de_mode(tmp_path):
 def test_un_docker_io_de_distribution_n_a_pas_de_mode_non_plus(tmp_path):
     """Il tourne, mais il est défectueux : lui reconnaître un mode reviendrait à
     le compter comme un choix valide."""
-    vus = bootstrap.juger({"docker": "Docker version 26.1.5",
+    vus = bootstrap.juger({"os_id": "debian", "os_suite": "trixie",
+                           "docker": "Docker version 26.1.5",
                            "origine": "docker.io", "mode": "enracine"})
     docker = next(v for v in vus if v["key"] == "docker")
     assert docker["state"] == bootstrap.DEFECT
@@ -661,9 +671,42 @@ def test_le_depot_amont_suit_la_DISTRIBUTION_de_la_cellule(tmp_path):
 
 
 def test_une_derivee_est_servie_par_son_PARENT_quand_ID_LIKE_le_nomme(tmp_path):
-    assert bootstrap.cible_apt(
-        {"os_id": "linuxmint", "os_suite": "virginia", "os_like": "ubuntu debian"}
-    ) == ("ubuntu", "virginia")
+    """§42.9.2 bis — et la suite se LIT, elle ne se recopie pas.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.9.2, §42.9.2 bis
+
+    Ce test affirmait `("ubuntu", "virginia")` : le parent était juste, la suite
+    était celle de la DÉRIVÉE. `download.docker.com/linux/ubuntu virginia`
+    n'existe pas — et le défaut a été mesuré sur Kali le 2026-09-08 :
+    *does not have a Release file*, après un `supported: true`.
+
+    La suite amont est celle que la dérivée publie POUR CELA.
+    """
+    assert bootstrap.cible_apt({
+        "os_id": "linuxmint", "os_suite": "wilma", "os_like": "ubuntu debian",
+        "os_suite_amont": "noble",
+    }) == ("ubuntu", "noble"), "la suite vient d'UBUNTU_CODENAME"
+
+
+def test_une_derivee_SANS_suite_amont_perd_Docker_et_GARDE_le_reste(tmp_path):
+    """§42.9.2 bis — le cas Kali, mesuré sur la Forge.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.9.2 bis, §42.11, §42.12
+
+    Kali est une `apt` : elle reçoit `sshd`, ses clés, ses variables et son
+    briefing. Elle ne publie ni `DEBIAN_CODENAME` ni `UBUNTU_CODENAME`, et sa
+    propre suite n'existe pas chez Docker — elle n'aura donc pas Docker, et
+    l'écran ne doit pas le lui proposer.
+    """
+    kali = {"os_id": "kali", "os_suite": "kali-rolling", "os_like": "debian"}
+    assert bootstrap.servie(kali) is True
+    assert bootstrap.identite(kali)["family"] == "apt"
+    assert bootstrap.identite(kali)["capabilities"]["docker"] is False
+    assert bootstrap.elements_de(kali) == ("sshd", "cles")
+    with pytest.raises(bootstrap.OSNonServi) as refus:
+        bootstrap.cible_apt(kali)
+    assert "kali-rolling" in str(refus.value), (
+        "le refus NOMME la suite qui n'existe pas, sans quoi il est incompréhensible")
 
 
 def test_sans_VERSION_CODENAME_on_REFUSE_au_lieu_de_deviner(tmp_path):
@@ -673,16 +716,87 @@ def test_sans_VERSION_CODENAME_on_REFUSE_au_lieu_de_deviner(tmp_path):
         bootstrap.cible_apt({"os_id": "debian", "os_suite": ""})
 
 
-def test_une_cellule_ALPINE_n_est_pas_servie_et_ce_n_est_pas_une_panne(tmp_path):
-    """§42.9.5. Le type est distinct de `BootstrapFailed` à dessein : « je ne
-    sais pas faire ça » n'est pas « ça a raté »."""
+def test_une_cellule_ALPINE_est_SERVIE_mais_SANS_Docker(tmp_path):
+    """§42.11 — et ce test disait l'inverse jusqu'au 2026-09-08.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11, §42.12
+
+    Il affirmait « Alpine n'est pas servie », ce que la campagne du catalogue a
+    infirmé : le produit posait DÉJÀ variables, secrets et clés dans une cellule
+    Alpine, et il ne lui manquait que le `sshd` qui aurait ouvert la porte que
+    ces clés venaient de garnir. Trois commandes mesurées ont suffi.
+
+    Ce qui reste vrai, et que le test continue de tenir : Alpine n'a **pas** de
+    Docker — Docker n'y publie aucun dépôt amont, et le paquet de la
+    distribution est ce que le §41.2 refuse.
+    """
     brut = {"os_id": "alpine", "os_suite": "", "os_like": ""}
-    assert bootstrap.servie(brut) is False
-    assert bootstrap.identite(brut)["family"] == "alpine"
+    assert bootstrap.servie(brut) is True, "une doctrine existe pour Alpine"
+    assert bootstrap.identite(brut)["family"] == "apk"
+
+    capacites = bootstrap.identite(brut)["capabilities"]
+    assert capacites["ssh"] is True and capacites["env"] is True
+    assert capacites["docker"] is False and capacites["compose"] is False
+
+    # §42.12 : les éléments sont BORNÉS à la famille. Pas « docker: absent » —
+    # pas de ligne docker du tout.
+    assert bootstrap.elements_de(brut) == ("sshd", "cles")
     with pytest.raises(bootstrap.OSNonServi) as refus:
         bootstrap.cible_apt(brut)
     assert "alpine" in str(refus.value), "le refus NOMME la distribution trouvée"
     assert not issubclass(bootstrap.OSNonServi, bootstrap.BootstrapFailed)
+
+
+def test_le_releve_d_une_ALPINE_ne_porte_AUCUNE_ligne_Docker(tmp_path):
+    """§42.12 — une absence se nomme une fois, pas cinq.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.12 ·
+              docs/DESIGN_SYSTEM_APP.md SPK-DS-24
+
+    Rendre `depot: absent`, `docker: absent`, `compose: absent` décrirait trois
+    manques qu'aucun geste ne comblera. C'est le contraire du §14.5 du design
+    system, et c'est ce qui ferait afficher à l'écran un sujet qui n'existe pas.
+    """
+    vus = bootstrap.juger({"os_id": "alpine", "os_suite": "", "os_like": "",
+                           "sshd": "active", "cles": "abc"},
+                          cles_voulues="abc", cles_accordees=1)
+    assert [v["key"] for v in vus] == ["sshd", "cles"]
+    assert bootstrap.complet(vus) is True, (
+        "une Alpine joignable est COMPLÈTE : c'est tout ce qu'on lui promet")
+
+
+def test_une_famille_INCONNUE_reste_refusee(tmp_path):
+    """§42.9.5 — on ne devine pas un gestionnaire de paquets.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.9.5, §42.11
+
+    Le refus n'a pas disparu avec l'élargissement : il s'est déplacé. Busybox
+    n'a ni `/etc/os-release`, ni gestionnaire de paquets — mesuré sur la Forge —,
+    et rien n'y est posable.
+    """
+    brut = {"os_id": "", "os_suite": "", "os_like": ""}
+    assert bootstrap.servie(brut) is False
+    assert bootstrap.identite(brut)["family"] is None
+    # Les CLÉS restent posables : elles passent par `incus file push`, sans
+    # qu'aucun paquet ne soit installé. C'est le fait fondateur de l'unité, et il
+    # vaut jusque sur une cellule dont on ignore tout.
+    assert bootstrap.elements_de(brut) == ("cles",)
+    assert bootstrap.script_pour("sshd", brut) is None, (
+        "aucune commande ne part vers une cellule qu'on ne sait pas servir")
+
+
+def test_les_capacites_d_une_famille_INCONNUE_gardent_l_environnement(tmp_path):
+    """§42.12 — `env` vaut vrai PARTOUT, et c'est le fait fondateur de l'unité.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11, §42.12
+
+    Variables, secrets et clés passent par `incus file push`, qui ne dépend
+    d'aucune distribution. C'est précisément pour cela que refuser une famille
+    en bloc privait la cellule de ce qu'on savait pourtant lui donner.
+    """
+    capacites = bootstrap.identite({"os_id": "plamo"})["capabilities"]
+    assert capacites["env"] is True
+    assert capacites["ssh"] is False and capacites["docker"] is False
 
 
 def test_un_depot_qui_pointe_une_AUTRE_distribution_est_un_DEFAUT(tmp_path):
@@ -729,11 +843,15 @@ def test_un_script_de_pose_S_ARRETE_au_premier_echec(tmp_path):
     """§42.9.7 : sans `set -e`, le code rendu était celui de la DERNIÈRE ligne.
     D'où un Docker installé « malgré l'erreur » — et, symétriquement, des poses
     ratées rendues réussies dès que la dernière ligne passait."""
-    for cle, brut in (("sshd", {}), ("compose", {}),
-                      ("depot", {"os_id": "debian", "os_suite": "trixie"}),
-                      ("docker", {})):
-        script = bootstrap.script_pour(cle, brut)[-1]
+    debian = {"os_id": "debian", "os_suite": "trixie"}
+    for cle in ("sshd", "compose", "depot", "docker"):
+        script = bootstrap.script_pour(cle, debian)[-1]
         assert "set -e" in script, f"« {cle} » poursuit après un échec"
+    # SPK-98 : la règle vaut pour TOUTES les familles, pas seulement celle qui
+    # l'a fait découvrir.
+    for cle_famille in ("apk", "dnf", "zypper", "pacman"):
+        script = bootstrap.script_ssh(familles.FAMILLES[cle_famille])
+        assert "set -e" in script, f"« {cle_famille} » poursuit après un échec"
 
 
 def test_l_echec_d_une_pose_porte_sa_CAUSE_et_pas_seulement_un_code(tmp_path):
@@ -751,23 +869,26 @@ def test_le_releve_REPOND_sur_une_cellule_qu_on_ne_saurait_pas_amorcer(tmp_path)
     """§42.9.5 : on peut regarder sans agir, et cela vaut a fortiori ici — c'est
     là qu'il faut pouvoir lire ce que la cellule EST."""
     client = _client(tmp_path)
-    nom = _creer(client, "alpine-demo")
-    client.app.state.incus.created[nom]["alias"] = "alpine/3.21"
+    nom = _creer(client, "busybox-demo")
+    client.app.state.incus.created[nom]["alias"] = "busybox/1.38.0"
     client.app.state.incus._persist()
 
     releve = client.get(f"/v1/sparks/{nom}/bootstrap")
     assert releve.status_code == 200, releve.text
     assert releve.json()["supported"] is False
-    assert releve.json()["os"]["id"] == "alpine"
+    assert releve.json()["os"]["family"] is None
+    # §42.12 : la SEULE ligne posable. Pas cinq « absent » dont quatre
+    # qu'aucun geste ne comblera.
+    assert [v["key"] for v in releve.json()["items"]] == ["cles"]
 
 
 def test_une_cellule_non_servie_est_REFUSEE_sans_qu_une_seule_pose_ne_parte(tmp_path):
     """§42.9.5. Le point de la preuve : elle COMPTE les exécutions. Un refus qui
     aurait déjà installé la moitié de quelque chose ne serait pas un refus."""
     client = _client(tmp_path)
-    nom = _creer(client, "alpine-demo")
+    nom = _creer(client, "busybox-demo")
     pilote = client.app.state.incus
-    pilote.created[nom]["alias"] = "alpine/3.21"
+    pilote.created[nom]["alias"] = "busybox/1.38.0"
     pilote._persist()
     assert client.get(f"/v1/sparks/{nom}/bootstrap").status_code == 200
     avant = len(pilote.created[nom].get("commands", []))
@@ -776,8 +897,7 @@ def test_une_cellule_non_servie_est_REFUSEE_sans_qu_une_seule_pose_ne_parte(tmp_
     assert refus.status_code == 409, refus.text
     detail = refus.json()["detail"]
     assert detail["error"] == "bootstrap_unsupported_os"
-    assert "alpine" in detail["message"], "le refus NOMME la distribution"
-    assert detail["os"]["id"] == "alpine"
+    assert detail["os"]["family"] is None
 
     # Une seule commande de plus : le relevé. Aucune pose.
     apres = pilote.created[nom]["commands"][avant:]
@@ -948,3 +1068,158 @@ def test_une_cellule_SANS_cle_n_est_pas_declaree_complete(tmp_path):
     assert releve.json()["complete"] is False, "une cellule fermée n'est pas complète"
     cles = next(i for i in releve.json()["items"] if i["key"] == "cles")
     assert cles["state"] == bootstrap.ABSENT
+
+
+# --- SPK-98 · les branches par famille, et ce que l'écran doit en tirer -------
+#
+# @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11 (l'amorçage sert par
+#           élément), §42.12 (le contrat d'API), §42.13 (ce que le registre
+#           retient), §42.14 (le catalogue publie une table) ·
+#           docs/DESIGN_SYSTEM_APP.md SPK-DS-24
+
+
+def test_chaque_famille_pose_les_commandes_QU_ON_A_MESUREES(tmp_path):
+    """§42.11 — une doctrine s'écrit après la mesure, pas avant.
+
+    Le nom du paquet et celui du service ne se transposent pas d'une famille à
+    l'autre : `openssh-server` n'existe pas sous zypper — mesuré, le premier
+    essai a rendu 104 — et le service s'appelle `ssh` sur Debian, `sshd`
+    ailleurs. Confondre le second laisse un `enable` sans effet et une porte
+    fermée, ce qui ne se voit qu'à la première connexion.
+    """
+    attendu = {
+        "apt": ("apt-get install -y -qq openssh-server ca-certificates curl",
+                "systemctl enable --now ssh"),
+        "apk": ("apk add --no-cache openssh", "rc-service sshd start"),
+        "dnf": ("dnf install -y -q openssh-server", "systemctl enable --now sshd"),
+        "zypper": ("zypper --non-interactive install -y openssh",
+                   "systemctl enable --now sshd"),
+        "pacman": ("pacman -Sy --noconfirm --needed openssh",
+                   "systemctl enable --now sshd"),
+    }
+    for cle, (pose, activation) in attendu.items():
+        script = bootstrap.script_ssh(familles.FAMILLES[cle])
+        assert pose in script, f"« {cle} » ne pose pas ce qui a été mesuré"
+        assert activation in script, f"« {cle} » n'active pas le bon service"
+
+
+def test_OpenRC_inscrit_ET_demarre_le_service(tmp_path):
+    """§42.11 — n'en faire qu'une donnerait une cellule joignable jusqu'au
+    premier redémarrage, ce qui ne se verrait qu'alors."""
+    script = bootstrap.script_ssh(familles.FAMILLES["apk"])
+    assert "rc-update add sshd default" in script
+    assert "rc-service sshd start" in script
+    assert script.index("rc-update") < script.index("rc-service"), (
+        "inscrire avant d'allumer : l'ordre est celui de la mesure")
+
+
+def test_le_depot_RPM_est_un_fichier_ECRIT_et_laisse_dnf_resoudre_sa_version(tmp_path):
+    """§42.11 — `dnf config-manager` a changé de forme entre dnf 4 et dnf 5.
+
+    Almalinux 9 et Fedora 43 figurent l'une et l'autre au catalogue : écrire le
+    fichier donne le MÊME dépôt sur les deux. Et `$releasever` n'est pas
+    interpolé — une cellule ne fige pas sa propre version dans un fichier de
+    dépôt.
+    """
+    alma = {"os_id": "almalinux", "os_like": "rhel centos fedora"}
+    script = bootstrap.script_pour("depot", alma)[-1]
+    assert "/etc/yum.repos.d/docker-ce.repo" in script
+    assert "download.docker.com/linux/centos" in script, (
+        "la préférence suit la MESURE, pas l'ordre d'ID_LIKE")
+    assert "$releasever" in script, "c'est dnf qui résout sa version"
+    assert "config-manager" not in script
+
+
+def test_une_famille_SANS_Docker_ne_recoit_aucune_commande_Docker(tmp_path):
+    """§42.12 — l'écran ne peut retirer Docker que si le serveur ne l'invente
+    pas. La preuve porte sur les deux bouts : ni élément, ni script."""
+    for brut in ({"os_id": "alpine"},
+                 {"os_id": "arch"},
+                 {"os_id": "opensuse-tumbleweed", "os_like": "opensuse suse"},
+                 {"os_id": "kali", "os_suite": "kali-rolling", "os_like": "debian"}):
+        assert bootstrap.docker_servi(brut) is False, brut
+        for cle in ("depot", "docker", "compose"):
+            assert cle not in bootstrap.elements_de(brut), (f"{brut} → {cle}")
+
+
+def test_une_ALPINE_amorcee_est_COMPLETE_et_le_registre_le_retient(tmp_path):
+    """§42.11, §42.12, §42.13 — le parcours entier, sur le doublon.
+
+    C'est la preuve d'API de l'unité : une Alpine s'amorce, ne reçoit aucune
+    ligne Docker, se déclare complète, et le registre en garde la trace pour que
+    l'écran sache quoi montrer sans avoir à relever.
+    """
+    client = _client(tmp_path)
+    nom = _creer(client, "alpine-servie")
+    pilote = client.app.state.incus
+    pilote.created[nom]["alias"] = "alpine/3.22"
+    pilote._persist()
+    # §42.10.4 : sans clé accordée, la cellule reste fermée à tout le monde et
+    # n'est donc PAS complète. La preuve porte sur une Alpine qu'on peut
+    # réellement atteindre — c'est tout l'objet de l'unité.
+    _accorder_cle(client, nom)
+
+    amorce = client.post(f"/v1/sparks/{nom}/bootstrap")
+    assert amorce.status_code == 200, amorce.text
+    corps = amorce.json()
+    assert corps["supported"] is True
+    assert corps["os"]["family"] == "apk"
+    assert corps["docker_enabled"] is False
+    # Ni dépôt, ni moteur, ni Compose. `motd` n'est pas un élément de la
+    # détection : c'est l'action de plus du §42.2 quater, rendue parce qu'elle a
+    # eu lieu.
+    assert [v["key"] for v in corps["items"]] == ["sshd", "cles", "motd"]
+    assert corps["complete"] is True, "joignable, c'est tout ce qu'on lui promet"
+
+    # §42.13 : le registre retient le fait, lisible sans relever à nouveau.
+    fiche = client.get(f"/v1/sparks/{nom}").json()
+    assert fiche["docker_enabled"] == 0
+
+    # Et aucune commande d'INSTALLATION Docker n'est partie vers la cellule. Le
+    # marqueur porte sur ce qui installe, jamais sur ce qui interroge : le relevé
+    # lui-même nomme `docker-ce`, puisqu'il vient constater son absence.
+    passees = " ".join(" ".join(c) for c in pilote.created[nom]["commands"])
+    assert "apk add --no-cache openssh" in passees, "la porte, elle, a été posée"
+    for pose in ("install -y -qq docker-ce", "install -y -q docker-ce",
+                 "> /etc/apt/sources.list.d/docker.list",
+                 "cat > /etc/yum.repos.d/docker-ce.repo"):
+        assert pose not in passees, f"une pose Docker est partie : {pose}"
+
+
+def test_le_registre_est_CORRIGE_quand_la_cellule_contredit_l_image(tmp_path):
+    """§42.13 — le relevé fait foi, jamais l'étiquette.
+
+    Une image nommée `debian/13` dont la cellule se déclare Alpine existe : un
+    alias mal nommé, une variante inattendue, un contenu remplacé. Le registre
+    doit suivre ce que la cellule dit, sans quoi l'écran offrirait un Docker que
+    l'amorçage refuse.
+    """
+    client = _client(tmp_path)
+    nom = _creer(client, "etiquette-menteuse")
+    assert client.get(f"/v1/sparks/{nom}").json()["docker_enabled"] == 1
+
+    pilote = client.app.state.incus
+    pilote.created[nom]["alias"] = "alpine/3.21"
+    pilote._persist()
+
+    releve = client.get(f"/v1/sparks/{nom}/bootstrap")
+    assert releve.status_code == 200, releve.text
+    assert releve.json()["docker_enabled"] is False
+    assert client.get(f"/v1/sparks/{nom}").json()["docker_enabled"] == 0
+
+
+def test_une_cellule_DEBIAN_garde_exactement_ce_que_la_campagne_a_valide(tmp_path):
+    """Le garde-fou de l'unité : les quatre images `apt` ne changent PAS.
+
+    Elles ont été éprouvées de bout en bout sur la Forge réelle le 2026-09-08 —
+    dépôt amont juste, Docker 29.8.0, Compose v5.5.1, `nginx:alpine` qui démarre.
+    Élargir aux autres familles ne doit rien leur retirer.
+    """
+    client = _client(tmp_path)
+    nom = _creer(client, "debian-temoin")
+    _accorder_cle(client, nom)
+    corps = client.post(f"/v1/sparks/{nom}/bootstrap").json()
+    assert [v["key"] for v in corps["items"]][:5] == [
+        "sshd", "cles", "depot", "docker", "compose"]
+    assert corps["docker_enabled"] is True
+    assert corps["complete"] is True

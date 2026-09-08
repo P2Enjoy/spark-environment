@@ -61,7 +61,13 @@ class SparkSpec:
     network_burst_bps: int | None = None
     storage_io_priority: int = 5
     runtime: str = "container"
-    docker_enabled: bool = True
+    #: SPK-98 · §42.13 : ce n'est PAS une préférence de l'exploitant, c'est un
+    #: fait sur la cellule. Il est posé à la création depuis la famille de
+    #: l'image, et `None` veut dire « déduis-le », ce que `create` fait juste
+    #: après avoir vérifié l'image. Le laisser régler à la main inviterait à
+    #: cocher « Docker » sur une Alpine, ce qui ne produirait qu'une promesse
+    #: fausse.
+    docker_enabled: bool | None = None
 
 
 def _now() -> str:
@@ -99,7 +105,15 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = 
     # controle, une reference inexistante passait, la ligne etait ecrite, la
     # ressource comptee, et le refus ne venait qu'a `apply` : le Spark restait
     # en `error` avec ses quotas engages jusqu'a sa suppression.
-    images.ensure_selectable(connection, spec.image)
+    entree = images.ensure_selectable(connection, spec.image)
+
+    # SPK-98 · §42.13 : la capacité Docker de la cellule, décidée MAINTENANT.
+    # C'est la création qui décide et non l'amorçage : l'écran doit savoir quoi
+    # montrer avant qu'aucun relevé n'ait eu lieu, et une cellule qu'on n'a pas
+    # encore démarrée n'a rien à dire d'elle-même. Le relevé reste la vérité et
+    # corrigera le registre à l'observation (§42.9).
+    docker = (images.capacites_de_alias(entree["alias"])["docker"]
+              if spec.docker_enabled is None else bool(spec.docker_enabled))
 
     demande = Request(
         cpu_mode=spec.cpu_mode,
@@ -147,7 +161,7 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = 
                     spec.memory_bytes, spec.memory_enforce, 1 if spec.memory_swap else 0,
                     spec.network_bps, spec.network_burst_bps or spec.network_bps,
                     spec.storage_bytes, spec.storage_io_priority,
-                    1 if spec.docker_enabled else 0, adresse, _now(), _now(),
+                    1 if docker else 0, adresse, _now(), _now(),
                 ),
             )
             _audit(

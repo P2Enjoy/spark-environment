@@ -30,20 +30,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import familles
+from .familles import CLES, COMPOSE, DEPOT, DOCKER, SSHD  # noqa: F401
+
 #: Les trois états d'un élément (§42.7). Jamais deux : réduire à un booléen
 #: rendrait le `docker.io` de distribution inexprimable.
 PRESENT = "present"
 ABSENT = "absent"
 DEFECT = "defect"
 
-#: Les distributions pour lesquelles Docker publie un dépôt amont (§42.9.2).
-#: Ce n'est PAS la liste des distributions qui existent : c'est celle que le
-#: §41.2 sait servir, et elle se lit dans l'URL du dépôt.
-DEPOTS_AMONT = ("debian", "ubuntu")
-
-#: La famille que l'amorçage sert. Une seule aujourd'hui, et elle est NOMMÉE :
-#: un `None` implicite ferait passer « pas encore relevé » pour « pas servi ».
-FAMILLE_APT = "apt"
+#: SPK-98 · §42.11 : la table des familles a remplacé ces deux constantes. Elles
+#: disaient « une seule doctrine, `apt` », ce qui a cessé d'être vrai le
+#: 2026-09-08 : cinq familles sont servies, et trois d'entre elles n'ont pas de
+#: dépôt Docker amont. Les distributions que Docker publie sont désormais un
+#: champ de `familles.Famille`, lu depuis la cellule et non récité ici.
+#:
+#: `FAMILLE_APT` survit comme NOM de la famille historique, parce que le briefing
+#: et les tests la nomment. Elle n'est plus « la » famille servie.
+FAMILLE_APT = familles.FAMILLES["apt"].cle
 
 #: Le `PATH` que le relevé pose lui-même (§42.9.1). C'était la seule raison
 #: invoquée pour `bash -lc` — `sshd` vit dans `/usr/sbin` —, et l'écrire est plus
@@ -76,10 +80,22 @@ RELEVE = r"""
 os_id=$(. /etc/os-release 2>/dev/null && echo "$ID")
 os_suite=$(. /etc/os-release 2>/dev/null && echo "$VERSION_CODENAME")
 os_like=$(. /etc/os-release 2>/dev/null && echo "$ID_LIKE")
+os_suite_amont=$(. /etc/os-release 2>/dev/null && echo "${DEBIAN_CODENAME:-$UBUNTU_CODENAME}")
+[ -n "$os_suite_amont" ] || os_suite_amont=absent
 arch=$(uname -m 2>/dev/null)
 [ -n "$arch" ] || arch=absent
-sshd=$(systemctl is-active ssh 2>/dev/null || echo absent)
-openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null || echo absent)
+sshd=absent
+for unite in ssh sshd; do
+  etat=$(systemctl is-active "$unite" 2>/dev/null)
+  if [ "$etat" = active ]; then sshd=active; break; fi
+done
+if [ "$sshd" != active ] && command -v rc-service >/dev/null 2>&1; then
+  rc-service sshd status >/dev/null 2>&1 && sshd=active
+fi
+openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null \
+                  || rpm -q --qf '%{VERSION}-%{RELEASE}' openssh-server 2>/dev/null \
+                  || apk info -v openssh 2>/dev/null | head -1)
+[ -n "$openssh_version" ] || openssh_version=absent
 cles=$(sha256sum /root/.ssh/authorized_keys 2>/dev/null | cut -c1-64)
 [ -n "$cles" ] || cles=absent
 cles_rootless=$(sha256sum /home/spark-docker/.ssh/authorized_keys 2>/dev/null | cut -c1-64)
@@ -87,14 +103,24 @@ cles_rootless=$(sha256sum /home/spark-docker/.ssh/authorized_keys 2>/dev/null | 
 depot_ligne=$(grep -h '^deb' /etc/apt/sources.list.d/docker.list 2>/dev/null | head -1)
 depot_distro=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/\([a-z][a-z]*\).*|\1|p')
 depot_suite=$(printf '%s' "$depot_ligne" | sed -n 's|.*download\.docker\.com/linux/[a-z][a-z]* \([^ ][^ ]*\).*|\1|p')
+if [ -z "$depot_distro" ] && [ -f /etc/yum.repos.d/docker-ce.repo ]; then
+  depot_distro=$(sed -n 's|.*download\.docker\.com/linux/\([a-z][a-z]*\)/.*|\1|p' \
+                 /etc/yum.repos.d/docker-ce.repo | head -1)
+fi
 docker=$(docker --version 2>/dev/null | head -1)
 [ -n "$docker" ] || docker=absent
-docker_version=$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null || echo absent)
+docker_version=$(dpkg-query -W -f='${Version}' docker-ce 2>/dev/null \
+                 || rpm -q --qf '%{VERSION}-%{RELEASE}' docker-ce 2>/dev/null)
+[ -n "$docker_version" ] || docker_version=absent
 origine=$(dpkg-query -W -f='${Package}' docker-ce 2>/dev/null \
-          || dpkg-query -W -f='${Package}' docker.io 2>/dev/null || echo absent)
+          || rpm -q --qf 'docker-ce' docker-ce 2>/dev/null \
+          || dpkg-query -W -f='${Package}' docker.io 2>/dev/null)
+[ -n "$origine" ] || origine=absent
 compose=$(docker compose version 2>/dev/null | head -1)
 [ -n "$compose" ] || compose=absent
-compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/null || echo absent)
+compose_version=$(dpkg-query -W -f='${Version}' docker-compose-plugin 2>/dev/null \
+                  || rpm -q --qf '%{VERSION}-%{RELEASE}' docker-compose-plugin 2>/dev/null)
+[ -n "$compose_version" ] || compose_version=absent
 rootless=absent
 if id spark-docker >/dev/null 2>&1; then
   uid=$(id -u spark-docker)
@@ -122,8 +148,8 @@ if [ -d /etc/update-motd.d ]; then
     if [ -f "$script" ] && [ -x "$script" ]; then motd_distro=present; break; fi
   done
 fi
-printf 'os_id=%s\nos_suite=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ncles_rootless=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\n' \
-  "$os_id" "$os_suite" "$os_like" "$arch" \
+printf 'os_id=%s\nos_suite=%s\nos_suite_amont=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ncles_rootless=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\n' \
+  "$os_id" "$os_suite" "$os_suite_amont" "$os_like" "$arch" \
   "$sshd" "$openssh_version" "$cles" "$cles_rootless" "$depot_distro" "$depot_suite" \
   "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode" \
   "$rootless_uid" "$rootless_gid" "$motd_distro"
@@ -174,7 +200,12 @@ MOTEUR_MUET = "moteur_muet"                   # paquet posé, moteur sans répon
 REPRISES_DURES = (DEPOT_ETRANGER, MOTEUR_MUET)
 
 #: L'ordre compte : le dépôt avant Docker, Docker avant Compose.
-ELEMENTS = ("sshd", "cles", "depot", "docker", "compose")
+#:
+#: SPK-98 · §42.12 : c'est l'ordre COMPLET, celui d'une famille qui reçoit tout.
+#: Ce qu'une cellule reçoit vraiment se lit dans `elements_de()`, qui la borne à
+#: sa famille. Garder la liste complète ici sert aux appelants qui parlent de
+#: l'ordre — jamais à décider ce qu'une cellule doit avoir.
+ELEMENTS = familles.AVEC_DOCKER
 
 LIBELLES = {
     "sshd": "serveur SSH",
@@ -228,26 +259,110 @@ class OSNonServi(RuntimeError):
     """
 
 
-def identite(brut: dict[str, str]) -> dict[str, str]:
-    """Ce que la cellule dit d'elle-même, normalisé (§42.9.1).
+def _vue_brute(brut: dict[str, str]) -> dict[str, str]:
+    """L'identité SANS les capacités.
 
-    Rendre un dictionnaire plutôt qu'un tuple : ce bloc voyage jusqu'à l'API
-    (§42.7) et se lit à l'écran. `family` vaut `None` tant qu'on ne sait pas —
-    « pas relevé » n'est pas « pas servi ».
+    Elle existe pour une raison précise : `identite` a besoin de savoir si le
+    dépôt Docker résout, et `cible_apt` a besoin de l'identité. Les faire
+    s'appeler l'une l'autre les ferait tourner en rond — mesuré, et sans appel.
+    Ce bloc-ci ne dépend de rien d'autre que du relevé.
     """
     os_id = brut.get("os_id", "").strip().lower()
     suite = brut.get("os_suite", "").strip().lower()
     parents = [m.strip().lower() for m in brut.get("os_like", "").split() if m.strip()]
-    servie = os_id in DEPOTS_AMONT or any(p in DEPOTS_AMONT for p in parents)
+    famille = familles.de_identite(os_id, tuple(parents))
     return {
         "id": os_id, "suite": suite, "like": " ".join(parents),
-        "family": FAMILLE_APT if servie else (None if not os_id else os_id),
+        "family": famille.cle if famille else None,
     }
 
 
+def identite(brut: dict[str, str]) -> dict[str, str]:
+    """Ce que la cellule dit d'elle-même, normalisé (§42.9.1).
+
+    @spec docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11
+
+    Rendre un dictionnaire plutôt qu'un tuple : ce bloc voyage jusqu'à l'API
+    (§42.7) et se lit à l'écran. `family` vaut `None` tant qu'on ne sait pas —
+    « pas relevé » n'est pas « pas servi ».
+
+    SPK-98 : `family` ne vaut plus « `apt` ou l'`ID` brut ». Elle nomme la
+    doctrine qui sert cette cellule — `apt`, `apk`, `dnf`, `zypper`, `pacman` —
+    ou `None` quand aucune ne la sert. Rendre l'`ID` comme s'il était une famille
+    laissait croire à une doctrine « alpine » qui n'existait pas.
+    """
+    vue = dict(_vue_brute(brut))
+    famille = famille_de(brut)
+    # §42.12 : ce que le produit sait faire de cette cellule. Il voyage avec
+    # l'identité parce qu'il en découle entièrement, et que les deux se lisent
+    # ensemble à l'écran comme dans un dossier de déploiement.
+    vue["capabilities"] = familles.capacites(famille)
+    # SPK-98 · §42.9.2 bis : appartenir à une famille qui a Docker ne suffit pas
+    # — encore faut-il qu'un dépôt réponde POUR CETTE CELLULE. Kali est une
+    # `apt`, et sa suite « kali-rolling » n'existe pas chez Docker. La capacité
+    # se lit donc sur la résolution réelle du dépôt, sans quoi l'écran offrirait
+    # un Docker que l'amorçage refuserait ensuite (§1.4 du design system).
+    if vue["capabilities"]["docker"] and not _depot_resout(brut):
+        vue["capabilities"]["docker"] = False
+        vue["capabilities"]["compose"] = False
+    return vue
+
+
+def _depot_resout(brut: dict[str, str]) -> bool:
+    """Un dépôt Docker amont existe-t-il POUR CETTE cellule ? (§42.9.2 bis)
+
+    Appartenir à une famille qui a Docker ne suffit pas. Kali est une `apt`, et
+    sa suite « kali-rolling » n'est publiée nulle part : lui annoncer Docker
+    ferait offrir à l'écran un geste que l'amorçage refuserait ensuite, ce que le
+    §1.4 du design system interdit.
+    """
+    try:
+        cible_apt(brut)
+    except OSNonServi:
+        return False
+    return True
+
+
+def famille_de(brut: dict[str, str]) -> "familles.Famille | None":
+    """La doctrine qui sert cette cellule, ou `None`. Point d'entrée unique."""
+    os_id = brut.get("os_id", "").strip().lower()
+    parents = tuple(m.strip().lower() for m in brut.get("os_like", "").split()
+                    if m.strip())
+    return familles.de_identite(os_id, parents)
+
+
+def elements_de(brut: dict[str, str]) -> tuple[str, ...]:
+    """Les éléments que CETTE cellule reçoit (§42.12).
+
+    Une famille sans Docker ne rend pas `depot: absent` : elle ne rend pas de
+    ligne `depot` du tout. Décrire un manque qu'aucun geste ne comblera est le
+    contraire du §14.5 du design system — une absence se nomme une fois, pour ce
+    qu'elle est.
+    """
+    famille = famille_de(brut)
+    if famille is None:
+        return familles.SANS_FAMILLE
+    if DOCKER in famille.elements and not _depot_resout(brut):
+        # Une `apt` dont le dépôt ne résout pas — Kali, Devuan — reçoit ce qu'une
+        # famille sans Docker reçoit. Les éléments suivent la CAPACITÉ, pas
+        # l'appartenance : c'est la cellule qui décide, pas son étiquette.
+        return familles.SANS_DOCKER
+    return famille.elements
+
+
+def docker_servi(brut: dict[str, str]) -> bool:
+    """Cette cellule peut-elle recevoir Docker du dépôt amont ? (§42.12)"""
+    return DOCKER in elements_de(brut)
+
+
 def servie(brut: dict[str, str]) -> bool:
-    """L'amorçage sait-il servir cette cellule ? (§42.9.5)"""
-    return identite(brut)["family"] == FAMILLE_APT
+    """Une doctrine existe-t-elle pour cette cellule ? (§42.9.5)
+
+    SPK-98 : ce prédicat signifiait « famille `apt` ». Il signifie désormais
+    « une doctrine existe », ce qui rend une Alpine `supported: true` — car
+    l'amorçage sait quoi en faire, même sans Docker.
+    """
+    return famille_de(brut) is not None
 
 
 def identite_rootless(brut: dict[str, str]) -> dict[str, int | None]:
@@ -285,34 +400,93 @@ def motd_a_taire(brut: dict[str, str]) -> bool:
 def cible_apt(brut: dict[str, str]) -> tuple[str, str]:
     """Le dépôt amont de CETTE cellule : (distribution, suite) — §42.9.2.
 
-    @spec docs/BACKLOG.md#SPK-76 · docs/DAT.md §42.9.2
+    @spec docs/BACKLOG.md#SPK-76 · docs/BACKLOG.md#SPK-98 ·
+          docs/DAT.md §42.9.2, §42.9.2 bis
 
     Remplace les constantes `linux/debian` et `trixie`. Une dérivée est servie
     par son parent quand `ID_LIKE` le nomme, ce que Docker documente lui-même.
 
-    **Sans `VERSION_CODENAME`, on refuse au lieu de deviner.** Poser une suite
-    fausse est précisément le défaut que cette unité corrige : `download.docker.com`
-    répondrait, `apt-get update` réussirait, et l'échec n'arriverait qu'à
-    l'installation — trop tard pour être compris.
+    **SPK-98 — la suite d'une dérivée se LIT, elle ne se recopie pas.** Reprendre
+    `VERSION_CODENAME` tel quel donnait `linux/debian kali-rolling`, un dépôt qui
+    répond sur sa racine et n'a pas de `Release` : mesuré sur la Forge, avec un
+    `supported: true` rendu juste avant. Le champ juste est `DEBIAN_CODENAME` ou
+    `UBUNTU_CODENAME`, que la dérivée publie **pour cela**. Mint le publie
+    (`noble`) ; Kali et Devuan ne publient rien, et là on refuse.
+
+    **Sans suite lisible, on refuse au lieu de deviner.** Poser une suite fausse
+    est précisément le défaut que cette fonction corrige : `download.docker.com`
+    répondrait, `apt-get update` échouerait, et l'erreur n'apparaîtrait qu'à
+    l'installation — trop tard pour être comprise.
     """
-    vue = identite(brut)
-    os_id, parents = vue["id"], vue["like"].split()
-    distribution = (os_id if os_id in DEPOTS_AMONT
-                    else next((p for p in parents if p in DEPOTS_AMONT), None))
+    vue = _vue_brute(brut)
+    os_id = vue["id"]
+    famille = famille_de(brut)
+    if famille is None or not famille.depot_docker:
+        nommee = os_id or "cette distribution"
+        raise OSNonServi(
+            f"L'amorçage ne pose pas de dépôt Docker sur « {nommee} » : Docker "
+            "n'en publie aucun pour elle. La cellule reçoit tout le reste — "
+            "serveur SSH, clés, variables et briefing — et reste parfaitement "
+            "utilisable.")
+
+    # La distribution est celle que Docker publie POUR cette cellule. L'`ID`
+    # d'abord, parce qu'une Debian est sa propre référence ; puis `ID_LIKE`,
+    # parcouru dans l'ordre de la TABLE et non dans celui du fichier — une
+    # Almalinux déclare « rhel centos fedora » et c'est `centos` qui a été
+    # éprouvé sur elle (§42.11).
+    parents = vue["like"].split()
+    distribution = famille.depot_docker.get(os_id)
+    derivee = distribution is None
+    if distribution is None:
+        distribution = next(
+            (cible for lu, cible in famille.depot_docker_parents.items()
+             if lu in parents), None)
     if distribution is None:
         raise OSNonServi(
-            f"L'amorçage ne sait pas servir « {os_id or 'distribution inconnue'} ». "
-            "Il installe SSH et Docker sur les distributions de la famille Debian "
-            "— Debian et Ubuntu —, dont il pose le dépôt Docker officiel. Cette "
-            "cellule tourne et reste utilisable : vous pouvez y entrer par la "
-            "console et l'équiper vous-même.")
-    if not vue["suite"]:
-        raise OSNonServi(
-            f"La cellule se déclare « {os_id} » mais ne nomme pas sa version "
-            "(`VERSION_CODENAME` absent d'`/etc/os-release`). L'amorçage ne "
-            "devine pas une suite : un dépôt Docker posé sur la mauvaise version "
-            "répond quand même, et l'erreur n'apparaîtrait qu'à l'installation.")
-    return distribution, vue["suite"]
+            f"« {os_id or 'cette distribution'} » appartient à la famille "
+            f"« {famille.cle} », mais aucun dépôt Docker amont ne lui "
+            "correspond : ni son nom ni ce qu'elle déclare dans `ID_LIKE` n'est "
+            "publié par Docker. Elle reçoit le serveur SSH, ses clés, ses "
+            "variables et son briefing ; elle n'aura pas Docker.")
+
+    suite = _suite_amont(brut, vue, derivee, famille)
+    return distribution, suite
+
+
+def _suite_amont(brut: dict[str, str], vue: dict[str, str], derivee: bool,
+                 famille: "familles.Famille") -> str:
+    """La suite que le dépôt amont publie pour cette cellule (§42.9.2 bis).
+
+    Les familles RPM n'ont pas de suite : `dnf` résout `$releasever` lui-même, et
+    lui en imposer une reviendrait à figer la version de la cellule dans un
+    fichier de dépôt. La chaîne vide dit cela, et le script du dépôt s'en sert
+    pour choisir sa forme.
+    """
+    if famille.paquets != "apt":
+        return ""
+    if not derivee:
+        # Une Debian est sa propre référence : lui chercher un parent serait
+        # absurde, et `VERSION_CODENAME` est exactement ce que Docker publie.
+        if not vue["suite"]:
+            raise OSNonServi(
+                f"La cellule se déclare « {vue['id']} » mais ne nomme pas sa "
+                "version (`VERSION_CODENAME` absent d'`/etc/os-release`). "
+                "L'amorçage ne devine pas une suite : un dépôt Docker posé sur "
+                "la mauvaise version répond quand même, et l'erreur "
+                "n'apparaîtrait qu'à l'installation.")
+        return vue["suite"]
+
+    amont = (brut.get("os_suite_amont") or "").strip().lower()
+    if amont and amont != "absent":
+        return amont
+    raise OSNonServi(
+        f"« {vue['id']} » est une dérivée de « {famille.cle} », mais elle ne dit "
+        "pas à quelle version amont elle correspond : ni `DEBIAN_CODENAME` ni "
+        f"`UBUNTU_CODENAME` dans son `/etc/os-release`. Sa propre suite — "
+        f"« {vue['suite'] or 'non nommée'} » — n'existe pas chez Docker, et la "
+        "poser donnerait un dépôt qui répond sans avoir de paquets. Cette "
+        "cellule reçoit le serveur SSH, ses clés, ses variables et son "
+        "briefing ; elle n'aura pas Docker.")
 
 
 def origine_paquet(version: str) -> str | None:
@@ -360,13 +534,18 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None,
     la ligne concluait `present` sur une cellule que personne ne peut atteindre.
     """
     vus: list[dict[str, Any]] = []
+    # SPK-98 · §42.12 : le relevé ne rend QUE les éléments de cette famille. Une
+    # ligne « absent » sur un élément qu'aucun geste ne posera n'est pas une
+    # information, c'est un manque qu'on invente.
+    servis = elements_de(brut)
 
-    actif = brut.get("sshd", "absent")
-    vus.append({
-        "key": "sshd", "label": LIBELLES["sshd"],
-        "state": PRESENT if actif == "active" else ABSENT,
-        "detail": actif,
-    })
+    if SSHD in servis:
+        actif = brut.get("sshd", "absent")
+        vus.append({
+            "key": "sshd", "label": LIBELLES["sshd"],
+            "state": PRESENT if actif == "active" else ABSENT,
+            "detail": actif,
+        })
 
     empreinte = brut.get("cles", "absent") or "absent"
     if cles_accordees == 0:
@@ -408,6 +587,14 @@ def juger(brut: dict[str, str], cles_voulues: str | None = None,
                 "registre déclare : une clé retirée peut y survivre")
     vus.append({"key": "cles", "label": LIBELLES["cles"],
                 "state": etat_cles, "detail": detail_cles})
+
+    # SPK-98 · §42.12 : une famille sans Docker ne rend AUCUNE ligne Docker. Pas
+    # « absent » — ce qui décrirait un manque qu'aucun geste ne comblera —, pas
+    # de ligne du tout. Le §14.5 du design system veut qu'une absence soit nommée
+    # une fois, pour ce qu'elle est ; elle l'est dans le panneau d'amorçage, qui
+    # dit que cette image n'a pas de dépôt amont.
+    if DEPOT not in servis:
+        return vus
 
     # §42.9.3 : un `docker.list` présent peut nommer une AUTRE distribution que
     # la cellule. C'est le cas mesuré sur l'Ubuntu du responsable, et rien ne
@@ -530,27 +717,109 @@ APT = "set -e\nexport DEBIAN_FRONTEND=noninteractive\n"
 LIGNES_ERREUR = 12
 CARACTERES_ERREUR = 1500
 
-SCRIPTS = {
-    "sshd": APT + (
-        "apt-get update -qq\n"
-        "apt-get install -y -qq openssh-server ca-certificates curl\n"
-        "systemctl enable --now ssh\n"
-    ),
-    "compose": APT + "apt-get install -y -qq docker-compose-plugin\n",
+#: SPK-98 · §42.11 : attendre que la cellule RÉSOLVE avant de poser quoi que ce
+#: soit. Mesuré sur Arch : `pacman -Sy` lancé aussitôt après `start` rend
+#: « Could not resolve host », et la même commande réussit quelques secondes plus
+#: tard — `systemd-resolved` n'avait pas fini de s'établir. Rendre un échec là
+#: enverrait chercher une panne de réseau qui n'existe pas.
+#:
+#: La sonde vise la passerelle du bridge (§10), pas un nom extérieur : on
+#: constate que le résolveur RÉPOND, pas qu'Internet va bien. Vingt essais d'une
+#: seconde, puis on continue quand même — un amorçage ne doit pas s'arrêter sur
+#: une sonde, il doit s'arrêter sur ce qu'il n'a pas réussi à poser.
+ATTENDRE_RESOLUTION = (
+    "i=0\n"
+    "while [ $i -lt 20 ]; do\n"
+    "  getent hosts download.docker.com >/dev/null 2>&1 && break\n"
+    "  getent hosts deb.debian.org >/dev/null 2>&1 && break\n"
+    "  i=$((i + 1)); sleep 1\n"
+    "done\n"
+)
+
+#: L'en-tête commun à toute pose. `set -e` d'abord (§42.9.7), puis l'attente.
+def _prelude(famille: "familles.Famille") -> str:
+    entete = "set -e\n"
+    if famille.paquets == "apt":
+        entete += "export DEBIAN_FRONTEND=noninteractive\n"
+    return entete + ATTENDRE_RESOLUTION
+
+
+#: Les commandes de chaque famille, MESURÉES le 2026-09-08 (§42.11). Deux
+#: gabarits par famille : installer des paquets, activer un service. Tout le
+#: reste de ce module s'écrit à partir de ces deux-là.
+#:
+#: `%s` porte la liste des paquets ; l'activation porte le nom du service, qui
+#: diffère d'une famille à l'autre — `ssh` sur Debian, `sshd` ailleurs. Les
+#: confondre laisse un `enable` sans effet et une porte fermée.
+INSTALLER = {
+    "apt": "apt-get update -qq\napt-get install -y -qq %s\n",
+    # `-q` et non `-y -q` seul : `dnf` demande confirmation sans `-y`, et rend 1
+    # sur une entrée fermée — un refus qu'on lirait comme une panne réseau.
+    "dnf": "dnf install -y -q %s\n",
+    # `refresh` est requis sur une image fraîche : sans lui, `install` rend 104
+    # « paquet introuvable » alors que le paquet existe. Mesuré.
+    "zypper": ("zypper --non-interactive refresh\n"
+               "zypper --non-interactive install -y %s\n"),
+    # `--needed` rend le script rejouable : sans lui, un second amorçage
+    # réinstallerait ce qui est déjà là (§42.1).
+    "pacman": "pacman -Sy --noconfirm --needed %s\n",
+    "apk": "apk add --no-cache %s\n",
+}
+
+ACTIVER = {
+    "systemd": "systemctl enable --now %s\n",
+    # OpenRC : deux commandes, et l'ordre compte — `add` inscrit au niveau
+    # d'exécution pour les redémarrages, `start` allume maintenant. N'en faire
+    # qu'une donnerait une cellule joignable jusqu'au premier redémarrage, ce
+    # qui ne se verrait qu'alors.
+    "openrc": "rc-update add %s default\nrc-service %s start\n",
 }
 
 
-def script_depot(distribution: str, suite: str) -> str:
-    """Pose le dépôt amont de CETTE distribution (§42.9.2).
+def script_ssh(famille: "familles.Famille") -> str:
+    """Poser et allumer le serveur SSH de CETTE famille (§42.11).
 
-    @spec docs/BACKLOG.md#SPK-76 · docs/DAT.md §41.2, §42.9.2
+    @spec docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11
+
+    C'est le seul élément que toutes les familles servies reçoivent, et c'est
+    l'objet de l'unité : une cellule à qui l'on pose des clés sans jamais poser
+    de serveur SSH n'est pas « équipable soi-même », c'est un accès qu'on a
+    préparé et qu'on n'ouvre pas.
+    """
+    paquets = " ".join(famille.paquets_ssh)
+    activation = ACTIVER[famille.services]
+    if famille.services == "openrc":
+        activation = activation % (famille.service_ssh, famille.service_ssh)
+    else:
+        activation = activation % famille.service_ssh
+    return _prelude(famille) + INSTALLER[famille.paquets] % paquets + activation
+
+
+def script_depot(distribution: str, suite: str,
+                 famille: "familles.Famille | None" = None) -> str:
+    """Pose le dépôt amont de CETTE distribution (§42.9.2, §42.11).
+
+    @spec docs/BACKLOG.md#SPK-76 · docs/BACKLOG.md#SPK-98 ·
+          docs/DAT.md §41.2, §42.9.2, §42.9.2 ter
 
     C'était une constante : `linux/debian` et `trixie`, quelle que soit la
-    cellule. Le fichier est RÉÉCRIT et non complété — un `docker.list` défectueux
-    au sens du §42.9.3 doit disparaître, pas cohabiter avec le bon.
+    cellule. Le fichier est RÉÉCRIT et non complété — un dépôt défectueux au sens
+    du §42.9.3 doit disparaître, pas cohabiter avec le bon.
+
+    **SPK-98 — l'élément installe ce dont il a besoin.** `curl` n'était posé
+    qu'en passant, par la ligne du serveur SSH. Sur une image qui porte déjà un
+    `sshd` actif — Kali, mesuré —, cette ligne ne s'exécute jamais, et le dépôt
+    partait sans `curl` : l'amorçage rendait « Command not found », un refus qui
+    ne nomme ni la commande, ni l'élément, ni la cause. Une dépendance obtenue
+    par effet de bord n'est pas une dépendance satisfaite.
     """
-    return APT + (
-        "install -m 0755 -d /etc/apt/keyrings\n"
+    famille = famille or familles.FAMILLES["apt"]
+    if famille.paquets == "dnf":
+        return _depot_rpm(distribution, famille)
+    return (
+        _prelude(famille)
+        + INSTALLER[famille.paquets] % "ca-certificates curl"
+        + "install -m 0755 -d /etc/apt/keyrings\n"
         f"curl -fsSL https://download.docker.com/linux/{distribution}/gpg "
         "-o /etc/apt/keyrings/docker.asc\n"
         "chmod a+r /etc/apt/keyrings/docker.asc\n"
@@ -562,10 +831,44 @@ def script_depot(distribution: str, suite: str) -> str:
     )
 
 
-def script_docker(purger_ce: bool = False) -> str:
+def _depot_rpm(distribution: str, famille: "familles.Famille") -> str:
+    """Le dépôt amont d'une famille RPM (§42.11).
+
+    **Le fichier est écrit, et non demandé à `dnf config-manager`.** Ce n'est pas
+    une préférence : la sous-commande a changé de forme entre `dnf` 4 et `dnf` 5
+    — `--add-repo <url>` d'un côté, `addrepo --from-repofile=<url>` de l'autre —,
+    et Almalinux 9 comme Fedora 43 figurent l'une et l'autre au catalogue. Écrire
+    le fichier donne le MÊME dépôt sur les deux, et rejoue la règle du §42.9.3 :
+    réécrit en entier, jamais complété.
+
+    `$releasever` n'est pas interpolé ici : c'est `dnf` qui le résout, et c'est
+    exactement ce qu'on veut — une cellule ne doit pas figer sa propre version
+    dans un fichier de dépôt.
+    """
+    base = f"https://download.docker.com/linux/{distribution}"
+    return (
+        _prelude(famille)
+        + "cat > /etc/yum.repos.d/docker-ce.repo <<'FIN_DEPOT'\n"
+        "[docker-ce-stable]\n"
+        "name=Docker CE Stable\n"
+        f"baseurl={base}/$releasever/$basearch/stable\n"
+        "enabled=1\n"
+        "gpgcheck=1\n"
+        f"gpgkey={base}/gpg\n"
+        "FIN_DEPOT\n"
+        # `makecache` échoue si le dépôt ne répond pas : c'est le contrôle qu'on
+        # veut ici, et non à l'installation du moteur, où la cause serait perdue
+        # au milieu de la résolution des dépendances.
+        "dnf makecache -q\n"
+    )
+
+
+def script_docker(purger_ce: bool = False,
+                  famille: "familles.Famille | None" = None) -> str:
     """Pose `docker-ce`, en retirant d'abord ce qui l'empêcherait de servir.
 
-    @spec docs/BACKLOG.md#SPK-76 · docs/DAT.md §41.2, §42.9.4, §42.9.7
+    @spec docs/BACKLOG.md#SPK-76 · docs/BACKLOG.md#SPK-98 ·
+          docs/DAT.md §41.2, §42.9.4, §42.9.7, §42.11
 
     `docker.io` est TOUJOURS purgé (§41.2) : les laisser cohabiter ne réparerait
     rien, c'est son profil AppArmor qui casse et il resterait posé.
@@ -576,10 +879,20 @@ def script_docker(purger_ce: bool = False) -> str:
     La purge ne touche PAS `/var/lib/docker` : les images et les volumes du
     locataire survivent, seul le démon redémarre.
     """
+    famille = famille or familles.FAMILLES["apt"]
+    if famille.paquets == "dnf":
+        # Aucun équivalent de `docker.io` côté RPM : la distribution y publie
+        # `moby-engine`, qui porte un autre nom et ne se substitue pas au paquet
+        # amont. Rien à purger, donc rien qui prétende purger.
+        return (
+            _prelude(famille)
+            + INSTALLER["dnf"] % "docker-ce docker-ce-cli containerd.io"
+            + "systemctl enable --now docker\n"
+        )
     purge = "docker.io docker-doc docker-compose podman-docker containerd runc"
     if purger_ce:
         purge = "docker-ce docker-ce-cli " + purge
-    return APT + (
+    return _prelude(famille) + (
         f"apt-get purge -y -qq {purge} 2>/dev/null || true\n"
         # §42.9.7 : `set -e` interdit de poursuivre après un échec, mais la
         # reprise mesurée reste possible parce qu'elle est EXPLICITE. Sur un
@@ -788,16 +1101,32 @@ def script_pour(cle: str, brut: dict[str, str] | None = None,
     Le relevé est désormais un ARGUMENT : le dépôt amont se construit depuis la
     cellule, il ne se récite plus depuis une constante de module.
     """
+    brut = brut or {}
+    famille = famille_de(brut)
+    if famille is None:
+        # §42.9.5 : aucune doctrine. Le refus est rendu en amont ; ici, on ne
+        # fabrique surtout pas une commande « par défaut » qui poserait des
+        # paquets Debian sur une distribution qu'on ne connaît pas.
+        return None
     if cle == "cles":
         return None
+    if cle == "sshd":
+        return _shell(script_ssh(famille))
     if cle == "depot":
-        distribution, suite = cible_apt(brut or {})
-        return _shell(script_depot(distribution, suite))
+        distribution, suite = cible_apt(brut)
+        return _shell(script_depot(distribution, suite, famille))
     if cle == "docker":
-        script = script_docker(purger_ce)
-        return _shell(script + SCRIPT_ROOTLESS if rootless else script)
-    script = SCRIPTS.get(cle)
-    return _shell(script) if script else None
+        script = script_docker(purger_ce, famille)
+        # §42.2 : le rootless n'existe que pour la famille `apt` — c'est la seule
+        # dont le contrat de reprise a été mesuré (§42.2 bis). L'ajouter ailleurs
+        # poserait des paquets qui n'existent pas sous ce nom.
+        if rootless and famille.paquets == "apt":
+            script += SCRIPT_ROOTLESS
+        return _shell(script)
+    if cle == "compose":
+        return _shell(_prelude(famille)
+                      + INSTALLER[famille.paquets] % "docker-compose-plugin")
+    return None
 
 
 def echec(cle: str, code: int, stderr: str = "") -> str:

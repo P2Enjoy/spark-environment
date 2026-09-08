@@ -455,11 +455,22 @@ class UnixSocketIncus:
 
 
 #: SPK-76 · §42.9 : ce que le doublon répond à `/etc/os-release`, par image du
-#: catalogue (§33). Alpine y figure DÉLIBÉRÉMENT : c'est la cellule que
-#: l'amorçage doit refuser, et une preuve du refus exige de pouvoir la monter.
+#: catalogue (§33).
 #: SPK-85 · §44.9.2 : `arch` accompagne la distribution. Le doublon rend celle du
 #: poste qui l'exécute — une valeur inventée ferait éprouver le dossier contre
 #: une architecture que rien ne porte.
+#:
+#: SPK-98 · §42.11 — **ces valeurs sont RELEVÉES, pas inventées.** Chacune vient
+#: de la sonde jouée sur la Forge de test le 2026-09-08, cellule par cellule, sur
+#: les 24 familles que publie le dépôt amont. C'est ce qui rend la campagne
+#: locale capable de prouver ce que la Forge a montré : un doublon qui rendrait
+#: des `os-release` plausibles mais faux ferait passer des preuves vertes sur un
+#: comportement que la vraie machine refuse — ce qui est arrivé plus d'une fois
+#: dans ce dépôt.
+#:
+#: Les trois cas qui portent l'unité, et qu'il faut pouvoir monter en local :
+#: Alpine (servie, sans Docker), Kali (famille `apt` dont la suite n'existe pas
+#: chez Docker), Busybox (aucune famille).
 _OS_PAR_ALIAS = {
     "debian/13": {"os_id": "debian", "os_suite": "trixie", "os_like": "",
                   "arch": platform.machine()},
@@ -467,8 +478,45 @@ _OS_PAR_ALIAS = {
                   "arch": platform.machine()},
     "ubuntu/24.04": {"os_id": "ubuntu", "os_suite": "noble", "os_like": "debian",
                      "arch": platform.machine()},
+    "ubuntu/26.04": {"os_id": "ubuntu", "os_suite": "resolute",
+                     "os_like": "debian", "arch": platform.machine()},
     "alpine/3.21": {"os_id": "alpine", "os_suite": "", "os_like": "",
                     "arch": platform.machine()},
+    "alpine/3.22": {"os_id": "alpine", "os_suite": "", "os_like": "",
+                    "arch": platform.machine()},
+    # Famille `dnf`. `ID_LIKE` est celui que la cellule déclare vraiment, dans
+    # son ordre à elle : c'est ce qui rend la préférence de la table éprouvable.
+    "almalinux/9": {"os_id": "almalinux", "os_suite": "",
+                    "os_like": "rhel centos fedora", "arch": platform.machine()},
+    "rockylinux/9": {"os_id": "rocky", "os_suite": "",
+                     "os_like": "rhel centos fedora", "arch": platform.machine()},
+    "centos/9-Stream": {"os_id": "centos", "os_suite": "",
+                        "os_like": "rhel fedora", "arch": platform.machine()},
+    "fedora/43": {"os_id": "fedora", "os_suite": "", "os_like": "",
+                  "arch": platform.machine()},
+    # Oracle et Amazon Linux se déclarent `fedora` en étant des RHEL : ce sont
+    # elles qui justifient la distinction `ID` / `ID_LIKE` du §42.11.
+    "oracle/9": {"os_id": "ol", "os_suite": "", "os_like": "fedora",
+                 "arch": platform.machine()},
+    "amazonlinux/2023": {"os_id": "amzn", "os_suite": "", "os_like": "fedora",
+                         "arch": platform.machine()},
+    "opensuse/tumbleweed": {"os_id": "opensuse-tumbleweed", "os_suite": "",
+                            "os_like": "opensuse suse",
+                            "arch": platform.machine()},
+    "archlinux/current": {"os_id": "arch", "os_suite": "", "os_like": "",
+                          "arch": platform.machine()},
+    # Les dérivées `apt`. Mint publie `UBUNTU_CODENAME`, Kali et Devuan ne
+    # publient rien — c'est exactement ce que le §42.9.2 bis distingue.
+    "mint/wilma": {"os_id": "linuxmint", "os_suite": "wilma",
+                   "os_like": "ubuntu debian", "os_suite_amont": "noble",
+                   "arch": platform.machine()},
+    "kali/current": {"os_id": "kali", "os_suite": "kali-rolling",
+                     "os_like": "debian", "arch": platform.machine()},
+    "devuan/daedalus": {"os_id": "devuan", "os_suite": "daedalus",
+                        "os_like": "debian", "arch": platform.machine()},
+    # Aucune famille : pas d'`/etc/os-release` du tout.
+    "busybox/1.38.0": {"os_id": "", "os_suite": "", "os_like": "",
+                       "arch": platform.machine()},
 }
 
 #: Une image inconnue du doublon est traitée comme la Debian 13 par défaut du
@@ -962,8 +1010,14 @@ class FakeIncus:
         # Mesuré : le relevé du §42.6 contient « docker-ce » dans son
         # `dpkg-query`, et un marqueur posé sur ce mot faisait déclarer Docker
         # installé par la commande même qui venait constater son absence.
-        installe = "apt-get install" in script
-        if installe and "openssh-server" in script:
+        # SPK-98 · §42.11 : cinq familles posent leurs paquets par cinq commandes
+        # différentes. Ne reconnaître qu'`apt-get` faisait passer les preuves des
+        # quatre autres sur une cellule qui n'installait jamais rien — donc
+        # « échoué » là où la Forge réelle rend « installé ».
+        installe = any(marqueur in script for marqueur in (
+            "apt-get install", "dnf install", "apk add",
+            "zypper --non-interactive install", "pacman -Sy"))
+        if installe and ("openssh-server" in script or "openssh" in script):
             runtime["sshd"] = "active"
             runtime["openssh_version"] = "1:9.8p1-1"
         # SPK-76 · §42.9.3 : le doublon retient CE QUE le dépôt nomme, pas le
@@ -972,6 +1026,14 @@ class FakeIncus:
         marque = re.search(r"download\.docker\.com/linux/([a-z]+) (\S+) stable", script)
         if marque and "> /etc/apt/sources.list.d/docker.list" in script:
             runtime["depot_distro"], runtime["depot_suite"] = marque.groups()
+        # SPK-98 · §42.11 : le dépôt d'une famille RPM est un FICHIER écrit, pas
+        # une ligne `deb`. Il ne porte pas de suite : `dnf` résout `$releasever`
+        # lui-même, et c'est ce qu'on veut — une cellule ne fige pas sa version
+        # dans un fichier de dépôt.
+        rpm = re.search(r"baseurl=https://download\.docker\.com/linux/([a-z]+)/",
+                        script)
+        if rpm and "/etc/yum.repos.d/docker-ce.repo" in script:
+            runtime["depot_distro"], runtime["depot_suite"] = rpm.group(1), ""
         if installe and "docker-ce" in script:
             runtime["docker"] = "Docker version 29.7.2"
             # §42.9.4 : la version PORTE l'origine du paquet, et c'est ce qui
@@ -979,6 +1041,12 @@ class FakeIncus:
             suite = runtime.get("depot_suite") or runtime.get("os_suite") or "trixie"
             distro = runtime.get("depot_distro") or runtime.get("os_id") or "debian"
             runtime["docker_version"] = f"5:29.7.2-1~{distro}.1~{suite}"
+            if "dnf install" in script:
+                # Les paquets RPM ne portent pas la suite dans leur version :
+                # `29.7.2-1.el9`. Le §42.9.4 ne s'y applique donc pas, et
+                # fabriquer une marque `~suite` ferait éprouver un défaut qui n'y
+                # existe pas.
+                runtime["docker_version"] = "29.7.2-1.el9"
             runtime["origine"] = "docker-ce"
             # §42.2 bis : le mode que la cellule PORTE après l'installation. Sans
             # lui, un second amorçage ne verrait aucun mode en place et le refus

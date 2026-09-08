@@ -30,7 +30,7 @@ from .config import Config
 from . import cgroup as cgroup_service
 from . import hostmem
 from . import images as images_service
-from .db import connect
+from .db import connect, transaction
 from .incus import FakeIncus, IncusClient, IncusError, InstanceAbsente, UnixSocketIncus
 from . import build
 from .inventory import InventoryError, sync
@@ -361,6 +361,12 @@ def create_app(config: Config) -> FastAPI:
             # équiper, et rien ne le signale avant l'échec.
             for entree in entrees:
                 entree["bootstrappable"] = images_service.amorcable(entree["alias"])
+                # SPK-98 · §42.14 : la TABLE, pas un booléen. « Amorçable » ne
+                # dit plus rien d'utile depuis qu'une famille peut être servie
+                # sans avoir Docker : l'écran a besoin de savoir laquelle.
+                entree["family"] = images_service.famille_presumee(entree["alias"])
+                entree["capabilities"] = images_service.capacites_de_alias(
+                    entree["alias"])
             return {
                 "images": entrees,
                 "selectable": [e["reference"] for e in entrees
@@ -905,6 +911,29 @@ def create_app(config: Config) -> FastAPI:
         # partie — il reste `0644`, sans quoi il serait invisible à la connexion.
         _ouvrir_au_rootless(connection, spark, briefing_service.DOSSIERS_OUVERTS,
                             briefing_service.FICHIERS_OUVERTS)
+
+    def _accorder_capacite_docker(connection, spark: dict, brut: dict) -> dict:
+        """Le RELEVÉ corrige le registre, jamais l'inverse (SPK-98, §42.13).
+
+        @spec docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.9, §42.13
+
+        `docker_enabled` est posé à la création depuis la famille de l'image :
+        c'est tout ce qu'on a avant qu'une cellule existe. Dès qu'une cellule
+        répond, elle en sait davantage — une image Debian dont le contenu a été
+        remplacé, un alias mal nommé, une variante inattendue.
+
+        On écrit donc ce que la cellule dit, et seulement quand cela diffère :
+        une écriture par relevé ferait tourner `updated_at` sur une lecture, qui
+        ne change rien.
+        """
+        capable = bootstrap_service.identite(brut)["capabilities"]["docker"]
+        if bool(spark.get("docker_enabled")) == capable:
+            return spark
+        with transaction(connection):
+            connection.execute(
+                "UPDATE spark SET docker_enabled = ? WHERE id = ?",
+                (1 if capable else 0, spark["id"]))
+        return service.get(connection, spark["id"])
 
     def _rattraper_env(connection, spark: dict) -> None:
         """Reprojette l'environnement sans annuler ce qui est déjà écrit.
@@ -2154,9 +2183,12 @@ def create_app(config: Config) -> FastAPI:
             # agir. On peut regarder sans agir (§42.7), et cela vaut a fortiori
             # pour une cellule qu'on va refuser : c'est là qu'il faut pouvoir
             # lire ce qu'elle est.
+            # SPK-98 · §42.13 : la cellule vient de parler ; le registre suit.
+            spark = _accorder_capacite_docker(connection, spark, brut)
             return {"spark": name, "reachable": True, "items": vus,
                     "os": bootstrap_service.identite(brut),
                     "supported": bootstrap_service.servie(brut),
+                    "docker_enabled": bool(spark["docker_enabled"]),
                     "complete": bootstrap_service.complet(vus)}
 
     @app.post("/v1/sparks/{name}/bootstrap", tags=["amorcage"], status_code=200)
@@ -2328,9 +2360,11 @@ def create_app(config: Config) -> FastAPI:
                 payload={"path": "incus_exec", "changed": bool(actions),
                          "mode": mode, "items": actions},
             )
+            spark = _accorder_capacite_docker(connection, spark, brut_final)
             return {"spark": name, "path": "incus_exec", "mode": mode,
                     "changed": bool(actions), "items": lignes,
                     "os": bootstrap_service.identite(brut_final), "supported": True,
+                    "docker_enabled": bool(spark["docker_enabled"]),
                     "complete": bootstrap_service.complet(apres)}
 
     @app.get("/v1/sparks/{name}/identity", tags=["cles"])

@@ -198,12 +198,54 @@ def test_ce_qui_est_deja_au_catalogue_est_marque(db):
 
 
 def test_l_amorcabilite_est_ANNONCEE_par_famille(db):
-    """§42.9.6 : annonce, jamais filtre — l'entree reste choisissable."""
+    """§42.9.6, §42.14 : annonce, jamais filtre — l'entree reste choisissable.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.14, §33.3 bis
+
+    Ce test affirmait `alpine → amorcable: False`, ce que la campagne du
+    2026-09-08 a infirme : Alpine EST servie, sans Docker. Le booleen a change de
+    sens — « une doctrine existe » — et la table des capacites dit ce qu'il ne
+    disait plus.
+    """
     vue = images.depot_listing(db, fetch=lecteur())
     par_famille = {f["famille"]: f for f in vue["familles"]}
     assert par_famille["debian"]["amorcable"] is True
-    assert par_famille["alpine"]["amorcable"] is False
+    assert par_famille["alpine"]["amorcable"] is True, (
+        "une doctrine `apk` existe : la cellule recevra sshd et ses cles")
     assert par_famille["alpine"]["versions"], "annoncee, mais toujours proposee"
+
+    # §42.14 : ce que le booleen ne dit plus, la table le dit.
+    assert par_famille["debian"]["capacites"]["docker"] is True
+    assert par_famille["alpine"]["capacites"]["docker"] is False
+    assert par_famille["alpine"]["capacites"]["ssh"] is True
+    assert par_famille["alpine"]["capacites"]["env"] is True
+
+
+def test_le_catalogue_ne_CONTREDIT_plus_le_releve(db):
+    """§33.3 bis — deux reponses opposees a la meme question, corrigees.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §33.3 bis
+
+    `amorcable()` lisait le prefixe de l'alias et ne connaissait que `debian` et
+    `ubuntu` ; le releve lit `ID_LIKE` dans la cellule et conclut `apt`. Le
+    catalogue affichait donc « amorcage non pris en charge » sur Mint, Kali et
+    Devuan, que l'amorcage acceptait.
+
+    Les deux consultent desormais la meme table, et la preuve le verifie des
+    deux cotes a la fois.
+    """
+    from sparkd import bootstrap
+
+    for alias, os_id, like in (("mint/wilma", "linuxmint", "ubuntu debian"),
+                               ("kali/current", "kali", "debian"),
+                               ("devuan/daedalus", "devuan", "debian"),
+                               ("alpine/3.21", "alpine", ""),
+                               ("almalinux/9", "almalinux", "rhel centos fedora")):
+        du_catalogue = images.famille_presumee(alias)
+        de_la_cellule = bootstrap.identite({"os_id": os_id, "os_like": like})["family"]
+        assert du_catalogue == de_la_cellule, (
+            f"« {alias} » : le catalogue dit {du_catalogue}, la cellule dit "
+            f"{de_la_cellule}")
 
 
 def test_le_libelle_est_DERIVE_de_ce_que_le_depot_publie(db):

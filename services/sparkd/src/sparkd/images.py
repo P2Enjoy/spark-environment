@@ -29,6 +29,7 @@ from secrets import token_hex
 import httpx
 
 from . import audit
+from . import familles as table_familles
 from .audit import record as _audit
 from .db import transaction
 
@@ -61,17 +62,50 @@ DEFAULTS = (
 #: cellules, pas seulement des cellules amorçables, et un locataire qui sait ce
 #: qu'il fait peut vouloir une Alpine. Mais l'écran de création le DIT avant, au
 #: lieu de le laisser découvrir à l'amorçage.
-FAMILLES_AMORCABLES = ("debian", "ubuntu")
+#:
+#: SPK-98 · §33.3 bis — **cette liste était une SECONDE table, et elle
+#: contredisait la première.** Elle lisait le préfixe de l'alias et ne connaissait
+#: que `debian` et `ubuntu` ; le relevé, lui, lit `ID_LIKE` dans la cellule. Le
+#: catalogue affichait donc « amorçage non pris en charge » sur `mint/wilma`,
+#: `kali/current` et `devuan/daedalus`, que l'amorçage acceptait. Deux réponses
+#: opposées à la même question dans le même produit.
+#:
+#: Le catalogue consulte désormais la table du §42.11, celle-là même que
+#: l'amorçage consulte. Il n'y a plus qu'un endroit où la réponse est écrite.
+
+
+def famille_presumee(alias: str) -> str | None:
+    """La famille PRÉSUMÉE de cet alias — `debian/13` → `apt` (§42.14).
+
+    Présumée, et le mot compte (§33.3) : c'est tout ce qu'on a avant qu'une
+    cellule existe. La vérité reste ce que la cellule déclare dans
+    `/etc/os-release`, et c'est le §42.9 qui décide, lui seul.
+    """
+    trouvee = table_familles.de_alias(alias)
+    return trouvee.cle if trouvee else None
+
+
+def capacites_de_alias(alias: str) -> dict[str, bool]:
+    """Ce que le produit sait faire d'une image de cet alias (§42.14).
+
+    Calculée à la LECTURE, jamais stockée en colonne : une doctrine qui s'ajoute
+    — Docker sur Alpine, le jour où il sera mesuré — doit changer la réponse de
+    toutes les entrées existantes sans migration, et une copie figée au registre
+    serait fausse dès le lendemain.
+    """
+    return table_familles.capacites(table_familles.de_alias(alias))
 
 
 def amorcable(alias: str) -> bool:
-    """L'amorçage sait-il équiper une cellule issue de cet alias ? (§42.9.6)
+    """Une doctrine existe-t-elle pour cet alias ? (§42.9.6, §42.14)
 
-    La vérité reste ce que la CELLULE déclare dans `/etc/os-release` : c'est le
-    §42.9 qui décide, et lui seul. Ceci n'est qu'une annonce faite avant la
-    création, sur la seule information qu'on ait alors — le nom de l'image.
+    SPK-98 : ce prédicat signifiait « famille `apt` », donc « aura Docker ». Il
+    signifie désormais « l'amorçage sait quoi en faire », ce qui rend une Alpine
+    amorçable — elle recevra `sshd` et ses clés. Ce qu'elle n'aura pas se lit
+    dans `capacites()`, qui le dit élément par élément au lieu de tout réduire à
+    un oui-ou-non.
     """
-    return (alias or "").split("/", 1)[0].strip().lower() in FAMILLES_AMORCABLES
+    return table_familles.de_alias(alias) is not None
 
 
 class ImageError(RuntimeError):
@@ -569,9 +603,13 @@ def depot_listing(
     familles = [
         {
             "famille": famille,
-            # §42.9.6 : l'amorçage sait équiper « debian » et « ubuntu ». On le
-            # DIT ici comme à la création — annonce, jamais filtre.
+            # §42.9.6 : ce que l'amorçage sait faire de cette famille. On le DIT
+            # ici comme à la création — annonce, jamais filtre.
             "amorcable": amorcable(famille),
+            # SPK-98 · §42.14 : et la table de ce qu'elle reçoit, parce qu'un
+            # booléen ne dit plus rien d'utile depuis qu'une famille peut être
+            # servie sans avoir Docker.
+            "capacites": capacites_de_alias(famille),
             "versions": sorted(lignes,
                                key=lambda v: _cle_de_version(v["version"]),
                                reverse=True),
