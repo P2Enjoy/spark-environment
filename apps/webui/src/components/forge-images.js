@@ -282,7 +282,13 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
                              ['#/forge/supervision', 'Supervision'],
                              ['#/forge/journal', 'Journal']];
 
-/** Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble. */
+/**
+ * Facettes d'un Spark (DESIGN_SYSTEM.md §6.27) : ce qui se lit ensemble.
+ *
+ * SPK-98 · SPK-DS-24 : certaines facettes n'existent que si le Spark a de quoi
+ * les remplir. `capacite` nomme ce qu'il faut pour que la destination existe ;
+ * une facette sans `capacite` est offerte à tous les Sparks.
+ */
 export const FACETTES_SPARK = [
   ['', 'Infos'], ['routes', 'Routes'], ['cles', 'Clés'],
   ['instantanes', 'Instantanés'],
@@ -298,14 +304,49 @@ export const FACETTES_SPARK = [
   ['terminal', 'Terminal'],
   // SPK-44 · §37.6 : ce que le locataire fait tourner, en LECTURE. La facette
   // vient après le terminal parce qu'elle s'observe, quand celui-ci s'emploie.
-  ['docker', 'Docker'],
+  // SPK-98 · SPK-DS-24 : la famille de l'image décide. Une Alpine n'aura jamais
+  // de Docker — Docker n'y publie aucun dépôt amont —, et un onglet est une
+  // ADRESSE : il se recharge, se met en favori, se partage, et promet un sujet.
+  // Le laisser en place ferait promettre au produit ce qu'il vient de refuser
+  // d'installer.
+  ['docker', 'Docker', 'docker'],
   ['journal', 'Journal'],
 ];
 
-export function renderOngletsSpark(nom, courant) {
+/**
+ * Les facettes que CE Spark offre réellement (SPK-DS-24).
+ *
+ * @spec docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.13 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-24
+ *
+ * `docker_enabled` vient du registre, où la création l'a posé depuis la famille
+ * de l'image et où le relevé le corrige (§42.13). On le lit plutôt que le
+ * relevé d'amorçage : la barre doit être juste à l'ouverture de l'écran, avant
+ * qu'aucune commande n'ait été exécutée dans la cellule.
+ *
+ * Une valeur ABSENTE vaut « oui ». C'est délibéré : un `undefined` vient d'un
+ * appelant qui n'a pas encore la fiche, et retirer l'onglet sur cette base le
+ * ferait clignoter à chaque chargement. Le registre, lui, rend toujours 0 ou 1.
+ */
+export function facettesDe(spark = null) {
+  const offertes = {
+    docker: spark == null || spark.docker_enabled == null
+      || Boolean(spark.docker_enabled),
+  };
+  return FACETTES_SPARK.filter(([, , capacite]) =>
+    !capacite || offertes[capacite]);
+}
+
+/** Une facette demandée que ce Spark n'offre pas retombe sur la première. */
+export function facetteOffertes(spark, facette) {
+  return facettesDe(spark).some(([suffixe]) => suffixe === (facette || ''))
+    ? (facette || '') : '';
+}
+
+export function renderOngletsSpark(nom, courant, spark = null) {
   const base = `#/sparks/${encodeURIComponent(nom)}`;
   return renderOnglets(
-    FACETTES_SPARK.map(([suffixe, libelle]) =>
+    facettesDe(spark).map(([suffixe, libelle]) =>
       [suffixe ? `${base}/${suffixe}` : base, libelle]),
     courant ? `${base}/${courant}` : base,
     `Facettes de ${nom}`);

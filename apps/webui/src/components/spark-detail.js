@@ -21,7 +21,7 @@ import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
          renderPortsPanel, ADMIN_VIDE } from './spark-admin.js';
 import { renderTerminal, TERMINAL_VIDE } from './spark-terminal.js';
 import { renderDocker, DOCKER_VIDE } from './spark-docker.js';
-import { renderOngletsSpark } from './forge-images.js';
+import { facetteOffertes, renderOngletsSpark } from './forge-images.js';
 import { renderModale } from './modale.js';
 import { renderSupervisionSpark, SUPERVISION_VIDE } from './supervision.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
@@ -518,9 +518,16 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
   // Deux affirmations contraires sur le même écran ne laissent pas le lecteur
   // choisir : elles lui font perdre confiance dans les deux. Après un échec, ce
   // qu'on savait AVANT n'est plus su — il faut relever à nouveau.
+  // SPK-98 · SPK-DS-24 : « capable de faire tourner une pile Compose » est FAUX
+  // sur une cellule sans Docker. Elle est complète pour ce qu'elle est, et la
+  // phrase le dit — un verdict qui promet ce que la cellule ne peut pas est pire
+  // qu'un verdict absent.
   const verdict = lignes && complet && !etat.erreur
-    ? `<p class="note" role="status">Cette cellule est complète : elle est joignable
-       en SSH et capable de faire tourner une pile Compose.</p>`
+    ? (spark.docker_enabled != null && !spark.docker_enabled
+        ? `<p class="note" role="status">Cette cellule est complète : elle est
+           joignable en SSH, avec ses clés, ses variables et son briefing.</p>`
+        : `<p class="note" role="status">Cette cellule est complète : elle est joignable
+           en SSH et capable de faire tourner une pile Compose.</p>`)
     : '';
 
   // SPK-82 : ce que l'octroi a donné. Il précède l'amorçage, donc il se dit même
@@ -547,8 +554,18 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
   // serveur refusera à coup sûr (§1.4). La différence avec le §14.9 tient à ce
   // que l'écran ne le SUPPOSE pas : il le tient d'une mesure que le serveur
   // vient de rendre.
+  // SPK-98 · SPK-DS-24 : sans Docker, l'option rootless n'a plus d'objet — c'est
+  // un MODE d'installation de Docker. L'offrir serait une case qui ne peut rien
+  // changer, et le §14.4 veut qu'un contrôle sans objet ne se rende pas.
+  //
+  // La raison se dit UNE fois, ici, et pas à chaque endroit où Docker aurait pu
+  // se trouver : « cette image n'est pas servie par le dépôt amont » est une
+  // information ; la répéter sur cinq écrans est du bruit.
+  const sansDocker = spark.docker_enabled != null && !spark.docker_enabled;
   const modeEnPlace = lignes?.find((l) => l.key === 'docker')?.mode ?? null;
-  const option = modeEnPlace
+  const option = sansDocker
+    ? ''
+    : modeEnPlace
     ? `<p class="note">Ce Spark fait déjà tourner un Docker
        <strong>${echapper(MODES[modeEnPlace] ?? modeEnPlace)}</strong>. Le mode ne
        se change pas par un amorçage : basculer déplacerait le moteur sous un autre
@@ -596,6 +613,10 @@ export function renderAmorcage(spark, etat = AMORCAGE_VIDE) {
   <h2 id="titre-amorcage">Amorçage</h2>
   <p class="note">L’amorçage relève ce qui manque dans la cellule et ne pose que
   cela. <a href="#/manuel/M6">Manuel M6 — Amorcer le Spark, une fois</a></p>
+  ${sansDocker ? `<p class="note">Cette image ne reçoit pas Docker : le dépôt
+    officiel n’en publie aucun pour sa famille, et le paquet de la distribution
+    ne tient pas sous imbrication. Le Spark reçoit tout le reste — serveur SSH,
+    clés, variables et briefing — et reste pleinement utilisable.</p>` : ''}
   ${corps}
   ${octroi}${verdict}${rien}
   ${confirmation}
@@ -686,6 +707,12 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
   const { token, label, transient } = stateOf(spark.state);
   const classeBadge = `badge badge--${token}${transient ? ' badge--transitoire' : ''}`;
 
+  // SPK-98 · SPK-DS-24 : l'ADRESSE d'une facette retirée ne mène nulle part non
+  // plus. Sans cela, un favori pris sur un autre Spark ouvrirait ici un écran
+  // que la barre ne propose plus — et le §6.13 veut que l'écran ne prétende pas
+  // savoir ce qui n'existe pas.
+  const facetteRendue = facetteOffertes(spark, facette);
+
   const facettes = {
     '': () => `<div class="detail">
       <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas, { pools, cores })}
@@ -722,8 +749,8 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
   ${spark.last_error ? `<p class="erreur-derniere" role="status">Dernière erreur : ${echapper(spark.last_error)}</p>` : ''}
   ${renderCommands(spark, { confirming })}
 </header>
-${renderOngletsSpark(spark.name, facette)}
-${(facettes[facette] ?? facettes[''])()}`;
+${renderOngletsSpark(spark.name, facetteRendue, spark)}
+${(facettes[facetteRendue] ?? facettes[''])()}`;
 }
 
 export function renderDetailSkeleton() {

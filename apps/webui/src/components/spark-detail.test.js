@@ -1038,3 +1038,67 @@ test('un octroi MANQUÉ est dit dans le compte rendu, pas passé sous silence', 
   assert.match(rendu, /Aucune clé n’a été accordée/);
   assert.match(rendu, /ne fonctionnera pas/);
 });
+
+// --- SPK-98 · une destination qui ne mène nulle part ne se rend pas ----------
+//
+// @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.13 ·
+//           docs/DESIGN_SYSTEM_APP.md SPK-DS-24
+
+test('un Spark sans Docker n’a PAS d’onglet Docker', () => {
+  const sansDocker = { ...SPARK, docker_enabled: 0 };
+  const html = renderSparkDetail({ status: 'ready', spark: sansDocker });
+  assert.ok(!html.includes('>Docker<'), 'l’onglet Docker est encore construit');
+  assert.ok(!html.includes('/docker"'), 'son adresse figure encore dans la barre');
+  // Ce qui ne dépend pas de Docker reste ENTIER : le produit sert des cellules,
+  // et une cellule sans Docker reste une cellule.
+  for (const facette of ['Routes', 'Clés', 'Instantanés', 'Mesures',
+                         'Environnement', 'Terminal', 'Journal']) {
+    assert.ok(html.includes(`>${facette}<`), `« ${facette} » a disparu avec Docker`);
+  }
+});
+
+test('un Spark AVEC Docker garde son onglet — le retrait ne déborde pas', () => {
+  const html = renderSparkDetail({ status: 'ready',
+                                   spark: { ...SPARK, docker_enabled: 1 } });
+  assert.ok(html.includes('>Docker<'));
+});
+
+test('l’ADRESSE de la facette Docker retombe sur la facette par défaut', () => {
+  // Un favori pris sur un autre Spark, ou un lien partagé. Sans ce repli,
+  // l'écran ouvrirait une destination que la barre ne propose plus (§6.13).
+  const html = renderSparkDetail({ status: 'ready',
+                                   spark: { ...SPARK, docker_enabled: 0 },
+                                   facette: 'docker' });
+  assert.ok(html.includes('id="titre-amorcage"'),
+            'la facette par défaut n’est pas rendue');
+  assert.ok(!html.includes('data-docker='), 'la facette Docker a été rendue');
+});
+
+test('sans Docker, l’option rootless n’est pas offerte et la raison est DITE', () => {
+  const html = renderSparkDetail({
+    status: 'ready', spark: { ...SPARK, docker_enabled: 0, incus_name: 'x' },
+    amorcage: { ...AMORCAGE_VIDE, releve: { items: [], complete: false,
+                                            supported: true } },
+  });
+  assert.ok(!html.includes('data-amorcage="rootless"'),
+            'une case qui ne peut rien changer est encore offerte');
+  assert.ok(html.includes('ne reçoit pas Docker'),
+            'la raison n’est dite nulle part');
+});
+
+test('le verdict ne promet pas Compose là où il n’y a pas de Docker', () => {
+  const complet = {
+    ...AMORCAGE_VIDE,
+    releve: { items: [{ key: 'sshd', label: 'serveur SSH', state: 'present' },
+                      { key: 'cles', label: 'clés', state: 'present' }],
+              complete: true, supported: true },
+  };
+  const sans = renderSparkDetail({ status: 'ready', amorcage: complet,
+    spark: { ...SPARK, docker_enabled: 0, incus_name: 'x' } });
+  assert.ok(sans.includes('joignable en SSH, avec ses clés'));
+  assert.ok(!sans.includes('pile Compose'), 'le verdict promet ce qu’elle ne peut pas');
+
+  const avec = renderSparkDetail({ status: 'ready', amorcage: complet,
+    spark: { ...SPARK, docker_enabled: 1, incus_name: 'x' } });
+  assert.ok(avec.includes('pile Compose'), 'le verdict a changé là où Docker existe');
+});
