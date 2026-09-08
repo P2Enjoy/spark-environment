@@ -770,13 +770,23 @@ PREPARER = {
     # Sans lui, `install` rend 104 « paquet introuvable » alors que le paquet
     # existe. Mesuré sur une openSUSE Tumbleweed fraîche.
     "zypper": "zypper --non-interactive refresh\n",
-    # MESURÉ le 2026-09-08, et c'est le trousseau, pas l'index : une image Arch
-    # embarque des clés plus vieilles que les paquets qu'elle va chercher, et
-    # `pacman` refuse alors TOUT — « signature from … is unknown trust ».
-    # Le premier essai de la campagne avait réussi sans cette ligne parce que le
-    # trousseau y était encore assez frais ; le second, quelques minutes plus
-    # tard, a échoué. Une doctrine qui dépend de la date n'en est pas une.
-    "pacman": "pacman -Sy --noconfirm archlinux-keyring\n",
+    # MESURÉ le 2026-09-08, en trois temps, et les trois comptent.
+    #
+    # Une image Arch arrive avec un trousseau `pacman` **non initialisé**, et
+    # `pacman` refuse alors tout : « signature from … is unknown trust ». Poser
+    # `archlinux-keyring` ne suffit pas — c'est le serpent qui se mord la queue,
+    # ce paquet-là ne peut pas se vérifier lui-même :
+    #
+    #   error: archlinux-keyring: signature from "…" is unknown trust
+    #   error: failed to commit transaction (invalid or corrupted package)
+    #
+    # `--init` crée le trousseau, `--populate` y met les clés que la
+    # distribution livre avec l'image. Le paquet est reposé ensuite, pour que le
+    # trousseau soit celui d'aujourd'hui et non celui du jour de l'image. Les
+    # trois sont idempotents, et l'ordre n'est pas négociable.
+    "pacman": ("pacman-key --init\n"
+               "pacman-key --populate archlinux\n"
+               "pacman -Sy --noconfirm archlinux-keyring\n"),
     # `apk add` lit l'index publié à chaque appel.
     "apk": "",
 }

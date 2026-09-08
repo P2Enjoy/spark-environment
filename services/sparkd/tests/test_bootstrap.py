@@ -1288,9 +1288,14 @@ def test_ARCH_rafraichit_son_TROUSSEAU_avant_d_installer(tmp_path):
     Une doctrine qui dépend de la date à laquelle on l'essaie n'en est pas une.
     """
     script = bootstrap.script_ssh(familles.FAMILLES["pacman"])
-    assert "pacman -Sy --noconfirm archlinux-keyring" in script
-    assert script.index("archlinux-keyring") < script.index("--needed openssh"), (
-        "le trousseau se rafraîchit AVANT, sinon il ne sert à rien")
+    # Les trois temps, dans l'ordre. `archlinux-keyring` seul ne suffit pas :
+    # ce paquet ne peut pas se vérifier lui-même sur un trousseau vide.
+    for etape in ("pacman-key --init", "pacman-key --populate archlinux",
+                  "pacman -Sy --noconfirm archlinux-keyring"):
+        assert etape in script, f"« {etape} » manque"
+    assert script.index("--init") < script.index("--populate") \
+        < script.index("-Sy --noconfirm archlinux-keyring") \
+        < script.index("--needed openssh"), "l'ordre n'est pas négociable"
 
 
 def test_preparer_ne_se_rejoue_pas_a_chaque_paquet(tmp_path):
