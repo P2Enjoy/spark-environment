@@ -10388,3 +10388,177 @@ réponse d'après la **forme de l'URL** est fragile dès qu'un relais la
 reconstruit. Ce qui se lit dans une capture ne dit pas d'où vient la donnée ; ici
 la seule chose qui l'a révélé est d'avoir relu l'image en cherchant une entrée
 précise, `OBJECT_STORAGE_URL`, et de ne pas l'avoir trouvée.
+
+## 2026-09-08 · Campagne du catalogue — les cinq images, une par une, sur la Forge réelle
+
+Le responsable a demandé la campagne complète : ajouter les images du catalogue à
+la Forge de test, créer un Spark de chacune, tenter l'amorçage, et **configurer au
+maximum** — variables, SSH, clés, et Docker pour celles qui le supportent. Avec
+une consigne d'exploitation : nettoyer le Spark et l'image mise en cache dès
+qu'une image est validée, pour ne pas immobiliser la Forge.
+
+Cinq entrées au catalogue, toutes `verified` : `debian/13`, `debian/12`,
+`ubuntu/24.04`, `ubuntu/26.04`, `alpine/3.21`. Chacune a eu son Spark
+(`0,5 CPU`, `2 Gio`, `100 Mbit/s`, `10 Gio`), sa clé accordée, ses variables
+posées — deux de Forge dont un secret, deux propres au Spark dont un secret —,
+puis son amorçage.
+
+**Ce que les quatre images `apt` ont rendu, et c'est sans surprise :**
+
+| Image | suite relevée | dépôt posé | moteur | Compose | pile réelle |
+|---|---|---|---|---|---|
+| `debian/13` | trixie | `linux/debian trixie` | 29.8.0 | v5.5.1 | `nginx:alpine` démarre |
+| `debian/12` | bookworm | `linux/debian bookworm` | 29.8.0 | v5.5.1 | idem |
+| `ubuntu/24.04` | noble | `linux/ubuntu noble` | 29.8.0 | v5.5.1 | idem |
+| `ubuntu/26.04` | resolute | `linux/ubuntu resolute` | 29.8.0 | v5.5.1 | idem |
+
+Trente-cinq secondes environ par amorçage, `complete: true` à chaque fois, et
+`docker info` rendant `overlayfs · cgroup 2 · [apparmor,profile=default
+seccomp,profile=builtin cgroupns]` — donc AppArmor et seccomp **actifs**, sans
+contournement. Le §42.9.2 tient sur la suite la plus récente : `docker-ce`
+`5:29.8.0-1~ubuntu.26.04~resolute` vient bien du dépôt `resolute`, et non d'un
+repli sur `noble`. Un point à noter : les images `debian/13` et `debian/12`
+d'aujourd'hui **embarquent `sshd`**, ce que le runbook §C.2 disait absent — la
+ligne « active, inchangé » du relevé le montre. Le runbook est corrigé.
+
+**Ce que l'image Alpine a rendu, et c'est le vrai résultat de la campagne.**
+
+L'amorçage refuse en `409 bootstrap_unsupported_os`, comme le §42.9.5 le prévoit.
+Mais l'inventaire de la cellule, lui, dit autre chose :
+
+```
+/etc/spark/env             posé      APP_PORT, CAMPAGNE_FORGE
+/run/spark/secrets         posé      APP_TOKEN, CAMPAGNE_SECRET
+/root/.ssh/authorized_keys posé      campagne-catalogue, empreinte conforme
+/etc/spark/BRIEFING.md     ABSENT
+sshd                       ABSENT
+```
+
+**Le produit configure déjà presque tout sur Alpine.** Les variables, les
+secrets et les clés y arrivent par `incus file push`, qui ne dépend d'aucune
+distribution. Ce qui manque, c'est le `sshd` qui ouvrirait la porte que ces clés
+viennent de garnir — et le briefing, qui n'est écrit que si une observation
+d'amorçage existe, ce qu'Alpine ne peut jamais obtenir.
+
+Une cellule à qui l'on pose des clés d'accès sans jamais poser de serveur SSH
+n'est pas « équipable soi-même » : c'est un accès qu'on a préparé et qu'on
+n'ouvre pas.
+
+**Mesuré, et non supposé** — sur la cellule `cat-alpine321` :
+
+```sh
+apk add --no-cache openssh          # OpenSSH_9.9p2
+rc-update add sshd default
+rc-service sshd start               # [ ok ]
+```
+
+Puis, depuis le poste, par rebond sur la Forge, avec la clé que le **registre**
+avait posée : connexion réussie, `/etc/spark/env` lu par le locataire. Aucun
+`PermitRootLogin` à changer — le défaut d'OpenSSH est `prohibit-password`, ce que
+la campagne a vérifié plutôt que de le supposer. Trois commandes, aucune
+doctrine nouvelle à inventer.
+
+**La décision, et sa raison.** Le §42.9.5 fusionnait deux questions distinctes :
+« sais-je rendre cette cellule joignable ? » et « sais-je y installer Docker ? ».
+La réponse à la seconde est non pour Alpine, et le reste — c'est l'argument du
+§41.2, Docker ne publie aucun dépôt amont pour Alpine, et le paquet de la
+distribution est précisément ce que la doctrine refuse. Mais cet argument ne dit
+**rien** de SSH. En refusant en bloc, l'amorçage refusait aussi ce qu'il savait
+parfaitement faire.
+
+L'amorçage sert donc désormais **ce que la famille sait recevoir** : `apk`
+obtient `sshd`, ses clés, son briefing et son panneau ; `apt` obtient tout cela
+plus le dépôt, le moteur et Compose. Une famille inconnue reste refusée — on ne
+devine pas un gestionnaire de paquets.
+
+**Conséquence à l'écran, et c'est la seconde moitié de la demande.** Un Spark
+dont la famille n'a pas de Docker ne doit pas en montrer : ni l'onglet, ni la
+facette, ni les lignes d'un relevé qui parleraient d'un dépôt qu'on ne posera
+jamais. Le §14.4 le dit déjà pour un contrôle sans objet ; ici il ne s'agit pas
+d'un contrôle mais d'une **destination entière**, et une destination qui ne mène
+nulle part est pire qu'un bouton grisé — elle se recharge, elle s'ajoute aux
+favoris, et elle promet un sujet qui n'existe pas.
+
+Unité ouverte : SPK-98. Contrat au §42.11 du DAT, règle d'écran SPK-DS-24.
+
+## 2026-09-08 · Le balayage des 24 familles, et les trois défauts qu'il a trouvés
+
+Le responsable a étendu la demande : « tu dois tenter TOUT CE QUI EST DISPONIBLE
+dans le repository remote, pas seulement ce qui est déjà enregistré comme image
+dans la forge — donc il faut importer l'image une par une puis toutes les
+essayer », et « il faut signaler dans le registre des images chaque famille avec
+quoi elle est compatible ou pas ; on crée des branches de fonctionnement par
+famille s'il le faut ».
+
+Le dépôt `images.linuxcontainers.org` publie **24 familles** en `amd64`. Chacune
+a été importée au catalogue de la Forge de test, a reçu un Spark, a été démarrée,
+sondée, puis retirée avec son image mise en cache. Le catalogue de la Forge porte
+désormais les 27 entrées ; la Forge est revenue à son seul Spark de production.
+
+**Ce que la sonde a rendu, famille par famille** — `os_id`, `ID_LIKE`,
+gestionnaire de paquets, gestionnaire de services, et présence de `sshd` :
+
+| Famille | `ID_LIKE` | paquets | services | `sshd` fourni |
+|---|---|---|---|---|
+| `debian`, `ubuntu` | — / `debian` | apt | systemd | oui |
+| `devuan` | `debian` | apt | **sysv seul** | oui |
+| `kali` | `debian` | apt | systemd | oui |
+| `linuxmint` | `ubuntu debian` | apt | systemd | oui |
+| `altlinux` | — | apt (RPM) | systemd | oui |
+| `alpine` | — | apk | OpenRC | non |
+| `almalinux`, `rocky` | `rhel centos fedora` | dnf | systemd | non |
+| `centos` | `rhel fedora` | dnf | systemd | non |
+| `ol`, `amzn` | `fedora` | dnf | systemd | non |
+| `fedora` | — | dnf | systemd | non |
+| `openEuler` | — | dnf | systemd | oui |
+| `opensuse-tumbleweed` | `opensuse suse` | zypper | systemd | non |
+| `arch` | — | pacman | systemd | non |
+| `void` | — | xbps | sysv (runit) | oui |
+| `gentoo` | — | emerge | systemd | oui |
+| `openwrt` | `lede openwrt` | opkg | sysv (procd) | non |
+| `slackware` | — | slackpkg | sysv | non |
+| `plamo`, `nixos`, `busybox` | — | **aucun détecté** | sysv | non |
+| `freebsd` | — | — | — | pas de conteneur Incus |
+
+**Les doctrines nouvelles, mesurées et non traduites.** Chacune a été jouée dans
+une cellule, puis vérifiée par une connexion réelle depuis le poste :
+
+- `apk` — `apk add openssh`, `rc-update add sshd default`, `rc-service sshd
+  start`. Connexion réussie avec la clé du registre ;
+- `dnf` — `dnf install openssh-server` puis `systemctl enable --now sshd`. Et,
+  sur Almalinux 9, **Docker amont fonctionne** : `dnf config-manager --add-repo
+  …/linux/centos/docker-ce.repo` pose `docker-ce 29.8.0-1.el9`, `docker info`
+  rend `overlayfs · cgroup 2 · [apparmor,profile=default seccomp,profile=builtin
+  cgroupns]`, et `nginx:alpine` démarre. La doctrine du §41.2 s'étend donc à la
+  famille RHEL sans aucun contournement ;
+- `zypper` — le paquet s'appelle `openssh`, pas `openssh-server` : le premier
+  essai a rendu 104. `zypper --non-interactive refresh` est requis avant
+  l'installation sur une image fraîche ;
+- `pacman` — `pacman -Sy --noconfirm --needed openssh`. Le premier essai a
+  échoué en *« Could not resolve host »* et le second a réussi sans rien
+  changer : `systemd-resolved` n'avait pas fini de s'établir. **L'amorçage doit
+  attendre que la résolution réponde**, sinon il rend un échec qui n'en est pas
+  un.
+
+**Trois défauts du code EN SERVICE, qu'aucune image Debian ne pouvait révéler.**
+
+1. **La suite d'une dérivée était recopiée au lieu d'être lue.** Kali est
+   `ID_LIKE=debian`, donc `linux/debian` — mais avec la suite `kali-rolling`,
+   qui n'existe pas chez Docker. Le produit répondait `supported: true`, posait
+   le dépôt et échouait à `apt-get update` : *does not have a Release file*. Le
+   §42.9.2 avait corrigé la distribution et laissé la suite. La lecture juste
+   est `UBUNTU_CODENAME` / `DEBIAN_CODENAME`, que Mint publie (`noble`) et que ni
+   Kali ni Devuan ne publient — pour ces deux-là, on refuse le dépôt, et lui
+   seul.
+2. **`curl` n'était installé qu'en passant**, par la ligne du serveur SSH. Sur
+   Kali, dont l'image a `sshd` actif et pas `curl`, cette ligne ne s'exécute
+   jamais et le dépôt part sans `curl` : l'amorçage rend
+   *« Operation Incus en echec (POST …/exec) : Command not found »*, un refus qui
+   ne nomme ni la commande, ni l'élément, ni la cause.
+3. **Le catalogue et le relevé se contredisaient.** `amorcable()` lit le préfixe
+   de l'alias et ne connaît que `debian` et `ubuntu` ; le relevé lit `ID_LIKE`
+   dans la cellule. Le catalogue affichait donc « amorçage non pris en charge »
+   sur Mint, Kali et Devuan, que l'amorçage acceptait. Deux réponses opposées à
+   la même question dans le même produit.
+
+Contrat au §42.11 et §42.11 bis du DAT.

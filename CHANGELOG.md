@@ -3,6 +3,16 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-98 — la campagne du catalogue : les 24 familles du dépôt amont, une par
+  une, sur la Forge réelle.** Chaque famille publiée par
+  `images.linuxcontainers.org` a reçu son entrée au catalogue, son Spark, sa
+  cellule démarrée, sa sonde, puis son retrait avec l'image mise en cache. Les
+  quatre images `apt` du catalogue s'amorcent intégralement en ~35 s — `sshd`,
+  clés, dépôt amont juste, Docker 29.8.0, Compose v5.5.1, et une pile
+  `nginx:alpine` qui démarre sous AppArmor et seccomp actifs. Relevé complet,
+  doctrines mesurées et défauts trouvés : `docs/JOURNAL.md` du 2026-09-08,
+  contrat au `docs/DAT.md` §42.11.
+
 - **La piste d'un GPU dans un Spark est consignée hors backlog**
   (`docs/EXPLORATION_GPU.md`, étudiée le 2026-09-08 à la demande du responsable).
   Le sujet est laissé **exploratoire et non planifié**, sans identifiant attribué,

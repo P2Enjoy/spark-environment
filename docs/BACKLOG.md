@@ -6071,6 +6071,113 @@ prochaine réécriture depuis l'état voulu l'effacera sans prévenir (§43.2).
   d'un Spark — **depuis SPK-64**. Journal du 2026-09-08.
 
 
+### [ ] SPK-98 · Une famille sert ce qu'elle sait servir, et l'écran ne montre que cela
+
+Demandée par le responsable le 2026-09-08, à l'issue de la **campagne du
+catalogue** : ajouter les images du catalogue à la Forge de test, créer un Spark
+de chacune, tenter l'amorçage, et configurer au maximum — variables, SSH, clés,
+identité, terminal, et Docker pour celles qui le supportent. Puis : « pour les
+images dont Docker n'est pas compatible, le Spark ne doit pas afficher le Docker,
+ne doit pas afficher les onglets de Docker — mais on doit quand même configurer
+tout le reste de ce qui est configurable », et « il faut signaler dans le registre
+des images chaque famille avec quoi elle est compatible ou pas ».
+
+- Spécification : `docs/DAT.md` §42.11 (l'amorçage sert par élément), §42.12 (le
+  contrat d'API : `capabilities`), §42.13 (ce que le registre retient), §42.14
+  (le catalogue publie une table, pas un booléen), §42.9.5 révisé ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-24 · `docs/SCHEMA.md` §4 ·
+  `docs/manuel/M6` · `docs/JOURNAL.md` 2026-09-08
+- Dépend de : SPK-76 (la famille de la cellule décide), SPK-54 (l'amorçage),
+  SPK-32 et SPK-92 (le catalogue), SPK-95 (le terminal et ses portes).
+
+**Ce que la campagne a mesuré, et qui fonde l'unité.** Les quatre images `apt`
+du catalogue — `debian/13`, `debian/12`, `ubuntu/24.04`, `ubuntu/26.04` —
+s'amorcent intégralement en ~35 s : `sshd`, clés, dépôt amont juste, Docker
+29.8.0, Compose v5.5.1, panneau, et une pile `nginx:alpine` qui démarre
+réellement sous AppArmor et seccomp actifs. Rien à corriger de ce côté.
+
+L'image `alpine/3.21`, elle, était refusée en bloc — et l'inventaire de sa
+cellule montrait que le produit y avait **déjà** posé `/etc/spark/env`,
+`/run/spark/secrets` et `/root/.ssh/authorized_keys`. Il manquait le `sshd` qui
+aurait ouvert la porte que ces clés venaient de garnir. Trois commandes
+mesurées — `apk add openssh`, `rc-update add sshd default`, `rc-service sshd
+start` — et la connexion depuis le poste réussit avec la clé du registre, sans
+toucher à `PermitRootLogin`. **Le refus global privait la cellule de la seule
+chose qui restait à faire pour qu'elle serve.**
+
+**Ce que l'unité livre :**
+
+1. **Des branches par famille dans l'amorçage**, toutes mesurées sur la Forge
+   (§42.11) : `apt` (Debian, Ubuntu, dérivées), `apk` (Alpine), `dnf` (Fedora,
+   CentOS, RHEL et dérivées), `zypper` (openSUSE), `pacman` (Arch). Chacune
+   déclare son paquet SSH, sa commande d'activation, et si un dépôt Docker amont
+   existe pour elle. `dnf` en a un — **mesuré** : `docker-ce 29.8.0-1.el9`
+   depuis `linux/centos`, `nginx:alpine` qui démarre sous AppArmor et seccomp.
+   `apk`, `zypper` et `pacman` n'en ont pas. Une famille inconnue reste refusée
+   en `409` : on ne devine pas un gestionnaire de paquets.
+1 bis. **Trois défauts du code en service, corrigés dans la même unité**
+   (§42.11 bis) : la suite d'une dérivée se lit dans `DEBIAN_CODENAME` /
+   `UBUNTU_CODENAME` au lieu d'être recopiée de `VERSION_CODENAME` — Kali posait
+   `linux/debian kali-rolling`, qui n'a pas de `Release` ; l'élément « dépôt »
+   installe `curl` lui-même au lieu de l'hériter de l'élément « serveur SSH » —
+   sur Kali, l'amorçage rendait « Command not found » ; et le catalogue cesse de
+   contredire le relevé en annonçant depuis la même table des familles.
+1 ter. **L'amorçage attend la résolution de noms.** Mesuré sur Arch : la même
+   commande échoue puis réussit selon que `systemd-resolved` a fini de
+   s'établir. Un amorçage lancé juste après `start` ne doit pas rendre un échec
+   qui n'en est pas un.
+2. **Un relevé qui ne suppose pas systemd.** `systemctl is-active ssh` n'existe
+   pas sur Alpine. Le relevé interroge les deux gestionnaires de services, reste
+   **une** commande, et n'écrit toujours rien.
+3. **`items` borné à la famille.** Une Alpine ne rend pas `depot: absent` : elle
+   ne rend pas de ligne `depot` du tout. Décrire un manque qu'aucun geste ne
+   comblera est le contraire du §14.5.
+4. **`complete` et son verdict, par famille.** Une Alpine joignable est complète.
+   La phrase « capable de faire tourner une pile Compose » ne s'écrit que là où
+   c'est vrai.
+5. **Le catalogue publie `family` et `capabilities`** — `ssh`, `identity`, `env`,
+   `terminal`, `docker`, `compose` — calculées à la lecture, jamais stockées.
+   `bootstrappable` survit et signifie « une doctrine existe ».
+6. **`spark.docker_enabled` cesse d'être une colonne morte** : posée à la
+   création depuis la famille de l'image, elle est la trace au registre de ce que
+   la cellule ne pourra pas avoir. Aucune route ne l'expose en écriture.
+7. **L'écran retire Docker en entier** quand la capacité manque : l'onglet n'est
+   pas construit, son adresse retombe sur la facette par défaut, les lignes
+   Docker du relevé disparaissent, l'option rootless avec elles. Le reste —
+   routes, clés, instantanés, mesures, environnement, terminal, journal — reste
+   entier (SPK-DS-24).
+
+**Ce que l'unité ne doit PAS casser** : les quatre familles `apt` gardent
+exactement le comportement que la campagne vient de valider, Docker compris ;
+`supported: false` reste un `409` pour une famille inconnue ; le terminal de
+**dépannage** par `incus exec` (§37.3) reste ouvert partout, y compris là où
+`ssh` ne l'est pas — c'est ce qui permet d'entrer dans une cellule qu'on n'a pas
+su équiper ; et le catalogue ne devient pas un filtre (§42.9.6) : une entrée
+reste choisissable quelles que soient ses capacités.
+
+**Le balayage est fait, et il fonde l'unité.** Les 24 familles publiées par le
+dépôt amont ont chacune eu son Spark sur la Forge de test le 2026-09-08 : import
+au catalogue, cellule, sonde, retrait. Le relevé complet est au journal. Sept
+familles restent sans doctrine et le document dit laquelle et pourquoi ;
+`freebsd` est hors du `runtime: container` du produit, Incus ne la publiant qu'en
+machine virtuelle.
+
+**DoD** : sur la Forge réelle, un Spark de **chaque** famille servie est créé
+depuis le parcours canonique, amorcé, et ses fonctions de base éprouvées une par
+une — amorçage, terminal, identité, variables, clés, secrets, briefing —, Docker
+compris là où la famille le porte ; un Spark Alpine est **joignable en SSH**
+depuis le poste avec la clé du registre, et sa fenêtre ne montre nulle part
+Docker ; l'adresse `#/sparks/<nom>/docker` d'un tel Spark retombe sur la facette
+par défaut ; le catalogue affiche la table des capacités par entrée ; tests
+unitaires, tests d'API et test E2E propres à l'unité ; captures observées aux
+principaux formats ; DAT, design system, manuel M6, runbook, `SCHEMA.md` et
+changelog mis à jour ; `@spec` / `@verifies` posés.
+
+**Correction due au passage, trouvée par la campagne** : le runbook §C.2 affirme
+que `images:debian/13` n'embarque pas de `sshd`. Les images d'aujourd'hui en ont
+un, et le relevé le montre « active, inchangé ». La mention est corrigée.
+
+
 ---
 
 ## Réservé, non planifié

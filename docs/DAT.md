@@ -8027,15 +8027,14 @@ d'être.
 Le volume `/var/lib/docker` n'est **pas** touché par cette purge : les images et
 les volumes du locataire survivent, seul le démon redémarre.
 
-#### 42.9.5 Ce qui n'est pas servi est REFUSÉ, et le refus se lit
+#### 42.9.5 Une famille INCONNUE est refusée, et le refus se lit
 
-Une cellule dont la famille n'est pas `apt` — Alpine, et tout ce qui viendra —
-n'est pas une panne. C'est un refus, et il se rend comme les autres refus du
-§42.7 :
+Une cellule dont la famille n'est **connue d'aucune doctrine** n'est pas une
+panne. C'est un refus, et il se rend comme les autres refus du §42.7 :
 
 | Situation | Code | `error` |
 |---|---|---|
-| famille non servie par l'amorçage | `409` | `bootstrap_unsupported_os` |
+| famille inconnue de l'amorçage | `409` | `bootstrap_unsupported_os` |
 
 Le message **nomme la distribution relevée** et dit ce que l'amorçage sert. Le
 relevé (`GET`) ne lève pas pour autant : il rend ce qu'il a vu, avec
@@ -8043,11 +8042,13 @@ relevé (`GET`) ne lève pas pour autant : il rend ce qu'il a vu, avec
 quand agir ne l'est pas. C'est la règle du §42.7 — on peut regarder sans agir —
 et elle vaut a fortiori ici.
 
-**Ce refus n'est pas une limite qu'on lèvera par principe.** La doctrine du
-§41.2 — Docker vient du dépôt amont — n'a pas d'équivalent Alpine : Docker n'y
-publie aucun dépôt, et le paquet vient de la distribution elle-même. Servir
-Alpine demanderait une seconde doctrine, mesurée, pas une traduction de
-commandes.
+**Ce paragraphe disait autre chose jusqu'au 2026-09-08, et la campagne du
+catalogue l'a infirmé.** Il refusait toute famille qui n'est pas `apt`, Alpine
+comprise, au motif que Docker n'y publie aucun dépôt amont. Le motif est juste et
+il tient — mais il ne parle que de Docker. Refuser sur lui l'ouverture d'un
+`sshd` revenait à poser les clés d'une porte qu'on renonçait à construire, ce que
+la mesure a constaté sur une cellule réelle. Ce qu'une famille reçoit est
+désormais décidé élément par élément : c'est le §42.11.
 
 #### 42.9.6 Le catalogue dit ce que l'amorçage sait servir
 
@@ -8059,6 +8060,11 @@ n'est **pas** un filtre : l'entrée reste choisissable — le produit sert des
 cellules, pas seulement des cellules amorçables, et un locataire qui sait ce
 qu'il fait peut vouloir une Alpine. Mais l'écran de création le **dit avant**,
 au lieu de le laisser découvrir à l'amorçage.
+
+**Ce que ce paragraphe annonçait était un booléen, et c'était trop peu.**
+Depuis le §42.11, une famille ne se résume plus à « amorçable » ou non : elle
+reçoit certains éléments et pas d'autres. Le catalogue publie donc la **table
+des capacités** de l'entrée, et non un oui-ou-non — c'est le §42.14.
 
 #### 42.9.7 Ce que l'échec d'une pose doit dire
 
@@ -8408,6 +8414,256 @@ que ne pas savoir n'autorise pas à écrire un état qu'on n'a pas observé (§1
 
 C'est le §14.3 appliqué à chaud : la même règle que la réconciliation au
 démarrage, confronter le registre à la réalité plutôt que de deviner.
+
+## 42 bis. Ce qu'une famille sait recevoir (SPK-98)
+
+### 42.11 L'amorçage sert par ÉLÉMENT, pas par tout ou rien
+
+Établi par la campagne du catalogue du 2026-09-08, sur la Forge de test, les cinq
+images une par une (`docs/JOURNAL.md`).
+
+Jusque-là, l'amorçage posait une seule question — « est-ce que je sers cette
+famille ? » — et répondait par oui ou par non. La mesure a montré que cette
+question en cachait deux, et qu'elles n'ont pas la même réponse.
+
+Sur une cellule Alpine, le produit avait **déjà** posé `/etc/spark/env`,
+`/run/spark/secrets` et `/root/.ssh/authorized_keys` : ces trois fichiers passent
+par `incus file push`, qui ne dépend d'aucune distribution. Ce qui manquait était
+le `sshd` qui aurait ouvert la porte que ces clés venaient de garnir. Le refus
+global privait donc la cellule de la seule chose qui restait à faire pour qu'elle
+serve.
+
+**La table des familles, entièrement MESURÉE sur la Forge de test le
+2026-09-08** — les 24 familles publiées par le dépôt amont ont chacune eu sa
+cellule. Ce que l'amorçage pose dépend de la famille relevée dans
+`/etc/os-release`, élément par élément :
+
+| Famille | `os_id` relevés | paquet SSH | activation | Docker amont |
+|---|---|---|---|---|
+| `apt` | `debian`, `ubuntu`, et ce qu'`ID_LIKE` y rattache | `openssh-server ca-certificates curl` | `systemctl enable --now ssh` | `linux/debian` ou `linux/ubuntu`, **suite publiée** (§42.9.2 bis) |
+| `apk` | `alpine` | `openssh` | `rc-update add sshd default` puis `rc-service sshd start` | **aucun** |
+| `dnf` | `fedora`, `centos`, `rhel` et ce qu'`ID_LIKE` y rattache — `almalinux`, `rocky`, `ol`, `amzn`, `openEuler` | `openssh-server` | `systemctl enable --now sshd` | `linux/centos` (dérivées RHEL) ou `linux/fedora` |
+| `zypper` | `opensuse*` | `openssh` — et non `openssh-server`, qui n'existe pas | `systemctl enable --now sshd` | **aucun** |
+| `pacman` | `arch` | `openssh` | `systemctl enable --now sshd` | **aucun** |
+| inconnue | tout le reste | — | — | — |
+
+Chaque ligne a été jouée dans une cellule réelle et vérifiée sur son résultat,
+pas sur son code de retour : `sshd` actif, puis connexion depuis le poste par
+rebond avec la clé du registre. Le détail est au journal du 2026-09-08.
+
+**Ce que le balayage a écarté, et pourquoi.** Sept familles publiées n'ont pas
+de doctrine, et c'est un constat, pas un oubli :
+
+| Famille | Ce que la cellule a montré |
+|---|---|
+| `busybox` | aucun `/etc/os-release`, aucun gestionnaire de paquets |
+| `plamo` | aucun gestionnaire de paquets détectable |
+| `nixos` | ni `nix-env` ni `ssh-keygen` dans le `PATH` d'une cellule fraîche |
+| `slackware` | `slackpkg` sans dépôt configuré à la sortie de l'image |
+| `openwrt` | `opkg`, sans `sshd` — la distribution emploie `dropbear` |
+| `voidlinux`, `gentoo`, `altlinux` | `sshd` **déjà présent** ; c'est l'activation qui diffère, et elle n'a pas été mesurée |
+| `freebsd` | Incus ne la publie **pas** en conteneur : « one was found for instance type virtual-machine ». Hors du `runtime: container` du produit |
+
+Les trois familles qui portent déjà `sshd` — Void, Gentoo, Alt — sont les
+candidates les plus proches pour la suite : il n'y manque qu'une commande
+d'activation mesurée. Elles restent `inconnue` tant que cette mesure n'est pas
+faite, parce qu'annoncer une capacité qu'on n'a pas éprouvée est exactement ce
+que ce document interdit ailleurs.
+
+**Une famille inconnue reste refusée en `409`** (§42.9.5) : on ne devine pas un
+gestionnaire de paquets, et se tromper n'installerait au mieux rien.
+
+**Le réseau de la cellule n'est pas prêt à l'instant du démarrage.** Mesuré sur
+Arch : un `pacman -Sy` lancé aussitôt après `start` échoue en
+*« Could not resolve host »*, et la même commande réussit quelques secondes plus
+tard — `systemd-resolved` n'avait pas fini de s'établir. L'amorçage attend donc
+que la résolution réponde avant de poser quoi que ce soit, plutôt que de rendre
+un échec qui n'en est pas un.
+
+**OpenRC n'est pas systemd, et le relevé ne doit pas le supposer.** `systemctl
+is-active ssh` n'existe pas sur Alpine. Le relevé du §42.6 interroge donc les
+deux gestionnaires de services et retient la première réponse utile ; il reste
+**une** commande, exécutée **une** fois, et il n'écrit toujours rien.
+
+### 42.11 bis Deux défauts du code en service, trouvés par la campagne
+
+Ni l'un ni l'autre n'est une conséquence du dessin ci-dessus : ils étaient là,
+et seule une campagne qui sort de Debian et d'Ubuntu pouvait les rencontrer.
+
+#### 42.9.2 bis La suite d'une dérivée se LIT, elle ne se recopie pas
+
+`cible_apt` rattachait une dérivée à son parent par `ID_LIKE`, puis reprenait
+`VERSION_CODENAME` **tel quel** comme suite. Or ce champ nomme la version de la
+DÉRIVÉE, pas celle du parent. Mesuré sur la Forge :
+
+```
+kali    ID_LIKE=debian  VERSION_CODENAME=kali-rolling
+        → deb https://download.docker.com/linux/debian kali-rolling stable
+        → E: The repository … does not have a Release file.
+```
+
+Le produit répondait pourtant `supported: true`, installait le dépôt, et
+échouait à `apt-get update`. C'est **exactement** le défaut que le §42.9.2 disait
+corriger — « un dépôt joignable n'est pas un dépôt juste » —, resté entier un
+cran plus bas : on avait vérifié la distribution, jamais la suite.
+
+**La suite du parent se lit dans le champ que la dérivée publie pour cela.**
+`/etc/os-release` porte `DEBIAN_CODENAME` ou `UBUNTU_CODENAME` quand la dérivée
+sait à quelle version amont elle correspond. Mesuré :
+
+| Cellule | `VERSION_CODENAME` | champ amont | suite retenue |
+|---|---|---|---|
+| Linux Mint 22 | `wilma` | `UBUNTU_CODENAME=noble` | `noble` |
+| Kali 2026.3 | `kali-rolling` | **aucun** | refus |
+| Devuan 5 | `daedalus` | **aucun** | refus |
+
+Sans ce champ, **on refuse le dépôt Docker** — et on ne refuse que lui. La
+cellule reçoit quand même `sshd`, ses clés, son environnement et son briefing :
+c'est le §42.11 appliqué à une distribution qui a un gestionnaire de paquets
+connu et pas de dépôt amont. Kali et Devuan sont donc des cellules `apt`
+**sans** Docker, exactement comme Alpine.
+
+`VERSION_CODENAME` reste la suite quand `ID` est lui-même servi — une Debian est
+sa propre référence, et lui chercher un parent serait absurde.
+
+#### 42.9.2 ter `curl` appartient au dépôt, pas au serveur SSH
+
+Le script du dépôt commence par `curl -fsSL …/gpg`. `curl` n'était installé
+qu'en **passant**, par la ligne du serveur SSH — `apt-get install openssh-server
+ca-certificates curl`. Sur une image qui porte déjà un `sshd` actif, cette ligne
+ne s'exécute jamais, et le dépôt s'exécute sans `curl`.
+
+Mesuré sur Kali, dont l'image a `sshd` et n'a pas `curl` : l'amorçage a rendu
+
+```
+Operation Incus en echec (POST /1.0/instances/fam-kali/exec) : Command not found
+```
+
+Un refus qui ne nomme ni la commande manquante, ni l'élément en cours, ni la
+cellule concernée — et qui ressemble à une panne du plan de contrôle alors que
+c'est un paquet absent.
+
+**Chaque élément installe ce dont il a besoin.** Le dépôt pose `ca-certificates`
+et `curl` lui-même. Une dépendance obtenue par effet de bord d'un autre élément
+n'est pas une dépendance satisfaite : c'est une dépendance qu'on a eu de la
+chance de trouver.
+
+#### 33.3 bis Le catalogue et le relevé se contredisaient
+
+`images.amorcable()` lit le **préfixe de l'alias** — `devuan/daedalus` →
+`devuan` — et le compare à `("debian", "ubuntu")`. Le relevé, lui, lit `ID_LIKE`
+dans la cellule et conclut `family: apt`. Le catalogue affichait donc « amorçage
+non pris en charge » sur `images:mint/wilma`, `images:kali/current` et
+`images:devuan/daedalus`, cependant que l'amorçage les acceptait.
+
+Deux réponses opposées à la même question, dans le même produit. Le catalogue
+annonce désormais sur la **table des familles** du §42.11 — la même que
+l'amorçage consulte —, et la présomption tirée du nom reste une présomption
+(§33.3) : elle porte sur les alias connus du dépôt, et se tait sur le reste.
+
+### 42.12 Le contrat d'API : `docker` devient une capacité, pas un élément supposé
+
+Le relevé et l'amorçage portent tous deux un bloc `capabilities`, calculé depuis
+la famille relevée :
+
+```json
+{"os": {"id": "alpine", "family": "apk"},
+ "supported": true,
+ "capabilities": {"docker": false, "ssh": true},
+ "items": [{"key": "sshd", ...}, {"key": "cles", ...}]}
+```
+
+Trois règles, et elles se tiennent :
+
+- `supported` cesse de signifier « famille `apt` » pour signifier **« une
+  doctrine existe pour cette famille »**. Une Alpine est désormais `supported:
+  true` — l'amorçage sait quoi en faire ;
+- `items` ne contient **que** les éléments que la famille reçoit. Rendre
+  `depot: absent` sur une Alpine décrirait un manque qu'aucun geste ne comblera,
+  et le §14.5 veut qu'une absence soit nommée pour ce qu'elle est. Un élément
+  qui n'existe pas pour cette famille **ne figure pas dans la liste** ;
+- `complete` porte sur les éléments de **cette** famille. Une Alpine dont le
+  `sshd` tourne et dont les clés sont conformes est complète : elle est
+  joignable, ce qui est tout ce que le produit lui promet.
+
+Le corollaire vaut d'être écrit, parce qu'il est le piège de ce dessin : le
+verdict de complétude ne doit plus dire « capable de faire tourner une pile
+Compose » quand la famille n'a pas de Docker. Il dirait le contraire de ce que la
+cellule peut.
+
+### 42.13 Le registre retient ce que la cellule NE PEUT PAS avoir
+
+`spark.docker_enabled` existait au schéma depuis le §17.3 et valait `1` pour
+tout le monde : aucun chemin ne l'écrivait jamais autrement. Il devient la trace
+au registre de la capacité du §42.12, posée **à la création** depuis la famille
+de l'image choisie (§33) :
+
+- une image que le catalogue dit non amorçable pour Docker crée un Spark à
+  `docker_enabled = 0` ;
+- c'est la **création** qui décide, pas l'amorçage : l'écran doit savoir quoi
+  montrer avant qu'aucun relevé n'ait eu lieu, et une cellule qu'on n'a pas
+  encore démarrée n'a rien à dire d'elle-même ;
+- le relevé, lui, reste la vérité (§42.9). Quand il contredit le registre — une
+  image Debian dont la cellule se déclare Alpine —, c'est le relevé qui gagne à
+  l'écran, et le registre est corrigé à l'observation.
+
+Ce n'est pas une préférence de l'exploitant : c'est un **fait** sur la cellule.
+Le champ n'est donc pas modifiable à la main, et aucune route ne l'expose en
+écriture. Le rendre réglable inviterait à cocher « Docker » sur une Alpine, ce
+qui ne produirait rien d'autre qu'une promesse fausse.
+
+### 42.14 Le catalogue publie une TABLE de capacités, pas un booléen
+
+Demandé par le responsable le 2026-09-08 : « il faut signaler dans le registre
+des images chaque famille avec quoi elle est compatible ou pas ».
+
+`bootstrappable: true|false` répondait à une question — « l'amorçage sait-il
+faire quelque chose de cette image ? » — dont la réponse ne dit plus rien
+d'utile depuis que la réponse est « oui, mais pas tout ». Chaque entrée du
+catalogue porte donc, calculé depuis la famille de son alias :
+
+```json
+{"reference": "images:alpine/3.21",
+ "family": "apk",
+ "bootstrappable": true,
+ "capabilities": {"ssh": true, "identity": true, "env": true,
+                  "terminal": true, "docker": false, "compose": false}}
+```
+
+- `family` est la famille **présumée**, déduite du nom de l'alias. C'est tout ce
+  qu'on a avant qu'une cellule existe, et le §33.3 s'applique : une présomption
+  n'est pas un relevé. La vérité reste ce que la cellule déclare (§42.9) ;
+- `capabilities` est calculée à la **lecture**, jamais stockée en colonne. Une
+  doctrine qui s'ajoute — Docker sur Alpine, le jour où il sera mesuré — doit
+  changer la réponse de toutes les entrées existantes sans migration, et une
+  copie figée au registre serait fausse dès le lendemain ;
+- `bootstrappable` **survit** et change de sens : il vaut désormais « une
+  doctrine existe pour cette famille », c'est-à-dire `family` connue. C'est ce
+  que l'écran de création annonce ;
+- une famille inconnue rend `family: null` et **toutes** les capacités à `false`.
+  Ne pas savoir n'est pas savoir que ce n'est pas là (§33.3), mais annoncer une
+  capacité qu'on n'a aucun moyen de servir serait pire qu'un silence.
+
+**Les capacités ne sont pas des cases à cocher.** Elles décrivent ce que le
+produit sait faire d'une famille, pas ce que l'exploitant souhaite. Aucune route
+ne les écrit ; l'écran de création les montre, il ne les propose pas.
+
+**Ce que chaque capacité recouvre**, et pourquoi elles ne se déduisent pas les
+unes des autres :
+
+| Capacité | Ce qu'elle permet | Ce dont elle dépend |
+|---|---|---|
+| `env` | variables et secrets posés dans la cellule | `incus file push` — aucune distribution |
+| `ssh` | la cellule est **joignable** : `sshd` posé et démarré | un gestionnaire de paquets connu |
+| `identity` | la clé que le Spark PRÉSENTE (§17.5) | `ssh-keygen`, qui vient avec `ssh` |
+| `terminal` | le terminal intégré par le chemin normal (§37.2) | `ssh` |
+| `docker` | moteur et dépôt amont (§41.2) | un dépôt amont publié par Docker |
+| `compose` | le greffon Compose | `docker` |
+
+`env` vaut `true` **partout**, y compris sur une famille inconnue : c'est le fait
+que la campagne a établi, et il est la raison d'être de cette table. Le terminal
+de **dépannage** par `incus exec` (§37.3) ne figure pas ici — il ne dépend
+d'aucune capacité, et c'est précisément ce qui en fait un chemin de dépannage.
 
 ## 43. L'environnement d'un Spark : variables et secrets
 

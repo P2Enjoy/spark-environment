@@ -915,6 +915,46 @@ offre qu'une.
   amorcé en mode enraciné » n'est pas la même chose que « son mode n'a jamais été
   relevé », et les deux se disent au lieu de laisser un sélecteur muet.
 
+### SPK-DS-24 · Une destination qui ne mène nulle part ne se rend pas
+
+@spec docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11, §42.12, §42.13
+
+Un Spark dont la famille n'a pas de Docker — une Alpine aujourd'hui — n'affiche
+**rien** de Docker. Pas un onglet grisé, pas une facette vide qui expliquerait
+son propre vide : rien.
+
+**Le SPK-DS-21 traite le cas d'un contrôle sans objet ; celui-ci traite le cas
+d'une destination entière.** La différence justifie une règle à part. Un bouton
+grisé se voit et s'oublie. Un onglet est une **adresse** : il se recharge, il se
+met en favori, il se partage, et il promet un sujet. Le laisser en place sur un
+Spark qui n'aura jamais de Docker fait promettre au produit ce qu'il vient de
+refuser d'installer.
+
+**Règles :**
+
+- l'onglet *Docker* est **absent** de la barre de facettes quand le Spark n'a pas
+  la capacité. Il n'est ni désactivé, ni rendu puis masqué en CSS : il n'est pas
+  construit ;
+- son **adresse** ne mène nulle part non plus. Ouvrir `#/sparks/x/docker` sur un
+  tel Spark rend la facette par défaut, comme une facette inconnue — sans quoi un
+  favori pris sur un autre Spark ouvrirait un écran que la barre ne propose plus.
+  Le §6.13 s'applique : l'écran ne prétend pas savoir ce qui n'existe pas ;
+- le relevé d'amorçage n'affiche **aucune ligne** Docker — ni dépôt, ni moteur,
+  ni Compose. Elles diraient « absent » d'une chose qu'aucun geste ne posera, et
+  le §14.5 veut qu'une absence soit nommée une fois, pour ce qu'elle est ;
+- l'option **rootless** disparaît avec elle. C'est un mode d'installation de
+  Docker : l'offrir sans Docker est une case qui ne peut rien changer ;
+- ce qui reste est **entier**. Routes, clés, instantanés, mesures, environnement,
+  terminal, journal : rien de ce qui ne dépend pas de Docker ne se retire. Le
+  produit sert des cellules, et une cellule sans Docker reste une cellule ;
+- la raison se **dit une fois**, dans le panneau d'amorçage, et pas à chaque
+  endroit où Docker aurait pu se trouver. « Cette image n'est pas servie par le
+  dépôt Docker amont » est une information ; la répéter sur cinq écrans est du
+  bruit ;
+- le verdict de complétude change de phrase avec la capacité. « Joignable en SSH
+  et capable de faire tourner une pile Compose » est **faux** sur une cellule
+  sans Docker ; elle est complète pour ce qu'elle est, et la phrase le dit.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19
