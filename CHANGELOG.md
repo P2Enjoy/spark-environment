@@ -3,6 +3,28 @@
 ## [Non publié]
 
 ### Ajouté
+- **La piste d'un GPU dans un Spark est consignée hors backlog**
+  (`docs/EXPLORATION_GPU.md`, étudiée le 2026-09-08 à la demande du responsable).
+  Le sujet est laissé **exploratoire et non planifié**, sans identifiant attribué,
+  et le document sépare explicitement ce qui est vérifié — les cinq `gputype`
+  d'Incus, l'absence de champ MIG dans son API de ressources, la forme du relevé
+  `nvidia-smi` faite sur le poste — de ce qui ne l'est pas : **la Forge n'a aucun
+  relevé PCI**, et l'empilement des injections NVIDIA n'a pas été essayé. Il
+  garde le point dur, qui n'est pas technique : un GPU **ne se contingente pas**.
+  Un device `physical` n'est pas exclusif pour un conteneur, la mémoire vidéo n'a
+  aucun cgroup, un pool d'une carte est une affectation et non un pool, et le
+  nœud de périphérique élargit la surface de noyau partagée du §11 — d'où la
+  décision consignée : si le sujet revenait, une carte appartiendrait à un seul
+  Spark et s'écrirait comme une **affectation**, jamais comme un quota, sous
+  peine de rendre faux le mot « contingenté » du README. MIG, seule vraie
+  partition, est hors d'atteinte sur le châssis du §8.1 et n'est de toute façon
+  **pas observable par l'API Incus** : le servir demanderait une sonde exécutée
+  sur la Forge, donc un second chemin d'accès que le §5.1 n'ouvre pas. Le
+  document ne figure ni au DAT, ni au SCHEMA, ni au backlog, et aucun code n'y
+  renvoie. Il conserve aussi une piste qui ne dépend pas du GPU : `inventory.py`
+  jette en silence tout ce qu'il ne modélise pas, et ce que la Forge porte sans
+  que le produit le gère mériterait d'être **nommé**, comme le §27.8 l'a déjà
+  tranché pour une topologie non relevée.
 - **Coller un `.env` : importer variables et secrets en un geste** (SPK-97,
   `docs/DAT.md` §43.10, `DESIGN_SYSTEM_APP.md` SPK-DS-23, manuel M8) : l'écran ne
   savait poser qu'**une entrée à la fois**, quand le `.env` d'une pile de
