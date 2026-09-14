@@ -7745,56 +7745,79 @@ locataire, ne pose pas ses variables, ne gère pas ses versions. Il rend la
 cellule **joignable et capable de faire tourner une pile Compose**, et s'arrête
 là — la frontière du §2 ne bouge pas.
 
-#### 42.4.1 La frontière se déplace d'un fichier, et voici lequel — SPK-96
+#### 42.4.1 Pourquoi le démon rootless ne sortait pas — SPK-96
 
-**Arbitrage du responsable, 2026-09-14.** Le §42.4 dit que l'amorçage rend la
-cellule « capable de faire tourner une pile Compose ». En mode **rootless**,
-cette phrase était fausse au sens du §41.2 — présent et inutilisable — et le
-compte rendu la prononçait quand même.
+**Cette section a été écrite le 2026-09-14 sur une supposition, puis RÉÉCRITE le
+même jour sur une mesure qui la contredit.** Elle garde la trace des deux, parce
+que le symptôme est trompeur et qu'il sera relu.
 
-**La cause, mesurée le 2026-09-07 et reconfirmée le 2026-09-14.** RootlessKit
-recopie le `/etc/resolv.conf` de la cellule dans son propre espace réseau. Ce
-fichier est un lien vers le `stub-resolv.conf` de `systemd-resolved` et porte
-`nameserver 127.0.0.53` — une boucle locale qui, **dans cet espace-là, n'existe
-pas** : le stub n'y écoute pas. Le démon rootless n'a donc aucun résolveur, et
-n'en a jamais eu. Aucune image ne peut être tirée d'un registre public.
+**Le symptôme.** Sur une cellule amorcée en rootless, aucune image ne peut être
+tirée d'un registre public :
 
-La résolution fonctionne partout ailleurs dans la cellule — depuis root, depuis
-le compte `spark-docker` — et l'amorçage lui-même n'a jamais eu besoin de
-résoudre depuis le démon : il installe `docker-ce` par le gestionnaire de
-paquets, qui passe, lui, par le résolveur de la cellule. Le mode **enraciné**
-n'est pas touché : son démon partage l'espace réseau de la cellule.
+    failed to resolve reference "docker.io/library/alpine:3.21" :
+    dial tcp: lookup registry-1.docker.io: no such host
 
-**Le remède retenu, et les deux écartés.** L'amorçage écrit un
-`/etc/resolv.conf` **statique** visant `10.77.0.1`, la passerelle du bridge
-`sparkbr0` du §10.
+**La supposition, tenue pour cause du 2026-09-07 au 2026-09-14.** Le
+`/etc/resolv.conf` de la cellule est un lien vers le stub de `systemd-resolved`
+et porte `127.0.0.53` ; RootlessKit le recopie dans l'espace du démon, où cette
+boucle locale n'existerait pas. Le remède annoncé était d'écrire un `resolv.conf`
+statique visant la passerelle du bridge.
 
-- **Ce n'est pas de la gestion de configuration** au sens du §42.4 : c'est
-  employer le réseau que le produit provisionne lui-même. `resolvectl` montre que
-  `systemd-resolved` interroge **déjà** cette adresse en amont. Ce que la cellule
-  résout ne change donc pas de destination — seulement de chemin, en cessant de
-  passer par un stub que le démon ne peut pas atteindre.
-- **Désactiver le stub** (`DNSStubListener=no`) est écarté : cela modifie la
-  configuration d'un service de la cellule, ce qui est plus intrusif que d'écrire
-  un fichier que la distribution invite explicitement à remplacer.
-- **N'agir que dans l'espace du démon** est écarté aussi, et c'est le plus
-  regrettable : c'était le plus fidèle au §42.4, mais le remède ne survit pas
-  nécessairement au redémarrage du service. Un remède qui se défait tout seul est
-  pire qu'un remède absent, parce qu'il fait croire que la chose est réglée.
+**Ce que la mesure a montré, et pourquoi la supposition était fausse.** Le
+remède a été écrit, déployé, et **n'a rien corrigé** : le démon échouait de la
+même façon. Trois mesures ont suivi, chacune écartant une explication :
 
-**Ce que le déplacement coûte, et il faut le nommer.** L'amorçage écrivait déjà
-dans la cellule — `authorized_keys`, `/etc/spark/env`, le briefing — mais jamais
-un fichier qui décide du comportement de TOUTE la cellule. C'est une frontière
-qui bouge, d'un fichier exactement, et pour une raison mesurée. Si le locataire
-réécrit ce fichier, l'amorçage le repose au prochain passage : c'est le §42.1,
-et cela se voit dans le compte rendu.
+1. avec un résolveur public (`1.1.1.1`) à la place de la passerelle : **même
+   échec**. Ce n'est donc pas l'adresse du résolveur ;
+2. `nsswitch.conf` porte `mymachines`, que `systemd-container` ajoute — et
+   `systemd-container`, c'est **notre propre amorçage** qui l'installe (§42.2
+   bis). En le retirant, le message change et dit enfin la vérité :
+   `dial udp 10.77.0.1:53: socket: permission denied`. `mymachines` **masquait
+   la cause** derrière un « no such host » qui envoyait chercher le DNS ;
+3. en TCP (`options use-vc`) : **`socket: permission denied` de nouveau**. Le
+   démon ne peut créer AUCUN socket réseau. Ce n'est pas un défaut de résolution.
 
-**Ce que cela ne doit pas casser**, et qui est vérifié :
+**La cause, lue dans le journal du noyau.**
 
-- le mode **enraciné**, qui n'a pas ce défaut et ne reçoit donc rien ;
-- la résolution ordinaire de la cellule, dont dépend le gestionnaire de paquets ;
-- le §42.1 — un amorçage rejoué ne redémarre pas le démon pour poser un fichier
-  déjà correct.
+    apparmor="DENIED" operation="create" class="net" info="failed af match"
+    profile="rootlesskit" comm="dockerd" family="inet" sock_type="dgram"
+    requested="create" denied="create"
+
+Le profil AppArmor **`rootlesskit`**, livré par la distribution et chargé dans la
+cellule, interdit au démon de créer le moindre socket `inet`. Le profil se
+présente pourtant comme permissif — *« This profile allows everything and only
+exists to give the application a name instead of having the label unconfined »* —
+et porte `flags=(unconfined)`. Dans l'espace AppArmor imbriqué d'une cellule
+Incus, sur un noyau où `kernel.apparmor_restrict_unprivileged_userns = 1`, il ne
+l'est pas : la classe `net` y est évaluée, et aucune règle `network` ne la
+satisfait.
+
+**Le remède, mesuré.** Une ligne, dans le fichier d'extension que le profil
+lui-même prévoit :
+
+    /etc/apparmor.d/local/rootlesskit :
+        network,
+
+puis `apparmor_parser -r /etc/apparmor.d/rootlesskit` et un redémarrage du démon.
+Éprouvé sur la Forge de test : `docker pull alpine:3.21` **aboutit**.
+
+**Et le `resolv.conf` d'origine suffit.** Une fois le profil ouvert, la cellule a
+été remise EXACTEMENT dans l'état que la distribution livre — lien vers
+`stub-resolv.conf`, `mymachines` en place — et l'image se tire quand même. Le
+`127.0.0.53` n'a jamais été le problème : le démon tourne dans l'espace réseau et
+de montage de la cellule, où le stub écoute parfaitement.
+
+**Ce que l'amorçage n'écrit donc PAS.** Ni le `resolv.conf` de la cellule, ni son
+`nsswitch.conf`. Le §42.4 tient : agir sur l'un ou l'autre aurait modifié le
+comportement de toute la cellule **sans corriger quoi que ce soit**. Une preuve
+garde ce constat, pour qu'il ne soit pas réécrit de bonne foi la prochaine fois
+que quelqu'un relira le symptôme.
+
+**Ce qui reste à trancher, et c'est une frontière.** Ouvrir le profil AppArmor
+d'une cellule est plus intrusif qu'écrire un fichier de configuration : c'est
+toucher à ce qui la confine. Le §42.4 ne le permet pas de lui-même, et l'arbitrage
+rendu le 2026-09-14 portait sur un diagnostic qui s'est révélé faux. La décision
+est donc à reprendre.
 
 ### 42.5 Ce qui manquait au pilote : exécuter et LIRE
 

@@ -149,25 +149,17 @@ if [ "$mode" = rootless ]; then
   [ -n "$rootless_uid" ] || rootless_uid=absent
   [ -n "$rootless_gid" ] || rootless_gid=absent
 fi
-# SPK-96 · §42.4.1 : le résolveur que la cellule emploie, et la passerelle par
-# laquelle elle sort. Les deux, parce que c'est leur ÉCART qui décide : un démon
-# rootless recopie le premier dans son espace réseau, où une boucle locale
-# n'existe pas. On ne conclut rien ici — on rapporte.
-resolveur=$(sed -n 's/^nameserver[[:space:]]*//p' /etc/resolv.conf 2>/dev/null | head -1)
-[ -n "$resolveur" ] || resolveur=absent
-passerelle=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
-[ -n "$passerelle" ] || passerelle=absent
 motd_distro=absent
 if [ -d /etc/update-motd.d ]; then
   for script in /etc/update-motd.d/*; do
     if [ -f "$script" ] && [ -x "$script" ]; then motd_distro=present; break; fi
   done
 fi
-printf 'os_id=%s\nos_suite=%s\nos_suite_amont=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ncles_rootless=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\nresolveur=%s\npasserelle=%s\n' \
+printf 'os_id=%s\nos_suite=%s\nos_suite_amont=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ncles_rootless=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\n' \
   "$os_id" "$os_suite" "$os_suite_amont" "$os_like" "$arch" \
   "$sshd" "$openssh_version" "$cles" "$cles_rootless" "$depot_distro" "$depot_suite" \
   "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode" \
-  "$rootless_uid" "$rootless_gid" "$motd_distro" "$resolveur" "$passerelle"
+  "$rootless_uid" "$rootless_gid" "$motd_distro"
 """
 
 #: Le compte de service du mode rootless. Un nom FIXE : il sert de signal à la
@@ -239,9 +231,6 @@ LIBELLES = {
     # « c'est bon ». Nommer le bandeau aurait rendu la seule ligne où `absent`
     # est le succès, et l'écran aurait affiché « absent » à côté d'« installé ».
     "motd": "panneau d'accueil du Spark",
-    # SPK-96 · §42.4.1 : même statut que `motd` — une action rendue au compte
-    # rendu, pas un sixième élément de la détection.
-    "resolveur": "résolveur du démon rootless",
 }
 
 
@@ -414,77 +403,6 @@ def identite_rootless(brut: dict[str, str]) -> dict[str, int | None]:
 def motd_a_taire(brut: dict[str, str]) -> bool:
     """La distribution garde-t-elle un bandeau d'accueil actif ? (§42.2 quater)"""
     return (brut.get("motd_distro") or "absent").strip() == "present"
-
-
-def resolveur_a_poser(brut: dict[str, str]) -> bool:
-    """Le démon rootless de CETTE cellule a-t-il besoin d'un résolveur ? (§42.4.1)
-
-    @spec docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1, §10, §42.1
-
-    Trois conditions, et chacune écarte un cas où agir serait une faute :
-
-    - **le mode est `rootless`.** Un démon enraciné partage l'espace réseau de
-      la cellule et résout déjà ; lui réécrire son `resolv.conf` serait agir
-      sans motif, et le §42.4 l'interdit ;
-    - **la passerelle est connue.** Sans route par défaut, il n'y a pas de
-      résolveur à proposer, et inventer une adresse serait pire que ne rien
-      faire ;
-    - **le résolveur n'est PAS déjà la passerelle.** C'est le §42.1 : une
-      cellule déjà correcte ne reçoit rien, et son démon n'est pas redémarré.
-
-    Le fait que ce soit une fonction du RELEVÉ, et non une étape enfouie dans la
-    pose de Docker, est le point : une cellule amorcée en rootless AVANT ce
-    correctif n'aurait jamais reçu le remède, puisque son Docker était déjà là.
-    """
-    if (brut.get("mode") or "").strip() != ROOTLESS:
-        return False
-    passerelle = (brut.get("passerelle") or "absent").strip()
-    if passerelle in ("", "absent"):
-        return False
-    return (brut.get("resolveur") or "absent").strip() != passerelle
-
-
-#: Le geste du §42.4.1. Il LIT la passerelle dans la cellule au lieu de la
-#: recevoir : le relevé a déjà dit qu'il fallait agir, et une adresse qui
-#: traverse deux fois le réseau est une adresse qui peut changer entre les deux.
-SCRIPT_RESOLVEUR = (
-    "passerelle=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')\n"
-    "[ -n \"$passerelle\" ] || { echo 'aucune passerelle par defaut : pas de resolveur a donner au demon' >&2; exit 1; }\n"
-    "attendu=\"nameserver $passerelle\"\n"
-    "actuel=$(sed -n '/^nameserver/p' /etc/resolv.conf 2>/dev/null | head -1)\n"
-    # §42.1 : déjà correct, on ne touche à RIEN — ni au fichier, ni au démon.
-    "if [ \"$actuel\" = \"$attendu\" ]; then exit 0; fi\n"
-    "cp -a /etc/resolv.conf /etc/resolv.conf.avant-spark 2>/dev/null || true\n"
-    # Le lien vers le stub doit DISPARAÎTRE : écrire à travers lui écrirait dans
-    # le fichier que `systemd-resolved` régénère, et le geste se déferait seul.
-    "rm -f /etc/resolv.conf\n"
-    "{ echo '# Pose par l amorcage Spark : le demon rootless ne joint pas le stub local.'\n"
-    "  echo '# docs/DAT.md 42.4.1'\n"
-    "  echo \"$attendu\"; } > /etc/resolv.conf\n"
-    # On MESURE que la passerelle résout vraiment, au lieu de le supposer. Si
-    # elle ne résout pas, on remet ce qui était là : une cellule qui ne résout
-    # plus rien serait bien pire que le défaut qu'on vient corriger.
-    "if ! getent hosts download.docker.com >/dev/null 2>&1; then\n"
-    "  rm -f /etc/resolv.conf\n"
-    "  cp -a /etc/resolv.conf.avant-spark /etc/resolv.conf 2>/dev/null || true\n"
-    "  echo \"la passerelle $passerelle ne resout pas : resolv.conf restaure\" >&2\n"
-    "  exit 1\n"
-    "fi\n"
-    # Le démon avait copié l'ANCIEN fichier à la création de son espace réseau :
-    # corriger le fichier ne le corrige pas lui. On n'arrive ici que si le
-    # fichier a changé — une cellule déjà correcte est sortie plus haut (§42.1).
-    f"uid=$(id -u {COMPTE_ROOTLESS} 2>/dev/null)\n"
-    "if [ -n \"$uid\" ]; then\n"
-    f"  runuser -u {COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus "
-    "systemctl --user restart docker 2>/dev/null || true\n"
-    "fi\n"
-)
-
-
-def script_resolveur() -> list[str]:
-    """Le geste qui donne un résolveur au démon rootless (§42.4.1)."""
-    return _shell(SCRIPT_RESOLVEUR)
 
 
 def cible_apt(brut: dict[str, str]) -> tuple[str, str]:

@@ -1462,90 +1462,27 @@ def test_les_trois_derivees_RHEL_restent_sans_Docker_par_CONSTAT(tmp_path):
         "un ID_LIKE=fedora ne vaut pas autorisation : Oracle et Amazon s'en réclament")
 
 
-# --- SPK-96 · le résolveur du démon rootless (§42.4.1) -----------------------
+# --- SPK-96 · ce que la cellule rootless ne reçoit PAS (§42.4.1) -------------
 #
-# @verifies docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1 (la frontière se
-#           déplace d'un fichier), §10 (le bridge et sa passerelle), §42.1 (un
-#           amorçage rejoué ne refait pas ce qui est fait), §41.2 (présent et
-#           inutilisable), §42.5 (un code non nul sur une pose est un échec)
+# @verifies docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1 (le diagnostic corrigé),
+#           §42.4 (l'amorçage n'est pas un gestionnaire de configuration)
 
 
-def test_le_releve_RAPPORTE_le_resolveur_et_la_passerelle_sans_conclure():
-    """C'est leur ÉCART qui décide, et l'écart se lit hors de la cellule."""
-    assert "resolveur=%s" in bootstrap.RELEVE
-    assert "passerelle=%s" in bootstrap.RELEVE
-    assert "ip -4 route show default" in bootstrap.RELEVE
+def test_l_amorcage_n_ECRIT_PAS_le_resolv_conf_de_la_cellule():
+    """Le remède du 2026-09-14, écrit puis DÉFAIT le même jour.
 
+    La supposition était que le stub `127.0.0.53` n'écoute pas dans l'espace du
+    démon rootless. Mesuré sur la Forge : c'est faux. Le démon tire ses images
+    avec le `resolv.conf` d'origine, dès lors que le profil AppArmor de la
+    cellule lui laisse créer un socket. Écrire ce fichier n'aurait rien corrigé,
+    et le §42.4 interdit d'agir sans motif.
 
-def test_le_resolveur_se_pose_QUAND_le_releve_le_reclame():
-    """Trois conditions, et chacune écarte un cas où agir serait une faute."""
-    stub = {"mode": "rootless", "resolveur": "127.0.0.53", "passerelle": "10.77.0.1"}
-    assert bootstrap.resolveur_a_poser(stub) is True
-    # Déjà correct : le §42.1 interdit d'y toucher, et donc de redémarrer.
-    assert bootstrap.resolveur_a_poser({**stub, "resolveur": "10.77.0.1"}) is False
-    # Enraciné : son démon partage l'espace réseau de la cellule et résout déjà.
-    assert bootstrap.resolveur_a_poser({**stub, "mode": "enracine"}) is False
-    # Sans route par défaut, il n'y a pas de résolveur à proposer. Inventer une
-    # adresse serait pire que ne rien faire.
-    assert bootstrap.resolveur_a_poser({**stub, "passerelle": "absent"}) is False
-    assert bootstrap.resolveur_a_poser({}) is False
-
-
-def test_une_cellule_DEJA_rootless_recoit_le_remede():
-    """Le défaut de la première rédaction, et la raison de cette forme.
-
-    Le remède vivait dans le script de pose de Docker. Une cellule amorcée en
-    rootless AVANT le correctif avait déjà son Docker : l'amorçage concluait
-    « rien n'a été fait, tout était déjà en place » et le remède ne l'atteignait
-    jamais. Mesuré sur la Forge le 2026-09-14.
+    Cette preuve existe pour que le remède ne soit pas réécrit de bonne foi la
+    prochaine fois que quelqu'un relira le symptôme.
     """
-    deja = {"mode": "rootless", "docker": "present", "compose": "present",
-            "resolveur": "127.0.0.53", "passerelle": "10.77.0.1"}
-    assert bootstrap.resolveur_a_poser(deja) is True, (
-        "une cellule complète mais sans résolveur doit encore le recevoir")
-    assert "resolv.conf" not in bootstrap.SCRIPT_ROOTLESS, (
-        "le remède ne doit PAS vivre dans la pose de Docker : il y serait "
-        "inatteignable pour les cellules déjà rootless")
-
-
-def test_l_adresse_du_resolveur_est_LUE_dans_la_cellule_et_non_ecrite():
-    """Une adresse en dur serait une seconde table, fausse le jour où le bridge
-    change. La cellule lit la passerelle de sa propre route par défaut (§10)."""
-    assert "ip -4 route show default" in bootstrap.SCRIPT_RESOLVEUR
-    assert "10.77.0.1" not in bootstrap.SCRIPT_RESOLVEUR, (
-        "l'adresse de la passerelle ne doit être écrite NULLE PART dans le code")
-
-
-def test_le_LIEN_vers_le_stub_est_retire_et_non_ecrit_a_travers():
-    """Écrire à travers le lien écrirait dans le fichier que `systemd-resolved`
-    régénère : le geste se déferait tout seul, ce qui est pire que rien."""
-    assert "rm -f /etc/resolv.conf" in bootstrap.SCRIPT_RESOLVEUR
-    assert "> /etc/resolv.conf" in bootstrap.SCRIPT_RESOLVEUR
-
-
-def test_la_passerelle_est_MESUREE_avant_d_etre_retenue():
-    """On ne suppose pas qu'une passerelle résout : on le vérifie, et on RESTAURE
-    si elle ne résout pas. Une cellule qui ne résout plus rien serait bien pire
-    que le défaut qu'on vient corriger — et l'échec est franc (§42.5)."""
-    script = bootstrap.SCRIPT_RESOLVEUR
-    assert "getent hosts" in script
-    assert "cp -a /etc/resolv.conf /etc/resolv.conf.avant-spark" in script
-    assert "cp -a /etc/resolv.conf.avant-spark /etc/resolv.conf" in script
-    assert "exit 1" in script
-
-
-def test_une_cellule_DEJA_correcte_sort_AVANT_de_toucher_a_quoi_que_ce_soit():
-    """§42.1. La sortie est en tête du script, donc avant la sauvegarde, avant
-    l'écriture, et avant tout redémarrage du démon — qui couperait les piles du
-    locataire pour rien."""
-    script = bootstrap.SCRIPT_RESOLVEUR
-    sortie = script.index('if [ "$actuel" = "$attendu" ]; then exit 0; fi')
-    for apres in ("cp -a", "rm -f /etc/resolv.conf", "systemctl --user restart docker"):
-        assert script.index(apres) > sortie, (
-            f"« {apres} » doit venir APRÈS la sortie anticipée")
-
-
-def test_le_geste_est_NOMME_dans_le_compte_rendu():
-    assert bootstrap.LIBELLES["resolveur"] == "résolveur du démon rootless"
-    assert "resolveur" not in bootstrap.ELEMENTS, (
-        "ce n'est pas un sixième élément de la détection, comme `motd`")
+    for source in (bootstrap.RELEVE, bootstrap.SCRIPT_ROOTLESS):
+        assert "resolv.conf" not in source, (
+            "l'amorçage ne touche pas au résolveur de la cellule : la cause est "
+            "le profil AppArmor `rootlesskit`, pas le fichier")
+    assert not hasattr(bootstrap, "SCRIPT_RESOLVEUR")
+    assert not hasattr(bootstrap, "resolveur_a_poser")

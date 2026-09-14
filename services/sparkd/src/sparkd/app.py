@@ -2315,29 +2315,6 @@ def create_app(config: Config) -> FastAPI:
                     brut_final, apres = _lire_amorcage(connection, spark)
                 else:
                     brut_final, apres = brut_avant, avant
-                # SPK-96 · §42.4.1 : le démon rootless recopie le `resolv.conf`
-                # de la cellule dans son espace réseau, où le stub local
-                # n'écoute pas — il n'a donc aucun résolveur, alors que le compte
-                # rendu promet une cellule capable de faire tourner une pile
-                # Compose. Comme le bandeau du §42.2 quater, ce n'est pas un
-                # sixième élément : c'est une action de plus, faite SEULEMENT si
-                # le relevé la réclame.
-                #
-                # Elle est décidée sur `brut_final`, et c'est le point : sur une
-                # cellule neuve, le relevé d'AVANT ne connaît pas encore le mode,
-                # puisque Docker n'y était pas. Et parce qu'elle est relue à
-                # chaque amorçage plutôt qu'enfouie dans la pose de Docker, une
-                # cellule amorcée en rootless AVANT ce correctif la reçoit aussi
-                # — c'est exactement le cas que la première rédaction manquait.
-                if bootstrap_service.resolveur_a_poser(brut_final):
-                    code, _, err = app.state.incus.exec_capture(
-                        spark["incus_name"], bootstrap_service.script_resolveur())
-                    if code:
-                        raise bootstrap_service.BootstrapFailed(
-                            bootstrap_service.echec("resolveur", code, err))
-                    actions.append("resolveur")
-                    # Le relevé qui vient d'être lu est périmé d'un fichier.
-                    brut_final, apres = _lire_amorcage(connection, spark)
                 if reprise_rootless:
                     bootstrap_service.verifier_reprise_rootless(apres)
             except InstanceAbsente as erreur:
