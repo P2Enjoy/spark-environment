@@ -2747,6 +2747,22 @@ committé avant la première ligne de code.
 
 ### [~] SPK-62 · Notification hors bande des actions sensibles
 
+**Trois des quatre chunks sont BÂTIS le 2026-09-14**, et éprouvés sur la Forge
+réelle avec un vrai webhook Discord. Ce qui a été mesuré, par l'écran :
+
+| Ce qui a été fait | Ce qui a été constaté |
+|---|---|
+| bascule au registre | `source: "registre"`, et l'avertissement d'environnement disparaît |
+| mauvais mot de passe | `403`, configuration **inchangée** |
+| gabarit fautif | `422` **à l'enregistrement**, nommant le champ |
+| couper le canal | envois **2 → 3** : il a porté son propre avis de décès |
+| canal coupé, geste sensible | envois restent à 3 : muet |
+| réactiver | l'URL est **conservée**, hôte `discord.com` |
+| l'URL en lecture | ne sort **jamais** — seul son hôte |
+
+Preuves : 14 du module `canaux`, 15 de l'onglet, 1 parcours E2E, captures
+observées à 1440 et 390 px.
+
 **Arbitrage du responsable, 2026-09-14 sur l'ordre des chunks restants** : la
 **configuration au registre et son onglet** d'abord. Motif : c'est le chunk qui
 rend les deux autres possibles — un mot de passe n'a de sens que sur une
