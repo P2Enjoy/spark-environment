@@ -2315,6 +2315,28 @@ def create_app(config: Config) -> FastAPI:
                     brut_final, apres = _lire_amorcage(connection, spark)
                 else:
                     brut_final, apres = brut_avant, avant
+                # SPK-96 · §42.4.1 : la pile rootless traverse deux profils
+                # AppArmor qui, dans leur état livré, lui refusent TOUT socket
+                # réseau — le démon ne peut tirer aucune image, alors que le
+                # compte rendu promet une cellule capable de faire tourner une
+                # pile Compose. Comme le bandeau du §42.2 quater, ce n'est pas
+                # un sixième élément : c'est une action de plus, faite seulement
+                # si le relevé la réclame.
+                #
+                # Elle est décidée sur `brut_final`, et c'est le point : sur une
+                # cellule neuve, le relevé d'AVANT ne connaît pas encore le
+                # mode, puisque Docker n'y était pas. Et parce qu'elle est relue
+                # à chaque amorçage, une cellule amorcée en rootless AVANT ce
+                # correctif la reçoit aussi.
+                if bootstrap_service.confinement_a_ouvrir(brut_final):
+                    code, _, err = app.state.incus.exec_capture(
+                        spark["incus_name"], bootstrap_service.script_apparmor())
+                    if code:
+                        raise bootstrap_service.BootstrapFailed(
+                            bootstrap_service.echec("confinement", code, err))
+                    actions.append("confinement")
+                    # Le relevé qui vient d'être lu est périmé de deux fichiers.
+                    brut_final, apres = _lire_amorcage(connection, spark)
                 if reprise_rootless:
                     bootstrap_service.verifier_reprise_rootless(apres)
             except InstanceAbsente as erreur:

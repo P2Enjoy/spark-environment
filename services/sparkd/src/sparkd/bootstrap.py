@@ -149,17 +149,30 @@ if [ "$mode" = rootless ]; then
   [ -n "$rootless_uid" ] || rootless_uid=absent
   [ -n "$rootless_gid" ] || rootless_gid=absent
 fi
+# SPK-96 · §42.4.1 : la pile rootless traverse DEUX profils AppArmor, et les
+# deux la privent de tout socket réseau dans leur état livré. On rapporte sans
+# conclure : `absent` quand la distribution n'a pas ces profils, `ouvert` quand
+# les deux portent déjà la règle, `ferme` sinon.
+confinement_rootless=absent
+for profil in rootlesskit slirp4netns; do
+  [ -f "/etc/apparmor.d/$profil" ] || continue
+  if grep -qs '^network inet,' "/etc/apparmor.d/local/$profil"; then
+    [ "$confinement_rootless" = absent ] && confinement_rootless=ouvert
+  else
+    confinement_rootless=ferme
+  fi
+done
 motd_distro=absent
 if [ -d /etc/update-motd.d ]; then
   for script in /etc/update-motd.d/*; do
     if [ -f "$script" ] && [ -x "$script" ]; then motd_distro=present; break; fi
   done
 fi
-printf 'os_id=%s\nos_suite=%s\nos_suite_amont=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ncles_rootless=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\n' \
+printf 'os_id=%s\nos_suite=%s\nos_suite_amont=%s\nos_like=%s\narch=%s\nsshd=%s\nopenssh_version=%s\ncles=%s\ncles_rootless=%s\ndepot_distro=%s\ndepot_suite=%s\ndocker=%s\ndocker_version=%s\norigine=%s\ncompose=%s\ncompose_version=%s\nmode=%s\nrootless_uid=%s\nrootless_gid=%s\nmotd_distro=%s\nconfinement_rootless=%s\n' \
   "$os_id" "$os_suite" "$os_suite_amont" "$os_like" "$arch" \
   "$sshd" "$openssh_version" "$cles" "$cles_rootless" "$depot_distro" "$depot_suite" \
   "$docker" "$docker_version" "$origine" "$compose" "$compose_version" "$mode" \
-  "$rootless_uid" "$rootless_gid" "$motd_distro"
+  "$rootless_uid" "$rootless_gid" "$motd_distro" "$confinement_rootless"
 """
 
 #: Le compte de service du mode rootless. Un nom FIXE : il sert de signal à la
@@ -231,6 +244,9 @@ LIBELLES = {
     # « c'est bon ». Nommer le bandeau aurait rendu la seule ligne où `absent`
     # est le succès, et l'écran aurait affiché « absent » à côté d'« installé ».
     "motd": "panneau d'accueil du Spark",
+    # SPK-96 · §42.4.1 : même statut que `motd` — une action rendue au compte
+    # rendu, pas un sixième élément de la détection.
+    "confinement": "réseau de la pile rootless",
 }
 
 
@@ -403,6 +419,68 @@ def identite_rootless(brut: dict[str, str]) -> dict[str, int | None]:
 def motd_a_taire(brut: dict[str, str]) -> bool:
     """La distribution garde-t-elle un bandeau d'accueil actif ? (§42.2 quater)"""
     return (brut.get("motd_distro") or "absent").strip() == "present"
+
+
+#: SPK-96 · §42.4.1 : les deux profils que la pile rootless traverse. Chacun
+#: déclare son propre fichier d'extension `local/<profil>`, et c'est là qu'on
+#: écrit — jamais dans le profil livré, qu'une mise à jour de la distribution
+#: remplacerait.
+PROFILS_ROOTLESS = ("rootlesskit", "slirp4netns")
+
+#: La règle, et elle est la PLUS PETITE qui fonctionne (§42.4.1). Pas
+#: `network,` : celle-ci accorderait en plus `AF_PACKET`, donc la capture et la
+#: forge de paquets bruts, dont la pile rootless n'a aucun besoin — mesuré.
+REGLE_RESEAU = "network inet,\nnetwork inet6,"
+
+
+def confinement_a_ouvrir(brut: dict[str, str]) -> bool:
+    """La pile rootless de CETTE cellule est-elle privée de réseau ? (§42.4.1)
+
+    @spec docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1, §42.1
+
+    Trois conditions, et chacune écarte un cas où agir serait une faute :
+
+    - **le mode est `rootless`.** Le démon enraciné n'est pas confiné par ces
+      profils et n'a pas ce défaut ;
+    - **les profils existent.** Une distribution qui ne les livre pas n'a rien à
+      ouvrir, et y écrire créerait des fichiers que rien ne lit ;
+    - **ils sont fermés.** Déjà ouverts, on ne recharge rien et on ne redémarre
+      pas le démon — c'est le §42.1, et un redémarrage gratuit couperait les
+      piles du locataire.
+    """
+    if (brut.get("mode") or "").strip() != ROOTLESS:
+        return False
+    return (brut.get("confinement_rootless") or "absent").strip() == "ferme"
+
+
+#: Le geste du §42.4.1. Idempotent par construction : `grep` avant d'écrire, et
+#: aucun rechargement quand rien n'a changé.
+SCRIPT_APPARMOR = (
+    "ouvert=0\n"
+    f"for profil in {' '.join(PROFILS_ROOTLESS)}; do\n"
+    "  [ -f \"/etc/apparmor.d/$profil\" ] || continue\n"
+    "  grep -qs '^network inet,' \"/etc/apparmor.d/local/$profil\" && continue\n"
+    "  install -d -m 0755 /etc/apparmor.d/local\n"
+    f"  printf '%s\\n' '{REGLE_RESEAU}' > \"/etc/apparmor.d/local/$profil\"\n"
+    "  apparmor_parser -r \"/etc/apparmor.d/$profil\" || "
+    "{ echo \"apparmor_parser a refuse $profil\" >&2; exit 1; }\n"
+    "  ouvert=1\n"
+    "done\n"
+    # Le démon a été confiné à sa création : rouvrir les profils ne le libère
+    # pas lui. Il n'est redémarré que si quelque chose a CHANGÉ (§42.1).
+    "if [ \"$ouvert\" = 1 ]; then\n"
+    f"  uid=$(id -u {COMPTE_ROOTLESS} 2>/dev/null)\n"
+    "  [ -n \"$uid\" ] && "
+    f"runuser -u {COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus "
+    "systemctl --user restart docker 2>/dev/null || true\n"
+    "fi\n"
+)
+
+
+def script_apparmor() -> list[str]:
+    """Le geste qui rend un réseau à la pile rootless (§42.4.1)."""
+    return _shell(SCRIPT_APPARMOR)
 
 
 def cible_apt(brut: dict[str, str]) -> tuple[str, str]:

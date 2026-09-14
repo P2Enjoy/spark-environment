@@ -1462,27 +1462,93 @@ def test_les_trois_derivees_RHEL_restent_sans_Docker_par_CONSTAT(tmp_path):
         "un ID_LIKE=fedora ne vaut pas autorisation : Oracle et Amazon s'en réclament")
 
 
-# --- SPK-96 · ce que la cellule rootless ne reçoit PAS (§42.4.1) -------------
+# --- SPK-96 · rendre un réseau à la pile rootless (§42.4.1) ------------------
 #
-# @verifies docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1 (le diagnostic corrigé),
-#           §42.4 (l'amorçage n'est pas un gestionnaire de configuration)
+# @verifies docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1 (le diagnostic corrigé
+#           et la règle la plus étroite), §42.4 (l'amorçage n'est pas un
+#           gestionnaire de configuration), §42.1 (rejoué, il ne refait rien),
+#           §41.2 (présent et inutilisable), §42.5 (un code non nul est un échec)
 
 
-def test_l_amorcage_n_ECRIT_PAS_le_resolv_conf_de_la_cellule():
-    """Le remède du 2026-09-14, écrit puis DÉFAIT le même jour.
+def test_l_amorcage_n_ECRIT_PAS_le_resolv_conf_ni_le_nsswitch():
+    """Les deux ont été soupçonnés le 2026-09-14, les deux ont été DISCULPÉS.
 
-    La supposition était que le stub `127.0.0.53` n'écoute pas dans l'espace du
-    démon rootless. Mesuré sur la Forge : c'est faux. Le démon tire ses images
-    avec le `resolv.conf` d'origine, dès lors que le profil AppArmor de la
-    cellule lui laisse créer un socket. Écrire ce fichier n'aurait rien corrigé,
-    et le §42.4 interdit d'agir sans motif.
+    La supposition tenue depuis le 2026-09-07 était que le stub `127.0.0.53`
+    n'écoute pas dans l'espace du démon rootless. Mesuré sur la Forge : faux. Une
+    fois les profils AppArmor ouverts, la cellule remise EXACTEMENT dans l'état
+    que la distribution livre — lien vers `stub-resolv.conf`, `mymachines` en
+    place — tire ses images sans difficulté.
 
     Cette preuve existe pour que le remède ne soit pas réécrit de bonne foi la
     prochaine fois que quelqu'un relira le symptôme.
     """
-    for source in (bootstrap.RELEVE, bootstrap.SCRIPT_ROOTLESS):
-        assert "resolv.conf" not in source, (
-            "l'amorçage ne touche pas au résolveur de la cellule : la cause est "
-            "le profil AppArmor `rootlesskit`, pas le fichier")
-    assert not hasattr(bootstrap, "SCRIPT_RESOLVEUR")
-    assert not hasattr(bootstrap, "resolveur_a_poser")
+    for source in (bootstrap.RELEVE, bootstrap.SCRIPT_ROOTLESS,
+                   bootstrap.SCRIPT_APPARMOR):
+        assert "resolv.conf" not in source
+        assert "nsswitch" not in source
+
+
+def test_le_releve_RAPPORTE_le_confinement_sans_conclure():
+    assert "confinement_rootless=%s" in bootstrap.RELEVE
+    for profil in bootstrap.PROFILS_ROOTLESS:
+        assert profil in bootstrap.RELEVE
+
+
+def test_le_confinement_s_ouvre_QUAND_le_releve_le_reclame():
+    """Trois conditions, et chacune écarte un cas où agir serait une faute."""
+    ferme = {"mode": "rootless", "confinement_rootless": "ferme"}
+    assert bootstrap.confinement_a_ouvrir(ferme) is True
+    # Déjà ouvert : §42.1, on ne recharge rien et on ne redémarre pas le démon.
+    assert bootstrap.confinement_a_ouvrir({**ferme, "confinement_rootless": "ouvert"}) is False
+    # La distribution ne livre pas ces profils : rien à ouvrir. Y écrire
+    # créerait des fichiers que rien ne lit.
+    assert bootstrap.confinement_a_ouvrir({**ferme, "confinement_rootless": "absent"}) is False
+    # L'enraciné n'est pas confiné par ces profils et n'a pas ce défaut.
+    assert bootstrap.confinement_a_ouvrir({**ferme, "mode": "enracine"}) is False
+    assert bootstrap.confinement_a_ouvrir({}) is False
+
+
+def test_les_DEUX_profils_sont_ouverts_et_pas_seulement_le_premier():
+    """Mesuré : ouvrir `rootlesskit` seul fait passer le tirage, mais un
+    conteneur qui sort échoue encore — et le journal du noyau accuse alors
+    `slirp4netns`. La pile en traverse deux."""
+    assert bootstrap.PROFILS_ROOTLESS == ("rootlesskit", "slirp4netns")
+    for profil in bootstrap.PROFILS_ROOTLESS:
+        assert profil in bootstrap.SCRIPT_APPARMOR
+
+
+def test_la_regle_est_la_PLUS_PETITE_qui_fonctionne():
+    """`network,` marchait aussi, et accordait en plus `AF_PACKET` — la capture
+    et la forge de paquets bruts, dont la pile rootless n'a aucun besoin."""
+    assert bootstrap.REGLE_RESEAU == "network inet,\nnetwork inet6,"
+    assert "network," not in bootstrap.SCRIPT_APPARMOR.replace("network inet,", "")
+    for interdit in ("network packet", "network raw", "capability"):
+        assert interdit not in bootstrap.SCRIPT_APPARMOR
+
+
+def test_on_ecrit_dans_le_fichier_d_EXTENSION_et_jamais_dans_le_profil_livre():
+    """Une mise à jour de la distribution remplace le profil livré ; elle ne
+    touche pas à `local/<profil>`, que le profil inclut lui-même."""
+    assert "/etc/apparmor.d/local/$profil" in bootstrap.SCRIPT_APPARMOR
+    assert '> "/etc/apparmor.d/$profil"' not in bootstrap.SCRIPT_APPARMOR
+
+
+def test_une_cellule_DEJA_ouverte_ne_recharge_rien_et_ne_REDEMARRE_pas():
+    """§42.1. Un redémarrage gratuit couperait les piles du locataire."""
+    script = bootstrap.SCRIPT_APPARMOR
+    assert "grep -qs '^network inet,' \"/etc/apparmor.d/local/$profil\" && continue" in script
+    debut = script.index('if [ "$ouvert" = 1 ]; then')
+    assert "systemctl --user restart docker" in script[debut:]
+    assert "systemctl --user restart docker" not in script[:debut]
+
+
+def test_un_apparmor_parser_qui_REFUSE_fait_echouer_l_amorcage():
+    """§42.5 : un profil écrit mais non chargé ne protège ni ne libère rien.
+    Le taire donnerait « amorcé » sur une cellule toujours privée de réseau."""
+    assert "apparmor_parser a refuse" in bootstrap.SCRIPT_APPARMOR
+    assert "exit 1" in bootstrap.SCRIPT_APPARMOR
+
+
+def test_le_geste_est_NOMME_dans_le_compte_rendu():
+    assert bootstrap.LIBELLES["confinement"] == "réseau de la pile rootless"
+    assert "confinement" not in bootstrap.ELEMENTS
