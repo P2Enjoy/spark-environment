@@ -832,6 +832,15 @@ le contourne pas puisque le profil fautif est celui du Spark. Le correctif est d
 
 ### [~] SPK-28 · Partitionnement fourni à la création du serveur
 
+**Arbitrage du responsable, 2026-09-14 : la création du miroir est éprouvée sur
+la Forge ACTUELLE.**
+
+**Ce que cela ne veut PAS dire, et il faut l'écrire avant d'agir** : le pool
+`spark` de la Forge porte les Sparks du responsable. Il n'est ni recréé, ni
+détruit, ni touché. Ce qui est éprouvé est le **chemin de création d'un miroir**,
+sur des supports jetables, puis défait — sans quoi l'épreuve détruirait
+précisément ce que l'unité existe pour protéger (`CLAUDE.md` §9).
+
 **Arbitrage du responsable, 2026-09-02. Il n'y a plus qu'une disposition.** Le
 pool de la Forge est un miroir ZFS natif sur deux supports portés par deux
 disques physiques distincts — disques entiers ou partitions réservées —, ou un
@@ -1676,6 +1685,12 @@ les Sparks.
   manuel M12 le nomme, pour qu'on ne cherche pas une erreur là où il n'y en a pas.
 
 ### [~] SPK-40 · Signature des gestes par la clé du responsable
+
+**Arbitrage du responsable, 2026-09-14 : le geste est signé par l'agent RÉEL.**
+Un agent SSH vivant tourne sur le poste de travail et porte la clé `login`
+(`SHA256:Oa0szulf…`) — celle-là même que la Forge inscrit déjà au journal. Le
+seul écart de l'unité était qu'aucun agent réel n'avait signé : il est donc à
+portée, et il est comblé plutôt que reporté.
 
 La console signe la requête avec la clé SSH du responsable, par son agent ;
 `sparkd` conserve la signature et les octets signés. Root sur l'hôte peut alors
@@ -2674,6 +2689,18 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
 
 ### [~] SPK-61 · Restreindre la clé d'accès du responsable au seul tunnel
 
+**Arbitrage du responsable, 2026-09-14 : l'unité reste `[~]` DÉFINITIVEMENT.**
+
+Ce n'est pas un report, et le document ne doit pas le laisser lire comme tel. La
+décision est prise en connaissance de son coût, et ce coût s'énonce sans le
+tempérer : **tant que cette clé ouvre un shell, une clé volée donne l'accès
+total et silencieux à la Forge**, et tout second facteur devant l'API de `sparkd`
+ne protégerait de rien contre elle.
+
+OP-10 reste écrit, mesuré et prêt à être joué — la garde `scripts/garde-ssh.sh`
+existe, les six cas de vérification sont écrits, et le retour arrière est
+immédiat. Rien n'attend : c'est un choix, pas un blocage.
+
 **Arbitrage du responsable, 2026-09-14 : l'unité RESTE `[~]`.** La clé n'est pas
 restreinte pour l'instant, et ce n'est pas un oubli : la décision est prise en
 connaissance du coût. Tant qu'elle ouvre un shell, une clé volée donne l'accès
@@ -2963,6 +2990,12 @@ Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle traite les menace
   `docs/manuel/images/m10-suppression-nom-frappe.png`. Manuel M10 complété.
 
 ### [~] SPK-51 · Un Spark qui héberge une messagerie, et sa recette DNS
+
+**Arbitrage du responsable, 2026-09-14 : le relais retenu est celui qui est DÉJÀ
+en service**, `noreply.lelabs.tech`, avec son sélecteur DKIM. Motif : le port 25
+sortant est bloqué par l'hébergeur, un Spark ne peut donc pas remettre
+directement ; et un relais déjà en service porte un `PTR` cohérent et une
+réputation établie, ce qu'un relais neuf n'a pas.
 
 - Spécification : `docs/DAT.md` §38.6, §38.7, §39 · manuel M7 et M8.
 - Dépend de : SPK-49 (les ports 25, 465, 587, 143, 993 ne passent pas par le
