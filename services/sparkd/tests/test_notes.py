@@ -187,6 +187,34 @@ def test_un_Spark_sans_cellule_garde_sa_note_au_registre(client):
         "Les sources sont sur le dépôt.")
 
 
+def test_le_BRIEFING_nomme_les_notes_et_ne_ment_pas_sur_celles_qui_existent(client):
+    """§54.5 et §44.4 : le briefing NOMME les trois notes — celui qui le lit est
+    déjà dans la cellule, à trois lignes de commande d'elles.
+
+    Et il dit lesquelles sont écrites : une note posée sans reprojeter le
+    briefing laisserait le fichier annoncer « pas encore écrite » sur un texte
+    qui vient d'arriver à côté de lui.
+    """
+    from sparkd import briefing
+
+    nom = creer(client)
+    assert client.post(f"/v1/sparks/{nom}/bootstrap").status_code == 200
+    vu = fichiers(client, nom)[briefing.FICHIER_MARKDOWN]
+    assert notes.chemin("readme") in vu
+    assert "pas encore écrite" in vu
+
+    assert ecrire(client, nom, "readme", "# Keycloak").status_code == 200
+    vu = fichiers(client, nom)[briefing.FICHIER_MARKDOWN]
+    assert notes.chemin("readme") in vu
+    # §54.5 : le briefing les NOMME, il ne les recopie pas. Deux exemplaires du
+    # même texte dans la même machine en feraient vieillir un — celui réécrit
+    # par le plan de contrôle, c'est-à-dire celui qui a l'air officiel.
+    assert "# Keycloak" not in vu
+    assert vu.count("pas encore écrite") == 2, (
+        "les DEUX autres restent non écrites, et celle qu'on vient d'écrire "
+        "cesse de l'être")
+
+
 # --- la révision : un enregistrement périmé est refusé, pas écrasé ----------
 
 
@@ -352,6 +380,107 @@ def test_un_Spark_supprime_emporte_ses_notes(client):
         "written"] is False, (
         "un Spark qui reprend un nom libéré ne doit pas hériter des notes du "
         "précédent")
+
+
+# --- le dossier pour un LLM (§54.5, §55.7) ----------------------------------
+
+
+def _dossier(client, nom):
+    rendu = client.get(f"/v1/sparks/{nom}/briefing?jump=forge")
+    assert rendu.status_code == 200, rendu.text
+    return rendu.json()["markdown"]
+
+
+def test_le_dossier_porte_les_trois_notes_EN_ENTIER(client):
+    """§54.5 : celui qui lit ce texte n'est pas encore entré dans la cellule.
+
+    Il ne peut ouvrir aucun de ces fichiers — ils vivent derrière une clé
+    accordée, un rebond et une cellule amorcée (§44.9.1). Les lui nommer ne
+    servirait à rien.
+    """
+    nom = creer(client)
+    assert ecrire(client, nom, "readme", "# Keycloak\n\nLe SSO.").status_code == 200
+    assert ecrire(client, nom, "install", "OIDC : /realms/x").status_code == 200
+
+    vu = _dossier(client, nom)
+    assert "# Keycloak" in vu and "Le SSO." in vu
+    assert "OIDC : /realms/x" in vu
+    # §14.5 : une note absente est DITE. Elle apprend à l'agent qu'il est
+    # peut-être le premier à savoir quelque chose que personne n'a écrit.
+    assert "Personne n'a encore écrit cette note" in vu
+    # Et ce que chacune est CENSÉE porter voyage avec elle (§54.2).
+    assert "d'où viennent les sources" in vu
+
+
+def test_le_dossier_dit_par_ou_l_on_PROPOSE_et_ce_qui_arrive_ensuite(client):
+    """§55.7 : les quatre points, et pas un de plus.
+
+    Sans la seconde moitié — « voici où déposer ce que vous souhaitez » —, la
+    première se lit comme une impasse, et un agent devant une impasse invente
+    (§44.2 ter).
+    """
+    nom = creer(client)
+    vu = _dossier(client, nom)
+
+    # 1. les six paires, avec leur effet
+    for chemin in ("/etc/spark/env.?", "/run/spark/secrets.?",
+                   "/etc/spark/routes.?", "/etc/spark/notes/README.md.?",
+                   "/etc/spark/notes/CONTRIBUTORS.md.?",
+                   "/etc/spark/notes/INSTALL.md.?"):
+        assert chemin in vu, chemin
+    assert "ajoute ou remplace" in vu and "remplace en entier" in vu
+    # 2. la grammaire
+    assert "NOM=valeur" in vu
+    assert "<domaine> <port écouté ici> [tls|clair]" in vu
+    # 3. le cycle de vie, et qu'il ne promet rien
+    assert "Rien ne s'applique tout seul" in vu
+    assert "Rien ne garantit qu'elle soit lue" in vu
+    assert "redeviendra **vide**" in vu
+    # 4. comment on apprend le sort de sa demande, sans accusé de réception
+    assert "Le fichier réel d'à côté vous dira laquelle" in vu
+    # Et le refus qui NE consomme pas, sans quoi l'auteur redéposerait à
+    # l'identique un texte que le produit vient de refuser.
+    assert "Un refus du produit ne vide pas" in vu
+
+
+def test_le_dossier_ecrit_la_consigne_d_acces_UNE_SEULE_FOIS(client):
+    """§55.7 : « écrite une fois, au même endroit que les commandes d'entrée ».
+
+    La répéter à chaque section la ferait lire zéro fois ; l'omettre laisserait
+    un agent conclure d'un fichier réécrit puis restauré que la machine est
+    cassée.
+    """
+    nom = creer(client)
+    vu = _dossier(client, nom)
+    assert vu.count("il le RÉÉCRIT") == 1
+    # Elle est dans la section d'entrée, pas ailleurs : c'est là qu'on la lit.
+    entree = vu.split("## 2.")[0]
+    assert "il le RÉÉCRIT" in entree
+    assert "n'entrent que par la console" in entree
+
+
+def test_AUCUNE_valeur_de_secret_n_entre_dans_le_dossier_augmente(client):
+    """§44.9.3, rejoué sur un dossier qui porte désormais du texte libre.
+
+    Un dossier est copié dans une conversation avec un modèle tiers — c'est sa
+    raison d'être, et c'est le pire trajet possible pour un secret. La garde du
+    §54.6 empêche qu'une note en porte ; cette preuve vérifie que le texte
+    ASSEMBLÉ n'en porte pas davantage.
+    """
+    nom = creer(client)
+    assert client.put(f"/v1/sparks/{nom}/env/SMTP_PASSWORD", json={
+        "value": SECRET, "secret": True}).status_code == 200
+    assert client.put(f"/v1/sparks/{nom}/env/BASE_URL", json={
+        "value": "https://sso.exemple.test", "secret": False}).status_code == 200
+    assert ecrire(client, nom, "readme", "Le SSO, servi sur "
+                  "https://sso.exemple.test").status_code == 200
+
+    vu = _dossier(client, nom)
+    assert SECRET not in vu
+    assert "SMTP_PASSWORD" in vu, "le NOM y est, et c'est le but"
+    # Une valeur NON secrète n'est pas davantage exportée par le produit : elle
+    # n'y figure que parce que l'auteur de la note l'y a mise lui-même.
+    assert vu.count("https://sso.exemple.test") == 1
 
 
 # --- la forme canonique -----------------------------------------------------

@@ -7216,7 +7216,8 @@ artefact, pas une narration) :
 3. **Briefing et dossier** — les notes nommées dans `BRIEFING.md` avec la
    commande qui les lit, portées en entier dans le dossier, et les points du
    §54.7 écrits dans les deux. Preuves de rendu, dont la garde du §44.9.3
-   rejouée sur un dossier augmenté.
+   rejouée sur un dossier augmenté. *Fait, avec le chunk 3 de SPK-105 : les
+   deux textes se rédigent ensemble ou ils se contrediraient.*
 4. **Console** — facette *Notes*, trois éditeurs, les trois états du §54.10, le
    refus `409` qui ne perd pas la saisie. Preuves de composant, design system.
 5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte ses trois
@@ -7304,7 +7305,10 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
    du §43.10.1 existe une seule fois, dans `env-import.js`, et le §43.10.3 pose
    que le serveur reçoit des entrées structurées et jamais du texte.
 3. **Dossier pour un LLM** — la section du §55.7 et la consigne d'accès unique,
-   dans le même chunk que celles de SPK-104.
+   dans le même chunk que celles de SPK-104. *Fait.* Le texte **ne nomme aucun
+   écran** : il dit ce qui arrive à la proposition, pas où le propriétaire la
+   lit. Nommer un écran ferait dépendre ce dossier d'une interface qu'il ne
+   connaît pas — et l'aurait fait mentir tant que celle-ci n'existe pas.
 4. **Console** — bannières et écrans d'acceptation sur les facettes
    *Environnement*, *Routes* et *Notes*, réemployant la relecture du §43.10.2.
 5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte une proposition

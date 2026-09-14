@@ -6,7 +6,10 @@
       docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier de déploiement),
       §44.9.2 (ce qu'il porte de plus), §44.9.3 (ce qu'il ne porte jamais) ·
       docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.7 (une variable n'entre pas par
-      la cellule) · docs/SCHEMA.md §10 quinquies
+      la cellule) · docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.5 (les notes en
+      entier dans le dossier, nommées dans le briefing) · docs/BACKLOG.md#SPK-105
+      · docs/DAT.md §55.7 (ce que le dossier doit dire du canal `.?`, et la
+      consigne d'accès unique) · docs/SCHEMA.md §10 quinquies
 
 Le JSON est le MODELE et le Markdown une présentation de ce même modèle. Les
 deux fichiers ne sont donc pas deux vérités qu'il faudrait garder en accord.
@@ -26,6 +29,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from . import bootstrap
+from . import notes as notes_service
+from . import suggestions as suggestions_service
 
 FORMAT = "spark-briefing/v1"
 WRITER = "sparkd, plan de contrôle"
@@ -75,7 +80,10 @@ PIEGES = (
     # lui fallait DEMANDER un port pour être atteint. Il est vrai et incomplet :
     # il parle de ce qu'on crée, jamais de ce qui existe déjà.
     "Une route active est déjà un chemin complet : la Forge termine le TLS et vise votre port, aucun port publié n'est requis.",
-    "Rien ne s'expose depuis la cellule : créer une route ou publier un port se demande au plan de contrôle.",
+    # SPK-105 · §55 : ce piège disait vrai avant le canal `.?`. Une route se
+    # PROPOSE désormais depuis la cellule ; un port publié, non — c'est une
+    # ressource de la Forge, partagée entre tous les Sparks (§55.3.2).
+    "Rien ne s'expose depuis la cellule : une route se PROPOSE dans /etc/spark/routes.?, un port publié se demande au propriétaire.",
     "Un port SORTANT fermé vient de l'hébergeur : le plan de contrôle ne filtre que l'entrée vers la Forge.",
     "nproc et free décrivent la Forge : les quotas de ce briefing font foi pour cette cellule.",
 )
@@ -283,7 +291,8 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
            routes: list[dict[str, Any]], ports: list[dict[str, Any]],
            environment: list[Any], bootstrap: dict[str, Any] | None,
            written_at: str | None = None,
-           ingress_behaviour: dict[str, Any] | None = None) -> dict[str, Any]:
+           ingress_behaviour: dict[str, Any] | None = None,
+           notes: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Construit l'unique modèle public, sans aucune valeur d'environnement."""
     variables = sorted(entry.name for entry in environment if not entry.is_secret)
     secrets = sorted(entry.name for entry in environment if entry.is_secret)
@@ -346,6 +355,10 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
         # répéter ici la rendrait deux fois plus longue à lire pour rien.
         "pitfalls": [p for p in PIEGES
                      if spark.get("docker_enabled", 1) or "Docker" not in p],
+        # SPK-104 · §44.8, §54.5 : les notes entrent dans le MODÈLE, comme tout
+        # le reste. Le briefing les nomme, le dossier les porte en entier — deux
+        # présentations d'une même donnée, jamais deux collectes.
+        "notes": list(notes or []),
     }
     # SPK-95 · §42.2 quater : les PORTES ouvertes sur cette cellule. La règle vit
     # ici et non dans la console : « root toujours, spark-docker si le mode relevé
@@ -409,6 +422,121 @@ def _lignes_systeme(model: dict[str, Any]) -> list[str]:
         f"- Distribution : {distribution}",
         f"- Architecture : {systeme.get('arch') or 'non relevée'}",
     ])
+    return lignes
+
+
+def _lignes_notes_nommees(model: dict[str, Any]) -> list[str]:
+    """Les notes NOMMÉES, pour le briefing de la cellule (§54.5).
+
+    Celui qui lit ce fichier est déjà dedans : les trois notes sont à trois
+    lignes de commande de lui. Les y recopier créerait deux exemplaires du même
+    texte dans la même machine, dont l'un vieillirait — et ce serait
+    l'exemplaire réécrit par le plan de contrôle, c'est-à-dire celui qui a l'air
+    officiel.
+    """
+    lignes = ["", "## Ce que ce Spark dit de lui-même", "",
+              "Trois textes écrits par ceux qui connaissent l'application. Le "
+              "plan de contrôle ne les vérifie pas : il les transporte.", ""]
+    for note in model.get("notes") or []:
+        etat = ("écrite" if note["written"] else "**pas encore écrite**")
+        lignes.append(f"- `{note['path']}` — {note['expected']} ({etat})")
+    lignes.extend([
+        "",
+        "    cat /etc/spark/notes/*.md",
+        "",
+        "Elles sont posées par le plan de contrôle depuis son registre : les "
+        "éditer à la main n'a aucun effet durable. Pour en proposer une autre "
+        "version, écrivez dans le fichier voisin en `.?` — voir ci-dessous.",
+    ])
+    return lignes
+
+
+def _lignes_canal(model: dict[str, Any],
+                  titre: str = "## Proposer un changement : le fichier `.?`"
+                  ) -> list[str]:
+    """Le canal `.?`, dit d'UNE seule façon pour les deux présentations (§55.7).
+
+    Quatre points, et pas un de plus : ce qu'on peut proposer, la grammaire, le
+    cycle de vie, et comment on apprend le sort de sa demande.
+    """
+    lignes = [
+        "", titre, "",
+        "Rien de ce que le plan de contrôle pose ici ne se modifie à la main : "
+        "il réécrit tout depuis son registre. **À côté de chaque fichier, un "
+        "voisin de même nom suffixé `.?` est le seul endroit où vous pouvez "
+        "PROPOSER un changement.**", "",
+    ]
+    for paire in suggestions_service.PAIRES:
+        effet = ("ajoute ou remplace"
+                 if paire["nature"] == suggestions_service.ENTREES
+                 else "remplace en entier")
+        lignes.append(f"- `{paire['reel']}{suggestions_service.SUFFIXE}` — "
+                      f"{paire['titre']} ; {effet}.")
+    lignes.extend([
+        "",
+        "Grammaire : `NOM=valeur` pour les deux `.env`, "
+        "`<domaine> <port écouté ici> [tls|clair]` pour les routes, du texte "
+        "libre pour les trois notes. Chaque fichier porte son en-tête, qui le "
+        "redit.",
+        "",
+        # Le texte ne décrit PAS l'écran du propriétaire : il décrit ce qui
+        # arrive à la proposition. Nommer un écran ferait dépendre ce dossier
+        # d'une interface qu'il ne connaît pas et qui change sans lui.
+        "**Rien ne s'applique tout seul.** Le propriétaire du Spark relit votre "
+        "proposition et l'accepte ou non — en tout ou en partie. Rien ne "
+        "garantit qu'elle soit lue : n'en faites pas dépendre le démarrage de "
+        "votre pile.",
+        "",
+        "**Tant que personne n'a tranché, votre fichier reste tel quel.** Quand "
+        "une décision aura été prise, il redeviendra **vide** : c'est ainsi que "
+        "vous l'apprendrez. Le fichier réel d'à côté vous dira laquelle — ce qui "
+        "a été accordé y est, ce qui a été refusé n'y est pas.",
+        "",
+        "**Un refus du produit ne vide pas** : une valeur de secret dans une "
+        "note, un nom hors grammaire, un domaine déjà pris laissent votre "
+        "proposition intacte. Corrigez-la sur place.",
+    ])
+    if model["docker"].get("mode") == "rootless":
+        # §55.6.1 : le seul des six dont la proposition est périssable.
+        lignes.extend([
+            "",
+            f"**`{suggestions_service.FICHIER_SECRETS}{suggestions_service.SUFFIXE}` "
+            "vit dans un tmpfs** : une proposition de secret disparaît au "
+            "redémarrage de la cellule, sans avoir été lue. Redéposez-la.",
+        ])
+    return lignes
+
+
+def _lignes_notes_entieres(model: dict[str, Any]) -> list[str]:
+    """Les notes recopiées EN ENTIER, pour le dossier (§54.5).
+
+    Celui qui lit ce texte n'est pas encore entré dans la cellule, et ne peut
+    ouvrir aucun de ces fichiers : ils vivent derrière une clé accordée, un
+    rebond et une cellule amorcée (§44.9.1). Les lui nommer ne servirait à rien.
+
+    Elles viennent en tête, avant même la machine : « à quoi sert ce Spark »
+    décide de tout ce qu'on lira ensuite. Une note absente est DITE — le §14.5
+    veut que l'absence se nomme, et ici elle dit à l'agent qu'il est peut-être le
+    premier à savoir quelque chose que personne n'a écrit.
+    """
+    lignes = [
+        "", "## 2. Ce que ce Spark est, dit par ceux qui le connaissent", "",
+        "Ces textes ne viennent pas du plan de contrôle : il les transporte sans "
+        "les vérifier. Ils peuvent être périmés, comme toute documentation — "
+        "c'est à leurs lecteurs de les corriger, et la section 7 dit comment.",
+    ]
+    for note in model.get("notes") or []:
+        lignes.extend(["", f"### {note['title']} — {note['file']}", ""])
+        if note["written"] and note["body"].strip():
+            lignes.extend([
+                f"> *Attendu ici : {note['expected']}*", "",
+                "```markdown", note["body"], "```",
+            ])
+        else:
+            lignes.append(
+                f"*Personne n'a encore écrit cette note.* Elle est faite pour "
+                f"porter : {note['expected']} Si vous l'apprenez en travaillant, "
+                f"vous êtes bien placé pour l'écrire — voir la section 7.")
     return lignes
 
 
@@ -534,6 +662,8 @@ def markdown(model: dict[str, Any]) -> str:
             (", ".join(bootstrap["managed_items"]) or "aucun lors des relevés connus"),
             "- Pour les autres paquets : dpkg-query -W",
         ])
+    lines.extend(_lignes_notes_nommees(model))
+    lines.extend(_lignes_canal(model))
     lines.extend(["", "## Pièges connus"])
     lines.extend(f"- {pitfall}" for pitfall in model["pitfalls"])
     return "\n".join(lines) + "\n"
@@ -713,6 +843,19 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "ce dossier, réécrit dans la cellule à chaque geste du plan de contrôle. "
         "`/etc/motd` le rappelle à la connexion — mais une commande d'une seule "
         "ligne n'ouvre aucun shell, et n'affiche donc aucun `motd`.",
+        # SPK-105 · §55.7 : la consigne d'accès, écrite UNE fois, ici, au même
+        # endroit que les commandes d'entrée. La répéter à chaque section la
+        # ferait lire zéro fois ; l'omettre laisserait un agent conclure d'un
+        # fichier réécrit puis restauré que la machine est cassée.
+        "- **Ce que le plan de contrôle pose, il le RÉÉCRIT** depuis son "
+        f"registre : `{FICHIER_VARIABLES}`, `{FICHIER_SECRETS}`, "
+        f"`{suggestions_service.FICHIER_ROUTES}`, `{FICHIER_MARKDOWN}` et les "
+        "trois notes. Les éditer à la main n'a aucun effet durable. **Tout ce "
+        "qui vient de la cellule passe par le fichier `.?` voisin** (section 7)"
+        + (", que `root` comme `spark-docker` peuvent écrire"
+           if model["docker"].get("mode") == "rootless" else "")
+        + ". Ni l'un ni l'autre ne décide : une variable, un secret, une route "
+        "ou une note n'entrent que par la console.",
     ])
     clefs = keys or []
     if clefs:
@@ -728,7 +871,8 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
                       "connexion SSH n'aboutira tant qu'une clé n'y aura pas été "
                       "accordée depuis la console.")
 
-    lignes.extend(["", "## 2. La machine"])
+    lignes.extend(_lignes_notes_entieres(model))
+    lignes.extend(["", "## 3. La machine"])
     # Le helper porte son propre titre pour le briefing de la cellule ; ici la
     # section en a déjà un. On ne garde que les faits (§44.8 : une seule façon
     # de les dire, deux façons de les titrer).
@@ -748,7 +892,7 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "qui porte le démon ; `/run` est un tmpfs, et ce qu'on y écrit disparaît "
         "au redémarrage.",
         "",
-        "## 3. Le moteur Docker",
+        "## 4. Le moteur Docker",
     ])
     if docker["mode"] is None:
         lignes.append("- Aucun Docker utilisable n'a été relevé. Une pile Compose "
@@ -799,7 +943,7 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
 
     lignes.extend([
         "",
-        "## 4. Ce que la pile recevra",
+        "## 5. Ce que la pile recevra",
         "",
         f"- Variables ordinaires, dans `{env['files']['variables']}` : "
         + (", ".join(f"`{nom}`" for nom in env["variables"]) or "aucune"),
@@ -823,9 +967,22 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "qui est pire : la pile marchera jusque-là.",
         "",
         "**Seul le propriétaire du Spark peut poser une variable**, depuis la "
-        "console, qui n'est pas joignable d'ici. Rendez-lui un bloc au format "
-        "`.env` et demandez-lui de le coller dans **la fenêtre de ce Spark → "
-        "Environnement → Importer un lot** :",
+        "console, qui n'est pas joignable d'ici. Mais vous pouvez lui DEMANDER, "
+        "et la machine porte la demande à sa place.",
+        "",
+        # SPK-105 · §55.7 : le §44.9.7 demandait à l'agent de rédiger un bloc
+        # dans sa réponse, à charge pour le propriétaire de le recopier. Le bloc
+        # traversait une conversation, où une ligne se perd sans que personne ne
+        # le voie. Le fichier, lui, ne perd rien.
+        f"**Écrivez-les dans `{FICHIER_VARIABLES}{suggestions_service.SUFFIXE}` "
+        f"— ou `{FICHIER_SECRETS}{suggestions_service.SUFFIXE}` pour ce qui doit "
+        "être secret.** Le propriétaire les relira ligne par ligne et posera "
+        "celles qu'il retient. La section 7 dit ce qui arrive ensuite à votre "
+        "fichier.",
+        "",
+        "Si vous préférez le lui remettre de la main à la main, c'est le même "
+        "texte, et il le collera dans **la fenêtre de ce Spark → Environnement → "
+        "Importer un lot** :",
         "",
         "```dotenv",
         "NOM_DE_VARIABLE=valeur",
@@ -840,11 +997,13 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "ne nomme pas.",
         "- **Dites en clair, à côté du bloc, lesquelles sont des secrets.** Le "
         "produit ne le devine pas d'après le nom : c'est la personne qui importe "
-        "qui coche, ligne par ligne.",
+        "qui coche, ligne par ligne. Par fichier, le chemin le dit déjà — ce qui "
+        f"est dans `{FICHIER_SECRETS}{suggestions_service.SUFFIXE}` est proposé "
+        "comme secret —, et le propriétaire garde le dernier mot.",
         "- Une ligne refusée est nommée avec son numéro avant que rien ne soit "
         "écrit ; c'est la console qui fait foi, pas cette liste.",
         "",
-        "## 5. Le contrat que le `docker-compose.yml` doit respecter",
+        "## 6. Le contrat que le `docker-compose.yml` doit respecter",
         "",
         "Ce ne sont pas des suggestions : ce sont les seules lignes que cette "
         "cellule impose, et que rien d'autre ne peut vous apprendre.",
@@ -932,15 +1091,25 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
     lignes.extend([
         "**Rien ne s'expose depuis l'intérieur.** Une route publique et un port "
         "publié se déclarent au plan de contrôle, injoignable depuis la cellule : "
-        "il faut les DEMANDER, on ne peut pas les poser soi-même.",
+        "vous ne pouvez pas les poser vous-même.",
         "",
-        "## 6. Pièges connus",
+        "Une **route**, vous pouvez la PROPOSER, et la section suivante dit "
+        f"comment : `{suggestions_service.FICHIER_ROUTES}"
+        f"{suggestions_service.SUFFIXE}`. Un **port publié**, non : c'est une "
+        "ressource de la Forge, unique sur la machine et partagée entre tous les "
+        "Sparks — celui-là se demande en toutes lettres à son propriétaire.",
+    ])
+    lignes.extend(_lignes_canal(
+        model, "## 7. Proposer un changement : le fichier `.?`"))
+    lignes.extend([
+        "",
+        "## 8. Pièges connus",
         "",
     ])
     lignes.extend(f"- {piege}" for piege in model["pitfalls"])
     lignes.extend([
         "",
-        "## 7. Ce que ce dossier ne contient pas",
+        "## 9. Ce que ce dossier ne contient pas",
         "",
         "- **Aucune valeur de secret, aucune clé privée.** Elles ne traversent "
         "jamais ce texte, quel qu'en soit le destinataire.",

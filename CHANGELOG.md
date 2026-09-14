@@ -22,6 +22,19 @@
   désormais cette grammaire : elle voit 33 variables au lieu de 28.
 
 ### Ajouté
+- **SPK-104/105 — le briefing et le texte pour un LLM disent les deux
+  nouveautés.** Le `BRIEFING.md` posé dans la cellule **nomme** les trois notes
+  et donne la commande qui les lit ; le texte copié par *Copier pour un LLM* les
+  porte **en entier**, parce que celui qui le lit n'est pas encore entré et ne
+  peut ouvrir aucun de ces fichiers. Les deux décrivent le canal `.?` : les six
+  paires, leur grammaire, et ce qui arrive à une proposition — elle attend, elle
+  reste si on la consulte, elle redevient vide quand une décision a été prise, et
+  le fichier réel d'à côté dit laquelle. Une **consigne d'accès unique** est
+  écrite une seule fois, au même endroit que les commandes d'entrée : ce que le
+  plan de contrôle pose, il le réécrit ; tout ce qui vient de la cellule passe
+  par un `.?`. Le texte **ne nomme aucun écran** — il dit ce qui arrive à la
+  proposition, pas où elle se lit. `/etc/spark/routes` est **créé** : la cellule
+  ne pouvait lire les routes qui la visent qu'en analysant une présentation.
 - **SPK-105 — le fichier `.?`, seul canal par lequel la cellule propose.** À côté
   de chaque fichier que le plan de contrôle pose dans une cellule —
   `/etc/spark/env`, `/run/spark/secrets`, le **nouveau** `/etc/spark/routes` et
@@ -39,9 +52,9 @@
   corriger. L'application passe par les **chemins existants** — import de lot,
   déclaration ou correction de route, écriture de note —, donc les contrôles du
   §18.4 et du §43.9 gardent le dernier mot. En rootless, **`root` comme
-  `spark-docker`** peuvent proposer ; ni l'un ni l'autre ne décide. *Service et
-  API livrés ; la console, le dossier pour un LLM et les parcours restent à
-  venir.*
+  `spark-docker`** peuvent proposer ; ni l'un ni l'autre ne décide. *Service,
+  API et textes pour les agents livrés ; les écrans de la console et les
+  parcours restent à venir.*
 - **SPK-104 — trois notes de Spark : README, CONTRIBUTORS, INSTALL.** Le §44.7
   disait depuis toujours que le briefing « ne décrit pas l'application du
   locataire » : ces trois textes comblent ce trou sans le combler de faits
@@ -53,8 +66,8 @@
   texte portant la valeur d'un secret connu du Spark est **refusé**, en nommant
   la variable et jamais la valeur ; un enregistrement portant une révision
   dépassée est refusé au lieu d'écraser, et rend le texte courant. *Registre,
-  service et API livrés ; la console, le dossier pour un LLM et les parcours
-  restent à venir.*
+  service, API et textes pour les agents livrés ; les écrans de la console et
+  les parcours restent à venir.*
 - **SPK-103 — les variables et les secrets se lisent en deux blocs, et se
   cherchent.** Une variable se lit pour sa **valeur**, un secret pour son
   **existence** : un seul tableau faisait alterner deux questions dans la colonne

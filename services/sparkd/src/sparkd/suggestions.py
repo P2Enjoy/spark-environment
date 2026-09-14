@@ -203,8 +203,8 @@ def entete(kind: str) -> str:
         f"Ce fichier PROPOSE ; il n'applique rien. Le fichier voisin "
         f"« {paire['reel']} » est",
         "posé par le plan de contrôle depuis son registre : l'éditer à la main",
-        "n'a aucun effet durable. Écrivez ici, et le propriétaire du Spark verra",
-        "votre proposition dans sa console.",
+        "n'a aucun effet durable. Écrivez ici : le propriétaire du Spark relira",
+        "votre proposition, et l'acceptera ou non.",
         "",
         "Tant que personne ne l'a ouverte, elle reste. Quand elle aura été",
         "acceptée ou refusée, ce fichier redeviendra VIDE — c'est ainsi que vous",

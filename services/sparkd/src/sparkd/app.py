@@ -971,6 +971,10 @@ def create_app(config: Config) -> FastAPI:
             ports=ports_service.listing(connection),
             environment=env_service.lister(connection, spark["id"]),
             bootstrap=releve,
+            # SPK-104 · §44.8, §54.5 : les notes entrent dans le MODÈLE. Le
+            # briefing les nomme, le dossier les porte en entier — deux
+            # présentations d'une même donnée, jamais deux collectes.
+            notes=notes_service.lister(connection, spark["id"]),
         )
         for chemin, (contenu, mode) in briefing_service.fichiers(model).items():
             app.state.incus.push_file(spark["incus_name"], chemin, contenu, mode=mode)
@@ -2824,6 +2828,7 @@ def create_app(config: Config) -> FastAPI:
                 ports=ports_service.listing(connection),
                 environment=env_service.lister(connection, spark["id"]),
                 bootstrap=briefing_service.observation(connection, spark["id"]),
+                notes=notes_service.lister(connection, spark["id"]),
             )
             return {
                 "spark": name,
@@ -2909,6 +2914,12 @@ def create_app(config: Config) -> FastAPI:
                                f"({erreur})"}) from erreur
             try:
                 posee = _apply_notes(connection, spark)
+                # SPK-104 · §44.4 : le briefing NOMME les trois notes et dit
+                # lesquelles sont écrites (§54.5). Une note posée sans le
+                # reprojeter laisserait le fichier de la cellule annoncer
+                # « pas encore écrite » sur un texte qui vient d'arriver à côté
+                # de lui — un briefing qui ment sur ce qu'il désigne.
+                _apply_briefing(connection, spark)
             except (IncusError, InstanceAbsente):
                 # Le registre est écrit ; la cellule sera rattrapée au prochain
                 # démarrage. Même règle que l'environnement (§43.5.2) : un geste
@@ -2971,6 +2982,9 @@ def create_app(config: Config) -> FastAPI:
                 connection, spark["id"], paire["note"],
                 str(body.get("body", "")), _secrets_du_spark(connection, spark))
             _apply_notes(connection, spark)
+            # §44.4, comme à l'écriture depuis la console : le briefing dit
+            # lesquelles des trois sont écrites.
+            _rattraper_briefing(connection, spark)
             return {"note": ecrite}
 
         entrees = body.get("entries")
