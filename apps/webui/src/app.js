@@ -195,6 +195,40 @@ function identiteFocus(element) {
   return lien ? `a[href="${CSS.escape(lien)}"]` : null;
 }
 
+/**
+ * La POSITION du curseur dans le contrôle qui avait le focus.
+ *
+ * MESURÉ le 2026-09-14, au clavier, sur la recherche d'environnement (SPK-103) :
+ * la repeinture reconstruit le champ, `focus()` le rend bien focusable — mais le
+ * curseur repart à l'offset 0, et frapper « DATABASE » écrivait « ESABATAD ».
+ *
+ * Le `DESIGN_SYSTEM.md` §14.3 ne demande pas seulement de RENDRE le focus : il
+ * demande qu'un contrôle reconstruit se comporte comme s'il n'avait pas bougé.
+ * Un champ qui garde le focus et perd son curseur n'est pas moins cassé.
+ *
+ * Le défaut vivait déjà dans la recherche du dépôt d'images (SPK-92), qu'aucune
+ * preuve ne frappait touche à touche — `fill()` pose la valeur d'un coup et ne
+ * l'aurait jamais montré.
+ */
+function positionCurseur(element) {
+  try {
+    if (typeof element?.selectionStart !== 'number') return null;
+    return { debut: element.selectionStart, fin: element.selectionEnd,
+             direction: element.selectionDirection ?? 'none' };
+  } catch {
+    // `selectionStart` n'est pas adressable sur tous les types de champ, et le
+    // lire LÈVE sur certains. Un champ sans curseur se contente de son focus.
+    return null;
+  }
+}
+
+function restaurerCurseur(element, curseur) {
+  if (!element || !curseur) return;
+  try {
+    element.setSelectionRange(curseur.debut, curseur.fin, curseur.direction);
+  } catch { /* idem : pas de curseur adressable, le focus suffit. */ }
+}
+
 function peindre() {
   marquerNavigation();
   // MESURÉ le 2026-09-02, en éprouvant la navigation au clavier : une repeinture
@@ -204,6 +238,7 @@ function peindre() {
   // donc éjecté sans rien avoir fait, et sa tabulation repartait du début de la
   // page (DESIGN_SYSTEM.md §14.3).
   const avantPeinture = identiteFocus(document.activeElement);
+  const curseurAvant = positionCurseur(document.activeElement);
   racine.querySelector('.principal').innerHTML =
     etat.route === 'manuel'
       ? renderManuel(manuel)
@@ -245,7 +280,9 @@ function peindre() {
   // vient de s'ouvrir, une confirmation qui appelle son champ, ont posé le leur
   // et il ne faut pas le leur reprendre (§6.27, §6.22).
   if (avantPeinture && (!document.activeElement || document.activeElement === document.body)) {
-    racine.querySelector(avantPeinture)?.focus();
+    const rendu = racine.querySelector(avantPeinture);
+    rendu?.focus();
+    restaurerCurseur(rendu, curseurAvant);
   }
 }
 
@@ -1654,6 +1691,9 @@ function brancherPanneaux() {
     caseACocher.addEventListener('change', () => changerSelectionEnv(
       caseACocher.dataset.descend, caseACocher.checked));
   }
+  // SPK-103 · §43.11 : la frappe restreint la facette entière. Elle ne part
+  // nulle part — ni au serveur, ni dans l'adresse.
+  brancherRechercheEnv('#env-recherche', etat.envUi);
   for (const niveau of ['forge', 'spark']) {
     const formulaire = racine.querySelector(`[data-modale="env-${niveau}"]`);
     if (!formulaire) continue;
@@ -3534,8 +3574,24 @@ async function importerEnv(portee) {
   await chargerDetail(etat.spark.name, etat.facette);
 }
 
+/**
+ * Le champ de recherche d'une vue d'environnement (SPK-103, docs/DAT.md §43.11).
+ *
+ * La liste change, donc il FAUT repeindre. Le champ retrouve son focus ET son
+ * curseur par son identifiant (`DESIGN_SYSTEM.md` §14.3) — c'est pourquoi ce
+ * champ en a un, et c'est le même motif que la recherche du dépôt d'images.
+ */
+function brancherRechercheEnv(selecteur, ui) {
+  const champ = racine.querySelector(selecteur);
+  champ?.addEventListener('input', () => {
+    ui.recherche = champ.value;
+    peindre();
+  });
+}
+
 function brancherCatalogueEnv() {
   const ui = etat.catalogueEnv.ui;
+  brancherRechercheEnv('#catalogue-env-recherche', ui);
   racine.querySelector('[data-ouvre="catalogue-env"]')?.addEventListener('click', () => {
     ui.open = true;
     ui.refusal = null;

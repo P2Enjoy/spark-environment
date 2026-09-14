@@ -1,9 +1,12 @@
 /**
  * Le catalogue d'environnement de la Forge.
  *
- * @verifies docs/BACKLOG.md#SPK-64 · docs/DAT.md §43.6 révisé, §43.3 (la valeur
- *           d'un secret ne sort jamais), §43.5.1 ·
- *           docs/DESIGN_SYSTEM.md §6.13 (états d'une vue), §14.5, §14.6
+ * @verifies docs/BACKLOG.md#SPK-64, docs/BACKLOG.md#SPK-103 (deux blocs, et la
+ *           recherche) · docs/DAT.md §43.6 révisé, §43.3 (la valeur
+ *           d'un secret ne sort jamais), §43.5.1, §43.11 ·
+ *           docs/DESIGN_SYSTEM_APP.md SPK-DS-25 ·
+ *           docs/DESIGN_SYSTEM.md §6.13 (états d'une vue), §9.3, §14.4, §14.5,
+ *           §14.6, §14.10
  */
 
 import test from 'node:test';
@@ -102,4 +105,66 @@ test('une écriture qui atteint un Spark protégé demande une confirmation expl
   assert.match(rendu, /analytics/);
   assert.match(rendu, /Continuer malgré les protections/);
   assert.match(rendu, /Aucune protection ne sera levée/);
+});
+
+// --- SPK-103 · Deux blocs, et la recherche (docs/DAT.md §43.11) -------------
+
+test('le catalogue se lit en DEUX blocs, variables puis secrets', () => {
+  const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES });
+  // §9.3 : la carte porte un h1, ses blocs des h2.
+  assert.match(rendu, /<h2 id="titre-catalogue-variables">Variables<\/h2>/);
+  assert.match(rendu, /<h2 id="titre-catalogue-secrets">Secrets<\/h2>/);
+
+  const variables = rendu.slice(rendu.indexOf('titre-catalogue-variables'),
+                                rendu.indexOf('titre-catalogue-secrets'));
+  assert.match(variables, /TZ/);
+  assert.match(variables, /OBJECT_STORAGE_URL/);
+  assert.doesNotMatch(variables, /SMTP_PASSWORD/);
+  assert.match(rendu.slice(rendu.indexOf('titre-catalogue-secrets')), /SMTP_PASSWORD/);
+});
+
+test('chaque bloc porte son COMPTE : c’est la question de revue', () => {
+  // §43.11 : « combien de secrets ce catalogue porte-t-il ? » ne doit pas se
+  // payer d'une lecture ligne à ligne.
+  const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES });
+  assert.match(rendu, /<span class="sous-bloc__compte">2 entrées<\/span>/);
+  assert.match(rendu, /<span class="sous-bloc__compte">1 entrée<\/span>/);
+});
+
+test('un catalogue sans aucun secret le DIT, et ne dit pas « vide »', () => {
+  const rendu = renderForgeEnv({ status: 'ready', entrees: [ENTREES[0]] });
+  assert.match(rendu, /Aucun secret au catalogue\./);
+  assert.doesNotMatch(rendu, /Aucune entrée au catalogue/);
+});
+
+test('un catalogue ENTIÈREMENT vide nomme son absence UNE fois', () => {
+  // §14.5 : deux blocs vides répéteraient la même absence de fond, et diraient
+  // « aucune variable » là où il faut « rien ne descend nulle part ».
+  const rendu = renderForgeEnv({ status: 'ready', entrees: [] });
+  assert.match(rendu, /Aucune entrée au catalogue/);
+  assert.doesNotMatch(rendu, /Aucune variable au catalogue/);
+  assert.doesNotMatch(rendu, /id="titre-catalogue-secrets"/);
+  // §14.4 : rien à chercher, donc pas de champ.
+  assert.doesNotMatch(rendu, /id="catalogue-env-recherche"/);
+});
+
+test('la recherche restreint les deux blocs, et porte sur le NOM', () => {
+  const ui = { ...CATALOGUE_VIDE, recherche: 'SMTP' };
+  const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES, ui });
+  assert.match(rendu, /SMTP_PASSWORD/);
+  assert.doesNotMatch(rendu, /OBJECT_STORAGE_URL/);
+  assert.match(rendu, /Aucune variable du catalogue ne porte « SMTP »\./);
+  // La valeur d'une variable n'est PAS un critère : le même pour les deux
+  // natures, sans quoi un secret serait introuvable (§14.10).
+  const parValeur = renderForgeEnv({ status: 'ready', entrees: ENTREES,
+                                     ui: { ...CATALOGUE_VIDE, recherche: 's3.example' } });
+  assert.match(parValeur, /Aucune variable du catalogue ne porte « s3.example »\./);
+  assert.match(parValeur, /Aucun secret du catalogue ne porte « s3.example »\./);
+});
+
+test('la valeur d’un secret reste absente, même quand il est la seule ligne', () => {
+  const ui = { ...CATALOGUE_VIDE, recherche: 'PASSWORD' };
+  const rendu = renderForgeEnv({ status: 'ready', entrees: ENTREES, ui });
+  assert.match(rendu, /ab12cd34/);
+  assert.doesNotMatch(rendu, /Europe\/Paris/);
 });

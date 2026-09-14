@@ -6977,7 +6977,7 @@ Trois manques, et une erreur d'attribution :
   réellement collé.
 
 
-### [ ] SPK-103 · Variables et secrets se lisent en deux blocs, et se cherchent
+### [x] SPK-103 · Variables et secrets se lisent en deux blocs, et se cherchent
 
 Demandé par le responsable le 2026-09-14 : « sépare la vue entre variables et
 secrets, un bloc des variables et un bloc des secrets, et rends-les
@@ -7030,6 +7030,33 @@ constatées sur le catalogue seedé :
   tests unitaires de composant et test E2E propres à l'unité ; captures observées
   en 1440 px et 390 px, blocs vides compris ; manuel M8, DAT, design system et
   changelog mis à jour ; `@spec` / `@verifies` posés.
+- **Clos le 2026-09-14.** **12 preuves** sur la logique partagée — dont celle qui
+  ne se voit sur aucune capture : la recherche NE trouve PAS une entrée par sa
+  valeur, y compris quand cette valeur est affichée —, **9 de plus** sur la
+  facette d'un Spark et **6** sur le catalogue de la Forge, plus **2 parcours**
+  contre la pile réelle depuis la page d'accueil.
+- **Deux défauts n'ont été trouvés que par le clavier et par les captures**, et
+  aucun n'aurait été vu autrement :
+  - frapper « DATABASE » dans le champ écrivait **« ESABATAD »**. La repeinture
+    reconstruit le champ, `focus()` le rend focusable et remet le curseur à
+    l'offset 0. Aucune preuve existante ne pouvait le voir : toutes posent la
+    valeur d'un coup avec `fill()`. La restauration rend désormais la
+    **sélection** avec le focus (`DESIGN_SYSTEM.md` §14.3 complété), et la
+    recherche du dépôt d'images — qui portait le même défaut depuis SPK-92 — en
+    profite ;
+  - la colonne des noms du catalogue était ferrée **à droite** : un
+    `th scope="row"` sans la classe que le projet a écrite pour cela. Un seul
+    tableau le cachait ; deux blocs de largeurs différentes l'ont rendu criant.
+- Le parcours prouve aussi ce qu'un rendu ne peut pas dire : la frappe ne
+  provoque **aucun appel** au serveur, et une entrée que la recherche masque
+  **descend toujours** — constaté sur `sparkd`, pas à l'écran.
+- Captures observées : `spk103-blocs-spark.jpg`, `spk103-recherche-spark.jpg`,
+  `spk103-recherche-sans-resultat.jpg`, `spk103-catalogue-blocs.jpg` et leurs
+  deux variantes en 390 px, depuis la pile réelle.
+- **Une reformulation qui n'était pas demandée** : « Variables propres à ce
+  Spark » était devenu faux le jour où la section a porté aussi des secrets. La
+  section porte des **entrées** ; leur nature se lit un cran plus bas. Le bouton
+  suit — « Poser une entrée ».
 
 
 ---

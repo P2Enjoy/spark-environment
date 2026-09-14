@@ -11081,3 +11081,49 @@ silence.
 juste » — tirée d'une mesure de durée, alors que la preuve de la vraie cause
 était écrite dans le dépôt depuis le premier échec. Le harnais écrit ces
 diagnostics précisément pour qu'on les lise avant de conjecturer.
+
+---
+
+## 2026-09-14 · SPK-103 — ce que le clavier a trouvé, et que les preuves ne pouvaient pas voir
+
+Suite de l'entrée précédente, écrite APRÈS l'implémentation : deux défauts, dont
+un qu'aucune preuve du dépôt n'aurait pu attraper.
+
+**« DATABASE » s'écrivait « ESABATAD ».** Le parcours E2E frappe la recherche
+**touche à touche**, parce que c'est ce que fait un exploitant. Il a échoué du
+premier coup, sur une valeur retournée. La cause : une vue qui se repeint à
+chaque frappe reconstruit son champ, et `focus()` rend bien le focus mais remet
+le curseur à l'**offset 0** — chaque caractère s'insère donc devant les
+précédents.
+
+Ce qui compte ici, c'est **pourquoi personne ne l'avait vu**. Le motif existe
+depuis SPK-92, dans la recherche du dépôt d'images, et il est éprouvé — mais par
+`page.fill()`, qui pose la valeur d'un coup et n'émet qu'un seul événement. Une
+preuve qui remplit un champ ne prouve pas qu'on peut y taper. Le §14.3 du socle
+dit désormais les deux : rendre le focus ne suffit pas, le curseur va avec, et
+une preuve tape au moins deux caractères.
+
+**La colonne des noms du catalogue était ferrée à droite.** Un `th scope="row"`
+hérite du centrage du navigateur ; le projet a écrit `.nom-cellule` exactement
+pour cela, et ce tableau ne la portait pas. Un seul tableau le cachait — la
+colonne étant la première, le ferrage ne saute pas aux yeux. Deux blocs de
+largeurs différentes l'ont rendu immédiat. C'est le §13.2 du socle en action :
+une interface qui passe ses tests peut encore être visuellement fausse.
+
+**Ce que je n'ai pas changé, et pourquoi.** Une frappe qui ne correspond à rien
+produit cinq phrases « … ne porte « X » » sur la facette d'un Spark, une par
+bloc plus celle des cases. C'est répétitif. Chacune porte pourtant un sujet et
+un compte distincts — « 0 sur 1 » dans les secrets cochés n'est pas « 0 sur 2 »
+dans les variables propres —, et elles disent OÙ l'on a cherché. Remplacer
+l'ensemble par un message unique perdrait cette information et ajouterait un
+second mécanisme pour un état rare. Laissé tel quel, et consigné ici pour que le
+choix soit rouvrable plutôt que redécouvert.
+
+**Un échec E2E qui ne m'appartient pas.** La série complète rend 130 vertes et
+une rouge : « un Spark ARRÊTÉ nomme l'arrêt » échoue faute de processeur sur la
+Forge d'épreuve. Mesuré : en écartant le parcours `amorcer ACCORDE la clé de la
+console` — qui crée `octroi-e2e` et n'est **pas encore committé** —, les 130
+passent, mes deux parcours compris. Le défaut appartient au travail en cours sur
+SPK-82, et le `CHANGELOG` porte déjà une correction du même symptôme pour
+SPK-93 : c'est un budget qui se re-consomme à chaque parcours créateur, pas un
+incident isolé. Laissé intact, signalé au responsable.

@@ -2,7 +2,8 @@
  * Parcours E2E contre la pile réelle.
  *
  * @verifies docs/BACKLOG.md#SPK-24, docs/BACKLOG.md#SPK-70,
- *           docs/BACKLOG.md#SPK-97 (l'import d'un lot collé, docs/DAT.md §43.10) ·
+ *           docs/BACKLOG.md#SPK-97 (l'import d'un lot collé, docs/DAT.md §43.10),
+ *           docs/BACKLOG.md#SPK-103 (deux blocs et la recherche, §43.11) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -824,6 +825,128 @@ test('le catalogue ne descend qu’après une case cochée, puis le décochage l
     await page.click('[data-retire-catalogue="PARCOURS_SELECTION"]');
     await page.waitForFunction(
       () => !document.body.innerText.includes('PARCOURS_SELECTION'), { timeout: 15000 });
+  });
+});
+
+// --- SPK-103 · DEUX BLOCS, ET LA RECHERCHE (§43.11) -------------------------
+
+test('l’environnement se lit en blocs, et la frappe restreint la facette entière', async () => {
+  await parcours('env-blocs-recherche', async () => {
+    // Le seed pose une variable ET un secret aux deux niveaux sur ce Spark : les
+    // quatre blocs sont peuplés, ce qui est exactement ce que l'unité sépare.
+    await ouvrir('crm-production', 'environnement');
+    await page.waitForSelector('#titre-env-forge-secrets', { timeout: 10000 });
+
+    for (const bloc of ['titre-env-forge-variables', 'titre-env-forge-secrets',
+                        'titre-env-spark-variables', 'titre-env-spark-secrets']) {
+      assert.equal(await page.locator(`#${bloc}`).count(), 1, `bloc ${bloc} absent`);
+    }
+    // La nature RANGE : le secret du catalogue n'est pas dans les variables.
+    const varForge = await page.innerText(
+      'section.sous-bloc:has(#titre-env-forge-variables)');
+    assert.match(varForge, /TZ/);
+    assert.doesNotMatch(varForge, /SMTP_PASSWORD/);
+
+    await capturer('spk103-blocs-spark');
+    await capturer('spk103-blocs-spark-mobile', { largeur: 390, hauteur: 900 });
+
+    // §43.3 : rien de la valeur, ni avant la frappe ni après.
+    const avant = await page.innerText('body');
+    assert.doesNotMatch(avant, /mot-de-passe-de-demonstration/);
+    assert.doesNotMatch(avant, /postgres:\/\//);
+
+    // La frappe, AU CLAVIER, caractère par caractère : c'est ce qui prouve que
+    // la repeinture ne vole pas le focus ni ne retourne la saisie (§14.3).
+    let appels = 0;
+    const compteur = (requete) => { if (requete.url().includes('/api/')) appels += 1; };
+    page.on('request', compteur);
+    await page.focus('#env-recherche');
+    await page.keyboard.type('DATABASE');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('APP_NAME'), { timeout: 10000 });
+    page.off('request', compteur);
+
+    assert.equal(await page.inputValue('#env-recherche'), 'DATABASE',
+      'la repeinture à chaque touche a perdu ou retourné la saisie');
+    // §43.11 : ce n'est pas une requête au serveur. L'écran tient déjà tout ce
+    // qu'il affiche, et un secret n'est jamais relu pour l'occasion.
+    assert.equal(appels, 0, 'la frappe a provoqué un appel au serveur');
+
+    await capturer('spk103-recherche-spark');
+    const filtre = await page.innerText('body');
+    assert.match(filtre, /DATABASE_URL/);
+    assert.doesNotMatch(filtre, /APP_NAME/);
+    assert.doesNotMatch(filtre, /postgres:\/\//);
+    // Un bloc vidé par la frappe la CITE, et ne dit pas « aucune entrée ».
+    assert.match(filtre, /Aucune variable ne porte « DATABASE »/);
+    assert.match(filtre, /Aucun secret ne porte « DATABASE »/);
+    // Les cases du catalogue sont restreintes elles aussi.
+    assert.equal(await page.locator('[data-descend="TZ"]').count(), 0);
+
+    // La recherche ne SÉLECTIONNE rien : ce qui sort de l'écran descend toujours.
+    const resolu = await pile.lireSparkd('/v1/sparks/crm-production/env');
+    assert.equal(resolu.corps.env.some((e) => e.name === 'APP_NAME'), true,
+      'une entrée masquée par la recherche a cessé de descendre');
+
+    // Une frappe qui ne laisse rien : le champ SURVIT, sans quoi on ne pourrait
+    // plus en sortir (§14.4, exception).
+    await page.fill('#env-recherche', 'INTROUVABLE');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('INTROUVABLE »'), { timeout: 10000 });
+    assert.equal(await page.locator('#env-recherche').count(), 1);
+    await capturer('spk103-recherche-sans-resultat');
+    const vide = await page.innerText('body');
+    assert.match(vide, /Aucune entrée du catalogue ne porte « INTROUVABLE »/);
+    assert.doesNotMatch(vide, /catalogue de la Forge est vide/);
+
+    // Vider le champ rend la facette entière.
+    await page.fill('#env-recherche', '');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('APP_NAME'), { timeout: 10000 });
+    assert.equal(await page.locator('[data-descend="TZ"]').count(), 1);
+  });
+});
+
+test('le catalogue de la Forge se lit en deux blocs, et se cherche', async () => {
+  await parcours('env-blocs-forge', async () => {
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-pools', { timeout: 10000 });
+    await page.click('.onglet[href="#/forge/environnement"]');
+    await page.waitForSelector('#titre-catalogue-secrets', { timeout: 10000 });
+
+    await capturer('spk103-catalogue-blocs');
+    await capturer('spk103-catalogue-blocs-mobile', { largeur: 390, hauteur: 900 });
+    const variables = await page.innerText(
+      'section.sous-bloc:has(#titre-catalogue-variables)');
+    assert.match(variables, /OBJECT_STORAGE_URL/);
+    assert.doesNotMatch(variables, /SMTP_PASSWORD/);
+    const secrets = await page.innerText(
+      'section.sous-bloc:has(#titre-catalogue-secrets)');
+    assert.match(secrets, /SMTP_PASSWORD/);
+    assert.doesNotMatch(secrets, /mot-de-passe-de-demonstration/);
+
+    // La recherche porte sur le NOM : chercher la VALEUR d'une variable ne
+    // trouve rien, et c'est le seul critère qui vaille pour les deux natures.
+    await page.focus('#catalogue-env-recherche');
+    await page.keyboard.type('s3.interne');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('s3.interne »'), { timeout: 10000 });
+    const parValeur = await page.innerText('body');
+    assert.match(parValeur, /Aucune variable du catalogue ne porte « s3.interne »/);
+    assert.match(parValeur, /Aucun secret du catalogue ne porte « s3.interne »/);
+
+    await page.fill('#catalogue-env-recherche', 'PASSWORD');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('OBJECT_STORAGE_URL'), { timeout: 10000 });
+    const parNom = await page.innerText('body');
+    assert.match(parNom, /SMTP_PASSWORD/);
+    assert.doesNotMatch(parNom, /mot-de-passe-de-demonstration/);
+
+    // Le catalogue est rendu entier pour les parcours suivants.
+    await page.fill('#catalogue-env-recherche', '');
+    await page.waitForFunction(
+      () => document.body.innerText.includes('OBJECT_STORAGE_URL'), { timeout: 10000 });
   });
 });
 

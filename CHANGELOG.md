@@ -3,6 +3,18 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-103 — les variables et les secrets se lisent en deux blocs, et se
+  cherchent.** Une variable se lit pour sa **valeur**, un secret pour son
+  **existence** : un seul tableau faisait alterner deux questions dans la colonne
+  « Valeur », et rendait coûteuse celle qu'on pose avant d'ouvrir un accès —
+  « quels secrets cette cellule reçoit-elle ? ». Chaque section porte désormais
+  ses deux blocs, avec leur **compte**. La portée reste le découpage de premier
+  rang : la nature se découpe DANS un niveau, jamais à sa place. Un champ de
+  recherche par vue restreint tout ce qu'elle affiche, **cases du catalogue
+  comprises** ; il porte sur le **nom**, et le dit — comparer les valeurs ferait
+  d'un secret une ligne qu'aucune frappe ne trouve, et l'écran répondrait
+  « aucun résultat » sur une entrée qui existe. Trois vides se distinguent :
+  la section sans entrée, la nature qui manque, et ce que la frappe exclut.
 - **SPK-102 — le brief dit ce que « TLS » implique, et le CALCULE.** Chaque route
   annonce son **origine publique** — `https://…` ou `http://…` — et le dossier
   dit que c'est elle que l'application doit connaître, faute de quoi elle émet
@@ -86,6 +98,17 @@
   les postes qui l'ont posée.
 
 ### Corrigé
+- **SPK-103 — une saisie se retournait caractère par caractère.** Une vue qui se
+  repeint à chaque frappe reconstruit son champ ; lui rendre le focus replaçait
+  le curseur à l'offset 0, et frapper « DATABASE » écrivait « ESABATAD ».
+  MESURÉ au clavier sur la recherche d'environnement, invisible à toute preuve
+  qui pose la valeur d'un coup. La restauration rend désormais aussi la
+  **sélection**. Le défaut vivait déjà dans la recherche du dépôt d'images, qui
+  en profite.
+- **SPK-103 — la colonne des noms du catalogue d'environnement était ferrée à
+  droite.** Un `th scope="row"` hérite du centrage du navigateur ; le projet a une
+  classe pour cela et ce tableau ne la portait pas. Deux blocs côte à côte l'ont
+  rendu criant (`DESIGN_SYSTEM.md` §6.14).
 - **SPK-93 — un parcours de supervision échouait sur un refus déguisé en
   lenteur.** « Un Spark ARRÊTÉ nomme l'arrêt » créait sa cellule avec la
   réservation CPU par défaut : il dépendait donc du pool laissé par les parcours

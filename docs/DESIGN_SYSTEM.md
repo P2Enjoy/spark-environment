@@ -1822,6 +1822,19 @@ Lorsqu’elle se ferme, le focus revient au déclencheur logique.
 
 Ne jamais laisser le navigateur gérer ce cas par hasard.
 
+### Rendre le focus ne suffit pas : le curseur va avec
+
+Lorsqu’un champ de saisie est **reconstruit** — une vue qui se repeint à chaque
+frappe, par exemple —, lui rendre le focus ne le remet pas dans l’état où il
+était. Le focus programmatique replace le curseur au **début** de la valeur : la
+frappe suivante s’insère devant les précédentes, et le mot se retourne
+caractère par caractère.
+
+Le défaut est invisible aux tests qui posent la valeur d’un coup, et ne se voit
+qu’en frappant réellement. Toute restauration de focus sur un champ textuel
+restaure donc aussi sa **sélection** — début, fin et direction —, et une preuve
+tape au moins deux caractères pour l’établir.
+
 ## 14.4 Contrôle sans objet
 
 Une barre de filtres, un bouton ou une option qui ne peut rien affecter crée du bruit.

@@ -915,8 +915,9 @@ accès : « quels secrets cette cellule reçoit-elle ? ».
 - la recherche porte sur le **nom**, et le champ le **dit**. La valeur d'un
   secret n'atteint jamais la console : la comparer laisserait l'écran répondre
   « aucun résultat » sur une entrée qui existe (§14.10) ;
-- la frappe **ne repeint que la liste** et le focus revient au champ par son
-  identifiant (§14.3). Le champ EN A un pour cette raison ;
+- la frappe repeint la vue, et le champ retrouve son focus **et son curseur**
+  par son identifiant (§14.3). Le champ EN A un pour cette raison — et sans le
+  curseur, frapper « DATABASE » écrivait « ESABATAD » (MESURÉ le 2026-09-14) ;
 - **trois vides se distinguent** (§14.5, §14.6) : la section sans aucune entrée
   dit l'absence de fond ; un bloc vide dit que **cette nature** manque — « aucun
   secret » n'est pas « aucune entrée » ; un bloc vidé par la recherche dit ce que

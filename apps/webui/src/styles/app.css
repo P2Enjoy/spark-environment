@@ -1049,6 +1049,32 @@ tbody tr:hover { background: var(--color-hover); }
 .case-catalogue label { display: inline-flex; align-items: center; gap: var(--space-2);
   min-height: var(--size-target); cursor: pointer; }
 
+/* SPK-103 · docs/DAT.md §43.11 · SPK-DS-25 — les deux natures d'une entrée
+   d'environnement. Une variable se lit pour sa VALEUR, un secret pour son
+   EXISTENCE : chacune a son bloc, et le compte du bloc répond à la question de
+   revue — « combien de secrets, et lesquels ? » — sans rien lire.
+   Le titre reste au même corps dans les deux vues, alors qu'il y est un `h2`
+   (sous le `h1` d'une page) et ici un `h3` (sous le `h2` d'une facette) : le
+   niveau dit la STRUCTURE au clavier et à la synthèse, il n'a pas à changer la
+   taille d'un bloc qui est le même objet (§9.3). */
+.sous-bloc > * + * { margin-top: var(--space-3); }
+.sous-bloc + .sous-bloc {
+  border-top: 1px solid var(--color-border); padding-top: var(--space-4);
+}
+.sous-bloc__entete {
+  display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;
+}
+.sous-bloc__entete h2, .sous-bloc__entete h3 {
+  font-size: var(--text-h3); color: var(--color-ink);
+}
+.sous-bloc__compte {
+  font-size: var(--text-compact); color: var(--color-text-2);
+  font-variant-numeric: tabular-nums;
+}
+/* Le champ ne prend pas toute la largeur d'une carte : une entrée de deux mots
+   dans un contrôle de 1200 px se lit comme une zone de texte. */
+.champ-recherche { max-width: 32rem; }
+
 /* SPK-92 · docs/DAT.md §33.6 — le dépôt d'images, lu en direct et coché.
    §6.10 : la case peut rester compacte, sa LIGNE atteint la cible du §4.4 —
    `.case-catalogue label` s'en charge déjà. Ce qui manque ici est la

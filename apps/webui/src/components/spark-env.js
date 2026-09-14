@@ -2,22 +2,35 @@
  * Facette *Environnement* d'un Spark : ce que sa pile recevra.
  *
  * @spec docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-64,
- *       docs/BACKLOG.md#SPK-97 (l'import d'un lot, docs/DAT.md §43.10) ·
- *       docs/DESIGN_SYSTEM_APP.md SPK-DS-23 · docs/DAT.md §43
+ *       docs/BACKLOG.md#SPK-97 (l'import d'un lot, docs/DAT.md §43.10),
+ *       docs/BACKLOG.md#SPK-103 (deux blocs par section, et la recherche) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-23, SPK-DS-25 · docs/DAT.md §43
  *       (l'environnement d'un Spark), §43.3 (la différence est DÉCLARÉE),
  *       §43.6 révisé (la Forge propose, le Spark choisit), §43.7 (quand cela
- *       prend effet), §43.9.4 (l'origine de chaque valeur), §43.9.5 (les refus) ·
+ *       prend effet), §43.9.4 (l'origine de chaque valeur), §43.9.5 (les refus),
+ *       §43.11 (deux natures, deux blocs, une recherche sur le nom) ·
  *       docs/DESIGN_SYSTEM.md §5.4 (les degrés), §6.27 (fenêtre, sections,
- *       modale), §6.13 (états d'une vue), §6.14 (tableau), §9.9 (désactivé mais
- *       visible), §14.5 (l'absence se nomme), §14.6 (trois états distincts) ·
- *       docs/DESIGN_SYSTEM_APP.md
+ *       modale), §6.13 (états d'une vue), §6.14 (tableau), §9.3 (les titres ne
+ *       sautent pas de niveau), §9.9 (désactivé mais visible), §14.4 (pas de
+ *       contrôle sans objet), §14.5 (l'absence se nomme), §14.6 (trois états
+ *       distincts), §14.10 (une recherche ne compare que ce que toute entrée
+ *       porte)
  *
  * **Deux sections, une par niveau** (§43.6) : ce qui vient de la Forge et ce qui
  * appartient au Spark. Les mélanger ferait perdre l'information la plus
  * difficile à reconstituer — pourquoi une valeur est celle-là et pas une autre.
+ *
+ * **Deux blocs dans chaque section** (§43.11) : les variables, puis les secrets.
+ * La nature se découpe DANS un niveau, jamais à sa place — croiser les deux axes
+ * en un seul niveau mettrait dans un même tableau des lignes qu'on DÉCOCHE et
+ * des lignes qu'on RETIRE, et perdrait l'origine au passage.
  */
 
 import { IMPORT_VIDE, renderImportEnv } from './env-import.js';
+import {
+  correspondEnv, filtrerEnv, renderAnnonceRecherche, renderBlocEnv,
+  renderRechercheEnv, separer,
+} from './env-blocs.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -31,6 +44,9 @@ export const ENV_VIDE = {
   open: null,       // 'forge' | 'spark'
   busy: false,
   refusal: null,    // { message, protected_sparks? }
+  // SPK-103 : la frappe vit dans l'interface et n'en sort pas — ni dans
+  // l'adresse, ni au serveur (§43.11). Rouvrir la facette la rouvre entière.
+  recherche: '',
   values: { name: '', value: '', secret: false },
 };
 
@@ -90,17 +106,44 @@ function lignes(entrees, { selection = false } = {}) {
  *
  * @param {string} niveau `forge` ou `spark`
  */
-function section(niveau, spark, entrees, ui, renderModale) {
+function section(niveau, spark, entrees, ui, renderModale, recherche = '') {
   const forge = niveau === 'forge';
-  const titre = forge ? 'Entrées du catalogue cochées ici' : 'Variables propres à ce Spark';
+  // SPK-103 : « Variables propres… » était devenu faux le jour où la section a
+  // porté AUSSI des secrets. Elle porte des ENTRÉES ; leur nature se lit un cran
+  // plus bas, dans les deux blocs.
+  const titre = forge ? 'Entrées du catalogue cochées ici' : 'Entrées propres à ce Spark';
   const id = `titre-env-${niveau}`;
   const propres = entrees.filter((e) => (e.scope === 'forge') === forge);
+  const tous = separer(propres);
+  const vues = separer(filtrerEnv(propres, recherche));
 
   // §14.5 : l'absence est un FAIT, et il se nomme. Un tableau vide ne dirait
-  // pas si rien n'est posé ou si le relevé a échoué.
-  const corps = propres.length ? lignes(propres, { selection: forge }) : `<p class="absence">${forge
-    ? 'Aucune entrée du catalogue ne descend dans ce Spark.'
-    : 'Aucune variable propre : ce Spark ne reçoit que les entrées cochées du catalogue.'}</p>`;
+  // pas si rien n'est posé ou si le relevé a échoué. Elle se dit UNE fois au
+  // niveau de la section : deux blocs vides répéteraient la même absence.
+  const corps = propres.length
+    ? `${renderBlocEnv({
+        id: `${id}-variables`, titre: 'Variables',
+        entrees: vues.variables, total: tous.variables.length, recherche,
+        absence: {
+          vide: forge ? 'Aucune variable du catalogue ne descend dans ce Spark.'
+                      : 'Aucune variable propre à ce Spark.',
+          filtre: 'Aucune variable ne porte',
+        },
+        rendu: (retenues) => lignes(retenues, { selection: forge }),
+      })}
+${renderBlocEnv({
+        id: `${id}-secrets`, titre: 'Secrets',
+        entrees: vues.secrets, total: tous.secrets.length, recherche,
+        absence: {
+          vide: forge ? 'Aucun secret du catalogue ne descend dans ce Spark.'
+                      : 'Aucun secret propre à ce Spark.',
+          filtre: 'Aucun secret ne porte',
+        },
+        rendu: (retenues) => lignes(retenues, { selection: forge }),
+      })}`
+    : `<p class="absence">${forge
+        ? 'Aucune entrée du catalogue ne descend dans ce Spark.'
+        : 'Aucune entrée propre : ce Spark ne reçoit que les entrées cochées du catalogue.'}</p>`;
 
   // §9.9 : sur un Spark protégé, la commande RESTE visible et désactivée, avec
   // sa raison. La faire disparaître ferait croire que le produit ne sait pas
@@ -108,7 +151,7 @@ function section(niveau, spark, entrees, ui, renderModale) {
   const gele = spark.protected;
   const commande = forge ? '' : `<p class="formulaire__actions">
     <button type="button" class="bouton" data-ouvre-env="${niveau}"${gele ? ' disabled' : ''}>
-      Poser une variable</button>
+      Poser une entrée</button>
     <button type="button" class="bouton" data-ouvre="env-import"${gele ? ' disabled' : ''}>
       Importer un lot</button>
     ${gele ? '<span class="note">Ce Spark est protégé : levez la protection d’abord.</span>' : ''}
@@ -168,9 +211,28 @@ export function renderEnvPanel(spark, entrees = [], ui = ENV_VIDE,
                                importUi = IMPORT_VIDE) {
   const refusSelection = ui.refusal?.niveau === 'selection'
     ? `<div class="refus" role="alert"><p>${echapper(ui.refusal.message)}</p></div>` : '';
-  return refusSelection + renderCatalogueCases(spark, catalogue, entrees)
-       + section('forge', spark, entrees, ui, renderModale)
-       + section('spark', spark, entrees, ui, renderModale)
+
+  // SPK-103 · §43.11 : UN champ pour la facette entière — on cherche un nom sans
+  // savoir d'avance s'il vit au catalogue, dans les entrées cochées ou dans les
+  // entrées propres.
+  const recherche = ui.recherche ?? '';
+  // Ce que la facette PORTE, noms confondus : une entrée cochée figure à la fois
+  // au catalogue et dans une section. Le champ se décide sur ce total (§14.4) et
+  // non sur ce qui reste après la frappe — sans quoi il disparaîtrait au moment
+  // précis où il est le seul moyen de revenir en arrière.
+  const noms = new Set([...entrees.map((e) => e.name), ...catalogue.map((e) => e.name)]);
+  const retenus = [...noms].filter((nom) => correspondEnv(nom, recherche)).length;
+  const chercheur = renderRechercheEnv({ id: 'env-recherche', valeur: recherche,
+                                         total: noms.size });
+  const barre = chercheur
+    ? `<section class="carte bloc">${chercheur}${
+        renderAnnonceRecherche(retenus, noms.size, recherche)}</section>`
+    : '';
+
+  return refusSelection + barre
+       + renderCatalogueCases(spark, catalogue, entrees, recherche)
+       + section('forge', spark, entrees, ui, renderModale, recherche)
+       + section('spark', spark, entrees, ui, renderModale, recherche)
        // SPK-97 : la modale d'import est rendue UNE fois pour la facette, et non
        // dans la section — deux `dialog` ouverts en même temps sortiraient du
        // contrat du §6.27, dont `brancherModale` ne gère qu'une instance.
@@ -191,7 +253,7 @@ export function renderEnvPanel(spark, entrees = [], ui = ENV_VIDE,
  * à la Forge se déposerait en clair dans toutes les cellules, y compris celles
  * qui n'en ont aucun usage (§43.5.1).
  */
-export function renderCatalogueCases(spark, catalogue = [], entrees = []) {
+export function renderCatalogueCases(spark, catalogue = [], entrees = [], recherche = '') {
   if (!catalogue.length) {
     // §14.5 : l'absence se nomme. Un bloc vide laisserait croire à une panne
     // de chargement là où il n'y a simplement rien à cocher.
@@ -211,7 +273,13 @@ export function renderCatalogueCases(spark, catalogue = [], entrees = []) {
   const descend = new Set(entrees.filter((e) => e.origin !== 'spark')
                                  .map((e) => e.name));
 
-  const cases = catalogue.map((e) => {
+  // La recherche traverse AUSSI les cases : c'est ici qu'on va chercher une
+  // entrée à faire descendre, et c'est le plus long des trois inventaires
+  // (§43.11).
+  const retenues = filtrerEnv(catalogue, recherche);
+  const frappe = String(recherche).trim();
+
+  const cases = retenues.map((e) => {
     const coche = descend.has(e.name) || masques.has(e.name);
     const id = `descend-${e.name}`;
     return `<li class="case-catalogue">
@@ -231,7 +299,10 @@ export function renderCatalogueCases(spark, catalogue = [], entrees = []) {
   <h2 id="titre-catalogue">Catalogue de la Forge</h2>
   <p class="note">Cocher fait descendre l’entrée dans ce Spark. Décocher la retire
   de sa cellule. <a href="#/manuel/M8">Manuel M8</a></p>
-  <ul class="liste-cases">${cases}</ul>
+  ${retenues.length
+    ? `<ul class="liste-cases">${cases}</ul>`
+    // §14.5 : ce que la FRAPPE exclut ne se dit pas comme un catalogue vide.
+    : `<p class="absence">Aucune entrée du catalogue ne porte « ${echapper(frappe)} ».</p>`}
   ${spark?.protected ? '<p class="note">Ce Spark est protégé : levez la protection avant de modifier ses sélections.</p>' : ''}
 </section>`;
 }

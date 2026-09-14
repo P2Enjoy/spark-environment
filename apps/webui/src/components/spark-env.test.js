@@ -1,9 +1,12 @@
 /**
- * @verifies docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-64 · docs/DAT.md §43.3
+ * @verifies docs/BACKLOG.md#SPK-58, docs/BACKLOG.md#SPK-64,
+ * docs/BACKLOG.md#SPK-103 (deux blocs par section, et la recherche) ·
+ * docs/DAT.md §43.3
  * (la valeur d'un secret ne s'affiche jamais), §43.6 révisé (la Forge propose,
  * le Spark choisit), §43.7 (écrire ne redémarre rien), §43.9.4 (l'origine de
- * chaque valeur) ·
- * docs/DESIGN_SYSTEM.md §6.27, §9.9, §14.5, §14.6
+ * chaque valeur), §43.11 (deux natures, deux blocs, une recherche sur le nom) ·
+ * docs/DESIGN_SYSTEM_APP.md SPK-DS-25 ·
+ * docs/DESIGN_SYSTEM.md §6.27, §9.3, §9.9, §14.4, §14.5, §14.6, §14.10
  */
 
 import { test } from 'node:test';
@@ -57,7 +60,8 @@ test('chaque niveau a SA section, et chacune nomme son absence', () => {
   assert.match(rendu, /id="titre-env-spark"/);
   // §14.5 : l’absence est un FAIT, et il se nomme.
   assert.match(rendu, /Aucune entrée du catalogue ne descend/);
-  assert.match(rendu, /Aucune variable propre/);
+  // SPK-103 : la section porte des ENTRÉES — sa nature se lit un cran plus bas.
+  assert.match(rendu, /Aucune entrée propre/);
 });
 
 test('les entrées de la FORGE ne se mélangent pas à celles du Spark', () => {
@@ -166,4 +170,102 @@ test('le mot « héritée » a disparu de l’écran', () => {
   // SPK-64 : rien n'est hérité. Le mot décrivait le défaut, pas le produit.
   assert.doesNotMatch(JSON.stringify(ORIGINES), /[Hh]érit/);
   assert.match(ORIGINES.forge.libelle, /coch/i);
+});
+
+// --- SPK-103 · Deux blocs par section, et la recherche (docs/DAT.md §43.11) ---
+
+/** Le jeu du seed, réduit : une variable ET un secret à chacun des deux niveaux. */
+const QUATRE = [
+  entree({ name: 'TZ', scope: 'forge', origin: 'forge' }),
+  entree({ name: 'SMTP_PASSWORD', is_secret: true, value: null,
+           fingerprint: 'a1b2c3d4e5f6', scope: 'forge', origin: 'forge' }),
+  entree({ name: 'APP_NAME', scope: 'spark', origin: 'spark', value: 'crm' }),
+  entree({ name: 'DATABASE_URL', is_secret: true, value: null,
+           fingerprint: '07acff4bc411', scope: 'spark', origin: 'spark' }),
+];
+
+test('chaque niveau porte SES deux blocs — quatre en tout', () => {
+  // §43.11 : la nature se découpe DANS un niveau, jamais à sa place.
+  const rendu = renderEnvPanel(SPARK, QUATRE, ENV_VIDE, renderModale);
+  for (const id of ['titre-env-forge-variables', 'titre-env-forge-secrets',
+                    'titre-env-spark-variables', 'titre-env-spark-secrets']) {
+    assert.match(rendu, new RegExp(`id="${id}"`), `bloc ${id} absent`);
+  }
+  // §9.3 : la carte porte un h2, ses blocs des h3. Un h2 sous un h2 ferait de
+  // « Secrets » une section sœur de « Entrées propres à ce Spark ».
+  assert.match(rendu, /<h3 id="titre-env-spark-secrets">Secrets<\/h3>/);
+});
+
+test('une nature qui manque le DIT, sans que la section soit vide', () => {
+  // §14.5, §14.6 : « aucun secret » n'est pas « aucune entrée ».
+  const rendu = renderEnvPanel(
+    SPARK, [entree({ name: 'APP_NAME', scope: 'spark', origin: 'spark' })],
+    ENV_VIDE, renderModale);
+  assert.match(rendu, /Aucun secret propre à ce Spark\./);
+  assert.doesNotMatch(rendu, /Aucune entrée propre/);
+});
+
+test('un SECRET ne se range pas dans les variables, et réciproquement', () => {
+  const rendu = renderEnvPanel(SPARK, QUATRE, ENV_VIDE, renderModale);
+  const decoupe = (debut, fin) => rendu.slice(rendu.indexOf(debut), rendu.indexOf(fin));
+  const variables = decoupe('titre-env-spark-variables', 'titre-env-spark-secrets');
+  assert.match(variables, /APP_NAME/);
+  assert.doesNotMatch(variables, /DATABASE_URL/);
+  const secrets = rendu.slice(rendu.indexOf('titre-env-spark-secrets'));
+  assert.match(secrets, /DATABASE_URL/);
+  assert.doesNotMatch(secrets, /APP_NAME/);
+});
+
+test('la recherche restreint la facette ENTIÈRE, cases du catalogue comprises', () => {
+  const rendu = renderEnvPanel(SPARK, QUATRE, ui({ recherche: 'SMTP' }), renderModale,
+    [{ name: 'TZ', is_secret: false }, { name: 'SMTP_PASSWORD', is_secret: true }]);
+  assert.match(rendu, /SMTP_PASSWORD/);
+  // Ni dans les blocs, ni dans les cases à cocher.
+  assert.doesNotMatch(rendu, /APP_NAME/);
+  assert.doesNotMatch(rendu, /data-descend="TZ"/);
+  assert.match(rendu, /data-descend="SMTP_PASSWORD"/);
+});
+
+test('la recherche ne révèle RIEN de plus d’un secret', () => {
+  // §43.3 : la valeur d'un secret ne s'affiche nulle part, y compris quand il
+  // est la seule ligne qui reste.
+  const rendu = renderEnvPanel(SPARK, [entree({
+    name: 'DATABASE_URL', is_secret: true, value: 'postgres://demo:demo@db/crm',
+    fingerprint: '07acff4bc411', scope: 'spark', origin: 'spark',
+  })], ui({ recherche: 'DATABASE' }), renderModale);
+  assert.doesNotMatch(rendu, /postgres:\/\//);
+  assert.match(rendu, /07acff4bc411/);
+});
+
+test('un bloc vidé par la frappe CITE la frappe', () => {
+  const rendu = renderEnvPanel(SPARK, QUATRE, ui({ recherche: 'APP' }), renderModale);
+  assert.match(rendu, /Aucune variable ne porte « APP »\./);
+  assert.match(rendu, /Aucun secret ne porte « APP »\./);
+});
+
+test('le champ de recherche SURVIT à une frappe qui ne laisse rien', () => {
+  // §14.4, exception : il est le seul moyen de sortir de l'état qu'il a causé.
+  const rendu = renderEnvPanel(SPARK, QUATRE, ui({ recherche: 'INTROUVABLE' }), renderModale,
+    [{ name: 'TZ', is_secret: false }]);
+  assert.match(rendu, /id="env-recherche"/);
+  assert.match(rendu, /value="INTROUVABLE"/);
+  // Les cases aussi disent ce que la frappe exclut, et non « catalogue vide ».
+  assert.match(rendu, /Aucune entrée du catalogue ne porte « INTROUVABLE »\./);
+  assert.doesNotMatch(rendu, /catalogue de la Forge est vide/);
+});
+
+test('pas de champ de recherche sur une facette qui n’a rien à chercher', () => {
+  const rendu = renderEnvPanel(SPARK, [], ENV_VIDE, renderModale, []);
+  assert.doesNotMatch(rendu, /id="env-recherche"/);
+  // Une seule entrée non plus : on la voit, on ne la cherche pas.
+  const une = renderEnvPanel(SPARK, [entree({ name: 'TZ', scope: 'forge' })],
+    ENV_VIDE, renderModale, [{ name: 'TZ', is_secret: false }]);
+  assert.doesNotMatch(une, /id="env-recherche"/);
+});
+
+test('une frappe est ÉCHAPPÉE partout où elle est citée', () => {
+  const rendu = renderEnvPanel(SPARK, QUATRE, ui({ recherche: '<img src=x>' }), renderModale,
+    [{ name: 'TZ', is_secret: false }]);
+  assert.doesNotMatch(rendu, /<img src=x>/);
+  assert.match(rendu, /&lt;img src=x&gt;/);
 });

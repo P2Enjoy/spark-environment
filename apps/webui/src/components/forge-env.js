@@ -2,11 +2,15 @@
  * Le catalogue d'environnement de la Forge — quatrième onglet sous Forge.
  *
  * @spec docs/BACKLOG.md#SPK-64, docs/BACKLOG.md#SPK-97 (l'import d'un lot,
- *       docs/DAT.md §43.10) · docs/DAT.md §43.6 révisé (la Forge propose, le
+ *       docs/DAT.md §43.10), docs/BACKLOG.md#SPK-103 (deux blocs, et la
+ *       recherche) · docs/DAT.md §43.6 révisé (la Forge propose, le
  *       Spark choisit), §43.3 (le secret est déclaré, sa valeur ne sort jamais),
- *       §43.5.1 (la valeur redevient en clair dans la cellule) ·
+ *       §43.5.1 (la valeur redevient en clair dans la cellule),
+ *       §43.11 (deux natures, deux blocs, une recherche sur le nom) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-25 ·
  *       docs/DESIGN_SYSTEM.md §5.4, §6.13 (états d'une vue), §6.14 (tableau),
- *       §6.27 (modale limitée à une section), §14.5, §14.6
+ *       §6.27 (modale limitée à une section), §14.4, §14.5, §14.6,
+ *       §14.10 (une recherche ne compare que ce que toute entrée porte)
  *
  * Le catalogue décrit la FORGE, pas un Spark : il vit donc sous Forge, à côté
  * des pools et des images. Ce qui descend, en revanche, se décide dans la
@@ -17,6 +21,9 @@
 import { renderOngletsForge } from './forge-images.js';
 import { renderModale } from './modale.js';
 import { IMPORT_VIDE, renderImportEnv } from './env-import.js';
+import {
+  filtrerEnv, renderAnnonceRecherche, renderBlocEnv, renderRechercheEnv, separer,
+} from './env-blocs.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -27,6 +34,9 @@ export const CATALOGUE_VIDE = {
   busy: false,
   refusal: null,
   confirming: null,
+  // SPK-103 : la frappe vit dans l'interface et n'en sort pas — ni dans
+  // l'adresse, ni au serveur (§43.11). Rouvrir l'écran le rouvre entier.
+  recherche: '',
   values: { name: '', value: '', secret: false },
 };
 
@@ -66,7 +76,11 @@ function lignes(entrees) {
     <tbody>${entrees.map((e) => {
       const d = decrireDescente(e.selected_by ?? 0);
       return `<tr>
-        <th scope="row" class="technique">${echapper(e.name)}</th>
+        ${/* §6.14 : le texte va à GAUCHE. Un `th scope="row"` hérite du
+             centrage du navigateur, et les deux blocs le rendaient criant —
+             deux tableaux de largeurs différentes, deux colonnes de noms
+             ferrées différemment. VU en capture le 2026-09-14. */ ''}
+        <th scope="row" class="technique nom-cellule">${echapper(e.name)}</th>
         ${cellule(e)}
         <td><span class="badge badge--${d.token}"><span class="badge__point" aria-hidden="true"></span>${
           echapper(d.texte)}</span></td>
@@ -147,9 +161,34 @@ export function renderForgeEnv({ status = 'loading', entrees = [],
     </section>`;
   }
 
+  // SPK-103 · §43.11 : deux natures, deux blocs. Une variable se lit pour sa
+  // VALEUR, un secret pour son EXISTENCE — un seul tableau faisait alterner deux
+  // questions dans la colonne « Valeur ».
+  const recherche = ui.recherche ?? '';
+  const retenues = filtrerEnv(entrees, recherche);
+  const tous = separer(entrees);
+  const vues = separer(retenues);
+
   const corps = entrees.length
-    ? lignes(entrees)
-    // §14.5 : l'absence se nomme, et elle dit ce qu'elle implique.
+    ? `${renderRechercheEnv({ id: 'catalogue-env-recherche', valeur: recherche,
+                              total: entrees.length })}
+${renderAnnonceRecherche(retenues.length, entrees.length, recherche)}
+${renderBlocEnv({
+  id: 'titre-catalogue-variables', niveau: 'h2', titre: 'Variables',
+  entrees: vues.variables, total: tous.variables.length, recherche,
+  absence: { vide: 'Aucune variable au catalogue : il ne porte que des secrets.',
+             filtre: 'Aucune variable du catalogue ne porte' },
+  rendu: lignes,
+})}
+${renderBlocEnv({
+  id: 'titre-catalogue-secrets', niveau: 'h2', titre: 'Secrets',
+  entrees: vues.secrets, total: tous.secrets.length, recherche,
+  absence: { vide: 'Aucun secret au catalogue.',
+             filtre: 'Aucun secret du catalogue ne porte' },
+  rendu: lignes,
+})}`
+    // §14.5 : l'absence se nomme, et elle dit ce qu'elle implique. Elle se dit
+    // UNE fois ici : deux blocs vides répéteraient la même absence de fond.
     : `<p class="absence">Aucune entrée au catalogue. Rien ne descend dans aucun
        Spark tant qu’il est vide.</p>`;
 
