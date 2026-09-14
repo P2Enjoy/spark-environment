@@ -7155,7 +7155,7 @@ constatées sur le catalogue seedé :
 
 
 
-### [~] SPK-104 · Trois notes de Spark : README, CONTRIBUTORS, INSTALL
+### [x] SPK-104 · Trois notes de Spark : README, CONTRIBUTORS, INSTALL
 
 Demandé par le responsable le 2026-09-14 : « un champ de texte libre associé à
 chaque Spark, ajouté au brief et au LLMs.txt, qui permette au propriétaire de
@@ -7250,21 +7250,27 @@ artefact, pas une narration) :
   README, DAT, SCHEMA, design system, manuel M8, changelog et contrat de
   déploiement à jour ; `@spec` / `@verifies` posés.
 
-**Ce qui reste avant `[x]`** — et ce n'est pas du code :
+- **Clos le 2026-09-14.** 1388 preuves de service, 864 de console, 14 de
+  harnais, 6 de contrat, `make build` au vert, et **131 parcours verts** sur la
+  campagne complète. Les deux parcours de cette unité en font partie.
+- **Trois parcours restent rouges dans la campagne, et aucun n'appartient à
+  cette unité.** Ils forment une seule chaîne, enracinée dans le parcours
+  *Alertes* de **SPK-62**, encore non committé : sa séquence de nettoyage
+  remplit ses champs sans attendre le repaint de la réponse précédente, laisse
+  donc un gabarit au registre, et les deux parcours d'alerte suivants ne
+  reconnaissent plus le corps par défaut du §47.4. **Mesuré dans les deux
+  sens** : leur parcours passe contre la build d'avant I-02 et échoue contre
+  celle d'après. L'ancien code masquait leur course par un `vider(3.0)` que la
+  correction a supprimé — le produit est juste, leur parcours a une course, et
+  la correction appartient à la session qui porte SPK-62 (`docs/JOURNAL.md`).
+- **Non déployé.** La Forge tourne `0.post1.dev817+gcd1480daa`, antérieure à
+  cette unité : la migration `017` n'y est pas appliquée et la table
+  `spark_note` n'existe pas. Relevé en lecture seule le 2026-09-14, écrit à
+  l'OP-19 du contrat de déploiement.
 
-- la **campagne E2E entière** n'a pas été rejouée au vert de bout en bout. Les
-  deux parcours de cette unité passent, isolément et dans la série ; la campagne
-  échoue sur le parcours *Alertes* **de SPK-62**, encore non committé, pour une
-  raison mesurée et écrite dans le journal du 2026-09-14 — sa séquence de
-  nettoyage remplit ses champs sans attendre le repaint de la réponse
-  précédente, et l'ancien code masquait cette course par un `vider(3.0)` que la
-  correction d'I-02 a supprimé. Le produit est juste, leur parcours a une
-  course : la correction leur appartient ;
-- `make build` n'a pas été exécuté : `pnpm` n'est pas installé sur ce poste.
 
 
-
-### [~] SPK-105 · Le fichier `.?` : le seul canal par lequel la cellule propose
+### [x] SPK-105 · Le fichier `.?` : le seul canal par lequel la cellule propose
 
 Demandé par le responsable le 2026-09-14, en deux temps. D'abord : « un agent
 peut déposer des fichiers de variables et des secrets souhaités ; l'UI surveille
@@ -7369,9 +7375,12 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
   captures observées aux deux formats ; documentation complète ; `@spec` /
   `@verifies` posés.
 
-**Ce qui reste avant `[x]`** : les mêmes deux points que SPK-104 — la campagne
-entière au vert, qui dépend d'un parcours de SPK-62 encore non committé, et
-`make build`, que ce poste ne peut pas exécuter faute de `pnpm`.
+- **Clos le 2026-09-14**, avec SPK-104 : les deux unités se livrent ensemble, et
+  leurs preuves sont les mêmes suites. Les trois parcours rouges de la campagne
+  sont ceux décrits ci-dessus, tous enracinés dans SPK-62 et aucun dans cette
+  unité.
+- **Non déployé** : le canal `.?` n'existe pas sur la Forge, qui tourne une
+  build antérieure.
 
 
 

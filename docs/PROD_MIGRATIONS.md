@@ -28,7 +28,7 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré.
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
 | Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 015** |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 016** — la `016` a été appliquée le **2026-09-14T12:55Z**, au démarrage de la build `0.post1.dev817+gcd1480daa` |
 | Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
@@ -117,100 +117,82 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-20 · Migration `016_canaux_notification` et reprise du canal d'alerte (SPK-62)
+### OP-20 · Migration `016_canaux_notification` et reprise du canal d'alerte (SPK-62) — **APPLIQUÉE le 2026-09-14**
 
 ```
-État          : NON APPLIQUÉE. La production porte la version de schéma 015 ;
-                cette migration et l'OP-19 s'appliquent au démarrage, dans
-                l'ordre numérique — 016 puis 017. Rien à séquencer à la main.
-Objectif      : créer `notify_channels`, qui fait passer la configuration du
-                canal d'alerte hors bande des variables d'environnement au
-                REGISTRE (docs/DAT.md §47.3, docs/SCHEMA.md §11). Motif écrit au
-                §47.3 : une variable se règle par un redémarrage et ne se voit
-                nulle part ; le 2026-09-14, un canal posé refusait tout envoi et
-                il a fallu provoquer un geste sensible réel pour l'apprendre.
+État          : MIGRATION APPLIQUÉE le 2026-09-14T12:55Z, au démarrage de la
+                build 0.post1.dev817+gcd1480daa. Relevé EN LECTURE SEULE sur la
+                Forge le 2026-09-14 : `schema_migration` porte la 016, la table
+                `notify_channels` existe.
+
+                LA REPRISE DE CONFIGURATION EST FAITE, elle aussi :
+                `GET /v1/forge` rend `notify.source = "registre"` et
+                `configured = true`. Le canal ne vit donc plus dans une variable
+                d'environnement, et les deux pièges décrits ci-dessous ont été
+                franchis sans dommage.
+
+                UNE ACTION HUMAINE RESTE DUE, et elle est mineure :
+                `/etc/sparkd/sparkd.env` porte ENCORE `SPARKD_NOTIFY_URL` et
+                `SPARKD_NOTIFY_TEMPLATE`. Le registre l'emporte (§47.3), donc
+                elles ne servent plus à rien — mais elles restent lisibles par
+                qui lit ce fichier, et le §21.3 traite déjà l'URL comme
+                sensible : elle porte un jeton.
+Objectif      : faire passer la configuration du canal d'alerte hors bande des
+                variables d'environnement au REGISTRE (docs/DAT.md §47.3,
+                docs/SCHEMA.md §11).
 Dépend de     : rien. Table nouvelle, sans clé étrangère.
-Commande      : appliquée automatiquement au démarrage de sparkd.
-Après         : le service continue d'alerter EXACTEMENT comme avant, et c'est
-                vérifié par lecture du code : la migration insère sa ligne
-                unique avec `webhook_enabled = 0`, donc `canaux.webhook_actif()`
-                rend `("", "")`, donc `_canal_depuis_le_registre()` ne
-                REREGLE rien au démarrage et `SPARKD_NOTIFY_URL` reste le repli
-                actif. Aucune coupure de surveillance n'est introduite par la
-                seule migration.
-
-                UNE ACTION HUMAINE EST DUE, et elle n'est pas urgente : reprendre
-                la configuration à l'écran, pour que le canal cesse de vivre dans
-                une unité systemd. Console → Forge → onglet « Alertes ». L'écran
-                affiche « la configuration vient de l'environnement » tant que
-                ce n'est pas fait.
-
-                DEUX PIÈGES, qu'il faut connaître AVANT d'ouvrir l'onglet. Le
-                second est MESURÉ le 2026-09-14 contre la pile factice, et non
-                déduit : `live.source` passe de `environnement`/`configured=true`
-                à `registre`/`configured=false` sur une simple écriture de
-                gabarit. Six preuves le tiennent désormais
-                (`tests/test_canal_coupure.py`).
-
-                1. la première écriture POSE le mot de passe du §47.3.3. Il n'y
-                   en a pas encore : celui qu'on tape la première fois devient
-                   le garde de toutes les écritures suivantes. Le choisir avant
-                   d'ouvrir l'écran, et le consigner là où sont gardés les
-                   autres secrets d'exploitation ;
-                2. DÈS LA PREMIÈRE ÉCRITURE, la variable d'environnement cesse
-                   d'être le repli — y compris si l'on enregistre SANS activer
-                   le webhook. `PUT /v1/notify/channels` appelle `reregler()`
-                   avec ce que le registre porte, donc avec une URL vide si la
-                   case « actif » n'est pas cochée ; le canal devient muet
-                   jusqu'au prochain redémarrage du service. Poser l'URL, le
-                   gabarit ET cocher « actif » dans la MÊME écriture.
-                   Depuis le 2026-09-14, cette coupure est ANNONCÉE par le canal
-                   qu'elle coupe, avant qu'il ne cesse de servir (§47.3.3 bis) :
-                   on en est donc averti, mais elle a bien lieu. L'écran, lui,
-                   affiche alors « aucun canal » (§14.6).
-Vérification  : `GET /v1/notify/channels` rend `live.source = "environnement"`
-                avant la reprise, et `"registre"` après, avec
-                `live.configured = true`. L'onglet cesse d'afficher l'avis
-                « la configuration vient de l'environnement ». Le canal ne
-                s'éprouve PAS sur commande — le §47.3 refuse délibérément un
-                bouton « essayer », parce qu'un canal qu'on peut faire parler
-                apprend à son destinataire que certains messages ne comptent
-                pas. Sa seule épreuve est un vrai geste sensible du §47.2, dont
-                `spark.unprotect`, qui est réversible.
-Ensuite       : une fois `live.source = "registre"` constaté, retirer
-                `SPARKD_NOTIFY_URL` et `SPARKD_NOTIFY_TEMPLATE` de
-                `/etc/sparkd/sparkd.env` et redémarrer `sparkd`. Tant que les
-                deux coexistent, le registre l'emporte et la variable ne sert à
-                rien — mais elle reste lisible par qui lit ce fichier, et le
-                §21.3 la traite déjà comme sensible : elle porte un jeton.
+Commande      : appliquée automatiquement au démarrage de sparkd. Faite.
+Reste à faire : retirer `SPARKD_NOTIFY_URL` et `SPARKD_NOTIFY_TEMPLATE` de
+                `/etc/sparkd/sparkd.env`, puis redémarrer `sparkd`. Vérifier
+                ensuite que `notify.source` vaut toujours `registre` et
+                `configured` toujours `true` : c'est la seule façon de
+                constater que le registre porte bien ce qu'on croit, avant de
+                jeter le repli.
+Les deux pièges, conservés : ils n'ont plus d'objet sur CETTE Forge, mais ils
+                valent pour toute autre reprise. (1) la première écriture POSE
+                le mot de passe du §47.3.3 : celui qu'on tape devient le garde
+                de toutes les suivantes. (2) dès la première écriture, la
+                variable cesse d'être le repli — y compris si l'on enregistre
+                sans cocher « actif » —, et le canal devient alors muet.
+                MESURÉ le 2026-09-14 : `live.source` passe de
+                `environnement`/`configured=true` à `registre`/`configured=false`
+                sur une simple écriture de gabarit. Poser l'URL, le gabarit ET
+                cocher « actif » dans la MÊME écriture.
+Non déployé   : depuis le 2026-09-14, cette coupure est ANNONCÉE par le canal
+                qu'elle coupe (§47.3.3 bis, six preuves). Ce correctif n'est
+                PAS sur la Forge : elle tourne la build
+                0.post1.dev817+gcd1480daa, antérieure. Tant qu'elle n'est pas
+                mise à jour, le piège (2) coupe toujours en silence.
 Retour arrière: le `down` supprime la table, donc la configuration du canal ET
-                le mot de passe du §47.3.3. Le repli par variable redevient seul
-                maître : si elle a été retirée de `sparkd.env` à l'étape
-                « Ensuite », il faut l'y remettre avant de redescendre, sans
-                quoi la Forge repart sans aucune surveillance hors bande.
-                Comme toute migration, il n'est jamais joué seul — « Revenir à
-                la build précédente » restaure le registre depuis sa sauvegarde
-                (SPK-91).
-Risque        : faible pour le registre — une table d'une ligne, sans clé
-                étrangère, qu'aucun geste existant ne lit avant qu'on l'ait
-                réglée. Le risque réel est le piège 2 ci-dessus : une
-                surveillance hors bande qui s'arrête sans le dire est
-                exactement ce que SPK-62 existe pour empêcher.
+                le mot de passe. Le repli par variable redevient seul maître :
+                s'il a été retiré de `sparkd.env` à l'étape ci-dessus, il faut
+                l'y remettre AVANT de redescendre, sans quoi la Forge repart
+                sans aucune surveillance hors bande.
+Risque        : nul pour le registre — c'est fait. Le seul risque restant est
+                celui du retrait des variables : le faire sans avoir constaté
+                `source = registre` couperait la surveillance.
 ```
 
 ### OP-19 · Migration `017_notes_spark` du registre (SPK-104)
 
 ```
-État          : NON APPLIQUÉE. La migration n'est pas encore écrite : cette
-                entrée est posée avec la spécification, avant le code, pour que
-                le contrat de déploiement ne découvre pas la table après coup.
+État          : NON APPLIQUÉE. Vérifié EN LECTURE SEULE sur la Forge le
+                2026-09-14 : la table `spark_note` n'y existe pas, et le
+                registre porte la version de schéma 016.
+
+                La migration est écrite et committée ; elle s'appliquera au
+                démarrage de la première build qui la porte. La Forge tourne
+                aujourd'hui `0.post1.dev817+gcd1480daa`, qui est ANTÉRIEURE à
+                SPK-104 : ni les notes, ni le canal `.?` n'y sont déployés.
 Objectif      : créer `spark_note`, qui porte les trois notes d'un Spark —
                 README, CONTRIBUTORS, INSTALL — leur révision et leur origine
                 (docs/SCHEMA.md §10 septies, docs/DAT.md §54). Les suggestions
                 du §55 n'ont AUCUNE table : le fichier `.?` dans la cellule est
                 l'état de la proposition.
 Dépend de     : rien. Table nouvelle, référencée seulement par `spark`.
-Commande      : appliquée automatiquement au démarrage de sparkd.
+Commande      : appliquée automatiquement au démarrage de sparkd, dès que la
+                build déployée porte SPK-104. Elle s'appliquera donc APRÈS la
+                016, dans l'ordre numérique, sans rien à séquencer à la main.
 Après         : AUCUNE action humaine. Les Sparks en service n'ont aucune note :
                 la table naît vide, l'API rend un texte vide en révision 0, et
                 l'écran dit « personne n'a encore écrit » — pas « vide ».

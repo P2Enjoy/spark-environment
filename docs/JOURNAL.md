@@ -11567,3 +11567,51 @@ verrou qu'on lève le jour où il gêne, c'est-à-dire le jour où il sert.
 quelqu'un d'autre. Une mesure qui consomme les ressources de la machine qu'on
 partage n'est pas gratuite parce qu'elle est automatisée, et « en tâche de
 fond » ne veut pas dire « sans conséquence ».
+
+---
+
+## 2026-09-14 · Clôture de SPK-104 et SPK-105, et ce que la Forge réelle m'a appris
+
+**Vérification de la Forge, en LECTURE SEULE** (`CLAUDE.md` §9), demandée par le
+responsable. Elle a contredit le contrat de déploiement sur deux points que
+j'avais écrits le matin même :
+
+| Ce que l'OP-20 disait | Ce que la Forge dit |
+|---|---|
+| migration `016` **non appliquée**, registre en schéma 015 | **appliquée** le 2026-09-14T12:55Z, registre en **016** |
+| reprise du canal au registre **due** | **faite** : `notify.source = registre`, `configured = true` |
+
+Les deux pièges que j'avais documentés — le mot de passe posé au premier usage,
+et la coupure silencieuse du repli — ont donc été franchis sans dommage par
+quelqu'un d'autre, pendant que je les écrivais. Le contrat est corrigé : il
+décrit désormais une opération **appliquée**, dont il ne reste qu'une miette —
+`SPARKD_NOTIFY_URL` et `SPARKD_NOTIFY_TEMPLATE` traînent encore dans
+`/etc/sparkd/sparkd.env`, inertes puisque le registre l'emporte, mais lisibles
+par qui lit ce fichier, et le §21.3 tient l'URL pour sensible.
+
+**Ce que cela dit de ma façon d'écrire un contrat de déploiement.** J'ai rédigé
+l'OP-20 en lisant le code, sans regarder la machine, et j'ai affirmé un état.
+Une opération « en attente » qui ne l'est plus fait perdre exactement le temps
+qu'elle prétend faire gagner. J'aurais dû relever avant d'écrire — c'est trente
+secondes de SSH en lecture seule.
+
+**`spark_note` n'existe pas sur la Forge**, et la build qui y tourne
+(`0.post1.dev817+gcd1480daa`) est antérieure à SPK-104. Rien de ce travail n'est
+déployé, le `CHANGELOG` le dit en gardant tout sous *Non publié*, et l'OP-19
+reste due.
+
+**Campagne complète, jouée UNE fois** (le verrou du SPK-106 l'y oblige
+désormais) : **131 parcours verts**, trois rouges. Les trois forment une seule
+chaîne, enracinée dans le parcours *Alertes* de SPK-62 encore non committé, dont
+j'ai mesuré la course dans les deux sens. Les deux parcours de SPK-104 et
+SPK-105 sont verts, dans la série comme isolément.
+
+**Une erreur de plus, corrigée ici.** J'avais écrit au backlog que `make build`
+ne pouvait pas tourner, « `pnpm` n'étant pas installé ». C'est faux :
+`corepack pnpm` le fournit, et le build passe. Je l'avais déduit d'un `pnpm:
+command not found` sans chercher plus loin — une hypothèse présentée comme un
+fait, ce que le `CLAUDE.md` §1 interdit explicitement.
+
+**Les deux unités sont closes**, avec cette réserve écrite noir sur blanc : la
+campagne porte trois rouges qui ne leur appartiennent pas, et rien n'est
+déployé.
