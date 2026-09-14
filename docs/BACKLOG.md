@@ -276,13 +276,27 @@ opération manuelle et n'est pas planifié.
   s'exécute toutes les cinq secondes : il prime maintenant sur elle.
 - 36 tests pour l'hôte console.
 
-### [~] SPK-17 · Contrat d'API partagé
+### [x] SPK-17 · Contrat d'API partagé
 
 **Arbitrage du responsable, 2026-09-14 : la garde passe en LOCAL.** La CI GitHub
 est abandonnée pour cette unité — Actions n'a jamais tourné et son activation
 n'est pas acquise. La vérification du contrat est posée dans un hook `pre-push`,
 prouvée sur une dérive réelle.
 
+- **Posée et éprouvée le 2026-09-14.** `.githooks/pre-push`, installé par
+  `make hooks` via `core.hooksPath` — et non recopié dans `.git/hooks`, où il se
+  périmerait en silence dès que le hook change.
+- **Éprouvée sur une VRAIE dérive**, pas sur une simulation : une route
+  `/v1/derive-eprouvee` a été ajoutée au code sans régénérer le contrat. Le hook
+  a refusé le push, affiché le diff et nommé la commande de correction. Le code
+  a ensuite été rétabli et la garde est repassée au vert.
+- **`.github/workflows/` est SUPPRIMÉ** du dépôt. Un workflow qui n'a jamais
+  tourné et qui ne tournera pas est pire qu'une absence : il se lit comme une
+  garantie.
+- **La limite est écrite au README, dans les limites connues, sans détour** : la
+  garde ne protège que les postes qui l'ont posée, et `git push --no-verify` la
+  contourne sans rien dire. Ce n'est pas équivalent à une intégration continue,
+  et le document ne laisse pas croire que si.
 
 - Spécification : `docs/DAT.md` §23
 - **Livré et prouvé le 2026-08-19.** `packages/contract/openapi/sparkd.json`

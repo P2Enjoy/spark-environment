@@ -7,7 +7,7 @@ VENV   := $(SPARKD)/.venv
 PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
-        contract contract-check test gestes e2e captures manuel runDev runProd seed build clean
+        contract contract-check hooks test gestes e2e captures manuel runDev runProd seed build clean
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -49,6 +49,14 @@ contract:
 
 contract-check:
 	$(PY) scripts/contract.py check
+
+# SPK-17 · §23 : la garde du contrat, posée sur CE dépôt. `core.hooksPath` plutôt
+# qu'une copie dans `.git/hooks` : une copie se périme en silence dès que le hook
+# change, et personne ne s'en aperçoit.
+hooks:
+	git config core.hooksPath .githooks
+	@echo "Garde posée : le contrat est vérifié avant chaque push."
+	@echo "Elle ne protège QUE ce poste, et « git push --no-verify » la contourne."
 
 # Pile de developpement (docs/DAT.md §28). Deux processus, aucun service a
 # orchestrer : aucun demon Docker n'est requis.

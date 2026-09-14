@@ -335,6 +335,7 @@ pas encore sont marquées.
 | `make test` | toutes les suites de tests, contrat compris | **oui** |
 | `make contract` | régénère le contrat d'API et ses types | **oui** |
 | `make contract-check` | échoue si le contrat committé a dérivé du code | **oui** |
+| `make hooks` | pose la garde du contrat avant chaque `git push` (voir ci-dessous) | **oui** |
 | `make gestes` | parcours navigateur des gestes d'administration | **oui** |
 | `make runDev` | pile de développement : `sparkd` **factice** + console, inventaire jetable | **oui** |
 | `make runProd` | **console d'exploitation seule** sur `:5175` : inventaire du poste, tunnels vers de vraies Forges. Port distinct de `runDev`, donc les deux tournent ensemble | **oui** |
@@ -486,6 +487,15 @@ le confond ni avec l'absence de jeton, ni avec un compte sans zone
   réponse prévue est le mode `vm`, pas un durcissement du mode `container`.
 
 ## Limites connues
+
+**La garde du contrat d'API ne protège que les postes qui l'ont posée.** Le
+contrat `packages/contract/` est ce sur quoi la console se règle ; une dérive non
+vue se découvre à l'exécution, chez l'utilisateur. `make hooks` installe un
+`pre-push` qui refuse un push dont le contrat a dérivé — mais il ne s'exécute que
+là où on l'a installé, et `git push --no-verify` le contourne sans rien dire.
+Une intégration continue serait plus forte ; elle n'a jamais tourné sur ce dépôt,
+et le responsable a tranché le 2026-09-14 de s'en passer plutôt que de laisser
+une garde qui n'existe que dans un fichier de workflow.
 
 - Un seul serveur. Aucun ordonnancement inter-machines.
 - `runtime: vm` est porté par le modèle de données mais n'est pas implémenté.

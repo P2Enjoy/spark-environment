@@ -1,0 +1,41 @@
+#!/bin/sh
+# La garde du contrat d'API, jouée avant chaque `git push`.
+#
+# @spec docs/BACKLOG.md#SPK-17 · docs/DAT.md §23 (le contrat partagé) ·
+#       CLAUDE.md §15
+#
+# **Ce qu'elle vaut, et il faut le dire sans détour.** Ce n'est PAS une CI. Elle
+# ne protège que les postes qui l'ont installée — `make hooks` —, et un
+# `git push --no-verify` la contourne sans rien dire. Le responsable a tranché
+# le 2026-09-14 de s'en contenter : GitHub Actions n'a jamais tourné sur ce
+# dépôt, et une garde faible qui s'exécute vaut mieux qu'une garde forte qui
+# n'existe que dans un fichier de workflow.
+#
+# Elle refuse le `push` quand le contrat committé ne correspond plus au code.
+# Le motif : ce contrat est ce sur quoi la console se règle. Une dérive non vue
+# se découvre à l'exécution, chez l'utilisateur, et sous la forme d'un écran qui
+# se tait.
+set -e
+
+racine=$(git rev-parse --show-toplevel)
+cd "$racine"
+
+py="services/sparkd/.venv/bin/python"
+[ -x "$py" ] || py=python3
+
+if ! "$py" scripts/contract.py check; then
+  cat >&2 <<'FIN'
+
+Le push est REFUSÉ : le contrat d'API committé ne décrit plus le code.
+
+  Regénérez-le, relisez le diff, et committez-le avec le changement qui l'a
+  fait bouger :
+
+      make contract
+
+  Si vous devez pousser malgré tout — et cela veut dire pousser un contrat
+  faux —, `git push --no-verify` le permet. Ce n'est pas une porte de sortie
+  ordinaire : la console se règle sur ce fichier.
+FIN
+  exit 1
+fi

@@ -2,6 +2,15 @@
 
 ## [Non publié]
 
+### Ajouté
+- **SPK-17 — une garde du contrat d'API avant chaque `git push`.** `make hooks`
+  installe `.githooks/pre-push`, qui refuse un push dont le contrat committé ne
+  décrit plus le code, affiche le diff et nomme la commande de correction.
+  Éprouvée sur une dérive réelle. `.github/workflows/` est supprimé : ce workflow
+  n'a jamais tourné, et un workflow qui ne tourne pas se lit comme une garantie.
+  La limite est écrite aux limites connues du README — cette garde ne protège que
+  les postes qui l'ont posée.
+
 ### Corrigé
 - **SPK-96 — un Spark amorcé en rootless ne pouvait télécharger aucune image.**
   Le compte rendu promettait pourtant une cellule « capable de faire tourner une
