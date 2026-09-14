@@ -1364,15 +1364,24 @@ def test_une_famille_dont_l_image_porte_sshd_n_INSTALLE_RIEN():
 
 def test_chaque_nouvelle_famille_active_CE_QU_ON_A_MESURE():
     """L'activation est la seule chose que ces familles reçoivent : si elle
-    n'est pas exactement celle de la cellule, elles ne reçoivent rien."""
+    n'est pas exactement celle de la cellule, elles ne reçoivent rien.
+
+    Sur Void, l'activation compte DEUX gestes et non un : poser le lien, puis
+    attendre que `runsvdir` le prenne. Mesuré le 2026-09-14, ce délai est de
+    cinq secondes — sans l'attente, le relevé du §42.6 déclare `sshd` absent sur
+    une cellule qui va écouter, et l'élément est dit échoué à tort.
+    """
     attendu = {
-        "xbps": "ln -sf /etc/sv/sshd /etc/runit/runsvdir/default/sshd",
-        "emerge": "systemctl enable --now sshd",
-        "apt-rpm": "systemctl enable --now sshd",
+        "xbps": ("ln -sf /etc/sv/sshd /etc/runit/runsvdir/default/sshd",
+                 "sv -w 30 start sshd"),
+        "emerge": ("systemctl enable --now sshd",),
+        "apt-rpm": ("systemctl enable --now sshd",),
     }
-    for cle, activation in attendu.items():
+    for cle, gestes in attendu.items():
         script = bootstrap.script_ssh(familles.FAMILLES[cle])
-        assert activation in script, f"« {cle} » n'active pas ce qui a été mesuré"
+        for geste in gestes:
+            assert geste in script, (
+                f"« {cle} » n'active pas ce qui a été mesuré : {geste}")
 
 
 def test_RUNIT_est_un_troisieme_gestionnaire_que_le_releve_INTERROGE():

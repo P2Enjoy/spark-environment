@@ -8528,9 +8528,27 @@ n'avait pas rencontrée.
 
 | Famille | `os_id` | services | Activation mesurée | Docker amont |
 |---|---|---|---|---|
-| `xbps` | `void` | **runit** | `ln -sf /etc/sv/sshd /etc/runit/runsvdir/default/sshd` | **aucun** |
+| `xbps` | `void` | **runit** | `ln -sf …/default/sshd`, **puis attendre** `sv -w 30 start sshd` | **aucun** |
 | `emerge` | `gentoo` | **systemd** | `systemctl enable --now sshd` | **aucun** |
 | `apt-rpm` | `altlinux` | systemd | `systemctl enable --now sshd` | **aucun** |
+
+**Sur runit, poser le lien ne démarre rien — et l'amorçage doit l'attendre.**
+C'est la différence de nature entre runit et les deux autres gestionnaires :
+`systemctl enable --now` et `rc-service start` rendent la main **une fois le
+service lancé** ; `ln -sf` ne fait que déposer une intention dans un répertoire.
+`runsvdir` le balaie périodiquement et ne lance `runsv` qu'au passage suivant —
+**5 secondes mesurées** sur la Forge le 2026-09-14.
+
+Sans attente, l'amorçage rendait la main aussitôt, le relevé du §42.6 trouvait
+`sshd` absent, et l'écran déclarait l'élément **échoué** sur une cellule qui
+allait écouter cinq secondes plus tard. C'était un faux négatif, et le plus
+coûteux des deux sens : il fait douter d'un amorçage qui a réussi.
+
+`sv start` seul ne suffit pas non plus — tant que `runsv` n'existe pas, il rend
+*« fail: sshd: runsv not running »* et sort en `1`, ce que le §42.5 compterait
+comme un échec de pose. L'activation réessaie donc jusqu'à ce que le superviseur
+existe, puis attend le service lui-même. **C'est le résultat qui est vérifié, pas
+le code de retour d'une commande qui n'a fait que poser un lien.**
 
 **Gentoo se lit `systemd`, et c'est une correction.** La campagne du 8 avait
 mesuré `images:gentoo/openrc` ; l'image que le catalogue sert est

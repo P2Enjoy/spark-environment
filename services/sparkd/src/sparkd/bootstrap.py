@@ -828,18 +828,35 @@ def poser(famille: "familles.Famille", paquets: str) -> str:
     return PREPARER[famille.paquets] + INSTALLER[famille.paquets] % paquets
 
 ACTIVER = {
-    "systemd": "systemctl enable --now %s\n",
+    "systemd": "systemctl enable --now {service}\n",
     # OpenRC : deux commandes, et l'ordre compte — `add` inscrit au niveau
     # d'exécution pour les redémarrages, `start` allume maintenant. N'en faire
     # qu'une donnerait une cellule joignable jusqu'au premier redémarrage, ce
     # qui ne se verrait qu'alors.
-    "openrc": "rc-update add %s default\nrc-service %s start\n",
+    "openrc": "rc-update add {service} default\nrc-service {service} start\n",
     # SPK-98 · §42.11 ter : runit, mesuré sur Void. Le service s'active en
     # LIANT sa description dans le répertoire du niveau d'exécution — il n'y a
     # pas de commande « enable » : `runsvdir` surveille ce répertoire et démarre
     # ce qu'il y trouve. `-f` parce que le lien peut déjà être là, et qu'un
     # second amorçage ne doit pas échouer sur ce qu'il a lui-même posé (§42.1).
-    "runit": "ln -sf /etc/sv/%s /etc/runit/runsvdir/default/%s\n",
+    #
+    # **Et il faut ATTENDRE.** Poser le lien ne démarre rien : `runsvdir` balaie
+    # son répertoire périodiquement, et ne lance `runsv` qu'au passage suivant —
+    # 5 secondes mesurées sur la Forge le 2026-09-14. Sans cette attente,
+    # l'amorçage rendait la main aussitôt, le relevé du §42.6 trouvait `sshd`
+    # absent, et l'élément était déclaré ÉCHOUÉ sur une cellule qui allait
+    # écouter cinq secondes plus tard. `sv start` seul ne suffit pas non plus :
+    # tant que `runsv` n'existe pas il rend « fail: runsv not running ». On
+    # réessaie donc jusqu'à ce que le superviseur soit là, puis on attend le
+    # service LUI-MÊME — c'est le résultat qui est vérifié, pas le code d'une
+    # commande qui n'a fait que poser un lien (§42.5).
+    "runit": ("ln -sf /etc/sv/{service} /etc/runit/runsvdir/default/{service}\n"
+              "i=0\n"
+              "while [ $i -lt 30 ]; do\n"
+              "  sv -w 30 start {service} >/dev/null 2>&1 && break\n"
+              "  i=$((i+1)); sleep 1\n"
+              "done\n"
+              "sv -w 30 start {service}\n"),
 }
 
 
@@ -854,13 +871,10 @@ def script_ssh(famille: "familles.Famille") -> str:
     préparé et qu'on n'ouvre pas.
     """
     paquets = " ".join(famille.paquets_ssh)
-    activation = ACTIVER[famille.services]
-    # `openrc` et `runit` nomment le service DEUX fois — l'un pour inscrire puis
-    # démarrer, l'autre pour lier la source vers la destination.
-    if famille.services in ("openrc", "runit"):
-        activation = activation % (famille.service_ssh, famille.service_ssh)
-    else:
-        activation = activation % famille.service_ssh
+    # Le gabarit nomme le service autant de fois qu'il en a besoin — une pour
+    # systemd, deux pour openrc, quatre pour runit —, et un champ NOMMÉ évite
+    # d'avoir à savoir combien à cet endroit.
+    activation = ACTIVER[famille.services].format(service=famille.service_ssh)
     return _prelude(famille) + poser(famille, paquets) + activation
 
 
