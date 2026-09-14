@@ -4434,12 +4434,37 @@ conteneur et dépannage — sans devoir deviner quel onglet les porte.
 
 ---
 
-### [~] SPK-71 · La tranche des Sparks délègue ses contrôleurs, sur le systemd d'aujourd'hui
+### [x] SPK-71 · La tranche des Sparks délègue ses contrôleurs, sur le systemd d'aujourd'hui
 
-**Arbitrage du responsable, 2026-09-14 : le redémarrage est AUTORISÉ**, sans
-attendre de fenêtre particulière. Les Sparks sont arrêtés proprement, la Forge
-redémarre, la délégation des contrôleurs est relevée au retour, et tout est remis
-en marche. L'indisponibilité brève de `sso-p2enjoy` est acceptée.
+**Arbitrage du responsable, 2026-09-14 : le redémarrage est AUTORISÉ.**
+
+**FAIT le 2026-09-14, et c'est la preuve qui manquait.** Les six cellules
+arrêtées proprement — `void-98` a demandé `--force`, runit n'honorant pas le
+signal d'arrêt qu'Incus envoie —, puis `systemctl reboot`. Au retour :
+
+| | avant le redémarrage | après |
+|---|---|---|
+| `spark.slice/cgroup.controllers` | `cpuset cpu io memory hugetlb pids rdma misc dmem` | `cpuset cpu io memory pids` |
+| `spark-delegation.service` | active, enabled | **active, enabled** |
+| préflight `RUN-SLICE` | ok | **ok** — *« controleurs cpuset cpu io memory pids, static, delegation enabled »* |
+
+La liste rétrécit, et c'est le résultat ATTENDU, pas une perte : les contrôleurs
+supplémentaires venaient du repli écrit une fois par l'installation
+(`+cpu +cpuset +memory +io +pids` dans `subtree_control`, plus ce que le parent
+portait). Après un démarrage propre, la tranche porte **exactement** ce que
+`Delegate=` de l'unité déclare. C'est la démonstration que la délégation vient de
+l'unité et non d'une écriture d'installation — précisément ce que l'unité
+affirmait et ne pouvait pas prouver.
+
+Préflight complet au retour : **14 contrôles, 0 bloquant**. Les six cellules ont
+été redémarrées et ont retrouvé leurs adresses.
+
+**Un écart de conduite à noter** : la Forge a mis **une vingtaine de minutes** à
+revenir, muette sur SSH, HTTP et ICMP pendant tout ce temps. Rien n'indique une
+cause imputable au produit — aucun changement de réseau, de pare-feu ni de
+démarrage n'avait été déployé —, et le préflight est vert au retour. Le fait est
+consigné parce qu'il change ce qu'il faut dire à qui redémarrera la prochaine
+fois : **prévoir vingt minutes, pas deux.**
 
 **Trouvé le 2026-09-01 sur la Forge réinstallée**, et c'est la promesse centrale
 du produit qui tombait en silence. Après réinstallation depuis le schéma JSON, la

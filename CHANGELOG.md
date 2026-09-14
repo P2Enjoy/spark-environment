@@ -3,6 +3,11 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-71 — la délégation des contrôleurs de `spark.slice` survit à un
+  redémarrage, prouvé sur la Forge réelle.** Au retour, la tranche porte
+  exactement `cpuset cpu io memory pids` — ce que `Delegate=` de l'unité déclare,
+  et non ce que l'installation avait écrit une fois. C'est la démonstration que la
+  délégation vient de l'unité. Préflight 14/14 au retour.
 - **SPK-17 — une garde du contrat d'API avant chaque `git push`.** `make hooks`
   installe `.githooks/pre-push`, qui refuse un push dont le contrat committé ne
   décrit plus le code, affiche le diff et nomme la commande de correction.

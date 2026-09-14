@@ -3875,6 +3875,37 @@ s'appliquant pas dans la tranche, la réservation redevenait proportionnelle en
 silence — le défaut même que tout le §32 corrige, revenu par la porte du
 système d'exploitation.
 
+#### 32.4 quater Les Sparks reviennent seuls après un redémarrage — par HÉRITAGE
+
+**Question posée par le responsable le 2026-09-14, et elle méritait une mesure**
+plutôt qu'une supposition : un Spark en marche avant un redémarrage de la Forge
+se relance-t-il tout seul ?
+
+**Oui — mesuré.** Démon Incus redémarré sans aucun geste : les six cellules de la
+Forge de test sont revenues `RUNNING`. Le mécanisme est
+`volatile.last_state.power`, qu'Incus écrit à l'arrêt et restaure au démarrage.
+
+**Et c'est la bonne sémantique, ce qui n'était pas acquis** : ce qui revient est
+ce qui tournait. Un Spark que le locataire avait **délibérément arrêté** reste
+arrêté — un redémarrage de la Forge n'a pas à défaire sa décision.
+
+**`boot.autostart` n'est donc PAS posé, et c'est un choix.** Le mettre à `true`
+ressusciterait les Spark arrêtés exprès ; le mettre à `false` empêcherait les
+autres de revenir. L'absence de réglage est la seule des trois valeurs qui dise
+« reviens comme tu étais ».
+
+**Ce qui manque, et il faut l'écrire plutôt que s'en féliciter.** Cette propriété
+est obtenue par **héritage** : le produit ne la déclare nulle part, ne la
+documente pas, et aucun contrôle de préflight ne la vérifie. Elle tient tant
+qu'Incus se comporte ainsi et que personne n'a posé `boot.autostart=false` sur
+une instance. Rien ne le dirait.
+
+Par ailleurs, la réconciliation du démarrage (`reconcile_all`) ne corrige que les
+états **transitoires** — `creating`, `starting`, `stopping`, `deleting`. Un Spark
+que le registre déclare `running` et dont la cellule serait arrêtée n'est ni
+corrigé ni relancé. Tant qu'Incus restaure, le cas ne se produit pas ; le jour où
+il ne restaurerait pas, le registre mentirait sans que rien ne le signale.
+
 ### 32.5 Ce que cette section ne prétend pas
 
 La réservation devient absolue **sous contention CPU**. Elle ne dit rien de la
