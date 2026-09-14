@@ -1470,52 +1470,82 @@ def test_les_trois_derivees_RHEL_restent_sans_Docker_par_CONSTAT(tmp_path):
 #           inutilisable), §42.5 (un code non nul sur une pose est un échec)
 
 
-def test_le_resolveur_n_est_donne_QU_AU_rootless():
-    """Le mode enraciné n'a pas ce défaut : son démon partage l'espace réseau
-    de la cellule. Lui poser le fichier serait agir sans motif."""
-    assert "resolv.conf" in bootstrap.SCRIPT_ROOTLESS
-    enracine = "".join(bootstrap.script_docker())
-    assert "resolv.conf" not in enracine, (
-        "l'enraciné ne doit RIEN recevoir : il résout déjà")
+def test_le_releve_RAPPORTE_le_resolveur_et_la_passerelle_sans_conclure():
+    """C'est leur ÉCART qui décide, et l'écart se lit hors de la cellule."""
+    assert "resolveur=%s" in bootstrap.RELEVE
+    assert "passerelle=%s" in bootstrap.RELEVE
+    assert "ip -4 route show default" in bootstrap.RELEVE
+
+
+def test_le_resolveur_se_pose_QUAND_le_releve_le_reclame():
+    """Trois conditions, et chacune écarte un cas où agir serait une faute."""
+    stub = {"mode": "rootless", "resolveur": "127.0.0.53", "passerelle": "10.77.0.1"}
+    assert bootstrap.resolveur_a_poser(stub) is True
+    # Déjà correct : le §42.1 interdit d'y toucher, et donc de redémarrer.
+    assert bootstrap.resolveur_a_poser({**stub, "resolveur": "10.77.0.1"}) is False
+    # Enraciné : son démon partage l'espace réseau de la cellule et résout déjà.
+    assert bootstrap.resolveur_a_poser({**stub, "mode": "enracine"}) is False
+    # Sans route par défaut, il n'y a pas de résolveur à proposer. Inventer une
+    # adresse serait pire que ne rien faire.
+    assert bootstrap.resolveur_a_poser({**stub, "passerelle": "absent"}) is False
+    assert bootstrap.resolveur_a_poser({}) is False
+
+
+def test_une_cellule_DEJA_rootless_recoit_le_remede():
+    """Le défaut de la première rédaction, et la raison de cette forme.
+
+    Le remède vivait dans le script de pose de Docker. Une cellule amorcée en
+    rootless AVANT le correctif avait déjà son Docker : l'amorçage concluait
+    « rien n'a été fait, tout était déjà en place » et le remède ne l'atteignait
+    jamais. Mesuré sur la Forge le 2026-09-14.
+    """
+    deja = {"mode": "rootless", "docker": "present", "compose": "present",
+            "resolveur": "127.0.0.53", "passerelle": "10.77.0.1"}
+    assert bootstrap.resolveur_a_poser(deja) is True, (
+        "une cellule complète mais sans résolveur doit encore le recevoir")
+    assert "resolv.conf" not in bootstrap.SCRIPT_ROOTLESS, (
+        "le remède ne doit PAS vivre dans la pose de Docker : il y serait "
+        "inatteignable pour les cellules déjà rootless")
 
 
 def test_l_adresse_du_resolveur_est_LUE_dans_la_cellule_et_non_ecrite():
     """Une adresse en dur serait une seconde table, fausse le jour où le bridge
     change. La cellule lit la passerelle de sa propre route par défaut (§10)."""
-    script = bootstrap.SCRIPT_ROOTLESS
-    assert "ip -4 route show default" in script
-    assert "10.77.0.1" not in script, (
+    assert "ip -4 route show default" in bootstrap.SCRIPT_RESOLVEUR
+    assert "10.77.0.1" not in bootstrap.SCRIPT_RESOLVEUR, (
         "l'adresse de la passerelle ne doit être écrite NULLE PART dans le code")
 
 
 def test_le_LIEN_vers_le_stub_est_retire_et_non_ecrit_a_travers():
     """Écrire à travers le lien écrirait dans le fichier que `systemd-resolved`
     régénère : le geste se déferait tout seul, ce qui est pire que rien."""
-    script = bootstrap.SCRIPT_ROOTLESS
-    assert "rm -f /etc/resolv.conf" in script
-    assert "> /etc/resolv.conf" in script
+    assert "rm -f /etc/resolv.conf" in bootstrap.SCRIPT_RESOLVEUR
+    assert "> /etc/resolv.conf" in bootstrap.SCRIPT_RESOLVEUR
 
 
 def test_la_passerelle_est_MESUREE_avant_d_etre_retenue():
-    """On ne suppose pas qu'une passerelle résout : on le vérifie, et on
-    RESTAURE si elle ne résout pas. Une cellule qui ne résout plus rien serait
-    bien pire que le défaut qu'on vient corriger."""
-    script = bootstrap.SCRIPT_ROOTLESS
+    """On ne suppose pas qu'une passerelle résout : on le vérifie, et on RESTAURE
+    si elle ne résout pas. Une cellule qui ne résout plus rien serait bien pire
+    que le défaut qu'on vient corriger — et l'échec est franc (§42.5)."""
+    script = bootstrap.SCRIPT_RESOLVEUR
     assert "getent hosts" in script
-    assert "resolv.conf.avant-spark" in script
+    assert "cp -a /etc/resolv.conf /etc/resolv.conf.avant-spark" in script
     assert "cp -a /etc/resolv.conf.avant-spark /etc/resolv.conf" in script
-    # Et l'échec est FRANC : le §42.5 en fait un amorçage échoué.
     assert "exit 1" in script
 
 
-def test_un_second_amorcage_ne_REDEMARRE_pas_le_demon(monkeypatch):
-    """§42.1. Le redémarrage est gardé par le fait que le fichier a CHANGÉ ;
-    sans ce garde, tout amorçage rejoué couperait les piles du locataire."""
-    script = bootstrap.SCRIPT_ROOTLESS
-    assert 'if [ "$resolv_pose" = 1 ]; then' in script
-    debut = script.index('if [ "$resolv_pose" = 1 ]')
-    assert "systemctl --user restart docker" in script[debut:], (
-        "le redémarrage doit être DANS la garde, pas à côté")
-    avant = script[:debut]
-    assert "systemctl --user restart docker" not in avant, (
-        "aucun redémarrage inconditionnel ne doit exister")
+def test_une_cellule_DEJA_correcte_sort_AVANT_de_toucher_a_quoi_que_ce_soit():
+    """§42.1. La sortie est en tête du script, donc avant la sauvegarde, avant
+    l'écriture, et avant tout redémarrage du démon — qui couperait les piles du
+    locataire pour rien."""
+    script = bootstrap.SCRIPT_RESOLVEUR
+    sortie = script.index('if [ "$actuel" = "$attendu" ]; then exit 0; fi')
+    for apres in ("cp -a", "rm -f /etc/resolv.conf", "systemctl --user restart docker"):
+        assert script.index(apres) > sortie, (
+            f"« {apres} » doit venir APRÈS la sortie anticipée")
+
+
+def test_le_geste_est_NOMME_dans_le_compte_rendu():
+    assert bootstrap.LIBELLES["resolveur"] == "résolveur du démon rootless"
+    assert "resolveur" not in bootstrap.ELEMENTS, (
+        "ce n'est pas un sixième élément de la détection, comme `motd`")
