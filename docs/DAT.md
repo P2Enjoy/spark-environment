@@ -9938,6 +9938,64 @@ applicatif du périmètre —, ni une commande à exécuter, ni un canal par leq
 agent obtiendrait un accès. C'est un texte, il se lit, et tout ce qu'il décrit
 reste protégé par ce qui le protégeait avant qu'il n'existe.
 
+Le §44.9.7 n'y change rien : le bloc de variables qu'il demande, l'agent le
+**rédige**, et rédiger n'est pas écrire. C'est le propriétaire qui le colle dans
+la console, et lui seul en a le pouvoir.
+
+
+#### 44.9.7 Une variable n'entre pas par la cellule : le lot que l'agent rend (SPK-99)
+
+Demandé par le responsable le 2026-09-14. Le §44.9.2 dit déjà les **noms** que la
+pile recevra. Il ne disait pas ce qui arrive quand la pile en réclame un de plus
+— et c'est le cas ordinaire : un agent qui prépare un déploiement découvre en
+l'écrivant qu'il lui faut `REDIS_URL`, que la cellule n'a pas.
+
+**Ce qu'il fait alors est prévisible, et perdu d'avance.** Il est `root` dans la
+cellule, les deux fichiers sont là, il les écrit. Or le §43.2 les régénère **en
+entier** depuis le registre à chaque application, et `/run/spark/secrets` vit
+dans un tmpfs reposé à chaque démarrage (§43.5.2). Sa ligne disparaît à la
+prochaine écriture du plan de contrôle ou au prochain redémarrage — pas tout de
+suite, donc : la pile marche, et cesse de marcher plus tard, loin du geste. C'est
+le même mode de panne que le §43.10 a mesuré chez l'exploitant, vu depuis l'autre
+bout.
+
+**Seul le propriétaire peut poser une variable.** La console n'est pas joignable
+depuis la cellule (§35.1) : ni `PUT /v1/sparks/{nom}/env/{nom}` (§43.9.5), ni
+l'import de lot (§43.10) ne sont à portée d'un agent. Ce n'est pas une lacune à
+contourner, c'est la frontière du produit — la même que « rien ne s'expose depuis
+l'intérieur » (§44.9.2).
+
+**Décision : le dossier nomme la seule voie, et donne la FORME que la console
+accepte.** L'agent qui prépare le déploiement est précisément celui qui connaît
+les noms et les valeurs dont sa pile a besoin ; le propriétaire est le seul qui
+puisse les écrire. Le dossier demande donc à l'agent de **rendre un bloc au
+format `.env`**, et dit où le propriétaire le colle : fenêtre du Spark →
+*Environnement* → **Importer un lot**.
+
+Ce que le dossier en dit, et rien de plus :
+
+- **la forme** — `NOM=valeur`, une par ligne, et un exemple de deux lignes. Pas
+  de noms inventés : le §44.7 tient, le produit ne connaît pas l'application du
+  locataire et ne lui propose aucune variable ;
+- **les quatre points qui décident qu'un bloc passe du premier coup** (§43.10.1) :
+  aucune valeur multiligne — on écrit `\n` —, aucune substitution — `$` est
+  littéral —, `#` n'ouvre un commentaire qu'en début de ligne, et un import
+  ajoute et remplace sans jamais retirer. La grammaire complète n'est **pas**
+  recopiée ici : la console refuse en nommant la ligne fautive, et c'est elle qui
+  fait foi ;
+- **le secret se déclare, il ne se devine pas** (§43.3). Le bloc ne porte aucune
+  marque, et le dossier demande à l'agent de **nommer en clair, à côté**, les
+  lignes que le propriétaire doit cocher comme secrètes ;
+- **la pile lira la nouvelle valeur au démarrage suivant**, pas à l'import
+  (§43.2) — le fait est déjà écrit au §44.9.2, et c'est ici qu'on s'en sert.
+
+**C'est une voie, pas un ordre** (§44.6). Le dossier dit par où passe l'écriture
+et sous quelle forme elle est acceptée ; il ne demande à personne de l'accorder,
+et rien dans la cellule ne la rend possible. Le bloc que l'agent rend est **le
+sien** : il ne vient pas du registre, et le §44.9.3 n'est pas entamé — aucune
+valeur détenue par le plan de contrôle n'entre dans ce texte, dans un sens comme
+dans l'autre.
+
 
 ### 44.10 Ce que le briefing devient quand la cellule a deux comptes (SPK-94, SPK-95)
 

@@ -10562,3 +10562,49 @@ une cellule, puis vérifiée par une connexion réelle depuis le poste :
    la même question dans le même produit.
 
 Contrat au §42.11 et §42.11 bis du DAT.
+
+---
+
+## 2026-09-14 · SPK-99 — le dossier pour un agent ne disait pas de lire le briefing
+
+Le responsable a relevé deux manques dans le texte que le bouton **Copier pour un
+LLM** produit, et un troisième point qui était une question.
+
+**Le `motd` ne s'affiche pas à qui n'ouvre pas de shell.** Le §44.1 avait mesuré
+qu'un agent lit `/etc/spark/BRIEFING.md` sans shell interactif — le journal du
+SPK-60 en porte la preuve, `ssh -J … 'cat /etc/spark/BRIEFING.md'`. Ce que
+personne n'avait rapproché, c'est que **cette forme-là n'affiche aucun `motd`** :
+le panneau du §44.1, dont la troisième ligne est justement l'instruction de lire
+le briefing, n'atteint que qui ouvre un shell de connexion. Un agent qui entre en
+une ligne ne sait donc pas que le fichier existe, et travaille avec le seul
+dossier — daté de la console, alors que la cellule porte le même modèle réécrit
+à chaque geste du plan de contrôle (§44.4). Le dossier nomme désormais le fichier
+et donne la ligne qui le lit, composée avec **le même rebond validé** que les
+commandes d'entrée : une cible non reconnue ne produit pas plus cette ligne-là
+que les autres.
+
+**Une variable écrite depuis la cellule est perdue, et elle est perdue plus
+tard.** Le §43.10 avait déjà mesuré ce geste chez l'exploitant : vingt lignes à
+poser une par une, et il écrit le fichier à la main. Vu du dossier, c'est la même
+panne à l'autre bout — l'agent est `root`, les deux fichiers sont là, il les
+écrit, et le §43.2 les régénère **en entier** à la prochaine application, tandis
+que `/run/spark/secrets` est reposé à chaque démarrage (§43.5.2). La pile marche,
+puis cesse de marcher, loin du geste. Seul le propriétaire peut écrire : la
+console n'est pas joignable depuis la cellule (§35.1). Le dossier dit donc la
+seule voie et la **forme** que la console accepte — un bloc `.env`, collé dans
+*Environnement* → **Importer un lot** (SPK-97) —, avec les quatre points qui
+décident qu'un bloc passe du premier coup, et le rappel que le secret se
+**déclare** et ne se devine pas (§43.3). Aucun nom de variable n'est proposé : le
+§44.7 tient, le produit ne connaît pas l'application du locataire.
+
+**« Adresse publique de la Forge : inconnue du plan de contrôle » n'est pas un
+défaut.** La question du responsable a été vérifiée dans le code et non supposée :
+cette ligne rend `SPARKD_FORGE_PUBLIC_ADDRESS`, variable **facultative** que
+l'unité systemd emballée ne pose pas et que l'on ajoute, si on le veut, dans
+`/etc/sparkd/sparkd.env`. Le §44.8 interdit de déduire cette adresse de l'IP
+privée ou d'un appel sortant — ce serait inventer un fait réseau —, donc le
+modèle rend `null` et le Markdown le dit au lieu de se taire. La campagne du
+SPK-60 avait fait le même constat sur la Forge de test, pour la même raison.
+La mention « inconnue » cède la place à l'adresse dès que la variable est posée
+et `sparkd` redémarré. Aucun changement de code : le contrat fait ce qu'il
+annonce.

@@ -6239,6 +6239,47 @@ un, et le relevé le montre « active, inchangé ». La mention est corrigée.
     d'API et la Forge réelle.
 
 
+### [ ] SPK-99 · Le dossier dit quoi lire en arrivant, et par où passent les variables
+
+Demandé par le responsable le 2026-09-14, en deux points tenant au même texte —
+celui que le bouton **Copier pour un LLM** met dans le presse-papier :
+
+1. « le texte LLM n'instruit pas à lire le brief sur la machine, je sais que la
+   connexion SSH le fait déjà mais certains LLM font des commandes ssh cli single
+   line » — le `motd` du §44.1 n'est affiché qu'à l'ouverture d'un shell de
+   connexion, et `ssh hôte 'commande'` n'en ouvre aucun. L'agent qui entre ainsi
+   ne saura jamais que `/etc/spark/BRIEFING.md` existe ;
+2. « expliquer au LLM d'instruire le propriétaire de pousser les variables dans
+   la Forge, lui préparer un bloc de variables à importer comme un fichier
+   `.env` » — **seul le propriétaire peut poser une variable** ; écraser
+   `/etc/spark/env` ou `/run/spark/secrets` depuis la cellule ne sert à rien,
+   ils sont recréés en entier au prochain geste du plan de contrôle et au
+   prochain démarrage (§43.2, §43.5.2).
+
+- Spécification : `docs/DAT.md` **§44.9.2** point 4 (quoi lire en arrivant) et
+  **§44.9.7** (le lot que l'agent rend), §44.9.6 complété · manuel M8.
+  **Écrite et committée avant le code.**
+- Dépend de : SPK-85 pour le dossier, SPK-60 pour le briefing de la cellule,
+  SPK-97 pour l'import de lot que le bloc vise.
+- Portée : le seul rendu `briefing.dossier()`. **Aucune route nouvelle, aucune
+  migration, aucun changement de seed** — rien de ce que le dossier dit n'est un
+  état de plus ; tout vient déjà du modèle unique (§44.8) ou est une propriété
+  du produit.
+- Ce que l'unité ne doit PAS casser : le §44.9.3 — aucune valeur de secret, dans
+  aucun sens ; le §44.7 — aucun nom de variable inventé pour le locataire, le
+  bloc d'exemple reste générique ; le §44.9.2 — la commande de lecture emploie le
+  **même** rebond validé que les commandes d'entrée, et une cible non reconnue
+  n'en produit aucune.
+- DoD : un test prouve que le dossier nomme `/etc/spark/BRIEFING.md` **et** donne
+  la ligne non interactive qui le lit, avec le rebond ; un test prouve qu'un
+  rebond refusé ne produit pas davantage cette ligne-là ; un test prouve que le
+  dossier dit l'inutilité d'écrire les deux fichiers depuis la cellule et nomme
+  le geste de la console ; un test prouve qu'aucune valeur de secret n'entre dans
+  le texte après ces ajouts ; le parcours E2E du presse-papier constate les
+  nouvelles lignes dans ce qui est réellement collé ; captures observées aux deux
+  formats ; manuel M8, DAT et changelog mis à jour ; `@spec` / `@verifies` posés.
+
+
 ---
 
 ## Réservé, non planifié
