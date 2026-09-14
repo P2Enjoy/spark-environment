@@ -1330,7 +1330,9 @@ def test_les_TROIS_familles_mesurees_le_14_entrent_dans_la_table():
     22 —, pas sur un code de retour (§42.5).
     """
     for cle, os_id, services in (("xbps", "void", "runit"),
-                                 ("emerge", "gentoo", "openrc"),
+                                 # systemd : le catalogue sert
+                                 # `images:gentoo/systemd`, mesurée le 14.
+                                 ("emerge", "gentoo", "systemd"),
                                  ("apt-rpm", "altlinux", "systemd")):
         famille = familles.FAMILLES[cle]
         assert os_id in famille.os_ids, f"« {cle} » ne sert pas {os_id}"
@@ -1365,7 +1367,7 @@ def test_chaque_nouvelle_famille_active_CE_QU_ON_A_MESURE():
     n'est pas exactement celle de la cellule, elles ne reçoivent rien."""
     attendu = {
         "xbps": "ln -sf /etc/sv/sshd /etc/runit/runsvdir/default/sshd",
-        "emerge": "rc-update add sshd default",
+        "emerge": "systemctl enable --now sshd",
         "apt-rpm": "systemctl enable --now sshd",
     }
     for cle, activation in attendu.items():

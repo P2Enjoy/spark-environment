@@ -231,7 +231,18 @@ FAMILLES: dict[str, Famille] = {
         # déjà installé.
         paquets_ssh=(),
         service_ssh="sshd",
-        services="openrc",
+        # **systemd, et non `openrc`.** La première mesure portait sur
+        # `images:gentoo/openrc` ; l'image que le catalogue sert est
+        # `images:gentoo/systemd`, où `rc-service` n'existe pas. Mesuré le
+        # 2026-09-14 sur la Forge : `systemctl enable --now sshd` rend la
+        # cellule joignable sur `:22` sans rien poser.
+        #
+        # LIMITE CONNUE, et elle tient à la table elle-même : les deux variantes
+        # amont déclarent le MÊME `ID=gentoo`. `/etc/os-release` ne permet donc
+        # pas de les distinguer, et cette entrée ne peut en servir qu'une. La
+        # variante `openrc` n'est pas servie ; l'ajouter au catalogue exigerait
+        # d'observer le gestionnaire DANS la cellule, au lieu de le déclarer ici.
+        services="systemd",
         paquets="emerge",
         elements=SANS_DOCKER,
     ),

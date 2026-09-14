@@ -8529,8 +8529,24 @@ n'avait pas rencontrée.
 | Famille | `os_id` | services | Activation mesurée | Docker amont |
 |---|---|---|---|---|
 | `xbps` | `void` | **runit** | `ln -sf /etc/sv/sshd /etc/runit/runsvdir/default/sshd` | **aucun** |
-| `emerge` | `gentoo` | openrc | `rc-update add sshd default` puis `rc-service sshd start` | **aucun** |
+| `emerge` | `gentoo` | **systemd** | `systemctl enable --now sshd` | **aucun** |
 | `apt-rpm` | `altlinux` | systemd | `systemctl enable --now sshd` | **aucun** |
+
+**Gentoo se lit `systemd`, et c'est une correction.** La campagne du 8 avait
+mesuré `images:gentoo/openrc` ; l'image que le catalogue sert est
+`images:gentoo/systemd`, où `rc-service` n'existe pas. La doctrine a donc été
+reprise sur l'image réellement servie, mesurée le 2026-09-14 : `systemctl enable
+--now sshd` rend la cellule joignable sur `:22` sans rien poser.
+
+Cela révèle une **limite de la table elle-même**, et elle est conservée ici parce
+qu'elle est structurelle : les deux variantes amont de Gentoo déclarent le
+**même** `ID=gentoo` dans `/etc/os-release`. La clé sur laquelle le §42.9 choisit
+la doctrine ne permet pas de les distinguer, et l'entrée `emerge` ne peut donc en
+servir qu'une seule. **La variante `openrc` n'est pas servie.** L'ajouter au
+catalogue demanderait d'**observer** le gestionnaire de services dans la cellule
+au lieu de le déclarer dans la table — c'est un changement de nature de la
+doctrine, pas une ligne de plus, et il n'est pas fait tant qu'aucune cellule ne
+le réclame.
 
 **Aucune des trois n'installe quoi que ce soit, et ce n'est pas une économie.**
 Les trois images portent déjà `sshd` ; ce qui manquait était l'activation. Mais
@@ -9818,8 +9834,9 @@ et le Markdown, et la règle ne change pas parce que le lecteur est ailleurs.
 
 #### 44.9.2 Ce que le dossier porte de plus que le briefing de la cellule
 
-Trois blocs, et aucun n'est un fait nouveau : ce sont des faits que le plan de
-contrôle possède déjà et que la cellule ne porte pas.
+Quatre blocs, et aucun n'est un fait nouveau : ce sont des faits que le plan de
+contrôle possède déjà et que la cellule ne porte pas — ou qu'elle porte à un
+moment où il est trop tard pour s'en servir.
 
 1. **Par où l'on entre.** Le fragment `ssh_config` du §17 — nom d'hôte, adresse
    privée, compte `root`, `ProxyJump spark-host` — et les empreintes des clés
@@ -9843,6 +9860,15 @@ contrôle possède déjà et que la cellule ne porte pas.
    - les noms des variables et des secrets, séparés, avec le rappel que les
      valeurs ne sont **pas** dans ce texte et n'ont pas à l'être : la pile les
      lira dans les fichiers.
+4. **Quoi lire en arrivant, et par quelle commande.** Le briefing du §44.1 vit
+   dans la cellule, et `/etc/motd` dit à la connexion qu'il faut l'ouvrir. **Un
+   agent ne voit jamais ce panneau** : il entre par `ssh … 'commande'`, une forme
+   qui n'ouvre aucun shell de connexion et n'affiche donc aucun `motd` — c'est
+   la mesure du §44.1, prise de l'autre côté. Le dossier nomme donc
+   `/etc/spark/BRIEFING.md` et donne la ligne qui le lit **sans shell**. Sans
+   elle, l'agent travaille avec le seul dossier, daté de la console, alors que la
+   cellule porte le même modèle réécrit à chaque écriture du plan de contrôle
+   (§44.4).
 
 **Ce sont des fragments contractuels, pas un gabarit.** Le §44.7 reste entier :
 le produit ne décrit toujours pas l'application du locataire, ne propose pas de
