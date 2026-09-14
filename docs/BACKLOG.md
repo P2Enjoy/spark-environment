@@ -2799,10 +2799,44 @@ avant la première ligne de code.
   `spark.deleted` reste un événement runtime et ne double donc jamais l'alerte.
   Une preuve traverse la transition et garde ce nom avant la disparition de la
   ligne du registre.
-- **Reste avant `[x]`** : le canal n'a jamais parlé à un vrai destinataire. Le
-  doublon est un vrai serveur HTTP, mais local ; qu'un Slack, un Discord ou un
-  `ntfy` accepte ce corps se mesure sur un canal réel, et **nécessite une action
-  humaine** — URL du canal, puis geste sensible explicitement autorisé.
+- **Le canal a parlé à un vrai destinataire le 2026-09-14, et il a été REFUSÉ.**
+  Webhook Discord posé dans `/etc/sparkd/sparkd.env` de la Forge de test, puis un
+  geste sensible réel depuis la console — armement puis **levée** de la protection
+  de `void-98`, `spark.unprotect`, le geste le plus grave de la liste fermée.
+  Résultat mesuré :
+
+  ```
+  POST → webhook Discord : HTTP 400
+  {"message": "Cannot send an empty message", "code": 50006}
+  ```
+
+  **Le corps du §47.4 n'est accepté par aucun des services visés tel quel.**
+  Discord attend `{"content": …}`, Slack `{"text": …}` ; notre JSON structuré ne
+  porte ni l'un ni l'autre, et un destinataire réel n'en veut pas. Le doublon
+  local acceptait tout : c'est précisément ce que le responsable a nommé en
+  disant que les tests sur le faux ne valent rien.
+
+  **Trois exigences de la DoD sont prouvées d'un coup, sur matériel réel** : un
+  canal en échec laisse le geste **aboutir** — la protection a bien été levée —,
+  il le **signale**, et l'écran distingue l'état *actif en échec* :
+  *« 1 alerte(s) ne sont pas parties. Les gestes, eux, ont abouti : un canal muet
+  n'empêche jamais d'agir. Dernier motif : HTTP Error 400: Bad Request. »*
+
+- **Ce qui reste avant `[x]`, et la ligne précédente le disait FAUX.** Elle
+  n'annonçait qu'un écart — « le canal n'a jamais parlé à un vrai destinataire ».
+  La DoD en compte bien davantage, et le §47.3 les spécifie depuis le
+  2026-08-21 sans qu'ils soient construits :
+  1. le **gabarit** du §47.3.1 — c'est lui qui répond au refus mesuré ci-dessus,
+     et il n'existe pas ; le corps est figé ;
+  2. la configuration **au registre** plutôt qu'en variable d'environnement, et
+     l'**onglet** qui la rend visible et essayable ;
+  3. le **mot de passe** exigé pour toute modification (§47.3.3), et la
+     **désactivation qui notifie par le canal qu'elle coupe** ;
+  4. le **second canal, SMTP**, et la preuve que l'échec de l'un n'empêche pas
+     l'autre.
+
+  Ce n'est plus « une action humaine » qui manque : c'est du code, et il est
+  spécifié.
 
 ### [x] SPK-63 · Frappe du nom sur les gestes destructifs
 
