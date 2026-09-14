@@ -10830,6 +10830,41 @@ Et une décision écrite, qui n'est pas un contrôle :
   sur la Forge. `ProtectSystem=strict`, `PrivateTmp` et `NoNewPrivileges` restent
   posés, et c'est ce qui limite les dégâts d'un défaut de `sparkd` lui-même.
 
+### 48.2 bis La règle est posée par l'INSTALLATION — arbitrage du 2026-09-14
+
+La règle du §48.1 naissait d'un geste humain, OP-11, et le §48.2 dit pourquoi le
+préflight ne la pose pas : il relève, il ne répare pas. Restait la question que
+l'unité laissait ouverte — **qui la pose, alors ?**
+
+**Le responsable a tranché : l'installation.** Une règle qui ne vit que dans un
+runbook dérive ; une installation qui n'installe pas la protection qu'elle
+documente n'est pas reproductible au sens du `CLAUDE.md` §14. La voie « le
+préflight la pose lui-même » est écartée : un contrôle qui répare n'est plus un
+contrôle, et le §20 en fait un observateur.
+
+`sparkd.install` pose donc la règle, et **quatre propriétés la gouvernent** :
+
+1. **Elle ne s'applique que si le bridge existe.** Créer le bridge appartient à
+   SPK-68. Sans lui, l'installation le DIT et passe — inventer un réseau que
+   l'exploitant n'a pas déclaré serait pire que ne rien faire.
+2. **L'ordre est celui d'OP-11, et il n'est pas décoratif.** Les connexions
+   établies d'abord — le produit va de la Forge VERS ses Sparks, et les réponses
+   reviennent par le bridge —, puis le DNS, le DHCP et l'ICMP utile, et le `drop`
+   en dernier. Inversé, la première règle ferme tout et chaque Spark devient muet.
+3. **Elle est PERSISTÉE, et c'est l'écart le plus dangereux de l'opération.** Des
+   règles `nft` de session disparaissent au premier redémarrage **sans que rien
+   ne le dise** : le préflight, lui, continuerait de lire `drop` dans la
+   configuration d'Incus et rendrait « ok ». Le fichier posé ne **flushe rien** —
+   le `/etc/nftables.conf` d'Ubuntu commence par `flush ruleset`, ce qui
+   effacerait la table d'Incus, donc le NAT, le DNS et le DHCP de tous les
+   Sparks. Il supprime et recrée sa seule table.
+4. **Elle est idempotente.** Une installation rejouée sur une Forge déjà durcie
+   ne recharge rien et ne coupe aucune connexion.
+
+**Ce que cela ne change pas** : OP-11 reste écrit au contrat de déploiement, pour
+les Forges installées avant ce changement. Il y porte désormais la mention qu'une
+installation neuve n'en a plus besoin.
+
 ### 48.3 Ce qui n'est pas retenu, et pourquoi
 
 - **Activer `ufw`** — écarté comme geste du produit. Un pare-feu général sur une
