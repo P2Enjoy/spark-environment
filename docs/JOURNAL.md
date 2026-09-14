@@ -11401,3 +11401,58 @@ pendant que je regardais l'unité.
 réconciliation, la quarantaine, la colonne d'empreinte — est retiré de l'arbre de
 travail avant d'avoir été committé. Rien de ce qui est décrit ici n'est encore
 implémenté.
+
+---
+
+## 2026-09-14 · OP-20 — l'opération manquante de la migration 016, et ce que son écriture a trouvé
+
+**Le problème.** En écrivant l'OP-19 de SPK-104, j'ai constaté que la migration
+`016_canaux_notification` (SPK-62) était committée sans aucune opération au
+contrat de déploiement : `docs/PROD_MIGRATIONS.md` ne connaissait que la `015`.
+Appliquée telle quelle, la production aurait reçu une table dont l'exploitant
+n'a ni l'objectif, ni la vérification, ni le retour arrière. Consigné en I-01,
+laissé en l'état, et **arbitré par le responsable le 2026-09-14 : le résoudre.**
+
+**Comment je l'ai écrite.** Pas de mémoire ni de déduction : lecture de
+`016_canaux_notification.sql`, de `canaux.py`, de la route `PUT
+/v1/notify/channels` et de `Canal.reregler`. C'est cette lecture qui a permis
+d'affirmer le point qui rassure — **la seule migration ne coupe rien** : elle
+insère sa ligne avec `webhook_enabled = 0`, donc `webhook_actif()` rend
+`("", "")`, donc `_canal_depuis_le_registre()` ne rerègle rien au démarrage et
+`SPARKD_NOTIFY_URL` reste le repli actif.
+
+**Ce que l'écriture a trouvé, et que je n'allais pas chercher.** Le démarrage et
+la route `PUT` ne traitent PAS le canal vide de la même façon. Au démarrage,
+`if url:` protège le repli ; dans la route, `reregler()` est appelée sans
+condition. Donc une première écriture à l'onglet, sans cocher « actif »,
+débranche la variable d'environnement et rend la Forge muette.
+
+**Je l'ai mesuré au lieu de le déduire**, parce qu'une phrase fausse dans un
+contrat de déploiement coûte plus cher qu'une phrase absente. Pile factice
+démarrée avec `SPARKD_NOTIFY_URL` posée, puis un `PUT` portant le seul gabarit :
+
+    avant  live.source = environnement   live.configured = true
+    après  live.source = registre        live.configured = false
+
+C'est écrit dans l'OP-20 comme un piège à connaître avant d'ouvrir l'onglet, avec
+le remède : poser l'URL, le gabarit ET cocher « actif » dans la **même** écriture.
+
+**Et c'est une incohérence, pas seulement un piège.** Le §47.3.3 exige qu'une
+désactivation soit annoncée **par le canal qu'elle coupe**, « sans quoi la
+coupure serait le seul geste dont personne n'entendrait parler — et c'est le
+premier qu'un attaquant tenterait ». Le garde de la route ne se déclenche que si
+le canal coupé était celui du **registre** ; la coupure du repli par
+environnement, elle, part sans un mot. Consignée en I-02 avec sa mesure, et **non
+corrigée** : SPK-62 est en cours sur cette branche dans une autre session, et le
+correctif engage le produit — étendre l'avis de coupure à un canal que le
+registre ne connaît pas, ou refuser une écriture qui débranche le repli sans le
+remplacer. Arbitrage demandé.
+
+**I-01 est retirée du rapport**, qui ne porte plus que I-02. Le fichier reste
+tant qu'une entrée est ouverte ; il sera supprimé quand il sera vide.
+
+**Ce que je retiens.** L'opération manquante n'était pas qu'un trou de
+documentation : en la rédigeant pour de bon — objectif, après, vérification,
+retour arrière, risque — il a fallu répondre à « que se passe-t-il ensuite ? »,
+et c'est cette question-là qui a fait ouvrir `reregler`. Un contrat de
+déploiement écrit sérieusement est une relecture du code, pas un compte rendu.
