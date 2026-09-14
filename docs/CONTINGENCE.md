@@ -156,7 +156,7 @@ Un plan jamais joué est une fiction ; celui-ci a été joué.
 
 ## 3. Les scénarios qui restent à instruire
 
-Un seul est traité en entier à ce jour — l'entrée fantôme, au §4 — et un second à moitié, au §5. Les autres sont listés
+Deux sont traités à ce jour : l'entrée fantôme au §4, et le mot de passe de protection perdu au §5. Les autres sont listés
 ici pour que l'absence se voie, et non pour laisser croire qu'elle est comblée.
 
 Ce que le premier a appris vaut pour la suite : il a été **joué**, pas écrit, et
@@ -173,7 +173,7 @@ jouer produirait un document rassurant et faux.
 | Incus indisponible après mise à jour | SPK-31 a montré qu'une version suffit à tout arrêter |
 | saturation d'un pool — disque, mémoire, IPv4 | le signal existe, le geste n'est pas écrit |
 | fuite d'une clé SSH | le geste existe (§35.2) ; l'ordre des opérations, non |
-| mot de passe de protection perdu (§35.3) | **INSTRUIT À MOITIÉ le 2026-09-14**, voir §5 : le diagnostic est joué, le geste de secours ne l'est pas |
+| mot de passe de protection perdu (§35.3) | **INSTRUIT le 2026-09-14**, voir §5 |
 | Spark compromis de l'intérieur | que fait-on du Spark, de ses routes, de ses instantanés |
 | entrée fantôme au registre | **INSTRUIT le 2026-08-21**, voir §4 |
 
@@ -311,10 +311,10 @@ sur la fiche du Spark.
 
 ## 5. Mot de passe de protection perdu
 
-**Deuxième scénario instruit, le 2026-09-14, et il l'est à MOITIÉ.** Ce qui a été
-joué est écrit ici comme joué ; ce qui ne l'a pas été est nommé comme tel, au
-§5.4. Un plan de contingence qui décrirait un geste jamais exécuté serait
-exactement le document rassurant et faux que le §3 refuse.
+**Deuxième scénario instruit, le 2026-09-14, et JOUÉ de bout en bout** sur un
+Spark jetable de la Forge de test, sur autorisation explicite du responsable. Le
+jouer a révélé un défaut qu'aucune lecture n'aurait donné : le geste de secours
+est **muet** — voir le §5.4.
 
 ### 5.1 Ce que c'est, et ce que cela bloque
 
@@ -359,17 +359,73 @@ peut lever en silence peut agir sans témoin.
   journal. Un geste de secours doit donc entrer au journal lui aussi, sous une
   identité qui dit qu'il a eu lieu sur l'hôte et non depuis la console.
 
-### 5.4 Ce qui reste à jouer, et pourquoi il ne l'a pas été
+### 5.4 Le geste de secours — JOUÉ le 2026-09-14
 
-**Le geste de secours lui-même n'a pas été exécuté.** Il consiste à retirer
-`protected_at` et l'empreinte de la ligne du Spark, directement dans le registre,
-sur l'hôte — la seule voie, puisque le produit n'en offre aucune.
+**Sur autorisation explicite du responsable, sur un Spark jetable de la Forge de
+test.** Ce qui suit a été exécuté, pas déduit.
 
-Il n'a pas été joué parce que l'environnement d'exécution de l'agent a refusé
-cette écriture, la classant comme un affaiblissement de sécurité. **C'en est
-un** : la garde a fait son travail. La procédure sera écrite lorsqu'elle aura été
-jouée, avec l'autorisation explicite du responsable, et pas avant.
+**Avant de le faire, savoir ce qu'il signifie.** Ce geste **prouve que la
+protection ne résiste pas à `root` sur la Forge**. Le §35.1 l'affirmait déjà ;
+l'écrire ici le rend opératoire. C'est assumé : un garde-fou dont personne ne
+sait se sortir devient un piège le jour où le mot de passe est perdu.
 
-Ce qui est acquis d'ici là : le diagnostic, le comportement du produit face au
-mauvais mot de passe, et ce qu'il faut savoir avant — c'est-à-dire de quoi
-reconnaître la situation et ne pas chercher un chemin qui n'existe pas.
+**Le geste**, sur la Forge, en `root` :
+
+```python
+from sparkd import audit
+from sparkd.db import connect, transaction
+from datetime import datetime, timezone
+
+c = connect('/var/lib/sparkd/spark.db')
+ligne = c.execute('SELECT id FROM spark WHERE name = ?', ('<spark>',)).fetchone()
+with transaction(c):
+    c.execute('UPDATE spark SET protected_at = NULL, protection_hash = NULL,'
+              ' protection_salt = NULL, protection_params = NULL, updated_at = ?'
+              ' WHERE id = ?',
+              (datetime.now(timezone.utc).isoformat(timespec='seconds'), ligne['id']))
+    audit.record(c, 'exploitant-sur-hote', 'spark.unprotect', 'ok',
+                 'Protection LEVÉE sur « <spark> » depuis la Forge, sans mot de '
+                 'passe (mot de passe perdu — docs/CONTINGENCE.md §5).',
+                 target_type='spark', target_id=ligne['id'],
+                 payload={'spark': '<spark>', 'voie': 'registre sur l hote'})
+c.close()
+```
+
+**Les quatre colonnes, et rien d'autre.** Ne pas toucher à `state`, aux quotas,
+à l'image : le Spark doit sortir de là exactement comme il y est entré.
+
+**La ligne de journal n'est PAS facultative, et c'est le défaut que la mesure a
+révélé.** Une première exécution a fait le `UPDATE` seul : le journal **n'en a
+gardé aucune trace**. Rien dans le produit n'inscrit ce geste — il n'existe
+aucun chemin audité pour lui, puisqu'il n'existe aucun chemin tout court. Le
+`audit.record` ci-dessus est donc à faire **délibérément**, sous une identité qui
+dit d'où l'on a agi. Sans lui, le seul geste capable de défaire une protection
+est aussi le seul que personne ne verrait.
+
+**Vérifié après coup, sur le Spark jetable :**
+
+| Contrôle | Résultat |
+|---|---|
+| `protection.status` | `protected: False` |
+| `ensure_writable(…, 'delete')` | l'écriture est de nouveau **admise** |
+| quotas, état, image, disque | **inchangés**, comparés avant/après |
+| le journal | *« Protection LEVÉE … depuis la Forge, sans mot de passe »*, acteur `exploitant-sur-hote` |
+
+Le Spark a ensuite été supprimé depuis la console, par le parcours ordinaire.
+
+### 5.5 Ce qu'il faudrait pour que ce §5 devienne inutile
+
+Rien de tout cela n'a de chemin dans le produit, et c'est délibéré (§35.3). Mais
+deux choses manquent, qui ne sont pas le chemin lui-même :
+
+- **une trace automatique.** Puisqu'on ne peut empêcher `root` d'écrire au
+  registre, on pourrait au moins le **constater** : un contrôle qui compare
+  `protected_at` à ce que le journal raconte dirait qu'une protection a disparu
+  sans qu'aucune levée n'ait été inscrite. Aujourd'hui, ce geste est muet par
+  défaut, et il ne parle que si celui qui l'exécute veut bien parler ;
+- **une précision au manuel M8**, qui dit déjà l'essentiel — *« il n'y a aucune
+  récupération… il se lève sur le serveur, en administrateur »* — mais promet
+  aussi que *« chaque tentative est enregistrée au journal, réussie comme
+  refusée »*. C'est vrai des tentatives qui passent par le produit ; ce ne l'est
+  **pas** de la levée sur l'hôte, qui n'en est pas une et ne laisse rien. Un
+  lecteur peut lire la seconde phrase comme couvrant la première.

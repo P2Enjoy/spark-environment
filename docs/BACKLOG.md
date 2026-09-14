@@ -1434,10 +1434,16 @@ que ni le préflight ni la console ne signalaient.
 
 - **Reste avant `[x]`** :
   1. les **sept autres scénarios**, listés au §3 de `docs/CONTINGENCE.md` avec ce
-     qui manque à chacun. Le huitième — *mot de passe de protection perdu* — a
-     été instruit **à moitié** le 2026-09-14 (§5) : le diagnostic et la réponse
-     du produit sont joués sur la Forge de test ; le geste de secours ne l'est
-     pas, et le document le dit au lieu de le décrire de mémoire.
+     qui manque à chacun. Le huitième — *mot de passe de protection perdu* — est
+     **instruit et joué de bout en bout** le 2026-09-14 (§5), sur un Spark
+     jetable de la Forge de test.
+
+     **Le jouer a révélé un défaut qu'aucune lecture n'aurait donné** : le geste
+     de secours est **muet**. Un `UPDATE` qui retire les quatre colonnes de
+     protection ne laisse aucune ligne au journal, parce qu'aucun chemin audité
+     n'existe pour lui. Le seul geste capable de défaire une protection est donc
+     aussi le seul que personne ne verrait. La procédure inscrit désormais la
+     trace délibérément, et le §5.5 nomme les deux manques qui restent.
 
      **Arbitrage du responsable, 2026-09-14 : le geste est joué sur un Spark
      JETABLE de la Forge de test, et la procédure écrite comme jouée.** Lever une
