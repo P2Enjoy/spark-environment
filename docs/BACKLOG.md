@@ -6936,6 +6936,61 @@ Trois manques, et une erreur d'attribution :
   posés.
 
 
+### [ ] SPK-103 · Variables et secrets se lisent en deux blocs, et se cherchent
+
+Demandé par le responsable le 2026-09-14 : « sépare la vue entre variables et
+secrets, un bloc des variables et un bloc des secrets, et rends-les
+cherchables. »
+
+L'écran mêle aujourd'hui les deux natures dans un seul tableau — au catalogue de
+la Forge comme sur la facette d'un Spark — et sa colonne *Valeur* porte tantôt
+une valeur, tantôt un badge « Secret » suivi d'une empreinte. Deux conséquences,
+constatées sur le catalogue seedé :
+
+1. **« quels secrets cette cellule reçoit-elle ? » se paie d'une lecture ligne à
+   ligne.** C'est pourtant la question de la revue, celle qu'on pose avant
+   d'ouvrir un accès, et le §43.4 borne exactement ce que leur déclaration
+   protège. Une question qu'on fait payer est une question qu'on saute ;
+2. **le tableau ne se cherche pas.** Le `.env` d'un locataire en porte vingt à
+   quarante (§43.10) : depuis SPK-97 on sait en poser quarante d'un geste, et
+   toujours pas en retrouver un.
+
+- Spécification : `docs/DAT.md` **§43.11** (deux natures, deux blocs, et la
+  recherche porte sur le NOM) · `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-25** ·
+  manuel M8. **Écrite et committée avant le code.**
+- Portée : le seul RENDU de la console — `spark-env.js`, `forge-env.js`, leur
+  état d'interface et la feuille de style. **Aucune route, aucune migration,
+  aucun champ de modèle nouveau** : `is_secret` existe depuis SPK-58, et la
+  recherche ne quitte jamais le navigateur.
+- **Aucun changement de seed** : il pose déjà une variable **et** un secret à
+  chacun des trois niveaux — catalogue de la Forge, entrées cochées d'un Spark,
+  entrées propres d'un Spark. Les quatre blocs de `crm-production` sont donc
+  peuplés, et ceux de `boutique` vides : les deux états se démontrent sans rien
+  ajouter.
+- Ce que l'unité ne doit PAS casser : le §43.3 — la valeur d'un secret ne
+  s'affiche nulle part, et la recherche ne lui ouvre aucune voie ; le §43.6
+  révisé — les deux niveaux gardent CHACUN leur section, la nature se découpant
+  à l'intérieur et jamais à leur place ; le §43.9.4 — l'origine reste écrite sur
+  chaque ligne ; le §14.4 — pas de champ de recherche là où il n'y a rien à
+  chercher.
+- **La recherche porte sur le NOM, et sur lui seul.** Chercher aussi dans les
+  valeurs ferait d'un secret une ligne qu'aucune frappe ne trouve jamais :
+  l'écran répondrait « aucun résultat » sur une entrée qui existe, et il le
+  ferait pour la seule nature dont on ne peut pas vérifier le contraire.
+- Dépend de : SPK-58 pour la déclaration de secret, SPK-64 pour la sélection au
+  catalogue, SPK-97 pour le volume qui rend la recherche nécessaire.
+- DoD : depuis le parcours canonique — page d'accueil, puis Forge →
+  Environnement, et Spark → Environnement —, constater les blocs peuplés, frapper
+  un fragment de nom et voir la vue se restreindre, **catalogue à cocher
+  compris** ; constater qu'aucune frappe ne révèle la valeur d'un secret,
+  cherchée explicitement dans le texte rendu ; constater qu'un bloc vidé par la
+  recherche le DIT autrement qu'un bloc vide ; le champ reste atteignable quand
+  il ne reste rien, sans quoi on ne pourrait plus sortir de l'état qu'il a causé ;
+  tests unitaires de composant et test E2E propres à l'unité ; captures observées
+  en 1440 px et 390 px, blocs vides compris ; manuel M8, DAT, design system et
+  changelog mis à jour ; `@spec` / `@verifies` posés.
+
+
 ---
 
 ## Réservé, non planifié

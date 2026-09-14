@@ -9777,6 +9777,85 @@ structurées où le même nom deux fois n'a plus aucune résolution visible.
   Spark coche ce qu'il reçoit. Importé sur un Spark, il vaut immédiatement pour
   lui seul, comme toute variable propre.
 
+### 43.11 Lire un environnement : deux natures, deux blocs, une recherche
+
+Demandé par le responsable le 2026-09-14. Les sections précédentes disent ce qui
+s'écrit et ce qui se refuse ; celle-ci dit ce qui se **lit**, et pourquoi la
+nature d'une entrée mérite la même séparation que sa portée.
+
+#### Pourquoi la nature sépare
+
+Une variable et un secret ne se lisent pas pour la même raison.
+
+Une variable se lit pour sa **valeur** : on veut savoir sur quel relais la pile
+enverra son courrier. Un secret n'a **pas** de valeur lisible (§43.3) : il se lit
+pour son **existence** — est-il posé, depuis quand, et est-ce la même valeur
+qu'ailleurs. Un tableau qui les alterne fait alterner deux questions dans une
+seule colonne : *Valeur* y porte tantôt la réponse, tantôt un badge et une
+empreinte qui répondent à autre chose.
+
+La question que ce mélange rend coûteuse est précisément celle de la revue :
+**quels secrets cette cellule reçoit-elle ?** C'est celle qu'on pose avant
+d'ouvrir un accès, et le §43.4 borne exactement ce que leur déclaration protège.
+La faire payer une lecture ligne à ligne, c'est la faire sauter.
+
+**Décision : chaque section d'environnement se découpe en deux blocs — les
+variables, puis les secrets.** Chaque bloc porte son titre et son compte ; le
+compte est ce qui répond à la question de revue sans rien lire.
+
+**La portée reste le découpage de premier rang** (§43.6). La nature se découpe
+**à l'intérieur** d'un niveau, jamais à sa place : croiser les deux axes en un
+seul niveau perdrait l'origine, qui est l'information la plus difficile à
+reconstituer (§43.9.4), et mettrait dans un même tableau des lignes qu'on décoche
+et des lignes qu'on retire — deux gestes différents.
+
+Sur la facette d'un Spark, cela donne donc quatre blocs : les variables et les
+secrets **cochés au catalogue**, puis les variables et les secrets **propres au
+Spark**. Au catalogue de la Forge, un seul niveau existe, donc deux blocs.
+
+#### La recherche porte sur le nom, et sur lui seul
+
+**Décision : la recherche compare le texte frappé au NOM de l'entrée, jamais à sa
+valeur.**
+
+Ce n'est pas une économie. Chercher aussi dans les valeurs ferait d'un secret une
+ligne qu'aucune frappe ne peut trouver — la console n'a jamais sa valeur —, et
+l'écran répondrait « aucun résultat » sur une entrée qui existe. L'asymétrie
+serait invisible : elle ne se manifesterait que sur la nature dont on ne peut
+pas vérifier le contraire. Une recherche qui ment sur les secrets seuls est pire
+qu'une recherche plus étroite, parce qu'on ne peut pas apprendre à s'en méfier.
+
+Le champ dit donc ce qu'il compare, plutôt que de laisser le supposer.
+
+#### Ce que la recherche n'est pas
+
+- **Ce n'est pas une requête au serveur.** L'écran tient déjà toutes les entrées
+  qu'il affiche ; la frappe ne provoque aucun appel, et un secret n'est donc
+  jamais relu pour l'occasion.
+- **Ce n'est pas un état du produit.** Elle vit dans l'interface, ne va pas dans
+  l'adresse et ne survit pas à un rechargement. Un filtre persisté ferait rouvrir
+  l'écran sur une vue partielle sans que rien ne dise pourquoi.
+- **Ce n'est pas une sélection.** Elle ne coche, ne décoche et ne retire rien.
+  Une entrée masquée par la recherche **descend toujours** dans la cellule : ce
+  qui n'est plus à l'écran continue d'exister.
+
+#### Trois vides qui ne disent pas la même chose
+
+Le §14.5 et le §14.6 du design system s'appliquent tels quels, et c'est ici qu'ils
+se distinguent :
+
+| Ce qui est vide | Ce que l'écran dit |
+|---|---|
+| la section entière, sans recherche | l'absence de fond — « aucune entrée du catalogue ne descend dans ce Spark » |
+| un bloc, sans recherche | la nature manque — « aucun secret » n'est pas « aucune entrée » |
+| un bloc, à cause de la recherche | ce que la **frappe** exclut, avec le texte frappé |
+
+Le champ de recherche reste **présent et atteignable** quand il ne reste rien :
+c'est l'exception nommée au §14.4 — il est le seul moyen de sortir de l'état vide
+qu'il a lui-même causé. Il n'est en revanche **pas rendu** là où il n'y a rien à
+chercher.
+
+
 ## 44. Le briefing d'un Spark : ce qu'un agent doit savoir en entrant
 
 Demandé par le responsable le 2026-08-20, en prévision de déploiements conduits

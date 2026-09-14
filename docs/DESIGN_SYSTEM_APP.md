@@ -879,6 +879,53 @@ quarante lignes ferait défiler pour relire ce qu'on vient de coller. C'est le
 pendant en **entrée** de SPK-DS-19, qui traite le texte fait pour être copié en
 **sortie** : le même respect des lignes, pour la raison inverse.
 
+### SPK-DS-25 · L'environnement se lit en deux blocs, et se cherche par le nom
+
+@spec docs/BACKLOG.md#SPK-103 · docs/DAT.md §43.11 · `DESIGN_SYSTEM.md` §14.8
+(la nature se porte par la structure), §14.10 (une recherche ne compare que ce
+que toute entrée porte), §14.4, §14.5, §14.6, §9.3
+
+Une variable se lit pour sa **valeur**, un secret pour son **existence**
+(`docs/DAT.md` §43.3). Un seul tableau pour les deux fait alterner deux questions
+dans la colonne *Valeur* — et rend coûteuse celle qui compte avant d'ouvrir un
+accès : « quels secrets cette cellule reçoit-elle ? ».
+
+**Règles :**
+
+- chaque section d'environnement porte **deux blocs** : *Variables*, puis
+  *Secrets*. C'est le §14.8 appliqué — deux natures, deux structures, et pas
+  seulement un badge de plus dans une colonne partagée ;
+- **la portée reste le découpage de premier rang** (`docs/DAT.md` §43.6). La
+  nature se découpe DANS un niveau, jamais à sa place : la facette d'un Spark
+  porte donc quatre blocs — cochés au catalogue, puis propres au Spark, chaque
+  fois variables puis secrets —, et le catalogue de la Forge en porte deux.
+  Croiser les deux axes en un seul niveau mélangerait des lignes qu'on **décoche**
+  et des lignes qu'on **retire** ;
+- chaque bloc porte son **compte** dans son titre. C'est lui qui répond à la
+  question de revue sans rien lire, et c'est la seule raison d'écrire un nombre
+  ici ;
+- la hiérarchie des titres ne saute pas (§9.3) : le titre de la carte, puis un
+  cran en dessous pour chaque bloc. Sur la page de la Forge la carte porte un
+  `h1` et ses blocs des `h2` ; sur la facette d'un Spark, la carte porte un `h2`
+  et ses blocs des `h3` ;
+- **un champ de recherche par vue**, jamais un par bloc. Il restreint tout ce que
+  la vue affiche — les deux ou quatre blocs **et** la liste des cases à cocher du
+  catalogue —, parce qu'on cherche un nom sans savoir d'avance dans lequel il
+  vit ;
+- la recherche porte sur le **nom**, et le champ le **dit**. La valeur d'un
+  secret n'atteint jamais la console : la comparer laisserait l'écran répondre
+  « aucun résultat » sur une entrée qui existe (§14.10) ;
+- la frappe **ne repeint que la liste** et le focus revient au champ par son
+  identifiant (§14.3). Le champ EN A un pour cette raison ;
+- **trois vides se distinguent** (§14.5, §14.6) : la section sans aucune entrée
+  dit l'absence de fond ; un bloc vide dit que **cette nature** manque — « aucun
+  secret » n'est pas « aucune entrée » ; un bloc vidé par la recherche dit ce que
+  **la frappe** exclut, en la citant ;
+- le champ **n'est pas rendu** quand la vue n'a rien à chercher (§14.4), et il
+  **reste atteignable** quand la recherche ne laisse rien : il est le seul moyen
+  de sortir de l'état vide qu'il a causé — c'est l'exception que le §14.4 nomme.
+
+
 ## 5. Responsive spécifique
 
 Le tableau des Sparks défile dans son propre conteneur sous 1024 px

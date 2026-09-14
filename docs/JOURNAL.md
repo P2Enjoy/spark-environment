@@ -10936,3 +10936,60 @@ Caddy, et la configuration générée ne le modifie pas, mais le §44 ne porte q
 des faits constatés. Le briefing porte donc la conséquence sous la forme qui n'en
 dépend pas : l'origine publique est connue, à l'application d'en être informée.
 La mesure reste due, et elle exige une route réelle ou un Caddy local.
+
+---
+
+## 2026-09-14 · SPK-103 — deux natures dans une seule colonne, et une liste qu'on ne pouvait pas chercher
+
+**La demande.** « Sépare la vue entre variables et secrets, un bloc des variables
+et un bloc des secrets, et rends-les cherchables. »
+
+**Ce qui était en place.** Un tableau par niveau, au catalogue de la Forge comme
+sur la facette d'un Spark, où la colonne *Valeur* portait tantôt une valeur,
+tantôt le badge « Secret » et une empreinte. Aucun champ de recherche nulle part.
+
+**Le problème, une fois nommé.** Ce n'est pas une question d'esthétique : les
+deux natures ne répondent pas à la même question. Une variable se lit pour sa
+valeur ; un secret n'en a pas de lisible (§43.3) et se lit pour son existence.
+Une colonne qui alterne les deux rend coûteuse la question de revue — « quels
+secrets cette cellule reçoit-elle ? » —, et une question qu'on fait payer est une
+question qu'on saute. Depuis SPK-97, on sait poser quarante entrées d'un geste ;
+on ne savait toujours pas en retrouver une.
+
+**L'arbitrage demandé au responsable.** La facette d'un Spark est **déjà**
+découpée, par niveau (§43.6 révisé), et ce découpage est une décision de sécurité,
+pas une mise en page : il porte l'origine de chaque valeur, qui est l'information
+la plus difficile à reconstituer. Croiser la nature avec la portée donne donc
+quatre blocs, pas deux, et le responsable a tranché pour **les deux vues**, en
+connaissance de ce coût.
+
+**Décision.** La nature se découpe **à l'intérieur** d'un niveau, jamais à sa
+place. Deux blocs au catalogue de la Forge, quatre sur la facette d'un Spark —
+chacun avec son compte, qui est ce qui répond à la question de revue sans rien
+lire.
+
+**La décision qui n'était pas demandée, et qui comptait le plus.** Une recherche
+qui compare aussi les **valeurs** paraît meilleure. Elle ne l'est pas ici : la
+console n'a jamais la valeur d'un secret, donc aucune frappe ne trouverait jamais
+un secret par sa valeur. L'écran répondrait « aucun résultat » sur une entrée qui
+existe, et **seulement** sur la nature dont l'utilisateur ne peut pas vérifier le
+contraire. Une recherche qui ment sur les secrets seuls est pire qu'une recherche
+plus étroite : on ne peut pas apprendre à s'en méfier. Elle porte donc sur le
+**nom**, et le champ le dit.
+
+**Conséquences.** La règle dépasse ce produit : toute liste dont une partie du
+contenu est délibérément illisible doit restreindre sa recherche à ce que
+**toutes** les entrées portent. Elle est donc remontée au socle global
+(`DESIGN_SYSTEM.md` §14.10), et son application ici reste dans le jumeau local
+(SPK-DS-25).
+
+**Portée volontairement tenue.** Aucune route, aucune migration, aucun champ
+nouveau : `is_secret` existe depuis SPK-58 et la frappe ne quitte pas le
+navigateur. Aucun changement de seed non plus — il pose déjà une variable **et**
+un secret aux trois niveaux, ce qui peuple les quatre blocs de `crm-production`
+et laisse vides ceux de `boutique`.
+
+**Vérifications dues avant de clore** : les quatre blocs et la recherche depuis
+le parcours canonique, la valeur d'un secret cherchée explicitement dans le texte
+rendu après filtrage, les trois vides distingués, et les captures observées en
+1440 px et 390 px.

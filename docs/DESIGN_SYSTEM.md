@@ -1913,6 +1913,28 @@ et
 
 est fondamentale.
 
+## 14.10 Une recherche ne compare que ce que toute entrée porte
+
+Lorsqu’une liste contient des entrées dont une partie du contenu n’est
+**délibérément pas lisible** — valeur masquée, champ en écriture seule, donnée que
+le serveur ne rend jamais —, la recherche ne porte que sur les attributs que
+**toutes** les entrées possèdent.
+
+Une recherche qui compare un contenu absent d’une partie des entrées ne trouve
+jamais celles-ci. Le résultat n’est pas « moins de résultats » : c’est « aucun
+résultat » affiché sur une entrée qui existe. Et la défaillance est invisible,
+parce qu’elle ne frappe que les entrées dont l’utilisateur ne peut pas vérifier
+le contenu par ailleurs — donc précisément celles sur lesquelles il ne peut pas
+apprendre à se méfier de l’outil.
+
+Le champ **dit** ce qu’il compare. « Chercher par nom » n’est pas une précision
+superflue : c’est ce qui rend le périmètre vérifiable au lieu de supposable.
+
+Cette règle complète le §6.28. Celui-ci exige qu’une valeur écartée de
+l’affichage reste **atteignable** par la recherche ; celle-ci exige que le
+critère de recherche soit **porté par toutes** les entrées.
+
+
 ---
 
 # 15. Contrat du fichier jumelé `DESIGN_SYSTEM_APP.md`
