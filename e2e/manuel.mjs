@@ -227,6 +227,18 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.locator('.proposition').scrollIntoViewIfNeeded();
     await capturer('m8-notes-proposition', { hauteur: 900 });
 
+    // --- M8 · Une proposition de variables, relue (SPK-105, §55.9) -----------
+    // Le seed en a déposé une dans la cellule et l'y laisse EN ATTENTE : c'est
+    // l'état où le propriétaire a une décision à prendre, et le seul que le
+    // chapitre décrive.
+    await ouvrir('crm-production');
+    await page.click('.onglets a:has-text("Environnement")');
+    await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 20000 });
+    await page.click('[data-sugg-ouvrir="variables"]');
+    await page.waitForSelector('[data-sugg-garder="variables"]', { timeout: 10000 });
+    await page.locator('.proposition').scrollIntoViewIfNeeded();
+    await capturer('m8-proposition-env', { hauteur: 800 });
+
     // --- M8 · Protéger un Spark (SPK-34) -------------------------------------
     // « analytics » est protégé par le seed. On l'ouvre PAR SON LIEN, comme un
     // exploitant, et la fenêtre montre les deux choses à la fois : la barre qui

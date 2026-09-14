@@ -5286,3 +5286,98 @@ test('la pile d’épreuve le DIT à l’écran, et nomme les commandes remplac�
     }
   });
 });
+
+// --- SPK-104 / SPK-105 · LES NOTES ET LE CANAL `.?` (§54, §55) --------------
+
+test('une note écrite à l’écran arrive DANS la cellule', async () => {
+  await parcours('note-ecrite-depuis-la-console', async () => {
+    // @verifies docs/DAT.md §54.4 (le registre écrit, la cellule reçoit),
+    //           §54.9, §54.10 · docs/BACKLOG.md#SPK-104
+    //
+    // Les deux bouts du trajet : on tape dans la console, et le fichier posé
+    // dans la cellule porte le texte. Vérifier le seul écran ne prouverait que
+    // la moitié qui n'intéresse pas l'agent.
+    await ouvrir('boutique', 'notes');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Lecture des notes'),
+      { timeout: 20000 });
+
+    // §14.6 : « personne n'a encore écrit » n'est pas un champ vide.
+    assert.match(await page.textContent('body'), /Personne n’a encore écrit/);
+
+    // On tape TOUCHE À TOUCHE : `fill()` pose la valeur d'un coup et ne
+    // prouverait pas qu'on peut saisir dans ce champ (§14.3).
+    const zone = page.locator('[data-note-saisie="readme"]');
+    await zone.click();
+    await page.keyboard.type('La boutique. ');
+    await page.keyboard.type('Vitrine publique, sans données personnelles.');
+    assert.match(await zone.inputValue(), /^La boutique\. Vitrine/,
+      'la frappe est arrivée dans le désordre');
+
+    await page.click('[data-note-enregistrer="readme"]');
+    await page.waitForFunction(
+      () => /Note enregistrée/.test(document.body.innerText), { timeout: 20000 });
+
+    // L'autre bout : le fichier de la cellule, lu chez sparkd.
+    const { corps } = await pile.lireSparkd('/v1/sparks/boutique/notes');
+    const readme = corps.notes.find((n) => n.id === 'readme');
+    assert.equal(readme.origin, 'console');
+    assert.match(readme.body, /Vitrine publique/);
+    // L'autre moitié du trajet, celle qui intéresse l'agent : le FICHIER posé
+    // dans la cellule. Aucune route ne le sert — on le constate au doublon.
+    const fichiers = await pile.fichiersCellule('boutique');
+    assert.match(fichiers['/etc/spark/notes/README.md'] ?? '',
+      /Vitrine publique/, 'la note n’est pas arrivée dans la cellule');
+    // §54.7 : l'en-tête dit que l'éditer sur place n'a aucun effet durable.
+    assert.match(fichiers['/etc/spark/notes/README.md'],
+      /aucun effet durable/);
+  });
+});
+
+test('une proposition déposée dans la cellule s’accepte EN PARTIE', async () => {
+  await parcours('proposition-acceptee-en-partie', async () => {
+    // @verifies docs/DAT.md §55.5 (consulter ne consomme pas, accepter vide),
+    //           §55.8, §55.9 · docs/BACKLOG.md#SPK-105
+    //
+    // Le seed a déposé deux variables souhaitées dans `/etc/spark/env.?`. Le
+    // parcours les relit, en écarte une, applique — et vérifie les TROIS
+    // effets : ce qui entre au registre, ce qui n'y entre pas, et le fichier
+    // vidé chez son auteur.
+    await ouvrir('crm-production', 'environnement');
+    await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 20000 });
+
+    // §55.5 : la lire ne la consomme pas. On l'ouvre, on la referme, elle est
+    // toujours là — c'est ce qui permet à sa disparition de servir de signal.
+    await page.click('[data-sugg-ouvrir="variables"]');
+    await page.waitForSelector('[data-sugg-garder="variables"]', { timeout: 10000 });
+    await page.click('[data-sugg-ouvrir="variables"]');
+    await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 10000 });
+    const avant = await pile.lireSparkd('/v1/sparks/crm-production/suggestions');
+    assert.equal(
+      avant.corps.suggestions.find((s) => s.kind === 'variables').present, true,
+      'consulter une proposition l’a consommée : le §55.5 est violé');
+
+    await page.click('[data-sugg-ouvrir="variables"]');
+    await page.waitForSelector('[data-sugg-garder="variables"]', { timeout: 10000 });
+    await page.uncheck('[data-sugg-garder="variables"][data-ligne="2"]');
+    assert.match(await page.textContent('[data-sugg-appliquer="variables"]'),
+      /1 retenue/);
+    await page.click('[data-sugg-appliquer="variables"]');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-sugg-appliquer]')
+            && /Proposition appliquée/.test(document.body.innerText),
+      { timeout: 20000 });
+
+    const texte = await page.textContent('body');
+    assert.match(texte, /REDIS_URL/, 'la ligne retenue doit être posée');
+    assert.doesNotMatch(texte, /SESSION_TTL/,
+      'la ligne écartée est REFUSÉE, pas ajournée');
+
+    const apres = await pile.lireSparkd('/v1/sparks/crm-production/suggestions');
+    const par = Object.fromEntries(
+      apres.corps.suggestions.map((s) => [s.kind, s.present]));
+    assert.equal(par.variables, false, 'le fichier `.?` doit être vidé');
+    assert.equal(par.install, true,
+      'une décision ne consomme que la proposition qu’elle vise');
+  });
+});

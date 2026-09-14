@@ -7250,6 +7250,19 @@ artefact, pas une narration) :
   README, DAT, SCHEMA, design system, manuel M8, changelog et contrat de
   déploiement à jour ; `@spec` / `@verifies` posés.
 
+**Ce qui reste avant `[x]`** — et ce n'est pas du code :
+
+- la **campagne E2E entière** n'a pas été rejouée au vert de bout en bout. Les
+  deux parcours de cette unité passent, isolément et dans la série ; la campagne
+  échoue sur le parcours *Alertes* **de SPK-62**, encore non committé, pour une
+  raison mesurée et écrite dans le journal du 2026-09-14 — sa séquence de
+  nettoyage remplit ses champs sans attendre le repaint de la réponse
+  précédente, et l'ancien code masquait cette course par un `vider(3.0)` que la
+  correction d'I-02 a supprimé. Le produit est juste, leur parcours a une
+  course : la correction leur appartient ;
+- `make build` n'a pas été exécuté : `pnpm` n'est pas installé sur ce poste.
+
+
 
 ### [~] SPK-105 · Le fichier `.?` : le seul canal par lequel la cellule propose
 
@@ -7355,6 +7368,11 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
   vérifie les trois effets — registre, `.?` vidé, fichier réel reprojeté ;
   captures observées aux deux formats ; documentation complète ; `@spec` /
   `@verifies` posés.
+
+**Ce qui reste avant `[x]`** : les mêmes deux points que SPK-104 — la campagne
+entière au vert, qui dépend d'un parcours de SPK-62 encore non committé, et
+`make build`, que ce poste ne peut pas exécuter faute de `pnpm`.
+
 
 
 ### [x] SPK-106 · Un verrou exclusif : une seule épreuve à la fois sur le poste

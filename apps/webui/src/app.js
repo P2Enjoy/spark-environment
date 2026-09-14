@@ -17,6 +17,7 @@ import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spar
 import { IDENTITE_VIDE } from './components/spark-identity.js';
 import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
 import { NOTES_VIDE } from './components/spark-notes.js';
+import { PROPOSITIONS_VIDE, comprendre } from './components/spark-suggestions.js';
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { IMPORT_VIDE, analyser } from './components/env-import.js';
@@ -157,7 +158,13 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // lorsqu'on l'ouvre — trois textes et une lecture de la cellule
                // n'ont rien à faire dans le chargement des huit autres facettes.
                notes: { ...NOTES_VIDE, brouillons: {}, items: [],
-                        propositions: [] } };
+                        propositions: [] },
+               // SPK-105 · §55.9 : les propositions venues de la cellule. Elles
+               // s'ouvrent sur les facettes Environnement et Routes, qui les
+               // chargent à leur ouverture — comme les notes, et pour la même
+               // raison : elles coûtent une lecture de la cellule.
+               propositions: { ...PROPOSITIONS_VIDE, items: [],
+                               exclues: {}, secrets: {} } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -283,6 +290,7 @@ function peindre() {
                             amorcage: etat.amorcage, docker: etat.docker,
                             identite: etat.identite, dossier: etat.dossier,
                             notes: etat.notes,
+                            propositions: etat.propositions,
                             mesures: etat.mesures,
                             ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
@@ -1909,6 +1917,61 @@ function brancherPanneaux() {
   for (const bouton of racine.querySelectorAll('[data-dossier-copie]')) {
     bouton.addEventListener('click', () => copierDossier());
   }
+  // SPK-105 · §55.9 : les propositions venues de la cellule.
+  //
+  // Les cases sont retenues SANS repeindre : reconstruire le tableau à chaque
+  // clic ferait perdre le focus au clavier (§14.3). Seul le compteur du bouton
+  // est mis à jour à la main.
+  const majCompteur = (kind) => {
+    const bloc = racine.querySelector(`[data-proposition="${kind}"]`);
+    const bouton = bloc?.querySelector('[data-sugg-appliquer]');
+    if (!bouton) return;
+    const gardees = bloc.querySelectorAll('[data-sugg-garder]:checked').length;
+    bouton.disabled = gardees === 0;
+    bouton.textContent = `Ajouter les ${gardees} retenue(s)`;
+  };
+  for (const caseGarder of racine.querySelectorAll('[data-sugg-garder]')) {
+    caseGarder.addEventListener('change', () => {
+      const kind = caseGarder.dataset.suggGarder;
+      const ligne = Number(caseGarder.dataset.ligne);
+      etat.propositions.exclues[kind] ??= new Set();
+      if (caseGarder.checked) etat.propositions.exclues[kind].delete(ligne);
+      else etat.propositions.exclues[kind].add(ligne);
+      majCompteur(kind);
+    });
+  }
+  for (const caseSecret of racine.querySelectorAll('[data-sugg-secret]')) {
+    caseSecret.addEventListener('change', () => {
+      const kind = caseSecret.dataset.suggSecret;
+      const ligne = Number(caseSecret.dataset.ligne);
+      // §43.10.2 : le produit ne coche rien de lui-même au-delà de ce que le
+      // CHEMIN déclare. Dès que l'exploitant touche une case, c'est SA liste
+      // qui fait foi — on la matérialise en entier à ce moment-là.
+      if (!etat.propositions.secrets[kind]) {
+        const suggestion = etat.propositions.items.find((x) => x.kind === kind);
+        etat.propositions.secrets[kind] = new Set(
+          comprendre(suggestion).entrees.filter((e) => e.secret).map((e) => e.ligne));
+      }
+      if (caseSecret.checked) etat.propositions.secrets[kind].add(ligne);
+      else etat.propositions.secrets[kind].delete(ligne);
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-sugg-ouvrir]')) {
+    bouton.addEventListener('click', () => {
+      const kind = bouton.dataset.suggOuvrir;
+      etat.propositions.ouvert = etat.propositions.ouvert === kind ? null : kind;
+      peindre();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-sugg-appliquer]')) {
+    bouton.addEventListener('click', () => trancherSuggestion(
+      bouton.dataset.suggAppliquer, bouton.dataset.sha, true));
+  }
+  for (const bouton of racine.querySelectorAll('[data-sugg-refuser]')) {
+    bouton.addEventListener('click', () => trancherSuggestion(
+      bouton.dataset.suggRefuser, bouton.dataset.sha, false));
+  }
+
   // SPK-104 · §54.10 : la facette Notes.
   //
   // La saisie est retenue SANS repeindre. Repeindre à chaque frappe
@@ -3089,6 +3152,100 @@ async function trancherProposition(id, sha, accepte) {
   peindre();
 }
 
+/**
+ * Les propositions déposées dans la cellule (SPK-105, §55.9).
+ *
+ * @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (consulter ne consomme
+ *       pas), §55.5.2 (l'empreinte relue), §55.8, §55.9
+ *
+ * **Cette lecture ne consomme rien** : elle pose les `.?` absents et ne vide
+ * aucun de ceux qui portent quelque chose. C'est la règle du §55.5, et c'est
+ * elle qui permet à la disparition du texte de servir de signal à son auteur.
+ */
+async function chargerPropositions(nom) {
+  const p = etat.propositions;
+  p.status = 'chargement';
+  p.erreur = null;
+  try {
+    const vues = await api(`/v1/sparks/${encodeURIComponent(nom)}/suggestions`);
+    p.items = vues.suggestions ?? [];
+    p.cellLue = Boolean(vues.cell_read);
+    p.status = 'pret';
+  } catch (erreur) {
+    // §14.6 : ne pas avoir pu regarder n'est pas « aucune proposition ». On ne
+    // rend alors AUCUNE bannière — en afficher une vide affirmerait plus qu'on
+    // ne sait, et une absence constatée est ce qui déciderait l'exploitant.
+    p.status = 'erreur';
+    p.items = [];
+    p.cellLue = false;
+    p.erreur = erreur?.message ?? String(erreur);
+  }
+}
+
+/**
+ * Applique ou refuse une proposition, puis relit (§55.5).
+ *
+ * `appliquer` envoie les entrées **structurées** que l'écran a montrées, jamais
+ * le texte : le serveur refuse sans deviner, et l'on applique exactement ce qui
+ * a été relu (§55.8). L'empreinte part avec, pour que le serveur refuse si
+ * l'agent a réécrit son fichier entre-temps (§55.5.2).
+ */
+async function trancherSuggestion(kind, sha, appliquer) {
+  const p = etat.propositions;
+  const suggestion = (p.items ?? []).find((s) => s.kind === kind);
+  if (!suggestion) return;
+  p.busy = kind;
+  p.issue = null;
+  peindre();
+
+  let corpsEnvoye = { sha256: sha };
+  if (appliquer) {
+    const { entrees } = comprendre(suggestion);
+    const exclues = p.exclues?.[kind] ?? new Set();
+    const secrets = p.secrets?.[kind] ?? null;
+    const gardees = entrees.filter((e) => !exclues.has(e.ligne));
+    corpsEnvoye = {
+      sha256: sha,
+      entries: kind === 'routes'
+        ? gardees.map((e) => ({ domain: e.domaine, port: e.port, tls: e.tls }))
+        : gardees.map((e) => ({
+          name: e.nom, value: e.valeur,
+          secret: secrets ? secrets.has(e.ligne) : e.secret })),
+    };
+  }
+
+  const { ok, corps } = await appel(
+    'POST',
+    `/v1/sparks/${encodeURIComponent(etat.spark.name)}/suggestions/`
+    + `${encodeURIComponent(kind)}/${appliquer ? 'apply' : 'reject'}`,
+    corpsEnvoye);
+  p.busy = null;
+  p.issue = {
+    kind, ok,
+    message: ok
+      ? (appliquer
+        ? 'Proposition appliquée, et le fichier de la cellule est vidé.'
+        : 'Proposition refusée : rien n’a été écrit, et le fichier de la cellule est vidé.')
+      // §55.5 : un refus du PRODUIT ne consomme pas. Le dire évite de croire la
+      // proposition perdue, et d'aller la redemander à son auteur.
+      : (corps?.detail?.message ?? 'La proposition n’a pas pu être traitée.')
+        + ' Elle reste dans la cellule : son auteur peut la corriger.',
+  };
+  if (ok) {
+    // Ce qui vient d'être appliqué change l'écran d'à côté : on relit la facette
+    // entière plutôt que de deviner son nouvel état (§26.6).
+    delete p.exclues[kind];
+    delete p.secrets[kind];
+    p.ouvert = null;
+    const issue = p.issue;
+    await chargerDetail(etat.spark.name, etat.facette);
+    etat.propositions.issue = issue;
+  } else {
+    await chargerPropositions(etat.spark.name);
+  }
+  peindre();
+}
+
 async function chargerDetail(nom, facette = '') {
   etat.route = 'detail';
   etat.facette = facette;
@@ -3172,6 +3329,15 @@ async function chargerDetail(nom, facette = '') {
   // SPK-104 · §54.10 : les notes partent APRÈS la peinture et SEULEMENT sur la
   // facette qui les montre. Elles coûtent une lecture de la cellule, et les huit
   // autres facettes n'en ont aucun usage.
+  // SPK-105 · §55.9 : les propositions ne se lisent que sur les facettes qui
+  // les montrent. Six lectures de la cellule n'ont rien à faire dans les six
+  // autres facettes, et le §55.5 veut que cette lecture ne consomme rien.
+  if (['environnement', 'routes'].includes(facette) && etat.status === 'ready') {
+    await chargerPropositions(nom);
+    peindre();
+  } else if (!['environnement', 'routes'].includes(facette)) {
+    etat.propositions = { ...PROPOSITIONS_VIDE, items: [], exclues: {}, secrets: {} };
+  }
   if (facette === 'notes' && etat.status === 'ready') {
     await chargerNotes(nom);
     peindre();

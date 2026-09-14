@@ -29,6 +29,7 @@ import { IMPORT_VIDE } from './env-import.js';
 import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
 import { DOSSIER_VIDE, renderDossier } from './spark-dossier.js';
 import { NOTES_VIDE, renderNotes } from './spark-notes.js';
+import { PROPOSITIONS_VIDE, renderPropositions } from './spark-suggestions.js';
 // §12.5 : la table des modes CPU vit à UN SEUL endroit. En recopier une
 // seconde ici ferait diverger deux libellés pour le même mode.
 // `MODES` est DÉJÀ pris dans ce fichier par les modes d'amorçage : on nomme donc
@@ -704,6 +705,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     identite = IDENTITE_VIDE,
                                     dossier = DOSSIER_VIDE,
                                     notes = NOTES_VIDE,
+                                    propositions = PROPOSITIONS_VIDE,
                                     mesures = SUPERVISION_VIDE,
                                     catalogue = [], pools = null, cores = null } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
@@ -733,7 +735,11 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     // et les propositions de texte venues de la cellule s'y acceptent — là où
     // le geste se conclut, jamais ailleurs (§55.9).
     notes: () => renderNotes(spark, notes),
-    routes: () => renderRoutesPanel(spark, routes, admin)
+    // SPK-105 · §55.9 : la proposition s'ouvre LÀ où le geste se conclut. Elle
+    // vient en tête : c'est une décision en attente, et le §6.13 veut qu'un
+    // écran dise d'abord ce qui demande une réponse.
+    routes: () => renderPropositions(propositions, ['routes'])
+                  + renderRoutesPanel(spark, routes, admin)
                   + renderPortsPanel(spark, ports, admin, reservedPorts),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin)
                + renderIdentityPanel(spark, identite),
@@ -741,8 +747,9 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     // SPK-93 · §52.11 : la meme lecture que l'ecran de Forge, bornee a CE Spark
     // et comparee a SES quotas.
     mesures: () => renderSupervisionSpark(mesures),
-    environnement: () => renderEnvPanel(spark, env, envUi, renderModale, catalogue,
-                                        envImport),
+    environnement: () => renderPropositions(propositions, ['variables', 'secrets'])
+                         + renderEnvPanel(spark, env, envUi, renderModale, catalogue,
+                                          envImport),
     terminal: () => renderTerminal(spark, terminal),
     docker: () => renderDocker(spark, docker),
     journal: () => renderJournal(audit) ||

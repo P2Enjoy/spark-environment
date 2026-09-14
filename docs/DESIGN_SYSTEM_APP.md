@@ -1103,6 +1103,22 @@ Trois choses que l'écran dit, parce qu'elles décident du geste :
 Le repli survit à la repeinture, comme celui du dossier (§14.3) : accepter la
 note d'à côté ne doit pas refermer ce qu'on était en train de comparer.
 
+**Pour ce qui a des entrées — variables, secrets, routes —, la relecture est
+celle du lot collé** (SPK-DS-23) : une ligne, sa valeur, une case *Retenir*, et
+pour l'environnement une case *Secret*. Le geste est le même qu'à l'import ;
+seule l'origine du texte change, et l'écran le dit. En inventer un second
+obligerait à apprendre deux fois la même chose.
+
+**Et le compte rendu SURVIT à ce qu'il décrit.** Vu à l'écran le 2026-09-14 :
+une fois la proposition appliquée, son bloc disparaissait — et la confirmation
+avec lui. L'exploitant venait d'agir et n'avait plus rien sous les yeux, ce que
+le §1.3 et le §6.11 refusent. Le bloc reste donc, réduit à son titre et à son
+compte rendu, jusqu'à la peinture suivante.
+
+Une preuve de rendu le tient, et le parcours qui le photographie attend
+**l'écran relu ET le message encore présent** : attendre le seul message aurait
+attrapé l'état transitoire d'avant la relecture, et laissé passer le défaut.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19
