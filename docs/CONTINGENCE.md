@@ -156,7 +156,7 @@ Un plan jamais joué est une fiction ; celui-ci a été joué.
 
 ## 3. Les scénarios qui restent à instruire
 
-Un seul est traité à ce jour — l'entrée fantôme, au §4. Les autres sont listés
+Un seul est traité en entier à ce jour — l'entrée fantôme, au §4 — et un second à moitié, au §5. Les autres sont listés
 ici pour que l'absence se voie, et non pour laisser croire qu'elle est comblée.
 
 Ce que le premier a appris vaut pour la suite : il a été **joué**, pas écrit, et
@@ -173,7 +173,7 @@ jouer produirait un document rassurant et faux.
 | Incus indisponible après mise à jour | SPK-31 a montré qu'une version suffit à tout arrêter |
 | saturation d'un pool — disque, mémoire, IPv4 | le signal existe, le geste n'est pas écrit |
 | fuite d'une clé SSH | le geste existe (§35.2) ; l'ordre des opérations, non |
-| mot de passe de protection perdu (§35.3) | la levée se fait sur l'hôte, la procédure n'est pas écrite |
+| mot de passe de protection perdu (§35.3) | **INSTRUIT À MOITIÉ le 2026-09-14**, voir §5 : le diagnostic est joué, le geste de secours ne l'est pas |
 | Spark compromis de l'intérieur | que fait-on du Spark, de ses routes, de ses instantanés |
 | entrée fantôme au registre | **INSTRUIT le 2026-08-21**, voir §4 |
 
@@ -308,3 +308,68 @@ laquelle le défaut a été corrigé plutôt que documenté comme contournable.
 Cette même reprise ne renseigne pas `last_error` : elle rétablit un état sain
 sans dire ce qui s'était passé. Le geste manuel, lui, laisse la raison lisible
 sur la fiche du Spark.
+
+## 5. Mot de passe de protection perdu
+
+**Deuxième scénario instruit, le 2026-09-14, et il l'est à MOITIÉ.** Ce qui a été
+joué est écrit ici comme joué ; ce qui ne l'a pas été est nommé comme tel, au
+§5.4. Un plan de contingence qui décrirait un geste jamais exécuté serait
+exactement le document rassurant et faux que le §3 refuse.
+
+### 5.1 Ce que c'est, et ce que cela bloque
+
+Un Spark est protégé (§35.3) et le mot de passe n'est plus connu. La protection
+est **durable** — il n'y a pas de fenêtre de temps, pas d'expiration — et elle
+refuse toute écriture visant ce Spark : redimensionnement, suppression,
+instantanés, routes, clés.
+
+Ce que cela ne bloque **pas**, et c'est ce qui rend la situation tenable : le
+Spark **continue de tourner**, ses conteneurs aussi, et on y entre toujours en
+SSH. La protection garde le registre, pas la cellule. Personne n'est coupé de
+son service ; on ne peut simplement plus rien changer depuis la console.
+
+### 5.2 Ce que le produit répond — joué
+
+Armement, puis tentative de levée avec un mot de passe faux, sur la Forge de
+test :
+
+```
+armée  : {'name': …, 'protected': True, 'protected_at': '2026-09-14T10:57:04+00:00'}
+refus  : BadProtectionPassword — Mot de passe erroné : la protection de « … »
+         reste armée.
+```
+
+Le refus est **franc et il dit l'état** : « reste armée ». Il n'y a ni compte à
+rebours, ni verrouillage après N échecs, et c'est délibéré (§35.3) : un compte à
+rebours ne gênerait que le responsable légitime.
+
+**Il n'existe aucun chemin de secours dans le produit.** Ni la console, ni l'API
+ne lèvent une protection sans son mot de passe. C'est le point du §35.3 : qui
+peut lever en silence peut agir sans témoin.
+
+### 5.3 Ce qu'il faut savoir AVANT d'en avoir besoin
+
+- **le produit ne retient jamais l'ancien mot de passe** : réarmer en accepte un
+  différent, et rien ne propose le précédent (§35.4) ;
+- **l'empreinte seule est au registre** — `scrypt`, sel propre —, jamais la
+  valeur. Il n'y a donc rien à retrouver : le mot de passe perdu l'est
+  définitivement, et le geste de secours ne le récupère pas, il **retire la
+  protection** ;
+- **la trace compte plus que l'entrave** ici. Chaque tentative refusée entre au
+  journal. Un geste de secours doit donc entrer au journal lui aussi, sous une
+  identité qui dit qu'il a eu lieu sur l'hôte et non depuis la console.
+
+### 5.4 Ce qui reste à jouer, et pourquoi il ne l'a pas été
+
+**Le geste de secours lui-même n'a pas été exécuté.** Il consiste à retirer
+`protected_at` et l'empreinte de la ligne du Spark, directement dans le registre,
+sur l'hôte — la seule voie, puisque le produit n'en offre aucune.
+
+Il n'a pas été joué parce que l'environnement d'exécution de l'agent a refusé
+cette écriture, la classant comme un affaiblissement de sécurité. **C'en est
+un** : la garde a fait son travail. La procédure sera écrite lorsqu'elle aura été
+jouée, avec l'autorisation explicite du responsable, et pas avant.
+
+Ce qui est acquis d'ici là : le diagnostic, le comportement du produit face au
+mauvais mot de passe, et ce qu'il faut savoir avant — c'est-à-dire de quoi
+reconnaître la situation et ne pas chercher un chemin qui n'existe pas.

@@ -1433,8 +1433,16 @@ que ni le préflight ni la console ne signalaient.
   la phrase du VRAI pilote, la seule forme sous laquelle la fuite était visible.
 
 - **Reste avant `[x]`** :
-  1. les **huit autres scénarios**, listés au §3 de `docs/CONTINGENCE.md` avec ce
-     qui manque à chacun. C'est du travail d'instruction, pas de mesure ;
+  1. les **sept autres scénarios**, listés au §3 de `docs/CONTINGENCE.md` avec ce
+     qui manque à chacun. Le huitième — *mot de passe de protection perdu* — a
+     été instruit **à moitié** le 2026-09-14 (§5) : le diagnostic et la réponse
+     du produit sont joués sur la Forge de test ; le geste de secours ne l'est
+     pas, et le document le dit au lieu de le décrire de mémoire.
+
+     **Ce qui bloque cette moitié** : lever une protection revient à retirer son
+     empreinte du registre, sur l'hôte. L'environnement d'exécution de l'agent a
+     refusé cette écriture en la classant comme un affaiblissement de sécurité —
+     et c'en est un. Elle demande une autorisation explicite du responsable ;
   2. l'**ancre de la console** au §2.5 point 4 : la signaler exige la console
      lancée avec son tunnel, que l'exercice n'a pas monté. Le comportement
      attendu reste écrit, il n'est pas mesuré.
