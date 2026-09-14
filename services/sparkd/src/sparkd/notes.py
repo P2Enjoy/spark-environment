@@ -82,6 +82,11 @@ IDENTIFIANTS = tuple(note["id"] for note in NOTES)
 MARQUEUR = "<!-- spark:note"
 FIN_ENTETE = "-->"
 
+#: SPK-105 · §55 : le suffixe du fichier par lequel la cellule propose. Il est
+#: DÉFINI ici, et non importé de `suggestions`, pour que la dépendance aille dans
+#: un seul sens — `suggestions` connaît les notes, l'inverse ferait un cycle.
+SUFFIXE_SUGGESTION = ".?"
+
 #: §54.8 : la note se LIT par la seconde porte, et s'écrit par le registre. Le
 #: dossier suit le régime du §44.10 ; le `.?` qui fait face à chaque note est
 #: ouvert en écriture par le §55, et non ici.
@@ -164,8 +169,12 @@ def entete(note_id: str) -> str:
         "",
         "L'éditer ici n'a aucun effet durable : la prochaine écriture du plan de",
         "contrôle écrase ce que vous aurez mis — comme pour /etc/spark/env et",
-        "/run/spark/secrets. Une note se modifie depuis la console, dans la",
-        "fenêtre de ce Spark.",
+        "/run/spark/secrets.",
+        "",
+        f"POUR LA MODIFIER DEPUIS LA CELLULE, écrivez votre version dans le",
+        f"fichier voisin « {chemin(note_id)}{SUFFIXE_SUGGESTION} » : c'est une",
+        "PROPOSITION de remplacement intégral, que le propriétaire du Spark verra",
+        "dans sa console et acceptera ou non. Rien ne s'applique tout seul.",
         "",
         "N'Y ÉCRIVEZ AUCUN SECRET : ce texte est fait pour être copié vers un",
         "modèle tiers. Le plan de contrôle refuse un texte portant la valeur d'un",
@@ -350,8 +359,12 @@ def accepter(connection: sqlite3.Connection, spark_id: str, note_id: str,
     secret est refusé, et le §55.5 veut que sa proposition ne soit alors PAS
     consommée — son auteur peut ainsi la corriger.
     """
+    # Le `.?` d'une note est souvent une COPIE du fichier réel dont on n'a changé
+    # que le corps : l'agent ouvre README.md, le recopie, l'édite. Sans ce
+    # retrait, l'avertissement du produit entrerait au registre, puis serait
+    # reprojeté SOUS un second avertissement, et ainsi de suite.
     return _ecrire(connection, spark_id, definition(note_id)["id"],
-                   _valider(corps, secrets), ORIGINE_SUGGESTION)
+                   _valider(sans_entete(corps), secrets), ORIGINE_SUGGESTION)
 
 
 def a_projeter(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:

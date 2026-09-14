@@ -45,6 +45,7 @@ from . import bootstrap as bootstrap_service
 from . import identity as identity_service
 from . import briefing as briefing_service
 from . import notes as notes_service
+from . import suggestions as suggestions_service
 from . import metrics as metrics_service
 from . import historian as historian_service
 from . import snapshots as snapshot_service
@@ -742,6 +743,10 @@ def create_app(config: Config) -> FastAPI:
             # L'instance existe : ne pas faire échouer sa création. L'écart sera
             # repris au prochain démarrage, qui repose les fichiers (§43.5.2).
             pass
+        # SPK-105 · §55.5 : les `.?` sont posés dès la création, pour qu'un agent
+        # qui entre les trouve. Le mécanisme se découvre alors d'un `ls`, sans
+        # qu'on ait eu à le lire quelque part.
+        _rattraper_suggestions(connection, service.get(connection, spark["id"]))
         # SPK-49 · §39.4 : les ports déclarés AVANT la création s'ouvrent
         # maintenant. Sans ce geste, un port publié sur un Spark encore
         # `pending` ne s'ouvrirait jamais — il resterait au registre avec un
@@ -851,7 +856,8 @@ def create_app(config: Config) -> FastAPI:
         return {"uid": int(uid), "gid": int(gid)}
 
     def _ouvrir_au_rootless(connection, spark: dict, dossiers: tuple[str, ...],
-                            fichiers: tuple[str, ...]) -> None:
+                            fichiers: tuple[str, ...],
+                            inscriptibles: tuple[str, ...] = ()) -> None:
         """Ouvre au groupe du compte rootless ce qu'on vient de poser (§42.2 ter).
 
         Ne fait rien hors mode rootless : un Spark enraciné n'a pas de compte à
@@ -866,7 +872,8 @@ def create_app(config: Config) -> FastAPI:
             return
         code, _, err = app.state.incus.exec_capture(
             spark["incus_name"],
-            bootstrap_service.script_ouverture(identite["gid"], dossiers, fichiers))
+            bootstrap_service.script_ouverture(identite["gid"], dossiers, fichiers,
+                                               inscriptibles))
         if code:
             raise IncusError(
                 "Les fichiers ont été posés dans « {} », mais n'ont pas pu être "
@@ -913,6 +920,27 @@ def create_app(config: Config) -> FastAPI:
         # borné à trois écritures de fichier sur un Spark qui en a trois.
         _apply_notes(connection, spark)
 
+    def _apply_routes_file(connection, spark: dict) -> None:
+        """Pose `/etc/spark/routes`, le fichier réel du §55.3.1.
+
+        @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.3.1
+
+        **Il ne dépend PAS du relevé d'amorçage**, contrairement au briefing.
+        Une cellule non amorcée reçoit déjà son `routes.?` (§55.5), et l'en-tête
+        de celui-ci nomme `/etc/spark/routes` : laisser le fichier réel absent
+        ferait désigner à l'agent un voisin qui n'existe pas.
+
+        Il porte la MÊME grammaire que sa proposition, et c'est le point :
+        l'agent lit et écrit la même chose (§43.10.1).
+        """
+        if not spark.get("incus_name"):
+            return
+        app.state.incus.push_file(
+            spark["incus_name"], suggestions_service.FICHIER_ROUTES,
+            suggestions_service.rendre_routes(
+                ingress_service.listing(connection), spark["id"]),
+            mode="0600")
+
     def _apply_briefing(connection, spark: dict) -> None:
         """Projette le briefing unique dans une cellule déjà amorcée.
 
@@ -925,6 +953,11 @@ def create_app(config: Config) -> FastAPI:
         """
         if not spark.get("incus_name"):
             return
+        # SPK-105 · §55.3.1 : AVANT la garde du relevé. Les routes ne dépendent
+        # pas d'un amorçage, et c'est ici que passent tous les gestes qui les
+        # changent — l'accrocher là évite d'énumérer une seconde fois les sept
+        # appelants de `_rattraper_briefing`, et d'en oublier un demain.
+        _apply_routes_file(connection, spark)
         releve = briefing_service.observation(connection, spark["id"])
         if releve is None:
             return
@@ -996,6 +1029,49 @@ def create_app(config: Config) -> FastAPI:
         _ouvrir_au_rootless(connection, spark, notes_service.DOSSIERS_OUVERTS,
                             tuple(note["path"] for note in a_poser))
         return True
+
+    def _lecteur(spark: dict):
+        """De quoi lire un chemin DANS la cellule (§55.8)."""
+        return lambda chemin: app.state.incus.pull_file(spark["incus_name"], chemin)
+
+    def _pousseur(spark: dict):
+        """De quoi écrire un `.?`. Ils sont posés `0600`, puis ouverts."""
+        return lambda chemin, contenu: app.state.incus.push_file(
+            spark["incus_name"], chemin, contenu, mode="0600")
+
+    def _poser_les_suggestions(connection, spark: dict) -> None:
+        """Pose les `.?` absents, et n'écrase jamais une proposition (§55.5).
+
+        @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5, §55.6
+
+        **Appelée aux instants grossiers** — création, démarrage, amorçage — et
+        à chaque lecture de l'écran, plutôt que sur chaque geste. Elle coûte six
+        lectures dans la cellule, et la lier à `_apply_env` la ferait payer à
+        chaque variable posée. La lecture de l'écran est le filet : on ne peut
+        pas accepter une proposition sans avoir ouvert la facette qui la montre.
+        """
+        if not spark.get("incus_name"):
+            return
+        # Le fichier réel d'abord : l'en-tête de `routes.?` le nomme, et un
+        # voisin annoncé mais absent enverrait chercher une panne.
+        _apply_routes_file(connection, spark)
+        suggestions_service.poser_manquants(_lecteur(spark), _pousseur(spark))
+        # §55.6 : les `.?` sont les SEULS fichiers que le groupe écrit. Le
+        # répertoire, lui, reste fermé — sans quoi on pourrait y supprimer
+        # `BRIEFING.md` et `env`.
+        _ouvrir_au_rootless(
+            connection, spark, suggestions_service.DOSSIERS_OUVERTS,
+            (suggestions_service.FICHIER_ROUTES,),
+            tuple(suggestions_service.chemin(k)
+                  for k in suggestions_service.NATURES))
+
+    def _rattraper_suggestions(connection, spark: dict) -> None:
+        """Un `.?` manquant n'est pas une panne : il sera posé au prochain
+        passage, ou à la première ouverture de l'écran."""
+        try:
+            _poser_les_suggestions(connection, spark)
+        except (IncusError, InstanceAbsente):
+            pass
 
     def _accorder_capacite_docker(connection, spark: dict, brut: dict) -> dict:
         """Le RELEVÉ corrige le registre, jamais l'inverse (SPK-98, §42.13).
@@ -2502,6 +2578,11 @@ def create_app(config: Config) -> FastAPI:
             # où sa pile ne démarre pas. `_apply_env` reprojette le briefing dans
             # la foulée : un seul appel couvre les deux.
             _rattraper_env(connection, service.by_name(connection, name))
+            # SPK-105 · §55.5 : l'amorçage vient peut-être de créer le compte
+            # rootless dont dépendent les permissions des `.?` (§55.6). Les
+            # reposer ici les ouvre au groupe, sans quoi la seconde porte ne
+            # pourrait y écrire qu'après le prochain geste du propriétaire.
+            _rattraper_suggestions(connection, service.by_name(connection, name))
             # SPK-95 · §42.2 quater : la seconde porte a été écrite plus haut,
             # AVANT que l'observation ne porte le uid et le gid — elle est donc
             # posée fermée, et `sshd` ne saurait pas la lire. On l'ouvre ici,
@@ -2835,6 +2916,222 @@ def create_app(config: Config) -> FastAPI:
                 # a manqué.
                 posee = False
             return {"spark": name, "note": ecrite, "projected": posee}
+
+    # --- SPK-105 · le fichier `.?` (docs/DAT.md §55) -------------------------
+    #
+    # Le SEUL canal par lequel la cellule propose. Rien ici ne s'applique tout
+    # seul : un fichier déposé dans une cellule est une demande sans effet tant
+    # qu'un humain ne l'ouvre pas, et le §35.1 reste entier.
+
+    @app.get("/v1/sparks/{name}/suggestions", tags=["suggestions"])
+    def read_suggestions(name: str) -> dict:
+        """Les six paires, telles que la cellule les porte (§55.8).
+
+        @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (consulter ne consomme
+              pas), §55.8
+
+        **Ne consomme rien.** Elle pose les `.?` absents — c'est ce qui rend le
+        mécanisme découvrable — et ne vide aucun de ceux qui portent quelque
+        chose.
+
+        Elle rend le **texte**, pas une analyse : la grammaire du §43.10.1 vit
+        dans la console, une seule fois, et le §43.10.3 veut que le serveur
+        reçoive des entrées structurées plutôt que du texte (§55.8).
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            if not spark.get("incus_name"):
+                # §14.6 : « pas de cellule » n'est ni « aucune proposition » ni
+                # une panne. L'écran doit pouvoir le dire autrement.
+                return {"spark": name, "cell_read": False, "suggestions": []}
+            try:
+                _poser_les_suggestions(connection, spark)
+                lues = [suggestions_service.lire(kind, _lecteur(spark))
+                        for kind in suggestions_service.NATURES]
+            except (IncusError, InstanceAbsente):
+                return {"spark": name, "cell_read": False, "suggestions": []}
+            return {"spark": name, "cell_read": True, "suggestions": lues}
+
+    def _appliquer_suggestion(connection, spark: dict, kind: str, body: dict) -> dict:
+        """Applique une proposition PAR LE CHEMIN NORMAL du produit (§55.8).
+
+        Aucun chemin d'écriture propre : `env_service.importer` pour les deux
+        natures de variables, la déclaration ou la correction de route du §18
+        pour les routes, l'écriture de note du §54.9 pour les trois textes.
+        C'est la condition pour qu'une proposition n'affaiblisse rien — le §18.4
+        et le §43.9 gardent le dernier mot, exactement comme à la saisie.
+        """
+        paire = suggestions_service.definition(kind)
+        if paire["nature"] == suggestions_service.TEXTE:
+            ecrite = notes_service.accepter(
+                connection, spark["id"], paire["note"],
+                str(body.get("body", "")), _secrets_du_spark(connection, spark))
+            _apply_notes(connection, spark)
+            return {"note": ecrite}
+
+        entrees = body.get("entries")
+        if not isinstance(entrees, list) or not entrees:
+            raise suggestions_service.SuggestionError(
+                "Aucune entrée retenue : il n'y a rien à appliquer. Pour "
+                "n'en retenir aucune, c'est « Refuser » qu'il faut employer — "
+                "les deux vident le fichier, mais ils ne disent pas la même "
+                "chose au journal.", "empty_apply")
+
+        if kind == "routes":
+            posees = []
+            for entree in entrees:
+                domaine = str(entree.get("domain", "")).strip().lower()
+                port = int(entree.get("port", 0))
+                tls = bool(entree.get("tls", True))
+                try:
+                    existante = ingress_service.by_domain(connection, domaine)
+                except ingress_service.IngressError:
+                    existante = None
+                # §18.3 ter : une route qui existe DÉJÀ pour ce Spark se
+                # corrige, elle ne se refait pas. Une route qui appartient à un
+                # autre Spark tombe sur l'unicité du §18.4, en déclarant — le
+                # refus est alors celui du produit, pas un refus inventé ici.
+                if existante and existante["spark_id"] == spark["id"]:
+                    posees.append(ingress_service.update(
+                        connection, domaine, port, tls))
+                else:
+                    posees.append(ingress_service.declare(
+                        connection, spark["id"], domaine, port, tls))
+            _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
+            try:
+                _reconcile_ingress(connection)
+            except ingress_service.IngressError:
+                # La route est enregistrée ; l'écart reste visible par
+                # `applied_at` (§18.5) plutôt que masqué par un succès simulé.
+                pass
+            return {"routes": posees}
+
+        lot = env_service.importer(
+            connection, _cle_de_forge(), "spark", spark["id"],
+            [(str(e.get("name", "")), str(e.get("value", "")),
+              bool(e.get("secret"))) for e in entrees])
+        _apply_env(connection, service.by_name(connection, spark["name"]))
+        return {"imported": [e.name for e in lot.entrees],
+                "replaced": list(lot.remplacees)}
+
+    @app.post("/v1/sparks/{name}/suggestions/{kind}/apply", tags=["suggestions"])
+    def apply_suggestion(name: str, kind: str, body: dict = Body(...)) -> dict:
+        """Accepte tout ou partie d'une proposition, puis VIDE le fichier (§55.5).
+
+        @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (accepter vide),
+              §55.5.2 (l'empreinte relue), §55.8 · §35.2
+
+        **Une acceptation partielle vide quand même tout** : la décision a porté
+        sur toute la proposition, et ce qui n'a pas été retenu a été refusé, pas
+        ajourné. Laisser le reliquat ferait revenir à chaque ouverture les lignes
+        qu'on vient d'écarter.
+
+        **Un refus du PRODUIT, lui, ne vide pas** : garde des secrets, grammaire
+        fautive, domaine déjà pris laissent le fichier intact, et son auteur peut
+        corriger.
+        """
+        with registry() as connection:
+            spark = _spark_pour_suggestion(connection, name, kind)
+            lecteur = _lecteur(spark)
+            try:
+                suggestions_service.exiger_fraiche(
+                    kind, lecteur, str((body or {}).get("sha256") or ""))
+                applique = _appliquer_suggestion(connection, spark, kind, body or {})
+            except suggestions_service.SuggestionPerimee as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": erreur.code, "message": str(erreur),
+                    "current": erreur.courante}) from erreur
+            except suggestions_service.SuggestionError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": erreur.code, "message": str(erreur)}) from erreur
+            except notes_service.NoteError as erreur:
+                # §54.6 : un texte porteur d'un secret est refusé, et sa
+                # proposition n'est PAS consommée — son auteur peut la corriger.
+                raise HTTPException(status_code=422, detail={
+                    "error": erreur.code, "message": str(erreur)}) from erreur
+            except env_service.EnvError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": erreur.code, "message": str(erreur)}) from erreur
+            except (ingress_service.IngressError, ValueError, TypeError) as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": "route_refused", "message": str(erreur)}) from erreur
+            except (IncusError, InstanceAbsente) as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
+
+            audit_service.record(
+                connection, None, "spark.suggestion.apply", "ok",
+                f"Proposition « {kind} » acceptée depuis la cellule de "
+                f"« {name} ».",
+                target_type="spark", target_id=spark["id"],
+                # §21.4 : la nature et le COMPTE, jamais les valeurs — un
+                # `secrets.?` en porte en clair par construction.
+                payload={"kind": kind,
+                         "count": len((body or {}).get("entries") or [1])})
+            vide = _vider_la_suggestion(spark, kind)
+            return {"spark": name, "kind": kind, "cleared": vide, **applique}
+
+    @app.post("/v1/sparks/{name}/suggestions/{kind}/reject", tags=["suggestions"])
+    def reject_suggestion(name: str, kind: str, body: dict = Body(...)) -> dict:
+        """Refuse une proposition et vide le fichier, sans rien appliquer (§55.5)."""
+        with registry() as connection:
+            spark = _spark_pour_suggestion(connection, name, kind)
+            try:
+                suggestions_service.exiger_fraiche(
+                    kind, _lecteur(spark), str((body or {}).get("sha256") or ""))
+            except suggestions_service.SuggestionPerimee as erreur:
+                raise HTTPException(status_code=409, detail={
+                    "error": erreur.code, "message": str(erreur),
+                    "current": erreur.courante}) from erreur
+            except suggestions_service.SuggestionError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": erreur.code, "message": str(erreur)}) from erreur
+            except (IncusError, InstanceAbsente) as erreur:
+                raise _refus_cellule_perdue(spark) from erreur
+            audit_service.record(
+                connection, None, "spark.suggestion.reject", "ok",
+                f"Proposition « {kind} » refusée sur « {name} ».",
+                target_type="spark", target_id=spark["id"],
+                payload={"kind": kind})
+            return {"spark": name, "kind": kind,
+                    "cleared": _vider_la_suggestion(spark, kind)}
+
+    def _spark_pour_suggestion(connection, name: str, kind: str) -> dict:
+        """Les trois refus communs aux deux gestes, écrits une fois."""
+        try:
+            spark = service.by_name(connection, name)
+        except service.NotFound as erreur:
+            raise HTTPException(status_code=404, detail={
+                "error": "not_found", "message": str(erreur)}) from erreur
+        try:
+            suggestions_service.definition(kind)
+        except suggestions_service.SuggestionError as erreur:
+            raise HTTPException(status_code=422, detail={
+                "error": erreur.code, "message": str(erreur)}) from erreur
+        # §35.2 : accepter écrit au registre, refuser écrit dans la cellule. Les
+        # deux sont des écritures qui visent ce Spark.
+        protection_service.ensure_writable(connection, name, "suggestion")
+        if not spark.get("incus_name"):
+            raise HTTPException(status_code=409, detail={
+                "error": "no_instance",
+                "message": "Ce Spark n'a pas de cellule : il ne peut porter "
+                           "aucune proposition."})
+        return spark
+
+    def _vider_la_suggestion(spark: dict, kind: str) -> bool:
+        """Vide le `.?`. Un échec ne DÉFAIT pas ce qui a été appliqué (§55.8).
+
+        Le registre fait foi ; le fichier sera revidé au prochain passage, et une
+        proposition déjà appliquée se reconnaît à ce qu'elle ne change plus rien.
+        """
+        try:
+            suggestions_service.vider(kind, _pousseur(spark))
+            return True
+        except (IncusError, InstanceAbsente):
+            return False
 
     @app.get("/v1/forge/cores", tags=["forge"])
     def forge_cores() -> dict:
@@ -3181,6 +3478,11 @@ def create_app(config: Config) -> FastAPI:
                         # Le Spark tourne ; l'écart sera repris à la
                         # réconciliation plutôt que de faire échouer le démarrage.
                         pass
+                    # SPK-105 · §55.5 : un `.?` supprimé par le locataire, ou une
+                    # cellule restaurée d'un instantané antérieur, le retrouve au
+                    # démarrage. Un `.?` déjà porteur n'est jamais écrasé.
+                    _rattraper_suggestions(
+                        connection, service.by_name(connection, name))
                     try:
                         _reconcile_ingress(connection)
                     except ingress_service.IngressError:

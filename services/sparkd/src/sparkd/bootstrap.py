@@ -1143,10 +1143,21 @@ def script_motd() -> list[str]:
 #: pas devenir exécutable.
 MODE_DOSSIER_OUVERT = "0750"
 MODE_FICHIER_OUVERT = "0640"
+#: SPK-105 · §55.6 : le fichier `.?` est le SEUL que le groupe écrit. Le compte
+#: qui fait tourner la pile est souvent celui qui découvre qu'il manque une
+#: variable ou qu'un port doit être servi ; lui refuser la plume sur une
+#: PROPOSITION l'obligerait à un rebond par `root` pour un geste sans effet.
+#:
+#: Le répertoire, lui, reste en `0750` : créer un fichier demande le droit
+#: d'écrire dans le répertoire, l'écrire ne demande que le droit sur le fichier.
+#: C'est pour cela que le produit pose les `.?` vides lui-même — ouvrir le
+#: répertoire permettrait de supprimer ou de renommer `BRIEFING.md` et `env`.
+MODE_FICHIER_INSCRIPTIBLE = "0660"
 
 
 def script_ouverture(gid: int, dossiers: tuple[str, ...],
-                     fichiers: tuple[str, ...]) -> list[str]:
+                     fichiers: tuple[str, ...],
+                     inscriptibles: tuple[str, ...] = ()) -> list[str]:
     """Ouvre au groupe du compte rootless ce que sparkd vient de poser (§42.2 ter).
 
     @spec docs/BACKLOG.md#SPK-94 · docs/DAT.md §42.2 ter
@@ -1176,6 +1187,14 @@ def script_ouverture(gid: int, dossiers: tuple[str, ...],
         lignes.append(
             f"if [ -f {fichier} ]; then chgrp {int(gid)} {fichier}; "
             f"chmod {MODE_FICHIER_OUVERT} {fichier}; fi")
+    # SPK-105 · §55.6 : les `.?` en dernier, et en `0660`. L'ordre compte si un
+    # chemin figurait dans les deux listes — le plus permissif l'emporterait
+    # alors, ce qu'on veut savoir plutôt que subir : aucun appelant ne doit
+    # passer un même fichier aux deux, et le §55.6 n'en nomme aucun.
+    for fichier in inscriptibles:
+        lignes.append(
+            f"if [ -f {fichier} ]; then chgrp {int(gid)} {fichier}; "
+            f"chmod {MODE_FICHIER_INSCRIPTIBLE} {fichier}; fi")
     return _shell("\n".join(lignes) + "\n")
 
 

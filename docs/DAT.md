@@ -12628,15 +12628,30 @@ que la machine est cassée.
 `install` — les six paires du §55.3.
 
 - **`GET` lit la cellule** et rend, par paire : la présence d'une proposition,
-  l'empreinte de son contenu, les entrées **analysées** — et, si l'analyse
-  échoue, la ligne fautive et son motif. Il ne rend jamais le fichier brut pour
-  les trois fichiers de configuration : ce que l'écran montre est ce que le
-  produit a compris, faute de quoi on relirait un texte et on appliquerait autre
-  chose. Pour une note, l'analyse EST le texte, et il est rendu tel quel ;
+  l'empreinte de son contenu, et le **texte**, dépouillé de l'en-tête que le
+  produit a posé.
+
+  **C'est la console qui l'analyse, et non le serveur** — révisé avant
+  implémentation. La grammaire du §43.10.1 existe déjà, **une seule fois**, dans
+  `env-import.js`, avec ses numéros de ligne et ses refus ; et le §43.10.3 pose
+  que « le serveur ne reçoit jamais le texte collé : il reçoit des entrées
+  structurées ». En écrire un second analyseur en Python ferait deux grammaires
+  pour le même fichier, qui divergeraient — exactement ce que le §44.8 interdit
+  entre deux présentations d'un même modèle. La garantie recherchée — *ce que
+  l'écran montre est ce que l'on applique* — est rendue par le même moyen qu'à
+  l'import collé : l'écran affiche ce qu'il a compris **avant** d'écrire
+  (§43.10.2), et c'est cela qui part au serveur.
+
+  La grammaire de `routes.conf` (§55.3.1) est donc écrite **au même endroit**, à
+  côté de celle des `.env`. Le serveur, lui, ne fait que **rendre**
+  `/etc/spark/routes` depuis le registre : rendre est d'une ligne, analyser ne
+  l'est pas ;
 - **`GET` ne consomme rien.** Il pose les `.?` manquants, et ne vide aucun de
   ceux qui portent quelque chose ;
-- **`apply` porte l'empreinte relue** et la liste des entrées retenues, avec leur
-  déclaration de secret pour les deux natures de variables. Il applique par
+- **`apply` porte l'empreinte relue** et la liste des entrées **structurées**
+  retenues, avec leur déclaration de secret pour les deux natures de variables —
+  la même forme que `POST /v1/sparks/{nom}/env/import` (§43.10.3). Pour une
+  note, il porte le texte. Il applique par
   `env_service.importer` (§43.10.3), par la création de route du §18 ou par
   l'écriture de note du §54.9, puis vide le `.?` ;
 - **`reject` porte l'empreinte relue** et se contente de vider ;

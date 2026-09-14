@@ -1011,6 +1011,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Suggestions
+         * @description Les six paires, telles que la cellule les porte (§55.8).
+         *
+         *     @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (consulter ne consomme
+         *           pas), §55.8
+         *
+         *     **Ne consomme rien.** Elle pose les `.?` absents — c'est ce qui rend le
+         *     mécanisme découvrable — et ne vide aucun de ceux qui portent quelque
+         *     chose.
+         *
+         *     Elle rend le **texte**, pas une analyse : la grammaire du §43.10.1 vit
+         *     dans la console, une seule fois, et le §43.10.3 veut que le serveur
+         *     reçoive des entrées structurées plutôt que du texte (§55.8).
+         */
+        get: operations["read_suggestions_v1_sparks__name__suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/suggestions/{kind}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Suggestion
+         * @description Accepte tout ou partie d'une proposition, puis VIDE le fichier (§55.5).
+         *
+         *     @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (accepter vide),
+         *           §55.5.2 (l'empreinte relue), §55.8 · §35.2
+         *
+         *     **Une acceptation partielle vide quand même tout** : la décision a porté
+         *     sur toute la proposition, et ce qui n'a pas été retenu a été refusé, pas
+         *     ajourné. Laisser le reliquat ferait revenir à chaque ouverture les lignes
+         *     qu'on vient d'écarter.
+         *
+         *     **Un refus du PRODUIT, lui, ne vide pas** : garde des secrets, grammaire
+         *     fautive, domaine déjà pris laissent le fichier intact, et son auteur peut
+         *     corriger.
+         */
+        post: operations["apply_suggestion_v1_sparks__name__suggestions__kind__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/suggestions/{kind}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Suggestion
+         * @description Refuse une proposition et vide le fichier, sans rien appliquer (§55.5).
+         */
+        post: operations["reject_suggestion_v1_sparks__name__suggestions__kind__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/usage": {
         parameters: {
             query?: never;
@@ -2963,6 +3046,119 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_suggestions_v1_sparks__name__suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_suggestion_v1_sparks__name__suggestions__kind__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_suggestion_v1_sparks__name__suggestions__kind__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
             content: {
                 "application/json": {
                     [key: string]: unknown;

@@ -7210,9 +7210,9 @@ artefact, pas une narration) :
 2. **Registre et service** — migration `017_notes_spark.sql`, module `notes.py`
    (modèle, garde des secrets, projection), `pull_file` sur les deux pilotes,
    routes `GET`/`PUT`, contrat d'API régénéré, audit. Preuves d'unité et d'API.
-   *Fait : 18 preuves propres, 1349 preuves de service au vert.* Le `.?` annoncé
-   au §54.7 n'est pas encore nommé dans l'en-tête posé — il n'existera qu'avec
-   SPK-105, et l'en-tête ne doit pas désigner un fichier absent.
+   *Fait : 18 preuves propres.* L'en-tête nomme désormais le `.?` par lequel la
+   cellule propose une note — il n'a été ajouté qu'une fois ce fichier réel
+   (SPK-105), un document ne désignant pas un fichier absent.
 3. **Briefing et dossier** — les notes nommées dans `BRIEFING.md` avec la
    commande qui les lit, portées en entier dans le dossier, et les points du
    §54.7 écrits dans les deux. Preuves de rendu, dont la garde du §44.9.3
@@ -7240,7 +7240,7 @@ artefact, pas une narration) :
   déploiement à jour ; `@spec` / `@verifies` posés.
 
 
-### [ ] SPK-105 · Le fichier `.?` : le seul canal par lequel la cellule propose
+### [~] SPK-105 · Le fichier `.?` : le seul canal par lequel la cellule propose
 
 Demandé par le responsable le 2026-09-14, en deux temps. D'abord : « un agent
 peut déposer des fichiers de variables et des secrets souhaités ; l'UI surveille
@@ -7297,8 +7297,12 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
 
 1. **Documentation seule** — DAT §55, cette unité, journal, changelog. *Fait.*
 2. **Service et API** — module `suggestions.py` (pose des `.?`, lecture,
-   analyse, empreinte, application, vidage), le fichier `/etc/spark/routes` et sa
-   grammaire, trois routes, contrat régénéré, audit. Preuves d'unité et d'API.
+   empreinte, application, vidage), le fichier `/etc/spark/routes`, trois
+   routes, contrat régénéré, audit. Preuves d'unité et d'API.
+   *Fait : 28 preuves propres, 1377 preuves de service au vert.* **L'analyse
+   reste dans la console** (§55.8, révisé avant implémentation) : la grammaire
+   du §43.10.1 existe une seule fois, dans `env-import.js`, et le §43.10.3 pose
+   que le serveur reçoit des entrées structurées et jamais du texte.
 3. **Dossier pour un LLM** — la section du §55.7 et la consigne d'accès unique,
    dans le même chunk que celles de SPK-104.
 4. **Console** — bannières et écrans d'acceptation sur les facettes

@@ -84,9 +84,14 @@ def test_les_trois_notes_existent_AVANT_qu_on_ecrive_et_se_disent_non_ecrites(cl
         assert note["expected"]
         assert note["path"].startswith(notes.DOSSIER)
 
-    # Rien n'est posé dans la cellule tant que personne n'a écrit : un fichier
-    # ne portant que l'en-tête du produit ferait croire à un texte rédigé.
-    assert not [c for c in fichiers(client, nom) if c.startswith(notes.DOSSIER)]
+    # Aucune NOTE n'est posée tant que personne n'a écrit : un fichier ne
+    # portant que l'en-tête du produit ferait croire à un texte rédigé.
+    poses = [c for c in fichiers(client, nom) if c.startswith(notes.DOSSIER)]
+    assert not [c for c in poses if not c.endswith(".?")]
+    # SPK-105 · §55.5 : leurs `.?`, en revanche, SONT posés dès la création.
+    # C'est ce qui rend le mécanisme découvrable d'un `ls`, sans qu'on ait eu à
+    # le lire quelque part.
+    assert len(poses) == 3
 
 
 def test_une_note_VIDE_enregistree_n_est_pas_une_note_jamais_ecrite(client):

@@ -22,21 +22,26 @@
   désormais cette grammaire : elle voit 33 variables au lieu de 28.
 
 ### Ajouté
-- **SPK-105 — le fichier `.?`, seul canal par lequel la cellule propose.
-  SPÉCIFIÉ, pas encore implémenté.** À côté de chaque fichier que le plan de
-  contrôle pose dans une cellule — `/etc/spark/env`, `/run/spark/secrets`, le
-  nouveau `/etc/spark/routes` et les trois notes — vit un voisin de même nom
-  suffixé `.?`, vide, où un agent dépose ce qu'il **souhaite** voir posé. Le
-  produit gagne ainsi **une règle sans exception** : tout fichier réel est
-  régénéré depuis le registre, et rien ne remonte autrement que par un `.?`.
-  **Rien ne s'applique tout seul** — une proposition est une demande sans effet
-  tant que le propriétaire ne l'ouvre pas, et il n'existera aucun mode
-  automatique. **Consulter ne consomme pas** : accepter ou refuser vide le
-  fichier, et ce vidage est le signal par lequel l'agent apprend qu'une décision
-  a été prise — le fichier réel d'à côté dit laquelle, sans aucun accusé de
-  réception à tenir à jour. En rootless, **`root` comme `spark-docker`** peuvent
-  proposer ; ni l'un ni l'autre ne décide. Contrat : `docs/DAT.md` §55,
-  `docs/BACKLOG.md` SPK-105.
+- **SPK-105 — le fichier `.?`, seul canal par lequel la cellule propose.** À côté
+  de chaque fichier que le plan de contrôle pose dans une cellule —
+  `/etc/spark/env`, `/run/spark/secrets`, le **nouveau** `/etc/spark/routes` et
+  les trois notes — vit un voisin de même nom suffixé `.?`, posé vide, où un
+  agent dépose ce qu'il **souhaite** voir posé. Le produit gagne ainsi **une
+  règle sans exception** : tout fichier réel est régénéré depuis le registre, et
+  rien ne remonte autrement que par un `.?`. **Rien ne s'applique tout seul** —
+  une proposition est une demande sans effet tant que le propriétaire ne l'ouvre
+  pas, et il n'existera aucun mode automatique. **Consulter ne consomme pas** :
+  accepter ou refuser vide le fichier, et ce vidage est le signal par lequel
+  l'agent apprend qu'une décision a été prise — le fichier réel d'à côté dit
+  laquelle, sans aucun accusé de réception à tenir à jour. **Un refus du produit,
+  lui, ne consomme pas** : un texte portant un secret, un nom hors grammaire, un
+  domaine déjà pris laissent la proposition intacte, et son auteur peut
+  corriger. L'application passe par les **chemins existants** — import de lot,
+  déclaration ou correction de route, écriture de note —, donc les contrôles du
+  §18.4 et du §43.9 gardent le dernier mot. En rootless, **`root` comme
+  `spark-docker`** peuvent proposer ; ni l'un ni l'autre ne décide. *Service et
+  API livrés ; la console, le dossier pour un LLM et les parcours restent à
+  venir.*
 - **SPK-104 — trois notes de Spark : README, CONTRIBUTORS, INSTALL.** Le §44.7
   disait depuis toujours que le briefing « ne décrit pas l'application du
   locataire » : ces trois textes comblent ce trou sans le combler de faits

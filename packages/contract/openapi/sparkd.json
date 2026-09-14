@@ -2714,6 +2714,183 @@
         ]
       }
     },
+    "/v1/sparks/{name}/suggestions": {
+      "get": {
+        "description": "Les six paires, telles que la cellule les porte (§55.8).\n\n@spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (consulter ne consomme\n      pas), §55.8\n\n**Ne consomme rien.** Elle pose les `.?` absents — c'est ce qui rend le\nmécanisme découvrable — et ne vide aucun de ceux qui portent quelque\nchose.\n\nElle rend le **texte**, pas une analyse : la grammaire du §43.10.1 vit\ndans la console, une seule fois, et le §43.10.3 veut que le serveur\nreçoive des entrées structurées plutôt que du texte (§55.8).",
+        "operationId": "read_suggestions_v1_sparks__name__suggestions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Suggestions V1 Sparks  Name  Suggestions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Suggestions",
+        "tags": [
+          "suggestions"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/suggestions/{kind}/apply": {
+      "post": {
+        "description": "Accepte tout ou partie d'une proposition, puis VIDE le fichier (§55.5).\n\n@spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (accepter vide),\n      §55.5.2 (l'empreinte relue), §55.8 · §35.2\n\n**Une acceptation partielle vide quand même tout** : la décision a porté\nsur toute la proposition, et ce qui n'a pas été retenu a été refusé, pas\najourné. Laisser le reliquat ferait revenir à chaque ouverture les lignes\nqu'on vient d'écarter.\n\n**Un refus du PRODUIT, lui, ne vide pas** : garde des secrets, grammaire\nfautive, domaine déjà pris laissent le fichier intact, et son auteur peut\ncorriger.",
+        "operationId": "apply_suggestion_v1_sparks__name__suggestions__kind__apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Apply Suggestion V1 Sparks  Name  Suggestions  Kind  Apply Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Suggestion",
+        "tags": [
+          "suggestions"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/suggestions/{kind}/reject": {
+      "post": {
+        "description": "Refuse une proposition et vide le fichier, sans rien appliquer (§55.5).",
+        "operationId": "reject_suggestion_v1_sparks__name__suggestions__kind__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reject Suggestion V1 Sparks  Name  Suggestions  Kind  Reject Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Suggestion",
+        "tags": [
+          "suggestions"
+        ]
+      }
+    },
     "/v1/sparks/{name}/usage": {
       "get": {
         "description": "Usage réel, comparé à ce qui est effectivement appliqué.",
