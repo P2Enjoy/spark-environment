@@ -6036,6 +6036,22 @@ secondes, rétention 7 jours.**
   rétention à sept jours. Elle reste prouvée par ses preuves d'unité ; la Forge
   de test ne porte pas encore sept jours d'historique.
 
+- **Assaini le 2026-09-14** : le parcours « un Spark ARRÊTÉ nomme l'arrêt »
+  échouait par intermittence dans la campagne et passait toujours seul. Ce
+  n'était **pas** une lenteur, contrairement à ce que son symptôme disait — un
+  délai dépassé sur `.entete-entite`. Le diagnostic laissé par le harnais portait
+  la vraie cause en toutes lettres : *« Le serveur a refusé cette création —
+  processeur : il manque 0,25 CPU »*. Le parcours créait sa cellule avec la
+  réservation par DÉFAUT, donc il dépendait de ce que les parcours précédents
+  avaient laissé au pool — la dépendance que le §29.2 proscrit, et celle que les
+  deux tentatives précédentes avaient déjà cherché à fuir.
+  Deux corrections, aucune n'est un délai rallongé : la cellule est créée avec la
+  réservation **minimale**, posée **au clavier** sur le curseur (`Home`), puisque
+  ce Spark n'est jamais démarré et n'a besoin d'aucun processeur ; et l'attente
+  accepte désormais **l'écran du Spark OU le refus du serveur**, de sorte qu'un
+  refus se présente comme un refus au lieu de se déguiser en lenteur. Une
+  troisième preuve relit la réservation chez `sparkd` : sans elle, le parcours
+  passerait pour la mauvaise raison le jour où le curseur cesserait de répondre.
 
 ### [x] SPK-94 · Ce que le compte rootless doit pouvoir lire, et le panneau qu'on enterrait
 

@@ -86,6 +86,13 @@
   les postes qui l'ont posée.
 
 ### Corrigé
+- **SPK-93 — un parcours de supervision échouait sur un refus déguisé en
+  lenteur.** « Un Spark ARRÊTÉ nomme l'arrêt » créait sa cellule avec la
+  réservation CPU par défaut : il dépendait donc du pool laissé par les parcours
+  précédents, et son échec se présentait comme un délai dépassé alors que le
+  serveur avait **refusé la création** faute de processeur. La cellule demande
+  désormais le minimum — posé au clavier sur le curseur —, et l'attente accepte
+  l'écran du Spark **ou** le refus, qui se lit alors tel quel.
 - **SPK-62 — le troisième état du canal d'alerte s'affichait sans aucun fond.** Le
   bloc « Le canal est configuré mais n'envoie rien » portait une classe `erreur`
   qui n'existait dans aucune feuille de style : le message le plus grave de cet

@@ -11039,3 +11039,45 @@ et laisse vides ceux de `boutique`.
 le parcours canonique, la valeur d'un secret cherchée explicitement dans le texte
 rendu après filtrage, les trois vides distingués, et les captures observées en
 1440 px et 390 px.
+
+---
+
+## 2026-09-14 · Un refus déguisé en lenteur, et le diagnostic qui le disait déjà
+
+Le parcours « un Spark ARRÊTÉ nomme l'arrêt » échouait une campagne sur deux et
+passait toujours seul. Son symptôme désignait une lenteur : *délai dépassé en
+attendant `.entete-entite`*, et le parcours prend effectivement 17 s pour un
+budget de 20. J'ai d'abord annoncé au responsable une preuve « trop juste ».
+
+**C'était faux, et le harnais le disait déjà.** Le fichier de diagnostic que
+`parcours()` écrit à chaque échec portait l'écran au moment de la panne, et
+dessus, en clair : *« Le serveur a refusé cette création — processeur : il
+manque 0,25 CPU »*. Le parcours n'attendait pas un écran lent, il attendait un
+écran qui ne viendrait **jamais**.
+
+La cause est celle que le §29.2 proscrit : le parcours créait sa cellule avec la
+réservation par défaut — 0,50 CPU — et dépendait donc de ce que les parcours
+précédents avaient laissé au pool. Seul, il trouve la place ; en campagne, les
+créations qui le précèdent la lui prennent. Son propre commentaire raconte que
+deux tentatives antérieures avaient déjà buté là-dessus et cherché à fuir la
+dépendance en changeant de Spark — ce qui déplace le problème sans le traiter.
+
+**Deux corrections, et aucune n'est un délai rallongé** — le §18 l'interdit
+explicitement :
+
+- la cellule demande la réservation **minimale**, posée **au clavier** sur le
+  curseur (`Home`). Ce Spark n'est jamais démarré : il n'a besoin d'aucun
+  processeur, et le lui réserver était une dépendance gratuite ;
+- l'attente accepte l'écran du Spark **ou** le refus du serveur. Un refus se
+  présente désormais comme un refus, avec son texte dans le message d'échec, au
+  lieu de se déguiser en lenteur et de faire chercher une saturation.
+
+Une troisième preuve relit la réservation chez `sparkd` après la création : sans
+elle, le parcours repasserait au vert pour la mauvaise raison le jour où le
+curseur cesserait de répondre à `Home`, et la dépendance au pool reviendrait en
+silence.
+
+**Ce que je retiens** : j'ai proposé au responsable une explication — « test trop
+juste » — tirée d'une mesure de durée, alors que la preuve de la vraie cause
+était écrite dans le dépôt depuis le premier échec. Le harnais écrit ces
+diagnostics précisément pour qu'on les lise avant de conjecturer.

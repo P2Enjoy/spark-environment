@@ -5004,8 +5004,37 @@ test('un Spark ARRÊTÉ nomme l’arrêt, et ne trace pas une ligne à zéro', a
     await page.click('.titre-vue .bouton--primaire');
     await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
     await page.fill('#name', 'en-veille');
+
+    // Ce Spark ne sera JAMAIS démarré : il n'a besoin d'aucun processeur, et
+    // demander la réservation par défaut le faisait dépendre de ce que les
+    // parcours précédents avaient laissé au pool. Il a échoué ainsi dans la
+    // campagne du 2026-09-14 — « le serveur a refusé cette création :
+    // processeur, il manque 0,25 CPU » — alors qu'il passait seul. Le §29.2
+    // proscrit exactement cette dépendance à l'état laissé par un voisin.
+    //
+    // Au CLAVIER, sur le curseur : `Home` le met à son minimum. C'est un geste
+    // d'utilisateur, pas une valeur posée par script (CLAUDE.md §16).
+    await page.focus('#cpu_reservation');
+    await page.keyboard.press('Home');
+
     await page.click('button[type="submit"]');
-    await page.waitForSelector('.entete-entite', { timeout: 20000 });
+    // On attend l'écran du Spark OU le refus du serveur : sans cette seconde
+    // branche, un refus se présentait comme un délai dépassé sur `.entete-entite`
+    // et l'on cherchait une lenteur là où il y avait une capacité manquante.
+    await page.waitForSelector('.entete-entite, #formulaire-spark .refus',
+                               { timeout: 20000 });
+    const refus = await page.locator('#formulaire-spark .refus').count()
+      ? (await page.textContent('#formulaire-spark .refus')).trim()
+      : null;
+    assert.equal(refus, null, `la création a été refusée : ${refus}`);
+
+    // Le geste clavier a-t-il VRAIMENT porté ? Sans ce contrôle, la preuve
+    // passerait pour la mauvaise raison le jour où le curseur cesserait de
+    // répondre à `Home`, et la dépendance au pool reviendrait en silence.
+    const { corps: cree } = await pile.lireSparkd('/v1/sparks/en-veille');
+    assert.equal(cree.cpu_reservation, 0.25,
+      'le curseur devait être au minimum : ce Spark ne démarre jamais');
+
     await page.click('[data-commande="apply"]');
     await page.waitForSelector('[data-commande="start"]', { timeout: 30000 });
 
