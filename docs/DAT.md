@@ -7745,6 +7745,57 @@ locataire, ne pose pas ses variables, ne gère pas ses versions. Il rend la
 cellule **joignable et capable de faire tourner une pile Compose**, et s'arrête
 là — la frontière du §2 ne bouge pas.
 
+#### 42.4.1 La frontière se déplace d'un fichier, et voici lequel — SPK-96
+
+**Arbitrage du responsable, 2026-09-14.** Le §42.4 dit que l'amorçage rend la
+cellule « capable de faire tourner une pile Compose ». En mode **rootless**,
+cette phrase était fausse au sens du §41.2 — présent et inutilisable — et le
+compte rendu la prononçait quand même.
+
+**La cause, mesurée le 2026-09-07 et reconfirmée le 2026-09-14.** RootlessKit
+recopie le `/etc/resolv.conf` de la cellule dans son propre espace réseau. Ce
+fichier est un lien vers le `stub-resolv.conf` de `systemd-resolved` et porte
+`nameserver 127.0.0.53` — une boucle locale qui, **dans cet espace-là, n'existe
+pas** : le stub n'y écoute pas. Le démon rootless n'a donc aucun résolveur, et
+n'en a jamais eu. Aucune image ne peut être tirée d'un registre public.
+
+La résolution fonctionne partout ailleurs dans la cellule — depuis root, depuis
+le compte `spark-docker` — et l'amorçage lui-même n'a jamais eu besoin de
+résoudre depuis le démon : il installe `docker-ce` par le gestionnaire de
+paquets, qui passe, lui, par le résolveur de la cellule. Le mode **enraciné**
+n'est pas touché : son démon partage l'espace réseau de la cellule.
+
+**Le remède retenu, et les deux écartés.** L'amorçage écrit un
+`/etc/resolv.conf` **statique** visant `10.77.0.1`, la passerelle du bridge
+`sparkbr0` du §10.
+
+- **Ce n'est pas de la gestion de configuration** au sens du §42.4 : c'est
+  employer le réseau que le produit provisionne lui-même. `resolvectl` montre que
+  `systemd-resolved` interroge **déjà** cette adresse en amont. Ce que la cellule
+  résout ne change donc pas de destination — seulement de chemin, en cessant de
+  passer par un stub que le démon ne peut pas atteindre.
+- **Désactiver le stub** (`DNSStubListener=no`) est écarté : cela modifie la
+  configuration d'un service de la cellule, ce qui est plus intrusif que d'écrire
+  un fichier que la distribution invite explicitement à remplacer.
+- **N'agir que dans l'espace du démon** est écarté aussi, et c'est le plus
+  regrettable : c'était le plus fidèle au §42.4, mais le remède ne survit pas
+  nécessairement au redémarrage du service. Un remède qui se défait tout seul est
+  pire qu'un remède absent, parce qu'il fait croire que la chose est réglée.
+
+**Ce que le déplacement coûte, et il faut le nommer.** L'amorçage écrivait déjà
+dans la cellule — `authorized_keys`, `/etc/spark/env`, le briefing — mais jamais
+un fichier qui décide du comportement de TOUTE la cellule. C'est une frontière
+qui bouge, d'un fichier exactement, et pour une raison mesurée. Si le locataire
+réécrit ce fichier, l'amorçage le repose au prochain passage : c'est le §42.1,
+et cela se voit dans le compte rendu.
+
+**Ce que cela ne doit pas casser**, et qui est vérifié :
+
+- le mode **enraciné**, qui n'a pas ce défaut et ne reçoit donc rien ;
+- la résolution ordinaire de la cellule, dont dépend le gestionnaire de paquets ;
+- le §42.1 — un amorçage rejoué ne redémarre pas le démon pour poser un fichier
+  déjà correct.
+
 ### 42.5 Ce qui manquait au pilote : exécuter et LIRE
 
 Constat fait le 2026-08-20 en ouvrant l'unité. `IncusDriver.exec_command` poste
