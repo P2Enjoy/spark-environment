@@ -222,3 +222,44 @@ def test_une_requête_SANS_signature_n_en_porte_pas():
     assert signature.entete_present({}) is False
     assert signature.entete_present({"x-spark-signature": ""}) is False
     assert signature.entete_present({"x-spark-signature": "sig"}) is True
+
+
+# --- SPK-40 · le PRINCIPAL n'est pas l'acteur (§36.10.2 bis) ------------------
+#
+# @verifies docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.2 bis, §21.6.3
+
+
+def test_le_principal_est_l_identite_REDUITE():
+    """Un principal d'`allowed_signers` ne peut pas contenir d'espace.
+
+    Mesuré le 2026-09-14 en faisant signer un agent réel pour la première fois :
+    la Forge refusait TOUTE signature, parce qu'elle passait
+    « console/spark-experiment key=SHA256:… » à `ssh-keygen -Y verify -I`.
+    """
+    assert signature.principal(
+        "console/spark-experiment key=SHA256:Oa0szulf") == "console/spark-experiment"
+    # Sans empreinte — un tunnel local —, l'identité EST déjà le principal.
+    assert signature.principal("console/local") == "console/local"
+    assert signature.principal("") == ""
+
+
+def test_la_verification_emploie_le_PRINCIPAL_et_non_l_acteur(tmp_path):
+    """Le point qui décide : ce qui est signé garde l'identité complète, ce qui
+    NOMME le signataire est réduit. Les confondre refusait tout."""
+    fichier = tmp_path / "allowed_signers"
+    fichier.write_text("console/x namespaces=\"spark-audit\" ssh-ed25519 AAAA\n")
+    vus = {}
+
+    def faux(commande, **kwargs):
+        vus["commande"] = commande
+        class R:
+            returncode = 0
+            stderr = b""
+        return R()
+
+    signature.verifier(b"octets", "c2ln", "console/x key=SHA256:abc",
+                       fichier, executer=faux)
+    i = vus["commande"].index("-I")
+    assert vus["commande"][i + 1] == "console/x", (
+        f"l'identité passée à ssh-keygen doit être le principal : "
+        f"{vus['commande'][i + 1]!r}")

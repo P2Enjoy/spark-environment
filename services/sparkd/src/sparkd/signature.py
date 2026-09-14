@@ -108,6 +108,27 @@ def signataires(chemin: str | Path | None) -> Path | None:
     return fichier
 
 
+def principal(identite: str) -> str:
+    """L'identité réduite à ce qu'`allowed_signers` peut nommer (§36.10.2 bis).
+
+    @spec docs/BACKLOG.md#SPK-40 · docs/DAT.md §36.10.2 bis, §21.6.3
+
+    L'hôte console déclare `console/<serveur> key=SHA256:…`. Un **principal**
+    d'`allowed_signers` ne peut pas contenir d'espace — la liste des principaux
+    est séparée par des virgules —, de sorte que passer l'identité entière à
+    `ssh-keygen -Y verify -I` faisait échouer TOUTE signature dès que la console
+    connaissait son empreinte, c'est-à-dire dans toute exploitation normale.
+
+    L'empreinte n'est pas un nom : elle dit quelle clé a servi, et cela reste au
+    journal. Ce qui nomme le signataire est le serveur.
+
+    On coupe à la PREMIÈRE espace et non sur `key=` : ce qui suit l'identité est
+    une attribution, quelle qu'en soit la forme future, et un principal n'en
+    contiendra jamais.
+    """
+    return str(identite or "").split(" ", 1)[0]
+
+
 def verifier(octets: bytes, signature: str, identite: str,
              allowed_signers: str | Path | None,
              *, executer=subprocess.run) -> None:
@@ -133,7 +154,8 @@ def verifier(octets: bytes, signature: str, identite: str,
         chemin_sig.write_text(_armure(signature), "utf-8")
         vu = executer(
             ["ssh-keygen", "-Y", "verify", "-f", str(fichier),
-             "-I", identite, "-n", NAMESPACE, "-s", str(chemin_sig)],
+             # §36.10.2 bis : le PRINCIPAL, pas l'acteur entier.
+             "-I", principal(identite), "-n", NAMESPACE, "-s", str(chemin_sig)],
             input=octets, capture_output=True, timeout=20)
 
     if vu.returncode != 0:
