@@ -376,6 +376,24 @@ rien fait.
 Le vert ne s'écrit jamais sur ce que l'écran **suppose** : il s'écrit sur ce que
 la Forge a rendu (`DESIGN_SYSTEM.md` §14.9).
 
+**Complété le 2026-09-14, sur un cas qui a fait dévier la règle.** Le troisième
+état du canal d'alerte (SPK-62) — configuré, mais dont le gabarit nomme un champ
+qui n'existe pas — a été écrit avec une classe `erreur`, pour le peindre en
+danger « parce qu'il demande un geste ». Cette classe n'existait dans aucune
+feuille de style : le bloc s'affichait **sans aucun fond**, et c'est le §12.3 qui
+l'a relevé.
+
+La leçon n'est pas la classe manquante, c'est ce qui l'a fait écrire : **un
+défaut grave n'est pas un refus.** Le rouge répond à un geste que le serveur a
+refusé ; un défaut que le produit **constate** — un canal muet, une route qu'une
+cellule ne peut pas servir, une configuration qui n'enverra rien — est un fait
+signalé, donc l'accent, quelle que soit sa gravité. La gravité se dit par le
+**texte**, par `role="alert"` et par la place du bloc, jamais en empruntant la
+couleur d'un refus (`DESIGN_SYSTEM.md` §1.5).
+
+Il n'y a donc toujours que **trois** blocs d'issue, et aucun quatrième n'est à
+inventer.
+
 ### SPK-DS-09 · Une confirmation sensible n'a pas la couleur d'une confirmation destructive
 
 **Date** : 2026-08-20 · introduit par SPK-45.

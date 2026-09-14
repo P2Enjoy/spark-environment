@@ -57,6 +57,13 @@
   les postes qui l'ont posée.
 
 ### Corrigé
+- **SPK-62 — le troisième état du canal d'alerte s'affichait sans aucun fond.** Le
+  bloc « Le canal est configuré mais n'envoie rien » portait une classe `erreur`
+  qui n'existait dans aucune feuille de style : le message le plus grave de cet
+  écran était le seul rendu nu. Il prend l'**accent**, comme SPK-DS-08 l'exige —
+  le rouge répond à un geste que le serveur a refusé, et ici le serveur n'a rien
+  refusé : il constate une faute de configuration. Sa gravité se dit par le texte
+  et par `role="alert"`, jamais par la seule couleur.
 - **SPK-96 — un Spark amorcé en rootless ne pouvait télécharger aucune image.**
   Le compte rendu promettait pourtant une cellule « capable de faire tourner une
   pile Compose ». Cause mesurée : les profils AppArmor `rootlesskit` et

@@ -2876,6 +2876,20 @@ avant la première ligne de code.
 
   Ce n'est plus « une action humaine » qui manque : c'est du code, et il est
   spécifié.
+- **Corrigé le 2026-09-14** : le troisième état — canal configuré, gabarit
+  nommant un champ inconnu — portait une classe `erreur` **qui n'existe dans
+  aucune feuille de style**. Le bloc s'affichait sans fond : le message le plus
+  grave de l'écran était le seul rendu nu, et la preuve du §12.3 était rouge. Le
+  remède n'est pas de peindre `erreur` en rouge : SPK-DS-08 réserve le rouge au
+  **refus du serveur**, et ici rien n'est refusé — le produit **constate** une
+  faute de configuration. Le bloc prend donc l'accent, et sa gravité reste portée
+  par le texte et `role="alert"`. La règle SPK-DS-08 est complétée de ce cas, qui
+  l'avait fait dévier, et une preuve pinne la classe pour qu'on n'y revienne pas.
+  Vérifié à l'écran depuis l'accueil, sur une pile de développement montée avec
+  un gabarit fautif — `SPARKD_NOTIFY_URL=… SPARKD_NOTIFY_TEMPLATE='{"content":
+  "{champ_inconnu}"}' ./scripts/dev.sh --state … up` — puis Forge au clic :
+  `spk62-canal-mal-configure.jpg` et `-mobile.jpg`, console vierge, aucun
+  débordement à 390 px.
 
 ### [x] SPK-63 · Frappe du nom sur les gestes destructifs
 

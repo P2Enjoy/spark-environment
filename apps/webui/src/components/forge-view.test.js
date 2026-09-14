@@ -810,7 +810,9 @@ test('pendant une mise à jour, c’est la SAUVEGARDE qui est en cours d’abord
 // --- SPK-62 · le troisième état du canal (§47.3.1) ---------------------------
 //
 // @verifies docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.1, §14.6 ·
-//           docs/DESIGN_SYSTEM.md (danger = demande un geste)
+//           docs/DESIGN_SYSTEM_APP.md SPK-DS-08 (trois blocs d'issue, et le
+//           rouge n'en est qu'un) · docs/DESIGN_SYSTEM.md §12.3 (la classe non
+//           générée), §1.5 (l'information ne repose jamais sur la couleur)
 
 test('un canal MAL CONFIGURÉ n’est ni muet ni en échec, et le dit', () => {
   const html = renderNotify({
@@ -825,6 +827,15 @@ test('un canal MAL CONFIGURÉ n’est ni muet ni en échec, et le dit', () => {
     'un canal mal configuré n’a rien tenté : ce n’est pas un échec d’envoi');
   assert.ok(!/Aucun canal n’est configuré/.test(html),
     'quelqu’un a voulu un canal : ce n’est pas « aucun canal »');
+
+  // SPK-DS-08 : le rouge est réservé au REFUS DU SERVEUR, et ici le serveur n'a
+  // rien refusé — il constate une faute de configuration. Ce bloc portait une
+  // classe `erreur` qui n'existait dans aucune feuille de style : il s'affichait
+  // sans aucun fond. Pinner la classe ici empêche d'y revenir en croyant bien
+  // faire, ce que le nom « erreur » invite à faire.
+  assert.match(html, /class="avertissement" role="alert"/);
+  assert.ok(!/class="(refus|erreur)"/.test(html),
+    'ni refus ni classe inventée : le rouge dit qu’un geste a été refusé');
 });
 
 test('sans gabarit fautif, le canal garde ses trois autres états', () => {

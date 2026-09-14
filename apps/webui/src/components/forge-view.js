@@ -700,13 +700,22 @@ export function renderNotify(notify) {
   // un canal — mais son gabarit nomme un champ que le §47.4 ne publie pas, et
   // le canal n'a donc rien tenté. Ce n'est ni « muet » ni « en échec », et le
   // peindre comme l'un des deux ferait lire « tout va bien » sur une Forge que
-  // personne ne surveille (§14.6). En DANGER, parce qu'il demande un geste.
+  // personne ne surveille (§14.6).
+  //
+  // **En ACCENT, et non en danger** (`DESIGN_SYSTEM_APP.md` SPK-DS-08). Ce bloc
+  // portait une classe `erreur` qui n'existait dans aucune feuille de style :
+  // il s'affichait donc sans aucun fond, et le §12.3 l'a relevé. Le remède n'est
+  // pas de peindre `erreur` en rouge — SPK-DS-08 réserve le rouge au **refus du
+  // serveur**, et ici le serveur n'a rien refusé : il constate une faute de
+  // configuration. C'est exactement « un fait signalé qui n'est ni un refus ni
+  // un succès », donc l'accent. L'urgence est portée par le texte et par
+  // `role="alert"`, jamais par la seule couleur (`DESIGN_SYSTEM.md` §1.5).
   if (notify.misconfigured) {
     const champs = (notify.unknown_fields ?? []).map(echapper).join(', ');
     return `
 <section class="carte bloc" aria-labelledby="titre-notify">
   ${entete}
-  <p class="erreur" role="alert"><strong>Le canal est configuré mais n’envoie
+  <p class="avertissement" role="alert"><strong>Le canal est configuré mais n’envoie
   rien.</strong> Son gabarit nomme ${champs ? `un champ qui n’existe pas :
   <code>${champs}</code>` : 'un champ qui n’existe pas'}. Aucune alerte n’a été
   tentée — le défaut est vu <strong>avant</strong> l’incident, et non pendant.</p>

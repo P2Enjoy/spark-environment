@@ -10863,3 +10863,34 @@ l'agent avait supposés : le réseau sortant, ce qui relance la pile au redémar
 et où vivent les volumes.
 
 Contrat aux §44.2 bis et §44.2 ter, table du §44.2 complétée.
+
+---
+
+## 2026-09-14 · Le message le plus grave de l'écran était le seul rendu nu
+
+La preuve du §12.3 — « toute classe littérale employée par un composant EXISTE
+dans le CSS » — est passée au rouge sur `erreur (forge-view.js)`. Le bloc du
+troisième état du canal d'alerte, celui qui annonce qu'une Forge n'est surveillée
+par personne, portait une classe qu'aucune feuille de style ne définit. Il
+s'affichait donc **sans aucun fond**, au milieu d'une carte où tout le reste est
+peint.
+
+**Le remède évident était le mauvais.** Le commentaire du code disait l'intention
+— « en DANGER, parce qu'il demande un geste » —, et il aurait suffi de définir
+`.erreur` en rouge. C'est SPK-DS-08 qui l'interdit, et pour une raison qui tient :
+`.refus` est **rouge parce que le serveur a refusé un geste**. Ici, aucun geste
+n'a été refusé ; le produit **constate** une faute de configuration. Peindre ce
+bloc en rouge aurait fait dire à la couleur deux choses différentes selon
+l'écran, et la couleur aurait cessé d'informer.
+
+Le bloc prend donc l'accent — « un fait signalé qui n'est ni un refus ni un
+succès », la définition exacte de SPK-DS-08 — et sa gravité reste portée par le
+texte, par `role="alert"` et par sa place, comme le §1.5 l'exige de toute
+information.
+
+**La règle est complétée de ce cas**, parce qu'un défaut grave ressemble
+suffisamment à un refus pour qu'on s'y trompe une seconde fois, et une preuve
+pinne désormais la classe de ce bloc précis.
+
+Vérifié à l'écran, depuis l'accueil et au clic, sur une pile de développement
+montée avec un gabarit réellement fautif.
