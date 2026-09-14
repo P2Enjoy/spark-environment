@@ -34,6 +34,7 @@ import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } fr
 import { DEPOT_VIDE, libelleEngagement, libelleIndication }
   from './components/forge-depot.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
+import { ALERTES_VIDE, renderAlertes } from './components/forge-alertes.js';
 import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
   from './components/forge-dns.js';
 import { renderManuel } from './components/manuel-view.js';
@@ -121,6 +122,8 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // Forge, parce qu'elle couvre TOUS les Sparks et les noms qui
                // n'appartiennent à aucun (§38.8.5).
                forgeDns: { ...FORGE_DNS_VIDE, selection: [] },
+               // SPK-62 · §47.3.0 bis : l'onglet des canaux d'alerte.
+               alertes: { ...ALERTES_VIDE },
                catalogue: { status: 'loading', images: [], error: null,
                             ui: { ...CATALOGUE_VIDE, values: { ...CATALOGUE_VIDE.values } } },
                // SPK-92 · §33.6 : ce que le DÉPÔT publie, lu à l'ouverture de la
@@ -162,7 +165,7 @@ function marquerNavigation() {
   const courant = etat.route === 'serveurs' ? '#/serveurs'
     : etat.route === 'manuel' ? '#/manuel'
     : ['forge', 'images', 'environnement', 'journal', 'forgedns',
-       'supervision'].includes(etat.route) ? '#/forge' : '#/sparks';
+       'supervision', 'alertes'].includes(etat.route) ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -253,6 +256,8 @@ function peindre() {
       ? renderJournalForgePage(etat.journal)
       : etat.route === 'forgedns'
       ? renderOngletsForge('#/forge/dns') + renderForgeDns(etat.forgeDns)
+      : etat.route === 'alertes'
+      ? renderOngletsForge('#/forge/alertes') + renderAlertes(etat.alertes)
       : etat.route === 'supervision'
       ? renderOngletsForge('#/forge/supervision')
         + renderSupervisionForge(etat.supervision)
@@ -381,6 +386,16 @@ function brancher() {
       });
     }
     formulairePlanForge.addEventListener('submit', planifierForge);
+  }
+  // SPK-62 · §47.3.0 bis : l'onglet des canaux. `novalidate` sur le formulaire
+  // et la soumission gardée ici : le refus qui compte est celui du serveur, pas
+  // celui du navigateur (§1.5 bis).
+  const formulaireAlertes = racine.querySelector('#formulaire-alertes');
+  if (formulaireAlertes) {
+    formulaireAlertes.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      enregistrerAlertes(formulaireAlertes);
+    });
   }
   const acceptationInstallation = racine.querySelector('[data-installation-accepted]');
   const confirmationInstallation = racine.querySelector('#confirmation-stockage-forge');
@@ -3882,6 +3897,56 @@ function brancherJournal() {
  * @spec docs/BACKLOG.md#SPK-77 · docs/DAT.md §38.8, §38.1.1 (les trois états
  *       d'un relevé qui ne rend rien)
  */
+/**
+ * L'onglet des canaux d'alerte (SPK-62, §47.3.0 bis).
+ *
+ * Deux lectures en une : la CONFIGURATION, qui vit au registre, et l'ÉTAT VIVANT
+ * du canal — compteurs, dernier motif, et d'où vient ce qui veille. Les
+ * confondre ferait croire qu'un canal enregistré est un canal qui marche, ce
+ * qui est précisément le défaut mesuré le 2026-09-14.
+ */
+async function chargerAlertes() {
+  etat.route = 'alertes';
+  etat.alertes = { ...ALERTES_VIDE, status: 'loading' };
+  peindre();
+  try {
+    const corps = await api('/v1/notify/channels');
+    etat.alertes = { ...ALERTES_VIDE, status: 'ready',
+                     config: corps, live: corps.live ?? null };
+  } catch (erreur) {
+    etat.alertes = { ...ALERTES_VIDE, status: 'error', error: erreur.message };
+  }
+  peindre();
+}
+
+/**
+ * Enregistre la configuration. Le mot de passe part à CHAQUE écriture (§47.3.3).
+ *
+ * Le champ d'adresse vide CONSERVE l'URL en place : on ne la retape pas pour
+ * changer un gabarit, et elle ne s'affiche jamais pour qu'on puisse la recopier.
+ */
+async function enregistrerAlertes(formulaire) {
+  const donnees = new FormData(formulaire);
+  const url = String(donnees.get('webhook_url') ?? '').trim();
+  const changements = {
+    webhook_enabled: donnees.get('webhook_enabled') ? 1 : 0,
+    webhook_template: String(donnees.get('webhook_template') ?? '').trim(),
+    ...(url ? { webhook_url: url } : {}),
+  };
+  const { ok, corps } = await appel('PUT', '/v1/notify/channels',
+    { password: String(donnees.get('password') ?? ''), ...changements });
+  if (!ok) {
+    // §1.5 bis : le refus RÉEL du serveur, mot pour mot, et la saisie reste.
+    etat.alertes = { ...etat.alertes, refus: corps?.detail?.message
+      ?? corps?.message ?? 'La Forge a refusé cette configuration.', enregistre: null };
+    peindre();
+    return;
+  }
+  etat.alertes = { ...etat.alertes, config: corps, live: corps.live ?? null,
+                   refus: null, enregistre: 'Configuration enregistrée.' };
+  peindre();
+}
+
 async function chargerInventaireDns() {
   etat.route = 'forgedns';
   etat.forgeDns = { ...FORGE_DNS_VIDE, chargement: true, selection: [] };
@@ -4411,6 +4476,7 @@ function router() {
   if (chapitre) return chargerManuel(chapitre[1] ?? null);
   if (location.hash === '#/serveurs') return chargerServeurs();
   if (location.hash === '#/forge/dns') return chargerInventaireDns();
+  if (location.hash === '#/forge/alertes') return chargerAlertes();
   if (location.hash === '#/forge/journal') return chargerJournal();
   if (location.hash === '#/forge/environnement') return chargerCatalogueEnv();
   if (location.hash === '#/forge/images') return chargerCatalogue();

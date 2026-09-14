@@ -38,10 +38,13 @@ test('le journal est un onglet de l’FORGE, à côté de Pools et Images', () =
   // SPK-77 l'inventaire DNS après lui (§38.8.5) : le DNS décrit la Forge, et la
   // page couvre les noms qui n'appartiennent à aucun Spark. SPK-93 y ajoute la
   // supervision (§52.11), pour la même raison : elle décrit la Forge — la somme
-  // de ses Sparks et leur répartition —, pas un Spark en particulier.
+  // de ses Sparks et leur répartition —, pas un Spark en particulier. SPK-62 y
+  // ajoute les alertes (§47.3.0 bis), AVANT le journal : on règle ce qui veille,
+  // puis on lit ce qui s'est passé.
   assert.deepEqual(chemins, ['#/forge', '#/forge/images',
                              '#/forge/environnement', '#/forge/dns',
-                             '#/forge/supervision', '#/forge/journal']);
+                             '#/forge/supervision', '#/forge/alertes',
+                             '#/forge/journal']);
 });
 
 test('l’écran dit qu’il couvre TOUS les Sparks', () => {

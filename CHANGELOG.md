@@ -28,6 +28,15 @@
   contrôle ne pose qu'un filtre d'**entrée** vers la Forge ; il ne filtre aucune
   sortie. Le briefing le dit, pour que la question parte au bon endroit au lieu
   de faire chercher un réglage produit qui n'existe pas.
+- **SPK-62 — un onglet « Alertes » sous la Forge, qui rend le canal visible et
+  réglable.** Il montre ce qui ne se lit nulle part ailleurs : d'où vient ce qui
+  veille — une Forge peut encore tourner sur la variable d'environnement —, et
+  lequel des **quatre** états le canal occupe, jamais confondus : aucun canal,
+  configuré mais désactivé, actif et sain, actif mais en échec. L'adresse du
+  canal ne s'y affiche pas, même à son propriétaire : seul son hôte, assez pour
+  le reconnaître et pas assez pour s'en servir. **Aucun bouton « essayer »** —
+  un canal qu'on peut faire parler sur commande apprend à son destinataire que
+  certains messages ne comptent pas.
 - **SPK-62 — la configuration du canal d'alerte quitte les variables
   d'environnement pour le REGISTRE.** Une variable se règle par un redémarrage du
   service et ne se voit nulle part : un canal qu'on ne peut ni voir ni éprouver

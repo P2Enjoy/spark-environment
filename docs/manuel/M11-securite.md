@@ -89,7 +89,31 @@ Le message nomme le geste, qui l'a demandé et sur quoi il a porté. Il ne conti
 **jamais** de secret : les valeurs d'un geste — corps de clé, mots de passe — ne
 sont pas envoyées du tout.
 
-Cela se règle avec la variable `SPARKD_NOTIFY_URL` sur la Forge.
+Cela se règle depuis la console : **Forge → Alertes**. L'écran y montre ce que
+vous ne pouvez lire nulle part ailleurs — d'où vient ce qui veille, et lequel des
+quatre états le canal occupe : aucun canal, configuré mais désactivé, actif et
+sain, actif mais en échec. Les confondre ferait lire « tout va bien » sur une
+Forge que personne ne surveille.
+
+**Toute modification demande un mot de passe**, fixé au premier usage. Il est
+exigé à chaque fois : il n'y a pas de session déverrouillée. Le motif tient en
+une phrase — qui peut couper le témoin en silence peut agir sans témoin, et
+c'est le premier geste qu'on tenterait. **Désactiver un canal envoie d'ailleurs
+une dernière alerte par ce canal**, pendant qu'il fonctionne encore.
+
+**L'adresse du canal ne s'affiche jamais**, pas même à vous : qui la détient peut
+écrire à votre place. L'écran en montre l'hôte — assez pour reconnaître le canal,
+pas assez pour s'en servir. Laisser le champ vide conserve celle qui est posée.
+
+**Il n'y a pas de bouton « essayer ».** Une alerte hors bande sert à détecter, et
+un canal qu'on peut faire parler sur commande apprend à son destinataire que
+certains messages ne comptent pas. Pour l'éprouver, faites un vrai geste
+réversible — lever puis réarmer la protection d'un Spark.
+
+La variable `SPARKD_NOTIFY_URL` existe encore, mais elle n'est plus le chemin
+normal : elle sert de repli aux Forges dont la configuration n'a pas été reprise,
+et **le registre l'emporte** dès qu'un canal est posé depuis l'écran. L'onglet le
+dit lorsque c'est le cas.
 
 **La plupart des services veulent le message à leur propre forme.** Discord
 attend `{"content": …}`, Slack `{"text": …}` ; un message envoyé autrement est
