@@ -1460,3 +1460,62 @@ def test_les_trois_derivees_RHEL_restent_sans_Docker_par_CONSTAT(tmp_path):
     # §42.9.2 bis, celui par lequel elles se déclarent.
     assert "fedora" not in dnf.depot_docker_parents, (
         "un ID_LIKE=fedora ne vaut pas autorisation : Oracle et Amazon s'en réclament")
+
+
+# --- SPK-96 · le résolveur du démon rootless (§42.4.1) -----------------------
+#
+# @verifies docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1 (la frontière se
+#           déplace d'un fichier), §10 (le bridge et sa passerelle), §42.1 (un
+#           amorçage rejoué ne refait pas ce qui est fait), §41.2 (présent et
+#           inutilisable), §42.5 (un code non nul sur une pose est un échec)
+
+
+def test_le_resolveur_n_est_donne_QU_AU_rootless():
+    """Le mode enraciné n'a pas ce défaut : son démon partage l'espace réseau
+    de la cellule. Lui poser le fichier serait agir sans motif."""
+    assert "resolv.conf" in bootstrap.SCRIPT_ROOTLESS
+    enracine = "".join(bootstrap.script_docker())
+    assert "resolv.conf" not in enracine, (
+        "l'enraciné ne doit RIEN recevoir : il résout déjà")
+
+
+def test_l_adresse_du_resolveur_est_LUE_dans_la_cellule_et_non_ecrite():
+    """Une adresse en dur serait une seconde table, fausse le jour où le bridge
+    change. La cellule lit la passerelle de sa propre route par défaut (§10)."""
+    script = bootstrap.SCRIPT_ROOTLESS
+    assert "ip -4 route show default" in script
+    assert "10.77.0.1" not in script, (
+        "l'adresse de la passerelle ne doit être écrite NULLE PART dans le code")
+
+
+def test_le_LIEN_vers_le_stub_est_retire_et_non_ecrit_a_travers():
+    """Écrire à travers le lien écrirait dans le fichier que `systemd-resolved`
+    régénère : le geste se déferait tout seul, ce qui est pire que rien."""
+    script = bootstrap.SCRIPT_ROOTLESS
+    assert "rm -f /etc/resolv.conf" in script
+    assert "> /etc/resolv.conf" in script
+
+
+def test_la_passerelle_est_MESUREE_avant_d_etre_retenue():
+    """On ne suppose pas qu'une passerelle résout : on le vérifie, et on
+    RESTAURE si elle ne résout pas. Une cellule qui ne résout plus rien serait
+    bien pire que le défaut qu'on vient corriger."""
+    script = bootstrap.SCRIPT_ROOTLESS
+    assert "getent hosts" in script
+    assert "resolv.conf.avant-spark" in script
+    assert "cp -a /etc/resolv.conf.avant-spark /etc/resolv.conf" in script
+    # Et l'échec est FRANC : le §42.5 en fait un amorçage échoué.
+    assert "exit 1" in script
+
+
+def test_un_second_amorcage_ne_REDEMARRE_pas_le_demon(monkeypatch):
+    """§42.1. Le redémarrage est gardé par le fait que le fichier a CHANGÉ ;
+    sans ce garde, tout amorçage rejoué couperait les piles du locataire."""
+    script = bootstrap.SCRIPT_ROOTLESS
+    assert 'if [ "$resolv_pose" = 1 ]; then' in script
+    debut = script.index('if [ "$resolv_pose" = 1 ]')
+    assert "systemctl --user restart docker" in script[debut:], (
+        "le redémarrage doit être DANS la garde, pas à côté")
+    avant = script[:debut]
+    assert "systemctl --user restart docker" not in avant, (
+        "aucun redémarrage inconditionnel ne doit exister")

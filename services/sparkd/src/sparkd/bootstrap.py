@@ -1027,9 +1027,57 @@ SCRIPT_ROOTLESS = APT + (
     f"sed -i '/^{COMPTE_ROOTLESS}:/d' /etc/subuid /etc/subgid\n"
     f"printf '%s:%s:%s\\n' {COMPTE_ROOTLESS} \"$subuid_start\" \"$subuid_count\" >> /etc/subuid\n"
     f"printf '%s:%s:%s\\n' {COMPTE_ROOTLESS} \"$subgid_start\" \"$subgid_count\" >> /etc/subgid\n"
+    # SPK-96 · §42.4.1 : DONNER UN RÉSOLVEUR AU DÉMON.
+    #
+    # RootlessKit recopie le `resolv.conf` de la cellule dans son espace réseau.
+    # Celui de la distribution est un lien vers le stub de `systemd-resolved` et
+    # porte `127.0.0.53` — une boucle locale qui, DANS CET ESPACE, n'existe pas.
+    # Le démon n'a donc aucun résolveur et ne peut tirer aucune image, alors que
+    # le compte rendu promet une cellule « capable de faire tourner une pile
+    # Compose ». C'est le §41.2 : présent et inutilisable.
+    #
+    # L'adresse n'est pas ÉCRITE ici : elle est LUE dans la cellule, comme la
+    # passerelle par défaut de sa route. C'est le réseau que le produit
+    # provisionne lui-même (§10), et c'est déjà l'amont que `systemd-resolved`
+    # interroge. Une adresse en dur serait une seconde table, fausse le jour où
+    # le bridge change.
+    "passerelle=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')\n"
+    "[ -n \"$passerelle\" ] || { echo 'aucune passerelle par defaut : pas de resolveur a donner au demon' >&2; exit 1; }\n"
+    "resolv_pose=0\n"
+    "attendu=\"nameserver $passerelle\"\n"
+    "actuel=$(sed -n '/^nameserver/p' /etc/resolv.conf 2>/dev/null | head -1)\n"
+    # §42.1 : déjà correct, on ne touche à RIEN — ni au fichier, ni au démon.
+    "if [ \"$actuel\" != \"$attendu\" ]; then\n"
+    "  cp -a /etc/resolv.conf /etc/resolv.conf.avant-spark 2>/dev/null || true\n"
+    # Le lien vers le stub doit DISPARAÎTRE : écrire à travers lui écrirait dans
+    # le fichier que `systemd-resolved` régénère, et le geste se déferait seul.
+    "  rm -f /etc/resolv.conf\n"
+    "  { echo '# Pose par l amorcage Spark : le demon rootless ne joint pas le stub local.'\n"
+    "    echo '# docs/DAT.md 42.4.1'\n"
+    "    echo \"$attendu\"; } > /etc/resolv.conf\n"
+    # On MESURE que la passerelle résout vraiment, au lieu de le supposer. Si
+    # elle ne résout pas, on remet ce qui était là : une cellule qui ne résout
+    # plus rien serait bien pire que le défaut qu'on vient corriger.
+    "  if getent hosts download.docker.com >/dev/null 2>&1; then\n"
+    "    resolv_pose=1\n"
+    "  else\n"
+    "    rm -f /etc/resolv.conf\n"
+    "    cp -a /etc/resolv.conf.avant-spark /etc/resolv.conf 2>/dev/null || true\n"
+    "    echo \"la passerelle $passerelle ne resout pas : resolv.conf restaure\" >&2\n"
+    "    exit 1\n"
+    "  fi\n"
+    "fi\n"
     f"runuser -u {COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR=/run/user/$uid "
     "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus "
     "dockerd-rootless-setuptool.sh install\n"
+    # Un démon DÉJÀ en marche a copié l'ancien `resolv.conf` à sa création :
+    # corriger le fichier ne le corrige pas lui. Il n'est redémarré que si le
+    # fichier a CHANGÉ — un second amorçage n'y touche donc pas (§42.1).
+    "if [ \"$resolv_pose\" = 1 ]; then\n"
+    f"  runuser -u {COMPTE_ROOTLESS} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus "
+    "systemctl --user restart docker 2>/dev/null || true\n"
+    "fi\n"
 )
 
 
