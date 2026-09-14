@@ -3150,14 +3150,43 @@ par cette ligne de base : la reprise rootless omettait `systemd-container`, et
 deux preuves E2E comparaient l'audit au nom mutable du Spark au lieu de son ID
 immuable.
 
-### [~] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
+### [x] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
 
 **Arbitrage du responsable, 2026-09-14 : l'installation PREND le réseau en
-charge.** `scripts/install-serveur.sh` crée le bridge `sparkbr0` et pose la règle
-dans le même geste ; OP-02 disparaît du contrat de déploiement. Motif : une règle
-qui ne vit que dans un runbook dérive, et une installation qui n'installe pas le
-réseau n'est pas reproductible au sens du §14. La voie « le préflight la pose
-lui-même » est écartée : un contrôle qui répare n'est plus un contrôle.
+charge.** Motif : une règle qui ne vit que dans un runbook dérive. La voie « le
+préflight la pose lui-même » est écartée — un contrôle qui répare n'est plus un
+contrôle.
+
+**Et en relisant le code pour l'y ajouter, on a trouvé qu'elle y était déjà, et
+qu'elle avait DÉJÀ été posée par l'installation sur la Forge réelle.** Le
+backlog affirmait le contraire parce qu'il regardait `scripts/install-serveur.sh`,
+qui n'est qu'un relais local pour un développeur. Le véritable installateur est
+`forge_install.phase_foundation`, et le relevé du 2026-09-14 le prouve :
+
+```
+/etc/sparkd/firewall.nft          -rw-r--r-- root root 383  Aug 30 22:01
+spark-firewall.service            enabled
+nft list tables                   table inet incus
+                                  table inet spark_filter
+incus network get … input_policy  drop
+```
+
+**`Aug 30 22:01` est l'heure de l'installation**, et `spark_filter` est la table
+que la phase écrit — jamais celle d'Incus. La règle n'a donc pas été posée par
+OP-11 à la main : elle l'a été par l'installation, et elle a survécu au
+redémarrage du 2026-09-14 (`NET-REMONTEE` en « ok » au retour).
+
+**Les quatre sens de la DoD, mesurés le 2026-09-14** — car la moitié qui manque
+d'ordinaire est celle du produit lui-même :
+
+| Depuis | Vers | Attendu | Mesuré |
+|---|---|---|---|
+| un Spark | `10.77.0.1:22` (le `sshd` de la Forge) | refusé | **refusé** |
+| un Spark | `10.77.0.1:9876` (`sparkd`) | refusé | **refusé** |
+| un Spark | DNS, puis HTTPS sortant | intacts | **intacts** |
+| la Forge | `:22` d'un Spark | doit marcher | **marche** |
+
+Le durcissement ne casse donc pas ce qu'il protège, dans les deux sens.
 
 Audit mené sur la Forge réelle pendant la mise en place de `helo`. La posture est
 bonne sur l'essentiel — seuls `22`, `80`, `443` répondent depuis l'extérieur,
@@ -3234,11 +3263,10 @@ opérationnelles et le message post-restauration ont été alignés sur cet
 interpréteur empaqueté : `python3 -m sparkd.preflight` aurait échoué sur la Forge
 réelle.
 
-- **Reste avant `[x]`, et c'est un ARBITRAGE, pas une mesure** : la regle n'est
-  pas posee par `scripts/install-serveur.sh`, qui n'installe pas le reseau — le
-  bridge nait d'OP-02, a la main. Poser la regle la ou le bridge nait demande
-  d'abord de **decider si l'installation prend le reseau en charge**, ce qui
-  deborde cette unite. **Attend une decision du responsable.**
+- **Ce point n'a plus lieu d'être**, et il était faux : il affirmait que la règle
+  n'est pas posée par l'installation, en regardant le mauvais script. Le §48.2 bis
+  décrit désormais le mécanisme réel, et le relevé ci-dessus le prouve sur la
+  Forge.
 
 ### [x] SPK-56 · L'écran nomme, le manuel explique — et le manuel devient joignable
 

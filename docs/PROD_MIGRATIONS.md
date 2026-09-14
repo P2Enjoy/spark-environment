@@ -381,6 +381,10 @@ Ce qui reste  : rien à faire sur cette Forge. Le README porte le schéma de
 
 ### OP-02 · Restreindre la plage DHCP dynamique du bridge privé — **APPLIQUÉ le 2026-08-19**
 
+> **Une installation neuve n'en a plus besoin** (constaté le 2026-09-14) :
+> `forge_install.phase_foundation` crée le bridge avec cette plage. Conservé pour
+> les Forges antérieures, et pour mémoire.
+
 > Relevé : `ipv4.dhcp.ranges = 10.77.0.240-10.77.0.254`. Contrôle `NET-DHCP`.
 > Conservé ici pour mémoire ; il n'y a rien à faire.
 
@@ -693,6 +697,12 @@ Variable      : aucune.
 
 ### OP-11 · Fermer la remontée d'un Spark vers sa Forge — **APPLIQUÉ le 2026-08-21**
 
+> **Une installation neuve n'en a plus besoin** (constaté le 2026-09-14) :
+> `forge_install.phase_foundation` pose la règle, la persiste dans sa propre table
+> `inet spark_filter` par une unité systemd activée, et marque le réseau. Sur la
+> Forge de test, `/etc/sparkd/firewall.nft` date de l'installation — `Aug 30
+> 22:01` — et non de cette opération. Conservé pour les Forges antérieures.
+
 **Appliqué et vérifié sur la Forge de validation**, sur instruction explicite du
 responsable. Vérification depuis le Spark `helo` : `10.77.0.1:22` **refusé** la
 ou il repondait, `9876` toujours refuse, DNS resolu, sortie HTTPS en 200.
@@ -784,6 +794,10 @@ Variable      : aucune.
 ```
 
 ### OP-12 · Desactiver X11Forwarding sur la Forge — **APPLIQUE le 2026-08-21**
+
+> **Une installation neuve n'en a plus besoin** (constaté le 2026-09-14) :
+> `forge_install.phase_foundation` écrit `X11Forwarding no` dans
+> `sshd_config.d/90-spark.conf`, après un `sshd -t`. Conservé pour mémoire.
 
 Applique sur la Forge de validation : `X11Forwarding no`, configuration validee
 par `sshd -t` **avant** le rechargement — recharger une configuration invalide
