@@ -7792,14 +7792,44 @@ Incus, sur un noyau où `kernel.apparmor_restrict_unprivileged_userns = 1`, il n
 l'est pas : la classe `net` y est évaluée, et aucune règle `network` ne la
 satisfait.
 
-**Le remède, mesuré.** Une ligne, dans le fichier d'extension que le profil
-lui-même prévoit :
+**Le remède, mesuré — et cherché AU PLUS ÉTROIT.** Deux profils, et non un :
+la pile rootless en traverse deux, `rootlesskit` pour le démon et `slirp4netns`
+pour le réseau en espace utilisateur. Chacun déclare son propre fichier
+d'extension, et c'est là qu'on écrit :
 
-    /etc/apparmor.d/local/rootlesskit :
-        network,
+    /etc/apparmor.d/local/rootlesskit
+    /etc/apparmor.d/local/slirp4netns :
+        network inet,
+        network inet6,
 
-puis `apparmor_parser -r /etc/apparmor.d/rootlesskit` et un redémarrage du démon.
-Éprouvé sur la Forge de test : `docker pull alpine:3.21` **aboutit**.
+puis `apparmor_parser -r` sur chacun, et un redémarrage du démon.
+
+**La progression des mesures est conservée, parce qu'elle dit pourquoi cette
+règle-là :**
+
+| Règle | `docker pull` | un conteneur qui sort |
+|---|---|---|
+| rien (état livré) | **échoue** — `socket: permission denied` | — |
+| `network,` sur `rootlesskit` seul | **aboutit** | non éprouvé |
+| `network inet, inet6,` sur `rootlesskit` seul | **aboutit** | **échoue** — `bad address` |
+| + `netlink`, + `unix` sur `rootlesskit` seul | aboutit | **échoue** — le journal accuse `slirp4netns` |
+| `network inet, inet6,` sur **les deux** | **aboutit** | **aboutit** |
+
+La règle retenue est donc la dernière ligne, et non `network,` : elle n'ouvre
+que les familles IP. `AF_PACKET` — la capture et la forge de paquets bruts —
+reste refusée à la pile rootless, alors que `network,` l'aurait accordée.
+
+**Ce que cela n'élargit pas, et c'est le point.** L'init de la cellule tourne
+`unconfined` : son root peut déjà créer n'importe quel socket, y compris ceux
+que cette règle n'accorde pas. Le profil `rootlesskit` était donc **plus strict
+que la cellule qui le contient**, et la règle ne fait que corriger cette
+incohérence — elle ne dépasse jamais ce que la cellule permet déjà. Le locataire,
+root chez lui, pouvait d'ailleurs écrire ces deux fichiers lui-même : l'amorçage
+ne lui accorde rien qu'il ne puisse s'accorder.
+
+La frontière qui compte — la cellule Incus — ne bouge pas. Et le mode enraciné
+ne reçoit rien : en rootless, l'amorçage a justement **arrêté** le démon
+enraciné (§42.2), de sorte que la règle ne donne aucun accès à celui-ci.
 
 **Et le `resolv.conf` d'origine suffit.** Une fois le profil ouvert, la cellule a
 été remise EXACTEMENT dans l'état que la distribution livre — lien vers
@@ -7813,11 +7843,17 @@ comportement de toute la cellule **sans corriger quoi que ce soit**. Une preuve
 garde ce constat, pour qu'il ne soit pas réécrit de bonne foi la prochaine fois
 que quelqu'un relira le symptôme.
 
-**Ce qui reste à trancher, et c'est une frontière.** Ouvrir le profil AppArmor
-d'une cellule est plus intrusif qu'écrire un fichier de configuration : c'est
-toucher à ce qui la confine. Le §42.4 ne le permet pas de lui-même, et l'arbitrage
-rendu le 2026-09-14 portait sur un diagnostic qui s'est révélé faux. La décision
-est donc à reprendre.
+**Arbitrage du responsable, 2026-09-14, rendu sur le diagnostic corrigé** :
+l'amorçage pose la règle, en mode rootless uniquement, et **la plus petite qui
+fonctionne** — les mesures ci-dessus sont la justification de son périmètre. Le
+motif tient en une phrase : un mode rootless qui ne peut tirer aucune image ne
+sert à rien, et le compte rendu promettait pourtant une cellule capable de faire
+tourner une pile Compose.
+
+**Ce que l'amorçage ne fait toujours pas** : il ne touche ni au `resolv.conf` ni
+au `nsswitch.conf` de la cellule. Les deux avaient été soupçonnés, les deux ont
+été disculpés par la mesure, et agir dessus aurait modifié le comportement de
+toute la cellule **sans rien corriger**.
 
 ### 42.5 Ce qui manquait au pilote : exécuter et LIRE
 
