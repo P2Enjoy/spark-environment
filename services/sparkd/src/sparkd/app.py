@@ -1570,7 +1570,14 @@ def create_app(config: Config) -> FastAPI:
                            #: le paquet changer pendant que sparkd s'arrête.
                            #: Ces deux traces nomment ce pouvoir de Forge sans
                            #: ouvrir une action arbitraire au navigateur.
-                           "forge.sparkd_update", "forge.sparkd_rollback")
+                           "forge.sparkd_update", "forge.sparkd_rollback",
+                           #: SPK-61 · §46.4 bis : la garde SSH refuse un shell
+                           #: sur la Forge. Elle ne notifie pas — elle DÉCLARE,
+                           #: et c'est `sparkd` qui décide d'inscrire et
+                           #: d'alerter. Sans quoi la garde devrait connaître la
+                           #: configuration des canaux, ce qui ferait un second
+                           #: endroit où le canal se règle.
+                           "forge.shell_refused")
 
     #: Clés admises dans la charge. Un champ libre deviendrait le dépôt de
     #: secrets en clair que le §37.5 interdit précisément.

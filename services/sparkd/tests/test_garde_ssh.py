@@ -162,3 +162,48 @@ def test_le_shell_admis_est_CELUI_que_la_console_lance():
     # …et réciproquement : ce que la console lance doit être admis.
     assert "'/bin/bash'" in console
     assert "/bin/bash" in admis
+
+
+# --- SPK-61 · §46.4 bis · un refus SORT de la machine -------------------------
+#
+# @verifies docs/BACKLOG.md#SPK-61 · docs/DAT.md §46.4 bis (la garde DÉCLARE,
+#           elle ne notifie pas), §37.4.6 (la porte étroite), §47.2 (la liste
+#           fermée), §47.5 (une panne de traçabilité n'est pas une panne d'accès)
+
+
+def test_la_garde_DECLARE_le_refus_au_lieu_de_le_taire():
+    texte = GARDE.read_text(encoding="utf-8")
+    assert "forge.shell_refused" in texte
+    assert "/v1/audit" in texte, (
+        "la garde passe par la PORTE ÉTROITE du §37.4.6 — elle déclare, "
+        "elle ne notifie pas")
+    assert "notify" not in texte.lower(), (
+        "lui faire connaître les canaux ferait un second endroit où ils se "
+        "règlent, que le §47.3 vient précisément de supprimer")
+
+
+def test_la_declaration_ne_peut_ni_RETARDER_ni_CASSER_une_connexion():
+    """Trois bornes du §46.4 bis. La garde s'exécute à CHAQUE connexion, y
+    compris les légitimes : un appel réseau dans ce chemin serait un risque
+    d'exploitation, pas une mesure de sécurité."""
+    texte = GARDE.read_text(encoding="utf-8")
+    assert "-m \"$DELAI_DECLARATION\"" in texte, "l'appel doit être BORNÉ"
+    assert "DELAI_DECLARATION=2" in texte
+    # DÉTACHÉ : la ligne de `curl` se termine par une esperluette.
+    lignes = [l.rstrip() for l in texte.splitlines()]
+    assert any(l.endswith("&") and "curl" not in l for l in lignes), (
+        "l'appel doit partir en arrière-plan")
+    assert ">/dev/null 2>&1" in texte, "son échec doit être AVALÉ"
+
+
+def test_la_declaration_n_a_lieu_QUE_sur_le_chemin_du_refus():
+    """Une connexion légitime ne déclare rien : elle est déjà journalisée par ce
+    qu'elle va faire. Déclarer sur le chemin heureux doublerait chaque tunnel."""
+    texte = GARDE.read_text(encoding="utf-8")
+    corps = texte[texte.index("refuser() {"):]
+    assert "declarer" in corps, "l'appel vit dans `refuser`"
+    avant = texte[:texte.index("refuser() {")]
+    # La DÉFINITION est avant ; ce qui ne doit pas s'y trouver est un APPEL.
+    lignes_avant = [l.strip() for l in avant.splitlines()]
+    assert "declarer" not in lignes_avant, (
+        "aucun appel ne doit exister hors du chemin du refus")

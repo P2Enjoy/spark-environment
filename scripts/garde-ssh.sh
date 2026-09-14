@@ -44,11 +44,45 @@ NOM_MAX=63
 # décrire la grammaire acceptée à qui n'y a pas droit lui apprend à la
 # contourner. Le détail part au journal système quand « logger » existe ; à
 # défaut il est perdu, ce qui est préférable à l'envoyer au client.
+#: SPK-61 · §46.4 bis : où la DÉCLARATION part. `sparkd` écoute sur la boucle
+#: locale ; la garde s'exécute sur la Forge, donc l'atteint sans réseau sortant.
+#:
+#: Ce n'est PAS une notification : la garde déclare, et `sparkd` décide
+#: d'inscrire et d'alerter (§37.4.6). Lui faire connaître les canaux ferait un
+#: second endroit où ils se règlent.
+SPARKD_LOCAL='http://127.0.0.1:9876/v1/audit'
+
+#: Le délai de garde, et il est court. Cette garde s'exécute à CHAQUE connexion.
+DELAI_DECLARATION=2
+
+declarer() {
+  # Trois bornes du §46.4 bis, et aucune n'est négociable :
+  #   — DÉTACHÉ : la garde n'attend pas la réponse ;
+  #   — BORNÉ : deux secondes, pas davantage ;
+  #   — AVALÉ : un `sparkd` arrêté ne doit pas retarder ni casser une connexion.
+  #
+  # Une panne de traçabilité ne devient pas une panne d'accès (§47.5, un cran
+  # plus bas). C'est pourquoi l'appel n'existe que sur le chemin du REFUS : une
+  # connexion légitime ne déclare rien, elle est déjà journalisée par ce qu'elle
+  # va faire.
+  command -v curl >/dev/null 2>&1 || return 0
+  curl -s -m "$DELAI_DECLARATION" -o /dev/null \
+    -X POST "$SPARKD_LOCAL" \
+    -H 'content-type: application/json' \
+    -H 'x-spark-actor: garde-ssh' \
+    -d '{"action":"forge.shell_refused","result":"denied","payload":{}}' \
+    >/dev/null 2>&1 &
+}
+
 refuser() {
   if command -v logger >/dev/null 2>&1; then
     logger -t spark-garde -p auth.warning \
       "refus: ${SSH_ORIGINAL_COMMAND:-<session interactive>}" || true
   fi
+  # §46.4 bis : le refus SORT de la machine. Le syslog local est lisible si l'on
+  # va le lire, et invisible sinon — or c'est précisément le signal qui sert
+  # quand tout le reste a échoué.
+  declarer
   echo "Cette clé n'autorise pas cette commande." >&2
   exit 1
 }

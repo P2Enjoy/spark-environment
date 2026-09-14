@@ -51,7 +51,16 @@ ACTIONS = frozenset({
     "port.withdraw",      # referme un port publié
     "ingress.withdraw",   # retire un nom public
     "spark.rescue_exec",  # ouvre un shell root dans une cellule (§37.3)
+    # SPK-61 · §46.4 bis : une clé restreinte a tenté ce qu'elle n'a pas le
+    # droit de faire. C'est le SEUL refus de la liste, et l'exception est
+    # nommée dans `notifiable()` juste en dessous.
+    "forge.shell_refused",
 })
+
+#: Les actions dont un REFUS mérite l'alerte. La règle générale les écarte —
+#: « rien n'a eu lieu » —, et cette exception doit rester une liste, pas une
+#: condition : un jour on ajoutera un refus, et il faudra le décider.
+REFUS_NOTIFIABLES = frozenset({"forge.shell_refused"})
 
 
 def notifiable(action: str, result: str, actor_class: str) -> bool:
@@ -66,6 +75,12 @@ def notifiable(action: str, result: str, actor_class: str) -> bool:
       dispositif ;
     - un REFUS : rien n'a eu lieu. Le notifier apprendrait à ignorer le canal.
     """
+    if action in REFUS_NOTIFIABLES and result == "denied":
+        # §46.4 bis : ici le refus EST l'événement. Une clé restreinte qui tente
+        # un shell est ou bien une erreur de l'exploitant, ou bien quelqu'un qui
+        # essaie la clé qu'il vient de voler — et c'est exactement ce qu'une
+        # alerte hors bande existe pour porter.
+        return actor_class != "runtime"
     return (action in ACTIONS
             and result == "ok"
             and actor_class != "runtime")
