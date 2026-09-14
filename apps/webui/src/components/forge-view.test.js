@@ -806,3 +806,34 @@ test('pendant une mise à jour, c’est la SAUVEGARDE qui est en cours d’abord
   const paquet = rendu.slice(rendu.indexOf('>Paquet<'));
   assert.match(paquet.slice(0, 120), /à faire/);
 });
+
+// --- SPK-62 · le troisième état du canal (§47.3.1) ---------------------------
+//
+// @verifies docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.1, §14.6 ·
+//           docs/DESIGN_SYSTEM.md (danger = demande un geste)
+
+test('un canal MAL CONFIGURÉ n’est ni muet ni en échec, et le dit', () => {
+  const html = renderNotify({
+    configured: true, misconfigured: true, unknown_fields: ['payload'],
+    sent: 0, failed: 0, dropped: 0,
+  });
+  assert.match(html, /configuré mais n’envoie\s+rien/);
+  assert.match(html, /payload/);
+  // Le point qui compte : rien n'a été TENTÉ. Dire « en échec » ferait chercher
+  // une panne de réseau là où il y a une faute de configuration.
+  assert.ok(!/ne sont pas parties/.test(html),
+    'un canal mal configuré n’a rien tenté : ce n’est pas un échec d’envoi');
+  assert.ok(!/Aucun canal n’est configuré/.test(html),
+    'quelqu’un a voulu un canal : ce n’est pas « aucun canal »');
+});
+
+test('sans gabarit fautif, le canal garde ses trois autres états', () => {
+  const muet = renderNotify({ configured: false });
+  assert.match(muet, /Aucun canal n’est configuré/);
+  const sain = renderNotify({ configured: true, sent: 3, failed: 0, dropped: 0 });
+  assert.match(sain, /Toutes les alertes sont parties/);
+  const casse = renderNotify({ configured: true, sent: 0, failed: 2, dropped: 0,
+                               last_error: 'HTTP Error 400: Bad Request' });
+  assert.match(casse, /ne sont pas parties/);
+  assert.match(casse, /HTTP Error 400/);
+});

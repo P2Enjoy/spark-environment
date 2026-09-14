@@ -696,6 +696,25 @@ export function renderNotify(notify) {
 </section>`;
   }
 
+  // SPK-62 · §47.3.1 : le TROISIÈME état. Une URL est posée — quelqu'un a voulu
+  // un canal — mais son gabarit nomme un champ que le §47.4 ne publie pas, et
+  // le canal n'a donc rien tenté. Ce n'est ni « muet » ni « en échec », et le
+  // peindre comme l'un des deux ferait lire « tout va bien » sur une Forge que
+  // personne ne surveille (§14.6). En DANGER, parce qu'il demande un geste.
+  if (notify.misconfigured) {
+    const champs = (notify.unknown_fields ?? []).map(echapper).join(', ');
+    return `
+<section class="carte bloc" aria-labelledby="titre-notify">
+  ${entete}
+  <p class="erreur" role="alert"><strong>Le canal est configuré mais n’envoie
+  rien.</strong> Son gabarit nomme ${champs ? `un champ qui n’existe pas :
+  <code>${champs}</code>` : 'un champ qui n’existe pas'}. Aucune alerte n’a été
+  tentée — le défaut est vu <strong>avant</strong> l’incident, et non pendant.</p>
+  <p class="note">Un gabarit ne peut nommer que les champs de l’alerte.
+  <a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>
+</section>`;
+  }
+
   const echecs = Number(notify.failed ?? 0) + Number(notify.dropped ?? 0);
   const bilan = echecs > 0
     ? `<p class="avertissement" role="status"><strong>${echapper(String(echecs))} alerte(s)

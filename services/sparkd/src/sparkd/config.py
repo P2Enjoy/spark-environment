@@ -148,6 +148,10 @@ class Config:
     #: et ce n'est pas une panne (§14.5) — une Forge sans canal fonctionne
     #: exactement comme avant.
     notify_url: str
+    #: SPK-62 · §47.3.1 : le gabarit du webhook. Il vit au MÊME endroit que
+    #: l'URL, et non au registre, pour que les deux s'y déplacent ENSEMBLE le
+    #: jour où le §47.3 y sera construit. Vide, le corps du §47.4 part tel quel.
+    notify_template: str
     #: SPK-60 · §44.8 : une adresse PUBLIQUE est un fait de configuration. Elle
     #: n'est jamais devinee depuis l'IP privee de la cellule ni via un service
     #: externe ; vide, le briefing dit qu'elle est inconnue.
@@ -296,6 +300,7 @@ def load(env: dict[str, str] | None = None) -> Config:
         allowed_signers=source.get("SPARKD_ALLOWED_SIGNERS", ""),
         secret_key_file=_cle_par_defaut(source),
         notify_url=source.get("SPARKD_NOTIFY_URL", "").strip(),
+        notify_template=source.get("SPARKD_NOTIFY_TEMPLATE", "").strip(),
         forge_public_address=source.get("SPARKD_FORGE_PUBLIC_ADDRESS", "").strip(),
         memory_reserve_bytes=reserve,
         cpu_reserve=cpu_reserve,

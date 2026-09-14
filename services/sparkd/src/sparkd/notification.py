@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import queue
 import threading
 import urllib.error
@@ -94,12 +95,65 @@ def corps(ligne: dict, forge: str) -> dict:
     }
 
 
-def envoyer(url: str, charge: dict, *, ouvrir=urllib.request.urlopen,
+#: Les champs qu'un gabarit a le droit de nommer (§47.3.1). C'est EXACTEMENT ce
+#: que `corps()` publie — pas un de plus. Un gabarit ne peut donc pas faire
+#: sortir ce que le §47.4 refuse de faire sortir, `payload` en tête : le nom
+#: n'existe pas pour lui.
+CHAMPS = ("version", "ts", "forge", "action", "actor", "actor_class",
+          "target_type", "target_id", "result", "message")
+
+#: `{champ}`. Volontairement borné aux minuscules et au souligné : un motif plus
+#: large accepterait `{ }` ou `{0}` et donnerait l'illusion d'un langage.
+PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def champs_inconnus(gabarit: str) -> tuple[str, ...]:
+    """Les noms qu'un gabarit cite et que le §47.4 ne publie pas.
+
+    @spec docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.1
+
+    Rendu AVANT tout envoi, jamais pendant : « sinon la panne se découvre le jour
+    de l'incident ». C'est la première des trois règles non négociables.
+    """
+    vus = [n for n in PLACEHOLDER.findall(gabarit) if n not in CHAMPS]
+    return tuple(dict.fromkeys(vus))
+
+
+def rendre(gabarit: str, charge: dict) -> str:
+    """Le gabarit, ses `{champ}` remplacés par les valeurs de CETTE ligne.
+
+    @spec docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.1
+
+    **Substitution de texte, jamais une exécution** — deuxième règle. Il n'y a
+    ici ni `eval`, ni `format`, ni moteur de gabarit : une expression régulière
+    et un remplacement.
+
+    Chaque valeur est ÉCHAPPÉE pour le contexte d'une chaîne JSON. Sans cela, un
+    Spark nommé avec un guillemet casserait le document — ou pire, y injecterait
+    de la structure, et le gabarit ne dessinerait plus la forme envoyée. `json`
+    échappe, on retire les guillemets qu'il ajoute autour.
+    """
+    def remplacer(trouve: "re.Match[str]") -> str:
+        valeur = charge.get(trouve.group(1))
+        return json.dumps("" if valeur is None else str(valeur),
+                          ensure_ascii=False)[1:-1]
+    return PLACEHOLDER.sub(remplacer, gabarit)
+
+
+def envoyer(url: str, charge: "dict | str", *, ouvrir=urllib.request.urlopen,
             delai: float = DELAI_S) -> None:
-    """Un `POST` de JSON. Lève en cas d'échec — c'est l'appelant qui absorbe."""
+    """Un `POST` de JSON. Lève en cas d'échec — c'est l'appelant qui absorbe.
+
+    `charge` est le corps du §47.4, ou le TEXTE déjà rendu par un gabarit. Le
+    second n'est pas resérialisé : le gabarit dessine le document, et le
+    repasser par `json` en changerait la forme, qui est précisément ce que le
+    destinataire exige.
+    """
+    corps_brut = (charge if isinstance(charge, str)
+                  else json.dumps(charge, ensure_ascii=False))
     requete = urllib.request.Request(
         url,
-        data=json.dumps(charge, ensure_ascii=False).encode("utf-8"),
+        data=corps_brut.encode("utf-8"),
         headers={"content-type": "application/json; charset=utf-8",
                  "user-agent": f"sparkd-notify/{VERSION}"},
         method="POST",
@@ -126,9 +180,17 @@ class Canal:
     """
 
     def __init__(self, url: str = "", forge: str = "", *,
-                 envoi=envoyer, file_max: int = FILE_MAX):
+                 gabarit: str = "", envoi=envoyer, file_max: int = FILE_MAX):
         self.url = (url or "").strip()
         self.forge = forge
+        # SPK-62 · §47.3.1 : le gabarit est vérifié ICI, au chargement, donc
+        # AVANT tout envoi. Un nom inconnu n'arme pas le canal — il ne le fait
+        # pas non plus échouer à l'envoi, ce qui ferait découvrir la panne le
+        # jour de l'incident. Le canal se dit alors « mal configuré », un
+        # troisième état que l'écran distingue de « muet » et de « en échec ».
+        self.gabarit = (gabarit or "").strip()
+        self.gabarit_refuse: tuple[str, ...] = (
+            champs_inconnus(self.gabarit) if self.gabarit else ())
         self._envoi = envoi
         self._file: queue.Queue = queue.Queue(maxsize=file_max)
         self._verrou = threading.Lock()
@@ -144,6 +206,16 @@ class Canal:
     def configured(self) -> bool:
         return bool(self.url)
 
+    @property
+    def mal_configure(self) -> bool:
+        """Une URL est posée, mais le gabarit cite un champ qui n'existe pas.
+
+        Ce n'est PAS « muet » — quelqu'un a voulu un canal — et ce n'est pas
+        « en échec » — rien n'a été tenté. Confondre les trois ferait lire
+        « tout va bien » sur une Forge que personne ne surveille (§14.6).
+        """
+        return bool(self.url) and bool(self.gabarit_refuse)
+
     def etat(self) -> dict:
         """Ce que `GET /v1/forge` rend (§47.6).
 
@@ -154,6 +226,8 @@ class Canal:
         with self._verrou:
             return {
                 "configured": self.configured,
+                "misconfigured": self.mal_configure,
+                "unknown_fields": list(self.gabarit_refuse),
                 "sent": self.sent,
                 "failed": self.failed,
                 "dropped": self.dropped,
@@ -163,7 +237,7 @@ class Canal:
 
     def poster(self, ligne: dict, *, maintenant=None) -> None:
         """Dépose une ligne à envoyer. Ne bloque JAMAIS, ne lève JAMAIS."""
-        if not self.configured:
+        if not self.configured or self.mal_configure:
             return
         if not notifiable(str(ligne.get("action") or ""),
                           str(ligne.get("result") or ""),
@@ -206,7 +280,8 @@ class Canal:
 
     def _tenter(self, charge: dict) -> None:
         try:
-            self._envoi(self.url, charge)
+            self._envoi(self.url,
+                        rendre(self.gabarit, charge) if self.gabarit else charge)
         except Exception as erreur:  # noqa: BLE001 - AUCUNE ne remonte (§47.5)
             with self._verrou:
                 self.failed += 1

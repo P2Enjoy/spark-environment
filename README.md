@@ -347,9 +347,26 @@ pas encore sont marquées.
 | `make e2e` / `pnpm e2e` | parcours complets contre la pile réelle | **oui** |
 | `make manuel` | reproduit les illustrations du manuel | **oui** |
 
+### Les deux scripts et leurs arguments
+
+Un réglage d'installation est un **argument nommé**, jamais une variable
+d'environnement : il se lit dans la commande qui l'a employé, et dans son
+`--help` (`docs/DAT.md` §53.4). Les deux scripts refusent une option inconnue
+plutôt que de l'ignorer.
+
+| Commande | Argument | Rôle | Défaut |
+|---|---|---|---|
+| `scripts/install-serveur.sh` | `--prefix <chemin>` | où poser le venv et le code du runtime | `/opt/sparkd` |
+| `scripts/dev.sh [up\|seed]` | `--state <chemin>` | répertoire d'état de la pile de développement | `<dépôt>/.dev` |
+
 ## Variables d'environnement
 
 Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajouté.
+
+**Le produit n'a aucun levier que cette page ne nomme pas** (`docs/DAT.md` §53).
+Un réglage se pose depuis un écran, par un argument de script, ou par une
+variable documentée ci-dessous. Une variable que seul le code connaîtrait est un
+défaut, pas une commodité.
 
 ### `services/sparkd`
 
@@ -361,10 +378,12 @@ Aucune valeur réelle n'apparaît dans ce dépôt, et aucun secret n'y sera ajou
 | `SPARKD_CADDY_ADMIN` | API d'administration Caddy | URL | non | `http://127.0.0.1:2019` |
 | `SPARKD_DRIVER` | pilote d'exécution | `incus` \| `fake` | non | `incus` |
 | `SPARKD_STORAGE_POOL` | pool Incus dont la capacité fait foi | nom | non | `spark` |
+| `SPARKD_NETWORK_BRIDGE` | pont réseau auquel les cellules sont rattachées — **écrit par l'écran d'installation de la Forge**, champ *Bridge* (`docs/DAT.md` §50) | nom d'interface | non | `sparkbr0` |
 | `SPARKD_STORAGE_DATASET` | jeu de données ZFS dont la compression est vérifiée | nom | non | la valeur de `SPARKD_STORAGE_POOL` |
 | `SPARKD_ALLOWED_SIGNERS` | fichier `allowed_signers` d'OpenSSH — clés **publiques** autorisées à signer un geste (`docs/DAT.md` §36.10) | chemin absolu | non | vide, la vérification est désactivée |
 | `SPARKD_SECRET_KEY_FILE` | clé de chiffrement des **secrets d'environnement** — 32 octets, `0600`, créée si absente et jamais remplacée (`docs/DAT.md` §43.9.2) | chemin absolu | non | `secret.key` **à côté du registre** |
 | `SPARKD_NOTIFY_URL` | canal d'**alerte hors bande** : un `POST` de JSON y part sur chaque geste sensible (`docs/DAT.md` §47) | URL | non | vide, la fonction est désactivée |
+| `SPARKD_NOTIFY_TEMPLATE` | **gabarit** du corps envoyé, pour le mettre à la forme qu'exige le service visé — Discord veut `{"content": …}`, Slack `{"text": …}` (`docs/DAT.md` §47.3.1). Ne peut nommer que les champs de l'alerte ; un nom inconnu **n'arme pas** le canal | JSON avec des `{champ}` | non | vide, le corps du §47.4 part tel quel |
 | `SPARKD_FORGE_PUBLIC_ADDRESS` | adresse ou nom public de la Forge, rendu dans le briefing d'un Spark (`docs/DAT.md` §44.8) | IPv4, IPv6 ou nom sans schéma | non | vide : l'adresse est inconnue du plan de contrôle |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
@@ -390,7 +409,11 @@ vigilance de l'exploitant.
 | `SCW_DEFAULT_ORGANIZATION_ID` | organisation dont les zones sont listées | UUID | non | `00000000-0000-0000-0000-000000000000` |
 | `SPARK_DNS_ALLOW_PATTERN` | expression régulière bornant les domaines écrivables depuis ce poste | regex | non | `^test\.[a-z0-9-]+\.exemple\.tech$` |
 | `SPARK_DNS_BASE_URL` | racine de l'API DNS, pour pointer un doublon local | URL | non | `http://127.0.0.1:8099` |
-| `SPARK_SIGN_COMMAND` | remplace la **commande** de signature d'un geste, pour éprouver la chaîne sans agent (`docs/DAT.md` §36.10.9) | commande shell | non | *(vide en production)* |
+| `SPARK_EPREUVE` | **interrupteur de la pile d'épreuve** : `1` — et cette valeur seule — autorise les quatre commandes doublées ci-dessous. Sans lui elles sont **ignorées**, et le refus est écrit au démarrage ; avec lui, la console affiche un avertissement permanent qui nomme ce qui est remplacé (`docs/DAT.md` §53.3) | `1` | non | *(absent en exploitation)* |
+| `SPARK_SIGN_COMMAND` | remplace la **commande** de signature d'un geste, pour éprouver la chaîne sans agent (`docs/DAT.md` §36.10.9) | commande shell | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
+| `SPARK_TERMINAL_COMMAND` | remplace la **commande** du terminal — `ssh` vers un Spark (`docs/DAT.md` §37.4.2 bis) | commande shell ou table JSON | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
+| `SPARK_DOCKER_COMMAND` | remplace la **commande** `docker` interrogée dans un Spark (`docs/DAT.md` §37.6 ter) | table JSON par geste | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
+| `SPARK_REBOOT_COMMAND` | remplace la **commande** de redémarrage de la Forge (`docs/DAT.md` §51.1) | commande shell | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
 
 La **clé de signature** d'un serveur se déclare dans l'écran *Serveurs*, champ
 *Clé de signature* : un chemin vers une clé **publique**, retenu dans

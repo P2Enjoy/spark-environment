@@ -272,3 +272,129 @@ def test_l_etat_distingue_non_configure_de_rien_a_signaler(canal):
     # Les deux ont zéro envoi ; seul « configured » distingue « rien n'est
     # surveillé » de « rien à signaler » (§14.6).
     assert muet.etat()["sent"] == actif.etat()["sent"] == 0
+
+
+# --- SPK-62 · le gabarit du webhook (§47.3.1) --------------------------------
+#
+# @verifies docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.1 (les trois règles non
+#           négociables), §47.4 (les champs publiés), §14.6 (zéro ne veut pas
+#           dire « tout va bien ») · CLAUDE.md §16 (mesuré sur un destinataire
+#           réel le 2026-09-14 : Discord refuse le corps du §47.4)
+
+
+def test_le_corps_du_47_4_est_REFUSE_par_les_services_reels_sans_gabarit():
+    """Le fait qui justifie toute cette section, et il a été MESURÉ.
+
+    Le 2026-09-14, le corps du §47.4 a été posté sur un vrai webhook Discord :
+    `HTTP 400 — Cannot send an empty message`. Discord veut `content`, Slack
+    veut `text` ; notre JSON structuré ne porte ni l'un ni l'autre. Le doublon
+    local, lui, acceptait tout — c'est pourquoi rien ne le voyait.
+    """
+    charge = notification.corps({"action": "spark.delete"}, "forge")
+    assert "content" not in charge and "text" not in charge, (
+        "si le corps par défaut portait ces champs, le gabarit n'aurait plus de "
+        "raison d'être — et cette preuve devrait être réécrite, pas supprimée")
+
+
+def test_un_gabarit_ne_peut_nommer_QUE_les_champs_publies():
+    """Première règle : refusé AVANT l'envoi, pas pendant."""
+    assert notification.champs_inconnus(
+        '{"content":"{forge} {action} {target_id}"}') == ()
+    # `payload` est le champ que le §47.4 refuse de faire sortir. Il n'existe
+    # pas pour un gabarit : c'est ce qui empêche de contourner la règle.
+    assert notification.champs_inconnus('{"content":"{payload}"}') == ("payload",)
+    assert notification.champs_inconnus(
+        '{"a":"{inconnu}","b":"{autre}","c":"{inconnu}"}') == ("inconnu", "autre")
+
+
+def test_un_gabarit_FAUTIF_n_arme_pas_le_canal():
+    """Le troisième état : ni muet, ni en échec — MAL CONFIGURÉ.
+
+    Quelqu'un a voulu un canal, et rien n'a été tenté. Les confondre ferait lire
+    « tout va bien » sur une Forge que personne ne surveille (§14.6).
+    """
+    c = notification.Canal(url="http://exemple.test/x", forge="f",
+                           gabarit='{"content":"{payload}"}')
+    etat = c.etat()
+    assert etat["configured"] is True
+    assert etat["misconfigured"] is True
+    assert etat["unknown_fields"] == ["payload"]
+    assert etat["failed"] == 0, "rien ne doit avoir été TENTÉ"
+
+
+def test_un_canal_mal_configure_n_ENVOIE_rien(canal):
+    serveur, url = canal
+    c = notification.Canal(url=url, forge="f", gabarit='{"content":"{inconnu}"}')
+    c.poster({"action": "spark.delete", "result": "ok", "actor_class": "human",
+              "target_id": "x", "ts": "2026-09-14T00:00:00"})
+    c.vider()
+    assert serveur.recus == [], "un gabarit fautif ne doit RIEN envoyer"
+    assert c.etat()["sent"] == 0 and c.etat()["failed"] == 0
+
+
+def test_la_substitution_ECHAPPE_pour_le_contexte_JSON():
+    """Deuxième règle, et sa conséquence de sûreté.
+
+    Sans échappement, un Spark nommé avec un guillemet casserait le document —
+    ou pire, y injecterait de la structure, et le gabarit ne dessinerait plus la
+    forme envoyée.
+    """
+    rendu = notification.rendre(
+        '{"content":"{target_id}"}',
+        {"target_id": 'void"98", "admin": true, "x": "'})
+    charge = json.loads(rendu)          # doit rester UN document valide
+    assert list(charge) == ["content"], "aucun champ n'a pu être injecté"
+    assert charge["content"].startswith('void"98')
+
+
+def test_un_champ_ABSENT_rend_une_chaine_vide_et_non_le_mot_None():
+    """« None » dans une alerte se lit comme une valeur, et n'en est pas une."""
+    rendu = notification.rendre('{"content":"[{message}]"}', {"message": None})
+    assert json.loads(rendu)["content"] == "[]"
+
+
+def test_le_gabarit_DESSINE_le_document_envoye(canal):
+    """La preuve qui répond au refus de Discord : le corps part à SA forme."""
+    serveur, url = canal
+    c = notification.Canal(
+        url=url, forge="spark-experiment",
+        gabarit='{"content":"**{forge}** — {action} sur {target_id} par {actor}"}')
+    c.poster({"action": "spark.unprotect", "result": "ok", "actor_class": "human",
+              "actor": "martino", "target_type": "spark", "target_id": "void-98",
+              "ts": "2026-09-14T10:00:00", "message": "protection levée"})
+    c.vider()
+    assert len(serveur.recus) == 1
+    recu = serveur.recus[0]
+    assert list(recu) == ["content"], (
+        "Discord refuse tout champ qu'il ne connaît pas : le gabarit doit "
+        "produire SON document, pas y ajouter le nôtre")
+    assert recu["content"] == (
+        "**spark-experiment** — spark.unprotect sur void-98 par martino")
+
+
+def test_SANS_gabarit_le_corps_du_47_4_part_tel_quel(canal):
+    """Le comportement d'avant reste celui d'un destinataire qui accepte du JSON."""
+    serveur, url = canal
+    c = notification.Canal(url=url, forge="f")
+    c.poster({"action": "spark.delete", "result": "ok", "actor_class": "human",
+              "target_id": "x", "ts": "2026-09-14T00:00:00"})
+    c.vider()
+    assert serveur.recus[0]["version"] == notification.VERSION
+    assert serveur.recus[0]["target_id"] == "x"
+
+
+def test_le_gabarit_ne_peut_pas_faire_sortir_le_PAYLOAD(canal):
+    """Troisième règle : un gabarit ne contourne pas ce que le §47.4 protège.
+
+    Tenté explicitement, comme la DoD l'exige — et le refus tombe à la
+    configuration, donc la valeur n'a jamais approché le réseau.
+    """
+    serveur, url = canal
+    c = notification.Canal(url=url, forge="f",
+                           gabarit='{"content":"{payload}"}')
+    c.poster({"action": "sshkey.grant", "result": "ok", "actor_class": "human",
+              "target_id": "x", "ts": "2026-09-14T00:00:00",
+              "payload": {"cle_privee": "SECRET-QUI-NE-DOIT-PAS-SORTIR"}})
+    c.vider()
+    assert serveur.recus == []
+    assert c.mal_configure is True

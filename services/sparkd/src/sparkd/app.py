@@ -214,7 +214,8 @@ def create_app(config: Config) -> FastAPI:
     # (§47.4). Il est lu au démarrage ; une Forge jamais relevée n'en a pas, et
     # une chaîne vide vaut mieux qu'un plantage au démarrage.
     app.state.notify = notification_service.Canal(
-        url=config.notify_url, forge=_nom_de_la_forge(config))
+        url=config.notify_url, forge=_nom_de_la_forge(config),
+        gabarit=config.notify_template)
     audit_service.set_canal(app.state.notify)
     app.state.caddy = (
         ingress_service.FakeCaddy() if config.driver == "fake"

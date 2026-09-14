@@ -3,6 +3,16 @@
 ## [Non publié]
 
 ### Corrigé
+- **SPK-62 — le corps de l'alerte hors bande n'était accepté par aucun service
+  réel.** Mesuré sur un webhook Discord : `HTTP 400 — Cannot send an empty
+  message`. Discord veut `{"content": …}`, Slack `{"text": …}` ; notre JSON
+  structuré ne porte ni l'un ni l'autre, et le faux serveur local acceptait tout.
+  Le **gabarit** du §47.3.1 est posé : `SPARKD_NOTIFY_TEMPLATE` met le corps à la
+  forme du service visé. Un gabarit ne peut nommer que les champs publiés, les
+  valeurs sont échappées pour le contexte JSON, et un nom inconnu **n'arme pas**
+  le canal — le défaut se voit avant l'incident, pas pendant. L'écran de la Forge
+  distingue désormais un troisième état, *configuré mais n'envoie rien*, de
+  *aucun canal* et de *en échec*.
 - **SPK-98 — la doctrine Gentoo disait `openrc`, et l'image servie est systemd.**
   La mesure du 8 portait sur `images:gentoo/openrc` ; le catalogue offre
   `images:gentoo/systemd`, où `rc-service` n'existe pas. L'amorçage aurait posé
@@ -17,6 +27,24 @@
   attend désormais que le service tourne.
 
 ### Ajouté
+- **SPK-100 — aucune option cachée : un réglage dit où, par qui et comment.** Un
+  inventaire des lectures d'environnement du dépôt a trouvé huit leviers que rien
+  ne documentait, dont **cinq que personne ne posait nulle part**. Le §53 du DAT
+  pose la règle : un réglage se pose depuis un écran, par un argument de script,
+  ou par une variable documentée au README — et un doublon d'épreuve ne s'active
+  jamais tout seul.
+- **SPK-100 — les quatre commandes doublées ne sont plus lues sans interrupteur.**
+  `SPARK_TERMINAL_COMMAND`, `SPARK_DOCKER_COMMAND`, `SPARK_REBOOT_COMMAND` et
+  `SPARK_SIGN_COMMAND` exigent `SPARK_EPREUVE=1`. Posées sans lui, elles sont
+  ignorées **et nommées** sur la sortie d'erreur au démarrage. Actives, la console
+  porte un avertissement permanent dans sa barre latérale, qui **nomme les
+  commandes remplacées**, sur tous les écrans.
+- **SPK-100 — `--prefix` et `--state`.** `scripts/install-serveur.sh` et
+  `scripts/dev.sh` prennent des arguments nommés, avec `--help` et refus d'une
+  option inconnue, à la place de `SPARKD_PREFIX` et `SPARK_DEV_STATE`.
+- **SPK-100 — `SPARKD_NETWORK_BRIDGE` entre dans les tables.** Elle n'était pas
+  une option cachée — l'écran d'installation de la Forge l'écrit — mais aucune
+  documentation ne la nommait.
 - **SPK-99 — le dossier pour un agent dit quoi lire en arrivant.** Le panneau
   d'accueil d'une cellule porte l'instruction d'ouvrir
   `/etc/spark/BRIEFING.md`, mais il ne s'affiche qu'à l'ouverture d'un shell de
@@ -56,6 +84,12 @@
   facette — son adresse retombe sur la facette par défaut —, ni ligne de relevé,
   ni option rootless, ni « contexte Docker » dans le panneau d'accueil de la
   cellule ou dans son briefing. Le reste est entier (`SPK-DS-24`).
+
+### Retiré
+- **SPK-100 — trois surcharges d'environnement lues, jamais écrites** :
+  `SPARK_SSH_CONFIG`, `SPARK_CONSOLE_ANCHORS` et `SPARK_FORGE_INSTALL_STATE`. Ni
+  écran, ni fichier, ni script, ni test ne les posait ; les tests déplacent déjà
+  ces chemins par paramètre. Le chemin par défaut et le paramètre restent.
 
 ### Corrigé
 - **SPK-98 — la suite d'une dérivée était recopiée au lieu d'être lue.** Kali

@@ -91,6 +91,21 @@ sont pas envoyées du tout.
 
 Cela se règle avec la variable `SPARKD_NOTIFY_URL` sur la Forge.
 
+**La plupart des services veulent le message à leur propre forme.** Discord
+attend `{"content": …}`, Slack `{"text": …}` ; un message envoyé autrement est
+refusé par le service, et l'écran de la Forge le signale. La variable
+`SPARKD_NOTIFY_TEMPLATE` donne la forme voulue, en remplaçant `{champ}` par la
+valeur de l'alerte :
+
+    SPARKD_NOTIFY_TEMPLATE='{"content":"**{forge}** — {action} sur {target_id} par {actor}"}'
+
+Un gabarit ne peut nommer que les champs de l'alerte — `forge`, `ts`, `action`,
+`actor`, `target_type`, `target_id`, `result`, `message`. **S'il en nomme un
+autre, le canal n'envoie rien du tout et l'écran vous le dit** : mieux vaut
+l'apprendre tout de suite qu'au moment où une alerte aurait dû partir. Aucune
+valeur de secret n'est accessible à un gabarit ; les champs qui les portent ne
+lui sont pas offerts.
+
 ## Toute règle d'accès est appliquée côté serveur
 
 Un bouton masqué ou un champ désactivé n'est qu'une aide visuelle. Les refus que
