@@ -17,6 +17,15 @@
  */
 
 import { chromium } from 'playwright';
+
+// SPK-106 · docs/DAT.md §29.8 : UNE seule épreuve à la fois sur ce poste.
+// Ce script n'appelle pas `monterPile()` — il vise une console déjà servie —
+// mais il lance quand même un Chromium, et deux Chromium restent deux Chromium.
+// Le verrou est pris ICI, à l'import, donc avant la moindre allocation.
+import { prendreLeVerrou } from './verrou.mjs';
+
+prendreLeVerrou();
+
 import { join } from 'node:path';
 
 const BASE = process.env.SPARK_CONSOLE_URL ?? 'http://127.0.0.1:5178';

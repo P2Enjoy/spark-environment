@@ -7228,10 +7228,11 @@ artefact, pas une narration) :
    dérivée de la table des onglets.
 5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte ses trois
    notes par le vrai chemin d'API ; un parcours les écrit depuis l'interface et
-   les relit dans la cellule ; captures observées aux deux formats.
-   *Seed, captures et manuel faits ; le parcours E2E reste dû.* Le seed pose les
-   **trois** états d'une note et laisse `install` non écrite : sans elle, la
-   distinction du §14.6 serait invérifiable à l'œil.
+   les relit dans la cellule ; captures observées aux deux formats. *Fait.* Le
+   seed pose les **trois** états d'une note et laisse `install` non écrite :
+   sans elle, la distinction du §14.6 serait invérifiable à l'œil. Le parcours
+   `une note écrite à l'écran arrive DANS la cellule` frappe le texte **touche à
+   touche** (§14.3) et constate le **fichier posé**, qu'aucune route ne sert.
 
 - **Aucune variable d'environnement** n'est introduite (§53). Le seul état neuf
   est la table `spark_note`.
@@ -7320,9 +7321,20 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
    connaît pas — et l'aurait fait mentir tant que celle-ci n'existe pas.
 4. **Console** — bannières et écrans d'acceptation sur les facettes
    *Environnement*, *Routes* et *Notes*, réemployant la relecture du §43.10.2.
+   *Fait : 18 preuves de composant.* La grammaire de `routes.conf` est écrite
+   **une fois**, dans la console, à côté de celle des `.env` (§55.8). Un défaut
+   trouvé à l'écran : le compte rendu disparaissait avec la proposition qu'il
+   décrivait — l'exploitant venait d'agir et n'avait plus aucune confirmation
+   (§1.3, §6.11).
 5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte une proposition
    de chaque nature ; un parcours dépose depuis la cellule, inspecte, accepte
-   partiellement et constate le vidage **et** l'effet au registre.
+   partiellement et constate le vidage **et** l'effet au registre. *Fait.* Le
+   parcours `une proposition déposée dans la cellule s'accepte EN PARTIE` ouvre
+   la relecture, la **referme sans trancher** et vérifie que la proposition est
+   toujours là — sans quoi « consulter ne consomme pas » ne serait qu'affirmé —,
+   puis constate les trois effets : ce qui entre au registre, ce qui n'y entre
+   pas, et le `.?` vidé. Une proposition voisine, que personne n'a touchée,
+   reste intacte.
 
 - **Aucune migration, aucune variable d'environnement** : le fichier dans la
   cellule EST l'état.
@@ -7343,6 +7355,38 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
   vérifie les trois effets — registre, `.?` vidé, fichier réel reprojeté ;
   captures observées aux deux formats ; documentation complète ; `@spec` /
   `@verifies` posés.
+
+
+### [x] SPK-106 · Un verrou exclusif : une seule épreuve à la fois sur le poste
+
+**Demandé par le responsable le 2026-09-14, après que je lui ai coûté des heures
+de travail.** J'ai lancé quatre campagnes E2E coup sur coup en tâche de fond ;
+chacune monte `sparkd`, la console et un Chromium. La mémoire du poste a été
+épuisée, le noyau a tué le dernier processus (code 137), et cette mort brutale a
+emporté la restauration de fichier qu'il devait faire en sortant.
+
+Sa demande, mot pour mot : « mets un mutex, un mutex exclusif inviolable : si tu
+es trop con pour t'en rappeler, que ça te pète à la gueule ».
+
+- Spécification : `docs/DAT.md` **§29.8** · README, section du harnais.
+- **Aucune variable d'environnement, aucun argument de contournement** (§53) :
+  un verrou qu'on peut lever est un verrou qu'on lève le jour où il sert.
+- Ce qui décide de l'unité :
+  1. **il est posé dans `monterPile()`**, pas dans le `Makefile`. Une cible
+     qu'on oublie d'emprunter ne protège rien, et `node e2e/…` monte la même
+     pile. Les cinq scripts qui lancent un navigateur sans monter de pile le
+     prennent à l'import ;
+  2. **il refuse, il n'attend pas**, et le refus NOMME le porteur ;
+  3. **une épave se reprend en le disant** — `SIGKILL` ne laisse aucun
+     nettoyage, et c'est exactement le cas qui a causé l'incident ;
+  4. **un verrou illisible est refusé**, jamais repris : on ne devine pas.
+- DoD : 7 preuves dans `e2e/verrou.test.mjs`, dont aucune ne monte de pile —
+  le verrou doit être éprouvable sans payer ce qu'il existe pour empêcher. Une
+  preuve emploie un VRAI second processus : deux appels dans le même
+  processus partageraient la variable en mémoire et ne prouveraient rien. Une
+  preuve vérifie que le message de refus ne nomme aucun réglage de
+  contournement. Refus constaté à l'écran contre `monterPile()` : aucune pile,
+  aucun navigateur n'est alloué avant le refus.
 
 ---
 

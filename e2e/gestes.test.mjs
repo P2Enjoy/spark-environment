@@ -25,6 +25,13 @@ import { EventEmitter } from 'node:events';
 import { createConsoleHost } from '../apps/webui/host/main.js';
 import { TunnelManager } from '../apps/webui/host/tunnel.js';
 
+// SPK-106 · docs/DAT.md §29.8 : UNE seule épreuve à la fois sur ce poste. Ces
+// parcours montent leur console en PROCESSUS et lancent un Chromium ; deux
+// séries en parallèle, c'est deux navigateurs. Le verrou est pris à l'import.
+import { prendreLeVerrou } from './verrou.mjs';
+
+prendreLeVerrou();
+
 const GIO = 1024 ** 3;
 const SPARK = {
   name: 'crm-production', state: 'running', cpu_mode: 'shared', cpu_reservation: 0.5,

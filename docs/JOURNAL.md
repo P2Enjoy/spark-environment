@@ -11508,3 +11508,62 @@ danger, et une preuve le tient.
 **I-02 est retirée du rapport, qui devient vide** : `docs/INCONSISTENCY_REPORT.md`
 est supprimé du dépôt, comme le `CLAUDE.md` §5 le demande. I-01 l'avait été plus
 tôt dans la journée.
+
+---
+
+## 2026-09-14 · SPK-106 — j'ai mis une machine à genoux, et le poste porte désormais un verrou
+
+**Ce que j'ai fait.** Pour attribuer un échec de campagne E2E, j'ai lancé la
+campagne complète **quatre fois de suite en tâche de fond**. Chacune monte
+`sparkd`, la console et un Chromium avec ses onglets. La mémoire du poste a été
+épuisée ; le noyau a tué le dernier processus (code 137).
+
+**Ce que cela a coûté, au-delà de la mémoire.** Ce processus tué exécutait une
+séquence qui devait restaurer `services/sparkd/src/sparkd/app.py` en sortant —
+je l'avais temporairement remplacé par sa version d'avant pour mesurer une
+attribution. `SIGKILL` ne laisse s'exécuter aucun nettoyage : le fichier est
+resté dans sa version d'avant, et la correction d'I-02 a disparu de l'arbre de
+travail sans que rien ne le signale. Elle était committée, donc récupérable par
+un `git checkout` — mais rien ne garantissait qu'elle le fût.
+
+**Ce que j'aurais dû faire.** Une seule campagne, lue jusqu'au bout. J'avais
+l'attribution après la première : le parcours passait seul et échouait en série,
+ce qui suffisait à conclure à une dépendance d'ordre. Les trois suivantes n'ont
+rien appris que la première ne disait déjà.
+
+**Ce que le responsable a demandé**, et il a raison : « un mutex exclusif
+inviolable : si tu es trop con pour t'en rappeler, que ça te pète à la gueule ».
+
+**Où je l'ai posé, et pourquoi pas ailleurs.** Dans `monterPile()`, avant la
+première allocation. C'est le seul passage que tous les harnais à pile
+traversent — et surtout ceux qu'on écrira. Dans le `Makefile`, il n'aurait
+protégé que les cibles qu'on pense à emprunter, or `node e2e/parcours.test.mjs`
+monte exactement la même pile ; c'est d'ailleurs comme cela que je l'ai lancée
+les quatre fois. Une règle qui dépend de la porte qu'on emprunte n'est pas une
+règle.
+
+Les cinq scripts qui lancent un navigateur **sans** monter de pile — ils visent
+une console déjà servie — le prennent à l'import : deux Chromium restent deux
+Chromium.
+
+**Trois décisions, et chacune vient d'un cas que la première version ratait :**
+
+- **il refuse, il n'attend pas.** Une file d'attente masquerait la faute et
+  doublerait la durée sans que personne ne comprenne pourquoi ;
+- **une épave se reprend.** `SIGKILL` — c'est-à-dire l'OOM, exactement le cas
+  qui a causé l'incident — ne laisse exécuter aucun nettoyage. Sans reprise, un
+  seul incident aurait rendu le harnais inutilisable jusqu'à ce que quelqu'un
+  efface un fichier dont il ignore l'existence ;
+- **un verrou illisible est refusé, pas repris.** Ma première version le volait.
+  C'est **la preuve qui l'a trouvé**, et elle contredisait mon propre
+  commentaire trois lignes plus haut : j'avais écrit « on refuse plutôt que de
+  deviner » et codé l'inverse.
+
+**Aucun interrupteur**, et le message de refus n'en suggère aucun — une preuve le
+vérifie. C'est le §53 appliqué à un garde-fou : un verrou qu'on peut lever est un
+verrou qu'on lève le jour où il gêne, c'est-à-dire le jour où il sert.
+
+**Ce que je retiens.** Le coût n'était pas une preuve rouge, c'était le poste de
+quelqu'un d'autre. Une mesure qui consomme les ressources de la machine qu'on
+partage n'est pas gratuite parce qu'elle est automatisée, et « en tâche de
+fond » ne veut pas dire « sans conséquence ».

@@ -17,6 +17,15 @@
  */
 import { chromium } from 'playwright';
 
+// SPK-106 · docs/DAT.md §29.8 : UNE seule épreuve à la fois sur ce poste.
+// Ce script n'appelle pas `monterPile()` — il vise une console déjà servie —
+// mais il lance quand même un Chromium, et deux Chromium restent deux Chromium.
+// Le verrou est pris ICI, à l'import, donc avant la moindre allocation.
+import { prendreLeVerrou } from './verrou.mjs';
+
+prendreLeVerrou();
+
+
 const BASE = 'http://127.0.0.1:5175';
 // SPK-100 · CLAUDE.md §3 : préfixée comme toutes les autres, pour qu'un balayage
 // des variables du dépôt ne puisse pas la manquer.

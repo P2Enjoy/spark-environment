@@ -38,6 +38,32 @@
   désormais cette grammaire : elle voit 33 variables au lieu de 28.
 
 ### Ajouté
+- **SPK-106 — un verrou EXCLUSIF : une seule épreuve à la fois sur le poste.**
+  Chaque harnais monte `sparkd`, la console et un Chromium ; quatre campagnes
+  lancées coup sur coup ont épuisé la mémoire d'un poste, fait tuer un processus
+  par le noyau, et emporté au passage la restauration de fichier que ce
+  processus devait faire en sortant. Le verrou est pris **dans `monterPile()`**,
+  avant la première allocation — pas dans le `Makefile`, qu'on peut ne pas
+  emprunter — et à l'import pour les cinq scripts qui visent une console déjà
+  servie. Il **refuse immédiatement** au lieu d'attendre, en nommant le PID, la
+  commande et l'âge de l'épreuve qui tient. Un verrou dont le porteur a été tué
+  se reprend tout seul, en le disant ; un verrou **illisible** est refusé, jamais
+  repris. **Aucun réglage ne le lève** — ni variable d'environnement, ni
+  argument.
+- **SPK-105 — les propositions s'ouvrent là où le geste se conclut.** Une
+  bannière apparaît en tête de l'onglet **Environnement** pour les variables et
+  les secrets, de l'onglet **Routes** pour les routes, et dans l'onglet
+  **Notes** pour les trois textes — jamais dans un écran à part. *Relire ligne
+  par ligne* ouvre le **même tableau qu'un lot collé** : une ligne, sa valeur,
+  une case *Retenir*, une case *Secret*. Ce qui vient de `secrets.?` arrive
+  pré-coché — le chemin le déclare — mais **c'est le propriétaire qui coche**.
+  Décocher ce qu'on ne veut pas suffit : le bouton compte ce qui reste, et une
+  acceptation partielle **vide quand même** le fichier, parce que ce qui n'a pas
+  été retenu a été refusé, pas ajourné. Une ligne illisible est nommée avec son
+  numéro sans faire perdre les autres, et **la proposition n'est pas consommée**
+  : son auteur peut la corriger. La grammaire des routes —
+  `<domaine> <port écouté ici> [tls|clair]` — est écrite **une seule fois**, à
+  côté de celle des `.env`.
 - **SPK-104 — un onglet *Notes* dans la fenêtre d'un Spark.** Trois textes
   libres, l'un sous l'autre, avec ce que chacun est censé porter et le chemin
   auquel il vit dans la cellule. **Le produit ne les vérifie pas : il les

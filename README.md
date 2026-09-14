@@ -428,6 +428,30 @@ pas** : un réglage de harnais reste un réglage.
 | `SPARK_CONSOLE_URL` | console à viser pour les scripts qui n'en montent pas (`e2e/reel.mjs`, `e2e/forge-conformite.mjs`) | URL | non | `http://127.0.0.1:5173` |
 | `SPARK_SORTIE` | répertoire où ces scripts déposent leurs captures | chemin | non | `e2e/captures` |
 
+**Une seule épreuve à la fois sur le poste** (`docs/DAT.md` §29.8). Chaque
+harnais monte une pile complète — `sparkd`, la console, un Chromium — et deux
+campagnes simultanées suffisent à mettre une machine à genoux : mesuré le
+2026-09-14, quatre lancées coup sur coup ont épuisé la mémoire et fait tuer un
+processus par le noyau.
+
+Un **verrou exclusif** l'empêche. Il est pris dans `monterPile()`, avant la
+première allocation, et à l'import pour les scripts qui visent une console déjà
+servie. Une seconde épreuve est **refusée immédiatement**, avec le PID, la
+commande et l'âge de celle qui tient :
+
+```
+Une pile d'épreuve tourne DÉJÀ sur ce poste…
+  tenue par le PID 12345 — e2e/parcours.test.mjs
+  depuis 42 s
+  verrou : /tmp/spark-e2e.verrou
+```
+
+Il **n'a aucun réglage** : ni variable d'environnement, ni argument pour le
+lever. Un verrou qu'on peut désactiver est un verrou qu'on désactive le jour où
+il gêne, c'est-à-dire le jour où il sert. Un verrou dont le porteur a disparu —
+tué par le noyau, par exemple — est repris tout seul au prochain essai, et la
+reprise le dit.
+
 La **clé de signature** d'un serveur se déclare dans l'écran *Serveurs*, champ
 *Clé de signature* : un chemin vers une clé **publique**, retenu dans
 `servers.json`. La console demande la signature à l'agent SSH, qui ne rend jamais

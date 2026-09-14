@@ -18,6 +18,8 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { prendreLeVerrou, rendreLeVerrou } from './verrou.mjs';
+
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PYTHON = join(RACINE, 'services', 'sparkd', '.venv', 'bin', 'python');
 
@@ -60,6 +62,16 @@ function lancer(commande, args, env, journal) {
  * après coup laisserait le processif servir un registre qu'il n'a pas relu.
  */
 export async function monterPile({ dns = null, notify = null } = {}) {
+  // SPK-106 · docs/DAT.md §29.8 : UNE seule pile lourde à la fois sur ce poste.
+  //
+  // Le verrou est pris ICI, avant la première allocation, parce que c'est le
+  // seul passage que TOUS les harnais traversent — ceux d'aujourd'hui et ceux
+  // qu'on écrira. Dans le `Makefile`, il ne protégerait que les cibles qu'on
+  // pense à emprunter, et un `node e2e/…` direct monte la même pile.
+  //
+  // Il LÈVE plutôt qu'il n'attend : deux campagnes lancées en parallèle sont
+  // une erreur de conduite, pas une file d'attente. Le refus nomme qui tient.
+  prendreLeVerrou();
   const dossier = await mkdtemp(join(tmpdir(), 'spark-e2e-'));
   const registre = join(dossier, 'spark.db');
   const inventaire = join(dossier, 'servers.json');
@@ -380,6 +392,10 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       consoleHost.kill('SIGTERM');
       await new Promise((r) => setTimeout(r, 150));
       await rm(dossier, { recursive: true, force: true });
+      // Rendu DÈS le démontage, et pas seulement à la sortie du processus : un
+      // script qui monte deux piles l'une après l'autre est légitime, et
+      // attendre la fin du processus le bloquerait sur lui-même.
+      rendreLeVerrou();
     },
   };
 }

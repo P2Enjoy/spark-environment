@@ -3433,6 +3433,54 @@ n'en fait pas partie : les parcours provoquent délibérément des refus, et
 compter ces lignes rendrait le contrôle inutilisable. Elles sont comptées à part
 et affichées, jamais masquées.
 
+### 29.8 Une seule épreuve à la fois, et le poste le TIENT (SPK-106)
+
+**Mesuré le 2026-09-14, sur le poste du responsable, à ses frais.** Quatre
+campagnes E2E ont été lancées coup sur coup en tâche de fond. Chacune monte une
+pile complète — `sparkd`, la console, un Chromium et ses onglets. La mémoire du
+poste a été épuisée, le noyau a tué le dernier processus (code 137), et cette
+mort brutale a emporté avec elle la restauration qu'il devait faire en sortant :
+un fichier du dépôt est resté dans un état intermédiaire.
+
+Le coût n'est pas celui d'une preuve rouge. C'est celui d'une machine à genoux
+et d'un dépôt qu'il faut rattraper à la main.
+
+**Décision : le poste porte un verrou EXCLUSIF, et il n'a aucun interrupteur.**
+
+`e2e/verrou.mjs` tient un fichier unique dans le répertoire temporaire du
+système. La prise est atomique — `open(…, 'wx')` crée ou échoue —, donc deux
+processus lancés dans la même seconde ne peuvent pas croire tous les deux
+l'avoir obtenu.
+
+**Où il est posé, et pourquoi pas ailleurs.** Dans `monterPile()`, avant la
+première allocation. C'est le seul passage que TOUS les harnais à pile
+traversent, ceux d'aujourd'hui comme ceux qu'on écrira ; dans le `Makefile`, il
+ne protégerait que les cibles qu'on pense à emprunter, et un `node e2e/…` direct
+monte exactement la même pile. Les cinq scripts qui lancent un navigateur **sans**
+monter de pile — ils visent une console déjà servie — le prennent à l'import,
+pour la même raison : deux Chromium restent deux Chromium.
+
+**Il refuse, il n'attend pas.** Deux campagnes simultanées sont une erreur de
+conduite, pas une file d'attente : les faire patienter masquerait la faute et
+doublerait la durée sans que personne ne comprenne pourquoi. Le refus **nomme**
+le porteur — PID, commande, âge — et le chemin du verrou.
+
+**Un verrou dont le porteur est mort est une épave, et se reprend en le disant.**
+`SIGKILL` — c'est-à-dire l'OOM, précisément le cas qui a coûté cet incident — ne
+laisse s'exécuter aucun nettoyage. Sans reprise, un seul incident rendrait le
+harnais inutilisable jusqu'à ce que quelqu'un efface un fichier dont il ignore
+l'existence. La reprise n'est jamais silencieuse.
+
+**Un verrou ILLISIBLE est refusé, jamais repris.** Un fichier tronqué ne dit pas
+qui le tient ; le reprendre ferait peut-être tourner deux piles, ce que ce
+fichier existe pour empêcher. Le refus dit alors autre chose — il n'y a rien à
+attendre, et le fichier s'efface à la main si aucune campagne ne tourne.
+
+**Aucun réglage ne le désactive** (`CLAUDE.md` §3) : ni variable d'environnement,
+ni argument. Un verrou qu'on peut lever est un verrou qu'on lève le jour où il
+gêne, c'est-à-dire le jour où il sert. Le message de refus n'en suggère aucun, et
+une preuve le vérifie.
+
 ### 29.7 Ce que ces parcours ne prouvent pas
 
 Le pilote reste factice (§28.7). Aucun quota n'est appliqué, aucun conteneur ne
