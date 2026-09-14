@@ -7050,6 +7050,9 @@ constatées sur le catalogue seedé :
 - Le parcours prouve aussi ce qu'un rendu ne peut pas dire : la frappe ne
   provoque **aucun appel** au serveur, et une entrée que la recherche masque
   **descend toujours** — constaté sur `sparkd`, pas à l'écran.
+- **Série rejouée après synchronisation** : une autre session a poussé SPK-102 et
+  SPK-93 pendant l'implémentation. Sur la branche à jour, les **131 parcours**
+  passent, ainsi que 1326 preuves de service, 1325 de console et 6 du contrat.
 - Captures observées : `spk103-blocs-spark.jpg`, `spk103-recherche-spark.jpg`,
   `spk103-recherche-sans-resultat.jpg`, `spk103-catalogue-blocs.jpg` et leurs
   deux variantes en 390 px, depuis la pile réelle.

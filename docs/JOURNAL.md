@@ -11119,11 +11119,17 @@ l'ensemble par un message unique perdrait cette information et ajouterait un
 second mécanisme pour un état rare. Laissé tel quel, et consigné ici pour que le
 choix soit rouvrable plutôt que redécouvert.
 
-**Un échec E2E qui ne m'appartient pas.** La série complète rend 130 vertes et
-une rouge : « un Spark ARRÊTÉ nomme l'arrêt » échoue faute de processeur sur la
-Forge d'épreuve. Mesuré : en écartant le parcours `amorcer ACCORDE la clé de la
-console` — qui crée `octroi-e2e` et n'est **pas encore committé** —, les 130
-passent, mes deux parcours compris. Le défaut appartient au travail en cours sur
-SPK-82, et le `CHANGELOG` porte déjà une correction du même symptôme pour
-SPK-93 : c'est un budget qui se re-consomme à chaque parcours créateur, pas un
-incident isolé. Laissé intact, signalé au responsable.
+**Un échec E2E qui ne m'appartenait pas, et qui a été corrigé pendant que
+j'écrivais.** La série rendait 130 vertes et une rouge : « un Spark ARRÊTÉ nomme
+l'arrêt » échouait faute de processeur sur la Forge d'épreuve. J'en ai isolé la
+cause plutôt que de la supposer : en écartant le parcours `amorcer ACCORDE la
+clé de la console` — qui crée `octroi-e2e` et n'était pas encore committé —, les
+130 passaient, mes deux parcours compris. Ce n'était donc pas mon changement,
+mais un budget qui se re-consomme à chaque parcours créateur.
+
+Une **autre session travaillait sur la même branche** et l'a tranché dans le même
+temps : `fab9549` — « cesser de dépendre du pool laissé par les voisins
+(SPK-93) ». Série rejouée **après synchronisation** : **131 vertes, aucune
+rouge**, le parcours voisin encore non committé inclus. Rien ne reste dû de ce
+côté, et cette mention n'est conservée que parce que la mesure — la cause isolée
+par élimination — vaut mieux que le souvenir qu'un jour « l'E2E était rouge ».
