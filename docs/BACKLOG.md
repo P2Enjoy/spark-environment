@@ -4308,14 +4308,38 @@ restent à produire ; l'unité demeure honnêtement `[~]`.
   Tests de l'installateur et de l'hôte, parcours E2E, captures desktop/mobile et
   manuel M2/M3 mis à jour.
 
-### [~] SPK-69 · Mettre à jour `sparkd` à distance et recharger son unité
+### [x] SPK-69 · Mettre à jour `sparkd` à distance et recharger son unité
 
 **Arbitrage du responsable, 2026-09-14 : la perturbation réversible est
-AUTORISÉE.** Les deux estampilles — `/opt/sparkd/build.json` et la version du
-paquet installé — sont neutralisées le temps d'observer le verdict *build non
-estampillée* sur la Forge de test, puis restaurées par la réinstallation
-ordinaire du paquet. `sparkd` ne s'arrête pas : l'estampille ne change que ce que
-la Forge **dit** d'elle-même.
+AUTORISÉE. FAITE le même jour, et c'est le dernier écart de l'unité.**
+
+Les deux estampilles ont été neutralisées sur la Forge de test : `build.json`
+vidé, et la version du paquet installé ramenée à `0.0.0` dans ses métadonnées —
+c'est elle qui prime, et c'est elle qu'aucune installation normale ne peut
+produire sans commit. Relevé de la Forge pendant la perturbation :
+
+```
+"build": {"commit": null, "version": "0.0.0+inconnue", "installed_at": null}
+```
+
+Le produit refuse au passage de présenter `0.0.0` comme une version plausible et
+rend `0.0.0+inconnue` — c'est le §40.2 appliqué, et il n'avait jamais été vu à
+l'œuvre sur matériel réel.
+
+**Ce que l'écran a rendu, observé** (`Code déployé`) :
+
+> ● **Build non estampillée** — *Cette Forge ne dit pas quel code elle exécute.
+> Réinstallez-la pour le savoir.*
+> Version installée : `0.0.0+inconnue` · Dépôt de ce poste : `d6eca2125efb sur main`
+
+Et **un seul bouton, « Comparer à nouveau »** : aucun bouton de mise à jour. Les
+**quatre** verdicts non sûrs ont donc été observés sur une Forge réelle sans
+qu'aucun n'expose de geste. La DoD est close.
+
+**Restauration vérifiée** : réinstallation du paquet depuis git, `build.json`
+revenu à `d6eca2125`, version `0.post1.dev791+gd6eca2125`, préflight 14/14. La
+perturbation n'a jamais arrêté `sparkd` — elle ne changeait que ce que la Forge
+**dit** d'elle-même, pas ce qu'elle fait.
 
 **Suite de SPK-68, demandée le 2026-08-21.** Quand une Forge déjà joignable dit
 que sa build est en retard sur le dépôt du poste, l'écran sait le signaler

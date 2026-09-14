@@ -3,6 +3,13 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-69 — le quatrième verdict non sûr de la mise à jour distante a été
+  observé sur une Forge réelle.** *Build non estampillée* ne peut pas se produire
+  par une installation normale, la version du paquet portant toujours son commit.
+  La Forge de test a donc été rendue temporairement non estampillée, sur
+  autorisation explicite : l'écran a rendu l'alerte et **aucun bouton de mise à
+  jour**, puis la réinstallation ordinaire l'a restaurée. Les quatre verdicts non
+  sûrs sont désormais vus sur matériel réel.
 - **SPK-71 — la délégation des contrôleurs de `spark.slice` survit à un
   redémarrage, prouvé sur la Forge réelle.** Au retour, la tranche porte
   exactement `cpuset cpu io memory pids` — ce que `Delegate=` de l'unité déclare,
