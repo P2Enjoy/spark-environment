@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+### Ajouté
+- **SPK-61 — un refus de la garde SSH sort désormais de la machine.** Une clé
+  restreinte qui tente un shell est ou bien une erreur, ou bien quelqu'un qui
+  essaie la clé qu'il vient de voler ; le signal restait dans le syslog local.
+  La garde **déclare** à la porte étroite du journal, et `sparkd` alerte.
+  `forge.shell_refused` est le seul refus que la liste fermée notifie. La phrase
+  ne recopie pas la commande refusée — l'alerte part vers un salon, et l'y
+  recopier ferait écrire l'attaquant chez le responsable. Éprouvé de bout en bout
+  sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
+
 ### Corrigé
 - **SPK-62 — une coupure de la surveillance hors bande qui ne s'annonçait pas.**
   Le §47.3.3 exige qu'une désactivation soit annoncée **par le canal qu'elle

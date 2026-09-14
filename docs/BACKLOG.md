@@ -2732,6 +2732,40 @@ OP-10 reste écrit, mesuré et prêt à être joué — la garde `scripts/garde-
 existe, les six cas de vérification sont écrits, et le retour arrière est
 immédiat. Rien n'attend : c'est un choix, pas un blocage.
 
+**Un manque comblé le 2026-09-14, et il reste INERTE.** La garde journalisait ses
+refus en `auth.warning`, dans le syslog de la Forge : lisible si quelqu'un va le
+lire, invisible sinon. Or une clé restreinte qui tente un shell est ou bien une
+erreur de l'exploitant, ou bien quelqu'un qui essaie la clé qu'il vient de
+voler — exactement ce qu'une alerte hors bande existe pour porter (§45.4).
+
+La garde **déclare** désormais à la porte étroite du §37.4.6 ; c'est `sparkd` qui
+inscrit et qui alerte. `forge.shell_refused` est le **seul refus** de la liste
+fermée du §47.2, et l'exception est portée par une liste et non par une
+condition : un jour on ajoutera un refus, et il faudra le décider.
+
+**Éprouvé de bout en bout sur la Forge le 2026-09-14** — la garde exécutée sans
+commande, donc une demande de shell interactif :
+
+```
+refus rendu   : « Cette clé n'autorise pas cette commande. »
+journal       : denied · garde-ssh · « Une cle restreinte a tente un geste
+                que la garde refuse. Le detail est au syslog… »
+canal         : envois 2, échecs 0 — l'alerte est partie
+```
+
+**La phrase est FIXE et ne recopie pas la commande refusée** : celle-ci est du
+texte fourni par qui tente, et l'alerte part vers un salon de discussion. L'y
+recopier ferait écrire l'attaquant chez le responsable. Le détail reste au
+syslog, et la phrase y envoie.
+
+Trois bornes gardées par des preuves, parce que la garde s'exécute à **chaque**
+connexion : l'appel part détaché, borné à deux secondes, son échec avalé, et il
+n'existe que sur le chemin du refus.
+
+**Tout ceci ne s'exécute nulle part aujourd'hui** : la garde n'est installée que
+par OP-10. Le dire vaut mieux que de laisser croire que la Forge est surveillée
+sur ce point.
+
 **Arbitrage du responsable, 2026-09-14 : l'unité RESTE `[~]`.** La clé n'est pas
 restreinte pour l'instant, et ce n'est pas un oubli : la décision est prise en
 connaissance du coût. Tant qu'elle ouvre un shell, une clé volée donne l'accès

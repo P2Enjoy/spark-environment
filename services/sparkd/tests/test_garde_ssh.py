@@ -207,3 +207,15 @@ def test_la_declaration_n_a_lieu_QUE_sur_le_chemin_du_refus():
     lignes_avant = [l.strip() for l in avant.splitlines()]
     assert "declarer" not in lignes_avant, (
         "aucun appel ne doit exister hors du chemin du refus")
+
+
+def test_la_declaration_ne_RECOPIE_pas_la_commande_refusee():
+    """L'alerte part vers un salon de discussion. Y recopier la commande
+    refusée — du texte fourni par qui tente — ferait écrire l'attaquant chez le
+    responsable. Le détail reste au syslog, et la phrase l'y envoie."""
+    texte = GARDE.read_text(encoding="utf-8")
+    debut = texte.index("declarer() {")
+    corps = texte[debut:texte.index("refuser() {")]
+    assert "SSH_ORIGINAL_COMMAND" not in corps, (
+        "la déclaration ne doit pas porter la commande refusée")
+    assert "syslog" in corps, "elle doit dire OÙ le détail se trouve"

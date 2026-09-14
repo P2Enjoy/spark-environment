@@ -65,12 +65,18 @@ declarer() {
   # plus bas). C'est pourquoi l'appel n'existe que sur le chemin du REFUS : une
   # connexion légitime ne déclare rien, elle est déjà journalisée par ce qu'elle
   # va faire.
+  #
+  # La phrase est FIXE et ne recopie PAS la commande refusée. Celle-ci est du
+  # texte fourni par qui tente, et l'alerte part vers un salon de discussion :
+  # l'y recopier ferait écrire l'attaquant chez le responsable. Le détail reste
+  # au syslog, où l'exploitant va le chercher quand l'alerte l'y envoie.
   command -v curl >/dev/null 2>&1 || return 0
   curl -s -m "$DELAI_DECLARATION" -o /dev/null \
     -X POST "$SPARKD_LOCAL" \
     -H 'content-type: application/json' \
     -H 'x-spark-actor: garde-ssh' \
-    -d '{"action":"forge.shell_refused","result":"denied","payload":{}}' \
+    -d '{"action":"forge.shell_refused","result":"denied","payload":{},
+         "message":"Une cle restreinte a tente un geste que la garde refuse. Le detail est au syslog de la Forge (auth.warning, tag spark-garde)."}' \
     >/dev/null 2>&1 &
 }
 
