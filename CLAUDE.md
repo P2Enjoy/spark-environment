@@ -94,6 +94,44 @@ Chaque variable doit être documentée avec :
 
 Aucune clé, aucun mot de passe, aucun jeton ou secret réel ne doit être ajouté au dépôt.
 
+Aucune option cachée (règle non négociable du responsable)
+
+Il est INTERDIT d'introduire une variable d'environnement — ou tout autre
+réglage — que la documentation ne nomme pas. Aucune exception ne sera tolérée.
+
+Cela vise en particulier le motif qui les produit presque toujours : un
+`process.env.X`, un `os.environ["X"]` ou un `${X:-défaut}` glissé pour rendre un
+module injectable, alors que le test ou le harnais pouvait passer la valeur en
+paramètre. La commodité de qui écrit le code y est payée par un levier que
+personne d'autre ne peut nommer.
+
+Toute variable lue par le code, sans exception, doit :
+
+- figurer dans un fichier d'exemple versionné — `.env.example` à la racine du
+  périmètre concerné, ou son équivalent nommé pour le service visé —, avec un
+  COMMENTAIRE expliquant son rôle, son format et ce qui arrive en son absence ;
+- figurer dans la documentation du dépôt, avec son rôle, son format, son
+  caractère obligatoire et sa valeur par défaut ;
+- répondre aux trois questions OÙ, PAR QUI et COMMENT. Une variable dont on ne
+  peut pas écrire « par qui elle est posée » ne doit pas exister : elle est
+  supprimée, et non documentée.
+
+Le fichier d'exemple ne contient JAMAIS de valeur réelle : il porte des noms, des
+commentaires et des exemples inoffensifs. Il est versionné ; le fichier réel ne
+l'est jamais.
+
+Un réglage d'installation est un ARGUMENT NOMMÉ du script qui l'emploie — il se
+lit dans la commande et dans son `--help` —, pas une variable d'environnement.
+
+Un réglage d'épreuve — doublon, commande remplacée, instrumentation de test —
+n'est jamais actif par défaut, exige un interrupteur explicite et unique, et se
+VOIT dans l'interface tant qu'il est actif. Ignorer en silence une telle variable
+remplacerait une option cachée par un comportement caché.
+
+Cette règle se tient par un test, pas par la vigilance : le dépôt doit porter une
+preuve qui échoue lorsqu'une variable lue par le code n'est ni dans un fichier
+d'exemple ni dans la documentation.
+
 ## 4. Interface et expérience utilisateur
 
 Charte P2Enjoy SAS
@@ -182,7 +220,8 @@ Les documents suivants doivent exister ou avoir un équivalent clairement identi
 - "docs/JOURNAL.md" ;
 - "docs/BACKLOG.md" ;
 - "docs/manual.md" ou un dossier "manuals/" lorsque le projet nécessite une documentation utilisateur ;
-- un document de préparation du déploiement lorsque des opérations manuelles sont nécessaires.
+- un document de préparation du déploiement lorsque des opérations manuelles sont nécessaires ;
+- un fichier d'exemple versionné par périmètre qui lit des variables d'environnement — `.env.example` ou son équivalent nommé —, commenté variable par variable (cf. §3).
 
 La documentation fait partie du produit.
 
@@ -823,6 +862,7 @@ Une tâche n'est terminée que lorsque toutes les conditions applicables sont sa
 - le DAT a été mis à jour si nécessaire ;
 - le design system a été mis à jour si nécessaire ;
 - le manuel utilisateur a été mis à jour si nécessaire ;
+- toute variable d'environnement introduite ou modifiée figure dans un fichier d'exemple commenté ET dans la documentation ;
 - le changelog a été mis à jour sous "[Non publié]" ;
 - le contrat de déploiement a été mis à jour si nécessaire ;
 - le backlog reflète le véritable état ;
@@ -1038,7 +1078,8 @@ Une instruction locale ne peut pas autoriser :
 - la suppression non validée de données ;
 - l'abandon des contrôles d'autorisation backend ;
 - la déclaration mensongère d'une tâche comme terminée ;
-- la suppression des tests pour obtenir artificiellement un résultat vert.
+- la suppression des tests pour obtenir artificiellement un résultat vert ;
+- l'introduction d'une variable d'environnement absente du fichier d'exemple et de la documentation.
 
 ## 27. Bloc local facultatif
 

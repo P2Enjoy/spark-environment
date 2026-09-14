@@ -5014,3 +5014,44 @@ test('la Forge REFUSE une fenêtre qu’elle n’offre pas, et le refus la nomme
               'le refus doit énumérer ce qu’il accepte');
   });
 });
+
+/* ------------------------------------- aucune option cachée (SPK-100, §53) */
+
+/**
+ * @verifies docs/BACKLOG.md#SPK-100 · docs/DAT.md §53.3 (l'interrupteur se voit
+ *           à l'écran, et nomme les commandes remplacées), §53.1 ·
+ *           docs/DESIGN_SYSTEM.md §9.7 (`role="status"`) · CLAUDE.md §15, §16
+ *
+ * Cette pile EST doublée : le harnais pose `SPARK_EPREUVE=1`. Le bandeau doit
+ * donc y être visible — et c'est la seule façon de prouver qu'il l'est, puisque
+ * la console d'exploitation, elle, ne doit rien afficher.
+ */
+test('la pile d’épreuve le DIT à l’écran, et nomme les commandes remplacées',
+     async () => {
+  await parcours('epreuve-bandeau', async () => {
+    await accueil();
+    const bandeau = page.locator('.entete__epreuve .avertissement');
+    await bandeau.waitFor({ timeout: 10000 });
+    const texte = await bandeau.textContent();
+    assert.match(texte, /commandes remplacées/);
+    // Les quatre doublons que le harnais pose réellement. « Mode épreuve » seul
+    // ferait deviner lesquels, et c'est précisément le défaut corrigé.
+    for (const attendu of [/terminal/i, /docker/i, /redémarrage/i, /signature/i]) {
+      assert.match(texte, attendu, `le bandeau doit nommer ${attendu}`);
+    }
+    // §9.7 : annoncé aux lecteurs d'écran, comme ses deux voisins.
+    assert.equal(await page.locator('.entete__epreuve [role="status"]').count(), 1);
+
+    // Il appartient à la COQUILLE : changer d'écran ne l'efface pas. Un bandeau
+    // posé dans une page disparaîtrait en naviguant, c'est-à-dire tout de suite.
+    await page.click('.laterale a[href="#/forge"]');
+    await page.waitForSelector('#titre-forge, .carte.bloc', { timeout: 10000 });
+    assert.equal(await page.locator('.entete__epreuve .avertissement').count(), 1);
+
+    // Et l'hôte le dit AUSSI par sa route, sans valeur de commande.
+    const vu = await page.evaluate(async () =>
+      (await fetch('/api/console/epreuve')).json());
+    assert.equal(vu.active, true);
+    assert.equal(vu.doublons.length, 4);
+  });
+});

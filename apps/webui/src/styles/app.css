@@ -138,7 +138,10 @@
    focus au clavier (§14.3). Vide, elle disparaît : `.laterale` est une colonne
    à `gap`, et un conteneur vide y creuserait un trou inexpliqué. */
 .entete__signature:empty,
-.entete__console:empty { display: none; }
+.entete__console:empty,
+/* SPK-100 · §53.3 : même règle pour le bandeau d'épreuve. Une console ordinaire
+   n'en a aucun, et la zone vide ne doit pas creuser un trou dans la colonne. */
+.entete__epreuve:empty { display: none; }
 .entete__contexte .badge { align-self: flex-start; }
 /* Sous 1024 px la barre laterale passe en barre SUPERIEURE : le contexte y
    redevient une rangee, ou la largeur ne manque plus. */
@@ -149,7 +152,8 @@
   /* La barre laterale est alors une RANGEE : l'avertissement prend sa propre
      ligne plutot que de comprimer la navigation. */
   .entete__signature,
-  .entete__console { flex-basis: 100%; }
+  .entete__console,
+  .entete__epreuve { flex-basis: 100%; }
 }
 
 .principal {
@@ -540,6 +544,14 @@ tbody tr:hover { background: var(--color-hover); }
   overflow-wrap: anywhere;
 }
 .avertissement--laterale a { color: inherit; }
+/* SPK-100 · §53.3 : le bandeau NOMME les commandes remplacées, donc il porte une
+   liste. Les puces par défaut décalent le texte de 40 px dans une colonne qui en
+   fait 200 : la marque est retirée, et c'est le retrait qui aligne la liste sur
+   les deux paragraphes qui l'encadrent. */
+.avertissement--laterale ul {
+  margin: var(--space-2) 0; padding-left: var(--space-4);
+}
+.avertissement--laterale li + li { margin-top: var(--space-1); }
 .succes .note { margin-top: var(--space-2); }
 
 /* SPK-88 · docs/DAT.md §38.6.4 ter — les trois blocs d'une recette.

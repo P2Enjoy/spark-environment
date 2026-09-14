@@ -11528,6 +11528,32 @@ Un `?? process.env.X` qui n'entre dans aucune de ces quatre cases est un défaut
 pas une commodité. Le critère n'est pas l'intention de qui l'écrit : c'est qu'un
 lecteur du README puisse nommer tous les leviers du produit.
 
+#### 53.1 bis Les fichiers d'exemple, et la preuve qui les tient
+
+**Arbitrage du responsable, 2026-09-14 : aucune exception ne sera tolérée.**
+Toute variable lue par le code figure dans un fichier d'exemple VERSIONNÉ, avec
+un commentaire qui dit son rôle, son format et ce qui arrive en son absence :
+
+| Fichier | Périmètre |
+|---|---|
+| `.env.example` | la console, sur le poste — y compris le pilotage DNS, la pile d'épreuve, le harnais et les variables du script de pool |
+| `services/sparkd/sparkd.env.example` | le runtime, sur la Forge — modèle de `/etc/sparkd/sparkd.env` |
+
+Ces fichiers ne portent **aucune valeur réelle** : des noms, des commentaires et
+des exemples inoffensifs. Le fichier réel n'est jamais versionné.
+
+**Et la règle tient par une preuve, pas par la vigilance.**
+`services/sparkd/tests/test_variables_documentees.py` balaie le dépôt — Python,
+JavaScript, scripts shell —, relève ce que le code interroge dans son
+environnement, et échoue si une variable manque à un fichier d'exemple, au
+README, ou d'un commentaire. Une quatrième preuve interdit le retour des leviers
+retirés au §53.2.
+
+Ce balayage a trouvé, dès sa première exécution, une **neuvième** variable que
+l'inventaire manuel avait manquée : `SPARKD_NOTIFY_TEMPLATE`, documentée au
+README mais absente du fichier d'exemple. C'est précisément la raison d'être de
+la preuve : huit leviers avaient déjà traversé trois semaines de relectures.
+
 ### 53.2 Ce qui est retiré, et pourquoi le retrait vaut mieux que la mention
 
 `SPARK_SSH_CONFIG`, `SPARK_CONSOLE_ANCHORS` et `SPARK_FORGE_INSTALL_STATE`

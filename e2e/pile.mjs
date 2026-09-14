@@ -136,6 +136,12 @@ export async function monterPile({ dns = null, notify = null } = {}) {
     SPARK_CONSOLE_PORT: String(portConsole),
     SPARK_CONSOLE_STATE: inventaire,
     SPARK_ENV_FILE: envConsole,
+    // SPK-100 · §53.3 : l'interrupteur SANS lequel les quatre doublons
+    // ci-dessous sont inertes. Le poser ici, et nulle part ailleurs, est ce qui
+    // fait qu'un `SPARK_DOCKER_COMMAND` exporté dans un shell d'exploitation ne
+    // remplace plus rien. La console affiche un bandeau tant qu'il est actif :
+    // les captures de ce harnais le portent, et c'est exact.
+    SPARK_EPREUVE: '1',
     // SPK-43 · §37.4.2 bis : le doublon du transport. La pile n'a pas de `sshd`
     // dans ses Sparks — son pilote est factice —, et sans lui aucun parcours ne
     // pourrait éprouver le flux, la saisie et la fermeture qui tue.

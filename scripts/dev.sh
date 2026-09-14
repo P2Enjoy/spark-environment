@@ -9,7 +9,45 @@
 set -euo pipefail
 
 RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ETAT="${SPARK_DEV_STATE:-$RACINE/.dev}"
+
+# SPK-100 · docs/DAT.md §53.4 : le repertoire d'etat est un ARGUMENT NOMME, et
+# non une variable d'environnement. Il se lit alors dans la commande qui l'a
+# employe et dans `--help` ; une variable ne laisse aucune trace de son passage.
+ETAT="$RACINE/.dev"
+COMMANDE=up
+
+usage() {
+  cat <<'AIDE'
+dev.sh — pile de developpement : sparkd (pilote factice) + hote console.
+
+  up                 Demarre les deux processus. Defaut.
+  seed               Applique le seed et sort.
+  --state <chemin>   Repertoire d'etat de la pile. Defaut : <depot>/.dev
+  -h, --help         Affiche cette aide.
+AIDE
+}
+
+# Un argument inconnu est REFUSE, jamais ignore : un reglage mal orthographie
+# doit se voir tout de suite, et non au moment ou l'on cherche pourquoi rien n'a
+# change (§53.4).
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --state)
+      [ $# -ge 2 ] || { echo "--state attend un chemin." >&2; exit 2; }
+      ETAT="$2"; shift 2 ;;
+    --state=*) ETAT="${1#*=}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    # Une OPTION mal orthographiee est refusee ici, avant tout effet : c'est le
+    # cas que le §53.4 vise — un reglage ignore en silence.
+    -*) echo "Option inconnue : $1" >&2; usage >&2; exit 2 ;;
+    # La COMMANDE reste validee par le `case` du bas, qui la refuse avec la meme
+    # aide. Elle y arrive apres la fusion de l'inventaire, comportement que la
+    # preuve du SPK-41 emploie et qui n'a rien a voir avec un levier cache.
+    *) COMMANDE="$1"; shift ;;
+  esac
+done
+
+[ -n "$ETAT" ] || { echo "--state ne peut pas etre vide." >&2; exit 2; }
 export SPARKD_DB="${SPARKD_DB:-$ETAT/spark.db}"
 export SPARKD_DRIVER=fake
 export SPARKD_BIND="${SPARKD_BIND:-127.0.0.1:9876}"
@@ -71,7 +109,7 @@ chemin.write_text(json.dumps(etat, ensure_ascii=False, indent=2) + "\n",
                   encoding="utf-8")
 FUSION
 
-case "${1:-up}" in
+case "$COMMANDE" in
   seed)
     exec "$PY" -m sparkd.seed
     ;;
@@ -88,5 +126,5 @@ case "${1:-up}" in
     cd "$RACINE/apps/webui" && node host/main.js
     ;;
   *)
-    echo "usage : dev.sh [up|seed]" >&2; exit 2 ;;
+    usage >&2; exit 2 ;;
 esac

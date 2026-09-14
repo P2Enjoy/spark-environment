@@ -18,7 +18,9 @@
 import { chromium } from 'playwright';
 
 const BASE = 'http://127.0.0.1:5175';
-const SORTIE = process.env.SORTIE || './e2e/captures';
+// SPK-100 · CLAUDE.md §3 : préfixée comme toutes les autres, pour qu'un balayage
+// des variables du dépôt ne puisse pas la manquer.
+const SORTIE = process.env.SPARK_SORTIE || './e2e/captures';
 const navigateur = await chromium.launch();
 const page = await navigateur.newPage();
 const bruits = [];

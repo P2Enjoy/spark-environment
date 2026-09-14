@@ -10738,3 +10738,39 @@ n'est pas équivalent à une CI, et le document ne doit pas laisser croire que s
 **Trois questions restent posées** : SPK-28 (les disques du miroir ZFS),
 SPK-51 (le relais de correspondance) et SPK-40 (qu'un agent SSH réel signe un
 geste). Aucune ne dépend d'un travail à faire ici.
+
+---
+
+## 2026-09-14 · SPK-100 — la règle est passée de la vigilance à la preuve
+
+Le responsable a complété l'arbitrage du matin : « ne jamais introduire des
+variables cachées non documentées et TOUJOURS les ajouter dans les fichiers
+`.env.example` avec un commentaire explicatif. Aucune exception ne sera
+tolérée. » Puis : « rattrape toutes les variables dans ce cas. »
+
+**Le dépôt n'avait aucun fichier d'exemple.** `.gitignore` réservait pourtant
+`!.env.example` depuis le début — la place était prévue, le fichier n'a jamais
+été écrit. Deux fichiers sont donc créés : `.env.example` pour le poste — console,
+DNS, pile d'épreuve, harnais et variables du script de pool — et
+`services/sparkd/sparkd.env.example` comme modèle de `/etc/sparkd/sparkd.env`.
+Chaque variable y porte son rôle, son format et ce qui arrive en son absence ;
+aucune valeur réelle n'y figure.
+
+**Et la règle ne repose plus sur ma vigilance.** `test_variables_documentees.py`
+balaie le dépôt — les cinq grammaires par lesquelles il lit son environnement, en
+Python, en JavaScript et en shell — et échoue si une variable manque à un fichier
+d'exemple, au README, ou d'un commentaire. Une quatrième preuve interdit le
+retour des cinq leviers retirés.
+
+**La preuve a trouvé une neuvième variable à sa première exécution.**
+`SPARKD_NOTIFY_TEMPLATE` — le gabarit du corps d'alerte — était documentée au
+README et absente de mon inventaire manuel de la veille. Mon balayage `grep` de
+l'après-midi l'avait manquée. C'est exactement la démonstration que la règle
+demandait : un inventaire fait à la main est un inventaire faux, et il l'est
+silencieusement.
+
+**Les 28 illustrations du manuel sont refaites.** Elles portent désormais le
+bandeau d'épreuve, puisqu'elles sortent de la pile doublée. Comparées une à une
+à leur version précédente, la mise en page est inchangée — le bandeau s'ajoute,
+rien ne se déplace. C'est la conséquence assumée du §53.3 : ce que ces captures
+montrent est ce qui a réellement tourné.

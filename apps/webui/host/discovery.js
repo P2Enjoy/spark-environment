@@ -15,8 +15,11 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-export const SSH_CONFIG =
-  process.env.SPARK_SSH_CONFIG ?? join(homedir(), '.ssh', 'config');
+//: SPK-100 · §53.2 : ce chemin n'a PAS de surcharge d'environnement. Il en
+//: portait une que personne ne posait — ni écran, ni script, ni test —, donc un
+//: levier que la documentation ne pouvait pas nommer (§53.1). Les tests passent
+//: le chemin en paramètre, comme partout ailleurs.
+export const SSH_CONFIG = join(homedir(), '.ssh', 'config');
 
 /**
  * Les `Host` déclarés, sans les motifs.

@@ -27,8 +27,11 @@ import { DEFAULT_PATH as INVENTAIRE } from './inventory.js';
  * l'inventaire disparaîtrait au premier enregistrement d'un serveur — c'est-à-dire
  * silencieusement, et précisément quand on croirait la référence tenue.
  */
-export const DEFAULT_ANCHOR_PATH =
-  process.env.SPARK_CONSOLE_ANCHORS ?? join(dirname(INVENTAIRE), 'anchors.json');
+//: SPK-100 · §53.2 : aucune surcharge d'environnement ici. `SPARK_CONSOLE_STATE`
+//: déplace l'inventaire — elle est documentée et posée par la pile de
+//: développement —, et l'ancre suit le répertoire de l'inventaire. Un second
+//: levier pour le même répertoire n'aurait servi qu'à exister.
+export const DEFAULT_ANCHOR_PATH = join(dirname(INVENTAIRE), 'anchors.json');
 
 export const FIRST = 'first';
 export const EXTENDS = 'extends';

@@ -415,6 +415,17 @@ vigilance de l'exploitant.
 | `SPARK_DOCKER_COMMAND` | remplace la **commande** `docker` interrogée dans un Spark (`docs/DAT.md` §37.6 ter) | table JSON par geste | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
 | `SPARK_REBOOT_COMMAND` | remplace la **commande** de redémarrage de la Forge (`docs/DAT.md` §51.1) | commande shell | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
 
+### Harnais de preuves (`e2e/`)
+
+Lues par les scripts de preuve, jamais par la console en exploitation. Elles
+figurent ici parce que **le produit n'a aucun levier que cette page ne nomme
+pas** : un réglage de harnais reste un réglage.
+
+| Variable | Rôle | Format | Requis | Exemple |
+|---|---|---|---|---|
+| `SPARK_CONSOLE_URL` | console à viser pour les scripts qui n'en montent pas (`e2e/reel.mjs`, `e2e/forge-conformite.mjs`) | URL | non | `http://127.0.0.1:5173` |
+| `SPARK_SORTIE` | répertoire où ces scripts déposent leurs captures | chemin | non | `e2e/captures` |
+
 La **clé de signature** d'un serveur se déclare dans l'écran *Serveurs*, champ
 *Clé de signature* : un chemin vers une clé **publique**, retenu dans
 `servers.json`. La console demande la signature à l'agent SSH, qui ne rend jamais

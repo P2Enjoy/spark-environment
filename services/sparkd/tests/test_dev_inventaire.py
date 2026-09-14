@@ -26,12 +26,14 @@ SCRIPT = RACINE / "scripts" / "dev.sh"
 
 def _lancer(inventaire: Path, etat: Path, bind: str = "127.0.0.1:9876") -> dict:
     """Exécute le script jusqu'à l'écriture de l'inventaire, et rend ce qu'il a écrit."""
+    # SPK-100 · §53.4 : le répertoire d'état est un ARGUMENT, plus une variable
+    # d'environnement. La commande inconnue reste la façon d'arrêter le script
+    # APRÈS la fusion de l'inventaire et avant qu'il ne lance quoi que ce soit.
     subprocess.run(
-        ["bash", str(SCRIPT), "argument-inconnu"],
+        ["bash", str(SCRIPT), "--state", str(etat), "commande-inconnue"],
         cwd=RACINE, check=False, capture_output=True,
         env={"PATH": "/usr/bin:/bin", "HOME": str(etat),
-             "SPARK_DEV_STATE": str(etat), "SPARK_CONSOLE_STATE": str(inventaire),
-             "SPARKD_BIND": bind},
+             "SPARK_CONSOLE_STATE": str(inventaire), "SPARKD_BIND": bind},
     )
     return json.loads(inventaire.read_text(encoding="utf-8"))
 

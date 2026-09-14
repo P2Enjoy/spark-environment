@@ -39,6 +39,12 @@
   ignorées **et nommées** sur la sortie d'erreur au démarrage. Actives, la console
   porte un avertissement permanent dans sa barre latérale, qui **nomme les
   commandes remplacées**, sur tous les écrans.
+- **SPK-100 — deux fichiers d'exemple commentés, et une preuve qui les tient.**
+  `.env.example` et `services/sparkd/sparkd.env.example` nomment **toutes** les
+  variables du dépôt, chacune avec son rôle, son format et ce qui arrive en son
+  absence. Un balayage du dépôt échoue désormais si une variable lue par le code
+  manque à l'un de ces fichiers, au README, ou d'un commentaire. Il a trouvé
+  `SPARKD_NOTIFY_TEMPLATE` dès sa première exécution.
 - **SPK-100 — `--prefix` et `--state`.** `scripts/install-serveur.sh` et
   `scripts/dev.sh` prennent des arguments nommés, avec `--help` et refus d'une
   option inconnue, à la place de `SPARKD_PREFIX` et `SPARK_DEV_STATE`.

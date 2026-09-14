@@ -37,6 +37,7 @@ import {
 } from './forge-reboot.js';
 import { capture as capturerConsole, compare as comparerConsole,
          describe as decrireConsole } from './console-build.js';
+import { lireEpreuve } from './epreuve.js';
 import { relever as releverDocker, inspecterConteneur, lireJournaux }
   from './docker.js';
 import { agir as agirConteneur, GESTES } from './gestes-docker.js';
@@ -71,10 +72,14 @@ export function createConsoleHost(options = {}) {
   const tunnels = options.tunnels ?? new TunnelManager();
   // SPK-43 · §37.1 : les sessions de terminal vivent ICI, sur le poste. Le plan
   // de contrôle n'est pas dans ce chemin et n'en gagne aucun pouvoir.
+  // SPK-100 · §53.3 : relevé UNE fois, au démarrage. Hors `SPARK_EPREUVE=1`,
+  // les quatre doublons sont inertes, et ceux qui sont posés sans interrupteur
+  // sont nommés sur la sortie d'erreur — vus, refusés, et le refus dit.
+  const epreuve = options.epreuve ?? lireEpreuve();
   const terminaux = options.terminals ?? new SessionManager({
     // §37.4.2 bis : absente en production, et c'est le cas normal — le produit
     // lance alors `ssh`.
-    commande: process.env.SPARK_TERMINAL_COMMAND || null,
+    commande: epreuve.commande('SPARK_TERMINAL_COMMAND'),
   });
   const inventoryPath = options.inventoryPath;
   const anchorPath = options.anchorPath;
@@ -104,9 +109,10 @@ export function createConsoleHost(options = {}) {
   // §50.4 : journal et verrous vivent sur l'hôte, séparément de l'inventaire
   // sans secret. Le chemin suit celui de l'inventaire uniquement pour rester
   // dans le même répertoire privé de configuration.
+  // SPK-100 · §53.2 : le chemin n'a plus de surcharge d'environnement. Elle
+  // n'était posée par personne, et le paramètre suffit à qui déplace l'état.
   const installationsForge = options.forgeInstallations ?? new ForgeInstallManager({
     path: options.forgeInstallStatePath
-      ?? process.env.SPARK_FORGE_INSTALL_STATE
       ?? join(dirname(inventoryPath ?? DEFAULT_INVENTORY_PATH), 'forge-installations.json'),
     resolveTarget: options.resolveForgeInstallTarget ?? (async () => {
       const depot = await etatDepot(racineDepot);
@@ -382,7 +388,7 @@ export function createConsoleHost(options = {}) {
     const decrit = await amont.json();
     return { status: 200,
              body: await lire({ tunnel, spark: decrit, nom: conteneur,
-                                doublon: process.env.SPARK_DOCKER_COMMAND || null }) };
+                                doublon: epreuve.commande('SPARK_DOCKER_COMMAND') }) };
   }
 
   /**
@@ -771,6 +777,19 @@ export function createConsoleHost(options = {}) {
     }),
 
     /**
+     * L'état de l'interrupteur d'épreuve (SPK-100, §53.3).
+     *
+     * Lecture pure et locale au poste, comme le relevé de build : elle n'ouvre
+     * aucun tunnel et ne modifie rien. Elle existe pour que la coquille puisse
+     * DIRE qu'un doublon est actif — un interrupteur qui ne se lirait que dans
+     * l'environnement du processus resterait caché à qui regarde l'écran.
+     */
+    'GET /api/console/epreuve': async () => ({
+      status: 200,
+      body: { active: epreuve.actif, doublons: epreuve.doublons },
+    }),
+
+    /**
      * La clé publique du POSTE qui ouvre cette Forge (SPK-82, §42.10.2).
      *
      * Lecture pure : elle n'ouvre aucun tunnel — un tunnel déjà ouvert a
@@ -830,7 +849,8 @@ export function createConsoleHost(options = {}) {
                  body: { error: 'unknown_server', message: `Aucun serveur « ${nom} ».` } };
       }
       try {
-        const vu = lireReleve(await executerSurLaForge(serveur, RELEVE_SCRIPT));
+        const vu = lireReleve(await executerSurLaForge(serveur, RELEVE_SCRIPT,
+          { doublon: epreuve.commande('SPARK_REBOOT_COMMAND') }));
         return { status: 200, body: { server: nom, ...vu } };
       } catch (erreur) {
         return { status: 502, body: { error: erreur.code ?? 'releve_failed',
@@ -861,7 +881,8 @@ export function createConsoleHost(options = {}) {
       }
       let vu;
       try {
-        vu = lireReleve(await executerSurLaForge(serveur, RELEVE_SCRIPT));
+        vu = lireReleve(await executerSurLaForge(serveur, RELEVE_SCRIPT,
+          { doublon: epreuve.commande('SPARK_REBOOT_COMMAND') }));
       } catch (erreur) {
         return { status: 502, body: { error: erreur.code ?? 'releve_failed',
           message: erreur.message } };
@@ -871,8 +892,10 @@ export function createConsoleHost(options = {}) {
           message: vu.refus?.message ?? 'Redémarrage refusé.', ...vu } };
       }
       try {
-        await executerSurLaForge(serveur, REBOOT_SCRIPT,
-                                 { timeoutMs: REBOOT_TIMEOUT_MS });
+        await executerSurLaForge(serveur, REBOOT_SCRIPT, {
+          timeoutMs: REBOOT_TIMEOUT_MS,
+          doublon: epreuve.commande('SPARK_REBOOT_COMMAND'),
+        });
       } catch (erreur) {
         // Un `close` non nul APRÈS `systemctl reboot --no-block` n'est pas un
         // échec : la machine coupe la connexion. Seul un refus AVANT l'ordre en
@@ -1459,7 +1482,7 @@ export function createConsoleHost(options = {}) {
       if (lireDocker) return { status: 200, body: await lireDocker(decrit.name) };
       return { status: 200,
                body: await releverDocker({ tunnel, spark: decrit,
-                                           doublon: process.env.SPARK_DOCKER_COMMAND || null }) };
+                                           doublon: epreuve.commande('SPARK_DOCKER_COMMAND') }) };
     },
 
     /**
@@ -1508,7 +1531,7 @@ export function createConsoleHost(options = {}) {
       const vu = agirInjecte
         ? await agirInjecte({ spark: decrit, nom: conteneur, geste })
         : await agirConteneur({ tunnel, spark: decrit, nom: conteneur, geste,
-                                doublon: process.env.SPARK_DOCKER_COMMAND || null });
+                                doublon: epreuve.commande('SPARK_DOCKER_COMMAND') });
 
       // Le refus du GEL est un 423, celui-là même que le runtime emploie : deux
       // codes pour un même refus obligeraient à savoir par quel chemin on passe.
@@ -1585,7 +1608,7 @@ export function createConsoleHost(options = {}) {
         const sonde = sonderShellInjecte
           ? await sonderShellInjecte({ spark: decrit, nom: conteneur })
           : await sonderShell({ tunnel, spark: decrit, nom: conteneur,
-                                doublon: process.env.SPARK_DOCKER_COMMAND || null });
+                                doublon: epreuve.commande('SPARK_DOCKER_COMMAND') });
         if (sonde.state !== SHELL_TROUVE) {
           // 409 : l'état du conteneur empêche d'entrer. Ce n'est ni un refus
           // d'autorisation (423) ni une absence (404) — le conteneur peut fort
@@ -1726,7 +1749,9 @@ export function createConsoleHost(options = {}) {
       // Tout le reste est relayé au sparkd du serveur choisi.
       if (url.pathname.startsWith('/api/v1/')) {
         return await relayer(url, requete, reponse, tunnels, fetchFn,
-                             { signer: signerInjecte ?? signerIntention });
+                             { signer: signerInjecte
+                               ?? ((intention, tunnel) =>
+                                     signerIntention(intention, tunnel, epreuve)) });
       }
 
       // Fichiers de la console. Servis uniquement depuis ce dossier : un
@@ -1760,13 +1785,17 @@ export function createConsoleHost(options = {}) {
  * agent, `ssh-keygen` lui délègue la signature et ne lit jamais le secret.
  * Absente, ce serveur n'est simplement pas signé — un état normal, pas une panne.
  */
-function signerIntention(intention, tunnel) {
+function signerIntention(intention, tunnel, epreuve) {
   return signatureService.signer(intention, {
     signingKey: tunnel?.server?.signingKey ?? null,
     // §36.10.8 : le doublon remplace la COMMANDE, pas le mécanisme — la pile de
     // développement n'a pas d'agent, et sans lui aucun parcours ne pourrait
     // éprouver ce que le produit possède.
-    doublon: process.env.SPARK_SIGN_COMMAND || null,
+    //
+    // SPK-100 · §53.3 : cette fonction vit au scope MODULE, donc l'interrupteur
+    // lui est PASSÉ. Le relire ici depuis `process.env` rouvrirait la porte que
+    // l'unité ferme, à l'endroit le plus sensible du produit — la signature.
+    doublon: epreuve?.commande('SPARK_SIGN_COMMAND') ?? null,
   });
 }
 

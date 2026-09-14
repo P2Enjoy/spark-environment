@@ -163,6 +163,11 @@ sudo scripts/install-serveur.sh
 Le script est **idempotent** : le relancer met à jour le code et l'unité sans
 rien détruire. **Il n'efface jamais le registre.**
 
+Il pose `sparkd` dans `/opt/sparkd`. Pour un autre emplacement, nommez-le :
+`sudo scripts/install-serveur.sh --prefix /srv/sparkd`. `--help` liste ce que le
+script accepte, et il refuse une option qu'il ne connaît pas plutôt que de
+l'ignorer.
+
 Il installe `sparkd` dans un environnement isolé, pose son unité systemd,
 l'**active au démarrage**, puis relance la vérification.
 

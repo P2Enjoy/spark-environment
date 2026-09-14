@@ -6503,6 +6503,22 @@ table du README.
 - Parcours E2E depuis l'accueil : le bandeau existe, **nomme les quatre
   commandes**, porte `role="status"`, survit à un changement d'écran — il
   appartient à la coquille —, et la route le confirme sans rendre aucune valeur.
+- **Complété le 2026-09-14 sur arbitrage du responsable** : « ne jamais
+  introduire de variables cachées non documentées et TOUJOURS les ajouter dans
+  les fichiers `.env.example` avec un commentaire explicatif. Aucune exception
+  ne sera tolérée. » La règle entre dans `CLAUDE.md` §3 — reprise en §5, dans la
+  Definition of Done du §17 et dans les priorités du §26 —, le contrat au §53.1
+  bis, et **toutes** les variables du dépôt sont rattrapées dans deux fichiers
+  d'exemple commentés : `.env.example` et `services/sparkd/sparkd.env.example`.
+- **La règle est tenue par une preuve qui balaie le dépôt** —
+  `test_variables_documentees.py`, quatre contrôles : présence en fichier
+  d'exemple, présence au README, commentaire au-dessus de chaque variable, et
+  non-retour des leviers retirés. **Elle a trouvé une NEUVIÈME variable dès sa
+  première exécution** : `SPARKD_NOTIFY_TEMPLATE`, que l'inventaire manuel avait
+  manquée — documentée au README, absente du fichier d'exemple.
+- Les 28 illustrations du manuel sont refaites : elles portent le bandeau
+  d'épreuve, puisqu'elles sortent de la pile doublée. Comparées une à une à leur
+  version précédente, la mise en page est inchangée — seul le bandeau s'ajoute.
 - Captures observées, reproductibles par `node e2e/epreuve.mjs` :
   `spk100-01-bandeau.jpg` et `spk100-02-bandeau-mobile.jpg`. À 390 px la barre
   latérale devient une rangée et le bandeau y prend sa propre ligne, sans

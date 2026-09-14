@@ -58,6 +58,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // SPK-65 · §40.5 : l'hôte dit si CE processus Node a démarré
                // avant le code du poste. Cela ne dépend d'aucune Forge.
                consoleBuild: null,
+               epreuve: null,
                // SPK-93 · §52.11 : les deux surfaces de supervision. Elles ont
                // chacune leur etat parce qu'elles ont chacune leur sujet — la
                // Forge d'un cote, un Spark de l'autre — et que la fenetre
@@ -4509,6 +4510,35 @@ function peindreBuildConsole() {
     : '';
 }
 
+/**
+ * Le bandeau d'épreuve, dans la barre latérale (SPK-100).
+ *
+ * @spec docs/BACKLOG.md#SPK-100 · docs/DAT.md §53.3 (l'interrupteur se voit à
+ *       l'écran), §53.1 (les quatre cases d'un réglage) ·
+ *       docs/DESIGN_SYSTEM.md §25.1 (le rouge est réservé au refus du serveur),
+ *       §9.7 (`role="status"`), §9.8 (la couleur n'est jamais seule)
+ *
+ * **En accent, jamais en rouge** : rien n'est refusé et rien n'est en panne —
+ * cette console marche, elle ne parle simplement pas aux vraies commandes. Le
+ * titre porte l'information, la couleur ne fait que la souligner.
+ *
+ * Il NOMME les commandes remplacées. « Mode épreuve » seul ferait deviner
+ * lesquelles, et c'est précisément ce que l'unité corrige.
+ */
+function peindreEpreuve() {
+  const zone = racine.querySelector('.entete__epreuve');
+  if (!zone) return;
+  const vu = etat.epreuve;
+  zone.innerHTML = vu?.active
+    ? `<div class="avertissement avertissement--laterale" role="status">
+         <p><strong>Pile d’épreuve : commandes remplacées</strong></p>
+         <ul>${vu.doublons.map((d) => `<li>${echapperTexte(
+             d.remplace.replace(/`/g, ''))}</li>`).join('')}</ul>
+         <p>Cette console ne parle pas aux vraies commandes.</p>
+       </div>`
+    : '';
+}
+
 const echapperTexte = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -4565,6 +4595,13 @@ async function demarrer() {
     etat.consoleBuild = corps;
     peindreBuildConsole();
   }).catch(() => { /* comparaison indisponible : aucun faux avertissement */ });
+  // SPK-100 · §53.3 : même place et même durée de vie que le message ci-dessus.
+  // Il appartient à la coquille : ce qui est remplacé l'est pour TOUS les
+  // écrans, et un bandeau posé dans l'un d'eux disparaîtrait en naviguant.
+  fetch('/api/console/epreuve').then((r) => r.json()).then((corps) => {
+    etat.epreuve = corps;
+    peindreEpreuve();
+  }).catch(() => { /* une console sans cette route n'invente aucun bandeau */ });
   const { servers, tunnels, current } = await (await fetch('/api/servers')).json();
   etat.servers = servers;
   const entete = racine.querySelector('.entete__contexte');

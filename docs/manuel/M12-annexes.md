@@ -5,6 +5,10 @@
 Les **noms** figurent ici ; leurs valeurs n'apparaissent jamais dans la
 documentation.
 
+**Le produit n'a pas d'autre levier que ceux nommés ici et dans le README.** Un
+réglage se pose depuis un écran, par un argument de script, ou par une variable
+documentée — jamais par une variable que seul le code connaîtrait.
+
 ### Runtime serveur
 
 | Variable | Rôle | Requis |
@@ -15,6 +19,7 @@ documentation.
 | `SPARKD_CADDY_ADMIN` | API d'administration du proxy | non |
 | `SPARKD_DRIVER` | pilote d'exécution : réel ou factice | non |
 | `SPARKD_STORAGE_POOL` | pool de stockage dont la capacité fait foi | non |
+| `SPARKD_NETWORK_BRIDGE` | pont réseau des cellules — **posé par l'écran d'installation de la Forge**, champ *Bridge* | non |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge, hors ARC | non |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | non |
 
@@ -24,6 +29,19 @@ documentation.
 |---|---|---|
 | `SPARK_CONSOLE_PORT` | port local de la console | non |
 | `SPARK_CONSOLE_STATE` | fichier d'inventaire des serveurs | non |
+| `SPARK_EPREUVE` | interrupteur de la **pile d'épreuve** : `1` autorise les commandes doublées. Absent en exploitation, et c'est le cas normal | non |
+
+### La pile d'épreuve, et comment elle se voit
+
+Le harnais de preuves remplace quatre commandes — le terminal, `docker`, le
+redémarrage de la Forge et la signature d'un geste — pour éprouver la console
+sans machine distante. Ces remplacements ne sont lus que sous `SPARK_EPREUVE=1`.
+
+Vous n'avez rien à poser : une console d'exploitation n'a pas cet interrupteur.
+S'il était actif, vous le verriez — un **avertissement permanent dans la barre
+latérale** nomme les commandes remplacées, sur tous les écrans. Les
+illustrations de ce manuel le portent, parce qu'elles sont produites par ce
+harnais.
 
 ## Journal d'audit
 

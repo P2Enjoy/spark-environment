@@ -74,7 +74,12 @@ export function executerSurLaForge(server, script, {
   // `SPARK_TERMINAL_COMMAND` et `SPARK_SIGN_COMMAND` — la pile de preuves n'a
   // pas de Forge à redémarrer, et le REFUS est ce qu'il faut pourtant éprouver
   // de bout en bout.
-  doublon = process.env.SPARK_REBOOT_COMMAND || null,
+  //
+  // SPK-100 · §53.3 : le doublon est PASSÉ, jamais relu ici. Ce défaut par
+  // valeur lisait `process.env` directement, donc hors interrupteur : la porte
+  // restait ouverte alors que l'appelant croyait la refermer. Le défaut est
+  // désormais « aucun doublon », et c'est `epreuve.commande()` qui décide.
+  doublon = null,
 } = {}) {
   let args;
   try {
