@@ -10814,6 +10814,36 @@ peut ni voir ni éprouver depuis l'écran est un canal dont on ne sait pas s'il
 veille. La configuration vit donc **au registre**, et l'onglet la rend visible et
 essayable.
 
+#### 47.3.0 bis L'onglet, et pourquoi il est une DESTINATION — SPK-62
+
+La configuration vit au registre (§47.3) ; l'onglet est ce qui la rend visible
+et **essayable**. Il se range sous *Forge*, comme le DNS et la supervision : un
+canal d'alerte décrit la Forge et non un Spark.
+
+**Trois choses qu'il montre, et qui ne se lisent nulle part ailleurs :**
+
+1. **d'où vient ce qui veille.** Une Forge peut encore tourner sur
+   `SPARKD_NOTIFY_URL` ; l'écran le dit, faute de quoi on réglerait l'onglet
+   sans effet et sans le savoir ;
+2. **les quatre états du canal**, jamais confondus : aucun canal, configuré mais
+   **désactivé**, actif et sain, actif **en échec** (§14.6). « Désactivé » garde
+   son URL — on ne la retape pas pour un essai ;
+3. **ce qu'on ne peut pas lire** : l'URL ne s'affiche pas, même à son
+   propriétaire. Son **hôte** suffit à reconnaître le canal, et ne suffit pas à
+   s'en servir.
+
+**Ce que l'onglet ne fait PAS, et c'est délibéré.** Il n'offre pas de bouton
+« essayer le canal » qui enverrait un message de test. Motif : une alerte hors
+bande est faite pour **détecter**, et un canal qu'on peut faire parler sur
+commande apprend à son destinataire que certains messages ne comptent pas. La
+seule épreuve d'un canal est un vrai geste sensible, et le §47.2 en donne la
+liste fermée — dont `spark.unprotect`, qui est **réversible**.
+
+**Le champ du mot de passe est dans le formulaire, pas dans une modale.** Il est
+exigé à chaque écriture, et non une fois pour la session : une session déverrouillée
+est exactement ce que le §47.3.3 refuse — qui peut couper le témoin en silence
+peut agir sans témoin.
+
 #### 47.3.1 Le gabarit du webhook
 
 Le corps par défaut est celui du §47.4. Un **gabarit** permet de le mettre à la
