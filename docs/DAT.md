@@ -4884,6 +4884,43 @@ courriel — serait rejouable ici. Mesuré : un espace de noms différent est re
 > mesure qui contredit les autres se **rejoue de zéro** avant d'être crue ; celle-ci
 > l'a été, et le refus est bien `255`.
 
+#### 36.10.2 bis Le PRINCIPAL n'est pas l'acteur — mesuré le 2026-09-14
+
+**Défaut trouvé en faisant signer un agent réel pour la première fois**, ce qui
+était précisément le seul écart que SPK-40 laissait ouvert. La Forge refusait
+toute signature, `signature_invalide`, alors que l'agent signait correctement.
+
+**La cause.** L'identité déclarée par l'hôte console est
+`console/<serveur> key=SHA256:…` (§21.6.3) : le serveur toujours, l'empreinte
+quand elle est connue. La Forge la passait telle quelle à
+`ssh-keygen -Y verify -I`, qui en fait un **principal** — et un principal
+d'`allowed_signers` **ne peut pas contenir d'espace**, la liste des principaux
+étant séparée par des virgules.
+
+Autrement dit : dès que la console connaissait son empreinte — c'est-à-dire dans
+toute exploitation normale —, **aucune signature ne pouvait se vérifier**. Le
+harnais ne le voyait pas parce que son doublon signe pour un serveur `local`
+dont le tunnel ne porte aucune empreinte : l'identité y est le principal nu, et
+elle passe.
+
+**La correction.** Les deux usages de l'identité sont **séparés**, parce qu'ils
+ne répondent pas à la même question :
+
+- ce qui est **signé** garde l'identité COMPLÈTE, empreinte comprise. C'est ce
+  que la console a signé, et le §36.10.3 exige que les octets décrivent la
+  requête telle qu'elle est ;
+- ce qui sert de **principal** est l'identité réduite à `console/<serveur>`.
+  L'empreinte est une attribution portée par le journal, pas un nom de
+  signataire.
+
+`allowed_signers` se lit donc ainsi, et c'est ce que le runbook doit écrire :
+
+    console/<nom-du-serveur> namespaces="spark-audit" ssh-ed25519 AAAA…
+
+**Ce que cela ne change pas** : l'empreinte reste dans le journal, où elle sert
+à savoir quelle clé a été employée. Elle cesse seulement de prétendre être un
+nom.
+
 #### 36.10.3 Ce qui est signé : l'intention, sérialisée canoniquement
 
 La signature porte sur des **octets**, et le §36.5 dit ce que cela impose. La
