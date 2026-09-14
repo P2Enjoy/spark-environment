@@ -335,7 +335,13 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
  * une facette sans `capacite` est offerte à tous les Sparks.
  */
 export const FACETTES_SPARK = [
-  ['', 'Infos'], ['routes', 'Routes'], ['cles', 'Clés'],
+  ['', 'Infos'],
+  // SPK-104 · §54.10 : trois textes longs qui s'éditent sont une DESTINATION,
+  // pas un encart de la facette Infos — la règle qui a déjà sorti le terminal
+  // (§34.1, SPK-DS-04). Elle vient en second parce qu'elle répond à « qu'est-ce
+  // que ce Spark », la question qu'on se pose avant toutes les autres.
+  ['notes', 'Notes'],
+  ['routes', 'Routes'], ['cles', 'Clés'],
   ['instantanes', 'Instantanés'],
   // SPK-93 · §52.11 : les courbes de CE Spark, comparees a SES quotas. Elles
   // se lisent, comme les infos ; la facette vient donc avant celles qui

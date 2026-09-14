@@ -386,6 +386,65 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
                  200, quoi=f"case « {nom} » cochée sur crm-production")
         compte["environnement"] = compte.get("environnement", 0) + 1
 
+    # --- Notes (SPK-104, docs/DAT.md §54) et propositions (SPK-105, §55).
+    #
+    # Les TROIS états d'une note doivent être atteignables depuis l'écran, sans
+    # quoi la facette se démontrerait sur des champs vides : une note écrite
+    # depuis la console, une note venue d'une PROPOSITION acceptée, et une note
+    # que personne n'a écrite. Le §14.6 les distingue, et un seed qui n'en
+    # montrerait qu'un rendrait la distinction invérifiable à l'œil.
+    #
+    # Les textes passent par la VRAIE route d'API, comme tout le reste du seed
+    # (§28.3) : aucune ligne n'est écrite en base à la main.
+    notes_seedees = [
+        ("crm-production", "readme",
+         "# CRM de production\n\n"
+         "Le CRM que l'équipe commerciale emploie tous les jours. Il porte les "
+         "comptes clients et les devis ; l'arrêter arrête la facturation.\n\n"
+         "- Pile : une application web et sa base Postgres, en Compose.\n"
+         "- Sauvegardes : instantané quotidien, plus l'export S3 de "
+         "l'application elle-même."),
+        ("crm-production", "contributors",
+         "## Où sont les choses\n\n"
+         "- Sources : dépôt `crm`, branche `main`.\n"
+         "- Pile déployée : `/srv/crm/docker-compose.yml`.\n"
+         "- Configuration : `/srv/crm/config/`, montée en lecture seule.\n"
+         "- Variables et secrets : `/etc/spark/env` et `/run/spark/secrets`, "
+         "posés par la console — ne les éditez pas à la main.\n"
+         "- Journaux applicatifs : `docker compose logs -f`."),
+    ]
+    for spark, note, texte in notes_seedees:
+        _attendu(client.put(f"/v1/sparks/{spark}/notes/{note}",
+                            json={"body": texte, "revision": 0}),
+                 200, quoi=f"note « {note} » de {spark}")
+        compte["notes"] = compte.get("notes", 0) + 1
+
+    # SPK-105 · §55.5 : DEUX propositions déposées dans la cellule, et laissées
+    # EN ATTENTE. C'est l'état que l'écran doit savoir montrer — celui où le
+    # propriétaire a une décision à prendre. Un seed qui les accepterait
+    # aussitôt ne démontrerait rien.
+    #
+    # Elles sont écrites comme un agent les écrit : dans le fichier `.?`, sous
+    # l'en-tête que le produit y a posé. Le doublon du pilote les porte, et la
+    # console les relit par le même chemin qu'en exploitation.
+    from . import suggestions as suggestions_service
+
+    propositions = [
+        ("crm-production", "install",
+         "## Intégrer le CRM\n\n"
+         "- API REST : `https://crm.interne.example/api/v1`\n"
+         "- Authentification : jeton porteur, demandé au responsable.\n"
+         "- Format : JSON, pagination par `?page=` et `?per_page=`."),
+        ("crm-production", "variables",
+         "REDIS_URL=redis://cache:6379\n"
+         "SESSION_TTL=3600\n"),
+    ]
+    for spark, kind, texte in propositions:
+        cellule = client.app.state.incus
+        cellule.push_file(spark, suggestions_service.chemin(kind),
+                          suggestions_service.entete(kind) + texte)
+        compte["propositions"] = compte.get("propositions", 0) + 1
+
     # --- Un Spark PROTÉGÉ (SPK-34, docs/DAT.md §35). Sans lui, l'écran ne peut
     # montrer ni le badge, ni le refus 423, ni la confirmation de révocation qui
     # nomme les Sparks protégés. Le mot de passe est celui du manuel M8 : c'est
@@ -546,6 +605,32 @@ def verify(client: TestClient) -> None:
         raise SeedError(
             f"« {orphelines[0]['name']} » n'est cochée nulle part et apparaît "
             "pourtant chez crm-production : le catalogue descend tout seul")
+
+    # SPK-104 · §54.10 : les TROIS états d'une note doivent être atteignables.
+    # Un seed qui n'en montrerait qu'un rendrait la distinction du §14.6
+    # invérifiable à l'œil — « personne n'a écrit » ressemble alors à « vide ».
+    notes = client.get("/v1/sparks/crm-production/notes").json()["notes"]
+    par_id = {n["id"]: n for n in notes}
+    if not par_id["readme"]["written"] or par_id["readme"]["origin"] != "console":
+        raise SeedError(
+            "« readme » de crm-production devrait être écrite depuis la console")
+    if par_id["install"]["written"]:
+        raise SeedError(
+            "« install » de crm-production doit rester NON écrite : c'est le seul "
+            "moyen de montrer à l'écran qu'une note peut n'avoir jamais servi")
+
+    # SPK-105 · §55.5 : deux propositions EN ATTENTE, et elles le restent. Les
+    # lire ne les consomme pas — c'est la règle que le seed doit démontrer.
+    vues = client.get("/v1/sparks/crm-production/suggestions").json()
+    en_attente = {s["kind"] for s in vues["suggestions"] if s["present"]}
+    if {"install", "variables"} - en_attente:
+        raise SeedError(
+            "les deux propositions déposées dans la cellule devraient être en "
+            f"attente ; seules {sorted(en_attente)} le sont")
+    # Relue une seconde fois : elle doit TOUJOURS être là (§55.5).
+    encore = client.get("/v1/sparks/crm-production/suggestions").json()
+    if {s["kind"] for s in encore["suggestions"] if s["present"]} != en_attente:
+        raise SeedError("consulter une proposition l'a consommée : §55.5 violé")
 
     # SPK-85 · §44.9 : le dossier doit être LISIBLE sur un Spark seedé, y compris
     # avant tout amorçage — c'est justement l'état où l'on prépare un

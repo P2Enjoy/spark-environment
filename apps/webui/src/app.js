@@ -16,6 +16,7 @@ import { renderSparksView } from './components/sparks-view.js';
 import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spark-detail.js';
 import { IDENTITE_VIDE } from './components/spark-identity.js';
 import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
+import { NOTES_VIDE } from './components/spark-notes.js';
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { IMPORT_VIDE, analyser } from './components/env-import.js';
@@ -30,7 +31,8 @@ import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zoneP
   from './components/spark-admin.js';
 import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
-import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE } from './components/forge-images.js';
+import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE,
+         FACETTES_SPARK } from './components/forge-images.js';
 import { DEPOT_VIDE, libelleEngagement, libelleIndication }
   from './components/forge-depot.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
@@ -150,7 +152,12 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // lecture du registre — la route n'entre PAS dans la cellule —,
                // et il est demandé avec le détail pour que la copie parte du
                // même geste que le clic (§44.9.5).
-               dossier: { ...DOSSIER_VIDE } };
+               dossier: { ...DOSSIER_VIDE },
+               // SPK-104 · §54.10 : la facette Notes. Elle ne se charge que
+               // lorsqu'on l'ouvre — trois textes et une lecture de la cellule
+               // n'ont rien à faire dans le chargement des huit autres facettes.
+               notes: { ...NOTES_VIDE, brouillons: {}, items: [],
+                        propositions: [] } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -275,6 +282,7 @@ function peindre() {
                             facette: etat.facette, terminal: etat.terminal,
                             amorcage: etat.amorcage, docker: etat.docker,
                             identite: etat.identite, dossier: etat.dossier,
+                            notes: etat.notes,
                             mesures: etat.mesures,
                             ...etat.detail })
       : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
@@ -1901,6 +1909,67 @@ function brancherPanneaux() {
   for (const bouton of racine.querySelectorAll('[data-dossier-copie]')) {
     bouton.addEventListener('click', () => copierDossier());
   }
+  // SPK-104 · §54.10 : la facette Notes.
+  //
+  // La saisie est retenue SANS repeindre. Repeindre à chaque frappe
+  // reconstruirait le `textarea` et remettrait le curseur à l'offset 0 — le
+  // défaut mesuré au §14.3, qui écrivait « DATABASE » à l'envers.
+  for (const zone of racine.querySelectorAll('[data-note-saisie]')) {
+    zone.addEventListener('input', () => {
+      etat.notes.brouillons[zone.dataset.noteSaisie] = zone.value;
+      // Le bouton « Enregistrer » dépend de la saisie : on le rend utilisable
+      // sans reconstruire la carte, donc sans perdre le curseur.
+      const carte = zone.closest('section');
+      const bouton = carte?.querySelector('[data-note-enregistrer]');
+      const note = etat.notes.items.find((n) => n.id === zone.dataset.noteSaisie);
+      if (bouton && note) bouton.disabled = zone.value === note.body;
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-note-enregistrer]')) {
+    bouton.addEventListener('click', () => enregistrerNote(
+      bouton.dataset.noteEnregistrer, bouton.dataset.revision));
+  }
+  for (const bouton of racine.querySelectorAll('[data-note-annuler]')) {
+    bouton.addEventListener('click', () => {
+      delete etat.notes.brouillons[bouton.dataset.noteAnnuler];
+      etat.notes.issue = null;
+      etat.notes.conflit = null;
+      peindre();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-note-reprendre]')) {
+    // §54.10 : repartir du texte courant après un refus de révision. On NE
+    // l'enregistre pas d'office — c'est une reprise de saisie, pas une décision.
+    bouton.addEventListener('click', () => {
+      const id = bouton.dataset.noteReprendre;
+      etat.notes.brouillons[id] = etat.notes.conflit?.note?.body ?? '';
+      etat.notes.conflit = null;
+      etat.notes.issue = null;
+      peindre();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-note-accepter]')) {
+    bouton.addEventListener('click', () => trancherProposition(
+      bouton.dataset.noteAccepter, bouton.dataset.sha, true));
+  }
+  for (const bouton of racine.querySelectorAll('[data-note-refuser]')) {
+    bouton.addEventListener('click', () => trancherProposition(
+      bouton.dataset.noteRefuser, bouton.dataset.sha, false));
+  }
+  for (const bouton of racine.querySelectorAll('[data-notes-relire]')) {
+    bouton.addEventListener('click', async () => {
+      await chargerNotes(etat.spark.name);
+      peindre();
+    });
+  }
+  // §55.5 : le repli d'une proposition survit à la repeinture, comme celui du
+  // dossier. Sans cela, on le referme en acceptant la note d'à côté.
+  for (const repli of racine.querySelectorAll('.proposition .repli')) {
+    repli.addEventListener('toggle', () => {
+      const id = repli.closest('[data-proposition]')?.dataset.proposition;
+      etat.notes.compare = repli.open ? id : null;
+    });
+  }
   // Le repli survit à la repeinture. On NE repeint PAS ici : `innerHTML`
   // reconstruirait la section et arracherait le focus au clavier (§14.3) — on
   // ne fait que retenir ce que l'exploitant vient d'ouvrir.
@@ -2905,6 +2974,121 @@ async function copierDossier() {
   peindre();
 }
 
+/**
+ * Les trois notes d'un Spark, et les propositions de texte venues de la cellule.
+ *
+ * @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.9 (la surface), §54.10 (ce que
+ *       la console en fait) · docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5, §55.9
+ *
+ * Deux lectures, et la seconde peut échouer sans emporter la première : le
+ * registre fait foi pour les textes, la cellule seule sait s'il y a une
+ * proposition. Les confondre ferait disparaître les notes d'un Spark arrêté.
+ */
+async function chargerNotes(nom) {
+  const n = etat.notes;
+  n.status = 'chargement';
+  n.erreur = null;
+  try {
+    const rendu = await api(`/v1/sparks/${encodeURIComponent(nom)}/notes`);
+    n.items = rendu.notes ?? [];
+    n.status = 'pret';
+  } catch (erreur) {
+    n.status = 'erreur';
+    n.erreur = erreur?.message ?? String(erreur);
+    return;
+  }
+  try {
+    const vues = await api(`/v1/sparks/${encodeURIComponent(nom)}/suggestions`);
+    n.cellLue = Boolean(vues.cell_read);
+    n.propositions = vues.suggestions ?? [];
+  } catch {
+    // §14.6 : ne pas avoir pu regarder n'est pas « aucune proposition ».
+    // L'écran le DIT plutôt que d'afficher une absence qu'il n'a pas constatée.
+    n.cellLue = false;
+    n.propositions = [];
+  }
+}
+
+/**
+ * Enregistre une note. La RÉVISION éditée part avec le texte (§54.9).
+ *
+ * Un `409` n'est pas une panne : c'est le seul moment où le produit peut dire
+ * qu'un texte allait être perdu. On garde donc la saisie et on montre les deux
+ * (§1.5 bis).
+ */
+async function enregistrerNote(id, revision) {
+  const n = etat.notes;
+  const texte = n.brouillons?.[id];
+  if (texte === undefined) return;
+  n.busy = id;
+  n.issue = null;
+  n.conflit = null;
+  peindre();
+  const { ok, corps } = await appel(
+    'PUT', `/v1/sparks/${encodeURIComponent(etat.spark.name)}/notes/${encodeURIComponent(id)}`,
+    { body: texte, revision: Number(revision) });
+  n.busy = null;
+  if (ok) {
+    delete n.brouillons[id];
+    n.issue = { id, ok: true, message: 'Note enregistrée, et posée dans la cellule.' };
+    await chargerNotes(etat.spark.name);
+  } else if (corps?.detail?.error === 'stale_revision' && corps.detail.current) {
+    n.conflit = { id, note: corps.detail.current };
+    n.issue = { id, ok: false, message: corps.detail.message };
+    await rafraichirNotesSansPerdreLaSaisie();
+  } else {
+    n.issue = { id, ok: false,
+                message: corps?.detail?.message ?? 'La note n’a pas été enregistrée.' };
+  }
+  peindre();
+}
+
+/** Relit les notes SANS écraser ce qu'on est en train de taper (§1.5 bis). */
+async function rafraichirNotesSansPerdreLaSaisie() {
+  const brouillons = { ...etat.notes.brouillons };
+  const conflit = etat.notes.conflit;
+  const issue = etat.notes.issue;
+  await chargerNotes(etat.spark.name);
+  etat.notes.brouillons = brouillons;
+  etat.notes.conflit = conflit;
+  etat.notes.issue = issue;
+}
+
+/**
+ * Accepte ou refuse une proposition de note (§55.5).
+ *
+ * L'empreinte relue part avec le geste : si l'agent a réécrit son fichier entre
+ * l'affichage et la décision, le serveur refuse plutôt que d'appliquer un texte
+ * que personne n'a lu (§55.5.2).
+ */
+async function trancherProposition(id, sha, accepte) {
+  const n = etat.notes;
+  const proposee = (n.propositions ?? []).find((p) => p.kind === id);
+  n.busy = id;
+  peindre();
+  const { ok, corps } = await appel(
+    'POST',
+    `/v1/sparks/${encodeURIComponent(etat.spark.name)}/suggestions/`
+    + `${encodeURIComponent(id)}/${accepte ? 'apply' : 'reject'}`,
+    accepte ? { sha256: sha, body: proposee?.body ?? '' } : { sha256: sha });
+  n.busy = null;
+  n.issue = {
+    id, ok,
+    message: ok
+      ? (accepte
+        ? 'Version acceptée : elle remplace la note, et le fichier de la cellule est vidé.'
+        : 'Proposition refusée : rien n’a été écrit, et le fichier de la cellule est vidé.')
+      // §55.5 : un refus du PRODUIT ne consomme pas. Le dire évite de croire
+      // que la proposition a disparu.
+      : (corps?.detail?.message ?? 'La proposition n’a pas pu être traitée.')
+        + ' La proposition reste dans la cellule.',
+  };
+  // `chargerNotes` ne touche pas à `issue` : le compte rendu du geste survit
+  // donc à la relecture, et c'est ce qu'on veut — il dit ce qui vient d'arriver.
+  await chargerNotes(etat.spark.name);
+  peindre();
+}
+
 async function chargerDetail(nom, facette = '') {
   etat.route = 'detail';
   etat.facette = facette;
@@ -2985,6 +3169,18 @@ async function chargerDetail(nom, facette = '') {
   // SPK-93 · §52.11 : les courbes partent APRES la peinture et SEULEMENT sur la
   // facette qui les montre. Une serie de deux cent quarante seaux n'a rien a
   // faire dans le chargement des six autres facettes.
+  // SPK-104 · §54.10 : les notes partent APRÈS la peinture et SEULEMENT sur la
+  // facette qui les montre. Elles coûtent une lecture de la cellule, et les huit
+  // autres facettes n'en ont aucun usage.
+  if (facette === 'notes' && etat.status === 'ready') {
+    await chargerNotes(nom);
+    peindre();
+  } else if (facette !== 'notes') {
+    // Les notes appartiennent à l'écran qui les a demandées : les garder
+    // afficherait celles d'un Spark sous le nom du suivant — le défaut que le
+    // §37.6 corrige pour Docker, et le §52.11 pour les mesures.
+    etat.notes = { ...NOTES_VIDE, brouillons: {}, items: [], propositions: [] };
+  }
   if (facette === 'mesures' && etat.status === 'ready') {
     chargerMesuresSpark(nom);
   } else if (facette !== 'mesures') {
@@ -4492,11 +4688,18 @@ function router() {
   if (location.hash === '#/creer') return chargerCreation();
   // Chaque facette d'un Spark est une véritable destination : on doit pouvoir
   // recharger la page sur « Instantanés » (DESIGN_SYSTEM.md §5.4, §6.27).
-  // SPK-43 · SPK-DS-04 : le terminal est une DESTINATION, avec sa propre
-  // adresse. L'omettre ici le rendait inatteignable au rechargement — et
-  // l'onglet menait à la facette « Infos ». Mesuré.
-  const detail = location.hash.match(
-    /^#\/sparks\/([^/?]+)(?:\/(routes|cles|instantanes|mesures|environnement|terminal|docker|journal))?(?:\?fenetre=([a-z0-9]+))?$/);
+  // SPK-43 · SPK-DS-04 : chaque facette est une DESTINATION, avec sa propre
+  // adresse. En omettre une ici la rend inatteignable au rechargement, et son
+  // onglet mène alors à « Infos » — mesuré une fois sur le terminal, et une
+  // seconde fois sur les notes, parce que cette liste était RECOPIÉE.
+  //
+  // Elle est désormais DÉRIVÉE de la table des facettes : une facette ajoutée
+  // là-bas est routable ici sans qu'on ait à y penser. Deux listes du même
+  // ensemble finissent toujours par diverger, et celle-ci l'a fait deux fois.
+  const detail = location.hash.match(new RegExp(
+    '^#/sparks/([^/?]+)(?:/('
+    + FACETTES_SPARK.map(([suffixe]) => suffixe).filter(Boolean).join('|')
+    + '))?(?:\\?fenetre=([a-z0-9]+))?$'));
   if (detail) {
     if (detail[3] && detail[3] !== etat.mesures.fenetre) {
       etat.mesures.fenetre = detail[3];

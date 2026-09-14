@@ -1044,6 +1044,65 @@ refuser d'installer.
   MOTD et le briefing sont des surfaces au même titre, lues par des agents qui
   n'ouvriront jamais la console, et la règle s'y applique entière.
 
+### SPK-DS-26 · Un texte que le produit ne vérifie pas le DIT, et se distingue d'un fait
+
+**Date** : 2026-09-14 · SPK-104, SPK-105 · `DAT.md` §54.3, §54.10, §55.9
+
+La console n'affichait jusqu'ici que des **faits** : quotas relevés, routes
+posées, versions observées. Un exploitant peut leur faire confiance sans y
+penser, et c'est ce qui rend le §14.9 tenable — le backend fait autorité.
+
+Les notes du §54 sont les premiers textes que le produit **transporte sans les
+vérifier**. Affichées comme tout le reste, elles seraient lues comme le reste, et
+une note périmée porterait l'autorité d'une mesure.
+
+**La règle** : toute surface qui rend un texte dont le produit n'est pas l'auteur
+dit, **avant de le montrer**, d'où il vient et ce qu'il vaut. Ici, en tête de
+facette : « Trois textes libres, écrits par ceux qui connaissent l'application.
+Le produit ne les vérifie pas : il les transporte. »
+
+Trois conséquences, appliquées à la facette *Notes* :
+
+- **le titre d'une carte est le NOM DU FICHIER**, pas une étiquette inventée par
+  l'écran. Vu à l'écran le 2026-09-14 : « README **README.md** » répétait le même
+  mot deux fois et passait sur deux lignes à 390 px. Le nom du fichier suffit, et
+  il a l'avantage d'être ce qu'on retrouvera dans la cellule — le chemin complet
+  est donné juste dessous, pour qu'on puisse aller l'y lire ;
+- **l'origine d'une révision se dit**, et « écrite depuis la console » n'est pas
+  « écrite depuis une proposition acceptée ». Ce sont deux auteurs, et le §14.7
+  veut qu'une donnée dont on connaît la provenance la porte ;
+- **« personne n'a encore écrit » n'est pas un champ vide** (§14.6). Le premier
+  appelle à écrire ; le second est un texte que quelqu'un a délibérément vidé.
+
+### SPK-DS-27 · Une proposition se lit À CÔTÉ de ce qu'elle remplacerait
+
+**Date** : 2026-09-14 · SPK-105 · `DAT.md` §55.5, §55.9
+
+Le canal `.?` du §55 fait arriver à l'écran des textes venus de la **cellule**,
+que le propriétaire accepte ou refuse. Pour une note, la proposition est un
+**remplacement intégral** : l'accepter sans voir ce qu'on remplace serait décider
+à l'aveugle.
+
+**La règle** : une proposition ne prend jamais la place de l'objet qu'elle vise.
+Les deux sont à l'écran en même temps — le texte courant dans son champ, la
+version proposée dans un bloc replié juste au-dessus —, et les boutons qui
+tranchent sont **dans** ce bloc, pas dans la barre d'actions de la carte.
+
+Trois choses que l'écran dit, parce qu'elles décident du geste :
+
+- **lire ne consomme pas.** « Tant que vous n'avez pas tranché, elle reste en
+  place — la lire ne l'efface pas. » Sans cette phrase, on hésite à ouvrir le
+  repli de peur de valider quelque chose ;
+- **trancher vide le fichier dans la cellule**, et c'est ainsi que son auteur
+  apprend qu'une décision a été prise. Le propriétaire doit le savoir : son geste
+  a un effet de l'autre côté, sur quelqu'un qu'il ne voit pas ;
+- **un refus du produit, lui, ne vide rien.** Une garde qui refuse — une valeur
+  de secret dans une note — laisse la proposition intacte, et le compte rendu le
+  dit, faute de quoi on croirait la proposition perdue.
+
+Le repli survit à la repeinture, comme celui du dossier (§14.3) : accepter la
+note d'à côté ne doit pas refermer ce qu'on était en train de comparer.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

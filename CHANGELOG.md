@@ -22,6 +22,17 @@
   désormais cette grammaire : elle voit 33 variables au lieu de 28.
 
 ### Ajouté
+- **SPK-104 — un onglet *Notes* dans la fenêtre d'un Spark.** Trois textes
+  libres, l'un sous l'autre, avec ce que chacun est censé porter et le chemin
+  auquel il vit dans la cellule. **Le produit ne les vérifie pas : il les
+  transporte**, et l'écran le dit avant de les montrer — sans quoi une note
+  périmée porterait l'autorité d'une mesure. Trois états ne se confondent pas :
+  « personne n'a encore écrit », « écrite depuis la console » et « écrite depuis
+  une proposition acceptée ». Si quelqu'un a écrit entre-temps, l'enregistrement
+  est **refusé** au lieu d'écraser : la saisie reste, et le texte qui vous a
+  devancé s'affiche à côté. Une version **proposée depuis la cellule** se lit
+  dans le même écran, au-dessus du texte qu'elle remplacerait — la lire ne la
+  consomme pas, la trancher vide le fichier de la cellule.
 - **SPK-104/105 — le briefing et le texte pour un LLM disent les deux
   nouveautés.** Le `BRIEFING.md` posé dans la cellule **nomme** les trois notes
   et donne la commande qui les lit ; le texte copié par *Copier pour un LLM* les

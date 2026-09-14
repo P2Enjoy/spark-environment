@@ -208,6 +208,25 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.locator('.dossier').scrollIntoViewIfNeeded();
     await capturer('m8-dossier', { hauteur: 1000 });
 
+    // --- M8 · Les notes d'un Spark (SPK-104, §54.10) -------------------------
+    // Le seed écrit deux notes et laisse la troisième NON écrite, avec une
+    // proposition en attente : l'illustration montre donc les trois états d'un
+    // coup, ce qu'aucune capture d'un écran vierge ne pourrait faire.
+    await ouvrir('crm-production');
+    await page.click('.onglets a:has-text("Notes")');
+    await page.waitForSelector('.note-carte', { timeout: 20000 });
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Lecture des notes'),
+      { timeout: 20000 });
+    await capturer('m8-notes', { hauteur: 1100 });
+
+    // La proposition DÉPLIÉE : c'est le geste que le chapitre décrit, et une
+    // capture repliée ne montrerait pas qu'on lit avant de trancher (§55.9).
+    await page.click('.proposition .repli summary');
+    await page.waitForSelector('.proposition .repli[open]', { timeout: 5000 });
+    await page.locator('.proposition').scrollIntoViewIfNeeded();
+    await capturer('m8-notes-proposition', { hauteur: 900 });
+
     // --- M8 · Protéger un Spark (SPK-34) -------------------------------------
     // « analytics » est protégé par le seed. On l'ouvre PAR SON LIEN, comme un
     // exploitant, et la fenêtre montre les deux choses à la fois : la barre qui

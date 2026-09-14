@@ -7220,9 +7220,18 @@ artefact, pas une narration) :
    deux textes se rédigent ensemble ou ils se contrediraient.*
 4. **Console** — facette *Notes*, trois éditeurs, les trois états du §54.10, le
    refus `409` qui ne perd pas la saisie. Preuves de composant, design system.
+   *Fait : 17 preuves de composant, 846 de console au vert ; SPK-DS-26 et
+   SPK-DS-27 écrites ; manuel M8 illustré depuis la pile réelle.* Deux défauts
+   trouvés **à l'écran** et corrigés : le titre répétait « README README.md » et
+   passait sur deux lignes à 390 px ; le routeur portait une liste de facettes
+   RECOPIÉE, qui rendait `#/sparks/x/notes` inatteignable — elle est désormais
+   dérivée de la table des onglets.
 5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte ses trois
    notes par le vrai chemin d'API ; un parcours les écrit depuis l'interface et
    les relit dans la cellule ; captures observées aux deux formats.
+   *Seed, captures et manuel faits ; le parcours E2E reste dû.* Le seed pose les
+   **trois** états d'une note et laisse `install` non écrite : sans elle, la
+   distinction du §14.6 serait invérifiable à l'œil.
 
 - **Aucune variable d'environnement** n'est introduite (§53). Le seul état neuf
   est la table `spark_note`.

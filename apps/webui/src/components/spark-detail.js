@@ -28,6 +28,7 @@ import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
 import { IMPORT_VIDE } from './env-import.js';
 import { IDENTITE_VIDE, renderIdentityPanel } from './spark-identity.js';
 import { DOSSIER_VIDE, renderDossier } from './spark-dossier.js';
+import { NOTES_VIDE, renderNotes } from './spark-notes.js';
 // §12.5 : la table des modes CPU vit à UN SEUL endroit. En recopier une
 // seconde ici ferait diverger deux libellés pour le même mode.
 // `MODES` est DÉJÀ pris dans ce fichier par les modes d'amorçage : on nomme donc
@@ -702,6 +703,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     envImport = IMPORT_VIDE,
                                     identite = IDENTITE_VIDE,
                                     dossier = DOSSIER_VIDE,
+                                    notes = NOTES_VIDE,
                                     mesures = SUPERVISION_VIDE,
                                     catalogue = [], pools = null, cores = null } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
@@ -727,6 +729,10 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     </div>`,
     // §39.3 : le nom D'ABORD, le port publié comme un second geste qui annonce
     // ce qu'il coûte. Les deux vivent donc sur la même facette, dans cet ordre.
+    // SPK-104 · §54.10 : la facette porte les trois notes l'une sous l'autre,
+    // et les propositions de texte venues de la cellule s'y acceptent — là où
+    // le geste se conclut, jamais ailleurs (§55.9).
+    notes: () => renderNotes(spark, notes),
     routes: () => renderRoutesPanel(spark, routes, admin)
                   + renderPortsPanel(spark, ports, admin, reservedPorts),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin)
