@@ -8466,14 +8466,13 @@ de doctrine, et c'est un constat, pas un oubli :
 | `nixos` | ni `nix-env` ni `ssh-keygen` dans le `PATH` d'une cellule fraîche |
 | `slackware` | `slackpkg` sans dépôt configuré à la sortie de l'image |
 | `openwrt` | `opkg`, sans `sshd` — la distribution emploie `dropbear` |
-| `voidlinux`, `gentoo`, `altlinux` | `sshd` **déjà présent** ; c'est l'activation qui diffère, et elle n'a pas été mesurée |
+| `voidlinux`, `gentoo`, `altlinux` | `sshd` **déjà présent** ; l'activation a été mesurée le 2026-09-14 et les trois sont entrées dans la table — voir §42.11 ter |
 | `freebsd` | Incus ne la publie **pas** en conteneur : « one was found for instance type virtual-machine ». Hors du `runtime: container` du produit |
 
-Les trois familles qui portent déjà `sshd` — Void, Gentoo, Alt — sont les
-candidates les plus proches pour la suite : il n'y manque qu'une commande
-d'activation mesurée. Elles restent `inconnue` tant que cette mesure n'est pas
-faite, parce qu'annoncer une capacité qu'on n'a pas éprouvée est exactement ce
-que ce document interdit ailleurs.
+Les trois familles qui portent déjà `sshd` — Void, Gentoo, Alt — **ont été
+mesurées le 2026-09-14 et sont servies** (§42.11 ter). Elles ont apporté une
+quatrième forme de doctrine : activer sans installer, et un troisième
+gestionnaire de services, `runit`.
 
 **Une famille inconnue reste refusée en `409`** (§42.9.5) : on ne devine pas un
 gestionnaire de paquets, et se tromper n'installerait au mieux rien.
@@ -8517,8 +8516,62 @@ cela que les trois lignes sont posées quel que soit l'état trouvé.
 
 **OpenRC n'est pas systemd, et le relevé ne doit pas le supposer.** `systemctl
 is-active ssh` n'existe pas sur Alpine. Le relevé du §42.6 interroge donc les
-deux gestionnaires de services et retient la première réponse utile ; il reste
+gestionnaires de services connus et retient la première réponse utile ; il reste
 **une** commande, exécutée **une** fois, et il n'écrit toujours rien.
+
+#### 42.11 ter Trois familles qui ACTIVENT sans installer — mesuré le 2026-09-14
+
+Les trois candidates que le §42.11 laissait en attente — Void, Gentoo, Alt — ont
+eu leur cellule sur la Forge de test. Elles entrent dans la table, et elles y
+entrent avec une **quatrième forme de doctrine** que la campagne précédente
+n'avait pas rencontrée.
+
+| Famille | `os_id` | services | Activation mesurée | Docker amont |
+|---|---|---|---|---|
+| `xbps` | `void` | **runit** | `ln -sf /etc/sv/sshd /etc/runit/runsvdir/default/sshd` | **aucun** |
+| `emerge` | `gentoo` | openrc | `rc-update add sshd default` puis `rc-service sshd start` | **aucun** |
+| `apt-rpm` | `altlinux` | systemd | `systemctl enable --now sshd` | **aucun** |
+
+**Aucune des trois n'installe quoi que ce soit, et ce n'est pas une économie.**
+Les trois images portent déjà `sshd` ; ce qui manquait était l'activation. Mais
+sur deux d'entre elles, poser une commande d'installation serait pire qu'inutile :
+
+- sur **Void**, `xbps-install -Sy openssh` rend un **code non nul** quand le
+  paquet est déjà là — *« ERROR: Package `openssh' already installed. »* Le §42.5
+  fait d'un code non nul sur une pose un échec d'amorçage : la commande
+  d'installation ferait donc **échouer** l'amorçage de toute cellule Void
+  normale, c'est-à-dire de toutes ;
+- sur **Gentoo**, l'arbre Portage est **absent** de l'image — `/var/db/repos/gentoo`
+  ne porte pas de catégories. `emerge` ne peut rien installer sans un
+  `emerge --sync` qui télécharge l'arbre entier ; or `openssh` y est déjà posé.
+  Faire payer plusieurs minutes de synchronisation pour reposer un paquet présent
+  serait un coût sans contrepartie.
+
+Sur **Alt**, l'installation fonctionne et elle est idempotente — `apt-get install`
+y rend *« already the newest version »* et sort en `0`. Elle est néanmoins omise,
+pour que la règle soit la même pour les trois : **une famille dont l'image porte
+`sshd` l'active, elle ne le repose pas.** Une doctrine qui installerait ici et
+pas là se lirait comme un oubli.
+
+**Ce que cela coûte, et qui est le vrai compromis.** Si une image future de l'une
+de ces trois distributions cessait de porter `sshd`, l'activation échouerait — et
+elle échouerait **franchement**, avec le message du gestionnaire de services, que
+le §42.5 remonte à l'écran. C'est le mode de panne souhaitable : bruyant,
+localisé, et qui nomme la cause. L'alternative — une commande d'installation non
+mesurée sur ces trois distributions — échouerait tout aussi souvent et pour des
+raisons qu'on n'aurait pas observées.
+
+**`runit` est un troisième gestionnaire de services, et le relevé l'ignorait.**
+Void n'a ni `systemctl` ni `rc-service` : elle a `sv`. Le relevé du §42.6
+interrogeait les deux premiers et concluait `absent` — y compris sur une cellule
+dont `sshd` **écoute réellement sur le port 22**, ce que la mesure a montré. Un
+relevé qui déclare absent ce qui est actif ferait rejouer indéfiniment une
+activation déjà faite, et ferait dire au verdict l'inverse du vrai. Il interroge
+donc `sv status sshd` en troisième.
+
+**Aucune des trois ne reçoit Docker**, et c'est un fait sur le dépôt amont, pas
+une prudence : `download.docker.com/linux/` ne publie ni Void, ni Gentoo, ni ALT.
+Le §41.2 interdit d'y substituer le paquet de la distribution.
 
 ### 42.11 bis Deux défauts du code en service, trouvés par la campagne
 
