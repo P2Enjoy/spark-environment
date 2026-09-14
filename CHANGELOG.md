@@ -2,6 +2,20 @@
 
 ## [Non publié]
 
+### Corrigé
+- **SPK-98 — la doctrine Gentoo disait `openrc`, et l'image servie est systemd.**
+  La mesure du 8 portait sur `images:gentoo/openrc` ; le catalogue offre
+  `images:gentoo/systemd`, où `rc-service` n'existe pas. L'amorçage aurait posé
+  `rc-update` sur une cellule systemd. La table suit l'image réellement servie.
+  Les deux variantes amont déclarent le même `ID=gentoo` : la table ne peut donc
+  en servir qu'une, et la variante `openrc` n'est pas servie.
+- **SPK-98 — sur runit, l'activation ne rendait pas compte de son résultat.**
+  Poser le lien dans le répertoire du niveau d'exécution ne démarre rien :
+  `runsvdir` le balaie périodiquement et ne lance le service qu'au passage
+  suivant — 5 secondes mesurées. L'amorçage rendait la main aussitôt et déclarait
+  le serveur SSH **échoué** sur une cellule qui allait écouter. L'activation
+  attend désormais que le service tourne.
+
 ### Ajouté
 - **SPK-99 — le dossier pour un agent dit quoi lire en arrivant.** Le panneau
   d'accueil d'une cellule porte l'instruction d'ouvrir

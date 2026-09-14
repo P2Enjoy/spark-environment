@@ -6071,7 +6071,7 @@ prochaine réécriture depuis l'état voulu l'effacera sans prévenir (§43.2).
   d'un Spark — **depuis SPK-64**. Journal du 2026-09-08.
 
 
-### [~] SPK-98 · Une famille sert ce qu'elle sait servir, et l'écran ne montre que cela
+### [x] SPK-98 · Une famille sert ce qu'elle sait servir, et l'écran ne montre que cela
 
 Demandée par le responsable le 2026-09-08, à l'issue de la **campagne du
 catalogue** : ajouter les images du catalogue à la Forge de test, créer un Spark
@@ -6232,11 +6232,39 @@ un, et le relevé le montre « active, inchangé ». La mention est corrigée.
     est trouvé — mais `container-selinux` n'est fourni par **aucun dépôt que son
     image déclare** ; l'ajouter demanderait de poser un dépôt éditeur que la
     distribution n'a pas choisi, ce que le §42.9.2 bis interdit.
-- **Ce qui reste, et pourquoi l'unité n'est pas `[x]`** :
-  - la campagne locale ne monte pas de cellule RPM — arbitrage écrit dans
-    `seed.py` : le pool CPU du doublon ne le permet pas sans faire échouer un
-    autre parcours, et la doctrine `dnf` est portée par les tests d'unité, ceux
-    d'API et la Forge réelle.
+- **Éprouvée par le produit le 2026-09-14 — `[x]`.** Les trois familles
+  ajoutées ont chacune leur Spark sur la Forge de test, créé **depuis l'écran de
+  création** et non par l'API : `void-98` (`images:voidlinux/current`, xbps ·
+  runit), `gentoo-98` (`images:gentoo/systemd`, emerge · systemd) et `alt-98`
+  (`images:alt/p11`, apt-rpm · systemd). Pour chacun, par la console et par des
+  clics : création, application, démarrage, amorçage, terminal SSH, clés,
+  identité de sortie, variable d'environnement, et — sur `void-98` — un secret.
+  Aucun des trois n'affiche Docker nulle part, et l'écran d'amorçage dit
+  pourquoi. Les trois cellules écoutent sur le port 22, relevé sur la Forge.
+
+  | Famille | Spark | Amorçage | Terminal | Identité | Variable dans la cellule |
+  |---|---|---|---|---|---|
+  | `xbps` | `void-98` | SSH **installé, active** | `FAMILLE=void` | posée | `/etc/spark/env` |
+  | `emerge` | `gentoo-98` | SSH **installé, active** | `FAMILLE=gentoo` | posée | `/etc/spark/env` |
+  | `apt-rpm` | `alt-98` | SSH **inchangé, active** | `FAMILLE=altlinux` | posée | `/etc/spark/env` |
+
+- **Deux défauts trouvés PAR LE PRODUIT, que la mesure en cellule n'avait pas
+  vus** — c'est le point du §16, et ils n'auraient pas pu l'être autrement :
+  - **la doctrine `emerge` disait `openrc`, et l'image servie est systemd.** La
+    campagne du 8 avait mesuré `images:gentoo/openrc` ; le catalogue offre
+    `images:gentoo/systemd`. L'amorçage aurait posé `rc-update` sur une cellule
+    qui n'a pas `rc-service`. Corrigé, et la limite consignée au §42.11 ter :
+    les deux variantes amont déclarent le même `ID=gentoo`, donc la table ne
+    peut en servir qu'une, et c'est celle du catalogue ;
+  - **sur runit, l'activation ne rendait pas compte de son résultat.** Le premier
+    amorçage de `void-98` a déclaré l'élément « serveur SSH » **échoué** sur une
+    cellule dont `sshd` allait écouter cinq secondes plus tard : `ln -sf` ne
+    démarre rien, `runsvdir` ne balaie son répertoire que périodiquement. Un faux
+    négatif, et le plus coûteux des deux sens. L'activation attend désormais.
+- **Limite conservée** : la campagne locale ne monte pas de cellule RPM —
+  arbitrage écrit dans `seed.py` : le pool CPU du doublon ne le permet pas sans
+  faire échouer un autre parcours, et la doctrine `dnf` est portée par les tests
+  d'unité, ceux d'API et la Forge réelle.
 
 
 ### [x] SPK-99 · Le dossier dit quoi lire en arrivant, et par où passent les variables

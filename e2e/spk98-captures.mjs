@@ -3,9 +3,11 @@
  *
  * Même statut qu'`e2e/reel.mjs` : hors campagne, parce qu'il exige une vraie
  * Forge et une console d'exploitation en marche. Il se lance à la main —
- * `node e2e/spk98-captures.mjs` — avec la console sur `127.0.0.1:5175` et deux
- * Sparks nommés `val-alpine` et `val-debian`. Les preuves qui doivent tourner
- * à chaque fois vivent, elles, dans `e2e/parcours.test.mjs`.
+ * `node e2e/spk98-captures.mjs` — avec la console sur `127.0.0.1:5175`. Les
+ * Sparks qu'il ouvre sont ceux de la campagne du 2026-09-14 : `void-98`, d'une
+ * famille SANS Docker, et `sso-p2enjoy`, le témoin qui en reçoit un. Les
+ * preuves qui doivent tourner à chaque fois vivent, elles, dans
+ * `e2e/parcours.test.mjs`.
  *
  * @verifies docs/BACKLOG.md#SPK-98 · docs/DESIGN_SYSTEM_APP.md SPK-DS-24
  *
@@ -40,7 +42,7 @@ for (const [largeur, hauteur, suffixe] of [[1440, 1150, ''], [390, 1000, '-mobil
   await page.goto(BASE, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('tbody a', { timeout: 20000 });
 
-  await ouvrir('val-alpine');
+  await ouvrir('void-98');
   await shot(`spk98-spark-sans-docker${suffixe}`);
 
   await page.click('nav a[href="#/forge"]');
@@ -52,7 +54,7 @@ for (const [largeur, hauteur, suffixe] of [[1440, 1150, ''], [390, 1000, '-mobil
 
 // Le témoin qui garde Docker, à 1440.
 await page.setViewportSize({ width: 1440, height: 1150 });
-await ouvrir('val-debian');
+await ouvrir('sso-p2enjoy');
 await shot('spk98-spark-avec-docker');
 
 console.log(bruits.length ? bruits.slice(0, 4) : 'aucun bruit console');

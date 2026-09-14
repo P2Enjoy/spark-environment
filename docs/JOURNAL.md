@@ -10608,3 +10608,56 @@ SPK-60 avait fait le même constat sur la Forge de test, pour la même raison.
 La mention « inconnue » cède la place à l'adresse dès que la variable est posée
 et `sparkd` redémarré. Aucun changement de code : le contrat fait ce qu'il
 annonce.
+
+
+## 2026-09-14 — SPK-98 éprouvée par le produit : deux défauts que la cellule seule ne montrait pas
+
+**Problème.** La doctrine des trois familles ajoutées le 14 — Void, Gentoo, Alt —
+avait été mesurée *dans des cellules*, à la main, sur la Forge. Restait la DoD :
+créer un Spark de chacune **depuis le parcours canonique** et l'amorcer par le
+produit.
+
+**Ce que le produit a montré, et que la mesure en cellule n'avait pas vu.**
+
+1. **L'image mesurée n'était pas l'image servie.** Le catalogue de la Forge offre
+   `images:gentoo/systemd` ; j'avais mesuré `images:gentoo/openrc`. La table
+   déclarait donc `openrc` pour une image qui n'a pas `rc-service`. Mesuré sur
+   l'image réelle : `systemctl enable --now sshd` rend la cellule joignable sans
+   rien poser. La table suit désormais le catalogue.
+
+   Cela révèle une limite **structurelle** : les deux variantes amont déclarent
+   le même `ID=gentoo`, et c'est sur cet identifiant que le §42.9 choisit la
+   doctrine. Une seule des deux peut être servie. Servir l'autre demanderait
+   d'**observer** le gestionnaire dans la cellule au lieu de le déclarer dans la
+   table — un changement de nature de la doctrine, que rien ne réclame
+   aujourd'hui. La limite est écrite au §42.11 ter plutôt que contournée.
+
+2. **Un faux négatif d'amorçage, visible seulement par l'écran.** Le premier
+   amorçage de `void-98` a affiché « serveur SSH — échoué ». La cellule, elle,
+   écoutait : le lien était posé et `sshd` tournait. Cause : `ln -sf` ne démarre
+   rien. `runsvdir` balaie son répertoire périodiquement et ne lance `runsv` qu'au
+   passage suivant — **5 secondes mesurées**. `systemctl enable --now` et
+   `rc-service start` rendent la main une fois le service lancé ; runit, non.
+
+   `sv start` seul ne suffit pas non plus : tant que `runsv` n'existe pas, il rend
+   *« fail: runsv not running »* et sort en `1`, ce que le §42.5 compterait comme
+   un échec de pose. L'activation réessaie donc jusqu'à ce que le superviseur
+   existe, puis attend le service. **C'est le résultat qui est vérifié, pas le
+   code de retour d'une commande qui n'a fait que poser un lien.**
+
+   Un faux négatif coûte plus cher qu'un faux positif ici : il fait douter d'un
+   amorçage qui a réussi, et pousse à défaire ce qui marchait.
+
+**Vérifications.** Les trois Sparks ont été créés depuis l'écran de création, par
+des clics : `void-98`, `gentoo-98`, `alt-98`. Pour chacun — application,
+démarrage, amorçage, terminal SSH (`FAMILLE=void` / `gentoo` / `altlinux`), clés,
+identité de sortie, variable retrouvée dans `/etc/spark/env` de la cellule ; sur
+`void-98`, un secret, retrouvé dans `/run/spark/secrets` en `0600` et **jamais
+affiché en clair**. Aucun des trois ne montre Docker. 1 276 tests serveur verts.
+
+**Au passage, deux comportements corrects qu'il vaut la peine d'avoir vus.**
+Recréer `void-98` sur la même adresse a changé sa clé d'hôte : le terminal a
+refusé d'envoyer quoi que ce soit et l'a dit — *« Aucune commande n'a été
+envoyée »* —, laissant le geste de réconciliation à l'humain. Et la suppression
+exige de retaper le nom du Spark. Les deux gardes ont fonctionné sans avoir été
+sollicités.
