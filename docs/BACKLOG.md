@@ -6782,7 +6782,7 @@ table du README.
   débordement horizontal.
 
 
-### [ ] SPK-101 · Le brief dit par quel chemin on vous atteint, et nomme la route qu'il ne peut pas servir
+### [x] SPK-101 · Le brief dit par quel chemin on vous atteint, et nomme la route qu'il ne peut pas servir
 
 **Mesuré sur un agent réel le 2026-09-14.** Le responsable a confié le dossier
 d'un Spark à un agent externe pour y installer un Keycloak. Le `GOAL.md` que
@@ -6834,6 +6834,22 @@ variables. La méthode marche ; il manque la moitié réseau.
   route ne demande aucun port publié ; parcours E2E constatant les ajouts dans le
   presse-papier ; captures observées ; manuel M8 et changelog mis à jour ;
   `@spec` / `@verifies` posés.
+- **Clos le 2026-09-14.** **6 preuves de service** : la route vers `443` nommée
+  inservable dans le modèle, le Markdown et le dossier ; la MÊME route sur une
+  cellule enracinée qui ne bloque rien — c'est le mode qui décide, pas le
+  numéro ; un port publié dont la **cible** est privilégiée nommé de même, et son
+  symétrique — un port **public** bas ne bloque rien, la Forge n'étant pas
+  rootless ; le dossier qui dit qui termine le TLS et qu'aucun port n'est à
+  demander ; les trois faits d'exploitation, dont la phrase qui nomme `linger` en
+  rootless et `docker.service` en enraciné ; et une cellule **sans Docker** qui ne
+  promet ni `docker pull` ni `restart:` — les dire sans démon serait mentir.
+- Le parcours E2E du presse-papier constate les six ajouts **dans ce qui est
+  réellement collé**. Le texte rendu sur le cas réel — `oauth.lelabs.tech` visant
+  `443` sur une cellule rootless — a été relu en entier.
+- **Le piège qui avait induit l'erreur est scindé.** « Une route ou un port
+  public se demande au plan de contrôle » était vrai et incomplet : il parlait de
+  ce qu'on crée, jamais de ce qui existe déjà. Il devient deux pièges, dont « une
+  route active est déjà un chemin complet ».
 
 
 ---

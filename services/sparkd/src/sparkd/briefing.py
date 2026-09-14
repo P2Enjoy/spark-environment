@@ -71,7 +71,11 @@ PIEGES = (
     "Docker doit venir du dépôt amont : docker.io de la distribution échoue sous AppArmor.",
     "Un conteneur n'hérite pas du shell : attacher /etc/spark/env et /run/spark/secrets avec env_file:.",
     "/run est un tmpfs : son contenu, y compris les secrets, disparaît au redémarrage.",
-    "Une route ou un port public se demande au plan de contrôle ; rien ne s'expose depuis la cellule.",
+    # SPK-101 · §44.2 bis : ce piège-ci, seul, a fait croire à un agent réel qu'il
+    # lui fallait DEMANDER un port pour être atteint. Il est vrai et incomplet :
+    # il parle de ce qu'on crée, jamais de ce qui existe déjà.
+    "Une route active est déjà un chemin complet : la Forge termine le TLS et vise votre port, aucun port publié n'est requis.",
+    "Rien ne s'expose depuis la cellule : créer une route ou publier un port se demande au plan de contrôle.",
     "nproc et free décrivent la Forge : les quotas de ce briefing font foi pour cette cellule.",
 )
 
@@ -257,6 +261,23 @@ def _docker(bootstrap: dict[str, Any] | None,
             "socket_uid_source": None, "supported": True}
 
 
+#: SPK-101 · §44.2 ter : en rootless, un port privilégié ne s'ouvre pas dans la
+#: cellule (§42). C'est le port CIBLE qui décide — celui qu'on écoute ici —,
+#: jamais le port public : la Forge, elle, écoute `443` sans difficulté.
+PORT_PRIVILEGIE = 1024
+
+
+def _inservable(target_port: int | None, docker: dict[str, Any]) -> bool:
+    """Cette cellule peut-elle seulement ouvrir ce port ? (§44.2 ter)
+
+    Le calcul vit ICI et non dans chaque présentation : deux formules qui
+    répondraient à la même question finiraient par ne plus s'accorder, et le
+    §44.8 l'interdit déjà entre le JSON et le Markdown.
+    """
+    return bool(docker.get("mode") == "rootless"
+                and target_port is not None and target_port < PORT_PRIVILEGIE)
+
+
 def modele(spark: dict[str, Any], *, forge_public_address: str,
            routes: list[dict[str, Any]], ports: list[dict[str, Any]],
            environment: list[Any], bootstrap: dict[str, Any] | None,
@@ -264,6 +285,9 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
     """Construit l'unique modèle public, sans aucune valeur d'environnement."""
     variables = sorted(entry.name for entry in environment if not entry.is_secret)
     secrets = sorted(entry.name for entry in environment if entry.is_secret)
+    # SPK-101 · §44.2 ter : le relevé Docker est calculé AVANT les routes, parce
+    # que c'est lui qui dit si cette cellule peut ouvrir le port qu'elles visent.
+    docker_releve = _docker(bootstrap, servi=bool(spark.get("docker_enabled", 1)))
     modele_rendu: dict[str, Any] = {
         "format": FORMAT,
         "written_at": written_at or _now(),
@@ -286,12 +310,15 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
         },
         "ingress": [
             {"domain": route["domain"], "target_port": route["target_port"],
-             "tls": bool(route["tls"]), "enabled": bool(route["enabled"])}
+             "tls": bool(route["tls"]), "enabled": bool(route["enabled"]),
+             # §44.2 ter : le fait qui décide que cette route n'aboutira PAS.
+             "blocked_by_rootless": _inservable(route["target_port"], docker_releve)}
             for route in routes if route["spark_id"] == spark["id"]
         ],
         "published_ports": [
             {"public_port": port["public_port"], "target_port": port["target_port"],
-             "protocol": port["protocol"], "note": port["note"]}
+             "protocol": port["protocol"], "note": port["note"],
+             "blocked_by_rootless": _inservable(port["target_port"], docker_releve)}
             for port in ports if port["spark_id"] == spark["id"]
         ],
         "environment": {
@@ -305,7 +332,7 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
         # posée depuis la famille de l'image et où le relevé la corrige. Le
         # briefing doit répondre sur un Spark arrêté et jamais amorcé — c'est
         # justement l'état où l'on prépare un déploiement (§44.9).
-        "docker": _docker(bootstrap, servi=bool(spark.get("docker_enabled", 1))),
+        "docker": docker_releve,
         # SPK-98 : le piège du §41.2 — « Docker doit venir du dépôt amont » —
         # ne s'adresse qu'à qui peut en installer un. Sur une cellule sans
         # Docker, la mise en garde vit dans la section qui la concerne, et la
@@ -371,8 +398,16 @@ def markdown(model: dict[str, Any]) -> str:
         "## Ingress",
     ]
     if model["ingress"]:
+        # SPK-101 · §44.2 bis : le mécanisme AVANT la liste. Sans lui, un agent
+        # lit une destination sans savoir qu'un chemin existe déjà, et croit
+        # devoir en demander un.
+        lines.append("- La Forge termine le TLS et fait suivre vers votre port : "
+                     "servez en clair, aucun port publié n'est requis.")
         lines.extend(
             f"- {route['domain']} → {route['target_port']} ({'TLS' if route['tls'] else 'sans TLS'}, {'active' if route['enabled'] else 'désactivée'})"
+            + (" — **INSERVABLE ICI** : ce port est privilégié et cette cellule "
+               "est rootless. Faites corriger le port cible depuis la console."
+               if route["blocked_by_rootless"] else "")
             for route in model["ingress"]
         )
     else:
@@ -381,7 +416,9 @@ def markdown(model: dict[str, Any]) -> str:
     if model["published_ports"]:
         lines.extend(
             f"- {port['protocol']} {port['public_port']} → {port['target_port']}" +
-            (f" — {port['note']}" if port["note"] else "")
+            (f" — {port['note']}" if port["note"] else "") +
+            (" — **INSERVABLE ICI** : ce port cible est privilégié et cette "
+             "cellule est rootless." if port["blocked_by_rootless"] else "")
             for port in model["published_ports"]
         )
     else:
@@ -655,6 +692,12 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         f"- Réseau : {_debit(ressources['network_bps'])}",
         "- `nproc` et `free` décrivent la **Forge**, pas cette cellule : les quotas "
         "ci-dessus font foi.",
+        # SPK-101 · §44.2 bis : où vivent les données. Un agent qui pose une base
+        # de données sur ce disque a besoin de savoir qu'il n'y en a qu'un.
+        "- **Un seul disque** : le système, vos images, vos volumes Docker et vos "
+        "fichiers partagent le quota ci-dessus. Les volumes vivent sous le compte "
+        "qui porte le démon ; `/run` est un tmpfs, et ce qu'on y écrit disparaît "
+        "au redémarrage.",
         "",
         "## 3. Le moteur Docker",
     ])
@@ -682,6 +725,19 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
     else:
         lignes.append("- Amorçage jamais relevé : aucune version n'est prétendue "
                       "fraîche, et rien ne garantit que Docker soit présent.")
+    # SPK-101 · §44.2 bis : deux faits qu'aucune commande ne donne avant d'avoir
+    # échoué — et qui décident de la forme de la pile.
+    if docker["mode"] is not None:
+        lignes.extend([
+            "- **Le réseau sortant fonctionne** : l'amorçage a installé ses paquets "
+            "par lui, et `docker pull` aboutit depuis cette cellule.",
+            "- **Le plan de contrôle ne démarre jamais votre pile.** Le démon, lui, "
+            "repart au démarrage de la cellule — "
+            + ("le compte rootless a son `linger`" if docker["mode"] == "rootless"
+               else "`docker.service` est activé")
+            + " —, donc ce que votre `docker-compose.yml` déclare dans `restart:` "
+            "est honoré après un redémarrage.",
+        ])
 
     lignes.extend([
         "",
@@ -748,23 +804,53 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "",
     ])
     if model["ingress"]:
-        lignes.append("Ports que la pile doit **écouter dans la cellule**, parce "
-                      "qu'une route publique les vise déjà :")
+        # SPK-101 · §44.2 bis : le MÉCANISME d'abord. Un agent réel, lisant la
+        # seule liste, a conclu qu'il devait faire publier un port et demander
+        # que l'ingress y soit routé — une procédure entière pour un besoin qui
+        # n'existe pas. Il ne lui manquait que la phrase qui suit.
+        lignes.extend([
+            "Ports que la pile doit **écouter dans la cellule**, parce qu'une "
+            "route publique les vise déjà :", ""])
         lignes.extend(
             f"- `{route['domain']}` ({'TLS' if route['tls'] else 'sans TLS'}, "
             f"{'active' if route['enabled'] else 'désactivée'}) → la pile doit "
             f"écouter sur **{route['target_port']}**"
+            + ("\n  - **Cette route n'aboutira pas en l'état.** Le port visé est "
+               "privilégié (`< 1024`) et cette cellule est en Docker rootless, "
+               "qui ne peut pas l'ouvrir. Il n'y a pas de contournement à "
+               "chercher : demandez au propriétaire de **changer le port cible "
+               "de la route** depuis la console, pour un port au-dessus de 1024."
+               if route["blocked_by_rootless"] else "")
             for route in model["ingress"])
-        lignes.append("")
+        lignes.extend([
+            "",
+            "**Une route active est un chemin complet.** La Forge tient un proxy "
+            "unique qui écoute `443`, détient le certificat, **termine le TLS** et "
+            "fait suivre vers l'adresse privée de ce Spark sur le port ci-dessus. "
+            "Votre pile sert donc **en clair** sur ce port : un certificat dans la "
+            "pile ne servirait à rien.",
+            "",
+            "**Et elle ne demande aucun port publié.** Un port publié est le "
+            "SECOND mécanisme, réservé à ce qui n'annonce aucun nom d'hôte — SMTP, "
+            "Postgres, Redis, SSH, MQTT. Tout ce qui parle HTTP, HTTPS ou "
+            "WebSocket passe par la route, sans rien demander de plus.",
+            "",
+        ])
     else:
         lignes.extend(["Aucune route publique ne vise ce Spark : rien n'impose de "
-                       "port d'écoute, et rien n'est servi sur un domaine.", ""])
+                       "port d'écoute, et rien n'est servi sur un domaine. Une "
+                       "route se demande au propriétaire ; elle suffit ensuite à "
+                       "vous atteindre, TLS compris, sans port publié.", ""])
     if model["published_ports"]:
         lignes.append("Ports publiés sur la Forge, en plus des routes :")
         lignes.extend(
             f"- {port['protocol']} **{port['public_port']}** sur la Forge → "
             f"{port['target_port']} dans la cellule"
             + (f" — {port['note']}" if port["note"] else "")
+            + ("\n  - **Ce port ne s'ouvrira pas ici** : sa cible est privilégiée "
+               "(`< 1024`) et cette cellule est en Docker rootless. Faites "
+               "changer le port cible depuis la console."
+               if port["blocked_by_rootless"] else "")
             for port in model["published_ports"])
         lignes.append("")
     lignes.extend([

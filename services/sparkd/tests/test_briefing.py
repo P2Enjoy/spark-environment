@@ -109,13 +109,16 @@ def test_le_briefing_est_reecrit_apres_route_variable_port_et_protection(tmp_pat
     model, markdown, motd = _briefing_files(client, name)
     assert briefing.markdown(model) == markdown
     assert model["spark"]["protected"] is True
+    # SPK-101 · §44.2 ter : chaque entrée porte désormais le fait qui décide
+    # qu'elle aboutira — ici `False`, la cellule n'étant pas relevée rootless et
+    # les deux ports visés étant au-dessus de 1024.
     assert model["ingress"] == [{
         "domain": "app.example.test", "target_port": 8080,
-        "tls": True, "enabled": True,
+        "tls": True, "enabled": True, "blocked_by_rootless": False,
     }]
     assert model["published_ports"] == [{
         "public_port": 2525, "target_port": 2525,
-        "protocol": "tcp", "note": "SMTP entrant",
+        "protocol": "tcp", "note": "SMTP entrant", "blocked_by_rootless": False,
     }]
     assert model["environment"]["variables"] == ["LOG_LEVEL"]
     assert "app.example.test → 8080" in markdown
@@ -494,3 +497,117 @@ def test_les_ajouts_du_SPK_99_n_ouvrent_aucune_fuite_de_valeur(tmp_path):
     # distinction, et le bloc d'exemple ne doit pas devenir un export déguisé.
     assert ordinaire not in texte
     assert "`SMTP_PASSWORD`" in texte and "`APP_NAME`" in texte
+
+
+# --- SPK-101 · §44.2 bis et ter : le chemin par lequel on vous atteint --------
+
+_RELEVE = {"observed_at": "2026-09-14T09:00:00+00:00", "os_id": "ubuntu",
+           "os_suite": "resolute", "arch": "x86_64", "openssh_version": "1:10",
+           "docker_version": "5:29", "compose_version": "5.5",
+           "managed_items": ["docker"]}
+
+
+def _modele(mode: str, *, routes=(), ports=()):
+    """Le modèle d'une cellule dont on choisit le MODE et ce qui la vise."""
+    return briefing.modele(
+        {**_CELLULE, "id": "s1", "docker_enabled": 1},
+        forge_public_address="", environment=[],
+        routes=[{"spark_id": "s1", **r} for r in routes],
+        ports=[{"spark_id": "s1", **p} for p in ports],
+        bootstrap={**_RELEVE, "docker_mode": mode})
+
+
+def test_une_route_vers_un_port_privilegie_est_NOMMEE_inservable_en_rootless(tmp_path):
+    """§44.2 ter : le cas réel du 2026-09-14, sur lequel un agent a inventé.
+
+    @verifies docs/BACKLOG.md#SPK-101 · docs/DAT.md §44.2 ter, §42 (le rootless
+              interdit un port privilégié dans la cellule)
+
+    Le texte disait « écoutez sur 443 » ET « aucun port sous 1024 ne se publie ».
+    Deux phrases vraies dont aucune ne nommait l'autre : l'agent a bâti une
+    procédure autour du conflit au lieu de buter dessus.
+    """
+    model = _modele("rootless", routes=[
+        {"domain": "oauth.lelabs.tech", "target_port": 443, "tls": 1, "enabled": 1}])
+
+    assert model["ingress"][0]["blocked_by_rootless"] is True
+    for texte in (briefing.markdown(model), briefing.dossier(model, jump=None)):
+        assert "INSERVABLE" in texte or "n'aboutira pas en l'état" in texte
+    # Le dossier dit AUSSI quoi faire, et que le contournement n'existe pas.
+    dossier = briefing.dossier(model, jump=None)
+    assert "changer le port cible de la route" in dossier
+    assert "pas de contournement" in dossier
+
+
+def test_la_MEME_route_sur_une_cellule_ENRACINEE_ne_bloque_rien(tmp_path):
+    """Le garde-fou : c'est le MODE qui décide, pas le numéro de port seul."""
+    model = _modele("enracine", routes=[
+        {"domain": "oauth.lelabs.tech", "target_port": 443, "tls": 1, "enabled": 1}])
+
+    assert model["ingress"][0]["blocked_by_rootless"] is False
+    assert "INSERVABLE" not in briefing.markdown(model)
+    assert "n'aboutira pas" not in briefing.dossier(model, jump=None)
+
+
+def test_un_port_publie_vers_une_cible_privilegiee_est_nomme_de_meme(tmp_path):
+    """§44.2 ter : c'est le port CIBLE qui décide, jamais le port public.
+
+    La Forge écoute `25` sans difficulté ; c'est l'ouvrir DANS la cellule qui est
+    impossible. Juger sur le port public dirait l'inverse de la vérité.
+    """
+    model = _modele("rootless", ports=[
+        {"public_port": 2525, "target_port": 25, "protocol": "tcp", "note": None}])
+    assert model["published_ports"][0]["blocked_by_rootless"] is True
+    assert "INSERVABLE" in briefing.markdown(model)
+
+    # Le port PUBLIC bas ne suffit pas à bloquer : la Forge n'est pas rootless.
+    autre = _modele("rootless", ports=[
+        {"public_port": 25, "target_port": 2525, "protocol": "tcp", "note": None}])
+    assert autre["published_ports"][0]["blocked_by_rootless"] is False
+
+
+def test_le_dossier_dit_QUI_termine_le_TLS_et_qu_aucun_port_n_est_a_demander(tmp_path):
+    """§44.2 bis : la phrase qui manquait, et qui a coûté une procédure inventée.
+
+    @verifies docs/BACKLOG.md#SPK-101 · docs/DAT.md §44.2 bis, §9 (un Caddy
+              unique détient l'exposition publique), §39.1 (ce qui n'a besoin
+              d'aucun port publié)
+    """
+    dossier = briefing.dossier(_modele("rootless", routes=[
+        {"domain": "app.exemple.test", "target_port": 8080, "tls": 1, "enabled": 1}]),
+        jump=None)
+
+    assert "termine le TLS" in dossier
+    assert "en clair" in dossier
+    assert "ne demande aucun port publié" in dossier
+    # Et le cas où un port publié sert VRAIMENT, sans quoi on aurait remplacé une
+    # erreur par une autre.
+    assert "SMTP" in dossier and "Postgres" in dossier
+
+
+def test_le_dossier_donne_les_trois_faits_d_exploitation(tmp_path):
+    """§44.2 bis : réseau sortant, ce qui relance la pile, où vivent les données.
+
+    Chacun ne se découvre qu'en échouant, après avoir écrit la pile.
+    """
+    dossier = briefing.dossier(_modele("rootless"), jump=None)
+    assert "docker pull` aboutit" in dossier
+    assert "linger" in dossier and "restart:" in dossier
+    assert "Un seul disque" in dossier
+
+    # En enraciné, la même phrase nomme l'unité, pas le linger.
+    enracine = briefing.dossier(_modele("enracine"), jump=None)
+    assert "`docker.service` est activé" in enracine
+    assert "linger" not in enracine
+
+
+def test_une_cellule_SANS_Docker_ne_promet_ni_pull_ni_redemarrage(tmp_path):
+    """Ces deux faits parlent d'un démon. Les dire sans démon serait mentir."""
+    model = briefing.modele(
+        {**_CELLULE, "id": "s1", "docker_enabled": 0},
+        forge_public_address="", routes=[], ports=[], environment=[],
+        bootstrap={**_RELEVE, "docker_mode": None, "docker_version": None,
+                   "compose_version": None})
+    dossier = briefing.dossier(model, jump=None)
+    assert "docker pull" not in dossier
+    assert "restart:" not in dossier

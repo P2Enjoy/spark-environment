@@ -3,6 +3,23 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-101 — le dossier dit par quel chemin on vous atteint.** Mesuré sur un
+  agent réel : faute de savoir qu'une route est déjà un chemin complet, il avait
+  inventé une procédure — publier un port haut et faire re-router l'ingress
+  dessus — pour un besoin qui n'existe pas. Le dossier et le briefing disent
+  désormais que **la Forge termine le TLS**, que la pile sert **en clair** sur le
+  port visé, qu'une route **ne demande aucun port publié**, et qu'un port publié
+  ne sert qu'à ce qui n'annonce aucun nom d'hôte — SMTP, Postgres, Redis.
+- **SPK-101 — une route qu'un Spark rootless ne peut pas servir est NOMMÉE.** Le
+  texte demandait « écoutez sur 443 » à une cellule où un port sous 1024 ne
+  s'ouvre pas, sans que rien ne rapproche les deux phrases. Le modèle porte
+  désormais le fait, les deux présentations le rendent, et le remède est nommé :
+  changer le **port cible** de la route. Vaut aussi pour un port publié dont la
+  cible est privilégiée.
+- **SPK-101 — trois faits d'exploitation qu'un agent devait supposer** : le
+  réseau sortant fonctionne et `docker pull` aboutit ; le plan de contrôle ne
+  démarre jamais la pile, mais le démon repart au redémarrage, donc `restart:`
+  est honoré ; un seul disque porte le système, les images et les volumes.
 - **SPK-54 / SPK-60 — une pile déployée depuis le SEUL dossier, sur la Forge
   réelle.** Le dossier obtenu par *Copier pour un LLM* donne deux portes et une
   lecture sans shell ; les trois ont été employées telles quelles depuis le poste,

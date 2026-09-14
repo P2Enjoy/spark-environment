@@ -119,6 +119,12 @@ await defilerVers('Il en manque une pour votre pile');
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk99-02-bloc-variables');
 
+// 3 quater. SPK-101 · §44.2 bis : le chemin par lequel on atteint la pile. Un
+//           agent réel, faute de ces phrases, a inventé une procédure entière.
+await defilerVers('Une route active est un chemin complet');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk101-01-chemin-ingress');
+
 // 4. Le focus clavier sur le bouton : l'anneau doit être visible (§9.5).
 await defilerVers('# Dossier de déploiement');
 await page.keyboard.press('Shift+Tab');

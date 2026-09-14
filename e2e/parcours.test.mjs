@@ -4822,6 +4822,22 @@ test('copier le dossier d’un Spark, et relire ce que le presse-papier a reçu'
     assert.match(copie, /Importer un lot/);
     assert.ok(copie.includes('```dotenv'),
       'le dossier doit porter le bloc que l’agent rend au propriétaire');
+
+    // 7. SPK-101 · §44.2 bis : le chemin par lequel on atteint la pile. Sans ces
+    //    phrases, un agent réel a conclu qu'il devait faire publier un port et
+    //    demander que l'ingress y soit routé — pour un besoin qui n'existe pas.
+    assert.match(copie, /termine le TLS/);
+    assert.match(copie, /en clair/);
+    assert.match(copie, /ne demande aucun port publié/);
+    // Et le cas où un port publié sert vraiment, pour ne pas remplacer une
+    // erreur par une autre.
+    assert.match(copie, /SMTP/);
+
+    // 8. SPK-101 · §44.2 bis : les trois faits d'exploitation que l'agent avait
+    //    supposés — tirage d'image, ce qui relance la pile, où vivent les données.
+    assert.match(copie, /docker pull` aboutit/);
+    assert.match(copie, /restart:/);
+    assert.match(copie, /Un seul disque/);
   });
 });
 
@@ -5090,6 +5106,15 @@ test('la pile d’épreuve le DIT à l’écran, et nomme les commandes remplac�
     const vu = await page.evaluate(async () =>
       (await fetch('/api/console/epreuve')).json());
     assert.equal(vu.active, true);
-    assert.equal(vu.doublons.length, 4);
+    // L'invariant est que le bandeau nomme TOUT ce que l'hôte remplace, et non
+    // qu'il en compte un nombre fixe : un cinquième doublon posé le même jour a
+    // rendu ce test rouge alors que le produit était juste. Compter est une
+    // mesure de l'instant ; nommer est le contrat du §53.3.
+    assert.ok(vu.doublons.length >= 4, 'les quatre doublons du harnais au moins');
+    for (const { remplace } of vu.doublons) {
+      const sans = remplace.replace(/`/g, '');
+      assert.ok(texte.includes(sans),
+        `le bandeau doit nommer « ${sans} » : ${texte}`);
+    }
   });
 });
