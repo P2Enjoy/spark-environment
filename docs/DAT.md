@@ -10830,40 +10830,51 @@ Et une décision écrite, qui n'est pas un contrôle :
   sur la Forge. `ProtectSystem=strict`, `PrivateTmp` et `NoNewPrivileges` restent
   posés, et c'est ce qui limite les dégâts d'un défaut de `sparkd` lui-même.
 
-### 48.2 bis La règle est posée par l'INSTALLATION — arbitrage du 2026-09-14
+### 48.2 bis La règle est posée par l'INSTALLATION — et elle l'était déjà
 
-La règle du §48.1 naissait d'un geste humain, OP-11, et le §48.2 dit pourquoi le
-préflight ne la pose pas : il relève, il ne répare pas. Restait la question que
-l'unité laissait ouverte — **qui la pose, alors ?**
+Le §48.2 dit pourquoi le préflight ne pose pas la règle : il relève, il ne répare
+pas. Restait la question que l'unité laissait ouverte — **qui la pose ?** Le
+responsable a tranché le 2026-09-14 : l'installation, et non un runbook, parce
+qu'une règle qui ne vit que dans une procédure manuelle dérive.
 
-**Le responsable a tranché : l'installation.** Une règle qui ne vit que dans un
-runbook dérive ; une installation qui n'installe pas la protection qu'elle
-documente n'est pas reproductible au sens du `CLAUDE.md` §14. La voie « le
-préflight la pose lui-même » est écartée : un contrôle qui répare n'est plus un
-contrôle, et le §20 en fait un observateur.
+**En relisant le code pour l'y ajouter, on a trouvé qu'elle y était déjà.**
+`forge_install.phase_foundation` — la phase « socle réseau et durcissement » de
+l'assistant d'installation — pose l'ensemble. Le backlog affirmait le contraire
+parce qu'il regardait `scripts/install-serveur.sh`, qui n'est qu'un relais local
+pour un développeur et n'installe effectivement pas de réseau. La mention est
+corrigée plutôt que complétée.
 
-`sparkd.install` pose donc la règle, et **quatre propriétés la gouvernent** :
+Ce que la phase pose, et pourquoi chaque point est là :
 
-1. **Elle ne s'applique que si le bridge existe.** Créer le bridge appartient à
-   SPK-68. Sans lui, l'installation le DIT et passe — inventer un réseau que
-   l'exploitant n'a pas déclaré serait pire que ne rien faire.
-2. **L'ordre est celui d'OP-11, et il n'est pas décoratif.** Les connexions
-   établies d'abord — le produit va de la Forge VERS ses Sparks, et les réponses
-   reviennent par le bridge —, puis le DNS, le DHCP et l'ICMP utile, et le `drop`
-   en dernier. Inversé, la première règle ferme tout et chaque Spark devient muet.
-3. **Elle est PERSISTÉE, et c'est l'écart le plus dangereux de l'opération.** Des
-   règles `nft` de session disparaissent au premier redémarrage **sans que rien
-   ne le dise** : le préflight, lui, continuerait de lire `drop` dans la
-   configuration d'Incus et rendrait « ok ». Le fichier posé ne **flushe rien** —
-   le `/etc/nftables.conf` d'Ubuntu commence par `flush ruleset`, ce qui
-   effacerait la table d'Incus, donc le NAT, le DNS et le DHCP de tous les
-   Sparks. Il supprime et recrée sa seule table.
-4. **Elle est idempotente.** Une installation rejouée sur une Forge déjà durcie
-   ne recharge rien et ne coupe aucune connexion.
+- **le bridge lui-même**, avec la plage DHCP restreinte du §10 — c'est le contenu
+  d'OP-02, absorbé ;
+- **les règles, dans l'ordre exact d'OP-11** : les connexions établies d'abord —
+  le produit va de la Forge VERS ses Sparks, et les réponses reviennent par le
+  bridge —, puis DNS, DHCP et ICMP utile, et le `drop` en dernier. Inversé, la
+  première règle ferme tout et chaque Spark devient muet ;
+- **une table à elle, `inet spark_filter`**, et c'est ce qui évite le piège le
+  plus grave de l'opération manuelle : le `/etc/nftables.conf` d'Ubuntu commence
+  par `flush ruleset`, ce qui effacerait la table d'Incus — donc le NAT, le DNS
+  et le DHCP de tous les Sparks. Ici rien n'est flushé : l'unité supprime et
+  recrée **sa seule table** ;
+- **la persistance par une unité systemd activée**, `spark-firewall.service`,
+  ordonnée `After=incus.service` et `Before=sparkd.service`. Des règles `nft` de
+  session disparaîtraient au premier redémarrage **sans que rien ne le dise** :
+  le préflight continuerait de lire `drop` dans la configuration d'Incus et
+  rendrait « ok » ;
+- **`user.spark.input_policy=drop`** sur le réseau, qui est ce que le préflight
+  lit — sans elle, la règle est posée mais la Forge se déclare ouverte ;
+- **`X11Forwarding no`**, dans `sshd_config.d/90-spark.conf`, avec `sshd -t`
+  **avant** le rechargement : recharger une configuration invalide sur la seule
+  voie d'accès est le geste qui coupe l'accès à la machine.
 
-**Ce que cela ne change pas** : OP-11 reste écrit au contrat de déploiement, pour
-les Forges installées avant ce changement. Il y porte désormais la mention qu'une
-installation neuve n'en a plus besoin.
+Le tout est **idempotent** : la pose entière est gardée par
+`if policy not in {"drop", "reject"}`, et une installation rejouée sur une Forge
+déjà durcie ne recharge rien.
+
+**Ce qui manquait donc n'était pas le code, mais la PREUVE** : aucune Forge n'a
+été installée par cette phase depuis que la règle y figure. La Forge de test a
+reçu la sienne à la main, par OP-11, le 2026-08-21.
 
 ### 48.3 Ce qui n'est pas retenu, et pourquoi
 
