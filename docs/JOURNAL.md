@@ -10774,3 +10774,48 @@ bandeau d'épreuve, puisqu'elles sortent de la pile doublée. Comparées une à 
 à leur version précédente, la mise en page est inchangée — le bandeau s'ajoute,
 rien ne se déplace. C'est la conséquence assumée du §53.3 : ce que ces captures
 montrent est ce qui a réellement tourné.
+
+---
+
+## 2026-09-14 — Des règles de sortie par Spark : ce que la Forge a répondu, et ce qui reste à trancher
+
+Le responsable a posé une piste : des jeux de règles de **sortie** définis au
+niveau de la Forge et appliqués par Spark, plus des jeux « super » posés par le
+propriétaire de la Forge, qui s'imposent au Spark et à son propriétaire. Consigne
+explicite : **explorer, ne rien faire**. Le sujet part donc hors backlog, sans
+identifiant, dans `docs/EXPLORATION_EGRESS.md`.
+
+**Le terrain a été relevé en lecture seule** sur la Forge de validation — `nft
+list`, `incus network show`, `incus config show`, `incus query /1.0`. Trois
+relevés décident du design : le NAT est en `postrouting` alors que le filtrage
+est en `forward`, donc **l'adresse source est encore celle de la cellule au
+moment où l'on filtre** ; `fwd.sparkbr0` accepte aujourd'hui tout ce qui entre
+par le bridge, sans condition de source ; et Incus 7.4 porte bien
+`network_bridge_acl` et `network_bridge_acl_devices`, mais aucune ACL n'existe.
+
+**Un relevé arrête tout le reste**, et c'est le plus utile de la journée : aucune
+cellule ne porte `security.ipv4_filtering`. Le modèle entier repose sur `ip
+saddr`, et rien ne contraint l'adresse source d'une cellule dont le propriétaire
+est root. Sans anti-usurpation, un filtrage par Spark est décoratif : on sort
+sous l'identité d'un voisin, ou sous une adresse qu'aucune règle ne matche.
+
+**L'énoncé « bloquer les apps, pas le propriétaire » ne s'applique pas tel
+quel.** `dockerd` masque ses conteneurs derrière l'`eth0` de la cellule : depuis
+la Forge, le trafic d'une application et celui du shell du propriétaire portent
+la même adresse source. Fabriquer la distinction demanderait une configuration
+qui vit **dans** la cellule, donc que le propriétaire défait en une commande — un
+garde-fou déguisé en frontière. La lecture proposée à l'arbitrage déplace la
+frontière là où elle tient : **dans la cellule contre hors de la cellule**. La
+règle reste le choix du propriétaire, mais elle est appliquée hors de son espace
+de noms, donc une application compromise ne peut pas la réécrire.
+
+**Ce qui n'a pas été mesuré est nommé comme tel.** Notamment : un `drop` posé en
+`forward` à `filter + 10` survit-il à l'`accept` **explicite** d'Incus ? Le §48
+s'appuie déjà sur cette sémantique côté `input`, mais Incus n'y pose qu'une
+`policy accept` ; ce n'est pas la même preuve. Elle demande d'écrire sur la
+Forge, ce que la consigne interdisait.
+
+Quatre questions restent ouvertes — la lecture du §2, le latéral Spark → Spark,
+le sort de l'amorçage sous un socle en refus, et la borne de la v1 à IP/port.
+Elles sont écrites au §9 du document. Tant qu'elles ne sont pas tranchées, rien
+ne devient une spécification.

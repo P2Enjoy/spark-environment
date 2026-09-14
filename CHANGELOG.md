@@ -27,6 +27,26 @@
   attend désormais que le service tourne.
 
 ### Ajouté
+- **La piste de règles de sortie par Spark est consignée hors backlog**
+  (`docs/EXPLORATION_EGRESS.md`, étudiée le 2026-09-14 à la demande du
+  responsable). Le sujet est laissé **exploratoire et non planifié**, sans
+  identifiant attribué, et le document sépare ce qui est **mesuré en lecture
+  seule** sur la Forge — le NAT est en `postrouting` alors que le filtrage est en
+  `forward`, donc l'adresse source est encore celle de la cellule au moment du
+  filtrage ; `fwd.sparkbr0` accepte tout ce qui entre par le bridge sans
+  condition de source ; Incus 7.4 porte `network_bridge_acl` et aucune ACL
+  n'existe — de ce qui ne l'est pas : qu'un `drop` posé en `forward` à
+  `filter + 10` survive à l'`accept` **explicite** d'Incus, ce que le §48 n'a
+  prouvé que côté `input` où Incus ne pose qu'une `policy accept`. Il garde le
+  point dur : **aucune cellule ne porte `security.ipv4_filtering`**, et comme le
+  modèle repose sur `ip saddr`, un filtrage par Spark serait décoratif tant que
+  l'usurpation d'adresse n'est pas fermée. Il garde aussi ce qui ne s'applique
+  pas de force : `dockerd` masquant ses conteneurs derrière l'`eth0` de la
+  cellule, « bloquer les apps sans limiter le propriétaire » n'existe pas au
+  niveau du paquet — la frontière tenable est *dans la cellule contre hors de la
+  cellule*. Quatre questions restent ouvertes et attendent l'arbitrage. Le
+  document ne figure ni au DAT, ni au SCHEMA, ni au backlog, et aucun code n'y
+  renvoie.
 - **SPK-100 — aucune option cachée : un réglage dit où, par qui et comment.** Un
   inventaire des lectures d'environnement du dépôt a trouvé huit leviers que rien
   ne documentait, dont **cinq que personne ne posait nulle part**. Le §53 du DAT
