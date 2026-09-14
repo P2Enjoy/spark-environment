@@ -31,6 +31,14 @@ LECTURES = (
     re.compile(r"os\.environ(?:\.get)?[\(\[]['\"](SPARKD?_[A-Z0-9_]+)['\"]"),
     re.compile(r"source\.get\(['\"](SPARKD?_[A-Z0-9_]+)['\"]"),
     re.compile(r"\$\{(SPARKD?_[A-Z0-9_]+)(?::-[^}]*)?\}"),
+    # SPK-62 · §53.3 : les DOUBLONS ne se lisent pas par `process.env` — ils
+    # passent par `epreuve.commande('X')`, et leur table les déclare en chaîne.
+    # La garde ne les voyait donc PAS, et elle était verte pour cette raison :
+    # les quatre doublons de SPK-100 étaient documentés par vigilance, pas par
+    # preuve. Le cinquième, ajouté le 2026-09-14, a traversé sans un mot — ce
+    # qui est exactement ce que le `CLAUDE.md` §3 dit de ne pas laisser arriver.
+    re.compile(r"epreuve\.commande\(['\"](SPARKD?_[A-Z0-9_]+)['\"]\)"),
+    re.compile(r"variable:\s*['\"](SPARKD?_[A-Z0-9_]+)['\"]"),
 )
 
 #: Où l'on cherche. Les fichiers de test en sont exclus : ils POSENT des

@@ -79,11 +79,12 @@ test('seule la valeur « 1 » arme l’interrupteur', () => {
   }
 });
 
-test('les quatre doublons du produit sont couverts, et nommés pour l’écran', () => {
-  // Un cinquième doublon ajouté sans entrer dans cette table serait à nouveau
-  // invisible : la table EST le contrat du §53.3.
+test('les cinq doublons du produit sont couverts, et nommés pour l’écran', () => {
+  // Un doublon ajouté sans entrer dans cette table serait à nouveau invisible :
+  // la table EST le contrat du §53.3. Elle a d'ailleurs fait son travail le
+  // 2026-09-14 — le cinquième a été refusé ici avant d'exister ailleurs.
   assert.deepEqual(DOUBLONS.map((d) => d.variable).sort(), [
-    'SPARK_DOCKER_COMMAND', 'SPARK_REBOOT_COMMAND',
+    'SPARK_CONSOLE_IDENTITY', 'SPARK_DOCKER_COMMAND', 'SPARK_REBOOT_COMMAND',
     'SPARK_SIGN_COMMAND', 'SPARK_TERMINAL_COMMAND',
   ]);
   for (const { remplace } of DOUBLONS) {

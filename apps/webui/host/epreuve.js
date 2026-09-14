@@ -15,7 +15,7 @@
  *
  * Deux propriétés, et la seconde compte autant que la première :
  *
- * 1. hors de `SPARK_EPREUVE=1`, les quatre variables sont **ignorées** ;
+ * 1. hors de `SPARK_EPREUVE=1`, les cinq variables sont **ignorées** ;
  * 2. ce qui est ignoré est **dit**, et ce qui est actif se **voit à l'écran**.
  *    Ignorer en silence aurait remplacé une option cachée par un comportement
  *    caché, et un interrupteur qui ne se lirait que dans l'environnement du
@@ -28,7 +28,7 @@ export const INTERRUPTEUR = 'SPARK_EPREUVE';
 export const ACTIF = '1';
 
 /**
- * Les quatre doublons du produit, et ce que chacun remplace.
+ * Les cinq doublons du produit, et ce que chacun remplace.
  *
  * `remplace` est écrit pour être lu **à l'écran** par quelqu'un qui découvre le
  * bandeau : il nomme la commande réelle, pas le module qui la lance.
@@ -42,6 +42,12 @@ export const DOUBLONS = [
     remplace: 'la commande de redémarrage de la Forge' },
   { variable: 'SPARK_SIGN_COMMAND',
     remplace: 'la commande de signature d’un geste' },
+  // SPK-82 · §53.3 bis : le seul des cinq qui ne remplace pas une COMMANDE. Il
+  // remplace un fait que la pile ne peut pas produire — qu'OpenSSH emploie une
+  // clé pour joindre ce serveur —, et sans lequel l'octroi du §42.10 n'a pas de
+  // chemin heureux à éprouver.
+  { variable: 'SPARK_CONSOLE_IDENTITY',
+    remplace: 'la clé qu’OpenSSH emploie pour joindre la Forge' },
 ];
 
 const posee = (env, variable) => String(env?.[variable] ?? '') !== '';

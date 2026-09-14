@@ -2,6 +2,16 @@
 
 ## [Non publié]
 
+### Corrigé
+- **La garde des variables d'environnement était verte pour la mauvaise raison.**
+  Elle balayait le dépôt à la recherche de `process.env.X` et de ses cousines,
+  mais les **doublons d'épreuve** ne se lisent pas ainsi : ils passent par
+  `epreuve.commande('X')`, une grammaire qu'elle ignorait. Aucun des cinq n'était
+  donc vu, et les quatre premiers n'étaient documentés que par vigilance. Le
+  cinquième, ajouté le même jour, a traversé sans un mot — exactement ce que la
+  règle du `CLAUDE.md` §3 dit de ne pas laisser arriver. La garde connaît
+  désormais cette grammaire : elle voit 33 variables au lieu de 28.
+
 ### Ajouté
 - **SPK-103 — les variables et les secrets se lisent en deux blocs, et se
   cherchent.** Une variable se lit pour sa **valeur**, un secret pour son

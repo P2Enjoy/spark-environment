@@ -29,7 +29,7 @@ import {
   ForgeUpdateManager, ForgeUpdateError, updateEligibility, verifyForge,
 } from './forge-update.js';
 // SPK-82 · §42.10.2 : quelle clé du poste ouvre cette Forge.
-import { cleCorrespondante, libelleConsole } from './identite-console.js';
+import { cleCorrespondante, empreinteDe, libelleConsole } from './identite-console.js';
 // SPK-87 · §51 : redémarrer la Forge, et refuser quand c'est dangereux.
 import {
   RELEVE_SCRIPT, REBOOT_SCRIPT, REBOOT_TIMEOUT_MS,
@@ -807,9 +807,21 @@ export function createConsoleHost(options = {}) {
       // que l'on a. `require` lève, ce qui ferait d'une lecture un refus.
       const tunnel = tunnels.get(nom);
       const empreinte = tunnel?.keyFingerprint ?? null;
+      // SPK-82 · §53.3 bis : le cinquième doublon. Le serveur `local` de la pile
+      // n'emploie AUCUNE clé SSH, de sorte que le §42.10.3 répond « je
+      // n'accorderai rien » — ce qui est juste, et rend le chemin heureux
+      // inatteignable par un parcours. Le doublon fournit un vrai fichier de clé
+      // publique ; l'empreinte est calculée par `ssh-keygen`, comme en
+      // exploitation. Rien d'autre du chemin n'est court-circuité.
+      const cheminDoublon = epreuve.commande('SPARK_CONSOLE_IDENTITY');
       if (!nom) {
         return { status: 400, body: { error: 'server_required',
           message: 'Nommer le serveur dont on veut l’identité.' } };
+      }
+      if (cheminDoublon) {
+        const cle = (await readFile(cheminDoublon, 'utf8')).trim();
+        return { status: 200, body: { server: nom, fingerprint: await empreinteDe(cle),
+          publicKey: cle, label: libelleConsole(cle), reason: null } };
       }
       if (!tunnel) {
         return { status: 200, body: { server: nom, fingerprint: null,

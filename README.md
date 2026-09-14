@@ -412,6 +412,7 @@ vigilance de l'exploitant.
 | `SPARK_DNS_BASE_URL` | racine de l'API DNS, pour pointer un doublon local | URL | non | `http://127.0.0.1:8099` |
 | `SPARK_EPREUVE` | **interrupteur de la pile d'épreuve** : `1` — et cette valeur seule — autorise les quatre commandes doublées ci-dessous. Sans lui elles sont **ignorées**, et le refus est écrit au démarrage ; avec lui, la console affiche un avertissement permanent qui nomme ce qui est remplacé (`docs/DAT.md` §53.3) | `1` | non | *(absent en exploitation)* |
 | `SPARK_SIGN_COMMAND` | remplace la **commande** de signature d'un geste, pour éprouver la chaîne sans agent (`docs/DAT.md` §36.10.9) | commande shell | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
+| `SPARK_CONSOLE_IDENTITY` | **doublon d'épreuve** — remplace la clé qu'OpenSSH emploie pour joindre la Forge (`docs/DAT.md` §53.3 bis). Le seul des cinq qui ne remplace pas une commande. Ignoré sans `SPARK_EPREUVE=1` | chemin d'un fichier `.pub` | non | vide |
 | `SPARK_TERMINAL_COMMAND` | remplace la **commande** du terminal — `ssh` vers un Spark (`docs/DAT.md` §37.4.2 bis) | commande shell ou table JSON | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
 | `SPARK_DOCKER_COMMAND` | remplace la **commande** `docker` interrogée dans un Spark (`docs/DAT.md` §37.6 ter) | table JSON par geste | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
 | `SPARK_REBOOT_COMMAND` | remplace la **commande** de redémarrage de la Forge (`docs/DAT.md` §51.1) | commande shell | non | *(lue sous `SPARK_EPREUVE=1` seulement)* |
