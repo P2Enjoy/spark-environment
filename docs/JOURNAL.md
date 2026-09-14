@@ -10819,3 +10819,47 @@ Quatre questions restent ouvertes — la lecture du §2, le latéral Spark → S
 le sort de l'amorçage sous un socle en refus, et la borne de la v1 à IP/port.
 Elles sont écrites au §9 du document. Tant qu'elles ne sont pas tranchées, rien
 ne devient une spécification.
+
+---
+
+## 2026-09-14 · SPK-101 — ce qu'un agent réel a compris du brief, et ce qu'il a inventé
+
+Le responsable a confié le dossier d'un Spark à un agent externe, pour y
+installer un Keycloak derrière `oauth.lelabs.tech`. Il a rapporté le `GOAL.md`
+que l'agent en a tiré. C'est la première mesure du brief sur son vrai
+destinataire, et elle vaut mieux qu'une relecture : on voit exactement où le
+texte laisse un trou, parce qu'un trou se remplit d'inventions.
+
+**Ce qui a porté** — et c'est à noter, parce que cela date d'hier : l'agent a
+repris le briefing `/etc/spark/BRIEFING.md`, les deux portes SSH avec leur rôle,
+et **toute** la procédure d'import des variables, y compris le fait que le
+caractère secret se coche à l'import. Les ajouts de SPK-99 ont fait exactement ce
+qu'on attendait d'eux.
+
+**Ce qu'il a inventé, et pourquoi.** Il a écrit qu'il fallait « publier un port
+haut et demander le routage de l'ingress vers lui ». Le §39.1 nomme pourtant
+Keycloak parmi les services qui n'ont besoin d'aucun port publié. Le brief ne
+mentait pas — « Ports publiés : aucun », « une route se demande au plan de
+contrôle » sont deux phrases vraies — mais il ne disait **nulle part comment une
+route atteint la cellule**. Il donnait une destination sans dire qu'un chemin
+existait déjà. Qui ne connaît pas le produit lit alors « je n'ai pas de port,
+donc il m'en faut un ».
+
+**Et il y avait pire qu'une lacune : une contradiction.** Les deux routes visent
+`443` **dans la cellule**, et la cellule est rootless, où un port sous 1024 ne se
+publie pas. Le brief portait donc, à deux endroits, « la pile doit écouter sur
+443 » et « aucun port sous 1024 ne se publie ». L'agent n'a pas abandonné : il a
+bâti une procédure entière autour du conflit, et l'a écrite dans un contrat de
+déploiement. **Un agent ne bute pas sur une contradiction, il la contourne** —
+c'est la leçon qui compte, et elle vaut pour tout ce que le produit écrit à
+destination d'une machine.
+
+**Décisions du responsable** : la collision se **nomme**, dans le dossier et dans
+le briefing, sans être ni signalée dans la console ni refusée à la déclaration —
+un Spark peut passer en rootless après coup, et deux routes existantes sont déjà
+dans ce cas. Le brief gagne par ailleurs le mécanisme d'ingress — TLS terminé sur
+la Forge, pile en clair, route ≠ port publié — et trois faits d'exploitation que
+l'agent avait supposés : le réseau sortant, ce qui relance la pile au redémarrage,
+et où vivent les volumes.
+
+Contrat aux §44.2 bis et §44.2 ter, table du §44.2 complétée.

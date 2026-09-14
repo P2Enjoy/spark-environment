@@ -9826,10 +9826,82 @@ l'agent ne peut que le lire dans le briefing.**
 | quotas : CPU réservé et plafond, mémoire, disque, débit | `nproc` et `free` mentent dans une cellule : ils rapportent la machine |
 | **sémantique** du CPU : réservation sous contention, burst normal | un chiffre sans son référentiel conduit à dimensionner faux (SPK-DS-02) |
 | routes d'ingress : domaine → port, TLS | elles vivent dans Caddy, sur la Forge |
+| **le chemin** d'une route : TLS terminé sur la Forge, aucun port publié requis | rien dans la cellule ne dit qu'un proxy la vise déjà (§44.2 bis) |
 | ports publiés : port public → port de la cellule | ils vivent dans un device Incus |
+| **une route que le mode rootless ne peut pas servir** | le port cible vit sur la Forge, le mode dans le relevé : seul le plan de contrôle tient les deux (§44.2 ter) |
+| le réseau sortant, ce qui relance la pile, où vivent les volumes | chacun ne se découvre qu'en échouant, après avoir écrit la pile (§44.2 bis) |
 | **noms** des variables et secrets injectés, et leurs deux chemins | les valeurs sont lisibles, l'inventaire non |
 | mode Docker relevé et, en rootless, compte et socket qui le portent | `root` ne parle pas au socket utilisateur et un compte seul ne prouve aucun démon |
 | état de protection du Spark | il vit au registre |
+
+### 44.2 bis Le chemin par lequel on vous atteint (SPK-101)
+
+**Mesuré le 2026-09-14, sur un agent réel.** Un agent externe a reçu le dossier
+d'un Spark portant deux routes TLS actives, et en a tiré ceci : *« la pile écoute
+sur un port haut publiable en rootless ; le responsable demande depuis la console
+la publication du port et le routage de l'ingress vers lui »*. Il en a fait un
+arbitrage, une limite et une ligne de contrat de déploiement — pour un besoin qui
+n'existe pas. Le §39.1 nomme **Keycloak** parmi les services qui n'ont besoin
+d'**aucun** port publié.
+
+Le briefing disait pourtant deux choses vraies : « Ports publiés : aucun » et
+« une route ou un port public se demande au plan de contrôle ». Lues ensemble par
+qui ne connaît pas le produit, elles donnent « je n'ai pas de port, donc je dois
+en demander un ». **Le défaut n'est pas dans la lecture : le briefing ne disait
+nulle part COMMENT une route atteint la cellule.** Il donnait une destination
+sans dire qu'un chemin existait déjà.
+
+Le briefing et le dossier portent donc le mécanisme, en trois faits :
+
+- **la Forge termine le TLS.** Un Caddy unique y détient l'exposition publique et
+  les certificats (§9) : il écoute `:443`, lit le nom demandé et fait suivre vers
+  l'adresse privée du Spark. **La pile sert en clair** sur le port visé ; un
+  certificat dans la pile ne servirait à rien ;
+- **une route active est un chemin complet.** Elle ne demande **aucun** port
+  publié, et il n'y a rien à demander de plus : le port visé, écouté dans la
+  cellule, suffit ;
+- **un port publié sert à ce qui n'annonce aucun nom** — SMTP, Postgres, Redis,
+  SSH, MQTT (§39.1). C'est le second mécanisme, et le seul cas où il faut
+  effectivement demander.
+
+**Et trois faits d'exploitation**, qu'aucune commande ne donne avant d'avoir
+échoué :
+
+- **le réseau sortant fonctionne** : l'amorçage a installé ses paquets par lui, et
+  en rootless il a posé la règle du §42.4.1 sans laquelle aucune image ne se tire.
+  `docker pull` aboutit ;
+- **le plan de contrôle ne démarre jamais la pile du locataire.** Le démon, lui,
+  repart au démarrage de la cellule : `linger` en rootless (§42.2), l'unité
+  `docker.service` en enraciné. Ce que la pile déclare dans `restart:` est donc
+  honoré au redémarrage ;
+- **tout vit sur le même disque que le quota** : les volumes Docker sont sous le
+  compte qui porte le démon, et `/run` est un tmpfs dont le contenu disparaît au
+  redémarrage, secrets compris (§43.5.2).
+
+Ces faits sont **énoncés, jamais prescrits** : le §44.7 tient, le produit ne
+choisit toujours ni image, ni service, ni politique de redémarrage.
+
+### 44.2 ter La route qu'une cellule rootless ne peut pas servir (SPK-101)
+
+Le même relevé a montré pire qu'une lacune : **le briefing demandait une chose
+impossible, sans le dire.** Les deux routes visaient le port `443` **dans la
+cellule**, et la cellule est rootless — où le §42 interdit la publication d'un
+port privilégié (`< 1024`). Le texte portait donc, à deux endroits, « la pile doit
+écouter sur 443 » et « aucun port sous 1024 ne se publie dans la cellule ».
+
+Devant une contradiction, un agent n'abandonne pas : il invente. Celui-ci a
+inventé une procédure entière, et l'a écrite dans un contrat de déploiement.
+
+**Décision : le modèle porte la collision, et les deux présentations la
+rendent.** La règle est calculée une fois — port cible `< 1024` **et** mode relevé
+`rootless` — et elle vaut pour une route comme pour un port publié : c'est le
+port **dans la cellule** qui décide, jamais le port public. Le texte dit alors ce
+qui bloque et ce qui le corrige : faire changer le **port cible** depuis la
+console. Il ne propose aucun contournement — il n'y en a pas de bon, et celui que
+l'agent a imaginé a coûté un arbitrage pour rien.
+
+La console n'est pas modifiée par cette unité : le défaut se lit là où il se
+découvre, et le §44.8 veut un seul modèle, pas une seconde vérité à l'écran.
 
 ### 44.3 Ce qui ne doit PAS y figurer, et pourquoi
 

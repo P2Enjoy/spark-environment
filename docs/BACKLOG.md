@@ -6782,6 +6782,60 @@ table du README.
   débordement horizontal.
 
 
+### [ ] SPK-101 · Le brief dit par quel chemin on vous atteint, et nomme la route qu'il ne peut pas servir
+
+**Mesuré sur un agent réel le 2026-09-14.** Le responsable a confié le dossier
+d'un Spark à un agent externe pour y installer un Keycloak. Le `GOAL.md` que
+l'agent en a tiré montre ce que le texte laisse croire :
+
+1. **il a cru devoir publier un port et faire re-router l'ingress** — « la pile
+   écoute sur un port haut publiable en rootless ; le responsable demande depuis
+   la console la publication du port et le routage de l'ingress vers lui ». Il en
+   a fait un arbitrage, une limite et une ligne de contrat de déploiement. Le
+   §39.1 nomme pourtant **Keycloak** parmi les services qui n'ont besoin d'**aucun**
+   port publié ;
+2. **il ne savait pas qui termine le TLS** — le texte dit « (TLS, active) » et
+   jamais que le certificat vit sur la Forge et que la pile sert **en clair** ;
+3. **le brief lui demandait une chose impossible sans le dire** : les deux routes
+   visent `443` **dans la cellule**, qui est rootless — où un port `< 1024` ne se
+   publie pas (§42). Deux phrases vraies, contradictoires, et aucune ne nommait
+   l'autre. Devant une contradiction, un agent invente ;
+4. **trois faits d'exploitation manquaient** : peut-il tirer une image, qu'est-ce
+   qui relance sa pile au redémarrage, où vivent ses données. Il a supposé pour
+   les trois.
+
+Ce qu'il a **bien** compris vient des ajouts de SPK-99 : le briefing de la
+cellule, les deux portes SSH et leur rôle, et toute la procédure d'import des
+variables. La méthode marche ; il manque la moitié réseau.
+
+- Spécification : `docs/DAT.md` **§44.2 bis** (le chemin par lequel on vous
+  atteint, et les trois faits d'exploitation), **§44.2 ter** (la route qu'une
+  cellule rootless ne peut pas servir), §44.2 complété · manuel M8.
+  **Écrite et committée avant le code.**
+- Dépend de : SPK-60 pour le modèle unique, SPK-85 pour le dossier, SPK-95 pour
+  le mode relevé, SPK-99 pour la forme des ajouts.
+- Portée : le **modèle** du §44.8 porte la collision par entrée d'ingress et de
+  port publié ; les deux présentations la rendent ; le briefing et le dossier
+  portent le mécanisme d'ingress et les trois faits d'exploitation.
+- **Arbitrage du responsable** : la collision se **nomme** dans le dossier et le
+  briefing. Elle n'est ni signalée dans la console ni refusée à la déclaration —
+  un Spark peut passer en rootless après coup, et deux routes existantes sont
+  déjà dans ce cas.
+- **Aucune route d'API nouvelle, aucune migration, aucun changement de seed** :
+  la collision se CALCULE depuis ce que le registre porte déjà.
+- Ce que l'unité ne doit PAS casser : le §44.7 — aucune image, aucun service,
+  aucune politique de redémarrage prescrite : ces faits sont énoncés ; le §44.3 —
+  aucune valeur de secret ; le §44.8 — un seul modèle, deux présentations.
+- DoD : un test prouve qu'une route visant un port `< 1024` sur un Spark rootless
+  est **nommée comme inservable** dans le modèle, le Markdown et le dossier ; un
+  test prouve que la même route sur un Spark **enraciné** ne l'est pas ; un test
+  prouve qu'un port publié visant un port privilégié en rootless est nommé de la
+  même façon ; un test prouve que le dossier dit qui termine le TLS et qu'une
+  route ne demande aucun port publié ; parcours E2E constatant les ajouts dans le
+  presse-papier ; captures observées ; manuel M8 et changelog mis à jour ;
+  `@spec` / `@verifies` posés.
+
+
 ---
 
 ## Réservé, non planifié
