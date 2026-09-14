@@ -10894,3 +10894,45 @@ pinne désormais la classe de ce bloc précis.
 
 Vérifié à l'écran, depuis l'accueil et au clic, sur une pile de développement
 montée avec un gabarit réellement fautif.
+
+---
+
+## 2026-09-14 · SPK-102 — un fait sans sa conséquence est un fait à refaire
+
+Seconde mesure sur le même agent, après les ajouts de SPK-101. Le responsable
+l'a interrogé sur l'absence de HTTPS dans sa pile. La réponse était **juste** :
+ne pas ajouter de proxy, le TLS est déjà terminé par l'ingress, et de toute
+façon un Caddy rootless ne pourrait ni écouter en `443` ni tenir un défi ACME en
+`80`. Il a même vu ce qu'il perdait — HSTS, CSP, redirection, limitation de débit
+— et conclu que le bon endroit restait l'ingress.
+
+**Rien à corriger dans son raisonnement. Tout à corriger dans ce qui l'a rendu
+nécessaire.** Le briefing lui donnait `(TLS, active)`, un fait, et s'arrêtait là.
+Il a donc reconstruit seul les trois conséquences — l'origine publique est
+`https://`, la cellule ne sert que du clair, un proxy serait un doublon — et les
+a écrites dans son propre dossier d'architecture, où elles vivront à côté des
+nôtres et divergeront un jour.
+
+La leçon est la même qu'au SPK-101, d'un cran plus fin : là-bas le texte donnait
+une destination sans le chemin ; ici il donne un fait sans sa conséquence. **Un
+fait dont la conséquence n'est pas écrite est un fait que chaque lecteur
+retrouvera à ses frais**, et qu'un lecteur sur deux retrouvera faux — celui qui
+en déduira qu'il lui faut un certificat.
+
+**Une erreur, et elle désigne le mauvais responsable.** Il a mesuré que `25`,
+`465` et `587` ne sortaient pas de sa cellule et l'a écrit « la cellule filtre la
+sortie SMTP ». Vérifié dans le code : le produit ne pose qu'une chaîne `input`
+sur le bridge privé — elle protège les services de la Forge —, et le §48.1 exige
+que la sortie NAT soit préservée. Aucune règle de sortie n'existe. Le blocage
+vient de l'hébergeur. La mesure était bonne ; la cause enverrait la personne
+suivante chercher un réglage produit qui n'existe pas. Le briefing énonce donc
+que le plan de contrôle ne filtre rien en sortie — c'est une distinction que lui
+seul peut faire, puisque lui seul sait ce qu'il pose.
+
+**Ce que je n'écris pas, et c'est délibéré.** Les en-têtes transmis par
+`reverse_proxy` — `X-Forwarded-Proto` et ses voisins — n'ont **jamais été mesurés
+dans ce dépôt** : aucune trace nulle part. C'est le comportement par défaut de
+Caddy, et la configuration générée ne le modifie pas, mais le §44 ne porte que
+des faits constatés. Le briefing porte donc la conséquence sous la forme qui n'en
+dépend pas : l'origine publique est connue, à l'application d'en être informée.
+La mesure reste due, et elle exige une route réelle ou un Caddy local.

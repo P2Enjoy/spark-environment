@@ -6883,6 +6883,59 @@ variables. La méthode marche ; il manque la moitié réseau.
   route active est déjà un chemin complet ».
 
 
+### [ ] SPK-102 · Le brief dit ce que « TLS » implique, et qui filtre quoi
+
+**Seconde mesure sur le même agent, le 2026-09-14**, après les ajouts de SPK-101.
+Interrogé sur l'absence de HTTPS dans sa pile, il a rendu une réponse **juste** —
+ne pas mettre de proxy, le TLS est déjà terminé, le rootless interdit `443` et le
+défi ACME —, mais il a dû **reconstruire tout le raisonnement** et l'écrire dans
+son propre dossier d'architecture. Le briefing lui donnait `(TLS, active)` comme
+un fait, sans jamais dire ce que ce fait **implique**.
+
+Trois manques, et une erreur d'attribution :
+
+1. **l'origine publique n'est écrite nulle part.** `https://<domaine>` est ce
+   qu'une application doit connaître pour ne pas émettre des URL en `http://` —
+   la panne la plus banale derrière un terminateur TLS. Il l'a résolue par
+   `KC_HOSTNAME`, ce qui est juste pour Keycloak, mais chaque pile la
+   redécouvrira ;
+2. **« dois-je mettre un proxy dans ma pile ? » n'a pas de réponse écrite.** Il a
+   dû l'argumenter, correctement, en cinq paragraphes ;
+3. **ce que l'ingress n'ajoute pas** — HSTS, CSP, redirection d'un nom vers un
+   autre, limitation de débit — n'est écrit nulle part. Vérifié : la
+   configuration Caddy générée ne contient qu'un `reverse_proxy` et la route
+   terminale de refus. Il l'a déduit juste, il n'aurait pas dû avoir à le
+   déduire ;
+4. **il a attribué au produit un filtrage qui n'est pas le sien.** « La cellule
+   filtre la sortie SMTP sur 25, 465 et 587 » : le produit ne pose qu'une chaîne
+   `input` sur le bridge (§48.1) et exige que la sortie NAT soit préservée. Le
+   blocage vient de l'hébergeur. La mesure était bonne, la cause désignait le
+   mauvais interlocuteur.
+
+- Spécification : `docs/DAT.md` **§44.2 quater** (ce que TLS implique, ce que
+  l'ingress n'ajoute pas) et **§44.2 quinquies** (le plan de contrôle ne filtre
+  rien en sortie) · manuel M8. **Écrite et committée avant le code.**
+- Dépend de : SPK-101 pour le mécanisme d'ingress, SPK-60 pour le modèle unique.
+- Portée : le seul rendu — briefing de la cellule et dossier. **Aucune route,
+  aucune migration, aucun champ de modèle nouveau** : tout se dérive de `tls`,
+  que le modèle porte déjà.
+- **Ce qui n'entre PAS dans le brief, et pourquoi** : les en-têtes que
+  `reverse_proxy` transmet (`X-Forwarded-Proto`, `-For`, `-Host`) n'ont jamais
+  été mesurés dans ce dépôt. Le §44 ne porte que des faits constatés ; la
+  conséquence est donc écrite sous la forme qui n'en dépend pas — l'origine
+  publique est connue, à l'application d'en être informée. **La mesure reste
+  due** : elle exige une route réelle, ou un Caddy local rejouant la
+  configuration générée.
+- DoD : un test prouve qu'une route `tls` dit l'origine `https://` dans le
+  briefing et le dossier ; un test prouve qu'une route **sans** TLS dit `http://`
+  et ne prétend pas l'inverse ; un test prouve que le dossier dit ce que
+  l'ingress n'ajoute pas et qu'un proxy dans la pile n'y changerait rien ; un
+  test prouve que le texte attribue le filtrage sortant à l'hébergeur et non au
+  plan de contrôle ; parcours E2E constatant les ajouts dans le presse-papier ;
+  captures observées ; manuel M8 et changelog mis à jour ; `@spec` / `@verifies`
+  posés.
+
+
 ---
 
 ## Réservé, non planifié

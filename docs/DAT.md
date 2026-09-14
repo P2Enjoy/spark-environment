@@ -9903,6 +9903,64 @@ l'agent a imaginé a coûté un arbitrage pour rien.
 La console n'est pas modifiée par cette unité : le défaut se lit là où il se
 découvre, et le §44.8 veut un seul modèle, pas une seconde vérité à l'écran.
 
+### 44.2 quater Ce que « TLS » implique, et ce que l'ingress n'ajoute pas (SPK-102)
+
+**Seconde mesure sur le même agent, le 2026-09-14.** Le §44.2 bis lui avait appris
+que la Forge termine le TLS ; il en a tiré, seul et correctement, qu'un proxy dans
+sa pile serait un second terminateur derrière le premier. Mais il a dû **refaire
+tout le raisonnement** pour y arriver, puis l'écrire dans son propre dossier
+d'architecture — parce que le briefing énonce `(TLS, active)` comme un fait, sans
+jamais dire **ce que ce fait implique pour la pile**.
+
+Un fait dont la conséquence n'est pas écrite est un fait que chaque lecteur
+retrouvera à ses frais, et qu'un lecteur sur deux retrouvera faux.
+
+**Trois conséquences s'écrivent donc, parce qu'elles décident de la pile :**
+
+- **l'origine publique est `https://<domaine>`, et la cellule ne voit jamais de
+  TLS.** C'est ce qui permet à une application de savoir sous quel schéma elle
+  est visitée. Sans cette phrase, une application derrière un terminateur émet
+  des URL en `http://` — la panne la plus banale de cette architecture, et celle
+  qui ne se voit qu'au premier lien envoyé par courriel ;
+- **un proxy dans la pile n'apporte rien de ce qu'on lui demande d'habitude.** Il
+  ne peut même pas fonctionner en rootless : ni `443`, ni `80` pour un défi
+  ACME. Le dire évite la seule mauvaise réponse plausible à « dois-je mettre un
+  Caddy devant ? » ;
+- **une route `tls = 0` est servie en clair sur `:80`** (§18.3). L'origine
+  publique est alors `http://`, et le briefing ne doit pas prétendre l'inverse.
+
+**Et ce que l'ingress n'ajoute PAS**, parce que l'agent l'a déduit correctement
+et qu'il n'aurait pas dû avoir à le déduire : la configuration générée ne
+contient qu'un `reverse_proxy` et la route terminale de refus (§18.2). Aucun
+en-tête de sécurité — pas de HSTS, pas de CSP —, aucune redirection d'un nom vers
+un autre, aucune limitation de débit. Le briefing le dit, faute de quoi
+l'exploitant croit ces protections acquises parce qu'un proxy est devant.
+
+**Ce que le produit ne mesure pas encore.** Les en-têtes que `reverse_proxy`
+transmet — `X-Forwarded-Proto`, `-For`, `-Host` — n'ont **jamais été mesurés dans
+ce dépôt**, et la configuration générée ne les manipule pas. Ils ne sont donc pas
+écrits dans le briefing : le §44 n'y porte que des faits constatés. La
+conséquence, elle, y est portée sous la forme qui ne dépend d'aucune mesure —
+l'origine publique est connue, et c'est à l'application d'en être informée. La
+mesure reste due.
+
+### 44.2 quinquies Le plan de contrôle ne filtre rien en sortie (SPK-102)
+
+Le même agent a mesuré que les ports SMTP sortants `25`, `465` et `587` ne
+répondaient pas depuis sa cellule, et l'a écrit ainsi : « la cellule filtre la
+sortie SMTP ». **C'est faux, et la nuance n'est pas cosmétique** : elle désigne
+l'interlocuteur.
+
+Le produit ne pose qu'une chaîne `input` sur le bridge privé — elle protège les
+services de la Forge d'un Spark qui remonterait vers eux (§48.1) — et le §48.1
+exige explicitement que la **sortie internet par le NAT** soit préservée. Il
+n'existe aucune règle de sortie dans le produit.
+
+Un port sortant refusé vient donc de l'**hébergeur**, jamais du plan de contrôle.
+C'est une distinction que seul le plan de contrôle peut faire, puisque lui seul
+sait ce qu'il pose. Le briefing l'énonce, et cela suffit à envoyer la question au
+bon endroit au lieu de faire chercher un réglage qui n'existe pas.
+
 ### 44.3 Ce qui ne doit PAS y figurer, et pourquoi
 
 - **Aucune valeur de secret.** Le briefing nomme les variables injectées et dit où
