@@ -92,6 +92,13 @@ done
 if [ "$sshd" != active ] && command -v rc-service >/dev/null 2>&1; then
   rc-service sshd status >/dev/null 2>&1 && sshd=active
 fi
+# SPK-98 · §42.11 ter : runit est un TROISIEME gestionnaire, et Void n'a ni
+# `systemctl` ni `rc-service`. Sans cette ligne le releve declare `absent` un
+# `sshd` qui ecoute reellement sur le port 22 — mesure le 2026-09-14 —, ce qui
+# ferait rejouer indefiniment une activation deja faite.
+if [ "$sshd" != active ] && command -v sv >/dev/null 2>&1; then
+  sv status sshd 2>/dev/null | grep -q '^run:' && sshd=active
+fi
 openssh_version=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null \
                   || rpm -q --qf '%{VERSION}-%{RELEASE}' openssh-server 2>/dev/null \
                   || apk info -v openssh 2>/dev/null | head -1)
@@ -807,7 +814,17 @@ INSTALLER = {
 
 
 def poser(famille: "familles.Famille", paquets: str) -> str:
-    """Préparer, puis installer. Dans cet ordre, et une seule fois chacun."""
+    """Préparer, puis installer. Dans cet ordre, et une seule fois chacun.
+
+    SPK-98 · §42.11 ter : une famille dont l'image porte déjà `sshd` ne pose
+    RIEN, et le dit par un `paquets_ssh` vide. Ce n'est pas une économie — sur
+    Void la commande d'installation rend un code non nul quand le paquet est
+    déjà là, et le §42.5 en ferait un échec d'amorçage ; sur Gentoo l'arbre
+    Portage est absent de l'image. Rendre une chaîne vide plutôt que d'inventer
+    une commande est ce qui permet à ces familles d'être servies du tout.
+    """
+    if not paquets:
+        return ""
     return PREPARER[famille.paquets] + INSTALLER[famille.paquets] % paquets
 
 ACTIVER = {
@@ -817,6 +834,12 @@ ACTIVER = {
     # qu'une donnerait une cellule joignable jusqu'au premier redémarrage, ce
     # qui ne se verrait qu'alors.
     "openrc": "rc-update add %s default\nrc-service %s start\n",
+    # SPK-98 · §42.11 ter : runit, mesuré sur Void. Le service s'active en
+    # LIANT sa description dans le répertoire du niveau d'exécution — il n'y a
+    # pas de commande « enable » : `runsvdir` surveille ce répertoire et démarre
+    # ce qu'il y trouve. `-f` parce que le lien peut déjà être là, et qu'un
+    # second amorçage ne doit pas échouer sur ce qu'il a lui-même posé (§42.1).
+    "runit": "ln -sf /etc/sv/%s /etc/runit/runsvdir/default/%s\n",
 }
 
 
@@ -832,7 +855,9 @@ def script_ssh(famille: "familles.Famille") -> str:
     """
     paquets = " ".join(famille.paquets_ssh)
     activation = ACTIVER[famille.services]
-    if famille.services == "openrc":
+    # `openrc` et `runit` nomment le service DEUX fois — l'un pour inscrire puis
+    # démarrer, l'autre pour lier la source vers la destination.
+    if famille.services in ("openrc", "runit"):
         activation = activation % (famille.service_ssh, famille.service_ssh)
     else:
         activation = activation % famille.service_ssh

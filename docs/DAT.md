@@ -8548,10 +8548,12 @@ sur deux d'entre elles, poser une commande d'installation serait pire qu'inutile
   serait un coût sans contrepartie.
 
 Sur **Alt**, l'installation fonctionne et elle est idempotente — `apt-get install`
-y rend *« already the newest version »* et sort en `0`. Elle est néanmoins omise,
-pour que la règle soit la même pour les trois : **une famille dont l'image porte
-`sshd` l'active, elle ne le repose pas.** Une doctrine qui installerait ici et
-pas là se lirait comme un oubli.
+y rend *« already the newest version »* et sort en `0`. Elle coûte pourtant
+**1 min 31 mesurées** pour ne rien poser, l'`apt` d'ALT reconstruisant son arbre
+de dépendances à chaque appel. Elle est donc omise elle aussi, et la règle est la
+même pour les trois : **une famille dont l'image porte `sshd` l'active, elle ne
+le repose pas.** Une doctrine qui installerait ici et pas là se lirait comme un
+oubli, et coûterait une minute et demie par amorçage pour un paquet déjà là.
 
 **Ce que cela coûte, et qui est le vrai compromis.** Si une image future de l'une
 de ces trois distributions cessait de porter `sshd`, l'activation échouerait — et
@@ -8572,6 +8574,64 @@ donc `sv status sshd` en troisième.
 **Aucune des trois ne reçoit Docker**, et c'est un fait sur le dépôt amont, pas
 une prudence : `download.docker.com/linux/` ne publie ni Void, ni Gentoo, ni ALT.
 Le §41.2 interdit d'y substituer le paquet de la distribution.
+
+#### 42.11 quater openSUSE reste sans Docker — par CONSTAT, mesuré le 2026-09-14
+
+Le §42.11 laissait `zypper` sans Docker au motif que `linux/sles` « n'avait pas
+été mesuré sur une cellule ». La mesure est faite, et elle est plus nette que
+l'hypothèse : **Docker publie bien un dépôt SLES, mais pas pour cette
+architecture.**
+
+```
+https://download.docker.com/linux/sles/        → 200, publie « 15/ »
+https://download.docker.com/linux/sles/15/     → ne contient que « s390x/ » et « source/ »
+https://download.docker.com/linux/sles/15/x86_64/stable/  → 404
+```
+
+Le fichier `docker-ce.repo` que Docker publie pour SLES pointe pourtant sur
+`sles/15/$basearch/stable` : sur un `x86_64`, ce dépôt **répond 404**. Le suivre
+aveuglément aurait posé un dépôt qui ne sert rien — précisément le défaut du
+§42.9.2 bis, une quatrième fois.
+
+`linux/sles` est donc un dépôt **IBM Z**. openSUSE et SLES restent `SANS_DOCKER`
+sur les Forges `x86_64`, et la raison est désormais un constat vérifiable et non
+une prudence. Elle changerait si la Forge tournait sur s390x, ce que le §1 ne
+prévoit pas.
+
+#### 42.11 quinquies Oracle, Amazon et openEuler — trois refus, trois causes
+
+Le §42.11 les donnait sans Docker parce que « le dépôt `linux/centos` n'avait pas
+été essayé sur elles ». Il l'a été, le 2026-09-14, sur une cellule chacune. Les
+trois échouent, et **pas de la même façon** — ce qui compte, parce qu'une seule
+des trois était à portée d'un geste.
+
+| Distribution | `$releasever` | Ce que la mesure a rendu |
+|---|---|---|
+| Oracle Linux 9 | `9` | le dépôt **répond** et publie `docker-ce-3:29.8.0-1.el9.x86_64` ; l'installation échoue sur *« nothing provides container-selinux »* |
+| Amazon Linux 2023 | `2023` | *« Unable to find a match: docker-ce »* — `linux/centos` ne publie pas de `2023` |
+| openEuler 24.03 | `24.03` | *« Cannot download repodata/repomd.xml: All mirrors were tried »* — même cause |
+
+**Amazon Linux et openEuler sont hors d'atteinte par construction** : leur
+`$releasever` n'existe pas chez Docker, et aucun geste du produit n'y changerait
+rien. Leur `ID_LIKE=fedora` — absent chez openEuler — reste précisément le piège
+que le §42.9.2 bis décrit : il annonce une parenté que le dépôt ne reconnaît pas.
+
+**Oracle Linux est le cas qui méritait d'être poussé**, et il a été poussé. Le
+dépôt le sert vraiment ; il ne manque qu'un paquet. Mais `container-selinux`
+n'est fourni par **aucun dépôt que l'image déclare** — elle ne porte que `base`
+et `latest`, et `ol9_addons` n'y existe pas :
+
+```
+dnf repolist --all        → base, latest, docker-ce-stable
+dnf list --available container-selinux   → No matching Packages to list
+```
+
+L'installer demanderait d'**ajouter un dépôt éditeur que l'image ne déclare
+pas**. C'est exactement la devinette que le §42.9.2 bis interdit : le produit
+poserait une source de paquets que la distribution n'a pas choisie, pour
+satisfaire une dépendance qu'il n'a pas mesurée. Oracle Linux reste donc servie
+en SSH et pas en Docker — et cette ligne-là, contrairement aux deux autres,
+changerait le jour où une image Oracle déclarerait ses `addons`.
 
 ### 42.11 bis Deux défauts du code en service, trouvés par la campagne
 

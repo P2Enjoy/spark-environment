@@ -1312,3 +1312,140 @@ def test_preparer_ne_se_rejoue_pas_a_chaque_paquet(tmp_path):
         "une fois pour poser curl, une fois après avoir ajouté le dépôt Docker")
     arch = bootstrap.script_ssh(familles.FAMILLES["pacman"])
     assert arch.count("archlinux-keyring") == 1
+
+
+# --- SPK-98 · les trois familles qui ACTIVENT sans installer (§42.11 ter) ----
+#
+# @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11 ter (mesuré le
+#           2026-09-14 sur la Forge de test, cellule par cellule), §42.5 (un code
+#           non nul sur une pose est un échec), §41.2 (pas de paquet de
+#           distribution à la place du dépôt amont)
+
+
+def test_les_TROIS_familles_mesurees_le_14_entrent_dans_la_table():
+    """Void, Gentoo et Alt étaient « candidates » depuis la campagne du 8.
+
+    Elles ne sont plus des candidates : chacune a eu sa cellule, et l'activation
+    y a été vérifiée sur son RÉSULTAT — `sshd` qui écoute réellement sur le port
+    22 —, pas sur un code de retour (§42.5).
+    """
+    for cle, os_id, services in (("xbps", "void", "runit"),
+                                 ("emerge", "gentoo", "openrc"),
+                                 ("apt-rpm", "altlinux", "systemd")):
+        famille = familles.FAMILLES[cle]
+        assert os_id in famille.os_ids, f"« {cle} » ne sert pas {os_id}"
+        assert famille.services == services
+        assert familles.de_identite(os_id) is famille, (
+            "une cellule qui déclare cet ID doit tomber sur cette doctrine")
+
+
+def test_une_famille_dont_l_image_porte_sshd_n_INSTALLE_RIEN():
+    """Le point du §42.11 ter, et il n'est pas une économie.
+
+    Sur Void, `xbps-install -Sy openssh` rend un code NON NUL quand le paquet est
+    déjà là — « ERROR: Package `openssh' already installed. » Le §42.5 en ferait
+    un échec d'amorçage, donc cette commande casserait toute cellule Void
+    normale. Sur Gentoo, l'arbre Portage est ABSENT de l'image : `emerge` ne peut
+    rien poser sans une synchronisation complète. Sur Alt elle marche, mais coûte
+    1 min 31 mesurées pour ne rien faire.
+    """
+    for cle in ("xbps", "emerge", "apt-rpm"):
+        famille = familles.FAMILLES[cle]
+        assert famille.paquets_ssh == (), (
+            f"« {cle} » ne doit poser AUCUN paquet : son image porte sshd")
+        script = bootstrap.script_ssh(famille)
+        for verbe in ("xbps-install", "emerge ", "apt-get install",
+                      "dnf install", "zypper", "pacman -S", "apk add"):
+            assert verbe not in script, (
+                f"« {cle} » ne doit exécuter aucune installation, or : {verbe}")
+
+
+def test_chaque_nouvelle_famille_active_CE_QU_ON_A_MESURE():
+    """L'activation est la seule chose que ces familles reçoivent : si elle
+    n'est pas exactement celle de la cellule, elles ne reçoivent rien."""
+    attendu = {
+        "xbps": "ln -sf /etc/sv/sshd /etc/runit/runsvdir/default/sshd",
+        "emerge": "rc-update add sshd default",
+        "apt-rpm": "systemctl enable --now sshd",
+    }
+    for cle, activation in attendu.items():
+        script = bootstrap.script_ssh(familles.FAMILLES[cle])
+        assert activation in script, f"« {cle} » n'active pas ce qui a été mesuré"
+
+
+def test_RUNIT_est_un_troisieme_gestionnaire_que_le_releve_INTERROGE():
+    """Void n'a ni `systemctl` ni `rc-service` : elle a `sv`.
+
+    Le relevé les interrogeait tous les deux et concluait `absent` — y compris
+    sur une cellule dont `sshd` ÉCOUTE sur le port 22, ce que la mesure a montré.
+    Un relevé qui déclare absent ce qui est actif ferait rejouer indéfiniment une
+    activation déjà faite.
+    """
+    assert "sv status sshd" in bootstrap.RELEVE, (
+        "le relevé doit interroger runit, sans quoi Void est toujours « absent »")
+    assert bootstrap.RELEVE.index("systemctl is-active") \
+        < bootstrap.RELEVE.index("sv status sshd"), (
+            "systemd reste interrogé en premier : c'est le cas courant")
+
+
+def test_aucune_des_trois_ne_recoit_Docker():
+    """Fait sur le dépôt amont, pas prudence : `download.docker.com/linux/` ne
+    publie ni Void, ni Gentoo, ni ALT. Le §41.2 interdit d'y substituer le
+    paquet de la distribution."""
+    for cle in ("xbps", "emerge", "apt-rpm"):
+        famille = familles.FAMILLES[cle]
+        assert famille.elements == familles.SANS_DOCKER
+        assert famille.depot_docker == {}
+        for element in ("depot", "docker", "compose"):
+            assert element not in famille.elements
+
+
+def test_openSUSE_reste_sans_Docker_par_CONSTAT(tmp_path):
+    """§42.11 quater — mesuré le 2026-09-14, et la raison a changé de nature.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11 quater, §42.9.2 bis
+
+    Docker publie bien `linux/sles`, mais son `15/` ne contient que `s390x/` et
+    `source/` : il n'y a aucun `x86_64`, et le chemin que son propre
+    `docker-ce.repo` annonce rend 404 sur cette architecture. Suivre ce fichier
+    aveuglément aurait posé un dépôt qui ne sert rien — le défaut du §42.9.2 bis
+    une quatrième fois.
+
+    La preuve porte sur ce que la TABLE conclut, pas sur le réseau : le dépôt
+    amont d'un tiers ne s'interroge pas depuis une preuve d'unité (§12).
+    """
+    zypper = familles.FAMILLES["zypper"]
+    assert zypper.elements == familles.SANS_DOCKER
+    assert zypper.depot_docker == {}, (
+        "aucune distribution SUSE ne doit annoncer un dépôt x86_64 qui n'existe pas")
+    for os_id in ("opensuse", "opensuse-leap", "sles"):
+        famille = familles.de_identite(os_id)
+        assert famille is zypper
+        assert "docker" not in famille.elements
+
+
+def test_les_trois_derivees_RHEL_restent_sans_Docker_par_CONSTAT(tmp_path):
+    """§42.11 quinquies — mesuré le 2026-09-14, une cellule chacune.
+
+    @verifies docs/BACKLOG.md#SPK-98 · docs/DAT.md §42.11 quinquies, §42.9.2 bis
+
+    Les trois échouent, et pas de la même façon : Amazon Linux (`$releasever`
+    2023) et openEuler (24.03) n'existent pas chez Docker ; Oracle Linux 9 EST
+    servie par `linux/centos` — `docker-ce…el9` est trouvé — mais
+    `container-selinux` n'est fourni par aucun dépôt que son image déclare.
+
+    Ce que cette preuve garde est le SILENCE de la table : aucune des trois ne
+    doit annoncer un dépôt, et leur `ID_LIKE=fedora` ne doit pas suffire à leur
+    en donner un.
+    """
+    dnf = familles.FAMILLES["dnf"]
+    for os_id in ("ol", "amzn", "openeuler"):
+        famille = familles.de_identite(os_id, parents=("fedora",))
+        assert famille is dnf, f"« {os_id} » doit rester servie par dnf pour SSH"
+        # Le dépôt se décide sur l'ID, pas sur la famille : aucune des trois n'y est.
+        assert os_id not in dnf.depot_docker, (
+            f"« {os_id} » annoncerait un dépôt que la mesure a trouvé inopérant")
+    # Et `fedora` ne doit pas les servir par parenté — c'est le piège du
+    # §42.9.2 bis, celui par lequel elles se déclarent.
+    assert "fedora" not in dnf.depot_docker_parents, (
+        "un ID_LIKE=fedora ne vaut pas autorisation : Oracle et Amazon s'en réclament")

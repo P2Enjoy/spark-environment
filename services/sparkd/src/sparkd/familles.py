@@ -159,6 +159,14 @@ FAMILLES: dict[str, Famille] = {
                       "fedora": "fedora"},
         # `centos` et `rhel` seulement : voir la note du champ. `fedora` n'y est
         # PAS, précisément parce qu'Oracle et Amazon Linux s'en réclament.
+        #
+        # MESURÉ le 2026-09-14 sur une cellule chacune (§42.11 quinquies), et
+        # les trois échouent pour trois raisons différentes : Amazon Linux
+        # (`$releasever` 2023) et openEuler (24.03) n'existent pas chez Docker ;
+        # Oracle Linux 9 EST servie — `docker-ce…el9` est trouvé — mais
+        # `container-selinux` n'est fourni par aucun dépôt que son image
+        # déclare. L'ajouter demanderait de poser un dépôt éditeur que la
+        # distribution n'a pas choisi.
         depot_docker_parents={"centos": "centos", "rhel": "centos"},
         parents=("rhel", "centos", "fedora"),
         elements=AVEC_DOCKER,
@@ -173,8 +181,11 @@ FAMILLES: dict[str, Famille] = {
         service_ssh="sshd",
         services="systemd",
         paquets="zypper",
-        # Docker publie `linux/sles`, qui n'est pas openSUSE. Tant qu'on ne l'a
-        # pas mesuré sur une cellule, la famille n'a pas de Docker.
+        # MESURÉ le 2026-09-14 (§42.11 quater) : Docker publie bien `linux/sles`,
+        # mais son `15/` ne contient que `s390x/` et `source/` — il n'y a AUCUN
+        # `x86_64`, et le chemin que son propre `docker-ce.repo` annonce rend
+        # 404 sur cette architecture. C'est un dépôt IBM Z. La famille reste
+        # sans Docker par CONSTAT, non par prudence.
         parents=("opensuse", "suse"),
         elements=SANS_DOCKER,
     ),
@@ -185,6 +196,59 @@ FAMILLES: dict[str, Famille] = {
         service_ssh="sshd",
         services="systemd",
         paquets="pacman",
+        elements=SANS_DOCKER,
+    ),
+    # --- Les trois familles qui ACTIVENT sans installer (§42.11 ter) --------
+    #
+    # MESURÉES le 2026-09-14, cellule par cellule, et vérifiées sur leur
+    # RÉSULTAT : `sshd` qui écoute réellement sur le port 22.
+    #
+    # `paquets_ssh` y est VIDE, et ce n'est pas une économie. Les trois images
+    # portent déjà `sshd` ; sur deux d'entre elles, poser une commande
+    # d'installation serait pire qu'inutile — le détail est au §42.11 ter, et
+    # chaque entrée porte sa propre mesure ci-dessous.
+    "xbps": Famille(
+        cle="xbps",
+        os_ids=("void",),
+        # `xbps-install -Sy openssh` rend un code NON NUL quand le paquet est
+        # déjà là : « ERROR: Package `openssh' already installed. » Le §42.5 en
+        # ferait un échec d'amorçage, donc cette commande casserait toute
+        # cellule Void normale — c'est-à-dire toutes.
+        paquets_ssh=(),
+        service_ssh="sshd",
+        # `runit` : ni `systemctl`, ni `rc-service`. Le relevé du §42.6
+        # l'ignorait et déclarait donc `absent` un `sshd` qui écoute.
+        services="runit",
+        paquets="xbps",
+        elements=SANS_DOCKER,
+    ),
+    "emerge": Famille(
+        cle="emerge",
+        os_ids=("gentoo",),
+        # L'arbre Portage est ABSENT de l'image — `/var/db/repos/gentoo` ne porte
+        # aucune catégorie. `emerge` ne peut donc rien poser sans un
+        # `emerge --sync` qui télécharge l'arbre entier, alors qu'`openssh` y est
+        # déjà installé.
+        paquets_ssh=(),
+        service_ssh="sshd",
+        services="openrc",
+        paquets="emerge",
+        elements=SANS_DOCKER,
+    ),
+    "apt-rpm": Famille(
+        cle="apt-rpm",
+        # ALT emploie `apt-get` sur des paquets RPM : ce n'est pas la famille
+        # `apt`, dont les dépôts et les noms de paquets sont ceux de Debian.
+        # Les confondre enverrait une cellule ALT chercher chez Debian.
+        os_ids=("altlinux",),
+        # Ici l'installation FONCTIONNE et elle est idempotente. Elle coûte
+        # pourtant 1 min 31 mesurées pour ne rien poser, l'`apt` d'ALT
+        # reconstruisant son arbre de dépendances à chaque appel. Elle est omise
+        # pour que la règle soit la même pour les trois (§42.11 ter).
+        paquets_ssh=(),
+        service_ssh="sshd",
+        services="systemd",
+        paquets="apt-rpm",
         elements=SANS_DOCKER,
     ),
 }
