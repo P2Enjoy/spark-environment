@@ -5308,7 +5308,10 @@ est celui qui tournera en production. C'est le même motif que `FakeIncus`,
 Forge réelle — même limite qu'au §39.7.
 
 La variable est **absente en production** : son absence est le cas normal, et le
-produit lance alors `ssh`.
+produit lance alors `ssh`. Depuis le §53.3, son absence n'est plus la seule
+garantie : **elle n'est lue que sous `SPARK_EPREUVE=1`**, et la console affiche
+un avertissement durable tant que cet interrupteur est actif. Posée sans lui,
+elle est ignorée et le refus est écrit au démarrage.
 
 #### 37.4.8 L'inventaire permanent, et ce qu'il coûte
 
@@ -11411,3 +11414,98 @@ transaction.
 Forge chargée, et le temps de réponse des deux routes de lecture sur une base
 pleine à sept jours. Les deux sont des vérifications dues, et tant qu'elles ne
 sont pas faites, ce tableau est un calcul et non une mesure.
+
+## 53. Aucune option cachée : où se pose un réglage, et par qui (SPK-100)
+
+Arbitrage du responsable le 2026-09-14, après un inventaire des lectures
+d'environnement du dépôt : « je DÉTESTE les options cachées ». L'inventaire en
+avait trouvé huit que rien ne documentait, dont **cinq que personne ne pose
+nulle part** — ni écran, ni fichier, ni script, ni test. Elles n'existaient que
+comme porte dérobée pour qui savait leur nom.
+
+### 53.1 La règle
+
+Tout réglage du produit répond aux trois questions **où, par qui, comment**, et
+la réponse vit dans la documentation, pas dans le code :
+
+- un réglage d'**exploitation** se pose depuis un écran, et le produit l'écrit
+  où il se lit — c'est déjà le cas du pont réseau, du pool et des réserves, que
+  l'écran d'installation de la Forge écrit dans `/etc/sparkd/sparkd.env`
+  (§50) ;
+- un réglage d'**installation** est un **argument nommé** du script qui
+  l'emploie. Il se voit dans la ligne de commande et dans son `--help` ; une
+  variable d'environnement ne se voit dans aucun des deux ;
+- un réglage de **service** est une variable d'environnement **documentée** au
+  README, avec son rôle, son format, son caractère obligatoire et sa valeur par
+  défaut ;
+- un réglage d'**épreuve** — un doublon — n'est jamais actif par défaut, exige
+  un interrupteur explicite, et **se voit à l'écran** quand il est actif.
+
+Un `?? process.env.X` qui n'entre dans aucune de ces quatre cases est un défaut,
+pas une commodité. Le critère n'est pas l'intention de qui l'écrit : c'est qu'un
+lecteur du README puisse nommer tous les leviers du produit.
+
+### 53.2 Ce qui est retiré, et pourquoi le retrait vaut mieux que la mention
+
+`SPARK_SSH_CONFIG`, `SPARK_CONSOLE_ANCHORS` et `SPARK_FORGE_INSTALL_STATE`
+étaient **lues, jamais écrites**. Les tests qui déplacent ces trois chemins le
+font déjà par paramètre — `options.envPath`, `options.forgeInstallStatePath`,
+`options.inventoryPath` —, et le harnais E2E ne les pose pas. Leur lecture
+d'environnement ne servait donc personne.
+
+Les documenter aurait ajouté trois lignes au README pour trois leviers que rien
+ne justifie. **Elles sont supprimées** : le chemin par défaut reste, le paramètre
+reste, et la porte disparaît. Un réglage dont on ne peut pas écrire le « par
+qui » n'a pas à exister.
+
+### 53.3 L'interrupteur d'épreuve, et le bandeau qui le dit
+
+Quatre doublons sont **nécessaires** : le harnais lance la console comme un
+processus séparé, et l'environnement est son seul canal.
+
+| Variable | Ce qu'elle remplace | Contrat |
+|---|---|---|
+| `SPARK_TERMINAL_COMMAND` | la commande du transport du terminal | §37.4.2 bis |
+| `SPARK_DOCKER_COMMAND` | la commande `docker` interrogée par la console | §37.6 ter |
+| `SPARK_REBOOT_COMMAND` | la commande de redémarrage de la Forge | §51.1 |
+| `SPARK_SIGN_COMMAND` | la commande de signature d'un geste | §36.10.9 |
+
+**`SPARK_EPREUVE=1` les autorise, et rien d'autre ne le fait.** Hors de cet
+interrupteur, les quatre sont **ignorées** : la console lance les vraies
+commandes. Ce n'est pas un durcissement théorique — `SPARK_DOCKER_COMMAND`
+exporté dans un shell remplaçait jusqu'ici la commande `docker` que la console
+exécute réellement, sans que rien ne le dise nulle part.
+
+**Ignorer en silence serait une seconde option cachée.** Quand l'interrupteur est
+absent et qu'une de ces variables est posée, l'hôte console l'écrit sur sa sortie
+d'erreur au démarrage, en la nommant : la variable est vue, refusée, et le refus
+est dit.
+
+**Et quand il est actif, la console le dit à l'écran.** Un avertissement durable
+dans la coquille — même place et même forme que le code local périmé du §40.6 et
+que le geste non signé du §36.10.9 —, qui **nomme les commandes remplacées**. Un
+interrupteur qui ne se verrait qu'en lisant l'environnement du processus serait
+resté caché à qui regarde l'écran, c'est-à-dire à tout le monde.
+
+Conséquence assumée : les captures produites par le harnais portent ce bandeau.
+C'est exact — ces écrans viennent d'une pile doublée —, et le §13 du design
+system demande précisément que la capture montre l'état réellement exécuté.
+
+### 53.4 Les deux réglages d'installation deviennent des arguments
+
+`SPARKD_PREFIX` et `SPARK_DEV_STATE` étaient des variables d'environnement que
+personne ne posait. Elles deviennent `--prefix` et `--state`, arguments nommés de
+`scripts/install-serveur.sh` et de `scripts/dev.sh`, avec leur valeur par défaut
+inchangée — `/opt/sparkd` et `.dev`. Un argument se lit dans la commande qui l'a
+employé ; une variable d'environnement ne laisse aucune trace de son passage.
+
+Les deux scripts rendent un `--help` qui les nomme, et refusent un argument
+inconnu plutôt que de l'ignorer : un réglage mal orthographié doit se voir tout
+de suite, pas au moment où l'on cherche pourquoi rien n'a changé.
+
+### 53.5 Ce que cette section n'est pas
+
+Ce n'est pas une interdiction des variables d'environnement : `sparkd` est un
+service, et les siennes sont son contrat de configuration — documentées au README
+et, pour la plupart, écrites par l'écran d'installation. C'est une interdiction
+des leviers **que la documentation ne nomme pas**, quelle que soit leur forme.

@@ -10661,3 +10661,47 @@ refusé d'envoyer quoi que ce soit et l'a dit — *« Aucune commande n'a été
 envoyée »* —, laissant le geste de réconciliation à l'humain. Et la suppression
 exige de retaper le nom du Spark. Les deux gardes ont fonctionné sans avoir été
 sollicités.
+
+---
+
+## 2026-09-14 · SPK-100 — huit leviers que personne ne pouvait nommer
+
+Le responsable a demandé quelles variables « secrètes » restaient sans
+documentation. L'inventaire a été fait sur le code — toutes les lectures
+d'environnement du dépôt, confrontées aux deux tables du README et à tout
+`docs/` — et non de mémoire. Il en est sorti huit, et une erreur de ma part.
+
+**L'erreur d'abord.** J'ai d'abord rangé `SPARKD_NETWORK_BRIDGE` parmi les
+options cachées. Elle ne l'est pas : c'est le champ *Bridge* de l'écran
+d'installation de la Forge, que le produit écrit lui-même dans
+`/etc/sparkd/sparkd.env` et que le diagnostic relit. Son seul défaut est de
+manquer à la table du README. La question du responsable — « on les pose où ? par
+qui ? comment ? » — est précisément celle qui a fait tomber cette confusion : une
+variable dont on sait répondre aux trois questions n'est pas cachée.
+
+**Cinq n'avaient aucune réponse à « par qui ».** `SPARK_SSH_CONFIG`,
+`SPARK_CONSOLE_ANCHORS`, `SPARK_FORGE_INSTALL_STATE`, `SPARKD_PREFIX` et
+`SPARK_DEV_STATE` ne sont posées nulle part : ni écran, ni fichier, ni script, ni
+test. Chacune est un `?? process.env.X` glissé pour rendre un module injectable,
+là où le harnais passait déjà par un paramètre de fonction. C'est le motif exact
+du défaut : la commodité de qui écrit le code, payée par un levier que personne
+ne peut nommer.
+
+**Trois sont réellement employées, et par le seul harnais** —
+`SPARK_DOCKER_COMMAND`, `SPARK_TERMINAL_COMMAND`, `SPARK_REBOOT_COMMAND` —, avec
+`SPARK_SIGN_COMMAND` qui, elle, était documentée. Le harnais lance la console
+comme un processus séparé : l'environnement est son seul canal, et il n'y a pas
+de tour de passe-passe qui l'en dispense. Mais rien ne les bornait : un
+`SPARK_DOCKER_COMMAND` exporté dans un shell remplaçait la commande `docker` que
+la console exécute en exploitation, sans que rien ne le dise.
+
+**Arbitrage du responsable**, deux décisions prises sur pièces : un interrupteur
+unique `SPARK_EPREUVE`, sans lequel les quatre doublons sont ignorés, avec un
+**bandeau à l'écran** quand il est actif ; et les deux réglages de scripts
+convertis en **arguments nommés**, parce qu'un argument se lit dans la commande
+qui l'a employé. Les trois variables mortes sont supprimées plutôt que
+documentées : trois lignes de README pour trois leviers que rien ne justifie
+auraient été une documentation de complaisance.
+
+Contrat au §53, et le §37.4.2 bis révisé : l'absence de la variable n'est plus la
+seule garantie du doublon.

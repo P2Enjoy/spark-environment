@@ -6325,6 +6325,64 @@ celui que le bouton **Copier pour un LLM** met dans le presse-papier :
   `AUTRE_VARIABLE="valeur avec des espaces"` — tient sans débordement.
 
 
+### [ ] SPK-100 · Aucune option cachée : huit leviers que la documentation ne nommait pas
+
+Arbitrage du responsable le 2026-09-14 : « je DÉTESTE les options cachées, tu le
+sais et tu les as faites quand même ». Un inventaire des lectures d'environnement
+du dépôt — confrontées aux deux tables du README et à tout `docs/` — en a trouvé
+huit non documentées, introduites entre le 2026-08-19 et le 2026-09-02
+(`53027c3`, `fed6212`, `17d8327`, `c589d6e`, `c157a82`, `e75b15b`, `7a9f927`,
+`cbef6a7`). Aucune n'avait été demandée.
+
+**Cinq ne sont posées par personne, nulle part** : ni écran, ni fichier, ni
+script, ni test. Elles n'existent que comme porte dérobée pour qui sait leur nom.
+Les trois autres sont des doublons que le harnais pose réellement — mais rien ne
+les borne : `SPARK_DOCKER_COMMAND` exporté dans un shell remplace la commande
+`docker` que la console exécute en exploitation.
+
+`SPARKD_NETWORK_BRIDGE` a été relevée avec elles **à tort** : elle est posée par
+le champ *Bridge* de l'écran d'installation de la Forge et écrite dans
+`/etc/sparkd/sparkd.env` par le produit. Son seul défaut est de manquer à la
+table du README.
+
+- Spécification : `docs/DAT.md` **§53** (la règle, les retraits, l'interrupteur
+  d'épreuve, les arguments nommés), §37.4.2 bis révisé · README, deux tables ·
+  manuel M12. **Écrite et committée avant le code.**
+- Portée, quatre traitements distincts :
+  1. **Supprimées** — `SPARK_SSH_CONFIG`, `SPARK_CONSOLE_ANCHORS`,
+     `SPARK_FORGE_INSTALL_STATE` : lues, jamais écrites, et les tests passent
+     déjà par paramètre. Le chemin par défaut et le paramètre restent (§53.2) ;
+  2. **Bornées et visibles** — `SPARK_TERMINAL_COMMAND`, `SPARK_DOCKER_COMMAND`,
+     `SPARK_REBOOT_COMMAND`, `SPARK_SIGN_COMMAND` : ignorées hors
+     `SPARK_EPREUVE=1`, refus écrit au démarrage quand elles sont vues sans lui,
+     et avertissement durable dans la coquille quand l'interrupteur est actif
+     (§53.3) ;
+  3. **Arguments nommés** — `SPARKD_PREFIX` → `--prefix`, `SPARK_DEV_STATE` →
+     `--state`, avec `--help` et refus d'un argument inconnu (§53.4) ;
+  4. **Documentées** — `SPARKD_NETWORK_BRIDGE` et `SPARK_EPREUVE` entrent dans
+     les tables du README, avec qui les pose.
+- Dépend de : SPK-45 et SPK-75 pour le terminal, SPK-87 pour le redémarrage,
+  SPK-40 pour la signature, SPK-68 pour l'écran d'installation.
+- **Aucune migration, aucune route de Forge, aucun changement de seed** : rien de
+  ceci n'est un état du registre.
+- Ce que l'unité ne doit PAS casser : les parcours E2E, qui dépendent des quatre
+  doublons — le harnais pose donc l'interrupteur ; le §37.4.2 bis, dont le
+  doublon reste le seul moyen d'éprouver le transport sans Spark ; les tests qui
+  déplacent un chemin par paramètre.
+- DoD : un test prouve que chacune des quatre variables d'épreuve est **ignorée**
+  sans l'interrupteur, et lue avec ; un test prouve que le refus est **écrit** au
+  démarrage quand une variable est vue sans interrupteur ; un test prouve que la
+  coquille affiche l'avertissement quand l'interrupteur est actif, et rien quand
+  il ne l'est pas ; un test prouve que les trois variables supprimées ne sont
+  plus lues ; un test par script prouve `--help`, la valeur par défaut, l'argument
+  posé et le refus d'un argument inconnu ; parcours E2E depuis l'accueil
+  constatant le bandeau ; captures observées aux deux formats ; README, DAT,
+  manuel M12 et changelog mis à jour ; `@spec` / `@verifies` posés.
+- **Conséquence assumée** : les illustrations du manuel et les captures du
+  harnais porteront le bandeau d'épreuve. C'est exact — elles viennent d'une pile
+  doublée — et le §13 du design system demande l'état réellement exécuté.
+
+
 ---
 
 ## Réservé, non planifié
