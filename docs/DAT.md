@@ -10966,6 +10966,44 @@ rapide. Une **désactivation notifie**, par le canal qu'on désactive et pendant
 qu'il fonctionne encore — sans quoi la coupure serait le seul geste dont personne
 n'entendrait parler.
 
+##### 47.3.3 bis La coupure se mesure sur ce qui VEILLE, pas sur ce qui est rangé au registre
+
+**Défaut trouvé et corrigé le 2026-09-14**, en écrivant l'OP-20 du contrat de
+déploiement, et arbitré par le responsable le même jour.
+
+La garde ci-dessus ne se déclenchait que si le canal **du registre** était actif
+avant l'écriture. Or une Forge peut veiller par le repli du §47.3 —
+`SPARKD_NOTIFY_URL` —, et c'est l'état de la production tant que l'OP-20 n'est pas
+repris. Dans cet état, la **première** écriture depuis l'onglet fait basculer la
+configuration au registre ; si la case « actif » n'est pas cochée dans la même
+écriture, plus rien ne veille. Mesuré :
+
+| Instant | `live.source` | `live.configured` |
+|---|---|---|
+| avant toute écriture | `environnement` | `true` |
+| après un `PUT` portant le seul gabarit | `registre` | `false` |
+
+La surveillance s'arrêtait, et **aucun avis ne partait** : exactement le geste
+que cette section existe pour rendre impossible à faire en silence. L'écran ne
+mentait pas — il affiche « aucun canal » (§14.6) — mais personne n'était averti,
+et c'est la différence que le motif ci-dessus tient pour décisive.
+
+**La règle est donc posée sur le canal VIVANT, pas sur l'endroit où son adresse
+est rangée** : l'avis part dès que quelque chose veillait et que plus rien ne
+veillera. Il emprunte le canal qu'il coupe, fût-il celui de l'environnement.
+
+**Et il part APRÈS l'écriture du registre**, non avant — ce qui est le second
+défaut que la correction a révélé. Envoyé avant, il annonçait un arrêt qui
+n'avait pas lieu quand le mot de passe était ensuite refusé : le canal criait sa
+propre mort, puis restait en vie. Écrire au registre ne change rien au canal
+vivant ; celui-ci fonctionne donc encore entre l'écriture et sa reconfiguration,
+et c'est là, dans cet intervalle, que l'avis passe.
+
+**Reprendre la configuration au registre n'est pas une coupure** et ne notifie
+rien : c'est le geste que l'OP-20 demande, et l'annoncer comme un arrêt ferait
+crier au loup à chaque migration — après quoi plus personne ne lirait les avis,
+ce qui est le vrai danger.
+
 ### 47.3 bis Pourquoi un webhook plutôt qu'un service nommé
 
 Pourquoi celui-là plutôt qu'un SMS ou un service nommé :

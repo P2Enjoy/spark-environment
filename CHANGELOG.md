@@ -3,6 +3,22 @@
 ## [Non publié]
 
 ### Corrigé
+- **SPK-62 — une coupure de la surveillance hors bande qui ne s'annonçait pas.**
+  Le §47.3.3 exige qu'une désactivation soit annoncée **par le canal qu'elle
+  coupe**, parce que « la coupure serait le seul geste dont personne
+  n'entendrait parler ». La garde ne regardait que le canal du **registre** : sur
+  une Forge qui veille encore par `SPARKD_NOTIFY_URL`, la première écriture
+  depuis l'onglet débranchait ce repli **sans un mot** — `live` passait de
+  `environnement`/actif à `registre`/muet sur un simple enregistrement de
+  gabarit. La coupure se mesure désormais sur le canal **vivant**, quel que soit
+  l'endroit où son adresse est rangée.
+- **SPK-62 — et une coupure qui s'annonçait à tort.** Trouvé par la preuve
+  écrite pour le défaut ci-dessus : l'avis partait **avant** l'écriture, donc un
+  mot de passe refusé faisait annoncer un arrêt qui n'avait pas lieu — le canal
+  criait sa propre mort puis restait en vie. Il part maintenant après l'écriture
+  et avant la reconfiguration, dans l'intervalle où l'écriture est acquise et où
+  le canal sert encore. Reprendre la configuration au registre n'est toujours
+  **pas** une coupure et ne notifie rien.
 - **SPK-40 — aucune signature ne pouvait se vérifier en exploitation.** Trouvé en
   faisant signer un agent SSH réel pour la première fois. L'identité déclarée par
   la console est `console/<serveur> key=SHA256:…` ; la Forge la passait telle

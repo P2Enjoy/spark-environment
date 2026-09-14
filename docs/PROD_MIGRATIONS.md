@@ -149,7 +149,8 @@ Après         : le service continue d'alerter EXACTEMENT comme avant, et c'est
                 second est MESURÉ le 2026-09-14 contre la pile factice, et non
                 déduit : `live.source` passe de `environnement`/`configured=true`
                 à `registre`/`configured=false` sur une simple écriture de
-                gabarit.
+                gabarit. Six preuves le tiennent désormais
+                (`tests/test_canal_coupure.py`).
 
                 1. la première écriture POSE le mot de passe du §47.3.3. Il n'y
                    en a pas encore : celui qu'on tape la première fois devient
@@ -162,9 +163,11 @@ Après         : le service continue d'alerter EXACTEMENT comme avant, et c'est
                    avec ce que le registre porte, donc avec une URL vide si la
                    case « actif » n'est pas cochée ; le canal devient muet
                    jusqu'au prochain redémarrage du service. Poser l'URL, le
-                   gabarit ET cocher « actif » dans la MÊME écriture. L'écran ne
-                   ment pas — il affiche alors « aucun canal » (§14.6) —, mais
-                   il n'avertit pas qu'on vient de débrancher le repli.
+                   gabarit ET cocher « actif » dans la MÊME écriture.
+                   Depuis le 2026-09-14, cette coupure est ANNONCÉE par le canal
+                   qu'elle coupe, avant qu'il ne cesse de servir (§47.3.3 bis) :
+                   on en est donc averti, mais elle a bien lieu. L'écran, lui,
+                   affiche alors « aucun canal » (§14.6).
 Vérification  : `GET /v1/notify/channels` rend `live.source = "environnement"`
                 avant la reprise, et `"registre"` après, avec
                 `live.configured = true`. L'onglet cesse d'afficher l'avis

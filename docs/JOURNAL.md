@@ -11456,3 +11456,55 @@ documentation : en la rédigeant pour de bon — objectif, après, vérification
 retour arrière, risque — il a fallu répondre à « que se passe-t-il ensuite ? »,
 et c'est cette question-là qui a fait ouvrir `reregler`. Un contrat de
 déploiement écrit sérieusement est une relecture du code, pas un compte rendu.
+
+---
+
+## 2026-09-14 · I-02 — une coupure qui ne s'annonçait pas, et une qui s'annonçait à tort
+
+**Arbitré par le responsable le 2026-09-14** : annoncer la coupure quelle que
+soit la source, et la corriger tout de suite plutôt que d'attendre la session qui
+porte SPK-62.
+
+**Le défaut, trouvé en écrivant l'OP-20.** Le §47.3.3 exige qu'une désactivation
+soit annoncée *par le canal qu'elle coupe, et pendant qu'il fonctionne encore*,
+et il en donne le motif : « la coupure serait le seul geste dont personne
+n'entendrait parler — et c'est le premier qu'un attaquant tenterait ». La garde
+ne regardait pourtant que le canal du **registre**. Sur une Forge qui veille
+encore par `SPARKD_NOTIFY_URL`, la première écriture depuis l'onglet débranchait
+ce repli sans un mot.
+
+**J'ai écrit la preuve avant la correction** (§18), et c'est elle qui a trouvé le
+reste.
+
+**Un second défaut, que je n'avais pas prévu en l'écrivant.** L'avis partait
+AVANT l'écriture du registre — pour que le canal fonctionne encore. Conséquence :
+un mot de passe refusé faisait annoncer un arrêt qui n'avait pas lieu. Le canal
+criait sa propre mort, puis restait en vie. C'est le §1.3 à l'envers : un échec
+simulé au lieu d'un succès simulé, et il est aussi trompeur.
+
+La correction traite les deux d'un coup, et elle est plus simple que ce que
+j'allais écrire :
+
+- la coupure se mesure sur le canal **vivant** — `notify.etat()["configured"]` —
+  et sur ce qui veillera après, non sur ce que le registre portait. L'avis
+  emprunte donc le canal qu'il coupe, fût-il celui de l'environnement ;
+- il part **après** l'écriture du registre et **avant** `reregler`. Écrire au
+  registre ne change rien au canal vivant : il y a un intervalle où l'écriture
+  est acquise et où le canal fonctionne encore. C'est exactement là qu'il faut
+  passer, et je ne l'avais pas vu en écrivant la première version.
+
+**Une troisième chose, apprise en faisant rougir la preuve.** Mon premier
+gabarit de test ne portait pas `{message}` : la preuve mesurait alors le gabarit
+de l'exploitant au lieu de ce que le produit avait décidé d'envoyer. Un test qui
+passe par une mise en forme configurable doit porter le champ qu'il prétend
+vérifier, sinon il éprouve la configuration.
+
+**Ce qui ne change pas, et qui méritait d'être écrit** : reprendre la
+configuration au registre — le geste que l'OP-20 demande — n'est **pas** une
+coupure et ne notifie rien. L'annoncer comme un arrêt ferait crier au loup à
+chaque migration, après quoi plus personne ne lirait les avis. C'est le vrai
+danger, et une preuve le tient.
+
+**I-02 est retirée du rapport, qui devient vide** : `docs/INCONSISTENCY_REPORT.md`
+est supprimé du dépôt, comme le `CLAUDE.md` §5 le demande. I-01 l'avait été plus
+tôt dans la journée.

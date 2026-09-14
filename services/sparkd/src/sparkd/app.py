@@ -2245,22 +2245,10 @@ def create_app(config: Config) -> FastAPI:
         mot = str(body.get("password") or "")
         changements = {c: body[c] for c in canaux_service.CHAMPS if c in body}
         with registry() as connection:
-            avant = canaux_service.etat(connection)
-            coupe = (avant["webhook"]["enabled"]
-                     and changements.get("webhook_enabled") in (0, False))
-            if coupe:
-                # AVANT d'écrire : le canal doit encore fonctionner pour porter
-                # son propre avis de décès.
-                app.state.notify.poster({
-                    "action": "spark.unprotect", "result": "ok",
-                    "actor_class": "human",
-                    "actor": audit_service.current_actor()[0],
-                    "target_type": "forge", "target_id": "notify",
-                    "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "message": "Le canal d'alerte hors bande va être DÉSACTIVÉ. "
-                               "C'est le dernier message qu'il porte.",
-                })
-                app.state.notify.vider(3.0)
+            # Ce qui veille MAINTENANT, quelle que soit la source de son adresse
+            # — registre ou repli par `SPARKD_NOTIFY_URL`. C'est cela qu'une
+            # coupure coupe, et le §47.3.3 ne distingue pas les deux.
+            veillait = bool(app.state.notify.etat()["configured"])
             try:
                 etat = canaux_service.regler(connection, mot, changements,
                                              audit_service.current_actor()[0])
@@ -2271,6 +2259,31 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(status_code=422, detail={
                     "error": "notify_refused", "message": str(erreur)}) from erreur
             url, gabarit = canaux_service.webhook_actif(connection)
+
+        # I-02, arbitré le 2026-09-14 : l'avis part si QUELQUE CHOSE veillait et
+        # que plus rien ne veillera — et non plus seulement si le canal du
+        # REGISTRE était actif. Sur une Forge encore sur son repli par
+        # environnement, la première écriture débranchait la surveillance sans
+        # un mot ; c'est exactement le geste que le §47.3.3 veut rendre
+        # impossible à faire en silence.
+        #
+        # Il part APRÈS l'écriture du registre et AVANT `reregler` : le registre
+        # écrit ne change rien au canal vivant, qui fonctionne donc encore pour
+        # porter son propre avis de décès. L'envoyer avant l'écriture — ce qu'on
+        # faisait — annonçait une coupure qui n'avait pas lieu quand le mot de
+        # passe était ensuite refusé.
+        if veillait and not url:
+            app.state.notify.poster({
+                "action": "spark.unprotect", "result": "ok",
+                "actor_class": "human",
+                "actor": audit_service.current_actor()[0],
+                "target_type": "forge", "target_id": "notify",
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "message": "Le canal d'alerte hors bande est DÉSACTIVÉ : plus "
+                           "rien ne veille sur cette Forge. C'est le dernier "
+                           "message qu'il porte.",
+            })
+            app.state.notify.vider(3.0)
         app.state.notify.reregler(url, gabarit, source="registre")
         return {**etat, "live": app.state.notify.etat()}
 
