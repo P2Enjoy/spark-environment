@@ -3029,7 +3029,38 @@ d'incohérences — retirée dans le même changement.
   retour arrière. SPK-53 reste une lecture : elle compare sans jamais modifier
   la Forge.
 
-### [~] SPK-54 · Amorcer un Spark depuis la console
+### [x] SPK-54 · Amorcer un Spark depuis la console
+
+**La preuve partagée par SPK-54 et SPK-60 est FAITE le 2026-09-14**, et elle
+l'est depuis le poste, avec le **seul dossier** que le produit remet.
+
+Le dossier a été obtenu par le geste du produit — bouton *Copier pour un LLM* sur
+l'écran du Spark `rootless-96` —, et rien d'autre n'a servi. Il donne deux portes
+et une lecture sans shell ; les trois ont été employées telles quelles :
+
+```
+$ ssh -J ubuntu@<forge> root@10.77.0.21 'head -6 /etc/spark/BRIEFING.md'
+# Briefing du Spark rootless-96 …
+
+$ ssh -J ubuntu@<forge> spark-docker@10.77.0.21 'whoami; docker --version'
+spark-docker
+Docker version 29.8.0, build 88096ef
+
+$ ssh -J ubuntu@<forge> spark-docker@10.77.0.21 'docker compose up -d …'
+ Container depuis-le-dossier-vitrine-1 Started
+ depuis-le-dossier-vitrine-1 Up 4 seconds
+ <title>Welcome to nginx!</title>
+```
+
+**Une pile joignable, déployée depuis le seul dossier**, sur une cellule amorcée
+en rootless par la console. L'image vient d'un registre public — ce qui n'était
+pas possible avant SPK-96, corrigé le même jour.
+
+**La mention de blocage qui figurait ici est RETIRÉE**, et elle avait cessé
+d'être vraie : elle attendait « la réconciliation explicitement autorisée » d'une
+empreinte d'hôte changée sur `briefing-e2e` — un Spark qui n'existe plus sur la
+Forge. Une cellule neuve n'a pas d'empreinte périmée ; il n'y avait plus rien à
+réconcilier, seulement la preuve à refaire.
 
 Mesuré en montant `helo` de bout en bout (§41) : un Spark neuf n'a **ni `sshd`**,
 et `docker.io` de la distribution y est **inutilisable** — son profil AppArmor
@@ -3134,14 +3165,9 @@ conteneur; la comparaison visuelle garde `helo` lisible sur Docker enraciné.
 Une pile Compose réelle sous `spark-docker` a joint `rootless-e2e-web-1` à son
 réseau privé et répondu `HTTP 200` sur `10.77.0.16:18080`; elle a ensuite été
 retirée (conteneur et réseau absents, port fermé). Cette preuve directe par
-`incus exec` établit le démon, Compose et le réseau rootless, **pas** le parcours
-agent partant du seul briefing. Celui-ci reste bloqué : OpenSSH constate que la
-clé d'hôte a changé. Son empreinte présentée a été comparée avec succès à la clé
-publique lue depuis la cellule par la Forge, mais aucune entrée `known_hosts`
-n'a été modifiée. C'est nommé explicitement à l'écran, sans commande Docker
-envoyée et sans effacement automatique. Il faut une décision explicite de
-réconciliation de cette empreinte, puis rejouer le Compose depuis SSH et le seul
-briefing.
+`incus exec` établissait le démon, Compose et le réseau rootless, **pas** le
+parcours agent partant du seul briefing. Ce dernier est fait — voir la preuve en
+tête d'unité.
 La campagne est rejouée le 2026-08-22, par ses étapes pour laisser le harnais E2E
 fermer proprement sa pile : `sparkd-test` (1 017 verts, plus de gel TestClient),
 contrat, 891 tests de packages, 8 gestes, 84 parcours E2E et 7 vérifications du
@@ -3819,7 +3845,38 @@ Relevé au même instant dans la cellule : les deux fichiers en `root:root 0600`
 le secret absent du fichier persistant et du fichier de confort, et la clé de
 chiffrement créée en `0600` à côté du registre.
 
-### [~] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
+### [x] SPK-60 · Le briefing d'un Spark, pour l'agent qui s'y connecte
+
+**La preuve partagée par SPK-54 et SPK-60 est FAITE le 2026-09-14**, et elle
+l'est depuis le poste, avec le **seul dossier** que le produit remet.
+
+Le dossier a été obtenu par le geste du produit — bouton *Copier pour un LLM* sur
+l'écran du Spark `rootless-96` —, et rien d'autre n'a servi. Il donne deux portes
+et une lecture sans shell ; les trois ont été employées telles quelles :
+
+```
+$ ssh -J ubuntu@<forge> root@10.77.0.21 'head -6 /etc/spark/BRIEFING.md'
+# Briefing du Spark rootless-96 …
+
+$ ssh -J ubuntu@<forge> spark-docker@10.77.0.21 'whoami; docker --version'
+spark-docker
+Docker version 29.8.0, build 88096ef
+
+$ ssh -J ubuntu@<forge> spark-docker@10.77.0.21 'docker compose up -d …'
+ Container depuis-le-dossier-vitrine-1 Started
+ depuis-le-dossier-vitrine-1 Up 4 seconds
+ <title>Welcome to nginx!</title>
+```
+
+**Une pile joignable, déployée depuis le seul dossier**, sur une cellule amorcée
+en rootless par la console. L'image vient d'un registre public — ce qui n'était
+pas possible avant SPK-96, corrigé le même jour.
+
+**La mention de blocage qui figurait ici est RETIRÉE**, et elle avait cessé
+d'être vraie : elle attendait « la réconciliation explicitement autorisée » d'une
+empreinte d'hôte changée sur `briefing-e2e` — un Spark qui n'existe plus sur la
+Forge. Une cellule neuve n'a pas d'empreinte périmée ; il n'y avait plus rien à
+réconcilier, seulement la preuve à refaire.
 
 Un agent qui entre dans une cellule fraîche ne sait rien : ni ses quotas, ni où
 lire l'environnement injecté, ni ce qui est installé, ni pourquoi certaines
@@ -3896,16 +3953,15 @@ second geste ne savait pas reprendre. Contrat corrigé et poussé avant le code 
 DAT §42.2 bis distingue cette reprise d'une bascule et exige `systemd-container`.
 Le correctif local est couvert : une reprise n'exécute pas le démon root, et un
 code d'installation non nul répond `bootstrap_failed` sans audit de succès. La
-preuve reste à rejouer sur `briefing-e2e` avec le paquet corrigé.
+preuve a été rejouée le 2026-09-14 sur `rootless-96`, avec le paquet courant.
 
 **Contexte rootless complété le 2026-08-21.** Le modèle unique ajoute le mode
 Docker et, lorsqu'il est rootless, `spark-docker`, le socket
 `/run/user/<uid>/docker.sock` et la source de cet UID. Ni valeur de secret ni
 privilège supplémentaire ne sont introduits. Le manuel et le runbook disent le
 même contexte. La preuve pure est verte et la projection réelle est maintenant
-posée sur `briefing-e2e`; le Compose lancé directement dans la cellule a répondu
-et a été retiré. La dernière preuve, qui doit partir **du seul briefing via
-SSH**, attend la réconciliation explicitement autorisée de sa clé d'hôte changée.
+posée sur `rootless-96`. La dernière preuve, qui devait partir **du seul dossier
+via SSH**, est faite — voir en tête d'unité.
 
 ### [x] SPK-64 · L'héritage de l'environnement devient une sélection
 
@@ -4648,14 +4704,49 @@ rendait le contrôle faux. Le préflight rend 13 contrôles, 0 bloquant,
 
 ---
 
-### [~] SPK-73 · L'amorce d'une Forge est un artefact versionné et rejouable
+### [x] SPK-73 · L'amorce d'une Forge est un artefact versionné et rejouable
 
 **Arbitrage du responsable, 2026-09-14 : l'amorce est rejouée sur la Forge
-ACTUELLE.** Le blocage d'origine — `dpkg` incohérent sur l'image de l'hébergeur —
-a cessé d'être vrai : la Forge a été réinstallée et `PKG-DPKG` rend « aucun paquet
-en défaut ». L'amorce se revendique idempotente ; la rejouer sur une Forge en
-service est la seule façon de le prouver. Un instantané du registre est pris
-avant.
+ACTUELLE. FAIT le même jour — `CODE=0`, six phases, registre intact.**
+
+Le blocage d'origine — `dpkg` incohérent sur l'image de l'hébergeur — avait cessé
+d'être vrai : la Forge a été réinstallée depuis, et `PKG-DPKG` rend « aucun paquet
+en défaut ».
+
+**Un écart trouvé en préparant le rejeu** : le script du dépôt et celui de la
+Forge n'étaient **plus identiques**. L'unité affirmait pourtant « identique bit
+pour bit (`sha256` comparé) » — vrai le 2026-09-01, faux depuis que SPK-84 y a
+ajouté la préparation de GRUB sur RAID. Une Forge amorcée le 1er septembre garde
+le script de ce jour-là : c'est normal, `cloud-init` ne le repose pas, et c'est
+précisément ce que la procédure de rejeu existe pour corriger. Le script du dépôt
+a donc été posé — `sha256` de nouveau identique — **puis** rejoué.
+
+**Le second passage, mesuré** :
+
+| Phase | Verdict |
+|---|---|
+| `access` | done — plan version 1 et Forge concordants |
+| `dependencies` | done — **`changed: false`**, Incus 7.4 |
+| `storage` | done — **`changed: false`**, pool `spark`, ARC 16 Gio |
+| `foundation` | done — **`changed: false`**, bridge `sparkbr0` |
+| `control` | done — `changed: true`, le paquet est réinstallé |
+| `verification` | done — préflight 14 contrôles 0 bloquant, `healthz` ok, `readyz` ready, schéma 15 |
+
+Les quatre premières phases ne changent **rien** : c'est l'idempotence, mesurée
+plutôt qu'affirmée. Seule `control` change, parce qu'elle réinstalle le paquet,
+ce qui est son travail.
+
+**Le registre est intact, au sens qui compte.** Le fichier a grossi de 8 Kio —
+`sparkd` a redémarré et journalisé, ce que toute base SQLite vivante fait. Mais
+la table `spark` est **strictement identique**, empreinte comprise :
+
+```
+avant : 3aa16ac86ae838d6a929cad747115559
+après : 3aa16ac86ae838d6a929cad747115559
+```
+
+Six Sparks, mêmes états, mêmes quotas, mêmes adresses, mêmes images. Aucun n'a
+été arrêté, et aucun n'a été réinitialisé.
 
 **Demandé par le responsable le 2026-09-01** : « les serveurs sont désormais
 créés au format JSON et le cloud-init doit être idempotent — rejouable, il remet

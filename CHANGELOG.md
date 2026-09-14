@@ -3,6 +3,22 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-54 / SPK-60 — une pile déployée depuis le SEUL dossier, sur la Forge
+  réelle.** Le dossier obtenu par *Copier pour un LLM* donne deux portes et une
+  lecture sans shell ; les trois ont été employées telles quelles depuis le poste,
+  et `docker compose up -d` a démarré une pile dont l'image vient d'un registre
+  public. C'était la dernière preuve des deux unités.
+- **SPK-73 — l'amorce d'une Forge est rejouable, mesuré sur la Forge réelle.** Un
+  second passage complet se termine `CODE=0` ; les quatre premières phases rendent
+  `changed: false`, et la table `spark` du registre est identique à l'empreinte
+  près — six Sparks, mêmes états, mêmes quotas, aucun arrêté. Écart corrigé au
+  passage : le script du dépôt et celui de la Forge avaient divergé, le second
+  datant d'avant SPK-84.
+- **SPK-55 — le durcissement du bridge est posé par l'installation, et prouvé dans
+  les quatre sens.** Un Spark ne joint ni le `sshd` ni `sparkd` de sa Forge, garde
+  son DNS et sa sortie HTTPS, et la Forge continue de joindre le port 22 de ses
+  Sparks. OP-02, OP-11 et OP-12 portent désormais la mention qu'une installation
+  neuve n'en a plus besoin.
 - **SPK-69 — le quatrième verdict non sûr de la mise à jour distante a été
   observé sur une Forge réelle.** *Build non estampillée* ne peut pas se produire
   par une installation normale, la version du paquet portant toujours son commit.
