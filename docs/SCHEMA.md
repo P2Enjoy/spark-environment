@@ -462,6 +462,58 @@ La cascade suit le §14.4 : la suppression d'un Spark rend ses ressources, et
 emporte ses mesures. Conserver la consommation d'un Spark qui n'existe plus ne
 répondrait à aucune question qu'on puisse encore poser.
 
+## 10 septies. `spark_note` : les trois notes d'un Spark (SPK-104)
+
+Migration `017_notes_spark.sql`. Contrat : `docs/DAT.md` §54, et §54.4 pour la
+colonne qui rend le double sens possible.
+
+| Colonne | Type | Contenu |
+|---|---|---|
+| `spark_id` | TEXT | le Spark visé, `ON DELETE CASCADE` |
+| `note_id` | TEXT | `readme`, `contributors` ou `install` |
+| `body` | TEXT | le texte, en clair, tel qu'il a été écrit |
+| `revision` | INTEGER | avance de 1 à chaque écriture, quelle qu'en soit l'origine |
+| `origin` | TEXT | `console` ou `cellule` — qui a écrit la révision courante |
+| `updated_at` | TEXT | horodatage de cette écriture |
+| `projected_sha256` | TEXT nullable | empreinte du dernier texte **posé dans la cellule** par le plan de contrôle, ou `NULL` s'il n'a rien posé |
+
+Clé primaire `(spark_id, note_id)` : une note par sujet et par Spark. Une ligne
+n'existe qu'à partir de la première écriture — **une note jamais écrite n'a pas de
+ligne**, et l'API rend alors un texte vide en révision `0`. C'est la distinction
+du §14.6 du design system portée jusqu'au schéma : « personne n'a encore écrit »
+n'est pas « quelqu'un a écrit une chaîne vide », et les deux se lisent
+différemment à l'écran.
+
+`origin` est **contrainte** à ces deux valeurs par un `CHECK`, comme `note_id` à
+ses trois. Ce sont des états du produit, pas du texte libre : une troisième
+origine apparue par erreur ferait afficher une provenance que l'écran ne sait pas
+traduire.
+
+**`projected_sha256` est la seule colonne qui ne décrit pas la note, mais ce que
+le plan de contrôle a fait d'elle.** Elle porte l'empreinte SHA-256 du texte
+exactement tel qu'il a été poussé, en-tête du §54.7 compris ou non selon ce que
+la projection écrit — le service en est seul juge, et il compare toujours ce
+qu'il a posé à ce qu'il retrouve. C'est elle qui permet de répondre à « quelqu'un
+a-t-il écrit dans la cellule ? » **sans jamais comparer deux horloges** : celle
+d'une cellule appartient à `root`, c'est-à-dire au locataire (§54.4.1).
+
+Elle vaut `NULL` tant que rien n'a été projeté ; un fichier trouvé dans la cellule
+alors qu'elle est `NULL` est donc, par définition, écrit par la cellule — ce qui
+est le cas normal d'un Spark où un agent a pris les devants.
+
+**Le texte n'est pas chiffré**, contrairement à `env_entry.value_enc`. C'est
+délibéré et cohérent : une note est faite pour être lue, copiée et collée vers un
+tiers, et le §54.6 refuse précisément qu'une valeur de secret y entre. Chiffrer un
+texte dont la raison d'être est d'être publié donnerait une garantie fausse.
+
+**Retour arrière** : le `down` supprime la table, donc les notes. Elles survivent
+dans les cellules, où leurs fichiers restent — c'est le seul endroit du produit où
+un `down` ne perd pas tout, et c'est une conséquence du double sens, pas une
+sauvegarde sur laquelle compter.
+
+La cascade suit le §14.4 : un Spark supprimé emporte ses notes, comme il emporte
+son briefing et son environnement.
+
 ## 11. Retour arrière
 
 Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sans

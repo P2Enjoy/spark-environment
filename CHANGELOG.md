@@ -22,6 +22,18 @@
   désormais cette grammaire : elle voit 33 variables au lieu de 28.
 
 ### Ajouté
+- **SPK-104 — trois notes à double sens, SPÉCIFIÉES et pas encore
+  implémentées.** Aucun code n'accompagne cette entrée, et c'est délibéré : les
+  quatre arbitrages du responsable sont écrits et committés **avant** la première
+  ligne (`CLAUDE.md` §5). Chaque Spark recevra trois textes libres — `README`
+  (ce qu'est ce Spark), `CONTRIBUTORS` (comment il est configuré) et `INSTALL`
+  (comment s'interfacer avec ce qu'il expose) — **à double sens** : inscrits
+  depuis le SSH, ils remontent à la console ; enregistrés à la console, ils
+  redescendent dans la cellule. La cellule gagne en cas de divergence, sur
+  comparaison de ce qui a été posé à ce qui est trouvé et **jamais** sur une
+  horloge ; un enregistrement périmé est refusé plutôt qu'écrasé. Le dossier
+  pour un LLM les portera en entier, le `BRIEFING.md` les nommera. Contrat :
+  `docs/DAT.md` §54, `docs/SCHEMA.md` §10 septies, `docs/BACKLOG.md` SPK-104.
 - **SPK-103 — les variables et les secrets se lisent en deux blocs, et se
   cherchent.** Une variable se lit pour sa **valeur**, un secret pour son
   **existence** : un seul tableau faisait alterner deux questions dans la colonne

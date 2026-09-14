@@ -11152,3 +11152,97 @@ temps : `fab9549` — « cesser de dépendre du pool laissé par les voisins
 rouge**, le parcours voisin encore non committé inclus. Rien ne reste dû de ce
 côté, et cette mention n'est conservée que parce que la mesure — la cause isolée
 par élimination — vaut mieux que le souvenir qu'un jour « l'E2E était rouge ».
+
+---
+
+## 2026-09-14 · SPK-104 — quatre arbitrages persistés avant d'écrire une ligne
+
+**La demande.** Un champ de texte libre par Spark, versé au briefing et au texte
+copié pour un LLM, où le propriétaire dit ce qu'est ce Spark et à quoi il sert —
+« un usage possible serait de donner ce texte à une application externe pour
+s'interfacer avec le logiciel déployé ici ». Puis, dans le même message : **trois**
+fichiers plutôt qu'un — README, CONTRIBUTORS, INSTALL —, et une propriété qui les
+distingue de tout ce que le produit pose déjà, **le double sens**.
+
+**Ce que le dépôt disait déjà, et qui rendait la demande difficile.** Tout ce que
+`sparkd` écrit dans une cellule est régénéré **en entier depuis le registre** :
+`authorized_keys` (§17.1), l'environnement (§43.2), le briefing (§44.4). Le
+§44.9.7 a été écrit il y a douze jours précisément pour apprendre aux agents que
+ces fichiers ne se modifient pas depuis la cellule — « une ligne ajoutée à la
+main disparaît, pas tout de suite, ce qui est pire ». La demande introduit donc
+les **premiers** fichiers dont la cellule peut être l'auteur légitime, et il
+fallait que la différence soit lisible au lieu d'être une exception qu'on
+découvre.
+
+**Quatre questions dont chaque réponse changeait le travail.** Je les ai posées
+au responsable avant d'écrire, plutôt que de les trancher seul :
+
+1. **Qui gagne quand les deux côtés ont changé ?** Trois réponses étaient
+   possibles : la console toujours (c'est-à-dire la règle actuelle, qui rend le
+   double sens fictif), l'horodatage (qui compare une horloge appartenant au
+   locataire — `root` chez lui — à la nôtre), ou la comparaison de ce qu'on a
+   **posé** à ce qu'on **trouve**.
+   **Retenu : la cellule gagne**, sur empreinte du dernier texte projeté, et la
+   console édite une révision datée — un enregistrement périmé est refusé en
+   `409` au lieu d'écraser en silence. Aucune horloge de cellule n'est jamais
+   comparée. Le raisonnement tient en une phrase : nous avons posé X, nous
+   trouvons Y, donc Y a été écrit après X, par construction.
+2. **Où les notes apparaissent-elles ?** J'avais proposé « en entier partout ».
+   **Le responsable a tranché autrement, et mieux : en entier dans le dossier
+   pour un LLM, seulement nommées dans le `BRIEFING.md`.** Celui qui lit le
+   briefing est *déjà dans la cellule*, à trois lignes de commande des fichiers ;
+   les y recopier ferait deux exemplaires du même texte dans la même machine,
+   dont l'un vieillirait — et ce serait l'exemplaire réécrit par le plan de
+   contrôle, c'est-à-dire celui qui a l'air officiel. Conséquence heureuse et non
+   prévue : le briefing ne dépendant pas du contenu des notes, il reste réécrit
+   par le §44.4 sans réconciliation préalable, et aucun geste du plan de contrôle
+   n'a besoin de relire trois fichiers avant de reposer un briefing.
+3. **Un secret collé par mégarde.** C'est le seul endroit du produit où un texte
+   libre écrit par un humain part vers un modèle tiers par un bouton prévu pour
+   ça. Maintenir le §44.9.3 sur ce que le produit *compose* et l'abandonner sur
+   ce qu'il *transporte* n'avait pas de sens. **Retenu : le produit refuse**, en
+   nommant la variable et jamais la valeur, au-dessus d'un plancher de huit
+   caractères.
+   **Ce que la question a révélé et que je n'avais pas vu en la posant** : la
+   garde n'est pas symétrique. Refuser un texte **trouvé dans la cellule**
+   n'aurait aucun sens — il est déjà écrit, et le refuser reviendrait à
+   l'écraser. D'où la **quarantaine** : rien d'absorbé, rien de publié, et
+   surtout **la projection de cette note est suspendue** tant que la divergence
+   dure. Sans cette dernière clause, le geste suivant du propriétaire écraserait
+   le texte que le produit venait de refuser de lire — on aurait détruit ce
+   qu'on prétendait protéger.
+4. **Qui écrit, en rootless ?** **Retenu : `root` écrit, `spark-docker` lit** —
+   le régime exact du §44.10. `spark-docker` est délibérément incapable de casser
+   la cellule (§42.2) ; lui donner la plume sur un texte que le produit republie
+   ensuite vers un tiers élargirait sa surface pour un confort. La conséquence —
+   « on inscrit une note en entrant par `root` » — doit s'écrire partout où elle
+   se découvre, le dossier compris, sinon la promesse « on peut l'inscrire depuis
+   le SSH » est fausse une fois sur deux.
+
+**Deux décisions que je n'ai pas eu à poser, et qui méritent d'être écrites.**
+
+- **Un `rm` n'est pas un effacement.** Un fichier absent de la cellule ne vide
+  pas la note : il la fait reposer. Supprimer un fichier est le geste le plus
+  facile à faire par accident — `rm -rf` trop large, instantané restauré, image
+  reconstruite — et il ne porte aucune intention rédactionnelle. Pour vider une
+  note, on écrit un fichier **vide**. Un fichier vide est un contenu ; une
+  absence n'en est pas un.
+- **Trois notes, pas une.** Un champ unique aurait suffi à la demande initiale,
+  et c'est le responsable qui a demandé trois. Le motif, écrit au §54.2 : trois
+  lecteurs cherchent trois choses, et un texte qui répond à trois questions n'en
+  traite bien aucune. D'où la consigne de conformité que le §54.7 impose aux
+  en-têtes et au dossier — un agent qui range ses notes d'intégration dans
+  `CONTRIBUTORS.md` les met là où personne ne les cherchera.
+
+**Ce qui n'est pas encore vrai.** Rien n'est implémenté à cette date : ni la
+table, ni le service, ni les routes, ni l'écran. Cette entrée, le §54 du DAT, le
+§10 septies du SCHEMA, l'unité SPK-104 et l'OP-19 du contrat de déploiement sont
+committés **avant** le code, conformément au `CLAUDE.md` §5 : une décision qui
+n'existe que dans le contexte d'un agent est une décision perdue.
+
+**Une incohérence trouvée en chemin, et laissée telle quelle.** La migration
+`016_canaux_notification` (SPK-62) n'a aucune opération au contrat de
+déploiement. Consignée dans `docs/INCONSISTENCY_REPORT.md` sous I-01 et non
+corrigée : SPK-62 est en cours sur cette même branche dans une autre session, et
+écrire son OP à sa place décrirait une opération dont je n'ai pas conduit la
+mesure.

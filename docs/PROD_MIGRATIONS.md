@@ -117,6 +117,42 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-19 · Migration `017_notes_spark` du registre (SPK-104)
+
+```
+État          : NON APPLIQUÉE. La migration n'est pas encore écrite : cette
+                entrée est posée avec la spécification, avant le code, pour que
+                le contrat de déploiement ne découvre pas la table après coup.
+Objectif      : créer `spark_note`, qui porte les trois notes d'un Spark —
+                README, CONTRIBUTORS, INSTALL — leur révision, leur origine et
+                l'empreinte du dernier texte projeté dans la cellule
+                (docs/SCHEMA.md §10 septies, docs/DAT.md §54).
+Dépend de     : rien. Table nouvelle, référencée seulement par `spark`.
+Commande      : appliquée automatiquement au démarrage de sparkd.
+Après         : AUCUNE action humaine. Les Sparks en service n'ont aucune note :
+                la table naît vide, l'API rend un texte vide en révision 0, et
+                l'écran dit « personne n'a encore écrit » — pas « vide ».
+                Aucun fichier n'est posé dans une cellule tant qu'une note n'a
+                pas été écrite, depuis la console ou depuis la cellule.
+Vérification  : `GET /v1/sparks/<nom>/notes` rend les trois notes en révision 0
+                avec `cell_read` vrai sur un Spark en marche. Puis, après un
+                enregistrement depuis la console,
+                `incus exec <cellule> -- stat -c '%U:%G %a'
+                /etc/spark/notes/README.md` rend `root:root 600` sur un Spark
+                enraciné et `root:spark-docker 640` sur un Spark rootless
+                (docs/DAT.md §54.8).
+Retour arrière: le `down` supprime la table, donc les notes du registre. Les
+                fichiers déjà posés RESTENT dans les cellules : c'est le seul
+                endroit du produit où un retour arrière ne perd pas tout, et
+                c'est une conséquence du double sens (§54.4), pas une sauvegarde
+                sur laquelle compter. Comme toute migration, il n'est jamais
+                joué seul.
+Risque        : faible. Une table nouvelle, aucun champ existant modifié, aucun
+                geste existant altéré. Le risque réel est dans la cellule et il
+                est borné : le produit écrit désormais trois fichiers sous
+                `/etc/spark/notes/`, un chemin qu'il n'occupait pas.
+```
+
 ### OP-18 · Migration `015_identite_rootless`, ouverture des fichiers et de la seconde porte (SPK-94, SPK-95)
 
 ```

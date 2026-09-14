@@ -12059,3 +12059,353 @@ Ce n'est pas une interdiction des variables d'environnement : `sparkd` est un
 service, et les siennes sont son contrat de configuration — documentées au README
 et, pour la plupart, écrites par l'écran d'installation. C'est une interdiction
 des leviers **que la documentation ne nomme pas**, quelle que soit leur forme.
+
+
+## 54. Les trois notes d'un Spark : ce que le propriétaire et l'agent s'écrivent (SPK-104)
+
+Demandé par le responsable le 2026-09-14 : « un champ de texte libre associé à
+chaque Spark, ajouté au brief et au texte pour un LLM, qui permette au
+propriétaire de donner des indications sur ce qu'est ce Spark et à quoi il sert ».
+Puis, dans le même mouvement : **trois** fichiers plutôt qu'un, et une propriété
+qui les distingue de tout ce que le produit pose déjà — ils sont **à double
+sens**.
+
+### 54.1 Le manque : le §44 décrit la cellule, et personne ne décrit le service
+
+Tout ce que le §44 porte, le plan de contrôle le SAIT : quotas, routes, mode
+Docker, noms des variables. C'est précisément ce qui le rend sûr — un briefing
+qui n'énonce que des faits relevés ne peut pas mentir longtemps (§44.4).
+
+Et c'est aussi ce qui en fixe la limite. Le §44.7 la dit en toutes lettres : le
+briefing « ne décrit pas l'application du locataire ». Or l'agent qui arrive n'a
+pas besoin que de la cellule. Il a besoin de savoir **ce qui tourne là**, **où en
+sont les sources et la configuration**, et **comment s'interfacer** avec ce qui y
+est exposé. Aucune de ces trois réponses n'est dans le registre, et aucune ne peut
+y entrer : le produit ne connaît pas l'application, ne la déploie pas, et le §1
+l'exclut de son périmètre.
+
+**Ce qui manque n'est donc pas un fait de plus : c'est un endroit où les humains
+et les agents qui, eux, connaissent l'application, l'écrivent pour les suivants.**
+
+Le trajet à éviter est connu, et il est celui de tous les projets : la réponse
+existe, dans une conversation, un carnet, la tête de quelqu'un, et pas dans la
+machine. La personne suivante la redécouvre.
+
+### 54.2 Trois notes, trois destinataires, et pourquoi pas une
+
+Un champ unique aurait suffi à la demande initiale. Trois ont été retenues, parce
+que **trois lecteurs différents cherchent trois choses**, et qu'un texte qui
+répond à trois questions à la fois ne répond bien à aucune.
+
+| Note | Fichier | Question à laquelle elle répond | Lecteur |
+|---|---|---|---|
+| **README** | `/etc/spark/notes/README.md` | Qu'est-ce que ce Spark, et à quoi sert-il ? | quiconque ouvre la fenêtre du Spark ou entre dans la cellule |
+| **CONTRIBUTORS** | `/etc/spark/notes/CONTRIBUTORS.md` | Comment est-ce configuré ici ? | celui qui entre pour **agir** : d'où viennent les sources, où vivent les fichiers de configuration, où sont déployés les artefacts, où se lisent les variables |
+| **INSTALL** | `/etc/spark/notes/INSTALL.md` | Comment m'interfacer avec ce qui est exposé ici ? | un **tiers**, qui n'entrera jamais dans la cellule : points d'entrée, routes, jetons, formats |
+
+Les trois noms sont ceux du responsable, et ils sont en majuscules parce qu'ils
+sont les noms qu'on cherche du regard dans un dépôt. `CONTRIBUTORS` ne porte pas
+ici son sens habituel de liste de personnes : il porte celui que la demande lui
+donne — **ce qu'il faut savoir pour contribuer à cette machine-là**. Le produit
+le dit à l'écran et dans les fichiers, sans quoi la moitié des textes qu'on y
+trouvera seront des listes de noms.
+
+`/etc/spark/notes/` est un **dossier à part**, et non trois fichiers posés à côté
+de `BRIEFING.md`. Deux motifs, et le second est le vrai :
+
+- `/etc/spark` porte ce que le plan de contrôle écrit et réécrit seul. Y mêler
+  des fichiers dont la cellule est parfois l'auteur ferait cohabiter deux
+  régimes sous le même chemin, et le §54.4 en dépend ;
+- un dossier se nomme d'une phrase — « vos notes sont dans
+  `/etc/spark/notes/` » — là où trois fichiers demandent trois phrases, et qu'on
+  ne retient pas.
+
+### 54.3 Ce qu'une note est, et ce qu'elle n'est pas
+
+Une note est du **texte libre**, en Markdown par convention et sans que rien ne
+l'impose. Le produit ne l'analyse pas, ne la valide pas au-delà de ce que le
+§54.6 refuse, et n'en tire aucun comportement. Il la **transporte**.
+
+Ce n'est donc pas :
+
+- **un fichier de configuration.** Rien de ce qu'on y écrit n'est appliqué. Une
+  note qui dit « le port est 8080 » ne fait pas écouter 8080, et le produit ne
+  la confronte pas aux routes qu'il connaît : elle pourrait être fausse, comme
+  toute documentation, et c'est à ses lecteurs de la corriger ;
+- **une extension du briefing.** Le §44 énonce des faits relevés par le plan de
+  contrôle. Une note énonce ce que son auteur affirme. Les deux voyagent
+  ensemble et ne se confondent jamais : le §54.7 impose que chaque texte dise
+  d'où il vient ;
+- **un canal d'autorisation.** Le §44.6 s'applique mot pour mot : ce n'est pas
+  parce qu'une note dit « tu peux » que quoi que ce soit devient permis. Les
+  autorisations se jouent côté Forge, où le locataire n'atteint rien (§35.1) ;
+- **un dépôt de secrets.** Le §54.6 y revient, parce que c'est le seul endroit du
+  produit où un texte libre écrit par un humain part vers un modèle tiers.
+
+### 54.4 Le double sens : deux auteurs, un seul texte
+
+C'est la propriété qui distingue ces trois fichiers de tout le reste, et la
+demande la nomme : *« on peut l'inscrire depuis le ssh et il est visible dans
+l'UI, on peut le sauvegarder dans l'UI et il est inscrit dans le Spark »*.
+
+Tout ce que `sparkd` pose ailleurs suit la règle inverse, et pour de bonnes
+raisons : `authorized_keys` (§17.1), les fichiers d'environnement (§43.2) et le
+briefing (§44.4) sont **régénérés en entier depuis le registre**. Le §44.9.7
+mesure ce que cela coûte à qui l'ignore — une ligne ajoutée à la main disparaît,
+pas tout de suite, ce qui est pire.
+
+**Une note ne peut pas suivre cette règle**, parce que son auteur légitime est
+parfois dans la cellule. L'agent qui vient d'installer la pile est exactement
+celui qui sait ce qu'il faut écrire dans `INSTALL.md`, et il l'écrit là où il se
+trouve. Le produit doit donc ramener ce texte, pas l'écraser.
+
+#### 54.4.1 Ce que le registre retient, et pourquoi cette colonne-là
+
+Le registre porte, par note : le **texte**, sa **révision** (un entier qui avance
+à chaque écriture), son **origine** (`console` ou `cellule`), sa date, et —
+la colonne qui fait tout fonctionner — l'**empreinte du dernier texte que le plan
+de contrôle a réellement posé dans la cellule**.
+
+Cette empreinte est la seule façon honnête de répondre à « quelqu'un a-t-il écrit
+là-bas ? ». On ne compare pas des dates : l'horloge d'une cellule appartient au
+locataire, qui est `root` chez lui, et une date fausse écraserait en silence le
+texte du propriétaire. On compare ce qu'on a posé à ce qu'on trouve.
+
+#### 54.4.2 La réconciliation, quatre cas et pas un de plus
+
+| Ce qu'on trouve dans la cellule | Conclusion | Ce que le produit fait |
+|---|---|---|
+| illisible — cellule absente, Spark sans cellule, pilote muet | on ne sait pas | le registre fait foi, et l'écran **dit** que la cellule n'a pas été consultée |
+| fichier absent | la cellule n'a rien à dire | le registre fait foi, et la note sera reposée à la prochaine projection |
+| identique à l'empreinte posée | personne n'a écrit là-bas | le registre fait foi |
+| **différent de l'empreinte posée** | **quelqu'un a écrit là-bas** | le registre **absorbe** le texte, la révision avance, l'origine devient `cellule` |
+
+Le quatrième cas est la décision du responsable : **la cellule gagne.** Le
+raisonnement tient en une phrase — le plan de contrôle a posé X, on trouve Y,
+donc Y a été écrit APRÈS X, par construction et sans avoir besoin d'aucune
+horloge.
+
+**Un `rm` n'est pas un effacement.** Un fichier absent ne vide pas la note : il
+la fait reposer. Supprimer un fichier est le geste le plus facile à faire par
+accident — un `rm -rf` trop large, une restauration d'instantané, une image
+reconstruite —, et il ne porte aucune intention rédactionnelle. **Pour vider une
+note, on écrit un fichier vide** (`: > /etc/spark/notes/INSTALL.md`), ou on
+l'enregistre vide depuis la console. Un fichier vide est un contenu ; une absence
+n'en est pas un.
+
+#### 54.4.3 La console édite une révision, et un enregistrement périmé est refusé
+
+Dans l'autre sens, le risque est symétrique : la console a affiché le texte à
+14h00, la cellule l'a réécrit à 14h01, le propriétaire enregistre à 14h02 et
+efface sans le savoir ce qu'un agent venait d'écrire.
+
+**L'enregistrement porte donc la révision que l'écran éditait.** Si le registre a
+avancé depuis, il est **refusé en `409`**, et la réponse rend le texte courant et
+son origine. L'écran montre alors les deux et laisse trancher. Ce n'est pas une
+gêne à contourner : c'est le seul moment où le produit peut dire qu'un texte
+allait être perdu.
+
+#### 54.4.4 Quand la réconciliation a lieu, et quand elle n'a pas lieu
+
+Elle coûte une lecture par note dans la cellule. On ne la fait donc pas à chaque
+geste, et surtout pas là où elle ne sert à rien :
+
+- **elle a lieu** quand la console ouvre les notes, quand le dossier de
+  déploiement est composé (c'est ce texte-là qui part vers un modèle tiers, il
+  doit être frais), quand une note est enregistrée, et au rattrapage qui suit un
+  amorçage ou un démarrage ;
+- **elle n'a pas lieu** sur les gestes qui ne concernent pas les notes. Une route
+  ajoutée ne change aucune note. C'est aussi pourquoi le §54.5 garde le
+  `BRIEFING.md` à l'écart du contenu : sans cela, chaque geste du plan de
+  contrôle devrait relire trois fichiers avant de réécrire le briefing.
+
+**La projection suit la réconciliation, jamais l'inverse.** Poser une note sans
+avoir lu d'abord ce qui est là est précisément le geste qui détruit le travail
+d'un agent.
+
+#### 54.4.5 Ce que le double sens ne rattrape pas
+
+Un instantané restauré rend les fichiers de la cellule à leur état d'alors ; la
+réconciliation suivante verra un texte différent de l'empreinte posée et
+l'**absorbera** — une restauration peut donc faire reculer une note. C'est la
+conséquence assumée de « la cellule gagne », et le registre garde la trace de
+l'écriture précédente dans le journal d'audit, pas dans la note.
+
+### 54.5 Où les notes apparaissent : en entier dans le dossier, nommées dans le briefing
+
+Arbitrage du responsable.
+
+**Le dossier de déploiement (§44.9) les porte en entier.** C'est le texte que la
+console met dans le presse-papier pour un agent qui n'est pas encore entré dans
+la cellule — et qui, par construction, ne peut lire aucun de ces fichiers : ils
+vivent derrière une clé accordée, un rebond et une cellule amorcée (§44.9.1). Les
+lui résumer ou les lui nommer ne servirait à rien : il n'a aucun moyen de les
+ouvrir.
+
+**Le `BRIEFING.md` de la cellule les NOMME.** Celui qui le lit est déjà dedans :
+les trois fichiers sont à trois lignes de commande de lui. Les y recopier créerait
+deux exemplaires du même texte dans la même machine, dont l'un vieillirait — et
+ce serait l'exemplaire réécrit par le plan de contrôle qui vieillirait, c'est-à-dire
+celui qui a l'air officiel. Le briefing donne donc le **chemin**, la **commande**
+qui les lit, et ce que chacun est censé contenir.
+
+Un `BRIEFING.md` qui ne porte pas les notes ne dépend pas d'elles : il reste
+réécrit par le §44.4 sans réconciliation préalable, et le §54.4.4 tient.
+
+### 54.6 Un secret collé par mégarde, et ce que le produit en fait
+
+C'est le seul endroit du produit où un texte libre, écrit par un humain, part
+ensuite vers un modèle tiers par un bouton prévu pour ça. Le §44.9.3 tient tout
+le briefing à l'écart des valeurs de secret ; il serait absurde de le maintenir
+sur ce que le produit compose et de l'abandonner sur ce qu'il transporte.
+
+**Décision du responsable : le produit refuse.** `sparkd` détient les valeurs des
+secrets du Spark — c'est lui qui les déchiffre pour les poser (§43.5.1) — donc il
+peut comparer. Un texte qui contient la valeur d'un secret de ce Spark n'est pas
+enregistré, et le refus **nomme la variable**, jamais la valeur.
+
+Trois bornes, sans lesquelles la garde ferait plus de mal que de bien :
+
+- **un plancher de longueur.** Seules les valeurs d'au moins **huit** caractères
+  sont cherchées. Un secret de trois caractères rendrait la moitié des textes
+  français impossibles à enregistrer, et une valeur si courte n'a de toute façon
+  aucune confidentialité à protéger ;
+- **la comparaison est littérale** — sous-chaîne exacte, casse comprise. On ne
+  cherche ni ressemblance ni fragment : une garde qui devine refuse un jour un
+  texte innocent, et ce jour-là elle est désactivée par celui qu'elle gêne ;
+- **les valeurs ne sortent jamais de la garde.** Elle les reçoit, elle ne les
+  rend pas, ne les journalise pas et ne les met dans aucun message. Le §43.5.1
+  reste entier : ce qui est déchiffré part vers la cellule, ou ne sort pas.
+
+**Dans l'autre sens, on ne refuse pas : on met en quarantaine.** Un texte trouvé
+dans la cellule et porteur d'un secret pose un problème différent — il est déjà
+écrit, et l'écraser détruirait le travail de son auteur. Le produit **ne l'absorbe
+pas, ne le publie nulle part, et ne reprojette plus cette note** tant que la
+divergence dure ; l'écran le dit, en nommant la variable en cause. L'auteur
+corrige là où il a écrit, et la réconciliation suivante absorbe. Suspendre la
+projection est essentiel : sans cela, le geste suivant du propriétaire écraserait
+le texte que le produit vient de refuser de lire.
+
+Ce que la garde **ne prétend pas** : elle ne connaît que les secrets **de ce
+Spark**, tels que le registre les porte. Un jeton d'un service tiers, un mot de
+passe que personne n'a déclaré, une clé privée collée en entier passent sans être
+vus. La garde attrape la fuite mécanique — copier-coller depuis l'écran
+d'environnement — et rien d'autre. C'est pourquoi l'avertissement du §54.7
+s'écrit quand même, dans les trois textes.
+
+### 54.7 Ce que les fichiers portent en tête, et ce que le LLMs.txt doit dire
+
+Chaque note posée dans la cellule porte un **en-tête écrit par le produit**, au
+format d'un commentaire HTML pour ne pas gêner le Markdown, et **retiré à la
+lecture** : il ne fait jamais partie du texte, sans quoi il s'accumulerait à
+chaque aller-retour. Il dit quatre choses :
+
+- **ce que ce fichier est censé contenir**, en une phrase — celle de la table du
+  §54.2. C'est la consigne de conformité que le responsable demande : un agent
+  qui écrit ses notes d'intégration dans `CONTRIBUTORS.md` les met là où
+  personne ne les cherchera ;
+- **qu'il est à double sens**, et ce que cela implique : ce qu'on écrit ici
+  remonte à la console, et ce que la console enregistre revient ici. C'est
+  l'exact contraire de ce que `BRIEFING.md`, `/etc/spark/env` et
+  `/run/spark/secrets` font, et le §44.9.7 a déjà appris à un agent réel que
+  ces derniers ne se modifient pas — il faut donc dire explicitement que
+  celui-ci, si ;
+- **quand la remontée a lieu** : à la lecture suivante par le plan de contrôle,
+  pas à la seconde où l'on enregistre. Un agent qui écrit puis vérifie
+  immédiatement l'écran ne doit pas conclure à une panne ;
+- **qu'aucun secret ne s'y écrit**, et pourquoi : ce texte est fait pour être
+  copié vers un modèle tiers.
+
+Le **dossier pour un LLM** porte les mêmes quatre points, plus deux que sa
+position lui impose :
+
+- **par où l'on écrit** : les fichiers appartiennent à `root` dans la cellule
+  (§54.8). Un agent entré par `spark-docker` les **lit** et ne les écrit pas ;
+  il doit rebondir par `root` pour cela, et le texte donne la commande ;
+- **la conformité se vérifie avant d'écrire.** Le dossier demande à l'agent de
+  relire la destination de chaque fichier et de ranger ce qu'il a à dire dans
+  celui qui lui correspond — et de ne pas inventer un quatrième sujet dans un
+  fichier qui en porte déjà un autre.
+
+Ces textes **énoncent et ne prescrivent pas** (§44.6). Ils disent où écrire, ce
+qu'on attend là et ce qui arrive ensuite ; ils ne demandent à personne d'écrire
+quoi que ce soit, et une note vide est un état parfaitement normal.
+
+### 54.8 Permissions dans la cellule
+
+Arbitrage du responsable : **`root` écrit, la seconde porte lit.**
+
+Le dossier `/etc/spark/notes/` et les trois fichiers suivent exactement le
+régime du §44.10 — `root:root 0600` sur un Spark enraciné, et
+`root:spark-docker 0640` (dossier `0750`) quand le relevé dit `rootless`, pour
+qu'un agent entré par la seconde porte puisse au moins les lire.
+
+Le groupe n'y écrit pas. `spark-docker` est le compte qui fait tourner la pile,
+délibérément incapable de casser la cellule (§42.2) ; lui donner la plume sur un
+texte que le plan de contrôle republie ensuite vers un modèle tiers élargirait
+sa surface pour un confort. La conséquence est écrite partout où elle se
+découvre : **on inscrit une note en entrant par `root`**.
+
+### 54.9 La surface d'API
+
+    GET  /v1/sparks/{name}/notes      → 200 { "spark", "notes": [ … ], "cell_read" }
+    PUT  /v1/sparks/{name}/notes/{id} → 200 { … }  | 409 | 422 | 423
+
+`{id}` vaut `readme`, `contributors` ou `install` — en minuscules, parce qu'un
+identifiant d'API n'est pas un nom de fichier, et qu'il ne change pas si le
+fichier est un jour renommé.
+
+Chaque note rendue porte : son identifiant, le nom du fichier et son chemin dans
+la cellule, le texte, la révision, l'origine, la date, et l'état de la
+réconciliation — `lue`, `non_lue` (la cellule n'a pas répondu), ou `quarantaine`
+avec la variable en cause.
+
+Quatre décisions :
+
+- **`GET` réconcilie**, et rend `cell_read` pour dire s'il y est parvenu. Un
+  écran qui affiche un texte sans savoir s'il vient d'être confronté à la cellule
+  affirmerait plus qu'il ne sait (§14.6 du design system) ;
+- **`GET` répond sur un Spark arrêté et sur un Spark sans cellule**, comme le
+  briefing (§44.9.4) : le registre porte le texte, et `cell_read` vaut alors
+  faux ;
+- **`PUT` exige la révision éditée**, et rend `409` avec le texte courant si elle
+  a été dépassée (§54.4.3). `422` pour un texte refusé par la garde (§54.6) ou
+  trop long. **`423`** quand le Spark est protégé : enregistrer une note est une
+  écriture qui vise le Spark, et le §35.2 ne fait pas d'exception pour les
+  écritures anodines ;
+- **une note entre au journal d'audit** comme toute écriture, sous une action
+  qui nomme la note. Le payload porte l'identifiant et la longueur, **jamais le
+  texte** (§21.4).
+
+Le texte est borné à **64 Kio** par note. Ce n'est pas une limite de stockage :
+c'est la taille au-delà de laquelle un dossier collé dans une conversation cesse
+d'être lisible par son destinataire, et trois notes sans borne feraient un
+dossier que plus aucun modèle ne lit en entier.
+
+### 54.10 Ce que la console en fait
+
+Une **facette** de la fenêtre du Spark, nommée *Notes*, et non une section de la
+facette *Infos* : trois textes longs qui s'éditent sont une destination, pas un
+encart — c'est la règle qui a déjà sorti le terminal (§34.1, SPK-DS-04).
+
+Elle porte les trois notes l'une sous l'autre, chacune avec le rappel de ce
+qu'elle est censée contenir, son origine et sa date. L'édition est un champ
+multiligne et un bouton *Enregistrer* par note : enregistrer l'une ne touche pas
+les deux autres, et une note en quarantaine ne bloque pas ses voisines.
+
+Quatre états sont distincts et le restent (§14.6) : **vide** (personne n'a encore
+écrit), **à jour**, **non confrontée à la cellule** (elle n'a pas répondu), et
+**en quarantaine**. Le refus de `409` ne perd pas la saisie (§1.5 bis) : il
+affiche le texte venu de la cellule à côté de celui qu'on allait enregistrer.
+
+### 54.11 Ce que cette unité ne fait pas
+
+- Elle ne rend pas les notes publiques : elles se lisent dans la console et dans
+  la cellule, et elles sortent par le dossier que le propriétaire copie lui-même.
+  Aucune route d'ingress ne les sert.
+- Elle ne les verse pas dans le JSON du briefing ni dans le `motd`.
+- Elle ne vérifie pas qu'elles sont vraies. Une note périmée est un défaut de
+  documentation, pas un défaut du produit — et c'est exactement ce que le §44.4
+  refuse de laisser arriver aux **faits**, ce qui est précisément la raison pour
+  laquelle les faits et les notes ne se mélangent pas.
+- Elle n'introduit **aucune** variable d'environnement (§53).

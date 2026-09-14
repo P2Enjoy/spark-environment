@@ -7154,6 +7154,95 @@ constatées sur le catalogue seedé :
   (`docs/JOURNAL.md`, 2026-09-14).
 
 
+
+### [ ] SPK-104 · Trois notes à double sens : README, CONTRIBUTORS, INSTALL
+
+Demandé par le responsable le 2026-09-14 : « un champ de texte libre associé à
+chaque Spark, ajouté au brief et au LLMs.txt, qui permette au propriétaire de
+donner des indications sur ce qui fait ce Spark et à quoi cela sert ». Puis,
+précisé dans le même message : **trois** fichiers — un `README` qui décrit le
+Spark, un `CONTRIBUTORS` qui dit comment il est configuré (sources, fichiers de
+configuration, artefacts déployés, où se lisent les variables), un `INSTALL` qui
+dit comment s'interfacer avec ce qui y est exposé (points d'entrée, routes,
+jetons). Et une propriété qui les distingue de tout ce que le produit pose
+déjà : **ils sont à double sens** — on les inscrit depuis le SSH et ils sont
+visibles dans la console, on les enregistre dans la console et ils sont inscrits
+dans le Spark.
+
+Le §44.7 dit depuis toujours que le briefing « ne décrit pas l'application du
+locataire ». C'est ce trou-là que l'unité comble, sans le combler avec des faits
+inventés : le produit ne connaît pas l'application, il **transporte** ce que ceux
+qui la connaissent ont écrit.
+
+- Spécification : `docs/DAT.md` **§54** (les trois notes, le double sens, la
+  réconciliation, la garde des secrets, les permissions, la surface d'API, la
+  console) · `docs/SCHEMA.md` **§10 septies** (`spark_note`) · §44.5 et §44.9.2
+  complétés · `docs/DESIGN_SYSTEM_APP.md` · manuel M8.
+  **Écrite et committée avant le code.**
+- Dépend de : SPK-60 pour le briefing, SPK-85 et SPK-99 pour le dossier, SPK-58
+  pour les secrets que la garde compare, SPK-94/SPK-95 pour le régime de
+  permissions de la seconde porte.
+
+**Les quatre arbitrages du responsable, tranchés le 2026-09-14 avant toute
+ligne de code** (`docs/JOURNAL.md`) :
+
+1. **la cellule gagne**, et la console édite une révision datée — un
+   enregistrement périmé est refusé en `409` plutôt qu'écrasé (§54.4). Aucune
+   horloge de cellule n'est jamais comparée ;
+2. **le dossier pour un LLM porte les trois textes en entier ; le `BRIEFING.md`
+   les NOMME** (§54.5). Celui qui lit le briefing est déjà dans la cellule, à
+   trois lignes de commande des fichiers ; celui qui lit le dossier n'y est pas
+   encore entré et ne peut rien ouvrir ;
+3. **le produit refuse un texte qui porte la valeur d'un secret connu du Spark**,
+   au-dessus d'un plancher de huit caractères, en nommant la variable et jamais
+   la valeur (§54.6). Dans l'autre sens — un texte trouvé dans la cellule — il ne
+   refuse pas : il met en **quarantaine**, n'absorbe pas, ne publie pas et
+   **suspend la projection de cette note** pour ne pas détruire ce qu'il vient de
+   refuser de lire ;
+4. **`root` écrit, `spark-docker` lit** (§54.8). Les fichiers suivent le régime du
+   §44.10 ; la conséquence — on inscrit une note en entrant par `root` — s'écrit
+   partout où elle se découvre.
+
+**Portée, et découpage persisté** (CLAUDE.md §5 : le plan de découpage est un
+artefact, pas une narration) :
+
+1. **Documentation seule** — DAT §54, SCHEMA §10 septies, cette unité, journal,
+   changelog, contrat de déploiement. Aucun code. *Ce chunk.*
+2. **Registre et service** — migration `017_notes_spark.sql`, module
+   `notes.py` (modèle, réconciliation, garde des secrets, projection),
+   `pull_file` sur les deux pilotes, routes `GET`/`PUT`, contrat d'API
+   régénéré, audit. Preuves d'unité et d'API.
+3. **Briefing et dossier** — les notes nommées dans `BRIEFING.md` avec la
+   commande qui les lit, portées en entier dans le dossier, et les six points du
+   §54.7 écrits dans les deux. Preuves de rendu, dont la garde du §44.9.3
+   rejouée sur un dossier augmenté.
+4. **Console** — facette *Notes*, trois éditeurs, les quatre états du §54.10, le
+   refus `409` qui ne perd pas la saisie. Preuves de composant, design system.
+5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte ses trois
+   notes par le vrai chemin d'API ; un parcours prouve les **deux** sens depuis
+   l'interface ; captures observées aux deux formats.
+
+- **Aucune variable d'environnement** n'est introduite (§53). Le seul état neuf
+  est la table `spark_note`.
+- Ce que l'unité ne doit PAS casser : le §44.4 — le `BRIEFING.md` reste réécrit
+  sans réconciliation préalable, puisqu'il ne porte pas le contenu des notes ;
+  le §43.5.1 — les valeurs de secrets entrent dans la garde et n'en sortent
+  jamais ; le §35.2 — un Spark protégé refuse l'enregistrement d'une note
+  (`423`) ; le §21.4 — le journal porte l'identifiant et la longueur, jamais le
+  texte.
+- DoD : un test prouve chacun des quatre cas de réconciliation du §54.4.2, dont
+  « un `rm` n'est pas un effacement » ; un test prouve le `409` sur révision
+  périmée ; un test prouve le refus nommant la variable **sans** rendre la
+  valeur ; un test prouve la quarantaine — rien d'absorbé, rien de publié, rien
+  de reprojeté ; un test prouve qu'un Spark protégé refuse en `423` ; un test
+  prouve que le dossier porte les trois textes et que le `BRIEFING.md` ne porte
+  que leurs chemins ; un parcours E2E inscrit une note **depuis la console** et
+  la relit **dans la cellule**, puis inscrit depuis la cellule et la relit à
+  l'écran — les deux sens, par l'interface, sans URL profonde ni appel d'API
+  pour agir ; captures observées aux deux formats ; README, DAT, SCHEMA, design
+  system, manuel M8, changelog et contrat de déploiement à jour ; `@spec` /
+  `@verifies` posés.
+
 ---
 
 ## Réservé, non planifié
