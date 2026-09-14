@@ -7155,7 +7155,7 @@ constatées sur le catalogue seedé :
 
 
 
-### [ ] SPK-104 · Trois notes de Spark : README, CONTRIBUTORS, INSTALL
+### [~] SPK-104 · Trois notes de Spark : README, CONTRIBUTORS, INSTALL
 
 Demandé par le responsable le 2026-09-14 : « un champ de texte libre associé à
 chaque Spark, ajouté au brief et au LLMs.txt, qui permette au propriétaire de
@@ -7210,6 +7210,9 @@ artefact, pas une narration) :
 2. **Registre et service** — migration `017_notes_spark.sql`, module `notes.py`
    (modèle, garde des secrets, projection), `pull_file` sur les deux pilotes,
    routes `GET`/`PUT`, contrat d'API régénéré, audit. Preuves d'unité et d'API.
+   *Fait : 18 preuves propres, 1349 preuves de service au vert.* Le `.?` annoncé
+   au §54.7 n'est pas encore nommé dans l'en-tête posé — il n'existera qu'avec
+   SPK-105, et l'en-tête ne doit pas désigner un fichier absent.
 3. **Briefing et dossier** — les notes nommées dans `BRIEFING.md` avec la
    commande qui les lit, portées en entier dans le dossier, et les points du
    §54.7 écrits dans les deux. Preuves de rendu, dont la garde du §44.9.3

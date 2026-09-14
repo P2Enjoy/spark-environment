@@ -44,6 +44,7 @@ from . import canaux as canaux_service
 from . import bootstrap as bootstrap_service
 from . import identity as identity_service
 from . import briefing as briefing_service
+from . import notes as notes_service
 from . import metrics as metrics_service
 from . import historian as historian_service
 from . import snapshots as snapshot_service
@@ -901,6 +902,16 @@ def create_app(config: Config) -> FastAPI:
         # (ses NOMS, jamais ses valeurs). Le faire dans le meme chemin evite
         # qu'une nouvelle route d'environnement oublie la seconde projection.
         _apply_briefing(connection, spark)
+        # SPK-104 · §54.4 : les notes se reposent aux MÊMES moments que
+        # l'environnement — création, démarrage, restauration, amorçage — et pour
+        # la même raison : ce sont les instants où les fichiers d'une cellule
+        # doivent être rétablis. Les accrocher ici plutôt qu'à ces quatre appels
+        # évite qu'un cinquième, ajouté demain, les oublie ; c'est l'argument
+        # écrit trois lignes plus haut pour le briefing.
+        #
+        # Le coût est nul sur un Spark sans note — `a_projeter` ne rend rien — et
+        # borné à trois écritures de fichier sur un Spark qui en a trois.
+        _apply_notes(connection, spark)
 
     def _apply_briefing(connection, spark: dict) -> None:
         """Projette le briefing unique dans une cellule déjà amorcée.
@@ -935,6 +946,56 @@ def create_app(config: Config) -> FastAPI:
         # partie — il reste `0644`, sans quoi il serait invisible à la connexion.
         _ouvrir_au_rootless(connection, spark, briefing_service.DOSSIERS_OUVERTS,
                             briefing_service.FICHIERS_OUVERTS)
+
+    def _secrets_du_spark(connection, spark: dict) -> dict[str, str]:
+        """Les valeurs des secrets de ce Spark, pour la GARDE du §54.6.
+
+        @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.6 · §43.5.1
+
+        Elles entrent dans `notes_service.secret_present` et n'en ressortent
+        jamais : il rend un NOM de variable. Le §43.5.1 tient — ce qui est
+        déchiffré part vers la cellule, ou ne sort pas.
+
+        Aucun secret déclaré, aucune clé n'est chargée : une garde qui exigerait
+        la clé pour un Spark qui n'a rien à protéger refuserait d'enregistrer une
+        note sur une Forge où le fichier de clé n'a pas encore servi.
+        """
+        if not any(e.is_secret for e in env_service.lister(connection, spark["id"])):
+            return {}
+        cle = env_service.charger_cle(config.secret_key_file)
+        return env_service.resoudre(connection, cle, spark["id"])["secrets"]
+
+    def _apply_notes(connection, spark: dict) -> bool:
+        """Projette les notes du registre dans la cellule (§54.4).
+
+        @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.4 (le registre écrit),
+              §54.8 (permissions)
+
+        Même mécanisme et même motif que l'environnement et le briefing :
+        régénéré depuis l'état voulu, jamais complété (§43.2, §44.4). Une note
+        jamais écrite n'est pas posée — un fichier ne portant que l'en-tête du
+        produit ferait croire à un texte que personne n'a rédigé.
+        """
+        if not spark.get("incus_name"):
+            # Pas de cellule : il n'y a rien à poser, et le geste doit le DIRE.
+            # Rendre « posé » ici ferait croire qu'un agent entrant trouverait le
+            # texte, alors qu'il n'y a pas encore de cellule où entrer.
+            return False
+        a_poser = notes_service.a_projeter(
+            notes_service.lister(connection, spark["id"]))
+        if not a_poser:
+            return False
+        for note in a_poser:
+            app.state.incus.push_file(
+                spark["incus_name"], note["path"],
+                notes_service.contenu_fichier(note["id"], note["body"]),
+                mode="0600")
+        # SPK-94 · §44.10, §54.8 : posées fermées, puis ouvertes au compte
+        # rootless quand il y en a un. Un agent qui entre par la seconde porte
+        # doit pouvoir LIRE le texte qui lui explique où il est.
+        _ouvrir_au_rootless(connection, spark, notes_service.DOSSIERS_OUVERTS,
+                            tuple(note["path"] for note in a_poser))
+        return True
 
     def _accorder_capacite_docker(connection, spark: dict, brut: dict) -> dict:
         """Le RELEVÉ corrige le registre, jamais l'inverse (SPK-98, §42.13).
@@ -2691,6 +2752,89 @@ def create_app(config: Config) -> FastAPI:
                     model, ssh_config=acces["config"], keys=acces["keys"],
                     jump=jump, direct=direct),
             }
+
+    # --- SPK-104 · les trois notes d'un Spark (docs/DAT.md §54) --------------
+    #
+    # Les PREMIERS fichiers du produit dont la cellule peut être l'auteur. Tout
+    # ce que sparkd pose ailleurs est régénéré en entier depuis le registre ; ces
+    # trois-là se réconcilient, et la cellule gagne (§54.4).
+
+    @app.get("/v1/sparks/{name}/notes", tags=["notes"])
+    def read_notes(name: str) -> dict:
+        """Les trois notes, telles que le registre les porte (§54.9).
+
+        @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.4, §54.9
+
+        **N'entre pas dans la cellule.** Depuis le §54.4, une note est une
+        projection : il n'y a rien à confronter, et ce qui arrive de la cellule
+        arrive par le fichier `.?` du §55. Elle répond donc sur un Spark arrêté
+        comme sur un Spark sans cellule.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            return {"spark": name,
+                    "notes": notes_service.lister(connection, spark["id"])}
+
+    @app.put("/v1/sparks/{name}/notes/{note_id}", tags=["notes"])
+    def set_note(name: str, note_id: str, body: dict = Body(...)) -> dict:
+        """Enregistre une note depuis la console (§54.9).
+
+        @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.6 (la garde), §54.9
+              (la surface) · §35.2
+
+        La **révision éditée** est obligatoire : sans elle, un enregistrement
+        écraserait en silence ce qu'un autre onglet, ou une proposition acceptée
+        entre-temps, venait d'écrire. Un `409` n'est pas une gêne à contourner —
+        c'est le seul moment où le produit peut dire qu'un texte allait être
+        perdu.
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+                # §35.2 : enregistrer une note est une écriture qui VISE ce
+                # Spark. Le verrou ne fait pas d'exception pour les écritures
+                # qu'on juge anodines.
+                protection_service.ensure_writable(connection, name, "note")
+                ecrite = notes_service.enregistrer(
+                    connection, spark["id"], note_id,
+                    str((body or {}).get("body", "")),
+                    (body or {}).get("revision"),
+                    _secrets_du_spark(connection, spark))
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except notes_service.NoteObsolete as erreur:
+                # §54.9 : le refus REND la note courante. Un refus qui ne montre
+                # pas ce qui allait être perdu n'est qu'un obstacle.
+                raise HTTPException(status_code=409, detail={
+                    "error": erreur.code, "message": str(erreur),
+                    "current": erreur.courante}) from erreur
+            except notes_service.NoteError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": erreur.code, "message": str(erreur)}) from erreur
+            except env_service.CleError as erreur:
+                # La garde du §54.6 ne peut pas s'exécuter sans la clé, et
+                # écrire sans garde publierait peut-être un secret. On refuse
+                # plutôt que d'écrire à l'aveugle.
+                raise HTTPException(status_code=503, detail={
+                    "error": "secret_key_unavailable",
+                    "message": "La note n'a pas été enregistrée : la clé des "
+                               "secrets est illisible, et la garde qui empêche "
+                               "d'y coller un secret ne peut pas s'exécuter. "
+                               f"({erreur})"}) from erreur
+            try:
+                posee = _apply_notes(connection, spark)
+            except (IncusError, InstanceAbsente):
+                # Le registre est écrit ; la cellule sera rattrapée au prochain
+                # démarrage. Même règle que l'environnement (§43.5.2) : un geste
+                # déjà inscrit au registre n'échoue pas parce que la projection
+                # a manqué.
+                posee = False
+            return {"spark": name, "note": ecrite, "projected": posee}
 
     @app.get("/v1/forge/cores", tags=["forge"])
     def forge_cores() -> dict:

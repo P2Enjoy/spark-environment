@@ -37,15 +37,19 @@
   réception à tenir à jour. En rootless, **`root` comme `spark-docker`** peuvent
   proposer ; ni l'un ni l'autre ne décide. Contrat : `docs/DAT.md` §55,
   `docs/BACKLOG.md` SPK-105.
-- **SPK-104 — trois notes de Spark, SPÉCIFIÉES et pas encore implémentées.**
-  Aucun code n'accompagne ces entrées, et c'est délibéré : les arbitrages du
-  responsable sont écrits et committés **avant** la première ligne (`CLAUDE.md`
-  §5). Chaque Spark recevra trois textes libres — `README` (ce qu'est ce Spark),
-  `CONTRIBUTORS` (comment il est configuré) et `INSTALL` (comment s'interfacer
-  avec ce qu'il expose). Le dossier pour un LLM les portera en entier, le
-  `BRIEFING.md` les nommera. Un texte portant la valeur d'un secret connu est
-  refusé, en nommant la variable et jamais la valeur. Contrat : `docs/DAT.md`
-  §54, `docs/SCHEMA.md` §10 septies, `docs/BACKLOG.md` SPK-104.
+- **SPK-104 — trois notes de Spark : README, CONTRIBUTORS, INSTALL.** Le §44.7
+  disait depuis toujours que le briefing « ne décrit pas l'application du
+  locataire » : ces trois textes comblent ce trou sans le combler de faits
+  inventés — le produit ne connaît pas l'application, il **transporte** ce que
+  ceux qui la connaissent ont écrit. Chacun a son destinataire : ce qu'**est** ce
+  Spark, comment il est **configuré**, comment s'y **interfacer**. Ils sont posés
+  dans la cellule sous `/etc/spark/notes/`, avec un en-tête qui dit ce qu'on
+  attend là et rappelle que les éditer à la main n'a aucun effet durable. Un
+  texte portant la valeur d'un secret connu du Spark est **refusé**, en nommant
+  la variable et jamais la valeur ; un enregistrement portant une révision
+  dépassée est refusé au lieu d'écraser, et rend le texte courant. *Registre,
+  service et API livrés ; la console, le dossier pour un LLM et les parcours
+  restent à venir.*
 - **SPK-103 — les variables et les secrets se lisent en deux blocs, et se
   cherchent.** Une variable se lit pour sa **valeur**, un secret pour son
   **existence** : un seul tableau faisait alterner deux questions dans la colonne

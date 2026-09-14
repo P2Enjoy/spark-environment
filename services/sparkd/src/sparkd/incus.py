@@ -114,6 +114,8 @@ class IncusClient(Protocol):
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None: ...
 
+    def pull_file(self, name: str, path: str) -> str | None: ...
+
     def exec_command(self, name: str, command: list[str]) -> None: ...
 
     def exec_capture(
@@ -327,6 +329,49 @@ class UnixSocketIncus:
         if parent:
             self._raw_push(name, parent, b"", "0700", "directory")
         self._raw_push(name, path, content.encode("utf-8"), mode, "file")
+
+    def pull_file(self, name: str, path: str) -> str | None:
+        """Lit un fichier DANS l'instance, ou `None` s'il n'y est pas.
+
+        @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.4.2
+
+        Le produit n'avait jamais eu besoin de lire : tout ce qu'il pose, il le
+        régénère depuis le registre (§43.2, §44.4). Les notes du §54 sont les
+        premières dont la cellule peut être l'auteur, et on ne réconcilie pas ce
+        qu'on ne lit pas.
+
+        **Passe par l'API de fichiers et non par `exec`**, et ce n'est pas un
+        détail : `exec` exige une cellule EN MARCHE, alors que la préparation
+        d'un déploiement se fait justement sur un Spark arrêté (§44.9.4).
+
+        **Un 404 est ambigu** — Incus le rend pour une instance absente comme
+        pour un chemin absent — et la différence décide de ce que l'écran
+        affiche : « la cellule n'a pas répondu » n'est pas « personne n'a encore
+        écrit » (§14.6). On le lève donc en interrogeant l'instance, une fois, et
+        seulement dans ce cas : deviner d'après le texte du message serait tenir
+        pour stable ce qui n'est pas un contrat.
+        """
+        transport = httpx.HTTPTransport(uds=self.socket_path)
+        try:
+            with httpx.Client(transport=transport, timeout=self.timeout) as client:
+                reponse = client.get(
+                    f"http://incus/1.0/instances/{name}/files",
+                    params={"path": path})
+                if reponse.status_code == 404:
+                    # Lève InstanceAbsente si c'est l'instance qui manque ; sinon
+                    # le chemin n'est pas là, ce qui est une réponse.
+                    self._get(f"/1.0/instances/{name}")
+                    return None
+                reponse.raise_for_status()
+                return reponse.content.decode("utf-8", errors="replace")
+        except httpx.HTTPStatusError as error:
+            raise IncusError(
+                f"Lecture de {path} dans « {name} » refusée : {_raison(error)}"
+            ) from error
+        except httpx.HTTPError as error:
+            raise IncusError(
+                f"Lecture de {path} dans « {name} » refusée : {error}"
+            ) from error
 
     def _raw_push(self, name: str, path: str, body: bytes, mode: str, kind: str) -> None:
         transport = httpx.HTTPTransport(uds=self.socket_path)
@@ -952,6 +997,17 @@ class FakeIncus:
                 hashlib.sha256(content.encode("utf-8")).hexdigest()[:64]
             )
         self._persist()
+
+    def pull_file(self, name: str, path: str) -> str | None:
+        """Doublon de `pull_file` : mêmes exceptions, même absence (§12.1.3).
+
+        Le fichier absent rend `None` et l'instance absente LÈVE, exactement
+        comme le vrai pilote — sans quoi les quatre cas du §54.4.2 seraient
+        éprouvés contre un doublon qui n'en distingue que trois.
+        """
+        self._maybe_fail("pull_file")
+        instance = self._vivante(name)
+        return instance.get("files", {}).get(path)
 
     def exec_command(self, name: str, command: list[str]) -> None:
         self._maybe_fail("exec_command")

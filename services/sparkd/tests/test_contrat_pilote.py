@@ -35,6 +35,11 @@ def _appels(pilote):
         "set_publication_devices": lambda: pilote.set_publication_devices("absente", {}),
         "update_root_size":        lambda: pilote.update_root_size("absente", "5GiB"),
         "push_file":               lambda: pilote.push_file("absente", "/etc/x", "y"),
+        # SPK-104 · §54.4.2 : la LECTURE entre dans la comparaison comme
+        # l'écriture. Elle a ceci de particulier qu'elle doit distinguer un
+        # chemin absent — qui rend `None` — d'une instance absente, qui lève :
+        # « personne n'a encore écrit » n'est pas « la cellule n'a pas répondu ».
+        "pull_file":               lambda: pilote.pull_file("absente", "/etc/x"),
         "exec_command":            lambda: pilote.exec_command("absente", ["true"]),
         "exec_capture":            lambda: pilote.exec_capture("absente", ["true"]),
         "create_snapshot":         lambda: pilote.create_snapshot("absente", "s"),

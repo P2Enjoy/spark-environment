@@ -2070,6 +2070,117 @@
         ]
       }
     },
+    "/v1/sparks/{name}/notes": {
+      "get": {
+        "description": "Les trois notes, telles que le registre les porte (§54.9).\n\n@spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.4, §54.9\n\n**N'entre pas dans la cellule.** Depuis le §54.4, une note est une\nprojection : il n'y a rien à confronter, et ce qui arrive de la cellule\narrive par le fichier `.?` du §55. Elle répond donc sur un Spark arrêté\ncomme sur un Spark sans cellule.",
+        "operationId": "read_notes_v1_sparks__name__notes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Notes V1 Sparks  Name  Notes Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Notes",
+        "tags": [
+          "notes"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/notes/{note_id}": {
+      "put": {
+        "description": "Enregistre une note depuis la console (§54.9).\n\n@spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.6 (la garde), §54.9\n      (la surface) · §35.2\n\nLa **révision éditée** est obligatoire : sans elle, un enregistrement\nécraserait en silence ce qu'un autre onglet, ou une proposition acceptée\nentre-temps, venait d'écrire. Un `409` n'est pas une gêne à contourner —\nc'est le seul moment où le produit peut dire qu'un texte allait être\nperdu.",
+        "operationId": "set_note_v1_sparks__name__notes__note_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Note V1 Sparks  Name  Notes  Note Id  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Note",
+        "tags": [
+          "notes"
+        ]
+      }
+    },
     "/v1/sparks/{name}/protection": {
       "delete": {
         "description": "Lever DÉSARME durablement (§35.4). Il n'y a pas de fenêtre de temps.",

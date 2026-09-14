@@ -827,6 +827,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sparks/{name}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Notes
+         * @description Les trois notes, telles que le registre les porte (§54.9).
+         *
+         *     @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.4, §54.9
+         *
+         *     **N'entre pas dans la cellule.** Depuis le §54.4, une note est une
+         *     projection : il n'y a rien à confronter, et ce qui arrive de la cellule
+         *     arrive par le fichier `.?` du §55. Elle répond donc sur un Spark arrêté
+         *     comme sur un Spark sans cellule.
+         */
+        get: operations["read_notes_v1_sparks__name__notes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Note
+         * @description Enregistre une note depuis la console (§54.9).
+         *
+         *     @spec docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.6 (la garde), §54.9
+         *           (la surface) · §35.2
+         *
+         *     La **révision éditée** est obligatoire : sans elle, un enregistrement
+         *     écraserait en silence ce qu'un autre onglet, ou une proposition acceptée
+         *     entre-temps, venait d'écrire. Un `409` n'est pas une gêne à contourner —
+         *     c'est le seul moment où le produit peut dire qu'un texte allait être
+         *     perdu.
+         */
+        put: operations["set_note_v1_sparks__name__notes__note_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sparks/{name}/protection": {
         parameters: {
             query?: never;
@@ -2476,6 +2532,79 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_notes_v1_sparks__name__notes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_note_v1_sparks__name__notes__note_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
