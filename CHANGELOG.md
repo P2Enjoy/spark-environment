@@ -22,6 +22,16 @@
   désormais cette grammaire : elle voit 33 variables au lieu de 28.
 
 ### Ajouté
+- **SPK-105 — des suggestions déposées dans la cellule, SPÉCIFIÉES et pas encore
+  implémentées.** Un agent pourra déposer `variables.env`, `secrets.env` et
+  `routes.conf` sous `/etc/spark/suggestions/` ; la console les lira, les fera
+  relire ligne par ligne et les appliquera par le chemin normal du produit.
+  **Rien ne s'applique tout seul** : un fichier déposé est une demande sans
+  effet, et le plan de contrôle reste injoignable depuis la cellule.
+  **Consulter ne consomme pas** — accepter ou refuser supprime le fichier, et
+  cette disparition est le signal par lequel l'agent apprend qu'une décision a
+  été prise, sans aucun accusé de réception à tenir à jour. Contrat :
+  `docs/DAT.md` §55, `docs/BACKLOG.md` SPK-105.
 - **SPK-104 — trois notes à double sens, SPÉCIFIÉES et pas encore
   implémentées.** Aucun code n'accompagne cette entrée, et c'est délibéré : les
   quatre arbitrages du responsable sont écrits et committés **avant** la première

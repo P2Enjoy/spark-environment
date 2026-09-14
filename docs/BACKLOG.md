@@ -7243,6 +7243,82 @@ artefact, pas une narration) :
   system, manuel M8, changelog et contrat de déploiement à jour ; `@spec` /
   `@verifies` posés.
 
+
+### [ ] SPK-105 · Des suggestions déposées dans la cellule : variables, secrets, routes
+
+Demandé par le responsable le 2026-09-14, dans le prolongement immédiat de
+SPK-104 : « un agent peut déposer des fichiers de variables et des secrets
+souhaités ; l'UI surveille ces fichiers et propose un bouton pour inspecter les
+variables suggérées et les ajouter au Spark ; les fichiers de suggestions sont
+remis à zéro à l'acceptation ou au refus, et persistent s'ils sont seulement
+consultés. Cette mécanique doit exister aussi pour les routes. »
+
+Le §44.9.7 avait déjà répondu à ce besoin **en prose** : l'agent rédige un bloc
+`.env` dans sa réponse, le propriétaire le recopie. Ce trajet passe par une
+conversation — chaque étape peut perdre une ligne — et ne marche pas du tout pour
+les routes, qu'on ne colle nulle part.
+
+- Spécification : `docs/DAT.md` **§55** (les trois fichiers, le cycle de vie, la
+  garde d'empreinte, les permissions, ce que le dossier doit dire, la surface
+  d'API, la console) · §44.9.7 complété · `docs/DESIGN_SYSTEM_APP.md` · manuel
+  M8. **Écrite et committée avant le code.**
+- Dépend de : SPK-104 pour la lecture et la suppression de fichiers dans la
+  cellule, SPK-97 pour l'import de lot que l'acceptation emploie, SPK-64/SPK-58
+  pour l'environnement, SPK-20 pour la création de route.
+
+**Ce qui décide de l'unité, et qu'il ne faut pas perdre de vue :**
+
+1. **Une suggestion n'est pas une écriture** (§55.2). Le §35.1 tient entier :
+   un fichier déposé dans une cellule n'a aucun effet tant qu'un humain ne
+   l'ouvre pas. Il n'existe **aucun** mode d'acceptation automatique, et il n'en
+   existera pas ;
+2. **consulter ne consomme pas** (§55.4). Accepter ou refuser supprime le
+   fichier — un vrai `DELETE`, pas une troncature : un fichier disparu dit
+   qu'une décision a été prise, un fichier vide ne dit rien. Une acceptation
+   **partielle** supprime quand même tout : ce qui n'a pas été retenu a été
+   refusé, pas ajourné ;
+3. **le chemin EST la déclaration de nature** — `variables.env` / `secrets.env`
+   (§55.3) —, et elle reste une **proposition** : c'est le propriétaire qui coche,
+   ligne par ligne, comme au §43.10.2. Un agent ne décide pas de ce qui est
+   secret dans le registre de quelqu'un d'autre ;
+4. **`root` seulement, et `spark-docker` pas même en lecture** (§55.6) :
+   `secrets.env` porte des valeurs en clair, ce que les notes ne font jamais.
+   D'où la **consigne d'accès unique** du §55.7, écrite une fois à côté des deux
+   portes du §42.2 quater et valable pour les six fichiers de SPK-104 et SPK-105 ;
+5. **l'agent apprend le sort de sa demande par ce qui est déjà vrai** (§55.4.1) :
+   fichier disparu + `/etc/spark/env` + `BRIEFING.md`. Aucun accusé de réception
+   n'est écrit — ce serait une quatrième vérité à tenir fraîche.
+
+**Portée, et découpage persisté :**
+
+1. **Documentation seule** — DAT §55, cette unité, journal, changelog. *Ce chunk.*
+2. **Service et API** — `delete_file` sur les deux pilotes, module
+   `suggestions.py` (lecture, analyse, empreinte, application, suppression),
+   trois routes, contrat régénéré, audit. Preuves d'unité et d'API.
+3. **Dossier pour un LLM** — la section du §55.7 et la consigne d'accès unique,
+   écrites dans le même chunk que celles de SPK-104 si leur ordre le permet.
+4. **Console** — bannières et écrans d'acceptation sur les facettes
+   *Environnement* et *Routes*, réemployant la relecture du §43.10.2.
+5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte une suggestion
+   de chaque nature ; un parcours dépose depuis la cellule, inspecte, accepte
+   partiellement et constate la suppression du fichier **et** l'effet au registre.
+
+- **Aucune migration, aucune variable d'environnement** : le fichier dans la
+  cellule EST l'état.
+- Ce que l'unité ne doit PAS casser : le §35.1 — rien ne s'applique sans geste
+  humain ; le §43.3 — la nature reste déclarée par le propriétaire ; le §18.4 et
+  le §43.9 — l'application passe par les contrôles existants et n'ouvre aucun
+  chemin d'écriture propre ; le §39 — les ports publiés restent hors suggestion.
+- DoD : un test prouve qu'une consultation ne supprime rien ; un test prouve
+  qu'accepter et refuser suppriment, y compris sur acceptation partielle ; un
+  test prouve le `409` sur empreinte périmée ; un test prouve qu'un fichier
+  illisible est nommé avec sa ligne et n'offre que le refus ; un test prouve
+  qu'un domaine déjà pris est refusé par le contrôle existant ; un test prouve
+  qu'un Spark protégé refuse en `423` les deux gestes ; un parcours E2E dépose,
+  inspecte, accepte partiellement et vérifie les trois effets — registre,
+  fichier supprimé, cellule reprojetée ; captures observées aux deux formats ;
+  documentation complète ; `@spec` / `@verifies` posés.
+
 ---
 
 ## Réservé, non planifié

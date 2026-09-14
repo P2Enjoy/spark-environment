@@ -11246,3 +11246,71 @@ déploiement. Consignée dans `docs/INCONSISTENCY_REPORT.md` sous I-01 et non
 corrigée : SPK-62 est en cours sur cette même branche dans une autre session, et
 écrire son OP à sa place décrirait une opération dont je n'ai pas conduit la
 mesure.
+
+---
+
+## 2026-09-14 · SPK-105 — la suggestion, ou comment proposer sans pouvoir écrire
+
+**La demande**, reçue pendant l'implémentation de SPK-104 : un agent dépose dans
+la cellule des fichiers de variables et de secrets souhaités ; la console les
+voit, propose de les inspecter et de les ajouter ; les fichiers sont remis à zéro
+à l'acceptation ou au refus, et persistent s'ils sont seulement consultés. Idem
+pour les routes. Et — le point qui relie les deux unités — expliquer à l'agent
+qu'il devra se connecter en `root`, puisque `spark-docker` ne peut rien de tout
+cela.
+
+**Ce que cela remplace.** Le §44.9.7, écrit le matin même, répondait déjà au
+besoin : l'agent rédige un bloc `.env` dans sa réponse, le propriétaire le
+recopie dans *Importer un lot*. Deux défauts que seule la machine corrige — le
+bloc traverse une conversation, où une ligne se perd sans que personne ne le
+voie ; et pour les routes, il n'y a rien à coller nulle part, donc rien du tout.
+
+**La question que j'ai dû trancher en premier : est-ce que cela perce le §35.1 ?**
+Non, et il fallait l'écrire avant le reste, parce que toute la suite en dépend.
+Un fichier déposé dans une cellule n'est pas une écriture : c'est une demande
+sans effet, qui n'existe que si quelqu'un l'ouvre. C'est exactement ce que le
+§44.9.6 dit déjà du bloc `.env` — **rédiger n'est pas écrire**. L'unité ne fait
+que donner à ce qui était permis un support que la machine transporte. D'où la
+clause écrite en toutes lettres au §55.2 : il n'existe aucun mode d'acceptation
+automatique, et il n'en existera pas.
+
+**Deux fichiers pour les variables, et non un avec une marque.** Le §43.3 a
+mesuré que deviner la nature d'après le nom échoue là où cela compte —
+`DATABASE_URL` porte un mot de passe et ne ressemble à rien. Une marque en
+commentaire aurait été une grammaire de plus à apprendre ; le **chemin** dit la
+nature, et l'écran garde le dernier mot : le propriétaire coche ligne par ligne,
+comme au §43.10.2. Un agent ne décide pas de ce qui est secret dans le registre
+de quelqu'un d'autre.
+
+**« Consulter ne consomme pas » a une conséquence que la demande ne disait pas,
+et qui est la plus utile.** Si un fichier survit à la lecture, alors sa
+**disparition** devient un signal : une décision a été prise. Combinée à
+`/etc/spark/env` et à `BRIEFING.md`, qui sont déjà régénérés depuis le registre
+et ne peuvent pas mentir, elle referme la boucle sans qu'on écrive le moindre
+accusé de réception — que j'ai d'abord envisagé, puis écarté : ce serait une
+quatrième vérité à tenir fraîche, exactement ce que le §44.8 interdit entre deux.
+
+**Ce que j'ai refusé d'étendre, et pourquoi.** Les ports publiés ne sont pas
+suggérables. Un port public est une ressource de la **Forge**, unique sur la
+machine (§39.2), et le §39.3 veut que ce qu'il coûte soit dit au moment de la
+décision. Les clés SSH et les quotas non plus : le §45 en fait des actions
+sensibles. Une suggestion ne doit pas devenir le contournement doux de ce que le
+produit protège ailleurs — c'est la seule façon de garder que « une suggestion
+n'affaiblit rien » soit vrai et pas seulement affirmé.
+
+**Le point de permission, qui relie les deux unités.** `secrets.env` porte des
+valeurs **en clair**, choisies par l'agent. Les notes du §54, elles, n'en portent
+jamais — le §54.6 le garantit — et c'est ce qui autorisait à les ouvrir en
+lecture au compte `spark-docker`. Ici, les ouvrir divulguerait tout : le dossier
+des suggestions est donc `0700 root:root`, sans exception. La conséquence est la
+même dans les deux unités et se dit **une seule fois**, à côté des deux portes du
+§42.2 quater : ces six fichiers s'écrivent en entrant par `root`. La répéter à
+chaque section la ferait lire zéro fois ; l'omettre ferait échouer un agent entré
+par la seconde porte sur un « permission denied » qui ne nomme pas sa cause —
+c'est le sixième piège du §44.10 dans une autre robe.
+
+**Ce qui n'est pas encore vrai.** Rien n'est implémenté. Le §55 du DAT, l'unité
+SPK-105 et cette entrée sont committés avant le code, dans un commit dédié,
+pendant que l'implémentation de SPK-104 est encore en cours dans l'arbre de
+travail : une décision du responsable ne doit pas attendre la fin d'un chunk pour
+exister ailleurs que dans le contexte d'un agent.

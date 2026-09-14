@@ -12409,3 +12409,278 @@ affiche le texte venu de la cellule à côté de celui qu'on allait enregistrer.
   refuse de laisser arriver aux **faits**, ce qui est précisément la raison pour
   laquelle les faits et les notes ne se mélangent pas.
 - Elle n'introduit **aucune** variable d'environnement (§53).
+
+
+## 55. Les suggestions déposées dans la cellule : ce que l'agent propose, ce que le propriétaire accorde (SPK-105)
+
+Demandé par le responsable le 2026-09-14, dans le prolongement immédiat du §54 :
+« un agent peut déposer des fichiers de variables et des secrets souhaités ;
+l'UI surveille ces fichiers et propose un bouton pour inspecter les variables
+suggérées et les ajouter au Spark ; les fichiers de suggestions sont donc remis
+à zéro à l'acceptation ou au refus, et persistent s'ils sont seulement
+consultés. Cette mécanique doit exister aussi pour les routes. »
+
+### 55.1 Le trajet que cette unité remplace
+
+Le §44.9.7 a déjà constaté le besoin et lui a donné une réponse **en prose** :
+l'agent qui découvre qu'il lui manque `REDIS_URL` rédige un bloc `.env` dans sa
+réponse, et le propriétaire le recopie dans *Environnement → Importer un lot*.
+
+Ce trajet fonctionne, et il a deux défauts que seule la machine peut corriger :
+
+- **il passe par une conversation.** Le bloc est produit par un modèle, lu par un
+  humain, recopié à la main. Chaque étape peut perdre une ligne, et personne ne
+  s'en aperçoit avant que la pile ne démarre mal ;
+- **il ne marche pas pour les routes.** Une route ne se colle nulle part : elle
+  se saisit domaine par domaine, et l'agent n'a aucun moyen de dire « ce service
+  attend d'être servi sur ce nom, vers ce port » autrement qu'en le racontant.
+
+**Décision : l'agent dépose un fichier dans la cellule ; la console le voit, le
+fait relire, et l'applique par le chemin normal du produit.** Le contenu voyage
+donc dans la machine plutôt que dans une conversation, et il arrive au moment
+exact où quelqu'un a le pouvoir de l'accorder.
+
+### 55.2 Ce que la frontière ne change pas
+
+**Rien de ce que le §35.1 protège n'est entamé.** Un fichier déposé dans une
+cellule n'est pas une écriture au registre : c'est une **demande**, sans effet,
+qui n'existe que si quelqu'un l'ouvre. Le plan de contrôle reste injoignable
+depuis la cellule ; la console reste le seul chemin par lequel une variable, un
+secret ou une route entrent réellement.
+
+C'est exactement ce que le §44.9.6 dit du bloc `.env` que l'agent rédige :
+**rédiger n'est pas écrire**. Cette unité ne fait que donner à ce qui était déjà
+permis un support que la machine peut transporter.
+
+Trois conséquences s'écrivent, parce qu'elles décident du reste :
+
+- **aucune suggestion ne s'applique toute seule**, jamais, sous aucune
+  condition. Il n'existe pas de mode « accepter automatiquement » et il n'en
+  existera pas : ce serait une écriture accordée depuis la cellule ;
+- **le produit ne fait aucune promesse de délai.** Une suggestion peut n'être
+  jamais lue. L'agent doit écrire sa pile en le supposant ;
+- **le journal d'audit retient l'acceptation et le refus**, comme toute écriture,
+  avec l'origine « suggestion » (§55.8).
+
+### 55.3 Trois fichiers, un par nature
+
+    /etc/spark/suggestions/variables.env    variables ordinaires souhaitées
+    /etc/spark/suggestions/secrets.env      secrets souhaités
+    /etc/spark/suggestions/routes.conf      routes publiques souhaitées
+
+**Deux fichiers pour les variables et non un, avec une marque.** Le §43.3 a
+mesuré que deviner la nature d'une entrée d'après son nom échoue précisément là
+où cela compte — `DATABASE_URL` porte un mot de passe et ne ressemble à rien. Un
+fichier unique obligerait à inventer une marque en commentaire, c'est-à-dire une
+grammaire de plus à apprendre et à ne pas se tromper. **Le chemin EST la
+déclaration** : ce qui est dans `secrets.env` est proposé comme secret.
+
+La déclaration reste une **proposition**, jamais une décision : l'écran
+d'acceptation porte une case par ligne, et c'est le propriétaire qui coche
+(§43.10.2). Un agent ne décide pas de ce qui est secret dans le registre de
+quelqu'un d'autre.
+
+**La grammaire des deux `.env` est celle du §43.10.1**, à la lettre, et il n'y en
+aura pas de seconde : `NOM=valeur`, une par ligne, pas de valeur multiligne, `$`
+littéral, `#` en début de ligne seulement. C'est la grammaire que le dossier du
+§44.9.7 apprend déjà aux agents, et celle que la console sait refuser en nommant
+la ligne fautive.
+
+**`routes.conf` en a une, minimale et sans surprise** — une route par ligne :
+
+    <domaine> <port_cible> [tls|clair]        # tls par défaut
+    sso.exemple.fr 8080
+    api.exemple.fr 3000 clair
+
+Le port est celui **écouté dans la cellule**, jamais un port public : c'est déjà
+la seule lecture juste au §44.2 bis, et la seule qui décide au §44.2 ter. Le
+défaut est `tls`, parce que c'est le cas de tout ce qui parle HTTP derrière
+l'ingress (§18.3) et qu'un défaut en clair ferait proposer par inadvertance ce
+que personne ne veut.
+
+**Ce qui n'entre PAS dans cette unité** : les ports publiés (§39), les clés SSH
+(§26.4), les instantanés, les quotas. Chacun est soit une ressource de la Forge
+partagée entre tous les Sparks — un port public est unique sur la machine
+(§39.2) —, soit un geste dont le §45 fait une action sensible. Une suggestion ne
+doit pas devenir le contournement doux de ce que le produit protège ailleurs. Un
+port publié se demande en prose, comme avant.
+
+### 55.4 Le cycle de vie : consulter ne consomme pas
+
+C'est la règle que le responsable a posée, et elle décide de l'implémentation.
+
+| Geste du propriétaire | Ce qu'il applique | Ce que le fichier devient |
+|---|---|---|
+| ouvrir la facette, lire la suggestion | rien | **il reste** |
+| **Accepter** (tout ou partie) | les lignes retenues, par le chemin normal | **supprimé** |
+| **Refuser** | rien | **supprimé** |
+
+**Consulter ne consomme pas**, parce qu'une suggestion qu'on regarde sans
+trancher est le cas ordinaire : on ouvre l'écran, on manque d'un élément, on
+revient. Un fichier consommé à la lecture ferait disparaître une demande que
+personne n'a refusée — et l'agent qui l'a déposée n'aurait aucun moyen de le
+savoir.
+
+**Une acceptation PARTIELLE supprime quand même le fichier en entier.** La
+décision a porté sur toute la suggestion : ce qui n'a pas été retenu a été
+refusé, pas ajourné. Laisser le reliquat ferait revenir à chaque ouverture des
+lignes qu'on vient d'écarter, et l'écran finirait par être fermé sans être lu.
+
+**La suppression est un vrai `DELETE` du fichier, pas une troncature.** Un
+fichier vide et un fichier absent se ressemblent pour le produit — les deux
+valent « aucune suggestion » — mais pas pour l'agent qui revient : un fichier
+disparu dit qu'une décision a été prise, un fichier vide ne dit rien.
+
+#### 55.4.1 Comment l'agent apprend le sort de sa demande
+
+**Par ce qui est déjà vrai, et par rien d'autre.** Le produit n'écrit aucun
+accusé de réception, et c'est délibéré : un fichier de réponse serait une
+quatrième vérité à tenir fraîche, alors que deux fichiers existants répondent
+déjà et ne peuvent pas mentir.
+
+- le fichier de suggestion a **disparu** → une décision a été prise ;
+- `/etc/spark/env` et `/run/spark/secrets` disent ce qui a été **accordé**
+  (§43.2 les régénère en entier depuis le registre) ;
+- `/etc/spark/BRIEFING.md` liste les **routes** réellement posées, et il est
+  réécrit à chaque route ajoutée ou retirée (§44.4).
+
+Fichier disparu **et** variable absente : elle a été refusée. C'est une réponse
+complète, et elle ne coûte aucun mécanisme nouveau.
+
+#### 55.4.2 Ce que le propriétaire a relu est ce qu'il applique
+
+L'agent peut réécrire son fichier entre le moment où la console l'affiche et
+celui où le propriétaire tranche. Appliquer alors le contenu **courant** ferait
+écrire au registre un texte que personne n'a lu.
+
+**L'acceptation et le refus portent donc l'empreinte du contenu relu**, et sont
+refusés en `409` si le fichier a changé depuis — la même doctrine qu'au §54.4.3,
+et pour la même raison : c'est le seul moment où le produit peut dire que la
+décision ne portait pas sur ce qu'on croit.
+
+### 55.5 Une suggestion illisible ne disparaît pas en silence
+
+Un fichier que la grammaire refuse est **nommé, avec sa ligne fautive** (§43.10.1),
+et l'écran n'offre alors que *Refuser*. Il n'y a rien à accepter d'un texte qu'on
+n'a pas su lire, et le supprimer sans le dire ferait croire à l'agent qu'il a été
+examiné.
+
+Le §18.4 et le §43.9 gardent le dernier mot : un domaine déjà pris, un nom de
+variable hors grammaire du shell, un port hors bornes sont refusés **à
+l'application**, par les mêmes contrôles que la saisie manuelle. Une suggestion
+n'ouvre aucun chemin d'écriture qui lui soit propre — c'est la condition pour
+qu'elle n'affaiblisse rien.
+
+### 55.6 Permissions, et pourquoi `root` seulement
+
+    /etc/spark/suggestions/        0700 root:root
+    variables.env, routes.conf     0600 root:root
+    secrets.env                    0600 root:root
+
+**Le compte `spark-docker` n'y a aucun accès, pas même en lecture**, et c'est la
+seule différence de régime avec les notes du §54.8. Le motif est dans le nom du
+fichier : `secrets.env` porte des **valeurs en clair**, choisies par l'agent.
+Les notes n'en portent aucune — le §54.6 le garantit —, donc les ouvrir au
+groupe ne divulguait rien ; ici, cela divulguerait tout.
+
+**Conséquence, et elle doit être écrite partout où elle se découvre : ces
+fichiers s'écrivent en entrant par `root`.** C'est déjà vrai des notes (§54.8),
+et le §55.7 en fait une consigne unique plutôt que trois.
+
+Les fichiers acceptés sont supprimés, donc les valeurs de `secrets.env` ne
+séjournent dans la cellule que le temps de la décision. Le produit ne les
+recopie nulle part : elles entrent au registre chiffrées (§43.5) et n'en
+ressortent que vers `/run/spark/secrets`.
+
+### 55.7 Ce que le dossier pour un LLM doit dire, et l'unique consigne d'accès
+
+Le §54.7 fixe déjà la forme : énoncer, ne pas prescrire. Le dossier gagne une
+section qui dit quatre choses, et un en-tête est posé dans chaque fichier de
+suggestion existant.
+
+1. **Ce qu'on ne peut pas faire depuis la cellule, et ce qu'on peut donc
+   proposer.** Le §44.9.7 dit déjà « seul le propriétaire peut poser une
+   variable » ; la phrase se complète — *et voici où déposer ce que vous
+   souhaitez qu'il pose*. Sans les deux moitiés, la première se lit comme une
+   impasse, et un agent devant une impasse invente (§44.2 ter).
+2. **Les trois chemins, leur grammaire et un exemple de deux lignes chacun.**
+   Pas de noms de variables inventés : le §44.7 tient, le produit ne connaît pas
+   l'application du locataire.
+3. **Le cycle de vie, en une phrase** : déposé, il attend ; consulté, il reste ;
+   accepté ou refusé, il disparaît. Et **rien ne garantit qu'il soit lu** : une
+   pile ne doit pas dépendre d'une suggestion pour démarrer.
+4. **Comment lire le sort de sa demande** — le §55.4.1, qui ne nomme que des
+   fichiers existants.
+
+**Et une consigne d'accès, unique, qui vaut pour les six fichiers du §54 et du
+§55 :**
+
+> Ces fichiers s'écrivent en entrant par **`root`**. Le compte `spark-docker`
+> fait tourner la pile ; il ne peut ni écrire une note, ni déposer une
+> suggestion, ni — bien sûr — poser une variable, un secret ou une route, qui
+> n'existent que dans le plan de contrôle.
+
+Elle est écrite **une fois, au même endroit que les commandes d'entrée**, à côté
+des deux portes du §42.2 quater. La répéter à chaque section la ferait lire zéro
+fois ; l'omettre ferait échouer un agent entré par la seconde porte sur un
+« permission denied » qui ne nomme pas sa cause — le sixième piège du §44.10,
+dans une autre robe.
+
+### 55.8 La surface d'API
+
+    GET  /v1/sparks/{name}/suggestions              → 200 { spark, cell_read, suggestions[] }
+    POST /v1/sparks/{name}/suggestions/{kind}/apply → 200 | 409 | 422 | 423
+    POST /v1/sparks/{name}/suggestions/{kind}/reject→ 200 | 409 | 423
+
+`{kind}` vaut `variables`, `secrets` ou `routes`.
+
+- **`GET` lit la cellule** et rend, par nature : la présence, l'empreinte du
+  contenu, les entrées **analysées** — et, si l'analyse échoue, la ligne fautive
+  et son motif. Il ne rend jamais le fichier brut : ce que l'écran montre est ce
+  que le produit a compris, faute de quoi on relirait un texte et on appliquerait
+  autre chose ;
+- **`GET` ne consomme rien** et ne pose rien dans la cellule. C'est la seule
+  route de lecture du produit qui puisse changer l'état d'une cellule, et elle ne
+  le fait pas ;
+- **`apply` porte l'empreinte relue** et la liste des entrées retenues, avec leur
+  déclaration de secret pour les deux natures de variables. Il applique par
+  `env_service.importer` (§43.10.3) et par la création de route du §18, puis
+  supprime le fichier ;
+- **`reject` porte l'empreinte relue** et se contente de supprimer ;
+- **`423` si le Spark est protégé**, pour `apply` comme pour `reject` : les deux
+  écrivent — l'un au registre, l'autre dans la cellule (§35.2) ;
+- une suppression de fichier qui échoue **ne défait pas** ce qui a été appliqué.
+  Le registre fait foi ; le fichier sera resupprimé au prochain passage, et la
+  suggestion déjà appliquée se reconnaît à ce qu'elle ne change plus rien.
+
+### 55.9 Ce que la console en fait
+
+**Là où le geste se conclut, jamais ailleurs** : les variables et secrets
+suggérés s'ouvrent depuis la facette *Environnement*, les routes depuis la
+facette *Routes*. Une bannière n'apparaît que lorsqu'une suggestion existe, et
+elle porte son compte.
+
+L'écran d'acceptation **réemploie la relecture du §43.10.2** — une ligne, sa
+valeur, une case *secret* — plutôt que d'en inventer une seconde. C'est le même
+geste qu'un import collé ; seule l'origine du texte change, et l'écran le dit.
+
+**L'UI ne surveille pas en tâche de fond.** La lecture a lieu à l'ouverture de la
+facette, et le bouton *Relire la cellule* la refait. Un sondage périodique
+multiplierait les appels à Incus par le nombre d'onglets ouverts, pour un
+événement qui se produit quelques fois dans la vie d'un Spark — et le §54.4.4 a
+déjà tranché ainsi pour les notes.
+
+Quatre états, distincts et le restant (§14.6) : **aucune suggestion**, **une
+suggestion en attente**, **illisible** (avec sa ligne), et **cellule non
+consultée**.
+
+### 55.10 Ce que cette unité ne fait pas
+
+- Elle n'applique rien automatiquement, et ne le fera pas.
+- Elle ne couvre ni les ports publiés, ni les clés, ni les quotas (§55.3).
+- Elle n'écrit aucun accusé de réception dans la cellule (§55.4.1).
+- Elle ne garde aucun historique des suggestions refusées : le journal d'audit
+  retient la décision, le fichier disparaît, et un texte refusé qui resterait
+  consultable serait une copie de plus d'un secret en clair.
+- Elle n'introduit **aucune** variable d'environnement (§53), ni aucune
+  migration : le fichier dans la cellule EST l'état.
