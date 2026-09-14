@@ -10485,6 +10485,38 @@ L'écran montre le rendu **avant** d'enregistrer, sur un événement d'exemple. 
 gabarit qu'on ne peut pas voir rendu se vérifie le jour où il sert, c'est-à-dire
 trop tard.
 
+**Où il vit AUJOURD'HUI, et pourquoi ce n'est pas encore le registre.** Le §47.3
+décide que la configuration du canal quitte les variables d'environnement pour le
+registre, avec l'onglet qui la rend visible et essayable. Ce déplacement n'est pas
+construit : l'URL vit encore dans `SPARKD_NOTIFY_URL`. Le gabarit vit donc
+**au même endroit qu'elle**, dans `SPARKD_NOTIFY_TEMPLATE`, pour que les deux se
+déplacent ENSEMBLE le jour où le registre les accueille. Les séparer maintenant
+créerait deux moitiés de configuration à deux endroits, et un déplacement en deux
+temps dont le premier casserait le second.
+
+**Ce que cela coûte, et il faut le dire :** sans registre, il n'existe pas
+d'instant d'« enregistrement » où refuser un gabarit fautif. La règle est donc
+appliquée au **chargement de la configuration**, c'est-à-dire avant tout envoi :
+un gabarit qui nomme un champ inconnu **n'arme pas le canal**. Le canal se déclare
+alors *mal configuré* — un troisième état, distinct de *muet* et de *en échec* —
+et l'écran le dit. L'intention de la règle est tenue : la panne ne se découvre
+pas le jour de l'incident. Ce qui manque est le rendu montré avant, qui suppose
+l'écran.
+
+**Le rendu est une substitution dans un texte JSON, et les valeurs y sont
+échappées.** Un gabarit est un document JSON où `{champ}` est remplacé par la
+valeur du champ, échappée pour le contexte d'une chaîne JSON. Sans cet
+échappement, un nom de Spark portant un guillemet casserait le document — ou pire,
+y injecterait de la structure. La substitution ne peut donc produire que la forme
+que le gabarit dessine, jamais une autre.
+
+    SPARKD_NOTIFY_TEMPLATE='{"content":"**{forge}** — {action} sur {target_id} par {actor}"}'
+
+**Sans gabarit, le corps du §47.4 part tel quel.** C'est le comportement d'avant,
+et il reste celui d'un destinataire qui accepte du JSON structuré. Mesuré le
+2026-09-14 : ni Discord ni Slack n'en font partie, ce qui est exactement la raison
+d'être du gabarit.
+
 #### 47.3.2 Ce que le canal SMTP suppose, et ce qu'il coûte
 
 Serveur, port, mode TLS, compte, mot de passe, adresse d'envoi et adresse de
