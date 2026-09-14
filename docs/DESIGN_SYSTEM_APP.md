@@ -922,6 +922,13 @@ accès : « quels secrets cette cellule reçoit-elle ? ».
   dit l'absence de fond ; un bloc vide dit que **cette nature** manque — « aucun
   secret » n'est pas « aucune entrée » ; un bloc vidé par la recherche dit ce que
   **la frappe** exclut, en la citant ;
+- **chaque bloc nomme SON vide, même quand tous sont vides.** Une frappe qui ne
+  correspond à rien produit donc plusieurs phrases, une par bloc. C'est
+  délibéré — arbitré le 2026-09-14 : chacune porte un sujet et un compte
+  distincts (« 0 sur 1 » dans les secrets cochés n'est pas « 0 sur 2 » dans les
+  variables propres), et elles disent **où** l'on a cherché. Un message unique en
+  tête perdrait cette information et ajouterait un second mécanisme pour un état
+  rare ;
 - le champ **n'est pas rendu** quand la vue n'a rien à chercher (§14.4), et il
   **reste atteignable** quand la recherche ne laisse rien : il est le seul moyen
   de sortir de l'état vide qu'il a causé — c'est l'exception que le §14.4 nomme.

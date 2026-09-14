@@ -7059,7 +7059,14 @@ constatées sur le catalogue seedé :
 - **Une reformulation qui n'était pas demandée** : « Variables propres à ce
   Spark » était devenu faux le jour où la section a porté aussi des secrets. La
   section porte des **entrées** ; leur nature se lit un cran plus bas. Le bouton
-  suit — « Poser une entrée ».
+  suit — « Poser une entrée ». **Soumise au responsable et retenue le
+  2026-09-14.**
+- **Rien ne reste dû.** Le responsable a constaté la livraison complète le
+  2026-09-14, et tranché les trois questions qu'elle laissait ouvertes : la
+  reformulation est retenue, les absences par bloc restent telles quelles, et la
+  recherche ne quitte pas l'interface. Étendre le même champ aux autres facettes
+  n'est pas retenu et ne constitue pas une dette de cette unité
+  (`docs/JOURNAL.md`, 2026-09-14).
 
 
 ---

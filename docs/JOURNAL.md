@@ -11029,6 +11029,21 @@ contenu est délibérément illisible doit restreindre sa recherche à ce que
 (`DESIGN_SYSTEM.md` §14.10), et son application ici reste dans le jumeau local
 (SPK-DS-25).
 
+**Trois autres arbitrages rendus le 2026-09-14**, et qui ferment autant de
+questions :
+
+- la **reformulation** — « Entrées propres à ce Spark », « Poser une entrée » —
+  est **retenue**. Elle n'avait pas été demandée : la section porte des variables
+  ET des secrets depuis SPK-58, et « Variables » y était devenu faux. Elle ne se
+  défait donc pas au motif qu'elle ne figurait pas dans la demande initiale ;
+- la recherche **reste dans l'interface** : ni dans l'adresse, ni persistée. La
+  forme écartée est nommée pour la même raison que ci-dessus — porter la frappe
+  dans l'URL rendrait un écran filtré partageable, au prix d'une vue partielle
+  qu'on rouvre sans le savoir ;
+- **étendre le même champ aux autres facettes** — Routes, Clés, Instantanés,
+  Journal — n'est **pas** retenu aujourd'hui. Ce serait une unité à part ; aucune
+  n'est ouverte, et SPK-103 ne la laisse pas en dette.
+
 **Portée volontairement tenue.** Aucune route, aucune migration, aucun champ
 nouveau : `is_secret` existe depuis SPK-58 et la frappe ne quitte pas le
 navigateur. Aucun changement de seed non plus — il pose déjà une variable **et**
@@ -11116,8 +11131,12 @@ bloc plus celle des cases. C'est répétitif. Chacune porte pourtant un sujet et
 un compte distincts — « 0 sur 1 » dans les secrets cochés n'est pas « 0 sur 2 »
 dans les variables propres —, et elles disent OÙ l'on a cherché. Remplacer
 l'ensemble par un message unique perdrait cette information et ajouterait un
-second mécanisme pour un état rare. Laissé tel quel, et consigné ici pour que le
-choix soit rouvrable plutôt que redécouvert.
+second mécanisme pour un état rare.
+
+**Arbitré par le responsable le 2026-09-14 : laissé tel quel.** Ce n'est donc
+plus une question ouverte, et les deux formes écartées sont écrites ici pour
+qu'on ne les repropose pas comme neuves — un message unique en tête, ou des
+phrases allégées ne citant la frappe qu'une fois.
 
 **Un échec E2E qui ne m'appartenait pas, et qui a été corrigé pendant que
 j'écrivais.** La série rendait 130 vertes et une rouge : « un Spark ARRÊTÉ nomme
