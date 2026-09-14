@@ -76,6 +76,7 @@ PIEGES = (
     # il parle de ce qu'on crée, jamais de ce qui existe déjà.
     "Une route active est déjà un chemin complet : la Forge termine le TLS et vise votre port, aucun port publié n'est requis.",
     "Rien ne s'expose depuis la cellule : créer une route ou publier un port se demande au plan de contrôle.",
+    "Un port SORTANT fermé vient de l'hébergeur : le plan de contrôle ne filtre que l'entrée vers la Forge.",
     "nproc et free décrivent la Forge : les quotas de ce briefing font foi pour cette cellule.",
 )
 
@@ -281,7 +282,8 @@ def _inservable(target_port: int | None, docker: dict[str, Any]) -> bool:
 def modele(spark: dict[str, Any], *, forge_public_address: str,
            routes: list[dict[str, Any]], ports: list[dict[str, Any]],
            environment: list[Any], bootstrap: dict[str, Any] | None,
-           written_at: str | None = None) -> dict[str, Any]:
+           written_at: str | None = None,
+           ingress_behaviour: dict[str, Any] | None = None) -> dict[str, Any]:
     """Construit l'unique modèle public, sans aucune valeur d'environnement."""
     variables = sorted(entry.name for entry in environment if not entry.is_secret)
     secrets = sorted(entry.name for entry in environment if entry.is_secret)
@@ -308,6 +310,11 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
             "storage_bytes": spark["storage_bytes"],
             "network_bps": spark["network_reservation_bps"],
         },
+        # SPK-102 · §44.2 quater : ce que l'ingress applique, CALCULÉ par lui
+        # depuis la configuration qu'il pose (`ingress.comportement()`) et non
+        # recopié ici. Une seconde description du même proxy divergerait, et
+        # c'est la description que l'agent lirait.
+        "ingress_behaviour": ingress_behaviour,
         "ingress": [
             {"domain": route["domain"], "target_port": route["target_port"],
              "tls": bool(route["tls"]), "enabled": bool(route["enabled"]),
@@ -346,6 +353,46 @@ def modele(spark: dict[str, Any], *, forge_public_address: str,
     # l'écran ferait deux vérités qui divergeraient (§44.8).
     modele_rendu["access"] = {"accounts": comptes_du_spark(modele_rendu)}
     return modele_rendu
+
+
+def _origine(route: dict[str, Any]) -> str:
+    """L'origine PUBLIQUE d'une route (§44.2 quater).
+
+    Le briefing donnait `(TLS, active)` — un fait — sans jamais dire ce qu'il
+    implique pour la pile. Un agent réel a dû reconstruire seul que le schéma
+    public était `https` et que la cellule ne voyait jamais de TLS, puis l'a
+    écrit dans son propre dossier d'architecture.
+    """
+    return f"{'https' if route['tls'] else 'http'}://{route['domain']}"
+
+
+def _lignes_ingress(model: dict[str, Any]) -> list[str]:
+    """Ce que l'ingress applique, depuis ce que l'ingress a CALCULÉ (§44.2 quater).
+
+    Rien n'est écrit en dur ici : `ingress.comportement()` inspecte la
+    configuration réellement posée. Le jour où l'ingress gagnera un handler qui
+    ajoute des en-têtes, ces lignes le diront sans qu'on y revienne.
+    """
+    vu = model.get("ingress_behaviour")
+    if not vu:
+        return []
+    lignes = []
+    if vu.get("forwarded_headers"):
+        lignes.append(
+            "- Ce que la pile reçoit du proxy : "
+            + ", ".join(f"`{nom}`" for nom in vu["forwarded_headers"])
+            + (" ; l'en-tête `Host` est celui que le visiteur a demandé."
+               if vu.get("preserve_host") else "."))
+        lignes.append(
+            "- `X-Forwarded-Proto` porte le schéma de la connexion reçue par la "
+            "Forge : `https` sur une route TLS.")
+    if not vu.get("adds_headers"):
+        lignes.append(
+            "- L'ingress **n'ajoute aucun en-tête** — ni HSTS, ni CSP —, ne "
+            "redirige aucun nom vers un autre et ne limite aucun débit. Ce qu'il "
+            "fait, il le fait en entier : "
+            + ", ".join(f"`{h}`" for h in vu.get("handlers", [])) + ".")
+    return lignes
 
 
 def _lignes_systeme(model: dict[str, Any]) -> list[str]:
@@ -404,12 +451,14 @@ def markdown(model: dict[str, Any]) -> str:
         lines.append("- La Forge termine le TLS et fait suivre vers votre port : "
                      "servez en clair, aucun port publié n'est requis.")
         lines.extend(
-            f"- {route['domain']} → {route['target_port']} ({'TLS' if route['tls'] else 'sans TLS'}, {'active' if route['enabled'] else 'désactivée'})"
+            f"- {_origine(route)} → {route['target_port']} "
+            f"({'active' if route['enabled'] else 'désactivée'})"
             + (" — **INSERVABLE ICI** : ce port est privilégié et cette cellule "
                "est rootless. Faites corriger le port cible depuis la console."
                if route["blocked_by_rootless"] else "")
             for route in model["ingress"]
         )
+        lines.extend(_lignes_ingress(model))
     else:
         lines.append("- Aucune route déclarée.")
     lines.extend(["", "## Ports publiés"])
@@ -731,6 +780,15 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         lignes.extend([
             "- **Le réseau sortant fonctionne** : l'amorçage a installé ses paquets "
             "par lui, et `docker pull` aboutit depuis cette cellule.",
+            # SPK-102 · §44.2 quinquies : un agent réel a mesuré des ports SMTP
+            # sortants fermés et a écrit « la cellule filtre ». Le produit ne
+            # pose qu'une chaîne `input` (§48.1) ; la cause est ailleurs, et le
+            # dire envoie la question au bon interlocuteur.
+            "- **Le plan de contrôle ne filtre AUCUN port sortant.** Il ne pose "
+            "qu'un filtre d'entrée, qui protège les services de la Forge. Un port "
+            "sortant qui ne répond pas — 25, 465 et 587 sont les cas courants — "
+            "est fermé par l'hébergeur, pas ici : c'est à lui qu'il faut le "
+            "demander, ou employer les ports de repli qu'il publie.",
             "- **Le plan de contrôle ne démarre jamais votre pile.** Le démon, lui, "
             "repart au démarrage de la cellule — "
             + ("le compte rootless a son `linger`" if docker["mode"] == "rootless"
@@ -812,9 +870,9 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
             "Ports que la pile doit **écouter dans la cellule**, parce qu'une "
             "route publique les vise déjà :", ""])
         lignes.extend(
-            f"- `{route['domain']}` ({'TLS' if route['tls'] else 'sans TLS'}, "
-            f"{'active' if route['enabled'] else 'désactivée'}) → la pile doit "
-            f"écouter sur **{route['target_port']}**"
+            f"- **{_origine(route)}** "
+            f"({'active' if route['enabled'] else 'désactivée'}) → la pile doit "
+            f"écouter sur **{route['target_port']}**, en clair"
             + ("\n  - **Cette route n'aboutira pas en l'état.** Le port visé est "
                "privilégié (`< 1024`) et cette cellule est en Docker rootless, "
                "qui ne peut pas l'ouvrir. Il n'y a pas de contournement à "
@@ -835,7 +893,25 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
             "Postgres, Redis, SSH, MQTT. Tout ce qui parle HTTP, HTTPS ou "
             "WebSocket passe par la route, sans rien demander de plus.",
             "",
+            "**L'origine publique ci-dessus est celle que votre application doit "
+            "connaître.** Une application qui l'ignore émet des URL en `http://` "
+            "derrière un terminateur TLS — la panne la plus banale de cette "
+            "architecture, et celle qui ne se voit qu'au premier lien envoyé.",
+            "",
         ])
+        # SPK-102 · §44.2 quater : CALCULÉ par l'ingress, jamais recopié ici.
+        lignes.extend(_lignes_ingress(model))
+        if model.get("ingress_behaviour") and not model["ingress_behaviour"].get(
+                "adds_headers"):
+            lignes.extend([
+                "",
+                "**Un proxy dans votre pile n'y changerait rien.** Il serait un "
+                "second terminateur derrière le premier, et sur une cellule "
+                "rootless il ne pourrait même pas démarrer : ni `443`, ni `80` "
+                "pour un défi ACME. Ces protections se posent à l'ingress, du "
+                "côté du propriétaire.",
+            ])
+        lignes.append("")
     else:
         lignes.extend(["Aucune route publique ne vise ce Spark : rien n'impose de "
                        "port d'écoute, et rien n'est servi sur un domaine. Une "

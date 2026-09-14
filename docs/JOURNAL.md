@@ -10939,6 +10939,52 @@ La mesure reste due, et elle exige une route réelle ou un Caddy local.
 
 ---
 
+## 2026-09-14 · La mesure sur la Forge réelle, et ce qu'elle a rendu
+
+Le responsable a autorisé la mesure sur la Forge réelle, avec une exigence :
+« ça ne doit pas être en dur, ça doit être calculé sur la Forge ».
+
+**Le protocole.** Un Caddy **jetable**, du binaire qui sert en production —
+2.6.2 —, sur la boucle locale, rejouant la **forme exacte** de la configuration
+que `sparkd` génère, contre un amont qui rend les en-têtes qu'il reçoit. Ni la
+configuration servie, ni le registre, ni un Spark n'ont été touchés. Nettoyage
+vérifié après coup : aucun processus, aucun fichier, aucun port.
+
+**Ce qui est mesuré :**
+
+```
+X-Forwarded-For: 127.0.0.1
+X-Forwarded-Host: mesure.exemple.test
+X-Forwarded-Proto: http
+Host: mesure.exemple.test
+```
+
+`reverse_proxy` transmet les trois `X-Forwarded-*` et conserve le `Host`
+demandé. `X-Forwarded-Proto` porte le **schéma de la connexion reçue** — `http`
+ici, puisque la sonde était en clair.
+
+**Un second fait est tombé par accident, et il vaut la mesure.** Le premier essai
+a échoué : *« listening on 127.0.0.1:80: permission denied »*. La gestion
+automatique du TLS de Caddy ouvre un écouteur de **redirection sur `:80`**. C'est
+donc prouvé sur le binaire réel qu'une route TLS reçoit sa redirection
+`http` → `https` sans que le produit l'écrive nulle part.
+
+**Ce qui reste dû, et le texte le respecte.** La sonde en TLS sur port haut n'a
+rien rendu — certificat interne, temps de génération, je n'ai pas insisté. La
+valeur `https` de `X-Forwarded-Proto` est donc **déduite** du fait que l'ingress
+reçoit la connexion TLS en `443`, et non constatée. Le briefing écrit ce qui est
+mesuré — « le schéma de la connexion reçue par la Forge » — et non un `https`
+présenté comme un relevé.
+
+**Et le « calculé, jamais en dur ».** `ingress.comportement()` inspecte la
+configuration que l'ingress **construit** et en tire ce qu'il applique. Une
+preuve tient l'exigence par le seul moyen qui vaille : on donne à l'ingress un
+handler d'en-têtes, et la phrase « n'ajoute aucun en-tête » **disparaît du
+briefing**. Le jour où l'ingress posera du HSTS, le texte le dira sans que
+personne y revienne.
+
+---
+
 ## 2026-09-14 · SPK-103 — deux natures dans une seule colonne, et une liste qu'on ne pouvait pas chercher
 
 **La demande.** « Sépare la vue entre variables et secrets, un bloc des variables

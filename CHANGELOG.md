@@ -3,6 +3,19 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-102 — le brief dit ce que « TLS » implique, et le CALCULE.** Chaque route
+  annonce son **origine publique** — `https://…` ou `http://…` — et le dossier
+  dit que c'est elle que l'application doit connaître, faute de quoi elle émet
+  des URL en `http://` derrière un terminateur TLS. Ce que l'ingress transmet
+  (`X-Forwarded-For`, `-Host`, `-Proto`, `Host` conservé) et ce qu'il n'ajoute
+  pas (ni HSTS, ni CSP, ni redirection, ni limitation de débit) sont **lus dans
+  la configuration réellement posée**, jamais récités : le jour où l'ingress
+  gagnera un handler, le texte le dira de lui-même. Les en-têtes sont **mesurés
+  sur la Forge réelle**, Caddy 2.6.2.
+- **SPK-102 — un port sortant fermé est attribué à l'hébergeur.** Le plan de
+  contrôle ne pose qu'un filtre d'**entrée** vers la Forge ; il ne filtre aucune
+  sortie. Le briefing le dit, pour que la question parte au bon endroit au lieu
+  de faire chercher un réglage produit qui n'existe pas.
 - **SPK-62 — la configuration du canal d'alerte quitte les variables
   d'environnement pour le REGISTRE.** Une variable se règle par un redémarrage du
   service et ne se voit nulle part : un canal qu'on ne peut ni voir ni éprouver

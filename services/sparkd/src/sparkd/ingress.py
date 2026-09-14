@@ -356,6 +356,60 @@ def withdraw(connection: sqlite3.Connection, domain: str,
                {"domain": route["domain"]}, "ok", f"{route['domain']} retiré.")
 
 
+#: SPK-102 · §44.2 quater : ce que CHAQUE handler fait subir à une requête.
+#:
+#: **Mesuré sur la Forge réelle le 2026-09-14**, avec le binaire qui y sert —
+#: Caddy 2.6.2 —, en rejouant la forme exacte de la configuration ci-dessous
+#: contre un amont qui rend ce qu'il reçoit. Ce n'est donc pas une lecture de
+#: documentation : c'est ce que cette Forge fait.
+#:
+#: La table est indexée par NOM DE HANDLER, et le briefing la consulte à partir
+#: des handlers réellement posés (`comportement()`). Le jour où l'ingress
+#: gagnera un handler `headers`, le briefing le dira de lui-même — c'est
+#: précisément ce que « calculé, jamais écrit en dur » veut dire.
+EFFETS_HANDLER = {
+    "reverse_proxy": {
+        "transmet": ("X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"),
+        "preserve_host": True,
+    },
+    # Aucun de ces deux-là n'est posé aujourd'hui. Ils sont nommés pour que leur
+    # apparition change le briefing au lieu de passer inaperçue.
+    "headers": {"ajoute_des_entetes": True},
+    "static_response": {},
+}
+
+
+def comportement(connection: sqlite3.Connection) -> dict:
+    """Ce que l'ingress applique RÉELLEMENT, lu dans la configuration qu'il pose.
+
+    @spec docs/BACKLOG.md#SPK-102 · docs/DAT.md §44.2 quater (ce que l'ingress
+          n'ajoute pas), §18.2 (la configuration vient du registre)
+
+    On inspecte la configuration CONSTRUITE plutôt qu'une liste tenue à la main :
+    deux descriptions du même proxy finiraient par diverger, et c'est la
+    description — pas le proxy — que l'agent lirait.
+
+    La route terminale de refus est écartée : elle ne sert aucun Spark.
+    """
+    config = build_config(connection)
+    servies = [r for r in config["apps"]["http"]["servers"][SERVER_NAME]["routes"]
+               if "match" in r]
+    handlers = sorted({h["handler"] for route in servies for h in route["handle"]})
+    effets = [EFFETS_HANDLER.get(nom, {}) for nom in handlers]
+    transmis: list[str] = []
+    for effet in effets:
+        transmis.extend(effet.get("transmet", ()))
+    return {
+        "handlers": handlers,
+        "forwarded_headers": sorted(set(transmis)),
+        "preserve_host": any(e.get("preserve_host") for e in effets),
+        # §44.2 quater : ce que l'ingress N'AJOUTE PAS est ce qui décide si une
+        # pile a besoin d'un proxy à elle. On le CALCULE, donc il cesse d'être
+        # vrai le jour où il cesse de l'être.
+        "adds_headers": any(e.get("ajoute_des_entetes") for e in effets),
+    }
+
+
 def build_config(connection: sqlite3.Connection) -> dict:
     """Construit la configuration COMPLÈTE de Caddy depuis le registre.
 

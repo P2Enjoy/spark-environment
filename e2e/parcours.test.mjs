@@ -4838,6 +4838,22 @@ test('copier le dossier d’un Spark, et relire ce que le presse-papier a reçu'
     assert.match(copie, /docker pull` aboutit/);
     assert.match(copie, /restart:/);
     assert.match(copie, /Un seul disque/);
+
+    // 9. SPK-102 · §44.2 quater : ce que `(TLS, active)` IMPLIQUE. Le fait était
+    //    déjà là ; sa conséquence — l'origine publique — ne l'était pas, et un
+    //    agent réel a dû la reconstruire seul.
+    assert.match(copie, /https:\/\/crm\.example\.com/);
+    assert.match(copie, /votre application doit connaître/);
+    // Ce que l'ingress applique, ÉNUMÉRÉ par lui et non récité par le texte.
+    assert.match(copie, /X-Forwarded-Proto/);
+    // L'apostrophe est DROITE : ce texte est rendu par le runtime, pas par
+    // l'écran — même remarque qu'au parcours du Spark jamais amorcé.
+    assert.match(copie, /n'ajoute aucun en-tête/);
+    assert.match(copie, /reverse_proxy/);
+
+    // 10. SPK-102 · §44.2 quinquies : la nuance qui désigne l'interlocuteur.
+    assert.match(copie, /ne filtre AUCUN port sortant/);
+    assert.match(copie, /fermé par l’hébergeur|fermé par l'hébergeur/);
   });
 });
 

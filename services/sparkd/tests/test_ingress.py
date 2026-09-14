@@ -496,3 +496,39 @@ def test_update_refuse_un_port_hors_bornes(db):
 def test_update_refuse_un_domaine_INCONNU(db):
     with pytest.raises(ingress.IngressError, match="Aucune route"):
         ingress.update(db, "absent.example.com", 9000, True)
+
+
+# --- SPK-102 · §44.2 quater : ce que l'ingress dit de lui-même ---------------
+
+
+def test_le_comportement_est_LU_dans_la_configuration_posee(db):
+    """« Calculé sur la Forge, jamais écrit en dur » — exigence du responsable.
+
+    @verifies docs/BACKLOG.md#SPK-102 · docs/DAT.md §44.2 quater, §18.2
+
+    Deux descriptions du même proxy divergeraient, et c'est la description — pas
+    le proxy — que l'agent lirait. On inspecte donc la configuration construite.
+
+    Les en-têtes transmis sont **mesurés sur la Forge réelle** le 2026-09-14,
+    Caddy 2.6.2, en rejouant cette forme de configuration contre un amont qui
+    rend ce qu'il reçoit.
+    """
+    poser_spark(db, "S1", "avec-route")
+    ingress.declare(db, "S1", "app.exemple.test", 8080)
+    vu = ingress.comportement(db)
+
+    # La route terminale de refus n'est pas une route servie : l'inclure ferait
+    # dire au briefing que l'ingress rend des réponses statiques à la pile.
+    assert vu["handlers"] == ["reverse_proxy"]
+    assert vu["adds_headers"] is False
+    assert vu["preserve_host"] is True
+    assert vu["forwarded_headers"] == [
+        "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"]
+
+
+def test_sans_aucune_route_servie_l_ingress_n_applique_rien(db):
+    """Le garde-fou : ne rien servir n'est pas « servir sans en-tête »."""
+    vu = ingress.comportement(db)
+    assert vu["handlers"] == []
+    assert vu["forwarded_headers"] == []
+    assert vu["preserve_host"] is False

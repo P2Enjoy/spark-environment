@@ -611,3 +611,98 @@ def test_une_cellule_SANS_Docker_ne_promet_ni_pull_ni_redemarrage(tmp_path):
     dossier = briefing.dossier(model, jump=None)
     assert "docker pull" not in dossier
     assert "restart:" not in dossier
+
+
+# --- SPK-102 · §44.2 quater et quinquies : ce que TLS implique, qui filtre quoi -
+
+_COMPORTEMENT = {
+    "handlers": ["reverse_proxy"],
+    "forwarded_headers": ["X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"],
+    "preserve_host": True, "adds_headers": False,
+}
+
+
+def _avec_route(tls: int, comportement=None):
+    return briefing.modele(
+        {**_CELLULE, "id": "s1", "docker_enabled": 1},
+        forge_public_address="", environment=[], ports=[],
+        routes=[{"spark_id": "s1", "domain": "app.exemple.test",
+                 "target_port": 8443, "tls": tls, "enabled": 1}],
+        bootstrap={**_RELEVE, "docker_mode": "rootless"},
+        ingress_behaviour=_COMPORTEMENT if comportement is None else comportement)
+
+
+def test_une_route_TLS_dit_son_origine_publique_en_https(tmp_path):
+    """§44.2 quater : le briefing donnait `(TLS, active)`, un fait, et s'arrêtait.
+
+    @verifies docs/BACKLOG.md#SPK-102 · docs/DAT.md §44.2 quater, §18.3
+
+    Un agent réel a dû reconstruire seul que le schéma public était `https` et
+    que la cellule ne voyait jamais de TLS.
+    """
+    model = _avec_route(tls=1)
+    for texte in (briefing.markdown(model), briefing.dossier(model, jump=None)):
+        assert "https://app.exemple.test" in texte
+    dossier = briefing.dossier(model, jump=None)
+    assert "votre application doit connaître" in dossier
+    assert "émet des URL en `http://`" in dossier
+
+
+def test_une_route_SANS_TLS_ne_pretend_pas_l_inverse(tmp_path):
+    """§18.3 : une route `tls = 0` n'est servie qu'en clair sur `:80`.
+
+    Le garde-fou : écrire `https` partout serait plus commode et faux.
+    """
+    model = _avec_route(tls=0)
+    for texte in (briefing.markdown(model), briefing.dossier(model, jump=None)):
+        assert "http://app.exemple.test" in texte
+        assert "https://app.exemple.test" not in texte
+
+
+def test_ce_que_l_ingress_applique_est_CALCULE_et_non_ecrit_en_dur(tmp_path):
+    """§44.2 quater : « calculé sur la Forge », exigence du responsable.
+
+    @verifies docs/BACKLOG.md#SPK-102 · docs/DAT.md §44.2 quater
+
+    La preuve qui compte : on change ce que l'ingress FAIT, et le texte change
+    tout seul. Une phrase écrite en dur resterait vraie après que le produit a
+    cessé de l'être — c'est exactement le défaut que le responsable proscrit.
+    """
+    ordinaire = briefing.dossier(_avec_route(tls=1), jump=None)
+    assert "n'ajoute aucun en-tête" in ordinaire
+    assert "`reverse_proxy`" in ordinaire
+
+    # Le jour où l'ingress posera un handler d'en-têtes, la phrase disparaît.
+    durci = briefing.dossier(_avec_route(tls=1, comportement={
+        **_COMPORTEMENT, "handlers": ["reverse_proxy", "headers"],
+        "adds_headers": True}), jump=None)
+    assert "n'ajoute aucun en-tête" not in durci
+    assert "Un proxy dans votre pile n'y changerait rien" not in durci
+
+
+def test_les_en_tetes_transmis_viennent_du_releve_et_non_du_texte(tmp_path):
+    """Ce que la pile reçoit du proxy est ÉNUMÉRÉ par l'ingress, pas récité."""
+    model = _avec_route(tls=1, comportement={
+        "handlers": ["reverse_proxy"], "forwarded_headers": ["X-Machin"],
+        "preserve_host": False, "adds_headers": False})
+    dossier = briefing.dossier(model, jump=None)
+    assert "`X-Machin`" in dossier
+    assert "X-Forwarded-For" not in dossier
+    # `Host` n'est promis que si le relevé dit qu'il est préservé.
+    assert "l'en-tête `Host` est celui que le visiteur a demandé" not in dossier
+
+
+def test_un_port_sortant_ferme_est_attribue_a_l_HEBERGEUR(tmp_path):
+    """§44.2 quinquies : la nuance désigne l'interlocuteur.
+
+    @verifies docs/BACKLOG.md#SPK-102 · docs/DAT.md §44.2 quinquies, §48.1
+
+    Un agent réel a écrit « la cellule filtre la sortie SMTP ». Le produit ne
+    pose qu'une chaîne `input` ; la cause est chez l'hébergeur, et chercher un
+    réglage produit ne donnera jamais rien.
+    """
+    dossier = briefing.dossier(_avec_route(tls=1), jump=None)
+    assert "ne filtre AUCUN port sortant" in dossier
+    assert "fermé par l'hébergeur" in dossier
+    # Le piège le redit là où on lit vite.
+    assert any("hébergeur" in p for p in _avec_route(tls=1)["pitfalls"])

@@ -6883,7 +6883,7 @@ variables. La méthode marche ; il manque la moitié réseau.
   route active est déjà un chemin complet ».
 
 
-### [ ] SPK-102 · Le brief dit ce que « TLS » implique, et qui filtre quoi
+### [x] SPK-102 · Le brief dit ce que « TLS » implique, et qui filtre quoi
 
 **Seconde mesure sur le même agent, le 2026-09-14**, après les ajouts de SPK-101.
 Interrogé sur l'absence de HTTPS dans sa pile, il a rendu une réponse **juste** —
@@ -6934,6 +6934,31 @@ Trois manques, et une erreur d'attribution :
   plan de contrôle ; parcours E2E constatant les ajouts dans le presse-papier ;
   captures observées ; manuel M8 et changelog mis à jour ; `@spec` / `@verifies`
   posés.
+- **Clos le 2026-09-14.** **7 preuves de service** : l'origine `https://` d'une
+  route TLS dans les deux présentations ; une route **sans** TLS qui dit
+  `http://` et ne prétend pas l'inverse ; le comportement de l'ingress qui
+  **change avec lui** — on lui donne un handler d'en-têtes et la phrase « n'ajoute
+  aucun en-tête » disparaît, ce qui est la preuve qu'il est calculé et non écrit ;
+  les en-têtes transmis énumérés par le relevé et non récités ; l'attribution du
+  filtrage sortant à l'hébergeur ; et deux preuves sur `ingress.comportement()`
+  lui-même, dont le cas sans aucune route servie.
+- **Mesuré sur la Forge réelle le 2026-09-14**, et c'est ce qui autorise à
+  l'écrire : un Caddy **jetable** du même binaire que la production — 2.6.2 —,
+  sur la boucle locale, rejouant la forme exacte de la configuration générée
+  contre un amont qui rend ce qu'il reçoit. `X-Forwarded-For`,
+  `X-Forwarded-Host`, `X-Forwarded-Proto` sont transmis et le `Host` demandé est
+  conservé. La production n'a été **ni touchée ni configurée** : aucun processus,
+  aucun fichier, aucun port laissés derrière — vérifié après coup.
+- **Un fait de plus est tombé de cette mesure** : Caddy refuse de démarrer hors
+  root parce que sa gestion automatique du TLS ouvre un écouteur de
+  **redirection sur `:80`**. C'est la preuve, sur le binaire réel, qu'une route
+  TLS reçoit sa redirection `http` → `https` sans que le produit l'écrive.
+- **Ce qui reste dû** : la valeur `https` de `X-Forwarded-Proto` est **déduite**,
+  pas mesurée — la sonde TLS sur port haut n'a rien rendu. Le texte dit donc « le
+  schéma de la connexion reçue par la Forge », qui est mesuré, et non « `https` »
+  comme un constat direct.
+- Le parcours E2E du presse-papier constate les cinq ajouts dans ce qui est
+  réellement collé.
 
 
 ### [ ] SPK-103 · Variables et secrets se lisent en deux blocs, et se cherchent

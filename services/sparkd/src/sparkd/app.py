@@ -921,6 +921,9 @@ def create_app(config: Config) -> FastAPI:
             spark,
             forge_public_address=config.forge_public_address,
             routes=ingress_service.listing(connection),
+            # SPK-102 · §44.2 quater : l'ingress dit lui-même ce qu'il applique,
+            # lu dans la configuration qu'il pose, jamais recopié ici.
+            ingress_behaviour=ingress_service.comportement(connection),
             ports=ports_service.listing(connection),
             environment=env_service.lister(connection, spark["id"]),
             bootstrap=releve,
@@ -2673,6 +2676,9 @@ def create_app(config: Config) -> FastAPI:
                 spark,
                 forge_public_address=config.forge_public_address,
                 routes=ingress_service.listing(connection),
+                # SPK-102 · §44.2 quater : l'ingress dit lui-même ce qu'il applique,
+                # lu dans la configuration qu'il pose, jamais recopié ici.
+                ingress_behaviour=ingress_service.comportement(connection),
                 ports=ports_service.listing(connection),
                 environment=env_service.lister(connection, spark["id"]),
                 bootstrap=briefing_service.observation(connection, spark["id"]),
