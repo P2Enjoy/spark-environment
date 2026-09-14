@@ -10705,3 +10705,36 @@ auraient été une documentation de complaisance.
 
 Contrat au §53, et le §37.4.2 bis révisé : l'absence de la variable n'est plus la
 seule garantie du doublon.
+
+## 2026-09-14 — Huit arbitrages rendus, et ce qu'ils engagent
+
+Le responsable a tranché huit questions qui bloquaient autant d'unités. Elles
+sont écrites ici et dans chaque unité concernée **avant** la première ligne de
+code, comme l'exige le §5 : une décision qui n'existe que dans le fil d'une
+conversation est une décision perdue.
+
+| Unité | Décision | Ce qu'elle engage |
+|---|---|---|
+| SPK-96 | `resolv.conf` statique vers `10.77.0.1` | L'amorçage écrit un fichier de la cellule — la frontière du §42.4 se déplace, et doit être redite |
+| SPK-71 | Redémarrage autorisé maintenant | `sso-p2enjoy` sera brièvement indisponible |
+| SPK-69 | Perturbation réversible autorisée | Les deux estampilles sont neutralisées puis restaurées |
+| SPK-55 | L'installation prend le réseau | `install-serveur.sh` grossit ; OP-02 disparaît du contrat |
+| SPK-17 | Garde en local, CI abandonnée | La garde ne protège que les postes qui ont posé le hook — à écrire sans détour |
+| SPK-73 | Amorce rejouée sur la Forge actuelle | Instantané du registre avant ; une amorce mal idempotente toucherait une Forge en service |
+| SPK-61 | L'unité reste `[~]` | La clé continue d'ouvrir un shell : décision prise en connaissance du coût |
+| SPK-62 | `ntfy` en local, webhook Discord sur la Forge | L'URL est un secret et n'entre pas au dépôt |
+
+**Deux de ces décisions demandent d'être regardées en face.**
+
+**SPK-61 n'est pas un report, c'est un choix.** Une clé volée donne aujourd'hui
+l'accès total et silencieux à la Forge, et aucun second facteur devant l'API n'y
+changerait rien. OP-10 est écrit, mesuré et prêt. Le laisser non joué est
+tenable sur une Forge de test ; cela cesserait de l'être ailleurs.
+
+**SPK-17 troque une garde contre une autre, plus faible.** Un hook `pre-push`
+ne s'exécute que chez qui l'a installé, et se contourne d'un `--no-verify`. Ce
+n'est pas équivalent à une CI, et le document ne doit pas laisser croire que si.
+
+**Trois questions restent posées** : SPK-28 (les disques du miroir ZFS),
+SPK-51 (le relais de correspondance) et SPK-40 (qu'un agent SSH réel signe un
+geste). Aucune ne dépend d'un travail à faire ici.

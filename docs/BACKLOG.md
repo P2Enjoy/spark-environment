@@ -278,6 +278,12 @@ opération manuelle et n'est pas planifié.
 
 ### [~] SPK-17 · Contrat d'API partagé
 
+**Arbitrage du responsable, 2026-09-14 : la garde passe en LOCAL.** La CI GitHub
+est abandonnée pour cette unité — Actions n'a jamais tourné et son activation
+n'est pas acquise. La vérification du contrat est posée dans un hook `pre-push`,
+prouvée sur une dérive réelle. La limite est à écrire sans détour : la garde ne
+protège que les postes qui ont installé le hook.
+
 - Spécification : `docs/DAT.md` §23
 - **Livré et prouvé le 2026-08-19.** `packages/contract/openapi/sparkd.json`
   committé, 20 chemins, généré de façon déterministe ; 1183 lignes de types
@@ -2636,6 +2642,12 @@ fait recevoir du courrier qu'on ne peut pas renvoyer.
 
 ### [~] SPK-61 · Restreindre la clé d'accès du responsable au seul tunnel
 
+**Arbitrage du responsable, 2026-09-14 : l'unité RESTE `[~]`.** La clé n'est pas
+restreinte pour l'instant, et ce n'est pas un oubli : la décision est prise en
+connaissance du coût. Tant qu'elle ouvre un shell, une clé volée donne l'accès
+total et silencieux à la Forge, et tout second facteur devant l'API ne protège de
+rien. OP-10 reste écrit, mesuré et prêt à être joué.
+
 Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.3), et **préalable à tout
 second facteur** : tant que cette clé ouvre un shell sur la Forge, un facteur
 devant l'API de `sparkd` ne protège de rien contre une clé volée.
@@ -2702,6 +2714,12 @@ committé avant la première ligne de code.
   OP-10 le décrit pas à pas — **nécessite une action humaine**.
 
 ### [~] SPK-62 · Notification hors bande des actions sensibles
+
+**Arbitrage du responsable, 2026-09-14 : deux destinataires, et ils diffèrent.**
+En local, un `ntfy`. Sur la Forge distante, un **webhook Discord**, dont l'URL a
+été fournie directement et n'entre nulle part au dépôt — c'est un secret au sens
+du §21.3 : qui la détient peut écrire dans le salon. Elle se pose dans
+`/etc/sparkd/sparkd.env`, sous `SPARKD_NOTIFY_URL`.
 
 Retenue par l'arbitrage de SPK-35 (`docs/DAT.md` §45.4). Elle ne prévient pas :
 elle **détecte**, et c'est la seule mesure qui serve encore quand tout le reste a
@@ -3068,6 +3086,13 @@ deux preuves E2E comparaient l'audit au nom mutable du Spark au lieu de son ID
 immuable.
 
 ### [~] SPK-55 · Durcir la Forge : ce que l'audit du 2026-08-20 a trouvé
+
+**Arbitrage du responsable, 2026-09-14 : l'installation PREND le réseau en
+charge.** `scripts/install-serveur.sh` crée le bridge `sparkbr0` et pose la règle
+dans le même geste ; OP-02 disparaît du contrat de déploiement. Motif : une règle
+qui ne vit que dans un runbook dérive, et une installation qui n'installe pas le
+réseau n'est pas reproductible au sens du §14. La voie « le préflight la pose
+lui-même » est écartée : un contrôle qui répare n'est plus un contrôle.
 
 Audit mené sur la Forge réelle pendant la mise en place de `helo`. La posture est
 bonne sur l'essentiel — seuls `22`, `80`, `443` répondent depuis l'extérieur,
@@ -4220,6 +4245,13 @@ restent à produire ; l'unité demeure honnêtement `[~]`.
 
 ### [~] SPK-69 · Mettre à jour `sparkd` à distance et recharger son unité
 
+**Arbitrage du responsable, 2026-09-14 : la perturbation réversible est
+AUTORISÉE.** Les deux estampilles — `/opt/sparkd/build.json` et la version du
+paquet installé — sont neutralisées le temps d'observer le verdict *build non
+estampillée* sur la Forge de test, puis restaurées par la réinstallation
+ordinaire du paquet. `sparkd` ne s'arrête pas : l'estampille ne change que ce que
+la Forge **dit** d'elle-même.
+
 **Suite de SPK-68, demandée le 2026-08-21.** Quand une Forge déjà joignable dit
 que sa build est en retard sur le dépôt du poste, l'écran sait le signaler
 (SPK-53) mais oblige encore à se connecter à la machine et à rejouer le
@@ -4338,6 +4370,11 @@ conteneur et dépannage — sans devoir deviner quel onglet les porte.
 ---
 
 ### [~] SPK-71 · La tranche des Sparks délègue ses contrôleurs, sur le systemd d'aujourd'hui
+
+**Arbitrage du responsable, 2026-09-14 : le redémarrage est AUTORISÉ**, sans
+attendre de fenêtre particulière. Les Sparks sont arrêtés proprement, la Forge
+redémarre, la délégation des contrôleurs est relevée au retour, et tout est remis
+en marche. L'indisponibilité brève de `sso-p2enjoy` est acceptée.
 
 **Trouvé le 2026-09-01 sur la Forge réinstallée**, et c'est la promesse centrale
 du produit qui tombait en silence. Après réinstallation depuis le schéma JSON, la
@@ -4470,6 +4507,13 @@ rendait le contrôle faux. Le préflight rend 13 contrôles, 0 bloquant,
 ---
 
 ### [~] SPK-73 · L'amorce d'une Forge est un artefact versionné et rejouable
+
+**Arbitrage du responsable, 2026-09-14 : l'amorce est rejouée sur la Forge
+ACTUELLE.** Le blocage d'origine — `dpkg` incohérent sur l'image de l'hébergeur —
+a cessé d'être vrai : la Forge a été réinstallée et `PKG-DPKG` rend « aucun paquet
+en défaut ». L'amorce se revendique idempotente ; la rejouer sur une Forge en
+service est la seule façon de le prouver. Un instantané du registre est pris
+avant.
 
 **Demandé par le responsable le 2026-09-01** : « les serveurs sont désormais
 créés au format JSON et le cloud-init doit être idempotent — rejouable, il remet
@@ -5917,6 +5961,14 @@ pas casser la cellule.
 
 ### [ ] SPK-96 · Le démon rootless ne résout aucun nom, et l'amorçage promet le contraire
 
+**Arbitrage du responsable, 2026-09-14 — la voie est tranchée.** Le remède est un
+`/etc/resolv.conf` **statique visant `10.77.0.1`**, la passerelle du bridge
+`sparkbr0`. Les deux autres voies sont écartées : désactiver le stub modifie la
+configuration d'un service de la cellule, et n'agir que dans l'espace du démon
+produit un remède qui ne survit peut-être pas au redémarrage du service. La voie
+retenue vise l'amont que `systemd-resolved` interroge **déjà** — ce que la cellule
+résout ne change donc pas de destination, seulement de chemin.
+
 **Trouvé par la mesure le 2026-09-07**, sur la Forge de test, en éprouvant la
 pile Compose de SPK-94 sur la cellule `rootless-mesure` (Ubuntu 24.04, amorcée en
 rootless par la console). Aucune image ne peut être téléchargée :
@@ -6325,7 +6377,7 @@ celui que le bouton **Copier pour un LLM** met dans le presse-papier :
   `AUTRE_VARIABLE="valeur avec des espaces"` — tient sans débordement.
 
 
-### [ ] SPK-100 · Aucune option cachée : huit leviers que la documentation ne nommait pas
+### [x] SPK-100 · Aucune option cachée : huit leviers que la documentation ne nommait pas
 
 Arbitrage du responsable le 2026-09-14 : « je DÉTESTE les options cachées, tu le
 sais et tu les as faites quand même ». Un inventaire des lectures d'environnement
@@ -6381,6 +6433,29 @@ table du README.
 - **Conséquence assumée** : les illustrations du manuel et les captures du
   harnais porteront le bandeau d'épreuve. C'est exact — elles viennent d'une pile
   doublée — et le §13 du design system demande l'état réellement exécuté.
+- **Clos le 2026-09-14.** **8 preuves côté console** — l'inertie des quatre
+  variables sans interrupteur, le refus écrit qui les nomme, le silence quand
+  aucune n'est posée, la lecture sous interrupteur et la valeur vide qui ne
+  devient pas une commande, `« 1 »` seule qui arme, la table des quatre doublons,
+  et les deux états de la route, dont la preuve qu'aucune **valeur** de commande
+  ne la traverse. Le test de `dev.sh` passe désormais `--state`.
+- **Un défaut trouvé en écrivant le code, et corrigé** : `signerIntention` vit au
+  **scope module**, hors de la fonction où l'interrupteur est relevé. Écrit
+  naïvement, le branchement y aurait laissé un `process.env` — donc la porte
+  ouverte à l'endroit le plus sensible du produit. L'interrupteur lui est passé
+  en argument, et son défaut, en l'absence d'argument, est de ne rien doubler.
+- **Un arbitrage de forme, tranché dans `dev.sh`** : une **option** inconnue est
+  refusée avant tout effet, une **commande** inconnue l'est par le `case` du bas,
+  après la fusion de l'inventaire — c'est le chemin qu'emploie la preuve du
+  SPK-41, et il n'a rien d'un levier caché. Les deux sont refusées, aucune n'est
+  ignorée.
+- Parcours E2E depuis l'accueil : le bandeau existe, **nomme les quatre
+  commandes**, porte `role="status"`, survit à un changement d'écran — il
+  appartient à la coquille —, et la route le confirme sans rendre aucune valeur.
+- Captures observées, reproductibles par `node e2e/epreuve.mjs` :
+  `spk100-01-bandeau.jpg` et `spk100-02-bandeau-mobile.jpg`. À 390 px la barre
+  latérale devient une rangée et le bandeau y prend sa propre ligne, sans
+  débordement horizontal.
 
 
 ---
