@@ -6211,16 +6211,28 @@ un, et le relevé le montre « active, inchangé ». La mention est corrigée.
   d'une cellule complète **sans** Docker soit montrable. Captures observées à
   1440 et 390 px : `spk98-spark-sans-docker.jpg`, `-mobile`,
   `spk98-spark-avec-docker.jpg`, `spk98-catalogue-capacites.jpg`, `-mobile`.
+- **Les trois questions ouvertes sont TRANCHÉES par la mesure, le 2026-09-14**,
+  une cellule par cas sur la Forge de test (§42.11 ter, quater, quinquies) :
+  - **Void, Gentoo et Alt entrent dans la table.** Elles y apportent une
+    quatrième forme de doctrine — **activer sans installer** — et un troisième
+    gestionnaire de services, `runit`. Ce n'est pas une économie : sur Void
+    `xbps-install` rend un code **non nul** quand le paquet est déjà là, ce dont
+    le §42.5 ferait un échec d'amorçage, et sur Gentoo l'arbre Portage est
+    **absent** de l'image. Sur Alt l'installation marche, mais coûte 1 min 31
+    mesurées pour ne rien poser. Le relevé, qui ne connaissait que `systemd` et
+    `openrc`, déclarait `absent` un `sshd` qui **écoute réellement sur le port
+    22** — corrigé ;
+  - **openSUSE reste sans Docker, par CONSTAT** : Docker publie bien
+    `linux/sles`, mais son `15/` ne contient que `s390x/` et `source/`. Le chemin
+    que son propre `docker-ce.repo` annonce rend **404** sur `x86_64`. C'est un
+    dépôt IBM Z ;
+  - **Oracle, Amazon Linux et openEuler restent sans Docker, et pour trois
+    raisons différentes.** Amazon (`$releasever` 2023) et openEuler (24.03)
+    n'existent pas chez Docker. Oracle Linux 9 **est** servie — `docker-ce…el9`
+    est trouvé — mais `container-selinux` n'est fourni par **aucun dépôt que son
+    image déclare** ; l'ajouter demanderait de poser un dépôt éditeur que la
+    distribution n'a pas choisi, ce que le §42.9.2 bis interdit.
 - **Ce qui reste, et pourquoi l'unité n'est pas `[x]`** :
-  - trois familles portent déjà `sshd` — Void, Gentoo, Alt — et n'attendent
-    qu'une commande d'activation mesurée pour entrer dans la table. Le catalogue
-    les donne « non servies », ce qui est vrai aujourd'hui et sous-estime ce
-    qu'elles pourraient recevoir ;
-  - `zypper` n'a pas été éprouvée contre `linux/sles`, donc openSUSE reste sans
-    Docker **par prudence et non par constat** ;
-  - Oracle, Amazon Linux et openEuler sont données sans Docker pour la même
-    raison : leur `ID_LIKE` annonce `fedora` alors que leur `$releasever` est
-    celui de RHEL, et le dépôt `linux/centos` n'a pas été essayé sur elles ;
   - la campagne locale ne monte pas de cellule RPM — arbitrage écrit dans
     `seed.py` : le pool CPU du doublon ne le permet pas sans faire échouer un
     autre parcours, et la doctrine `dnf` est portée par les tests d'unité, ceux
