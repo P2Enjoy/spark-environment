@@ -4770,6 +4770,20 @@ test('copier le dossier d’un Spark, et relire ce que le presse-papier a reçu'
     assert.match(copie, /Distribution : debian trixie/);
     assert.match(copie, /- Architecture : /);
     assert.match(copie, /la pile doit écouter sur \*\*8080\*\*/);
+
+    // 5. SPK-99 · §44.9.2 point 4 : ce qu'un agent qui entre en UNE LIGNE ne
+    //    verrait jamais. `ssh hôte 'commande'` n'ouvre aucun shell, donc aucun
+    //    `motd` — et c'est le `motd` qui dit d'ouvrir le briefing.
+    assert.ok(copie.includes(`ssh root@${corps.ipv4_address} 'cat /etc/spark/BRIEFING.md'`),
+      `le dossier doit donner la ligne qui lit le briefing sans shell : ${copie.slice(0, 400)}`);
+
+    // 6. SPK-99 · §44.9.7 : la seule voie par laquelle une variable entre, et la
+    //    forme que la console accepte. Écrire les fichiers depuis la cellule est
+    //    perdu à la prochaine application (§43.2).
+    assert.match(copie, /Seul le propriétaire du Spark peut poser une variable/);
+    assert.match(copie, /Importer un lot/);
+    assert.ok(copie.includes('```dotenv'),
+      'le dossier doit porter le bloc que l’agent rend au propriétaire');
   });
 });
 

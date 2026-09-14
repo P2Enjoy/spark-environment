@@ -6239,7 +6239,7 @@ un, et le relevé le montre « active, inchangé ». La mention est corrigée.
     d'API et la Forge réelle.
 
 
-### [ ] SPK-99 · Le dossier dit quoi lire en arrivant, et par où passent les variables
+### [x] SPK-99 · Le dossier dit quoi lire en arrivant, et par où passent les variables
 
 Demandé par le responsable le 2026-09-14, en deux points tenant au même texte —
 celui que le bouton **Copier pour un LLM** met dans le presse-papier :
@@ -6278,6 +6278,23 @@ celui que le bouton **Copier pour un LLM** met dans le presse-papier :
   le texte après ces ajouts ; le parcours E2E du presse-papier constate les
   nouvelles lignes dans ce qui est réellement collé ; captures observées aux deux
   formats ; manuel M8, DAT et changelog mis à jour ; `@spec` / `@verifies` posés.
+- **Clos le 2026-09-14.** Quatre preuves de service et d'API : la ligne de
+  lecture composée avec le rebond, son absence sur trois cibles piégées — le
+  second usage du rebond ne rouvre pas ce que le premier ferme —, le bloc `.env`
+  et ses quatre règles, et le garde-fou du §44.9.3 rejoué sur le texte augmenté,
+  où une valeur **non secrète** est cherchée elle aussi : le bloc d'exemple ne
+  doit pas devenir un export déguisé. 1276 preuves serveur au vert, contrat
+  d'API inchangé — aucune route nouvelle.
+- Le parcours E2E du presse-papier constate les deux ajouts **dans ce qui est
+  réellement collé**, et non dans le rendu de l'écran.
+- Captures observées, produites par `node e2e/dossier.mjs` contre sa pile
+  seedée : `spk99-01-lecture-briefing.jpg`, `spk99-02-bloc-variables.jpg` et
+  `spk99-03-bloc-variables-mobile.jpg` — plus les six captures de SPK-85,
+  refaites, qui dataient d'avant la seconde porte du SPK-95. Le `<pre>` du
+  dossier a son propre défilement : le harnais y **défile jusqu'à la ligne
+  visée**, sans quoi une capture de la page ne montrerait que le début du texte
+  et ne prouverait rien des ajouts. À 390 px, la ligne la plus longue du bloc —
+  `AUTRE_VARIABLE="valeur avec des espaces"` — tient sans débordement.
 
 
 ---

@@ -401,3 +401,96 @@ def test_une_cellule_AVEC_Docker_garde_son_contexte(tmp_path):
     assert "## Contexte Docker relevé" in briefing.markdown(model)
     assert "contexte Docker" in briefing.motd(model)
     assert any("Docker" in p for p in model["pitfalls"])
+
+
+# --- SPK-99 · §44.9.2 point 4 et §44.9.7 : ce que le dossier dit à un agent ---
+
+
+def test_le_dossier_nomme_le_briefing_et_donne_la_ligne_qui_le_lit_sans_shell(tmp_path):
+    """§44.9.2 point 4 : `ssh hôte 'commande'` n'ouvre aucun shell, donc n'affiche
+    aucun `motd` — et c'est le `motd` qui porte l'instruction de lire le briefing.
+
+    @verifies docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.2 (point 4), §44.1
+    """
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+    adresse = client.get(f"/v1/sparks/{name}").json()["ipv4_address"]
+
+    texte = client.get(f"/v1/sparks/{name}/briefing",
+                       params={"jump": "responsable@forge.example.test"}).json()["markdown"]
+    assert briefing.FICHIER_MARKDOWN in texte
+    assert (f"ssh -J responsable@forge.example.test root@{adresse} "
+            f"'cat {briefing.FICHIER_MARKDOWN}'") in texte
+    # Le FAIT est dit même là où la commande ne l'est pas : c'est lui qui décide
+    # qu'on ouvre le fichier, la commande n'est qu'un raccourci.
+    assert "n'affiche donc aucun `motd`" in texte
+
+
+def test_un_rebond_refuse_ne_produit_pas_davantage_la_ligne_de_LECTURE(tmp_path):
+    """§44.9.2 : la ligne de lecture emploie le même rebond validé. Une cible
+    piégée ne doit pas trouver dans ce second usage la sortie qu'on lui ferme
+    dans le premier.
+
+    @verifies docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.2
+    """
+    client = _client(tmp_path)
+    name = _spark(client)
+
+    for piege in ("forge.test; rm -rf /", "$(id)", "-oProxyCommand=touch /tmp/x"):
+        texte = client.get(f"/v1/sparks/{name}/briefing",
+                           params={"jump": piege}).json()["markdown"]
+        assert f"cat {briefing.FICHIER_MARKDOWN}'" not in texte, piege
+        assert piege not in texte, piege
+        # Le fait reste dit : il ne dépend pas d'une cible de rebond.
+        assert briefing.FICHIER_MARKDOWN in texte, piege
+
+
+def test_le_dossier_dit_que_la_cellule_n_est_PAS_la_voie_pour_une_variable(tmp_path):
+    """§44.9.7 : l'agent est root, les deux fichiers sont là, et les écrire ne
+    sert à rien — le §43.2 les régénère en entier, le §43.5.2 repose le tmpfs.
+    Le dossier nomme la seule voie, et la forme que la console accepte.
+
+    @verifies docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.7, §43.2, §43.5.2,
+              §43.10.1 (la grammaire du lot), §43.3 (le secret se déclare)
+    """
+    client = _client(tmp_path)
+    name = _spark(client)
+    texte = client.get(f"/v1/sparks/{name}/briefing").json()["markdown"]
+
+    assert "ne sert à rien" in texte
+    assert "Seul le propriétaire du Spark peut poser une variable" in texte
+    assert "Importer un lot" in texte
+    # La FORME, sans aucun nom de variable inventé pour le locataire (§44.7).
+    assert "```dotenv" in texte
+    assert "NOM_DE_VARIABLE=valeur" in texte
+    # Les quatre points qui décident qu'un bloc passe du premier coup.
+    assert "aucune valeur multiligne" in texte
+    assert "`$` est **littéral**" in texte
+    assert "en **début** de ligne" in texte
+    assert "il ne retire jamais" in texte
+    # §43.3 : le produit ne devine jamais un secret d'après son nom.
+    assert "lesquelles sont des secrets" in texte
+
+
+def test_les_ajouts_du_SPK_99_n_ouvrent_aucune_fuite_de_valeur(tmp_path):
+    """Le garde-fou du §44.9.3, rejoué sur le texte augmenté : un dossier qui
+    parle de variables est précisément celui où une valeur pourrait se glisser.
+
+    @verifies docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.3
+    """
+    client = _client(tmp_path)
+    name = _spark(client)
+    secret = "valeur-que-le-bloc-dotenv-ne-doit-pas-porter-7b3e"
+    ordinaire = "valeur-ordinaire-qui-ne-sort-pas-non-plus-2c19"
+    assert client.put(f"/v1/sparks/{name}/env/SMTP_PASSWORD", json={
+        "value": secret, "secret": True}).status_code == 200
+    assert client.put(f"/v1/sparks/{name}/env/APP_NAME", json={
+        "value": ordinaire, "secret": False}).status_code == 200
+
+    texte = client.get(f"/v1/sparks/{name}/briefing").json()["markdown"]
+    assert secret not in texte
+    # Même une valeur NON secrète reste hors du texte : le §44.3 ne fait pas de
+    # distinction, et le bloc d'exemple ne doit pas devenir un export déguisé.
+    assert ordinaire not in texte
+    assert "`SMTP_PASSWORD`" in texte and "`APP_NAME`" in texte

@@ -2,6 +2,7 @@
  * Captures du dossier de déploiement, contre la pile RÉELLE.
  *
  * @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9.5 ·
+ *           docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.2 (point 4), §44.9.7 ·
  *           docs/DESIGN_SYSTEM_APP.md SPK-DS-19 ·
  *           docs/DESIGN_SYSTEM.md §13 (les captures sont une preuve), §13.1
  *           (desktop, mobile, état vide, contenu long, clavier) · CLAUDE.md §16
@@ -53,6 +54,26 @@ async function ouvrir(nom, { largeur = 1440, hauteur = 1400 } = {}) {
 await page.context().grantPermissions(['clipboard-read', 'clipboard-write'],
                                       { origin: pile.base });
 
+/**
+ * Amène une ligne du dossier sous les yeux, DANS le texte replié (SPK-99).
+ *
+ * Le `<pre>` a sa propre hauteur et son propre défilement (SPK-DS-18) : une
+ * capture de la page ne montre que son début. Les deux ajouts du SPK-99 vivent
+ * plus bas, et une capture qui ne les montre pas ne prouve rien d'eux.
+ */
+async function defilerVers(fragment) {
+  await page.evaluate((cherche) => {
+    const pre = document.querySelector('.dossier__texte');
+    const index = pre.textContent.indexOf(cherche);
+    if (index < 0) throw new Error(`fragment absent du dossier : ${cherche}`);
+    const plage = document.createRange();
+    plage.setStart(pre.firstChild, index);
+    plage.setEnd(pre.firstChild, index + 1);
+    pre.scrollTop += plage.getBoundingClientRect().top
+                     - pre.getBoundingClientRect().top - 12;
+  }, fragment);
+}
+
 /** Amorce un Spark par le geste de l'écran, jamais par un appel d'API. */
 async function amorcer(nom) {
   await ouvrir(nom);
@@ -85,7 +106,21 @@ await page.waitForSelector('.dossier .succes', { timeout: 8000 });
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk85-03-copie');
 
+// 3 bis. SPK-99 · §44.9.2 point 4 : la ligne qui lit le briefing sans ouvrir de
+//         shell. Un agent qui entre par `ssh hôte 'commande'` ne voit aucun
+//         `motd`, donc rien ne lui dit que ce fichier existe.
+await defilerVers('Lire le briefing de la cellule sans ouvrir de shell');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk99-01-lecture-briefing');
+
+// 3 ter. SPK-99 · §44.9.7 : le bloc que l'agent rend au propriétaire, et la
+//        raison pour laquelle il ne peut pas poser la variable lui-même.
+await defilerVers('Il en manque une pour votre pile');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk99-02-bloc-variables');
+
 // 4. Le focus clavier sur le bouton : l'anneau doit être visible (§9.5).
+await defilerVers('# Dossier de déploiement');
 await page.keyboard.press('Shift+Tab');
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk85-04-focus-clavier');
@@ -102,6 +137,13 @@ await page.click('.dossier .repli > summary');
 await page.waitForSelector('.dossier__texte', { timeout: 8000 });
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk85-06-mobile');
+
+// 7. Le bloc `.env` au format étroit : ses lignes sont les plus longues du
+//    texte, et c'est là qu'un débordement se verrait (SPK-99). On vise le bloc
+//    lui-même et non son titre — c'est `AUTRE_VARIABLE="…"` qu'il faut voir.
+await defilerVers('NOM_DE_VARIABLE=valeur');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk99-03-bloc-variables-mobile');
 
 const debordement = await page.evaluate(
   () => document.documentElement.scrollWidth > document.documentElement.clientWidth);

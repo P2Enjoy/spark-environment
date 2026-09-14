@@ -3,6 +3,20 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-99 — le dossier pour un agent dit quoi lire en arrivant.** Le panneau
+  d'accueil d'une cellule porte l'instruction d'ouvrir
+  `/etc/spark/BRIEFING.md`, mais il ne s'affiche qu'à l'ouverture d'un shell de
+  connexion : un agent qui entre par `ssh hôte 'commande'` ne le voit jamais. Le
+  texte copié par **Copier pour un LLM** nomme désormais le fichier et donne la
+  ligne qui le lit sans shell, composée avec le même rebond validé que les
+  commandes d'entrée.
+- **SPK-99 — le dossier dit par où une variable entre, et donne la forme du bloc
+  à rendre.** Écrire `/etc/spark/env` ou `/run/spark/secrets` depuis la cellule
+  ne sert à rien : le plan de contrôle les régénère en entier à chaque écriture,
+  et le second vit dans un tmpfs reposé à chaque démarrage. Le dossier demande à
+  l'agent de rendre au propriétaire un bloc au format `.env`, à coller dans
+  *Environnement → Importer un lot*, et rappelle que le secret se **déclare** à
+  l'import — le produit ne le devine pas d'après le nom.
 - **SPK-98 — la campagne du catalogue : les 24 familles du dépôt amont, une par
   une, sur la Forge réelle.** Chaque famille publiée par
   `images.linuxcontainers.org` a reçu son entrée au catalogue, son Spark, sa

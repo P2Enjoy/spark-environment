@@ -5,7 +5,8 @@
       pièges), §44.6 (donnée et non consigne), §44.8 (modèle unique) ·
       docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier de déploiement),
       §44.9.2 (ce qu'il porte de plus), §44.9.3 (ce qu'il ne porte jamais) ·
-      docs/SCHEMA.md §10 quinquies
+      docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.7 (une variable n'entre pas par
+      la cellule) · docs/SCHEMA.md §10 quinquies
 
 Le JSON est le MODELE et le Markdown une présentation de ce même modèle. Les
 deux fichiers ne sont donc pas deux vérités qu'il faudrait garder en accord.
@@ -552,8 +553,10 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
     """Le dossier de déploiement, pour l'agent qui prépare depuis son poste.
 
     @spec docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9 (le dossier), §44.9.2 (ce
-          qu'il porte de plus), §44.9.3 (ce qu'il ne porte jamais), §44.6 (une
-          donnée, pas une consigne)
+          qu'il porte de plus, dont le point 4 : quoi lire en arrivant), §44.9.3
+          (ce qu'il ne porte jamais), §44.6 (une donnée, pas une consigne) ·
+          docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.7 (le lot que l'agent rend),
+          §44.9.6 (rédiger n'est pas écrire)
 
     TOUT ce qu'il écrit vient de `model`, plus l'accès SSH que la cellule ne
     porte pas. Il ne relit rien, ne mesure rien et n'invente rien : une seconde
@@ -573,8 +576,9 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         f"Relevé écrit le {model['written_at']} par {model['written_by']}.",
         "",
         "Ce texte décrit **la cellule qui accueillera la pile**, telle que le plan "
-        "de contrôle la connaît. Il énonce des faits ; il ne donne aucun ordre, ne "
-        "décrit pas l'application à déployer, et ne prouve **aucune** autorisation : "
+        "de contrôle la connaît. Il énonce des faits, et les seules voies par "
+        "lesquelles on agit sur cette cellule ; il ne décrit pas l'application à "
+        "déployer, et ne prouve **aucune** autorisation : "
         f"{model['trust']}",
         "",
         "## 1. Entrer dans la cellule",
@@ -599,6 +603,16 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
             "rebond défini dans le `~/.ssh/config` du poste.",
             "",
         ])
+    if commande:
+        # SPK-99 · §44.9.2 point 4 : le `motd` du §44.1 porte l'instruction de
+        # lire le briefing, et il ne s'affiche QU'À l'ouverture d'un shell de
+        # connexion. `ssh hôte 'commande'` n'en ouvre aucun — c'est la forme par
+        # laquelle un agent entre. Sans cette ligne, il ignore que le fichier
+        # existe. Même rebond validé que ci-dessus : rien de neuf n'entre dans
+        # une ligne de commande.
+        lignes.extend([
+            "Lire le briefing de la cellule sans ouvrir de shell :", "",
+            "```sh", f"{commande} 'cat {FICHIER_MARKDOWN}'", "```", ""])
     if ssh_config:
         lignes.extend(["Fragment `ssh_config` équivalent :", "", "```",
                        ssh_config.rstrip("\n"), "```", ""])
@@ -609,6 +623,10 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "**uniquement** depuis la Forge, jamais depuis Internet.",
         "- **Le rebond est obligatoire** : un Spark n'expose jamais son port 22 sur "
         "l'extérieur. Viser l'adresse publique de la Forge ne mène pas ici.",
+        f"- **Lisez `{FICHIER_MARKDOWN}` en arrivant** : c'est le même modèle que "
+        "ce dossier, réécrit dans la cellule à chaque geste du plan de contrôle. "
+        "`/etc/motd` le rappelle à la connexion — mais une commande d'une seule "
+        "ligne n'ouvre aucun shell, et n'affiche donc aucun `motd`.",
     ])
     clefs = keys or []
     if clefs:
@@ -677,6 +695,40 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "les lit dans ces deux fichiers, au démarrage.",
         "- Les deux fichiers sont posés par le plan de contrôle. Poser une variable "
         "ne redémarre rien : la pile lira la nouvelle valeur au démarrage suivant.",
+        "",
+        # SPK-99 · §44.9.7 : le cas ordinaire est qu'il en MANQUE une. L'agent
+        # est root, les deux fichiers sont là, il les écrit — et le §43.2 les
+        # régénère en entier au prochain geste, le tmpfs du §43.5.2 au prochain
+        # démarrage. La pile marche, puis cesse de marcher, loin du geste.
+        "### Il en manque une pour votre pile ?",
+        "",
+        "**Écrire dans ces deux fichiers depuis la cellule ne sert à rien.** Le "
+        "plan de contrôle les régénère **en entier** depuis son registre à chaque "
+        f"écriture, et `{FICHIER_SECRETS}` vit dans un tmpfs reposé à chaque "
+        "démarrage. Une ligne ajoutée à la main disparaît — pas tout de suite, ce "
+        "qui est pire : la pile marchera jusque-là.",
+        "",
+        "**Seul le propriétaire du Spark peut poser une variable**, depuis la "
+        "console, qui n'est pas joignable d'ici. Rendez-lui un bloc au format "
+        "`.env` et demandez-lui de le coller dans **la fenêtre de ce Spark → "
+        "Environnement → Importer un lot** :",
+        "",
+        "```dotenv",
+        "NOM_DE_VARIABLE=valeur",
+        'AUTRE_VARIABLE="valeur avec des espaces"',
+        "```",
+        "",
+        "- Une ligne par variable, et **aucune valeur multiligne** : écrivez "
+        "`\\n`.",
+        "- `$` est **littéral** : `A=$B` vaut `$B`, rien n'est substitué.",
+        "- `#` n'ouvre un commentaire qu'en **début** de ligne.",
+        "- Un import **ajoute et remplace** ; il ne retire jamais ce que le bloc "
+        "ne nomme pas.",
+        "- **Dites en clair, à côté du bloc, lesquelles sont des secrets.** Le "
+        "produit ne le devine pas d'après le nom : c'est la personne qui importe "
+        "qui coche, ligne par ligne.",
+        "- Une ligne refusée est nommée avec son numéro avant que rien ne soit "
+        "écrit ; c'est la console qui fait foi, pas cette liste.",
         "",
         "## 5. Le contrat que le `docker-compose.yml` doit respecter",
         "",
