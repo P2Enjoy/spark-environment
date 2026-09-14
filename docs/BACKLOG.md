@@ -2822,12 +2822,29 @@ avant la première ligne de code.
   *« 1 alerte(s) ne sont pas parties. Les gestes, eux, ont abouti : un canal muet
   n'empêche jamais d'agir. Dernier motif : HTTP Error 400: Bad Request. »*
 
-- **Ce qui reste avant `[x]`, et la ligne précédente le disait FAUX.** Elle
+- **Le gabarit est posé, et Discord reçoit — mesuré le 2026-09-14.** Le §47.3.1
+  est construit : `SPARKD_NOTIFY_TEMPLATE`, substitution de texte sur les seuls
+  champs publiés, valeurs échappées pour le contexte JSON, et un nom inconnu qui
+  **n'arme pas** le canal. Après déploiement sur la Forge et un nouveau
+  `spark.unprotect` réel depuis la console, l'écran rend *« Toutes les alertes
+  sont parties · Envoyées 1 · En échec 0 »*.
+
+  **Et le message existe VRAIMENT dans le salon**, ce qu'un code `2xx` ne prouve
+  pas à lui seul : un envoi avec `?wait=true` rend l'objet créé par Discord —
+  identifiant de message, salon, horodatage, et le contenu rendu par le gabarit.
+  Le canal a donc parlé à un destinataire réel, qui l'a **matérialisé**.
+
+  Trois autres exigences de la DoD tombent avec : un gabarit qui nomme un champ
+  inconnu est refusé **avant** l'envoi ; un gabarit ne peut pas faire sortir le
+  `payload`, tenté explicitement ; les trois états — aucun canal, mal configuré,
+  actif en échec — sont distingués à l'écran. 42 preuves du module contre un vrai
+  serveur HTTP, 2 de l'écran.
+
+- **Ce qui reste avant `[x]`.** Elle
   n'annonçait qu'un écart — « le canal n'a jamais parlé à un vrai destinataire ».
   La DoD en compte bien davantage, et le §47.3 les spécifie depuis le
   2026-08-21 sans qu'ils soient construits :
-  1. le **gabarit** du §47.3.1 — c'est lui qui répond au refus mesuré ci-dessus,
-     et il n'existe pas ; le corps est figé ;
+  1. ~~le gabarit du §47.3.1~~ — **fait le 2026-09-14** ;
   2. la configuration **au registre** plutôt qu'en variable d'environnement, et
      l'**onglet** qui la rend visible et essayable ;
   3. le **mot de passe** exigé pour toute modification (§47.3.3), et la
