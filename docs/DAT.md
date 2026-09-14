@@ -11674,7 +11674,7 @@ qui » n'a pas à exister.
 
 ### 53.3 L'interrupteur d'épreuve, et le bandeau qui le dit
 
-Quatre doublons sont **nécessaires** : le harnais lance la console comme un
+**Cinq** doublons sont nécessaires : le harnais lance la console comme un
 processus séparé, et l'environnement est son seul canal.
 
 | Variable | Ce qu'elle remplace | Contrat |
@@ -11683,9 +11683,10 @@ processus séparé, et l'environnement est son seul canal.
 | `SPARK_DOCKER_COMMAND` | la commande `docker` interrogée par la console | §37.6 ter |
 | `SPARK_REBOOT_COMMAND` | la commande de redémarrage de la Forge | §51.1 |
 | `SPARK_SIGN_COMMAND` | la commande de signature d'un geste | §36.10.9 |
+| `SPARK_CONSOLE_IDENTITY` | **la clé qu'OpenSSH emploie pour joindre la Forge** | §53.3 bis |
 
 **`SPARK_EPREUVE=1` les autorise, et rien d'autre ne le fait.** Hors de cet
-interrupteur, les quatre sont **ignorées** : la console lance les vraies
+interrupteur, les cinq sont **ignorées** : la console lance les vraies
 commandes. Ce n'est pas un durcissement théorique — `SPARK_DOCKER_COMMAND`
 exporté dans un shell remplaçait jusqu'ici la commande `docker` que la console
 exécute réellement, sans que rien ne le dise nulle part.
@@ -11704,6 +11705,34 @@ resté caché à qui regarde l'écran, c'est-à-dire à tout le monde.
 Conséquence assumée : les captures produites par le harnais portent ce bandeau.
 C'est exact — ces écrans viennent d'une pile doublée —, et le §13 du design
 system demande précisément que la capture montre l'état réellement exécuté.
+
+#### 53.3 bis Le cinquième doublon : la clé de la console — SPK-82
+
+**Le trou qu'il bouche, et pourquoi il ne se bouchait pas autrement.** L'octroi
+de la clé du §42.10 se décide dans l'hôte console : elle lit l'empreinte que
+`ssh` emploie pour le tunnel, retrouve la clé publique correspondante sur le
+poste, et l'accorde au Spark. Ce chemin a été prouvé **deux fois sur matériel
+réel**, et jamais gardé par un test automatique — parce que le serveur `local`
+de la pile de développement n'emploie **aucune** clé SSH. Le §42.10.3 fait alors
+exactement ce qu'il doit : la console dit qu'elle n'accordera rien. Le chemin
+heureux n'existe donc pas dans la pile, et aucun parcours ne pouvait l'atteindre.
+
+Le remède est celui que le `CLAUDE.md` §15 prévoit — *« créer un chemin
+déterministe permettant de le tester réellement »* —, et non un contournement :
+le doublon fournit **une vraie clé publique**, dont l'empreinte est calculée par
+`ssh-keygen` comme en exploitation. Ce qui est remplacé est la seule chose que la
+pile ne peut pas produire : le fait qu'OpenSSH emploie une clé pour ce serveur.
+
+Trois bornes, et elles sont ce qui distingue une instrumentation d'une porte
+dérobée :
+
+- elle ne vaut que sous `SPARK_EPREUVE=1`, comme les quatre autres, et le bandeau
+  la nomme ;
+- elle fournit un **chemin de fichier**, jamais une clé en ligne : une clé
+  inventée dans une variable d'environnement ne passerait pas `ssh-keygen`, et
+  la preuve mesurerait alors le doublon au lieu du produit ;
+- **elle n'écrit rien** au registre elle-même. L'octroi reste celui du produit,
+  par le même chemin qu'en exploitation — c'est précisément ce qu'on veut garder.
 
 ### 53.4 Les deux réglages d'installation deviennent des arguments
 
