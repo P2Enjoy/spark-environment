@@ -1439,10 +1439,14 @@ que ni le préflight ni la console ne signalaient.
      du produit sont joués sur la Forge de test ; le geste de secours ne l'est
      pas, et le document le dit au lieu de le décrire de mémoire.
 
-     **Ce qui bloque cette moitié** : lever une protection revient à retirer son
-     empreinte du registre, sur l'hôte. L'environnement d'exécution de l'agent a
-     refusé cette écriture en la classant comme un affaiblissement de sécurité —
-     et c'en est un. Elle demande une autorisation explicite du responsable ;
+     **Arbitrage du responsable, 2026-09-14 : le geste est joué sur un Spark
+     JETABLE de la Forge de test, et la procédure écrite comme jouée.** Lever une
+     protection revient à retirer son empreinte du registre, sur l'hôte. C'est un
+     affaiblissement, et le document doit le dire : ce geste **prouve que la
+     protection ne résiste pas à `root` sur la Forge** — ce que le §35.1 affirme
+     déjà, mais qu'un plan de contingence rend opératoire. Motif de la décision :
+     un garde-fou dont personne ne sait se sortir devient un piège le jour où le
+     mot de passe est perdu ;
   2. l'**ancre de la console** au §2.5 point 4 : la signaler exige la console
      lancée avec son tunnel, que l'exercice n'a pas monté. Le comportement
      attendu reste écrit, il n'est pas mesuré.
@@ -2736,6 +2740,13 @@ committé avant la première ligne de code.
   OP-10 le décrit pas à pas — **nécessite une action humaine**.
 
 ### [~] SPK-62 · Notification hors bande des actions sensibles
+
+**Arbitrage du responsable, 2026-09-14 sur l'ordre des chunks restants** : la
+**configuration au registre et son onglet** d'abord. Motif : c'est le chunk qui
+rend les deux autres possibles — un mot de passe n'a de sens que sur une
+configuration qui vit au registre —, et c'est celui qui sert le plus vite. Un
+canal ne s'éprouve aujourd'hui qu'en provoquant un vrai geste sensible, ce qui a
+été fait trois fois sur le salon du responsable pendant cette session.
 
 **Arbitrage du responsable, 2026-09-14 : deux destinataires, et ils diffèrent.**
 En local, un `ntfy`. Sur la Forge distante, un **webhook Discord**, dont l'URL a
