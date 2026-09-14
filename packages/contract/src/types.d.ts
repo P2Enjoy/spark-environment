@@ -481,6 +481,39 @@ export interface paths {
         patch: operations["update_route_v1_ingress__domain__patch"];
         trace?: never;
     };
+    "/v1/notify/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Channels
+         * @description Ce que l'onglet lit. **Aucun secret n'en sort** (§43.3).
+         *
+         *     L'URL du webhook n'est pas rendue : elle EST un secret — qui la détient
+         *     écrit dans le salon. On rend son HÔTE, de quoi reconnaître le canal sans
+         *     pouvoir s'en servir.
+         */
+        get: operations["read_channels_v1_notify_channels_get"];
+        /**
+         * Set Channels
+         * @description Règle les canaux. Exige le mot de passe du §47.3.3.
+         *
+         *     **La désactivation NOTIFIE par le canal qu'elle coupe**, et pendant qu'il
+         *     fonctionne encore (§47.3.3) : sans quoi la coupure serait le seul geste
+         *     dont personne n'entendrait parler — et c'est le premier qu'un attaquant
+         *     tenterait.
+         */
+        put: operations["set_channels_v1_notify_channels_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ports": {
         parameters: {
             query?: never;
@@ -1722,6 +1755,65 @@ export interface operations {
             path: {
                 domain: string;
             };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_channels_v1_notify_channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    set_channels_v1_notify_channels_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody: {

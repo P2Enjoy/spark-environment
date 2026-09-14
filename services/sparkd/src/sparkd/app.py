@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import asynccontextmanager, contextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException
@@ -40,6 +40,7 @@ from . import ports as ports_service
 from . import signature as signature_service
 from . import notification as notification_service
 from . import audit as audit_service
+from . import canaux as canaux_service
 from . import bootstrap as bootstrap_service
 from . import identity as identity_service
 from . import briefing as briefing_service
@@ -216,6 +217,25 @@ def create_app(config: Config) -> FastAPI:
     app.state.notify = notification_service.Canal(
         url=config.notify_url, forge=_nom_de_la_forge(config),
         gabarit=config.notify_template)
+
+    def _canal_depuis_le_registre() -> None:
+        """Le REGISTRE prime sur l'environnement (SPK-62, §47.3).
+
+        Ordre, et il n'est pas neutre : un canal réglé à l'écran doit l'emporter
+        sur une variable oubliée dans une unité systemd, faute de quoi on
+        réglerait l'écran sans effet et sans le savoir. L'environnement reste un
+        REPLI — pour une Forge dont la configuration n'a pas encore été reprise
+        —, et l'écran dit d'où vient ce qui veille.
+        """
+        connection = connect(config.database)
+        try:
+            url, gabarit = canaux_service.webhook_actif(connection)
+        finally:
+            connection.close()
+        if url:
+            app.state.notify.reregler(url, gabarit, source="registre")
+
+    _canal_depuis_le_registre()
     audit_service.set_canal(app.state.notify)
     app.state.caddy = (
         ingress_service.FakeCaddy() if config.driver == "fake"
@@ -2054,6 +2074,61 @@ def create_app(config: Config) -> FastAPI:
             except (IncusError, InstanceAbsente, env_service.CleError, service.NotFound):
                 pass
             return _rendu_lot(ecrit)
+
+    # --- SPK-62 · §47.3 : les canaux d'alerte, réglés au REGISTRE --------------
+
+    @app.get("/v1/notify/channels", tags=["alertes"])
+    def read_channels() -> dict:
+        """Ce que l'onglet lit. **Aucun secret n'en sort** (§43.3).
+
+        L'URL du webhook n'est pas rendue : elle EST un secret — qui la détient
+        écrit dans le salon. On rend son HÔTE, de quoi reconnaître le canal sans
+        pouvoir s'en servir.
+        """
+        with registry() as connection:
+            return {**canaux_service.etat(connection),
+                    "live": app.state.notify.etat()}
+
+    @app.put("/v1/notify/channels", tags=["alertes"])
+    def set_channels(body: dict = Body(...)) -> dict:
+        """Règle les canaux. Exige le mot de passe du §47.3.3.
+
+        **La désactivation NOTIFIE par le canal qu'elle coupe**, et pendant qu'il
+        fonctionne encore (§47.3.3) : sans quoi la coupure serait le seul geste
+        dont personne n'entendrait parler — et c'est le premier qu'un attaquant
+        tenterait.
+        """
+        mot = str(body.get("password") or "")
+        changements = {c: body[c] for c in canaux_service.CHAMPS if c in body}
+        with registry() as connection:
+            avant = canaux_service.etat(connection)
+            coupe = (avant["webhook"]["enabled"]
+                     and changements.get("webhook_enabled") in (0, False))
+            if coupe:
+                # AVANT d'écrire : le canal doit encore fonctionner pour porter
+                # son propre avis de décès.
+                app.state.notify.poster({
+                    "action": "spark.unprotect", "result": "ok",
+                    "actor_class": "human",
+                    "actor": audit_service.current_actor()[0],
+                    "target_type": "forge", "target_id": "notify",
+                    "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "message": "Le canal d'alerte hors bande va être DÉSACTIVÉ. "
+                               "C'est le dernier message qu'il porte.",
+                })
+                app.state.notify.vider(3.0)
+            try:
+                etat = canaux_service.regler(connection, mot, changements,
+                                             audit_service.current_actor()[0])
+            except canaux_service.MotDePasseRefuse as erreur:
+                raise HTTPException(status_code=403, detail={
+                    "error": "notify_password", "message": str(erreur)}) from erreur
+            except canaux_service.CanalError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "notify_refused", "message": str(erreur)}) from erreur
+            url, gabarit = canaux_service.webhook_actif(connection)
+        app.state.notify.reregler(url, gabarit, source="registre")
+        return {**etat, "live": app.state.notify.etat()}
 
     @app.get("/v1/ssh-keys", tags=["cles"])
     def list_keys() -> dict:

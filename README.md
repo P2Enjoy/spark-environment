@@ -383,8 +383,8 @@ défaut, pas une commodité.
 | `SPARKD_STORAGE_DATASET` | jeu de données ZFS dont la compression est vérifiée | nom | non | la valeur de `SPARKD_STORAGE_POOL` |
 | `SPARKD_ALLOWED_SIGNERS` | fichier `allowed_signers` d'OpenSSH — clés **publiques** autorisées à signer un geste (`docs/DAT.md` §36.10) | chemin absolu | non | vide, la vérification est désactivée |
 | `SPARKD_SECRET_KEY_FILE` | clé de chiffrement des **secrets d'environnement** — 32 octets, `0600`, créée si absente et jamais remplacée (`docs/DAT.md` §43.9.2) | chemin absolu | non | `secret.key` **à côté du registre** |
-| `SPARKD_NOTIFY_URL` | canal d'**alerte hors bande** : un `POST` de JSON y part sur chaque geste sensible (`docs/DAT.md` §47) | URL | non | vide, la fonction est désactivée |
-| `SPARKD_NOTIFY_TEMPLATE` | **gabarit** du corps envoyé, pour le mettre à la forme qu'exige le service visé — Discord veut `{"content": …}`, Slack `{"text": …}` (`docs/DAT.md` §47.3.1). Ne peut nommer que les champs de l'alerte ; un nom inconnu **n'arme pas** le canal | JSON avec des `{champ}` | non | vide, le corps du §47.4 part tel quel |
+| `SPARKD_NOTIFY_URL` | **REPLI seulement** — le canal d'alerte se règle désormais au registre, depuis l'onglet de la Forge (`docs/DAT.md` §47.3). Cette variable ne sert plus qu'aux Forges dont la configuration n'a pas encore été reprise, et le **registre l'emporte** dès qu'un canal y est posé | URL | non | vide |
+| `SPARKD_NOTIFY_TEMPLATE` | **REPLI seulement**, même règle que ci-dessus | JSON avec des `{champ}` | non | vide |
 | `SPARKD_FORGE_PUBLIC_ADDRESS` | adresse ou nom public de la Forge, rendu dans le briefing d'un Spark (`docs/DAT.md` §44.8) | IPv4, IPv6 ou nom sans schéma | non | vide : l'adresse est inconnue du plan de contrôle |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |

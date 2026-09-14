@@ -3,6 +3,22 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-62 — la configuration du canal d'alerte quitte les variables
+  d'environnement pour le REGISTRE.** Une variable se règle par un redémarrage du
+  service et ne se voit nulle part : un canal qu'on ne peut ni voir ni éprouver
+  depuis l'écran est un canal dont on ne sait pas s'il veille — ce qui s'est
+  exactement produit le 2026-09-14. Le registre **l'emporte** sur
+  l'environnement, qui devient un repli pour les Forges non encore reprises, et
+  l'écran dit d'où vient ce qui veille. Toute modification exige un **mot de
+  passe**, fixé au premier usage, par le même mécanisme que la protection d'un
+  Spark. **Désactiver un canal envoie l'alerte PAR ce canal**, pendant qu'il
+  fonctionne encore : sans cela, la coupure serait le seul geste dont personne
+  n'entendrait parler. Le gabarit est refusé **à l'enregistrement**, jamais à
+  l'envoi. L'URL ne sort jamais de l'API, même en lecture — seul son hôte.
+- **SPK-82 — la ligne d'octroi d'une clé NOMME le Spark.** `sshkey.grant` est
+  l'une des neuf actions qui partent en alerte hors bande ; « Clé « console »
+  accordée » sans dire OÙ est une alerte inexploitable. Même défaut que celui
+  corrigé sur `spark.delete`, resté ici.
 - **SPK-101 — le dossier dit par quel chemin on vous atteint.** Mesuré sur un
   agent réel : faute de savoir qu'une route est déjà un chemin complet, il avait
   inventé une procédure — publier un port haut et faire re-router l'ingress

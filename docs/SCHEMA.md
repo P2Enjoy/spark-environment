@@ -574,3 +574,28 @@ défaut**, et le fait par connexion, pas par base. Un modèle aussi riche en cl�
 pointant vers rien s'insérerait sans un mot. C'est la valeur par défaut la plus
 coûteuse de SQLite, et la seule ligne de cette liste qui change la correction et
 non la performance.
+
+
+## 11. `notify_channels` — la configuration des canaux d'alerte (SPK-62, §47.3)
+
+**Une seule ligne**, contrainte par `CHECK (id = 1)`. Le §47.3 décide **deux
+canaux** — un webhook et un SMTP, activables séparément —, pas N canaux du même
+genre. Une table de lignes libres inviterait à en poser trois, et il faudrait
+alors décider ce que « l'échec de l'un n'empêche pas l'autre » veut dire à trois.
+La contrainte rend cette question impossible à poser par accident.
+
+La ligne est **posée par la migration elle-même**, de sorte que l'écran lise
+toujours un état et jamais une absence de ligne : « aucun canal » se dit par
+`enabled = 0`, ce qui est un fait ; une table vide serait une question sans
+réponse (§14.6).
+
+| Colonne | Ce qu'elle porte |
+|---|---|
+| `guard_hash`, `guard_salt`, `guard_params`, `guard_set_at` | le mot de passe du §47.3.3, **même mécanisme que la protection d'un Spark** (§35.3) — `scrypt`, sel propre, empreinte seule. `NULL` tant qu'aucun n'a été fixé : le premier usage le pose |
+| `webhook_enabled` / `webhook_url` / `webhook_template` | `enabled` est distinct de « configuré » : on garde une URL en la désactivant, sans avoir à la retaper |
+| `smtp_*` | serveur, port, TLS, compte, expéditeur, destinataire |
+| `smtp_password_secret` | **le NOM** de l'entrée chiffrée du §43.3, jamais le mot de passe. Un secret ne vit qu'au coffre |
+
+**L'URL du webhook ne sort jamais de l'API**, même en lecture : elle EST un
+secret — qui la détient écrit dans le salon. `GET /v1/notify/channels` rend son
+**hôte**, de quoi reconnaître le canal sans pouvoir s'en servir.

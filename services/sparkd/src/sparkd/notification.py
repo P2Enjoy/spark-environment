@@ -191,6 +191,11 @@ class Canal:
         self.gabarit = (gabarit or "").strip()
         self.gabarit_refuse: tuple[str, ...] = (
             champs_inconnus(self.gabarit) if self.gabarit else ())
+        #: SPK-62 · §47.3 : d'où vient la configuration ACTUELLE — `registre` ou
+        #: `environnement`. L'écran le dit : sur une Forge dont la configuration
+        #: n'a pas encore été reprise au registre, il faut savoir que la régler
+        #: à l'écran ne servira à rien tant que la variable est là.
+        self.source = "environnement" if self.url else "registre"
         self._envoi = envoi
         self._file: queue.Queue = queue.Queue(maxsize=file_max)
         self._verrou = threading.Lock()
@@ -201,6 +206,22 @@ class Canal:
         self.dropped = 0
         self.last_error: str | None = None
         self.last_error_at: str | None = None
+
+    def reregler(self, url: str, gabarit: str, source: str = "registre") -> None:
+        """Reprend la configuration à chaud, sans redémarrer le service.
+
+        @spec docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3
+
+        Appelée quand le registre change. La file en cours n'est PAS vidée : les
+        alertes déjà déposées partent vers l'ancien destinataire, ce qui est le
+        comportement voulu — elles ont été produites sous cette configuration-là,
+        et les rediriger ferait arriver un geste ancien sur un canal neuf.
+        """
+        with self._verrou:
+            self.url = (url or "").strip()
+            self.gabarit = (gabarit or "").strip()
+            self.gabarit_refuse = champs_inconnus(self.gabarit) if self.gabarit else ()
+            self.source = source
 
     @property
     def configured(self) -> bool:
@@ -226,6 +247,7 @@ class Canal:
         with self._verrou:
             return {
                 "configured": self.configured,
+                "source": self.source,
                 "misconfigured": self.mal_configure,
                 "unknown_fields": list(self.gabarit_refuse),
                 "sent": self.sent,

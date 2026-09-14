@@ -1054,6 +1054,74 @@
         ]
       }
     },
+    "/v1/notify/channels": {
+      "get": {
+        "description": "Ce que l'onglet lit. **Aucun secret n'en sort** (§43.3).\n\nL'URL du webhook n'est pas rendue : elle EST un secret — qui la détient\nécrit dans le salon. On rend son HÔTE, de quoi reconnaître le canal sans\npouvoir s'en servir.",
+        "operationId": "read_channels_v1_notify_channels_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Channels V1 Notify Channels Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read Channels",
+        "tags": [
+          "alertes"
+        ]
+      },
+      "put": {
+        "description": "Règle les canaux. Exige le mot de passe du §47.3.3.\n\n**La désactivation NOTIFIE par le canal qu'elle coupe**, et pendant qu'il\nfonctionne encore (§47.3.3) : sans quoi la coupure serait le seul geste\ndont personne n'entendrait parler — et c'est le premier qu'un attaquant\ntenterait.",
+        "operationId": "set_channels_v1_notify_channels_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Channels V1 Notify Channels Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Channels",
+        "tags": [
+          "alertes"
+        ]
+      }
+    },
     "/v1/ports": {
       "get": {
         "description": "Les ports publiés de la FORGE. C'est une liste de la machine, pas\nd'un Spark : un port public est une ressource unique sur la machine.",

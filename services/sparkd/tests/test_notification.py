@@ -398,3 +398,38 @@ def test_le_gabarit_ne_peut_pas_faire_sortir_le_PAYLOAD(canal):
     c.vider()
     assert serveur.recus == []
     assert c.mal_configure is True
+
+
+def test_la_ligne_d_OCTROI_nomme_le_Spark():
+    """SPK-82 · §47.4 : « Clé « console » accordée » ne dit pas OÙ.
+
+    @verifies docs/BACKLOG.md#SPK-82 · docs/DAT.md §47.4, §47.2
+
+    `sshkey.grant` est l'une des neuf actions qui partent en alerte hors bande.
+    Une alerte qui annonce un accès DONNÉ sans nommer le Spark est inexploitable
+    — c'est le même défaut que celui corrigé sur `spark.delete` le 2026-08-21, et
+    il était resté ici.
+    """
+    from sparkd import migrations, sshkeys
+    from sparkd.db import connect
+    import tempfile, pathlib
+    c = connect(pathlib.Path(tempfile.mkdtemp()) / "r.db")
+    migrations.upgrade(c)
+    c.execute(
+        "INSERT INTO spark (id, name, state, image, cpu_mode, cpu_reservation,"
+        " memory_reservation_bytes, network_reservation_bps, storage_bytes,"
+        " created_at, updated_at)"
+        " VALUES ('S1','le-spark','running','images:debian/13','shared', 0.5,"
+        " 1073741824, 10000000, 10737418240, 't', 't')")
+    # Une VRAIE clé, produite par `ssh-keygen` : le registre la valide comme en
+    # exploitation, et la preuve mesure le produit au lieu d'une chaîne inventée.
+    import subprocess, tempfile as tf
+    d = pathlib.Path(tf.mkdtemp()) / "k"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "x",
+                    "-f", str(d)], check=True)
+    sshkeys.register(c, "console-x", d.with_suffix(".pub").read_text().strip())
+    sshkeys.grant(c, "S1", "console-x", actor="epreuve")
+    ligne = c.execute("SELECT message FROM audit_log WHERE action = 'sshkey.grant'").fetchone()
+    assert "le-spark" in ligne["message"], (
+        f"la ligne doit nommer le Spark : {ligne['message']}")
+    c.close()

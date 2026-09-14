@@ -204,9 +204,17 @@ def grant(connection: sqlite3.Connection, spark_id: str, label: str,
             "INSERT OR IGNORE INTO spark_ssh_key (spark_id, ssh_key_id) VALUES (?, ?)",
             (spark_id, cle["id"]),
         )
+        # SPK-82 · §47.4 : la ligne NOMME le Spark. `sshkey.grant` est l'une des
+        # neuf actions qui partent en alerte hors bande (§47.2), et « Clé
+        # « console » accordée » sans dire OÙ est une alerte inexploitable —
+        # c'est exactement la correction déjà faite sur `spark.delete`.
+        nom = connection.execute(
+            "SELECT name FROM spark WHERE id = ?", (spark_id,)).fetchone()
+        ou = f" sur « {nom['name']} »" if nom else ""
         _audit(connection, actor, "sshkey.grant", cle["id"],
-               {"label": label, "spark_id": spark_id}, "ok",
-               f"Clé « {label} » accordée.")
+               {"label": label, "spark_id": spark_id,
+                "spark": nom["name"] if nom else None}, "ok",
+               f"Clé « {label} » accordée{ou}.")
 
 
 def revoke(connection: sqlite3.Connection, spark_id: str, label: str,
