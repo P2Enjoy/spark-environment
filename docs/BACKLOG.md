@@ -6656,14 +6656,19 @@ un, et le relevé le montre « active, inchangé ». La mention est corrigée.
     image déclare** ; l'ajouter demanderait de poser un dépôt éditeur que la
     distribution n'a pas choisi, ce que le §42.9.2 bis interdit.
 - **Éprouvée par le produit le 2026-09-14 — `[x]`.** Les trois familles
-  ajoutées ont chacune leur Spark sur la Forge de test, créé **depuis l'écran de
-  création** et non par l'API : `void-98` (`images:voidlinux/current`, xbps ·
+  ajoutées ont chacune EU son Spark sur la Forge de test ce jour-là, créé
+  **depuis l'écran de création** et non par l'API : `void-98` (`images:voidlinux/current`, xbps ·
   runit), `gentoo-98` (`images:gentoo/systemd`, emerge · systemd) et `alt-98`
   (`images:alt/p11`, apt-rpm · systemd). Pour chacun, par la console et par des
   clics : création, application, démarrage, amorçage, terminal SSH, clés,
   identité de sortie, variable d'environnement, et — sur `void-98` — un secret.
-  Aucun des trois n'affiche Docker nulle part, et l'écran d'amorçage dit
-  pourquoi. Les trois cellules écoutent sur le port 22, relevé sur la Forge.
+  Aucun des trois n'affichait Docker nulle part, et l'écran d'amorçage disait
+  pourquoi. Les trois cellules écoutaient sur le port 22, relevé sur la Forge.
+
+  **Les trois cellules ont été supprimées depuis**, le 2026-09-14 à 14h51, par
+  la console. La preuve, elle, est faite et consignée ci-dessous : elle ne
+  dépend pas de cellules qui survivent. Le temps du verbe est corrigé pour que
+  personne n'aille les chercher.
 
   | Famille | Spark | Amorçage | Terminal | Identité | Variable dans la cellule |
   |---|---|---|---|---|---|
