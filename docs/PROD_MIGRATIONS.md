@@ -793,6 +793,55 @@ Risques       : les règles ci-dessus sont VOLATILES. Les persister
 Variable      : aucune.
 ```
 
+### OP-13 · Armer la vérification des signatures — **APPLIQUÉ le 2026-09-14**
+
+**Appliqué et vérifié sur la Forge de test**, sur instruction explicite du
+responsable. Un geste réel signé par l'agent SSH du poste est entré au journal
+en « signée ».
+
+```
+Objectif      : la Forge VÉRIFIE les signatures que la console lui envoie
+                (SPK-40, docs/DAT.md §36.10). Sans ce réglage, une signature ne
+                peut être rattachée à personne et n'est pas inscrite.
+Dépend de     : rien.
+Ordre         : le fichier AVANT la variable — sparkd lit la variable au
+                démarrage, et la pointer sur un fichier absent ferait refuser
+                toute signature au lieu de les ignorer.
+
+  1. Le fichier des signataires autorisés. Le PRINCIPAL est
+     « console/<nom-du-serveur-dans-l-inventaire> », et RIEN d'autre :
+     l'empreinte que la console ajoute à son identité n'est pas un nom, et un
+     principal ne peut pas contenir d'espace (§36.10.2 bis).
+
+         console/spark-experiment namespaces="spark-audit" ssh-ed25519 AAAA… commentaire
+
+     dans /etc/sparkd/allowed_signers, en 0644.
+
+  2. La variable, dans /etc/sparkd/sparkd.env :
+
+         SPARKD_ALLOWED_SIGNERS=/etc/sparkd/allowed_signers
+
+     puis : systemctl restart sparkd
+
+  3. CÔTÉ POSTE, et c'est la moitié qu'on oublie : déclarer le chemin de la clé
+     PUBLIQUE dans l'écran « Serveurs » de la console, puis REDÉMARRER la
+     console — elle lit l'inventaire à l'ouverture du tunnel, et une clé
+     déclarée sur un tunnel déjà ouvert ne sert à rien.
+
+Après         : RIEN d'automatique.
+Vérification  : faire un geste sensible et RÉVERSIBLE depuis la console — armer
+                puis lever une protection —, puis lire le journal : la ligne
+                doit porter « signée ». « non signée » veut dire que la console
+                n'a pas signé ; un refus 422 « signature_invalide » veut dire
+                qu'elle a signé et que la Forge n'a pas reconnu la clé.
+Retour arrière: retirer la variable et redémarrer. Les gestes repartent non
+                signés, ce qui est un état NORMAL et non une panne (§36.10.8).
+Risques       : aucun pour l'exploitation. Une signature absente n'empêche
+                jamais un geste ; seule une signature PRÉSENTE et invalide est
+                refusée, parce que l'inscrire ferait mentir le journal.
+Variable      : SPARKD_ALLOWED_SIGNERS.
+```
+
 ### OP-12 · Desactiver X11Forwarding sur la Forge — **APPLIQUE le 2026-08-21**
 
 > **Une installation neuve n'en a plus besoin** (constaté le 2026-09-14) :

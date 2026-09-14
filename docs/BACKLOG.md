@@ -1684,13 +1684,45 @@ les Sparks.
   le trancher **serait** l'arbitrage, qui appartient au responsable — mais le
   manuel M12 le nomme, pour qu'on ne cherche pas une erreur là où il n'y en a pas.
 
-### [~] SPK-40 · Signature des gestes par la clé du responsable
+### [x] SPK-40 · Signature des gestes par la clé du responsable
 
-**Arbitrage du responsable, 2026-09-14 : le geste est signé par l'agent RÉEL.**
-Un agent SSH vivant tourne sur le poste de travail et porte la clé `login`
-(`SHA256:Oa0szulf…`) — celle-là même que la Forge inscrit déjà au journal. Le
-seul écart de l'unité était qu'aucun agent réel n'avait signé : il est donc à
-portée, et il est comblé plutôt que reporté.
+**Arbitrage du responsable, 2026-09-14 : le geste est signé par l'agent RÉEL —
+FAIT le même jour, et il a trouvé un défaut que rien d'autre ne pouvait trouver.**
+
+Ce que l'épreuve a demandé, dans l'ordre : poser `allowed_signers` sur la Forge
+et régler `SPARKD_ALLOWED_SIGNERS` ; déclarer la clé de signature **depuis
+l'écran Serveurs**, comme un exploitant ; redémarrer la console, parce qu'elle
+lit l'inventaire à l'ouverture du tunnel ; puis armer une protection sur
+`rootless-96` — un geste sensible et **réversible**.
+
+**Le défaut, et il rendait l'unité inopérante en exploitation.** La Forge a
+refusé : `422 signature_invalide`, alors que l'agent signait correctement.
+L'identité déclarée est `console/<serveur> key=SHA256:…` (§21.6.3), et la Forge
+la passait **telle quelle** à `ssh-keygen -Y verify -I`, qui en fait un
+*principal*. Un principal d'`allowed_signers` ne peut pas contenir d'espace.
+
+**Dès que la console connaissait son empreinte — c'est-à-dire toujours, en
+exploitation — aucune signature ne pouvait se vérifier.** Le harnais ne le
+voyait pas : son doublon signe pour un serveur `local` dont le tunnel ne porte
+aucune empreinte, de sorte que l'identité y est le principal nu et qu'elle
+passe. C'est exactement ce que le §36.3 annonce — *où la signature est produite
+décide de ce qu'elle vaut* — appliqué à la vérification.
+
+Corrigé au §36.10.2 bis : ce qui est **signé** garde l'identité complète, ce qui
+sert de **principal** est réduit à `console/<serveur>`. L'empreinte reste au
+journal, où elle dit quelle clé a servi ; elle cesse de prétendre être un nom.
+
+**Preuve, après correction et redéploiement** — relevée dans le journal par
+l'écran :
+
+```
+2026-09-14 15:47  réussi  spark.protect
+console/spark-experiment key=SHA256:Oa0szulf…   signée
+Protection armée sur « rootless-96 ».
+```
+
+Un agent SSH **réel** a signé un geste **réel**, et la Forge l'a **vérifié**. La
+protection d'épreuve a été levée ensuite.
 
 La console signe la requête avec la clé SSH du responsable, par son agent ;
 `sparkd` conserve la signature et les octets signés. Root sur l'hôte peut alors
@@ -1786,12 +1818,11 @@ Contrat écrit et poussé avant le code — `docs/DAT.md` §36.10.9, et §36.8.5
 - **Preuves** : 2 parcours E2E, 7 de composant, 5 du vocabulaire, 2 de relais ;
   3 captures observées (`e2e/captures/47`, `48`, `49`).
 
-- **Reste avant `[x]`, et c'est un seul écart, hors de portée d'une session** :
-  aucun agent SSH réel n'a signé un geste. Le harnais éprouve la chaîne avec la
-  clé privée voisine de la publique — le cas du poste sans agent, que le
-  §36.10.8 admet et qui fonctionne. Que l'agent réponde se mesure **sur un
-  poste**, et c'est la même limite qu'au §37.4.2 bis : **nécessite une action
-  humaine**.
+- ~~**Reste avant `[x]` : aucun agent SSH réel n'a signé un geste.**~~ **Comblé
+  le 2026-09-14** — voir en tête d'unité. Le harnais éprouvait la chaîne avec la
+  clé privée voisine de la publique, le cas du poste sans agent que le §36.10.8
+  admet ; c'est précisément cette différence qui cachait le défaut du §36.10.2
+  bis.
 
 ### [x] SPK-41 · Catalogue local des serveurs, tenu depuis la console
 

@@ -3,6 +3,15 @@
 ## [Non publié]
 
 ### Corrigé
+- **SPK-40 — aucune signature ne pouvait se vérifier en exploitation.** Trouvé en
+  faisant signer un agent SSH réel pour la première fois. L'identité déclarée par
+  la console est `console/<serveur> key=SHA256:…` ; la Forge la passait telle
+  quelle à `ssh-keygen -Y verify -I`, qui en fait un *principal* — et un principal
+  ne peut pas contenir d'espace. Dès que la console connaissait son empreinte,
+  c'est-à-dire toujours, la Forge refusait. Le harnais ne le voyait pas : son
+  doublon signe pour un serveur dont le tunnel n'a pas d'empreinte. Ce qui est
+  signé garde désormais l'identité complète ; ce qui nomme le signataire est
+  réduit au serveur.
 - **La garde des variables d'environnement était verte pour la mauvaise raison.**
   Elle balayait le dépôt à la recherche de `process.env.X` et de ses cousines,
   mais les **doublons d'épreuve** ne se lisent pas ainsi : ils passent par
