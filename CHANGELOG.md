@@ -22,28 +22,30 @@
   désormais cette grammaire : elle voit 33 variables au lieu de 28.
 
 ### Ajouté
-- **SPK-105 — des suggestions déposées dans la cellule, SPÉCIFIÉES et pas encore
-  implémentées.** Un agent pourra déposer `variables.env`, `secrets.env` et
-  `routes.conf` sous `/etc/spark/suggestions/` ; la console les lira, les fera
-  relire ligne par ligne et les appliquera par le chemin normal du produit.
-  **Rien ne s'applique tout seul** : un fichier déposé est une demande sans
-  effet, et le plan de contrôle reste injoignable depuis la cellule.
-  **Consulter ne consomme pas** — accepter ou refuser supprime le fichier, et
-  cette disparition est le signal par lequel l'agent apprend qu'une décision a
-  été prise, sans aucun accusé de réception à tenir à jour. Contrat :
-  `docs/DAT.md` §55, `docs/BACKLOG.md` SPK-105.
-- **SPK-104 — trois notes à double sens, SPÉCIFIÉES et pas encore
-  implémentées.** Aucun code n'accompagne cette entrée, et c'est délibéré : les
-  quatre arbitrages du responsable sont écrits et committés **avant** la première
-  ligne (`CLAUDE.md` §5). Chaque Spark recevra trois textes libres — `README`
-  (ce qu'est ce Spark), `CONTRIBUTORS` (comment il est configuré) et `INSTALL`
-  (comment s'interfacer avec ce qu'il expose) — **à double sens** : inscrits
-  depuis le SSH, ils remontent à la console ; enregistrés à la console, ils
-  redescendent dans la cellule. La cellule gagne en cas de divergence, sur
-  comparaison de ce qui a été posé à ce qui est trouvé et **jamais** sur une
-  horloge ; un enregistrement périmé est refusé plutôt qu'écrasé. Le dossier
-  pour un LLM les portera en entier, le `BRIEFING.md` les nommera. Contrat :
-  `docs/DAT.md` §54, `docs/SCHEMA.md` §10 septies, `docs/BACKLOG.md` SPK-104.
+- **SPK-105 — le fichier `.?`, seul canal par lequel la cellule propose.
+  SPÉCIFIÉ, pas encore implémenté.** À côté de chaque fichier que le plan de
+  contrôle pose dans une cellule — `/etc/spark/env`, `/run/spark/secrets`, le
+  nouveau `/etc/spark/routes` et les trois notes — vit un voisin de même nom
+  suffixé `.?`, vide, où un agent dépose ce qu'il **souhaite** voir posé. Le
+  produit gagne ainsi **une règle sans exception** : tout fichier réel est
+  régénéré depuis le registre, et rien ne remonte autrement que par un `.?`.
+  **Rien ne s'applique tout seul** — une proposition est une demande sans effet
+  tant que le propriétaire ne l'ouvre pas, et il n'existera aucun mode
+  automatique. **Consulter ne consomme pas** : accepter ou refuser vide le
+  fichier, et ce vidage est le signal par lequel l'agent apprend qu'une décision
+  a été prise — le fichier réel d'à côté dit laquelle, sans aucun accusé de
+  réception à tenir à jour. En rootless, **`root` comme `spark-docker`** peuvent
+  proposer ; ni l'un ni l'autre ne décide. Contrat : `docs/DAT.md` §55,
+  `docs/BACKLOG.md` SPK-105.
+- **SPK-104 — trois notes de Spark, SPÉCIFIÉES et pas encore implémentées.**
+  Aucun code n'accompagne ces entrées, et c'est délibéré : les arbitrages du
+  responsable sont écrits et committés **avant** la première ligne (`CLAUDE.md`
+  §5). Chaque Spark recevra trois textes libres — `README` (ce qu'est ce Spark),
+  `CONTRIBUTORS` (comment il est configuré) et `INSTALL` (comment s'interfacer
+  avec ce qu'il expose). Le dossier pour un LLM les portera en entier, le
+  `BRIEFING.md` les nommera. Un texte portant la valeur d'un secret connu est
+  refusé, en nommant la variable et jamais la valeur. Contrat : `docs/DAT.md`
+  §54, `docs/SCHEMA.md` §10 septies, `docs/BACKLOG.md` SPK-104.
 - **SPK-103 — les variables et les secrets se lisent en deux blocs, et se
   cherchent.** Une variable se lit pour sa **valeur**, un secret pour son
   **existence** : un seul tableau faisait alterner deux questions dans la colonne

@@ -124,9 +124,10 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
                 entrée est posée avec la spécification, avant le code, pour que
                 le contrat de déploiement ne découvre pas la table après coup.
 Objectif      : créer `spark_note`, qui porte les trois notes d'un Spark —
-                README, CONTRIBUTORS, INSTALL — leur révision, leur origine et
-                l'empreinte du dernier texte projeté dans la cellule
-                (docs/SCHEMA.md §10 septies, docs/DAT.md §54).
+                README, CONTRIBUTORS, INSTALL — leur révision et leur origine
+                (docs/SCHEMA.md §10 septies, docs/DAT.md §54). Les suggestions
+                du §55 n'ont AUCUNE table : le fichier `.?` dans la cellule est
+                l'état de la proposition.
 Dépend de     : rien. Table nouvelle, référencée seulement par `spark`.
 Commande      : appliquée automatiquement au démarrage de sparkd.
 Après         : AUCUNE action humaine. Les Sparks en service n'ont aucune note :
@@ -142,15 +143,15 @@ Vérification  : `GET /v1/sparks/<nom>/notes` rend les trois notes en révision 
                 enraciné et `root:spark-docker 640` sur un Spark rootless
                 (docs/DAT.md §54.8).
 Retour arrière: le `down` supprime la table, donc les notes du registre. Les
-                fichiers déjà posés RESTENT dans les cellules : c'est le seul
-                endroit du produit où un retour arrière ne perd pas tout, et
-                c'est une conséquence du double sens (§54.4), pas une sauvegarde
-                sur laquelle compter. Comme toute migration, il n'est jamais
-                joué seul.
+                fichiers déjà posés restent dans les cellules, mais ils ne sont
+                qu'une projection : ce n'est pas une sauvegarde sur laquelle
+                compter. Comme toute migration, il n'est jamais joué seul.
 Risque        : faible. Une table nouvelle, aucun champ existant modifié, aucun
                 geste existant altéré. Le risque réel est dans la cellule et il
-                est borné : le produit écrit désormais trois fichiers sous
-                `/etc/spark/notes/`, un chemin qu'il n'occupait pas.
+                est borné : le produit écrit désormais sous `/etc/spark/notes/`,
+                un chemin qu'il n'occupait pas, et pose à côté de chaque fichier
+                qu'il projette un voisin vide en `.?` (SPK-105, §55.5). Un `.?`
+                déjà porteur d'une proposition n'est JAMAIS écrasé.
 ```
 
 ### OP-18 · Migration `015_identite_rootless`, ouverture des fichiers et de la seconde porte (SPK-94, SPK-95)

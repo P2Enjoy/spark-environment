@@ -11157,6 +11157,9 @@ par élimination — vaut mieux que le souvenir qu'un jour « l'E2E était rouge
 
 ## 2026-09-14 · SPK-104 — quatre arbitrages persistés avant d'écrire une ligne
 
+
+> **Révisé le même jour.** Le double sens décrit ci-dessous a été remplacé par le canal unique du §55 : voir l'entrée « SPK-104 et SPK-105 — une règle sans exception » plus bas. Ce qui suit est conservé comme trace du chemin, pas comme description du produit.
+
 **La demande.** Un champ de texte libre par Spark, versé au briefing et au texte
 copié pour un LLM, où le propriétaire dit ce qu'est ce Spark et à quoi il sert —
 « un usage possible serait de donner ce texte à une application externe pour
@@ -11251,6 +11254,9 @@ mesure.
 
 ## 2026-09-14 · SPK-105 — la suggestion, ou comment proposer sans pouvoir écrire
 
+
+> **Révisé le même jour**, sur la seconde formulation du responsable : voir l'entrée suivante. Les fichiers de suggestion ne vivent plus dans un dossier à part et ne sont plus supprimés mais vidés.
+
 **La demande**, reçue pendant l'implémentation de SPK-104 : un agent dépose dans
 la cellule des fichiers de variables et de secrets souhaités ; la console les
 voit, propose de les inspecter et de les ajouter ; les fichiers sont remis à zéro
@@ -11314,3 +11320,84 @@ SPK-105 et cette entrée sont committés avant le code, dans un commit dédié,
 pendant que l'implémentation de SPK-104 est encore en cours dans l'arbre de
 travail : une décision du responsable ne doit pas attendre la fin d'un chunk pour
 exister ailleurs que dans le contexte d'un agent.
+
+---
+
+## 2026-09-14 · SPK-104 et SPK-105 — une règle sans exception, et ce qu'elle a fait disparaître
+
+Troisième entrée du même jour sur le même sujet, et c'est la bonne. Les deux
+précédentes sont conservées comme trace du chemin ; elles portent chacune un
+avertissement les renvoyant ici.
+
+**Ce que le responsable a dit**, en voyant arriver les suggestions du §55 : *« je
+dirais même que les fichiers README, INSTALL, CONTRIBUTORS devraient être des
+suggestions aussi s'ils sont générés depuis l'interne du Spark, et donc on peut
+faire gagner au root comme au spark-docker la possibilité de les écrire. Donc
+chaque fichier aurait le fichier sans extension — les valeurs réelles — et le même
+avec `.?`, qui existe seulement pour proposer une suggestion de modification. »*
+
+**Pourquoi cela vaut mieux que ce que j'avais écrit deux heures plus tôt**, et ce
+n'est pas un compromis :
+
+Ma première rédaction faisait des trois notes les **seuls** fichiers à double
+sens du produit. Il fallait une colonne d'empreinte de projection, une machine à
+quatre cas, une mise en quarantaine pour le texte porteur d'un secret qu'on ne
+pouvait ni absorber ni écraser, et une note dans chaque document expliquant
+pourquoi ces trois-là ne suivaient pas la règle des autres.
+
+La seconde formulation supprime tout cela d'un coup, parce qu'elle ne traite pas
+les notes à part : **elle donne au produit une seule règle.** Tout fichier posé
+par le plan de contrôle est régénéré depuis le registre ; le fichier `.?` voisin
+est le seul endroit où la cellule propose. Une règle avec une exception se
+réapprend à chaque fois — et le §44.9.7 a mesuré, sur un agent réel, ce que coûte
+quelqu'un qui croit pouvoir écrire là où il ne faut pas.
+
+**Ce que la révision a fait disparaître**, et que je n'aurai donc pas à écrire :
+
+- la réconciliation à quatre cas et sa colonne `projected_sha256` ;
+- la quarantaine — un texte porteur d'un secret est désormais simplement refusé à
+  l'acceptation, et sa proposition n'est pas consommée, donc son auteur la voit
+  et la corrige. C'est plus simple **et** plus utile que de la mettre de côté
+  sans rien dire à celui qui l'a écrite ;
+- la clause « un `rm` n'est pas un effacement », qui n'avait de sens que parce
+  qu'un fichier réel pouvait être une source ;
+- le dossier `/etc/spark/suggestions/`, remplacé par l'adjacence — le `.?` se lit
+  d'un même regard que le fichier qu'il propose de changer, ce qui est
+  précisément ce dont l'agent a besoin pour savoir si sa demande a été accordée.
+
+**Deux décisions que la formulation du responsable n'imposait pas et qu'il a
+fallu prendre.**
+
+- **Vidé, et non supprimé.** J'avais écrit « un vrai `DELETE`, pas une
+  troncature », avec un bon argument : un fichier disparu dit qu'une décision a
+  été prise, un fichier vide ne dit rien. L'argument tombe dès lors que le `.?`
+  est **posé vide par le produit** à côté de chaque fichier réel : redevenir vide
+  EST alors le signal, et le fichier permanent a deux vertus que la suppression
+  n'a pas — il rend le mécanisme découvrable d'un simple `ls`, et il permet au
+  compte de la seconde porte d'écrire dedans **sans** qu'on ouvre le répertoire
+  en écriture au groupe. Ce dernier point est décisif : ouvrir `/etc/spark` au
+  groupe autoriserait à supprimer ou renommer `BRIEFING.md` et `env`.
+- **`/etc/spark/routes` est créé par cette unité.** Cinq des six fichiers réels
+  existaient ; celui-là non, et son absence se voyait : une cellule ne pouvait
+  lire les routes qui la visent qu'en analysant `BRIEFING.md`, c'est-à-dire une
+  présentation faite pour être lue. Il porte **la même grammaire que sa
+  proposition**, exactement pour la raison du §43.10.1 — « l'import lit ce que le
+  produit écrit ».
+
+**Sur les permissions, et sur ce qu'elles ne coûtent pas.** Ouvrir les `.?` en
+écriture au groupe `spark-docker` n'ajoute aucune divulgation : le seul fichier
+sensible de la liste est `/run/spark/secrets`, et le §42.2 ter l'ouvre **déjà** en
+lecture au groupe — sans quoi la pile du locataire ne démarrerait pas. Ce que le
+compte gagne est exactement la surface d'un message laissé sur une table.
+
+**Ce que je retiens.** J'ai posé quatre questions au responsable avant d'écrire, et
+la réponse à l'une d'elles — « le dossier porte les textes en entier, le briefing
+les nomme » — avait déjà simplifié l'unité d'une façon que je n'avais pas vue en
+la posant. La révision d'aujourd'hui fait la même chose en plus grand. Dans les
+deux cas, la simplification vient de quelqu'un qui regarde le produit entier,
+pendant que je regardais l'unité.
+
+**État réel à cette heure.** Le code de SPK-104 écrit avant la révision — la
+réconciliation, la quarantaine, la colonne d'empreinte — est retiré de l'arbre de
+travail avant d'avoir été committé. Rien de ce qui est décrit ici n'est encore
+implémenté.

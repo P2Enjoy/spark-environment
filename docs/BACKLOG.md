@@ -7155,7 +7155,7 @@ constatées sur le catalogue seedé :
 
 
 
-### [ ] SPK-104 · Trois notes à double sens : README, CONTRIBUTORS, INSTALL
+### [ ] SPK-104 · Trois notes de Spark : README, CONTRIBUTORS, INSTALL
 
 Demandé par le responsable le 2026-09-14 : « un champ de texte libre associé à
 chaque Spark, ajouté au brief et au LLMs.txt, qui permette au propriétaire de
@@ -7164,160 +7164,165 @@ précisé dans le même message : **trois** fichiers — un `README` qui décrit
 Spark, un `CONTRIBUTORS` qui dit comment il est configuré (sources, fichiers de
 configuration, artefacts déployés, où se lisent les variables), un `INSTALL` qui
 dit comment s'interfacer avec ce qui y est exposé (points d'entrée, routes,
-jetons). Et une propriété qui les distingue de tout ce que le produit pose
-déjà : **ils sont à double sens** — on les inscrit depuis le SSH et ils sont
-visibles dans la console, on les enregistre dans la console et ils sont inscrits
-dans le Spark.
+jetons).
 
 Le §44.7 dit depuis toujours que le briefing « ne décrit pas l'application du
 locataire ». C'est ce trou-là que l'unité comble, sans le combler avec des faits
 inventés : le produit ne connaît pas l'application, il **transporte** ce que ceux
 qui la connaissent ont écrit.
 
-- Spécification : `docs/DAT.md` **§54** (les trois notes, le double sens, la
-  réconciliation, la garde des secrets, les permissions, la surface d'API, la
-  console) · `docs/SCHEMA.md` **§10 septies** (`spark_note`) · §44.5 et §44.9.2
-  complétés · `docs/DESIGN_SYSTEM_APP.md` · manuel M8.
-  **Écrite et committée avant le code.**
+- Spécification : `docs/DAT.md` **§54** (les trois notes, la garde des secrets,
+  les permissions, la surface d'API, la console) · `docs/SCHEMA.md` **§10
+  septies** (`spark_note`) · §44.5 et §44.9.2 complétés ·
+  `docs/DESIGN_SYSTEM_APP.md` · manuel M8. **Écrite et committée avant le code.**
 - Dépend de : SPK-60 pour le briefing, SPK-85 et SPK-99 pour le dossier, SPK-58
   pour les secrets que la garde compare, SPK-94/SPK-95 pour le régime de
-  permissions de la seconde porte.
+  permissions de la seconde porte. **SPK-105 porte le canal par lequel la cellule
+  propose une note** : les deux unités se livrent ensemble.
 
-**Les quatre arbitrages du responsable, tranchés le 2026-09-14 avant toute
-ligne de code** (`docs/JOURNAL.md`) :
+**Les arbitrages du responsable, tranchés le 2026-09-14 avant toute ligne de
+code** (`docs/JOURNAL.md`) :
 
-1. **la cellule gagne**, et la console édite une révision datée — un
-   enregistrement périmé est refusé en `409` plutôt qu'écrasé (§54.4). Aucune
-   horloge de cellule n'est jamais comparée ;
-2. **le dossier pour un LLM porte les trois textes en entier ; le `BRIEFING.md`
+1. **le dossier pour un LLM porte les trois textes en entier ; le `BRIEFING.md`
    les NOMME** (§54.5). Celui qui lit le briefing est déjà dans la cellule, à
    trois lignes de commande des fichiers ; celui qui lit le dossier n'y est pas
    encore entré et ne peut rien ouvrir ;
-3. **le produit refuse un texte qui porte la valeur d'un secret connu du Spark**,
+2. **le produit refuse un texte qui porte la valeur d'un secret connu du Spark**,
    au-dessus d'un plancher de huit caractères, en nommant la variable et jamais
-   la valeur (§54.6). Dans l'autre sens — un texte trouvé dans la cellule — il ne
-   refuse pas : il met en **quarantaine**, n'absorbe pas, ne publie pas et
-   **suspend la projection de cette note** pour ne pas détruire ce qu'il vient de
-   refuser de lire ;
-4. **`root` écrit, `spark-docker` lit** (§54.8). Les fichiers suivent le régime du
-   §44.10 ; la conséquence — on inscrit une note en entrant par `root` — s'écrit
-   partout où elle se découvre.
+   la valeur (§54.6). La garde vaut aux **deux** entrées : l'enregistrement
+   depuis la console et l'acceptation d'une suggestion ;
+3. **les notes sont une PROJECTION, comme tout le reste** (§54.4) —
+   **arbitrage révisé le même jour**. La première rédaction en faisait des
+   fichiers à double sens, réconciliés contre la cellule ; le responsable a
+   tranché ensuite que ce qui vient de la cellule passe par le fichier `.?` de
+   SPK-105. Le produit n'a donc plus **aucune** exception à « le registre écrit,
+   la cellule reçoit », et l'unité perd sa réconciliation, son empreinte de
+   projection et sa quarantaine ;
+4. **en rootless, la seconde porte lit la note et peut écrire sa proposition**
+   (§54.8) : écrire la note elle-même ne servirait à rien, puisque le produit la
+   réécrit.
 
 **Portée, et découpage persisté** (CLAUDE.md §5 : le plan de découpage est un
 artefact, pas une narration) :
 
 1. **Documentation seule** — DAT §54, SCHEMA §10 septies, cette unité, journal,
-   changelog, contrat de déploiement. Aucun code. *Ce chunk.*
-2. **Registre et service** — migration `017_notes_spark.sql`, module
-   `notes.py` (modèle, réconciliation, garde des secrets, projection),
-   `pull_file` sur les deux pilotes, routes `GET`/`PUT`, contrat d'API
-   régénéré, audit. Preuves d'unité et d'API.
+   changelog, contrat de déploiement. Aucun code. *Fait.*
+2. **Registre et service** — migration `017_notes_spark.sql`, module `notes.py`
+   (modèle, garde des secrets, projection), `pull_file` sur les deux pilotes,
+   routes `GET`/`PUT`, contrat d'API régénéré, audit. Preuves d'unité et d'API.
 3. **Briefing et dossier** — les notes nommées dans `BRIEFING.md` avec la
-   commande qui les lit, portées en entier dans le dossier, et les six points du
+   commande qui les lit, portées en entier dans le dossier, et les points du
    §54.7 écrits dans les deux. Preuves de rendu, dont la garde du §44.9.3
    rejouée sur un dossier augmenté.
-4. **Console** — facette *Notes*, trois éditeurs, les quatre états du §54.10, le
+4. **Console** — facette *Notes*, trois éditeurs, les trois états du §54.10, le
    refus `409` qui ne perd pas la saisie. Preuves de composant, design system.
 5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte ses trois
-   notes par le vrai chemin d'API ; un parcours prouve les **deux** sens depuis
-   l'interface ; captures observées aux deux formats.
+   notes par le vrai chemin d'API ; un parcours les écrit depuis l'interface et
+   les relit dans la cellule ; captures observées aux deux formats.
 
 - **Aucune variable d'environnement** n'est introduite (§53). Le seul état neuf
   est la table `spark_note`.
-- Ce que l'unité ne doit PAS casser : le §44.4 — le `BRIEFING.md` reste réécrit
-  sans réconciliation préalable, puisqu'il ne porte pas le contenu des notes ;
-  le §43.5.1 — les valeurs de secrets entrent dans la garde et n'en sortent
-  jamais ; le §35.2 — un Spark protégé refuse l'enregistrement d'une note
-  (`423`) ; le §21.4 — le journal porte l'identifiant et la longueur, jamais le
-  texte.
-- DoD : un test prouve chacun des quatre cas de réconciliation du §54.4.2, dont
-  « un `rm` n'est pas un effacement » ; un test prouve le `409` sur révision
-  périmée ; un test prouve le refus nommant la variable **sans** rendre la
-  valeur ; un test prouve la quarantaine — rien d'absorbé, rien de publié, rien
-  de reprojeté ; un test prouve qu'un Spark protégé refuse en `423` ; un test
-  prouve que le dossier porte les trois textes et que le `BRIEFING.md` ne porte
-  que leurs chemins ; un parcours E2E inscrit une note **depuis la console** et
-  la relit **dans la cellule**, puis inscrit depuis la cellule et la relit à
-  l'écran — les deux sens, par l'interface, sans URL profonde ni appel d'API
-  pour agir ; captures observées aux deux formats ; README, DAT, SCHEMA, design
-  system, manuel M8, changelog et contrat de déploiement à jour ; `@spec` /
-  `@verifies` posés.
+- Ce que l'unité ne doit PAS casser : le §43.5.1 — les valeurs de secrets entrent
+  dans la garde et n'en sortent jamais ; le §35.2 — un Spark protégé refuse
+  l'enregistrement d'une note (`423`) ; le §21.4 — le journal porte
+  l'identifiant, la révision et la longueur, jamais le texte.
+- DoD : un test prouve qu'une note jamais écrite se distingue d'une note vide ;
+  un test prouve le `409` sur révision périmée ; un test prouve le refus nommant
+  la variable **sans** rendre la valeur ; un test prouve qu'un Spark protégé
+  refuse en `423` ; un test prouve que le dossier porte les trois textes et que
+  le `BRIEFING.md` ne porte que leurs chemins ; un parcours E2E écrit une note
+  depuis la console et la relit dans la cellule, par l'interface, sans URL
+  profonde ni appel d'API pour agir ; captures observées aux deux formats ;
+  README, DAT, SCHEMA, design system, manuel M8, changelog et contrat de
+  déploiement à jour ; `@spec` / `@verifies` posés.
 
 
-### [ ] SPK-105 · Des suggestions déposées dans la cellule : variables, secrets, routes
+### [ ] SPK-105 · Le fichier `.?` : le seul canal par lequel la cellule propose
 
-Demandé par le responsable le 2026-09-14, dans le prolongement immédiat de
-SPK-104 : « un agent peut déposer des fichiers de variables et des secrets
-souhaités ; l'UI surveille ces fichiers et propose un bouton pour inspecter les
-variables suggérées et les ajouter au Spark ; les fichiers de suggestions sont
-remis à zéro à l'acceptation ou au refus, et persistent s'ils sont seulement
-consultés. Cette mécanique doit exister aussi pour les routes. »
+Demandé par le responsable le 2026-09-14, en deux temps. D'abord : « un agent
+peut déposer des fichiers de variables et des secrets souhaités ; l'UI surveille
+ces fichiers et propose un bouton pour inspecter les variables suggérées et les
+ajouter au Spark ; les fichiers sont remis à zéro à l'acceptation ou au refus, et
+persistent s'ils sont seulement consultés. Cette mécanique doit exister aussi
+pour les routes. » Puis, en voyant que cela recouvrait SPK-104 : « chaque fichier
+aurait le fichier sans extension — les valeurs réelles — et le même avec `.?`,
+qui existe seulement pour proposer une modification ».
 
-Le §44.9.7 avait déjà répondu à ce besoin **en prose** : l'agent rédige un bloc
-`.env` dans sa réponse, le propriétaire le recopie. Ce trajet passe par une
-conversation — chaque étape peut perdre une ligne — et ne marche pas du tout pour
-les routes, qu'on ne colle nulle part.
+**C'est la seconde formulation qui fait l'unité**, et elle vaut mieux : elle ne
+crée pas un mécanisme de plus à côté des fichiers existants, elle donne au
+produit **une seule règle, sans exception** — tout fichier posé est régénéré
+depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose.
 
-- Spécification : `docs/DAT.md` **§55** (les trois fichiers, le cycle de vie, la
-  garde d'empreinte, les permissions, ce que le dossier doit dire, la surface
-  d'API, la console) · §44.9.7 complété · `docs/DESIGN_SYSTEM_APP.md` · manuel
-  M8. **Écrite et committée avant le code.**
-- Dépend de : SPK-104 pour la lecture et la suppression de fichiers dans la
-  cellule, SPK-97 pour l'import de lot que l'acceptation emploie, SPK-64/SPK-58
-  pour l'environnement, SPK-20 pour la création de route.
+- Spécification : `docs/DAT.md` **§55** (la règle, les six paires, le cycle de
+  vie, la garde d'empreinte, les permissions, ce que le dossier doit dire, la
+  surface d'API, la console), §55.3.1 (le fichier `/etc/spark/routes`, nouveau) ·
+  §44.9.7 complété · `docs/DESIGN_SYSTEM_APP.md` · manuel M8. **Écrite et
+  committée avant le code.**
+- Dépend de : SPK-104 pour les notes et la lecture de fichiers dans la cellule,
+  SPK-97 pour l'import de lot que l'acceptation emploie, SPK-64/SPK-58 pour
+  l'environnement, SPK-20 pour la création de route.
 
 **Ce qui décide de l'unité, et qu'il ne faut pas perdre de vue :**
 
-1. **Une suggestion n'est pas une écriture** (§55.2). Le §35.1 tient entier :
-   un fichier déposé dans une cellule n'a aucun effet tant qu'un humain ne
-   l'ouvre pas. Il n'existe **aucun** mode d'acceptation automatique, et il n'en
+1. **Une suggestion n'est pas une écriture** (§55.4). Le §35.1 tient entier : un
+   fichier déposé dans une cellule n'a aucun effet tant qu'un humain ne l'ouvre
+   pas. Il n'existe **aucun** mode d'acceptation automatique, et il n'en
    existera pas ;
-2. **consulter ne consomme pas** (§55.4). Accepter ou refuser supprime le
-   fichier — un vrai `DELETE`, pas une troncature : un fichier disparu dit
-   qu'une décision a été prise, un fichier vide ne dit rien. Une acceptation
-   **partielle** supprime quand même tout : ce qui n'a pas été retenu a été
-   refusé, pas ajourné ;
-3. **le chemin EST la déclaration de nature** — `variables.env` / `secrets.env`
-   (§55.3) —, et elle reste une **proposition** : c'est le propriétaire qui coche,
-   ligne par ligne, comme au §43.10.2. Un agent ne décide pas de ce qui est
-   secret dans le registre de quelqu'un d'autre ;
-4. **`root` seulement, et `spark-docker` pas même en lecture** (§55.6) :
-   `secrets.env` porte des valeurs en clair, ce que les notes ne font jamais.
-   D'où la **consigne d'accès unique** du §55.7, écrite une fois à côté des deux
-   portes du §42.2 quater et valable pour les six fichiers de SPK-104 et SPK-105 ;
-5. **l'agent apprend le sort de sa demande par ce qui est déjà vrai** (§55.4.1) :
-   fichier disparu + `/etc/spark/env` + `BRIEFING.md`. Aucun accusé de réception
-   n'est écrit — ce serait une quatrième vérité à tenir fraîche.
+2. **consulter ne consomme pas** (§55.5). Accepter ou refuser **vide** le
+   fichier — il n'est jamais supprimé : le `.?` existe toujours, posé vide par le
+   produit, ce qui le rend découvrable d'un `ls` et permet à la seconde porte
+   d'y écrire sans que le dossier lui soit ouvert. Une acceptation **partielle**
+   vide quand même tout : ce qui n'a pas été retenu a été refusé, pas ajourné ;
+3. **la projection ne l'écrase jamais quand il n'est pas vide** : écraser une
+   proposition en attente détruirait ce que l'unité existe pour transporter ;
+4. **un refus du produit ne consomme pas** — garde des secrets, grammaire
+   fautive, domaine déjà pris laissent le fichier intact et nomment la cause ;
+5. **le chemin EST la déclaration de nature** — `variables.env` / `secrets.env`
+   (§55.3) —, et elle reste une **proposition** : le propriétaire coche ligne par
+   ligne, comme au §43.10.2 ;
+6. **en rootless, `root` comme `spark-docker` écrivent les `.?`** (§55.6) ; ni
+   l'un ni l'autre ne décide. La seule divulgation possible serait
+   `/run/spark/secrets`, que le §42.2 ter ouvre **déjà** en lecture au groupe ;
+7. **l'agent apprend le sort de sa demande par ce qui est déjà vrai** (§55.5.1) :
+   le `.?` redevenu vide, et le fichier réel d'à côté. Aucun accusé de réception
+   n'est écrit — ce serait une vérité de plus à tenir fraîche ;
+8. **`/etc/spark/routes` est un fichier nouveau** (§55.3.1), qui manquait : la
+   cellule ne pouvait lire les routes qui la visent qu'en analysant une
+   présentation. Il porte la **même grammaire** que sa proposition.
 
 **Portée, et découpage persisté :**
 
-1. **Documentation seule** — DAT §55, cette unité, journal, changelog. *Ce chunk.*
-2. **Service et API** — `delete_file` sur les deux pilotes, module
-   `suggestions.py` (lecture, analyse, empreinte, application, suppression),
-   trois routes, contrat régénéré, audit. Preuves d'unité et d'API.
+1. **Documentation seule** — DAT §55, cette unité, journal, changelog. *Fait.*
+2. **Service et API** — module `suggestions.py` (pose des `.?`, lecture,
+   analyse, empreinte, application, vidage), le fichier `/etc/spark/routes` et sa
+   grammaire, trois routes, contrat régénéré, audit. Preuves d'unité et d'API.
 3. **Dossier pour un LLM** — la section du §55.7 et la consigne d'accès unique,
-   écrites dans le même chunk que celles de SPK-104 si leur ordre le permet.
+   dans le même chunk que celles de SPK-104.
 4. **Console** — bannières et écrans d'acceptation sur les facettes
-   *Environnement* et *Routes*, réemployant la relecture du §43.10.2.
-5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte une suggestion
+   *Environnement*, *Routes* et *Notes*, réemployant la relecture du §43.10.2.
+5. **Seed, E2E, captures, manuel, README** — un Spark seedé porte une proposition
    de chaque nature ; un parcours dépose depuis la cellule, inspecte, accepte
-   partiellement et constate la suppression du fichier **et** l'effet au registre.
+   partiellement et constate le vidage **et** l'effet au registre.
 
 - **Aucune migration, aucune variable d'environnement** : le fichier dans la
   cellule EST l'état.
 - Ce que l'unité ne doit PAS casser : le §35.1 — rien ne s'applique sans geste
   humain ; le §43.3 — la nature reste déclarée par le propriétaire ; le §18.4 et
   le §43.9 — l'application passe par les contrôles existants et n'ouvre aucun
-  chemin d'écriture propre ; le §39 — les ports publiés restent hors suggestion.
-- DoD : un test prouve qu'une consultation ne supprime rien ; un test prouve
-  qu'accepter et refuser suppriment, y compris sur acceptation partielle ; un
-  test prouve le `409` sur empreinte périmée ; un test prouve qu'un fichier
-  illisible est nommé avec sa ligne et n'offre que le refus ; un test prouve
-  qu'un domaine déjà pris est refusé par le contrôle existant ; un test prouve
-  qu'un Spark protégé refuse en `423` les deux gestes ; un parcours E2E dépose,
-  inspecte, accepte partiellement et vérifie les trois effets — registre,
-  fichier supprimé, cellule reprojetée ; captures observées aux deux formats ;
-  documentation complète ; `@spec` / `@verifies` posés.
+  chemin d'écriture propre ; le §39 — les ports publiés restent hors suggestion ;
+  le §43.5.2 — une proposition de secret vit dans le tmpfs et n'y survit pas au
+  redémarrage, ce que le dossier doit dire.
+- DoD : un test prouve qu'une consultation ne vide rien ; un test prouve
+  qu'accepter et refuser vident, y compris sur acceptation partielle ; un test
+  prouve qu'une projection n'écrase pas une proposition en attente ; un test
+  prouve le `409` sur empreinte périmée ; un test prouve qu'un fichier illisible
+  est nommé avec sa ligne et n'offre que le refus ; un test prouve qu'un refus
+  du produit ne consomme pas ; un test prouve qu'un domaine déjà pris est refusé
+  par le contrôle existant ; un test prouve qu'un Spark protégé refuse en `423`
+  les deux gestes ; un parcours E2E dépose, inspecte, accepte partiellement et
+  vérifie les trois effets — registre, `.?` vidé, fichier réel reprojeté ;
+  captures observées aux deux formats ; documentation complète ; `@spec` /
+  `@verifies` posés.
 
 ---
 

@@ -12061,14 +12061,13 @@ et, pour la plupart, écrites par l'écran d'installation. C'est une interdictio
 des leviers **que la documentation ne nomme pas**, quelle que soit leur forme.
 
 
-## 54. Les trois notes d'un Spark : ce que le propriétaire et l'agent s'écrivent (SPK-104)
+
+## 54. Les trois notes d'un Spark : ce qu'on écrit pour celui qui arrivera après (SPK-104)
 
 Demandé par le responsable le 2026-09-14 : « un champ de texte libre associé à
 chaque Spark, ajouté au brief et au texte pour un LLM, qui permette au
 propriétaire de donner des indications sur ce qu'est ce Spark et à quoi il sert ».
-Puis, dans le même mouvement : **trois** fichiers plutôt qu'un, et une propriété
-qui les distingue de tout ce que le produit pose déjà — ils sont **à double
-sens**.
+Puis, dans le même mouvement : **trois** fichiers plutôt qu'un.
 
 ### 54.1 Le manque : le §44 décrit la cellule, et personne ne décrit le service
 
@@ -12110,15 +12109,9 @@ donne — **ce qu'il faut savoir pour contribuer à cette machine-là**. Le prod
 le dit à l'écran et dans les fichiers, sans quoi la moitié des textes qu'on y
 trouvera seront des listes de noms.
 
-`/etc/spark/notes/` est un **dossier à part**, et non trois fichiers posés à côté
-de `BRIEFING.md`. Deux motifs, et le second est le vrai :
-
-- `/etc/spark` porte ce que le plan de contrôle écrit et réécrit seul. Y mêler
-  des fichiers dont la cellule est parfois l'auteur ferait cohabiter deux
-  régimes sous le même chemin, et le §54.4 en dépend ;
-- un dossier se nomme d'une phrase — « vos notes sont dans
-  `/etc/spark/notes/` » — là où trois fichiers demandent trois phrases, et qu'on
-  ne retient pas.
+`/etc/spark/notes/` est un **dossier à part** : un dossier se nomme d'une phrase
+— « vos notes sont dans `/etc/spark/notes/` » — là où trois fichiers dispersés
+demandent trois phrases, et qu'on ne retient pas.
 
 ### 54.3 Ce qu'une note est, et ce qu'elle n'est pas
 
@@ -12142,94 +12135,51 @@ Ce n'est donc pas :
 - **un dépôt de secrets.** Le §54.6 y revient, parce que c'est le seul endroit du
   produit où un texte libre écrit par un humain part vers un modèle tiers.
 
-### 54.4 Le double sens : deux auteurs, un seul texte
+### 54.4 Le registre écrit, la cellule PROPOSE — révisé le 2026-09-14
 
-C'est la propriété qui distingue ces trois fichiers de tout le reste, et la
-demande la nomme : *« on peut l'inscrire depuis le ssh et il est visible dans
-l'UI, on peut le sauvegarder dans l'UI et il est inscrit dans le Spark »*.
+**Cette section a changé de décision le jour même de son écriture, et l'ancienne
+n'est pas conservée à côté : elle est remplacée.** Il faut dire pourquoi, parce
+que la première version avait l'air de mieux répondre à la demande.
 
-Tout ce que `sparkd` pose ailleurs suit la règle inverse, et pour de bonnes
-raisons : `authorized_keys` (§17.1), les fichiers d'environnement (§43.2) et le
-briefing (§44.4) sont **régénérés en entier depuis le registre**. Le §44.9.7
-mesure ce que cela coûte à qui l'ignore — une ligne ajoutée à la main disparaît,
-pas tout de suite, ce qui est pire.
+**Ce qui avait été décidé d'abord.** Les trois fichiers étaient *à double sens* :
+le plan de contrôle les posait, la cellule pouvait les réécrire, et une
+réconciliation comparait ce qui avait été posé à ce qui était trouvé — la cellule
+gagnant en cas de divergence. Cela demandait une colonne d'empreinte, une
+machine à quatre cas, une mise en quarantaine lorsqu'un secret y apparaissait, et
+faisait de ces trois fichiers la seule exception du produit à la règle « le
+registre écrit, la cellule reçoit » (§17.1, §43.2, §44.4).
 
-**Une note ne peut pas suivre cette règle**, parce que son auteur légitime est
-parfois dans la cellule. L'agent qui vient d'installer la pile est exactement
-celui qui sait ce qu'il faut écrire dans `INSTALL.md`, et il l'écrit là où il se
-trouve. Le produit doit donc ramener ce texte, pas l'écraser.
+**Ce que le responsable a tranché ensuite**, en voyant arriver les suggestions du
+§55 : *« les fichiers README, INSTALL, CONTRIBUTORS devraient être des
+suggestions aussi s'ils sont générés depuis l'intérieur du Spark »*.
 
-#### 54.4.1 Ce que le registre retient, et pourquoi cette colonne-là
+**Et cela vaut mieux, pour une raison qui n'est pas un compromis.** Le produit
+n'a plus **aucune** exception : tout ce qu'il pose dans une cellule est régénéré
+en entier depuis le registre, et il existe **un seul canal entrant**, le fichier
+de suggestion du §55. Une règle sans exception se retient ; une règle avec une
+exception se réapprend à chaque fois, et le §44.9.7 a mesuré ce que coûte un
+agent qui croit pouvoir écrire là où il ne faut pas.
 
-Le registre porte, par note : le **texte**, sa **révision** (un entier qui avance
-à chaque écriture), son **origine** (`console` ou `cellule`), sa date, et —
-la colonne qui fait tout fonctionner — l'**empreinte du dernier texte que le plan
-de contrôle a réellement posé dans la cellule**.
+Trois conséquences, toutes des simplifications :
 
-Cette empreinte est la seule façon honnête de répondre à « quelqu'un a-t-il écrit
-là-bas ? ». On ne compare pas des dates : l'horloge d'une cellule appartient au
-locataire, qui est `root` chez lui, et une date fausse écraserait en silence le
-texte du propriétaire. On compare ce qu'on a posé à ce qu'on trouve.
+- **il n'y a plus de réconciliation, plus d'empreinte de projection et plus de
+  quarantaine.** Un texte porteur d'un secret n'a plus à être « mis de côté sans
+  être écrasé » : il est refusé à l'acceptation, comme n'importe quelle
+  suggestion, et son auteur le voit puisque son fichier n'est pas consommé ;
+- **écrire dans `/etc/spark/notes/README.md` depuis la cellule ne sert à rien** —
+  exactement comme pour `/etc/spark/env` et `/run/spark/secrets` (§44.9.7). Le
+  produit le réécrit depuis le registre. C'est désormais vrai de **tous** les
+  fichiers qu'il pose, sans avoir à se souvenir lesquels ;
+- **la suggestion de note est un REMPLACEMENT INTÉGRAL**, là où celles de
+  variables et de routes ajoutent ou remplacent entrée par entrée (§55.3). Un
+  texte n'a pas d'entrées : le proposer par fragments n'aurait aucun sens.
 
-#### 54.4.2 La réconciliation, quatre cas et pas un de plus
-
-| Ce qu'on trouve dans la cellule | Conclusion | Ce que le produit fait |
-|---|---|---|
-| illisible — cellule absente, Spark sans cellule, pilote muet | on ne sait pas | le registre fait foi, et l'écran **dit** que la cellule n'a pas été consultée |
-| fichier absent | la cellule n'a rien à dire | le registre fait foi, et la note sera reposée à la prochaine projection |
-| identique à l'empreinte posée | personne n'a écrit là-bas | le registre fait foi |
-| **différent de l'empreinte posée** | **quelqu'un a écrit là-bas** | le registre **absorbe** le texte, la révision avance, l'origine devient `cellule` |
-
-Le quatrième cas est la décision du responsable : **la cellule gagne.** Le
-raisonnement tient en une phrase — le plan de contrôle a posé X, on trouve Y,
-donc Y a été écrit APRÈS X, par construction et sans avoir besoin d'aucune
-horloge.
-
-**Un `rm` n'est pas un effacement.** Un fichier absent ne vide pas la note : il
-la fait reposer. Supprimer un fichier est le geste le plus facile à faire par
-accident — un `rm -rf` trop large, une restauration d'instantané, une image
-reconstruite —, et il ne porte aucune intention rédactionnelle. **Pour vider une
-note, on écrit un fichier vide** (`: > /etc/spark/notes/INSTALL.md`), ou on
-l'enregistre vide depuis la console. Un fichier vide est un contenu ; une absence
-n'en est pas un.
-
-#### 54.4.3 La console édite une révision, et un enregistrement périmé est refusé
-
-Dans l'autre sens, le risque est symétrique : la console a affiché le texte à
-14h00, la cellule l'a réécrit à 14h01, le propriétaire enregistre à 14h02 et
-efface sans le savoir ce qu'un agent venait d'écrire.
-
-**L'enregistrement porte donc la révision que l'écran éditait.** Si le registre a
-avancé depuis, il est **refusé en `409`**, et la réponse rend le texte courant et
-son origine. L'écran montre alors les deux et laisse trancher. Ce n'est pas une
-gêne à contourner : c'est le seul moment où le produit peut dire qu'un texte
-allait être perdu.
-
-#### 54.4.4 Quand la réconciliation a lieu, et quand elle n'a pas lieu
-
-Elle coûte une lecture par note dans la cellule. On ne la fait donc pas à chaque
-geste, et surtout pas là où elle ne sert à rien :
-
-- **elle a lieu** quand la console ouvre les notes, quand le dossier de
-  déploiement est composé (c'est ce texte-là qui part vers un modèle tiers, il
-  doit être frais), quand une note est enregistrée, et au rattrapage qui suit un
-  amorçage ou un démarrage ;
-- **elle n'a pas lieu** sur les gestes qui ne concernent pas les notes. Une route
-  ajoutée ne change aucune note. C'est aussi pourquoi le §54.5 garde le
-  `BRIEFING.md` à l'écart du contenu : sans cela, chaque geste du plan de
-  contrôle devrait relire trois fichiers avant de réécrire le briefing.
-
-**La projection suit la réconciliation, jamais l'inverse.** Poser une note sans
-avoir lu d'abord ce qui est là est précisément le geste qui détruit le travail
-d'un agent.
-
-#### 54.4.5 Ce que le double sens ne rattrape pas
-
-Un instantané restauré rend les fichiers de la cellule à leur état d'alors ; la
-réconciliation suivante verra un texte différent de l'empreinte posée et
-l'**absorbera** — une restauration peut donc faire reculer une note. C'est la
-conséquence assumée de « la cellule gagne », et le registre garde la trace de
-l'écriture précédente dans le journal d'audit, pas dans la note.
+Le registre garde, par note : le **texte**, sa **révision** — un entier qui
+avance à chaque écriture —, son **origine** (`console` ou `suggestion`) et sa
+date. La révision sert à la console : un enregistrement portant une révision
+dépassée est refusé en `409` avec le texte courant, plutôt que d'écraser en
+silence ce qu'un autre onglet, ou une suggestion acceptée entre-temps, venait
+d'écrire.
 
 ### 54.5 Où les notes apparaissent : en entier dans le dossier, nommées dans le briefing
 
@@ -12245,12 +12195,9 @@ ouvrir.
 **Le `BRIEFING.md` de la cellule les NOMME.** Celui qui le lit est déjà dedans :
 les trois fichiers sont à trois lignes de commande de lui. Les y recopier créerait
 deux exemplaires du même texte dans la même machine, dont l'un vieillirait — et
-ce serait l'exemplaire réécrit par le plan de contrôle qui vieillirait, c'est-à-dire
-celui qui a l'air officiel. Le briefing donne donc le **chemin**, la **commande**
-qui les lit, et ce que chacun est censé contenir.
-
-Un `BRIEFING.md` qui ne porte pas les notes ne dépend pas d'elles : il reste
-réécrit par le §44.4 sans réconciliation préalable, et le §54.4.4 tient.
+ce serait l'exemplaire réécrit par le plan de contrôle, c'est-à-dire celui qui a
+l'air officiel. Le briefing donne donc le **chemin**, la **commande** qui les lit,
+et ce que chacun est censé contenir.
 
 ### 54.6 Un secret collé par mégarde, et ce que le produit en fait
 
@@ -12263,6 +12210,11 @@ sur ce que le produit compose et de l'abandonner sur ce qu'il transporte.
 secrets du Spark — c'est lui qui les déchiffre pour les poser (§43.5.1) — donc il
 peut comparer. Un texte qui contient la valeur d'un secret de ce Spark n'est pas
 enregistré, et le refus **nomme la variable**, jamais la valeur.
+
+La garde s'applique aux **deux** entrées du registre, et sans nuance : à
+l'enregistrement depuis la console, et à l'acceptation d'une suggestion de note
+(§55). Une suggestion refusée pour cette raison **n'est pas consommée** : son
+fichier reste, son auteur peut donc le corriger.
 
 Trois bornes, sans lesquelles la garde ferait plus de mal que de bien :
 
@@ -12277,15 +12229,6 @@ Trois bornes, sans lesquelles la garde ferait plus de mal que de bien :
   rend pas, ne les journalise pas et ne les met dans aucun message. Le §43.5.1
   reste entier : ce qui est déchiffré part vers la cellule, ou ne sort pas.
 
-**Dans l'autre sens, on ne refuse pas : on met en quarantaine.** Un texte trouvé
-dans la cellule et porteur d'un secret pose un problème différent — il est déjà
-écrit, et l'écraser détruirait le travail de son auteur. Le produit **ne l'absorbe
-pas, ne le publie nulle part, et ne reprojette plus cette note** tant que la
-divergence dure ; l'écran le dit, en nommant la variable en cause. L'auteur
-corrige là où il a écrit, et la réconciliation suivante absorbe. Suspendre la
-projection est essentiel : sans cela, le geste suivant du propriétaire écraserait
-le texte que le produit vient de refuser de lire.
-
 Ce que la garde **ne prétend pas** : elle ne connaît que les secrets **de ce
 Spark**, tels que le registre les porte. Un jeton d'un service tiers, un mot de
 passe que personne n'a déclaré, une clé privée collée en entier passent sans être
@@ -12293,7 +12236,7 @@ vus. La garde attrape la fuite mécanique — copier-coller depuis l'écran
 d'environnement — et rien d'autre. C'est pourquoi l'avertissement du §54.7
 s'écrit quand même, dans les trois textes.
 
-### 54.7 Ce que les fichiers portent en tête, et ce que le LLMs.txt doit dire
+### 54.7 Ce que les fichiers portent en tête, et ce que le dossier doit dire
 
 Chaque note posée dans la cellule porte un **en-tête écrit par le produit**, au
 format d'un commentaire HTML pour ne pas gêner le Markdown, et **retiré à la
@@ -12304,28 +12247,17 @@ chaque aller-retour. Il dit quatre choses :
   §54.2. C'est la consigne de conformité que le responsable demande : un agent
   qui écrit ses notes d'intégration dans `CONTRIBUTORS.md` les met là où
   personne ne les cherchera ;
-- **qu'il est à double sens**, et ce que cela implique : ce qu'on écrit ici
-  remonte à la console, et ce que la console enregistre revient ici. C'est
-  l'exact contraire de ce que `BRIEFING.md`, `/etc/spark/env` et
-  `/run/spark/secrets` font, et le §44.9.7 a déjà appris à un agent réel que
-  ces derniers ne se modifient pas — il faut donc dire explicitement que
-  celui-ci, si ;
-- **quand la remontée a lieu** : à la lecture suivante par le plan de contrôle,
-  pas à la seconde où l'on enregistre. Un agent qui écrit puis vérifie
-  immédiatement l'écran ne doit pas conclure à une panne ;
+- **que ce fichier-ci est une PROJECTION** : l'écrire à la main ne sert à rien,
+  le plan de contrôle le réécrit depuis son registre ;
+- **par où passe une modification** : le fichier voisin en `.?` (§55), qui est
+  une **proposition de remplacement intégral**, et ce qu'il advient d'elle ;
 - **qu'aucun secret ne s'y écrit**, et pourquoi : ce texte est fait pour être
-  copié vers un modèle tiers.
+  copié vers un modèle tiers, et le §54.6 refuse une suggestion qui en porte un.
 
-Le **dossier pour un LLM** porte les mêmes quatre points, plus deux que sa
-position lui impose :
-
-- **par où l'on écrit** : les fichiers appartiennent à `root` dans la cellule
-  (§54.8). Un agent entré par `spark-docker` les **lit** et ne les écrit pas ;
-  il doit rebondir par `root` pour cela, et le texte donne la commande ;
-- **la conformité se vérifie avant d'écrire.** Le dossier demande à l'agent de
-  relire la destination de chaque fichier et de ranger ce qu'il a à dire dans
-  celui qui lui correspond — et de ne pas inventer un quatrième sujet dans un
-  fichier qui en porte déjà un autre.
+Le **dossier pour un LLM** porte les mêmes points, plus la **conformité** : il
+demande à l'agent de relire la destination de chaque fichier et de ranger ce
+qu'il a à dire dans celui qui lui correspond — et de ne pas inventer un quatrième
+sujet dans un fichier qui en porte déjà un autre.
 
 Ces textes **énoncent et ne prescrivent pas** (§44.6). Ils disent où écrire, ce
 qu'on attend là et ce qui arrive ensuite ; ils ne demandent à personne d'écrire
@@ -12333,49 +12265,46 @@ quoi que ce soit, et une note vide est un état parfaitement normal.
 
 ### 54.8 Permissions dans la cellule
 
-Arbitrage du responsable : **`root` écrit, la seconde porte lit.**
+**Révisé le 2026-09-14 avec le §54.4** : le compte de la seconde porte peut
+**proposer**, et ne peut toujours pas décider.
 
-Le dossier `/etc/spark/notes/` et les trois fichiers suivent exactement le
-régime du §44.10 — `root:root 0600` sur un Spark enraciné, et
-`root:spark-docker 0640` (dossier `0750`) quand le relevé dit `rootless`, pour
-qu'un agent entré par la seconde porte puisse au moins les lire.
+Le dossier `/etc/spark/notes/` et les trois notes suivent le régime du §44.10 —
+`root:root 0600` sur un Spark enraciné, `root:spark-docker 0640` quand le relevé
+dit `rootless`. Le fichier `.?` qui leur fait face est, lui, **ouvert en écriture
+au groupe** : `0660` en rootless (§55.6).
 
-Le groupe n'y écrit pas. `spark-docker` est le compte qui fait tourner la pile,
-délibérément incapable de casser la cellule (§42.2) ; lui donner la plume sur un
-texte que le plan de contrôle republie ensuite vers un modèle tiers élargirait
-sa surface pour un confort. La conséquence est écrite partout où elle se
-découvre : **on inscrit une note en entrant par `root`**.
+Le groupe n'écrit donc pas la note elle-même : non par restriction, mais parce
+que **cela ne servirait à rien** — le fichier est une projection, et le plan de
+contrôle le réécrit. Ce que `spark-docker` peut faire est exactement ce qui a un
+effet : déposer une proposition.
 
 ### 54.9 La surface d'API
 
-    GET  /v1/sparks/{name}/notes      → 200 { "spark", "notes": [ … ], "cell_read" }
-    PUT  /v1/sparks/{name}/notes/{id} → 200 { … }  | 409 | 422 | 423
+    GET  /v1/sparks/{name}/notes      → 200 { "spark", "notes": [ … ] }
+    PUT  /v1/sparks/{name}/notes/{id} → 200 | 409 | 422 | 423
 
 `{id}` vaut `readme`, `contributors` ou `install` — en minuscules, parce qu'un
 identifiant d'API n'est pas un nom de fichier, et qu'il ne change pas si le
 fichier est un jour renommé.
 
 Chaque note rendue porte : son identifiant, le nom du fichier et son chemin dans
-la cellule, le texte, la révision, l'origine, la date, et l'état de la
-réconciliation — `lue`, `non_lue` (la cellule n'a pas répondu), ou `quarantaine`
-avec la variable en cause.
+la cellule, ce qu'elle est censée contenir, le texte, la révision, l'origine et
+la date.
 
 Quatre décisions :
 
-- **`GET` réconcilie**, et rend `cell_read` pour dire s'il y est parvenu. Un
-  écran qui affiche un texte sans savoir s'il vient d'être confronté à la cellule
-  affirmerait plus qu'il ne sait (§14.6 du design system) ;
+- **`GET` lit le REGISTRE seul** et n'entre pas dans la cellule. Depuis le
+  §54.4, une note est une projection : il n'y a rien à confronter, et ce qui
+  arrive de la cellule arrive par le §55 ;
 - **`GET` répond sur un Spark arrêté et sur un Spark sans cellule**, comme le
-  briefing (§44.9.4) : le registre porte le texte, et `cell_read` vaut alors
-  faux ;
+  briefing (§44.9.4) ;
 - **`PUT` exige la révision éditée**, et rend `409` avec le texte courant si elle
-  a été dépassée (§54.4.3). `422` pour un texte refusé par la garde (§54.6) ou
-  trop long. **`423`** quand le Spark est protégé : enregistrer une note est une
-  écriture qui vise le Spark, et le §35.2 ne fait pas d'exception pour les
-  écritures anodines ;
-- **une note entre au journal d'audit** comme toute écriture, sous une action
-  qui nomme la note. Le payload porte l'identifiant et la longueur, **jamais le
-  texte** (§21.4).
+  a été dépassée. `422` pour un texte refusé par la garde (§54.6) ou trop long.
+  **`423`** quand le Spark est protégé : enregistrer une note est une écriture
+  qui vise le Spark, et le §35.2 ne fait pas d'exception pour les écritures
+  anodines ;
+- **une note entre au journal d'audit** comme toute écriture. Le payload porte
+  l'identifiant, la révision et la longueur, **jamais le texte** (§21.4).
 
 Le texte est borné à **64 Kio** par note. Ce n'est pas une limite de stockage :
 c'est la taille au-delà de laquelle un dossier collé dans une conversation cesse
@@ -12391,12 +12320,15 @@ encart — c'est la règle qui a déjà sorti le terminal (§34.1, SPK-DS-04).
 Elle porte les trois notes l'une sous l'autre, chacune avec le rappel de ce
 qu'elle est censée contenir, son origine et sa date. L'édition est un champ
 multiligne et un bouton *Enregistrer* par note : enregistrer l'une ne touche pas
-les deux autres, et une note en quarantaine ne bloque pas ses voisines.
+les deux autres.
 
-Quatre états sont distincts et le restent (§14.6) : **vide** (personne n'a encore
-écrit), **à jour**, **non confrontée à la cellule** (elle n'a pas répondu), et
-**en quarantaine**. Le refus de `409` ne perd pas la saisie (§1.5 bis) : il
-affiche le texte venu de la cellule à côté de celui qu'on allait enregistrer.
+Trois états sont distincts et le restent (§14.6) : **vide** — personne n'a encore
+écrit —, **écrite depuis la console**, et **écrite depuis une suggestion
+acceptée**. Le refus de `409` ne perd pas la saisie (§1.5 bis) : il affiche le
+texte courant à côté de celui qu'on allait enregistrer.
+
+Une suggestion de note en attente s'y annonce, et s'y accepte : c'est la facette
+qui porte l'objet (§55.9).
 
 ### 54.11 Ce que cette unité ne fait pas
 
@@ -12411,44 +12343,122 @@ affiche le texte venu de la cellule à côté de celui qu'on allait enregistrer.
 - Elle n'introduit **aucune** variable d'environnement (§53).
 
 
-## 55. Les suggestions déposées dans la cellule : ce que l'agent propose, ce que le propriétaire accorde (SPK-105)
+## 55. Le fichier `.?` : le seul canal par lequel la cellule propose (SPK-105)
 
-Demandé par le responsable le 2026-09-14, dans le prolongement immédiat du §54 :
-« un agent peut déposer des fichiers de variables et des secrets souhaités ;
-l'UI surveille ces fichiers et propose un bouton pour inspecter les variables
-suggérées et les ajouter au Spark ; les fichiers de suggestions sont donc remis
-à zéro à l'acceptation ou au refus, et persistent s'ils sont seulement
+Demandé par le responsable le 2026-09-14, en deux temps le même jour.
+
+D'abord : « un agent peut déposer des fichiers de variables et des secrets
+souhaités ; l'UI surveille ces fichiers et propose un bouton pour inspecter les
+variables suggérées et les ajouter au Spark ; les fichiers de suggestions sont
+remis à zéro à l'acceptation ou au refus, et persistent s'ils sont seulement
 consultés. Cette mécanique doit exister aussi pour les routes. »
 
-### 55.1 Le trajet que cette unité remplace
+Puis, en voyant que cela recouvrait le §54 : « chaque fichier aurait le fichier
+sans extension — les valeurs réelles — et le même avec `.?`, qui existe seulement
+pour proposer une modification ».
 
-Le §44.9.7 a déjà constaté le besoin et lui a donné une réponse **en prose** :
-l'agent qui découvre qu'il lui manque `REDIS_URL` rédige un bloc `.env` dans sa
-réponse, et le propriétaire le recopie dans *Environnement → Importer un lot*.
+**C'est cette seconde formulation qui fait l'unité**, et elle vaut mieux que la
+première : elle ne crée pas un mécanisme de plus à côté des fichiers existants,
+elle donne au produit **une seule règle, sans exception**.
 
-Ce trajet fonctionne, et il a deux défauts que seule la machine peut corriger :
+### 55.1 La règle, en deux lignes
 
-- **il passe par une conversation.** Le bloc est produit par un modèle, lu par un
-  humain, recopié à la main. Chaque étape peut perdre une ligne, et personne ne
-  s'en aperçoit avant que la pile ne démarre mal ;
+> Tout fichier que le plan de contrôle pose dans une cellule est **régénéré en
+> entier depuis le registre**, et l'écrire à la main n'a aucun effet durable.
+> À côté de chacun, un fichier de même nom suffixé **`.?`** est le seul endroit
+> où la cellule peut **proposer** un changement.
+
+Avant cette unité, la première moitié était vraie et la seconde n'existait pas :
+le §44.9.7 devait apprendre aux agents qu'écrire dans `/etc/spark/env` ne servait
+à rien, sans avoir rien d'autre à leur offrir que « demandez au propriétaire ».
+Le §54, dans sa première rédaction, ajoutait une exception — trois fichiers à
+double sens — qu'il a fallu retirer : une règle avec une exception se réapprend à
+chaque fois.
+
+### 55.2 Le trajet que cette unité remplace
+
+Le §44.9.7 répondait déjà au besoin **en prose** : l'agent qui découvre qu'il lui
+manque `REDIS_URL` rédige un bloc `.env` dans sa réponse, et le propriétaire le
+recopie dans *Environnement → Importer un lot*.
+
+Deux défauts que seule la machine corrige :
+
+- **le bloc traverse une conversation.** Produit par un modèle, lu par un humain,
+  recopié à la main : chaque étape peut perdre une ligne, et personne ne s'en
+  aperçoit avant que la pile ne démarre mal ;
 - **il ne marche pas pour les routes.** Une route ne se colle nulle part : elle
-  se saisit domaine par domaine, et l'agent n'a aucun moyen de dire « ce service
-  attend d'être servi sur ce nom, vers ce port » autrement qu'en le racontant.
+  se saisit domaine par domaine, et l'agent n'avait aucun moyen de dire « ce
+  service attend d'être servi sur ce nom, vers ce port » autrement qu'en le
+  racontant.
 
-**Décision : l'agent dépose un fichier dans la cellule ; la console le voit, le
-fait relire, et l'applique par le chemin normal du produit.** Le contenu voyage
-donc dans la machine plutôt que dans une conversation, et il arrive au moment
-exact où quelqu'un a le pouvoir de l'accorder.
+### 55.3 Les six paires, et ce que chacune propose
 
-### 55.2 Ce que la frontière ne change pas
+| Fichier réel — posé par le plan de contrôle | Proposition | Ce qu'elle fait à l'acceptation |
+|---|---|---|
+| `/etc/spark/env` | `/etc/spark/env.?` | **ajoute ou remplace** des variables, entrée par entrée |
+| `/run/spark/secrets` | `/run/spark/secrets.?` | **ajoute ou remplace** des secrets, entrée par entrée |
+| `/etc/spark/routes` | `/etc/spark/routes.?` | **ajoute ou corrige** des routes, ligne par ligne |
+| `/etc/spark/notes/README.md` | `…/README.md.?` | **remplace le texte en entier** |
+| `/etc/spark/notes/CONTRIBUTORS.md` | `…/CONTRIBUTORS.md.?` | **remplace le texte en entier** |
+| `/etc/spark/notes/INSTALL.md` | `…/INSTALL.md.?` | **remplace le texte en entier** |
+
+**Remplacement intégral pour les textes, entrée par entrée pour le reste**, et ce
+n'est pas une commodité : un texte n'a pas d'entrées. Proposer un README « par
+fragments » demanderait une grammaire de fusion que personne ne sait écrire sans
+se tromper, et le résultat ne serait plus le texte que son auteur a relu.
+
+**Aucune suggestion ne RETIRE.** Ni une variable, ni un secret, ni une route.
+C'est déjà la règle de l'import collé (§43.10.1) — « un import ajoute et
+remplace ; il ne supprime jamais ce que le texte ne mentionne pas » —, et
+l'étendre ici évite qu'un `env.?` partiel vide la moitié d'un environnement.
+Retirer reste un geste du propriétaire, à l'écran.
+
+#### 55.3.1 `/etc/spark/routes` est un fichier NOUVEAU, et il manquait
+
+Les cinq autres fichiers réels existaient déjà. Celui-là est créé par cette
+unité, et il aurait dû exister avant elle : la cellule ne pouvait lire les routes
+qui la visent que dans `BRIEFING.md` ou `briefing.json`, c'est-à-dire en
+analysant une présentation faite pour être lue.
+
+Il porte **la même grammaire que sa proposition**, et c'est le point : l'agent
+lit et écrit la même chose. C'est exactement l'argument du §43.10.1 — « l'import
+lit ce que le produit écrit » —, sans lequel le fichier posé par le produit
+serait la seule chose qu'on ne peut pas lui redonner.
+
+Une route par ligne, `#` en début de ligne pour un commentaire :
+
+    <domaine> <port_écouté_dans_la_cellule> [tls|clair]
+
+    sso.exemple.fr 8080
+    api.exemple.fr 3000 clair
+
+Le port est celui **écouté dans la cellule**, jamais un port public : c'est la
+seule lecture juste du §44.2 bis, et la seule qui décide au §44.2 ter. Le défaut
+est `tls`, parce que c'est le cas de tout ce qui parle HTTP derrière l'ingress
+(§18.3) et qu'un défaut en clair ferait proposer par inadvertance ce que personne
+ne veut.
+
+#### 55.3.2 Ce qui n'est délibérément PAS suggérable
+
+Les ports publiés (§39), les clés SSH (§26.4), les instantanés et les quotas.
+Chacun est soit une ressource de la **Forge** partagée entre tous les Sparks — un
+port public est unique sur la machine (§39.2) —, soit un geste dont le §45 fait
+une action sensible.
+
+Une suggestion ne doit pas devenir le contournement doux de ce que le produit
+protège ailleurs : c'est la seule façon que « une suggestion n'affaiblit rien »
+soit vrai et pas seulement affirmé. Un port publié se demande en prose, comme
+avant.
+
+### 55.4 Ce que la frontière ne change pas
 
 **Rien de ce que le §35.1 protège n'est entamé.** Un fichier déposé dans une
 cellule n'est pas une écriture au registre : c'est une **demande**, sans effet,
 qui n'existe que si quelqu'un l'ouvre. Le plan de contrôle reste injoignable
 depuis la cellule ; la console reste le seul chemin par lequel une variable, un
-secret ou une route entrent réellement.
+secret, une route ou une note entrent réellement.
 
-C'est exactement ce que le §44.9.6 dit du bloc `.env` que l'agent rédige :
+C'est exactement ce que le §44.9.6 dit déjà du bloc `.env` que l'agent rédige :
 **rédiger n'est pas écrire**. Cette unité ne fait que donner à ce qui était déjà
 permis un support que la machine peut transporter.
 
@@ -12459,61 +12469,19 @@ Trois conséquences s'écrivent, parce qu'elles décident du reste :
   existera pas : ce serait une écriture accordée depuis la cellule ;
 - **le produit ne fait aucune promesse de délai.** Une suggestion peut n'être
   jamais lue. L'agent doit écrire sa pile en le supposant ;
-- **le journal d'audit retient l'acceptation et le refus**, comme toute écriture,
-  avec l'origine « suggestion » (§55.8).
+- **le journal d'audit retient l'acceptation et le refus**, avec l'origine
+  « suggestion » (§55.8).
 
-### 55.3 Trois fichiers, un par nature
-
-    /etc/spark/suggestions/variables.env    variables ordinaires souhaitées
-    /etc/spark/suggestions/secrets.env      secrets souhaités
-    /etc/spark/suggestions/routes.conf      routes publiques souhaitées
-
-**Deux fichiers pour les variables et non un, avec une marque.** Le §43.3 a
-mesuré que deviner la nature d'une entrée d'après son nom échoue précisément là
-où cela compte — `DATABASE_URL` porte un mot de passe et ne ressemble à rien. Un
-fichier unique obligerait à inventer une marque en commentaire, c'est-à-dire une
-grammaire de plus à apprendre et à ne pas se tromper. **Le chemin EST la
-déclaration** : ce qui est dans `secrets.env` est proposé comme secret.
-
-La déclaration reste une **proposition**, jamais une décision : l'écran
-d'acceptation porte une case par ligne, et c'est le propriétaire qui coche
-(§43.10.2). Un agent ne décide pas de ce qui est secret dans le registre de
-quelqu'un d'autre.
-
-**La grammaire des deux `.env` est celle du §43.10.1**, à la lettre, et il n'y en
-aura pas de seconde : `NOM=valeur`, une par ligne, pas de valeur multiligne, `$`
-littéral, `#` en début de ligne seulement. C'est la grammaire que le dossier du
-§44.9.7 apprend déjà aux agents, et celle que la console sait refuser en nommant
-la ligne fautive.
-
-**`routes.conf` en a une, minimale et sans surprise** — une route par ligne :
-
-    <domaine> <port_cible> [tls|clair]        # tls par défaut
-    sso.exemple.fr 8080
-    api.exemple.fr 3000 clair
-
-Le port est celui **écouté dans la cellule**, jamais un port public : c'est déjà
-la seule lecture juste au §44.2 bis, et la seule qui décide au §44.2 ter. Le
-défaut est `tls`, parce que c'est le cas de tout ce qui parle HTTP derrière
-l'ingress (§18.3) et qu'un défaut en clair ferait proposer par inadvertance ce
-que personne ne veut.
-
-**Ce qui n'entre PAS dans cette unité** : les ports publiés (§39), les clés SSH
-(§26.4), les instantanés, les quotas. Chacun est soit une ressource de la Forge
-partagée entre tous les Sparks — un port public est unique sur la machine
-(§39.2) —, soit un geste dont le §45 fait une action sensible. Une suggestion ne
-doit pas devenir le contournement doux de ce que le produit protège ailleurs. Un
-port publié se demande en prose, comme avant.
-
-### 55.4 Le cycle de vie : consulter ne consomme pas
+### 55.5 Le cycle de vie : consulter ne consomme pas
 
 C'est la règle que le responsable a posée, et elle décide de l'implémentation.
 
-| Geste du propriétaire | Ce qu'il applique | Ce que le fichier devient |
+| Geste du propriétaire | Ce qu'il applique | Ce que le `.?` devient |
 |---|---|---|
-| ouvrir la facette, lire la suggestion | rien | **il reste** |
-| **Accepter** (tout ou partie) | les lignes retenues, par le chemin normal | **supprimé** |
-| **Refuser** | rien | **supprimé** |
+| ouvrir la facette, lire la proposition | rien | **il reste, intact** |
+| **Accepter** (tout ou partie) | les entrées retenues, par le chemin normal | **vidé** |
+| **Refuser** | rien | **vidé** |
+| refus du produit — garde des secrets, grammaire | rien | **il reste**, et le refus est nommé |
 
 **Consulter ne consomme pas**, parce qu'une suggestion qu'on regarde sans
 trancher est le cas ordinaire : on ouvre l'écran, on manque d'un élément, on
@@ -12521,110 +12489,134 @@ revient. Un fichier consommé à la lecture ferait disparaître une demande que
 personne n'a refusée — et l'agent qui l'a déposée n'aurait aucun moyen de le
 savoir.
 
-**Une acceptation PARTIELLE supprime quand même le fichier en entier.** La
-décision a porté sur toute la suggestion : ce qui n'a pas été retenu a été
-refusé, pas ajourné. Laisser le reliquat ferait revenir à chaque ouverture des
-lignes qu'on vient d'écarter, et l'écran finirait par être fermé sans être lu.
+**Une acceptation PARTIELLE vide quand même le fichier.** La décision a porté sur
+toute la proposition : ce qui n'a pas été retenu a été refusé, pas ajourné.
+Laisser le reliquat ferait revenir à chaque ouverture des lignes qu'on vient
+d'écarter, et l'écran finirait par être fermé sans être lu.
 
-**La suppression est un vrai `DELETE` du fichier, pas une troncature.** Un
-fichier vide et un fichier absent se ressemblent pour le produit — les deux
-valent « aucune suggestion » — mais pas pour l'agent qui revient : un fichier
-disparu dit qu'une décision a été prise, un fichier vide ne dit rien.
+**Vidé, et non supprimé.** Le fichier `.?` **existe toujours**, posé vide par le
+plan de contrôle à côté de chaque fichier réel. C'est ce qui le rend
+découvrable : un `ls /etc/spark` montre le mécanisme sans qu'on ait à l'avoir lu
+quelque part. C'est aussi ce qui permet au compte de la seconde porte d'écrire
+dedans **sans** que le dossier lui soit ouvert en écriture (§55.6). Un fichier
+vide et un fichier absent valent l'un comme l'autre « aucune proposition » : le
+produit ne fait pas de différence, et son en-tête dit laquelle il pose.
 
-#### 55.4.1 Comment l'agent apprend le sort de sa demande
+**La projection ne l'écrase JAMAIS quand il n'est pas vide.** Le plan de contrôle
+le crée s'il manque, et ne touche à rien d'autre : écraser une proposition en
+attente au premier geste venu détruirait exactement ce que l'unité existe pour
+transporter.
+
+#### 55.5.1 Comment l'agent apprend le sort de sa demande
 
 **Par ce qui est déjà vrai, et par rien d'autre.** Le produit n'écrit aucun
-accusé de réception, et c'est délibéré : un fichier de réponse serait une
-quatrième vérité à tenir fraîche, alors que deux fichiers existants répondent
-déjà et ne peuvent pas mentir.
+accusé de réception, et c'est délibéré : un fichier de réponse serait une vérité
+de plus à tenir fraîche, alors que les fichiers réels répondent déjà et ne
+peuvent pas mentir.
 
-- le fichier de suggestion a **disparu** → une décision a été prise ;
-- `/etc/spark/env` et `/run/spark/secrets` disent ce qui a été **accordé**
-  (§43.2 les régénère en entier depuis le registre) ;
-- `/etc/spark/BRIEFING.md` liste les **routes** réellement posées, et il est
-  réécrit à chaque route ajoutée ou retirée (§44.4).
+- le `.?` est **redevenu vide** → une décision a été prise ;
+- le fichier réel **d'à côté** dit laquelle. `/etc/spark/env`, `/run/spark/secrets`,
+  `/etc/spark/routes` et les trois notes sont régénérés depuis le registre
+  (§43.2, §44.4) : ce qui a été accordé y est, et ce qui a été refusé n'y est pas.
 
-Fichier disparu **et** variable absente : elle a été refusée. C'est une réponse
-complète, et elle ne coûte aucun mécanisme nouveau.
+C'est une réponse complète, et elle ne coûte aucun mécanisme nouveau. C'est aussi
+la raison pour laquelle le `.?` est **voisin** de son fichier réel plutôt que
+rangé dans un dossier à part : les deux se lisent d'un même regard.
 
-#### 55.4.2 Ce que le propriétaire a relu est ce qu'il applique
+#### 55.5.2 Ce que le propriétaire a relu est ce qu'il applique
 
 L'agent peut réécrire son fichier entre le moment où la console l'affiche et
 celui où le propriétaire tranche. Appliquer alors le contenu **courant** ferait
 écrire au registre un texte que personne n'a lu.
 
 **L'acceptation et le refus portent donc l'empreinte du contenu relu**, et sont
-refusés en `409` si le fichier a changé depuis — la même doctrine qu'au §54.4.3,
-et pour la même raison : c'est le seul moment où le produit peut dire que la
-décision ne portait pas sur ce qu'on croit.
+refusés en `409` si le fichier a changé depuis. C'est le seul moment où le
+produit peut dire que la décision ne portait pas sur ce qu'on croit.
 
-### 55.5 Une suggestion illisible ne disparaît pas en silence
+### 55.6 Permissions : qui propose, et qui décide
 
-Un fichier que la grammaire refuse est **nommé, avec sa ligne fautive** (§43.10.1),
-et l'écran n'offre alors que *Refuser*. Il n'y a rien à accepter d'un texte qu'on
-n'a pas su lire, et le supprimer sans le dire ferait croire à l'agent qu'il a été
-examiné.
+    /etc/spark, /etc/spark/notes, /run/spark   0700 root:root   →  0750 root:spark-docker en rootless
+    fichiers réels                             0600 root:root   →  0640 root:spark-docker en rootless
+    fichiers .?                                0600 root:root   →  0660 root:spark-docker en rootless
 
-Le §18.4 et le §43.9 gardent le dernier mot : un domaine déjà pris, un nom de
-variable hors grammaire du shell, un port hors bornes sont refusés **à
-l'application**, par les mêmes contrôles que la saisie manuelle. Une suggestion
-n'ouvre aucun chemin d'écriture qui lui soit propre — c'est la condition pour
-qu'elle n'affaiblisse rien.
+**En rootless, la seconde porte peut proposer.** C'est l'arbitrage du
+responsable : *« on peut faire gagner au root comme au spark-docker la
+possibilité de les écrire »*. Le compte qui fait tourner la pile est souvent
+celui qui découvre qu'il manque une variable ou qu'un port doit être servi ; lui
+refuser la plume sur une **proposition** l'obligerait à un rebond par `root` pour
+un geste qui n'a aucun effet par lui-même.
 
-### 55.6 Permissions, et pourquoi `root` seulement
+**Et il ne peut toujours rien décider.** Un `.?` n'écrit rien : seule la console
+écrit, et la console n'est pas joignable depuis la cellule (§35.1). La surface
+gagnée est exactement celle d'un message laissé sur une table.
 
-    /etc/spark/suggestions/        0700 root:root
-    variables.env, routes.conf     0600 root:root
-    secrets.env                    0600 root:root
+**Ce que cela ne coûte pas en divulgation.** Le seul fichier sensible de la liste
+est `/run/spark/secrets`, et le §42.2 ter l'ouvre **déjà** en lecture au groupe :
+sans cela, la pile du locataire ne démarrerait pas. Ouvrir `secrets.?` en
+écriture ne montre donc rien de neuf à personne.
 
-**Le compte `spark-docker` n'y a aucun accès, pas même en lecture**, et c'est la
-seule différence de régime avec les notes du §54.8. Le motif est dans le nom du
-fichier : `secrets.env` porte des **valeurs en clair**, choisies par l'agent.
-Les notes n'en portent aucune — le §54.6 le garantit —, donc les ouvrir au
-groupe ne divulguait rien ; ici, cela divulguerait tout.
+**Le dossier, lui, n'est pas ouvert en écriture au groupe**, et c'est pour cela
+que les `.?` sont posés vides par le produit (§55.5) : créer un fichier demande
+le droit d'écrire dans le répertoire, l'écrire ne demande que le droit sur le
+fichier. Ouvrir le répertoire permettrait de supprimer ou de renommer
+`BRIEFING.md`, `env` et les notes — des projections, donc rien d'irréparable,
+mais une surface élargie sans qu'on ait rien à y gagner.
 
-**Conséquence, et elle doit être écrite partout où elle se découvre : ces
-fichiers s'écrivent en entrant par `root`.** C'est déjà vrai des notes (§54.8),
-et le §55.7 en fait une consigne unique plutôt que trois.
+**Sur un Spark enraciné, tout reste `root`.** Il n'y a pas de second compte : le
+locataire y est `root`, et la question ne se pose pas.
 
-Les fichiers acceptés sont supprimés, donc les valeurs de `secrets.env` ne
-séjournent dans la cellule que le temps de la décision. Le produit ne les
-recopie nulle part : elles entrent au registre chiffrées (§43.5) et n'en
-ressortent que vers `/run/spark/secrets`.
+#### 55.6.1 Une proposition de secret vit dans le tmpfs, et n'y survit pas
 
-### 55.7 Ce que le dossier pour un LLM doit dire, et l'unique consigne d'accès
+`/run/spark/secrets.?` est dans `/run`, qui est un tmpfs (§43.5.2). Une
+proposition de secret **disparaît au redémarrage de la cellule**, sans avoir été
+lue.
 
-Le §54.7 fixe déjà la forme : énoncer, ne pas prescrire. Le dossier gagne une
-section qui dit quatre choses, et un en-tête est posé dans chaque fichier de
-suggestion existant.
+C'est voulu, et c'est le même motif que pour le fichier réel qu'elle accompagne :
+une valeur de secret en clair n'a rien à faire sur le jeu de données, donc rien à
+faire dans un instantané. Le §55.7 le dit à l'agent, qui redéposera — c'est le
+seul des six fichiers dont la proposition est périssable, et le taire ferait
+chercher un refus qui n'a pas eu lieu.
 
-1. **Ce qu'on ne peut pas faire depuis la cellule, et ce qu'on peut donc
+### 55.7 Ce que les fichiers et le dossier pour un LLM doivent dire
+
+Chaque `.?` posé par le produit porte un en-tête, dans la syntaxe de commentaire
+du fichier qu'il accompagne — `#` pour les trois fichiers de configuration, un
+commentaire HTML pour les notes —, **retiré à la lecture** comme celui du §54.7.
+
+Il dit, pour ce fichier-là : à quoi il sert, quelle grammaire il attend, si la
+proposition **ajoute et remplace** ou **remplace en entier**, que rien ne
+s'applique sans un geste du propriétaire, et qu'il redeviendra vide quand une
+décision aura été prise.
+
+Le **dossier pour un LLM** gagne une section qui dit quatre choses, et pas une de
+plus :
+
+1. **ce qu'on ne peut pas faire depuis la cellule, et ce qu'on peut donc
    proposer.** Le §44.9.7 dit déjà « seul le propriétaire peut poser une
    variable » ; la phrase se complète — *et voici où déposer ce que vous
    souhaitez qu'il pose*. Sans les deux moitiés, la première se lit comme une
-   impasse, et un agent devant une impasse invente (§44.2 ter).
-2. **Les trois chemins, leur grammaire et un exemple de deux lignes chacun.**
-   Pas de noms de variables inventés : le §44.7 tient, le produit ne connaît pas
-   l'application du locataire.
-3. **Le cycle de vie, en une phrase** : déposé, il attend ; consulté, il reste ;
-   accepté ou refusé, il disparaît. Et **rien ne garantit qu'il soit lu** : une
-   pile ne doit pas dépendre d'une suggestion pour démarrer.
-4. **Comment lire le sort de sa demande** — le §55.4.1, qui ne nomme que des
+   impasse, et un agent devant une impasse invente (§44.2 ter) ;
+2. **les six paires, leur grammaire et un exemple court.** Pas de noms de
+   variables inventés : le §44.7 tient, le produit ne connaît pas l'application
+   du locataire ;
+3. **le cycle de vie, en une phrase** : déposé, il attend ; consulté, il reste ;
+   accepté ou refusé, il redevient vide. Et **rien ne garantit qu'il soit lu** :
+   une pile ne doit pas dépendre d'une proposition pour démarrer ;
+4. **comment lire le sort de sa demande** — le §55.5.1, qui ne nomme que des
    fichiers existants.
 
-**Et une consigne d'accès, unique, qui vaut pour les six fichiers du §54 et du
-§55 :**
+**Et une consigne d'accès, unique, qui vaut pour les douze fichiers :**
 
-> Ces fichiers s'écrivent en entrant par **`root`**. Le compte `spark-docker`
-> fait tourner la pile ; il ne peut ni écrire une note, ni déposer une
-> suggestion, ni — bien sûr — poser une variable, un secret ou une route, qui
-> n'existent que dans le plan de contrôle.
+> Les fichiers réels sont posés par le plan de contrôle et régénérés depuis son
+> registre : les écrire à la main n'a aucun effet durable. Tout ce qui vient de
+> la cellule passe par le fichier `.?` voisin. En Docker rootless, **`root` comme
+> `spark-docker`** peuvent y écrire ; ni l'un ni l'autre ne peut décider — une
+> variable, un secret, une route ou une note n'entrent que par la console.
 
 Elle est écrite **une fois, au même endroit que les commandes d'entrée**, à côté
 des deux portes du §42.2 quater. La répéter à chaque section la ferait lire zéro
-fois ; l'omettre ferait échouer un agent entré par la seconde porte sur un
-« permission denied » qui ne nomme pas sa cause — le sixième piège du §44.10,
-dans une autre robe.
+fois ; l'omettre laisserait un agent conclure d'un fichier réécrit puis restauré
+que la machine est cassée.
 
 ### 55.8 La surface d'API
 
@@ -12632,55 +12624,59 @@ dans une autre robe.
     POST /v1/sparks/{name}/suggestions/{kind}/apply → 200 | 409 | 422 | 423
     POST /v1/sparks/{name}/suggestions/{kind}/reject→ 200 | 409 | 423
 
-`{kind}` vaut `variables`, `secrets` ou `routes`.
+`{kind}` vaut `variables`, `secrets`, `routes`, `readme`, `contributors` ou
+`install` — les six paires du §55.3.
 
-- **`GET` lit la cellule** et rend, par nature : la présence, l'empreinte du
-  contenu, les entrées **analysées** — et, si l'analyse échoue, la ligne fautive
-  et son motif. Il ne rend jamais le fichier brut : ce que l'écran montre est ce
-  que le produit a compris, faute de quoi on relirait un texte et on appliquerait
-  autre chose ;
-- **`GET` ne consomme rien** et ne pose rien dans la cellule. C'est la seule
-  route de lecture du produit qui puisse changer l'état d'une cellule, et elle ne
-  le fait pas ;
+- **`GET` lit la cellule** et rend, par paire : la présence d'une proposition,
+  l'empreinte de son contenu, les entrées **analysées** — et, si l'analyse
+  échoue, la ligne fautive et son motif. Il ne rend jamais le fichier brut pour
+  les trois fichiers de configuration : ce que l'écran montre est ce que le
+  produit a compris, faute de quoi on relirait un texte et on appliquerait autre
+  chose. Pour une note, l'analyse EST le texte, et il est rendu tel quel ;
+- **`GET` ne consomme rien.** Il pose les `.?` manquants, et ne vide aucun de
+  ceux qui portent quelque chose ;
 - **`apply` porte l'empreinte relue** et la liste des entrées retenues, avec leur
   déclaration de secret pour les deux natures de variables. Il applique par
-  `env_service.importer` (§43.10.3) et par la création de route du §18, puis
-  supprime le fichier ;
-- **`reject` porte l'empreinte relue** et se contente de supprimer ;
+  `env_service.importer` (§43.10.3), par la création de route du §18 ou par
+  l'écriture de note du §54.9, puis vide le `.?` ;
+- **`reject` porte l'empreinte relue** et se contente de vider ;
 - **`423` si le Spark est protégé**, pour `apply` comme pour `reject` : les deux
   écrivent — l'un au registre, l'autre dans la cellule (§35.2) ;
-- une suppression de fichier qui échoue **ne défait pas** ce qui a été appliqué.
-  Le registre fait foi ; le fichier sera resupprimé au prochain passage, et la
-  suggestion déjà appliquée se reconnaît à ce qu'elle ne change plus rien.
+- **une garde qui refuse ne vide pas** : un texte de note portant un secret
+  (§54.6), une grammaire fautive, un domaine déjà pris (§18.4) laissent le
+  fichier intact, et le refus nomme la cause. L'auteur peut corriger ;
+- un vidage qui échoue **ne défait pas** ce qui a été appliqué. Le registre fait
+  foi ; le fichier sera revidé au prochain passage, et une proposition déjà
+  appliquée se reconnaît à ce qu'elle ne change plus rien.
 
 ### 55.9 Ce que la console en fait
 
 **Là où le geste se conclut, jamais ailleurs** : les variables et secrets
-suggérés s'ouvrent depuis la facette *Environnement*, les routes depuis la
-facette *Routes*. Une bannière n'apparaît que lorsqu'une suggestion existe, et
-elle porte son compte.
+suggérés s'ouvrent depuis la facette *Environnement*, les routes depuis *Routes*,
+les notes depuis *Notes*. Une bannière n'apparaît que lorsqu'une proposition
+existe, et elle porte son compte.
 
 L'écran d'acceptation **réemploie la relecture du §43.10.2** — une ligne, sa
 valeur, une case *secret* — plutôt que d'en inventer une seconde. C'est le même
 geste qu'un import collé ; seule l'origine du texte change, et l'écran le dit.
+Pour une note, la relecture est la comparaison des deux textes.
 
 **L'UI ne surveille pas en tâche de fond.** La lecture a lieu à l'ouverture de la
-facette, et le bouton *Relire la cellule* la refait. Un sondage périodique
+facette, et un bouton *Relire la cellule* la refait. Un sondage périodique
 multiplierait les appels à Incus par le nombre d'onglets ouverts, pour un
-événement qui se produit quelques fois dans la vie d'un Spark — et le §54.4.4 a
-déjà tranché ainsi pour les notes.
+événement qui se produit quelques fois dans la vie d'un Spark.
 
-Quatre états, distincts et le restant (§14.6) : **aucune suggestion**, **une
-suggestion en attente**, **illisible** (avec sa ligne), et **cellule non
+Quatre états, distincts et le restant (§14.6) : **aucune proposition**, **une
+proposition en attente**, **illisible** — avec sa ligne —, et **cellule non
 consultée**.
 
 ### 55.10 Ce que cette unité ne fait pas
 
 - Elle n'applique rien automatiquement, et ne le fera pas.
-- Elle ne couvre ni les ports publiés, ni les clés, ni les quotas (§55.3).
-- Elle n'écrit aucun accusé de réception dans la cellule (§55.4.1).
-- Elle ne garde aucun historique des suggestions refusées : le journal d'audit
-  retient la décision, le fichier disparaît, et un texte refusé qui resterait
-  consultable serait une copie de plus d'un secret en clair.
+- Elle ne couvre ni les ports publiés, ni les clés, ni les quotas (§55.3.2).
+- Elle n'écrit aucun accusé de réception dans la cellule (§55.5.1).
+- Elle ne garde aucun historique des propositions refusées : le journal d'audit
+  retient la décision, le fichier redevient vide, et un texte refusé qui
+  resterait consultable serait une copie de plus d'un secret en clair.
 - Elle n'introduit **aucune** variable d'environnement (§53), ni aucune
-  migration : le fichier dans la cellule EST l'état.
+  migration : le fichier dans la cellule EST l'état de la proposition.

@@ -465,7 +465,7 @@ répondrait à aucune question qu'on puisse encore poser.
 ## 10 septies. `spark_note` : les trois notes d'un Spark (SPK-104)
 
 Migration `017_notes_spark.sql`. Contrat : `docs/DAT.md` §54, et §54.4 pour la
-colonne qui rend le double sens possible.
+raison de sa forme.
 
 | Colonne | Type | Contenu |
 |---|---|---|
@@ -473,9 +473,8 @@ colonne qui rend le double sens possible.
 | `note_id` | TEXT | `readme`, `contributors` ou `install` |
 | `body` | TEXT | le texte, en clair, tel qu'il a été écrit |
 | `revision` | INTEGER | avance de 1 à chaque écriture, quelle qu'en soit l'origine |
-| `origin` | TEXT | `console` ou `cellule` — qui a écrit la révision courante |
+| `origin` | TEXT | `console` ou `suggestion` — d'où vient la révision courante |
 | `updated_at` | TEXT | horodatage de cette écriture |
-| `projected_sha256` | TEXT nullable | empreinte du dernier texte **posé dans la cellule** par le plan de contrôle, ou `NULL` s'il n'a rien posé |
 
 Clé primaire `(spark_id, note_id)` : une note par sujet et par Spark. Une ligne
 n'existe qu'à partir de la première écriture — **une note jamais écrite n'a pas de
@@ -489,30 +488,33 @@ ses trois. Ce sont des états du produit, pas du texte libre : une troisième
 origine apparue par erreur ferait afficher une provenance que l'écran ne sait pas
 traduire.
 
-**`projected_sha256` est la seule colonne qui ne décrit pas la note, mais ce que
-le plan de contrôle a fait d'elle.** Elle porte l'empreinte SHA-256 du texte
-exactement tel qu'il a été poussé, en-tête du §54.7 compris ou non selon ce que
-la projection écrit — le service en est seul juge, et il compare toujours ce
-qu'il a posé à ce qu'il retrouve. C'est elle qui permet de répondre à « quelqu'un
-a-t-il écrit dans la cellule ? » **sans jamais comparer deux horloges** : celle
-d'une cellule appartient à `root`, c'est-à-dire au locataire (§54.4.1).
+**Il n'y a PAS d'empreinte de projection**, et c'est une décision révisée le jour
+même de l'écriture de cette section (`docs/DAT.md` §54.4). La première rédaction
+faisait des notes des fichiers **à double sens**, réconciliés contre la cellule,
+ce qui exigeait de retenir l'empreinte du dernier texte posé. Le §55 a remplacé ce
+mécanisme par un canal unique — le fichier `.?` — et les notes sont redevenues ce
+que tout le reste est déjà : une **projection** du registre. Il n'y a donc plus
+rien à comparer, et la colonne n'a jamais existé ailleurs que dans une
+spécification corrigée avant son implémentation.
 
-Elle vaut `NULL` tant que rien n'a été projeté ; un fichier trouvé dans la cellule
-alors qu'elle est `NULL` est donc, par définition, écrit par la cellule — ce qui
-est le cas normal d'un Spark où un agent a pris les devants.
+`revision` reste, et sert à la console : un enregistrement portant une révision
+dépassée est refusé en `409` plutôt que d'écraser en silence ce qu'un autre
+onglet, ou une suggestion acceptée entre-temps, venait d'écrire (§54.9).
 
 **Le texte n'est pas chiffré**, contrairement à `env_entry.value_enc`. C'est
 délibéré et cohérent : une note est faite pour être lue, copiée et collée vers un
 tiers, et le §54.6 refuse précisément qu'une valeur de secret y entre. Chiffrer un
 texte dont la raison d'être est d'être publié donnerait une garantie fausse.
 
-**Retour arrière** : le `down` supprime la table, donc les notes. Elles survivent
-dans les cellules, où leurs fichiers restent — c'est le seul endroit du produit où
-un `down` ne perd pas tout, et c'est une conséquence du double sens, pas une
-sauvegarde sur laquelle compter.
+**Retour arrière** : le `down` supprime la table, donc les notes.
 
 La cascade suit le §14.4 : un Spark supprimé emporte ses notes, comme il emporte
 son briefing et son environnement.
+
+**Les suggestions du §55 n'ont AUCUNE table**, et n'en auront pas : le fichier
+`.?` dans la cellule EST l'état de la proposition. Un registre qui en tiendrait
+une copie aurait à la garder d'accord avec un fichier que le locataire réécrit
+quand il veut — exactement la divergence que le §44.8 interdit ailleurs.
 
 ## 11. Retour arrière
 
