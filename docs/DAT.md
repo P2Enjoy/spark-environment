@@ -10763,6 +10763,57 @@ adversaire qui a déjà `root` sur la Forge. Le §35.1 l'assume déjà pour la
 protection, et le §45.2 pour le poste compromis. La garde réduit ce qu'une clé
 volée donne ; elle ne transforme pas la Forge en système inviolable.
 
+### 46.4 bis Un refus de la garde DOIT sortir de la machine — SPK-61
+
+**Constat du 2026-09-14.** La garde journalise ses refus par `logger`, en
+`auth.warning`, dans le syslog de la Forge. C'est lisible **si quelqu'un va le
+lire**, et invisible sinon.
+
+Or ce refus est exactement ce qu'une alerte hors bande existe pour porter : une
+tentative d'ouvrir un shell avec la clé restreinte est, ou bien une erreur de
+l'exploitant, ou bien quelqu'un qui essaie la clé qu'il vient de voler. Le §45.4
+le dit — l'alerte ne prévient pas, elle **détecte**, et elle sert encore quand
+tout le reste a échoué. Laisser ce signal-là dans un fichier local revient à le
+perdre.
+
+**La garde ne NOTIFIE pas : elle DÉCLARE.** C'est la distinction qui décide de
+tout le reste. Elle poste une action à la porte étroite du §37.4.6 —
+`POST /v1/audit`, liste blanche —, et c'est `sparkd` qui décide de l'inscrire au
+journal et de la faire partir en alerte. Deux raisons :
+
+- la garde n'a pas à connaître la configuration des canaux, ni le gabarit, ni le
+  mot de passe qui les protège. Lui donner cette connaissance ferait un second
+  endroit où le canal se règle, et le §47.3 vient précisément d'en supprimer un ;
+- ce qui notifie est la liste FERMÉE du §47.2, décidée à un seul endroit. Une
+  garde qui posterait elle-même contournerait cette liste.
+
+**L'action déclarée est `forge.shell_refused`**, et elle est nouvelle dans la
+liste du §37.4.6. Son résultat est `denied` — le seul cas où le §47.2 notifie un
+refus, et il faut dire pourquoi l'exception est justifiée : la règle générale
+écarte les refus parce que *rien n'a eu lieu*, et qu'en notifier ferait ignorer
+le canal. Ici, le refus **est** l'événement : c'est une clé qui a tenté ce
+qu'elle n'a pas le droit de faire.
+
+**Ce que la déclaration ne doit jamais faire : retarder ou casser une
+connexion.** La garde s'exécute à CHAQUE connexion, y compris les légitimes —
+tunnel, rebond, dépannage. Un appel réseau dans ce chemin est un risque
+d'exploitation, pas une mesure de sécurité. Trois bornes, et elles ne sont pas
+négociables :
+
+- l'appel part **en arrière-plan**, détaché, et la garde n'attend pas sa réponse ;
+- il porte un **délai de garde** de deux secondes, et son échec est **avalé** ;
+- il n'est tenté **que sur le chemin du refus**. Une connexion légitime ne
+  déclare rien : elle est déjà journalisée par ce qu'elle va faire.
+
+C'est le §47.5 appliqué un cran plus bas : une panne de traçabilité ne devient
+pas une panne d'accès.
+
+**Ce qui reste INERTE tant qu'OP-10 n'est pas joué.** La garde n'est installée
+que par cette opération, et le responsable a décidé le 2026-09-14 de la laisser
+en attente. Le code existe donc, il est prouvé, et il ne s'exécute nulle part.
+Le document le dit plutôt que de laisser croire que la Forge est surveillée sur
+ce point.
+
 ### 46.5 Ce que `permitopen` doit couvrir, et le piège qui s'y cache
 
 Deux familles de cibles, et une seule est stable :
