@@ -222,6 +222,36 @@ de votre Spark. Trois choses changent, et il vaut mieux les savoir avant :
 C'est pourquoi le défaut est le mode ordinaire. Le rootless est offert à qui le
 demande en connaissance de cause, pas recommandé par défaut.
 
+### Ce que l'amorçage ouvre pour vous en rootless
+
+Le compte rendu d'un amorçage rootless porte une ligne de plus : **« réseau de la
+pile rootless »**. Voici ce qu'elle recouvre, parce que c'est un geste qui touche
+à la configuration de votre cellule et que vous devez pouvoir le défaire.
+
+Les distributions récentes livrent deux profils de sécurité — `rootlesskit` et
+`slirp4netns` — qui, **tels quels, interdisent au moteur Docker non privilégié de
+créer le moindre socket réseau**. Concrètement : aucune image ne peut être
+téléchargée, et le message d'erreur parle de résolution de nom, ce qui envoie
+chercher au mauvais endroit.
+
+L'amorçage ajoute donc deux lignes, dans le fichier d'extension que chaque profil
+prévoit lui-même — `/etc/apparmor.d/local/rootlesskit` et
+`/etc/apparmor.d/local/slirp4netns` :
+
+    network inet,
+    network inet6,
+
+C'est la plus petite règle qui fonctionne : elle autorise les connexions IP, et
+**rien d'autre** — pas la capture de paquets bruts, par exemple. Elle n'accorde
+à votre pile rien que vous ne puissiez déjà faire depuis le compte `root` de
+votre Spark, et elle ne touche ni au mode enraciné, ni à la manière dont votre
+cellule résout les noms.
+
+Pour la retirer : supprimez les deux fichiers et rechargez les profils. Sachez
+seulement que votre moteur rootless cessera alors de pouvoir télécharger des
+images. Un amorçage rejoué les repose ; s'ils sont déjà en place, il ne touche à
+rien et ne redémarre pas votre moteur.
+
 ### Ce choix ne se reprend pas
 
 **Un amorçage ne bascule jamais un Docker déjà installé d'un mode à l'autre**, et

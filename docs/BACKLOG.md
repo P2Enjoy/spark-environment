@@ -281,8 +281,8 @@ opération manuelle et n'est pas planifié.
 **Arbitrage du responsable, 2026-09-14 : la garde passe en LOCAL.** La CI GitHub
 est abandonnée pour cette unité — Actions n'a jamais tourné et son activation
 n'est pas acquise. La vérification du contrat est posée dans un hook `pre-push`,
-prouvée sur une dérive réelle. La limite est à écrire sans détour : la garde ne
-protège que les postes qui ont installé le hook.
+prouvée sur une dérive réelle.
+
 
 - Spécification : `docs/DAT.md` §23
 - **Livré et prouvé le 2026-08-19.** `packages/contract/openapi/sparkd.json`
@@ -6010,15 +6010,82 @@ pas casser la cellule.
   un second Spark rootless dans la campagne, ce qui est une tâche à part.
 
 
-### [ ] SPK-96 · Le démon rootless ne résout aucun nom, et l'amorçage promet le contraire
+### [x] SPK-96 · Le démon rootless ne sortait pas, et l'amorçage promettait le contraire
 
-**Arbitrage du responsable, 2026-09-14 — la voie est tranchée.** Le remède est un
-`/etc/resolv.conf` **statique visant `10.77.0.1`**, la passerelle du bridge
-`sparkbr0`. Les deux autres voies sont écartées : désactiver le stub modifie la
-configuration d'un service de la cellule, et n'agir que dans l'espace du démon
-produit un remède qui ne survit peut-être pas au redémarrage du service. La voie
-retenue vise l'amont que `systemd-resolved` interroge **déjà** — ce que la cellule
-résout ne change donc pas de destination, seulement de chemin.
+**Le titre a changé, et c'est le résumé de l'unité.** Elle s'appelait « ne résout
+aucun nom ». La résolution n'était pas en cause : le démon ne pouvait ouvrir
+**aucun socket**. Le symptôme mentait, et il a menti trois fois.
+
+**Premier arbitrage du 2026-09-14, rendu sur un diagnostic FAUX** : écrire un
+`/etc/resolv.conf` statique visant la passerelle du bridge. Le remède a été
+spécifié, codé, déployé — et n'a **rien corrigé**. Il est défait. La trace est
+gardée ici parce que le symptôme sera relu, et qu'il envoie au mauvais endroit.
+
+**Ce que la mesure a établi, le 2026-09-14, sur la cellule `rootless-96` de la
+Forge de test :**
+
+| Ce qu'on a changé | Ce que `docker pull` a rendu |
+|---|---|
+| `resolv.conf` → passerelle du bridge | échec, **identique** |
+| `resolv.conf` → `1.1.1.1` (résolveur public) | échec, identique — ce n'est donc pas l'adresse |
+| retrait de `mymachines` de `nsswitch.conf` | le message CHANGE : `socket: permission denied` |
+| DNS en TCP (`options use-vc`) | `socket: permission denied` — ce n'est pas la résolution |
+| `network inet, inet6,` sur `rootlesskit` **et** `slirp4netns` | **l'image est tirée** |
+
+**Deux leurres, et le second est de notre fait.** Le premier est le
+`nameserver 127.0.0.53` : il a l'air coupable et ne l'est pas. Le second est
+`mymachines` dans `nsswitch.conf`, qui fait rendre à Go un « no such host » là où
+le noyau dit « permission denied » — et `mymachines` est posé par
+`systemd-container`, que **notre propre amorçage installe** (§42.2 bis). Nous
+avions donc fabriqué le brouillard que nous avons mis une semaine à traverser.
+
+**La cause, lue dans le journal du noyau et non supposée :**
+
+```
+apparmor="DENIED" operation="create" class="net" info="failed af match"
+profile="rootlesskit" comm="dockerd" family="inet" sock_type="dgram"
+```
+
+**Second arbitrage du responsable, rendu sur le diagnostic corrigé** : l'amorçage
+pose la règle, en rootless seulement, et **la plus petite qui fonctionne**. Le
+§42.4.1 porte la progression complète des mesures, qui est la justification de
+son périmètre.
+
+**Ce que cela n'élargit pas.** L'init de la cellule tourne `unconfined` : son root
+peut déjà créer n'importe quel socket. Le profil `rootlesskit` était donc **plus
+strict que la cellule qui le contient**, et la règle ne fait que corriger cette
+incohérence. Le locataire, root chez lui, pouvait écrire ces deux fichiers
+lui-même.
+
+- **Éprouvée par le produit, depuis le parcours canonique.** Sur `rootless-96`,
+  remise **exactement** dans l'état que la distribution livre — profils fermés,
+  `resolv.conf` d'origine, `nsswitch.conf` d'origine —, l'amorçage demandé depuis
+  la console a posé les deux règles lui-même. Puis, par le **terminal de la
+  console**, porte `spark-docker` choisie à la souris, au clavier :
+
+  ```
+  spark-docker@rootless-96:~/pile$ docker compose up -d
+   ✔ Image nginx:alpine   Pulled
+   ✔ Network pile_default Created
+   ✔ Container pile-web-1 Started
+  spark-docker@rootless-96:~/pile$ wget -qO- http://127.0.0.1:8099 | head -4
+  <title>Welcome to nginx!</title>
+  ```
+
+  C'est la DoD, mot pour mot : une pile dont l'image vient d'un registre public
+  **démarre**.
+- **Le Spark enraciné est inchangé**, prouvé par un test et vérifié sur la Forge :
+  `dns-96` ne porte aucun des deux fichiers, et son `resolv.conf` est celui que la
+  distribution livre.
+- **La résolution ordinaire de la cellule est intacte** : l'amorçage n'écrit ni
+  `resolv.conf` ni `nsswitch.conf`, et une preuve garde ce constat pour qu'il ne
+  soit pas réécrit de bonne foi la prochaine fois que quelqu'un relira le symptôme.
+- **Un second amorçage ne redémarre pas le démon** : mesuré sur la Forge —
+  « Rien n'a été fait : tout était déjà en place ».
+- **Preuves** : 9 tests d'unité, 1 parcours E2E propre à l'unité, captures
+  observées. Le doublon porte l'EFFET du geste — et un défaut y a été corrigé au
+  passage : il concluait « ouvert » en se contentant de LIRE le relevé, dont le
+  script nomme le même chemin.
 
 **Trouvé par la mesure le 2026-09-07**, sur la Forge de test, en éprouvant la
 pile Compose de SPK-94 sur la cellule `rootless-mesure` (Ubuntu 24.04, amorcée en

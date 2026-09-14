@@ -979,6 +979,16 @@ class FakeIncus:
         runtime.setdefault("motd_distro", "present")
         if "chmod -x /etc/update-motd.d" in script:
             runtime["motd_distro"] = "absent"
+        # SPK-96 · §42.4.1 : une cellule ARRIVE avec ses profils AppArmor fermes,
+        # et c'est ce qui rend le geste eprouvable. Un doublon ne naissant pas
+        # confine n'aurait jamais fait passer l'ouverture — exactement la raison
+        # pour laquelle le bandeau du §42.2 quater est pose par defaut ci-dessus.
+        runtime.setdefault("confinement_rootless", "ferme")
+        # La marque doit etre celle du GESTE, jamais celle du releve : le script
+        # du §42.6 nomme lui aussi `/etc/apparmor.d/local/`, et le doublon
+        # concluait « ouvert » en se contentant de LIRE.
+        if "apparmor_parser -r" in script:
+            runtime["confinement_rootless"] = "ouvert"
 
         # SPK-74 · §17.5 : le doublon porte l'EFFET de la creation d'identite,
         # pas seulement son passage. Sans lui, un second appel retrouverait la

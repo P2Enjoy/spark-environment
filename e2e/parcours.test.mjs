@@ -3769,6 +3769,44 @@ test('cocher le rootless amorce dans ce mode, et le journal le PORTE', async () 
   });
 });
 
+// --- SPK-96 · rendre un réseau à la pile rootless (§42.4.1) ------------------
+//
+// @verifies docs/BACKLOG.md#SPK-96 · docs/DAT.md §42.4.1, §42.1, §41.2 ·
+//           CLAUDE.md §16 (mesuré sur la Forge réelle le 2026-09-14 : sans ce
+//           geste, `docker pull` rend « socket: permission denied »)
+
+test('amorcer en rootless REND UN RÉSEAU à la pile, et le journal le NOMME', async () => {
+  await parcours('amorcage-rootless-reseau', async () => {
+    // Le geste vient d'avoir lieu sur « boutique », que le parcours précédent a
+    // amorcée en rootless. On ne le rejoue pas : on LIT ce que le journal en a
+    // gardé, parce que c'est là qu'on le cherchera le jour où une pile ne
+    // démarre pas.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.bootstrap&limit=20');
+    const sienne = corps.entries.filter((e) => e.message.includes('boutique'));
+    assert.ok(sienne.length > 0, 'l’amorçage rootless doit avoir laissé une ligne');
+
+    // Le libellé est en FRANÇAIS et nomme ce qui a été rendu, pas le fichier
+    // qu'on a écrit : « réseau de la pile rootless » se lit, « apparmor » non.
+    assert.match(sienne[0].message, /réseau de la pile rootless/,
+      'le compte rendu doit nommer le geste : sans lui, le démon ne peut ' +
+      'tirer aucune image et l’écran promet pourtant une pile Compose');
+    assert.ok(!/apparmor/i.test(sienne[0].message),
+      'aucun jeton technique dans une phrase destinée à être lue (§14.7)');
+
+    const items = JSON.parse(sienne[0].payload).items ?? [];
+    assert.ok(items.includes('confinement'), JSON.stringify(items));
+  });
+});
+
+// L'IDEMPOTENCE de ce geste n'est pas éprouvée ici, et ce n'est pas un oubli :
+// le §42.2 bis refuse de réamorcer une cellule déjà rootless sans la case, que
+// l'écran n'offre plus une fois le mode en place — le parcours suivant en fait
+// justement sa preuve. Elle l'est ailleurs, deux fois : par
+// `test_une_cellule_DEJA_ouverte_ne_recharge_rien_et_ne_REDEMARRE_pas`, qui
+// garde l'ordre des instructions du script, et sur la Forge RÉELLE le
+// 2026-09-14, où un second amorçage de `rootless-96` a rendu « Rien n'a été
+// fait : tout était déjà en place ».
+
 test('redemander l’autre mode est REFUSÉ, et le refus nomme les deux', async () => {
   await parcours('amorcage-bascule-refusee', async () => {
     // LE point du §42.2 bis. Basculer déplacerait le moteur sous un autre compte,

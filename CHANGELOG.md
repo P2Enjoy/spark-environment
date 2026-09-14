@@ -3,6 +3,19 @@
 ## [Non publié]
 
 ### Corrigé
+- **SPK-96 — un Spark amorcé en rootless ne pouvait télécharger aucune image.**
+  Le compte rendu promettait pourtant une cellule « capable de faire tourner une
+  pile Compose ». Cause mesurée : les profils AppArmor `rootlesskit` et
+  `slirp4netns`, livrés par la distribution, refusent à la pile rootless la
+  création de tout socket réseau. Le message d'erreur parlait de résolution de
+  nom — un leurre que `mymachines`, ajouté par `systemd-container` que
+  l'amorçage installe lui-même, rendait encore plus trompeur. L'amorçage ouvre
+  désormais les deux profils par leur fichier d'extension, avec la plus petite
+  règle qui fonctionne (`network inet,` et `network inet6,`, jamais `network,`
+  qui accorderait en plus les paquets bruts). Le mode enraciné ne reçoit rien,
+  rien n'est refait si c'est déjà en place, et ni le `resolv.conf` ni le
+  `nsswitch.conf` de la cellule ne sont touchés — les deux avaient été
+  soupçonnés, les deux ont été disculpés par la mesure.
 - **SPK-62 — le corps de l'alerte hors bande n'était accepté par aucun service
   réel.** Mesuré sur un webhook Discord : `HTTP 400 — Cannot send an empty
   message`. Discord veut `{"content": …}`, Slack `{"text": …}` ; notre JSON
