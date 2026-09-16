@@ -223,6 +223,104 @@ test('ouvrir deux fois le meme serveur ne lance pas deux ssh', async () => {
   assert.equal(lances, 1);
 });
 
+// --- LA RECONNEXION (§22.4.6, §22.4.6 bis) ---------------------------------
+//
+// @verifies docs/BACKLOG.md#SPK-16, docs/BACKLOG.md#SPK-41 · docs/DAT.md
+//           §22.4.6 (la reconnexion est un geste), §22.4.6 bis, §22.6
+//
+// DEFAUT RAPPORTE PAR LE RESPONSABLE, 2026-09-16 : une console ouverte depuis
+// plus de 24 h ne se reconnectait plus. Le tunnel tombe dans la nuit, le geste
+// « Reconnecter » ne relance RIEN, et la seule issue est d'arreter la console et
+// de la relancer — c'est-a-dire le defaut meme que le §22.4.6 existe pour
+// supprimer, deplace de la page vers le processus.
+
+test('le geste de reconnexion ROUVRE un tunnel rompu', async () => {
+  let lances = 0;
+  let joignable = false;
+  const gestion = new TunnelManager({
+    spawn: () => { lances += 1; return fauxSsh(); },
+    probe: async () => { if (!joignable) throw new Error('injoignable'); },
+    probeIntervalMs: 3_600_000,
+    openTimeoutMs: 1,
+  });
+  const rompu = await gestion.open(SERVEUR);
+  assert.equal(rompu.state, BROKEN);
+
+  // La Forge revient. Le geste doit relancer un `ssh` — rendre l'existant tel
+  // quel laissait la console rompue jusqu'a son redemarrage.
+  joignable = true;
+  const rouvert = await gestion.open(SERVEUR);
+  assert.equal(rouvert.state, READY);
+  assert.equal(lances, 2, 'un SECOND ssh a bien ete lance');
+  assert.equal(rouvert, rompu, 'le meme tunnel, rouvert : le nom reste une adresse');
+});
+
+test('un SSH etabli devant un sparkd muet n est PAS relance', async () => {
+  // SPK-68 · §50.1 : relancer `ssh` ne reveillerait pas `sparkd`, et couperait
+  // une connexion saine pour rien. La sonde, elle, le verra revenir.
+  let lances = 0;
+  const gestion = new TunnelManager({
+    spawn: () => { lances += 1; return fauxSsh(); },
+    probe: async () => { throw new Error('connect ECONNREFUSED'); },
+    probeIntervalMs: 3_600_000,
+    openTimeoutMs: 1,
+  });
+  const tunnel_ = await gestion.open(SERVEUR);
+  tunnel_.transportState = READY;   // ce que dit « Authenticated to … »
+  await gestion.open(SERVEUR);
+  assert.equal(lances, 1);
+});
+
+test('rouvrir ABANDONNE le ssh precedent, et ses derniers mots ne rompent rien', async () => {
+  // Rompu ne veut pas dire mort : un `ssh` FIGE vit toujours, et SIGTERM lui
+  // fait ecrire sa derniere ligne. Sans garde, ce rale rompait la connexion qui
+  // venait de s'etablir.
+  const enfants = [];
+  let joignable = false;
+  const t = tunnel({
+    spawn: () => { const e = fauxSsh(); enfants.push(e); return e; },
+    probe: async () => { if (!joignable) throw new Error('fige'); },
+    openTimeoutMs: 1,
+  });
+  await t.open();
+  assert.equal(t.state, BROKEN);
+
+  joignable = true;
+  await t.open();
+  assert.equal(t.state, READY);
+  assert.equal(enfants.length, 2);
+  assert.equal(enfants[0].tue, true, 'le ssh de la tentative precedente est TUE');
+
+  enfants[0].stderr.emit('data', 'Permission denied (publickey).\n');
+  enfants[0].emit('exit', 255);
+  assert.equal(t.state, READY, 'le tunnel COURANT n est pas rompu par un ssh abandonne');
+  assert.equal(t.lastError, null, 'ni salie par son diagnostic');
+});
+
+test('rouvrir ne laisse pas la sonde de la tentative precedente', async (t) => {
+  // La sonde appartient a une TENTATIVE, pas a l'objet qui la porte. Chaque
+  // reouverture en ajoutait une : au bout de dix, `/healthz` etait interroge dix
+  // fois par intervalle, pour un seul tunnel.
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let joignable = false;
+  const tun = tunnel({
+    probe: async () => { if (!joignable) throw new Error('injoignable'); },
+    probeIntervalMs: 100,
+    openTimeoutMs: 1,
+  });
+  await tun.open();
+  assert.equal(tun.state, BROKEN);
+  joignable = true;
+  await tun.open();
+  assert.equal(tun.state, READY);
+
+  let sondes = 0;
+  tun.probeFn = async () => { sondes += 1; };
+  t.mock.timers.tick(1000);
+  assert.equal(sondes, 10, 'UNE sonde toutes les 100 ms, et non deux');
+  tun.close();
+});
+
 // --- etablissement (defaut trouve par le test reel) -------------------------
 
 test('un tunnel lent a s ouvrir n est PAS declare rompu', async () => {

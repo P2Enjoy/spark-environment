@@ -115,7 +115,11 @@ export async function monterPile({ dns = null, notify = null } = {}) {
   });
 
   // 2. `sparkd`, sur son port libre.
-  const sparkd = lancer(PYTHON, ['-m', 'sparkd'], envSparkd, journal);
+  //
+  // `let` et non `const` : la Forge se COUPE et se remonte au cours d'un
+  // parcours (§22.4.6 bis), sur le même port, et le démontage doit tuer celle
+  // qui tourne alors — pas celle qui a démarré ici.
+  let sparkd = lancer(PYTHON, ['-m', 'sparkd'], envSparkd, journal);
   await attendre(`http://127.0.0.1:${portSparkd}/healthz`, { quoi: 'sparkd' });
 
   // 3. L'inventaire de la console pointe sur CE sparkd (docs/DAT.md §28.2).
@@ -385,6 +389,37 @@ export async function monterPile({ dns = null, notify = null } = {}) {
           ? resolve()
           : reject(new Error(`altération sortie en ${code} :\n${journal.join('')}`))));
       });
+    },
+    /**
+     * COUPE la Forge, pour de vrai (SPK-16, docs/DAT.md §22.4.6, §22.4.6 bis).
+     *
+     * La panne que le responsable a rapportée est une nuit de sommeil : la
+     * console reste ouverte, la Forge devient injoignable, et il faut ensuite
+     * se reconnecter. Aucun geste de l'interface ne peut produire cela — c'est
+     * la machine d'en face qui tombe —, et `CLAUDE.md` §15 demande alors un
+     * chemin déterministe plutôt qu'une simulation. Celui-ci ARRÊTE le vrai
+     * processus ; la console ne sait rien de cet arrêt, elle le découvre.
+     *
+     * On attend la SORTIE : tuer sans attendre laisserait le port répondre
+     * encore, et le parcours mesurerait alors sa propre impatience.
+     */
+    async couperSparkd() {
+      if (sparkd.exitCode === null) {
+        const fini = new Promise((r) => sparkd.once('exit', r));
+        sparkd.kill('SIGTERM');
+        await fini;
+      }
+      for (let i = 0; i < 40; i += 1) {
+        try { await fetch(`http://127.0.0.1:${portSparkd}/healthz`); }
+        catch { return; }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      throw new Error(`sparkd répond encore sur ${portSparkd} après son arrêt.`);
+    },
+    /** Remonte la Forge sur le MÊME port : c'est la même machine qui revient. */
+    async remonterSparkd() {
+      sparkd = lancer(PYTHON, ['-m', 'sparkd'], envSparkd, journal);
+      await attendre(`http://127.0.0.1:${portSparkd}/healthz`, { quoi: 'sparkd remonté' });
     },
     journal,
     async demonter() {

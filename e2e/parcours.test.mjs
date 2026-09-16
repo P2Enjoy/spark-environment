@@ -285,6 +285,68 @@ test('ajouter un serveur, voir l’épreuve, basculer, reconnecter, retirer', as
   });
 });
 
+// --- SPK-16 · LA RECONNEXION APRÈS UNE VRAIE PANNE (§22.4.6, §22.4.6 bis) ---
+
+test('une Forge tombée puis revenue se rejoint DEPUIS L’ÉCRAN', async () => {
+  await parcours('tunnel-reconnexion', async () => {
+    // @verifies docs/BACKLOG.md#SPK-16, docs/BACKLOG.md#SPK-41 ·
+    //           docs/DAT.md §22.4.6 (la reconnexion est un geste), §22.4.6 bis
+    //           (rouvrir, c'est abandonner le transport précédent) · CLAUDE.md §16
+    //
+    // DÉFAUT RAPPORTÉ PAR LE RESPONSABLE le 2026-09-16 : une console ouverte
+    // depuis plus de 24 h ne se reconnectait plus, et la seule issue était de
+    // l'arrêter et de la relancer. La DoD de SPK-41 exigeait ce parcours —
+    // « rompre le tunnel et le rouvrir depuis l'écran » — et il manquait : le
+    // parcours du catalogue en portait le mot dans son titre, pas dans son corps.
+    //
+    // Ce parcours COUPE la vraie Forge. Rien n'est simulé côté console : elle
+    // découvre la panne comme un exploitant la découvre, en s'en servant.
+    await accueil();
+
+    // 1. La Forge tombe pendant que la console reste ouverte.
+    await pile.couperSparkd();
+
+    // 2. On s'en sert — et c'est le geste ordinaire qui révèle la panne.
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('[data-action="reconnecter"]', { timeout: 30000 });
+    assert.match(await page.textContent('.entete__contexte'), /Tunnel rompu/,
+      'le badge dit la panne, et la commande de reconnexion apparaît');
+    await capturer('spk16-tunnel-rompu');
+    // 390 px : la commande de reconnexion doit rester atteignable là aussi.
+    await capturer('spk16-tunnel-rompu-mobile', { largeur: 390, hauteur: 900 });
+
+    // 3. Le geste ne MENT pas : Forge à terre, il rend « rompu ». Un bouton qui
+    //    annoncerait un succès parce qu'on l'a cliqué serait pire qu'aucun.
+    await page.click('[data-action="reconnecter"]');
+    await page.waitForFunction(
+      () => document.querySelector('.entete__contexte')?.textContent.includes('Tunnel rompu'),
+      { timeout: 30000 });
+
+    // 4. La Forge revient. LE MÊME BOUTON doit suffire : c'est tout le défaut.
+    await pile.remonterSparkd();
+    await page.click('[data-action="reconnecter"]');
+    await page.waitForFunction(
+      () => document.querySelector('.entete__contexte')?.textContent.includes('Tunnel ouvert'),
+      { timeout: 30000 });
+
+    // 5. …et l'ÉCRAN se relit tout seul. Un badge vert au-dessus du refus rouge
+    //    de la tentative précédente ferait lire « la reconnexion n'a rien
+    //    changé » : c'est le refus périmé qu'on verrait, pas l'état courant.
+    await page.waitForSelector('#titre-pools', { timeout: 30000 });
+    assert.doesNotMatch(await page.textContent('main'),
+      /n’ont pas pu être lues|n'ont pas pu être lues/,
+      'le refus de la Forge tombée ne survit pas à sa reconnexion');
+    await capturer('spk16-tunnel-rejoint');
+
+    // 6. Le tunnel PORTE à nouveau, et la Forge remontée est bien celle qu'on
+    //    interroge. On rend enfin l'écran où les parcours se prennent (§29.2).
+    const { status } = await pile.lireSparkd('/v1/forge');
+    assert.equal(status, 200, 'la Forge remontée répond à nouveau');
+    await page.click('nav a[href="#/sparks"]');
+    await page.waitForSelector('tbody a', { timeout: 20000 });
+  });
+});
+
 test('modifier un serveur existant : la modale s’ouvre PRÉ-REMPLIE', async () => {
   await parcours('catalogue-modifier', async () => {
     await accueil();

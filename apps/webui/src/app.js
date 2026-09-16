@@ -2824,8 +2824,24 @@ async function api(chemin) {
     // PARLE du tunnel rend son état, fût-il `null` — aucun tunnel n'est alors
     // ouvert. Une erreur qui n'en parle pas ne doit rien laisser croire de lui :
     // la recopier en `null` effaçait ce qu'on savait du tunnel, et l'écran des
-    // pools concluait ensuite au silence du transport SSH (voir `charger`).
+    // pools concluait ensuite au silence du transport SSH.
     erreur.tunnel = corps && 'tunnel' in corps ? corps.tunnel : undefined;
+    // …et ce que le refus dit du tunnel remplace AUSSITÔT ce qu'on en savait.
+    //
+    // Ce rafraîchissement vivait dans trois chargeurs sur la douzaine qui
+    // appellent `api` — et l'écran de la Forge n'en faisait pas partie. VU À
+    // L'ÉCRAN le 2026-09-16, Forge coupée : « Tunnel ouvert » dans l'en-tête
+    // au-dessus de « La Forge n'a pas répondu à travers le tunnel ». Le badge
+    // mentait, donc la commande *Reconnecter* n'apparaissait jamais, et il
+    // fallait relancer la console — la panne rapportée par le responsable.
+    //
+    // Ici, il vaut pour TOUS les appels : un quatrième chargeur oublié n'est
+    // plus possible. Le badge est peint à part de la vue (`peindre` ne le
+    // touche pas), donc on le repeint explicitement.
+    if (erreur.tunnel !== undefined) {
+      etat.tunnel = erreur.tunnel;
+      peindreContexte();
+    }
     // Le runtime nomme ses refus ; l'appelant en a besoin pour distinguer un
     // état nommé d'une panne (docs/DAT.md §27.8). `sparkd` les niche sous
     // `detail`, l'hôte console les pose à plat : les deux sont des refus nommés.
@@ -4744,14 +4760,8 @@ async function chargerSupervisionForge(fenetre, { silencieux = false } = {}) {
   } catch (erreur) {
     ui.status = 'erreur';
     ui.error = erreur.message;
-    // §22.3 : une panne se signale, elle ne se masque pas. Sans cela, VU À
-    // L'ÉCRAN le 2026-09-07 : « Tunnel ouvert » dans l'en-tête au-dessus d'un
-    // refus qui nommait le tunnel rompu. Seule une erreur qui PARLE du tunnel
-    // remplace ce qu'on en savait — un refus muet n'efface rien.
-    if (erreur.tunnel !== undefined) {
-      etat.tunnel = erreur.tunnel;
-      peindreContexte();
-    }
+    // §22.3 : une panne se signale, elle ne se masque pas — `api` a déjà adopté
+    // ce que ce refus dit du tunnel, et repeint l'en-tête.
   }
   peindre();
   if (etat.route === 'supervision') {
@@ -4772,14 +4782,8 @@ async function chargerMesuresSpark(nom, { silencieux = false } = {}) {
   } catch (erreur) {
     ui.status = 'erreur';
     ui.error = erreur.message;
-    // §22.3 : une panne se signale, elle ne se masque pas. Sans cela, VU À
-    // L'ÉCRAN le 2026-09-07 : « Tunnel ouvert » dans l'en-tête au-dessus d'un
-    // refus qui nommait le tunnel rompu. Seule une erreur qui PARLE du tunnel
-    // remplace ce qu'on en savait — un refus muet n'efface rien.
-    if (erreur.tunnel !== undefined) {
-      etat.tunnel = erreur.tunnel;
-      peindreContexte();
-    }
+    // §22.3 : une panne se signale, elle ne se masque pas — `api` a déjà adopté
+    // ce que ce refus dit du tunnel, et repeint l'en-tête.
   }
   peindre();
   if (etat.route === 'detail' && etat.facette === 'mesures' && etat.spark?.name === nom) {
@@ -4902,20 +4906,8 @@ async function charger() {
   } catch (erreur) {
     etat.status = 'error';
     etat.error = erreur;
-    // Seule une erreur qui PARLE du tunnel remplace ce qu'on en savait (§22.3).
-    //
-    // MESURÉ le 2026-09-02 contre la Forge réelle : un refus de `sparkd` — ou
-    // une requête qui n'aboutit pas à travers un tunnel figé — ne dit RIEN du
-    // tunnel, et `erreur.tunnel` valait alors `null`. L'écrire quand même
-    // effaçait l'état connu ; l'écran des pools, qui lit ce même état, annonçait
-    // ensuite « Le transport SSH ne répond pas » à côté d'un en-tête affichant
-    // « Tunnel ouvert », sur un tunnel qui l'était.
-    if (erreur.tunnel !== undefined) {
-      etat.tunnel = erreur.tunnel;
-      // L'en-tête porte le badge du tunnel et `peindre` ne le touche pas :
-      // sans cela, l'état adopté ici resterait invisible là où on le lit.
-      peindreContexte();
-    }
+    // Seule une erreur qui PARLE du tunnel remplace ce qu'on en savait (§22.3),
+    // et c'est `api` qui l'adopte, pour tous ses appelants.
   }
   peindre();
 }
@@ -4961,7 +4953,15 @@ function peindreContexte() {
     changerDeServeur(evenement.target.value);
   });
   racine.querySelector('[data-action="reconnecter"]')
-    ?.addEventListener('click', () => ouvrirTunnel(etat.server));
+    ?.addEventListener('click', async () => {
+      // Le tunnel rouvert, l'ÉCRAN se relit. VU À L'ÉCRAN le 2026-09-16 : le
+      // badge repassait au vert au-dessus du refus rouge de la tentative
+      // précédente, laissé tel quel. Un exploitant lit alors que la
+      // reconnexion n'a rien changé — c'est le refus périmé qu'il voit, pas
+      // l'état courant, et le §22.3 interdit de présenter l'un pour l'autre.
+      const vu = await ouvrirTunnel(etat.server);
+      if (vu?.state === 'ready') await router();
+    });
 }
 
 /**

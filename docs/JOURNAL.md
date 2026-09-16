@@ -11615,3 +11615,64 @@ fait, ce que le `CLAUDE.md` §1 interdit explicitement.
 **Les deux unités sont closes**, avec cette réserve écrite noir sur blanc : la
 campagne porte trois rouges qui ne leur appartiennent pas, et rien n'est
 déployé.
+
+---
+
+## 2026-09-16 · SPK-16 — la console ne se reconnectait pas, et il fallait la relancer
+
+**Le problème, rapporté par le responsable.** Une console ouverte depuis plus de
+24 h ne rejoint plus sa Forge. Il faut arrêter l'interface et la relancer pour
+que le tunnel se rétablisse.
+
+**Ce que le code disait.** `TunnelManager.open` rendait le tunnel existant sans
+regarder son état. Le geste *Reconnecter* du §22.4.6 appelle `POST /api/tunnels`,
+qui appelle cette méthode : il ne relançait donc **rien**, et rendait le même
+`broken`. `Tunnel.open` savait pourtant rouvrir depuis `broken` — personne ne le
+lui demandait jamais. Recharger la page ne servait à rien non plus : l'ouverture
+au démarrage (§22.6) passe par la même porte. Redémarrer le processus vidait la
+table des tunnels : c'était le seul remède, et c'est exactement celui que le
+§22.4.6 avait entrepris de supprimer, déplacé de la page vers le processus.
+
+**Reproduit avant de corriger**, deux fois, hors interface : une sonde qui échoue
+puis redevient saine, et le compte des `ssh` lancés. Un seul, avant comme après
+le geste.
+
+**Deux défauts de plus, trouvés en écrivant la correction**, et que la première
+version aurait introduits :
+
+- `broken` ne veut pas dire **mort**. Un `ssh` figé vit toujours — c'est la
+  première ligne du module —, et rouvrir sans l'abandonner fuit un processus et
+  une sonde par reconnexion. Mesuré : dix clics, dix intervalles, `/healthz`
+  interrogé dix fois par période pour un seul tunnel.
+- un `ssh` tué **parle encore**. SIGTERM lui fait écrire sa dernière ligne, et
+  son `exit` arrive après. Ses écouteurs rompaient alors le tunnel qui venait de
+  s'établir, et écrivaient « Permission denied » par-dessus un tunnel sain. Ils
+  reconnaissent désormais le sous-processus dont ils parlent.
+
+**Le troisième défaut est venu du parcours E2E**, et c'est lui qui rendait le
+premier invisible depuis l'écran. Forge coupée, l'en-tête affichait **« Tunnel
+ouvert »** au-dessus de « La Forge n'a pas répondu à travers le tunnel ». Le
+rafraîchissement de l'état du tunnel vivait dans trois chargeurs sur la douzaine
+qui appellent `api` — et l'écran de la Forge n'en faisait pas partie. Le badge
+mentant, la commande *Reconnecter* n'apparaissait jamais. Il vit maintenant dans
+`api`, pour tous ses appelants : un quatrième chargeur oublié n'est plus
+possible. C'est le même défaut que le 2026-09-02, réparé trois fois au lieu
+d'une.
+
+**Et une reconnexion réussie relit la vue courante.** Observé : sans cela, le
+badge repasse au vert au-dessus du refus rouge de la tentative précédente, et
+l'exploitant lit que son geste n'a rien changé.
+
+**La DoD de SPK-41 exigeait ce parcours** — « rompre le tunnel et le rouvrir
+depuis l'écran » — et il manquait depuis le début : le parcours du catalogue en
+portait le mot dans son **titre**, pas dans son corps. C'est la leçon de la
+journée. Le nouveau parcours **coupe la vraie Forge** — la pile arrête le
+processus `sparkd` et le remonte sur le même port — et la console découvre la
+panne en s'en servant, comme un exploitant qui revient le lendemain. Il échoue
+sans la correction, à l'endroit exact du défaut.
+
+**Vérifications.** 4 preuves unitaires neuves, dont 3 rouges avant correction ;
+1379 tests de console (1 rouge **antérieur**, sans rapport : des classes CSS
+littérales absentes de la feuille, laissées par un travail non committé) ;
+parcours E2E vert, isolément et en campagne ; captures desktop et 390 px
+observées.

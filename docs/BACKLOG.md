@@ -274,7 +274,23 @@ opération manuelle et n'est pas planifié.
   `502 forge_unreachable`, avec le motif et le tunnel resondé. Et le motif
   rapporté par `ssh` était recouvert par le `fetch failed` de la sonde, qui
   s'exécute toutes les cinq secondes : il prime maintenant sur elle.
-- 36 tests pour l'hôte console.
+- **Défaut rapporté par le responsable le 2026-09-16, sur une console ouverte
+  depuis plus de 24 h : elle ne se reconnectait plus.** Le geste *Reconnecter* du
+  §22.4.6 rendait le tunnel existant **sans regarder son état** — un tunnel tombé
+  dans la nuit restait tombé, et la seule issue était d'arrêter la console et de
+  la relancer. Recharger la page ne suffisait pas : l'ouverture au démarrage
+  (§22.6) passe par la même porte. Trois choses manquaient, toutes écrites au
+  §22.4.6 bis : relancer le transport tombé, **abandonner** la tentative
+  précédente — un `ssh` figé vit toujours, sa sonde survivait à chaque essai, et
+  son râle rompait la connexion suivante —, et faire suivre l'écran, qui
+  affichait « Tunnel ouvert » au-dessus du refus de la Forge et n'offrait donc
+  jamais la commande de reconnexion.
+- **La DoD de SPK-41 exigeait ce parcours — « rompre le tunnel et le rouvrir
+  depuis l'écran » — et il manquait** : le parcours du catalogue en portait le
+  mot dans son titre, pas dans son corps. Il existe désormais, et il COUPE la
+  vraie Forge : `e2e/parcours.test.mjs`, captures `spk16-tunnel-rompu`,
+  `spk16-tunnel-rompu-mobile` et `spk16-tunnel-rejoint`, observées.
+- 40 tests pour l'hôte console, dont 4 sur la reconnexion.
 
 ### [x] SPK-17 · Contrat d'API partagé
 
@@ -1886,6 +1902,7 @@ l'est pas.** Contrat au §22.4 ter du DAT, écrit et committé avant le code.
     refermé dans tous les cas. Elle informe et ne décide pas — un serveur
     injoignable s'enregistre quand même ;
   - **commande de reconnexion** sur un tunnel rompu, la tentative étant montrée.
+    Elle ne relançait rien jusqu'au 2026-09-16 : voir SPK-16 et le §22.4.6 bis.
 - **Preuves** : 88 tests de l'hôte console, dont 13 propres aux nouvelles routes —
   secret refusé même envoyé explicitement, épreuve qui n'enregistre rien et ne
   laisse aucun `ssh`, retrait du courant, entrée par alias sans `user` ni `port` ;

@@ -13,6 +13,23 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-16 — la console ne se reconnectait plus à une Forge tombée.** Rapporté
+  sur une console ouverte depuis plus de 24 h : le tunnel tombe dans la nuit, le
+  bouton *Reconnecter* ne relance rien, et il faut arrêter l'interface et la
+  relancer. Le gestionnaire rendait le tunnel existant **sans regarder son
+  état** ; recharger la page ne servait à rien, l'ouverture au démarrage passant
+  par la même porte. Un transport tombé est désormais relancé par le geste, et un
+  transport qui tient — `ssh` établi devant un `sparkd` muet — n'est pas coupé
+  pour rien. La tentative précédente est **abandonnée** avant la suivante : un
+  `ssh` figé vit toujours, sa sonde survivait à chaque essai, et son dernier râle
+  rompait la connexion qui venait de s'établir.
+- **SPK-16 — et un en-tête qui affichait « Tunnel ouvert » sur une Forge
+  coupée.** Ce qu'un refus dit du tunnel n'était adopté que par trois écrans sur
+  la douzaine, et celui de la Forge n'en faisait pas partie : le badge mentait,
+  donc la commande *Reconnecter* n'apparaissait jamais. Il l'est maintenant par
+  le client d'API, pour tous. Une reconnexion réussie **relit la vue courante**,
+  faute de quoi le vert de l'en-tête surmonte le rouge de la tentative
+  précédente.
 - **SPK-62 — une coupure de la surveillance hors bande qui ne s'annonçait pas.**
   Le §47.3.3 exige qu'une désactivation soit annoncée **par le canal qu'elle
   coupe**, parce que « la coupure serait le seul geste dont personne

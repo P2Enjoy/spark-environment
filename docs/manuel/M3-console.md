@@ -91,7 +91,15 @@ avec OpenSSH selon votre procédure d'exploitation.
 ### Quand le tunnel tombe
 
 Un tunnel rompu porte un bouton **Reconnecter**, en haut de la barre latérale.
-Il n'y a pas à recharger la console.
+Il n'y a pas à recharger la console, ni à la relancer : le bouton **rouvre**
+réellement la connexion, et l'écran que vous regardez se relit tout seul dès
+qu'elle est rétablie. Tant que la machine d'en face ne répond pas, le bouton
+laisse le badge sur **Tunnel rompu** — il ne prétend pas avoir réussi parce que
+vous l'avez cliqué.
+
+Un cas ne porte **pas** ce bouton : « SSH établi · sparkd sans réponse ». La
+connexion tient, c'est le service de la Forge qui se tait ; relancer SSH ne le
+réveillerait pas, et la console le verra revenir d'elle-même.
 
 ## Se repérer
 

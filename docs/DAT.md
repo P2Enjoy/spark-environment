@@ -2697,6 +2697,52 @@ Le geste appelle `POST /api/tunnels`, qui rouvre. L'état passe par `connecting`
 et l'écran le montre : une reconnexion silencieuse laisserait croire que rien ne
 se passe.
 
+#### 22.4.6 bis Rouvrir, c'est abandonner le transport précédent
+
+Le §22.4.6 dit que le geste **rouvre**. Le code, lui, rendait le tunnel existant
+**sans regarder son état** : un tunnel tombé restait tombé, `POST /api/tunnels`
+renvoyait le même `broken`, et la seule issue était d'arrêter la console et de la
+relancer. Le défaut que le §22.4.6 supprimait — « recharger n'est pas un remède,
+c'est une superstition » — avait simplement migré de la page vers le processus.
+**Rapporté par le responsable le 2026-09-16, sur une console ouverte depuis plus
+de 24 h.** Le rechargement de la page ne suffisait pas non plus : le §22.6 passe
+par la même porte.
+
+**Décision, en trois règles.**
+
+1. **Un transport qui TIENT se rend tel quel.** Un tunnel `ready`, un tunnel en
+   cours d'ouverture, et le cas du §50.1 — `ssh` authentifié devant un `sparkd`
+   muet — ne sont pas relancés : couper une connexion saine ne réveillerait pas
+   `sparkd`, et la sonde le verra revenir toute seule. C'est aussi ce que
+   l'écran dit déjà, en n'offrant pas de reconnexion dans ce cas.
+2. **Un transport tombé est RELANCÉ par le geste.** C'est le seul cas où un
+   nouveau `ssh` est lancé, et il l'est sur le tunnel existant : le nom du
+   serveur reste l'adresse de son tunnel.
+3. **La tentative précédente est abandonnée AVANT la suivante**, parce que
+   `broken` ne veut pas dire mort :
+   - un `ssh` **figé** vit toujours — c'est le cas que nomme la première ligne du
+     module — et le laisser derrière soi fuit un processus par reconnexion ;
+   - la **sonde** appartient à la tentative, pas à l'objet qui la porte : sans
+     abandon, chaque reconnexion ajoutait un intervalle, et `/healthz` était
+     interrogé autant de fois qu'on avait cliqué ;
+   - un `ssh` tué **parle encore** : il sort, et SIGTERM lui fait écrire sa
+     dernière ligne. Ses écouteurs reconnaissent donc le sous-processus dont ils
+     parlent, faute de quoi le râle de la connexion abandonnée rompt celle qui
+     vient de s'établir, et écrit son diagnostic par-dessus.
+
+**Et l'écran suit le transport.** Deux conséquences, mesurées le même jour :
+
+- ce qu'un refus dit du tunnel est adopté par le CLIENT D'API, pour tous ses
+  appelants. Trois chargeurs sur la douzaine le faisaient, et l'écran de la Forge
+  n'en faisait pas partie : Forge coupée, l'en-tête affichait « Tunnel ouvert »
+  au-dessus de « La Forge n'a pas répondu à travers le tunnel ». Le badge mentant,
+  la commande *Reconnecter* n'apparaissait jamais — c'est par là que le défaut
+  s'atteignait depuis l'écran ;
+- **une reconnexion réussie relit la vue courante.** Sans cela, le badge repasse
+  au vert au-dessus du refus rouge de la tentative précédente, et l'exploitant
+  lit que la reconnexion n'a rien changé. C'est le §22.3 : ne jamais présenter
+  un état antérieur comme actuel.
+
 #### 22.4.7 bis Où vit l'écran du catalogue
 
 Le §22.4 ter disait les routes ; il ne disait pas la surface. Ce point-ci le
@@ -2787,7 +2833,9 @@ ne partait vraiment de l'accueil.
   l'inventaire établirait des connexions SSH vers des machines qu'on n'a pas
   demandé à regarder.
 - Si un tunnel est déjà `ready`, elle ne le rouvre pas : `TunnelManager.open`
-  rend l'existant, et la console n'a pas à le savoir.
+  rend l'existant, et la console n'a pas à le savoir. S'il est **rompu**, la même
+  porte le relance (§22.4.6 bis) — c'est ce qui manquait, et l'ouverture au
+  démarrage en héritait : recharger la page ne réparait rien.
 - L'ouverture est **visible** : l'en-tête passe par `connecting` puis `ready` ou
   `broken`. Un échec n'est pas masqué — c'est le bandeau du §22.3 qui prend le
   relais, avec la sortie d'erreur de `ssh`.

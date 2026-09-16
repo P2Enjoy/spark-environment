@@ -195,6 +195,13 @@ export class Tunnel {
   async open() {
     if (this.state !== CLOSED && this.state !== BROKEN) return this;
 
+    // TABLE RASE avant de rouvrir (§22.4.6 bis). Une réouverture part d'un
+    // tunnel ROMPU, qui porte encore sa sonde et, très souvent, son `ssh` —
+    // rompu ne veut pas dire mort : un `ssh` FIGÉ vit toujours. Sans cet
+    // abandon, chaque tentative ajoutait une sonde et laissait un processus
+    // derrière elle.
+    this.#abandonnerTransport();
+
     // Chemin LOCAL : `sparkd` écoute déjà sur la boucle locale de cette
     // machine. Il n'y a rien à rediriger, donc pas de `ssh` à lancer — mais la
     // santé se prouve de la MÊME façon, en interrogeant `/healthz` (§22.2). Un
@@ -219,14 +226,20 @@ export class Tunnel {
     // d'une connexion qui n'existe plus.
     this.#motifSsh = null;
 
-    this.#child = this.spawnFn('ssh', this.sshArgs(this.localPort), {
+    // Le sous-processus est nommé, et chacun de ses écouteurs le reconnaît
+    // (§22.4.6 bis). Un `ssh` abandonné PARLE encore — il sort, et SIGTERM lui
+    // fait justement écrire sa dernière ligne. Sans cette garde, le râle de la
+    // connexion précédente rompait celle qui venait de s'établir.
+    const enfant = this.spawnFn('ssh', this.sshArgs(this.localPort), {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
+    this.#child = enfant;
 
     // On retient la sortie d'erreur de `ssh` : c'est elle qui dit « clé
     // refusée » ou « hôte inconnu », et la taire obligerait l'exploitant à
     // relancer la commande à la main pour la lire.
-    this.#child.stderr?.on('data', (bloc) => {
+    enfant.stderr?.on('data', (bloc) => {
+      if (this.#child !== enfant) return;   // un `ssh` abandonné ne parle plus ici
       // LIGNE PAR LIGNE, et non bloc par bloc. Un bloc porte plusieurs lignes,
       // et n'en tester que la première rangeait dans `lastError` tout ce qui
       // suivait une ligne bénigne — `describe()` publie ce champ, donc l'écran
@@ -256,7 +269,8 @@ export class Tunnel {
         this.lastError = texte;
       }
     });
-    this.#child.on('exit', (code) => {
+    enfant.on('exit', (code) => {
+      if (this.#child !== enfant) return;
       if (this.state !== CLOSED) {
         this.#motifSsh = this.#motifSsh ?? `ssh s'est arrêté (code ${code}).`;
         this.lastError = this.#motifSsh;
@@ -264,7 +278,8 @@ export class Tunnel {
         this.#setState(BROKEN);
       }
     });
-    this.#child.on('error', (erreur) => {
+    enfant.on('error', (erreur) => {
+      if (this.#child !== enfant) return;
       this.#motifSsh = `ssh est introuvable ou n'a pas pu démarrer : ${erreur.message}`;
       this.lastError = this.#motifSsh;
       this.transportState = BROKEN;
@@ -335,12 +350,31 @@ export class Tunnel {
 
   close() {
     this.#setState(CLOSED);
-    if (this.#timer) clearInterval(this.#timer);
-    this.#timer = null;
-    this.#child?.kill('SIGTERM');
-    this.#child = null;
+    this.#abandonnerTransport();
     this.localPort = null;
     this.transportState = CLOSED;
+  }
+
+  /**
+   * Abandonne la tentative en cours : sa sonde et son `ssh`.
+   *
+   * @spec docs/BACKLOG.md#SPK-16 · docs/DAT.md §22.4.6 bis
+   *
+   * La sonde et le sous-processus appartiennent à une TENTATIVE, pas à l'objet
+   * qui la porte. Fermer et rouvrir sont donc le même geste de nettoyage, et
+   * l'écrire une seule fois est ce qui empêche la réouverture d'en oublier la
+   * moitié.
+   *
+   * L'ordre compte : le champ est vidé AVANT le `kill`, pour que les écouteurs
+   * du processus tué — qui se déclenchent après — reconnaissent qu'ils ne
+   * parlent plus du tunnel courant.
+   */
+  #abandonnerTransport() {
+    if (this.#timer) clearInterval(this.#timer);
+    this.#timer = null;
+    const enfant = this.#child;
+    this.#child = null;
+    enfant?.kill('SIGTERM');
   }
 
   /** Ce que la console affiche. Jamais un état deviné. */
@@ -393,9 +427,31 @@ export class TunnelManager {
     this.options = options;
   }
 
+  /**
+   * Ouvre le tunnel d'un serveur — ou le ROUVRE si son transport est tombé.
+   *
+   * @spec docs/BACKLOG.md#SPK-16, docs/BACKLOG.md#SPK-41 ·
+   *       docs/DAT.md §22.4.6 (la reconnexion est un geste), §22.4.6 bis, §22.6
+   *
+   * Rendre l'existant SANS REGARDER SON ÉTAT rendait le geste de reconnexion
+   * inerte : un tunnel tombé pendant la nuit restait tombé, `POST /api/tunnels`
+   * renvoyait le même `broken`, et la seule issue était de redémarrer la
+   * console — ce que le §22.4.6 nomme précisément comme le défaut à supprimer.
+   *
+   * On ne relance pas pour autant à tout propos : un transport qui TIENT se
+   * rend tel quel. Un `ssh` authentifié devant un `sparkd` muet (§50.1) est
+   * dans ce cas — relancer `ssh` ne réveillerait pas `sparkd`, et couperait une
+   * connexion saine pour rien ; la sonde, elle, continue et le verra revenir.
+   */
   async open(server) {
     const existant = this.#tunnels.get(server.name);
-    if (existant) return existant;
+    if (existant) {
+      const transportTient = existant.state === READY || existant.state === CONNECTING
+        || existant.transportState === READY;
+      if (transportTient) return existant;
+      await existant.open();
+      return existant;
+    }
     const tunnel = new Tunnel(server, this.options);
     this.#tunnels.set(server.name, tunnel);
     await tunnel.open();
