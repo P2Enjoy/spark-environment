@@ -7466,6 +7466,88 @@ es trop con pour t'en rappeler, que ça te pète à la gueule ».
   contournement. Refus constaté à l'écran contre `monterPile()` : aucune pile,
   aucun navigateur n'est alloué avant le refus.
 
+### [ ] SPK-107 · Une proposition peut DEMANDER une valeur, et dire à quoi elle sert
+
+**Demandé par le responsable le 2026-09-16**, en deux phrases : « on instruit
+l'agent qu'il peut aussi poser dans les suggestions une variable (ou un secret)
+VIDE, et dans ce cas là l'UI force l'utilisateur à saisir une valeur pour
+l'importer » ; et « les variables et les secrets suggérés peuvent être
+accompagnés d'un commentaire : pour le poser il faut précéder la déclaration
+d'un commentaire, une seule ligne, tronqué à 120 chars ».
+
+Le canal `.?` de SPK-105 transporte ce qu'un agent **sait**. Il ne transportait
+pas ce qu'il **ignore** — et c'est le cas ordinaire : celui qui installe une pile
+sait qu'il lui faut `SMTP_PASSWORD`, et c'est exactement la valeur qu'il ne peut
+pas connaître. Sans cette unité, il invente une valeur de remplissage que le
+propriétaire accepte sans la voir, ou il se tait.
+
+- Spécification : `docs/DAT.md` **§55.3.3** (le vide est une demande, le
+  commentaire est une étiquette), **§55.9.1** (le champ, le bouton désactivé, ce
+  qui survit au repli), §55.7 complété (en-tête et dossier pour un LLM),
+  §43.10.1 complété (la ligne `#` est portée par la déclaration suivante) ·
+  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-28** · manuel M8. **Écrite et committée
+  avant le code.**
+- Dépend de : SPK-105 pour le canal et l'écran d'acceptation, SPK-97 pour la
+  grammaire et la relecture d'un lot.
+
+**Ce qui décide de l'unité :**
+
+1. **`NOM=` dans un `.?` d'environnement veut dire « posez-la »**, pas « vide ».
+   La console ouvre un champ et refuse d'importer la ligne tant qu'il est vide ;
+2. **le lot collé, lui, garde `A=` pour une valeur vide** (§43.10.1). La
+   divergence est voulue et écrite : ce qui sépare les deux n'est pas la syntaxe,
+   c'est **qui a écrit la ligne**. Celui qui colle est l'auteur de son texte ;
+   celui qui relit une proposition ne peut pas demander à son auteur ce qu'il
+   voulait dire ;
+3. **écarter la ligne reste la sortie** (§55.5) : aucun mécanisme neuf pour
+   refuser une demande, et aucun bouton de plus ;
+4. **le commentaire est une étiquette, pas une documentation** : une seule ligne,
+   la plus proche, 120 caractères, coupure **visible**. Une ligne séparée par un
+   blanc ne se rattache à rien ;
+5. **le commentaire n'entre jamais au registre.** Il explique la demande ; il ne
+   fait pas partie de la valeur, et rien ne le conserve après la décision ;
+6. **la grammaire reste écrite une seule fois** (§55.8), donc le commentaire se
+   lit AUSSI à la relecture d'un lot collé. Le §44.9.7 invite l'agent à remettre
+   le même texte de la main à la main : un texte qui perdrait ses commentaires
+   selon la porte empruntée ferait mentir cette phrase ;
+7. **la valeur tapée se lit en clair**, même sur une ligne secrète (§43.10.2) :
+   elle sort du clavier de qui la lit, la masquer empêcherait de vérifier sa
+   frappe sans rien protéger ;
+8. **ce qui est tapé survit au repli**, et la frappe ne repeint pas le tableau
+   (§14.3).
+
+**Portée, et découpage persisté :**
+
+1. **Documentation seule** — DAT §55.3.3, §55.9.1, §55.7 et §43.10.1 complétés,
+   cette unité, SPK-DS-28, journal, changelog.
+2. **Grammaire et console** — le commentaire lu dans `env-import.js`, le champ de
+   saisie et la garde du bouton dans `spark-suggestions.js`, l'état des valeurs
+   saisies dans `app.js`. Preuves de composant.
+3. **Ce que la cellule lit** — l'en-tête des deux `.?` d'environnement et la
+   section du dossier pour un LLM disent les deux gestes, avec un exemple.
+   Preuves de service.
+4. **Seed, E2E, captures, manuel** — la proposition seedée porte une variable
+   vide commentée ; le parcours la saisit, l'applique, et constate la valeur au
+   registre.
+
+- **Aucune migration, aucune variable d'environnement, aucune route nouvelle** :
+  le serveur reçoit déjà des entrées structurées (§55.8), et une valeur saisie à
+  l'écran est une valeur comme une autre.
+- Ce que l'unité ne doit PAS casser : le §43.10.1 — un lot collé garde sa valeur
+  vide ; le §55.5 — consulter ne consomme pas, et une acceptation partielle vide
+  quand même ; le §43.3 — la nature reste déclarée par le propriétaire ; le
+  §14.3 — rien ne se repeint sous les doigts.
+- DoD : une preuve montre qu'une ligne `#` collée à une déclaration est portée
+  par elle, et qu'une ligne séparée par un blanc ne l'est pas ; une preuve montre
+  la coupure à 120 caractères ; une preuve montre que le commentaire n'est pas
+  envoyé au serveur ; une preuve montre le champ rendu pour une valeur vide et le
+  bouton désactivé avec sa raison ; une preuve montre qu'une ligne vide
+  **écartée** ne bloque plus ; une preuve montre que la valeur saisie part au
+  serveur à la place du vide ; une preuve montre que l'en-tête des deux `.?`
+  d'environnement dit les deux gestes ; un parcours E2E saisit la valeur demandée
+  depuis l'écran et la constate au registre ; captures observées aux deux
+  formats ; documentation complète ; `@spec` / `@verifies` posés.
+
 ---
 
 ## Réservé, non planifié

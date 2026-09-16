@@ -11676,3 +11676,56 @@ sans la correction, à l'endroit exact du défaut.
 littérales absentes de la feuille, laissées par un travail non committé) ;
 parcours E2E vert, isolément et en campagne ; captures desktop et 390 px
 observées.
+
+---
+
+## 2026-09-16 · SPK-107 — une proposition qui ne sait pas ce qu'elle demande
+
+**La demande du responsable**, en deux phrases : un agent doit pouvoir poser dans
+une suggestion une variable — ou un secret — **vide**, auquel cas la console
+oblige à saisir une valeur pour l'importer ; et une déclaration peut porter un
+**commentaire**, posé sur la ligne juste au-dessus, sur une seule ligne, tronqué
+à 120 caractères.
+
+**Le problème que cela règle, et qui était déjà là.** Le canal `.?` de SPK-105
+transporte ce qu'un agent sait. Le cas ordinaire est pourtant l'inverse : celui
+qui installe une pile sait qu'il lui faut `SMTP_PASSWORD`, et c'est précisément
+la valeur qu'il ne peut pas connaître. Le §44.9.7 lui dit « demandez au
+propriétaire » sans lui donner de forme pour le demander **ligne par ligne** : il
+lui restait à inventer une valeur de remplissage — que le propriétaire accepte
+sans la regarder, et qui casse la pile au démarrage suivant — ou à se taire.
+
+**La décision qui a demandé le plus de réflexion** n'est pas le champ de saisie :
+c'est d'assumer une **divergence** avec le §43.10.1. Un lot collé garde `A=` pour
+une valeur vide, qui est une valeur ; une proposition, non. Deux sens pour une
+même syntaxe est en principe ce qu'on refuse. Ce qui tranche ici n'est pas la
+syntaxe mais **qui a écrit la ligne** : celui qui colle est l'auteur de son texte
+et l'a sous les yeux dans la zone de saisie ; celui qui relit une proposition ne
+peut pas demander à son auteur ce qu'il voulait dire — l'auteur n'est pas là, et
+c'est toute la raison d'être de ce canal. La divergence est donc écrite aux deux
+endroits (§43.10.1 et §55.3.3) plutôt que laissée à découvrir.
+
+**Le commentaire, lui, ne diverge pas.** La grammaire est écrite une seule fois
+(§55.8), dans `env-import.js` : le commentaire se lit donc **aussi** à la
+relecture d'un lot collé. Ce n'est pas une extension gratuite de la demande —
+c'est ce que le §44.9.7 impose déjà, puisqu'il invite l'agent à remettre **le
+même texte** de la main à la main quand il préfère. Un texte qui perdrait ses
+étiquettes selon la porte empruntée ferait mentir cette phrase, et le
+propriétaire qui colle serait celui qui perd l'explication.
+
+**Trois choix de forme, et leur raison :**
+
+- **une seule ligne de commentaire, la plus proche.** Un paragraphe ne tient pas
+  dans une cellule de tableau ; qui en écrit trois n'en écrit qu'une qui compte ;
+- **120 caractères, coupure visible.** Une étiquette, pas une documentation :
+  celle-ci a sa place dans les notes (§54), que le même canal sait déjà proposer ;
+- **aucun bouton pour refuser une demande.** Décocher *Retenir* existe déjà et
+  suffit. Ajouter un geste dédié ferait deux façons de dire non.
+
+**Ce que le §55.10 gagne sans changer** : le commentaire n'entre jamais au
+registre. Il explique la demande, il ne fait pas partie de la valeur, et rien ne
+le conserve après la décision — le produit ne garde aucun historique des
+propositions.
+
+**Documentation écrite et committée avant toute ligne de code** : DAT §55.3.3 et
+§55.9.1, §55.7 et §43.10.1 complétés, unité SPK-107, SPK-DS-28.

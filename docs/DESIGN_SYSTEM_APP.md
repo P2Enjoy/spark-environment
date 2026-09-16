@@ -1119,6 +1119,43 @@ Une preuve de rendu le tient, et le parcours qui le photographie attend
 **l'écran relu ET le message encore présent** : attendre le seul message aurait
 attrapé l'état transitoire d'avant la relecture, et laissé passer le défaut.
 
+### SPK-DS-28 · Une demande se saisit sur place, et porte son étiquette
+
+**Date** : 2026-09-16 · SPK-107 · `DAT.md` §55.3.3, §55.9.1
+
+Une proposition venue de la cellule peut arriver **incomplète exprès** : son
+auteur nomme la variable dont sa pile a besoin et laisse la valeur vide, parce
+qu'il ne peut pas la connaître. L'écran d'acceptation doit alors faire deux
+choses que la relecture d'un lot collé n'avait pas à faire.
+
+**La ligne se complète là où elle se lit.** Le champ de saisie prend la place de
+la valeur, dans la cellule du tableau, et non dans une modale ou un second écran.
+Renvoyer ailleurs pour taper une valeur ferait perdre ce qui donne son sens au
+geste : le nom, l'étiquette et la case *Secret* de la même ligne.
+
+**Le bouton est désactivé tant qu'une ligne retenue attend sa valeur** (§9.9), et
+la raison est écrite à côté, avec le compte. Un bouton actif qui refuse après
+coup fait payer un aller-retour pour un fait connu avant le clic. Décocher
+*Retenir* lève la retenue : la sortie est celle qui existe déjà, on n'en ajoute
+pas une seconde.
+
+**L'étiquette est une ligne, et elle tient dans la cellule.** Le commentaire que
+l'auteur a posé au-dessus de sa déclaration s'affiche sous le nom, coupé à 120
+caractères, la coupure visible. Il est rattaché au champ par `aria-describedby` :
+au clavier, on entend ce qu'il faut taper **en entrant dans le champ**. Une ligne
+sans commentaire n'affiche rien — une étiquette vide ferait une colonne de blancs
+sur un écran déjà dense.
+
+**Ce qui est tapé survit au repli et ne repeint rien.** La frappe met à jour
+l'état et le bouton, jamais le tableau (§14.3) ; replier la proposition pour
+aller chercher la valeur dans l'onglet d'à côté ne l'efface pas. Retaper un
+secret est le moment où l'on se trompe.
+
+**La valeur tapée se lit en clair**, même sur une ligne déclarée secrète. C'est
+la règle de SPK-DS-23 : ce qui est interdit est de **rendre** une valeur que le
+registre détient ; celle-ci sort du clavier de qui la lit, et la masquer
+empêcherait de vérifier sa frappe sans rien protéger.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

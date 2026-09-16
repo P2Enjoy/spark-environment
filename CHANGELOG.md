@@ -3,6 +3,14 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-107 — une proposition peut DEMANDER une valeur, et dire à quoi elle
+  sert.** *Spécification écrite ; code à venir.* Un agent qui installe une pile
+  sait qu'il lui faut `SMTP_PASSWORD` et ne peut pas connaître sa valeur : dans
+  un fichier `.?` d'environnement, une valeur laissée **vide** devient une
+  demande, et la console refusera d'importer la ligne tant que le propriétaire
+  n'aura pas saisi la valeur. Une ligne `#` posée juste au-dessus d'une
+  déclaration lui sert d'**étiquette** — une ligne, 120 caractères — et
+  s'affichera à la relecture, y compris pour un lot collé à la main.
 - **SPK-61 — un refus de la garde SSH sort désormais de la machine.** Une clé
   restreinte qui tente un shell est ou bien une erreur, ou bien quelqu'un qui
   essaie la clé qu'il vient de voler ; le signal restait dans le syslog local.

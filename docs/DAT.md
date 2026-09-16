@@ -9798,12 +9798,12 @@ au lieu de le rendre rapide.
 |---|---|
 | `SMTP_HOST=mail.exemple.fr` | `SMTP_HOST` vaut `mail.exemple.fr` |
 | `export SMTP_HOST=mail.exemple.fr` | idem : `export` est toléré, on colle souvent depuis un shell |
-| `# un commentaire` | ignorée |
+| `# un commentaire` | ignorée comme entrée ; si elle précède **immédiatement** une déclaration, celle-ci la porte et l'affiche à la relecture (§55.3.3) |
 | ligne vide | ignorée |
 | `A="ab cd"` | `ab cd` — guillemets doubles retirés, `\n` `\r` `\t` `\\` `\"` `\$` rendus |
 | `A='ab$cd'` | `ab$cd` — apostrophes retirées, contenu **littéral** |
 | `A=  ab  ` | `ab` — les blancs de bord d'une valeur **non citée** sont rognés |
-| `A=` | valeur **vide**, et c'est une valeur : le §14.6 la distingue d'une absence |
+| `A=` | valeur **vide**, et c'est une valeur : le §14.6 la distingue d'une absence. Dans une **proposition**, la même ligne veut dire « posez-la, je ne peux pas la connaître » (§55.3.3) |
 
 **Ce qui n'est délibérément PAS fait**, chaque refus ayant sa raison :
 
@@ -12635,6 +12635,72 @@ protège ailleurs : c'est la seule façon que « une suggestion n'affaiblit rien
 soit vrai et pas seulement affirmé. Un port publié se demande en prose, comme
 avant.
 
+#### 55.3.3 Une proposition peut DEMANDER une valeur, et dire à quoi elle sert
+
+**Demandé par le responsable le 2026-09-16** : « on instruit l'agent qu'il peut
+aussi poser dans les suggestions une variable — ou un secret — **VIDE**, et dans
+ce cas l'UI force l'utilisateur à saisir une valeur pour l'importer ». Et, pour
+l'accompagner, « un commentaire : une seule ligne, tronquée à 120 caractères,
+posée juste avant la déclaration ».
+
+Le cas est le plus fréquent de tous, et le canal du §55 ne le portait pas. Un
+agent qui installe une pile sait qu'il lui faut `SMTP_PASSWORD` : c'est
+précisément la valeur qu'il ne peut pas connaître. Il n'avait alors que deux
+gestes, mauvais tous les deux — **inventer** une valeur de remplissage, que le
+propriétaire accepterait sans la regarder et qui casserait la pile au démarrage
+suivant, ou **ne pas nommer** la variable, ce qui laisse deviner ce qui manque.
+
+**Dans un `.?` d'environnement, `NOM=` ne dit donc pas « vide » : il dit
+« posez-la, je ne peux pas la connaître ».** La console ne l'applique pas en
+l'état — elle ouvre un champ à cette ligne, et refuse de l'importer tant qu'il
+est vide (§55.9.1).
+
+**Ce n'est pas la règle du lot collé, et c'est voulu.** Le §43.10.1 garde `A=`
+pour une valeur vide, qui est une valeur. Ce qui sépare les deux n'est pas la
+syntaxe, c'est **qui a écrit la ligne** : celui qui colle est l'auteur de son
+texte, il l'a sous les yeux dans la zone de saisie, et il peut vouloir une
+variable définie et vide. Celui qui relit une proposition ne peut pas demander à
+son auteur ce qu'il voulait dire — l'auteur n'est pas là, et c'est toute la
+raison d'être de ce canal.
+
+**Refuser la demande reste possible**, et ne demande aucun mécanisme neuf : on
+décoche *Retenir* (§55.5), rien n'est écrit pour cette ligne. Une valeur vide
+délibérée, elle, se pose à la main depuis l'écran *Environnement* : ce n'est pas
+une demande, c'est une décision.
+
+**Le commentaire d'une ligne.** Une ligne `#` qui précède **immédiatement** une
+déclaration est portée par elle, et s'affiche à côté d'elle à la relecture :
+
+    # Clé d'API du fournisseur de facturation, à créer dans son portail.
+    BILLING_API_KEY=
+
+    # Nombre maximum de connexions simultanées à la base.
+    MAX_POOL=5
+
+- **une seule ligne**, la plus proche de la déclaration. Un paragraphe ne tient
+  pas dans une cellule de tableau, et qui en écrit trois n'en écrit qu'une qui
+  compte : la dernière ;
+- **120 caractères**, coupés au-delà, la coupure étant **visible** par un « … ».
+  Un commentaire est une **étiquette**, pas une documentation — celle-ci a sa
+  place dans les notes (§54), que le même canal sait déjà proposer ;
+- **il n'entre jamais au registre.** Il explique la demande ; il ne fait pas
+  partie de la valeur, et rien ne le conserve après la décision. C'est cohérent
+  avec le §55.10 : le produit ne garde aucun historique des propositions ;
+- une ligne `#` **séparée** de la déclaration par une ligne vide ne se rattache à
+  rien et reste un commentaire libre, comme avant. Une ligne `#` reste ignorée
+  comme entrée : le commentaire ne crée aucune variable et n'en change aucune.
+
+Sans lui, le vide serait une **énigme** : le propriétaire lit un nom et un champ,
+et n'a aucun moyen de savoir ce qu'on lui demande d'y écrire. Les deux moitiés se
+tiennent — c'est l'exigence du §14.5, où une absence se nomme au lieu de se
+laisser deviner.
+
+**La grammaire reste écrite une seule fois** (§55.8), dans `env-import.js` : le
+commentaire est donc lu des deux côtés, et il s'affiche **aussi** à la relecture
+d'un lot collé. C'est la conséquence directe du §44.9.7, qui invite l'agent à
+remettre le **même texte** de la main à la main quand il préfère : un texte qui
+perdrait ses commentaires selon la porte empruntée ferait mentir cette phrase.
+
 ### 55.4 Ce que la frontière ne change pas
 
 **Rien de ce que le §35.1 protège n'est entamé.** Un fichier déposé dans une
@@ -12773,6 +12839,13 @@ proposition **ajoute et remplace** ou **remplace en entier**, que rien ne
 s'applique sans un geste du propriétaire, et qu'il redeviendra vide quand une
 décision aura été prise.
 
+**Les deux fichiers d'environnement disent une chose de plus**, parce qu'elle
+change ce que l'agent écrit : une valeur **laissée vide** est une demande — le
+propriétaire devra la saisir pour l'importer —, et une ligne `#` posée juste
+au-dessus d'une déclaration lui sert d'**étiquette**, sur une ligne et 120
+caractères (§55.3.3). Le taire laisserait l'agent inventer une valeur de
+remplissage, qui est exactement ce que cette règle existe pour lui épargner.
+
 Le **dossier pour un LLM** gagne une section qui dit quatre choses, et pas une de
 plus :
 
@@ -12783,7 +12856,9 @@ plus :
    impasse, et un agent devant une impasse invente (§44.2 ter) ;
 2. **les six paires, leur grammaire et un exemple court.** Pas de noms de
    variables inventés : le §44.7 tient, le produit ne connaît pas l'application
-   du locataire ;
+   du locataire. La grammaire des deux `.env` porte les **deux gestes du
+   §55.3.3** — la valeur laissée vide, et l'étiquette d'une ligne —, et l'exemple
+   les montre plutôt que de les décrire ;
 3. **le cycle de vie, en une phrase** : déposé, il attend ; consulté, il reste ;
    accepté ou refusé, il redevient vide. Et **rien ne garantit qu'il soit lu** :
    une pile ne doit pas dépendre d'une proposition pour démarrer ;
@@ -12869,6 +12944,38 @@ multiplierait les appels à Incus par le nombre d'onglets ouverts, pour un
 Quatre états, distincts et le restant (§14.6) : **aucune proposition**, **une
 proposition en attente**, **illisible** — avec sa ligne —, et **cellule non
 consultée**.
+
+#### 55.9.1 Le champ d'une valeur demandée, et l'étiquette qui l'explique
+
+Une ligne d'environnement dont la valeur est vide (§55.3.3) se rend avec un
+**champ de saisie** à la place de sa valeur, et le bouton d'acceptation est
+**désactivé tant qu'une ligne retenue attend la sienne** (§9.9), avec sa raison
+écrite et le **compte** des lignes concernées. Un bouton actif qui refuserait
+ensuite ferait payer un aller-retour pour un fait connu avant le clic.
+
+Trois choses que cet écran fait, et chacune a coûté ailleurs :
+
+- **il ne repeint pas pendant la frappe** (§14.3). La saisie met à jour l'état et
+  le bouton, jamais le tableau : reconstruire la ligne à chaque touche ferait
+  perdre le curseur, exactement comme les cases *Retenir* du §55.9 qui sont déjà
+  tenues à la main pour cette raison ;
+- **ce qui est tapé survit au repli.** On replie la proposition pour aller
+  chercher la valeur dans l'onglet d'à côté, et l'on revient ; la perdre ferait
+  retaper, et retaper un secret est le moment où l'on se trompe ;
+- **la valeur tapée se lit en clair**, y compris sur une ligne déclarée secrète.
+  C'est déjà la règle du §43.10.2 : ce qu'interdit le §43.3 est de **rendre** une
+  valeur que le registre détient. Ici elle n'est pas encore écrite, elle sort du
+  clavier de qui la lit, et la masquer empêcherait de vérifier sa frappe sans
+  rien protéger. Après écriture, elle ne revient jamais.
+
+Le **commentaire** de la ligne se lit sous le nom, et il est rattaché au champ
+par `aria-describedby` : au clavier, on entend ce qu'il faut taper en **entrant
+dans le champ**, et non trois cellules plus tôt. Une ligne qui n'en porte pas
+n'affiche rien — une étiquette vide ferait une colonne de blancs sur un écran
+déjà dense.
+
+Une ligne vide **écartée** ne bloque rien : le compte ne retient que les lignes
+retenues. C'est la sortie du §55.3.3, et elle n'a pas de bouton à elle.
 
 ### 55.10 Ce que cette unité ne fait pas
 
