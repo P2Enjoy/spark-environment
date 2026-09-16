@@ -254,6 +254,11 @@ table { width: 100%; border-collapse: collapse; }
    du centrage par defaut du navigateur, ce qui desaligne la premiere colonne
    de ses en-tetes — vu en capture, pas en test. */
 .nom-cellule { text-align: left; }
+/* SPK-107 · SPK-DS-28 : l'etiquette qu'un auteur a posee au-dessus de sa
+   declaration se lit SOUS le nom, en texte secondaire. Sans cette regle elle
+   herite de la graisse de l'en-tete de ligne — MESURE, capture du 2026-09-16 :
+   elle se lisait comme un second nom, aussi fort que la variable elle-meme. */
+.nom-cellule .note { font-weight: 400; margin-top: var(--space-1); }
 thead th {
   position: sticky; top: 0; z-index: 1;
   background: var(--color-bg);

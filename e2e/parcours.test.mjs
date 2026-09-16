@@ -5399,12 +5399,15 @@ test('une note écrite à l’écran arrive DANS la cellule', async () => {
 test('une proposition déposée dans la cellule s’accepte EN PARTIE', async () => {
   await parcours('proposition-acceptee-en-partie', async () => {
     // @verifies docs/DAT.md §55.5 (consulter ne consomme pas, accepter vide),
-    //           §55.8, §55.9 · docs/BACKLOG.md#SPK-105
+    //           §55.8, §55.9 · docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.3.3
+    //           (le vide est une DEMANDE), §55.9.1 (le champ, le bouton
+    //           désactivé) · docs/BACKLOG.md#SPK-107
     //
-    // Le seed a déposé deux variables souhaitées dans `/etc/spark/env.?`. Le
-    // parcours les relit, en écarte une, applique — et vérifie les TROIS
-    // effets : ce qui entre au registre, ce qui n'y entre pas, et le fichier
-    // vidé chez son auteur.
+    // Le seed a déposé trois variables souhaitées dans `/etc/spark/env.?`, dont
+    // une DEMANDE — une valeur que son auteur ne pouvait pas connaître. Le
+    // parcours les relit, en écarte une, saisit celle qu'on lui demande,
+    // applique — et vérifie les TROIS effets : ce qui entre au registre, ce qui
+    // n'y entre pas, et le fichier vidé chez son auteur.
     await ouvrir('crm-production', 'environnement');
     await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 20000 });
 
@@ -5423,7 +5426,31 @@ test('une proposition déposée dans la cellule s’accepte EN PARTIE', async ()
     await page.waitForSelector('[data-sugg-garder="variables"]', { timeout: 10000 });
     await page.uncheck('[data-sugg-garder="variables"][data-ligne="2"]');
     assert.match(await page.textContent('[data-sugg-appliquer="variables"]'),
-      /1 retenue/);
+      /2 retenue/);
+
+    // SPK-107 · §55.3.3 : la troisième ligne est une DEMANDE. Le geste REFUSE
+    // tant qu'elle est vide et NOMME ce qu'il attend (§9.9) ; l'étiquette de
+    // l'auteur dit à quoi elle sert — sans elle, le vide serait une énigme.
+    assert.equal(await page.isDisabled('[data-sugg-appliquer="variables"]'), true,
+      'le geste est offert alors qu’une valeur demandée est vide');
+    assert.match(await page.textContent('[data-sugg-attente="variables"]'),
+      /BILLING_API_KEY/);
+    assert.match(await page.textContent('[data-proposition="variables"]'),
+      /Clé d’API du fournisseur de facturation/);
+
+    // Écarter la ligne suffirait à lever la retenue ; on la SAISIT, touche à
+    // touche, parce que c'est le geste que l'unité existe pour rendre possible.
+    // `fill()` poserait la valeur d'un coup et ne prouverait pas qu'on peut
+    // écrire dans ce champ — ni que la frappe ne repeint pas le tableau (§14.3).
+    await page.click('[data-sugg-valeur="variables"][data-ligne="5"]');
+    await page.keyboard.type('cle-de-facturation-de-recette');
+    assert.equal(
+      await page.inputValue('[data-sugg-valeur="variables"][data-ligne="5"]'),
+      'cle-de-facturation-de-recette', 'la frappe est arrivée dans le désordre');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-sugg-appliquer="variables"]').disabled,
+      { timeout: 10000 });
+
     await page.click('[data-sugg-appliquer="variables"]');
     await page.waitForFunction(
       () => !document.querySelector('[data-sugg-appliquer]')
@@ -5434,6 +5461,16 @@ test('une proposition déposée dans la cellule s’accepte EN PARTIE', async ()
     assert.match(texte, /REDIS_URL/, 'la ligne retenue doit être posée');
     assert.doesNotMatch(texte, /SESSION_TTL/,
       'la ligne écartée est REFUSÉE, pas ajournée');
+
+    // La demande est entrée avec la valeur SAISIE, et l'étiquette de son auteur
+    // n'est entrée NULLE PART : elle expliquait la demande, elle ne fait pas
+    // partie de la valeur (§55.3.3).
+    const { corps: env } = await pile.lireSparkd('/v1/sparks/crm-production/env');
+    const facturation = env.env.find((e) => e.name === 'BILLING_API_KEY');
+    assert.equal(facturation?.value, 'cle-de-facturation-de-recette',
+      'la valeur saisie à l’écran n’est pas celle qui est entrée au registre');
+    assert.equal(env.env.some((e) => /fournisseur/.test(e.name)), false,
+      'l’étiquette est entrée au registre comme si elle était une variable');
 
     const apres = await pile.lireSparkd('/v1/sparks/crm-production/suggestions');
     const par = Object.fromEntries(

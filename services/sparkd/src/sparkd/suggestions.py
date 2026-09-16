@@ -1,10 +1,12 @@
 """Le fichier `.?` : le seul canal par lequel la cellule propose.
 
-@spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55 (la règle), §55.3 (les six
-      paires), §55.3.1 (`/etc/spark/routes`), §55.4 (ce que la frontière ne
-      change pas), §55.5 (consulter ne consomme pas), §55.5.2 (l'empreinte
-      relue), §55.6 (permissions), §55.7 (les en-têtes), §55.8 (la surface
-      d'API) · docs/DAT.md §43.10.1 (la grammaire, qui vit dans la console)
+@spec docs/BACKLOG.md#SPK-105, docs/BACKLOG.md#SPK-107 · docs/DAT.md §55 (la
+      règle), §55.3 (les six paires), §55.3.1 (`/etc/spark/routes`), §55.3.3 (le
+      vide est une DEMANDE, et l'étiquette l'explique), §55.4 (ce que la
+      frontière ne change pas), §55.5 (consulter ne consomme pas), §55.5.2
+      (l'empreinte relue), §55.6 (permissions), §55.7 (les en-têtes), §55.8 (la
+      surface d'API) · docs/DAT.md §43.10.1 (la grammaire, qui vit dans la
+      console)
 
 **La règle du produit, en deux lignes** : tout fichier que le plan de contrôle
 pose dans une cellule est régénéré en entier depuis le registre, et l'écrire à la
@@ -120,6 +122,11 @@ NATURES = tuple(paire["kind"] for paire in PAIRES)
 #: suggestions peut avoir lieu sans projection d'environnement.
 DOSSIERS_OUVERTS = ("/etc/spark", "/run/spark", notes_service.DOSSIER)
 
+#: SPK-107 · §55.3.3 : la longueur d'une étiquette, telle que l'en-tête
+#: l'ANNONCE. La coupure, elle, a lieu dans la console, où vit la grammaire
+#: (§55.8) : ce module ne lit toujours rien de ce que la cellule écrit.
+ETIQUETTE_MAX = 120
+
 MARQUEUR = "spark:suggestion"
 FIN_DIESE = "# --- fin du bloc posé par sparkd, écrivez ci-dessous ---"
 FIN_HTML = "-->"
@@ -212,6 +219,24 @@ def entete(kind: str) -> str:
         "laquelle. Rien ne garantit qu'elle soit lue : n'en faites pas dépendre",
         "le démarrage de votre pile.",
     ]
+    if paire["kind"] in ("variables", "secrets"):
+        # SPK-107 · §55.7 : le taire laisserait inventer une valeur de
+        # remplissage, que le propriétaire accepte sans la regarder et qui casse
+        # la pile au démarrage suivant.
+        corps.extend([
+            "",
+            "VOUS NE CONNAISSEZ PAS UNE VALEUR ? Laissez-la VIDE — « NOM= ».",
+            "C'est une DEMANDE : le propriétaire devra la saisir lui-même pour",
+            "l'importer. N'inventez pas une valeur de remplissage.",
+            "",
+            "Une ligne « # … » posée JUSTE AU-DESSUS d'une déclaration lui sert",
+            f"d'étiquette et s'affiche à côté d'elle : une seule ligne, "
+            f"{ETIQUETTE_MAX} caractères,",
+            "coupée au-delà. Une ligne vide entre les deux rompt le lien.",
+            "",
+            "    # Clé d'API du fournisseur de facturation, à créer chez lui.",
+            "    BILLING_API_KEY=",
+        ])
     if paire["kind"] == "secrets":
         # §55.6.1 : le seul des six dont la proposition est périssable. Le taire
         # ferait chercher un refus qui n'a pas eu lieu.

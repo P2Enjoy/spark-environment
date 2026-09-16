@@ -11729,3 +11729,59 @@ propositions.
 
 **Documentation écrite et committée avant toute ligne de code** : DAT §55.3.3 et
 §55.9.1, §55.7 et §43.10.1 complétés, unité SPK-107, SPK-DS-28.
+
+---
+
+## 2026-09-16 · SPK-107 — le champ, l'étiquette, et ce que l'écran a démenti
+
+**Suite du même jour**, après la spécification committée.
+
+**La grammaire n'a été écrite qu'une fois**, et c'est ce qui a décidé du reste.
+L'étiquette est lue dans `env-import.js`, aux côtés du reste du `.env` : la
+console la rend donc à la relecture d'une **proposition** comme à celle d'un lot
+**collé**. Le §44.9.7 invite l'agent à remettre le même texte de la main à la
+main quand il préfère ; un texte qui aurait perdu ses étiquettes selon la porte
+empruntée aurait fait mentir cette phrase.
+
+**Une seule chose a été déplacée dans le code** : la construction des entrées
+envoyées au serveur, jusque-là écrite en ligne dans `app.js`. Elle vit désormais
+dans `spark-suggestions.js`, à côté du rendu — c'est la même garantie (§55.8,
+« ce que l'écran montre est ce que l'on applique »), et c'est ce qui rend
+éprouvable le fait que **l'étiquette n'entre jamais au registre**. Sans ce
+déplacement, cette preuve-là aurait été une tautologie.
+
+**Trois défauts trouvés À L'ÉCRAN, qu'aucune preuve n'aurait montrés :**
+
+- **l'étiquette héritait de la graisse de l'en-tête de ligne.** Elle se lisait
+  comme un second nom, aussi fort que la variable — exactement l'inverse de ce
+  qu'elle est. Corrigé dans la feuille, pas dans le composant ;
+- **« à saisir » se démentait dès la première touche.** La ligne ne se repeint
+  pas pendant la frappe (§14.3), donc sa phrase doit rester vraie une fois le
+  champ rempli. Elle dit maintenant ce qui ne change pas : *valeur demandée : son
+  auteur ne la connaît pas* ;
+- **le tableau ne signalait son défilement que par une ombre.** C'était suffisant
+  tant qu'il ne portait que du texte. À 390 px, ce qui sort de l'écran est
+  désormais **le champ que le geste attend**, et une ombre ne se lit pas comme
+  « il reste quelque chose à remplir par là ». Il l'annonce en toutes lettres,
+  comme les autres tableaux de la même page (§14.2).
+
+**Campagne rejouée AVANT et APRÈS, à l'identique.** 135 parcours, 132 verts, 3
+rouges dans les deux séries — `onglet Alertes`, `alerte hors bande` et `révoquer
+une clé malgré le gel`. Les mêmes, aux mêmes endroits : ils sont **étrangers à
+cette unité**. Les deux premiers sont ceux que le 2026-09-14 rattachait déjà à
+SPK-62 ; le troisième ne tombe qu'en campagne et passe isolément, ce qui désigne
+un ordre d'exécution, pas une régression.
+
+**Deux dettes ANTÉRIEURES constatées au passage, et laissées telles quelles** —
+elles appartiennent à d'autres unités, et les reprendre ici aurait mêlé deux
+sujets dans un commit :
+
+1. la preuve « toute classe littérale existe dans le CSS » est **rouge** sur
+   quatre classes qui ne peignent rien : `erreur` (forge-alertes.js),
+   `proposition` et `note-carte` (spark-notes.js), `proposition`
+   (spark-suggestions.js). Identiques avant et après ce travail ;
+2. le parcours `une note écrite à l'écran arrive DANS la cellule`, **committé**,
+   appelle `pile.fichiersCellule()` qui n'existe **pas** dans le `e2e/pile.mjs`
+   committé. La campagne ne tient donc que par un travail resté **non committé**
+   dans l'arbre de travail. Signalé au responsable : ce n'est pas à cette unité
+   de committer le travail d'une autre.

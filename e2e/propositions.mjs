@@ -3,6 +3,9 @@
  *
  * @verifies docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (consulter ne consomme
  *           pas), §55.9 (là où le geste se conclut) ·
+ *           docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3 (le vide est une
+ *           DEMANDE), §55.9.1 (le champ, le bouton désactivé) ·
+ *           docs/DESIGN_SYSTEM_APP.md SPK-DS-28 ·
  *           docs/DESIGN_SYSTEM.md §13 (les captures sont une preuve), §13.1 ·
  *           CLAUDE.md §16
  *
@@ -66,9 +69,46 @@ await capturer('spk105-proposition-relecture');
 // et le fichier est vidé quand même.
 await page.uncheck('[data-sugg-garder="variables"][data-ligne="2"]');
 const libelle = await page.textContent('[data-sugg-appliquer="variables"]');
-if (!libelle.includes('1 retenue')) {
+if (!libelle.includes('2 retenue')) {
   throw new Error(`le bouton ne compte pas les retenues : « ${libelle} »`);
 }
+
+// SPK-107 · §55.3.3 : la troisième ligne est une DEMANDE — son auteur ne peut
+// pas connaître cette valeur. Le geste REFUSE tant qu'elle est vide, et le dit
+// à côté du bouton. C'est l'état qu'il faut photographier : celui où l'écran
+// attend quelque chose de l'exploitant, et lui dit quoi.
+if (!(await page.isDisabled('[data-sugg-appliquer="variables"]'))) {
+  throw new Error('le geste est offert alors qu’une valeur demandée est vide');
+}
+const attente = await page.textContent('[data-sugg-attente="variables"]');
+if (!attente.includes('BILLING_API_KEY')) {
+  throw new Error(`l’écran ne nomme pas ce qu’il attend : « ${attente} »`);
+}
+await page.locator('.proposition').scrollIntoViewIfNeeded();
+await capturer('spk107-demande-a-saisir');
+
+// Le même état à 390 px, AVANT de trancher : c'est là que le champ, l'étiquette
+// et les deux cases doivent tenir côte à côte (SPK-DS-28). Après application, la
+// proposition n'existe plus et l'écran ne pourrait plus le montrer.
+await page.setViewportSize({ width: 390, height: 1800 });
+await page.locator('.proposition').scrollIntoViewIfNeeded();
+if (await page.evaluate(
+  () => document.documentElement.scrollWidth
+        > document.documentElement.clientWidth + 1)) {
+  throw new Error('débordement horizontal à 390 px sur la demande');
+}
+await capturer('spk107-demande-mobile');
+await page.setViewportSize({ width: 1440, height: 1500 });
+
+// On la saisit TOUCHE À TOUCHE, comme l'exploitant : `fill()` pose la valeur
+// d'un coup et ne prouverait pas qu'on peut écrire dans ce champ (§14.3).
+await page.click('[data-sugg-valeur="variables"][data-ligne="5"]');
+await page.keyboard.type('cle-de-facturation-de-recette');
+await page.waitForFunction(
+  () => !document.querySelector('[data-sugg-appliquer="variables"]').disabled,
+  { timeout: 10000 });
+await capturer('spk107-demande-saisie');
+
 await page.click('[data-sugg-appliquer="variables"]');
 // Le compte rendu doit SURVIVRE à la proposition qu'il décrit : on attend que
 // l'écran soit relu — le tableau de relecture a disparu — ET que la
@@ -86,6 +126,17 @@ if (!vu.includes('REDIS_URL')) {
 }
 if (vu.includes('SESSION_TTL')) {
   throw new Error('la ligne ÉCARTÉE est entrée au registre : le §55.5 est violé');
+}
+// La demande est entrée avec la valeur SAISIE, et l'étiquette de son auteur
+// n'est entrée nulle part : elle expliquait la demande (§55.3.3).
+const { corps: env } = await pile.lireSparkd('/v1/sparks/crm-production/env');
+const facturation = env.env.find((e) => e.name === 'BILLING_API_KEY');
+if (facturation?.value !== 'cle-de-facturation-de-recette') {
+  throw new Error(`la valeur saisie n’est pas au registre : ${
+    JSON.stringify(facturation)}`);
+}
+if (env.env.some((e) => /fournisseur de facturation/.test(e.name + e.value))) {
+  throw new Error('l’étiquette est entrée au registre : elle n’est pas une valeur');
 }
 
 // Le troisième effet, invisible à l'écran : le fichier de la cellule est vidé.

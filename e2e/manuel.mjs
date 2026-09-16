@@ -239,6 +239,19 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.locator('.proposition').scrollIntoViewIfNeeded();
     await capturer('m8-proposition-env', { hauteur: 800 });
 
+    // --- M8 · Une valeur DEMANDÉE, saisie à l'écran (SPK-107, §55.3.3) -------
+    // La ligne vide du seed est une demande : son auteur ne peut pas connaître
+    // cette valeur. L'illustration montre l'état d'APRÈS la saisie — le champ
+    // rempli et le geste redevenu offert. L'état d'avant, où le bouton refuse,
+    // est déjà sous les yeux du lecteur dans l'image précédente.
+    await page.click('[data-sugg-valeur="variables"][data-ligne="5"]');
+    await page.keyboard.type('cle-de-facturation-2f7a');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-sugg-appliquer="variables"]').disabled,
+      { timeout: 10000 });
+    await page.locator('.proposition').scrollIntoViewIfNeeded();
+    await capturer('m8-proposition-demande', { hauteur: 800 });
+
     // --- M8 · Protéger un Spark (SPK-34) -------------------------------------
     // « analytics » est protégé par le seed. On l'ouvre PAR SON LIEN, comme un
     // exploitant, et la fenêtre montre les deux choses à la fois : la barre qui

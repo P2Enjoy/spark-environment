@@ -1,27 +1,33 @@
 /**
  * Ce qu'un agent PROPOSE depuis la cellule, et ce qu'on en fait.
  *
- * @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.3 (les six paires), §55.3.1
- *       (la grammaire des routes), §55.5 (consulter ne consomme pas), §55.5.2
- *       (l'empreinte relue), §55.8 (l'analyse vit ICI, pas au serveur), §55.9
- *       (là où le geste se conclut) ·
+ * @spec docs/BACKLOG.md#SPK-105, docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3
+ *       (les six paires), §55.3.1 (la grammaire des routes), §55.3.3 (le vide
+ *       est une DEMANDE, et l'étiquette l'explique), §55.5 (consulter ne
+ *       consomme pas), §55.5.2 (l'empreinte relue), §55.8 (l'analyse vit ICI,
+ *       pas au serveur), §55.9 (là où le geste se conclut), §55.9.1 (le champ
+ *       d'une valeur demandée) ·
  *       docs/DESIGN_SYSTEM.md §14.5 (l'absence se nomme), §14.6 (les états ne
- *       se confondent pas), §1.3 (pas de succès simulé), §6.10 (cases),
- *       §6.22 (la confirmation est intégrée au flux) ·
+ *       se confondent pas), §1.3 (pas de succès simulé), §6.9 (champ), §6.10
+ *       (cases), §6.22 (la confirmation est intégrée au flux), §9.9 (désactivé
+ *       mais visible, avec sa raison) ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-23 (un lot s'analyse à l'écran avant
- *       d'être écrit), SPK-DS-27 (une proposition se lit à côté de sa cible)
+ *       d'être écrit), SPK-DS-27 (une proposition se lit à côté de sa cible),
+ *       SPK-DS-28 (une demande se saisit sur place, et porte son étiquette)
  *
  * **L'analyse vit ici, comme celle du lot collé** (§43.10.3, §55.8) : le serveur
  * reçoit des entrées structurées, jamais du texte. Écrire un second analyseur en
  * Python ferait deux grammaires pour le même fichier, qui divergeraient.
  *
- * **Pas de modale.** Le §6.27 la réserve à la saisie ; ici rien n'est saisi — on
- * choisit parmi des lignes déjà à l'écran, et la décision se conclut dans le
- * flux (§6.22). Une modale ajouterait un piège de focus pour un geste qui n'en
- * a pas besoin.
+ * **Pas de modale**, bien qu'une valeur puisse s'y saisir depuis SPK-107. Le
+ * §6.27 réserve la modale à la MODIFICATION d'une section ; ici on tranche parmi
+ * des lignes déjà à l'écran, et la décision se conclut dans le flux (§6.22). Le
+ * champ d'une valeur demandée vit DANS la ligne qu'il complète (§55.9.1) :
+ * renvoyer ailleurs pour la taper ferait perdre le nom, l'étiquette et la case
+ * *Secret* qui lui donnent son sens.
  */
 
-import { analyser } from './env-import.js';
+import { analyser, renderEtiquette } from './env-import.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -36,6 +42,7 @@ export const PROPOSITIONS_VIDE = {
   ouvert: null,     // la nature dépliée pour relecture
   exclues: {},      // { [kind]: Set des lignes écartées }
   secrets: {},      // { [kind]: Set des lignes cochées « secret » }
+  valeurs: {},      // { [kind]: Map ligne -> valeur saisie } — §55.3.3
   busy: null,
   issue: null,      // { kind, ok, message }
 };
@@ -115,6 +122,59 @@ const retenue = (ui, kind, ligne) => !(ui.exclues?.[kind] ?? new Set()).has(lign
 const estSecret = (ui, kind, ligne, defaut) =>
   (ui.secrets?.[kind] ?? null) ? ui.secrets[kind].has(ligne) : defaut;
 
+/**
+ * SPK-107 · §55.3.3 : une valeur vide est une DEMANDE, pas une valeur.
+ *
+ * Seulement pour les deux natures d'environnement : une route n'a pas de valeur
+ * à demander, et son analyse refuse déjà une ligne incomplète (§55.3.1).
+ */
+export const estDemande = (kind, entree) =>
+  kind !== 'routes' && entree.valeur === '';
+
+/** Ce que le propriétaire a tapé pour cette ligne, ou rien. */
+export const valeurSaisie = (ui, kind, ligne) =>
+  ui.valeurs?.[kind]?.get(ligne) ?? '';
+
+/**
+ * La valeur qui partira au serveur pour cette ligne (§55.8).
+ *
+ * Ce que l'écran montre est ce que l'on applique : pour une demande, c'est la
+ * saisie ; pour tout le reste, la valeur proposée, inchangée.
+ */
+export const valeurAppliquee = (ui, kind, entree) =>
+  (estDemande(kind, entree) ? valeurSaisie(ui, kind, entree.ligne) : entree.valeur);
+
+/**
+ * Les entrées STRUCTURÉES que le geste enverra (§55.8).
+ *
+ * Écrite ici, à côté du rendu, parce que c'est la même garantie : ce que l'écran
+ * montre est ce que l'on applique. Elle ne porte QUE ce que le serveur attend —
+ * l'étiquette explique la demande, elle ne fait pas partie de la valeur et
+ * n'entre jamais au registre (§55.3.3).
+ */
+export function entreesAppliquees(ui, kind, entrees) {
+  const secrets = ui.secrets?.[kind] ?? null;
+  const gardees = entrees.filter((e) => retenue(ui, kind, e.ligne));
+  return kind === 'routes'
+    ? gardees.map((e) => ({ domain: e.domaine, port: e.port, tls: e.tls }))
+    : gardees.map((e) => ({
+      name: e.nom, value: valeurAppliquee(ui, kind, e),
+      secret: secrets ? secrets.has(e.ligne) : e.secret }));
+}
+
+/**
+ * Les lignes RETENUES qui attendent encore leur valeur (§55.9.1).
+ *
+ * Écartée, une demande ne bloque plus rien : c'est la sortie du §55.3.3, et elle
+ * n'a pas de bouton à elle. Le blanc seul ne remplit pas : une valeur faite d'un
+ * espace se lirait comme une saisie alors qu'elle n'en est pas une.
+ */
+export function enAttente(kind, entrees, ui) {
+  return entrees.filter((e) => estDemande(kind, e)
+    && retenue(ui, kind, e.ligne)
+    && !valeurSaisie(ui, kind, e.ligne).trim());
+}
+
 /** Une ligne d'entrée, avec sa case de rétention et — pour l'env — sa case secret. */
 function ligneEntree(kind, entree, ui) {
   const gardee = retenue(ui, kind, entree.ligne);
@@ -128,11 +188,26 @@ function ligneEntree(kind, entree, ui) {
     </tr>`;
   }
   const secret = estSecret(ui, kind, entree.ligne, entree.secret);
+  const etiquetteId = entree.commentaire ? `sugg-note-${kind}-${entree.ligne}` : null;
+  // §55.9.1 : une DEMANDE se complète sur place. Le champ prend la place de la
+  // valeur, dans la ligne qu'il complète, et l'étiquette de l'auteur lui est
+  // rattachée — au clavier, on entend ce qu'il faut taper EN ENTRANT dans le
+  // champ, et non trois cellules plus tôt.
+  const valeur = estDemande(kind, entree)
+    ? `<label class="sr-only" for="sugg-valeur-${kind}-${entree.ligne}">Valeur de
+        ${echapper(entree.nom)}, demandée par l’auteur de la proposition</label>
+      <input type="text" class="controle" id="sugg-valeur-${kind}-${entree.ligne}"
+        data-sugg-valeur="${kind}" data-ligne="${entree.ligne}" spellcheck="false"
+        value="${echapper(valeurSaisie(ui, kind, entree.ligne))}"
+        ${etiquetteId ? `aria-describedby="${etiquetteId}"` : ''}>
+      <p class="absence">valeur demandée : son auteur ne la connaît pas</p>`
+    : `<span class="technique">${echapper(entree.valeur)}</span>`;
   return `<tr>
     <td><input type="checkbox" data-sugg-garder="${kind}" data-ligne="${entree.ligne}"
       ${gardee ? 'checked' : ''} aria-label="Retenir la ligne ${entree.ligne}"></td>
-    <th scope="row" class="technique nom-cellule">${echapper(entree.nom)}</th>
-    <td class="technique">${echapper(entree.valeur)}</td>
+    <th scope="row" class="nom-cellule"><span class="technique">${
+      echapper(entree.nom)}</span>${renderEtiquette(entree.commentaire, etiquetteId)}</th>
+    <td>${valeur}</td>
     <td><input type="checkbox" data-sugg-secret="${kind}" data-ligne="${entree.ligne}"
       ${secret ? 'checked' : ''} aria-label="Déclarer la ligne ${entree.ligne} secrète"></td>
   </tr>`;
@@ -146,7 +221,13 @@ function relecture(suggestion, ui) {
     ? '<th>Retenir</th><th>Domaine</th><th>Port dans la cellule</th><th>TLS</th>'
     : '<th>Retenir</th><th>Nom</th><th>Valeur proposée</th><th>Secret</th>';
   const tableau = entrees.length
-    ? `<div class="tableau-defilant"><table>
+    // §14.2 : le débordement est ANNONCÉ en toutes lettres sous 1024 px. Il
+    // l'était déjà par une ombre ; depuis SPK-107 ce qui sort de l'écran peut
+    // être un CHAMP que le geste attend, et une ombre ne se lit pas comme « il
+    // reste quelque chose à remplir par là ».
+    ? `<div class="tableau-defilant">
+        <p class="tableau-indice">Le tableau défile horizontalement.</p>
+        <table>
         <thead><tr>${entetes}</tr></thead>
         <tbody>${entrees.map((e) => ligneEntree(kind, e, ui)).join('')}</tbody>
       </table></div>`
@@ -175,6 +256,10 @@ function bloc(suggestion, ui) {
   const enCours = ui.busy === kind;
   const issue = ui.issue?.kind === kind ? ui.issue : null;
   const gardees = entrees.filter((e) => retenue(ui, kind, e.ligne));
+  // §55.9.1 : le bouton reste VISIBLE et refuse (§9.9), avec sa raison et son
+  // compte à côté. Un bouton actif qui refuserait ensuite ferait payer un
+  // aller-retour pour un fait connu avant le clic.
+  const attente = enAttente(kind, entrees, ui);
   return `<section class="carte bloc proposition" data-proposition="${kind}"
     aria-labelledby="titre-sugg-${kind}">
     <h2 id="titre-sugg-${kind}">${echapper(libelle.titre)}</h2>
@@ -198,12 +283,17 @@ function bloc(suggestion, ui) {
       <p class="formulaire__actions">
         <button type="button" class="bouton bouton--primaire"
           data-sugg-appliquer="${kind}" data-sha="${echapper(suggestion.sha256)}"
-          ${enCours || !gardees.length ? 'disabled' : ''}>${
+          aria-describedby="sugg-attente-${kind}"
+          ${enCours || !gardees.length || attente.length ? 'disabled' : ''}>${
             enCours ? 'Application…' : `Ajouter les ${gardees.length} retenue(s)`}</button>
         <button type="button" class="bouton" data-sugg-refuser="${kind}"
           data-sha="${echapper(suggestion.sha256)}"
           ${enCours ? 'disabled' : ''}>Tout refuser</button>
       </p>
+      <p class="champ__aide" id="sugg-attente-${kind}" data-sugg-attente="${kind}">${
+        attente.length ? `${attente.length} valeur(s) demandée(s) encore vide(s)
+        : ${echapper(attente.map((e) => e.nom).join(', '))}. Complétez ces champs,
+        ou décochez ces lignes.` : ''}</p>
       <p class="note">Quel que soit votre choix, <strong>le fichier de la cellule
       est vidé</strong> : ce que vous n’avez pas retenu est refusé, pas ajourné.
       C’est ainsi que son auteur apprend qu’une décision a été prise.</p>` : ''}

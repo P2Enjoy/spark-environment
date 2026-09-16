@@ -3,7 +3,9 @@
              suggestion n'est pas une écriture), §55.5 (consulter ne consomme
              pas), §55.5.1 (comment l'agent apprend le sort de sa demande),
              §55.5.2 (l'empreinte relue), §55.6 (permissions), §55.8 (la surface)
-             · §18.4 (l'unicité du domaine) · §54.6 (la garde des secrets)
+             · docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3 (le vide est une
+             DEMANDE, et l'étiquette l'explique), §55.7 (ce que l'en-tête doit
+             dire) · §18.4 (l'unicité du domaine) · §54.6 (la garde des secrets)
 
 Le point de ces preuves est ce qui N'ARRIVE PAS : un fichier consulté qui reste,
 une proposition en attente qu'aucune projection n'écrase, un refus du produit qui
@@ -118,6 +120,28 @@ def test_l_entete_dit_ce_qu_on_attend_la_et_ce_qui_arrivera(client):
     # ferait chercher un refus qui n'a pas eu lieu.
     assert "TMPFS" in poses[suggestions.chemin("secrets")]
     assert "TMPFS" not in variables
+
+
+def test_l_entete_des_deux_env_dit_le_VIDE_et_l_ETIQUETTE(client):
+    """SPK-107 · §55.3.3, §55.7 : le taire laisserait l'agent inventer une valeur
+    de remplissage — acceptée sans être regardée, et la pile casse au démarrage
+    suivant. Les quatre autres paires n'en parlent pas : une route incomplète est
+    refusée, et un texte n'a pas de valeur à demander."""
+    nom = creer(client)
+    poses = fichiers(client, nom)
+
+    for kind in ("variables", "secrets"):
+        entete = poses[suggestions.chemin(kind)]
+        assert "Laissez-la VIDE" in entete
+        assert "N'inventez pas une valeur de remplissage." in entete
+        assert "JUSTE AU-DESSUS" in entete
+        assert str(suggestions.ETIQUETTE_MAX) in entete
+        # L'exemple est DANS le bloc de commentaires : il ne doit pas se lire
+        # comme une proposition déjà déposée.
+        assert suggestions.vide(kind, entete), "l'en-tête seul vaut absence"
+
+    for kind in ("routes", "readme"):
+        assert "Laissez-la VIDE" not in poses[suggestions.chemin(kind)]
 
 
 def test_le_fichier_REEL_des_routes_est_pose_et_relu_a_chaque_changement(client):

@@ -3,8 +3,10 @@
  *           §43.10.1 (la grammaire lue et ses trois refus), §43.10.2 (le secret
  *           reste DÉCLARÉ), §43.9.7 (l'encodage dont l'analyseur est l'inverse),
  *           §43.9.4 (masquer n'est pas remplacer) ·
- *           docs/DESIGN_SYSTEM_APP.md SPK-DS-23 · docs/DESIGN_SYSTEM.md §9.9,
- *           §14.5
+ *           docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3 (l'étiquette d'une
+ *           ligne, lue ici parce que la grammaire s'écrit une seule fois) ·
+ *           docs/DESIGN_SYSTEM_APP.md SPK-DS-23, SPK-DS-28 ·
+ *           docs/DESIGN_SYSTEM.md §9.9, §14.5
  *
  * Ce que ces preuves gardent en propre : **rien n'est jeté en silence.** Une
  * ligne refusée, une ligne supplantée et une ligne qui remplace une valeur
@@ -16,8 +18,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { analyser, decrireEffet, lireValeur, renderImportEnv, IMPORT_VIDE }
-  from './env-import.js';
+import { analyser, decrireEffet, lireValeur, lireEtiquette, renderImportEnv,
+         ETIQUETTE_MAX, IMPORT_VIDE } from './env-import.js';
 import { renderModale } from './modale.js';
 
 const relire = (lu, extra = {}) => ({
@@ -240,4 +242,67 @@ test('une valeur hostile est ÉCHAPPÉE avant d’atteindre le DOM', () => {
                                  renderModale });
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;script&gt;/);
+});
+
+// --- l'étiquette d'une ligne (SPK-107, §55.3.3) ------------------------------
+
+test('une ligne « # » COLLÉE à une déclaration est portée par elle', () => {
+  const lu = analyser('#Commentaire pour la variable à saisir\nVAR=\n'
+                    + '\n#C’est le nombre max de concurrence\nMAXPOOL=5\n');
+  assert.deepEqual(lu.entrees.map((e) => [e.nom, e.valeur, e.commentaire]), [
+    ['VAR', '', 'Commentaire pour la variable à saisir'],
+    ['MAXPOOL', '5', 'C’est le nombre max de concurrence'],
+  ]);
+  // Elle n'a créé AUCUNE entrée : elle en explique une, au plus.
+  assert.equal(lu.entrees.length, 2);
+  assert.deepEqual(lu.refus, []);
+});
+
+test('une ligne vide ROMPT le rattachement, et le commentaire redevient libre', () => {
+  // Sans cette règle, un commentaire d'en-tête étiquetterait la première
+  // variable venue, trente lignes plus bas.
+  const lu = analyser('# En-tête du fichier\n\nA=1\n');
+  assert.equal(lu.entrees[0].commentaire, '',
+    'un commentaire séparé par un blanc ne décrit plus la ligne suivante');
+});
+
+test('de plusieurs lignes « # », c’est la PLUS PROCHE qui étiquette', () => {
+  const lu = analyser('# la première\n# la plus proche\nA=1\n');
+  assert.equal(lu.entrees[0].commentaire, 'la plus proche');
+});
+
+test('une étiquette est coupée à 120 caractères, et la coupure se VOIT', () => {
+  const lu = analyser(`# ${'a'.repeat(200)}\nA=1\n`);
+  assert.equal(lu.entrees[0].commentaire.length, ETIQUETTE_MAX);
+  assert.match(lu.entrees[0].commentaire, /…$/,
+    'un texte tronqué en silence se lit comme un texte entier');
+  assert.equal(lireEtiquette('# court'), 'court',
+    'ce qui tient n’est pas touché, et le « # » ne reste pas dans l’étiquette');
+});
+
+test('une étiquette posée au-dessus d’une ligne REFUSÉE ne glisse pas plus bas', () => {
+  const lu = analyser('# décrit la ligne fautive\nsans_egal\nA=1\n');
+  assert.equal(lu.refus.length, 1);
+  assert.equal(lu.entrees[0].commentaire, '',
+    'l’étiquette décrivait la ligne refusée, pas celle d’après');
+});
+
+test('l’étiquette se rend SOUS le nom, à la relecture d’un lot collé', () => {
+  // §44.9.7 : l'agent est invité à remettre le MÊME texte de la main à la main.
+  // Un texte qui perdrait ses étiquettes selon la porte empruntée ferait mentir
+  // cette phrase.
+  const lu = analyser('# Clé d’API du fournisseur\nBILLING_KEY=abc\nSANS=1\n');
+  const rendu = renderImportEnv({ ui: relire(lu), renderModale: (o) => o.corps });
+  assert.match(rendu, /<p class="note">Clé d’API du fournisseur<\/p>/);
+  assert.match(rendu, /BILLING_KEY/);
+  // Une ligne sans étiquette n'en affiche aucune : pas de colonne de blancs.
+  assert.match(rendu, /<span class="technique">SANS<\/span><\/th>/,
+    'la ligne sans commentaire ferme son en-tête sans rien y ajouter');
+});
+
+test('une étiquette hostile est ÉCHAPPÉE avant d’atteindre le DOM', () => {
+  const lu = analyser('# <img src=x onerror=alert(1)>\nA=1\n');
+  const rendu = renderImportEnv({ ui: relire(lu), renderModale: (o) => o.corps });
+  assert.doesNotMatch(rendu, /<img src=x/);
+  assert.match(rendu, /&lt;img src=x/);
 });

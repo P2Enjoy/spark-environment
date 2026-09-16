@@ -17,7 +17,8 @@ import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spar
 import { IDENTITE_VIDE } from './components/spark-identity.js';
 import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
 import { NOTES_VIDE } from './components/spark-notes.js';
-import { PROPOSITIONS_VIDE, comprendre } from './components/spark-suggestions.js';
+import { PROPOSITIONS_VIDE, comprendre, enAttente as lignesEnAttente,
+         entreesAppliquees } from './components/spark-suggestions.js';
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { IMPORT_VIDE, analyser } from './components/env-import.js';
@@ -164,7 +165,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // chargent à leur ouverture — comme les notes, et pour la même
                // raison : elles coûtent une lecture de la cellule.
                propositions: { ...PROPOSITIONS_VIDE, items: [],
-                               exclues: {}, secrets: {} } };
+                               exclues: {}, secrets: {}, valeurs: {} } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -1927,7 +1928,21 @@ function brancherPanneaux() {
     const bouton = bloc?.querySelector('[data-sugg-appliquer]');
     if (!bouton) return;
     const gardees = bloc.querySelectorAll('[data-sugg-garder]:checked').length;
-    bouton.disabled = gardees === 0;
+    // SPK-107 · §55.9.1 : une ligne retenue dont la valeur est DEMANDÉE et
+    // toujours vide interdit le geste, et le dit à côté du bouton. Le compte se
+    // relit de l'état, seul endroit où la saisie et les exclusions sont à jour.
+    const suggestion = etat.propositions.items.find((x) => x.kind === kind);
+    const attente = lignesEnAttente(
+      kind, comprendre(suggestion).entrees, etat.propositions);
+    const indication = bloc.querySelector(`[data-sugg-attente="${kind}"]`);
+    if (indication) {
+      indication.textContent = attente.length
+        ? `${attente.length} valeur(s) demandée(s) encore vide(s) : `
+          + `${attente.map((e) => e.nom).join(', ')}. Complétez ces champs, ou `
+          + 'décochez ces lignes.'
+        : '';
+    }
+    bouton.disabled = gardees === 0 || attente.length > 0;
     bouton.textContent = `Ajouter les ${gardees} retenue(s)`;
   };
   for (const caseGarder of racine.querySelectorAll('[data-sugg-garder]')) {
@@ -1954,6 +1969,20 @@ function brancherPanneaux() {
       }
       if (caseSecret.checked) etat.propositions.secrets[kind].add(ligne);
       else etat.propositions.secrets[kind].delete(ligne);
+    });
+  }
+  // SPK-107 · §55.9.1 : la frappe met à jour l'état et le bouton, JAMAIS le
+  // tableau — reconstruire la ligne à chaque touche ferait perdre le curseur.
+  // Ce qui est tapé vit dans l'état, et survit donc au repli de la proposition.
+  for (const champ of racine.querySelectorAll('[data-sugg-valeur]')) {
+    champ.addEventListener('input', () => {
+      const kind = champ.dataset.suggValeur;
+      const ligne = Number(champ.dataset.ligne);
+      etat.propositions.valeurs[kind] ??= new Map();
+      // Pas de rognage : ce qui est tapé est ce qui sera écrit. Le compte des
+      // lignes en attente, lui, ne se laisse pas remplir par un blanc seul.
+      etat.propositions.valeurs[kind].set(ligne, champ.value);
+      majCompteur(kind);
     });
   }
   for (const bouton of racine.querySelectorAll('[data-sugg-ouvrir]')) {
@@ -3216,17 +3245,11 @@ async function trancherSuggestion(kind, sha, appliquer) {
 
   let corpsEnvoye = { sha256: sha };
   if (appliquer) {
-    const { entrees } = comprendre(suggestion);
-    const exclues = p.exclues?.[kind] ?? new Set();
-    const secrets = p.secrets?.[kind] ?? null;
-    const gardees = entrees.filter((e) => !exclues.has(e.ligne));
+    // Ce qui part est construit à côté de ce qui s'affiche (§55.8), et porte la
+    // valeur SAISIE là où la proposition en demandait une (§55.3.3).
     corpsEnvoye = {
       sha256: sha,
-      entries: kind === 'routes'
-        ? gardees.map((e) => ({ domain: e.domaine, port: e.port, tls: e.tls }))
-        : gardees.map((e) => ({
-          name: e.nom, value: e.valeur,
-          secret: secrets ? secrets.has(e.ligne) : e.secret })),
+      entries: entreesAppliquees(p, kind, comprendre(suggestion).entrees),
     };
   }
 
@@ -3252,6 +3275,7 @@ async function trancherSuggestion(kind, sha, appliquer) {
     // entière plutôt que de deviner son nouvel état (§26.6).
     delete p.exclues[kind];
     delete p.secrets[kind];
+    delete p.valeurs[kind];
     p.ouvert = null;
     const issue = p.issue;
     await chargerDetail(etat.spark.name, etat.facette);
@@ -3352,7 +3376,8 @@ async function chargerDetail(nom, facette = '') {
     await chargerPropositions(nom);
     peindre();
   } else if (!['environnement', 'routes'].includes(facette)) {
-    etat.propositions = { ...PROPOSITIONS_VIDE, items: [], exclues: {}, secrets: {} };
+    etat.propositions = { ...PROPOSITIONS_VIDE, items: [], exclues: {},
+                         secrets: {}, valeurs: {} };
   }
   if (facette === 'notes' && etat.status === 'ready') {
     await chargerNotes(nom);

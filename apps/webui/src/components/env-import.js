@@ -1,10 +1,12 @@
 /**
  * Coller un `.env` : l'analyse du texte, puis la modale à deux pas.
  *
- * @spec docs/BACKLOG.md#SPK-97 · docs/DAT.md §43.10 (coller un lot), §43.10.1
- *       (la grammaire lue, et ce qu'elle refuse), §43.10.2 (le secret reste
- *       DÉCLARÉ), §43.10.3 (la route de lot et ses refus), §43.9.7 (l'encodage
- *       dont ceci est l'inverse) · docs/DESIGN_SYSTEM_APP.md SPK-DS-23,
+ * @spec docs/BACKLOG.md#SPK-97, docs/BACKLOG.md#SPK-107 · docs/DAT.md §43.10
+ *       (coller un lot), §43.10.1 (la grammaire lue, et ce qu'elle refuse),
+ *       §43.10.2 (le secret reste DÉCLARÉ), §43.10.3 (la route de lot et ses
+ *       refus), §43.9.7 (l'encodage dont ceci est l'inverse), §55.3.3
+ *       (l'étiquette d'une ligne, lue ICI parce que la grammaire s'écrit une
+ *       seule fois) · docs/DESIGN_SYSTEM_APP.md SPK-DS-23, SPK-DS-28,
  *       SPK-DS-15 (une valeur d'un seul jeton se replie) ·
  *       docs/DESIGN_SYSTEM.md §6.27 (modale limitée à une section, refus DANS
  *       la modale), §6.9 (champ), §6.14 (tableau), §9.9 (désactivé mais
@@ -37,7 +39,7 @@ export const IMPORT_VIDE = {
   pas: 'coller',       // 'coller' | 'relire'
   texte: '',
   toutSecret: false,
-  lignes: [],          // { nom, valeur, secret, ligne }
+  lignes: [],          // { nom, valeur, secret, ligne, commentaire }
   refus: [],           // { ligne, texte, raison }
   supplantees: [],     // { ligne, nom, gagnante }
   busy: false,
@@ -81,6 +83,28 @@ export function lireValeur(brut) {
 }
 
 /**
+ * SPK-107 · §55.3.3 : la longueur d'une étiquette, et pourquoi elle est bornée.
+ *
+ * Une étiquette, pas une documentation : celle-ci a sa place dans les notes
+ * (§54). La borne existe surtout pour la cellule d'un tableau, qui doit rester
+ * lisible à 390 px à côté d'un nom et d'une case.
+ */
+export const ETIQUETTE_MAX = 120;
+
+/**
+ * Le commentaire d'une ligne, lu depuis la ligne `#` qui la précède (§55.3.3).
+ *
+ * La coupure est VISIBLE : un texte tronqué en silence se lit comme un texte
+ * entier, et l'on croit son auteur quand il s'arrête au milieu d'une phrase.
+ */
+export function lireEtiquette(brut) {
+  const texte = String(brut ?? '').replace(/^#+/, '').trim();
+  return texte.length > ETIQUETTE_MAX
+    ? `${texte.slice(0, ETIQUETTE_MAX - 1)}\u2026`
+    : texte;
+}
+
+/**
  * Analyse un texte collé (§43.10.1).
  *
  * Rend trois listes, et les trois se rendent à l'écran : ce qui sera écrit, ce
@@ -91,12 +115,23 @@ export function lireValeur(brut) {
 export function analyser(texte, { secretParDefaut = false } = {}) {
   const lues = [];
   const refus = [];
+  // SPK-107 · §55.3.3 : la ligne `#` qui précède IMMÉDIATEMENT une déclaration
+  // est portée par elle. Une ligne vide rompt le rattachement — sans quoi un
+  // commentaire d'en-tête, trente lignes plus haut, étiquetterait la première
+  // variable venue.
+  let etiquette = '';
 
   String(texte ?? '').split(/\r?\n/).forEach((brut, index) => {
     const numero = index + 1;
     const ligne = brut.trim();
-    // Un `#` n'ouvre un commentaire qu'en DÉBUT de ligne (§43.10.1).
-    if (!ligne || ligne.startsWith('#')) return;
+    if (!ligne) { etiquette = ''; return; }
+    // Un `#` n'ouvre un commentaire qu'en DÉBUT de ligne (§43.10.1). Il ne
+    // définit toujours AUCUNE entrée : il en explique une, au plus.
+    if (ligne.startsWith('#')) { etiquette = lireEtiquette(ligne); return; }
+    // Consommée par la ligne qui suit, quelle que soit son issue : une étiquette
+    // posée au-dessus d'une ligne refusée décrivait CELLE-LÀ.
+    const portee = etiquette;
+    etiquette = '';
 
     const utile = ligne.startsWith('export ') ? ligne.slice(7).trim() : ligne;
     const coupe = utile.indexOf('=');
@@ -119,7 +154,8 @@ export function analyser(texte, { secretParDefaut = false } = {}) {
       refus.push({ ligne: numero, texte: ligne, raison: lu.raison });
       return;
     }
-    lues.push({ nom, valeur: lu.valeur, secret: Boolean(secretParDefaut), ligne: numero });
+    lues.push({ nom, valeur: lu.valeur, secret: Boolean(secretParDefaut),
+                ligne: numero, commentaire: portee });
   });
 
   // La règle du shell : la DERNIÈRE ligne l'emporte. Et la perdante le dit —
@@ -155,6 +191,19 @@ export function decrireEffet(nom, existantes = [], cochees = []) {
   return { texte: 'nouvelle entrée', token: 'neutral' };
 }
 
+/**
+ * L'étiquette d'une ligne, rendue sous son nom (§55.9.1, SPK-DS-28).
+ *
+ * Rien quand il n'y en a pas : une étiquette vide ferait une colonne de blancs
+ * sur un écran déjà dense. L'`id` sert à la rattacher au champ de saisie quand
+ * il y en a un — la relecture d'un lot collé, elle, n'en a pas.
+ */
+export function renderEtiquette(commentaire, id = null) {
+  if (!commentaire) return '';
+  return `<p class="note"${id ? ` id="${echapper(id)}"` : ''}>${
+    echapper(commentaire)}</p>`;
+}
+
 function renderColler(ui) {
   return `
   <div class="champ">
@@ -166,7 +215,9 @@ function renderColler(ui) {
     <p class="champ__aide">Une variable par ligne, <code class="technique">NOM=valeur</code>, comme
     dans un fichier <code class="technique">.env</code>. <code class="technique">export</code> est toléré, les lignes
     vides et celles qui commencent par <code class="technique">#</code> sont ignorées. Une valeur
-    peut être entre guillemets ; elle tient sur une seule ligne.</p>
+    peut être entre guillemets ; elle tient sur une seule ligne. Une ligne
+    <code class="technique">#</code> collée juste au-dessus d’une variable lui sert
+    d’étiquette et s’affiche à l’étape suivante.</p>
   </div>
   <div class="champ">
     <label for="import-env-secret">
@@ -185,7 +236,8 @@ function renderColler(ui) {
 function ligneRelue(entree, existantes, cochees) {
   const effet = decrireEffet(entree.nom, existantes, cochees);
   return `<tr>
-    <th scope="row" class="technique nom-cellule">${echapper(entree.nom)}</th>
+    <th scope="row" class="nom-cellule"><span class="technique">${
+      echapper(entree.nom)}</span>${renderEtiquette(entree.commentaire)}</th>
     <td class="import-valeur technique">${entree.valeur === ''
       // §14.5 : une valeur vide est une VALEUR, et elle se nomme. Une cellule
       // blanche se lirait comme une ligne qu'on a oublié de remplir.

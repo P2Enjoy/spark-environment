@@ -12977,6 +12977,15 @@ déjà dense.
 Une ligne vide **écartée** ne bloque rien : le compte ne retient que les lignes
 retenues. C'est la sortie du §55.3.3, et elle n'a pas de bouton à elle.
 
+Deux conséquences sur le tableau, puisqu'il porte maintenant un champ :
+
+- **ce qu'il dit d'une ligne demandée reste vrai une fois le champ rempli.** Rien
+  ne se repeint pendant la frappe, donc une mention « à saisir » se démentirait
+  dès la première touche ;
+- **son défilement est annoncé en toutes lettres** sous 1024 px (§14.2) et non
+  plus seulement ombré : ce qui sort de l'écran peut être le champ que le geste
+  attend.
+
 ### 55.10 Ce que cette unité ne fait pas
 
 - Elle n'applique rien automatiquement, et ne le fera pas.

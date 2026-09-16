@@ -9,7 +9,8 @@
       la cellule) · docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.5 (les notes en
       entier dans le dossier, nommées dans le briefing) · docs/BACKLOG.md#SPK-105
       · docs/DAT.md §55.7 (ce que le dossier doit dire du canal `.?`, et la
-      consigne d'accès unique) · docs/SCHEMA.md §10 quinquies
+      consigne d'accès unique) · docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3
+      (le vide est une DEMANDE, et l'étiquette l'explique) · docs/SCHEMA.md §10 quinquies
 
 Le JSON est le MODELE et le Markdown une présentation de ce même modèle. Les
 deux fichiers ne sont donc pas deux vérités qu'il faudrait garder en accord.
@@ -478,6 +479,21 @@ def _lignes_canal(model: dict[str, Any],
         "`<domaine> <port écouté ici> [tls|clair]` pour les routes, du texte "
         "libre pour les trois notes. Chaque fichier porte son en-tête, qui le "
         "redit.",
+        "",
+        # SPK-107 · §55.3.3 : les DEUX gestes, montrés plutôt que décrits. Sans
+        # eux, l'agent qui ignore une valeur invente un remplissage — accepté
+        # sans être regardé, et la pile casse au démarrage suivant.
+        "**Une valeur que vous ne connaissez pas se laisse VIDE** — `NOM=`. "
+        "C'est une demande : le propriétaire devra la saisir lui-même pour "
+        "l'importer. N'inventez pas de valeur de remplissage. Et une ligne `#` "
+        "posée **juste au-dessus** d'une déclaration lui sert d'étiquette : une "
+        f"seule ligne, {suggestions_service.ETIQUETTE_MAX} caractères, coupée "
+        "au-delà.",
+        "",
+        "```dotenv",
+        "# Clé d'API du fournisseur de facturation, à créer chez lui.",
+        "BILLING_API_KEY=",
+        "```",
         "",
         # Le texte ne décrit PAS l'écran du propriétaire : il décrit ce qui
         # arrive à la proposition. Nommer un écran ferait dépendre ce dossier
@@ -985,12 +1001,23 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         "Importer un lot** :",
         "",
         "```dotenv",
+        "# Ce que fait cette variable, en une ligne : c'est son étiquette.",
         "NOM_DE_VARIABLE=valeur",
         'AUTRE_VARIABLE="valeur avec des espaces"',
+        "# Celle-ci, je ne peux pas la connaître : à vous de la poser.",
+        "MOT_DE_PASSE_SMTP=",
         "```",
         "",
         "- Une ligne par variable, et **aucune valeur multiligne** : écrivez "
         "`\\n`.",
+        # SPK-107 · §55.3.3 : le vide est une DEMANDE dans un `.?`. Collé à la
+        # main, il vaut une valeur vide (§43.10.1) — la divergence est dans le
+        # DAT, et ce texte ne promet donc rien de l'écran ici.
+        "- **Une valeur laissée vide dans un fichier `.?` est une DEMANDE** : "
+        "le propriétaire devra la saisir pour l'importer.",
+        "- **Une ligne `#` collée juste au-dessus d'une déclaration lui sert "
+        f"d'étiquette** — une ligne, {suggestions_service.ETIQUETTE_MAX} "
+        "caractères — et s'affiche à côté d'elle quand il relit.",
         "- `$` est **littéral** : `A=$B` vaut `$B`, rien n'est substitué.",
         "- `#` n'ouvre un commentaire qu'en **début** de ligne.",
         "- Un import **ajoute et remplace** ; il ne retire jamais ce que le bloc "

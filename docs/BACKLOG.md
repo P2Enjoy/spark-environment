@@ -7466,7 +7466,7 @@ es trop con pour t'en rappeler, que ça te pète à la gueule ».
   contournement. Refus constaté à l'écran contre `monterPile()` : aucune pile,
   aucun navigateur n'est alloué avant le refus.
 
-### [ ] SPK-107 · Une proposition peut DEMANDER une valeur, et dire à quoi elle sert
+### [x] SPK-107 · Une proposition peut DEMANDER une valeur, et dire à quoi elle sert
 
 **Demandé par le responsable le 2026-09-16**, en deux phrases : « on instruit
 l'agent qu'il peut aussi poser dans les suggestions une variable (ou un secret)
@@ -7519,16 +7519,24 @@ propriétaire accepte sans la voir, ou il se tait.
 **Portée, et découpage persisté :**
 
 1. **Documentation seule** — DAT §55.3.3, §55.9.1, §55.7 et §43.10.1 complétés,
-   cette unité, SPK-DS-28, journal, changelog.
+   cette unité, SPK-DS-28, journal, changelog. *Fait, et committé avant le code.*
 2. **Grammaire et console** — le commentaire lu dans `env-import.js`, le champ de
    saisie et la garde du bouton dans `spark-suggestions.js`, l'état des valeurs
-   saisies dans `app.js`. Preuves de composant.
+   saisies dans `app.js`. *Fait : 8 preuves de grammaire, 9 de composant.* Ce qui
+   part au serveur est construit **à côté** de ce qui s'affiche —
+   `entreesAppliquees` — plutôt qu'en ligne dans `app.js` : c'est la même
+   garantie qu'au §55.8, et c'est ce qui la rend éprouvable.
 3. **Ce que la cellule lit** — l'en-tête des deux `.?` d'environnement et la
    section du dossier pour un LLM disent les deux gestes, avec un exemple.
-   Preuves de service.
+   *Fait : 2 preuves de service.*
 4. **Seed, E2E, captures, manuel** — la proposition seedée porte une variable
    vide commentée ; le parcours la saisit, l'applique, et constate la valeur au
-   registre.
+   registre. *Fait.* Trois défauts trouvés **à l'écran** et corrigés avant de
+   clore (SPK-DS-28) : l'étiquette héritait de la graisse de l'en-tête de ligne
+   et se lisait comme un second nom ; la phrase de la ligne se démentait dès la
+   première touche, alors qu'elle ne se repeint pas ; et le tableau ne signalait
+   son défilement que par une ombre, alors que ce qui sort de l'écran peut
+   désormais être le champ que le geste attend.
 
 - **Aucune migration, aucune variable d'environnement, aucune route nouvelle** :
   le serveur reçoit déjà des entrées structurées (§55.8), et une valeur saisie à
@@ -7537,6 +7545,13 @@ propriétaire accepte sans la voir, ou il se tait.
   vide ; le §55.5 — consulter ne consomme pas, et une acceptation partielle vide
   quand même ; le §43.3 — la nature reste déclarée par le propriétaire ; le
   §14.3 — rien ne se repeint sous les doigts.
+- **Clos le 2026-09-16.** Campagne E2E rejouée **avant et après** le changement,
+  à l'identique : 132 parcours verts, 3 rouges — `onglet Alertes`, `alerte hors
+  bande` et `révoquer une clé malgré le gel` — **exactement les mêmes dans les
+  deux séries**, donc étrangers à cette unité. La preuve de classes CSS reste
+  rouge sur ses quatre classes antérieures, elles aussi inchangées.
+- **Non déployé** : la Forge tourne une build antérieure, et le canal `.?`
+  lui-même (SPK-105) n'y existe pas encore.
 - DoD : une preuve montre qu'une ligne `#` collée à une déclaration est portée
   par elle, et qu'une ligne séparée par un blanc ne l'est pas ; une preuve montre
   la coupure à 120 caractères ; une preuve montre que le commentaire n'est pas

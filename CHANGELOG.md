@@ -4,13 +4,23 @@
 
 ### Ajouté
 - **SPK-107 — une proposition peut DEMANDER une valeur, et dire à quoi elle
-  sert.** *Spécification écrite ; code à venir.* Un agent qui installe une pile
-  sait qu'il lui faut `SMTP_PASSWORD` et ne peut pas connaître sa valeur : dans
-  un fichier `.?` d'environnement, une valeur laissée **vide** devient une
-  demande, et la console refusera d'importer la ligne tant que le propriétaire
-  n'aura pas saisi la valeur. Une ligne `#` posée juste au-dessus d'une
-  déclaration lui sert d'**étiquette** — une ligne, 120 caractères — et
-  s'affichera à la relecture, y compris pour un lot collé à la main.
+  sert.** Un agent qui installe une pile sait qu'il lui faut `SMTP_PASSWORD`, et
+  c'est précisément la valeur qu'il ne peut pas connaître : il lui restait à
+  inventer un remplissage — accepté sans être regardé, et la pile casse au
+  démarrage suivant — ou à se taire. Dans un fichier `.?` d'environnement, une
+  valeur laissée **vide** est désormais une **demande** : l'écran de relecture
+  ouvre un champ à cette ligne et **refuse d'importer** tant qu'elle est vide, en
+  nommant ce qu'il attend. Décocher *Retenir* reste la façon de dire non ; aucun
+  geste nouveau. Un lot **collé**, lui, garde `A=` pour une valeur vide : ce qui
+  sépare les deux n'est pas la syntaxe mais qui a écrit la ligne.
+- **SPK-107 — et une étiquette d'une ligne pour expliquer ce qu'on demande.** Une
+  ligne `#` posée **juste au-dessus** d'une déclaration est portée par elle —
+  une seule ligne, 120 caractères, coupure visible — et se lit sous le nom de la
+  variable, rattachée au champ pour les lecteurs d'écran. Elle n'entre jamais au
+  registre : elle explique la demande, elle ne fait pas partie de la valeur. La
+  grammaire étant écrite une seule fois, elle s'affiche **aussi** à la relecture
+  d'un lot collé à la main. Le dossier pour un LLM et l'en-tête des deux
+  fichiers `.?` disent les deux gestes, exemple à l'appui.
 - **SPK-61 — un refus de la garde SSH sort désormais de la machine.** Une clé
   restreinte qui tente un shell est ou bien une erreur, ou bien quelqu'un qui
   essaie la clé qu'il vient de voler ; le signal restait dans le syslog local.

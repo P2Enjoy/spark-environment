@@ -435,9 +435,16 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
          "- API REST : `https://crm.interne.example/api/v1`\n"
          "- Authentification : jeton porteur, demandé au responsable.\n"
          "- Format : JSON, pagination par `?page=` et `?per_page=`."),
+        # SPK-107 · §55.3.3 : la troisième ligne est une DEMANDE — une valeur
+        # que son auteur ne peut pas connaître, avec l'étiquette qui l'explique.
+        # Sans elle, l'écran ne pourrait montrer ni le champ de saisie, ni le
+        # bouton qui refuse tant qu'il est vide, ni une étiquette d'auteur.
         ("crm-production", "variables",
          "REDIS_URL=redis://cache:6379\n"
-         "SESSION_TTL=3600\n"),
+         "SESSION_TTL=3600\n"
+         "\n"
+         "# Clé d\u2019API du fournisseur de facturation : je ne peux pas la créer.\n"
+         "BILLING_API_KEY=\n"),
     ]
     for spark, kind, texte in propositions:
         cellule = client.app.state.incus

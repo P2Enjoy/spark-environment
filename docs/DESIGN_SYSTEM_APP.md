@@ -1156,6 +1156,20 @@ la règle de SPK-DS-23 : ce qui est interdit est de **rendre** une valeur que le
 registre détient ; celle-ci sort du clavier de qui la lit, et la masquer
 empêcherait de vérifier sa frappe sans rien protéger.
 
+**Trois choses vues à l'écran le 2026-09-16, et corrigées avant de clore :**
+
+- **l'étiquette héritait de la graisse de l'en-tête de ligne** et se lisait comme
+  un second nom, aussi fort que la variable elle-même. Elle est du texte
+  secondaire : `font-weight: 400`, à la couleur des notes ;
+- **la phrase de la ligne demandée devait rester vraie une fois le champ
+  rempli.** Elle ne se repeint pas sous les doigts (§14.3), donc « à saisir » se
+  démentait dès la première touche. Elle dit ce qui ne change pas : *valeur
+  demandée : son auteur ne la connaît pas* ;
+- **le tableau annonce son défilement** (§14.2). Il le signalait par une ombre,
+  ce qui suffisait tant qu'il ne portait que du texte. Ce qui sort de l'écran
+  peut désormais être un **champ que le geste attend**, et une ombre ne se lit
+  pas comme « il reste quelque chose à remplir par là ».
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

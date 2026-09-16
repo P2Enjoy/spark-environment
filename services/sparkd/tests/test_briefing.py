@@ -476,6 +476,29 @@ def test_le_dossier_dit_que_la_cellule_n_est_PAS_la_voie_pour_une_variable(tmp_p
     assert "lesquelles sont des secrets" in texte
 
 
+def test_le_dossier_dit_le_VIDE_et_l_ETIQUETTE_d_une_demande(tmp_path):
+    """SPK-107 · §55.3.3, §55.7 : l'agent qui ignore une valeur n'avait que deux
+    gestes, mauvais tous les deux — inventer un remplissage, ou se taire. Le
+    dossier lui donne la forme, et la MONTRE plutôt que de la décrire.
+
+    @verifies docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3, §55.7, §44.9.7
+    """
+    client = _client(tmp_path)
+    name = _spark(client)
+    texte = client.get(f"/v1/sparks/{name}/briefing").json()["markdown"]
+
+    assert "se laisse VIDE" in texte
+    assert "N'inventez pas de valeur de remplissage" in texte
+    assert "juste au-dessus" in texte
+    assert "120 caractères" in texte
+    # Montrée, pas décrite : le bloc d'exemple porte les deux gestes.
+    assert "BILLING_API_KEY=" in texte
+    # §44.7 : aucun nom de variable inventé POUR le locataire. Ceux-ci sont des
+    # exemples de forme, dans un bloc de code, et le texte ne prétend pas que
+    # cette pile-ci en a besoin.
+    assert "Clé d'API du fournisseur de facturation" in texte
+
+
 def test_les_ajouts_du_SPK_99_n_ouvrent_aucune_fuite_de_valeur(tmp_path):
     """Le garde-fou du §44.9.3, rejoué sur le texte augmenté : un dossier qui
     parle de variables est précisément celui où une valeur pourrait se glisser.
