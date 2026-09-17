@@ -90,6 +90,15 @@ export async function monterPile({ dns = null, notify = null } = {}) {
   // contre une identité que le journal n'inscrit pas.
   const cle = join(dossier, 'signature');
   execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'e2e', '-f', cle]);
+  // SPK-82 · §53.3 bis : la clé que la console est censée employer pour joindre
+  // la Forge. Le serveur `local` n'en emploie AUCUNE — il n'y a pas de SSH —, et
+  // le §42.10.3 répond donc « je n'accorderai rien », ce qui est juste et rend
+  // l'octroi inéprouvable. Une VRAIE clé, produite par `ssh-keygen` : son
+  // empreinte est calculée comme en exploitation, et la preuve mesure le
+  // produit au lieu du doublon.
+  const cleConsole = join(dossier, 'console-poste');
+  execFileSync('ssh-keygen',
+    ['-q', '-t', 'ed25519', '-N', '', '-C', 'poste-e2e', '-f', cleConsole]);
   const signataires = join(dossier, 'allowed_signers');
   await writeFile(signataires,
     `console/local namespaces="spark-audit" ${await readFile(`${cle}.pub`, 'utf8')}`);
@@ -152,7 +161,7 @@ export async function monterPile({ dns = null, notify = null } = {}) {
     SPARK_CONSOLE_PORT: String(portConsole),
     SPARK_CONSOLE_STATE: inventaire,
     SPARK_ENV_FILE: envConsole,
-    // SPK-100 · §53.3 : l'interrupteur SANS lequel les quatre doublons
+    // SPK-100 · §53.3 : l'interrupteur SANS lequel les cinq doublons
     // ci-dessous sont inertes. Le poser ici, et nulle part ailleurs, est ce qui
     // fait qu'un `SPARK_DOCKER_COMMAND` exporté dans un shell d'exploitation ne
     // remplace plus rien. La console affiche un bandeau tant qu'il est actif :
@@ -293,6 +302,9 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       + ` exec ssh-keygen -Y sign -f ${JSON.stringify(`${cle}.pub`)}`
       + ' -n spark-audit "$0" ;;'
       + ' esac',
+    // SPK-82 · §53.3 bis : le cinquième doublon, un CHEMIN de fichier et jamais
+    // une clé en ligne.
+    SPARK_CONSOLE_IDENTITY: `${cleConsole}.pub`,
     SPARK_TERMINAL_COMMAND: JSON.stringify({
       // Le relai brut est nécessaire pour éprouver CSI/DSR : `cat` laisse le
       // pilote canonique transformer ESC en `^[` avant de le réémettre.
@@ -337,6 +349,20 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       const brut = await readFile(`${registre}.incus.json`, 'utf8').catch(() => '{}');
       const etat = JSON.parse(brut);
       return (etat[nom]?.commands ?? []).map((c) => c.join(' '));
+    },
+    /**
+     * Les fichiers que le produit a RÉELLEMENT posés dans une cellule.
+     *
+     * SPK-104 · docs/DAT.md §54.4 : une note écrite à l'écran doit ARRIVER dans
+     * la cellule, et c'est la moitié du trajet qui intéresse l'agent. Elle n'a
+     * aucun rendu — aucune route ne sert les fichiers d'une cellule —, et le
+     * §15 de `CLAUDE.md` exige quand même de la prouver.
+     *
+     * Lecture seule, comme `commandesCellule` juste au-dessus : on constate.
+     */
+    async fichiersCellule(nom) {
+      const brut = await readFile(`${registre}.incus.json`, 'utf8').catch(() => '{}');
+      return JSON.parse(brut)[nom]?.files ?? {};
     },
     /**
      * Écrit sur `sparkd` en CONTOURNANT l'interface (`CLAUDE.md` §10).

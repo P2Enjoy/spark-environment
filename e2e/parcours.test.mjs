@@ -1123,6 +1123,80 @@ test('un lot importé au CATALOGUE ne descend dans aucun Spark', async () => {
 
 // --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
 
+test('l’onglet Alertes se règle, et le REFUS vient du serveur', async () => {
+  await parcours('alertes-onglet', async () => {
+    // @verifies docs/DAT.md §47.3 (la configuration au registre), §47.3.0 bis
+    //           (l'onglet), §47.3.1 (le gabarit refusé à l'enregistrement),
+    //           §47.3.3 (le mot de passe à chaque écriture) · §1.5 bis
+    //
+    // Cette pile démarre avec `SPARKD_NOTIFY_URL` posée : l'onglet doit donc
+    // DIRE que ce qui veille vient de l'environnement, et non de lui. C'est le
+    // cas qui a coûté le plus cher — régler un écran sans effet et sans le
+    // savoir.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.click('.onglets a[href="#/forge/alertes"]');
+    await page.waitForSelector('#formulaire-alertes', { timeout: 20000 });
+
+    assert.ok(await page.$('[data-source="environnement"]'),
+      'une Forge qui tourne encore sur la variable doit le DIRE');
+
+    // 1. Le premier usage POSE le mot de passe : l'écran l'annonce avant.
+    assert.match(await page.textContent('#formulaire-alertes'),
+                 /Aucun mot de passe n’est encore fixé/);
+
+    // 2. Un gabarit FAUTIF est refusé à l'ENREGISTREMENT, pas à l'envoi.
+    await page.fill('#alerte-mot', 'le-garde');
+    await page.fill('#alerte-gabarit', '{"content":"{payload}"}');
+    await page.click('#formulaire-alertes button[type="submit"]');
+    await page.waitForFunction(
+      () => /ne publie pas/.test(document.body.innerText), { timeout: 15000 });
+    assert.match(await page.textContent('#formulaire-alertes'), /payload/,
+      'le refus NOMME le champ fautif');
+    assert.ok(await page.$('#formulaire-alertes'),
+      'la saisie reste : un refus n’efface pas ce qu’on vient d’écrire (§1.5 bis)');
+
+    // 3. Un gabarit valide passe, et le canal bascule au REGISTRE.
+    await page.fill('#alerte-gabarit', '{"content":"{forge} {action} {target_id}"}');
+    await page.fill('#alerte-url', canal.baseUrl);
+    await page.check('#alerte-actif');
+    await page.fill('#alerte-mot', 'le-garde');
+    await page.click('#formulaire-alertes button[type="submit"]');
+    await page.waitForFunction(
+      () => /Configuration enregistrée/.test(document.body.innerText), { timeout: 15000 });
+    assert.equal(await page.$('[data-source="environnement"]'), null,
+      'une fois posé au registre, l’avertissement DISPARAÎT');
+
+    // 4. Le mot de passe est exigé à CHAQUE écriture — pas de session ouverte.
+    await page.fill('#alerte-mot', '');
+    await page.uncheck('#alerte-actif');
+    await page.click('#formulaire-alertes button[type="submit"]');
+    await page.waitForFunction(
+      () => /refusé/i.test(document.body.innerText), { timeout: 15000 });
+    const { corps } = await pile.lireSparkd('/v1/notify/channels');
+    assert.equal(corps.webhook.enabled, true,
+      'un refus laisse la configuration EXACTEMENT où elle était');
+
+    // 5. L'adresse ne s'affiche NULLE PART, et son hôte suffit à la reconnaître.
+    const vu = await page.textContent('#formulaire-alertes');
+    assert.ok(!vu.includes(canal.baseUrl),
+      'qui détient l’adresse peut écrire à votre place : elle ne se montre pas');
+    assert.match(await page.textContent('body'), /127\.0\.0\.1:/,
+      'son hôte, lui, se lit — assez pour reconnaître le canal');
+
+    // ON REMET CE QU'ON A TROUVÉ (§29.2). Ce parcours a posé un gabarit au
+    // registre ; le suivant éprouve le corps par défaut du §47.4 et ne le
+    // reconnaîtrait plus. Un parcours qui laisse une trace rend le verdict des
+    // suivants dépendant de l'ordre — le défaut corrigé trois fois déjà.
+    await page.fill('#alerte-gabarit', '');
+    await page.fill('#alerte-mot', 'le-garde');
+    await page.click('#formulaire-alertes button[type="submit"]');
+    await page.waitForFunction(
+      () => /Configuration enregistrée/.test(document.body.innerText), { timeout: 15000 });
+  });
+});
+
+
 test('un geste sensible envoie une alerte hors bande, un geste ordinaire non', async () => {
   await parcours('notify-alerte', async () => {
     // Le geste éprouvé est la LEVÉE DE PROTECTION, et le choix n'est pas
@@ -3951,6 +4025,78 @@ test('cocher le rootless amorce dans ce mode, et le journal le PORTE', async () 
     assert.ok(sienne.length > 0);
     assert.equal(JSON.parse(sienne[0].payload).mode, 'rootless');
     assert.match(sienne[0].message, /en rootless/);
+  });
+});
+
+// --- SPK-82 · l'amorçage ACCORDE la clé de la console (§42.10) ---------------
+//
+// @verifies docs/BACKLOG.md#SPK-82 · docs/DAT.md §42.10, §42.10.1 (la clé passe
+//           par le REGISTRE), §42.10.2, §53.3 bis (le cinquième doublon) ·
+//           CLAUDE.md §15 (un chemin déterministe plutôt qu'une simulation)
+//
+// Ce chemin était prouvé DEUX FOIS sur matériel réel et gardé par aucun test :
+// le serveur `local` de cette pile n'emploie aucune clé SSH, donc la console
+// disait « je n'accorderai rien » — ce qui est juste — et le chemin heureux
+// n'existait pas ici. Le doublon du §53.3 bis fournit une vraie clé publique ;
+// tout le reste du chemin est celui de l'exploitation.
+
+test('amorcer ACCORDE la clé de la console, et elle apparaît au panneau Clés', async () => {
+  await parcours('amorcage-octroi-cle', async () => {
+    // AUTONOME, et c'est délibéré : ce parcours crée sa propre cellule au lieu
+    // d'emprunter celle d'un autre. Le §42.2 bis refuse un second amorçage, donc
+    // réutiliser un Spark déjà amorcé ailleurs ferait dépendre cette preuve de
+    // l'ordre de la campagne — le défaut que le 2026-09-08 avait déjà corrigé
+    // sur trois parcours.
+    await accueil();
+    await page.click('.titre-vue .bouton--primaire');
+    await page.waitForSelector('#formulaire-spark', { timeout: 10000 });
+    await page.fill('#name', 'octroi-e2e');
+    await page.click('button[type="submit"]');
+    await page.waitForSelector('.entete-entite', { timeout: 20000 });
+
+    // Appliquer, puis démarrer : l'amorçage exige une cellule qui tourne.
+    await page.click('[data-commande="apply"]');
+    await page.waitForSelector('[data-commande="start"]', { timeout: 30000 });
+    await page.click('[data-commande="start"]');
+    await page.waitForFunction(
+      () => document.querySelector('[data-commande="stop"]') !== null,
+      null, { timeout: 30000 });
+
+    await page.click('[data-amorcage="amorcer"]');
+    await page.waitForSelector('[data-amorcage="engager"]', { timeout: 10000 });
+    // La confirmation ANNONCE l'octroi avant de le faire : accorder un accès
+    // sans le dire serait le contraire du §42.10.
+    assert.match(await page.textContent('.confirmation'), /clé/i);
+    await page.click('[data-amorcage="engager"]');
+    await page.waitForSelector('.liste-amorcage', { timeout: 30000 });
+
+    // Par le REGISTRE (§42.10.1) : la clé n'est jamais écrite dans la cellule à
+    // la main, elle est ACCORDÉE — et un octroi laisse une ligne au journal, qui
+    // est la seule trace que le §36 reconnaisse.
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?action=sshkey.grant&limit=20');
+    const sienne = (journal.entries ?? []).filter((e) => e.message.includes('octroi-e2e'));
+    assert.ok(sienne.length > 0,
+      'l’octroi doit avoir laissé une ligne « sshkey.grant » nommant le Spark');
+
+    // Et elle se VOIT, avec son empreinte et non son corps.
+    await ouvrir('octroi-e2e', 'cles');
+    await page.waitForFunction(
+      () => /SHA256:/.test(document.body.innerText), { timeout: 20000 });
+    const vu = await page.textContent('body');
+    assert.match(vu, /console/);
+    assert.ok(!/ssh-ed25519 AAAA/.test(vu),
+      'le panneau montre l’empreinte, jamais le corps de la clé');
+
+    // ON REND LA PLACE (§29.2). Ce parcours crée sa cellule ; la laisser
+    // retirerait de la capacité aux parcours qui éprouvent un REFUS pour
+    // capacité insuffisante, et leur verdict dépendrait alors de l'ordre.
+    await ouvrir('octroi-e2e');
+    await page.click('[data-commande="delete"]');
+    await page.waitForSelector('#suppression-nom', { timeout: 10000 });
+    await page.fill('#suppression-nom', 'octroi-e2e');
+    await page.click('[data-confirme="delete"]');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('octroi-e2e'), { timeout: 30000 });
   });
 });
 
