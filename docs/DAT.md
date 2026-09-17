@@ -13520,11 +13520,16 @@ autre famille, le device est posé, l'adresse est réservée, et l'adhésion dit
 locataire configure `spn<n>` en DHCP lui-même, et le manuel le dit.
 
 **Une cellule arrêtée** n'exécute rien : sa famille se lit dans son
-`/etc/os-release` par le chemin des fichiers, le drop-in est posé sans
-rechargement — networkd le lit au démarrage —, et l'adhésion porte la
+`os-release` par le chemin des fichiers — `/etc/os-release`, puis
+`/usr/lib/os-release`, dans l'ordre de la spécification —, le drop-in est posé
+sans rechargement — networkd le lit au démarrage —, et l'adhésion porte la
 précision « cellule arrêtée : configuration posée, prise au démarrage »,
-configurée, pas en défaut. Le doublon sert `/etc/os-release` de la même table
-que son relevé (§42.9), pour que les deux chemins ne divergent pas.
+configurée, pas en défaut. **Mesuré le 2026-09-18** : sur Ubuntu comme sur
+Debian, `/etc/os-release` est un lien vers `/usr/lib/os-release`, et l'API de
+fichiers d'Incus rend la cible du lien, pas son contenu — lire le premier seul
+donnait « famille non lue » sur la Forge. Le doublon fait pareil, et sert le
+second de la même table que son relevé (§42.9), pour que les deux chemins ne
+divergent pas.
 
 Dans la cellule, une interface `spn42` avec son adresse et son domaine. Ses
 conteneurs l'atteignent par le routage de la cellule, comme ils atteignent

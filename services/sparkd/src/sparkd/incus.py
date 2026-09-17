@@ -1117,10 +1117,17 @@ class FakeIncus:
         instance = self._vivante(name)
         fichiers = instance.get("files", {})
         # SPK-110 · §58.6 : une cellule arrêtée n'exécute rien, et sa famille se
-        # lit dans `/etc/os-release` — que le vrai pilote sert à l'arrêt comme en
+        # lit dans `os-release` — que le vrai pilote sert à l'arrêt comme en
         # marche. Le doublon le rend de la MÊME table que `exec_capture` (§42.9),
         # sinon les deux chemins de lecture de la famille divergeraient.
+        #
+        # MESURÉ sur la Forge le 2026-09-18 : `/etc/os-release` est un LIEN vers
+        # `/usr/lib/os-release` sur Ubuntu comme sur Debian, et l'API de fichiers
+        # d'Incus rend la CIBLE du lien, pas son contenu. Le doublon fait pareil :
+        # un lecteur qui s'arrête au premier chemin doit rougir ici aussi.
         if path == "/etc/os-release" and path not in fichiers:
+            return "../usr/lib/os-release"
+        if path == "/usr/lib/os-release" and path not in fichiers:
             os_release = _os_de_alias(instance.get("alias", ""))
             return (f'ID={os_release["os_id"]}\nID_LIKE="{os_release["os_like"]}"\n'
                     f'VERSION_CODENAME={os_release["os_suite"]}\n')

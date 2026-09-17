@@ -228,6 +228,11 @@ def test_une_cellule_arretee_recoit_le_fichier_sans_rechargement_et_l_adhesion_l
     assert a["applied_at"] and a["cell_configured"] is True
     assert a["cell_note"] == "cellule arrêtée : configuration posée, prise au démarrage"
     cellule = c.app.state.incus.created["dormante"]
+    # Le doublon rend, comme Incus, la CIBLE du lien pour /etc/os-release : la
+    # famille n'a pu être lue qu'en suivant la spécification jusqu'à /usr/lib.
+    incus = c.app.state.incus
+    assert incus.pull_file("dormante", "/etc/os-release") == "../usr/lib/os-release"
+    assert "ID=debian" in incus.pull_file("dormante", "/usr/lib/os-release")
     assert cellule["files"][reseaux.FICHIER_NETWORKD] == reseaux.DROPIN_NETWORKD
     assert not any("networkctl" in " ".join(cmd) for cmd in cellule.get("commands", [])), \
         "rien ne s'exécute dans une cellule arrêtée"

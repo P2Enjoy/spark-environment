@@ -218,17 +218,28 @@ def _en_marche(incus, incus_name: str) -> bool:
     return str(meta.get("status", "")).lower() == "running"
 
 
+#: Les deux emplacements d'`os-release`, dans l'ordre de la spécification :
+#: `/etc/os-release` d'abord, `/usr/lib/os-release` sinon. MESURÉ sur la Forge le
+#: 2026-09-18 : sur Ubuntu comme sur Debian, le premier est un LIEN vers le
+#: second, et l'API de fichiers d'Incus rend la cible du lien, pas son contenu —
+#: lire le premier seul donnait « famille non lue ».
+FICHIERS_OS_RELEASE = ("/etc/os-release", "/usr/lib/os-release")
+
+
 def _famille_cellule_arretee(incus, incus_name: str) -> tuple[Any, dict[str, str]]:
     """Une cellule arrêtée n'exécute rien : sa famille se lit dans son
-    `/etc/os-release`, par le chemin des fichiers, qui ne demande pas qu'elle
+    `os-release`, par le chemin des fichiers, qui ne demande pas qu'elle
     tourne (§58.6). Rend `(famille, brut)` — `brut` au format du relevé de
     l'amorçage, pour que `famille_de` soit la SEULE lecture de la famille."""
-    contenu = incus.pull_file(incus_name, "/etc/os-release") or ""
     valeurs: dict[str, str] = {}
-    for ligne in contenu.splitlines():
-        cle, separateur, valeur = ligne.partition("=")
-        if separateur:
-            valeurs[cle.strip()] = valeur.strip().strip('"')
+    for chemin in FICHIERS_OS_RELEASE:
+        contenu = incus.pull_file(incus_name, chemin) or ""
+        for ligne in contenu.splitlines():
+            cle, separateur, valeur = ligne.partition("=")
+            if separateur:
+                valeurs[cle.strip()] = valeur.strip().strip('"')
+        if valeurs.get("ID"):
+            break
     brut = {"os_id": valeurs.get("ID", ""), "os_like": valeurs.get("ID_LIKE", "")}
     return bootstrap.famille_de(brut), brut
 
@@ -254,7 +265,7 @@ def _configurer_cellule(incus, incus_name: str, iface: str) -> tuple[bool, str]:
             famille, brut = _famille_cellule_arretee(incus, incus_name)
             if not brut.get("os_id"):
                 return False, ("interface non configurée dans la cellule : cellule arrêtée, "
-                               "famille non lue dans /etc/os-release")
+                               "famille non lue dans os-release")
         if famille is None or famille.services != "systemd":
             identite = brut.get("os_id") or "inconnue"
             return False, f"interface non configurée dans la cellule : famille sans networkd ({identite})"

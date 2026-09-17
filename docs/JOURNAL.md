@@ -12225,9 +12225,38 @@ poste, la règle du §15 bis tenue : `ps` avant chaque lancement, `make e2e-un`,
 jamais deux. Le harnais du manuel prend le plafond à son tour, il ne l'avait
 pas.
 
-**Ce qui reste** : déployer (OP-23), puis la preuve depuis les terminaux
-d'essai-a et d'essai-b — un réseau créé par la console, deux adhésions, `ping`
-par nom, rien vers Internet ni vers la Forge par `spn<n>` —, et les
-illustrations de M13 produites par `make manuel`. Le cas d'un conteneur Docker
-qui résout `<spark>.<réseau>` par le résolveur de sa cellule n'est **pas
-mesuré** : le manuel dit de le vérifier, et donne l'adresse en repli.
+**Une cellule arrêtée**, en relisant le manuel : « un Spark arrêté reçoit
+l'interface au démarrage suivant » n'était pas vrai — le geste exécutait le
+relevé de l'amorçage dans la cellule, qui ne tourne pas, et l'adhésion aurait
+porté l'erreur brute du pilote. Le geste lit maintenant l'état d'abord : à
+l'arrêt, la famille vient d'`os-release` par le chemin des fichiers, le drop-in
+est posé sans rechargement, et l'adhésion précise « configuration posée, prise
+au démarrage » — une ligne de précision, pas un avertissement. Deux preuves
+unitaires, la fiche du doublon.
+
+**Déployé** (OP-23, build `dev850+g67c28aae0`) : migration 018 jouée, règles
+`spn*` posées, préflight 15 verts, pool « 0 sur 255 ». La première preuve sur
+la Forge a **échoué deux fois pour de bonnes raisons** :
+
+1. la cellule arrêtée a dit « famille non lue dans /etc/os-release » : sur
+   Ubuntu comme sur Debian, ce fichier est un **lien** vers
+   `/usr/lib/os-release`, et l'API de fichiers d'Incus rend la cible du lien
+   (`X-Incus-Type: symlink`), pas son contenu. Le geste lit maintenant les deux
+   emplacements dans l'ordre de la spécification, et le doublon rend lui aussi
+   la cible du lien pour le premier — un lecteur qui s'arrête au premier chemin
+   rougit désormais sur le poste, pas seulement sur la Forge ;
+2. le terminal d'`essai-a` a refusé une **clé d'hôte changée** : le
+   `known_hosts` du poste gardait la clé d'une incarnation précédente de la
+   cellule, recréée depuis pour les mesures. La console ne l'accepte ni ne
+   l'efface elle-même, par contrat (SPK-54) ; retirée à la main, par
+   `ssh-keygen -R`, pour les deux cellules d'essai. Rien à changer dans le
+   produit.
+
+L'état laissé par la preuve interrompue — réseau `essai`, deux adhésions — a
+été défait par les gestes du produit, et la Forge relue vide : ni bridge
+`spn1`, ni device, pool à zéro.
+
+**Ce qui reste** : redéployer le correctif, rejouer la preuve entière depuis
+la console. Le cas d'un conteneur Docker qui résout `<spark>.<réseau>` par le
+résolveur de sa cellule n'est **pas mesuré** : le manuel dit de le vérifier,
+et donne l'adresse en repli.
