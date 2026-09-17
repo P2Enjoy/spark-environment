@@ -266,7 +266,7 @@ function renderReseau(spark, isolation) {
       ? `Non relevée${isolation?.reason ? ` — ${isolation.reason}` : ''}`
       : isolation.isolated
         ? 'Isolé du réseau des autres Sparks'
-        : 'Non encore isolé — depuis la Forge : « Isoler le parc »';
+        : 'Non encore isolé — cellule créée avant la règle ; se rattrape depuis la Forge'
   return `
 <section class="carte bloc" aria-labelledby="titre-reseau">
   <h2 id="titre-reseau">Réseau</h2>

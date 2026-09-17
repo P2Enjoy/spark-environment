@@ -1180,15 +1180,21 @@ jamais (`DESIGN_SYSTEM.md` §1.2, §14.9).
 
 **Règles :**
 
-- **trois états, trois textes** (§14.6) : « isolé », « non encore isolé », et
-  « non relevée — <raison> ». Un relevé impossible n'est jamais rendu comme un
-  Spark non isolé : c'est le cas où l'écran pourrait faire poser un geste sur
-  une lecture qui n'a pas eu lieu ;
-- **les non encore isolés sont nommés et liés**, pas comptés (§6.4, §14.5). Un
-  Spark protégé porte la mention « (protégé) » à côté de son nom : c'est lui qui
-  refusera, et l'exploitant doit le savoir avant de cliquer ;
-- **un parc entièrement isolé n'offre aucun geste** (§14.4) : la ligne dit
-  « aucun », et le bouton n'est pas rendu ;
+- **le geste n'est pas un choix, et la section le dit** — reformulé le
+  2026-09-17 sur remarque du responsable : « Isoler le parc » se lisait comme
+  une option à choisir. Chaque Spark **naît** isolé ; la section s'appelle
+  toujours *Isolation du réseau*, mais elle parle de « cellules créées avant la
+  règle », et le geste s'appelle *Les isoler maintenant* : un rattrapage, une
+  fois, pas un réglage ;
+- **trois états, trois textes** (§14.6) : « isolé », « non encore isolé —
+  cellule créée avant la règle », et « non relevée — <raison> ». Un relevé
+  impossible n'est jamais rendu comme un Spark non isolé : c'est le cas où
+  l'écran pourrait faire poser un geste sur une lecture qui n'a pas eu lieu ;
+- **les cellules créées avant la règle sont nommées et liées**, pas comptées
+  (§6.4, §14.5). Un Spark protégé porte la mention « (protégé) » à côté de son
+  nom : c'est lui qui refusera, et l'exploitant doit le savoir avant de cliquer ;
+- **quand il n'en reste aucune, il n'y a aucun geste** (§14.4) : la ligne dit
+  « aucune — toutes les cellules sont isolées », et le bouton n'est pas rendu ;
 - **le geste se confirme dans le flux**, en accent, avec un bouton ordinaire
   (SPK-DS-09) : il interrompt le trafic entre voisins, il ne détruit rien. La
   confirmation compte ce qu'elle touche et annonce le refus du protégé ;

@@ -5640,7 +5640,7 @@ test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et s
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-isolation', { timeout: 20000 });
     await page.waitForFunction(
-      () => /Non encore isolés/.test(document.body.innerText), null, { timeout: 20000 });
+      () => /Créées avant la règle/.test(document.body.innerText), null, { timeout: 20000 });
     const section = () => page.$eval('#titre-isolation', (h) => h.closest('section').innerText);
     assert.match(await section(), /boutique/, 'la cellule d’avant est NOMMÉE');
     await capturer('spk109-isolation-avant');
@@ -5649,21 +5649,21 @@ test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et s
     // Le geste se confirme dans le flux, sans détruire : un bouton ordinaire.
     await page.click('[data-isolation="demander"]');
     await page.waitForSelector('[data-isolation="engager"]', { timeout: 10000 });
-    assert.match(await section(), /Isoler tout le parc \?/);
+    assert.match(await section(), /Rattraper 1 cellule créée avant la règle \?/);
     assert.equal(await page.$eval('[data-isolation="engager"]',
       (b) => b.classList.contains('bouton--destructif')), false);
     await capturer('spk109-isolation-confirmation');
 
     await page.click('[data-isolation="engager"]');
     await page.waitForFunction(
-      () => /Le geste a été joué/.test(document.body.innerText), null, { timeout: 20000 });
+      () => /Le rattrapage a été joué/.test(document.body.innerText), null, { timeout: 20000 });
     // Le seed porte AUSSI « orphelin », dont la cellule a disparu (§14.5) : le
     // geste le nomme en échec, sans que boutique en pâtisse — et sans vert,
     // parce que tout n'a pas abouti (SPK-DS-08). Les six autres l'étaient déjà
     // et ne sont pas présentés comme isolés par ce geste.
     const issue = await section();
-    assert.match(issue, /isolé : boutique/);
-    assert.match(issue, /déjà isolés : 6/);
+    assert.match(issue, /isolée : boutique/);
+    assert.match(issue, /déjà isolées : 6/);
     assert.match(issue, /en échec : orphelin/);
     // Les blocs d'issue sont cherchés DANS la section, et rendus en booléens.
     // JAMAIS `assert.equal(await page.$(…), null)` : si l'assertion échoue,
@@ -5679,7 +5679,7 @@ test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et s
     assert.equal(blocs.avertissement, true, 'un échec nommé est un fait signalé : l’accent');
     assert.equal(blocs.succes, false, 'tout n’a pas abouti : pas de vert (SPK-DS-08)');
     // L'écran RELIT l'état : plus rien à isoler, donc plus de geste (§14.4).
-    assert.match(issue, /Non encore isolés\s+aucun/);
+    assert.match(issue, /Créées avant la règle\s+aucune — toutes les cellules sont isolées/);
     assert.equal(await page.evaluate(() => Boolean(document.querySelector('[data-isolation="demander"]'))), false);
     await capturer('spk109-isolation-apres');
 

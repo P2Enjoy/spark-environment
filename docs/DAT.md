@@ -13273,12 +13273,14 @@ appliqué, Incus muet — et jamais « non isolé » (§31.2). Le pilote gagne
 `update_device_config(name, device, keys)` : lecture-modification-écriture d'un
 seul device, mesurée à chaud le 2026-09-17.
 
-- **À l'écran** : la Forge porte une section *Isolation du réseau* — isolés
-  sur total, les non encore isolés **nommés et liés**, les cellules absentes à
-  part, et le geste *Isoler le parc* confirmé dans le flux, en accent, sans
-  bouton destructif (SPK-DS-29). Un parc entièrement isolé n'offre aucun geste.
-  Le dossier de chaque Spark porte une section *Réseau* qui dit son état, y
-  compris « non relevée » avec sa raison.
+- **À l'écran** : la Forge porte une section *Isolation du réseau* — cellules
+  isolées sur total, les cellules **créées avant la règle** nommées et liées,
+  les cellules absentes à part, et le geste *Les isoler maintenant* confirmé
+  dans le flux, en accent, sans bouton destructif (SPK-DS-29). Reformulé le
+  2026-09-17 sur remarque du responsable : ce n'est pas un choix — chaque Spark
+  naît isolé — mais un rattrapage, une fois ; quand plus aucune cellule ne
+  précède la règle, il n'y a aucun geste. Le dossier de chaque Spark porte une
+  section *Réseau* qui dit son état, y compris « non relevée » avec sa raison.
 - Le déploiement est OP-22. Sur la Forge de validation, le parc est de deux
   cellules de locataires et deux cellules d'essai.
 

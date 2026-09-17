@@ -776,28 +776,33 @@ function renderIssueIsolation(issue) {
   // SPK-DS-08 : le vert ne s'écrit que sur ce que la Forge a RENDU, et un
   // refus par Spark est un fait signalé — l'accent —, pas un refus du geste.
   if (isoles.length && !refuses.length && !echoues.length) {
-    return `<p class="succes" role="status">${isoles.length} Spark${
-      isoles.length > 1 ? 's' : ''} isolé${isoles.length > 1 ? 's' : ''} : ${nomme(isoles)}.${dejaPhrase}</p>`;
+    return `<p class="succes" role="status">${isoles.length} cellule${
+      isoles.length > 1 ? 's' : ''} isolée${isoles.length > 1 ? 's' : ''} : ${nomme(isoles)}.${dejaPhrase}</p>`;
   }
   if (!isoles.length && !refuses.length && !echoues.length) {
-    return `<p class="note" role="status">Rien à isoler : ${deja.length} Spark${
+    return `<p class="note" role="status">Rien à rattraper : ${deja.length} cellule${
       deja.length > 1 ? 's' : ''} l’étai${deja.length > 1 ? 'ent' : 't'} déjà.</p>`;
   }
   const parts = [];
-  if (isoles.length) parts.push(`isolé${isoles.length > 1 ? 's' : ''} : ${nomme(isoles)}`);
-  if (deja.length) parts.push(`déjà isolé${deja.length > 1 ? 's' : ''} : ${deja.length}`);
-  if (refuses.length) parts.push(`refusé${refuses.length > 1 ? 's' : ''}, protégé${
+  if (isoles.length) parts.push(`isolée${isoles.length > 1 ? 's' : ''} : ${nomme(isoles)}`);
+  if (deja.length) parts.push(`déjà isolée${deja.length > 1 ? 's' : ''} : ${deja.length}`);
+  if (refuses.length) parts.push(`refusée${refuses.length > 1 ? 's' : ''}, protégée${
     refuses.length > 1 ? 's' : ''} : ${nomme(refuses)}`);
   if (echoues.length) parts.push(`en échec : ${echoues.map((r) =>
     `${echapper(r.name)} (${echapper(r.reason ?? '')})`).join(', ')}`);
-  return `<p class="avertissement" role="status">Le geste a été joué — ${parts.join(' · ')}.${
+  return `<p class="avertissement" role="status">Le rattrapage a été joué — ${parts.join(' · ')}.${
     refuses.length ? ' Un Spark protégé reste non isolé tant que sa protection n’est pas levée.' : ''}</p>`;
 }
 
 export function renderIsolation(isolation, ui = ISOLATION_VIDE) {
+  // Reformulé le 2026-09-17 sur remarque du responsable : « Isoler le parc »
+  // se lisait comme une option à choisir. Ce n'en est pas une — chaque Spark
+  // NAÎT isolé — ; c'est le RATTRAPAGE, une fois, des cellules créées avant la
+  // règle, et la section le dit avec ces mots.
   const entete = `<h2 id="titre-isolation">Isolation du réseau</h2>
-  <p class="note">Chaque Spark est isolé du réseau des autres ; un Spark créé avant cette
-  règle ne l’est pas encore. <a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>`;
+  <p class="note">Chaque Spark naît isolé du réseau des autres. Les cellules créées avant
+  cette règle ne le sont pas encore : elles se rattrapent ici, une fois.
+  <a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>`;
   let corps;
   if (isolation === undefined) {
     corps = '<p class="note" role="status" aria-busy="true">Relevé de l’isolation en cours…</p>';
@@ -810,9 +815,9 @@ export function renderIsolation(isolation, ui = ISOLATION_VIDE) {
     const enAttente = sparks.filter((s) => s.isolated === false);
     const absentes = sparks.filter((s) => s.isolated === null);
     corps = `<dl class="definitions">
-      <div class="def"><dt>Sparks isolés</dt><dd>${isolation.isolated ?? 0} sur ${sparks.length}</dd></div>
-      <div class="def"><dt>Non encore isolés</dt><dd>${
-        enAttente.length ? nomsLies(enAttente) : 'aucun'}</dd></div>
+      <div class="def"><dt>Cellules isolées</dt><dd>${isolation.isolated ?? 0} sur ${sparks.length}</dd></div>
+      <div class="def"><dt>Créées avant la règle</dt><dd>${
+        enAttente.length ? nomsLies(enAttente) : 'aucune — toutes les cellules sont isolées'}</dd></div>
       ${absentes.length ? `<div class="def"><dt>Cellule absente</dt><dd>${nomsLies(absentes)}</dd></div>` : ''}
     </dl>`;
   }
@@ -822,14 +827,15 @@ export function renderIsolation(isolation, ui = ISOLATION_VIDE) {
   const confirmation = ui.confirme && enAttente.length
     ? `<div class="confirmation confirmation--sensible" role="group"
          aria-labelledby="titre-confirme-isolation">
-         <h3 id="titre-confirme-isolation">Isoler tout le parc ?</h3>
-         <p>${enAttente.length} Spark${enAttente.length > 1 ? 's' : ''} non encore isolé${
-           enAttente.length > 1 ? 's' : ''} cesse${enAttente.length > 1 ? 'nt' : ''} de joindre
-         ${enAttente.length > 1 ? 'leurs' : 'ses'} voisins par leur adresse privée. Un Spark
-         protégé refusera, et restera non isolé jusqu’à ce que sa protection soit levée.</p>
+         <h3 id="titre-confirme-isolation">Rattraper ${enAttente.length} cellule${
+           enAttente.length > 1 ? 's' : ''} créée${enAttente.length > 1 ? 's' : ''} avant la règle ?</h3>
+         <p>${nomsLies(enAttente)} cesse${enAttente.length > 1 ? 'nt' : ''} de joindre
+         ${enAttente.length > 1 ? 'leurs' : 'ses'} voisines par leur adresse privée — comme toute
+         cellule créée depuis. Un Spark protégé refusera, et restera non isolé jusqu’à ce
+         que sa protection soit levée.</p>
          <p class="confirmation__actions">
            <button type="button" class="bouton" data-isolation="engager"
-                   ${ui.busy ? 'disabled' : ''}>Isoler le parc</button>
+                   ${ui.busy ? 'disabled' : ''}>Isoler ${enAttente.length > 1 ? 'ces cellules' : 'cette cellule'}</button>
            <button type="button" class="bouton" data-isolation="annuler">Annuler</button>
          </p>
        </div>`
@@ -838,7 +844,7 @@ export function renderIsolation(isolation, ui = ISOLATION_VIDE) {
   const action = enAttente.length && !ui.confirme
     ? `<p class="formulaire__actions">
          <button type="button" class="bouton" data-isolation="demander"
-                 ${ui.busy ? 'disabled' : ''}>Isoler le parc</button>
+                 ${ui.busy ? 'disabled' : ''}>Les isoler maintenant</button>
        </p>`
     : '';
   return `

@@ -24,7 +24,8 @@ libellé et l'empreinte d'une clé, jamais son corps.
 même quand l'un connaît l'adresse privée de l'autre, et aucun ne peut se
 présenter sous l'adresse d'un voisin. Un Spark créé avant cette règle ne l'est
 pas encore : la Forge le nomme dans sa section *Isolation du réseau*, et le
-geste *Isoler le parc* l'applique à tous d'un coup (voir [M8](M8-exploiter.md)).
+geste *Les isoler maintenant* rattrape toutes ces cellules d'un coup (voir
+[M8](M8-exploiter.md)).
 Le dossier de chaque Spark, section *Réseau*, dit où il en est. Les services
 d'un autre Spark se joignent par leur **nom public**, à travers l'ingress.
 

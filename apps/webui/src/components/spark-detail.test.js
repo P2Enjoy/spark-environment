@@ -1124,7 +1124,7 @@ test('SPK-109 · le dossier DIT si le Spark est isolé, non encore isolé, ou no
   const rendu = (isolation) => renderSparkDetail({ status: 'ready', spark, isolation });
   assert.match(rendu({ isolated: true, missing: [] }), /Isolé du réseau des autres Sparks/);
   assert.match(rendu({ isolated: false, missing: ['security.port_isolation'] }),
-               /Non encore isolé — depuis la Forge : « Isoler le parc »/);
+               /Non encore isolé — cellule créée avant la règle ; se rattrape depuis la Forge/);
   assert.match(rendu({ isolated: null, reason: 'cellule absente' }), /Non relevée — cellule absente/);
   assert.match(rendu(undefined), /Relevé en cours/);
   assert.match(rendu(null), /Non relevée/);

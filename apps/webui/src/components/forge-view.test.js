@@ -872,7 +872,7 @@ test('SPK-109 · le relevé en cours et le relevé impossible se NOMMENT, sans g
 test('SPK-109 · un parc entièrement isolé n’offre AUCUN geste (§14.4)', () => {
   const rendu = renderIsolation(PARC([{ name: 'a', isolated: true }, { name: 'b', isolated: true }]));
   assert.match(rendu, /2 sur 2/);
-  assert.match(rendu, /Non encore isolés<\/dt><dd>aucun/);
+  assert.match(rendu, /Créées avant la règle<\/dt><dd>aucune — toutes les cellules sont isolées/);
   assert.ok(!rendu.includes('data-isolation="demander"'));
 });
 
@@ -896,8 +896,9 @@ test('SPK-109 · la confirmation est sensible, pas destructive, et compte ce qu�
   const parc = PARC([{ name: 'a', isolated: false }, { name: 'b', isolated: false }]);
   const rendu = renderIsolation(parc, { ...ISOLATION_VIDE, confirme: true });
   assert.match(rendu, /confirmation confirmation--sensible/);
-  assert.match(rendu, /Isoler tout le parc \?/);
-  assert.match(rendu, /2 Sparks non encore isolés cessent/);
+  assert.match(rendu, /Rattraper 2 cellules créées avant la règle \?/);
+  assert.match(rendu, /cessent de joindre/);
+  assert.match(rendu, /Isoler ces cellules/);
   assert.ok(rendu.includes('data-isolation="engager"'));
   assert.ok(!rendu.includes('bouton--destructif'), 'le geste interrompt, il ne détruit pas');
   assert.ok(!rendu.includes('data-isolation="demander"'));
@@ -908,16 +909,16 @@ test('SPK-109 · l’issue du geste : vert seulement si tout est isolé, l’acc
   const parc = PARC([{ name: 'a', isolated: true }]);
   const vert = renderIsolation(parc, { ...ISOLATION_VIDE,
     issue: { isolated: ['a'], already: ['b', 'c'], denied: [], error: [] } });
-  assert.match(vert, /class="succes"[^>]*>1 Spark isolé : a\. 2 l’étaient déjà\./);
+  assert.match(vert, /class="succes"[^>]*>1 cellule isolée : a\. 2 l’étaient déjà\./);
   const rien = renderIsolation(parc, { ...ISOLATION_VIDE,
     issue: { isolated: [], already: ['a'], denied: [], error: [] } });
-  assert.match(rien, /Rien à isoler : 1 Spark l’était déjà\./);
+  assert.match(rien, /Rien à rattraper : 1 cellule l’était déjà\./);
   assert.ok(!rien.includes('class="succes"'), 'rien n’a été fait : pas de vert (§1.3)');
   const mixte = renderIsolation(parc, { ...ISOLATION_VIDE,
     issue: { isolated: ['a'], denied: [{ name: 'garde', reason: 'protégé' }],
              error: [{ name: 'perdu', reason: 'cellule absente' }] } });
   assert.match(mixte, /class="avertissement"/);
-  assert.match(mixte, /refusé, protégé : garde/);
+  assert.match(mixte, /refusée, protégée : garde/);
   assert.match(mixte, /en échec : perdu \(cellule absente\)/);
   assert.ok(!mixte.includes('class="succes"'));
   const refus = renderIsolation(parc, { ...ISOLATION_VIDE, erreur: 'HTTP 502' });
