@@ -20,6 +20,14 @@ et les limites mémoire ont été vérifiés par la mesure sur matériel réel.
 Seules des clés **publiques** sont stockées. Le journal d'audit retient le
 libellé et l'empreinte d'une clé, jamais son corps.
 
+**Chaque Spark est isolé du réseau des autres.** Deux Sparks ne se parlent pas,
+même quand l'un connaît l'adresse privée de l'autre, et aucun ne peut se
+présenter sous l'adresse d'un voisin. Un Spark créé avant cette règle ne l'est
+pas encore : la Forge le nomme dans sa section *Isolation du réseau*, et le
+geste *Isoler le parc* l'applique à tous d'un coup (voir [M8](M8-exploiter.md)).
+Le dossier de chaque Spark, section *Réseau*, dit où il en est. Les services
+d'un autre Spark se joignent par leur **nom public**, à travers l'ingress.
+
 **Ce qu'un Spark atteint de sa propre Forge.** Deux choses, et deux seulement :
 le résolveur DNS, et l'ingress — les ports 80 et 443, ceux que le proxy sert. Un
 Spark joint donc par leur **nom public** les services que sa Forge héberge, y

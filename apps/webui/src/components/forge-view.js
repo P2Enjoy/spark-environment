@@ -746,12 +746,121 @@ export function renderNotify(notify) {
 </section>`;
 }
 
+/**
+ * L'isolation du réseau des Sparks, lue dans Incus, et le geste qui l'applique
+ * au parc (SPK-109).
+ *
+ * @spec docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.3 (l'état se lit dans Incus,
+ *       jamais dans une étiquette ; « Isoler le parc » est un geste explicite ;
+ *       un Spark protégé refuse et reste VISIBLEMENT non isolé) ·
+ *       docs/DESIGN_SYSTEM.md §6.22 (confirmation dans le flux), §6.23, §14.4
+ *       (pas de geste sans objet), §14.5, §14.6 (non relevé n'est pas non
+ *       isolé) · docs/DESIGN_SYSTEM_APP.md SPK-DS-08, SPK-DS-09, SPK-DS-29
+ */
+export const ISOLATION_VIDE = { confirme: false, busy: false, issue: null, erreur: null };
+
+function nomsLies(sparks) {
+  return sparks.map((s) => `<a href="#/sparks/${encodeURIComponent(s.name)}">${
+    echapper(s.name)}</a>${s.protected ? ' (protégé)' : ''}`).join(', ');
+}
+
+function renderIssueIsolation(issue) {
+  if (!issue) return '';
+  const isoles = issue.isolated ?? [];
+  const deja = issue.already ?? [];
+  const refuses = issue.denied ?? [];
+  const echoues = issue.error ?? [];
+  const nomme = (liste) => liste.map((r) => echapper(r.name ?? r)).join(', ');
+  const dejaPhrase = deja.length
+    ? ` ${deja.length} l’étai${deja.length > 1 ? 'ent' : 't'} déjà.` : '';
+  // SPK-DS-08 : le vert ne s'écrit que sur ce que la Forge a RENDU, et un
+  // refus par Spark est un fait signalé — l'accent —, pas un refus du geste.
+  if (isoles.length && !refuses.length && !echoues.length) {
+    return `<p class="succes" role="status">${isoles.length} Spark${
+      isoles.length > 1 ? 's' : ''} isolé${isoles.length > 1 ? 's' : ''} : ${nomme(isoles)}.${dejaPhrase}</p>`;
+  }
+  if (!isoles.length && !refuses.length && !echoues.length) {
+    return `<p class="note" role="status">Rien à isoler : ${deja.length} Spark${
+      deja.length > 1 ? 's' : ''} l’étai${deja.length > 1 ? 'ent' : 't'} déjà.</p>`;
+  }
+  const parts = [];
+  if (isoles.length) parts.push(`isolé${isoles.length > 1 ? 's' : ''} : ${nomme(isoles)}`);
+  if (deja.length) parts.push(`déjà isolé${deja.length > 1 ? 's' : ''} : ${deja.length}`);
+  if (refuses.length) parts.push(`refusé${refuses.length > 1 ? 's' : ''}, protégé${
+    refuses.length > 1 ? 's' : ''} : ${nomme(refuses)}`);
+  if (echoues.length) parts.push(`en échec : ${echoues.map((r) =>
+    `${echapper(r.name)} (${echapper(r.reason ?? '')})`).join(', ')}`);
+  return `<p class="avertissement" role="status">Le geste a été joué — ${parts.join(' · ')}.${
+    refuses.length ? ' Un Spark protégé reste non isolé tant que sa protection n’est pas levée.' : ''}</p>`;
+}
+
+export function renderIsolation(isolation, ui = ISOLATION_VIDE) {
+  const entete = `<h2 id="titre-isolation">Isolation du réseau</h2>
+  <p class="note">Chaque Spark est isolé du réseau des autres ; un Spark créé avant cette
+  règle ne l’est pas encore. <a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>`;
+  let corps;
+  if (isolation === undefined) {
+    corps = '<p class="note" role="status" aria-busy="true">Relevé de l’isolation en cours…</p>';
+  } else if (!isolation || isolation.readable === false) {
+    // §14.6 : ne pas avoir lu n'est pas avoir lu « non isolé ».
+    corps = `<p class="avertissement" role="status">L’isolation n’a pas pu être relevée :
+      Incus n’a pas répondu.${isolation?.error ? ` ${echapper(isolation.error)}` : ''}</p>`;
+  } else {
+    const sparks = isolation.sparks ?? [];
+    const enAttente = sparks.filter((s) => s.isolated === false);
+    const absentes = sparks.filter((s) => s.isolated === null);
+    corps = `<dl class="definitions">
+      <div class="def"><dt>Sparks isolés</dt><dd>${isolation.isolated ?? 0} sur ${sparks.length}</dd></div>
+      <div class="def"><dt>Non encore isolés</dt><dd>${
+        enAttente.length ? nomsLies(enAttente) : 'aucun'}</dd></div>
+      ${absentes.length ? `<div class="def"><dt>Cellule absente</dt><dd>${nomsLies(absentes)}</dd></div>` : ''}
+    </dl>`;
+  }
+  const enAttente = (isolation?.sparks ?? []).filter((s) => s.isolated === false);
+  // Une action sensible se confirme (§6.23) ; elle interrompt le trafic entre
+  // voisins sans rien détruire : l'accent et un bouton ordinaire (SPK-DS-09).
+  const confirmation = ui.confirme && enAttente.length
+    ? `<div class="confirmation confirmation--sensible" role="group"
+         aria-labelledby="titre-confirme-isolation">
+         <h3 id="titre-confirme-isolation">Isoler tout le parc ?</h3>
+         <p>${enAttente.length} Spark${enAttente.length > 1 ? 's' : ''} non encore isolé${
+           enAttente.length > 1 ? 's' : ''} cesse${enAttente.length > 1 ? 'nt' : ''} de joindre
+         ${enAttente.length > 1 ? 'leurs' : 'ses'} voisins par leur adresse privée. Un Spark
+         protégé refusera, et restera non isolé jusqu’à ce que sa protection soit levée.</p>
+         <p class="confirmation__actions">
+           <button type="button" class="bouton" data-isolation="engager"
+                   ${ui.busy ? 'disabled' : ''}>Isoler le parc</button>
+           <button type="button" class="bouton" data-isolation="annuler">Annuler</button>
+         </p>
+       </div>`
+    : '';
+  // §14.4 : pas de geste sans objet — un parc déjà isolé n'offre rien à isoler.
+  const action = enAttente.length && !ui.confirme
+    ? `<p class="formulaire__actions">
+         <button type="button" class="bouton" data-isolation="demander"
+                 ${ui.busy ? 'disabled' : ''}>Isoler le parc</button>
+       </p>`
+    : '';
+  return `
+<section class="carte bloc" aria-labelledby="titre-isolation">
+  ${entete}
+  ${corps}
+  ${ui.erreur ? `<p class="refus" role="alert">${echapper(ui.erreur)}</p>` : ''}
+  ${renderIssueIsolation(ui.issue)}
+  ${confirmation}
+  ${action}
+</section>`;
+}
+
 export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
                                  build = null, syncing = false,
                                  installer = null, updateUi = UPDATE_VIDE,
                                  // SPK-87 · §51 : le redémarrage et son relevé.
-                                 rebootUi = REBOOT_VIDE, sparks = [] } = {}) {
+                                 rebootUi = REBOOT_VIDE, sparks = [],
+                                 // SPK-109 · §57.3 : l'isolation du parc.
+                                 isolation = undefined,
+                                 isolationUi = ISOLATION_VIDE } = {}) {
   // SPK-68 · §50.1 : l'assistant doit rester visible quand /healthz manque ;
   // le cacher derrière l'erreur du plan de contrôle rendrait son cas d'usage
   // inatteignable.
@@ -792,6 +901,7 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
   <div class="detail__secondaire">
     ${renderBuild(build, updateUi)}
     ${renderRedemarrage(host, rebootUi, sparks)}
+    ${renderIsolation(isolation, isolationUi)}
     ${renderNotify(host.notify)}
     ${renderAddresses(host.addresses)}
   </div>

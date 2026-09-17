@@ -1112,3 +1112,21 @@ test('le verdict ne promet pas Compose là où il n’y a pas de Docker', () => 
     spark: { ...SPARK, docker_enabled: 1, incus_name: 'x' } });
   assert.ok(avec.includes('pile Compose'), 'le verdict a changé là où Docker existe');
 });
+
+// --- SPK-109 · la section Réseau du dossier -----------------------------------
+
+test('SPK-109 · le dossier DIT si le Spark est isolé, non encore isolé, ou non relevé', () => {
+  /** @verifies docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.3 · DESIGN_SYSTEM.md §14.6 */
+  const spark = { name: 'x', state: 'running', cpu_mode: 'shared', cpu_reservation: 0.5,
+                  memory_reservation_bytes: 1024 ** 3, storage_bytes: 10 * 1024 ** 3,
+                  network_burst_bps: 1e8, image: 'images:debian/13', ipv4_address: '10.77.0.5',
+                  allowed_commands: [], protected: false };
+  const rendu = (isolation) => renderSparkDetail({ status: 'ready', spark, isolation });
+  assert.match(rendu({ isolated: true, missing: [] }), /Isolé du réseau des autres Sparks/);
+  assert.match(rendu({ isolated: false, missing: ['security.port_isolation'] }),
+               /Non encore isolé — depuis la Forge : « Isoler le parc »/);
+  assert.match(rendu({ isolated: null, reason: 'cellule absente' }), /Non relevée — cellule absente/);
+  assert.match(rendu(undefined), /Relevé en cours/);
+  assert.match(rendu(null), /Non relevée/);
+  assert.match(rendu({ isolated: true, missing: [] }), /id="titre-reseau"/);
+});

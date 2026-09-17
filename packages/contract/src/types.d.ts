@@ -237,6 +237,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/forge/isolation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Forge Isolation
+         * @description L'état d'isolation de chaque Spark, LU dans Incus (SPK-109, §57.3).
+         */
+        get: operations["forge_isolation_v1_forge_isolation_get"];
+        put?: never;
+        /**
+         * Forge Isolate
+         * @description « Isoler le parc » : une entrée d'audit par Spark, le protégé refuse
+         *     (SPK-109, §57.3, docs/PROD_MIGRATIONS.md OP-22).
+         */
+        post: operations["forge_isolate_v1_forge_isolation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/forge/metrics": {
         parameters: {
             query?: never;
@@ -801,6 +826,23 @@ export interface paths {
          *     déploiement déjà posée chez le tiers, et rien sur la Forge ne le sait.
          */
         post: operations["create_identity_v1_sparks__name__identity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sparks/{name}/isolation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Spark Isolation */
+        get: operations["spark_isolation_v1_sparks__name__isolation_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1512,6 +1554,50 @@ export interface operations {
         };
     };
     forge_cores_v1_forge_cores_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    forge_isolation_v1_forge_isolation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    forge_isolate_v1_forge_isolation_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2582,6 +2668,39 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spark_isolation_v1_sparks__name__isolation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

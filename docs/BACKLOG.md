@@ -7446,9 +7446,17 @@ emporté la restauration de fichier qu'il devait faire en sortant.
 Sa demande, mot pour mot : « mets un mutex, un mutex exclusif inviolable : si tu
 es trop con pour t'en rappeler, que ça te pète à la gueule ».
 
-- Spécification : `docs/DAT.md` **§29.8** · README, section du harnais.
+- Spécification : `docs/DAT.md` **§29.8**, **§29.8 bis** (complété le
+  2026-09-17 : le plafond mémoire du harnais, et le refus d'une épave dont la
+  pile survit) · README, section du harnais · `CLAUDE.md` §15 bis.
 - **Aucune variable d'environnement, aucun argument de contournement** (§53) :
   un verrou qu'on peut lever est un verrou qu'on lève le jour où il sert.
+- **Complété le 2026-09-17**, après un second incident : un harnais tué en
+  `137` laissait ses Chromium vivants, et l'épave était reprise. Le verrou
+  inscrit la session du porteur et refuse tant qu'un processus de cette session
+  vit, en nommant ce qu'il faut tuer (1 preuve de plus, 8 au total). Et le
+  harnais entier tourne dans un scope systemd plafonné à 8 Go : un emballement
+  est tué à la borne, jamais la machine.
 - Ce qui décide de l'unité :
   1. **il est posé dans `monterPile()`**, pas dans le `Makefile`. Une cible
      qu'on oublie d'emprunter ne protège rien, et `node e2e/…` monte la même
@@ -7686,13 +7694,30 @@ cellules s'échangent leurs trames en couche 2.
    à chaud. Cellules d'essai `essai-a`/`essai-b` créées par le produit ;
    `scripts/mesures-spk109.sh`.*
 3. **Rendu et pose** — les clés dans `translate.py`, la chaîne dans
-   `firewall.nft`, preuves unitaires par témoin.
+   `firewall.nft`, preuves unitaires par témoin. *Fait le 2026-09-17 :
+   `translate` rend les deux clés pour tout Spark ; `pare_feu` rend la chaîne
+   `forward` ; le pilote gagne `update_device_config`, réel et factice.*
 4. **État et geste** — l'état au dossier, *Isoler le parc* côté Forge avec audit
    par Spark et refus du protégé ; `NET-ISOLATION` ; preuves API et E2E ;
-   captures ; SPK-DS si un composant naît.
+   captures ; SPK-DS si un composant naît. *Fait : module `isolation` et trois
+   routes (9 preuves d'API) ; `NET-ISOLATION` (5 preuves) ; section de la
+   Forge et section *Réseau* du dossier (6 preuves de composant, SPK-DS-29) ;
+   seed avec « boutique » non encore isolée ; parcours E2E `isolation-du-parc`
+   vert, 5 captures observées aux deux formats ; manuel M8 et M11. Suite
+   `sparkd` : 1430 vertes ; console : 1401 vertes, la preuve de classes CSS
+   toujours rouge sur ses quatre classes antérieures.*
 5. **Forge réelle** — relevé `ss` dans les deux cellules, OP-22 joué sur
    instruction, preuve depuis les terminaux : `A` ne joint pas `B`, résout, sort,
-   joint l'ingress ; manuel M11 ; la limite connue retirée.
+   joint l'ingress ; manuel M11 ; la limite connue retirée. *Relevé fait (zéro
+   flux) ; la mise à jour de `sparkd` est jouée sans redemander ; le geste sur
+   les cellules des locataires attend le feu vert explicite du responsable.*
+
+- **Ce que la preuve E2E a coûté, et ce qu'elle a appris** (2026-09-17) : trois
+  OOM du poste avant de comprendre qu'un `assert.equal(await page.$(…), null)`
+  fautif faisait inspecter à Node le graphe entier du client Playwright. Le
+  harnais est désormais plafonné (`docs/DAT.md` §29.8 bis, `CLAUDE.md`
+  §15 bis), le verrou refuse une épave dont la pile survit, et les assertions
+  du parcours portent sur des booléens calculés dans la page.
 
 - Ce que l'unité ne doit PAS casser : DNS, DHCP, NAT, ingress (SPK-108) et
   rebond SSH de chaque Spark ; le sens Forge → Spark (`ct state established`

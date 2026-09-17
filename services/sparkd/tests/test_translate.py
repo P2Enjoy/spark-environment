@@ -322,3 +322,14 @@ def test_le_placement_ne_modifie_ni_le_poids_ni_le_burst():
     assert rendu.config["limits.cpu.allowance"] == "250%"
     assert rendu.config["limits.cpu.priority"] == "5"
     assert "limits.cpu.max" not in rendu.config, "le burst est preserve"
+
+
+def test_l_eth0_de_tout_spark_est_isolee_et_sans_usurpation():
+    """@verifies docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.2
+
+    L'isolation est la règle du produit, pas une donnée du registre : elle est
+    rendue pour tout Spark, dans la même fonction pure que l'adresse."""
+    c = translate(manifeste(ipv4_address="10.77.0.42"), SHARED, POOL)
+    assert c.devices["eth0"]["security.port_isolation"] == "true"
+    assert c.devices["eth0"]["security.ipv4_filtering"] == "true"
+    assert c.devices["eth0"]["ipv4.address"] == "10.77.0.42"

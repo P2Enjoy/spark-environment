@@ -3,6 +3,28 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-109 — chaque Spark est isolé du réseau des autres.** Mesuré le matin :
+  bridge partagé, ports `isolated off`, aucune anti-usurpation. L'`eth0` de
+  tout Spark porte désormais `security.port_isolation` et
+  `security.ipv4_filtering`, rendues par `translate` ; `spark_filter` gagne une
+  chaîne `forward` qui ferme le détour par la passerelle — les trois mesures
+  du soir, sur deux cellules d'essai créées par le produit, ont dit oui à
+  chaud. L'état se **lit dans Incus** (`GET /v1/forge/isolation`,
+  `GET /v1/sparks/{name}/isolation`) ; le geste *Isoler le parc*
+  (`POST /v1/forge/isolation`) pose les clés sur ce qui ne les porte pas, compte
+  à part ce qui les portait, refuse le protégé et nomme la cellule absente —
+  une entrée d'audit par Spark touché. Le préflight gagne `NET-ISOLATION`, qui
+  lit les clés effectives. La Forge porte une section *Isolation du réseau*,
+  le dossier une section *Réseau* (SPK-DS-29) ; le seed laisse « boutique »
+  non encore isolée pour que le geste ait quelque chose à montrer. **Le geste
+  sur les cellules des locataires attend le feu vert du responsable** (OP-22).
+- **SPK-106 complété — le harnais est plafonné, et le verrou refuse une épave
+  dont la pile survit.** Une campagne SEULE a mis le poste à genoux trois fois
+  (27 Go) : un `assert.equal(await page.$(…), null)` fautif faisait inspecter à
+  Node le graphe entier du client Playwright. `make e2e`, `e2e-un`, `captures`
+  et `gestes` tournent dans un scope systemd borné à 8 Go ; `e2e/verrou.mjs`
+  inscrit la session du porteur et refuse tant qu'un de ses processus vit ;
+  `CLAUDE.md` §15 bis écrit la règle, `docs/DAT.md` §29.8 bis la cause.
 - **SPK-108 — un Spark joint les services publics de sa propre Forge.** Un
   Spark déployé ne joignait pas le SSO que sa Forge sert : l'adresse publique
   est celle de la Forge, et le `drop` d'`input` de SPK-55 tombait sur le paquet.

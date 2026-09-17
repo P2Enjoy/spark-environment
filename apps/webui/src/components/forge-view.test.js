@@ -848,3 +848,78 @@ test('sans gabarit fautif, le canal garde ses trois autres états', () => {
   assert.match(casse, /ne sont pas parties/);
   assert.match(casse, /HTTP Error 400/);
 });
+
+// --- SPK-109 · l'isolation du parc ------------------------------------------
+
+import { renderIsolation, ISOLATION_VIDE } from './forge-view.js';
+
+const PARC = (sparks) => ({ readable: true, sparks,
+  isolated: sparks.filter((s) => s.isolated === true).length,
+  pending: sparks.filter((s) => s.isolated === false).length });
+
+test('SPK-109 · le relevé en cours et le relevé impossible se NOMMENT, sans geste', () => {
+  /** @verifies docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.3 · DESIGN_SYSTEM.md §14.6 */
+  const enCours = renderIsolation(undefined);
+  assert.match(enCours, /Relevé de l’isolation en cours/);
+  assert.ok(!enCours.includes('data-isolation="demander"'));
+  const illisible = renderIsolation({ readable: false, error: 'socket fermée', sparks: [] });
+  assert.match(illisible, /n’a pas pu être relevée/);
+  assert.match(illisible, /socket fermée/);
+  assert.ok(!illisible.includes('data-isolation="demander"'),
+    'ne pas avoir lu n’est pas avoir lu « non isolé » : rien à isoler à l’aveugle');
+});
+
+test('SPK-109 · un parc entièrement isolé n’offre AUCUN geste (§14.4)', () => {
+  const rendu = renderIsolation(PARC([{ name: 'a', isolated: true }, { name: 'b', isolated: true }]));
+  assert.match(rendu, /2 sur 2/);
+  assert.match(rendu, /Non encore isolés<\/dt><dd>aucun/);
+  assert.ok(!rendu.includes('data-isolation="demander"'));
+});
+
+test('SPK-109 · les Sparks non encore isolés sont NOMMÉS, liés, et le protégé le dit', () => {
+  const rendu = renderIsolation(PARC([
+    { name: 'neuf', isolated: true },
+    { name: 'ancien', isolated: false, protected: false },
+    { name: 'garde', isolated: false, protected: true },
+    { name: 'perdu', isolated: null },
+  ]));
+  assert.match(rendu, /1 sur 4/);
+  assert.match(rendu, /href="#\/sparks\/ancien">ancien<\/a>/);
+  assert.match(rendu, /garde<\/a> \(protégé\)/);
+  assert.match(rendu, /Cellule absente<\/dt><dd>.*perdu/);
+  assert.ok(rendu.includes('data-isolation="demander"'));
+  assert.ok(!rendu.includes('data-isolation="engager"'), 'pas de confirmation avant de la demander');
+});
+
+test('SPK-109 · la confirmation est sensible, pas destructive, et compte ce qu’elle touche', () => {
+  /** @verifies docs/DESIGN_SYSTEM.md §6.23 · docs/DESIGN_SYSTEM_APP.md SPK-DS-09 */
+  const parc = PARC([{ name: 'a', isolated: false }, { name: 'b', isolated: false }]);
+  const rendu = renderIsolation(parc, { ...ISOLATION_VIDE, confirme: true });
+  assert.match(rendu, /confirmation confirmation--sensible/);
+  assert.match(rendu, /Isoler tout le parc \?/);
+  assert.match(rendu, /2 Sparks non encore isolés cessent/);
+  assert.ok(rendu.includes('data-isolation="engager"'));
+  assert.ok(!rendu.includes('bouton--destructif'), 'le geste interrompt, il ne détruit pas');
+  assert.ok(!rendu.includes('data-isolation="demander"'));
+});
+
+test('SPK-109 · l’issue du geste : vert seulement si tout est isolé, l’accent nomme les refus', () => {
+  /** @verifies docs/DESIGN_SYSTEM_APP.md SPK-DS-08 */
+  const parc = PARC([{ name: 'a', isolated: true }]);
+  const vert = renderIsolation(parc, { ...ISOLATION_VIDE,
+    issue: { isolated: ['a'], already: ['b', 'c'], denied: [], error: [] } });
+  assert.match(vert, /class="succes"[^>]*>1 Spark isolé : a\. 2 l’étaient déjà\./);
+  const rien = renderIsolation(parc, { ...ISOLATION_VIDE,
+    issue: { isolated: [], already: ['a'], denied: [], error: [] } });
+  assert.match(rien, /Rien à isoler : 1 Spark l’était déjà\./);
+  assert.ok(!rien.includes('class="succes"'), 'rien n’a été fait : pas de vert (§1.3)');
+  const mixte = renderIsolation(parc, { ...ISOLATION_VIDE,
+    issue: { isolated: ['a'], denied: [{ name: 'garde', reason: 'protégé' }],
+             error: [{ name: 'perdu', reason: 'cellule absente' }] } });
+  assert.match(mixte, /class="avertissement"/);
+  assert.match(mixte, /refusé, protégé : garde/);
+  assert.match(mixte, /en échec : perdu \(cellule absente\)/);
+  assert.ok(!mixte.includes('class="succes"'));
+  const refus = renderIsolation(parc, { ...ISOLATION_VIDE, erreur: 'HTTP 502' });
+  assert.match(refus, /class="refus" role="alert">HTTP 502/);
+});

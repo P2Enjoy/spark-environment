@@ -4,7 +4,9 @@
       vérification), §31.1 (une seule liste, employée deux fois), §31.2 (mesurer,
       nommer, remédier), §31.3 (lecture seule), §31.4 (ce qui doit être garanti)
       · §3.1, §8, §15, §16 · docs/BACKLOG.md#SPK-108, docs/DAT.md §56.3
-      (NET-REMONTEE lit les règles effectives) · docs/PROD_MIGRATIONS.md
+      (NET-REMONTEE lit les règles effectives) · docs/BACKLOG.md#SPK-109,
+      docs/DAT.md §57.4 (NET-ISOLATION lit les clés effectives des NIC) ·
+      docs/PROD_MIGRATIONS.md
 
 La même série sert AVANT l'installation — pour savoir ce qui manque — et APRÈS,
 pour constater que le serveur est en état. Deux listes distinctes finiraient par
@@ -28,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Callable, NamedTuple
 
 from . import pare_feu
+from .translate import CLES_ISOLATION
 
 GIO = 1024**3
 
@@ -583,6 +586,55 @@ REMEDE_X11 = ("X11Forwarding no dans /etc/ssh/sshd_config.d/90-spark.conf, "
               "puis systemctl reload ssh")
 
 
+def isolation_des_sparks(hote: Hote, nom: str | None = None) -> Verdict:
+    """Contrôle NET-ISOLATION : chaque cellule du bridge est isolée des autres.
+
+    @spec docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.2 (les deux étages), §57.3
+          (une Forge à moitié migrée se lit comme telle), §57.4 (le contrôle lit
+          les clés EFFECTIVES des NIC, jamais une étiquette) · §48.2 (le
+          préflight relève, il ne répare pas)
+
+    Deux choses, lues là où elles sont posées : les deux clés sur l'`eth0` de
+    chaque instance — `incus config device get`, une par une — et le verrou
+    `forward` dans `spark_filter`. Une Forge antérieure, ou à moitié migrée,
+    rend un AVERTISSEMENT qui NOMME les cellules non isolées : elle n'est pas
+    moins sûre qu'hier, et le remède est un geste du produit (OP-22).
+    """
+    nom = nom or reglages().network_bridge
+    code, titre = "NET-ISOLATION", "Chaque Spark est isolé du réseau des autres"
+    remede = ("Mettre à jour sparkd, puis « Isoler le parc » depuis la console "
+              "(docs/PROD_MIGRATIONS.md OP-22). Un Spark protégé reste non isolé "
+              "tant que sa protection n’est pas levée.")
+    brut = hote.executer(["incus", "list", "--format", "csv", "-c", "n"])
+    if brut is None:
+        return Verdict(code, titre, INCONNU, "Incus injoignable", "")
+    noms = sorted(ligne.strip() for ligne in brut.splitlines() if ligne.strip())
+    non_isolees: list[str] = []
+    for cellule in noms:
+        for cle in CLES_ISOLATION:
+            valeur = hote.executer(["incus", "config", "device", "get", cellule, "eth0", cle])
+            if (valeur or "").strip().lower() != "true":
+                non_isolees.append(cellule)
+                break
+    isolees = len(noms) - len(non_isolees)
+    table = hote.executer(["nft", "list", "table", "inet", "spark_filter"])
+    if table is None:
+        return Verdict(code, titre, INCONNU,
+                       f"{isolees} cellule(s) isolée(s) sur {len(noms)} ; verrou forward "
+                       "illisible (nft) — relancer avec les droits", "")
+    verrou = ("chain forward" in table
+              and f'iifname "{nom}" oifname "{nom}" drop' in table)
+    if not non_isolees and verrou:
+        return Verdict(code, titre, OK,
+                       f"{len(noms)} cellule(s) isolée(s), verrou forward posé")
+    releve = []
+    if non_isolees:
+        releve.append(f"non encore isolée(s) : {', '.join(non_isolees)}")
+    if not verrou:
+        releve.append("verrou forward absent de spark_filter")
+    return Verdict(code, titre, AVERTISSEMENT, " ; ".join(releve), remede)
+
+
 def _x11_effectif(hote: Hote) -> bool | None:
     """Ce que `sshd` applique VRAIMENT, fragments et préséance compris.
 
@@ -797,6 +849,7 @@ CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     caddy_administrable,
     surface_reseau,
     remontee_vers_la_forge,
+    isolation_des_sparks,
     x11_sans_usage,
     sparkd_survit_au_redemarrage,
     tranche_des_sparks,

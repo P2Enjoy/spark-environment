@@ -1170,6 +1170,40 @@ empêcherait de vérifier sa frappe sans rien protéger.
   peut désormais être un **champ que le geste attend**, et une ombre ne se lit
   pas comme « il reste quelque chose à remplir par là ».
 
+### SPK-DS-29 · L'isolation du parc : un état lu, un geste confirmé, jamais de vert par anticipation
+
+**Date** : 2026-09-17 · SPK-109 · `DAT.md` §57.3
+
+La section *Isolation du réseau* de la Forge et la section *Réseau* du dossier
+d'un Spark rendent un état que la console **lit dans Incus** et n'invente
+jamais (`DESIGN_SYSTEM.md` §1.2, §14.9).
+
+**Règles :**
+
+- **trois états, trois textes** (§14.6) : « isolé », « non encore isolé », et
+  « non relevée — <raison> ». Un relevé impossible n'est jamais rendu comme un
+  Spark non isolé : c'est le cas où l'écran pourrait faire poser un geste sur
+  une lecture qui n'a pas eu lieu ;
+- **les non encore isolés sont nommés et liés**, pas comptés (§6.4, §14.5). Un
+  Spark protégé porte la mention « (protégé) » à côté de son nom : c'est lui qui
+  refusera, et l'exploitant doit le savoir avant de cliquer ;
+- **un parc entièrement isolé n'offre aucun geste** (§14.4) : la ligne dit
+  « aucun », et le bouton n'est pas rendu ;
+- **le geste se confirme dans le flux**, en accent, avec un bouton ordinaire
+  (SPK-DS-09) : il interrompt le trafic entre voisins, il ne détruit rien. La
+  confirmation compte ce qu'elle touche et annonce le refus du protégé ;
+- **l'issue suit SPK-DS-08** : vert seulement si tout ce qui devait être isolé
+  l'a été ; dès qu'un Spark est refusé ou en échec, l'accent, et chaque cas
+  nommé — « isolé : … · déjà isolés : n · refusés, protégés : … · en échec :
+  … ». Ce qui l'était déjà n'est pas présenté comme isolé par ce geste ;
+- **l'écran relit l'état après le geste** (§1.3) : les compteurs et la liste
+  viennent d'une nouvelle lecture, jamais de ce que l'écran croit avoir fait.
+
+Preuves observées : `e2e/captures/spk109-isolation-avant.jpg`, `-avant-mobile`,
+`-confirmation`, `-apres`, `spk109-dossier-reseau.jpg`. Sur mobile, le widget
+*Sparks & conteneurs* recouvre une ligne du pool mémoire — trait de SPK-DS-16,
+antérieur, sans effet sur cette section.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

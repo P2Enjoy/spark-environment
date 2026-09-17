@@ -268,6 +268,8 @@ def test_chaque_controle_porte_un_code_stable_et_unique():
         # SPK-84 · §50.7.2 : un dpkg incohérent empêche TOUTE installation,
         # donc l'amorce d'une Forge comme l'amorçage d'un Spark.
         "PKG-DPKG",
+        # SPK-109 · §57.4 : chaque cellule isolée, et le verrou forward posé.
+        "NET-ISOLATION",
     }
 
 
@@ -756,3 +758,66 @@ def test_la_liste_des_paquets_casses_est_BORNEE():
 def test_le_controle_figure_dans_la_serie():
     """Un contrôle qui n'est pas dans CONTROLES ne s'exécute jamais."""
     assert preflight.paquets_coherents in preflight.CONTROLES
+
+
+# --- NET-ISOLATION (SPK-109) --------------------------------------------------
+
+NFT_AVEC_FORWARD = NFT_SPARK_FILTER_FORGE.replace("tcp dport 53 accept",
+                                                  "tcp dport { 53, 80, 443 } accept") + """\
+table inet spark_filter {
+\tchain forward {
+\t\ttype filter hook forward priority filter + 10; policy accept;
+\t\tct state established,related accept
+\t\tiifname "sparkbr0" oifname "sparkbr0" drop
+\t}
+}
+"""
+
+
+def _hote_isolation(cellules: dict[str, dict[str, str]], table: str | None = NFT_AVEC_FORWARD):
+    commandes = {"incus list --format csv -c n": "\n".join(cellules) + "\n"}
+    for nom, cles in cellules.items():
+        for cle, valeur in cles.items():
+            commandes[f"incus config device get {nom} eth0 {cle}"] = valeur
+    if table is not None:
+        commandes["nft list table inet spark_filter"] = table
+    return hote(commandes)
+
+
+ISOLEE = {"security.port_isolation": "true", "security.ipv4_filtering": "true"}
+
+
+def test_un_parc_isole_avec_son_verrou_est_OK():
+    """@verifies docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.4"""
+    verdict = preflight.isolation_des_sparks(_hote_isolation({"a": ISOLEE, "b": ISOLEE}))
+    assert verdict.etat == OK
+    assert "2 cellule(s)" in verdict.releve
+
+
+def test_une_cellule_non_isolee_est_SIGNALEE_et_nommee():
+    """§57.3 : une Forge à moitié migrée se lit comme telle — un avertissement,
+    pas un échec, et le remède est le geste du produit (OP-22)."""
+    verdict = preflight.isolation_des_sparks(_hote_isolation({
+        "a": ISOLEE, "b": {"security.port_isolation": "true", "security.ipv4_filtering": ""}}))
+    assert verdict.etat == AVERTISSEMENT
+    assert not verdict.bloquant
+    assert "b" in verdict.releve and "a" not in verdict.releve.split(":")[-1].replace("b", "")
+    assert "OP-22" in verdict.remede
+
+
+def test_le_verrou_forward_absent_est_SIGNALE_meme_si_les_cellules_sont_isolees():
+    verdict = preflight.isolation_des_sparks(
+        _hote_isolation({"a": ISOLEE}, table=NFT_SPARK_FILTER_FORGE))
+    assert verdict.etat == AVERTISSEMENT
+    assert "forward" in verdict.releve
+
+
+def test_incus_injoignable_ne_conclut_a_rien_sur_l_isolation():
+    verdict = preflight.isolation_des_sparks(hote())
+    assert verdict.etat == INCONNU
+
+
+def test_nft_illisible_rend_INCONNU_avec_le_compte_des_cellules():
+    verdict = preflight.isolation_des_sparks(_hote_isolation({"a": ISOLEE}, table=None))
+    assert verdict.etat == INCONNU
+    assert "1 cellule(s) isolée(s) sur 1" in verdict.releve

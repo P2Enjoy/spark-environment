@@ -3,7 +3,9 @@
 @spec docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.2 (80 et 443, et rien d'autre),
       §56.3 (une règle statique, posée par comparaison du fichier rendu),
       §56.4 · §48.1, §48.2 bis (la règle est posée par l'INSTALLATION), §48.3 ·
-      docs/PROD_MIGRATIONS.md#OP-21
+      docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.2 (le verrou `forward` : le
+      détour par la passerelle, mesuré le 2026-09-17) ·
+      docs/PROD_MIGRATIONS.md#OP-21, docs/PROD_MIGRATIONS.md#OP-22
 
 Une seule table, `inet spark_filter`, rendue comme une FONCTION PURE du nom du
 bridge : ce qui se pose se lit d'un coup, et se compare à un témoin. La pose ne
@@ -75,15 +77,32 @@ def rendre(bridge: str) -> str:
         f'    iifname "{bridge}" ip6 nexthdr ipv6-icmp accept\n'
         f'    iifname "{bridge}" drop\n'
         "  }\n"
+        # SPK-109 · §57.2 : l'isolation de port ferme la couche 2 ; ce qu'une
+        # cellule route VIA la passerelle vers un voisin traverse `forward`, et
+        # c'est ici qu'on le ferme. MESURÉ le 2026-09-17 : 3 échos livrés par le
+        # détour sans cette règle, 0 avec — le drop survit à l'accept d'Incus.
+        "  chain forward {\n"
+        "    type filter hook forward priority 10; policy accept;\n"
+        "    ct state established,related accept\n"
+        f'    iifname "{bridge}" oifname "{bridge}" drop\n'
+        "  }\n"
         "}\n"
     )
 
 
-def regles(bridge: str) -> list[str]:
-    """Les seules lignes qui filtrent, sans l'enveloppe — pour un relevé ou un
-    remède qui les cite."""
-    return [ligne.strip() for ligne in rendre(bridge).splitlines()
-            if f'iifname "{bridge}"' in ligne]
+def regles(bridge: str, chaine: str = "input") -> list[str]:
+    """Les seules lignes qui filtrent dans UNE chaîne, sans l'enveloppe — pour
+    un relevé ou un remède qui les cite."""
+    lignes: list[str] = []
+    dedans = False
+    for brut in rendre(bridge).splitlines():
+        ligne = brut.strip()
+        if ligne.startswith("chain "):
+            dedans = ligne == f"chain {chaine} {{"
+            continue
+        if dedans and f'iifname "{bridge}"' in ligne:
+            lignes.append(ligne)
+    return lignes
 
 
 def _ecrire_si_change(chemin: Path, contenu: str, mode: int) -> bool:

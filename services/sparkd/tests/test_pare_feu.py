@@ -26,6 +26,11 @@ table inet spark_filter {
     iifname "sparkbr0" ip6 nexthdr ipv6-icmp accept
     iifname "sparkbr0" drop
   }
+  chain forward {
+    type filter hook forward priority 10; policy accept;
+    ct state established,related accept
+    iifname "sparkbr0" oifname "sparkbr0" drop
+  }
 }
 """
 
@@ -67,6 +72,21 @@ def test_rien_d_autre_que_le_resolveur_et_l_ingress_n_est_accepte():
         assert f" {port}" not in rendu and f"{port} " not in rendu, port
     assert "flush" not in rendu, "le fichier remplace SA table, il ne flushe rien (§48.2 bis)"
     assert rendu.index("add table inet spark_filter") < rendu.index("delete table inet spark_filter")
+
+
+def test_le_verrou_forward_ferme_le_detour_par_la_passerelle():
+    """@verifies docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.2
+
+    MESURÉ le 2026-09-17 : une route via 10.77.0.1 livre les paquets à un
+    voisin isolé ; cette règle, en forward à filter + 10, les arrête — et
+    survit à l'accept explicite d'Incus. Les connexions établies passent avant :
+    les liens du §59 et le retour de l'ingress en dépendent."""
+    rendu = pare_feu.rendre("sparkbr0")
+    forward = rendu[rendu.index("chain forward"):]
+    assert "ct state established,related accept" in forward
+    assert 'iifname "sparkbr0" oifname "sparkbr0" drop' in forward
+    assert forward.index("established") < forward.index("drop")
+    assert "priority 10" in forward
 
 
 def test_le_bridge_est_celui_qu_on_lui_donne():

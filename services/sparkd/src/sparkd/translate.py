@@ -20,6 +20,15 @@ from dataclasses import dataclass, field
 
 from . import cgroup
 
+#: SPK-109 · docs/DAT.md §57.2 : les deux clés que porte l'`eth0` de TOUT Spark.
+#: `security.ipv4_filtering` emporte `security.mac_filtering` sans l'écrire —
+#: MESURÉ le 2026-09-17. Définies ici, avec le rendu ; `isolation` et le
+#: préflight les importent d'ici.
+CLES_ISOLATION: dict[str, str] = {
+    "security.port_isolation": "true",
+    "security.ipv4_filtering": "true",
+}
+
 # Loi mesurée sur onze points (docs/DAT.md §7.2 bis) :
 #     cpu.weight = allowance_pct − 10 + limits.cpu.priority
 # Le noyau refuse un poids nul ou négatif, d'où le plancher.
@@ -297,6 +306,11 @@ def translate(
             # Plafond strict : le noyau n'offre pas de réservation de bande
             # passante, seulement un plafond (docs/DAT.md §7.6).
             "limits.max": str(manifest.network_burst_bps),
+            # SPK-109 · docs/DAT.md §57.2 : chaque Spark est isolé du réseau des
+            # autres — isolation de port, drapeau du bridge du noyau — et ne
+            # peut pas usurper l'adresse d'un voisin. C'est la règle du produit,
+            # pour TOUS les Sparks ; le verrou `forward` complète dans `pare_feu`.
+            **CLES_ISOLATION,
         },
     }
     if manifest.ipv4_address:

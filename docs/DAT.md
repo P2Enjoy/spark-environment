@@ -3536,6 +3536,45 @@ ni argument. Un verrou qu'on peut lever est un verrou qu'on lève le jour où il
 gêne, c'est-à-dire le jour où il sert. Le message de refus n'en suggère aucun, et
 une preuve le vérifie.
 
+### 29.8 bis Une épreuve lourde est PLAFONNÉE, et un handle ne s'inspecte jamais
+
+**Mesuré le 2026-09-17, trois fois, sur le poste du responsable.** Une campagne
+lancée SEULE — au premier plan, verrou tenu — a mis la machine à genoux : un
+processus à 27 Go, tué par le noyau, et le poste figé le temps qu'il le fasse.
+Le verrou du §29.8 n'y pouvait rien : il n'y avait pas deux piles, il y en
+avait une qui explosait.
+
+**La cause**, trouvée par le journal du protocole Playwright :
+`assert.equal(await page.$('… section .succes'), null)`. Le sélecteur, trop
+large, attrapait le bloc `.succes` de la section *Alerte hors bande* ;
+l'assertion échouait ; et pour composer son message d'erreur, Node **inspecte
+l'`ElementHandle`** — le graphe entier du client Playwright, à profondeur 1000.
+Le message ne finit jamais de s'écrire, la mémoire monte d'un gigaoctet par
+seconde, et rien dans le processus ne le signale.
+
+Trois règles en découlent, et elles sont écrites dans `CLAUDE.md` §15 bis :
+
+- **le harnais tourne dans un scope systemd plafonné** — `make e2e`,
+  `make e2e-un NOM="…"`, `make captures`, `make gestes` passent par
+  `systemd-run --user --scope -p MemoryMax=8G -p MemorySwapMax=0`. Un
+  emballement est tué à la borne par le noyau, jamais la machine. Mesuré sur ce
+  poste : 300 Mo sous un plafond de 100 Mo, tués net ; 8 Go atteints par la
+  campagne fautive, tués en 14 s, poste intact. **Aucun réglage ne relève la
+  borne** ;
+- **une assertion ne porte jamais sur un handle Playwright.** Ce qu'on veut
+  savoir d'un élément — existe-t-il, porte-t-il une classe — se calcule DANS
+  la page et revient en booléen ou en texte : `page.$eval(…, (e) => Boolean(…))`.
+  Un `assert.equal(await page.$(…), null)` est une bombe qui n'explose que
+  quand elle échoue, c'est-à-dire le jour où l'on a besoin du message ;
+- **le verrou refuse une épave dont la pile survit.** Un harnais tué en `137`
+  laisse ses Chromium vivants ; le porteur étant mort, l'épave était reprise et
+  une seconde pile démarrait à côté des orphelins. `e2e/verrou.mjs` inscrit
+  désormais la **session** du porteur et, avant de reprendre, cherche dans
+  `/proc` les processus de cette session encore vivants : s'il en reste, il
+  refuse en les nommant, avec la commande qui les tue. Le script de preuve sur
+  Forge réelle (`e2e/forge-reelle/`) prend le verrou à l'import, comme les
+  cinq autres.
+
 ### 29.7 Ce que ces parcours ne prouvent pas
 
 Le pilote reste factice (§28.7). Aucun quota n'est appliqué, aucun conteneur ne
@@ -13209,13 +13248,39 @@ tranché : **une opération explicite sur tout le parc, après un relevé des fl
   rendue pour **tous** les Sparks. L'état, lui, se lit dans Incus — un Spark dont
   l'`eth0` appliquée ne porte pas les deux clés est « non encore isolé », et le
   dossier le dit, comme il dit toute dérive entre le registre et le pilote.
-- L'opération est un geste de la Forge — *Isoler le parc* — qui rejoue
-  l'application de chaque Spark, une entrée d'audit par Spark. Un Spark
-  **protégé** (§35) refuse le geste et reste « non encore isolé », visiblement,
-  jusqu'à ce que sa protection soit levée : la protection garde son sens, et
-  l'état ne ment pas.
+- L'opération est un geste de la Forge — *Isoler le parc* — qui pose les deux
+  clés sur l'`eth0` de chaque Spark **qui ne les porte pas encore**, à chaud,
+  une entrée d'audit `spark.isolate` par Spark touché. Un Spark qui les porte
+  déjà est **compté à part et non journalisé** : « 7 isolés » sur un parc où un
+  seul l'a été mentirait. Un Spark **protégé** (§35) refuse le geste — `denied`
+  — et reste « non encore isolé », visiblement, jusqu'à ce que sa protection
+  soit levée : la protection garde son sens, et l'état ne ment pas. Une cellule
+  absente est un `error` nommé, qui n'arrête pas les autres.
+- Le vocabulaire des issues est celui du journal (`ok`, `denied`, `error`) :
+  une ligne de l'écran et une ligne du journal disent la même chose avec le
+  même mot.
+
+```
+GET  /v1/forge/isolation          { readable, sparks: [{name, isolated: true|false|null,
+                                    missing, protected, reason?}], isolated, pending }
+POST /v1/forge/isolation          { isolated: [...], already: [...],
+                                    denied: [{name, reason}], error: [{name, reason}] }
+GET  /v1/sparks/{name}/isolation  { name, isolated: true|false|null, missing, reason? }
+```
+
+`isolated: null` veut dire « non relevé » — cellule absente, Spark non
+appliqué, Incus muet — et jamais « non isolé » (§31.2). Le pilote gagne
+`update_device_config(name, device, keys)` : lecture-modification-écriture d'un
+seul device, mesurée à chaud le 2026-09-17.
+
+- **À l'écran** : la Forge porte une section *Isolation du réseau* — isolés
+  sur total, les non encore isolés **nommés et liés**, les cellules absentes à
+  part, et le geste *Isoler le parc* confirmé dans le flux, en accent, sans
+  bouton destructif (SPK-DS-29). Un parc entièrement isolé n'offre aucun geste.
+  Le dossier de chaque Spark porte une section *Réseau* qui dit son état, y
+  compris « non relevée » avec sa raison.
 - Le déploiement est OP-22. Sur la Forge de validation, le parc est de deux
-  cellules.
+  cellules de locataires et deux cellules d'essai.
 
 ### 57.4 Le préflight
 

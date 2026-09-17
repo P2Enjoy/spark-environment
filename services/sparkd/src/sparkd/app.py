@@ -50,6 +50,7 @@ from . import metrics as metrics_service
 from . import historian as historian_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
+from . import isolation as isolation_service
 from . import environnement as env_service
 from . import sshkeys
 from .lifecycle import Command
@@ -608,6 +609,28 @@ def create_app(config: Config) -> FastAPI:
             "network_total_bps": topology.network_total_bps,
             "storage_total_bytes": topology.storage_total_bytes,
         }
+
+    @app.get("/v1/forge/isolation", tags=["forge"])
+    def forge_isolation() -> dict:
+        """L'état d'isolation de chaque Spark, LU dans Incus (SPK-109, §57.3)."""
+        with registry() as connection:
+            return isolation_service.etat_parc(connection, app.state.incus)
+
+    @app.post("/v1/forge/isolation", tags=["forge"])
+    def forge_isolate() -> dict:
+        """« Isoler le parc » : une entrée d'audit par Spark, le protégé refuse
+        (SPK-109, §57.3, docs/PROD_MIGRATIONS.md OP-22)."""
+        with registry() as connection:
+            return isolation_service.isoler_parc(connection, app.state.incus)
+
+    @app.get("/v1/sparks/{name}/isolation", tags=["sparks"])
+    def spark_isolation(name: str) -> dict:
+        with registry() as connection:
+            try:
+                return isolation_service.etat_spark(connection, app.state.incus, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
 
     def _redistribute(connection, redistribution) -> None:
         """Applique à Incus la reconfiguration des Sparks partagés.

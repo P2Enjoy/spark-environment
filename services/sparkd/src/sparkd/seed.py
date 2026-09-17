@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 from . import historian, metrics
 from .app import create_app
 from .config import Config, load
+from .translate import CLES_ISOLATION
 from .db import connect
 from .incus import _PROFIL_ORIGINE as PROFIL_ORIGINE
 from .incus import InstanceAbsente, etat_simule
@@ -106,6 +107,14 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     creer({"name": "boutique", "image": "images:debian/13", "cpu_mode": "shared",
            "cpu_reservation": 0.5, "memory_bytes": GIO, "storage_bytes": 20 * GIO,
            "network_bps": 100 * MBIT}, demarrer=False)
+    # SPK-109 · §57.3 : une cellule créée AVANT l'isolation n'en porte pas les
+    # clés — c'est l'état de tout le parc d'une Forge à migrer, et l'écran doit
+    # savoir le dire. On retire ce qu'une build antérieure n'aurait jamais posé,
+    # dans le doublon, là où le vrai Incus le garde ; le geste « Isoler le
+    # parc » le repose par la même route qu'en production.
+    for cle in CLES_ISOLATION:
+        incus.created["boutique"]["devices"]["eth0"].pop(cle, None)
+    incus._persist()
 
     # --- Spark en mode dédié : la carte des cœurs du §27.4 a de quoi montrer.
     creer({"name": "postgres-dedie", "image": "images:debian/13", "cpu_mode": "dedicated",
@@ -589,6 +598,14 @@ def verify(client: TestClient) -> None:
     for nom, etat in attendus.items():
         if etats.get(nom) != etat:
             raise SeedError(f"« {nom} » devrait être « {etat} », il est « {etats.get(nom)} »")
+
+    # SPK-109 · §57.3 : exactement UNE cellule « non encore isolée », nommée —
+    # sans elle, le geste « Isoler le parc » n'aurait rien à montrer.
+    isolation = _attendu(client.get("/v1/forge/isolation"), 200,
+                         quoi="état d'isolation").json()
+    en_attente = sorted(s["name"] for s in isolation["sparks"] if s["isolated"] is False)
+    if en_attente != ["boutique"]:
+        raise SeedError(f"le seed doit laisser « boutique » seule non isolée, pas {en_attente}")
 
     # SPK-58 · §43.9.4 : les TROIS origines doivent être atteignables depuis
     # l'écran. Il en manquerait une que la démonstration serait muette sur le

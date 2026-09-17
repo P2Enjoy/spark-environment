@@ -5626,3 +5626,78 @@ test('une proposition déposée dans la cellule s’accepte EN PARTIE', async ()
       'une décision ne consomme que la proposition qu’elle vise');
   });
 });
+
+test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et son dossier le dit', async () => {
+  await parcours('isolation-du-parc', async () => {
+    // @verifies docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.3 (l'état se lit dans
+    //           Incus ; « Isoler le parc » est un geste explicite et confirmé ;
+    //           une entrée d'audit par Spark) · §57.7 · docs/DESIGN_SYSTEM_APP.md
+    //           SPK-DS-29 · docs/PROD_MIGRATIONS.md OP-22
+    //
+    // Le seed laisse « boutique » seule non isolée : une cellule créée avant
+    // la règle, comme tout le parc d'une Forge à migrer.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-isolation', { timeout: 20000 });
+    await page.waitForFunction(
+      () => /Non encore isolés/.test(document.body.innerText), null, { timeout: 20000 });
+    const section = () => page.$eval('#titre-isolation', (h) => h.closest('section').innerText);
+    assert.match(await section(), /boutique/, 'la cellule d’avant est NOMMÉE');
+    await capturer('spk109-isolation-avant');
+    await capturer('spk109-isolation-avant-mobile', { largeur: 390, hauteur: 844 });
+
+    // Le geste se confirme dans le flux, sans détruire : un bouton ordinaire.
+    await page.click('[data-isolation="demander"]');
+    await page.waitForSelector('[data-isolation="engager"]', { timeout: 10000 });
+    assert.match(await section(), /Isoler tout le parc \?/);
+    assert.equal(await page.$eval('[data-isolation="engager"]',
+      (b) => b.classList.contains('bouton--destructif')), false);
+    await capturer('spk109-isolation-confirmation');
+
+    await page.click('[data-isolation="engager"]');
+    await page.waitForFunction(
+      () => /Le geste a été joué/.test(document.body.innerText), null, { timeout: 20000 });
+    // Le seed porte AUSSI « orphelin », dont la cellule a disparu (§14.5) : le
+    // geste le nomme en échec, sans que boutique en pâtisse — et sans vert,
+    // parce que tout n'a pas abouti (SPK-DS-08). Les six autres l'étaient déjà
+    // et ne sont pas présentés comme isolés par ce geste.
+    const issue = await section();
+    assert.match(issue, /isolé : boutique/);
+    assert.match(issue, /déjà isolés : 6/);
+    assert.match(issue, /en échec : orphelin/);
+    // Les blocs d'issue sont cherchés DANS la section, et rendus en booléens.
+    // JAMAIS `assert.equal(await page.$(…), null)` : si l'assertion échoue,
+    // Node inspecte l'ElementHandle — le graphe entier du client Playwright, à
+    // profondeur 1000 — et le processus monte à plusieurs dizaines de Go.
+    // MESURÉ le 2026-09-17 : trois OOM du poste avant de le comprendre
+    // (docs/DAT.md §29.8 bis).
+    const blocs = await page.$eval('#titre-isolation', (h) => {
+      const s = h.closest('section');
+      return { avertissement: Boolean(s.querySelector('.avertissement')),
+               succes: Boolean(s.querySelector('.succes')) };
+    });
+    assert.equal(blocs.avertissement, true, 'un échec nommé est un fait signalé : l’accent');
+    assert.equal(blocs.succes, false, 'tout n’a pas abouti : pas de vert (SPK-DS-08)');
+    // L'écran RELIT l'état : plus rien à isoler, donc plus de geste (§14.4).
+    assert.match(issue, /Non encore isolés\s+aucun/);
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('[data-isolation="demander"]'))), false);
+    await capturer('spk109-isolation-apres');
+
+    // EFFET côté sparkd : une entrée d'audit `spark.isolate` en `ok`, et le
+    // doublon porte les deux clés là où le vrai Incus les garde.
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=50');
+    const isoles = journal.entries.filter((e) => e.action === 'spark.isolate');
+    assert.ok(isoles.some((e) => e.result === 'ok'), 'boutique isolée : une entrée `ok`');
+    assert.ok(isoles.some((e) => e.result === 'error'), 'orphelin en échec : une entrée `error`, nommée');
+    assert.equal(isoles.length, 2, 'les six déjà isolés n’entrent PAS au journal');
+    const { corps: etat } = await pile.lireSparkd('/v1/sparks/boutique/isolation');
+    assert.equal(etat.isolated, true);
+
+    // Le dossier du Spark le dit, comme il dit toute dérive.
+    await ouvrir('boutique');
+    await page.waitForSelector('#titre-reseau', { timeout: 10000 });
+    assert.match(await page.$eval('#titre-reseau', (h) => h.closest('section').innerText),
+                 /Isolé du réseau des autres Sparks/);
+    await capturer('spk109-dossier-reseau');
+  });
+});

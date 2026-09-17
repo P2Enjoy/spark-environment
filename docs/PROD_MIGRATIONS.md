@@ -136,13 +136,16 @@ Dépend de     : OP-21 (les cellules doivent joindre l'ingress AVANT d'être
 Ordre         : 1. relevé des flux Spark <-> Spark DANS chaque cellule —
                    `incus exec <cellule> -- ss -tn` —, conntrack n'étant pas
                    installé sur la Forge ; premier relevé du 2026-09-17 au
-                   journal ;
-                2. mise à jour de sparkd ; la phase d'installation rejouée pose
-                   la chaîne forward (mécanisme de OP-21) ;
-                3. depuis la console, le geste « Isoler le parc » — une entrée
-                   d'audit par Spark ; un Spark protégé reste « non encore
-                   isolé », visiblement, jusqu'à ce que sa protection soit
-                   levée par le responsable.
+                   journal : zéro ;
+                2. mise à jour de sparkd (runbook A.2) : l'installateur pose la
+                   chaîne forward de spark_filter (mécanisme d'OP-21) et les
+                   Sparks créés désormais naissent isolés ;
+                3. depuis la console, écran Forge, section « Isolation du
+                   réseau » : le geste « Isoler le parc », sur FEU VERT EXPLICITE
+                   du responsable — il touche les cellules des locataires. Une
+                   entrée d'audit par Spark ; un Spark protégé reste « non
+                   encore isolé », visiblement, jusqu'à ce que sa protection
+                   soit levée.
 Vérification  : depuis le terminal de chaque cellule : `nc -zw3 <voisin> 22`
                 refusé ; DNS résolu ; sortie HTTPS en 200 ; ingress en 200
                 (OP-21) ; `bridge -d link` montre `isolated on` ; préflight

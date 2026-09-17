@@ -32,6 +32,8 @@ def _appels(pilote):
         "set_instance_state":      lambda: pilote.set_instance_state("absente", "start"),
         "delete_instance":         lambda: pilote.delete_instance("absente"),
         "update_instance_config":  lambda: pilote.update_instance_config("absente", {"a": "b"}),
+        # SPK-109 · §57.3 : les clés d'isolation se posent à chaud sur UN device.
+        "update_device_config":    lambda: pilote.update_device_config("absente", "eth0", {"a": "b"}),
         "set_publication_devices": lambda: pilote.set_publication_devices("absente", {}),
         "update_root_size":        lambda: pilote.update_root_size("absente", "5GiB"),
         "push_file":               lambda: pilote.push_file("absente", "/etc/x", "y"),

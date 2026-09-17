@@ -12043,3 +12043,53 @@ SPK-110, sur un bridge privé, là où elle compte.
 
 Les cellules d'essai restent en place, drapeaux posés, pour les mesures de
 SPK-110 et SPK-111 ; elles seront supprimées par le produit à la fin du lot.
+
+## 2026-09-17 · SPK-109 — le code, trois nuits de poste à genoux, et une bombe dans une assertion
+
+**Le code, d'abord.** `translate` rend les deux clés d'isolation pour tout
+Spark ; `pare_feu` rend la chaîne `forward` ; le pilote gagne
+`update_device_config`, lecture-modification-écriture d'un device, à chaud ;
+`isolation` lit l'état dans Incus et joue le geste — ce qui porte déjà les clés
+est compté à part et non journalisé, sans quoi « 7 isolés » se lirait sur un
+parc où un seul l'a été ; `NET-ISOLATION` lit les clés effectives. La Forge
+porte la section *Isolation du réseau*, le dossier la section *Réseau* ; le
+seed laisse « boutique » non isolée. Suite `sparkd` : 1430 vertes.
+
+**Puis la preuve E2E a tué le poste. Trois fois.** Une campagne, seule, au
+premier plan, verrou tenu : un processus à 27 Go, l'OOM du noyau, la machine
+figée. Le responsable, à juste titre, furieux — c'était la seconde fois en
+trois jours, et SPK-106 était censé l'empêcher. Il ne pouvait pas : il n'y
+avait pas deux piles, il y en avait une qui explosait.
+
+**La chasse.** `sparkd` seul : propre, 0,01 s. L'hôte console avec son tunnel :
+propre. La page, rejouée clic par clic dans une pile plafonnée : propre, 530 Mo
+de Chromium, aucun message console. Les doublons DNS et notify : rien. Il ne
+restait que la campagne elle-même ; un échantillonneur externe a montré le
+processus `node` de la campagne monter d'un gigaoctet par seconde pendant
+l'attente du texte « Le geste a été joué ». Le journal du protocole Playwright
+(`DEBUG=pw:protocol`) s'arrête sur un `DOM.describeNode` d'un `p.succes` : celui
+de la section *Alerte hors bande*, que le canal notify de la campagne rend
+vert — et que mon sélecteur `section .succes` attrapait. L'assertion
+`assert.equal(await page.$(…), null)` échouait, et **Node inspectait
+l'`ElementHandle`** pour composer son message — le graphe entier du client
+Playwright, à profondeur 1000. Aucune preuve locale ne pouvait le voir : elle
+n'explose que quand elle échoue.
+
+**Ce qui est posé pour que ça n'arrive plus**, et ce n'est pas une consigne :
+
+- `CLAUDE.md` §15 bis, en lettres capitales, à la demande du responsable ;
+- le harnais tourne dans un scope systemd **plafonné à 8 Go** — mesuré :
+  300 Mo sous 100 Mo tués net ; la campagne fautive tuée en 14 s, poste intact ;
+- le verrou inscrit la **session** du porteur et refuse une épave dont les
+  processus survivent, en nommant ce qu'il faut tuer ; le script de preuve sur
+  Forge réelle prend le verrou à l'import ;
+- les assertions du parcours portent sur des **booléens calculés dans la
+  page**, jamais sur un handle.
+
+Corrigé, le parcours passe en 3 s. Cinq captures observées : la section avant,
+la confirmation en accent, l'issue nommant boutique isolée, six déjà isolés et
+orphelin en échec, le dossier de boutique « isolé ». Le journal porte deux
+entrées `spark.isolate` — `ok` et `error` —, pas huit.
+
+**Ce qui reste** : la mise à jour de `sparkd` sur la Forge (sans redemander),
+puis le geste sur les deux cellules de locataires, sur feu vert explicite.

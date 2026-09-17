@@ -252,6 +252,31 @@ function renderRessources(spark, usage) {
 }
 
 /**
+ * Le réseau d'un Spark : ce que dit Incus de son isolation (SPK-109).
+ *
+ * @spec docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.3 (l'état se lit dans Incus
+ *       et le dossier le dit, comme il dit toute dérive) ·
+ *       docs/DESIGN_SYSTEM.md §1.5 bis (l'écran nomme, le manuel explique),
+ *       §14.5, §14.6 · docs/DESIGN_SYSTEM_APP.md SPK-DS-29
+ */
+function renderReseau(spark, isolation) {
+  const etat = isolation === undefined
+    ? 'Relevé en cours'
+    : !isolation || isolation.isolated === null
+      ? `Non relevée${isolation?.reason ? ` — ${isolation.reason}` : ''}`
+      : isolation.isolated
+        ? 'Isolé du réseau des autres Sparks'
+        : 'Non encore isolé — depuis la Forge : « Isoler le parc »';
+  return `
+<section class="carte bloc" aria-labelledby="titre-reseau">
+  <h2 id="titre-reseau">Réseau</h2>
+  ${definitions([['Isolation', etat]])}
+  <p class="note">Un Spark isolé joint Internet, le résolveur et l’ingress de sa Forge,
+  et rien d’autre. <a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>
+</section>`;
+}
+
+/**
  * Modifier les quotas d'un Spark, sans le détruire (SPK-57).
  *
  * @spec docs/BACKLOG.md#SPK-57 · docs/DAT.md §49.2 (ce que le geste modifie),
@@ -707,7 +732,9 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     notes = NOTES_VIDE,
                                     propositions = PROPOSITIONS_VIDE,
                                     mesures = SUPERVISION_VIDE,
-                                    catalogue = [], pools = null, cores = null } = {}) {
+                                    catalogue = [], pools = null, cores = null,
+                                    // SPK-109 · §57.3 : l'isolation, lue dans Incus.
+                                    isolation = undefined } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -724,6 +751,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
   const facettes = {
     '': () => `<div class="detail">
       <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas, { pools, cores })}
+        ${renderReseau(spark, isolation)}
         ${renderProtection(spark, admin)}
         ${renderDossier(spark, dossier)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}

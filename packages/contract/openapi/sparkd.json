@@ -544,6 +544,52 @@
         ]
       }
     },
+    "/v1/forge/isolation": {
+      "get": {
+        "description": "L'état d'isolation de chaque Spark, LU dans Incus (SPK-109, §57.3).",
+        "operationId": "forge_isolation_v1_forge_isolation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forge Isolation V1 Forge Isolation Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Forge Isolation",
+        "tags": [
+          "forge"
+        ]
+      },
+      "post": {
+        "description": "« Isoler le parc » : une entrée d'audit par Spark, le protégé refuse\n(SPK-109, §57.3, docs/PROD_MIGRATIONS.md OP-22).",
+        "operationId": "forge_isolate_v1_forge_isolation_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forge Isolate V1 Forge Isolation Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Forge Isolate",
+        "tags": [
+          "forge"
+        ]
+      }
+    },
     "/v1/forge/metrics": {
       "get": {
         "description": "Historique d'usage de la Forge, et de chacun de ses Sparks.\n\n@spec docs/BACKLOG.md#SPK-93 · docs/DAT.md §52.6, §52.7, §52.8\n\nL'agregat est une SOMME, et il dit combien de Sparks il somme : un Spark\ncree a midi n'a pas de mesure le matin, et une somme dont le nombre de\ntermes varie changerait de marche sans que rien n'ait bouge dans la\nmachine (§52.7).",
@@ -1990,6 +2036,50 @@
         "summary": "Create Identity",
         "tags": [
           "cles"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/isolation": {
+      "get": {
+        "operationId": "spark_isolation_v1_sparks__name__isolation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Spark Isolation V1 Sparks  Name  Isolation Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spark Isolation",
+        "tags": [
+          "sparks"
         ]
       }
     },

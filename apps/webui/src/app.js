@@ -31,7 +31,7 @@ import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEF
 import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour,
          renderVerification, refusEcritureRecette }
   from './components/spark-admin.js';
-import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE } from './components/forge-view.js';
+import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE, ISOLATION_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE,
          FACETTES_SPARK } from './components/forge-images.js';
@@ -95,6 +95,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        // qu'on n'a pas demandé — il exécute des commandes SUR la
                        // Forge, et l'ouvrir ne doit pas y entrer.
                        rebootUi: { ...REBOOT_VIDE }, sparks: [],
+                       // SPK-109 · §57.3 : l'isolation du parc, lue dans Incus.
+                       // `undefined` tant qu'on n'a pas lu ; `null` si la
+                       // lecture a échoué — « pas relevé » n'est pas « non isolé ».
+                       isolation: undefined, isolationUi: { ...ISOLATION_VIDE },
                        installer: { ...INSTALLER_VIDE,
                                     values: { ...INSTALLER_VIDE.values } } },
                facette: '',
@@ -392,6 +396,22 @@ function brancher() {
   }
   racine.querySelector('[data-redemarrage="engager"]')
     ?.addEventListener('click', () => engagerRedemarrage());
+  // SPK-109 · §57.3 : isoler le parc — demander, annuler, engager.
+  racine.querySelector('[data-isolation="demander"]')
+    ?.addEventListener('click', () => {
+      etat.forge.isolationUi.confirme = true;
+      etat.forge.isolationUi.issue = null;
+      peindre();
+      racine.querySelector('[data-isolation="engager"]')?.focus();
+    });
+  racine.querySelector('[data-isolation="annuler"]')
+    ?.addEventListener('click', () => {
+      etat.forge.isolationUi.confirme = false;
+      peindre();
+      racine.querySelector('[data-isolation="demander"]')?.focus();
+    });
+  racine.querySelector('[data-isolation="engager"]')
+    ?.addEventListener('click', () => isolerLeParc());
   for (const bouton of racine.querySelectorAll('[data-action="diagnostiquer-forge"]')) {
     bouton.addEventListener('click', diagnostiquerForge);
   }
@@ -3000,6 +3020,33 @@ async function releverRedemarrage() {
  * L'hôte relève de nouveau et refuse sur place si le noyau visé n'a pas de
  * module ZFS : l'écran ne décide pas, il montre.
  */
+/**
+ * « Isoler le parc » (SPK-109, docs/DAT.md §57.3, docs/PROD_MIGRATIONS.md OP-22).
+ *
+ * Le geste est celui du runtime : une entrée d'audit par Spark, le protégé
+ * refuse. L'écran ne déduit rien de ce qu'il a demandé — il RELIT l'état après
+ * (DESIGN_SYSTEM.md §1.3, §14.9).
+ */
+async function isolerLeParc() {
+  const ui = etat.forge.isolationUi;
+  ui.erreur = null;
+  ui.busy = true;
+  peindre();
+  try {
+    const reponse = await relais(
+      `/api/v1/forge/isolation?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
+    ui.issue = corps;
+    ui.confirme = false;
+    etat.forge.isolation = await api('/v1/forge/isolation').catch(() => null);
+  } catch (erreur) {
+    ui.erreur = erreur?.message ?? String(erreur);
+  }
+  ui.busy = false;
+  peindre();
+}
+
 async function engagerRedemarrage() {
   const r = etat.forge.rebootUi;
   r.erreur = null;
@@ -3314,7 +3361,7 @@ async function chargerDetail(nom, facette = '') {
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
-           env, catalogue, forge] = await Promise.all([
+           env, catalogue, forge, , isolation] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -3344,9 +3391,11 @@ async function chargerDetail(nom, facette = '') {
       // l'activation du geste sur certains navigateurs, et la copie échoue alors
       // sans raison lisible.
       chargerDossier(nom),
+      // SPK-109 · §57.3 : ce que dit Incus de l'isolation de CE Spark.
+      api(`/v1/sparks/${encodeURIComponent(nom)}/isolation`).catch(() => null),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit,
+                    snapshots, audit, isolation,
                     ports: (publies.ports ?? []).filter((p) => p.spark_id === etat.spark.id),
                     reservedPorts: publies.reserved ?? [], env, catalogue,
                     pools: forge?.pools ?? null, cores: forge?.cpu?.cores_total ?? null };
@@ -3534,11 +3583,15 @@ async function chargerHote() {
   }
   try {
     etat.forge.host = await api('/v1/forge');
-    const [cores, sparks] = await Promise.all([
+    const [cores, sparks, isolation] = await Promise.all([
       api('/v1/forge/cores').catch(() => null),
       api('/v1/sparks').then((r) => r.sparks).catch(() => []),
+      // SPK-109 · §57.3 : lue dans Incus à chaque ouverture de l'écran ; une
+      // lecture en échec rend `null`, que l'écran nomme (§14.6).
+      api('/v1/forge/isolation').catch(() => null),
     ]);
     etat.forge.cores = cores;
+    etat.forge.isolation = isolation;
     // La carte des cœurs porte des identifiants de Sparks ; l'écran affiche des
     // NOMS. Un identifiant interne sans intérêt ne doit pas atteindre l'écran
     // (docs/DESIGN_SYSTEM.md §3.1).

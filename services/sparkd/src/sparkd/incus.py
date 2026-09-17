@@ -107,6 +107,8 @@ class IncusClient(Protocol):
 
     def update_instance_config(self, name: str, config: dict[str, str]) -> None: ...
 
+    def update_device_config(self, name: str, device: str, keys: dict[str, str]) -> None: ...
+
     def set_publication_devices(
         self, name: str, devices: dict[str, dict[str, str]]) -> None: ...
 
@@ -274,6 +276,24 @@ class UnixSocketIncus:
         effacerait tout ce qu'on ne renvoie pas.
         """
         self._request("PATCH", f"/1.0/instances/{name}", {"config": config})
+
+    def update_device_config(self, name: str, device: str, keys: dict[str, str]) -> None:
+        """Fusionne des clés dans UN device de l'instance, à chaud.
+
+        @spec docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.2, §57.3
+
+        Lecture-modification-écriture, comme `set_publication_devices` : PATCH
+        remplacerait le device entier au lieu d'y fusionner des clés. MESURÉ le
+        2026-09-17 : `security.port_isolation` et `security.ipv4_filtering`
+        s'appliquent sur une instance en marche, sans redémarrage.
+        """
+        actuelle = self._get(f"/1.0/instances/{name}")
+        metadata = actuelle.get("metadata") or actuelle
+        devices = dict(metadata.get("devices") or {})
+        devices[device] = {**(devices.get(device) or {}), **keys}
+        metadata = dict(metadata)
+        metadata["devices"] = devices
+        self._request("PUT", f"/1.0/instances/{name}", metadata)
 
     def set_publication_devices(
         self, name: str, devices: dict[str, dict[str, str]]) -> None:
@@ -973,6 +993,16 @@ class FakeIncus:
     def update_instance_config(self, name: str, config: dict[str, Any]) -> None:
         self._maybe_fail("update_instance_config")
         self._vivante(name).setdefault("config", {}).update(config)
+        self._persist()
+
+    def update_device_config(self, name: str, device: str, keys: dict[str, str]) -> None:
+        """Même sémantique que le vrai pilote : les clés sont FUSIONNÉES dans le
+        device nommé, les autres devices restent (SPK-109, §57.3)."""
+        self._maybe_fail("update_device_config")
+        instance = self._vivante(name)
+        devices = dict(instance.get("devices") or {})
+        devices[device] = {**(devices.get(device) or {}), **keys}
+        instance["devices"] = devices
         self._persist()
 
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
