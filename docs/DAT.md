@@ -13125,7 +13125,14 @@ table absente cite les règles attendues, et jamais une commande de session.
   conforme, trop ouverte (`22` accepté), antérieure (sans `80`/`443`), illisible.
 - **Sur la Forge réelle**, par le parcours canonique : depuis la console, le
   terminal du Spark (§37) — `curl -sS https://<domaine servi par la Forge>/`
-  rend `200`, et `nc -zw3 10.77.0.1 22` est refusé. Captures observées.
+  **répond**, certificat vérifié par `curl`, et `nc -zw3 10.77.0.1 22` échoue.
+  Ce qui prouve la joignabilité est une réponse du service à travers l'ingress :
+  un `302` vers la page de connexion ou un `404` sur un chemin que ce SSO ne
+  sert pas le prouvent autant qu'un `200` ; seul `000` dirait « injoignable ».
+  Le script `e2e/forge-reelle/spk108-ingress.mjs` joue ce parcours contre la
+  console ouverte sur la Forge et dépose ses captures dans `e2e/captures/`.
+  **Joué le 2026-09-17** depuis `redaction-devis` : découverte OIDC `404`,
+  racine `302`, `nc` en échec — captures `spk108-*` observées aux deux formats.
 - **Le déploiement** est OP-21 (`docs/PROD_MIGRATIONS.md`) : la Forge a reçu sa
   table à la main par OP-11 ; elle reçoit cette règle par la **mise à jour du
   paquet**, qui joue OP-19 du même geste, et la vérification est celle ci-dessus.

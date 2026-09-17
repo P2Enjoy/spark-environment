@@ -19,7 +19,11 @@
   effectives et nomme les ports acceptés ; une table antérieure est signalée,
   un `22` accepté est un échec, une étiquette seule ne vaut plus `ok`. Le
   fichier rendu a été validé en `nft -c` sur la Forge, sans rien appliquer.
-  **Non déployé** : OP-21, avec OP-19.
+  **Déployé sur la Forge le 2026-09-17** par la mise à jour du paquet (OP-21) :
+  la cellule qui ne joignait pas le SSO reçoit désormais sa réponse, le 22 reste
+  fermé, et le préflight le lit. Prouvé par le parcours canonique — la console,
+  le Spark, son terminal, la commande au clavier — avec
+  `e2e/forge-reelle/spk108-ingress.mjs` et ses captures `spk108-*`.
 - **Lot 6 — Réseau entre Sparks : quatre unités ouvertes et spécifiées avant le
   code** (SPK-108 à SPK-111, `docs/DAT.md` §56 à §59, OP-21 et OP-22), après
   seize arbitrages du responsable le 2026-09-17 et un relevé en lecture seule de

@@ -11938,3 +11938,63 @@ vert explicite ; les quatre unités s'enchaînent avec un commit et un compte
 rendu chacune ; les modifications E2E non committées de l'arbre, qui ne sont
 pas de l'agent, sont committées telles quelles en un commit à part ; et une
 réponse au locataire est rédigée pour relecture.
+
+## 2026-09-17 · SPK-108 — l'ingress ouvert aux cellules, et ce que la pose a révélé
+
+**Le code.** Un module `pare_feu` rend la table `inet spark_filter` comme une
+fonction pure du nom du bridge, comparée à un témoin mot pour mot dans sa
+preuve ; la pose écrit les deux fichiers s'ils diffèrent et recharge
+`spark-firewall.service` seulement alors. Le fichier remplace sa propre table
+— `add`, `delete`, définition — dans la seule transaction d'un `nft -f`, pour
+qu'un `ExecReload` ne duplique jamais une règle ; validé en `nft -c` sur la
+Forge avant tout déploiement, sans rien appliquer. Deux chemins l'appellent : la
+phase « socle réseau » de l'installation, et la **mise à jour du paquet** —
+c'est par elle qu'une Forge existante reçoit la règle, en lisant le bridge dans
+`sparkd.env` et non dans ce que le poste suppose.
+
+**Le défaut latent.** `phase_foundation` ne posait la table que si l'étiquette
+`user.spark.input_policy` n'était pas déjà `drop`. Une Forge durcie n'aurait
+donc **jamais** reçu une règle nouvelle : la ligne de SPK-108 serait restée
+dans le dépôt, et le préflight aurait continué de dire « ok ». C'est le genre de
+garde qui protège l'idempotence d'un côté et l'interdit de l'autre ; la
+comparaison du fichier rendu fait les deux.
+
+**Le préflight.** `NET-REMONTEE` lit `nft list tables` puis la table, ne compte
+que les règles avant le premier `drop`, et ne rend `ok` que pour exactement tcp
+`{53, 80, 443}` et udp `{53, 67}`, connexions établies en tête. Un `22` accepté
+est un échec qui le nomme ; une table antérieure est un avertissement dont le
+remède est la mise à jour ; une étiquette seule, `nft` illisible, rend INCONNU —
+plus jamais `ok`. Neuf preuves, dont le relevé réel de la Forge du matin.
+Suite complète : 1412 vertes.
+
+**Le déploiement, à 20:34Z**, par le runbook A.2, sans redemander — l'arbitrage
+du jour. `pip install` depuis `main`, `sparkd.install` : le fichier de règles
+réécrit, l'unité active, la table effective en `{53, 80, 443}`, `healthz` sur la
+build `0.post1.dev841+g90fc7262d`, 14 contrôles verts. Depuis `redaction-devis`
+par `incus exec` : `https://oauth.lelabs.tech/` → **302**, Internet 200,
+`10.77.0.1:22` injoignable.
+
+**Une fiche périmée.** Le registre portait déjà la migration `017`, appliquée le
+2026-09-14 à 18:40Z — une build déployée ce soir-là, après le relevé de midi qui
+la disait absente. OP-19 disait « non appliquée » depuis trois jours, et la
+baseline « 016 ». Corrigés : le contrat n'avait pas suivi le déploiement, ce
+que la règle « la documentation suit la réalité » interdit précisément.
+
+**La preuve, dans la peau de l'exploitant.** Un script Playwright contre la
+console ouverte sur la Forge — `e2e/forge-reelle/spk108-ingress.mjs` — part de
+l'accueil, ouvre `redaction-devis`, l'onglet *Terminal*, la session, et tape
+les commandes. La découverte OIDC à `/.well-known/openid-configuration` répond
+**404** — ce SSO ne la sert pas à ce chemin, c'est son affaire — et la racine
+**302**, certificat vérifié ; `nc 10.77.0.1 22` échoue. Le premier critère
+exigeait un `200` : faux critère, corrigé — ce qui prouve la joignabilité est
+une **réponse** à travers l'ingress, et seul `000` dirait injoignable. Deux
+autres leçons : une session de terminal survit à la navigation (SPK-95), donc
+une preuve interrompue en laisse une derrière elle et le bouton *Ouvrir* ne
+revient pas — le script ferme d'abord la session résiduelle ; et sur mobile,
+le widget « Sparks & conteneurs » recouvre deux lignes de la grille — un trait
+de SPK-75, noté au backlog, hors de cette unité. Captures observées aux deux
+formats. La console affichait « à redémarrer, démarrée avant 3 commits » : sans
+effet sur la preuve, le terminal étant inchangé.
+
+**Ce que le locataire peut faire dès maintenant** : réessayer. Rien à changer
+de son côté. La réponse rédigée pour lui attend la relecture du responsable.

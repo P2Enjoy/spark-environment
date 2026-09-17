@@ -39,8 +39,8 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 96 closes, 7
-partielles, 4 non commencées — le lot 6, *Réseau entre Sparks*, ouvert le
+**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 97 closes, 7
+partielles, 3 non commencées — le lot 6, *Réseau entre Sparks*, ouvert le
 2026-09-17. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
@@ -554,16 +554,6 @@ une garde qui n'existe que dans un fichier de workflow.
   de fermer ce latéral par défaut — SPK-109, `docs/DAT.md` §57 — avec des
   réseaux privés (SPK-110, §58) et des liens privés (SPK-111, §59) pour le
   rouvrir à dessein. Spécifié, non implémenté.
-- **Un Spark ne joint pas les domaines que sa propre Forge sert.** La règle du
-  §48 du DAT — `iifname "sparkbr0" drop` en `input` — ferme toute remontée d'une
-  cellule vers la Forge, et l'adresse publique est portée par la Forge elle-même :
-  depuis une cellule, un appel de serveur à serveur vers un domaine servi par
-  Caddy n'aboutit pas, alors qu'il aboutit depuis Internet. Un SSO hébergé sur la
-  Forge est donc injoignable par un Spark voisin. Rapporté et **confirmé sur la
-  Forge le 2026-09-17** : l'adresse publique est portée par `eno1` de la Forge,
-  Caddy écoute sur `*:443`, et la règle tombe sur le paquet. Ouverture bornée
-  à `80` et `443` **implémentée** — SPK-108, `docs/DAT.md` §56 —, **non encore
-  déployée** sur la Forge : OP-21.
 
 ## Sauvegarder le registre
 

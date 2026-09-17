@@ -7573,7 +7573,7 @@ réseaux privés, puis les liens privés. Étude, relevés et arbitrages dans
 `docs/EXPLORATION_RESEAU_PRIVE.md` et `docs/JOURNAL.md` (2026-09-17). Contrats
 au `docs/DAT.md` §56 à §59, **écrits et committés avant le code**.
 
-### [~] SPK-108 · Un Spark joint les services publics de sa propre Forge
+### [x] SPK-108 · Un Spark joint les services publics de sa propre Forge
 
 **Demandé par le responsable le 2026-09-17**, à partir d'un rapport de locataire :
 le Spark `redaction-devis` ne joint pas le SSO servi par sa propre Forge. Le
@@ -7617,10 +7617,26 @@ poser, borné aux ports de l'ingress.
    fixés : conforme, trop ouvert, antérieur, illisible. *Fait : 9 preuves, dont
    le relevé réel de la Forge du 2026-09-17 ; l'étiquette seule rend INCONNU.
    Suite `sparkd` complète : 1412 vertes.*
-4. **Forge réelle** — OP-21 joué par la mise à jour du paquet, avec OP-19 ;
-   preuve depuis le terminal du Spark par la console : `200` sur un domaine
-   servi par la Forge, `22` refusé ; captures ; README et limite connue.
-   *Manuel M11 écrit ; déploiement en attente.*
+4. **Forge réelle** — OP-21 joué par la mise à jour du paquet ; preuve depuis
+   le terminal du Spark par la console ; captures ; README et limite connue.
+   *Fait le 2026-09-17 : build `0.post1.dev841+g90fc7262d` déployée à 20:34Z,
+   table effective en `{53, 80, 443}`, préflight 14 verts avec `NET-REMONTEE`
+   qui nomme les ensembles. Preuve par le parcours canonique
+   (`e2e/forge-reelle/spk108-ingress.mjs`) depuis `redaction-devis` : la
+   découverte OIDC répond `404` — ce SSO ne la sert pas à ce chemin —, la
+   racine `302`, certificat vérifié ; `nc 10.77.0.1 22` échoue. Captures
+   `spk108-terminal-sso-joint`, `-mobile` et `spk108-terminal-22-ferme`
+   observées. OP-19 s'est révélé APPLIQUÉ depuis le 2026-09-14T18:40Z : le
+   contrat le disait en attente, corrigé. Manuel M11 écrit ; limite connue
+   retirée du README.*
+
+- **Clos le 2026-09-17.** Suite `sparkd` : 1412 preuves vertes après
+  synchronisation. Ce que la preuve a appris : une session de terminal survit
+  à la navigation (SPK-95), donc une preuve interrompue en laisse une derrière
+  elle — le script ferme une session résiduelle avant d'en ouvrir une, comme un
+  exploitant. Sur le format mobile, le widget « Sparks & conteneurs » recouvre
+  deux lignes de la grille : un trait de SPK-75, antérieur, sans effet sur la
+  preuve — noté, non traité ici.
 
 - Ce que l'unité ne doit PAS casser : le §48.1 sur `22`, `9876` et `2019` ; le
   DNS et la sortie des Sparks ; la persistance par `spark-firewall.service` ;

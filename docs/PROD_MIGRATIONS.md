@@ -28,7 +28,8 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré.
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
 | Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 016** — la `016` a été appliquée le **2026-09-14T12:55Z**, au démarrage de la build `0.post1.dev817+gcd1480daa` |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 017** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z** ; build **`0.post1.dev841+g90fc7262d`** depuis le 2026-09-17 (OP-21) |
+| Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final — OP-11 puis **OP-21, appliqué le 2026-09-17** |
 | Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
@@ -154,12 +155,21 @@ Risques       : un montage de locataire qui s'appuyait sur le latéral cesse de
                 cellules : sso-p2enjoy et redaction-devis.
 ```
 
-### OP-21 · Ouvrir l'ingress de la Forge aux cellules, 80 et 443 (SPK-108)
+### OP-21 · Ouvrir l'ingress de la Forge aux cellules, 80 et 443 (SPK-108) — **APPLIQUÉ le 2026-09-17**
 
 ```
-État          : EN ATTENTE — code écrit et éprouvé le 2026-09-17 (suite
-                sparkd : 1412 preuves vertes ; fichier rendu validé en
-                `nft -c` sur la Forge, sans rien appliquer). Non déployé.
+État          : APPLIQUÉ le 2026-09-17 à 20:34Z, par la mise à jour de sparkd
+                (build `0.post1.dev841+g90fc7262d`), sans redemander — c'est
+                l'arbitrage du responsable du même jour. Relevé après
+                application : `/etc/sparkd/firewall.nft` réécrit (empreinte
+                changée), `spark-firewall.service` actif, la table effective
+                accepte tcp {53, 80, 443} et udp {53, 67} avant le drop ;
+                préflight 14 contrôles verts, NET-REMONTEE « ok » en nommant
+                les ensembles. Depuis la cellule `redaction-devis` :
+                `https://oauth.lelabs.tech/` répond **302** — le SSO —,
+                Internet 200, et `10.77.0.1:22` reste injoignable. Rejoué par
+                le parcours canonique (console → terminal du Spark), captures
+                `e2e/captures/spk108-*.jpg`.
 Objectif      : qu'un Spark joigne les services publics de sa propre Forge —
                 le cas du SSO rapporté le 2026-09-17 — par un accept borné à
                 tcp 80 et 443 depuis sparkbr0, avant le drop de spark_filter
@@ -246,17 +256,17 @@ Risque        : nul pour le registre — c'est fait. Le seul risque restant est
                 `source = registre` couperait la surveillance.
 ```
 
-### OP-19 · Migration `017_notes_spark` du registre (SPK-104)
+### OP-19 · Migration `017_notes_spark` du registre (SPK-104) — **APPLIQUÉE le 2026-09-14**
 
 ```
-État          : NON APPLIQUÉE. Vérifié EN LECTURE SEULE sur la Forge le
-                2026-09-14 : la table `spark_note` n'y existe pas, et le
-                registre porte la version de schéma 016.
-
-                La migration est écrite et committée ; elle s'appliquera au
-                démarrage de la première build qui la porte. La Forge tourne
-                aujourd'hui `0.post1.dev817+gcd1480daa`, qui est ANTÉRIEURE à
-                SPK-104 : ni les notes, ni le canal `.?` n'y sont déployés.
+État          : APPLIQUÉE. Relevé EN LECTURE SEULE le 2026-09-17 :
+                `schema_migration` porte la 017, appliquée le
+                2026-09-14T18:40:11Z — au démarrage d'une build déployée ce
+                soir-là, après le relevé de midi qui la disait absente. Cette
+                fiche l'a dite « non appliquée » pendant trois jours : le
+                contrat n'avait pas suivi le déploiement. Depuis le
+                2026-09-17, la Forge tourne `0.post1.dev841+g90fc7262d`
+                (OP-21), qui porte SPK-104 à SPK-108.
 Objectif      : créer `spark_note`, qui porte les trois notes d'un Spark —
                 README, CONTRIBUTORS, INSTALL — leur révision et leur origine
                 (docs/SCHEMA.md §10 septies, docs/DAT.md §54). Les suggestions
