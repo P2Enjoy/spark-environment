@@ -11785,3 +11785,95 @@ sujets dans un commit :
    committé. La campagne ne tient donc que par un travail resté **non committé**
    dans l'arbre de travail. Signalé au responsable : ce n'est pas à cette unité
    de committer le travail d'une autre.
+
+## 2026-09-17 · Un SSO injoignable, un cloisonnement qui n'existait pas, et la direction prise
+
+**Le problème.** Un message du locataire du Spark `redaction-devis`
+(`10.77.0.17`) : la cellule ne joint pas `oauth.lelabs.tech`, et son diagnostic
+est fait — l'adresse du SSO est `51.158.54.202`, la même que l'adresse de sortie
+de la cellule ; depuis la cellule, cette adresse ne répond sur aucun port, ni
+443, ni 80, ni 22, alors que tout le reste d'Internet répond et qu'un poste
+extérieur joint le SSO sans peine. Conclusion du message : un hairpin manquant
+sur « le routeur », et deux règles `iptables` à poser — un `DNAT` vers
+`<IP_INGRESS>` et un `MASQUERADE`. Le responsable demande les implications, sans
+coder.
+
+**Ce que le dépôt dit de la topologie.** Le message raisonne sur trois machines ;
+le DAT en décrit une : la Forge est le routeur des cellules **et** l'ingress —
+un Caddy unique sur la machine (§18), et `51.158.54.202` est l'adresse de la
+Forge elle-même (§8.1). Il n'y a pas d'`<IP_INGRESS>` à renseigner.
+
+**L'hypothèse, et pourquoi elle tient mieux que celle du message.**
+`forge_install.phase_foundation` pose `table inet spark_filter`, hook `input`,
+`iifname "sparkbr0" drop` après DNS, DHCP, ICMP et connexions établies — c'est
+SPK-55, §48.1 : « un Spark ne remonte pas vers sa Forge ». Un paquet d'une
+cellule vers une adresse **locale** de la Forge est livré localement, traverse
+`input`, et tombe sur ce `drop`. Cela produit exactement les trois observations :
+aucun port de la Forge ne répond, tout Internet répond — la sortie passe par
+`forward`, pas par `input`. Le silence du 22 n'est pas un symptôme : c'est la
+propriété que SPK-55 a mesurée ouverte puis fermée. Et l'option A du message,
+appliquée telle quelle, **ne réparerait rien** : le `DNAT` de `prerouting`
+s'exécute avant `input`, et le paquet réécrit retombe sur le même `drop` ; le
+`MASQUERADE` n'a de sens que si l'ingress est une autre machine. Le vrai risque
+est la suite : constatant l'échec, on désactiverait `spark-firewall.service`, et
+SPK-55 tomberait en entier, port 22 compris.
+
+**Non vérifié sur la Forge** — et il faut le dire : `ip -4 addr` et
+`nft list ruleset` confirmeraient ou infirmeraient en deux commandes. Si
+`51.158.54.202` est portée par une passerelle en amont et non par la Forge,
+l'analyse du message reprend ses droits. Les commandes n'ont pas été lancées.
+
+**Ce que la forme proposée coûterait de toute façon.** Des règles `iptables` à
+côté des tables nftables d'Incus et du produit, c'est le recouvrement que le
+§48.3 refuse pour `ufw` ; un `-A` à la main ne survit pas au redémarrage et se
+duplique à chaque rejeu ; et le responsable a tranché le 2026-09-14 que ces
+règles sont posées **par l'installation**, jamais par un runbook (§48.2 bis).
+Le `MASQUERADE`, enfin, effacerait l'adresse source des cellules dans les
+journaux de Caddy. Si la cause est bien le `drop` d'`input`, la correction est
+plus petite : un `accept` **borné aux ports de l'ingress**, avant le `drop`, dans
+la table que le produit possède déjà — sans DNAT, Caddy écoutant déjà sur
+l'adresse publique, sans `MASQUERADE`, l'origine restant lisible. Le 22 reste
+fermé, et `NET-REMONTEE` devra lire les règles effectives plutôt qu'une
+étiquette.
+
+**La prémisse corrigée.** Le responsable a écrit : « les Sparks sont isolés les
+uns des autres ». C'est vrai de la cellule — UID/GID disjoints, quotas, AppArmor,
+un `dockerd` chacun — et **faux du réseau** : le relevé du 2026-09-14
+(`docs/EXPLORATION_EGRESS.md` §0) montre un bridge partagé, aucune ACL, aucune
+anti-usurpation. `redaction-devis` peut joindre `10.77.0.16` sur n'importe quel
+port, et se présenter sous l'adresse d'un voisin. Le §11 du DAT ne promettait
+rien sur le réseau, mais README et DAT ne disaient pas non plus que ce réseau
+est ouvert — une absence qui se lit comme une garantie. **Corrigé le jour même**
+dans les limites connues du README et au §11 du DAT.
+
+Le point contre-intuitif, et c'est lui qui décide : **l'isolation plaide pour
+l'ouverture de l'ingress, pas contre.** Un service servi par Caddy est déjà
+joignable par tout Internet ; l'ouvrir aux cellules ne donne rien que
+l'isolation protégeait. Ce qui est vraiment ouvert, c'est le chemin privé qui
+contourne Caddy, atteint des ports jamais publiés, et ignore les routes
+d'ingress. Joindre le SSO par son nom public **est** le chemin qui respecte
+l'isolation.
+
+**La décision du responsable.** Chaque Spark est isolé du réseau des autres,
+même en connaissant l'adresse privée du voisin ; la Forge sait créer des
+**réseaux privés** — « VPN », « mini-switch » — auxquels on attache des Sparks ;
+la Forge sait créer des **liens privés** — un port d'un Spark attaché au réseau
+d'un autre, qui joint ce seul port ; le tout géré depuis la console et la Forge.
+
+**Ce que cela tranche, et ce qui reste.** La question 2 de
+`docs/EXPLORATION_EGRESS.md` §9 est close : le latéral est coupé par défaut. En
+la fermant, une phrase de son §6 s'est révélée imprécise — le latéral n'est pas
+« autorisé par `fwd.sparkbr0` » : deux cellules d'un même bridge s'échangent
+leurs trames en couche 2 sans passer par `forward`, sauf `br_netfilter`, non
+mesuré. Corrigé. La direction, le modèle proposé — trois objets, une seule
+notion de portée : le lien privé est un **port publié dont la portée n'est pas
+Internet** —, les trois voies d'isolation dont `security.port_isolation` lu le
+jour même dans la référence d'Incus, les six mesures dues et les sept questions
+à arbitrer sont dans `docs/EXPLORATION_RESEAU_PRIVE.md`, hors backlog, sans
+identifiant.
+
+**Vérifications réalisées.** Lecture du code (`forge_install.py`, `translate.py`,
+`ports.py`), du DAT (§8.1, §11, §18, §35, §39, §48), de
+`docs/EXPLORATION_EGRESS.md`, et de la référence des devices NIC d'Incus.
+**Aucune commande sur la Forge**, aucune ligne de code. Les documents sont
+committés avant toute implémentation, comme le §5 de `CLAUDE.md` l'exige.

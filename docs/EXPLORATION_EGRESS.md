@@ -17,9 +17,10 @@ qui décrit ce qui est à faire.
 un identifiant neuf. `docs/EXPLORATION_MCP.md` a dû *rendre* trois numéros déjà
 parus dans un message de commit poussé ; on ne recommence pas.
 
-**Quatre questions restent ouvertes** et attendent l'arbitrage du responsable
-(§9). Tant qu'elles ne sont pas tranchées, ce document ne peut pas devenir une
-spécification.
+**Trois questions restent ouvertes** et attendent l'arbitrage du responsable
+(§9) ; la deuxième — couper le latéral Spark → Spark — a été tranchée le
+2026-09-17 et vit dans `docs/EXPLORATION_RESEAU_PRIVE.md`. Tant que les autres ne
+sont pas tranchées, ce document ne peut pas devenir une spécification.
 
 ---
 
@@ -172,10 +173,13 @@ Incus, c'est précisément l'ambiguïté que le §48.3 refuse.
 - **Le DNS n'est pas concerné, et c'est voulu.** `dnsmasq` sur `10.77.0.1:53`
   passe par le hook `input`, pas `forward` (§48.3 : « fermer le port 53 aux
   Sparks — écarté : c'est leur résolveur »).
-- **Spark → Spark.** Aujourd'hui autorisé par `fwd.sparkbr0`. Est-ce de la
-  « sortie » ? Une destination est une destination, et un socle par défaut
-  devrait sans doute couper le latéral — mais c'est un changement de comportement
-  pour les Sparks existants, donc il se décide (§9).
+- **Spark → Spark.** Aujourd'hui ouvert — et **pas par `fwd.sparkbr0`** : deux
+  cellules d'un même bridge Linux s'échangent leurs trames en couche 2, sans
+  passer par le hook `forward` de la Forge, sauf si `br_netfilter` y est chargé,
+  ce qui n'est pas mesuré. `fwd.sparkbr0` ne concerne que ce qui est routé. Le
+  responsable a tranché le 2026-09-17 : le latéral est **coupé par défaut**, et
+  se rouvre à dessein par réseau privé — `docs/EXPLORATION_RESEAU_PRIVE.md`. Les
+  règles de sortie de ce document n'ont donc pas à en décider.
 
 ## 7. Les limites à écrire dès la spécification, pas après
 
@@ -213,14 +217,16 @@ Chaque jeu porte une **action par défaut explicite** en fin de liste — c'est 
 qui décide s'il est une liste noire ou une liste blanche, et elle doit être
 visible à l'écran, jamais déduite de la lecture des règles.
 
-## 9. Les quatre questions ouvertes
+## 9. Les questions ouvertes
 
 1. **La lecture du §2** — « hors de la cellule », et non « app contre humain » —
    est-elle bien l'intention ? Si la distinction entre le trafic des conteneurs
    et celui du propriétaire est vraiment voulue, elle ne s'applique pas de force,
    et il faut le dire avant d'écrire une ligne.
-2. **Le socle coupe-t-il le latéral Spark → Spark par défaut ?** Cela change le
-   comportement du parc existant.
+2. **Tranché le 2026-09-17 : oui.** Le latéral Spark → Spark est coupé par
+   défaut, et se rouvre à dessein par réseau privé. Le changement de comportement
+   du parc existant, et sa migration, sont traités dans
+   `docs/EXPLORATION_RESEAU_PRIVE.md` — plus ici.
 3. **L'amorçage** : noyau incompressible dans le socle, ou règles armées
    seulement après amorçage ?
 4. **La v1 s'arrête-t-elle à IP/port**, le filtrage par domaine partant en unité

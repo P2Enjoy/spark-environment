@@ -543,6 +543,23 @@ une garde qui n'existe que dans un fichier de workflow.
   réservation, et c'est voulu (`docs/DAT.md` §32.2).
 - Les disques de la Forge sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
+- **Le réseau entre Sparks n'est pas cloisonné.** Toutes les cellules partagent
+  le bridge `sparkbr0`, et rien n'y filtre : un Spark joint l'adresse privée d'un
+  voisin sur n'importe quel port, et aucune cellule ne porte d'anti-usurpation
+  (relevé du 2026-09-14, `docs/EXPLORATION_EGRESS.md` §0). Ce qui est cloisonné,
+  c'est la cellule — UID/GID, quotas, AppArmor —, pas le réseau entre cellules.
+  Le responsable a décidé le 2026-09-17 de fermer ce latéral par défaut, avec des
+  réseaux privés et des liens privés pour le rouvrir à dessein :
+  `docs/EXPLORATION_RESEAU_PRIVE.md`. Rien n'est implémenté.
+- **Un Spark ne joint pas les domaines que sa propre Forge sert.** La règle du
+  §48 du DAT — `iifname "sparkbr0" drop` en `input` — ferme toute remontée d'une
+  cellule vers la Forge, et l'adresse publique est portée par la Forge elle-même :
+  depuis une cellule, un appel de serveur à serveur vers un domaine servi par
+  Caddy n'aboutit pas, alors qu'il aboutit depuis Internet. Un SSO hébergé sur la
+  Forge est donc injoignable par un Spark voisin (rapporté le 2026-09-17,
+  `docs/JOURNAL.md`). Le mécanisme est celui du code ; le cas rapporté n'a pas
+  encore été relevé sur la Forge. Une ouverture bornée aux ports de l'ingress
+  reste à spécifier.
 
 ## Sauvegarder le registre
 

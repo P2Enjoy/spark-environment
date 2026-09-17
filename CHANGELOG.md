@@ -3,6 +3,23 @@
 ## [Non publié]
 
 ### Ajouté
+- **La direction « chaque Spark isolé du réseau des autres, réseaux privés et
+  liens privés » est consignée hors backlog** (`docs/EXPLORATION_RESEAU_PRIVE.md`,
+  décision du responsable du 2026-09-17, sans identifiant attribué, rien
+  d'implémenté). Le document sépare ce qui est **mesuré** — bridge partagé,
+  aucune ACL, aucune anti-usurpation, la remontée vers la Forge fermée par
+  `spark_filter` — de ce qui est **lu** dans la référence d'Incus
+  (`security.port_isolation`, `security.ipv4_filtering`) et de ce qui ne l'est
+  pas : `br_netfilter`, l'application à chaud, les flux Spark ↔ Spark existants.
+  Il propose un modèle à trois objets et une seule notion de portée — **un lien
+  privé est un port publié dont la portée n'est pas Internet** —, trois voies
+  d'isolation, six mesures dues et sept questions à arbitrer. Il ferme la
+  question 2 de `docs/EXPLORATION_EGRESS.md` et en corrige une phrase : le
+  latéral n'est pas « autorisé par `fwd.sparkbr0` », il est commuté en couche 2.
+  Deux **limites connues** entrent au README et au §11 du DAT : le réseau entre
+  Sparks est ouvert, et un Spark ne joint pas les domaines que sa propre Forge
+  sert — le cas d'un SSO rapporté le 2026-09-17, analysé au journal, dont la
+  cause probable est le `drop` d'`input` du §48 et non un hairpin manquant.
 - **SPK-107 — une proposition peut DEMANDER une valeur, et dire à quoi elle
   sert.** Un agent qui installe une pile sait qu'il lui faut `SMTP_PASSWORD`, et
   c'est précisément la valeur qu'il ne peut pas connaître : il lui restait à
