@@ -39,8 +39,8 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 97 closes, 7
-partielles, 3 non commencées — le lot 6, *Réseau entre Sparks*, ouvert le
+**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 98 closes, 7
+partielles, 2 non commencées — le lot 6, *Réseau entre Sparks*, ouvert le
 2026-09-17. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
@@ -552,16 +552,11 @@ une garde qui n'existe que dans un fichier de workflow.
   réservation, et c'est voulu (`docs/DAT.md` §32.2).
 - Les disques de la Forge sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
-- **Le réseau entre Sparks n'est pas cloisonné.** Toutes les cellules partagent
-  le bridge `sparkbr0`, et rien n'y filtre : un Spark joint l'adresse privée d'un
-  voisin sur n'importe quel port, et aucune cellule ne porte d'anti-usurpation
-  (relevé du 2026-09-14, `docs/EXPLORATION_EGRESS.md` §0). Ce qui est cloisonné,
-  c'est la cellule — UID/GID, quotas, AppArmor —, pas le réseau entre cellules.
-  Confirmé sur la Forge le 2026-09-17 : ports de bridge `isolated off`, aucune
-  clé `security.*`, `br_netfilter` absent. Le responsable a décidé le jour même
-  de fermer ce latéral par défaut — SPK-109, `docs/DAT.md` §57 — avec des
-  réseaux privés (SPK-110, §58) et des liens privés (SPK-111, §59) pour le
-  rouvrir à dessein. Spécifié, non implémenté.
+- **Les réseaux privés et les liens privés n'existent pas encore.** Chaque
+  Spark est isolé du réseau des autres depuis SPK-109 (2026-09-18) ; ce qui
+  permettra de les relier à dessein — SPK-110 (`docs/DAT.md` §58) et SPK-111
+  (§59) — est spécifié, non implémenté. D'ici là, deux Sparks d'une même Forge
+  ne se joignent que par leurs noms publics, à travers l'ingress.
 
 ## Sauvegarder le registre
 

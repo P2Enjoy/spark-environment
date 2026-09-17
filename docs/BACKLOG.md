@@ -7655,7 +7655,7 @@ poser, borné aux ports de l'ingress.
   terminal d'un Spark et `22` refusé, captures observées ; OP-21 basculé dans la
   baseline ; documentation complète ; `@spec` / `@verifies` posés.
 
-### [~] SPK-109 · Chaque Spark est isolé du réseau des autres
+### [x] SPK-109 · Chaque Spark est isolé du réseau des autres
 
 **Demandé par le responsable le 2026-09-17** : « chaque Spark isolé du réseau
 des autres, autrement dit ils ne peuvent pas se parler même s'ils connaissent
@@ -7708,11 +7708,21 @@ cellules s'échangent leurs trames en couche 2.
    toujours rouge sur ses quatre classes antérieures.*
 5. **Forge réelle** — relevé `ss` dans les deux cellules, OP-22 joué sur
    instruction, preuve depuis les terminaux : `A` ne joint pas `B`, résout, sort,
-   joint l'ingress ; manuel M11 ; la limite connue retirée. *Relevé fait (zéro
-   flux) ; mise à jour jouée le 2026-09-17 (build `eb7586543`) : chaîne
-   `forward` posée, `NET-ISOLATION` signale « essai-b, redaction-devis,
-   sso-p2enjoy » ; le geste sur les cellules des locataires attend le feu vert
-   explicite du responsable, puis la preuve depuis leurs terminaux.*
+   joint l'ingress ; manuel M11 ; la limite connue retirée. *Fait : relevé
+   (zéro flux) ; mise à jour le 2026-09-17 (build `eb7586543`), chaîne
+   `forward` posée ; rattrapage joué le 2026-09-18 sur feu vert, par la console
+   (`e2e/forge-reelle/spk109-isolation.mjs`, `make forge-reelle`) : « 3
+   cellules isolées : essai-b, redaction-devis, sso-p2enjoy. 1 l'était déjà » ;
+   `bridge` → 4 × `isolated on`, préflight 15 verts, trois `spark.isolate ok`
+   au journal ; depuis le terminal de `redaction-devis`, le SSO voisin est
+   injoignable en TCP et en ICMP, passerelle, DNS, Internet (200) et ingress
+   (302) intacts. Six captures observées. Limite connue retirée du README.*
+
+- **Clos le 2026-09-18.** Ce que le responsable a corrigé en chemin : le geste
+  se lisait comme un choix ; la section dit désormais « cellules créées avant
+  la règle » et « Les isoler maintenant », et disparaît quand il n'en reste
+  aucune. Les cellules d'essai `essai-a`/`essai-b` restent en place pour les
+  mesures de SPK-110 et SPK-111.
 
 - **Ce que la preuve E2E a coûté, et ce qu'elle a appris** (2026-09-17) : trois
   OOM du poste avant de comprendre qu'un `assert.equal(await page.$(…), null)`

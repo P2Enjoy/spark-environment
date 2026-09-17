@@ -16,8 +16,14 @@
   une entrée d'audit par Spark touché. Le préflight gagne `NET-ISOLATION`, qui
   lit les clés effectives. La Forge porte une section *Isolation du réseau*,
   le dossier une section *Réseau* (SPK-DS-29) ; le seed laisse « boutique »
-  non encore isolée pour que le geste ait quelque chose à montrer. **Le geste
-  sur les cellules des locataires attend le feu vert du responsable** (OP-22).
+  non encore isolée pour que le geste ait quelque chose à montrer. Sur remarque
+  du responsable, la section dit que ce n'est pas un choix : « cellules créées
+  avant la règle », « Les isoler maintenant », et rien quand il n'en reste
+  aucune. **Déployé sur la Forge** : mise à jour le 2026-09-17, rattrapage joué
+  le 2026-09-18 sur feu vert, par la console — trois cellules isolées, quatre
+  ports `isolated on`, préflight 15 verts ; depuis le terminal de
+  `redaction-devis`, le SSO voisin est injoignable par son adresse privée et
+  reste joint par son nom public (OP-22).
 - **SPK-106 complété — le harnais est plafonné, et le verrou refuse une épave
   dont la pile survit.** Une campagne SEULE a mis le poste à genoux trois fois
   (27 Go) : un `assert.equal(await page.$(…), null)` fautif faisait inspecter à

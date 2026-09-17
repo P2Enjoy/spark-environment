@@ -110,6 +110,11 @@ e2e-un:
 captures:
 	$(PLAFOND) node e2e/captures.mjs
 
+# Une preuve sur FORGE RÉELLE (e2e/forge-reelle/*.mjs), contre la console déjà
+# ouverte : make forge-reelle SCRIPT=spk109-isolation ARGS="redaction-devis 10.77.0.16 oauth.lelabs.tech"
+forge-reelle:
+	$(PLAFOND) node e2e/forge-reelle/$(SCRIPT).mjs $(ARGS)
+
 # Les illustrations du manuel sont PRODUITES depuis l'application (DAT §30.1),
 # jamais collectees a la main.
 manuel:

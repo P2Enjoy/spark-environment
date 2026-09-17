@@ -1276,13 +1276,12 @@ possible sans toucher à la console.
 - Aucune API d'administration exposée au réseau ; le seul vecteur d'accès est SSH.
 - Les Sparks sont non privilégiés, `security.idmap.isolated=true`, afin que deux
   Sparks ne partagent pas de plage UID/GID sur la Forge.
-- **Le réseau entre Sparks n'est pas cloisonné aujourd'hui** : un seul bridge,
-  aucune ACL, aucune anti-usurpation (mesuré le 2026-09-14,
-  `docs/EXPLORATION_EGRESS.md` §0). L'isolation garantie est celle de la
-  **cellule**, pas celle du réseau entre cellules. Fermeture décidée par le
-  responsable le 2026-09-17 et **spécifiée** : §57 (SPK-109), avec les réseaux
-  privés du §58 (SPK-110) et les liens privés du §59 (SPK-111) pour rouvrir à
-  dessein. Non implémentés. L'étude est dans `docs/EXPLORATION_RESEAU_PRIVE.md`.
+- **Chaque Spark est isolé du réseau des autres** (§57, SPK-109, déployé le
+  2026-09-18) : isolation de port et anti-usurpation sur l'`eth0` de toute
+  cellule, verrou `forward` sur la Forge. Une cellule ne joint hors d'elle-même
+  que l'Internet, le résolveur et l'ingress de sa Forge (§56). Les réseaux
+  privés (§58) et les liens privés (§59) rouvriront à dessein ; ils ne sont pas
+  encore implémentés. L'étude est dans `docs/EXPLORATION_RESEAU_PRIVE.md`.
 - Toute règle d'autorisation est appliquée par `sparkd`, jamais par la console.
   Masquer un bouton n'est qu'une aide visuelle.
 - Aucun secret n'entre dans le dépôt. Les clés SSH gérées par le produit sont des

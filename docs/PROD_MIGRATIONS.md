@@ -29,7 +29,8 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré.
 | Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
 | Registre | `/var/lib/sparkd/spark.db`, **version de schéma 017** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z** ; build **`0.post1.dev841+g90fc7262d`** depuis le 2026-09-17 (OP-21) |
-| Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final — OP-11 puis **OP-21, appliqué le 2026-09-17** |
+| Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)** |
+| Isolation des cellules | les quatre cellules portent `security.port_isolation` et `security.ipv4_filtering` ; `NET-ISOLATION` « ok » — OP-22, appliqué le 2026-09-18 |
 | Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
@@ -118,17 +119,27 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-22 · Isoler le parc : chaque Spark isolé du réseau des autres (SPK-109)
+### OP-22 · Isoler le parc : chaque Spark isolé du réseau des autres (SPK-109) — **APPLIQUÉ le 2026-09-18**
 
 ```
-État          : MISE À JOUR JOUÉE le 2026-09-17 (build
-                `0.post1.dev845+geb7586543`) : la chaîne forward est posée,
-                NET-REMONTEE « ok », NET-ISOLATION « signalé » — « non encore
-                isolée(s) : essai-b, redaction-devis, sso-p2enjoy » ; 15
-                contrôles, 0 bloquant. Les trois mesures du §57.5 sont faites
-                et concluent. LE GESTE « Isoler le parc » N'EST PAS JOUÉ : il
-                touche les cellules des locataires et attend le feu vert
-                explicite du responsable (arbitrage du 2026-09-17).
+État          : APPLIQUÉ. Mise à jour jouée le 2026-09-17 (build
+                `0.post1.dev845+geb7586543`, chaîne forward posée), puis le
+                rattrapage joué le 2026-09-18 à 00:0x, sur FEU VERT du
+                responsable (« oui à tout », 2026-09-18), par le parcours
+                canonique — console redémarrée sur la build du jour, écran
+                Forge, section « Isolation du réseau », « Les isoler
+                maintenant », confirmation, geste. Rendu : « 3 cellules
+                isolées : essai-b, redaction-devis, sso-p2enjoy. 1 l'était
+                déjà. » Relevé après : `bridge -d link` → 4 × `isolated on` ;
+                les deux clés à `true` sur les quatre cellules ; préflight
+                15 contrôles verts, NET-ISOLATION « 4 cellule(s) isolée(s),
+                verrou forward posé » ; journal : trois `spark.isolate` en
+                `ok`, aucun pour la cellule déjà isolée. Depuis le terminal
+                de `redaction-devis` : `10.77.0.16` (le SSO) injoignable en
+                TCP comme en ICMP, passerelle jointe, DNS résolu, Internet 200,
+                ingress 302. Captures `e2e/captures/spk109-forge-*`,
+                `spk109-dossier-locataire-isole`,
+                `spk109-terminal-voisine-injoignable`.
 Objectif      : poser security.port_isolation et security.ipv4_filtering sur
                 l'eth0 de chaque Spark, et la chaîne forward de spark_filter
                 (docs/DAT.md §57). Change le comportement des Sparks existants.

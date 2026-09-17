@@ -12100,3 +12100,39 @@ exactement ce qu'il doit — un avertissement qui nomme « essai-b,
 redaction-devis, sso-p2enjoy », 15 contrôles, 0 bloquant. `essai-a` est déjà
 isolée par les mesures ; `essai-b` n'a reçu que l'isolation de port. Le geste
 n'est pas joué : il touche les locataires, et c'est au responsable de dire oui.
+
+## 2026-09-18 · SPK-109 clos — « oui à tout », le rattrapage joué, et un menu qui ne se lisait pas
+
+**La remarque du responsable, avant le feu vert** : « ton menu ne fait aucun
+sens, comment choisir qui isoler ? ». Il avait raison sur la lecture, et
+l'arbitrage n° 8 sur le fond : on ne choisit pas, chaque Spark naît isolé, et
+le bouton ne sert qu'à rattraper les cellules créées avant la règle. La section
+le dit désormais avec ces mots — « Créées avant la règle », « Les isoler
+maintenant », « Rattraper 3 cellules créées avant la règle ? » — et disparaît
+quand il n'en reste aucune. Le dossier dit « cellule créée avant la règle ; se
+rattrape depuis la Forge ». Composants, parcours, captures, manuel M8 et M11,
+SPK-DS-29 et DAT §57.3 ont suivi dans le même commit.
+
+**« Oui à tout »** — OP-22 et SPK-110. Le rattrapage a été joué comme
+l'exploitant le ferait : console redémarrée sur la build du jour, accueil,
+Forge, la section, le geste, la confirmation qui nomme `essai-b`,
+`redaction-devis` et `sso-p2enjoy`, puis le vert : « 3 cellules isolées … 1
+l'était déjà ». Le script `e2e/forge-reelle/spk109-isolation.mjs`, sous le
+plafond et le verrou, a ensuite ouvert le dossier de `redaction-devis` —
+« Isolé du réseau des autres Sparks » — et son terminal : `nc` vers le SSO
+voisin **expire**, `ping` **échoue**, la passerelle répond, le DNS résout,
+Internet rend `200`, l'ingress `302`. Sur la Forge : quatre ports `isolated
+on`, les deux clés partout, préflight 15 verts avec `NET-ISOLATION` « 4
+cellule(s) isolée(s), verrou forward posé », trois `spark.isolate ok` au
+journal et aucun pour la cellule déjà isolée. Six captures observées ; sur
+mobile, le widget des sessions recouvre une ligne du pool mémoire — trait de
+SPK-DS-16, noté deux fois déjà.
+
+**Ce que ça change pour le locataire du SSO** : rien qu'il ne sache. Sa cellule
+ne joint plus `10.77.0.16` par son adresse — elle ne le faisait pas —, et joint
+toujours `oauth.lelabs.tech` par l'ingress. La réponse rédigée hier reste
+juste ; la phrase « une cellule ne pourra pas joindre une autre cellule par son
+adresse privée » est devenue vraie ce soir.
+
+**Une cible de plus** : `make forge-reelle SCRIPT=… ARGS="…"`, pour qu'une
+preuve sur Forge réelle passe par le plafond sans qu'on ait à s'en souvenir.

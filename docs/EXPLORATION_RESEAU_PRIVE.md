@@ -1,9 +1,9 @@
 # Exploration — cloisonner le réseau des Sparks : réseaux privés et liens privés
 
 **Statut : direction décidée et arbitrée par le responsable le 2026-09-17 ;
-quatre unités ouvertes — SPK-108, SPK-109, SPK-110, SPK-111 (`docs/BACKLOG.md`,
-lot 6) — et leurs contrats écrits au `docs/DAT.md` §56 à §59. Rien n'est
-implémenté.**
+quatre unités ouvertes (`docs/BACKLOG.md`, lot 6), contrats au `docs/DAT.md`
+§56 à §59. SPK-108 et SPK-109 sont closes et déployées (2026-09-17 et
+2026-09-18) ; SPK-110 et SPK-111 restent à faire.**
 
 Ce document est l'**étude** : la décision, les relevés, les voies envisagées et
 écartées, les arbitrages et leurs raisons. Les contrats font foi au DAT ; en cas
