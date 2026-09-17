@@ -19,8 +19,10 @@ parus dans un message de commit poussé ; on ne recommence pas.
 
 **Trois questions restent ouvertes** et attendent l'arbitrage du responsable
 (§9) ; la deuxième — couper le latéral Spark → Spark — a été tranchée le
-2026-09-17 et vit dans `docs/EXPLORATION_RESEAU_PRIVE.md`. Tant que les autres ne
-sont pas tranchées, ce document ne peut pas devenir une spécification.
+2026-09-17 et vit dans `docs/EXPLORATION_RESEAU_PRIVE.md`. Le responsable a
+tranché le même jour que les trois autres restent **hors périmètre jusqu'après
+SPK-111** : elles ne bloquent aucune unité du lot 6. Tant qu'elles ne sont pas
+tranchées, ce document ne peut pas devenir une spécification.
 
 ---
 

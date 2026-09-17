@@ -1,16 +1,15 @@
 # Exploration — cloisonner le réseau des Sparks : réseaux privés et liens privés
 
-**Statut : direction décidée par le responsable le 2026-09-17 ; modèle et
-réalisation à arbitrer. Non planifié, hors backlog, aucun identifiant `SPK-`
-attribué.**
+**Statut : direction décidée et arbitrée par le responsable le 2026-09-17 ;
+quatre unités ouvertes — SPK-108, SPK-109, SPK-110, SPK-111 (`docs/BACKLOG.md`,
+lot 6) — et leurs contrats écrits au `docs/DAT.md` §56 à §59. Rien n'est
+implémenté.**
 
-Ce document consigne une **décision de direction** du responsable et l'étude qui
-l'accompagne. Il n'est ni une spécification, ni un contrat : rien n'est
-implémenté, aucun code du dépôt n'y renvoie, et **aucune écriture n'a été faite
-sur la Forge**. Comme `docs/EXPLORATION_EGRESS.md`, il vit hors de `docs/DAT.md`,
-qui décrit l'architecture réelle, hors de `docs/SCHEMA.md`, qui décrit le
-registre réel, et hors de `docs/BACKLOG.md`, qui décrit ce qui est à faire. Les
-unités qui reprendront ces pistes prendront des identifiants neufs.
+Ce document est l'**étude** : la décision, les relevés, les voies envisagées et
+écartées, les arbitrages et leurs raisons. Les contrats font foi au DAT ; en cas
+d'écart, c'est le DAT qui a raison et ce document qui se corrige. Aucune
+écriture n'a été faite sur la Forge : les relevés du 2026-09-17 sont en lecture
+seule, et les mesures en écriture (§6) restent dues, sur des cellules d'essai.
 
 Il ferme une question de `docs/EXPLORATION_EGRESS.md` — la deuxième du §9, « le
 socle coupe-t-il le latéral Spark → Spark ? » — et il en corrige une phrase
@@ -58,8 +57,28 @@ repris de `docs/EXPLORATION_EGRESS.md` §0, et lecture du code du dépôt :
 | L'`eth0` d'un Spark est rendue par le produit, avec `limits.max` et `ipv4.address` attribuée par le registre | `translate.py`, §15.1 du DAT |
 | Un port publié est un **device `proxy`** d'Incus, `listen tcp:0.0.0.0:<port>` → `connect tcp:<ip privée>:<port>`, et non une règle netfilter posée par `sparkd` | `ports.py`, §39.4 du DAT |
 
-**Lu le 2026-09-17** dans la référence des devices NIC d'Incus, et **non mesuré
-sur la Forge** — un type `bridged` porte :
+**Mesuré le 2026-09-17**, en lecture seule sur la Forge — `spark-experiment`,
+`13:35Z`, noyau `7.0.0-31`, Incus `7.4` :
+
+| Fait | Relevé |
+|---|---|
+| L'adresse publique `51.158.54.202/24` est sur `eno1` de la Forge | `ip -4 -br addr` — il n'y a pas de routeur en amont |
+| Caddy écoute sur `*:80` et `*:443`, `sshd` sur `0.0.0.0:22`, `sparkd` et l'API de Caddy sur la boucle locale | `ss -lntp` |
+| `spark_filter` est exactement celle du code : `iifname "sparkbr0" drop` en `input` après établi, `53`, `67`, ICMP ; aucune chaîne `forward` | `nft list ruleset` |
+| `fwd.sparkbr0` accepte tout ce qui entre ou sort du bridge ; `pstrt.sparkbr0` masque vers `!= 10.77.0.0/24` | idem |
+| `br_netfilter` **absent** — `/proc/sys/net/bridge` n'existe pas | `lsmod`, `sysctl` |
+| Les deux ports de bridge sont `isolated off` ; le noyau connaît le drapeau | `bridge -d link show` |
+| L'`eth0` de `redaction-devis` : `ipv4.address`, `limits.max`, `network` — aucune clé `security.*` | `incus config show --expanded` |
+| Deux cellules seulement, toutes deux en service : `sso-p2enjoy` `10.77.0.16`, `redaction-devis` `10.77.0.17` | `incus list` |
+| `conntrack` n'est pas installé ; `/proc/net/nf_conntrack` absent | — |
+| **Zéro connexion établie** de l'une vers l'autre à l'instant du relevé | `ss -tn` **dans** chaque cellule, hors passerelle |
+
+Le premier `ssh` de la session a attendu 120 s puis a été fermé par la Forge :
+l'agent du trousseau attendait un déverrouillage ; la seconde tentative a
+authentifié aussitôt. À savoir pour le prochain relevé.
+
+**Lu le 2026-09-17** dans la référence des devices NIC d'Incus — un type
+`bridged` porte :
 
 - `security.port_isolation` (bool, défaut `false`) — « *Prevent the NIC from
   communicating with other NICs in the network that have port isolation
@@ -83,15 +102,15 @@ n'est pas une règle `inet forward`**, ou pas seulement (§4.1).
 
 **Non mesuré, et il ne faut pas le présenter autrement :**
 
-- `br_netfilter` est-il chargé sur la Forge ? S'il l'est, le trafic de couche 2
-  traverse aussi les hooks IP, et la conception des règles change ;
 - `security.port_isolation` coupe-t-il effectivement `A → B` tout en laissant le
   DNS, le NAT et l'ingress intacts ? S'applique-t-il à chaud ?
 - un `drop` en `forward` survit-il à l'`accept` explicite d'Incus, et
   `security.ipv4_filtering=true` ferme-t-il bien l'usurpation ? Les deux mesures
   déjà dues par `docs/EXPLORATION_EGRESS.md` §9 ;
-- **quels Sparks se parlent aujourd'hui ?** `conntrack` en lecture seule le dit.
-  C'est le risque de la migration : couper le latéral casse ce qui s'y appuie ;
+- un device `proxy` en `nat=true` sur un bridge privé, et `ct status dnat` ;
+- les noms entre membres d'un réseau privé, qu'Incus devrait donner ;
+- le relevé des flux est un **instantané** : zéro à `13:35Z` ne dit rien d'un
+  lot nocturne. OP-22 le refait avant d'isoler ;
 - le coût : aucun relevé de débit ou de latence.
 
 ## 2. Les mots
@@ -199,7 +218,8 @@ Plus lourd ; à garder si I1 échoue à la mesure.
 réellement n'a pas été vérifié —, et un filtre peut être mal ordonné là où une
 topologie ne le peut pas. Non retenue en première intention.
 
-**Proposé à l'arbitrage : I1**, sous réserve des mesures du §6.
+**Retenue par le responsable le 2026-09-17 : I1**, sous réserve des mesures du
+§6. Contrat au `docs/DAT.md` §57.
 
 ### 4.2 Le réseau privé
 
@@ -260,9 +280,10 @@ un lien demande qu'un port de la Forge, sur un réseau privé, s'ouvre — et
   source** du consommateur — le Spark exposé voit le membre, pas la Forge —, et
   exige une adresse statique sur la NIC, que le §15.1 garantit.
 
-**Proposé à l'arbitrage : (c)**, sous réserve de mesure (§6). Un **nom** pour le
-lien dans le résolveur du réseau — `<lien>.<réseau>` — est une commodité
-ultérieure, pas une condition.
+**Retenue par le responsable le 2026-09-17 : (c)**, sous réserve de mesure (§6),
+avec l'adresse source du membre conservée. Contrat au `docs/DAT.md` §59. Un
+**nom** pour le lien dans le résolveur du réseau — `<lien>.<réseau>` — est une
+commodité ultérieure, hors première version.
 
 ### 4.4 Le SSO d'aujourd'hui dans ce modèle
 
@@ -321,13 +342,17 @@ n'est pas complète : une Forge à moitié migrée doit se lire comme telle.
 
 ## 6. Préalables et mesures
 
-En **lecture seule**, sans instruction particulière :
+En **lecture seule** — **faites le 2026-09-17** (§1) :
 
-1. `br_netfilter` est-il chargé sur la Forge ?
-2. `conntrack` : quels flux Spark ↔ Spark existent aujourd'hui ?
+1. `br_netfilter` : **absent**. Les trames commutées ne traversent pas les hooks
+   IP ; la conception à deux étages du §4.1 en dépend et tient.
+2. Flux Spark ↔ Spark : **zéro** connexion établie à l'instant du relevé, dans
+   les deux cellules. `conntrack` n'est pas installé ; le relevé se fait par
+   `ss -tn` dans les cellules, et OP-22 le refait avant d'isoler.
 
-En **écriture** sur la Forge de validation — donc sur instruction explicite du
-responsable (§9 de `CLAUDE.md`), et réversibles :
+En **écriture** sur la Forge — **autorisées par le responsable le 2026-09-17**,
+sur des cellules d'essai créées pour cela, réversibles, jamais sur une cellule de
+locataire ; la Forge est traitée comme une Forge de validation par ce choix :
 
 3. `security.port_isolation=true` sur l'`eth0` d'un Spark d'essai : s'applique-t-il
    à chaud, coupe-t-il `A → B`, laisse-t-il DNS, NAT et ingress intacts ?
@@ -337,7 +362,7 @@ responsable (§9 de `CLAUDE.md`), et réversibles :
 6. un device `proxy` en `nat=true` écoutant sur l'adresse de la Forge d'un bridge
    privé : le flux est-il bien traduit, et `ct status dnat` le voit-il ?
 
-## 7. Ordre proposé
+## 7. Ordre retenu par le responsable le 2026-09-17
 
 1. **L'ouverture bornée de l'ingress aux cellules** — petite, indépendante, et
    elle débloque un Spark déployé. Sa propre unité, avec l'amendement du §48.1
@@ -348,21 +373,51 @@ responsable (§9 de `CLAUDE.md`), et réversibles :
 5. Plus tard, les règles de sortie de `docs/EXPLORATION_EGRESS.md` : même table,
    mêmes priorités, aucune contradiction.
 
-## 8. Les questions à arbitrer
+## 8. Les arbitrages du responsable, 2026-09-17
 
-1. **Les mots** — « réseau privé » et « lien privé » à l'écran ?
-2. **La portée d'un lien est-elle toujours un réseau**, un réseau à un seul membre
-   étant valide — ou faut-il une portée « ce Spark » distincte ?
-3. **L'adresse source vue par le Spark exposé** — celle du membre (`nat=true`) ou
-   celle de la Forge ? Cela décide de ce que le locataire peut mettre dans ses
-   listes d'accès et lire dans ses journaux.
-4. **Le débit des interfaces privées** — sans plafond, ou le même que l'`eth0` ?
-5. **Supprimer un réseau qui a des membres** — refus, ou détachement journalisé ?
-6. **La migration** — une opération explicite sur tout le parc après le relevé
-   `conntrack`, ou un choix par Spark pendant une transition ? Proposé : une
-   opération, avec un état « non encore isolé » visible entre-temps.
-7. **Les noms entre membres** dès la première version — Incus les donne ; à
-   vérifier, puis à promettre ou non.
+Seize questions posées, seize réponses, toutes persistées le jour même dans les
+contrats du DAT.
 
-Tant que ces questions ne sont pas tranchées et que les mesures du §6 ne sont pas
-faites, ce document ne peut pas devenir une spécification.
+**Architecture**
+
+1. **Isolation** : I1 — isolation de port, anti-usurpation, verrou `forward`.
+2. **Lien privé** : device `proxy` en `nat=true` ; le Spark exposé voit
+   l'adresse du membre.
+3. **Portée d'un lien** : toujours un réseau ; un réseau à un seul membre est
+   valide.
+4. **Les mots** : « réseau privé » et « lien privé ».
+
+**Comportements**
+
+5. **Noms entre membres** : promis dès la première version, après vérification
+   qu'Incus les donne.
+6. **Débit des interfaces privées** : sans plafond — ce n'est pas une ressource
+   de la Forge.
+7. **Supprimer un réseau habité** : refusé tant qu'il reste un membre ou un
+   lien, nommés.
+8. **Migration du parc** : une opération explicite sur tout le parc, après le
+   relevé des flux ; état « non encore isolé » visible entre-temps.
+
+**Ingress et Forge**
+
+9. **Ports ouverts aux cellules** : `80` et `443` seulement — l'ingress.
+10. **Relevés en lecture seule** : autorisés, faits (§1).
+11. **Mesures en écriture** : autorisées sur des cellules d'essai créées pour
+    cela, réversibles, jamais sur une cellule de locataire.
+12. **Statut de la Forge** : traitée comme une Forge de validation — les
+    écritures réversibles sont autorisées par ce choix, bien qu'elle serve des
+    locataires réels. Chaque geste reste consigné.
+
+**Plan**
+
+13. **Ordre** : ingress, puis isolation et migration, puis réseau privé, puis
+    lien privé.
+14. **Backlog** : quatre unités distinctes, spécifiées dans le DAT avant le
+    code — SPK-108 à SPK-111.
+15. **Règles de sortie** (`docs/EXPLORATION_EGRESS.md` §9) : hors périmètre
+    jusqu'après le lien privé.
+16. **Pool des réseaux privés** : `10.78.0.0/16` découpé en `/24`, valeur par
+    défaut d'un champ nommé du plan d'installation.
+
+Les mesures 3 à 6 du §6 restent dues ; chaque contrat du DAT dit laquelle il
+attend avant sa première ligne de code.

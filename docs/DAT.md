@@ -1279,10 +1279,10 @@ possible sans toucher à la console.
 - **Le réseau entre Sparks n'est pas cloisonné aujourd'hui** : un seul bridge,
   aucune ACL, aucune anti-usurpation (mesuré le 2026-09-14,
   `docs/EXPLORATION_EGRESS.md` §0). L'isolation garantie est celle de la
-  **cellule**, pas celle du réseau entre cellules. Direction prise par le
-  responsable le 2026-09-17 pour le fermer par défaut, avec réseaux privés et
-  liens privés : `docs/EXPLORATION_RESEAU_PRIVE.md` — non planifié, non
-  implémenté.
+  **cellule**, pas celle du réseau entre cellules. Fermeture décidée par le
+  responsable le 2026-09-17 et **spécifiée** : §57 (SPK-109), avec les réseaux
+  privés du §58 (SPK-110) et les liens privés du §59 (SPK-111) pour rouvrir à
+  dessein. Non implémentés. L'étude est dans `docs/EXPLORATION_RESEAU_PRIVE.md`.
 - Toute règle d'autorisation est appliquée par `sparkd`, jamais par la console.
   Masquer un bouton n'est qu'une aide visuelle.
 - Aucun secret n'entre dans le dépôt. Les clés SSH gérées par le produit sont des
@@ -7027,6 +7027,11 @@ C'est la différence qui structure tout le reste. Un nom appartient à celui qui
 possède, et deux Sparks peuvent en porter autant qu'ils veulent. Un port public
 est **unique sur la machine** : le premier qui le prend le prend.
 
+**Précisé le 2026-09-17 par le §59 (SPK-111), non encore appliqué** : un port
+publié porte une **portée** — Internet, ou un réseau privé du §58 —, et il est
+unique **dans sa portée**. « Unique sur la machine » reste vrai de la portée
+Internet, qui est la seule à exister aujourd'hui.
+
 Conséquences :
 
 - le registre tient une table des ports publiés, et l'unicité est portée par la
@@ -11282,6 +11287,12 @@ produit ne part d'un Spark vers la Forge. Un locataire n'a donc **aucune raison*
 d'atteindre le service qui l'héberge, et le `sshd` est précisément celui qu'il ne
 doit pas atteindre : c'est la porte que le §46 vient de refermer côté clé.
 
+**Amendé le 2026-09-17 par le §56 (SPK-108), non encore appliqué** : un chemin,
+et un seul, part d'un Spark vers sa Forge — les **services publics** qu'elle
+sert sur `80` et `443`, joints comme depuis Internet. Le `22`, le `9876` et le
+`2019` restent fermés ; le §56 dit pourquoi cette exception ne contredit pas la
+phrase ci-dessus, et ce que le préflight doit lire pour le garantir.
+
 La cause est nue : la chaîne `input` du bridge privé est en `policy accept`. Ce
 qui n'est pas joignable ne l'est que parce que rien ne s'y lie — et le `sshd`, lui,
 se lie partout.
@@ -13003,3 +13014,481 @@ Deux conséquences sur le tableau, puisqu'il porte maintenant un champ :
   resterait consultable serait une copie de plus d'un secret en clair.
 - Elle n'introduit **aucune** variable d'environnement (§53), ni aucune
   migration : le fichier dans la cellule EST l'état de la proposition.
+
+
+## 56. Un Spark joint les services publics de sa Forge : contrat (SPK-108)
+
+**Décision du responsable, 2026-09-17**, à l'occasion d'un Spark déployé qui ne
+joignait pas le SSO servi par sa propre Forge.
+
+### 56.1 Le fait, mesuré le 2026-09-17
+
+Relevé en lecture seule sur la Forge, `spark-experiment`, à `13:35Z` :
+
+| Relevé | Valeur |
+|---|---|
+| Adresse publique | `51.158.54.202/24` sur `eno1` — **la Forge elle-même**, pas une passerelle en amont |
+| Caddy | écoute sur `*:80` et `*:443`, donc aussi sur `10.77.0.1` et sur l'adresse publique |
+| `sshd` | `0.0.0.0:22` ; `sparkd` et l'API de Caddy sur la boucle locale |
+| `table inet spark_filter`, hook `input` | `iifname "sparkbr0" drop` après les connexions établies, `53`, `67` et l'ICMP — conforme au §48 |
+| `br_netfilter` | **absent** : `/proc/sys/net/bridge` n'existe pas |
+| Cellules | `sso-p2enjoy` (`10.77.0.16`), `redaction-devis` (`10.77.0.17`), toutes deux en service |
+
+Un paquet de `10.77.0.17` vers `51.158.54.202:443` est donc livré **localement**
+— l'adresse est celle de la machine —, traverse le hook `input` avec `iifname
+"sparkbr0"`, n'est ni établi, ni DNS, ni DHCP, ni ICMP, et tombe sur le `drop`.
+C'est le §48.1 qui fonctionne comme prévu. Le silence du port `22`, que le
+rapport comptait comme un symptôme, est la propriété que SPK-55 a mesurée
+ouverte puis fermée. Il n'y a **pas de hairpin manquant** : un `DNAT` en
+`prerouting` remettrait le paquet sur le même `drop`, et un `MASQUERADE` n'a de
+sens que vers une autre machine.
+
+### 56.2 La décision, et ce qu'elle amende du §48.1
+
+Un Spark joint les **services publics** de sa Forge — ce que Caddy sert sur
+`80` et `443` — exactement comme un visiteur d'Internet : même vhost, même TLS,
+même `404` sur un domaine non routé (§18). Rien d'autre ne s'ouvre : `22`,
+`9876`, `2019` restent fermés, et les ports publiés du §39 aussi (§56.4).
+
+Ce n'est pas une brèche dans le §48.1, et le §57 le rend nécessaire : quand le
+réseau entre Sparks est coupé, le nom public à travers l'ingress **est** le seul
+chemin par lequel un Spark joint un service d'un voisin — et il ne donne rien
+que tout Internet n'ait déjà. Le chemin privé qui contourne Caddy, lui, se ferme
+(§57). Un lien privé (§59) n'est pas l'outil de ce cas : OIDC exige un certificat
+valide pour le nom public, que seul Caddy détient.
+
+### 56.3 Le mécanisme
+
+**Une règle statique, posée par l'installateur**, dans la table que le produit
+possède déjà, avant le `drop` :
+
+```
+iifname "sparkbr0" tcp dport { 80, 443 } accept
+```
+
+Sans traduction d'adresse — Caddy écoute déjà sur toutes les adresses — et sans
+masquage : Caddy voit l'adresse de la cellule, les journaux gardent l'origine, et
+la clé `ip saddr` sur laquelle tout filtrage par Spark reposera reste lisible.
+
+**L'idempotence change de nature, et c'est le point délicat de l'unité.**
+`phase_foundation` ne pose aujourd'hui `spark_filter` que si
+`user.spark.input_policy` n'est pas déjà `drop` : une étiquette. Une Forge déjà
+durcie ne recevrait donc **jamais** une règle nouvelle — la ligne ci-dessus
+resterait dans le dépôt sans jamais atteindre `/etc/sparkd/firewall.nft`. La
+phase compare désormais le **fichier rendu** au fichier en place
+(`_atomic_write_if_changed`, déjà employé pour `sshd_config.d/90-spark.conf`), et
+recharge `spark-firewall.service` quand — et seulement quand — il a changé. Le
+rendu est une fonction pure du nom du bridge, comparable à un témoin. L'étiquette
+reste posée, pour le préflight des Forges antérieures.
+
+**`NET-REMONTEE` lit les règles effectives.** Le contrôle rend `ok` sur
+l'étiquette ; il ne verrait pas une ouverture trop large. Il lit désormais
+`nft list table inet spark_filter`, nomme dans son relevé les ports que la
+chaîne accepte depuis le bridge, et ne rend `ok` que si cet ensemble est
+**exactement** `{53, 67, 80, 443}` avec l'ICMP et les connexions établies, et si
+le `22` reste hors liste. Une Forge durcie par OP-11 sans la règle nouvelle rend
+un AVERTISSEMENT nommé — « les cellules ne joignent pas l'ingress » —, pas un
+échec : elle est plus fermée, pas moins.
+
+### 56.4 Ce que l'unité ne prétend pas
+
+- **Les ports publiés (§39) restent injoignables depuis une cellule.** Leur
+  relais écoute sur `0.0.0.0` et tombe sur le même `drop`. Les ouvrir exigerait
+  des règles qui changent avec le registre, que `sparkd` ne pose pas (§39.4). Le
+  besoin n'est pas établi ; s'il l'est un jour, c'est une unité, pas une ligne.
+- Elle n'ouvre aucun chemin vers `sparkd`, Incus, `sshd` ni l'API de Caddy.
+- Elle ne dit rien du trafic entre Sparks : c'est le §57.
+
+### 56.5 La preuve
+
+- **Unitaire** : le rendu de `firewall.nft` comparé à un témoin ; la phase
+  n'écrit pas et ne recharge pas quand le fichier est identique, écrit et
+  recharge quand il diffère ; `NET-REMONTEE` sur des sorties `nft` fixées —
+  conforme, trop ouverte (`22` accepté), antérieure (sans `80`/`443`), illisible.
+- **Sur la Forge réelle**, par le parcours canonique : depuis la console, le
+  terminal du Spark (§37) — `curl -sS https://<domaine servi par la Forge>/`
+  rend `200`, et `nc -zw3 10.77.0.1 22` est refusé. Captures observées.
+- **Le déploiement** est OP-21 (`docs/PROD_MIGRATIONS.md`) : la Forge a reçu sa
+  table à la main par OP-11 ; elle reçoit cette règle par la phase rejouée ou par
+  la recette équivalente, et la vérification est celle ci-dessus.
+
+## 57. Chaque Spark est isolé du réseau des autres : contrat (SPK-109)
+
+**Décision du responsable, 2026-09-17** : deux Sparks ne se parlent pas, même
+quand l'un connaît l'adresse privée de l'autre. Étude et arbitrages dans
+`docs/EXPLORATION_RESEAU_PRIVE.md`.
+
+### 57.1 Ce qui est mesuré, et ce que « isolé » veut dire
+
+Le 2026-09-17 sur la Forge : les deux cellules partagent `sparkbr0` ; leurs
+ports de bridge sont `isolated off` ; leur `eth0` ne porte ni
+`security.port_isolation`, ni `security.ipv4_filtering`, ni
+`security.mac_filtering` ; `br_netfilter` est absent ; aucune ACL n'existe.
+Deux cellules d'un même bridge s'échangent donc leurs trames **en couche 2**,
+sans que le hook `forward` de la Forge les voie — `fwd.sparkbr0` ne concerne que
+ce qui est routé. Un Spark joint l'adresse privée d'un voisin sur n'importe quel
+port, y compris ceux que le voisin n'a jamais publiés, et peut se présenter sous
+l'adresse d'un autre.
+
+L'isolation garantie par le §11 est celle de la **cellule**. Cette unité y
+ajoute celle du **réseau entre cellules** : un Spark ne joint, hors de lui-même,
+que l'Internet, le résolveur de sa Forge, l'ingress de sa Forge (§56), et les
+réseaux privés auxquels on l'a attaché (§58).
+
+### 57.2 Le mécanisme, en deux étages
+
+**Sur l'`eth0` de chaque Spark**, rendues par `translate.py` comme
+`ipv4.address` l'est déjà — donc dans la même fonction pure, comparée au même
+témoin :
+
+```
+security.port_isolation: "true"
+security.ipv4_filtering: "true"      # emporte security.mac_filtering
+```
+
+L'isolation de port est un drapeau du bridge du noyau : deux ports isolés ne
+s'échangent aucune trame — pas d'ARP, donc pas d'IP —, et chacun parle encore au
+port du bridge lui-même, c'est-à-dire à la Forge : DNS, DHCP, NAT et ingress
+restent intacts. L'anti-usurpation est le préalable de tout ce qui suit : sans
+elle, une règle par adresse est décorative.
+
+**Dans `spark_filter`, une chaîne `forward`**, posée par l'installateur par le
+mécanisme du §56.3 :
+
+```
+chain forward {
+  type filter hook forward priority filter + 10; policy accept;
+  ct state established,related accept
+  iifname "sparkbr0" oifname "sparkbr0" drop
+}
+```
+
+Elle ferme le seul détour que l'isolation de port laisse : un `root` de cellule
+pose une route vers son voisin **via `10.77.0.1`** ; la trame va au port de la
+Forge, non isolé ; la Forge route le paquet et le réémet sur `sparkbr0`. Ce
+chemin-là traverse `forward`, et une règle statique suffit à le fermer.
+
+Deux étages plutôt qu'un, parce qu'aucun des deux ne couvre l'autre : le drapeau
+ne voit pas ce qui est routé, la règle ne voit pas ce qui est commuté.
+
+### 57.3 La migration du parc
+
+Poser l'isolation change le comportement des Sparks existants. Le responsable a
+tranché : **une opération explicite sur tout le parc, après un relevé des flux**
+— et non un choix par Spark, ni les seuls nouveaux Sparks.
+
+- Le relevé dit quels Sparks se parlent aujourd'hui. `conntrack` n'est pas
+  installé sur la Forge ; le relevé se fait **dans** chaque cellule, par
+  `ss -tn` — ce qui n'installe rien.
+- L'isolation n'est pas une donnée du registre : c'est la règle du produit,
+  rendue pour **tous** les Sparks. L'état, lui, se lit dans Incus — un Spark dont
+  l'`eth0` appliquée ne porte pas les deux clés est « non encore isolé », et le
+  dossier le dit, comme il dit toute dérive entre le registre et le pilote.
+- L'opération est un geste de la Forge — *Isoler le parc* — qui rejoue
+  l'application de chaque Spark, une entrée d'audit par Spark. Un Spark
+  **protégé** (§35) refuse le geste et reste « non encore isolé », visiblement,
+  jusqu'à ce que sa protection soit levée : la protection garde son sens, et
+  l'état ne ment pas.
+- Le déploiement est OP-22. Sur la Forge de validation, le parc est de deux
+  cellules.
+
+### 57.4 Le préflight
+
+Un contrôle `NET-ISOLATION` : l'`eth0` de chaque instance du bridge porte les
+deux clés — lues par `incus config device get`, pas par une étiquette — et la
+chaîne `forward` de `spark_filter` existe avec sa règle. Le relevé nomme les
+Sparks qui manquent. Une Forge antérieure rend un AVERTISSEMENT nommé, pas un
+échec : elle n'est pas moins sûre qu'hier.
+
+### 57.5 Les mesures dues avant d'implémenter
+
+Autorisées par le responsable le 2026-09-17, **sur une cellule d'essai créée
+pour cela, réversibles, jamais sur une cellule de locataire** :
+
+1. `security.port_isolation=true` sur une cellule qui tourne : s'applique-t-il à
+   chaud, et `bridge -d link` montre-t-il `isolated on` ? Deux cellules d'essai
+   isolées ne se joignent plus ; chacune garde DNS, sortie et ingress ;
+2. un `drop` en `forward` à `filter + 10` survit-il à l'`accept` explicite de
+   `fwd.sparkbr0` ? Le §48 ne l'a prouvé que côté `input` ;
+3. `security.ipv4_filtering=true` refuse-t-il une trame émise sous l'adresse d'un
+   voisin ?
+
+`br_netfilter` est mesuré absent : les trames commutées ne traversent pas les
+hooks IP, et la conception ci-dessus en dépend. Chaque mesure est consignée au
+journal avec sa commande et son résultat.
+
+### 57.6 Ce que l'unité ne prétend pas
+
+Elle ne protège pas de `root` sur la Forge (§35.1), ni d'une évasion de *system
+container* (§11), ni du résolveur comme canal — le DNS reste ouvert, c'est
+voulu (§48.3). Elle ne filtre pas ce qu'un Spark joint **hors** de la Forge :
+c'est `docs/EXPLORATION_EGRESS.md`, hors périmètre jusqu'après le §59.
+
+### 57.7 La preuve
+
+- **Unitaire** : `translate.py` rend les deux clés pour tout Spark ; le rendu de
+  `firewall.nft` porte la chaîne ; `NET-ISOLATION` sur des relevés fixés.
+- **API** : l'application d'un Spark pousse les deux clés au pilote factice ;
+  *Isoler le parc* rejoue chaque Spark, journalise, et refuse le Spark protégé
+  en le nommant.
+- **E2E** : le dossier montre « isolé » / « non encore isolé » ; le geste de la
+  Forge depuis l'écran ; captures observées.
+- **Sur la Forge réelle**, depuis le terminal de chaque cellule (§37) : `A` ne
+  joint pas `B` (`nc -zw3`), `A` résout, sort, et joint l'ingress (§56).
+
+## 58. Réseaux privés : un commutateur de la Forge : contrat (SPK-110)
+
+**Décision du responsable, 2026-09-17** : la Forge sait créer des réseaux
+privés auxquels on attache des Sparks pour les interconnecter, à dessein.
+
+### 58.1 L'objet, et ses mots
+
+Un **réseau privé** est un commutateur interne à la Forge : un nom, un
+sous-réseau, des **membres**. Le responsable l'a dit « VPN », « mini-switch » ;
+le produit dit *réseau privé*, parce qu'il n'y a ni tunnel, ni chiffrement, ni
+pair distant, et qu'un mot qui promet plus que le mécanisme est un mot faux à
+l'écran. Un réseau privé est de **couche 2 seulement** : il ne mène ni à
+Internet, ni à `sparkbr0`, ni à un autre réseau privé. Un Spark peut être membre
+de plusieurs réseaux ; ses membres se joignent **par nom** (§58.6).
+
+### 58.2 Le modèle
+
+Migration `018_reseaux_prives` ; contrat repris dans `docs/SCHEMA.md` §6 ter à
+l'écriture de la migration.
+
+```
+private_network        (id TEXT PK, name TEXT UNIQUE, cidr TEXT UNIQUE,
+                        note TEXT, created_at TEXT)
+private_network_member (network_id FK → private_network ON DELETE CASCADE,
+                        spark_id   FK → spark           ON DELETE CASCADE,
+                        ipv4_address TEXT, applied_at TEXT,
+                        PRIMARY KEY (network_id, spark_id))
+host                   + private_pool_cidr TEXT NOT NULL DEFAULT '10.78.0.0/16'
+```
+
+- **Le sous-réseau est attribué par le registre**, sur le pool
+  `host.private_pool_cidr` découpé en `/24`, le plus petit libre d'abord — la
+  règle du §15.3, transposée. Le pool est un champ du plan d'installation (§50),
+  `privatePoolCidr`, défaut `10.78.0.0/16`, visible dans l'assistant et à l'écran
+  de la Forge ; **jamais une variable d'environnement** (§53). L'épuisement est
+  un refus nommé.
+- **L'adresse d'un membre est attribuée par le registre** sur son réseau, plan
+  du §15.2 transposé : `.1` passerelle, `.16`–`.239` registre, `.240`–`.254`
+  dynamique hors produit. Incus l'épingle par `ipv4.address` (§15.1).
+- **Le nom d'interface dérive du sous-réseau** : `spn<n>` pour `10.78.<n>.0/24`
+  — `spn42` —, sous les 15 caractères d'un nom d'interface, identique sur la
+  Forge et **dans** la cellule, pour que ce qu'un locataire voit dans `ip addr`
+  soit ce que la console nomme.
+- La cascade sur `spark_id` suit celle des routes et des ports : une adhésion qui
+  survivrait à son Spark serait une adresse promise à rien.
+
+### 58.3 Le mécanisme
+
+**Un réseau géré d'Incus par réseau privé** : `incus network create spn42
+ipv4.address=10.78.42.1/24 ipv4.nat=false ipv6.address=none
+ipv4.dhcp.ranges=10.78.42.240-10.78.42.254 dns.domain=<nom du réseau>`. Son
+`dnsmasq` distribue les adresses statiques du registre — le mécanisme de
+`sparkbr0` — et inscrit chaque membre sous son nom.
+
+**Un device NIC par adhésion**, rendu par `translate.py` avec les autres devices
+du Spark — la carte est régénérée entière, jamais rapiécée (§18.1, §39.4) :
+
+```
+spn42: { type: nic, network: spn42, name: spn42,
+         ipv4.address: <registre>, security.ipv4_filtering: "true" }
+```
+
+**Sans** `security.port_isolation` — c'est le point du réseau — et **sans**
+`limits.max` : le responsable a tranché que le trafic entre membres, commuté en
+mémoire, n'est pas une ressource de la Forge.
+
+**Dans `spark_filter`**, statiquement, par le mécanisme du §56.3 — un réseau
+privé est une interface de plus sur la Forge, et la porte du §48.1 ne se rouvre
+pas par lui :
+
+```
+input   : iifname "spn*" — mêmes acceptations que sparkbr0 (établi, 53, 67,
+          ICMP), puis drop
+forward : iifname "spn*" drop
+          oifname "spn*" drop
+```
+
+Rien n'est routé **depuis** ni **vers** un réseau privé ; entre membres, tout
+est commuté et ne passe pas par là. Les lignes du §59 s'insèrent avant ces
+`drop`.
+
+### 58.4 Les gestes, et leurs refus
+
+```
+GET    /v1/networks                          catalogue, membres et liens comptés
+POST   /v1/networks          { name, note }  201, sous-réseau attribué
+DELETE /v1/networks/{id}                     409 tant qu'il reste un membre ou un lien, nommés
+POST   /v1/networks/{id}/members { spark }   201, adresse attribuée
+DELETE /v1/networks/{id}/members/{spark}     détache, et régénère les devices
+```
+
+- Un nom pris, un Spark déjà membre : `409`, en nommant.
+- Un Spark **protégé** (§35) refuse l'attachement et le détachement avant tout le
+  reste, comme une route ou un port.
+- **Supprimer un réseau qui a des membres ou des liens est refusé** — décision
+  du responsable — et le refus nomme ce qui reste attaché. On détache d'abord,
+  explicitement.
+- `applied_at` sur l'adhésion : une adhésion enregistrée mais non appliquée —
+  pilote injoignable — se voit, comme au §18.5.
+- Journal d'audit : `network.create`, `network.delete`, `network.attach`,
+  `network.detach`.
+
+### 58.5 La console
+
+- Côté Forge, un catalogue **Réseaux privés** : nom, sous-réseau, membres, liens,
+  création, suppression avec son refus nommé. Les pools de la Forge (SPK-22)
+  montrent les sous-réseaux comme ils montrent les adresses.
+- Au dossier du Spark, une facette **Réseau** : l'adresse sur `sparkbr0` et
+  l'état d'isolation (§57), les adhésions — réseau, interface, adresse —, les
+  gestes *Attacher* et *Détacher* avec confirmation, refusés sur un Spark
+  protégé.
+- Une entrée `SPK-DS-29` dans `docs/DESIGN_SYSTEM_APP.md` pour ce que ces écrans
+  introduisent, lue et vérifiée avant tout commit d'interface.
+
+### 58.6 Ce que le locataire voit
+
+Dans la cellule, une interface `spn42` avec son adresse. Ses conteneurs
+l'atteignent par le routage de la cellule, comme ils atteignent `eth0` ; pour
+**servir** sur le réseau, il publie sur la cellule, comme aujourd'hui. Les
+membres se nomment `<spark>.<réseau>` — promis par le responsable, **après**
+vérification sur la Forge qu'Incus les donne bien ; si la mesure l'infirme,
+l'unité revient à l'arbitrage avant de promettre. Un chapitre du manuel,
+*Relier des Sparks entre eux*, le dit avec un exemple Compose.
+
+### 58.7 Ce que l'unité ne prétend pas
+
+Aucun plafond ni garantie de débit ; aucun chiffrement ; une seule Forge ; pas
+de sortie Internet par un réseau privé ; un membre `root` dans sa cellule voit
+tous les membres du réseau — c'est ce qu'un réseau veut dire.
+
+### 58.8 La preuve
+
+- **Unitaire** : rendu du réseau Incus, du device, de `firewall.nft` ;
+  attribution des sous-réseaux et des adresses, épuisement compris.
+- **API** : unicité, refus nommés, cascade à la suppression d'un Spark, refus de
+  supprimer un réseau habité, Spark protégé, `applied_at` sans pilote.
+- **E2E** : créer un réseau depuis la Forge, attacher deux Sparks depuis leurs
+  dossiers, les voir au catalogue, détacher, supprimer ; captures observées.
+- **Sur la Forge réelle**, depuis le terminal des cellules d'essai : `A` joint
+  `B` par son nom sur `spn<n>` ; `C`, non membre, ne le joint pas ; `A` ne sort
+  ni vers Internet ni vers `sparkbr0` par `spn<n>`.
+- **Seed** : un réseau à deux membres et un troisième Spark hors réseau.
+
+## 59. Liens privés : la portée d'un port publié : contrat (SPK-111)
+
+**Décision du responsable, 2026-09-17** : attacher **un port d'un Spark** au
+réseau d'un autre, qui joint alors ce seul port et rien d'autre du premier.
+
+### 59.1 Un lien privé est un port publié dont la portée n'est pas Internet
+
+Un port publié (§39) est déjà « la Forge écoute quelque part et relaie vers
+l'adresse privée du Spark ». Sa portée est implicite : Internet. Un lien privé
+est le **même objet** dont la portée est un réseau privé du §58 : la Forge
+écoute sur **son adresse à elle sur ce réseau**, et relaie vers le Spark. Les
+membres joignent `<passerelle>:<port>`, et rien d'autre — ni les autres ports du
+Spark, ni son `eth0`, ni son propre réseau. Ce n'est pas un pont : un pont
+fusionnerait deux réseaux.
+
+**La portée est toujours un réseau** — décision du responsable —, un réseau à
+un seul membre étant valide. « Attacher au réseau de cet autre Spark » crée au
+besoin ce réseau, avec ce Spark pour seul membre. Le Spark qui expose n'a **pas**
+à être membre : c'est précisément ce qui le tient hors du réseau.
+
+### 59.2 Le modèle
+
+Migration `019_portee_port_publie` ; `docs/SCHEMA.md` §6 bis complété à
+l'écriture.
+
+```
+published_port + scope TEXT NOT NULL DEFAULT 'internet'
+                 -- 'internet' | id d'un private_network (FK, ON DELETE RESTRICT)
+               UNIQUE (scope, public_port)     remplace UNIQUE (public_port)
+```
+
+Un port n'est unique que **dans sa portée** : le `5432` d'un réseau ne dispute
+rien au `5432` d'un autre, ni au `5432` d'Internet. Les ports réservés du §39.5
+le sont dans **toute** portée — `sshd` se lie sur toutes les adresses —, plus
+`53` et `67`, que le résolveur du réseau occupe. La suppression d'un réseau qui
+porte un lien est refusée (§58.4) ; celle du Spark emporte ses liens (§39.5).
+
+### 59.3 Le mécanisme
+
+**Un device `proxy` en mode `nat=true`**, nommé `lnk-<réseau>-<port>` :
+
+```
+lnk-spn42-5432: { type: proxy, nat: "true",
+                  listen:  tcp:10.78.42.1:5432,
+                  connect: tcp:<eth0 du Spark>:5432 }
+```
+
+En mode `nat`, Incus pose lui-même la traduction d'adresse dans **sa** table ;
+le flux traverse `prerouting` puis `forward`, jamais `input`. **Une seule règle
+statique** de l'installateur suffit, avant les `drop` du §57 et du §58 : « tout
+flux qu'Incus a traduit est un lien que le produit a créé ». Le mode conserve
+l'**adresse source** du membre — décision du responsable : le Spark exposé voit
+qui le joint, peut l'inscrire dans ses listes d'accès et le lit dans ses
+journaux. Il exige une adresse statique sur la NIC, que le §15.1 garantit.
+
+La chaîne `forward` de `spark_filter`, assemblée :
+
+```
+chain forward {
+  type filter hook forward priority filter + 10; policy accept;
+  ct state established,related accept
+  ct status dnat accept                       # §59 — les liens
+  iifname "sparkbr0" oifname "sparkbr0" drop  # §57
+  iifname "spn*" drop                         # §58
+  oifname "spn*" drop                         # §58
+}
+```
+
+### 59.4 Les gestes
+
+```
+GET    /v1/networks/{id}/links
+POST   /v1/networks/{id}/links   { spark, public_port, target_port, protocol, note }
+DELETE /v1/networks/{id}/links/{public_port}
+```
+
+La même table que `/v1/ports`, dont `POST` gagne `scope` (défaut `internet`,
+donc inchangé pour qui l'appelle aujourd'hui). Refus : port pris dans cette
+portée, en nommant le Spark ; port réservé ; réseau inconnu ; Spark protégé
+avant tout le reste. Le journal d'audit de la publication porte la portée.
+
+À l'écran, le geste *Publier un port* du §39.3 gagne un choix de portée —
+*Internet* ou un réseau privé — et dit, pour un réseau, l'adresse que les
+membres devront employer. La facette **Réseau** du dossier (§58.5) liste les
+liens **exposés** par ce Spark et les liens **consommables** depuis les réseaux
+dont il est membre, avec `adresse:port`. Entrée `SPK-DS-30`.
+
+### 59.5 Ce que l'unité ne prétend pas
+
+Pas de nom pour un lien dans le résolveur du réseau en première version — les
+membres emploient `adresse:port`, et la console la donne. Pas de TLS : comme au
+§39.3, le service exposé fait le sien. Pas de lien vers un service **public**
+de la Forge : c'est le §56. `udp` est accepté comme au §39, et se mesure.
+
+### 59.6 La mesure due, et la preuve
+
+**Avant d'implémenter**, sur la Forge, cellules d'essai : un device `proxy` en
+`nat=true` écoutant sur l'adresse de la Forge d'un bridge privé traduit-il bien
+le flux, `ct status dnat` le voit-il en `forward`, et le Spark exposé lit-il
+l'adresse du membre ?
+
+- **Unitaire** : rendu du device ; unicité par portée ; ports réservés par
+  portée ; rendu de la chaîne assemblée.
+- **API** : refus nommés ; `scope` absent vaut Internet ; la suppression du
+  réseau porteur refusée ; cascade à la suppression du Spark.
+- **E2E** : publier un port de `A` dans le réseau de `B` depuis l'écran ; le
+  voir consommable au dossier de `B` ; le retirer ; captures observées.
+- **Sur la Forge réelle**, depuis le terminal de `B` : `<passerelle>:<port>`
+  répond ; un autre port de `A` et l'`eth0` de `A` ne répondent pas ; `A` voit
+  l'adresse de `B` dans son journal.
+- **Seed** : un lien — le Postgres d'un membre publié dans le réseau de
+  démonstration — et un second port du même Spark laissé hors lien, pour que
+  l'écran montre la différence.

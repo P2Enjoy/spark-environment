@@ -7565,6 +7565,224 @@ propriétaire accepte sans la voir, ou il se tait.
 
 ---
 
+## Lot 6 — Réseau entre Sparks
+
+Quatre unités ouvertes le 2026-09-17 sur décision du responsable, dans l'ordre
+qu'il a fixé : l'ingress d'abord, puis l'isolation et sa migration, puis les
+réseaux privés, puis les liens privés. Étude, relevés et arbitrages dans
+`docs/EXPLORATION_RESEAU_PRIVE.md` et `docs/JOURNAL.md` (2026-09-17). Contrats
+au `docs/DAT.md` §56 à §59, **écrits et committés avant le code**.
+
+### [ ] SPK-108 · Un Spark joint les services publics de sa propre Forge
+
+**Demandé par le responsable le 2026-09-17**, à partir d'un rapport de locataire :
+le Spark `redaction-devis` ne joint pas le SSO servi par sa propre Forge. Le
+rapport concluait à un hairpin manquant sur « le routeur » ; le relevé du jour
+montre que l'adresse publique est celle de la Forge et que le paquet tombe sur
+le `drop` d'`input` de SPK-55. Il n'y a rien à traduire : il y a un `accept` à
+poser, borné aux ports de l'ingress.
+
+- Spécification : `docs/DAT.md` **§56** (le fait mesuré, la décision, le
+  mécanisme, ce qui reste fermé), §48.1 amendé · README, limites connues ·
+  manuel M11 · `docs/PROD_MIGRATIONS.md` OP-21. **Écrite et committée avant le
+  code.**
+- Dépend de : SPK-55 pour la table `spark_filter` et le préflight `NET-REMONTEE`.
+
+**Ce qui décide de l'unité :**
+
+1. **`80` et `443` seulement**, depuis `sparkbr0` vers la Forge, avant le `drop`.
+   Sans DNAT — Caddy écoute déjà sur toutes les adresses — et sans masquage :
+   l'adresse de la cellule reste lisible par Caddy ;
+2. **la pose devient idempotente par comparaison du fichier rendu**, plus par
+   l'étiquette `user.spark.input_policy` : sans cela, une Forge déjà durcie ne
+   recevrait jamais une règle nouvelle. `spark-firewall.service` est rechargé
+   quand, et seulement quand, le fichier a changé ;
+3. **`NET-REMONTEE` lit les règles effectives** et nomme les ports acceptés ;
+   `ok` seulement pour exactement `{53, 67, 80, 443}` ; `22` accepté est un échec ;
+   une Forge antérieure sans `80`/`443` est un avertissement nommé ;
+4. **les ports publiés restent injoignables** depuis une cellule (§56.4) : le
+   besoin n'est pas établi, et ce serait une autre unité.
+
+**Portée, et découpage persisté :**
+
+1. **Documentation seule** — DAT §56, §48.1 amendé, cette unité, OP-21, journal,
+   changelog. *Fait, et committé avant le code.*
+2. **Rendu et pose** — `firewall.nft` rendu comme fonction pure, écrit si
+   changé, service rechargé ; preuves unitaires sur le rendu et sur l'absence
+   d'écriture à l'identique.
+3. **Préflight** — `NET-REMONTEE` sur les règles effectives, quatre relevés
+   fixés : conforme, trop ouvert, antérieur, illisible.
+4. **Forge réelle** — OP-21 joué sur instruction ; preuve depuis le terminal du
+   Spark par la console : `200` sur un domaine servi par la Forge, `22` refusé ;
+   captures ; README et manuel M11 mis à jour ; la limite connue retirée.
+
+- Ce que l'unité ne doit PAS casser : le §48.1 sur `22`, `9876` et `2019` ; le
+  DNS et la sortie des Sparks ; la persistance par `spark-firewall.service` ;
+  l'idempotence d'une installation rejouée.
+- DoD : une preuve montre le rendu attendu ; une preuve montre qu'un fichier
+  identique n'est ni réécrit ni rechargé, et qu'un fichier différent l'est ;
+  quatre preuves de `NET-REMONTEE` ; sur la Forge, `curl` en `200` depuis le
+  terminal d'un Spark et `22` refusé, captures observées ; OP-21 basculé dans la
+  baseline ; documentation complète ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-109 · Chaque Spark est isolé du réseau des autres
+
+**Demandé par le responsable le 2026-09-17** : « chaque Spark isolé du réseau
+des autres, autrement dit ils ne peuvent pas se parler même s'ils connaissent
+l'IP privée de l'autre ». Le relevé du jour : bridge partagé, ports `isolated
+off`, aucune clé `security.*` sur les `eth0`, `br_netfilter` absent — les
+cellules s'échangent leurs trames en couche 2.
+
+- Spécification : `docs/DAT.md` **§57** (les deux étages, la migration du parc,
+  `NET-ISOLATION`, les mesures dues) · README, limites connues · manuel M11 ·
+  `docs/PROD_MIGRATIONS.md` OP-22. **Écrite et committée avant le code.**
+- Dépend de : SPK-108 pour le mécanisme de pose par comparaison ; SPK-55.
+
+**Ce qui décide de l'unité :**
+
+1. **`security.port_isolation` et `security.ipv4_filtering` sur l'`eth0` de
+   tout Spark**, rendues par `translate.py` — l'isolation est la règle du
+   produit, pas une donnée du registre ;
+2. **une chaîne `forward` dans `spark_filter`** ferme le détour par la
+   passerelle ; deux étages parce qu'aucun ne couvre l'autre ;
+3. **l'état se lit dans Incus**, jamais dans une étiquette : « isolé » / « non
+   encore isolé » au dossier, `NET-ISOLATION` au préflight ;
+4. **la migration est une opération explicite sur tout le parc**, après un
+   relevé des flux fait dans les cellules par `ss -tn` ; un Spark protégé la
+   refuse et reste visiblement non isolé ;
+5. **trois mesures avant d'implémenter**, sur des cellules d'essai, réversibles :
+   l'application à chaud, la survie du `drop` en `forward`, l'anti-usurpation.
+
+**Portée, et découpage persisté :**
+
+1. **Documentation seule** — DAT §57, cette unité, OP-22, journal, changelog.
+   *Fait, et committé avant le code.*
+2. **Mesures** — les trois du §57.5, consignées au journal avec commandes et
+   résultats ; si l'une infirme la conception, retour à l'arbitrage avant tout
+   code.
+3. **Rendu et pose** — les clés dans `translate.py`, la chaîne dans
+   `firewall.nft`, preuves unitaires par témoin.
+4. **État et geste** — l'état au dossier, *Isoler le parc* côté Forge avec audit
+   par Spark et refus du protégé ; `NET-ISOLATION` ; preuves API et E2E ;
+   captures ; SPK-DS si un composant naît.
+5. **Forge réelle** — relevé `ss` dans les deux cellules, OP-22 joué sur
+   instruction, preuve depuis les terminaux : `A` ne joint pas `B`, résout, sort,
+   joint l'ingress ; manuel M11 ; la limite connue retirée.
+
+- Ce que l'unité ne doit PAS casser : DNS, DHCP, NAT, ingress (SPK-108) et
+  rebond SSH de chaque Spark ; le sens Forge → Spark (`ct state established`
+  en tête) ; les Sparks protégés.
+- DoD : trois mesures consignées ; preuves unitaires du rendu ; preuve API que
+  l'application pousse les clés et que le geste refuse le protégé en le
+  nommant ; parcours E2E de l'état et du geste, captures observées ; sur la
+  Forge, `A` ne joint pas `B` depuis le terminal et tout le reste tient ;
+  OP-22 dans la baseline ; documentation complète ; `@spec` / `@verifies`
+  posés.
+
+### [ ] SPK-110 · Réseaux privés : un commutateur de la Forge auquel on attache des Sparks
+
+**Demandé par le responsable le 2026-09-17** : « on devrait pouvoir créer des
+VPN sur la Forge et y attacher des Sparks si on veut créer des mini-switchs de
+Sparks interconnectés ». Le produit dit *réseau privé* : un commutateur interne
+à la Forge, de couche 2, sans tunnel ni chiffrement.
+
+- Spécification : `docs/DAT.md` **§58** (l'objet, le modèle, le mécanisme, les
+  gestes, la console, ce que le locataire voit) · `docs/SCHEMA.md` §6 ter à
+  l'écriture de la migration `018` · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-29 ·
+  manuel, chapitre *Relier des Sparks entre eux* · `docs/PROD_MIGRATIONS.md`,
+  opération de la migration. **Écrite et committée avant le code.**
+- Dépend de : SPK-109 — un réseau privé rouvre ce que l'isolation ferme, et n'a
+  pas de sens avant.
+
+**Ce qui décide de l'unité :**
+
+1. **un réseau géré d'Incus par réseau privé**, `ipv4.nat=false`, sans IPv6, avec
+   son résolveur ; **un device NIC par adhésion**, `spn<n>` sur la Forge comme
+   dans la cellule, sans isolation de port et sans plafond de débit — décisions
+   du responsable ;
+2. **le registre attribue le sous-réseau et les adresses**, pool
+   `10.78.0.0/16` en `/24`, champ du plan d'installation `privatePoolCidr`
+   persisté dans `host` — jamais une variable d'environnement ;
+3. **`spark_filter` couvre `spn*`** : rien n'est routé depuis ni vers un réseau
+   privé ; la porte du §48.1 ne se rouvre pas par lui ;
+4. **supprimer un réseau habité est refusé**, en nommant ce qui reste ; un
+   Spark protégé refuse l'attachement ;
+5. **les membres se joignent par nom**, promis après vérification sur la Forge.
+
+**Portée, et découpage persisté :**
+
+1. **Documentation seule** — DAT §58, cette unité, journal, changelog. *Fait,
+   et committé avant le code.*
+2. **Mesure** — les noms entre membres, sur deux cellules d'essai ; consignée.
+3. **Registre** — migration `018`, attribution des sous-réseaux et des adresses,
+   SCHEMA §6 ter, opération de déploiement ; preuves unitaires et API.
+4. **Rendu et gestes** — réseau Incus, device, `firewall.nft` ; `/v1/networks`
+   et ses membres, refus nommés, audit ; pilote factice éprouvé.
+5. **Console** — catalogue de la Forge, facette *Réseau* du dossier, pools ;
+   SPK-DS-29 ; E2E et captures ; seed à deux membres et un Spark hors réseau.
+6. **Forge réelle** — `A` joint `B` par nom, `C` non ; ni Internet ni `sparkbr0`
+   par `spn<n>` ; manuel.
+
+- Ce que l'unité ne doit PAS casser : l'isolation de SPK-109 hors des réseaux ;
+  la régénération entière des devices (§39.4) ; l'`eth0` et ses quotas.
+- DoD : mesure des noms consignée ; migration avec `down` ; preuves unitaires du
+  rendu et de l'attribution, épuisement compris ; preuves API des refus, des
+  cascades et du protégé ; parcours E2E complet, captures aux deux formats ;
+  preuve sur la Forge depuis les terminaux ; seed ; SCHEMA, DAT, design system,
+  manuel, README à jour ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-111 · Liens privés : un port d'un Spark publié dans un réseau privé
+
+**Demandé par le responsable le 2026-09-17** : « attacher ce port de ce Spark au
+network de cet autre Spark, ainsi ce dernier peut joindre seulement celui-ci
+mais pas les autres du network du premier — une sorte de private link ». Le
+produit dit *lien privé*, et le modélise comme **un port publié dont la portée
+n'est pas Internet** : un objet de moins, l'unicité par portée.
+
+- Spécification : `docs/DAT.md` **§59** (la portée, le modèle, `nat=true` et la
+  règle `ct status dnat`, les gestes), §39.2 précisé · `docs/SCHEMA.md` §6 bis
+  complété à la migration `019` · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-30 ·
+  manuel, même chapitre que SPK-110 · `docs/PROD_MIGRATIONS.md`. **Écrite et
+  committée avant le code.**
+- Dépend de : SPK-110 pour la portée ; SPK-109 pour la chaîne `forward`.
+
+**Ce qui décide de l'unité :**
+
+1. **la portée est toujours un réseau**, un réseau à un seul membre étant
+   valide ; le Spark qui expose n'est pas membre ;
+2. **un device `proxy` en `nat=true`**, écoute sur la passerelle du réseau ; une
+   seule règle statique, `ct status dnat accept` ; **le Spark exposé voit
+   l'adresse du membre** — décision du responsable ;
+3. **`UNIQUE (scope, public_port)`** remplace l'unicité sur la machine ; les
+   ports réservés le sont dans toute portée, plus `53` et `67` ;
+4. **le geste *Publier un port* gagne un choix de portée** et donne l'adresse à
+   employer ; la facette *Réseau* liste l'exposé et le consommable ;
+5. **une mesure avant d'implémenter** : `nat=true` sur un bridge privé,
+   `ct status dnat` en `forward`, l'adresse source lue côté exposé.
+
+**Portée, et découpage persisté :**
+
+1. **Documentation seule** — DAT §59, §39.2 précisé, cette unité, journal,
+   changelog. *Fait, et committé avant le code.*
+2. **Mesure** — celle du §59.6, sur cellules d'essai ; consignée.
+3. **Registre** — migration `019`, unicité par portée, SCHEMA §6 bis ;
+   opération de déploiement.
+4. **Rendu et gestes** — le device, la règle, `/v1/networks/{id}/links`, `scope`
+   sur `/v1/ports` ; refus nommés ; audit avec portée ; pilote factice.
+5. **Console** — choix de portée, adresse donnée, facette ; SPK-DS-30 ; E2E,
+   captures ; seed avec un lien et un port laissé hors lien.
+6. **Forge réelle** — `B` joint `<passerelle>:<port>` ; pas un autre port de
+   `A`, pas son `eth0` ; `A` lit l'adresse de `B` ; manuel.
+
+- Ce que l'unité ne doit PAS casser : les ports publiés d'aujourd'hui — `scope`
+  absent vaut Internet, `DELETE /v1/ports/{port}` inchangé ; le refus de
+  supprimer un réseau porteur (§58.4) ; l'isolation de SPK-109.
+- DoD : mesure consignée ; migration avec `down` ; preuves unitaires de
+  l'unicité par portée, des ports réservés, du rendu du device et de la chaîne
+  assemblée ; preuves API des refus et de la compatibilité ; parcours E2E,
+  captures ; preuve sur la Forge depuis le terminal de `B` ; seed ; SCHEMA, DAT,
+  design system, manuel à jour ; `@spec` / `@verifies` posés.
+
 ## Réservé, non planifié
 
 - **Serveur MCP sur un Spark** : piste étudiée le 2026-09-02 et laissée hors

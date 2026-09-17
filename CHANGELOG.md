@@ -3,6 +3,22 @@
 ## [Non publié]
 
 ### Ajouté
+- **Lot 6 — Réseau entre Sparks : quatre unités ouvertes et spécifiées avant le
+  code** (SPK-108 à SPK-111, `docs/DAT.md` §56 à §59, OP-21 et OP-22), après
+  seize arbitrages du responsable le 2026-09-17 et un relevé en lecture seule de
+  la Forge. Le relevé **confirme la cause** du SSO injoignable — l'adresse
+  publique est celle de la Forge, et le paquet tombe sur le `drop` d'`input` de
+  SPK-55 ; le hairpin proposé n'aurait rien réparé — et l'absence de tout
+  cloisonnement réseau entre cellules : ports `isolated off`, aucune clé
+  `security.*`, `br_netfilter` absent, zéro flux latéral à l'instant du relevé.
+  Retenu : `80` et `443` seuls ouverts aux cellules par une règle statique ;
+  l'isolation par isolation de port, anti-usurpation et verrou `forward` ; les
+  réseaux privés comme réseaux gérés d'Incus sans NAT, sur `10.78.0.0/16` ; le
+  lien privé comme **port publié dont la portée n'est pas Internet**, en
+  `nat=true`, l'adresse du membre conservée. L'écriture des contrats a trouvé un
+  défaut latent — la pose de `spark_filter` gardée par une étiquette, qui aurait
+  privé toute Forge déjà durcie d'une règle nouvelle — corrigé au §56.3 par la
+  comparaison du fichier rendu. Rien n'est implémenté.
 - **La direction « chaque Spark isolé du réseau des autres, réseaux privés et
   liens privés » est consignée hors backlog** (`docs/EXPLORATION_RESEAU_PRIVE.md`,
   décision du responsable du 2026-09-17, sans identifiant attribué, rien

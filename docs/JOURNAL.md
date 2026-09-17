@@ -11877,3 +11877,55 @@ identifiant.
 `docs/EXPLORATION_EGRESS.md`, et de la référence des devices NIC d'Incus.
 **Aucune commande sur la Forge**, aucune ligne de code. Les documents sont
 committés avant toute implémentation, comme le §5 de `CLAUDE.md` l'exige.
+
+## 2026-09-17 · Seize arbitrages, quatre unités, et une Forge relevée en lecture seule
+
+**Le responsable a demandé de trancher tout ce qui empêchait d'avancer.** Seize
+questions, en quatre séries, toutes répondues — la liste est au §8 de
+`docs/EXPLORATION_RESEAU_PRIVE.md`. Trois pèsent sur la conception : l'isolation
+par isolation de port, anti-usurpation et verrou `forward` (I1) ; le lien privé
+par device `proxy` en `nat=true`, l'adresse du membre conservée ; la portée d'un
+lien toujours un réseau. Trois pèsent sur la conduite : `80` et `443` seulement
+ouverts aux cellules ; les écritures sur la Forge autorisées sur des cellules
+d'essai, jamais sur une cellule de locataire ; la Forge traitée comme une Forge
+de validation malgré ses locataires réels — c'est son choix, il est écrit.
+
+**Le relevé, en lecture seule, à `13:35Z`.** Le premier `ssh` a attendu 120 s
+puis la Forge a fermé — l'agent du trousseau attendait un déverrouillage ; la
+seconde tentative a passé aussitôt. Ce qu'il montre, et qui tranche l'analyse de
+la veille : `51.158.54.202/24` est sur `eno1` **de la Forge** — il n'y a pas de
+routeur en amont ; Caddy écoute sur `*:443` ; `spark_filter` est exactement la
+table du code, `drop` d'`input` compris, sans chaîne `forward`. **La cause du
+SSO injoignable est confirmée** : le paquet de `redaction-devis` vers l'adresse
+publique est livré localement et tombe sur le `drop` de SPK-55. Le hairpin du
+rapport n'aurait rien réparé. Et le cloisonnement absent est confirmé lui
+aussi : ports de bridge `isolated off`, aucune clé `security.*` sur `eth0`,
+`br_netfilter` absent — donc les trames entre cellules ne traversent pas les
+hooks IP, et la conception à deux étages tient. Deux cellules seulement,
+`sso-p2enjoy` et `redaction-devis`, et **zéro connexion établie** de l'une vers
+l'autre à cet instant — mesuré par `ss -tn` dans chacune, `conntrack` n'étant
+pas installé. Un instantané, pas une garantie : OP-22 le refait avant d'isoler.
+
+**Ce qui est écrit.** Le lot 6 du backlog, *Réseau entre Sparks* : SPK-108
+(l'ingress aux cellules), SPK-109 (l'isolation et sa migration), SPK-110 (les
+réseaux privés), SPK-111 (les liens privés) — dans cet ordre, le sien. Leurs
+contrats au DAT, §56 à §59, avec trois amendements pointés : le §48.1 gagne son
+unique exception, le §39.2 sa notion de portée, le §11 sa phrase sur le réseau.
+`docs/PROD_MIGRATIONS.md` reçoit OP-21 et OP-22, en attente. Le README compte
+107 unités et ses deux limites du matin sont requalifiées : confirmées et
+spécifiées. Les trois questions restantes des règles de sortie sont hors
+périmètre jusqu'après SPK-111.
+
+**Deux choses que l'écriture des contrats a trouvées.** La première est un
+défaut latent : `phase_foundation` ne pose `spark_filter` que si l'étiquette
+`user.spark.input_policy` n'est pas déjà `drop` — une Forge durcie ne recevrait
+donc **jamais** une règle nouvelle, et la ligne de SPK-108 serait restée dans le
+dépôt. Le §56.3 remplace l'étiquette par la comparaison du fichier rendu. La
+seconde est une tension entre deux principes du dépôt : « `sparkd` ne pose pas
+de netfilter » (§39.4) et « la Forge est fermée aux cellules » (§48.1) rendent
+un lien privé impossible par une règle par lien ; le mode `nat=true` du device
+`proxy` la dénoue avec une seule règle statique, `ct status dnat accept`.
+
+**Ce qui reste.** Les mesures 3 à 6 du §6 de l'étude, en écriture sur des
+cellules d'essai, chacune avant l'unité qui en dépend ; puis le code, dans
+l'ordre. **Aucune ligne de code** aujourd'hui ; aucune écriture sur la Forge.

@@ -117,6 +117,75 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-22 · Isoler le parc : chaque Spark isolé du réseau des autres (SPK-109)
+
+```
+État          : EN ATTENTE — le code n'existe pas. Trois mesures dues avant
+                (docs/DAT.md §57.5), autorisées le 2026-09-17 sur des cellules
+                d'essai créées pour cela, réversibles, jamais sur une cellule
+                de locataire.
+Objectif      : poser security.port_isolation et security.ipv4_filtering sur
+                l'eth0 de chaque Spark, et la chaîne forward de spark_filter
+                (docs/DAT.md §57). Change le comportement des Sparks existants.
+Dépend de     : OP-21 (les cellules doivent joindre l'ingress AVANT d'être
+                isolées, sinon un service voisin devient injoignable par les
+                deux chemins) ; sparkd mis à jour avec SPK-109.
+Ordre         : 1. relevé des flux Spark <-> Spark DANS chaque cellule —
+                   `incus exec <cellule> -- ss -tn` —, conntrack n'étant pas
+                   installé sur la Forge ; premier relevé du 2026-09-17 au
+                   journal ;
+                2. mise à jour de sparkd ; la phase d'installation rejouée pose
+                   la chaîne forward (mécanisme de OP-21) ;
+                3. depuis la console, le geste « Isoler le parc » — une entrée
+                   d'audit par Spark ; un Spark protégé reste « non encore
+                   isolé », visiblement, jusqu'à ce que sa protection soit
+                   levée par le responsable.
+Vérification  : depuis le terminal de chaque cellule : `nc -zw3 <voisin> 22`
+                refusé ; DNS résolu ; sortie HTTPS en 200 ; ingress en 200
+                (OP-21) ; `bridge -d link` montre `isolated on` ; préflight
+                NET-ISOLATION en « ok ».
+Retour arrière: `incus config device unset <spark> eth0 security.port_isolation`
+                (et ipv4_filtering) par Spark ; retirer la chaîne forward du
+                fichier rendu et recharger spark-firewall.service. Aucune
+                donnée touchée.
+Risques       : un montage de locataire qui s'appuyait sur le latéral cesse de
+                fonctionner — c'est le but, et c'est pourquoi le relevé
+                précède. Sur la Forge de validation, le parc est de deux
+                cellules : sso-p2enjoy et redaction-devis.
+```
+
+### OP-21 · Ouvrir l'ingress de la Forge aux cellules, 80 et 443 (SPK-108)
+
+```
+État          : EN ATTENTE — le code n'existe pas.
+Objectif      : qu'un Spark joigne les services publics de sa propre Forge —
+                le cas du SSO rapporté le 2026-09-17 — par un accept borné à
+                tcp 80 et 443 depuis sparkbr0, avant le drop de spark_filter
+                (docs/DAT.md §56). Sans DNAT, sans MASQUERADE.
+Dépend de     : OP-11 (la table spark_filter existe sur cette Forge, posée à
+                la main le 2026-08-21) ; sparkd mis à jour avec SPK-108.
+Commande      : fournie par l'unité. Deux voies équivalentes : rejouer la
+                phase d'installation « socle réseau », qui compare le fichier
+                rendu à /etc/sparkd/firewall.nft et recharge
+                spark-firewall.service s'il a changé ; ou la recette manuelle
+                — insérer `iifname "sparkbr0" tcp dport { 80, 443 } accept`
+                AVANT la ligne `drop` du fichier, puis
+                `systemctl reload spark-firewall.service`.
+                NE PAS utiliser `nft add rule` en session : la règle
+                disparaîtrait au redémarrage sans que rien ne le dise.
+Vérification  : `nft list table inet spark_filter` montre l'accept avant le
+                drop ; depuis le terminal d'un Spark par la console :
+                `curl -sS -o /dev/null -w '%{http_code}' https://<domaine servi>/`
+                rend 200, et `nc -zw3 10.77.0.1 22` est refusé ; préflight
+                NET-REMONTEE en « ok » en nommant {53, 67, 80, 443}.
+Retour arrière: retirer la ligne du fichier et recharger le service. Aucune
+                donnée touchée.
+Risques       : nul pour les données. Une ligne mal placée APRÈS le drop est
+                sans effet — la vérification le voit. Une ligne trop large
+                (sans dport) rouvrirait le 22 : NET-REMONTEE rend alors un
+                échec, c'est ce pour quoi il lit les règles effectives.
+```
+
 ### OP-20 · Migration `016_canaux_notification` et reprise du canal d'alerte (SPK-62) — **APPLIQUÉE le 2026-09-14**
 
 ```

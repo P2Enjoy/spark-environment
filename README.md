@@ -39,8 +39,9 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 94 unités : 77 closes, 16
-partielles, 1 non commencée. L'état de chacune est dans
+**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 96 closes, 7
+partielles, 4 non commencées — le lot 6, *Réseau entre Sparks*, ouvert le
+2026-09-17. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
 Ce qui est **établi par la mesure**, et non par intention :
@@ -548,18 +549,20 @@ une garde qui n'existe que dans un fichier de workflow.
   voisin sur n'importe quel port, et aucune cellule ne porte d'anti-usurpation
   (relevé du 2026-09-14, `docs/EXPLORATION_EGRESS.md` §0). Ce qui est cloisonné,
   c'est la cellule — UID/GID, quotas, AppArmor —, pas le réseau entre cellules.
-  Le responsable a décidé le 2026-09-17 de fermer ce latéral par défaut, avec des
-  réseaux privés et des liens privés pour le rouvrir à dessein :
-  `docs/EXPLORATION_RESEAU_PRIVE.md`. Rien n'est implémenté.
+  Confirmé sur la Forge le 2026-09-17 : ports de bridge `isolated off`, aucune
+  clé `security.*`, `br_netfilter` absent. Le responsable a décidé le jour même
+  de fermer ce latéral par défaut — SPK-109, `docs/DAT.md` §57 — avec des
+  réseaux privés (SPK-110, §58) et des liens privés (SPK-111, §59) pour le
+  rouvrir à dessein. Spécifié, non implémenté.
 - **Un Spark ne joint pas les domaines que sa propre Forge sert.** La règle du
   §48 du DAT — `iifname "sparkbr0" drop` en `input` — ferme toute remontée d'une
   cellule vers la Forge, et l'adresse publique est portée par la Forge elle-même :
   depuis une cellule, un appel de serveur à serveur vers un domaine servi par
   Caddy n'aboutit pas, alors qu'il aboutit depuis Internet. Un SSO hébergé sur la
-  Forge est donc injoignable par un Spark voisin (rapporté le 2026-09-17,
-  `docs/JOURNAL.md`). Le mécanisme est celui du code ; le cas rapporté n'a pas
-  encore été relevé sur la Forge. Une ouverture bornée aux ports de l'ingress
-  reste à spécifier.
+  Forge est donc injoignable par un Spark voisin. Rapporté et **confirmé sur la
+  Forge le 2026-09-17** : l'adresse publique est portée par `eno1` de la Forge,
+  Caddy écoute sur `*:443`, et la règle tombe sur le paquet. Ouverture bornée
+  à `80` et `443` spécifiée — SPK-108, `docs/DAT.md` §56 —, non implémentée.
 
 ## Sauvegarder le registre
 
