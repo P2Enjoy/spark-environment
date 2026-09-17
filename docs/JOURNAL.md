@@ -11929,3 +11929,12 @@ un lien privé impossible par une règle par lien ; le mode `nat=true` du device
 **Ce qui reste.** Les mesures 3 à 6 du §6 de l'étude, en écriture sur des
 cellules d'essai, chacune avant l'unité qui en dépend ; puis le code, dans
 l'ordre. **Aucune ligne de code** aujourd'hui ; aucune écriture sur la Forge.
+
+**Seconde série d'arbitrages, le même jour** (§8 de l'étude, 17 à 23) : le
+« ne code pas » est levé et SPK-108 commence ; le locataire **attend le code**
+plutôt qu'une recette manuelle ; la Forge sera mise à jour quand SPK-108 est
+vérifié, OP-19 et OP-21 joués ensemble, sans redemander — OP-22, lui, sur feu
+vert explicite ; les quatre unités s'enchaînent avec un commit et un compte
+rendu chacune ; les modifications E2E non committées de l'arbre, qui ne sont
+pas de l'agent, sont committées telles quelles en un commit à part ; et une
+réponse au locataire est rédigée pour relecture.

@@ -419,5 +419,24 @@ contrats du DAT.
 16. **Pool des réseaux privés** : `10.78.0.0/16` découpé en `/24`, valeur par
     défaut d'un champ nommé du plan d'installation.
 
+**Conduite, seconde série du même jour**
+
+17. **Départ** : le « ne code pas » est levé ; SPK-108 commence, les mesures de
+    SPK-109 viennent après, sur des cellules d'essai.
+18. **Le locataire bloqué** : pas de recette manuelle — il attend le code de
+    SPK-108 et son déploiement.
+19. **Déploiement** : une mise à jour de `sparkd` sur la Forge quand SPK-108 est
+    vérifié, qui joue OP-19 (migration `017`) et OP-21 ensemble.
+20. **L'arbre de travail** : les modifications E2E non committées qui ne sont
+    pas de l'agent sont committées telles quelles, en un commit à part, au nom
+    du responsable, avant tout travail du lot 6.
+21. **Autonomie** : les quatre unités s'enchaînent, un commit poussé et un
+    compte rendu par unité ; arrêt seulement si une mesure infirme un contrat
+    ou si un arbitrage manque.
+22. **Opérations sur la Forge** : la mise à jour et OP-21 sans redemander ;
+    **OP-22 sur feu vert explicite**, relevé des flux présenté avant.
+23. **Le locataire** : une réponse est rédigée par l'agent, relue par le
+    responsable avant envoi.
+
 Les mesures 3 à 6 du §6 restent dues ; chaque contrat du DAT dit laquelle il
 attend avant sa première ligne de code.
