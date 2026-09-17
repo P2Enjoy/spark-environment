@@ -12093,3 +12093,10 @@ entrées `spark.isolate` — `ok` et `error` —, pas huit.
 
 **Ce qui reste** : la mise à jour de `sparkd` sur la Forge (sans redemander),
 puis le geste sur les deux cellules de locataires, sur feu vert explicite.
+
+**Déployé le soir même**, build `0.post1.dev845+geb7586543` : la chaîne
+`forward` est en place, `NET-REMONTEE` reste « ok », et `NET-ISOLATION` fait
+exactement ce qu'il doit — un avertissement qui nomme « essai-b,
+redaction-devis, sso-p2enjoy », 15 contrôles, 0 bloquant. `essai-a` est déjà
+isolée par les mesures ; `essai-b` n'a reçu que l'isolation de port. Le geste
+n'est pas joué : il touche les locataires, et c'est au responsable de dire oui.

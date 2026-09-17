@@ -7709,8 +7709,10 @@ cellules s'échangent leurs trames en couche 2.
 5. **Forge réelle** — relevé `ss` dans les deux cellules, OP-22 joué sur
    instruction, preuve depuis les terminaux : `A` ne joint pas `B`, résout, sort,
    joint l'ingress ; manuel M11 ; la limite connue retirée. *Relevé fait (zéro
-   flux) ; la mise à jour de `sparkd` est jouée sans redemander ; le geste sur
-   les cellules des locataires attend le feu vert explicite du responsable.*
+   flux) ; mise à jour jouée le 2026-09-17 (build `eb7586543`) : chaîne
+   `forward` posée, `NET-ISOLATION` signale « essai-b, redaction-devis,
+   sso-p2enjoy » ; le geste sur les cellules des locataires attend le feu vert
+   explicite du responsable, puis la preuve depuis leurs terminaux.*
 
 - **Ce que la preuve E2E a coûté, et ce qu'elle a appris** (2026-09-17) : trois
   OOM du poste avant de comprendre qu'un `assert.equal(await page.$(…), null)`

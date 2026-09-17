@@ -121,12 +121,14 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-22 · Isoler le parc : chaque Spark isolé du réseau des autres (SPK-109)
 
 ```
-État          : EN ATTENTE — le code n'existe pas. Les trois mesures dues
-                (docs/DAT.md §57.5) ont été FAITES le 2026-09-17 sur deux
-                cellules d'essai créées par le produit, et concluent toutes
-                trois : la conception tient. Le geste sur les cellules de
-                locataires attend le feu vert explicite du responsable
-                (arbitrage du 2026-09-17).
+État          : MISE À JOUR JOUÉE le 2026-09-17 (build
+                `0.post1.dev845+geb7586543`) : la chaîne forward est posée,
+                NET-REMONTEE « ok », NET-ISOLATION « signalé » — « non encore
+                isolée(s) : essai-b, redaction-devis, sso-p2enjoy » ; 15
+                contrôles, 0 bloquant. Les trois mesures du §57.5 sont faites
+                et concluent. LE GESTE « Isoler le parc » N'EST PAS JOUÉ : il
+                touche les cellules des locataires et attend le feu vert
+                explicite du responsable (arbitrage du 2026-09-17).
 Objectif      : poser security.port_isolation et security.ipv4_filtering sur
                 l'eth0 de chaque Spark, et la chaîne forward de spark_filter
                 (docs/DAT.md §57). Change le comportement des Sparks existants.
