@@ -13396,7 +13396,15 @@ host                   + private_pool_cidr TEXT NOT NULL DEFAULT '10.78.0.0/16'
 ipv4.address=10.78.42.1/24 ipv4.nat=false ipv6.address=none
 ipv4.dhcp.ranges=10.78.42.240-10.78.42.254 dns.domain=<nom du réseau>`. Son
 `dnsmasq` distribue les adresses statiques du registre — le mécanisme de
-`sparkbr0` — et inscrit chaque membre sous son nom.
+`sparkbr0` — et inscrit chaque membre sous son nom. Le nom d'un réseau est donc
+un **nom DNS** : `^[a-z][a-z0-9-]{0,30}$`, unique.
+
+**Le pool.** La valeur du 2026-09-17 — `10.78.0.0/16` en `/24` — est portée par
+la migration `018`, colonne `forge.private_pool_cidr`, et affichée à l'écran de
+la Forge. Le champ du plan d'installation qui la rendrait réglable à
+l'installation n'est **pas** construit par cette unité : le plan est lu par
+l'exécuteur avant que le registre n'existe, et le porter jusqu'à lui est un
+chantier de SPK-68. L'écart est dit ici et au backlog, pas caché.
 
 **Un device NIC par adhésion**, rendu par `translate.py` avec les autres devices
 du Spark — la carte est régénérée entière, jamais rapiécée (§18.1, §39.4) :
@@ -13458,15 +13466,44 @@ DELETE /v1/networks/{id}/members/{spark}     détache, et régénère les device
 - Une entrée `SPK-DS-29` dans `docs/DESIGN_SYSTEM_APP.md` pour ce que ces écrans
   introduisent, lue et vérifiée avant tout commit d'interface.
 
-### 58.6 Ce que le locataire voit
+### 58.6 Ce que le locataire voit, et ce que le produit pose dans la cellule
 
-Dans la cellule, une interface `spn42` avec son adresse. Ses conteneurs
-l'atteignent par le routage de la cellule, comme ils atteignent `eth0` ; pour
-**servir** sur le réseau, il publie sur la cellule, comme aujourd'hui. Les
-membres se nomment `<spark>.<réseau>` — promis par le responsable, **après**
-vérification sur la Forge qu'Incus les donne bien ; si la mesure l'infirme,
-l'unité revient à l'arbitrage avant de promettre. Un chapitre du manuel,
-*Relier des Sparks entre eux*, le dit avec un exemple Compose.
+**Mesuré le 2026-09-18** sur `essai-a` et `essai-b` (Ubuntu 26.04), avec un
+bridge `spn1` sans NAT et `dns.domain=backoffice` :
+
+- un device NIC ajouté **à chaud** sur une cellule en marche apparaît dedans,
+  mais **sans adresse** : rien dans la cellule ne configure une interface
+  nouvelle. Avec un drop-in `systemd-networkd` — `[Match] Name=spn*`,
+  `[Network] DHCP=ipv4` — l'interface reçoit **l'adresse que le registre a
+  épinglée**, le résolveur du réseau (`10.78.1.1`) et son domaine ;
+  `essai-b.backoffice` résout vers `10.78.1.17`, et `ping` par nom joint ;
+- le DHCP d'un réseau privé annonce **une passerelle**, et la cellule prend une
+  seconde route par défaut, vers `10.78.1.1`. Un réseau privé n'est une route
+  vers rien : le drop-in porte `UseGateway=no` et `UseRoutes=no` ;
+- sans règle, le réseau privé **mène quelque part** : la Forge route
+  `spn1 → sparkbr0` (une cellule de `spn1` a joint le SSO par son adresse) et
+  son `sshd` répond sur `10.78.1.1:22`. Les lignes du §58.3 sont donc
+  nécessaires toutes les deux, et pas seulement par prudence ;
+- Internet par le réseau privé ne répond pas (pas de NAT) — la règle
+  `iifname "spn*" drop` le ferme quand même, pour ne pas dépendre d'un réglage.
+
+**Ce que le produit pose dans la cellule, à l'attachement** : un unique
+fichier `/etc/systemd/network/50-spark-reseaux-prives.network` — `Name=spn*`,
+`DHCP=ipv4`, `UseGateway=no`, `UseRoutes=no`, `UseDNS=yes`, `UseDomains=yes` —
+puis `networkctl reload` et `networkctl reconfigure <interface>`, par le même
+chemin que l'amorçage (§42). Le fichier vaut pour tous les réseaux privés de la
+cellule et reste en place au détachement. **Première version : familles à
+`systemd-networkd`** — Ubuntu et Debian, celles du parc et du seed. Sur une
+autre famille, le device est posé, l'adresse est réservée, et l'adhésion dit
+« interface non configurée dans la cellule : famille sans networkd » ; le
+locataire configure `spn<n>` en DHCP lui-même, et le manuel le dit.
+
+Dans la cellule, une interface `spn42` avec son adresse et son domaine. Ses
+conteneurs l'atteignent par le routage de la cellule, comme ils atteignent
+`eth0` ; pour **servir** sur le réseau, il publie sur la cellule, comme
+aujourd'hui. Les membres se nomment `<spark>.<réseau>` — **mesuré**, donc
+promis. Un chapitre du manuel, *Relier des Sparks entre eux*, le dit avec un
+exemple Compose.
 
 ### 58.7 Ce que l'unité ne prétend pas
 

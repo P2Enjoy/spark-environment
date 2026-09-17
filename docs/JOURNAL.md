@@ -12136,3 +12136,33 @@ adresse privée » est devenue vraie ce soir.
 
 **Une cible de plus** : `make forge-reelle SCRIPT=… ARGS="…"`, pour qu'une
 preuve sur Forge réelle passe par le plafond sans qu'on ait à s'en souvenir.
+
+## 2026-09-18 · SPK-110 — la mesure des noms, et deux choses que la conception n'avait pas vues
+
+**Sur les deux cellules d'essai**, un bridge `spn1` sans NAT avec
+`dns.domain=backoffice`, deux devices NIC posés **à chaud**. Première surprise :
+l'interface apparaît dans la cellule **sans adresse** — rien n'y configure une
+interface nouvelle ; la première mesure a conclu « injoignable » sur des
+cellules qui n'avaient pas d'adresse, et il a fallu la refaire. Avec un
+drop-in `systemd-networkd` (`Name=spn*`, `DHCP=ipv4`), tout arrive d'un coup :
+l'adresse épinglée par le registre, le résolveur `10.78.1.1`, le domaine, et
+`essai-b.backoffice` → `10.78.1.17`, `ping` par nom **joint**. Les noms sont
+mesurés, donc promis.
+
+**Seconde surprise, dans les routes** : le DHCP d'un réseau privé annonce une
+passerelle, et la cellule a pris une seconde route par défaut. Le drop-in
+portera `UseGateway=no` et `UseRoutes=no`. Et **sans règle, le réseau privé
+mène quelque part** : la Forge route `spn1 → sparkbr0` — une cellule a joint le
+SSO par son adresse privée à travers le réseau privé —, et `sshd` répond sur
+`10.78.1.1:22`. Les deux étages du §58.3 ne sont pas de la prudence : sans
+eux, un réseau privé rouvrirait, par un autre chemin, tout ce que SPK-109 vient
+de fermer. Internet par le réseau privé, lui, ne répond pas (pas de NAT).
+
+**Conséquence de conception** : l'attachement pose dans la cellule, par le
+chemin de l'amorçage, un fichier networkd unique pour tous les réseaux privés,
+puis recharge. Première version : familles à networkd — Ubuntu, Debian. Les
+autres reçoivent le device et l'adresse, et une adhésion qui **dit** que
+l'interface n'est pas configurée. Le champ du plan d'installation pour le pool
+est différé, dit au DAT et au backlog : la migration porte `10.78.0.0/16`.
+Tout est retiré après mesure : réseau supprimé, devices retirés, drop-ins
+effacés, `essai-a` revenue à sa seule `eth0`.
