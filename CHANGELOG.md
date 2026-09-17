@@ -3,6 +3,23 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-108 — un Spark joint les services publics de sa propre Forge.** Un
+  Spark déployé ne joignait pas le SSO que sa Forge sert : l'adresse publique
+  est celle de la Forge, et le `drop` d'`input` de SPK-55 tombait sur le paquet.
+  La table `inet spark_filter` accepte désormais `80` et `443` depuis le bridge,
+  avant le `drop` — sans DNAT ni masquage, l'adresse de la cellule reste
+  lisible par Caddy ; le `22`, le `9876`, le `2019` et les ports publiés restent
+  fermés. Le rendu vit dans un module `pare_feu`, fonction pure comparée à un
+  témoin ; la pose **compare le fichier rendu** au fichier en place et ne
+  recharge que s'il a changé — ce qui corrige un défaut latent : gardée par
+  l'étiquette `user.spark.input_policy`, la pose n'aurait **jamais** porté une
+  règle nouvelle sur une Forge déjà durcie. La mise à jour du paquet
+  (`sparkd.install`) pose désormais le pare-feu comme les unités : c'est par elle
+  qu'une Forge existante reçoit la règle (OP-21). `NET-REMONTEE` lit les règles
+  effectives et nomme les ports acceptés ; une table antérieure est signalée,
+  un `22` accepté est un échec, une étiquette seule ne vaut plus `ok`. Le
+  fichier rendu a été validé en `nft -c` sur la Forge, sans rien appliquer.
+  **Non déployé** : OP-21, avec OP-19.
 - **Lot 6 — Réseau entre Sparks : quatre unités ouvertes et spécifiées avant le
   code** (SPK-108 à SPK-111, `docs/DAT.md` §56 à §59, OP-21 et OP-22), après
   seize arbitrages du responsable le 2026-09-17 et un relevé en lecture seule de

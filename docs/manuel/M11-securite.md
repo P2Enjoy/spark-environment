@@ -20,6 +20,15 @@ et les limites mémoire ont été vérifiés par la mesure sur matériel réel.
 Seules des clés **publiques** sont stockées. Le journal d'audit retient le
 libellé et l'empreinte d'une clé, jamais son corps.
 
+**Ce qu'un Spark atteint de sa propre Forge.** Deux choses, et deux seulement :
+le résolveur DNS, et l'ingress — les ports 80 et 443, ceux que le proxy sert. Un
+Spark joint donc par leur **nom public** les services que sa Forge héberge, y
+compris de serveur à serveur : un SSO, une API, un webhook. Il les joint
+exactement comme un visiteur d'Internet — même certificat, même refus sur un
+domaine non routé. Rien d'autre ne répond : ni le port 22 de la Forge, ni son API
+d'administration, ni les ports publiés (voir [M7](M7-domaine.md)) d'un autre
+Spark.
+
 ## Ce qui n'est pas garanti
 
 - **Un *system container* partage le noyau de la Forge.** Pour des charges hostiles

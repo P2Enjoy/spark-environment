@@ -1,8 +1,9 @@
 """Installation autonome du paquet ``sparkd`` sur une Forge.
 
 @spec docs/BACKLOG.md#SPK-66, docs/BACKLOG.md#SPK-69 · docs/DAT.md §40.4,
-      §40.6 ·
-      docs/PROD_MIGRATIONS.md#OP-04
+      §40.6 · docs/BACKLOG.md#SPK-108, docs/DAT.md §56.3 (la mise à jour pose
+      aussi le pare-feu du bridge, par comparaison) ·
+      docs/PROD_MIGRATIONS.md#OP-04, docs/PROD_MIGRATIONS.md#OP-21
 
 Le dépôt n'est volontairement pas une entrée de ce module. Une Forge reçoit le
 paquet Python directement depuis la source publique ; les migrations et les
@@ -27,6 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import __version__
+from . import pare_feu
 from .build import commit_du_paquet
 
 
@@ -56,6 +58,9 @@ class Paths:
     state: Path
     systemd: Path
     python: Path
+    #: La racine sous laquelle vivent `/etc/sparkd` et `/etc/systemd/system`
+    #: du pare-feu (SPK-108). `/` sur une Forge ; un dossier jetable en preuve.
+    racine: Path = Path("/")
 
     @classmethod
     def installed(cls) -> "Paths":
@@ -108,6 +113,30 @@ def _preflight() -> int:
     from .preflight import main
 
     return main([])
+
+
+def _bridge_configure(paths: Paths) -> str:
+    """Le nom du bridge tel que le service le lit : `/etc/sparkd/sparkd.env`
+    d'abord, l'environnement ensuite, le défaut du produit enfin.
+
+    L'installateur tourne hors du service, donc sans son `EnvironmentFile` :
+    lire le fichier est la seule façon de poser la table sur le bridge que
+    `sparkd` emploie réellement, et non sur celui que le poste suppose.
+    """
+    from .preflight import reglages
+
+    valeurs: dict[str, str] = {}
+    try:
+        for brut in (paths.racine / "etc/sparkd/sparkd.env").read_text(
+                encoding="utf-8").splitlines():
+            ligne = brut.strip()
+            if not ligne or ligne.startswith("#") or "=" not in ligne:
+                continue
+            cle, valeur = ligne.split("=", 1)
+            valeurs[cle.strip()] = valeur.strip().strip('"')
+    except OSError:
+        pass
+    return reglages({**os.environ, **valeurs}).network_bridge
 
 
 def packaged_unit(name: str) -> str:
@@ -182,6 +211,11 @@ def install(paths: Paths | None = None, *, runner: Runner = _run,
     write_build(paths)
     for name in UNIT_NAMES:
         _write(paths.systemd / name, _render_unit(name, paths.python), 0o644)
+    # Le pare-feu du bridge est un fichier du produit comme les unités : une
+    # mise à jour le rend et le compare, pour qu'une Forge déjà durcie reçoive
+    # une règle nouvelle (SPK-108, docs/DAT.md §56.3). Activé plus bas, après
+    # le `daemon-reload` commun.
+    pare_feu_changement = pare_feu.ecrire(_bridge_configure(paths), racine=paths.racine)
     announce("units", "done")
 
     announce("daemon_reload", "in_progress")
@@ -210,6 +244,10 @@ def install(paths: Paths | None = None, *, runner: Runner = _run,
 
     if not start:
         return
+
+    # Une pose identique ne passe AUCUNE commande (§56.3) ; le `daemon-reload`
+    # ci-dessus a déjà relu l'unité si elle a changé.
+    pare_feu.activer(pare_feu_changement, runner, daemon_recharge=True)
 
     runner(["systemctl", "enable", "sparkd"])
     announce("restart", "in_progress")

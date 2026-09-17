@@ -7573,7 +7573,7 @@ réseaux privés, puis les liens privés. Étude, relevés et arbitrages dans
 `docs/EXPLORATION_RESEAU_PRIVE.md` et `docs/JOURNAL.md` (2026-09-17). Contrats
 au `docs/DAT.md` §56 à §59, **écrits et committés avant le code**.
 
-### [ ] SPK-108 · Un Spark joint les services publics de sa propre Forge
+### [~] SPK-108 · Un Spark joint les services publics de sa propre Forge
 
 **Demandé par le responsable le 2026-09-17**, à partir d'un rapport de locataire :
 le Spark `redaction-devis` ne joint pas le SSO servi par sa propre Forge. Le
@@ -7609,12 +7609,18 @@ poser, borné aux ports de l'ingress.
    changelog. *Fait, et committé avant le code.*
 2. **Rendu et pose** — `firewall.nft` rendu comme fonction pure, écrit si
    changé, service rechargé ; preuves unitaires sur le rendu et sur l'absence
-   d'écriture à l'identique.
+   d'écriture à l'identique. *Fait le 2026-09-17 : module `pare_feu`, 8
+   preuves ; `phase_foundation` et `sparkd.install` l'appellent tous deux, et
+   l'installateur lit le bridge dans `sparkd.env` (2 preuves) ; le fichier
+   rendu validé en `nft -c` sur la Forge.*
 3. **Préflight** — `NET-REMONTEE` sur les règles effectives, quatre relevés
-   fixés : conforme, trop ouvert, antérieur, illisible.
-4. **Forge réelle** — OP-21 joué sur instruction ; preuve depuis le terminal du
-   Spark par la console : `200` sur un domaine servi par la Forge, `22` refusé ;
-   captures ; README et manuel M11 mis à jour ; la limite connue retirée.
+   fixés : conforme, trop ouvert, antérieur, illisible. *Fait : 9 preuves, dont
+   le relevé réel de la Forge du 2026-09-17 ; l'étiquette seule rend INCONNU.
+   Suite `sparkd` complète : 1412 vertes.*
+4. **Forge réelle** — OP-21 joué par la mise à jour du paquet, avec OP-19 ;
+   preuve depuis le terminal du Spark par la console : `200` sur un domaine
+   servi par la Forge, `22` refusé ; captures ; README et limite connue.
+   *Manuel M11 écrit ; déploiement en attente.*
 
 - Ce que l'unité ne doit PAS casser : le §48.1 sur `22`, `9876` et `2019` ; le
   DNS et la sortie des Sparks ; la persistance par `spark-firewall.service` ;

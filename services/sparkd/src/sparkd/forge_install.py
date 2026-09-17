@@ -1,6 +1,7 @@
 """Exécuteur fermé et idempotent d'installation d'une Forge distante.
 
-@spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.3-§50.6 ·
+@spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.3-§50.6 · docs/BACKLOG.md#SPK-108,
+      docs/DAT.md §56.3 (la pose du pare-feu par comparaison) ·
       docs/PROD_MIGRATIONS.md
 
 Le navigateur ne fournit jamais une commande. Il fournit le plan versionné du
@@ -26,6 +27,7 @@ from typing import Any, Callable
 
 from . import __version__
 from . import install as package_install
+from . import pare_feu
 from .preflight import INCUS_MINIMUM, verifier
 
 
@@ -412,40 +414,16 @@ def phase_foundation(plan: dict[str, Any]) -> dict[str, object]:
         _run(["systemctl", "enable", "--now", "caddy"])
         created = True
 
+    # La table du §48 est rendue et posée par `pare_feu`, par COMPARAISON du
+    # fichier rendu au fichier en place (SPK-108, docs/DAT.md §56.3) : une Forge
+    # déjà durcie reçoit ainsi une règle nouvelle, ce que la garde par
+    # l'étiquette `user.spark.input_policy` lui aurait refusé pour toujours.
+    pare_feu_pose = pare_feu.poser(bridge, executer=_run)
     policy = _run(["incus", "network", "get", bridge, "user.spark.input_policy"],
                   check=False).stdout.strip().lower()
     if policy not in {"drop", "reject"}:
-        rules = f"""table inet spark_filter {{
-  chain input {{
-    type filter hook input priority 10; policy accept;
-    iifname \"{bridge}\" ct state established,related accept
-    iifname \"{bridge}\" udp dport {{ 53, 67 }} accept
-    iifname \"{bridge}\" tcp dport 53 accept
-    iifname \"{bridge}\" ip protocol icmp accept
-    iifname \"{bridge}\" ip6 nexthdr ipv6-icmp accept
-    iifname \"{bridge}\" drop
-  }}
-}}
-"""
-        _atomic_write(Path("/etc/sparkd/firewall.nft"), rules, 0o644)
-        unit = """[Unit]
-Description=Filtrage du bridge privé Spark
-After=incus.service
-Before=sparkd.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStartPre=-/usr/sbin/nft delete table inet spark_filter
-ExecStart=/usr/sbin/nft -f /etc/sparkd/firewall.nft
-ExecReload=/usr/sbin/nft -f /etc/sparkd/firewall.nft
-
-[Install]
-WantedBy=multi-user.target
-"""
-        _atomic_write(Path("/etc/systemd/system/spark-firewall.service"), unit, 0o644)
-        _run(["systemctl", "daemon-reload"])
-        _run(["systemctl", "enable", "--now", "spark-firewall.service"])
+        # L'étiquette reste posée : c'est ce que lit le préflight d'une build
+        # antérieure, et ce qui distingue à l'œil une Forge durcie (§48.2 bis).
         _run(["incus", "network", "set", bridge, "user.spark.input_policy=drop"])
 
     ssh_changed = _atomic_write_if_changed(
@@ -456,8 +434,10 @@ WantedBy=multi-user.target
             ["systemctl", "cat", "ssh.service"], check=False).returncode == 0 else "sshd.service"
         _run(["systemctl", "reload", ssh_unit])
     return {
-        "changed": created or policy not in {"drop", "reject"} or ssh_changed,
+        "changed": (created or bool(pare_feu_pose["changed"])
+                    or policy not in {"drop", "reject"} or ssh_changed),
         "bridge": bridge,
+        "firewall": pare_feu_pose,
     }
 
 

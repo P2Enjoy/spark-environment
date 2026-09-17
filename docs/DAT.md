@@ -11378,9 +11378,11 @@ Ce que la phase pose, et pourquoi chaque point est là :
   **avant** le rechargement : recharger une configuration invalide sur la seule
   voie d'accès est le geste qui coupe l'accès à la machine.
 
-Le tout est **idempotent** : la pose entière est gardée par
-`if policy not in {"drop", "reject"}`, et une installation rejouée sur une Forge
-déjà durcie ne recharge rien.
+Le tout est **idempotent** — depuis SPK-108 par **comparaison du fichier
+rendu** (§56.3), et non plus par l'étiquette : la garde `if policy not in
+{"drop", "reject"}` aurait privé pour toujours une Forge déjà durcie d'une règle
+nouvelle. Une installation rejouée sur une Forge à jour n'écrit rien et ne
+recharge rien.
 
 **Ce qui manquait donc n'était pas le code, mais la PREUVE** : aucune Forge n'a
 été installée par cette phase depuis que la règle y figure. La Forge de test a
@@ -13070,25 +13072,41 @@ Sans traduction d'adresse — Caddy écoute déjà sur toutes les adresses — e
 masquage : Caddy voit l'adresse de la cellule, les journaux gardent l'origine, et
 la clé `ip saddr` sur laquelle tout filtrage par Spark reposera reste lisible.
 
+Le fichier **remplace sa propre table**, atomiquement — `add table`, `delete
+table`, définition, dans la seule transaction d'un `nft -f` — pour qu'un
+`ExecReload` ne duplique jamais une règle. Rien n'est flushé (§48.2 bis).
+Validé en `nft -c` sur la Forge le 2026-09-17, sans rien appliquer.
+
 **L'idempotence change de nature, et c'est le point délicat de l'unité.**
 `phase_foundation` ne pose aujourd'hui `spark_filter` que si
 `user.spark.input_policy` n'est pas déjà `drop` : une étiquette. Une Forge déjà
 durcie ne recevrait donc **jamais** une règle nouvelle — la ligne ci-dessus
-resterait dans le dépôt sans jamais atteindre `/etc/sparkd/firewall.nft`. La
-phase compare désormais le **fichier rendu** au fichier en place
-(`_atomic_write_if_changed`, déjà employé pour `sshd_config.d/90-spark.conf`), et
-recharge `spark-firewall.service` quand — et seulement quand — il a changé. Le
-rendu est une fonction pure du nom du bridge, comparable à un témoin. L'étiquette
-reste posée, pour le préflight des Forges antérieures.
+resterait dans le dépôt sans jamais atteindre `/etc/sparkd/firewall.nft`. Le
+rendu, la comparaison et le rechargement vivent dans un module à eux,
+`pare_feu` : une fonction pure du nom du bridge, comparée à un témoin ; deux
+fichiers écrits s'ils diffèrent ; `spark-firewall.service` rechargé quand — et
+seulement quand — l'un a changé, sans `daemon-reload` si l'unité n'a pas bougé.
+**Deux chemins l'appellent** : la phase « socle réseau » de l'installation d'une
+Forge, et la **mise à jour du paquet** — `sparkd.install`, runbook A.2. C'est par
+elle qu'une Forge existante reçoit la règle, et c'est ce qui fait d'OP-21 une
+mise à jour ordinaire. L'installateur lit le nom du bridge dans
+`/etc/sparkd/sparkd.env`, celui que le service emploie, et non celui que le poste
+suppose. L'étiquette `user.spark.input_policy` reste posée : c'est ce que lit le
+préflight d'une build antérieure.
 
-**`NET-REMONTEE` lit les règles effectives.** Le contrôle rend `ok` sur
-l'étiquette ; il ne verrait pas une ouverture trop large. Il lit désormais
-`nft list table inet spark_filter`, nomme dans son relevé les ports que la
-chaîne accepte depuis le bridge, et ne rend `ok` que si cet ensemble est
-**exactement** `{53, 67, 80, 443}` avec l'ICMP et les connexions établies, et si
-le `22` reste hors liste. Une Forge durcie par OP-11 sans la règle nouvelle rend
-un AVERTISSEMENT nommé — « les cellules ne joignent pas l'ingress » —, pas un
-échec : elle est plus fermée, pas moins.
+**`NET-REMONTEE` lit les règles effectives.** Le contrôle rendait `ok` sur
+l'étiquette ; il ne pouvait voir ni une ouverture trop large, ni une fermeture
+trop stricte. Il lit désormais `nft list tables` puis `nft list table inet
+spark_filter`, ne compte que les règles **avant** le premier `drop` — ce qui le
+suit ne s'applique jamais —, et ne rend `ok` que pour **exactement** tcp
+`{53, 80, 443}` et udp `{53, 67}`, les connexions établies acceptées en premier,
+le `drop` en dernier ; le relevé nomme ces ensembles. Le `22`, ou tout port hors
+liste, est un ÉCHEC qui le nomme ; le résolveur ou le DHCP fermé est un ÉCHEC —
+« chaque Spark devient muet » ; une table antérieure à SPK-108, sans `80` ni
+`443`, est un AVERTISSEMENT nommé dont le remède est la mise à jour : elle est
+plus fermée, pas moins. Quand `nft` n'est pas lisible — droits insuffisants —,
+l'étiquette **ne vaut plus preuve** : INCONNU, jamais `ok`. Le remède d'une
+table absente cite les règles attendues, et jamais une commande de session.
 
 ### 56.4 Ce que l'unité ne prétend pas
 
@@ -13109,8 +13127,8 @@ un AVERTISSEMENT nommé — « les cellules ne joignent pas l'ingress » —, pa
   terminal du Spark (§37) — `curl -sS https://<domaine servi par la Forge>/`
   rend `200`, et `nc -zw3 10.77.0.1 22` est refusé. Captures observées.
 - **Le déploiement** est OP-21 (`docs/PROD_MIGRATIONS.md`) : la Forge a reçu sa
-  table à la main par OP-11 ; elle reçoit cette règle par la phase rejouée ou par
-  la recette équivalente, et la vérification est celle ci-dessus.
+  table à la main par OP-11 ; elle reçoit cette règle par la **mise à jour du
+  paquet**, qui joue OP-19 du même geste, et la vérification est celle ci-dessus.
 
 ## 57. Chaque Spark est isolé du réseau des autres : contrat (SPK-109)
 

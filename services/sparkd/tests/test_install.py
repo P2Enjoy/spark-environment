@@ -17,7 +17,8 @@ def paths(tmp_path: Path) -> install.Paths:
     python.touch()
     return install.Paths(prefix=python.parent.parent.parent,
                          state=tmp_path / "state",
-                         systemd=tmp_path / "systemd", python=python)
+                         systemd=tmp_path / "systemd", python=python,
+                         racine=tmp_path / "racine")
 
 
 def test_les_unites_sont_lues_depuis_le_paquet():
@@ -123,9 +124,15 @@ def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_
         # controleurs apres un redemarrage (docs/DAT.md §32.4).
         ["systemctl", "enable", install.DELEGATION_UNIT],
         ["systemctl", "restart", install.DELEGATION_UNIT],
+        # SPK-108 · §56.3 : le pare-feu du bridge est un fichier du produit ;
+        # une racine vierge le reçoit et l'active, sans second daemon-reload.
+        ["systemctl", "enable", "--now", "spark-firewall.service"],
+        ["systemctl", "reload-or-restart", "spark-firewall.service"],
         ["systemctl", "enable", "sparkd"],
         ["systemctl", "restart", "sparkd"],
     ]
+    assert (cible.racine / "etc/sparkd/firewall.nft").is_file()
+    assert (cible.racine / "etc/systemd/system/spark-firewall.service").is_file()
     build = json.loads(cible.build.read_text(encoding="utf-8"))
     assert build["commit"] == "abc123def456"
     assert build["installed_from"] == "paquet sparkd 0.post1.dev1+gabc123def456"
@@ -136,6 +143,39 @@ def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_
         ("healthz", "in_progress"), ("healthz", "done"),
         ("preflight", "in_progress"), ("preflight", "done"),
     ]
+
+
+def test_une_mise_a_jour_rejouee_ne_recharge_pas_un_pare_feu_identique(monkeypatch, tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3
+
+    C'est par la mise à jour du paquet qu'une Forge existante reçoit la règle
+    de l'ingress (OP-21). Rejouée sur un pare-feu déjà à jour, elle ne passe
+    aucune commande de pare-feu : la pose est idempotente par comparaison du
+    fichier, plus par une étiquette.
+    """
+    cible = paths(tmp_path)
+    monkeypatch.setattr(install, "commit_du_paquet", lambda: "abc123def456")
+    arguments = dict(healthcheck=lambda: True, preflight=lambda: 0, uid=0,
+                     sleep=lambda _: None, announce=lambda *_: None)
+    install.install(cible, runner=lambda _: None, **arguments)
+    commandes: list[list[str]] = []
+    install.install(cible, runner=commandes.append, **arguments)
+    assert not any("spark-firewall.service" in c for c in commandes)
+
+
+def test_le_bridge_du_pare_feu_est_celui_du_service(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3
+
+    L'installateur tourne hors du service, sans son `EnvironmentFile` : il lit
+    `/etc/sparkd/sparkd.env` pour poser la table sur le bridge que `sparkd`
+    emploie réellement, et non sur celui que le poste suppose.
+    """
+    cible = paths(tmp_path)
+    env = cible.racine / "etc/sparkd/sparkd.env"
+    env.parent.mkdir(parents=True)
+    env.write_text("# commentaire\nSPARKD_NETWORK_BRIDGE=\"forgebr1\"\n", encoding="utf-8")
+    assert install._bridge_configure(cible) == "forgebr1"
+    assert install._bridge_configure(paths(tmp_path / "vierge")) == "sparkbr0"
 
 
 def test_no_start_ne_fait_pas_passer_une_forge_incomplete_pour_prete(tmp_path):

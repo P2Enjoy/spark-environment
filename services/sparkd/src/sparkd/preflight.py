@@ -3,7 +3,8 @@
 @spec docs/BACKLOG.md#SPK-26 · docs/DAT.md §31 (l'installation et sa
       vérification), §31.1 (une seule liste, employée deux fois), §31.2 (mesurer,
       nommer, remédier), §31.3 (lecture seule), §31.4 (ce qui doit être garanti)
-      · §3.1, §8, §15, §16 · docs/PROD_MIGRATIONS.md
+      · §3.1, §8, §15, §16 · docs/BACKLOG.md#SPK-108, docs/DAT.md §56.3
+      (NET-REMONTEE lit les règles effectives) · docs/PROD_MIGRATIONS.md
 
 La même série sert AVANT l'installation — pour savoir ce qui manque — et APRÈS,
 pour constater que le serveur est en état. Deux listes distinctes finiraient par
@@ -25,6 +26,8 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from typing import Callable, NamedTuple
+
+from . import pare_feu
 
 GIO = 1024**3
 
@@ -419,47 +422,158 @@ def surface_reseau(hote: Hote) -> Verdict:
                    f"exposés : {', '.join(sorted(exposes)) or 'aucun'}")
 
 
+#: Ce que la chaîne `input` de `spark_filter` accepte depuis le bridge, et rien
+#: de plus (docs/DAT.md §56.3) : le résolveur, le DHCP, et les deux ports de
+#: l'ingress. Le 22 hors liste est la propriété de SPK-55 ; le 80 et le 443
+#: dedans, celle de SPK-108.
+TCP_ATTENDUS = frozenset({53, *pare_feu.PORTS_INGRESS})
+UDP_ATTENDUS = frozenset({53, 67})
+TITRE_REMONTEE = "Un Spark n’atteint de sa Forge que le DNS et l’ingress"
+
+
+def _analyser_spark_filter(texte: str, bridge: str) -> dict | None:
+    """Lit la chaîne `input` telle que `nft list table inet spark_filter` la
+    rend. Rend `None` quand la chaîne n'y est pas.
+
+    Seules comptent les règles AVANT le premier `drop` : ce qui le suit ne
+    s'applique jamais, et le compter ferait passer pour ouvert un port que rien
+    n'atteint.
+    """
+    regles: list[str] = []
+    dans_chaine = False
+    for brut in texte.splitlines():
+        ligne = brut.strip()
+        if ligne.startswith("chain input"):
+            dans_chaine = True
+            continue
+        if dans_chaine:
+            if ligne == "}":
+                break
+            if f'iifname "{bridge}"' in ligne:
+                regles.append(ligne)
+    if not dans_chaine:
+        return None
+    drop = f'iifname "{bridge}" drop'
+    avant_drop = regles[:regles.index(drop)] if drop in regles else regles
+    tcp: set[int] = set()
+    udp: set[int] = set()
+    for regle in avant_drop:
+        trouve = re.search(r"\b(tcp|udp) dport (\{[^}]*\}|\d+) accept\b", regle)
+        if trouve:
+            ports = {int(p) for p in re.findall(r"\d+", trouve.group(2))}
+            (tcp if trouve.group(1) == "tcp" else udp).update(ports)
+    return {
+        "tcp": tcp,
+        "udp": udp,
+        "etabli": any("ct state established,related accept" in r for r in avant_drop),
+        "drop": drop in regles,
+    }
+
+
+def _ports(valeurs: set[int]) -> str:
+    return "{" + ", ".join(str(v) for v in sorted(valeurs)) + "}"
+
+
 def remontee_vers_la_forge(hote: Hote, nom: str | None = None) -> Verdict:
-    """Un Spark ne doit pas atteindre le `sshd` de sa Forge (§48.1).
+    """Contrôle NET-REMONTEE : la Forge n'est ouverte aux Sparks que par son
+    résolveur et son ingress.
 
     @spec docs/BACKLOG.md#SPK-55 · docs/DAT.md §48.1 (le sens du produit est à
           SENS UNIQUE), §48.2 (le préflight relève, il ne répare pas) ·
-          §37.2, §37.3 (aucun chemin du produit ne part d'un Spark vers la Forge)
+          docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.2 (80 et 443, et rien
+          d'autre), §56.3 (le contrôle lit les RÈGLES EFFECTIVES) · §37.2, §37.3
 
     MESURÉ le 2026-08-20 depuis un Spark en service : `10.77.0.1:9876` et
     `10.77.0.1:2019` sont injoignables — c'est la propriété attendue — mais
     `10.77.0.1:22` RÉPOND. La cause est nue : la chaîne `input` du bridge est en
     « policy accept », et le `sshd`, lui, se lie partout.
 
+    MESURÉ le 2026-09-17 depuis la même Forge : la table posée par SPK-55 ferme
+    AUSSI l'ingress, et un Spark ne joint plus le SSO que sa Forge sert. Le
+    contrôle ne lit donc plus une étiquette — elle disait « drop » et ne pouvait
+    pas voir une ouverture trop large, ni une fermeture trop stricte — mais la
+    chaîne elle-même. `ok` exige exactement tcp {53, 80, 443} et udp {53, 67}
+    avant un `drop` final, les connexions établies acceptées en premier ; une
+    table antérieure sans l'ingress est SIGNALÉE, pas refusée : elle est plus
+    fermée, pas moins.
+
     **Ce qui ne doit PAS être fermé** est aussi important que ce qui doit l'être :
     un Spark garde son DNS — `dnsmasq` écoute sur l'adresse du bridge — et sa
     sortie internet, qui passe par le NAT du même bridge. Une règle qui fermerait
-    tout rendrait chaque Spark muet : une panne, pas une protection. Le remède
-    proposé ouvre donc explicitement le 53 avant de fermer le reste.
+    tout rendrait chaque Spark muet : une panne, pas une protection.
     """
     nom = nom or reglages().network_bridge
-    politique = hote.executer(
-        ["incus", "network", "get", nom, "ipv4.firewall"])
-    regles = hote.executer(
-        ["incus", "network", "get", nom, "user.spark.input_policy"])
-    # Ni l'un ni l'autre : on ne SAIT PAS. Le §31.2 interdit de confondre « pas
-    # mesuré » avec « mesuré fautif » — conclure ici ferait « corriger » une
-    # Forge correcte.
-    if politique is None and regles is None:
-        return Verdict("NET-REMONTEE", "Un Spark n’atteint pas le sshd de la Forge",
-                       INCONNU, f"réseau « {nom} » illisible", "")
-    if (regles or "").strip().lower() in {"drop", "reject"}:
-        return Verdict("NET-REMONTEE", "Un Spark n’atteint pas le sshd de la Forge",
-                       OK, f"entrée du bridge en « {regles.strip().lower()} »")
-    return Verdict(
-        "NET-REMONTEE", "Un Spark n’atteint pas le sshd de la Forge", ECHEC,
-        "l’entrée du bridge accepte tout : le port 22 de la Forge répond "
-        "depuis le réseau des Sparks",
-        f"Fermer l’entrée du bridge en LAISSANT le DNS et la sortie : "
-        f"nft add rule inet filter input iifname \"{nom}\" udp dport 53 accept ; "
-        f"nft add rule inet filter input iifname \"{nom}\" tcp dport 53 accept ; "
-        f"nft add rule inet filter input iifname \"{nom}\" drop — "
-        f"puis marquer l’état : incus network set {nom} user.spark.input_policy=drop")
+    code = "NET-REMONTEE"
+    remede_pose = (
+        "Poser la table par l’installation ou la mise à jour de sparkd — "
+        "spark-firewall.service, docs/PROD_MIGRATIONS.md OP-21 —, jamais par une "
+        "règle de session, qui disparaît au redémarrage. Règles attendues : "
+        + " ; ".join(pare_feu.regles(nom)))
+
+    tables = hote.executer(["nft", "list", "tables"])
+    if tables is None:
+        # nft illisible — droits insuffisants, ou binaire absent. On retombe sur
+        # ce que la Forge DÉCLARE, sans jamais le prendre pour une mesure : le
+        # §31.2 interdit de confondre « pas mesuré » et « mesuré fautif ».
+        etiquette = hote.executer(["incus", "network", "get", nom, "user.spark.input_policy"])
+        politique = hote.executer(["incus", "network", "get", nom, "ipv4.firewall"])
+        if etiquette is None and politique is None:
+            return Verdict(code, TITRE_REMONTEE, INCONNU, f"réseau « {nom} » illisible", "")
+        if (etiquette or "").strip().lower() in {"drop", "reject"}:
+            return Verdict(code, TITRE_REMONTEE, INCONNU,
+                           "étiquette « drop » posée, mais les règles effectives sont "
+                           "illisibles (nft) — relancer avec les droits", "")
+        return Verdict(code, TITRE_REMONTEE, ECHEC,
+                       "aucune fermeture déclarée : l’entrée du bridge accepte tout, "
+                       "le port 22 de la Forge répond depuis le réseau des Sparks",
+                       remede_pose)
+
+    if not any(ligne.strip() == "table inet spark_filter" for ligne in tables.splitlines()):
+        return Verdict(code, TITRE_REMONTEE, ECHEC,
+                       "aucune table inet spark_filter : l’entrée du bridge accepte tout, "
+                       "le port 22 de la Forge répond depuis le réseau des Sparks",
+                       remede_pose)
+    texte = hote.executer(["nft", "list", "table", "inet", "spark_filter"])
+    if texte is None:
+        return Verdict(code, TITRE_REMONTEE, INCONNU,
+                       "table inet spark_filter présente mais illisible", "")
+    analyse = _analyser_spark_filter(texte, nom)
+    if analyse is None:
+        return Verdict(code, TITRE_REMONTEE, ECHEC,
+                       "table inet spark_filter sans chaîne input : rien ne filtre",
+                       remede_pose)
+    if not analyse["drop"]:
+        return Verdict(code, TITRE_REMONTEE, ECHEC,
+                       f"aucun drop final pour « {nom} » : l’entrée du bridge accepte "
+                       "tout ce que les règles ne nomment pas", remede_pose)
+    if not analyse["etabli"]:
+        return Verdict(code, TITRE_REMONTEE, ECHEC,
+                       "les connexions établies ne sont pas acceptées avant le drop : "
+                       "la Forge ne joint plus ses propres Sparks (OP-11, correction 0)",
+                       remede_pose)
+    trop = (analyse["tcp"] - TCP_ATTENDUS) | (analyse["udp"] - UDP_ATTENDUS)
+    if trop:
+        return Verdict(code, TITRE_REMONTEE, ECHEC,
+                       f"spark_filter accepte {_ports(trop)} depuis le bridge, hors "
+                       f"résolveur et ingress — le 22 y répondrait" if 22 in trop else
+                       f"spark_filter accepte {_ports(trop)} depuis le bridge, hors "
+                       "résolveur et ingress",
+                       remede_pose)
+    if 53 not in analyse["tcp"] or not UDP_ATTENDUS <= analyse["udp"]:
+        return Verdict(code, TITRE_REMONTEE, ECHEC,
+                       f"le résolveur ou le DHCP n’est pas accepté (tcp {_ports(analyse['tcp'])}, "
+                       f"udp {_ports(analyse['udp'])}) : chaque Spark devient muet",
+                       remede_pose)
+    manquants = set(pare_feu.PORTS_INGRESS) - analyse["tcp"]
+    if manquants:
+        return Verdict(code, TITRE_REMONTEE, AVERTISSEMENT,
+                       f"table antérieure à SPK-108 : tcp {_ports(analyse['tcp'])} — les "
+                       f"cellules ne joignent pas l’ingress {_ports(manquants)}",
+                       "Mettre à jour sparkd (docs/PROD_MIGRATIONS.md OP-21) : la pose "
+                       "rejouée ajoute la règle et recharge spark-firewall.service")
+    return Verdict(code, TITRE_REMONTEE, OK,
+                   f"spark_filter : tcp {_ports(analyse['tcp'])}, udp {_ports(analyse['udp'])}, "
+                   "connexions établies, drop final")
 
 
 #: Remède du contrôle SSH-X11. Il nomme le fragment que l'installation écrit

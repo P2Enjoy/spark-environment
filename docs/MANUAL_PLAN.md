@@ -113,7 +113,7 @@ Surface d'exposition réelle. Pourquoi aucune API d'administration n'est joignab
 depuis le réseau. Ce qu'un *system container* ne protège pas, et quand il faudra
 un mode `vm`. La réservation réseau, qui est une comptabilité et non une garantie.
 
-Unités : SPK-15, et §10 du DAT.
+Unités : SPK-15, SPK-108 ; §10 et §56 du DAT.
 
 ## M12 · Annexes
 

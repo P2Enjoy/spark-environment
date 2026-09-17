@@ -562,7 +562,8 @@ une garde qui n'existe que dans un fichier de workflow.
   Forge est donc injoignable par un Spark voisin. Rapporté et **confirmé sur la
   Forge le 2026-09-17** : l'adresse publique est portée par `eno1` de la Forge,
   Caddy écoute sur `*:443`, et la règle tombe sur le paquet. Ouverture bornée
-  à `80` et `443` spécifiée — SPK-108, `docs/DAT.md` §56 —, non implémentée.
+  à `80` et `443` **implémentée** — SPK-108, `docs/DAT.md` §56 —, **non encore
+  déployée** sur la Forge : OP-21.
 
 ## Sauvegarder le registre
 

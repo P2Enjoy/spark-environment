@@ -430,22 +430,31 @@ def test_une_entree_de_bridge_qui_accepte_tout_est_un_ECHEC():
 
 def test_le_remede_LAISSE_le_DNS_et_la_sortie():
     """§48.1, la moitié difficile : une règle qui fermerait tout rendrait chaque
-    Spark muet — une panne, pas une protection."""
+    Spark muet — une panne, pas une protection. Le remède cite la table que
+    l'installation pose, jamais une règle de session (§48.2 bis)."""
     verdict = preflight.remontee_vers_la_forge(hote({
         "incus network get sparkbr0 ipv4.firewall": "true",
     }))
-    assert "dport 53 accept" in verdict.remede, "le résolveur reste joignable"
-    assert verdict.remede.index("dport 53 accept") < verdict.remede.index("drop"), (
+    assert verdict.etat == ECHEC
+    assert "dport { 53, 67 } accept" in verdict.remede, "le résolveur reste joignable"
+    assert verdict.remede.index("dport { 53, 67 } accept") < verdict.remede.index("drop"), (
         "le DNS doit être ouvert AVANT la fermeture, sinon la règle qui tombe "
         "en premier ferme tout")
+    assert "nft add rule" not in verdict.remede, "une règle de session disparaît au redémarrage"
 
 
-def test_une_entree_deja_fermee_est_OK():
+def test_une_etiquette_seule_ne_vaut_plus_preuve():
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3
+
+    L'étiquette disait « drop » et ne pouvait voir ni une ouverture trop large,
+    ni une fermeture trop stricte. Sans les règles effectives, on ne SAIT pas :
+    §31.2, pas mesuré n'est pas mesuré fautif."""
     for pose in ("drop", "reject", "DROP"):
         verdict = preflight.remontee_vers_la_forge(hote({
             "incus network get sparkbr0 user.spark.input_policy": pose,
         }))
-        assert verdict.etat == OK, pose
+        assert verdict.etat == INCONNU, pose
+        assert not verdict.bloquant
 
 
 def test_un_reseau_ILLISIBLE_ne_conclut_a_rien():
@@ -454,6 +463,98 @@ def test_un_reseau_ILLISIBLE_ne_conclut_a_rien():
     verdict = preflight.remontee_vers_la_forge(hote())
     assert verdict.etat == INCONNU
     assert not verdict.bloquant
+
+
+#: Relevé RÉEL de `nft list table inet spark_filter` sur la Forge, le
+#: 2026-09-17 à 13:35Z — la table posée par OP-11, AVANT SPK-108. C'est ce
+#: relevé qui a montré que l'ingress était fermé aux cellules.
+NFT_SPARK_FILTER_FORGE = """\
+table inet spark_filter {
+\tchain input {
+\t\ttype filter hook input priority filter + 10; policy accept;
+\t\tiifname "sparkbr0" ct state established,related accept
+\t\tiifname "sparkbr0" udp dport { 53, 67 } accept
+\t\tiifname "sparkbr0" tcp dport 53 accept
+\t\tiifname "sparkbr0" ip protocol icmp accept
+\t\tiifname "sparkbr0" ip6 nexthdr ipv6-icmp accept
+\t\tiifname "sparkbr0" drop
+\t}
+}
+"""
+NFT_TABLES_FORGE = "table inet incus\ntable inet spark_filter\n"
+
+
+def _hote_nft(table: str, tables: str = NFT_TABLES_FORGE):
+    return hote({"nft list tables": tables, "nft list table inet spark_filter": table})
+
+
+def test_la_table_d_OP_11_est_SIGNALEE_sans_bloquer():
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3
+
+    Une Forge antérieure à SPK-108 est plus fermée, pas moins : un
+    avertissement nommé, et le remède est la mise à jour (OP-21)."""
+    verdict = preflight.remontee_vers_la_forge(_hote_nft(NFT_SPARK_FILTER_FORGE))
+    assert verdict.etat == AVERTISSEMENT
+    assert not verdict.bloquant
+    assert "80" in verdict.releve and "443" in verdict.releve
+    assert "OP-21" in verdict.remede
+
+
+def test_la_table_de_SPK_108_est_OK_et_nomme_ce_qu_elle_accepte():
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3"""
+    table = NFT_SPARK_FILTER_FORGE.replace("tcp dport 53 accept",
+                                           "tcp dport { 53, 80, 443 } accept")
+    verdict = preflight.remontee_vers_la_forge(_hote_nft(table))
+    assert verdict.etat == OK
+    assert "{53, 80, 443}" in verdict.releve and "{53, 67}" in verdict.releve
+
+
+def test_le_22_accepte_est_un_ECHEC_qui_le_nomme():
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3 · §48.1
+
+    Une ligne trop large rouvrirait la porte que SPK-55 a fermée ; c'est pour
+    la voir que le contrôle lit les règles et non l'étiquette."""
+    table = NFT_SPARK_FILTER_FORGE.replace("tcp dport 53 accept",
+                                           "tcp dport { 22, 53, 80, 443 } accept")
+    verdict = preflight.remontee_vers_la_forge(_hote_nft(table))
+    assert verdict.etat == ECHEC
+    assert "{22}" in verdict.releve
+
+
+def test_sans_drop_final_c_est_un_ECHEC():
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3"""
+    table = NFT_SPARK_FILTER_FORGE.replace('\t\tiifname "sparkbr0" drop\n', "")
+    verdict = preflight.remontee_vers_la_forge(_hote_nft(table))
+    assert verdict.etat == ECHEC
+    assert "drop" in verdict.releve
+
+
+def test_une_regle_apres_le_drop_ne_compte_pas():
+    """Ce qui suit le drop ne s'applique jamais : le compter ferait passer pour
+    ouvert un port que rien n'atteint."""
+    table = NFT_SPARK_FILTER_FORGE.replace(
+        "tcp dport 53 accept", "tcp dport { 53, 80, 443 } accept").replace(
+        '\t\tiifname "sparkbr0" drop\n',
+        '\t\tiifname "sparkbr0" drop\n\t\tiifname "sparkbr0" tcp dport 22 accept\n')
+    verdict = preflight.remontee_vers_la_forge(_hote_nft(table))
+    assert verdict.etat == OK
+
+
+def test_sans_table_spark_filter_l_entree_accepte_tout():
+    """@verifies docs/BACKLOG.md#SPK-108 · docs/DAT.md §56.3 · §48.1"""
+    verdict = preflight.remontee_vers_la_forge(_hote_nft("", tables="table inet incus\n"))
+    assert verdict.etat == ECHEC
+    assert "spark_filter" in verdict.releve and "22" in verdict.releve
+    assert "spark-firewall.service" in verdict.remede
+
+
+def test_le_DNS_ferme_est_un_ECHEC_meme_avec_l_ingress_ouvert():
+    """§48.1, la moitié difficile : fermer le résolveur rend chaque Spark muet."""
+    table = NFT_SPARK_FILTER_FORGE.replace("tcp dport 53 accept",
+                                           "tcp dport { 80, 443 } accept")
+    verdict = preflight.remontee_vers_la_forge(_hote_nft(table))
+    assert verdict.etat == ECHEC
+    assert "muet" in verdict.releve
 
 
 #: Relevé RÉEL de `sshd -T` sur la Forge, le 2026-09-01. C'est ce relevé qui a

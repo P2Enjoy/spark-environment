@@ -157,20 +157,24 @@ Risques       : un montage de locataire qui s'appuyait sur le latéral cesse de
 ### OP-21 · Ouvrir l'ingress de la Forge aux cellules, 80 et 443 (SPK-108)
 
 ```
-État          : EN ATTENTE — le code n'existe pas.
+État          : EN ATTENTE — code écrit et éprouvé le 2026-09-17 (suite
+                sparkd : 1412 preuves vertes ; fichier rendu validé en
+                `nft -c` sur la Forge, sans rien appliquer). Non déployé.
 Objectif      : qu'un Spark joigne les services publics de sa propre Forge —
                 le cas du SSO rapporté le 2026-09-17 — par un accept borné à
                 tcp 80 et 443 depuis sparkbr0, avant le drop de spark_filter
                 (docs/DAT.md §56). Sans DNAT, sans MASQUERADE.
 Dépend de     : OP-11 (la table spark_filter existe sur cette Forge, posée à
                 la main le 2026-08-21) ; sparkd mis à jour avec SPK-108.
-Commande      : fournie par l'unité. Deux voies équivalentes : rejouer la
-                phase d'installation « socle réseau », qui compare le fichier
-                rendu à /etc/sparkd/firewall.nft et recharge
-                spark-firewall.service s'il a changé ; ou la recette manuelle
-                — insérer `iifname "sparkbr0" tcp dport { 80, 443 } accept`
-                AVANT la ligne `drop` du fichier, puis
-                `systemctl reload spark-firewall.service`.
+Commande      : la mise à jour de sparkd du runbook A.2, et rien d'autre —
+                décision du responsable du 2026-09-17, pas de recette manuelle :
+                  sudo /opt/sparkd/venv/bin/pip install --upgrade \
+                    "git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"
+                  sudo /opt/sparkd/venv/bin/python -m sparkd.install
+                L'installateur rend /etc/sparkd/firewall.nft, le compare au
+                fichier posé par OP-11, l'écrit s'il diffère et recharge
+                spark-firewall.service (docs/DAT.md §56.3). Le redémarrage de
+                sparkd joue OP-19 (migration 017) du même geste.
                 NE PAS utiliser `nft add rule` en session : la règle
                 disparaîtrait au redémarrage sans que rien ne le dise.
 Vérification  : `nft list table inet spark_filter` montre l'accept avant le
