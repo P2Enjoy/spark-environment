@@ -111,3 +111,37 @@ test('le rendre deux fois ne lève pas', () => {
   assert.doesNotThrow(() => rendreLeVerrou());
   assert.ok(!existsSync(CHEMIN));
 });
+
+test('un porteur MORT dont la pile survit est REFUSÉ, et le refus nomme les survivants', async () => {
+  /** @verifies docs/DAT.md §29.8 (complété le 2026-09-17) · CLAUDE.md §15 bis
+   *
+   * Le cas du 2026-09-17 : un harnais tué en 137 laisse ses Chromium vivants ;
+   * reprendre l'épave faisait démarrer une seconde pile à côté d'eux. */
+  const { spawn } = await import('node:child_process');
+  // Un « porteur » dans SA PROPRE session, qui lance un survivant puis meurt.
+  const porteur = spawn(process.execPath, ['-e',
+    `const { spawn } = require('node:child_process');
+     spawn('sleep', ['30'], { stdio: 'ignore' });
+     setInterval(() => {}, 1000);`], { detached: true, stdio: 'ignore' });
+  await new Promise((r) => setTimeout(r, 400));
+  const sid = porteur.pid; // `detached` = setsid : le porteur est chef de session
+  process.kill(porteur.pid, 'SIGKILL');
+  await new Promise((r) => setTimeout(r, 200));
+  writeFileSync(CHEMIN, JSON.stringify({ pid: porteur.pid, sid,
+    commande: 'node --test parcours', depuis: new Date().toISOString() }));
+  try {
+    assert.throws(() => prendreLeVerrou({ journal: { warn() {} } }), (e) => {
+      assert.equal(e.name, 'VerrouTenu');
+      assert.ok(e.survivants.length >= 1, 'le sleep orphelin doit être vu');
+      assert.match(e.message, /Tuez-les d’abord/);
+      assert.match(e.message, /kill -9 /);
+      return true;
+    });
+    assert.ok(existsSync(CHEMIN), 'le verrou n’est PAS repris tant que la pile survit');
+  } finally {
+    for (const s of (await import('./verrou.mjs')).survivantsDeLaSession(sid)) {
+      try { process.kill(s.pid, 'SIGKILL'); } catch {}
+    }
+    rmSync(CHEMIN, { force: true });
+  }
+});

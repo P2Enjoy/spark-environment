@@ -15,6 +15,13 @@
  *
  *   node e2e/forge-reelle/spk108-ingress.mjs <spark> <domaine servi par la Forge>
  */
+// CLAUDE.md §15 bis · docs/DAT.md §29.8 : ce script ne monte pas de pile, mais
+// il lance un Chromium — et deux Chromium restent deux Chromium. Le verrou est
+// pris ICI, à l'import, avant la moindre allocation.
+import { prendreLeVerrou } from '../verrou.mjs';
+
+prendreLeVerrou();
+
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';

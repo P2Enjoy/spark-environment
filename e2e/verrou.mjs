@@ -25,9 +25,53 @@
  * jour où il sert.
  */
 
-import { openSync, writeSync, closeSync, readFileSync, unlinkSync } from 'node:fs';
+import { openSync, writeSync, closeSync, readFileSync, unlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+/**
+ * L'identifiant de SESSION d'un processus, lu dans `/proc/<pid>/stat`.
+ *
+ * Complété le 2026-09-17, après un second incident : un harnais tué en `137`
+ * laisse ses Chromium derrière lui — ils survivent au processus `node` et
+ * continuent d'occuper la mémoire. Le porteur étant mort, l'épave était reprise
+ * et une SECONDE pile démarrait à côté des orphelins : exactement ce que ce
+ * fichier existe pour empêcher. Les enfants d'un processus gardent sa session
+ * jusqu'à leur mort ; c'est elle qu'on inscrit, et elle qu'on relit.
+ */
+function sessionDe(pid) {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    // Le nom de commande est entre parenthèses et peut contenir des espaces :
+    // les champs se comptent APRÈS la dernière parenthèse fermante.
+    const apres = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+    // state(0) ppid(1) pgrp(2) session(3)
+    return Number(apres[3]) || null;
+  } catch {
+    return null;
+  }
+}
+
+function commandeDe(pid) {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').join(' ').trim().slice(0, 100);
+  } catch {
+    return '';
+  }
+}
+
+/** Les processus encore VIVANTS d'une session, hors le nôtre. */
+export function survivantsDeLaSession(sid) {
+  if (!sid) return [];
+  const vivants = [];
+  for (const entree of readdirSync('/proc')) {
+    if (!/^\d+$/.test(entree)) continue;
+    const pid = Number(entree);
+    if (pid === process.pid) continue;
+    if (sessionDe(pid) === sid) vivants.push({ pid, commande: commandeDe(pid) });
+  }
+  return vivants;
+}
 
 /**
  * Où vit le verrou.
@@ -43,6 +87,7 @@ export const CHEMIN = join(tmpdir(), 'spark-e2e.verrou');
 function empreinteDuPorteur() {
   return JSON.stringify({
     pid: process.pid,
+    sid: sessionDe(process.pid),
     commande: process.argv.slice(1).join(' '),
     depuis: new Date().toISOString(),
   });
@@ -73,9 +118,29 @@ function lireLePorteur() {
 }
 
 export class VerrouTenu extends Error {
-  constructor(porteur) {
+  constructor(porteur, survivants = []) {
     const age = porteur?.depuis
       ? Math.round((Date.now() - Date.parse(porteur.depuis)) / 1000) : null;
+    if (survivants.length) {
+      // Le porteur est mort, sa pile non. Reprendre ici ferait tourner deux
+      // piles — c'est le second incident, celui du 2026-09-17. On REFUSE, et
+      // on nomme ce qu'il faut tuer.
+      super(
+        'Une pile d’épreuve tuée a laissé des processus VIVANTS sur ce poste, et '
+        + 'il ne peut y avoir qu’une pile à la fois.\n'
+        + `  porteur mort : PID ${porteur?.pid ?? 'inconnu'}`
+        + (porteur?.commande ? ` — ${porteur.commande}` : '')
+        + '\n  survivants de sa session :\n'
+        + survivants.map((s) => `    ${s.pid}  ${s.commande}`).join('\n')
+        + `\n  verrou : ${CHEMIN}\n`
+        + '  Tuez-les d’abord — `kill -9 '
+        + survivants.map((s) => s.pid).join(' ')
+        + '` — puis relancez UNE fois. Le verrou n’est pas repris tant qu’ils vivent.');
+      this.name = 'VerrouTenu';
+      this.porteur = porteur;
+      this.survivants = survivants;
+      return;
+    }
     // Deux refus, parce qu'ils appellent deux gestes différents. Dire « il se
     // libérera tout seul » d'un verrou illisible serait faux, et ferait
     // attendre indéfiniment quelque chose qui n'arrivera pas.
@@ -95,6 +160,7 @@ export class VerrouTenu extends Error {
       + suite);
     this.name = 'VerrouTenu';
     this.porteur = porteur;
+    this.survivants = [];
   }
 }
 
@@ -126,6 +192,10 @@ export function prendreLeVerrou({ journal = console } = {}) {
     // existe pour empêcher. Le §29.8 refuse plutôt qu'il ne devine.
     if (!porteur?.pid) throw new VerrouTenu(porteur);
     if (porteurVivant(porteur.pid)) throw new VerrouTenu(porteur);
+    // Porteur mort — mais sa pile ? Un Chromium orphelin est une épreuve qui
+    // tourne encore. Tant qu'un processus de sa session vit, on REFUSE.
+    const survivants = survivantsDeLaSession(porteur.sid);
+    if (survivants.length) throw new VerrouTenu(porteur, survivants);
     journal.warn?.(
       `Verrou d’épreuve abandonné par le PID ${porteur?.pid ?? 'inconnu'} `
       + '(processus disparu) : il est repris.');

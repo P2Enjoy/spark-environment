@@ -349,6 +349,14 @@ pas encore sont marquées.
 | `make e2e` / `pnpm e2e` | parcours complets contre la pile réelle | **oui** |
 | `make manuel` | reproduit les illustrations du manuel | **oui** |
 
+**Une seule épreuve lourde à la fois, et plafonnée** (`CLAUDE.md` §15 bis,
+`docs/DAT.md` §29.8 et §29.8 bis) : `make e2e`, `make e2e-un NOM="<nom du
+parcours>"`, `make captures` et `make gestes` tournent dans un scope systemd
+borné à 8 Go (`systemd-run --user --scope -p MemoryMax=8G`) — un emballement
+est tué par le noyau, jamais la machine —, et `e2e/verrou.mjs` refuse toute
+seconde pile, y compris une épave dont les navigateurs survivent. Aucun
+réglage ne relève la borne ni ne lève le verrou.
+
 ### Les deux scripts et leurs arguments
 
 Un réglage d'installation est un **argument nommé**, jamais une variable

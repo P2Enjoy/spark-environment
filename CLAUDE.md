@@ -810,6 +810,47 @@ Ce chemin peut utiliser :
 
 Ne pas contourner une exigence E2E en remplaçant le comportement par une simulation sans valeur probante.
 
+## 15 bis. UNE SEULE ÉPREUVE LOURDE À LA FOIS (règle non négociable du responsable)
+
+**IL EST INTERDIT DE LANCER DEUX CAMPAGNES E2E, DEUX PILES D'ÉPREUVE OU DEUX
+NAVIGATEURS DE PREUVE EN MÊME TEMPS SUR LE POSTE. JAMAIS. SOUS AUCUN PRÉTEXTE.**
+
+Cela vise toute commande qui monte un harnais lourd — `make e2e`, `node --test
+e2e/…`, un script Playwright de preuve, une pile de développement de test —,
+qu'elle soit lancée au premier plan, en tâche de fond, « pour voir », « en
+attendant », ou parce que la précédente « a l'air bloquée ».
+
+Motif, payé deux fois par le responsable (2026-09-14, 2026-09-17) : chaque
+harnais monte un runtime, une console et un Chromium. Deux d'un coup épuisent la
+mémoire du poste ; le noyau tue en `137` ; la mort brutale emporte les
+restaurations de fichiers et laisse le dépôt dans un état intermédiaire. Le coût
+n'est pas une preuve rouge : c'est une machine à genoux et des heures perdues.
+
+Ce que l'agent fait, sans exception :
+
+1. **AVANT** de lancer une épreuve lourde, vérifier qu'aucune ne tourne :
+   `ps` sur `node --test`, `chrome-headless-shell`, `playwright`, le runtime de
+   la pile. S'il en reste une, **attendre qu'elle finisse** ou la tuer
+   explicitement avec son arbre de processus — jamais en lancer une autre à
+   côté.
+2. Lancer **une seule** commande, **au premier plan**, avec un délai suffisant
+   pour qu'elle rende son verdict. Ne jamais la mettre en tâche de fond pour
+   « avancer sur autre chose » : il n'y a rien à faire d'autre pendant une
+   épreuve lourde que d'attendre son résultat.
+3. Si elle est tuée (`137`, délai dépassé), **ne pas relancer aussitôt** :
+   vérifier d'abord qu'aucun processus orphelin ne survit — un Chromium qui
+   traîne est une épreuve qui tourne encore —, puis relancer une fois.
+4. Le dépôt porte un **verrou exclusif dans le code** (`e2e/verrou.mjs`), sans
+   interrupteur ni variable de contournement. Un refus du verrou n'est pas une
+   erreur à contourner : c'est le poste qui dit « une épreuve tourne ». On
+   cherche qui la tient, on ne force jamais.
+5. Tout nouveau script qui lance un navigateur ou monte une pile **prend ce
+   verrou à l'import**, avant sa première allocation. Un script qui l'oublie
+   est un défaut bloquant, à corriger avant tout commit.
+
+Cette règle prime sur toute considération de rapidité. Un agent qui l'enfreint
+a commis une faute grave, quelle qu'ait été son intention.
+
 ## 16. Vérification visuelle
 
 Les tests automatisés ne remplacent pas l'observation visuelle.

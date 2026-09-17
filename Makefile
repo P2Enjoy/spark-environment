@@ -90,15 +90,25 @@ runProd:
 # Les parcours navigateur font partie de la campagne : un test hors campagne
 # cesse d'etre execute, puis cesse d'etre vrai.
 gestes:
-	node --test e2e/gestes.test.mjs
+	$(PLAFOND) node --test e2e/gestes.test.mjs
 
 # Parcours E2E : le harnais monte SA pile (docs/DAT.md §29.2). Sequentiel, car
 # les parcours partagent un navigateur et une pile.
+# CLAUDE.md §15 bis · docs/DAT.md §29.8 : une épreuve lourde tourne dans un
+# scope systemd PLAFONNÉ. Un emballement est tué à la borne par le noyau, jamais
+# la machine. Mesuré le 2026-09-17 : un seul harnais a atteint 27 Go et mis le
+# poste à genoux trois fois. Aucun réglage ne relève la borne.
+PLAFOND := systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0
+
 e2e:
-	node --test --test-concurrency=1 e2e/parcours.test.mjs
+	$(PLAFOND) node --test --test-concurrency=1 e2e/parcours.test.mjs
+
+# Un seul parcours, par son nom : make e2e-un NOM="isoler le parc"
+e2e-un:
+	$(PLAFOND) node --test --test-concurrency=1 --test-name-pattern="$(NOM)" e2e/parcours.test.mjs
 
 captures:
-	node e2e/captures.mjs
+	$(PLAFOND) node e2e/captures.mjs
 
 # Les illustrations du manuel sont PRODUITES depuis l'application (DAT §30.1),
 # jamais collectees a la main.
