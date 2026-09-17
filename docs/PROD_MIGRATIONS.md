@@ -121,10 +121,12 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-22 · Isoler le parc : chaque Spark isolé du réseau des autres (SPK-109)
 
 ```
-État          : EN ATTENTE — le code n'existe pas. Trois mesures dues avant
-                (docs/DAT.md §57.5), autorisées le 2026-09-17 sur des cellules
-                d'essai créées pour cela, réversibles, jamais sur une cellule
-                de locataire.
+État          : EN ATTENTE — le code n'existe pas. Les trois mesures dues
+                (docs/DAT.md §57.5) ont été FAITES le 2026-09-17 sur deux
+                cellules d'essai créées par le produit, et concluent toutes
+                trois : la conception tient. Le geste sur les cellules de
+                locataires attend le feu vert explicite du responsable
+                (arbitrage du 2026-09-17).
 Objectif      : poser security.port_isolation et security.ipv4_filtering sur
                 l'eth0 de chaque Spark, et la chaîne forward de spark_filter
                 (docs/DAT.md §57). Change le comportement des Sparks existants.

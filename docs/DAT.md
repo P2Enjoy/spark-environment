@@ -13225,22 +13225,39 @@ chaîne `forward` de `spark_filter` existe avec sa règle. Le relevé nomme les
 Sparks qui manquent. Une Forge antérieure rend un AVERTISSEMENT nommé, pas un
 échec : elle n'est pas moins sûre qu'hier.
 
-### 57.5 Les mesures dues avant d'implémenter
+### 57.5 Les mesures, faites le 2026-09-17
 
-Autorisées par le responsable le 2026-09-17, **sur une cellule d'essai créée
-pour cela, réversibles, jamais sur une cellule de locataire** :
+Autorisées par le responsable le 2026-09-17, faites le soir même sur deux
+cellules d'essai **créées par le produit** — `essai-a` `10.77.0.18`, `essai-b`
+`10.77.0.19`, `POST /v1/sparks` puis `apply` et `start`, donc au registre et
+sous `REG-FANTOME` —, jamais sur une cellule de locataire. Le script est
+`scripts/mesures-spk109.sh` ; les trois réponses sont **oui** :
 
-1. `security.port_isolation=true` sur une cellule qui tourne : s'applique-t-il à
-   chaud, et `bridge -d link` montre-t-il `isolated on` ? Deux cellules d'essai
-   isolées ne se joignent plus ; chacune garde DNS, sortie et ingress ;
-2. un `drop` en `forward` à `filter + 10` survit-il à l'`accept` explicite de
-   `fwd.sparkbr0` ? Le §48 ne l'a prouvé que côté `input` ;
-3. `security.ipv4_filtering=true` refuse-t-il une trame émise sous l'adresse d'un
-   voisin ?
+1. **`security.port_isolation=true` s'applique à chaud.** `incus config device
+   set` accepté sur une cellule en marche, `bridge -d link` passe de `isolated
+   off` à `isolated on` sur les deux veth. Avant : `A → B` et `B → A` joints ;
+   après : **injoignables**, tandis que `A` garde sa passerelle, son DNS, sa
+   sortie (`200`) et l'ingress (`302`). `A` joint encore `redaction-devis`,
+   dont le port n'est pas isolé — l'isolation est une propriété des **deux**
+   ports, d'où la migration de tout le parc (§57.3).
+2. **Le détour existe, et le `drop` en `forward` le ferme.** Une route
+   `B/32 via 10.77.0.1` posée dans `A` : trois échos livrés à `B` (`InEchos`
+   de `/proc/net/snmp`, 4 → 7) malgré l'isolation de port — la Forge route et
+   réémet. La table d'essai posée en `forward` à `filter + 10`, `iifname
+   "sparkbr0" oifname "sparkbr0" drop` : **0** écho livré (7 → 7). Le `drop`
+   survit donc à l'`accept` explicite de `fwd.sparkbr0`, comme la sémantique de
+   netfilter le dit ; la sortie et l'ingress de `A` restent en `200` et `302`.
+3. **`security.ipv4_filtering=true` ferme l'usurpation, à chaud.** `A` porte
+   l'adresse de `B` en secondaire et envoie trois échos à la passerelle sous
+   cette adresse : un compteur `nft` en `input` avant `spark_filter` en voit
+   **3**. Le drapeau posé sans redémarrage : **0** sur trois envois ; le trafic
+   légitime de `A` — passerelle, DNS, sortie — intact. `security.mac_filtering`
+   n'apparaît pas dans la configuration : Incus l'emporte avec le premier, sans
+   l'écrire.
 
 `br_netfilter` est mesuré absent : les trames commutées ne traversent pas les
-hooks IP, et la conception ci-dessus en dépend. Chaque mesure est consignée au
-journal avec sa commande et son résultat.
+hooks IP, et la conception à deux étages en dépend. Le journal du 2026-09-17
+porte les commandes et les relevés.
 
 ### 57.6 Ce que l'unité ne prétend pas
 

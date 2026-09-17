@@ -11998,3 +11998,48 @@ effet sur la preuve, le terminal étant inchangé.
 
 **Ce que le locataire peut faire dès maintenant** : réessayer. Rien à changer
 de son côté. La réponse rédigée pour lui attend la relecture du responsable.
+
+## 2026-09-17 · SPK-109 — les trois mesures, et un script qui s'est mangé lui-même
+
+**Deux cellules d'essai par le produit**, `essai-a` et `essai-b`, `POST
+/v1/sparks` puis `apply` et `start` sur la Forge : au registre, comptées, et
+sous `REG-FANTOME` — pas un `incus launch` à côté du produit. `10.77.0.18` et
+`10.77.0.19`, joignables l'une l'autre au départ, comme mesuré le matin.
+
+**M1 — l'isolation de port s'applique à chaud.** `incus config device set
+essai-a eth0 security.port_isolation=true`, accepté sur une cellule en marche ;
+`bridge -d link` passe à `isolated on` sur les deux veth. `A → B` et `B → A` :
+injoignables. `A` garde sa passerelle, son DNS, sa sortie (`200`) et l'ingress
+(`302`). `A` joint encore `redaction-devis`, dont le port n'est pas isolé :
+l'isolation est une propriété des **deux** ports, c'est ce qui impose la
+migration de tout le parc et non Spark par Spark.
+
+**M2 — le détour existe, et le `drop` le ferme.** Une route `B/32 via
+10.77.0.1` dans `A` : trois échos livrés à `B` — `InEchos` de
+`/proc/net/snmp`, 4 → 7 — malgré l'isolation : la Forge route et réémet sur le
+port isolé, exactement le détour que le §57.2 décrit. Une table d'essai en
+`forward` à `filter + 10`, `iifname "sparkbr0" oifname "sparkbr0" drop` : 7 → 7,
+zéro livré. **Le `drop` survit à l'`accept` explicite de `fwd.sparkbr0`** —
+la question laissée ouverte par `docs/EXPLORATION_EGRESS.md` est close, et la
+sortie comme l'ingress de `A` restent intacts.
+
+**M3 — l'anti-usurpation ferme, à chaud.** `A` porte l'adresse de `B` en
+secondaire et envoie trois échos à la passerelle sous cette adresse ; un
+compteur `nft` posé en `input` avant `spark_filter` en voit 3. Le drapeau
+`security.ipv4_filtering=true` posé sans redémarrage : 0 sur trois envois ; le
+trafic légitime de `A` intact. `security.mac_filtering` reste vide dans la
+configuration — Incus l'emporte avec le premier sans l'écrire, et le préflight
+devra lire le premier, pas le second.
+
+**Le script s'est mangé lui-même.** Première exécution en `ssh 'bash -s' <
+script` : `incus exec` attache l'entrée standard, et a **lu le reste du script**
+comme entrée de la commande dans la cellule — la mesure s'est arrêtée après la
+première ligne, sans rien avoir modifié. Corrigé en copiant le script sur la
+Forge et en fermant l'entrée de chaque `incus exec` (`</dev/null`). À retenir
+pour tout relevé qui exécute dans une cellule. La quatrième mesure — les noms
+entre membres, pour SPK-110 — n'a pas été jouée : une parenthèse dans une
+sous-commande a fait échouer l'analyse de la fin du script. Elle se joue avec
+SPK-110, sur un bridge privé, là où elle compte.
+
+Les cellules d'essai restent en place, drapeaux posés, pour les mesures de
+SPK-110 et SPK-111 ; elles seront supprimées par le produit à la fin du lot.

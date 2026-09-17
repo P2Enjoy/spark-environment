@@ -354,13 +354,16 @@ En **écriture** sur la Forge — **autorisées par le responsable le 2026-09-17
 sur des cellules d'essai créées pour cela, réversibles, jamais sur une cellule de
 locataire ; la Forge est traitée comme une Forge de validation par ce choix :
 
-3. `security.port_isolation=true` sur l'`eth0` d'un Spark d'essai : s'applique-t-il
-   à chaud, coupe-t-il `A → B`, laisse-t-il DNS, NAT et ingress intacts ?
+3. `security.port_isolation=true` sur l'`eth0` d'un Spark d'essai — **fait le
+   2026-09-17 : oui**, à chaud, `A → B` coupé, DNS, NAT et ingress intacts
+   (`docs/DAT.md` §57.5) ;
 4. un `drop` en `forward` dans `spark_filter` survit-il à l'`accept` explicite
-   d'Incus ? — dû depuis `docs/EXPLORATION_EGRESS.md` ;
-5. `security.ipv4_filtering=true` ferme-t-il l'usurpation d'adresse ? — dû aussi ;
+   d'Incus ? — **fait : oui**, 0 écho livré sur 3 par le détour routé ;
+5. `security.ipv4_filtering=true` ferme-t-il l'usurpation d'adresse ? — **fait :
+   oui**, à chaud, 0 paquet usurpé sur 3 ;
 6. un device `proxy` en `nat=true` écoutant sur l'adresse de la Forge d'un bridge
-   privé : le flux est-il bien traduit, et `ct status dnat` le voit-il ?
+   privé : le flux est-il bien traduit, et `ct status dnat` le voit-il ? — dû
+   avant SPK-111.
 
 ## 7. Ordre retenu par le responsable le 2026-09-17
 

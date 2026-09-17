@@ -7647,7 +7647,7 @@ poser, borné aux ports de l'ingress.
   terminal d'un Spark et `22` refusé, captures observées ; OP-21 basculé dans la
   baseline ; documentation complète ; `@spec` / `@verifies` posés.
 
-### [ ] SPK-109 · Chaque Spark est isolé du réseau des autres
+### [~] SPK-109 · Chaque Spark est isolé du réseau des autres
 
 **Demandé par le responsable le 2026-09-17** : « chaque Spark isolé du réseau
 des autres, autrement dit ils ne peuvent pas se parler même s'ils connaissent
@@ -7681,7 +7681,10 @@ cellules s'échangent leurs trames en couche 2.
    *Fait, et committé avant le code.*
 2. **Mesures** — les trois du §57.5, consignées au journal avec commandes et
    résultats ; si l'une infirme la conception, retour à l'arbitrage avant tout
-   code.
+   code. *Fait le 2026-09-17, les trois réponses sont oui : isolation de port
+   à chaud, `drop` en `forward` qui survit à l'`accept` d'Incus, anti-usurpation
+   à chaud. Cellules d'essai `essai-a`/`essai-b` créées par le produit ;
+   `scripts/mesures-spk109.sh`.*
 3. **Rendu et pose** — les clés dans `translate.py`, la chaîne dans
    `firewall.nft`, preuves unitaires par témoin.
 4. **État et geste** — l'état au dossier, *Isoler le parc* côté Forge avec audit
