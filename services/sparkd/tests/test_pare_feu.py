@@ -25,11 +25,18 @@ table inet spark_filter {
     iifname "sparkbr0" ip protocol icmp accept
     iifname "sparkbr0" ip6 nexthdr ipv6-icmp accept
     iifname "sparkbr0" drop
+    iifname "spn*" ct state established,related accept
+    iifname "spn*" udp dport { 53, 67 } accept
+    iifname "spn*" tcp dport 53 accept
+    iifname "spn*" ip protocol icmp accept
+    iifname "spn*" drop
   }
   chain forward {
     type filter hook forward priority 10; policy accept;
     ct state established,related accept
     iifname "sparkbr0" oifname "sparkbr0" drop
+    iifname "spn*" drop
+    oifname "spn*" drop
   }
 }
 """
@@ -59,7 +66,7 @@ def test_l_ordre_d_OP_11_tient_et_l_ingress_precede_le_drop():
     """§48.2 bis : les connexions établies d'abord, le drop en dernier — inversé,
     chaque Spark devient muet. §56.2 : 80 et 443 AVANT le drop, sinon la ligne
     est morte."""
-    lignes = pare_feu.regles("sparkbr0")
+    lignes = [r for r in pare_feu.regles("sparkbr0") if 'iifname "sparkbr0"' in r]
     assert lignes[0].endswith("ct state established,related accept")
     assert lignes[-1] == 'iifname "sparkbr0" drop'
     assert lignes.index('iifname "sparkbr0" tcp dport { 53, 80, 443 } accept') < len(lignes) - 1
@@ -87,6 +94,25 @@ def test_le_verrou_forward_ferme_le_detour_par_la_passerelle():
     assert 'iifname "sparkbr0" oifname "sparkbr0" drop' in forward
     assert forward.index("established") < forward.index("drop")
     assert "priority 10" in forward
+
+
+def test_un_reseau_prive_n_ouvre_pas_la_forge_et_ne_mene_nulle_part():
+    """@verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.3, §58.6
+
+    MESURÉ le 2026-09-18 : sans ces lignes, sshd répondait sur la passerelle du
+    réseau privé et la Forge routait spn* → sparkbr0. Le résolveur et le DHCP
+    du réseau restent ouverts — ils donnent aux membres adresse et noms —,
+    l'ingress non : un service public se joint par sparkbr0."""
+    entree = pare_feu.regles("sparkbr0", "input")
+    prives = [r for r in entree if 'iifname "spn*"' in r]
+    assert prives[-1] == 'iifname "spn*" drop'
+    assert any("udp dport { 53, 67 } accept" in r for r in prives)
+    assert any("tcp dport 53 accept" in r for r in prives)
+    assert not any("443" in r or "80" in r for r in prives), "pas d'ingress par un réseau privé"
+    rendu = pare_feu.rendre("sparkbr0")
+    forward = rendu[rendu.index("chain forward"):]
+    assert 'iifname "spn*" drop' in forward and 'oifname "spn*" drop' in forward
+    assert forward.index("established") < forward.index('iifname "spn*" drop')
 
 
 def test_le_bridge_est_celui_qu_on_lui_donne():

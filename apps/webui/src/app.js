@@ -31,7 +31,7 @@ import { renderSparkCreate, renderAvertissement, formatQuota, validateShape, DEF
 import { ADMIN_VIDE, apercu, refusZones, renderEffet, renderRecetteApercu, zonePour,
          renderVerification, refusEcritureRecette }
   from './components/spark-admin.js';
-import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE, ISOLATION_VIDE } from './components/forge-view.js';
+import { renderForgeView, UPDATE_VIDE, REBOOT_VIDE, ISOLATION_VIDE, RESEAUX_VIDE } from './components/forge-view.js';
 import { INSTALLER_VIDE, observedValues } from './components/forge-installer.js';
 import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE,
          FACETTES_SPARK } from './components/forge-images.js';
@@ -99,6 +99,10 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        // `undefined` tant qu'on n'a pas lu ; `null` si la
                        // lecture a échoué — « pas relevé » n'est pas « non isolé ».
                        isolation: undefined, isolationUi: { ...ISOLATION_VIDE },
+                       // SPK-110 · §58.5 : le catalogue des réseaux privés et la
+                       // modale de création.
+                       reseaux: undefined,
+                       reseauxUi: { ...RESEAUX_VIDE, values: { ...RESEAUX_VIDE.values } },
                        installer: { ...INSTALLER_VIDE,
                                     values: { ...INSTALLER_VIDE.values } } },
                facette: '',
@@ -412,6 +416,45 @@ function brancher() {
     });
   racine.querySelector('[data-isolation="engager"]')
     ?.addEventListener('click', () => isolerLeParc());
+  // SPK-110 · §58.4 : créer un réseau privé (modale), en supprimer un (confirmé).
+  const reseauxUi = etat.forge.reseauxUi;
+  racine.querySelector('[data-ouvre-reseau]')?.addEventListener('click', () => {
+    reseauxUi.open = true;
+    reseauxUi.refusal = null;
+    reseauxUi.confirming = null;
+    peindre();
+  });
+  const formulaireReseau = racine.querySelector('[data-modale="reseau-creation"]');
+  if (formulaireReseau) {
+    for (const controle of formulaireReseau.querySelectorAll('input')) {
+      controle.addEventListener('input', () => {
+        reseauxUi.values[controle.name] = controle.value;
+        // L'aide sous le nom montre le domaine que porteront les membres ; elle
+        // suit la frappe SUR PLACE, sans repeindre (§14.3).
+        const aide = racine.querySelector('#reseau-nom-aide .technique');
+        if (aide && controle.name === 'name') aide.textContent = `<spark>.${controle.value || 'nom'}`;
+      });
+    }
+    formulaireReseau.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      creerReseau();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-supprime-reseau]')) {
+    bouton.addEventListener('click', () => {
+      reseauxUi.confirming = bouton.dataset.supprimeReseau;
+      reseauxUi.refusal = null;
+      peindre();
+      racine.querySelector('.confirmation .bouton--destructif')?.focus();
+    });
+  }
+  racine.querySelector('[data-annule-reseau]')?.addEventListener('click', () => {
+    reseauxUi.confirming = null;
+    peindre();
+  });
+  for (const bouton of racine.querySelectorAll('[data-confirme-suppression-reseau]')) {
+    bouton.addEventListener('click', () => supprimerReseau(bouton.dataset.confirmeSuppressionReseau));
+  }
   for (const bouton of racine.querySelectorAll('[data-action="diagnostiquer-forge"]')) {
     bouton.addEventListener('click', diagnostiquerForge);
   }
@@ -509,6 +552,9 @@ function brancher() {
     onFermer: () => {
       etat.admin.open = null;
       etat.admin.refusal = null;
+      // SPK-110 : la modale de création d'un réseau suit le MÊME contrat.
+      etat.forge.reseauxUi.open = false;
+      etat.forge.reseauxUi.refusal = null;
       etat.catalogue.ui.open = false;
       etat.catalogue.ui.refusal = null;
       // SPK-92 : la modale du dépôt suit le MÊME contrat. L'oublier ici la
@@ -1640,7 +1686,8 @@ function brancherPanneaux() {
   // du catalogue, qui vit sur une autre destination et a son propre état.
   for (const bouton of racine.querySelectorAll(
     '[data-ouvre="route"], [data-ouvre="key"], [data-ouvre="snapshot"],'
-    + ' [data-ouvre="protection"], [data-ouvre="port"], [data-ouvre="recette"]')) {
+    + ' [data-ouvre="protection"], [data-ouvre="port"], [data-ouvre="recette"],'
+    + ' [data-ouvre="reseau"]')) {
     bouton.addEventListener('click', () => {
       admin.open = bouton.dataset.ouvre;
       admin.refusal = null;
@@ -1806,7 +1853,7 @@ function brancherPanneaux() {
   const formulaire = racine.querySelector(
     '[data-modale="route"], [data-modale="key"], [data-modale="snapshot"],'
     + ' [data-modale="protection"], [data-modale="dns"], [data-modale="port"],'
-    + ' [data-modale="recette"]');
+    + ' [data-modale="recette"], [data-modale="reseau"]');
   if (formulaire) {
     for (const controle of formulaire.querySelectorAll('input, select')) {
       controle.addEventListener('input', () => {
@@ -1845,6 +1892,7 @@ function brancherPanneaux() {
       if (quoi === 'dns') return poserEnregistrementDns();
       if (quoi === 'port') return publierPort();
       if (quoi === 'recette') return ecrireRecette();
+      if (quoi === 'reseau') return attacherReseau();
     });
   }
 
@@ -1855,8 +1903,10 @@ function brancherPanneaux() {
         admin.confirming = { kind, id: bouton.getAttribute(`data-${attribut}`) };
         admin.refusal = null;
         peindre();
-        // §6.22 : le focus entre dans la confirmation.
-        racine.querySelector('.confirmation .bouton--destructif')?.focus();
+        // §6.22 : le focus entre dans la confirmation — sur son bouton
+        // d'engagement, destructif ou non (SPK-DS-09 : détacher interrompt,
+        // il ne détruit pas).
+        racine.querySelector('.confirmation .bouton--destructif, .confirmation .bouton')?.focus();
       });
     }
   };
@@ -1881,6 +1931,8 @@ function brancherPanneaux() {
 
   demande('retire-route', 'route');
   demande('retire-port', 'port');
+  // SPK-110 · §58.4 : détacher d'un réseau privé se confirme dans le flux.
+  demande('detache-reseau', 'reseau');
   demande('restaure', 'snapshot-restore');
   demande('supprime-instantane', 'snapshot-delete');
 
@@ -1917,6 +1969,9 @@ function brancherPanneaux() {
       `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots/${encodeURIComponent(nom)}`)));
   geste('confirme-port', (port) =>
     agir('port', () => appel('DELETE', `/v1/ports/${encodeURIComponent(port)}`)));
+  geste('confirme-detachement', (reseau) =>
+    agir('reseau', () => appel('DELETE',
+      `/v1/networks/${encodeURIComponent(reseau)}/members/${encodeURIComponent(etat.spark.name)}`)));
   geste('confirme-restauration', (nom) => restaurer(nom, false));
   // §26.5 : l'acceptation de la perte n'est atteignable qu'APRÈS le refus.
   geste('accepte-perte', (nom) => restaurer(nom, true));
@@ -2539,6 +2594,17 @@ async function poserEnregistrementDns() {
  * Aucun contrôle d'unicité ici : le port public est UNIQUE en base, et une
  * vérification d'interface ne protégerait de rien face à deux consoles.
  */
+/** Attache ce Spark au réseau privé choisi (SPK-110, docs/DAT.md §58.4). */
+async function attacherReseau() {
+  const disponibles = (etat.detail?.reseaux ?? [])
+    .filter((r) => !(etat.detail?.memberships ?? []).some((m) => m.network === r.name));
+  const choix = etat.admin.values.reseau || disponibles[0]?.name || '';
+  const resultat = await agir('reseau', () => appel('POST',
+    `/v1/networks/${encodeURIComponent(choix)}/members`, { spark: etat.spark.name }));
+  if (resultat?.ok) etat.admin.values.reseau = '';
+  return resultat;
+}
+
 async function publierPort() {
   const v = etat.admin.values;
   const resultat = await agir('port', () => appel('POST', '/v1/ports', {
@@ -3027,6 +3093,49 @@ async function releverRedemarrage() {
  * refuse. L'écran ne déduit rien de ce qu'il a demandé — il RELIT l'état après
  * (DESIGN_SYSTEM.md §1.3, §14.9).
  */
+/**
+ * Créer un réseau privé, puis supprimer un réseau (SPK-110, docs/DAT.md §58.4).
+ *
+ * Le refus de création s'affiche DANS la modale, près du bouton (§6.27) ; le
+ * refus de suppression — un réseau habité, nommé — dans la section. L'écran
+ * RELIT le catalogue après chaque geste (§1.3).
+ */
+async function creerReseau() {
+  const ui = etat.forge.reseauxUi;
+  ui.busy = true;
+  ui.refusal = null;
+  peindre();
+  const resultat = await appel('POST', '/v1/networks', { name: ui.values.name, note: ui.values.note })
+    .catch((erreur) => ({ ok: false, corps: { detail: { message: erreur.message } } }));
+  if (resultat.ok) {
+    ui.open = false;
+    ui.values = { ...RESEAUX_VIDE.values };
+    etat.forge.reseaux = await api('/v1/networks').catch(() => null);
+  } else {
+    const detail = resultat.corps?.detail ?? resultat.corps ?? {};
+    ui.refusal = { modale: detail.message ?? 'Le serveur a refusé ce geste.' };
+  }
+  ui.busy = false;
+  peindre();
+}
+
+async function supprimerReseau(nom) {
+  const ui = etat.forge.reseauxUi;
+  ui.busy = true;
+  peindre();
+  const resultat = await appel('DELETE', `/v1/networks/${encodeURIComponent(nom)}`)
+    .catch((erreur) => ({ ok: false, corps: { detail: { message: erreur.message } } }));
+  ui.confirming = null;
+  if (resultat.ok) {
+    etat.forge.reseaux = await api('/v1/networks').catch(() => null);
+  } else {
+    const detail = resultat.corps?.detail ?? resultat.corps ?? {};
+    ui.refusal = { liste: detail.message ?? 'Le serveur a refusé ce geste.' };
+  }
+  ui.busy = false;
+  peindre();
+}
+
 async function isolerLeParc() {
   const ui = etat.forge.isolationUi;
   ui.erreur = null;
@@ -3361,7 +3470,7 @@ async function chargerDetail(nom, facette = '') {
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
-           env, catalogue, forge, , isolation] = await Promise.all([
+           env, catalogue, forge, , isolation, memberships, reseaux] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -3393,9 +3502,12 @@ async function chargerDetail(nom, facette = '') {
       chargerDossier(nom),
       // SPK-109 · §57.3 : ce que dit Incus de l'isolation de CE Spark.
       api(`/v1/sparks/${encodeURIComponent(nom)}/isolation`).catch(() => null),
+      // SPK-110 · §58.5 : les adhésions du Spark, et les réseaux qu'il peut rejoindre.
+      api(`/v1/sparks/${encodeURIComponent(nom)}/networks`).then((r) => r.memberships).catch(() => []),
+      api('/v1/networks').then((r) => r.networks).catch(() => []),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit, isolation,
+                    snapshots, audit, isolation, memberships, reseaux,
                     ports: (publies.ports ?? []).filter((p) => p.spark_id === etat.spark.id),
                     reservedPorts: publies.reserved ?? [], env, catalogue,
                     pools: forge?.pools ?? null, cores: forge?.cpu?.cores_total ?? null };
@@ -3583,15 +3695,18 @@ async function chargerHote() {
   }
   try {
     etat.forge.host = await api('/v1/forge');
-    const [cores, sparks, isolation] = await Promise.all([
+    const [cores, sparks, isolation, reseaux] = await Promise.all([
       api('/v1/forge/cores').catch(() => null),
       api('/v1/sparks').then((r) => r.sparks).catch(() => []),
       // SPK-109 · §57.3 : lue dans Incus à chaque ouverture de l'écran ; une
       // lecture en échec rend `null`, que l'écran nomme (§14.6).
       api('/v1/forge/isolation').catch(() => null),
+      // SPK-110 · §58.5 : le catalogue, membres compris.
+      api('/v1/networks').catch(() => null),
     ]);
     etat.forge.cores = cores;
     etat.forge.isolation = isolation;
+    etat.forge.reseaux = reseaux;
     // La carte des cœurs porte des identifiants de Sparks ; l'écran affiche des
     // NOMS. Un identifiant interne sans intérêt ne doit pas atteindre l'écran
     // (docs/DESIGN_SYSTEM.md §3.1).

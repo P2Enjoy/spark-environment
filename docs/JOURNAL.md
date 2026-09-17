@@ -12166,3 +12166,68 @@ l'interface n'est pas configurée. Le champ du plan d'installation pour le pool
 est différé, dit au DAT et au backlog : la migration porte `10.78.0.0/16`.
 Tout est retiré après mesure : réseau supprimé, devices retirés, drop-ins
 effacés, `essai-a` revenue à sa seule `eth0`.
+
+## 2026-09-18 · SPK-110 — le code, du registre à l'écran, et ce que l'épreuve a corrigé
+
+**Le registre et le rendu.** Migration `018` — deux tables, une colonne sur
+`forge` ; `reseaux.py` attribue le sous-réseau sur le pool et l'adresse sur le
+réseau, comme `addressing` le fait pour `sparkbr0`. Deux décisions prises en
+écrivant, et consignées ici parce que la conception ne les avait pas :
+
+- **le premier `/24` du pool n'est pas attribué.** `spn0` et `10.78.0.0/24`
+  se lisent comme « aucun » — dans un `ip addr`, dans un journal, dans une
+  conversation. Une interface qui porte le nom de l'absence finirait par être
+  prise pour elle. Le pool compte donc 255 sous-réseaux, `spn1` en tête ; le
+  seed, l'épreuve et la documentation le disent ;
+- **le device NIC n'est pas rendu par `translate.py`.** La conception disait
+  « avec les autres devices, carte régénérée entière ». Mais la carte naît du
+  manifeste, qui ne sait rien des adhésions, et rendre le device là aurait
+  obligé `translate` à lire le registre. Le device est posé par le geste —
+  `update_device_config`, lecture-modification-écriture — et retiré par le
+  détachement. Avant de le décider, j'ai lu les deux réécritures de devices
+  que le produit fait ensuite : `set_publication_devices` ne touche que les
+  `pub-*`, le changement de quotas ne pose que `root` et la configuration. Un
+  `spn<n>` survit aux deux. Lu, pas supposé.
+
+**Dans la cellule**, le drop-in networkd mesuré le matin est posé par le même
+chemin que l'amorçage — `push_file`, `networkctl reload`, `reconfigure` —, après
+que le relevé de l'amorçage a dit la famille. Sur une famille sans networkd, le
+device et l'adresse sont posés quand même, et l'adhésion porte
+`cell_configured = 0` avec sa raison : le locataire configure lui-même, et le
+dossier le lui dit. Ce n'est pas déduit du nom de l'image, c'est ce que le
+geste a constaté.
+
+**La console.** Le catalogue sur la Forge, sous la carte des cœurs ; les
+adhésions dans la section *Réseau* que SPK-109 avait ouverte au dossier. La
+ligne d'un réseau porte ses membres sur une ligne pleine largeur en dessous :
+le `<li>` d'une liste administrable est un `flex` qui fait de chaque nœud un
+item, et un `<br>` n'y coupe rien — une structure, pas un retour à la ligne.
+Détacher se confirme sans bouton destructif : cela interrompt, cela ne détruit
+pas (SPK-DS-09). Huit preuves de composant.
+
+**Ce que l'épreuve E2E a corrigé**, en trois passes sur le doublon, une seule à
+la fois, plafonnée :
+
+1. l'assertion attendait `spn0` et `10.78.0.0/24` — le pool avait raison, la
+   première rédaction de l'épreuve, non ; et « (protégé) » sur crm-production,
+   que le seed ne protège pas — c'est `analytics` qui porte la démonstration ;
+2. l'attente de « labo » après la création se satisfaisait de l'aide de la
+   modale, qui dit déjà `<spark>.labo` pendant l'envoi : on attend la LIGNE du
+   catalogue, pas le mot ;
+3. **le refus de supprimer un réseau habité n'était pas au journal.** Le service
+   levait avant d'écrire. Un geste destructif refusé est un fait du journal
+   (§21.1) — `sparks.py` le fait pour le redimensionnement — ; la trace est
+   maintenant écrite avant de lever, en autocommit, et une preuve unitaire la
+   cherche.
+
+Puis vert : un parcours, douze captures observées aux deux formats. Sur le
+poste, la règle du §15 bis tenue : `ps` avant chaque lancement, `make e2e-un`,
+jamais deux. Le harnais du manuel prend le plafond à son tour, il ne l'avait
+pas.
+
+**Ce qui reste** : déployer (OP-23), puis la preuve depuis les terminaux
+d'essai-a et d'essai-b — un réseau créé par la console, deux adhésions, `ping`
+par nom, rien vers Internet ni vers la Forge par `spn<n>` —, et les
+illustrations de M13 produites par `make manuel`. Le cas d'un conteneur Docker
+qui résout `<spark>.<réseau>` par le résolveur de sa cellule n'est **pas
+mesuré** : le manuel dit de le vérifier, et donne l'adresse en repli.

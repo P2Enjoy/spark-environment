@@ -1210,6 +1210,58 @@ Preuves observées : `e2e/captures/spk109-isolation-avant.jpg`, `-avant-mobile`,
 *Sparks & conteneurs* recouvre une ligne du pool mémoire — trait de SPK-DS-16,
 antérieur, sans effet sur cette section.
 
+### SPK-DS-30 · Les réseaux privés : un catalogue sur la Forge, des adhésions au dossier, et rien qui ne se nomme
+
+**Date** : 2026-09-18 · SPK-110 · `DAT.md` §58.4, §58.5, §58.6
+
+Deux surfaces, un seul objet. La section *Réseaux privés* de l'écran Forge est
+le **catalogue** — l'objet y naît et y meurt ; la section *Réseau* du dossier
+d'un Spark (facette *Infos*, sous l'isolation de SPK-DS-29) porte ses
+**adhésions** — c'est là qu'on attache et qu'on détache, parce que c'est le
+Spark qui reçoit l'interface.
+
+**Règles :**
+
+- **une ligne par réseau, et ses membres sur une ligne pleine largeur en
+  dessous** (§6.19, §14.8) : l'identité — nom, sous-réseau, interface, note —,
+  le geste à droite, puis « membres : a, b » liés à leurs dossiers, ou « aucun
+  membre ». Deux natures, deux lignes ; pas un badge ;
+- **le pool se compte** — « n attribués sur 255 (10.78.0.0/16) » —, comme les
+  adresses privées ; l'épuisement est un refus nommé au moment du geste, pas un
+  compteur rouge ;
+- **créer passe par une modale** (§6.27) : nom et note ; l'aide sous le nom
+  montre `<spark>.<nom>` et suit la frappe sur place (§14.3) — c'est le contrat
+  que le nom engage. Le refus — nom pris, pool épuisé — se lit dans la modale,
+  près du bouton ;
+- **supprimer est destructif et se confirme dans le flux** (§6.22, §6.23), en
+  nommant le réseau et le sous-réseau rendu au pool. Le refus d'un réseau habité
+  se lit dans la section, et **nomme les membres** — ce que l'exploitant doit
+  détacher d'abord ;
+- **au dossier, une adhésion dit tout ce que la cellule a reçu** : réseau,
+  interface `spn<n>`, adresse, et le nom `<spark>.<réseau>` ; un badge « non
+  appliquée » tant que le pilote n'a pas posé ; et quand le produit n'a pas pu
+  configurer l'interface dans la cellule, un avertissement sous la ligne, avec
+  la raison et le geste qui reste (§14.5) ; une adhésion configurée **avec une
+  précision** — « cellule arrêtée : configuration posée, prise au démarrage » —
+  la porte sur une ligne de précision sous la ligne, pas en avertissement :
+  rien n'y reste à faire ;
+- **attacher passe par une modale à un seul choix** : les réseaux dont le Spark
+  n'est pas membre ; s'il n'en reste aucun, la modale explique, renvoie à la
+  Forge, et se ferme — sans bouton d'engagement (§6.27) ;
+- **détacher se confirme dans le flux, sans bouton destructif** (SPK-DS-09) :
+  cela interrompt, cela ne détruit pas — la confirmation dit que l'interface
+  disparaît et que rien n'est détruit ;
+- **un Spark protégé garde ses gestes visibles et indisponibles** (§9.9), avec
+  la phrase « levez la protection d'abord » ;
+- **l'écran relit après chaque geste** (§1.3) : le catalogue et les adhésions
+  viennent d'une nouvelle lecture, jamais de ce que l'écran croit avoir fait.
+
+Preuves observées : `e2e/captures/spk110-catalogue.jpg`, `-catalogue-mobile`,
+`-creation`, `-creation-refusee`, `-suppression-confirmation`,
+`-suppression-refusee`, `-attacher`, `-dossier-membre`,
+`-dossier-membre-mobile`, `-detacher-confirmation`, `-catalogue-habite`,
+`-catalogue-apres`.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

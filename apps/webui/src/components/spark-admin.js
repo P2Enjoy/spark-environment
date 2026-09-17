@@ -62,6 +62,8 @@ export const ADMIN_VIDE = {
             public_port: '', target_port: '', protocol: 'tcp', port_note: '',
             // SPK-50 · §38.6 : la recette choisie, sa zone, et ses paramètres.
             recette: '', recette_zone: '', recette_params: {},
+            // SPK-110 · §58.5 : le réseau privé choisi dans la modale d'attachement.
+            reseau: '',
             // SPK-47 · §38.3 : ce qui sera écrit dans la zone.
             dns_zone: '', dns_address: '' },
   // SPK-48 · §18.3 bis : la route qu'une déclaration vient de dépasser, et le

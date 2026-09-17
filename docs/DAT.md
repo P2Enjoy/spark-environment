@@ -13361,25 +13361,28 @@ de plusieurs réseaux ; ses membres se joignent **par nom** (§58.6).
 
 ### 58.2 Le modèle
 
-Migration `018_reseaux_prives` ; contrat repris dans `docs/SCHEMA.md` §6 ter à
-l'écriture de la migration.
+Migration `018_reseaux_prives` ; contrat repris dans `docs/SCHEMA.md` §6 ter.
 
 ```
 private_network        (id TEXT PK, name TEXT UNIQUE, cidr TEXT UNIQUE,
-                        note TEXT, created_at TEXT)
+                        note TEXT, applied_at TEXT, created_at TEXT)
 private_network_member (network_id FK → private_network ON DELETE CASCADE,
                         spark_id   FK → spark           ON DELETE CASCADE,
                         ipv4_address TEXT, applied_at TEXT,
-                        PRIMARY KEY (network_id, spark_id))
-host                   + private_pool_cidr TEXT NOT NULL DEFAULT '10.78.0.0/16'
+                        cell_configured INTEGER, cell_note TEXT, created_at TEXT,
+                        PRIMARY KEY (network_id, spark_id),
+                        UNIQUE (network_id, ipv4_address))
+forge                  + private_pool_cidr TEXT NOT NULL DEFAULT '10.78.0.0/16'
 ```
 
 - **Le sous-réseau est attribué par le registre**, sur le pool
-  `host.private_pool_cidr` découpé en `/24`, le plus petit libre d'abord — la
-  règle du §15.3, transposée. Le pool est un champ du plan d'installation (§50),
-  `privatePoolCidr`, défaut `10.78.0.0/16`, visible dans l'assistant et à l'écran
-  de la Forge ; **jamais une variable d'environnement** (§53). L'épuisement est
-  un refus nommé.
+  `forge.private_pool_cidr` découpé en `/24`, le plus petit libre d'abord — la
+  règle du §15.3, transposée. **Le premier `/24` du pool est laissé de côté** :
+  `spn0` et `10.78.0.0/24` se liraient comme « aucun », et une interface qui
+  porte le nom de l'absence est une confusion en attente ; le pool compte donc
+  255 sous-réseaux. Le pool est une colonne de `forge`, défaut `10.78.0.0/16`,
+  comptée à l'écran de la Forge — « n attribués sur 255 » ; **jamais une
+  variable d'environnement** (§53). L'épuisement est un refus nommé.
 - **L'adresse d'un membre est attribuée par le registre** sur son réseau, plan
   du §15.2 transposé : `.1` passerelle, `.16`–`.239` registre, `.240`–`.254`
   dynamique hors produit. Incus l'épingle par `ipv4.address` (§15.1).
@@ -13406,8 +13409,16 @@ l'installation n'est **pas** construit par cette unité : le plan est lu par
 l'exécuteur avant que le registre n'existe, et le porter jusqu'à lui est un
 chantier de SPK-68. L'écart est dit ici et au backlog, pas caché.
 
-**Un device NIC par adhésion**, rendu par `translate.py` avec les autres devices
-du Spark — la carte est régénérée entière, jamais rapiécée (§18.1, §39.4) :
+**Un device NIC par adhésion**, posé par le geste d'attachement —
+`update_device_config`, lecture-modification-écriture du seul device — et
+retiré par le détachement (`remove_device`). Il n'est **pas** rendu par
+`translate.py` : la carte y naît du manifeste, qui ne sait rien des adhésions ;
+et les réécritures de devices que le produit fait ensuite — les `pub-*` du
+§39.4, le `root` du §49.2 — conservent tout device qui n'est pas le leur. Un
+`spn<n>` survit donc à une publication de port et à un changement de quotas :
+lu dans le pilote, pas supposé. Une adhésion déclarée sur un Spark dont la
+cellule n'existe pas encore (§14.2) est posée quand elle naît, par
+`apply_memberships` :
 
 ```
 spn42: { type: nic, network: spn42, name: spn42,
@@ -13436,11 +13447,13 @@ est commuté et ne passe pas par là. Les lignes du §59 s'insèrent avant ces
 ### 58.4 Les gestes, et leurs refus
 
 ```
-GET    /v1/networks                          catalogue, membres et liens comptés
-POST   /v1/networks          { name, note }  201, sous-réseau attribué
-DELETE /v1/networks/{id}                     409 tant qu'il reste un membre ou un lien, nommés
-POST   /v1/networks/{id}/members { spark }   201, adresse attribuée
-DELETE /v1/networks/{id}/members/{spark}     détache, et régénère les devices
+GET    /v1/networks                            catalogue, membres et liens comptés, pool
+GET    /v1/networks/{name}                     un réseau, ses membres
+POST   /v1/networks          { name, note }    201, sous-réseau attribué, réseau Incus créé
+DELETE /v1/networks/{name}                     409 tant qu'il reste un membre ou un lien, nommés
+POST   /v1/networks/{name}/members { spark }   201, adresse attribuée, device posé, cellule configurée
+DELETE /v1/networks/{name}/members/{spark}     détache, et retire le device
+GET    /v1/sparks/{name}/networks              les adhésions d'un Spark
 ```
 
 - Un nom pris, un Spark déjà membre : `409`, en nommant.
@@ -13450,21 +13463,29 @@ DELETE /v1/networks/{id}/members/{spark}     détache, et régénère les device
   du responsable — et le refus nomme ce qui reste attaché. On détache d'abord,
   explicitement.
 - `applied_at` sur l'adhésion : une adhésion enregistrée mais non appliquée —
-  pilote injoignable — se voit, comme au §18.5.
+  cellule pas encore née — se voit, comme au §18.5 ; `cell_configured` et
+  `cell_note` disent ce que le geste a constaté dans la cellule (§58.6).
 - Journal d'audit : `network.create`, `network.delete`, `network.attach`,
-  `network.detach`.
+  `network.detach`. **Un refus de supprimer un réseau habité est journalisé**,
+  `network.delete` en `denied`, membres nommés : un geste destructif refusé est
+  un fait du journal (§21.1), et le doublon l'a rappelé — l'épreuve E2E cherchait
+  l'entrée, elle n'y était pas.
 
 ### 58.5 La console
 
-- Côté Forge, un catalogue **Réseaux privés** : nom, sous-réseau, membres, liens,
-  création, suppression avec son refus nommé. Les pools de la Forge (SPK-22)
-  montrent les sous-réseaux comme ils montrent les adresses.
-- Au dossier du Spark, une facette **Réseau** : l'adresse sur `sparkbr0` et
-  l'état d'isolation (§57), les adhésions — réseau, interface, adresse —, les
-  gestes *Attacher* et *Détacher* avec confirmation, refusés sur un Spark
-  protégé.
-- Une entrée `SPK-DS-29` dans `docs/DESIGN_SYSTEM_APP.md` pour ce que ces écrans
-  introduisent, lue et vérifiée avant tout commit d'interface.
+- Côté Forge, un catalogue **Réseaux privés**, dans la colonne principale sous
+  la carte des cœurs : nom, sous-réseau, interface, note, membres liés à leurs
+  dossiers ; création par modale ; suppression confirmée, avec son refus nommé.
+  Le catalogue compte les sous-réseaux attribués sur le pool — « n attribués
+  sur 255 (10.78.0.0/16) ».
+- Au dossier du Spark, facette *Infos*, la section **Réseau** de SPK-109 porte
+  sous l'isolation la liste **Réseaux privés** : chaque adhésion — réseau,
+  interface, adresse, nom `<spark>.<réseau>`, et ce que la cellule n'a pas pu
+  recevoir (§58.6) —, le geste *Attacher à un réseau* par modale, *Détacher*
+  confirmé dans le flux ; les deux indisponibles sur un Spark protégé, en le
+  disant.
+- L'entrée `SPK-DS-30` de `docs/DESIGN_SYSTEM_APP.md` fixe ces règles, lue et
+  vérifiée avant tout commit d'interface.
 
 ### 58.6 Ce que le locataire voit, et ce que le produit pose dans la cellule
 
@@ -13498,6 +13519,13 @@ autre famille, le device est posé, l'adresse est réservée, et l'adhésion dit
 « interface non configurée dans la cellule : famille sans networkd » ; le
 locataire configure `spn<n>` en DHCP lui-même, et le manuel le dit.
 
+**Une cellule arrêtée** n'exécute rien : sa famille se lit dans son
+`/etc/os-release` par le chemin des fichiers, le drop-in est posé sans
+rechargement — networkd le lit au démarrage —, et l'adhésion porte la
+précision « cellule arrêtée : configuration posée, prise au démarrage »,
+configurée, pas en défaut. Le doublon sert `/etc/os-release` de la même table
+que son relevé (§42.9), pour que les deux chemins ne divergent pas.
+
 Dans la cellule, une interface `spn42` avec son adresse et son domaine. Ses
 conteneurs l'atteignent par le routage de la cellule, comme ils atteignent
 `eth0` ; pour **servir** sur le réseau, il publie sur la cellule, comme
@@ -13517,8 +13545,11 @@ tous les membres du réseau — c'est ce qu'un réseau veut dire.
   attribution des sous-réseaux et des adresses, épuisement compris.
 - **API** : unicité, refus nommés, cascade à la suppression d'un Spark, refus de
   supprimer un réseau habité, Spark protégé, `applied_at` sans pilote.
-- **E2E** : créer un réseau depuis la Forge, attacher deux Sparks depuis leurs
-  dossiers, les voir au catalogue, détacher, supprimer ; captures observées.
+- **E2E** : sur le seed — `backoffice` habité par deux Sparks —, créer un
+  réseau depuis la Forge, se voir refuser le doublon puis la suppression du
+  réseau habité, attacher un troisième Spark depuis son dossier, le voir au
+  catalogue, le détacher, supprimer le réseau vide ; douze captures observées,
+  deux formats (`e2e/captures/spk110-*`).
 - **Sur la Forge réelle**, depuis le terminal des cellules d'essai : `A` joint
   `B` par son nom sur `spn<n>` ; `C`, non membre, ne le joint pas ; `A` ne sort
   ni vers Internet ni vers `sparkbr0` par `spn<n>`.

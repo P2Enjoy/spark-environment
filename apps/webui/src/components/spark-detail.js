@@ -252,27 +252,109 @@ function renderRessources(spark, usage) {
 }
 
 /**
- * Le réseau d'un Spark : ce que dit Incus de son isolation (SPK-109).
+ * Le réseau d'un Spark : ce que dit Incus de son isolation (SPK-109), et ses
+ * adhésions aux réseaux privés (SPK-110).
  *
  * @spec docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.3 (l'état se lit dans Incus
  *       et le dossier le dit, comme il dit toute dérive) ·
- *       docs/DESIGN_SYSTEM.md §1.5 bis (l'écran nomme, le manuel explique),
- *       §14.5, §14.6 · docs/DESIGN_SYSTEM_APP.md SPK-DS-29
+ *       docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.4 (attacher, détacher, et
+ *       leurs refus), §58.5 (la facette Réseau du dossier), §58.6 (ce que la
+ *       cellule a reçu, et ce qu'elle n'a pas pu recevoir) ·
+ *       docs/DESIGN_SYSTEM.md §1.5 bis, §6.22 (confirmation dans le flux),
+ *       §6.27 (une modale par section), §9.9, §14.5, §14.6 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-29, SPK-DS-30
  */
-function renderReseau(spark, isolation) {
+function renderReseau(spark, isolation, memberships = [], reseaux = [], ui = ADMIN_VIDE) {
   const etat = isolation === undefined
     ? 'Relevé en cours'
     : !isolation || isolation.isolated === null
       ? `Non relevée${isolation?.reason ? ` — ${isolation.reason}` : ''}`
       : isolation.isolated
         ? 'Isolé du réseau des autres Sparks'
-        : 'Non encore isolé — cellule créée avant la règle ; se rattrape depuis la Forge'
+        : 'Non encore isolé — cellule créée avant la règle ; se rattrape depuis la Forge';
+
+  const adhesions = memberships.length
+    ? `<ul class="liste-administrable">${memberships.map((m) => {
+        const attente = m.applied_at ? ''
+          : ' <span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>non appliquée</span>';
+        // §14.5 : une interface que le produit n'a PAS pu configurer se nomme,
+        // avec sa raison — le locataire doit savoir qu'il lui reste un geste.
+        const cellule = m.applied_at && !m.cell_configured
+          ? `<p class="avertissement" role="status">${echapper(m.cell_note || 'interface non configurée dans la cellule')}.
+             Configurez <span class="technique">${echapper(m.interface)}</span> en DHCP dans la cellule.</p>`
+          : '';
+        // Configurée AVEC une précision — « cellule arrêtée : configuration
+        // posée, prise au démarrage » — : une ligne de précision sous la ligne,
+        // pas un avertissement (SPK-DS-30).
+        const precision = m.applied_at && m.cell_configured && m.cell_note
+          ? `<span class="precision">${echapper(m.cell_note)}</span>` : '';
+        const confirme = ui.confirming?.kind === 'reseau' && ui.confirming.id === m.network
+          ? `<div class="confirmation confirmation--sensible" role="group" aria-label="Confirmer le détachement">
+               <p><strong>Détacher « ${echapper(spark.name)} » de « ${echapper(m.network)} » ?</strong></p>
+               <p class="confirmation__consequence">L’interface <span class="technique">${echapper(m.interface)}</span>
+               disparaît de la cellule ; ce Spark cesse de joindre les membres de ce réseau.
+               Rien n’est détruit.</p>
+               <p class="confirmation__actions">
+                 <button type="button" class="bouton" data-confirme-detachement="${echapper(m.network)}">Détacher</button>
+                 <button type="button" class="bouton" data-annule="reseau">Annuler</button>
+               </p>
+             </div>`
+          : '';
+        return `<li><span><strong>${echapper(m.network)}</strong> · <span class="technique">${
+          echapper(m.interface)} · ${echapper(m.ipv4_address)}</span>${attente}` +
+          ` <span class="note">se joint par <span class="technique">&lt;spark&gt;.${echapper(m.network)}</span></span></span>` +
+          `<span class="actions-ligne">` +
+          `<button type="button" class="bouton bouton--compact" data-detache-reseau="${echapper(m.network)}"
+             ${spark.protected ? 'disabled' : ''}>Détacher</button></span>${precision}${cellule}${confirme}</li>`;
+      }).join('')}</ul>`
+    : '<p class="absence">Ce Spark n’est membre d’aucun réseau privé.</p>';
+
+  const membres = new Set(memberships.map((m) => m.network));
+  const disponibles = reseaux.filter((r) => !membres.has(r.name));
+  const modale = renderModale({
+    ouverte: ui.open === 'reseau', id: 'reseau', titre: 'Attacher à un réseau privé',
+    // §6.27 : sans réseau à choisir, la modale ne recueille rien et n'offre
+    // pas de l'engager — elle explique, et son bouton dit « Fermer ».
+    engagement: disponibles.length ? 'Attacher' : null,
+    refus: ui.refusal?.panel === 'reseau' ? ui.refusal.message : null,
+    occupee: ui.busy,
+    corps: disponibles.length
+      ? `<div class="champ">
+           <label for="reseau-choix">Réseau privé</label>
+           <select class="controle" id="reseau-choix" name="reseau" aria-describedby="reseau-aide">
+             ${disponibles.map((r) => `<option value="${echapper(r.name)}"${
+               ui.values.reseau === r.name ? ' selected' : ''}>${echapper(r.name)} — ${echapper(r.cidr)}</option>`).join('')}
+           </select>
+           <p class="champ__aide" id="reseau-aide">La cellule reçoit une interface
+           <span class="technique">spn&lt;n&gt;</span> avec une adresse du réseau, et joint
+           ses membres par nom. Rien d’autre ne passe par là : ni Internet, ni les autres
+           cellules.</p>
+         </div>`
+      : `<p class="absence">Aucun réseau privé disponible pour ce Spark. Créez-en un depuis
+         l’écran <a href="#/forge">Forge</a>, section <em>Réseaux privés</em>.</p>`,
+  });
+
   return `
 <section class="carte bloc" aria-labelledby="titre-reseau">
   <h2 id="titre-reseau">Réseau</h2>
   ${definitions([['Isolation', etat]])}
   <p class="note">Un Spark isolé joint Internet, le résolveur et l’ingress de sa Forge,
   et rien d’autre. <a href="#/manuel/M11">Manuel M11 — Sécurité et limites</a></p>
+  <h3 id="titre-reseaux-prives">Réseaux privés</h3>
+  ${adhesions}
+  ${ui.refusal?.panel === 'reseau' && ui.open !== 'reseau'
+    ? `<div class="refus" role="alert"><p>${echapper(ui.refusal.message)}</p></div>` : ''}
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-ouvre="reseau"
+      ${spark.protected ? 'disabled' : ''}>Attacher à un réseau</button>
+    ${spark.protected
+      // §9.9 : l'action existe, elle est indisponible dans un état connu.
+      ? '<span class="champ__aide">Ce Spark est protégé : levez la protection d’abord.</span>'
+      : ''}
+  </p>
+  <p class="note">Les membres d’un réseau privé se joignent par nom.
+  <a href="#/manuel/M13">Manuel M13 — Relier des Sparks entre eux</a></p>
+  ${modale}
 </section>`;
 }
 
@@ -734,7 +816,10 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     mesures = SUPERVISION_VIDE,
                                     catalogue = [], pools = null, cores = null,
                                     // SPK-109 · §57.3 : l'isolation, lue dans Incus.
-                                    isolation = undefined } = {}) {
+                                    isolation = undefined,
+                                    // SPK-110 · §58.5 : les adhésions du Spark, et les
+                                    // réseaux qu'il peut rejoindre.
+                                    memberships = [], reseaux = [] } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -751,7 +836,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
   const facettes = {
     '': () => `<div class="detail">
       <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas, { pools, cores })}
-        ${renderReseau(spark, isolation)}
+        ${renderReseau(spark, isolation, memberships, reseaux, admin)}
         ${renderProtection(spark, admin)}
         ${renderDossier(spark, dossier)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}

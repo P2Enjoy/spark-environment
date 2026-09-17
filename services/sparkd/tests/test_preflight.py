@@ -769,6 +769,8 @@ table inet spark_filter {
 \t\ttype filter hook forward priority filter + 10; policy accept;
 \t\tct state established,related accept
 \t\tiifname "sparkbr0" oifname "sparkbr0" drop
+\t\tiifname "spn*" drop
+\t\toifname "spn*" drop
 \t}
 }
 """
@@ -808,6 +810,15 @@ def test_une_cellule_non_isolee_est_SIGNALEE_et_nommee():
 def test_le_verrou_forward_absent_est_SIGNALE_meme_si_les_cellules_sont_isolees():
     verdict = preflight.isolation_des_sparks(
         _hote_isolation({"a": ISOLEE}, table=NFT_SPARK_FILTER_FORGE))
+    assert verdict.etat == AVERTISSEMENT
+    assert "forward" in verdict.releve
+
+
+def test_les_verrous_des_reseaux_prives_manquants_sont_SIGNALES():
+    """@verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.3 : une table de
+    SPK-109 sans les lignes spn* laisse un réseau privé mener quelque part."""
+    sans_prive = NFT_AVEC_FORWARD.replace('\t\tiifname "spn*" drop\n\t\toifname "spn*" drop\n', "")
+    verdict = preflight.isolation_des_sparks(_hote_isolation({"a": ISOLEE}, table=sans_prive))
     assert verdict.etat == AVERTISSEMENT
     assert "forward" in verdict.releve
 

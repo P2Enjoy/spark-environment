@@ -5,7 +5,11 @@
       §56.4 · §48.1, §48.2 bis (la règle est posée par l'INSTALLATION), §48.3 ·
       docs/BACKLOG.md#SPK-109 · docs/DAT.md §57.2 (le verrou `forward` : le
       détour par la passerelle, mesuré le 2026-09-17) ·
-      docs/PROD_MIGRATIONS.md#OP-21, docs/PROD_MIGRATIONS.md#OP-22
+      docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.3 (un réseau privé n'est une
+      route vers rien), §58.6 (mesuré le 2026-09-18 : sans règle, la Forge route
+      `spn* → sparkbr0` et son sshd répond sur la passerelle du réseau) ·
+      docs/PROD_MIGRATIONS.md#OP-21, docs/PROD_MIGRATIONS.md#OP-22,
+      docs/PROD_MIGRATIONS.md#OP-23
 
 Une seule table, `inet spark_filter`, rendue comme une FONCTION PURE du nom du
 bridge : ce qui se pose se lit d'un coup, et se compare à un témoin. La pose ne
@@ -30,6 +34,10 @@ from typing import Callable
 PORTS_INGRESS = (80, 443)
 
 UNITE = "spark-firewall.service"
+#: Le préfixe des bridges des réseaux privés (§58.2) : `spn<n>` pour
+#: `10.78.<n>.0/24`. Les règles le matchent par joker — une interface de plus
+#: n'est pas une règle de plus, la table reste STATIQUE.
+PREFIXE_RESEAU_PRIVE = "spn"
 CHEMIN_REGLES = Path("etc/sparkd/firewall.nft")
 CHEMIN_UNITE = Path("etc/systemd/system") / UNITE
 
@@ -64,6 +72,7 @@ def rendre(bridge: str) -> str:
     l'ingress (§56.2), puis l'ICMP utile, et le `drop` en dernier.
     """
     tcp = ", ".join(str(port) for port in (53, *PORTS_INGRESS))
+    prive = f"{PREFIXE_RESEAU_PRIVE}*"
     return (
         "add table inet spark_filter\n"
         "delete table inet spark_filter\n"
@@ -76,6 +85,17 @@ def rendre(bridge: str) -> str:
         f'    iifname "{bridge}" ip protocol icmp accept\n'
         f'    iifname "{bridge}" ip6 nexthdr ipv6-icmp accept\n'
         f'    iifname "{bridge}" drop\n'
+        # SPK-110 · §58.3 : un réseau privé est une interface de plus sur la
+        # Forge, et la porte du §48.1 ne se rouvre pas par lui. Son résolveur
+        # et son DHCP, oui — c'est lui qui donne aux membres adresse et noms
+        # (§58.6) — ; rien d'autre, pas même l'ingress : un service public se
+        # joint par sparkbr0. MESURÉ le 2026-09-18 : sans ces lignes, sshd
+        # répondait sur la passerelle du réseau privé.
+        f'    iifname "{prive}" ct state established,related accept\n'
+        f'    iifname "{prive}" udp dport {{ 53, 67 }} accept\n'
+        f'    iifname "{prive}" tcp dport 53 accept\n'
+        f'    iifname "{prive}" ip protocol icmp accept\n'
+        f'    iifname "{prive}" drop\n'
         "  }\n"
         # SPK-109 · §57.2 : l'isolation de port ferme la couche 2 ; ce qu'une
         # cellule route VIA la passerelle vers un voisin traverse `forward`, et
@@ -85,6 +105,12 @@ def rendre(bridge: str) -> str:
         "    type filter hook forward priority 10; policy accept;\n"
         "    ct state established,related accept\n"
         f'    iifname "{bridge}" oifname "{bridge}" drop\n'
+        # SPK-110 · §58.3 : rien n'est routé DEPUIS ni VERS un réseau privé —
+        # ni Internet, ni sparkbr0, ni un autre réseau. Entre membres, tout est
+        # commuté et ne passe pas par là. MESURÉ le 2026-09-18 : sans ces
+        # lignes, une cellule du réseau privé joignait le SSO sur sparkbr0.
+        f'    iifname "{prive}" drop\n'
+        f'    oifname "{prive}" drop\n'
         "  }\n"
         "}\n"
     )
@@ -100,7 +126,7 @@ def regles(bridge: str, chaine: str = "input") -> list[str]:
         if ligne.startswith("chain "):
             dedans = ligne == f"chain {chaine} {{"
             continue
-        if dedans and f'iifname "{bridge}"' in ligne:
+        if dedans and ligne and not ligne.startswith(("type ", "}")):
             lignes.append(ligne)
     return lignes
 

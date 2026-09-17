@@ -294,6 +294,34 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('[data-accepte-perte]', { timeout: 10000 });
     await capturer('m9-restauration-refusee', { hauteur: 800 });
 
+    // --- M13 · Relier des Sparks entre eux (SPK-110, §58.5) -------------------
+    // Le seed porte « backoffice », habité par crm-production et postgres-dedie ;
+    // le chapitre montre le catalogue, puis « boutique » attachée depuis son
+    // dossier — par le geste de l'écran, comme le lecteur le fera.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-reseaux-prives', { timeout: 10000 });
+    await page.waitForFunction(
+      () => /backoffice · /.test(document.querySelector('#titre-reseaux-prives')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 15000 });
+    // L'écran de la Forge se repeint à chaque lecture qui aboutit : on fait
+    // défiler par le document, pas par un nœud qui peut être remplacé sous
+    // l'action.
+    await page.evaluate(() => document.querySelector('#titre-reseaux-prives')
+      ?.closest('section')?.scrollIntoView({ block: 'start' }));
+    await capturer('m13-catalogue', { hauteur: 900 });
+    await ouvrir('boutique');
+    await page.waitForSelector('[data-ouvre="reseau"]', { timeout: 10000 });
+    await page.click('[data-ouvre="reseau"]');
+    await page.waitForSelector('[data-modale="reseau"] select[name="reseau"]', { timeout: 10000 });
+    await capturer('m13-attacher', { hauteur: 800 });
+    await page.click('[data-modale="reseau"] [data-engage="reseau"]');
+    await page.waitForFunction(
+      () => /backoffice · spn1 · /.test(document.querySelector('#titre-reseau')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    await page.evaluate(() => document.querySelector('#titre-reseau')
+      ?.closest('section')?.scrollIntoView({ block: 'start' }));
+    await capturer('m13-membre', { hauteur: 900 });
     // --- M12 · Le journal de tous les Sparks (SPK-39) ------------------------
     // On y va par la navigation : Forge, puis l'onglet Journal. Le relevé de la
     // chaîne est déclenché, sinon l'illustration montrerait « pas encore

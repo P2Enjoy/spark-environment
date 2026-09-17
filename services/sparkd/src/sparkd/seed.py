@@ -73,7 +73,8 @@ def wipe(config: Config) -> None:
     prouve plus rien.
     """
     base = Path(config.database)
-    for chemin in (base, Path(f"{base}.incus.json"), Path(f"{base}-wal"), Path(f"{base}-shm")):
+    for chemin in (base, Path(f"{base}.incus.json"), Path(f"{base}.incus.json.reseaux"),
+                   Path(f"{base}-wal"), Path(f"{base}-shm")):
         chemin.unlink(missing_ok=True)
     base.parent.mkdir(parents=True, exist_ok=True)
 
@@ -120,6 +121,17 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     creer({"name": "postgres-dedie", "image": "images:debian/13", "cpu_mode": "dedicated",
            "cpu_cores": 1, "memory_bytes": 1536 * MIO, "storage_bytes": 40 * GIO,
            "network_bps": 200 * MBIT})
+
+    # SPK-110 · §58.8 : un réseau privé de démonstration à deux membres — le
+    # CRM et sa base —, et tous les autres Sparks hors réseau. Créé par les
+    # mêmes gestes que depuis l'écran, jamais posé à la main dans le registre.
+    _attendu(client.post("/v1/networks", json={"name": "backoffice",
+                                                "note": "le CRM et sa base"}),
+             201, quoi="création du réseau privé « backoffice »")
+    for membre in ("crm-production", "postgres-dedie"):
+        _attendu(client.post("/v1/networks/backoffice/members", json={"spark": membre}),
+                 201, quoi=f"adhésion de « {membre} » à « backoffice »")
+    compte["reseaux"] = 1
 
     # --- Spark « pending » : déclaré, pas encore appliqué. Il porte aussi la
     # route non appliquée ci-dessous, parce qu'il n'a pas encore d'adresse.
@@ -598,6 +610,15 @@ def verify(client: TestClient) -> None:
     for nom, etat in attendus.items():
         if etats.get(nom) != etat:
             raise SeedError(f"« {nom} » devrait être « {etat} », il est « {etats.get(nom)} »")
+
+    # SPK-110 · §58.8 : le réseau de démonstration porte ses deux membres, et
+    # les membres se voient depuis leur dossier — sans quoi la facette Réseau
+    # n'aurait rien à montrer.
+    backoffice = _attendu(client.get("/v1/networks/backoffice"), 200,
+                          quoi="réseau privé « backoffice »").json()
+    membres = sorted(m["spark"] for m in backoffice["members"])
+    if membres != ["crm-production", "postgres-dedie"]:
+        raise SeedError(f"« backoffice » devrait relier crm-production et postgres-dedie, pas {membres}")
 
     # SPK-109 · §57.3 : exactement UNE cellule « non encore isolée », nommée —
     # sans elle, le geste « Isoler le parc » n'aurait rien à montrer.

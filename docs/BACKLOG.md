@@ -7741,7 +7741,7 @@ cellules s'échangent leurs trames en couche 2.
   OP-22 dans la baseline ; documentation complète ; `@spec` / `@verifies`
   posés.
 
-### [ ] SPK-110 · Réseaux privés : un commutateur de la Forge auquel on attache des Sparks
+### [~] SPK-110 · Réseaux privés : un commutateur de la Forge auquel on attache des Sparks
 
 **Demandé par le responsable le 2026-09-17** : « on devrait pouvoir créer des
 VPN sur la Forge et y attacher des Sparks si on veut créer des mini-switchs de
@@ -7750,9 +7750,9 @@ Sparks interconnectés ». Le produit dit *réseau privé* : un commutateur inte
 
 - Spécification : `docs/DAT.md` **§58** (l'objet, le modèle, le mécanisme, les
   gestes, la console, ce que le locataire voit) · `docs/SCHEMA.md` §6 ter à
-  l'écriture de la migration `018` · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-29 ·
-  manuel, chapitre *Relier des Sparks entre eux* · `docs/PROD_MIGRATIONS.md`,
-  opération de la migration. **Écrite et committée avant le code.**
+  l'écriture de la migration `018` · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-30 ·
+  manuel, chapitre M13 *Relier des Sparks entre eux* · `docs/PROD_MIGRATIONS.md`
+  OP-23. **Écrite et committée avant le code.**
 - Dépend de : SPK-109 — un réseau privé rouvre ce que l'isolation ferme, et n'a
   pas de sens avant.
 
@@ -7777,13 +7777,19 @@ Sparks interconnectés ». Le produit dit *réseau privé* : un commutateur inte
    et committé avant le code.*
 2. **Mesure** — les noms entre membres, sur deux cellules d'essai ; consignée.
 3. **Registre** — migration `018`, attribution des sous-réseaux et des adresses,
-   SCHEMA §6 ter, opération de déploiement ; preuves unitaires et API.
+   SCHEMA §6 ter, opération de déploiement ; preuves unitaires et API. *Fait le
+   2026-09-18 : `reseaux.py`, `test_reseaux.py`, OP-23.*
 4. **Rendu et gestes** — réseau Incus, device, `firewall.nft` ; `/v1/networks`
-   et ses membres, refus nommés, audit ; pilote factice éprouvé.
-5. **Console** — catalogue de la Forge, facette *Réseau* du dossier, pools ;
-   SPK-DS-29 ; E2E et captures ; seed à deux membres et un Spark hors réseau.
+   et ses membres, refus nommés, audit ; pilote factice éprouvé. *Fait le
+   2026-09-18 ; le drop-in networkd posé dans la cellule, et l'adhésion qui dit
+   quand elle n'a pas pu l'être (§58.6).*
+5. **Console** — catalogue de la Forge, section *Réseau* du dossier ; SPK-DS-30 ;
+   E2E et captures ; seed à deux membres et un Spark hors réseau. *Fait le
+   2026-09-18 : parcours « relier des Sparks », douze captures observées ; le
+   refus de suppression journalisé, que l'épreuve a réclamé.*
 6. **Forge réelle** — `A` joint `B` par nom, `C` non ; ni Internet ni `sparkbr0`
-   par `spn<n>` ; manuel.
+   par `spn<n>` ; manuel. *Manuel M13 écrit ; déploiement (OP-23) et preuve
+   depuis les terminaux en attente.*
 
 - Ce que l'unité ne doit PAS casser : l'isolation de SPK-109 hors des réseaux ;
   la régénération entière des devices (§39.4) ; l'`eth0` et ses quotas.

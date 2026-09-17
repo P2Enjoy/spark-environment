@@ -5701,3 +5701,152 @@ test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et s
     await capturer('spk109-dossier-reseau');
   });
 });
+
+test('relier des Sparks : un réseau privé se crée, s’habite, se quitte, et ne se supprime pas habité', async () => {
+  await parcours('reseaux-prives', async () => {
+    // @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.4 (créer, attacher,
+    //           détacher, supprimer refusé tant qu'il reste un membre — nommé),
+    //           §58.5 (le catalogue côté Forge, la facette Réseau du dossier),
+    //           §58.6 (l'adhésion dit ce que la cellule a reçu) ·
+    //           docs/DESIGN_SYSTEM_APP.md SPK-DS-30 · docs/PROD_MIGRATIONS.md OP-23
+    //
+    // Le seed porte « backoffice », habité par crm-production et postgres-dedie.
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-reseaux-prives', { timeout: 20000 });
+    await page.waitForFunction(
+      () => /backoffice/.test(document.querySelector('#titre-reseaux-prives')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    const catalogue = () => page.$eval('#titre-reseaux-prives', (h) => h.closest('section').innerText);
+    let texte = await catalogue();
+    // Le pool laisse son premier /24 de côté (§58.2) : 255 sous-réseaux, spn1 en tête.
+    assert.match(texte, /backoffice · 10\.78\.1\.0\/24 · spn1/);
+    assert.match(texte, /membres : crm-production, postgres-dedie/);
+    assert.match(texte, /1 attribués sur 255 \(10\.78\.0\.0\/16\)/);
+    await capturer('spk110-catalogue');
+    await capturer('spk110-catalogue-mobile', { largeur: 390, hauteur: 844 });
+
+    // Créer : la modale recueille nom et note, l'aide montre le domaine des membres.
+    await page.click('[data-ouvre-reseau]');
+    await page.waitForSelector('[data-modale="reseau-creation"] input[name="name"]', { timeout: 10000 });
+    await page.fill('[data-modale="reseau-creation"] input[name="name"]', 'labo');
+    await page.fill('[data-modale="reseau-creation"] input[name="note"]', 'les essais');
+    assert.equal(await page.$eval('#reseau-nom-aide .technique', (e) => e.textContent), '<spark>.labo');
+    await capturer('spk110-creation');
+    await page.click('[data-modale="reseau-creation"] [data-engage="reseau-creation"]');
+    // L'aide de la modale dit déjà « <spark>.labo » : on attend la LIGNE du
+    // catalogue, pas le mot.
+    await page.waitForFunction(
+      () => /labo · 10\.78\.2\.0\/24 · spn2/.test(document.querySelector('#titre-reseaux-prives')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    texte = await catalogue();
+    assert.match(texte, /labo · 10\.78\.2\.0\/24 · spn2/, 'le sous-réseau suivant du pool, et son interface');
+    assert.match(texte, /les essais/);
+    assert.match(texte, /2 attribués sur 255/);
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('[data-modale="reseau-creation"]')?.closest('dialog')?.open)),
+                 false, 'la modale s’est refermée');
+
+    // Créer en doublon : le refus se lit DANS la modale, et rien n'est créé.
+    await page.click('[data-ouvre-reseau]');
+    await page.waitForSelector('[data-modale="reseau-creation"] input[name="name"]', { timeout: 10000 });
+    await page.fill('[data-modale="reseau-creation"] input[name="name"]', 'labo');
+    await page.click('[data-modale="reseau-creation"] [data-engage="reseau-creation"]');
+    await page.waitForFunction(
+      () => /existe déjà/.test(document.querySelector('[data-modale="reseau-creation"]')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    await capturer('spk110-creation-refusee');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-modale="reseau-creation"]')?.closest('dialog')?.open, null, { timeout: 10000 });
+
+    // Supprimer un réseau habité : confirmé, puis REFUSÉ en nommant ses membres.
+    await page.click('[data-supprime-reseau="backoffice"]');
+    await page.waitForSelector('[data-confirme-suppression-reseau="backoffice"]', { timeout: 10000 });
+    assert.match(await catalogue(), /Supprimer le réseau « backoffice » \?/);
+    await capturer('spk110-suppression-confirmation');
+    await page.click('[data-confirme-suppression-reseau="backoffice"]');
+    await page.waitForFunction(
+      () => Boolean(document.querySelector('#titre-reseaux-prives')?.closest('section')?.querySelector('.refus')),
+      null, { timeout: 20000 });
+    const refus = await page.$eval('#titre-reseaux-prives', (h) => h.closest('section').querySelector('.refus').innerText);
+    assert.match(refus, /crm-production/, 'le refus NOMME les membres');
+    assert.match(refus, /postgres-dedie/);
+    assert.match(await catalogue(), /backoffice · 10\.78\.1\.0\/24/, 'rien n’a été supprimé');
+    await capturer('spk110-suppression-refusee');
+
+    // Attacher « boutique » à « labo », depuis son dossier.
+    await ouvrir('boutique');
+    await page.waitForSelector('#titre-reseaux-prives', { timeout: 10000 });
+    const dossier = () => page.$eval('#titre-reseau', (h) => h.closest('section').innerText);
+    assert.match(await dossier(), /membre d’aucun réseau privé/);
+    await page.click('[data-ouvre="reseau"]');
+    await page.waitForSelector('[data-modale="reseau"] select[name="reseau"]', { timeout: 10000 });
+    const options = await page.$$eval('[data-modale="reseau"] select[name="reseau"] option', (o) => o.map((x) => x.value));
+    assert.deepEqual(options, ['backoffice', 'labo'], 'boutique n’est membre d’aucun : les deux s’offrent');
+    await page.selectOption('[data-modale="reseau"] select[name="reseau"]', 'labo');
+    await capturer('spk110-attacher');
+    await page.click('[data-modale="reseau"] [data-engage="reseau"]');
+    await page.waitForFunction(
+      () => /labo · spn2 · 10\.78\.2\.16/.test(document.querySelector('#titre-reseau')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    texte = await dossier();
+    assert.match(texte, /<spark>\.labo/, 'le nom par lequel les membres se joignent');
+    assert.ok(!/non appliquée/.test(texte), 'la cellule existe : l’adhésion est posée tout de suite');
+    assert.ok(!/Configurez/.test(texte), 'debian/13 a networkd : la cellule est configurée par le produit');
+    await capturer('spk110-dossier-membre');
+    await capturer('spk110-dossier-membre-mobile', { largeur: 390, hauteur: 844 });
+
+    // EFFET côté sparkd : l'adhésion est posée et la cellule configurée ; le
+    // doublon d'Incus porte le device NIC sur le bon réseau, avec l'adresse.
+    const { corps: adhesions } = await pile.lireSparkd('/v1/sparks/boutique/networks');
+    assert.equal(adhesions.memberships.length, 1);
+    assert.equal(adhesions.memberships[0].network, 'labo');
+    assert.equal(adhesions.memberships[0].ipv4_address, '10.78.2.16');
+    assert.ok(adhesions.memberships[0].applied_at, 'posée');
+    assert.equal(adhesions.memberships[0].cell_configured, true);
+    const { corps: reseau } = await pile.lireSparkd('/v1/networks/labo');
+    assert.deepEqual(reseau.members.map((m) => m.spark), ['boutique']);
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=50');
+    assert.ok(journal.entries.some((e) => e.action === 'network.create' && e.result === 'ok'));
+    assert.ok(journal.entries.some((e) => e.action === 'network.attach' && e.result === 'ok'));
+    assert.ok(journal.entries.some((e) => e.action === 'network.delete' && e.result === 'denied'),
+              'la suppression refusée est journalisée comme un refus');
+
+    // Le catalogue de la Forge nomme le nouveau membre, lié à son dossier.
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForFunction(
+      () => /membres : boutique/.test(document.querySelector('#titre-reseaux-prives')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    await capturer('spk110-catalogue-habite');
+
+    // Détacher : confirmé dans le flux, sans bouton destructif, et le dossier le relit.
+    await ouvrir('boutique');
+    await page.waitForSelector('[data-detache-reseau="labo"]', { timeout: 10000 });
+    await page.click('[data-detache-reseau="labo"]');
+    await page.waitForSelector('[data-confirme-detachement="labo"]', { timeout: 10000 });
+    assert.match(await dossier(), /Détacher « boutique » de « labo » \?/);
+    assert.equal(await page.$eval('[data-confirme-detachement="labo"]',
+      (b) => b.classList.contains('bouton--destructif')), false, 'détacher interrompt, il ne détruit pas');
+    await capturer('spk110-detacher-confirmation');
+    await page.click('[data-confirme-detachement="labo"]');
+    await page.waitForFunction(
+      () => /membre d’aucun réseau privé/.test(document.querySelector('#titre-reseau')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    const { corps: apres } = await pile.lireSparkd('/v1/sparks/boutique/networks');
+    assert.equal(apres.memberships.length, 0);
+
+    // Un réseau vide se supprime, et son sous-réseau revient au pool.
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('[data-supprime-reseau="labo"]', { timeout: 20000 });
+    await page.click('[data-supprime-reseau="labo"]');
+    await page.waitForSelector('[data-confirme-suppression-reseau="labo"]', { timeout: 10000 });
+    await page.click('[data-confirme-suppression-reseau="labo"]');
+    await page.waitForFunction(
+      () => /1 attribués sur 255/.test(document.querySelector('#titre-reseaux-prives')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    texte = await catalogue();
+    assert.ok(!/labo/.test(texte), 'le réseau n’est plus au catalogue');
+    assert.match(texte, /backoffice/);
+    await capturer('spk110-catalogue-apres');
+  });
+});

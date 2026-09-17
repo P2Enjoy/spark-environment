@@ -118,7 +118,7 @@ forge-reelle:
 # Les illustrations du manuel sont PRODUITES depuis l'application (DAT §30.1),
 # jamais collectees a la main.
 manuel:
-	node e2e/manuel.mjs
+	$(PLAFOND) node e2e/manuel.mjs
 
 test: sparkd-test contract-check
 	pnpm -r test

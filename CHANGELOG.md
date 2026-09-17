@@ -3,6 +3,24 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-110 — réseaux privés : un commutateur de la Forge auquel on attache des
+  Sparks.** Migration `018_reseaux_prives` — `private_network`,
+  `private_network_member`, `forge.private_pool_cidr` (SCHEMA §6 ter) ; le
+  registre attribue le sous-réseau sur le pool `10.78.0.0/16` en `/24` — le
+  premier laissé de côté — et l'adresse de chaque membre ; un réseau géré
+  d'Incus `spn<n>` par réseau, sans NAT, avec son résolveur et `dns.domain` ; un
+  device NIC par adhésion, posé à chaud, et dans la cellule un drop-in networkd
+  qui prend l'adresse épinglée sans passerelle ni route — sur une famille sans
+  networkd, l'adhésion le dit. `spark_filter` couvre `spn*` : rien n'y entre ni
+  n'en sort, et `NET-ISOLATION` l'exige. API `/v1/networks`, ses membres,
+  `/v1/sparks/{name}/networks` ; refus nommés — nom pris, pool épuisé, Spark
+  protégé, réseau habité — et journal `network.*`, refus de suppression compris.
+  Console : catalogue *Réseaux privés* sur la Forge (créer, supprimer),
+  adhésions dans la section *Réseau* du dossier (attacher, détacher) —
+  SPK-DS-30 ; manuel M13 *Relier des Sparks entre eux*. Seed : `backoffice`
+  avec `crm-production` et `postgres-dedie`. **Implémenté et vérifié sur le
+  doublon** — preuves sparkd et de composant, un parcours E2E, douze captures ;
+  **à déployer** (OP-23) et à prouver sur la Forge.
 - **SPK-109 — chaque Spark est isolé du réseau des autres.** Mesuré le matin :
   bridge partagé, ports `isolated off`, aucune anti-usurpation. L'`eth0` de
   tout Spark porte désormais `security.port_isolation` et

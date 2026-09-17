@@ -15,7 +15,7 @@ l'apparence change.
 carte des chapitres et de leurs unités ; le contrat de fraîcheur — illustrations
 produites, lien vérifié dans les deux sens — est au §30 du [DAT](DAT.md).
 
-**Tous les chapitres sont rédigés (M1 à M12).** M2 l'a été avec SPK-26 ; il
+**Tous les chapitres sont rédigés (M1 à M13).** M2 l'a été avec SPK-26 ; il
 délimite explicitement ce qui n'est pas encore outillé — la mise en place des
 prérequis, et le repartitionnement du stockage qui attend un arbitrage (SPK-28).
 
@@ -119,3 +119,13 @@ Unités : SPK-15, SPK-108 ; §10 et §56 du DAT.
 
 Journal d'audit, variables d'environnement, messages d'erreur courants et leur
 diagnostic.
+
+## M13 · Relier des Sparks entre eux
+
+Ce qu'est un réseau privé — un commutateur interne à la Forge — et ce qu'il
+n'est pas. Créer un réseau depuis l'écran Forge, attacher un Spark depuis son
+dossier, se joindre par nom `<spark>.<réseau>`, servir sur le réseau depuis un
+Compose, détacher, supprimer un réseau vide. Les familles sans networkd, où la
+cellule reste à configurer. Ce que le journal garde.
+
+Unités : SPK-110 ; §58 du DAT.

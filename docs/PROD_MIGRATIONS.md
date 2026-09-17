@@ -119,6 +119,51 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-23 · Migration `018_reseaux_prives` et règles `spn*` de `spark_filter` (SPK-110)
+
+```
+État          : EN ATTENTE — code vérifié sur le doublon le 2026-09-18 ; à
+                déployer par le runbook A.2, puis à prouver sur la Forge depuis
+                les terminaux des cellules d'essai.
+Objectif      : créer `private_network`, `private_network_member` et la colonne
+                `forge.private_pool_cidr` (docs/SCHEMA.md §6 ter) ; poser dans
+                `spark_filter` les règles `input` et `forward` des interfaces
+                `spn*` (docs/DAT.md §58.3) ; `sparkd` sert `/v1/networks`.
+Dépend de     : OP-22 — un réseau privé rouvre À DESSEIN ce que l'isolation
+                ferme, et n'a pas de sens avant.
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) : la migration 018
+                   s'applique au démarrage ; l'installateur réécrit
+                   `firewall.nft` avec les règles `spn*` et recharge
+                   `spark-firewall.service` (mécanisme d'OP-21) ;
+                3. depuis la console, écran Forge : la section « Réseaux
+                   privés » compte « 0 attribués sur 255 » ;
+                4. preuve sur deux cellules d'essai créées par le produit —
+                   jamais sur une cellule de locataire.
+Vérification  : `nft list chain inet spark_filter input` montre les acceptations
+                `iifname "spn*"` (établi, 53, 67, ICMP) puis le drop ;
+                `nft list chain inet spark_filter forward` montre
+                `iifname "spn*" drop` et `oifname "spn*" drop` ; préflight
+                NET-ISOLATION toujours « ok », 15 contrôles verts ;
+                `GET /v1/networks` répond avec le pool. Puis, par la console :
+                créer un réseau d'essai, attacher essai-a et essai-b depuis leurs
+                dossiers, et depuis le terminal d'essai-a `ping -c1
+                essai-b.<réseau>` répond ; `curl` vers Internet par
+                `--interface spn<n>` ne répond pas ; `nc -zw3 10.78.<n>.1 22`
+                refusé ; détacher, supprimer le réseau — `incus network list`
+                ne montre plus `spn<n>`.
+Retour arrière: sparkd arrêté, le `@down` de la migration 018 retire la
+                colonne et les deux tables — comme toute migration, il n'est
+                jamais joué seul ; `incus config device remove <cellule>
+                spn<n>` puis `incus network delete spn<n>` pour ce qui a été
+                créé ; retirer les règles `spn*` du fichier rendu et recharger
+                `spark-firewall.service`. Aucune donnée de locataire touchée.
+Risques       : aucun sur les cellules existantes — rien ne change pour un
+                Spark membre de rien. Un réseau privé créé puis oublié laisse un
+                bridge `spn<n>` sur la Forge : le catalogue le montre, avec ses
+                membres.
+```
+
 ### OP-22 · Isoler le parc : chaque Spark isolé du réseau des autres (SPK-109) — **APPLIQUÉ le 2026-09-18**
 
 ```

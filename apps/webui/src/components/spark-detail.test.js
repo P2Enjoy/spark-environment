@@ -1130,3 +1130,99 @@ test('SPK-109 · le dossier DIT si le Spark est isolé, non encore isolé, ou no
   assert.match(rendu(null), /Non relevée/);
   assert.match(rendu({ isolated: true, missing: [] }), /id="titre-reseau"/);
 });
+
+// --- SPK-110 · les réseaux privés dans la section Réseau ----------------------
+
+import { ADMIN_VIDE } from './spark-admin.js';
+
+test('SPK-110 · le dossier NOMME chaque adhésion, son interface, son adresse, et offre d’attacher', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.5, §58.6 · DESIGN_SYSTEM.md §6.19, §14.5 */
+  const spark = { ...SPARK, protected: false };
+  const memberships = [
+    { network: 'backoffice', interface: 'spn0', ipv4_address: '10.78.0.16', applied_at: 't',
+      cell_configured: true, cell_note: null },
+    { network: 'labo', interface: 'spn1', ipv4_address: '10.78.1.16', applied_at: null,
+      cell_configured: false, cell_note: null },
+    { network: 'legacy', interface: 'spn2', ipv4_address: '10.78.2.16', applied_at: 't',
+      cell_configured: false, cell_note: 'famille alpine : configuration manuelle' },
+  ];
+  const reseaux = [{ name: 'backoffice', cidr: '10.78.0.0/24' }, { name: 'labo', cidr: '10.78.1.0/24' },
+                   { name: 'legacy', cidr: '10.78.2.0/24' }, { name: 'compta', cidr: '10.78.3.0/24' }];
+  const rendu = renderSparkDetail({ status: 'ready', spark, isolation: { isolated: true, missing: [] },
+                                    memberships, reseaux });
+  assert.match(rendu, /id="titre-reseaux-prives">Réseaux privés/);
+  // Configurée avec une précision (cellule arrêtée) : une note, pas un avertissement.
+  const arretee = renderSparkDetail({ status: 'ready', spark, reseaux,
+    memberships: [{ network: 'labo', interface: 'spn1', ipv4_address: '10.78.1.16', applied_at: 't',
+                    cell_configured: true, cell_note: 'cellule arrêtée : configuration posée, prise au démarrage' }] });
+  assert.match(arretee, /<span class="precision">cellule arrêtée : configuration posée, prise au démarrage<\/span>/);
+  assert.ok(!/class="avertissement"/.test(arretee));
+  assert.match(rendu, /<strong>backoffice<\/strong> · <span class="technique">spn0 · 10\.78\.0\.16<\/span>/);
+  assert.match(rendu, /&lt;spark&gt;\.backoffice/);
+  // Une adhésion pas encore appliquée à la cellule le dit (§14.5).
+  assert.match(rendu, /<strong>labo<\/strong>[^]*?non appliquée/);
+  // Une cellule que le produit n'a pas su configurer le dit, avec sa raison, et
+  // ce qu'il reste à faire (§58.6).
+  assert.match(rendu, /famille alpine : configuration manuelle\.\s+Configurez <span class="technique">spn2<\/span> en DHCP/);
+  assert.ok(!/<strong>backoffice<\/strong>[^]*?Configurez <span class="technique">spn0/.test(rendu));
+  assert.ok(rendu.includes('data-detache-reseau="backoffice"'));
+  assert.ok(rendu.includes('data-ouvre="reseau"'));
+  assert.match(rendu, /href="#\/manuel\/M13"/);
+});
+
+test('SPK-110 · sans adhésion, la section le dit ; protégé, les gestes sont indisponibles (§9.9)', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.4 · DESIGN_SYSTEM.md §9.9, §14.6 */
+  const libre = renderSparkDetail({ status: 'ready', spark: { ...SPARK, protected: false },
+                                    memberships: [], reseaux: [{ name: 'labo', cidr: '10.78.1.0/24' }] });
+  assert.match(libre, /Ce Spark n’est membre d’aucun réseau privé\./);
+  assert.match(libre, /<button type="button" class="bouton" data-ouvre="reseau"\s*>Attacher à un réseau</);
+  const protege = renderSparkDetail({ status: 'ready', spark: { ...SPARK, protected: true },
+    memberships: [{ network: 'labo', interface: 'spn1', ipv4_address: '10.78.1.16', applied_at: 't',
+                    cell_configured: true, cell_note: null }],
+    reseaux: [{ name: 'labo', cidr: '10.78.1.0/24' }] });
+  assert.match(protege, /data-ouvre="reseau"\s+disabled/);
+  assert.match(protege, /data-detache-reseau="labo"\s+disabled/);
+  assert.match(protege, /Ce Spark est protégé : levez la protection d’abord\./);
+});
+
+test('SPK-110 · la modale d’attachement ne propose que les réseaux dont le Spark n’est pas membre', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.4 · DESIGN_SYSTEM.md §6.27 */
+  const spark = { ...SPARK, protected: false };
+  const memberships = [{ network: 'backoffice', interface: 'spn0', ipv4_address: '10.78.0.16',
+                         applied_at: 't', cell_configured: true, cell_note: null }];
+  const reseaux = [{ name: 'backoffice', cidr: '10.78.0.0/24' }, { name: 'labo', cidr: '10.78.1.0/24' }];
+  const admin = { ...ADMIN_VIDE, open: 'reseau', values: { ...ADMIN_VIDE.values, reseau: 'labo' } };
+  const ouverte = renderSparkDetail({ status: 'ready', spark, memberships, reseaux, admin });
+  assert.match(ouverte, /data-modale="reseau"/);
+  assert.match(ouverte, /Attacher à un réseau privé/);
+  assert.match(ouverte, /<option value="labo" selected>labo — 10\.78\.1\.0\/24<\/option>/);
+  assert.ok(!ouverte.includes('<option value="backoffice"'));
+  assert.match(ouverte, />Attacher</);
+  // Membre de tout : la modale explique et se ferme, elle ne s'engage pas (§6.27).
+  const complet = renderSparkDetail({ status: 'ready', spark, reseaux, admin,
+    memberships: [...memberships, { network: 'labo', interface: 'spn1', ipv4_address: '10.78.1.16',
+                                    applied_at: 't', cell_configured: true, cell_note: null }] });
+  assert.match(complet, /Aucun réseau privé disponible pour ce Spark/);
+  assert.ok(!complet.includes('name="reseau"'));
+  assert.ok(!/>Attacher</.test(complet));
+  // Le refus du serveur se lit dans la modale.
+  const refus = renderSparkDetail({ status: 'ready', spark, memberships, reseaux,
+    admin: { ...admin, refusal: { panel: 'reseau', message: 'le pool est épuisé' } } });
+  assert.match(refus, /le pool est épuisé/);
+});
+
+test('SPK-110 · détacher se confirme dans le flux, en NOMMANT le Spark et le réseau (§6.22)', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.4 · DESIGN_SYSTEM.md §6.22 · DESIGN_SYSTEM_APP.md SPK-DS-09 */
+  const spark = { ...SPARK, protected: false };
+  const memberships = [{ network: 'backoffice', interface: 'spn0', ipv4_address: '10.78.0.16',
+                         applied_at: 't', cell_configured: true, cell_note: null }];
+  const admin = { ...ADMIN_VIDE, confirming: { kind: 'reseau', id: 'backoffice' } };
+  const rendu = renderSparkDetail({ status: 'ready', spark, memberships, reseaux: [], admin });
+  assert.match(rendu, /Détacher « crm-production » de « backoffice » \?/);
+  assert.match(rendu, /L’interface <span class="technique">spn0<\/span>\s+disparaît de la cellule/);
+  assert.ok(rendu.includes('data-confirme-detachement="backoffice"'));
+  assert.ok(rendu.includes('data-annule="reseau"'));
+  // Détacher interrompt, il ne détruit pas : le bouton n'est pas destructif (SPK-DS-09).
+  assert.ok(!/data-confirme-detachement="backoffice"[^>]*bouton--destructif/.test(rendu));
+  assert.ok(!/bouton--destructif" data-confirme-detachement/.test(rendu));
+});

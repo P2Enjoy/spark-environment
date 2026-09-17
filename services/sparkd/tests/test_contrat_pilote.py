@@ -34,6 +34,10 @@ def _appels(pilote):
         "update_instance_config":  lambda: pilote.update_instance_config("absente", {"a": "b"}),
         # SPK-109 · §57.3 : les clés d'isolation se posent à chaud sur UN device.
         "update_device_config":    lambda: pilote.update_device_config("absente", "eth0", {"a": "b"}),
+        # SPK-110 · §58.3, §58.4 : un réseau géré par réseau privé, un device par
+        # adhésion — et son retrait à chaud.
+        "remove_device":           lambda: pilote.remove_device("absente", "spn1"),
+        "delete_network":          lambda: pilote.delete_network("spn-absent"),
         "set_publication_devices": lambda: pilote.set_publication_devices("absente", {}),
         "update_root_size":        lambda: pilote.update_root_size("absente", "5GiB"),
         "push_file":               lambda: pilote.push_file("absente", "/etc/x", "y"),
@@ -199,6 +203,9 @@ _HORS_COMPARAISON = {
     "server_info":            "interroge le SERVEUR",
     "instances":              "COLLECTION : vide est une réponse (§12.1.2)",
     "create_instance":        "crée : il n'y a rien dont l'absence serait anormale",
+    # SPK-110 · §58.3 : même raison — créer un réseau géré ne désigne rien
+    # dont l'absence serait à rapporter.
+    "create_network":         "crée : il n'y a rien dont l'absence serait anormale",
     "snapshots":              "MESURÉ : Incus rend 200 et une liste vide pour une "
                               "instance inconnue — il ne SAIT PAS rapporter "
                               "l'absence ici (§12.1.2)",

@@ -15,6 +15,7 @@
 
 import { formatBytes, formatBps, formatCpu } from './tokens.js';
 import { renderForgeInstaller } from './forge-installer.js';
+import { renderModale } from './modale.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -858,6 +859,103 @@ export function renderIsolation(isolation, ui = ISOLATION_VIDE) {
 </section>`;
 }
 
+/**
+ * Le catalogue des réseaux privés de la Forge (SPK-110).
+ *
+ * @spec docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.1 (un commutateur interne, ni
+ *       VPN ni pont), §58.2 (le pool), §58.4 (créer ; supprimer refusé tant
+ *       qu'il reste un membre, nommé), §58.5 (le catalogue côté Forge) ·
+ *       docs/DESIGN_SYSTEM.md §6.19 (une liste plate administrable), §6.22,
+ *       §6.23 (supprimer un réseau est destructif : il se confirme), §6.27 (une
+ *       modale pour insérer dans la section), §14.5, §14.6 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-30
+ */
+export const RESEAUX_VIDE = { open: false, values: { name: '', note: '' },
+                              refusal: null, busy: false, confirming: null };
+
+export function renderReseauxPrives(reseaux, ui = RESEAUX_VIDE) {
+  const entete = `<h2 id="titre-reseaux-prives">Réseaux privés</h2>
+  <p class="note">Un commutateur interne à la Forge : ses membres se joignent par nom,
+  <span class="technique">&lt;spark&gt;.&lt;réseau&gt;</span>. Un réseau privé ne mène ni à
+  Internet, ni aux autres cellules. <a href="#/manuel/M13">Manuel M13 — Relier des Sparks entre eux</a></p>`;
+  let corps;
+  if (reseaux === undefined) {
+    corps = '<p class="note" role="status" aria-busy="true">Lecture des réseaux privés en cours…</p>';
+  } else if (!reseaux) {
+    corps = '<p class="avertissement" role="status">Les réseaux privés n’ont pas pu être lus.</p>';
+  } else {
+    const pool = reseaux.pool
+      ? `<dl class="definitions">
+           <div class="def"><dt>Sous-réseaux</dt><dd class="technique">${echapper(reseaux.pool.used)} attribués sur ${
+             echapper(reseaux.pool.capacity)} (${echapper(reseaux.pool.cidr)})</dd></div>
+         </dl>`
+      : '';
+    const liste = reseaux.networks?.length
+      ? `<ul class="liste-administrable">${reseaux.networks.map((r) => {
+          const membres = r.members?.length
+            ? `membres : ${r.members.map((m) =>
+                `<a href="#/sparks/${encodeURIComponent(m.spark)}">${echapper(m.spark)}</a>${
+                  m.protected ? ' (protégé)' : ''}`).join(', ')}`
+            : 'aucun membre';
+          const confirme = ui.confirming === r.name
+            ? `<div class="confirmation" role="group" aria-label="Confirmer la suppression">
+                 <p><strong>Supprimer le réseau « ${echapper(r.name)} » ?</strong></p>
+                 <p class="confirmation__consequence">Son sous-réseau <span class="technique">${
+                   echapper(r.cidr)}</span> est rendu au pool. Un réseau qui a encore des membres
+                 sera refusé, en les nommant.</p>
+                 <p class="confirmation__actions">
+                   <button type="button" class="bouton bouton--destructif" data-confirme-suppression-reseau="${
+                     echapper(r.name)}">Supprimer le réseau</button>
+                   <button type="button" class="bouton" data-annule-reseau>Annuler</button>
+                 </p>
+               </div>`
+            : '';
+          // Une ligne par réseau : son identité, puis ses membres sur une ligne
+          // pleine largeur (SPK-DS-30) — les deux natures se distinguent par
+          // la structure, pas seulement par la couleur (§14.8).
+          return `<li><span><strong>${echapper(r.name)}</strong> · <span class="technique">${
+            echapper(r.cidr)} · ${echapper(r.interface)}</span>` +
+            (r.note ? ` <span class="note">${echapper(r.note)}</span>` : '') + '</span>' +
+            `<span class="actions-ligne"><button type="button" class="bouton bouton--compact"
+               data-supprime-reseau="${echapper(r.name)}">Supprimer</button></span>` +
+            `<span class="membres">${membres}</span>${confirme}</li>`;
+        }).join('')}</ul>`
+      : '<p class="absence">Aucun réseau privé. Chaque Spark reste isolé des autres.</p>';
+    corps = pool + liste;
+  }
+  const refus = ui.refusal?.liste
+    ? `<div class="refus" role="alert"><p>${echapper(ui.refusal.liste)}</p></div>` : '';
+  const modale = renderModale({
+    ouverte: ui.open, id: 'reseau-creation', titre: 'Créer un réseau privé',
+    engagement: 'Créer le réseau', refus: ui.refusal?.modale ?? null, occupee: ui.busy,
+    corps: `
+      <div class="champ">
+        <label for="reseau-nom">Nom</label>
+        <input class="controle" id="reseau-nom" name="name" type="text" autocomplete="off"
+               spellcheck="false" placeholder="backoffice" value="${echapper(ui.values.name)}"
+               aria-describedby="reseau-nom-aide">
+        <p class="champ__aide" id="reseau-nom-aide">Un nom DNS : minuscules, chiffres et tirets.
+        Les membres se nommeront <span class="technique">&lt;spark&gt;.${
+          echapper(ui.values.name || 'nom')}</span>.</p>
+      </div>
+      <div class="champ">
+        <label for="reseau-note">À quoi il sert</label>
+        <input class="controle" id="reseau-note" name="note" type="text" autocomplete="off"
+               placeholder="le CRM et sa base" value="${echapper(ui.values.note)}">
+      </div>`,
+  });
+  return `
+<section class="carte bloc" aria-labelledby="titre-reseaux-prives">
+  ${entete}
+  ${corps}
+  ${refus}
+  <p class="formulaire__actions">
+    <button type="button" class="bouton" data-ouvre-reseau ${ui.busy ? 'disabled' : ''}>Créer un réseau</button>
+  </p>
+  ${modale}
+</section>`;
+}
+
 export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  sparkNames = {}, error = null,
                                  build = null, syncing = false,
@@ -866,7 +964,9 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
                                  rebootUi = REBOOT_VIDE, sparks = [],
                                  // SPK-109 · §57.3 : l'isolation du parc.
                                  isolation = undefined,
-                                 isolationUi = ISOLATION_VIDE } = {}) {
+                                 isolationUi = ISOLATION_VIDE,
+                                 // SPK-110 · §58.5 : le catalogue des réseaux privés.
+                                 reseaux = undefined, reseauxUi = RESEAUX_VIDE } = {}) {
   // SPK-68 · §50.1 : l'assistant doit rester visible quand /healthz manque ;
   // le cacher derrière l'erreur du plan de contrôle rendrait son cas d'usage
   // inatteignable.
@@ -903,6 +1003,7 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
   <div class="detail__principal">
     ${renderMemoryBreakdown(host)}
     ${renderCores(cores, sparkNames)}
+    ${renderReseauxPrives(reseaux, reseauxUi)}
   </div>
   <div class="detail__secondaire">
     ${renderBuild(build, updateUi)}

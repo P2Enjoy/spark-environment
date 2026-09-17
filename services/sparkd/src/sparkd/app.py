@@ -51,6 +51,7 @@ from . import historian as historian_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
 from . import isolation as isolation_service
+from . import reseaux as reseaux_service
 from . import environnement as env_service
 from . import sshkeys
 from .lifecycle import Command
@@ -515,6 +516,8 @@ def create_app(config: Config) -> FastAPI:
             row = connection.execute("SELECT * FROM forge WHERE id = 1").fetchone()
             connection_usage = connection
             adresses = usage(connection)
+            # SPK-110 · §58.2 : compté DANS le bloc, pour la même raison.
+            reseaux_prives = reseaux_service.usage(connection)
             # Compte DANS le bloc : le dict de reponse est construit apres la
             # fermeture de la connexion. Mesure — « Cannot operate on a closed
             # database » a la premiere requete.
@@ -568,6 +571,9 @@ def create_app(config: Config) -> FastAPI:
                 "free": adresses.free,
                 "dhcp_dynamic_range": DHCP_RANGE,
             },
+            # SPK-110 · §58.2 : le pool des sous-réseaux privés, comme celui des
+            # adresses — capacité, attribués, libres.
+            "private_networks": reseaux_prives,
             "topology_synced_at": row["topology_synced_at"],
             # SPK-62 · docs/DAT.md §47.6 : l'échec du canal hors bande est DIT.
             # `configured: false` ne veut PAS dire « tout va bien » : les
@@ -609,6 +615,89 @@ def create_app(config: Config) -> FastAPI:
             "network_total_bps": topology.network_total_bps,
             "storage_total_bytes": topology.storage_total_bytes,
         }
+
+    # --- réseaux privés (SPK-110, docs/DAT.md §58) ------------------------------
+
+    def _refus_reseau(erreur: Exception) -> HTTPException:
+        if isinstance(erreur, reseaux_service.ReseauIntrouvable):
+            return HTTPException(status_code=404, detail={"error": "not_found", "message": str(erreur)})
+        if isinstance(erreur, reseaux_service.PoolEpuise):
+            return HTTPException(status_code=409, detail={"error": "pool_exhausted", "message": str(erreur)})
+        return HTTPException(status_code=409, detail={"error": "network_refused", "message": str(erreur)})
+
+    @app.get("/v1/networks", tags=["networks"])
+    def list_networks() -> dict:
+        """Le catalogue des réseaux privés, membres compris, et le pool (§58.4)."""
+        with registry() as connection:
+            return {"networks": reseaux_service.listing(connection),
+                    "pool": reseaux_service.usage(connection)}
+
+    @app.post("/v1/networks", tags=["networks"], status_code=201)
+    def create_network(body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                return reseaux_service.create(
+                    connection, app.state.incus, str(body.get("name", "")),
+                    str(body.get("note", "")))
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+
+    @app.get("/v1/networks/{name}", tags=["networks"])
+    def get_network(name: str) -> dict:
+        with registry() as connection:
+            try:
+                return reseaux_service.by_name(connection, name)
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+
+    @app.delete("/v1/networks/{name}", tags=["networks"])
+    def delete_network(name: str) -> dict:
+        """Refusé tant qu'il reste un membre ou un lien, nommés (§58.4)."""
+        with registry() as connection:
+            try:
+                reseaux_service.delete(connection, app.state.incus, name)
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+            return {"deleted": name}
+
+    @app.post("/v1/networks/{name}/members", tags=["networks"], status_code=201)
+    def attach_member(name: str, body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, str(body.get("spark", "")))
+                # §35.2 : la protection s'applique AVANT tout le reste.
+                protection_service.ensure_writable(connection, spark["name"], "network")
+                return reseaux_service.attach(connection, app.state.incus, name, spark)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+
+    @app.delete("/v1/networks/{name}/members/{spark_name}", tags=["networks"])
+    def detach_member(name: str, spark_name: str) -> dict:
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, spark_name)
+                protection_service.ensure_writable(connection, spark["name"], "network")
+                reseaux_service.detach(connection, app.state.incus, name, spark)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+            return {"detached": spark_name, "network": name}
+
+    @app.get("/v1/sparks/{name}/networks", tags=["sparks"])
+    def spark_networks(name: str) -> dict:
+        """Les adhésions d'UN Spark, pour son dossier (§58.5)."""
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            return {"memberships": reseaux_service.for_spark(connection, spark["id"])}
 
     @app.get("/v1/forge/isolation", tags=["forge"])
     def forge_isolation() -> dict:
@@ -781,6 +870,13 @@ def create_app(config: Config) -> FastAPI:
         except ports_service.PortError:
             # L'instance existe : ne pas faire échouer sa création pour un port.
             # L'écart reste visible par `applied_at` (§39.5).
+            pass
+        # SPK-110 · §58.4 : les adhésions déclarées AVANT la création se posent
+        # maintenant — même règle que les ports, même visibilité de l'écart.
+        try:
+            reseaux_service.apply_memberships(
+                connection, app.state.incus, service.get(connection, spark["id"]))
+        except (IncusError, InstanceAbsente, reseaux_service.ReseauError):
             pass
 
     config_network = config.network_bridge

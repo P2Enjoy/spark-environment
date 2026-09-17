@@ -1100,6 +1100,269 @@
         ]
       }
     },
+    "/v1/networks": {
+      "get": {
+        "description": "Le catalogue des réseaux privés, membres compris, et le pool (§58.4).",
+        "operationId": "list_networks_v1_networks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Networks V1 Networks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Networks",
+        "tags": [
+          "networks"
+        ]
+      },
+      "post": {
+        "operationId": "create_network_v1_networks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Network V1 Networks Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Network",
+        "tags": [
+          "networks"
+        ]
+      }
+    },
+    "/v1/networks/{name}": {
+      "delete": {
+        "description": "Refusé tant qu'il reste un membre ou un lien, nommés (§58.4).",
+        "operationId": "delete_network_v1_networks__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Network V1 Networks  Name  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Network",
+        "tags": [
+          "networks"
+        ]
+      },
+      "get": {
+        "operationId": "get_network_v1_networks__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Network V1 Networks  Name  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Network",
+        "tags": [
+          "networks"
+        ]
+      }
+    },
+    "/v1/networks/{name}/members": {
+      "post": {
+        "operationId": "attach_member_v1_networks__name__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Attach Member V1 Networks  Name  Members Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach Member",
+        "tags": [
+          "networks"
+        ]
+      }
+    },
+    "/v1/networks/{name}/members/{spark_name}": {
+      "delete": {
+        "operationId": "detach_member_v1_networks__name__members__spark_name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "spark_name",
+            "required": true,
+            "schema": {
+              "title": "Spark Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Detach Member V1 Networks  Name  Members  Spark Name  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detach Member",
+        "tags": [
+          "networks"
+        ]
+      }
+    },
     "/v1/notify/channels": {
       "get": {
         "description": "Ce que l'onglet lit. **Aucun secret n'en sort** (§43.3).\n\nL'URL du webhook n'est pas rendue : elle EST un secret — qui la détient\nécrit dans le salon. On rend son HÔTE, de quoi reconnaître le canal sans\npouvoir s'en servir.",
@@ -2157,6 +2420,51 @@
         "summary": "Spark Metrics",
         "tags": [
           "metriques"
+        ]
+      }
+    },
+    "/v1/sparks/{name}/networks": {
+      "get": {
+        "description": "Les adhésions d'UN Spark, pour son dossier (§58.5).",
+        "operationId": "spark_networks_v1_sparks__name__networks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Spark Networks V1 Sparks  Name  Networks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spark Networks",
+        "tags": [
+          "sparks"
         ]
       }
     },

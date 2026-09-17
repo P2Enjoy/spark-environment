@@ -109,6 +109,12 @@ class IncusClient(Protocol):
 
     def update_device_config(self, name: str, device: str, keys: dict[str, str]) -> None: ...
 
+    def remove_device(self, name: str, device: str) -> None: ...
+
+    def create_network(self, name: str, config: dict[str, str]) -> None: ...
+
+    def delete_network(self, name: str) -> None: ...
+
     def set_publication_devices(
         self, name: str, devices: dict[str, dict[str, str]]) -> None: ...
 
@@ -294,6 +300,29 @@ class UnixSocketIncus:
         metadata = dict(metadata)
         metadata["devices"] = devices
         self._request("PUT", f"/1.0/instances/{name}", metadata)
+
+    def remove_device(self, name: str, device: str) -> None:
+        """Retire UN device de l'instance, à chaud (SPK-110, §58.4).
+
+        Lecture-modification-écriture : `PATCH` fusionne et ne sait pas
+        retirer (§39.4). Un device déjà absent vaut retrait acquis.
+        """
+        actuelle = self._get(f"/1.0/instances/{name}")
+        metadata = actuelle.get("metadata") or actuelle
+        devices = dict(metadata.get("devices") or {})
+        if device not in devices:
+            return
+        del devices[device]
+        metadata = dict(metadata)
+        metadata["devices"] = devices
+        self._request("PUT", f"/1.0/instances/{name}", metadata)
+
+    def create_network(self, name: str, config: dict[str, str]) -> None:
+        """Crée un réseau géré de type bridge (SPK-110, §58.3)."""
+        self._request("POST", "/1.0/networks", {"name": name, "type": "bridge", "config": config})
+
+    def delete_network(self, name: str) -> None:
+        self._request("DELETE", f"/1.0/networks/{name}", None)
 
     def set_publication_devices(
         self, name: str, devices: dict[str, dict[str, str]]) -> None:
@@ -842,6 +871,11 @@ class FakeIncus:
     payload: dict[str, Any] | None = None
     pool_payload: dict[str, Any] | None = None
     created: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: SPK-110 · §58.3 : les réseaux gérés que le produit a créés, persistés à
+    #: côté des instances (fichier voisin `.reseaux`), là où le vrai Incus les
+    #: garde — sans quoi un réseau créé depuis l'écran disparaîtrait au geste
+    #: suivant de la pile de développement.
+    networks: dict[str, dict[str, Any]] = field(default_factory=dict)
     state_path: Path | None = None
     #: Panne a injecter, consommee une fois : {operation: message}.
     #: Elle sert a EXECUTER REELLEMENT le chemin d'erreur du produit, pas a
@@ -855,9 +889,16 @@ class FakeIncus:
         if message is not None:
             raise IncusError(message)
 
+    def _chemin_reseaux(self) -> Path | None:
+        return None if self.state_path is None else self.state_path.with_name(
+            self.state_path.name + ".reseaux")
+
     def __post_init__(self) -> None:
         if self.state_path is not None and self.state_path.exists():
             self.created = json.loads(self.state_path.read_text(encoding="utf-8"))
+        chemin = self._chemin_reseaux()
+        if chemin is not None and chemin.exists():
+            self.networks = json.loads(chemin.read_text(encoding="utf-8"))
 
     def _recharger(self) -> None:
         """Relit l'état persisté AVANT chaque opération (docs/DAT.md §12.1.3).
@@ -880,6 +921,12 @@ class FakeIncus:
             self.created = json.loads(self.state_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
+        chemin = self._chemin_reseaux()
+        if chemin is not None and chemin.exists():
+            try:
+                self.networks = json.loads(chemin.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
 
     def _vivante(self, name: str) -> dict[str, Any]:
         """L'instance, ou l'absence RAPPORTÉE (docs/DAT.md §12.1.2).
@@ -903,6 +950,11 @@ class FakeIncus:
         provisoire = self.state_path.with_suffix(".tmp")
         provisoire.write_text(json.dumps(self.created), encoding="utf-8")
         provisoire.replace(self.state_path)
+        chemin = self._chemin_reseaux()
+        if chemin is not None:
+            provisoire_reseaux = chemin.with_suffix(".tmp")
+            provisoire_reseaux.write_text(json.dumps(self.networks), encoding="utf-8")
+            provisoire_reseaux.replace(chemin)
 
     def resources(self) -> dict[str, Any]:
         self._maybe_fail("resources")
@@ -1005,6 +1057,32 @@ class FakeIncus:
         instance["devices"] = devices
         self._persist()
 
+    def remove_device(self, name: str, device: str) -> None:
+        """Même sémantique que le vrai pilote : un device absent vaut retrait
+        acquis, l'instance absente LÈVE (SPK-110, §58.4)."""
+        self._maybe_fail("remove_device")
+        instance = self._vivante(name)
+        devices = dict(instance.get("devices") or {})
+        devices.pop(device, None)
+        instance["devices"] = devices
+        self._persist()
+
+    def create_network(self, name: str, config: dict[str, str]) -> None:
+        self._maybe_fail("create_network")
+        self._recharger()
+        if name in self.networks:
+            raise IncusError(f"Réseau « {name} » déjà présent.")
+        self.networks[name] = {"name": name, "type": "bridge", "config": dict(config)}
+        self._persist()
+
+    def delete_network(self, name: str) -> None:
+        self._maybe_fail("delete_network")
+        self._recharger()
+        if name not in self.networks:
+            raise InstanceAbsente(f"Incus ne connaît pas /1.0/networks/{name}.")
+        del self.networks[name]
+        self._persist()
+
     def push_file(self, name: str, path: str, content: str, mode: str = "0600") -> None:
         self._maybe_fail("push_file")
         instance = self._vivante(name)
@@ -1037,7 +1115,16 @@ class FakeIncus:
         """
         self._maybe_fail("pull_file")
         instance = self._vivante(name)
-        return instance.get("files", {}).get(path)
+        fichiers = instance.get("files", {})
+        # SPK-110 · §58.6 : une cellule arrêtée n'exécute rien, et sa famille se
+        # lit dans `/etc/os-release` — que le vrai pilote sert à l'arrêt comme en
+        # marche. Le doublon le rend de la MÊME table que `exec_capture` (§42.9),
+        # sinon les deux chemins de lecture de la famille divergeraient.
+        if path == "/etc/os-release" and path not in fichiers:
+            os_release = _os_de_alias(instance.get("alias", ""))
+            return (f'ID={os_release["os_id"]}\nID_LIKE="{os_release["os_like"]}"\n'
+                    f'VERSION_CODENAME={os_release["os_suite"]}\n')
+        return fichiers.get(path)
 
     def exec_command(self, name: str, command: list[str]) -> None:
         self._maybe_fail("exec_command")

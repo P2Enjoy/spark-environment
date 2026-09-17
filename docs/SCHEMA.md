@@ -188,6 +188,57 @@ pilote se voit, au lieu de se déduire.
 Les deux ports sont bornés à `1..65535` par une contrainte `CHECK`, et le
 protocole à `tcp` ou `udp`.
 
+## 6 ter. `private_network` et `private_network_member` : les réseaux privés (SPK-110)
+
+Migration `018_reseaux_prives`. Contrat au `docs/DAT.md` §58.2.
+
+```sql
+CREATE TABLE private_network (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,      -- un nom DNS : ^[a-z][a-z0-9-]{0,30}$
+    cidr        TEXT NOT NULL UNIQUE,      -- un /24 du pool, attribué par le registre
+    note        TEXT NOT NULL DEFAULT '',
+    applied_at  TEXT,                      -- le réseau Incus spn<n> existe
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE private_network_member (
+    network_id       TEXT NOT NULL REFERENCES private_network(id) ON DELETE CASCADE,
+    spark_id         TEXT NOT NULL REFERENCES spark(id) ON DELETE CASCADE,
+    ipv4_address     TEXT NOT NULL,        -- .16 à .239 du réseau, attribuée par le registre
+    applied_at       TEXT,                 -- le device NIC est posé sur la cellule
+    cell_configured  INTEGER NOT NULL DEFAULT 0 CHECK (cell_configured IN (0, 1)),
+    cell_note        TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL,
+    PRIMARY KEY (network_id, spark_id),
+    UNIQUE (network_id, ipv4_address)
+);
+
+ALTER TABLE forge ADD COLUMN private_pool_cidr TEXT NOT NULL DEFAULT '10.78.0.0/16';
+```
+
+- **Le registre attribue, Incus épingle** (§15.1 du DAT, transposé) : le
+  sous-réseau sur le pool `forge.private_pool_cidr` découpé en `/24` — le premier
+  laissé de côté, pour que `spn0` n'existe pas (DAT §58.2) —, l'adresse sur le
+  réseau, de `.16` à `.239`. L'unicité du nom, du sous-réseau et de l'adresse est
+  portée par la base : deux créations simultanées ne peuvent pas obtenir le même.
+- **Le nom d'interface n'est pas stocké** : il dérive du sous-réseau — `spn<n>`
+  pour `10.78.<n>.0/24` — et se recalcule. Deux colonnes qui pourraient se
+  contredire seraient une de trop.
+- **`applied_at`** dit que le pilote a fait ce que la ligne promet — le réseau
+  Incus, le device —, comme sur les routes et les ports (DAT §18.5).
+  **`cell_configured`** et **`cell_note`** disent ce que le geste a constaté
+  DANS la cellule (DAT §58.6) : l'interface configurée par networkd, ou pas, et
+  pourquoi. Ce n'est pas déduit, c'est constaté.
+- **Cascade sur `spark_id`** : une adhésion ne survit pas à son Spark. **Cascade
+  sur `network_id`** : jamais empruntée par le produit, qui refuse de supprimer
+  un réseau habité (DAT §58.4) ; elle garde la base cohérente si quelqu'un passe
+  à côté.
+- **Retour arrière** (`@down`) : la colonne et les deux tables sont retirées.
+  Les réseaux Incus `spn<n>` et les devices posés ne le sont pas par la
+  migration — c'est le contrat de déploiement qui le dit
+  (`docs/PROD_MIGRATIONS.md` OP-23).
+
 ## 7. `ssh_key` et `spark_ssh_key`
 
 `ssh_key` : `id`, `label` unique, `public_key`, `fingerprint` unique, `created_at`.

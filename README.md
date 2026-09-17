@@ -39,8 +39,8 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 98 closes, 7
-partielles, 2 non commencées — le lot 6, *Réseau entre Sparks*, ouvert le
+**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 98 closes, 8
+partielles, 1 non commencée — le lot 6, *Réseau entre Sparks*, ouvert le
 2026-09-17. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
@@ -434,7 +434,7 @@ pas** : un réglage de harnais reste un réglage.
 
 | Variable | Rôle | Format | Requis | Exemple |
 |---|---|---|---|---|
-| `SPARK_CONSOLE_URL` | console à viser pour les scripts qui n'en montent pas (`e2e/reel.mjs`, `e2e/forge-conformite.mjs`) | URL | non | `http://127.0.0.1:5173` |
+| `SPARK_CONSOLE_URL` | console à viser pour les scripts qui n'en montent pas (`e2e/reel.mjs`, `e2e/forge-conformite.mjs`, `e2e/forge-reelle/*.mjs` — ceux-ci visent `sparkui`, `http://localhost:5175/`, par défaut) | URL | non | `http://127.0.0.1:5173` |
 | `SPARK_SORTIE` | répertoire où ces scripts déposent leurs captures | chemin | non | `e2e/captures` |
 
 **Une seule épreuve à la fois sur le poste** (`docs/DAT.md` §29.8). Chaque
@@ -552,11 +552,14 @@ une garde qui n'existe que dans un fichier de workflow.
   réservation, et c'est voulu (`docs/DAT.md` §32.2).
 - Les disques de la Forge sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
-- **Les réseaux privés et les liens privés n'existent pas encore.** Chaque
-  Spark est isolé du réseau des autres depuis SPK-109 (2026-09-18) ; ce qui
-  permettra de les relier à dessein — SPK-110 (`docs/DAT.md` §58) et SPK-111
-  (§59) — est spécifié, non implémenté. D'ici là, deux Sparks d'une même Forge
-  ne se joignent que par leurs noms publics, à travers l'ingress.
+- **Les réseaux privés ne sont pas encore déployés, et les liens privés
+  n'existent pas.** Chaque Spark est isolé du réseau des autres depuis SPK-109
+  (2026-09-18). Les réseaux privés — SPK-110, `docs/DAT.md` §58 — relient des
+  Sparks à dessein : implémentés et vérifiés sur le doublon le 2026-09-18, ils
+  attendent leur déploiement (OP-23) et leur preuve sur la Forge. Le produit
+  configure la cellule seul sur les familles à `systemd-networkd` (Ubuntu,
+  Debian), et dit quand il n'a pas pu. Publier un port d'un Spark dans un
+  réseau privé — SPK-111 (§59) — est spécifié, non implémenté.
 
 ## Sauvegarder le registre
 

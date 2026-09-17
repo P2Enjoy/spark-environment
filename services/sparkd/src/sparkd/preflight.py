@@ -622,8 +622,13 @@ def isolation_des_sparks(hote: Hote, nom: str | None = None) -> Verdict:
         return Verdict(code, titre, INCONNU,
                        f"{isolees} cellule(s) isolée(s) sur {len(noms)} ; verrou forward "
                        "illisible (nft) — relancer avec les droits", "")
+    prive = f"{pare_feu.PREFIXE_RESEAU_PRIVE}*"
     verrou = ("chain forward" in table
-              and f'iifname "{nom}" oifname "{nom}" drop' in table)
+              and f'iifname "{nom}" oifname "{nom}" drop' in table
+              # SPK-110 · §58.3 : les réseaux privés ne mènent nulle part, et
+              # n'ouvrent pas la Forge (§48.1) — même contrôle, mêmes règles.
+              and f'iifname "{prive}" drop' in table
+              and f'oifname "{prive}" drop' in table)
     if not non_isolees and verrou:
         return Verdict(code, titre, OK,
                        f"{len(noms)} cellule(s) isolée(s), verrou forward posé")

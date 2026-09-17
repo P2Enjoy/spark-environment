@@ -646,6 +646,16 @@ tbody tr:hover { background: var(--color-hover); }
 .liste-administrable > li > .surcharges,
 .liste-administrable > li > .refus { flex-basis: 100%; margin-top: var(--space-2); }
 
+/* SPK-110 · SPK-DS-30 : sous un réseau privé, ses membres sur leur propre ligne ;
+   sous une adhésion, l'interface que le produit n'a PAS pu configurer (§14.5).
+   Pleine largeur : une ligne de plus dans la même rangée, pas un badge. */
+.liste-administrable > li > .membres,
+.liste-administrable > li > .precision,
+.liste-administrable > li > .avertissement {
+  flex-basis: 100%; margin: 0; font-size: var(--text-compact); color: var(--color-text-2);
+}
+.liste-administrable > li > .avertissement { color: inherit; }
+
 /* §3.1 : le fragment ssh_config se compare caractère par caractère. Il défile
    dans son propre conteneur — la page ne défile jamais horizontalement (§8.2). */
 .fragment {

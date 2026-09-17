@@ -28,6 +28,7 @@ n'existe plus. Voir [DAT §30](../DAT.md).
 | [M10 · Supprimer un Spark](M10-supprimer.md) | ce qui est libéré, ce qui est irréversible |
 | [M11 · Sécurité et limites](M11-securite.md) | surface d'exposition, ce qui n'est pas garanti |
 | [M12 · Annexes](M12-annexes.md) | variables d'environnement, journal d'audit, messages courants |
+| [M13 · Relier des Sparks entre eux](M13-reseaux-prives.md) | réseaux privés : créer, attacher, se joindre par nom, détacher |
 
 ## Essayer sans serveur
 

@@ -924,3 +924,75 @@ test('SPK-109 · l’issue du geste : vert seulement si tout est isolé, l’acc
   const refus = renderIsolation(parc, { ...ISOLATION_VIDE, erreur: 'HTTP 502' });
   assert.match(refus, /class="refus" role="alert">HTTP 502/);
 });
+
+// --- SPK-110 · le catalogue des réseaux privés --------------------------------
+
+import { renderReseauxPrives, RESEAUX_VIDE } from './forge-view.js';
+
+const CATALOGUE = {
+  pool: { cidr: '10.78.0.0/16', capacity: 256, used: 2 },
+  networks: [
+    { name: 'backoffice', cidr: '10.78.0.0/24', interface: 'spn0', note: 'le CRM et sa base',
+      members: [{ spark: 'crm-production', ipv4_address: '10.78.0.16', protected: true },
+                { spark: 'postgres-dedie', ipv4_address: '10.78.0.17', protected: false }] },
+    { name: 'labo', cidr: '10.78.1.0/24', interface: 'spn1', note: '', members: [] },
+  ],
+};
+
+test('SPK-110 · le catalogue NOMME chaque réseau, son sous-réseau, ses membres liés, et le pool', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.2, §58.5 · DESIGN_SYSTEM.md §6.19 */
+  const rendu = renderReseauxPrives(CATALOGUE);
+  assert.match(rendu, /id="titre-reseaux-prives">Réseaux privés/);
+  assert.match(rendu, /2 attribués sur 256 \(10\.78\.0\.0\/16\)/);
+  assert.match(rendu, /<strong>backoffice<\/strong> · <span class="technique">10\.78\.0\.0\/24 · spn0<\/span>/);
+  assert.match(rendu, /le CRM et sa base/);
+  assert.match(rendu, /href="#\/sparks\/crm-production">crm-production<\/a> \(protégé\)/);
+  assert.match(rendu, /href="#\/sparks\/postgres-dedie">postgres-dedie<\/a>/);
+  assert.match(rendu, /<strong>labo<\/strong>[^]*aucun membre/);
+  assert.ok(rendu.includes('data-supprime-reseau="backoffice"'));
+  assert.ok(rendu.includes('data-ouvre-reseau'));
+  // Le nom des membres est un vrai chemin : <spark>.<réseau> (§58.1).
+  assert.match(rendu, /&lt;spark&gt;\.&lt;réseau&gt;/);
+  assert.match(rendu, /href="#\/manuel\/M13"/);
+});
+
+test('SPK-110 · sans réseau, en cours, et illisible : trois états qui se NOMMENT (§14.6)', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · DESIGN_SYSTEM.md §14.6 */
+  assert.match(renderReseauxPrives({ pool: CATALOGUE.pool, networks: [] }),
+               /Aucun réseau privé\. Chaque Spark reste isolé des autres\./);
+  assert.match(renderReseauxPrives(undefined), /aria-busy="true">Lecture des réseaux privés en cours/);
+  assert.match(renderReseauxPrives(null), /n’ont pas pu être lus/);
+  // Même illisible, le geste de création reste offert : il ne dépend pas de la lecture.
+  assert.ok(renderReseauxPrives(null).includes('data-ouvre-reseau'));
+});
+
+test('SPK-110 · la modale de création recueille nom et note, et montre le domaine des membres', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.4 · DESIGN_SYSTEM.md §6.27 */
+  const ferme = renderReseauxPrives(CATALOGUE);
+  assert.ok(!ferme.includes('data-modale="reseau-creation"') || /<dialog[^>]*(?!open)/.test(ferme));
+  const ouverte = renderReseauxPrives(CATALOGUE,
+    { ...RESEAUX_VIDE, open: true, values: { name: 'compta', note: 'la paie' } });
+  assert.match(ouverte, /data-modale="reseau-creation"/);
+  assert.match(ouverte, /Créer un réseau privé/);
+  assert.match(ouverte, /name="name"[^>]*value="compta"/);
+  assert.match(ouverte, /name="note"[^>]*value="la paie"/);
+  assert.match(ouverte, /&lt;spark&gt;\.compta/);
+  assert.match(ouverte, />Créer le réseau</);
+  // Le refus de création vit DANS la modale.
+  const refus = renderReseauxPrives(CATALOGUE,
+    { ...RESEAUX_VIDE, open: true, refusal: { modale: 'ce nom existe déjà' } });
+  assert.match(refus, /ce nom existe déjà/);
+});
+
+test('SPK-110 · supprimer se confirme en NOMMANT le réseau ; le refus (réseau habité) se lit dans la section', () => {
+  /** @verifies docs/BACKLOG.md#SPK-110 · docs/DAT.md §58.4 · DESIGN_SYSTEM.md §6.22, §6.23 */
+  const confirme = renderReseauxPrives(CATALOGUE, { ...RESEAUX_VIDE, confirming: 'backoffice' });
+  assert.match(confirme, /Supprimer le réseau « backoffice » \?/);
+  assert.match(confirme, /10\.78\.0\.0\/24<\/span> est rendu au pool/);
+  assert.ok(confirme.includes('data-confirme-suppression-reseau="backoffice"'));
+  assert.ok(confirme.includes('data-annule-reseau'));
+  assert.ok(!confirme.includes('Supprimer le réseau « labo »'));
+  const refus = renderReseauxPrives(CATALOGUE,
+    { ...RESEAUX_VIDE, refusal: { liste: 'le réseau « backoffice » a encore 2 membres : crm-production, postgres-dedie' } });
+  assert.match(refus, /class="refus" role="alert"><p>le réseau « backoffice » a encore 2 membres : crm-production, postgres-dedie/);
+});
