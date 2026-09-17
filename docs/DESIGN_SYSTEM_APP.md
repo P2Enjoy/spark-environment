@@ -1260,7 +1260,10 @@ Preuves observées : `e2e/captures/spk110-catalogue.jpg`, `-catalogue-mobile`,
 `-creation`, `-creation-refusee`, `-suppression-confirmation`,
 `-suppression-refusee`, `-attacher`, `-dossier-membre`,
 `-dossier-membre-mobile`, `-detacher-confirmation`, `-catalogue-habite`,
-`-catalogue-apres`.
+`-catalogue-apres` ; sur la Forge réelle, `spk110-forge-catalogue-avant`,
+`-forge-reseau-cree`, `-dossier-essai-membre`, `-dossier-essai-arretee-membre`
+(la ligne de précision d'une cellule attachée arrêtée),
+`-terminal-nom-joint`, `-forge-catalogue-apres`.
 
 ### SPK-DS-E01 · Pas de Tailwind
 

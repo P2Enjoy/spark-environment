@@ -18,9 +18,14 @@
   Console : catalogue *Réseaux privés* sur la Forge (créer, supprimer),
   adhésions dans la section *Réseau* du dossier (attacher, détacher) —
   SPK-DS-30 ; manuel M13 *Relier des Sparks entre eux*. Seed : `backoffice`
-  avec `crm-production` et `postgres-dedie`. **Implémenté et vérifié sur le
-  doublon** — preuves sparkd et de composant, un parcours E2E, douze captures ;
-  **à déployer** (OP-23) et à prouver sur la Forge.
+  avec `crm-production` et `postgres-dedie`. Preuves sparkd et de composant,
+  un parcours E2E, douze captures. **Déployé sur la Forge** le 2026-09-18
+  (OP-23) et prouvé par la console sur les cellules d'essai : `essai-b.essai`
+  joint par son nom depuis le terminal d'`essai-a`, la cellule attachée arrêtée
+  revient configurée, ni la Forge ni Internet ne répondent par `spn1`, et un
+  membre détaché n'est plus joint. En chemin : `/etc/os-release` est un lien
+  et Incus rend sa cible — le geste lit les deux emplacements, le doublon fait
+  pareil.
 - **SPK-109 — chaque Spark est isolé du réseau des autres.** Mesuré le matin :
   bridge partagé, ports `isolated off`, aucune anti-usurpation. L'`eth0` de
   tout Spark porte désormais `security.port_isolation` et

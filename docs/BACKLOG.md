@@ -7741,7 +7741,7 @@ cellules s'échangent leurs trames en couche 2.
   OP-22 dans la baseline ; documentation complète ; `@spec` / `@verifies`
   posés.
 
-### [~] SPK-110 · Réseaux privés : un commutateur de la Forge auquel on attache des Sparks
+### [x] SPK-110 · Réseaux privés : un commutateur de la Forge auquel on attache des Sparks
 
 **Demandé par le responsable le 2026-09-17** : « on devrait pouvoir créer des
 VPN sur la Forge et y attacher des Sparks si on veut créer des mini-switchs de
@@ -7788,8 +7788,27 @@ Sparks interconnectés ». Le produit dit *réseau privé* : un commutateur inte
    2026-09-18 : parcours « relier des Sparks », douze captures observées ; le
    refus de suppression journalisé, que l'épreuve a réclamé.*
 6. **Forge réelle** — `A` joint `B` par nom, `C` non ; ni Internet ni `sparkbr0`
-   par `spn<n>` ; manuel. *Manuel M13 écrit ; déploiement (OP-23) et preuve
-   depuis les terminaux en attente.*
+   par `spn<n>` ; manuel. *Fait le 2026-09-18 : manuel M13 illustré par le
+   harnais ; déployé (OP-23, build `4e2b295a0`) ; preuve jouée par la console
+   (`e2e/forge-reelle/spk110-reseau-prive.mjs`, `make forge-reelle`) — voir
+   ci-dessous.*
+
+- **Clos le 2026-09-18.** Sur la Forge, depuis la console : réseau `essai` créé
+  sur `10.78.1.0/24` (`spn1`) ; `essai-a` attachée en marche (`.16`), `essai-b`
+  attachée **arrêtée** (`.17`, « cellule arrêtée : configuration posée, prise
+  au démarrage ») puis démarrée par le produit ; sa clé accordée par l'onglet
+  Clés, le terminal d'`essai-a` dit : `spn1` porte `10.78.1.16/24`,
+  `essai-b.essai` résout en `10.78.1.17`, `ping` par nom et par adresse joint,
+  le `sshd` de la Forge sur `10.78.1.1:22` est refusé, Internet par `spn1` ne
+  répond pas, Internet par `eth0` répond `200`, la passerelle est jointe ;
+  `essai-b` détachée, `10.78.1.17` ne répond plus ; tout défait, catalogue à
+  « 0 attribués sur 255 », plus de bridge `spn1`, journal `network.create`,
+  `attach` ×2, `detach` ×2, `delete` en `ok`, préflight 15 verts. Trois
+  échecs en chemin, tous instructifs : `/etc/os-release` est un lien et Incus
+  rend sa cible (corrigé, doublon aligné) ; le `known_hosts` du poste gardait
+  la clé d'une cellule recréée (retirée à la main) ; le terminal d'une cellule
+  d'essai exige la clé du poste, accordée par l'onglet Clés (le script le fait
+  par ce chemin). Six captures de Forge réelle observées, douze du doublon.
 
 - Ce que l'unité ne doit PAS casser : l'isolation de SPK-109 hors des réseaux ;
   la régénération entière des devices (§39.4) ; l'`eth0` et ses quotas.

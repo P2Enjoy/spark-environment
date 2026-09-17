@@ -15,7 +15,11 @@
  * produit — jamais sur celles d'un locataire. UNE seule pile lourde à la fois
  * (CLAUDE.md §15 bis) : le verrou est pris à l'import.
  *
- *   make forge-reelle SCRIPT=spk110-reseau-prive ARGS="<a> <b> <réseau>"
+ *   make forge-reelle SCRIPT=spk110-reseau-prive ARGS="<a> <b> <réseau> <clé>"
+ *
+ * `<clé>` est le libellé, au registre, de la clé du poste : le terminal d'une
+ * cellule d'essai l'exige, et elle s'accorde par l'onglet Clés — le chemin
+ * canonique, jamais un `authorized_keys` posé à la main.
  */
 import { prendreLeVerrou } from '../verrou.mjs';
 
@@ -25,7 +29,7 @@ import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const [a = 'essai-a', b = 'essai-b', reseau = 'essai'] = process.argv.slice(2);
+const [a = 'essai-a', b = 'essai-b', reseau = 'essai', cle = 'console-login'] = process.argv.slice(2);
 const CONSOLE = process.env.SPARK_CONSOLE_URL ?? 'http://localhost:5175/';
 const CAPTURES = new URL('../captures/', import.meta.url).pathname;
 
@@ -63,10 +67,31 @@ async function forge() {
   await page.waitForSelector('#titre-reseaux-prives', { timeout: 30000 });
   await attendreSection('#titre-reseaux-prives', 'attribués sur');
 }
-async function ouvrir(nom) {
+async function ouvrir(nom, facette = '') {
   await accueil();
   await page.click(`tbody a:has-text("${nom}")`);
-  await page.waitForSelector('#titre-reseau', { timeout: 30000 });
+  await page.waitForSelector('.entete-entite', { timeout: 30000 });
+  if (facette) {
+    await page.click(`.onglet[href$="/${facette}"]`);
+    await page.waitForSelector(`.onglet[href$="/${facette}"][aria-current="page"]`, { timeout: 10000 });
+  } else {
+    await page.waitForSelector('#titre-reseau', { timeout: 30000 });
+  }
+}
+/** Accorde la clé du poste à `nom` par l'onglet Clés, si elle ne l'est pas déjà. */
+async function accorderCle(nom) {
+  await ouvrir(nom, 'cles');
+  await page.waitForSelector('#titre-cles', { timeout: 30000 });
+  if (await page.locator(`[data-revoque="${cle}"]`).count()) {
+    console.log(`--- ${nom} : clé « ${cle} » déjà accordée ---`);
+    return;
+  }
+  await page.click('[data-ouvre="key"]');
+  await page.waitForSelector('[data-modale="key"] select[name="key_label"]', { timeout: 10000 });
+  await page.selectOption('[data-modale="key"] select[name="key_label"]', cle);
+  await page.click('[data-modale="key"] [data-engage="key"]');
+  await page.waitForSelector(`[data-revoque="${cle}"]`, { timeout: 60000 });
+  console.log(`--- ${nom} : clé « ${cle} » accordée ---`);
 }
 /** Attache `nom` au réseau depuis SON dossier, et rend ce que la ligne dit. */
 async function attacher(nom) {
@@ -148,8 +173,10 @@ try {
   await commander(b, 'start', 'En marche');
   const passerelle = A.adresse.replace(/\.\d+$/, '.1');
 
-  // 4. Depuis le terminal de A : B se joint PAR SON NOM ; ni la Forge ni
-  //    Internet ne répondent par spn<n> ; le reste tient.
+  // 4. Depuis le terminal de A — sa clé accordée par l'onglet Clés — : B se
+  //    joint PAR SON NOM ; ni la Forge ni Internet ne répondent par spn<n> ;
+  //    le reste tient.
+  await accorderCle(a);
   const commandes = [
     `ip -4 -o addr show ${A.iface} | awk '{print "IFACE " $4}'`,
     `N=$(getent hosts ${b}.${reseau} | awk '{print $1}') ; echo "NOM=\${N:-aucun}"`,
@@ -162,7 +189,13 @@ try {
     'echo FIN-PREUVE-1',
   ];
   const ecran = await terminal(a, commandes, 'FIN-PREUVE-1');
-  const lire = (motif) => (ecran.match(new RegExp(motif)) ?? [])[1];
+  // La grille montre la commande FRAPPÉE avant sa sortie : « IFACE " » figure
+  // dans l'écho de l'awk avant de figurer dans le résultat. On lit donc la
+  // DERNIÈRE occurrence, celle de la sortie.
+  const lire = (motif) => {
+    const toutes = [...ecran.matchAll(new RegExp(motif, 'g'))];
+    return toutes.length ? toutes[toutes.length - 1][1] : undefined;
+  };
   const resultat = {
     iface: lire(/IFACE (\S+)/), nom: lire(/NOM=(\S+)/), pingNom: lire(/PING-NOM code=(\d+)/),
     pingAdresse: lire(/PING-ADRESSE code=(\d+)/), forgeSpn: lire(/FORGE-SPN code=(\d+)/),
@@ -180,7 +213,7 @@ try {
     `ping -c1 -W2 ${B.adresse} >/dev/null 2>&1 ; echo "PING-DETACHE code=$?"`,
     'echo FIN-PREUVE-2',
   ], 'FIN-PREUVE-2');
-  const pingDetache = (ecran2.match(/PING-DETACHE code=(\d+)/) ?? [])[1];
+  const pingDetache = [...ecran2.matchAll(/PING-DETACHE code=(\d+)/g)].map((m) => m[1]).pop();
   console.log('--- après détachement de ' + b + ' ---', { pingDetache });
   await fermerTerminal();
 

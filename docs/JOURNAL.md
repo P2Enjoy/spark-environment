@@ -12256,7 +12256,21 @@ L'état laissé par la preuve interrompue — réseau `essai`, deux adhésions �
 été défait par les gestes du produit, et la Forge relue vide : ni bridge
 `spn1`, ni device, pool à zéro.
 
-**Ce qui reste** : redéployer le correctif, rejouer la preuve entière depuis
-la console. Le cas d'un conteneur Docker qui résout `<spark>.<réseau>` par le
-résolveur de sa cellule n'est **pas mesuré** : le manuel dit de le vérifier,
-et donne l'adresse en repli.
+**Redéployé** (`dev851+g4e2b295a0`), **preuve jouée entière** par la
+console, sur les deux cellules d'essai, après deux dernières leçons de
+harnais : le terminal d'une cellule d'essai exige la clé du poste, que le
+script accorde désormais par l'onglet Clés — le chemin canonique —, et la
+grille montre la commande frappée avant sa sortie, donc on lit la DERNIÈRE
+occurrence d'un marqueur, pas la première. Résultat, depuis `essai-a` :
+`spn1` porte `10.78.1.16/24` ; `essai-b.essai` résout en `10.78.1.17` ; `ping`
+par nom et par adresse joint ; le `sshd` de la Forge sur `10.78.1.1:22` est
+refusé ; Internet par `spn1` ne répond pas, par `eth0` répond `200` ; la
+passerelle est jointe. `essai-b`, attachée **arrêtée** puis démarrée, porte
+son adresse, le résolveur `10.78.1.1` et le domaine, et résout ses pairs — la
+précision « prise au démarrage » est mesurée. Détachée, `10.78.1.17` ne répond
+plus. Tout défait par la console : catalogue à zéro, plus de bridge `spn1`,
+préflight 15 verts, six entrées `network.*` en `ok`. SPK-110 close.
+
+Le cas d'un conteneur Docker qui résout `<spark>.<réseau>` par le résolveur
+de sa cellule n'est **pas mesuré** : le manuel dit de le vérifier, et donne
+l'adresse en repli.

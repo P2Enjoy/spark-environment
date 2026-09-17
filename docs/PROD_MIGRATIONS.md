@@ -13,8 +13,8 @@ n'est appliquée en production sans instruction humaine explicite.
 ## 1. Baseline de production
 
 **Relevée le 2026-09-07** sur la Forge de test, par le préflight du paquet et par
-lecture directe de la machine. Les **14** contrôles du §31 du [DAT](DAT.md) sont
-verts — 0 bloquant, 0 signalé, 0 non mesuré.
+lecture directe de la machine. Les **15** contrôles du §31 du [DAT](DAT.md) sont
+verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-18).
 
 | Élément | État |
 |---|---|
@@ -28,8 +28,9 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré.
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
 | Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 017** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z** ; build **`0.post1.dev841+g90fc7262d`** depuis le 2026-09-17 (OP-21) |
-| Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)** |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 018** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23) ; build **`0.post1.dev851+g4e2b295a0`** depuis le 2026-09-18 (OP-23) |
+| Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` ; `input` et `forward` couvrent `spn*` (établi, 53, 67, ICMP, puis `drop` ; rien routé depuis ni vers) — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)**, **OP-23 (2026-09-18)** |
+| Réseaux privés | pool `10.78.0.0/16` en `/24`, le premier laissé de côté — **0 attribué** après la preuve d'OP-23 ; aucun bridge `spn<n>` — OP-23, appliqué le 2026-09-18 |
 | Isolation des cellules | les quatre cellules portent `security.port_isolation` et `security.ipv4_filtering` ; `NET-ISOLATION` « ok » — OP-22, appliqué le 2026-09-18 |
 | Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
@@ -119,12 +120,24 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-23 · Migration `018_reseaux_prives` et règles `spn*` de `spark_filter` (SPK-110)
+### OP-23 · Migration `018_reseaux_prives` et règles `spn*` de `spark_filter` (SPK-110) — **APPLIQUÉ le 2026-09-18**
 
 ```
-État          : EN ATTENTE — code vérifié sur le doublon le 2026-09-18 ; à
-                déployer par le runbook A.2, puis à prouver sur la Forge depuis
-                les terminaux des cellules d'essai.
+État          : APPLIQUÉ. Mise à jour jouée le 2026-09-18 par le runbook A.2
+                (build `0.post1.dev850+g67c28aae0`, puis `dev851+g4e2b295a0`
+                pour la lecture d'`os-release` d'une cellule arrêtée) :
+                migration 018 appliquée au démarrage, `firewall.nft` réécrit
+                avec les règles `spn*`, préflight 15 verts, catalogue « 0 sur
+                255 ». Preuve jouée le même jour par la console, sur les deux
+                cellules d'essai (`e2e/forge-reelle/spk110-reseau-prive.mjs`) :
+                réseau `essai` créé sur `10.78.1.0/24`, `essai-a` attachée en
+                marche, `essai-b` attachée arrêtée puis démarrée ; depuis le
+                terminal d'`essai-a`, `essai-b.essai` → `10.78.1.17`, `ping`
+                par nom joint, `10.78.1.1:22` refusé, Internet par `spn1` sans
+                réponse, par `eth0` en 200 ; `essai-b` détachée, injoignable ;
+                réseau supprimé, `incus network list` sans `spn1`. Captures
+                `e2e/captures/spk110-forge-*`, `spk110-dossier-essai-*`,
+                `spk110-terminal-nom-joint`.
 Objectif      : créer `private_network`, `private_network_member` et la colonne
                 `forge.private_pool_cidr` (docs/SCHEMA.md §6 ter) ; poser dans
                 `spark_filter` les règles `input` et `forward` des interfaces

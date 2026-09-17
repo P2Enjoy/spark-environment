@@ -13529,7 +13529,9 @@ Debian, `/etc/os-release` est un lien vers `/usr/lib/os-release`, et l'API de
 fichiers d'Incus rend la cible du lien, pas son contenu — lire le premier seul
 donnait « famille non lue » sur la Forge. Le doublon fait pareil, et sert le
 second de la même table que son relevé (§42.9), pour que les deux chemins ne
-divergent pas.
+divergent pas. **Mesuré le même jour sur `essai-b`** : attachée à l'arrêt puis
+démarrée par le produit, elle porte `10.78.1.17/24`, le résolveur `10.78.1.1`
+et le domaine, et résout ses pairs.
 
 Dans la cellule, une interface `spn42` avec son adresse et son domaine. Ses
 conteneurs l'atteignent par le routage de la cellule, comme ils atteignent
@@ -13556,8 +13558,12 @@ tous les membres du réseau — c'est ce qu'un réseau veut dire.
   catalogue, le détacher, supprimer le réseau vide ; douze captures observées,
   deux formats (`e2e/captures/spk110-*`).
 - **Sur la Forge réelle**, depuis le terminal des cellules d'essai : `A` joint
-  `B` par son nom sur `spn<n>` ; `C`, non membre, ne le joint pas ; `A` ne sort
-  ni vers Internet ni vers `sparkbr0` par `spn<n>`.
+  `B` par son nom sur `spn<n>` ; un membre détaché n'est plus joint ; `A` ne
+  sort ni vers Internet ni vers la Forge par `spn<n>`. **Jouée le 2026-09-18**
+  par la console (`e2e/forge-reelle/spk110-reseau-prive.mjs`) : `essai-b.essai`
+  → `10.78.1.17`, `ping` par nom joint, `10.78.1.1:22` refusé, Internet par
+  `spn1` sans réponse et par `eth0` en 200, `essai-b` détachée injoignable ;
+  réseau supprimé, Forge relue vide.
 - **Seed** : un réseau à deux membres et un troisième Spark hors réseau.
 
 ## 59. Liens privés : la portée d'un port publié : contrat (SPK-111)
