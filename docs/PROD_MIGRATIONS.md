@@ -28,10 +28,10 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-18).
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
 | Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 018** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23) ; build **`0.post1.dev851+g4e2b295a0`** depuis le 2026-09-18 (OP-23) |
-| Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` ; `input` et `forward` couvrent `spn*` (établi, 53, 67, ICMP, puis `drop` ; rien routé depuis ni vers) — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)**, **OP-23 (2026-09-18)** |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 019** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24) ; build **`0.post1.dev854+g37eafe5ca`** depuis le 2026-09-18 (OP-24) |
+| Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` ; `input` et `forward` couvrent `spn*` (établi, 53, 67, ICMP, puis `drop` ; rien routé depuis ni vers) ; `forward` accepte `ct status dnat` — les liens privés — après l'établi et avant les drop — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)**, **OP-23 (2026-09-18)**, **OP-24 (2026-09-18)** |
 | Réseaux privés | pool `10.78.0.0/16` en `/24`, le premier laissé de côté — **0 attribué** après la preuve d'OP-23 ; aucun bridge `spn<n>` — OP-23, appliqué le 2026-09-18 |
-| Isolation des cellules | les quatre cellules portent `security.port_isolation` et `security.ipv4_filtering` ; `NET-ISOLATION` « ok » — OP-22, appliqué le 2026-09-18 |
+| Isolation des cellules | chaque cellule porte `security.port_isolation` et `security.ipv4_filtering` — les deux cellules de locataires depuis OP-22 (2026-09-18) ; les deux cellules d'essai du lot 6, supprimées par le produit le 2026-09-18 une fois les preuves jouées ; `NET-ISOLATION` « ok » |
 | Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
 | Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
 
@@ -120,12 +120,23 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-24 · Migration `019_portee_port_publie` et règle `ct status dnat` de `spark_filter` (SPK-111)
+### OP-24 · Migration `019_portee_port_publie` et règle `ct status dnat` de `spark_filter` (SPK-111) — **APPLIQUÉ le 2026-09-18**
 
 ```
-État          : EN ATTENTE — code vérifié sur le doublon le 2026-09-18 ; à
-                déployer par le runbook A.2, puis à prouver sur la Forge depuis
-                les terminaux des cellules d'essai.
+État          : APPLIQUÉ. Mise à jour jouée le 2026-09-18 par le runbook A.2
+                (build `0.post1.dev854+g37eafe5ca`) : migration 019 appliquée
+                au démarrage, `firewall.nft` réécrit, `forward` = établi,
+                `ct status dnat accept`, puis les trois drop ; préflight 15
+                verts ; aucun port publié d'Internet sur cette Forge, donc
+                rien à recopier. Preuve jouée le même jour par la console sur
+                les deux cellules d'essai (`e2e/forge-reelle/spk111-lien-prive.mjs`) :
+                réseau `essai`, `essai-b` membre, un service dans `essai-a`
+                hors du réseau, son port 8080 publié dans `essai` depuis
+                l'onglet Routes ; depuis `essai-b`, `10.78.1.1:8080` répond
+                200, 8081, l'eth0 d'essai-a et le sshd de la Forge par spn
+                sont fermés ; `essai-a` a lu `10.78.1.16` ; tout défait,
+                Forge relue vide. Captures `e2e/captures/spk111-forge-*`,
+                `spk111-terminal-*`.
 Objectif      : donner une PORTÉE aux ports publiés — `published_port.scope`
                 et `network_id`, `UNIQUE (scope, public_port)`, table
                 reconstruite (docs/SCHEMA.md §6 bis) — et poser dans la

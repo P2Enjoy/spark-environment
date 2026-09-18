@@ -12390,3 +12390,37 @@ découle. Consignés au rapport d'incohérences, pas résolus : hors du lot.
 Seconde passe : 134 verts ; un quatrième rouge, « un fournisseur qui REFUSE »,
 qui lit l'état de chargement avant le refus, vert seul et vert à la première
 passe — une course du parcours, consignée aussi.
+
+## 2026-09-18 · SPK-111 clos — la preuve sur la Forge, et trois leçons de terminal
+
+**Déployé** (OP-24, build `dev854+g37eafe5ca`) : migration 019 jouée sur un
+registre sans port publié, `ct status dnat accept` en place entre l'établi et
+les drop, préflight 15 verts. **Preuve jouée par la console** sur les deux
+cellules d'essai : `essai` créé, `essai-b` membre en `10.78.1.16`, un
+`http.server` lancé dans `essai-a` depuis son terminal, le port `8080` publié
+dans `essai` depuis l'onglet Routes — la modale dit la portée, la ligne dit
+l'adresse. Depuis le terminal d'`essai-b` : `10.78.1.1:8080` → `200` ;
+`10.78.1.1:8081`, `10.77.0.18:8080` (l'`eth0` d'`essai-a`) et `10.78.1.1:22`
+fermés. Depuis le terminal d'`essai-a` : le service a lu `10.78.1.16`. Lien
+retiré, membre détaché, réseau supprimé, Forge relue vide, journal
+`port.publish` / `port.withdraw` avec la portée.
+
+**Trois passes pour la preuve, aucune pour le produit.** Le produit a répondu
+juste dès la première ; c'est le harnais du terminal qui a appris :
+
+1. une commande de plusieurs lignes frappée d'un trait dans la grille perd
+   parfois son Entrée, et la sonde suivante s'ajoute à une ligne jamais
+   exécutée — les sondes tiennent sur une ligne, en python compact, puisque
+   les cellules n'ont ni `curl` ni `nc` ;
+2. la grille ne montre que ses lignes visibles, et un marqueur attendu dans
+   TOUT l'écran se lit d'abord dans l'écho de la commande — `echo 'LIEN ->
+   ERR'` frappé est lu comme un résultat avant que `LIEN -> 200` ne tombe ;
+   le repli est frappé en trois mots, l'écho ne porte plus le marqueur ;
+3. donc une commande à la fois, chacune attendue sur SON rendu, et une Entrée
+   perdue rejouée une fois, en le disant. La preuve d'OP-23 tenait par chance
+   avec des commandes courtes ; celle-ci ne tient que par construction.
+
+Le lot 6 est clos : l'ingress joint, chaque Spark isolé, les réseaux privés
+et les liens privés déployés et prouvés. Les cellules d'essai ont fait leur
+office : supprimées par le produit, la Forge relue à ses deux cellules de
+locataires, préflight vert.

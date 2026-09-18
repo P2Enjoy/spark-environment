@@ -3,6 +3,32 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-111 — liens privés : un port d'un Spark publié dans un réseau privé.**
+  Un lien est un port publié dont la portée n'est pas Internet — un objet de
+  moins. Migration `019_portee_port_publie` : `published_port.scope` et
+  `network_id`, `UNIQUE (scope, public_port)` à la place de l'unicité sur la
+  machine, `RESTRICT` sur le réseau porteur (SCHEMA §6 bis). Un device
+  `proxy` `lnk-<interface>-<port>` en `nat=true`, qui écoute sur la passerelle
+  du réseau et conserve l'adresse du membre — mesuré avant d'écrire une
+  ligne : sans `ct status dnat accept` en `forward` le lien est arrêté par le
+  drop de SPK-110, avec elle seul le port lié passe, le service exposé lit
+  l'adresse du membre, `udp` fait pareil. `POST /v1/ports` gagne `scope` ;
+  `/v1/networks/{name}/links` liste, publie, retire ; `/v1/sparks/{name}/networks`
+  dit ce qu'un Spark expose et ce qu'il peut joindre, avec `adresse:port`.
+  Refus nommés — port pris dans cette portée, réservés de la Forge plus `53`
+  et `67`, réseau inconnu, protégé —, journal avec la portée, un réseau
+  porteur ne se supprime pas. Console : la portée dans la modale *Publier un
+  port*, les lignes disent leur portée et l'adresse, la clé d'un geste porte
+  la portée, la section *Réseau* liste l'exposé et le consommable, le
+  catalogue compte les liens (SPK-DS-30 complété) ; manuel M13 complété, M7
+  renvoie. Seed : le Postgres de `postgres-dedie` publié dans `backoffice`,
+  et un second port du même Spark sur Internet. Preuves sparkd et de
+  composant, un parcours E2E, sept captures. **Déployé sur la Forge** le
+  2026-09-18 (OP-24) et prouvé par la console sur les cellules d'essai : un
+  port d'`essai-a`, hors du réseau, publié dans `essai` depuis l'onglet
+  Routes, joint par `essai-b` en `10.78.1.1:8080` et par rien d'autre —
+  ni un autre port, ni l'`eth0`, ni le sshd de la Forge —, et `essai-a` a lu
+  l'adresse du membre. Le lot 6 est clos.
 - **SPK-110 — réseaux privés : un commutateur de la Forge auquel on attache des
   Sparks.** Migration `018_reseaux_prives` — `private_network`,
   `private_network_member`, `forge.private_pool_cidr` (SCHEMA §6 ter) ; le

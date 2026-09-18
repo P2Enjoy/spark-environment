@@ -1289,7 +1289,9 @@ Preuves observées : `e2e/captures/spk110-catalogue.jpg`, `-catalogue-mobile`,
 (la ligne de précision d'une cellule attachée arrêtée),
 `-terminal-nom-joint`, `-forge-catalogue-apres`. Pour les liens :
 `spk111-membre-consommable`, `-ports-portees`, `-publier-lien`, `-lien-publie`,
-`-lien-publie-mobile`, `-suppression-refusee-liens`, `-retrait-confirmation`.
+`-lien-publie-mobile`, `-suppression-refusee-liens`, `-retrait-confirmation` ;
+sur la Forge réelle, `spk111-forge-publier-lien`, `-forge-lien-publie`,
+`-terminal-membre-joint`, `-terminal-exposee-source`.
 
 ### SPK-DS-E01 · Pas de Tailwind
 

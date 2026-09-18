@@ -7721,8 +7721,9 @@ cellules s'échangent leurs trames en couche 2.
 - **Clos le 2026-09-18.** Ce que le responsable a corrigé en chemin : le geste
   se lisait comme un choix ; la section dit désormais « cellules créées avant
   la règle » et « Les isoler maintenant », et disparaît quand il n'en reste
-  aucune. Les cellules d'essai `essai-a`/`essai-b` restent en place pour les
-  mesures de SPK-110 et SPK-111.
+  aucune. Les cellules d'essai `essai-a`/`essai-b` sont restées en place pour
+  les mesures et les preuves de SPK-110 et SPK-111, puis ont été supprimées par
+  le produit le 2026-09-18, le lot clos.
 
 - **Ce que la preuve E2E a coûté, et ce qu'elle a appris** (2026-09-17) : trois
   OOM du poste avant de comprendre qu'un `assert.equal(await page.$(…), null)`
@@ -7818,7 +7819,7 @@ Sparks interconnectés ». Le produit dit *réseau privé* : un commutateur inte
   preuve sur la Forge depuis les terminaux ; seed ; SCHEMA, DAT, design system,
   manuel, README à jour ; `@spec` / `@verifies` posés.
 
-### [~] SPK-111 · Liens privés : un port d'un Spark publié dans un réseau privé
+### [x] SPK-111 · Liens privés : un port d'un Spark publié dans un réseau privé
 
 **Demandé par le responsable le 2026-09-17** : « attacher ce port de ce Spark au
 network de cet autre Spark, ainsi ce dernier peut joindre seulement celui-ci
@@ -7869,8 +7870,25 @@ n'est pas Internet** : un objet de moins, l'unicité par portée.
    le Postgres de `postgres-dedie` dans `backoffice`, et `15432` sur
    Internet.*
 6. **Forge réelle** — `B` joint `<passerelle>:<port>` ; pas un autre port de
-   `A`, pas son `eth0` ; `A` lit l'adresse de `B` ; manuel. *Manuel M13
-   complété ; déploiement (OP-24) et preuve depuis les terminaux en attente.*
+   `A`, pas son `eth0` ; `A` lit l'adresse de `B` ; manuel. *Fait le
+   2026-09-18 : déployé (OP-24, build `37eafe5ca`), preuve jouée par la console
+   (`e2e/forge-reelle/spk111-lien-prive.mjs`) — voir ci-dessous.*
+
+- **Clos le 2026-09-18.** Sur la Forge, depuis la console : réseau `essai`
+  créé, `essai-b` attachée (`10.78.1.16`), `essai-a` hors du réseau ; un
+  service lancé dans `essai-a` par son terminal ; son port `8080` publié dans
+  `essai` depuis l'onglet Routes, portée choisie dans la modale — la ligne dit
+  « ses membres le joignent en 10.78.1.1:8080 » ; depuis le terminal
+  d'`essai-b`, `10.78.1.1:8080` répond `200`, `10.78.1.1:8081` est fermé,
+  `10.77.0.18:8080` (l'`eth0` d'`essai-a`) est fermé, `10.78.1.1:22` est fermé ;
+  depuis le terminal d'`essai-a`, le service a lu **`10.78.1.16`**, l'adresse du
+  membre ; lien retiré, membre détaché, réseau supprimé, Forge relue vide,
+  journal `port.publish` et `port.withdraw` avec leur portée. Le chemin du
+  terminal a coûté trois passes : une Entrée perdue dans une frappe de
+  plusieurs lignes, puis un marqueur lu dans l'écho de la commande avant son
+  résultat — le script frappe désormais une commande à la fois, attend son
+  propre rendu, et garde ses marqueurs hors de l'écho. Quatre captures de
+  Forge réelle observées, sept du doublon.
 
 - Ce que l'unité ne doit PAS casser : les ports publiés d'aujourd'hui — `scope`
   absent vaut Internet, `DELETE /v1/ports/{port}` inchangé ; le refus de

@@ -3,9 +3,8 @@
 **Statut : direction décidée et arbitrée par le responsable le 2026-09-17 ;
 quatre unités ouvertes (`docs/BACKLOG.md`, lot 6), contrats au `docs/DAT.md`
 §56 à §59. SPK-108 et SPK-109 sont closes et déployées (2026-09-17 et
-2026-09-18) ; SPK-110 est close, déployée et prouvée sur la Forge le
-2026-09-18 ; SPK-111 est implémentée et vérifiée sur le doublon le même jour,
-à déployer et à prouver sur la Forge.**
+2026-09-18) ; SPK-110 et SPK-111 sont closes, déployées et prouvées sur la
+Forge le 2026-09-18. Le lot 6 est clos.**
 
 Ce document est l'**étude** : la décision, les relevés, les voies envisagées et
 écartées, les arbitrages et leurs raisons. Les contrats font foi au DAT ; en cas

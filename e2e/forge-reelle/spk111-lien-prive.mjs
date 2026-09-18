@@ -54,7 +54,7 @@ const attendreSection = (titre, motif, delai = 60000) => page.waitForFunction(
   [titre, motif], { timeout: delai });
 const echapperRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const dernier = (ecran, motif) => {
-  const toutes = [...ecran.matchAll(new RegExp(motif, 'g'))];
+  const toutes = [...ecran.matchAll(new RegExp(motif, 'gm'))];
   return toutes.length ? toutes[toutes.length - 1][1] : undefined;
 };
 
@@ -110,7 +110,14 @@ async function detacher(nom) {
   await attendreSection('#titre-reseau', 'membre d’aucun réseau privé');
   console.log(`--- ${nom} détaché ---`);
 }
-async function terminal(nom, commandes, fin) {
+/**
+ * Joue des commandes dans le terminal de `nom`, UNE PAR UNE : chaque commande
+ * annonce ce qu'elle doit rendre, et la suivante n'est frappée qu'une fois ce
+ * rendu visible. MESURÉ le 2026-09-18 : frapper toutes les commandes d'un
+ * trait laissait l'une d'elles sans son Entrée, et la sonde suivante s'ajoutait
+ * à une ligne jamais exécutée. Une Entrée perdue se rejoue une fois, et se dit.
+ */
+async function terminal(nom, commandes) {
   await ouvrir(nom);
   await page.click('.onglet[href$="/terminal"]');
   await page.waitForSelector('#titre-terminal', { timeout: 30000 });
@@ -123,27 +130,45 @@ async function terminal(nom, commandes, fin) {
   const grille = page.locator('.terminal--emulateur .xterm-helper-textarea');
   await grille.waitFor({ state: 'attached', timeout: 20000 });
   await attendreTexte('~[#$]');
-  for (const c of commandes) { await grille.pressSequentially(c); await grille.press('Enter'); }
-  await attendreTexte(fin, 90000);
-  return page.locator('.xterm-rows').innerText();
+  const resultats = {};
+  for (const { texte, attendu, cle } of commandes) {
+    await grille.pressSequentially(texte);
+    // L'écho de la fin de la commande d'abord : la frappe est arrivée entière.
+    const fin = texte.slice(-10).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await attendreTexte(fin, 15000);
+    await grille.press('Enter');
+    let ecran = '';
+    for (let essai = 0; essai < 2; essai += 1) {
+      try {
+        await page.waitForFunction(
+          (m) => new RegExp(m, 'm').test(document.querySelector('.xterm-rows')?.innerText ?? ''),
+          attendu, { timeout: 20000 });
+        break;
+      } catch (erreur) {
+        if (essai === 1) throw erreur;
+        console.log(`   (Entrée rejouée pour « ${cle} » : rien rendu en 20 s)`);
+        await grille.press('Enter');
+      }
+    }
+    ecran = await page.locator('.xterm-rows').innerText();
+    resultats[cle] = dernier(ecran, attendu);
+  }
+  return resultats;
 }
 async function fermerTerminal() {
   await page.click('[data-terminal="fermer"]');
   await page.waitForSelector('[data-terminal="ouvrir"]', { timeout: 20000 });
 }
+// Des sondes d'UNE ligne : la grille du terminal ne montre que ses lignes
+// visibles, et une commande de plusieurs lignes fait défiler ses résultats
+// hors de vue avant qu'on les lise.
+// Le repli est frappé en trois mots pour que l'ÉCHO de la commande ne porte
+// jamais le marqueur entier : la grille montre la frappe avant le résultat, et
+// un marqueur lisible dans l'écho serait lu comme un résultat (mesuré).
 const sondeHttp = (url, marque) =>
-  `python3 -c "import urllib.request
-try:
-  print('${marque} ->', urllib.request.urlopen('${url}', timeout=6).status)
-except Exception as e:
-  print('${marque} ->', 'ERR', getattr(e, 'code', None) or type(e).__name__)"`;
+  `python3 -c "import urllib.request as u;print('${marque} ->',u.urlopen('${url}',timeout=6).status)" 2>/dev/null || echo '${marque}' '->' 'ERR'`;
 const sondeTcp = (hote, p, marque) =>
-  `python3 -c "import socket
-s = socket.socket(); s.settimeout(4)
-try:
-  s.connect(('${hote}', ${p})); print('${marque} -> OUVERT')
-except Exception as e:
-  print('${marque} -> FERME', type(e).__name__)"`;
+  `python3 -c "import socket;s=socket.socket();s.settimeout(4);print('${marque} ->','OUVERT' if s.connect_ex(('${hote}',${p}))==0 else 'FERME')"`;
 
 try {
   // 1. Le réseau, et le membre B — A reste HORS du réseau (§59.1).
@@ -168,8 +193,9 @@ try {
   await accorderCle(a);
   await accorderCle(b);
   await terminal(a, [
-    `cd /tmp && (nohup python3 -m http.server ${port} --bind 0.0.0.0 >/tmp/srv.log 2>&1 &) ; sleep 1 ; echo SERVEUR-PRET`,
-  ], 'SERVEUR-PRET');
+    { cle: 'serveur', attendu: '^(SERVEUR-PRET)$',
+      texte: `cd /tmp && (nohup python3 -m http.server ${port} --bind 0.0.0.0 >/tmp/srv.log 2>&1 &) ; sleep 1 ; echo SERVEUR-PR""ET` },
+  ]);
   await fermerTerminal();
 
   // 3. Le port de A publié DANS le réseau, depuis l'onglet Routes.
@@ -190,27 +216,22 @@ try {
 
   // 4. Depuis le terminal de B : la passerelle répond sur le port lié, et rien
   //    d'autre — ni un autre port, ni l'eth0 de A, ni le sshd de la Forge.
-  const ecranB = await terminal(b, [
-    sondeHttp(`http://${passerelle}:${port}/`, 'LIEN'),
-    sondeTcp(passerelle, Number(port) + 1, 'AUTRE-PORT'),
-    ...(eth0A ? [sondeTcp(eth0A, Number(port), 'ETH0-A')] : []),
-    sondeTcp(passerelle, 22, 'FORGE-SPN'),
-    'echo FIN-PREUVE-1',
-  ], 'FIN-PREUVE-1');
-  const resultat = {
-    lien: dernier(ecranB, /LIEN -> (\S+)/), autrePort: dernier(ecranB, /AUTRE-PORT -> (\S+)/),
-    eth0A: eth0A ? dernier(ecranB, /ETH0-A -> (\S+)/) : 'non sondé', forgeSpn: dernier(ecranB, /FORGE-SPN -> (\S+)/),
-  };
+  const resultat = await terminal(b, [
+    { cle: 'lien', texte: sondeHttp(`http://${passerelle}:${port}/`, 'LIEN'), attendu: 'LIEN -> (\\d{3}|ERR)' },
+    { cle: 'autrePort', texte: sondeTcp(passerelle, Number(port) + 1, 'AUTRE-PORT'), attendu: 'AUTRE-PORT -> (OUVERT|FERME)' },
+    ...(eth0A ? [{ cle: 'eth0A', texte: sondeTcp(eth0A, Number(port), 'ETH0-A'), attendu: 'ETH0-A -> (OUVERT|FERME)' }] : []),
+    { cle: 'forgeSpn', texte: sondeTcp(passerelle, 22, 'FORGE-SPN'), attendu: 'FORGE-SPN -> (OUVERT|FERME)' },
+  ]);
+  if (!eth0A) resultat.eth0A = 'non sondé';
   console.log(`--- terminal de ${b} ---`, resultat);
   await capturer('spk111-terminal-membre-joint');
   await fermerTerminal();
 
   // 5. Depuis le terminal de A : le service a lu l'adresse du membre.
-  const ecranA = await terminal(a, [
-    'tail -1 /tmp/srv.log | awk \'{print "SOURCE " $1}\'',
-    `pkill -f '^python3 -m http.server ${port}' ; rm -f /tmp/srv.log ; echo NETTOYE`,
-  ], 'NETTOYE');
-  const source = dernier(ecranA, /SOURCE (\S+)/);
+  const { source } = await terminal(a, [
+    { cle: 'source', texte: 'tail -1 /tmp/srv.log | awk \'{print "SOURCE " $1}\'', attendu: 'SOURCE (\\d+\\.\\d+\\.\\d+\\.\\d+)' },
+    { cle: 'nettoye', texte: `pkill -f '^python3 -m http.server ${port}' ; rm -f /tmp/srv.log ; echo NET-TOYE | tr -d -`, attendu: '^(NETTOYE)$' },
+  ]);
   console.log(`--- ${a} a lu l'adresse : ${source} (membre : ${B.adresse}) ---`);
   await capturer('spk111-terminal-exposee-source');
   await fermerTerminal();

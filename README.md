@@ -39,9 +39,9 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 99 closes, 7
-partielles, 1 non commencée — le lot 6, *Réseau entre Sparks*, ouvert le
-2026-09-17. L'état de chacune est dans
+**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 100 closes, 7
+partielles, 0 non commencée — le lot 6, *Réseau entre Sparks*, ouvert le
+2026-09-17 et clos le 2026-09-18. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
 Ce qui est **établi par la mesure**, et non par intention :
@@ -552,13 +552,14 @@ une garde qui n'existe que dans un fichier de workflow.
   réservation, et c'est voulu (`docs/DAT.md` §32.2).
 - Les disques de la Forge sont mécaniques (7200 tr/min) : la copie sur écriture n'y
   est pas un confort mais une condition de temps de création acceptable.
-- **Les liens privés n'existent pas encore.** Chaque Spark est isolé du
-  réseau des autres depuis SPK-109 (2026-09-18), et les réseaux privés —
-  SPK-110, `docs/DAT.md` §58, déployés et prouvés sur la Forge le 2026-09-18 —
-  relient des Sparks à dessein. Le produit configure l'interface dans la
-  cellule sur les familles à `systemd-networkd` (Ubuntu, Debian), et dit quand
-  il n'a pas pu. Publier un port d'un Spark dans un réseau privé — SPK-111
-  (§59) — est spécifié, non implémenté.
+- **Le réseau entre Sparks se limite à une Forge.** Chaque Spark est isolé du
+  réseau des autres (SPK-109) ; les réseaux privés (SPK-110, `docs/DAT.md`
+  §58) et les liens privés (SPK-111, §59) les relient à dessein, déployés et
+  prouvés sur la Forge le 2026-09-18. Le produit configure l'interface d'un
+  réseau privé dans la cellule sur les familles à `systemd-networkd` (Ubuntu,
+  Debian), et dit quand il n'a pas pu ; un lien n'a pas de nom dans le
+  résolveur du réseau — ses membres emploient `adresse:port`, que la console
+  donne.
 
 ## Sauvegarder le registre
 
