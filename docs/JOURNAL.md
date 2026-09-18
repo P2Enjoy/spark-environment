@@ -12424,3 +12424,23 @@ Le lot 6 est clos : l'ingress joint, chaque Spark isolé, les réseaux privés
 et les liens privés déployés et prouvés. Les cellules d'essai ont fait leur
 office : supprimées par le produit, la Forge relue à ses deux cellules de
 locataires, préflight vert.
+
+## 2026-09-18 · Une modale qui parlait d'Internet en publiant un lien privé
+
+**Remarque du responsable** : en publiant un lien privé, la modale parlait
+encore du « port de la Forge » public. Juste : j'avais ajouté le champ de
+portée et laissé tous les autres textes tels qu'écrits pour Internet — le
+libellé, l'aide sur la machine et « le premier qui le prend », l'avertissement
+sur le certificat du proxy, les réservés « sur cette Forge ». Un lien ne passe
+ni par le proxy ni par Internet ; ces textes contredisaient la portée choisie.
+
+**Cause technique** : le sélecteur enregistrait la valeur sans repeindre, et
+les textes ne pouvaient pas suivre. **Correction** : les textes dépendent de la
+portée dans le composant — « Port sur le réseau « x » », l'adresse de la Forge
+sur ce réseau, « unique que dans ce réseau », « Rien n'est publié sur
+Internet » à la place de l'avertissement, `53` et `67` parmi les réservés —,
+et le changement de portée repeint la modale, comme le mode CPU repeint la
+création ; la saisie vit dans l'état et y survit, le focus revient au
+sélecteur (§14.3). Une preuve de composant par portée, le parcours E2E saisit
+d'abord et change la portée ensuite, l'illustration M13 est reproduite, le
+design system et le manuel le disent.

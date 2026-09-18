@@ -330,10 +330,13 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('[data-ouvre="port"]', { timeout: 10000 });
     await page.click('[data-ouvre="port"]');
     await page.waitForSelector('[data-modale="port"] select[name="scope"]', { timeout: 10000 });
-    await page.selectOption('[data-modale="port"] select[name="scope"]', 'backoffice');
     await page.fill('[data-modale="port"] input[name="public_port"]', '8080');
     await page.fill('[data-modale="port"] input[name="target_port"]', '80');
     await page.fill('[data-modale="port"] input[name="port_note"]', 'la boutique, pour le CRM');
+    await page.selectOption('[data-modale="port"] select[name="scope"]', 'backoffice');
+    await page.waitForFunction(
+      () => /Port sur le réseau « backoffice »/.test(document.querySelector('[data-modale="port"]')?.innerText ?? ''),
+      null, { timeout: 10000 });
     await capturer('m13-lien', { hauteur: 900 });
     await page.keyboard.press('Escape');
     // --- M12 · Le journal de tous les Sparks (SPK-39) ------------------------

@@ -28,7 +28,11 @@
   port d'`essai-a`, hors du réseau, publié dans `essai` depuis l'onglet
   Routes, joint par `essai-b` en `10.78.1.1:8080` et par rien d'autre —
   ni un autre port, ni l'`eth0`, ni le sshd de la Forge —, et `essai-a` a lu
-  l'adresse du membre. Le lot 6 est clos.
+  l'adresse du membre. Le lot 6 est clos. Sur remarque du responsable, les
+  textes de la modale *Publier un port* suivent la portée : pour un réseau,
+  « Port sur le réseau « x » », l'adresse de la Forge sur ce réseau, plus
+  d'avertissement sur le certificat, les réservés du réseau ; la modale se
+  repeint au changement de portée sans perdre la saisie.
 - **SPK-110 — réseaux privés : un commutateur de la Forge auquel on attache des
   Sparks.** Migration `018_reseaux_prives` — `private_network`,
   `private_network_member`, `forge.private_pool_cidr` (SCHEMA §6 ter) ; le

@@ -700,11 +700,33 @@ test('SPK-111 · la modale offre la portée : Internet, ou un réseau privé ave
   assert.match(rendu, /<select class="controle" id="port-portee" name="scope"/);
   assert.match(rendu, /<option value="internet">Internet — le port de la Forge, joignable de partout/);
   assert.match(rendu, /<option value="backoffice" selected>Réseau privé « backoffice » — ses membres joignent 10\.78\.1\.1:&lt;port&gt;/);
-  assert.match(rendu, /rien n’est publié sur\s+Internet/);
+  assert.match(rendu, /Rien n’est publié sur Internet : seuls les\s+membres de « backoffice »/);
   const defaut = renderPortsPanel(SPARK, [], ui({ open: 'port' }), [], reseaux);
   assert.match(defaut, /<option value="internet" selected>/);
   // Sans réseau privé, la portée n'offre qu'Internet — et le geste reste le même.
   assert.ok(!/Réseau privé «/.test(renderPortsPanel(SPARK, [], ui({ open: 'port' }))));
+});
+
+test('SPK-111 · les textes de la modale SUIVENT la portée : un lien n’est pas un port de la Forge sur Internet', () => {
+  /** @verifies docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.4 · DESIGN_SYSTEM.md §6.27, §14.3 ·
+   *            DESIGN_SYSTEM_APP.md SPK-DS-30 — remarque du responsable, 2026-09-18 */
+  const reseaux = [{ name: 'backoffice', cidr: '10.78.1.0/24', gateway: '10.78.1.1' }];
+  const lien = renderPortsPanel(SPARK, [], ui({ open: 'port', values: { scope: 'backoffice' } }), RESERVES, reseaux);
+  assert.match(lien, /<label for="port-public">Port sur le réseau « backoffice »<\/label>/);
+  assert.match(lien, /ses membres le joindront en\s+<span class="technique">10\.78\.1\.1:&lt;port&gt;<\/span>/);
+  assert.match(lien, /unique que dans ce réseau/);
+  assert.ok(!lien.includes('certificat automatique'), 'le certificat du proxy ne concerne pas un lien');
+  assert.ok(!/déclarez plutôt une <strong>route publique/.test(lien), 'ni le renvoi vers une route publique');
+  assert.match(lien, /Rien n’est publié sur Internet : seuls les\s+membres de « backoffice » joignent ce port/);
+  assert.match(lien, /Réservés dans ce réseau : .*443.*proxy.*53<\/span> \(le résolveur du réseau\) et <span class="technique">67<\/span> \(son DHCP\)/);
+  assert.ok(!/appartient à la <strong>machine<\/strong>/.test(lien));
+
+  const internet = renderPortsPanel(SPARK, [], ui({ open: 'port' }), RESERVES, reseaux);
+  assert.match(internet, /<label for="port-public">Port de la Forge<\/label>/);
+  assert.match(internet, /certificat automatique/);
+  assert.match(internet, /appartient à la <strong>machine<\/strong>/);
+  assert.match(internet, /Réservés sur cette Forge : /);
+  assert.ok(!/Port sur le réseau/.test(internet) && !/résolveur du réseau/.test(internet));
 });
 
 test('un refus du serveur s’affiche DANS la modale du port', () => {

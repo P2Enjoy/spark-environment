@@ -1869,6 +1869,10 @@ function brancherPanneaux() {
           controle.type === 'checkbox' ? controle.checked
           : controle.type === 'number' ? Number(controle.value)
           : controle.value;
+        // SPK-111 · §59.4 : les textes de la modale du port suivent la portée —
+        // comme les champs de la création suivent le mode CPU. La saisie vit
+        // dans l'état, le focus revient au sélecteur (§14.3, §25.2).
+        if (controle.name === 'scope') { peindre(); return; }
         // SPK-47 · §38.3 : l'aperçu de l'enregistrement suit la saisie. On le
         // met à jour SUR PLACE : repeindre à chaque frappe déplacerait le
         // curseur, et un aperçu figé montrerait une valeur qui ne sera pas

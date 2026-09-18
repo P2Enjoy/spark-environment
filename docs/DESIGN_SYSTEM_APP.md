@@ -1263,7 +1263,16 @@ traite comme tel, sans objet nouveau :
 - **la portée est un champ de la modale *Publier un port*** (§6.27), en tête :
   *Internet* par défaut, ou un réseau privé, dont l'option dit l'adresse que
   ses membres emploieront — `10.78.1.1:<port>` — avant même que le port soit
-  saisi ; l'aide dit que rien n'est alors publié sur Internet ;
+  saisi ;
+- **les textes de la modale suivent la portée** — corrigé le 2026-09-18 sur
+  remarque du responsable : un lien privé n'est pas un port de la Forge sur
+  Internet. Pour un réseau, le champ s'appelle « Port sur le réseau « x » »,
+  son aide donne l'adresse de la Forge sur ce réseau et dit que le port n'est
+  unique que là ; l'avertissement sur le certificat du proxy laisse place à
+  « Rien n'est publié sur Internet » ; les réservés sont ceux du réseau, `53`
+  et `67` en plus de ceux de la Forge. La modale se repeint au changement de
+  portée : la saisie vit dans l'état et y survit, le focus revient au
+  sélecteur (§14.3, §25.2) ;
 - **la ligne d'un lien dit sa portée et son adresse** : « 5432/tcp dans
   « backoffice » → port 5432 du Spark · ses membres le joignent en
   10.78.1.1:5432 » ; celle d'un port d'Internet reste « de la Forge » ;

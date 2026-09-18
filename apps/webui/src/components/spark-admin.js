@@ -928,11 +928,35 @@ export function renderPortsPanel(spark, ports = [], ui = ADMIN_VIDE,
       }).join('')}</ul>`
     : '<p class="absence">Aucun port de la Forge ne mène à ce Spark.</p>';
 
-  const interdits = reserved.length
-    ? `<p class="champ__aide">Réservés sur cette Forge : ${reserved.map((r) =>
-        `<span class="technique">${echapper(r.port)}</span> (${echapper(r.reason)})`)
-        .join(', ')}.</p>`
-    : '';
+  // SPK-111 · §59.4 : les textes de la modale SUIVENT la portée choisie. Un
+  // lien privé n'est pas un port de la Forge sur Internet : ni le libellé, ni
+  // l'aide, ni l'avertissement du certificat ne peuvent rester ceux d'Internet
+  // — corrigé le 2026-09-18 sur remarque du responsable. La modale se repeint
+  // au changement de portée, la saisie vit dans l'état (§14.3, §25.2).
+  const reseauChoisi = reseaux.find((r) => r.name === ui.values.scope) ?? null;
+  const lien = Boolean(reseauChoisi);
+  const reservesForge = reserved.map((r) =>
+    `<span class="technique">${echapper(r.port)}</span> (${echapper(r.reason)})`).join(', ');
+  const interdits = lien
+    ? `<p class="champ__aide">Réservés dans ce réseau : ${reservesForge ? `${reservesForge}, ` : ''}` +
+      `<span class="technique">53</span> (le résolveur du réseau) et <span class="technique">67</span> (son DHCP).</p>`
+    : reserved.length ? `<p class="champ__aide">Réservés sur cette Forge : ${reservesForge}.</p>` : '';
+  const consequence = lien
+    ? `<p class="note" id="port-portee-consequence">Rien n’est publié sur Internet : seuls les
+       membres de « ${echapper(reseauChoisi.name)} » joignent ce port, à l’adresse de la Forge
+       sur ce réseau. Le proxy et son certificat ne sont pas concernés.</p>`
+    : `<p class="avertissement" role="status" id="port-portee-consequence">Un port publié <strong>perd le
+         certificat automatique</strong> : le proxy ne le voit pas passer. Si
+         l’application parle HTTP, déclarez plutôt une <strong>route publique</strong>
+         ci-dessus — elle donne le TLS sans rien demander. Ce geste sert à ce qui
+         ne parle pas HTTP : messagerie, base de données, SSH.</p>`;
+  const aidePort = lien
+    ? `Le port est celui de l’adresse de la Forge sur ce réseau : ses membres le joindront en
+       <span class="technique">${echapper(reseauChoisi.gateway ?? '')}:&lt;port&gt;</span>. Il n’est
+       unique que dans ce réseau — le même numéro peut servir sur Internet ou dans un autre réseau.`
+    : `Un port de la Forge appartient à la <strong>machine</strong>, pas au Spark :
+       le premier qui le prend le prend. Il n’est unique que sur Internet — un réseau
+       privé a les siens.`;
 
   const modale = renderModale({
     ouverte: ui.open === 'port', id: 'port', titre: 'Publier un port',
@@ -940,28 +964,22 @@ export function renderPortsPanel(spark, ports = [], ui = ADMIN_VIDE,
     refus: ui.refusal?.panel === 'port' ? ui.refusal.message : null,
     occupee: ui.busy,
     corps: `
-         <p class="avertissement" role="status">Un port publié <strong>perd le
-         certificat automatique</strong> : le proxy ne le voit pas passer. Si
-         l’application parle HTTP, déclarez plutôt une <strong>route publique</strong>
-         ci-dessus — elle donne le TLS sans rien demander. Ce geste sert à ce qui
-         ne parle pas HTTP : messagerie, base de données, SSH.</p>
+         ${consequence}
          <div class="champ">
            <label for="port-portee">Portée</label>
            <select class="controle" id="port-portee" name="scope" aria-describedby="port-portee-aide">
              <option value="internet"${!ui.values.scope || ui.values.scope === 'internet' ? ' selected' : ''}>Internet — le port de la Forge, joignable de partout</option>
              ${reseaux.map((r) => `<option value="${echapper(r.name)}"${ui.values.scope === r.name ? ' selected' : ''}>Réseau privé « ${echapper(r.name)} » — ses membres joignent ${echapper(r.gateway ?? '')}:&lt;port&gt;</option>`).join('')}
            </select>
-           <p class="champ__aide" id="port-portee-aide">Dans un réseau privé, seuls ses membres
-           joignent le port, à l’adresse de la Forge sur ce réseau : rien n’est publié sur
-           Internet. C’est un <em>lien privé</em>.</p>
+           <p class="champ__aide" id="port-portee-aide">Internet : le port de la Forge, joignable
+           de partout. Un réseau privé : ses membres seuls, à l’adresse de la Forge sur ce
+           réseau — un <em>lien privé</em>. Les autres champs suivent ce choix.</p>
          </div>
          <div class="champ">
-           <label for="port-public">Port de la Forge</label>
+           <label for="port-public">${lien ? `Port sur le réseau « ${echapper(reseauChoisi.name)} »` : 'Port de la Forge'}</label>
            <input class="controle" id="port-public" name="public_port" type="number"
                   min="1" max="65535" value="${echapper(ui.values.public_port)}">
-           <p class="champ__aide">Un port est unique dans sa <strong>portée</strong> : sur Internet,
-           il appartient à la <strong>machine</strong>, pas au Spark — le premier qui le prend le
-           prend ; dans un réseau privé, à ce réseau.</p>
+           <p class="champ__aide">${aidePort}</p>
            ${interdits}
          </div>
          <div class="champ">

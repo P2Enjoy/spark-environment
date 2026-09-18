@@ -115,7 +115,10 @@ publiez ce port **dans le réseau** : c'est un *lien privé*.
 Dossier du Spark qui expose, onglet **Routes**, section *Ports publiés*,
 *Publier un port*. Le premier champ est la **portée** : *Internet* — le port de
 la Forge, joignable de partout, comme avant — ou un réseau privé. L'option d'un
-réseau dit déjà l'adresse que ses membres emploieront.
+réseau dit déjà l'adresse que ses membres emploieront, et le reste de la
+fenêtre suit ce choix : le champ devient « Port sur le réseau « x » », son aide
+donne cette adresse, et l'avertissement sur le certificat du proxy disparaît —
+rien n'est publié sur Internet.
 
 ![Publier un port dans un réseau privé](images/m13-lien.png)
 

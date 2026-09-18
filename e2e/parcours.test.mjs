@@ -5912,10 +5912,25 @@ test('relier un port : un lien privé se publie dans un réseau, se lit des deux
                                       (o) => o.map((x) => x.textContent));
     assert.match(options.join(' | '), /Internet — le port de la Forge/);
     assert.match(options.join(' | '), /Réseau privé « backoffice » — ses membres joignent 10\.78\.1\.1:<port>/);
-    await page.selectOption('[data-modale="port"] select[name="scope"]', 'backoffice');
+    // La saisie D'ABORD, la portée ensuite : les textes de la modale suivent
+    // la portée par une repeinture, et la saisie doit y survivre (§14.3).
+    assert.match(await page.textContent('[data-modale="port"]'), /Port de la Forge/);
+    assert.match(await page.textContent('[data-modale="port"]'), /certificat automatique/);
     await page.fill('[data-modale="port"] input[name="public_port"]', '8080');
     await page.fill('[data-modale="port"] input[name="target_port"]', '80');
     await page.fill('[data-modale="port"] input[name="port_note"]', 'la boutique, pour le CRM');
+    await page.selectOption('[data-modale="port"] select[name="scope"]', 'backoffice');
+    await page.waitForFunction(
+      () => /Port sur le réseau « backoffice »/.test(document.querySelector('[data-modale="port"]')?.innerText ?? ''),
+      null, { timeout: 10000 });
+    const modale = await page.textContent('[data-modale="port"]');
+    assert.ok(!/certificat automatique/.test(modale), 'le certificat du proxy ne concerne pas un lien');
+    assert.match(modale, /Rien n’est publié sur Internet/);
+    assert.match(modale, /10\.78\.1\.1:<port>/);
+    assert.match(modale, /53 \(le résolveur du réseau\)/);
+    assert.equal(await page.inputValue('[data-modale="port"] input[name="public_port"]'), '8080', 'la saisie survit');
+    assert.equal(await page.inputValue('[data-modale="port"] input[name="port_note"]'), 'la boutique, pour le CRM');
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'port-portee', 'le focus reste au sélecteur (§14.3)');
     await capturer('spk111-publier-lien');
     await page.click('[data-modale="port"] [data-engage="port"]');
     await page.waitForFunction(
