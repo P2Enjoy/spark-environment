@@ -4,7 +4,8 @@
 quatre unités ouvertes (`docs/BACKLOG.md`, lot 6), contrats au `docs/DAT.md`
 §56 à §59. SPK-108 et SPK-109 sont closes et déployées (2026-09-17 et
 2026-09-18) ; SPK-110 est close, déployée et prouvée sur la Forge le
-2026-09-18 ; SPK-111 reste à faire.**
+2026-09-18 ; SPK-111 est implémentée et vérifiée sur le doublon le même jour,
+à déployer et à prouver sur la Forge.**
 
 Ce document est l'**étude** : la décision, les relevés, les voies envisagées et
 écartées, les arbitrages et leurs raisons. Les contrats font foi au DAT ; en cas

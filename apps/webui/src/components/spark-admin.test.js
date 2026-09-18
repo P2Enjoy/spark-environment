@@ -671,10 +671,40 @@ test('un port de la Forge est annonce comme une ressource de la MACHINE', () => 
 
 test('le retrait d’un port se CONFIRME, en nommant le port et l’effet', () => {
   const rendu = renderPortsPanel(SPARK, [PORT],
-    ui({ confirming: { kind: 'port', id: '2525' } }));
+    ui({ confirming: { kind: 'port', id: 'internet:2525' } }));
   assert.ok(rendu.includes('Retirer le port 2525 ?'));
   assert.ok(rendu.includes('cessera d’être joignable'));
   assert.ok(rendu.includes('bouton--destructif'));
+});
+
+test('SPK-111 · un lien privé se lit avec sa portée et l’adresse que ses membres emploient', () => {
+  /** @verifies docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.4 · DESIGN_SYSTEM.md §6.22, §6.23 */
+  const LIEN = { public_port: 5432, target_port: 5432, protocol: 'tcp', note: 'Postgres du CRM',
+                 applied_at: 't', scope: 'backoffice', network: 'backoffice', address: '10.78.1.1:5432' };
+  const rendu = renderPortsPanel(SPARK, [PORT, LIEN]);
+  assert.match(rendu, /5432\/tcp<\/span> dans « backoffice » → port 5432 du Spark/);
+  assert.match(rendu, /ses membres le joignent en <span class="technique">10\.78\.1\.1:5432/);
+  assert.match(rendu, /2525\/tcp<\/span> de la Forge → port 25 du Spark/);
+  assert.ok(rendu.includes('data-retire-port="internet:2525"'));
+  assert.ok(rendu.includes('data-retire-port="backoffice:5432"'));
+  const confirme = renderPortsPanel(SPARK, [LIEN], ui({ confirming: { kind: 'port', id: 'backoffice:5432' } }));
+  assert.match(confirme, /Retirer le port 5432 de « backoffice » \?/);
+  assert.match(confirme, /Les membres du réseau cesseront de le joindre/);
+  assert.ok(confirme.includes('data-confirme-port="backoffice:5432"'));
+});
+
+test('SPK-111 · la modale offre la portée : Internet, ou un réseau privé avec l’adresse de sa passerelle', () => {
+  /** @verifies docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.4 · DESIGN_SYSTEM.md §6.27 */
+  const reseaux = [{ name: 'backoffice', cidr: '10.78.1.0/24', gateway: '10.78.1.1' }];
+  const rendu = renderPortsPanel(SPARK, [], ui({ open: 'port', values: { scope: 'backoffice' } }), [], reseaux);
+  assert.match(rendu, /<select class="controle" id="port-portee" name="scope"/);
+  assert.match(rendu, /<option value="internet">Internet — le port de la Forge, joignable de partout/);
+  assert.match(rendu, /<option value="backoffice" selected>Réseau privé « backoffice » — ses membres joignent 10\.78\.1\.1:&lt;port&gt;/);
+  assert.match(rendu, /rien n’est publié sur\s+Internet/);
+  const defaut = renderPortsPanel(SPARK, [], ui({ open: 'port' }), [], reseaux);
+  assert.match(defaut, /<option value="internet" selected>/);
+  // Sans réseau privé, la portée n'offre qu'Internet — et le geste reste le même.
+  assert.ok(!/Réseau privé «/.test(renderPortsPanel(SPARK, [], ui({ open: 'port' }))));
 });
 
 test('un refus du serveur s’affiche DANS la modale du port', () => {

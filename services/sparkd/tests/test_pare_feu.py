@@ -34,6 +34,7 @@ table inet spark_filter {
   chain forward {
     type filter hook forward priority 10; policy accept;
     ct state established,related accept
+    ct status dnat accept
     iifname "sparkbr0" oifname "sparkbr0" drop
     iifname "spn*" drop
     oifname "spn*" drop
@@ -181,3 +182,17 @@ def test_l_installateur_du_paquet_n_ajoute_pas_de_daemon_reload_en_double(tmp_pa
         ["systemctl", "enable", "--now", "spark-firewall.service"],
         ["systemctl", "reload-or-restart", "spark-firewall.service"],
     ]
+
+
+def test_le_lien_prive_passe_apres_l_etabli_et_avant_les_drop():
+    """@verifies docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.3 (une seule règle
+    statique : un flux qu'Incus a traduit est un lien que le produit a créé)
+
+    MESURÉ le 2026-09-18 : sans cette ligne, le drop `iifname "spn*"` arrête le
+    lien ; avec elle, seul le port lié passe. Sa PLACE décide : après l'établi,
+    avant tous les drop.
+    """
+    forward = [ligne.strip() for ligne in pare_feu.regles("sparkbr0", "forward")]
+    assert forward[0] == "ct state established,related accept"
+    assert forward[1] == "ct status dnat accept"
+    assert forward[2:] and all(ligne.endswith("drop") for ligne in forward[2:])

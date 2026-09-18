@@ -548,6 +548,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/networks/{name}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Links
+         * @description Les liens qu'un réseau porte, avec l'adresse que ses membres emploient.
+         */
+        get: operations["list_links_v1_networks__name__links_get"];
+        put?: never;
+        /**
+         * Publish Link
+         * @description Publie un port d'un Spark DANS ce réseau — la même table que
+         *     `/v1/ports`, la portée en plus (§59.4).
+         */
+        post: operations["publish_link_v1_networks__name__links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/networks/{name}/links/{public_port}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraw Link */
+        delete: operations["withdraw_link_v1_networks__name__links__public_port__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/networks/{name}/members": {
         parameters: {
             query?: never;
@@ -629,7 +671,11 @@ export interface paths {
          */
         get: operations["list_ports_v1_ports_get"];
         put?: never;
-        /** Publish Port */
+        /**
+         * Publish Port
+         * @description `scope` absent ou `internet` : le port de la Forge qu'on publie depuis
+         *     SPK-49 ; le nom d'un réseau privé : un lien privé (§59.4).
+         */
         post: operations["publish_port_v1_ports_post"];
         delete?: never;
         options?: never;
@@ -647,7 +693,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Withdraw Port */
+        /**
+         * Withdraw Port
+         * @description Retire un port d'Internet — les liens se retirent par leur réseau (§59.4).
+         */
         delete: operations["withdraw_port_v1_ports__public_port__delete"];
         options?: never;
         head?: never;
@@ -954,7 +1003,9 @@ export interface paths {
         };
         /**
          * Spark Networks
-         * @description Les adhésions d'UN Spark, pour son dossier (§58.5).
+         * @description Les adhésions d'UN Spark, pour son dossier (§58.5) ; les liens qu'il
+         *     EXPOSE dans un réseau privé, et ceux qu'il peut JOINDRE depuis les
+         *     réseaux dont il est membre, avec l'adresse à employer (§59.4).
          */
         get: operations["spark_networks_v1_sparks__name__networks_get"];
         put?: never;
@@ -2206,6 +2257,112 @@ export interface operations {
             header?: never;
             path: {
                 name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_links_v1_networks__name__links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_link_v1_networks__name__links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_link_v1_networks__name__links__public_port__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                public_port: number;
             };
             cookie?: never;
         };

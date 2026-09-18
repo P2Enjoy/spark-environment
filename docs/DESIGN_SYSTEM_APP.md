@@ -1256,6 +1256,30 @@ Spark qui reçoit l'interface.
 - **l'écran relit après chaque geste** (§1.3) : le catalogue et les adhésions
   viennent d'une nouvelle lecture, jamais de ce que l'écran croit avoir fait.
 
+**Complété le 2026-09-18 pour les liens privés (SPK-111, `DAT.md` §59.4)** —
+un lien est un port publié dont la portée n'est pas Internet, et l'écran le
+traite comme tel, sans objet nouveau :
+
+- **la portée est un champ de la modale *Publier un port*** (§6.27), en tête :
+  *Internet* par défaut, ou un réseau privé, dont l'option dit l'adresse que
+  ses membres emploieront — `10.78.1.1:<port>` — avant même que le port soit
+  saisi ; l'aide dit que rien n'est alors publié sur Internet ;
+- **la ligne d'un lien dit sa portée et son adresse** : « 5432/tcp dans
+  « backoffice » → port 5432 du Spark · ses membres le joignent en
+  10.78.1.1:5432 » ; celle d'un port d'Internet reste « de la Forge » ;
+- **la clé d'un geste porte la portée** — `internet:2525`, `backoffice:5432` —
+  parce qu'un port n'est unique que dans sa portée ; la confirmation nomme le
+  réseau (« Retirer le port 5432 de « backoffice » ? ») et dit qui cesse de
+  joindre — les membres, pas l'extérieur ;
+- **la section *Réseau* du dossier liste les liens en deux listes** (§6.19) :
+  ce que le Spark *expose, à ses membres seulement*, et ce qu'il *peut
+  joindre*, chaque ligne avec `adresse:port` — la seule chose qu'un membre ait
+  à connaître — et un lien vers le dossier de l'exposant ; l'absence est
+  nommée (§14.5) ;
+- **le catalogue de la Forge compte les liens** d'un réseau — « · 1 lien
+  privé » — et le refus de supprimer un réseau porteur les nomme, port et
+  Spark, avec les membres.
+
 Preuves observées : `e2e/captures/spk110-catalogue.jpg`, `-catalogue-mobile`,
 `-creation`, `-creation-refusee`, `-suppression-confirmation`,
 `-suppression-refusee`, `-attacher`, `-dossier-membre`,
@@ -1263,7 +1287,9 @@ Preuves observées : `e2e/captures/spk110-catalogue.jpg`, `-catalogue-mobile`,
 `-catalogue-apres` ; sur la Forge réelle, `spk110-forge-catalogue-avant`,
 `-forge-reseau-cree`, `-dossier-essai-membre`, `-dossier-essai-arretee-membre`
 (la ligne de précision d'une cellule attachée arrêtée),
-`-terminal-nom-joint`, `-forge-catalogue-apres`.
+`-terminal-nom-joint`, `-forge-catalogue-apres`. Pour les liens :
+`spk111-membre-consommable`, `-ports-portees`, `-publier-lien`, `-lien-publie`,
+`-lien-publie-mobile`, `-suppression-refusee-liens`, `-retrait-confirmation`.
 
 ### SPK-DS-E01 · Pas de Tailwind
 

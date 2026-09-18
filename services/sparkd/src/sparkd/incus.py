@@ -334,16 +334,18 @@ class UnixSocketIncus:
         sait donc pas RETIRER un device. Un retrait rapiécé laisserait un port
         ouvert vers un service qui n'est plus là (§39.2).
 
-        Seuls les devices « pub-* » sont touchés : la carte, l'interface réseau
-        et le disque racine de l'instance sont relus puis réécrits tels quels.
-        Les remplacer serait détruire l'instance par mégarde.
+        Seuls les devices « pub-* » — et « lnk-* », les liens privés de SPK-111
+        (§59.3), même famille, même carte — sont touchés : la carte, l'interface
+        réseau, les NIC des réseaux privés et le disque racine de l'instance
+        sont relus puis réécrits tels quels. Les remplacer serait détruire
+        l'instance par mégarde.
         """
         actuelle = self._get(f"/1.0/instances/{name}")
         metadata = actuelle.get("metadata") or actuelle
         conservees = {
             nom: valeurs
             for nom, valeurs in (metadata.get("devices") or {}).items()
-            if not nom.startswith("pub-")
+            if not nom.startswith(("pub-", "lnk-"))
         }
         metadata = dict(metadata)
         metadata["devices"] = {**conservees, **devices}
@@ -978,8 +980,8 @@ class FakeIncus:
         self, name: str, devices: dict[str, dict[str, str]]) -> None:
         """@spec docs/BACKLOG.md#SPK-49 · docs/DAT.md §39.4
 
-        Même sémantique que le pilote réel : les devices « pub-* » sont
-        REMPLACÉS, les autres sont conservés. C'est ce qui permet d'éprouver
+        Même sémantique que le pilote réel : les devices « pub-* » et « lnk-* »
+        (SPK-111, §59.3) sont REMPLACÉS, les autres sont conservés. C'est ce qui permet d'éprouver
         qu'un retrait fait bien disparaître le device — et donc que le port se
         referme (§39.2).
         """
@@ -987,9 +989,12 @@ class FakeIncus:
         instance = self._vivante(name)
         conservees = {
             nom: valeurs for nom, valeurs in (instance.get("devices") or {}).items()
-            if not nom.startswith("pub-")
+            if not nom.startswith(("pub-", "lnk-"))
         }
         instance["devices"] = {**conservees, **devices}
+        # §28.4 : le doublon PERSISTE ce qu'on lui a demandé — c'est ce que la
+        # campagne lit pour constater qu'un lien est posé, puis retiré (§59.3).
+        self._persist()
 
     def update_root_size(self, name: str, size: str) -> None:
         """Meme semantique que le pilote reel : le device `root` porte la taille.

@@ -120,6 +120,51 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-24 · Migration `019_portee_port_publie` et règle `ct status dnat` de `spark_filter` (SPK-111)
+
+```
+État          : EN ATTENTE — code vérifié sur le doublon le 2026-09-18 ; à
+                déployer par le runbook A.2, puis à prouver sur la Forge depuis
+                les terminaux des cellules d'essai.
+Objectif      : donner une PORTÉE aux ports publiés — `published_port.scope`
+                et `network_id`, `UNIQUE (scope, public_port)`, table
+                reconstruite (docs/SCHEMA.md §6 bis) — et poser dans la
+                chaîne `forward` de `spark_filter` la règle `ct status dnat
+                accept`, après l'établi et avant les drop (docs/DAT.md §59.3) ;
+                `sparkd` sert `/v1/networks/{name}/links` et `scope` sur
+                `/v1/ports`.
+Dépend de     : OP-23 — un lien est un port publié dans un réseau privé.
+Ordre         : 1. sauvegarder le registre (§2 bis) — la migration reconstruit
+                   une table ;
+                2. mettre à jour sparkd (runbook A.2) : la migration 019
+                   s'applique au démarrage, l'installateur réécrit
+                   `firewall.nft` et recharge `spark-firewall.service` ;
+                3. vérifier que les ports publiés d'Internet sont inchangés —
+                   `GET /v1/ports`, chacun en `scope: internet` — et que leurs
+                   devices `pub-*` sont toujours posés ;
+                4. preuve sur les deux cellules d'essai — jamais sur une
+                   cellule de locataire.
+Vérification  : `nft list chain inet spark_filter forward` montre `ct status
+                dnat accept` entre `ct state established,related accept` et le
+                premier drop ; préflight 15 verts. Puis, par la console : un
+                réseau d'essai, essai-b membre, un service dans essai-a, le port
+                publié dans le réseau depuis l'onglet Routes d'essai-a avec la
+                portée du réseau ; depuis le terminal d'essai-b,
+                `<passerelle>:<port>` répond, un autre port et l'eth0 d'essai-a
+                ne répondent pas ; le journal du service dans essai-a lit
+                l'adresse d'essai-b ; lien retiré, réseau défait.
+Retour arrière: sparkd arrêté, le `@down` de la migration 019 RETIRE LES LIENS
+                puis rend l'ancienne table — les ports d'Internet sont
+                conservés ; les devices `lnk-*` posés se retirent par `incus
+                config device remove` ; retirer la règle `ct status dnat` du
+                fichier rendu et recharger `spark-firewall.service`. Aucune
+                donnée de locataire touchée.
+Risques       : la reconstruction de la table est le seul geste qui touche
+                des lignes existantes ; elle recopie tout, et la sauvegarde du
+                pas 1 couvre le reste. La règle `dnat` n'ouvre rien tant
+                qu'aucun lien n'existe : sans device proxy, rien n'est traduit.
+```
+
 ### OP-23 · Migration `018_reseaux_prives` et règles `spn*` de `spark_filter` (SPK-110) — **APPLIQUÉ le 2026-09-18**
 
 ```

@@ -365,6 +365,20 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       return JSON.parse(brut)[nom]?.files ?? {};
     },
     /**
+     * Les devices que le doublon porte pour une cellule — ceux que le produit
+     * a posés.
+     *
+     * SPK-111 · docs/DAT.md §59.3 : un lien privé est un device proxy en
+     * nat=true, qu'aucune route ne rend ; le §15 de `CLAUDE.md` exige quand
+     * même de prouver qu'il est posé, puis retiré.
+     *
+     * Lecture seule, comme `fichiersCellule` : on constate.
+     */
+    async devicesCellule(nom) {
+      const brut = await readFile(`${registre}.incus.json`, 'utf8').catch(() => '{}');
+      return JSON.parse(brut)[nom]?.devices ?? {};
+    },
+    /**
      * Écrit sur `sparkd` en CONTOURNANT l'interface (`CLAUDE.md` §10).
      *
      * À ne pas confondre avec `lireSparkd`, qui constate un effet. Ici on agit,

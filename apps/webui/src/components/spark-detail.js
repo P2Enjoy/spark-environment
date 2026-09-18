@@ -264,7 +264,8 @@ function renderRessources(spark, usage) {
  *       §6.27 (une modale par section), §9.9, §14.5, §14.6 ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-29, SPK-DS-30
  */
-function renderReseau(spark, isolation, memberships = [], reseaux = [], ui = ADMIN_VIDE) {
+function renderReseau(spark, isolation, memberships = [], reseaux = [], ui = ADMIN_VIDE,
+                      liens = { exposed: [], consumable: [] }) {
   const etat = isolation === undefined
     ? 'Relevé en cours'
     : !isolation || isolation.isolated === null
@@ -352,10 +353,47 @@ function renderReseau(spark, isolation, memberships = [], reseaux = [], ui = ADM
       ? '<span class="champ__aide">Ce Spark est protégé : levez la protection d’abord.</span>'
       : ''}
   </p>
+  ${renderLiens(liens)}
   <p class="note">Les membres d’un réseau privé se joignent par nom.
   <a href="#/manuel/M13">Manuel M13 — Relier des Sparks entre eux</a></p>
   ${modale}
 </section>`;
+}
+
+/**
+ * Les liens privés d'un Spark (SPK-111) : ceux qu'il EXPOSE dans un réseau, et
+ * ceux qu'il peut JOINDRE depuis les réseaux dont il est membre — avec, pour
+ * chacun, l'adresse à employer, la seule chose qu'un membre ait à connaître.
+ *
+ * @spec docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.4 (la facette Réseau liste
+ *       l'exposé et le consommable, avec adresse:port) ·
+ *       docs/DESIGN_SYSTEM.md §6.19, §14.5 · docs/DESIGN_SYSTEM_APP.md SPK-DS-30
+ */
+function renderLiens({ exposed = [], consumable = [] } = {}) {
+  const ligne = (l) => `<span class="technique">${echapper(l.public_port)}/${echapper(l.protocol)}</span>`;
+  const exposes = exposed.length
+    ? `<p class="note">Ce Spark expose, à ses membres seulement :</p>
+  <ul class="liste-administrable">${exposed.map((l) =>
+    `<li><span>${ligne(l)} dans « ${echapper(l.scope)} » → port ${echapper(l.target_port)} du Spark, joignable en <span class="technique">${echapper(l.address)}</span>${
+      l.note ? ` <span class="note">${echapper(l.note)}</span>` : ''}</span></li>`).join('')}</ul>`
+    : '';
+  const consommables = consumable.length
+    ? `<p class="note">Ce Spark peut joindre :</p>
+  <ul class="liste-administrable">${consumable.map((l) =>
+    `<li><span><a href="#/sparks/${encodeURIComponent(l.spark_name)}">${echapper(l.spark_name)}</a> · ${ligne(l)} — en <span class="technique">${echapper(l.address)}</span>, par « ${echapper(l.scope)} »${
+      l.note ? ` <span class="note">${echapper(l.note)}</span>` : ''}</span></li>`).join('')}</ul>`
+    : '';
+  // §14.5 : l'absence est nommée, pas rendue par une liste vide.
+  const absence = !exposed.length && !consumable.length
+    ? '<p class="absence">Aucun lien privé : ce Spark n’expose rien dans un réseau, et les réseaux dont il est membre n’en portent pas.</p>'
+    : '';
+  return `
+  <h3 id="titre-liens-prives">Liens privés</h3>
+  ${exposes}
+  ${consommables}
+  ${absence}
+  <p class="note">Un lien se publie depuis la facette <em>Routes</em>, section <em>Ports publiés</em>,
+  en choisissant un réseau pour portée.</p>`;
 }
 
 /**
@@ -819,7 +857,9 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     isolation = undefined,
                                     // SPK-110 · §58.5 : les adhésions du Spark, et les
                                     // réseaux qu'il peut rejoindre.
-                                    memberships = [], reseaux = [] } = {}) {
+                                    memberships = [], reseaux = [],
+                                    // SPK-111 · §59.4 : les liens exposés et consommables.
+                                    exposed = [], consumable = [] } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -836,7 +876,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
   const facettes = {
     '': () => `<div class="detail">
       <div class="detail__principal">${renderRessources(spark, usage)}${renderQuotas(spark, quotas, { pools, cores })}
-        ${renderReseau(spark, isolation, memberships, reseaux, admin)}
+        ${renderReseau(spark, isolation, memberships, reseaux, admin, { exposed, consumable })}
         ${renderProtection(spark, admin)}
         ${renderDossier(spark, dossier)}</div>
       <div class="detail__secondaire">${renderAcces(spark)}
@@ -853,7 +893,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
     // écran dise d'abord ce qui demande une réponse.
     routes: () => renderPropositions(propositions, ['routes'])
                   + renderRoutesPanel(spark, routes, admin)
-                  + renderPortsPanel(spark, ports, admin, reservedPorts),
+                  + renderPortsPanel(spark, ports, admin, reservedPorts, reseaux),
     cles: () => renderKeysPanel(spark, { keys, registry, sshConfig }, admin)
                + renderIdentityPanel(spark, identite),
     instantanes: () => renderSnapshotsPanel(spark, snapshots, admin),

@@ -5647,6 +5647,16 @@ test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et s
     await capturer('spk109-isolation-avant-mobile', { largeur: 390, hauteur: 844 });
 
     // Le geste se confirme dans le flux, sans détruire : un bouton ordinaire.
+    // Le parc n'est pas le même seul ou dans la campagne : un parcours antérieur
+    // supprime « orphelin » (SPK-36), d'autres créent ou détruisent des Sparks
+    // (§29.2). On LIT donc l'état que l'écran a lu, et on en tire ce que le
+    // geste doit rendre — jamais des nombres figés.
+    const { corps: parc } = await pile.lireSparkd('/v1/forge/isolation');
+    const enAttente = parc.sparks.filter((s) => s.isolated === false).map((s) => s.name);
+    const absentes = parc.sparks.filter((s) => s.isolated === null).map((s) => s.name);
+    const deja = parc.sparks.filter((s) => s.isolated === true).length;
+    assert.deepEqual(enAttente, ['boutique'], 'le seed laisse « boutique » seule non isolée');
+
     await page.click('[data-isolation="demander"]');
     await page.waitForSelector('[data-isolation="engager"]', { timeout: 10000 });
     assert.match(await section(), /Rattraper 1 cellule créée avant la règle \?/);
@@ -5655,16 +5665,21 @@ test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et s
     await capturer('spk109-isolation-confirmation');
 
     await page.click('[data-isolation="engager"]');
+    // Deux formes d'issue (SPK-DS-08) : le vert quand tout a abouti, l'accent
+    // « Le rattrapage a été joué — … » dès qu'un Spark est en échec ou refusé.
     await page.waitForFunction(
-      () => /Le rattrapage a été joué/.test(document.body.innerText), null, { timeout: 20000 });
-    // Le seed porte AUSSI « orphelin », dont la cellule a disparu (§14.5) : le
-    // geste le nomme en échec, sans que boutique en pâtisse — et sans vert,
-    // parce que tout n'a pas abouti (SPK-DS-08). Les six autres l'étaient déjà
-    // et ne sont pas présentés comme isolés par ce geste.
+      () => /Le rattrapage a été joué|cellules? isolées? :/.test(
+        document.querySelector('#titre-isolation')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    // Le seed porte AUSSI « orphelin », dont la cellule a disparu (§14.5) : tant
+    // qu'il est là, le geste le nomme en échec, sans que boutique en pâtisse —
+    // et sans vert, parce que tout n'a pas abouti (SPK-DS-08). Les autres
+    // l'étaient déjà et ne sont pas présentés comme isolés par ce geste.
     const issue = await section();
     assert.match(issue, /isolée : boutique/);
-    assert.match(issue, /déjà isolées : 6/);
-    assert.match(issue, /en échec : orphelin/);
+    assert.ok(new RegExp(`déjà isolées : ${deja}|${deja} l’étaient déjà`).test(issue),
+      `les ${deja} déjà isolées sont comptées à part`);
+    for (const nom of absentes) assert.match(issue, new RegExp(`en échec : .*${nom}`));
     // Les blocs d'issue sont cherchés DANS la section, et rendus en booléens.
     // JAMAIS `assert.equal(await page.$(…), null)` : si l'assertion échoue,
     // Node inspecte l'ElementHandle — le graphe entier du client Playwright, à
@@ -5676,20 +5691,22 @@ test('isoler le parc : le Spark d’avant est nommé, le geste se confirme, et s
       return { avertissement: Boolean(s.querySelector('.avertissement')),
                succes: Boolean(s.querySelector('.succes')) };
     });
-    assert.equal(blocs.avertissement, true, 'un échec nommé est un fait signalé : l’accent');
-    assert.equal(blocs.succes, false, 'tout n’a pas abouti : pas de vert (SPK-DS-08)');
+    assert.equal(blocs.avertissement, absentes.length > 0, 'un échec nommé est un fait signalé : l’accent');
+    assert.equal(blocs.succes, absentes.length === 0, 'le vert seulement si tout a abouti (SPK-DS-08)');
     // L'écran RELIT l'état : plus rien à isoler, donc plus de geste (§14.4).
     assert.match(issue, /Créées avant la règle\s+aucune — toutes les cellules sont isolées/);
     assert.equal(await page.evaluate(() => Boolean(document.querySelector('[data-isolation="demander"]'))), false);
     await capturer('spk109-isolation-apres');
 
-    // EFFET côté sparkd : une entrée d'audit `spark.isolate` en `ok`, et le
+    // EFFET côté sparkd : une entrée d'audit `spark.isolate` par Spark touché
+    // — `ok` pour boutique, `error` pour chaque cellule absente —, et le
     // doublon porte les deux clés là où le vrai Incus les garde.
     const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=50');
     const isoles = journal.entries.filter((e) => e.action === 'spark.isolate');
     assert.ok(isoles.some((e) => e.result === 'ok'), 'boutique isolée : une entrée `ok`');
-    assert.ok(isoles.some((e) => e.result === 'error'), 'orphelin en échec : une entrée `error`, nommée');
-    assert.equal(isoles.length, 2, 'les six déjà isolés n’entrent PAS au journal');
+    assert.equal(isoles.filter((e) => e.result === 'error').length, absentes.length,
+      'une entrée `error` par cellule absente, nommée');
+    assert.equal(isoles.length, 1 + absentes.length, 'les déjà isolés n’entrent PAS au journal');
     const { corps: etat } = await pile.lireSparkd('/v1/sparks/boutique/isolation');
     assert.equal(etat.isolated, true);
 
@@ -5848,5 +5865,124 @@ test('relier des Sparks : un réseau privé se crée, s’habite, se quitte, et 
     assert.ok(!/labo/.test(texte), 'le réseau n’est plus au catalogue');
     assert.match(texte, /backoffice/);
     await capturer('spk110-catalogue-apres');
+  });
+});
+
+test('relier un port : un lien privé se publie dans un réseau, se lit des deux côtés avec son adresse, et se retire', async () => {
+  await parcours('liens-prives', async () => {
+    // @verifies docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.1 (un port publié
+    //           dont la portée n'est pas Internet), §59.3 (le device proxy
+    //           nat=true sur la passerelle), §59.4 (les gestes, l'exposé et le
+    //           consommable), §59.6 · docs/DESIGN_SYSTEM_APP.md SPK-DS-30 ·
+    //           docs/PROD_MIGRATIONS.md OP-24
+    //
+    // Le seed publie le Postgres de « postgres-dedie » DANS « backoffice »
+    // (5432) et un second port du même Spark sur Internet (15432) ;
+    // « crm-production » est membre du réseau, « boutique » ne l'est pas.
+
+    // 1. Le membre lit ce qu'il peut joindre, avec l'adresse.
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-liens-prives', { timeout: 10000 });
+    const reseau = () => page.$eval('#titre-reseau', (h) => h.closest('section').innerText);
+    let texte = await reseau();
+    assert.match(texte, /Ce Spark peut joindre :/);
+    assert.match(texte, /postgres-dedie · 5432\/tcp — en 10\.78\.1\.1:5432, par « backoffice »/);
+    await capturer('spk111-membre-consommable');
+
+    // 2. L'exposant lit ce qu'il expose ; ses ports disent leur portée.
+    await ouvrir('postgres-dedie');
+    await page.waitForSelector('#titre-liens-prives', { timeout: 10000 });
+    texte = await reseau();
+    assert.match(texte, /Ce Spark expose, à ses membres seulement :/);
+    assert.match(texte, /5432\/tcp dans « backoffice » → port 5432 du Spark, joignable en 10\.78\.1\.1:5432/);
+    await page.click('.onglet[href$="/routes"]');
+    await page.waitForSelector('#titre-ports', { timeout: 10000 });
+    const ports = () => page.$eval('#titre-ports', (h) => h.closest('section').innerText);
+    texte = await ports();
+    assert.match(texte, /5432\/tcp dans « backoffice » → port 5432 du Spark/);
+    assert.match(texte, /ses membres le joignent en 10\.78\.1\.1:5432/);
+    assert.match(texte, /15432\/tcp de la Forge → port 5432 du Spark/);
+    await capturer('spk111-ports-portees');
+
+    // 3. Publier un port de « boutique » — hors du réseau — dans « backoffice ».
+    await ouvrir('boutique', 'routes');
+    await page.click('[data-ouvre="port"]');
+    await page.waitForSelector('[data-modale="port"] select[name="scope"]', { timeout: 10000 });
+    const options = await page.$$eval('[data-modale="port"] select[name="scope"] option',
+                                      (o) => o.map((x) => x.textContent));
+    assert.match(options.join(' | '), /Internet — le port de la Forge/);
+    assert.match(options.join(' | '), /Réseau privé « backoffice » — ses membres joignent 10\.78\.1\.1:<port>/);
+    await page.selectOption('[data-modale="port"] select[name="scope"]', 'backoffice');
+    await page.fill('[data-modale="port"] input[name="public_port"]', '8080');
+    await page.fill('[data-modale="port"] input[name="target_port"]', '80');
+    await page.fill('[data-modale="port"] input[name="port_note"]', 'la boutique, pour le CRM');
+    await capturer('spk111-publier-lien');
+    await page.click('[data-modale="port"] [data-engage="port"]');
+    await page.waitForFunction(
+      () => /8080\/tcp dans « backoffice »/.test(document.querySelector('#titre-ports')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    texte = await ports();
+    assert.match(texte, /8080\/tcp dans « backoffice » → port 80 du Spark/);
+    assert.match(texte, /ses membres le joignent en 10\.78\.1\.1:8080/);
+    await capturer('spk111-lien-publie');
+    await capturer('spk111-lien-publie-mobile', { largeur: 390, hauteur: 844 });
+
+    // EFFET côté sparkd et côté doublon : la table, et le device — nat=true,
+    // sur la passerelle du réseau, vers l'eth0 de boutique.
+    const { corps: liens } = await pile.lireSparkd('/v1/networks/backoffice/links');
+    assert.deepEqual(liens.links.map((l) => [l.spark_name, l.public_port, l.address]),
+                     [['postgres-dedie', 5432, '10.78.1.1:5432'], ['boutique', 8080, '10.78.1.1:8080']]);
+    const devices = await pile.devicesCellule('boutique');
+    assert.equal(devices['lnk-spn1-8080']?.nat, 'true');
+    assert.equal(devices['lnk-spn1-8080']?.listen, 'tcp:10.78.1.1:8080');
+    assert.match(devices['lnk-spn1-8080']?.connect ?? '', /^tcp:10\.77\.0\.\d+:80$/);
+    assert.ok(devices.eth0, 'l’eth0 n’est pas touchée');
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=20');
+    const publie = journal.entries.find((e) => e.action === 'port.publish');
+    assert.match(publie.message, /dans le réseau « backoffice »/);
+
+    // 4. Le membre le voit désormais aussi ; la Forge compte deux liens, et
+    //    refuse de supprimer le réseau en nommant membres ET liens.
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-liens-prives', { timeout: 10000 });
+    assert.match(await reseau(), /boutique · 8080\/tcp — en 10\.78\.1\.1:8080, par « backoffice »/);
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('#titre-reseaux-prives', { timeout: 20000 });
+    await page.waitForFunction(
+      () => /2 liens privés/.test(document.querySelector('#titre-reseaux-prives')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    await page.click('[data-supprime-reseau="backoffice"]');
+    await page.waitForSelector('[data-confirme-suppression-reseau="backoffice"]', { timeout: 10000 });
+    await page.click('[data-confirme-suppression-reseau="backoffice"]');
+    await page.waitForFunction(
+      () => Boolean(document.querySelector('#titre-reseaux-prives')?.closest('section')?.querySelector('.refus')),
+      null, { timeout: 20000 });
+    const refus = await page.$eval('#titre-reseaux-prives', (h) => h.closest('section').querySelector('.refus').innerText);
+    assert.match(refus, /crm-production/);
+    assert.match(refus, /5432\/tcp de « postgres-dedie »/);
+    assert.match(refus, /8080\/tcp de « boutique »/);
+    await capturer('spk111-suppression-refusee-liens');
+
+    // 5. Retirer le lien : la confirmation nomme le réseau ; le device
+    //    disparaît ; le membre ne le voit plus.
+    await ouvrir('boutique', 'routes');
+    await page.click('[data-retire-port="backoffice:8080"]');
+    await page.waitForSelector('[data-confirme-port="backoffice:8080"]', { timeout: 10000 });
+    texte = await ports();
+    assert.match(texte, /Retirer le port 8080 de « backoffice » \?/);
+    assert.match(texte, /Les membres du réseau cesseront de le joindre/);
+    await capturer('spk111-retrait-confirmation');
+    await page.click('[data-confirme-port="backoffice:8080"]');
+    await page.waitForFunction(
+      () => !/8080\/tcp/.test(document.querySelector('#titre-ports')?.closest('section')?.innerText ?? ''),
+      null, { timeout: 20000 });
+    const apres = await pile.devicesCellule('boutique');
+    assert.equal(Object.hasOwn(apres, 'lnk-spn1-8080'), false, 'le device est retiré : le lien est refermé');
+    const { corps: restants } = await pile.lireSparkd('/v1/networks/backoffice/links');
+    assert.equal(restants.links.length, 1);
+    await ouvrir('crm-production');
+    await page.waitForSelector('#titre-liens-prives', { timeout: 10000 });
+    assert.ok(!/boutique · 8080/.test(await reseau()), 'le membre ne voit plus le lien retiré');
   });
 });

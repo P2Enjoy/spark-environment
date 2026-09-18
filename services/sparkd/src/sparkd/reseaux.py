@@ -170,9 +170,11 @@ def _decorer(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]
         "interface": interface(row["cidr"]), "gateway": passerelle(row["cidr"]),
         "note": row["note"], "applied_at": row["applied_at"], "created_at": row["created_at"],
         "members": _membres(connection, row["id"]),
-        # SPK-111 donnera aux liens leur portée ; jusque-là un réseau n'en porte
-        # aucun, et le refus de suppression ne compte que les membres.
-        "links": 0,
+        # SPK-111 · §59.2 : les liens que ce réseau porte — comptés ici, listés
+        # par `ports.links_for_network`, refusés à la suppression (§58.4).
+        "links": connection.execute(
+            "SELECT COUNT(*) FROM published_port WHERE network_id = ?",
+            (row["id"],)).fetchone()[0],
     }
 
 
@@ -345,17 +347,30 @@ def create(connection: sqlite3.Connection, incus, name: str, note: str = "") -> 
 def delete(connection: sqlite3.Connection, incus, name: str) -> None:
     """Supprime un réseau VIDE. Habité, le refus nomme ce qui reste (§58.4)."""
     network = by_name(connection, name)
+    # SPK-110 · §58.4, SPK-111 · §59.2 : un réseau habité ou porteur ne se
+    # supprime pas ; le refus NOMME ce qui reste — membres et liens —, il est
+    # journalisé (§21.1), et la base le refuserait de toute façon (RESTRICT).
+    restes = []
     if network["members"]:
         noms = ", ".join(m["spark"] for m in network["members"])
-        motif = f"Le réseau « {name} » a encore des membres : {noms}. Détachez-les d'abord."
-        # Un geste destructif refusé est un fait du journal (§21.1) : la trace
-        # est écrite AVANT de lever, et la connexion est en autocommit.
-        _audit(connection, "network.delete", "network", network["id"],
-               {"name": name, "members": [m["spark"] for m in network["members"]]},
-               result="denied", message=motif)
-        raise ReseauError(motif)
+        restes.append(f"a encore des membres : {noms}")
     if network["links"]:
-        raise ReseauError(f"Le réseau « {name} » porte encore {network['links']} lien(s).")
+        liens = ", ".join(
+            f"{p['public_port']}/{p['protocol']} de « {p['spark']} »"
+            for p in connection.execute(
+                "SELECT p.public_port, p.protocol, s.name AS spark FROM published_port p"
+                " JOIN spark s ON s.id = p.spark_id WHERE p.network_id = ?"
+                " ORDER BY p.public_port", (network["id"],)))
+        restes.append(f"porte encore {network['links']} lien(s) : {liens}")
+    if restes:
+        motif = (f"Le réseau « {name} » {' et '.join(restes)}. "
+                 + ("Détachez-les d'abord." if not network["links"]
+                    else "Retirez les liens" + (" et détachez les membres" if network["members"] else "")
+                    + " d'abord."))
+        _audit(connection, "network.delete", "network", network["id"],
+               {"name": name, "members": [m["spark"] for m in network["members"]],
+                "links": network["links"]}, result="denied", message=motif)
+        raise ReseauError(motif)
     try:
         incus.delete_network(network["interface"])
     except InstanceAbsente:

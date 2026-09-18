@@ -125,7 +125,9 @@ diagnostic.
 Ce qu'est un réseau privé — un commutateur interne à la Forge — et ce qu'il
 n'est pas. Créer un réseau depuis l'écran Forge, attacher un Spark depuis son
 dossier, se joindre par nom `<spark>.<réseau>`, servir sur le réseau depuis un
-Compose, détacher, supprimer un réseau vide. Les familles sans networkd, où la
-cellule reste à configurer. Ce que le journal garde.
+Compose, détacher, supprimer un réseau vide. Publier un port dans un réseau
+privé — le lien privé —, ce que les membres joignent et ce qu'ils ne joignent
+pas. Les familles sans networkd, où la cellule reste à configurer. Ce que le
+journal garde.
 
-Unités : SPK-110 ; §58 du DAT.
+Unités : SPK-110, SPK-111 ; §58 et §59 du DAT.

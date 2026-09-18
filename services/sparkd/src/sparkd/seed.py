@@ -133,6 +133,19 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
                  201, quoi=f"adhésion de « {membre} » à « backoffice »")
     compte["reseaux"] = 1
 
+    # SPK-111 · §59.6 : un LIEN — le Postgres de la base publié dans le réseau,
+    # que le CRM joint en 10.78.1.1:5432 — et un second port du même Spark
+    # laissé sur Internet, pour que l'écran montre la différence.
+    _attendu(client.post("/v1/ports", json={
+        "spark": "postgres-dedie", "public_port": 5432, "target_port": 5432,
+        "protocol": "tcp", "scope": "backoffice", "note": "Postgres du CRM, réservé au réseau"}),
+        201, quoi="lien privé « 5432 dans backoffice »")
+    _attendu(client.post("/v1/ports", json={
+        "spark": "postgres-dedie", "public_port": 15432, "target_port": 5432,
+        "protocol": "tcp", "note": "réplication depuis l'extérieur"}),
+        201, quoi="port publié « 15432 → 5432 »")
+    compte["ports"] = compte.get("ports", 0) + 2
+
     # --- Spark « pending » : déclaré, pas encore appliqué. Il porte aussi la
     # route non appliquée ci-dessous, parce qu'il n'a pas encore d'adresse.
     creer({"name": "analytics", "image": "images:debian/13", "cpu_mode": "capped",

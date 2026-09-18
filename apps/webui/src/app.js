@@ -218,7 +218,15 @@ function identiteFocus(element) {
     .join('');
   if (attributs) return attributs;
   const lien = element.getAttribute?.('href');
-  return lien ? `a[href="${CSS.escape(lien)}"]` : null;
+  if (!lien) return null;
+  // MESURÉ le 2026-09-18, dans la campagne : l'onglet « Pools » et la
+  // destination « Forge » de la barre latérale portent le MÊME href, `#/forge`.
+  // Restaurer par `a[href]` seul rendait le focus au premier des deux — la
+  // barre latérale —, et une tabulation vers les onglets repartait en arrière
+  // à chaque repeinture (§14.3). L'identité porte donc la zone.
+  const zone = element.closest?.('.onglets, .laterale, .onglets-forge');
+  const prefixe = zone ? `${zone.tagName.toLowerCase()}.${CSS.escape(zone.classList[0])} ` : '';
+  return `${prefixe}a[href="${CSS.escape(lien)}"]`;
 }
 
 /**
@@ -1967,8 +1975,13 @@ function brancherPanneaux() {
   geste('confirme-suppression', (nom) =>
     agir('snapshot', () => appel('DELETE',
       `/v1/sparks/${encodeURIComponent(etat.spark.name)}/snapshots/${encodeURIComponent(nom)}`)));
-  geste('confirme-port', (port) =>
-    agir('port', () => appel('DELETE', `/v1/ports/${encodeURIComponent(port)}`)));
+  // SPK-111 · §59.4 : la clé porte la portée — un lien se retire par son réseau.
+  geste('confirme-port', (cle) => {
+    const [portee, port] = String(cle).includes(':') ? String(cle).split(':') : ['internet', String(cle)];
+    return agir('port', () => appel('DELETE', portee === 'internet'
+      ? `/v1/ports/${encodeURIComponent(port)}`
+      : `/v1/networks/${encodeURIComponent(portee)}/links/${encodeURIComponent(port)}`));
+  });
   geste('confirme-detachement', (reseau) =>
     agir('reseau', () => appel('DELETE',
       `/v1/networks/${encodeURIComponent(reseau)}/members/${encodeURIComponent(etat.spark.name)}`)));
@@ -2611,6 +2624,8 @@ async function publierPort() {
     spark: etat.spark.name,
     public_port: Number(v.public_port), target_port: Number(v.target_port),
     protocol: v.protocol || 'tcp', note: v.port_note ?? '',
+    // SPK-111 · §59.4 : la portée — Internet, ou le nom d'un réseau privé.
+    scope: v.scope || 'internet',
   }));
   if (resultat?.ok) etat.admin.values = { ...ADMIN_VIDE.values };
 }
@@ -3470,7 +3485,7 @@ async function chargerDetail(nom, facette = '') {
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
-           env, catalogue, forge, , isolation, memberships, reseaux] = await Promise.all([
+           env, catalogue, forge, , isolation, reseauDuSpark, reseaux] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -3502,12 +3517,16 @@ async function chargerDetail(nom, facette = '') {
       chargerDossier(nom),
       // SPK-109 · §57.3 : ce que dit Incus de l'isolation de CE Spark.
       api(`/v1/sparks/${encodeURIComponent(nom)}/isolation`).catch(() => null),
-      // SPK-110 · §58.5 : les adhésions du Spark, et les réseaux qu'il peut rejoindre.
-      api(`/v1/sparks/${encodeURIComponent(nom)}/networks`).then((r) => r.memberships).catch(() => []),
+      // SPK-110 · §58.5 : les adhésions du Spark, et les réseaux qu'il peut
+      // rejoindre ; SPK-111 · §59.4 : les liens qu'il expose et ceux qu'il joint.
+      api(`/v1/sparks/${encodeURIComponent(nom)}/networks`).catch(() => ({})),
       api('/v1/networks').then((r) => r.networks).catch(() => []),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit, isolation, memberships, reseaux,
+                    snapshots, audit, isolation, reseaux,
+                    memberships: reseauDuSpark.memberships ?? [],
+                    exposed: reseauDuSpark.exposed ?? [],
+                    consumable: reseauDuSpark.consumable ?? [],
                     ports: (publies.ports ?? []).filter((p) => p.spark_id === etat.spark.id),
                     reservedPorts: publies.reserved ?? [], env, catalogue,
                     pools: forge?.pools ?? null, cores: forge?.cpu?.cores_total ?? null };

@@ -892,11 +892,14 @@ export function renderReseauxPrives(reseaux, ui = RESEAUX_VIDE) {
       : '';
     const liste = reseaux.networks?.length
       ? `<ul class="liste-administrable">${reseaux.networks.map((r) => {
-          const membres = r.members?.length
+          const membres = (r.members?.length
             ? `membres : ${r.members.map((m) =>
                 `<a href="#/sparks/${encodeURIComponent(m.spark)}">${echapper(m.spark)}</a>${
                   m.protected ? ' (protégé)' : ''}`).join(', ')}`
-            : 'aucun membre';
+            : 'aucun membre')
+            // SPK-111 · §59.2 : les liens que le réseau porte se comptent ici ; ils
+            // se lisent au dossier du Spark qui expose, et retiennent la suppression.
+            + (r.links ? ` · ${echapper(r.links)} lien${r.links > 1 ? 's' : ''} privé${r.links > 1 ? 's' : ''}` : '');
           const confirme = ui.confirming === r.name
             ? `<div class="confirmation" role="group" aria-label="Confirmer la suppression">
                  <p><strong>Supprimer le réseau « ${echapper(r.name)} » ?</strong></p>

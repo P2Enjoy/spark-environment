@@ -934,7 +934,8 @@ const CATALOGUE = {
   networks: [
     { name: 'backoffice', cidr: '10.78.0.0/24', interface: 'spn0', note: 'le CRM et sa base',
       members: [{ spark: 'crm-production', ipv4_address: '10.78.0.16', protected: true },
-                { spark: 'postgres-dedie', ipv4_address: '10.78.0.17', protected: false }] },
+                { spark: 'postgres-dedie', ipv4_address: '10.78.0.17', protected: false }],
+      links: 1 },
     { name: 'labo', cidr: '10.78.1.0/24', interface: 'spn1', note: '', members: [] },
   ],
 };
@@ -947,8 +948,9 @@ test('SPK-110 · le catalogue NOMME chaque réseau, son sous-réseau, ses membre
   assert.match(rendu, /<strong>backoffice<\/strong> · <span class="technique">10\.78\.0\.0\/24 · spn0<\/span>/);
   assert.match(rendu, /le CRM et sa base/);
   assert.match(rendu, /href="#\/sparks\/crm-production">crm-production<\/a> \(protégé\)/);
-  assert.match(rendu, /href="#\/sparks\/postgres-dedie">postgres-dedie<\/a>/);
+  assert.match(rendu, /href="#\/sparks\/postgres-dedie">postgres-dedie<\/a> · 1 lien privé/);
   assert.match(rendu, /<strong>labo<\/strong>[^]*aucun membre/);
+  assert.ok(!/aucun membre · /.test(rendu), 'sans lien, rien à compter');
   assert.ok(rendu.includes('data-supprime-reseau="backoffice"'));
   assert.ok(rendu.includes('data-ouvre-reseau'));
   // Le nom des membres est un vrai chemin : <spark>.<réseau> (§58.1).

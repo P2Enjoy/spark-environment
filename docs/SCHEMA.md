@@ -175,9 +175,27 @@ Introduite par la migration `008`. Contrat au `docs/DAT.md` §39.5.
 | `applied_at` | TEXT | dernière application réussie vers le pilote |
 | `created_at` | TEXT | horodatage |
 
-`public_port` est **UNIQUE** : un port public est une ressource de la MACHINE,
-pas du Spark, et le premier qui le prend le prend. L'unicité vient de la base et
-non de l'interface, qui ne protégerait de rien face à deux requêtes simultanées.
+| `scope` | TEXT | **SPK-111**, migration `019` : `internet`, ou l'identifiant du réseau privé — la clé d'unicité |
+| `network_id` | TEXT FK | **SPK-111** : le réseau privé porteur, `ON DELETE RESTRICT` ; `NULL` sur Internet |
+
+`public_port` n'est unique que **dans sa portée** — `UNIQUE (scope,
+public_port)` remplace `UNIQUE (public_port)` depuis la migration `019`
+(SPK-111, DAT §59.2) : sur Internet, un port public est une ressource de la
+MACHINE, pas du Spark, et le premier qui le prend le prend ; dans un réseau
+privé, il appartient à ce réseau, et le `5432` d'un réseau ne dispute rien au
+`5432` d'un autre ni à celui d'Internet. L'unicité vient de la base et non de
+l'interface, qui ne protégerait de rien face à deux requêtes simultanées.
+
+**Deux colonnes pour la portée**, parce qu'une seule ne portait pas les deux
+garanties : `scope` est la clé d'unicité — une valeur non nulle, même sur
+Internet, sans quoi `UNIQUE` ne compterait pas les `NULL` —, `network_id` est
+la clé étrangère, en `RESTRICT` : la base refuse de supprimer un réseau qui
+porte un lien, quoi que le service ait vérifié. Un `CHECK` lie les deux :
+`scope = 'internet'` sans réseau, ou `scope = network_id`. La migration
+reconstruit la table (SQLite ne modifie pas un `UNIQUE` en place), recopie les
+ports tels quels — sans portée explicite, un port vaut Internet — et son
+`@down` retire les liens avant de rendre l'ancienne forme, ce que le contrat de
+déploiement dit (OP-24).
 
 La cascade sur `spark_id` suit celle d'`ingress_route` (§6) : un port qui
 survivrait à son Spark serait un port ouvert vers rien.

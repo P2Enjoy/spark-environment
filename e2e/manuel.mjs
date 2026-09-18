@@ -322,6 +322,20 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.evaluate(() => document.querySelector('#titre-reseau')
       ?.closest('section')?.scrollIntoView({ block: 'start' }));
     await capturer('m13-membre', { hauteur: 900 });
+
+    // --- M13 · Le lien privé (SPK-111, §59.4) : la portée d'un port publié ---
+    // Le chapitre montre la modale « Publier un port » avec un réseau pour
+    // portée — l'option dit déjà l'adresse que les membres emploieront.
+    await ouvrir('boutique', 'routes');
+    await page.waitForSelector('[data-ouvre="port"]', { timeout: 10000 });
+    await page.click('[data-ouvre="port"]');
+    await page.waitForSelector('[data-modale="port"] select[name="scope"]', { timeout: 10000 });
+    await page.selectOption('[data-modale="port"] select[name="scope"]', 'backoffice');
+    await page.fill('[data-modale="port"] input[name="public_port"]', '8080');
+    await page.fill('[data-modale="port"] input[name="target_port"]', '80');
+    await page.fill('[data-modale="port"] input[name="port_note"]', 'la boutique, pour le CRM');
+    await capturer('m13-lien', { hauteur: 900 });
+    await page.keyboard.press('Escape');
     // --- M12 · Le journal de tous les Sparks (SPK-39) ------------------------
     // On y va par la navigation : Forge, puis l'onglet Journal. Le relevé de la
     // chaîne est déclenché, sinon l'illustration montrerait « pas encore

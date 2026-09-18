@@ -361,7 +361,9 @@ nom ne soit prononcé. Une base de données, un Redis, un SSH sont dans le même
 cas. Le seul élément qui désigne alors le Spark destinataire est **le port sur
 lequel la connexion est arrivée**.
 
-C'est à cela que sert la section **Ports publiés**, sous les routes.
+C'est à cela que sert la section **Ports publiés**, sous les routes. Un port
+peut aussi n'être publié que **dans un réseau privé**, pour ses membres — c'est
+un *lien privé*, décrit au chapitre [M13](M13-reseaux-prives.md).
 
 ### Ce qu'un port publié vous coûte
 

@@ -688,16 +688,55 @@ def create_app(config: Config) -> FastAPI:
                 raise _refus_reseau(erreur) from erreur
             return {"detached": spark_name, "network": name}
 
+    # --- les liens privés : la portée d'un port publié (SPK-111, §59.4) ------
+
+    @app.get("/v1/networks/{name}/links", tags=["networks"])
+    def list_links(name: str) -> dict:
+        """Les liens qu'un réseau porte, avec l'adresse que ses membres emploient."""
+        with registry() as connection:
+            try:
+                network = reseaux_service.by_name(connection, name)
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+            return {"links": ports_service.links_for_network(connection, network["id"])}
+
+    @app.post("/v1/networks/{name}/links", tags=["networks"], status_code=201)
+    def publish_link(name: str, body: dict = Body(...)) -> dict:
+        """Publie un port d'un Spark DANS ce réseau — la même table que
+        `/v1/ports`, la portée en plus (§59.4)."""
+        with registry() as connection:
+            try:
+                network = reseaux_service.by_name(connection, name)
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+            return _publier_port(connection, body, network)
+
+    @app.delete("/v1/networks/{name}/links/{public_port}", tags=["networks"])
+    def withdraw_link(name: str, public_port: int) -> dict:
+        with registry() as connection:
+            try:
+                network = reseaux_service.by_name(connection, name)
+            except reseaux_service.ReseauError as erreur:
+                raise _refus_reseau(erreur) from erreur
+            return _retirer_port(connection, public_port, network)
+
     @app.get("/v1/sparks/{name}/networks", tags=["sparks"])
     def spark_networks(name: str) -> dict:
-        """Les adhésions d'UN Spark, pour son dossier (§58.5)."""
+        """Les adhésions d'UN Spark, pour son dossier (§58.5) ; les liens qu'il
+        EXPOSE dans un réseau privé, et ceux qu'il peut JOINDRE depuis les
+        réseaux dont il est membre, avec l'adresse à employer (§59.4)."""
         with registry() as connection:
             try:
                 spark = service.by_name(connection, name)
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
-            return {"memberships": reseaux_service.for_spark(connection, spark["id"])}
+            return {
+                "memberships": reseaux_service.for_spark(connection, spark["id"]),
+                "exposed": [p for p in ports_service.for_spark(connection, spark["id"])
+                            if p["network_id"]],
+                "consumable": ports_service.consumable_for(connection, spark["id"]),
+            }
 
     @app.get("/v1/forge/isolation", tags=["forge"])
     def forge_isolation() -> dict:
@@ -1932,72 +1971,93 @@ def create_app(config: Config) -> FastAPI:
                 ],
             }
 
+    def _publier_port(connection, body: dict, network: dict | None) -> dict:
+        """Publie un port, sur Internet ou dans un réseau privé — le MÊME geste,
+        la portée en plus (SPK-111, §59.4)."""
+        try:
+            spark = service.by_name(connection, body.get("spark", ""))
+            # §35 : la protection s'applique AVANT tout le reste.
+            protection_service.ensure_writable(connection, spark["name"], "port")
+            port = ports_service.publish(
+                connection, app.state.incus, spark,
+                int(body.get("public_port", 0)), int(body.get("target_port", 0)),
+                str(body.get("protocol", "tcp")), str(body.get("note", "")),
+                extra_reserved=app.state.config.reserved_ports, network=network,
+            )
+        except service.NotFound as erreur:
+            raise HTTPException(status_code=404, detail={
+                "error": "not_found", "message": str(erreur)}) from erreur
+        except (ports_service.PortError, ValueError, TypeError) as erreur:
+            raise HTTPException(status_code=409, detail={
+                "error": "port_refused", "message": str(erreur)}) from erreur
+        try:
+            pose = ports_service.apply_devices(
+                connection, app.state.incus, spark["name"], spark["id"])
+            # `applied_at` n'est renseigné QUE si le pilote a réellement été
+            # appelé : un Spark sans instance n'a rien à appliquer, et dater
+            # l'application ferait croire à une publication effective.
+            if pose is not None:
+                ports_service.mark_applied(connection, spark["id"])
+        except ports_service.PortError as erreur:
+            # La ligne est enregistrée ; l'écart reste visible par
+            # `applied_at` plutôt que masqué par un succès simulé (§39.5).
+            _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
+            raise HTTPException(status_code=502, detail={
+                "error": "driver_unavailable",
+                "message": str(erreur),
+                "port": port["public_port"],
+                "note": "Port enregistré mais non appliqué.",
+            }) from erreur
+        _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
+        return ports_service.by_public_port(
+            connection, port["public_port"], network["id"] if network else None)
+
+    def _retirer_port(connection, public_port: int, network: dict | None) -> dict:
+        """Retire un port dans sa portée, puis REFERME (§39.2, §59.4)."""
+        network_id = network["id"] if network else None
+        try:
+            vise = ports_service.by_public_port(connection, public_port, network_id)
+            protection_service.ensure_writable(
+                connection, vise["spark_name"], "port")
+            ports_service.withdraw(connection, public_port, network_id=network_id)
+        except ports_service.PortError as erreur:
+            raise HTTPException(status_code=404, detail={
+                "error": "not_found", "message": str(erreur)}) from erreur
+        try:
+            # On REFERME : la carte des devices est reconstruite sans celui
+            # qu'on vient de retirer (§39.2, §39.4).
+            ports_service.apply_devices(
+                connection, app.state.incus, vise["spark_name"], vise["spark_id"])
+        except ports_service.PortError as erreur:
+            _rattraper_briefing(
+                connection, service.by_name(connection, vise["spark_name"]))
+            raise HTTPException(status_code=502, detail={
+                "error": "driver_unavailable", "message": str(erreur),
+                "note": "Port retiré du registre mais pas encore refermé.",
+            }) from erreur
+        _rattraper_briefing(
+            connection, service.by_name(connection, vise["spark_name"]))
+        return {"withdrawn": public_port, "scope": vise["scope"]}
+
     @app.post("/v1/ports", tags=["ports"], status_code=201)
     def publish_port(body: dict = Body(...)) -> dict:
+        """`scope` absent ou `internet` : le port de la Forge qu'on publie depuis
+        SPK-49 ; le nom d'un réseau privé : un lien privé (§59.4)."""
         with registry() as connection:
-            try:
-                spark = service.by_name(connection, body.get("spark", ""))
-                # §35 : la protection s'applique AVANT tout le reste.
-                protection_service.ensure_writable(connection, spark["name"], "port")
-                port = ports_service.publish(
-                    connection, app.state.incus, spark,
-                    int(body.get("public_port", 0)), int(body.get("target_port", 0)),
-                    str(body.get("protocol", "tcp")), str(body.get("note", "")),
-                    extra_reserved=app.state.config.reserved_ports,
-                )
-            except service.NotFound as erreur:
-                raise HTTPException(status_code=404, detail={
-                    "error": "not_found", "message": str(erreur)}) from erreur
-            except (ports_service.PortError, ValueError, TypeError) as erreur:
-                raise HTTPException(status_code=409, detail={
-                    "error": "port_refused", "message": str(erreur)}) from erreur
-            try:
-                pose = ports_service.apply_devices(
-                    connection, app.state.incus, spark["name"], spark["id"])
-                # `applied_at` n'est renseigné QUE si le pilote a réellement été
-                # appelé : un Spark sans instance n'a rien à appliquer, et dater
-                # l'application ferait croire à une publication effective.
-                if pose is not None:
-                    ports_service.mark_applied(connection, spark["id"])
-            except ports_service.PortError as erreur:
-                # La ligne est enregistrée ; l'écart reste visible par
-                # `applied_at` plutôt que masqué par un succès simulé (§39.5).
-                _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
-                raise HTTPException(status_code=502, detail={
-                    "error": "driver_unavailable",
-                    "message": str(erreur),
-                    "port": port["public_port"],
-                    "note": "Port enregistré mais non appliqué.",
-                }) from erreur
-            _rattraper_briefing(connection, service.by_name(connection, spark["name"]))
-            return ports_service.by_public_port(connection, port["public_port"])
+            scope = str(body.get("scope") or ports_service.INTERNET)
+            network = None
+            if scope != ports_service.INTERNET:
+                try:
+                    network = reseaux_service.by_name(connection, scope)
+                except reseaux_service.ReseauError as erreur:
+                    raise _refus_reseau(erreur) from erreur
+            return _publier_port(connection, body, network)
 
     @app.delete("/v1/ports/{public_port}", tags=["ports"])
     def withdraw_port(public_port: int) -> dict:
+        """Retire un port d'Internet — les liens se retirent par leur réseau (§59.4)."""
         with registry() as connection:
-            try:
-                vise = ports_service.by_public_port(connection, public_port)
-                protection_service.ensure_writable(
-                    connection, vise["spark_name"], "port")
-                ports_service.withdraw(connection, public_port)
-            except ports_service.PortError as erreur:
-                raise HTTPException(status_code=404, detail={
-                    "error": "not_found", "message": str(erreur)}) from erreur
-            try:
-                # On REFERME : la carte des devices est reconstruite sans celui
-                # qu'on vient de retirer (§39.2, §39.4).
-                ports_service.apply_devices(
-                    connection, app.state.incus, vise["spark_name"], vise["spark_id"])
-            except ports_service.PortError as erreur:
-                _rattraper_briefing(
-                    connection, service.by_name(connection, vise["spark_name"]))
-                raise HTTPException(status_code=502, detail={
-                    "error": "driver_unavailable", "message": str(erreur),
-                    "note": "Port retiré du registre mais pas encore refermé.",
-                }) from erreur
-            _rattraper_briefing(
-                connection, service.by_name(connection, vise["spark_name"]))
-            return {"withdrawn": public_port}
+            return _retirer_port(connection, public_port, None)
 
     @app.post("/v1/ingress/reconcile", tags=["ingress"])
     def reconcile_routes() -> dict:

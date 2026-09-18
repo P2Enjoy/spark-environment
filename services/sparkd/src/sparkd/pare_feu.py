@@ -104,6 +104,12 @@ def rendre(bridge: str) -> str:
         "  chain forward {\n"
         "    type filter hook forward priority 10; policy accept;\n"
         "    ct state established,related accept\n"
+        # SPK-111 · §59.3 : un flux qu'Incus a TRADUIT est un lien privé que
+        # le produit a créé — un device proxy en nat=true, dont la traduction
+        # vit dans la table d'Incus. Une seule règle, statique, avant les drop.
+        # MESURÉ le 2026-09-18 : sans elle le drop spn* arrête le lien, avec
+        # elle seul le port lié passe.
+        "    ct status dnat accept\n"
         f'    iifname "{bridge}" oifname "{bridge}" drop\n'
         # SPK-110 · §58.3 : rien n'est routé DEPUIS ni VERS un réseau privé —
         # ni Internet, ni sparkbr0, ni un autre réseau. Entre membres, tout est

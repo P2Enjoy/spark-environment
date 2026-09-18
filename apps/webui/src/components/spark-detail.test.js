@@ -1226,3 +1226,24 @@ test('SPK-110 · détacher se confirme dans le flux, en NOMMANT le Spark et le r
   assert.ok(!/data-confirme-detachement="backoffice"[^>]*bouton--destructif/.test(rendu));
   assert.ok(!/bouton--destructif" data-confirme-detachement/.test(rendu));
 });
+
+// --- SPK-111 · les liens privés dans la section Réseau ------------------------
+
+test('SPK-111 · la section Réseau liste ce que le Spark expose et ce qu’il peut joindre, avec l’adresse', () => {
+  /** @verifies docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.4 · DESIGN_SYSTEM.md §6.19, §14.5 */
+  const spark = { ...SPARK, protected: false };
+  const exposed = [{ public_port: 5432, protocol: 'tcp', target_port: 5432, scope: 'backoffice',
+                     address: '10.78.1.1:5432', note: 'Postgres du CRM' }];
+  const consumable = [{ spark_name: 'postgres-dedie', public_port: 5432, protocol: 'tcp',
+                        scope: 'backoffice', address: '10.78.1.1:5432', note: '' }];
+  const rendu = renderSparkDetail({ status: 'ready', spark, memberships: [], reseaux: [], exposed, consumable });
+  assert.match(rendu, /id="titre-liens-prives">Liens privés/);
+  assert.match(rendu, /Ce Spark expose, à ses membres seulement :/);
+  assert.match(rendu, /5432\/tcp<\/span> dans « backoffice » → port 5432 du Spark, joignable en <span class="technique">10\.78\.1\.1:5432/);
+  assert.match(rendu, /Postgres du CRM/);
+  assert.match(rendu, /Ce Spark peut joindre :/);
+  assert.match(rendu, /href="#\/sparks\/postgres-dedie">postgres-dedie<\/a> · <span class="technique">5432\/tcp<\/span> — en <span class="technique">10\.78\.1\.1:5432<\/span>, par « backoffice »/);
+  assert.ok(!/Aucun lien privé/.test(rendu));
+  const rien = renderSparkDetail({ status: 'ready', spark, memberships: [], reseaux: [] });
+  assert.match(rien, /Aucun lien privé : ce Spark n’expose rien dans un réseau/);
+});

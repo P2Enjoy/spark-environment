@@ -7818,7 +7818,7 @@ Sparks interconnectés ». Le produit dit *réseau privé* : un commutateur inte
   preuve sur la Forge depuis les terminaux ; seed ; SCHEMA, DAT, design system,
   manuel, README à jour ; `@spec` / `@verifies` posés.
 
-### [ ] SPK-111 · Liens privés : un port d'un Spark publié dans un réseau privé
+### [~] SPK-111 · Liens privés : un port d'un Spark publié dans un réseau privé
 
 **Demandé par le responsable le 2026-09-17** : « attacher ce port de ce Spark au
 network de cet autre Spark, ainsi ce dernier peut joindre seulement celui-ci
@@ -7855,13 +7855,22 @@ n'est pas Internet** : un objet de moins, l'unicité par portée.
    2026-09-18 : `scripts/mesures-spk111.sh`, les cinq réponses sont oui
    (`docs/DAT.md` §59.6, `docs/JOURNAL.md`).*
 3. **Registre** — migration `019`, unicité par portée, SCHEMA §6 bis ;
-   opération de déploiement.
-4. **Rendu et gestes** — le device, la règle, `/v1/networks/{id}/links`, `scope`
-   sur `/v1/ports` ; refus nommés ; audit avec portée ; pilote factice.
+   opération de déploiement. *Fait le 2026-09-18 : deux colonnes, `scope` pour
+   l'unicité et `network_id` pour le `RESTRICT` ; OP-24.*
+4. **Rendu et gestes** — le device, la règle, `/v1/networks/{name}/links`,
+   `scope` sur `/v1/ports` ; refus nommés ; audit avec portée ; pilote factice.
+   *Fait le 2026-09-18 : `lnk-<interface>-<port>` en `nat=true`, `ct status
+   dnat accept` rendu et éprouvé à sa place ; les deux pilotes remplacent
+   `pub-*` et `lnk-*` ensemble ; le refus de supprimer un réseau porteur nomme
+   membres et liens.*
 5. **Console** — choix de portée, adresse donnée, facette ; SPK-DS-30 ; E2E,
-   captures ; seed avec un lien et un port laissé hors lien.
+   captures ; seed avec un lien et un port laissé hors lien. *Fait le
+   2026-09-18 : parcours « relier un port », sept captures observées ; seed :
+   le Postgres de `postgres-dedie` dans `backoffice`, et `15432` sur
+   Internet.*
 6. **Forge réelle** — `B` joint `<passerelle>:<port>` ; pas un autre port de
-   `A`, pas son `eth0` ; `A` lit l'adresse de `B` ; manuel.
+   `A`, pas son `eth0` ; `A` lit l'adresse de `B` ; manuel. *Manuel M13
+   complété ; déploiement (OP-24) et preuve depuis les terminaux en attente.*
 
 - Ce que l'unité ne doit PAS casser : les ports publiés d'aujourd'hui — `scope`
   absent vaut Internet, `DELETE /v1/ports/{port}` inchangé ; le refus de

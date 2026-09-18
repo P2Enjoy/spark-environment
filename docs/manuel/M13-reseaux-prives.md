@@ -105,6 +105,37 @@ a encore des membres n'est pas supprimé** : le refus les nomme, et vous les
 détachez d'abord, un par un. Le sous-réseau d'un réseau supprimé revient au
 pool.
 
+## Publier un port dans un réseau privé : le lien privé
+
+Un membre d'un réseau joint les autres membres, et tout ce qu'ils servent.
+Quand vous voulez qu'un Spark **hors du réseau** offre *un seul* de ses ports à
+ses membres — la base de données d'un autre projet, un cache partagé —, vous
+publiez ce port **dans le réseau** : c'est un *lien privé*.
+
+Dossier du Spark qui expose, onglet **Routes**, section *Ports publiés*,
+*Publier un port*. Le premier champ est la **portée** : *Internet* — le port de
+la Forge, joignable de partout, comme avant — ou un réseau privé. L'option d'un
+réseau dit déjà l'adresse que ses membres emploieront.
+
+![Publier un port dans un réseau privé](images/m13-lien.png)
+
+Une fois publié, la ligne du port dit sa portée et l'adresse à employer :
+« 5432/tcp dans « backoffice » → port 5432 du Spark · ses membres le joignent
+en 10.78.1.1:5432 ». Les membres du réseau joignent cette adresse, et rien
+d'autre du Spark exposé : ni ses autres ports, ni son adresse privée, ni son
+propre réseau. Le Spark exposé, lui, voit l'adresse du membre qui le joint —
+utile pour ses journaux et ses listes d'accès.
+
+Dans la section *Réseau* de chaque dossier, sous *Liens privés*, le Spark
+exposant lit ce qu'il expose, et chaque membre lit ce qu'il **peut joindre**,
+avec l'adresse. Le port n'est jamais publié sur Internet pour autant : un port
+n'est unique que dans sa portée, et le `5432` d'un réseau ne dispute rien à
+celui d'Internet.
+
+Un lien se retire comme un port, depuis la section *Ports publiés* : les
+membres cessent de le joindre immédiatement, rien n'est détruit. Un réseau qui
+porte encore un lien ne se supprime pas : le refus le nomme.
+
 ## Quand la cellule ne se configure pas seule
 
 Le produit configure l'interface dans la cellule par `systemd-networkd` — c'est
@@ -118,5 +149,6 @@ reçue sera celle que le dossier affiche : elle est réservée au Spark.
 
 Chaque geste laisse une entrée dans le journal de la Forge (voir
 [M12](M12-annexes.md)) : `network.create`, `network.attach`, `network.detach`,
-`network.delete`. Un refus de suppression y figure aussi, comme un refus, avec
-les membres qui restaient.
+`network.delete` ; un lien s'y lit comme un port, `port.publish` et
+`port.withdraw`, avec sa portée. Un refus de suppression y figure aussi, comme
+un refus, avec les membres et les liens qui restaient.

@@ -13475,7 +13475,8 @@ GET    /v1/sparks/{name}/networks              les adhésions d'un Spark
 
 - Côté Forge, un catalogue **Réseaux privés**, dans la colonne principale sous
   la carte des cœurs : nom, sous-réseau, interface, note, membres liés à leurs
-  dossiers ; création par modale ; suppression confirmée, avec son refus nommé.
+  dossiers, et le compte des liens privés qu'il porte (§59) ; création par
+  modale ; suppression confirmée, avec son refus nommé — membres et liens.
   Le catalogue compte les sous-réseaux attribués sur le pool — « n attribués
   sur 255 (10.78.0.0/16) ».
 - Au dossier du Spark, facette *Infos*, la section **Réseau** de SPK-109 porte
@@ -13592,10 +13593,16 @@ Migration `019_portee_port_publie` ; `docs/SCHEMA.md` §6 bis complété à
 l'écriture.
 
 ```
-published_port + scope TEXT NOT NULL DEFAULT 'internet'
-                 -- 'internet' | id d'un private_network (FK, ON DELETE RESTRICT)
+published_port + scope      TEXT NOT NULL DEFAULT 'internet'   -- 'internet' | id du réseau : la clé d'unicité
+               + network_id TEXT REFERENCES private_network(id) ON DELETE RESTRICT
+                 CHECK ((scope = 'internet' AND network_id IS NULL) OR scope = network_id)
                UNIQUE (scope, public_port)     remplace UNIQUE (public_port)
 ```
+
+Deux colonnes à l'écriture de la migration, pour deux garanties qu'une seule
+ne portait pas : `scope` non nul pour que `UNIQUE` compte Internet aussi —
+SQLite ne compare pas les `NULL` —, `network_id` pour le `RESTRICT` de la base
+(`docs/SCHEMA.md` §6 bis).
 
 Un port n'est unique que **dans sa portée** : le `5432` d'un réseau ne dispute
 rien au `5432` d'un autre, ni au `5432` d'Internet. Les ports réservés du §39.5
@@ -13641,15 +13648,21 @@ chain forward {
 ### 59.4 Les gestes
 
 ```
-GET    /v1/networks/{id}/links
-POST   /v1/networks/{id}/links   { spark, public_port, target_port, protocol, note }
-DELETE /v1/networks/{id}/links/{public_port}
+GET    /v1/networks/{name}/links
+POST   /v1/networks/{name}/links   { spark, public_port, target_port, protocol, note }
+DELETE /v1/networks/{name}/links/{public_port}
+GET    /v1/sparks/{name}/networks  + exposed, consumable
 ```
 
-La même table que `/v1/ports`, dont `POST` gagne `scope` (défaut `internet`,
-donc inchangé pour qui l'appelle aujourd'hui). Refus : port pris dans cette
-portée, en nommant le Spark ; port réservé ; réseau inconnu ; Spark protégé
-avant tout le reste. Le journal d'audit de la publication porte la portée.
+La même table que `/v1/ports`, dont `POST` gagne `scope` — `internet` par
+défaut, donc inchangé pour qui l'appelle aujourd'hui, ou le **nom** d'un réseau
+privé — et dont chaque ligne rend sa portée par son nom, et pour un lien
+l'adresse `<passerelle>:<port>` que les membres emploient. `DELETE
+/v1/ports/{port}` reste celui d'Internet ; un lien se retire par son réseau.
+Refus : port pris dans cette portée, en nommant le Spark et le réseau ; port
+réservé — ceux de la Forge, plus `53` et `67` ; réseau inconnu, `404` ; Spark
+protégé avant tout le reste. Le journal d'audit de la publication et du
+retrait porte la portée.
 
 À l'écran, le geste *Publier un port* du §39.3 gagne un choix de portée —
 *Internet* ou un réseau privé — et dit, pour un réseau, l'adresse que les

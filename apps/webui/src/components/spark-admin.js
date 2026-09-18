@@ -60,6 +60,8 @@ export const ADMIN_VIDE = {
             snapshot: '', password: '',
             // SPK-49 · §39 : la publication d'un port de la Forge.
             public_port: '', target_port: '', protocol: 'tcp', port_note: '',
+            // SPK-111 · §59.4 : la portée du port — Internet, ou un réseau privé.
+            scope: 'internet',
             // SPK-50 · §38.6 : la recette choisie, sa zone, et ses paramètres.
             recette: '', recette_zone: '', recette_params: {},
             // SPK-110 · §58.5 : le réseau privé choisi dans la modale d'attachement.
@@ -887,29 +889,41 @@ function nomAEcrire(domaine, zone) {
  * automatique sans rien gagner. Le produit ne l'interdit pas ; il le dit.
  */
 export function renderPortsPanel(spark, ports = [], ui = ADMIN_VIDE,
-                                 reserved = []) {
+                                 reserved = [], reseaux = []) {
   const lignes = ports.length
     ? `<ul class="liste-administrable">${ports.map((p) => {
         const attente = p.applied_at
           ? ''
           : ` <span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>non appliqué</span>`;
-        const confirme = ui.confirming?.kind === 'port' && ui.confirming.id === String(p.public_port)
+        // SPK-111 · §59.4 : un port n'est unique que DANS sa portée — la clé
+        // d'un geste porte les deux, `internet:2525` ou `backoffice:5432`.
+        const portee = p.scope && p.scope !== 'internet' ? p.scope : 'internet';
+        const lien = portee !== 'internet';
+        const cle = `${portee}:${p.public_port}`;
+        const confirme = ui.confirming?.kind === 'port' && ui.confirming.id === cle
           ? `<div class="confirmation" role="group" aria-label="Confirmer le retrait">
-               <p><strong>Retirer le port ${echapper(p.public_port)} ?</strong></p>
-               <p class="confirmation__consequence">Ce port cessera d’être joignable
-               depuis l’extérieur immédiatement. Le Spark et ses données ne sont pas
-               touchés.</p>
+               <p><strong>Retirer le port ${echapper(p.public_port)}${lien ? ` de « ${echapper(portee)} »` : ''} ?</strong></p>
+               <p class="confirmation__consequence">${lien
+                 ? 'Les membres du réseau cesseront de le joindre immédiatement.'
+                 : 'Ce port cessera d’être joignable depuis l’extérieur immédiatement.'}
+               Le Spark et ses données ne sont pas touchés.</p>
                <p class="confirmation__actions">
-                 <button type="button" class="bouton bouton--destructif" data-confirme-port="${echapper(p.public_port)}">Retirer le port</button>
+                 <button type="button" class="bouton bouton--destructif" data-confirme-port="${echapper(cle)}">Retirer le port</button>
                  <button type="button" class="bouton" data-annule="port">Annuler</button>
                </p>
              </div>`
           : '';
-        return `<li><span class="technique">${echapper(p.public_port)}/${echapper(p.protocol)}</span>` +
-          ` de la Forge → port ${echapper(p.target_port)} du Spark${attente}` +
-          (p.note ? ` <span class="note">${echapper(p.note)}</span>` : '') +
+        const ou = lien ? `dans « ${echapper(portee)} »` : 'de la Forge';
+        // Un lien dit l'adresse que ses membres emploient (§59.4) : c'est la
+        // seule chose qu'ils ont à connaître.
+        const adresse = lien && p.address
+          ? `${p.note ? ' ·' : ''} <span class="note">ses membres le joignent en <span class="technique">${echapper(p.address)}</span></span>`
+          : '';
+        return `<li><span><span class="technique">${echapper(p.public_port)}/${echapper(p.protocol)}</span>` +
+          ` ${ou} → port ${echapper(p.target_port)} du Spark${attente}` +
+          (p.note ? ` <span class="note">${echapper(p.note)}</span>` : '') + adresse + '</span>' +
           `<span class="actions-ligne">` +
-          `<button type="button" class="bouton bouton--compact" data-retire-port="${echapper(p.public_port)}">Retirer</button></span>` +
+          `<button type="button" class="bouton bouton--compact" data-retire-port="${echapper(cle)}">Retirer</button></span>` +
           `${confirme}</li>`;
       }).join('')}</ul>`
     : '<p class="absence">Aucun port de la Forge ne mène à ce Spark.</p>';
@@ -932,11 +946,22 @@ export function renderPortsPanel(spark, ports = [], ui = ADMIN_VIDE,
          ci-dessus — elle donne le TLS sans rien demander. Ce geste sert à ce qui
          ne parle pas HTTP : messagerie, base de données, SSH.</p>
          <div class="champ">
+           <label for="port-portee">Portée</label>
+           <select class="controle" id="port-portee" name="scope" aria-describedby="port-portee-aide">
+             <option value="internet"${!ui.values.scope || ui.values.scope === 'internet' ? ' selected' : ''}>Internet — le port de la Forge, joignable de partout</option>
+             ${reseaux.map((r) => `<option value="${echapper(r.name)}"${ui.values.scope === r.name ? ' selected' : ''}>Réseau privé « ${echapper(r.name)} » — ses membres joignent ${echapper(r.gateway ?? '')}:&lt;port&gt;</option>`).join('')}
+           </select>
+           <p class="champ__aide" id="port-portee-aide">Dans un réseau privé, seuls ses membres
+           joignent le port, à l’adresse de la Forge sur ce réseau : rien n’est publié sur
+           Internet. C’est un <em>lien privé</em>.</p>
+         </div>
+         <div class="champ">
            <label for="port-public">Port de la Forge</label>
            <input class="controle" id="port-public" name="public_port" type="number"
                   min="1" max="65535" value="${echapper(ui.values.public_port)}">
-           <p class="champ__aide">Un port de la Forge appartient à la <strong>machine</strong>,
-           pas au Spark : le premier qui le prend le prend.</p>
+           <p class="champ__aide">Un port est unique dans sa <strong>portée</strong> : sur Internet,
+           il appartient à la <strong>machine</strong>, pas au Spark — le premier qui le prend le
+           prend ; dans un réseau privé, à ce réseau.</p>
            ${interdits}
          </div>
          <div class="champ">

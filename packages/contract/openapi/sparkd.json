@@ -1254,6 +1254,159 @@
         ]
       }
     },
+    "/v1/networks/{name}/links": {
+      "get": {
+        "description": "Les liens qu'un réseau porte, avec l'adresse que ses membres emploient.",
+        "operationId": "list_links_v1_networks__name__links_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Links V1 Networks  Name  Links Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Links",
+        "tags": [
+          "networks"
+        ]
+      },
+      "post": {
+        "description": "Publie un port d'un Spark DANS ce réseau — la même table que\n`/v1/ports`, la portée en plus (§59.4).",
+        "operationId": "publish_link_v1_networks__name__links_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Publish Link V1 Networks  Name  Links Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish Link",
+        "tags": [
+          "networks"
+        ]
+      }
+    },
+    "/v1/networks/{name}/links/{public_port}": {
+      "delete": {
+        "operationId": "withdraw_link_v1_networks__name__links__public_port__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "public_port",
+            "required": true,
+            "schema": {
+              "title": "Public Port",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Withdraw Link V1 Networks  Name  Links  Public Port  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw Link",
+        "tags": [
+          "networks"
+        ]
+      }
+    },
     "/v1/networks/{name}/members": {
       "post": {
         "operationId": "attach_member_v1_networks__name__members_post",
@@ -1455,6 +1608,7 @@
         ]
       },
       "post": {
+        "description": "`scope` absent ou `internet` : le port de la Forge qu'on publie depuis\nSPK-49 ; le nom d'un réseau privé : un lien privé (§59.4).",
         "operationId": "publish_port_v1_ports_post",
         "requestBody": {
           "content": {
@@ -1500,6 +1654,7 @@
     },
     "/v1/ports/{public_port}": {
       "delete": {
+        "description": "Retire un port d'Internet — les liens se retirent par leur réseau (§59.4).",
         "operationId": "withdraw_port_v1_ports__public_port__delete",
         "parameters": [
           {
@@ -2425,7 +2580,7 @@
     },
     "/v1/sparks/{name}/networks": {
       "get": {
-        "description": "Les adhésions d'UN Spark, pour son dossier (§58.5).",
+        "description": "Les adhésions d'UN Spark, pour son dossier (§58.5) ; les liens qu'il\nEXPOSE dans un réseau privé, et ceux qu'il peut JOINDRE depuis les\nréseaux dont il est membre, avec l'adresse à employer (§59.4).",
         "operationId": "spark_networks_v1_sparks__name__networks_get",
         "parameters": [
           {

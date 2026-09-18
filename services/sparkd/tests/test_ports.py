@@ -278,3 +278,139 @@ def test_api_un_spark_inconnu_rend_404(tmp_path):
     r = client.post("/v1/ports", json={
         "spark": "fantome", "public_port": 2525, "target_port": 25})
     assert r.status_code == 404
+
+
+# --- les liens privés : la portée d'un port publié (SPK-111, §59) ------------
+
+
+def poser_reseau(db, ident, nom, cidr):
+    db.execute(
+        "INSERT INTO private_network (id, name, cidr, note, applied_at, created_at)"
+        " VALUES (?, ?, ?, '', 'x', 'x')", (ident, nom, cidr))
+    return {"id": ident, "name": nom, "cidr": cidr}
+
+
+def test_un_lien_prive_pose_un_device_proxy_nat_sur_la_passerelle_du_reseau(db, pilote):
+    """@verifies docs/BACKLOG.md#SPK-111 · docs/DAT.md §59.3 (nat=true, écoute
+    sur la passerelle, connecte sur l'eth0 — MESURÉ le 2026-09-18) · §59.4
+    (l'adresse que les membres emploient est rendue)"""
+    spark = poser_spark(db, "S1", "pg", applique=True)
+    pilote.created["pg"] = {"name": "pg", "devices": {
+        "eth0": {"type": "nic"}, "spn1": {"type": "nic"}}}
+    reseau = poser_reseau(db, "N1", "backoffice", "10.78.1.0/24")
+    lien = ports.publish(db, pilote, spark, 5432, 5432, network=reseau)
+    assert lien["scope"] == "backoffice" and lien["interface"] == "spn1"
+    assert lien["gateway"] == "10.78.1.1" and lien["address"] == "10.78.1.1:5432"
+    ports.apply_devices(db, pilote, "pg", "S1")
+    devices = pilote.created["pg"]["devices"]
+    assert devices["lnk-spn1-5432"] == {
+        "type": "proxy", "nat": "true",
+        "listen": "tcp:10.78.1.1:5432", "connect": "tcp:10.77.0.16:5432"}
+    assert "spn1" in devices and "eth0" in devices, "les NIC ne sont jamais touchées"
+    ports.withdraw(db, 5432, network_id="N1")
+    ports.apply_devices(db, pilote, "pg", "S1")
+    assert "lnk-spn1-5432" not in pilote.created["pg"]["devices"]
+    assert "spn1" in pilote.created["pg"]["devices"]
+
+
+def test_l_unicite_d_un_port_est_par_PORTEE_et_vient_de_la_base(db, pilote):
+    """@verifies docs/DAT.md §59.2 · docs/SCHEMA.md §6 bis"""
+    spark = poser_spark(db, "S1", "pg")
+    autre = poser_spark(db, "S2", "api", adresse="10.77.0.17")
+    reseau = poser_reseau(db, "N1", "backoffice", "10.78.1.0/24")
+    labo = poser_reseau(db, "N2", "labo", "10.78.2.0/24")
+    ports.publish(db, pilote, spark, 5432, 5432)                   # Internet
+    ports.publish(db, pilote, spark, 5432, 5432, network=reseau)   # ne dispute rien à Internet
+    ports.publish(db, pilote, autre, 5432, 5432, network=labo)     # ni à un autre réseau
+    with pytest.raises(ports.PortError) as refus:
+        ports.publish(db, pilote, autre, 5432, 5432, network=reseau)
+    assert "pg" in str(refus.value) and "backoffice" in str(refus.value)
+    with pytest.raises(sqlite3.IntegrityError):
+        db.execute("INSERT INTO published_port (id, public_port, spark_id, target_port,"
+                   " created_at, scope, network_id) VALUES ('x', 5432, 'S2', 1, 'x', 'N1', 'N1')")
+    # la cohérence entre la portée et le réseau est un CHECK de la base
+    with pytest.raises(sqlite3.IntegrityError):
+        db.execute("INSERT INTO published_port (id, public_port, spark_id, target_port,"
+                   " created_at, scope, network_id) VALUES ('y', 9999, 'S2', 1, 'x', 'internet', 'N1')")
+    assert [(p["scope"], p["public_port"]) for p in ports.listing(db)] == [
+        ("internet", 5432), ("backoffice", 5432), ("labo", 5432)]
+    assert ports.by_public_port(db, 5432)["scope"] == "internet"
+    assert ports.by_public_port(db, 5432, "N2")["spark_name"] == "api"
+    with pytest.raises(ports.PortError):
+        ports.by_public_port(db, 5432, "N3")
+
+
+def test_les_reserves_de_la_Forge_le_restent_dans_un_reseau_et_le_resolveur_ajoute_les_siens(db, pilote):
+    """@verifies docs/DAT.md §59.2"""
+    spark = poser_spark(db, "S1", "pg")
+    reseau = poser_reseau(db, "N1", "backoffice", "10.78.1.0/24")
+    for port, mot in ((443, "proxy"), (53, "résolveur"), (67, "DHCP")):
+        with pytest.raises(ports.PortError) as refus:
+            ports.publish(db, pilote, spark, port, port, network=reseau)
+        assert mot in str(refus.value), f"{port} : le refus nomme ce qui le tient"
+    assert 53 not in ports.reserved() and 53 in ports.reserved(in_network=True)
+
+
+def test_le_journal_porte_la_portee_et_la_suppression_du_spark_emporte_ses_liens(db, pilote):
+    """@verifies docs/DAT.md §59.2 (cascade), §59.4 (l'audit porte la portée)"""
+    spark = poser_spark(db, "S1", "pg")
+    reseau = poser_reseau(db, "N1", "backoffice", "10.78.1.0/24")
+    ports.publish(db, pilote, spark, 5432, 5432, network=reseau)
+    entree = db.execute(
+        "SELECT message, payload FROM audit_log WHERE action = 'port.publish'").fetchone()
+    assert "dans le réseau « backoffice »" in entree["message"]
+    assert '"scope": "backoffice"' in entree["payload"]
+    db.execute("DELETE FROM spark WHERE id = 'S1'")
+    assert db.execute("SELECT COUNT(*) FROM published_port").fetchone()[0] == 0
+
+
+def test_api_liens_publier_lister_consommer_retirer(tmp_path):
+    """@verifies docs/DAT.md §59.4 (les gestes et leurs refus), §58.4 (un
+    réseau porteur ne se supprime pas)"""
+    client = _client(tmp_path)
+    assert client.post("/v1/sparks", json={
+        "name": "api", "image": "images:debian/13", "cpu_mode": "shared",
+        "cpu_reservation": 0.5, "memory_bytes": GIO, "storage_bytes": GIO,
+        "network_bps": 10_000_000}).status_code in (201, 202)
+    assert client.post("/v1/networks", json={"name": "backoffice"}).status_code == 201
+    assert client.post("/v1/networks/backoffice/members", json={"spark": "api"}).status_code == 201
+
+    lien = client.post("/v1/networks/backoffice/links", json={
+        "spark": "crm", "public_port": 5432, "target_port": 5432, "note": "Postgres"})
+    assert lien.status_code == 201, lien.text
+    assert lien.json()["scope"] == "backoffice" and lien.json()["address"] == "10.78.1.1:5432"
+    assert client.get("/v1/networks/backoffice/links").json()["links"][0]["spark_name"] == "crm"
+    assert client.get("/v1/networks/backoffice").json()["links"] == 1
+
+    # La même table, par `/v1/ports` avec `scope` ; sans `scope`, Internet.
+    assert client.post("/v1/ports", json={
+        "spark": "crm", "public_port": 5432, "target_port": 5432}).status_code == 201
+    doublon = client.post("/v1/ports", json={
+        "spark": "api", "public_port": 5432, "target_port": 5432, "scope": "backoffice"})
+    assert doublon.status_code == 409 and "crm" in doublon.json()["detail"]["message"]
+    assert client.post("/v1/ports", json={
+        "spark": "crm", "public_port": 8080, "target_port": 80, "scope": "inconnu"}).status_code == 404
+    assert [(p["scope"], p["public_port"]) for p in client.get("/v1/ports").json()["ports"]] == [
+        ("internet", 5432), ("backoffice", 5432)]
+
+    # Le membre voit ce qu'il peut joindre ; l'exposé voit ce qu'il expose.
+    dossier = client.get("/v1/sparks/api/networks").json()
+    assert [(l["spark_name"], l["address"]) for l in dossier["consumable"]] == [("crm", "10.78.1.1:5432")]
+    assert dossier["exposed"] == []
+    expose = client.get("/v1/sparks/crm/networks").json()
+    assert [l["address"] for l in expose["exposed"]] == ["10.78.1.1:5432"]
+
+    # Un réseau porteur ne se supprime pas : le refus nomme le lien, et le journal le garde.
+    refus = client.delete("/v1/networks/backoffice")
+    assert refus.status_code == 409 and "5432/tcp de « crm »" in refus.json()["detail"]["message"]
+    assert any(e["action"] == "network.delete" and e["result"] == "denied"
+               for e in client.get("/v1/audit?limit=20").json()["entries"])
+
+    # Retirer le port d'Internet ne touche pas le lien ; le lien se retire par son réseau.
+    assert client.delete("/v1/ports/5432").json() == {"withdrawn": 5432, "scope": "internet"}
+    assert client.get("/v1/networks/backoffice").json()["links"] == 1
+    assert client.delete("/v1/ports/5432").status_code == 404
+    assert client.delete("/v1/networks/backoffice/links/5432").json()["scope"] == "backoffice"
+    assert client.get("/v1/networks/backoffice/links").json()["links"] == []
+    assert client.delete("/v1/networks/backoffice/members/api").status_code == 200
+    assert client.delete("/v1/networks/backoffice").status_code == 200

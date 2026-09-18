@@ -12318,3 +12318,75 @@ rend juste après `ct state established,related accept`, avant les `drop` des
 §57 et §58 ; le device s'appelle `lnk-<interface>-<port>`, `nat=true`, écoute
 sur la passerelle du réseau, connecte sur l'`eth0` de la cellule ; `udp` est
 accepté au même titre que `tcp`.
+
+## 2026-09-18 · SPK-111 — le code : un objet de moins, deux colonnes de plus
+
+**Le modèle.** Le §59.2 disait une colonne, `scope`, clé étrangère vers le
+réseau. À l'écriture de la migration, une seule ne portait pas les deux
+garanties : `UNIQUE (scope, public_port)` doit compter Internet aussi — et
+SQLite ne compare pas les `NULL` —, tandis que le `RESTRICT` veut une vraie
+clé étrangère, qui ne peut pas valoir « internet ». Donc `scope`, non nul, clé
+d'unicité, et `network_id`, clé étrangère, liés par un `CHECK`. La table est
+reconstruite — SQLite ne modifie pas un `UNIQUE` en place —, les ports
+recopiés tels quels : sans portée explicite, un port vaut Internet, et rien ne
+change pour lui. Le `@down` retire les liens avant de rendre l'ancienne forme,
+et OP-24 le dit.
+
+**Le rendu.** Le device s'appelle `lnk-<interface>-<port>`, `nat=true`, écoute
+sur la passerelle du réseau et connecte sur l'`eth0` du Spark — exactement ce
+que la mesure du matin a posé à la main. Les deux pilotes remplacent `pub-*`
+et `lnk-*` ensemble, comme une seule famille : c'est ce qui permet au retrait
+de refermer réellement. La règle `ct status dnat accept` se rend à sa place —
+après l'établi, avant les drop — et une preuve regarde la place, pas seulement
+la présence. Les réservés de la Forge le restent dans un réseau, `53` et `67`
+s'y ajoutent, et le refus nomme ce qui tient le port.
+
+**Le refus de supprimer un réseau** nomme désormais membres ET liens dans une
+seule phrase : l'épreuve API a montré que vérifier les membres d'abord cachait
+le lien derrière, et qu'un exploitant aurait détaché tout le monde pour
+découvrir ensuite qu'il restait un port.
+
+**La console** ne gagne pas d'objet : la modale *Publier un port* gagne une
+portée en tête, dont l'option dit déjà l'adresse que les membres emploieront ;
+les lignes disent leur portée ; la clé d'un geste la porte — `internet:2525`,
+`backoffice:5432` —, parce qu'un port n'est unique que dans sa portée et que
+deux lignes peuvent porter le même numéro ; la section *Réseau* liste ce que
+le Spark expose et ce qu'il peut joindre, avec l'adresse ; le catalogue compte
+les liens. Le doublon persiste maintenant les devices de publication : la
+première passe de l'épreuve E2E lisait un fichier d'état où le device n'était
+jamais écrit, et c'est l'épreuve qui l'a dit.
+
+**Vérifié sur le doublon** : 1 458 preuves sparkd, 314 de composant, un
+parcours E2E, sept captures observées aux deux formats ; `make manuel` a
+produit `m13-lien`. **Ce qui reste** : déployer (OP-24), puis la preuve depuis
+les terminaux — un service dans `essai-a`, son port publié dans le réseau
+depuis l'onglet Routes, `essai-b` le joint par la passerelle et rien d'autre,
+`essai-a` lit l'adresse d'`essai-b`.
+
+## 2026-09-18 · La campagne entière, deux fois, et ce qu'elle a dit du lot 6
+
+Avant de committer SPK-111, la campagne E2E complète — 138 parcours, quatre
+minutes sous le plafond, ce qui tient dans le délai d'un seul lancement — au
+lieu des seuls parcours du lot. Première passe : 133 verts, 5 rouges. Deux
+étaient du lot, ou l'exposaient :
+
+- **« isoler le parc »** (SPK-109) supposait le parc du seed intact : dans la
+  campagne, un parcours antérieur a supprimé `orphelin`, et l'issue devenait le
+  vert d'un rattrapage sans échec — que le parcours n'attendait pas. Il LIT
+  désormais l'état que l'écran a lu (`/v1/forge/isolation`) et en déduit
+  l'issue, les compteurs et le journal, au lieu de nombres figés ;
+- **« les trois degrés s'atteignent au clavier »** échouait sur la Forge : après
+  une tabulation vers l'onglet *Pools*, chaque repeinture — et l'écran de la
+  Forge en a plusieurs, une par lecture qui aboutit, une de plus depuis le
+  catalogue des réseaux — rendait le focus à… la destination *Forge* de la
+  barre latérale, qui porte le MÊME href `#/forge`. L'identité de focus était
+  `a[href]` seul, et `querySelector` rend le premier. Elle porte maintenant la
+  zone (`nav.onglets`, `aside.laterale`) ; le parcours tient dans la campagne.
+
+Trois autres sont rouges **sur l'arbre committé aussi**, le lot retiré du plan
+de travail par un `stash` le temps de les rejouer : l'onglet Alertes, l'alerte
+hors bande d'un geste sensible, et la révocation malgré le gel — qui en
+découle. Consignés au rapport d'incohérences, pas résolus : hors du lot.
+Seconde passe : 134 verts ; un quatrième rouge, « un fournisseur qui REFUSE »,
+qui lit l'état de chargement avant le refus, vert seul et vert à la première
+passe — une course du parcours, consignée aussi.
