@@ -13613,8 +13613,12 @@ lnk-spn42-5432: { type: proxy, nat: "true",
                   connect: tcp:<eth0 du Spark>:5432 }
 ```
 
-En mode `nat`, Incus pose lui-même la traduction d'adresse dans **sa** table ;
-le flux traverse `prerouting` puis `forward`, jamais `input`. **Une seule règle
+En mode `nat`, Incus pose lui-même la traduction d'adresse dans **sa** table
+— **mesuré le 2026-09-18** : trois chaînes dans `table inet incus`,
+`prert.<cellule>.<device>` et `out.<…>` qui font le `dnat ip to
+<eth0>:<port>`, et `pstrt.<…>` qui ne `masquerade` que le rebouclage depuis la
+cellule exposée elle-même — ; le flux traverse `prerouting` puis `forward`,
+jamais `input` ; la réponse revient par `forward` en `established`. **Une seule règle
 statique** de l'installateur suffit, avant les `drop` du §57 et du §58 : « tout
 flux qu'Incus a traduit est un lien que le produit a créé ». Le mode conserve
 l'**adresse source** du membre — décision du responsable : le Spark exposé voit
@@ -13666,6 +13670,16 @@ de la Forge : c'est le §56. `udp` est accepté comme au §39, et se mesure.
 `nat=true` écoutant sur l'adresse de la Forge d'un bridge privé traduit-il bien
 le flux, `ct status dnat` le voit-il en `forward`, et le Spark exposé lit-il
 l'adresse du membre ?
+
+**Mesurée le 2026-09-18** (`scripts/mesures-spk111.sh`, réseau et adhésion
+créés par le produit, devices posés à la main sur `essai-a`, `essai-b` membre
+en `10.78.1.16`) : **sans** `ct status dnat accept`, `essai-b → 10.78.1.1:8080`
+est refusé — le `drop` du §58 en `forward` tient ; la règle insérée, `200` ;
+`10.78.1.1:8081` (port non lié), `10.77.0.18:8080` (l'`eth0` de A) et
+`10.78.1.1:22` (le `sshd` de la Forge par `spn1`) restent fermés ; le journal
+du serveur dans A lit **`10.78.1.16`**, l'adresse du membre ; en `udp`, `ping`
+arrive « de 10.78.1.16 » et `pong` revient. Tout défait, la Forge relue comme
+avant : trois `drop`, zéro règle `dnat`, aucun bridge `spn`.
 
 - **Unitaire** : rendu du device ; unicité par portée ; ports réservés par
   portée ; rendu de la chaîne assemblée.

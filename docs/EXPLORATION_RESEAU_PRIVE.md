@@ -363,8 +363,10 @@ locataire ; la Forge est traitée comme une Forge de validation par ce choix :
 5. `security.ipv4_filtering=true` ferme-t-il l'usurpation d'adresse ? — **fait :
    oui**, à chaud, 0 paquet usurpé sur 3 ;
 6. un device `proxy` en `nat=true` écoutant sur l'adresse de la Forge d'un bridge
-   privé : le flux est-il bien traduit, et `ct status dnat` le voit-il ? — dû
-   avant SPK-111.
+   privé : le flux est-il bien traduit, et `ct status dnat` le voit-il ? —
+   **fait le 2026-09-18 : oui** ; sans la règle le `drop` du §58 tient, avec
+   elle seul le port lié passe, le Spark exposé lit l'adresse du membre, et
+   `udp` fait pareil (`docs/DAT.md` §59.6).
 
 ## 7. Ordre retenu par le responsable le 2026-09-17
 

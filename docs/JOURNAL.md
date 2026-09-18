@@ -12274,3 +12274,47 @@ préflight 15 verts, six entrées `network.*` en `ok`. SPK-110 close.
 Le cas d'un conteneur Docker qui résout `<spark>.<réseau>` par le résolveur
 de sa cellule n'est **pas mesuré** : le manuel dit de le vérifier, et donne
 l'adresse en repli.
+
+## 2026-09-18 · SPK-111 — la mesure 6 : oui sur toute la ligne
+
+**Le montage**, par le produit autant que possible : réseau `mesure` créé par
+l'API de la Forge (`10.78.1.0/24`, `spn1`), `essai-b` attachée par l'API
+(`10.78.1.16`, configurée par networkd) ; dans `essai-a`, un `http.server` sur
+8080 ; puis, à la main, ce que SPK-111 rendra : `incus config device add
+essai-a lnk-mesure-8080 proxy nat=true listen=tcp:10.78.1.1:8080
+connect=tcp:10.77.0.18:8080`. Les cellules n'ont ni `curl` ni `nc` : les sondes
+sont en python.
+
+**Ce qu'Incus pose** dans `table inet incus`, lu au lieu d'être supposé :
+`prert.essai-a.lnk-mesure-8080` et `out.…` — `ip daddr 10.78.1.1 tcp dport 8080
+dnat ip to 10.77.0.18:8080` — et `pstrt.…`, qui ne `masquerade` que le
+rebouclage depuis A elle-même (`ip saddr 10.77.0.18 ip daddr 10.77.0.18`). Pour
+un membre, l'adresse source est donc conservée : c'est ce que le responsable a
+demandé.
+
+**Les réponses :**
+
+1. **sans** `ct status dnat accept`, `essai-b → 10.78.1.1:8080` échoue — le
+   `drop` `iifname "spn*"` du §58 en `forward` tient, exactement comme prévu ;
+2. la règle insérée en tête du `forward`, `200` ;
+3. et **seul ce flux** : `10.78.1.1:8081` (non lié), `10.77.0.18:8080` (l'`eth0`
+   de A, isolation) et `10.78.1.1:22` (le `sshd` de la Forge par `spn1`) restent
+   fermés ;
+4. le journal du serveur dans A lit `10.78.1.16 - - "GET / HTTP/1.1" 200` :
+   **l'adresse du membre**, pas celle de la Forge ;
+5. `udp`, même montage sur 9090 : A reçoit « ping de 10.78.1.16 », B reçoit
+   `pong`.
+
+**Tout défait** : devices retirés, règle provisoire retirée par son handle,
+adhésion et réseau défaits par l'API, Forge relue — trois `drop`, zéro `dnat`,
+aucun bridge `spn`, `essai-a` sans device ni serveur. Une leçon de script au
+passage : `pkill -f 'http.server 8080'` tue aussi le `sh -c` qui le porte,
+parce que sa ligne de commande contient le motif ; ancrer le motif sur le
+début du nom du processus règle la chose, et le nettoyage a été vérifié à la
+main.
+
+**Ce que la mesure fixe pour le code** : la ligne `ct status dnat accept` se
+rend juste après `ct state established,related accept`, avant les `drop` des
+§57 et §58 ; le device s'appelle `lnk-<interface>-<port>`, `nat=true`, écoute
+sur la passerelle du réseau, connecte sur l'`eth0` de la cellule ; `udp` est
+accepté au même titre que `tcp`.

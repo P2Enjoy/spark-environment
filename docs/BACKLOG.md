@@ -7851,7 +7851,9 @@ n'est pas Internet** : un objet de moins, l'unicité par portée.
 
 1. **Documentation seule** — DAT §59, §39.2 précisé, cette unité, journal,
    changelog. *Fait, et committé avant le code.*
-2. **Mesure** — celle du §59.6, sur cellules d'essai ; consignée.
+2. **Mesure** — celle du §59.6, sur cellules d'essai ; consignée. *Fait le
+   2026-09-18 : `scripts/mesures-spk111.sh`, les cinq réponses sont oui
+   (`docs/DAT.md` §59.6, `docs/JOURNAL.md`).*
 3. **Registre** — migration `019`, unicité par portée, SCHEMA §6 bis ;
    opération de déploiement.
 4. **Rendu et gestes** — le device, la règle, `/v1/networks/{id}/links`, `scope`
