@@ -12490,3 +12490,27 @@ renvoyer vers `https://` — `crm` et `devis` le font. Consigné au §18.3 comme
 l'état réel, et ouvert en SPK-113, distincte parce qu'elle change le
 comportement public de toutes les routes de la Forge et demande une mesure
 d'abord.
+
+## 2026-09-23 · SPK-114 — écarter une ligne proposée ne la refuse pas
+
+**Décision du responsable**, pendant SPK-112 : une ligne non cochée dans la
+relecture d'une proposition — typiquement une valeur demandée qu'il n'a pas sous
+la main — ne doit pas disparaître de la cellule ; seules une acceptation ou un
+refus explicites la retirent.
+
+**Ce qu'elle remplace** : le §55.5 de SPK-105 posait qu'une acceptation
+partielle vide tout le fichier, « ce qui n'a pas été retenu a été refusé, pas
+ajourné », pour éviter que des lignes écartées reviennent à chaque ouverture.
+À l'usage, écarter voulait dire « pas maintenant », et vider faisait croire à
+l'auteur que sa demande était rejetée.
+
+**Choix de conception, dans le sens de la décision** : la case *Retenir* garde
+deux sens — accepter maintenant ou laisser attendre — et « Tout refuser » reste
+le seul refus ; refuser une partie se fait en deux temps. Un troisième état par
+ligne (accepter / attendre / refuser) a été écarté pour ne pas alourdir un
+tableau déjà dense ; il reste possible si le responsable le demande. Le serveur
+ne lit toujours pas la grammaire : la console, qui analyse, envoie les numéros
+des lignes à conserver, et le serveur réécrit l'en-tête suivi de ces lignes.
+
+**Ordre** : SPK-112 d'abord, dont les parcours E2E attendent que le poste soit
+libre ; SPK-114 ensuite.

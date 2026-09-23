@@ -12786,8 +12786,10 @@ variable définie et vide. Celui qui relit une proposition ne peut pas demander 
 son auteur ce qu'il voulait dire — l'auteur n'est pas là, et c'est toute la
 raison d'être de ce canal.
 
-**Refuser la demande reste possible**, et ne demande aucun mécanisme neuf : on
-décoche *Retenir* (§55.5), rien n'est écrit pour cette ligne. Une valeur vide
+**Écarter la demande ne la refuse pas** (§55.5, SPK-114) : on décoche *Retenir*,
+rien n'est écrit pour cette ligne, et elle **reste dans la cellule**, en attente
+de sa valeur — c'est le geste de qui ne l'a pas sous la main. La refuser se fait
+par « Tout refuser », une fois accepté ce qu'on garde. Une valeur vide
 délibérée, elle, se pose à la main depuis l'écran *Environnement* : ce n'est pas
 une demande, c'est une décision.
 
@@ -12853,8 +12855,8 @@ C'est la règle que le responsable a posée, et elle décide de l'implémentatio
 | Geste du propriétaire | Ce qu'il applique | Ce que le `.?` devient |
 |---|---|---|
 | ouvrir la facette, lire la proposition | rien | **il reste, intact** |
-| **Accepter** (tout ou partie) | les entrées retenues, par le chemin normal | **vidé** |
-| **Refuser** | rien | **vidé** |
+| **Accepter** les lignes retenues | ces entrées, par le chemin normal | **privé de ces lignes seulement** ; ce qui n'a pas été retenu **y reste**, en attente — vidé quand plus rien n'attend |
+| **Tout refuser** | rien | **vidé** |
 | refus du produit — garde des secrets, grammaire | rien | **il reste**, et le refus est nommé |
 
 **Consulter ne consomme pas**, parce qu'une suggestion qu'on regarde sans
@@ -12863,10 +12865,33 @@ revient. Un fichier consommé à la lecture ferait disparaître une demande que
 personne n'a refusée — et l'agent qui l'a déposée n'aurait aucun moyen de le
 savoir.
 
-**Une acceptation PARTIELLE vide quand même le fichier.** La décision a porté sur
-toute la proposition : ce qui n'a pas été retenu a été refusé, pas ajourné.
-Laisser le reliquat ferait revenir à chaque ouverture des lignes qu'on vient
-d'écarter, et l'écran finirait par être fermé sans être lu.
+**Écarter n'est pas refuser** — décision du responsable, 2026-09-23 (SPK-114),
+qui remplace la règle d'origine. Celle-ci voulait qu'une acceptation partielle
+vide tout le fichier : « ce qui n'a pas été retenu a été refusé, pas ajourné ».
+Le responsable l'a jugée fausse à l'usage : on écarte une ligne parce qu'on n'a
+pas sa valeur **maintenant** — un secret à aller chercher, une clé à créer chez
+un fournisseur —, pas parce qu'on n'en veut pas. Vider la faisait disparaître
+sans que personne l'ait refusée, et son auteur la croyait rejetée.
+
+**Seule une décision explicite retire une ligne de la proposition** : l'accepter,
+ou la refuser.
+
+- les lignes **acceptées** sortent du `.?`, chacune avec l'étiquette posée juste
+  au-dessus d'elle (§55.3.3) ;
+- les lignes **non retenues** y restent telles que leur auteur les a écrites,
+  étiquette comprise : à la prochaine ouverture, la proposition ne porte plus
+  qu'elles ;
+- une ligne **illisible** (§43.10.1) y reste aussi : personne ne l'a tranchée, et
+  son auteur peut la corriger ;
+- **« Tout refuser »** vide le fichier. Refuser une partie seulement se fait en
+  deux temps : accepter ce qu'on garde, puis refuser ce qui reste ;
+- quand plus rien n'attend — ni ligne non retenue, ni ligne illisible —,
+  l'acceptation **vide** le fichier, comme avant.
+
+La crainte d'origine — des lignes écartées qui reviennent à chaque ouverture,
+jusqu'à ce qu'on ferme l'écran sans le lire — a sa réponse dans le même écran :
+ce qui revient est ce qu'on n'a pas encore tranché, l'écran le dit, et « Tout
+refuser » le tranche.
 
 **Vidé, et non supprimé.** Le fichier `.?` **existe toujours**, posé vide par le
 plan de contrôle à côté de chaque fichier réel. C'est ce qui le rend
@@ -12888,8 +12913,12 @@ accusé de réception, et c'est délibéré : un fichier de réponse serait une 
 de plus à tenir fraîche, alors que les fichiers réels répondent déjà et ne
 peuvent pas mentir.
 
-- le `.?` est **redevenu vide** → une décision a été prise ;
-- le fichier réel **d'à côté** dit laquelle. `/etc/spark/env`, `/run/spark/secrets`,
+- le `.?` est **redevenu vide** → une décision a été prise sur tout ce qu'il
+  portait ;
+- une ligne a **disparu** du `.?` → elle a été tranchée ; une ligne **y est
+  toujours** → elle attend encore, personne ne l'a acceptée ni refusée (§55.5,
+  SPK-114) ;
+- le fichier réel **d'à côté** dit ce qui a été décidé. `/etc/spark/env`, `/run/spark/secrets`,
   `/etc/spark/routes` et les trois notes sont régénérés depuis le registre
   (§43.2, §44.4) : ce qui a été accordé y est, et ce qui a été refusé n'y est pas.
 
@@ -13036,16 +13065,25 @@ que la machine est cassée.
   la même forme que `POST /v1/sparks/{nom}/env/import` (§43.10.3). Pour une
   note, il porte le texte. Il applique par
   `env_service.importer` (§43.10.3), par la création de route du §18 ou par
-  l'écriture de note du §54.9, puis vide le `.?` ;
+  l'écriture de note du §54.9 ;
+- **`apply` porte aussi les lignes à CONSERVER** — `conserver`, les numéros de
+  ligne du corps relu : les entrées non retenues, leurs étiquettes, les lignes
+  illisibles (§55.5, SPK-114). Le serveur ne lit toujours aucune grammaire : il
+  réécrit l'en-tête suivi de ces lignes, dans leur ordre, et **vide** le fichier
+  quand la liste est vide ou absente. C'est la console qui sait quelle ligne
+  porte quelle entrée, puisque c'est elle qui analyse. Une note n'a pas de
+  lignes : l'accepter vide son `.?` ;
 - **`reject` porte l'empreinte relue** et se contente de vider ;
 - **`423` si le Spark est protégé**, pour `apply` comme pour `reject` : les deux
   écrivent — l'un au registre, l'autre dans la cellule (§35.2) ;
 - **une garde qui refuse ne vide pas** : un texte de note portant un secret
   (§54.6), une grammaire fautive, un domaine déjà pris (§18.4) laissent le
   fichier intact, et le refus nomme la cause. L'auteur peut corriger ;
-- un vidage qui échoue **ne défait pas** ce qui a été appliqué. Le registre fait
-  foi ; le fichier sera revidé au prochain passage, et une proposition déjà
-  appliquée se reconnaît à ce qu'elle ne change plus rien.
+- une réécriture qui échoue **ne défait pas** ce qui a été appliqué. Le registre
+  fait foi, et une ligne déjà appliquée restée dans le fichier se reconnaît à ce
+  qu'une nouvelle acceptation ne change plus rien ;
+- le **journal** d'une acceptation porte le nombre de lignes laissées en
+  attente, jamais leur contenu (§55.10).
 
 ### 55.9 Ce que la console en fait
 
@@ -13067,6 +13105,12 @@ multiplierait les appels à Incus par le nombre d'onglets ouverts, pour un
 Quatre états, distincts et le restant (§14.6) : **aucune proposition**, **une
 proposition en attente**, **illisible** — avec sa ligne —, et **cellule non
 consultée**.
+
+**Ce que l'écran dit du reste** (SPK-114) : sous les boutons, que les lignes non
+retenues **restent dans la cellule, en attente**, et que seules « Ajouter » et
+« Tout refuser » retirent une ligne ; après une acceptation partielle, le compte
+rendu dit combien de lignes ont été appliquées et combien attendent encore, et
+le bloc relu ne montre plus que celles-ci.
 
 #### 55.9.1 Le champ d'une valeur demandée, et l'étiquette qui l'explique
 
@@ -13098,7 +13142,8 @@ n'affiche rien — une étiquette vide ferait une colonne de blancs sur un écra
 déjà dense.
 
 Une ligne vide **écartée** ne bloque rien : le compte ne retient que les lignes
-retenues. C'est la sortie du §55.3.3, et elle n'a pas de bouton à elle.
+retenues, et elle **reste en attente** dans la cellule (§55.5, SPK-114) — c'est le
+geste de qui n'a pas la valeur sous la main, et il n'a pas de bouton à lui.
 
 Deux conséquences sur le tableau, puisqu'il porte maintenant un champ :
 

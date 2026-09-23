@@ -7356,7 +7356,8 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
    fichier — il n'est jamais supprimé : le `.?` existe toujours, posé vide par le
    produit, ce qui le rend découvrable d'un `ls` et permet à la seconde porte
    d'y écrire sans que le dossier lui soit ouvert. Une acceptation **partielle**
-   vide quand même tout : ce qui n'a pas été retenu a été refusé, pas ajourné ;
+   ne retire que ce qu'elle accepte : ce qui n'a pas été retenu reste en attente
+   — règle révisée par le responsable le 2026-09-23 (SPK-114) ;
 3. **la projection ne l'écrase jamais quand il n'est pas vide** : écraser une
    proposition en attente détruirait ce que l'unité existe pour transporter ;
 4. **un refus du produit ne consomme pas** — garde des secrets, grammaire
@@ -7550,8 +7551,8 @@ propriétaire accepte sans la voir, ou il se tait.
   le serveur reçoit déjà des entrées structurées (§55.8), et une valeur saisie à
   l'écran est une valeur comme une autre.
 - Ce que l'unité ne doit PAS casser : le §43.10.1 — un lot collé garde sa valeur
-  vide ; le §55.5 — consulter ne consomme pas, et une acceptation partielle vide
-  quand même ; le §43.3 — la nature reste déclarée par le propriétaire ; le
+  vide ; le §55.5 — consulter ne consomme pas (et, depuis SPK-114, écarter non
+  plus) ; le §43.3 — la nature reste déclarée par le propriétaire ; le
   §14.3 — rien ne se repeint sous les doigts.
 - **Clos le 2026-09-16.** Campagne E2E rejouée **avant et après** le changement,
   à l'identique : 132 parcours verts, 3 rouges — `onglet Alertes`, `alerte hors
@@ -7672,6 +7673,59 @@ avant d'écrire une ligne.
 - DoD : mesure consignée ; preuve unitaire de la configuration rendue ; preuve
   sur la Forge depuis une cellule d'essai ; DAT, manuel et contrat de
   déploiement à jour ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-114 · Écarter une ligne proposée ne la refuse pas : elle reste en attente
+
+**Décision du responsable le 2026-09-23** : « les suggestions que je ne coche
+pas, elles sont écartées (si valeur vide en attente de saisie) ; ce n'est pas
+bon, je peux très bien les écarter de l'acceptation car je n'ai pas les valeurs
+là maintenant, et donc je veux qu'elles restent dans la pile des suggestions.
+Seul un refus ou une acceptation explicite doit supprimer de la pile de
+suggestion. »
+
+Elle remplace la règle d'origine de SPK-105 — une acceptation partielle vidait
+tout le fichier, « ce qui n'a pas été retenu a été refusé, pas ajourné ».
+
+- Spécification : `docs/DAT.md` **§55.5** révisé (écarter n'est pas refuser),
+  §55.5.1 (ce que l'agent lit du sort de sa demande), §55.8 (`apply` porte
+  `conserver`), §55.3.3 et §55.9.1 (une demande écartée reste en attente), §55.9
+  (ce que l'écran dit du reste) · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-27,
+  SPK-DS-28 · manuel M8. **Écrite et committée avant le code.**
+- Dépend de : SPK-105, SPK-107 ; s'appuie sur la case *TLS* de SPK-112 pour les
+  routes.
+
+**Ce qui décide de l'unité :**
+
+1. **seule une décision explicite retire une ligne** : l'accepter (elle entre au
+   registre et sort du `.?`) ou « Tout refuser » (le `.?` est vidé) ;
+2. **une ligne non retenue reste dans le `.?`**, telle que son auteur l'a
+   écrite, avec son étiquette ; une ligne illisible aussi ; le fichier n'est
+   vidé que quand plus rien n'attend ;
+3. **refuser une partie seulement se fait en deux temps** — accepter ce qu'on
+   garde, puis « Tout refuser » sur le reste. Aucun troisième état par ligne :
+   la case *Retenir* garde deux sens, accepter maintenant ou laisser attendre ;
+4. **le serveur ne lit toujours aucune grammaire** (§55.8) : la console envoie
+   les numéros des lignes à conserver, le serveur réécrit l'en-tête suivi de ces
+   lignes. L'empreinte relue (§55.5.2) garde la réécriture ;
+5. **l'écran le dit** : sous les boutons, que les lignes non retenues restent en
+   attente ; après une acceptation partielle, combien ont été appliquées et
+   combien attendent ; le journal compte les lignes laissées, sans leur contenu.
+
+- Portée : variables, secrets et routes. Une note se tranche en entier et
+  n'est pas concernée.
+- Aucune migration, aucune variable d'environnement : le fichier dans la
+  cellule EST l'état de la proposition.
+- Ce que l'unité ne doit PAS casser : consulter ne consomme pas (§55.5) ; la
+  garde d'empreinte (§55.5.2) ; un refus du produit ne consomme pas ; « Tout
+  refuser » vide toujours ; le §55.4 — rien ne s'applique sans geste humain.
+- DoD : preuves sparkd — `conserver` réécrit l'en-tête et ces lignes seules,
+  une liste vide vide le fichier, l'empreinte périmée refuse sans rien écrire,
+  le journal compte sans contenu ; preuves de composant — les lignes à
+  conserver (entrée non retenue, son étiquette, ligne illisible) et le texte
+  sous les boutons ; parcours E2E qui écarte une demande sans valeur, accepte le
+  reste, constate au registre ce qui est entré, puis rouvre et retrouve la
+  demande en attente, et la refuse ; seed inchangé ou complété ; captures ;
+  manuel M8 ; `@spec` / `@verifies` posés.
 
 ---
 

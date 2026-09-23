@@ -1093,9 +1093,12 @@ Trois choses que l'écran dit, parce qu'elles décident du geste :
 - **lire ne consomme pas.** « Tant que vous n'avez pas tranché, elle reste en
   place — la lire ne l'efface pas. » Sans cette phrase, on hésite à ouvrir le
   repli de peur de valider quelque chose ;
-- **trancher vide le fichier dans la cellule**, et c'est ainsi que son auteur
-  apprend qu'une décision a été prise. Le propriétaire doit le savoir : son geste
-  a un effet de l'autre côté, sur quelqu'un qu'il ne voit pas ;
+- **trancher retire du fichier de la cellule ce qui a été tranché**, et c'est
+  ainsi que son auteur apprend qu'une décision a été prise. Le propriétaire doit
+  le savoir : son geste a un effet de l'autre côté, sur quelqu'un qu'il ne voit
+  pas. **Ce qu'il n'a pas retenu y reste, en attente** — révisé le 2026-09-23
+  (SPK-114) : écarter une ligne dont on n'a pas la valeur n'est pas la refuser,
+  et l'écran le dit sous les boutons ;
 - **un refus du produit, lui, ne vide rien.** Une garde qui refuse — une valeur
   de secret dans une note — laisse la proposition intacte, et le compte rendu le
   dit, faute de quoi on croirait la proposition perdue.
@@ -1137,7 +1140,8 @@ geste : le nom, l'étiquette et la case *Secret* de la même ligne.
 la raison est écrite à côté, avec le compte. Un bouton actif qui refuse après
 coup fait payer un aller-retour pour un fait connu avant le clic. Décocher
 *Retenir* lève la retenue : la sortie est celle qui existe déjà, on n'en ajoute
-pas une seconde.
+pas une seconde — et la ligne **reste dans la cellule**, en attente de sa valeur
+(SPK-114).
 
 **L'étiquette est une ligne, et elle tient dans la cellule.** Le commentaire que
 l'auteur a posé au-dessus de sa déclaration s'affiche sous le nom, coupé à 120
