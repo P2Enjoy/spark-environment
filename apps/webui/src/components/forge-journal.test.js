@@ -40,9 +40,11 @@ test('le journal est un onglet de l’FORGE, à côté de Pools et Images', () =
   // supervision (§52.11), pour la même raison : elle décrit la Forge — la somme
   // de ses Sparks et leur répartition —, pas un Spark en particulier. SPK-62 y
   // ajoute les alertes (§47.3.0 bis), AVANT le journal : on règle ce qui veille,
-  // puis on lit ce qui s'est passé.
+  // puis on lit ce qui s'est passé. SPK-115 y ajoute les propositions (§60)
+  // après le DNS : comme lui, la page couvre TOUS les Sparks.
   assert.deepEqual(chemins, ['#/forge', '#/forge/images',
                              '#/forge/environnement', '#/forge/dns',
+                             '#/forge/propositions',
                              '#/forge/supervision', '#/forge/alertes',
                              '#/forge/journal']);
 });

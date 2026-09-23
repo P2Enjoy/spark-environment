@@ -3,6 +3,19 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-115 — un onglet *Propositions* de la Forge : ce qui attend dans tous
+  les Sparks, et un lien vers l'onglet où cela se décide.** `GET
+  /v1/suggestions`, en lecture seule — il ne pose aucun `.?` —, rend pour chaque
+  Spark ayant une cellule la nature de ce qui attend et un nombre de lignes,
+  jamais une valeur ni un nom ; une cellule illisible est rendue `cell_read:
+  false` et l'écran la nomme ; un Spark sans cellule n'y figure pas. L'onglet est
+  un index (SPK-DS-32) : une ligne par proposition, le Spark et la nature en
+  liens vers *Environnement*, *Routes* ou *Notes*, aucun geste de décision ;
+  lecture à l'ouverture et au bouton *Relire les cellules*, l'heure de la
+  lecture écrite à côté. Preuves sparkd et de composant, un parcours E2E qui
+  suit le lien jusqu'à la facette et vérifie que rien n'a été consommé, deux
+  captures ; manuel M8 et une illustration. **Non déployé** : la route attend
+  OP-25.
 - **SPK-111 — liens privés : un port d'un Spark publié dans un réseau privé.**
   Un lien est un port publié dont la portée n'est pas Internet — un objet de
   moins. Migration `019_portee_port_publie` : `published_port.scope` et

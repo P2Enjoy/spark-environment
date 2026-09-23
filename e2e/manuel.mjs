@@ -206,6 +206,15 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.locator('.proposition').scrollIntoViewIfNeeded();
     await capturer('m8-proposition-routes', { hauteur: 900 });
 
+    // --- M8 · Ce qui attend dans toute la Forge (SPK-115, §60) --------------
+    // AVANT toute décision : le seed laisse des propositions en attente dans
+    // deux Sparks, et c'est cet état que le chapitre décrit.
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('.onglet[href="#/forge/propositions"]', { timeout: 10000 });
+    await page.click('.onglet[href="#/forge/propositions"]');
+    await page.waitForSelector('[data-proposition-lien]', { timeout: 20000 });
+    await capturer('m8-propositions-forge', { hauteur: 700 });
+
     // --- M8 · Exploiter au quotidien -----------------------------------------
     await ouvrir('site-vitrine');
     await capturer('m8-erreur', { hauteur: 1000 });

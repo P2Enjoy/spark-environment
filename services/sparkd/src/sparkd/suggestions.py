@@ -13,6 +13,8 @@
 @spec docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas refuser :
       ce qui n'est pas retenu reste en attente), §55.8 (`conserver`) — pour
       `a_conserver` et `reecrire`
+@spec docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.1, §60.2 (ce qui attend, sans
+      le corps, sans rien poser) — pour `en_suspens`
 
 **La règle du produit, en deux lignes** : tout fichier que le plan de contrôle
 pose dans une cellule est régénéré en entier depuis le registre, et l'écrire à la
@@ -392,6 +394,26 @@ def vider(kind: str, pousseur: Callable[[str, str], None]) -> None:
     répertoire.
     """
     pousseur(chemin(kind), entete(kind))
+
+
+def en_suspens(lecteur: Callable[[str], str | None]) -> list[dict[str, Any]]:
+    """Ce qui attend dans une cellule, SANS le corps (§60.1, §60.2 — SPK-115).
+
+    Lecture seule : rien n'est posé. Pour une nature à entrées, le nombre de
+    lignes ni blanches ni commentaires ; pour une note, `None` — elle se tranche
+    en entier. Aucune valeur ne sort d'ici : un `secrets.?` en porte en clair.
+    """
+    attente = []
+    for paire in PAIRES:
+        corps = sans_entete(paire["kind"], lecteur(chemin(paire["kind"])))
+        if not corps:
+            continue
+        attente.append({
+            "kind": paire["kind"],
+            "lines": (en_attente(corps.split("\n"))
+                      if paire["nature"] == ENTREES else None),
+        })
+    return attente
 
 
 def a_conserver(kind: str, corps: str, lignes: object) -> list[str]:

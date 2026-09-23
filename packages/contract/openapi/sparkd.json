@@ -3664,6 +3664,30 @@
           "cles"
         ]
       }
+    },
+    "/v1/suggestions": {
+      "get": {
+        "description": "Les propositions en attente de TOUTE la Forge (§60 — SPK-115).\n\n@spec docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.1 (un index, pas un\n      écran de décision), §60.2 (lecture seule, aucun corps, un Spark\n      sans cellule absent, une cellule illisible nommée)\n\n**Elle ne pose rien**, contrairement à la lecture d'un Spark (§55.8) :\nune vue d'ensemble n'écrit dans aucune cellule. Et elle ne rend aucune\nvaleur — la nature et un nombre de lignes, jamais le texte.",
+        "operationId": "pending_suggestions_v1_suggestions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pending Suggestions V1 Suggestions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Pending Suggestions",
+        "tags": [
+          "suggestions"
+        ]
+      }
     }
   }
 }

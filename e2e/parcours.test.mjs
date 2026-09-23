@@ -1121,6 +1121,53 @@ test('un lot importé au CATALOGUE ne descend dans aucun Spark', async () => {
   });
 });
 
+// --- SPK-115 · LES PROPOSITIONS DE TOUTE LA FORGE (docs/DAT.md §60) ---------
+//
+// Avant SPK-112 et SPK-114, qui tranchent les propositions d'« ubuntu-24 » : cet
+// index doit les voir encore en attente.
+
+test('la Forge liste les propositions en attente, et un clic mène à l’onglet du Spark', async () => {
+  await parcours('spk115-propositions-forge', async () => {
+    // @verifies docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.1 (un index, sans
+    //           valeur, qui mène à la facette), §60.2, §60.3 ·
+    //           docs/DESIGN_SYSTEM_APP.md SPK-DS-32
+    await accueil();
+    await page.click('nav a[href="#/forge"]');
+    await page.waitForSelector('.onglet[href="#/forge/propositions"]', { timeout: 15000 });
+    await page.click('.onglet[href="#/forge/propositions"]');
+    await page.waitForSelector('[data-proposition-lien="ubuntu-24:routes"]', { timeout: 20000 });
+
+    const texte = await page.innerText('section[aria-labelledby="titre-propositions-forge"]');
+    // Le seed : « crm-production » (INSTALL, variables), « ubuntu-24 » (routes,
+    // variables). Leur nombre de lignes, jamais leurs valeurs (§60.1).
+    for (const lien of ['crm-production:install', 'crm-production:variables',
+                        'ubuntu-24:routes', 'ubuntu-24:variables']) {
+      assert.ok(await page.$(`[data-proposition-lien="${lien}"]`), `ligne absente : ${lien}`);
+    }
+    assert.doesNotMatch(texte, /docs\.example\.com|MAPS_TOKEN|redis:\/\//,
+      'une valeur proposée a traversé la vue d’ensemble');
+    assert.match(texte, /Lu à \d\d:\d\d/);
+    await capturer('spk115-propositions-forge', { hauteur: 900 });
+    await capturer('spk115-propositions-forge-mobile', { largeur: 390, hauteur: 1200 });
+
+    // Relire ne perd pas le focus du bouton (§14.3).
+    await page.click('[data-propositions-relire]');
+    await page.waitForFunction(
+      () => document.activeElement?.hasAttribute('data-propositions-relire'),
+      null, { timeout: 15000 });
+
+    // Un clic, et l'on est sur la facette où la proposition se tranche.
+    await page.click('[data-proposition-lien="ubuntu-24:routes"]');
+    await page.waitForSelector('.onglet[href$="/routes"][aria-current="page"]', { timeout: 10000 });
+    assert.match(page.url(), /#\/sparks\/ubuntu-24\/routes$/);
+    await page.waitForSelector('[data-sugg-ouvrir="routes"]', { timeout: 20000 });
+
+    // La vue d'ensemble n'a rien écrit : la proposition attend toujours.
+    const { corps } = await pile.lireSparkd('/v1/sparks/ubuntu-24/suggestions');
+    assert.equal(corps.suggestions.find((x) => x.kind === 'routes').present, true);
+  });
+});
+
 // --- SPK-112 · UNE ROUTE SANS TLS (docs/DAT.md §18.3 quater, §55.9.2) -------
 //
 // Placés AVANT l'alerte hors bande, et ce n'est pas un hasard : le refus se

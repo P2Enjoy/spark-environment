@@ -1371,6 +1371,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending Suggestions
+         * @description Les propositions en attente de TOUTE la Forge (§60 — SPK-115).
+         *
+         *     @spec docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.1 (un index, pas un
+         *           écran de décision), §60.2 (lecture seule, aucun corps, un Spark
+         *           sans cellule absent, une cellule illisible nommée)
+         *
+         *     **Elle ne pose rien**, contrairement à la lecture d'un Spark (§55.8) :
+         *     une vue d'ensemble n'écrit dans aucune cellule. Et elle ne rend aucune
+         *     valeur — la nature et un nombre de lignes, jamais le texte.
+         */
+        get: operations["pending_suggestions_v1_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3955,6 +3983,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pending_suggestions_v1_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

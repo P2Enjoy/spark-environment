@@ -7769,7 +7769,7 @@ tout le fichier, « ce qui n'a pas été retenu a été refusé, pas ajourné »
   joué, la Forge vide encore tout le `.?` ; la console, elle, le dit déjà —
   d'où l'ordre d'OP-25.
 
-### [ ] SPK-115 · Les propositions en attente de toute la Forge, dans un onglet
+### [x] SPK-115 · Les propositions en attente de toute la Forge, dans un onglet
 
 **Demandé par le responsable le 2026-09-23** : « un onglet dans la Forge qui
 reprend tous les Sparks avec toutes les suggestions en suspens, et aller au
@@ -7797,6 +7797,12 @@ Spark concerné, onglet concerné, avec un clic ».
   par nature, états) ; parcours E2E qui part de la Forge, suit le lien et arrive
   sur la facette où la proposition est dépliable ; captures ; manuel ;
   `@spec` / `@verifies`.
+- **Vérifié le 2026-09-23** : cinq preuves sparkd (`test_suggestions_forge.py`),
+  sept preuves de composant, le parcours E2E « la Forge liste les propositions
+  en attente… » ; captures `spk115-propositions-forge` et `-mobile` observées —
+  la première version peignait ses liens au bleu du navigateur et décalait
+  l'heure de lecture, corrigés (`.lien-spark`, `.relecture`) ; illustration
+  `m8-propositions-forge`. Déploiement : OP-25.
 
 ### [ ] SPK-116 · Des projets pour ranger les Sparks
 

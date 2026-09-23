@@ -315,6 +315,9 @@ export const ONGLETS_FORGE = [['#/forge', 'Pools'], ['#/forge/images', 'Images']
                              // Spark — la page couvre TOUS les Sparks, et
                              // surtout les noms qui n'appartiennent à aucun.
                              ['#/forge/dns', 'DNS'],
+                             // SPK-115 · §60 : ce qui attend dans TOUS les
+                             // Sparks. Un index : chaque ligne mène au Spark.
+                             ['#/forge/propositions', 'Propositions'],
                              // SPK-93 · §52.11 : la supervision decrit la FORGE
                              // — la somme de ses Sparks et leur repartition. Ce
                              // qu'un Spark consomme se regarde dans sa fenetre.

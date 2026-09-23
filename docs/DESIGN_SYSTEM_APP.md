@@ -1353,7 +1353,14 @@ qui attend. La nature est un **lien** vers la facette où la proposition se
 tranche (§5.2) ; aucun bouton *Ajouter* ni *Refuser* n'y figure — le geste se
 conclut là où vit l'objet (SPK-DS-27). Aucune valeur n'y est rendue. Une cellule
 non consultée est une ligne nommée, pas une absence. L'heure de la lecture est
-écrite près du bouton *Relire les cellules*.
+écrite près du bouton *Relire les cellules*, **centrée sur lui** (`.relecture`).
+
+Vu en capture le 2026-09-23 et corrigé : la première version laissait ses liens
+au bleu du navigateur — la console n'a pas de couleur de lien globale, un lien de
+tableau porte `.lien-spark` (`DESIGN_SYSTEM.md` §2.1) — et l'heure, alignée en
+haut, se lisait comme une note détachée du bouton. Preuves observées :
+`e2e/captures/spk115-propositions-forge.jpg`, `-mobile` (à 390 px la colonne
+*En attente* part derrière le défilement annoncé).
 
 ### SPK-DS-33 · Les projets : des onglets qui filtrent, une gestion à part, un rangement depuis le Spark
 

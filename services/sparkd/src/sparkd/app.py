@@ -3133,6 +3133,32 @@ def create_app(config: Config) -> FastAPI:
     # seul : un fichier déposé dans une cellule est une demande sans effet tant
     # qu'un humain ne l'ouvre pas, et le §35.1 reste entier.
 
+    @app.get("/v1/suggestions", tags=["suggestions"])
+    def pending_suggestions() -> dict:
+        """Les propositions en attente de TOUTE la Forge (§60 — SPK-115).
+
+        @spec docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.1 (un index, pas un
+              écran de décision), §60.2 (lecture seule, aucun corps, un Spark
+              sans cellule absent, une cellule illisible nommée)
+
+        **Elle ne pose rien**, contrairement à la lecture d'un Spark (§55.8) :
+        une vue d'ensemble n'écrit dans aucune cellule. Et elle ne rend aucune
+        valeur — la nature et un nombre de lignes, jamais le texte.
+        """
+        with registry() as connection:
+            sparks = service.listing(connection)
+        vus = []
+        for spark in sparks:
+            if not spark.get("incus_name"):
+                continue
+            try:
+                attente = suggestions_service.en_suspens(_lecteur(spark))
+            except (IncusError, InstanceAbsente):
+                vus.append({"spark": spark["name"], "cell_read": False, "pending": []})
+                continue
+            vus.append({"spark": spark["name"], "cell_read": True, "pending": attente})
+        return {"sparks": vus}
+
     @app.get("/v1/sparks/{name}/suggestions", tags=["suggestions"])
     def read_suggestions(name: str) -> dict:
         """Les six paires, telles que la cellule les porte (§55.8).

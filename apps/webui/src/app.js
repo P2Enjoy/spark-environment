@@ -39,6 +39,8 @@ import { DEPOT_VIDE, libelleEngagement, libelleIndication }
   from './components/forge-depot.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
 import { ALERTES_VIDE, renderAlertes } from './components/forge-alertes.js';
+import { PROPOSITIONS_FORGE_VIDE, renderPropositionsForge }
+  from './components/forge-propositions.js';
 import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
   from './components/forge-dns.js';
 import { renderManuel } from './components/manuel-view.js';
@@ -188,7 +190,8 @@ function marquerNavigation() {
   const courant = etat.route === 'serveurs' ? '#/serveurs'
     : etat.route === 'manuel' ? '#/manuel'
     : ['forge', 'images', 'environnement', 'journal', 'forgedns',
-       'supervision', 'alertes'].includes(etat.route) ? '#/forge' : '#/sparks';
+       'supervision', 'alertes', 'propositions'].includes(etat.route)
+      ? '#/forge' : '#/sparks';
   for (const lien of racine.querySelectorAll('nav a')) {
     if (lien.getAttribute('href') === courant) lien.setAttribute('aria-current', 'page');
     else lien.removeAttribute('aria-current');
@@ -289,6 +292,9 @@ function peindre() {
       ? renderOngletsForge('#/forge/dns') + renderForgeDns(etat.forgeDns)
       : etat.route === 'alertes'
       ? renderOngletsForge('#/forge/alertes') + renderAlertes(etat.alertes)
+      : etat.route === 'propositions'
+      ? renderOngletsForge('#/forge/propositions')
+        + renderPropositionsForge(etat.propositionsForge)
       : etat.route === 'supervision'
       ? renderOngletsForge('#/forge/supervision')
         + renderSupervisionForge(etat.supervision)
@@ -352,6 +358,9 @@ function rafraichirQuota(formulaire, controle, nomQuota = controle.name) {
 
 /** §9.1 : toute fonction est utilisable sans souris. Le tri est un bouton. */
 function brancher() {
+  // SPK-115 · §60.3 : relire les cellules, à la demande.
+  racine.querySelector('[data-propositions-relire]')
+    ?.addEventListener('click', () => chargerPropositionsForge({ depuisBouton: true }));
   for (const bouton of racine.querySelectorAll('[data-tri]')) {
     bouton.addEventListener('click', () => {
       const cle = bouton.dataset.tri;
@@ -4551,6 +4560,35 @@ function brancherJournal() {
  * confondre ferait croire qu'un canal enregistré est un canal qui marche, ce
  * qui est précisément le défaut mesuré le 2026-09-14.
  */
+/**
+ * Lit ce qui attend dans TOUS les Sparks (SPK-115).
+ *
+ * @spec docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.2, §60.3
+ *
+ * À l'ouverture et au bouton, jamais en tâche de fond : six lectures par
+ * cellule, pour un événement rare (§55.9). L'heure de la lecture est gardée —
+ * l'écran dit de quand date ce qu'il montre.
+ */
+async function chargerPropositionsForge({ depuisBouton = false } = {}) {
+  etat.route = 'propositions';
+  etat.propositionsForge = { ...PROPOSITIONS_FORGE_VIDE,
+                             luA: etat.propositionsForge?.luA ?? null };
+  peindre();
+  try {
+    const corps = await api('/v1/suggestions');
+    etat.propositionsForge = { ...PROPOSITIONS_FORGE_VIDE, status: 'ready',
+                               sparks: corps.sparks ?? [],
+                               luA: new Date().toTimeString().slice(0, 5) };
+  } catch (erreur) {
+    etat.propositionsForge = { ...PROPOSITIONS_FORGE_VIDE, status: 'error',
+                               error: erreur.message };
+  }
+  peindre();
+  // §14.3 : le bouton, désactivé pendant la lecture, a perdu le focus. On le
+  // lui rend s'il venait de lui — jamais à l'arrivée par l'onglet, qui le garde.
+  if (depuisBouton) racine.querySelector('[data-propositions-relire]')?.focus();
+}
+
 async function chargerAlertes() {
   etat.route = 'alertes';
   etat.alertes = { ...ALERTES_VIDE, status: 'loading' };
@@ -5111,6 +5149,7 @@ function router() {
   if (location.hash === '#/serveurs') return chargerServeurs();
   if (location.hash === '#/forge/dns') return chargerInventaireDns();
   if (location.hash === '#/forge/alertes') return chargerAlertes();
+  if (location.hash === '#/forge/propositions') return chargerPropositionsForge();
   if (location.hash === '#/forge/journal') return chargerJournal();
   if (location.hash === '#/forge/environnement') return chargerCatalogueEnv();
   if (location.hash === '#/forge/images') return chargerCatalogue();

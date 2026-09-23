@@ -120,7 +120,7 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes, et ce qu'une acceptation laisse en attente (SPK-112, SPK-114) — **EN ATTENTE**
+### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes, ce qu'une acceptation laisse en attente, et les propositions de toute la Forge (SPK-112, SPK-114, SPK-115) — **EN ATTENTE**
 
 ```
 État          : EN ATTENTE. Aucune migration, aucune variable, aucun service
@@ -135,7 +135,11 @@ Objectif      : servir les textes corrigés de SPK-112 (docs/DAT.md §55.3.1,
                 SPK-114 (docs/DAT.md §55.5, §55.8) : `apply` lit `conserver` et
                 laisse dans le `.?` ce qui n'a pas été retenu. L'ancienne build
                 l'ignore et vide tout le fichier.
-                La console (case TLS, « Activer le TLS », lignes conservées) est
+                SPK-115 (docs/DAT.md §60.2) : `GET /v1/suggestions`, lecture
+                seule, sert l'onglet Propositions de la Forge. Contre l'ancienne
+                build, l'onglet affiche le refus `404` de sparkd.
+                La console (case TLS, « Activer le TLS », lignes conservées,
+                onglet Propositions) est
                 locale : elle ne se déploie pas, elle se relance (`sparkui
                 stop`, puis `sparkui`).
 Dépend de     : rien.
@@ -153,7 +157,9 @@ Vérification  : `GET /v1/forge` rend la nouvelle build ; depuis le terminal
                 DERNIER MOT RÈGLE LE CÔTÉ PUBLIC » et `grep -ci 'en clair'
                 /etc/spark/routes` rend 0 ; sur la même cellule d'essai, une
                 proposition `A=1` / `B=` dont on n'accepte que `A` laisse `B=`
-                dans `/etc/spark/env.?` — jamais sur une cellule de locataire.
+                dans `/etc/spark/env.?` — jamais sur une cellule de locataire ;
+                l'onglet Forge → Propositions liste `B=` sous cette cellule
+                (« 1 ligne(s) ») et son lien ouvre l'onglet Environnement.
 Retour arrière: réinstaller la build précédente (runbook A.2) : rien n'est
                 écrit au registre, les textes redeviennent les anciens.
 Risques       : aucun sur les routes servies — ni le registre ni la

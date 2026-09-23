@@ -94,10 +94,11 @@ Forge, ce que chaque Spark en coche, et l'**import d'un `.env` collé** — le p
 de relecture qui dit ce qui sera remplacé et ce qui est refusé avant d'écrire.
 Une route **proposée** depuis le Spark : ce que règle son dernier mot, et la
 case TLS qui se coche avant d'accepter. Une ligne proposée qu'on écarte n'est
-pas refusée : elle reste en attente.
+pas refusée : elle reste en attente. L'onglet **Propositions** de la Forge, qui
+liste ce qui attend dans tous les Sparks et mène à l'onglet où cela se décide.
 
 Unités : SPK-09, SPK-14, SPK-34, SPK-58, SPK-64, SPK-93, SPK-97, SPK-112,
-SPK-114.
+SPK-114, SPK-115.
 
 ## M9 · Sauvegarder et restaurer
 
