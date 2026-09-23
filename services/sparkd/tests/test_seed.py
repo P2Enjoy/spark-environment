@@ -133,6 +133,19 @@ def test_une_route_EN_CLAIR_et_une_proposition_qui_en_demande_une(seede):
     assert "statut.example.com 8081" in proposees["routes"]["body"]
 
 
+def test_une_demande_sans_valeur_attend_a_cote_d_une_valeur(seede):
+    """SPK-114 · §55.5 : sans elle, écarter une demande et la retrouver en
+    attente ne se démontre pas — celle de « crm-production » sert à la saisie.
+
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 · CLAUDE.md §8
+    """
+    proposees = {s["kind"]: s for s in
+                 seede.get("/v1/sparks/ubuntu-24/suggestions").json()["suggestions"]}
+    corps = proposees["variables"]["body"]
+    assert "APP_ENV=production" in corps
+    assert "# Jeton du service de cartes, à demander au fournisseur.\nMAPS_TOKEN=" in corps
+
+
 def test_un_spark_a_ses_cles_et_un_autre_n_en_a_aucune(seede):
     """§26.4, §28.5 — l'absence nommée doit être atteignable à l'écran."""
     avec = seede.get("/v1/sparks/crm-production/ssh-config").json()["keys"]

@@ -8,6 +8,8 @@
  * @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.9.2 (la relecture d'une
  * route porte sa case TLS, et une ligne proposée sans TLS le dit) ·
  * docs/DESIGN_SYSTEM_APP.md SPK-DS-31
+ * @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas
+ * refuser), §55.8 (`conserver`), §55.9 · docs/DESIGN_SYSTEM_APP.md SPK-DS-27
  *
  * Ce que ces preuves gardent : l'écran montre CE QU'IL A COMPRIS — pas le texte
  * brut —, une ligne illisible est nommée sans que la proposition soit perdue, et
@@ -19,7 +21,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PROPOSITIONS_VIDE, analyserRoutes, comprendre, enAttente, estDemande,
-         entreesAppliquees, estTls, renderPropositions, valeurAppliquee }
+         entreesAppliquees, estTls, lignesAConserver, renderPropositions,
+         valeurAppliquee }
   from './spark-suggestions.js';
 
 const SUGG = (champs = {}) => ({
@@ -180,11 +183,14 @@ test('une proposition ENTIÈREMENT illisible le dit au lieu d’un tableau vide'
   assert.match(rendu, /data-sugg-appliquer="variables"[^>]*disabled/);
 });
 
-test('l’écran dit que trancher VIDE le fichier, et pourquoi', () => {
+test('l’écran dit que ce qui n’est pas retenu RESTE en attente (SPK-114)', () => {
+  // §55.5 : écarter n'est pas refuser. Le dire évite de décocher une ligne en
+  // croyant la refuser, ou de craindre de la perdre en ne la cochant pas.
   const rendu = renderPropositions(ui({ ouvert: 'variables' }), ['variables']);
-  assert.match(rendu, /le fichier de la cellule\s*\n?\s*est vidé/);
-  assert.match(rendu, /refusé, pas ajourné/);
-  assert.match(rendu, /son auteur apprend qu’une décision a été prise/);
+  assert.match(rendu, /ce que vous ne retenez pas y reste, en attente/);
+  assert.match(rendu, /« Tout refuser »/);
+  assert.match(rendu, /son auteur apprend ce qui a été décidé/);
+  assert.doesNotMatch(rendu, /refusé, pas ajourné/);
 });
 
 test('le compte rendu d’un refus du produit est un REFUS (§1.3)', () => {
@@ -374,4 +380,42 @@ test('c’est la case TELLE QU’ELLE EST COCHÉE qui part au serveur', () => {
   ]);
   assert.equal(estTls(ui(), 'routes', 1, false), false);
   assert.equal(estTls(ui({ tls: { routes: new Set([1]) } }), 'routes', 1, false), true);
+});
+
+
+// --- ce qui reste en attente (SPK-114, §55.5, §55.8) ------------------------
+
+const ENV_MIXTE = () => SUGG({
+  body: 'GARDEE=oui\n\n# Jeton du fournisseur, à créer chez lui.\nDEMANDEE=\n'
+      + 'sans egal\nDOUBLE=1\nDOUBLE=2\n',
+});
+
+test('une ligne NON RETENUE est conservée, avec son étiquette', () => {
+  const etat = ui({ exclues: { variables: new Set([4]) } });
+  // Ligne 4 écartée : elle reste, et l'étiquette de la ligne 3 avec elle. La
+  // ligne 5 est illisible : personne ne l'a tranchée, elle reste aussi.
+  assert.deepEqual(lignesAConserver(etat, ENV_MIXTE()), [3, 4, 5]);
+});
+
+test('tout retenir ne conserve que l’illisible, et une supplantée suit la gagnante', () => {
+  assert.deepEqual(lignesAConserver(ui(), ENV_MIXTE()), [5]);
+  // DOUBLE=2 (ligne 7) écartée : DOUBLE=1 (ligne 6), qu'elle supplante, reste
+  // avec elle — sinon la reprise ne serait plus celle que l'auteur a écrite.
+  const etat = ui({ exclues: { variables: new Set([7]) } });
+  assert.deepEqual(lignesAConserver(etat, ENV_MIXTE()), [5, 6, 7]);
+});
+
+test('les ROUTES suivent la même règle ; une note n’a rien à conserver', () => {
+  const routes = SUGG({ kind: 'routes', body: 'a.exemple.fr 8080\nb.exemple.fr 80 clair\n' });
+  assert.deepEqual(lignesAConserver(ui({ exclues: { routes: new Set([2]) } }), routes), [2]);
+  assert.deepEqual(lignesAConserver(ui(), routes), []);
+  const note = SUGG({ kind: 'readme', body: '# Titre\nTexte' });
+  assert.deepEqual(lignesAConserver(ui(), note), []);
+  assert.deepEqual(lignesAConserver(ui(), SUGG({ present: false })), []);
+});
+
+test('écarter une demande sans valeur ne bloque rien, et le message dit qu’elle attendra', () => {
+  const rendu = renderPropositions(ui({ ouvert: 'variables', items: [ENV_MIXTE()] }),
+                                   ['variables']);
+  assert.match(rendu, /décochez ces lignes : elles resteront en attente dans la cellule/);
 });

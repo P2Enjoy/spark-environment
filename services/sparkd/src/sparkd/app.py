@@ -3189,10 +3189,10 @@ def create_app(config: Config) -> FastAPI:
         entrees = body.get("entries")
         if not isinstance(entrees, list) or not entrees:
             raise suggestions_service.SuggestionError(
-                "Aucune entrée retenue : il n'y a rien à appliquer. Pour "
-                "n'en retenir aucune, c'est « Refuser » qu'il faut employer — "
-                "les deux vident le fichier, mais ils ne disent pas la même "
-                "chose au journal.", "empty_apply")
+                "Aucune entrée retenue : il n'y a rien à appliquer. Les "
+                "lignes non retenues restent en attente dans la cellule ; pour "
+                "les écarter pour de bon, c'est « Tout refuser ».",
+                "empty_apply")
 
         if kind == "routes":
             posees = []
@@ -3233,15 +3233,18 @@ def create_app(config: Config) -> FastAPI:
 
     @app.post("/v1/sparks/{name}/suggestions/{kind}/apply", tags=["suggestions"])
     def apply_suggestion(name: str, kind: str, body: dict = Body(...)) -> dict:
-        """Accepte tout ou partie d'une proposition, puis VIDE le fichier (§55.5).
+        """Accepte tout ou partie d'une proposition (§55.5).
 
-        @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (accepter vide),
-              §55.5.2 (l'empreinte relue), §55.8 · §35.2
+        @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5, §55.5.2 (l'empreinte
+              relue), §55.8 · §35.2
+        @spec docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas
+              refuser), §55.8 (`conserver`)
 
-        **Une acceptation partielle vide quand même tout** : la décision a porté
-        sur toute la proposition, et ce qui n'a pas été retenu a été refusé, pas
-        ajourné. Laisser le reliquat ferait revenir à chaque ouverture les lignes
-        qu'on vient d'écarter.
+        **Ce qui n'est pas retenu RESTE en attente** (SPK-114, décision du
+        responsable) : on écarte une ligne parce qu'on n'a pas sa valeur
+        maintenant, pas parce qu'on n'en veut pas. Les lignes à conserver sont
+        validées AVANT d'appliquer quoi que ce soit, puis le fichier est réécrit
+        avec elles seules — ou vidé quand plus rien n'attend.
 
         **Un refus du PRODUIT, lui, ne vide pas** : garde des secrets, grammaire
         fautive, domaine déjà pris laissent le fichier intact, et son auteur peut
@@ -3251,8 +3254,10 @@ def create_app(config: Config) -> FastAPI:
             spark = _spark_pour_suggestion(connection, name, kind)
             lecteur = _lecteur(spark)
             try:
-                suggestions_service.exiger_fraiche(
+                relue = suggestions_service.exiger_fraiche(
                     kind, lecteur, str((body or {}).get("sha256") or ""))
+                gardees = suggestions_service.a_conserver(
+                    kind, relue["body"], (body or {}).get("conserver"))
                 applique = _appliquer_suggestion(connection, spark, kind, body or {})
             except suggestions_service.SuggestionPerimee as erreur:
                 raise HTTPException(status_code=409, detail={
@@ -3283,9 +3288,12 @@ def create_app(config: Config) -> FastAPI:
                 # §21.4 : la nature et le COMPTE, jamais les valeurs — un
                 # `secrets.?` en porte en clair par construction.
                 payload={"kind": kind,
-                         "count": len((body or {}).get("entries") or [1])})
-            vide = _vider_la_suggestion(spark, kind)
-            return {"spark": name, "kind": kind, "cleared": vide, **applique}
+                         "count": len((body or {}).get("entries") or [1]),
+                         # SPK-114 : ce qui attend encore, compté, jamais lu.
+                         "pending": suggestions_service.en_attente(gardees)})
+            vide = _reecrire_la_suggestion(spark, kind, gardees)
+            return {"spark": name, "kind": kind, "cleared": vide,
+                    "pending": suggestions_service.en_attente(gardees), **applique}
 
     @app.post("/v1/sparks/{name}/suggestions/{kind}/reject", tags=["suggestions"])
     def reject_suggestion(name: str, kind: str, body: dict = Body(...)) -> dict:
@@ -3333,6 +3341,18 @@ def create_app(config: Config) -> FastAPI:
                 "message": "Ce Spark n'a pas de cellule : il ne peut porter "
                            "aucune proposition."})
         return spark
+
+    def _reecrire_la_suggestion(spark: dict, kind: str, gardees: list[str]) -> bool:
+        """Laisse dans le `.?` ce qui attend encore (SPK-114, §55.5).
+
+        Rend `True` si le fichier est vidé. Comme le vidage, un échec ne DÉFAIT
+        pas ce qui a été appliqué (§55.8) : le registre fait foi, et une ligne
+        déjà appliquée restée dans le fichier ne changera plus rien.
+        """
+        try:
+            return suggestions_service.reecrire(kind, gardees, _pousseur(spark))
+        except (IncusError, InstanceAbsente):
+            return False
 
     def _vider_la_suggestion(spark: dict, kind: str) -> bool:
         """Vide le `.?`. Un échec ne DÉFAIT pas ce qui a été appliqué (§55.8).

@@ -10,6 +10,9 @@
 @spec docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.3.1 (le dernier mot d'une
       route règle son côté PUBLIC ; la pile sert « en HTTP simple ») — pour
       `DERNIER_MOT_ROUTE`, l'en-tête de `routes.?` et `rendre_routes`
+@spec docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas refuser :
+      ce qui n'est pas retenu reste en attente), §55.8 (`conserver`) — pour
+      `a_conserver` et `reecrire`
 
 **La règle du produit, en deux lignes** : tout fichier que le plan de contrôle
 pose dans une cellule est régénéré en entier depuis le registre, et l'écrire à la
@@ -389,6 +392,53 @@ def vider(kind: str, pousseur: Callable[[str, str], None]) -> None:
     répertoire.
     """
     pousseur(chemin(kind), entete(kind))
+
+
+def a_conserver(kind: str, corps: str, lignes: object) -> list[str]:
+    """Les lignes du corps RELU qui restent en attente (§55.5, §55.8 — SPK-114).
+
+    La console, qui analyse, envoie leurs NUMÉROS : les entrées non retenues,
+    leurs étiquettes, les lignes illisibles. Ce module ne lit toujours aucune
+    grammaire — il découpe le texte que l'empreinte vient de garantir, et rien
+    d'autre. Il est appelé AVANT toute application : une liste fautive ne doit
+    rien laisser d'écrit derrière elle.
+
+    Une note n'a pas de lignes à laisser : elle se tranche en entier.
+    """
+    if definition(kind)["nature"] != ENTREES or lignes is None:
+        return []
+    if (not isinstance(lignes, list)
+            or not all(isinstance(n, int) and not isinstance(n, bool) for n in lignes)):
+        raise SuggestionError(
+            "« conserver » doit être une liste de numéros de ligne.", "invalid_keep")
+    texte = _normaliser(corps).split("\n")
+    hors = [n for n in lignes if not 1 <= n <= len(texte)]
+    if hors:
+        raise SuggestionError(
+            f"« conserver » désigne des lignes qui n'existent pas dans la "
+            f"proposition relue : {sorted(set(hors))}. Rien n'a été fait.",
+            "invalid_keep")
+    return [texte[n - 1] for n in sorted(set(lignes))]
+
+
+def en_attente(lignes: list[str]) -> int:
+    """Combien de lignes attendent encore une décision : ni blanc, ni `#`."""
+    return sum(1 for l in lignes if l.strip() and not l.strip().startswith("#"))
+
+
+def reecrire(kind: str, lignes: list[str],
+             pousseur: Callable[[str, str], None]) -> bool:
+    """Repose l'en-tête suivi de ce qui attend encore, ou VIDE (§55.5 — SPK-114).
+
+    Rend `True` quand le fichier est vidé. Quand plus rien n'attend — il ne reste
+    que des commentaires ou des blancs —, c'est un vidage, exactement comme
+    avant : une étiquette seule ne serait pas une proposition.
+    """
+    if not en_attente(lignes):
+        vider(kind, pousseur)
+        return True
+    pousseur(chemin(kind), entete(kind) + "\n".join(lignes) + "\n")
+    return False
 
 
 def exiger_fraiche(kind: str, lecteur: Callable[[str], str | None],

@@ -7571,7 +7571,7 @@ propriétaire accepte sans la voir, ou il se tait.
   depuis l'écran et la constate au registre ; captures observées aux deux
   formats ; documentation complète ; `@spec` / `@verifies` posés.
 
-### [~] SPK-112 · Une route sans TLS le dit et se corrige d'un geste, et la cellule ne la propose plus par méprise
+### [x] SPK-112 · Une route sans TLS le dit et se corrige d'un geste, et la cellule ne la propose plus par méprise
 
 **Constat du responsable le 2026-09-23** : « j'ai accepté la suggestion d'une
 route et appuyé sur DNS pour poser le record, mais je vois une pastille "sans
@@ -7641,15 +7641,25 @@ déclarée `tls: false` par l'acceptation d'une proposition de la cellule
    seedée `clair` ; un parcours accepte la proposition en cochant TLS et
    constate `tls` au registre ; un parcours active le TLS d'une route depuis sa
    ligne et le constate ; captures observées aux deux formats ; M7 et M8.
-   *En cours : seed fait et prouvé (`intranet.example.com` en clair et une
-   proposition `clair` sur `ubuntu-24`) ; manuel M7 et M8 écrits, avec deux
-   illustrations ajoutées au harnais du manuel ; les deux parcours sont écrits
-   mais **pas encore joués**, ni les illustrations produites : le 2026-09-23, le
-   poste portait sans interruption les campagnes E2E d'un autre projet, et la
-   règle d'une seule épreuve lourde à la fois a primé.*
+   *Fait : seed prouvé (`intranet.example.com` en clair et une proposition
+   `clair` sur `ubuntu-24`) ; les deux parcours passent — la case cochée au
+   clavier entre au registre en TLS, « Activer le TLS » garde l'identité et le
+   port de la route, écrit `ingress.update` avec l'avant et l'après, rend le
+   focus à « Modifier », et un Spark protégé refuse dans la section ; sept
+   captures observées, dont 390 px ; manuel M7 et M8 et leurs deux
+   illustrations, `m7-route-sans-tls` et `m8-proposition-routes`, produites par
+   le harnais et observées.*
 5. **Déploiement** — OP-25 : les textes remis à la cellule sont servis par
    `sparkd` et n'atteignent la Forge qu'à sa mise à jour. La console est locale
-   et se relance. *Écrit, en attente.*
+   et se relance. *Écrit, en attente — il porte aussi SPK-114.*
+
+- **Clos le 2026-09-23.** Campagne E2E entière : **138 verts sur 141**, les trois
+  rouges étant ceux du rapport d'incohérences du 2026-09-18 (canal d'alerte hors
+  bande), sans rapport avec cette unité. Deux corrections de parcours en
+  chemin, aucune du produit : deux sélecteurs qui lisaient le premier
+  avertissement et le premier badge de la ligne, et une lecture du focus faite
+  avant qu'il soit posé — elle attend désormais la condition.
+- **Non déployé** : les textes remis à la cellule attendent OP-25.
 
 - Ce que l'unité ne doit PAS casser : une route volontairement en clair reste
   déclarable et proposable (`clair`) ; les fichiers déjà écrits se lisent à
@@ -7683,7 +7693,7 @@ avant d'écrire une ligne.
   sur la Forge depuis une cellule d'essai ; DAT, manuel et contrat de
   déploiement à jour ; `@spec` / `@verifies` posés.
 
-### [ ] SPK-114 · Écarter une ligne proposée ne la refuse pas : elle reste en attente
+### [x] SPK-114 · Écarter une ligne proposée ne la refuse pas : elle reste en attente
 
 **Décision du responsable le 2026-09-23** : « les suggestions que je ne coche
 pas, elles sont écartées (si valeur vide en attente de saisie) ; ce n'est pas
@@ -7735,6 +7745,29 @@ tout le fichier, « ce qui n'a pas été retenu a été refusé, pas ajourné »
   reste, constate au registre ce qui est entré, puis rouvre et retrouve la
   demande en attente, et la refuse ; seed inchangé ou complété ; captures ;
   manuel M8 ; `@spec` / `@verifies` posés.
+
+- **Clos le 2026-09-23.** Spécification committée avant le code (`4ddfbe5`).
+  `suggestions.a_conserver` valide les numéros **avant** toute application et
+  refuse en `422` (`invalid_keep`) ce qui n'est pas une liste d'entiers de la
+  proposition relue ; `reecrire` repose l'en-tête et ces lignes, ou vide quand
+  il ne reste que des commentaires ; le journal porte `pending`. Console :
+  `lignesAConserver` — entrée non retenue avec son étiquette, ligne illisible,
+  supplantée qui suit sa gagnante —, le texte sous les boutons, le compte rendu
+  « appliquée en partie ». Preuves : onze sparkd et cinq de composant, rouges
+  avant, vertes après ; 42 preuves de propositions et la campagne de
+  composants au vert, hors des quatre classes CSS déjà consignées. Seed : une
+  demande `MAPS_TOKEN=` étiquetée sur `ubuntu-24`. Parcours : celui de
+  l'acceptation partielle constate que la ligne écartée reste dans le `.?`, et
+  un nouveau écarte la demande sans valeur, accepte le reste, retrouve la
+  demande seule et la refuse ; captures `spk114-*` et
+  `spk105-proposition-appliquee` observées ; manuel M8.
+- Campagne entière : 138 verts sur 141, les trois rouges du 2026-09-18. Elle a
+  révélé une course du **doublon** Incus — deux requêtes simultanées se volent
+  son fichier provisoire —, consignée au rapport d'incohérences et non corrigée
+  ici ; le parcours attend l'écran relu avant de lire `sparkd`.
+- **Non déployé** : `conserver` est lu par `sparkd`. Tant qu'OP-25 n'est pas
+  joué, la Forge vide encore tout le `.?` ; la console, elle, le dit déjà —
+  d'où l'ordre d'OP-25.
 
 ---
 

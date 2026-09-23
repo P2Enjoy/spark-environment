@@ -39,8 +39,8 @@ L'idée d'origine est conservée intégralement dans
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 107 unités : 100 closes, 7
-partielles, 0 non commencée — le lot 6, *Réseau entre Sparks*, ouvert le
+**Le plan de contrôle tourne sur une Forge réelle.** 110 unités : 102 closes, 7
+partielles, 1 non commencée — le lot 6, *Réseau entre Sparks*, ouvert le
 2026-09-17 et clos le 2026-09-18. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 

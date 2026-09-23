@@ -19,6 +19,9 @@
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-31 — pour `estTls`, la colonne TLS de
  *       `ligneEntree`, l'avertissement de `relecture` et le `tls` envoyé par
  *       `entreesAppliquees`
+ * @spec docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas refuser :
+ *       ce qui n'est pas retenu reste en attente), §55.8 (`conserver`), §55.9 —
+ *       pour `lignesAConserver` et ce que l'écran dit sous les boutons
  *
  * **L'analyse vit ici, comme celle du lot collé** (§43.10.3, §55.8) : le serveur
  * reçoit des entrées structurées, jamais du texte. Écrire un second analyseur en
@@ -178,6 +181,36 @@ export function entreesAppliquees(ui, kind, entrees) {
 }
 
 /**
+ * Les lignes du corps relu qui RESTENT dans la cellule (SPK-114, §55.5, §55.8).
+ *
+ * Seule une décision explicite retire une ligne : l'accepter, ou « Tout
+ * refuser ». Ce qui n'est pas retenu reste donc, avec l'étiquette posée juste
+ * au-dessus (§55.3.3) ; une ligne illisible aussi — personne ne l'a tranchée ;
+ * une ligne supplantée suit celle qui la supplante. C'est la console qui sait
+ * quelle ligne porte quelle entrée, puisque c'est elle qui analyse : le serveur
+ * ne reçoit que des NUMÉROS.
+ *
+ * Une note se tranche en entier : rien à conserver.
+ */
+export function lignesAConserver(ui, suggestion) {
+  if (!suggestion?.present || !NATURES[suggestion.kind]) return [];
+  const { kind } = suggestion;
+  const brutes = String(suggestion.body ?? '').split(/\r?\n/);
+  const { entrees, refus, supplantees = [] } = comprendre(suggestion);
+  const gardees = new Set();
+  const avecEtiquette = (numero) => {
+    gardees.add(numero);
+    if (numero > 1 && brutes[numero - 2].trim().startsWith('#')) gardees.add(numero - 1);
+  };
+  const restantes = entrees.filter((e) => !retenue(ui, kind, e.ligne));
+  restantes.forEach((e) => avecEtiquette(e.ligne));
+  const noms = new Set(restantes.map((e) => e.nom));
+  supplantees.filter((x) => noms.has(x.nom)).forEach((x) => avecEtiquette(x.ligne));
+  refus.forEach((r) => avecEtiquette(r.ligne));
+  return [...gardees].sort((a, b) => a - b);
+}
+
+/**
  * Les lignes RETENUES qui attendent encore leur valeur (§55.9.1).
  *
  * Écartée, une demande ne bloque plus rien : c'est la sortie du §55.3.3, et elle
@@ -328,10 +361,11 @@ function bloc(suggestion, ui) {
       <p class="champ__aide" id="sugg-attente-${kind}" data-sugg-attente="${kind}">${
         attente.length ? `${attente.length} valeur(s) demandée(s) encore vide(s)
         : ${echapper(attente.map((e) => e.nom).join(', '))}. Complétez ces champs,
-        ou décochez ces lignes.` : ''}</p>
-      <p class="note">Quel que soit votre choix, <strong>le fichier de la cellule
-      est vidé</strong> : ce que vous n’avez pas retenu est refusé, pas ajourné.
-      C’est ainsi que son auteur apprend qu’une décision a été prise.</p>` : ''}
+        ou décochez ces lignes : elles resteront en attente dans la cellule.` : ''}</p>
+      <p class="note">Ce que vous ajoutez sort du fichier de la cellule ;
+      <strong>ce que vous ne retenez pas y reste, en attente</strong>, jusqu’à
+      ce que vous l’ajoutiez ou choisissiez « Tout refuser ». C’est ainsi que
+      son auteur apprend ce qui a été décidé.</p>` : ''}
   </section>`;
 }
 

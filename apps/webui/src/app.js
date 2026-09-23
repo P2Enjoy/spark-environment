@@ -18,7 +18,7 @@ import { IDENTITE_VIDE } from './components/spark-identity.js';
 import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
 import { NOTES_VIDE } from './components/spark-notes.js';
 import { PROPOSITIONS_VIDE, comprendre, enAttente as lignesEnAttente,
-         entreesAppliquees } from './components/spark-suggestions.js';
+         entreesAppliquees, lignesAConserver } from './components/spark-suggestions.js';
 import { ENV_VIDE } from './components/spark-env.js';
 import { CATALOGUE_VIDE as CATALOGUE_ENV_VIDE, renderForgeEnv } from './components/forge-env.js';
 import { IMPORT_VIDE, analyser } from './components/env-import.js';
@@ -2033,7 +2033,7 @@ function brancherPanneaux() {
       indication.textContent = attente.length
         ? `${attente.length} valeur(s) demandée(s) encore vide(s) : `
           + `${attente.map((e) => e.nom).join(', ')}. Complétez ces champs, ou `
-          + 'décochez ces lignes.'
+          + 'décochez ces lignes : elles resteront en attente dans la cellule.'
         : '';
     }
     bouton.disabled = gardees === 0 || attente.length > 0;
@@ -3469,6 +3469,8 @@ async function trancherSuggestion(kind, sha, appliquer) {
     corpsEnvoye = {
       sha256: sha,
       entries: entreesAppliquees(p, kind, comprendre(suggestion).entrees),
+      // SPK-114 · §55.5 : ce qui n'est pas retenu reste dans la cellule.
+      conserver: lignesAConserver(p, suggestion),
     };
   }
 
@@ -3482,7 +3484,12 @@ async function trancherSuggestion(kind, sha, appliquer) {
     kind, ok,
     message: ok
       ? (appliquer
-        ? 'Proposition appliquée, et le fichier de la cellule est vidé.'
+        // SPK-114 : le compte rendu dit ce qui attend ENCORE, tel que le
+        // serveur l'a réécrit — pas ce que l'écran croit avoir laissé.
+        ? (corps?.pending
+          ? `Proposition appliquée en partie : ${corps.pending} ligne(s) `
+            + 'reste(nt) en attente dans la cellule.'
+          : 'Proposition appliquée, et le fichier de la cellule est vidé.')
         : 'Proposition refusée : rien n’a été écrit, et le fichier de la cellule est vidé.')
       // §55.5 : un refus du PRODUIT ne consomme pas. Le dire évite de croire la
       // proposition perdue, et d'aller la redemander à son auteur.

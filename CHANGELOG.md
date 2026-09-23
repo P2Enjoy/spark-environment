@@ -180,9 +180,21 @@
   TLS*, la correction du §18.3 ter, port inchangé, sans confirmation, dont le
   refus se lit dans la section. Seed : une route en clair et une proposition de
   routes avec une ligne `clair` sur `ubuntu-24`. Preuves sparkd et de
-  composant ; deux parcours E2E écrits, **pas encore joués** ; manuel M7 et M8,
-  dont les deux illustrations restent à produire ; design system §6.8 et
-  SPK-DS-31. **Non déployé** : les textes remis à la cellule attendent OP-25.
+  composant, deux parcours E2E, sept captures ; manuel M7 et M8 et deux
+  illustrations ; design system §6.8 et SPK-DS-31. **Non déployé** : les textes
+  remis à la cellule attendent OP-25.
+- **SPK-114 — écarter une ligne proposée ne la refuse pas : elle reste en
+  attente.** Décision du responsable : une valeur demandée qu'on n'a pas sous la
+  main ne doit pas disparaître de la cellule. Une acceptation ne retire plus du
+  `.?` que les lignes acceptées, avec leur étiquette ; ce qui n'est pas retenu
+  et les lignes illisibles y restent ; « Tout refuser » vide toujours. La
+  console envoie les numéros des lignes à conserver (`conserver`), `sparkd` les
+  valide avant d'appliquer, réécrit l'en-tête et ces lignes, et journalise leur
+  nombre sans leur contenu. L'écran le dit sous les boutons et dans le compte
+  rendu. Seed : une demande `MAPS_TOKEN=` sur `ubuntu-24`. Preuves sparkd et de
+  composant, un parcours E2E et un parcours adapté ; manuel M8. **Non
+  déployé** : tant qu'OP-25 n'est pas joué, la Forge vide encore tout le
+  fichier.
 - **SPK-16 — la console ne se reconnectait plus à une Forge tombée.** Rapporté
   sur une console ouverte depuis plus de 24 h : le tunnel tombe dans la nuit, le
   bouton *Reconnecter* ne relance rien, et il faut arrêter l'interface et la

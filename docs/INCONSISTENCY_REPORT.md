@@ -77,3 +77,24 @@ dit rien, ce que `DESIGN_SYSTEM.md` §1.3 et §6.27 refusent.
 le TLS » a son propre panneau (`route-tls`) rendu dans la section. À arbitrer par
 le responsable : rendre aussi le refus du panneau `route` dans la section quand
 la modale est fermée.
+
+## 2026-09-23 · Le doublon Incus perd des écritures simultanées : `500` sur des lectures concurrentes
+
+**Constaté** en jouant la campagne E2E de SPK-114 : une lecture de
+`GET /v1/sparks/{nom}/suggestions` faite par le parcours pendant que la console
+relisait la même facette a rendu une réponse non JSON. **Reproduit** hors
+navigateur : six fils qui lisent quinze fois `/suggestions` sur le pilote
+factice rendent **84 erreurs sur 90**, toutes `FileNotFoundError` sur le
+renommage du fichier provisoire. Cause : `FakeIncus._persist`
+(`services/sparkd/src/sparkd/incus.py`) écrit toujours dans le même
+`<registre>.incus.tmp` puis le renomme ; deux requêtes simultanées — chaque
+lecture repose les `.?` — se volent ce fichier. Le pilote réel n'est pas
+concerné : il ne persiste rien de tel.
+
+**Non résolu ici** : c'est le doublon de la pile de développement et des
+parcours, hors du périmètre de SPK-112 et SPK-114. Le parcours de SPK-114
+attend désormais que l'écran soit relu avant de lire `sparkd` (la règle de
+SPK-DS-27), ce qui évite la course sans la corriger. À arbitrer par le
+responsable : rendre `_persist` sûr entre fils (verrou, fichier provisoire
+propre à chaque écriture), ce qui supprimerait aussi une source possible de
+rouges intermittents dans la campagne.

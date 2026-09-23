@@ -8,6 +8,8 @@
              dire) · §18.4 (l'unicité du domaine) · §54.6 (la garde des secrets)
              · docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.3.1 (le dernier mot
              d'une route règle son côté PUBLIC ; la pile sert en HTTP simple)
+             · docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas
+             refuser), §55.8 (`conserver`)
 
 Le point de ces preuves est ce qui N'ARRIVE PAS : un fichier consulté qui reste,
 une proposition en attente qu'aucune projection n'écrase, un refus du produit qui
@@ -297,26 +299,148 @@ def test_ACCEPTER_ecrit_au_registre_ET_vide_le_fichier(client):
     assert "REDIS_URL" in fichiers(client, nom)[suggestions.FICHIER_VARIABLES]
 
 
-def test_une_acceptation_PARTIELLE_vide_quand_meme_tout(client):
-    """§55.5 : ce qui n'a pas été retenu a été refusé, pas ajourné.
+def test_une_acceptation_PARTIELLE_laisse_EN_ATTENTE_ce_qui_n_est_pas_retenu(client):
+    """SPK-114 · §55.5 : écarter n'est pas refuser. On écarte une ligne parce
+    qu'on n'a pas sa valeur MAINTENANT ; la vider la ferait disparaître sans que
+    personne l'ait refusée, et son auteur la croirait rejetée.
 
-    Laisser le reliquat ferait revenir à chaque ouverture les lignes qu'on vient
-    d'écarter, et l'écran finirait par être fermé sans être lu.
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5, §55.5.1, §55.8
     """
     nom = creer(client)
-    deposer(client, nom, "variables", "GARDEE=oui\nECARTEE=non\n")
+    deposer(client, nom, "variables",
+            "GARDEE=oui\n\n# Jeton du fournisseur, à créer chez lui.\nDEMANDEE=\n")
     vue = lire(client, nom, "variables")
 
     rendu = client.post(f"/v1/sparks/{nom}/suggestions/variables/apply", json={
         "sha256": vue["sha256"],
         "entries": [{"name": "GARDEE", "value": "oui", "secret": False}],
+        # La console, qui analyse, désigne la demande ET son étiquette.
+        "conserver": [3, 4],
     })
     assert rendu.status_code == 200, rendu.text
+    assert rendu.json()["cleared"] is False
+    assert rendu.json()["pending"] == 1
+
+    # Ce qui a été accepté est au registre, et SORTI du `.?` ; ce qui ne l'a
+    # pas été y reste, étiquette comprise, telle que son auteur l'a écrite.
+    pose = fichiers(client, nom)[suggestions.FICHIER_VARIABLES]
+    assert "GARDEE" in pose and "DEMANDEE" not in pose
+    reste = lire(client, nom, "variables")
+    assert reste["present"] is True
+    assert reste["body"] == "# Jeton du fournisseur, à créer chez lui.\nDEMANDEE="
+    # L'en-tête est reposé au-dessus : le fichier reste un `.?` du produit.
+    brut = fichiers(client, nom)[suggestions.chemin("variables")]
+    assert brut.startswith(suggestions.entete("variables"))
+
+
+def test_une_acceptation_SANS_ligne_a_conserver_vide_le_fichier(client):
+    """§55.5 : quand plus rien n'attend, l'acceptation vide — comme avant. Et une
+    console qui n'envoie pas `conserver` n'en laisse rien : l'absence ne peut
+    pas ÉCRIRE une ligne que personne n'a désignée.
+
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5, §55.8
+    """
+    nom = creer(client)
+    for conserver in ([], None):
+        deposer(client, nom, "variables", "A=1\n")
+        vue = lire(client, nom, "variables")
+        corps = {"sha256": vue["sha256"],
+                 "entries": [{"name": "A", "value": "1", "secret": False}]}
+        if conserver is not None:
+            corps["conserver"] = conserver
+        rendu = client.post(f"/v1/sparks/{nom}/suggestions/variables/apply", json=corps)
+        assert rendu.status_code == 200, rendu.text
+        assert rendu.json()["cleared"] is True and rendu.json()["pending"] == 0
+        assert lire(client, nom, "variables")["present"] is False
+
+
+def test_une_etiquette_SEULE_ne_fait_pas_une_proposition(client):
+    """§55.5 : des lignes conservées qui ne portent que des commentaires ne
+    laissent rien en attente — le fichier est vidé plutôt que de montrer une
+    proposition à zéro ligne.
+
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5
+    """
+    nom = creer(client)
+    deposer(client, nom, "variables", "# une note\nA=1\n")
+    vue = lire(client, nom, "variables")
+    rendu = client.post(f"/v1/sparks/{nom}/suggestions/variables/apply", json={
+        "sha256": vue["sha256"], "conserver": [1],
+        "entries": [{"name": "A", "value": "1", "secret": False}]})
+    assert rendu.status_code == 200, rendu.text
+    assert rendu.json()["cleared"] is True
     assert lire(client, nom, "variables")["present"] is False
 
-    pose = fichiers(client, nom)[suggestions.FICHIER_VARIABLES]
-    assert "GARDEE" in pose
-    assert "ECARTEE" not in pose
+
+@pytest.mark.parametrize("conserver", [[0], [9], ["2"], "2", [True], [1.5]])
+def test_des_lignes_a_conserver_FAUTIVES_sont_refusees_AVANT_d_appliquer(client, conserver):
+    """§55.8 : une liste fautive est refusée en 422, et RIEN n'a été écrit — ni
+    au registre, ni dans la cellule. La valider après aurait appliqué une partie
+    de la proposition, puis échoué en laissant le fichier dans un état inconnu.
+
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.8
+    """
+    nom = creer(client)
+    deposer(client, nom, "variables", "A=1\nB=2\n")
+    vue = lire(client, nom, "variables")
+    rendu = client.post(f"/v1/sparks/{nom}/suggestions/variables/apply", json={
+        "sha256": vue["sha256"], "conserver": conserver,
+        "entries": [{"name": "A", "value": "1", "secret": False}]})
+    assert rendu.status_code == 422, rendu.text
+    assert rendu.json()["detail"]["error"] == "invalid_keep"
+    assert "A=1" not in fichiers(client, nom)[suggestions.FICHIER_VARIABLES]
+    assert lire(client, nom, "variables")["sha256"] == vue["sha256"], "rien consommé"
+
+
+def test_une_route_non_retenue_reste_en_attente(client):
+    """SPK-114 : la règle vaut pour les routes, dont la grammaire vit aussi dans
+    la console — le serveur ne fait que garder les lignes désignées.
+
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5
+    """
+    nom = creer(client)
+    deposer(client, nom, "routes", "a.exemple.test 8080\nb.exemple.test 8081 clair\n")
+    vue = lire(client, nom, "routes")
+    rendu = client.post(f"/v1/sparks/{nom}/suggestions/routes/apply", json={
+        "sha256": vue["sha256"], "conserver": [2],
+        "entries": [{"domain": "a.exemple.test", "port": 8080, "tls": True}]})
+    assert rendu.status_code == 200, rendu.text
+    assert lire(client, nom, "routes")["body"] == "b.exemple.test 8081 clair"
+    assert [r["domain"] for r in client.get("/v1/ingress").json()["routes"]] == [
+        "a.exemple.test"]
+
+
+def test_une_NOTE_se_tranche_en_entier_quoi_que_dise_conserver(client):
+    """§55.3 : un texte n'a pas de lignes à laisser en attente.
+
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.3, §55.8
+    """
+    nom = creer(client)
+    deposer(client, nom, "readme", "# Titre\n\nUn texte.\n")
+    vue = lire(client, nom, "readme")
+    rendu = client.post(f"/v1/sparks/{nom}/suggestions/readme/apply", json={
+        "sha256": vue["sha256"], "body": vue["body"], "conserver": [1]})
+    assert rendu.status_code == 200, rendu.text
+    assert rendu.json()["cleared"] is True
+    assert lire(client, nom, "readme")["present"] is False
+
+
+def test_le_journal_COMPTE_ce_qui_attend_sans_le_lire(client):
+    """§21.4, §55.8 : un `secrets.?` porte des valeurs en clair par construction.
+    Le journal dit combien de lignes restent en attente, jamais lesquelles.
+
+    @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.8
+    """
+    nom = creer(client)
+    deposer(client, nom, "secrets", f"GARDE=x\nRESTE={SECRET}\n")
+    vue = lire(client, nom, "secrets")
+    assert client.post(f"/v1/sparks/{nom}/suggestions/secrets/apply", json={
+        "sha256": vue["sha256"], "conserver": [2],
+        "entries": [{"name": "GARDE", "value": "x", "secret": True}]}).status_code == 200
+    entree = next(e for e in client.get("/v1/audit?limit=50").json()["entries"]
+                  if e["action"] == "spark.suggestion.apply")
+    assert '"pending": 1' in entree["payload"]
+    assert SECRET not in entree["payload"] and "RESTE" not in entree["payload"]
 
 
 def test_REFUSER_vide_sans_rien_ecrire(client):
@@ -615,9 +739,9 @@ def test_un_Spark_SANS_CELLULE_le_dit_au_lieu_de_pretendre(client):
 
 
 def test_accepter_SANS_retenir_aucune_entree_envoie_vers_le_refus(client):
-    """Les deux vident le fichier ; ils ne disent pas la même chose au journal
-    (§55.5). Une acceptation vide serait un refus qui se fait passer pour un
-    accord."""
+    """Une acceptation vide serait un refus qui se fait passer pour un accord
+    (§55.5). Et depuis SPK-114, elle ne vide rien : ce qui n'est pas retenu
+    reste en attente, et le message le dit."""
     nom = creer(client)
     deposer(client, nom, "variables", "A=1\n")
     vue = lire(client, nom, "variables")
@@ -625,7 +749,8 @@ def test_accepter_SANS_retenir_aucune_entree_envoie_vers_le_refus(client):
         "sha256": vue["sha256"], "entries": []})
     assert refus.status_code == 422
     assert refus.json()["detail"]["error"] == "empty_apply"
-    assert "Refuser" in refus.json()["detail"]["message"]
+    assert "« Tout refuser »" in refus.json()["detail"]["message"]
+    assert "restent en attente" in refus.json()["detail"]["message"]
     assert lire(client, nom, "variables")["present"] is True
 
 

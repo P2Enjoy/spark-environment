@@ -120,7 +120,7 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes (SPK-112) — **EN ATTENTE**
+### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes, et ce qu'une acceptation laisse en attente (SPK-112, SPK-114) — **EN ATTENTE**
 
 ```
 État          : EN ATTENTE. Aucune migration, aucune variable, aucun service
@@ -132,11 +132,17 @@ Objectif      : servir les textes corrigés de SPK-112 (docs/DAT.md §55.3.1,
                 route règle son côté public. Tant que la Forge tourne la build
                 0.post1.dev856+g565e5c688, une cellule y lit encore « servez en
                 CLAIR » sous la grammaire `[tls|clair]`.
-                La console (case TLS, bouton « Activer le TLS ») est locale :
-                elle ne se déploie pas, elle se relance (`sparkui stop`, puis
-                `sparkui`).
+                SPK-114 (docs/DAT.md §55.5, §55.8) : `apply` lit `conserver` et
+                laisse dans le `.?` ce qui n'a pas été retenu. L'ancienne build
+                l'ignore et vide tout le fichier.
+                La console (case TLS, « Activer le TLS », lignes conservées) est
+                locale : elle ne se déploie pas, elle se relance (`sparkui
+                stop`, puis `sparkui`).
 Dépend de     : rien.
-Ordre         : 1. mettre à jour sparkd depuis la console (runbook A.2) ;
+Ordre         : 0. NE PAS trancher de proposition partielle avec la console
+                   relancée avant l'étape 1 : elle annonce que les lignes non
+                   retenues restent, et l'ancienne build les viderait ;
+                1. mettre à jour sparkd depuis la console (runbook A.2) ;
                 2. rien d'autre : ouvrir l'onglet Routes ou Environnement d'un
                    Spark réécrit `/etc/spark/routes` et repose les en-têtes des
                    `.?` vides (§55.5) ; le briefing est réécrit à sa prochaine
@@ -145,7 +151,9 @@ Vérification  : `GET /v1/forge` rend la nouvelle build ; depuis le terminal
                 d'une cellule d'ESSAI, après l'ouverture de son onglet Routes
                 dans la console, `head -20 /etc/spark/routes.?` montre « LE
                 DERNIER MOT RÈGLE LE CÔTÉ PUBLIC » et `grep -ci 'en clair'
-                /etc/spark/routes` rend 0 — jamais sur une cellule de locataire.
+                /etc/spark/routes` rend 0 ; sur la même cellule d'essai, une
+                proposition `A=1` / `B=` dont on n'accepte que `A` laisse `B=`
+                dans `/etc/spark/env.?` — jamais sur une cellule de locataire.
 Retour arrière: réinstaller la build précédente (runbook A.2) : rien n'est
                 écrit au registre, les textes redeviennent les anciens.
 Risques       : aucun sur les routes servies — ni le registre ni la

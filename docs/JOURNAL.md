@@ -12514,3 +12514,33 @@ des lignes à conserver, et le serveur réécrit l'en-tête suivi de ces lignes.
 
 **Ordre** : SPK-112 d'abord, dont les parcours E2E attendent que le poste soit
 libre ; SPK-114 ensuite.
+
+## 2026-09-23 · SPK-112 et SPK-114 clos — ce que les parcours ont appris
+
+**Attente du poste** : de 17:00Z à 17:30Z environ, le poste a porté sans
+interruption les campagnes Playwright d'un autre projet (conteneurs
+`lelabs-sso-dev-e2e-run-*`, lancés hors de cette session). La règle d'une seule
+épreuve lourde à la fois a primé : SPK-112 a été committé comme étape
+intermédiaire, ses parcours non joués, et SPK-114 écrit pendant ce temps. Le
+responsable a donné le feu vert dès que le poste s'est libéré.
+
+**Parcours** : quatre ciblés, puis la campagne entière trois fois. Rien dans le
+produit ; trois choses dans les parcours :
+
+1. deux sélecteurs trop larges — le premier `.avertissement` d'un bloc qui en
+   porte deux, le premier `.badge` d'une ligne qui porte aussi l'état DNS ;
+2. une lecture du focus faite dès que le bouton disparaissait, avant que la
+   console, qui relit d'abord la route, l'ait posé sur « Modifier » : le parcours
+   attend désormais la condition ;
+3. une lecture de `sparkd` pendant la relecture de la console a rendu un corps
+   non JSON. **Reproduit** hors navigateur : sur le pilote factice, six fils de
+   lectures simultanées de `/suggestions` rendent 84 erreurs sur 90,
+   `FileNotFoundError` — `FakeIncus._persist` écrit toujours dans le même
+   fichier provisoire. Le pilote réel n'est pas concerné. Consigné au rapport
+   d'incohérences, non corrigé ; le parcours attend l'écran relu (SPK-DS-27).
+
+**Résultat** : 138 verts sur 141, les trois rouges du 2026-09-18.
+
+**Déploiement** : OP-25 porte les deux unités. L'ordre compte pour SPK-114 : la
+console relancée annonce que les lignes non retenues restent, ce que seule la
+nouvelle build de `sparkd` rend vrai.

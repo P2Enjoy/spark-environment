@@ -190,6 +190,10 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     // et le bouton qui la corrige sont sur la même ligne, et c'est exactement
     // ce que le chapitre décrit.
     await ouvrir('ubuntu-24', 'routes');
+    // La facette se repeint quand les propositions de la cellule arrivent : on
+    // attend leur bannière, sans quoi la ligne visée est remplacée sous le
+    // défilement.
+    await page.waitForSelector('[data-sugg-ouvrir="routes"]', { timeout: 20000 });
     await page.waitForSelector('[data-active-tls]', { timeout: 10000 });
     await page.locator('li:has([data-active-tls])').scrollIntoViewIfNeeded();
     await capturer('m7-route-sans-tls', { hauteur: 900 });

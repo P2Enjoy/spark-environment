@@ -1242,15 +1242,18 @@ export interface paths {
         put?: never;
         /**
          * Apply Suggestion
-         * @description Accepte tout ou partie d'une proposition, puis VIDE le fichier (§55.5).
+         * @description Accepte tout ou partie d'une proposition (§55.5).
          *
-         *     @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (accepter vide),
-         *           §55.5.2 (l'empreinte relue), §55.8 · §35.2
+         *     @spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5, §55.5.2 (l'empreinte
+         *           relue), §55.8 · §35.2
+         *     @spec docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas
+         *           refuser), §55.8 (`conserver`)
          *
-         *     **Une acceptation partielle vide quand même tout** : la décision a porté
-         *     sur toute la proposition, et ce qui n'a pas été retenu a été refusé, pas
-         *     ajourné. Laisser le reliquat ferait revenir à chaque ouverture les lignes
-         *     qu'on vient d'écarter.
+         *     **Ce qui n'est pas retenu RESTE en attente** (SPK-114, décision du
+         *     responsable) : on écarte une ligne parce qu'on n'a pas sa valeur
+         *     maintenant, pas parce qu'on n'en veut pas. Les lignes à conserver sont
+         *     validées AVANT d'appliquer quoi que ce soit, puis le fichier est réécrit
+         *     avec elles seules — ou vidé quand plus rien n'attend.
          *
          *     **Un refus du PRODUIT, lui, ne vide pas** : garde des secrets, grammaire
          *     fautive, domaine déjà pris laissent le fichier intact, et son auteur peut

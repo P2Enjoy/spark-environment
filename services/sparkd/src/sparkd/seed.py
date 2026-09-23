@@ -496,6 +496,15 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
         ("ubuntu-24", "routes",
          "docs.example.com 8080 clair\n"
          "statut.example.com 8081\n"),
+        # SPK-114 · §55.5 : une demande que le propriétaire n'a pas sous la
+        # main. L'écarter doit la laisser EN ATTENTE ; sans elle, ni le reste
+        # d'une acceptation partielle ni son refus explicite ne se démontrent —
+        # la proposition de « crm-production » sert déjà à la saisie de SPK-107.
+        ("ubuntu-24", "variables",
+         "APP_ENV=production\n"
+         "\n"
+         "# Jeton du service de cartes, à demander au fournisseur.\n"
+         "MAPS_TOKEN=\n"),
     ]
     for spark, kind, texte in propositions:
         cellule = client.app.state.incus
@@ -716,6 +725,13 @@ def verify(client: TestClient) -> None:
     if not routes_ubuntu["present"] or " clair" not in routes_ubuntu["body"]:
         raise SeedError("la proposition de routes d'« ubuntu-24 » devrait attendre, "
                         "avec une ligne en clair")
+    # SPK-114 · §55.5 : une demande sans valeur attend, à côté d'une valeur.
+    variables_ubuntu = next(
+        s for s in client.get("/v1/sparks/ubuntu-24/suggestions").json()["suggestions"]
+        if s["kind"] == "variables")
+    if not variables_ubuntu["present"] or "MAPS_TOKEN=" not in variables_ubuntu["body"]:
+        raise SeedError("la proposition de variables d'« ubuntu-24 » devrait "
+                        "attendre, avec une valeur demandée")
     proteges_ = {s["name"] for s in client.get("/v1/sparks").json()["sparks"]
                  if s.get("protected")}
     if not any(not r["tls"] and r["spark_name"] not in proteges_

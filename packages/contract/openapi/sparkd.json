@@ -3314,7 +3314,7 @@
     },
     "/v1/sparks/{name}/suggestions/{kind}/apply": {
       "post": {
-        "description": "Accepte tout ou partie d'une proposition, puis VIDE le fichier (§55.5).\n\n@spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (accepter vide),\n      §55.5.2 (l'empreinte relue), §55.8 · §35.2\n\n**Une acceptation partielle vide quand même tout** : la décision a porté\nsur toute la proposition, et ce qui n'a pas été retenu a été refusé, pas\najourné. Laisser le reliquat ferait revenir à chaque ouverture les lignes\nqu'on vient d'écarter.\n\n**Un refus du PRODUIT, lui, ne vide pas** : garde des secrets, grammaire\nfautive, domaine déjà pris laissent le fichier intact, et son auteur peut\ncorriger.",
+        "description": "Accepte tout ou partie d'une proposition (§55.5).\n\n@spec docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5, §55.5.2 (l'empreinte\n      relue), §55.8 · §35.2\n@spec docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas\n      refuser), §55.8 (`conserver`)\n\n**Ce qui n'est pas retenu RESTE en attente** (SPK-114, décision du\nresponsable) : on écarte une ligne parce qu'on n'a pas sa valeur\nmaintenant, pas parce qu'on n'en veut pas. Les lignes à conserver sont\nvalidées AVANT d'appliquer quoi que ce soit, puis le fichier est réécrit\navec elles seules — ou vidé quand plus rien n'attend.\n\n**Un refus du PRODUIT, lui, ne vide pas** : garde des secrets, grammaire\nfautive, domaine déjà pris laissent le fichier intact, et son auteur peut\ncorriger.",
         "operationId": "apply_suggestion_v1_sparks__name__suggestions__kind__apply_post",
         "parameters": [
           {

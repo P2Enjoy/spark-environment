@@ -1143,7 +1143,9 @@ test('une route proposée EN CLAIR se passe en TLS avant d’être acceptée', a
     await page.waitForSelector('[data-sugg-tls="routes"]', { timeout: 10000 });
 
     const bloc = '[data-proposition="routes"]';
-    assert.match(await page.innerText(`${bloc} .avertissement[role="status"] strong`),
+    // Le bloc porte DEUX avertissements : la bannière qui compte la proposition,
+    // puis celui qui compte les routes sans TLS. On lit le second.
+    assert.match(await page.innerText(`${bloc} .avertissement:has-text("sans TLS") strong`),
       /1 route\(s\)\s+proposée\(s\) sans TLS/);
     assert.match(await page.innerText(bloc), /docs\.example\.com\. Acceptée/);
     assert.match(await page.innerText('#sugg-tls-note-routes-1'),
@@ -1203,7 +1205,8 @@ test('une route sans TLS porte « Activer le TLS », et un Spark protégé le re
     await ouvrir('ubuntu-24', 'routes');
     const ligne = ligneRoute('intranet.example.com');
     await page.waitForSelector(`${ligne} [data-active-tls]`, { timeout: 10000 });
-    assert.match(await page.innerText(`${ligne} .badge`), /sans TLS/);
+    // La ligne porte aussi l'état DNS relevé, dans un autre badge.
+    assert.match(await page.innerText(`${ligne} .badge:has-text("sans TLS")`), /sans TLS/);
     await page.locator(ligne).scrollIntoViewIfNeeded();
     await capturer('spk112-route-sans-tls', { hauteur: 1000 });
     await capturer('spk112-route-sans-tls-mobile', { largeur: 390, hauteur: 1200 });
@@ -1232,8 +1235,11 @@ test('une route sans TLS porte « Activer le TLS », et un Spark protégé le re
     assert.equal(charge.tls, true);
     // §14.3 : le bouton a disparu avec la pastille ; le focus est allé au geste
     // qui le défait, pas sur la page.
-    assert.equal(await page.evaluate(() => document.activeElement?.dataset.modifieRoute),
-      'intranet.example.com');
+    // Le focus est posé une fois la route RELUE, après la repeinture qui a fait
+    // disparaître le bouton : on attend cette condition, pas un délai.
+    await page.waitForFunction(
+      () => document.activeElement?.dataset.modifieRoute === 'intranet.example.com',
+      null, { timeout: 5000 });
     await capturer('spk112-tls-active', { hauteur: 1000 });
 
     // Un Spark PROTÉGÉ refuse, et le refus se lit DANS la section (§35).
@@ -5686,7 +5692,9 @@ test('une proposition déposée dans la cellule s’accepte EN PARTIE', async ()
     // une DEMANDE — une valeur que son auteur ne pouvait pas connaître. Le
     // parcours les relit, en écarte une, saisit celle qu'on lui demande,
     // applique — et vérifie les TROIS effets : ce qui entre au registre, ce qui
-    // n'y entre pas, et le fichier vidé chez son auteur.
+    // n'y entre pas, et ce qui reste chez son auteur. Depuis SPK-114 (§55.5),
+    // la ligne écartée RESTE dans le fichier, en attente : écarter n'est pas
+    // refuser.
     await ouvrir('crm-production', 'environnement');
     await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 20000 });
 
@@ -5738,8 +5746,10 @@ test('une proposition déposée dans la cellule s’accepte EN PARTIE', async ()
 
     const texte = await page.textContent('body');
     assert.match(texte, /REDIS_URL/, 'la ligne retenue doit être posée');
-    assert.doesNotMatch(texte, /SESSION_TTL/,
-      'la ligne écartée est REFUSÉE, pas ajournée');
+    assert.match(texte, /1 ligne\(s\) reste\(nt\) en attente dans la cellule/);
+    const { corps: registre } = await pile.lireSparkd('/v1/sparks/crm-production/env');
+    assert.equal(registre.env.some((e) => e.name === 'SESSION_TTL'), false,
+      'la ligne écartée est entrée au registre');
 
     // La demande est entrée avec la valeur SAISIE, et l'étiquette de son auteur
     // n'est entrée NULLE PART : elle expliquait la demande, elle ne fait pas
@@ -5753,10 +5763,77 @@ test('une proposition déposée dans la cellule s’accepte EN PARTIE', async ()
 
     const apres = await pile.lireSparkd('/v1/sparks/crm-production/suggestions');
     const par = Object.fromEntries(
-      apres.corps.suggestions.map((s) => [s.kind, s.present]));
-    assert.equal(par.variables, false, 'le fichier `.?` doit être vidé');
-    assert.equal(par.install, true,
+      apres.corps.suggestions.map((s) => [s.kind, s]));
+    // SPK-114 · §55.5 : ce qui a été accepté est sorti du `.?`, ce qui a été
+    // écarté y reste, en attente.
+    assert.equal(par.variables.body, 'SESSION_TTL=3600',
+      'le `.?` devait ne plus porter que la ligne écartée');
+    assert.equal(par.install.present, true,
       'une décision ne consomme que la proposition qu’elle vise');
+  });
+});
+
+test('une demande ÉCARTÉE reste en attente, et seul « Tout refuser » la retire', async () => {
+  await parcours('spk114-ecarter-n-est-pas-refuser', async () => {
+    // @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas
+    //           refuser), §55.5.1, §55.8 (`conserver`), §55.9 ·
+    //           docs/DESIGN_SYSTEM_APP.md SPK-DS-27, SPK-DS-28
+    //
+    // Le cas du responsable : une valeur demandée qu'il n'a pas sous la main.
+    // Il l'écarte, accepte le reste ; la demande doit l'attendre.
+    await ouvrir('ubuntu-24', 'environnement');
+    await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 20000 });
+    await page.click('[data-sugg-ouvrir="variables"]');
+    await page.waitForSelector('[data-sugg-garder="variables"]', { timeout: 10000 });
+    assert.match(await page.innerText('[data-proposition="variables"]'),
+      /ce que vous ne retenez pas y reste, en attente/);
+    // La demande (ligne 4) bloque le geste tant qu'elle est retenue et vide.
+    assert.equal(await page.isDisabled('[data-sugg-appliquer="variables"]'), true);
+    await page.uncheck('[data-sugg-garder="variables"][data-ligne="4"]');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-sugg-appliquer="variables"]').disabled,
+      null, { timeout: 10000 });
+    await capturer('spk114-demande-ecartee', { hauteur: 1000 });
+
+    await page.click('[data-sugg-appliquer="variables"]');
+    // L'écran RELU ET le message (SPK-DS-27) : le compte « 1 variable » n'existe
+    // qu'une fois la cellule relue. Lire `sparkd` avant croiserait la relecture
+    // de la console (docs/INCONSISTENCY_REPORT.md, doublon Incus).
+    await page.waitForFunction(
+      () => /Proposition appliquée en partie/.test(document.body.innerText)
+            && /1 variable\(s\) proposée\(s\)/.test(document.body.innerText),
+      null, { timeout: 20000 });
+    assert.match(await page.innerText('[data-proposition="variables"]'),
+      /1 ligne\(s\) reste\(nt\) en attente dans la cellule/);
+    await capturer('spk114-reste-en-attente', { hauteur: 1000 });
+
+    // EFFETS : APP_ENV est au registre ; MAPS_TOKEN n'y est pas, et attend
+    // TOUJOURS dans la cellule, avec l'étiquette de son auteur.
+    const { corps: env } = await pile.lireSparkd('/v1/sparks/ubuntu-24/env');
+    assert.equal(env.env.find((e) => e.name === 'APP_ENV')?.value, 'production');
+    assert.equal(env.env.some((e) => e.name === 'MAPS_TOKEN'), false);
+    let { corps: vues } = await pile.lireSparkd('/v1/sparks/ubuntu-24/suggestions');
+    assert.equal(vues.suggestions.find((x) => x.kind === 'variables').body,
+      '# Jeton du service de cartes, à demander au fournisseur.\nMAPS_TOKEN=');
+
+    // On revient plus tard : la demande est là, seule, et on la REFUSE.
+    await ouvrir('ubuntu-24', 'environnement');
+    await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 20000 });
+    assert.match(await page.innerText('[data-proposition="variables"]'),
+      /1 variable\(s\) proposée\(s\)/);
+    await page.click('[data-sugg-ouvrir="variables"]');
+    await page.waitForSelector('[data-sugg-refuser="variables"]', { timeout: 10000 });
+    await page.click('[data-sugg-refuser="variables"]');
+    // Relue : la proposition vidée n'a plus de bloc, seul son compte rendu reste.
+    await page.waitForFunction(
+      () => /Proposition refusée/.test(document.body.innerText)
+            && !document.querySelector('[data-sugg-ouvrir="variables"]'),
+      null, { timeout: 20000 });
+    ({ corps: vues } = await pile.lireSparkd('/v1/sparks/ubuntu-24/suggestions'));
+    assert.equal(vues.suggestions.find((x) => x.kind === 'variables').present, false,
+      '« Tout refuser » devait vider le `.?`');
+    const { corps: apres } = await pile.lireSparkd('/v1/sparks/ubuntu-24/env');
+    assert.equal(apres.env.some((e) => e.name === 'MAPS_TOKEN'), false);
   });
 });
 

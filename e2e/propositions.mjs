@@ -1,6 +1,8 @@
 /**
  * Captures des propositions déposées dans la cellule, contre la pile RÉELLE.
  *
+ * @verifies docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas
+ *           refuser : la ligne écartée reste dans la cellule)
  * @verifies docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (consulter ne consomme
  *           pas), §55.9 (là où le geste se conclut) ·
  *           docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3 (le vide est une
@@ -12,7 +14,7 @@
  * Le harnais parcourt l'écran EN CLIQUANT depuis l'accueil (§29.3). Il fait
  * plus que photographier : il **accepte partiellement** une proposition et
  * vérifie les trois effets — ce qui est entré au registre, ce qui ne l'est pas,
- * et le fichier de la cellule vidé.
+ * et ce qui reste en attente dans la cellule (SPK-114, §55.5).
  */
 
 import { chromium } from 'playwright';
@@ -65,8 +67,8 @@ await page.locator('.proposition').scrollIntoViewIfNeeded();
 await capturer('spk105-proposition-relecture');
 
 // --- 3. Une acceptation PARTIELLE, et ses trois effets ----------------------
-// C'est le point du §55.5 : ce qui n'a pas été retenu est REFUSÉ, pas ajourné,
-// et le fichier est vidé quand même.
+// C'est le point du §55.5 : depuis SPK-114, ce qui n'a pas été retenu n'est
+// PAS refusé — il reste dans le fichier de la cellule, en attente.
 await page.uncheck('[data-sugg-garder="variables"][data-ligne="2"]');
 const libelle = await page.textContent('[data-sugg-appliquer="variables"]');
 if (!libelle.includes('2 retenue')) {
@@ -124,12 +126,12 @@ const vu = await page.textContent('body');
 if (!vu.includes('REDIS_URL')) {
   throw new Error('la ligne retenue n’est pas entrée au registre');
 }
-if (vu.includes('SESSION_TTL')) {
-  throw new Error('la ligne ÉCARTÉE est entrée au registre : le §55.5 est violé');
-}
 // La demande est entrée avec la valeur SAISIE, et l'étiquette de son auteur
 // n'est entrée nulle part : elle expliquait la demande (§55.3.3).
 const { corps: env } = await pile.lireSparkd('/v1/sparks/crm-production/env');
+if (env.env.some((e) => e.name === 'SESSION_TTL')) {
+  throw new Error('la ligne ÉCARTÉE est entrée au registre : le §55.5 est violé');
+}
 const facturation = env.env.find((e) => e.name === 'BILLING_API_KEY');
 if (facturation?.value !== 'cle-de-facturation-de-recette') {
   throw new Error(`la valeur saisie n’est pas au registre : ${
@@ -139,11 +141,12 @@ if (env.env.some((e) => /fournisseur de facturation/.test(e.name + e.value))) {
   throw new Error('l’étiquette est entrée au registre : elle n’est pas une valeur');
 }
 
-// Le troisième effet, invisible à l'écran : le fichier de la cellule est vidé.
+// Le troisième effet, invisible à l'écran : le fichier de la cellule ne porte
+// plus que la ligne écartée (SPK-114, §55.5).
 const { corps } = await pile.lireSparkd('/v1/sparks/crm-production/suggestions');
 const variables = corps.suggestions.find((s) => s.kind === 'variables');
-if (variables.present) {
-  throw new Error('le fichier `.?` n’a pas été vidé après la décision');
+if (variables.body !== 'SESSION_TTL=3600') {
+  throw new Error(`le \`.?\` devait ne garder que la ligne écartée : « ${variables.body} »`);
 }
 // Et celui des routes, que personne n'a touché, est INTACT : une décision ne
 // consomme que la proposition qu'elle vise.

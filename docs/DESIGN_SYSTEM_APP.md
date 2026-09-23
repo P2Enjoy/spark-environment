@@ -1338,6 +1338,12 @@ bloc un avertissement accent qui les compte et dit ce qu'elles publieraient :
 la case : rien ne se repeint au clic (§14.3), et une phrase qui suivrait la case
 se démentirait sous les doigts (SPK-DS-28).
 
+Preuves observées le 2026-09-23 : `e2e/captures/spk112-proposition-sans-tls`,
+`-proposition-sans-tls-mobile` (à 390 px la colonne TLS sort du tableau, qui
+annonce son défilement ; l'avertissement nomme le domaine), `-proposition-acceptee`,
+`-route-sans-tls`, `-route-sans-tls-mobile`, `-tls-active`, `-tls-refuse` ;
+pour SPK-114, `spk114-demande-ecartee` et `spk114-reste-en-attente`.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19
