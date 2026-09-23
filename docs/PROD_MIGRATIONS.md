@@ -28,7 +28,7 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-18).
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
 | Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 019** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24) ; build **`0.post1.dev856+g565e5c688`**, installée le **2026-09-23T11:36Z** — relevé `GET /v1/forge` en lecture seule le 2026-09-23 ; elle ne diffère de celle d'OP-24 que par des textes de la console |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 020** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24), la `020` le **2026-09-23T21:52Z** (OP-26) ; build **`0.post1.dev865+ge989c1a83`**, installée le **2026-09-23T21:51Z** — relevé `/healthz` et `/readyz` le 2026-09-23 ; sauvegarde prise juste avant : `/var/backups/sparkd/spark-20260923-215139.db`, structure saine, chaîne du journal intacte (1 243 entrées) |
 | Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` ; `input` et `forward` couvrent `spn*` (établi, 53, 67, ICMP, puis `drop` ; rien routé depuis ni vers) ; `forward` accepte `ct status dnat` — les liens privés — après l'établi et avant les drop — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)**, **OP-23 (2026-09-18)**, **OP-24 (2026-09-18)** |
 | Réseaux privés | pool `10.78.0.0/16` en `/24`, le premier laissé de côté — **0 attribué** après la preuve d'OP-23 ; aucun bridge `spn<n>` — OP-23, appliqué le 2026-09-18 |
 | Isolation des cellules | chaque cellule porte `security.port_isolation` et `security.ipv4_filtering` — les deux cellules de locataires depuis OP-22 (2026-09-18) ; les deux cellules d'essai du lot 6, supprimées par le produit le 2026-09-18 une fois les preuves jouées ; `NET-ISOLATION` « ok » |
@@ -120,11 +120,21 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-26 · Migration `020_projets` : ranger les Sparks en projets (SPK-116) — **EN ATTENTE**
+### OP-26 · Migration `020_projets` : ranger les Sparks en projets (SPK-116) — **APPLIQUÉ le 2026-09-23**
 
 ```
-État          : EN ATTENTE. Une migration, aucune variable, aucun service
-                nouveau, aucune règle réseau.
+État          : APPLIQUÉ le 2026-09-23 (21:52Z), sur instruction du
+                responsable. Registre sauvegardé d'abord
+                (spark-20260923-215139.db, structure saine, chaîne intacte) ;
+                build 0.post1.dev865+ge989c1a83 installée par le runbook A.2 ;
+                préflight 15/15 ; `/readyz` rend `schema_version: 20` ;
+                `project` et `spark_project` présents ; `/v1/projects` rend
+                `{"projects": []}` et les trois Sparks portent `projects: []`.
+                Console relancée ; relue par le parcours canonique en lecture
+                seule — rangée Tous | Projets, gestion vide, modale de rangement
+                qui explique et n'offre que « Fermer ». Aucun projet créé.
+                Une migration, aucune variable, aucun service nouveau, aucune
+                règle réseau.
 Objectif      : créer `project` et `spark_project` (docs/SCHEMA.md §10 octies)
                 et servir `/v1/projects` et `PUT /v1/sparks/{nom}/projects`
                 (docs/DAT.md §61.3). Un projet range et ne fait rien d'autre :
@@ -150,11 +160,19 @@ Risques       : aucun sur les Sparks — la migration n'ajoute que deux tables
                 et un index, et ne touche aucune table existante.
 ```
 
-### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes, ce qu'une acceptation laisse en attente, et les propositions de toute la Forge (SPK-112, SPK-114, SPK-115) — **EN ATTENTE**
+### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes, ce qu'une acceptation laisse en attente, et les propositions de toute la Forge (SPK-112, SPK-114, SPK-115) — **APPLIQUÉ le 2026-09-23**
 
 ```
-État          : EN ATTENTE. Aucune migration, aucune variable, aucun service
-                nouveau.
+État          : APPLIQUÉ le 2026-09-23 : la build 0.post1.dev863+gb1cc34ed7
+                (SPK-112, SPK-114, SPK-115) était installée à 21:25Z, puis
+                remplacée à 21:51Z par celle d'OP-26, qui les porte aussi.
+                Vérifié : la build servie, et `GET /v1/suggestions` qui lit les
+                trois cellules (aucune proposition en attente), vu aussi dans
+                l'onglet Forge → Propositions. NON rejoué : la vérification
+                dans une cellule (en-tête de `routes.?`, `B=` conservé), qui
+                exige une cellule d'ESSAI — aucune n'existe aujourd'hui, et les
+                cellules de locataires ne reçoivent pas d'écriture d'épreuve.
+                Aucune migration, aucune variable, aucun service nouveau.
 Objectif      : servir les textes corrigés de SPK-112 (docs/DAT.md §55.3.1,
                 §44.2 bis) : l'en-tête de `/etc/spark/routes.?`,
                 `/etc/spark/routes`, `BRIEFING.md` et le dossier disent de la

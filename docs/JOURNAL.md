@@ -12590,3 +12590,16 @@ les noms repliés (`casefold`), pour que « Été » et « été » se refusent 
 
 **Vérifications** : seize preuves sparkd, treize preuves de composant, le
 parcours E2E joué seul, neuf captures observées.
+
+## 2026-09-23 · OP-25 et OP-26 joués sur la Forge
+
+**Instruction du responsable** : redéployer le dernier binaire une fois SPK-116
+terminé. **Constaté en lisant la Forge** : la build de SPK-115 (`b1cc34ed7`)
+y était déjà installée depuis 21:25Z — OP-25 était donc de fait joué.
+**Fait** : sauvegarde du registre (structure saine, 1 243 entrées, chaîne
+intacte), installation de `e989c1a83` par le runbook A.2, migration `020`
+appliquée à 21:52Z, préflight 15/15. **Vérifié** : `/healthz`, `/readyz`
+(schéma 20), `/v1/projects` vide, les Sparks portent `projects: []`,
+`/v1/suggestions` lit les trois cellules ; console relancée et relue par le
+parcours canonique, sans écriture. **Non rejoué** : la vérification d'OP-25
+dans une cellule, faute de cellule d'essai.

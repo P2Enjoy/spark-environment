@@ -21,7 +21,8 @@
   dans sa partie visible à l'arrivée (`DESIGN_SYSTEM.md` §8.1). Seed : trois
   projets, dont un Spark dans deux et un projet vide. Preuves sparkd et de
   composant, un parcours E2E, neuf captures ; manuel M3 et trois
-  illustrations. **Non déployé** : OP-26.
+  illustrations. **Déployé sur la Forge** le 2026-09-23 (OP-26, migration
+  `020` appliquée après sauvegarde du registre) et relu par la console.
 - **SPK-115 — un onglet *Propositions* de la Forge : ce qui attend dans tous
   les Sparks, et un lien vers l'onglet où cela se décide.** `GET
   /v1/suggestions`, en lecture seule — il ne pose aucun `.?` —, rend pour chaque
@@ -33,8 +34,8 @@
   lecture à l'ouverture et au bouton *Relire les cellules*, l'heure de la
   lecture écrite à côté. Preuves sparkd et de composant, un parcours E2E qui
   suit le lien jusqu'à la facette et vérifie que rien n'a été consommé, deux
-  captures ; manuel M8 et une illustration. **Non déployé** : la route attend
-  OP-25.
+  captures ; manuel M8 et une illustration. **Déployé sur la Forge** le
+  2026-09-23 (OP-25) : les trois cellules y sont lues depuis l'onglet.
 - **SPK-111 — liens privés : un port d'un Spark publié dans un réseau privé.**
   Un lien est un port publié dont la portée n'est pas Internet — un objet de
   moins. Migration `019_portee_port_publie` : `published_port.scope` et
@@ -213,8 +214,8 @@
   refus se lit dans la section. Seed : une route en clair et une proposition de
   routes avec une ligne `clair` sur `ubuntu-24`. Preuves sparkd et de
   composant, deux parcours E2E, sept captures ; manuel M7 et M8 et deux
-  illustrations ; design system §6.8 et SPK-DS-31. **Non déployé** : les textes
-  remis à la cellule attendent OP-25.
+  illustrations ; design system §6.8 et SPK-DS-31. **Déployé sur la Forge** le
+  2026-09-23 (OP-25) ; la lecture dans une cellule d'essai n'a pas été rejouée.
 - **SPK-114 — écarter une ligne proposée ne la refuse pas : elle reste en
   attente.** Décision du responsable : une valeur demandée qu'on n'a pas sous la
   main ne doit pas disparaître de la cellule. Une acceptation ne retire plus du
@@ -224,9 +225,9 @@
   valide avant d'appliquer, réécrit l'en-tête et ces lignes, et journalise leur
   nombre sans leur contenu. L'écran le dit sous les boutons et dans le compte
   rendu. Seed : une demande `MAPS_TOKEN=` sur `ubuntu-24`. Preuves sparkd et de
-  composant, un parcours E2E et un parcours adapté ; manuel M8. **Non
-  déployé** : tant qu'OP-25 n'est pas joué, la Forge vide encore tout le
-  fichier.
+  composant, un parcours E2E et un parcours adapté ; manuel M8. **Déployé
+  sur la Forge** le 2026-09-23 (OP-25) ; la lecture dans une cellule d'essai
+  n'a pas été rejouée.
 - **SPK-16 — la console ne se reconnectait plus à une Forge tombée.** Rapporté
   sur une console ouverte depuis plus de 24 h : le tunnel tombe dans la nuit, le
   bouton *Reconnecter* ne relance rien, et il faut arrêter l'interface et la

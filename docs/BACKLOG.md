@@ -7651,7 +7651,9 @@ déclarée `tls: false` par l'acceptation d'une proposition de la cellule
    le harnais et observées.*
 5. **Déploiement** — OP-25 : les textes remis à la cellule sont servis par
    `sparkd` et n'atteignent la Forge qu'à sa mise à jour. La console est locale
-   et se relance. *Écrit, en attente — il porte aussi SPK-114.*
+   et se relance. *Appliqué le 2026-09-23 — il porte aussi SPK-114 et SPK-115 ;
+   la lecture dans une cellule d'essai n'a pas été rejouée, faute de cellule
+   d'essai.*
 
 - **Clos le 2026-09-23.** Campagne E2E entière : **138 verts sur 141**, les trois
   rouges étant ceux du rapport d'incohérences du 2026-09-18 (canal d'alerte hors
@@ -7659,7 +7661,7 @@ déclarée `tls: false` par l'acceptation d'une proposition de la cellule
   chemin, aucune du produit : deux sélecteurs qui lisaient le premier
   avertissement et le premier badge de la ligne, et une lecture du focus faite
   avant qu'il soit posé — elle attend désormais la condition.
-- **Non déployé** : les textes remis à la cellule attendent OP-25.
+- **Déployé le 2026-09-23** (OP-25).
 
 - Ce que l'unité ne doit PAS casser : une route volontairement en clair reste
   déclarable et proposable (`clair`) ; les fichiers déjà écrits se lisent à
@@ -7765,9 +7767,7 @@ tout le fichier, « ce qui n'a pas été retenu a été refusé, pas ajourné »
   révélé une course du **doublon** Incus — deux requêtes simultanées se volent
   son fichier provisoire —, consignée au rapport d'incohérences et non corrigée
   ici ; le parcours attend l'écran relu avant de lire `sparkd`.
-- **Non déployé** : `conserver` est lu par `sparkd`. Tant qu'OP-25 n'est pas
-  joué, la Forge vide encore tout le `.?` ; la console, elle, le dit déjà —
-  d'où l'ordre d'OP-25.
+- **Déployé le 2026-09-23** (OP-25) : la Forge lit `conserver`.
 
 ### [x] SPK-115 · Les propositions en attente de toute la Forge, dans un onglet
 
@@ -7802,7 +7802,8 @@ Spark concerné, onglet concerné, avec un clic ».
   en attente… » ; captures `spk115-propositions-forge` et `-mobile` observées —
   la première version peignait ses liens au bleu du navigateur et décalait
   l'heure de lecture, corrigés (`.lien-spark`, `.relecture`) ; illustration
-  `m8-propositions-forge`. Déploiement : OP-25.
+  `m8-propositions-forge`. Déployé le 2026-09-23 (OP-25), et l'onglet relu
+  sur la Forge : trois cellules lues, aucune proposition.
 
 ### [x] SPK-116 · Des projets pour ranger les Sparks
 
@@ -7840,7 +7841,7 @@ responsable le veut :**
 3. console — onglets, gestion, section *Projets* ; preuves de composant —
    *fait le 2026-09-23* ;
 4. seed, E2E, captures, manuel — *fait le 2026-09-23* ;
-5. déploiement — OP-26 (migration).
+5. déploiement — OP-26 (migration) — *appliqué le 2026-09-23*.
 
 - Aucune variable d'environnement.
 - DoD : preuves sparkd (création, unicité insensible à la casse, renommage,
@@ -7855,7 +7856,8 @@ responsable le veut :**
   renommage et un rechargement à 390 px ; neuf captures `spk116-*` observées ;
   illustrations `m3-projets-*`. Deux écarts pris à l'implémentation et portés
   au DAT §61.4 : les adresses en `~`, l'onglet courant amené dans la rangée
-  visible (journal du 2026-09-23). Déploiement : OP-26.
+  visible (journal du 2026-09-23). Déployé le 2026-09-23 (OP-26), après
+  sauvegarde du registre, et relu sur la Forge en lecture seule.
 
 ---
 
