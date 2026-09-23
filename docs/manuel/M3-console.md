@@ -10,7 +10,14 @@ un tunnel SSH.
 make runDev
 ```
 
-La console répond alors sur `http://127.0.0.1:5173`.
+La console répond alors sur `http://127.0.0.1:5173`, contre une Forge de
+démonstration. Pour administrer vos vraies Forges :
+
+```
+make runProd
+```
+
+La console répond alors sur `http://127.0.0.1:5175`.
 
 ## Déclarer un serveur
 
@@ -218,3 +225,45 @@ décider sur un état qui n'existe plus.
 
 Le message reprend la sortie d'erreur de `ssh` — « clé refusée », « Forge
 inconnu » —, pour vous éviter de relancer la commande à la main pour la lire.
+
+## Quand la console est à redémarrer
+
+La console est un programme qui tourne sur votre poste. Quand le code du dépôt
+avance — un `git pull`, un commit —, elle continue de servir la version qu'elle
+a lue à son démarrage. Elle le **dit**, dans la barre latérale, sous le serveur
+courant :
+
+![L'avertissement « Console à redémarrer », avec son bouton](images/m3-console-a-redemarrer.png)
+
+Le nombre de commits est celui qui s'est ajouté depuis son démarrage. Sans dépôt
+Git, elle compare la date de ses fichiers. L'avertissement est relu chaque fois
+que vous revenez sur l'onglet : inutile de recharger la page pour le voir.
+
+**Redémarrer la console** l'arrête puis la relance avec le code du dépôt, sans
+quitter le navigateur. Avant, une confirmation dit ce qui va se passer et
+**nomme chaque session de terminal** qui sera fermée — un shell ouvert ne
+survit pas à la console qui le porte :
+
+![La confirmation, qui nomme la session de terminal ouverte](images/m3-console-redemarrer-confirmation.png)
+
+Confirmez : la barre dit « Redémarrage de la console… », puis la page se
+recharge d'elle-même dès que la nouvelle console répond. Les tunnels se
+rouvrent seuls. `Échap` ou **Annuler** referment la confirmation sans rien faire.
+
+La console **refuse** de redémarrer, et le dit, quand :
+
+- une **mise à jour** ou une **installation** de Forge est en cours — attendez
+  sa fin : l'interrompre laisserait la Forge entre deux états ;
+- le **nouveau code ne se charge pas** — une erreur dans le dernier commit. La
+  console vérifie avant de s'arrêter, montre l'erreur, et **continue de servir**
+  l'ancienne version ;
+- une session de terminal s'est ouverte **après** la confirmation — relisez-la :
+  elle serait fermée sans avoir été nommée.
+
+Le bouton n'existe que si la console a été lancée par `make runProd`,
+`make runDev` ou `pnpm dev` : c'est leur lanceur qui la relance. Lancée
+autrement, l'avertissement vous dit de la redémarrer à la main. Si la nouvelle
+console ne répond pas dans les 30 secondes, la barre le dit : la sortie de
+`make runProd` donne la raison.
+
+La console ne redémarre **jamais d'elle-même** : c'est toujours votre geste.

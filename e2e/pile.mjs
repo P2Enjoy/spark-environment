@@ -13,7 +13,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, writeFile, readFile, rm, symlink, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -157,7 +157,9 @@ export async function monterPile({ dns = null, notify = null } = {}) {
        ...(dns.motif ? [`SPARK_DNS_ALLOW_PATTERN=${dns.motif}`] : [])].join('\n')
     : '');
 
-  const consoleHost = lancer('node', [join(RACINE, 'apps', 'webui', 'host', 'main.js')], {
+  // L'environnement de l'hôte console, nommé pour que la console relançable de
+  // SPK-117 reçoive EXACTEMENT les mêmes doublons, sur un autre port.
+  const envHoteConsole = {
     SPARK_CONSOLE_PORT: String(portConsole),
     SPARK_CONSOLE_STATE: inventaire,
     SPARK_ENV_FILE: envConsole,
@@ -320,8 +322,11 @@ export async function monterPile({ dns = null, notify = null } = {}) {
     // Le `.env` du poste ne doit pas se réintroduire par l'environnement hérité.
     SCW_SECRET_KEY: '', SCW_DEFAULT_ORGANIZATION_ID: '', SPARK_DNS_ALLOW_PATTERN: '',
     SPARK_DNS_BASE_URL: '',
-  }, journal);
+  };
+  const consoleHost = lancer('node', [join(RACINE, 'apps', 'webui', 'host', 'main.js')],
+                             envHoteConsole, journal);
   await attendre(`http://127.0.0.1:${portConsole}/api/servers`, { quoi: "l'hôte console" });
+  const consolesRelancables = [];
 
   const base = `http://127.0.0.1:${portConsole}`;
 
@@ -461,10 +466,73 @@ export async function monterPile({ dns = null, notify = null } = {}) {
       sparkd = lancer(PYTHON, ['-m', 'sparkd'], envSparkd, journal);
       await attendre(`http://127.0.0.1:${portSparkd}/healthz`, { quoi: 'sparkd remonté' });
     },
+    /**
+     * Une SECONDE console, démarrée par son lanceur et HORS DÉPÔT.
+     *
+     * @spec docs/BACKLOG.md#SPK-117 · docs/DAT.md §62.1 (le lanceur), §62.3 (le
+     *       préflight), §40.5 (hors dépôt, la date des fichiers servis)
+     *
+     * Le redémarrage ne s'offre que sur une console périmée, et rendre périmée
+     * la console du dépôt exigerait un commit. Hors dépôt, le produit compare
+     * la date de ses fichiers servis (§40.5) : c'est un chemin RÉEL — celui
+     * d'une console installée sans Git —, et avancer la date d'un fichier est
+     * exactement ce qu'une mise à jour de ces fichiers produit. Rien n'est
+     * simulé : ni le lanceur, ni le préflight, ni le redémarrage.
+     *
+     * Même `sparkd`, même inventaire, mêmes doublons ; seul le port change. Le
+     * répertoire de travail reste celui du harnais, pour que les doublons
+     * relatifs (`node e2e/terminal-doublon.mjs`) se résolvent comme ailleurs.
+     */
+    async monterConsoleRelancable() {
+      const copie = join(dossier, 'copie', 'apps', 'webui');
+      const source = join(RACINE, 'apps', 'webui');
+      await cp(source, copie, { recursive: true,
+        filter: (chemin) => !chemin.startsWith(join(source, 'node_modules')) });
+      await symlink(join(source, 'node_modules'), join(copie, 'node_modules'));
+      const port = await portLibre();
+      const sortie = [];
+      let moduleSain = null;
+      const lanceur = lancer('node', [join(copie, 'host', 'lanceur.js')],
+                             { ...envHoteConsole, SPARK_CONSOLE_PORT: String(port) }, sortie);
+      consolesRelancables.push(lanceur);
+      await attendre(`http://127.0.0.1:${port}/api/servers`, { quoi: 'la console relançable' });
+      return {
+        base: `http://127.0.0.1:${port}`,
+        /** Ce que le lanceur et ses consoles successives ont écrit. */
+        sortie,
+        pid: lanceur.pid,
+        /** Le code servi change sous la console : un fichier plus récent. */
+        async avancerLeCode() {
+          const quand = new Date(Date.now() + 60_000);
+          await utimes(join(copie, 'src', 'app.js'), quand, quand);
+        },
+        /**
+         * Un commit qui casse un module de l'hôte : le préflight doit le voir
+         * et refuser (§62.3). L'écriture date aussi le fichier, donc la
+         * console devient périmée par le même geste — comme dans la réalité.
+         */
+        async casserLeCode() {
+          const module = join(copie, 'host', 'dns.js');
+          moduleSain ??= await readFile(module, 'utf8');
+          await writeFile(module, `${moduleSain}\nexport const casse = ;\n`);
+        },
+        async reparerLeCode() {
+          if (moduleSain !== null) await writeFile(join(copie, 'host', 'dns.js'), moduleSain);
+        },
+        vivant: () => lanceur.exitCode === null && lanceur.signalCode === null,
+        async demonter() {
+          if (lanceur.exitCode !== null || lanceur.signalCode !== null) return;
+          const fini = new Promise((r) => lanceur.once('exit', r));
+          lanceur.kill('SIGTERM');
+          await fini;
+        },
+      };
+    },
     journal,
     async demonter() {
       sparkd.kill('SIGTERM');
       consoleHost.kill('SIGTERM');
+      for (const lanceur of consolesRelancables) lanceur.kill('SIGTERM');
       await new Promise((r) => setTimeout(r, 150));
       await rm(dossier, { recursive: true, force: true });
       // Rendu DÈS le démontage, et pas seulement à la sortie du processus : un

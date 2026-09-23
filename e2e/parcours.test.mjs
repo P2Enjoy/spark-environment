@@ -6375,3 +6375,105 @@ test('relier un port : un lien privé se publie dans un réseau, se lit des deux
     assert.ok(!/boutique · 8080/.test(await reseau()), 'le membre ne voit plus le lien retiré');
   });
 });
+
+test('une console périmée se redémarre depuis son avertissement, refuse un code cassé, et revient à jour', async () => {
+  // @verifies docs/BACKLOG.md#SPK-117 · docs/DAT.md §62.1 (le lanceur garde le
+  //           processus), §62.2 (la confirmation nomme les sessions), §62.3 (un
+  //           code qui ne se charge pas est refusé), §62.4 (relu à la
+  //           visibilité, attente d'une autre instance) ·
+  //           docs/DESIGN_SYSTEM_APP.md SPK-DS-11 · docs/DESIGN_SYSTEM.md §6.22
+  //
+  // C'est le reproche du responsable, rejoué : le code change sous une console
+  // ouverte, et on la relance SANS quitter le navigateur. Tout se fait à la
+  // souris et au clavier ; `sparkd` et l'hôte ne sont LUS que pour constater.
+  const copie = await pile.monterConsoleRelancable();
+  const lireBuild = async () => (await fetch(`${copie.base}/api/console/build`)).json();
+  try {
+    await parcours('relancer-la-console', async () => {
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.goto(copie.base, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('tbody a', { timeout: 20000 });
+      assert.equal((await page.locator('.entete__console').innerHTML()).trim(), '',
+                   'une console à jour ne dit rien');
+      const avant = await lireBuild();
+      assert.equal(avant.relaunchable, true, 'démarrée par son lanceur');
+
+      // Une session de terminal, ouverte comme l'exploitant l'ouvre.
+      await page.click('tbody a:has-text("boutique")');
+      await page.waitForSelector('.entete-entite', { timeout: 10000 });
+      await page.click('.onglet[href$="/terminal"]');
+      await page.click('[data-terminal="ouvrir"]');
+      await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+
+      // Un commit CASSÉ arrive pendant que l'exploitant est dans son éditeur.
+      await copie.casserLeCode();
+      // §62.4 : l'onglet redevient visible, l'avertissement est là sans recharger.
+      //
+      // MESURÉ le 2026-09-24 : Chromium sans tête tient TOUTE page pour
+      // « visible » et n'émet jamais `visibilitychange`, même quand un autre
+      // onglet passe devant. Le retour sur l'onglet ne se produit donc pas ici ;
+      // on émet l'événement que le navigateur émettrait, et tout ce qui suit —
+      // l'écouteur, la relecture de l'hôte, la repeinture — est le vrai chemin.
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      const avertissement = page.locator('.entete__console .avertissement');
+      await avertissement.waitFor({ timeout: 10000 });
+      assert.match(await avertissement.textContent(), /Console à redémarrer/);
+
+      // Ouvrir : le focus ENTRE dans la confirmation, qui nomme la session.
+      await page.click('[data-relance="ouvrir"]');
+      const bloc = page.locator('[data-relance="bloc"]');
+      await bloc.waitFor({ timeout: 10000 });
+      assert.match(await bloc.textContent(), /Cette session de terminal sera fermée/);
+      assert.match(await bloc.textContent(), /boutique/);
+      assert.equal(await page.evaluate(() => document.activeElement?.dataset?.relance),
+                   'engager');
+      await capturer('spk117-confirmation');
+      await capturer('spk117-confirmation-mobile', { largeur: 390, hauteur: 900 });
+
+      // `Échap` referme, et rend le focus au déclencheur (§6.22).
+      await page.keyboard.press('Escape');
+      await bloc.waitFor({ state: 'detached', timeout: 5000 });
+      assert.equal(await page.evaluate(() => document.activeElement?.dataset?.relance),
+                   'ouvrir');
+
+      // Au clavier : le code cassé est REFUSÉ, et la console sert toujours.
+      await page.keyboard.press('Enter');
+      await bloc.waitFor({ timeout: 10000 });
+      await page.keyboard.press('Enter');
+      const refus = page.locator('.entete__console .refus');
+      await refus.waitFor({ timeout: 30000 });
+      assert.match(await refus.textContent(), /ne se charge pas/);
+      assert.match(await refus.textContent(), /SyntaxError/);
+      assert.equal((await lireBuild()).instance, avant.instance, 'la même console sert');
+      await capturer('spk117-refus-code');
+
+      // Le correctif arrive ; on relance, cette fois pour de bon.
+      await copie.reparerLeCode();
+      await page.click('[data-relance="ouvrir"]');
+      await bloc.waitFor({ timeout: 10000 });
+      const recharge = page.waitForEvent('load', { timeout: 40000 });
+      await page.click('[data-relance="engager"]');
+      // §1.3 : l'avertissement ne tombe pas sur la foi du 202 — il dit qu'on
+      // attend, et la page n'attend jamais moins d'un demi-seconde avant de relire.
+      await page.locator('.entete__console', { hasText: 'Redémarrage de la console…' })
+        .waitFor({ timeout: 30000 });
+      await recharge;
+      // La page se recharge LÀ OÙ l'on était : la fenêtre du Spark.
+      await page.waitForSelector('.entete-entite', { timeout: 20000 });
+
+      // Constaté : une AUTRE console, à jour, portée par le MÊME lanceur.
+      const apres = await lireBuild();
+      assert.notEqual(apres.instance, avant.instance);
+      assert.equal(apres.verdict, 'a_jour');
+      assert.equal((await page.locator('.entete__console').innerHTML()).trim(), '');
+      assert.ok(copie.vivant(), 'le lanceur — le pid de sparkui — n’a pas changé');
+      assert.match(copie.sortie.join(''), /console relancée/);
+      // §37.4.2 : aucun shell ne survit à l'hôte console.
+      const { sessions } = await (await fetch(`${copie.base}/api/terminal/sessions`)).json();
+      assert.equal(sessions.length, 0);
+      await capturer('spk117-apres');
+    });
+  } finally {
+    await copie.demonter();
+  }
+});

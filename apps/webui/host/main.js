@@ -57,6 +57,10 @@ import { runDiagnostic as diagnostiquerForge, ForgeDiagnosticError } from './for
 import { createInstallPlan, ForgeInstallError } from './forge-install.js';
 import { ForgeInstallManager, ForgeInstallRunError }
   from './forge-install-runner.js';
+// SPK-117 · §62 : redémarrer la console depuis son avertissement.
+import { randomUUID } from 'node:crypto';
+import { canalEnfant } from './lanceur.js';
+import { examinerRelance, verifierChargement } from './relance.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -69,6 +73,16 @@ export function createConsoleHost(options = {}) {
   // première visite de Forge, mais l'identité de CE processus au démarrage.
   const consoleAuDemarrage = options.consoleBuild ?? capturerConsole(racineConsole);
   const comparerCetteConsole = options.compareConsole ?? comparerConsole;
+  // SPK-117 · §62.1 : le canal vers le lanceur. Absent — `node host/main.js`,
+  // les harnais —, la console n'est pas relançable et le dit.
+  const relance = options.relance ?? null;
+  // §62.3 : le code que le lanceur démarrera est le `main.js` voisin de celui-ci.
+  const chargerCode = options.verifyLoad
+    ?? (() => verifierChargement(join(RACINE, 'host', 'main.js')));
+  // §62.4 : tiré à chaque démarrage. C'est par lui que la page reconnaît le
+  // NOUVEAU processus, et non par la fin d'une attente.
+  const instance = options.instance ?? randomUUID();
+  let relanceEnCours = false;
   const tunnels = options.tunnels ?? new TunnelManager();
   // SPK-43 · §37.1 : les sessions de terminal vivent ICI, sur le poste. Le plan
   // de contrôle n'est pas dans ce chemin et n'en gagne aucun pouvoir.
@@ -771,10 +785,59 @@ export function createConsoleHost(options = {}) {
 
     // SPK-65 : ce relevé est local au poste. Il ne demande aucun tunnel, reste
     // lisible quand toutes les Forges sont rompues et ne modifie rien.
+    // SPK-117 · §62.4 : `relaunchable` décide du bouton, `instance` de la fin
+    // de l'attente.
     'GET /api/console/build': async () => ({
       status: 200,
-      body: decrireConsole(comparerCetteConsole(consoleAuDemarrage, racineConsole)),
+      body: { ...decrireConsole(comparerCetteConsole(consoleAuDemarrage, racineConsole)),
+              relaunchable: Boolean(relance?.relancable), instance },
     }),
+
+    /**
+     * Redémarrer la console, à la demande de l'exploitant.
+     *
+     * @spec docs/BACKLOG.md#SPK-117 · docs/DAT.md §62.2 (ce que la route
+     *       refuse), §62.3 (préflight de chargement), §62.4 (le 202 porte
+     *       l'instance que la page verra changer)
+     *
+     * Le corps JSON est EXIGÉ : il impose un pré-vol CORS qu'aucune autre
+     * origine ne passe. Sans lui, n'importe quelle page ouverte dans le
+     * navigateur pourrait arrêter la console d'un `POST` en texte brut.
+     *
+     * Les conditions sont examinées DEUX fois : avant le préflight, pour
+     * refuser vite, et après, parce qu'une mise à jour ou une session a pu
+     * naître pendant qu'il chargeait le code.
+     */
+    'POST /api/console/relance': async (corps, _url, reponse, requete) => {
+      if (!/^application\/json\b/i.test(String(requete?.headers?.['content-type'] ?? ''))) {
+        return { status: 415, body: { error: 'json_requis',
+          message: 'Corps JSON exigé : cette route ne répond qu’à la console elle-même.' } };
+      }
+      const examiner = (enCours) => examinerRelance({
+        relancable: Boolean(relance?.relancable), enCours,
+        misesAJour: [...(misesAJour.busy ?? [])],
+        installations: [...(installationsForge.active?.keys?.() ?? [])],
+        sessions: terminaux.list().filter((s) => s.state === 'open'),
+        annoncees: Array.isArray(corps?.sessions) ? corps.sessions.map(String) : [],
+      });
+      const refus = examiner(relanceEnCours);
+      if (refus) return { status: 409, body: { error: refus.code, message: refus.message } };
+      relanceEnCours = true;
+      const charge = await chargerCode();
+      const apres = charge.ok ? examiner(false) : null;
+      if (!charge.ok || apres) {
+        relanceEnCours = false;
+        return { status: 409, body: charge.ok
+          ? { error: apres.code, message: apres.message }
+          : { error: 'code_illisible', output: charge.sortie,
+              message: 'Le nouveau code ne se charge pas : la console courante '
+                       + 'continue de servir.' } };
+      }
+      // Le 202 part AVANT l'arrêt : une page qui ne l'aurait pas reçu ne
+      // saurait pas qu'elle doit attendre une autre instance.
+      reponse.once('finish', () => { relance.relancer(fermerPourRelance); });
+      return { status: 202, body: { instance } };
+    },
 
     /**
      * L'état de l'interrupteur d'épreuve (SPK-100, §53.3).
@@ -1747,7 +1810,7 @@ export function createConsoleHost(options = {}) {
         // Une route qui rend `null` a DÉJÀ répondu : c'est le cas d'un corps
         // binaire — une illustration du manuel — que `repondre` sérialiserait
         // en JSON.
-        const rendu = await routes[cle](corps, url, reponse);
+        const rendu = await routes[cle](corps, url, reponse, requete);
         if (rendu === null) return;
         return repondre(reponse, rendu.status, rendu.body);
       }
@@ -1786,6 +1849,33 @@ export function createConsoleHost(options = {}) {
     installationsForge.closeAll();
     tunnels.closeAll();
   });
+
+  /**
+   * Rend le port et ferme ce que la console porte, avant sa relance.
+   *
+   * @spec docs/BACKLOG.md#SPK-117 · docs/DAT.md §62.1, §37.4.2 (aucun shell ne
+   *       survit à l'hôte console)
+   *
+   * Les sessions se ferment D'ABORD, pendant que l'hôte sert encore : chaque
+   * flux reçoit alors son événement `fin` et se termine proprement, et la
+   * fermeture est journalisée comme n'importe quelle autre. Couper les sockets
+   * au milieu d'un flux laissait le navigateur sur
+   * `ERR_INCOMPLETE_CHUNKED_ENCODING` — MESURÉ par le parcours du 2026-09-24.
+   *
+   * Seules les connexions inactives sont ensuite coupées ; une requête en
+   * cours finit. La garde de cinq secondes coupe ce qui reste : le lanceur ne
+   * démarre le suivant qu'une fois celui-ci sorti.
+   */
+  function fermerPourRelance() {
+    terminaux.fermerToutes();
+    return new Promise((fini) => {
+      const garde = setTimeout(() => { server.closeAllConnections?.(); fini(); }, 5000);
+      garde.unref?.();
+      server.close(() => { clearTimeout(garde); fini(); });
+      server.closeIdleConnections?.();
+    });
+  }
+
   return { server, tunnels, terminals: terminaux, forgeUpdates: misesAJour,
            forgeInstallations: installationsForge };
 }
@@ -2058,9 +2148,19 @@ async function lireCorps(requete) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { server } = createConsoleHost();
+  // SPK-117 · §62.1 : le canal vers le lanceur, s'il y en a un. Il ne se
+  // présente qu'une fois la console à l'écoute : relancer une console qui
+  // n'écoute pas encore ne servirait personne.
+  const relance = canalEnfant();
+  const { server } = createConsoleHost({ relance });
+  // Un lanceur mort ne laisse pas une console orpheline tenir le port.
+  relance.surPerte(() => {
+    server.close(() => process.exit(0));
+    server.closeAllConnections();
+  });
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`Console Spark : http://127.0.0.1:${PORT}`);
     console.log("Aucun port n'est ouvert vers l'extérieur.");
+    relance.saluer();
   });
 }

@@ -586,6 +586,20 @@ tbody tr:hover { background: var(--color-hover); }
   margin: var(--space-2) 0; padding-left: var(--space-4);
 }
 .avertissement--laterale li + li { margin-top: var(--space-1); }
+/* SPK-117 · docs/DAT.md §62.4 · SPK-DS-11 révisé — la confirmation et le refus du
+   redémarrage vivent sous l'avertissement, dans la même colonne étroite : mêmes
+   marges, mêmes mots coupés plutôt qu'une barre poussée (§8.1), et la liste des
+   sessions alignée comme celle du bandeau d'épreuve. */
+.confirmation--laterale,
+.refus--laterale {
+  margin: var(--space-2) 0 0; padding: var(--space-2);
+  font-size: var(--text-compact); overflow-wrap: anywhere;
+}
+.confirmation--laterale ul { margin: 0; padding-left: var(--space-4); }
+/* `.confirmation p { margin: 0 }` l'emporte sur l'espacement des frères : vu en
+   capture le 2026-09-24, le titre et les phrases se collaient dans la colonne. */
+.confirmation.confirmation--laterale > * + * { margin-top: var(--space-2); }
+.confirmation--laterale li + li { margin-top: var(--space-1); }
 .succes .note { margin-top: var(--space-2); }
 
 /* SPK-88 · docs/DAT.md §38.6.4 ter — les trois blocs d'une recette.

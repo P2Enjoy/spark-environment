@@ -7859,7 +7859,7 @@ responsable le veut :**
   visible (journal du 2026-09-23). Déployé le 2026-09-23 (OP-26), après
   sauvegarde du registre, et relu sur la Forge en lecture seule.
 
-### [ ] SPK-117 · La console se redémarre depuis son propre avertissement
+### [x] SPK-117 · La console se redémarre depuis son propre avertissement
 
 **Demandé par le responsable le 2026-09-24** : « je dois arrêter la console et
 la relancer chaque fois que le code local de l'interface reçoit un commit. C'est
@@ -7892,10 +7892,10 @@ responsable le veut :**
 
 1. Documentation — *fait, committé avant le code* ;
 2. hôte — lanceur, route, préflight de chargement, cibles de lancement ; preuves
-   unitaires et de route ;
+   unitaires et de route — *fait le 2026-09-24* ;
 3. écran — bouton, confirmation, attente de la nouvelle instance, relecture à la
-   visibilité ; preuves de composant ;
-4. E2E, captures, manuel M3.
+   visibilité ; preuves de composant — *fait le 2026-09-24* ;
+4. E2E, captures, manuel M3 — *fait le 2026-09-24*.
 
 - Aucune variable d'environnement, aucun argument. Aucune migration, aucune
   opération de déploiement : la console vit sur le poste.
@@ -7905,6 +7905,18 @@ responsable le veut :**
   confirmation qui nomme les sessions, refus, attente) ; parcours E2E qui rend la
   console périmée, redémarre depuis l'avertissement et constate une nouvelle
   instance ; captures observées ; manuel ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-24** : sept preuves du lanceur, douze du refus et du
+  préflight, onze de route, douze de composant ; le parcours E2E « une console
+  périmée se redémarre… » — refus d'un code cassé, correctif, redémarrage au
+  clavier, autre instance sous le même lanceur, session fermée — et quatre
+  parcours voisins rejoués après la retouche de la pile ; captures `spk117-*`
+  et illustrations `m3-console-*` observées ; lanceur réel éprouvé à la main
+  (pid et groupe conservés, `SIGTERM` et `SIGKILL` du lanceur sans orphelin),
+  et le chemin Git rejoué sur une console démarrée avant le commit de l'unité.
+  Deux défauts trouvés en chemin et corrigés : le flux du terminal coupé à
+  l'arrêt, et « avant 0 commit » hors dépôt (SPK-65). Limite : Chromium sans
+  tête n'émet jamais `visibilitychange` ; le parcours l'émet (journal du
+  2026-09-24).
 
 ---
 

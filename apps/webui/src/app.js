@@ -47,6 +47,8 @@ import { ongletsSparks, renderProjetsGestion, PROJETS_UI_VIDE, ADRESSE_GESTION,
 import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
   from './components/forge-dns.js';
 import { renderManuel } from './components/manuel-view.js';
+import { renderBuildConsole, RELANCE_VIDE, ATTENTE_MAX_MS, sessionsOuvertes }
+  from './components/console-relance.js';
 import { renderServeurs, CATALOGUE_SERVEURS_VIDE } from './components/servers-view.js';
 import { brancherModale } from './components/modale.js';
 import { renderSupervisionForge, SUPERVISION_VIDE }
@@ -68,6 +70,8 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // SPK-65 · §40.5 : l'hôte dit si CE processus Node a démarré
                // avant le code du poste. Cela ne dépend d'aucune Forge.
                consoleBuild: null,
+               // SPK-117 · §62.4 : où en est le geste « Redémarrer la console ».
+               relance: { ...RELANCE_VIDE },
                epreuve: null,
                // SPK-93 · §52.11 : les deux surfaces de supervision. Elles ont
                // chacune leur etat parce qu'elles ont chacune leur sujet — la
@@ -5540,14 +5544,117 @@ function peindreSignature() {
 function peindreBuildConsole() {
   const zone = racine.querySelector('.entete__console');
   if (!zone) return;
-  const vu = etat.consoleBuild;
-  zone.innerHTML = vu?.verdict === 'perimee'
-    ? `<div class="avertissement avertissement--laterale" role="status">
-         <p><strong>${echapperTexte(vu.title)}</strong></p>
-         <p>${echapperTexte(vu.detail)}</p>
-       </div>`
-    : '';
+  zone.innerHTML = renderBuildConsole(etat.consoleBuild, etat.relance);
 }
+
+/**
+ * Relit le verdict de build de CE processus, et repeint l'avertissement.
+ *
+ * @spec docs/BACKLOG.md#SPK-117 · docs/DAT.md §62.4 (relu quand l'onglet
+ *       redevient visible) · docs/DESIGN_SYSTEM_APP.md SPK-DS-10 (il s'efface
+ *       de lui-même quand sa cause disparaît)
+ *
+ * Seulement au repos : relire pendant une confirmation repeindrait le bloc
+ * sous les doigts de l'exploitant et lui arracherait le focus (§14.3).
+ */
+function relireBuildConsole() {
+  if (etat.relance.phase !== 'repos') return Promise.resolve();
+  return fetch('/api/console/build').then((r) => r.json()).then((corps) => {
+    if (etat.relance.phase !== 'repos') return;
+    etat.consoleBuild = corps;
+    peindreBuildConsole();
+  }).catch(() => { /* comparaison indisponible : aucun faux avertissement */ });
+}
+
+/**
+ * Le geste « Redémarrer la console » (SPK-117).
+ *
+ * @spec docs/BACKLOG.md#SPK-117 · docs/DAT.md §62.2, §62.4 ·
+ *       docs/DESIGN_SYSTEM.md §6.22 (le focus entre dans la confirmation, et
+ *       revient au déclencheur), §1.3 (l'avertissement ne tombe que sur la
+ *       réponse du NOUVEAU processus)
+ *
+ * Les sessions nommées sont celles relues AU MOMENT d'ouvrir la confirmation, et
+ * ce sont exactement elles que la requête annonce : l'hôte refuse si une autre
+ * est née entre-temps, plutôt que de la fermer sans l'avoir dite.
+ */
+async function ouvrirRelance() {
+  await releverSessions();
+  etat.relance = { ...RELANCE_VIDE, phase: 'confirmation',
+                   sessions: sessionsOuvertes(etat.sessions.items) };
+  peindreBuildConsole();
+  racine.querySelector('[data-relance="engager"]')?.focus();
+}
+
+function annulerRelance(refus = null) {
+  etat.relance = { ...RELANCE_VIDE, refus };
+  peindreBuildConsole();
+  racine.querySelector('[data-relance="ouvrir"]')?.focus();
+}
+
+async function engagerRelance() {
+  const annoncees = etat.relance.sessions;
+  const ancienne = etat.consoleBuild?.instance ?? null;
+  etat.relance = { ...etat.relance, phase: 'envoi' };
+  peindreBuildConsole();
+  let reponse;
+  let corps;
+  try {
+    reponse = await fetch('/api/console/relance', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessions: annoncees.map((s) => s.id) }),
+    });
+    corps = await reponse.json();
+  } catch (erreur) {
+    return annulerRelance({ message: `La console n’a pas répondu : ${erreur.message}` });
+  }
+  if (reponse.status !== 202) {
+    return annulerRelance({ message: corps?.message ?? `HTTP ${reponse.status}`,
+                            output: corps?.output ?? null });
+  }
+  etat.relance = { ...RELANCE_VIDE, phase: 'attente' };
+  peindreBuildConsole();
+  attendreNouvelleInstance(corps.instance ?? ancienne);
+}
+
+/** Interroge l'hôte jusqu'à ce qu'une AUTRE instance réponde, puis recharge. */
+async function attendreNouvelleInstance(ancienne) {
+  const limite = Date.now() + ATTENTE_MAX_MS;
+  while (Date.now() < limite) {
+    await new Promise((ok) => setTimeout(ok, 500));
+    try {
+      const corps = await (await fetch('/api/console/build', { cache: 'no-store' })).json();
+      if (corps?.instance && corps.instance !== ancienne) {
+        location.reload();
+        return;
+      }
+    } catch { /* l'ancienne est partie, la nouvelle n'écoute pas encore */ }
+  }
+  etat.relance = { ...RELANCE_VIDE, phase: 'muette' };
+  peindreBuildConsole();
+}
+
+document.addEventListener('click', (evenement) => {
+  const bouton = evenement.target.closest?.('[data-relance]');
+  if (!bouton || bouton.disabled) return;
+  const geste = bouton.dataset.relance;
+  if (geste === 'ouvrir') ouvrirRelance();
+  if (geste === 'annuler') annulerRelance();
+  if (geste === 'engager') engagerRelance();
+});
+
+// §6.22 : `Échap` referme la confirmation, qui ne s'est encore engagée à rien.
+document.addEventListener('keydown', (evenement) => {
+  if (evenement.key !== 'Escape' || etat.relance.phase !== 'confirmation') return;
+  if (!evenement.target.closest?.('[data-relance="bloc"]')) return;
+  annulerRelance();
+});
+
+// §62.4 : on commite depuis l'éditeur, on revient au navigateur — et
+// l'avertissement est là, sans recharger.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') relireBuildConsole();
+});
 
 /**
  * Le bandeau d'épreuve, dans la barre latérale (SPK-100).
@@ -5630,10 +5737,7 @@ async function changerDeServeur(nom) {
 async function demarrer() {
   // Le message appartient à la coquille : il est chargé indépendamment des
   // serveurs et reste en place quand l'on navigue (SPK-DS-10/11).
-  fetch('/api/console/build').then((r) => r.json()).then((corps) => {
-    etat.consoleBuild = corps;
-    peindreBuildConsole();
-  }).catch(() => { /* comparaison indisponible : aucun faux avertissement */ });
+  relireBuildConsole();
   // SPK-100 · §53.3 : même place et même durée de vie que le message ci-dessus.
   // Il appartient à la coquille : ce qui est remplacé l'est pour TOUS les
   // écrans, et un bandeau posé dans l'un d'eux disparaîtrait en naviguant.

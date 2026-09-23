@@ -7353,7 +7353,10 @@ geste « redémarrer » est porté par l'avertissement lui-même, confirmé, et 
 quand il interromprait une opération en cours (§62). Le message persiste
 dans la coquille, et non dans la seule vue Forge, car sa cause survit à toute
 navigation (`DESIGN_SYSTEM_APP.md` SPK-DS-11). Il nomme l'action utile :
-« Console démarrée avant N commits · redémarrer pour en bénéficier ».
+« Console démarrée avant N commits · redémarrer pour en bénéficier ». Hors dépôt,
+il n'y a pas de commits à compter : « Les fichiers servis ont changé depuis son
+démarrage · redémarrer pour en bénéficier » — corrigé le 2026-09-24, le message
+disait jusque-là « avant 0 commit ».
 
 ### 40.6 Mettre à jour sans donner un shell à la page (SPK-69)
 
@@ -14042,11 +14045,14 @@ formalité : une page quelconque ouverte dans le même navigateur peut envoyer �
 JSON impose le pré-vol, que la console ne satisfait pour aucune autre origine.
 Sans cela, n'importe quel site pourrait arrêter la console. Refus : `415`.
 
-Les refus `409`, chacun avec son code et un message qui dit quoi faire :
+Les refus `409`, chacun avec son code et un message qui dit quoi faire, examinés
+**deux fois** — avant le préflight, et après, car une mise à jour ou une session
+peut naître pendant qu'il charge le code :
 
 | Code | Condition | Motif |
 |---|---|---|
 | `relance_indisponible` | la console n'a pas été démarrée par le lanceur | personne ne la relancerait : ce serait un arrêt |
+| `relance_en_cours` | un redémarrage est déjà accepté ou en préflight | deux arrêts successifs, deux préflights concurrents |
 | `mise_a_jour_en_cours` | une mise à jour ou un retour arrière de `sparkd` est en cours (§40.6) | son verrou et son reçu vivent dans ce processus ; l'interrompre laisse une Forge entre deux builds |
 | `installation_en_cours` | une installation de Forge est en cours (§50) | l'exécuteur distant est l'enfant de ce processus |
 | `sessions_changees` | une session de terminal vivante n'est pas dans la liste annoncée | elle serait fermée sans avoir été nommée dans la confirmation |

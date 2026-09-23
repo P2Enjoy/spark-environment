@@ -123,7 +123,9 @@ case "$COMMANDE" in
     trap 'kill $SPARKD_PID 2>/dev/null || true' EXIT INT TERM
     echo "sparkd    http://127.0.0.1:$PORT  (pilote factice, registre $SPARKD_DB)"
     echo "console   http://127.0.0.1:$SPARK_CONSOLE_PORT"
-    cd "$RACINE/apps/webui" && node host/main.js
+    # SPK-117 · docs/DAT.md §62.1 : le lanceur, pour que la console se
+    # redémarre depuis son avertissement.
+    cd "$RACINE/apps/webui" && node host/lanceur.js
     ;;
   *)
     usage >&2; exit 2 ;;

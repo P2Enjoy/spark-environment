@@ -53,8 +53,8 @@ leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-ma
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 113 unités : 104 closes, 7
-partielles, 2 non commencées — SPK-113, qui attend une mesure, et SPK-117, spécifiée. Le lot 6, *Réseau
+**Le plan de contrôle tourne sur une Forge réelle.** 113 unités : 105 closes, 7
+partielles, 1 non commencée — SPK-113, qui attend une mesure. Le lot 6, *Réseau
 entre Sparks*, ouvert le 2026-09-17, a été clos le 2026-09-18. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
@@ -353,7 +353,7 @@ pas encore sont marquées.
 | `make hooks` | pose la garde du contrat avant chaque `git push` (voir ci-dessous) | **oui** |
 | `make gestes` | parcours navigateur des gestes d'administration | **oui** |
 | `make runDev` | pile de développement : `sparkd` **factice** + console, inventaire jetable | **oui** |
-| `make runProd` | **console d'exploitation seule** sur `:5175` : inventaire du poste, tunnels vers de vraies Forges. Port distinct de `runDev`, donc les deux tournent ensemble | **oui** |
+| `make runProd` | **console d'exploitation seule** sur `:5175` : inventaire du poste, tunnels vers de vraies Forges. Port distinct de `runDev`, donc les deux tournent ensemble. Démarrée par son **lanceur**, elle se redémarre depuis son avertissement « Console à redémarrer » (`docs/DAT.md` §62) | **oui** |
 | `make seed` | recrée le registre de développement et le peuple | **oui** |
 | `make captures` | captures d'interface, à observer | **oui** |
 | `make build` | build de tous les paquets | **oui** |
@@ -546,6 +546,12 @@ et le responsable a tranché le 2026-09-14 de s'en passer plutôt que de laisser
 une garde qui n'existe que dans un fichier de workflow.
 
 - Un seul serveur. Aucun ordonnancement inter-machines.
+- **La console ne se redémarre depuis son écran que si son lanceur l'a démarrée**
+  (`make runProd`, `make runDev`, `pnpm dev` ; `docs/DAT.md` §62). Le préflight
+  prouve que le nouveau code **se charge**, pas qu'il **démarre** : une erreur
+  levée à la création de l'hôte n'apparaît qu'au redémarrage, et la page le dit
+  au bout de 30 s. Un changement du `Makefile` lui-même demande toujours un arrêt
+  à la main.
 - `runtime: vm` est porté par le modèle de données mais n'est pas implémenté.
 - La réservation réseau est une grandeur de **comptabilité** : le noyau n'applique
   qu'un plafond, il n'y a pas de garantie de bande passante.

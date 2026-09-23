@@ -3,6 +3,22 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-117 — la console se redémarre depuis son avertissement.** « Console à
+  redémarrer » porte désormais un bouton **Redémarrer la console** : une
+  confirmation dans le flux, en accent, qui nomme chaque session de terminal
+  qui sera fermée ; puis la page attend qu'une **autre** instance réponde, et se
+  recharge avec le code courant. Un lanceur (`apps/webui/host/lanceur.js`)
+  démarre l'hôte et le relance quand il l'annonce — jamais sur une panne ;
+  `make runProd`, `make runDev` et `pnpm dev` passent par lui, et le pid ne
+  change pas (`sparkui` continue de désigner la console). Route
+  `POST /api/console/relance` : corps JSON exigé (`415` sinon, pour qu'aucune
+  page tierce n'arrête la console) ; refus `409` pendant une mise à jour ou une
+  installation de Forge, sur une session née depuis la confirmation, sur un
+  redémarrage déjà en cours, et quand le nouveau code **ne se charge pas** —
+  un préflight l'importe à part, et la console courante continue de servir.
+  `GET /api/console/build` porte `relaunchable` et `instance`. L'avertissement
+  est relu quand l'onglet redevient visible. Aucune variable d'environnement.
+  DAT §62, §40.5 révisé ; SPK-DS-11 révisé ; manuel M3.
 - **SPK-116 — des projets pour ranger les Sparks.** Un projet est une
   étiquette : il range, et ne fait rien au Spark. Migration `020_projets` —
   `project`, `spark_project`, deux `CASCADE` (SCHEMA §10 octies) ; nom de 1 à
@@ -199,6 +215,8 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-65 — une console hors dépôt ne dit plus « démarrée avant 0 commit ».**
+  Sans Git, ce sont les fichiers servis qui changent, et l'avertissement le dit.
 - **SPK-112 — une route sans TLS le dit et se corrige d'un geste, et la cellule
   ne la propose plus en clair par méprise.** Constaté par le responsable sur la
   Forge : une route acceptée depuis une proposition portait « sans TLS », sans

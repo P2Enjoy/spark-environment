@@ -70,3 +70,15 @@ test('le repli fichiers ne confond pas une dépendance avec le code servi', () =
   const read = (path) => (path === '/console' ? ['app.js', 'node_modules'] : []);
   assert.equal(latestMtime('/console', stat, read), 20);
 });
+
+test('hors dépôt, la console périmée ne compte pas des commits qu’elle n’a pas', () => {
+  // @verifies docs/BACKLOG.md#SPK-65 · docs/DAT.md §40.5 — vu en capture le
+  // 2026-09-24 (SPK-117) : « Console démarrée avant 0 commit » sur une console
+  // sans dépôt, dont les FICHIERS avaient changé.
+  const vu = describe(compare({ kind: 'files', mtime: 1000 }, '/servi',
+                              { latestMtime: () => 2000 }));
+  assert.equal(vu.verdict, 'perimee');
+  assert.doesNotMatch(vu.detail, /commit/);
+  assert.match(vu.detail, /fichiers servis ont changé depuis son démarrage/);
+  assert.match(vu.detail, /redémarrer pour en bénéficier/);
+});

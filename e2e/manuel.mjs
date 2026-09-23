@@ -135,6 +135,37 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('#titre-serveurs', { timeout: 10000 });
     await capturer('m3-serveurs', { hauteur: 600 });
 
+    // --- M3 · Quand la console est à redémarrer (SPK-117, §62.4) ------------
+    // La console du dépôt est à jour par construction : l'avertissement se
+    // montre sur la console relançable de la pile, dont le code servi avance.
+    const relancable = await pile.monterConsoleRelancable();
+    try {
+      await page.setViewportSize({ width: LARGEUR, height: 900 });
+      await page.goto(relancable.base, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('tbody a', { timeout: 20000 });
+      // Une session ouverte, pour que la confirmation ait quelque chose à nommer.
+      await page.click('tbody a:has-text("boutique")');
+      await page.waitForSelector('.entete-entite', { timeout: 10000 });
+      await page.click('.onglet[href$="/terminal"]');
+      await page.click('[data-terminal="ouvrir"]');
+      await page.waitForSelector('[data-terminal="fermer"]', { timeout: 20000 });
+      await relancable.avancerLeCode();
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('.entete__console .avertissement', { timeout: 20000 });
+      await page.waitForSelector('.entete-entite', { timeout: 20000 });
+      await capturer('m3-console-a-redemarrer', { hauteur: 700 });
+      await page.click('[data-relance="ouvrir"]');
+      await page.waitForSelector('[data-relance="bloc"]', { timeout: 10000 });
+      await capturer('m3-console-redemarrer-confirmation', { hauteur: 700 });
+      await page.keyboard.press('Escape');
+    } finally {
+      // On QUITTE sa page avant de l'arrêter : l'arrêt brutal d'une console
+      // coupe le flux du terminal ouvert, et le navigateur l'écrirait. La
+      // suite du manuel se photographie sur la console de la pile.
+      await accueil();
+      await relancable.demonter();
+    }
+
     // --- M4 · Lire les pools de ressources ----------------------------------
     await page.click('nav a[href="#/forge"]');
     await page.waitForSelector('#titre-pools', { timeout: 10000 });

@@ -73,7 +73,11 @@ seed:
 #   runProd : la console SEULE, inventaire du poste, tunnels vers de vraies Forges
 #
 # Aucun sparkd ne tourne ici : la console en atteint un par tunnel SSH, sur la
-# machine qui le porte. Lancer un sparkd local en croyant faire de la production
+# machine qui le porte.
+#
+# SPK-117 · docs/DAT.md §62.1 : c'est le LANCEUR qui démarre l'hôte, pour que
+# le bouton « Redémarrer la console » ait quelqu'un pour le relancer. Le pid ne
+# change pas : `sparkui status` et `stop` désignent toujours la console. Lancer un sparkd local en croyant faire de la production
 # donnerait une console qui administre un registre vide.
 #
 # Le PORT differe de celui de runDev, et ce n'est pas un detail : les deux
@@ -85,7 +89,7 @@ runProd:
 	@echo "Console d'exploitation — http://127.0.0.1:$(SPARK_CONSOLE_PORT)"
 	@echo "Inventaire : $${SPARK_CONSOLE_STATE:-$$HOME/.config/spark/servers.json}"
 	@echo "Aucun sparkd local : les Forges sont atteintes par tunnel SSH."
-	cd apps/webui && SPARK_CONSOLE_PORT=$(SPARK_CONSOLE_PORT) node host/main.js
+	cd apps/webui && SPARK_CONSOLE_PORT=$(SPARK_CONSOLE_PORT) node host/lanceur.js
 
 # Les parcours navigateur font partie de la campagne : un test hors campagne
 # cesse d'etre execute, puis cesse d'etre vrai.

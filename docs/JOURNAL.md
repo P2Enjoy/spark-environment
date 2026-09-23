@@ -12648,3 +12648,36 @@ changé sans son arbitrage.
 
 **Découpage** : documentation (ce commit), puis hôte, écran, E2E et manuel —
 backlog SPK-117.
+
+## 2026-09-24 · SPK-117 — ce que le parcours et les captures ont appris
+
+**Chromium sans tête ne quitte jamais l'état « visible ».** Mesuré par une sonde :
+un second onglet passé devant laisse le premier `visible`, et aucun
+`visibilitychange` n'est émis. Le retour sur l'onglet (§62.4) ne se produit donc
+pas dans un parcours. **Décision** : le parcours émet l'événement que le
+navigateur émettrait ; l'écouteur, la relecture de l'hôte et la repeinture sont
+le vrai chemin. Limite écrite dans le parcours.
+
+**Couper les sockets tuait les flux de terminal au milieu d'un morceau.** Le
+navigateur écrivait `ERR_INCOMPLETE_CHUNKED_ENCODING`, et le §29.6 l'a
+attrapé. **Correction** : les sessions se ferment d'abord, pendant que l'hôte
+sert — chaque flux reçoit sa `fin` et se termine —, puis seules les connexions
+inactives sont coupées ; la garde de 5 s coupe le reste.
+
+**« Console démarrée avant 0 commit »** sur une console hors dépôt — défaut de
+SPK-65, invisible tant qu'aucun écran n'avait montré ce cas. Hors dépôt, ce sont
+les fichiers qui changent, et le message le dit désormais (§40.5). Preuve
+ajoutée à `console-build.test.js`, rouge avant la correction.
+
+**Le refus du préflight montrait la pile du chargeur de Node**, une trentaine de
+lignes qui ne parlent que de Node. Seule la tête reste — fichier, ligne, code,
+message.
+
+**L'espacement de la confirmation** : `.confirmation p { margin: 0 }` l'emportait
+sur l'espacement des frères ; la règle de la colonne porte la double classe.
+
+**Faute de conduite (CLAUDE.md §15 bis)** : un relevé `ps` a montré une campagne
+Playwright d'un autre projet, et le parcours, enchaîné sans condition au relevé,
+est parti quand même. Il a réussi et le poste a tenu, mais c'est exactement ce
+que la règle interdit. Depuis, la commande lourde n'est lancée que derrière une
+garde qui s'arrête si le relevé n'est pas vide.

@@ -86,6 +86,15 @@ export function compare(start, root, dependencies = {}) {
 
 /** Le libellé est le contrat : le navigateur ne le reconstruit pas. */
 export function describe(result) {
+  if (result.verdict === PERIMEE && result.changed_at != null) {
+    // Hors dépôt, il n'y a pas de commits à compter : ce sont les fichiers.
+    // « avant 0 commit » disait une chose fausse (vu le 2026-09-24).
+    return {
+      ...result,
+      title: 'Console à redémarrer',
+      detail: 'Les fichiers servis ont changé depuis son démarrage · redémarrer pour en bénéficier.',
+    };
+  }
   if (result.verdict === PERIMEE) {
     const n = Number(result.behind ?? 0);
     return {

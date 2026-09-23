@@ -481,7 +481,17 @@ sur place. Ce qui ne change pas : rien ne redémarre **sans** geste.
   la page se recharge alors (§1.3). Sans réponse, il le dit en accent, en
   `role="alert"` — un défaut constaté, pas un refus (SPK-DS-08) ;
 - dans la barre latérale étroite, les boutons passent à la ligne plutôt que de
-  déborder (`DESIGN_SYSTEM.md` §8.1).
+  déborder (`DESIGN_SYSTEM.md` §8.1) ;
+- le refus du préflight ne montre que la **tête** de l'erreur — fichier, ligne,
+  code, message —, en `.refus__sortie` (SPK-DS-18) : la pile d'appels du
+  chargeur ne parle que de Node.
+
+Vu en capture le 2026-09-24 et corrigé : les phrases de la confirmation se
+collaient — `.confirmation p { margin: 0 }` l'emportait sur l'espacement des
+frères —, le refus déroulait trente lignes de pile, et une console hors dépôt
+disait « avant 0 commit ». Preuves observées : `e2e/captures/spk117-confirmation`,
+`-confirmation-mobile`, `-refus-code`, `-apres` ; manuel
+`m3-console-a-redemarrer`, `m3-console-redemarrer-confirmation`.
 
 ### SPK-DS-12 · Installer est un parcours visible, jamais une barre qui promet
 

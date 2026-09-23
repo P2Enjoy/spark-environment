@@ -5,7 +5,7 @@
   "description": "Console d'administration locale : hôte Node porteur des tunnels SSH, et SPA React",
   "type": "module",
   "scripts": {
-    "dev": "node host/main.js",
+    "dev": "node host/lanceur.js",
     "build": "echo 'console servie telle quelle par l hote, rien a compiler' && exit 0",
     "test": "node --test modules.test.js host/*.test.js src/components/*.test.js src/styles/*.test.js",
     "typecheck": "tsc --noEmit --allowJs --checkJs false host/*.js"
