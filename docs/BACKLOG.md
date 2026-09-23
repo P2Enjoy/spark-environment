@@ -7804,7 +7804,7 @@ Spark concerné, onglet concerné, avec un clic ».
   l'heure de lecture, corrigés (`.lien-spark`, `.relecture`) ; illustration
   `m8-propositions-forge`. Déploiement : OP-25.
 
-### [ ] SPK-116 · Des projets pour ranger les Sparks
+### [x] SPK-116 · Des projets pour ranger les Sparks
 
 **Demandé par le responsable le 2026-09-23** : « même si ce n'est que du
 visuel, on devrait pouvoir rattacher des Sparks à des projets (un Spark,
@@ -7836,9 +7836,10 @@ responsable le veut :**
 
 1. Documentation — *fait, committé avant le code* ;
 2. registre et API — migration `020`, `/v1/projects`, adhésions, journal ;
-   preuves sparkd ; contrat ;
-3. console — onglets, gestion, section *Projets* ; preuves de composant ;
-4. seed, E2E, captures, manuel ;
+   preuves sparkd ; contrat — *fait le 2026-09-23* ;
+3. console — onglets, gestion, section *Projets* ; preuves de composant —
+   *fait le 2026-09-23* ;
+4. seed, E2E, captures, manuel — *fait le 2026-09-23* ;
 5. déploiement — OP-26 (migration).
 
 - Aucune variable d'environnement.
@@ -7848,6 +7849,13 @@ responsable le veut :**
   projet, y range deux Sparks depuis leur fenêtre, ouvre l'onglet du projet, le
   supprime et constate les Sparks intacts ; migration avec `down` ; seed ;
   captures ; manuel ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-23** : seize preuves sparkd (`test_projets.py`), treize
+  preuves de composant (`sparks-projets.test.js`), le parcours E2E « un projet
+  se crée, range deux Sparks… », qui passe aussi par le refus d'un nom pris, le
+  renommage et un rechargement à 390 px ; neuf captures `spk116-*` observées ;
+  illustrations `m3-projets-*`. Deux écarts pris à l'implémentation et portés
+  au DAT §61.4 : les adresses en `~`, l'onglet courant amené dans la rangée
+  visible (journal du 2026-09-23). Déploiement : OP-26.
 
 ---
 

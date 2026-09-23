@@ -1,6 +1,7 @@
 """Données de démonstration de la pile de développement.
 
 @spec docs/BACKLOG.md#SPK-23 · docs/BACKLOG.md#SPK-85 · docs/DAT.md §28 (la pile et le seed),
+      docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.4 (les projets de démonstration),
       §28.3 (les mêmes chemins que l'application), §28.5 (ce qu'il démontre),
       §28.6 (rejouable à l'identique) · CLAUDE.md §8
 
@@ -549,6 +550,22 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
              200, quoi="protection de « analytics »")
     compte["proteges"] = 1
 
+    # SPK-116 · §61.4 : des projets pour ranger ce qui précède. `postgres-dedie`
+    # en porte DEUX (un Spark, plusieurs projets) ; `analytics`, protégé, est
+    # rangé APRÈS l'armement — le geste n'atteint pas le Spark (§61.1) ;
+    # « Archives » reste vide, pour que l'onglet d'un projet vide se voie.
+    projets = {}
+    for nom in ("Client Martin", "Données", "Archives"):
+        projets[nom] = _attendu(client.post("/v1/projects", json={"name": nom}), 201,
+                                quoi=f"création du projet « {nom} »").json()["id"]
+    for spark, siens in (("crm-production", ["Client Martin"]),
+                         ("postgres-dedie", ["Client Martin", "Données"]),
+                         ("analytics", ["Données"])):
+        _attendu(client.put(f"/v1/sparks/{spark}/projects",
+                            json={"projects": [projets[n] for n in siens]}),
+                 200, quoi=f"rangement de « {spark} »")
+    compte["projets"] = len(projets)
+
     return compte
 
 
@@ -658,6 +675,14 @@ def verify(client: TestClient) -> None:
     membres = sorted(m["spark"] for m in backoffice["members"])
     if membres != ["crm-production", "postgres-dedie"]:
         raise SeedError(f"« backoffice » devrait relier crm-production et postgres-dedie, pas {membres}")
+
+    # SPK-116 · §61.4 : les onglets de projet ont de quoi montrer — un projet
+    # à deux Sparks, un Spark dans deux projets, un projet vide.
+    rangement = {p["name"]: p["sparks"] for p in _attendu(
+        client.get("/v1/projects"), 200, quoi="projets").json()["projects"]}
+    if rangement != {"Archives": [], "Client Martin": ["crm-production", "postgres-dedie"],
+                     "Données": ["analytics", "postgres-dedie"]}:
+        raise SeedError(f"les projets de démonstration ne sont pas ceux annoncés : {rangement}")
 
     # SPK-109 · §57.3 : exactement UNE cellule « non encore isolée », nommée —
     # sans elle, le geste « Isoler le parc » n'aurait rien à montrer.

@@ -12564,3 +12564,29 @@ en fin de rangée ; le rangement depuis la fenêtre du Spark ; la protection ne
 s'applique pas à un geste qui n'atteint pas le Spark.
 
 **Ordre** : SPK-115, puis SPK-116.
+
+## 2026-09-23 · SPK-116 — deux écarts à la spécification, pris à l'implémentation
+
+**Les adresses.** Le §61.4 écrivait `#/sparks/projets` et
+`#/sparks/projet/<id>`. Or `projets` et `projet` sont des noms de Spark valides
+(`[a-z0-9-]`) : la première adresse masquait la fenêtre d'un Spark nommé
+« projets », la seconde se lisait comme la facette `<id>` d'un Spark « projet ».
+**Décision** : `#/sparks/~projets` et `#/sparks/~projet/<id>` — le `~` n'entre
+dans aucun nom de Spark, et les onglets restent sous *Sparks*. Le DAT est
+corrigé, pas complété.
+
+**L'onglet courant hors champ.** Vu en capture à 390 px : la page *Projets*
+rechargée laissait son onglet, le dernier de la rangée, hors de la partie
+visible. La rangée d'onglets n'avait jamais eu à défiler loin ; un onglet par
+projet la fait grandir sans borne. **Décision** : à l'arrivée sur une adresse —
+ou quand la rangée grandit —, l'onglet courant est amené dans la partie
+visible, à l'horizontale seulement ; une repeinture spontanée ne reprend jamais
+le défilement de l'exploitant. Règle générique : remontée au socle
+(`DESIGN_SYSTEM.md` §8.1).
+
+**L'unicité sans égard à la casse** : `COLLATE NOCASE` ne replie que l'ASCII.
+La base la porte pour les créations simultanées ; le service compare en plus
+les noms repliés (`casefold`), pour que « Été » et « été » se refusent aussi.
+
+**Vérifications** : seize preuves sparkd, treize preuves de composant, le
+parcours E2E joué seul, neuf captures observées.

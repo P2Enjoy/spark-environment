@@ -3421,6 +3421,7 @@ les refus non éprouvés — précisément ceux où les défauts se logent.
 | Clé accordée, et un Spark **sans aucune clé** | l'absence nommée du §26.4 |
 | Instantanés, dont un ancien et un plus récent | le refus de restauration du §19.1 |
 | Journal d'audit couvrant `ok`, `denied`, `error` | les trois résultats du §21 |
+| Projets « Client Martin », « Données », « Archives » (SPK-116) | un onglet par projet, un Spark dans deux projets (`postgres-dedie`), un Spark protégé rangé (`analytics`), un projet vide (§61.4) |
 
 ### 28.6 Reproductible veut dire : rejouable à l'identique
 
@@ -13931,7 +13932,10 @@ elle. Un projet est donc **propre à une Forge** : une console qui en administre
 deux voit deux listes.
 
 Le nom est libre, de 1 à 40 caractères, **unique sans égard à la casse** — deux
-onglets « Client A » et « client a » ne se distingueraient pas à l'œil.
+onglets « Client A » et « client a » ne se distingueraient pas à l'œil. Les bords
+blancs sont retirés, un caractère de contrôle est refusé. La base porte
+`UNIQUE COLLATE NOCASE`, qui ne replie que l'ASCII ; le service compare en plus
+les noms repliés (`casefold`), si bien que « Été » et « été » se refusent aussi.
 
 ### 61.3 La surface d'API
 
@@ -13941,16 +13945,27 @@ onglets « Client A » et « client a » ne se distingueraient pas à l'œil.
     DELETE /v1/projects/{id}              → 200 { unassigned: [nom] } | 404
     PUT    /v1/sparks/{nom}/projects { projects: [id] } → 200 | 404 | 422
 
-`GET /v1/sparks` porte, pour chaque Spark, la liste de ses projets. Le journal
-reçoit `project.create`, `project.rename`, `project.delete` — avec les Sparks
-désaffectés — et `spark.projects.set`, avec l'avant et l'après.
+`GET /v1/sparks` et `GET /v1/sparks/{nom}` portent, pour chaque Spark, la liste
+de ses projets (`[{ id, name }]`). Un nom vide, trop long ou de contrôle rend
+`422` ; un identifiant de projet inconnu dans un rangement refuse **tout** le
+rangement (`422`) — ranger à moitié laisserait croire que la liste envoyée est
+celle qui a été écrite. Le journal reçoit `project.create`, `project.rename`,
+`project.delete` — avec les Sparks désaffectés — et `spark.projects.set`, avec
+l'avant et l'après.
 
 ### 61.4 L'écran
 
 - **sous *Sparks***, les onglets du second degré deviennent : **Tous** — la liste
   d'aujourd'hui —, puis **un onglet par projet**, par ordre alphabétique, puis
   **Projets**, qui les gère. Chaque onglet est une destination, avec son URL
-  (`#/sparks/projet/<id>`, `#/sparks/projets`) : ce sont des liens (§5.2) ;
+  (`#/sparks/~projet/<id>`, `#/sparks/~projets`) : ce sont des liens (§5.2).
+  Le `~` est délibéré : un nom de Spark ne peut pas en contenir (`[a-z0-9-]`),
+  alors que `#/sparks/projets`, écrit d'abord, masquait la fenêtre d'un Spark
+  nommé « projets » — corrigé à l'implémentation, le 2026-09-23 ;
+- une rangée plus large que l'écran défile, et **l'onglet courant est amené dans
+  sa partie visible à l'arrivée sur une adresse** — seulement à l'horizontale, et
+  seulement quand l'adresse change ou que la rangée grandit, pour qu'une
+  repeinture ne reprenne jamais le défilement de l'exploitant ;
 - l'onglet d'un projet montre **la même liste que *Tous***, restreinte à ses
   Sparks ; vide, il le dit et dit où l'on range un Spark ;
 - **Projets** liste les projets avec leurs Sparks, et porte trois gestes :

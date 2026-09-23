@@ -22,6 +22,7 @@ import { renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
 import { renderTerminal, TERMINAL_VIDE } from './spark-terminal.js';
 import { renderDocker, DOCKER_VIDE } from './spark-docker.js';
 import { facetteOffertes, renderOngletsSpark } from './forge-images.js';
+import { renderProjetsSpark } from './sparks-projets.js';
 import { renderModale } from './modale.js';
 import { renderSupervisionSpark, SUPERVISION_VIDE } from './supervision.js';
 import { ENV_VIDE, renderEnvPanel } from './spark-env.js';
@@ -859,7 +860,10 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
                                     // réseaux qu'il peut rejoindre.
                                     memberships = [], reseaux = [],
                                     // SPK-111 · §59.4 : les liens exposés et consommables.
-                                    exposed = [], consumable = [] } = {}) {
+                                    exposed = [], consumable = [],
+                                    // SPK-116 · §61.4 : les projets de la Forge,
+                                    // pour ranger ce Spark ; `null` si illisibles.
+                                    projets = [] } = {}) {
   if (status === 'loading') return renderDetailSkeleton();
   if (status === 'error') return renderDetailError(error);
   if (!spark) return renderDetailNotFound();
@@ -879,7 +883,7 @@ export function renderSparkDetail({ status, spark = null, usage = null, routes =
         ${renderReseau(spark, isolation, memberships, reseaux, admin, { exposed, consumable })}
         ${renderProtection(spark, admin)}
         ${renderDossier(spark, dossier)}</div>
-      <div class="detail__secondaire">${renderAcces(spark)}
+      <div class="detail__secondaire">${renderProjetsSpark(spark, projets, admin)}${renderAcces(spark)}
         ${renderAmorcage(spark, amorcage)}</div>
     </div>`,
     // §39.3 : le nom D'ABORD, le port publié comme un second geste qui annonce

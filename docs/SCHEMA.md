@@ -593,7 +593,7 @@ Migration `020_projets`. Un projet range ; il n'a aucun effet sur un Spark
 | Colonne de `project` | Type | Contrainte |
 |---|---|---|
 | `id` | TEXT | clé primaire, identifiant opaque |
-| `name` | TEXT | `NOT NULL`, 1 à 40 caractères, `UNIQUE COLLATE NOCASE` |
+| `name` | TEXT | `NOT NULL`, 1 à 40 caractères, `UNIQUE COLLATE NOCASE` — ne replie que l'ASCII ; le service compare aussi les noms repliés (`casefold`) |
 | `created_at` | TEXT | ISO 8601 UTC |
 
 | Colonne de `spark_project` | Type | Contrainte |
@@ -605,6 +605,9 @@ Migration `020_projets`. Un projet range ; il n'a aucun effet sur un Spark
 **Les deux `CASCADE` sont la règle du responsable** : supprimer un projet retire
 ses adhésions et ne touche aucun Spark ; supprimer un Spark retire les siennes
 et ne touche aucun projet.
+
+Un index `spark_project_by_project` sert la lecture d'un projet et sa
+suppression.
 
 Retour arrière : le `@down` supprime les deux tables. Seul le rangement est
 perdu ; aucun Spark n'en dépend.

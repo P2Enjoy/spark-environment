@@ -462,6 +462,27 @@ tbody tr:hover { background: var(--color-hover); }
 }
 .relecture .note { margin: 0; }
 
+/* SPK-116 · SPK-DS-33 : ranger un Spark. Une case par projet — la case visible
+   mesure 24 px, sa ligne atteint la cible de 40 px et le libellé l'étend
+   (DESIGN_SYSTEM.md §6.10). */
+.cases { border: 0; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.cases legend { font-size: var(--text-compact); color: var(--color-text-2); padding: 0;
+                margin-bottom: var(--space-2); }
+.case {
+  display: flex; align-items: center; gap: var(--space-2);
+  min-height: var(--size-target); cursor: pointer;
+}
+.case input[type="checkbox"] {
+  width: 24px; height: 24px; margin: 0; flex: none;
+  /* §2.1 : la sélection est bleu P2Enjoy, pas le bleu du navigateur — vu en
+     illustration le 2026-09-23. */
+  accent-color: var(--color-brand);
+}
+/* Les projets d'un Spark : des pastilles neutres, une catégorie et non un état
+   (§6.8). Elles passent à la ligne plutôt que d'élargir la colonne du nom. */
+.pastilles-projets { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.cellule-nom .pastilles-projets { margin-top: var(--space-1); }
+
 /* SPK-97 · SPK-DS-23 : coller un lot de variables.
    La zone garde au moins huit lignes visibles — une zone de deux lignes pour un
    `.env` de quarante ferait defiler pour relire ce qu'on vient de coller — et ne

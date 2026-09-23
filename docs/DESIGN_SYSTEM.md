@@ -1459,6 +1459,7 @@ Ces paliers constituent des valeurs par défaut, pas une obligation de mise en p
 * Les tableaux larges défilent dans leur propre conteneur.
 * Les boards larges défilent dans leur propre conteneur.
 * Une navigation horizontale longue signale qu’elle peut défiler.
+* À l’arrivée sur une destination, une navigation horizontale qui défile amène l’élément courant dans sa partie visible. Elle ne le fait qu’à l’arrivée : un rendu ultérieur ne reprend pas le défilement que l’utilisateur a choisi.
 * Une mise en page ne doit pas simplement compresser un composant desktop jusqu’à devenir inutilisable.
 
 ## 8.2 Débordement horizontal

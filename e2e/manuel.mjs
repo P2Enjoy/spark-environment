@@ -117,6 +117,19 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await accueil();
     await capturer('m3-liste');
 
+    // --- M3 · Ranger les Sparks en projets (SPK-116, §61.4) -----------------
+    // Le seed range trois projets, dont un Spark dans deux et un projet vide.
+    await page.locator('tr:has(a[href="#/sparks/postgres-dedie"])').scrollIntoViewIfNeeded();
+    await capturer('m3-projets-liste', { hauteur: 900 });
+    await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Projets")');
+    await page.waitForSelector('[data-renomme-projet]', { timeout: 10000 });
+    await capturer('m3-projets-gestion', { hauteur: 700 });
+    await ouvrir('postgres-dedie');
+    await page.click('[data-ouvre="projets"]');
+    await page.waitForSelector('dialog.modale[open] .cases', { timeout: 10000 });
+    await capturer('m3-projets-ranger', { hauteur: 800 });
+    await page.keyboard.press('Escape');
+
     // --- M3 · Déclarer un serveur (SPK-41) -----------------------------------
     await page.click('nav a[href="#/serveurs"]');
     await page.waitForSelector('#titre-serveurs', { timeout: 10000 });

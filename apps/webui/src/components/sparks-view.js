@@ -4,6 +4,9 @@
  * @spec docs/BACKLOG.md#SPK-18 · docs/DESIGN_SYSTEM.md §6.13 (états
  *       systématiques), §6.14 (tableau), §9 (accessibilité), §14.5 (absence),
  *       §14.6 (mesure indisponible) · docs/DESIGN_SYSTEM_APP.md §4
+ * @spec docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.4 (les projets d'un Spark en
+ *       pastilles ; l'onglet d'un projet est cette liste, restreinte) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-33 — pour le filtre et les pastilles
  *
  * Rendu en chaînes HTML plutôt qu'avec un framework : la vue est une liste, et
  * une dépendance de rendu se justifiera quand l'interactivité l'exigera
@@ -12,6 +15,7 @@
  */
 
 import { stateOf, formatBytes, formatBps, formatCpu, MEASURE, tunnelOf } from './tokens.js';
+import { renderPastillesProjets, ADRESSE_GESTION } from './sparks-projets.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -106,13 +110,18 @@ const COLONNES = [
 
 /** Vue complète. Traite explicitement chargement, vide et erreur (§6.13). */
 export function renderSparksView({ status, sparks = [], usage = {}, error = null,
-                                   sort = { key: 'name', dir: 'asc' }, tunnel = null } = {}) {
+                                   sort = { key: 'name', dir: 'asc' }, tunnel = null,
+                                   // SPK-116 · §61.4 : l'onglet d'un projet est
+                                   // CETTE liste, restreinte à ses Sparks.
+                                   projet = null, projetAbsent = false } = {}) {
   const bandeau = tunnel && tunnel.state !== 'ready'
     ? `<p class="bandeau-tunnel" role="alert">Tunnel « ${echapper(tunnel.name)} » ${echapper(tunnelOf(tunnel.state).label)} — les données affichées ne sont plus à jour.</p>`
     : '';
 
   if (status === 'loading') return bandeau + renderSkeleton();
   if (status === 'error') return bandeau + renderError(error);
+  if (projetAbsent) return bandeau + renderProjetAbsent();
+  if (projet && sparks.length === 0) return bandeau + renderProjetVide(projet);
   if (sparks.length === 0) return bandeau + renderEmpty();
 
   const tries = [...sparks].sort((a, b) => {
@@ -136,7 +145,7 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
     return [
       '<tr>',
       `<td class="cellule-nom"><a class="lien-spark" href="#/sparks/${encodeURIComponent(s.name)}" title="${echapper(s.name)}">${echapper(s.name)}</a>${
-        renderProtectionBadge(s)}</td>`,
+        renderProtectionBadge(s)}${renderPastillesProjets(s.projects)}</td>`,
       `<td>${renderStateBadge(s.state)}</td>`,
       `<td>${renderCpuGauge(u.cpu, s)}</td>`,
       `<td class="aligne-droite">${renderMesure(u.memory?.used_bytes, s.memory_reservation_bytes, formatBytes)}</td>`,
@@ -149,8 +158,9 @@ export function renderSparksView({ status, sparks = [], usage = {}, error = null
 
   return `${bandeau}
 <div class="titre-vue">
-  <h1>Sparks</h1>
-  <p class="titre-vue__compte">${sparks.length} cellule${sparks.length > 1 ? 's' : ''}</p>
+  <h1>${projet ? echapper(projet.name) : 'Sparks'}</h1>
+  <p class="titre-vue__compte">${sparks.length} cellule${sparks.length > 1 ? 's' : ''}${
+    projet ? ' dans ce projet' : ''}</p>
   <a class="bouton bouton--primaire bouton--compact" href="#/creer" style="margin-left:auto">Créer un Spark</a>
 </div>
 <div class="carte">
@@ -192,6 +202,35 @@ export function renderEmpty() {
   <h2>Aucun Spark sur ce serveur</h2>
   <p>Un Spark est une cellule d’exécution contingentée, destinée à héberger une pile Docker Compose.</p>
   <p style="margin-top:var(--space-4)"><a class="bouton bouton--primaire" href="#/creer">Créer un Spark</a></p>
+</div></div>`;
+}
+
+/**
+ * L'onglet d'un projet sans Spark : il le dit, et dit où l'on range (§61.4).
+ *
+ * @spec docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.4 · docs/DESIGN_SYSTEM.md §14.5
+ */
+export function renderProjetVide(projet) {
+  return `
+<div class="titre-vue"><h1>${echapper(projet.name)}</h1></div>
+<div class="carte"><div class="etat-vue">
+  <h2>Aucun Spark dans ce projet</h2>
+  <p>On range un Spark depuis sa fenêtre : onglet <em>Infos</em>, section <em>Projets</em>.</p>
+</div></div>`;
+}
+
+/**
+ * Une adresse de projet qui ne mène à rien — supprimé depuis une autre console,
+ * ou favori périmé. On le NOMME plutôt que de montrer une liste vide qui se
+ * lirait comme un projet sans Spark (§14.6).
+ */
+export function renderProjetAbsent() {
+  return `
+<div class="titre-vue"><h1>Projet introuvable</h1></div>
+<div class="carte"><div class="etat-vue">
+  <h2>Ce projet n’existe pas, ou plus</h2>
+  <p>Il a pu être supprimé depuis une autre console. Les projets existants sont listés dans
+  l’onglet <a href="${ADRESSE_GESTION}">Projets</a>.</p>
 </div></div>`;
 }
 

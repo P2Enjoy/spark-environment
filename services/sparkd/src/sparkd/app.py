@@ -52,6 +52,7 @@ from . import snapshots as snapshot_service
 from . import protection as protection_service
 from . import isolation as isolation_service
 from . import reseaux as reseaux_service
+from . import projets as projets_service
 from . import environnement as env_service
 from . import sshkeys
 from .lifecycle import Command
@@ -687,6 +688,69 @@ def create_app(config: Config) -> FastAPI:
             except reseaux_service.ReseauError as erreur:
                 raise _refus_reseau(erreur) from erreur
             return {"detached": spark_name, "network": name}
+
+    # --- projets : ranger les Sparks, sans rien leur faire (SPK-116, §61) ------
+    #
+    # @spec docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.1 (la protection ne s'y
+    #       applique pas : ranger n'atteint pas le Spark), §61.3 (la surface)
+
+    def _refus_projet(erreur: Exception) -> HTTPException:
+        if isinstance(erreur, projets_service.ProjetIntrouvable):
+            return HTTPException(status_code=404, detail={"error": "not_found", "message": str(erreur)})
+        if isinstance(erreur, projets_service.NomPris):
+            return HTTPException(status_code=409, detail={"error": "name_taken", "message": str(erreur)})
+        return HTTPException(status_code=422, detail={"error": "invalid_project", "message": str(erreur)})
+
+    @app.get("/v1/projects", tags=["projects"])
+    def list_projects() -> dict:
+        """Les projets, par ordre alphabétique, avec leurs Sparks (§61.3)."""
+        with registry() as connection:
+            return {"projects": projets_service.listing(connection)}
+
+    @app.post("/v1/projects", tags=["projects"], status_code=201)
+    def create_project(body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                return projets_service.create(connection, body.get("name"))
+            except projets_service.ProjetError as erreur:
+                raise _refus_projet(erreur) from erreur
+
+    @app.patch("/v1/projects/{project_id}", tags=["projects"])
+    def rename_project(project_id: str, body: dict = Body(...)) -> dict:
+        with registry() as connection:
+            try:
+                return projets_service.rename(connection, project_id, body.get("name"))
+            except projets_service.ProjetError as erreur:
+                raise _refus_projet(erreur) from erreur
+
+    @app.delete("/v1/projects/{project_id}", tags=["projects"])
+    def delete_project(project_id: str) -> dict:
+        """Supprime le projet et rend les Sparks DÉSAFFECTÉS — intacts (§61.1)."""
+        with registry() as connection:
+            try:
+                return {"unassigned": projets_service.delete(connection, project_id)}
+            except projets_service.ProjetError as erreur:
+                raise _refus_projet(erreur) from erreur
+
+    @app.put("/v1/sparks/{name}/projects", tags=["sparks"])
+    def set_spark_projects(name: str, body: dict = Body(...)) -> dict:
+        """Range un Spark : ses projets deviennent exactement cette liste.
+
+        Un projet inconnu est une requête invalide (422), pas une ressource
+        absente : le Spark, lui, existe. Aucune protection lue (§61.1).
+        """
+        with registry() as connection:
+            try:
+                spark = service.by_name(connection, name)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            try:
+                return {"projects": projets_service.set_for_spark(
+                    connection, spark, body.get("projects"))}
+            except projets_service.ProjetError as erreur:
+                raise HTTPException(status_code=422, detail={
+                    "error": "invalid_project", "message": str(erreur)}) from erreur
 
     # --- les liens privés : la portée d'un port publié (SPK-111, §59.4) ------
 
@@ -3401,7 +3465,11 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/v1/sparks", tags=["sparks"])
     def list_sparks() -> dict[str, object]:
         with registry() as connection:
-            return {"sparks": service.listing(connection)}
+            # SPK-116 · §61.3 : chaque Spark porte ses projets — la liste Tous
+            # les affiche, l'onglet d'un projet la filtre.
+            projets = projets_service.par_spark(connection)
+            return {"sparks": [{**s, "projects": projets.get(s["id"], [])}
+                               for s in service.listing(connection)]}
 
     @app.patch("/v1/sparks/{name}", tags=["sparks"])
     def resize_spark(name: str, body: dict = Body(...)) -> dict:
@@ -3650,7 +3718,10 @@ def create_app(config: Config) -> FastAPI:
     def get_spark(name: str) -> dict:
         with registry() as connection:
             try:
-                return service.by_name(connection, name)
+                spark = service.by_name(connection, name)
+                # SPK-116 · §61.4 : la section Projets de la facette Infos.
+                return {**spark, "projects": projets_service.par_spark(connection)
+                        .get(spark["id"], [])}
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur

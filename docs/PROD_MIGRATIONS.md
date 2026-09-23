@@ -120,6 +120,36 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-26 · Migration `020_projets` : ranger les Sparks en projets (SPK-116) — **EN ATTENTE**
+
+```
+État          : EN ATTENTE. Une migration, aucune variable, aucun service
+                nouveau, aucune règle réseau.
+Objectif      : créer `project` et `spark_project` (docs/SCHEMA.md §10 octies)
+                et servir `/v1/projects` et `PUT /v1/sparks/{nom}/projects`
+                (docs/DAT.md §61.3). Un projet range et ne fait rien d'autre :
+                ni pilote appelé, ni cellule écrite. La console (onglets Tous /
+                un par projet / Projets, section Projets de la facette Infos)
+                est locale : elle se relance (`sparkui stop`, puis `sparkui`).
+Dépend de     : rien. Se joue dans la MÊME mise à jour qu'OP-25 : la build
+                qui porte l'une porte l'autre.
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) — `sparkd.install`
+                   applique la migration 020 ;
+                3. relancer la console.
+Vérification  : `GET /healthz` rend le commit déployé ; `GET /v1/forge` rend
+                la version de schéma 020 ; `GET /v1/projects` rend
+                `{"projects": []}` ; `GET /v1/sparks` porte `projects: []` pour
+                chaque Spark. Aucun projet n'est créé sur la Forge pour la
+                preuve : la lecture suffit, et un rangement de démonstration
+                chez un locataire n'aurait rien à y faire.
+Retour arrière: le `@down` de 020 supprime les deux tables — seul le
+                rangement est perdu, aucun Spark n'en dépend ; puis réinstaller
+                la build précédente (runbook A.2).
+Risques       : aucun sur les Sparks — la migration n'ajoute que deux tables
+                et un index, et ne touche aucune table existante.
+```
+
 ### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes, ce qu'une acceptation laisse en attente, et les propositions de toute la Forge (SPK-112, SPK-114, SPK-115) — **EN ATTENTE**
 
 ```

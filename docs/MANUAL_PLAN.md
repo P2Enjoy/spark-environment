@@ -38,9 +38,11 @@ Unités : SPK-28, SPK-03, SPK-26.
 ## M3 · Ouvrir la console
 
 Lancement local, ajout d'un serveur à l'inventaire, ouverture du tunnel SSH, et ce
-que l'on voit quand le tunnel tombe.
+que l'on voit quand le tunnel tombe. Se repérer dans les niveaux de navigation ;
+ranger les Sparks en projets — les onglets Tous, un par projet, Projets, et le
+rangement depuis la fenêtre d'un Spark.
 
-Unités : SPK-16.
+Unités : SPK-16, SPK-116.
 
 ## M4 · Lire les pools de ressources
 

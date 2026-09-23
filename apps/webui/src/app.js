@@ -41,6 +41,9 @@ import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journa
 import { ALERTES_VIDE, renderAlertes } from './components/forge-alertes.js';
 import { PROPOSITIONS_FORGE_VIDE, renderPropositionsForge }
   from './components/forge-propositions.js';
+import { ongletsSparks, renderProjetsGestion, PROJETS_UI_VIDE, ADRESSE_GESTION,
+         adresseProjet, filtrerParProjet, projetsCoches }
+  from './components/sparks-projets.js';
 import { renderForgeDns, FORGE_DNS_VIDE, cleEntree, choisies }
   from './components/forge-dns.js';
 import { renderManuel } from './components/manuel-view.js';
@@ -108,6 +111,12 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                        installer: { ...INSTALLER_VIDE,
                                     values: { ...INSTALLER_VIDE.values } } },
                facette: '',
+               // SPK-116 · §61.4 : les projets de la Forge — ils forment la
+               // rangée d'onglets de Sparks. `undefined` tant qu'on n'a pas lu,
+               // `null` si la lecture a échoué. `projetCourant` : l'onglet d'un
+               // projet ouvert, ou `null` sur Tous.
+               projets: undefined, projetCourant: null,
+               projetsUi: { ...PROJETS_UI_VIDE },
                // SPK-43 · §37.4 : la session de terminal. Les OCTETS n'y sont
                // pas — ils vont directement au DOM (§37.5).
                terminal: {
@@ -266,6 +275,37 @@ function restaurerCurseur(element, curseur) {
   } catch { /* idem : pas de curseur adressable, le focus suffit. */ }
 }
 
+/**
+ * Amène l'onglet courant dans la rangée visible, À L'ARRIVÉE sur une adresse.
+ *
+ * @spec docs/BACKLOG.md#SPK-116 · docs/DESIGN_SYSTEM.md §5.1 (la destination
+ *       courante reste identifiable), §8.1 (une navigation longue défile) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-33
+ *
+ * Une rangée par projet dépasse vite la largeur : sans cela, *Projets* ou le
+ * projet ouvert par un lien restait hors champ — vu en capture à 390 px le
+ * 2026-09-23. Seulement quand l'adresse CHANGE, et seulement à l'horizontale :
+ * les repeintures spontanées ne doivent ni ramener la page en haut, ni reprendre
+ * la rangée que l'exploitant fait défiler.
+ */
+let adresseMontree = null;
+function montrerOngletCourant() {
+  const courant = racine.querySelector('.onglets [aria-current="page"]');
+  if (!courant) return;
+  const rangee = courant.parentElement;
+  // La rangée GRANDIT quand les projets arrivent : la même adresse se remontre
+  // alors, puisque l'onglet courant a pu glisser hors champ.
+  const cle = `${location.hash}|${rangee.children.length}`;
+  if (cle === adresseMontree) return;
+  adresseMontree = cle;
+  const gauche = courant.getBoundingClientRect().left - rangee.getBoundingClientRect().left
+    + rangee.scrollLeft;
+  if (gauche < rangee.scrollLeft
+      || gauche + courant.offsetWidth > rangee.scrollLeft + rangee.clientWidth) {
+    rangee.scrollLeft = Math.max(0, gauche - (rangee.clientWidth - courant.offsetWidth) / 2);
+  }
+}
+
 function peindre() {
   marquerNavigation();
   // MESURÉ le 2026-09-02, en éprouvant la navigation au clavier : une repeinture
@@ -316,9 +356,29 @@ function peindre() {
                             propositions: etat.propositions,
                             mesures: etat.mesures,
                             ...etat.detail })
-      : renderOnglets([['#/sparks', 'Instances']], '#/sparks', 'Sections des Sparks')
-        + renderSparksView(etat);
+      : etat.route === 'projets'
+      ? renderOnglets(ongletsSparks(etat.projets), ADRESSE_GESTION, 'Sections des Sparks')
+        + renderProjetsGestion(etat.projets, etat.projetsUi)
+      // SPK-116 · §61.4 : Tous, un onglet par projet, puis Projets. L'onglet
+      // d'un projet est la MÊME liste, restreinte (SPK-DS-33).
+      : renderOnglets(ongletsSparks(etat.projets),
+                      etat.projetCourant ? adresseProjet(etat.projetCourant) : '#/sparks',
+                      'Sections des Sparks')
+        + (() => {
+          // Sans la liste des projets, on ne sait pas quels Sparks ce projet
+          // range : le dire, plutôt que d'afficher une liste vide (§14.6).
+          if (etat.projetCourant && etat.status === 'ready' && !Array.isArray(etat.projets)) {
+            return renderSparksView({ ...etat, status: 'error',
+              error: { message: 'Les projets n’ont pas pu être lus : la liste de ce projet ne peut pas être composée.' } });
+          }
+          const vue = filtrerParProjet(etat.sparks, etat.projets, etat.projetCourant);
+          return renderSparksView({ ...etat, sparks: vue.sparks, projet: vue.projet,
+                                    // Tant que les projets ne sont pas lus, on
+                                    // ne peut pas dire qu'un projet n'existe pas.
+                                    projetAbsent: vue.absent && Array.isArray(etat.projets) });
+        })();
   brancher();
+  montrerOngletCourant();
   peindreRegistreSessions();
   // On ne restaure QUE si personne d'autre n'a pris le focus : une modale qui
   // vient de s'ouvrir, une confirmation qui appelle son champ, ont posé le leur
@@ -358,6 +418,7 @@ function rafraichirQuota(formulaire, controle, nomQuota = controle.name) {
 
 /** §9.1 : toute fonction est utilisable sans souris. Le tri est un bouton. */
 function brancher() {
+  brancherProjets();
   // SPK-115 · §60.3 : relire les cellules, à la demande.
   racine.querySelector('[data-propositions-relire]')
     ?.addEventListener('click', () => chargerPropositionsForge({ depuisBouton: true }));
@@ -599,7 +660,18 @@ function brancher() {
       // posé et rappellerait `showModal()` sur la modale qu'on vient de fermer.
       etat.envImport.open = null;
       etat.envImport.refusal = null;
+      // SPK-116 : les modales des projets suivent le MÊME contrat. Fermer vaut
+      // annulation : les cases non enregistrées sont oubliées.
+      const renomme = etat.projetsUi.open === 'projet-renommage' ? etat.projetsUi.cible : null;
+      etat.projetsUi.open = null;
+      etat.projetsUi.refusal = null;
+      for (const cle of Object.keys(etat.admin.values)) {
+        if (cle.startsWith('projet:')) delete etat.admin.values[cle];
+      }
       peindre();
+      // Le renommage a un déclencheur PAR projet : `brancherModale` ne peut pas
+      // le retrouver par l'identifiant de la modale, on le rend ici (§6.27).
+      if (renomme) racine.querySelector(`[data-renomme-projet="${CSS.escape(renomme)}"]`)?.focus();
     },
   });
   // SPK-63 : la frappe n'appelle PAS `peindre()`. Le §6.9 bis a déjà enseigné la
@@ -1704,7 +1776,7 @@ function brancherPanneaux() {
   for (const bouton of racine.querySelectorAll(
     '[data-ouvre="route"], [data-ouvre="key"], [data-ouvre="snapshot"],'
     + ' [data-ouvre="protection"], [data-ouvre="port"], [data-ouvre="recette"],'
-    + ' [data-ouvre="reseau"]')) {
+    + ' [data-ouvre="reseau"], [data-ouvre="projets"]')) {
     bouton.addEventListener('click', () => {
       admin.open = bouton.dataset.ouvre;
       admin.refusal = null;
@@ -1870,7 +1942,7 @@ function brancherPanneaux() {
   const formulaire = racine.querySelector(
     '[data-modale="route"], [data-modale="key"], [data-modale="snapshot"],'
     + ' [data-modale="protection"], [data-modale="dns"], [data-modale="port"],'
-    + ' [data-modale="recette"], [data-modale="reseau"]');
+    + ' [data-modale="recette"], [data-modale="reseau"], [data-modale="projets"]');
   if (formulaire) {
     for (const controle of formulaire.querySelectorAll('input, select')) {
       controle.addEventListener('input', () => {
@@ -1914,6 +1986,7 @@ function brancherPanneaux() {
       if (quoi === 'port') return publierPort();
       if (quoi === 'recette') return ecrireRecette();
       if (quoi === 'reseau') return attacherReseau();
+      if (quoi === 'projets') return rangerSpark();
     });
   }
 
@@ -2640,6 +2713,25 @@ async function poserEnregistrementDns() {
  * Aucun contrôle d'unicité ici : le port public est UNIQUE en base, et une
  * vérification d'interface ne protégerait de rien face à deux consoles.
  */
+/**
+ * Range ce Spark : ses projets deviennent exactement les cases cochées
+ * (SPK-116, docs/DAT.md §61.3). Rien n'atteint la cellule.
+ */
+async function rangerSpark() {
+  const projets = projetsCoches(etat.spark, etat.detail?.projets, etat.admin.values);
+  const resultat = await agir('projets', () => appel('PUT',
+    `/v1/sparks/${encodeURIComponent(etat.spark.name)}/projects`, { projects: projets }));
+  if (resultat?.ok) {
+    // Les cases repartent de ce que le serveur a écrit, relu par `agir`.
+    for (const cle of Object.keys(etat.admin.values)) {
+      if (cle.startsWith('projet:')) delete etat.admin.values[cle];
+    }
+    peindre();
+    racine.querySelector('[data-ouvre="projets"]')?.focus();
+  }
+  return resultat;
+}
+
 /** Attache ce Spark au réseau privé choisi (SPK-110, docs/DAT.md §58.4). */
 async function attacherReseau() {
   const disponibles = (etat.detail?.reseaux ?? [])
@@ -3550,7 +3642,8 @@ async function chargerDetail(nom, facette = '') {
   try {
     etat.spark = await api(`/v1/sparks/${encodeURIComponent(nom)}`);
     const [usage, routes, sshConfig, registry, snapshots, audit, publies,
-           env, catalogue, forge, , isolation, reseauDuSpark, reseaux] = await Promise.all([
+           env, catalogue, forge, , isolation, reseauDuSpark, reseaux,
+           projets] = await Promise.all([
       api(`/v1/sparks/${encodeURIComponent(nom)}/usage`).catch(() => null),
       api('/v1/ingress').then((r) => r.routes.filter((x) => x.spark_name === nom)).catch(() => []),
       api(`/v1/sparks/${encodeURIComponent(nom)}/ssh-config`).catch(() => null),
@@ -3586,9 +3679,11 @@ async function chargerDetail(nom, facette = '') {
       // rejoindre ; SPK-111 · §59.4 : les liens qu'il expose et ceux qu'il joint.
       api(`/v1/sparks/${encodeURIComponent(nom)}/networks`).catch(() => ({})),
       api('/v1/networks').then((r) => r.networks).catch(() => []),
+      // SPK-116 · §61.4 : les projets de la Forge, pour la section Projets.
+      api('/v1/projects').then((r) => r.projects).catch(() => null),
     ]);
     etat.detail = { usage, routes, keys: sshConfig?.keys ?? [], registry, sshConfig,
-                    snapshots, audit, isolation, reseaux,
+                    snapshots, audit, isolation, reseaux, projets,
                     memberships: reseauDuSpark.memberships ?? [],
                     exposed: reseauDuSpark.exposed ?? [],
                     consumable: reseauDuSpark.consumable ?? [],
@@ -4561,6 +4656,135 @@ function brancherJournal() {
  * qui est précisément le défaut mesuré le 2026-09-14.
  */
 /**
+ * La page *Projets* : lire, créer, renommer, supprimer (SPK-116).
+ *
+ * @spec docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.3, §61.4 ·
+ *       docs/DESIGN_SYSTEM.md §6.22, §6.23, §6.27, §14.3 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-33
+ *
+ * Après chaque geste, la liste est RELUE (§1.3) : l'écran montre ce que le
+ * registre porte, jamais ce qu'il croit avoir fait.
+ */
+async function chargerProjets() {
+  etat.route = 'projets';
+  etat.spark = null;
+  etat.projets = undefined;
+  // Un compte rendu ne survit pas à la navigation : il décrirait un geste que
+  // l'écran d'arrivée n'a pas vu faire.
+  etat.projetsUi = { ...PROJETS_UI_VIDE };
+  peindre();
+  await relireProjets();
+}
+
+async function relireProjets() {
+  try {
+    etat.projets = (await api('/v1/projects')).projects;
+  } catch (erreur) {
+    etat.projets = null;
+    etat.projetsUi.refusal = { liste: erreur.message };
+  }
+  peindre();
+}
+
+function brancherProjets() {
+  const ui = etat.projetsUi;
+  racine.querySelector('[data-ouvre="projet-creation"]')?.addEventListener('click', () => {
+    Object.assign(ui, { open: 'projet-creation', cible: null, nom: '', refusal: null,
+                        confirming: null, issue: null });
+    peindre();
+  });
+  for (const bouton of racine.querySelectorAll('[data-renomme-projet]')) {
+    bouton.addEventListener('click', () => {
+      const projet = (etat.projets ?? []).find((p) => p.id === bouton.dataset.renommeProjet);
+      Object.assign(ui, { open: 'projet-renommage', cible: projet?.id ?? null,
+                          nom: projet?.name ?? '', refusal: null, confirming: null, issue: null });
+      peindre();
+    });
+  }
+  const formulaire = racine.querySelector(
+    '[data-modale="projet-creation"], [data-modale="projet-renommage"]');
+  if (formulaire) {
+    // La frappe ne repeint pas (§14.3) : elle ne fait que tenir l'état.
+    formulaire.querySelector('[name="nom"]')?.addEventListener('input', (evenement) => {
+      ui.nom = evenement.target.value;
+    });
+    formulaire.addEventListener('submit', (evenement) => {
+      evenement.preventDefault();
+      enregistrerProjet();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-supprime-projet]')) {
+    bouton.addEventListener('click', () => {
+      Object.assign(ui, { confirming: bouton.dataset.supprimeProjet, refusal: null, issue: null });
+      peindre();
+      // §6.22 : le focus entre dans la confirmation.
+      racine.querySelector('[data-confirme-suppression-projet]')?.focus();
+    });
+  }
+  for (const bouton of racine.querySelectorAll('[data-annule-projet]')) {
+    bouton.addEventListener('click', () => {
+      const id = bouton.dataset.annuleProjet;
+      ui.confirming = null;
+      peindre();
+      // §6.22 : l'annulation rend le focus au déclencheur.
+      racine.querySelector(`[data-supprime-projet="${CSS.escape(id)}"]`)?.focus();
+    });
+  }
+  racine.querySelector('[data-confirme-suppression-projet]')?.addEventListener('click', (evenement) =>
+    supprimerProjet(evenement.currentTarget.dataset.confirmeSuppressionProjet));
+}
+
+async function enregistrerProjet() {
+  const ui = etat.projetsUi;
+  const renommage = ui.open === 'projet-renommage';
+  const cible = ui.cible;
+  ui.busy = true;
+  peindre();
+  const resultat = await appel(renommage ? 'PATCH' : 'POST',
+    renommage ? `/v1/projects/${encodeURIComponent(cible)}` : '/v1/projects', { name: ui.nom })
+    .catch((erreur) => ({ ok: false, corps: { detail: { message: erreur.message } } }));
+  ui.busy = false;
+  if (!resultat.ok) {
+    // §6.27 : le refus s'affiche DANS la modale, la saisie est gardée.
+    ui.refusal = { modale: resultat.corps?.detail?.message ?? 'Le serveur a refusé ce nom.' };
+    peindre();
+    racine.querySelector('#projet-nom')?.focus();
+    return;
+  }
+  ui.open = null;
+  ui.refusal = null;
+  ui.issue = renommage
+    ? `Projet renommé « ${resultat.corps.name} ».`
+    : `Projet « ${resultat.corps.name} » créé. Son onglet est ajouté à la rangée.`;
+  await relireProjets();
+  racine.querySelector(renommage
+    ? `[data-renomme-projet="${CSS.escape(cible)}"]` : '[data-ouvre="projet-creation"]')?.focus();
+}
+
+async function supprimerProjet(id) {
+  const ui = etat.projetsUi;
+  const projet = (etat.projets ?? []).find((p) => p.id === id);
+  ui.busy = true;
+  peindre();
+  const resultat = await appel('DELETE', `/v1/projects/${encodeURIComponent(id)}`)
+    .catch((erreur) => ({ ok: false, corps: { detail: { message: erreur.message } } }));
+  ui.busy = false;
+  ui.confirming = null;
+  if (!resultat.ok) {
+    ui.refusal = { liste: resultat.corps?.detail?.message ?? 'Le serveur a refusé la suppression.' };
+    await relireProjets();
+    return;
+  }
+  const desaffectes = resultat.corps?.unassigned ?? [];
+  ui.refusal = null;
+  ui.issue = `Projet « ${projet?.name ?? ''} » supprimé. ` + (desaffectes.length
+    ? `Sparks désaffectés, non modifiés : ${desaffectes.join(', ')}.`
+    : 'Aucun Spark n’y était rangé.');
+  await relireProjets();
+  racine.querySelector('[data-ouvre="projet-creation"]')?.focus();
+}
+
+/**
  * Lit ce qui attend dans TOUS les Sparks (SPK-115).
  *
  * @spec docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.2, §60.3
@@ -5163,6 +5387,15 @@ function router() {
   }
   if (location.hash === '#/forge') return chargerHote();
   if (location.hash === '#/creer') return chargerCreation();
+  // SPK-116 · §61.4 : AVANT la fenêtre d'un Spark — `~` n'entre dans aucun nom
+  // de Spark, mais le motif de la fenêtre accepterait « ~projets » comme nom.
+  if (location.hash === ADRESSE_GESTION) return chargerProjets();
+  const projet = location.hash.match(/^#\/sparks\/~projet\/([^/?]+)$/);
+  if (projet) {
+    etat.route = 'liste';
+    etat.spark = null;
+    return charger({ projet: decodeURIComponent(projet[1]) });
+  }
   // Chaque facette d'un Spark est une véritable destination : on doit pouvoir
   // recharger la page sur « Instantanés » (DESIGN_SYSTEM.md §5.4, §6.27).
   // SPK-43 · SPK-DS-04 : chaque facette est une DESTINATION, avec sa propre
@@ -5194,14 +5427,22 @@ function router() {
 
 window.addEventListener('hashchange', router);
 
-async function charger() {
+async function charger({ projet = null } = {}) {
   etat.route = 'liste';
+  etat.projetCourant = projet;
   etat.status = 'loading';
   etat.error = null;
   peindre();
   try {
-    const { sparks } = await api('/v1/sparks');
+    // SPK-116 · §61.3 : chaque Spark porte ses projets ; la rangée d'onglets
+    // vient de la liste des projets. Une liste illisible n'empêche pas de
+    // montrer les Sparks : la rangée se réduit alors à Tous et Projets.
+    const [{ sparks }, projets] = await Promise.all([
+      api('/v1/sparks'),
+      api('/v1/projects').then((r) => r.projects).catch(() => null),
+    ]);
     etat.sparks = sparks;
+    etat.projets = projets;
     etat.usage = {};
     // L'usage est demandé Spark par Spark : une mesure manquante n'empêche pas
     // d'afficher les autres.

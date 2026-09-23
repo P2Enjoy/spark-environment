@@ -1168,6 +1168,123 @@ test('la Forge liste les propositions en attente, et un clic mène à l’onglet
   });
 });
 
+// --- SPK-116 · DES PROJETS POUR RANGER LES SPARKS (docs/DAT.md §61) --------
+
+test('un projet se crée, range deux Sparks depuis leur fenêtre, a son onglet, et sa suppression les laisse intacts', async () => {
+  await parcours('spk116-projets', async () => {
+    // @verifies docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.1 (supprimer
+    //           désaffecte sans toucher aux Sparks), §61.3, §61.4 (Tous, un
+    //           onglet par projet, Projets ; ranger depuis la fenêtre) ·
+    //           docs/DESIGN_SYSTEM_APP.md SPK-DS-33
+    await accueil();
+    // La rangée du seed : Tous, les projets par ordre alphabétique, Projets.
+    const rangee = await page.$$eval('nav[aria-label="Sections des Sparks"] a',
+                                     (l) => l.map((a) => a.textContent.trim()));
+    assert.deepEqual(rangee, ['Tous', 'Archives', 'Client Martin', 'Données', 'Projets']);
+    // Un Spark, plusieurs projets : deux pastilles sur la même ligne.
+    const pastilles = await page.$$eval('tr:has(a[href="#/sparks/postgres-dedie"]) .pastilles-projets .badge',
+                                        (l) => l.map((b) => b.textContent.trim()));
+    assert.deepEqual(pastilles, ['Client Martin', 'Données']);
+    await capturer('spk116-liste-tous', { hauteur: 900 });
+
+    // --- créer, depuis l'onglet Projets --------------------------------------
+    await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Projets")');
+    await page.waitForSelector('#titre-projets', { timeout: 10000 });
+    await page.click('[data-ouvre="projet-creation"]');
+    await page.waitForSelector('dialog.modale[open] #projet-nom', { timeout: 5000 });
+    // Un nom pris, à la casse près : le refus se lit DANS la modale.
+    await page.keyboard.type('client martin');
+    await page.click('[data-engage="projet-creation"]');
+    await page.waitForSelector('dialog.modale[open] .refus', { timeout: 10000 });
+    assert.match(await page.innerText('dialog.modale[open] .refus'), /existe déjà/);
+    await capturer('spk116-creation-refusee', { hauteur: 900 });
+    await page.fill('#projet-nom', 'Essai E2E');
+    await page.click('[data-engage="projet-creation"]');
+    await page.waitForSelector('.succes:has-text("Essai E2E")', { timeout: 10000 });
+    assert.ok(await page.$('nav[aria-label="Sections des Sparks"] a:has-text("Essai E2E")'),
+      'le nouveau projet a son onglet');
+
+    // --- ranger deux Sparks, depuis leur fenêtre -----------------------------
+    for (const spark of ['boutique', 'site-vitrine']) {
+      await ouvrir(spark);
+      await page.waitForSelector('#titre-projets-spark', { timeout: 10000 });
+      await page.click('[data-ouvre="projets"]');
+      await page.waitForSelector('dialog.modale[open] .cases', { timeout: 5000 });
+      if (spark === 'boutique') await capturer('spk116-ranger-modale', { hauteur: 900 });
+      await page.check('dialog.modale[open] label.case:has-text("Essai E2E") input');
+      await page.click('[data-engage="projets"]');
+      await page.waitForSelector('#titre-projets-spark ~ p .badge:has-text("Essai E2E")',
+                                 { timeout: 10000 });
+    }
+    await capturer('spk116-section-infos', { hauteur: 1100 });
+
+    // --- l'onglet du projet : la liste de Tous, restreinte -------------------
+    await page.click('nav a[href="#/sparks"]');
+    await page.waitForSelector('tbody a', { timeout: 15000 });
+    await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Essai E2E")');
+    await page.waitForSelector('nav[aria-label="Sections des Sparks"] a[aria-current="page"]:has-text("Essai E2E")',
+                               { timeout: 10000 });
+    await page.waitForSelector('tbody a', { timeout: 15000 });
+    const lignes = await page.$$eval('tbody a.lien-spark', (l) => l.map((a) => a.textContent.trim()));
+    assert.deepEqual(lignes.sort(), ['boutique', 'site-vitrine']);
+    await capturer('spk116-onglet-projet', { hauteur: 700 });
+    await capturer('spk116-onglet-projet-mobile', { largeur: 390, hauteur: 1100 });
+
+    // --- renommer, puis supprimer : les Sparks restent tels quels ------------
+    const avant = (await pile.lireSparkd('/v1/sparks')).corps.sparks
+      .filter((s) => ['boutique', 'site-vitrine'].includes(s.name))
+      .map(({ projects, ...reste }) => reste);
+    await page.click('nav[aria-label="Sections des Sparks"] a:has-text("Projets")');
+    await page.waitForSelector('#titre-projets', { timeout: 10000 });
+    const id = (await pile.lireSparkd('/v1/projects')).corps.projects
+      .find((p) => p.name === 'Essai E2E').id;
+    await page.click(`[data-renomme-projet="${id}"]`);
+    await page.waitForSelector('dialog.modale[open] #projet-nom', { timeout: 5000 });
+    await page.fill('#projet-nom', 'Essai renommé');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('nav[aria-label="Sections des Sparks"] a:has-text("Essai renommé")',
+                               { timeout: 10000 });
+    // §6.27 : le focus revient au déclencheur du renommage.
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.renommeProjet), id);
+
+    await page.click(`[data-supprime-projet="${id}"]`);
+    await page.waitForSelector('.confirmation [data-confirme-suppression-projet]', { timeout: 5000 });
+    const confirmation = await page.innerText('.confirmation');
+    assert.match(confirmation, /boutique/);
+    assert.match(confirmation, /site-vitrine/);
+    assert.match(confirmation, /ne sont pas modifiés/);
+    await capturer('spk116-suppression-confirmation', { hauteur: 900 });
+    await page.click('[data-confirme-suppression-projet]');
+    await page.waitForSelector('.succes:has-text("désaffectés")', { timeout: 10000 });
+    assert.match(await page.innerText('.succes'), /boutique, site-vitrine/);
+    assert.equal(await page.$('nav[aria-label="Sections des Sparks"] a:has-text("Essai renommé")'), null,
+      'l’onglet du projet supprimé a disparu');
+    await capturer('spk116-suppression-faite', { hauteur: 900 });
+    // À 390 px, un rechargement de la page où l'on est : l'onglet courant, le
+    // dernier de la rangée, doit être amené dans la partie visible.
+    await page.setViewportSize({ width: 390, height: 1200 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-renomme-projet]', { timeout: 15000 });
+    const visible = await page.evaluate(() => {
+      const rangee = document.querySelector('nav[aria-label="Sections des Sparks"]');
+      const courant = rangee.querySelector('[aria-current="page"]').getBoundingClientRect();
+      const cadre = rangee.getBoundingClientRect();
+      return courant.left >= cadre.left - 1 && courant.right <= cadre.right + 1;
+    });
+    assert.ok(visible, 'l’onglet courant est dans la partie visible de la rangée');
+    await capturer('spk116-gestion-mobile', { largeur: 390, hauteur: 1200 });
+    await page.setViewportSize({ width: 1440, height: 1300 });
+
+    const apres = (await pile.lireSparkd('/v1/sparks')).corps.sparks
+      .filter((s) => ['boutique', 'site-vitrine'].includes(s.name));
+    assert.deepEqual(apres.map(({ projects, ...reste }) => reste), avant,
+      'supprimer un projet ne touche aucun Spark (§61.1)');
+    assert.ok(apres.every((s) => s.projects.length === 0), 'les deux Sparks sont désaffectés');
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?action=project.delete');
+    assert.deepEqual(JSON.parse(journal.entries[0].payload).unassigned, ['boutique', 'site-vitrine']);
+  });
+});
+
 // --- SPK-112 · UNE ROUTE SANS TLS (docs/DAT.md §18.3 quater, §55.9.2) -------
 //
 // Placés AVANT l'alerte hors bande, et ce n'est pas un hasard : le refus se

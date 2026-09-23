@@ -109,7 +109,7 @@ vous cliquez :
 | Niveau | Ce que c'est | Forme |
 |---|---|---|
 | 1 | les destinations — Sparks, Forge | barre latérale, à gauche |
-| 2 | les sous-parties d'une destination — Pools, Images sous Forge | onglets |
+| 2 | les sous-parties d'une destination — Pools, Images sous Forge ; Tous, vos projets, Projets sous Sparks | onglets |
 | 3 | un Spark ouvert, avec ses facettes — Infos, Routes, Clés, Instantanés, Journal | onglets de sa fenêtre |
 
 Le **serveur courant** et l'état de son tunnel sont au-dessus de la barre
@@ -120,7 +120,56 @@ Chaque onglet a sa propre adresse. Vous pouvez donc recharger la page sur
 « Instantanés », ou en partager le lien.
 
 Sous 1024 px, la barre latérale passe en haut. Elle garde ses libellés : un
-pictogramme seul n'est pas une navigation.
+pictogramme seul n'est pas une navigation. Une rangée d'onglets plus large que
+l'écran défile ; à l'arrivée sur une page, son onglet est amené dans la partie
+visible.
+
+## Ranger les Sparks en projets
+
+Un **projet** est une étiquette : il range des Sparks, et **ne leur fait rien**.
+Aucun quota, aucun accès, aucun réseau, aucune route n'en dépend, et le Spark
+lui-même n'en sait rien. Un Spark peut appartenir à **plusieurs** projets, ou à
+aucun.
+
+![La liste des Sparks : les onglets Tous, un par projet, puis Projets ; les projets de chaque Spark sous son nom](images/m3-projets-liste.png)
+
+Sous **Sparks**, la rangée d'onglets se lit ainsi :
+
+- **Tous** — la liste de tous les Sparks de la Forge. Les projets de chacun sont
+  écrits sous son nom ;
+- **un onglet par projet**, par ordre alphabétique — la même liste, avec les
+  mêmes colonnes, restreinte aux Sparks de ce projet ;
+- **Projets** — la gestion : créer, renommer, supprimer.
+
+![L'onglet Projets : chaque projet, ses Sparks, et ses deux gestes](images/m3-projets-gestion.png)
+
+**Créer** et **Renommer** ouvrent une saisie : un nom de 1 à 40 caractères. Deux
+projets ne peuvent pas porter le même nom, **majuscules comprises** : « Client A »
+et « client a » se refusent, parce qu'on ne les distinguerait pas à l'œil dans la
+rangée.
+
+**Ranger un Spark se fait depuis sa fenêtre** : onglet **Infos**, section
+**Projets**, bouton **Modifier**. Une case par projet ; cochez ceux auxquels il
+appartient, et enregistrez. S'il n'existe encore aucun projet, la saisie le dit
+et renvoie à l'onglet *Projets*.
+
+![Ranger un Spark depuis sa fenêtre : une case par projet](images/m3-projets-ranger.png)
+
+**Supprimer un projet ne touche aucun Spark.** La confirmation nomme les Sparks
+qui en faisaient partie : ils sont simplement **désaffectés** — ils n'y sont
+plus rangés —, et rien d'autre ne change pour eux.
+
+Deux précisions, qu'on se pose presque toujours :
+
+- **un Spark protégé se range comme un autre** : la protection garde ce qui
+  atteint le Spark, et ranger ne l'atteint pas ;
+- **les projets sont ceux de la Forge**, pas ceux de votre poste : une autre
+  console qui administre la même Forge voit le même rangement. Une console qui
+  administre deux Forges voit, pour chacune, ses propres projets.
+
+Le journal de la Forge garde chaque geste : `project.create`, `project.rename`,
+`project.delete` — avec les Sparks désaffectés — et `spark.projects.set`, avec
+les projets avant et après.
 
 ## Saisir
 

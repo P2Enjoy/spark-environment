@@ -3,6 +3,25 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-116 — des projets pour ranger les Sparks.** Un projet est une
+  étiquette : il range, et ne fait rien au Spark. Migration `020_projets` —
+  `project`, `spark_project`, deux `CASCADE` (SCHEMA §10 octies) ; nom de 1 à
+  40 caractères, unique sans égard à la casse, `casefold` compris. API
+  `/v1/projects` (lister, créer, renommer, supprimer — la suppression rend les
+  Sparks désaffectés) et `PUT /v1/sparks/{nom}/projects` ; `GET /v1/sparks` et
+  la lecture d'un Spark portent ses projets ; journal `project.*` et
+  `spark.projects.set` ; la protection ne s'y applique pas. Console : sous
+  *Sparks*, les onglets *Tous*, un par projet, puis *Projets* ; l'onglet d'un
+  projet est la liste de *Tous* restreinte ; les projets en pastilles neutres ;
+  créer et renommer en modale, supprimer confirmé dans le flux en nommant les
+  Sparks désaffectés et intacts ; ranger depuis la fenêtre du Spark, section
+  *Projets* de l'onglet *Infos* (SPK-DS-33). Adresses en `~`
+  (`#/sparks/~projets`) : `#/sparks/projets`, écrit d'abord, masquait un Spark
+  nommé « projets ». Toute rangée d'onglets amène désormais l'onglet courant
+  dans sa partie visible à l'arrivée (`DESIGN_SYSTEM.md` §8.1). Seed : trois
+  projets, dont un Spark dans deux et un projet vide. Preuves sparkd et de
+  composant, un parcours E2E, neuf captures ; manuel M3 et trois
+  illustrations. **Non déployé** : OP-26.
 - **SPK-115 — un onglet *Propositions* de la Forge : ce qui attend dans tous
   les Sparks, et un lien vers l'onglet où cela se décide.** `GET
   /v1/suggestions`, en lecture seule — il ne pose aucun `.?` —, rend pour chaque

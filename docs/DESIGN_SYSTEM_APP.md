@@ -32,7 +32,7 @@ orientation, pas une loi. Voici ce qu'ils désignent ici :
 | Degré | Contenu de la console | Forme |
 |---|---|---|
 | 1 | **Sparks**, **Forge** | barre latérale, sélecteur de serveur et état du tunnel en tête |
-| 2 | sous *Sparks* : *Instances* · sous *Forge* : *Pools*, *Images* | onglets |
+| 2 | sous *Sparks* : *Tous*, un onglet par projet, *Projets* (SPK-DS-33) · sous *Forge* : *Pools*, *Images*, … | onglets |
 | 3 | la fenêtre d'un Spark, ouverte depuis la liste : *Infos*, *Routes*, *Clés*, *Instantanés*, *Journal*, *Docker*, *Terminal* | onglets de la fenêtre, sections à l'intérieur |
 | — | modifier une section, ou lui insérer un élément | modale limitée à cette section |
 
@@ -63,7 +63,7 @@ un seul sujet, et une action sensible se confirme (`DESIGN_SYSTEM.md` §5.4,
 §6.23).
 
 Les exemples de navigation retirés du socle global restent donc explicitement ici :
-`Sparks` → `Instances` → fenêtre du Spark → `Infos`, `Routes`, `Clés`,
+`Sparks` → `Tous` → fenêtre du Spark → `Infos`, `Routes`, `Clés`,
 `Instantanés`, `Journal`, `Docker`, `Terminal`. Une modale ouverte depuis la section
 `Routes` ne modifie que les routes ; le même principe vaut pour chaque autre section.
 
@@ -1379,7 +1379,25 @@ haut, se lisait comme une note détachée du bouton. Preuves observées :
   modifiés ;
 - **ranger** : section *Projets* de la facette *Infos*, modale à cases (§6.10) ;
   aucune case si aucun projet n'existe — la modale le dit et renvoie à
-  l'onglet *Projets* (§6.27, « une modale qui ne recueille rien »).
+  l'onglet *Projets* (§6.27, « une modale qui ne recueille rien ») ;
+- **un Spark protégé garde *Modifier* actif** : ranger n'atteint pas le Spark
+  (`DAT.md` §61.1). C'est l'exception assumée au « levez la protection
+  d'abord » des autres sections, et le manuel la dit ;
+- **l'onglet courant est amené dans la partie visible** de la rangée à
+  l'arrivée (`DESIGN_SYSTEM.md` §8.1) : *Projets* est le dernier onglet, et un
+  projet ouvert par un lien peut être loin à droite ;
+- **les adresses portent un `~`** — `#/sparks/~projets`, `#/sparks/~projet/<id>` —,
+  qu'aucun nom de Spark ne peut contenir.
+
+Vu en capture le 2026-09-23 et corrigé : à 390 px, la page *Projets* rechargée
+laissait son onglet hors champ ; les cases cochées prenaient le bleu du
+navigateur, et portent désormais `accent-color: var(--color-brand)`. Accepté tel quel : dans la liste *Tous*, un Spark
+protégé et rangé dans deux projets porte trois pastilles empilées sous son nom —
+la colonne du nom est bornée (`.cellule-nom`), et élargir la colonne ferait
+replier toutes les autres. Preuves observées : `e2e/captures/spk116-liste-tous`,
+`-creation-refusee`, `-ranger-modale`, `-section-infos`, `-onglet-projet`,
+`-onglet-projet-mobile`, `-suppression-confirmation`, `-suppression-faite`,
+`-gestion-mobile`.
 
 ### SPK-DS-E01 · Pas de Tailwind
 
