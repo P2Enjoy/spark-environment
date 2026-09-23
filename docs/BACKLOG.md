@@ -7769,6 +7769,80 @@ tout le fichier, « ce qui n'a pas été retenu a été refusé, pas ajourné »
   joué, la Forge vide encore tout le `.?` ; la console, elle, le dit déjà —
   d'où l'ordre d'OP-25.
 
+### [ ] SPK-115 · Les propositions en attente de toute la Forge, dans un onglet
+
+**Demandé par le responsable le 2026-09-23** : « un onglet dans la Forge qui
+reprend tous les Sparks avec toutes les suggestions en suspens, et aller au
+Spark concerné, onglet concerné, avec un clic ».
+
+- Spécification : `docs/DAT.md` **§60** · §55.9 (le geste se conclut là où vit
+  l'objet) · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-32 · manuel M8. **Écrite et
+  committée avant le code.**
+- Dépend de : SPK-105, SPK-114.
+
+**Ce qui décide de l'unité :**
+
+1. **l'onglet ne tranche rien** : chaque ligne est un lien vers la facette du
+   Spark où la proposition se décide ;
+2. **aucune valeur ne transite** : le serveur rend la nature et un nombre de
+   lignes, jamais le corps ;
+3. **lecture seule** : `GET /v1/suggestions` ne pose aucun `.?` ;
+4. **quatre états** : aucune proposition, des propositions, une cellule non
+   consultée — nommée —, une erreur ; lecture à l'ouverture et au bouton,
+   jamais en tâche de fond.
+
+- Aucune migration, aucune variable d'environnement.
+- DoD : preuves sparkd (agrégat, aucun corps rendu, aucun `.?` posé, Spark
+  sans cellule absent, cellule illisible nommée) ; preuves de composant (lien
+  par nature, états) ; parcours E2E qui part de la Forge, suit le lien et arrive
+  sur la facette où la proposition est dépliable ; captures ; manuel ;
+  `@spec` / `@verifies`.
+
+### [ ] SPK-116 · Des projets pour ranger les Sparks
+
+**Demandé par le responsable le 2026-09-23** : « même si ce n'est que du
+visuel, on devrait pouvoir rattacher des Sparks à des projets (un Spark,
+plusieurs projets) ; le premier onglet des Sparks les liste tous, puis un onglet
+par projet. Il doit exister un menu pour gérer les projets. Supprimer un projet
+désaffecte simplement les Sparks du projet supprimé. »
+
+- Spécification : `docs/DAT.md` **§61** · `docs/SCHEMA.md` **§10 octies**
+  (migration `020_projets`) · `docs/DESIGN_SYSTEM_APP.md` SPK-DS-33 · manuel M3
+  et M8 · `docs/PROD_MIGRATIONS.md` (OP-26). **Écrite et committée avant le
+  code.**
+- Dépend de : SPK-33 (les onglets du second degré).
+
+**Ce qui décide de l'unité — et les choix pris par défaut, à corriger si le
+responsable le veut :**
+
+1. **un projet range et ne fait rien d'autre** ; supprimer un projet ne touche
+   aucun Spark ; la protection ne s'y applique pas (§61.1) ;
+2. **au registre de la Forge**, pas dans l'inventaire du poste : deux consoles
+   voient le même rangement, la sauvegarde l'emporte (§61.2) — *choix par
+   défaut* ;
+3. **onglets *Tous*, un par projet, puis *Projets*** pour la gestion — *le
+   « menu » demandé est cet onglet, choix par défaut* ;
+4. **on range un Spark depuis sa fenêtre**, onglet *Infos*, section *Projets*
+   — *choix par défaut* ;
+5. nom libre de 1 à 40 caractères, unique sans égard à la casse.
+
+**Portée, et découpage :**
+
+1. Documentation — *fait, committé avant le code* ;
+2. registre et API — migration `020`, `/v1/projects`, adhésions, journal ;
+   preuves sparkd ; contrat ;
+3. console — onglets, gestion, section *Projets* ; preuves de composant ;
+4. seed, E2E, captures, manuel ;
+5. déploiement — OP-26 (migration).
+
+- Aucune variable d'environnement.
+- DoD : preuves sparkd (création, unicité insensible à la casse, renommage,
+  suppression qui désaffecte sans toucher aux Sparks, adhésions multiples, Spark
+  protégé rangé, journal) ; preuves de composant ; parcours E2E qui crée un
+  projet, y range deux Sparks depuis leur fenêtre, ouvre l'onglet du projet, le
+  supprime et constate les Sparks intacts ; migration avec `down` ; seed ;
+  captures ; manuel ; `@spec` / `@verifies`.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

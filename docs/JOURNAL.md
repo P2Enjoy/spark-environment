@@ -12544,3 +12544,23 @@ produit ; trois choses dans les parcours :
 **Déploiement** : OP-25 porte les deux unités. L'ordre compte pour SPK-114 : la
 console relancée annonce que les lignes non retenues restent, ce que seule la
 nouvelle build de `sparkd` rend vrai.
+
+## 2026-09-23 · SPK-115 et SPK-116 — deux demandes, et les choix pris par défaut
+
+**Demandes du responsable**, pendant la clôture de SPK-112 et SPK-114 : un
+onglet de la Forge qui liste toutes les propositions en attente et mène au bon
+onglet du bon Spark ; des projets pour ranger les Sparks, un onglet par projet
+et une gestion, la suppression d'un projet ne faisant que désaffecter.
+
+**SPK-115** : l'onglet est un **index**, pas un second écran de décision — le
+§55.9 veut que le geste se conclue là où vit l'objet. Il ne rend aucune valeur
+(un `secrets.?` en porte en clair) et ne pose aucun `.?` : une vue d'ensemble
+n'écrit dans aucune cellule.
+
+**SPK-116, choix pris par défaut et signalés au responsable** : les projets au
+**registre** de la Forge plutôt que dans l'inventaire du poste (deux consoles,
+un rangement ; la sauvegarde l'emporte) ; la gestion dans un onglet *Projets*
+en fin de rangée ; le rangement depuis la fenêtre du Spark ; la protection ne
+s'applique pas à un geste qui n'atteint pas le Spark.
+
+**Ordre** : SPK-115, puis SPK-116.

@@ -13840,3 +13840,129 @@ avant : trois `drop`, zéro règle `dnat`, aucun bridge `spn`.
 - **Seed** : un lien — le Postgres d'un membre publié dans le réseau de
   démonstration — et un second port du même Spark laissé hors lien, pour que
   l'écran montre la différence.
+
+
+## 60. Les propositions en attente, vues depuis la Forge : contrat (SPK-115)
+
+**Demandé par le responsable le 2026-09-23** : « un onglet dans la Forge qui
+reprend tous les Sparks avec toutes les suggestions en suspens, et aller au Spark
+concerné, onglet concerné, avec un clic ».
+
+### 60.1 Ce que l'onglet montre, et ce qu'il ne fait pas
+
+Le §55.9 fait trancher une proposition **là où vit l'objet** — l'environnement,
+les routes, les notes d'un Spark. Il ne dit pas où l'on apprend qu'une
+proposition attend : il faut ouvrir chaque Spark. Avec plusieurs Sparks dont les
+agents proposent, une demande peut attendre des jours sans qu'on le sache.
+
+L'onglet **Propositions** de la Forge répond à cette seule question : *qu'est-ce
+qui attend, et où ?* Il **ne tranche rien** : chaque ligne est un **lien** vers la
+facette du Spark où le geste se conclut (§55.9) — *Environnement* pour les
+variables et les secrets, *Routes* pour les routes, *Notes* pour les trois notes.
+Un second écran de décision ferait deux gestes pour le même objet.
+
+Une ligne par proposition présente : le Spark, la nature, et ce qui attend — le
+**nombre de lignes** pour les trois natures à entrées, « un texte » pour une note.
+**Aucune valeur n'y figure** : un `secrets.?` porte ses valeurs en clair par
+construction (§55.6.1), et une vue qui couvre toute la Forge n'a pas à les
+transporter.
+
+### 60.2 La surface d'API
+
+    GET /v1/suggestions → 200 { sparks: [{ spark, cell_read, pending: [{ kind, lines }] }] }
+
+- **lecture seule** : contrairement au `GET` d'un Spark (§55.8), elle ne pose
+  **aucun** `.?` manquant — une vue d'ensemble n'écrit dans aucune cellule ;
+- `lines` compte les lignes qui ne sont ni blanches ni commentaires, comme le
+  journal de SPK-114 ; `null` pour une note. Le serveur ne lit toujours aucune
+  grammaire (§55.8) ;
+- un Spark **sans cellule** n'est pas listé : il ne peut rien proposer ;
+- une cellule **illisible** — arrêtée sur un pilote qui ne la lit pas, instance
+  perdue — est listée avec `cell_read: false`, et l'écran le **nomme** au lieu de
+  la taire (§14.6) : « aucune proposition » et « non consultée » ne sont pas le
+  même état ;
+- un Spark **protégé** est listé comme les autres : lire n'est pas écrire (§35).
+
+### 60.3 Quand elle lit
+
+**À l'ouverture de l'onglet, et au bouton « Relire les cellules »** — jamais en
+tâche de fond, pour la raison du §55.9 : six lectures par cellule, multipliées
+par le nombre de Sparks, pour un événement rare. L'écran dit l'heure de sa
+lecture.
+
+### 60.4 Ce que l'unité ne fait pas
+
+Elle ne compte pas les propositions dans la barre latérale ni dans l'onglet (il
+faudrait lire en tâche de fond pour que ce compte reste vrai), n'introduit
+aucune migration ni variable d'environnement, et ne change rien au cycle de vie
+du §55.5.
+
+
+## 61. Les projets : ranger les Sparks, sans rien leur faire : contrat (SPK-116)
+
+**Demandé par le responsable le 2026-09-23** : « même si ce n'est que du visuel,
+on devrait pouvoir rattacher des Sparks à des projets (un Spark, plusieurs
+projets) ; le premier onglet des Sparks les liste tous, puis un onglet par
+projet. Il doit exister un menu pour gérer les projets. Supprimer un projet
+désaffecte simplement les Sparks du projet supprimé. »
+
+### 61.1 Un projet est une étiquette, et rien d'autre
+
+Un projet **range** : il n'a aucun effet sur une cellule, un quota, une route,
+une clé ou un environnement. Aucun pilote n'est appelé, rien n'est projeté dans
+une cellule, et le briefing n'en dit rien. C'est ce qui rend légitimes les trois
+règles suivantes :
+
+- **un Spark appartient à zéro, un ou plusieurs projets** ;
+- **supprimer un projet ne touche aucun Spark** : ses adhésions disparaissent, et
+  la confirmation nomme les Sparks désaffectés en disant qu'ils ne sont pas
+  modifiés ;
+- **la protection ne s'y applique pas** (§35) : elle garde ce qui atteint le
+  Spark, et ranger un Spark ne l'atteint pas. Un Spark protégé se range donc
+  comme un autre, et la documentation le dit — sans quoi on y verrait une
+  exception silencieuse.
+
+### 61.2 Où ils vivent : le registre de la Forge
+
+Les projets sont au **registre** (`docs/SCHEMA.md` §10 octies), et non dans
+l'inventaire du poste : deux consoles qui administrent la même Forge doivent voir
+le même rangement, et la sauvegarde du registre (`docs/CONTINGENCE.md`) l’emporte avec
+elle. Un projet est donc **propre à une Forge** : une console qui en administre
+deux voit deux listes.
+
+Le nom est libre, de 1 à 40 caractères, **unique sans égard à la casse** — deux
+onglets « Client A » et « client a » ne se distingueraient pas à l'œil.
+
+### 61.3 La surface d'API
+
+    GET    /v1/projects                   → 200 { projects: [{ id, name, sparks: [nom] }] }
+    POST   /v1/projects         { name }  → 201 | 409 (nom pris) | 422
+    PATCH  /v1/projects/{id}    { name }  → 200 | 404 | 409 | 422
+    DELETE /v1/projects/{id}              → 200 { unassigned: [nom] } | 404
+    PUT    /v1/sparks/{nom}/projects { projects: [id] } → 200 | 404 | 422
+
+`GET /v1/sparks` porte, pour chaque Spark, la liste de ses projets. Le journal
+reçoit `project.create`, `project.rename`, `project.delete` — avec les Sparks
+désaffectés — et `spark.projects.set`, avec l'avant et l'après.
+
+### 61.4 L'écran
+
+- **sous *Sparks***, les onglets du second degré deviennent : **Tous** — la liste
+  d'aujourd'hui —, puis **un onglet par projet**, par ordre alphabétique, puis
+  **Projets**, qui les gère. Chaque onglet est une destination, avec son URL
+  (`#/sparks/projet/<id>`, `#/sparks/projets`) : ce sont des liens (§5.2) ;
+- l'onglet d'un projet montre **la même liste que *Tous***, restreinte à ses
+  Sparks ; vide, il le dit et dit où l'on range un Spark ;
+- **Projets** liste les projets avec leurs Sparks, et porte trois gestes :
+  *Créer* et *Renommer* par une modale (§6.27), *Supprimer* par une
+  confirmation dans le flux qui nomme les Sparks désaffectés (§6.22) ;
+- **dans la fenêtre d'un Spark**, onglet *Infos*, une section **Projets** dit à
+  quoi il appartient et porte *Modifier*, une modale à cases — une par projet.
+  C'est là qu'on range : le geste vise un Spark, il se fait depuis lui ;
+- la liste *Tous* porte les projets de chaque Spark en pastilles neutres.
+
+### 61.5 Ce que l'unité ne fait pas
+
+Pas de couleur par projet, pas de filtre combiné, pas d'effet sur les
+autorisations ni sur le coût : un projet range. Aucune variable
+d'environnement. Une migration, `020_projets`.

@@ -585,6 +585,30 @@ son briefing et son environnement.
 une copie aurait à la garder d'accord avec un fichier que le locataire réécrit
 quand il veut — exactement la divergence que le §44.8 interdit ailleurs.
 
+## 10 octies. `project` et `spark_project` : ranger les Sparks (SPK-116)
+
+Migration `020_projets`. Un projet range ; il n'a aucun effet sur un Spark
+(`docs/DAT.md` §61.1).
+
+| Colonne de `project` | Type | Contrainte |
+|---|---|---|
+| `id` | TEXT | clé primaire, identifiant opaque |
+| `name` | TEXT | `NOT NULL`, 1 à 40 caractères, `UNIQUE COLLATE NOCASE` |
+| `created_at` | TEXT | ISO 8601 UTC |
+
+| Colonne de `spark_project` | Type | Contrainte |
+|---|---|---|
+| `spark_id` | TEXT | `REFERENCES spark(id) ON DELETE CASCADE` |
+| `project_id` | TEXT | `REFERENCES project(id) ON DELETE CASCADE` |
+| | | clé primaire `(spark_id, project_id)` |
+
+**Les deux `CASCADE` sont la règle du responsable** : supprimer un projet retire
+ses adhésions et ne touche aucun Spark ; supprimer un Spark retire les siennes
+et ne touche aucun projet.
+
+Retour arrière : le `@down` supprime les deux tables. Seul le rangement est
+perdu ; aucun Spark n'en dépend.
+
 ## 11. Retour arrière
 
 Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sans

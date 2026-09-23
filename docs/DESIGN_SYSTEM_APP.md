@@ -1344,6 +1344,36 @@ annonce son défilement ; l'avertissement nomme le domaine), `-proposition-accep
 `-route-sans-tls`, `-route-sans-tls-mobile`, `-tls-active`, `-tls-refuse` ;
 pour SPK-114, `spk114-demande-ecartee` et `spk114-reste-en-attente`.
 
+### SPK-DS-32 · Les propositions de toute la Forge : un index, pas un second écran de décision
+
+**Date** : 2026-09-23 · SPK-115 · `DAT.md` §60
+
+L'onglet *Propositions* de la Forge est une **table** (§6.14) : Spark, nature, ce
+qui attend. La nature est un **lien** vers la facette où la proposition se
+tranche (§5.2) ; aucun bouton *Ajouter* ni *Refuser* n'y figure — le geste se
+conclut là où vit l'objet (SPK-DS-27). Aucune valeur n'y est rendue. Une cellule
+non consultée est une ligne nommée, pas une absence. L'heure de la lecture est
+écrite près du bouton *Relire les cellules*.
+
+### SPK-DS-33 · Les projets : des onglets qui filtrent, une gestion à part, un rangement depuis le Spark
+
+**Date** : 2026-09-23 · SPK-116 · `DAT.md` §61.4
+
+- **Second degré de *Sparks*** : *Tous*, puis un onglet par projet, puis
+  *Projets*. Des liens, pas un `tablist` (§5.2) ; au-delà de la largeur, la
+  rangée défile et le dit (§8.1) ;
+- **l'onglet d'un projet est la liste de *Tous*, filtrée** — même tableau, mêmes
+  colonnes : une vue qui changerait de forme ferait croire à un autre objet ;
+- **les projets d'un Spark sont des pastilles neutres** dans la liste : une
+  catégorie, pas un état (§6.8) ;
+- **gérer** : *Créer* et *Renommer* en modale (§6.27), *Supprimer* confirmé dans
+  le flux (§6.22) — bouton destructif, puisque le projet disparaît —, la
+  confirmation nommant les Sparks désaffectés et disant qu'ils ne sont pas
+  modifiés ;
+- **ranger** : section *Projets* de la facette *Infos*, modale à cases (§6.10) ;
+  aucune case si aucun projet n'existe — la modale le dit et renvoie à
+  l'onglet *Projets* (§6.27, « une modale qui ne recueille rien »).
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19
