@@ -6,6 +6,8 @@
              · docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3 (le vide est une
              DEMANDE, et l'étiquette l'explique), §55.7 (ce que l'en-tête doit
              dire) · §18.4 (l'unicité du domaine) · §54.6 (la garde des secrets)
+             · docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.3.1 (le dernier mot
+             d'une route règle son côté PUBLIC ; la pile sert en HTTP simple)
 
 Le point de ces preuves est ce qui N'ARRIVE PAS : un fichier consulté qui reste,
 une proposition en attente qu'aucune projection n'écrase, un refus du produit qui
@@ -144,6 +146,30 @@ def test_l_entete_des_deux_env_dit_le_VIDE_et_l_ETIQUETTE(client):
         assert "Laissez-la VIDE" not in poses[suggestions.chemin(kind)]
 
 
+def test_l_entete_des_routes_dit_ce_que_regle_le_DERNIER_MOT(client):
+    """SPK-112 · §55.3.1 : la grammaire se lisait sans dire ce que règle son
+    dernier mot, et un agent a proposé `clair` pour un site public — il croyait
+    décrire sa pile, qui écoute bien en HTTP simple.
+
+    @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.3.1, §55.7
+    """
+    nom = creer(client)
+    poses = fichiers(client, nom)
+    entete = poses[suggestions.chemin("routes")]
+
+    assert "LE DERNIER MOT RÈGLE LE CÔTÉ PUBLIC" in entete
+    assert "https://, avec un certificat" in entete
+    assert "publié en http://, sans certificat" in entete
+    assert "Votre pile écoute en HTTP simple" in entete
+    # L'exemple montre la forme la plus courante, SANS dernier mot, et reste dans
+    # le bloc du produit : il ne se lit pas comme une proposition déposée.
+    assert "#     app.exemple.fr 8080\n" in entete
+    assert suggestions.vide("routes", entete), "l'exemple reste un commentaire"
+
+    for kind in ("variables", "secrets", "readme"):
+        assert "DERNIER MOT" not in poses[suggestions.chemin(kind)]
+
+
 def test_le_fichier_REEL_des_routes_est_pose_et_relu_a_chaque_changement(client):
     """§55.3.1 : il manquait. Une cellule ne pouvait lire les routes qui la
     visent qu'en analysant `BRIEFING.md`, une présentation faite pour être lue.
@@ -166,6 +192,33 @@ def test_le_fichier_REEL_des_routes_est_pose_et_relu_a_chaque_changement(client)
     assert client.delete("/v1/ingress/sso.exemple.test").status_code == 200
     assert "sso.exemple.test" not in fichiers(client, nom)[
         suggestions.FICHIER_ROUTES]
+
+
+def test_le_fichier_reel_des_routes_ne_dit_plus_EN_CLAIR_de_la_pile(client):
+    """SPK-112 · §55.3.1 : « servez en CLAIR », deux lignes sous `[tls|clair]`,
+    a été lu comme une valeur de la grammaire. La pile sert « en HTTP simple »,
+    et le mot `clair` n'appartient plus qu'à la grammaire.
+
+    @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.3.1, §44.2 bis
+
+    Une route voulue en clair reste une route légitime (§18.3) : elle s'écrit
+    toujours `clair`, et c'est le seul endroit où le mot apparaît.
+    """
+    nom = creer(client)
+    assert client.post(f"/v1/sparks/{nom}/bootstrap").status_code == 200
+    assert client.post("/v1/ingress", json={
+        "spark": nom, "domain": "interne.exemple.test", "port": 8080,
+        "tls": False}).status_code in (201, 502)
+    vu = fichiers(client, nom)[suggestions.FICHIER_ROUTES]
+
+    assert "en clair" not in vu.lower()
+    assert "HTTP simple" in vu
+    assert "LE DERNIER MOT RÈGLE LE CÔTÉ PUBLIC" in vu
+    assert "interne.exemple.test 8080 clair" in vu
+    # Le fichier se relit avec la grammaire de sa proposition : hors des routes,
+    # chaque ligne est un commentaire.
+    donnees = [l for l in vu.splitlines() if l and not l.startswith("#")]
+    assert donnees == ["interne.exemple.test 8080 clair"]
 
 
 # --- consulter ne consomme pas (§55.5) --------------------------------------

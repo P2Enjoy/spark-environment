@@ -112,6 +112,27 @@ def test_une_route_appliquee_et_une_qui_ne_l_est_pas(seede):
     )
 
 
+def test_une_route_EN_CLAIR_et_une_proposition_qui_en_demande_une(seede):
+    """SPK-112 · §18.3 quater, §55.9.2 : sans ces deux fixtures, ni « Activer le
+    TLS » hors d'un refus, ni la case TLS d'une proposition ne se démontrent.
+
+    @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §18.3 quater, §55.9.2 ·
+              CLAUDE.md §8
+    """
+    routes = {r["domain"]: r for r in seede.get("/v1/ingress").json()["routes"]}
+    intranet = routes["intranet.example.com"]
+    assert not intranet["tls"] and intranet["spark_name"] == "ubuntu-24"
+    assert intranet["applied_at"], "une route en clair SERVIE, pas en retard"
+    assert not seede.get("/v1/sparks/ubuntu-24").json()["protected"], (
+        "sur un Spark protégé, le geste ne montrerait que son refus")
+
+    proposees = {s["kind"]: s for s in
+                 seede.get("/v1/sparks/ubuntu-24/suggestions").json()["suggestions"]}
+    assert proposees["routes"]["present"]
+    assert "docs.example.com 8080 clair" in proposees["routes"]["body"]
+    assert "statut.example.com 8081" in proposees["routes"]["body"]
+
+
 def test_un_spark_a_ses_cles_et_un_autre_n_en_a_aucune(seede):
     """§26.4, §28.5 — l'absence nommée doit être atteignable à l'écran."""
     avec = seede.get("/v1/sparks/crm-production/ssh-config").json()["keys"]

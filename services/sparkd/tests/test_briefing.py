@@ -601,7 +601,9 @@ def test_le_dossier_dit_QUI_termine_le_TLS_et_qu_aucun_port_n_est_a_demander(tmp
         jump=None)
 
     assert "termine le TLS" in dossier
-    assert "en clair" in dossier
+    # SPK-112 · §44.2 bis : la pile sert « en HTTP simple ». « En clair » est le
+    # mot de la grammaire des routes qui publie un site en `http://`.
+    assert "en HTTP simple" in dossier
     assert "ne demande aucun port publié" in dossier
     # Et le cas où un port publié sert VRAIMENT, sans quoi on aurait remplacé une
     # erreur par une autre.
@@ -729,3 +731,22 @@ def test_un_port_sortant_ferme_est_attribue_a_l_HEBERGEUR(tmp_path):
     assert "fermé par l'hébergeur" in dossier
     # Le piège le redit là où on lit vite.
     assert any("hébergeur" in p for p in _avec_route(tls=1)["pitfalls"])
+
+
+def test_la_pile_ne_se_dit_plus_EN_CLAIR_et_le_dernier_mot_est_explique(tmp_path):
+    """SPK-112 · §44.2 bis, §55.3.1 : un agent a lu « servez en clair » comme une
+    valeur de la grammaire `[tls|clair]`, et proposé `clair` pour un site public.
+
+    @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §44.2 bis, §55.3.1, §55.7
+
+    Les deux présentations sont vérifiées : l'agent lit le briefing dans la
+    cellule, et le dossier sur son poste.
+    """
+    model = _avec_route(tls=1)
+    for texte in (briefing.markdown(model), briefing.dossier(model, jump=None)):
+        assert "servez en clair" not in texte.lower()
+        assert "**en clair**" not in texte
+        assert ", en clair" not in texte
+        assert "HTTP simple" in texte
+        assert "Le dernier mot d'une route règle son côté PUBLIC" in texte
+        assert "`clair`, il est publié en `http://`, sans certificat" in texte

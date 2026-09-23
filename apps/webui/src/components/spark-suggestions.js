@@ -14,6 +14,11 @@
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-23 (un lot s'analyse à l'écran avant
  *       d'être écrit), SPK-DS-27 (une proposition se lit à côté de sa cible),
  *       SPK-DS-28 (une demande se saisit sur place, et porte son étiquette)
+ * @spec docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.9.2 (la relecture d'une route
+ *       porte sa case TLS, et une ligne proposée sans TLS le dit) ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-31 — pour `estTls`, la colonne TLS de
+ *       `ligneEntree`, l'avertissement de `relecture` et le `tls` envoyé par
+ *       `entreesAppliquees`
  *
  * **L'analyse vit ici, comme celle du lot collé** (§43.10.3, §55.8) : le serveur
  * reçoit des entrées structurées, jamais du texte. Écrire un second analyseur en
@@ -42,6 +47,7 @@ export const PROPOSITIONS_VIDE = {
   ouvert: null,     // la nature dépliée pour relecture
   exclues: {},      // { [kind]: Set des lignes écartées }
   secrets: {},      // { [kind]: Set des lignes cochées « secret » }
+  tls: {},          // { [kind]: Set des lignes cochées « TLS » } — §55.9.2
   valeurs: {},      // { [kind]: Map ligne -> valeur saisie } — §55.3.3
   busy: null,
   issue: null,      // { kind, ok, message }
@@ -121,6 +127,13 @@ export function comprendre(suggestion) {
 const retenue = (ui, kind, ligne) => !(ui.exclues?.[kind] ?? new Set()).has(ligne);
 const estSecret = (ui, kind, ligne, defaut) =>
   (ui.secrets?.[kind] ?? null) ? ui.secrets[kind].has(ligne) : defaut;
+/**
+ * SPK-112 · §55.9.2 : la case TLS d'une route, comme la case *Secret* — le
+ * fichier propose, le propriétaire a le dernier mot. Tant qu'il n'a touché à
+ * rien, c'est la proposition qui fait foi.
+ */
+export const estTls = (ui, kind, ligne, defaut) =>
+  (ui.tls?.[kind] ?? null) ? ui.tls[kind].has(ligne) : defaut;
 
 /**
  * SPK-107 · §55.3.3 : une valeur vide est une DEMANDE, pas une valeur.
@@ -156,7 +169,9 @@ export function entreesAppliquees(ui, kind, entrees) {
   const secrets = ui.secrets?.[kind] ?? null;
   const gardees = entrees.filter((e) => retenue(ui, kind, e.ligne));
   return kind === 'routes'
-    ? gardees.map((e) => ({ domain: e.domaine, port: e.port, tls: e.tls }))
+    // §55.9.2 : la case TELLE QU'ELLE EST COCHÉE, pas ce que le fichier disait.
+    ? gardees.map((e) => ({ domain: e.domaine, port: e.port,
+                            tls: estTls(ui, kind, e.ligne, e.tls) }))
     : gardees.map((e) => ({
       name: e.nom, value: valeurAppliquee(ui, kind, e),
       secret: secrets ? secrets.has(e.ligne) : e.secret }));
@@ -179,12 +194,22 @@ export function enAttente(kind, entrees, ui) {
 function ligneEntree(kind, entree, ui) {
   const gardee = retenue(ui, kind, entree.ligne);
   if (kind === 'routes') {
+    // SPK-112 · §55.9.2 : la mention dit ce que la proposition DEMANDE, pas
+    // l'état de la case. Rien ne se repeint au clic (§14.3) : une phrase qui
+    // décrirait la case se démentirait sous les doigts.
+    const mentionId = `sugg-tls-note-${kind}-${entree.ligne}`;
+    const mention = entree.tls ? ''
+      : `<p class="absence" id="${mentionId}">proposée sans TLS : http://, sans
+          certificat</p>`;
     return `<tr>
       <td><input type="checkbox" data-sugg-garder="${kind}" data-ligne="${entree.ligne}"
         ${gardee ? 'checked' : ''} aria-label="Retenir la ligne ${entree.ligne}"></td>
       <th scope="row" class="technique nom-cellule">${echapper(entree.domaine)}</th>
       <td class="technique">${entree.port}</td>
-      <td>${entree.tls ? 'TLS' : 'en clair'}</td>
+      <td><input type="checkbox" data-sugg-tls="${kind}" data-ligne="${entree.ligne}"
+        ${estTls(ui, kind, entree.ligne, entree.tls) ? 'checked' : ''}
+        aria-label="Servir ${echapper(entree.domaine)} en TLS"${
+          entree.tls ? '' : ` aria-describedby="${mentionId}"`}>${mention}</td>
     </tr>`;
   }
   const secret = estSecret(ui, kind, entree.ligne, entree.secret);
@@ -235,6 +260,16 @@ function relecture(suggestion, ui) {
     // fichier. Le taire ferait croire à une panne de lecture.
     : `<p class="absence">Rien de lisible dans cette proposition : aucune ligne
        n’a pu être comprise.</p>`;
+  // SPK-112 · §55.9.2 : une ligne proposée sans TLS publierait le site en
+  // `http://`. L'avertissement COMPTE ces lignes et dit ce qu'elles demandent ;
+  // il reste vrai quelle que soit la case, comme la mention de chaque ligne.
+  const enClair = kind === 'routes' ? entrees.filter((e) => !e.tls) : [];
+  const avertissementTls = enClair.length
+    ? `<p class="avertissement" role="status"><strong>${enClair.length} route(s)
+        proposée(s) sans TLS</strong> : ${echapper(enClair.map((e) => e.domaine)
+        .join(', '))}. Acceptée(s) ainsi, elle(s) publierai(en)t le site en
+        http://, sans certificat. Cochez « TLS » pour la servir en https://.</p>`
+    : '';
   const fautives = refus.length
     ? `<div class="refus" role="alert">
         <p><strong>${refus.length} ligne(s) refusée(s)</strong>, et elles ne
@@ -244,7 +279,7 @@ function relecture(suggestion, ui) {
           <span class="technique">${echapper(r.texte)}</span> — ${echapper(r.raison)}</li>`).join('')}</ul>
       </div>`
     : '';
-  return tableau + fautives;
+  return avertissementTls + tableau + fautives;
 }
 
 /** Le bloc d'une nature : la bannière, puis la relecture quand on l'ouvre. */

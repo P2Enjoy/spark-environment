@@ -75,9 +75,10 @@ Unités : SPK-11, SPK-12.
 ## M7 · Exposer un domaine
 
 Déclaration d'une route, émission du certificat, vérification, retrait. Que se
-passe-t-il lorsqu'un domaine est déjà pris.
+passe-t-il lorsqu'un domaine est déjà pris. Une route servie **sans TLS** : ce
+que dit sa pastille, et le bouton qui l'active.
 
-Unités : SPK-12.
+Unités : SPK-12, SPK-112.
 
 ## M8 · Exploiter au quotidien
 
@@ -91,8 +92,10 @@ disant clairement ce dont elle protège, et ce dont elle ne protège pas.
 Passer des variables et des secrets à la pile du locataire : le catalogue de la
 Forge, ce que chaque Spark en coche, et l'**import d'un `.env` collé** — le pas
 de relecture qui dit ce qui sera remplacé et ce qui est refusé avant d'écrire.
+Une route **proposée** depuis le Spark : ce que règle son dernier mot, et la
+case TLS qui se coche avant d'accepter.
 
-Unités : SPK-09, SPK-14, SPK-34, SPK-58, SPK-64, SPK-93, SPK-97.
+Unités : SPK-09, SPK-14, SPK-34, SPK-58, SPK-64, SPK-93, SPK-97, SPK-112.
 
 ## M9 · Sauvegarder et restaurer
 

@@ -286,6 +286,16 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
             "la route exacte devait signaler qu'elle prend le pas sur le joker : "
             "sans cela la démonstration de SPK-48 ne montre rien")
 
+    # --- SPK-112 · §18.3 quater : une route servie EN CLAIR sur un Spark non
+    # protégé — l'état qu'a laissé, sur la Forge, une proposition acceptée par
+    # méprise. Sans elle, le geste « Activer le TLS » n'aurait qu'un Spark
+    # protégé où s'exercer, et seul son refus serait démontrable. Posée avant le
+    # bloc « caddy.fail » pour la même raison que le joker.
+    _attendu(client.post("/v1/ingress", json={
+        "spark": "ubuntu-24", "domain": "intranet.example.com",
+        "port": 8080, "tls": False}), 201, quoi="route en clair « intranet.example.com »")
+    compte["routes"] += 1
+
     # Le mécanisme réel d'une route non appliquée est un CADDY INJOIGNABLE au
     # moment de la déclaration (§18.5) : la route entre au registre, la
     # configuration n'est pas chargée, et `applied_at` reste vide. On rend donc
@@ -479,6 +489,13 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
          "\n"
          "# Clé d\u2019API du fournisseur de facturation : je ne peux pas la créer.\n"
          "BILLING_API_KEY=\n"),
+        # SPK-112 · §55.9.2 : une proposition de routes dont UNE ligne demande
+        # `clair` — la méprise qu'a commise un agent réel, qui croyait décrire sa
+        # pile. Sans elle, ni la mention « proposée sans TLS », ni
+        # l'avertissement, ni la case à cocher avant d'accepter ne se voient.
+        ("ubuntu-24", "routes",
+         "docs.example.com 8080 clair\n"
+         "statut.example.com 8081\n"),
     ]
     for spark, kind, texte in propositions:
         cellule = client.app.state.incus
@@ -689,6 +706,22 @@ def verify(client: TestClient) -> None:
     encore = client.get("/v1/sparks/crm-production/suggestions").json()
     if {s["kind"] for s in encore["suggestions"] if s["present"]} != en_attente:
         raise SeedError("consulter une proposition l'a consommée : §55.5 violé")
+
+    # SPK-112 · §55.9.2, §18.3 quater : la proposition de routes attend, et une
+    # de ses lignes demande `clair` ; une route en clair existe hors d'un Spark
+    # protégé, pour que « Activer le TLS » aboutisse ailleurs que sur un refus.
+    routes_ubuntu = next(
+        s for s in client.get("/v1/sparks/ubuntu-24/suggestions").json()["suggestions"]
+        if s["kind"] == "routes")
+    if not routes_ubuntu["present"] or " clair" not in routes_ubuntu["body"]:
+        raise SeedError("la proposition de routes d'« ubuntu-24 » devrait attendre, "
+                        "avec une ligne en clair")
+    proteges_ = {s["name"] for s in client.get("/v1/sparks").json()["sparks"]
+                 if s.get("protected")}
+    if not any(not r["tls"] and r["spark_name"] not in proteges_
+               for r in client.get("/v1/ingress").json()["routes"]):
+        raise SeedError("aucune route en clair sur un Spark non protégé : « Activer "
+                        "le TLS » ne pourrait aboutir nulle part")
 
     # SPK-85 · §44.9 : le dossier doit être LISIBLE sur un Spark seedé, y compris
     # avant tout amorçage — c'est justement l'état où l'on prépare un

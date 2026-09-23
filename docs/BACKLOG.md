@@ -7631,16 +7631,25 @@ déclarée `tls: false` par l'acceptation d'une proposition de la cellule
    décrit que ce qui existe.
 2. **Textes remis à la cellule** — `suggestions.py` (en-tête de `routes.?`,
    `/etc/spark/routes`) et `briefing.py` (grammaire, consignes de la pile) ;
-   preuves sparkd.
+   preuves sparkd. *Fait : quatre preuves rouges avant la correction, vertes
+   après ; 1461 preuves sparkd au vert.*
 3. **Console** — case *TLS* et avertissement dans la relecture ; bouton
-   *Activer le TLS* ; preuves de composant.
+   *Activer le TLS* ; preuves de composant. *Fait : sept preuves rouges avant,
+   vertes après ; la campagne de composants est verte hors des quatre classes
+   CSS déjà consignées au rapport d'incohérences.*
 4. **Seed, E2E, captures, manuel** — une route seedée sans TLS, une proposition
    seedée `clair` ; un parcours accepte la proposition en cochant TLS et
    constate `tls` au registre ; un parcours active le TLS d'une route depuis sa
    ligne et le constate ; captures observées aux deux formats ; M7 et M8.
+   *En cours : seed fait et prouvé (`intranet.example.com` en clair et une
+   proposition `clair` sur `ubuntu-24`) ; manuel M7 et M8 écrits, avec deux
+   illustrations ajoutées au harnais du manuel ; les deux parcours sont écrits
+   mais **pas encore joués**, ni les illustrations produites : le 2026-09-23, le
+   poste portait sans interruption les campagnes E2E d'un autre projet, et la
+   règle d'une seule épreuve lourde à la fois a primé.*
 5. **Déploiement** — OP-25 : les textes remis à la cellule sont servis par
    `sparkd` et n'atteignent la Forge qu'à sa mise à jour. La console est locale
-   et se relance.
+   et se relance. *Écrit, en attente.*
 
 - Ce que l'unité ne doit PAS casser : une route volontairement en clair reste
   déclarable et proposable (`clair`) ; les fichiers déjà écrits se lisent à

@@ -1,4 +1,7 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §18.3 quater (une route sans
+ *           TLS le dit, et se corrige d'un geste) · docs/DESIGN_SYSTEM.md §6.8,
+ *           §6.24 · docs/DESIGN_SYSTEM_APP.md SPK-DS-31
  * @verifies docs/BACKLOG.md#SPK-49 · docs/DAT.md §39 (les ports publies),
  *           §39.2, §39.3, §39.5
  * @verifies docs/BACKLOG.md#SPK-89 · docs/DAT.md §18.3 ter (la cible d'une route
@@ -208,6 +211,33 @@ test("aucun controle d'unicite du domaine cote interface (§18.4, §26.3)", () =
 test('une route sans TLS le dit', () => {
   assert.ok(renderRoutesPanel(SPARK, [ROUTE_EN_ATTENTE], ui()).includes('sans TLS'));
   assert.ok(!renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui()).includes('sans TLS'));
+});
+
+test('une route sans TLS porte sa sortie : « Activer le TLS », sur SA ligne (SPK-112)', () => {
+  // §18.3 quater : la pastille seule etait une impasse. Le geste vit sur la
+  // ligne qu'il corrige, et nomme le domaine pour le lecteur d'ecran (§10.2).
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE, ROUTE_EN_ATTENTE], ui());
+  const lignes = rendu.split('<li>').slice(1);
+  const enClair = lignes.find((l) => l.includes('test.example.com'));
+  const chiffree = lignes.find((l) => l.includes('crm.example.com'));
+  assert.ok(enClair.includes('data-active-tls="test.example.com"'));
+  assert.ok(enClair.includes('aria-label="Activer le TLS pour test.example.com">Activer le TLS</button>'));
+  assert.ok(!chiffree.includes('data-active-tls'), 'une route deja en TLS n’a rien a activer');
+  // La pastille reste NEUTRE : une route en clair peut etre voulue (§18.3).
+  assert.ok(enClair.includes('<span class="badge badge--neutral">sans TLS</span>'));
+  // Reparateur, sans parametre, reversible : aucune confirmation (§6.24).
+  assert.ok(!enClair.includes('class="confirmation'));
+});
+
+test('le refus d’« Activer le TLS » se lit dans la section, pas dans une modale fermee (SPK-112)', () => {
+  const refuse = renderRoutesPanel(SPARK, [ROUTE_EN_ATTENTE],
+    ui({ refusal: { panel: 'route-tls', message: 'Le Spark « crm » est protégé.' } }));
+  assert.match(refuse, /<div class="refus" role="alert">\s*<p><strong>Le Spark « crm » est protégé\.<\/strong>/);
+  assert.ok(!refuse.includes('<dialog'), 'aucune modale n’est ouverte pour le dire');
+  // Le refus d'un AUTRE panneau ne s'y affiche pas.
+  const autre = renderRoutesPanel(SPARK, [ROUTE_EN_ATTENTE],
+    ui({ refusal: { panel: 'key', message: 'Refus de clé.' } }));
+  assert.ok(!autre.includes('Refus de clé.'));
 });
 
 test('une absence de route est nommee', () => {

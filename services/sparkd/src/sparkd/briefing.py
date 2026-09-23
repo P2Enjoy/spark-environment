@@ -11,6 +11,8 @@
       · docs/DAT.md §55.7 (ce que le dossier doit dire du canal `.?`, et la
       consigne d'accès unique) · docs/BACKLOG.md#SPK-107 · docs/DAT.md §55.3.3
       (le vide est une DEMANDE, et l'étiquette l'explique) · docs/SCHEMA.md §10 quinquies
+@spec docs/BACKLOG.md#SPK-112 · docs/DAT.md §44.2 bis (la pile sert « en HTTP
+      simple »), §55.3.1 (le dernier mot d'une route règle son côté PUBLIC)
 
 Le JSON est le MODELE et le Markdown une présentation de ce même modèle. Les
 deux fichiers ne sont donc pas deux vérités qu'il faudrait garder en accord.
@@ -480,6 +482,13 @@ def _lignes_canal(model: dict[str, Any],
         "libre pour les trois notes. Chaque fichier porte son en-tête, qui le "
         "redit.",
         "",
+        # SPK-112 · §55.3.1 : un agent a lu « servez en clair » comme une valeur
+        # de la grammaire, et proposé `clair` pour un site public.
+        "**Le dernier mot d'une route règle son côté PUBLIC, et lui seul** : "
+        "omis ou `tls`, le site est servi en `https://`, avec un certificat ; "
+        "`clair`, il est publié en `http://`, sans certificat. Votre pile écoute "
+        "en HTTP simple dans les deux cas.",
+        "",
         # SPK-107 · §55.3.3 : les DEUX gestes, montrés plutôt que décrits. Sans
         # eux, l'agent qui ignore une valeur invente un remplissage — accepté
         # sans être regardé, et la pile casse au démarrage suivant.
@@ -591,9 +600,11 @@ def markdown(model: dict[str, Any]) -> str:
     if model["ingress"]:
         # SPK-101 · §44.2 bis : le mécanisme AVANT la liste. Sans lui, un agent
         # lit une destination sans savoir qu'un chemin existe déjà, et croit
-        # devoir en demander un.
+        # devoir en demander un. SPK-112 · §44.2 bis : « en HTTP simple », pas
+        # « en clair » — le mot de la grammaire qui publie en `http://`.
         lines.append("- La Forge termine le TLS et fait suivre vers votre port : "
-                     "servez en clair, aucun port publié n'est requis.")
+                     "servez en HTTP simple, sans certificat ; aucun port publié "
+                     "n'est requis.")
         lines.extend(
             f"- {_origine(route)} → {route['target_port']} "
             f"({'active' if route['enabled'] else 'désactivée'})"
@@ -1058,7 +1069,7 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         lignes.extend(
             f"- **{_origine(route)}** "
             f"({'active' if route['enabled'] else 'désactivée'}) → la pile doit "
-            f"écouter sur **{route['target_port']}**, en clair"
+            f"écouter sur **{route['target_port']}**, en HTTP simple"
             + ("\n  - **Cette route n'aboutira pas en l'état.** Le port visé est "
                "privilégié (`< 1024`) et cette cellule est en Docker rootless, "
                "qui ne peut pas l'ouvrir. Il n'y a pas de contournement à "
@@ -1071,8 +1082,10 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
             "**Une route active est un chemin complet.** La Forge tient un proxy "
             "unique qui écoute `443`, détient le certificat, **termine le TLS** et "
             "fait suivre vers l'adresse privée de ce Spark sur le port ci-dessus. "
-            "Votre pile sert donc **en clair** sur ce port : un certificat dans la "
-            "pile ne servirait à rien.",
+            # SPK-112 · §44.2 bis : « en HTTP simple ». « En clair » est le mot
+            # de la grammaire des routes qui publie un site en `http://`.
+            "Votre pile sert donc **en HTTP simple** sur ce port : un certificat "
+            "dans la pile ne servirait à rien.",
             "",
             "**Et elle ne demande aucun port publié.** Un port publié est le "
             "SECOND mécanisme, réservé à ce qui n'annonce aucun nom d'hôte — SMTP, "

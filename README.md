@@ -560,6 +560,10 @@ une garde qui n'existe que dans un fichier de workflow.
   Debian), et dit quand il n'a pas pu ; un lien n'a pas de nom dans le
   résolveur du réseau — ses membres emploient `adresse:port`, que la console
   donne.
+- **`http://` d'une route TLS répond en clair, sans renvoyer vers `https://`.**
+  Constaté le 2026-09-23 sur la Forge (`docs/DAT.md` §18.3) : le certificat est
+  bien servi sur `443`, mais `80` sert aussi le site, sans redirection. Ouvert en
+  `docs/BACKLOG.md#SPK-113`, qui demande une mesure avant d'être corrigé.
 
 ## Sauvegarder le registre
 

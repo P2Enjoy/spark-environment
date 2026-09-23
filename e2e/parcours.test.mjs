@@ -1121,6 +1121,139 @@ test('un lot importé au CATALOGUE ne descend dans aucun Spark', async () => {
   });
 });
 
+// --- SPK-112 · UNE ROUTE SANS TLS (docs/DAT.md §18.3 quater, §55.9.2) -------
+//
+// Placés AVANT l'alerte hors bande, et ce n'est pas un hasard : le refus se
+// démontre sur « analytics », que le seed protège, et le parcours d'alerte lève
+// cette protection — qu'il peut laisser levée s'il s'interrompt
+// (docs/INCONSISTENCY_REPORT.md).
+
+test('une route proposée EN CLAIR se passe en TLS avant d’être acceptée', async () => {
+  await parcours('spk112-proposition-tls', async () => {
+    // @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.9.2 (la case TLS,
+    //           pré-cochée d'après la proposition ; la mention et
+    //           l'avertissement disent la demande) · docs/DESIGN_SYSTEM_APP.md
+    //           SPK-DS-31
+    //
+    // Le seed a déposé dans « ubuntu-24 » la méprise réelle du 2026-09-23 : une
+    // ligne `clair` pour un site public, à côté d'une ligne sans dernier mot.
+    await ouvrir('ubuntu-24', 'routes');
+    await page.waitForSelector('[data-sugg-ouvrir="routes"]', { timeout: 20000 });
+    await page.click('[data-sugg-ouvrir="routes"]');
+    await page.waitForSelector('[data-sugg-tls="routes"]', { timeout: 10000 });
+
+    const bloc = '[data-proposition="routes"]';
+    assert.match(await page.innerText(`${bloc} .avertissement[role="status"] strong`),
+      /1 route\(s\)\s+proposée\(s\) sans TLS/);
+    assert.match(await page.innerText(bloc), /docs\.example\.com\. Acceptée/);
+    assert.match(await page.innerText('#sugg-tls-note-routes-1'),
+      /proposée sans TLS : http:\/\/, sans\s+certificat/);
+    // Pré-cochée d'après la proposition : `clair` décochée, le défaut cochée.
+    assert.equal(await page.isChecked('[data-sugg-tls="routes"][data-ligne="1"]'), false);
+    assert.equal(await page.isChecked('[data-sugg-tls="routes"][data-ligne="2"]'), true);
+    await capturer('spk112-proposition-sans-tls', { hauteur: 1100 });
+    await capturer('spk112-proposition-sans-tls-mobile', { largeur: 390, hauteur: 1400 });
+    const deborde = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+    assert.equal(deborde, false, 'la page défile horizontalement à 390 px');
+
+    // Au CLAVIER : on atteint la case par la tabulation depuis la case
+    // « Retenir » de la même ligne, et l'Espace la coche.
+    await page.focus('[data-sugg-garder="routes"][data-ligne="1"]');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.suggTls), 'routes',
+      'la case TLS doit suivre « Retenir » dans l’ordre de tabulation');
+    await page.keyboard.press('Space');
+    assert.equal(await page.isChecked('[data-sugg-tls="routes"][data-ligne="1"]'), true);
+    // Rien ne se repeint : la mention dit ce que la proposition DEMANDE.
+    assert.match(await page.innerText('#sugg-tls-note-routes-1'), /proposée sans TLS/);
+
+    await page.click('[data-sugg-appliquer="routes"]');
+    await page.waitForFunction(
+      () => !document.querySelector('[data-sugg-appliquer]')
+            && /Proposition appliquée/.test(document.body.innerText),
+      { timeout: 20000 });
+    await capturer('spk112-proposition-acceptee', { hauteur: 1100 });
+
+    // EFFET au registre : la case telle qu'elle était cochée, pas le fichier.
+    const { corps } = await pile.lireSparkd('/v1/ingress');
+    const docs = corps.routes.find((r) => r.domain === 'docs.example.com');
+    const statut = corps.routes.find((r) => r.domain === 'statut.example.com');
+    assert.equal(docs?.spark_name, 'ubuntu-24');
+    assert.equal(Boolean(docs.tls), true, 'la ligne cochée TLS est entrée en clair');
+    assert.equal(Boolean(statut?.tls), true);
+    // Et la ligne ne porte plus la pastille : l'écran relu le dit.
+    assert.doesNotMatch(await page.innerText(ligneRoute('docs.example.com')), /sans TLS/);
+    const { corps: apres } = await pile.lireSparkd('/v1/sparks/ubuntu-24/suggestions');
+    assert.equal(apres.suggestions.find((x) => x.kind === 'routes').present, false,
+      'le fichier `.?` doit être vidé');
+  });
+});
+
+test('une route sans TLS porte « Activer le TLS », et un Spark protégé le refuse', async () => {
+  await parcours('spk112-activer-tls', async () => {
+    // @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §18.3 quater (la sortie
+    //           de la pastille ; la correction du §18.3 ter, port inchangé ;
+    //           le refus d'un Spark protégé) · docs/DESIGN_SYSTEM.md §6.8,
+    //           §6.24, §14.3 · docs/DESIGN_SYSTEM_APP.md SPK-DS-31
+    const { corps: avant } = await pile.lireSparkd('/v1/ingress');
+    const ancienne = avant.routes.find((r) => r.domain === 'intranet.example.com');
+    assert.equal(Boolean(ancienne?.tls), false, 'le seed doit porter une route en clair');
+
+    await ouvrir('ubuntu-24', 'routes');
+    const ligne = ligneRoute('intranet.example.com');
+    await page.waitForSelector(`${ligne} [data-active-tls]`, { timeout: 10000 });
+    assert.match(await page.innerText(`${ligne} .badge`), /sans TLS/);
+    await page.locator(ligne).scrollIntoViewIfNeeded();
+    await capturer('spk112-route-sans-tls', { hauteur: 1000 });
+    await capturer('spk112-route-sans-tls-mobile', { largeur: 390, hauteur: 1200 });
+
+    // Le geste, sans confirmation (§6.24) : réparateur, sans paramètre.
+    await page.click(`${ligne} [data-active-tls]`);
+    await page.waitForFunction(() => {
+      const li = document.querySelector('[data-modifie-route="intranet.example.com"]')
+        ?.closest('li');
+      return li && !li.querySelector('[data-active-tls]') && !/sans TLS/.test(li.innerText);
+    }, null, { timeout: 15000 });
+
+    // EFFET : la MÊME route, même port, TLS activé — la correction du §18.3 ter.
+    const { corps: apres } = await pile.lireSparkd('/v1/ingress');
+    const corrigee = apres.routes.find((r) => r.domain === 'intranet.example.com');
+    assert.equal(Boolean(corrigee.tls), true);
+    assert.equal(corrigee.id, ancienne.id, 'la route garde son identité');
+    assert.equal(corrigee.target_port, 8080, 'le port n’a pas bougé');
+    // Le journal porte l'avant et l'après, comme toute correction.
+    const { corps: journal } = await pile.lireSparkd('/v1/audit?limit=20');
+    const entree = journal.entries.find((e) => e.action === 'ingress.update'
+      && JSON.parse(e.payload ?? '{}').domain === 'intranet.example.com');
+    assert.ok(entree, 'aucune entrée ingress.update au journal');
+    const charge = JSON.parse(entree.payload);
+    assert.equal(charge.tls_avant, false);
+    assert.equal(charge.tls, true);
+    // §14.3 : le bouton a disparu avec la pastille ; le focus est allé au geste
+    // qui le défait, pas sur la page.
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.modifieRoute),
+      'intranet.example.com');
+    await capturer('spk112-tls-active', { hauteur: 1000 });
+
+    // Un Spark PROTÉGÉ refuse, et le refus se lit DANS la section (§35).
+    assert.equal((await pile.lireSparkd('/v1/sparks/analytics/protection'))
+      .corps.protected, true, 'le seed protège « analytics »');
+    await ouvrir('analytics', 'routes');
+    const refusee = ligneRoute('analytics.example.com');
+    await page.waitForSelector(`${refusee} [data-active-tls]`, { timeout: 10000 });
+    await page.click(`${refusee} [data-active-tls]`);
+    await page.waitForSelector('section[aria-labelledby="titre-routes"] .refus[role="alert"]',
+      { timeout: 10000 });
+    assert.match(await page.innerText('section[aria-labelledby="titre-routes"] .refus'),
+      /protég/);
+    const { corps: fin } = await pile.lireSparkd('/v1/ingress');
+    assert.equal(Boolean(fin.routes.find((r) => r.domain === 'analytics.example.com').tls),
+      false, 'un refus n’a rien écrit');
+    await capturer('spk112-tls-refuse', { hauteur: 1000 });
+  });
+});
+
 // --- SPK-62 · L'ALERTE HORS BANDE (§47) ------------------------------------
 
 test('l’onglet Alertes se règle, et le REFUS vient du serveur', async () => {

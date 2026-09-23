@@ -185,6 +185,23 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('#route-domaine');
     await capturer('m7-route', { hauteur: 800 });
 
+    // --- M7 · Une route sans TLS, et sa sortie (SPK-112, §18.3 quater) -------
+    // Le seed porte sur « ubuntu-24 » une route servie en clair : la pastille
+    // et le bouton qui la corrige sont sur la même ligne, et c'est exactement
+    // ce que le chapitre décrit.
+    await ouvrir('ubuntu-24', 'routes');
+    await page.waitForSelector('[data-active-tls]', { timeout: 10000 });
+    await page.locator('li:has([data-active-tls])').scrollIntoViewIfNeeded();
+    await capturer('m7-route-sans-tls', { hauteur: 900 });
+
+    // --- M8 · Une proposition de routes, et sa case TLS (SPK-112, §55.9.2) ---
+    // La proposition du seed demande `clair` pour l'une de ses lignes : la
+    // relecture montre la case décochée, la mention et l'avertissement.
+    await page.click('[data-sugg-ouvrir="routes"]');
+    await page.waitForSelector('[data-sugg-tls="routes"]', { timeout: 10000 });
+    await page.locator('.proposition').scrollIntoViewIfNeeded();
+    await capturer('m8-proposition-routes', { hauteur: 900 });
+
     // --- M8 · Exploiter au quotidien -----------------------------------------
     await ouvrir('site-vitrine');
     await capturer('m8-erreur', { hauteur: 1000 });

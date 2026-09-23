@@ -27,6 +27,10 @@
  *       zone), §38.3 (ce qu'écrit un enregistrement d'ingress),
  *       §38.4 (poser n'est pas résoudre) — pour le panneau « Pointer le
  *       domaine » de la section des routes publiques.
+ * @spec docs/BACKLOG.md#SPK-112 · docs/DAT.md §18.3 quater (une route sans TLS
+ *       le dit, et se corrige d'un geste) · docs/DESIGN_SYSTEM.md §6.8 (une
+ *       pastille d'écart porte sa sortie), §6.24 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-31 — pour le bouton « Activer le TLS » et son refus.
  *
  * Ce sont des panneaux du détail, pas des écrans (§26.1) : une route publique
  * et un instantané n'existent pas sans leur Spark.
@@ -207,6 +211,12 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           `${renderEtatDns(ui.dnsRoutes, r.domain)}` +
           `${r.tls ? '' : ' <span class="badge badge--neutral">sans TLS</span>'}${attente}` +
           `<span class="actions-ligne">${reappliquer}` +
+          // SPK-112 · §18.3 quater : la pastille porte sa sortie. C'est la
+          // correction du §18.3 ter, port inchangé — réparatrice, sans
+          // paramètre, réversible par « Modifier » : pas de confirmation.
+          (r.tls ? '' : `<button type="button" class="bouton bouton--compact" ` +
+            `data-active-tls="${echapper(r.domain)}" ` +
+            `aria-label="Activer le TLS pour ${echapper(r.domain)}">Activer le TLS</button>`) +
           // SPK-47 · §38 : pointer le DNS est un geste de CETTE route, pas de la
           // section — deux routes du même Spark ont deux domaines distincts.
           `<button type="button" class="bouton bouton--compact" data-dns-route="${echapper(r.domain)}">DNS</button>` +
@@ -287,6 +297,7 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
 <section class="carte bloc" aria-labelledby="titre-routes">
   <h2 id="titre-routes">Routes publiques</h2>
   ${lignes}
+  ${refus(ui, 'route-tls')}
   ${renderPriseDePas(ui)}
   ${renderDnsEcrit(ui)}
   ${renderRecetteResultat(ui)}

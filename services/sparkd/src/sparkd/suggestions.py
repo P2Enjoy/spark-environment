@@ -7,6 +7,9 @@
       (l'empreinte relue), §55.6 (permissions), §55.7 (les en-têtes), §55.8 (la
       surface d'API) · docs/DAT.md §43.10.1 (la grammaire, qui vit dans la
       console)
+@spec docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.3.1 (le dernier mot d'une
+      route règle son côté PUBLIC ; la pile sert « en HTTP simple ») — pour
+      `DERNIER_MOT_ROUTE`, l'en-tête de `routes.?` et `rendre_routes`
 
 **La règle du produit, en deux lignes** : tout fichier que le plan de contrôle
 pose dans une cellule est régénéré en entier depuis le registre, et l'écrire à la
@@ -127,6 +130,16 @@ DOSSIERS_OUVERTS = ("/etc/spark", "/run/spark", notes_service.DOSSIER)
 #: (§55.8) : ce module ne lit toujours rien de ce que la cellule écrit.
 ETIQUETTE_MAX = 120
 
+#: SPK-112 · §55.3.1 : ce que règle le dernier mot d'une route, dit partout où
+#: la grammaire se montre — l'en-tête de `routes.?` et `/etc/spark/routes`. Le
+#: même mot, « clair », décrivait aussi la pile, et un agent a confondu les deux.
+DERNIER_MOT_ROUTE = (
+    "LE DERNIER MOT RÈGLE LE CÔTÉ PUBLIC DE LA ROUTE, et lui seul : omis ou",
+    "« tls », le site est servi en https://, avec un certificat ; « clair », il",
+    "est publié en http://, sans certificat. Votre pile écoute en HTTP simple",
+    "dans les deux cas : c'est la Forge qui termine le TLS.",
+)
+
 MARQUEUR = "spark:suggestion"
 FIN_DIESE = "# --- fin du bloc posé par sparkd, écrivez ci-dessous ---"
 FIN_HTML = "-->"
@@ -237,6 +250,10 @@ def entete(kind: str) -> str:
             "    # Clé d'API du fournisseur de facturation, à créer chez lui.",
             "    BILLING_API_KEY=",
         ])
+    if paire["kind"] == "routes":
+        # SPK-112 · §55.3.1 : la grammaire se lisait sans dire ce que règle son
+        # dernier mot, et un agent a proposé `clair` pour un site public.
+        corps.extend(["", *DERNIER_MOT_ROUTE, "", "    app.exemple.fr 8080"])
     if paire["kind"] == "secrets":
         # §55.6.1 : le seul des six dont la proposition est périssable. Le taire
         # ferait chercher un refus qui n'a pas eu lieu.
@@ -299,8 +316,13 @@ def rendre_routes(routes: list[dict[str, Any]], spark_id: str) -> str:
         "#",
         "# <domaine> <port écouté ICI> [tls|clair]",
         "#",
-        "# La Forge termine le TLS et fait suivre vers le port ci-dessous :",
-        "# servez en CLAIR, aucun port publié n'est requis.",
+        *(f"# {ligne}" for ligne in DERNIER_MOT_ROUTE),
+        "#",
+        # SPK-112 · §55.3.1 : « servez en CLAIR » ici, sous `[tls|clair]`, a été
+        # lu comme une valeur de la grammaire. La pile sert en HTTP SIMPLE.
+        "# La Forge termine le TLS et fait suivre vers le port ci-dessous : votre",
+        "# pile y écoute en HTTP simple, sans certificat. Aucun port publié n'est",
+        "# requis.",
         "#",
         f"# Pour en demander une autre, écrivez dans « {FICHIER_ROUTES}{SUFFIXE} ».",
     ]

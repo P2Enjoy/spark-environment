@@ -166,6 +166,23 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-112 — une route sans TLS le dit et se corrige d'un geste, et la cellule
+  ne la propose plus en clair par méprise.** Constaté par le responsable sur la
+  Forge : une route acceptée depuis une proposition portait « sans TLS », sans
+  rien pour le résoudre ; la cellule avait écrit `clair` en lisant « servez en
+  CLAIR » sous la grammaire `[tls|clair]`. Les textes remis à la cellule —
+  en-tête de `routes.?`, `/etc/spark/routes`, briefing et dossier — disent de la
+  pile qu'elle sert « en HTTP simple » et expliquent que le dernier mot d'une
+  route règle son côté public ; la grammaire ne change pas. Console : la
+  relecture d'une proposition de routes porte une case *TLS* par ligne,
+  pré-cochée d'après la proposition, une mention « proposée sans TLS » et un
+  avertissement qui les compte ; une route sans TLS porte un bouton *Activer le
+  TLS*, la correction du §18.3 ter, port inchangé, sans confirmation, dont le
+  refus se lit dans la section. Seed : une route en clair et une proposition de
+  routes avec une ligne `clair` sur `ubuntu-24`. Preuves sparkd et de
+  composant ; deux parcours E2E écrits, **pas encore joués** ; manuel M7 et M8,
+  dont les deux illustrations restent à produire ; design system §6.8 et
+  SPK-DS-31. **Non déployé** : les textes remis à la cellule attendent OP-25.
 - **SPK-16 — la console ne se reconnectait plus à une Forge tombée.** Rapporté
   sur une console ouverte depuis plus de 24 h : le tunnel tombe dans la nuit, le
   bouton *Reconnecter* ne relance rien, et il faut arrêter l'interface et la

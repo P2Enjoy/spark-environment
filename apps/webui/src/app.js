@@ -173,7 +173,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // chargent à leur ouverture — comme les notes, et pour la même
                // raison : elles coûtent une lecture de la cellule.
                propositions: { ...PROPOSITIONS_VIDE, items: [],
-                               exclues: {}, secrets: {}, valeurs: {} } };
+                               exclues: {}, secrets: {}, tls: {}, valeurs: {} } };
 
 /**
  * L'indicateur de page courante SUIT la route.
@@ -1957,6 +1957,8 @@ function brancherPanneaux() {
     agir('route', () => appel('DELETE', `/v1/ingress/${encodeURIComponent(domaine)}`)));
   geste('reapplique', () =>
     agir('route', () => appel('POST', '/v1/ingress/reconcile')));
+  // SPK-112 · §18.3 quater : la sortie de la pastille « sans TLS ».
+  geste('active-tls', (domaine) => activerTls(domaine));
   // §35.2 : révoquer n'est jamais refusé par la protection. Le premier appel
   // peut rendre la liste NOMMÉE des Sparks protégés touchés ; le second porte
   // l'acceptation. Aucun mot de passe, et aucune protection levée.
@@ -2061,6 +2063,24 @@ function brancherPanneaux() {
       }
       if (caseSecret.checked) etat.propositions.secrets[kind].add(ligne);
       else etat.propositions.secrets[kind].delete(ligne);
+    });
+  }
+  // SPK-112 · §55.9.2 : la case TLS d'une route, tenue comme la case *Secret*.
+  // Rien ne se repeint : la mention de la ligne dit ce que la proposition
+  // demande, et reste vraie quelle que soit la case (§14.3).
+  for (const caseTls of racine.querySelectorAll('[data-sugg-tls]')) {
+    caseTls.addEventListener('change', () => {
+      const kind = caseTls.dataset.suggTls;
+      const ligne = Number(caseTls.dataset.ligne);
+      // Au premier geste, la liste de l'exploitant se matérialise en entier
+      // depuis la proposition : c'est désormais elle qui fait foi.
+      if (!etat.propositions.tls[kind]) {
+        const suggestion = etat.propositions.items.find((x) => x.kind === kind);
+        etat.propositions.tls[kind] = new Set(
+          comprendre(suggestion).entrees.filter((e) => e.tls).map((e) => e.ligne));
+      }
+      if (caseTls.checked) etat.propositions.tls[kind].add(ligne);
+      else etat.propositions.tls[kind].delete(ligne);
     });
   }
   // SPK-107 · §55.9.1 : la frappe met à jour l'état et le bouton, JAMAIS le
@@ -2729,6 +2749,30 @@ async function corrigerRoute() {
   ), { ferme: false });
   if (resultat?.ok) admin.editing = null;
   peindre();
+}
+
+/**
+ * Active le TLS d'une route servie en clair (SPK-112).
+ *
+ * @spec docs/BACKLOG.md#SPK-112 · docs/DAT.md §18.3 quater, §18.3 ter, §18.5,
+ *       §35 · docs/DESIGN_SYSTEM.md §6.8, §6.24, §14.3
+ *
+ * C'est la correction du §18.3 ter et rien d'autre : le port vient de la route
+ * AFFICHÉE, le TLS passe à vrai. Le bouton disparaît avec la pastille qu'il
+ * corrigeait : le focus va à « Modifier » de la même ligne, le geste qui le
+ * défait, plutôt que de tomber sur la page (§14.3).
+ */
+async function activerTls(domaine) {
+  const route = (etat.detail?.routes ?? []).find((r) => r.domain === domaine);
+  if (!route) return;
+  const resultat = await agir('route-tls', () => appel(
+    'PATCH', `/v1/ingress/${encodeURIComponent(domaine)}`,
+    { port: Number(route.target_port), tls: true },
+  ), { ferme: false });
+  peindre();
+  if (resultat?.ok) {
+    racine.querySelector(`[data-modifie-route="${CSS.escape(domaine)}"]`)?.focus();
+  }
 }
 
 /**
@@ -3450,6 +3494,7 @@ async function trancherSuggestion(kind, sha, appliquer) {
     // entière plutôt que de deviner son nouvel état (§26.6).
     delete p.exclues[kind];
     delete p.secrets[kind];
+    delete p.tls[kind];
     delete p.valeurs[kind];
     p.ouvert = null;
     const issue = p.issue;
@@ -3561,7 +3606,7 @@ async function chargerDetail(nom, facette = '') {
     peindre();
   } else if (!['environnement', 'routes'].includes(facette)) {
     etat.propositions = { ...PROPOSITIONS_VIDE, items: [], exclues: {},
-                         secrets: {}, valeurs: {} };
+                         secrets: {}, tls: {}, valeurs: {} };
   }
   if (facette === 'notes' && etat.status === 'ready') {
     await chargerNotes(nom);

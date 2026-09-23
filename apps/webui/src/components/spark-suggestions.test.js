@@ -5,6 +5,9 @@
  * (le vide est une DEMANDE), §55.9.1 (le champ, le bouton désactivé, ce qui
  * survit au repli) · docs/DESIGN_SYSTEM.md §14.5, §14.6, §1.3, §9.9 ·
  * docs/DESIGN_SYSTEM_APP.md SPK-DS-23, SPK-DS-28
+ * @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §55.9.2 (la relecture d'une
+ * route porte sa case TLS, et une ligne proposée sans TLS le dit) ·
+ * docs/DESIGN_SYSTEM_APP.md SPK-DS-31
  *
  * Ce que ces preuves gardent : l'écran montre CE QU'IL A COMPRIS — pas le texte
  * brut —, une ligne illisible est nommée sans que la proposition soit perdue, et
@@ -16,7 +19,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PROPOSITIONS_VIDE, analyserRoutes, comprendre, enAttente, estDemande,
-         entreesAppliquees, renderPropositions, valeurAppliquee }
+         entreesAppliquees, estTls, renderPropositions, valeurAppliquee }
   from './spark-suggestions.js';
 
 const SUGG = (champs = {}) => ({
@@ -308,4 +311,67 @@ test('un secret DEMANDÉ se saisit comme une variable, en clair (§43.10.2)', ()
   assert.match(rendu, /value="en-clair"/);
   // Et elle reste PRÉ-COCHÉE secrète, parce que le chemin le déclare (§55.3).
   assert.match(rendu, /data-sugg-secret="secrets" data-ligne="2"\s+checked/);
+});
+
+// --- la case TLS d'une route (SPK-112, §55.9.2) -----------------------------
+
+const ROUTES_MIXTES = () => SUGG({
+  kind: 'routes', path: '/etc/spark/routes.?', target: '/etc/spark/routes',
+  body: 'crm.exemple.fr 8080 clair\napi.exemple.fr 3000\n',
+});
+
+test('chaque route porte une case TLS, PRÉ-COCHÉE d’après la proposition', () => {
+  const rendu = renderPropositions(
+    ui({ ouvert: 'routes', items: [ROUTES_MIXTES()] }), ['routes']);
+  // `clair` : décochée ; sans dernier mot : cochée (le défaut est `tls`).
+  assert.match(rendu, /data-sugg-tls="routes" data-ligne="1"\s+aria-label/);
+  assert.match(rendu, /data-sugg-tls="routes" data-ligne="2"\s+checked/);
+  assert.match(rendu, /aria-label="Servir crm\.exemple\.fr en TLS"/);
+  // La colonne ne dit plus seulement « en clair » : elle se coche.
+  assert.doesNotMatch(rendu, /<td>en clair<\/td>/);
+});
+
+test('une route proposée SANS TLS le dit sous sa case, et l’avertissement la compte', () => {
+  const rendu = renderPropositions(
+    ui({ ouvert: 'routes', items: [ROUTES_MIXTES()] }), ['routes']);
+  assert.match(rendu, /id="sugg-tls-note-routes-1">proposée sans TLS : http:\/\/, sans\s+certificat/);
+  // La mention est RATTACHÉE à la case : au clavier, on l'entend en y entrant.
+  assert.match(rendu, /data-ligne="1"\s+aria-label="[^"]*" aria-describedby="sugg-tls-note-routes-1"/);
+  assert.doesNotMatch(rendu, /sugg-tls-note-routes-2/, 'une ligne en TLS ne porte rien');
+  assert.match(rendu, /<p class="avertissement" role="status"><strong>1 route\(s\)\s+proposée\(s\) sans TLS<\/strong> : crm\.exemple\.fr\./);
+});
+
+test('cocher TLS ne change NI la mention NI l’avertissement : ils disent la demande', () => {
+  // §14.3 : rien ne se repeint au clic. Une phrase qui suivrait la case se
+  // démentirait sous les doigts — celle-ci reste vraie après le geste.
+  const coche = renderPropositions(ui({ ouvert: 'routes', items: [ROUTES_MIXTES()],
+                                        tls: { routes: new Set([1, 2]) } }), ['routes']);
+  assert.match(coche, /data-sugg-tls="routes" data-ligne="1"\s+checked/);
+  assert.match(coche, /proposée sans TLS/);
+  assert.match(coche, /1 route\(s\)\s+proposée\(s\) sans TLS/);
+});
+
+test('aucun avertissement TLS quand toutes les routes le demandent, ni ailleurs', () => {
+  const tout = SUGG({ kind: 'routes', body: 'a.exemple.fr 8080\nb.exemple.fr 80 tls\n' });
+  assert.doesNotMatch(renderPropositions(ui({ ouvert: 'routes', items: [tout] }), ['routes']),
+                      /sans TLS/);
+  // Les variables n'ont pas de TLS.
+  assert.doesNotMatch(renderPropositions(ui({ ouvert: 'variables' }), ['variables']),
+                      /data-sugg-tls/);
+});
+
+test('c’est la case TELLE QU’ELLE EST COCHÉE qui part au serveur', () => {
+  const { entrees } = comprendre(ROUTES_MIXTES());
+  // Personne n'a touché : la proposition fait foi.
+  assert.deepEqual(entreesAppliquees(ui(), 'routes', entrees), [
+    { domain: 'crm.exemple.fr', port: 8080, tls: false },
+    { domain: 'api.exemple.fr', port: 3000, tls: true },
+  ]);
+  // Le propriétaire coche TLS sur la première, et le retire de la seconde.
+  assert.deepEqual(entreesAppliquees(ui({ tls: { routes: new Set([1]) } }), 'routes', entrees), [
+    { domain: 'crm.exemple.fr', port: 8080, tls: true },
+    { domain: 'api.exemple.fr', port: 3000, tls: false },
+  ]);
+  assert.equal(estTls(ui(), 'routes', 1, false), false);
+  assert.equal(estTls(ui({ tls: { routes: new Set([1]) } }), 'routes', 1, false), true);
 });

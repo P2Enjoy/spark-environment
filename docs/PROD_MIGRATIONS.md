@@ -120,6 +120,38 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-25 · Mettre à jour `sparkd` : ce que la cellule lit des routes (SPK-112) — **EN ATTENTE**
+
+```
+État          : EN ATTENTE. Aucune migration, aucune variable, aucun service
+                nouveau.
+Objectif      : servir les textes corrigés de SPK-112 (docs/DAT.md §55.3.1,
+                §44.2 bis) : l'en-tête de `/etc/spark/routes.?`,
+                `/etc/spark/routes`, `BRIEFING.md` et le dossier disent de la
+                pile qu'elle sert « en HTTP simple », et que le dernier mot d'une
+                route règle son côté public. Tant que la Forge tourne la build
+                0.post1.dev856+g565e5c688, une cellule y lit encore « servez en
+                CLAIR » sous la grammaire `[tls|clair]`.
+                La console (case TLS, bouton « Activer le TLS ») est locale :
+                elle ne se déploie pas, elle se relance (`sparkui stop`, puis
+                `sparkui`).
+Dépend de     : rien.
+Ordre         : 1. mettre à jour sparkd depuis la console (runbook A.2) ;
+                2. rien d'autre : ouvrir l'onglet Routes ou Environnement d'un
+                   Spark réécrit `/etc/spark/routes` et repose les en-têtes des
+                   `.?` vides (§55.5) ; le briefing est réécrit à sa prochaine
+                   projection, dont tout changement de route.
+Vérification  : `GET /v1/forge` rend la nouvelle build ; depuis le terminal
+                d'une cellule d'ESSAI, après l'ouverture de son onglet Routes
+                dans la console, `head -20 /etc/spark/routes.?` montre « LE
+                DERNIER MOT RÈGLE LE CÔTÉ PUBLIC » et `grep -ci 'en clair'
+                /etc/spark/routes` rend 0 — jamais sur une cellule de locataire.
+Retour arrière: réinstaller la build précédente (runbook A.2) : rien n'est
+                écrit au registre, les textes redeviennent les anciens.
+Risques       : aucun sur les routes servies — ni le registre ni la
+                configuration du proxy ne changent.
+```
+
 ### OP-24 · Migration `019_portee_port_publie` et règle `ct status dnat` de `spark_filter` (SPK-111) — **APPLIQUÉ le 2026-09-18**
 
 ```

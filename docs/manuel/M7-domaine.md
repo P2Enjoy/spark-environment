@@ -151,6 +151,33 @@ préfère le dire plutôt que d'annoncer un succès qu'il n'a pas constaté.
 Le journal garde l'ancienne **et** la nouvelle valeur : sans les deux, on ne
 saurait pas ce qui a été corrigé.
 
+### Une route « sans TLS »
+
+![Une route servie en clair : sa pastille « sans TLS » et, sur la même ligne, le bouton « Activer le TLS »](images/m7-route-sans-tls.png)
+
+Une route déclarée sans certificat porte la pastille **sans TLS** : le proxy la
+sert en `http://`, sans chiffrement. C'est parfois voulu — un domaine interne, un
+essai, un frontal qui termine déjà le TLS —, et la pastille reste donc grise :
+rien n'est en panne.
+
+Si ce n'est pas voulu, le bouton **Activer le TLS**, sur la même ligne, corrige la
+route en un clic : même domaine, même port, et un certificat demandé au proxy.
+C'est la correction que fait *Modifier* en cochant *Certificat TLS automatique*,
+sans passer par la fenêtre. Elle ne demande pas de confirmation — elle ne détruit
+rien, et *Modifier* la défait —, et la route repasse **« non appliquée »** le
+temps que le proxy reprenne la configuration.
+
+L'écran ne vous dira pas que le certificat est émis : il ne le sait pas.
+L'émission suppose que le domaine résolve déjà vers la Forge (voir « Pointer le
+domaine »).
+
+Sur un Spark protégé, le geste est refusé comme toute correction, et la raison
+s'affiche sous la liste des routes.
+
+Le cas le plus courant d'une route sans TLS non voulue est une **proposition
+acceptée** depuis le Spark : voir [M8](M8-exploiter.md), « Ce qu'un agent peut
+vous proposer depuis le Spark ».
+
 ## Un domaine déjà pris
 
 Deux Sparks ne peuvent pas revendiquer le même nom. Le refus vient de la base de

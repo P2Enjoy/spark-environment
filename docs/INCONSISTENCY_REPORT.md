@@ -60,3 +60,20 @@ chargement ; il faudrait attendre le TEXTE du refus, pas l'élément.
 
 **Non résolu ici** : hors du périmètre du lot 6 (SPK-50). À arbitrer par le
 responsable : durcir l'attente du parcours.
+
+## 2026-09-23 · Le refus de « Retirer la route » et de « Réappliquer » ne s'affiche nulle part
+
+**Constaté** en écrivant SPK-112 : les deux gestes passent par
+`agir('route', …)`, qui range leur refus sous le panneau `route`. Or ce panneau
+n'est rendu que **dans la modale** « Routes publiques » (`renderRoutesPanel`,
+`apps/webui/src/components/spark-admin.js`), et cette modale est fermée quand on
+retire ou réapplique. Vérifié par un rendu direct : un refus `{ panel: 'route' }`
+avec la modale fermée n'apparaît pas dans le HTML. Deux refus réels y tombent :
+`DELETE /v1/ingress/{domain}` sur un Spark protégé (`423`, `ensure_writable`) et
+`POST /v1/ingress/reconcile` quand le proxy est injoignable (`502`). L'écran ne
+dit rien, ce que `DESIGN_SYSTEM.md` §1.3 et §6.27 refusent.
+
+**Non résolu ici** : hors du périmètre validé de SPK-112, dont le geste « Activer
+le TLS » a son propre panneau (`route-tls`) rendu dans la section. À arbitrer par
+le responsable : rendre aussi le refus du panneau `route` dans la section quand
+la modale est fermée.
