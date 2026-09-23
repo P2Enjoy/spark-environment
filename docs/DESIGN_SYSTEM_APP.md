@@ -1302,6 +1302,38 @@ Preuves observées : `e2e/captures/spk110-catalogue.jpg`, `-catalogue-mobile`,
 sur la Forge réelle, `spk111-forge-publier-lien`, `-forge-lien-publie`,
 `-terminal-membre-joint`, `-terminal-exposee-source`.
 
+### SPK-DS-31 · Une route sans TLS porte « Activer le TLS », et une proposition en clair se signale
+
+**Date** : 2026-09-23 · SPK-112 · `DAT.md` §18.3 quater, §55.9.2 ·
+`DESIGN_SYSTEM.md` §6.8 (une pastille d'écart porte sa sortie)
+
+Vu par le responsable le 2026-09-23 : une route acceptée depuis une proposition
+affichait « sans TLS », et rien à côté. Le remède existait derrière *Modifier*,
+une modale et une case plus loin ; personne ne pouvait le déduire de la pastille.
+La règle générique est remontée au socle (§6.8) ; voici son application.
+
+**Sur la ligne d'une route `tls = 0`** : la pastille « sans TLS », **neutre**, et
+dans le groupe d'actions un bouton compact **« Activer le TLS »**, avant *DNS*.
+
+- neutre, parce qu'une route en clair peut être voulue — un domaine interne, un
+  essai, un frontal qui termine déjà le TLS. Ce n'est ni un retard (accent,
+  « non appliquée ») ni une panne ;
+- sans confirmation (`DESIGN_SYSTEM.md` §6.24) : il ne détruit rien, n'a aucun
+  paramètre, et *Modifier* le défait ;
+- il ne promet pas de certificat : la ligne relue passe par « non appliquée »,
+  puis appliquée, sans jamais dire qu'un certificat est émis (`DAT.md` §18.3) ;
+- son refus — un Spark protégé — s'affiche dans la section, comme celui de
+  *Retirer*.
+
+**Dans la relecture d'une proposition de routes**, la colonne *TLS* devient une
+**case par ligne**, pré-cochée d'après la proposition, comme la case *Secret*
+(SPK-DS-27) : le fichier propose, le propriétaire a le dernier mot. Une ligne
+proposée sans TLS porte sous sa case la mention **« proposée sans TLS »**, et le
+bloc un avertissement accent qui les compte et dit ce qu'elles publieraient :
+`http://`, sans certificat. Mention et avertissement décrivent la **demande**, pas
+la case : rien ne se repeint au clic (§14.3), et une phrase qui suivrait la case
+se démentirait sous les doigts (SPK-DS-28).
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

@@ -621,6 +621,25 @@ Exemple de correspondance :
 | `danger`  | `--color-danger-soft`  | `--color-danger-on-soft`  |
 | `neutral` | `--color-hover`        | `--color-text-2`          |
 
+### Une pastille qui signale un écart corrigeable porte sa sortie
+
+Lorsqu’une pastille signale sur un élément un écart que l’utilisateur peut
+vouloir corriger, le geste qui le corrige vit **sur la même ligne**, à côté
+d’elle : un bouton compact qui **nomme l’effet** (« Activer … », « Réappliquer »),
+pas un « Corriger » générique.
+
+Une pastille sans sortie est une impasse : l’utilisateur voit qu’un état ne va
+pas, ne voit pas quoi faire, et cherche ailleurs — ou conclut que rien n’est
+possible. Que le remède existe derrière une commande plus générale, une modale
+et une case plus loin, ne suffit pas : personne ne le déduit de la pastille.
+
+* La couleur de la pastille dit la **nature** de l’écart, pas l’existence du
+  geste : un état qui peut être voulu reste `neutral`, même avec un bouton à
+  côté.
+* Le geste suit les règles de sa nature : sans confirmation lorsqu’il est
+  réparateur (§6.24), confirmé lorsqu’il est sensible (§6.23).
+* Après le geste, l’écran montre l’état **relu**, jamais l’état espéré (§1.3).
+
 ## 6.9 Champs de formulaire
 
 Structure standard :

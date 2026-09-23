@@ -12444,3 +12444,49 @@ création ; la saisie vit dans l'état et y survit, le focus revient au
 sélecteur (§14.3). Une preuve de composant par portée, le parcours E2E saisit
 d'abord et change la portée ensuite, l'illustration M13 est reproduite, le
 design system et le manuel le disent.
+
+## 2026-09-23 · SPK-112 — une pastille « sans TLS » sans sortie, et le mot qui y a mené
+
+**Problème, rapporté par le responsable** : une route acceptée depuis une
+proposition de la cellule affiche « sans TLS », et l'écran n'offre rien pour
+le résoudre.
+
+**Observations, en lecture seule sur la Forge** (`spark-experiment`, build
+`0.post1.dev856+g565e5c688`) : `crm.lelabs.tech` a été déclarée `tls: false`
+par l'acceptation d'une proposition de routes de la cellule de `crm`
+(`spark.suggestion.apply` et `ingress.declare`, 14:33:51Z) ; une correction
+`tls false → true` par *Modifier* suit à 15:30:20Z ; le domaine résout vers la
+Forge, `https://` répond `200` avec un certificat Let's Encrypt valide.
+
+**Cause, par étage** :
+
+1. la grammaire de `/etc/spark/routes` est `[tls|clair]`, et le même fichier dit
+   deux lignes plus bas « servez en CLAIR » ; le briefing le répète trois fois.
+   « En clair » y décrit la pile — qui écoute bien en HTTP simple, la Forge
+   terminant le TLS —, mais c'est aussi le mot de la grammaire qui publie un
+   site en `http://`. L'agent a lu la consigne comme une valeur ;
+2. la relecture de la proposition écrivait « en clair » dans une colonne, sans
+   avertissement ni moyen de passer en TLS avant d'accepter ;
+3. la pastille « sans TLS » ne menait à rien : le remède était derrière
+   *Modifier*, une case plus loin, et le manuel ne le disait pas.
+
+**Solutions envisagées** : changer le mot de la grammaire (`http` au lieu de
+`clair`) — écarté, il casserait les fichiers écrits et les propositions en
+attente, pour un défaut qui n'est pas dans le mot mais dans ce qui l'entoure ;
+supprimer la possibilité d'une route en clair — écarté, elle reste légitime
+(§18.3).
+
+**Décision, validée par le responsable** : la pile ne se dit plus « en clair »
+mais « en HTTP simple », et chaque texte qui montre la grammaire dit que le
+dernier mot règle le côté public ; la relecture porte une case *TLS* par ligne,
+pré-cochée d'après la proposition, et signale une ligne proposée sans TLS ; une
+route sans TLS porte un bouton *Activer le TLS*, qui est la correction du §18.3
+ter, port inchangé. Spécification au DAT §18.3 quater, §55.3.1, §55.9.2 ; la
+règle « une pastille d'écart porte sa sortie » remonte au socle du design system
+(§6.8), son application est SPK-DS-31.
+
+**Constat annexe** : `http://` d'une route `tls = 1` répond `200` en clair, sans
+renvoyer vers `https://` — `crm` et `devis` le font. Consigné au §18.3 comme
+l'état réel, et ouvert en SPK-113, distincte parce qu'elle change le
+comportement public de toutes les routes de la Forge et demande une mesure
+d'abord.

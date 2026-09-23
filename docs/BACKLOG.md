@@ -7571,6 +7571,109 @@ propriétaire accepte sans la voir, ou il se tait.
   depuis l'écran et la constate au registre ; captures observées aux deux
   formats ; documentation complète ; `@spec` / `@verifies` posés.
 
+### [~] SPK-112 · Une route sans TLS le dit et se corrige d'un geste, et la cellule ne la propose plus par méprise
+
+**Constat du responsable le 2026-09-23** : « j'ai accepté la suggestion d'une
+route et appuyé sur DNS pour poser le record, mais je vois une pastille "sans
+TLS" et je ne vois rien pour résoudre ce sujet ». Proposition de correction
+validée le même jour.
+
+Relevé en lecture seule sur la Forge le même jour : `crm.lelabs.tech` a été
+déclarée `tls: false` par l'acceptation d'une proposition de la cellule
+(`spark.suggestion.apply` routes et `ingress.declare`, 14:33:51Z), puis corrigée
+`tls false → true` par *Modifier* à 15:30:20Z ; le certificat a été émis et
+`https://` répond. Trois défauts, un par étage :
+
+1. **la cellule a proposé `clair` par méprise, et le produit l'y a conduite.**
+   `/etc/spark/routes` pose la grammaire `[tls|clair]` puis, deux lignes plus
+   bas, « servez en CLAIR » ; le briefing répète « servez en clair » et « la pile
+   doit écouter sur N, en clair ». Le même mot désigne le protocole de la pile —
+   qui écoute bien en HTTP simple — et le côté public de la route ;
+2. **l'écran d'acceptation ne le signalait pas** : « en clair » dans une
+   colonne, sans avertissement ni moyen de passer la ligne en TLS avant
+   d'accepter ;
+3. **la pastille « sans TLS » était une impasse** : le remède — *Modifier*, puis
+   *Certificat TLS automatique* — existait, mais rien ne le reliait à la
+   pastille, et le manuel ne le disait pas.
+
+- Spécification : `docs/DAT.md` **§18.3 quater** (une route sans TLS le dit, et
+  se corrige d'un geste), **§55.3.1** précisé (le dernier mot règle le côté
+  PUBLIC ; la pile ne se dit plus « en clair »), **§55.9.2** (la case TLS de la
+  relecture), §44.2 bis corrigé · §18.3 ter, §18.5 · `docs/DESIGN_SYSTEM.md` §6.8
+  (une pastille d'écart porte sa sortie) · `docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-31 · manuel M7, M8. **Écrite et committée avant le code.**
+- Dépend de : SPK-89 (corriger une route), SPK-105 (le canal `.?`), SPK-101 et
+  SPK-102 (le briefing).
+
+**Ce qui décide de l'unité :**
+
+1. **la grammaire ne change pas.** `tls` reste le défaut, `clair` reste le mot
+   qui publie en `http://` : changer un mot casserait les fichiers déjà écrits
+   et les propositions en attente. Ce qui change est ce que le produit dit
+   autour — la pile sert « en HTTP simple », et chaque texte qui montre la
+   grammaire dit que le dernier mot règle le côté public ;
+2. **la relecture d'une proposition de routes porte une case *TLS* par ligne**,
+   pré-cochée d'après la proposition, comme la case *Secret* de
+   l'environnement : le propriétaire a le dernier mot, et ce qui part est la case
+   telle qu'elle est cochée. Une ligne proposée sans TLS le dit en toutes
+   lettres, et la mention reste vraie quelle que soit la case ;
+3. **une route sans TLS porte un bouton *Activer le TLS*** à côté de sa
+   pastille : la correction du §18.3 ter, port inchangé — même `PATCH`, même
+   journal, même passage par « non appliquée ». Réparateur, sans paramètre,
+   réversible : pas de confirmation ;
+4. **rien de nouveau côté API ni registre** : aucune migration, aucune route
+   d'API, aucune variable d'environnement.
+
+**Portée, et découpage persisté :**
+
+1. **Documentation seule** — DAT, cette unité et SPK-113, design system,
+   journal. *Fait, committé avant le code.* Le changelog suit le code : il ne
+   décrit que ce qui existe.
+2. **Textes remis à la cellule** — `suggestions.py` (en-tête de `routes.?`,
+   `/etc/spark/routes`) et `briefing.py` (grammaire, consignes de la pile) ;
+   preuves sparkd.
+3. **Console** — case *TLS* et avertissement dans la relecture ; bouton
+   *Activer le TLS* ; preuves de composant.
+4. **Seed, E2E, captures, manuel** — une route seedée sans TLS, une proposition
+   seedée `clair` ; un parcours accepte la proposition en cochant TLS et
+   constate `tls` au registre ; un parcours active le TLS d'une route depuis sa
+   ligne et le constate ; captures observées aux deux formats ; M7 et M8.
+5. **Déploiement** — OP-25 : les textes remis à la cellule sont servis par
+   `sparkd` et n'atteignent la Forge qu'à sa mise à jour. La console est locale
+   et se relance.
+
+- Ce que l'unité ne doit PAS casser : une route volontairement en clair reste
+  déclarable et proposable (`clair`) ; les fichiers déjà écrits se lisent à
+  l'identique ; §55.4 — rien ne s'applique sans geste humain ; §18.3 ter — ni le
+  domaine ni le Spark ne se corrigent.
+- DoD : preuves sparkd que les textes remis à la cellule ne disent plus « en
+  clair » de la pile et disent ce que règle le dernier mot ; preuves de composant
+  de la case *TLS* (pré-cochée d'après la proposition, envoyée telle que cochée),
+  de la mention et de l'avertissement, et du bouton présent sur une route sans
+  TLS seulement ; parcours E2E des deux gestes, qui constatent l'effet au
+  registre ; captures observées ; seed ; manuel ; `@spec` / `@verifies` posés.
+
+### [ ] SPK-113 · Une route TLS ne se sert plus en clair : `http://` renvoie vers `https://`
+
+**Constaté le 2026-09-23** en vérifiant SPK-112 : `http://crm.lelabs.tech/` et
+`http://devis.lelabs.tech/`, deux routes `tls = 1`, répondent `200` en clair sans
+renvoyer vers `https://`. Le §18.3 le consigne désormais comme l'état réel.
+Ajouté au backlog avec l'accord du responsable du même jour, **en unité
+distincte de SPK-112** : elle change le comportement public de toutes les routes
+TLS de la Forge — celles des locataires comprises —, et elle exige une mesure
+avant d'écrire une ligne.
+
+- Spécification : `docs/DAT.md` §18.2, §18.3 — **à écrire après la mesure**.
+- Hypothèse, non mesurée : la configuration rendue déclare un seul serveur qui
+  écoute `:80` et `:443`, et Caddy n'y ajoute pas ses redirections automatiques.
+- Mesure préalable, sur cellule d'essai et jamais sur une cellule de locataire :
+  quelle forme de configuration fait renvoyer `http://` d'une route TLS vers
+  `https://` ; qu'un défi ACME `HTTP-01` passe toujours ; qu'une route `tls = 0`
+  reste servie en clair ; qu'un domaine non routé garde son `404` (§18.2).
+- DoD : mesure consignée ; preuve unitaire de la configuration rendue ; preuve
+  sur la Forge depuis une cellule d'essai ; DAT, manuel et contrat de
+  déploiement à jour ; `@spec` / `@verifies` posés.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

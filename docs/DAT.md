@@ -2,7 +2,7 @@
 
 Projet : **Spark Environment**
 Statut : architecture implémentée par unités, éprouvée sur la Forge de validation
-Dernière mise à jour : 2026-08-22
+Dernière mise à jour : 2026-09-23
 
 Ce document fait autorité sur l'architecture. Lorsqu'il diverge du code, c'est un
 défaut à corriger, pas une tolérance.
@@ -1996,6 +1996,14 @@ et renouvelle le certificat. Une route à `tls = 0` n'est servie qu'en clair sur
 `:80` — utile pour un domaine interne, un essai, ou un frontal qui termine déjà
 le TLS.
 
+**Ce que `:80` sert réellement, constaté le 2026-09-23 sur la Forge.** Une route
+à `tls = 1` y est **aussi** servie en clair, sans redirection vers `https://` :
+`http://crm.lelabs.tech/` et `http://devis.lelabs.tech/`, deux routes `tls = 1`,
+répondent `200` sans renvoyer vers `https://`. La cause probable, non mesurée : la
+forme du §18.2 déclare un seul serveur qui écoute `:80` **et** `:443`, et Caddy
+n'y ajoute pas ses redirections automatiques. `docs/BACKLOG.md#SPK-113` le traite,
+mesure d'abord.
+
 **L'émission d'un certificat suppose que le domaine résolve vers cette Forge.**
 Ce n'est toujours pas une propriété que `sparkd` contrôle : elle dépend du DNS,
 puis de sa propagation. Ce qui a changé depuis le §38, c'est que le DNS n'est
@@ -2105,6 +2113,36 @@ d'ingress, et un Spark protégé la refuse comme il refuse la déclaration.
 Le journal reçoit une action propre, `ingress.update`, qui porte l'**ancienne**
 et la **nouvelle** valeur. Une entrée qui ne dirait que la nouvelle ne permettrait
 pas de savoir ce qu'on a corrigé.
+
+### 18.3 quater Une route sans TLS le dit, et se corrige d'un geste (SPK-112)
+
+**Constat du responsable, 2026-09-23** : « j'ai accepté la suggestion d'une route
+et appuyé sur DNS pour poser le record, mais je vois une pastille "sans TLS" et
+je ne vois rien pour résoudre ce sujet ».
+
+Le remède existait — le §18.3 ter corrige le TLS d'une route —, mais il était
+derrière *Modifier*, une case plus loin, et rien ne le reliait à la pastille. Une
+pastille qui signale un écart sans offrir de sortie est une impasse : l'exploitant
+voit que quelque chose ne va pas, et cherche ailleurs.
+
+**Une route `tls = 0` porte, sur sa ligne, un geste *Activer le TLS*.** C'est la
+correction du §18.3 ter et rien d'autre : même `PATCH /v1/ingress/{domain}`, port
+inchangé et `tls` à vrai ; même journal `ingress.update`, avec l'avant et
+l'après ; même passage par « non appliquée » (§18.5) ; même refus sur un Spark
+protégé (§35). Le geste n'ouvre aucun chemin d'écriture propre.
+
+**Il ne se confirme pas** : il ne détruit rien, n'a aucun paramètre et se défait
+par *Modifier* (`DESIGN_SYSTEM.md` §6.24). **Il n'affirme pas que le certificat
+est émis** : le §18.3 tient, l'émission suppose que le domaine résolve vers la
+Forge, et l'écran ne l'annonce jamais.
+
+**Une route en clair reste légitime** — un domaine interne, un essai, un frontal
+qui termine déjà le TLS (§18.3). Le geste est offert, pas imposé : la pastille
+reste neutre, parce que rien n'est en retard ni en panne.
+
+**Le défaut avait une origine en amont**, que le §55.3.1 traite : la cellule
+avait proposé la route en clair **par méprise**, et l'écran d'acceptation ne le
+signalait pas (§55.9.2).
 
 ### 18.4 L'unicité du domaine appartient à la base
 
@@ -10117,8 +10155,11 @@ Le briefing et le dossier portent donc le mécanisme, en trois faits :
 
 - **la Forge termine le TLS.** Un Caddy unique y détient l'exposition publique et
   les certificats (§9) : il écoute `:443`, lit le nom demandé et fait suivre vers
-  l'adresse privée du Spark. **La pile sert en clair** sur le port visé ; un
-  certificat dans la pile ne servirait à rien ;
+  l'adresse privée du Spark. **La pile sert en HTTP simple** sur le port visé ;
+  un certificat dans la pile ne servirait à rien. Le briefing ne dit plus « en
+  clair » de la pile : le mot est celui qui, dans la grammaire des routes,
+  publie un site en `http://`, et un agent a confondu les deux (§55.3.1,
+  SPK-112) ;
 - **une route active est un chemin complet.** Elle ne demande **aucun** port
   publié, et il n'y a rien à demander de plus : le port visé, écouté dans la
   cellule, suffit ;
@@ -12681,6 +12722,30 @@ est `tls`, parce que c'est le cas de tout ce qui parle HTTP derrière l'ingress
 (§18.3) et qu'un défaut en clair ferait proposer par inadvertance ce que personne
 ne veut.
 
+**Le dernier mot règle le côté PUBLIC de la route, et seulement lui** — précisé
+le 2026-09-23 (SPK-112). Omis ou `tls`, le domaine est servi en `https://`, avec
+un certificat ; `clair`, il est publié en `http://`, sans certificat. La pile,
+elle, écoute en HTTP simple **dans les deux cas** : c'est la Forge qui termine le
+TLS (§44.2 bis).
+
+Le défaut par `tls` ne suffisait pas. Les textes remis à la cellule disaient de
+la pile « servez en CLAIR », deux lignes sous la grammaire `[tls|clair]` ; le
+briefing le répétait. Un agent réel a lu la consigne comme une valeur, et proposé
+`crm.lelabs.tech 8080 clair` pour un site public (journal de la Forge,
+2026-09-23 : `ingress.declare` avec `tls: false`, par l'acceptation de sa
+proposition). Deux corrections, et la grammaire ne change pas :
+
+- **la pile ne se dit plus « en clair »** : elle sert « en HTTP simple ». Le mot
+  `clair` n'appartient plus qu'à la grammaire ;
+- **chaque texte qui montre la grammaire dit ce que règle le dernier mot** —
+  l'en-tête de `routes.?`, `/etc/spark/routes`, la section du briefing : omis
+  pour un site en `https://`, `clair` pour le publier en `http://`.
+
+La grammaire reste `[tls|clair]` : changer un mot casserait les fichiers déjà
+écrits et les propositions en attente, pour un défaut qui n'était pas dans le mot
+mais dans ce qui l'entourait. Et un en-tête de `.?` vide est reposé à chaque
+passage (§55.5) : le texte corrigé atteint les cellules existantes sans geste.
+
 #### 55.3.2 Ce qui n'est délibérément PAS suggérable
 
 Les ports publiés (§39), les clés SSH (§26.4), les instantanés et les quotas.
@@ -13043,6 +13108,30 @@ Deux conséquences sur le tableau, puisqu'il porte maintenant un champ :
 - **son défilement est annoncé en toutes lettres** sous 1024 px (§14.2) et non
   plus seulement ombré : ce qui sort de l'écran peut être le champ que le geste
   attend.
+
+#### 55.9.2 La relecture d'une route porte sa case TLS (SPK-112)
+
+La colonne *TLS* de la relecture disait « TLS » ou « en clair », et rien d'autre :
+une route proposée en clair s'acceptait comme les autres, et le propriétaire ne
+pouvait la passer en TLS qu'**après** l'avoir acceptée, par *Modifier* (§18.3
+quater).
+
+**Chaque ligne de route porte une case *TLS***, pré-cochée d'après la
+proposition — cochée, sauf `clair` —, comme la case *Secret* de l'environnement :
+le fichier propose, le propriétaire a le dernier mot (§43.10.2). Ce qui part au
+serveur est la case **telle qu'elle est cochée** (§55.8) : l'écran montre ce qu'on
+applique.
+
+**Une ligne proposée sans TLS le dit en toutes lettres**, sous sa case, et le bloc
+porte un avertissement qui compte ces lignes : acceptées telles quelles, elles
+publieraient le site en `http://`, sans certificat. Mention et avertissement
+disent ce que la proposition **demande**, pas l'état de la case : rien ne se
+repeint quand on la coche (§14.3), et une mention qui décrirait la case se
+démentirait au premier clic — la leçon du §55.9.1.
+
+Cocher ou décocher ne change pas le compte du bouton : une ligne retenue sans TLS
+reste une ligne retenue. Le propriétaire qui veut réellement une route en clair
+la laisse décochée.
 
 ### 55.10 Ce que cette unité ne fait pas
 
