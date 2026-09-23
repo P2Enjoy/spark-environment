@@ -7314,10 +7314,10 @@ artefact, pas une narration) :
   celle d'après. L'ancien code masquait leur course par un `vider(3.0)` que la
   correction a supprimé — le produit est juste, leur parcours a une course, et
   la correction appartient à la session qui porte SPK-62 (`docs/JOURNAL.md`).
-- **Non déployé.** La Forge tourne `0.post1.dev817+gcd1480daa`, antérieure à
-  cette unité : la migration `017` n'y est pas appliquée et la table
-  `spark_note` n'existe pas. Relevé en lecture seule le 2026-09-14, écrit à
-  l'OP-19 du contrat de déploiement.
+- **Déployé** : la migration `017` est appliquée sur la Forge depuis le
+  2026-09-14T18:40Z (OP-19), et la Forge tourne depuis le 2026-09-17 une build
+  qui porte SPK-104 à SPK-108 (OP-21) — relevé en lecture seule le 2026-09-23 :
+  `0.post1.dev856+g565e5c688`.
 
 
 
@@ -7430,8 +7430,8 @@ depuis le registre, et le `.?` voisin est le seul endroit où la cellule propose
   leurs preuves sont les mêmes suites. Les trois parcours rouges de la campagne
   sont ceux décrits ci-dessus, tous enracinés dans SPK-62 et aucun dans cette
   unité.
-- **Non déployé** : le canal `.?` n'existe pas sur la Forge, qui tourne une
-  build antérieure.
+- **Déployé** avec la build d'OP-21 (2026-09-17). Le journal de la Forge porte
+  des propositions acceptées depuis la console le 2026-09-23.
 
 
 
@@ -7558,8 +7558,7 @@ propriétaire accepte sans la voir, ou il se tait.
   bande` et `révoquer une clé malgré le gel` — **exactement les mêmes dans les
   deux séries**, donc étrangers à cette unité. La preuve de classes CSS reste
   rouge sur ses quatre classes antérieures, elles aussi inchangées.
-- **Non déployé** : la Forge tourne une build antérieure, et le canal `.?`
-  lui-même (SPK-105) n'y existe pas encore.
+- **Déployé** avec la build d'OP-21 (2026-09-17), comme SPK-105.
 - DoD : une preuve montre qu'une ligne `#` collée à une déclaration est portée
   par elle, et qu'une ligne séparée par un blanc ne l'est pas ; une preuve montre
   la coupure à 120 caractères ; une preuve montre que le commentaire n'est pas

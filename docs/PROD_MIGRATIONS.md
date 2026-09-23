@@ -28,7 +28,7 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-18).
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
 | Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 019** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24) ; build **`0.post1.dev854+g37eafe5ca`** depuis le 2026-09-18 (OP-24) |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 019** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24) ; build **`0.post1.dev856+g565e5c688`**, installée le **2026-09-23T11:36Z** — relevé `GET /v1/forge` en lecture seule le 2026-09-23 ; elle ne diffère de celle d'OP-24 que par des textes de la console |
 | Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` ; `input` et `forward` couvrent `spn*` (établi, 53, 67, ICMP, puis `drop` ; rien routé depuis ni vers) ; `forward` accepte `ct status dnat` — les liens privés — après l'établi et avant les drop — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)**, **OP-23 (2026-09-18)**, **OP-24 (2026-09-18)** |
 | Réseaux privés | pool `10.78.0.0/16` en `/24`, le premier laissé de côté — **0 attribué** après la preuve d'OP-23 ; aucun bridge `spn<n>` — OP-23, appliqué le 2026-09-18 |
 | Isolation des cellules | chaque cellule porte `security.port_isolation` et `security.ipv4_filtering` — les deux cellules de locataires depuis OP-22 (2026-09-18) ; les deux cellules d'essai du lot 6, supprimées par le produit le 2026-09-18 une fois les preuves jouées ; `NET-ISOLATION` « ok » |
@@ -373,11 +373,10 @@ Les deux pièges, conservés : ils n'ont plus d'objet sur CETTE Forge, mais ils
                 `environnement`/`configured=true` à `registre`/`configured=false`
                 sur une simple écriture de gabarit. Poser l'URL, le gabarit ET
                 cocher « actif » dans la MÊME écriture.
-Non déployé   : depuis le 2026-09-14, cette coupure est ANNONCÉE par le canal
-                qu'elle coupe (§47.3.3 bis, six preuves). Ce correctif n'est
-                PAS sur la Forge : elle tourne la build
-                0.post1.dev817+gcd1480daa, antérieure. Tant qu'elle n'est pas
-                mise à jour, le piège (2) coupe toujours en silence.
+Déployé       : depuis le 2026-09-14, cette coupure est ANNONCÉE par le canal
+                qu'elle coupe (§47.3.3 bis, six preuves). Ce correctif est sur
+                la Forge depuis la build d'OP-21 (2026-09-17) ; elle tourne
+                0.post1.dev856+g565e5c688 depuis le 2026-09-23.
 Retour arrière: le `down` supprime la table, donc la configuration du canal ET
                 le mot de passe. Le repli par variable redevient seul maître :
                 s'il a été retiré de `sparkd.env` à l'étape ci-dessus, il faut
