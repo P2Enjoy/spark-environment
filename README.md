@@ -37,6 +37,20 @@ une application ni une fonction, mais une cellule d'exécution à quota.
 L'idée d'origine est conservée intégralement dans
 [docs/ORIGIN_CONVERSATION.md](docs/ORIGIN_CONVERSATION.md).
 
+## Pourquoi « Forge » et « Spark »
+
+Spark Environment est un gestionnaire de **métal en service** (*metal as a
+service*) : il sert le métal d'un serveur physique, découpé en cellules. Le
+vocabulaire suit la métallurgie.
+
+- La **Forge** est le serveur physique, le métal lui-même, et l'atelier où l'on
+  travaille ce métal.
+- Forger un nouveau serveur dans la Forge, c'est en **couler** un : chaque coulée
+  fait jaillir une étincelle — un **Spark**.
+
+Le nom de la machine a été tranché le 2026-08-19, avec les candidats écartés et
+leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-machine-et-ce-qui-manque-vraiment-au-catalogue).
+
 ## Statut
 
 **Le plan de contrôle tourne sur une Forge réelle.** 110 unités : 102 closes, 7
