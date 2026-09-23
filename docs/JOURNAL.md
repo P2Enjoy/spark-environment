@@ -12603,3 +12603,48 @@ appliquée à 21:52Z, préflight 15/15. **Vérifié** : `/healthz`, `/readyz`
 `/v1/suggestions` lit les trois cellules ; console relancée et relue par le
 parcours canonique, sans écriture. **Non rejoué** : la vérification d'OP-25
 dans une cellule, faute de cellule d'essai.
+
+## 2026-09-24 · SPK-117 — redémarrer la console depuis son avertissement
+
+**Problème** (le responsable) : chaque commit du code local de la console oblige
+à l'arrêter et à la relancer à la main. SPK-65 savait le **dire** ; le §40.5 avait
+décidé de ne jamais le **faire** — « un processus ne se relance jamais sous les
+mains de l'exploitant ».
+
+**Observation** : ce motif visait le redémarrage *automatique*. Un geste
+demandé, confirmé, et refusé quand il interromprait ce que l'exploitant ne voit
+pas, ne l'enfreint pas. La décision est donc **révisée** (§40.5, SPK-DS-11), pas
+contournée.
+
+**Solutions envisagées pour relancer** :
+
+- l'hôte lance un successeur détaché puis meurt — rejeté : le pid change, et
+  `sparkui status` / `stop` perdent la console ; lancé depuis un terminal, le
+  successeur écrit dans un terminal rendu au shell ;
+- un code de sortie convenu, et une boucle dans le `Makefile` — rejeté : une
+  boucle shell ne distingue pas un code convenu d'une panne qui le produirait,
+  et elle ne se prouve pas par un test ;
+- **retenu** : un lanceur Node qui garde le pid et le groupe, et ne relance que
+  sur un message IPC **annoncé** par l'enfant. Une panne n'est jamais relancée ;
+  un enfant n'est relançable que si le lanceur s'est présenté à lui.
+
+**Choix pris par défaut, signalés au responsable** : le bouton vit dans
+l'avertissement et nulle part ailleurs ; les mises à jour et installations de
+Forge en cours **refusent** le redémarrage ; les sessions de terminal ne le
+refusent pas mais sont **nommées** dans la confirmation ; l'avertissement est
+relu quand l'onglet redevient visible.
+
+**Deux gardes qu'on n'avait pas demandées, et pourquoi elles sont dans l'unité** :
+
+- le **préflight de chargement** — importer `main.js` dans un processus à part
+  avant de quitter l'ancien. Sans lui, un commit cassé transforme le bouton en
+  arrêt, et l'exploitant perd l'écran d'où il constaterait la panne ;
+- le **corps JSON exigé** — une route qui arrête la console, sans pré-vol CORS,
+  est à la portée de n'importe quelle page ouverte dans le navigateur.
+
+**Constaté en passant, hors de l'unité** : les autres routes `POST` de l'hôte
+console n'exigent pas de corps JSON non plus. Signalé au responsable ; rien n'est
+changé sans son arbitrage.
+
+**Découpage** : documentation (ce commit), puis hôte, écran, E2E et manuel —
+backlog SPK-117.

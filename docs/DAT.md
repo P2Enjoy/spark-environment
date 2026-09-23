@@ -7346,8 +7346,11 @@ ne se confondent pas :
 | tête courante ancêtre de celle du démarrage | le dépôt a reculé depuis le démarrage | aucun |
 | dépôt ou date indisponible | comparaison indisponible | aucun |
 
-L'hôte console ne se redémarre **jamais** lui-même : interrompre sous les mains
-d'un exploitant est plus grave que le décalage qu'on signale. Le message persiste
+L'hôte console ne se redémarre **jamais de lui-même** : interrompre sous les
+mains d'un exploitant est plus grave que le décalage qu'on signale. Il se
+redémarre en revanche **sur demande** — révisé le 2026-09-24 par SPK-117 : le
+geste « redémarrer » est porté par l'avertissement lui-même, confirmé, et refusé
+quand il interromprait une opération en cours (§62). Le message persiste
 dans la coquille, et non dans la seule vue Forge, car sa cause survit à toute
 navigation (`DESIGN_SYSTEM_APP.md` SPK-DS-11). Il nomme l'action utile :
 « Console démarrée avant N commits · redémarrer pour en bénéficier ».
@@ -13981,3 +13984,131 @@ l'avant et l'après.
 Pas de couleur par projet, pas de filtre combiné, pas d'effet sur les
 autorisations ni sur le coût : un projet range. Aucune variable
 d'environnement. Une migration, `020_projets`.
+
+## 62. Redémarrer la console depuis la console : contrat (SPK-117)
+
+**Demandé par le responsable le 2026-09-24** : « je dois arrêter la console et la
+relancer chaque fois que le code local de l'interface reçoit un commit. Ajouter
+un bouton qui la relance, depuis l'interface, avec le dernier code. »
+
+Le §40.5 savait déjà **dire** que la console sert un code plus ancien que le
+dépôt ; il ne savait pas y **remédier**, et le décidait délibérément : « l'hôte
+console ne se redémarre jamais lui-même ». Le motif — ne pas interrompre sous les
+mains de l'exploitant — reste entier. Ce qui change, c'est qui décide : le
+redémarrage n'est jamais automatique, il est **demandé** par un geste confirmé,
+et **refusé** quand il interromprait ce que l'exploitant ne voit pas.
+
+### 62.1 Un lanceur, parce qu'un processus ne se relance pas lui-même
+
+Un processus Node ne peut pas se remplacer : il peut seulement mourir. Quelqu'un
+doit donc rester en vie pour démarrer le suivant, et ce quelqu'un ne peut pas
+être le shell de `sparkui` ni `make` — ils ne savent pas distinguer une mort
+voulue d'une panne.
+
+`apps/webui/host/lanceur.js` est ce quelqu'un. `make runProd`, `make runDev` et
+`pnpm dev` démarrent le **lanceur**, qui démarre `host/main.js` comme processus
+enfant muni d'un canal IPC, et :
+
+- quand l'enfant **annonce** un redémarrage sur ce canal puis se termine, le
+  lanceur démarre un nouvel enfant — qui **relit tous les modules sur le disque**,
+  donc sert le code courant du dépôt ;
+- quand l'enfant se termine **sans** l'avoir annoncé — panne, `Ctrl-C`,
+  `sparkui stop` —, le lanceur se termine avec le même code : une panne n'est
+  jamais relancée en boucle ;
+- quand le lanceur reçoit `SIGINT`, `SIGTERM` ou `SIGHUP`, il le transmet à
+  l'enfant et ne relance plus rien ;
+- l'enfant se termine si le canal se ferme : un lanceur mort ne laisse jamais une
+  console orpheline tenir le port.
+
+Le **pid et le groupe de processus ne changent pas** : `sparkui status` et
+`sparkui stop` continuent de désigner la console, avant et après un
+redémarrage. Seul l'enfant change.
+
+L'enfant ne se croit relançable que si son parent le lui **dit** : le lanceur
+envoie un message de présentation à la naissance de chaque enfant. Un canal IPC
+seul ne suffit pas — un processus qui ouvrirait `main.js` avec un canal sans
+l'écouter ferait d'un redémarrage un arrêt. Lancée par `node host/main.js`, la
+console n'est pas relançable, et le dit (§62.4).
+
+Aucune variable d'environnement, aucun argument : le lanceur ne se règle pas.
+
+### 62.2 Ce que la route refuse, et pourquoi
+
+    POST /api/console/relance  { sessions: [id] }   → 202 { instance } | 409 | 415
+
+La requête doit porter `content-type: application/json`. Ce n'est pas une
+formalité : une page quelconque ouverte dans le même navigateur peut envoyer à
+`127.0.0.1` un `POST` « simple » — texte brut, sans pré-vol CORS. Exiger un corps
+JSON impose le pré-vol, que la console ne satisfait pour aucune autre origine.
+Sans cela, n'importe quel site pourrait arrêter la console. Refus : `415`.
+
+Les refus `409`, chacun avec son code et un message qui dit quoi faire :
+
+| Code | Condition | Motif |
+|---|---|---|
+| `relance_indisponible` | la console n'a pas été démarrée par le lanceur | personne ne la relancerait : ce serait un arrêt |
+| `mise_a_jour_en_cours` | une mise à jour ou un retour arrière de `sparkd` est en cours (§40.6) | son verrou et son reçu vivent dans ce processus ; l'interrompre laisse une Forge entre deux builds |
+| `installation_en_cours` | une installation de Forge est en cours (§50) | l'exécuteur distant est l'enfant de ce processus |
+| `sessions_changees` | une session de terminal vivante n'est pas dans la liste annoncée | elle serait fermée sans avoir été nommée dans la confirmation |
+| `code_illisible` | le code du dépôt ne se charge pas (§62.3) | redémarrer remplacerait une console qui marche par une console morte |
+
+**Les sessions de terminal ne sont pas un refus : elles sont nommées.** Une
+session vivante mourra avec la console (§37.4.2) — c'est un effet du geste, que
+l'exploitant accepte en connaissance de cause, pas une condition qui manque. La
+confirmation les nomme ; le corps de la requête renvoie leurs identifiants ; la
+route vérifie qu'aucune autre n'est née entre la confirmation et le clic.
+
+Les tunnels ne sont ni un refus ni une mention : ils se rouvrent seuls au
+rechargement de la page (§22.6).
+
+### 62.3 Le nouveau code doit se charger avant qu'on quitte l'ancien
+
+Un commit peut laisser `main.js` ou l'un de ses modules inchargeable — une
+erreur de syntaxe, un import cassé. Redémarrer à l'aveugle ferait mourir une
+console qui marchait, et l'exploitant perdrait l'écran même d'où il pouvait
+constater la panne.
+
+Avant d'accepter, l'hôte **importe `host/main.js` dans un processus séparé**, qui
+charge tous les modules sans rien écouter, et attend sa sortie (20 s au plus).
+Un échec rend `code_illisible`, avec les dernières lignes de la sortie
+d'erreur ; la console courante continue de servir.
+
+La preuve est bornée, et c'est écrit : elle établit que le code **se charge**,
+pas qu'il **démarre** — une erreur levée à la création de l'hôte n'apparaîtrait
+qu'au redémarrage. Dans ce cas, la page le dit (§62.4) et le journal du lanceur
+porte l'erreur.
+
+### 62.4 Ce que l'écran fait
+
+`GET /api/console/build` porte en plus deux champs : `relaunchable` (booléen) et
+`instance`, un identifiant tiré au démarrage de chaque processus.
+
+- **le bouton vit dans l'avertissement « Console à redémarrer »** (§40.5), et
+  seulement lorsqu'il est affiché : un redémarrage n'a d'objet que si la console
+  sert un code plus ancien. Il s'appelle **Redémarrer la console** ;
+- une console non relançable garde l'avertissement **sans bouton**, et dit
+  pourquoi : « lancée sans le lanceur, elle se redémarre à la main » ;
+- le bouton ouvre une **confirmation dans le flux** (`DESIGN_SYSTEM.md` §6.22),
+  en accent (`DESIGN_SYSTEM_APP.md` SPK-DS-09 — le geste interrompt, il ne
+  détruit rien), qui dit ce qui va se passer et **nomme chaque session de
+  terminal** qui sera fermée ;
+- un refus s'affiche dans le bloc, avec son message, et ne retire rien ;
+- une fois accepté, le bloc dit **« Redémarrage de la console… »**
+  (`role="status"`) ; la page interroge `GET /api/console/build` jusqu'à ce
+  qu'une **autre instance** réponde, puis se recharge. L'avertissement ne
+  disparaît donc que sur la réponse du nouveau processus, jamais sur la foi du
+  `202` (`DESIGN_SYSTEM.md` §1.3) ;
+- sans réponse d'une autre instance en 30 s, le bloc le dit en accent, avec
+  `role="alert"`, et renvoie au journal de la console ;
+- l'avertissement est **relu quand l'onglet redevient visible** : on commite
+  depuis l'éditeur, on revient au navigateur, et l'avertissement est là sans
+  recharger. Il s'efface de la même façon quand sa cause disparaît
+  (`DESIGN_SYSTEM_APP.md` SPK-DS-10).
+
+### 62.5 Ce que l'unité ne fait pas
+
+Pas de redémarrage automatique, ni à la détection d'un commit ni à heure fixe.
+Pas de redémarrage de `sparkd` : une Forge se met à jour par le §40.6. Pas de
+retour automatique à l'ancien code quand le nouveau ne démarre pas : le lanceur
+se termine et son journal dit pourquoi. Le `Makefile` lui-même n'est pas relu :
+un changement de la cible `runProd` demande toujours un arrêt à la main.

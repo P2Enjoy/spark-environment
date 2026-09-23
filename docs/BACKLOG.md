@@ -4218,7 +4218,7 @@ build déployée au dépôt et nomme les six situations. Elle ne le fait pas pou
   date des seuls fichiers servis sans dépôt), compare l'ascendance à chaque
   lecture et expose le verdict sans tunnel. La coquille affiche en accent
   « Console à redémarrer » avec le nombre de commits et le geste explicite, sans
-  bouton ni redémarrage automatique. Les six scénarios de comparaison et la
+  redémarrage automatique — le bouton qui l'exécute est venu avec SPK-117. Les six scénarios de comparaison et la
   route sont verts ; une console d'exploitation volontairement démarrée un
   commit avant `main` l'a montré dans la vue Forge, tunnel réel ouvert vers
   `validation`.
@@ -7858,6 +7858,53 @@ responsable le veut :**
   au DAT §61.4 : les adresses en `~`, l'onglet courant amené dans la rangée
   visible (journal du 2026-09-23). Déployé le 2026-09-23 (OP-26), après
   sauvegarde du registre, et relu sur la Forge en lecture seule.
+
+### [ ] SPK-117 · La console se redémarre depuis son propre avertissement
+
+**Demandé par le responsable le 2026-09-24** : « je dois arrêter la console et
+la relancer chaque fois que le code local de l'interface reçoit un commit. C'est
+pénible. Ajouter un bouton qui la relance, depuis l'interface, avec le dernier
+code. »
+
+- Spécification : `docs/DAT.md` **§62** (et §40.5 révisé) ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-11 (révisé) · manuel M3. **Écrite et
+  committée avant le code.**
+- Dépend de : SPK-65 (la console sait qu'elle est périmée).
+
+**Ce qui décide de l'unité — et les choix pris par défaut, à corriger si le
+responsable le veut :**
+
+1. **un lanceur** (`host/lanceur.js`) démarre `main.js` et le redémarre quand il
+   l'annonce ; `runProd`, `runDev` et `pnpm dev` passent par lui. Pid et groupe
+   inchangés : `sparkui` continue de fonctionner (§62.1) ;
+2. **le bouton vit dans l'avertissement « Console à redémarrer »**, et nulle part
+   ailleurs — *choix par défaut* ;
+3. **refusé** pendant une mise à jour ou une installation de Forge, et quand le
+   nouveau code ne se charge pas ; **les sessions de terminal ne sont pas un
+   refus**, elles sont nommées dans la confirmation et fermées — *choix par
+   défaut* (§62.2) ;
+4. **l'avertissement est relu quand l'onglet redevient visible** : il apparaît
+   sans recharger après un commit fait depuis l'éditeur (§62.4) ;
+5. la route exige un corps JSON, pour qu'aucune page tierce ne puisse arrêter la
+   console (§62.2).
+
+**Portée, et découpage :**
+
+1. Documentation — *fait, committé avant le code* ;
+2. hôte — lanceur, route, préflight de chargement, cibles de lancement ; preuves
+   unitaires et de route ;
+3. écran — bouton, confirmation, attente de la nouvelle instance, relecture à la
+   visibilité ; preuves de composant ;
+4. E2E, captures, manuel M3.
+
+- Aucune variable d'environnement, aucun argument. Aucune migration, aucune
+  opération de déploiement : la console vit sur le poste.
+- DoD : preuves du lanceur (relance annoncée, panne non relancée, signal
+  transmis, canal fermé) ; preuves de route (chacun des cinq refus, `415`, `202`
+  puis arrêt) ; preuves de composant (bouton, absence de bouton hors lanceur,
+  confirmation qui nomme les sessions, refus, attente) ; parcours E2E qui rend la
+  console périmée, redémarre depuis l'avertissement et constate une nouvelle
+  instance ; captures observées ; manuel ; `@spec` / `@verifies`.
 
 ---
 

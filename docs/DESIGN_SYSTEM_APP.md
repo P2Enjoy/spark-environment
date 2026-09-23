@@ -456,10 +456,32 @@ celle que le responsable vient de lire. Le symptôme survit à toutes les
 destinations : il est donc rendu sous le contexte de serveur, dans la coquille,
 avec un badge **accent**, un texte explicite et `role="status"`.
 
-Le message nomme le seul geste qui le corrige — redémarrer la console — sans
-bouton qui prétendrait pouvoir le faire. Un processus ne se relance jamais sous
-les mains de l'exploitant. L'absence de dépôt, un dépôt qui a reculé, et une
-comparaison impossible restent des faits nommés, jamais « à jour » par défaut.
+Le message nomme le seul geste qui le corrige — redémarrer la console. L'absence
+de dépôt, un dépôt qui a reculé, et une comparaison impossible restent des faits
+nommés, jamais « à jour » par défaut.
+
+**Révisé le 2026-09-24 (SPK-117, `docs/DAT.md` §62.4) : le message porte son
+bouton.** La règle d'origine refusait tout bouton, parce qu'un processus ne se
+relançait pas lui-même. Le lanceur du §62.1 lève cette limite, et le
+`DESIGN_SYSTEM.md` §6.8 s'applique alors : un écart corrigeable porte sa sortie
+sur place. Ce qui ne change pas : rien ne redémarre **sans** geste.
+
+- **Redémarrer la console** est un bouton ordinaire, compact, sous le texte ; il
+  n'existe que lorsque l'avertissement est affiché ;
+- une console lancée sans le lanceur ne porte **pas** de bouton désactivé : le
+  geste n'y existe pas (§1.4). Le texte dit qu'elle se redémarre à la main ;
+- la confirmation vit **dans le bloc** (§6.22), `.confirmation--sensible` —
+  accent et bouton ordinaire (SPK-DS-09) : le geste interrompt, il ne détruit
+  rien. Elle nomme chaque session de terminal qui sera fermée, par son Spark et,
+  le cas échéant, son conteneur ; sans session, elle le dit ;
+- un refus de l'hôte s'écrit dans le bloc en `.refus` (SPK-DS-08), avec son
+  message, et le bouton reste ;
+- pendant le redémarrage, le bloc dit « Redémarrage de la console… » en
+  `role="status"` ; il ne s'efface que lorsque le **nouveau** processus répond, et
+  la page se recharge alors (§1.3). Sans réponse, il le dit en accent, en
+  `role="alert"` — un défaut constaté, pas un refus (SPK-DS-08) ;
+- dans la barre latérale étroite, les boutons passent à la ligne plutôt que de
+  déborder (`DESIGN_SYSTEM.md` §8.1).
 
 ### SPK-DS-12 · Installer est un parcours visible, jamais une barre qui promet
 

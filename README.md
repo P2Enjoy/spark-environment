@@ -53,8 +53,8 @@ leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-ma
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 112 unités : 104 closes, 7
-partielles, 1 non commencée — SPK-113, qui attend une mesure. Le lot 6, *Réseau
+**Le plan de contrôle tourne sur une Forge réelle.** 113 unités : 104 closes, 7
+partielles, 2 non commencées — SPK-113, qui attend une mesure, et SPK-117, spécifiée. Le lot 6, *Réseau
 entre Sparks*, ouvert le 2026-09-17, a été clos le 2026-09-18. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
