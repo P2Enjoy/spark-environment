@@ -7918,6 +7918,39 @@ responsable le veut :**
   tête n'émet jamais `visibilitychange` ; le parcours l'émet (journal du
   2026-09-24).
 
+### [ ] SPK-118 · La console n'obéit qu'à sa propre page
+
+**Demandé par le responsable le 2026-09-24**, sur le constat fait en livrant
+SPK-117 : n'importe quelle page ouverte dans le navigateur pouvait faire agir la
+console — ajouter un serveur, faire relayer (et signer) la suppression d'un
+Spark —, et une page en *DNS rebinding* pouvait en lire tout le contenu.
+
+- Spécification : `docs/DAT.md` **§63** (et §62.2 révisé) · manuel M11.
+  **Écrite et committée avant le code.**
+- Dépend de : SPK-16 (l'hôte console), SPK-40 (le relais signe).
+
+**Ce qui décide de l'unité** : trois gardes — hôte, origine, corps JSON —
+posées **une fois**, avant toute route, et non route par route ; la page ne
+change que par neuf appels qui déclarent désormais leur type.
+
+**Portée, et découpage :**
+
+1. Documentation — *fait, committé avant le code* ;
+2. hôte — la garde, ses preuves unitaires et de route ; retrait de la garde
+   propre à `POST /api/console/relance`, devenue commune ;
+3. page — les neuf appels ; preuves ;
+4. E2E : l'attaque rejouée par un vrai navigateur — une page d'une autre origine
+   tente de supprimer un Spark, un nom piégé résolu en `127.0.0.1` tente de lire
+   l'inventaire — et la campagne complète, qui prouve qu'aucun geste légitime
+   n'est refusé ; manuel M11.
+
+- Aucune variable d'environnement, aucune migration, aucune opération de
+  déploiement.
+- DoD : preuves de la garde (chaque refus, chaque passage légitime,
+  `localhost`, `Origin: null`, absence d'`Origin`) ; preuves de route (les refus
+  atteignent aussi le relais, le flux et les fichiers) ; parcours E2E de
+  l'attaque ; campagne complète verte ; `@spec` / `@verifies`.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

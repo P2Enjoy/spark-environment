@@ -119,10 +119,12 @@ Unités : SPK-09.
 ## M11 · Sécurité et limites
 
 Surface d'exposition réelle. Pourquoi aucune API d'administration n'est joignable
-depuis le réseau. Ce qu'un *system container* ne protège pas, et quand il faudra
-un mode `vm`. La réservation réseau, qui est une comptabilité et non une garantie.
+depuis le réseau. Pourquoi la console locale n'obéit qu'à sa propre page, et
+pas aux autres onglets du navigateur. Ce qu'un *system container* ne protège
+pas, et quand il faudra un mode `vm`. La réservation réseau, qui est une
+comptabilité et non une garantie.
 
-Unités : SPK-15, SPK-108 ; §10 et §56 du DAT.
+Unités : SPK-15, SPK-108, SPK-118 ; §10, §56 et §63 du DAT.
 
 ## M12 · Annexes
 

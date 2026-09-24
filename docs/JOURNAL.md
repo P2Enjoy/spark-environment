@@ -12681,3 +12681,32 @@ Playwright d'un autre projet, et le parcours, enchaîné sans condition au relev
 est parti quand même. Il a réussi et le poste a tenu, mais c'est exactement ce
 que la règle interdit. Depuis, la commande lourde n'est lancée que derrière une
 garde qui s'arrête si le relevé n'est pas vide.
+
+## 2026-09-24 · SPK-118 — la console obéissait à n'importe quelle page du navigateur
+
+**Problème** : signalé en livrant SPK-117, confirmé par le responsable. L'hôte
+console n'écoute que sur `127.0.0.1`, mais le navigateur de l'exploitant
+l'atteint — avec toutes ses autres pages.
+
+**Mesuré sur un hôte réel**, avant toute correction :
+
+- un `POST /api/servers` en `text/plain` — ce qu'un formulaire caché envoie sans
+  pré-vol — a ajouté `root@attaquant` à l'inventaire et l'a rendu courant ;
+- un `POST /api/v1/sparks/boutique/delete` sans corps a été relayé tel quel à
+  `sparkd`, qui ne demande rien de plus pour supprimer un Spark non protégé ; le
+  relais signe un tel geste avec la clé de l'exploitant quand elle est déclarée ;
+- avec `Host: site-piege.example` (*DNS rebinding*), `GET /api/servers` rendait
+  l'inventaire : sous cette attaque, la page piégée LIT tout, sessions de
+  terminal comprises.
+
+**Hypothèse écartée** : « exiger un corps JSON suffit ». Il arrête la première
+voie, pas la seconde — sous *rebinding*, la page est de même origine et envoie
+du JSON sans pré-vol.
+
+**Décision** : trois gardes en un point unique, avant toute route — hôte,
+origine, corps JSON (§63). Pas de jeton anti-CSRF : il n'ajoute rien à un hôte
+que seul le poste atteint.
+
+**Conséquence sur la page** : neuf appels sans corps déclarent désormais leur
+type. Le relais transmettait déjà `application/json` à `sparkd` à leur place :
+ni `sparkd` ni la signature ne voient de différence.

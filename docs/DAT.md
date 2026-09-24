@@ -14037,13 +14037,12 @@ Aucune variable d'environnement, aucun argument : le lanceur ne se règle pas.
 
 ### 62.2 Ce que la route refuse, et pourquoi
 
-    POST /api/console/relance  { sessions: [id] }   → 202 { instance } | 409 | 415
+    POST /api/console/relance  { sessions: [id] }   → 202 { instance } | 409 | 403 | 415
 
-La requête doit porter `content-type: application/json`. Ce n'est pas une
-formalité : une page quelconque ouverte dans le même navigateur peut envoyer à
-`127.0.0.1` un `POST` « simple » — texte brut, sans pré-vol CORS. Exiger un corps
-JSON impose le pré-vol, que la console ne satisfait pour aucune autre origine.
-Sans cela, n'importe quel site pourrait arrêter la console. Refus : `415`.
+La requête passe les trois gardes communes du §63 — hôte, origine, corps JSON :
+sans elles, n'importe quelle page ouverte dans le navigateur pourrait arrêter la
+console d'un `POST` en texte brut. Ces gardes, écrites d'abord pour cette seule
+route, valent pour toutes depuis SPK-118.
 
 Les refus `409`, chacun avec son code et un message qui dit quoi faire, examinés
 **deux fois** — avant le préflight, et après, car une mise à jour ou une session
@@ -14118,3 +14117,80 @@ Pas de redémarrage de `sparkd` : une Forge se met à jour par le §40.6. Pas de
 retour automatique à l'ancien code quand le nouveau ne démarre pas : le lanceur
 se termine et son journal dit pourquoi. Le `Makefile` lui-même n'est pas relu :
 un changement de la cible `runProd` demande toujours un arrêt à la main.
+
+## 63. La console n'obéit qu'à sa propre page : hôte, origine, corps JSON : contrat (SPK-118)
+
+**Demandé par le responsable le 2026-09-24**, après le constat fait en livrant
+SPK-117 : la garde « corps JSON » ne protégeait que la route du redémarrage.
+
+### 63.1 Le défaut, mesuré
+
+L'hôte console écoute sur `127.0.0.1` : rien du réseau ne l'atteint. Mais le
+**navigateur** de l'exploitant, lui, l'atteint — et toutes les pages qu'il a
+ouvertes avec. Deux voies, toutes deux éprouvées le 2026-09-24 sur un hôte réel :
+
+1. **La requête « simple » d'un site tiers.** Un navigateur laisse n'importe quelle
+   page envoyer à `127.0.0.1` un `POST` sans corps, en texte brut ou en
+   formulaire, **sans pré-vol CORS** : il l'empêche seulement d'en *lire* la
+   réponse. L'hôte lisait le corps comme du JSON quel que soit son type, et
+   relayait tout `/api/v1/*`. Constaté :
+   - `POST /api/servers` en `text/plain` a ajouté un serveur `root@attaquant` à
+     l'inventaire, et l'a rendu **courant** ;
+   - `POST /api/v1/sparks/<nom>/delete?server=<forge>`, sans corps, a été
+     **relayé à `sparkd`**, qui supprime un Spark non protégé sur ce seul appel —
+     et le relais **signe** tout geste avec la clé de l'exploitant quand une clé
+     de signature est déclarée (§36.10.8). Le journal de la Forge l'aurait
+     attribué à l'exploitant.
+2. **Le *DNS rebinding*.** Une page servie par `site-piege.example`, dont le nom se
+   met à résoudre vers `127.0.0.1`, devient pour le navigateur **de la même
+   origine** que la console : plus de pré-vol, et les réponses se **lisent**.
+   Constaté : `GET /api/servers` avec `Host: site-piege.example` rendait
+   l'inventaire. Par la même voie : la liste des sessions de terminal, leur flux
+   de sortie, et la frappe dans un shell ouvert.
+
+### 63.2 La règle : trois gardes, à un seul endroit
+
+Toute requête traverse, **avant toute route** — routes de l'hôte, flux de
+terminal, relais `/api/v1/*`, fichiers servis —, une garde unique :
+
+| Garde | S'applique à | Refus |
+|---|---|---|
+| **l'hôte** : l'en-tête `Host` vaut `127.0.0.1:<port>` ou `localhost:<port>`, `<port>` étant celui sur lequel la requête est arrivée | toute requête | `403 hote_refuse` |
+| **l'origine** : un en-tête `Origin` présent vaut `http://` suivi de ce même hôte | toute requête qui n'est ni `GET`, ni `HEAD`, ni `OPTIONS` | `403 origine_refusee` |
+| **le corps JSON** : `content-type: application/json`, même sans corps | idem | `415 json_requis` |
+
+Ce que chacune arrête :
+
+- **l'hôte** arrête le *rebinding* : le navigateur envoie le nom qu'il croit
+  joindre, et ce n'est jamais `127.0.0.1`. Elle porte aussi sur les lectures et
+  les fichiers servis — sous *rebinding*, une lecture est une fuite ;
+- **l'origine** arrête la requête d'un site tiers, que tout navigateur actuel
+  marque de son origine sur un `POST`. `Origin: null` — iframe isolée, fichier
+  local — est refusé ;
+- **le corps JSON** impose le pré-vol CORS à toute autre origine, que l'hôte ne
+  satisfait jamais. Il couvre un navigateur qui omettrait `Origin`.
+
+Un client **absent** d'`Origin` et qui porte le bon hôte et un corps JSON passe :
+c'est un outil local — `curl`, un harnais —, qui a déjà tous les droits du poste.
+
+Le port est lu sur la socket, jamais configuré : aucune variable, aucun argument.
+
+### 63.3 Ce que la page de la console change
+
+Rien pour l'exploitant. La page déclarait déjà `application/json` sur tous ses
+gestes, sauf neuf appels sans corps — cinq `POST` (commandes d'un Spark, octroi
+d'une clé, isolation, synchronisation de la Forge et du catalogue) et trois
+`DELETE`. Ils déclarent désormais le type, sans corps : le relais transmettait
+déjà `application/json` à `sparkd` en son absence, donc ni `sparkd` ni la
+signature ne voient de différence.
+
+Le §62.2 exigeait déjà le corps JSON pour le redémarrage ; sa règle est
+désormais celle de toutes les routes, portée par cette garde.
+
+### 63.4 Ce que l'unité ne fait pas
+
+Pas de jeton anti-CSRF : les trois gardes suffisent pour un hôte que seul le
+poste atteint, et un jeton ajouterait un état à la page sans fermer de voie de
+plus. Pas d'authentification de l'hôte console : tout processus du poste peut
+toujours le joindre, comme il peut lire la clé SSH de l'exploitant. Aucune
+variable d'environnement, aucune migration.
