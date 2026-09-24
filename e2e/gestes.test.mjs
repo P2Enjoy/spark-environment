@@ -198,7 +198,7 @@ before(async () => {
   ({ server: serveur } = createConsoleHost({ tunnels, inventoryPath: chemin, fetch: repondre }));
   await new Promise((r) => serveur.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${serveur.address().port}`;
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'validation' }) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'validation' }) });
   navigateur = await chromium.launch();
   page = await navigateur.newPage();
 });

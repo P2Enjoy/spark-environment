@@ -11,6 +11,31 @@ condition de démarrage. Seul un porteur de clé SSH valide l'atteint, par tunne
 
 Un Spark n'expose pas son port 22 : l'accès passe par rebond sur la Forge.
 
+### La console n'obéit qu'à sa propre page
+
+La console tourne sur votre poste et n'écoute que sur `127.0.0.1` : rien du
+réseau ne l'atteint. Mais votre **navigateur**, lui, l'atteint — et toutes les
+pages qu'il a ouvertes avec. Une page piégée, visitée dans un autre onglet,
+pourrait donc lui envoyer des ordres, ou chercher à la lire.
+
+La console refuse tout ce qui ne vient pas de sa propre page :
+
+- une requête adressée sous **un autre nom** que `127.0.0.1` ou `localhost` est
+  refusée, lecture comprise. C'est la parade au *DNS rebinding*, où un site fait
+  résoudre son propre nom vers votre poste pour se faire passer pour la console ;
+- un **geste** — tout ce qui modifie quelque chose — venu d'une autre origine
+  est refusé ;
+- un geste qui n'annonce pas un corps JSON est refusé : un formulaire caché ou
+  une requête « simple » d'un autre site ne passent pas.
+
+Vous ne voyez rien de tout cela en utilisant la console : sa page remplit ces
+trois conditions d'elle-même. Ouvrez-la par `http://127.0.0.1:<port>` ou
+`http://localhost:<port>` ; sous un autre nom, elle ne répond pas.
+
+Ce que cela ne couvre pas : un **programme** qui tourne sur votre poste. Il peut
+joindre la console comme il peut lire votre clé SSH — la frontière est le poste
+lui-même.
+
 ## Ce qui est cloisonné
 
 Les Sparks sont **non privilégiés**, avec des plages d'identifiants disjointes :

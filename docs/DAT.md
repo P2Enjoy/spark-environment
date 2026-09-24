@@ -14178,9 +14178,12 @@ Le port est lu sur la socket, jamais configuré : aucune variable, aucun argumen
 ### 63.3 Ce que la page de la console change
 
 Rien pour l'exploitant. La page déclarait déjà `application/json` sur tous ses
-gestes, sauf neuf appels sans corps — cinq `POST` (commandes d'un Spark, octroi
-d'une clé, isolation, synchronisation de la Forge et du catalogue) et trois
-`DELETE`. Ils déclarent désormais le type, sans corps : le relais transmettait
+gestes **qui portent un corps**. Ceux qui n'en portent pas l'omettaient : huit
+appels directs — cinq `POST` (commandes d'un Spark, octroi d'une clé, isolation,
+synchronisation de la Forge, vérification du catalogue) et trois `DELETE` —, et
+l'utilitaire `appel()`, qui porte vingt-deux gestes d'un Spark (retirer une
+route, une clé, un instantané…). Tous déclarent désormais le type, même sans
+corps : le relais transmettait
 déjà `application/json` à `sparkd` en son absence, donc ni `sparkd` ni la
 signature ne voient de différence.
 
@@ -14188,6 +14191,11 @@ Le §62.2 exigeait déjà le corps JSON pour le redémarrage ; sa règle est
 désormais celle de toutes les routes, portée par cette garde.
 
 ### 63.4 Ce que l'unité ne fait pas
+
+Les lectures d'un site tiers ne sont pas refusées : aucune route `GET` n'écrit
+(vérifié route par route le 2026-09-24), et le navigateur ne laisse pas la page
+en lire la réponse. Une telle lecture peut au plus déclencher un relevé — un
+`ssh` vers la Forge — dont personne ne voit le résultat.
 
 Pas de jeton anti-CSRF : les trois gardes suffisent pour un hôte que seul le
 poste atteint, et un jeton ajouterait un état à la page sans fermer de voie de

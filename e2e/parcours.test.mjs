@@ -23,6 +23,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -58,7 +59,11 @@ before(async () => {
   // c'est voulu : si le canal cassait un geste, TOUTE la série le dirait.
   canal = await monterCanalNotify();
   pile = await monterPile({ dns, notify: canal.baseUrl });
-  navigateur = await chromium.launch();
+  // SPK-118 · §63.1 : un nom piégé qui résout vers la boucle locale, comme sous
+  // DNS rebinding. Il ne concerne que ce nom : les autres parcours ne le voient
+  // jamais.
+  navigateur = await chromium.launch({
+    args: ['--host-resolver-rules=MAP site-piege.test 127.0.0.1'] });
   page = await navigateur.newPage();
   page.on('console', (m) => {
     if (!['error', 'warning'].includes(m.type())) return;
@@ -1474,8 +1479,13 @@ test('l’onglet Alertes se règle, et le REFUS vient du serveur', async () => {
     await page.fill('#alerte-mot', '');
     await page.uncheck('#alerte-actif');
     await page.click('#formulaire-alertes button[type="submit"]');
+    // Le message EXACT du refus. `/refusé/i` trouvait l'aide statique du
+    // formulaire (« Un champ inconnu est refusé ici ») et rendait la main AVANT
+    // la réponse ; celle-ci repeignait ensuite le formulaire par-dessus la saisie
+    // du geste suivant. Mis au jour le 2026-09-24 par SPK-118, qui a déplacé
+    // les temps de quelques millisecondes.
     await page.waitForFunction(
-      () => /refusé/i.test(document.body.innerText), { timeout: 15000 });
+      () => /Mot de passe refusé/.test(document.body.innerText), { timeout: 15000 });
     const { corps } = await pile.lireSparkd('/v1/notify/channels');
     assert.equal(corps.webhook.enabled, true,
       'un refus laisse la configuration EXACTEMENT où elle était');
@@ -6475,5 +6485,67 @@ test('une console périmée se redémarre depuis son avertissement, refuse un co
     });
   } finally {
     await copie.demonter();
+  }
+});
+
+test('une page d’un autre site ne fait rien faire à la console, et un nom piégé n’en lit rien', async () => {
+  // @verifies docs/BACKLOG.md#SPK-118 · docs/DAT.md §63.1 (les deux voies,
+  //           rejouées par un vrai navigateur), §63.2 (hôte, origine, corps JSON)
+  //
+  // L'exploitant a la console ouverte, et visite un site. Ce site est ici une
+  // page servie par un AUTRE port de la boucle locale : pour le navigateur,
+  // c'est une autre origine, exactement comme un site d'Internet — et, étant
+  // local lui aussi, aucune protection du réseau privé ne s'interpose.
+  const portConsole = new URL(pile.base).port;
+  const cible = `http://127.0.0.1:${portConsole}`;
+  const piege = createServer((q, r) => {
+    r.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    r.end(`<!doctype html><title>jeu gratuit</title>
+      <form id="f" method="post" enctype="text/plain" action="${cible}/api/servers">
+        <input name='{"name":"intrus","kind":"ssh","host":"attaquant.example","user":"root","x":"' value='"}'>
+      </form>
+      <script>
+        fetch('${cible}/api/v1/sparks/boutique/delete?server=local',
+              { method: 'POST', mode: 'no-cors' })
+          .finally(() => { document.title = 'tente'; });
+      </script>`);
+  });
+  await new Promise((ok) => piege.listen(0, '127.0.0.1', ok));
+  const lireServeurs = async () => (await fetch(`${pile.base}/api/servers`)).json();
+  try {
+    await parcours('attaque-depuis-un-autre-site', async () => {
+      const avant = await lireServeurs();
+
+      // 1. Le site tiers tente de SUPPRIMER un Spark non protégé.
+      await page.goto(`http://127.0.0.1:${piege.address().port}/`);
+      await page.waitForFunction(() => document.title === 'tente', null, { timeout: 10000 });
+      // 2. Puis soumet un formulaire caché qui AJOUTERAIT un serveur.
+      await Promise.all([page.waitForLoadState('domcontentloaded'),
+                         page.evaluate(() => document.getElementById('f').submit())]);
+      assert.match(await page.textContent('body'), /origine_refusee/);
+
+      // Constaté : rien n'a changé, ni sur la Forge, ni dans l'inventaire.
+      const { status } = await pile.lireSparkd('/v1/sparks/boutique');
+      assert.equal(status, 200, 'le Spark visé existe toujours');
+      assert.deepEqual(await lireServeurs(), avant, 'l’inventaire est intact');
+
+      // 3. DNS rebinding : le nom piégé résout vers la console. Le navigateur
+      // la croit de même origine — elle refuse de lui répondre.
+      const reponse = await page.goto(`http://site-piege.test:${portConsole}/`);
+      assert.equal(reponse.status(), 403);
+      assert.match(await page.textContent('body'), /hote_refuse/);
+      const lue = await page.evaluate(async () => {
+        const r = await fetch('/api/servers');
+        return { status: r.status, texte: await r.text() };
+      });
+      assert.equal(lue.status, 403);
+      assert.doesNotMatch(lue.texte, /"servers"/, 'aucune donnée ne sort');
+
+      // Et la console elle-même, ouverte par l'exploitant, marche toujours.
+      await accueil();
+      assert.ok(await page.locator('tbody a:has-text("boutique")').count());
+    });
+  } finally {
+    piege.close();
   }
 });

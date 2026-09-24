@@ -86,7 +86,7 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
 }
 
 const ouvrir = (base, corps) => fetch(`${base}/api/terminal`, {
-  method: 'POST',
+  method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ server: 'prod', spark: 'crm', ...corps }) });
 
 // --- On SONDE avant d'ouvrir (§37.4.7) --------------------------------------
@@ -165,7 +165,7 @@ test('le terminal de conteneur cible aussi l’identifiant immuable du Spark', a
              incus_name: 'crm', state: 'running', protected: false },
   });
   const session = await (await ouvrir(base, { container: 'crm-web-1' })).json();
-  await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE' });
+  await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } });
 
   const terminal = declarees.filter((d) => d.action.includes('container_terminal'));
   assert.deepEqual(terminal.map((d) => d.target_id),
@@ -176,7 +176,7 @@ test('le terminal de conteneur cible aussi l’identifiant immuable du Spark', a
 test('la FERMETURE porte l’action du conteneur, sa durée et son motif', async () => {
   const { base, fermer, declarees } = await pile();
   const session = await (await ouvrir(base, { container: 'crm-web-1' })).json();
-  const r = await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE' });
+  const r = await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 200);
 
   const fermeture = declarees.find((d) => d.action === 'spark.container_terminal_close');
@@ -193,7 +193,7 @@ test('la fermeture d’une session de SPARK dit le chemin RÉELLEMENT emprunté'
   // déjà faux pour le dépannage, et l'aurait été pour un conteneur.
   const { base, fermer, declarees } = await pile();
   const session = await (await ouvrir(base, {})).json();
-  await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE' });
+  await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } });
   const fermeture = declarees.find((d) => d.action === 'spark.terminal_close');
   assert.equal(fermeture.payload.path, 'ssh');
   fermer();
@@ -203,9 +203,9 @@ test('rien du CONTENU ne traverse la frontière du journal (§37.5)', async () =
   const { base, fermer, declarees, enfants } = await pile();
   const session = await (await ouvrir(base, { container: 'crm-web-1' })).json();
   await fetch(`${base}/api/terminal/entree?id=${session.id}`, {
-    method: 'POST', body: JSON.stringify({ data: 'export TOKEN=SECRET-EN-CLAIR\n' }) });
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: 'export TOKEN=SECRET-EN-CLAIR\n' }) });
   enfants[0].stdout.emit('data', Buffer.from('base ouverte, mot de passe accepté'));
-  await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE' });
+  await fetch(`${base}/api/terminal?id=${session.id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } });
 
   const vu = JSON.stringify(declarees);
   assert.ok(!vu.includes('SECRET-EN-CLAIR'));

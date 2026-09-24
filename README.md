@@ -53,8 +53,8 @@ leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-ma
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 114 unités : 105 closes, 7
-partielles, 2 non commencées — SPK-113, qui attend une mesure, et SPK-118, spécifiée. Le lot 6, *Réseau
+**Le plan de contrôle tourne sur une Forge réelle.** 114 unités : 106 closes, 7
+partielles, 1 non commencée — SPK-113, qui attend une mesure. Le lot 6, *Réseau
 entre Sparks*, ouvert le 2026-09-17, a été clos le 2026-09-18. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
@@ -546,6 +546,10 @@ et le responsable a tranché le 2026-09-14 de s'en passer plutôt que de laisser
 une garde qui n'existe que dans un fichier de workflow.
 
 - Un seul serveur. Aucun ordonnancement inter-machines.
+- **La console n'obéit qu'à sa propre page, pas au poste entier** (`docs/DAT.md`
+  §63). Elle refuse les requêtes d'un autre site et le *DNS rebinding* ; elle
+  ne distingue pas, en revanche, un programme local d'elle-même — la frontière
+  est le poste, comme pour la clé SSH qu'elle emploie.
 - **La console ne se redémarre depuis son écran que si son lanceur l'a démarrée**
   (`make runProd`, `make runDev`, `pnpm dev` ; `docs/DAT.md` §62). Le préflight
   prouve que le nouveau code **se charge**, pas qu'il **démarre** : une erreur

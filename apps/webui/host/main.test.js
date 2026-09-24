@@ -58,7 +58,7 @@ async function hote({
 test('un serveur s enregistre puis se relit', async () => {
   const { base, server } = await hote();
   const cree = await fetch(`${base}/api/servers`, {
-    method: 'POST', body: JSON.stringify(SERVEUR),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR),
   });
   assert.equal(cree.status, 201);
   const { servers } = await (await fetch(`${base}/api/servers`)).json();
@@ -69,7 +69,7 @@ test('un serveur s enregistre puis se relit', async () => {
 test('un secret dans l inventaire est refuse en 422', async () => {
   const { base, server } = await hote();
   const r = await fetch(`${base}/api/servers`, {
-    method: 'POST', body: JSON.stringify({ ...SERVEUR, password: 'x' }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...SERVEUR, password: 'x' }),
   });
   assert.equal(r.status, 422);
   assert.match((await r.json()).message, /ressemble à un secret/);
@@ -80,8 +80,8 @@ test('un secret dans l inventaire est refuse en 422', async () => {
 
 test('ouvrir un tunnel sain rend 200 et son etat', async () => {
   const { base, server } = await hote();
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  const r = await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  const r = await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   assert.equal(r.status, 200);
   assert.equal((await r.json()).state, 'ready');
   server.close();
@@ -97,9 +97,9 @@ test('SSH etabli sans sparkd rend 200 avec les deux etats distincts', async () =
     open: async () => tunnel, list: () => [], closeAll: () => {},
   };
   const { base, server } = await hote({ tunnels });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
   const r = await fetch(`${base}/api/tunnels`, {
-    method: 'POST', body: JSON.stringify({ name: 'prod' }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }),
   });
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), {
@@ -112,8 +112,8 @@ test('un tunnel qui ne repond pas rend 502, PAS 200', async () => {
   // Annoncer un succes parce que la commande a ete lancee serait un succes
   // simule (CLAUDE.md §18).
   const { base, server } = await hote({ sonde: async () => { throw new Error('injoignable'); } });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  const r = await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  const r = await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   assert.equal(r.status, 502);
   assert.equal((await r.json()).state, 'broken');
   server.close();
@@ -121,7 +121,7 @@ test('un tunnel qui ne repond pas rend 502, PAS 200', async () => {
 
 test('un serveur inconnu est refuse en 404', async () => {
   const { base, server } = await hote();
-  const r = await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'fantome' }) });
+  const r = await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'fantome' }) });
   assert.equal(r.status, 404);
   server.close();
 });
@@ -133,8 +133,8 @@ test('le relais atteint sparkd a travers le tunnel', async () => {
   const { base, server } = await hote({
     amont: async (url) => { vue = url; return new Response('{"status":"ok"}', { status: 200 }); },
   });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
 
   const r = await fetch(`${base}/api/v1/forge?server=prod`);
   assert.equal(r.status, 200);
@@ -146,8 +146,8 @@ test('le relais atteint sparkd a travers le tunnel', async () => {
 
 test('une requete vers un tunnel rompu remonte le MOTIF, pas un 502 anonyme', async () => {
   const { base, server } = await hote({ sonde: async () => { throw new Error('connexion refusée'); } });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
 
   const r = await fetch(`${base}/api/v1/forge?server=prod`);
   assert.equal(r.status, 502);
@@ -174,8 +174,8 @@ test('les parametres de requete sont transmis, sauf « server »', async () => {
   const { base, server } = await hote({
     amont: async (url) => { vue = url; return new Response('{}', { status: 200 }); },
   });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   await fetch(`${base}/api/v1/audit?server=prod&limit=5&result=denied`);
   assert.match(vue, /limit=5/);
   assert.match(vue, /result=denied/);
@@ -185,8 +185,8 @@ test('les parametres de requete sont transmis, sauf « server »', async () => {
 
 test('fermer le serveur ferme les tunnels', async () => {
   const { base, server, tunnels } = await hote();
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   assert.equal(tunnels.list().length, 1);
   server.close();
   await new Promise((r) => setTimeout(r, 20));
@@ -213,10 +213,10 @@ function sparkdChaine(etat) {
 
 async function ouvrir(base, tunnels, amont) {
   await fetch(`${base}/api/servers`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }),
   });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   return amont;
 }
 
@@ -225,14 +225,14 @@ test('le premier relevé POSE l’ancre, les suivants la comparent', async () =>
   const { base, server, tunnels } = await hote({ amont: (u) => sparkdChaine(chaine)(u) });
   await ouvrir(base, tunnels);
 
-  let r = await fetch(`${base}/api/anchor`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  let r = await fetch(`${base}/api/anchor`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   let corps = await r.json();
   assert.equal(corps.verdict, 'first', 'rien de retenu : on pose, on ne juge pas');
   assert.equal(corps.alert, false);
 
   // Le journal s'allonge et contient toujours la tête connue : il PROLONGE.
   chaine.head = 'ccc'; chaine.length = 6; chaine.entries = ['aaa', 'bbb', 'ccc'];
-  r = await fetch(`${base}/api/anchor`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  r = await fetch(`${base}/api/anchor`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   corps = await r.json();
   assert.equal(corps.verdict, 'extends');
   assert.equal(corps.alert, false);
@@ -243,12 +243,12 @@ test('une histoire qui NE PROLONGE PAS la précédente est signalée', async () 
   const chaine = { head: 'aaa', length: 5, entries: ['aaa'] };
   const { base, server, tunnels } = await hote({ amont: (u) => sparkdChaine(chaine)(u) });
   await ouvrir(base, tunnels);
-  await fetch(`${base}/api/anchor`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/anchor`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
 
   // TRONCATURE : la chaîne restante est valide, seule la console le voit.
   chaine.head = 'aa'; chaine.length = 2; chaine.entries = ['aa'];
   let corps = await (await fetch(`${base}/api/anchor`,
-    { method: 'POST', body: JSON.stringify({ name: 'prod' }) })).json();
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) })).json();
   assert.equal(corps.verdict, 'shrunk');
   assert.equal(corps.alert, true);
   assert.match(corps.explanation, /RACCOURCI/);
@@ -257,7 +257,7 @@ test('une histoire qui NE PROLONGE PAS la précédente est signalée', async () 
   // REMPLACEMENT : un journal neuf et cohérent, sans la tête connue.
   chaine.head = 'zzz'; chaine.length = 9; chaine.entries = ['xxx', 'yyy', 'zzz'];
   corps = await (await fetch(`${base}/api/anchor`,
-    { method: 'POST', body: JSON.stringify({ name: 'prod' }) })).json();
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) })).json();
   assert.equal(corps.verdict, 'diverged');
   assert.equal(corps.alert, true);
   assert.equal(corps.known.head, 'aaa', 'toujours la référence d’origine');
@@ -266,7 +266,7 @@ test('une histoire qui NE PROLONGE PAS la précédente est signalée', async () 
 
 test('sans tunnel ouvert, l’ancre ne prétend rien', async () => {
   const { base, server } = await hote();
-  const r = await fetch(`${base}/api/anchor`, { method: 'POST', body: JSON.stringify({ name: 'absent' }) });
+  const r = await fetch(`${base}/api/anchor`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'absent' }) });
   assert.equal(r.status, 502);
   assert.equal((await r.json()).error, 'tunnel_unavailable');
   server.close();
@@ -276,7 +276,7 @@ test('sans tunnel ouvert, l’ancre ne prétend rien', async () => {
 // --- le catalogue tenu depuis la console (SPK-41, §22.4 ter) --------------
 
 async function poser(base, serveur) {
-  return fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(serveur) });
+  return fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(serveur) });
 }
 
 test('le premier serveur ajouté devient le serveur COURANT', async () => {
@@ -303,7 +303,7 @@ test('changer de serveur courant le RETIENT', async () => {
   await poser(base, SERVEUR);
   await poser(base, { ...SERVEUR, name: 'autre' });
   const r = await fetch(`${base}/api/servers/current`,
-                        { method: 'POST', body: JSON.stringify({ name: 'autre' }) });
+                        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'autre' }) });
   assert.equal(r.status, 200);
   assert.equal((await (await fetch(`${base}/api/servers`)).json()).current, 'autre');
   server.close();
@@ -313,7 +313,7 @@ test('choisir un serveur inconnu est refusé, sans changer le courant', async ()
   const { base, server } = await hote();
   await poser(base, SERVEUR);
   const r = await fetch(`${base}/api/servers/current`,
-                        { method: 'POST', body: JSON.stringify({ name: 'fantome' }) });
+                        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'fantome' }) });
   assert.equal(r.status, 404);
   assert.equal((await r.json()).error, 'unknown_server');
   assert.equal((await (await fetch(`${base}/api/servers`)).json()).current, 'prod');
@@ -325,11 +325,11 @@ test('retirer un serveur FERME son tunnel avant de l’effacer', async () => {
   // genre de processus qu'on ne retrouve plus.
   const { base, server, tunnels } = await hote();
   await poser(base, { name: 'prod', kind: 'local', port: 9876 });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   assert.ok(tunnels.get('prod'), 'le tunnel existe');
 
   const r = await fetch(`${base}/api/servers`,
-                        { method: 'DELETE', body: JSON.stringify({ name: 'prod' }) });
+                        { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   assert.equal(r.status, 200);
   assert.equal(tunnels.get('prod')?.state ?? 'closed', 'closed');
   assert.deepEqual((await (await fetch(`${base}/api/servers`)).json()).servers, []);
@@ -341,7 +341,7 @@ test('retirer le serveur COURANT donne la place au suivant', async () => {
   await poser(base, SERVEUR);
   await poser(base, { ...SERVEUR, name: 'autre' });
   const r = await fetch(`${base}/api/servers`,
-                        { method: 'DELETE', body: JSON.stringify({ name: 'prod' }) });
+                        { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   assert.equal((await r.json()).current, 'autre');
   server.close();
 });
@@ -352,7 +352,7 @@ test('retirer le DERNIER serveur laisse un courant nul, et le dit', async () => 
   const { base, server } = await hote();
   await poser(base, SERVEUR);
   const r = await fetch(`${base}/api/servers`,
-                        { method: 'DELETE', body: JSON.stringify({ name: 'prod' }) });
+                        { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
   assert.equal((await r.json()).current, null);
   server.close();
 });
@@ -360,7 +360,7 @@ test('retirer le DERNIER serveur laisse un courant nul, et le dit', async () => 
 test('retirer un serveur inconnu est refusé', async () => {
   const { base, server } = await hote();
   const r = await fetch(`${base}/api/servers`,
-                        { method: 'DELETE', body: JSON.stringify({ name: 'fantome' }) });
+                        { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'fantome' }) });
   assert.equal(r.status, 404);
   server.close();
 });
@@ -384,7 +384,7 @@ test('l’épreuve REND ce qu’elle a vu, et referme son tunnel', async () => {
       { status: 200 }),
   });
   const r = await fetch(`${base}/api/servers/probe`,
-                        { method: 'POST', body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) });
+                        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) });
   assert.equal(r.status, 200);
   const bilan = await r.json();
   assert.equal(bilan.reachable, true);
@@ -400,7 +400,7 @@ test('l’épreuve n’enregistre RIEN', async () => {
   // §22.4.4 : elle informe, elle ne décide pas — et elle n'écrit pas non plus.
   const { base, server } = await hote();
   await fetch(`${base}/api/servers/probe`,
-              { method: 'POST', body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) });
+              { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) });
   assert.deepEqual((await (await fetch(`${base}/api/servers`)).json()).servers, []);
   server.close();
 });
@@ -412,7 +412,7 @@ test('un serveur INJOIGNABLE s’enregistre quand même', async () => {
     amont: async () => { throw new Error('connexion refusée'); },
   });
   const bilan = await (await fetch(`${base}/api/servers/probe`,
-    { method: 'POST', body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) })).json();
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod', kind: 'local', port: 9876 }) })).json();
   assert.equal(bilan.reachable, false);
   assert.ok(bilan.error || bilan.healthz, 'l’échec est RENDU, pas masqué');
 
@@ -423,7 +423,7 @@ test('un serveur INJOIGNABLE s’enregistre quand même', async () => {
 test('une entrée invalide est refusée par l’épreuve, sans tunnel', async () => {
   const { base, server } = await hote();
   const r = await fetch(`${base}/api/servers/probe`,
-                        { method: 'POST', body: JSON.stringify({ name: 'Majuscule' }) });
+                        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Majuscule' }) });
   assert.equal(r.status, 422);
   server.close();
 });
@@ -472,10 +472,10 @@ function amontInventaire({ records, routes = {}, patchs = [] }) {
 async function forgeInventoriee(options) {
   const monte = await hote({ env: JETON, ...options });
   await fetch(`${monte.base}/api/servers`, {
-    method: 'POST', body: JSON.stringify(SERVEUR),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR),
   });
   await fetch(`${monte.base}/api/tunnels`, {
-    method: 'POST', body: JSON.stringify({ name: 'prod' }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }),
   });
   return monte;
 }
@@ -562,7 +562,7 @@ test('retirer une entree SERVIE est refuse, et n ecrit RIEN', async () => {
     }),
   });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'DELETE',
+    method: 'DELETE', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'exemple.tech', name: 'crm', type: 'A' }),
   });
   assert.equal(r.status, 409);
@@ -580,7 +580,7 @@ test('retirer un enregistrement qui pointe AILLEURS est refuse', async () => {
     }),
   });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'DELETE',
+    method: 'DELETE', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'exemple.tech', name: 'nas', type: 'A' }),
   });
   assert.equal(r.status, 409);
@@ -598,7 +598,7 @@ test('retirer un MX est refuse, meme s il porte l adresse de la Forge', async ()
     }),
   });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'DELETE',
+    method: 'DELETE', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'exemple.tech', name: 'mail', type: 'MX' }),
   });
   assert.equal(r.status, 409);
@@ -619,7 +619,7 @@ test('retirer une entree PERDUE vise le nom ET le type exacts', async () => {
     }),
   });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'DELETE',
+    method: 'DELETE', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'exemple.tech', name: 'ancien', type: 'A' }),
   });
   assert.equal(r.status, 200);
@@ -643,7 +643,7 @@ test('la verification rend ce que la zone PORTE, ligne a ligne', async () => {
     ] }), { status: 200 }),
   });
   const r = await fetch(`${base}/api/dns/verifier`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'exemple.tech', records: [
       { name: 'www', type: 'A', data: '203.0.113.10' },
       { name: '', type: 'A', data: '203.0.113.10' },
@@ -667,7 +667,7 @@ test('l etat DNS de noms de routes distingue ICI, AILLEURS, ABSENT et HORS ZONE'
     }),
   });
   const r = await fetch(`${base}/api/dns/etat-routes`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ domains: ['crm.exemple.tech', 'vitrine.exemple.tech',
                                      'rien.exemple.tech', 'ailleurs.autre-compte.fr'] }),
   });
@@ -681,7 +681,7 @@ test('l etat DNS de noms de routes distingue ICI, AILLEURS, ABSENT et HORS ZONE'
 test('sans jeton, l etat des routes DIT que rien n est configure', async () => {
   const { base, server } = await hote();
   const r = await fetch(`${base}/api/dns/etat-routes`, {
-    method: 'POST', body: JSON.stringify({ domains: ['a.exemple.tech'] }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ domains: ['a.exemple.tech'] }),
   });
   assert.equal(r.status, 200);
   const corps = await r.json();
@@ -716,7 +716,7 @@ test('sans jeton, les zones rendent 200 et DISENT que rien n est configure', asy
 test('sans jeton, une ECRITURE est refusee en 409 avec la meme raison', async () => {
   const { base, server } = await hote();
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'exemple.tech', domain: 'a.exemple.tech', address: '1.2.3.4' }),
   });
   assert.equal(r.status, 409);
@@ -765,7 +765,7 @@ test('un refus de la garde ne coute AUCUNE requete sortante', async () => {
     amont: async () => { appels += 1; return new Response('{}', { status: 200 }); },
   });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'a.autre.tech', address: '1.2.3.4' }),
   });
   assert.equal(r.status, 422);
@@ -786,7 +786,7 @@ test("l'APEX s'ecrit, et vise le nom RELATIF vide", async () => {
     },
   });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '203.0.113.7' }),
   });
   assert.equal(r.status, 200);
@@ -811,7 +811,7 @@ test("l'apercu DIT ce que l'ecriture ferait, sans rien ecrire", async () => {
   });
 
   const remplace = await (await fetch(`${base}/api/dns/preview`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '203.0.113.7' }),
   })).json();
   assert.equal(remplace.effet, 'remplace');
@@ -819,13 +819,13 @@ test("l'apercu DIT ce que l'ecriture ferait, sans rien ecrire", async () => {
   assert.equal(remplace.apex, true);
 
   const inchange = await (await fetch(`${base}/api/dns/preview`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'lelabs.tech', address: '198.51.100.1' }),
   })).json();
   assert.equal(inchange.effet, 'inchange');
 
   const pose = await (await fetch(`${base}/api/dns/preview`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'neuf.lelabs.tech', address: '203.0.113.7' }),
   })).json();
   assert.equal(pose.effet, 'pose');
@@ -838,7 +838,7 @@ test("l'apercu DIT ce que l'ecriture ferait, sans rien ecrire", async () => {
 test('un domaine hors zone est refuse en 422', async () => {
   const { base, server } = await hote({ env: JETON });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'a.autre.tech', address: '1.2.3.4' }),
   });
   assert.equal(r.status, 422);
@@ -851,14 +851,14 @@ test("l espace de noms des essais borne l ecriture quand le poste le pose", asyn
     env, amont: async () => new Response('{}', { status: 200 }),
   });
   const refuse = await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'gram.lelabs.tech', address: '1.2.3.4' }),
   });
   assert.equal(refuse.status, 422);
   assert.match((await refuse.json()).message, /espace de noms/);
 
   const pose = await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'test.spark.lelabs.tech', address: '1.2.3.4' }),
   });
   assert.equal(pose.status, 200);
@@ -872,7 +872,7 @@ test("l ecriture annonce ce qui est ECRIT et la propagation, jamais un domaine p
     env: JETON, amont: async () => new Response('{}', { status: 200 }),
   });
   const r = await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'lelabs.tech', domain: 'test.spark.lelabs.tech',
                            address: '203.0.113.7' }),
   });
@@ -912,9 +912,9 @@ test('le jeton DNS n entre NI dans l inventaire NI dans une requete vers sparkd'
     },
   });
 
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
   await fetch(`${base}/api/dns/record`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ zone: 'exemple.tech', domain: 'a.exemple.tech', address: '1.2.3.4' }),
   });
 
@@ -952,7 +952,7 @@ test('l’apercu d’une recette rend l’effet de CHAQUE ligne, sans rien ecrir
     },
   });
   const vu = await (await fetch(`${base}/api/dns/recipe/preview`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
                            params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
   })).json();
@@ -972,7 +972,7 @@ test('une recette ecrit ligne a ligne et rend LE SORT de chacune', async () => {
       new Response(JSON.stringify({ records: [] }), { status: 200 }),
   });
   const fait = await (await fetch(`${base}/api/dns/recipe`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
                            params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
   })).json();
@@ -1001,7 +1001,7 @@ test('une ligne REFUSEE au milieu rend la recette INCOMPLETE, sans rien defaire'
     },
   });
   const fait = await (await fetch(`${base}/api/dns/recipe`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech',
                            params: { domain: 'exemple.tech', address: '203.0.113.7' } }),
   })).json();
@@ -1020,7 +1020,7 @@ test('une ligne REFUSEE au milieu rend la recette INCOMPLETE, sans rien defaire'
 test('une valeur que l’exploitant doit fournir rend 422 en NOMMANT le champ', async () => {
   const { base, server } = await hote({ env: JETON });
   const r = await fetch(`${base}/api/dns/recipe`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'relais-transactionnel', zone: 'exemple.tech',
                            params: { domain: 'noreply.exemple.tech', selector: '' } }),
   });
@@ -1035,7 +1035,7 @@ test('sans jeton, les recettes se lisent mais ne s’ecrivent pas', async () => 
   const { base, server } = await hote();
   assert.equal((await fetch(`${base}/api/dns/recipes`)).status, 200);
   const r = await fetch(`${base}/api/dns/recipe`, {
-    method: 'POST',
+    method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipe: 'site-web', zone: 'exemple.tech', params: {} }),
   });
   assert.equal(r.status, 409);
@@ -1052,8 +1052,8 @@ test('la route CONFRONTE, et rend le verdict du dépôt de ce poste', async () =
       ? new Response(JSON.stringify({ build: { commit: 'a'.repeat(40) } }), { status: 200 })
       : new Response('{}', { status: 200 })),
   });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
 
   const corps = await (await fetch(`${base}/api/forge/build?server=prod`)).json();
   assert.equal(corps.server, 'prod');
@@ -1072,8 +1072,8 @@ test('une Forge qui ne publie AUCUNE build est dite non estampillée, pas en pan
       ? new Response(JSON.stringify({ pools: [] }), { status: 200 })
       : new Response('{}', { status: 200 })),
   });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
 
   const reponse = await fetch(`${base}/api/forge/build?server=prod`);
   assert.equal(reponse.status, 200);
@@ -1097,8 +1097,8 @@ test('une Forge qui répond mal n’est pas confondue avec une build inconnue', 
       ? new Response('{}', { status: 500 })
       : new Response('{}', { status: 200 })),
   });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'prod' }) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }) });
 
   const reponse = await fetch(`${base}/api/forge/build?server=prod`);
   assert.equal(reponse.status, 502);
@@ -1119,9 +1119,9 @@ test('le diagnostic SSH ne réclame PAS un tunnel sparkd prêt', async () => {
                           filePool: { possible: true, sizeBytes: null } } };
     },
   });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
   const reponse = await fetch(`${base}/api/forge/diagnostic`, {
-    method: 'POST', body: JSON.stringify({ server: 'prod' }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ server: 'prod' }),
   });
   assert.equal(reponse.status, 200);
   assert.equal((await reponse.json()).transport, 'established');
@@ -1133,7 +1133,7 @@ test('le diagnostic SSH ne réclame PAS un tunnel sparkd prêt', async () => {
 test('le diagnostic ne reçoit qu’un serveur connu et nomme le refus', async () => {
   const { base, server } = await hote();
   const reponse = await fetch(`${base}/api/forge/diagnostic`, {
-    method: 'POST', body: JSON.stringify({ server: 'inconnu' }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ server: 'inconnu' }),
   });
   assert.equal(reponse.status, 404);
   assert.equal((await reponse.json()).error, 'unknown_server');
@@ -1163,16 +1163,16 @@ test('l’exécution refait le diagnostic et refuse un plan non confirmé', asyn
     };
   };
   const { base, server } = await hote({ diagnoseForge, forgeInstallations: journal });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
 
   let response = await fetch(`${base}/api/forge/install`, {
-    method: 'POST', body: JSON.stringify({ server: 'prod', values: {} }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ server: 'prod', values: {} }),
   });
   assert.equal(response.status, 422);
   assert.equal(diagnostics, 0, 'un plan non confirmé ne sonde même pas la Forge');
 
   response = await fetch(`${base}/api/forge/install`, {
-    method: 'POST', body: JSON.stringify({ server: 'prod', values: {}, accepted: true }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ server: 'prod', values: {}, accepted: true }),
   });
   assert.equal(response.status, 202);
   assert.equal(diagnostics, 1, 'le plan est reconstruit sur un nouveau relevé');
@@ -1186,7 +1186,7 @@ test('le journal d’installation reste lisible sans tunnel sparkd', async () =>
   const journal = { isRunning: () => false, read: async () => expected,
     start: async () => null, closeAll: () => {} };
   const { base, server } = await hote({ forgeInstallations: journal });
-  await fetch(`${base}/api/servers`, { method: 'POST', body: JSON.stringify(SERVEUR) });
+  await fetch(`${base}/api/servers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SERVEUR) });
   const response = await fetch(`${base}/api/forge/install?server=prod`);
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).installation, expected);

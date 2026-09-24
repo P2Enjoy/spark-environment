@@ -7918,7 +7918,7 @@ responsable le veut :**
   tête n'émet jamais `visibilitychange` ; le parcours l'émet (journal du
   2026-09-24).
 
-### [ ] SPK-118 · La console n'obéit qu'à sa propre page
+### [x] SPK-118 · La console n'obéit qu'à sa propre page
 
 **Demandé par le responsable le 2026-09-24**, sur le constat fait en livrant
 SPK-117 : n'importe quelle page ouverte dans le navigateur pouvait faire agir la
@@ -7931,14 +7931,15 @@ Spark —, et une page en *DNS rebinding* pouvait en lire tout le contenu.
 
 **Ce qui décide de l'unité** : trois gardes — hôte, origine, corps JSON —
 posées **une fois**, avant toute route, et non route par route ; la page ne
-change que par neuf appels qui déclarent désormais leur type.
+change que par les appels sans corps — huit directs et l'utilitaire `appel()` —,
+qui déclarent désormais leur type.
 
 **Portée, et découpage :**
 
 1. Documentation — *fait, committé avant le code* ;
 2. hôte — la garde, ses preuves unitaires et de route ; retrait de la garde
    propre à `POST /api/console/relance`, devenue commune ;
-3. page — les neuf appels ; preuves ;
+3. page — les appels sans corps ; preuves ;
 4. E2E : l'attaque rejouée par un vrai navigateur — une page d'une autre origine
    tente de supprimer un Spark, un nom piégé résolu en `127.0.0.1` tente de lire
    l'inventaire — et la campagne complète, qui prouve qu'aucun geste légitime
@@ -7950,6 +7951,16 @@ change que par neuf appels qui déclarent désormais leur type.
   `localhost`, `Origin: null`, absence d'`Origin`) ; preuves de route (les refus
   atteignent aussi le relais, le flux et les fichiers) ; parcours E2E de
   l'attaque ; campagne complète verte ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-24** : huit preuves de la garde, quatre de route contre un
+  vrai hôte relié à un faux `sparkd` (rien ne l'atteint) ; le parcours E2E de
+  l'attaque, par un vrai navigateur — une page d'une autre origine, un nom piégé
+  résolu en `127.0.0.1` — **rouge sans la garde** (le formulaire caché ajoutait
+  `intrus` à l'inventaire), vert avec ; la campagne complète, **145 sur 145**, et
+  `make gestes`, 13 sur 13 : aucun geste légitime n'est refusé. Cent appels de
+  test qui jouaient la page déclarent désormais leur type, comme elle. En
+  chemin, une course latente du parcours *Alertes* corrigée (journal du
+  2026-09-24). Non rejoué : `make captures`, dont un seul appel a changé de la
+  même façon.
 
 ---
 

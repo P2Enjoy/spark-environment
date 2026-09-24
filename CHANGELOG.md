@@ -3,6 +3,17 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-118 — la console n'obéit qu'à sa propre page.** Mesuré avant : une page
+  d'un autre site, ouverte dans le même navigateur, faisait ajouter un serveur
+  à l'inventaire et relayer à `sparkd` — signée — la suppression d'un Spark non
+  protégé ; sous *DNS rebinding*, elle lisait l'inventaire. Trois gardes, posées
+  une fois avant toute route (`host/garde.js`) : l'en-tête `Host` doit être
+  `127.0.0.1` ou `localhost` sur le port de la console (`403 hote_refuse`),
+  lectures et fichiers compris ; un geste d'une autre origine est refusé
+  (`403 origine_refusee`) ; un geste sans `content-type: application/json` est
+  refusé (`415 json_requis`). La page déclare désormais ce type sur tous ses
+  gestes, y compris sans corps ; `sparkd` ne voit aucune différence. Aucune
+  variable. DAT §63, §62.2 révisé ; manuel M11.
 - **SPK-117 — la console se redémarre depuis son avertissement.** « Console à
   redémarrer » porte désormais un bouton **Redémarrer la console** : une
   confirmation dans le flux, en accent, qui nomme chaque session de terminal

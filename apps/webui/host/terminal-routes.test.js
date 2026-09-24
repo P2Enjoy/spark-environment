@@ -95,7 +95,7 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
 }
 
 const ouvrir = (base, path, account) => fetch(`${base}/api/terminal`, {
-  method: 'POST',
+  method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ server: 'prod', spark: 'crm', ...(path ? { path } : {}),
                          ...(account ? { account } : {}) }) });
 
@@ -172,9 +172,9 @@ test('les octets traversent, et le redimensionnement ne devient pas une frappe',
   const { base, fermer, enfants } = await pile();
   const { id } = await (await ouvrir(base)).json();
   assert.equal((await fetch(`${base}/api/terminal/entree?id=${id}`, {
-    method: 'POST', body: JSON.stringify({ data: 'ls -la\n' }) })).status, 204);
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: 'ls -la\n' }) })).status, 204);
   assert.equal((await fetch(`${base}/api/terminal/taille?id=${id}`, {
-    method: 'POST', body: JSON.stringify({ rows: 40, cols: 120 }) })).status, 204);
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rows: 40, cols: 120 }) })).status, 204);
   assert.deepEqual(enfants[0].stdin.ecrit, ['ls -la\n']);
   assert.deepEqual(enfants[0].redimensionnements, [{ cols: 120, rows: 40 }]);
   fermer();
@@ -204,7 +204,7 @@ test('déconnecter une Forge tue ses sessions et les retire du registre', async 
   const { base, fermer, enfants, declarees } = await pile();
   await ouvrir(base);
   const r = await fetch(`${base}/api/tunnels`, {
-    method: 'DELETE', body: JSON.stringify({ name: 'prod' }),
+    method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'prod' }),
   });
   assert.equal(r.status, 200);
   assert.equal((await r.json()).sessionsClosed, 1);
@@ -218,7 +218,7 @@ test('déconnecter une Forge tue ses sessions et les retire du registre', async 
 test('fermer TUE le distant et déclare la fermeture avec sa durée', async () => {
   const { base, fermer, enfants, declarees } = await pile();
   const { id } = await (await ouvrir(base)).json();
-  assert.equal((await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE' })).status, 200);
+  assert.equal((await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } })).status, 200);
   assert.deepEqual(enfants[0].tue, ['SIGKILL']);
   const fermeture = declarees.find((d) => d.action === 'spark.terminal_close');
   assert.ok(fermeture);
@@ -233,7 +233,7 @@ test('le journal cible l’identifiant immuable du Spark, jamais son nom', async
              incus_name: 'crm' },
   });
   const { id } = await (await ouvrir(base)).json();
-  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE' });
+  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } });
 
   const terminal = declarees.filter((d) => d.action.startsWith('spark.terminal_'));
   assert.deepEqual(terminal.map((d) => d.target_id),
@@ -264,9 +264,9 @@ test('AUCUN octet de la session n’atteint le journal', async () => {
   const { base, fermer, enfants, declarees } = await pile();
   const { id } = await (await ouvrir(base)).json();
   await fetch(`${base}/api/terminal/entree?id=${id}`, {
-    method: 'POST', body: JSON.stringify({ data: 'mysql -u root -pSECRET-EN-CLAIR\n' }) });
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: 'mysql -u root -pSECRET-EN-CLAIR\n' }) });
   enfants[0].stdout.emit('data', Buffer.from('base ouverte, 42 tables'));
-  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE' });
+  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } });
 
   const tout = JSON.stringify(declarees);
   assert.ok(!tout.includes('SECRET-EN-CLAIR'), 'aucune frappe ne doit atteindre le journal');
@@ -277,10 +277,10 @@ test('AUCUN octet de la session n’atteint le journal', async () => {
 test('une session inconnue est refusée sur chaque route', async () => {
   const { base, fermer } = await pile();
   assert.equal((await fetch(`${base}/api/terminal/entree?id=nulle`, {
-    method: 'POST', body: JSON.stringify({ data: 'x' }) })).status, 409);
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: 'x' }) })).status, 409);
   assert.equal((await fetch(`${base}/api/terminal/taille?id=nulle`, {
-    method: 'POST', body: JSON.stringify({ rows: 24, cols: 80 }) })).status, 409);
-  assert.equal((await fetch(`${base}/api/terminal?id=nulle`, { method: 'DELETE' })).status, 404);
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rows: 24, cols: 80 }) })).status, 409);
+  assert.equal((await fetch(`${base}/api/terminal?id=nulle`, { method: 'DELETE', headers: { 'content-type': 'application/json' } })).status, 404);
   fermer();
 });
 
@@ -351,7 +351,7 @@ test('la fermeture EXPLICITE tue toujours le distant', async () => {
   const flux = await fetch(`${base}/api/terminal/flux?id=${id}`);
   await flux.body.getReader().read();
 
-  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE' });
+  await fetch(`${base}/api/terminal?id=${id}`, { method: 'DELETE', headers: { 'content-type': 'application/json' } });
   await new Promise((r) => setTimeout(r, 100));
   assert.deepEqual(enfants[0].tue, ['SIGKILL'], 'la demande explicite tue');
   const listees = await (await fetch(`${base}/api/terminal/sessions`)).json();

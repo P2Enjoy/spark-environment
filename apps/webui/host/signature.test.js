@@ -263,7 +263,7 @@ test('le relais SIGNE une écriture et pose les deux en-têtes', async () => {
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
     await fetch(`${base}/api/v1/sparks?server=prod`, {
-      method: 'POST', body: JSON.stringify({ name: 'essai' }) });
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'essai' }) });
     const vu = vues.at(-1);
     assert.equal(vu.headers['x-spark-signature'], 'c2lnbmVl');
     // Les octets signés décrivent bien CETTE requête (§36.10.7).
@@ -276,7 +276,7 @@ test('le relais SIGNE une écriture et pose les deux en-têtes', async () => {
     // §36.10.9 : rien n'a échoué, donc RIEN n'est dit. Un avertissement posé
     // sur un geste correctement signé ferait désapprendre à le lire.
     const signe = await fetch(`${base}/api/v1/sparks?server=prod`, {
-      method: 'POST', body: JSON.stringify({ name: 'encore' }) });
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'encore' }) });
     assert.equal(signe.headers.get('x-spark-signature-motif'), null);
 
     // Une LECTURE n'est pas signée : le §36.7 ne la journalise pas, et signer ce
@@ -315,7 +315,7 @@ test('un relais qui ne peut PAS signer laisse quand même passer le geste', asyn
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
     const r = await fetch(`${base}/api/v1/sparks?server=prod`, {
-      method: 'POST', body: JSON.stringify({ name: 'essai' }) });
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'essai' }) });
     assert.equal(r.status, 200, 'le geste passe');
     // Aucune signature vide n'est envoyée : la Forge refuserait en 422.
     assert.ok(!('x-spark-signature' in vues.at(-1)));

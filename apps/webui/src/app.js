@@ -864,7 +864,8 @@ function brancherRegistreSessions() {
     bouton.addEventListener('click', async () => {
       const id = bouton.dataset.sessionCloseConfirm;
       etat.sessions.confirmation = null;
-      await fetch(`/api/terminal?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => null);
+      await fetch(`/api/terminal?id=${encodeURIComponent(id)}`, { method: 'DELETE',
+        headers: { 'content-type': 'application/json' } }).catch(() => null);
       if (etat.terminal.session?.id === id) await fermerTerminal(null);
       await releverSessions();
     });
@@ -1085,7 +1086,7 @@ async function accorderCleConsole(nom) {
     }
     const octroi = await relais(
       `/api/v1/sparks/${encodeURIComponent(nom)}/ssh-keys/${encodeURIComponent(label)}`
-      + `?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+      + `?server=${encodeURIComponent(etat.server)}`, { method: 'POST', headers: { 'content-type': 'application/json' } });
     if (!octroi.ok) {
       const corps = await octroi.json().catch(() => ({}));
       return { accordee: false, raison: 'refus_octroi',
@@ -1488,7 +1489,7 @@ async function fermerTerminal(motif = 'sortie') {
   if (session && motif) {
     fermetureLocaleTerminal = session.id;
     await fetch(`/api/terminal?id=${encodeURIComponent(session.id)}`,
-                { method: 'DELETE' }).catch(() => {});
+                { method: 'DELETE', headers: { 'content-type': 'application/json' } }).catch(() => {});
   }
   fluxTerminal?.close();
   fluxTerminal = null;
@@ -2505,8 +2506,10 @@ async function appliquerQuotas() {
 async function appel(methode, chemin, corps = null) {
   const reponse = await relais(
     `/api${chemin}${chemin.includes('?') ? '&' : '?'}server=${encodeURIComponent(etat.server)}`,
-    { method: methode, ...(corps ? { headers: { 'content-type': 'application/json' },
-                                     body: JSON.stringify(corps) } : {}) });
+    // SPK-118 · §63.2 : le type est déclaré MÊME sans corps — l'hôte refuse
+    // toute écriture qui ne l'annonce pas.
+    { method: methode, headers: { 'content-type': 'application/json' },
+      ...(corps ? { body: JSON.stringify(corps) } : {}) });
   let rendu = null;
   try { rendu = await reponse.json(); } catch { /* corps vide */ }
   return { ok: reponse.ok, corps: rendu };
@@ -3092,7 +3095,7 @@ async function lancer(commande) {
   peindre();
   try {
     await relais(`/api/v1/sparks/${encodeURIComponent(etat.spark.name)}/${commande}?server=${encodeURIComponent(etat.server)}`,
-                 { method: 'POST' });
+                 { method: 'POST', headers: { 'content-type': 'application/json' } });
   } catch { /* l'état réel sera relu ci-dessous */ }
   if (commande === 'delete') { location.hash = '#/sparks'; return router(); }
   await router();
@@ -3311,7 +3314,8 @@ async function isolerLeParc() {
   peindre();
   try {
     const reponse = await relais(
-      `/api/v1/forge/isolation?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+      `/api/v1/forge/isolation?server=${encodeURIComponent(etat.server)}`,
+      { method: 'POST', headers: { 'content-type': 'application/json' } });
     const corps = await reponse.json();
     if (!reponse.ok) throw new Error(corps?.detail?.message ?? corps?.message ?? `HTTP ${reponse.status}`);
     ui.issue = corps;
@@ -3991,7 +3995,8 @@ async function relever() {
   etat.forge.syncing = true;
   peindre();
   try {
-    await relais(`/api/v1/forge/sync?server=${encodeURIComponent(etat.server)}`, { method: 'POST' });
+    await relais(`/api/v1/forge/sync?server=${encodeURIComponent(etat.server)}`,
+                 { method: 'POST', headers: { 'content-type': 'application/json' } });
   } catch { /* l'état réel sera relu ci-dessous */ }
   etat.forge.syncing = false;
   await chargerHote();
@@ -4403,7 +4408,7 @@ async function releverImages() {
   peindre();
   try {
     await relais(`/api/v1/images/verify?server=${encodeURIComponent(etat.server)}`,
-                 { method: 'POST' });
+                 { method: 'POST', headers: { 'content-type': 'application/json' } });
   } catch { /* l'état réel sera relu ci-dessous */ }
   etat.catalogue.ui.syncing = false;
   await chargerCatalogue();
@@ -5084,7 +5089,7 @@ function brancherRetraitImage() {
     const identifiant = ui.retrait;
     const reponse = await relais(
       `/api/v1/images/${encodeURIComponent(identifiant)}?server=${encodeURIComponent(etat.server)}`,
-      { method: 'DELETE' },
+      { method: 'DELETE', headers: { 'content-type': 'application/json' } },
     ).catch((e) => ({ ok: false, json: async () => ({ detail: { message: e.message } }) }));
     if (!reponse.ok) {
       // Le refus NOMME les Sparks concernés (§33.7). Il reste sous la ligne : le

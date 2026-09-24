@@ -545,7 +545,7 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
-  await fetch(`${base}/api/tunnels`, { method: 'POST', body: JSON.stringify({ name: 'validation' }) });
+  await fetch(`${base}/api/tunnels`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'validation' }) });
   return { base, server };
 }
 

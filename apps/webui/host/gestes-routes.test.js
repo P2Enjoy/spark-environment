@@ -61,7 +61,7 @@ async function pile({ spark = { name: 'crm', ipv4_address: '10.77.0.16',
 }
 
 const agir = (base, corps) => fetch(`${base}/api/spark/container/action`, {
-  method: 'POST',
+  method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ server: 'prod', spark: 'crm', ...corps }) });
 
 // --- Le geste abouti --------------------------------------------------------

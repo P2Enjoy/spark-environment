@@ -61,6 +61,8 @@ import { ForgeInstallManager, ForgeInstallRunError }
 import { randomUUID } from 'node:crypto';
 import { canalEnfant } from './lanceur.js';
 import { examinerRelance, verifierChargement } from './relance.js';
+// SPK-118 · §63 : la console n'obéit qu'à sa propre page.
+import { examinerRequete } from './garde.js';
 
 const PORT = Number(process.env.SPARK_CONSOLE_PORT ?? 5173);
 
@@ -800,19 +802,14 @@ export function createConsoleHost(options = {}) {
      *       refuse), §62.3 (préflight de chargement), §62.4 (le 202 porte
      *       l'instance que la page verra changer)
      *
-     * Le corps JSON est EXIGÉ : il impose un pré-vol CORS qu'aucune autre
-     * origine ne passe. Sans lui, n'importe quelle page ouverte dans le
-     * navigateur pourrait arrêter la console d'un `POST` en texte brut.
+     * Hôte, origine et corps JSON sont vérifiés par la garde commune, avant
+     * toute route (SPK-118, §63) : une page tierce n'atteint jamais ce code.
      *
      * Les conditions sont examinées DEUX fois : avant le préflight, pour
      * refuser vite, et après, parce qu'une mise à jour ou une session a pu
      * naître pendant qu'il chargeait le code.
      */
-    'POST /api/console/relance': async (corps, _url, reponse, requete) => {
-      if (!/^application\/json\b/i.test(String(requete?.headers?.['content-type'] ?? ''))) {
-        return { status: 415, body: { error: 'json_requis',
-          message: 'Corps JSON exigé : cette route ne répond qu’à la console elle-même.' } };
-      }
+    'POST /api/console/relance': async (corps, _url, reponse) => {
       const examiner = (enCours) => examinerRelance({
         relancable: Boolean(relance?.relancable), enCours,
         misesAJour: [...(misesAJour.busy ?? [])],
@@ -1802,6 +1799,14 @@ export function createConsoleHost(options = {}) {
 
   const server = createServer(async (requete, reponse) => {
     try {
+      // SPK-118 · §63.2 : AVANT toute route — y compris le relais, le flux et
+      // les fichiers servis. Sous DNS rebinding, une lecture est une fuite.
+      const refusGarde = examinerRequete({ method: requete.method,
+        headers: requete.headers, port: requete.socket.localPort });
+      if (refusGarde) {
+        return repondre(reponse, refusGarde.status,
+                        { error: refusGarde.error, message: refusGarde.message });
+      }
       const url = new URL(requete.url, 'http://127.0.0.1');
       const cle = `${requete.method} ${url.pathname}`;
 
@@ -1810,7 +1815,7 @@ export function createConsoleHost(options = {}) {
         // Une route qui rend `null` a DÉJÀ répondu : c'est le cas d'un corps
         // binaire — une illustration du manuel — que `repondre` sérialiserait
         // en JSON.
-        const rendu = await routes[cle](corps, url, reponse, requete);
+        const rendu = await routes[cle](corps, url, reponse);
         if (rendu === null) return;
         return repondre(reponse, rendu.status, rendu.body);
       }

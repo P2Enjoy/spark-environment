@@ -12707,6 +12707,23 @@ du JSON sans pré-vol.
 origine, corps JSON (§63). Pas de jeton anti-CSRF : il n'ajoute rien à un hôte
 que seul le poste atteint.
 
-**Conséquence sur la page** : neuf appels sans corps déclarent désormais leur
-type. Le relais transmettait déjà `application/json` à `sparkd` à leur place :
+**Conséquence sur la page** : les appels sans corps — huit directs, et
+l'utilitaire `appel()` qui en porte vingt-deux (compte corrigé au codage : la
+spécification disait « neuf ») — déclarent désormais leur type. Le relais transmettait déjà `application/json` à `sparkd` à leur place :
 ni `sparkd` ni la signature ne voient de différence.
+
+**Vérifications, et une course mise au jour.** La garde est prouvée par un vrai
+navigateur : le même parcours est **rouge sans elle** — le formulaire caché de
+la page tierce a bien ajouté `intrus` à l'inventaire — et vert avec. La
+première campagne complète a rendu trois échecs en chaîne, dont deux
+reproduits **sans** SPK-118 : le parcours *Alertes* attendait `/refusé/i`,
+que l'aide statique du formulaire contient déjà (« Un champ inconnu est refusé
+ici ») ; il rendait la main avant la réponse, qui repeignait ensuite le
+formulaire par-dessus la saisie de sa remise en état. Le canal restait donc
+altéré, *notify-alerte* échouait et laissait `analytics` sans protection, et
+*protection-revocation* échouait à son tour. Le parcours attend désormais le
+message exact ; la campagne rend 145 sur 145.
+
+**Cent appels de test** jouaient la page sans déclarer de type : ils le
+déclarent désormais, comme elle. Quatre fichiers de preuves **pendaient** au
+lieu d'échouer sur un refus — un trait des preuves, signalé, non corrigé ici.
