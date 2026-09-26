@@ -53,9 +53,12 @@ leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-ma
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 114 unités : 106 closes, 7
-partielles, 1 non commencée — SPK-113, qui attend une mesure. Le lot 6, *Réseau
-entre Sparks*, ouvert le 2026-09-17, a été clos le 2026-09-18. L'état de chacune est dans
+**Le plan de contrôle tourne sur une Forge réelle.** 123 unités : 106 closes, 7
+partielles, 10 non commencées — SPK-113, qui attend une mesure, et les neuf du
+lot 7. Le lot 6, *Réseau entre Sparks*, ouvert le 2026-09-17, a été clos le
+2026-09-18. Le lot 7, *La console hébergée derrière le SSO du domaine*, est
+décidé depuis le 2026-09-26 et spécifié au §64 du [DAT](docs/DAT.md) ; rien n'en
+est encore livré. L'état de chacune est dans
 [docs/BACKLOG.md](docs/BACKLOG.md), qui fait foi — ce paragraphe se périme, lui.
 
 Ce qui est **établi par la mesure**, et non par intention :
@@ -132,6 +135,27 @@ Le second geste redémarre brièvement le plan de contrôle et ne réussit qu'ap
 `/healthz` et le préflight. Il ne supprime jamais `/var/lib/sparkd/spark.db`.
 La procédure complète et son retour arrière sont dans le
 [runbook d'agent](docs/AGENT_RUNBOOK.md#A-déployer-sparkd-sur-une-nouvelle-forge).
+
+### Le parcours officiel d'une Forge
+
+Fixé par le responsable le 2026-09-26 (`docs/DAT.md` §64.3, point 11). Les deux
+premières étapes existent ; les suivantes sont celles du lot 7, **pas encore
+livrées**.
+
+1. **`cloud-init`** prépare le serveur métal et y installe `sparkd` —
+   `deploy/cloud-init/`, décrit plus bas (disponible).
+2. **La console locale** joint la Forge et installe le **SSO** du domaine dans un
+   Spark, selon le runbook du dépôt `lelabs-sso` (disponible : c'est ainsi que
+   `sso-p2enjoy` a été installé).
+3. **La console locale installe la console hébergée** par un geste guidé : un
+   Spark marqué *infrastructure*, la route `forge.lelabs.tech`, la build de la
+   Forge (lot 7, SPK-125).
+4. **L'interface de vérification du SSO** crée le client de la console, à partir
+   de la déclaration que le geste a composée ; son secret devient un secret de la
+   cellule (lot 7).
+5. **Le geste vérifie** le client et une connexion d'essai, puis active
+   l'exigence du SSO. Dès lors, on administre par `https://forge.lelabs.tech`, et
+   la console locale sert au secours (lot 7).
 
 ## Le stockage : un miroir ZFS natif, et rien d'autre
 
@@ -485,6 +509,12 @@ sont recevables.
 
 ### Restreindre la clé d'accès du responsable
 
+> **Suspendu depuis le 2026-09-26 — ne pas appliquer.** Une hypothèse non
+> mesurée (`docs/DAT.md` §46.7) : la ligne produite laisserait ouverte la
+> redirection vers une socket UNIX, donc Incus en `root`. SPK-119 la mesure et
+> remplace ce geste par un compte par usage (lot 7). La procédure ci-dessous
+> reste décrite pour ce qu'elle est, pas pour être jouée.
+
 Par défaut, une clé qui atteint la Forge y ouvre un shell — et qui a un shell a le
 registre. Deux gestes ferment cela sans rien retirer à la console, et ils vont
 **ensemble** :
@@ -530,7 +560,13 @@ le confond ni avec l'absence de jeton, ni avec un compte sans zone
 - Un Spark n'a pas de port SSH public : l'accès se fait par rebond sur la Forge.
 - Seules des clés **publiques** sont stockées.
 - La clé d'accès du responsable **peut être restreinte** au strict nécessaire :
-  elle n'ouvre alors plus de shell sur la Forge (voir ci-dessous).
+  elle n'ouvre alors plus de shell sur la Forge (voir ci-dessous) — geste
+  **suspendu** jusqu'à SPK-119.
+- **Décidé, non livré** (lot 7, `docs/DAT.md` §64) : l'administration passera par
+  une console hébergée dans un Spark, où l'on entre par le SSO du domaine avec le
+  rôle `admin` et un second facteur, vérifiés par `sparkd` lui-même ; `sparkd`
+  restera injoignable du réseau ; la console locale deviendra l'outil
+  d'installation et de secours.
 - Un *system container* partage le noyau de la Forge. Pour des charges hostiles, la
   réponse prévue est le mode `vm`, pas un durcissement du mode `container`.
 

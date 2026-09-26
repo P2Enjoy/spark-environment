@@ -352,6 +352,12 @@ POSTE DU RESPONSABLE                       SERVEUR
 Le navigateur ne sait rien de SSH. C'est l'hôte console local qui porte le
 tunnel, parce qu'un navigateur ne peut pas et ne doit pas le faire.
 
+**Décidé le 2026-09-26, non livré** (§64) : ce plan deviendra celui de la
+console locale **de secours**, qui joindra `sparkd` par une socket réservée ;
+l'administration quotidienne passera par une console hébergée dans un Spark,
+derrière le SSO du domaine. Jusqu'à la livraison de SPK-120, le schéma ci-dessus
+décrit le seul chemin.
+
 ## 7. Modèle de ressources
 
 ### 7.1 Le partage est le mode par défaut
@@ -1274,14 +1280,19 @@ possible sans toucher à la console.
 ## 11. Sécurité
 
 - Aucune API d'administration exposée au réseau ; le seul vecteur d'accès est SSH.
+  **Décidé le 2026-09-26, non livré** (§64) : le premier principe demeure ; le
+  second cède — l'administration passera par une console hébergée derrière le
+  SSO, dont `sparkd` vérifiera lui-même le jeton, SSH restant le chemin du
+  secours et du rebond vers les Sparks.
 - Les Sparks sont non privilégiés, `security.idmap.isolated=true`, afin que deux
   Sparks ne partagent pas de plage UID/GID sur la Forge.
 - **Chaque Spark est isolé du réseau des autres** (§57, SPK-109, déployé le
   2026-09-18) : isolation de port et anti-usurpation sur l'`eth0` de toute
   cellule, verrou `forward` sur la Forge. Une cellule ne joint hors d'elle-même
   que l'Internet, le résolveur et l'ingress de sa Forge (§56). Les réseaux
-  privés (§58) et les liens privés (§59) rouvriront à dessein ; ils ne sont pas
-  encore implémentés. L'étude est dans `docs/EXPLORATION_RESEAU_PRIVE.md`.
+  privés (§58) et les liens privés (§59) rouvrent à dessein ce que l'exploitant
+  choisit — livrés le 2026-09-18. L'étude est dans
+  `docs/EXPLORATION_RESEAU_PRIVE.md`.
 - Toute règle d'autorisation est appliquée par `sparkd`, jamais par la console.
   Masquer un bouton n'est qu'une aide visuelle.
 - Aucun secret n'entre dans le dépôt. Les clés SSH gérées par le produit sont des
@@ -2451,7 +2462,9 @@ X-Spark-Actor: <identité>
 « responsable », qui affirmerait une identité que rien n'établit.
 
 **Cet en-tête n'est pas une preuve, et le produit ne le présentera jamais comme
-telle.** Qui atteint `sparkd` écrit ce qu'il veut dedans, exactement comme qui
+telle.** (Décidé le 2026-09-26, non livré, §64.4 : l'acteur deviendra une
+identité **vérifiée** — le jeton SSO de la console hébergée, ou le compte de la
+socket de secours ; jusqu'à SPK-120, ce qui suit reste vrai.) Qui atteint `sparkd` écrit ce qu'il veut dedans, exactement comme qui
 atteint la Forge contourne la protection du §35.1. C'est une **attribution**, utile
 entre usages légitimes et pour distinguer les deux classes ; la preuve viendra de
 la signature (SPK-40), et d'elle seule. Le §36.7 dit l'ordre : identité, puis
@@ -3360,6 +3373,9 @@ rendrait la pile moins autonome, pas plus.
 **Écart assumé, à rouvrir** : dès qu'un service réel entre dans la pile de
 développement — un Incus local, un Caddy, un fournisseur simulé —, la
 conteneurisation redevient la bonne réponse et cet écart tombe.
+**Ce service arrive** — décidé le 2026-09-26, non livré (§64.3 point 11) : le lot 7
+fait entrer un **vrai Keycloak** dans la pile, par celle du dépôt `lelabs-sso`.
+L'écart tombera avec SPK-126, et Docker deviendra un prérequis du développement.
 
 ### 28.2 Le serveur local est un chemin d'accès, pas un tunnel SSH simulé
 
@@ -4532,7 +4548,9 @@ La protection s'arme avec un mot de passe et se lève avec ce même mot de passe
   au même titre que les clés — et le journal enregistre la **tentative**, son
   résultat et sa date, jamais sa valeur.
 - Il n'y a **aucune récupération** par l'API. Un mot de passe perdu se lève sur
-  la Forge, avec `root`, dans le registre. C'est cohérent avec le §35.1 : ce n'est
+  la Forge, avec `root`, dans le registre. (Décidé le 2026-09-26, non livré,
+  §64.3 point 7 : la console locale **de secours**, qui est `root` en pratique,
+  pourra changer ce mot de passe ; la console hébergée, jamais.) C'est cohérent avec le §35.1 : ce n'est
   pas un chiffrement, et prétendre le contraire par un mécanisme de secours
   compliqué serait mentir sur ce que l'interrupteur vaut.
 
@@ -10736,6 +10754,13 @@ notification et une chaîne d'audit deviennent utiles.
   compte, ni page de connexion publique, ni tiers vers qui être détourné. Elle
   coûte du matériel à acheter **et à doubler**, et la charge de conception la plus
   lourde des quatre. Écartée pour disproportion, non pour défaut.
+- **Révisé le 2026-09-26 pour le lot 7, non livré** (§64.3 point 6) : la console
+  hébergée crée précisément la page de connexion publique dont l'absence motivait
+  ces deux écarts. Le second facteur — WebAuthn **ou** TOTP, au choix de la
+  personne — sera exigé par le SSO du domaine pour le rôle `admin`, et **vérifié
+  par `sparkd`** dans le jeton. Le raisonnement du §45.3 tient toujours pour la
+  console locale : il ne vaut que là où la clé n'ouvre pas la Forge sans passer
+  par l'API — ce que le modèle de comptes du §64 établit.
 - **Ré-authentification à durée limitée** — *écartée, et le motif existe déjà.*
   C'est le déverrouillage temporaire du §35.4, sous un autre nom : elle rend le
   comportement du produit dépendant de l'heure, et pousse à travailler vite pour
@@ -11015,6 +11040,29 @@ lequel la chaîne d'audit (§36), la signature (§36.10) et une notification fut
 
 Elle ne protège pas non plus contre un poste compromis (§45.2) : la clé y est, et
 elle est restreinte pour tout le monde de la même façon.
+
+### 46.7 Ce que la mesure n'a pas couvert — ouvert le 2026-09-26
+
+**Hypothèse, non mesurée, et qui suspend OP-10.** Les six cas du §46.1 mesurent
+les tunnels TCP (`-L`, `-W`) et les sessions. Ils ne mesurent pas la
+**redirection vers une socket UNIX** (`ssh -L 5555:/chemin/de/socket`), qui est
+un autre canal d'OpenSSH (`direct-streamlocal`). `permitopen` ne s'applique
+qu'aux destinations TCP ; seul le réglage serveur `AllowStreamLocalForwarding`
+ferme ce canal, et rien ne le pose sur la Forge.
+
+La ligne produite par `scripts/cle-restreinte.sh` réactive le transfert
+(`port-forwarding`) pour une clé de `root`. Si l'hypothèse se vérifie, cette clé
+« restreinte » ouvrirait `/var/lib/incus/unix.socket`, c'est-à-dire Incus en
+`root` : la garde et `permitopen` seraient contournés d'un seul geste.
+
+Conséquences, tant que SPK-119 ne l'a pas mesurée :
+
+- **OP-10 est suspendue** : la jouer poserait une restriction qui pourrait ne
+  rien restreindre de ce qui compte ;
+- le lot 7 (§64.3 point 9) ne met plus les clés restreintes dans
+  l'`authorized_keys` de `root` : chaque usage reçoit son **compte**, restreint
+  côté serveur par `Match User`, où `AllowStreamLocalForwarding no` se pose
+  indépendamment de toute ligne de clé.
 
 ## 47. La notification hors bande : contrat (SPK-62)
 
@@ -14202,3 +14250,216 @@ poste atteint, et un jeton ajouterait un état à la page sans fermer de voie de
 plus. Pas d'authentification de l'hôte console : tout processus du poste peut
 toujours le joindre, comme il peut lire la clé SSH de l'exploitant. Aucune
 variable d'environnement, aucune migration.
+
+## 64. La console hébergée derrière le SSO du domaine : contrat (SPK-119 à SPK-127)
+
+**Décidé par le responsable le 2026-09-26**, au terme de six séries de questions
+consignées au journal du même jour. **Aucune ligne n'en est encore livrée** :
+cette section est le contrat du lot 7. Les sections qu'elle amendera — §6, §11,
+§35.3, §45, §46 — restent vraies jusqu'à la livraison de l'unité qui les touche,
+et chacune le dit par un renvoi ici.
+
+### 64.1 La demande, et ce qu'elle renverse
+
+La demande, en substance (reformulée) : se connecter à la console par le SSO ;
+avec le rôle admin, on accède à la console ; déployer l'interface dans un Spark de
+la Forge, sous un nom de domaine ; une fois authentifié, déposer sa clé SSH, qui
+devient sur la Forge la clé de cet utilisateur ; un amorçage par l'installateur,
+déjà autorisé à se connecter en root ; et que seule une interface déployée depuis
+une adresse connue et validée par un admin puisse administrer une Forge.
+
+Deux principes tombent : « le seul vecteur d'accès est SSH » (§11) et « qui
+atteint `sparkd` écrit ce qu'il veut » (§21.6.2). Un principe **reste** :
+aucune API d'administration n'est exposée au réseau — la console hébergée l'est,
+`sparkd` non.
+
+**Une précision a guidé toute la conception.** Un en-tête `Origin` ne prouve rien
+hors d'un navigateur : `curl` y écrit ce qu'il veut. « Seule la console validée
+administre la Forge » tient donc par l'**identité du client** du SSO (le client
+du jeton) et par le **jeton de la personne**, vérifiés par `sparkd`. Les gardes
+du §63 restent une défense de plus contre les pages tierces, pas une
+authentification.
+
+### 64.2 Ce qui a été établi avant de décider
+
+Tout a été lu, et rien écrit ; la Forge n'a été lue qu'en lecture seule.
+
+- **`sparkd` n'authentifie personne** : l'en-tête d'acteur est déclaratif, la
+  signature du §36.10 est une non-répudiation, pas un contrôle d'accès.
+- **Le SSO existe** : Keycloak 26.7.3 dans la cellule `sso-p2enjoy`, servi sur
+  `oauth.lelabs.tech`, dépôt **privé** `P2Enjoy/lelabs-sso`, déployé par
+  `git archive` dans `/srv/sso`. Realm `lelabs`, émetteur
+  `https://oauth.lelabs.tech/realms/lelabs`, rôles de realm `verified` et
+  `admin`. Ses notes (`README`, `CONTRIBUTORS`, `INSTALL`) fixent pour tout le
+  domaine :
+  - **aucune application sans `verified`** ; **« `admin` vaut administrateur
+    chez vous, d'office »** — une application peut être plus stricte, jamais plus
+    permissive ;
+  - un client se **déclare** (`CLIENTID=`, `TYPE=serveur`, `REDIRECT=`,
+    `ROLE=`, `SECRET_VAR=`) dans l'onglet *Intégrations* de
+    `https://oauth.lelabs.tech/verification/` ; le secret s'affiche une fois et se
+    pose comme secret de l'environnement de l'application ; PKCE `S256` et flux
+    « code » imposés ; URL exactes ; portées `openid profile email` seulement ;
+    l'existence d'un client se vérifie par `curl`, le refus rendant `400` ;
+  - **« N'appelez pas l'API d'administration de Keycloak depuis une application
+    intégrée. »**
+- **Le realm ne configure aucun second facteur** : ni politique OTP ni
+  WebAuthn, aucun flux, aucune correspondance `acr` (`config/realms/lelabs.json`).
+- **Depuis les Sparks, les ports 22 et 9876 de la Forge sont fermés exprès**
+  (§56.2, contrôle `NET-REMONTEE`). La console d'une cellule ne peut pas joindre
+  `sparkd` par SSH sans défaire cette règle.
+- **OP-10 n'est pas jouée** : la clé du responsable ouvre aujourd'hui un shell
+  complet, en `ubuntu` — le compte dont l'installation se sert par `sudo`
+  (README) ; ses droits n'ont pas été relus sur la Forge.
+- **Hypothèse, non mesurée** : `permitopen` ne restreint que les tunnels TCP ;
+  une redirection vers une **socket UNIX** (`ssh -L port:/chemin`) est un autre
+  canal, que rien ne ferme (`AllowStreamLocalForwarding` n'est posé nulle part,
+  et le §46.1 ne l'a pas mesurée). Une clé « restreinte » selon OP-10, étant une
+  clé de `root`, atteindrait alors `/var/lib/incus/unix.socket` — Incus en
+  `root`, garde contournée. SPK-119 la mesure avant tout.
+- **Un sous-module Git casserait l'installation des Forges** : pip exécute
+  `git submodule update --init --recursive` sur tout dépôt qu'il installe (lu
+  dans `pip/_internal/vcs/git.py`) ; `spark-environment` est public,
+  `lelabs-sso` privé, et `cloud-init` comme la mise à jour (§40.6) installent
+  `sparkd` par `pip install git+https://…/spark-environment.git`.
+
+### 64.3 Les décisions, et leur motif
+
+1. **`sparkd` vérifie lui-même le jeton.** À chaque requête venue de la console
+   hébergée : signature contre les clés publiées par la découverte (suivies à
+   leur rotation), émetteur exact, **client figurant dans la liste de la Forge**,
+   rôle de realm `admin`, **niveau second facteur**, échéance. Motif : la règle
+   s'applique au backend (`CLAUDE.md` §10) ; une console qui croirait à sa place
+   ferait de quiconque prend sa cellule un administrateur.
+2. **Le rôle est `admin`, du realm `lelabs`.** Le responsable a choisi un rôle de
+   realm ; les règles du domaine désignent le rôle existant. Spark est plus
+   strict que le plancher du domaine : `verified` seul n'entre pas.
+3. **Transport : une socket UNIX remise par Incus.** `sparkd` ouvre une socket
+   dédiée à la console ; un périphérique `proxy` Incus — le mécanisme des ports
+   publiés, `ports.py` — la remet dans la **seule** cellule de la console. Motif :
+   aucune clé de service à voler, et le 22 de la Forge reste fermé aux Sparks.
+   Le tunnel SSH, validé d'abord, a été abandonné pour cette raison.
+4. **La console locale devient installateur et secours.** Amorçage, mise à jour
+   et redémarrage de la Forge, administration quand le SSO est en panne. Elle
+   joint `sparkd` par une **socket de secours**, réservée à un groupe dont est le
+   compte de l'installateur, par `ssh -L port:/run/sparkd/secours.sock`. Aucun
+   jeton n'y est demandé ; **chaque écriture y part en alerte hors bande** (§47)
+   et porte la classe d'acteur `secours`. Motif : le §45.5 fixe la récupération à
+   `root` sur la Forge, et un secours que personne n'attendait est exactement ce
+   qu'on veut apprendre.
+5. **Une console par Forge, figée sur elle.** Ni sélection ni ajout de serveur
+   dans la console hébergée ; ces gestes restent dans la console locale. La Forge
+   tient pourtant une **liste** de clients acceptés — une entrée aujourd'hui.
+6. **Second facteur WebAuthn ou TOTP pour `admin`**, livré **d'abord dans
+   `lelabs-sso`** ; `sparkd` refuse un jeton qui ne porte pas ce niveau. Motif :
+   la console hébergée crée une page de connexion publique, donc la menace
+   d'hameçonnage que le §45.4 écartait faute d'objet. Vérifier le niveau dans
+   `sparkd` fait d'une politique Keycloak retirée par erreur un refus, et non un
+   accès.
+7. **Drapeau « infrastructure ».** Il supplante la protection (§35) : depuis la
+   console hébergée, aucun geste que la protection bloquerait ne passe, et
+   **aucun mot de passe** ne permet de passer outre. Il se pose et se retire
+   **uniquement par le secours**, sur n'importe quel Spark ; l'amorçage le pose
+   sur la cellule du SSO et sur celle de la console. Motif : ne pas pouvoir
+   scier, depuis la console, la branche sur laquelle elle est assise. Le secours
+   peut en outre **changer le mot de passe de protection** d'un Spark.
+8. **Terminal et Docker par `sparkd`**, dès la migration : `exec` interactif
+   d'Incus, avec pseudo-terminal, dans les comptes `root` et `spark-docker` ;
+   journalisés sous l'identité SSO. Motif : la console hébergée ne détient
+   aucune clé privée.
+9. **La clé déposée donne le seul rebond vers les Sparks.** Elle entre dans
+   l'`authorized_keys` d'un **compte dédié** de la Forge, restreint côté serveur
+   par `Match User` — `PermitOpen *:22`, `AllowStreamLocalForwarding no`, ni TTY
+   ni commande —, et au registre, où on l'accorde aux Sparks voulus. **Échéance
+   7 jours, renouvelée à chaque connexion** de son propriétaire avec `admin` et le
+   second facteur ; révocation manuelle immédiate par tout admin ; alerte au dépôt
+   et à la révocation. Motif du renouvellement plutôt que d'une synchronisation :
+   la règle du SSO interdit l'API d'administration ; un admin retiré perd l'accès
+   au plus tard à l'échéance.
+10. **Installation par un geste guidé** de la console locale, **mise à jour avec
+    la Forge** : la console hébergée est construite au commit de `sparkd`, et la
+    mise à jour de la Forge met à jour l'un puis l'autre, avec un retour arrière
+    commun.
+11. **Le SSO est tenu par une révision épinglée**, ni sous-module ni import.
+    Importer le SSO ferait de Spark le propriétaire du fournisseur d'identité de
+    tout le domaine ; un sous-module casserait l'installation (§64.2). Un fichier
+    du dépôt nomme `lelabs-sso` et le commit attendu ; `make bootstrap` le
+    récupère par SSH dans un dossier ignoré ; le développement et les E2E lancent
+    un **vrai Keycloak**, par la pile de développement du SSO.
+
+### 64.4 L'architecture cible
+
+```
+navigateur ──HTTPS, cookie de session httpOnly──▶ Caddy : forge.lelabs.tech
+                                                    │
+                        cellule « console » (infrastructure, pile Compose)
+                        console = BFF OIDC : flux « code » + PKCE, client confidentiel
+                                 │ /run/sparkd.sock (proxy Incus, cette cellule seule)
+hôte ── /run/sparkd/console.sock ─▶ sparkd : jeton exigé (admin + second facteur)
+     ── /run/sparkd/secours.sock ─▶ sparkd : groupe de secours, sans jeton, alerte
+     ── TCP 127.0.0.1:9876       ─▶ santé seulement
+console locale ── ssh -L port:/run/sparkd/secours.sock ──▶ installateur
+sparkd ── découverte + clés publiques ──▶ oauth.lelabs.tech (cache, rotation)
+```
+
+- **Trois entrées, trois contrats.** La socket de la console exige un jeton
+  valide, et chaque refus nomme sa cause — absent, signature, émetteur, client,
+  rôle, facteur, échéance. La socket de secours n'accepte qu'un appelant du
+  groupe de secours, vérifié par le noyau (`SO_PEERCRED`). Le port TCP ne sert
+  plus que la santé — `/healthz`, `/readyz`, la build —, dont l'installateur et la
+  vérification de mise à jour ont besoin.
+- **Pas de mode transitoire non authentifié.** Dès la version qui introduit ces
+  entrées, le TCP ne sert que la santé et la console locale passe par le secours.
+- **Les réglages du SSO vivent au registre** — émetteur, clients acceptés, niveau
+  exigé, échéance des clés —, écrits par le secours seulement. Aucune variable
+  d'environnement (`CLAUDE.md` §3) ; une Forge dont le SSO n'est pas réglé refuse
+  tout sur la socket de la console.
+- **L'acteur du journal** devient une identité vérifiée : `sso:<adresse>` et le
+  `sub` du jeton, ou `secours:<compte>`. La signature du §36.10 reste celle de
+  la console locale ; elle est sans objet pour la console hébergée.
+- **Les secrets de la cellule console** (§43) : le secret du client OIDC, sous le
+  nom déclaré par `SECRET_VAR`, et le jeton du fournisseur DNS.
+- **La garde du §63** accepte, en mode hébergé, l'hôte et l'origine publics de la
+  console, et eux seuls.
+
+### 64.5 Ce qui reste à mesurer avant d'écrire le code qui en dépend
+
+- la redirection vers une socket UNIX, pour chaque compte (SPK-119) ;
+- un périphérique `proxy` Incus d'une socket UNIX de l'hôte vers une socket de la
+  cellule, dans un conteneur non privilégié, avec la correspondance des
+  identifiants ;
+- la lecture des clés publiques du SSO depuis l'hôte : par le nom public (retour
+  sur sa propre adresse) ou par l'adresse privée de la cellule, l'émetteur
+  restant vérifié ;
+- la publication du niveau `acr` par Keycloak 26 pour un compte `admin` qui a
+  passé son second facteur ;
+- un authentificateur WebAuthn virtuel et un TOTP calculé dans les parcours E2E ;
+- la mémoire d'une campagne E2E qui porte un Keycloak, sous la borne de 8 Go
+  (§29.8).
+
+### 64.6 Ce que le lot ne fait pas
+
+Pas de console hébergée multi-Forges ; pas de rôle autre qu'`admin` ; aucun appel
+à l'API d'administration de Keycloak ; `sparkd` jamais joignable du réseau ;
+aucun mode non authentifié ; la console locale n'est pas retirée ; la signature
+du §36.10 n'est pas transposée à l'identité SSO.
+
+### 64.7 L'ordre de livraison, et pourquoi
+
+1. **SPK-119** — mesurer et fermer les redirections vers socket UNIX ; poser le
+   modèle de comptes. Préalable de sécurité : OP-10 est suspendue d'ici là.
+2. **`lelabs-sso`** — second facteur pour `admin`, niveau `acr` publié, comptes et
+   client de développement ; dans son dépôt et selon ses règles, **avant** que
+   Spark ne l'exige.
+3. **SPK-126** — le SSO épinglé en développement et en E2E : chaque unité
+   suivante a besoin d'un vrai Keycloak pour ses preuves.
+4. **SPK-120** — `sparkd` authentifie, et **la console locale passe au secours
+   dans la même unité**, sans quoi elle tomberait en panne.
+5. **SPK-121** — le drapeau infrastructure et la réinitialisation du mot de passe
+   de protection par le secours.
+6. **SPK-124** — la console en mode hébergé.
+7. **SPK-123** — le terminal et Docker par `sparkd`.
+8. **SPK-122** — les clés des admins.
+9. **SPK-125** — l'installation guidée et la mise à jour conjointe.
+10. **SPK-127** — le parcours officiel au README, et la bascule de la Forge de
+    validation, opération par opération.

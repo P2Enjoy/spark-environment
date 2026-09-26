@@ -1037,6 +1037,13 @@ Variable      : SPARKD_SECRET_KEY_FILE, facultative. Chemin de la clé de
 
 ### OP-10 · Restreindre la clé d'accès du responsable
 
+> **SUSPENDUE depuis le 2026-09-26 — ne pas jouer.** Une hypothèse non mesurée
+> (docs/DAT.md §46.7) : la ligne produite laisserait ouverte la redirection vers
+> une socket UNIX, donc `/var/lib/incus/unix.socket` — Incus en `root`, garde
+> contournée. SPK-119 la mesure et réécrit cette opération sur le modèle de
+> comptes du §64 (lot 7). Tant qu'elle n'est pas réécrite, la jouer poserait une
+> restriction qui pourrait ne rien restreindre de ce qui compte.
+
 ```
 Objectif      : la clé SSH du responsable n'ouvre plus de shell sur la Forge.
                 Elle garde ce dont la console a besoin — le tunnel vers sparkd,

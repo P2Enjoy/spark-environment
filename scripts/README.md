@@ -21,3 +21,9 @@ historique d'un terminal.
 `garde-ssh.sh` et `cle-restreinte.sh` vont ensemble, et avec un réglage serveur —
 `AllowTcpForwarding local` — sans lequel la console tombe en panne au lieu d'être
 protégée. La marche à suivre est dans `docs/PROD_MIGRATIONS.md`, OP-10.
+
+**OP-10 est suspendue depuis le 2026-09-26** : la ligne que produit
+`cle-restreinte.sh` laisserait peut-être ouverte la redirection vers une socket
+UNIX (`docs/DAT.md` §46.7, hypothèse non mesurée). SPK-119 la mesure et remplace
+ces deux scripts par un compte par usage (lot 7, §64). Ne pas poser la ligne d'ici
+là.

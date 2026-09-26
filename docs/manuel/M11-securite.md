@@ -104,6 +104,13 @@ La marche à suivre s'adresse à qui administre la Forge : elle est dans le
 `README.md` du produit, section *Restreindre la clé d'accès du responsable*.
 Gardez une seconde session ouverte pendant l'opération.
 
+**Suspendu depuis le 2026-09-26 : ne posez pas cette restriction pour l'instant.**
+Une vérification n'a pas encore été faite : que la clé restreinte ne puisse pas
+non plus joindre les **sockets** de la Forge — celle d'Incus en particulier, qui
+donnerait tout. Tant qu'elle n'est pas faite, « plus d'accès à un autre service »
+n'est pas établi. Le produit la fera, et remplacera ce geste par un compte dédié à
+chaque usage.
+
 ## Être prévenu quand quelque chose de grave arrive
 
 La Forge peut envoyer une **alerte hors bande** — vers Slack, Discord, `ntfy` ou

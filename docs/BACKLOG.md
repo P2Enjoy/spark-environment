@@ -8290,6 +8290,137 @@ n'est pas Internet** : un objet de moins, l'unicité par portée.
   captures ; preuve sur la Forge depuis le terminal de `B` ; seed ; SCHEMA, DAT,
   design system, manuel à jour ; `@spec` / `@verifies` posés.
 
+---
+
+## Lot 7 — La console hébergée derrière le SSO du domaine
+
+Neuf unités ouvertes le 2026-09-26 sur décision du responsable, au terme de six
+séries de questions consignées au journal du même jour. Contrat au
+`docs/DAT.md` **§64**, qui porte les décisions, leurs motifs, l'architecture,
+ce qui reste à mesurer et l'ordre de livraison ; **écrit et committé avant le
+code**. L'ordre ci-dessous est celui du §64.7, et il n'est pas indifférent :
+chaque unité dépend de la précédente.
+
+**Dépendance hors de ce dépôt** — dans `P2Enjoy/lelabs-sso`, selon ses propres
+règles et son backlog : un second facteur (WebAuthn ou TOTP) obligatoire pour le
+rôle `admin`, un niveau `acr` publié dans le jeton, des comptes et un client de
+développement pour la console Spark. À livrer et déployer **avant** que `sparkd`
+n'exige le second facteur (SPK-120 sur la Forge de validation).
+
+### [ ] SPK-119 · Mesurer et fermer les redirections vers socket UNIX ; un compte par usage
+
+- Spécification : `docs/DAT.md` §64.2, §64.3 point 9, **§46.7** (l'hypothèse) ·
+  `docs/PROD_MIGRATIONS.md` OP-10 (suspendue).
+- Portée : mesurer, sur un `sshd` jetable comme au §46.1, la redirection vers une
+  socket UNIX pour chaque forme de clé et de compte ; en déduire le modèle de
+  comptes (`Match User` : un compte de rebond, un compte de secours), avec
+  `AllowStreamLocalForwarding` fermé partout où il n'est pas voulu ; réécrire
+  OP-10 en conséquence ; un contrôle au préflight.
+- DoD : le tableau mesuré au DAT ; preuves du script qui produit la
+  configuration ; contrôle du préflight prouvé en échec et en succès ; OP-10
+  réécrite.
+
+### [ ] SPK-126 · Le SSO épinglé en développement et en E2E
+
+- Spécification : `docs/DAT.md` §64.3 point 11, §64.5, §28.1 (l'écart qui tombe).
+- Dépend de : l'unité de `lelabs-sso` (comptes et client de développement).
+- Portée : un fichier du dépôt nomme `lelabs-sso` et le commit attendu ;
+  `make bootstrap` le récupère par SSH dans un dossier ignoré ; la pile de
+  développement et le harnais E2E lancent la pile de développement du SSO (vrai
+  Keycloak) ; connexion réelle dans les parcours, TOTP calculé, authentificateur
+  WebAuthn virtuel ; README et §28 mis à jour (Docker requis).
+- DoD : un parcours E2E se connecte au vrai Keycloak avec chacun des deux
+  facteurs ; la révision épinglée est vérifiée à l'amorçage ; la campagne tient
+  sous la borne de 8 Go ; aucune variable non documentée.
+
+### [ ] SPK-120 · `sparkd` authentifie : trois entrées, l'identité vérifiée au journal
+
+- Spécification : `docs/DAT.md` §64.3 points 1 à 6, **§64.4** · `docs/SCHEMA.md`
+  (réglages du SSO au registre) · `docs/PROD_MIGRATIONS.md`.
+- Dépend de : SPK-119, SPK-126, et le second facteur livré dans `lelabs-sso`.
+- Portée : socket de la console (jeton exigé : signature, émetteur, client
+  accepté, rôle `admin`, niveau second facteur, échéance ; chaque refus nomme sa
+  cause) ; socket de secours (groupe, `SO_PEERCRED`, classe `secours`, alerte hors
+  bande à chaque écriture) ; TCP réduit à la santé ; réglages du SSO au registre,
+  écrits par le secours seulement ; **la console locale passe au secours dans la
+  même unité**.
+- DoD : preuves de chaque refus avec des jetons signés localement ; preuves des
+  trois entrées ; parcours E2E avec le vrai Keycloak ; l'alerte du secours reçue ;
+  migration avec retour arrière ; aucune route non authentifiée hors santé.
+
+### [ ] SPK-121 · Le drapeau infrastructure, et le mot de passe de protection réinitialisé par le secours
+
+- Spécification : `docs/DAT.md` §64.3 point 7 · §35 (qu'il supplante) ·
+  `docs/SCHEMA.md` · `docs/DESIGN_SYSTEM_APP.md`.
+- Dépend de : SPK-120.
+- Portée : le drapeau, posé et retiré par le secours seulement ; tout geste que la
+  protection bloquerait est refusé depuis la console hébergée, sans mot de passe
+  qui passe outre ; le secours change un mot de passe de protection ; l'écran le
+  dit.
+- DoD : preuves directes (refus par la socket de la console, acceptation par
+  celle du secours) ; parcours E2E ; captures ; manuel.
+
+### [ ] SPK-124 · La console en mode hébergé
+
+- Spécification : `docs/DAT.md` §64.3 points 1, 3, 5, §64.4 · §22 (à amender) ·
+  §63 (la garde, en mode hébergé) · `docs/DESIGN_SYSTEM_APP.md` · manuel M3.
+- Dépend de : SPK-120, SPK-121.
+- Portée : connexion par le SSO (flux « code » + PKCE, client confidentiel,
+  session en cookie `httpOnly`) ; transport par la socket remise par Incus ;
+  Forge figée ; écrans du secours absents ; pages de refus (sans rôle,
+  `verified` sans `admin`, sans second facteur) ; paquet Compose
+  `deploy/console/` et son `.env.example` commenté ; secrets de la cellule.
+- DoD : preuves unitaires et de route ; parcours E2E de connexion et de refus ;
+  vérification visuelle en utilisateur ; design system et manuel.
+
+### [ ] SPK-123 · Le terminal et Docker par `sparkd`
+
+- Spécification : `docs/DAT.md` §64.3 point 8 · §37 (à amender).
+- Dépend de : SPK-124.
+- Portée : `exec` interactif d'Incus avec pseudo-terminal, dans les comptes
+  `root` et `spark-docker` ; les gestes Docker ; journalisés sous l'identité SSO ;
+  la console hébergée garde le protocole de flux et de saisie existant ; la
+  console locale garde ses chemins SSH de secours.
+- DoD : preuves ; parcours E2E (ouvrir, écrire, fermer ; un geste Docker) ;
+  vérification visuelle.
+
+### [ ] SPK-122 · Les clés des admins : dépôt, échéance, rebond
+
+- Spécification : `docs/DAT.md` §64.3 point 9 · §17 (le registre des clés).
+- Dépend de : SPK-119, SPK-124.
+- Portée : dépôt depuis la console hébergée ; propriétaire (le `sub` du jeton) ;
+  échéance de 7 jours renouvelée à chaque connexion avec `admin` et second
+  facteur ; `authorized_keys` du compte de rebond et des cellules régénérés par
+  `sparkd`, réconciliation périodique ; révocation par tout admin ; alertes.
+- DoD : preuves (échéance, renouvellement, révocation, régénération) ; parcours
+  E2E : déposer, rebondir par `ssh -J`, retirer le rôle, constater l'échéance.
+
+### [ ] SPK-125 · Installer la console hébergée, et la mettre à jour avec la Forge
+
+- Spécification : `docs/DAT.md` §64.3 points 7 et 10 · §40.6, §50 (à amender).
+- Dépend de : SPK-122.
+- Portée : un geste guidé de la console locale — créer le Spark, poser le
+  drapeau, la route, déployer la build, composer la déclaration du client à
+  coller dans l'interface du SSO, recevoir le secret, vérifier (client connu,
+  connexion d'essai) avant d'activer ; la mise à jour de la Forge met à jour la
+  console, avec un retour arrière commun.
+- DoD : parcours E2E du geste entier contre le SSO de développement ; retour
+  arrière prouvé ; manuel.
+
+### [ ] SPK-127 · Le parcours officiel, et la bascule de la Forge de validation
+
+- Spécification : `docs/DAT.md` §64.3 point 11, §64.7 · README ·
+  `docs/AGENT_RUNBOOK.md` · `docs/PROD_MIGRATIONS.md` · manuel M3, M11.
+- Dépend de : toutes les unités du lot.
+- Portée : le parcours officiel au README — `cloud-init` → `sparkd` → le SSO par
+  la console locale → la console hébergée → le client déclaré dans l'interface du
+  SSO → la vérification ; les opérations ordonnées pour la Forge de validation,
+  chacune avec seconde session ouverte et retour arrière écrit.
+- DoD : la Forge de validation administrée par `https://forge.lelabs.tech`, par un
+  admin avec second facteur ; le secours éprouvé ; OP-10 remplacée.
+
+---
+
 ## Réservé, non planifié
 
 - **Serveur MCP sur un Spark** : piste étudiée le 2026-09-02 et laissée hors

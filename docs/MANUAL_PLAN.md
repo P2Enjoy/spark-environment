@@ -43,7 +43,13 @@ ranger les Sparks en projets — les onglets Tous, un par projet, Projets, et le
 rangement depuis la fenêtre d'un Spark. Quand la console sert un code plus ancien
 que le dépôt : l'avertissement, et la redémarrer depuis lui.
 
-Unités : SPK-16, SPK-116, SPK-65, SPK-117.
+À venir avec le lot 7 (`docs/DAT.md` §64) : la console hébergée — s'y connecter
+par le SSO du domaine, ce que voit un compte sans le rôle `admin` ou sans second
+facteur, déposer sa clé SSH et la voir échoir, le terminal ouvert par la Forge ;
+la console locale devenue l'outil d'installation et de secours.
+
+Unités : SPK-16, SPK-116, SPK-65, SPK-117 ; à venir SPK-122, SPK-123, SPK-124,
+SPK-125.
 
 ## M4 · Lire les pools de ressources
 
@@ -124,7 +130,12 @@ pas aux autres onglets du navigateur. Ce qu'un *system container* ne protège
 pas, et quand il faudra un mode `vm`. La réservation réseau, qui est une
 comptabilité et non une garantie.
 
-Unités : SPK-15, SPK-108, SPK-118 ; §10, §56 et §63 du DAT.
+À venir avec le lot 7 : qui peut administrer une Forge — `admin` et un second
+facteur, vérifiés par la Forge elle-même —, le secours et son alerte, le drapeau
+*infrastructure*, et ce qu'une clé déposée ouvre (le rebond, rien d'autre).
+
+Unités : SPK-15, SPK-108, SPK-118 ; §10, §56 et §63 du DAT ; à venir SPK-119,
+SPK-120, SPK-121, SPK-122, §64.
 
 ## M12 · Annexes
 

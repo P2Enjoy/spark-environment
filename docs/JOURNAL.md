@@ -12727,3 +12727,92 @@ message exact ; la campagne rend 145 sur 145.
 **Cent appels de test** jouaient la page sans déclarer de type : ils le
 déclarent désormais, comme elle. Quatre fichiers de preuves **pendaient** au
 lieu d'échouer sur un refus — un trait des preuves, signalé, non corrigé ici.
+
+## 2026-09-26 · Lot 7 — administrer la Forge par une console hébergée, derrière le SSO du domaine
+
+**Demande du responsable** : se connecter à la console par le SSO ; `admin`
+ouvre l'accès ; la console est déployée dans un Spark, sous un nom de domaine ;
+chacun y dépose sa clé SSH ; un amorçage par l'installateur, qui a déjà `root`.
+But : que seule une console déployée à une adresse connue et validée administre
+une Forge. Il a demandé explicitement qu'on lui pose des questions avant de rien
+décider.
+
+**Ce qui a été établi avant la première question** (lecture seule ; la Forge n'a
+été lue que par un tunnel éphémère, refermé aussitôt) :
+
+- `sparkd` n'authentifie personne (§11, §21.6.2, §45.4) ;
+  `docs/EXPLORATION_MCP.md` avait déjà tranché les contraintes d'une ouverture —
+  ne jamais router Caddy vers `sparkd`, un processus exposé ne doit pas être celui
+  qui tourne en `root`, une authentification sans voie de secours enferme
+  l'exploitant dehors ;
+- le SSO est le Keycloak de la cellule `sso-p2enjoy`, dépôt privé
+  `P2Enjoy/lelabs-sso` (copie locale : `lelabs/sso`). Ses notes fixent les règles
+  du domaine (rien sans `verified`, `admin` vaut administrateur d'office), la
+  déclaration d'un client par son interface de vérification, PKCE imposé, et
+  **interdisent l'API d'administration de Keycloak aux applications**. Son realm
+  ne configure **aucun second facteur** ;
+- depuis les Sparks, 22 et 9876 de la Forge sont fermés exprès (§56.2) ;
+- OP-10 n'est **pas jouée** : la clé du responsable ouvre un shell complet ;
+- **hypothèse, non mesurée** : la redirection vers une socket UNIX échappe à
+  `permitopen` ; une clé « restreinte » selon OP-10, clé de `root`, ouvrirait
+  Incus en `root`. OP-10 est suspendue jusqu'à la mesure (§46.7) ;
+- pip initialise les sous-modules des dépôts qu'il installe — lu dans son code —,
+  ce qui interdit un sous-module privé dans un dépôt public qu'on installe par
+  pip ;
+- en passant : le tunnel de la console locale vers la Forge de validation était
+  rompu depuis ~26 h, alors que la Forge répondait (22, 80, 443 ouverts, SSO en
+  `302`). Aucune panne de la Forge ; seul le tunnel était resté cassé.
+
+**Six séries de questions, et les réponses** :
+
+1. `sparkd` vérifie le jeton lui-même (recommandé) ; console locale =
+   installateur et secours (recommandé) ; clé déposée = rebond seul (recommandé) ;
+   une console par Forge (recommandé).
+2. Admin = **rôle du realm** (contre la recommandation « rôle du client ») ;
+   second facteur **exigé et vérifié** (recommandé) ; **drapeau infrastructure**
+   qui supplante la protection, posé par le secours seulement, sans mot de passe
+   pour passer outre, et le secours peut changer un mot de passe de protection
+   (réponse libre) ; **terminal et Docker par `sparkd` dès la migration** (contre
+   la recommandation « en deux temps »).
+3. Clés **synchronisées avec Keycloak** ; **vrai Keycloak** en dev et en E2E ;
+   parcours officiel `cloud-init` → `sparkd` → console locale → SSO → console
+   hébergée → client déclaré par l'interface du SSO (réponse libre), avec la
+   proposition d'un sous-module ; domaine `forge.lelbas.tech` ; console figée
+   sur sa Forge, la sélection des serveurs restant à la console locale.
+4. Clés : **échéance renouvelée** à la connexion (recommandé) — la
+   synchronisation demandait l'API que la règle du SSO interdit ; SSO **épinglé**
+   (recommandé) ; second facteur **WebAuthn ou TOTP** (recommandé) ; domaine
+   **`forge.lelabs.tech`** (coquille confirmée).
+5. **Installation guidée** par la console locale ; **mise à jour avec la
+   Forge** ; l'unité du second facteur **faite dans `lelabs-sso` au cours de ce
+   lot**, selon les règles de ce dépôt ; échéance **7 jours** (tous
+   recommandés).
+6. Transport : **socket UNIX remise par Incus** dans la seule cellule de la
+   console (recommandé) — le tunnel SSH de la réponse 1 aurait exigé d'ouvrir le
+   22 aux Sparks ; **alerte hors bande à chaque geste de secours** (recommandé).
+
+**Trois réponses corrigées en chemin, par des faits lus ensuite** — et chacune
+soumise de nouveau au responsable, jamais changée en silence :
+
+- le « rôle du realm » désigne le rôle `admin` **existant**, par la règle du
+  domaine, et non un nouveau `spark-admin` ;
+- la synchronisation des clés cède à l'échéance renouvelée, par la règle du SSO ;
+- le tunnel SSH cède à la socket remise par Incus, par le §56.
+
+**Avis donné sur le sous-module, et retenu** : ni sous-module ni import. Le SSO
+sert tout le domaine (le CRM et le devis en dépendent) : l'importer ferait de
+Spark le propriétaire de son fournisseur d'identité ; un sous-module casserait
+l'installation des Forges. Une révision épinglée donne la même reproductibilité.
+
+**Décision** : le contrat est le §64 du DAT ; les §6, §11, §21.6.2, §28.1, §35.3,
+§45.4 et §46 portent un renvoi, et restent vrais jusqu'à la livraison de l'unité
+qui les amende. Le lot 7 ouvre SPK-119 à SPK-127, dans l'ordre du §64.7.
+Corrigé en passant : le §11 disait encore les réseaux privés « pas encore
+implémentés », livrés le 2026-09-18.
+
+**Non vérifié, et dit comme tel** : l'hypothèse de la socket UNIX ; un
+périphérique `proxy` Incus d'une socket de l'hôte vers une cellule non
+privilégiée ; la lecture des clés du SSO depuis l'hôte ; le niveau `acr` de
+Keycloak 26 ; l'automatisation des deux facteurs en E2E ; la mémoire d'une
+campagne qui porte un Keycloak. Le §64.5 les liste ; chacun est mesuré par
+l'unité qui en dépend, avant son code.
