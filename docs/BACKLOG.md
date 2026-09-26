@@ -8307,18 +8307,26 @@ rôle `admin`, un niveau `acr` publié dans le jeton, des comptes et un client d
 développement pour la console Spark. À livrer et déployer **avant** que `sparkd`
 n'exige le second facteur (SPK-120 sur la Forge de validation).
 
-### [ ] SPK-119 · Mesurer et fermer les redirections vers socket UNIX ; un compte par usage
+### [ ] SPK-119 · Un compte par usage sur la Forge, et le préflight qui le garde
 
-- Spécification : `docs/DAT.md` §64.2, §64.3 point 9, **§46.7** (l'hypothèse) ·
-  `docs/PROD_MIGRATIONS.md` OP-10 (suspendue).
-- Portée : mesurer, sur un `sshd` jetable comme au §46.1, la redirection vers une
-  socket UNIX pour chaque forme de clé et de compte ; en déduire le modèle de
-  comptes (`Match User` : un compte de rebond, un compte de secours), avec
-  `AllowStreamLocalForwarding` fermé partout où il n'est pas voulu ; réécrire
-  OP-10 en conséquence ; un contrôle au préflight.
-- DoD : le tableau mesuré au DAT ; preuves du script qui produit la
-  configuration ; contrôle du préflight prouvé en échec et en succès ; OP-10
-  réécrite.
+- Spécification : `docs/DAT.md` **§46.7** (mesuré), §64.2, §64.3 point 9 ·
+  `docs/PROD_MIGRATIONS.md` OP-10.
+- **Mesure faite le 2026-09-26**, avant tout code (§46.7) : sur un banc Ubuntu
+  26.04 / OpenSSH 10.2p1, c'est `permitopen` — et lui seul — qui refuse une
+  redirection vers une socket UNIX ; `restrict,port-forwarding` ne la ferme pas,
+  et atteint la socket d'Incus, donc Incus en `root`. `AllowStreamLocalForwarding
+  no` la ferme quelle que soit la ligne, sans casser tunnel ni rebond. La crainte
+  qui avait suspendu OP-10 est **infirmée** ; OP-10 a repris, avec ce réglage.
+- Portée : le modèle de comptes de la Forge — un compte de **rebond** (`Match
+  User` : `PermitOpen *:22`, `AllowStreamLocalForwarding no`, ni TTY ni commande)
+  et un compte de **secours** (redirection vers socket ouverte, donc sans
+  `permitopen` — §46.7.2) ; le script qui produit cette configuration, comme
+  `cle-restreinte.sh` produit sa ligne ; un contrôle de préflight qui lit la
+  configuration **effective** (`sshd -T`, fragments compris) et refuse une Forge
+  dont un compte a dérivé.
+- DoD : les cas du §46.7 rejoués **par compte** sur un banc, et consignés ;
+  preuves du script ; contrôle de préflight prouvé en échec et en succès ; OP-10
+  et le README à jour ; `@spec` / `@verifies`.
 
 ### [ ] SPK-126 · Le SSO épinglé en développement et en E2E
 

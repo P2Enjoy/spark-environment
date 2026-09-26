@@ -226,6 +226,16 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **OP-10 gagne un second réglage serveur, et une crainte est levée.** MESURÉ le
+  2026-09-26 sur un banc Ubuntu 26.04 / OpenSSH 10.2p1 (`docs/DAT.md` §46.7) :
+  ce qui refuse à la clé restreinte une redirection vers une socket UNIX — donc
+  vers `/var/lib/incus/unix.socket`, Incus en `root` — est le `permitopen` de sa
+  ligne, et rien d'autre. `restrict,port-forwarding` seul, lui, atteint Incus :
+  c'est le second visage du faux ami du §46.1. La ligne produite par
+  `scripts/cle-restreinte.sh` ferme donc déjà ce canal ; OP-10, suspendue le
+  matin sur la crainte inverse, reprend son cours et ajoute
+  `AllowStreamLocalForwarding no` au `sshd_config`, qui ferme le même canal sans
+  dépendre d'aucune virgule.
 - **SPK-65 — une console hors dépôt ne dit plus « démarrée avant 0 commit ».**
   Sans Git, ce sont les fichiers servis qui changent, et l'avertissement le dit.
 - **SPK-112 — une route sans TLS le dit et se corrige d'un geste, et la cellule

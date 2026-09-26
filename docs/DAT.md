@@ -11041,28 +11041,74 @@ lequel la chaîne d'audit (§36), la signature (§36.10) et une notification fut
 Elle ne protège pas non plus contre un poste compromis (§45.2) : la clé y est, et
 elle est restreinte pour tout le monde de la même façon.
 
-### 46.7 Ce que la mesure n'a pas couvert — ouvert le 2026-09-26
+### 46.7 Les redirections vers une socket UNIX — MESURÉ le 2026-09-26
 
-**Hypothèse, non mesurée, et qui suspend OP-10.** Les six cas du §46.1 mesurent
-les tunnels TCP (`-L`, `-W`) et les sessions. Ils ne mesurent pas la
-**redirection vers une socket UNIX** (`ssh -L 5555:/chemin/de/socket`), qui est
-un autre canal d'OpenSSH (`direct-streamlocal`). `permitopen` ne s'applique
-qu'aux destinations TCP ; seul le réglage serveur `AllowStreamLocalForwarding`
-ferme ce canal, et rien ne le pose sur la Forge.
+Les six cas du §46.1 mesurent les tunnels TCP (`-L`, `-W`) et les sessions. Ils
+ne mesuraient pas la **redirection vers une socket UNIX** (`ssh -L
+<port>:/chemin/de/socket`), qui est un canal distinct d'OpenSSH
+(`direct-streamlocal`) : `permitopen` ne prend qu'une destination `hôte:port`,
+et l'on pouvait craindre que ce canal échappe à la restriction. Une clé d'OP-10
+étant une clé de `root`, elle aurait alors ouvert `/var/lib/incus/unix.socket`,
+c'est-à-dire **Incus en `root`**, garde et `permitopen` contournés d'un seul geste.
 
-La ligne produite par `scripts/cle-restreinte.sh` réactive le transfert
-(`port-forwarding`) pour une clé de `root`. Si l'hypothèse se vérifie, cette clé
-« restreinte » ouvrirait `/var/lib/incus/unix.socket`, c'est-à-dire Incus en
-`root` : la garde et `permitopen` seraient contournés d'un seul geste.
+**Mesuré sur un banc Ubuntu 26.04 — la distribution de la Forge —, OpenSSH
+10.2p1 des deux côtés, avec la ligne réellement produite par
+`scripts/cle-restreinte.sh` et quatre services témoins qui répondent chacun son
+nom**, afin de savoir non pas qu'une connexion aboutit, mais **qui** elle atteint :
 
-Conséquences, tant que SPK-119 ne l'a pas mesurée :
+| Ligne d'`authorized_keys` | `-L` vers la socket d'Incus | `-L` vers `sparkd` |
+|---|---|---|
+| clé nue | **atteint Incus** | passe |
+| `restrict,port-forwarding` | **atteint Incus** | passe |
+| `restrict,port-forwarding,command=…` | **atteint Incus** | passe |
+| `restrict,port-forwarding,permitopen=…` | **refusé** | passe |
+| la ligne d'OP-10 (les deux) | **refusé** | passe |
 
-- **OP-10 est suspendue** : la jouer poserait une restriction qui pourrait ne
-  rien restreindre de ce qui compte ;
-- le lot 7 (§64.3 point 9) ne met plus les clés restreintes dans
-  l'`authorized_keys` de `root` : chaque usage reçoit son **compte**, restreint
-  côté serveur par `Match User`, où `AllowStreamLocalForwarding no` se pose
-  indépendamment de toute ligne de clé.
+**La crainte est infirmée : la ligne d'OP-10 refuse déjà ce canal.** `sshd`
+journalise le refus en toutes lettres — « *Received request to connect to path
+/var/lib/incus/unix.socket, but the request was denied.* » OP-10 n'a donc jamais
+été la porte ouverte qu'on redoutait, et elle reprend son cours.
+
+**Ce que la mesure apprend en revanche, et qui n'était pas cherché : c'est
+`permitopen` qui ferme, et lui seul.** Ni `restrict`, ni `port-forwarding`, ni
+`command=` n'y sont pour rien — une clé portant `restrict,port-forwarding` sans
+`permitopen` atteint Incus en `root`. C'est **le second visage du faux ami du
+§46.1** : `restrict` ne ferme ni l'exécution d'une commande, ni les redirections
+vers une socket. Qui écrirait « restrict suffit » se tromperait deux fois.
+
+Le mécanisme est celui d'une liste fermée : `permitopen` n'autorise que ce qu'il
+énumère, et une socket ne peut jamais y figurer — elle est donc refusée d'office,
+non par une règle qui la viserait, mais parce que rien ne l'autorise.
+
+#### 46.7.1 La ceinture serveur, et pourquoi elle est ajoutée quand même
+
+Toute la protection repose donc sur **une option dans une ligne** — précisément ce
+dont `scripts/cle-restreinte.sh` existe pour éviter la recopie, « une virgule
+oubliée y ouvre une porte EN SILENCE ». Une ligne dont le `permitopen` tombe ne
+perd pas seulement le filtrage des ports : elle ouvre Incus en `root`.
+
+MESURÉ sur le même banc : `AllowStreamLocalForwarding no` dans le `sshd_config`
+**ferme ce canal quelle que soit la ligne** — clé nue comprise — et **ne casse ni
+le tunnel vers `sparkd` ni le rebond**. Elle est donc ajoutée à OP-10, à côté
+d'`AllowTcpForwarding local` (§46.2), comme seconde condition indépendante : la
+première tient dans la clé, la seconde dans le serveur, et il faut perdre les deux
+pour rouvrir la porte.
+
+#### 46.7.2 Ce que cela impose au compte de secours du §64
+
+La conséquence est contre-intuitive et décide d'un point du lot 7 : **une clé qui
+porte `permitopen` ne peut pas rediriger vers une socket**. Le compte de secours
+du §64.4, dont c'est précisément le geste — joindre `/run/sparkd/secours.sock` —,
+ne peut donc pas être restreint par `permitopen`, et `AllowStreamLocalForwarding`
+doit y rester ouvert.
+
+Il en découle qu'**une clé de secours atteint toutes les sockets de la Forge**,
+Incus compris. Ce n'est pas une brèche : le §45.5 fixe la récupération à `root`
+sur la Forge, et le compte de secours est celui de l'installateur, qui est `root`
+en pratique. Mais cela se dit, plutôt que de laisser croire à une restriction qui
+n'existe pas — et cela justifie le **compte par usage** du §64.3 point 9 : le
+compte de rebond, lui, ferme `AllowStreamLocalForwarding` par `Match User`, et
+n'hérite pas de ce que le secours doit pouvoir faire.
 
 ## 47. La notification hors bande : contrat (SPK-62)
 
@@ -14311,12 +14357,15 @@ Tout a été lu, et rien écrit ; la Forge n'a été lue qu'en lecture seule.
 - **OP-10 n'est pas jouée** : la clé du responsable ouvre aujourd'hui un shell
   complet, en `ubuntu` — le compte dont l'installation se sert par `sudo`
   (README) ; ses droits n'ont pas été relus sur la Forge.
-- **Hypothèse, non mesurée** : `permitopen` ne restreint que les tunnels TCP ;
-  une redirection vers une **socket UNIX** (`ssh -L port:/chemin`) est un autre
-  canal, que rien ne ferme (`AllowStreamLocalForwarding` n'est posé nulle part,
-  et le §46.1 ne l'a pas mesurée). Une clé « restreinte » selon OP-10, étant une
-  clé de `root`, atteindrait alors `/var/lib/incus/unix.socket` — Incus en
-  `root`, garde contournée. SPK-119 la mesure avant tout.
+- **Les redirections vers une socket UNIX, MESURÉES le 2026-09-26** (§46.7) :
+  c'est `permitopen` — et lui seul — qui les refuse. La ligne d'OP-10 ferme donc
+  déjà ce canal ; une ligne portant `restrict,port-forwarding` **sans**
+  `permitopen`, en revanche, atteint `/var/lib/incus/unix.socket`, donc Incus en
+  `root`. Deux conséquences pour ce lot : le compte de **rebond** ferme
+  `AllowStreamLocalForwarding` côté serveur, indépendamment de toute ligne ; le
+  compte de **secours**, qui doit joindre une socket, ne peut pas porter de
+  `permitopen` et atteint donc toutes les sockets de la Forge — ce qui est
+  cohérent avec §45.5, et se dit (§46.7.2).
 - **Un sous-module Git casserait l'installation des Forges** : pip exécute
   `git submodule update --init --recursive` sur tout dépôt qu'il installe (lu
   dans `pip/_internal/vcs/git.py`) ; `spark-environment` est public,
@@ -14424,7 +14473,10 @@ sparkd ── découverte + clés publiques ──▶ oauth.lelabs.tech (cache, 
 
 ### 64.5 Ce qui reste à mesurer avant d'écrire le code qui en dépend
 
-- la redirection vers une socket UNIX, pour chaque compte (SPK-119) ;
+**Fait le 2026-09-26** : les redirections vers une socket UNIX (§46.7). Restent :
+
+- le modèle de comptes lui-même — les mêmes cas, rejoués par `Match User` plutôt
+  qu'au niveau global (SPK-119) ;
 - un périphérique `proxy` Incus d'une socket UNIX de l'hôte vers une socket de la
   cellule, dans un conteneur non privilégié, avec la correspondance des
   identifiants ;
@@ -14446,8 +14498,9 @@ du §36.10 n'est pas transposée à l'identité SSO.
 
 ### 64.7 L'ordre de livraison, et pourquoi
 
-1. **SPK-119** — mesurer et fermer les redirections vers socket UNIX ; poser le
-   modèle de comptes. Préalable de sécurité : OP-10 est suspendue d'ici là.
+1. **SPK-119** — poser le modèle de comptes (`Match User`), et le contrôle de
+   préflight qui le garde. La mesure qui devait le précéder est **faite** (§46.7),
+   et OP-10 a repris son cours, enrichie du réglage qu'elle a établi.
 2. **`lelabs-sso`** — second facteur pour `admin`, niveau `acr` publié, comptes et
    client de développement ; dans son dépôt et selon ses règles, **avant** que
    Spark ne l'exige.

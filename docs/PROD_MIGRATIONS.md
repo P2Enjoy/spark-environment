@@ -1037,12 +1037,12 @@ Variable      : SPARKD_SECRET_KEY_FILE, facultative. Chemin de la clé de
 
 ### OP-10 · Restreindre la clé d'accès du responsable
 
-> **SUSPENDUE depuis le 2026-09-26 — ne pas jouer.** Une hypothèse non mesurée
-> (docs/DAT.md §46.7) : la ligne produite laisserait ouverte la redirection vers
-> une socket UNIX, donc `/var/lib/incus/unix.socket` — Incus en `root`, garde
-> contournée. SPK-119 la mesure et réécrit cette opération sur le modèle de
-> comptes du §64 (lot 7). Tant qu'elle n'est pas réécrite, la jouer poserait une
-> restriction qui pourrait ne rien restreindre de ce qui compte.
+> **Révisée le 2026-09-26** : un troisième geste s'ajoute — la ligne 1 porte
+> désormais DEUX réglages. Motif MESURÉ (docs/DAT.md §46.7) : la restriction des
+> redirections vers une socket UNIX repose entièrement sur `permitopen`, donc sur
+> une option d'une ligne ; `AllowStreamLocalForwarding no` la double côté serveur.
+> L'opération avait été suspendue le matin même sur une crainte que la mesure a
+> **infirmée** : la ligne produite refuse déjà ce canal.
 
 ```
 Objectif      : la clé SSH du responsable n'ouvre plus de shell sur la Forge.
@@ -1054,14 +1054,22 @@ Ordre         : les deux gestes vont ENSEMBLE. Poser la ligne sans le réglage
                 serveur donne une console EN PANNE ; poser le réglage sans la
                 ligne ne protège de rien.
 
-  1. sshd_config de la Forge :
+  1. sshd_config de la Forge, DEUX réglages :
 
          AllowTcpForwarding local
+         AllowStreamLocalForwarding no
 
-     MESURÉ (§46.2) : à « no », TOUT tombe, y compris avec une clé sans aucune
-     option, sur « administratively prohibited: open failed ». Certaines
-     distributions l'ont ainsi par défaut. « local » et non « yes » : il
+     MESURÉ (§46.2) : à « AllowTcpForwarding no », TOUT tombe, y compris avec une
+     clé sans aucune option, sur « administratively prohibited: open failed ».
+     Certaines distributions l'ont ainsi par défaut. « local » et non « yes » : il
      autorise -L et -W, dont la console a besoin, et refuse -R.
+
+     MESURÉ (§46.7) : « AllowStreamLocalForwarding no » ferme les redirections
+     vers une socket UNIX QUELLE QUE SOIT la ligne de clé, et ne casse ni le
+     tunnel ni le rebond. Sans lui, la seule chose qui sépare cette clé de
+     /var/lib/incus/unix.socket — donc d'Incus en root — est le « permitopen » de
+     la ligne : une option, dans une ligne, que ce script existe pour ne pas
+     avoir à recopier à la main.
      Puis : systemctl reload ssh
 
   2. La garde, posée sur la Forge :
@@ -1090,6 +1098,10 @@ Vérification  : GARDER UNE SECONDE SESSION OUVERTE pendant tout le geste. Puis,
                     ssh <forge>                      (shell interactif)
                     ssh <forge> "cat /etc/hostname"  (lecture d'un fichier)
                     ssh -W 127.0.0.1:22 <forge>      (autre service)
+                    ssh -L 5555:/var/lib/incus/unix.socket <forge>
+                      puis une connexion sur 127.0.0.1:5555 — elle ne doit RIEN
+                      atteindre. Le sshd journalise alors « Received request to
+                      connect to path …, but the request was denied. » (§46.7)
 
                 Et depuis la console : le tunnel s'ouvre, un terminal de Spark
                 s'ouvre, le dépannage s'ouvre.

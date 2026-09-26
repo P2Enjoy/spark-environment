@@ -509,19 +509,14 @@ sont recevables.
 
 ### Restreindre la clé d'accès du responsable
 
-> **Suspendu depuis le 2026-09-26 — ne pas appliquer.** Une hypothèse non
-> mesurée (`docs/DAT.md` §46.7) : la ligne produite laisserait ouverte la
-> redirection vers une socket UNIX, donc Incus en `root`. SPK-119 la mesure et
-> remplace ce geste par un compte par usage (lot 7). La procédure ci-dessous
-> reste décrite pour ce qu'elle est, pas pour être jouée.
-
 Par défaut, une clé qui atteint la Forge y ouvre un shell — et qui a un shell a le
 registre. Deux gestes ferment cela sans rien retirer à la console, et ils vont
 **ensemble** :
 
 ```bash
-# 1. Sur la Forge — sans ce réglage, tout tombe, même avec une clé sans options.
-#    Dans /etc/ssh/sshd_config :  AllowTcpForwarding local
+# 1. Sur la Forge, deux réglages de /etc/ssh/sshd_config :
+#      AllowTcpForwarding local        sans lui, tout tombe, même clé sans options
+#      AllowStreamLocalForwarding no   ferme les redirections vers une socket
 # 2. Poser la garde sur la Forge :
 install -m 0755 scripts/garde-ssh.sh /usr/local/sbin/spark-garde-ssh
 # 3. Produire la ligne, et remplacer celle de cette clé dans authorized_keys :
@@ -530,15 +525,20 @@ install -m 0755 scripts/garde-ssh.sh /usr/local/sbin/spark-garde-ssh
 
 Ce que la clé garde : le tunnel vers `sparkd`, le rebond vers un Spark, et le
 dépannage. Ce qu'elle perd : le shell interactif, la lecture des fichiers de la
-Forge, et l'accès à tout autre service que `sparkd`.
+Forge, et l'accès à tout autre service que `sparkd` — **y compris les sockets**,
+celle d'Incus comprise, mesuré le 2026-09-26 (`docs/DAT.md` §46.7).
 
 **Gardez une seconde session SSH ouverte pendant l'opération** : elle est votre
 retour arrière. La marche à suivre complète, avec ses six vérifications, est dans
 `docs/PROD_MIGRATIONS.md` (OP-10) ; le raisonnement et les mesures sont au §46 du
 `docs/DAT.md`.
 
-Attention à un faux ami mesuré : `restrict` seul **ne ferme pas** l'exécution de
-commande. Une clé « restreinte » sans `command=` lit encore tout le registre.
+Attention à un faux ami mesuré, et il a **deux visages** : `restrict` seul ne
+ferme ni l'exécution de commande — une clé « restreinte » sans `command=` lit
+encore tout le registre —, ni les redirections vers une socket : sans
+`permitopen`, elle atteint la socket d'Incus, donc Incus en `root`. Les deux ont
+été mesurés (§46.1, §46.7). C'est pourquoi la ligne se **produit** et ne se
+recopie pas.
 
 Le jeton DNS vit **sur le poste qui fait tourner la console**, dans un `.env`
 ignoré par Git — jamais sur la Forge, où il serait lisible par qui y détient
@@ -560,8 +560,8 @@ le confond ni avec l'absence de jeton, ni avec un compte sans zone
 - Un Spark n'a pas de port SSH public : l'accès se fait par rebond sur la Forge.
 - Seules des clés **publiques** sont stockées.
 - La clé d'accès du responsable **peut être restreinte** au strict nécessaire :
-  elle n'ouvre alors plus de shell sur la Forge (voir ci-dessous) — geste
-  **suspendu** jusqu'à SPK-119.
+  elle n'ouvre alors plus de shell sur la Forge, ni aucune de ses sockets (voir
+  ci-dessous).
 - **Décidé, non livré** (lot 7, `docs/DAT.md` §64) : l'administration passera par
   une console hébergée dans un Spark, où l'on entre par le SSO du domaine avec le
   rôle `admin` et un second facteur, vérifiés par `sparkd` lui-même ; `sparkd`

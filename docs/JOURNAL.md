@@ -12816,3 +12816,59 @@ privilégiée ; la lecture des clés du SSO depuis l'hôte ; le niveau `acr` de
 Keycloak 26 ; l'automatisation des deux facteurs en E2E ; la mémoire d'une
 campagne qui porte un Keycloak. Le §64.5 les liste ; chacun est mesuré par
 l'unité qui en dépend, avant son code.
+
+## 2026-09-26 · SPK-119 — la crainte qui suspendait OP-10, mesurée et infirmée
+
+**Problème.** En spécifiant le lot 7, une hypothèse a été écrite sans être
+mesurée : `permitopen` ne prend qu'une destination `hôte:port`, donc la
+redirection vers une **socket UNIX** (`ssh -L <port>:/chemin`, canal
+`direct-streamlocal`) lui échapperait. La clé d'OP-10 étant une clé de `root`,
+elle aurait ouvert `/var/lib/incus/unix.socket` — Incus en `root`. OP-10 a été
+suspendue le matin, et la mesure programmée avant tout code.
+
+**Le banc.** Ubuntu 26.04 — la distribution de la Forge, et non l'Alpine du banc
+de 2026-08-21 —, OpenSSH 10.2p1 des deux côtés. Quatre services témoins qui
+répondent **chacun son nom** (`INCUS-ROOT`, `SECOURS`, `SPARKD`,
+`AUTRE-SERVICE`) : on ne mesure pas qu'une connexion aboutit, on mesure **qui**
+elle atteint. La ligne employée est celle que `scripts/cle-restreinte.sh` produit
+réellement.
+
+**Résultat — la crainte est infirmée.** La ligne d'OP-10 refuse déjà ce canal, et
+`sshd` le journalise en toutes lettres : « *Received request to connect to path
+/var/lib/incus/unix.socket, but the request was denied.* »
+
+**Ce que la mesure a appris, et qui n'était pas cherché.** C'est `permitopen` —
+et lui seul — qui ferme. Croisé sur cinq formes de ligne : clé nue, `restrict`
+seul avec `port-forwarding`, et `restrict,port-forwarding,command=` atteignent
+**toutes** Incus ; les deux formes qui portent `permitopen` le refusent. C'est le
+**second visage du faux ami du §46.1** : `restrict` ne ferme ni l'exécution d'une
+commande, ni les redirections vers une socket. Qui écrirait « restrict suffit »
+se tromperait deux fois.
+
+**Décision.** OP-10 reprend son cours, et gagne un second réglage serveur :
+`AllowStreamLocalForwarding no`, mesuré comme fermant ce canal quelle que soit la
+ligne, sans casser ni le tunnel ni le rebond. Motif : toute la protection tenait
+sinon dans **une option d'une ligne** — précisément ce que `cle-restreinte.sh`
+existe pour ne pas avoir à recopier, « une virgule oubliée y ouvre une porte en
+silence ». Deux conditions indépendantes valent mieux qu'une.
+
+**Conséquence sur le lot 7, contre-intuitive.** Une clé qui porte `permitopen` ne
+peut **pas** rediriger vers une socket — donc le compte de **secours** du §64,
+dont c'est le geste même, ne peut pas être restreint par `permitopen`, et atteint
+alors toutes les sockets de la Forge. Ce n'est pas une brèche (le §45.5 fixe la
+récupération à `root`, et le secours est l'installateur), mais cela se dit au lieu
+de laisser croire à une restriction inexistante — et cela justifie le compte **par
+usage** : le rebond ferme ce canal par `Match User`, et n'hérite pas de ce que le
+secours doit pouvoir faire.
+
+**Deux défauts de banc, corrigés et notés parce qu'ils coûtent du temps.**
+`docker cp` conserve l'UID du poste : `sshd` refusait la clé sur « bad ownership
+or modes », ce qui ressemble à une clé fausse et n'en est pas une. Et un `\n`
+écrit littéralement dans le fragment de configuration a rendu `sshd` invalide,
+qui est mort au `HUP` — le conteneur avec. Le banc vérifie désormais `sshd -t`
+avant de recharger.
+
+**Ce qui reste à SPK-119** : le modèle de comptes lui-même, les mêmes cas rejoués
+par `Match User`, et un contrôle de préflight qui lise la configuration
+**effective** — le §9308 du journal rappelle qu'un contrôle qui ignore les
+fragments `sshd_config.d/` lit un fichier qui ne décide de rien.

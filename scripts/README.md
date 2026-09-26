@@ -22,8 +22,9 @@ historique d'un terminal.
 `AllowTcpForwarding local` — sans lequel la console tombe en panne au lieu d'être
 protégée. La marche à suivre est dans `docs/PROD_MIGRATIONS.md`, OP-10.
 
-**OP-10 est suspendue depuis le 2026-09-26** : la ligne que produit
-`cle-restreinte.sh` laisserait peut-être ouverte la redirection vers une socket
-UNIX (`docs/DAT.md` §46.7, hypothèse non mesurée). SPK-119 la mesure et remplace
-ces deux scripts par un compte par usage (lot 7, §64). Ne pas poser la ligne d'ici
-là.
+**Le réglage serveur en compte deux depuis le 2026-09-26** :
+`AllowStreamLocalForwarding no` s'ajoute à `AllowTcpForwarding local`. MESURÉ
+(`docs/DAT.md` §46.7) : ce qui refuse une redirection vers la socket d'Incus est
+le `permitopen` de la ligne, et rien d'autre — une ligne qui le perdrait ouvrirait
+Incus en `root`. Le réglage serveur ferme le même canal sans dépendre d'aucune
+virgule.
