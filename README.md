@@ -640,9 +640,6 @@ une garde qui n'existe que dans un fichier de workflow.
   *Notes* ; si la note est réécrite entre-temps depuis un autre onglet,
   l'acceptation remplace cette version sans l'avoir montrée. L'empreinte garde
   la version proposée, rien ne garde le texte actuel.
-- **Le préflight ne relève que les écoutes TCP.** `SEC-PORTS` lit `ss -lnt` : une
-  écoute UDP exposée lui échappe — c'est ainsi que l'UDP/443 de Caddy est passé
-  inaperçu jusqu'au 2026-09-30.
 
 ## Sauvegarder le registre
 

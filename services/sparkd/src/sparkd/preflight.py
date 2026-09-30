@@ -463,6 +463,13 @@ def caddy_sert_le_registre(hote: Hote) -> Verdict:
         "curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile")
 
 
+#: SPK-134 · §31.6 : ce qui peut écouter sur une adresse publique.
+PORTS_TCP_ADMIS = frozenset({"22", "80", "443"})
+#: Le client DHCP de la Forge. Relevé le 2026-09-30 : `systemd-networkd` sur
+#: `<adresse publique>%eno1:68`, et rien d'autre en UDP public.
+PORTS_UDP_ADMIS = frozenset({"68"})
+
+
 def _portee(adresse_ecoute: str) -> str:
     """Classe une adresse d'écoute : « locale », « privee » ou « exposee ».
 
@@ -475,7 +482,15 @@ def _portee(adresse_ecoute: str) -> str:
     Est exposé ce qui écoute sur un joker ou sur une adresse routable. Une
     adresse de boucle locale ou de réseau privé ne l'est pas.
     """
-    hote_ecoute = adresse_ecoute.rsplit(":", 1)[0].strip("[]").split("%")[0]
+    hote_ecoute, _, interface = adresse_ecoute.rsplit(":", 1)[0].strip("[]").partition("%")
+    # SPK-134 · §31.6 : une écoute LIÉE à une interface ne reçoit que ce qui
+    # arrive par elle. `0.0.0.0%sparkbr0:67` — le DHCP des Sparks — n'est donc
+    # pas exposé, même sur l'adresse joker.
+    if interface == "lo":
+        return "locale"
+    if interface and (interface == reglages().network_bridge
+                      or interface.startswith(pare_feu.PREFIXE_RESEAU_PRIVE)):
+        return "privee"
     if hote_ecoute in ("0.0.0.0", "*", "::", ""):
         return "exposee"
     if hote_ecoute == "::1" or hote_ecoute.startswith("127."):
@@ -492,34 +507,50 @@ def _portee(adresse_ecoute: str) -> str:
 
 
 def surface_reseau(hote: Hote) -> Verdict:
-    """Seuls 22, 80 et 443 sont joignables depuis le réseau (docs/DAT.md §11).
+    """Seuls 22, 80 et 443 en TCP, et 68 en UDP, sont joignables (docs/DAT.md §11).
+
+    @spec docs/BACKLOG.md#SPK-134 · docs/DAT.md §31.6 (la surface se relève
+          aussi en UDP)
 
     Ce qui écoute sur la boucle locale ou sur le bridge privé n'est pas exposé :
     `sparkd` et l'API d'administration de Caddy sont dans ce cas, et c'est
     précisément la propriété de sécurité du produit.
-    """
-    brut = hote.executer(["ss", "-lntH"])
-    if brut is None:
-        return Verdict("SEC-PORTS", "Surface réseau réduite à 22, 80, 443", INCONNU,
-                       "ss injoignable", "")
-    exposes = set()
-    for ligne in brut.splitlines():
-        colonnes = ligne.split()
-        if len(colonnes) < 4:
-            continue
-        adresse = colonnes[3]
-        if _portee(adresse) != "exposee":
-            continue
-        exposes.add(adresse.rsplit(":", 1)[-1])
-    intrus = sorted(exposes - {"22", "80", "443"}, key=lambda p: int(p) if p.isdigit() else 0)
-    if intrus:
-        return Verdict("SEC-PORTS", "Surface réseau réduite à 22, 80, 443", ECHEC,
-                       f"ports exposés en trop : {', '.join(intrus)}",
-                       "Aucune API d'administration ne doit être joignable depuis "
-                       "le réseau (docs/DAT.md §11).")
-    return Verdict("SEC-PORTS", "Surface réseau réduite à 22, 80, 443", OK,
-                   f"exposés : {', '.join(sorted(exposes)) or 'aucun'}")
 
+    SPK-134 : l'UDP n'était pas lu. Caddy écoutait UDP/443 sur toutes les
+    adresses, pour un HTTP/3 qu'il ne servait pas, et ce contrôle se disait vert
+    (relevé du 2026-09-30). En UDP, seul le client DHCP (`68`) est admis public :
+    sans lui, une Forge dont l'adresse vient du DHCP perdrait son bail.
+    """
+    titre = "Surface réseau réduite à 22, 80, 443 en TCP, et 68 en UDP"
+    exposes: dict[str, set[str]] = {}
+    for famille, commande in (("tcp", ["ss", "-lntH"]), ("udp", ["ss", "-lnuH"])):
+        brut = hote.executer(commande)
+        if brut is None:
+            return Verdict("SEC-PORTS", titre, INCONNU, f"ss injoignable ({famille})", "")
+        exposes[famille] = set()
+        for ligne in brut.splitlines():
+            colonnes = ligne.split()
+            if len(colonnes) < 4:
+                continue
+            adresse = colonnes[3]
+            if _portee(adresse) != "exposee":
+                continue
+            exposes[famille].add(adresse.rsplit(":", 1)[-1])
+
+    def trie(ports: set[str]) -> list[str]:
+        return sorted(ports, key=lambda p: int(p) if p.isdigit() else 0)
+
+    intrus = ([p for p in trie(exposes["tcp"] - PORTS_TCP_ADMIS)]
+              + [f"{p}/udp" for p in trie(exposes["udp"] - PORTS_UDP_ADMIS)])
+    releve = (f"TCP : {', '.join(trie(exposes['tcp'])) or 'aucun'} · "
+              f"UDP : {', '.join(trie(exposes['udp'])) or 'aucun'}")
+    if intrus:
+        return Verdict("SEC-PORTS", titre, ECHEC,
+                       f"ports exposés en trop : {', '.join(intrus)} ({releve})",
+                       "Aucune API d'administration ne doit être joignable depuis "
+                       "le réseau (docs/DAT.md §11) ; une écoute UDP publique "
+                       "nouvelle se revoit avant d'être admise (§31.6).")
+    return Verdict("SEC-PORTS", titre, OK, f"exposés : {releve}")
 
 #: Ce que la chaîne `input` de `spark_filter` accepte depuis le bridge, et rien
 #: de plus (docs/DAT.md §56.3) : le résolveur, le DHCP, et les deux ports de

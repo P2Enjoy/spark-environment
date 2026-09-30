@@ -289,6 +289,12 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-134 — le préflight relève aussi les écoutes UDP.** `SEC-PORTS` ne lisait
+  que TCP : l'écoute UDP/443 de Caddy, exposée, n'avait jamais paru. Il lit
+  désormais les deux familles ; en UDP, seul le client DHCP (`68`) est admis
+  public ; une écoute liée à `sparkbr0` ou à un `spn*` n'est pas exposée ; le
+  relevé dit « TCP : 22, 80, 443 · UDP : 68 », et un intrus se nomme « 443/udp ».
+  DAT §31.6 ; manuel M2 ; runbook. **Sur la Forge avec OP-32.**
 - **SPK-136 — toute classe qu'écrit un composant peint quelque chose.** La
   preuve des classes de la console était rouge depuis SPK-104 : quatre classes
   écrites sans règle de style. Le message d'échec des alertes prend la forme

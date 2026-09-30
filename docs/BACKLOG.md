@@ -8302,7 +8302,7 @@ ce que le tmpfs a perdu, **quelle que soit la cause** du démarrage.
   causes, rouge sur le code d'avant ; DAT, manuel, contrat de déploiement à
   jour ; `@spec` / `@verifies`.
 
-### [ ] SPK-134 · Le préflight relève aussi les écoutes UDP
+### [~] SPK-134 · Le préflight relève aussi les écoutes UDP
 
 **Constaté le 2026-09-30** (SPK-128) : `SEC-PORTS` ne lit que `ss -lnt`, et
 l'écoute UDP/443 de Caddy, exposée, n'a jamais paru au préflight. Demandé par
@@ -8320,6 +8320,11 @@ relevé réel du 2026-09-30, et sur celui d'avant OP-27 (UDP/443 dénoncé).
 - Aucune variable, aucune migration, aucune opération : le préflight lit.
 - DoD : preuves unitaires ; préflight rejoué sur la Forge ; manuel M2, DAT à
   jour ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-30, hors Forge** : `SEC-PORTS` lit TCP et UDP ; preuves
+  sur le relevé UDP **réel** de la Forge (vert, « TCP : 22, 80, 443 · UDP :
+  68 ») et sur celui d'avant OP-27 (rouge, « 443/udp ») ; écoutes liées à
+  `sparkbr0` et `spn*` privées ; UDP non mesuré → inconnu ; cinq preuves rouges
+  sur l'ancien code. **Reste `[~]`** : rejoué sur la Forge avec OP-32.
 
 ### [ ] SPK-135 · Une Forge dont la carte n'annonce pas son débit s'installe, avec un débit déclaré
 

@@ -135,7 +135,7 @@ le programme venait de mesurer.
 | `ING-CADDY` | Caddy administrable localement |
 | `ING-UNITE` | Caddy reprend sa configuration après un redémarrage : porté par `caddy-api.service`, `caddy.service` masqué |
 | `ING-CONCORDE` | la configuration que Caddy sert **maintenant** est celle du registre |
-| `SEC-PORTS` | seuls `22`, `80`, `443` joignables depuis le réseau |
+| `SEC-PORTS` | seuls `22`, `80`, `443` en TCP, et le client DHCP (`68`) en UDP, joignables depuis le réseau |
 | `NET-REMONTEE` | un Spark ne peut pas remonter vers le SSH de sa Forge |
 | `NET-ISOLATION` | chaque Spark est isolé du réseau des autres |
 | `SSH-X11` | la redirection X11 inutile est désactivée ou signalée sans bloquer |

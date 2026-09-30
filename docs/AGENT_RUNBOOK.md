@@ -72,7 +72,8 @@ ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/python -m sparkd.preflight'
 Les 17 contrôles doivent être verts — `ING-UNITE` et `ING-CONCORDE` compris : Caddy
 porté par `caddy-api.service`, et servant la configuration du registre
 (`docs/DAT.md` §51.5). `SEC-PORTS` doit ne rapporter que **22, 80,
-443**.
+443** en TCP, et **68** en UDP — le client DHCP de la Forge (`docs/DAT.md`
+§31.6).
 
 ### A.4 Inscrire la Forge au catalogue du poste
 

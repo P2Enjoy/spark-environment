@@ -4,6 +4,8 @@
 Les relevés sont INJECTÉS : ces preuves n'ont besoin d'aucun serveur. Ceux du
 `ss` viennent de la Forge cible, relevés le 2026-08-19 — c'est ce relevé qui a
 montré que le contrôle de surface réseau était faux.
+
+@verifies docs/BACKLOG.md#SPK-134 · docs/DAT.md §31.6 (SEC-PORTS relève aussi l'UDP)
 """
 
 from __future__ import annotations
@@ -32,6 +34,20 @@ LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*
 LISTEN 0 4096 [::]:22 [::]:*
 """
 
+#: SPK-134 · §31.6 : relevé RÉEL de `ss -lnuH` sur la Forge, le 2026-09-30,
+#: après OP-27. Le DHCP des Sparks écoute sur l'adresse JOKER mais LIÉ à
+#: `sparkbr0` ; seul le client DHCP de la Forge est sur son adresse publique.
+SSU_HOTE_REEL = """\
+UNCONN 0 0 0.0.0.0%sparkbr0:67 0.0.0.0:*
+UNCONN 0 0 10.77.0.1:53 0.0.0.0:*
+UNCONN 0 0 127.0.0.1:323 0.0.0.0:*
+UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:*
+UNCONN 0 0 127.0.0.54:53 0.0.0.0:*
+UNCONN 0 0 [::1]:323 [::]:*
+UNCONN 0 0 51.158.54.202%eno1:68 0.0.0.0:*
+"""
+RELEVE_REEL = {"ss -lntH": SS_HOTE_REEL, "ss -lnuH": SSU_HOTE_REEL}
+
 
 def hote(commandes: dict[str, str | None] = None, fichiers: dict[str, str] = None,
          binaires: set[str] = None, declarations=None, attendue=None) -> Hote:
@@ -59,7 +75,7 @@ def test_le_bridge_prive_et_la_boucle_locale_ne_sont_PAS_exposes():
     Le côté privé du bridge est ce que les Sparks doivent joindre pour leur DNS.
     Le tenir pour exposé rendait un verdict rouge sur un serveur correct.
     """
-    verdict = preflight.surface_reseau(hote({"ss -lntH": SS_HOTE_REEL}))
+    verdict = preflight.surface_reseau(hote(RELEVE_REEL))
     assert verdict.etat == OK, verdict.releve
     assert "22" in verdict.releve and "80" in verdict.releve and "443" in verdict.releve
     assert "53" not in verdict.releve
@@ -79,6 +95,10 @@ def test_le_bridge_prive_et_la_boucle_locale_ne_sont_PAS_exposes():
     ("*:443", "exposee"),
     ("[::]:22", "exposee"),
     ("51.158.54.202:9876", "exposee"),
+    # SPK-134 · §31.6 : une écoute LIÉE à une interface privée n'est pas exposée.
+    ("0.0.0.0%sparkbr0:67", "privee"),
+    ("0.0.0.0%spn3:67", "privee"),
+    ("51.158.54.202%eno1:68", "exposee"),
 ])
 def test_la_portee_d_une_adresse_d_ecoute(adresse, portee):
     assert preflight._portee(adresse) == portee
@@ -87,10 +107,38 @@ def test_la_portee_d_une_adresse_d_ecoute(adresse, portee):
 def test_une_api_d_administration_joignable_du_reseau_est_un_echec():
     """docs/DAT.md §11 — c'est la propriété de sécurité du produit."""
     fautif = SS_HOTE_REEL.replace("127.0.0.1:9876", "0.0.0.0:9876")
-    verdict = preflight.surface_reseau(hote({"ss -lntH": fautif}))
+    verdict = preflight.surface_reseau(hote({**RELEVE_REEL, "ss -lntH": fautif}))
     assert verdict.etat == ECHEC
     assert "9876" in verdict.releve
     assert verdict.remede
+
+
+def test_SEC_PORTS_releve_aussi_l_UDP_et_admet_le_seul_client_DHCP():
+    """@verifies docs/BACKLOG.md#SPK-134 · docs/DAT.md §31.6
+
+    Le relevé réel du 2026-09-30 : vert, et il DIT les deux familles."""
+    verdict = preflight.surface_reseau(hote(RELEVE_REEL))
+    assert verdict.etat == OK
+    assert "TCP : 22, 80, 443" in verdict.releve
+    assert "UDP : 68" in verdict.releve
+
+
+def test_SEC_PORTS_denonce_l_UDP_443_d_avant_OP_27():
+    """@verifies docs/BACKLOG.md#SPK-134 · docs/DAT.md §31.6, §18.6
+
+    Caddy écoutait UDP/443 sur toutes les adresses pour un HTTP/3 qu'il ne
+    servait pas, et le contrôle se disait vert : il ne lisait que TCP."""
+    avant = SSU_HOTE_REEL + "UNCONN 0 0 *:443 *:*\n"
+    verdict = preflight.surface_reseau(hote({**RELEVE_REEL, "ss -lnuH": avant}))
+    assert verdict.etat == ECHEC
+    assert "443/udp" in verdict.releve
+    assert "§31.6" in verdict.remede
+
+
+def test_SEC_PORTS_sans_releve_UDP_ne_conclut_rien():
+    """§31.2 : TCP mesuré sans UDP n'est pas une surface mesurée."""
+    verdict = preflight.surface_reseau(hote({"ss -lntH": SS_HOTE_REEL}))
+    assert verdict.etat == INCONNU and "udp" in verdict.releve
 
 
 def test_sans_ss_le_verdict_est_INCONNU_et_non_un_echec():
