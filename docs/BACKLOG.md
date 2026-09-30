@@ -8460,7 +8460,7 @@ passe, aucune raison.
   code d'avant ; vérification visuelle dans la console branchée sur une VM à
   installation fraîche (SPK-137), un refus réel provoqué par une protection.
 
-### [ ] SPK-140 · Un gabarit d'alerte refusé garde ce qu'on a tapé
+### [~] SPK-140 · Un gabarit d'alerte refusé garde ce qu'on a tapé
 
 **Constaté le 2026-09-30** (capture de SPK-136), **arbitré le 2026-10-01** :
 « corriger ». Onglet Alertes de la Forge : un gabarit qui nomme un champ
@@ -8476,6 +8476,11 @@ repeint avec la valeur relue au serveur — la saisie refusée disparaît.
   réécrit dans la page ; au succès, il repart de la configuration relue ;
   preuve de composant rouge sur le code d'avant ; vérification visuelle sur VM
   (SPK-137).
+- **Corrigé le 2026-10-01, non vérifié visuellement.** Preuves de composant :
+  rouges sur le code d'avant (le gabarit, l'adresse et la case repartaient du
+  registre), vertes après ; suite de la console 1 566 sur 1 566 — des
+  diagnostics. **Reste `[~]`** : voir le refus garder la saisie dans la console
+  branchée sur une VM à installation fraîche (SPK-137).
 
 ---
 

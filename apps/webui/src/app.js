@@ -38,7 +38,7 @@ import { renderCatalogue, renderOngletsForge, renderOnglets, CATALOGUE_VIDE,
 import { DEPOT_VIDE, libelleEngagement, libelleIndication }
   from './components/forge-depot.js';
 import { renderJournalForgePage, FILTRES_VIDES } from './components/forge-journal.js';
-import { ALERTES_VIDE, renderAlertes } from './components/forge-alertes.js';
+import { ALERTES_VIDE, renderAlertes, saisieAlertes } from './components/forge-alertes.js';
 import { PROPOSITIONS_FORGE_VIDE, renderPropositionsForge }
   from './components/forge-propositions.js';
 import { ongletsSparks, renderProjetsGestion, PROJETS_UI_VIDE, ADRESSE_GESTION,
@@ -4916,6 +4916,9 @@ async function chargerAlertes() {
 /**
  * Enregistre la configuration. Le mot de passe part à CHAQUE écriture (§47.3.3).
  *
+ * @spec docs/BACKLOG.md#SPK-62 · docs/DAT.md §47.3.3 · docs/BACKLOG.md#SPK-140 ·
+ *       docs/DAT.md §47.3.0 bis (au refus, la saisie reste — sauf le mot de passe)
+ *
  * Le champ d'adresse vide CONSERVE l'URL en place : on ne la retape pas pour
  * changer un gabarit, et elle ne s'affiche jamais pour qu'on puisse la recopier.
  */
@@ -4930,14 +4933,16 @@ async function enregistrerAlertes(formulaire) {
   const { ok, corps } = await appel('PUT', '/v1/notify/channels',
     { password: String(donnees.get('password') ?? ''), ...changements });
   if (!ok) {
-    // §1.5 bis : le refus RÉEL du serveur, mot pour mot, et la saisie reste.
+    // §1.5 bis : le refus RÉEL du serveur, mot pour mot. SPK-140 · §47.3.0 bis :
+    // la saisie reste — sans quoi le repeint la remplaçait par le registre.
     etat.alertes = { ...etat.alertes, refus: corps?.detail?.message
-      ?? corps?.message ?? 'La Forge a refusé cette configuration.', enregistre: null };
+      ?? corps?.message ?? 'La Forge a refusé cette configuration.', enregistre: null,
+                     saisie: saisieAlertes(donnees) };
     peindre();
     return;
   }
   etat.alertes = { ...etat.alertes, config: corps, live: corps.live ?? null,
-                   refus: null, enregistre: 'Configuration enregistrée.' };
+                   refus: null, enregistre: 'Configuration enregistrée.', saisie: null };
   peindre();
 }
 

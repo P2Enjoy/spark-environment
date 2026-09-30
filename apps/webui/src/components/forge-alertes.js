@@ -18,6 +18,8 @@
  * commande apprend à son destinataire que certains messages ne comptent pas.
  * @spec docs/BACKLOG.md#SPK-136 · docs/DESIGN_SYSTEM.md §12.3 (toute classe écrite
  *       peint quelque chose ; un crochet de script est un attribut `data-*`)
+ * @spec docs/BACKLOG.md#SPK-140 · docs/DAT.md §47.3.0 bis · docs/DESIGN_SYSTEM.md
+ *       §6.11, §7.1 (un refus garde la saisie, sauf le mot de passe)
  */
 
 const echapper = (v) =>
@@ -29,6 +31,9 @@ const echapper = (v) =>
 export const ALERTES_VIDE = {
   status: 'loading', config: null, live: null, error: null,
   refus: null, enregistre: null, mot: '',
+  // SPK-140 · §47.3.0 bis : ce qu'un refus a laissé dans le formulaire, ou
+  // `null` — le formulaire montre alors la configuration relue.
+  saisie: null,
 };
 
 /**
@@ -85,6 +90,24 @@ function renderSource(live) {
   Enregistrer ici posera la configuration au registre, qui l’emportera ensuite.</p>`;
 }
 
+/**
+ * Ce qu'un refus garde de la saisie (SPK-140, §47.3.0 bis).
+ *
+ * @spec docs/BACKLOG.md#SPK-140 · docs/DAT.md §47.3.0 bis · docs/DESIGN_SYSTEM.md
+ *       §6.11 (un refus n'efface pas la saisie), §7.1
+ *
+ * Le gabarit, l'adresse TAPÉE et la case. Le mot de passe n'y est pas : il se
+ * redonne à chaque écriture (§47.3.3), et un secret ne se recopie pas dans la
+ * page pour épargner une frappe.
+ */
+export function saisieAlertes(donnees) {
+  return {
+    url: String(donnees.get('webhook_url') ?? '').trim(),
+    template: String(donnees.get('webhook_template') ?? ''),
+    enabled: Boolean(donnees.get('webhook_enabled')),
+  };
+}
+
 export function renderAlertes(etat = ALERTES_VIDE) {
   const entete = '<h1 id="titre-alertes">Alerte hors bande</h1>';
   if (etat.status === 'loading') {
@@ -99,6 +122,10 @@ export function renderAlertes(etat = ALERTES_VIDE) {
   const c = etat.config?.webhook ?? {};
   const live = etat.live ?? {};
   const garde = etat.config?.guard_set;
+  // SPK-140 : après un refus, ce qui a été tapé l'emporte sur le registre.
+  const saisie = etat.saisie;
+  const gabarit = saisie ? saisie.template : (c.template ?? '');
+  const veille = saisie ? saisie.enabled : Boolean(c.enabled);
 
   return `
 <section class="carte bloc" aria-labelledby="titre-alertes">
@@ -126,7 +153,8 @@ export function renderAlertes(etat = ALERTES_VIDE) {
   <div class="champ">
     <label for="alerte-url">Adresse du webhook</label>
     <input type="url" id="alerte-url" name="webhook_url" class="controle"
-           placeholder="${c.configured ? 'inchangée' : 'https://…'}"
+           placeholder="${c.configured ? 'inchangée' : 'https://…'}"${
+             saisie?.url ? ` value="${echapper(saisie.url)}"` : ''}
            aria-describedby="alerte-url-aide">
     <p class="champ__aide" id="alerte-url-aide">Slack, Discord, <code>ntfy</code>,
     ou votre propre service derrière un port.</p>
@@ -135,7 +163,7 @@ export function renderAlertes(etat = ALERTES_VIDE) {
   <div class="champ">
     <label for="alerte-gabarit">Gabarit du message</label>
     <textarea id="alerte-gabarit" name="webhook_template" class="controle" rows="3"
-              aria-describedby="alerte-gabarit-aide">${echapper(c.template ?? '')}</textarea>
+              aria-describedby="alerte-gabarit-aide">${echapper(gabarit)}</textarea>
     <p class="champ__aide" id="alerte-gabarit-aide">La plupart des services
     veulent le message à leur forme — Discord attend <code>{"content": …}</code>,
     Slack <code>{"text": …}</code>. Remplacez <code>{champ}</code> par la valeur
@@ -149,7 +177,7 @@ export function renderAlertes(etat = ALERTES_VIDE) {
   <div class="champ">
     <label for="alerte-actif">
       <input type="checkbox" id="alerte-actif" name="webhook_enabled"
-             ${c.enabled ? 'checked' : ''}> Le canal veille
+             ${veille ? 'checked' : ''}> Le canal veille
     </label>
     <p class="champ__aide">Le décocher <strong>conserve l’adresse</strong>. Une
     dernière alerte part alors par ce canal, pendant qu’il fonctionne encore :

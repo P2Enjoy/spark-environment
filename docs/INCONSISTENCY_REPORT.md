@@ -31,18 +31,3 @@ code ne touche ni la Forge ni la navigation.
 **Arbitré le 2026-10-01** : pas de correction à part — le parcours tourne sur la
 pile factice, qui ne valide plus rien (DAT §28.7). Il est absorbé par SPK-138 et
 rejoué contre la VM ; l'entrée sort du rapport à ce moment.
-
-## 2026-09-30 · Un gabarit refusé vide le champ où on l'a saisi
-
-**Constaté** en observant la capture `spk136-alertes-refus` (SPK-136) : l'onglet
-Alertes refuse un gabarit qui nomme un champ inconnu, et affiche bien la raison
-— mais le champ « Gabarit du message » repeint alors la valeur **relue au
-serveur** (`c.template` dans `forge-alertes.js`), pas celle qu'on venait de
-taper. La saisie refusée disparaît ; il faut la retaper pour la corriger.
-`DESIGN_SYSTEM.md` §6.11 et §7.1 : « un refus n'efface pas la saisie ». Le
-parcours ne le voit pas : il vérifie que le formulaire existe, pas ce qu'il
-contient.
-
-**Arbitré le 2026-10-01** : corriger — unité SPK-140. L'entrée sort du rapport
-quand la correction est livrée.
-

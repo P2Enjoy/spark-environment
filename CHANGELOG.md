@@ -289,6 +289,11 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-140 — un gabarit d'alerte refusé garde ce qu'on a tapé.** Onglet
+  Alertes de la Forge : au refus, le formulaire repartait du registre et la
+  saisie disparaissait. Il garde désormais le gabarit, l'adresse tapée et la
+  case « Le canal veille » ; le mot de passe n'est pas réécrit dans la page.
+  DAT §47.3.0 bis ; manuel M11. Vérification visuelle sur VM à venir (SPK-137).
 - **SPK-133 — le fichier des secrets est reposé à chaque démarrage de la
   cellule, quelle qu'en soit la cause.** Signalé par le responsable :
   « le fichier de secrets ne se recrée pas si on redémarre le Spark ».

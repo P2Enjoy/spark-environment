@@ -6,12 +6,14 @@
  *           gabarit), §47.3.3 (le mot de passe à chaque écriture),
  *           §14.6 (les états se distinguent), §43.3 (un secret ne s'affiche
  *           pas) · docs/DESIGN_SYSTEM.md §6.13, §1.5 bis
+ * @verifies docs/BACKLOG.md#SPK-140 · docs/DAT.md §47.3.0 bis (un refus garde
+ *           la saisie, sauf le mot de passe) · docs/DESIGN_SYSTEM.md §6.11, §7.1
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ALERTES_VIDE, etatDuCanal, renderAlertes } from './forge-alertes.js';
+import { ALERTES_VIDE, etatDuCanal, renderAlertes, saisieAlertes } from './forge-alertes.js';
 
 const pret = (config, live) => renderAlertes({
   ...ALERTES_VIDE, status: 'ready', config, live });
@@ -150,4 +152,53 @@ test('un refus du serveur s’affiche MOT POUR MOT et la saisie reste', () => {
   assert.match(html, /Mot de passe refusé/);
   assert.match(html, /role="alert"/);
   assert.match(html, /id="formulaire-alertes"/, 'le formulaire reste en place');
+});
+
+
+// --- SPK-140 · §47.3.0 bis : un refus garde la saisie ------------------------
+
+const REFUSE = 'Le gabarit nomme un champ que l’alerte ne publie pas : inconnu.';
+const TAPE = { url: 'https://hooks.exemple.test/abc', template: '{"content": "{inconnu}"}',
+               enabled: false };
+
+test('au REFUS, le gabarit, l’adresse et la case gardent ce qui a été tapé', () => {
+  const html = renderAlertes({
+    ...ALERTES_VIDE, status: 'ready', live: {}, refus: REFUSE, saisie: TAPE,
+    config: CONFIG({ enabled: true, configured: true, host: 'hooks.exemple.test',
+                     template: '{"content": "{action}"}' }) });
+  assert.match(html, /<textarea[^>]*id="alerte-gabarit"[^>]*>\{&quot;content&quot;: &quot;\{inconnu\}&quot;\}<\/textarea>/,
+               'le gabarit refusé reste dans le champ');
+  assert.ok(!html.includes('{&quot;content&quot;: &quot;{action}&quot;}'),
+            'le gabarit du registre ne remplace pas la saisie');
+  assert.match(html, /id="alerte-url"[^>]*value="https:\/\/hooks\.exemple\.test\/abc"/,
+               'l’adresse tapée reste dans le champ');
+  assert.doesNotMatch(html, /id="alerte-actif"[^>]*checked/, 'la case décochée reste décochée');
+  assert.match(html, new RegExp(REFUSE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
+test('le MOT DE PASSE n’est jamais réécrit dans la page', () => {
+  const html = renderAlertes({
+    ...ALERTES_VIDE, status: 'ready', live: {}, refus: REFUSE,
+    saisie: { ...TAPE, password: 'ne-doit-pas-revenir' },
+    config: CONFIG({ enabled: true, configured: true }) });
+  assert.ok(!html.includes('ne-doit-pas-revenir'));
+  assert.doesNotMatch(html, /id="alerte-mot"[^>]*value=/);
+});
+
+test('sans saisie retenue, le formulaire montre la configuration RELUE', () => {
+  const html = pret(CONFIG({ enabled: true, configured: true, template: '{"text": "{action}"}' }), {});
+  assert.match(html, /\{&quot;text&quot;: &quot;\{action\}&quot;\}<\/textarea>/);
+  assert.match(html, /id="alerte-actif"[^>]*checked/);
+  assert.doesNotMatch(html, /id="alerte-url"[^>]*value=/, 'l’adresse du registre ne s’affiche jamais');
+});
+
+test('la saisie retenue au refus ne garde ni le mot de passe, ni rien d’autre', () => {
+  const donnees = new FormData();
+  donnees.set('webhook_url', '  https://hooks.exemple.test/abc ');
+  donnees.set('webhook_template', '{"content": "{inconnu}"}');
+  donnees.set('password', 'secret');
+  assert.deepEqual(saisieAlertes(donnees), {
+    url: 'https://hooks.exemple.test/abc', template: '{"content": "{inconnu}"}', enabled: false });
+  donnees.set('webhook_enabled', 'on');
+  assert.equal(saisieAlertes(donnees).enabled, true);
 });
