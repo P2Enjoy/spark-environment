@@ -1,4 +1,7 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-139 · docs/DESIGN_SYSTEM_APP.md SPK-DS-36 (le
+ *           refus d'un geste de ligne s'affiche dans la ligne) ·
+ *           docs/DESIGN_SYSTEM.md §7.1, §9.7
  * @verifies docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (Caddy et le certificat,
  *           relevés à chaque visite) · docs/DESIGN_SYSTEM.md §6.8, §6.13, §14.6,
  *           §14.7 · docs/DESIGN_SYSTEM_APP.md SPK-DS-34
@@ -1404,4 +1407,47 @@ test('SPK-130 : une raison venue du réseau est échappée', () => {
                                                       reason: '<img src=x onerror=1>' } } });
   const rendu = renderEtatCaddy(diag, ROUTE_APPLIQUEE);
   assert.ok(!rendu.includes('<img'));
+});
+
+
+// --- SPK-139 · SPK-DS-36 : le refus d'un geste de ligne, dans la ligne --------
+
+/** La ligne `<li>` d'une route, telle que rendue. */
+function ligneDe(rendu, domaine) {
+  const debut = rendu.indexOf(`<li><span class="technique">${domaine}</span>`);
+  assert.ok(debut >= 0, `la ligne de ${domaine} est rendue`);
+  return rendu.slice(debut, rendu.indexOf('</li>', debut));
+}
+
+const REFUS_PROTEGE = 'Le Spark « crm » est protégé : levez la protection avant ce geste.';
+
+test('le refus de « Retirer la route » s’affiche dans SA ligne, modale fermée', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE, ROUTE_EN_ATTENTE], ui({
+    open: null,
+    refusal: { panel: 'route-ligne', target: 'crm.example.com', message: REFUS_PROTEGE } }));
+  const ligne = ligneDe(rendu, 'crm.example.com');
+  assert.match(ligne, /class="refus" role="alert"/);
+  assert.ok(ligne.includes('Le Spark « crm » est protégé'), 'le message du serveur, tel quel');
+  assert.ok(!ligneDe(rendu, 'test.example.com').includes('protégé'),
+            'aucune ligne ne porte le refus d’une autre');
+});
+
+test('le refus de « Réappliquer » s’affiche sous la ligne où l’on a cliqué', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE, ROUTE_EN_ATTENTE], ui({
+    refusal: { panel: 'route-ligne', target: 'test.example.com',
+               message: 'Caddy injoignable sur 127.0.0.1:2019.' } }));
+  assert.ok(ligneDe(rendu, 'test.example.com').includes('Caddy injoignable sur 127.0.0.1:2019.'));
+  assert.ok(!ligneDe(rendu, 'crm.example.com').includes('Caddy injoignable sur'));
+});
+
+test('« Réappliquer » dit sur quelle ligne on l’a cliqué', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_EN_ATTENTE], ui());
+  assert.match(rendu, /data-reapplique="test\.example\.com"/);
+});
+
+test('le refus de la DÉCLARATION reste dans la modale, et seulement là', () => {
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui({
+    open: 'route', refusal: { panel: 'route', message: 'Domaine déjà pris.' } }));
+  assert.ok(!ligneDe(rendu, 'crm.example.com').includes('Domaine déjà pris.'));
+  assert.ok(rendu.includes('Domaine déjà pris.'));
 });

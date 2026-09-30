@@ -289,6 +289,13 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-139 — le refus de « Retirer la route » et de « Réappliquer » s'affiche
+  sous la route.** Ces deux gestes rangeaient leur refus dans la modale
+  « Routes publiques », fermée à ce moment : un Spark protégé ou un Caddy
+  injoignable faisaient échouer le geste sans un mot. Le refus se lit désormais
+  dans la ligne de la route, tel que la Forge le donne, et le focus revient au
+  bouton de la ligne. SPK-DS-36 ; manuel M7. Vérification visuelle sur VM à
+  venir (SPK-137).
 - **SPK-140 — un gabarit d'alerte refusé garde ce qu'on a tapé.** Onglet
   Alertes de la Forge : au refus, le formulaire repartait du registre et la
   saisie disparaissait. Il garde désormais le gabarit, l'adresse tapée et la

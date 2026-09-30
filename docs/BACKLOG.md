@@ -8443,7 +8443,7 @@ réponse : « oui ».
   factice : il n'est pas corrigé à part, il est rejoué contre la VM quand la
   pile factice disparaît, et son entrée sort alors du rapport d'incohérences.
 
-### [ ] SPK-139 · Le refus de « Retirer la route » et de « Réappliquer » s'affiche sous la route
+### [~] SPK-139 · Le refus de « Retirer la route » et de « Réappliquer » s'affiche sous la route
 
 **Constaté le 2026-09-23** (rapport d'incohérences), **arbitré le 2026-10-01** :
 « corriger ». Dans la section Routes d'un Spark, un refus de ces deux gestes —
@@ -8460,6 +8460,15 @@ passe, aucune raison.
   visée, que la modale soit ouverte ou non ; preuve de composant rouge sur le
   code d'avant ; vérification visuelle dans la console branchée sur une VM à
   installation fraîche (SPK-137), un refus réel provoqué par une protection.
+- **Corrigé le 2026-10-01, non vérifié visuellement.** Les deux gestes ont leur
+  panneau, `route-ligne`, qui porte le domaine de la ligne ; le refus se rend
+  dans cette ligne, et le focus revient à son bouton. Preuves de composant :
+  trois rouges sur le code d'avant, vertes après ; suite de la console 1 570 sur
+  1 570 — des diagnostics. **Reste `[~]`** : provoquer un refus réel (Spark
+  protégé) dans la console branchée sur une VM à installation fraîche
+  (SPK-137). Observé en chemin, non traité : un retrait refusé en `502` a déjà
+  retiré la route du registre — l'écran, qui ne relit pas après un refus,
+  montre encore la ligne jusqu'au rechargement.
 
 ### [~] SPK-140 · Un gabarit d'alerte refusé garde ce qu'on a tapé
 

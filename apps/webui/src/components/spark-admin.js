@@ -184,6 +184,21 @@ function refus(ui, panneau) {
   </div>`;
 }
 
+/**
+ * Le refus d'un geste de LIGNE — « Retirer la route », « Réappliquer » —, rendu
+ * dans la ligne où le geste a été fait.
+ *
+ * @spec docs/BACKLOG.md#SPK-139 · docs/DESIGN_SYSTEM_APP.md SPK-DS-36 ·
+ *       docs/DESIGN_SYSTEM.md §7.1 (la raison près de l'action), §9.7
+ *
+ * Ces gestes partageaient le panneau de la modale « Routes publiques », fermée
+ * au moment où ils partent : leur refus n'était rendu nulle part.
+ */
+function refusDeLigne(ui, domaine) {
+  if (ui.refusal?.panel !== 'route-ligne' || ui.refusal.target !== domaine) return '';
+  return refus(ui, 'route-ligne');
+}
+
 /* ------------------------------------------------------------------ routes */
 
 /**
@@ -206,7 +221,8 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
         const caddyEtat = ui.diagRoutes?.routes?.[r.domain]?.caddy?.state;
         const reappliquer = r.applied_at && !REPARABLES.has(caddyEtat)
           ? ''
-          : `<button type="button" class="bouton bouton--compact" data-reapplique="1">Réappliquer</button>`;
+          // SPK-139 : le domaine dit sous quelle ligne rendre un refus.
+          : `<button type="button" class="bouton bouton--compact" data-reapplique="${echapper(r.domain)}">Réappliquer</button>`;
         const confirme = ui.confirming?.kind === 'route' && ui.confirming.id === r.domain
           ? `<div class="confirmation" role="group" aria-label="Confirmer le retrait">
                <p><strong>Retirer « ${echapper(r.domain)} » ?</strong></p>
@@ -240,7 +256,7 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           // route, sa place au journal et ce qu'elle a dépassé.
           `<button type="button" class="bouton bouton--compact" data-modifie-route="${echapper(r.domain)}">Modifier</button>` +
           `<button type="button" class="bouton bouton--compact" data-retire-route="${echapper(r.domain)}">Retirer</button></span>` +
-          `${renderSurcharges(r)}${confirme}</li>`;
+          `${renderSurcharges(r)}${confirme}${refusDeLigne(ui, r.domain)}</li>`;
       }).join('')}</ul>`
     : '<p class="absence">Aucune route publique ne pointe vers ce Spark.</p>';
 

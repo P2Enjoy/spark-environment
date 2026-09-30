@@ -2040,15 +2040,26 @@ function brancherPanneaux() {
       bouton.addEventListener('click', () => action(bouton.getAttribute(`data-${attribut}`)));
     }
   };
-  geste('confirme-route', (domaine) =>
-    agir('route', () => appel('DELETE', `/v1/ingress/${encodeURIComponent(domaine)}`)));
+  // @spec docs/BACKLOG.md#SPK-139 · docs/DESIGN_SYSTEM_APP.md SPK-DS-36 : le
+  // refus de ces deux gestes se lit dans la ligne de la route — ils
+  // partageaient le panneau de la modale, fermée à ce moment-là.
+  // Le focus revient au bouton de la ligne qui reste : la confirmation, elle,
+  // s'est refermée (§14.3).
+  const refuseDansLaLigne = (domaine, resultat, bouton) => {
+    if (resultat?.ok) return;
+    racine.querySelector(`[data-${bouton}="${CSS.escape(domaine)}"]`)?.focus();
+  };
+  geste('confirme-route', async (domaine) => refuseDansLaLigne(domaine,
+    await agir('route-ligne', () => appel('DELETE', `/v1/ingress/${encodeURIComponent(domaine)}`),
+               { cible: domaine }), 'retire-route'));
   // SPK-130 · §18.7 : relire DNS, Caddy et certificats, sans quitter la page.
   geste('reverifie-routes', () => {
     chargerEtatDnsRoutes(etat.detail?.routes ?? []);
     chargerDiagnosticRoutes();
   });
-  geste('reapplique', () =>
-    agir('route', () => appel('POST', '/v1/ingress/reconcile')));
+  geste('reapplique', async (domaine) => refuseDansLaLigne(domaine,
+    await agir('route-ligne', () => appel('POST', '/v1/ingress/reconcile'), { cible: domaine }),
+    'reapplique'));
   // SPK-112 · §18.3 quater : la sortie de la pastille « sans TLS ».
   geste('active-tls', (domaine) => activerTls(domaine));
   // §35.2 : révoquer n'est jamais refusé par la protection. Le premier appel
@@ -2547,7 +2558,7 @@ async function appel(methode, chemin, corps = null) {
  * ces gestes touchent au réseau et au disque, et un état relu vaut mieux qu'un
  * état deviné.
  */
-async function agir(panneau, operation, { ferme = true } = {}) {
+async function agir(panneau, operation, { ferme = true, cible = null } = {}) {
   etat.admin.busy = true;
   peindre();
   let resultat;
@@ -2561,6 +2572,8 @@ async function agir(panneau, operation, { ferme = true } = {}) {
     const detail = resultat.corps?.detail ?? resultat.corps ?? {};
     etat.admin.refusal = {
       panel: panneau,
+      // SPK-139 : la ligne d'une liste qui porte le refus, quand le geste en a une.
+      ...(cible ? { target: cible } : {}),
       message: detail.message ?? 'Le serveur a refusé ce geste.',
       // §35.2 : la liste NOMMÉE des Sparks protégés voyage avec le refus, sinon
       // la confirmation ne pourrait que les compter.
