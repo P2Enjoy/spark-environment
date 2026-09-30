@@ -8408,6 +8408,37 @@ existent pour cela.
   voir les trois écrans — refus des alertes, notes, propositions — dans la
   console branchée sur une machine virtuelle à installation fraîche.
 
+### [ ] SPK-137 · La console se vérifie sur une Forge de machine virtuelle à installation fraîche
+
+**Décidé par le responsable le 2026-09-30.** À la question « le banc démonte sa
+machine en sortant, donc la console ne peut pas s'y brancher pour la
+vérification visuelle — en faire une unité ? », réponse : « oui ». C'est la
+suite directe de la règle du DAT §28.7 : une unité qui touche l'écran ne se
+valide que dans la console branchée sur une VM à installation fraîche.
+
+- Spécification : **à écrire** (DAT §28.7, §51.5) **et à faire valider avant
+  le code**.
+- Ce que l'unité doit rendre possible : monter la VM du banc, la garder en
+  vie tant qu'on vérifie, et y brancher la console par son chemin ordinaire —
+  inventaire, tunnel SSH, connexion depuis l'accueil —, pour jouer les
+  parcours et les captures contre elle, souris et clavier (`CLAUDE.md` §16).
+  Une seule VM à la fois, sous le verrou des épreuves lourdes.
+- Débloque : la vérification visuelle de SPK-135 et de SPK-136.
+
+### [ ] SPK-138 · La pile de développement sans pilote factice
+
+**Décidé par le responsable le 2026-09-30.** À la question « veux-tu aussi
+retirer complètement le pilote factice de la pile de développement ? »,
+réponse : « oui ».
+
+- Spécification : **à écrire et à faire valider avant le code**. Elle doit
+  dire ce que deviennent `make runDev`, `make seed`, `make e2e`,
+  `make captures`, `make gestes` et `make manuel`, qui tournent aujourd'hui sur
+  le pilote factice (DAT §28), et si les doublons des preuves unitaires
+  (`FakeIncus`, `FakeCaddy`) sont dans le périmètre — la question posée ne
+  visait que la pile de développement.
+- Dépend de : SPK-137 (la VM qui remplace la pile factice).
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

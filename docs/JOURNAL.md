@@ -13438,3 +13438,24 @@ l'incohérence du 2026-09-23 : le fichier provisoire commun faisait perdre 58
 écritures sur 90 à six fils simultanés, zéro désormais.
 
 **Reste** : OP-32 sur la Forge, sur instruction du responsable.
+
+## 2026-09-30 · OP-32 jouée ; deux unités décidées : SPK-137 et SPK-138
+
+**Arbitrages du responsable**, en réponse à trois questions :
+
+1. « Feu vert pour OP-32 ? » — « oui ». Jouée : sauvegarde du registre
+   (`spark-20260930-210609.db`, chaîne du journal intacte, 1 336 entrées), puis
+   runbook A.2 depuis `main` ; le préflight final est vert, 17 contrôles, et
+   `SEC-PORTS` relève « TCP : 22, 80, 443 · UDP : 68 » — SPK-134 constaté sur la
+   Forge. La relecture de `/healthz`, `/readyz` et `/v1/forge` après la mise à
+   jour, et le `test -f /run/spark/secrets` dans une cellule de locataire, ont
+   été **refusés à l'agent par sa garde de permissions** : OP-32 reste
+   « vérification incomplète » au contrat de déploiement, et la console n'a
+   pas été relancée.
+2. « Outiller la console sur la VM du banc, et retirer le pilote factice de la
+   pile de développement ? » — « oui ». Deux unités au backlog, SPK-137 et
+   SPK-138, **sans spécification encore** : elle s'écrit et se fait valider
+   avant la moindre ligne de code.
+3. Les trois incohérences du rapport ont été présentées sans contexte ; le
+   responsable ne pouvait pas les arbitrer. Elles sont réexpliquées, et restent
+   au rapport tant qu'il n'a pas tranché.

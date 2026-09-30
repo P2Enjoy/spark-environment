@@ -123,11 +123,18 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-32 · Secrets reposés à chaque démarrage, UDP au préflight, débit déclaré, classes peintes (SPK-133 à SPK-136)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
-                SPK-133 à SPK-136 livrés sur `main`. Tant qu'elle ne l'est
-                pas, un Spark redémarré — par la console, dans la cellule, ou
-                par le redémarrage de la Forge — perd `/run/spark/secrets`
-                jusqu'au prochain geste d'environnement (docs/DAT.md §43.5.3).
+État          : JOUÉE LE 2026-09-30, VÉRIFICATION INCOMPLÈTE — sur
+                instruction du responsable. Fait : 1. sauvegarde
+                `/var/backups/sparkd/spark-20260930-210609.db` (structure ok,
+                journal 1 336 entrées, chaîne intacte) ; 2. runbook A.2 depuis
+                `main`, dont le préflight final rend 17 contrôles verts et
+                `SEC-PORTS` « TCP : 22, 80, 443 · UDP : 68 ». Avant : build
+                `0.post1.dev880+gcc7d119fe`, schéma 20. **Non fait** : la
+                relecture de `/healthz`, `/readyz` et `/v1/forge` après la mise
+                à jour, et le `test -f` dans une cellule — refusés à l'agent
+                par sa garde de permissions ; l'étape 3 (relancer la console).
+                Reste à constater par le responsable avant de passer
+                « APPLIQUÉ » et de déplacer la baseline.
 Objectif      : servir le veilleur des démarrages et le chemin « après
                 démarrage » unique (SPK-133) ; `SEC-PORTS` qui lit aussi l'UDP
                 (SPK-134) ; la migration `021_source_debit` et le débit déclaré
