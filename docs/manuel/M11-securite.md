@@ -179,6 +179,12 @@ l'apprendre tout de suite qu'au moment où une alerte aurait dû partir. Aucune
 valeur de secret n'est accessible à un gabarit ; les champs qui les portent ne
 lui sont pas offerts.
 
+**Un refus ne vous fait rien retaper.** Si la Forge refuse ce que vous venez
+d'enregistrer — un gabarit qui nomme un champ inconnu, un mot de passe erroné —,
+la raison s'affiche sous le formulaire, et le gabarit, l'adresse et la case « Le
+canal veille » gardent ce que vous aviez tapé : corrigez, puis enregistrez de
+nouveau. Seul le mot de passe est à redonner, comme à chaque modification.
+
 ## Toute règle d'accès est appliquée côté serveur
 
 Un bouton masqué ou un champ désactivé n'est qu'une aide visuelle. Les refus que

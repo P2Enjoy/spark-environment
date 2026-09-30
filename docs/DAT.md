@@ -11805,6 +11805,16 @@ exigé à chaque écriture, et non une fois pour la session : une session déver
 est exactement ce que le §47.3.3 refuse — qui peut couper le témoin en silence
 peut agir sans témoin.
 
+**Un refus garde la saisie (SPK-140, `docs/DESIGN_SYSTEM.md` §6.11, §7.1).**
+Constaté le 2026-09-30 : un gabarit refusé repeignait le formulaire depuis le
+registre, et la saisie refusée disparaissait — il fallait la retaper pour la
+corriger. Au refus, le formulaire garde ce qui a été tapé : le **gabarit**,
+l'**adresse** — telle que tapée, jamais relue du registre, qui ne la rend pas —
+et la case **« Le canal veille »**. Le **mot de passe**, lui, n'est pas réécrit
+dans la page : il se redonne à chaque écriture (§47.3.3), et un secret ne se
+recopie pas dans le document pour épargner une frappe. Au succès, le formulaire
+repart de la configuration relue, et l'adresse tapée n'est plus retenue.
+
 #### 47.3.1 Le gabarit du webhook
 
 Le corps par défaut est celui du §47.4. Un **gabarit** permet de le mettre à la

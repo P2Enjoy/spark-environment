@@ -8468,12 +8468,14 @@ inconnu est refusé avec sa raison, mais le champ « Gabarit du message » se
 repeint avec la valeur relue au serveur — la saisie refusée disparaît.
 
 - Spécification : `docs/DESIGN_SYSTEM.md` §6.11 (« un refus n'efface pas la
-  saisie »), §7.1 (conserver la saisie, raison près de l'action) · manuel M8
-  ou le chapitre des alertes.
+  saisie »), §7.1 (conserver la saisie, raison près de l'action) · manuel M11
+  (les alertes) · `docs/DAT.md` §47.3.0 bis.
 - Dépend de : SPK-62 (le canal d'alerte), SPK-136 (la forme du refus).
-- Portée : au refus, le champ garde le texte tapé ; au succès, il montre la
-  valeur relue ; preuve de composant rouge sur le code d'avant ; vérification
-  visuelle sur VM (SPK-137).
+- Portée (DAT §47.3.0 bis) : au refus, le formulaire garde ce qui a été tapé —
+  gabarit, adresse, case « Le canal veille » — ; le mot de passe n'est pas
+  réécrit dans la page ; au succès, il repart de la configuration relue ;
+  preuve de composant rouge sur le code d'avant ; vérification visuelle sur VM
+  (SPK-137).
 
 ---
 
