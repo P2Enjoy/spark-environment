@@ -120,6 +120,43 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-32 · Secrets reposés à chaque démarrage, UDP au préflight, débit déclaré, classes peintes (SPK-133 à SPK-136)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
+                SPK-133 à SPK-136 livrés sur `main`. Tant qu'elle ne l'est
+                pas, un Spark redémarré — par la console, dans la cellule, ou
+                par le redémarrage de la Forge — perd `/run/spark/secrets`
+                jusqu'au prochain geste d'environnement (docs/DAT.md §43.5.3).
+Objectif      : servir le veilleur des démarrages et le chemin « après
+                démarrage » unique (SPK-133) ; `SEC-PORTS` qui lit aussi l'UDP
+                (SPK-134) ; la migration `021_source_debit` et le débit déclaré
+                (SPK-135) ; la console dont les classes peignent (SPK-136).
+                Une migration, additive ; une variable, facultative et absente
+                sur cette Forge — sa carte annonce 1 Gbit/s.
+Dépend de     : OP-31 et OP-30 peuvent se jouer dans la même mise à jour : la
+                build la plus récente les porte toutes.
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) — `sparkd.install`
+                   applique la migration 021, puis redémarre `sparkd`, dont le
+                   veilleur repose l'environnement de chaque cellule en marche ;
+                3. relancer la console (« Redémarrer la console »).
+Vérification  : `/readyz` rend `schema_version: 21` ; `/v1/forge` rend
+                `network_source: "measured"` ; le préflight rend 17 contrôles
+                verts et `SEC-PORTS` relève « UDP : 68 » ; dans une cellule qui
+                déclare des secrets, `test -f /run/spark/secrets` réussit —
+                une lecture, jamais une écriture sur une cellule de locataire.
+                La preuve des trois causes de redémarrage est celle du banc
+                (`make forge-vm`) : redémarrer un Spark de locataire pour
+                l'éprouver n'appartient pas à cette opération.
+Retour arrière: réinstaller la build précédente (runbook A.2) ; le `@down` de
+                021 retire la colonne `network_source` sans toucher au débit.
+Risques       : au redémarrage de `sparkd`, le veilleur réécrit
+                l'environnement de chaque cellule en marche — les mêmes
+                fichiers, régénérés depuis le registre, comme à chaque geste
+                d'environnement.
+```
+
 ### OP-31 · Recréer un conteneur de pile Compose : `sparkd` et la console (SPK-132)
 
 ```

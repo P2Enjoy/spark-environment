@@ -13309,3 +13309,42 @@ ses quatre lignes ; l'onglet Routes relève « DNS ici · Caddy ici · 302 · TL
 valide · 66 j », sans sondes factices. SPK-128 à SPK-130 passent à `[x]`, le
 contrat de déploiement et le README cessent de les dire en attente. Le
 redémarrage de contrôle de la Forge, lui, n'a pas été fait.
+
+## 2026-09-30 · SPK-133 à SPK-136 — les secrets après un redémarrage, et trois points laissés ouverts
+
+**Les secrets.** Le responsable : « le fichier de secrets ne se recrée pas si on
+redémarre le Spark ». Lu dans le code avant de rien supposer : la branche
+`RESTART` de `command_spark` relance la cellule par un second appel au pilote,
+sans reposer ni clés, ni environnement, ni notes — seule la branche `START` le
+fait. Et le §43.5.2 promettait qu'un démarrage hors du produit serait « rattrapé
+par la réconciliation du §14.3 », qui ne corrige que des états. Trois causes
+donc, dont une que mon banc de redémarrage (SPK-129) ne regardait pas : la Forge
+elle-même. Ce que la pile en perd n'est visible qu'à la **création** suivante —
+les conteneurs existants repartent avec leur environnement de création —, donc
+loin de la cause.
+
+**Solutions envisagées.** S'abonner aux événements d'Incus (`incus monitor`) :
+immédiat, mais un événement émis pendant le démarrage d'Incus, avant que
+`sparkd` n'écoute, est perdu — exactement le cas du redémarrage de la Forge.
+Tester la présence du fichier : lire le fichier revient à faire transiter un
+secret pour rien, et `exec` est lourd. **Retenu** : le PID d'init de la
+cellule, que l'état d'Incus porte déjà et qui change à chaque démarrage, relevé
+toutes les 15 s ; au démarrage de `sparkd`, aucun PID connu, donc tout est
+reposé — ce qui couvre la Forge. Un seul chemin « après démarrage » pour
+*Démarrer* et *Redémarrer*.
+
+**Les trois points.** `SEC-PORTS` relèvera l'UDP : relevé de la Forge fait, seul
+le client DHCP (`:68`) est public ; une écoute liée à `sparkbr0` ou `spn*` n'est
+pas exposée. Une carte sans débit n'empêchera plus une Forge de s'installer : un
+débit **déclaré**, qui ne remplace jamais un mesuré et se dit déclaré — il faut
+une colonne, donc la migration 021. Les quatre classes : `erreur` prend la forme
+d'un refus, `proposition` et `note-carte` ne peignaient rien et ne servaient que
+de crochets à des scripts, qui viseront les attributs `data-*`.
+
+**Rapport d'incohérences relu en chemin.** Deux entrées n'étaient plus vraies :
+la course du parcours DNS des zones refusées, corrigée le matin même (`8a99713`),
+et les trois parcours d'alerte hors bande, verts dans les deux campagnes
+complètes du jour. Retirées. « Les trois degrés au clavier » reste : un vert ne
+prouve pas qu'une intermittence a disparu. « Le refus de Réappliquer ne
+s'affiche nulle part » reste, et SPK-130 le rend plus pressant — signalé au
+responsable.

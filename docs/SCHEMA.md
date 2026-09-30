@@ -636,6 +636,22 @@ Les deux colonnes valent `0` par défaut : une base existante conserve sa réser
 totale, et le prochain relevé de topologie renseigne le détail. Aucune donnée
 n'est perdue et aucune valeur n'est devinée.
 
+## 11 ter. `host.network_source` : un débit mesuré, ou déclaré (SPK-135)
+
+Migration `021_source_debit`. Une colonne :
+
+| Colonne | Type | Sens |
+|---|---|---|
+| `network_source` | TEXT NOT NULL, défaut `measured`, `CHECK IN ('measured', 'declared')` | d'où vient `network_total_bps` : un port qui annonce son débit, ou `SPARKD_NETWORK_CAPACITY_MBIT` faute d'un tel port (`docs/DAT.md` §5.3 bis) |
+
+Motif : une capacité que personne n'a mesurée ne doit pas se lire comme une
+mesure. La colonne dit laquelle des deux l'écran affiche.
+
+Une base existante reçoit `measured` : jusqu'ici, un débit n'entrait au registre
+que mesuré — le relevé refusait sinon. Aucune valeur n'est devinée. Le `down`
+retire la colonne ; il est sans perte tant qu'aucun relevé n'a retenu de débit
+déclaré, et il ne perd que la **source** sinon, jamais le débit.
+
 ## 12. Mécanique des migrations
 
 Le §11 dit que chaque migration fournit son `down` ; le §10 dit que le démarrage

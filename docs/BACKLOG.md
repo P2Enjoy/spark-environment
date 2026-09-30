@@ -8266,6 +8266,111 @@ des étiquettes que Compose a posées, relues au moment du geste.
   `spk132-recreer-*` et illustration `m8-docker-recreer` observées.
   **Déploiement** : OP-31, en attente d'instruction.
 
+### [ ] SPK-133 · Le fichier des secrets est reposé à chaque démarrage de la cellule, quelle qu'en soit la cause
+
+**Signalé par le responsable le 2026-09-30** : « le fichier de secrets ne se
+recrée pas si on redémarre le Spark ». **Confirmé dans le code** :
+`/run/spark/secrets` vit dans un tmpfs (§43.5.2) et disparaît à l'arrêt ; le
+geste *Démarrer* le repose, mais le geste *Redémarrer* relance la cellule sans
+rien reposer, et aucun démarrage que `sparkd` n'a pas commandé — redémarrage de
+la Forge, `reboot` tapé dans la cellule, `incus restart` à la main — ne le
+repose jamais. La réconciliation du §14.3 que le §43.5.2 invoquait ne le fait
+pas.
+
+- Spécification : `docs/DAT.md` **§43.5.3**, §43.5.2 révisé · manuel M8.
+  **Écrite et committée avant le code.**
+- Dépend de : SPK-58 (l'environnement), SPK-129 (la Forge qui reprend seule).
+
+**Ce qui décide de l'unité** : la cellule dit elle-même qu'elle a démarré — son
+processus d'init change de PID à chaque démarrage. `sparkd` le relève, et repose
+ce que le tmpfs a perdu, **quelle que soit la cause** du démarrage.
+
+**Portée, et découpage :**
+
+1. Documentation — *fait, committé avant le code* ;
+2. un seul chemin « après démarrage » pour *Démarrer* et *Redémarrer* ; un
+   veilleur des démarrages dans `sparkd`, qui compare le PID d'init de chaque
+   cellule à celui du dernier dépôt et repose l'environnement quand il change ;
+   le doublon Incus rend un PID qui change à chaque démarrage ; preuves ;
+3. banc de redémarrage étendu : un secret posé par l'API, puis le fichier relu
+   après *Redémarrer*, après un `reboot` dans la cellule, après le redémarrage
+   de la Forge — rouge sur le code d'avant, vert sur le nouveau ;
+4. OP-32 sur la Forge, **sur instruction du responsable**.
+
+- Aucune variable d'environnement, aucune migration.
+- DoD : preuves unitaires et de route ; banc de redémarrage vert sur les trois
+  causes, rouge sur le code d'avant ; DAT, manuel, contrat de déploiement à
+  jour ; `@spec` / `@verifies`.
+
+### [ ] SPK-134 · Le préflight relève aussi les écoutes UDP
+
+**Constaté le 2026-09-30** (SPK-128) : `SEC-PORTS` ne lit que `ss -lnt`, et
+l'écoute UDP/443 de Caddy, exposée, n'a jamais paru au préflight. Demandé par
+le responsable le même jour : « corrige ».
+
+- Spécification : `docs/DAT.md` **§31.6** · manuel M2. **Écrite et committée
+  avant le code.**
+- Dépend de : SPK-26 (le préflight).
+
+**Portée** : `SEC-PORTS` relève TCP **et** UDP ; en UDP, n'est admis exposé que
+le client DHCP (`:68`), relevé sur la Forge ; une écoute liée au bridge privé ou
+à un réseau privé (`%sparkbr0`, `%spn*`) n'est pas exposée ; preuves sur le
+relevé réel du 2026-09-30, et sur celui d'avant OP-27 (UDP/443 dénoncé).
+
+- Aucune variable, aucune migration, aucune opération : le préflight lit.
+- DoD : preuves unitaires ; préflight rejoué sur la Forge ; manuel M2, DAT à
+  jour ; `@spec` / `@verifies`.
+
+### [ ] SPK-135 · Une Forge dont la carte n'annonce pas son débit s'installe, avec un débit déclaré
+
+**Constaté le 2026-09-30** (banc de SPK-129) : une carte `virtio` n'annonce
+aucun débit, le relevé de topologie refuse une capacité réseau nulle, et
+l'amorce d'une Forge sur machine virtuelle échoue à sa recette finale. Demandé
+par le responsable le même jour : « corrige ».
+
+- Spécification : `docs/DAT.md` **§5.3 bis** · `docs/SCHEMA.md` (`host`,
+  migration 021) · README (variables) · manuel M2 et M4. **Écrite et committée
+  avant le code.**
+- Dépend de : SPK-07 (le relevé), SPK-68 et SPK-73 (l'exécuteur et l'amorce).
+
+**Ce qui décide de l'unité** : un débit **déclaré** ne remplace jamais un débit
+mesuré ; il ne sert que lorsque la carte n'en annonce aucun, et il se **dit**
+déclaré partout où la capacité s'affiche.
+
+**Portée** : réglage `SPARKD_NETWORK_CAPACITY_MBIT` ; le relevé retient le
+mesuré, sinon le déclaré, sinon refuse en nommant le réglage ; la source est
+gardée au registre (`host.network_source`, migration 021) et rendue par l'API ;
+l'écran de la Forge dit « déclaré » ; l'exécuteur accepte `networkCapacityMbit`
+et l'amorce `NET_MBIT` ; banc de redémarrage joué une fois sur carte `virtio`
+avec un débit déclaré ; OP-32.
+
+- Une variable d'environnement, documentée ; une migration, additive.
+- DoD : preuves unitaires (relevé, exécuteur, migration, API, écran) ; banc sur
+  carte `virtio` vert ; DAT, SCHEMA, README, `.env.example`, manuels à jour ;
+  `@spec` / `@verifies`.
+
+### [ ] SPK-136 · Toute classe qu'écrit un composant peint quelque chose
+
+**Constaté le 2026-09-18** (rapport d'incohérences) et rouge depuis : quatre
+classes écrites sans règle de style — `erreur` (`forge-alertes.js`),
+`proposition` et `note-carte` (`spark-notes.js`), `proposition`
+(`spark-suggestions.js`). Demandé par le responsable le 2026-09-30 :
+« corrige ».
+
+- Spécification : `docs/DESIGN_SYSTEM.md` §12.3 · `docs/DESIGN_SYSTEM_APP.md`
+  SPK-DS-26, SPK-DS-27.
+- Dépend de : SPK-62, SPK-104, SPK-105.
+
+**Arbitrage** : le message d'échec des alertes prend la forme existante d'un
+refus (`.refus`) ; `proposition` et `note-carte` ne peignaient rien — les
+conteneurs le sont par `carte bloc` — et ne servaient que de crochets à des
+scripts : ils sont retirés, et les scripts visent des attributs `data-*`, qui
+existent pour cela.
+
+- DoD : la preuve des classes verte ; les scripts qui les visaient rejoués ;
+  capture de l'erreur des alertes observée ; entrée retirée du rapport
+  d'incohérences.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

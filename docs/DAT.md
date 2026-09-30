@@ -329,6 +329,36 @@ malgré tout — la réalité fait foi — mais il est journalisé en `result=de
 et l'écart doit rester visible dans la console. Refuser d'enregistrer la réalité
 serait pire : le registre mentirait sur la machine.
 
+### 5.3 bis Un débit déclaré, quand la carte n'en annonce aucun (SPK-135)
+
+**Constaté le 2026-09-30** sur la machine du banc de SPK-129 : une carte
+`virtio` n'annonce aucun `link_speed`. Le relevé refusait alors toute la
+topologie — « un port réseau détecté absent ou nul » —, et l'amorce d'une Forge
+sur machine virtuelle échouait à sa recette finale. Le refus est juste : un
+débit nul fausserait l'admission réseau. Mais il laissait l'exploitant sans
+issue, alors qu'**il connaît le débit** de la machine qu'il loue.
+
+**Décision : un débit déclaré, qui ne remplace jamais un débit mesuré.**
+
+- le réglage `SPARKD_NETWORK_CAPACITY_MBIT` — un entier, en **Mbit/s**, comme
+  `link_speed` — déclare le débit du lien ;
+- le relevé retient le débit **mesuré** dès qu'un port en annonce un, **même si
+  un débit est déclaré** ; il ne retient le déclaré que lorsqu'aucun port n'en
+  annonce ; sans l'un ni l'autre, il refuse, et le refus **nomme le réglage** ;
+- la source est gardée au registre, `host.network_source` — `measured` ou
+  `declared` (migration 021, `docs/SCHEMA.md`) —, rendue par `/v1/forge`, et
+  l'écran de la Forge dit « déclaré » à côté de la capacité réseau. Une capacité
+  que personne n'a mesurée ne doit pas se lire comme une mesure ;
+- l'exécuteur accepte `networkCapacityMbit` dans la configuration de son plan,
+  et l'écrit dans `/etc/sparkd/sparkd.env` ; l'amorce du cloud-init porte le
+  réglage `NET_MBIT`, vide par défaut — le débit est alors mesuré. Une
+  déclaration posée à la main dans `sparkd.env` survit à une réinstallation :
+  l'exécuteur ne l'écrit que s'il en reçoit une.
+
+Ce que la déclaration ne fait pas : elle ne **borne** rien sur la machine. Comme
+le débit mesuré (§32), elle est la capacité que l'admission partage entre les
+Sparks ; seul le plafond de chaque Spark est appliqué par le noyau.
+
 ## 6. Plan d'administration
 
 ```
@@ -3957,6 +3987,32 @@ n'établit pas qu'une pile Docker tourne dans un Spark : cette preuve-là est un
 mesure, et elle est au §13. La vérification dit que le serveur est en état
 d'être utilisé ; le §13 dit que le produit fonctionne.
 
+
+### 31.6 La surface réseau se relève aussi en UDP (SPK-134)
+
+**Constaté le 2026-09-30** (§18.6) : `SEC-PORTS` lisait `ss -lnt`, TCP seul.
+Caddy écoutait UDP/443 sur toutes les adresses de la Forge, pour un HTTP/3 qu'il
+ne servait pas, et le préflight se disait vert.
+
+**Relevé le 2026-09-30 sur la Forge, après OP-27**, en UDP : `dnsmasq` sur
+`10.77.0.1:53` et sur `0.0.0.0%sparkbr0:67` ; `systemd-resolved` et `chronyd`
+sur la boucle locale ; et **un seul** port sur l'adresse publique, `:68` — le
+client DHCP de `systemd-networkd`, qui reçoit le bail de la machine.
+
+**Décision.** `SEC-PORTS` relève TCP **et** UDP, sous le même code :
+
+- en TCP, rien ne change : 22, 80, 443 ;
+- en UDP, seul `68` est admis exposé — sans lui, une Forge dont l'adresse vient
+  du DHCP perdrait son bail ;
+- une écoute **liée à une interface** du bridge privé ou d'un réseau privé
+  (`%sparkbr0`, `%spn*`) n'est pas exposée, même sur `0.0.0.0` : le noyau ne lui
+  livre que ce qui arrive par cette interface. Sans cette règle, le DHCP des
+  Sparks rendrait le contrôle rouge sur une Forge correcte ;
+- le relevé dit les deux familles — « TCP : 22, 443, 80 · UDP : 68 » —, et un
+  intrus est nommé avec sa famille : « 443/udp ».
+
+Un HTTP/3 réactivé un jour, comme toute écoute UDP publique nouvelle, rend donc
+le préflight rouge tant que la liste admise n'a pas été revue.
 
 ## 32. Rendre la réservation CPU absolue
 
@@ -9930,10 +9986,55 @@ env_file:
 ```
 
 Contrepartie assumée : le fichier volatil doit être **réécrit à chaque démarrage**
-de la cellule. Le cycle de vie passe par `sparkd` (§14), qui le repose donc à
-`start` comme il repose déjà `authorized_keys`. La limite à écrire au manuel : un
-Spark démarré **hors du produit** — un `incus start` à la main sur la Forge —
-n'aura pas ses secrets tant que la réconciliation du §14.3 ne l'a pas rattrapé.
+de la cellule — quelle qu'en soit la cause. Le §43.5.3 dit comment.
+
+#### 43.5.3 Reposé à chaque démarrage, quelle qu'en soit la cause (SPK-133)
+
+**Signalé par le responsable le 2026-09-30** : « le fichier de secrets ne se
+recrée pas si on redémarre le Spark ». **Confirmé dans le code** : ce paragraphe
+promettait que `sparkd` le reposerait « à `start` », et qu'un démarrage hors du
+produit serait « rattrapé par la réconciliation du §14.3 ». Deux choses fausses :
+le geste *Redémarrer* relançait la cellule sans rien reposer, et la
+réconciliation du §14.3 ne corrige que des **états**, elle ne repose aucun
+fichier. Un Spark redémarré — par la console, par un `reboot` dans la cellule,
+par le redémarrage de la Forge — n'avait plus de `/run/spark/secrets` jusqu'au
+prochain geste d'environnement.
+
+Ce qu'une pile en perd : ses conteneurs **existants** repartent avec
+l'environnement de leur création (§43.7) ; c'est la **création** suivante —
+`docker compose up -d`, le geste *Recréer* — qui échoue, faute du fichier
+qu'`env_file:` exige. La panne arrive donc loin de sa cause.
+
+**Décision : la cellule dit elle-même qu'elle a démarré.** Son processus d'init
+change de PID à chaque démarrage, et Incus le rend dans l'état de l'instance.
+
+- *Démarrer* et *Redémarrer* passent par **un seul** chemin « après démarrage » :
+  clés, environnement — donc secrets, briefing et notes —, fichiers de
+  proposition, réconciliation de l'ingress. Un second chemin ne peut plus en
+  oublier un ;
+- un **veilleur des démarrages**, dans `sparkd`, relève toutes les **15
+  secondes** le PID d'init de chaque cellule en marche. S'il diffère de celui au
+  moment du dernier dépôt, il repose l'environnement et retient le nouveau PID.
+  Au démarrage de `sparkd` il ne connaît aucun PID : il repose donc tout —
+  c'est ce qui couvre le redémarrage de la Forge. Le chemin « après démarrage »
+  lui dit le PID qu'il vient de servir, pour ne pas reposer deux fois ;
+- un démarrage que `sparkd` n'a pas commandé entre au journal comme un
+  **événement du runtime** — `spark.cell_started`, « la cellule a démarré hors du
+  produit : environnement reposé » —, parce que c'est une information
+  d'exploitation : quelqu'un, ou quelque chose, a redémarré ce Spark ;
+- une panne du veilleur ne l'arrête pas : il compte ses erreurs et retente au
+  passage suivant, comme l'historien (§52.4).
+
+**Ce que la décision ne fait pas.** Pendant au plus quinze secondes après un
+démarrage hors du produit, le fichier manque : une pile qui se **recrée**
+exactement à cet instant échoue encore, et se recréera au passage suivant. Le
+produit n'écrit toujours rien dans une cellule arrêtée, et ne recrée jamais la
+pile à la place du locataire (§43.7).
+
+**La preuve** : le banc de redémarrage de SPK-129, un secret posé par l'API, et
+le fichier relu après *Redémarrer*, après un `reboot` tapé dans la cellule, et
+après le redémarrage de la Forge — rouge sur le code d'avant, vert sur le
+nouveau.
 
 ### 43.6 Portée : la Forge propose, le Spark **choisit** — révisé le 2026-08-21
 
