@@ -629,6 +629,11 @@ une garde qui n'existe que dans un fichier de workflow.
   seulement, et `Alt-Svc: clear` sur chaque réponse pour effacer une annonce
   mémorisée. La Forge de validation annonce encore HTTP/3 sans le servir tant
   qu'OP-27 n'est pas joué (`docs/PROD_MIGRATIONS.md`).
+- **Après un redémarrage, l'ingress de la Forge ne reprend pas ses routes**
+  (`docs/DAT.md` §51.5, `docs/BACKLOG.md#SPK-129`, en cours). Caddy repart du
+  `Caddyfile` par défaut, et l'écran continue d'afficher les routes « appliquées ».
+  D'ici là, après tout redémarrage de la Forge ou de Caddy :
+  `curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile` sur la Forge.
 - **Le préflight ne relève que les écoutes TCP.** `SEC-PORTS` lit `ss -lnt` : une
   écoute UDP exposée lui échappe — c'est ainsi que l'UDP/443 de Caddy est passé
   inaperçu jusqu'au 2026-09-30.

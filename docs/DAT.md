@@ -1970,7 +1970,10 @@ dérive **impossible plutôt qu'improbable**.
 
 La conséquence pratique est que la réconciliation n'est pas une opération de
 réparation exceptionnelle : c'est le mécanisme **normal** d'application. Toute
-modification de route la déclenche.
+modification de route la déclenche, **et le démarrage de `sparkd` aussi**
+(SPK-129, §51.5) : une configuration qui ne se pose qu'au changement suivant
+laisse Caddy servir ce qu'il a trouvé en démarrant — ou ce qu'une build
+précédente avait construit.
 
 ### 18.2 Forme de la configuration produite
 
@@ -2173,8 +2176,19 @@ dans l'interface, qui ne protégerait de rien face à deux requêtes simultanée
 
 Chaque route porte la date de sa dernière application réussie. Une route
 enregistrée mais jamais appliquée — Caddy injoignable au moment de la demande —
-se voit donc immédiatement, au lieu de se déduire d'une comparaison manuelle
-entre le registre et la configuration active.
+se voit donc immédiatement.
+
+**`applied_at` date un geste, il ne décrit pas Caddy.** Mesuré le 2026-09-14 :
+après le redémarrage de la Forge, Caddy est reparti sans aucune route, et les
+routes sont restées « appliquées » à l'écran pendant deux heures — la date était
+exacte, l'état qu'on en déduisait était faux. Deux règles en découlent :
+
+- **une réconciliation en échec remet `applied_at` à zéro** pour toutes les
+  routes qu'elle devait poser (SPK-129). Sans cela, l'échec n'existait qu'au
+  journal, et l'écran continuait d'afficher la dernière réussite ;
+- **ce que Caddy porte se relève, il ne se déduit pas** : la page des routes lit
+  la configuration vivante et interroge le proxy à chaque visite (SPK-130,
+  §18.7). `applied_at` reste l'historique du geste ; le diagnostic dit l'état.
 
 ### 18.6 L'ingress ne sert pas HTTP/3, et le dit (SPK-128)
 
@@ -2244,6 +2258,93 @@ fonctionnelle.
 HTTP/3 et le retrait de l'`Alt-Svc` de la pile sont **lus dans la configuration
 produite**, jamais écrits en dur — une pile n'a donc pas à émettre d'`Alt-Svc`,
 et le briefing le lui dit avant qu'elle ne le découvre.
+
+### 18.7 Le diagnostic en direct d'une route : DNS, Caddy, certificat (SPK-130)
+
+**Demandé par le responsable le 2026-09-30** : « autre que *DNS ici*, aussi
+*Caddy ici* et *SSL ici*, vérifiés en live lors de la visite de la page. Si la
+console ne fait pas du vrai diagnostic, on est mal. » Le 2026-09-14 l'a prouvé
+par l'absurde : l'écran disait « appliquée » d'une route que Caddy ne portait
+plus (§18.5).
+
+**La règle : chaque badge dit ce qui a été relevé à l'instant, par le composant
+qui peut le savoir.** Aucun souvenir d'écriture — `applied_at`, un compte rendu,
+un journal — ne tient lieu de preuve.
+
+| Badge | Qui relève | Comment | Ce qu'il ne dit pas |
+|---|---|---|---|
+| DNS (§38.9.1) | la console, avec le jeton du poste | la zone chez le fournisseur | ce qu'un résolveur répond (§38.9.2) |
+| Caddy | `sparkd`, sur la Forge | 1. la configuration **vivante** (`GET /config/` de l'API d'administration) porte-t-elle la route, vers la cible du registre ? 2. une **requête réelle** sur la boucle locale — `https://127.0.0.1`, le nom en SNI et en `Host` ; `http://` pour une route sans TLS — et son statut | que le trafic public arrive jusque-là (DNS, hébergeur) |
+| Certificat | `sparkd`, sur la Forge | une **poignée de main TLS réelle** sur `127.0.0.1:443`, le nom en SNI, vérifiée comme un navigateur la vérifie : autorités du système, et nom | ce que verrait un visiteur dont le DNS pointe ailleurs |
+
+**Pourquoi `sparkd`, et pourquoi la boucle locale.** L'API d'administration de
+Caddy n'écoute que sur la boucle locale de la Forge (§5) : la console ne peut
+pas la lire, et ne doit pas pouvoir. Sonder par la boucle locale isole chaque
+couche : le badge Caddy ne dépend pas du DNS, le badge certificat non plus. Les
+trois ensemble décrivent le chemin d'un visiteur ; chacun seul désigne **la**
+couche en défaut.
+
+**Les états du badge Caddy.**
+
+| État | Ce qui a été relevé | Rendu |
+|---|---|---|
+| servie | la route est dans la configuration vivante, vers la cible du registre, et la requête a reçu une réponse de la pile — son statut est nommé | succès, « Caddy ici » |
+| pile muette | la route est portée, mais Caddy rend `502` ou `504` : la cible `adresse:port` n'a pas répondu. Le défaut est dans le Spark, pas dans l'ingress | danger |
+| absente | Caddy ne porte pas cette route | danger, et **Réappliquer** offert |
+| autre cible | Caddy la porte vers une autre cible que le registre | danger, et **Réappliquer** offert |
+| non servie | la route est désactivée, ou son Spark n'a pas d'adresse : Caddy ne doit pas la porter | neutre |
+| injoignable | l'API d'administration de Caddy ne répond pas | danger |
+
+**Les états du badge certificat**, pour une route TLS seulement — une route sans
+TLS garde sa pastille « sans TLS » (§18.3 quater) :
+
+| État | Ce qui a été relevé | Rendu |
+|---|---|---|
+| valide | chaîne et nom vérifiés ; l'émetteur et l'échéance sont nommés | succès |
+| expire bientôt | valide, mais l'échéance tombe dans moins de **14 jours**. Caddy renouvelle au dernier tiers de la validité — trente jours pour un certificat de quatre-vingt-dix — : sous quatorze, le renouvellement échoue depuis deux semaines au moins | accent |
+| invalide | la vérification échoue, et sa raison est rendue **telle quelle** : auto-signé, nom qui ne correspond pas, expiré. C'est le cas d'un certificat de l'autorité interne de Caddy, son repli quand l'émission publique échoue | danger |
+| absent | Caddy ne présente aucun certificat pour ce nom : l'émission n'a pas eu lieu — le plus souvent parce que le DNS ne pointe pas ici (§18.3) | danger |
+| injoignable | rien ne répond sur `443` | danger |
+
+**Quand.** À chaque ouverture de la page des routes, comme l'état DNS, et sur un
+geste **Revérifier**. Le relevé est une lecture : il n'écrit rien, ne se
+journalise pas (§36.7), et n'exige aucune confirmation.
+
+**Ce que la sonde fait subir à la pile.** Une requête `GET /` par route et par
+visite, dont on ne lit que le statut — ce qu'un visiteur ferait. Elle se nomme
+dans son `User-Agent` (`sparkd-diagnostic`), pour qu'un exploitant la reconnaisse
+dans ses journaux au lieu de la prendre pour un intrus.
+
+**Borné, et jamais faux par défaut.** Chaque sonde a son délai (3 s) et les
+routes se sondent ensemble : une pile lente ne retient pas la page. Tant qu'un
+relevé n'est pas revenu, le badge dit « vérification… » ; s'il ne peut pas
+revenir — `sparkd` injoignable, tunnel rompu —, le badge dit **« non vérifié »**
+et pourquoi, jamais le dernier état connu (§22.3).
+
+**Réappliquer suit le relevé.** Le geste était offert quand `applied_at` était
+vide. Il l'est désormais aussi quand Caddy ne porte pas la route, ou pas vers la
+bonne cible : c'est exactement le cas du 2026-09-14, où il aurait réparé en un
+clic ce qui a duré deux heures.
+
+**La surface d'API.**
+
+```
+GET /v1/ingress/diagnostic?spark=<nom>   ce que Caddy et le TLS disent MAINTENANT des routes de ce Spark
+```
+
+La réponse porte, par domaine, `caddy` (`state`, cible attendue, cible trouvée,
+statut rendu, raison) et `certificate` (`state`, émetteur, échéance, jours
+restants, raison), et une fois pour toutes `caddy_reachable`. Les états y sont
+nommés en anglais, comme ailleurs dans le contrat ; l'écran les dit en français.
+
+**Avec le pilote factice** (§28), la comparaison avec la configuration vivante
+est **réelle** : elle lit ce que `FakeCaddy` a reçu, par le même code. Seules les
+sondes réseau — la requête et la poignée de main — ont des doubles, déterministes
+et déclarés par le seed, pour que chaque état se montre en développement et
+s'éprouve de bout en bout. Ce sont des doubles du pilote factice, au même titre
+que `FakeIncus`, jamais des traces présentées comme un relevé réel : la réponse
+porte `probes: "fake"`, et l'écran l'affiche au-dessus des routes tant qu'il
+est vrai.
 
 ## 19. Instantanés et restauration
 
@@ -8807,6 +8908,77 @@ actuelle. Un tunnel rompu se dit rompu.
 
 L'audit reçoit une action **distincte**, `forge.reboot` : la confondre avec la
 mise à jour empêcherait de compter les arrêts de production.
+
+### 51.5 Ce qui doit reprendre seul, et ce qui ne reprenait pas (SPK-129)
+
+**Exigence du responsable, 2026-09-30** : une Forge doit supporter un
+redémarrage total et reprendre comme attendu, **sans aucun geste** ; une Forge
+neuve, montée par le cloud-init du dépôt, doit naître ainsi. Le produit offre
+lui-même le redémarrage (§51) : ce qui ne reprend pas seul, c'est lui qui le
+casse.
+
+**Relevé le 2026-09-30**, en lecture seule sur la Forge, et dans les journaux du
+dernier démarrage, le 2026-09-14 à 10:34 :
+
+| Maillon | Ce qui le relance | Constaté au démarrage du 2026-09-14 |
+|---|---|---|
+| pool ZFS `spark` | Incus l'importe à son démarrage ; `zfs-import-cache` était sauté faute de cache, le cache existe depuis | importé 5 s après Incus |
+| plafond de l'ARC | `/etc/modprobe.d/zfs.conf` | 16 Gio |
+| bridge, DHCP, réseaux privés, ports publiés | la base d'Incus | repris |
+| cellules | Incus restaure leur dernier état (`volatile.last_state.power`) | les trois en marche |
+| pare-feu `spark_filter` | `spark-firewall.service`, activé, avant `sparkd` | posé |
+| `sparkd` | activé, après Incus | prêt |
+| **Caddy** | `caddy.service`, qui lit `/etc/caddy/Caddyfile` : un serveur de fichiers par défaut sur `:80`, aucune route. Il **écrase** au passage sa sauvegarde automatique. `sparkd` ne réconciliait pas à son démarrage | **aucune route servie de 10:36 à 12:36** |
+| console | le tunnel se rompt ; la reconnexion est un geste (§22.4.6) | par conception |
+
+**La cause est dans l'exécuteur.** Il installe Caddy et active `caddy.service`,
+l'unité d'une configuration par fichier, alors que le produit pilote Caddy par
+son API (§18.1). Le paquet livre l'unité prévue pour cet usage,
+`caddy-api.service` : `caddy run --resume` repart de la dernière configuration
+posée. La cause est donc aussi dans **toute Forge neuve** : le cloud-init
+appelle le même exécuteur.
+
+**Décisions.**
+
+1. **Caddy est porté par `caddy-api.service`.** `caddy.service` est désactivé
+   **et masqué** : ni un démarrage, ni le script d'un paquet mis à jour, ni un
+   `systemctl restart caddy` tapé par habitude ne peuvent remettre le
+   `Caddyfile` en service et écraser la sauvegarde. Un complément d'unité pose
+   `Restart=on-failure` : aucune des deux unités livrées ne relance un Caddy
+   tombé. **Une seule fonction** pose cet alignement, appelée par l'exécuteur
+   (Forge neuve, cloud-init compris) **et** par `sparkd.install` (toute mise à
+   jour, runbook A.2 comme geste de la console, §50). Une Forge existante se
+   répare donc par une mise à jour ordinaire. Rejouer l'amorce entière ne
+   conviendrait pas : son `apt-get install incus` monterait Incus de version
+   sous des cellules en marche, ce qui en a déjà laissé une injoignable (runbook
+   §A.1). L'alignement ne coupe l'ingress que le temps de passer d'une unité à
+   l'autre : `caddy-api.service` repart de la sauvegarde que `caddy.service`
+   tenait, c'est-à-dire de la dernière configuration posée par `sparkd`.
+2. **`sparkd` réconcilie l'ingress à son démarrage**, ordonné après Caddy
+   (`After=` et `Wants=caddy-api.service`). Caddy sert déjà la dernière
+   configuration quand `sparkd` démarre ; la réconciliation corrige ce que la
+   sauvegarde ne peut pas savoir : une forme changée par une nouvelle build — une
+   mise à jour n'exige plus de réconciliation à la main, OP-27 compris —, et une
+   Forge neuve, dont la sauvegarde est celle du `Caddyfile`.
+3. **Une réconciliation en échec remet `applied_at` à zéro** (§18.5) : un échec
+   au démarrage se voit à l'écran, avec **Réappliquer**.
+4. **Le préflight le vérifie** : `ING-UNITE` — Caddy porté par
+   `caddy-api.service`, `caddy.service` masqué — et `ING-CONCORDE` — la
+   configuration vivante de Caddy est celle que le registre construit. Deux
+   lectures, comme le reste du §31.
+5. **La preuve est un redémarrage réel**, sur une Forge montée par le cloud-init
+   du dépôt, dans une machine virtuelle du poste — pas sur la Forge de
+   validation, qui porte des locataires. Un miroir sur deux disques, un Spark,
+   une route, un redémarrage, puis tout est revérifié **sans aucun geste**. Le
+   banc s'écarte du cloud-init réel en quatre points, et en ceux-là seulement,
+   qu'il imprime : il crée le zpool avant l'amorce (l'hébergeur le livre, §8.2) ;
+   il installe `sparkd` depuis l'arbre de travail et non depuis `main`, pour
+   éprouver une build avant de la publier ; il réduit l'ARC à la mémoire de la
+   machine virtuelle ; il dépose une clé SSH jetable pour s'y connecter.
+
+Ce que SPK-129 ne change pas : la reconnexion de la console reste un geste
+(§22.4.6), et un Spark dont la pile ne redémarre pas seule reste l'affaire de
+son locataire (§44.2 bis) — le diagnostic du §18.7 le montre.
 
 ### 5.3 Un refus d'Incus se lit — écrit le 2026-09-02
 

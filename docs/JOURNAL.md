@@ -12956,3 +12956,66 @@ en-tête, et n'a pas de retrait à programmer ni à oublier.
 `ufw`, configuration posée, journaux de Caddy), `tcpdump` pendant l'envoi de
 datagrammes et pendant une poignée de main réelle, banc Caddy 2.6.2 en quatre
 formes. Aucune écriture sur la Forge.
+
+## 2026-09-30 · SPK-129 et SPK-130 — la Forge ne reprenait pas son ingress, et l'écran ne le voyait pas
+
+**Trois questions du responsable**, le même jour : un WebSocket peut-il encore
+atteindre un Spark sans HTTP/3 ? que veut dire « Réappliquer » ? et, surtout :
+« la Forge doit pouvoir faire un redémarrage total et reprendre comme attendu ;
+assure-toi que le cloud-init d'une nouvelle Forge configure tout ». Puis, en
+cours de route : « sur la page des routes, autre que *DNS ici*, aussi *Caddy ici*
+et *SSL ici*, vérifiés en live. Si la console ne fait pas du vrai diagnostic, on
+est mal. »
+
+**WebSocket — mesuré, pas supposé.** La route commune de SPK-128 enveloppe la
+réponse (`deferred`) ; elle aurait pu gêner le passage en `101`. Banc Caddy
+2.6.2, amont WebSocket réel, configuration produite par le code : `101 Switching
+Protocols` et l'écho revient, avant comme après SPK-128. Les navigateurs ouvrent
+un WebSocket en HTTP/1.1 ; seul HTTP/3 a disparu, et il ne fonctionnait pas.
+
+**Le redémarrage — relevé en lecture seule sur la Forge.** Dernier démarrage :
+2026-09-14 à 10:34. Pool ZFS importé par Incus (le cache manquait,
+`zfs-import-cache` sauté), ARC à 16 Gio, pare-feu posé, `sparkd` prêt, les trois
+cellules restaurées en marche. **Caddy, non** : `caddy.service` a démarré sur
+`/etc/caddy/Caddyfile` (« using provided configuration »), un serveur de fichiers
+par défaut, et a **écrasé** sa sauvegarde automatique. `sparkd` ne réconciliait
+pas à son démarrage. Le journal d'audit date le retour : 12:36:15, une
+modification de port sur `oauth.lelabs.tech`. **Deux heures sans aucune route**,
+SSO du domaine compris, pendant que la console affichait « appliquée ». Personne
+ne l'avait consigné.
+
+**La cause est dans l'exécuteur, donc aussi dans toute Forge neuve** :
+`forge_install.phase_foundation` fait `systemctl enable --now caddy`, l'unité
+d'une configuration par fichier, alors que le produit pilote Caddy par son API.
+Le paquet livre `caddy-api.service` (`caddy run --resume`), prévu pour cet usage
+et resté désactivé. Aucune des deux unités ne relance un Caddy tombé.
+
+**Hypothèses écartées en chemin.** Le pool aurait pu rester non importé : non,
+Incus l'importe lui-même. La console aurait pu rester bloquée : elle se
+reconnecte par un geste, c'est arbitré (§22.4.6). Rejouer l'amorce sur la Forge
+aurait pu servir de remède : non — son `apt-get install incus` monterait Incus de
+version sous des cellules en marche.
+
+**Décisions (SPK-129, DAT §51.5).** Caddy porté par `caddy-api.service`,
+`caddy.service` masqué, reprise sur panne ; une seule fonction d'alignement,
+appelée par l'exécuteur et par `sparkd.install`, pour qu'une mise à jour
+ordinaire répare une Forge existante — le modèle est celui du pare-feu, déjà posé
+des deux côtés ; `sparkd` réconcilie à son démarrage, après Caddy ; une
+réconciliation en échec remet `applied_at` à zéro ; deux contrôles de préflight.
+La preuve : un redémarrage réel d'une Forge montée par le cloud-init du dépôt,
+dans une VM du poste, rouge sur le code d'avant et vert sur le nouveau.
+
+**« Réappliquer », et pourquoi la question était la bonne.** Le registre de
+`sparkd` décrit les routes ; Caddy les sert. « Appliquer », c'est reconstruire
+toute la configuration depuis le registre et la poser dans Caddy. Chaque route
+garde la date de sa dernière application réussie ; tant qu'elle est vide, l'écran
+dit « non appliquée » et offre **Réappliquer**. Le défaut : cette date décrit un
+geste passé, pas l'état de Caddy — elle survivait au redémarrage alors que Caddy
+avait tout perdu. D'où SPK-130 (DAT §18.7) : les badges Caddy et certificat sont
+**relevés** à chaque visite — configuration vivante, requête réelle, poignée de
+main TLS réelle — par `sparkd`, seul à atteindre l'API de Caddy ; et
+« Réappliquer » est offert dès que Caddy ne porte pas la route.
+
+**Vérifications réalisées** : relevés de la Forge (`systemctl`, unités, journaux
+du démarrage du 2026-09-14, audit en lecture seule), banc WebSocket sur Caddy
+2.6.2. Aucune écriture sur la Forge.

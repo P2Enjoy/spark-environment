@@ -120,6 +120,51 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-28 · Caddy porté par `caddy-api.service`, et `sparkd` qui réconcilie à son démarrage (SPK-129)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
+                SPK-129 livré sur `main`. Se joue dans la MÊME mise à jour
+                qu'OP-27 : la build qui porte l'une porte l'autre. Tant
+                qu'elle ne l'est pas, un redémarrage de la Forge — ou de Caddy
+                seul — laisse l'ingress sans aucune route jusqu'à une
+                réconciliation (docs/DAT.md §51.5 : deux heures le
+                2026-09-14).
+Objectif      : `caddy.service` désactivé et masqué, `caddy-api.service`
+                (`caddy run --resume`) activé avec `Restart=on-failure` ;
+                `sparkd.service` ordonné après lui ; `sparkd` réconcilie
+                l'ingress à son démarrage. Aucune migration, aucune variable.
+Dépend de     : rien.
+Ordre         : 1. vérifier, sans rien écrire, que la sauvegarde de Caddy porte
+                   la configuration de `sparkd` :
+                   `sudo python3 -c 'import json; c=json.load(open("/var/lib/caddy/.config/caddy/autosave.json")); print(list(c["apps"]["http"]["servers"]))'`
+                   doit rendre `['spark']`. C'est d'elle que `caddy-api.service`
+                   repart ;
+                2. mettre à jour sparkd (runbook A.2) : `sparkd.install` aligne
+                   l'unité de Caddy, puis redémarre `sparkd`, qui réconcilie.
+                   L'ingress n'est coupé que le temps du passage d'une unité à
+                   l'autre.
+Vérification  : `systemctl is-enabled caddy` rend `masked` ;
+                `systemctl is-enabled caddy-api` et `is-active` rendent
+                `enabled` et `active` ; `systemctl show caddy-api -p Restart`
+                rend `Restart=on-failure` ; le préflight rend `ING-UNITE` et
+                `ING-CONCORDE` verts ; chaque domaine servi rend le même statut
+                qu'avant ; le journal porte un `ingress.reconcile` au démarrage
+                de `sparkd`.
+                Le redémarrage de contrôle de la Forge elle-même arrête les
+                Sparks des locataires : il ne fait PAS partie de cette
+                opération, et se décide à part.
+Retour arrière: réinstaller la build précédente (runbook A.2), puis
+                `sudo systemctl disable --now caddy-api && sudo systemctl unmask caddy && sudo systemctl enable --now caddy`,
+                puis `curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile`
+                — `caddy.service` repart du `Caddyfile`, sans aucune route,
+                tant que cette réconciliation n'est pas faite.
+Risques       : une coupure de l'ingress le temps du passage d'une unité à
+                l'autre. Si l'étape 1 ne rend pas `['spark']`, `caddy-api`
+                repartirait d'une autre configuration jusqu'à la réconciliation
+                du démarrage de `sparkd`, qui suit aussitôt.
+```
+
 ### OP-27 · Mettre à jour `sparkd` : l'ingress cesse d'annoncer HTTP/3 et pose `Alt-Svc: clear` (SPK-128)
 
 ```

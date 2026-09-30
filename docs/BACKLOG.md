@@ -8017,6 +8017,89 @@ date — une seule constante porte les deux.
   inchangé. **Reste `[~]`** : OP-27 n'est pas joué, et la preuve sur Forge
   réelle ne peut l'être qu'après.
 
+### [ ] SPK-129 · Une Forge reprend seule après un redémarrage total
+
+**Demandé par le responsable le 2026-09-30** : « la Forge doit pouvoir faire un
+redémarrage total et reprendre à fonctionner comme attendu ; assure-toi que le
+cloud-init d'une nouvelle Forge configure tout comme il le faut ». **Constaté le
+même jour** dans les journaux de la Forge : au redémarrage du 2026-09-14, Caddy
+est reparti sur `/etc/caddy/Caddyfile` — un serveur de fichiers par défaut — et a
+écrasé sa sauvegarde automatique ; aucune route n'a été servie pendant deux
+heures, jusqu'à ce qu'une modification de port déclenche une réconciliation. La
+console, elle, affichait les routes « appliquées ».
+
+- Spécification : `docs/DAT.md` **§51.5**, §18.1, §18.5 · runbook §A ·
+  `docs/PROD_MIGRATIONS.md` OP-28. **Écrite et committée avant le code.**
+- Dépend de : SPK-12 (la réconciliation), SPK-68 et SPK-73 (l'exécuteur et
+  l'amorce), SPK-128 (une build en attente de déploiement : même mise à jour).
+
+**Ce qui décide de l'unité** : chaque maillon d'une reprise est **nommé et
+éprouvé**, et un seul redémarrage réel, sur une Forge **montée par le cloud-init
+du dépôt**, en fait la preuve — pas une lecture de configuration.
+
+**Portée, et découpage :**
+
+1. Documentation — *fait, committé avant le code* ;
+2. exécuteur (`forge_install`) : Caddy porté par `caddy-api.service`
+   (`--resume`), `caddy.service` désactivé et **masqué**, reprise sur panne ;
+   `sparkd.service` ordonné après Caddy ; preuves unitaires ;
+3. `sparkd` réconcilie l'ingress **à son démarrage** ; une réconciliation en
+   échec remet `applied_at` à zéro, pour que l'écran le dise ; preuves ;
+4. préflight : un contrôle de l'unité qui porte Caddy, et un contrôle de
+   concordance entre la configuration vivante de Caddy et le registre ;
+5. banc de redémarrage : une VM Ubuntu 26.04 montée par
+   `deploy/cloud-init/`, deux disques pour le miroir, un Spark et une route
+   créés par l'API, **redémarrage**, puis tout revérifié sans aucun geste ;
+   rouge sur le code d'avant, vert sur le nouveau ;
+6. OP-28 sur la Forge, **sur instruction du responsable**.
+
+- Aucune variable d'environnement, aucune migration.
+- DoD : preuves unitaires ; banc de redémarrage vert (route servie, `sparkd`
+  prêt, pare-feu posé, Spark en marche, préflight vert, **aucun geste**), et
+  rouge sur le code d'avant ; OP-28 joué ; préflight vert sur la Forge ; runbook,
+  DAT, manuel et contrat de déploiement à jour ; `@spec` / `@verifies`.
+
+### [ ] SPK-130 · La page des routes diagnostique en direct : DNS, Caddy, certificat
+
+**Demandé par le responsable le 2026-09-30** : « sur la page des routes il
+faudra aussi ajouter, autre que DNS ici, aussi Caddy ici et SSL ici, qui sont
+donc vérifiés en live lors de la visite de la page. Si la console ne fait pas du
+vrai diagnostic, on est mal. » Le défaut de SPK-129 en est la démonstration :
+pendant deux heures, l'écran disait « appliquée » d'une route que Caddy ne
+portait plus.
+
+- Spécification : `docs/DAT.md` **§18.7**, §18.5, §38.9.1 ·
+  `docs/DESIGN_SYSTEM.md` (à lire en entier avant l'écran) · manuel M7.
+  **Écrite et committée avant le code.**
+- Dépend de : SPK-78 (l'état DNS relevé à chaque visite), SPK-129 (la
+  concordance registre ↔ Caddy).
+
+**Ce qui décide de l'unité** : chaque badge dit ce qui a été **relevé à
+l'instant**, par le composant qui peut le savoir — la zone chez le fournisseur
+pour le DNS, la configuration vivante de Caddy et une requête réelle pour Caddy,
+une poignée de main TLS réelle pour le certificat. Aucun souvenir d'écriture ne
+tient lieu de preuve.
+
+**Portée, et découpage :**
+
+1. Documentation — *fait, committé avant le code* ;
+2. `sparkd` : `GET /v1/ingress/diagnostic`, lecture seule ; les sondes réelles
+   (configuration vivante, requête sur la boucle locale, poignée de main TLS
+   vérifiée) et leurs doubles déterministes pour le pilote factice ; contrat
+   d'API ; preuves unitaires, dont des sondes contre de vrais serveurs locaux ;
+3. console : les badges Caddy et certificat à côté du badge DNS, relevés à
+   chaque visite, leurs états de chargement et d'erreur ; « Réappliquer »
+   offert dès que Caddy ne porte pas la route ; seed ; preuves ;
+4. E2E : le parcours de la page des routes, captures observées ; manuel M7 ;
+5. preuve sur la Forge réelle, après déploiement, **sur instruction du
+   responsable**.
+
+- Aucune variable d'environnement, aucune migration, aucune écriture : le
+  diagnostic lit.
+- DoD : preuves unitaires et de route ; parcours E2E ; captures observées
+  (bureau, mobile, chaque état) ; relu sur la Forge réelle ; manuel M7, design
+  system, DAT à jour ; `@spec` / `@verifies`.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks
