@@ -15,7 +15,7 @@ Confondre les deux ferait declarer prete une instance incapable de travailler.
 from __future__ import annotations
 
 import base64
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import ExitStack, asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -49,6 +49,7 @@ from . import notes as notes_service
 from . import suggestions as suggestions_service
 from . import metrics as metrics_service
 from . import historian as historian_service
+from . import veilleur as veilleur_service
 from . import snapshots as snapshot_service
 from . import protection as protection_service
 from . import isolation as isolation_service
@@ -133,10 +134,18 @@ def create_app(config: Config) -> FastAPI:
         historien = application.state.historien
         if historien.actif and not historien.is_alive():
             historien.start()
+        # SPK-133 · docs/DAT.md §43.5.3 : le veilleur des démarrages repose ce
+        # que le tmpfs d'une cellule perd, quelle que soit la cause du
+        # démarrage. Son premier passage repose tout : c'est ce qui couvre le
+        # redémarrage de la Forge.
+        veilleur = application.state.veilleur
+        if not veilleur.is_alive():
+            veilleur.start()
         try:
             yield
         finally:
             historien.arreter()
+            veilleur.arreter()
 
     app = FastAPI(
         title="sparkd",
@@ -211,6 +220,14 @@ def create_app(config: Config) -> FastAPI:
         incus=app.state.incus,
         interval=config.metrics_interval_seconds,
         retention=config.metrics_retention_seconds,
+    )
+    # SPK-133 · docs/DAT.md §43.5.3 : il repose par le MÊME geste que le
+    # démarrage commandé — `_apply_env`, défini plus bas et résolu à l'appel.
+    app.state.veilleur = veilleur_service.Veilleur(
+        ouvrir=lambda: connect(config.database),
+        incus=app.state.incus,
+        reposer=lambda connection, spark_id: _apply_env(
+            connection, service.get(connection, spark_id)),
     )
     # SPK-62 · docs/DAT.md §47.1 : le canal hors bande est posé sur `audit`, qui
     # est le SEUL chemin vers le journal. S'accrocher à la console laisserait
@@ -998,9 +1015,12 @@ def create_app(config: Config) -> FastAPI:
         try:
             _apply_env(connection, service.get(connection, spark["id"]))
         except (IncusError, InstanceAbsente, env_service.CleError):
-            # L'instance existe : ne pas faire échouer sa création. L'écart sera
-            # repris au prochain démarrage, qui repose les fichiers (§43.5.2).
+            # L'instance existe : ne pas faire échouer sa création. L'écart est
+            # repris par le veilleur des démarrages, qui ne connaît pas encore
+            # ce PID (§43.5.3).
             pass
+        else:
+            _noter_demarrage(connection, spark["name"])
         # SPK-105 · §55.5 : les `.?` sont posés dès la création, pour qu'un agent
         # qui entre les trouve. Le mécanisme se découvre alors d'un `ls`, sans
         # qu'on ait eu à le lire quelque part.
@@ -1184,6 +1204,63 @@ def create_app(config: Config) -> FastAPI:
         # Le coût est nul sur un Spark sans note — `a_projeter` ne rend rien — et
         # borné à trois écritures de fichier sur un Spark qui en a trois.
         _apply_notes(connection, spark)
+
+    def _noter_demarrage(connection, name: str) -> None:
+        """Dit au veilleur le PID d'init que le produit vient de servir.
+
+        @spec docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3
+
+        Sans ce mot, le veilleur verrait au passage suivant un PID qu'il ne
+        connaît pas et reposerait une seconde fois. Ne l'appeler qu'APRÈS un
+        dépôt réussi : un PID noté sur un dépôt raté ne serait jamais repris.
+        """
+        spark = service.by_name(connection, name)
+        if not spark.get("incus_name"):
+            return
+        try:
+            etat = app.state.incus.instance_state(spark["incus_name"])
+        except (IncusError, InstanceAbsente):
+            return
+        app.state.veilleur.servi(spark["id"], veilleur_service.pid_d_init(etat))
+
+    def _apres_demarrage(connection, name: str) -> None:
+        """Ce qu'une cellule que le produit vient de démarrer doit retrouver.
+
+        @spec docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (un seul chemin
+              « après démarrage »), §43.5.2 · §17.3 (clés) · §55.5 (`.?`)
+
+        *Démarrer* et *Redémarrer* passent tous deux par ici : un second chemin
+        finit toujours par en oublier un morceau, et c'est ce qui était arrivé
+        au fichier des secrets.
+        """
+        # Le provisionnement exige une instance DEMARREE. Il installe
+        # openssh-server si besoin — environ deux minutes, mesuré — puis pose
+        # les clés voulues (docs/DAT.md §17.3).
+        try:
+            app.state.incus.exec_command(name, sshkeys.PROVISION_SSHD)
+            _apply_keys(connection, service.by_name(connection, name))
+        except (IncusError, InstanceAbsente):
+            # Le Spark tourne ; l'écart sera repris à la réconciliation plutôt
+            # que de faire échouer le démarrage.
+            pass
+        # SPK-58 · §43.5.2 : le fichier des secrets vit dans un tmpfs, il
+        # DISPARAÎT à l'arrêt de la cellule. Il ne dépend pas de `sshd` : une
+        # panne du provisionnement ne doit pas l'empêcher.
+        try:
+            _apply_env(connection, service.by_name(connection, name))
+        except (IncusError, InstanceAbsente, env_service.CleError):
+            # Le PID n'est pas noté : le veilleur reposera au passage suivant.
+            pass
+        else:
+            _noter_demarrage(connection, name)
+        # SPK-105 · §55.5 : un `.?` supprimé par le locataire, ou une cellule
+        # restaurée d'un instantané antérieur, le retrouve au démarrage. Un `.?`
+        # déjà porteur n'est jamais écrasé.
+        _rattraper_suggestions(connection, service.by_name(connection, name))
+        try:
+            _reconcile_ingress(connection)
+        except ingress_service.IngressError:
+            pass
 
     def _apply_routes_file(connection, spark: dict) -> None:
         """Pose `/etc/spark/routes`, le fichier réel du §55.3.1.
@@ -1655,10 +1732,14 @@ def create_app(config: Config) -> FastAPI:
         option de configuration : une configuration se pose une fois et s'oublie,
         alors que la perte se décide instantané par instantané (§19.1).
         """
-        with registry() as connection:
+        with registry() as connection, ExitStack() as pile:
             try:
                 spark = service.by_name(connection, name)
                 protection_service.ensure_writable(connection, name, "snapshot")
+                # SPK-133 · §43.5.3 : Incus relance une cellule en marche pour la
+                # restaurer. Ce démarrage-là est celui du produit ; le veilleur
+                # ne doit pas le journaliser comme venu d'ailleurs.
+                pile.enter_context(app.state.veilleur.geste(spark["id"]))
                 rendu = snapshot_service.restore(
                     connection, spark, snapshot, app.state.incus,
                     accept_losing_newer=bool((body or {}).get("accept_losing_newer")),
@@ -1672,6 +1753,8 @@ def create_app(config: Config) -> FastAPI:
                     _apply_env(connection, service.by_name(connection, name))
                 except (IncusError, InstanceAbsente, env_service.CleError):
                     pass
+                else:
+                    _noter_demarrage(connection, name)
                 return rendu
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
@@ -3829,11 +3912,14 @@ def create_app(config: Config) -> FastAPI:
                 "message": f"Commande « {action} » inconnue.",
                 "known": sorted(c.value for c in Command)}) from erreur
 
-        with registry() as connection:
+        with registry() as connection, ExitStack() as pile:
             try:
                 spark = service.by_name(connection, name)
                 # §35.2 : les commandes de cycle de vie visent CE Spark.
                 protection_service.ensure_writable(connection, name, "command")
+                # SPK-133 · §43.5.3 : le veilleur des démarrages se tient à
+                # l'écart de ce Spark jusqu'à la fin du geste.
+                pile.enter_context(app.state.veilleur.geste(spark["id"]))
                 apres = service.command(connection, spark["id"], commande)
             except service.NotFound as erreur:
                 raise HTTPException(status_code=404, detail={
@@ -3855,33 +3941,6 @@ def create_app(config: Config) -> FastAPI:
                     raise HTTPException(status_code=502, detail={
                         "error": "incus_failed", "message": str(erreur)}) from erreur
                 service.finish(connection, apres["id"], success=True)
-                if commande is Command.START:
-                    # Le provisionnement exige une instance DEMARREE. Il installe
-                    # openssh-server si besoin — environ deux minutes, mesuré —
-                    # puis pose les clés voulues (docs/DAT.md §17.3).
-                    try:
-                        app.state.incus.exec_command(
-                            apres["name"], sshkeys.PROVISION_SSHD
-                        )
-                        _apply_keys(connection, service.by_name(connection, name))
-                        # SPK-58 · §43.5.2 : le fichier des secrets vit dans un
-                        # tmpfs, il DISPARAÎT à l'arrêt de la cellule. Le
-                        # reposer ici n'est pas une précaution : sans cela, un
-                        # Spark redémarré perdrait ses secrets.
-                        _apply_env(connection, service.by_name(connection, name))
-                    except (IncusError, InstanceAbsente, env_service.CleError):
-                        # Le Spark tourne ; l'écart sera repris à la
-                        # réconciliation plutôt que de faire échouer le démarrage.
-                        pass
-                    # SPK-105 · §55.5 : un `.?` supprimé par le locataire, ou une
-                    # cellule restaurée d'un instantané antérieur, le retrouve au
-                    # démarrage. Un `.?` déjà porteur n'est jamais écrasé.
-                    _rattraper_suggestions(
-                        connection, service.by_name(connection, name))
-                    try:
-                        _reconcile_ingress(connection)
-                    except ingress_service.IngressError:
-                        pass
                 if commande is Command.RESTART:
                     # Le second appel au pilote vivait HORS de toute garde : une
                     # panne y coinçait le Spark en « starting » aussi sûrement
@@ -3897,6 +3956,11 @@ def create_app(config: Config) -> FastAPI:
                         raise HTTPException(status_code=502, detail={
                             "error": "incus_failed", "message": str(erreur)}) from erreur
                     service.finish(connection, apres["id"], success=True)
+                if commande in (Command.START, Command.RESTART):
+                    # SPK-133 · §43.5.3 : UN SEUL chemin pour les deux gestes.
+                    # *Redémarrer* avait le sien, qui ne reposait rien : le
+                    # fichier des secrets manquait jusqu'au geste suivant.
+                    _apres_demarrage(connection, name)
             elif commande is Command.DELETE:
                 # SPK-52 · §14.5 : une instance déjà absente vaut suppression
                 # RÉUSSIE. Sans cela, un Spark dont l'instance a disparu hors du

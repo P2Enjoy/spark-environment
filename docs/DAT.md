@@ -3671,6 +3671,7 @@ les refus non éprouvés — précisément ceux où les défauts se logent.
 | Instantanés, dont un ancien et un plus récent | le refus de restauration du §19.1 |
 | Journal d'audit couvrant `ok`, `denied`, `error` | les trois résultats du §21 |
 | Projets « Client Martin », « Données », « Archives » (SPK-116) | un onglet par projet, un Spark dans deux projets (`postgres-dedie`), un Spark protégé rangé (`analytics`), un projet vide (§61.4) |
+| `crm-production` relancée **hors du produit**, reprise par le vrai veilleur (SPK-133) | la ligne *automatique* `spark.cell_started` au journal, et `/run/spark/secrets` reposé (§43.5.3) |
 
 ### 28.6 Reproductible veut dire : rejouable à l'identique
 
@@ -10041,8 +10042,22 @@ change de PID à chaque démarrage, et Incus le rend dans l'état de l'instance.
   **événement du runtime** — `spark.cell_started`, « la cellule a démarré hors du
   produit : environnement reposé » —, parce que c'est une information
   d'exploitation : quelqu'un, ou quelque chose, a redémarré ce Spark ;
+- un geste du produit sur un Spark — créer, démarrer, redémarrer, arrêter,
+  restaurer — le **soustrait au veilleur** jusqu'à sa fin : sans cela, un passage
+  tombé entre le démarrage commandé et le PID noté journaliserait un démarrage
+  « hors du produit » qui ne l'était pas. Un passage n'attend jamais un geste ;
+  il laisse ce Spark au passage suivant ;
+- un dépôt raté n'est pas retenu : le PID n'est noté qu'après un dépôt réussi,
+  et le passage suivant retente ;
 - une panne du veilleur ne l'arrête pas : il compte ses erreurs et retente au
   passage suivant, comme l'historien (§52.4).
+
+Le doublon Incus de la pile de développement est fidèle sur ces deux points :
+son `/run` est vidé à l'arrêt, comme le tmpfs, et chaque démarrage y rend un
+nouveau PID. Il écrit aussi son état sous un verrou, avec un fichier provisoire
+propre à chaque écriture : le veilleur écrit pendant que les requêtes écrivent,
+et le fichier provisoire commun faisait perdre des écritures simultanées (84
+lectures sur 90 en échec, mesuré le 2026-09-23).
 
 **Ce que la décision ne fait pas.** Pendant au plus quinze secondes après un
 démarrage hors du produit, le fichier manque : une pile qui se **recrée**

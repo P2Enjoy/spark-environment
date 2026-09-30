@@ -7,15 +7,21 @@
  *           · README.md (amorçage par cloud-init) · CLAUDE.md §15, §15 bis
  * @verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (`--carte virtio` :
  *           une carte qui n'annonce aucun débit, et le débit déclaré retenu)
+ * @verifies docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (le fichier des
+ *           secrets reposé après *Redémarrer*, après un `reboot` dans la
+ *           cellule, après le redémarrage de la Forge ; la ligne du journal)
  *
  * Ce que le banc établit, et que rien d'autre n'établit :
  *
  *   1. `deploy/cloud-init/` monte une Forge qui fonctionne — préflight vert,
  *      `sparkd` prêt — sur une Ubuntu 26.04 neuve, à deux disques ;
  *   2. un Spark créé PAR L'API, une route déclarée PAR L'API, servent une page ;
- *   3. après `systemctl reboot`, et SANS AUCUN GESTE, tout reprend : la route
- *      sert la même page, le Spark est en marche, le pare-feu est posé, le
- *      préflight est vert.
+ *   3. le fichier des secrets d'un Spark (`/run/spark/secrets`, un tmpfs) est
+ *      là après *Redémarrer* par l'API, et revient seul après un `reboot` tapé
+ *      dans la cellule (SPK-133) ;
+ *   4. après `systemctl reboot`, et SANS AUCUN GESTE, tout reprend : la route
+ *      sert la même page, le Spark est en marche, son fichier des secrets est
+ *      reposé, le pare-feu est posé, le préflight est vert.
  *
  * Il s'écarte du cloud-init réel en quatre points, et en ceux-là seulement —
  * il les imprime avant de démarrer :
@@ -54,6 +60,8 @@ const IMAGE = join(CACHE, basename(IMAGE_URL));
 const MEMOIRE_MIO = 6144;
 const DOMAINE = 'temoin.banc.test';
 const PAGE = 'TEMOIN-SPK129';
+// SPK-133 : un secret de banc, sans valeur réelle. Seule sa PRÉSENCE est lue.
+const SECRET = 'TEMOIN_SECRET';
 const ECHECS = join(RACINE, 'e2e', 'captures', 'echecs');
 
 // --- arguments nommés -------------------------------------------------------
@@ -282,6 +290,44 @@ try {
   const route = api('POST', '/v1/ingress', { spark: 'temoin', domain: DOMAINE, port: 8080, tls: false });
   if (route.domain !== DOMAINE) throw new Error(`route refusée : ${JSON.stringify(route)}`);
 
+  // --- 5 bis. SPK-133 : le fichier des secrets, à chaque démarrage -------------
+  // `/run` est un tmpfs dans la cellule (docs/DAT.md §43.5.2) : chaque démarrage
+  // l'efface, et quelque chose doit le reposer. On n'en lit que la PRÉSENCE.
+  const pose = api('PUT', `/v1/sparks/temoin/env/${SECRET}`,
+                   { value: `banc-${Date.now()}`, secret: true });
+  if (pose.detail) throw new Error(`secret refusé : ${JSON.stringify(pose)}`);
+  const secretsPresents = () => ssh(
+    `sudo incus exec temoin -- grep -c '^${SECRET}=' /run/spark/secrets`,
+    { tolerer: true }).sortie === '1';
+  const pidInit = () => {
+    const { sortie } = ssh('sudo incus query /1.0/instances/temoin/state', { tolerer: true });
+    try { return JSON.parse(sortie).pid; } catch { return null; }
+  };
+  verdict('le fichier des secrets est posé', secretsPresents(), '/run/spark/secrets');
+  const relance = api('POST', '/v1/sparks/temoin/restart');
+  if (relance.detail) throw new Error(`restart refusé : ${JSON.stringify(relance)}`);
+  verdict('après Redémarrer : le fichier des secrets est reposé', secretsPresents(),
+          secretsPresents() ? 'présent' : 'absent');
+  // Un `reboot` tapé DANS la cellule : `sparkd` ne l'a pas commandé. Le veilleur
+  // passe toutes les 15 s ; on lui en laisse 60 avant de conclure.
+  const pidAvant = pidInit();
+  ssh('sudo incus exec temoin -- systemctl reboot', { tolerer: true, delai: 30 });
+  await jusqua('la cellule redémarrée', () => {
+    const pid = pidInit();
+    return pid && pid !== pidAvant ? pid : null;
+  }, { delai: 180, pas: 2 });
+  let repose = false;
+  try { repose = await jusqua('le fichier des secrets reposé', secretsPresents, { delai: 60, pas: 3 }); }
+  catch { repose = false; }
+  verdict('après un reboot dans la cellule : le fichier des secrets revient seul', repose,
+          repose ? 'présent' : 'absent après 60 s');
+  // Ce démarrage, `sparkd` ne l'a pas commandé : le journal doit le dire, une fois.
+  const demarrages = () => (api('GET', '/v1/audit?action=spark.cell_started').entries ?? [])
+    .filter((e) => e.actor_class === 'runtime');
+  const horsProduit = demarrages().length;
+  verdict('après un reboot dans la cellule : le journal le dit, en ligne automatique',
+          horsProduit === 1, `${horsProduit} ligne(s) spark.cell_started`);
+
   // --- 6. avant le redémarrage ---------------------------------------------------
   const avant = await jusqua('la route sert la pile',
     () => (page().includes(PAGE) ? page() : null), { delai: 120 });
@@ -313,6 +359,16 @@ try {
           apres.split('\r\n')[0] || 'aucune réponse');
   const spark = api('GET', '/v1/sparks/temoin');
   verdict('après : le Spark est en marche', spark.state === 'running', spark.state);
+  let reposeForge = false;
+  try { reposeForge = await jusqua('le fichier des secrets reposé', secretsPresents, { delai: 60, pas: 3 }); }
+  catch { reposeForge = false; }
+  verdict('après : le fichier des secrets est reposé, sans aucun geste', reposeForge,
+          reposeForge ? 'présent' : 'absent après 60 s');
+  // `sparkd` a redémarré avec la Forge : il ne sait pas qui a relancé la
+  // cellule, et ne l'écrit pas (docs/DAT.md §43.5.3).
+  const apresForge = demarrages().length;
+  verdict('après : aucune ligne hors du produit inventée', apresForge === horsProduit,
+          `${apresForge} ligne(s) spark.cell_started`);
   // `systemctl show` sépare deux unités par une ligne VIDE : on relit mot à mot.
   const unites = ssh('systemctl show -p UnitFileState --value caddy.service caddy-api.service'
     + ' ; systemctl is-active caddy-api.service', { tolerer: true }).sortie

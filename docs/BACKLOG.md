@@ -8266,7 +8266,7 @@ des étiquettes que Compose a posées, relues au moment du geste.
   `spk132-recreer-*` et illustration `m8-docker-recreer` observées.
   **Déploiement** : OP-31, en attente d'instruction.
 
-### [ ] SPK-133 · Le fichier des secrets est reposé à chaque démarrage de la cellule, quelle qu'en soit la cause
+### [~] SPK-133 · Le fichier des secrets est reposé à chaque démarrage de la cellule, quelle qu'en soit la cause
 
 **Signalé par le responsable le 2026-09-30** : « le fichier de secrets ne se
 recrée pas si on redémarre le Spark ». **Confirmé dans le code** :
@@ -8301,6 +8301,18 @@ ce que le tmpfs a perdu, **quelle que soit la cause** du démarrage.
 - DoD : preuves unitaires et de route ; banc de redémarrage vert sur les trois
   causes, rouge sur le code d'avant ; DAT, manuel, contrat de déploiement à
   jour ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-30 sur machine virtuelle à installation fraîche** (banc
+  `make forge-vm`, la seule validation locale admise — DAT §28.7) : avec la
+  roue d'avant (`0.post1.dev886+g611a460e2`), **rouge, trois écarts, les
+  seuls** — fichier des secrets absent après *Redémarrer*, après un `reboot`
+  dans la cellule, après le redémarrage de la Forge ; avec la roue de l'arbre
+  de travail, **vert** sur les trois, fichier présent dès le retour de
+  *Redémarrer*, revenu seul après le `reboot` et après le redémarrage de la
+  Forge ; une ligne automatique `spark.cell_started` après le `reboot`, aucune
+  inventée après le redémarrage de la Forge. Les preuves `pytest` sur le
+  doublon (20, rouges sur l'ancien code pour *Redémarrer* et pour les écritures
+  simultanées) sont des diagnostics. **Reste `[~]`** : OP-32 sur la Forge (point
+  4), sur instruction du responsable.
 
 ### [~] SPK-134 · Le préflight relève aussi les écoutes UDP
 

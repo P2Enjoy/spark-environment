@@ -21,6 +21,7 @@ import json
 import math
 import platform
 import re
+import threading
 import time
 
 import httpx
@@ -827,6 +828,11 @@ def etat_simule(name: str, secondes: float,
     }
 
 
+#: SPK-133 : un seul verrou pour toutes les instances du doublon — la pile de
+#: développement n'en tient qu'une, mais les preuves en créent plusieurs.
+_VERROU_DOUBLON = threading.RLock()
+
+
 @dataclass
 class FakeIncus:
     """Pilote factice, pour les tests et le developpement local.
@@ -945,18 +951,26 @@ class FakeIncus:
     def _persist(self) -> None:
         if self.state_path is None:
             return
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        # Ecriture atomique : une pile interrompue en plein enregistrement
-        # laisserait sinon un fichier tronque, et le demarrage suivant
-        # echouerait sur un JSON invalide sans rapport avec sa cause.
-        provisoire = self.state_path.with_suffix(".tmp")
-        provisoire.write_text(json.dumps(self.created), encoding="utf-8")
-        provisoire.replace(self.state_path)
-        chemin = self._chemin_reseaux()
-        if chemin is not None:
-            provisoire_reseaux = chemin.with_suffix(".tmp")
-            provisoire_reseaux.write_text(json.dumps(self.networks), encoding="utf-8")
-            provisoire_reseaux.replace(chemin)
+        # SPK-133 · docs/DAT.md §43.5.3 : le veilleur des démarrages écrit
+        # pendant que les requêtes écrivent. Tous partageaient `<registre>.tmp` :
+        # deux écritures simultanées se volaient ce fichier, et l'une tombait
+        # en `FileNotFoundError` — 84 lectures sur 90 en échec, mesuré le
+        # 2026-09-23 (rapport d'incohérences). Un verrou sérialise, et chaque
+        # écriture a son propre fichier provisoire.
+        with _VERROU_DOUBLON:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            # Ecriture atomique : une pile interrompue en plein enregistrement
+            # laisserait sinon un fichier tronque, et le demarrage suivant
+            # echouerait sur un JSON invalide sans rapport avec sa cause.
+            suffixe = f".{threading.get_ident()}.tmp"
+            provisoire = self.state_path.with_suffix(suffixe)
+            provisoire.write_text(json.dumps(self.created), encoding="utf-8")
+            provisoire.replace(self.state_path)
+            chemin = self._chemin_reseaux()
+            if chemin is not None:
+                provisoire_reseaux = chemin.with_suffix(suffixe)
+                provisoire_reseaux.write_text(json.dumps(self.networks), encoding="utf-8")
+                provisoire_reseaux.replace(chemin)
 
     def resources(self) -> dict[str, Any]:
         self._maybe_fail("resources")
@@ -1035,7 +1049,32 @@ class FakeIncus:
         # `InstanceAbsente` sur tout 404, donc ici aussi — et par l'aide
         # commune, qui RELIT l'état avant de conclure (§12.1.3, point 3).
         self._maybe_fail("set_instance_state")
-        self._vivante(name)["status"] = "Running" if action == "start" else "Stopped"
+        instance = self._vivante(name)
+        instance["status"] = "Running" if action == "start" else "Stopped"
+        if action == "stop":
+            # SPK-133 · §43.5.2 : `/run` est un tmpfs ; il ne survit pas à
+            # l'arrêt de la cellule. Le doublon qui le garderait rendrait verte
+            # une preuve que le vrai hôte fait échouer.
+            for chemin in [c for c in instance.get("files", {}) if c.startswith("/run/")]:
+                del instance["files"][chemin]
+        if action == "start":
+            # SPK-133 · §43.5.3 : chaque démarrage donne un NOUVEAU processus
+            # d'init, comme sur le vrai hôte. C'est ce que le veilleur relève.
+            instance["demarrages"] = instance.get("demarrages", 1) + 1
+        self._persist()
+
+    def demarrer_hors_produit(self, name: str) -> None:
+        """Un démarrage que `sparkd` n'a pas commandé : `reboot` dans la
+        cellule, `incus restart` à la main, redémarrage de la Forge (§43.5.3).
+
+        Le tmpfs de la cellule est perdu ; les fichiers qui y vivaient aussi.
+        """
+        instance = self._vivante(name)
+        instance["status"] = "Running"
+        instance["demarrages"] = instance.get("demarrages", 1) + 1
+        instance.setdefault("files", {})
+        for chemin in [c for c in instance["files"] if c.startswith("/run/")]:
+            del instance["files"][chemin]
         self._persist()
 
     def delete_instance(self, name: str) -> None:
@@ -1329,6 +1368,10 @@ class FakeIncus:
         etat = etat_simule(name, time.time() - _PROFIL_ORIGINE,
                            _taille_racine(instance))
         etat["status"] = instance.get("status", "Running")
+        # SPK-133 · §43.5.3 : le PID du processus d'init, comme `/state` le rend
+        # sur le vrai hôte — nouveau à chaque démarrage, nul à l'arrêt.
+        etat["pid"] = (1000 + instance.get("demarrages", 1)
+                       if etat["status"] == "Running" else 0)
         return etat
 
 

@@ -13402,3 +13402,39 @@ source `declared`, et le banc de redémarrage est vert en entier. Une capture
 sur la pile factice avait été écrite, jamais jouée : retirée, puisqu'elle
 n'aurait rien validé. **Reste ouvert** : voir la mention « déclarée » dans la
 console branchée sur la machine virtuelle — pas encore outillé.
+
+## 2026-09-30 · SPK-133 — les secrets reposés à chaque démarrage, validés sur machine virtuelle
+
+**Le défaut**, signalé par le responsable : « le fichier de secrets ne se
+recrée pas si on redémarre le Spark ». Deux causes, lues dans le code :
+*Redémarrer* avait son propre chemin, qui relançait la cellule sans rien
+reposer ; et aucun démarrage hors du produit ne reposait jamais rien — la
+« réconciliation du §14.3 » invoquée par le §43.5.2 ne corrige que des états.
+
+**Ce qui est fait** (DAT §43.5.3) : un seul chemin « après démarrage » ; un
+veilleur des démarrages, fil de `sparkd`, qui relève toutes les 15 s le PID
+d'init de chaque cellule en marche et repose l'environnement quand il change —
+tout, au démarrage de `sparkd`. Deux décisions de détail, écrites au DAT : un
+geste du produit soustrait son Spark au veilleur jusqu'à sa fin — sans quoi un
+passage tombé entre le démarrage et le PID noté journaliserait un démarrage
+« hors du produit » qui ne l'était pas — ; un dépôt raté ne retient pas le PID,
+et le passage suivant retente. Le dépôt de l'environnement ne dépend plus de la
+réussite du provisionnement de `sshd`.
+
+**Validation** — sur machine virtuelle à installation fraîche (§28.7), le banc
+`make forge-vm` étendu d'un secret posé par l'API :
+
+| | roue d'avant (`dev886+g611a460e2`) | roue de l'arbre de travail |
+|---|---|---|
+| après *Redémarrer* | **absent** | présent |
+| après `reboot` dans la cellule | **absent après 60 s** | présent, revenu seul |
+| après le redémarrage de la Forge | **absent après 60 s** | présent, sans geste |
+| `spark.cell_started` au journal | — | 1 après le `reboot`, 0 de plus après la Forge |
+
+Rouge : trois écarts, les seuls. Vert : 18 verdicts sur 18, carte `virtio`.
+Les preuves `pytest` sur le doublon restent des diagnostics ; elles ont servi à
+rendre le doublon fidèle — `/run` vidé à l'arrêt, PID qui change — et à fermer
+l'incohérence du 2026-09-23 : le fichier provisoire commun faisait perdre 58
+écritures sur 90 à six fils simultanés, zéro désormais.
+
+**Reste** : OP-32 sur la Forge, sur instruction du responsable.

@@ -1,6 +1,8 @@
 """@verifies docs/BACKLOG.md#SPK-23 · docs/DAT.md §28 (la pile et le seed),
            §28.3 (les mêmes chemins que l'application), §28.5 (ce qu'il
-           démontre), §28.6 (rejouable à l'identique) · CLAUDE.md §8
+           démontre), §28.6 (rejouable à l'identique) · CLAUDE.md §8 ·
+           docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (le démarrage hors
+           du produit, au journal)
 
 Le seed est un CONTRAT maintenu : il doit démontrer chaque situation que les
 écrans traitent. Un seed qui perd une fixture rend un écran inéprouvable sans
@@ -222,6 +224,19 @@ def test_le_journal_couvre_les_trois_resultats(seede):
     """§21, §28.5 — les trois badges du journal doivent être éprouvables."""
     resultats = {e["result"] for e in seede.get("/v1/audit?limit=500").json()["entries"]}
     assert {"ok", "denied", "error"} <= resultats
+
+
+def test_un_demarrage_HORS_DU_PRODUIT_est_au_journal_et_ses_secrets_reposes(seede):
+    """@verifies docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3
+
+    Le journal de la Forge doit pouvoir montrer la ligne du runtime, et la
+    cellule relancée doit porter son fichier des secrets : le vrai veilleur l'a
+    reposé, rien n'est écrit à la main."""
+    lignes = seede.get("/v1/audit?action=spark.cell_started").json()["entries"]
+    assert [(e["target_id"] is not None, e["actor_class"]) for e in lignes] == [
+        (True, "runtime")]
+    fichiers = seede.app.state.incus.created["crm-production"]["files"]
+    assert "/run/spark/secrets" in fichiers
 
 
 def test_le_seed_est_rejouable_a_l_identique(config):

@@ -289,6 +289,23 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-133 — le fichier des secrets est reposé à chaque démarrage de la
+  cellule, quelle qu'en soit la cause.** Signalé par le responsable :
+  « le fichier de secrets ne se recrée pas si on redémarre le Spark ».
+  `/run/spark/secrets` vit dans un tmpfs et disparaît à l'arrêt ; *Redémarrer*
+  relançait la cellule sans rien reposer, et aucun démarrage hors du produit —
+  `reboot` dans la cellule, redémarrage de la Forge — ne le reposait jamais.
+  *Démarrer* et *Redémarrer* passent désormais par un seul chemin « après
+  démarrage » ; un veilleur des démarrages, dans `sparkd`, relève toutes les
+  15 s le PID d'init de chaque cellule en marche et repose l'environnement quand
+  il change — tout, au démarrage de `sparkd`. Un démarrage hors du produit entre
+  au journal comme ligne automatique `spark.cell_started`. Le doublon Incus vide
+  son `/run` à l'arrêt, change de PID à chaque démarrage, et n'égare plus
+  d'écriture simultanée (rapport d'incohérences du 2026-09-23 résolu). Validé
+  sur machine virtuelle à installation fraîche (`make forge-vm`, étendu) :
+  rouge avec la roue d'avant sur les trois causes, vert avec la nouvelle, et la
+  ligne du journal après un `reboot` dans la cellule. Aucune variable, aucune
+  migration. DAT §43.5.3 ; manuels M8 et M6. **Sur la Forge avec OP-32.**
 - **SPK-135 — une Forge dont la carte n'annonce pas son débit s'installe, avec
   un débit déclaré.** Une carte `virtio` n'annonce aucun débit : le relevé de
   topologie refusait une capacité nulle, et l'amorce d'une Forge sur machine

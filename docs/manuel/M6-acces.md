@@ -434,8 +434,10 @@ Trois choses valent d'être sues :
   `docker compose up -d` dans la cellule, ou *Recréer* dans l'onglet Docker de
   la console (voir M8) ;
 - **le second fichier est volatil.** Il vit en mémoire et disparaît à l'arrêt du
-  Spark ; la console le repose à chaque démarrage. C'est ce qui empêche un
-  ancien instantané de ressusciter un secret que vous avez remplacé ;
+  Spark ; la console le repose à chaque démarrage, quelle qu'en soit la cause —
+  y compris un `reboot` que vous tapez dans la cellule, après lequel il revient
+  dans les quinze secondes (voir M8). C'est ce qui empêche un ancien instantané
+  de ressusciter un secret que vous avez remplacé ;
 - **une valeur peut contenir n'importe quoi** — espaces, guillemets, `$`,
   apostrophes. La console les écrit de façon à ce que Compose les rende intactes.
 

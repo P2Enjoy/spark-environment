@@ -4,6 +4,8 @@
       docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.4 (les projets de démonstration),
       docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 (une proposition de README
       qui modifie une note écrite, en-tête recopié),
+      docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (un démarrage hors du
+      produit, repris par le veilleur),
       §28.3 (les mêmes chemins que l'application), §28.5 (ce qu'il démontre),
       §28.6 (rejouable à l'identique) · CLAUDE.md §8
 
@@ -626,6 +628,21 @@ def populate(client: TestClient, incus, caddy, sondes) -> dict[str, int]:
                             json={"projects": [projets[n] for n in siens]}),
                  200, quoi=f"rangement de « {spark} »")
     compte["projets"] = len(projets)
+
+    # SPK-133 · §43.5.3 : une cellule qui a démarré HORS du produit — un
+    # `reboot` tapé dedans. Aucun chemin du produit ne le produit, par
+    # définition : relancer la cellule dans le pilote EST la reproduction de
+    # l'évènement, comme la cellule disparue d'« orphelin ». Ce qui suit est le
+    # vrai veilleur : il relève le PID, repose le fichier des secrets et écrit
+    # la ligne du runtime que le journal de la Forge montre.
+    veilleur = client.app.state.veilleur
+    veilleur.un_passage()
+    incus.demarrer_hors_produit("crm-production")
+    passage = veilleur.un_passage()
+    if not passage or passage["hors_produit"] != ["crm-production"]:
+        raise SeedError("le veilleur n'a pas repris le démarrage hors du produit "
+                        f"de « crm-production » : {passage!r}")
+    compte["demarrages_hors_produit"] = 1
 
     return compte
 
