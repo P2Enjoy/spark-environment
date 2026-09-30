@@ -13291,3 +13291,21 @@ rapport d'incohérences ; gestes 13/13 ; contrat inchangé.
 diagnostic portait en queue un `make e2e` oublié. Son tube fermé l'a arrêté
 avant qu'il ne monte quoi que ce soit — vérifié aussitôt : aucun processus
 d'épreuve, aucun verrou. Aucune seconde campagne n'a tourné.
+
+## 2026-09-30 · OP-27 à OP-29 — une mise à jour constatée, et ce qu'elle a prouvé
+
+En relevant la Forge pour la suite, j'ai trouvé la build `cc7d119` installée à
+09:14:51Z — une mise à jour ordinaire, que je n'ai pas faite. C'était le chemin
+prévu par SPK-129 : `sparkd.install` a aligné Caddy lui-même (`caddy.service`
+masqué, `caddy-api.service` actif avec `Restart=on-failure`), puis `sparkd` a
+réconcilié à son démarrage (09:14:55Z, runtime, 5 routes). Aucun geste de plus
+n'a été nécessaire — c'est la première démonstration réelle de la décision « une
+mise à jour ordinaire répare une Forge existante ».
+
+Vérifié en lecture seule : préflight 17 sur 17, plus d'écoute UDP/443, les
+quatre domaines répondent. Puis par le navigateur (`spk128-alt-svc.mjs`) :
+`alt-svc: clear` en HTTP/2 à chaque réponse ; le dossier de `sso-p2enjoy` porte
+ses quatre lignes ; l'onglet Routes relève « DNS ici · Caddy ici · 302 · TLS
+valide · 66 j », sans sondes factices. SPK-128 à SPK-130 passent à `[x]`, le
+contrat de déploiement et le README cessent de les dire en attente. Le
+redémarrage de contrôle de la Forge, lui, n'a pas été fait.

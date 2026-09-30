@@ -7962,7 +7962,7 @@ qui déclarent désormais leur type.
   2026-09-24). Non rejoué : `make captures`, dont un seul appel a changé de la
   même façon.
 
-### [~] SPK-128 · L'ingress ne sert pas HTTP/3, et cesse de l'annoncer
+### [x] SPK-128 · L'ingress ne sert pas HTTP/3, et cesse de l'annoncer
 
 **Signalé le 2026-09-30** par l'exploitant du SSO du domaine, transmis par le
 responsable : `oauth.lelabs.tech` répond `alt-svc: h3=":443"; ma=2592000`, alors
@@ -7996,7 +7996,7 @@ date — une seule constante porte les deux.
    M8 — *fait* ;
 5. OP-27 : mise à jour de `sparkd` sur la Forge, **sur instruction du
    responsable** ; preuve sur Forge réelle, par le navigateur et par la console
-   (`e2e/forge-reelle/spk128-alt-svc.mjs`) — **en attente**.
+   (`e2e/forge-reelle/spk128-alt-svc.mjs`) — *fait*.
 
 - Aucune variable d'environnement, aucune migration. Une opération de
   déploiement : OP-27.
@@ -8015,10 +8015,14 @@ date — une seule constante porte les deux.
   `spk128-01-ingress-http3` et `spk128-02-ingress-http3-mobile` observées —
   les quatre lignes lisibles, aucun débordement, console vierge ; contrat
   inchangé. Le banc prouve aussi, depuis, qu'un WebSocket traverse la forme
-  produite (`101`, écho reçu). **Reste `[~]`** : OP-27 n'est pas joué, et la preuve sur Forge
-  réelle ne peut l'être qu'après.
+  produite (`101`, écho reçu).
+- **Vérifié sur la Forge le 2026-09-30**, après la mise à jour constatée à 09:14Z (build `0.post1.dev880+gcc7d119fe`, OP-27 à OP-29) : aucune écoute UDP/443 ; `oauth.lelabs.tech` et
+  `crm.lelabs.tech` rendent `alt-svc: clear` à un Chromium neuf, en HTTP/2, à
+  chaque réponse de la chaîne ; le dossier de `sso-p2enjoy`, ouvert depuis
+  l'accueil de la console, porte les quatre lignes (preuve
+  `spk128-alt-svc.mjs`, captures `spk128-forge-dossier-ingress`, `-mobile`).
 
-### [~] SPK-129 · Une Forge reprend seule après un redémarrage total
+### [x] SPK-129 · Une Forge reprend seule après un redémarrage total
 
 **Demandé par le responsable le 2026-09-30** : « la Forge doit pouvoir faire un
 redémarrage total et reprendre à fonctionner comme attendu ; assure-toi que le
@@ -8054,7 +8058,7 @@ du dépôt**, en fait la preuve — pas une lecture de configuration.
    `deploy/cloud-init/`, deux disques pour le miroir, un Spark et une route
    créés par l'API, **redémarrage**, puis tout revérifié sans aucun geste ;
    rouge sur le code d'avant, vert sur le nouveau — *fait* (`make forge-vm`) ;
-6. OP-28 sur la Forge, **sur instruction du responsable** — **en attente**.
+6. OP-28 sur la Forge — *fait*, par la mise à jour ordinaire, comme prévu.
 
 - Aucune variable d'environnement, aucune migration.
 - DoD : preuves unitaires ; banc de redémarrage vert (route servie, `sparkd`
@@ -8068,10 +8072,16 @@ du dépôt**, en fait la preuve — pas une lecture de configuration.
   17 sur 17 ; suite de `sparkd` complète verte ; preuves unitaires de
   l'alignement (ordre, idempotence, absence de `caddy.service`, lecture par
   `systemctl show`), de l'exécuteur d'une Forge neuve, de la réconciliation au
-  démarrage et de son échec, de `ING-UNITE` et `ING-CONCORDE`. **Reste `[~]`** :
-  OP-28 n'est pas joué.
+  démarrage et de son échec, de `ING-UNITE` et `ING-CONCORDE`.
+- **Vérifié sur la Forge le 2026-09-30**, après la mise à jour constatée à 09:14Z (build `0.post1.dev880+gcc7d119fe`, OP-27 à OP-29) : la mise à jour a aligné Caddy d'elle-même —
+  `caddy.service` masqué, `caddy-api.service` actif avec `Restart=on-failure` —,
+  `sparkd` a réconcilié à son démarrage (`ingress.reconcile`, runtime, 5 routes,
+  09:14:55Z), préflight **17 sur 17** verts, `ING-UNITE` et `ING-CONCORDE`
+  compris ; les quatre domaines répondent. Le redémarrage de contrôle de la
+  Forge elle-même reste une décision à part : il arrête les Sparks des
+  locataires.
 
-### [~] SPK-130 · La page des routes diagnostique en direct : DNS, Caddy, certificat
+### [x] SPK-130 · La page des routes diagnostique en direct : DNS, Caddy, certificat
 
 **Demandé par le responsable le 2026-09-30** : « sur la page des routes il
 faudra aussi ajouter, autre que DNS ici, aussi Caddy ici et SSL ici, qui sont
@@ -8105,8 +8115,7 @@ tient lieu de preuve.
    offert dès que Caddy ne porte pas la route ; seed ; preuves — *fait* ;
 4. E2E : le parcours de la page des routes, captures observées ; manuel M7 —
    *fait* ;
-5. preuve sur la Forge réelle, après déploiement, **sur instruction du
-   responsable** — **en attente** (OP-29).
+5. preuve sur la Forge réelle, après déploiement — *fait* (OP-29).
 
 - Aucune variable d'environnement, aucune migration, aucune écriture : le
   diagnostic lit.
@@ -8122,8 +8131,11 @@ tient lieu de preuve.
   dites, « Revérifier » qui relance la requête, pile muette, joker) ; captures
   `spk130-routes-diagnostic`, `-mobile`, `spk130-pile-muette` observées, et
   `spk130-etats-degrades` (route absente avec Réappliquer, autre cible, échéance
-  proche, certificat absent) produite par `make captures`. **Reste `[~]`** :
-  relu sur la Forge réelle seulement après OP-29.
+  proche, certificat absent) produite par `make captures`.
+- **Vérifié sur la Forge le 2026-09-30**, après la mise à jour constatée à 09:14Z (build `0.post1.dev880+gcc7d119fe`, OP-27 à OP-29) : l'onglet Routes de `sso-p2enjoy`, ouvert depuis l'accueil,
+  relève « DNS ici · Caddy ici · 302 · TLS valide · 66 j » pour
+  `oauth.lelabs.tech` et `www.oauth.lelabs.tech`, sans mention de sondes
+  factices (captures `spk130-forge-routes`, `-mobile`).
 
 ### [x] SPK-131 · Une note proposée se relit en deux colonnes, comme une revue de code
 

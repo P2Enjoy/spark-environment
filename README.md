@@ -629,8 +629,7 @@ une garde qui n'existe que dans un fichier de workflow.
   `docs/BACKLOG.md#SPK-113`, qui demande une mesure avant d'être corrigé.
 - **L'ingress ne sert pas HTTP/3** (`docs/DAT.md` §18.6) : HTTP/1.1 et HTTP/2
   seulement, et `Alt-Svc: clear` sur chaque réponse pour effacer une annonce
-  mémorisée. La Forge de validation annonce encore HTTP/3 sans le servir tant
-  qu'OP-27 n'est pas joué (`docs/PROD_MIGRATIONS.md`).
+  mémorisée.
 - **Une Forge dont la carte réseau n'annonce pas son débit ne s'installe pas** —
   typiquement une machine virtuelle à carte `virtio`. Le relevé de topologie
   refuse une capacité réseau nulle plutôt que de la retenir (SPK-07) ; mesuré le

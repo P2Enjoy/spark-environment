@@ -13,8 +13,8 @@ n'est appliquée en production sans instruction humaine explicite.
 ## 1. Baseline de production
 
 **Relevée le 2026-09-07** sur la Forge de test, par le préflight du paquet et par
-lecture directe de la machine. Les **15** contrôles du §31 du [DAT](DAT.md) sont
-verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-18).
+lecture directe de la machine. Les **17** contrôles du §31 du [DAT](DAT.md) sont
+verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-30, après OP-28).
 
 | Élément | État |
 |---|---|
@@ -26,14 +26,14 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-18).
 | `zfs_arc_max` | **16 Gio**, persisté dans `/etc/modprobe.d/zfs.conf` |
 | Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif, DNS sur `10.77.0.1:53` |
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
-| Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` ; HTTP/3 actif par défaut — écoute UDP/443 et annonce `h3` sur chaque réponse sans le servir (relevé du 2026-09-30, docs/DAT.md §18.6) — jusqu'à OP-27 |
+| Caddy | **v2.6.2**, porté par `caddy-api.service` (`--resume`, `Restart=on-failure`), `caddy.service` masqué — OP-28 ; API d'administration sur `127.0.0.1:2019` ; HTTP/1.1 et HTTP/2 seulement, `Alt-Svc: clear` sur chaque réponse — OP-27 (relevé du 2026-09-30) |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
-| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 020** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24), la `020` le **2026-09-23T21:52Z** (OP-26) ; build **`0.post1.dev865+ge989c1a83`**, installée le **2026-09-23T21:51Z** — relevé `/healthz` et `/readyz` le 2026-09-23 ; sauvegarde prise juste avant : `/var/backups/sparkd/spark-20260923-215139.db`, structure saine, chaîne du journal intacte (1 243 entrées) |
+| Registre | `/var/lib/sparkd/spark.db`, **version de schéma 020** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24), la `020` le **2026-09-23T21:52Z** (OP-26) ; build **`0.post1.dev880+gcc7d119fe`**, installée le **2026-09-30T09:14:51Z** (OP-27 à OP-29) — relevé `/healthz` le 2026-09-30 ; la build précédente, `0.post1.dev865+ge989c1a83`, datait du 2026-09-23T21:51Z ; sauvegarde prise juste avant : `/var/backups/sparkd/spark-20260923-215139.db`, structure saine, chaîne du journal intacte (1 243 entrées) |
 | Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` ; `input` et `forward` couvrent `spn*` (établi, 53, 67, ICMP, puis `drop` ; rien routé depuis ni vers) ; `forward` accepte `ct status dnat` — les liens privés — après l'établi et avant les drop — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)**, **OP-23 (2026-09-18)**, **OP-24 (2026-09-18)** |
 | Réseaux privés | pool `10.78.0.0/16` en `/24`, le premier laissé de côté — **0 attribué** après la preuve d'OP-23 ; aucun bridge `spn<n>` — OP-23, appliqué le 2026-09-18 |
 | Isolation des cellules | chaque cellule porte `security.port_isolation` et `security.ipv4_filtering` — les deux cellules de locataires depuis OP-22 (2026-09-18) ; les deux cellules d'essai du lot 6, supprimées par le produit le 2026-09-18 une fois les preuves jouées ; `NET-ISOLATION` « ok » |
 | Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
-| Surface réseau | `22`, `80`, `443` exposés en TCP ; **UDP/443** exposé par Caddy jusqu'à OP-27, que `SEC-PORTS` ne voit pas (il ne lit que TCP) ; `9876` et `2019` sur la boucle locale |
+| Surface réseau | `22`, `80`, `443` exposés en TCP ; en UDP, seul le client DHCP de `systemd-networkd` écoute sur l'adresse publique (`:68`) — relevé du 2026-09-30, après OP-27 ; `9876` et `2019` sur la boucle locale |
 
 Cette baseline décrit une Forge de **test**, qui porte néanmoins un Spark en
 service. Sa disposition de stockage n'est plus une dette ni un choix par
@@ -192,12 +192,16 @@ Risques       : aucun connu — le champ est calculé à la lecture, par la
                 fonction que l'acceptation emploie déjà.
 ```
 
-### OP-29 · Le diagnostic en direct des routes : `sparkd` et la console (SPK-130)
+### OP-29 · Le diagnostic en direct des routes : `sparkd` et la console (SPK-130) — **APPLIQUÉ le 2026-09-30**
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable, dans la
-                MÊME mise à jour qu'OP-27 et OP-28 : la build qui porte l'une
-                porte les trois.
+État          : APPLIQUÉ — constaté le 2026-09-30 : la Forge sert la build
+                0.post1.dev880+gcc7d119fe, installée à 09:14:51Z par une mise
+                à jour ordinaire (runbook A.2 ou geste de la console) ; une
+                seule mise à jour a joué OP-27, OP-28 et OP-29.
+                Vérifié par le parcours canonique (spk128-alt-svc.mjs) :
+                l'onglet Routes de sso-p2enjoy relève « Caddy ici · 302 » et
+                « TLS valide · 66 j », sans sondes factices.
 Objectif      : servir `GET /v1/ingress/diagnostic` (docs/DAT.md §18.7) et
                 relancer la console qui l'affiche. Lecture seule : aucune
                 migration, aucune variable, aucun service nouveau, rien au
@@ -224,16 +228,18 @@ Risques       : une requête par route et par visite vers chaque pile ; une pile
                 qui traiterait `GET /` comme une écriture en recevrait une.
 ```
 
-### OP-28 · Caddy porté par `caddy-api.service`, et `sparkd` qui réconcilie à son démarrage (SPK-129)
+### OP-28 · Caddy porté par `caddy-api.service`, et `sparkd` qui réconcilie à son démarrage (SPK-129) — **APPLIQUÉ le 2026-09-30**
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
-                SPK-129 livré sur `main`. Se joue dans la MÊME mise à jour
-                qu'OP-27 : la build qui porte l'une porte l'autre. Tant
-                qu'elle ne l'est pas, un redémarrage de la Forge — ou de Caddy
-                seul — laisse l'ingress sans aucune route jusqu'à une
-                réconciliation (docs/DAT.md §51.5 : deux heures le
-                2026-09-14).
+État          : APPLIQUÉ — constaté le 2026-09-30 : la Forge sert la build
+                0.post1.dev880+gcc7d119fe, installée à 09:14:51Z par une mise
+                à jour ordinaire (runbook A.2 ou geste de la console) ; une
+                seule mise à jour a joué OP-27, OP-28 et OP-29.
+                Vérifié en lecture seule : caddy.service masqué, caddy-api
+                actif avec Restart=on-failure, `ingress.reconcile` au
+                démarrage de sparkd (runtime, 5 routes, 09:14:55Z), préflight
+                17 sur 17. Le redémarrage de contrôle de la Forge n'a PAS été
+                fait : il arrête les Sparks des locataires.
 Objectif      : `caddy.service` désactivé et masqué, `caddy-api.service`
                 (`caddy run --resume`) activé avec `Restart=on-failure` ;
                 `sparkd.service` ordonné après lui ; `sparkd` réconcilie
@@ -269,13 +275,16 @@ Risques       : une coupure de l'ingress le temps du passage d'une unité à
                 du démarrage de `sparkd`, qui suit aussitôt.
 ```
 
-### OP-27 · Mettre à jour `sparkd` : l'ingress cesse d'annoncer HTTP/3 et pose `Alt-Svc: clear` (SPK-128)
+### OP-27 · Mettre à jour `sparkd` : l'ingress cesse d'annoncer HTTP/3 et pose `Alt-Svc: clear` (SPK-128) — **APPLIQUÉ le 2026-09-30**
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable, dans la
-                MÊME mise à jour qu'OP-28. Tant qu'elle ne l'est pas, la Forge
-                annonce `alt-svc: h3=":443"; ma=2592000` sur chaque réponse et
-                écoute UDP/443, sans servir HTTP/3 (docs/DAT.md §18.6).
+État          : APPLIQUÉ — constaté le 2026-09-30 : la Forge sert la build
+                0.post1.dev880+gcc7d119fe, installée à 09:14:51Z par une mise
+                à jour ordinaire (runbook A.2 ou geste de la console) ; une
+                seule mise à jour a joué OP-27, OP-28 et OP-29.
+                Vérifié : aucune écoute UDP/443 ; oauth.lelabs.tech et
+                crm.lelabs.tech rendent `alt-svc: clear` à un Chromium neuf, en
+                HTTP/2 ; le dossier de sso-p2enjoy porte les quatre lignes.
 Objectif      : poser la configuration de l'ingress du §18.2 révisé :
                 `protocols: ["h1", "h2"]` et la route commune qui pose
                 `Alt-Svc: clear`. Les navigateurs qui ont mémorisé l'annonce

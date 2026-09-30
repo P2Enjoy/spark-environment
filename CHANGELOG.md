@@ -65,7 +65,7 @@
   doubles déclarés par le seed (`<registre>.sondes.json`), et l'écran le dit.
   `FakeCaddy` en échec refuse désormais aussi la lecture de sa configuration.
   DAT §18.7 ; design system SPK-DS-34 et une règle générique (un état relevé se
-  date) ; manuel M7. **Relu sur la Forge réelle après OP-29 seulement.**
+  date) ; manuel M7. **Relu sur la Forge de validation le 2026-09-30 (OP-29).**
 - **SPK-118 — la console n'obéit qu'à sa propre page.** Mesuré avant : une page
   d'un autre site, ouverte dans le même navigateur, faisait ajouter un serveur
   à l'inventaire et relayer à `sparkd` — signée — la suppression d'un Spark non
@@ -306,8 +306,8 @@
   revérifié sans geste — rouge sur l'ancienne build, vert sur la nouvelle.
   « Non appliquée » devient un état transitoire : le seed le produit toujours,
   et le démarrage suivant l'applique. DAT §51.5, §18.1, §18.5 ; manuels M2 et
-  M4 ; runbook ; OP-27 revue. **Inerte sur la Forge tant qu'OP-28 n'est pas
-  joué.**
+  M4 ; runbook ; OP-27 revue. **Joué sur la Forge de validation le 2026-09-30
+  (OP-28) : préflight 17 sur 17.**
 - **SPK-128 — l'ingress ne sert pas HTTP/3, et cesse de l'annoncer.** Signalé
   par l'exploitant du SSO du domaine, mesuré le 2026-09-30 : la configuration de
   l'ingress ne fixait pas `protocols`, et Caddy 2.6.2 activait HTTP/3 par
@@ -323,7 +323,7 @@
   Banc rejouable `scripts/mesures-spk128.sh` (Caddy 2.6.2, configuration
   produite par le code, passage à chaud, WebSocket qui la traverse — `101` et
   écho). DAT §18.2, §18.6, §44.2 quater ;
-  manuel M8. **Inerte sur la Forge tant qu'OP-27 n'est pas joué.**
+  manuel M8. **Joué sur la Forge de validation le 2026-09-30 (OP-27).**
 - **OP-10 gagne un second réglage serveur, et une crainte est levée.** MESURÉ le
   2026-09-26 sur un banc Ubuntu 26.04 / OpenSSH 10.2p1 (`docs/DAT.md` §46.7) :
   ce qui refuse à la clé restreinte une redirection vers une socket UNIX — donc
