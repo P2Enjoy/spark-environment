@@ -8452,7 +8452,8 @@ de la modale « Routes publiques », fermée à ce moment : on clique, rien ne s
 passe, aucune raison.
 
 - Spécification : `docs/DESIGN_SYSTEM.md` §7.1 (la raison du refus près de
-  l'action concernée), §9.7 (`role="alert"`), §1.3 · manuel M7 (les routes).
+  l'action concernée), §9.7 (`role="alert"`), §1.3 · `docs/DESIGN_SYSTEM_APP.md`
+  **SPK-DS-36** · manuel M7 (« Quand la Forge refuse Retirer ou Réappliquer »).
 - Dépend de : SPK-112 (les gestes de la section), SPK-130 (le diagnostic en
   direct, qui fait de *Réappliquer* le geste naturel).
 - Portée : le refus de ces deux gestes se rend dans la section, sous la route

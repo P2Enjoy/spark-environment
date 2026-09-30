@@ -248,6 +248,17 @@ Le domaine cesse de répondre immédiatement. C'est réversible — il suffit de
 redéclarer — mais la confirmation nomme le domaine, parce que la coupure est
 instantanée.
 
+## Quand la Forge refuse Retirer ou Réappliquer
+
+La raison s'affiche **sous la route** où vous avez cliqué, telle que la Forge la
+donne. Deux refus se rencontrent :
+
+- **le Spark est protégé** — retirer une de ses routes change ce qu'il sert ;
+  levez d'abord la protection (M8) ;
+- **le proxy est injoignable** — la Forge n'a pas pu donner la configuration à
+  Caddy. Le badge **Caddy injoignable** le dit aussi ; c'est une affaire
+  d'exploitation de la Forge, et *Réappliquer* réussira quand Caddy répondra.
+
 > **Limite connue.** L'émission d'un certificat n'a pas encore été éprouvée de
 > bout en bout. La cause la plus fréquente de son échec — un domaine qui ne
 > résout pas — est levée depuis que la console pose le DNS, mais l'émission

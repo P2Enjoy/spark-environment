@@ -1520,6 +1520,26 @@ Preuves observées le 2026-09-30 : `e2e/captures/spk130-routes-diagnostic`,
 et, produite par `make captures` sans être versionnée, `spk130-etats-degrades`
 (route absente avec Réappliquer, autre cible, échéance proche, certificat absent).
 
+### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
+
+**Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus
+près de l'action concernée), §9.7, §6.22, §14.3
+
+Constaté le 2026-09-23, arbitré le 2026-10-01 : dans la section Routes, un refus
+de **« Retirer la route »** ou de **« Réappliquer »** était rangé sous la modale
+« Routes publiques », fermée à ce moment — le geste échouait sans un mot.
+
+- le refus se rend **dans la ligne de la route** où le geste a été fait, sous
+  ses badges et ses boutons, en bloc `.refus` avec `role="alert"`, le message du
+  serveur **tel quel** ;
+- *Réappliquer* refait l'application de toutes les routes, mais son refus se
+  lit sous la ligne où l'on a cliqué : c'est là que l'on regarde ;
+- après le refus, le focus revient au bouton de la ligne qui a lancé le geste
+  — « Retirer » quand la confirmation s'est refermée, « Réappliquer » sinon ;
+- la modale « Routes publiques » garde son propre refus, celui de la
+  déclaration : les deux ne se partagent plus un panneau ;
+- aucune ligne ne porte le refus d'une autre.
+
 ### SPK-DS-35 · « Recréer » : un cinquième geste, destructif, et seulement là où il a un sens
 
 **Date** : 2026-09-30 · SPK-132 · `DAT.md` §37.7.5 · `DESIGN_SYSTEM.md` §6.23,
