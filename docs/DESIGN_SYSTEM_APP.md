@@ -1431,6 +1431,63 @@ replier toutes les autres. Preuves observées : `e2e/captures/spk116-liste-tous`
 `-onglet-projet-mobile`, `-suppression-confirmation`, `-suppression-faite`,
 `-gestion-mobile`.
 
+### SPK-DS-34 · Caddy et le certificat, relevés à chaque visite de la facette Routes
+
+**Date** : 2026-09-30 · SPK-130 · `DAT.md` §18.7 · `DESIGN_SYSTEM.md` §6.8,
+§6.13, §14.6, §14.7
+
+Demandé par le responsable : à côté de « DNS ici », « Caddy ici » et « SSL ici »,
+vérifiés en direct. Le 2026-09-14 en est la raison : une route affichée
+« appliquée » que Caddy ne portait plus.
+
+**Sur la ligne d'une route**, après le badge DNS, dans cet ordre — la couche
+réseau, puis le proxy, puis le certificat :
+
+| Badge | Texte | Couleur |
+|---|---|---|
+| Caddy servie | « Caddy ici · 302 » — le statut **relevé** | `success` |
+| pile muette | « Caddy ici · pile muette (502) » | `danger` |
+| route absente | « Caddy : route absente » | `danger` |
+| autre cible | « Caddy → 10.77.0.16:8000 » — la cible **trouvée** | `danger` |
+| non servie | « Caddy : non servie » (route désactivée, Spark sans adresse) | `neutral` |
+| Caddy injoignable | « Caddy injoignable » | `danger` |
+| sans réponse | « Caddy : sans réponse » | `danger` |
+| certificat valide | « TLS valide · 60 j » | `success` |
+| échéance proche | « TLS expire dans 9 j » | `accent` |
+| invalide, absent, injoignable | « TLS invalide », « TLS absent », « TLS injoignable » | `danger` |
+| joker | « TLS : joker non sondé » | `neutral` |
+
+- une route sans TLS n'a **pas** de badge de certificat : sa pastille « sans
+  TLS » (SPK-DS-31) le dit déjà ;
+- le détail — émetteur et échéance, cible attendue, raison de la vérification
+  **telle quelle** — va dans le titre du badge, pas dans son texte (§1.5 bis) ;
+- un état que le contrat ne connaît pas retombe au neutre, « état inconnu »,
+  jamais sur `undefined` (§14.7).
+
+**La ligne du relevé**, sous le titre de la section, en `role="status"` : « Caddy
+et certificats relevés à 10:42:07. », ou « Relevé de Caddy et des certificats… »
+pendant qu'il se fait, ou « Caddy et certificats non vérifiés : <raison> » s'il
+n'a pas pu se faire. Dans les deux derniers cas, **aucun badge** ne s'affiche :
+pas l'ancien relevé comme s'il était actuel, et pas un badge par ligne pour
+redire la même impossibilité (§14.6). Avec le pilote factice, la ligne ajoute :
+« Sondes factices du pilote de développement : ce ne sont pas des relevés
+réels. »
+
+**« Revérifier »**, dans les actions de la section, relit DNS, Caddy et
+certificats sans quitter la page ; il n'apparaît que s'il y a des routes à
+relever (§14.4).
+
+**« Réappliquer » suit le relevé** : offert quand la route n'est pas appliquée,
+**et** quand Caddy ne la porte pas, ou pas vers la bonne cible — même sur une
+route datée « appliquée ». C'est la pastille qui porte sa sortie (§6.8) ; le
+badge « non appliquée », lui, ne s'affiche que si la date manque, parce que la
+date reste exacte.
+
+Preuves observées le 2026-09-30 : `e2e/captures/spk130-routes-diagnostic`,
+`-mobile` (à 390 px, les badges se replient sous le domaine), `spk130-pile-muette` ;
+et, produite par `make captures` sans être versionnée, `spk130-etats-degrades`
+(route absente avec Réappliquer, autre cible, échéance proche, certificat absent).
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

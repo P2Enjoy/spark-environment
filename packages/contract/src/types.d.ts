@@ -434,6 +434,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ingress/diagnostic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diagnose Routes
+         * @description Ce que Caddy et le TLS disent MAINTENANT des routes de ce Spark.
+         *
+         *     @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7
+         *
+         *     Une LECTURE : la configuration vivante de Caddy, une requête réelle et
+         *     une poignée de main TLS par route, sur la boucle locale. Rien n'est
+         *     écrit, rien n'entre au journal (§36.7).
+         */
+        get: operations["diagnose_routes_v1_ingress_diagnostic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ingress/match": {
         parameters: {
             query?: never;
@@ -2104,6 +2130,39 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagnose_routes_v1_ingress_diagnostic_get: {
+        parameters: {
+            query: {
+                spark: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

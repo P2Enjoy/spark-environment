@@ -4,7 +4,8 @@
  *
  * @verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6 (l'annonce remplacée
  *           par `Alt-Svc: clear`), §44.2 quater (le dossier le dit) ·
- *           CLAUDE.md §16
+ *           docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (l'onglet Routes relève
+ *           Caddy et le certificat, pour de vrai) · CLAUDE.md §16
  *
  * Deux personnes, deux parcours, chacun par son entrée ordinaire :
  *
@@ -102,6 +103,31 @@ try {
   await capturer(page, 'spk128-forge-dossier-ingress');
   await capturer(page, 'spk128-forge-dossier-ingress-mobile', { largeur: 390, hauteur: 1600 });
 
+  // 3. SPK-130 : l'onglet Routes du même Spark, par son onglet. Le relevé est
+  //    celui des SONDES RÉELLES de la Forge — la page ne doit pas dire
+  //    « factices » —, et chaque domaine demandé est servi, certificat reconnu.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.click('.onglet[href$="/routes"]');
+  await page.waitForFunction(
+    () => /relevés à/.test(document.querySelector('section[aria-labelledby="titre-routes"]')
+      ?.textContent ?? ''), null, { timeout: 30000 });
+  const section = await page.textContent('section[aria-labelledby="titre-routes"]');
+  const routesVues = {};
+  for (const domaine of domaines) {
+    const ligne = await page.locator(
+      `li:has(span.technique:text-is("${domaine}"))`).textContent({ timeout: 2000 })
+      .catch(() => '');
+    // Un domaine visité peut relever d'un AUTRE Spark : seul celui-ci est ici.
+    if (!ligne) continue;
+    routesVues[domaine] = {
+      caddy: /Caddy ici · \d{3}/.test(ligne) && !/pile muette/.test(ligne),
+      tls: /TLS valide · \d+ j/.test(ligne),
+    };
+  }
+  console.log('onglet Routes :', { factices: /factices/.test(section), routesVues });
+  await capturer(page, 'spk130-forge-routes');
+  await capturer(page, 'spk130-forge-routes-mobile', { largeur: 390, hauteur: 1200 });
+
   const dit = {
     http3: dossier.includes('pas en HTTP/3'),
     clear: dossier.includes("l'ingress pose `Alt-Svc: clear`"),
@@ -114,7 +140,9 @@ try {
   // chaîne, redirection comprise, et plus aucun `h3=`.
   const visitesOk = visites.every((v) => v.protocole === 'h2'
     && v.altSvc.every((valeur) => valeur === 'clear'));
-  const ok = visitesOk && Object.values(dit).every(Boolean) && bruits.length === 0;
+  const routesOk = !/factices/.test(section) && Object.keys(routesVues).length > 0
+    && Object.values(routesVues).every((r) => r.caddy && r.tls);
+  const ok = visitesOk && routesOk && Object.values(dit).every(Boolean) && bruits.length === 0;
   console.log(ok ? 'PREUVE OK' : 'PREUVE EN ÉCHEC', { bruits });
   process.exitCode = ok ? 0 : 1;
 } catch (erreur) {

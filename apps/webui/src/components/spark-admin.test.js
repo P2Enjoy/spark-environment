@@ -1,4 +1,7 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (Caddy et le certificat,
+ *           relevés à chaque visite) · docs/DESIGN_SYSTEM.md §6.8, §6.13, §14.6,
+ *           §14.7 · docs/DESIGN_SYSTEM_APP.md SPK-DS-34
  * @verifies docs/BACKLOG.md#SPK-112 · docs/DAT.md §18.3 quater (une route sans
  *           TLS le dit, et se corrige d'un geste) · docs/DESIGN_SYSTEM.md §6.8,
  *           §6.24 · docs/DESIGN_SYSTEM_APP.md SPK-DS-31
@@ -36,7 +39,7 @@ import {
   renderRoutesPanel, renderKeysPanel, renderSnapshotsPanel,
   renderBlockedRestore, formatDate, ADMIN_VIDE, renderProtectedRevocation, zonePour,
   renderPortsPanel, refusZones, renderEtatDns, renderVerification,
-  refusEcritureRecette,
+  refusEcritureRecette, renderEtatCaddy, renderEtatCertificat, renderReleveRoutes,
 } from './spark-admin.js';
 
 const SPARK = { name: 'crm', ipv4_address: '10.77.0.16' };
@@ -1278,4 +1281,127 @@ test('avec une zone, la recette s’engage normalement', () => {
   const rendu = renderRoutesPanel(SPARK, [], recetteUi({}, { recette: 'site-web' }));
   assert.match(rendu, /data-engage="recette"/);
   assert.match(rendu, /Écrire la recette/);
+});
+
+
+// --- SPK-130 · §18.7 : Caddy et le certificat, relevés à chaque visite ------
+
+const releve = (routes, surcharge = {}) => ({
+  ...ADMIN_VIDE.diagRoutes, probes: 'real', releveA: '2026-09-30T10:42:07+00:00',
+  routes, ...surcharge });
+const servie = { state: 'served', expected: '10.77.0.16:8080', found: '10.77.0.16:8080',
+                 status: 302, reason: null };
+const valide = { state: 'valid', issuer: "Let's Encrypt", not_after: '2026-11-29T00:00:00+00:00',
+                 days_left: 60, reason: null };
+
+test('SPK-130 : une route servie et un certificat valide se disent, valeurs comprises', () => {
+  const diag = releve({ 'crm.example.com': { caddy: servie, certificate: valide } });
+  const caddy = renderEtatCaddy(diag, ROUTE_APPLIQUEE);
+  assert.match(caddy, /badge--success/);
+  assert.match(caddy, /Caddy ici · 302/, 'le statut RELEVÉ est à l’écran');
+  const tls = renderEtatCertificat(diag, ROUTE_APPLIQUEE);
+  assert.match(tls, /badge--success[^>]*>TLS valide · 60 j/);
+  assert.match(tls, /Let&#39;s Encrypt|Let's Encrypt/);
+});
+
+test('SPK-130 : chaque état de Caddy a son texte et sa couleur, jamais la couleur seule', () => {
+  const cas = [
+    [{ ...servie, state: 'silent_stack', status: 502 }, 'badge--danger', /pile muette \(502\)/],
+    [{ ...servie, state: 'absent', found: null, status: null }, 'badge--danger', /route absente/],
+    [{ ...servie, state: 'other_target', found: '10.77.0.9:8080' }, 'badge--danger',
+     /Caddy → 10\.77\.0\.9:8080/],
+    [{ ...servie, state: 'not_served', reason: 'route désactivée' }, 'badge--neutral',
+     /non servie/],
+    [{ ...servie, state: 'unreachable' }, 'badge--danger', /Caddy injoignable/],
+    [{ ...servie, state: 'probe_failed', reason: 'timed out' }, 'badge--danger', /sans réponse/],
+  ];
+  for (const [etat, classe, texte] of cas) {
+    const rendu = renderEtatCaddy(releve({ 'crm.example.com': { caddy: etat } }), ROUTE_APPLIQUEE);
+    assert.ok(rendu.includes(classe), `${etat.state} → ${classe}`);
+    assert.match(rendu, texte);
+  }
+});
+
+test('SPK-130 : un état inconnu du contrat retombe au neutre, jamais sur « undefined »', () => {
+  const rendu = renderEtatCaddy(releve({ 'crm.example.com': { caddy: { state: 'nouveau' } } }),
+                                ROUTE_APPLIQUEE);
+  assert.match(rendu, /badge--neutral/);
+  assert.ok(!rendu.includes('undefined'));
+  const tls = renderEtatCertificat(releve({ 'crm.example.com': { certificate: {} } }),
+                                   ROUTE_APPLIQUEE);
+  assert.ok(!tls.includes('undefined'));
+});
+
+test('SPK-130 : chaque état du certificat a son texte et sa couleur', () => {
+  const cas = [
+    [{ ...valide, state: 'expiring', days_left: 9 }, 'badge--accent', /TLS expire dans 9 j/],
+    [{ state: 'invalid', reason: 'unable to get local issuer certificate' }, 'badge--danger',
+     /TLS invalide/],
+    [{ state: 'missing', reason: 'TLSV1_ALERT_INTERNAL_ERROR' }, 'badge--danger', /TLS absent/],
+    [{ state: 'unreachable', reason: 'Connection refused' }, 'badge--danger', /TLS injoignable/],
+    [{ state: 'wildcard', reason: 'joker' }, 'badge--neutral', /joker non sondé/],
+  ];
+  for (const [etat, classe, texte] of cas) {
+    const rendu = renderEtatCertificat(releve({ 'crm.example.com': { certificate: etat } }),
+                                       ROUTE_APPLIQUEE);
+    assert.ok(rendu.includes(classe), `${etat.state} → ${classe}`);
+    assert.match(rendu, texte);
+  }
+  // La raison de la vérification voyage TELLE QUELLE, dans le titre.
+  assert.match(renderEtatCertificat(releve({ 'crm.example.com': { certificate: cas[1][0] } }),
+                                    ROUTE_APPLIQUEE), /unable to get local issuer certificate/);
+});
+
+test('SPK-130 : une route sans TLS n’a pas de badge de certificat', () => {
+  const diag = releve({ 'test.example.com': { caddy: servie,
+                                              certificate: { state: 'not_applicable' } } });
+  assert.equal(renderEtatCertificat(diag, ROUTE_EN_ATTENTE), '');
+  assert.ok(renderRoutesPanel(SPARK, [ROUTE_EN_ATTENTE], ui({ diagRoutes: diag }))
+    .includes('sans TLS'));
+});
+
+test('SPK-130 : Réappliquer est offert quand Caddy ne porte pas la route, même « appliquée »', () => {
+  for (const state of ['absent', 'other_target']) {
+    const diag = releve({ 'crm.example.com': { caddy: { ...servie, state } } });
+    const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui({ diagRoutes: diag }));
+    assert.ok(rendu.includes('data-reapplique'), `${state} : la pastille porte sa sortie`);
+    assert.ok(!rendu.includes('non appliquée'), 'la date, elle, reste exacte');
+  }
+  const saine = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE],
+    ui({ diagRoutes: releve({ 'crm.example.com': { caddy: servie, certificate: valide } }) }));
+  assert.ok(!saine.includes('data-reapplique'));
+});
+
+test('SPK-130 : pendant le relevé, ni badge ni ancien état — une ligne qui le dit', () => {
+  const diag = { ...ADMIN_VIDE.diagRoutes, chargement: true,
+                 routes: { 'crm.example.com': { caddy: servie, certificate: valide } } };
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui({ diagRoutes: diag }));
+  assert.ok(!rendu.includes('Caddy ici'), 'un relevé en cours n’affiche pas le précédent');
+  assert.match(rendu, /role="status"[^>]*>Relevé de Caddy et des certificats…/);
+});
+
+test('SPK-130 : un relevé impossible se DIT, une fois, et n’invente aucun badge', () => {
+  const diag = { ...ADMIN_VIDE.diagRoutes, erreur: 'Aucun tunnel ouvert vers « prod ».' };
+  const rendu = renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui({ diagRoutes: diag }));
+  assert.match(rendu, /Caddy et certificats non vérifiés : Aucun tunnel ouvert/);
+  assert.ok(!rendu.includes('Caddy ici') && !rendu.includes('TLS valide'));
+});
+
+test('SPK-130 : des sondes factices se disent factices', () => {
+  const rendu = renderReleveRoutes(releve({}, { probes: 'fake' }));
+  assert.match(rendu, /relevés à /);
+  assert.match(rendu, /Sondes factices/);
+  assert.ok(!renderReleveRoutes(releve({})).includes('factices'));
+});
+
+test('SPK-130 : Revérifier n’apparaît que s’il y a des routes à relever', () => {
+  assert.ok(renderRoutesPanel(SPARK, [ROUTE_APPLIQUEE], ui()).includes('data-reverifie-routes'));
+  assert.ok(!renderRoutesPanel(SPARK, [], ui()).includes('data-reverifie-routes'));
+});
+
+test('SPK-130 : une raison venue du réseau est échappée', () => {
+  const diag = releve({ 'crm.example.com': { caddy: { ...servie, state: 'probe_failed',
+                                                      reason: '<img src=x onerror=1>' } } });
+  const rendu = renderEtatCaddy(diag, ROUTE_APPLIQUEE);
+  assert.ok(!rendu.includes('<img'));
 });

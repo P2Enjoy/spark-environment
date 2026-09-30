@@ -5,7 +5,9 @@
  *           docs/BACKLOG.md#SPK-97 (l'import d'un lot collé, docs/DAT.md §43.10),
  *           docs/BACKLOG.md#SPK-103 (deux blocs et la recherche, §43.11),
  *           docs/BACKLOG.md#SPK-128 (le dossier dit l'en-tête que l'ingress
- *           pose et le HTTP/3 qu'il ne sert pas, §18.6, §44.2 quater) ·
+ *           pose et le HTTP/3 qu'il ne sert pas, §18.6, §44.2 quater),
+ *           docs/BACKLOG.md#SPK-130 (la facette Routes relève Caddy et le
+ *           certificat à chaque visite, §18.7) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -141,6 +143,19 @@ async function ouvrir(nom, facette = '') {
     await page.click(`.onglet[href$="/${facette}"]`);
     await page.waitForSelector(`.onglet[href$="/${facette}"][aria-current="page"]`,
                                { timeout: 10000 });
+  }
+  // SPK-130 · §18.7 : la facette Routes relève Caddy et les certificats APRÈS
+  // sa première peinture, et se repeint au résultat. Une ligne visée avant se
+  // détache sous le geste — mesuré le 2026-09-30 sur « Activer le TLS ». On
+  // rend la main quand le relevé est DATÉ, ou dit impossible : c'est l'état
+  // qu'un exploitant voit se poser.
+  if (facette === 'routes') {
+    await page.waitForFunction(() => {
+      const section = document.querySelector('section[aria-labelledby="titre-routes"]');
+      if (!section) return false;
+      if (!section.querySelector(':scope > ul.liste-administrable > li')) return true;
+      return /relevés à|non vérifiés/.test(section.textContent);
+    }, null, { timeout: 20000 });
   }
 }
 
@@ -3071,6 +3086,62 @@ test('la facette Routes MONTRE l’état DNS de chaque route', async () => {
       'une route qui pointe ailleurs doit dire OÙ');
     assert.match(await page.textContent('li:has-text("sans-dns.exemple.test")'),
       /Aucun enregistrement/);
+  });
+});
+
+// --- SPK-130 · LE DIAGNOSTIC EN DIRECT DES ROUTES (docs/DAT.md §18.7) -------
+
+const sectionRoutes = 'section[aria-labelledby="titre-routes"]';
+
+test('la facette Routes RELÈVE Caddy et le certificat de chaque route, et le redit sur demande', async () => {
+  await parcours('routes-diagnostic', async () => {
+    await ouvrir('crm-production', 'routes');
+    await page.waitForSelector('#titre-routes');
+    // Le relevé part APRÈS la peinture : on attend la ligne qui le DATE.
+    await page.waitForFunction(
+      (s) => /relevés à/.test(document.querySelector(s)?.textContent ?? ''),
+      sectionRoutes, { timeout: 20000 });
+
+    const crm = await page.textContent(ligneRoute('crm.example.com'));
+    assert.match(crm, /Caddy ici · 200/, 'Caddy porte la route, et la pile a répondu');
+    assert.match(crm, /TLS valide · \d+ j/);
+    assert.match(await page.textContent(ligneRoute('vip.boutique.example.com')),
+      /TLS invalide/, 'le certificat que présente la Forge pour ce nom n’est pas reconnu');
+    // Des doubles se DISENT doubles : ce ne sont pas des relevés réels.
+    assert.match(await page.textContent(sectionRoutes), /Sondes factices/);
+    // Une route servie, et « appliquée » : rien à réparer, pas de Réappliquer.
+    assert.equal(await page.locator(`${ligneRoute('crm.example.com')} [data-reapplique]`).count(), 0);
+    await capturer('spk130-routes-diagnostic', { hauteur: 1000 });
+    await capturer('spk130-routes-diagnostic-mobile', { largeur: 390, hauteur: 900 });
+
+    // « Revérifier » relève À NOUVEAU — la requête part, par le geste de l'écran.
+    const [requete] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes('/v1/ingress/diagnostic'), { timeout: 10000 }),
+      page.click(`${sectionRoutes} [data-reverifie-routes]`),
+    ]);
+    assert.match(requete.url(), /spark=crm-production/);
+    await page.waitForFunction(
+      (s) => /relevés à/.test(document.querySelector(s)?.textContent ?? ''),
+      sectionRoutes, { timeout: 20000 });
+  });
+});
+
+test('une pile muette se voit sur sa route, et un joker n’est pas sondé', async () => {
+  await parcours('routes-diagnostic-pile-muette', async () => {
+    // `analytics` est « pending » : aucune cellule n'écoute, Caddy rend 502.
+    await ouvrir('analytics', 'routes');
+    await page.waitForSelector(`${ligneRoute('analytics.example.com')} .badge--danger`,
+                               { timeout: 20000 });
+    assert.match(await page.textContent(ligneRoute('analytics.example.com')),
+      /Caddy ici · pile muette \(502\)/);
+    await capturer('spk130-pile-muette', { hauteur: 900 });
+
+    await ouvrir('boutique', 'routes');
+    await page.waitForFunction(
+      (s) => /relevés à/.test(document.querySelector(s)?.textContent ?? ''),
+      sectionRoutes, { timeout: 20000 });
+    assert.match(await page.textContent(ligneRoute('*.boutique.example.com')),
+      /TLS : joker non sondé/);
   });
 });
 

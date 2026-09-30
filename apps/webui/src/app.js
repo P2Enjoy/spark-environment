@@ -2042,6 +2042,11 @@ function brancherPanneaux() {
   };
   geste('confirme-route', (domaine) =>
     agir('route', () => appel('DELETE', `/v1/ingress/${encodeURIComponent(domaine)}`)));
+  // SPK-130 · §18.7 : relire DNS, Caddy et certificats, sans quitter la page.
+  geste('reverifie-routes', () => {
+    chargerEtatDnsRoutes(etat.detail?.routes ?? []);
+    chargerDiagnosticRoutes();
+  });
   geste('reapplique', () =>
     agir('route', () => appel('POST', '/v1/ingress/reconcile')));
   // SPK-112 · §18.3 quater : la sortie de la pastille « sans TLS ».
@@ -3043,6 +3048,46 @@ async function chargerEtatDnsRoutes(routes = []) {
   peindre();
 }
 
+/**
+ * Relève ce que Caddy et le TLS disent MAINTENANT des routes affichées.
+ *
+ * @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7
+ *
+ * Par `sparkd`, seul à atteindre l'API de Caddy et le `:443` de la Forge. Une
+ * réponse ARRIVÉE n'est pas forcément la réponse ATTENDUE : un relevé lent,
+ * lancé avant un « Revérifier » ou avant d'ouvrir un autre Spark, ne doit pas
+ * écraser le plus récent (même garde qu'au §38.5.2).
+ */
+let releveDiagnostic = 0;
+async function chargerDiagnosticRoutes({ dejaAnnonce = false } = {}) {
+  const nom = etat.spark?.name;
+  const jeton = ++releveDiagnostic;
+  if (!nom || !(etat.detail?.routes ?? []).length) {
+    etat.admin.diagRoutes = { ...ADMIN_VIDE.diagRoutes };
+    return;
+  }
+  if (!dejaAnnonce) {
+    etat.admin.diagRoutes = { ...ADMIN_VIDE.diagRoutes, chargement: true };
+    peindre();
+  }
+  let resultat;
+  try {
+    resultat = await appel('GET', `/v1/ingress/diagnostic?spark=${encodeURIComponent(nom)}`);
+  } catch (erreur) {
+    resultat = { ok: false, corps: { detail: { message: erreur.message } } };
+  }
+  if (jeton !== releveDiagnostic || etat.spark?.name !== nom) return;
+  const corps = resultat.corps ?? {};
+  etat.admin.diagRoutes = resultat.ok
+    ? { ...ADMIN_VIDE.diagRoutes, probes: corps.probes ?? null,
+        caddyErreur: corps.caddy_error ?? null, releveA: corps.checked_at ?? null,
+        routes: corps.routes ?? {} }
+    // Un relevé impossible ne se déguise pas en état (§14.6) : il se DIT.
+    : { ...ADMIN_VIDE.diagRoutes,
+        erreur: corps.detail?.message ?? corps.message ?? 'sparkd ne répond pas.' };
+  peindre();
+}
+
 async function autoriserCle() {
   const v = etat.admin.values;
   const nom = etat.spark.name;
@@ -3703,6 +3748,12 @@ async function chargerDetail(nom, facette = '') {
     etat.status = 'error';
     etat.error = erreur;
   }
+  // SPK-130 · §18.7 : « relevé en cours » s'annonce DANS la première peinture,
+  // pas par une seconde. Chaque repeinture reconstruit la section : une de
+  // moins, c'est une ligne de moins qui se détache sous le pointeur.
+  const releverRoutes = facette === 'routes' && etat.status === 'ready'
+    && (etat.detail?.routes ?? []).length > 0;
+  if (releverRoutes) etat.admin.diagRoutes = { ...ADMIN_VIDE.diagRoutes, chargement: true };
   peindre();
   // SPK-78 · §38.9.1 : l'état DNS des routes, relevé chez le fournisseur. Il
   // part APRÈS la peinture et seulement sur la facette qui le montre : le détail
@@ -3710,6 +3761,9 @@ async function chargerDetail(nom, facette = '') {
   // (même raison qu'au §38.6 pour le catalogue des recettes).
   if (facette === 'routes' && etat.status === 'ready') {
     chargerEtatDnsRoutes(etat.detail?.routes ?? []);
+    // SPK-130 · §18.7 : Caddy et les certificats, relevés par sparkd à CHAQUE
+    // visite — même raison, et même moment, que l'état DNS.
+    chargerDiagnosticRoutes({ dejaAnnonce: releverRoutes });
   }
   // SPK-93 · §52.11 : les courbes partent APRES la peinture et SEULEMENT sur la
   // facette qui les montre. Une serie de deux cent quarante seaux n'a rien a

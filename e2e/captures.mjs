@@ -2,8 +2,8 @@
  * Captures de l'écran liste des Sparks.
  *
  * @verifies docs/BACKLOG.md#SPK-18, #SPK-19, #SPK-20, #SPK-21, #SPK-22,
- *           #SPK-64, #SPK-70, #SPK-97 ·
- *           docs/DAT.md §24, §25, §26, §27, §43.6 · docs/DESIGN_SYSTEM.md §13 (les captures
+ *           #SPK-64, #SPK-70, #SPK-97, #SPK-130 ·
+ *           docs/DAT.md §24, §25, §26, §27, §43.6, §18.7 · docs/DESIGN_SYSTEM.md §13 (les captures
  *           sont une preuve), §13.1 (validation attendue) · CLAUDE.md §16
  *
  * Les états sont produits depuis un faux `sparkd` local : la DoD demande de voir
@@ -191,6 +191,10 @@ function metriquesSpark(nom, etat) {
 
 async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRompu = false,
                           refusCreation = false, routeEnAttente = false,
+                          // SPK-130 · §18.7 : les états du relevé qu'un pilote
+                          // factice ne produit pas — Caddy y est toujours
+                          // réconcilié. Posés ici pour qu'ils se VOIENT.
+                          diagnosticDegrade = false,
                           // SPK-57 · §49.3 : le refus de RÉTRÉCISSEMENT. Il ne se
                           // provoque pas sur un faux sparkd, il se pose — et le
                           // corps posé est celui RELEVÉ sur le vrai runtime.
@@ -389,10 +393,32 @@ async function demarrer({ sparks = SPARKS, lent = false, casse = false, tunnelRo
         { label: 'portable-astreinte', fingerprint: 'SHA256:9kQ2mXbT4uLcR7wPzE1oYn' },
         { label: 'ci-deploiement', fingerprint: 'SHA256:Dw8sT3vB6nMq0aZxKpL5hJ' },
       ] }), { status: 200 });
+      // SPK-130 · §18.7 : AVANT `/v1/ingress`, qui l'attraperait sinon.
+      if (url.includes('/v1/ingress/diagnostic')) return new Response(JSON.stringify({
+        spark: 'crm-production', checked_at: '2026-09-30T10:42:07+00:00', probes: 'real',
+        caddy_reachable: true, caddy_error: null,
+        routes: diagnosticDegrade ? {
+          'crm.example.com': {
+            caddy: { state: 'absent', expected: '10.77.0.16:8080', found: null, status: null, reason: null },
+            certificate: { state: 'expiring', issuer: "Let's Encrypt", not_after: '2026-10-09T08:00:00+00:00',
+                           days_left: 9, reason: null } },
+          'nouveau.example.com': {
+            caddy: { state: 'other_target', expected: '10.77.0.16:9000', found: '10.77.0.16:8000',
+                     status: null, reason: null },
+            certificate: { state: 'missing', reason: 'TLSV1_ALERT_INTERNAL_ERROR' } },
+        } : {
+          'crm.example.com': {
+            caddy: { state: 'served', expected: '10.77.0.16:8080', found: '10.77.0.16:8080', status: 302, reason: null },
+            certificate: { state: 'valid', issuer: "Let's Encrypt", not_after: '2026-11-29T08:00:00+00:00',
+                           days_left: 60, reason: null } },
+        },
+      }), { status: 200 });
       if (url.includes('/v1/ingress')) return new Response(JSON.stringify({ routes: [
         { domain: 'crm.example.com', target_port: 8080, tls: 1, spark_name: 'crm-production', applied_at: '2026-08-19T09:00:00' },
         ...(routeEnAttente ? [{ domain: 'preprod.example.com', target_port: 3000, tls: 0,
                                 spark_name: 'crm-production', applied_at: null }] : []),
+        ...(diagnosticDegrade ? [{ domain: 'nouveau.example.com', target_port: 9000, tls: 1,
+                                   spark_name: 'crm-production', applied_at: '2026-09-30T10:40:00' }] : []),
       ] }), { status: 200 });
       // Catalogue d'images (§33.3) : les trois états, pour que la capture les
       // montre tous les trois plutôt qu'un seul.
@@ -860,6 +886,16 @@ await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#titre-routes', { timeout: 15000 });
 await page.screenshot({ path: join(SORTIE, '28-panneaux-mobile.png'), fullPage: true });
 console.log('  28-panneaux-mobile.png');
+await fermerContexte(ctx);
+
+// SPK-130 · §18.7 : les états dégradés du relevé — Caddy ne porte plus la route
+// (et Réappliquer est offert sur une route pourtant « appliquée »), Caddy vise
+// une autre cible, un certificat proche de son échéance, un certificat absent.
+ctx = await demarrer({ diagnosticDegrade: true });
+await ouvrirDetail(ctx.base, { facette: 'routes' });
+await page.waitForSelector('.badge.badge--danger', { timeout: 15000 });
+await page.screenshot({ path: join(SORTIE, 'spk130-etats-degrades.png'), fullPage: true });
+console.log('  spk130-etats-degrades.png');
 await fermerContexte(ctx);
 
 // --- Écran des pools de la Forge (SPK-22) -----------------------------------

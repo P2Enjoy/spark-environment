@@ -190,6 +190,10 @@ class FakeCaddy:
         self.config = config
 
     def current(self) -> dict:
+        # SPK-130 · §18.7 : un Caddy injoignable ne répond à RIEN — ni à la
+        # pose, ni à la lecture de sa configuration vivante.
+        if self.fail:
+            raise IngressError("Caddy factice en échec, sur demande.")
         return self.config or {}
 
 

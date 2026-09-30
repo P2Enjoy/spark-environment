@@ -8071,7 +8071,7 @@ du dépôt**, en fait la preuve — pas une lecture de configuration.
   démarrage et de son échec, de `ING-UNITE` et `ING-CONCORDE`. **Reste `[~]`** :
   OP-28 n'est pas joué.
 
-### [ ] SPK-130 · La page des routes diagnostique en direct : DNS, Caddy, certificat
+### [~] SPK-130 · La page des routes diagnostique en direct : DNS, Caddy, certificat
 
 **Demandé par le responsable le 2026-09-30** : « sur la page des routes il
 faudra aussi ajouter, autre que DNS ici, aussi Caddy ici et SSL ici, qui sont
@@ -8098,19 +8098,32 @@ tient lieu de preuve.
 2. `sparkd` : `GET /v1/ingress/diagnostic`, lecture seule ; les sondes réelles
    (configuration vivante, requête sur la boucle locale, poignée de main TLS
    vérifiée) et leurs doubles déterministes pour le pilote factice ; contrat
-   d'API ; preuves unitaires, dont des sondes contre de vrais serveurs locaux ;
+   d'API ; preuves unitaires, dont des sondes contre de vrais serveurs locaux —
+   *fait* ;
 3. console : les badges Caddy et certificat à côté du badge DNS, relevés à
    chaque visite, leurs états de chargement et d'erreur ; « Réappliquer »
-   offert dès que Caddy ne porte pas la route ; seed ; preuves ;
-4. E2E : le parcours de la page des routes, captures observées ; manuel M7 ;
+   offert dès que Caddy ne porte pas la route ; seed ; preuves — *fait* ;
+4. E2E : le parcours de la page des routes, captures observées ; manuel M7 —
+   *fait* ;
 5. preuve sur la Forge réelle, après déploiement, **sur instruction du
-   responsable**.
+   responsable** — **en attente** (OP-29).
 
 - Aucune variable d'environnement, aucune migration, aucune écriture : le
   diagnostic lit.
 - DoD : preuves unitaires et de route ; parcours E2E ; captures observées
   (bureau, mobile, chaque état) ; relu sur la Forge réelle ; manuel M7, design
   system, DAT à jour ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-30, hors Forge** : 22 preuves du diagnostic, dont 11
+  contre de **vrais serveurs TLS locaux** signés par une autorité de test
+  (valide, échéance proche, auto-signé, autre nom, absent par alerte, port
+  fermé, statut lu derrière un certificat invalide, `User-Agent` envoyé) ;
+  preuves de route (404, rien au journal) et du seed ; 11 preuves de composant ;
+  deux parcours E2E par le chemin canonique (badges relevés, sondes factices
+  dites, « Revérifier » qui relance la requête, pile muette, joker) ; captures
+  `spk130-routes-diagnostic`, `-mobile`, `spk130-pile-muette` observées, et
+  `spk130-etats-degrades` (route absente avec Réappliquer, autre cible, échéance
+  proche, certificat absent) produite par `make captures`. **Reste `[~]`** :
+  relu sur la Forge réelle seulement après OP-29.
 
 ---
 

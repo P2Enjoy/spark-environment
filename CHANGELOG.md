@@ -3,6 +3,23 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-130 — la page des routes diagnostique en direct : DNS, Caddy,
+  certificat.** Demandé par le responsable : « si la console ne fait pas du
+  vrai diagnostic, on est mal ». À chaque ouverture de l'onglet Routes, et sur
+  **Revérifier**, `sparkd` relève pour chaque route la configuration **vivante**
+  de Caddy (la route y est-elle, vers la bonne cible ?), une vraie requête sur
+  la boucle locale (le statut rendu : « Caddy ici · 302 », ou « pile muette
+  (502) »), et une vraie poignée de main TLS vérifiée comme un navigateur
+  (« TLS valide · 60 j », « expire dans 9 j », « invalide » avec sa raison,
+  « absent »). Les badges suivent le badge DNS ; une ligne date le relevé, dit
+  qu'il est en cours, ou pourquoi il n'a pas pu se faire. **Réappliquer** est
+  offert dès que Caddy ne porte pas la route, même datée « appliquée » — le cas
+  du 2026-09-14. `GET /v1/ingress/diagnostic?spark=<nom>`, lecture seule, rien au
+  journal ; la sonde se nomme `sparkd-diagnostic`. Avec le pilote factice, des
+  doubles déclarés par le seed (`<registre>.sondes.json`), et l'écran le dit.
+  `FakeCaddy` en échec refuse désormais aussi la lecture de sa configuration.
+  DAT §18.7 ; design system SPK-DS-34 et une règle générique (un état relevé se
+  date) ; manuel M7. **Relu sur la Forge réelle après OP-29 seulement.**
 - **SPK-118 — la console n'obéit qu'à sa propre page.** Mesuré avant : une page
   d'un autre site, ouverte dans le même navigateur, faisait ajouter un serveur
   à l'inventaire et relayer à `sparkd` — signée — la suppression d'un Spark non

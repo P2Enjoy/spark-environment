@@ -22,7 +22,7 @@ n'existe plus. Voir [DAT §30](../DAT.md).
 | [M4 · Lire les pools de ressources](M4-pools.md) | capacité, réserve, surengagement |
 | [M5 · Créer un Spark](M5-creer.md) | le formulaire, les modes CPU, la lecture d'un refus |
 | [M6 · Accéder à un Spark](M6-acces.md) | clés SSH, rebond, déploiement de la pile Compose |
-| [M7 · Exposer un domaine](M7-domaine.md) | déclarer une route, la réappliquer, la retirer |
+| [M7 · Exposer un domaine](M7-domaine.md) | déclarer une route, la réappliquer, la retirer, et lire ce que la page vérifie à chaque visite — DNS, Caddy, TLS |
 | [M8 · Exploiter au quotidien](M8-exploiter.md) | démarrer, arrêter, lire les mesures, comprendre une erreur |
 | [M9 · Instantanés et sauvegarde](M9-instantanes.md) | ce qu'un instantané protège, et ce qu'il ne protège pas |
 | [M10 · Supprimer un Spark](M10-supprimer.md) | ce qui est libéré, ce qui est irréversible |

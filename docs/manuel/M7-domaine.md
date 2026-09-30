@@ -184,14 +184,63 @@ Deux Sparks ne peuvent pas revendiquer le même nom. Le refus vient de la base d
 données, pas d'un contrôle de l'interface — qui ne protégerait de rien si deux
 consoles agissaient en même temps.
 
-## « Non appliquée »
+## « Non appliquée », et ce que « Réappliquer » fait
+
+Deux choses distinctes décrivent une route. Le **registre** de la Forge dit ce
+que vous avez déclaré : ce domaine, vers ce Spark, sur ce port. Le **proxy** —
+Caddy, qui reçoit tout le trafic web de la Forge — dit ce qui est réellement
+servi. **Appliquer**, c'est reconstruire toute la configuration du proxy depuis
+le registre et la lui donner d'un coup. La Forge le fait d'elle-même à chaque
+route déclarée, corrigée ou retirée, et à chaque démarrage.
 
 Une route peut être enregistrée sans être servie : c'est ce qui arrive si le
 proxy était injoignable au moment de la déclaration. L'interface l'affiche en
-jaune, avec un bouton **Réappliquer**.
+jaune, « non appliquée », avec un bouton **Réappliquer**, qui refait
+l'application. Il ne détruit rien et ne demande donc aucune confirmation. Le
+jaune est délibéré : rien n'est cassé, un état est simplement en retard.
 
-Le jaune est délibéré : rien n'est cassé, un état est simplement en retard.
-Réappliquer ne détruit rien et ne demande donc aucune confirmation.
+**Réappliquer apparaît aussi quand le proxy ne porte pas la route** — même si
+elle est datée « appliquée » : la date dit qu'une application a réussi un jour,
+pas que le proxy la sert encore. C'est ce que dit le badge Caddy, ci-dessous.
+
+## Ce que la page vérifie à chaque visite
+
+En ouvrant l'onglet **Routes**, la console relève trois choses pour chaque
+route, **à l'instant**, et le dit sous le titre : « Caddy et certificats relevés
+à 10:42:07 ». Rien n'est un souvenir : c'est une lecture, qui ne modifie rien.
+**Revérifier** la refait sans quitter la page.
+
+| Badge | Qui le relève | Ce qu'il vous dit |
+|---|---|---|
+| **DNS** | la console, chez votre fournisseur DNS | si le nom pointe vers cette Forge |
+| **Caddy** | la Forge, dans la configuration **vivante** du proxy, puis par une vraie requête | si le proxy sert la route, et ce que votre pile a répondu |
+| **TLS** | la Forge, par une vraie connexion chiffrée, vérifiée comme le ferait un navigateur | si le certificat est reconnu, et jusqu'à quand |
+
+Chaque badge regarde **une** couche. Quand un site ne répond pas, le premier
+badge rouge désigne l'endroit où chercher :
+
+- **Caddy : route absente**, ou **Caddy → une autre adresse** — le proxy ne sert
+  pas ce que vous avez déclaré. Appuyez sur **Réappliquer**, à côté ;
+- **Caddy ici · pile muette (502)** — le proxy fait bien suivre, mais rien ne
+  répond dans le Spark sur le port de la route. Le défaut est dans la pile, pas
+  dans la Forge : est-elle démarrée ? écoute-t-elle sur ce port ?
+- **Caddy injoignable** — le proxy lui-même ne répond pas ; c'est une affaire
+  d'exploitation de la Forge ;
+- **TLS absent** — aucun certificat n'a été émis pour ce nom ; le plus souvent,
+  le DNS ne pointe pas encore ici. Regardez le badge DNS ;
+- **TLS invalide** — un certificat est présenté, mais un navigateur le refuserait
+  ; le survol donne la raison exacte, par exemple un certificat de repli émis
+  par le proxy lui-même quand l'émission publique a échoué ;
+- **TLS expire dans 9 j** — le renouvellement automatique aurait dû avoir lieu ;
+  vérifiez que le nom pointe toujours vers la Forge.
+
+Une route **sans TLS** garde sa pastille « sans TLS », sans badge de
+certificat. Un **joker** (`*.exemple.fr`) n'est ni interrogé ni présenté : il ne
+désigne aucun nom précis.
+
+La vérification envoie à votre pile une requête `GET /` par route et par visite,
+signée `sparkd-diagnostic` dans son `User-Agent` : c'est elle que vous verrez
+passer dans vos journaux.
 
 ## Retirer
 

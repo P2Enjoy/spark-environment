@@ -13087,3 +13087,39 @@ de `sparkd` verte. **Deux trouvailles hors de SPK-129**, en chemin :
   (`spark-suggestions.js`), `erreur` (`forge-alertes.js`). Non corrigé ici :
   c'est une décision d'interface, qui demande la lecture du design system ;
   signalé au responsable.
+
+## 2026-09-30 · SPK-130 — des badges relevés, pas déduits
+
+**La demande** : sur la page des routes, à côté de « DNS ici », « Caddy ici » et
+« SSL ici », vérifiés à chaque visite. **La décision de fond** : chaque badge est
+relevé par le composant qui peut le savoir. La console lit la zone DNS ; seule
+la Forge atteint l'API de Caddy (boucle locale) et son `:443` : `sparkd` relève
+donc Caddy et le certificat, sur la boucle locale, ce qui isole chaque couche du
+DNS. Trois relevés, trois couches, et le premier badge rouge désigne l'endroit.
+
+**Ce qui a été mesuré plutôt que supposé** : les sondes réelles sont éprouvées
+contre de vrais serveurs TLS locaux signés par une autorité de test — valide,
+échéance proche, auto-signé, autre nom, alerte pendant la poignée de main
+(« absent », ce que fait Caddy pour un nom sans certificat), port fermé. La
+requête lit le statut même derrière un certificat invalide : c'est ce qui sépare
+« la pile ne répond pas » de « le certificat est mauvais ».
+
+**Décisions de détail.** Un joker n'est ni interrogé ni présenté : il ne désigne
+aucun nom. Une route sans TLS n'a pas de badge de certificat. `FakeCaddy` en
+échec refusait la pose mais rendait sa configuration : un Caddy injoignable ne
+répond à rien, le double est aligné. Réappliquer suit désormais le relevé.
+Pendant un relevé, et quand il échoue, aucun badge : ni l'ancien présenté comme
+actuel, ni une impossibilité répétée ligne par ligne — une seule ligne le dit.
+La règle générique est remontée au socle du design system (un état relevé se
+date).
+
+**Ce que le pilote factice ne peut pas montrer**, et comment on le voit quand
+même : route absente, autre cible, échéance proche, certificat absent — Caddy y
+est toujours réconcilié. `make captures` les pose par son faux `sparkd`
+(`spk130-etats-degrades`), et les preuves de composant les couvrent. Le DAT
+disait d'abord « chaque état se montre en développement » : corrigé avant le
+commit.
+
+**Vérifications** : 22 preuves du diagnostic, route HTTP, seed, 11 preuves de
+composant, deux parcours E2E, captures observées. Suite de la console : 1 508
+sur 1 509, l'échec restant étant celui, antérieur, des classes de SPK-104.

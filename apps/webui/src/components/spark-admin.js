@@ -31,6 +31,10 @@
  *       le dit, et se corrige d'un geste) · docs/DESIGN_SYSTEM.md §6.8 (une
  *       pastille d'écart porte sa sortie), §6.24 · docs/DESIGN_SYSTEM_APP.md
  *       SPK-DS-31 — pour le bouton « Activer le TLS » et son refus.
+ * @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (Caddy et le certificat,
+ *       relevés à chaque visite) · docs/DESIGN_SYSTEM.md §6.8, §6.13, §14.6 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-34 — pour les badges Caddy et TLS,
+ *       la ligne du relevé, « Revérifier », et Réappliquer offert d'après le relevé.
  *
  * Ce sont des panneaux du détail, pas des écrans (§26.1) : une route publique
  * et un instantané n'existent pas sans leur Spark.
@@ -95,6 +99,11 @@ export const ADMIN_VIDE = {
   // écriture est transitoire, mais l'état, lui, se relit.
   dnsRoutes: { chargement: false, configured: null, reason: null,
                etats: {}, erreur: null },
+  // SPK-130 · §18.7 : ce que Caddy et le TLS disent MAINTENANT, relevé par
+  // sparkd à chaque visite. Rien n'est gardé d'une visite à l'autre : un relevé
+  // qui vieillirait sans le dire serait le souvenir que le §18.7 interdit.
+  diagRoutes: { chargement: false, erreur: null, probes: null, caddyErreur: null,
+                releveA: null, routes: {} },
   // SPK-47 · §38.1 : ce que la console SAIT du fournisseur. `configured` vaut
   // `null` tant qu'on n'a pas demandé — « pas encore su » n'est pas « pas
   // configuré », et l'écran ne doit pas annoncer une absence qu'il n'a pas
@@ -191,7 +200,11 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           ? ''
           : ` <span class="badge badge--accent"><span class="badge__point" aria-hidden="true"></span>non appliquée</span>`;
         // §26.3 : « non appliquée » est un retard, pas une panne — accent, pas danger.
-        const reappliquer = r.applied_at
+        // SPK-130 · §18.7 : Réappliquer suit AUSSI le relevé. Le 2026-09-14, la
+        // route était « appliquée » et Caddy ne la portait plus : le geste qui
+        // réparait en un clic n'était pas offert.
+        const caddyEtat = ui.diagRoutes?.routes?.[r.domain]?.caddy?.state;
+        const reappliquer = r.applied_at && !REPARABLES.has(caddyEtat)
           ? ''
           : `<button type="button" class="bouton bouton--compact" data-reapplique="1">Réappliquer</button>`;
         const confirme = ui.confirming?.kind === 'route' && ui.confirming.id === r.domain
@@ -209,6 +222,8 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
           ` → port ${echapper(r.target_port)} du Spark` +
           // SPK-78 · §38.9.1 : l'état DNS RELEVÉ, pas un souvenir d'écriture.
           `${renderEtatDns(ui.dnsRoutes, r.domain)}` +
+          // SPK-130 · §18.7 : ce que Caddy et le TLS disent, relevé à l'instant.
+          `${renderEtatCaddy(ui.diagRoutes, r)}${renderEtatCertificat(ui.diagRoutes, r)}` +
           `${r.tls ? '' : ' <span class="badge badge--neutral">sans TLS</span>'}${attente}` +
           `<span class="actions-ligne">${reappliquer}` +
           // SPK-112 · §18.3 quater : la pastille porte sa sortie. C'est la
@@ -296,12 +311,14 @@ export function renderRoutesPanel(spark, routes = [], ui = ADMIN_VIDE) {
   return `
 <section class="carte bloc" aria-labelledby="titre-routes">
   <h2 id="titre-routes">Routes publiques</h2>
+  ${routes.length ? renderReleveRoutes(ui.diagRoutes) : ''}
   ${lignes}
   ${refus(ui, 'route-tls')}
   ${renderPriseDePas(ui)}
   ${renderDnsEcrit(ui)}
   ${renderRecetteResultat(ui)}
   <p class="formulaire__actions">
+    ${routes.length ? '<button type="button" class="bouton" data-reverifie-routes="1">Revérifier</button>' : ''}
     <button type="button" class="bouton" data-ouvre="route">Ajouter une route</button>
     <button type="button" class="bouton" data-ouvre="recette">Appliquer une recette DNS</button>
   </p>
@@ -700,6 +717,119 @@ function renderDnsEcrit(ui) {
     <span class="technique">${echapper(ecrit.type)} ${echapper(ecrit.fqdn)}
     → ${echapper(ecrit.data)}</span> écrit chez le fournisseur.
     ${echapper(ecrit.propagation ?? '')}</p>`;
+}
+
+/** Les états Caddy qu'un « Réappliquer » répare (§18.7). */
+const REPARABLES = new Set(['absent', 'other_target']);
+
+const pastille = (classe, texte, titre) =>
+  ` <span class="badge ${classe}"${titre ? ` title="${echapper(titre)}"` : ''}>${echapper(texte)}</span>`;
+
+const heure = (iso) => {
+  const date = new Date(iso ?? '');
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleTimeString('fr-FR');
+};
+
+/**
+ * La ligne qui dit QUAND Caddy et les certificats ont été relevés, ou pourquoi
+ * ils ne l'ont pas été (SPK-130, §18.7).
+ *
+ * @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 · docs/DESIGN_SYSTEM.md
+ *       §6.13 (chargement, erreur), §9.7 (un changement s'annonce),
+ *       §14.6 (en cours, impossible et valeur ont des textes distincts)
+ *
+ * Un relevé impossible ne se déguise pas en état : les badges ne s'affichent
+ * pas, et la raison est dite UNE fois ici plutôt que sur chaque ligne.
+ */
+export function renderReleveRoutes(diag) {
+  if (!diag) return '';
+  if (diag.chargement) {
+    return '<p class="champ__aide" role="status" aria-live="polite">'
+      + 'Relevé de Caddy et des certificats…</p>';
+  }
+  if (diag.erreur) {
+    return '<p class="absence" role="status" aria-live="polite">Caddy et certificats '
+      + `non vérifiés : ${echapper(diag.erreur)}</p>`;
+  }
+  const a = heure(diag.releveA);
+  if (!a) return '';
+  return '<p class="champ__aide" role="status" aria-live="polite">'
+    + `Caddy et certificats relevés à ${echapper(a)}.`
+    + (diag.probes === 'fake'
+      ? ' Sondes factices du pilote de développement : ce ne sont pas des relevés réels.'
+      : '')
+    + '</p>';
+}
+
+/**
+ * Ce que Caddy dit d'une route, relevé à l'instant (SPK-130, §18.7).
+ *
+ * @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (les états du badge
+ *       Caddy) · docs/DESIGN_SYSTEM.md §6.8 (texte explicite, jamais la
+ *       couleur seule), §14.7 (un état inconnu a un repli neutre)
+ */
+export function renderEtatCaddy(diag, route) {
+  const etat = diag?.chargement || diag?.erreur ? null : diag?.routes?.[route?.domain]?.caddy;
+  if (!etat) return '';
+  switch (etat.state) {
+    case 'served':
+      return pastille('badge--success', etat.status ? `Caddy ici · ${etat.status}` : 'Caddy ici',
+        etat.status
+          ? `Caddy porte la route vers ${etat.found} ; la pile a répondu ${etat.status}.`
+          : `Caddy porte la route vers ${etat.found}. ${etat.reason ?? ''}`.trim());
+    case 'silent_stack':
+      return pastille('badge--danger', `Caddy ici · pile muette (${etat.status})`,
+        `Caddy porte la route, mais ${etat.expected} n'a pas répondu.`);
+    case 'absent':
+      return pastille('badge--danger', 'Caddy : route absente',
+        'La configuration que Caddy sert maintenant ne porte pas ce domaine.');
+    case 'other_target':
+      return pastille('badge--danger', `Caddy → ${etat.found}`,
+        `Caddy vise ${etat.found} ; le registre attend ${etat.expected}.`);
+    case 'not_served':
+      return pastille('badge--neutral', 'Caddy : non servie', etat.reason);
+    case 'unreachable':
+      return pastille('badge--danger', 'Caddy injoignable',
+        diag.caddyErreur ?? "L'API d'administration de Caddy ne répond pas.");
+    case 'probe_failed':
+      return pastille('badge--danger', 'Caddy : sans réponse', etat.reason);
+    default:
+      return pastille('badge--neutral', 'Caddy : état inconnu', String(etat.state ?? ''));
+  }
+}
+
+/**
+ * Ce qu'un navigateur penserait du certificat de cette route (SPK-130, §18.7).
+ *
+ * @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 (les états du badge
+ *       certificat) · docs/DESIGN_SYSTEM.md §6.8, §14.7
+ *
+ * Une route sans TLS garde sa pastille « sans TLS » (§18.3 quater) : elle n'a
+ * pas de certificat à juger, et un second badge ne dirait rien de plus.
+ */
+export function renderEtatCertificat(diag, route) {
+  const c = diag?.chargement || diag?.erreur ? null : diag?.routes?.[route?.domain]?.certificate;
+  if (!c || c.state === 'not_applicable') return '';
+  const jusquau = c.not_after ? new Date(c.not_after).toLocaleDateString('fr-FR') : null;
+  switch (c.state) {
+    case 'valid':
+      return pastille('badge--success', `TLS valide · ${c.days_left} j`,
+        `Émis par ${c.issuer ?? 'un émetteur non nommé'}${jusquau ? `, jusqu'au ${jusquau}` : ''}.`);
+    case 'expiring':
+      return pastille('badge--accent', `TLS expire dans ${c.days_left} j`,
+        `Émis par ${c.issuer ?? 'un émetteur non nommé'}${jusquau ? `, jusqu'au ${jusquau}` : ''}.`);
+    case 'invalid':
+      return pastille('badge--danger', 'TLS invalide', c.reason);
+    case 'missing':
+      return pastille('badge--danger', 'TLS absent',
+        `Caddy ne présente aucun certificat pour ce nom${c.reason ? ` (${c.reason})` : ''}.`);
+    case 'unreachable':
+      return pastille('badge--danger', 'TLS injoignable', c.reason);
+    case 'wildcard':
+      return pastille('badge--neutral', 'TLS : joker non sondé', c.reason);
+    default:
+      return pastille('badge--neutral', 'TLS : état inconnu', String(c.state ?? ''));
+  }
 }
 
 /**

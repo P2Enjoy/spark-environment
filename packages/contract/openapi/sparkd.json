@@ -931,6 +931,51 @@
         ]
       }
     },
+    "/v1/ingress/diagnostic": {
+      "get": {
+        "description": "Ce que Caddy et le TLS disent MAINTENANT des routes de ce Spark.\n\n@spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7\n\nUne LECTURE : la configuration vivante de Caddy, une requête réelle et\nune poignée de main TLS par route, sur la boucle locale. Rien n'est\nécrit, rien n'entre au journal (§36.7).",
+        "operationId": "diagnose_routes_v1_ingress_diagnostic_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "spark",
+            "required": true,
+            "schema": {
+              "title": "Spark",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Diagnose Routes V1 Ingress Diagnostic Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Diagnose Routes",
+        "tags": [
+          "ingress"
+        ]
+      }
+    },
     "/v1/ingress/match": {
       "post": {
         "description": "Quelles routes servent ces noms ? (SPK-77, docs/DAT.md §38.8.4)\n\nUne LECTURE, malgré le `POST` : une liste de noms n'a pas sa place dans\nune chaîne de requête, et la console en envoie autant que la zone en\nporte. Rien n'est écrit, rien n'entre au journal.\n\n`sparkd` ne voit que des noms : le jeton du fournisseur DNS reste sur\nl'hôte console (§38.1).",

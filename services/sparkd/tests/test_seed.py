@@ -246,8 +246,8 @@ def test_le_seed_s_arrete_plutot_que_de_produire_un_jeu_partiel(config, monkeypa
     """
     original = seed_module.populate
 
-    def tronque(client, incus, caddy):
-        original(client, incus, caddy)
+    def tronque(client, incus, caddy, sondes):
+        original(client, incus, caddy, sondes)
         # On retire une fixture APRES coup : la verification doit mordre.
         #
         # REVISE par SPK-34. Cette ligne retirait « analytics.example.com », qui
@@ -267,3 +267,26 @@ def test_le_seed_s_arrete_plutot_que_de_produire_un_jeu_partiel(config, monkeypa
     # inchange : un jeu tronque est detecte au lieu d'etre servi tel quel.
     with pytest.raises(seed_module.SeedError, match="route non appliquée"):
         seed_module.run(config)
+
+
+def test_le_diagnostic_en_direct_montre_ses_etats_en_developpement(seede):
+    """SPK-130 · §18.7 : sans ces doubles, les badges Caddy et certificat ne
+    montreraient qu'un seul état en développement.
+
+    @verifies docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7 · CLAUDE.md §8
+
+    La fixture démarre `sparkd` sur le registre seedé — comme `make runDev` —
+    donc la route d'`analytics`, déclarée pendant la panne de Caddy, est portée
+    (SPK-129) : Caddy la sert, et la cellule absente rend 502.
+    """
+    crm = seede.get("/v1/ingress/diagnostic", params={"spark": "crm-production"}).json()
+    assert crm["probes"] == "fake", "des doubles doivent se dire doubles"
+    assert crm["routes"]["crm.example.com"]["caddy"]["state"] == "served"
+    assert crm["routes"]["crm.example.com"]["certificate"]["state"] == "valid"
+    assert crm["routes"]["vip.boutique.example.com"]["certificate"]["state"] == "invalid"
+
+    analytics = seede.get("/v1/ingress/diagnostic", params={"spark": "analytics"}).json()
+    assert analytics["routes"]["analytics.example.com"]["caddy"]["state"] == "silent_stack"
+
+    boutique = seede.get("/v1/ingress/diagnostic", params={"spark": "boutique"}).json()
+    assert boutique["routes"]["*.boutique.example.com"]["certificate"]["state"] == "wildcard"

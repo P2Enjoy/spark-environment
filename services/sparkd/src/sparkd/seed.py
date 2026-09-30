@@ -75,12 +75,15 @@ def wipe(config: Config) -> None:
     """
     base = Path(config.database)
     for chemin in (base, Path(f"{base}.incus.json"), Path(f"{base}.incus.json.reseaux"),
+                   # SPK-130 : les doubles des sondes du diagnostic, déclarés
+                   # plus bas — un seed rejoué ne doit pas hériter des anciens.
+                   Path(f"{base}.sondes.json"),
                    Path(f"{base}-wal"), Path(f"{base}-shm")):
         chemin.unlink(missing_ok=True)
     base.parent.mkdir(parents=True, exist_ok=True)
 
 
-def populate(client: TestClient, incus, caddy) -> dict[str, int]:
+def populate(client: TestClient, incus, caddy, sondes) -> dict[str, int]:
     """Produit les fixtures du §28.5. Rend un décompte de ce qui a été créé."""
     compte = {"sparks": 0, "routes": 0, "cles": 0, "instantanes": 0, "refus": 0}
 
@@ -319,6 +322,19 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
     # finale constate les deux états. Le démarrage de `sparkd` sur ce registre,
     # lui, réconcilie (SPK-129, docs/DAT.md §51.5) et applique cette route —
     # « non appliquée » est un état transitoire, dont le journal garde l'échec.
+
+    # --- SPK-130 · §18.7 : ce que les sondes du diagnostic rendront. Ce sont des
+    # DOUBLES du pilote factice, déclarés ici comme `caddy.fail` ci-dessus, et la
+    # réponse le dit (`probes: "fake"`). Chacun colle au monde du seed :
+    #
+    # - `analytics` est « pending » : aucune cellule n'écoute, Caddy rend 502 ;
+    # - `vip.boutique.example.com` présente le certificat que Caddy émet de son
+    #   autorité interne quand l'émission publique échoue — non reconnu ;
+    # - les autres répondent, avec un certificat valide de l'autorité factice ;
+    #   le joker `*.boutique.example.com` ne s'interroge pas, par construction.
+    sondes.poser("analytics.example.com", http={"status": 502, "error": None})
+    sondes.poser("vip.boutique.example.com", certificat={
+        "state": "invalid", "reason": "unable to get local issuer certificate"})
 
     # --- SPK-49 · §39 : un port publié, pour ce qui ne parle pas HTTP.
     #
@@ -798,6 +814,17 @@ def verify(client: TestClient) -> None:
         raise SeedError("aucune route appliquée")
     if not any(not r["applied_at"] for r in routes):
         raise SeedError("aucune route non appliquée : le badge du §18.5 serait invisible")
+    # SPK-130 · §18.7 : le diagnostic, PAR L'API, comme la console le lira.
+    releve = client.get("/v1/ingress/diagnostic",
+                        params={"spark": "crm-production"}).json().get("routes", {})
+    crm = releve.get("crm.example.com", {})
+    if (crm.get("caddy", {}).get("state") != "served"
+            or crm.get("certificate", {}).get("state") != "valid"):
+        raise SeedError(f"crm.example.com devrait être servie, certificat valide : {crm}")
+    vip = releve.get("vip.boutique.example.com", {})
+    if vip.get("certificate", {}).get("state") != "invalid":
+        raise SeedError("vip.boutique.example.com devrait présenter un certificat "
+                        "invalide : l'écran ne pourrait pas montrer ce badge")
 
     resultats = {e["result"] for e in client.get("/v1/audit?limit=500").json()["entries"]}
     for attendu in ("ok", "denied", "error"):
@@ -836,7 +863,7 @@ def run(config: Config | None = None) -> dict[str, int]:
     wipe(config)
     app = create_app(config)
     client = TestClient(app)
-    compte = populate(client, app.state.incus, app.state.caddy)
+    compte = populate(client, app.state.incus, app.state.caddy, app.state.sondes)
     verify(client)
     # SPK-93 · §52.9 : l'historien ne remplit jamais le passé. Sans cet
     # historique, tout écran de supervision démarre vide pendant des minutes et

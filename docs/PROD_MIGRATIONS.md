@@ -120,6 +120,38 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-29 · Le diagnostic en direct des routes : `sparkd` et la console (SPK-130)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable, dans la
+                MÊME mise à jour qu'OP-27 et OP-28 : la build qui porte l'une
+                porte les trois.
+Objectif      : servir `GET /v1/ingress/diagnostic` (docs/DAT.md §18.7) et
+                relancer la console qui l'affiche. Lecture seule : aucune
+                migration, aucune variable, aucun service nouveau, rien au
+                journal. La sonde envoie un `GET /` par route et par visite de
+                l'onglet Routes, signé `sparkd-diagnostic` : les locataires le
+                verront dans leurs journaux.
+Dépend de     : rien — mais une Forge sans OP-28 montrera, à juste titre,
+                « Caddy : route absente » après son prochain redémarrage.
+Ordre         : 1. mettre à jour sparkd (runbook A.2) — c'est celle d'OP-27 et
+                   d'OP-28 ;
+                2. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : par le parcours canonique — l'accueil de la console, le Spark
+                `sso-p2enjoy`, l'onglet Routes — la ligne « Caddy et
+                certificats relevés à … » apparaît, SANS mention de sondes
+                factices ; `oauth.lelabs.tech` porte « Caddy ici · 302 » et
+                « TLS valide » avec l'émetteur Let's Encrypt au survol ;
+                « Revérifier » redate la ligne ; le journal de `sparkd` ne gagne
+                aucune entrée. Preuve jouée par
+                `make forge-reelle SCRIPT=spk128-alt-svc ARGS="sso-p2enjoy oauth.lelabs.tech crm.lelabs.tech"`
+                — le visiteur, le dossier, puis l'onglet Routes, capturés.
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console ; la console précédente n'appelle pas cette route.
+Risques       : une requête par route et par visite vers chaque pile ; une pile
+                qui traiterait `GET /` comme une écriture en recevrait une.
+```
+
 ### OP-28 · Caddy porté par `caddy-api.service`, et `sparkd` qui réconcilie à son démarrage (SPK-129)
 
 ```

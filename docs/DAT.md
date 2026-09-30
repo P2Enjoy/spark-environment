@@ -2349,12 +2349,26 @@ nommés en anglais, comme ailleurs dans le contrat ; l'écran les dit en frança
 
 **Avec le pilote factice** (§28), la comparaison avec la configuration vivante
 est **réelle** : elle lit ce que `FakeCaddy` a reçu, par le même code. Seules les
-sondes réseau — la requête et la poignée de main — ont des doubles, déterministes
-et déclarés par le seed, pour que chaque état se montre en développement et
-s'éprouve de bout en bout. Ce sont des doubles du pilote factice, au même titre
-que `FakeIncus`, jamais des traces présentées comme un relevé réel : la réponse
-porte `probes: "fake"`, et l'écran l'affiche au-dessus des routes tant qu'il
-est vrai.
+sondes réseau — la requête et la poignée de main — ont des doubles, déterministes,
+déclarés par le seed et gardés à côté du registre (`<registre>.sondes.json`, comme
+`FakeIncus`). Ce sont des doubles du pilote factice, jamais des traces présentées
+comme un relevé réel : la réponse porte `probes: "fake"`, et l'écran le dit sur
+la ligne du relevé.
+
+Le seed en tire, sur la pile de développement : une route **servie**, certificat
+**valide** (`crm.example.com`) ; un certificat **invalide** — celui de l'autorité
+interne de Caddy (`vip.boutique.example.com`) ; une **pile muette**, la cellule
+d'`analytics` n'existant pas ; un **joker**, non sondé. Les états qu'un Caddy
+toujours réconcilié ne produit pas — route **absente**, **autre cible**,
+certificat **proche de l'échéance** ou **absent** — se voient sur la capture
+`spk130-etats-degrades` de `make captures`, dont le faux `sparkd` les pose, et
+s'éprouvent par les preuves de composant et contre de vrais serveurs TLS locaux.
+
+**À l'écran**, une ligne sous le titre de la section **date** le relevé —
+« Caddy et certificats relevés à 10:42:07 » — ou dit qu'il est en cours, ou
+pourquoi il n'a pas pu se faire ; pendant un relevé, aucun badge de l'ancien ne
+reste affiché. Les badges suivent le badge DNS sur la ligne de chaque route.
+Contrat visuel : `DESIGN_SYSTEM_APP.md` SPK-DS-34.
 
 ## 19. Instantanés et restauration
 

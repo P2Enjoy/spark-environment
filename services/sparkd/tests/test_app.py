@@ -511,6 +511,31 @@ def test_un_caddy_injoignable_au_demarrage_n_empeche_pas_sparkd(tmp_path, monkey
     assert derniere["result"] == "error"
 
 
+def test_le_diagnostic_des_routes_se_lit_par_http_et_n_ecrit_rien(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7
+
+    Une LECTURE : rien n'entre au journal (§36.7), et un Spark inconnu se dit
+    inconnu au lieu de rendre un diagnostic vide qu'on prendrait pour « rien à
+    signaler ».
+    """
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
+    avant = len(c.get("/v1/audit?limit=500").json()["entries"])
+
+    r = c.get("/v1/ingress/diagnostic", params={"spark": "crm"})
+    assert r.status_code == 200
+    corps = r.json()
+    assert corps["spark"] == "crm" and corps["probes"] == "fake"
+    assert corps["routes"]["crm.example.com"]["caddy"]["state"] == "served"
+    assert len(c.get("/v1/audit?limit=500").json()["entries"]) == avant
+
+    inconnu = c.get("/v1/ingress/diagnostic", params={"spark": "fantome"})
+    assert inconnu.status_code == 404
+    assert inconnu.json()["detail"]["error"] == "not_found"
+
+
 def test_conflit_de_domaine_refuse_par_http(tmp_path):
     c = _app(tmp_path)
     for nom in ("a", "b"):

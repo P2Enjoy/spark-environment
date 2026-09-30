@@ -820,6 +820,17 @@ Un état vide ne doit proposer une action que lorsqu’une action pertinente exi
 
 Une vue saine sans donnée, par exemple une corbeille vide, peut n’avoir aucune action.
 
+### Un état relevé à la demande se date, et ne survit pas à son relevé suivant
+
+Lorsqu’une vue affiche un état **relevé** auprès d’un système tiers — plutôt que
+lu dans ses propres données —, elle dit **quand** il a été relevé. Pendant qu’un
+nouveau relevé se fait, l’ancien ne reste pas affiché comme s’il était actuel ;
+et un relevé qui n’a pas pu se faire se dit, **une fois**, avec sa raison, au
+lieu d’être remplacé par un état par défaut ou par le dernier connu.
+
+Un état relevé sans date se lit comme un fait permanent, et c’est précisément
+ce qu’il n’est pas.
+
 ## 6.14 Tableau de données
 
 Utiliser les éléments HTML natifs :

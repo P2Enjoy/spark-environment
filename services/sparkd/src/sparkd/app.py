@@ -36,6 +36,7 @@ from . import build
 from .inventory import InventoryError, sync
 from . import sparks as service
 from . import ingress as ingress_service
+from . import ingress_diagnostic
 from . import ports as ports_service
 from . import signature as signature_service
 from . import notification as notification_service
@@ -245,6 +246,15 @@ def create_app(config: Config) -> FastAPI:
     app.state.caddy = (
         ingress_service.FakeCaddy() if config.driver == "fake"
         else ingress_service.Caddy(config.caddy_admin)
+    )
+    # SPK-130 · §18.7 : les sondes du diagnostic en direct. Avec le pilote
+    # factice, des doubles déclarés par le seed et gardés à côté du registre —
+    # comme `FakeIncus` —, et la réponse le dit (`probes: "fake"`).
+    app.state.sondes = (
+        ingress_diagnostic.SondesFactices(
+            state_path=None if config.database == ":memory:"
+            else Path(f"{config.database}.sondes.json"))
+        if config.driver == "fake" else ingress_diagnostic.SondesReelles()
     )
 
     def _reconcile_at_startup() -> list[dict]:
@@ -1929,6 +1939,25 @@ def create_app(config: Config) -> FastAPI:
     def list_routes() -> dict:
         with registry() as connection:
             return {"routes": ingress_service.listing(connection)}
+
+    @app.get("/v1/ingress/diagnostic", tags=["ingress"])
+    def diagnose_routes(spark: str) -> dict:
+        """Ce que Caddy et le TLS disent MAINTENANT des routes de ce Spark.
+
+        @spec docs/BACKLOG.md#SPK-130 · docs/DAT.md §18.7
+
+        Une LECTURE : la configuration vivante de Caddy, une requête réelle et
+        une poignée de main TLS par route, sur la boucle locale. Rien n'est
+        écrit, rien n'entre au journal (§36.7).
+        """
+        with registry() as connection:
+            try:
+                service.by_name(connection, spark)
+            except service.NotFound as erreur:
+                raise HTTPException(status_code=404, detail={
+                    "error": "not_found", "message": str(erreur)}) from erreur
+            return ingress_diagnostic.diagnostiquer(
+                connection, spark, app.state.caddy, app.state.sondes)
 
     @app.post("/v1/ingress/match", tags=["ingress"])
     def match_routes(body: dict = Body(...)) -> dict:
