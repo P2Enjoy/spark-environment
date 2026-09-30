@@ -8373,6 +8373,10 @@ avec un débit déclaré ; OP-32.
   `[~]`** : la mention « déclarée » de l'onglet Forge n'est vue que par ses
   preuves de composant — la vérification visuelle par la console branchée sur
   la machine virtuelle n'est pas encore outillée (DAT §28.7) — et OP-32.
+- **Vue le 2026-10-01 dans la console branchée sur la VM** (épreuve
+  `spk135-debit`) : « Capacité déclarée par SPARKD_NETWORK_CAPACITY_MBIT » sous
+  le pool Réseau ; capture observée. **Reste `[~]`** : la vérification d'OP-32
+  sur la Forge.
 
 ### [~] SPK-136 · Toute classe qu'écrit un composant peint quelque chose
 
@@ -8407,8 +8411,12 @@ existent pour cela.
   unité (DAT §28.7, règle du responsable rappelée le 2026-09-30). Reste :
   voir les trois écrans — refus des alertes, notes, propositions — dans la
   console branchée sur une machine virtuelle à installation fraîche.
+- **Le refus des alertes vu sur VM le 2026-10-01** (épreuve `spk140-alertes`) :
+  il a la forme `.refus`. Restent les notes et les propositions — une
+  proposition s'écrit dans la cellule, par son terminal, que le premier
+  incrément de SPK-137 n'ouvre pas.
 
-### [ ] SPK-137 · La console se vérifie sur une Forge de machine virtuelle à installation fraîche
+### [x] SPK-137 · La console se vérifie sur une Forge de machine virtuelle à installation fraîche
 
 **Décidé par le responsable le 2026-09-30.** À la question « le banc démonte sa
 machine en sortant, donc la console ne peut pas s'y brancher pour la
@@ -8428,6 +8436,12 @@ valide que dans la console branchée sur une VM à installation fraîche.
 - Limite écrite d'avance (§51.6) : pas de terminal de cellule dans ce premier
   incrément — les adresses `10.77.0.x` de la VM se confondent avec celles de
   la Forge réelle dans le `known_hosts` du poste.
+- **Vérifié le 2026-10-01** : `--epreuve` joue trois épreuves vertes contre la
+  console branchée sur une VM à installation fraîche — Spark, route et
+  protection créés par la console ; `--garder` garde la machine, sa console
+  répond, et `Ctrl-C` démonte tout (machine, console, verrou, répertoire
+  jetable) ; le verrou est réentrant pour son porteur, refusé à tout autre
+  processus (preuve dans `e2e/verrou.test.mjs`, 9 sur 9). README, DAT §51.6.
 
 ### [ ] SPK-138 · La pile de développement sans pilote factice
 
@@ -8468,11 +8482,12 @@ passe, aucune raison.
   panneau, `route-ligne`, qui porte le domaine de la ligne ; le refus se rend
   dans cette ligne, et le focus revient à son bouton. Preuves de composant :
   trois rouges sur le code d'avant, vertes après ; suite de la console 1 570 sur
-  1 570 — des diagnostics. **Reste `[~]`** : provoquer un refus réel (Spark
-  protégé) dans la console branchée sur une VM à installation fraîche
-  (SPK-137). Observé en chemin, non traité : un retrait refusé en `502` a déjà
-  retiré la route du registre — l'écran, qui ne relit pas après un refus,
-  montre encore la ligne jusqu'au rechargement.
+  1 570 — des diagnostics. Le retrait refusé en `502` qui avait déjà retiré la
+  route, vu en chemin, est traité par SPK-141.
+- **Vérifié le 2026-10-01 sur VM à installation fraîche** (épreuve
+  `spk139-141-routes`) : le refus réel d'un Spark protégé s'affiche dans la
+  ligne de la route, le focus revient à « Retirer » ; capture
+  `spk139-vm-refus-protege-dans-la-ligne` observée. **Reste `[~]`** : OP-33.
 
 ### [~] SPK-140 · Un gabarit d'alerte refusé garde ce qu'on a tapé
 
@@ -8493,8 +8508,11 @@ repeint avec la valeur relue au serveur — la saisie refusée disparaît.
 - **Corrigé le 2026-10-01, non vérifié visuellement.** Preuves de composant :
   rouges sur le code d'avant (le gabarit, l'adresse et la case repartaient du
   registre), vertes après ; suite de la console 1 566 sur 1 566 — des
-  diagnostics. **Reste `[~]`** : voir le refus garder la saisie dans la console
-  branchée sur une VM à installation fraîche (SPK-137).
+  diagnostics.
+- **Vérifié le 2026-10-01 sur VM à installation fraîche** (épreuve
+  `spk140-alertes`) : refusé par la vraie `sparkd`, le formulaire garde le
+  gabarit, l'adresse et la case, le mot de passe est vide ; corrigé, il est
+  enregistré ; captures observées. **Reste `[~]`** : OP-33.
 
 
 ### [~] SPK-141 · Une route ne sort du registre qu'une fois Caddy confirmé
@@ -8516,8 +8534,13 @@ supprimé chez Caddy ».
   route, relit `GET /config/`, puis seulement retire ; l'ancien `withdraw`, qui
   retirait sans confirmation, est supprimé. Preuves : sur le code d'avant, un
   second retrait après un `502` rendait `404` — la route avait déjà disparu ;
-  vertes après, suite `sparkd` 1 604 sur 1 604 — des diagnostics. **Reste
-  `[~]`** : la validation sur la VM du banc (SPK-137), puis OP-33.
+  vertes après, suite `sparkd` 1 604 sur 1 604 — des diagnostics.
+- **Vérifié le 2026-10-01 sur VM à installation fraîche** (épreuve
+  `spk139-141-routes`) : Caddy arrêté sur la VM, le retrait est refusé dans la
+  ligne, la route reste au registre (relu par l'API) et à l'écran après retour
+  sur la page ; Caddy relancé, le retrait aboutit et Caddy ne la sert plus
+  (configuration vivante relue) ; captures observées. **Reste `[~]`** : OP-33.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

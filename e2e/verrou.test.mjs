@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-137 · docs/DAT.md §51.6 (le même processus reprend
+ *           le verrou qu'il tient ; un autre reste refusé)
  * @verifies docs/BACKLOG.md#SPK-106 · docs/DAT.md §29.8 (une seule pile lourde
  * à la fois) · CLAUDE.md §14, §21
  *
@@ -55,6 +57,22 @@ test('une SECONDE prise, par un autre processus, est REFUSÉE', () => {
   assert.equal(sortie, `REFUSE:VerrouTenu:${process.pid}`,
     'le refus doit NOMMER le processus qui tient');
   assert.ok(existsSync(CHEMIN), 'un refus ne doit pas emporter le verrou d’autrui');
+});
+
+test('le MÊME processus qui le tient déjà le reprend sans refus (SPK-137)', () => {
+  // docs/DAT.md §51.6 : l'épreuve jouée dans le processus du banc de la VM prend
+  // le verrou à son import, comme tout script qui lance un navigateur.
+  const chemin = prendreLeVerrou();
+  assert.equal(prendreLeVerrou(), chemin);
+  const porteur = JSON.parse(execFileSync('cat', [CHEMIN], { encoding: 'utf8' }));
+  assert.equal(porteur.pid, process.pid, 'le porteur n’a pas changé');
+  // …et un autre processus reste refusé pendant ce temps.
+  const sortie = dansUnAutreProcessus(`
+    import { prendreLeVerrou } from './verrou.mjs';
+    try { prendreLeVerrou(); console.log('PRIS'); }
+    catch (e) { console.log('REFUSE:' + e.name); }
+  `).trim();
+  assert.equal(sortie, 'REFUSE:VerrouTenu');
 });
 
 test('le refus DIT quoi faire, et ne parle pas d’un réglage qui n’existe pas', () => {

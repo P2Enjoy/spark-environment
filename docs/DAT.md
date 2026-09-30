@@ -9297,6 +9297,16 @@ confond. Une épreuve qui ouvre le **terminal d'une cellule** de la VM est hors
 de ce premier incrément ; purger ces entrées couperait l'accès aux cellules de
 production, et ne se fait pas.
 
+**Joué le 2026-10-01**, carte `virtio`, roue de l'arbre de travail :
+`make forge-vm ARGS="--carte virtio --epreuve spk140-alertes,spk135-debit,spk139-141-routes"`
+— le banc vert (16 verdicts), puis la console branchée sur la machine, et les
+trois épreuves vertes (18 verdicts) : un Spark **créé par la console**, sa route,
+sa protection, un refus réel de la `sparkd` de la VM dans la ligne, puis Caddy
+arrêté sur la VM et la route qui reste, Caddy relancé et la route retirée. Les
+six captures `e2e/captures/spk1{35,39,40,41}-vm-*.jpg` sont observées.
+`--garder` éprouvé à part : la console répond pendant la garde, et après
+`Ctrl-C` il ne reste ni machine, ni console, ni verrou, ni répertoire jetable.
+
 ### 5.3 Un refus d'Incus se lit — écrit le 2026-09-02
 
 Signalé sur la Forge de démonstration. Supprimer un Spark rendait :

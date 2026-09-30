@@ -13520,3 +13520,29 @@ d'hôte à chaque machine.
 - **Deux phrases que SPK-135 avait rendues fausses**, et que son commit n'avait
   pas corrigées : la limite « une Forge à carte `virtio` ne s'installe pas » du
   README, et la phrase correspondante du DAT §51.5. Retirées.
+
+## 2026-10-01 · SPK-137 livré, et quatre unités vues dans la console branchée sur une VM
+
+**Ce qui est fait** (DAT §51.6) : le banc garde sa machine (`--garder`) ou joue
+des épreuves navigateur contre elle (`--epreuve`), par une console **à part**
+dont l'inventaire ne porte que la VM. Clés du poste et clé d'hôte fixe de banc
+déposées par le cloud-init ; le `known_hosts` du poste apprend une fois
+`[127.0.0.1]:2222`. Le verrou devient réentrant pour son porteur — une épreuve
+importée par le banc le « reprend » à son import, comme la règle l'exige de tout
+script qui lance un navigateur —, et reste refusé à tout autre processus.
+
+**Joué** : banc vert, puis trois épreuves vertes, 18 verdicts — SPK-140
+(la saisie gardée au refus), SPK-135 (« Capacité déclarée »), SPK-139 et SPK-141
+(un Spark créé par la console, protégé : refus dans la ligne ; Caddy arrêté sur
+la VM : refus, la route reste ; Caddy relancé : retirée, et Caddy ne la sert
+plus). `--garder` éprouvé à part : console joignable pendant la garde, et
+`Ctrl-C` ne laisse rien derrière lui. Six captures observées.
+
+**En chemin** :
+- la garde des épreuves lourdes s'est vue elle-même une fois — la ligne de
+  commande contenait un motif qu'elle cherche — et attendait indéfiniment ;
+  aucun banc n'avait tourné. Les commandes vivent désormais dans un script ;
+- deux défauts antérieurs, vus sur les captures, sont consignés au rapport
+  d'incohérences sans être corrigés : l'aide du gabarit d'alerte qui nomme huit
+  champs sur dix, et le panneau « Installer cette Forge » qui s'affiche sur une
+  Forge installée, avec des accents graves bruts.

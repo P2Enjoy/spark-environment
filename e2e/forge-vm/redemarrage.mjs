@@ -7,6 +7,8 @@
  *           · README.md (amorçage par cloud-init) · CLAUDE.md §15, §15 bis
  * @verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (`--carte virtio` :
  *           une carte qui n'annonce aucun débit, et le débit déclaré retenu)
+ * @verifies docs/BACKLOG.md#SPK-137 · docs/DAT.md §51.6 (la machine gardée, la
+ *           console branchée sur elle, les épreuves jouées dans ce processus)
  * @verifies docs/BACKLOG.md#SPK-133 · docs/DAT.md §43.5.3 (le fichier des
  *           secrets reposé après *Redémarrer*, après un `reboot` dans la
  *           cellule, après le redémarrage de la Forge ; la ligne du journal)
@@ -35,6 +37,17 @@
  *   make forge-vm ARGS="--roue <x.whl>"    # une roue donnée : la preuve ROUGE d'avant
  *   make forge-vm ARGS="--carte virtio"    # SPK-135 : une carte qui n'annonce aucun
  *                                          # débit, et `NET_MBIT` déclaré dans l'amorce
+ *   make forge-vm ARGS="--garder"          # SPK-137 : garde la machine, lance une console
+ *                                          # branchée sur elle, attend Ctrl-C
+ *   make forge-vm ARGS="--epreuve <a,b>"   # SPK-137 : joue e2e/forge-vm/epreuves/<a>.mjs,
+ *                                          # puis <b>.mjs, contre cette console, puis démonte
+ *   … --port-ssh <n>                       # port SSH de la machine gardée (2222 par défaut)
+ *
+ * Avec --garder ou --epreuve, trois écarts de plus, imprimés eux aussi : la
+ * machine reçoit les clés publiques du poste (celles que la console emploie), une
+ * clé d'hôte FIXE de banc (gardée dans le cache), et le known_hosts du poste
+ * apprend une fois l'empreinte de [127.0.0.1]:<port>. La console est à part : son
+ * inventaire ne contient QUE la machine, jamais la Forge de production.
  *
  * L'image Ubuntu (≈ 850 Mo) est gardée dans ~/.cache/spark-environment/vm/.
  * Le reste vit dans un répertoire jetable, retiré en sortant ; la console série
@@ -78,9 +91,25 @@ if (iRoue >= 0 && !roueDonnee) throw new Error('--roue attend le chemin d’une 
 const iCarte = args.indexOf('--carte');
 const carte = iCarte >= 0 ? args[iCarte + 1] : 'e1000e';
 if (!['e1000e', 'virtio'].includes(carte)) throw new Error('--carte attend e1000e ou virtio');
-const valeurs = new Set([iRoue + 1, iCarte + 1].filter((i) => i > 0));
-const inconnus = args.filter((a, i) => a.startsWith('--') && !['--roue', '--carte'].includes(a)
-                                       && !valeurs.has(i));
+// SPK-137 · docs/DAT.md §51.6 : garder la machine, et brancher une console dessus.
+const garder = args.includes('--garder');
+const iEpreuve = args.indexOf('--epreuve');
+const epreuves = iEpreuve >= 0 ? String(args[iEpreuve + 1] ?? '').split(',').filter(Boolean) : [];
+if (iEpreuve >= 0 && !epreuves.length) throw new Error('--epreuve attend un nom, ou plusieurs séparés par des virgules');
+for (const nom of epreuves) {
+  if (!/^[a-z0-9-]+$/.test(nom) || !existsSync(new URL(`./epreuves/${nom}.mjs`, import.meta.url))) {
+    throw new Error(`épreuve inconnue : ${nom} (e2e/forge-vm/epreuves/)`);
+  }
+}
+const brancher = garder || epreuves.length > 0;
+const iPortSsh = args.indexOf('--port-ssh');
+const portSshFixe = iPortSsh >= 0 ? Number(args[iPortSsh + 1]) : 2222;
+if (!Number.isInteger(portSshFixe) || portSshFixe < 1024 || portSshFixe > 65535) {
+  throw new Error('--port-ssh attend un port entre 1024 et 65535');
+}
+const valeurs = new Set([iRoue + 1, iCarte + 1, iEpreuve + 1, iPortSsh + 1].filter((i) => i > 0));
+const inconnus = args.filter((a, i) => a.startsWith('--')
+  && !['--roue', '--carte', '--garder', '--epreuve', '--port-ssh'].includes(a) && !valeurs.has(i));
 if (inconnus.length) throw new Error(`arguments inconnus : ${inconnus.join(' ')} (voir --help)`);
 
 // --- outillage --------------------------------------------------------------
@@ -100,18 +129,20 @@ function executer(commande, argv, options = {}) {
   }
   return r.stdout;
 }
-function portLibre() {
-  return new Promise((resolve) => {
+function portLibre(voulu = 0) {
+  return new Promise((resolve, reject) => {
     const s = createServer();
-    s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
+    s.once('error', () => reject(new Error(`le port ${voulu} du poste est déjà pris`)));
+    s.listen(voulu, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
   });
 }
 
 const travail = mkdtempSync(join(tmpdir(), 'spark-vm-'));
 let qemu = null;
 let serveur = null;
+let consoleVm = null;
 function nettoyer() {
-  for (const enfant of [qemu, serveur]) {
+  for (const enfant of [consoleVm, qemu, serveur]) {
     if (enfant && enfant.exitCode === null) enfant.kill('SIGKILL');
   }
   rmSync(travail, { recursive: true, force: true });
@@ -139,6 +170,44 @@ if (roueDonnee) {
 dire(`roue éprouvée : ${basename(roue)}`);
 executer('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(travail, 'cle')]);
 const clePublique = readFileSync(join(travail, 'cle.pub'), 'utf8').trim();
+
+// SPK-137 · docs/DAT.md §51.6 : la console du poste doit pouvoir entrer, avec SA
+// clé et sans « clé d'hôte changée » à chaque machine neuve.
+let clesDuPoste = [];
+let hote = null;
+if (brancher) {
+  // Les clés que la console présente : celles de l'agent, sinon ~/.ssh/id_*.pub.
+  const agent = spawnSync('ssh-add', ['-L'], { encoding: 'utf8' });
+  clesDuPoste = agent.status === 0 ? agent.stdout.split('\n').filter((l) => l.startsWith('ssh-')) : [];
+  if (!clesDuPoste.length) {
+    const dossier = join(homedir(), '.ssh');
+    clesDuPoste = existsSync(dossier) ? readdirSync(dossier)
+      .filter((f) => /^id_[a-z0-9_]+\.pub$/.test(f))
+      .map((f) => readFileSync(join(dossier, f), 'utf8').trim()) : [];
+  }
+  if (!clesDuPoste.length) throw new Error('aucune clé publique du poste à déposer : ni agent SSH, ni ~/.ssh/id_*.pub');
+  // Une clé d'hôte FIXE, créée une fois : chaque machine neuve présente la même.
+  const cheminHote = join(CACHE, 'hote_ed25519');
+  if (!existsSync(cheminHote)) {
+    mkdirSync(CACHE, { recursive: true });
+    executer('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'banc-forge-vm', '-f', cheminHote]);
+  }
+  hote = { privee: readFileSync(cheminHote, 'utf8'),
+           publique: readFileSync(`${cheminHote}.pub`, 'utf8').trim() };
+  // Le known_hosts du poste apprend l'empreinte UNE fois, et le banc le dit.
+  const cle = hote.publique.split(' ').slice(0, 2).join(' ');
+  const nom = `[127.0.0.1]:${portSshFixe}`;
+  const connus = join(homedir(), '.ssh', 'known_hosts');
+  const trouve = spawnSync('ssh-keygen', ['-F', nom, '-f', connus], { encoding: 'utf8' });
+  const deja = (trouve.stdout || '').split('\n').some((l) => l.includes(cle));
+  if (!deja) {
+    if (trouve.status === 0) executer('ssh-keygen', ['-R', nom, '-f', connus]);
+    mkdirSync(join(homedir(), '.ssh'), { recursive: true });
+    writeFileSync(connus, `${nom} ${cle}\n`, { flag: 'a' });
+    console.log(`  écart du banc — known_hosts du poste : ${nom} → clé d’hôte fixe de banc`
+      + (trouve.status === 0 ? ' (ancienne entrée de ce port remplacée)' : ''));
+  }
+}
 
 // --- 2. le cloud-init du dépôt, et ses quatre écarts --------------------------
 const portSeed = await portLibre();
@@ -171,7 +240,12 @@ userData = remplacer(userData, "runcmd:\n  - '/opt/spark-amorce.sh'",
   + "  - '/opt/spark-amorce.sh'",
   'zpool « spark » créé en miroir sur vdb et vdc avant l’amorce, comme l’hébergeur le livre');
 userData = remplacer(userData, '\nwrite_files:',
-  `\nssh_authorized_keys:\n  - ${clePublique}\n\nwrite_files:`, 'clé SSH jetable déposée');
+  `\nssh_authorized_keys:\n${[clePublique, ...clesDuPoste].map((c) => `  - ${c}`).join('\n')}`
+  + `${hote ? `\n\nssh_keys:\n  ed25519_private: |\n${hote.privee.trimEnd().split('\n')
+      .map((l) => `    ${l}`).join('\n')}\n  ed25519_public: ${hote.publique}` : ''}`
+  + '\n\nwrite_files:',
+  brancher ? 'clé jetable, clés du poste et clé d’hôte fixe de banc déposées (SPK-137)'
+           : 'clé SSH jetable déposée');
 
 // --- 3. la source NoCloud, servie au poste --------------------------------------
 // Par un PROCESSUS à part : les attentes du banc passent par `spawnSync`, qui
@@ -189,7 +263,9 @@ serveur = spawn('python3', ['-m', 'http.server', String(portSeed), '--bind', '12
                             '--directory', seed], { stdio: 'ignore' });
 
 // --- 4. la machine ----------------------------------------------------------------
-const portSsh = await portLibre();
+// SPK-137 : un port FIXE quand la console doit entrer — le known_hosts du poste
+// connaît [127.0.0.1]:<port>, pas un port tiré au hasard.
+const portSsh = await portLibre(brancher ? portSshFixe : 0);
 const portHttp = await portLibre();
 executer('qemu-img', ['create', '-q', '-f', 'qcow2', '-F', 'qcow2', '-b', IMAGE,
                       join(travail, 'racine.qcow2'), '30G']);
@@ -398,6 +474,59 @@ try {
 console.log(reussi
   ? `VERT en ${t().trim()} : la Forge du cloud-init reprend seule après un redémarrage.`
   : `ROUGE en ${t().trim()} : ${verdicts.filter((v) => !v.ok).length} écart(s).`);
+
+// --- 8. SPK-137 · §51.6 : la console branchée sur la machine --------------------
+/**
+ * Une console À PART, depuis l'arbre de travail : son inventaire ne contient que
+ * la machine, et vit dans le répertoire jetable. La console d'exploitation, son
+ * inventaire et ses ancres ne sont pas touchés.
+ */
+async function lancerLaConsole() {
+  const dossier = join(travail, 'console');
+  mkdirSync(dossier, { recursive: true });
+  const inventaire = join(dossier, 'servers.json');
+  writeFileSync(inventaire, JSON.stringify({
+    version: 1, current: 'forge-vm', anchors: {},
+    servers: [{ name: 'forge-vm', kind: 'ssh', host: '127.0.0.1', user: 'ubuntu',
+                port: portSsh, remotePort: 9876 }],
+  }, null, 2));
+  const port = await portLibre();
+  // Ni interrupteur d'épreuve, ni doublon : c'est la console d'exploitation.
+  const env = { ...process.env, SPARK_CONSOLE_PORT: String(port), SPARK_CONSOLE_STATE: inventaire };
+  delete env.SPARK_EPREUVE;
+  consoleVm = spawn(process.execPath, ['host/main.js'],
+                    { cwd: join(RACINE, 'apps', 'webui'), env, stdio: 'ignore' });
+  const url = `http://127.0.0.1:${port}/`;
+  await jusqua('la console répond', async () => {
+    try { return (await fetch(url)).ok; } catch { return false; }
+  }, { delai: 60, pas: 1 });
+  return url;
+}
+
+if (brancher && (reussi || garder)) {
+  const url = await lancerLaConsole();
+  dire(`console de la machine : ${url} — inventaire à part, la seule Forge est la VM`);
+  if (epreuves.length) {
+    for (const nom of epreuves) {
+      dire(`épreuve « ${nom} »`);
+      const { default: jouer } = await import(`./epreuves/${nom}.mjs`);
+      try {
+        await jouer({ console: url, carte, verdict, dire, ssh, api, jusqua, attendre });
+      } catch (erreur) {
+        verdict(`l’épreuve « ${nom} » est allée au bout`, false, erreur.message);
+      }
+    }
+    reussi = verdicts.every((v) => v.ok);
+    console.log(reussi ? `VERT en ${t().trim()} : épreuves comprises.`
+      : `ROUGE en ${t().trim()} : ${verdicts.filter((v) => !v.ok).length} écart(s), épreuves comprises.`);
+  }
+  if (garder) {
+    dire('machine GARDÉE : Ctrl-C pour tout démonter (machine, console, verrou)');
+    await new Promise(() => {});
+  }
+} else if (brancher) {
+  dire('banc ROUGE : les épreuves ne se jouent pas sur une machine qui ne tient pas');
+}
 // SORTIR, explicitement. Un enfant vivant — la machine, le serveur de la source
 // NoCloud — garde la boucle de Node ouverte : mesuré le 2026-09-30, un premier
 // banc a rendu son verdict puis gardé 20 minutes une VM de 6 Gio et le verrou.

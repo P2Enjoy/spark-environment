@@ -16,3 +16,30 @@ code ne touche ni la Forge ni la navigation.
 **Arbitré le 2026-10-01** : pas de correction à part — le parcours tourne sur la
 pile factice, qui ne valide plus rien (DAT §28.7). Il est absorbé par SPK-138 et
 rejoué contre la VM ; l'entrée sort du rapport à ce moment.
+
+## 2026-10-01 · L'aide du gabarit d'alerte nomme huit champs, la Forge en accepte dix
+
+**Constaté** en observant la capture `spk140-vm-refus-garde-la-saisie`, prise
+dans la console branchée sur la VM du banc : le refus de la `sparkd` dit
+« Champs disponibles : version, ts, forge, action, actor, actor_class,
+target_type, target_id, result, message », quand l'aide du champ, sous le
+gabarit, n'en nomme que huit — `version` et `actor_class` y manquent
+(`apps/webui/src/components/forge-alertes.js`). Le manuel M11 en nomme huit lui
+aussi.
+
+**Non résolu ici** : hors du périmètre de SPK-140. À arbitrer par le
+responsable : l'aide et le manuel nomment les dix champs, ou la Forge n'en
+offre que huit.
+
+## 2026-10-01 · Le panneau « Installer cette Forge » montre des accents graves bruts, sur une Forge installée
+
+**Constaté** sur la capture `spk135-vm-forge-virtio` : en bas de l'onglet
+Forge d'une Forge **installée** — tunnel ouvert, code à jour —, le panneau
+« Installer cette Forge » dit « Cette destination peut accepter SSH sans encore
+porter `sparkd` », et les accents graves s'affichent tels quels
+(`apps/webui/src/components/forge-installer.js`). C'est aussi la phrase de la
+capture d'échec du parcours clavier instable (entrée ci-dessus).
+
+**Non résolu ici** : hors du périmètre de SPK-135 et de SPK-137. À arbitrer par
+le responsable : le panneau n'apparaît que sur une destination qui ne porte pas
+`sparkd`, ou sa phrase dit ce qu'elle a relevé ; et le nom s'écrit en `<code>`.

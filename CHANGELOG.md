@@ -3,6 +3,15 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-137 — la console se vérifie sur une Forge de machine virtuelle à
+  installation fraîche.** `make forge-vm ARGS="--garder"` garde la machine du
+  banc et lance une console à part, branchée sur elle seule, jusqu'à `Ctrl-C` ;
+  `ARGS="--epreuve <a,b>"` joue des épreuves navigateur contre cette console —
+  souris et clavier, tout créé par la console —, puis démonte. La machine reçoit
+  les clés du poste et une clé d'hôte fixe de banc ; le `known_hosts` du poste
+  apprend une fois `[127.0.0.1]:2222`. Trois épreuves : SPK-135, SPK-139 et
+  SPK-141, SPK-140. Limite : pas de terminal de cellule — les cellules de la VM
+  ont les adresses de celles de la Forge réelle. DAT §51.6 ; README.
 - **SPK-132 — recréer un conteneur de pile Compose, pour qu'il relise son
   environnement.** Né d'une panne réelle : une application disait son envoi de
   courriel « non configuré » alors que ses variables SMTP venaient d'être
@@ -295,19 +304,21 @@
   Caddy pouvait la servir encore. `sparkd` pose désormais la configuration sans
   elle, relit ce que Caddy sert, et ne l'efface qu'ensuite ; sinon `502`, la
   route reste, et la tentative entre au journal en échec. DAT §18.8 ; manuel M7.
-  Validation sur VM à venir (SPK-137) ; **sur la Forge avec OP-33.**
+  Vérifié sur VM, Caddy arrêté puis relancé (SPK-137) ; **sur la Forge avec
+  OP-33.**
 - **SPK-139 — le refus de « Retirer la route » et de « Réappliquer » s'affiche
   sous la route.** Ces deux gestes rangeaient leur refus dans la modale
   « Routes publiques », fermée à ce moment : un Spark protégé ou un Caddy
   injoignable faisaient échouer le geste sans un mot. Le refus se lit désormais
   dans la ligne de la route, tel que la Forge le donne, et le focus revient au
-  bouton de la ligne. SPK-DS-36 ; manuel M7. Vérification visuelle sur VM à
-  venir (SPK-137).
+  bouton de la ligne. SPK-DS-36 ; manuel M7. Vérifié dans la console branchée
+  sur une VM à installation fraîche (SPK-137).
 - **SPK-140 — un gabarit d'alerte refusé garde ce qu'on a tapé.** Onglet
   Alertes de la Forge : au refus, le formulaire repartait du registre et la
   saisie disparaissait. Il garde désormais le gabarit, l'adresse tapée et la
   case « Le canal veille » ; le mot de passe n'est pas réécrit dans la page.
-  DAT §47.3.0 bis ; manuel M11. Vérification visuelle sur VM à venir (SPK-137).
+  DAT §47.3.0 bis ; manuel M11. Vérifié dans la console branchée sur une VM à
+  installation fraîche (SPK-137).
 - **SPK-133 — le fichier des secrets est reposé à chaque démarrage de la
   cellule, quelle qu'en soit la cause.** Signalé par le responsable :
   « le fichier de secrets ne se recrée pas si on redémarre le Spark ».

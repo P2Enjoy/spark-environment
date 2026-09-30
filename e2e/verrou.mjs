@@ -180,6 +180,11 @@ let tenuParNous = false;
  * ignore l'existence.
  */
 export function prendreLeVerrou({ journal = console } = {}) {
+  // SPK-137 · docs/DAT.md §51.6 : une épreuve jouée DANS le processus du banc de
+  // la VM l'importe, et le prend à son tour — comme tout script qui lance un
+  // navigateur (CLAUDE.md §15 bis, point 5). Le processus le tient déjà : c'est
+  // la même épreuve lourde, pas une seconde. Un AUTRE processus reste refusé.
+  if (tenuParNous) return CHEMIN;
   try {
     const fd = openSync(CHEMIN, 'wx');
     writeSync(fd, empreinteDuPorteur());
