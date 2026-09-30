@@ -12872,3 +12872,87 @@ avant de recharger.
 par `Match User`, et un contrôle de préflight qui lise la configuration
 **effective** — le §9308 du journal rappelle qu'un contrôle qui ignore les
 fragments `sshd_config.d/` lit un fichier qui ne décide de rien.
+
+## 2026-09-30 · SPK-128 — l'ingress annonçait HTTP/3 sans le servir
+
+**Problème.** L'exploitant du SSO du domaine signale, par le responsable, que
+`oauth.lelabs.tech` répond `alt-svc: h3=":443"; ma=2592000` alors qu'une
+connexion HTTP/3 forcée reste sans réponse une quarantaine de secondes. Un
+navigateur mémorise l'annonce trente jours et tente QUIC d'abord : chaque visite
+paie l'attente du repli. Deux remèdes proposés : ouvrir UDP/443 jusqu'aux
+cellules, ou cesser l'annonce et émettre `Alt-Svc: clear` le temps que les
+mémoires expirent.
+
+**Hypothèse de départ, à vérifier avant de choisir** : l'annonce viendrait de
+l'ingress (Caddy 2.6 active HTTP/3 quand `protocols` n'est pas fixé, et
+`build_config` ne le fixe pas), et UDP/443 serait coupé chez l'hébergeur.
+
+**Observations, en lecture seule sur la Forge.**
+
+- La réponse publique porte **deux** `server: Caddy` — l'ingress et le Caddy de
+  la cellule du SSO. L'amont interrogé directement (`10.77.0.16:8443`) rend
+  `Alt-Svc: clear` : l'exploitant avait déjà fait sa part, et elle se perdait.
+- L'ingress écoute UDP/443 (`ss -tulpn`), `protocols` absent de la configuration
+  posée ; ni `nftables`, ni `iptables`, ni `ufw` ne filtrent UDP/443 en entrée
+  d'Internet.
+- **La seconde moitié de l'hypothèse est infirmée** : trois datagrammes envoyés
+  du poste vers `51.158.54.202:443/udp` arrivent sur `eno1` (`tcpdump`).
+  L'hébergeur ne coupe rien.
+- Un vrai client HTTP/3 (`aioquic` 1.3.0, conteneur jetable) échoue pourtant :
+  délai dépassé à 20 s sur `oauth.lelabs.tech`, fermeture en 0,6 s sur
+  `crm.lelabs.tech`. La capture montre la Forge répondre au paquet initial
+  (1 280 et 123 octets) sans que la poignée de main se conclue. Cause non
+  établie, et non cherchée plus loin : elle ne change pas la décision.
+- Depuis une cellule, UDP/443 vers la Forge tombe sur le `drop` final de
+  `spark_filter`, qui n'accepte que TCP `{53, 80, 443}` depuis `sparkbr0`. C'est
+  le sens de « jusqu'aux cellules » dans la demande.
+- `SEC-PORTS` lit `ss -lntH`, TCP seul : l'écoute UDP/443 exposée n'a jamais
+  paru au préflight.
+
+**Banc Caddy 2.6.2** (image officielle, un amont Caddy qui rend
+`Alt-Svc: clear` et `X-Amont: oui`, certificat de l'autorité interne) :
+
+| Forme | UDP/443 | Route servie (HTTP/2 et HTTP/1.1) | Refus `404` sur `:80` |
+|---|---|---|---|
+| actuelle, `protocols` absent | écouté | `alt-svc: h3=":443"; ma=2592000` ; l'`Alt-Svc` amont **retiré**, `X-Amont` transmis | `alt-svc: h3=…` |
+| `protocols: [h1, h2]` seul | non écouté | **aucun** `alt-svc` : l'amont est retiré quand même | — |
+| `protocols: [h1, h2]` + route commune `headers` | non écouté | `alt-svc: clear`, seul | `alt-svc: clear` |
+| actuelle, puis la nouvelle par `POST /load` à chaud | écouté → **fermé** sans redémarrage | `h3=…` → `clear` | — |
+
+La deuxième ligne décide qu'un handler `headers` est nécessaire : cesser
+l'annonce ne suffit pas à faire parvenir un `clear`, puisque `reverse_proxy`
+retire celui de la pile.
+
+**Solutions envisagées.**
+
+1. Ouvrir UDP/443 — dans `spark_filter` pour les cellules, et garder HTTP/3.
+   Insuffisant : depuis Internet, UDP arrive déjà et la poignée de main échoue.
+   Il faudrait d'abord diagnostiquer QUIC sur le Caddy de 2022, pour un gain que
+   rien ne mesure, et au prix d'une surface UDP exposée que le préflight ne voit
+   pas. Et QUIC se termine à l'ingress : les cellules ne reçoivent que du HTTP
+   simple.
+2. Cesser l'annonce et poser `Alt-Svc: clear`. Entièrement dans le produit, par
+   la réconciliation normale, mesurée sur la version de la Forge, et réversible
+   par la build précédente.
+
+**Décision : la seconde**, avec un écart assumé sur la durée — le `clear` n'est
+pas daté, il **suit les protocoles** : émis si et seulement si `h3` n'est pas
+dans la liste. Il reste vrai tant qu'on ne sert pas HTTP/3, ne coûte qu'un
+en-tête, et n'a pas de retrait à programmer ni à oublier.
+
+**Conséquences.**
+
+- Le briefing affirmait « l'ingress n'ajoute aucun en-tête » alors que Caddy
+  posait `Alt-Svc` sur chaque réponse. Il nommera désormais l'en-tête posé, et le
+  retrait de l'`Alt-Svc` de la pile — les deux lus dans la configuration.
+- `adds_headers` ne suffit plus : un handler `headers` ferait disparaître la
+  phrase sur HSTS et CSP alors que `Alt-Svc: clear` n'est pas un en-tête de
+  sécurité. `comportement()` distingue les en-têtes posés de ceux qui protègent.
+- Une opération de déploiement, OP-27, **à jouer sur instruction** : tant qu'elle
+  ne l'est pas, la Forge continue d'annoncer HTTP/3.
+- Hors périmètre, signalé au responsable : `SEC-PORTS` ignore UDP.
+
+**Vérifications réalisées** : relevé de la Forge (`ss`, `nft`, `iptables`,
+`ufw`, configuration posée, journaux de Caddy), `tcpdump` pendant l'envoi de
+datagrammes et pendant une poignée de main réelle, banc Caddy 2.6.2 en quatre
+formes. Aucune écriture sur la Forge.

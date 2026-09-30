@@ -26,14 +26,14 @@ verts — 0 bloquant, 0 signalé, 0 non mesuré (relevé du 2026-09-18).
 | `zfs_arc_max` | **16 Gio**, persisté dans `/etc/modprobe.d/zfs.conf` |
 | Bridge `sparkbr0` | créé, `10.77.0.1/24`, NAT actif, DNS sur `10.77.0.1:53` |
 | Plage DHCP de `sparkbr0` | **restreinte** à `10.77.0.240-10.77.0.254` — OP-02 appliqué |
-| Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` |
+| Caddy | **v2.6.2**, actif, API d'administration sur `127.0.0.1:2019` ; HTTP/3 actif par défaut — écoute UDP/443 et annonce `h3` sur chaque réponse sans le servir (relevé du 2026-09-30, docs/DAT.md §18.6) — jusqu'à OP-27 |
 | `sparkd` | **déployé** en service systemd, activé au démarrage — OP-04 |
 | Registre | `/var/lib/sparkd/spark.db`, **version de schéma 020** — la `016` appliquée le **2026-09-14T12:55Z**, la `017` le **2026-09-14T18:40Z**, la `018` le **2026-09-17T23:06Z** (OP-23), la `019` le **2026-09-18** (OP-24), la `020` le **2026-09-23T21:52Z** (OP-26) ; build **`0.post1.dev865+ge989c1a83`**, installée le **2026-09-23T21:51Z** — relevé `/healthz` et `/readyz` le 2026-09-23 ; sauvegarde prise juste avant : `/var/backups/sparkd/spark-20260923-215139.db`, structure saine, chaîne du journal intacte (1 243 entrées) |
 | Pare-feu du bridge | `inet spark_filter` rendue par `sparkd` (`pare_feu`), `spark-firewall.service` actif ; `input` accepte tcp `{53, 80, 443}` et udp `{53, 67}` depuis `sparkbr0`, `drop` final ; `forward` ferme `sparkbr0 → sparkbr0` ; `input` et `forward` couvrent `spn*` (établi, 53, 67, ICMP, puis `drop` ; rien routé depuis ni vers) ; `forward` accepte `ct status dnat` — les liens privés — après l'établi et avant les drop — OP-11, **OP-21 (2026-09-17)**, **OP-22 (2026-09-18)**, **OP-23 (2026-09-18)**, **OP-24 (2026-09-18)** |
 | Réseaux privés | pool `10.78.0.0/16` en `/24`, le premier laissé de côté — **0 attribué** après la preuve d'OP-23 ; aucun bridge `spn<n>` — OP-23, appliqué le 2026-09-18 |
 | Isolation des cellules | chaque cellule porte `security.port_isolation` et `security.ipv4_filtering` — les deux cellules de locataires depuis OP-22 (2026-09-18) ; les deux cellules d'essai du lot 6, supprimées par le produit le 2026-09-18 une fois les preuves jouées ; `NET-ISOLATION` « ok » |
 | Topologie relevée | 4 cœurs / 8 threads, 94 Gio, réserve 18,0 Gio (ARC 16 + marge 2), **76 Gio allouables** |
-| Surface réseau | `22`, `80`, `443` exposés ; `9876` et `2019` sur la boucle locale |
+| Surface réseau | `22`, `80`, `443` exposés en TCP ; **UDP/443** exposé par Caddy jusqu'à OP-27, que `SEC-PORTS` ne voit pas (il ne lit que TCP) ; `9876` et `2019` sur la boucle locale |
 
 Cette baseline décrit une Forge de **test**, qui porte néanmoins un Spark en
 service. Sa disposition de stockage n'est plus une dette ni un choix par
@@ -119,6 +119,47 @@ Ne copiez pas le fichier à la main : il est en WAL, et une copie perd en silenc
 ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
+
+### OP-27 · Mettre à jour `sparkd` : l'ingress cesse d'annoncer HTTP/3 et pose `Alt-Svc: clear` (SPK-128)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
+                SPK-128 livré sur `main`. Tant qu'elle ne l'est pas, la Forge
+                annonce `alt-svc: h3=":443"; ma=2592000` sur chaque réponse et
+                écoute UDP/443, sans servir HTTP/3 (docs/DAT.md §18.6).
+Objectif      : poser la configuration de l'ingress du §18.2 révisé :
+                `protocols: ["h1", "h2"]` et la route commune qui pose
+                `Alt-Svc: clear`. Les navigateurs qui ont mémorisé l'annonce
+                l'effacent à leur prochaine réponse de la Forge.
+                Aucune migration, aucune variable, aucun service nouveau,
+                aucune règle réseau. La console ne change pas.
+Dépend de     : rien.
+Ordre         : 1. mettre à jour sparkd (runbook A.2) ;
+                2. RÉCONCILIER l'ingress, sur la Forge :
+                   `curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile`
+                   — la nouvelle build ne pose rien d'elle-même : `sparkd` ne
+                   réconcilie l'ingress qu'à un changement de route, et
+                   « Réappliquer » n'est offert que sur une route non
+                   appliquée. Mesuré sur Caddy 2.6.2 : ce `POST /load` à chaud
+                   ferme l'écoute UDP/443 sans redémarrer Caddy ni couper
+                   les routes.
+Vérification  : la réponse de l'étape 2 compte les mêmes routes qu'avant ;
+                `sudo ss -lnuH | grep ':443 '` ne rend plus rien ;
+                depuis le poste, `curl -sI https://oauth.lelabs.tech/` et
+                `curl -sI https://crm.lelabs.tech/` portent `alt-svc: clear`,
+                et plus aucun `h3=` ; le statut de chaque domaine servi est
+                inchangé ; un domaine non routé rend toujours `404` ; le
+                dossier d'un Spark à route, ouvert dans la console, nomme
+                `Alt-Svc: clear` et dit que l'ingress ne sert pas HTTP/3.
+Retour arrière: réinstaller la build précédente (runbook A.2) puis
+                réconcilier (étape 2) : Caddy réécoute UDP/443 et réannonce
+                HTTP/3. Rien n'est écrit au registre.
+Risques       : aucun sur les routes servies — même amont, même filtre, même
+                ordre de préséance ; la route commune ne sert rien, elle pose
+                un en-tête et passe la main. Un client qui ne parlerait QUE
+                HTTP/3 n'atteindrait plus la Forge : il ne l'atteignait déjà
+                pas, la poignée de main n'aboutissait pas.
+```
 
 ### OP-26 · Migration `020_projets` : ranger les Sparks en projets (SPK-116) — **APPLIQUÉ le 2026-09-23**
 

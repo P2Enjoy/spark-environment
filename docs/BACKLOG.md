@@ -7962,6 +7962,48 @@ qui déclarent désormais leur type.
   2026-09-24). Non rejoué : `make captures`, dont un seul appel a changé de la
   même façon.
 
+### [ ] SPK-128 · L'ingress ne sert pas HTTP/3, et cesse de l'annoncer
+
+**Signalé le 2026-09-30** par l'exploitant du SSO du domaine, transmis par le
+responsable : `oauth.lelabs.tech` répond `alt-svc: h3=":443"; ma=2592000`, alors
+qu'une connexion HTTP/3 forcée reste sans réponse ; les navigateurs mémorisent
+l'annonce trente jours et tentent QUIC d'abord. Deux remèdes proposés : ouvrir
+UDP/443 jusqu'aux cellules, ou cesser l'annonce et émettre `Alt-Svc: clear` le
+temps que les mémoires expirent. **Le second est retenu** — mesures et motifs au
+§18.6 du DAT et au journal du 2026-09-30.
+
+- Spécification : `docs/DAT.md` §18.2, **§18.6**, §44.2 quater · manuel M8
+  (« Ce que l'ingress fait, et ce qu'il ne fait pas »). **Écrite et committée
+  avant le code.**
+- Dépend de : SPK-12 (la réconciliation), SPK-102 (le comportement de l'ingress
+  calculé depuis sa configuration).
+
+**Ce qui décide de l'unité** : l'ingress **déclare** ses protocoles au lieu de
+recevoir ceux de Caddy par défaut, et le `clear` **suit les protocoles**, pas une
+date — une seule constante porte les deux.
+
+**Portée, et découpage :**
+
+1. Documentation — *fait, committé avant le code* ;
+2. `build_config` : `protocols` à `h1`, `h2`, et la route commune qui pose
+   `Alt-Svc: clear` ; `comportement()` lit dans la configuration les en-têtes
+   posés, HTTP/3, et ce que le proxy retire ; briefing et dossier le disent ;
+   preuves unitaires ;
+3. banc rejouable sur Caddy 2.6.2 — la version de la Forge —, qui pose la
+   configuration **produite par `build_config`** et non une copie à la main ;
+4. E2E local : le parcours qui copie le dossier ; manuel M8 ;
+5. OP-27 : mise à jour de `sparkd` sur la Forge, **sur instruction du
+   responsable** ; preuve sur Forge réelle, par le navigateur et par la console.
+
+- Aucune variable d'environnement, aucune migration. Une opération de
+  déploiement : OP-27.
+- DoD : preuves unitaires de la configuration et du comportement calculé ; banc
+  Caddy 2.6.2 vert (plus d'écoute UDP/443, `alt-svc: clear` seul sur une route
+  servie en HTTP/2 et HTTP/1.1 et sur le refus `404`, passage à chaud par
+  `POST /load`) ; parcours E2E du dossier ; OP-27 joué ; preuve sur la Forge :
+  `alt-svc: clear` sur `oauth.lelabs.tech`, aucune écoute UDP/443, dossier relu
+  dans la console ; manuel M8 ; `@spec` / `@verifies`.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

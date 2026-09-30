@@ -1977,12 +1977,20 @@ modification de route la déclenche.
 ```json
 {"apps": {"http": {"servers": {"spark": {
   "listen": [":80", ":443"],
+  "protocols": ["h1", "h2"],
   "routes": [
+    {"handle": [{"handler": "headers",
+                 "response": {"set": {"Alt-Svc": ["clear"]}, "deferred": true}}]},
     {"match": [{"host": ["crm.example.com"]}],
      "handle": [{"handler": "reverse_proxy",
                  "upstreams": [{"dial": "10.77.0.16:8080"}]}]}
   ]}}}}}
 ```
+
+Les protocoles sont **déclarés** — HTTP/1.1 et HTTP/2, pas HTTP/3 —, et la
+configuration **commence** par une route commune, sans filtre et non terminale :
+elle vaut pour toute requête, puis la première route qui correspond sert. Les
+deux sont l'objet du §18.6.
 
 L'amont est `ipv4_address:target_port` — l'adresse que le **registre** a
 attribuée (§15.1), jamais une découverte par Docker ou par étiquettes. C'est ce
@@ -2167,6 +2175,75 @@ Chaque route porte la date de sa dernière application réussie. Une route
 enregistrée mais jamais appliquée — Caddy injoignable au moment de la demande —
 se voit donc immédiatement, au lieu de se déduire d'une comparaison manuelle
 entre le registre et la configuration active.
+
+### 18.6 L'ingress ne sert pas HTTP/3, et le dit (SPK-128)
+
+**Signalé le 2026-09-30** par l'exploitant du SSO du domaine :
+`oauth.lelabs.tech` répond `alt-svc: h3=":443"; ma=2592000`, alors qu'une
+connexion HTTP/3 forcée reste sans réponse une quarantaine de secondes. Un
+navigateur mémorise cette annonce **trente jours** et tente QUIC d'abord à chaque
+visite : l'annonce d'un protocole qu'on ne sert pas coûte, à chaque visiteur,
+l'attente de son repli.
+
+**Mesuré le 2026-09-30**, sur la Forge en lecture seule et sur un banc Caddy
+**2.6.2** — la version de la Forge :
+
+- **l'annonce vient de l'ingress, pas de la pile.** La configuration du §18.2 ne
+  fixait pas `protocols` ; Caddy 2.6 active alors HTTP/3 par défaut, écoute
+  **UDP/443** et pose l'annonce sur **toutes** ses réponses — routes servies,
+  refus `404` terminal, et même en clair sur `:80` ;
+- **HTTP/3 n'aboutit pas.** Depuis Internet, UDP/443 atteint la Forge et Caddy
+  répond au paquet initial de QUIC, mais la poignée de main ne se conclut pas
+  (client `aioquic` 1.3.0 : délai dépassé à 20 s sur `oauth.lelabs.tech`,
+  fermeture en 0,6 s sur `crm.lelabs.tech`). La cause n'est pas établie. Depuis
+  une cellule, UDP/443 vers la Forge est jeté par `spark_filter`, qui n'ouvre
+  que TCP `80` et `443` (§56.3) ;
+- **la pile ne peut pas corriger l'annonce.** `reverse_proxy` retire l'`Alt-Svc`
+  de la réponse amont : la cellule du SSO rend déjà `Alt-Svc: clear`, et il ne
+  parvient pas au visiteur. Seul l'ingress peut parler aux navigateurs de ce
+  sujet ;
+- **le préflight ne voyait pas cette écoute** : `SEC-PORTS` ne lit que TCP
+  (`ss -lnt`). Une surface UDP exposée lui échappe par construction.
+
+**Décision : l'ingress déclare `h1` et `h2`, et pose `Alt-Svc: clear` sur chaque
+réponse.**
+
+- **`protocols: ["h1", "h2"]`.** Plus d'écoute UDP/443, plus d'annonce. Mesuré
+  sur le banc : la nouvelle forme, posée **à chaud** par `POST /load` sur un Caddy
+  qui servait l'ancienne, ferme l'écoute UDP sans redémarrage — c'est le chemin
+  réel du déploiement, la réconciliation normale du §18.1 ;
+- **une route commune, en tête, pose `Alt-Svc: clear`** au moment d'écrire la
+  réponse (`deferred`). Elle vaut pour les routes servies comme pour le refus
+  `404`. Mesuré : `alt-svc: clear`, **seul**, en HTTP/2 et HTTP/1.1 sur une route
+  servie, et sur le `404`. Un navigateur qui reçoit `clear` efface les
+  alternatives mémorisées pour cette origine (RFC 7838, §3) ;
+- **le `clear` suit les protocoles, pas une date.** La demande disait « le temps
+  que les mémoires expirent », soit trente jours après la dernière annonce reçue.
+  Tant que l'ingress ne sert pas HTTP/3, `clear` est **vrai**, ne coûte qu'un
+  en-tête, et n'a pas de date de retrait à oublier. La route est émise **si et
+  seulement si** HTTP/3 n'est pas dans la liste des protocoles : c'est la même
+  constante, et l'une ne peut pas changer sans l'autre.
+
+**Pourquoi pas l'autre remède — ouvrir UDP/443.**
+
+- **Il ne suffirait pas.** Depuis Internet, UDP/443 arrive déjà, et la poignée de
+  main échoue quand même. Servir HTTP/3 demanderait d'abord de diagnostiquer
+  QUIC sur le Caddy de la distribution, publié en 2022 ;
+- **« jusqu'aux cellules » ne vise pas le bon endroit.** QUIC se termine à
+  l'ingress ; une cellule ne reçoit jamais que du HTTP simple (§44.2 bis). Ouvrir
+  UDP/443 dans `spark_filter` ne servirait qu'à un client HTTP/3 **dans** une
+  cellule qui joindrait la Forge par son nom public ;
+- **HTTP/3 n'apporte rien de mesuré** aux services servis aujourd'hui, et
+  ajouterait une surface UDP exposée que le préflight ne voit pas.
+
+Servir HTTP/3 un jour sera une unité à part, mesure d'abord : ajouter `h3` à la
+liste retire le `clear` du même geste, mais ne rend pas la poignée de main
+fonctionnelle.
+
+**Ce que le briefing en dit** (§44.2 quater) : l'en-tête posé, l'absence de
+HTTP/3 et le retrait de l'`Alt-Svc` de la pile sont **lus dans la configuration
+produite**, jamais écrits en dur — une pile n'a donc pas à émettre d'`Alt-Svc`,
+et le briefing le lui dit avant qu'elle ne le découvre.
 
 ## 19. Instantanés et restauration
 
@@ -10259,10 +10336,22 @@ retrouvera à ses frais, et qu'un lecteur sur deux retrouvera faux.
 
 **Et ce que l'ingress n'ajoute PAS**, parce que l'agent l'a déduit correctement
 et qu'il n'aurait pas dû avoir à le déduire : la configuration générée ne
-contient qu'un `reverse_proxy` et la route terminale de refus (§18.2). Aucun
+contient qu'un `reverse_proxy` par route, la route terminale de refus, et la
+route commune qui pose un seul en-tête, `Alt-Svc: clear` (§18.2, §18.6). Aucun
 en-tête de sécurité — pas de HSTS, pas de CSP —, aucune redirection d'un nom vers
 un autre, aucune limitation de débit. Le briefing le dit, faute de quoi
 l'exploitant croit ces protections acquises parce qu'un proxy est devant.
+
+**L'en-tête que l'ingress pose, et celui qu'il retire (SPK-128).** Le briefing
+nomme l'en-tête posé sur chaque réponse, dit que l'ingress ne sert pas HTTP/3,
+et dit que le proxy **retire** l'`Alt-Svc` de la pile — mesuré le 2026-09-30 sur
+Caddy 2.6.2 : la cellule du SSO rendait `Alt-Svc: clear`, le visiteur ne l'a
+jamais reçu. Les trois sont **lus dans la configuration produite** : l'en-tête
+dans la route commune, HTTP/3 dans `protocols`, le retrait dans la table des
+effets du `reverse_proxy`, mesurée comme celle des en-têtes transmis. Poser un
+en-tête de **sécurité** à l'ingress ferait disparaître d'elle-même la phrase
+« aucun en-tête de sécurité » ; poser `Alt-Svc: clear` ne la fait pas
+disparaître, parce que ce n'en est pas un.
 
 **Ce que le produit ne mesure pas encore.** Les en-têtes que `reverse_proxy`
 transmet — `X-Forwarded-Proto`, `-For`, `-Host` — n'ont **jamais été mesurés dans
