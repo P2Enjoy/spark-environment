@@ -8189,6 +8189,56 @@ ce qui change.
   commit (en-têtes en chasse fixe, ligne repliée repartant sous le signe).
   **Déploiement** : OP-30, en attente d'instruction.
 
+### [ ] SPK-132 · Recréer un conteneur de pile Compose, pour qu'il relise son environnement
+
+**Demandé par le responsable le 2026-09-30**, après une panne réelle : une
+application disait son envoi de courriel « non configuré » alors que ses
+variables SMTP venaient d'être posées. Il demandait un bouton « rebuild » dans
+l'onglet Docker. La mesure (`docs/DAT.md` §37.7.5) a montré que le geste utile
+est de **recréer** le conteneur — une variable d'`env_file:` est figée à sa
+création, et aucun redémarrage ne la relit —, et le responsable a retenu
+« Recréer » parmi « Recréer », « Reconstruire », les deux, ou un texte seul.
+
+- Spécification : `docs/DAT.md` **§37.7.5** (la mesure, la commande, ce qui est
+  offert, les états), §37.7 et §37.7.4 révisés (la décision « pas Compose »
+  révisée sur ce seul point ; une cinquième action), §37.8, **§43.7 corrigé**
+  (« prochain démarrage » était faux), §44.9.7 ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-35 · manuel M8 et M6 ·
+  `docs/PROD_MIGRATIONS.md` OP-31. **Écrite et committée avant le code.**
+- Dépend de : SPK-45 (les gestes sur un conteneur, leur route, leur journal),
+  SPK-44 (l'inspection), SPK-58 (les deux fichiers d'environnement).
+
+**Ce qui décide de l'unité** : le geste fait relire à un conteneur son
+environnement, et rien d'autre de Compose n'entre — ni construction, ni
+téléchargement, ni `down`, ni un second service. La commande se compose à partir
+des étiquettes que Compose a posées, relues au moment du geste.
+
+**Portée, et découpage :**
+
+1. Documentation — DAT, design system, backlog, journal, OP-31 — *committée
+   avant le code* ;
+2. hôte console : l'inspection lit les étiquettes Compose ; le geste `recreate`
+   (étiquettes relues, commande composée et citée, délai de 60 s, états
+   distincts) ; la route l'admet ; le doublon d'épreuve le reconnaît. Preuves
+   d'unité ; **un banc contre un vrai Docker** qui exécute la commande que le
+   code compose et constate la valeur relue ;
+3. `sparkd` : l'action `spark.container_recreate` admise au journal ; la phrase
+   du dossier pour un agent corrigée ; preuves ;
+4. console : le bouton *Recréer* sur un conteneur de pile Compose, sa
+   confirmation destructive qui nomme le fichier, la ligne qui explique son
+   absence ; la phrase de l'onglet *Environnement* corrigée ; preuves de
+   composant ;
+5. E2E, captures, manuel : un parcours depuis l'accueil ouvre un conteneur,
+   recrée, constate le journal ; un conteneur hors Compose n'offre pas le
+   geste ; un Spark protégé le refuse ; captures observées ; manuels M8 et M6.
+
+- Aucune variable d'environnement, aucune migration.
+- DoD : preuves d'unité de la commande (citations, fichiers multiples, fichier
+  d'environnement, conteneur ponctuel, étiquettes absentes) et du classement ;
+  banc réel vert ; preuve `sparkd` de l'action et de la phrase ; preuves de
+  composant ; parcours E2E ; captures observées ; DAT, design system, manuels,
+  README à jour ; `@spec` / `@verifies`.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

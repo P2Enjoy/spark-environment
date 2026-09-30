@@ -6306,9 +6306,15 @@ ni relu ni caviardé.
 ### 37.7 Les gestes sur un conteneur, et le gel
 
 **Décision du responsable : lecture, plus le cycle de vie d'un conteneur** —
-démarrer, arrêter, redémarrer, tuer. **Pas** Compose : ni `up`, ni `down`, ni
-`pull`, ni édition du fichier. Le §1 exclut du périmètre la construction et le
-déploiement applicatifs, et cette limite ne bouge pas ici.
+démarrer, arrêter, redémarrer, tuer — **et, depuis le 2026-09-30, recréer** un
+conteneur qu'une pile Compose a créé (§37.7.5, SPK-132). La décision d'origine
+excluait Compose en entier ; elle est révisée sur ce seul point, parce que la
+mesure du §37.7.5 a montré qu'aucun des quatre gestes ne fait relire à un
+conteneur les variables qu'on vient de lui poser. Le reste de Compose reste
+dehors : ni `down`, ni `pull`, ni construction d'image, ni édition du fichier.
+Le §1 exclut du périmètre la construction et le déploiement applicatifs, et
+cette limite ne bouge pas : recréer un service tel que son fichier le décrit
+n'est pas le déployer.
 
 Chaque geste est **sensible** au sens du §6.23 du design system : il interrompt la
 production du locataire. La confirmation nomme le conteneur et l'effet, jamais un
@@ -6461,14 +6467,14 @@ Une seule route, sur l'hôte console comme tout le §37 :
 
 ```
 POST /api/spark/container/action   { server, spark, name, action }
-                                   action ∈ start | stop | restart | kill
+                                   action ∈ start | stop | restart | kill | recreate
 ```
 
 Refus rendus, chacun distinct :
 
 | Cas | Code | Ce que l'écran en fait |
 |---|---|---|
-| `action` hors des quatre | `422` | défaut de programmation, jamais montré |
+| `action` hors des cinq | `422` | défaut de programmation, jamais montré |
 | `name` absent | `422` | idem |
 | Spark **protégé** | `423` | le refus du §37.7.3, avec la levée nommée |
 | Spark inconnu du serveur | `404` | l'écran renvoie à la liste |
@@ -6483,14 +6489,16 @@ chemin on est passé.
 §37.6, qui ne journalise rien : arrêter le conteneur d'un locataire interrompt sa
 production, et un tel geste doit pouvoir être retrouvé.
 
-La porte du §37.4.6 s'ouvre donc de quatre actions :
+La porte du §37.4.6 s'ouvre donc de cinq actions — la cinquième depuis
+SPK-132 (§37.7.5) :
 
 ```
 spark.container_start   spark.container_stop
 spark.container_restart spark.container_kill
+spark.container_recreate
 ```
 
-**Quatre actions et non une seule**, pour la raison exacte qui a séparé
+**Une action par geste et non une seule**, pour la raison exacte qui a séparé
 `spark.rescue_exec` de `spark.terminal_open` : ce qui doit se compter, c'est le
 geste. « Combien de conteneurs a-t-on tués ce mois-ci » doit se répondre par un
 filtre sur l'action, pas par la lecture des charges.
@@ -6521,12 +6529,125 @@ Si la déclaration échoue, le geste **a quand même eu lieu** : il est parti av
 La console ne peut pas le défaire, et prétendre le contraire serait pire. Elle le
 signale à l'écran plutôt que de le taire, comme au §37.4.5.
 
+#### 37.7.5 Recréer un conteneur de pile Compose (SPK-132)
+
+**Demandé par le responsable le 2026-09-30**, après une panne réelle : une
+application servie par un Spark disait « l'envoi par courriel n'est pas
+configuré sur ce serveur » alors que ses variables SMTP venaient d'être posées
+depuis l'onglet *Environnement*. Il demandait un bouton « rebuild », en pensant
+les variables figées dans l'image.
+
+**Ce que la mesure a établi**, sur le Docker du poste (29.8.1, Compose v5.5.1) :
+un conteneur lit sa variable par `env_file:`, on change le fichier, puis on
+essaie chaque geste.
+
+| Geste | Valeur vue par le conteneur | Conteneur |
+|---|---|---|
+| `docker restart` — le geste *Redémarrer* | **ancienne** | le même |
+| `docker compose restart` | **ancienne** | le même |
+| `docker stop` puis `docker start` | **ancienne** | le même |
+| `docker compose up -d` | nouvelle | **recréé** |
+| `docker compose up -d --force-recreate` | nouvelle | **recréé** |
+
+Trois conclusions, et chacune corrigeait quelque chose :
+
+1. **Une variable d'`env_file:` est figée à la CRÉATION du conteneur**, ni à la
+   construction de l'image, ni à son démarrage. Reconstruire l'image n'était
+   donc pas le remède — et ne l'aurait pas pu : l'application en cause construit
+   son image hors de la cellule, qui n'a ni le contexte ni la mémoire pour le
+   faire. Seules les valeurs consommées PENDANT la construction — un `ARG`, un
+   frontal qui fige ses variables dans son paquet — demandent une reconstruction,
+   et celle-là reste hors périmètre (§37.8) ;
+2. **un redémarrage, sous toutes ses formes, relance le MÊME conteneur**, donc
+   avec l'environnement de sa création. Celui de la cellule ou de la Forge aussi :
+   Docker y relance les conteneurs selon leur politique de redémarrage, sans les
+   recréer. Le §43.7 disait que « la pile lira la nouvelle valeur à son prochain
+   démarrage » et renvoyait au geste *Redémarrer* : c'était faux, et il est
+   corrigé (§43.7) ;
+3. **recréer est le geste**. Compose le fait quand il constate un changement,
+   `--force-recreate` le fait toujours.
+
+**Le geste « Recréer »**, sur un conteneur ouvert dans l'onglet Docker. Au clic
+confirmé, l'hôte console relit les étiquettes que Compose a posées sur le
+conteneur, puis lance, dans le contexte Docker du §42.2 bis :
+
+```
+docker inspect <nom> --format '…'          # les étiquettes, relues au geste
+docker compose -p <projet> --project-directory <répertoire>
+               -f <fichier> [-f <fichier>…] [--env-file <fichier>]
+               up -d --force-recreate --no-deps --no-build --pull never
+               -t 10 <service>
+```
+
+Chaque option répond à une limite :
+
+- `-p`, `--project-directory`, `-f`, `--env-file` — les valeurs des étiquettes
+  `com.docker.compose.project`, `….project.working_dir`,
+  `….project.config_files` et `….project.environment_file` : le **même** projet,
+  lu depuis le **même** répertoire, donc avec le même `.env` de substitution et
+  les mêmes chemins relatifs ;
+- `--no-deps` — **ce service seul**. Les autres services de la pile ne sont pas
+  touchés ;
+- `--no-build` — la cellule ne construit rien (§1, et la raison de la conclusion
+  1) ;
+- `--pull never` — rien ne se tire d'un registre (§37.8). Une image absente fait
+  échouer le geste au lieu d'en télécharger une ;
+- `--force-recreate` — le geste fait ce qu'il dit, même quand Compose ne voit
+  aucun changement ;
+- `-t 10` — le délai d'arrêt du §37.7.1, explicite pour la même raison.
+
+La commande est **composée par l'hôte console** à partir de ce que Docker rend,
+chaque valeur citée pour le shell distant (§37.6 ter) : une étiquette est une
+donnée du locataire, et elle traverse un `ssh`.
+
+**Ce qui est offert, et à quel conteneur.** Le bouton *Recréer* n'existe que sur
+un conteneur **créé par Compose** : les quatre étiquettes projet, service,
+répertoire et fichiers sont présentes, et ce n'est pas un conteneur ponctuel
+(`com.docker.compose.oneoff`). Un conteneur lancé par `docker run` n'a pas de
+définition d'où le recréer : le bouton n'est pas rendu, et l'inspection dit en
+une ligne pourquoi (§14.5). Il est offert que le conteneur tourne ou non :
+recréer un conteneur arrêté le recrée **et le démarre**, et la confirmation le
+dit.
+
+**Un geste sensible, et destructif.** Recréer **supprime** le conteneur avant de
+le refaire : ce qu'il avait écrit hors de ses volumes est perdu, comme au §6.23
+du design system. La confirmation, rouge, nomme le conteneur, le fichier de
+composition d'après lequel il est refait — **tel qu'il est aujourd'hui**, ce qui
+applique aussi ce qui y aurait changé pour ce service —, la relecture des deux
+fichiers d'environnement, et la perte. Le gel (§37.7.3) le refuse comme les
+quatre autres.
+
+**Ce que l'écran rend**, chaque état distinct :
+
+- **abouti** — « Recréer : c'est fait », puis l'inventaire relu : le conteneur a
+  un nouvel identifiant, et son état est celui que Docker rend ;
+- **hors Compose** — les étiquettes relues au geste ont disparu, ou n'ont jamais
+  existé. Rien n'est lancé ; l'écran le dit ;
+- **disparu** — le conteneur n'existe plus (§37.7.1) ;
+- **refus de Compose** — fichier de composition déplacé, image absente,
+  greffon Compose manquant : ce que Compose a dit, **tel quel**, sans diagnostic
+  inventé (§37.7.1).
+
+Le délai du `ssh` qui porte la recréation est de **60 s** : l'arrêt du §37.7.1,
+puis la création et le démarrage. Le journal reçoit `spark.container_recreate`,
+avec le nom du conteneur, comme les quatre autres gestes (§37.7.4).
+
+**Ce que ce geste ne fait pas** : il ne construit pas, ne tire pas, n'arrête pas
+la pile (`down`), n'édite pas le fichier de composition, et ne recrée jamais
+plus d'un service à la fois. Il ne devine pas non plus quels conteneurs lisent
+une variable qu'on vient de poser : c'est à l'exploitant de savoir lesquels la
+consomment — l'onglet *Environnement* le lui rappelle.
+
+Aucune variable d'environnement, aucune migration.
+
 ### 37.8 Ce que ces outils ne sont pas
 
 Ce n'est pas un Docker Desktop. Restent hors périmètre, et pas seulement « pas
 tout de suite » : la construction d'images, les registres, le déploiement de
 piles, l'édition de Compose (§1). L'outil observe la pile du locataire et permet
-de reprendre un conteneur tombé ; il ne la gère pas à sa place.
+de reprendre un conteneur tombé — ou de le **recréer** tel que son fichier le
+décrit, pour qu'il relise son environnement (§37.7.5) ; il ne la gère pas à sa
+place.
 
 
 ## 38. Le DNS entre dans le périmètre (SPK-47)
@@ -9865,13 +9986,25 @@ et chez eux seuls.
 
 ### 43.7 Quand cela prend effet, et ce que le produit ne fait pas à la place du locataire
 
-Écrire le fichier **ne redémarre rien**. La pile du locataire ne le lira qu'à son
-prochain démarrage, et l'écran le dit en toutes lettres au moment de l'écriture —
-plutôt que de laisser croire à un effet immédiat qui n'aurait pas lieu.
+Écrire le fichier **ne recrée rien**, et c'est la recréation qui compte —
+**révisé le 2026-09-30** (SPK-132). Ce paragraphe disait que la pile lirait la
+nouvelle valeur « à son prochain démarrage », et renvoyait au geste
+*Redémarrer* de SPK-45. La mesure du §37.7.5 l'a infirmé : un conteneur lit son
+`env_file:` **à sa création**, et un redémarrage — le geste *Redémarrer*,
+`docker compose restart`, celui de la cellule ou de la Forge — relance le même
+conteneur avec l'environnement de sa création. Une application a ainsi continué
+de dire son envoi de courriel « non configuré » après que ses variables eurent
+été posées.
 
-Le produit ne relance pas la pile à la place du locataire : le §1 exclut le
-déploiement applicatif de son périmètre. Il peut en revanche **nommer** le geste
-qui reste à faire, et SPK-45 donne déjà de quoi redémarrer un conteneur.
+Ce qui fait relire les fichiers : **recréer le conteneur**. Le locataire le fait
+par `docker compose up -d`, qui recrée ce qui a changé ; l'exploitant, depuis
+l'onglet Docker, par le geste *Recréer* (§37.7.5). L'écran d'environnement le
+dit au moment de l'écriture, en nommant ce geste, plutôt que de laisser croire à
+un effet qui n'aura pas lieu.
+
+Le produit ne recrée pas la pile à la place du locataire, ni d'office après une
+écriture : il ne sait pas quels conteneurs consomment quelle variable, et le §1
+exclut le déploiement applicatif de son périmètre.
 
 Interactions, toutes déjà décidées ailleurs :
 
@@ -10911,8 +11044,9 @@ Ce que le dossier en dit, et rien de plus :
 - **le secret se déclare, il ne se devine pas** (§43.3). Le bloc ne porte aucune
   marque, et le dossier demande à l'agent de **nommer en clair, à côté**, les
   lignes que le propriétaire doit cocher comme secrètes ;
-- **la pile lira la nouvelle valeur au démarrage suivant**, pas à l'import
-  (§43.2) — le fait est déjà écrit au §44.9.2, et c'est ici qu'on s'en sert.
+- **la pile lira la nouvelle valeur quand ses conteneurs seront recréés**, pas
+  à l'import ni à un simple redémarrage (§43.7, révisé par SPK-132) —
+  `docker compose up -d`, ou le geste *Recréer* de la console.
 
 **C'est une voie, pas un ordre** (§44.6). Le dossier dit par où passe l'écriture
 et sous quelle forme elle est acceptée ; il ne demande à personne de l'accorder,

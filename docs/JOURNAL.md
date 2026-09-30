@@ -13211,3 +13211,49 @@ celui, antérieur, des classes de SPK-104) ; parcours SPK-131 ; campagne E2E
 complète 148/148 ; gestes 13/13 ; liens du manuel 7/7 ; contrat inchangé ; build.
 Les captures régénérées par la campagne sans rapport avec l'unité — dates et
 empreintes seulement — n'entrent pas au commit.
+
+## 2026-09-30 · SPK-132 — « rebuild » ? Non : recréer, et le §43.7 était faux
+
+**Le problème, remonté par le responsable** : une application servie par un
+Spark (`devis-p2enjoy`) disait « l'envoi par courriel n'est pas configuré sur ce
+serveur » après que ses variables SMTP eurent été posées depuis la console. Il
+demandait un bouton « rebuild » dans l'onglet Docker, en supposant les variables
+embarquées dans le build, et que la machine redémarrée ne verrait pas un
+changement.
+
+**Relu dans l'application** : la configuration SMTP est lue dans
+l'environnement, au démarrage du backend (`pydantic`, préfixe `DEVIS_`, il faut
+`DEVIS_SMTP_HOTE` ET `DEVIS_COURRIEL_EXPEDITEUR`). L'image est construite sur le
+poste puis chargée dans la cellule ; son compose n'a pas de `build:`, et note
+qu'une construction dans la cellule y est tuée en 137. Son script de
+déploiement finit par `docker compose … up -d`.
+
+**Mesuré, plutôt que répondu de mémoire** — Docker 29.8.1, Compose v5.5.1, un
+conteneur jetable qui lit une variable par `env_file:` : `docker restart`,
+`docker compose restart`, `stop` puis `start` gardent l'ANCIENNE valeur et le
+même conteneur ; `docker compose up -d` et `--force-recreate` recréent, et la
+nouvelle valeur arrive. D'où : « les variables sont dans le build » — faux ;
+« un redémarrage ne les voit pas » — vrai ; le remède est de recréer, pas de
+reconstruire, et reconstruire serait impossible pour cette application.
+
+**Ce que la mesure a révélé chez nous** : le §43.7, l'écran d'environnement, le
+manuel M8 et le dossier pour un agent disaient que la pile lirait la valeur « à
+son prochain démarrage », et le §43.7 renvoyait au geste *Redémarrer* — qui ne
+la fait pas relire. Une affirmation jamais mesurée, qui a coûté une panne.
+
+**Options présentées au responsable** : *Recréer* (recommandé), *Reconstruire*
+(inutile ici, impossible dans une cellule sans contexte de build), les deux, ou
+seulement corriger le texte. **Décision : Recréer.** Elle révise sa décision du
+§37.7 (« pas Compose ») sur ce seul point.
+
+**Décisions de conception, prises ici** : la commande se compose depuis les
+étiquettes que Compose pose, relues au moment du geste (projet, répertoire,
+fichiers, fichier d'environnement) ; `--no-deps --no-build --pull never` pour que
+rien d'autre de Compose n'entre ; `--force-recreate` pour que le geste fasse ce
+qu'il dit ; destructif, parce qu'il perd ce qui a été écrit hors des volumes ;
+rendu seulement sur un conteneur de pile Compose ; offert arrêté comme en
+marche. La correction du §43.7 et des textes fait partie de l'unité : la
+documentation suit la réalité.
+
+**Documents** : DAT §37.7.5 et révisions (§37.7, §37.7.4, §37.8, §43.7,
+§44.9.7), SPK-DS-35, SPK-132, OP-31. Committés avant le code.

@@ -1520,6 +1520,29 @@ Preuves observées le 2026-09-30 : `e2e/captures/spk130-routes-diagnostic`,
 et, produite par `make captures` sans être versionnée, `spk130-etats-degrades`
 (route absente avec Réappliquer, autre cible, échéance proche, certificat absent).
 
+### SPK-DS-35 · « Recréer » : un cinquième geste, destructif, et seulement là où il a un sens
+
+**Date** : 2026-09-30 · SPK-132 · `DAT.md` §37.7.5 · `DESIGN_SYSTEM.md` §6.23,
+§14.4, §14.5 · SPK-DS-09
+
+Le conteneur ouvert dans l'onglet Docker porte un cinquième geste, *Recréer*.
+Trois règles, chacune tirée d'une règle déjà écrite :
+
+- **il est destructif** (SPK-DS-09) : il supprime le conteneur avant de le
+  refaire, et ce qui avait été écrit hors des volumes est perdu. Son bouton, sa
+  confirmation et son bouton d'engagement sont rouges, comme ceux de *Tuer*. La
+  confirmation nomme le conteneur, le fichier de composition d'après lequel il
+  est refait, la relecture des deux fichiers d'environnement et la perte ;
+- **il n'est rendu que sur un conteneur créé par Compose** (§14.4) : sur un
+  conteneur lancé par `docker run`, il n'aurait aucune définition d'où le
+  refaire. Ce n'est pas un bouton désactivé (§9.9 vaut pour un geste qui existe
+  et qui attend) : il n'existe pas pour ce conteneur. L'inspection dit en une
+  ligne pourquoi, pour qu'on ne le cherche pas (§14.5) ;
+- **il est offert que le conteneur tourne ou non**, contrairement à *Redémarrer* :
+  recréer un conteneur arrêté le recrée et le démarre, et la confirmation le dit.
+
+Sous gel, il est présent et désactivé avec les quatre autres (§37.7.3).
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

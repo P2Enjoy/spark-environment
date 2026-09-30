@@ -53,9 +53,9 @@ leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-ma
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 127 unités : 107 closes, 10
-partielles, 10 non commencées — SPK-113, qui attend une mesure, et les neuf du
-lot 7. Le lot 6, *Réseau entre Sparks*, ouvert le 2026-09-17, a été clos le
+**Le plan de contrôle tourne sur une Forge réelle.** 128 unités : 107 closes, 10
+partielles, 11 non commencées — SPK-113, qui attend une mesure, SPK-132, recréer
+un conteneur depuis l'onglet Docker, et les neuf du lot 7. Le lot 6, *Réseau entre Sparks*, ouvert le 2026-09-17, a été clos le
 2026-09-18. Le lot 7, *La console hébergée derrière le SSO du domaine*, est
 décidé depuis le 2026-09-26 et spécifié au §64 du [DAT](docs/DAT.md) ; rien n'en
 est encore livré. L'état de chacune est dans

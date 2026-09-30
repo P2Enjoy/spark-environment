@@ -120,6 +120,44 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-31 · Recréer un conteneur de pile Compose : `sparkd` et la console (SPK-132)
+
+```
+État          : EN ATTENTE — SPK-132 est spécifié, pas encore livré. À jouer
+                sur instruction du responsable une fois l'unité sur `main` ; si
+                OP-27 à OP-30 ne sont pas encore jouées, dans la même mise à
+                jour : la build qui porte l'une porte les autres.
+Objectif      : sparkd admet au journal l'action `spark.container_recreate`
+                et corrige la phrase du dossier pour un agent (« recréer », et
+                non « au démarrage suivant ») ; la console offre le geste
+                « Recréer » dans l'onglet Docker (docs/DAT.md §37.7.5) et
+                corrige la phrase de l'onglet Environnement (§43.7). Aucune
+                migration, aucune variable.
+Dépend de     : rien. Mais l'ORDRE compte : une console à jour devant un
+                sparkd qui ne l'est pas recrée bien le conteneur, et le journal
+                REFUSE de l'inscrire — l'écran dit alors « le journal n'a pas
+                pu l'enregistrer ».
+Ordre         : 1. mettre à jour sparkd (runbook A.2) ;
+                2. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : par le parcours canonique, sur la cellule d'essai `essai-a` :
+                depuis son terminal, une pile Compose d'une ligne qui lit
+                `env_file: [/etc/spark/env]` ; depuis l'onglet Environnement,
+                poser `ESSAI_RECREER=1` ; l'onglet Docker, le conteneur,
+                « Recréer », la confirmation qui nomme le fichier de
+                composition, puis « Recréer : c'est fait » ; depuis le terminal,
+                `docker exec <conteneur> env | grep ESSAI_RECREER` rend 1 ; le
+                journal du Spark porte `spark.container_recreate`. Le conteneur
+                de `redaction-devis` n'est recréé qu'à la demande explicite du
+                responsable : c'est de la production.
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console. Un conteneur recréé ne se « dé-recrée » pas : il tourne
+                d'après son fichier, comme après un `docker compose up -d`.
+Risques       : le geste recrée d'après le fichier de composition TEL QU'IL
+                EST : une modification de ce fichier, faite dans la cellule et
+                jamais appliquée, l'est pour ce service. La confirmation nomme
+                le fichier pour cette raison.
+```
+
 ### OP-30 · Une note proposée se relit en deux colonnes : `sparkd` et la console (SPK-131)
 
 ```
