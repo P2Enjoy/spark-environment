@@ -382,8 +382,15 @@ def _origine(route: dict[str, Any]) -> str:
     return f"{'https' if route['tls'] else 'http'}://{route['domain']}"
 
 
+#: Les protocoles de Caddy, dans les mots du visiteur (§18.6).
+NOMS_PROTOCOLES = {"h1": "HTTP/1.1", "h2": "HTTP/2", "h3": "HTTP/3"}
+
+
 def _lignes_ingress(model: dict[str, Any]) -> list[str]:
     """Ce que l'ingress applique, depuis ce que l'ingress a CALCULÉ (§44.2 quater).
+
+    @spec docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6, §44.2 quater (l'en-tête
+          posé, HTTP/3, et l'`Alt-Svc` que le proxy retire)
 
     Rien n'est écrit en dur ici : `ingress.comportement()` inspecte la
     configuration réellement posée. Le jour où l'ingress gagnera un handler qui
@@ -402,11 +409,29 @@ def _lignes_ingress(model: dict[str, Any]) -> list[str]:
         lignes.append(
             "- `X-Forwarded-Proto` porte le schéma de la connexion reçue par la "
             "Forge : `https` sur une route TLS.")
-    if not vu.get("adds_headers"):
+    protocoles = vu.get("protocols") or []
+    if protocoles and "h3" not in protocoles:
         lignes.append(
-            "- L'ingress **n'ajoute aucun en-tête** — ni HSTS, ni CSP —, ne "
-            "redirige aucun nom vers un autre et ne limite aucun débit. Ce qu'il "
-            "fait, il le fait en entier : "
+            "- Les visiteurs atteignent l'ingress en "
+            + " ou ".join(NOMS_PROTOCOLES.get(p, p) for p in protocoles)
+            + ", **pas en HTTP/3**.")
+    if vu.get("response_headers"):
+        lignes.append(
+            "- Sur chaque réponse, l'ingress pose "
+            + ", ".join(f"`{nom}: {valeur}`"
+                        for nom, valeur in vu["response_headers"].items()) + ".")
+    if vu.get("stripped_headers"):
+        # §18.6 : l'exploitant du SSO avait posé `Alt-Svc: clear` dans sa pile,
+        # et cherché pourquoi le visiteur ne le recevait pas.
+        lignes.append(
+            "- Le proxy **retire** de vos réponses "
+            + ", ".join(f"`{nom}`" for nom in vu["stripped_headers"])
+            + " : l'émettre depuis la pile n'atteint jamais le visiteur.")
+    if not vu.get("security_headers"):
+        lignes.append(
+            "- L'ingress **n'ajoute aucun en-tête de sécurité** — ni HSTS, ni "
+            "CSP —, ne redirige aucun nom vers un autre et ne limite aucun "
+            "débit. Ce qu'il fait, il le fait en entier : "
             + ", ".join(f"`{h}`" for h in vu.get("handlers", [])) + ".")
     return lignes
 
@@ -1100,8 +1125,10 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         ])
         # SPK-102 · §44.2 quater : CALCULÉ par l'ingress, jamais recopié ici.
         lignes.extend(_lignes_ingress(model))
+        # SPK-128 : ce paragraphe parle des protections qu'un proxy ajouterait.
+        # `Alt-Svc: clear` n'en est pas une, et ne le fait pas disparaître.
         if model.get("ingress_behaviour") and not model["ingress_behaviour"].get(
-                "adds_headers"):
+                "security_headers"):
             lignes.extend([
                 "",
                 "**Un proxy dans votre pile n'y changerait rien.** Il serait un "

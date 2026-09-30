@@ -640,10 +640,16 @@ def test_une_cellule_SANS_Docker_ne_promet_ni_pull_ni_redemarrage(tmp_path):
 
 # --- SPK-102 · §44.2 quater et quinquies : ce que TLS implique, qui filtre quoi -
 
+#: La forme que `ingress.comportement()` rend réellement depuis SPK-128 —
+#: prouvée dans `test_ingress.py`, où elle est lue dans la configuration.
 _COMPORTEMENT = {
-    "handlers": ["reverse_proxy"],
+    "handlers": ["headers", "reverse_proxy"],
     "forwarded_headers": ["X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"],
-    "preserve_host": True, "adds_headers": False,
+    "preserve_host": True,
+    "response_headers": {"Alt-Svc": "clear"},
+    "security_headers": [],
+    "stripped_headers": ["Alt-Svc"],
+    "protocols": ["h1", "h2"],
 }
 
 
@@ -694,22 +700,59 @@ def test_ce_que_l_ingress_applique_est_CALCULE_et_non_ecrit_en_dur(tmp_path):
     cessé de l'être — c'est exactement le défaut que le responsable proscrit.
     """
     ordinaire = briefing.dossier(_avec_route(tls=1), jump=None)
-    assert "n'ajoute aucun en-tête" in ordinaire
-    assert "`reverse_proxy`" in ordinaire
+    assert "n'ajoute aucun en-tête de sécurité" in ordinaire
+    assert "`headers`, `reverse_proxy`" in ordinaire
 
-    # Le jour où l'ingress posera un handler d'en-têtes, la phrase disparaît.
+    # Le jour où l'ingress posera un en-tête de SÉCURITÉ, la phrase disparaît,
+    # et l'en-tête est nommé à sa place.
     durci = briefing.dossier(_avec_route(tls=1, comportement={
-        **_COMPORTEMENT, "handlers": ["reverse_proxy", "headers"],
-        "adds_headers": True}), jump=None)
-    assert "n'ajoute aucun en-tête" not in durci
+        **_COMPORTEMENT,
+        "response_headers": {"Alt-Svc": "clear",
+                             "Strict-Transport-Security": "max-age=31536000"},
+        "security_headers": ["Strict-Transport-Security"]}), jump=None)
+    assert "n'ajoute aucun en-tête de sécurité" not in durci
     assert "Un proxy dans votre pile n'y changerait rien" not in durci
+    assert "`Strict-Transport-Security: max-age=31536000`" in durci
+
+
+def test_le_briefing_dit_l_en_tete_pose_HTTP3_absent_et_l_alt_svc_retire(tmp_path):
+    """§18.6 : ce que l'exploitant du SSO a dû découvrir seul, le briefing le dit.
+
+    @verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6, §44.2 quater
+
+    Il avait posé `Alt-Svc: clear` dans sa pile, et le visiteur ne l'a jamais
+    reçu : le proxy le retire. Les deux présentations le portent, et
+    `Alt-Svc: clear` — qui ne protège rien — laisse intactes la phrase sur HSTS
+    et CSP comme le paragraphe sur le proxy dans la pile.
+    """
+    model = _avec_route(tls=1)
+    for texte in (briefing.markdown(model), briefing.dossier(model, jump=None)):
+        assert "HTTP/1.1 ou HTTP/2, **pas en HTTP/3**" in texte
+        assert "Sur chaque réponse, l'ingress pose `Alt-Svc: clear`" in texte
+        assert "**retire** de vos réponses `Alt-Svc`" in texte
+        assert "n'ajoute aucun en-tête de sécurité" in texte
+    assert "Un proxy dans votre pile n'y changerait rien" in briefing.dossier(
+        model, jump=None)
+
+
+def test_un_ingress_qui_servirait_HTTP3_ne_serait_pas_dit_sans(tmp_path):
+    """Le garde-fou : les phrases sont CALCULÉES, pas récitées (§44.2 quater).
+
+    @verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6
+    """
+    model = _avec_route(tls=1, comportement={
+        **_COMPORTEMENT, "handlers": ["reverse_proxy"], "response_headers": {},
+        "protocols": ["h1", "h2", "h3"]})
+    texte = briefing.dossier(model, jump=None)
+    assert "pas en HTTP/3" not in texte
+    assert "Alt-Svc: clear" not in texte
 
 
 def test_les_en_tetes_transmis_viennent_du_releve_et_non_du_texte(tmp_path):
     """Ce que la pile reçoit du proxy est ÉNUMÉRÉ par l'ingress, pas récité."""
     model = _avec_route(tls=1, comportement={
         "handlers": ["reverse_proxy"], "forwarded_headers": ["X-Machin"],
-        "preserve_host": False, "adds_headers": False})
+        "preserve_host": False, "security_headers": []})
     dossier = briefing.dossier(model, jump=None)
     assert "`X-Machin`" in dossier
     assert "X-Forwarded-For" not in dossier

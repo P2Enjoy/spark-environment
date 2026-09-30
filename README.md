@@ -386,6 +386,7 @@ pas encore sont marquées.
 
 | `make e2e` / `pnpm e2e` | parcours complets contre la pile réelle | **oui** |
 | `make manuel` | reproduit les illustrations du manuel | **oui** |
+| `scripts/mesures-spk128.sh` | banc de l'ingress sur Caddy 2.6.2 — la version de la Forge — avec la configuration **produite par le code** : ni écoute UDP/443 ni annonce HTTP/3, `Alt-Svc: clear` partout, passage à chaud (`docs/DAT.md` §18.6). Docker requis ; trois conteneurs jetables | **oui** |
 
 **Une seule épreuve lourde à la fois, et plafonnée** (`CLAUDE.md` §15 bis,
 `docs/DAT.md` §29.8 et §29.8 bis) : `make e2e`, `make e2e-un NOM="<nom du
@@ -624,6 +625,13 @@ une garde qui n'existe que dans un fichier de workflow.
   Constaté le 2026-09-23 sur la Forge (`docs/DAT.md` §18.3) : le certificat est
   bien servi sur `443`, mais `80` sert aussi le site, sans redirection. Ouvert en
   `docs/BACKLOG.md#SPK-113`, qui demande une mesure avant d'être corrigé.
+- **L'ingress ne sert pas HTTP/3** (`docs/DAT.md` §18.6) : HTTP/1.1 et HTTP/2
+  seulement, et `Alt-Svc: clear` sur chaque réponse pour effacer une annonce
+  mémorisée. La Forge de validation annonce encore HTTP/3 sans le servir tant
+  qu'OP-27 n'est pas joué (`docs/PROD_MIGRATIONS.md`).
+- **Le préflight ne relève que les écoutes TCP.** `SEC-PORTS` lit `ss -lnt` : une
+  écoute UDP exposée lui échappe — c'est ainsi que l'UDP/443 de Caddy est passé
+  inaperçu jusqu'au 2026-09-30.
 
 ## Sauvegarder le registre
 

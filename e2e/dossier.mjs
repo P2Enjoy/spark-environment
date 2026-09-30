@@ -3,6 +3,8 @@
  *
  * @verifies docs/BACKLOG.md#SPK-85 · docs/DAT.md §44.9.5 ·
  *           docs/BACKLOG.md#SPK-99 · docs/DAT.md §44.9.2 (point 4), §44.9.7 ·
+ *           docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6, §44.2 quater (l'en-tête
+ *           que l'ingress pose, le HTTP/3 qu'il ne sert pas) ·
  *           docs/DESIGN_SYSTEM_APP.md SPK-DS-19 ·
  *           docs/DESIGN_SYSTEM.md §13 (les captures sont une preuve), §13.1
  *           (desktop, mobile, état vide, contenu long, clavier) · CLAUDE.md §16
@@ -125,6 +127,13 @@ await defilerVers('Une route active est un chemin complet');
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk101-01-chemin-ingress');
 
+// 3 quinquies. SPK-128 · §18.6 : ce que l'ingress pose, le protocole qu'il ne
+//              sert pas, et l'`Alt-Svc` qu'il retire à la pile — l'exploitant
+//              du SSO a dû le découvrir seul.
+await defilerVers('Les visiteurs atteignent l');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk128-01-ingress-http3');
+
 // 4. Le focus clavier sur le bouton : l'anneau doit être visible (§9.5).
 await defilerVers('# Dossier de déploiement');
 await page.keyboard.press('Shift+Tab');
@@ -150,6 +159,11 @@ await capturer('spk85-06-mobile');
 await defilerVers('NOM_DE_VARIABLE=valeur');
 await page.locator('.dossier').scrollIntoViewIfNeeded();
 await capturer('spk99-03-bloc-variables-mobile');
+
+// 8. SPK-128 au format étroit : les lignes de l'ingress se replient aussi.
+await defilerVers('Les visiteurs atteignent l');
+await page.locator('.dossier').scrollIntoViewIfNeeded();
+await capturer('spk128-02-ingress-http3-mobile');
 
 const debordement = await page.evaluate(
   () => document.documentElement.scrollWidth > document.documentElement.clientWidth);

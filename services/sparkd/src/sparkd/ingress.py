@@ -8,6 +8,8 @@
       DNS avec les routes se fait ICI, jamais dans la console)
 @spec docs/BACKLOG.md#SPK-89 · docs/DAT.md §18.3 ter (la cible d'une route se
       corrige, elle ne se refait pas) · §18.5 (l'écart reste visible)
+@spec docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.2 (protocoles déclarés, route
+      commune), §18.6 (l'ingress ne sert pas HTTP/3, et le dit)
 
 On régénère la configuration entière, on ne la rapièce pas. Une configuration
 rapiécée diverge ; une configuration régénérée ne le peut pas.
@@ -15,6 +17,7 @@ rapiécée diverge ; une configuration régénérée ne le peut pas.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import sqlite3
@@ -28,6 +31,12 @@ from . import audit
 from .db import transaction
 
 SERVER_NAME = "spark"
+
+#: SPK-128 · §18.6 : les protocoles que l'ingress SERT, déclarés. Laisser Caddy
+#: choisir, c'est recevoir HTTP/3 par défaut : Caddy 2.6.2 écoute alors UDP/443
+#: et l'annonce sur chaque réponse, alors que la poignée de main n'aboutit pas —
+#: mesuré le 2026-09-30. Chaque visiteur payait l'attente de son repli.
+PROTOCOLES = ("h1", "h2")
 
 #: Un nom d'hôte, éventuellement avec un joker de premier niveau (§18.3 bis).
 DOMAIN = re.compile(
@@ -371,11 +380,55 @@ EFFETS_HANDLER = {
     "reverse_proxy": {
         "transmet": ("X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"),
         "preserve_host": True,
+        # SPK-128 · §18.6 : mesuré le 2026-09-30 sur Caddy 2.6.2 — la cellule du
+        # SSO rendait `Alt-Svc: clear`, et le visiteur ne l'a jamais reçu.
+        "retire": ("Alt-Svc",),
     },
-    # Aucun de ces deux-là n'est posé aujourd'hui. Ils sont nommés pour que leur
-    # apparition change le briefing au lieu de passer inaperçue.
-    "headers": {"ajoute_des_entetes": True},
+    # Ce que `headers` pose ne vit pas dans cette table : il se LIT dans sa
+    # configuration (`response.set`), là où un ajout le changerait.
+    "headers": {},
     "static_response": {},
+}
+
+#: Les en-têtes qui PROTÈGENT. En poser un à l'ingress rend fausse la phrase
+#: « aucun en-tête de sécurité » du briefing, qui disparaît donc d'elle-même ;
+#: `Alt-Svc` n'en est pas un, et ne la fait pas disparaître (§44.2 quater).
+ENTETES_DE_SECURITE = frozenset({
+    "Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options",
+    "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy",
+})
+
+
+def _route_commune() -> dict | None:
+    """La route qui pose `Alt-Svc: clear` sur chaque réponse (§18.6).
+
+    Sans filtre et non terminale : elle vaut pour toute requête, puis la
+    première route qui correspond sert — le refus `404` compris. `deferred`
+    pose l'en-tête au moment d'écrire la réponse, donc après tout le reste.
+
+    Elle suit `PROTOCOLES` et rien d'autre : `clear` est vrai tant que HTTP/3
+    n'est pas servi, et le jour où il le serait, elle disparaît du même geste.
+    Une date de retrait serait une échéance à oublier.
+    """
+    if "h3" in PROTOCOLES:
+        return None
+    return {"handle": [{
+        "handler": "headers",
+        "response": {"set": {"Alt-Svc": ["clear"]}, "deferred": True},
+    }]}
+
+
+#: Route terminale : sans elle, Caddy rend « 200 » et un corps vide pour TOUT
+#: domaine non routé — mesuré le 2026-08-19. La Forge répondrait alors pour des
+#: noms qu'il ne sert pas, et une erreur de pointage DNS resterait invisible au
+#: lieu de se voir immédiatement (docs/DAT.md §18.2).
+ROUTE_REFUS = {
+    "handle": [{
+        "handler": "static_response",
+        "status_code": 404,
+        "headers": {"Content-Type": ["text/plain; charset=utf-8"]},
+        "body": "Aucun Spark ne sert ce domaine.\n",
+    }],
 }
 
 
@@ -385,20 +438,35 @@ def comportement(connection: sqlite3.Connection) -> dict:
     @spec docs/BACKLOG.md#SPK-102 · docs/DAT.md §44.2 quater (ce que l'ingress
           n'ajoute pas), §18.2 (la configuration vient du registre)
 
+    @spec docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6, §44.2 quater (l'en-tête
+          posé, HTTP/3, et ce que le proxy retire, lus au même endroit)
+
     On inspecte la configuration CONSTRUITE plutôt qu'une liste tenue à la main :
     deux descriptions du même proxy finiraient par diverger, et c'est la
     description — pas le proxy — que l'agent lirait.
 
-    La route terminale de refus est écartée : elle ne sert aucun Spark.
+    La route terminale de refus est écartée : elle ne sert aucun Spark. La route
+    commune, elle, vaut pour chaque route servie — mais seulement s'il y en a
+    une : ne rien servir n'est pas « servir avec un en-tête ».
     """
     config = build_config(connection)
-    servies = [r for r in config["apps"]["http"]["servers"][SERVER_NAME]["routes"]
-               if "match" in r]
-    handlers = sorted({h["handler"] for route in servies for h in route["handle"]})
+    serveur = config["apps"]["http"]["servers"][SERVER_NAME]
+    servies = [r for r in serveur["routes"] if "match" in r]
+    communes = [r for r in serveur["routes"]
+                if "match" not in r and r != ROUTE_REFUS]
+    appliquees = communes + servies if servies else []
+    handlers = sorted({h["handler"] for route in appliquees for h in route["handle"]})
     effets = [EFFETS_HANDLER.get(nom, {}) for nom in handlers]
     transmis: list[str] = []
+    retires: list[str] = []
     for effet in effets:
         transmis.extend(effet.get("transmet", ()))
+        retires.extend(effet.get("retire", ()))
+    poses = {
+        nom: ", ".join(valeurs)
+        for route in appliquees for h in route["handle"] if h["handler"] == "headers"
+        for nom, valeurs in h.get("response", {}).get("set", {}).items()
+    }
     return {
         "handlers": handlers,
         "forwarded_headers": sorted(set(transmis)),
@@ -406,7 +474,11 @@ def comportement(connection: sqlite3.Connection) -> dict:
         # §44.2 quater : ce que l'ingress N'AJOUTE PAS est ce qui décide si une
         # pile a besoin d'un proxy à elle. On le CALCULE, donc il cesse d'être
         # vrai le jour où il cesse de l'être.
-        "adds_headers": any(e.get("ajoute_des_entetes") for e in effets),
+        "response_headers": dict(sorted(poses.items())),
+        "security_headers": sorted(nom for nom in poses if nom in ENTETES_DE_SECURITE),
+        "stripped_headers": sorted(set(retires)),
+        # §18.6 : une propriété du SERVEUR, vraie qu'une route existe ou non.
+        "protocols": list(serveur["protocols"]),
     }
 
 
@@ -417,7 +489,10 @@ def build_config(connection: sqlite3.Connection) -> dict:
     route déclarée sur un Spark encore `pending` existe — on déclare avant de
     créer — mais rien ne peut la servir (docs/DAT.md §18.2).
     """
-    routes = []
+    # §18.6 : la route commune d'abord — sans filtre et non terminale, elle ne
+    # sert rien et ne décide d'aucune préséance, elle pose un en-tête et passe.
+    commune = _route_commune()
+    routes = [commune] if commune else []
     # §18.3 bis : Caddy retient la PREMIÈRE route qui correspond. L'ordre est
     # donc la règle de préséance elle-même, pas une commodité d'affichage.
     servies = sorted(listing(connection), key=lambda r: specificity(r["domain"]))
@@ -434,20 +509,12 @@ def build_config(connection: sqlite3.Connection) -> dict:
             }],
         })
 
-    # Route terminale : sans elle, Caddy rend « 200 » et un corps vide pour
-    # TOUT domaine non routé — mesuré le 2026-08-19. La Forge répondrait alors
-    # pour des noms qu'il ne sert pas, et une erreur de pointage DNS resterait
-    # invisible au lieu de se voir immédiatement (docs/DAT.md §18.2).
-    routes.append({
-        "handle": [{
-            "handler": "static_response",
-            "status_code": 404,
-            "headers": {"Content-Type": ["text/plain; charset=utf-8"]},
-            "body": "Aucun Spark ne sert ce domaine.\n",
-        }],
-    })
+    # Le refus vient APRÈS les routes nommées, sans quoi il les masquerait. Une
+    # copie : la constante sert aussi à le reconnaître (`comportement()`).
+    routes.append(copy.deepcopy(ROUTE_REFUS))
 
-    serveur: dict = {"listen": [":80", ":443"], "routes": routes}
+    serveur: dict = {"listen": [":80", ":443"], "protocols": list(PROTOCOLES),
+                     "routes": routes}
     en_clair = [r["domain"] for r in listing(connection) if not r["tls"] and r["enabled"]]
     if en_clair:
         # Une route en clair est explicitement soustraite à la gestion

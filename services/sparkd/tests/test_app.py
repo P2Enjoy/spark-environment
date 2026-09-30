@@ -459,7 +459,8 @@ def test_declarer_une_route_l_applique_a_chaud(tmp_path):
     assert r.status_code == 201 and r.json()["applied_at"] is not None
 
     routes = c.app.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]
-    assert routes[0]["handle"][0]["upstreams"][0]["dial"] == "10.77.0.16:8080"
+    servie = next(r for r in routes if "match" in r)
+    assert servie["handle"][0]["upstreams"][0]["dial"] == "10.77.0.16:8080"
 
 
 def test_conflit_de_domaine_refuse_par_http(tmp_path):

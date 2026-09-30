@@ -3,7 +3,9 @@
  *
  * @verifies docs/BACKLOG.md#SPK-24, docs/BACKLOG.md#SPK-70,
  *           docs/BACKLOG.md#SPK-97 (l'import d'un lot collé, docs/DAT.md §43.10),
- *           docs/BACKLOG.md#SPK-103 (deux blocs et la recherche, §43.11) ·
+ *           docs/BACKLOG.md#SPK-103 (deux blocs et la recherche, §43.11),
+ *           docs/BACKLOG.md#SPK-128 (le dossier dit l'en-tête que l'ingress
+ *           pose et le HTTP/3 qu'il ne sert pas, §18.6, §44.2 quater) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -5492,8 +5494,14 @@ test('copier le dossier d’un Spark, et relire ce que le presse-papier a reçu'
     assert.match(copie, /X-Forwarded-Proto/);
     // L'apostrophe est DROITE : ce texte est rendu par le runtime, pas par
     // l'écran — même remarque qu'au parcours du Spark jamais amorcé.
-    assert.match(copie, /n'ajoute aucun en-tête/);
+    assert.match(copie, /n'ajoute aucun en-tête de sécurité/);
     assert.match(copie, /reverse_proxy/);
+    // SPK-128 · §18.6 : l'en-tête que l'ingress pose, le protocole qu'il ne sert
+    // pas, et l'`Alt-Svc` qu'il retire à la pile — l'exploitant du SSO a dû
+    // découvrir seul que le sien n'atteignait jamais le visiteur.
+    assert.match(copie, /pas en HTTP\/3/);
+    assert.match(copie, /l'ingress pose `Alt-Svc: clear`/);
+    assert.match(copie, /\*\*retire\*\* de vos réponses `Alt-Svc`/);
 
     // 10. SPK-102 · §44.2 quinquies : la nuance qui désigne l'interlocuteur.
     assert.match(copie, /ne filtre AUCUN port sortant/);

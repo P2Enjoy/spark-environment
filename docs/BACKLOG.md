@@ -7962,7 +7962,7 @@ qui déclarent désormais leur type.
   2026-09-24). Non rejoué : `make captures`, dont un seul appel a changé de la
   même façon.
 
-### [ ] SPK-128 · L'ingress ne sert pas HTTP/3, et cesse de l'annoncer
+### [~] SPK-128 · L'ingress ne sert pas HTTP/3, et cesse de l'annoncer
 
 **Signalé le 2026-09-30** par l'exploitant du SSO du domaine, transmis par le
 responsable : `oauth.lelabs.tech` répond `alt-svc: h3=":443"; ma=2592000`, alors
@@ -7988,12 +7988,15 @@ date — une seule constante porte les deux.
 2. `build_config` : `protocols` à `h1`, `h2`, et la route commune qui pose
    `Alt-Svc: clear` ; `comportement()` lit dans la configuration les en-têtes
    posés, HTTP/3, et ce que le proxy retire ; briefing et dossier le disent ;
-   preuves unitaires ;
+   preuves unitaires — *fait* ;
 3. banc rejouable sur Caddy 2.6.2 — la version de la Forge —, qui pose la
-   configuration **produite par `build_config`** et non une copie à la main ;
-4. E2E local : le parcours qui copie le dossier ; manuel M8 ;
+   configuration **produite par `build_config`** et non une copie à la main
+   (`scripts/mesures-spk128.sh`) — *fait* ;
+4. E2E local : le parcours qui copie le dossier ; captures du dossier ; manuel
+   M8 — *fait* ;
 5. OP-27 : mise à jour de `sparkd` sur la Forge, **sur instruction du
-   responsable** ; preuve sur Forge réelle, par le navigateur et par la console.
+   responsable** ; preuve sur Forge réelle, par le navigateur et par la console
+   (`e2e/forge-reelle/spk128-alt-svc.mjs`) — **en attente**.
 
 - Aucune variable d'environnement, aucune migration. Une opération de
   déploiement : OP-27.
@@ -8003,6 +8006,16 @@ date — une seule constante porte les deux.
   `POST /load`) ; parcours E2E du dossier ; OP-27 joué ; preuve sur la Forge :
   `alt-svc: clear` sur `oauth.lelabs.tech`, aucune écoute UDP/443, dossier relu
   dans la console ; manuel M8 ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-30, hors Forge** : neuf preuves unitaires (protocoles
+  déclarés, route commune en tête et unique, `clear` lié à HTTP/3, en-tête de
+  sécurité reconnu, compte de réconciliation, briefing et dossier), dont huit
+  **rouges sur l'ancien code** ; suite de `sparkd` complète, 1 502 sur 1 502 ;
+  banc Caddy 2.6.2 vert, et **rouge sur l'ancien code** avec ses quatre écarts
+  nommés ; parcours E2E « copier le dossier » vert ; captures
+  `spk128-01-ingress-http3` et `spk128-02-ingress-http3-mobile` observées —
+  les quatre lignes lisibles, aucun débordement, console vierge ; contrat
+  inchangé. **Reste `[~]`** : OP-27 n'est pas joué, et la preuve sur Forge
+  réelle ne peut l'être qu'après.
 
 ---
 

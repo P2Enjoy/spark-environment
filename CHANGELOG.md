@@ -226,6 +226,21 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-128 — l'ingress ne sert pas HTTP/3, et cesse de l'annoncer.** Signalé
+  par l'exploitant du SSO du domaine, mesuré le 2026-09-30 : la configuration de
+  l'ingress ne fixait pas `protocols`, et Caddy 2.6.2 activait HTTP/3 par
+  défaut — écoute UDP/443 et `alt-svc: h3=":443"; ma=2592000` sur chaque
+  réponse, alors que la poignée de main QUIC n'aboutit pas ; chaque navigateur
+  mémorisait l'annonce trente jours et payait le repli. La configuration déclare
+  désormais `protocols: ["h1", "h2"]` et commence par une route commune qui pose
+  `Alt-Svc: clear` sur chaque réponse, refus `404` compris — émise tant que
+  HTTP/3 n'est pas servi, sans date de retrait. La pile ne pouvait pas corriger
+  seule : `reverse_proxy` retire son `Alt-Svc`. Le briefing et le dossier le
+  disent désormais — l'en-tête posé, HTTP/3 absent, l'`Alt-Svc` retiré —, lus
+  dans la configuration ; « aucun en-tête de sécurité » reste vrai et reste dit.
+  Banc rejouable `scripts/mesures-spk128.sh` (Caddy 2.6.2, configuration
+  produite par le code, passage à chaud). DAT §18.2, §18.6, §44.2 quater ;
+  manuel M8. **Inerte sur la Forge tant qu'OP-27 n'est pas joué.**
 - **OP-10 gagne un second réglage serveur, et une crainte est levée.** MESURÉ le
   2026-09-26 sur un banc Ubuntu 26.04 / OpenSSH 10.2p1 (`docs/DAT.md` §46.7) :
   ce qui refuse à la clé restreinte une redirection vers une socket UNIX — donc

@@ -1,4 +1,5 @@
 """@verifies docs/BACKLOG.md#SPK-12 · docs/DAT.md §9, §18 · docs/SCHEMA.md §6
+@verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.2, §18.6, §44.2 quater
 
 La DoD nomme trois choses : application a chaud, reconstruction COMPLETE depuis
 le registre, et conflit de domaine refuse PAR LA BASE. Les trois sont ici.
@@ -95,11 +96,18 @@ def test_le_domaine_libere_est_reutilisable(db):
 
 # --- construction de la configuration ---------------------------------------
 
+def _servies(config: dict) -> list[dict]:
+    """Les routes qui SERVENT un domaine — ni la commune, ni le refus (§18.2)."""
+    return [r for r in config["apps"]["http"]["servers"]["spark"]["routes"]
+            if "match" in r]
+
+
 def test_config_vide_ne_sert_que_le_refus(db):
-    serveur = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]
+    config = ingress.build_config(db)
+    serveur = config["apps"]["http"]["servers"]["spark"]
     assert serveur["listen"] == [":80", ":443"]
-    assert len(serveur["routes"]) == 1
-    assert serveur["routes"][0]["handle"][0]["status_code"] == 404
+    assert _servies(config) == []
+    assert serveur["routes"][-1]["handle"][0]["status_code"] == 404
 
 
 def test_un_domaine_non_route_est_refuse_pas_accepte(db):
@@ -113,14 +121,16 @@ def test_un_domaine_non_route_est_refuse_pas_accepte(db):
     assert "match" not in terminale            # elle attrape tout le reste
     assert terminale["handle"][0]["status_code"] == 404
     # Et elle vient APRES les routes nommees, sans quoi elle les masquerait.
-    assert routes[0]["match"][0]["host"] == ["crm.example.com"]
+    nommee = next(r for r in routes if "match" in r)
+    assert nommee["match"][0]["host"] == ["crm.example.com"]
+    assert routes.index(nommee) < len(routes) - 1
 
 
 def test_l_amont_vient_du_registre(db):
     """docs/DAT.md §18.2 — jamais d'une decouverte par Docker."""
     poser_spark(db, "S1", "crm", "10.77.0.42")
     ingress.declare(db, "S1", "crm.example.com", 8080)
-    route = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"][0]
+    route = _servies(ingress.build_config(db))[0]
     assert route["match"][0]["host"] == ["crm.example.com"]
     assert route["handle"][0]["upstreams"][0]["dial"] == "10.77.0.42:8080"
 
@@ -129,16 +139,14 @@ def test_une_route_sur_un_spark_sans_adresse_n_est_pas_servie(db):
     """On declare avant de creer ; rien ne peut la servir encore."""
     poser_spark(db, "S1", "pas-encore", adresse=None)
     ingress.declare(db, "S1", "crm.example.com", 8080)
-    routes = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"]
-    assert len(routes) == 1 and "match" not in routes[0]   # seule la terminale
+    assert _servies(ingress.build_config(db)) == []   # seules la commune et la terminale
 
 
 def test_une_route_desactivee_n_est_pas_servie(db):
     poser_spark(db, "S1", "crm")
     r = ingress.declare(db, "S1", "crm.example.com", 8080)
     db.execute("UPDATE ingress_route SET enabled = 0 WHERE id = ?", (r["id"],))
-    routes = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"]
-    assert len(routes) == 1 and "match" not in routes[0]
+    assert _servies(ingress.build_config(db)) == []
 
 
 def test_une_route_en_clair_est_soustraite_au_tls_automatique(db):
@@ -175,7 +183,9 @@ def test_la_configuration_est_REGENEREE_pas_rapiecee(db):
     ingress.declare(db, "S1", "b.example.com", 9090)
     faux = ingress.FakeCaddy()
     ingress.reconcile(db, faux)
-    assert len(faux.config["apps"]["http"]["servers"]["spark"]["routes"]) == 3  # 2 + terminale
+    # 2 servies, plus la commune (SPK-128) et la terminale.
+    assert len(faux.config["apps"]["http"]["servers"]["spark"]["routes"]) == 4
+    assert len(_servies(faux.config)) == 2
 
     ingress.withdraw(db, "a.example.com")
     ingress.reconcile(db, faux)
@@ -518,12 +528,18 @@ def test_le_comportement_est_LU_dans_la_configuration_posee(db):
     vu = ingress.comportement(db)
 
     # La route terminale de refus n'est pas une route servie : l'inclure ferait
-    # dire au briefing que l'ingress rend des réponses statiques à la pile.
-    assert vu["handlers"] == ["reverse_proxy"]
-    assert vu["adds_headers"] is False
+    # dire au briefing que l'ingress rend des réponses statiques à la pile. La
+    # route commune, elle, vaut pour chaque réponse servie (SPK-128).
+    assert vu["handlers"] == ["headers", "reverse_proxy"]
     assert vu["preserve_host"] is True
     assert vu["forwarded_headers"] == [
         "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"]
+    # SPK-128 : l'en-tête posé, lu dans la route commune — et ce n'est pas un
+    # en-tête de sécurité, donc « aucun en-tête de sécurité » reste vrai.
+    assert vu["response_headers"] == {"Alt-Svc": "clear"}
+    assert vu["security_headers"] == []
+    assert vu["stripped_headers"] == ["Alt-Svc"]
+    assert vu["protocols"] == ["h1", "h2"]
 
 
 def test_sans_aucune_route_servie_l_ingress_n_applique_rien(db):
@@ -532,3 +548,95 @@ def test_sans_aucune_route_servie_l_ingress_n_applique_rien(db):
     assert vu["handlers"] == []
     assert vu["forwarded_headers"] == []
     assert vu["preserve_host"] is False
+    assert vu["response_headers"] == {} and vu["stripped_headers"] == []
+
+
+# --- SPK-128 · §18.6 : l'ingress ne sert pas HTTP/3, et le dit ---------------
+
+
+def test_l_ingress_declare_ses_protocoles_et_HTTP3_n_y_est_pas(db):
+    """@verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.2, §18.6
+
+    Sans `protocols`, Caddy 2.6.2 active HTTP/3, écoute UDP/443 et l'annonce sur
+    chaque réponse — alors que la poignée de main n'aboutit pas, mesuré le
+    2026-09-30. Laisser le défaut, c'était annoncer ce qu'on ne sert pas.
+    """
+    serveur = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]
+    assert serveur["protocols"] == ["h1", "h2"]
+
+
+def test_chaque_reponse_porte_alt_svc_clear_route_servie_comme_refus(db):
+    """@verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.2, §18.6
+
+    La route commune vient EN TÊTE, sans filtre et non terminale : elle vaut
+    pour toute requête, puis la première qui correspond sert. `deferred` pose
+    l'en-tête au moment d'écrire la réponse. Mesuré sur Caddy 2.6.2 :
+    `alt-svc: clear`, seul, sur la route servie comme sur le refus `404`.
+    """
+    poser_spark(db, "S1", "sso")
+    ingress.declare(db, "S1", "oauth.exemple.test", 8443)
+    routes = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]["routes"]
+
+    commune = routes[0]
+    assert "match" not in commune and not commune.get("terminal")
+    assert commune["handle"] == [{
+        "handler": "headers",
+        "response": {"set": {"Alt-Svc": ["clear"]}, "deferred": True}}]
+    # Puis la route servie, puis le refus : la commune ne décide d'aucune
+    # préséance, elle ne sert rien.
+    assert routes[1]["match"][0]["host"] == ["oauth.exemple.test"]
+    assert routes[-1]["handle"][0]["status_code"] == 404
+    # Une seule : deux `clear` ne diraient rien de plus.
+    assert sum(1 for r in routes for h in r["handle"] if h["handler"] == "headers") == 1
+
+
+def test_le_clear_suit_les_protocoles_et_disparait_avec_HTTP3(db, monkeypatch):
+    """@verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.6
+
+    Une seule constante porte les deux. Le jour où HTTP/3 serait servi, un
+    `clear` resté en place effacerait l'annonce que Caddy vient de faire —
+    c'est le défaut inverse, et il ne doit pas pouvoir se produire en oubliant
+    une date de retrait.
+    """
+    monkeypatch.setattr(ingress, "PROTOCOLES", ("h1", "h2", "h3"))
+    poser_spark(db, "S1", "sso")
+    ingress.declare(db, "S1", "oauth.exemple.test", 8443)
+    serveur = ingress.build_config(db)["apps"]["http"]["servers"]["spark"]
+    assert serveur["protocols"] == ["h1", "h2", "h3"]
+    assert all(h["handler"] != "headers" for r in serveur["routes"] for h in r["handle"])
+
+    vu = ingress.comportement(db)
+    assert vu["response_headers"] == {}
+    assert "h3" in vu["protocols"]
+
+
+def test_un_en_tete_de_securite_pose_a_l_ingress_serait_reconnu(db, monkeypatch):
+    """@verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §44.2 quater
+
+    `Alt-Svc: clear` ne protège rien, et ne doit pas faire taire « aucun en-tête
+    de sécurité ». Un HSTS posé à l'ingress, lui, le doit — et c'est la lecture
+    de la configuration qui en décide, pas un drapeau tenu à la main.
+    """
+    monkeypatch.setattr(ingress, "_route_commune", lambda: {"handle": [{
+        "handler": "headers", "response": {"set": {
+            "Alt-Svc": ["clear"],
+            "Strict-Transport-Security": ["max-age=31536000"]}}}]})
+    poser_spark(db, "S1", "sso")
+    ingress.declare(db, "S1", "oauth.exemple.test", 8443)
+    vu = ingress.comportement(db)
+    assert vu["security_headers"] == ["Strict-Transport-Security"]
+    assert vu["response_headers"] == {
+        "Alt-Svc": "clear", "Strict-Transport-Security": "max-age=31536000"}
+
+
+def test_la_reconciliation_ne_compte_pas_la_route_commune(db):
+    """@verifies docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.5, §18.6
+
+    L'exploitant lit « N route(s) appliquée(s) » : la route commune ne sert
+    aucun domaine, la compter fausserait ce nombre comme le refus l'aurait fait.
+    """
+    poser_spark(db, "S1", "sso")
+    ingress.declare(db, "S1", "oauth.exemple.test", 8443)
+    faux = ingress.FakeCaddy()
+    assert ingress.reconcile(db, faux)["routes"] == 1
+    assert faux.config["apps"]["http"]["servers"]["spark"]["protocols"] == ["h1", "h2"]
