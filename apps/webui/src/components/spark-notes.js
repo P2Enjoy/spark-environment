@@ -10,12 +10,18 @@
  *       (l'absence se nomme), §14.6 (les états ne se confondent pas), §1.3 (pas
  *       de succès simulé), §1.5 bis (un refus n'efface pas la saisie), §6.9
  *       (champ), §9.9 (désactivé mais visible)
+ * @spec docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 (une note proposée se
+ *       relit en deux colonnes, avant les gestes qui tranchent) ·
+ *       docs/DESIGN_SYSTEM.md §6.29 · docs/DESIGN_SYSTEM_APP.md SPK-DS-27 —
+ *       pour `proposition`, `cleComparaison` et l'état `deplies`
  *
  * **Le produit ne vérifie pas ces textes, il les transporte.** L'écran le dit en
  * toutes lettres : une note périmée est un défaut de documentation, pas un
  * défaut du produit — et c'est précisément pourquoi les faits du briefing et les
  * notes ne se mélangent jamais (§54.11).
  */
+
+import { renderComparaison } from './comparaison.js';
 
 const echapper = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) =>
@@ -44,7 +50,10 @@ export const NOTES_VIDE = {
   // s'acceptent ICI, sur la facette qui porte l'objet.
   propositions: [],
   cellLue: false,
-  compare: null,         // l'identifiant de la proposition dépliée
+  // SPK-131 · §55.9.3 : les replis de lignes identiques DÉPLIÉS, par
+  // comparaison — { [cleComparaison]: Set des index de repli }. Ils survivent à
+  // la repeinture : accepter la note d'à côté ne les replie pas.
+  deplies: {},
 };
 
 /** Les trois origines possibles, dites en français (§14.7). */
@@ -85,24 +94,48 @@ function etatDe(note) {
 }
 
 /**
- * La proposition en attente pour CETTE note, s'il y en a une (§55.9).
+ * Ce qui identifie UNE comparaison : la note, la révision du texte actuel, et
+ * l'empreinte de la proposition. Un repli déplié s'y rattache — une autre
+ * proposition, ou un texte actuel réécrit, se replient à neuf, puisque leurs
+ * replis ne sont plus les mêmes lignes.
+ */
+export const cleComparaison = (note, proposee) =>
+  `${note.id}:${note.revision}:${proposee.sha256 ?? ''}`;
+
+/**
+ * La proposition en attente pour CETTE note, s'il y en a une (§55.9, §55.9.3).
  *
- * Elle est montrée **à côté** du texte courant, jamais à sa place : accepter un
- * remplacement intégral sans voir ce qu'on remplace serait décider à l'aveugle.
+ * Elle se lit **comparée** au texte qu'elle remplacerait, ligne à ligne, et les
+ * boutons qui tranchent viennent APRÈS la comparaison : on relit, puis on
+ * décide. La colonne de droite est `replacement` — ce que `sparkd` dit que
+ * l'acceptation écrira —, jamais le `.?` brut : un agent qui recopie README.md y
+ * laisse l'en-tête du produit, que l'acceptation retire.
  */
 function proposition(note, ui) {
   const p = (ui.propositions ?? []).find((x) => x.kind === note.id && x.present);
   if (!p) return '';
-  const ouvert = ui.compare === note.id;
+  // §55.9.3 : une Forge d'avant SPK-131 ne rend pas `replacement`. On compare
+  // alors le fichier tel quel, et on le DIT — l'en-tête recopié y paraîtrait
+  // ajouté alors que l'acceptation le retirera (§14.7 : pas d'`undefined`).
+  const connu = typeof p.replacement === 'string';
+  const cle = cleComparaison(note, p);
   return `<div class="proposition" data-proposition="${echapper(note.id)}">
     <p class="avertissement" role="status"><strong>Une version est proposée depuis
     la cellule.</strong> Elle <strong>remplacerait ce texte en entier</strong>.
     Tant que vous n’avez pas tranché, elle reste en place — la lire ne l’efface pas.</p>
-    <details class="repli"${ouvert ? ' open' : ''}>
-      <summary>Lire la version proposée</summary>
-      <pre class="fragment technique" tabindex="0"
-        aria-label="Version proposée depuis la cellule">${echapper(p.body)}</pre>
-    </details>
+    ${connu ? '' : `<p class="avertissement">Cette Forge ne dit pas encore quel texte
+      l’acceptation écrirait : la comparaison porte sur le fichier proposé tel quel.
+      Un en-tête recopié y paraît ajouté, alors que l’acceptation le retirera.</p>`}
+    ${renderComparaison({
+      id: note.id, cle, sujet: note.file,
+      avant: note.body, apres: connu ? p.replacement : p.body,
+      titreAvant: note.written ? `Texte actuel · révision ${note.revision}`
+        : 'Texte actuel : jamais écrit',
+      titreApres: 'Version proposée',
+      avantAbsent: note.written ? null
+        : 'Personne n’a encore écrit cette note : tout le texte proposé est nouveau.',
+      deplies: ui.deplies?.[cle] ?? new Set(),
+    })}
     <p class="formulaire__actions">
       <button type="button" class="bouton bouton--primaire"
         data-note-accepter="${echapper(note.id)}"

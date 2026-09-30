@@ -2,6 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-23 · docs/BACKLOG.md#SPK-85 · docs/DAT.md §28 (la pile et le seed),
       docs/BACKLOG.md#SPK-116 · docs/DAT.md §61.4 (les projets de démonstration),
+      docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 (une proposition de README
+      qui modifie une note écrite, en-tête recopié),
       §28.3 (les mêmes chemins que l'application), §28.5 (ce qu'il démontre),
       §28.6 (rejouable à l'identique) · CLAUDE.md §8
 
@@ -460,13 +462,24 @@ def populate(client: TestClient, incus, caddy, sondes) -> dict[str, int]:
     # Les textes passent par la VRAIE route d'API, comme tout le reste du seed
     # (§28.3) : aucune ligne n'est écrite en base à la main.
     notes_seedees = [
+        # SPK-131 · §55.9.3 : assez de lignes pour qu'une proposition y montre
+        # des lignes identiques REPLIÉES — sur six lignes, tout tiendrait dans
+        # le contexte, et le repli ne se verrait nulle part.
         ("crm-production", "readme",
          "# CRM de production\n\n"
          "Le CRM que l'équipe commerciale emploie tous les jours. Il porte les "
          "comptes clients et les devis ; l'arrêter arrête la facturation.\n\n"
+         "## Ce qui tourne ici\n\n"
          "- Pile : une application web et sa base Postgres, en Compose.\n"
+         "- Tâches planifiées : relance des devis expirés, chaque nuit à 2 h.\n"
          "- Sauvegardes : instantané quotidien, plus l'export S3 de "
-         "l'application elle-même."),
+         "l'application elle-même.\n\n"
+         "## Qui dépend de lui\n\n"
+         "- La facturation lit les devis signés chaque matin.\n"
+         "- Le site vitrine interroge l'API des tarifs.\n\n"
+         "## Qui prévenir\n\n"
+         "- Équipe commerciale : canal #crm.\n"
+         "- Astreinte technique : voir CONTRIBUTORS.md."),
         ("crm-production", "contributors",
          "## Où sont les choses\n\n"
          "- Sources : dépôt `crm`, branche `main`.\n"
@@ -525,11 +538,41 @@ def populate(client: TestClient, incus, caddy, sondes) -> dict[str, int]:
          "# Jeton du service de cartes, à demander au fournisseur.\n"
          "MAPS_TOKEN=\n"),
     ]
+    cellule = client.app.state.incus
     for spark, kind, texte in propositions:
-        cellule = client.app.state.incus
         cellule.push_file(spark, suggestions_service.chemin(kind),
                           suggestions_service.entete(kind) + texte)
         compte["propositions"] = compte.get("propositions", 0) + 1
+
+    # SPK-131 · §55.9.3 : une proposition qui MODIFIE une note écrite. Sans
+    # elle, la seule proposition de note est celle d'INSTALL, jamais écrite :
+    # l'écran n'y montrerait que des ajouts — ni ligne retirée, ni mot changé,
+    # ni repli, ni retrait de l'en-tête.
+    #
+    # Elle est faite comme un agent la fait (§54.7) : il RELIT le README.md posé
+    # dans la cellule, EN-TÊTE DU PRODUIT COMPRIS, le recopie dans son `.?` et
+    # en change trois endroits — une heure corrigée, une ligne ajoutée, une
+    # ligne réécrite.
+    from . import notes as notes_service
+
+    reel = cellule.pull_file("crm-production", notes_service.chemin("readme"))
+    if not reel or notes_service.MARQUEUR not in reel:
+        raise SeedError("le README.md de crm-production n'est pas dans la cellule, "
+                        "ou sans l'en-tête du produit")
+    retouches = (
+        ("chaque nuit à 2 h.", "chaque nuit à 3 h."),
+        ("- Le site vitrine interroge l'API des tarifs.\n",
+         "- Le site vitrine interroge l'API des tarifs.\n"
+         "- Le portail client lit l'état des commandes.\n"),
+        ("- Astreinte technique : voir CONTRIBUTORS.md.",
+         "- Astreinte technique : canal #astreinte, jour et nuit."),
+    )
+    for avant, apres in retouches:
+        if reel.count(avant) != 1:
+            raise SeedError(f"retouche du README introuvable : {avant!r}")
+        reel = reel.replace(avant, apres)
+    cellule.push_file("crm-production", suggestions_service.chemin("readme"), reel)
+    compte["propositions"] += 1
 
     # --- Un Spark PROTÉGÉ (SPK-34, docs/DAT.md §35). Sans lui, l'écran ne peut
     # montrer ni le badge, ni le refus 423, ni la confirmation de révocation qui
@@ -750,10 +793,20 @@ def verify(client: TestClient) -> None:
     # lire ne les consomme pas — c'est la règle que le seed doit démontrer.
     vues = client.get("/v1/sparks/crm-production/suggestions").json()
     en_attente = {s["kind"] for s in vues["suggestions"] if s["present"]}
-    if {"install", "variables"} - en_attente:
+    if {"install", "variables", "readme"} - en_attente:
         raise SeedError(
-            "les deux propositions déposées dans la cellule devraient être en "
+            "les trois propositions déposées dans la cellule devraient être en "
             f"attente ; seules {sorted(en_attente)} le sont")
+    # SPK-131 · §55.9.3 : la proposition de README porte l'en-tête recopié, et
+    # ce que l'acceptation écrirait ne le porte pas — c'est ce que la colonne de
+    # droite doit montrer.
+    readme_propose = next(s for s in vues["suggestions"] if s["kind"] == "readme")
+    from . import notes as notes_service
+    if (notes_service.MARQUEUR not in readme_propose["body"]
+            or notes_service.MARQUEUR in readme_propose["replacement"]
+            or "chaque nuit à 3 h." not in readme_propose["replacement"]):
+        raise SeedError("la proposition de README de crm-production devrait porter "
+                        "l'en-tête recopié, et son remplacement en être privé")
     # Relue une seconde fois : elle doit TOUJOURS être là (§55.5).
     encore = client.get("/v1/sparks/crm-production/suggestions").json()
     if {s["kind"] for s in encore["suggestions"] if s["present"]} != en_attente:

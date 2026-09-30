@@ -53,9 +53,9 @@ leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-ma
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 127 unités : 106 closes, 10
-partielles, 11 non commencées — SPK-113, qui attend une mesure, SPK-131, la
-relecture d'une note proposée en deux colonnes, et les neuf du lot 7. Le lot 6, *Réseau entre Sparks*, ouvert le 2026-09-17, a été clos le
+**Le plan de contrôle tourne sur une Forge réelle.** 127 unités : 107 closes, 10
+partielles, 10 non commencées — SPK-113, qui attend une mesure, et les neuf du
+lot 7. Le lot 6, *Réseau entre Sparks*, ouvert le 2026-09-17, a été clos le
 2026-09-18. Le lot 7, *La console hébergée derrière le SSO du domaine*, est
 décidé depuis le 2026-09-26 et spécifié au §64 du [DAT](docs/DAT.md) ; rien n'en
 est encore livré. L'état de chacune est dans
@@ -635,6 +635,11 @@ une garde qui n'existe que dans un fichier de workflow.
   refuse une capacité réseau nulle plutôt que de la retenir (SPK-07) ; mesuré le
   2026-09-30 sur la machine du banc de redémarrage, qui emploie donc une carte
   `e1000e` (`docs/DAT.md` §51.5).
+- **Accepter une note proposée ne revérifie pas le texte comparé** (`docs/DAT.md`
+  §55.9.3). La comparaison en deux colonnes est celle de l'ouverture de l'onglet
+  *Notes* ; si la note est réécrite entre-temps depuis un autre onglet,
+  l'acceptation remplace cette version sans l'avoir montrée. L'empreinte garde
+  la version proposée, rien ne garde le texte actuel.
 - **Le préflight ne relève que les écoutes TCP.** `SEC-PORTS` lit `ss -lnt` : une
   écoute UDP exposée lui échappe — c'est ainsi que l'UDP/443 de Caddy est passé
   inaperçu jusqu'au 2026-09-30.

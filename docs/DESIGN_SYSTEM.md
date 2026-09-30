@@ -1459,7 +1459,7 @@ mesure sur les couleurs rendues, numéros de ligne compris.
 
 **Les lignes identiques se replient au-delà d’un court contexte** — quelques
 lignes autour de chaque changement. Le repli est un bouton qui **compte** et
-**situe** ce qu’il cache (« Afficher 12 lignes identiques (8 à 19) »), porte
+**situe** ce qu’il cache (« Afficher 12 lignes identiques (lignes 8 à 19) »), porte
 `aria-expanded`, et **reste en place** une fois déplié pour permettre de replier :
 le focus ne se perd pas (§14.3). Un repli qui cacherait moins de lignes qu’il n’en
 occupe n’est pas fait. Ce qui a été déplié survit à une repeinture de la vue.

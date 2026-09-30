@@ -8125,7 +8125,7 @@ tient lieu de preuve.
   proche, certificat absent) produite par `make captures`. **Reste `[~]`** :
   relu sur la Forge réelle seulement après OP-29.
 
-### [ ] SPK-131 · Une note proposée se relit en deux colonnes, comme une revue de code
+### [x] SPK-131 · Une note proposée se relit en deux colonnes, comme une revue de code
 
 **Demandé par le responsable le 2026-09-30** : « lors des propositions de
 changement des fichiers INSTALL, CONTRIB, README, on devrait afficher un côte à
@@ -8149,22 +8149,22 @@ ce qui change.
 
 **Portée, et découpage :**
 
-1. Documentation — DAT, design system, backlog, journal, OP-30 — *committée
-   avant le code* ;
+1. Documentation — DAT, design system, backlog, journal, OP-30 — *fait,
+   committée avant le code* (`c92c014`) ;
 2. `sparkd` : `replacement` dans la lecture des propositions de note ; preuves —
-   un texte recopié avec l'en-tête du produit, un texte écrit sans ;
+   un texte recopié avec l'en-tête du produit, un texte écrit sans — *fait* ;
 3. console : la comparaison (alignement de Myers borné, appariement des lignes
    d'un même bloc, mots changés, replis des lignes identiques), rendue en deux
    colonnes et en une ; replis dépliés sans repeinture, et qui survivent à
    elle ; les quatre états nommés ; repli sur le `.?` brut, dit, quand `sparkd`
-   ne rend pas `replacement` ; preuves d'unité et de composant ;
+   ne rend pas `replacement` ; preuves d'unité et de composant — *fait* ;
 4. seed : une proposition de README qui **modifie** une note écrite, recopiée
    avec l'en-tête du produit comme le fait un agent — sans elle, l'écran ne
    montre que des ajouts, et ni les lignes retirées, ni les mots changés, ni un
-   repli, ni le retrait de l'en-tête ne se voient ;
+   repli, ni le retrait de l'en-tête ne se voient — *fait* ;
 5. E2E, captures, manuel : un parcours depuis l'accueil relit la comparaison,
    déplie un repli, accepte, puis constate le registre et la cellule ; captures
-   à 1440 et 390 px observées ; manuel M8 et ses illustrations.
+   à 1440 et 390 px observées ; manuel M8 et ses illustrations — *fait*.
 
 - Aucune variable d'environnement, aucune migration, aucune route nouvelle.
 - Hors de la demande, consigné au §55.9.3 et non corrigé : l'acceptation ne porte
@@ -8175,6 +8175,19 @@ ce qui change.
   replis et leurs libellés, quatre états, échappement du HTML, repli dit sans
   `replacement`) ; preuve `sparkd` du `replacement` ; parcours E2E ; captures
   observées ; manuel M8, design system, DAT à jour ; `@spec` / `@verifies`.
+- **Clos le 2026-09-30.** 4 preuves `sparkd` du `replacement` et 1 du seed
+  (`sparkd` 1549/1549) ; 26 preuves du module de comparaison, dont une propriété
+  sur 400 couples tirés au hasard contre une plus longue sous-suite commune
+  calculée à part, et 5 de la facette (console 1539/1540, l'échec restant étant
+  celui, antérieur, des classes de SPK-104) ; le parcours
+  `spk131-note-comparee` — compte, colonnes, mots marqués, repli déplié à la
+  souris puis replié et redéplié au clavier sans perdre le focus, repli qui
+  survit au refus de la note voisine, une colonne à 390 px sans défilement,
+  acceptation, registre et cellule relus ; campagne E2E complète 148/148 ;
+  gestes 13/13. Captures `spk131-note-comparee`, `-depliee`, `-mobile` et
+  `spk104-notes-*` observées ; deux défauts vus à l'écran et corrigés avant le
+  commit (en-têtes en chasse fixe, ligne repliée repartant sous le signe).
+  **Déploiement** : OP-30, en attente d'instruction.
 
 ---
 

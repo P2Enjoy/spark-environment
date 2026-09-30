@@ -15,6 +15,8 @@
       `a_conserver` et `reecrire`
 @spec docs/BACKLOG.md#SPK-115 · docs/DAT.md §60.1, §60.2 (ce qui attend, sans
       le corps, sans rien poser) — pour `en_suspens`
+@spec docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.8 (`replacement`), §55.9.3 (ce
+      que la comparaison compare) — pour le `replacement` que rend `lire`
 
 **La règle du produit, en deux lignes** : tout fichier que le plan de contrôle
 pose dans une cellule est régénéré en entier depuis le registre, et l'écrire à la
@@ -347,7 +349,7 @@ def lire(kind: str, lecteur: Callable[[str], str | None]) -> dict[str, Any]:
     paire = definition(kind)
     brut = lecteur(chemin(kind))
     corps = sans_entete(kind, brut)
-    return {
+    vue = {
         "kind": paire["kind"],
         "nature": paire["nature"],
         "title": paire["titre"],
@@ -358,6 +360,14 @@ def lire(kind: str, lecteur: Callable[[str], str | None]) -> dict[str, Any]:
         "body": corps,
         "sha256": empreinte(corps) if corps else None,
     }
+    if paire["nature"] == TEXTE:
+        # @spec docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.8, §55.9.3 — le texte
+        # que l'acceptation ÉCRIRAIT, que la console compare au texte actuel.
+        # Calculé par la fonction même que l'acceptation emploie : un agent qui
+        # recopie README.md y laisse l'en-tête du produit, et relire le `.?`
+        # brut ferait relire autre chose que ce qu'on accepte.
+        vue["replacement"] = notes_service.sans_entete(corps)
+    return vue
 
 
 def poser_manquants(lecteur: Callable[[str], str | None],

@@ -182,7 +182,7 @@ const etat = { status: 'loading', sparks: [], usage: {}, error: null,
                // lorsqu'on l'ouvre — trois textes et une lecture de la cellule
                // n'ont rien à faire dans le chargement des huit autres facettes.
                notes: { ...NOTES_VIDE, brouillons: {}, items: [],
-                        propositions: [] },
+                        propositions: [], deplies: {} },
                // SPK-105 · §55.9 : les propositions venues de la cellule. Elles
                // s'ouvrent sur les facettes Environnement et Routes, qui les
                // chargent à leur ouverture — comme les notes, et pour la même
@@ -2258,12 +2258,34 @@ function brancherPanneaux() {
       peindre();
     });
   }
-  // §55.5 : le repli d'une proposition survit à la repeinture, comme celui du
-  // dossier. Sans cela, on le referme en acceptant la note d'à côté.
-  for (const repli of racine.querySelectorAll('.proposition .repli')) {
-    repli.addEventListener('toggle', () => {
-      const id = repli.closest('[data-proposition]')?.dataset.proposition;
-      etat.notes.compare = repli.open ? id : null;
+  // @spec docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 · docs/DESIGN_SYSTEM.md
+  //       §6.29, §14.3 — un repli de lignes identiques se déplie SANS repeindre.
+  // Repeindre reconstruirait la carte et arracherait le focus au bouton
+  // (§14.3) ; on bascule donc le `tbody` et le libellé à la main. Le bouton
+  // RESTE en place et devient « Masquer ». Les deux vues — deux colonnes et une
+  // — basculent ensemble : la largeur peut changer entre deux gestes.
+  //
+  // L'état est retenu par comparaison (`cleComparaison`) : accepter la note
+  // d'à côté repeint la facette, et ne doit pas replier ce qu'on relisait.
+  for (const bouton of racine.querySelectorAll('[data-comparaison-pli]')) {
+    bouton.addEventListener('click', () => {
+      const comparaison = bouton.closest('[data-comparaison-cle]');
+      if (!comparaison) return;
+      const cle = comparaison.dataset.comparaisonCle;
+      const index = Number(bouton.dataset.comparaisonPli);
+      const deplie = bouton.getAttribute('aria-expanded') !== 'true';
+      const deplies = (etat.notes.deplies[cle] ??= new Set());
+      if (deplie) deplies.add(index);
+      else deplies.delete(index);
+      for (const b of comparaison.querySelectorAll(
+        `[data-comparaison-pli="${index}"]`)) {
+        b.setAttribute('aria-expanded', String(deplie));
+        b.textContent = deplie ? b.dataset.libelleMasquer : b.dataset.libelleAfficher;
+      }
+      for (const lignes of comparaison.querySelectorAll(
+        `[data-comparaison-lignes="${index}"]`)) {
+        lignes.hidden = !deplie;
+      }
     });
   }
   // Le repli survit à la repeinture. On NE repeint PAS ici : `innerHTML`
@@ -3788,7 +3810,8 @@ async function chargerDetail(nom, facette = '') {
     // Les notes appartiennent à l'écran qui les a demandées : les garder
     // afficherait celles d'un Spark sous le nom du suivant — le défaut que le
     // §37.6 corrige pour Docker, et le §52.11 pour les mesures.
-    etat.notes = { ...NOTES_VIDE, brouillons: {}, items: [], propositions: [] };
+    etat.notes = { ...NOTES_VIDE, brouillons: {}, items: [], propositions: [],
+                   deplies: {} };
   }
   if (facette === 'mesures' && etat.status === 'ready') {
     chargerMesuresSpark(nom);

@@ -3,6 +3,25 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-131 — une note proposée se relit en deux colonnes, comme une revue de
+  code.** Demandé par le responsable : « un côte à côte comme GitHub, avec les
+  différences, avant d'accepter ». Sur l'onglet Notes, une version de README,
+  CONTRIBUTORS ou INSTALL proposée depuis la cellule n'est plus un texte brut
+  replié : elle est comparée au texte actuel — à gauche le texte et sa révision,
+  à droite ce que l'acceptation écrira —, avec le compte (« 2 lignes retirées,
+  3 ajoutées, 17 identiques »), les numéros de ligne, « − » et « + », la ligne
+  réécrite face à celle qu'elle remplace et le mot changé en `del` / `ins`. Les
+  lignes identiques au-delà de trois de contexte se replient derrière un bouton
+  qui les compte et reste en place (« Masquer ») ; un pli déplié survit à la
+  repeinture. Une colonne sous 768 px. Quatre états nommés : note jamais écrite,
+  version identique, version vide, textes trop différents (alignement de Myers
+  borné à mille différences). `GET /v1/sparks/{nom}/suggestions` rend, pour les
+  notes, `replacement` — le texte sans l'en-tête qu'un agent recopie avec
+  README.md, que l'acceptation retirait déjà ; une Forge qui ne le rend pas est
+  dite à l'écran. Seed : une proposition de README qui modifie la note écrite
+  de `crm-production`. Aucune variable, aucune migration, aucune route. DAT
+  §55.8, §55.9.3 ; design system §6.29 (règle générique) et SPK-DS-27 ; manuel
+  M8 ; OP-30.
 - **SPK-130 — la page des routes diagnostique en direct : DNS, Caddy,
   certificat.** Demandé par le responsable : « si la console ne fait pas du
   vrai diagnostic, on est mal ». À chaque ouverture de l'onglet Routes, et sur

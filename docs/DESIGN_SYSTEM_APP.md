@@ -1136,12 +1136,20 @@ côte comme GitHub, avec les différences, avant d'accepter ». Ce que la facett
   `--color-text-2`, parce que `--color-text-3` ne tient pas l'AA sur les fonds
   doux — calculé le 2026-09-30 : 4,12 sur `danger-soft`, 4,16 sur
   `success-soft`, contre 6,44 et 6,50 pour `--color-text-2` ;
-- trois lignes de contexte, puis « Afficher N lignes identiques (a à b) » ;
+- trois lignes de contexte, puis « Afficher N lignes identiques (lignes a à b) » ;
 - une seule colonne sous 768 px ;
 - la colonne de droite est le `replacement` que rend `sparkd`, jamais le `.?`
   brut : un agent qui recopie `README.md` y laisse l'en-tête du produit, que
   l'acceptation retire. Une Forge qui ne le rend pas encore est **dite** au-dessus
-  de la comparaison.
+  de la comparaison ;
+- les en-têtes de colonne en texte d'interface, et un **retrait suspendu** qui
+  aligne la suite d'une ligne repliée sur son texte — deux défauts vus en
+  capture le 2026-09-30 : les en-têtes héritaient de la chasse fixe de la table,
+  et « relance des devis expirés » repartait sous le « − ».
+
+Preuves observées le 2026-09-30 : `e2e/captures/spk131-note-comparee`,
+`-depliee` (le repli déplié, le focus resté sur « Masquer »), `-mobile` (une
+colonne à 390 px), et `spk104-notes-proposition`.
 
 Trois choses que l'écran dit, parce qu'elles décident du geste :
 

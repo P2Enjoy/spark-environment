@@ -294,12 +294,21 @@ export async function produireIllustrations({ silencieux = false } = {}) {
       { timeout: 20000 });
     await capturer('m8-notes', { hauteur: 1100 });
 
-    // La proposition DÉPLIÉE : c'est le geste que le chapitre décrit, et une
-    // capture repliée ne montrerait pas qu'on lit avant de trancher (§55.9).
-    await page.click('.proposition .repli summary');
-    await page.waitForSelector('.proposition .repli[open]', { timeout: 5000 });
-    await page.locator('.proposition').scrollIntoViewIfNeeded();
-    await capturer('m8-notes-proposition', { hauteur: 900 });
+    // La proposition COMPARÉE, en deux colonnes (SPK-131, §55.9.3) : c'est le
+    // geste que le chapitre décrit — on relit ce qui change, puis on tranche.
+    // Le seed a déposé une proposition de README qui modifie la note écrite :
+    // lignes retirées, mots changés et repli s'y voient d'un coup.
+    await page.waitForSelector('[data-proposition="readme"] .comparaison__deux',
+                               { timeout: 10000 });
+    // Cadrée en HAUT de l'écran, et haute de 1000 px : la comparaison ET les
+    // deux gestes qui la suivent doivent tenir dans l'image — c'est l'ordre
+    // « on relit, puis on tranche » que le chapitre décrit. Défilement par le
+    // document : la facette se repeint à la lecture de la cellule.
+    await page.setViewportSize({ width: LARGEUR, height: 1000 });
+    // La CARTE entière, titre compris : l'image doit dire quelle note est comparée.
+    await page.evaluate(() => document.querySelector('[data-proposition="readme"]')
+      ?.closest('section')?.scrollIntoView({ block: 'start' }));
+    await capturer('m8-notes-proposition', { hauteur: 1000 });
 
     // --- M8 · Une proposition de variables, relue (SPK-105, §55.9) -----------
     // Le seed en a déposé une dans la cellule et l'y laisse EN ATTENTE : c'est

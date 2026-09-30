@@ -159,6 +159,35 @@ def test_une_demande_sans_valeur_attend_a_cote_d_une_valeur(seede):
     assert "# Jeton du service de cartes, à demander au fournisseur.\nMAPS_TOKEN=" in corps
 
 
+def test_une_proposition_de_readme_MODIFIE_une_note_ecrite_en_tete_recopie(seede):
+    """@verifies docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 (ce qui est
+    comparé), §55.8 (`replacement`) · CLAUDE.md §8
+
+    Sans elle, la seule proposition de note serait celle d'INSTALL, jamais
+    écrite : la comparaison n'y montrerait que des ajouts, et ni ligne retirée,
+    ni mot changé, ni repli, ni retrait de l'en-tête ne se verraient à l'écran.
+    """
+    from sparkd import notes
+
+    note = next(n for n in seede.get("/v1/sparks/crm-production/notes").json()["notes"]
+                if n["id"] == "readme")
+    vue = next(s for s in seede.get("/v1/sparks/crm-production/suggestions").json()[
+        "suggestions"] if s["kind"] == "readme")
+    assert note["written"] and vue["present"]
+    # Recopiée comme un agent la recopie : l'en-tête du produit est dedans…
+    assert notes.MARQUEUR in vue["body"]
+    # … et ce que l'acceptation écrirait n'en a plus rien.
+    assert notes.MARQUEUR not in vue["replacement"]
+    avant = note["body"].split("\n")
+    apres = vue["replacement"].split("\n")
+    assert "- Tâches planifiées : relance des devis expirés, chaque nuit à 2 h." in avant
+    assert "- Tâches planifiées : relance des devis expirés, chaque nuit à 3 h." in apres
+    assert "- Le portail client lit l'état des commandes." in apres
+    assert len(apres) == len(avant) + 1
+    # Assez de lignes identiques en tête pour qu'un repli s'y fasse (§55.9.3).
+    assert avant[:7] == apres[:7]
+
+
 def test_un_spark_a_ses_cles_et_un_autre_n_en_a_aucune(seede):
     """§26.4, §28.5 — l'absence nommée doit être atteignable à l'écran."""
     avec = seede.get("/v1/sparks/crm-production/ssh-config").json()["keys"]

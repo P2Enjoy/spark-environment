@@ -7,7 +7,9 @@
  *           docs/BACKLOG.md#SPK-128 (le dossier dit l'en-tête que l'ingress
  *           pose et le HTTP/3 qu'il ne sert pas, §18.6, §44.2 quater),
  *           docs/BACKLOG.md#SPK-130 (la facette Routes relève Caddy et le
- *           certificat à chaque visite, §18.7) ·
+ *           certificat à chaque visite, §18.7),
+ *           docs/BACKLOG.md#SPK-131 (une note proposée se relit en deux
+ *           colonnes, §55.9.3) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -6098,6 +6100,119 @@ test('une demande ÉCARTÉE reste en attente, et seul « Tout refuser » la reti
       '« Tout refuser » devait vider le `.?`');
     const { corps: apres } = await pile.lireSparkd('/v1/sparks/ubuntu-24/env');
     assert.equal(apres.env.some((e) => e.name === 'MAPS_TOKEN'), false);
+  });
+});
+
+// --- SPK-131 · UNE NOTE PROPOSÉE SE RELIT EN DEUX COLONNES (§55.9.3) ---------
+
+test('une note proposée se relit en deux colonnes, se déplie au clavier, puis s’accepte', async () => {
+  await parcours('spk131-note-comparee', async () => {
+    // @verifies docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 (ce qui est
+    //           comparé, les deux colonnes, les replis, une colonne sous
+    //           768 px, les gestes après la comparaison), §55.8
+    //           (`replacement`) · docs/DESIGN_SYSTEM.md §6.29, §14.3 ·
+    //           docs/DESIGN_SYSTEM_APP.md SPK-DS-27
+    //
+    // Le seed a déposé dans la cellule de « crm-production » une copie de son
+    // README.md, EN-TÊTE DU PRODUIT COMPRIS, dont trois endroits changent — le
+    // geste d'un agent (§54.7). L'écran doit montrer ce que l'acceptation
+    // écrira : ni plus — l'en-tête —, ni moins.
+    await ouvrir('crm-production', 'notes');
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Lecture des notes'),
+      null, { timeout: 20000 });
+    const carte = 'section.note-carte:has([data-note-saisie="readme"])';
+    const deux = `${carte} .comparaison__deux`;
+    await page.waitForSelector(deux, { timeout: 20000 });
+
+    // Le compte, et les deux colonnes titrées.
+    assert.equal(await page.innerText(`${carte} .comparaison__compte`),
+      '2 lignes retirées, 3 ajoutées, 17 identiques');
+    const entetes = await page.$$eval(`${deux} thead th`, (ths) => ths.map((th) => th.innerText));
+    assert.deepEqual(entetes, ['Texte actuel · révision 1', 'Version proposée']);
+    // L'en-tête recopié par l'agent n'est NULLE PART : l'acceptation le retire.
+    assert.doesNotMatch(await page.innerText(carte), /spark:note|POSÉ PAR LE PLAN DE CONTRÔLE/);
+    assert.doesNotMatch(await page.innerText(carte), /Lire la version proposée/);
+
+    // La ligne changée fait face à celle qui la remplace, le mot changé marqué.
+    const dels = await page.$$eval(`${deux} del`, (els) => els.map((e) => e.textContent));
+    const inss = await page.$$eval(`${deux} ins`, (els) => els.map((e) => e.textContent));
+    assert.ok(dels.includes('2'), `mots retirés : ${dels}`);
+    assert.ok(inss.includes('3'), `mots ajoutés : ${inss}`);
+    // La ligne ajoutée se dit « ajoutée » à la synthèse, pas seulement en vert.
+    // (Le texte pour la synthèse est positionné hors flux : `innerText` le suit
+    // d'un retour à la ligne.)
+    assert.match(await page.innerText(deux), /ajoutée :\s+- Le portail client lit l.état des commandes\./);
+    await capturer('spk131-note-comparee', { hauteur: 1200 });
+
+    // Les quatre premières lignes, identiques, sont repliées ; le bouton les
+    // compte et les situe. On le CLIQUE…
+    const pli = `${deux} [data-comparaison-pli="0"]`;
+    assert.equal(await page.innerText(pli), 'Afficher 4 lignes identiques (lignes 1 à 4)');
+    assert.equal(await page.isVisible(`${deux} td:has-text("# CRM de production")`), false);
+    await page.click(pli);
+    await page.waitForSelector(`${deux} td:has-text("# CRM de production")`, { timeout: 5000 });
+    assert.equal(await page.innerText(pli), 'Masquer 4 lignes identiques (lignes 1 à 4)');
+    assert.equal(await page.getAttribute(pli, 'aria-expanded'), 'true');
+    // … il RESTE en place et garde le focus (§14.3) : le clavier le replie.
+    assert.equal(await page.evaluate(
+      () => document.activeElement?.dataset?.comparaisonPli), '0');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      (s) => document.querySelector(s)?.getAttribute('aria-expanded') === 'false',
+      pli, { timeout: 5000 });
+    assert.equal(await page.isVisible(`${deux} td:has-text("# CRM de production")`), false);
+    await page.keyboard.press('Enter');
+    await page.waitForSelector(`${deux} td:has-text("# CRM de production")`, { timeout: 5000 });
+    await capturer('spk131-note-comparee-depliee', { hauteur: 1200 });
+
+    // Trancher la note d'À CÔTÉ repeint la facette : ce qu'on relisait reste
+    // déplié (SPK-DS-27).
+    await page.click('[data-note-refuser="install"]');
+    await page.waitForFunction(
+      () => /Proposition refusée/.test(document.body.innerText)
+            && !document.querySelector('[data-note-accepter="install"]'),
+      null, { timeout: 20000 });
+    assert.equal(await page.getAttribute(pli, 'aria-expanded'), 'true');
+    assert.equal(await page.isVisible(`${deux} td:has-text("# CRM de production")`), true);
+
+    // Sous 768 px, la MÊME comparaison en une colonne, sans défilement de page.
+    await page.setViewportSize({ width: 390, height: 1400 });
+    assert.equal(await page.isVisible(`${carte} .comparaison__une`), true);
+    assert.equal(await page.isVisible(deux), false);
+    assert.equal(await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1),
+      false, 'la page défile horizontalement à 390 px');
+    await page.locator(`${carte} .comparaison__une`).scrollIntoViewIfNeeded();
+    await capturer('spk131-note-comparee-mobile', { largeur: 390, hauteur: 1400 });
+    await page.setViewportSize({ width: 1440, height: 1300 });
+
+    // Ce que la colonne de droite montrait est ce que `sparkd` écrira.
+    const { corps: vues } = await pile.lireSparkd('/v1/sparks/crm-production/suggestions');
+    const attendu = vues.suggestions.find((s) => s.kind === 'readme').replacement;
+
+    await page.click('[data-note-accepter="readme"]');
+    // L'écran RELU et le message (SPK-DS-27) avant de lire `sparkd` : la
+    // relecture de la console et la nôtre se croiseraient dans le doublon.
+    await page.waitForFunction(
+      () => /Version acceptée/.test(document.body.innerText)
+            && !document.querySelector('[data-note-accepter="readme"]'),
+      null, { timeout: 20000 });
+    assert.match(await page.innerText(carte), /écrite depuis une proposition acceptée/);
+
+    const { corps } = await pile.lireSparkd('/v1/sparks/crm-production/notes');
+    const readme = corps.notes.find((n) => n.id === 'readme');
+    assert.equal(readme.body, attendu);
+    assert.equal(readme.origin, 'suggestion');
+    assert.match(readme.body, /chaque nuit à 3 h\./);
+    assert.doesNotMatch(readme.body, /spark:note/);
+    // Dans la cellule : la note reprojetée, sous UN seul en-tête, et le `.?` vidé.
+    const fichiers = await pile.fichiersCellule('crm-production');
+    const reel = fichiers['/etc/spark/notes/README.md'] ?? '';
+    assert.match(reel, /chaque nuit à 3 h\./);
+    assert.equal(reel.split('<!-- spark:note').length - 1, 1);
+    const apres = await pile.lireSparkd('/v1/sparks/crm-production/suggestions');
+    assert.equal(apres.corps.suggestions.find((s) => s.kind === 'readme').present, false);
   });
 });
 

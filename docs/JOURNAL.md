@@ -13185,3 +13185,29 @@ au §55.9.3, et proposé au responsable.
 **Documents** : DAT §55.8 et §55.9.3, règle générique `DESIGN_SYSTEM.md` §6.29,
 SPK-DS-27 révisé, SPK-131, OP-30, compte du README corrigé (il datait d'avant
 SPK-128). Committés avant le code.
+
+## 2026-09-30 · SPK-131 livré — ce que l'écran a montré, et ce que le poste a imposé
+
+**Ce que les preuves n'avaient pas vu, et que les captures ont montré.** Les
+en-têtes de colonne héritaient de la chasse fixe de la table : ils se lisaient
+comme deux lignes du texte comparé. Et une ligne longue, repliée dans sa colonne,
+repartait sous le « − » au lieu de s'aligner sur son texte. Corrigés par un
+retrait suspendu — qui a failli en introduire un troisième : `text-indent` se
+transmet au contenu d'un `inline-block`, et le signe aurait été décalé hors de
+sa case ; remis à zéro sur lui. Recapturé et observé à 1440 et 390 px.
+
+**Ce que le parcours a appris** : le texte pour la synthèse vocale est
+positionné hors flux, et `innerText` le suit d'un retour à la ligne — une
+assertion sur « ajoutée : - Le portail… » doit l'admettre.
+
+**Le poste** : deux campagnes Playwright d'autres projets (`p2enjoy-crm`, puis
+`devis-p2enjoy`) ont tenu le poste pendant le chantier ; les épreuves de cette
+unité ont attendu qu'il soit libre, une à la fois. Une première boucle d'attente
+ne pouvait pas finir : `pgrep -f` y retrouvait son propre motif dans sa ligne de
+commande. Réécrite avec `[p]laywright`, qui ne se reconnaît pas.
+
+**Vérifications** : `sparkd` 1549/1549 ; console 1539/1540 (l'échec restant est
+celui, antérieur, des classes de SPK-104) ; parcours SPK-131 ; campagne E2E
+complète 148/148 ; gestes 13/13 ; liens du manuel 7/7 ; contrat inchangé ; build.
+Les captures régénérées par la campagne sans rapport avec l'unité — dates et
+empreintes seulement — n'entrent pas au commit.

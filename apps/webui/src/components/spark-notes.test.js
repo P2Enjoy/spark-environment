@@ -3,7 +3,10 @@
  * censée porter), §54.4, §54.9, §54.10 (les trois états, le refus qui ne perd
  * pas la saisie) · docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5 (consulter ne
  * consomme pas), §55.9 · docs/DESIGN_SYSTEM.md §14.5, §14.6, §1.3, §1.5 bis,
- * §9.9
+ * §9.9 · docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 (la proposition se lit
+ * COMPARÉE, colonne de droite = ce que l'acceptation écrirait, les gestes après
+ * la comparaison) · docs/DESIGN_SYSTEM.md §6.29 · docs/DESIGN_SYSTEM_APP.md
+ * SPK-DS-27
  *
  * Ce que ces preuves gardent : « personne n'a encore écrit » et « texte vide »
  * sont deux écrans, un refus n'efface jamais la saisie, et une version proposée
@@ -13,7 +16,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { NOTES_VIDE, renderNotes } from './spark-notes.js';
+import { NOTES_VIDE, cleComparaison, renderNotes } from './spark-notes.js';
 
 const SPARK = { name: 'sso' };
 
@@ -148,7 +151,7 @@ test('une version proposée se lit À CÔTÉ de celle qu’elle remplacerait', (
   const rendu = renderNotes(SPARK, ui({
     items: [NOTE({ written: true, body: 'la version du registre', revision: 1 })],
     propositions: [{ kind: 'readme', present: true, body: 'la version proposée',
-                     sha256: 'abc123' }],
+                     replacement: 'la version proposée', sha256: 'abc123' }],
   }));
   // Les deux sont là : accepter un remplacement intégral sans voir ce qu'on
   // remplace serait décider à l'aveugle.
@@ -197,4 +200,85 @@ test('rien de ce qui vient du serveur n’est injecté sans échappement', () =>
                    revision: 1, origin: 'console' })] }));
   assert.doesNotMatch(rendu, /<script>alert/);
   assert.match(rendu, /&lt;script&gt;/);
+});
+
+// --- SPK-131 · la proposition se lit COMPARÉE (§55.9.3) ----------------------
+
+const RECOPIEE = {
+  kind: 'readme', present: true, sha256: 'e1',
+  // Ce que le `.?` porte : l'en-tête du produit, recopié avec README.md.
+  body: '<!-- spark:note:readme\nREADME — …\n-->\n\n# CRM\n\nPort 8080.',
+  // Ce que l'acceptation écrirait, selon sparkd.
+  replacement: '# CRM\n\nPort 8443.',
+};
+
+test('la colonne de droite est ce que l’acceptation ÉCRIRAIT, jamais le `.?` brut', () => {
+  const rendu = renderNotes(SPARK, ui({
+    items: [NOTE({ written: true, body: '# CRM\n\nPort 8080.', revision: 3,
+                   origin: 'console' })],
+    propositions: [RECOPIEE] }));
+  // L'en-tête recopié n'atteint pas la comparaison : l'acceptation le retire.
+  assert.doesNotMatch(rendu, /spark:note/);
+  assert.match(rendu, /Port <del>8080<\/del>\./);
+  assert.match(rendu, /Port <ins>8443<\/ins>\./);
+  assert.match(rendu, /1 ligne retirée, 1 ajoutée, 2 identiques/);
+  assert.match(rendu, /colspan="2">Texte actuel · révision 3<\/th>/);
+  assert.match(rendu, /colspan="2">Version proposée<\/th>/);
+  // L'ancien repli qui montrait le texte brut a disparu.
+  assert.doesNotMatch(rendu, /Lire la version proposée/);
+});
+
+test('on relit, PUIS on décide : les gestes viennent après la comparaison', () => {
+  const rendu = renderNotes(SPARK, ui({
+    items: [NOTE({ written: true, body: '# CRM\n\nPort 8080.', revision: 3 })],
+    propositions: [RECOPIEE] }));
+  const comparaison = rendu.indexOf('comparaison__deux');
+  assert.ok(comparaison > 0);
+  assert.ok(comparaison < rendu.indexOf('data-note-accepter="readme"'));
+  assert.ok(comparaison < rendu.indexOf('data-note-refuser="readme"'));
+  // Et la comparaison est dans la carte de SA note, au-dessus du champ.
+  assert.ok(rendu.indexOf('data-note-refuser="readme"') < rendu.indexOf('data-note-saisie="readme"'));
+});
+
+test('une note jamais écrite le dit, et tout le texte proposé est ajouté', () => {
+  const rendu = renderNotes(SPARK, ui({
+    propositions: [{ kind: 'readme', present: true, body: 'Un\nDeux',
+                     replacement: 'Un\nDeux', sha256: 'e2' }] }));
+  assert.match(rendu, /colspan="2">Texte actuel : jamais écrit<\/th>/);
+  assert.match(rendu, /Personne n’a encore écrit cette note : tout le texte proposé est nouveau\./);
+  assert.match(rendu, /0 ligne retirée, 2 ajoutées, 0 identique/);
+});
+
+test('une Forge qui ne rend pas `replacement` : on compare le fichier tel quel, et on le DIT', () => {
+  const { replacement, ...sansChamp } = RECOPIEE;
+  assert.ok(replacement);
+  const rendu = renderNotes(SPARK, ui({
+    items: [NOTE({ written: true, body: '# CRM\n\nPort 8080.', revision: 3 })],
+    propositions: [sansChamp] }));
+  assert.match(rendu, /Cette Forge ne dit pas encore quel texte\s+l’acceptation écrirait/);
+  // Le fichier tel quel : l'en-tête y paraît, ajouté.
+  assert.match(rendu, /ajoutée : <\/span>&lt;!-- spark:note:readme/);
+  assert.doesNotMatch(rendu, /undefined/);
+});
+
+test('un repli déplié se rattache à SA comparaison : note, révision, proposition', () => {
+  const long = Array.from({ length: 20 }, (_, i) => `ligne ${i + 1}`);
+  const note = NOTE({ written: true, body: long.join('\n'), revision: 4 });
+  const change = [...long];
+  change[9] = 'ligne 10, corrigée';
+  const proposee = { kind: 'readme', present: true, body: change.join('\n'),
+                     replacement: change.join('\n'), sha256: 'e3' };
+  const cle = cleComparaison(note, proposee);
+  assert.equal(cle, 'readme:4:e3');
+
+  const deplie = renderNotes(SPARK, ui({ items: [note], propositions: [proposee],
+                                         deplies: { [cle]: new Set([0]) } }));
+  assert.match(deplie, /aria-expanded="true"\s+aria-controls="comparaison-readme-deux-pli-0"/);
+  assert.match(deplie, /data-comparaison-cle="readme:4:e3"/);
+
+  // Une AUTRE proposition — autre empreinte — se replie à neuf.
+  const autre = renderNotes(SPARK, ui({ items: [note],
+    propositions: [{ ...proposee, sha256: 'e4' }],
+    deplies: { [cle]: new Set([0]) } }));
+  assert.match(autre, /aria-expanded="false"\s+aria-controls="comparaison-readme-deux-pli-0"/);
 });

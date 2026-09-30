@@ -10,6 +10,8 @@
              d'une route règle son côté PUBLIC ; la pile sert en HTTP simple)
              · docs/BACKLOG.md#SPK-114 · docs/DAT.md §55.5 (écarter n'est pas
              refuser), §55.8 (`conserver`)
+             · docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.8 (`replacement`),
+             §55.9.3 (ce que la comparaison compare)
 
 Le point de ces preuves est ce qui N'ARRIVE PAS : un fichier consulté qui reste,
 une proposition en attente qu'aucune projection n'écrase, un refus du produit qui
@@ -681,6 +683,73 @@ def test_une_note_RECOPIEE_depuis_son_fichier_reel_perd_l_entete_du_produit(clie
     assert notes.MARQUEUR not in note["body"]
     # Et le fichier reprojeté ne porte qu'UN seul en-tête.
     assert fichiers(client, nom)[notes.chemin("readme")].count(notes.MARQUEUR) == 1
+
+
+# --- SPK-131 · la lecture dit ce que l'acceptation écrirait (§55.8, §55.9.3) --
+#
+# @verifies docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.8 (le champ
+#           `replacement`), §55.9.3 (ce qui est comparé)
+
+
+def test_une_note_RECOPIEE_se_lit_SANS_l_entete_que_l_acceptation_retirera(client):
+    """La colonne de droite de la comparaison dit ce qu'on accepte. Lire le `.?`
+    brut ferait relire l'en-tête du produit comme un ajout de l'agent, alors que
+    l'acceptation le retire : on relirait autre chose que ce qu'on accepte."""
+    nom = creer(client)
+    assert client.put(f"/v1/sparks/{nom}/notes/readme", json={
+        "body": "Première version.\n\nDeuxième paragraphe.",
+        "revision": 0}).status_code == 200
+    reel = fichiers(client, nom)[notes.chemin("readme")]
+    client.app.state.incus.push_file(
+        nom, suggestions.chemin("readme"),
+        reel.replace("Première version.", "Seconde version."))
+
+    vue = lire(client, nom, "readme")
+    assert notes.MARQUEUR in vue["body"], "le `.?` porte bien l'en-tête recopié"
+    assert vue["replacement"] == "Seconde version.\n\nDeuxième paragraphe."
+
+    # Et c'est exactement ce que l'acceptation écrit : la comparaison ne ment pas.
+    assert client.post(f"/v1/sparks/{nom}/suggestions/readme/apply", json={
+        "sha256": vue["sha256"], "body": vue["body"]}).status_code == 200
+    note = client.get(f"/v1/sparks/{nom}/notes").json()["notes"][0]
+    assert note["body"] == vue["replacement"]
+
+
+def test_une_note_ecrite_de_zero_se_lit_telle_quelle_fins_de_ligne_normalisees(client):
+    """Sans en-tête recopié, il n'y a rien à retirer ; les fins de ligne, elles,
+    sont celles que le registre stockera — une comparaison ligne à ligne sur
+    des `\\r` compterait pour changée une ligne que personne n'a touchée."""
+    nom = creer(client)
+    deposer(client, nom, "install", "## API\r\n\r\n- `GET /v1/etat`\r\n")
+    vue = lire(client, nom, "install")
+    assert vue["replacement"] == "## API\n\n- `GET /v1/etat`"
+
+
+def test_une_note_qui_ne_porte_QUE_l_entete_recopie_se_lit_vide(client):
+    """§55.9.3 : l'état « version proposée vide » — l'accepter effacerait le
+    texte. Le `.?` n'est pourtant pas vide : il porte l'en-tête de la note."""
+    nom = creer(client)
+    assert client.put(f"/v1/sparks/{nom}/notes/contributors", json={
+        "body": "Sources : dépôt `atelier`.", "revision": 0}).status_code == 200
+    entete_seul = notes.entete("contributors")
+    client.app.state.incus.push_file(
+        nom, suggestions.chemin("contributors"), entete_seul)
+    vue = lire(client, nom, "contributors")
+    assert vue["present"] is True
+    assert vue["replacement"] == ""
+
+
+def test_seules_les_notes_portent_replacement(client):
+    """Une nature à entrées s'analyse dans la console (§55.8) : lui rendre un
+    « texte accepté » laisserait croire qu'elle s'accepte en entier."""
+    nom = creer(client)
+    deposer(client, nom, "variables", "A=1\n")
+    corps = lire(client, nom)
+    for vue in corps["suggestions"]:
+        if vue["nature"] == suggestions.TEXTE:
+            assert "replacement" in vue, vue["kind"]
+        else:
+            assert "replacement" not in vue, vue["kind"]
 
 
 def test_l_entete_d_une_note_NOMME_le_fichier_par_lequel_on_la_change(client):

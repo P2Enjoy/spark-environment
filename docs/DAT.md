@@ -13640,7 +13640,7 @@ qui tranchent — on relit, puis on décide :
    (`DESIGN_SYSTEM.md` §1.5) ;
 3. **les lignes identiques se replient** : trois lignes de contexte autour de
    chaque changement ; au-delà, un bouton compte et nomme ce qu'il cache —
-   « Afficher 12 lignes identiques (8 à 19) ». Il les rend sans quitter l'écran,
+   « Afficher 12 lignes identiques (lignes 8 à 19) ». Il les rend sans quitter l'écran,
    **reste en place** et devient « Masquer … » : le focus ne se perd pas
    (§14.3). Un repli qui cacherait moins de quatre lignes n'est pas fait — il
    coûterait plus qu'il ne cache. Ce qu'on a déplié **survit à la repeinture** :

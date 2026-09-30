@@ -1381,3 +1381,78 @@ tbody tr:hover { background: var(--color-hover); }
 @media (max-width: 1024px) {
   .graphiques { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* SPK-131 · docs/DAT.md §55.9.3 · DESIGN_SYSTEM.md §6.29 · SPK-DS-27 — une note
+   proposée se relit COMPARÉE au texte qu'elle remplacerait, comme une revue de
+   code. La MÊME comparaison est rendue deux fois — deux colonnes, une colonne —
+   et une seule s'affiche selon la largeur : l'autre, en `display: none`, sort
+   aussi de l'arbre d'accessibilité, et la synthèse ne la lit pas deux fois. */
+.comparaison { display: grid; gap: var(--space-2); margin: var(--space-3) 0; min-width: 0; }
+.comparaison__compte { margin: 0; font-size: var(--text-compact); color: var(--color-text-2); }
+/* Des lignes de code, pas des lignes de tableau : ni la hauteur de cible du
+   §6.14 (on ne clique pas une ligne), ni séparateur, ni survol. La largeur est
+   FIXE : sans elle, une ligne longue élargirait sa colonne aux dépens de
+   l'autre, et les deux versions ne se feraient plus face. */
+.comparaison__table {
+  table-layout: fixed;
+  border: 1px solid var(--color-border);
+  font-family: var(--font-mono); font-size: var(--text-compact); line-height: 1.5;
+}
+/* Les en-têtes sont du texte d'interface (§6.14), pas des lignes comparées :
+   hérités de la table, ils passaient en chasse fixe — vu en capture. */
+.comparaison__table thead th {
+  padding: var(--space-2); white-space: normal; font-family: var(--font-sans);
+}
+.comparaison__table tbody td {
+  height: auto; padding: 0; border-bottom: 0; vertical-align: top;
+}
+.comparaison__table tbody tr:hover { background: none; }
+.comparaison__col-num { width: 6ch; }
+/* Les numéros en `--color-text-2` : `--color-text-3` tombe à 4,12 sur
+   `danger-soft` et 4,16 sur `success-soft`, sous l'AA (SPK-DS-27). Ils ne se
+   sélectionnent pas : copier une ligne ne doit pas emporter son numéro. */
+.comparaison__table .comparaison__num {
+  padding: 0 var(--space-2); text-align: right;
+  color: var(--color-text-2); font-variant-numeric: tabular-nums; user-select: none;
+}
+/* SPK-DS-18 : une note est de la prose — la ligne longue se replie dans sa
+   colonne au lieu de défiler, et garde ses retours. Le retrait SUSPENDU aligne
+   la suite d'une ligne repliée sur son texte, et non sous le signe : sans lui,
+   « relance des devis expirés » repartait sous le « − » — vu en capture. */
+.comparaison__table .comparaison__texte {
+  padding: 0 var(--space-2) 0 2ch; text-indent: -2ch;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+/* `text-indent` se transmet au contenu d'un `inline-block` : sans cette remise
+   à zéro, le signe serait lui-même décalé hors de sa case. */
+.comparaison__signe {
+  display: inline-block; width: 2ch; text-indent: 0; text-align: center; user-select: none;
+}
+.comparaison__table .comparaison__num--retire,
+.comparaison__table .comparaison__texte--retire { background: var(--color-danger-soft); }
+.comparaison__table .comparaison__num--ajoute,
+.comparaison__table .comparaison__texte--ajoute { background: var(--color-success-soft); }
+/* Le signe et le mot changé portent la couleur `*-on-soft` (4,51 et 4,60 sur
+   leur fond) ; `del` et `ins` GARDENT leur biffure et leur soulignement : la
+   couleur n'est jamais seule (§1.5). */
+.comparaison__texte--retire .comparaison__signe,
+.comparaison__texte--retire del { color: var(--color-danger-on-soft); }
+.comparaison__texte--ajoute .comparaison__signe,
+.comparaison__texte--ajoute ins { color: var(--color-success-on-soft); }
+.comparaison__texte del, .comparaison__texte ins { font-weight: 700; }
+.comparaison__table .comparaison__vide { background: var(--color-bg); }
+/* Entre les deux versions, un filet : l'œil sait où l'une finit. */
+.comparaison__deux td:nth-child(3), .comparaison__deux th:nth-child(2) {
+  border-left: 1px solid var(--color-border);
+}
+.comparaison__table .comparaison__pli td {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg);
+  border-block: 1px solid var(--color-border);
+  font-family: var(--font-sans);
+}
+.comparaison__une { display: none; }
+@media (max-width: 767px) {
+  .comparaison__deux { display: none; }
+  .comparaison__une { display: table; }
+}

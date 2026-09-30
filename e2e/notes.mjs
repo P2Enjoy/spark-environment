@@ -3,6 +3,7 @@
  *
  * @verifies docs/BACKLOG.md#SPK-104 · docs/DAT.md §54.10 (ce que la console en
  *           fait) · docs/BACKLOG.md#SPK-105 · docs/DAT.md §55.5, §55.9 ·
+ *           docs/BACKLOG.md#SPK-131 · docs/DAT.md §55.9.3 ·
  *           docs/DESIGN_SYSTEM.md §13 (les captures sont une preuve), §13.1
  *           (desktop, mobile, état vide, contenu long, clavier) · CLAUDE.md §16
  *
@@ -63,12 +64,12 @@ console.log('Captures de la facette Notes :');
 await ouvrirNotes('crm-production');
 await capturer('spk104-notes-facette');
 
-// --- 2. La proposition DÉPLIÉE, à côté du texte qu'elle remplacerait --------
+// --- 2. La proposition COMPARÉE au texte qu'elle remplacerait --------------
 // C'est le point du §55.9 : accepter un remplacement intégral sans voir ce
-// qu'on remplace serait décider à l'aveugle. Une capture repliée ne le
-// prouverait pas.
-await page.click('.proposition .repli summary');
-await page.waitForSelector('.proposition .repli[open]', { timeout: 5000 });
+// qu'on remplace serait décider à l'aveugle. Depuis SPK-131 (§55.9.3), la
+// comparaison en deux colonnes est à l'écran sans rien déplier : on la cadre.
+await page.waitForSelector('[data-proposition="readme"] .comparaison__deux', { timeout: 10000 });
+await page.locator('[data-proposition="readme"]').scrollIntoViewIfNeeded();
 await capturer('spk104-notes-proposition');
 
 // --- 3. La saisie au CLAVIER, touche à touche (§14.3) -----------------------
