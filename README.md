@@ -398,6 +398,14 @@ est tué par le noyau, jamais la machine —, et `e2e/verrou.mjs` refuse toute
 seconde pile, y compris une épave dont les navigateurs survivent. Aucun
 réglage ne relève la borne ni ne lève le verrou.
 
+**Contre quoi on valide** (règle du responsable, `docs/DAT.md` §28.7) : la pile
+au pilote **factice** — `make runDev`, `make seed`, `make captures`, `make e2e`,
+`make gestes`, les preuves `pytest` sur le doublon `FakeIncus` — est un
+**diagnostic**. Elle ne valide aucune unité. En local, une unité se valide
+**exclusivement** contre une machine virtuelle qui porte une **installation
+fraîche** de `sparkd` : `make forge-vm`, monté par le cloud-init du dépôt avec
+la roue de l'arbre de travail.
+
 ### Les deux scripts et leurs arguments
 
 Un réglage d'installation est un **argument nommé**, jamais une variable

@@ -3687,6 +3687,24 @@ aucune configuration Caddy n'est chargée. La pile éprouve la **traduction**, l
 contrôle d'admission, le cycle de vie, l'audit et l'interface — elle ne prouve
 rien de l'isolation. Cette preuve exige une Forge Incus réelle (§12, §13).
 
+**Elle ne valide donc aucune unité — règle du responsable**, posée le
+2026-08-22 (« validation exclusivement sur les Forges réelles ») et rappelée le
+2026-09-30 : « arrêter d'utiliser le fake driver, et en local tester
+EXCLUSIVEMENT contre une VM avec une installation fraîche de sparkd ».
+
+- ce qui tourne sur le pilote factice — la pile de développement, le seed,
+  `make captures`, `make e2e`, `make gestes`, les preuves `pytest` sur
+  `FakeIncus` — est un **diagnostic** : il peut rougir, il ne peut pas
+  conclure. Une unité ne passe jamais `[x]` sur sa foi ;
+- en local, la validation se fait contre une machine virtuelle portant une
+  **installation fraîche** de `sparkd` : le banc `make forge-vm` (§51.5), monté
+  par le cloud-init du dépôt avec la roue de l'arbre de travail, et qui
+  redémarre pour de vrai ;
+- **écart connu** : le banc démonte sa machine en sortant. La vérification
+  visuelle par la console **branchée sur cette machine** (`CLAUDE.md` §16) n'est
+  pas encore outillée ; tant qu'elle ne l'est pas, une unité qui touche l'écran
+  reste `[~]`.
+
 
 ## 29. Les parcours E2E : éprouver le produit par où il s'utilise
 

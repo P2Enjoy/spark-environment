@@ -13353,3 +13353,30 @@ responsable.
 première fois depuis le 2026-09-14. En observant la capture du refus des alertes,
 un défaut antérieur est apparu — le gabarit refusé est effacé du champ — ;
 consigné au rapport d'incohérences plutôt que corrigé au passage.
+
+## 2026-09-30 · Valider sur une VM à installation fraîche, jamais sur le pilote factice
+
+**Le rappel du responsable** : « j'avais pourtant déjà consigné de ARRÊTER
+d'utiliser le fake driver et en local de tester EXCLUSIVEMENT contre une VM avec
+une installation fraîche de sparkd ».
+
+**Ce qui était consigné, et où** : l'entrée du 2026-08-22 (SPK-70) le disait —
+« ces exécutions sur pilote factice restent des diagnostics et ne valident plus
+l'unité : le responsable exige désormais une validation exclusivement sur les
+Forges réelles ». La règle ne vivait **que** dans ce journal : ni le README, ni
+le DAT, ni la mémoire de l'agent ne la portaient, et elle n'était donc pas
+relue en début de session. Pendant SPK-133, la preuve a d'abord été faite sur
+le doublon `FakeIncus`, et `make captures` sur la pile factice était prévu pour
+SPK-135.
+
+**Décision** : la règle est écrite là où elle se lit — README (« Contre quoi on
+valide »), DAT §28.7 — et dans la mémoire de l'agent. Le pilote factice est un
+diagnostic ; une unité se valide en local contre `make forge-vm`. Écart connu,
+écrit au §28.7 : le banc démonte sa machine en sortant, et brancher la console
+dessus pour la vérification visuelle n'est pas encore outillé.
+
+**Conséquence immédiate** : SPK-133 et SPK-135 se valident sur le banc, pas sur
+le doublon. Le rouge de SPK-133 est déjà constaté sur machine virtuelle, avec la
+roue d'avant (`0.post1.dev886+g611a460e2`) : fichier des secrets absent après
+*Redémarrer*, après un `reboot` dans la cellule et après le redémarrage de la
+Forge — trois écarts, les seuls ; tout le reste du banc est vert.
