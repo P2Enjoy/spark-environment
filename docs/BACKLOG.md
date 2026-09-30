@@ -8374,7 +8374,7 @@ avec un débit déclaré ; OP-32.
   preuves de composant — la vérification visuelle par la console branchée sur
   la machine virtuelle n'est pas encore outillée (DAT §28.7) — et OP-32.
 
-### [x] SPK-136 · Toute classe qu'écrit un composant peint quelque chose
+### [~] SPK-136 · Toute classe qu'écrit un composant peint quelque chose
 
 **Constaté le 2026-09-18** (rapport d'incohérences) et rouge depuis : quatre
 classes écrites sans règle de style — `erreur` (`forge-alertes.js`),
@@ -8402,6 +8402,11 @@ existent pour cela.
   attributs `data-*` ; capture `spk136-alertes-refus` observée — le refus du
   gabarit a la forme d'un refus. **Vu en chemin, et non corrigé** : ce refus
   vide le champ du gabarit (rapport d'incohérences, 2026-09-30).
+- **Repassé `[~]` le même jour** : tout ce qui précède tourne sur le pilote
+  factice ou sur un faux `sparkd` — des diagnostics, qui ne valident pas une
+  unité (DAT §28.7, règle du responsable rappelée le 2026-09-30). Reste :
+  voir les trois écrans — refus des alertes, notes, propositions — dans la
+  console branchée sur une machine virtuelle à installation fraîche.
 
 ---
 
