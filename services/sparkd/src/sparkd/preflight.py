@@ -6,6 +6,8 @@
       · §3.1, §8, §15, §16 · docs/BACKLOG.md#SPK-108, docs/DAT.md §56.3
       (NET-REMONTEE lit les règles effectives) · docs/BACKLOG.md#SPK-109,
       docs/DAT.md §57.4 (NET-ISOLATION lit les clés effectives des NIC) ·
+      docs/BACKLOG.md#SPK-129, docs/DAT.md §51.5 (ING-UNITE, ING-CONCORDE : ce
+      qui fait reprendre l'ingress après un redémarrage) ·
       docs/PROD_MIGRATIONS.md
 
 La même série sert AVANT l'installation — pour savoir ce qui manque — et APRÈS,
@@ -29,7 +31,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable, NamedTuple
 
-from . import pare_feu
+from . import caddy_unite, pare_feu
 from .translate import CLES_ISOLATION
 
 GIO = 1024**3
@@ -127,6 +129,11 @@ class Hote:
     #: signaler comme fantômes des Sparks bien vivants.
     declarations: Callable[[], list[dict] | None] = field(
         default=lambda: _declarations_locales())
+    #: SPK-129 · §51.5 : la configuration que le REGISTRE construit, pour la
+    #: confronter à celle que Caddy sert. Même couture, même règle : `None`
+    #: quand le registre est illisible.
+    configuration_attendue: Callable[[], dict | None] = field(
+        default=lambda: _configuration_attendue_locale())
 
 
 def _declarations_locales(chemin: str | None = None) -> list[dict] | None:
@@ -151,6 +158,31 @@ def _declarations_locales(chemin: str | None = None) -> list[dict] | None:
             return [dict(r) for r in connexion.execute(
                 "SELECT name, incus_name, state, cpu_reservation, "
                 "memory_reservation_bytes FROM spark WHERE incus_name IS NOT NULL")]
+        finally:
+            connexion.close()
+    except sqlite3.Error:
+        return None
+
+
+def _configuration_attendue_locale(chemin: str | None = None) -> dict | None:
+    """La configuration de Caddy que le registre construit, en lecture seule.
+
+    Construite par `ingress.build_config` — le code même qui la pose : une
+    seconde construction ici divergerait à la première évolution de la forme.
+    """
+    import sqlite3
+
+    from . import ingress
+    from .config import DEFAULT_DB
+
+    fichier = chemin or os.environ.get("SPARKD_DB") or DEFAULT_DB
+    if not os.path.exists(fichier):
+        return None
+    try:
+        connexion = sqlite3.connect(f"file:{fichier}?mode=ro", uri=True, timeout=5)
+        connexion.row_factory = sqlite3.Row
+        try:
+            return ingress.build_config(connexion)
         finally:
             connexion.close()
     except sqlite3.Error:
@@ -365,6 +397,70 @@ def caddy_administrable(hote: Hote) -> Verdict:
                        "Vérifier que Caddy écoute sur 127.0.0.1:2019.")
     return Verdict("ING-CADDY", "Caddy présent et administrable", OK,
                    "API d'administration → 200 sur 127.0.0.1:2019")
+
+
+def caddy_porte_par_son_api(hote: Hote) -> Verdict:
+    """SPK-129 · §51.5 — l'unité qui fait reprendre Caddy après un redémarrage.
+
+    `ING-CADDY` établit que l'API répond MAINTENANT. Le 2026-09-14, elle
+    répondait — et le redémarrage l'avait ramenée au `Caddyfile`, sans une
+    route. Ce qui compte pour la reprise, c'est l'unité qui la porte.
+    """
+    titre = "Caddy reprend sa configuration après un redémarrage"
+    releve = caddy_unite.etat(lambda commande: hote.executer(commande) or "")
+    if not any(releve.values()):
+        return Verdict("ING-UNITE", titre, INCONNU, "systemd illisible", "")
+    decrit = (f"caddy.service : {releve['fichier'] or 'absent'} · "
+              f"{caddy_unite.UNITE} : {releve['api'] or 'absent'}, "
+              f"{releve['api_actif'] or 'inconnu'}")
+    if caddy_unite.aligne(releve):
+        return Verdict("ING-UNITE", titre, OK, decrit)
+    return Verdict(
+        "ING-UNITE", titre, ECHEC, decrit,
+        "Mettre à jour sparkd (runbook A.2) : l'installation porte Caddy par "
+        f"{caddy_unite.UNITE} et masque caddy.service (docs/DAT.md §51.5).")
+
+
+def caddy_sert_le_registre(hote: Hote) -> Verdict:
+    """SPK-129 · §51.5, §18.5 — la configuration VIVANTE est celle du registre.
+
+    `applied_at` date un geste ; il ne dit pas ce que Caddy porte. Mesuré le
+    2026-09-30 sur Caddy 2.6.2 : `GET /config/` rend exactement ce qu'on a
+    posé, donc l'égalité stricte est le bon critère.
+    """
+    titre = "Caddy sert la configuration du registre"
+    attendue = hote.configuration_attendue()
+    if attendue is None:
+        return Verdict("ING-CONCORDE", titre, INCONNU, "registre illisible", "")
+    brut = hote.executer(["curl", "-s", "--max-time", "5", "http://127.0.0.1:2019/config/"])
+    try:
+        vivante = json.loads(brut) if brut else None
+    except ValueError:
+        vivante = None
+    if not isinstance(vivante, dict):
+        return Verdict("ING-CONCORDE", titre, INCONNU,
+                       "API d'administration injoignable ou illisible", "")
+
+    def domaines(config: dict) -> set[str]:
+        serveurs = config.get("apps", {}).get("http", {}).get("servers", {})
+        return {hote_ for serveur in serveurs.values()
+                for route in serveur.get("routes", []) for filtre in route.get("match", [])
+                for hote_ in filtre.get("host", [])}
+
+    attendus = domaines(attendue)
+    if vivante == attendue:
+        return Verdict("ING-CONCORDE", titre, OK,
+                       f"{len(attendus)} domaine(s) servi(s), configuration identique")
+    manquants = sorted(attendus - domaines(vivante))
+    en_trop = sorted(domaines(vivante) - attendus)
+    ecart = "; ".join(filter(None, (
+        f"absents de Caddy : {', '.join(manquants)}" if manquants else "",
+        f"inconnus du registre : {', '.join(en_trop)}" if en_trop else "",
+    ))) or "mêmes domaines, forme différente (build nouvelle, ou configuration posée hors du produit)"
+    return Verdict(
+        "ING-CONCORDE", titre, ECHEC, ecart,
+        "Réappliquer depuis la page des routes, ou sur la Forge : "
+        "curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile")
 
 
 def _portee(adresse_ecoute: str) -> str:
@@ -852,6 +948,8 @@ CONTROLES: tuple[Callable[[Hote], Verdict], ...] = (
     bridge_prive,
     plage_dhcp_disjointe,
     caddy_administrable,
+    caddy_porte_par_son_api,
+    caddy_sert_le_registre,
     surface_reseau,
     remontee_vers_la_forge,
     isolation_des_sparks,

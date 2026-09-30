@@ -2181,14 +2181,19 @@ se voit donc immédiatement.
 **`applied_at` date un geste, il ne décrit pas Caddy.** Mesuré le 2026-09-14 :
 après le redémarrage de la Forge, Caddy est reparti sans aucune route, et les
 routes sont restées « appliquées » à l'écran pendant deux heures — la date était
-exacte, l'état qu'on en déduisait était faux. Deux règles en découlent :
+exacte, l'état qu'on en déduisait était faux.
 
-- **une réconciliation en échec remet `applied_at` à zéro** pour toutes les
-  routes qu'elle devait poser (SPK-129). Sans cela, l'échec n'existait qu'au
-  journal, et l'écran continuait d'afficher la dernière réussite ;
-- **ce que Caddy porte se relève, il ne se déduit pas** : la page des routes lit
-  la configuration vivante et interroge le proxy à chaque visite (SPK-130,
-  §18.7). `applied_at` reste l'historique du geste ; le diagnostic dit l'état.
+**Ce que Caddy porte se relève, il ne se déduit pas** : la page des routes lit
+la configuration vivante et interroge le proxy à chaque visite (SPK-130, §18.7).
+`applied_at` reste l'historique du geste ; le diagnostic dit l'état.
+
+**Une réconciliation en échec ne remet pas les autres routes à zéro.** Envisagé
+pour SPK-129, puis écarté le 2026-09-30 : quand Caddy refuse une configuration,
+ou que son API ne répond pas un instant, il continue de servir la précédente.
+Tout remettre à zéro aurait affiché « non appliquée » à côté de « Caddy ici »
+sur la même ligne — deux vérités contradictoires. La route dont le changement
+n'est pas passé perd déjà sa date, à sa déclaration comme à sa correction
+(§18.3 ter) ; le reste, c'est le relevé qui le dit.
 
 ### 18.6 L'ingress ne sert pas HTTP/3, et le dit (SPK-128)
 
@@ -8960,8 +8965,10 @@ appelle le même exécuteur.
    sauvegarde ne peut pas savoir : une forme changée par une nouvelle build — une
    mise à jour n'exige plus de réconciliation à la main, OP-27 compris —, et une
    Forge neuve, dont la sauvegarde est celle du `Caddyfile`.
-3. **Une réconciliation en échec remet `applied_at` à zéro** (§18.5) : un échec
-   au démarrage se voit à l'écran, avec **Réappliquer**.
+3. **Un échec au démarrage n'empêche pas `sparkd` de démarrer** : le plan de
+   contrôle est ce qui permet de réparer. L'échec est au journal, et l'écran le
+   montre par le relevé du §18.7 — Caddy injoignable, route absente, et
+   **Réappliquer**. Remettre `applied_at` à zéro a été écarté (§18.5).
 4. **Le préflight le vérifie** : `ING-UNITE` — Caddy porté par
    `caddy-api.service`, `caddy.service` masqué — et `ING-CONCORDE` — la
    configuration vivante de Caddy est celle que le registre construit. Deux
@@ -8975,6 +8982,24 @@ appelle le même exécuteur.
    il installe `sparkd` depuis l'arbre de travail et non depuis `main`, pour
    éprouver une build avant de la publier ; il réduit l'ARC à la mémoire de la
    machine virtuelle ; il dépose une clé SSH jetable pour s'y connecter.
+
+**Joué le 2026-09-30** (`make forge-vm`, `e2e/forge-vm/redemarrage.mjs`) :
+
+| Build | Cloud-init | Route avant | Après redémarrage, sans aucun geste |
+|---|---|---|---|
+| d'avant SPK-129 (`…+gf6d06e497`) | monte la Forge | sert la pile | `sparkd` prêt en 27 s, Spark en marche, pare-feu et pool en place — mais la route rend `200` **avec la page par défaut du `Caddyfile`**, `caddy.service` est actif, et le préflight d'alors se dit **vert, 15 sur 15** |
+| SPK-129 | monte la Forge | sert la pile | la route sert la pile **dès que `sparkd` est prêt** ; Caddy porté par `caddy-api.service`, `caddy.service` masqué ; préflight vert, 17 sur 17 |
+
+Le rouge reproduit l'incident du 2026-09-14 à l'identique, y compris son pire
+trait : un `200` trompeur, et un préflight qui ne voyait rien.
+
+**Ce que la machine du banc a appris en chemin.** Sa carte réseau est une
+`e1000e` : une carte `virtio` n'annonce aucun débit, et le relevé de topologie
+refuse — à dessein — une capacité réseau nulle (`inventory`, SPK-07) ; l'amorce
+échouait alors à sa recette finale, `/v1/forge/sync` en `503`. Une Forge sur une
+machine virtuelle à carte `virtio` ne s'installe donc pas, et le README le dit.
+Et une Forge neuve n'a jamais relevé son catalogue d'images : le banc fait le
+geste de l'exploitant (`POST /v1/images/verify`) avant de créer son Spark.
 
 Ce que SPK-129 ne change pas : la reconnexion de la console reste un geste
 (§22.4.6), et un Spark dont la pile ne redémarre pas seule reste l'affaire de

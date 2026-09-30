@@ -13019,3 +13019,71 @@ main TLS réelle — par `sparkd`, seul à atteindre l'API de Caddy ; et
 **Vérifications réalisées** : relevés de la Forge (`systemctl`, unités, journaux
 du démarrage du 2026-09-14, audit en lecture seule), banc WebSocket sur Caddy
 2.6.2. Aucune écriture sur la Forge.
+
+## 2026-09-30 · SPK-129 — la preuve par un redémarrage réel, et ce que le banc m'a coûté
+
+**Le banc.** Une Ubuntu 26.04 officielle, amorcée par NoCloud sur HTTP — pas
+d'outil d'image ISO sur le poste —, deux disques pour le miroir, `qemu` sous KVM,
+6 Gio. Le `user-data` est **rendu depuis `deploy/cloud-init/`**, et chaque écart
+au cloud-init réel est une substitution qui échoue bruyamment si le gabarit
+change. Un Spark `ubuntu/24.04` et une route en clair, par l'API ; une pile
+`python3 -m http.server` en unité systemd dans la cellule, comme un locataire la
+poserait.
+
+**Rouge, puis vert.** Roue d'avant (`…+gf6d06e497`), figée avant le premier
+changement de code : après le redémarrage, la route rend `200` — la page par
+défaut du `Caddyfile` —, `caddy.service` actif, et l'ancien préflight vert, 15
+sur 15. L'incident du 2026-09-14, rejoué à l'identique. Roue de l'arbre corrigé :
+la route sert la pile dès que `sparkd` est prêt (27 s après le retour du SSH),
+préflight 17 sur 17.
+
+**Une décision retirée en cours de route.** J'avais spécifié qu'une
+réconciliation en échec remettrait `applied_at` à zéro sur toutes les routes. Le
+seed l'a fait rougir, et il avait raison : Caddy qui refuse une configuration
+continue de servir la précédente, et l'écran aurait affiché « non appliquée » à
+côté de « Caddy ici ». Retirée du code et des documents ; la vérité par route
+vient du relevé de SPK-130. Autre conséquence, voulue : « non appliquée » est
+devenu transitoire — le seed la produit, le démarrage suivant de `sparkd`
+l'applique. La preuve du seed le dit désormais.
+
+**Ce que la machine a appris.** La carte `virtio` n'annonce aucun débit, et le
+relevé de topologie refuse une capacité réseau nulle (SPK-07) : l'amorce
+échouait à sa recette finale, `/v1/forge/sync` en `503`. Voulu, mais jamais
+écrit : une Forge sur VM à carte `virtio` ne s'installe pas — c'est au README.
+Le banc emploie une `e1000e`. Et le catalogue d'une Forge neuve est `unknown` :
+le banc le relève comme le ferait l'exploitant.
+
+**Trois fautes du banc, dont une que le responsable a relevée.**
+
+1. `spawnSync` bloque la boucle de Node : le serveur NoCloud **dans** le
+   processus du banc cessait de répondre pendant l'attente du cloud-init, et
+   `pip` n'obtenait jamais la roue ;
+2. en le remplaçant, j'ai pointé `python3 -m http.server --directory` sur **tout**
+   le répertoire de travail — clé SSH jetable de la VM comprise. Relu et
+   restreint à `seed/` avant tout lancement ; vérifié sur les processus : la
+   seule version qui a tourné servait une liste fermée de quatre chemins, sur
+   `127.0.0.1`, `/cle` en `404`, injoignable depuis le réseau local. La relance
+   dangereuse n'a jamais démarré : la garde du poste l'a refusée ;
+3. un banc qui a rendu son verdict **ne sortait pas** : la VM et le serveur
+   gardaient Node vivant. Une VM de 6 Gio et le verrou ont tenu 20 minutes après
+   le verdict ; tuée avec son arbre. Le banc sort désormais explicitement.
+
+La deuxième est la plus grave, parce qu'elle procédait d'une commodité :
+servir un répertoire au lieu de nommer ce qu'on sert. La règle que je
+m'applique : un serveur d'épreuve sert une liste, ou un répertoire qui ne
+contient qu'elle.
+
+**Rejoué avant de committer**, puisque la pile de développement réconcilie
+désormais au démarrage : campagne E2E complète 145 sur 145 (après correction de
+deux courses latentes des parcours DNS, commit à part), gestes 13 sur 13, suite
+de `sparkd` verte. **Deux trouvailles hors de SPK-129**, en chemin :
+
+- la garde du contrat comparait aussi `info.version`, c'est-à-dire la version de
+  la build : elle ne tenait que tant que les métadonnées du poste restaient
+  figées. Corrigé à part — le contrat ne porte plus la version ;
+- **la suite unitaire de la console est rouge** depuis SPK-104 (2026-09-14) :
+  `classes.test.js` dénonce quatre classes écrites mais absentes de la feuille
+  de style — `note-carte` et `proposition` (`spark-notes.js`), `proposition`
+  (`spark-suggestions.js`), `erreur` (`forge-alertes.js`). Non corrigé ici :
+  c'est une décision d'interface, qui demande la lecture du design system ;
+  signalé au responsable.

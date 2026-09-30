@@ -226,6 +226,25 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-129 — une Forge reprend seule après un redémarrage total.** Constaté le
+  2026-09-30 dans les journaux de la Forge : au redémarrage du 2026-09-14, Caddy
+  est reparti de `/etc/caddy/Caddyfile` et a écrasé sa sauvegarde ; aucune route
+  n'a été servie pendant deux heures, et l'écran les disait « appliquées ».
+  L'exécuteur — donc le cloud-init de toute Forge neuve — activait
+  `caddy.service`. Désormais : Caddy porté par `caddy-api.service` (`--resume`),
+  `caddy.service` masqué, `Restart=on-failure` en complément d'unité ; une
+  seule fonction (`caddy_unite`) aligne l'unité, appelée par l'exécuteur et par
+  `sparkd.install`, pour qu'une mise à jour ordinaire répare une Forge
+  existante ; `sparkd.service` ordonné après Caddy ; `sparkd` réconcilie
+  l'ingress à son démarrage, et démarre même si Caddy ne répond pas. Deux
+  contrôles de préflight : `ING-UNITE` et `ING-CONCORDE` (17 contrôles). Un banc
+  de redémarrage réel, `make forge-vm` : une Forge montée par le cloud-init du
+  dépôt dans une VM, un Spark et une route par l'API, redémarrage, tout
+  revérifié sans geste — rouge sur l'ancienne build, vert sur la nouvelle.
+  « Non appliquée » devient un état transitoire : le seed le produit toujours,
+  et le démarrage suivant l'applique. DAT §51.5, §18.1, §18.5 ; manuels M2 et
+  M4 ; runbook ; OP-27 revue. **Inerte sur la Forge tant qu'OP-28 n'est pas
+  joué.**
 - **SPK-128 — l'ingress ne sert pas HTTP/3, et cesse de l'annoncer.** Signalé
   par l'exploitant du SSO du domaine, mesuré le 2026-09-30 : la configuration de
   l'ingress ne fixait pas `protocols`, et Caddy 2.6.2 activait HTTP/3 par

@@ -1,0 +1,326 @@
+/**
+ * Banc de REDÉMARRAGE : une Forge montée par le cloud-init du dépôt, dans une
+ * machine virtuelle du poste, redémarrée pour de vrai.
+ *
+ * @verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (ce qui doit reprendre
+ *           seul ; la preuve est un redémarrage réel, et le banc dit ses écarts)
+ *           · README.md (amorçage par cloud-init) · CLAUDE.md §15, §15 bis
+ *
+ * Ce que le banc établit, et que rien d'autre n'établit :
+ *
+ *   1. `deploy/cloud-init/` monte une Forge qui fonctionne — préflight vert,
+ *      `sparkd` prêt — sur une Ubuntu 26.04 neuve, à deux disques ;
+ *   2. un Spark créé PAR L'API, une route déclarée PAR L'API, servent une page ;
+ *   3. après `systemctl reboot`, et SANS AUCUN GESTE, tout reprend : la route
+ *      sert la même page, le Spark est en marche, le pare-feu est posé, le
+ *      préflight est vert.
+ *
+ * Il s'écarte du cloud-init réel en quatre points, et en ceux-là seulement —
+ * il les imprime avant de démarrer :
+ *   - il crée le zpool avant l'amorce : l'hébergeur le livre (docs/DAT.md §8.2) ;
+ *   - il installe `sparkd` depuis une roue construite sur CE poste, et non depuis
+ *     `main` : c'est une build qu'on veut éprouver avant de la publier ;
+ *   - il ramène le plafond de l'ARC à 1 Gio : la machine en a 6 ;
+ *   - il dépose une clé SSH jetable, pour s'y connecter.
+ *
+ *   make forge-vm                          # roue construite depuis l'arbre de travail
+ *   make forge-vm ARGS="--roue <x.whl>"    # une roue donnée : la preuve ROUGE d'avant
+ *
+ * L'image Ubuntu (≈ 850 Mo) est gardée dans ~/.cache/spark-environment/vm/.
+ * Le reste vit dans un répertoire jetable, retiré en sortant ; la console série
+ * de la machine est copiée dans e2e/captures/echecs/ si le banc échoue.
+ */
+// CLAUDE.md §15 bis · docs/DAT.md §29.8 : une machine virtuelle de 6 Gio est une
+// épreuve lourde. Le verrou est pris ICI, à l'import, avant la moindre allocation.
+import { prendreLeVerrou } from '../verrou.mjs';
+
+prendreLeVerrou();
+
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync,
+         rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
+
+const RACINE = new URL('../../', import.meta.url).pathname;
+const IMAGE_URL = 'https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img';
+const CACHE = join(homedir(), '.cache', 'spark-environment', 'vm');
+const IMAGE = join(CACHE, basename(IMAGE_URL));
+const MEMOIRE_MIO = 6144;
+const DOMAINE = 'temoin.banc.test';
+const PAGE = 'TEMOIN-SPK129';
+const ECHECS = join(RACINE, 'e2e', 'captures', 'echecs');
+
+// --- arguments nommés -------------------------------------------------------
+const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(readFileSync(new URL(import.meta.url), 'utf8').split('*/')[0]);
+  process.exit(0);
+}
+const iRoue = args.indexOf('--roue');
+const roueDonnee = iRoue >= 0 ? args[iRoue + 1] : null;
+if (iRoue >= 0 && !roueDonnee) throw new Error('--roue attend le chemin d’une roue .whl');
+const inconnus = args.filter((a, i) => a.startsWith('--') && a !== '--roue' && i !== iRoue + 1);
+if (inconnus.length) throw new Error(`arguments inconnus : ${inconnus.join(' ')} (voir --help)`);
+
+// --- outillage --------------------------------------------------------------
+const debut = Date.now();
+const t = () => `${String(Math.round((Date.now() - debut) / 1000)).padStart(5)} s`;
+const dire = (m) => console.log(`[${t()}] ${m}`);
+const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+const verdicts = [];
+function verdict(libelle, ok, releve) {
+  verdicts.push({ libelle, ok });
+  console.log(`[${t()}]   ${ok ? 'ok    ' : 'ÉCHEC '} ${libelle} : ${releve}`);
+}
+function executer(commande, argv, options = {}) {
+  const r = spawnSync(commande, argv, { encoding: 'utf8', ...options });
+  if (r.status !== 0) {
+    throw new Error(`${commande} ${argv.join(' ')} → ${r.status}\n${r.stderr || r.stdout}`);
+  }
+  return r.stdout;
+}
+function portLibre() {
+  return new Promise((resolve) => {
+    const s = createServer();
+    s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
+  });
+}
+
+const travail = mkdtempSync(join(tmpdir(), 'spark-vm-'));
+let qemu = null;
+let serveur = null;
+function nettoyer() {
+  for (const enfant of [qemu, serveur]) {
+    if (enfant && enfant.exitCode === null) enfant.kill('SIGKILL');
+  }
+  rmSync(travail, { recursive: true, force: true });
+}
+process.on('exit', nettoyer);
+for (const s of ['SIGINT', 'SIGTERM']) process.on(s, () => process.exit(130));
+
+// --- 1. l'image, la roue, la clé -----------------------------------------------
+mkdirSync(CACHE, { recursive: true });
+if (!existsSync(IMAGE)) {
+  dire(`image absente du cache : téléchargement de ${IMAGE_URL}`);
+  executer('curl', ['-fsSL', '--retry', '3', '-o', `${IMAGE}.part`, IMAGE_URL], { stdio: 'inherit' });
+  executer('mv', [`${IMAGE}.part`, IMAGE]);
+}
+let roue;
+if (roueDonnee) {
+  roue = join(travail, basename(roueDonnee));
+  copyFileSync(roueDonnee, roue);
+} else {
+  const python = join(RACINE, 'services', 'sparkd', '.venv', 'bin', 'python');
+  executer(python, ['-m', 'pip', 'wheel', '-q', '--no-deps', '-w', travail,
+                    join(RACINE, 'services', 'sparkd')]);
+  roue = join(travail, readdirSync(travail).find((f) => f.endsWith('.whl')));
+}
+dire(`roue éprouvée : ${basename(roue)}`);
+executer('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', join(travail, 'cle')]);
+const clePublique = readFileSync(join(travail, 'cle.pub'), 'utf8').trim();
+
+// --- 2. le cloud-init du dépôt, et ses quatre écarts --------------------------
+const portSeed = await portLibre();
+const gabarit = readFileSync(join(RACINE, 'deploy', 'cloud-init', 'user-data.yaml'), 'utf8');
+let amorce = readFileSync(join(RACINE, 'deploy', 'cloud-init', 'spark-amorce.sh'), 'utf8');
+function remplacer(texte, avant, apres, ecart) {
+  if (!texte.includes(avant)) {
+    throw new Error(`le cloud-init a changé, l'écart « ${ecart} » ne s'applique plus : ${avant}`);
+  }
+  console.log(`  écart du banc — ${ecart}`);
+  return texte.replace(avant, apres);
+}
+console.log('Écarts du banc au cloud-init réel (docs/DAT.md §51.5) :');
+amorce = remplacer(amorce,
+  '"git+https://github.com/P2Enjoy/spark-environment.git@main#subdirectory=services/sparkd"',
+  `"http://10.0.2.2:${portSeed}/${basename(roue)}"`,
+  `sparkd installé depuis ${basename(roue)}, pas depuis main`);
+amorce = remplacer(amorce, 'ARC_GIB=16 ', 'ARC_GIB=1  ', 'plafond ARC ramené à 1 Gio');
+const MARQUE = '      # <<< contenu integral de deploy/cloud-init/spark-amorce.sh, indente ici >>>';
+let userData = remplacer(gabarit, MARQUE,
+  amorce.split('\n').map((l) => (l ? `      ${l}` : '')).join('\n'),
+  'amorce insérée dans le gabarit, telle quelle hors des deux écarts ci-dessus');
+userData = remplacer(userData, "runcmd:\n  - '/opt/spark-amorce.sh'",
+  "runcmd:\n  - [sh, -c, 'apt-get update -q && apt-get install -y zfsutils-linux"
+  + " && zpool create -f spark mirror /dev/vdb /dev/vdc && zpool export spark']\n"
+  + "  - '/opt/spark-amorce.sh'",
+  'zpool « spark » créé en miroir sur vdb et vdc avant l’amorce, comme l’hébergeur le livre');
+userData = remplacer(userData, '\nwrite_files:',
+  `\nssh_authorized_keys:\n  - ${clePublique}\n\nwrite_files:`, 'clé SSH jetable déposée');
+
+// --- 3. la source NoCloud, servie au poste --------------------------------------
+// Par un PROCESSUS à part : les attentes du banc passent par `spawnSync`, qui
+// bloque la boucle de Node. Un serveur dans ce processus cessait de répondre
+// pendant le cloud-init — mesuré : `pip` n'obtenait jamais la roue.
+// Un sous-répertoire, et lui seul : la clé privée jetable reste hors de portée.
+const seed = join(travail, 'seed');
+mkdirSync(seed);
+writeFileSync(join(seed, 'user-data'), userData);
+writeFileSync(join(seed, 'meta-data'),
+              `instance-id: forge-vm-${Date.now()}\nlocal-hostname: forge-vm\n`);
+writeFileSync(join(seed, 'vendor-data'), '');
+copyFileSync(roue, join(seed, basename(roue)));
+serveur = spawn('python3', ['-m', 'http.server', String(portSeed), '--bind', '127.0.0.1',
+                            '--directory', seed], { stdio: 'ignore' });
+
+// --- 4. la machine ----------------------------------------------------------------
+const portSsh = await portLibre();
+const portHttp = await portLibre();
+executer('qemu-img', ['create', '-q', '-f', 'qcow2', '-F', 'qcow2', '-b', IMAGE,
+                      join(travail, 'racine.qcow2'), '30G']);
+for (const d of ['d1', 'd2']) {
+  executer('qemu-img', ['create', '-q', '-f', 'qcow2', join(travail, `${d}.qcow2`), '8G']);
+}
+const console_ = join(travail, 'console.log');
+qemu = spawn('qemu-system-x86_64', [
+  '-enable-kvm', '-cpu', 'host', '-smp', '4', '-m', String(MEMOIRE_MIO), '-machine', 'q35',
+  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'racine.qcow2')}`,
+  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd1.qcow2')}`,
+  '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd2.qcow2')}`,
+  '-netdev', `user,id=n0,hostfwd=tcp:127.0.0.1:${portSsh}-:22,hostfwd=tcp:127.0.0.1:${portHttp}-:80`,
+  // Une carte qui ANNONCE son débit, comme la carte physique d'une Forge. Une
+  // carte virtio n'en annonce aucun, et le relevé de topologie refuse — à
+  // dessein — une capacité réseau nulle (mesuré le 2026-09-30 : `/v1/forge/sync`
+  // en 503, l'amorce en échec à sa recette finale).
+  '-device', 'e1000e,netdev=n0',
+  '-smbios', `type=1,serial=ds=nocloud;s=http://10.0.2.2:${portSeed}/`,
+  '-display', 'none', '-serial', `file:${console_}`,
+], { stdio: 'ignore' });
+dire(`machine démarrée — ssh 127.0.0.1:${portSsh}, http 127.0.0.1:${portHttp}, carte e1000e`);
+
+const ssh = (commande, { tolerer = false, delai = 120 } = {}) => {
+  const r = spawnSync('ssh', ['-i', join(travail, 'cle'), '-p', String(portSsh),
+    '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+    '-o', 'LogLevel=ERROR', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes',
+    'ubuntu@127.0.0.1', commande], { encoding: 'utf8', timeout: delai * 1000 });
+  if (r.status !== 0 && !tolerer) throw new Error(`ssh « ${commande} » → ${r.status}\n${r.stderr}`);
+  return { code: r.status, sortie: (r.stdout || '').trim() };
+};
+async function jusqua(libelle, essai, { delai = 600, pas = 5 } = {}) {
+  const fin = Date.now() + delai * 1000;
+  for (;;) {
+    const r = await essai();
+    if (r) return r;
+    if (Date.now() > fin) throw new Error(`délai dépassé : ${libelle}`);
+    await attendre(pas * 1000);
+  }
+}
+const api = (methode, chemin, corps) => {
+  const donnees = corps ? Buffer.from(JSON.stringify(corps)).toString('base64') : null;
+  const commande = donnees
+    ? `echo ${donnees} | base64 -d | curl -s -X ${methode} -H 'content-type: application/json' --data-binary @- http://127.0.0.1:9876${chemin}`
+    : `curl -s -X ${methode} http://127.0.0.1:9876${chemin}`;
+  const { sortie } = ssh(commande, { tolerer: true, delai: 900 });
+  try { return JSON.parse(sortie); } catch { return { brut: sortie }; }
+};
+const page = () => {
+  const r = spawnSync('curl', ['-s', '-m', '5', '-D', '-', '-H', `Host: ${DOMAINE}`,
+                               `http://127.0.0.1:${portHttp}/`], { encoding: 'utf8' });
+  return r.stdout || '';
+};
+
+let reussi = false;
+try {
+  await jusqua('SSH de la machine', () => ssh('true', { tolerer: true, delai: 10 }).code === 0,
+               { delai: 600 });
+  dire('SSH joignable ; attente de la fin du cloud-init (apt, Incus, sparkd, préflight)');
+  const init = ssh('cloud-init status --wait --long', { tolerer: true, delai: 3600 });
+  if (!/status: done/.test(init.sortie)) {
+    // Relevé AVANT de démonter : la machine disparaît avec le banc, et un
+    // échec sans sa cause obligerait à tout rejouer à la main.
+    const lire = (c) => ssh(c, { tolerer: true, delai: 180 }).sortie;
+    const journal = lire("sudo grep -v -E '^[|+]|randomart|fingerprint|identification|public key|Generating|SHA256' /var/log/cloud-init-output.log | tail -25");
+    const sparkd = lire('sudo journalctl -u sparkd --no-pager -n 40 -o cat');
+    const sync = lire("curl -s -m 120 -w '\\n→ HTTP %{http_code} en %{time_total} s' -X POST http://127.0.0.1:9876/v1/forge/sync | tail -c 1500");
+    throw new Error(`le cloud-init n'a pas abouti :\n${init.sortie}\n--- cloud-init-output.log\n${journal}`
+      + `\n--- journalctl -u sparkd\n${sparkd}\n--- POST /v1/forge/sync, rejoué\n${sync}`);
+  }
+  verdict('le cloud-init du dépôt monte la Forge', true, 'status: done');
+
+  // --- 5. un Spark et une route, par l'API ------------------------------------
+  // Une Forge neuve n'a jamais relevé son catalogue, et refuse — à raison —
+  // une image « unknown » (docs/DAT.md §33.3). Le geste de l'exploitant d'abord.
+  const catalogue = api('POST', '/v1/images/verify');
+  if (catalogue.detail) throw new Error(`relevé du catalogue refusé : ${JSON.stringify(catalogue)}`);
+  const cree = api('POST', '/v1/sparks', {
+    name: 'temoin', image: 'images:ubuntu/24.04', cpu_mode: 'shared', cpu_reservation: 0.5,
+    memory_bytes: 512 * 1024 ** 2, network_bps: 50_000_000, storage_bytes: 4 * 1024 ** 3 });
+  if (cree.name !== 'temoin') throw new Error(`création refusée : ${JSON.stringify(cree)}`);
+  for (const action of ['apply', 'start']) {
+    const r = api('POST', `/v1/sparks/temoin/${action}`);
+    if (r.detail) throw new Error(`${action} refusé : ${JSON.stringify(r)}`);
+  }
+  dire('Spark « temoin » créé et démarré par l’API ; pose de sa pile (un serveur HTTP)');
+  // Ce que le locataire ferait : une pile qui redémarre avec sa cellule.
+  ssh(`sudo incus exec temoin -- sh -c 'command -v python3 >/dev/null || (apt-get update -q && apt-get install -y -q python3-minimal); mkdir -p /srv/temoin && echo ${PAGE} > /srv/temoin/index.html && printf "[Unit]\\nDescription=pile temoin\\n[Service]\\nExecStart=/usr/bin/python3 -m http.server 8080 --directory /srv/temoin\\n[Install]\\nWantedBy=multi-user.target\\n" > /etc/systemd/system/temoin.service && systemctl enable --now temoin'`,
+      { delai: 900 });
+  const route = api('POST', '/v1/ingress', { spark: 'temoin', domain: DOMAINE, port: 8080, tls: false });
+  if (route.domain !== DOMAINE) throw new Error(`route refusée : ${JSON.stringify(route)}`);
+
+  // --- 6. avant le redémarrage ---------------------------------------------------
+  const avant = await jusqua('la route sert la pile',
+    () => (page().includes(PAGE) ? page() : null), { delai: 120 });
+  verdict('avant : la route sert la pile', true, avant.split('\r\n')[0]);
+
+  // --- 7. le redémarrage, puis AUCUN geste -----------------------------------------
+  dire('redémarrage de la machine — à partir d’ici, le banc ne fait que LIRE');
+  ssh('sudo systemctl reboot', { tolerer: true, delai: 15 });
+  await jusqua('arrêt de la machine', () => ssh('true', { tolerer: true, delai: 5 }).code !== 0,
+               { delai: 180, pas: 2 });
+  await jusqua('SSH après redémarrage', () => ssh('true', { tolerer: true, delai: 10 }).code === 0,
+               { delai: 600 });
+  const sante = await jusqua('sparkd prêt', () => {
+    const r = api('GET', '/healthz');
+    return r.status === 'ok' ? r : null;
+  }, { delai: 300 });
+  verdict('après : sparkd prêt', true, sante.version);
+
+  // Une route que Caddy porte répond dès que la pile a démarré dans sa cellule.
+  // On laisse à la cellule le temps de démarrer ; au-delà, c'est un échec.
+  let apres = '';
+  try {
+    apres = await jusqua('la route sert la pile', () => {
+      const p = page();
+      return p.includes(PAGE) ? p : null;
+    }, { delai: 180 });
+  } catch { apres = page(); }
+  verdict('après : la route sert la pile, sans aucun geste', apres.includes(PAGE),
+          apres.split('\r\n')[0] || 'aucune réponse');
+  const spark = api('GET', '/v1/sparks/temoin');
+  verdict('après : le Spark est en marche', spark.state === 'running', spark.state);
+  // `systemctl show` sépare deux unités par une ligne VIDE : on relit mot à mot.
+  const unites = ssh('systemctl show -p UnitFileState --value caddy.service caddy-api.service'
+    + ' ; systemctl is-active caddy-api.service', { tolerer: true }).sortie
+    .split(/\s+/).filter(Boolean).join(' ');
+  verdict('après : Caddy porté par caddy-api.service, caddy.service masqué',
+          unites === 'masked enabled active', unites);
+  const pareFeu = ssh('sudo nft list table inet spark_filter >/dev/null && echo posé',
+                      { tolerer: true }).sortie;
+  verdict('après : le pare-feu du bridge est posé', pareFeu === 'posé', pareFeu || 'absent');
+  const pool = ssh('sudo zpool list -H -o health spark', { tolerer: true }).sortie;
+  verdict('après : le pool est en ligne', pool === 'ONLINE', pool || 'absent');
+  const pf = ssh('sudo /opt/sparkd/venv/bin/python -m sparkd.preflight', { tolerer: true, delai: 120 });
+  const rouges = (pf.sortie.match(/^\[ECHEC \] \S+/gm) || []).map((l) => l.split(/\s+/).pop());
+  verdict('après : le préflight est vert', pf.code === 0,
+          rouges.length ? `bloquants : ${rouges.join(', ')}` : pf.sortie.split('\n').pop());
+
+  reussi = verdicts.every((v) => v.ok);
+} catch (erreur) {
+  verdict('le banc est allé au bout', false, erreur.message);
+} finally {
+  if (!reussi && existsSync(console_)) {
+    mkdirSync(ECHECS, { recursive: true });
+    copyFileSync(console_, join(ECHECS, 'forge-vm-console.log'));
+    console.log(`console série : ${join(ECHECS, 'forge-vm-console.log')}`);
+  }
+}
+console.log(reussi
+  ? `VERT en ${t().trim()} : la Forge du cloud-init reprend seule après un redémarrage.`
+  : `ROUGE en ${t().trim()} : ${verdicts.filter((v) => !v.ok).length} écart(s).`);
+// SORTIR, explicitement. Un enfant vivant — la machine, le serveur de la source
+// NoCloud — garde la boucle de Node ouverte : mesuré le 2026-09-30, un premier
+// banc a rendu son verdict puis gardé 20 minutes une VM de 6 Gio et le verrou.
+nettoyer();
+process.exit(reussi ? 0 : 1);

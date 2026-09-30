@@ -463,6 +463,54 @@ def test_declarer_une_route_l_applique_a_chaud(tmp_path):
     assert servie["handle"][0]["upstreams"][0]["dial"] == "10.77.0.16:8080"
 
 
+def test_sparkd_reconcilie_l_ingress_des_son_demarrage(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (décision 2), §18.1
+
+    Le 2026-09-14, Caddy est reparti sans route et `sparkd` a attendu le
+    changement de route suivant : deux heures. Un `sparkd` qui (re)démarre pose
+    la configuration du registre sans qu'on le lui demande.
+    """
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
+
+    # Un second démarrage sur le même registre : son Caddy (neuf, vide) reçoit
+    # la route AVANT toute requête.
+    relance = create_app(load({"SPARKD_DB": str(tmp_path / "c.db"), "SPARKD_DRIVER": "fake"}))
+    servies = [r for r in relance.state.caddy.config["apps"]["http"]["servers"]["spark"]["routes"]
+               if "match" in r]
+    assert [r["match"][0]["host"] for r in servies] == [["crm.example.com"]]
+
+
+def test_un_caddy_injoignable_au_demarrage_n_empeche_pas_sparkd(tmp_path, monkeypatch):
+    """@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (décision 2)
+
+    Le plan de contrôle démarre quand même — c'est lui qui permet de réparer —,
+    et l'échec est au journal comme un événement du runtime. L'écran, lui, le
+    montre par le diagnostic en direct (SPK-130, §18.7) : Caddy injoignable.
+    """
+    c = _app(tmp_path)
+    c.post("/v1/sparks", json=_spec(name="crm"))
+    c.post("/v1/sparks/crm/apply")
+    c.post("/v1/ingress", json={"spark": "crm", "domain": "crm.example.com", "port": 8080})
+
+    from sparkd import ingress as ingress_module
+    classe = ingress_module.FakeCaddy
+    monkeypatch.setattr(ingress_module, "FakeCaddy", lambda: classe(fail=True))
+    relance = TestClient(create_app(
+        load({"SPARKD_DB": str(tmp_path / "c.db"), "SPARKD_DRIVER": "fake"})))
+    assert relance.get("/healthz").status_code == 200
+    connexion = connect(tmp_path / "c.db")
+    try:
+        derniere = connexion.execute(
+            "SELECT result, actor_class FROM audit_log WHERE action = 'ingress.reconcile'"
+            " ORDER BY id DESC LIMIT 1").fetchone()
+    finally:
+        connexion.close()
+    assert derniere["result"] == "error"
+
+
 def test_conflit_de_domaine_refuse_par_http(tmp_path):
     c = _app(tmp_path)
     for nom in ("a", "b"):

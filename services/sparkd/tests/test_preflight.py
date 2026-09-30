@@ -8,6 +8,8 @@ montré que le contrôle de surface réseau était faux.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from sparkd import preflight
@@ -32,7 +34,7 @@ LISTEN 0 4096 [::]:22 [::]:*
 
 
 def hote(commandes: dict[str, str | None] = None, fichiers: dict[str, str] = None,
-         binaires: set[str] = None, declarations=None) -> Hote:
+         binaires: set[str] = None, declarations=None, attendue=None) -> Hote:
     commandes = commandes or {}
     fichiers = fichiers or {}
     binaires = binaires if binaires is not None else {"caddy"}
@@ -43,6 +45,8 @@ def hote(commandes: dict[str, str | None] = None, fichiers: dict[str, str] = Non
         # SPK-36 : par défaut AUCUNE déclaration, donc aucun fantôme possible.
         # Les preuves qui visent ce contrôle fournissent leur propre relevé.
         declarations=declarations if declarations is not None else (lambda: []),
+        # SPK-129 : par défaut, registre ILLISIBLE — jamais celui du poste.
+        configuration_attendue=attendue if attendue is not None else (lambda: None),
     )
 
 
@@ -270,6 +274,8 @@ def test_chaque_controle_porte_un_code_stable_et_unique():
         "PKG-DPKG",
         # SPK-109 · §57.4 : chaque cellule isolée, et le verrou forward posé.
         "NET-ISOLATION",
+        # SPK-129 · §51.5 : ce qui fait reprendre l'ingress après un redémarrage.
+        "ING-UNITE", "ING-CONCORDE",
     }
 
 
@@ -832,3 +838,70 @@ def test_nft_illisible_rend_INCONNU_avec_le_compte_des_cellules():
     verdict = preflight.isolation_des_sparks(_hote_isolation({"a": ISOLEE}, table=None))
     assert verdict.etat == INCONNU
     assert "1 cellule(s) isolée(s) sur 1" in verdict.releve
+
+
+# --- SPK-129 · §51.5 : ce qui fait reprendre l'ingress -------------------------
+
+def _unites(fichier, api, actif):
+    base = "systemctl show -p {} --value {}"
+    return {base.format("UnitFileState", "caddy.service"): fichier,
+            base.format("UnitFileState", "caddy-api.service"): api,
+            base.format("ActiveState", "caddy-api.service"): actif}
+
+
+def test_ING_UNITE_denonce_la_forge_du_14_septembre():
+    """@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (décision 4)
+
+    `ING-CADDY` était vert ce jour-là : l'API répondait. Ce qui manquait, c'est
+    l'unité qui fait repartir Caddy de sa configuration."""
+    verdict = preflight.caddy_porte_par_son_api(hote(_unites("enabled", "disabled", "inactive")))
+    assert verdict.etat == ECHEC
+    assert "caddy.service : enabled" in verdict.releve
+    assert "runbook A.2" in verdict.remede
+
+
+def test_ING_UNITE_vert_sur_une_forge_alignee():
+    verdict = preflight.caddy_porte_par_son_api(hote(_unites("masked", "enabled", "active")))
+    assert verdict.etat == OK, verdict.releve
+
+
+def test_ING_UNITE_ne_conclut_rien_sans_systemd_lisible():
+    assert preflight.caddy_porte_par_son_api(hote()).etat == preflight.INCONNU
+
+
+CONFIG = {"apps": {"http": {"servers": {"spark": {
+    "listen": [":80", ":443"], "protocols": ["h1", "h2"],
+    "routes": [{"match": [{"host": ["crm.example.com"]}], "handle": []}]}}}}}
+CURL = "curl -s --max-time 5 http://127.0.0.1:2019/config/"
+
+
+def test_ING_CONCORDE_vert_quand_caddy_sert_le_registre():
+    """@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5, §18.5"""
+    verdict = preflight.caddy_sert_le_registre(
+        hote({CURL: json.dumps(CONFIG)}, attendue=lambda: CONFIG))
+    assert verdict.etat == OK and "1 domaine" in verdict.releve
+
+
+def test_ING_CONCORDE_nomme_les_routes_perdues_apres_un_redemarrage():
+    """Le 2026-09-14 : Caddy servait le `Caddyfile`, aucune route du registre."""
+    caddyfile = {"apps": {"http": {"servers": {"srv0": {"listen": [":80"], "routes": []}}}}}
+    verdict = preflight.caddy_sert_le_registre(
+        hote({CURL: json.dumps(caddyfile)}, attendue=lambda: CONFIG))
+    assert verdict.etat == ECHEC
+    assert "absents de Caddy : crm.example.com" in verdict.releve
+    assert "reconcile" in verdict.remede
+
+
+def test_ING_CONCORDE_voit_une_forme_perimee_aux_memes_domaines():
+    """Une build nouvelle qui n'a pas encore réconcilié : mêmes noms, autre forme."""
+    perimee = json.loads(json.dumps(CONFIG))
+    del perimee["apps"]["http"]["servers"]["spark"]["protocols"]
+    verdict = preflight.caddy_sert_le_registre(
+        hote({CURL: json.dumps(perimee)}, attendue=lambda: CONFIG))
+    assert verdict.etat == ECHEC and "forme différente" in verdict.releve
+
+
+def test_ING_CONCORDE_ne_conclut_rien_sans_registre_ou_sans_caddy():
+    assert preflight.caddy_sert_le_registre(hote()).etat == preflight.INCONNU
+    assert preflight.caddy_sert_le_registre(
+        hote(attendue=lambda: CONFIG)).etat == preflight.INCONNU

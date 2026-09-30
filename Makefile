@@ -7,7 +7,8 @@ VENV   := $(SPARKD)/.venv
 PY     := $(VENV)/bin/python
 
 .PHONY: help bootstrap sparkd-install sparkd-test sparkd-run webui-install \
-        contract contract-check hooks test gestes e2e captures manuel runDev runProd seed build clean
+        contract contract-check hooks test gestes e2e captures manuel runDev runProd seed build clean \
+        forge-vm
 
 help:
 	@echo "bootstrap       installe les dependances des deux livrables"
@@ -24,6 +25,7 @@ help:
 	@echo "e2e             parcours complets contre la pile reelle"
 	@echo "manuel          reproduit les illustrations du manuel utilisateur"
 	@echo "captures        captures d'interface, a OBSERVER (CLAUDE.md §16)"
+	@echo "forge-vm        Forge du cloud-init dans une VM, redemarree pour de vrai (SPK-129)"
 	@echo "test            toutes les suites de tests"
 	@echo "build           build de tous les paquets"
 
@@ -118,6 +120,13 @@ captures:
 # ouverte : make forge-reelle SCRIPT=spk109-isolation ARGS="redaction-devis 10.77.0.16 oauth.lelabs.tech"
 forge-reelle:
 	$(PLAFOND) node e2e/forge-reelle/$(SCRIPT).mjs $(ARGS)
+
+# SPK-129 · DAT §51.5 : une Forge montée par le cloud-init du dépôt, dans une VM
+# du poste, redémarrée pour de vrai. Épreuve LOURDE (6 Gio) : le verrou la prend.
+# make forge-vm                       roue construite depuis l'arbre de travail
+# make forge-vm ARGS="--roue <x.whl>" une roue donnée — la preuve rouge d'avant
+forge-vm:
+	$(PLAFOND) node e2e/forge-vm/redemarrage.mjs $(ARGS)
 
 # Les illustrations du manuel sont PRODUITES depuis l'application (DAT §30.1),
 # jamais collectees a la main.

@@ -168,8 +168,8 @@ Risques       : une coupure de l'ingress le temps du passage d'une unité à
 ### OP-27 · Mettre à jour `sparkd` : l'ingress cesse d'annoncer HTTP/3 et pose `Alt-Svc: clear` (SPK-128)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
-                SPK-128 livré sur `main`. Tant qu'elle ne l'est pas, la Forge
+État          : EN ATTENTE — à jouer sur instruction du responsable, dans la
+                MÊME mise à jour qu'OP-28. Tant qu'elle ne l'est pas, la Forge
                 annonce `alt-svc: h3=":443"; ma=2592000` sur chaque réponse et
                 écoute UDP/443, sans servir HTTP/3 (docs/DAT.md §18.6).
 Objectif      : poser la configuration de l'ingress du §18.2 révisé :
@@ -180,15 +180,13 @@ Objectif      : poser la configuration de l'ingress du §18.2 révisé :
                 aucune règle réseau. La console ne change pas.
 Dépend de     : rien.
 Ordre         : 1. mettre à jour sparkd (runbook A.2) ;
-                2. RÉCONCILIER l'ingress, sur la Forge :
-                   `curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile`
-                   — la nouvelle build ne pose rien d'elle-même : `sparkd` ne
-                   réconcilie l'ingress qu'à un changement de route, et
-                   « Réappliquer » n'est offert que sur une route non
-                   appliquée. Mesuré sur Caddy 2.6.2 : ce `POST /load` à chaud
-                   ferme l'écoute UDP/443 sans redémarrer Caddy ni couper
-                   les routes.
-Vérification  : la réponse de l'étape 2 compte les mêmes routes qu'avant ;
+                2. rien d'autre : la build porte aussi SPK-129, et `sparkd`
+                   réconcilie l'ingress à son démarrage (docs/DAT.md §51.5).
+                   Mesuré sur Caddy 2.6.2 : ce `POST /load` à chaud ferme
+                   l'écoute UDP/443 sans redémarrer Caddy ni couper les
+                   routes.
+Vérification  : le journal porte, au démarrage de `sparkd`, un
+                `ingress.reconcile` qui compte les mêmes routes qu'avant ;
                 `sudo ss -lnuH | grep ':443 '` ne rend plus rien ;
                 depuis le poste, `curl -sI https://oauth.lelabs.tech/` et
                 `curl -sI https://crm.lelabs.tech/` portent `alt-svc: clear`,
@@ -197,8 +195,11 @@ Vérification  : la réponse de l'étape 2 compte les mêmes routes qu'avant ;
                 dossier d'un Spark à route, ouvert dans la console, nomme
                 `Alt-Svc: clear` et dit que l'ingress ne sert pas HTTP/3.
 Retour arrière: réinstaller la build précédente (runbook A.2) puis
-                réconcilier (étape 2) : Caddy réécoute UDP/443 et réannonce
-                HTTP/3. Rien n'est écrit au registre.
+                réconcilier à la main — la build précédente ne le fait pas à
+                son démarrage :
+                `curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile`.
+                Caddy réécoute UDP/443 et réannonce HTTP/3. Rien n'est écrit
+                au registre.
 Risques       : aucun sur les routes servies — même amont, même filtre, même
                 ordre de préséance ; la route commune ne sert rien, elle pose
                 un en-tête et passe la main. Un client qui ne parlerait QUE

@@ -119,7 +119,7 @@ en service sans vous demander ce qu'elle va faire.
 sudo /opt/sparkd/venv/bin/python -m sparkd.preflight
 ```
 
-Elle rend treize contrôles. Chacun dit son verdict, **la valeur qu'il a relevée**,
+Elle rend dix-sept contrôles. Chacun dit son verdict, **la valeur qu'il a relevée**,
 et la commande qui corrige — pour vous éviter d'aller remesurer à la main ce que
 le programme venait de mesurer.
 
@@ -131,9 +131,13 @@ le programme venait de mesurer.
 | `MEM-ARC` | plafond de l'ARC ZFS posé et raisonnable |
 | `NET-BRIDGE` | bridge privé présent |
 | `NET-DHCP` | plage DHCP disjointe de celle du registre |
+| `PKG-DPKG` | le gestionnaire de paquets est cohérent — sinon aucune installation ne passe |
 | `ING-CADDY` | Caddy administrable localement |
+| `ING-UNITE` | Caddy reprend sa configuration après un redémarrage : porté par `caddy-api.service`, `caddy.service` masqué |
+| `ING-CONCORDE` | la configuration que Caddy sert **maintenant** est celle du registre |
 | `SEC-PORTS` | seuls `22`, `80`, `443` joignables depuis le réseau |
 | `NET-REMONTEE` | un Spark ne peut pas remonter vers le SSH de sa Forge |
+| `NET-ISOLATION` | chaque Spark est isolé du réseau des autres |
 | `SSH-X11` | la redirection X11 inutile est désactivée ou signalée sans bloquer |
 | `RUN-SPARKD` | `sparkd` survivra à un redémarrage |
 | `RUN-SLICE` | la tranche systemd parente des Sparks existe et est paramétrée |

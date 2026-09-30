@@ -386,6 +386,7 @@ pas encore sont marquées.
 
 | `make e2e` / `pnpm e2e` | parcours complets contre la pile réelle | **oui** |
 | `make manuel` | reproduit les illustrations du manuel | **oui** |
+| `make forge-vm` | **une Forge montée par le cloud-init du dépôt**, dans une machine virtuelle du poste (6 Gio, KVM), un Spark et une route créés par l'API, puis **redémarrée pour de vrai** et revérifiée sans aucun geste (`docs/DAT.md` §51.5). `ARGS="--roue <x.whl>"` éprouve une roue donnée. Épreuve lourde : elle prend le verrou. L'image Ubuntu est gardée dans `~/.cache/spark-environment/vm/` | **oui** |
 | `scripts/mesures-spk128.sh` | banc de l'ingress sur Caddy 2.6.2 — la version de la Forge — avec la configuration **produite par le code** : ni écoute UDP/443 ni annonce HTTP/3, `Alt-Svc: clear` partout, passage à chaud (`docs/DAT.md` §18.6). Docker requis ; trois conteneurs jetables | **oui** |
 
 **Une seule épreuve lourde à la fois, et plafonnée** (`CLAUDE.md` §15 bis,
@@ -629,11 +630,11 @@ une garde qui n'existe que dans un fichier de workflow.
   seulement, et `Alt-Svc: clear` sur chaque réponse pour effacer une annonce
   mémorisée. La Forge de validation annonce encore HTTP/3 sans le servir tant
   qu'OP-27 n'est pas joué (`docs/PROD_MIGRATIONS.md`).
-- **Après un redémarrage, l'ingress de la Forge ne reprend pas ses routes**
-  (`docs/DAT.md` §51.5, `docs/BACKLOG.md#SPK-129`, en cours). Caddy repart du
-  `Caddyfile` par défaut, et l'écran continue d'afficher les routes « appliquées ».
-  D'ici là, après tout redémarrage de la Forge ou de Caddy :
-  `curl -s -X POST http://127.0.0.1:9876/v1/ingress/reconcile` sur la Forge.
+- **Une Forge dont la carte réseau n'annonce pas son débit ne s'installe pas** —
+  typiquement une machine virtuelle à carte `virtio`. Le relevé de topologie
+  refuse une capacité réseau nulle plutôt que de la retenir (SPK-07) ; mesuré le
+  2026-09-30 sur la machine du banc de redémarrage, qui emploie donc une carte
+  `e1000e` (`docs/DAT.md` §51.5).
 - **Le préflight ne relève que les écoutes TCP.** `SEC-PORTS` lit `ss -lnt` : une
   écoute UDP exposée lui échappe — c'est ainsi que l'UDP/443 de Caddy est passé
   inaperçu jusqu'au 2026-09-30.

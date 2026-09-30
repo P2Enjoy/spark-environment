@@ -1,4 +1,8 @@
-"""Preuves de l'installateur distribué avec le paquet sparkd."""
+"""Preuves de l'installateur distribué avec le paquet sparkd.
+
+@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (la mise à jour aligne
+          l'unité qui porte Caddy, avant de redémarrer sparkd)
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,23 @@ from pathlib import Path
 import pytest
 
 from sparkd import cgroup, install
+
+
+def unites(fichier: str, api: str, api_actif: str):
+    """Un lecteur d'état d'unités : ce que `systemctl show` rendrait."""
+    valeurs = {("caddy.service", "UnitFileState"): fichier,
+               ("caddy-api.service", "UnitFileState"): api,
+               ("caddy-api.service", "ActiveState"): api_actif}
+
+    def lire(commande: list[str]) -> str:
+        return valeurs.get((commande[-1], commande[3]), "")
+    return lire
+
+
+#: Une Forge dont Caddy est déjà porté comme le §51.5 l'exige.
+ALIGNEE = unites("masked", "enabled", "active")
+#: Une Forge telle que l'exécuteur la laissait avant SPK-129.
+AVANT_SPK129 = unites("enabled", "disabled", "inactive")
 
 
 def paths(tmp_path: Path) -> install.Paths:
@@ -111,7 +132,8 @@ def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_
 
     install.install(cible, runner=commandes.append, healthcheck=lambda: True,
                     preflight=lambda: 0, uid=0, sleep=lambda _: None,
-                    announce=lambda phase, state: jalons.append((phase, state)))
+                    announce=lambda phase, state: jalons.append((phase, state)),
+                    lire=AVANT_SPK129)
 
     service = (cible.systemd / "sparkd.service").read_text(encoding="utf-8")
     assert f"ExecStart={cible.python} -m sparkd" in service
@@ -128,10 +150,17 @@ def test_l_installateur_pose_les_unites_du_paquet_et_le_commit(monkeypatch, tmp_
         # une racine vierge le reçoit et l'active, sans second daemon-reload.
         ["systemctl", "enable", "--now", "spark-firewall.service"],
         ["systemctl", "reload-or-restart", "spark-firewall.service"],
+        # SPK-129 · §51.5 : Caddy porté par `caddy-api.service` AVANT le
+        # redémarrage de sparkd, qui réconciliera contre lui.
+        ["systemctl", "disable", "caddy.service"],
+        ["systemctl", "mask", "--now", "caddy.service"],
+        ["systemctl", "enable", "--now", "caddy-api.service"],
         ["systemctl", "enable", "sparkd"],
         ["systemctl", "restart", "sparkd"],
     ]
     assert (cible.racine / "etc/sparkd/firewall.nft").is_file()
+    assert "Restart=on-failure" in (
+        cible.racine / "etc/systemd/system/caddy-api.service.d/spark.conf").read_text()
     assert (cible.racine / "etc/systemd/system/spark-firewall.service").is_file()
     build = json.loads(cible.build.read_text(encoding="utf-8"))
     assert build["commit"] == "abc123def456"
@@ -156,7 +185,7 @@ def test_une_mise_a_jour_rejouee_ne_recharge_pas_un_pare_feu_identique(monkeypat
     cible = paths(tmp_path)
     monkeypatch.setattr(install, "commit_du_paquet", lambda: "abc123def456")
     arguments = dict(healthcheck=lambda: True, preflight=lambda: 0, uid=0,
-                     sleep=lambda _: None, announce=lambda *_: None)
+                     sleep=lambda _: None, announce=lambda *_: None, lire=ALIGNEE)
     install.install(cible, runner=lambda _: None, **arguments)
     commandes: list[list[str]] = []
     install.install(cible, runner=commandes.append, **arguments)
@@ -189,7 +218,8 @@ def test_no_start_ne_fait_pas_passer_une_forge_incomplete_pour_prete(tmp_path):
         return 1
 
     install.install(cible, runner=commandes.append, healthcheck=lambda: False,
-                    preflight=preflight, uid=0, sleep=lambda _: None, start=False)
+                    preflight=preflight, uid=0, sleep=lambda _: None, start=False,
+                    lire=AVANT_SPK129)
     assert commandes == [
         ["systemctl", "daemon-reload"],
         ["systemctl", "start", "spark.slice"],
@@ -202,7 +232,7 @@ def test_no_start_ne_fait_pas_passer_une_forge_incomplete_pour_prete(tmp_path):
 def test_un_echec_de_preflight_empeche_le_faux_succes(tmp_path):
     with pytest.raises(install.InstallationError, match="préflight rouge"):
         install.install(paths(tmp_path), runner=lambda _: None, healthcheck=lambda: True,
-                        preflight=lambda: 1, uid=0, sleep=lambda _: None)
+                        preflight=lambda: 1, uid=0, sleep=lambda _: None, lire=ALIGNEE)
 
 
 def test_l_installateur_refuse_de_s_executer_sans_root(tmp_path):
@@ -221,3 +251,19 @@ def test_build_n_a_pas_besoin_d_une_variable_de_commit(monkeypatch, tmp_path):
         "installed_at": "2026-08-21T00:00:00+00:00",
         "installed_from": "paquet sparkd 0.post1.dev1+g0123456789ab",
     }
+
+
+def test_une_mise_a_jour_sur_une_forge_alignee_ne_touche_pas_a_caddy(monkeypatch, tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5
+
+    Rejouée sur une Forge déjà alignée, la mise à jour ne passe AUCUNE commande
+    sur Caddy : l'arrêter et le relancer couperait l'ingress pour rien.
+    """
+    cible = paths(tmp_path)
+    monkeypatch.setattr(install, "commit_du_paquet", lambda: "abc123def456")
+    arguments = dict(healthcheck=lambda: True, preflight=lambda: 0, uid=0,
+                     sleep=lambda _: None, announce=lambda *_: None, lire=ALIGNEE)
+    install.install(cible, runner=lambda _: None, **arguments)
+    commandes: list[list[str]] = []
+    install.install(cible, runner=commandes.append, **arguments)
+    assert not any("caddy" in " ".join(c) for c in commandes)

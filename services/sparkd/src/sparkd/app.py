@@ -265,6 +265,32 @@ def create_app(config: Config) -> FastAPI:
 
     app.state.reconciliations = _reconcile_at_startup()
 
+    def _reconcilier_l_ingress_au_demarrage() -> None:
+        """Pose dans Caddy ce que le registre décrit, dès le démarrage.
+
+        @spec docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (décision 2), §18.1,
+              §18.5
+
+        Caddy sert déjà sa dernière configuration quand `sparkd` démarre
+        (`--resume`). Ce qu'il ne peut pas savoir, c'est qu'une build nouvelle
+        la construit autrement, ou qu'une Forge neuve n'a jamais reçu que le
+        `Caddyfile`. Sans ce passage, la configuration attendait le prochain
+        changement de route — deux heures, le 2026-09-14.
+
+        Un échec n'empêche pas le démarrage : le plan de contrôle est ce qui
+        permet de réparer. Il est au journal, et à l'écran — `applied_at` remis
+        à zéro, donc « non appliquée » et « Réappliquer » (§18.5).
+        """
+        connection = connect(config.database)
+        try:
+            ingress_service.reconcile(connection, app.state.caddy)
+        except ingress_service.IngressError:
+            pass
+        finally:
+            connection.close()
+
+    _reconcilier_l_ingress_au_demarrage()
+
     def _preparer_le_catalogue() -> None:
         """Pre-renseigne le catalogue, et le releve avec le pilote FACTICE.
 

@@ -3,7 +3,9 @@
 @spec docs/BACKLOG.md#SPK-66, docs/BACKLOG.md#SPK-69 · docs/DAT.md §40.4,
       §40.6 · docs/BACKLOG.md#SPK-108, docs/DAT.md §56.3 (la mise à jour pose
       aussi le pare-feu du bridge, par comparaison) ·
-      docs/PROD_MIGRATIONS.md#OP-04, docs/PROD_MIGRATIONS.md#OP-21
+      docs/PROD_MIGRATIONS.md#OP-04, docs/PROD_MIGRATIONS.md#OP-21 ·
+      docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (la mise à jour aligne aussi
+      l'unité qui porte Caddy) · docs/PROD_MIGRATIONS.md#OP-28
 
 Le dépôt n'est volontairement pas une entrée de ce module. Une Forge reçoit le
 paquet Python directement depuis la source publique ; les migrations et les
@@ -28,7 +30,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import __version__
-from . import pare_feu
+from . import caddy_unite, pare_feu
 from .build import commit_du_paquet
 
 
@@ -99,6 +101,23 @@ def _run(command: list[str]) -> None:
     except (OSError, subprocess.CalledProcessError) as error:
         joined = " ".join(command)
         raise InstallationError(f"commande échouée : {joined} ({error})") from error
+
+
+Lecteur = Callable[[list[str]], str]
+
+
+def _lire(command: list[str]) -> str:
+    """Une commande de LECTURE : sa sortie standard, jamais d'exception.
+
+    Un relevé qui échoue rend une chaîne vide ; l'alignement qui le lit en
+    conclut « à faire », et c'est la commande d'écriture qui dira pourquoi elle
+    échoue — avec son message, par `_run`.
+    """
+    try:
+        return subprocess.run(command, capture_output=True, text=True,
+                              timeout=20).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 def _healthz() -> bool:
@@ -190,7 +209,8 @@ def write_build(paths: Paths, *, now: Callable[[], datetime] =
 def install(paths: Paths | None = None, *, runner: Runner = _run,
             healthcheck: Healthcheck = _healthz, preflight: Preflight = _preflight,
             uid: int | None = None, sleep: Callable[[float], None] = time.sleep,
-            start: bool = True, announce: Announcer = _announce) -> None:
+            start: bool = True, announce: Announcer = _announce,
+            lire: Lecteur = _lire) -> None:
     """Pose les unités du paquet et démarre la build nouvellement installée.
 
     ``--no-start`` sert seulement à préparer une Forge dont les dépendances ne
@@ -216,6 +236,9 @@ def install(paths: Paths | None = None, *, runner: Runner = _run,
     # une règle nouvelle (SPK-108, docs/DAT.md §56.3). Activé plus bas, après
     # le `daemon-reload` commun.
     pare_feu_changement = pare_feu.ecrire(_bridge_configure(paths), racine=paths.racine)
+    # SPK-129 · §51.5 : le complément de l'unité de Caddy est un fichier du
+    # produit, posé au même moment et relu par le même `daemon-reload`.
+    caddy_complement_change = caddy_unite.ecrire(racine=paths.racine)
     announce("units", "done")
 
     announce("daemon_reload", "in_progress")
@@ -248,6 +271,14 @@ def install(paths: Paths | None = None, *, runner: Runner = _run,
     # Une pose identique ne passe AUCUNE commande (§56.3) ; le `daemon-reload`
     # ci-dessus a déjà relu l'unité si elle a changé.
     pare_feu.activer(pare_feu_changement, runner, daemon_recharge=True)
+
+    # SPK-129 · §51.5 : Caddy porté par `caddy-api.service` AVANT le
+    # redémarrage de `sparkd` — ordonné après lui, `sparkd` réconcilie au
+    # démarrage contre le Caddy qui survivra au prochain redémarrage de la
+    # Forge. C'est ce qui répare une Forge existante par une mise à jour
+    # ordinaire. Une Forge déjà alignée ne reçoit aucune commande.
+    caddy_unite.aligner(runner, lire, complement_change=caddy_complement_change,
+                        daemon_recharge=True)
 
     runner(["systemctl", "enable", "sparkd"])
     announce("restart", "in_progress")

@@ -16,7 +16,7 @@ porte `sparkd` ; un **Spark** est une cellule d'exécution de cette Forge.
 **Entrée** : un accès SSH root sans mot de passe — `ssh root@<hôte>` — ou un
 compte à `sudo` sans mot de passe.
 
-**Sortie** : `sparkd` actif, estampillé, et 10 contrôles de préflight verts.
+**Sortie** : `sparkd` actif, estampillé, et les 17 contrôles du préflight verts.
 
 ### A.1 Ce que la machine doit avoir AVANT
 
@@ -69,7 +69,9 @@ Le préflight se rejoue seul, en lecture seule :
 ssh <compte>@<forge> 'sudo /opt/sparkd/venv/bin/python -m sparkd.preflight'
 ```
 
-Les 10 contrôles doivent être verts. `SEC-PORTS` doit ne rapporter que **22, 80,
+Les 17 contrôles doivent être verts — `ING-UNITE` et `ING-CONCORDE` compris : Caddy
+porté par `caddy-api.service`, et servant la configuration du registre
+(`docs/DAT.md` §51.5). `SEC-PORTS` doit ne rapporter que **22, 80,
 443**.
 
 ### A.4 Inscrire la Forge au catalogue du poste

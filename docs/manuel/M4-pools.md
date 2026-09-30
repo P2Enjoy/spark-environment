@@ -188,6 +188,14 @@ passent. Tant que le nom ne correspond pas, le bouton reste visible et inactif.
 Reconnectez-vous quand la machine aura redémarré ; rien de ce qui est affiché
 entretemps n'est à jour.
 
+**Au retour, tout reprend sans vous.** Les Sparks qui tournaient redémarrent,
+le pare-feu se repose, et le proxy repart de sa dernière configuration ; le plan
+de contrôle la repose de toute façon à son démarrage. Vos domaines répondent dès
+que la pile de chaque Spark a démarré. Ce n'est pas une promesse : un
+redémarrage réel d'une Forge neuve le prouve à chaque version (`make forge-vm`).
+Une pile qui ne redémarre pas seule avec sa cellule reste, elle, l'affaire de
+son locataire.
+
 > Un Spark **protégé** n'empêche pas le redémarrage. La protection garde les
 > écritures qui visent un Spark, pas l'arrêt de la machine qui l'héberge —
 > prétendre le contraire vous donnerait une garantie fausse.

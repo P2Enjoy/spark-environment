@@ -2,7 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.3-§50.6 · docs/BACKLOG.md#SPK-108,
       docs/DAT.md §56.3 (la pose du pare-feu par comparaison) ·
-      docs/PROD_MIGRATIONS.md
+      docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (Caddy porté par
+      `caddy-api.service`, jamais par le `Caddyfile`) · docs/PROD_MIGRATIONS.md
 
 Le navigateur ne fournit jamais une commande. Il fournit le plan versionné du
 §50.4 ; ce module revalide chaque valeur et chaque invariant sur la Forge avant
@@ -27,7 +28,7 @@ from typing import Any, Callable
 
 from . import __version__
 from . import install as package_install
-from . import pare_feu
+from . import caddy_unite, pare_feu
 from .preflight import INCUS_MINIMUM, verifier
 
 
@@ -406,13 +407,15 @@ def phase_foundation(plan: dict[str, Any]) -> dict[str, object]:
         "default", "root", "disk", {"path": "/", "pool": pool}) or created
     created = _ensure_device(
         "default", "eth0", "nic", {"network": bridge}) or created
-    caddy_enabled = _run(
-        ["systemctl", "is-enabled", "--quiet", "caddy"], check=False).returncode == 0
-    caddy_active = _run(
-        ["systemctl", "is-active", "--quiet", "caddy"], check=False).returncode == 0
-    if not caddy_enabled or not caddy_active:
-        _run(["systemctl", "enable", "--now", "caddy"])
-        created = True
+    # SPK-129 · §51.5 : `caddy-api.service`, jamais `caddy.service`. Activer ce
+    # dernier — ce que faisait cette phase — faisait repartir toute Forge, neuve
+    # comprise, du `Caddyfile` à chaque redémarrage : aucune route servie. La
+    # MÊME fonction que `sparkd.install`, pour qu'une Forge ne puisse pas
+    # recevoir deux alignements différents selon le chemin qui l'a posée.
+    caddy_commandes = caddy_unite.aligner(
+        _run, lambda commande: _run(commande, check=False).stdout,
+        complement_change=caddy_unite.ecrire())
+    created = bool(caddy_commandes) or created
 
     # La table du §48 est rendue et posée par `pare_feu`, par COMPARAISON du
     # fichier rendu au fichier en place (SPK-108, docs/DAT.md §56.3) : une Forge

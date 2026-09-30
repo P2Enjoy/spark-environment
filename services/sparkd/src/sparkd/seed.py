@@ -315,8 +315,10 @@ def populate(client: TestClient, incus, caddy) -> dict[str, int]:
         compte["routes"] += 1
     finally:
         caddy.fail = False
-    # Aucun appel suivant ne doit réconcilier l'ingress, sans quoi la route
-    # serait appliquée et la fixture disparaîtrait.
+    # Aucun appel suivant du seed ne doit réconcilier l'ingress : la vérification
+    # finale constate les deux états. Le démarrage de `sparkd` sur ce registre,
+    # lui, réconcilie (SPK-129, docs/DAT.md §51.5) et applique cette route —
+    # « non appliquée » est un état transitoire, dont le journal garde l'échec.
 
     # --- SPK-49 · §39 : un port publié, pour ce qui ne parle pas HTTP.
     #

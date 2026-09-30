@@ -103,13 +103,26 @@ def test_le_refus_d_admission_est_un_vrai_refus(seede):
     assert seede.get("/v1/sparks/trop-gros").status_code == 404
 
 
-def test_une_route_appliquee_et_une_qui_ne_l_est_pas(seede):
-    """§18.5, §28.5 — sans les deux, le badge « non appliquée » est inéprouvable."""
+def test_la_route_declaree_pendant_une_panne_de_caddy_est_appliquee_au_demarrage(seede):
+    """§18.5 — et, depuis SPK-129, §51.5 : « non appliquée » est un état
+    TRANSITOIRE.
+
+    @verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (décision 2), §18.1 ·
+              CLAUDE.md §8
+
+    Le seed déclare `analytics.example.com` pendant une panne de Caddy : la
+    réconciliation échoue, et le journal le garde. Puis `sparkd` démarre sur ce
+    registre — ce que fait la fixture, comme `make runDev` — et réconcilie :
+    la route est appliquée sans que personne ne le demande. Avant SPK-129, elle
+    restait « non appliquée » jusqu'au changement de route suivant.
+    """
     routes = {r["domain"]: r["applied_at"] for r in seede.get("/v1/ingress").json()["routes"]}
     assert routes["crm.example.com"], "la route nominale doit être appliquée"
-    assert routes["analytics.example.com"] is None, (
-        "il faut une route enregistrée mais non appliquée"
-    )
+    assert routes["analytics.example.com"], (
+        "le démarrage de sparkd doit appliquer la route déclarée pendant la panne")
+    echecs = [e for e in seede.get("/v1/audit?limit=500").json()["entries"]
+              if e["action"] == "ingress.reconcile" and e["result"] == "error"]
+    assert echecs, "la panne de Caddy du seed doit rester au journal"
 
 
 def test_une_route_EN_CLAIR_et_une_proposition_qui_en_demande_une(seede):

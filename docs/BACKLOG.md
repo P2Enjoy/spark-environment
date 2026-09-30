@@ -8017,7 +8017,7 @@ date — une seule constante porte les deux.
   inchangé. **Reste `[~]`** : OP-27 n'est pas joué, et la preuve sur Forge
   réelle ne peut l'être qu'après.
 
-### [ ] SPK-129 · Une Forge reprend seule après un redémarrage total
+### [~] SPK-129 · Une Forge reprend seule après un redémarrage total
 
 **Demandé par le responsable le 2026-09-30** : « la Forge doit pouvoir faire un
 redémarrage total et reprendre à fonctionner comme attendu ; assure-toi que le
@@ -8042,22 +8042,33 @@ du dépôt**, en fait la preuve — pas une lecture de configuration.
 1. Documentation — *fait, committé avant le code* ;
 2. exécuteur (`forge_install`) : Caddy porté par `caddy-api.service`
    (`--resume`), `caddy.service` désactivé et **masqué**, reprise sur panne ;
-   `sparkd.service` ordonné après Caddy ; preuves unitaires ;
-3. `sparkd` réconcilie l'ingress **à son démarrage** ; une réconciliation en
-   échec remet `applied_at` à zéro, pour que l'écran le dise ; preuves ;
+   `sparkd.service` ordonné après Caddy ; preuves unitaires — *fait* ;
+3. `sparkd` réconcilie l'ingress **à son démarrage**, et démarre même si Caddy
+   ne répond pas — l'échec au journal, le relevé de SPK-130 à l'écran ;
+   preuves — *fait* ;
 4. préflight : un contrôle de l'unité qui porte Caddy, et un contrôle de
-   concordance entre la configuration vivante de Caddy et le registre ;
+   concordance entre la configuration vivante de Caddy et le registre —
+   *fait* (`ING-UNITE`, `ING-CONCORDE`) ;
 5. banc de redémarrage : une VM Ubuntu 26.04 montée par
    `deploy/cloud-init/`, deux disques pour le miroir, un Spark et une route
    créés par l'API, **redémarrage**, puis tout revérifié sans aucun geste ;
-   rouge sur le code d'avant, vert sur le nouveau ;
-6. OP-28 sur la Forge, **sur instruction du responsable**.
+   rouge sur le code d'avant, vert sur le nouveau — *fait* (`make forge-vm`) ;
+6. OP-28 sur la Forge, **sur instruction du responsable** — **en attente**.
 
 - Aucune variable d'environnement, aucune migration.
 - DoD : preuves unitaires ; banc de redémarrage vert (route servie, `sparkd`
   prêt, pare-feu posé, Spark en marche, préflight vert, **aucun geste**), et
   rouge sur le code d'avant ; OP-28 joué ; préflight vert sur la Forge ; runbook,
   DAT, manuel et contrat de déploiement à jour ; `@spec` / `@verifies`.
+- **Vérifié le 2026-09-30, hors Forge** : banc de redémarrage **rouge** sur la
+  roue d'avant (`…+gf6d06e497`) — la route rend la page du `Caddyfile` après le
+  redémarrage, et l'ancien préflight se dit vert, 15 sur 15 — puis **vert** sur
+  la nouvelle : route servie dès que `sparkd` est prêt, sans geste, préflight
+  17 sur 17 ; suite de `sparkd` complète verte ; preuves unitaires de
+  l'alignement (ordre, idempotence, absence de `caddy.service`, lecture par
+  `systemctl show`), de l'exécuteur d'une Forge neuve, de la réconciliation au
+  démarrage et de son échec, de `ING-UNITE` et `ING-CONCORDE`. **Reste `[~]`** :
+  OP-28 n'est pas joué.
 
 ### [ ] SPK-130 · La page des routes diagnostique en direct : DNS, Caddy, certificat
 
