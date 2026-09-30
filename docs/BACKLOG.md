@@ -8014,7 +8014,8 @@ date — une seule constante porte les deux.
   nommés ; parcours E2E « copier le dossier » vert ; captures
   `spk128-01-ingress-http3` et `spk128-02-ingress-http3-mobile` observées —
   les quatre lignes lisibles, aucun débordement, console vierge ; contrat
-  inchangé. **Reste `[~]`** : OP-27 n'est pas joué, et la preuve sur Forge
+  inchangé. Le banc prouve aussi, depuis, qu'un WebSocket traverse la forme
+  produite (`101`, écho reçu). **Reste `[~]`** : OP-27 n'est pas joué, et la preuve sur Forge
   réelle ne peut l'être qu'après.
 
 ### [~] SPK-129 · Une Forge reprend seule après un redémarrage total

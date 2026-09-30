@@ -13,9 +13,13 @@
 #   3. l'`Alt-Svc` de l'amont ne parvient pas au visiteur, ses autres en-têtes si ;
 #   4. le passage À CHAUD, par `POST /load`, depuis la forme d'avant SPK-128 —
 #      celle que la Forge sert tant qu'OP-27 n'est pas joué — ferme l'écoute UDP
-#      et remplace l'annonce `h3` par `clear`, sans redémarrer Caddy.
+#      et remplace l'annonce `h3` par `clear`, sans redémarrer Caddy ;
+#   5. un WebSocket traverse la forme produite : `101`, et l'écho revient. La
+#      route commune enveloppe la réponse (`deferred`) ; elle aurait pu gêner le
+#      passage de protocole — question du responsable, 2026-09-30.
 #
-# Trois conteneurs jetables (deux Caddy, un curl) sur un réseau Docker dédié,
+# Conteneurs jetables (deux Caddy, un amont WebSocket, un curl, un client) sur un
+# réseau Docker dédié,
 # retirés en sortant. Ni navigateur, ni `sparkd`, ni console : ce n'est pas une
 # épreuve lourde au sens de CLAUDE.md §15 bis, et il ne prend pas le verrou de
 # `e2e/verrou.mjs`.
@@ -27,7 +31,7 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 if [[ $# -gt 0 ]]; then
@@ -40,12 +44,14 @@ PY="$RACINE/services/sparkd/.venv/bin/python"
 # La version de la Forge : docs/PROD_MIGRATIONS.md §1, ligne « Caddy ».
 CADDY=caddy:2.6.2
 CURL=curlimages/curl:8.11.1
+PYTHON=python:3.13-slim
+DOMAINE_WS=ws.exemple.test
 RESEAU=mesure-spk128
 DOMAINE=app.exemple.test
 TRAVAIL="$(mktemp -d)"
 
 retirer_le_banc() {
-  docker rm -f spk128-ingress spk128-amont >/dev/null 2>&1 || true
+  docker rm -f spk128-ingress spk128-amont spk128-ws >/dev/null 2>&1 || true
   docker network rm "$RESEAU" >/dev/null 2>&1 || true
 }
 trap 'retirer_le_banc; rm -rf "$TRAVAIL"' EXIT
@@ -70,17 +76,22 @@ connexion.execute(
     "ipv4_address,created_at,updated_at) VALUES ('S1','banc','images:debian/13',"
     "'shared',0.5,1,1,1,'10.77.0.16','x','x')")
 ingress.declare(connexion, "S1", domaine, 8080)
+ingress.declare(connexion, "S1", "ws." + domaine.split(".", 1)[1], 8080)
 nouvelle = ingress.build_config(connexion)
 serveur = nouvelle["apps"]["http"]["servers"][ingress.SERVER_NAME]
 
 # Deux écarts, propres au BANC et à lui seul : l'amont est le conteneur témoin,
 # et le certificat vient de l'autorité interne — le domaine n'existe pas.
+noms = []
 for route in serveur["routes"]:
     for h in route["handle"]:
         if h["handler"] == "reverse_proxy":
-            h["upstreams"] = [{"dial": "spk128-amont:8080"}]
+            nom = route["match"][0]["host"][0]
+            noms.append(nom)
+            temoin = "spk128-ws" if nom.startswith("ws.") else "spk128-amont"
+            h["upstreams"] = [{"dial": f"{temoin}:8080"}]
 nouvelle["apps"]["tls"] = {"automation": {"policies": [
-    {"subjects": [domaine], "issuers": [{"module": "internal"}]}]}}
+    {"subjects": noms, "issuers": [{"module": "internal"}]}]}}
 nouvelle["admin"] = {"listen": "0.0.0.0:2019"}
 
 # La forme d'AVANT SPK-128 : sans `protocols`, sans route commune.
@@ -99,14 +110,40 @@ s["routes"] = [r for r in s["routes"]
         {"handle": [{"handler": "static_response", "status_code": 200,
                      "headers": {"Alt-Svc": ["h3=\":9999\""], "X-Amont": ["oui"]},
                      "body": "amont\n"}]}]}}}}}))
+# L'amont WebSocket et son client : un écho, et ce que le client a reçu.
+(travail / "ws-amont.py").write_text('''import asyncio
+from websockets.asyncio.server import serve
+async def echo(ws):
+    async for message in ws:
+        await ws.send("echo:" + message)
+async def main():
+    async with serve(echo, "0.0.0.0", 8080):
+        await asyncio.Future()
+asyncio.run(main())
+''')
+(travail / "ws-client.py").write_text('''import asyncio, ssl, sys
+from websockets.asyncio.client import connect
+async def main():
+    ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+    async with connect(f"wss://{sys.argv[1]}/", ssl=ctx, open_timeout=10) as ws:
+        await ws.send("bonjour")
+        print(ws.response.status_code, await asyncio.wait_for(ws.recv(), 5))
+try:
+    asyncio.run(main())
+except Exception as erreur:
+    print("échec", type(erreur).__name__)
+''')
 print(f"configuration produite par build_config : protocols={serveur.get('protocols', 'absent : défaut de Caddy')}")
 EOF
 
 docker pull -q "$CADDY" >/dev/null
 docker pull -q "$CURL" >/dev/null
+docker pull -q "$PYTHON" >/dev/null
 docker network create "$RESEAU" >/dev/null
 docker run -d --name spk128-amont --network "$RESEAU" \
   -v "$TRAVAIL/amont.json:/c.json:ro" "$CADDY" caddy run --config /c.json >/dev/null
+docker run -d --name spk128-ws --network "$RESEAU" -v "$TRAVAIL/ws-amont.py:/a.py:ro" \
+  "$PYTHON" sh -c 'pip -q install --root-user-action=ignore "websockets>=14,<17" >/dev/null 2>&1 && python /a.py' >/dev/null
 docker run -d --name spk128-ingress --network "$RESEAU" \
   -v "$TRAVAIL/ancienne.json:/c.json:ro" -v "$TRAVAIL/nouvelle.json:/nouvelle.json:ro" \
   "$CADDY" caddy run --config /c.json >/dev/null
@@ -153,6 +190,11 @@ verdict "alt-svc, route servie, HTTP/2" "$(valeurs_alt_svc <<<"$H2")" "clear"
 verdict "en-tête de l'amont transmis" "$(grep -c '^x-amont: oui' <<<"$H2")" "1"
 H1="$(entetes --http1.1 "https://$DOMAINE/")"
 verdict "alt-svc, route servie, HTTP/1.1" "$(valeurs_alt_svc <<<"$H1")" "clear"
+IP_INGRESS="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' spk128-ingress)"
+WS="$(docker run --rm --network "$RESEAU" --add-host "$DOMAINE_WS:$IP_INGRESS" \
+  -v "$TRAVAIL/ws-client.py:/c.py:ro" "$PYTHON" sh -c \
+  'pip -q install --root-user-action=ignore "websockets>=14,<17" >/dev/null 2>&1 && python /c.py '"$DOMAINE_WS")"
+verdict "WebSocket à travers la forme produite" "$WS" "101 echo:bonjour"
 REFUS="$(docker run --rm --network "$RESEAU" "$CURL" -s -o /dev/null -D - \
   -H 'Host: inconnu.exemple.test' http://spk128-ingress/ | tr -d '\r' | tr 'A-Z' 'a-z')"
 verdict "refus, domaine non routé" "$(head -1 <<<"$REFUS" | awk '{print $2}')" "404"

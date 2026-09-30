@@ -2241,7 +2241,12 @@ réponse.**
   Tant que l'ingress ne sert pas HTTP/3, `clear` est **vrai**, ne coûte qu'un
   en-tête, et n'a pas de date de retrait à oublier. La route est émise **si et
   seulement si** HTTP/3 n'est pas dans la liste des protocoles : c'est la même
-  constante, et l'une ne peut pas changer sans l'autre.
+  constante, et l'une ne peut pas changer sans l'autre ;
+- **les WebSockets passent.** Question du responsable, mesurée plutôt que
+  supposée : la route commune enveloppe la réponse, et aurait pu gêner le
+  passage de protocole. Sur Caddy 2.6.2, un WebSocket traverse la forme produite
+  — `101`, et l'écho revient. Les navigateurs l'ouvrent en HTTP/1.1 ; seul
+  HTTP/3 a disparu, et il ne fonctionnait pas. Le banc le rejoue à chaque fois.
 
 **Pourquoi pas l'autre remède — ouvrir UDP/443.**
 

@@ -258,7 +258,8 @@
   disent désormais — l'en-tête posé, HTTP/3 absent, l'`Alt-Svc` retiré —, lus
   dans la configuration ; « aucun en-tête de sécurité » reste vrai et reste dit.
   Banc rejouable `scripts/mesures-spk128.sh` (Caddy 2.6.2, configuration
-  produite par le code, passage à chaud). DAT §18.2, §18.6, §44.2 quater ;
+  produite par le code, passage à chaud, WebSocket qui la traverse — `101` et
+  écho). DAT §18.2, §18.6, §44.2 quater ;
   manuel M8. **Inerte sur la Forge tant qu'OP-27 n'est pas joué.**
 - **OP-10 gagne un second réglage serveur, et une crainte est levée.** MESURÉ le
   2026-09-26 sur un banc Ubuntu 26.04 / OpenSSH 10.2p1 (`docs/DAT.md` §46.7) :
