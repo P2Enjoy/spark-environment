@@ -2683,7 +2683,14 @@ test('l’écran MONTRE ce qu’il va remplacer avant de le remplacer', async ()
     // `www` porte déjà 198.51.100.1 dans le doublon.
     await page.fill('#dns-adresse', '198.51.100.9');
     await page.dispatchEvent('#dns-adresse', 'change');
-    await page.waitForSelector('#dns-effet .avertissement', { timeout: 10000 });
+    // L'avertissement de l'adresse SAISIE, pas n'importe lequel : celui de
+    // l'adresse pré-remplie est déjà là quand la seconde lecture part, et un
+    // poste chargé le faisait lire — rouge une fois sur la campagne complète du
+    // 2026-09-30. Le produit, lui, écarte bien la réponse périmée.
+    await page.waitForFunction(
+      () => document.querySelector('#dns-effet .avertissement')?.textContent
+        .includes('198.51.100.9'),
+      null, { timeout: 10000 });
     const effet = await page.textContent('#dns-effet');
 
     // Le focus ne doit PAS avoir bougé : la lecture remplace un bloc, elle ne
@@ -2953,7 +2960,11 @@ test('un fournisseur qui REFUSE ne laisse pas un sélecteur vide et muet', async
       assert.deepEqual(options, [''], 'aucune zone ne doit être proposée');
 
       // … et il DIT pourquoi, avec le message du fournisseur tel quel.
-      await page.waitForSelector('#recette-zones-vides', { timeout: 10000 });
+      // PAS l'élément seul : pendant la lecture des zones, il porte déjà cet
+      // identifiant, avec `aria-busy` et « Lecture des zones du compte… ». Un
+      // fournisseur lent faisait lire ce texte-là — rouge une fois sur la
+      // campagne complète du 2026-09-30, vert trois fois sur trois seul.
+      await page.waitForSelector('#recette-zones-vides:not([aria-busy])', { timeout: 10000 });
       const raison = await page.textContent('#recette-zones-vides');
       assert.match(raison, /401/, 'le refus du fournisseur doit être nommé');
       assert.match(raison, /expired/, 'sa raison doit être rendue TELLE QUELLE');
