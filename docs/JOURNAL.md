@@ -13380,3 +13380,25 @@ le doublon. Le rouge de SPK-133 est déjà constaté sur machine virtuelle, avec
 roue d'avant (`0.post1.dev886+g611a460e2`) : fichier des secrets absent après
 *Redémarrer*, après un `reboot` dans la cellule et après le redémarrage de la
 Forge — trois écarts, les seuls ; tout le reste du banc est vert.
+
+## 2026-09-30 · SPK-135 — un débit déclaré, validé sur une carte `virtio`
+
+**Le défaut** : une carte `virtio` n'annonce aucun `link_speed` ; le relevé de
+topologie refusait une capacité réseau nulle — à raison —, et l'amorce d'une
+Forge sur machine virtuelle échouait à sa recette finale, sans issue pour
+l'exploitant qui connaît pourtant le débit qu'il loue.
+
+**Ce qui est fait** (DAT §5.3 bis) : `SPARKD_NETWORK_CAPACITY_MBIT`, facultatif ;
+le mesuré l'emporte toujours, le déclaré ne sert qu'à défaut, et sans l'un ni
+l'autre le relevé refuse en nommant le réglage ; la source au registre
+(`forge.network_source`, migration 021) et dans `/v1/forge` (`network.source`) ;
+l'onglet Forge dit « déclarée » ; `networkCapacityMbit` dans le plan de
+l'exécuteur, `NET_MBIT` dans l'amorce.
+
+**Validation** — sur machine virtuelle à installation fraîche, la seule admise
+(§28.7) : `make forge-vm ARGS="--carte virtio"`, `NET_MBIT="1000"` déclaré dans
+l'amorce. Le cloud-init monte la Forge, `/v1/forge` rend `1000000000` bit/s,
+source `declared`, et le banc de redémarrage est vert en entier. Une capture
+sur la pile factice avait été écrite, jamais jouée : retirée, puisqu'elle
+n'aurait rien validé. **Reste ouvert** : voir la mention « déclarée » dans la
+console branchée sur la machine virtuelle — pas encore outillé.

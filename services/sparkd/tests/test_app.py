@@ -536,6 +536,31 @@ def test_le_diagnostic_des_routes_se_lit_par_http_et_n_ecrit_rien(tmp_path):
     assert inconnu.json()["detail"]["error"] == "not_found"
 
 
+def test_la_forge_dit_d_ou_vient_sa_capacite_reseau(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis
+
+    Mesurée par défaut ; DÉCLARÉE quand la carte n'annonce rien et que la
+    configuration le fait — et `/v1/forge` le dit, pour que l'écran le dise."""
+    c = _app(tmp_path)
+    assert c.get("/v1/forge").json()["network"] == {"total_bps": 1_000_000_000,
+                                                    "source": "measured"}
+
+    import copy
+    from sparkd.incus import FakeIncus, _EXEMPLE_HOTE
+    virtio = copy.deepcopy(_EXEMPLE_HOTE)
+    for carte in virtio["network"]["cards"]:
+        for port in carte["ports"]:
+            port.pop("link_speed", None)
+    declare = TestClient(create_app(load({
+        "SPARKD_DB": str(tmp_path / "d.db"), "SPARKD_DRIVER": "fake",
+        "SPARKD_NETWORK_CAPACITY_MBIT": "500"})))
+    declare.app.state.incus = FakeIncus(payload=virtio)
+    releve = declare.post("/v1/forge/sync")
+    assert releve.status_code == 200 and releve.json()["network_source"] == "declared"
+    assert declare.get("/v1/forge").json()["network"] == {"total_bps": 500_000_000,
+                                                          "source": "declared"}
+
+
 def test_conflit_de_domaine_refuse_par_http(tmp_path):
     c = _app(tmp_path)
     for nom in ("a", "b"):

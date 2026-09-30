@@ -572,6 +572,10 @@ def create_app(config: Config) -> FastAPI:
                 "cores_dedicated": etat.dedicated_cores,
             },
             "memory": {"total_bytes": row["memory_total_bytes"]},
+            # SPK-135 · §5.3 bis : d'où vient la capacité réseau. Une capacité
+            # DÉCLARÉE se dit déclarée ; personne ne l'a mesurée.
+            "network": {"total_bps": row["network_total_bps"],
+                        "source": row["network_source"]},
             # docs/DAT.md §27.3 : la console doit pouvoir énoncer la soustraction
             # TERME À TERME. La somme seule ne dit pas laquelle des deux vannes
             # tourner — zfs_arc_max, ou SPARKD_MEMORY_RESERVE.
@@ -636,6 +640,8 @@ def create_app(config: Config) -> FastAPI:
                     connection, app.state.incus, config.storage_pool,
                     operating_margin=config.memory_reserve_bytes,
                     metadata_margin=config.storage_metadata_margin_bytes,
+                    # SPK-135 · §5.3 bis : à défaut d'une carte qui l'annonce.
+                    network_declared_mbit=config.network_capacity_mbit,
                 )
         except (IncusError, InventoryError) as erreur:
             raise HTTPException(
@@ -650,6 +656,7 @@ def create_app(config: Config) -> FastAPI:
             "memory_reserve_bytes": topology.memory_reserve_bytes,
             "memory_detail": topology.memory_detail,
             "network_total_bps": topology.network_total_bps,
+            "network_source": topology.network_source,
             "storage_total_bytes": topology.storage_total_bytes,
         }
 

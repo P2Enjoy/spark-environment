@@ -4,7 +4,8 @@
 # @spec docs/BACKLOG.md#SPK-73, docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.4-§50.6
 #       (l'executeur ferme), §8.2 (la paire dediee livree par le schema JSON),
 #       §3.1 (Incus >= 6.19) · README.md (schema de partitionnement, rejeu de
-#       l'amorce) · docs/AGENT_RUNBOOK.md §A
+#       l'amorce) · docs/AGENT_RUNBOOK.md §A · docs/BACKLOG.md#SPK-135,
+#       docs/DAT.md §5.3 bis (NET_MBIT : le debit declare)
 #
 # La machine est livree avec le schema de partitionnement du README : sda5 et
 # sdb5 sont nues, le zpool est cree par le geste paramétré ou deja present.
@@ -24,6 +25,8 @@ BRIDGE=sparkbr0       # bridge prive des Sparks
 ARC_GIB=16            # plafond ARC ZFS, soustrait de la memoire allouable
 MEM_RESERVE_GIB=2     # reserve memoire de la Forge, hors ARC
 CPU_RESERVE=0.5       # coeurs que la Forge garde pour elle
+NET_MBIT=""           # debit du lien en Mbit/s, SEULEMENT si la carte n'en annonce
+                      # aucun (virtio) ; vide : le debit est mesure (DAT §5.3 bis)
 export DEBIAN_FRONTEND=noninteractive
 
 # SPK-84 · docs/DAT.md §50.7.1 · runbook §C.5 — AVANT le premier apt.
@@ -112,9 +115,9 @@ incus storage show "$POOL" >/dev/null 2>&1 \
 # nftables, ARC, bridge, durcissement SSH, unites systemd, puis preflight,
 # /healthz, /readyz et releve de topologie.
 /opt/sparkd/venv/bin/python - "$POOL" "$BRIDGE" "$CPU_RESERVE" \
-  "$MEM_RESERVE_GIB" "$ARC_GIB" <<'PY'
+  "$MEM_RESERVE_GIB" "$ARC_GIB" "$NET_MBIT" <<'PY'
 import json, platform, subprocess, sys
-pool, bridge, cpu, mem, arc = sys.argv[1:6]
+pool, bridge, cpu, mem, arc, net = sys.argv[1:7]
 plan = {
     "version": 1,
     "system": {"os": "ubuntu", "architecture": platform.machine()},
@@ -122,7 +125,9 @@ plan = {
                 "destructive": False},
     "config": {"poolName": pool, "bridgeName": bridge,
                "cpuReserve": float(cpu), "memoryReserveGib": float(mem),
-               "arcMaxGib": float(arc), "reservedPorts": [22, 80, 443]},
+               "arcMaxGib": float(arc), "reservedPorts": [22, 80, 443],
+               # SPK-135 : seulement s'il est pose — la cle est facultative.
+               **({"networkCapacityMbit": int(net)} if net else {})},
     "phases": [{"id": p, "label": p, "status": "pending"} for p in (
         "access", "dependencies", "storage", "foundation",
         "control", "verification")],

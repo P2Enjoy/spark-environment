@@ -1,4 +1,5 @@
-"""@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (Caddy porté par
+"""@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (le débit déclaré du plan)
+@verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (Caddy porté par
 `caddy-api.service`, `caddy.service` masqué, reprise sur panne ; une seule
 fonction pour l'exécuteur et pour `sparkd.install`)
 
@@ -10,6 +11,8 @@ l'activait.
 from __future__ import annotations
 
 import subprocess
+
+import pytest
 from pathlib import Path
 
 from sparkd import caddy_unite, forge_install
@@ -121,3 +124,60 @@ def test_l_executeur_d_une_forge_neuve_n_active_plus_le_caddyfile(monkeypatch):
     assert ["systemctl", "mask", "--now", "caddy.service"] in passees
     assert ["systemctl", "enable", "--now", "caddy-api.service"] in passees
     assert resultat["changed"] is True
+
+
+# --- SPK-135 · §5.3 bis : le débit déclaré dans le plan de l'exécuteur -------
+
+def _plan(**config):
+    base = {"poolName": "spark", "bridgeName": "sparkbr0", "cpuReserve": 0.5,
+            "memoryReserveGib": 2.0, "arcMaxGib": 1.0, "reservedPorts": [22, 80, 443]}
+    return {"plan": {
+        "version": 1, "system": {"os": "ubuntu", "architecture": "x86_64"},
+        "storage": {"kind": "reuse", "poolName": "spark", "driver": "zfs",
+                    "destructive": False},
+        "config": {**base, **config},
+        "phases": [{"id": p, "label": p, "status": "pending"} for p in (
+            "access", "dependencies", "storage", "foundation", "control", "verification")],
+    }, "confirmation": ""}
+
+
+def test_le_plan_accepte_un_debit_declare_facultatif(monkeypatch):
+    """@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis
+
+    La console ne l'envoie pas, l'amorce seulement quand `NET_MBIT` est posé :
+    les deux plans restent valides."""
+    monkeypatch.setattr(forge_install, "_memory_total", lambda: 64 * 1024**3)
+    monkeypatch.setattr(forge_install.os, "geteuid", lambda: 0)
+    forge_install.validate_envelope(_plan())
+    forge_install.validate_envelope(_plan(networkCapacityMbit=1000))
+
+
+@pytest.mark.parametrize("debit", [0, -1, "1000", 1.5, True])
+def test_un_debit_declare_invalide_est_refuse(monkeypatch, debit):
+    monkeypatch.setattr(forge_install, "_memory_total", lambda: 64 * 1024**3)
+    with pytest.raises(forge_install.ForgeInstallationError, match="débit"):
+        forge_install.validate_envelope(_plan(networkCapacityMbit=debit))
+
+
+def test_une_autre_cle_reste_un_refus(monkeypatch):
+    """La liste reste FERMÉE : la clé facultative n'ouvre pas la porte au reste."""
+    monkeypatch.setattr(forge_install, "_memory_total", lambda: 64 * 1024**3)
+    with pytest.raises(forge_install.ForgeInstallationError, match="contrat"):
+        forge_install.validate_envelope(_plan(autreChose=1))
+
+
+def test_le_debit_declare_n_est_ecrit_que_s_il_est_donne(monkeypatch, tmp_path):
+    """Une déclaration posée à la main survit à une réinstallation qui n'en dit
+    rien : l'exécuteur ne réécrit que ce qu'on lui passe."""
+    ecrits: list[dict] = []
+    monkeypatch.setattr(forge_install, "_merge_environment",
+                        lambda reglages: ecrits.append(reglages) or False)
+    monkeypatch.setattr(forge_install.package_install.Paths, "installed",
+                        classmethod(lambda cls: (_ for _ in ()).throw(StopIteration())))
+    for config in ({}, {"networkCapacityMbit": 1000}):
+        try:
+            forge_install.phase_control(_plan(**config)["plan"])
+        except StopIteration:
+            pass
+    assert "SPARKD_NETWORK_CAPACITY_MBIT" not in ecrits[0]
+    assert ecrits[1]["SPARKD_NETWORK_CAPACITY_MBIT"] == "1000"

@@ -116,6 +116,23 @@ export function formatDate(valeur) {
 }
 
 /**
+ * D'où vient la capacité réseau, quand elle n'est pas mesurée (SPK-135).
+ *
+ * @spec docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis · docs/DESIGN_SYSTEM.md
+ *       §1.5 bis (le mot exact qui qualifie une valeur ambiguë, et le réglage
+ *       qui la commande)
+ *
+ * Une capacité que personne n'a mesurée ne doit pas se lire comme une mesure.
+ * Mesurée, elle n'appelle aucun mot : c'est le cas ordinaire.
+ */
+export function describeNetworkSource(forge) {
+  if (forge?.network?.source !== 'declared') return '';
+  return 'Capacité <strong>déclarée</strong> par '
+    + '<span class="technique">SPARKD_NETWORK_CAPACITY_MBIT</span> : aucune carte '
+    + 'réseau de la Forge n’annonce son débit.';
+}
+
+/**
  * Une ressource : capacité, alloué, disponible — les TROIS, jamais deux (§27.2).
  * « 4,0 Gio libres » sans dire sur combien ne permet pas de juger s'il faut
  * supprimer un Spark ou agrandir la machine.
@@ -999,7 +1016,8 @@ export function renderForgeView({ status = 'loading', host = null, cores = null,
 <section class="carte bloc" aria-labelledby="titre-pools">
   <h2 id="titre-pools">Pools</h2>
   <div class="pools">${RESSOURCES.map((r) =>
-    renderPool(r, host.pools, r.cle === 'storage' ? describeMetadataMargin(host) : '')).join('')}</div>
+    renderPool(r, host.pools, r.cle === 'storage' ? describeMetadataMargin(host)
+      : r.cle === 'network' ? describeNetworkSource(host) : '')).join('')}</div>
   ${garantie ? `<p class="avertissement" role="status">${echapper(garantie)}</p>` : ''}
 </section>
 <div class="detail">

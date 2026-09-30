@@ -85,6 +85,15 @@ La capacité se compte en cœurs **physiques**. Le SMT entrelace l'exécution, i
 n'ajoute pas de capacité : compter les threads reviendrait à vendre deux fois la
 même chose.
 
+## Une capacité réseau déclarée
+
+Sous le pool **Réseau**, la mention « Capacité **déclarée** par
+`SPARKD_NETWORK_CAPACITY_MBIT` » signifie qu'aucune carte réseau de la Forge
+n'annonce son débit — c'est le cas d'une machine virtuelle — et que le chiffre
+affiché est celui que l'exploitant a déclaré, pas une mesure. Sans cette
+mention, la capacité vient de la carte elle-même. Déclarer un débit se fait à
+l'installation ([M2](M2-installer.md)).
+
 ## Le relevé n'est pas continu
 
 La capacité affichée date du dernier relevé, dont la date accompagne toujours les

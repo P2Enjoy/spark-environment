@@ -31,10 +31,12 @@ Toute évolution passe par une migration versionnée dans
       schema_migration (technique)
 ```
 
-## 2. `host`
+## 2. `forge` (créée `host`)
 
 Capacité physique et politique d'allocation du serveur. Une seule ligne,
-contrainte par `CHECK (id = 1)`.
+contrainte par `CHECK (id = 1)`. Créée sous le nom `host` par la migration
+`001`, **renommée `forge`** par la migration `007_forge` : c'est le nom que le
+code emploie, et celui des sections qui suivent.
 
 | Colonne | Type | Rôle |
 |---|---|---|
@@ -618,7 +620,7 @@ Chaque migration fournit son `down`. Lorsqu'un retour arrière est impossible sa
 perte, la migration le documente explicitement dans son en-tête et le contrat de
 déploiement `docs/PROD_MIGRATIONS.md` le signale.
 
-## 11 bis. `host` : les deux termes de la réserve mémoire
+## 11 bis. `forge` : les deux termes de la réserve mémoire
 
 `memory_reserve_bytes` porte la **somme** de ce qui est soustrait à `MemTotal`.
 La migration `002_part_arc` ajoute les deux termes séparément :
@@ -636,7 +638,7 @@ Les deux colonnes valent `0` par défaut : une base existante conserve sa réser
 totale, et le prochain relevé de topologie renseigne le détail. Aucune donnée
 n'est perdue et aucune valeur n'est devinée.
 
-## 11 ter. `host.network_source` : un débit mesuré, ou déclaré (SPK-135)
+## 11 ter. `forge.network_source` : un débit mesuré, ou déclaré (SPK-135)
 
 Migration `021_source_debit`. Une colonne :
 

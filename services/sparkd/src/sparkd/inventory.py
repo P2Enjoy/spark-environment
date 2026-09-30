@@ -1,7 +1,9 @@
 """Relevé de la capacité et de la topologie de la Forge.
 
 @spec docs/BACKLOG.md#SPK-07 · docs/DAT.md §5.2 (ce qui est lu et où), §5.3 (le
-      relevé est explicite) · docs/SCHEMA.md §2 (host), §3 (cpu_core, cpu_thread)
+      relevé est explicite) · docs/SCHEMA.md §2 (forge), §3 (cpu_core, cpu_thread)
+@spec docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (un débit déclaré ne
+      remplace jamais un débit mesuré) · docs/SCHEMA.md §11 ter
 
 Le relevé n'est jamais implicite : c'est une opération nommée, datée et tracée.
 La capacité de la Forge est la base de tous les calculs d'admission ; la voir bouger
@@ -54,6 +56,9 @@ class Topology:
     storage_total_bytes: int
     cores: tuple[Core, ...]
     memory_reserve_bytes: int = 0
+    #: SPK-135 · §5.3 bis : `measured` — un port annonce son débit — ou
+    #: `declared` — faute d'un tel port, `SPARKD_NETWORK_CAPACITY_MBIT`.
+    network_source: str = "measured"
     # Les deux termes de la reserve, separement : la somme seule ne dit pas
     # laquelle des deux vannes tourner (docs/DAT.md §16.1, §27.3).
     memory_arc_bytes: int = 0
@@ -76,7 +81,8 @@ def _require(value: Any, quoi: str) -> Any:
 
 
 def read_topology(
-    client: IncusClient, pool: str, operating_margin: int = 0
+    client: IncusClient, pool: str, operating_margin: int = 0,
+    network_declared_mbit: int | None = None,
 ) -> Topology:
     """Traduit la réponse d'Incus en topologie exploitable."""
     resources = client.resources()
@@ -123,6 +129,20 @@ def read_topology(
             if port.get("link_detected") and port.get("link_speed"):
                 debit_mbit += int(port["link_speed"])
 
+    # SPK-135 · §5.3 bis : le MESURÉ d'abord, même si un débit est déclaré ; le
+    # déclaré à défaut ; sinon le refus, qui nomme le réglage — une carte
+    # `virtio` n'annonce aucun débit, et l'exploitant, lui, le connaît.
+    source_debit = "measured"
+    if not debit_mbit and network_declared_mbit:
+        debit_mbit, source_debit = network_declared_mbit, "declared"
+    if not debit_mbit:
+        raise InventoryError(
+            "Relevé inexploitable : aucun port réseau n'annonce son débit — une "
+            "carte virtio, par exemple. Déclarer le débit du lien, en Mbit/s : "
+            "SPARKD_NETWORK_CAPACITY_MBIT dans /etc/sparkd/sparkd.env, ou NET_MBIT "
+            "dans l'amorce du cloud-init (docs/DAT.md §5.3 bis). Le registre ne "
+            "retiendra pas une capacité fausse.")
+
     espace = (client.storage_pool_resources(pool).get("space") or {}).get("total")
 
     # La memoire ne vient PAS d'Incus : « memory.total » est la RAM physique,
@@ -147,7 +167,8 @@ def read_topology(
         memory_margin_bytes=memoire.operating_margin_bytes if memoire else 0,
         memory_detail=memoire.detail if memoire else "/proc/meminfo illisible : total physique d'Incus retenu, réserve inconnue.",
         arc_known=memoire.arc_known if memoire else False,
-        network_total_bps=int(_require(debit_mbit, "un port réseau détecté")) * MBIT,
+        network_total_bps=int(debit_mbit) * MBIT,
+        network_source=source_debit,
         # La capacité de stockage est celle du POOL Incus, pas du disque.
         storage_total_bytes=int(_require(espace, f"l'espace du pool « {pool} »")),
         cores=tuple(cores),
@@ -165,6 +186,7 @@ def sync(
     actor: str = "sparkd",
     operating_margin: int = 0,
     metadata_margin: int | None = None,
+    network_declared_mbit: int | None = None,
 ) -> Topology:
     """Écrit le relevé dans le registre, et le trace.
 
@@ -186,7 +208,7 @@ def sync(
         if metadata_margin is None:
             metadata_margin = DEFAULT_METADATA_MARGIN
 
-        topology = read_topology(client, pool, operating_margin)
+        topology = read_topology(client, pool, operating_margin, network_declared_mbit)
 
         try:
             avant = lire_pools(connection, metadata_margin)
@@ -205,8 +227,8 @@ def sync(
                        id, hostname, cpu_threads_total, cpu_cores_total,
                        memory_total_bytes, storage_total_bytes, network_total_bps,
                        memory_reserve_bytes, memory_arc_bytes, memory_margin_bytes,
-                       topology_synced_at)
-                   VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       network_source, topology_synced_at)
+                   VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                        hostname = excluded.hostname,
                        cpu_threads_total = excluded.cpu_threads_total,
@@ -217,6 +239,7 @@ def sync(
                        memory_reserve_bytes = excluded.memory_reserve_bytes,
                        memory_arc_bytes = excluded.memory_arc_bytes,
                        memory_margin_bytes = excluded.memory_margin_bytes,
+                       network_source = excluded.network_source,
                        topology_synced_at = excluded.topology_synced_at""",
                 (
                     topology.hostname,
@@ -228,6 +251,7 @@ def sync(
                     topology.memory_reserve_bytes,
                     topology.memory_arc_bytes,
                     topology.memory_margin_bytes,
+                    topology.network_source,
                     _now(),
                 ),
             )
@@ -291,6 +315,7 @@ def sync(
                     "cpu_threads": topology.cpu_threads_total,
                     "memory_bytes": topology.memory_total_bytes,
                     "network_bps": topology.network_total_bps,
+                    "network_source": topology.network_source,
                     "storage_bytes": topology.storage_total_bytes,
                     "memory_reserve_bytes": topology.memory_reserve_bytes,
                 },

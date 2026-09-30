@@ -5,6 +5,8 @@
  * @verifies docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (ce qui doit reprendre
  *           seul ; la preuve est un redémarrage réel, et le banc dit ses écarts)
  *           · README.md (amorçage par cloud-init) · CLAUDE.md §15, §15 bis
+ * @verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (`--carte virtio` :
+ *           une carte qui n'annonce aucun débit, et le débit déclaré retenu)
  *
  * Ce que le banc établit, et que rien d'autre n'établit :
  *
@@ -25,6 +27,8 @@
  *
  *   make forge-vm                          # roue construite depuis l'arbre de travail
  *   make forge-vm ARGS="--roue <x.whl>"    # une roue donnée : la preuve ROUGE d'avant
+ *   make forge-vm ARGS="--carte virtio"    # SPK-135 : une carte qui n'annonce aucun
+ *                                          # débit, et `NET_MBIT` déclaré dans l'amorce
  *
  * L'image Ubuntu (≈ 850 Mo) est gardée dans ~/.cache/spark-environment/vm/.
  * Le reste vit dans un répertoire jetable, retiré en sortant ; la console série
@@ -61,7 +65,14 @@ if (args.includes('--help') || args.includes('-h')) {
 const iRoue = args.indexOf('--roue');
 const roueDonnee = iRoue >= 0 ? args[iRoue + 1] : null;
 if (iRoue >= 0 && !roueDonnee) throw new Error('--roue attend le chemin d’une roue .whl');
-const inconnus = args.filter((a, i) => a.startsWith('--') && a !== '--roue' && i !== iRoue + 1);
+// SPK-135 · docs/DAT.md §5.3 bis : `e1000e` annonce son débit comme une carte
+// physique ; `virtio` n'en annonce aucun, et éprouve le débit DÉCLARÉ.
+const iCarte = args.indexOf('--carte');
+const carte = iCarte >= 0 ? args[iCarte + 1] : 'e1000e';
+if (!['e1000e', 'virtio'].includes(carte)) throw new Error('--carte attend e1000e ou virtio');
+const valeurs = new Set([iRoue + 1, iCarte + 1].filter((i) => i > 0));
+const inconnus = args.filter((a, i) => a.startsWith('--') && !['--roue', '--carte'].includes(a)
+                                       && !valeurs.has(i));
 if (inconnus.length) throw new Error(`arguments inconnus : ${inconnus.join(' ')} (voir --help)`);
 
 // --- outillage --------------------------------------------------------------
@@ -138,6 +149,10 @@ amorce = remplacer(amorce,
   `"http://10.0.2.2:${portSeed}/${basename(roue)}"`,
   `sparkd installé depuis ${basename(roue)}, pas depuis main`);
 amorce = remplacer(amorce, 'ARC_GIB=16 ', 'ARC_GIB=1  ', 'plafond ARC ramené à 1 Gio');
+if (carte === 'virtio') {
+  amorce = remplacer(amorce, 'NET_MBIT=""  ', 'NET_MBIT="1000"',
+    'carte virtio, qui n’annonce aucun débit : NET_MBIT=1000 déclaré (SPK-135)');
+}
 const MARQUE = '      # <<< contenu integral de deploy/cloud-init/spark-amorce.sh, indente ici >>>';
 let userData = remplacer(gabarit, MARQUE,
   amorce.split('\n').map((l) => (l ? `      ${l}` : '')).join('\n'),
@@ -180,15 +195,14 @@ qemu = spawn('qemu-system-x86_64', [
   '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd1.qcow2')}`,
   '-drive', `if=virtio,format=qcow2,file=${join(travail, 'd2.qcow2')}`,
   '-netdev', `user,id=n0,hostfwd=tcp:127.0.0.1:${portSsh}-:22,hostfwd=tcp:127.0.0.1:${portHttp}-:80`,
-  // Une carte qui ANNONCE son débit, comme la carte physique d'une Forge. Une
-  // carte virtio n'en annonce aucun, et le relevé de topologie refuse — à
-  // dessein — une capacité réseau nulle (mesuré le 2026-09-30 : `/v1/forge/sync`
-  // en 503, l'amorce en échec à sa recette finale).
-  '-device', 'e1000e,netdev=n0',
+  // Par défaut, une carte qui ANNONCE son débit, comme la carte physique d'une
+  // Forge. `--carte virtio` n'en annonce aucun : sans débit déclaré, le relevé
+  // refuse — à dessein — une capacité nulle (mesuré le 2026-09-30).
+  '-device', carte === 'virtio' ? 'virtio-net-pci,netdev=n0' : 'e1000e,netdev=n0',
   '-smbios', `type=1,serial=ds=nocloud;s=http://10.0.2.2:${portSeed}/`,
   '-display', 'none', '-serial', `file:${console_}`,
 ], { stdio: 'ignore' });
-dire(`machine démarrée — ssh 127.0.0.1:${portSsh}, http 127.0.0.1:${portHttp}, carte e1000e`);
+dire(`machine démarrée — ssh 127.0.0.1:${portSsh}, http 127.0.0.1:${portHttp}, carte ${carte}`);
 
 const ssh = (commande, { tolerer = false, delai = 120 } = {}) => {
   const r = spawnSync('ssh', ['-i', join(travail, 'cle'), '-p', String(portSsh),
@@ -238,6 +252,15 @@ try {
       + `\n--- journalctl -u sparkd\n${sparkd}\n--- POST /v1/forge/sync, rejoué\n${sync}`);
   }
   verdict('le cloud-init du dépôt monte la Forge', true, 'status: done');
+  // SPK-135 · §5.3 bis : sur carte virtio, la capacité retenue est la DÉCLARÉE.
+  // Relevé seulement dans ce mode : une roue d'avant SPK-135 ne rend pas la
+  // source, et la preuve rouge d'une autre unité ne doit rougir que pour elle.
+  if (carte === 'virtio') {
+    const reseau = api('GET', '/v1/forge').network ?? {};
+    verdict('la capacité réseau est déclarée, faute de débit annoncé',
+            reseau.source === 'declared' && reseau.total_bps === 1_000_000_000,
+            `${reseau.total_bps ?? '?'} bit/s, ${reseau.source ?? 'source non rendue'}`);
+  }
 
   // --- 5. un Spark et une route, par l'API ------------------------------------
   // Une Forge neuve n'a jamais relevé son catalogue, et refuse — à raison —

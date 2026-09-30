@@ -445,6 +445,7 @@ défaut, pas une commodité.
 | `SPARKD_NOTIFY_TEMPLATE` | **REPLI seulement**, même règle que ci-dessus | JSON avec des `{champ}` | non | vide |
 | `SPARKD_FORGE_PUBLIC_ADDRESS` | adresse ou nom public de la Forge, rendu dans le briefing d'un Spark (`docs/DAT.md` §44.8) | IPv4, IPv6 ou nom sans schéma | non | vide : l'adresse est inconnue du plan de contrôle |
 | `SPARKD_MEMORY_RESERVE` | mémoire soustraite du pool pour la Forge elle-même, hors ARC | octets ou suffixe | non | `2GiB` |
+| `SPARKD_NETWORK_CAPACITY_MBIT` | débit du lien **déclaré**, retenu seulement quand aucune carte n'annonce le sien (carte `virtio`) ; un débit mesuré l'emporte toujours ; posé par l'exécuteur (`networkCapacityMbit`, `NET_MBIT` de l'amorce) ou à la main (`docs/DAT.md` §5.3 bis) | entier > 0, Mbit/s | non — absent, le débit est mesuré | `1000` |
 | `SPARKD_CPU_RESERVE` | part de processeur que la Forge garde pour lui, en cœurs | décimal ≥ 0 | non | `0.5` |
 | `SPARKD_STORAGE_METADATA_MARGIN` | marge posée au-dessus de la taille vendue de chaque Spark, pour qu'un disque plein n'empêche plus sa reconfiguration | octets ou suffixe | non | `64MiB` |
 | `SPARKD_LOG_LEVEL` | niveau de journalisation | `debug`…`error` | non | `info` |

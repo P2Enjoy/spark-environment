@@ -1,4 +1,5 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (une capacité déclarée se dit déclarée)
  * @verifies docs/BACKLOG.md#SPK-22, docs/BACKLOG.md#SPK-30 ·
  *           docs/DAT.md §27, §27.2, §27.3, §27.4, §27.5, §27.6, §27.7, §27.8 ·
  *           §7.7, §8.8.2 (la marge de metadonnees est nommee a l'ecran), §16.1 ·
@@ -15,7 +16,7 @@ import assert from 'node:assert/strict';
 import { renderRedemarrage, REBOOT_VIDE,
   renderForgeView, renderMemoryBreakdown, renderCores, renderNotSynced,
   renderHostError, renderControlUnavailable, renderHostSkeleton, fillRatio,
-  formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin,
+  formatDate, GARANTIES, RESSOURCES, describeArcUsage, describeMetadataMargin, describeNetworkSource,
   renderBuild, renderNotify, UPDATE_VIDE, renderRetablissement,
 } from './forge-view.js';
 
@@ -997,4 +998,17 @@ test('SPK-110 · supprimer se confirme en NOMMANT le réseau ; le refus (réseau
   const refus = renderReseauxPrives(CATALOGUE,
     { ...RESEAUX_VIDE, refusal: { liste: 'le réseau « backoffice » a encore 2 membres : crm-production, postgres-dedie' } });
   assert.match(refus, /class="refus" role="alert"><p>le réseau « backoffice » a encore 2 membres : crm-production, postgres-dedie/);
+});
+
+
+test('SPK-135 : une capacité réseau DÉCLARÉE se dit déclarée, et nomme son réglage', () => {
+  const texte = describeNetworkSource({ network: { total_bps: 1e9, source: 'declared' } });
+  assert.match(texte, /déclarée/);
+  assert.match(texte, /SPARKD_NETWORK_CAPACITY_MBIT/);
+});
+
+test('SPK-135 : une capacité mesurée n’appelle aucun mot', () => {
+  assert.equal(describeNetworkSource({ network: { total_bps: 1e9, source: 'measured' } }), '');
+  // Une Forge d'avant la migration 021 ne rend pas la source : rien n'est inventé.
+  assert.equal(describeNetworkSource({}), '');
 });

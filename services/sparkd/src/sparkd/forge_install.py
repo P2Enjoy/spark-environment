@@ -3,7 +3,9 @@
 @spec docs/BACKLOG.md#SPK-68 · docs/DAT.md §50.3-§50.6 · docs/BACKLOG.md#SPK-108,
       docs/DAT.md §56.3 (la pose du pare-feu par comparaison) ·
       docs/BACKLOG.md#SPK-129 · docs/DAT.md §51.5 (Caddy porté par
-      `caddy-api.service`, jamais par le `Caddyfile`) · docs/PROD_MIGRATIONS.md
+      `caddy-api.service`, jamais par le `Caddyfile`) · docs/BACKLOG.md#SPK-135
+      · docs/DAT.md §5.3 bis (le débit déclaré, facultatif dans le plan) ·
+      docs/PROD_MIGRATIONS.md
 
 Le navigateur ne fournit jamais une commande. Il fournit le plan versionné du
 §50.4 ; ce module revalide chaque valeur et chaque invariant sur la Forge avant
@@ -122,9 +124,18 @@ def validate_envelope(envelope: object) -> dict[str, Any]:
         raise ForgeInstallationError("le plan est incomplet")
     if set(system) != {"os", "architecture"}:
         raise ForgeInstallationError("le contrat système du plan est invalide")
-    if set(config) != {"poolName", "bridgeName", "cpuReserve", "memoryReserveGib",
-                      "arcMaxGib", "reservedPorts"}:
+    # SPK-135 · §5.3 bis : `networkCapacityMbit` est FACULTATIF — la console ne
+    # l'envoie pas, l'amorce seulement quand `NET_MBIT` est posé. Tout autre
+    # écart à la liste fermée reste un refus.
+    cles = {"poolName", "bridgeName", "cpuReserve", "memoryReserveGib",
+            "arcMaxGib", "reservedPorts"}
+    if set(config) not in (cles, cles | {"networkCapacityMbit"}):
         raise ForgeInstallationError("le contrat de configuration du plan est invalide")
+    debit = config.get("networkCapacityMbit")
+    if debit is not None and (isinstance(debit, bool) or not isinstance(debit, int)
+                              or not 0 < debit <= 10_000_000):
+        raise ForgeInstallationError(
+            "le débit déclaré doit être un entier de Mbit/s strictement positif")
     if (not isinstance(phases, list) or any(
             not isinstance(phase, dict) or set(phase) != {"id", "label", "status"}
             for phase in phases) or [phase["id"] for phase in phases] != list(PHASES)):
@@ -466,14 +477,20 @@ def _merge_environment(updates: dict[str, str]) -> bool:
 def phase_control(plan: dict[str, Any]) -> dict[str, object]:
     config = plan["config"]
     extra_ports = sorted(set(config["reservedPorts"]) - {22, 80, 443})
-    environment_changed = _merge_environment({
+    reglages = {
         "SPARKD_STORAGE_POOL": config["poolName"],
         "SPARKD_STORAGE_DATASET": config["poolName"],
         "SPARKD_NETWORK_BRIDGE": config["bridgeName"],
         "SPARKD_MEMORY_RESERVE": f"{float(config['memoryReserveGib']):g}GiB",
         "SPARKD_CPU_RESERVE": f"{float(config['cpuReserve']):g}",
         "SPARKD_RESERVED_PORTS": ",".join(map(str, extra_ports)),
-    })
+    }
+    # SPK-135 · §5.3 bis : écrit seulement s'il est DONNÉ. Une déclaration posée
+    # à la main dans `sparkd.env` survit ainsi à une réinstallation qui n'en
+    # dit rien — `_merge_environment` garde les lignes qu'on ne lui passe pas.
+    if config.get("networkCapacityMbit"):
+        reglages["SPARKD_NETWORK_CAPACITY_MBIT"] = str(config["networkCapacityMbit"])
+    environment_changed = _merge_environment(reglages)
     paths = package_install.Paths.installed()
     units_match = all(
         (paths.systemd / name).exists()

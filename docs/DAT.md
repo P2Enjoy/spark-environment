@@ -346,7 +346,8 @@ issue, alors qu'**il connaît le débit** de la machine qu'il loue.
   un débit est déclaré** ; il ne retient le déclaré que lorsqu'aucun port n'en
   annonce ; sans l'un ni l'autre, il refuse, et le refus **nomme le réglage** ;
 - la source est gardée au registre, `host.network_source` — `measured` ou
-  `declared` (migration 021, `docs/SCHEMA.md`) —, rendue par `/v1/forge`, et
+  `declared` (migration 021, `docs/SCHEMA.md`) —, rendue par `/v1/forge` sous
+  `network.source`, et
   l'écran de la Forge dit « déclaré » à côté de la capacité réseau. Une capacité
   que personne n'a mesurée ne doit pas se lire comme une mesure ;
 - l'exécuteur accepte `networkCapacityMbit` dans la configuration de son plan,
@@ -3571,14 +3572,14 @@ qu'on n'a pas encore interrogée. L'écran présente donc le remède **comme une
 action**, pas comme un message d'erreur à décoder.
 
 De même, `topology_synced_at` est affiché avec la capacité : une capacité sans
-date serait crue à jour. Le relevé (`POST /v1/host/sync`) est une action
+date serait crue à jour. Le relevé (`POST /v1/forge/sync`) est une action
 réparatrice au sens du §6.24 — elle ne détruit rien, n'a aucun paramètre, et ne
 demande donc aucune confirmation.
 
 ### 27.9 Ce que cet écran ne fait pas
 
 Il ne crée rien et ne supprime rien. C'est une surface de **lecture** et de
-relevé. La seule écriture qu'il déclenche est `POST /v1/host/sync`, qui met le
+relevé. La seule écriture qu'il déclenche est `POST /v1/forge/sync`, qui met le
 registre en accord avec la machine et ne touche à aucun Spark.
 
 

@@ -211,10 +211,31 @@ précédente et affiche séparément l'issue de ce retour arrière.
 Un registre neuf ignore la capacité de la machine. Relevez-la :
 
 ```
-curl -X POST http://127.0.0.1:9876/v1/host/sync
+curl -X POST http://127.0.0.1:9876/v1/forge/sync
 ```
 
 Ou, depuis la console, le bouton **Relever la topologie** ([M4](M4-pools.md)).
+
+### Une carte réseau qui n'annonce pas son débit
+
+Le relevé lit le débit du lien sur la carte réseau. Une carte de machine
+virtuelle (`virtio`) n'en annonce aucun : le relevé **refuse** alors, et sa
+réponse nomme le réglage qui le débloque. Un débit nul fausserait le partage du
+réseau entre les Sparks ; le produit ne le devine pas.
+
+Vous connaissez le débit de la machine que vous louez : **déclarez-le**, en
+Mbit/s, dans `/etc/sparkd/sparkd.env`, puis redémarrez `sparkd` et relevez de
+nouveau :
+
+```
+SPARKD_NETWORK_CAPACITY_MBIT=1000
+```
+
+Pour une Forge montée par le cloud-init, le réglage `NET_MBIT` en tête de
+`deploy/cloud-init/spark-amorce.sh` fait la même déclaration ; laissez-le vide
+sur une machine dont la carte annonce son débit. Un débit **mesuré** l'emporte
+toujours sur un débit déclaré, et l'onglet Forge dit lequel il affiche
+([M4](M4-pools.md)).
 
 Vérifiez ensuite que les dépendances répondent :
 

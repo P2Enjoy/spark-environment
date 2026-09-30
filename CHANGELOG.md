@@ -289,6 +289,19 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-135 — une Forge dont la carte n'annonce pas son débit s'installe, avec
+  un débit déclaré.** Une carte `virtio` n'annonce aucun débit : le relevé de
+  topologie refusait une capacité nulle, et l'amorce d'une Forge sur machine
+  virtuelle échouait. Le réglage `SPARKD_NETWORK_CAPACITY_MBIT` (Mbit/s,
+  facultatif) déclare le débit du lien ; le relevé retient le débit mesuré dès
+  qu'une carte en annonce un, sinon le déclaré, sinon refuse en nommant le
+  réglage. La source est gardée au registre (`forge.network_source`, migration
+  021), rendue par `/v1/forge` sous `network.source`, et l'onglet Forge dit
+  « déclarée » sous le pool Réseau. L'exécuteur accepte `networkCapacityMbit`,
+  l'amorce du cloud-init `NET_MBIT`. Validé sur machine virtuelle à carte
+  `virtio` (`make forge-vm ARGS="--carte virtio"`). DAT §5.3 bis ; SCHEMA
+  §11 ter ; README ; `sparkd.env.example` ; manuels M2 et M4. **Sur la Forge
+  avec OP-32.**
 - **SPK-134 — le préflight relève aussi les écoutes UDP.** `SEC-PORTS` ne lisait
   que TCP : l'écoute UDP/443 de Caddy, exposée, n'avait jamais paru. Il lit
   désormais les deux familles ; en UDP, seul le client DHCP (`68`) est admis

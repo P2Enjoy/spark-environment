@@ -1,4 +1,5 @@
 """@verifies docs/BACKLOG.md#SPK-07 · docs/DAT.md §5.2, §5.3 · docs/SCHEMA.md §2, §3
+@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis · docs/SCHEMA.md §11 ter
 
 Les trois pièges du §5.2 ont été rencontrés à la mesure sur la Forge réelle. Ces
 tests existent pour qu'ils ne reviennent jamais en silence.
@@ -235,3 +236,54 @@ def test_le_nom_d_hote_vient_de_l_api_serveur_pas_des_ressources():
     materiel. Chercher le nom la rendait « inconnu », mesure sur l'hote reel.
     """
     assert read_topology(FakeIncus(), "spark").hostname == "spark-experiment"
+
+
+# --- SPK-135 · §5.3 bis : un débit déclaré, quand aucune carte n'en annonce ---
+
+def _virtio():
+    """Une carte `virtio` : détectée, mais sans débit — mesuré sur la VM du banc
+    de SPK-129, le 2026-09-30."""
+    charge = copy.deepcopy(_EXEMPLE_HOTE)
+    for carte in charge["network"]["cards"]:
+        for port in carte["ports"]:
+            port.pop("link_speed", None)
+    return charge
+
+
+def test_une_carte_sans_debit_sans_declaration_est_refusee_et_le_reglage_est_nomme():
+    """@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis
+
+    Le refus reste — un débit nul fausserait l'admission —, mais il dit
+    désormais quoi faire, au lieu de laisser l'exploitant sans issue."""
+    with pytest.raises(InventoryError) as refus:
+        read_topology(FakeIncus(payload=_virtio()), "spark")
+    assert "SPARKD_NETWORK_CAPACITY_MBIT" in str(refus.value)
+    assert "NET_MBIT" in str(refus.value)
+
+
+def test_une_carte_sans_debit_prend_le_debit_declare_et_le_dit():
+    """@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis"""
+    topology = read_topology(FakeIncus(payload=_virtio()), "spark",
+                             network_declared_mbit=500)
+    assert topology.network_total_bps == 500_000_000
+    assert topology.network_source == "declared"
+
+
+def test_un_debit_mesure_l_emporte_toujours_sur_le_declare():
+    """@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis
+
+    Une déclaration oubliée dans `sparkd.env` ne doit pas contredire une carte
+    qui annonce son débit : la mesure fait foi."""
+    topology = read_topology(FakeIncus(), "spark", network_declared_mbit=100)
+    assert topology.network_total_bps == 1_000_000_000
+    assert topology.network_source == "measured"
+
+
+def test_le_releve_garde_la_source_au_registre(db, arc_connu):
+    """@verifies docs/BACKLOG.md#SPK-135 · docs/SCHEMA.md §11 ter (migration 021)"""
+    sync(db, FakeIncus(payload=_virtio()), "spark", network_declared_mbit=500)
+    ligne = db.execute("SELECT network_total_bps, network_source FROM forge").fetchone()
+    assert (ligne["network_total_bps"], ligne["network_source"]) == (500_000_000, "declared")
+    sync(db, FakeIncus(), "spark")
+    ligne = db.execute("SELECT network_total_bps, network_source FROM forge").fetchone()
+    assert (ligne["network_total_bps"], ligne["network_source"]) == (1_000_000_000, "measured")

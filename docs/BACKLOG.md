@@ -8326,14 +8326,14 @@ relevé réel du 2026-09-30, et sur celui d'avant OP-27 (UDP/443 dénoncé).
   `sparkbr0` et `spn*` privées ; UDP non mesuré → inconnu ; cinq preuves rouges
   sur l'ancien code. **Reste `[~]`** : rejoué sur la Forge avec OP-32.
 
-### [ ] SPK-135 · Une Forge dont la carte n'annonce pas son débit s'installe, avec un débit déclaré
+### [~] SPK-135 · Une Forge dont la carte n'annonce pas son débit s'installe, avec un débit déclaré
 
 **Constaté le 2026-09-30** (banc de SPK-129) : une carte `virtio` n'annonce
 aucun débit, le relevé de topologie refuse une capacité réseau nulle, et
 l'amorce d'une Forge sur machine virtuelle échoue à sa recette finale. Demandé
 par le responsable le même jour : « corrige ».
 
-- Spécification : `docs/DAT.md` **§5.3 bis** · `docs/SCHEMA.md` (`host`,
+- Spécification : `docs/DAT.md` **§5.3 bis** · `docs/SCHEMA.md` (`forge`,
   migration 021) · README (variables) · manuel M2 et M4. **Écrite et committée
   avant le code.**
 - Dépend de : SPK-07 (le relevé), SPK-68 et SPK-73 (l'exécuteur et l'amorce).
@@ -8344,7 +8344,7 @@ déclaré partout où la capacité s'affiche.
 
 **Portée** : réglage `SPARKD_NETWORK_CAPACITY_MBIT` ; le relevé retient le
 mesuré, sinon le déclaré, sinon refuse en nommant le réglage ; la source est
-gardée au registre (`host.network_source`, migration 021) et rendue par l'API ;
+gardée au registre (`forge.network_source`, migration 021) et rendue par l'API ;
 l'écran de la Forge dit « déclaré » ; l'exécuteur accepte `networkCapacityMbit`
 et l'amorce `NET_MBIT` ; banc de redémarrage joué une fois sur carte `virtio`
 avec un débit déclaré ; OP-32.
@@ -8353,6 +8353,14 @@ avec un débit déclaré ; OP-32.
 - DoD : preuves unitaires (relevé, exécuteur, migration, API, écran) ; banc sur
   carte `virtio` vert ; DAT, SCHEMA, README, `.env.example`, manuels à jour ;
   `@spec` / `@verifies`.
+- **Vérifié le 2026-09-30 sur machine virtuelle à installation fraîche** (banc
+  `make forge-vm ARGS="--carte virtio"`) : l'amorce du cloud-init, `NET_MBIT`
+  déclaré, monte la Forge sur une carte qui n'annonce aucun débit — là où elle
+  échouait à sa recette finale —, et `/v1/forge` rend `1000000000` bit/s,
+  source `declared` ; le reste du banc est vert, redémarrage compris. **Reste
+  `[~]`** : la mention « déclarée » de l'onglet Forge n'est vue que par ses
+  preuves de composant — la vérification visuelle par la console branchée sur
+  la machine virtuelle n'est pas encore outillée (DAT §28.7) — et OP-32.
 
 ### [x] SPK-136 · Toute classe qu'écrit un composant peint quelque chose
 

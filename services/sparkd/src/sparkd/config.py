@@ -5,6 +5,8 @@
       §11 (Securite), §44.8 (adresse publique du briefing),
       §52.2 et §52.5 (cadence et retention de l'historien) · README.md section
       « Variables d'environnement »
+@spec docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis (un débit déclaré, quand
+      aucune carte n'en annonce)
 
 La garde d'adresse d'ecoute implemente une invariante de securite du produit,
 pas une preference de configuration : « aucune API d'administration n'est
@@ -93,6 +95,29 @@ def _parse_reserved_ports(raw: str) -> tuple[int, ...]:
     return tuple(sorted(set(ports)))
 
 
+def _parse_debit_declare(raw: str) -> int | None:
+    """Le débit déclaré du lien, en Mbit/s — l'unité de `link_speed` (§5.2).
+
+    Vide : rien de déclaré, le relevé mesure. Un zéro ou un négatif se REFUSE :
+    déclarer un débit nul reviendrait à réintroduire, par un réglage, la
+    capacité fausse que le relevé refuse de retenir (§5.3 bis).
+    """
+    brut = (raw or "").strip()
+    if not brut:
+        return None
+    try:
+        valeur = int(brut)
+    except ValueError:
+        raise ConfigError(
+            f"SPARKD_NETWORK_CAPACITY_MBIT : « {brut} » n'est pas un entier "
+            "(Mbit/s, par exemple 1000 pour un lien de 1 Gbit/s).") from None
+    if valeur <= 0:
+        raise ConfigError(
+            f"SPARKD_NETWORK_CAPACITY_MBIT : {valeur} n'est pas un débit ; "
+            "laisser vide pour mesurer.")
+    return valeur
+
+
 #: Suffixes acceptes par `parse_duration`, en secondes.
 _DUREES = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -162,6 +187,9 @@ class Config:
     cpu_reserve: float
     storage_metadata_margin_bytes: int
     reserved_ports: tuple[int, ...]
+    #: SPK-135 · §5.3 bis : le débit du lien DÉCLARÉ, en Mbit/s, retenu par le
+    #: relevé seulement quand aucune carte n'en annonce. `None` : rien de déclaré.
+    network_capacity_mbit: int | None
     #: SPK-93 · §52.2 : cadence de l'historien, en secondes. `0` le desactive.
     metrics_interval_seconds: float
     #: SPK-93 · §52.5 : retention, en secondes. `0` desactive la purge.
@@ -307,6 +335,8 @@ def load(env: dict[str, str] | None = None) -> Config:
         storage_metadata_margin_bytes=marge,
         reserved_ports=_parse_reserved_ports(
             source.get("SPARKD_RESERVED_PORTS", "")),
+        network_capacity_mbit=_parse_debit_declare(
+            source.get("SPARKD_NETWORK_CAPACITY_MBIT", "")),
         metrics_interval_seconds=parse_duration(
             source.get("SPARKD_METRICS_INTERVAL", DEFAULT_METRICS_INTERVAL),
             variable="SPARKD_METRICS_INTERVAL"),

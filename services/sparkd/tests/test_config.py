@@ -70,3 +70,22 @@ def test_pilote_factice_accepte():
 def test_niveau_de_log_inconnu_refuse():
     with pytest.raises(ConfigError):
         load({"SPARKD_LOG_LEVEL": "verbeux"})
+
+
+# --- SPK-135 · §5.3 bis : le débit déclaré ------------------------------------
+
+def test_sans_debit_declare_le_releve_mesure():
+    """@verifies docs/BACKLOG.md#SPK-135 · docs/DAT.md §5.3 bis"""
+    assert load({}).network_capacity_mbit is None
+    assert load({"SPARKD_NETWORK_CAPACITY_MBIT": "  "}).network_capacity_mbit is None
+
+
+def test_un_debit_declare_se_lit_en_mbit():
+    assert load({"SPARKD_NETWORK_CAPACITY_MBIT": "1000"}).network_capacity_mbit == 1000
+
+
+@pytest.mark.parametrize("brut", ["0", "-5", "1Gbit", "1.5"])
+def test_un_debit_declare_nul_ou_malforme_est_refuse_en_nommant_la_variable(brut):
+    """Déclarer zéro réintroduirait la capacité fausse que le relevé refuse."""
+    with pytest.raises(ConfigError, match="SPARKD_NETWORK_CAPACITY_MBIT"):
+        load({"SPARKD_NETWORK_CAPACITY_MBIT": brut})

@@ -142,7 +142,7 @@ Ordre         : 1. sauvegarder le registre (§2 bis) ;
                    veilleur repose l'environnement de chaque cellule en marche ;
                 3. relancer la console (« Redémarrer la console »).
 Vérification  : `/readyz` rend `schema_version: 21` ; `/v1/forge` rend
-                `network_source: "measured"` ; le préflight rend 17 contrôles
+                `network.source: "measured"` ; le préflight rend 17 contrôles
                 verts et `SEC-PORTS` relève « UDP : 68 » ; dans une cellule qui
                 déclare des secrets, `test -f /run/spark/secrets` réussit —
                 une lecture, jamais une écriture sur une cellule de locataire.
