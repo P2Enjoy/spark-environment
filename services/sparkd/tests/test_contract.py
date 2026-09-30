@@ -17,6 +17,21 @@ def test_la_generation_est_deterministe():
     assert contract.serialize(contract.build()) == contract.serialize(contract.build())
 
 
+def test_le_contrat_ne_depend_pas_de_la_version_de_la_build(monkeypatch):
+    """docs/DAT.md §23.2 — une build nouvelle ne fait pas dériver le contrat.
+
+    Le contrat portait la version du paquet : la garde rougissait dès que les
+    métadonnées du poste changeaient, sans qu'une route ait bougé.
+    """
+    from sparkd import app as app_module
+
+    monkeypatch.setattr(app_module, "__version__", "0.post1.dev1+gaaaaaaa")
+    premier = contract.serialize(contract.build())
+    monkeypatch.setattr(app_module, "__version__", "0.post1.dev999+gbbbbbbb.d20991231")
+    assert contract.serialize(contract.build()) == premier
+    assert json.loads(premier)["info"]["version"] == contract.VERSION_DU_CONTRAT
+
+
 def test_la_serialisation_est_stable_quel_que_soit_l_ordre():
     a = contract.serialize({"b": 1, "a": {"z": 1, "y": 2}})
     b = contract.serialize({"a": {"y": 2, "z": 1}, "b": 1})

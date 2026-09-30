@@ -17,6 +17,13 @@ CONTRACT_PATH = (
     Path(__file__).resolve().parents[4] / "packages" / "contract" / "openapi" / "sparkd.json"
 )
 
+#: Le contrat décrit l'API, pas la build qui la sert. `info.version` portait la
+#: version du paquet — `0.post1.dev675+g592b4cb62.d20260901` —, qui change à
+#: chaque commit et à chaque installation : la garde ne tenait que tant que les
+#: métadonnées du poste restaient figées. Constaté le 2026-09-30, dès la
+#: première construction de roue. La build servie se lit dans `/healthz`.
+VERSION_DU_CONTRAT = "voir /healthz"
+
 
 def build() -> dict:
     """Rend le schéma OpenAPI de l'application, sans démarrer de serveur."""
@@ -30,7 +37,9 @@ def build() -> dict:
             "SPARKD_DB": str(Path(dossier) / "contract.db"),
             "SPARKD_DRIVER": "fake",
         }))
-        return app.openapi()
+        schema = app.openapi()
+    schema["info"]["version"] = VERSION_DU_CONTRAT
+    return schema
 
 
 def serialize(schema: dict) -> str:
