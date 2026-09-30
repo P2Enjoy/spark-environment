@@ -13459,3 +13459,18 @@ l'incohérence du 2026-09-23 : le fichier provisoire commun faisait perdre 58
 3. Les trois incohérences du rapport ont été présentées sans contexte ; le
    responsable ne pouvait pas les arbitrer. Elles sont réexpliquées, et restent
    au rapport tant qu'il n'a pas tranché.
+
+## 2026-10-01 · Les trois incohérences arbitrées : SPK-139, SPK-140, et SPK-138
+
+Réexpliquées avec leur contexte, elles sont tranchées par le responsable (« oui
+oui oui ») :
+
+- le refus de « Retirer la route » et de « Réappliquer » qui ne s'affiche nulle
+  part : **corriger**, unité SPK-139 ;
+- le gabarit d'alerte refusé qui efface la saisie : **corriger**, unité SPK-140 ;
+- le parcours clavier instable : **pas de correction à part** ; il tourne sur la
+  pile factice, il est absorbé par SPK-138 et rejoué contre la VM.
+
+Les deux corrections se prouvent d'abord par des preuves de composant rouges
+sur le code d'avant — des diagnostics —, puis dans la console branchée sur une
+VM à installation fraîche (SPK-137). Jusque-là, elles restent `[~]`.

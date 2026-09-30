@@ -8438,6 +8438,42 @@ réponse : « oui ».
   (`FakeIncus`, `FakeCaddy`) sont dans le périmètre — la question posée ne
   visait que la pile de développement.
 - Dépend de : SPK-137 (la VM qui remplace la pile factice).
+- **Absorbe** (arbitré le 2026-10-01) le parcours « les trois degrés
+  s'atteignent au clavier », rouge une fois sur deux campagnes sur la pile
+  factice : il n'est pas corrigé à part, il est rejoué contre la VM quand la
+  pile factice disparaît, et son entrée sort alors du rapport d'incohérences.
+
+### [ ] SPK-139 · Le refus de « Retirer la route » et de « Réappliquer » s'affiche sous la route
+
+**Constaté le 2026-09-23** (rapport d'incohérences), **arbitré le 2026-10-01** :
+« corriger ». Dans la section Routes d'un Spark, un refus de ces deux gestes —
+Spark protégé (`423`), Caddy injoignable (`502`) — était rangé sous le panneau
+de la modale « Routes publiques », fermée à ce moment : on clique, rien ne se
+passe, aucune raison.
+
+- Spécification : `docs/DESIGN_SYSTEM.md` §7.1 (la raison du refus près de
+  l'action concernée), §9.7 (`role="alert"`), §1.3 · manuel M7 (les routes).
+- Dépend de : SPK-112 (les gestes de la section), SPK-130 (le diagnostic en
+  direct, qui fait de *Réappliquer* le geste naturel).
+- Portée : le refus de ces deux gestes se rend dans la section, sous la route
+  visée, que la modale soit ouverte ou non ; preuve de composant rouge sur le
+  code d'avant ; vérification visuelle dans la console branchée sur une VM à
+  installation fraîche (SPK-137), un refus réel provoqué par une protection.
+
+### [ ] SPK-140 · Un gabarit d'alerte refusé garde ce qu'on a tapé
+
+**Constaté le 2026-09-30** (capture de SPK-136), **arbitré le 2026-10-01** :
+« corriger ». Onglet Alertes de la Forge : un gabarit qui nomme un champ
+inconnu est refusé avec sa raison, mais le champ « Gabarit du message » se
+repeint avec la valeur relue au serveur — la saisie refusée disparaît.
+
+- Spécification : `docs/DESIGN_SYSTEM.md` §6.11 (« un refus n'efface pas la
+  saisie »), §7.1 (conserver la saisie, raison près de l'action) · manuel M8
+  ou le chapitre des alertes.
+- Dépend de : SPK-62 (le canal d'alerte), SPK-136 (la forme du refus).
+- Portée : au refus, le champ garde le texte tapé ; au succès, il montre la
+  valeur relue ; preuve de composant rouge sur le code d'avant ; vérification
+  visuelle sur VM (SPK-137).
 
 ---
 

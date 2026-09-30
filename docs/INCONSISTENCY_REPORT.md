@@ -15,10 +15,8 @@ avec la modale fermée n'apparaît pas dans le HTML. Deux refus réels y tombent
 `POST /v1/ingress/reconcile` quand le proxy est injoignable (`502`). L'écran ne
 dit rien, ce que `DESIGN_SYSTEM.md` §1.3 et §6.27 refusent.
 
-**Non résolu ici** : hors du périmètre validé de SPK-112, dont le geste « Activer
-le TLS » a son propre panneau (`route-tls`) rendu dans la section. À arbitrer par
-le responsable : rendre aussi le refus du panneau `route` dans la section quand
-la modale est fermée.
+**Arbitré le 2026-10-01** : corriger — unité SPK-139. L'entrée sort du rapport
+quand la correction est livrée.
 
 ## 2026-09-30 · « Les trois degrés s'atteignent au clavier » rouge une fois sur deux campagnes
 
@@ -30,9 +28,9 @@ autre serveur de l'inventaire que la pile d'épreuve — un état qu'un parcours
 antérieur aurait laissé. Le parcours s'exécute AVANT ceux de SPK-132, dont le
 code ne touche ni la Forge ni la navigation.
 
-**Non résolu ici** : hors du périmètre de SPK-132. La cause n'a pas été
-cherchée. À arbitrer par le responsable : isoler ce parcours de l'inventaire que
-les parcours antérieurs modifient.
+**Arbitré le 2026-10-01** : pas de correction à part — le parcours tourne sur la
+pile factice, qui ne valide plus rien (DAT §28.7). Il est absorbé par SPK-138 et
+rejoué contre la VM ; l'entrée sort du rapport à ce moment.
 
 ## 2026-09-30 · Un gabarit refusé vide le champ où on l'a saisi
 
@@ -45,7 +43,6 @@ taper. La saisie refusée disparaît ; il faut la retaper pour la corriger.
 parcours ne le voit pas : il vérifie que le formulaire existe, pas ce qu'il
 contient.
 
-**Non résolu ici** : hors du périmètre de SPK-136, qui ne change que la forme du
-refus. À arbitrer par le responsable : garder la saisie de l'onglet Alertes au
-refus, et le prouver par le parcours.
+**Arbitré le 2026-10-01** : corriger — unité SPK-140. L'entrée sort du rapport
+quand la correction est livrée.
 
