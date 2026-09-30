@@ -13474,3 +13474,34 @@ oui oui ») :
 Les deux corrections se prouvent d'abord par des preuves de composant rouges
 sur le code d'avant — des diagnostics —, puis dans la console branchée sur une
 VM à installation fraîche (SPK-137). Jusque-là, elles restent `[~]`.
+
+## 2026-10-01 · SPK-137 — proposition soumise : brancher la console sur la VM du banc
+
+**Non validée** : soumise au responsable le 2026-10-01 ; rien n'est codé.
+
+**Ce qu'on a relu** : la console atteint une Forge par un tunnel SSH lancé avec
+l'identité et le `known_hosts` du poste (`apps/webui/host/tunnel.js`) ; son
+inventaire est `SPARK_CONSOLE_STATE` et son port `SPARK_CONSOLE_PORT`, deux
+variables déjà documentées ; le banc dépose une clé jetable et change de clé
+d'hôte à chaque machine.
+
+**Proposition** :
+
+1. `make forge-vm ARGS="--garder"` : le banc joue ses verdicts, puis **garde la
+   machine** au lieu de la démonter, jusqu'à `Ctrl-C` ; il tient le verrou des
+   épreuves lourdes tout ce temps — une seule VM à la fois.
+2. **Une console à part** pour la VM — `make console-vm`, sur son propre port —
+   dont l'inventaire ne contient **que** la VM. La console d'exploitation et son
+   inventaire réel ne sont pas touchés : aucune épreuve ne peut viser la Forge
+   de production par erreur.
+3. La VM reçoit la **clé publique du poste**, celle que la console emploie déjà,
+   et une **clé d'hôte fixe de banc**, gardée dans
+   `~/.cache/spark-environment/vm/` et posée par le cloud-init : chaque VM
+   neuve présente la même empreinte, que le `known_hosts` du poste apprend une
+   fois. Sans cela, chaque machine fraîche serait refusée comme « clé d'hôte
+   changée ».
+4. **Tout se crée par la console** — Spark, route, protection, secret — depuis
+   l'accueil, souris et clavier (`CLAUDE.md` §16) : des scripts d'épreuve comme
+   ceux de `e2e/forge-reelle/`, qui prennent le verrou, jouent le parcours et
+   produisent les captures observées. Premiers servis : SPK-135, SPK-136,
+   SPK-139, SPK-140.
