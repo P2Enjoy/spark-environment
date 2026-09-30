@@ -23,6 +23,10 @@
  * SUR le conteneur ». La preuve dit désormais cela, et l'éprouve : aucun libellé
  * de démarrage, d'arrêt, de redémarrage ou de suppression, et aucune classe
  * destructive.
+ *
+ * @verifies docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.5 (recréer : offert sur
+ *           un conteneur de pile Compose seulement, arrêté ou non ; la
+ *           confirmation nomme le fichier) · docs/DESIGN_SYSTEM_APP.md SPK-DS-35
  */
 
 import { test } from 'node:test';
@@ -416,9 +420,10 @@ test('un conteneur ARRÊTÉ n’offre que démarrer', () => {
   }
 });
 
-test('« tuer » est le SEUL bouton destructif', () => {
+test('hors Compose, « tuer » est le SEUL bouton destructif', () => {
   // Distinguer visuellement « arrêter » de « tuer » est le seul moyen
-  // d'empêcher qu'on les confonde au moment où l'on est pressé.
+  // d'empêcher qu'on les confonde au moment où l'on est pressé. (Sur un
+  // conteneur de pile Compose, « recréer » l'est aussi : voir SPK-132 plus bas.)
   const rendu = renderConteneur(ouvert(), SPARK);
   const destructifs = [...rendu.matchAll(/<button[^>]*data-geste="(\w+)"[^>]*>/g)]
     .filter((m) => m[0].includes('bouton--destructif')).map((m) => m[1]);
@@ -602,4 +607,57 @@ test('un conteneur DISPARU n’offre pas d’y entrer', () => {
     detail: { state: 'conteneur_inconnu', titre: 'Ce conteneur a disparu',
               detail: 'x' } }), SPARK);
   assert.ok(!/data-docker="terminal"/.test(rendu));
+});
+
+// --- SPK-132 · Recréer un conteneur de pile Compose (§37.7.5) ----------------
+
+const COMPOSE = { project: 'devis', service: 'devis', workingDir: '/srv/devis',
+                  configFiles: ['/srv/devis/deploy/prod/compose.yml'], envFiles: [] };
+const DE_PILE = { ...INSPECTION, compose: COMPOSE };
+
+test('un conteneur de pile Compose offre « Recréer », rouge, EN MARCHE comme ARRÊTÉ', () => {
+  const marche = renderConteneur(ouvert({ detail: DE_PILE }), SPARK);
+  const bouton = /<button[^>]*data-geste="recreate"[^>]*>/.exec(marche)?.[0];
+  assert.ok(bouton, 'le geste est offert');
+  assert.match(bouton, /bouton--destructif/);
+  assert.match(marche, />\s*Recréer</);
+  const arrete = renderConteneur(ouvert({
+    detail: { ...DE_PILE, state: 'exited', exitCode: 0 } }), SPARK);
+  assert.match(arrete, /data-geste="recreate"/);
+  assert.match(arrete, /data-geste="start"/);
+});
+
+test('hors Compose, « Recréer » n’existe pas — et l’inspection dit pourquoi', () => {
+  const rendu = renderConteneur(ouvert(), SPARK);
+  assert.doesNotMatch(rendu, /data-geste="recreate"/);
+  assert.match(rendu, /Créé hors Compose : il ne se recrée\s+pas depuis la console/);
+  // Et la ligne ne s'écrit pas sur un conteneur de pile.
+  assert.doesNotMatch(renderConteneur(ouvert({ detail: DE_PILE }), SPARK), /Créé hors Compose/);
+});
+
+test('l’inspection dit de quelle pile il vient, et d’après quel fichier', () => {
+  const rendu = renderConteneur(ouvert({ detail: DE_PILE }), SPARK);
+  assert.match(rendu, /<dt>Pile Compose<\/dt>\s*<dd><span class="technique">devis · service devis<\/span>/);
+  assert.match(rendu, /<dt>Fichier de composition<\/dt>\s*<dd><span class="technique">\/srv\/devis\/deploy\/prod\/compose\.yml/);
+});
+
+test('la confirmation NOMME le fichier, la relecture de l’environnement, et la perte', () => {
+  const rendu = renderConteneur(ouvert({ detail: DE_PILE, confirme: 'recreate' }), SPARK);
+  const bloc = /<div class="confirmation"[\s\S]*?<\/div>/.exec(rendu)?.[0] ?? '';
+  assert.ok(bloc, 'la confirmation est DESTRUCTIVE (rouge), pas « sensible »');
+  assert.match(bloc, /Recréer\s+« helo-web-1 » \?/);
+  assert.match(bloc, /\/srv\/devis\/deploy\/prod\/compose\.yml, tel qu’il est aujourd’hui/);
+  assert.match(bloc, /relit \/etc\/spark\/env et \/run\/spark\/secrets\./);
+  assert.match(bloc, /hors de ses volumes est perdu/);
+  assert.match(bloc, /data-geste-confirme="recreate"[^>]*>\s*Recréer ce conteneur/);
+  assert.match(bloc, /class="bouton bouton--destructif"\s+data-geste-confirme="recreate"/);
+  // Arrêté, il est aussi démarré : la confirmation le dit.
+  const arrete = renderConteneur(ouvert({
+    detail: { ...DE_PILE, state: 'exited', exitCode: 0 }, confirme: 'recreate' }), SPARK);
+  assert.match(arrete, /\/run\/spark\/secrets, puis il est démarré\./);
+});
+
+test('sous GEL, « Recréer » est présent et désactivé, avec les autres', () => {
+  const rendu = renderConteneur(ouvert({ detail: DE_PILE }), SPARK_GELE);
+  assert.match(rendu, /<button[^>]*data-geste="recreate"[^>]*disabled/);
 });

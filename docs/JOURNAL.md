@@ -13257,3 +13257,37 @@ documentation suit la réalité.
 
 **Documents** : DAT §37.7.5 et révisions (§37.7, §37.7.4, §37.8, §43.7,
 §44.9.7), SPK-DS-35, SPK-132, OP-31. Committés avant le code.
+
+## 2026-09-30 · SPK-132 livré — ce que Compose a appris, et ce que le banc prouve
+
+**Mesuré avant d'écrire le classement**, sur le vrai Docker : une étiquette
+absente rend une chaîne vide dans `docker inspect --format` (jamais
+« <no value> ») ; `oneoff` vaut `False` ou `True` ; Compose écrit sa progression
+sur la sortie d'erreur et son erreur **en dernier** — le message d'un refus est
+donc la dernière ligne, là où celui de `docker start` est la première ; une
+image absente avec `--pull never` est refusée **avant** que l'ancien conteneur
+soit touché, qui reste en marche.
+
+**Un défaut attrapé avant tout lancement** : les colonnes ajoutées au gabarit
+d'inspection portaient le texte `\t` au lieu d'une tabulation — une preuve le
+garde désormais.
+
+**Le banc** (`node scripts/mesures-spk132.mjs`) n'emploie aucune commande écrite
+à la main : il exécute l'inspection, *Redémarrer* et *Recréer* tels que le code
+les compose, sur un projet Compose jetable à deux services. Vert : 9 constats.
+
+**Ce que la documentation disait de faux, et qui est corrigé dans le même
+changement** : l'écran d'environnement, le DAT §43.7 et §44.9.7, les manuels M8
+et M6, et le dossier pour un agent (§43.7).
+
+**Vérifications** : banc vert (9 constats) ; `sparkd` 1551/1551 ; console
+1559/1560 (l'échec antérieur des classes de SPK-104) ; parcours `spk132-recreer`
+et les parcours voisins ; campagne complète 149/149 à la seconde passe — la
+première a rendu « les trois degrés s'atteignent au clavier » rouge, vert seul
+et vert ensuite : un rouge intermittent, antérieur à l'unité, consigné au
+rapport d'incohérences ; gestes 13/13 ; contrat inchangé.
+
+**Un faux pas, sans effet, dit quand même** : une commande de lecture de
+diagnostic portait en queue un `make e2e` oublié. Son tube fermé l'a arrêté
+avant qu'il ne monte quoi que ce soit — vérifié aussitôt : aucun processus
+d'épreuve, aucun verrou. Aucune seconde campagne n'a tourné.

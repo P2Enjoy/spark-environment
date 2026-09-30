@@ -9,7 +9,9 @@
  *           docs/BACKLOG.md#SPK-130 (la facette Routes relève Caddy et le
  *           certificat à chaque visite, §18.7),
  *           docs/BACKLOG.md#SPK-131 (une note proposée se relit en deux
- *           colonnes, §55.9.3) ·
+ *           colonnes, §55.9.3),
+ *           docs/BACKLOG.md#SPK-132 (recréer un conteneur de pile Compose,
+ *           §37.7.5 ; l'onglet Environnement nomme ce geste, §43.7) ·
  *           docs/DAT.md §29 (éprouver le produit par où
  *           il s'utilise), §29.2 (le harnais monte sa pile), §29.3 (aucune URL
  *           profonde, aucun appel d'API pour agir), §29.4 (les quatre refus),
@@ -794,8 +796,12 @@ test('poser une variable AU CLAVIER, et la retirer', async () => {
     await page.keyboard.press('Enter');
     await page.waitForSelector('dialog.modale[open] #env-nom-spark', { timeout: 10000 });
 
-    // §43.7 : l'écran annonce AVANT le geste que rien ne redémarre.
-    assert.match(await page.innerText('dialog.modale[open]'), /ne redémarre rien/);
+    // §43.7, révisé par SPK-132 : l'écran annonce AVANT le geste qu'un
+    // conteneur lit ces fichiers à sa création, et nomme le geste qui les fait
+    // relire. « Ne redémarre rien » laissait croire qu'un redémarrage suffisait.
+    const modale = await page.innerText('dialog.modale[open]');
+    assert.match(modale, /lit ces fichiers à sa création/);
+    assert.match(modale, /onglet Docker, « Recréer »/);
 
     await page.fill('#env-nom-spark', 'PARCOURS_E2E');
     await page.fill('#env-valeur-spark', 'valeur-du-parcours');
@@ -5188,6 +5194,91 @@ test('un Spark GELÉ refuse le geste et LAISSE la lecture (§37.7)', async () =>
       await page.waitForFunction(
         () => document.body.innerText.includes('Désarmée'), { timeout: 10000 });
     }
+  });
+});
+
+// --- SPK-132 · RECRÉER UN CONTENEUR DE PILE COMPOSE (§37.7.5) --------------
+
+test('recréer un conteneur de pile : la confirmation nomme le fichier, le clavier engage, le journal retient', async () => {
+  await parcours('spk132-recreer', async () => {
+    // @verifies docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.5 (ce qui est
+    //           offert, la confirmation, les états), §37.7.4 (la cinquième
+    //           action) · docs/DESIGN_SYSTEM_APP.md SPK-DS-35
+    //
+    // Le doublon rend pour « helo-web-1 » les étiquettes d'une pile Compose,
+    // aucune pour « distroless-1 », et fait échouer Compose sur « helo-base-1 »
+    // comme sur une image absente.
+    await ouvrirConteneur('helo-web-1');
+    const fiche = await page.innerText('.fiche-conteneur');
+    assert.match(fiche, /Pile Compose\s+helo · service web/);
+    assert.match(fiche, /Fichier de composition\s+\/srv\/helo\/compose\.yml/);
+    assert.doesNotMatch(fiche, /Créé hors Compose/);
+
+    await page.click('button[data-geste="recreate"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+    const confirmation = await page.innerText('.confirmation');
+    assert.match(confirmation, /Recréer « helo-web-1 » \?/);
+    assert.match(confirmation, /supprimé puis recréé d’après \/srv\/helo\/compose\.yml, tel qu’il est aujourd’hui/);
+    assert.match(confirmation, /relit \/etc\/spark\/env et \/run\/spark\/secrets/);
+    assert.match(confirmation, /hors de ses volumes est perdu/);
+    // SPK-DS-35 : destructif — la confirmation rouge, pas l'accent du « sensible ».
+    assert.equal(await page.$eval('.confirmation',
+      (b) => b.classList.contains('confirmation--sensible')), false);
+    assert.equal(await page.evaluate(
+      () => document.activeElement?.getAttribute('data-geste-confirme')), 'recreate',
+    'le focus entre dans la confirmation');
+    await capturer('spk132-recreer-confirmation', { hauteur: 1000 });
+
+    // Au CLAVIER : le focus est sur le bouton d'engagement.
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.succes', { timeout: 15000 });
+    const issue = await page.innerText('.succes');
+    assert.match(issue, /Recréer : c’est fait/);
+    assert.match(issue, /d’après \/srv\/helo\/compose\.yml : il a relu ses deux fichiers/);
+    await page.waitForFunction(
+      () => !document.body.innerText.includes('Inspection en cours'), null, { timeout: 15000 });
+    await capturer('spk132-recreer-fait', { hauteur: 1000 });
+
+    // CLAUDE.md §15 : on LIT le journal pour constater, jamais pour agir.
+    const { corps } = await pile.lireSparkd('/v1/audit?action=spark.container_recreate');
+    const inscrit = corps.entries.find((e) => JSON.parse(e.payload).container === 'helo-web-1');
+    assert.ok(inscrit, 'la recréation doit être au journal, sous SA propre action');
+    assert.equal(inscrit.result, 'ok');
+
+    // Hors Compose : le geste n'existe pas, et l'inspection dit pourquoi.
+    await ouvrirConteneur('distroless-1');
+    assert.equal(await page.$('button[data-geste="recreate"]'), null);
+    assert.match(await page.innerText('.fiche-conteneur'),
+      /Créé hors Compose : il ne se recrée pas depuis la console/);
+
+    // Un refus de Compose se rend tel quel — sa dernière ligne —, en rouge, et
+    // s'inscrit comme refusé.
+    await ouvrirConteneur('helo-base-1');
+    await page.click('button[data-geste="recreate"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+    assert.match(await page.innerText('.confirmation'), /puis il est démarré/);
+    await page.click('[data-geste-confirme="recreate"]');
+    await page.waitForSelector('.fiche-conteneur .refus', { timeout: 15000 });
+    const refus = await page.innerText('.fiche-conteneur .refus');
+    assert.match(refus, /Recréer : Compose a refusé/);
+    assert.match(refus, /No such image: postgres:16/);
+    const { corps: refuses } = await pile.lireSparkd('/v1/audit?action=spark.container_recreate');
+    const refuse = refuses.entries.find((e) => JSON.parse(e.payload).container === 'helo-base-1');
+    assert.equal(refuse?.result, 'denied');
+    await capturer('spk132-recreer-refus', { hauteur: 1000 });
+
+    // 390 px : la confirmation tient, sans défilement de page.
+    await ouvrirConteneur('helo-web-1');
+    await page.setViewportSize({ width: 390, height: 1400 });
+    await page.click('button[data-geste="recreate"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+    assert.equal(await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1),
+    false, 'la page défile horizontalement à 390 px');
+    await page.locator('.confirmation').scrollIntoViewIfNeeded();
+    await capturer('spk132-recreer-mobile', { largeur: 390, hauteur: 1400 });
+    await page.click('[data-geste-annule]');
+    await page.setViewportSize({ width: 1440, height: 1300 });
   });
 });
 

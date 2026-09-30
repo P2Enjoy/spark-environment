@@ -104,12 +104,14 @@ de relecture qui dit ce qui sera remplacé et ce qui est refusé avant d'écrire
 Une route **proposée** depuis le Spark : ce que règle son dernier mot, et la
 case TLS qui se coche avant d'accepter. Une ligne proposée qu'on écarte n'est
 pas refusée : elle reste en attente. Une **note** proposée se relit comparée au
-texte qu'elle remplacerait, en deux colonnes, avant de l'accepter. L'onglet
+texte qu'elle remplacerait, en deux colonnes, avant de l'accepter. Une variable
+posée n'arrive dans un conteneur que lorsqu'il est **recréé** — pas redémarré —,
+et le geste *Recréer* de l'onglet Docker le fait. L'onglet
 **Propositions** de la Forge, qui liste ce qui attend dans tous les Sparks et
 mène à l'onglet où cela se décide.
 
 Unités : SPK-09, SPK-14, SPK-34, SPK-58, SPK-64, SPK-93, SPK-97, SPK-112,
-SPK-114, SPK-115, SPK-131.
+SPK-114, SPK-115, SPK-131, SPK-132.
 
 ## M9 · Sauvegarder et restaurer
 

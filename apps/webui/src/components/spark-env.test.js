@@ -3,7 +3,8 @@
  * docs/BACKLOG.md#SPK-103 (deux blocs par section, et la recherche) ·
  * docs/DAT.md §43.3
  * (la valeur d'un secret ne s'affiche jamais), §43.6 révisé (la Forge propose,
- * le Spark choisit), §43.7 (écrire ne redémarre rien), §43.9.4 (l'origine de
+ * le Spark choisit), §43.7 (révisé par docs/BACKLOG.md#SPK-132 : un conteneur
+ * lit ses fichiers à sa création), §43.9.4 (l'origine de
  * chaque valeur), §43.11 (deux natures, deux blocs, une recherche sur le nom) ·
  * docs/DESIGN_SYSTEM_APP.md SPK-DS-25 ·
  * docs/DESIGN_SYSTEM.md §6.27, §9.3, §9.9, §14.4, §14.5, §14.6, §14.10
@@ -88,12 +89,16 @@ test('un Spark PROTÉGÉ garde la commande, DÉSACTIVÉE, avec sa raison', () =>
   assert.match(avecCatalogue, /modifier ses sélections/);
 });
 
-test('la modale ANNONCE que rien ne redémarre', () => {
-  // §43.7 : laisser croire à un effet immédiat qui n’aura pas lieu ferait
-  // chercher une panne là où il n’y en a pas.
+test('la modale dit qu’un conteneur lit ces fichiers À SA CRÉATION, et nomme « Recréer »', () => {
+  // §43.7, révisé par SPK-132 : « la pile lira la valeur à son prochain
+  // démarrage » était FAUX — mesuré, un redémarrage relance le même conteneur
+  // avec l'environnement de sa création. Une application a ainsi continué de
+  // dire son courriel « non configuré » après que ses variables eurent été posées.
   const rendu = renderEnvPanel(SPARK, [], ui({ open: 'spark' }), renderModale);
-  assert.match(rendu, /prochain démarrage/);
-  assert.match(rendu, /ne redémarre rien/);
+  assert.match(rendu, /lit ces fichiers <strong>à sa création<\/strong>/);
+  assert.match(rendu, /ni un redémarrage ne lui font lire la nouvelle valeur/);
+  assert.match(rendu, /onglet Docker, « Recréer »/);
+  assert.doesNotMatch(rendu, /prochain démarrage/);
 });
 
 test('la modale dit ce qu’une déclaration de SECRET engage', () => {

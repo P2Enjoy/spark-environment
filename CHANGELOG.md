@@ -3,6 +3,33 @@
 ## [Non publié]
 
 ### Ajouté
+- **SPK-132 — recréer un conteneur de pile Compose, pour qu'il relise son
+  environnement.** Né d'une panne réelle : une application disait son envoi de
+  courriel « non configuré » alors que ses variables SMTP venaient d'être
+  posées. Mesuré (Docker 29.8.1, Compose v5.5.1) : une variable d'`env_file` est
+  figée à la **création** du conteneur ; *Redémarrer*, `compose restart` et un
+  redémarrage de la machine gardent l'ancienne valeur. L'onglet Docker offre
+  donc un cinquième geste, **Recréer**, sur un conteneur créé par Compose,
+  arrêté ou non : l'hôte console relit ses étiquettes (projet, répertoire,
+  fichiers, fichier de substitution) et lance
+  `docker compose … up -d --force-recreate --no-deps --no-build --pull never
+  -t 10 <service>` — ce service seul, rien de construit ni de téléchargé.
+  Destructif (ce qui a été écrit hors des volumes est perdu), confirmé en
+  nommant le fichier de composition, gelé comme les autres gestes, journalisé en
+  `spark.container_recreate`. Un conteneur lancé par `docker run` n'offre pas le
+  geste, et l'inspection dit pourquoi ; elle nomme la pile et son fichier. Un
+  refus de Compose est rendu par sa dernière ligne, tel quel. Banc
+  `node scripts/mesures-spk132.mjs` contre un vrai Docker, avec les commandes
+  composées par le code. Aucune variable, aucune migration. DAT §37.7.5, §37.7
+  et §37.7.4 révisés ; SPK-DS-35 ; manuels M8 et M6 ; OP-31.
+
+### Corrigé
+- **« La pile lira la nouvelle valeur à son prochain démarrage » était faux**
+  (SPK-132). L'onglet Environnement, le DAT §43.7 et §44.9.7, les manuels M8 et
+  M6 et le dossier pour un agent le disaient, et le §43.7 renvoyait au geste
+  *Redémarrer*, qui ne fait pas relire les fichiers. Ils disent désormais qu'un
+  conteneur lit ses fichiers à sa création, et nomment *Recréer* et
+  `docker compose up -d`.
 - **SPK-131 — une note proposée se relit en deux colonnes, comme une revue de
   code.** Demandé par le responsable : « un côte à côte comme GitHub, avec les
   différences, avant d'accepter ». Sur l'onglet Notes, une version de README,

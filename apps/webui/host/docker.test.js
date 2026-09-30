@@ -22,7 +22,7 @@ import {
   OK, SANS_CONTENEUR, DOCKER_ABSENT, MOTEUR_MUET, SSHD_MUET, CLE_HOTE_CHANGEE, INJOIGNABLE,
   analyserInspection, analyserReseaux, analyserMontages, analyserJournaux,
   inspecter, journaux, quoter, inspecterConteneur, lireJournaux,
-  CONTENEUR_INCONNU, doublonPour,
+  CONTENEUR_INCONNU, doublonPour, composeDe, ETIQUETTES_COMPOSE,
 } from './docker.js';
 
 const SPARK = { name: 'helo', ipv4_address: '10.77.0.17',
@@ -389,4 +389,51 @@ test('une sortie ENCORE EN COURS n’est pas rendue tronquée', async () => {
                                   spawn: spawnFn });
   assert.equal(vu.lines.length, 2, 'la ligne arrivée après « exit » est gardée');
   assert.equal(vu.lines.at(-1).text, 'fin');
+});
+
+// --- SPK-132 · ce que Compose sait d'un conteneur (§37.7.5) ------------------
+//
+// @verifies docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.5 (ce qui est offert, et
+//           à quel conteneur)
+
+test('l’inspection lit les étiquettes de Compose, dans leur ordre', () => {
+  const commande = inspecter('devis-devis-1');
+  for (const e of ETIQUETTES_COMPOSE) {
+    assert.ok(commande.includes(`{{index .Config.Labels "${e}"}}`), e);
+  }
+  // De vraies tabulations, comme le reste du gabarit : c'est sur elles qu'on coupe.
+  assert.ok(!commande.includes('\\t'), 'un séparateur écrit « \\t » au lieu d’une tabulation');
+});
+
+test('un conteneur de pile Compose se décrit : projet, service, répertoire, fichiers', () => {
+  const vu = analyserInspection('/devis-devis-1\trunning\t0\t2026-09-30T10:00:00Z\t\t0'
+    + '\tdevis:production\tdevis\tdevis\t/srv/devis\t/srv/devis/a.yml,/srv/devis/b.yml'
+    + '\t/srv/devis/.env.prod\tFalse');
+  assert.deepEqual(vu.compose, { project: 'devis', service: 'devis', workingDir: '/srv/devis',
+    configFiles: ['/srv/devis/a.yml', '/srv/devis/b.yml'],
+    envFiles: ['/srv/devis/.env.prod'] });
+});
+
+test('sans ses étiquettes — `docker run` —, un conteneur ne se décrit pas', () => {
+  // MESURÉ : une étiquette absente rend une chaîne vide.
+  assert.equal(analyserInspection('/nu\trunning\t0\tx\t\t0\talpine\t\t\t\t\t\t').compose, null);
+  // Une inspection d'avant SPK-132, sans colonnes d'étiquettes, non plus.
+  assert.equal(analyserInspection('/web\trunning\t0\tx\t\t0\tnginx').compose, null);
+});
+
+test('une étiquette manquante suffit à ne pas décrire ; un conteneur PONCTUEL non plus', () => {
+  const complet = ['p', 's', '/w', '/w/c.yml', '', 'False'];
+  assert.ok(composeDe(complet));
+  for (const i of [0, 1, 2, 3]) {
+    const trou = [...complet];
+    trou[i] = '';
+    assert.equal(composeDe(trou), null, `étiquette ${i} absente`);
+  }
+  assert.equal(composeDe(['p', 's', '/w', '/w/c.yml', '', 'True']), null);
+});
+
+test('le doublon d’épreuve reconnaît la recréation', () => {
+  const table = JSON.stringify({ compose: 'R', '*': 'X' });
+  assert.equal(doublonPour(table,
+    "docker compose -p 'p' --project-directory '/w' -f '/w/c.yml' up -d 's'"), 'R');
 });

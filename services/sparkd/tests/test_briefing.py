@@ -223,6 +223,24 @@ def test_le_dossier_ne_porte_aucune_valeur_de_secret(tmp_path):
     assert "`SMTP_PASSWORD`" in corps["markdown"]
 
 
+def test_le_dossier_dit_qu_un_conteneur_lit_ses_fichiers_A_SA_CREATION(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-132 · docs/DAT.md §43.7 (révisé), §44.9.7,
+    §37.7.5 (la mesure)
+
+    « La pile lira la nouvelle valeur au démarrage suivant » était FAUX : mesuré,
+    un redémarrage relance le même conteneur, avec l'environnement de sa
+    création. Un agent qui l'aurait cru redémarre, et la variable n'arrive pas.
+    """
+    client = _client(tmp_path)
+    name = _spark(client)
+    assert client.post(f"/v1/sparks/{name}/bootstrap").status_code == 200
+    texte = client.get(f"/v1/sparks/{name}/briefing").json()["markdown"]
+    assert "démarrage suivant" not in texte
+    assert "un redémarrage ne suffit pas" in texte
+    assert "**à sa création**" in texte
+    assert "`docker compose up -d`" in texte
+
+
 def test_le_dossier_donne_la_commande_ssh_avec_son_rebond(tmp_path):
     """§44.9.2 : le rebond est obligatoire, et sa cible n'est connue que de la
     console. Fournie, elle produit une ligne prête à coller."""

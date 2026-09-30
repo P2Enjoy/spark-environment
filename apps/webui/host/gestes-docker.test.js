@@ -10,6 +10,10 @@
  *
  * Les confondre annoncerait une disparition à propos d'un conteneur simplement
  * arrêté, et enverrait chercher une suppression qui n'a jamais eu lieu.
+ *
+ * @verifies docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.5 (recréer : la commande
+ *           composée depuis les étiquettes relues, ce qui est refusé, les états),
+ *           §37.7.4 (une cinquième action) · docs/DESIGN_SYSTEM_APP.md SPK-DS-35
  */
 
 import { test } from 'node:test';
@@ -19,6 +23,7 @@ import { EventEmitter } from 'node:events';
 import {
   agir, classer, messageEchec, GESTES, ETATS, DELAI_ARRET, DELAI_SSH,
   ABOUTI, DEJA_ARRETE, CONTENEUR_INCONNU, ECHEC, SSHD_MUET, INJOIGNABLE,
+  HORS_COMPOSE, DELAI_RECREER, commandeRecreer, messageEchecCompose,
 } from './gestes-docker.js';
 
 const SPARK = { name: 'helo', ipv4_address: '10.77.0.17',
@@ -88,14 +93,15 @@ test('le message d’un échec est celui de DOCKER, débarrassé de son préfixe
 
 // --- Les quatre gestes, et ce qu'ils promettent -----------------------------
 
-test('les quatre gestes existent, chacun avec SON action de journal', () => {
-  // §37.7.4 : quatre actions et non une, pour que « combien en a-t-on tués »
-  // se réponde par un filtre et non par la lecture des charges.
+test('les cinq gestes existent, chacun avec SON action de journal', () => {
+  // §37.7.4 : une action par geste, pour que « combien en a-t-on tués » se
+  // réponde par un filtre et non par la lecture des charges. La cinquième,
+  // « recreate », vient de SPK-132 (§37.7.5).
   const actions = Object.values(GESTES).map((g) => g.action);
   assert.deepEqual(actions.sort(), [
-    'spark.container_kill', 'spark.container_restart',
+    'spark.container_kill', 'spark.container_recreate', 'spark.container_restart',
     'spark.container_start', 'spark.container_stop'].sort());
-  assert.equal(new Set(actions).size, 4, 'aucune action n’est partagée');
+  assert.equal(new Set(actions).size, 5, 'aucune action n’est partagée');
 });
 
 test('chaque confirmation NOMME le conteneur et l’effet (§6.23)', () => {
@@ -108,12 +114,16 @@ test('chaque confirmation NOMME le conteneur et l’effet (§6.23)', () => {
   }
 });
 
-test('« tuer » est le SEUL destructif', () => {
+test('« tuer » et « recréer » sont les SEULS destructifs', () => {
   // Distinguer visuellement « arrêter » de « tuer » est le seul moyen d'empêcher
   // qu'on les confonde au moment où l'on est pressé — donc où l'on tue.
+  // SPK-DS-35 : recréer SUPPRIME le conteneur, et ce qu'il avait écrit hors de
+  // ses volumes avec lui.
   const destructifs = Object.entries(GESTES)
     .filter(([, g]) => g.destructif).map(([k]) => k);
-  assert.deepEqual(destructifs, ['kill']);
+  assert.deepEqual(destructifs.sort(), ['kill', 'recreate']);
+  assert.match(GESTES.recreate.effet('web'), /supprimé puis recréé/);
+  assert.match(GESTES.recreate.effet('web'), /hors de ses volumes est perdu/);
   assert.match(GESTES.kill.effet('web'), /IMMÉDIATEMENT/);
   assert.match(GESTES.kill.effet('web'), /perdu/);
 });
@@ -134,7 +144,8 @@ test('le délai du ssh est PLUS LONG que celui de l’arrêt', () => {
 });
 
 test('un nom de conteneur est CITÉ avant de traverser un ssh', () => {
-  for (const geste of Object.values(GESTES)) {
+  for (const [cle, geste] of Object.entries(GESTES)) {
+    if (cle === 'recreate') continue;   // composée depuis les étiquettes, ci-dessous
     assert.match(geste.commande("; rm -rf /"), /'; rm -rf \/'/);
   }
 });
@@ -230,5 +241,118 @@ test('un geste INCONNU est refusé sans rien lancer', async () => {
   const vu = await agir({ tunnel: TUNNEL, spark: SPARK, nom: 'web',
                           geste: 'supprimer', spawn: spawnFn });
   assert.equal(vu.refus, 'geste_inconnu');
+  assert.equal(vus.length, 0);
+});
+
+// --- SPK-132 · Recréer un conteneur de pile Compose (§37.7.5) ----------------
+
+const COMPOSE = { project: 'devis', service: 'devis', workingDir: '/srv/devis',
+                  configFiles: ['/srv/devis/deploy/prod/compose.yml'], envFiles: [] };
+
+/** Une inspection telle que `docker inspect --format` la rend, étiquettes au bout. */
+const inspection = (etiquettes) => ['/devis-devis-1', 'running', '0',
+  '2026-09-30T10:00:00Z', '', '0', 'devis:production', ...etiquettes].join('\t') + '\n';
+const ETIQUETTES = ['devis', 'devis', '/srv/devis',
+                    '/srv/devis/deploy/prod/compose.yml', '', 'False'];
+
+test('recréer : le même projet, lu depuis le même répertoire, ce service SEUL', () => {
+  assert.equal(commandeRecreer(COMPOSE),
+    "docker compose -p 'devis' --project-directory '/srv/devis'"
+    + " -f '/srv/devis/deploy/prod/compose.yml'"
+    + ` up -d --force-recreate --no-deps --no-build --pull never -t ${DELAI_ARRET} 'devis'`);
+});
+
+test('recréer : plusieurs fichiers et un fichier de substitution, dans leur ordre', () => {
+  const commande = commandeRecreer({ ...COMPOSE,
+    configFiles: ['/a/compose.yml', '/a/compose.prod.yml'], envFiles: ['/a/.env.prod'] });
+  assert.match(commande, /-f '\/a\/compose\.yml' -f '\/a\/compose\.prod\.yml' --env-file '\/a\/\.env\.prod' up/);
+});
+
+test('recréer : chaque étiquette est CITÉE — elle vient du locataire et traverse un ssh', () => {
+  const commande = commandeRecreer({ project: "p'; rm -rf / #", service: '$(id)',
+    workingDir: '/srv/a b', configFiles: ['/srv/a b/c.yml'], envFiles: [] });
+  assert.match(commande, /-p 'p'\\''; rm -rf \/ #'/);
+  assert.match(commande, / '\$\(id\)'$/);
+  assert.match(commande, /--project-directory '\/srv\/a b'/);
+});
+
+test('recréer : ni construction, ni téléchargement, ni un autre service', () => {
+  const commande = commandeRecreer(COMPOSE);
+  for (const option of ['--no-build', '--pull never', '--no-deps', '--force-recreate']) {
+    assert.ok(commande.includes(option), option);
+  }
+  // Une seule sous-commande, `up` : aucun mot isolé ne lance autre chose.
+  const mots = commande.split(' ');
+  assert.deepEqual(mots.filter((m) => ['build', 'pull', 'down', 'rm', 'restart',
+                                       'stop', 'kill'].includes(m)), []);
+  assert.equal(mots.filter((m) => m === 'up').length, 1);
+});
+
+test('recréer : les étiquettes sont RELUES, puis Compose part, avec son propre délai', async () => {
+  const { spawnFn, vus } = fauxSsh([
+    { code: 0, sortie: inspection(ETIQUETTES) },
+    { code: 0, erreurs: ' Container devis-devis-1 Recreate\n Container devis-devis-1 Started\n' },
+  ]);
+  const vu = await agir({ tunnel: TUNNEL, spark: SPARK, nom: 'devis-devis-1',
+                          geste: 'recreate', spawn: spawnFn });
+  assert.equal(vu.state, ABOUTI);
+  assert.equal(vu.action, 'spark.container_recreate');
+  assert.match(vu.detail, /deploy\/prod\/compose\.yml/);
+  assert.match(vu.detail, /relu ses deux fichiers/);
+  assert.equal(vus.length, 2);
+  assert.match(vus[0].args.at(-1), /docker inspect 'devis-devis-1'/);
+  assert.match(vus[1].args.at(-1), /docker compose -p 'devis'/);
+  // Le contexte Docker du §42.2 bis s'applique à Compose comme au reste.
+  assert.match(vus[1].args.at(-1), /runuser -u spark-docker/);
+  assert.ok(DELAI_RECREER > DELAI_SSH, 'une recréation prend plus qu’un arrêt');
+});
+
+test('recréer un conteneur HORS Compose ne lance rien d’autre que l’inspection', async () => {
+  const { spawnFn, vus } = fauxSsh([{ code: 0, sortie: inspection(['', '', '', '', '', '']) }]);
+  const vu = await agir({ tunnel: TUNNEL, spark: SPARK, nom: 'fait-a-la-main',
+                          geste: 'recreate', spawn: spawnFn });
+  assert.equal(vu.state, HORS_COMPOSE);
+  assert.match(vu.titre, /n’a pas été créé par Compose/);
+  assert.match(vu.detail, /Rien n’a été lancé/);
+  assert.equal(vus.length, 1);
+});
+
+test('un conteneur PONCTUEL (`compose run`) n’est pas un service : il ne se recrée pas', async () => {
+  const { spawnFn, vus } = fauxSsh([{ code: 0, sortie: inspection(
+    ['devis', 'devis', '/srv/devis', '/srv/devis/compose.yml', '', 'True']) }]);
+  const vu = await agir({ tunnel: TUNNEL, spark: SPARK, nom: 'devis-devis-run-1',
+                          geste: 'recreate', spawn: spawnFn });
+  assert.equal(vu.state, HORS_COMPOSE);
+  assert.equal(vus.length, 1);
+});
+
+test('recréer un conteneur DISPARU le dit, sans lancer Compose', async () => {
+  const { spawnFn, vus } = fauxSsh([{ code: 1, erreurs: 'Error: No such object: parti' }]);
+  const vu = await agir({ tunnel: TUNNEL, spark: SPARK, nom: 'parti',
+                          geste: 'recreate', spawn: spawnFn });
+  assert.equal(vu.state, CONTENEUR_INCONNU);
+  assert.equal(vus.length, 1);
+});
+
+test('un refus de Compose se rend par SA DERNIÈRE LIGNE, telle quelle', async () => {
+  // MESURÉ (Compose v5.5.1) : la progression d'abord, l'erreur ensuite.
+  const erreurs = ' Container devis-devis-1 Recreate \n'
+    + ' Container devis-devis-1 Error response from daemon: No such image: devis:x \n'
+    + 'Error response from daemon: No such image: devis:x\n';
+  assert.equal(messageEchecCompose(erreurs), 'No such image: devis:x');
+  const { spawnFn } = fauxSsh([{ code: 0, sortie: inspection(ETIQUETTES) },
+                               { code: 1, erreurs }]);
+  const vu = await agir({ tunnel: TUNNEL, spark: SPARK, nom: 'devis-devis-1',
+                          geste: 'recreate', spawn: spawnFn });
+  assert.equal(vu.state, ECHEC);
+  assert.equal(vu.titre, 'Recréer : Compose a refusé');
+  assert.equal(vu.detail, 'No such image: devis:x');
+});
+
+test('le gel refuse aussi la recréation, sans ouvrir la moindre connexion', async () => {
+  const { spawnFn, vus } = fauxSsh([]);
+  const vu = await agir({ tunnel: TUNNEL, spark: { ...SPARK, protected: true },
+                          nom: 'devis-devis-1', geste: 'recreate', spawn: spawnFn });
+  assert.equal(vu.refus, 'protege');
   assert.equal(vus.length, 0);
 });

@@ -53,9 +53,9 @@ leurs motifs, dans le [journal](docs/JOURNAL.md#2026-08-19--comment-nommer-la-ma
 
 ## Statut
 
-**Le plan de contrôle tourne sur une Forge réelle.** 128 unités : 107 closes, 10
-partielles, 11 non commencées — SPK-113, qui attend une mesure, SPK-132, recréer
-un conteneur depuis l'onglet Docker, et les neuf du lot 7. Le lot 6, *Réseau entre Sparks*, ouvert le 2026-09-17, a été clos le
+**Le plan de contrôle tourne sur une Forge réelle.** 128 unités : 108 closes, 10
+partielles, 10 non commencées — SPK-113, qui attend une mesure, et les neuf du
+lot 7. Le lot 6, *Réseau entre Sparks*, ouvert le 2026-09-17, a été clos le
 2026-09-18. Le lot 7, *La console hébergée derrière le SSO du domaine*, est
 décidé depuis le 2026-09-26 et spécifié au §64 du [DAT](docs/DAT.md) ; rien n'en
 est encore livré. L'état de chacune est dans
@@ -387,6 +387,7 @@ pas encore sont marquées.
 | `make e2e` / `pnpm e2e` | parcours complets contre la pile réelle | **oui** |
 | `make manuel` | reproduit les illustrations du manuel | **oui** |
 | `make forge-vm` | **une Forge montée par le cloud-init du dépôt**, dans une machine virtuelle du poste (6 Gio, KVM), un Spark et une route créés par l'API, puis **redémarrée pour de vrai** et revérifiée sans aucun geste (`docs/DAT.md` §51.5). `ARGS="--roue <x.whl>"` éprouve une roue donnée. Épreuve lourde : elle prend le verrou. L'image Ubuntu est gardée dans `~/.cache/spark-environment/vm/` | **oui** |
+| `node scripts/mesures-spk132.mjs` | banc de « Recréer » contre un vrai Docker, avec les commandes **composées par le code** : un redémarrage ne fait pas relire une variable d'`env_file`, la recréation si, le service voisin n'est pas touché, une image absente est refusée sans toucher l'ancien conteneur (`docs/DAT.md` §37.7.5). Docker et l'image `alpine:latest` requis ; conteneurs jetables | **oui** |
 | `scripts/mesures-spk128.sh` | banc de l'ingress sur Caddy 2.6.2 — la version de la Forge — avec la configuration **produite par le code** : ni écoute UDP/443 ni annonce HTTP/3, `Alt-Svc: clear` partout, passage à chaud (`docs/DAT.md` §18.6). Docker requis ; trois conteneurs jetables | **oui** |
 
 **Une seule épreuve lourde à la fois, et plafonnée** (`CLAUDE.md` §15 bis,

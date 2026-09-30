@@ -6,6 +6,9 @@
  *       les journaux, mesurés), §37.2 (le chemin normal : SSH), §37.3 (pourquoi
  *       PAS `incus exec`) · §36.7 (les lectures ne se journalisent pas) ·
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-05
+ * @spec docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.5 (les étiquettes Compose,
+ *       relues pour recréer) — pour `ETIQUETTES_COMPOSE`, `composeDe`, les
+ *       colonnes ajoutées à `inspecter` et `compose` dans `analyserInspection`
  *
  * Le chemin est SSH depuis la console, comme le terminal. Pas `incus exec` : le
  * §37.3 réserve le plan de contrôle au dépannage, et lire l'inventaire d'un
@@ -155,6 +158,42 @@ export function attacher(conteneurs, sortieMesures) {
 
 export const CONTENEUR_INCONNU = 'conteneur_inconnu';
 
+/**
+ * Les étiquettes que Compose pose sur les conteneurs qu'il crée, dans l'ordre où
+ * l'inspection les rend (SPK-132, §37.7.5).
+ *
+ * Elles disent D'OÙ refaire un conteneur : son projet, son service, le
+ * répertoire d'où Compose a lu, ses fichiers, et le fichier de substitution
+ * éventuel. `oneoff` distingue un `docker compose run`, qui n'est pas un service.
+ * MESURÉ sur Docker 29.8.1 : une étiquette absente rend une chaîne vide, jamais
+ * « <no value> ».
+ */
+export const ETIQUETTES_COMPOSE = [
+  'com.docker.compose.project',
+  'com.docker.compose.service',
+  'com.docker.compose.project.working_dir',
+  'com.docker.compose.project.config_files',
+  'com.docker.compose.project.environment_file',
+  'com.docker.compose.oneoff',
+];
+
+/**
+ * Ce que Compose sait d'un conteneur, ou `null` s'il n'en sait rien (§37.7.5).
+ *
+ * `null` quand une des quatre étiquettes qui permettent de le refaire manque, ou
+ * pour un conteneur ponctuel : on ne recrée pas ce qu'on ne sait pas décrire.
+ * Les fichiers sont des listes séparées par des virgules, chemins absolus.
+ */
+export function composeDe(champs) {
+  const [projet, service, repertoire, fichiers, environnement, ponctuel] =
+    (champs ?? []).map((c) => String(c ?? '').trim());
+  const liste = (v) => String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!projet || !service || !repertoire || !liste(fichiers).length) return null;
+  if (ponctuel === 'True') return null;
+  return { project: projet, service, workingDir: repertoire,
+           configFiles: liste(fichiers), envFiles: liste(environnement) };
+}
+
 /** Combien de lignes de journal au plus. Le §37.6 ter dit pourquoi une borne. */
 export const TAIL = 200;
 
@@ -166,7 +205,9 @@ export const TAIL = 200;
  */
 export const inspecter = (nom) => `docker inspect ${quoter(nom)} --format `
   + "'{{.Name}}\t{{.State.Status}}\t{{.State.ExitCode}}\t{{.State.StartedAt}}"
-  + "\t{{.State.FinishedAt}}\t{{.RestartCount}}\t{{.Config.Image}}'";
+  + "\t{{.State.FinishedAt}}\t{{.RestartCount}}\t{{.Config.Image}}"
+  + ETIQUETTES_COMPOSE.map((e) => `\t{{index .Config.Labels "${e}"}}`).join('')
+  + "'";
 
 export const reseaux = (nom) => `docker inspect ${quoter(nom)} --format `
   + "'{{range $r,$c := .NetworkSettings.Networks}}{{$r}}\t{{$c.IPAddress}}\n{{end}}'";
@@ -202,7 +243,8 @@ const sansBarre = (nom) => String(nom ?? '').replace(/^\//, '');
 export function analyserInspection(sortie) {
   const [ligne] = String(sortie).split('\n').filter((l) => l.trim());
   if (!ligne) return null;
-  const [nom, etat, code, debut, fin, redemarrages, image] = ligne.split('\t');
+  const [nom, etat, code, debut, fin, redemarrages, image, ...etiquettes] =
+    ligne.split('\t');
   return {
     name: sansBarre(nom),
     state: etat ?? '',
@@ -213,6 +255,8 @@ export function analyserInspection(sortie) {
     finishedAt: etat === 'exited' ? (fin || null) : null,
     restarts: Number(redemarrages ?? 0),
     image: image ?? '',
+    // SPK-132 · §37.7.5 : ce qui permet de le RECRÉER, ou `null`.
+    compose: composeDe(etiquettes),
   };
 }
 
@@ -272,10 +316,11 @@ export function doublonPour(doublon, commande) {
   if (!doublon.trimStart().startsWith('{')) return doublon;
   let table;
   try { table = JSON.parse(doublon); } catch { return doublon; }
-  // Les quatre gestes du §37.7 en font partie : sans eux, un doublon laisse
-  // partir la VRAIE commande `ssh`, qui échoue en 255 et fait rendre à l'écran
-  // « aucun serveur SSH ne répond » — un diagnostic qui ne dit rien du geste.
-  const geste = /docker\s+(ps|stats|inspect|logs|start|stop|restart|kill|exec)\b/
+  // Les gestes du §37.7 en font partie : sans eux, un doublon laisse partir la
+  // VRAIE commande `ssh`, qui échoue en 255 et fait rendre à l'écran « aucun
+  // serveur SSH ne répond » — un diagnostic qui ne dit rien du geste. SPK-132 :
+  // `compose` est la recréation du §37.7.5.
+  const geste = /docker\s+(ps|stats|inspect|logs|start|stop|restart|kill|exec|compose)\b/
     .exec(commande)?.[1] ?? '*';
   return table[geste] ?? table['*'] ?? null;
 }

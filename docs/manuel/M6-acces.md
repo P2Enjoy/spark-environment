@@ -429,8 +429,10 @@ entrée au catalogue ne change donc aucune de vos piles par surprise.
 
 Trois choses valent d'être sues :
 
-- **rien ne redémarre tout seul.** Votre pile lira les nouvelles valeurs à son
-  prochain démarrage — `docker compose up -d` suffit ;
+- **un conteneur lit ces fichiers à sa création**, et un redémarrage ne les
+  relit pas. Pour qu'il prenne une nouvelle valeur, recréez-le :
+  `docker compose up -d` dans la cellule, ou *Recréer* dans l'onglet Docker de
+  la console (voir M8) ;
 - **le second fichier est volatil.** Il vit en mémoire et disparaît à l'arrêt du
   Spark ; la console le repose à chaque démarrage. C'est ce qui empêche un
   ancien instantané de ressusciter un secret que vous avez remplacé ;

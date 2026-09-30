@@ -8189,7 +8189,7 @@ ce qui change.
   commit (en-têtes en chasse fixe, ligne repliée repartant sous le signe).
   **Déploiement** : OP-30, en attente d'instruction.
 
-### [ ] SPK-132 · Recréer un conteneur de pile Compose, pour qu'il relise son environnement
+### [x] SPK-132 · Recréer un conteneur de pile Compose, pour qu'il relise son environnement
 
 **Demandé par le responsable le 2026-09-30**, après une panne réelle : une
 application disait son envoi de courriel « non configuré » alors que ses
@@ -8215,22 +8215,23 @@ des étiquettes que Compose a posées, relues au moment du geste.
 
 **Portée, et découpage :**
 
-1. Documentation — DAT, design system, backlog, journal, OP-31 — *committée
-   avant le code* ;
+1. Documentation — DAT, design system, backlog, journal, OP-31 — *fait,
+   committée avant le code* (`a86bb81`) ;
 2. hôte console : l'inspection lit les étiquettes Compose ; le geste `recreate`
    (étiquettes relues, commande composée et citée, délai de 60 s, états
    distincts) ; la route l'admet ; le doublon d'épreuve le reconnaît. Preuves
    d'unité ; **un banc contre un vrai Docker** qui exécute la commande que le
-   code compose et constate la valeur relue ;
+   code compose et constate la valeur relue — *fait* ;
 3. `sparkd` : l'action `spark.container_recreate` admise au journal ; la phrase
-   du dossier pour un agent corrigée ; preuves ;
+   du dossier pour un agent corrigée ; preuves — *fait* ;
 4. console : le bouton *Recréer* sur un conteneur de pile Compose, sa
    confirmation destructive qui nomme le fichier, la ligne qui explique son
    absence ; la phrase de l'onglet *Environnement* corrigée ; preuves de
-   composant ;
+   composant — *fait* ;
 5. E2E, captures, manuel : un parcours depuis l'accueil ouvre un conteneur,
    recrée, constate le journal ; un conteneur hors Compose n'offre pas le
-   geste ; un Spark protégé le refuse ; captures observées ; manuels M8 et M6.
+   geste ; un Spark protégé le refuse ; captures observées ; manuels M8 et M6
+   — *fait*.
 
 - Aucune variable d'environnement, aucune migration.
 - DoD : preuves d'unité de la commande (citations, fichiers multiples, fichier
@@ -8238,6 +8239,20 @@ des étiquettes que Compose a posées, relues au moment du geste.
   banc réel vert ; preuve `sparkd` de l'action et de la phrase ; preuves de
   composant ; parcours E2E ; captures observées ; DAT, design system, manuels,
   README à jour ; `@spec` / `@verifies`.
+- **Clos le 2026-09-30.** Banc `node scripts/mesures-spk132.mjs` vert contre un
+  vrai Docker (9 constats) ; hôte console : 10 preuves de la recréation et 5 des
+  étiquettes ; `sparkd` : l'action au journal et la phrase du dossier ; console :
+  5 preuves de composant et celle de l'onglet Environnement, réécrite ; parcours
+  `spk132-recreer` — inspection qui nomme la pile, confirmation destructive qui
+  nomme le fichier, engagement au clavier, journal `ok`, conteneur hors Compose
+  sans le geste, refus de Compose rendu tel quel et journalisé `denied`, 390 px
+  sans débordement — et les parcours voisins (arrêter, gel, variable au
+  clavier). Campagne E2E complète 149/149 à la seconde passe — la première
+  avait un rouge intermittent, antérieur et étranger à l'unité, consigné au
+  rapport d'incohérences ; gestes 13/13 ; `sparkd` 1551/1551 ; console
+  1559/1560 (l'échec antérieur des classes de SPK-104). Captures
+  `spk132-recreer-*` et illustration `m8-docker-recreer` observées.
+  **Déploiement** : OP-31, en attente d'instruction.
 
 ---
 

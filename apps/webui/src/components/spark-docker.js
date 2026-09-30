@@ -6,6 +6,10 @@
  *       origines de mesure ne partagent pas une jauge) ·
  *       docs/DESIGN_SYSTEM.md §6.14 (tableau), §6.13 (états d'une vue),
  *       §14.5 (nommer une absence), §14.6, §14.7, §1.4 (pas de commande morte)
+ * @spec docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.5 (recréer un conteneur de
+ *       pile Compose) · docs/DESIGN_SYSTEM_APP.md SPK-DS-35 — pour le geste
+ *       `recreate`, sa confirmation, et les lignes « Pile Compose » de
+ *       l'inspection
  *
  * **Aucun bouton d'action.** SPK-44 est en lecture ; les gestes sur un conteneur
  * sont l'objet de SPK-45. Un bouton posé ici laisserait croire que cet onglet
@@ -21,11 +25,14 @@
 const CONTENEUR_INCONNU = 'conteneur_inconnu';
 
 /**
- * Les quatre gestes du §37.7, dans l'ordre où on les emploie.
+ * Les gestes du §37.7, dans l'ordre où on les emploie.
  *
  * L'effet est écrit ICI comme il l'est dans l'hôte console : l'écran doit
  * pouvoir composer sa confirmation sans avoir d'abord interrogé la Forge, sinon
  * la confirmation arriverait après le clic qu'elle est censée précéder.
+ *
+ * `quand` reçoit l'état ET l'inspection : « Recréer » (SPK-132, §37.7.5) ne
+ * dépend pas de l'état, mais de ce que Compose sait du conteneur.
  */
 export const GESTES = [
   { cle: 'start', libelle: 'Démarrer', destructif: false,
@@ -35,6 +42,18 @@ export const GESTES = [
     quand: (etat) => etat === 'running',
     effet: (nom) => `« ${nom} » s’arrête puis repart. Le service qu’il rend est `
       + `interrompu le temps du redémarrage.` },
+  // SPK-132 · §37.7.5 · SPK-DS-35 : seulement sur un conteneur de pile Compose,
+  // qu'il tourne ou non ; destructif, parce qu'il SUPPRIME le conteneur. La
+  // confirmation nomme le fichier d'après lequel il est refait — tel qu'il est
+  // aujourd'hui.
+  { cle: 'recreate', libelle: 'Recréer', destructif: true,
+    quand: (_etat, detail) => Boolean(detail?.compose),
+    effet: (nom, detail) => `« ${nom} » est supprimé puis recréé d’après `
+      + `${(detail?.compose?.configFiles ?? []).join(', ') || 'son fichier de composition'}, `
+      + `tel qu’il est aujourd’hui : il relit /etc/spark/env et /run/spark/secrets`
+      + `${detail?.state === 'running' ? '' : ', puis il est démarré'}. Le service `
+      + `est interrompu le temps de la recréation, et ce que le conteneur avait `
+      + `écrit hors de ses volumes est perdu.` },
   { cle: 'stop', libelle: 'Arrêter', destructif: false,
     quand: (etat) => etat === 'running',
     effet: (nom) => `La production servie par « ${nom} » s’interrompt. Le `
@@ -195,7 +214,7 @@ function gestes(etat, spark) {
   if (!d || d === 'en-cours' || d.state === CONTENEUR_INCONNU || d.titre) return '';
 
   const gele = Boolean(spark?.protected);
-  const offerts = GESTES.filter((g) => g.quand(d.state));
+  const offerts = GESTES.filter((g) => g.quand(d.state, d));
   if (!offerts.length) return '';
 
   const boutons = offerts.map((g) => `<button type="button"
@@ -225,7 +244,7 @@ function confirmation(etat) {
        role="group" aria-labelledby="titre-geste">
     <p id="titre-geste"><strong>${echapper(g.libelle)}
       « ${echapper(etat.ouvert)} » ?</strong></p>
-    <p>${echapper(g.effet(etat.ouvert))}</p>
+    <p>${echapper(g.effet(etat.ouvert, etat.detail))}</p>
     <p class="note">Ce geste est inscrit au journal de ce Spark.</p>
     <p class="confirmation__actions">
       <button type="button"
@@ -313,7 +332,15 @@ export function renderConteneur(etat, spark = null) {
           ['Démarré', d.startedAt, true],
           ['Terminé', d.finishedAt, true],
           ['Redémarrages', d.restarts ? String(d.restarts) : null],
+          // SPK-132 · §37.7.5 : d'où il se recrée.
+          ['Pile Compose', d.compose
+            ? `${d.compose.project} · service ${d.compose.service}` : null, true],
+          ['Fichier de composition', d.compose?.configFiles?.join(', ') ?? null, true],
         ])
+        // SPK-DS-35 : le geste n'existe pas pour ce conteneur. Le dire une fois,
+        // pour qu'on ne le cherche pas (§14.5).
+        + (d.compose ? '' : `<p class="note">Créé hors Compose : il ne se recrée
+          pas depuis la console, faute de fichier d’où le refaire.</p>`)
         + `<h3>Réseaux</h3>${d.networks === null
           ? '<p class="absence">Non lus — l’inspection a abouti, cette liste non.</p>'
           : d.networks?.length

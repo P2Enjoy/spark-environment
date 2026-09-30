@@ -7,7 +7,8 @@
  *       docs/DESIGN_SYSTEM_APP.md SPK-DS-23, SPK-DS-25 · docs/DAT.md §43
  *       (l'environnement d'un Spark), §43.3 (la différence est DÉCLARÉE),
  *       §43.6 révisé (la Forge propose, le Spark choisit), §43.7 (quand cela
- *       prend effet), §43.9.4 (l'origine de chaque valeur), §43.9.5 (les refus),
+ *       prend effet — révisé par docs/BACKLOG.md#SPK-132 : à la CRÉATION du
+ *       conteneur, et « Recréer » est le geste), §43.9.4 (l'origine de chaque valeur), §43.9.5 (les refus),
  *       §43.11 (deux natures, deux blocs, une recherche sur le nom) ·
  *       docs/DESIGN_SYSTEM.md §5.4 (les degrés), §6.27 (fenêtre, sections,
  *       modale), §6.13 (états d'une vue), §6.14 (tableau), §9.3 (les titres ne
@@ -191,8 +192,9 @@ ${renderBlocEnv({
         <p class="champ__aide">Une valeur secrète n’est plus jamais affichée, ni
         rendue par l’API, ni portée au journal. On la remplace ; on ne la relit pas.</p>
       </div>
-      <p class="note">La pile du locataire ne lira la nouvelle valeur qu’à son
-      prochain démarrage : écrire ici ne redémarre rien.
+      <p class="note">Un conteneur lit ces fichiers <strong>à sa création</strong> :
+      ni l’écrire ici, ni un redémarrage ne lui font lire la nouvelle valeur.
+      Recréez les conteneurs qui l’emploient — onglet Docker, « Recréer ».
       <a href="#/manuel/M8">Manuel M8 — Exploiter au quotidien</a></p>`,
   })}
 </section>`;

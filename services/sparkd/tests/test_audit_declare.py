@@ -203,6 +203,24 @@ def test_les_quatre_gestes_sont_QUATRE_actions_donc_denombrables(tmp_path):
     assert all(e["action"] == "spark.container_kill" for e in tues)
 
 
+def test_recreer_est_une_CINQUIEME_action_denombrable(tmp_path):
+    """@verifies docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.4, §37.7.5
+
+    Recréer un conteneur de pile Compose le supprime avant de le refaire : c'est
+    un geste qu'on doit pouvoir compter à part, pas mêlé aux redémarrages.
+    """
+    client = _client(tmp_path)
+    for geste in ("restart", "recreate"):
+        r = client.post("/v1/audit", json={
+            "action": f"spark.container_{geste}", "target_id": "crm",
+            "message": f"Conteneur « crm-web-1 » : {geste}.",
+            "payload": {"container": "crm-web-1", "path": "ssh"}})
+        assert r.status_code == 201, r.text
+    recrees = client.get("/v1/audit?action=spark.container_recreate").json()["entries"]
+    assert [e["action"] for e in recrees] == ["spark.container_recreate"]
+    assert json.loads(recrees[0]["payload"])["container"] == "crm-web-1"
+
+
 def test_le_nom_du_CONTENEUR_est_une_cle_admise_et_la_cible_reste_le_Spark(tmp_path):
     """§37.7.4 : la cible est le SPARK — c'est lui qui est protégé et facturé.
 

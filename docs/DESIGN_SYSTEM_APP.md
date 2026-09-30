@@ -1543,6 +1543,11 @@ Trois règles, chacune tirée d'une règle déjà écrite :
 
 Sous gel, il est présent et désactivé avec les quatre autres (§37.7.3).
 
+Preuves observées le 2026-09-30 : `e2e/captures/spk132-recreer-confirmation`
+(la confirmation rouge qui nomme le fichier), `-fait`, `-refus` (Compose rendu
+tel quel), `-mobile` (les quatre gestes tiennent sur une ligne à 390 px), et
+l'illustration `docs/manuel/images/m8-docker-recreer.png`.
+
 ### SPK-DS-E01 · Pas de Tailwind
 
 **Date** : 2026-08-19

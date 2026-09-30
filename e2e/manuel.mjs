@@ -492,6 +492,14 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await capturer('m8-docker-geste', { hauteur: 700 });
     await page.click('[data-geste-annule]');
 
+    // --- M8 · RECRÉER UN CONTENEUR DE PILE (SPK-132, §37.7.5) ----------------
+    // La confirmation seule, jamais le geste : le chapitre montre ce qu'on lit
+    // AVANT de recréer — le fichier d'après lequel il est refait, et la perte.
+    await page.click('button[data-geste="recreate"]');
+    await page.waitForSelector('.confirmation', { timeout: 10000 });
+    await capturer('m8-docker-recreer', { hauteur: 700 });
+    await page.click('[data-geste-annule]');
+
     // --- M8 · LE TERMINAL DANS UN CONTENEUR (SPK-45, §37.4.7) ---------------
     await page.click('[data-docker="terminal"]');
     await page.waitForSelector('.bandeau-terminal .badge--accent', { timeout: 15000 });

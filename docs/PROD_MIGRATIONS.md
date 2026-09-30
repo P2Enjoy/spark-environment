@@ -123,10 +123,10 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-31 · Recréer un conteneur de pile Compose : `sparkd` et la console (SPK-132)
 
 ```
-État          : EN ATTENTE — SPK-132 est spécifié, pas encore livré. À jouer
-                sur instruction du responsable une fois l'unité sur `main` ; si
-                OP-27 à OP-30 ne sont pas encore jouées, dans la même mise à
-                jour : la build qui porte l'une porte les autres.
+État          : EN ATTENTE — SPK-132 est livré sur `main`. À jouer sur
+                instruction du responsable ; si OP-27 à OP-30 ne sont pas encore
+                jouées, dans la même mise à jour : la build qui porte l'une
+                porte les autres.
 Objectif      : sparkd admet au journal l'action `spark.container_recreate`
                 et corrige la phrase du dossier pour un agent (« recréer », et
                 non « au démarrage suivant ») ; la console offre le geste

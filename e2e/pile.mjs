@@ -217,10 +217,15 @@ export async function monterPile({ dns = null, notify = null } = {}) {
         + " 'volume\\thelo_data\\t/var/lib/postgresql/data\\trw' ;;"
         + " *distroless-1*) printf '%b\\n' '/distroless-1\\trunning\\t0"
         + "\\t2026-08-20T18:52:01Z\\t\\t0\\tgcr.io/distroless/static' ;;"
+        // SPK-132 · §37.7.5 : les étiquettes de Compose, au bout de la ligne.
+        // « helo-web-1 » et « helo-base-1 » viennent d'une pile ; « distroless-1 »
+        // a été lancé par `docker run` et n'en porte aucune.
         + " *helo-base-1*) printf '%b\\n' '/helo-base-1\\texited\\t137"
-        + "\\t2026-08-20T18:52:01Z\\t2026-08-20T18:52:18Z\\t2\\tpostgres:16' ;;"
+        + "\\t2026-08-20T18:52:01Z\\t2026-08-20T18:52:18Z\\t2\\tpostgres:16"
+        + "\\thelo\\tbase\\t/srv/helo\\t/srv/helo/compose.yml\\t\\tFalse' ;;"
         + " *) printf '%b\\n' '/helo-web-1\\trunning\\t0"
-        + "\\t2026-08-20T18:52:01Z\\t\\t0\\tnginx:alpine' ;;"
+        + "\\t2026-08-20T18:52:01Z\\t\\t0\\tnginx:alpine"
+        + "\\thelo\\tweb\\t/srv/helo\\t/srv/helo/compose.yml\\t\\tFalse' ;;"
         + ' esac',
       // SPK-45, tranche 2 · §37.4.7 : le SONDAGE du shell. « helo-web-1 » porte
       // bash, « helo-base-1 » n'a que sh, « distroless-1 » n'a aucun shell et
@@ -252,6 +257,14 @@ export async function monterPile({ dns = null, notify = null } = {}) {
         + " *parti*) echo 'Error response from daemon: No such container: parti' >&2;"
         + ' exit 1 ;;'
         + " *) printf '%b\\n' \"${0##* }\" ;;"
+        + ' esac',
+      // SPK-132 · §37.7.5 : la recréation. Compose écrit sa progression sur la
+      // sortie d'erreur, et son erreur EN DERNIER — mesuré. Le service « base »
+      // échoue comme Compose le fait sur une image absente avec `--pull never`.
+      compose: "case \"$0\" in"
+        + " *base*) printf '%b\\n' ' Container helo-base-1 Recreate'"
+        + " 'Error response from daemon: No such image: postgres:16' >&2; exit 1 ;;"
+        + " *) printf '%b\\n' ' Container recree Recreate' ' Container recree Started' >&2 ;;"
         + ' esac',
       kill: "case \"$0\" in"
         + " *parti*) echo 'Error response from daemon: cannot kill container:"

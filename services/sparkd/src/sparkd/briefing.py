@@ -1003,8 +1003,13 @@ def dossier(model: dict[str, Any], *, ssh_config: str | None = None,
         + (", ".join(f"`{nom}`" for nom in env["secrets"]) or "aucun"),
         "- **Les valeurs ne sont pas dans ce texte** et n'ont pas à y être : la pile "
         "les lit dans ces deux fichiers, au démarrage.",
+        # SPK-132 · §43.7, révisé : un conteneur lit son `env_file:` à sa
+        # CRÉATION. « Au démarrage suivant » était faux — mesuré, un redémarrage
+        # relance le même conteneur avec l'environnement de sa création.
         "- Les deux fichiers sont posés par le plan de contrôle. Poser une variable "
-        "ne redémarre rien : la pile lira la nouvelle valeur au démarrage suivant.",
+        "ne recrée rien, et un redémarrage ne suffit pas : un conteneur lit ces "
+        "fichiers **à sa création**. Il lira la nouvelle valeur quand il sera "
+        "recréé — `docker compose up -d`, ou le geste *Recréer* de la console.",
         "",
         # SPK-99 · §44.9.7 : le cas ordinaire est qu'il en MANQUE une. L'agent
         # est root, les deux fichiers sont là, il les écrit — et le §43.2 les

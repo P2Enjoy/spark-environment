@@ -6,6 +6,10 @@
  *       §37.7.2 (demandé, confirmé, constaté), §37.7.3 (où le refus est rendu),
  *       §37.7.4 (la route et les quatre actions d'audit) ·
  *       §37.2 (le chemin normal : SSH) · docs/DESIGN_SYSTEM.md §6.23
+ * @spec docs/BACKLOG.md#SPK-132 · docs/DAT.md §37.7.5 (recréer un conteneur de
+ *       pile Compose : la commande, ce qui est offert, les états) — pour
+ *       `commandeRecreer`, `messageEchecCompose`, `DELAI_RECREER`,
+ *       `HORS_COMPOSE` et la branche `recreate` d'`agir`
  *
  * **Le point qui décide de ce module** : le code `1` a DEUX causes, et seule la
  * sortie d'erreur les sépare. C'est l'exact inverse du §37.6 bis, où le code
@@ -21,7 +25,7 @@
 import { spawn } from 'node:child_process';
 
 import { classerEchecSsh } from './terminal.js';
-import { doublonPour, quoter } from './docker.js';
+import { analyserInspection, doublonPour, inspecter, quoter } from './docker.js';
 import { dansContexteDocker } from './docker-context.js';
 
 /** Le délai laissé au conteneur avant d'être tué, en secondes. */
@@ -34,6 +38,35 @@ export const DELAI_ARRET = 10;
  * se déroule NORMALEMENT — un conteneur a le droit de prendre ses dix secondes.
  */
 export const DELAI_SSH = DELAI_ARRET + 10;
+
+/**
+ * SPK-132 · §37.7.5 : le délai du `ssh` qui porte une RECRÉATION — l'arrêt du
+ * §37.7.1, puis la création et le démarrage. Rien n'est téléchargé ni construit
+ * (`--pull never --no-build`) : soixante secondes suffisent largement.
+ */
+export const DELAI_RECREER = 60;
+
+/**
+ * La recréation d'UN service, telle que Compose l'a créé (SPK-132, §37.7.5).
+ *
+ * Tout vient des étiquettes relues au geste : le même projet, lu depuis le même
+ * répertoire — donc avec le même `.env` de substitution et les mêmes chemins
+ * relatifs —, d'après les mêmes fichiers. Chaque valeur est CITÉE : c'est une
+ * donnée du locataire, et elle traverse un `ssh`.
+ *
+ * `--no-deps` : ce service seul. `--no-build` : la cellule ne construit rien.
+ * `--pull never` : rien ne se tire d'un registre, une image absente fait
+ * échouer. `--force-recreate` : le geste fait ce qu'il dit, même quand Compose ne
+ * voit aucun changement.
+ */
+export function commandeRecreer(compose) {
+  return ['docker compose', `-p ${quoter(compose.project)}`,
+    `--project-directory ${quoter(compose.workingDir)}`,
+    ...compose.configFiles.map((f) => `-f ${quoter(f)}`),
+    ...(compose.envFiles ?? []).map((f) => `--env-file ${quoter(f)}`),
+    'up -d --force-recreate --no-deps --no-build --pull never',
+    `-t ${DELAI_ARRET}`, quoter(compose.service)].join(' ');
+}
 
 export const GESTES = {
   start: {
@@ -61,6 +94,20 @@ export const GESTES = {
       + `interrompu le temps du redémarrage.`,
     destructif: false,
   },
+  // SPK-132 · §37.7.5 : la commande dépend des étiquettes relues au geste, et
+  // `agir` la compose ; `commande` reste nommée pour que la table dise ce que
+  // chaque geste lance.
+  recreate: {
+    libelle: 'Recréer',
+    commande: commandeRecreer,
+    action: 'spark.container_recreate',
+    // Destructif : le conteneur est SUPPRIMÉ avant d'être refait, et ce qu'il
+    // avait écrit hors de ses volumes est perdu (SPK-DS-35).
+    effet: (nom) => `« ${nom} » est supprimé puis recréé d’après son fichier de `
+      + `composition : il relit ses deux fichiers d’environnement. Ce qu’il avait `
+      + `écrit hors de ses volumes est perdu.`,
+    destructif: true,
+  },
   kill: {
     libelle: 'Tuer',
     commande: (nom) => `docker kill ${quoter(nom)}`,
@@ -78,6 +125,7 @@ export const CONTENEUR_INCONNU = 'conteneur_inconnu';
 export const ECHEC = 'echec';
 export const SSHD_MUET = 'sshd_muet';
 export const INJOIGNABLE = 'injoignable';
+export const HORS_COMPOSE = 'hors_compose';
 
 /** Ce que l'écran écrit, par état. Le geste est nommé, l'effet aussi. */
 export const ETATS = {
@@ -98,6 +146,14 @@ export const ETATS = {
   [INJOIGNABLE]: {
     titre: 'La liaison avec ce Spark n’est pas établie',
     detail: 'Le geste n’est pas parti. Rien n’a changé dans ce Spark.',
+  },
+  // SPK-132 · §37.7.5 : les étiquettes relues au geste ne décrivent pas de
+  // service Compose. Rien n'est lancé : on ne recrée pas ce qu'on ne sait pas
+  // décrire.
+  [HORS_COMPOSE]: {
+    titre: 'Ce conteneur n’a pas été créé par Compose',
+    detail: 'La console ne sait le recréer que d’après son fichier de '
+      + 'composition. Rien n’a été lancé.',
   },
 };
 
@@ -133,7 +189,20 @@ export function messageEchec(erreurs) {
     : 'Docker n’a rien dit de plus.';
 }
 
-function surLeSpark(tunnel, spark, commande, spawnFn, doublonBrut) {
+/**
+ * Le message d'un échec de COMPOSE : sa DERNIÈRE ligne, et non la première.
+ *
+ * MESURÉ (Compose v5.5.1) : Compose écrit sa progression sur la sortie
+ * d'erreur — « Container … Recreate » — et l'erreur vient après elle. La
+ * première ligne dirait ce qu'il faisait, pas pourquoi il a échoué.
+ */
+export function messageEchecCompose(erreurs) {
+  const lignes = String(erreurs ?? '').split('\n').filter((l) => l.trim());
+  return messageEchec(lignes[lignes.length - 1] ?? '');
+}
+
+function surLeSpark(tunnel, spark, commande, spawnFn, doublonBrut,
+                    delai = DELAI_SSH) {
   const doublon = doublonPour(doublonBrut, commande);
   return new Promise((resoudre) => {
     const [programme, ...args] = doublon
@@ -144,7 +213,7 @@ function surLeSpark(tunnel, spark, commande, spawnFn, doublonBrut) {
     const enfant = spawnFn(programme, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let sortie = '';
     let erreurs = '';
-    const minuterie = setTimeout(() => enfant.kill?.('SIGKILL'), DELAI_SSH * 1000);
+    const minuterie = setTimeout(() => enfant.kill?.('SIGKILL'), delai * 1000);
     enfant.stdout?.on('data', (bloc) => { sortie += bloc.toString('utf8'); });
     enfant.stderr?.on('data', (bloc) => { erreurs += bloc.toString('utf8'); });
     // `close` et non `exit` : `exit` précède le drainage de stdout (§37.6 ter,
@@ -191,6 +260,10 @@ export async function agir({ tunnel, spark, nom, geste,
              detail: 'Rien ne peut être fait dans une cellule à l’arrêt.' };
   }
 
+  if (geste === 'recreate') {
+    return recreer({ tunnel, spark, nom, modele, spawnFn, doublon });
+  }
+
   const vu = await surLeSpark(tunnel, spark, modele.commande(nom), spawnFn, doublon);
   const etat = classer(vu.code, vu.erreurs);
   const base = { state: etat, geste, name: nom, action: modele.action };
@@ -203,4 +276,45 @@ export async function agir({ tunnel, spark, nom, geste,
              detail: messageEchec(vu.erreurs) };
   }
   return { ...base, ...ETATS[etat] };
+}
+
+/**
+ * La recréation (SPK-132, §37.7.5) : les étiquettes RELUES, puis Compose.
+ *
+ * Relues au moment du geste, et non reprises de l'écran : ce qui est lancé doit
+ * décrire le conteneur tel qu'il est, pas tel qu'il était à l'ouverture de
+ * l'onglet. Une inspection qui échoue se classe comme les autres gestes — un
+ * conteneur disparu entre-temps est « disparu », pas un échec de Compose.
+ */
+async function recreer({ tunnel, spark, nom, modele, spawnFn, doublon }) {
+  const base = { geste: 'recreate', name: nom, action: modele.action };
+  const lu = await surLeSpark(tunnel, spark, inspecter(nom), spawnFn, doublon);
+  if (lu.code !== 0) {
+    const etat = classer(lu.code, lu.erreurs);
+    if (etat === ECHEC) {
+      return { ...base, state: ECHEC, titre: 'Recréer : Docker a refusé',
+               detail: messageEchec(lu.erreurs) };
+    }
+    return { ...base, state: etat, ...ETATS[etat] };
+  }
+  const compose = analyserInspection(lu.sortie)?.compose;
+  if (!compose) return { ...base, state: HORS_COMPOSE, ...ETATS[HORS_COMPOSE] };
+
+  const vu = await surLeSpark(tunnel, spark, commandeRecreer(compose), spawnFn,
+                              doublon, DELAI_RECREER);
+  const etat = classer(vu.code, vu.erreurs);
+  if (etat === ABOUTI) {
+    return { ...base, state: ABOUTI, titre: 'Recréer : c’est fait',
+             detail: `« ${nom} » a été recréé d’après `
+               + `${compose.configFiles.join(', ')} : il a relu ses deux fichiers `
+               + 'd’environnement.' };
+  }
+  if (etat === ECHEC || etat === CONTENEUR_INCONNU || etat === DEJA_ARRETE) {
+    // Un refus de COMPOSE — fichier déplacé, image absente, greffon manquant —
+    // se rend tel quel, par sa dernière ligne. Le classement par la sortie
+    // d'erreur, pensé pour `docker start`, ne s'applique pas à lui.
+    return { ...base, state: ECHEC, titre: 'Recréer : Compose a refusé',
+             detail: messageEchecCompose(vu.erreurs) };
+  }
+  return { ...base, state: etat, ...ETATS[etat] };
 }

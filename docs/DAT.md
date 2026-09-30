@@ -6626,7 +6626,11 @@ quatre autres.
 - **disparu** — le conteneur n'existe plus (§37.7.1) ;
 - **refus de Compose** — fichier de composition déplacé, image absente,
   greffon Compose manquant : ce que Compose a dit, **tel quel**, sans diagnostic
-  inventé (§37.7.1).
+  inventé (§37.7.1). Compose écrit sa progression sur la sortie d'erreur et son
+  erreur **en dernier** — mesuré —, et c'est donc la dernière ligne qui est
+  rendue. **Mesuré aussi** : une image absente est refusée avant que l'ancien
+  conteneur soit touché, qui reste en marche, intact. L'écran ne le suppose pas
+  pour autant : il relit l'inspection après le geste, comme au §37.7.2.
 
 Le délai du `ssh` qui porte la recréation est de **60 s** : l'arrêt du §37.7.1,
 puis la création et le démarrage. Le journal reçoit `spark.container_recreate`,
@@ -6637,6 +6641,13 @@ la pile (`down`), n'édite pas le fichier de composition, et ne recrée jamais
 plus d'un service à la fois. Il ne devine pas non plus quels conteneurs lisent
 une variable qu'on vient de poser : c'est à l'exploitant de savoir lesquels la
 consomment — l'onglet *Environnement* le lui rappelle.
+
+**Éprouvé contre un vrai Docker** par `node scripts/mesures-spk132.mjs`, qui
+exécute les commandes que le code compose — l'inspection, *Redémarrer*,
+*Recréer* — sur un projet Compose jetable : la variable n'est pas relue au
+redémarrage, elle l'est à la recréation, sur un nouveau conteneur ; le service
+voisin n'est pas touché ; l'image absente est refusée et l'ancien conteneur
+reste en marche. Joué le 2026-09-30 : vert.
 
 Aucune variable d'environnement, aucune migration.
 

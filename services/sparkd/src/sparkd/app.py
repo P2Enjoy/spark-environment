@@ -1817,6 +1817,9 @@ def create_app(config: Config) -> FastAPI:
                            "spark.rescue_exec",
                            "spark.container_start", "spark.container_stop",
                            "spark.container_restart", "spark.container_kill",
+                           #: SPK-132 · §37.7.5 : recréer un conteneur de pile
+                           #: Compose, pour qu'il relise son environnement.
+                           "spark.container_recreate",
                            #: SPK-45 · §37.4.7 : entrer dans la cellule d'un
                            #: locataire et entrer dans un de ses conteneurs ne
                            #: sont pas le même pouvoir. « Combien de fois est-on
