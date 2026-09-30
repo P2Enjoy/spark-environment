@@ -247,7 +247,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     // relecture montre la case décochée, la mention et l'avertissement.
     await page.click('[data-sugg-ouvrir="routes"]');
     await page.waitForSelector('[data-sugg-tls="routes"]', { timeout: 10000 });
-    await page.locator('.proposition').scrollIntoViewIfNeeded();
+    await page.locator('[data-proposition]').scrollIntoViewIfNeeded();
     await capturer('m8-proposition-routes', { hauteur: 900 });
 
     // --- M8 · Ce qui attend dans toute la Forge (SPK-115, §60) --------------
@@ -288,7 +288,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     // coup, ce qu'aucune capture d'un écran vierge ne pourrait faire.
     await ouvrir('crm-production');
     await page.click('.onglets a:has-text("Notes")');
-    await page.waitForSelector('.note-carte', { timeout: 20000 });
+    await page.waitForSelector('[data-note-carte]', { timeout: 20000 });
     await page.waitForFunction(
       () => !document.body.innerText.includes('Lecture des notes'),
       { timeout: 20000 });
@@ -319,7 +319,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForSelector('[data-sugg-ouvrir="variables"]', { timeout: 20000 });
     await page.click('[data-sugg-ouvrir="variables"]');
     await page.waitForSelector('[data-sugg-garder="variables"]', { timeout: 10000 });
-    await page.locator('.proposition').scrollIntoViewIfNeeded();
+    await page.locator('[data-proposition]').scrollIntoViewIfNeeded();
     await capturer('m8-proposition-env', { hauteur: 800 });
 
     // --- M8 · Une valeur DEMANDÉE, saisie à l'écran (SPK-107, §55.3.3) -------
@@ -332,7 +332,7 @@ export async function produireIllustrations({ silencieux = false } = {}) {
     await page.waitForFunction(
       () => !document.querySelector('[data-sugg-appliquer="variables"]').disabled,
       { timeout: 10000 });
-    await page.locator('.proposition').scrollIntoViewIfNeeded();
+    await page.locator('[data-proposition]').scrollIntoViewIfNeeded();
     await capturer('m8-proposition-demande', { hauteur: 800 });
 
     // --- M8 · Protéger un Spark (SPK-34) -------------------------------------

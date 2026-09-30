@@ -8349,7 +8349,7 @@ avec un débit déclaré ; OP-32.
   carte `virtio` vert ; DAT, SCHEMA, README, `.env.example`, manuels à jour ;
   `@spec` / `@verifies`.
 
-### [ ] SPK-136 · Toute classe qu'écrit un composant peint quelque chose
+### [x] SPK-136 · Toute classe qu'écrit un composant peint quelque chose
 
 **Constaté le 2026-09-18** (rapport d'incohérences) et rouge depuis : quatre
 classes écrites sans règle de style — `erreur` (`forge-alertes.js`),
@@ -8370,6 +8370,13 @@ existent pour cela.
 - DoD : la preuve des classes verte ; les scripts qui les visaient rejoués ;
   capture de l'erreur des alertes observée ; entrée retirée du rapport
   d'incohérences.
+- **Vérifié le 2026-09-30** : suite de la console **1 560 sur 1 560** — verte
+  pour la première fois depuis SPK-104 ; campagne E2E 149 sur 149, dont le
+  parcours des notes qui visait `section.note-carte` ; `e2e/notes.mjs`,
+  `e2e/propositions.mjs` et `make manuel` (45 illustrations) rejoués avec les
+  attributs `data-*` ; capture `spk136-alertes-refus` observée — le refus du
+  gabarit a la forme d'un refus. **Vu en chemin, et non corrigé** : ce refus
+  vide le champ du gabarit (rapport d'incohérences, 2026-09-30).
 
 ---
 

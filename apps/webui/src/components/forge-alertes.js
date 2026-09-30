@@ -16,6 +16,8 @@
  * **Aucun bouton « essayer le canal ».** Le §47.3.0 bis en donne la raison : une
  * alerte hors bande sert à DÉTECTER, et un canal qu'on peut faire parler sur
  * commande apprend à son destinataire que certains messages ne comptent pas.
+ * @spec docs/BACKLOG.md#SPK-136 · docs/DESIGN_SYSTEM.md §12.3 (toute classe écrite
+ *       peint quelque chose ; un crochet de script est un attribut `data-*`)
  */
 
 const echapper = (v) =>
@@ -91,7 +93,7 @@ export function renderAlertes(etat = ALERTES_VIDE) {
   }
   if (etat.status === 'error') {
     return `<section class="carte bloc" aria-labelledby="titre-alertes">
-  ${entete}<p class="erreur" role="alert">${echapper(etat.error)}</p></section>`;
+  ${entete}<p class="refus" role="alert">${echapper(etat.error)}</p></section>`;
   }
 
   const c = etat.config?.webhook ?? {};
@@ -164,7 +166,7 @@ export function renderAlertes(etat = ALERTES_VIDE) {
         + 'donnez ici deviendra le mot de passe, et sera exigé ensuite.'}</p>
   </div>
 
-  ${etat.refus ? `<p class="erreur" role="alert">${echapper(etat.refus)}</p>` : ''}
+  ${etat.refus ? `<p class="refus" role="alert">${echapper(etat.refus)}</p>` : ''}
   ${etat.enregistre ? `<p class="succes" role="status">${echapper(etat.enregistre)}</p>` : ''}
 
   <p class="formulaire__actions">

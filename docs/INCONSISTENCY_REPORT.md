@@ -3,27 +3,6 @@
 Ce fichier n'existe que tant qu'une incohérence relevée n'est pas résolue ; il
 est supprimé du dépôt quand il devient vide (CLAUDE.md §5).
 
-## 2026-09-18 · Quatre classes de composants que la feuille de style ne peint pas
-
-**Constaté** en rejouant la campagne de composants de la console pendant
-SPK-110 : la preuve `apps/webui/src/styles/classes.test.js` — « toute classe
-littérale employée par un composant EXISTE dans le CSS » — est **rouge sur
-`main` avant SPK-110** (vérifié en la rejouant contre la feuille de style de
-`cf6ec7a`), pour quatre classes que des composants écrivent et que
-`app.css` ne définit pas :
-
-- `erreur` dans `forge-alertes.js` ;
-- `proposition` et `note-carte` dans `spark-notes.js` ;
-- `proposition` dans `spark-suggestions.js`.
-
-La liste des manquantes connues de la preuve ne les nomme pas : elles ont été
-écrites après elle, sans règle de style. Une preuve de composant qui les cherche
-dans la chaîne rendue reste verte sans rien garantir (`DESIGN_SYSTEM.md` §12.3).
-
-**Non résolu ici** : hors du périmètre de SPK-110, qui ne touche ni ces
-composants ni ces classes. À arbitrer par le responsable : leur donner une règle
-de style, ou les retirer des composants.
-
 ## 2026-09-23 · Le refus de « Retirer la route » et de « Réappliquer » ne s'affiche nulle part
 
 **Constaté** en écrivant SPK-112 : les deux gestes passent par
@@ -75,3 +54,19 @@ code ne touche ni la Forge ni la navigation.
 **Non résolu ici** : hors du périmètre de SPK-132. La cause n'a pas été
 cherchée. À arbitrer par le responsable : isoler ce parcours de l'inventaire que
 les parcours antérieurs modifient.
+
+## 2026-09-30 · Un gabarit refusé vide le champ où on l'a saisi
+
+**Constaté** en observant la capture `spk136-alertes-refus` (SPK-136) : l'onglet
+Alertes refuse un gabarit qui nomme un champ inconnu, et affiche bien la raison
+— mais le champ « Gabarit du message » repeint alors la valeur **relue au
+serveur** (`c.template` dans `forge-alertes.js`), pas celle qu'on venait de
+taper. La saisie refusée disparaît ; il faut la retaper pour la corriger.
+`DESIGN_SYSTEM.md` §6.11 et §7.1 : « un refus n'efface pas la saisie ». Le
+parcours ne le voit pas : il vérifie que le formulaire existe, pas ce qu'il
+contient.
+
+**Non résolu ici** : hors du périmètre de SPK-136, qui ne change que la forme du
+refus. À arbitrer par le responsable : garder la saisie de l'onglet Alertes au
+refus, et le prouver par le parcours.
+

@@ -289,6 +289,12 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-136 — toute classe qu'écrit un composant peint quelque chose.** La
+  preuve des classes de la console était rouge depuis SPK-104 : quatre classes
+  écrites sans règle de style. Le message d'échec des alertes prend la forme
+  d'un refus (`.refus`) ; `proposition` et `note-carte`, qui ne peignaient rien
+  et ne servaient que de crochets à des scripts, sont retirées — les scripts
+  visent `[data-proposition]` et `[data-note-carte]`. Console 1 560 sur 1 560.
 - **SPK-129 — une Forge reprend seule après un redémarrage total.** Constaté le
   2026-09-30 dans les journaux de la Forge : au redémarrage du 2026-09-14, Caddy
   est reparti de `/etc/caddy/Caddyfile` et a écrasé sa sauvegarde ; aucune route

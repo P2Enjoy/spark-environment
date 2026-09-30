@@ -13348,3 +13348,8 @@ complètes du jour. Retirées. « Les trois degrés au clavier » reste : un ver
 prouve pas qu'une intermittence a disparu. « Le refus de Réappliquer ne
 s'affiche nulle part » reste, et SPK-130 le rend plus pressant — signalé au
 responsable.
+
+**SPK-136, fait le même jour.** La console est verte, 1 560 sur 1 560, pour la
+première fois depuis le 2026-09-14. En observant la capture du refus des alertes,
+un défaut antérieur est apparu — le gabarit refusé est effacé du champ — ;
+consigné au rapport d'incohérences plutôt que corrigé au passage.

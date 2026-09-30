@@ -1488,6 +1488,10 @@ test('l’onglet Alertes se règle, et le REFUS vient du serveur', async () => {
       'le refus NOMME le champ fautif');
     assert.ok(await page.$('#formulaire-alertes'),
       'la saisie reste : un refus n’efface pas ce qu’on vient d’écrire (§1.5 bis)');
+    // SPK-136 · DESIGN_SYSTEM.md §12.3 : le refus a la forme d'un refus — il
+    // était écrit dans une classe que la feuille de style ne peignait pas.
+    assert.ok(await page.$('.refus[role="alert"]'), 'le refus se PEINT comme un refus');
+    await capturer('spk136-alertes-refus', { hauteur: 900 });
 
     // 3. Un gabarit valide passe, et le canal bascule au REGISTRE.
     await page.fill('#alerte-gabarit', '{"content":"{forge} {action} {target_id}"}');
@@ -6212,7 +6216,7 @@ test('une note proposée se relit en deux colonnes, se déplie au clavier, puis 
     await page.waitForFunction(
       () => !document.body.innerText.includes('Lecture des notes'),
       null, { timeout: 20000 });
-    const carte = 'section.note-carte:has([data-note-saisie="readme"])';
+    const carte = 'section[data-note-carte]:has([data-note-saisie="readme"])';
     const deux = `${carte} .comparaison__deux`;
     await page.waitForSelector(deux, { timeout: 20000 });
 

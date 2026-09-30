@@ -19,6 +19,8 @@
  * toutes lettres : une note périmée est un défaut de documentation, pas un
  * défaut du produit — et c'est précisément pourquoi les faits du briefing et les
  * notes ne se mélangent jamais (§54.11).
+ * @spec docs/BACKLOG.md#SPK-136 · docs/DESIGN_SYSTEM.md §12.3 (toute classe écrite
+ *       peint quelque chose ; un crochet de script est un attribut `data-*`)
  */
 
 import { renderComparaison } from './comparaison.js';
@@ -119,7 +121,7 @@ function proposition(note, ui) {
   // ajouté alors que l'acceptation le retirera (§14.7 : pas d'`undefined`).
   const connu = typeof p.replacement === 'string';
   const cle = cleComparaison(note, p);
-  return `<div class="proposition" data-proposition="${echapper(note.id)}">
+  return `<div data-proposition="${echapper(note.id)}">
     <p class="avertissement" role="status"><strong>Une version est proposée depuis
     la cellule.</strong> Elle <strong>remplacerait ce texte en entier</strong>.
     Tant que vous n’avez pas tranché, elle reste en place — la lire ne l’efface pas.</p>
@@ -181,7 +183,7 @@ function carte(note, ui) {
   // ferait lire deux fois la même mauvaise nouvelle.
   const issue = (ui.issue?.id === note.id && !enConflit) ? ui.issue : null;
   const champ = `note-${note.id}`;
-  return `<section class="carte bloc note-carte" aria-labelledby="titre-${champ}">
+  return `<section class="carte bloc" data-note-carte="${echapper(note.id)}" aria-labelledby="titre-${champ}">
     <h2 id="titre-${champ}" class="technique">${echapper(note.file)}</h2>
     <p class="note">${echapper(note.expected)}</p>
     <p class="note">Dans la cellule :

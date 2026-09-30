@@ -50,7 +50,7 @@ async function ouvrirNotes(nom, { largeur = 1440, hauteur = 1600 } = {}) {
   await page.click(`tbody a:has-text("${nom}")`);
   await page.waitForSelector('.onglets', { timeout: 10000 });
   await page.click('.onglets a:has-text("Notes")');
-  await page.waitForSelector('.note-carte', { timeout: 20000 });
+  await page.waitForSelector('[data-note-carte]', { timeout: 20000 });
   // La lecture de la cellule part après la peinture : on attend qu'elle ait
   // rendu son verdict, sinon la capture montrerait un écran à moitié informé.
   await page.waitForFunction(

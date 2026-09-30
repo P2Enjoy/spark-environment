@@ -33,6 +33,8 @@
  * champ d'une valeur demandée vit DANS la ligne qu'il complète (§55.9.1) :
  * renvoyer ailleurs pour la taper ferait perdre le nom, l'étiquette et la case
  * *Secret* qui lui donnent son sens.
+ * @spec docs/BACKLOG.md#SPK-136 · docs/DESIGN_SYSTEM.md §12.3 (toute classe écrite
+ *       peint quelque chose ; un crochet de script est un attribut `data-*`)
  */
 
 import { analyser, renderEtiquette } from './env-import.js';
@@ -328,7 +330,7 @@ function bloc(suggestion, ui) {
   // compte à côté. Un bouton actif qui refuserait ensuite ferait payer un
   // aller-retour pour un fait connu avant le clic.
   const attente = enAttente(kind, entrees, ui);
-  return `<section class="carte bloc proposition" data-proposition="${kind}"
+  return `<section class="carte bloc" data-proposition="${kind}"
     aria-labelledby="titre-sugg-${kind}">
     <h2 id="titre-sugg-${kind}">${echapper(libelle.titre)}</h2>
     <p class="avertissement" role="status">
@@ -399,7 +401,7 @@ export function renderPropositions(ui = PROPOSITIONS_VIDE, natures = []) {
 /** Le compte rendu seul, quand la proposition qu'il décrit n'existe plus. */
 function comptRendu(issue) {
   const libelle = NATURES[issue.kind] ?? { titre: issue.kind };
-  return `<section class="carte bloc proposition" data-proposition="${issue.kind}"
+  return `<section class="carte bloc" data-proposition="${issue.kind}"
     aria-labelledby="titre-sugg-${issue.kind}">
     <h2 id="titre-sugg-${issue.kind}">${echapper(libelle.titre)}</h2>
     <p class="${issue.ok ? 'succes' : 'refus'}" role="${issue.ok ? 'status' : 'alert'}"

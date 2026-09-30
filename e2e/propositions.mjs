@@ -50,7 +50,7 @@ async function ouvrir(nom, onglet, { largeur = 1440, hauteur = 1500 } = {}) {
   await page.click(`tbody a:has-text("${nom}")`);
   await page.waitForSelector('.onglets', { timeout: 10000 });
   await page.click(`.onglets a:has-text("${onglet}")`);
-  await page.waitForSelector('.proposition, .carte.bloc', { timeout: 20000 });
+  await page.waitForSelector('[data-proposition], .carte.bloc', { timeout: 20000 });
 }
 
 console.log('Captures des propositions :');
@@ -63,7 +63,7 @@ await capturer('spk105-proposition-banniere');
 // --- 2. La relecture ligne par ligne ---------------------------------------
 await page.click('[data-sugg-ouvrir="variables"]');
 await page.waitForSelector('[data-sugg-garder="variables"]', { timeout: 10000 });
-await page.locator('.proposition').scrollIntoViewIfNeeded();
+await page.locator('[data-proposition]').scrollIntoViewIfNeeded();
 await capturer('spk105-proposition-relecture');
 
 // --- 3. Une acceptation PARTIELLE, et ses trois effets ----------------------
@@ -86,14 +86,14 @@ const attente = await page.textContent('[data-sugg-attente="variables"]');
 if (!attente.includes('BILLING_API_KEY')) {
   throw new Error(`l’écran ne nomme pas ce qu’il attend : « ${attente} »`);
 }
-await page.locator('.proposition').scrollIntoViewIfNeeded();
+await page.locator('[data-proposition]').scrollIntoViewIfNeeded();
 await capturer('spk107-demande-a-saisir');
 
 // Le même état à 390 px, AVANT de trancher : c'est là que le champ, l'étiquette
 // et les deux cases doivent tenir côte à côte (SPK-DS-28). Après application, la
 // proposition n'existe plus et l'écran ne pourrait plus le montrer.
 await page.setViewportSize({ width: 390, height: 1800 });
-await page.locator('.proposition').scrollIntoViewIfNeeded();
+await page.locator('[data-proposition]').scrollIntoViewIfNeeded();
 if (await page.evaluate(
   () => document.documentElement.scrollWidth
         > document.documentElement.clientWidth + 1)) {
@@ -155,7 +155,7 @@ if (routes.present) throw new Error('la proposition de routes a été consommée
 
 // --- 4. Mobile : 390 px, sans débordement ----------------------------------
 await ouvrir('crm-production', 'Notes', { largeur: 390, hauteur: 1800 });
-await page.waitForSelector('.note-carte', { timeout: 20000 });
+await page.waitForSelector('[data-note-carte]', { timeout: 20000 });
 const deborde = await page.evaluate(
   () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
 if (deborde) throw new Error('débordement horizontal à 390 px');
