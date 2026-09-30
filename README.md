@@ -639,11 +639,6 @@ une garde qui n'existe que dans un fichier de workflow.
 - **L'ingress ne sert pas HTTP/3** (`docs/DAT.md` §18.6) : HTTP/1.1 et HTTP/2
   seulement, et `Alt-Svc: clear` sur chaque réponse pour effacer une annonce
   mémorisée.
-- **Une Forge dont la carte réseau n'annonce pas son débit ne s'installe pas** —
-  typiquement une machine virtuelle à carte `virtio`. Le relevé de topologie
-  refuse une capacité réseau nulle plutôt que de la retenir (SPK-07) ; mesuré le
-  2026-09-30 sur la machine du banc de redémarrage, qui emploie donc une carte
-  `e1000e` (`docs/DAT.md` §51.5).
 - **Accepter une note proposée ne revérifie pas le texte comparé** (`docs/DAT.md`
   §55.9.3). La comparaison en deux colonnes est celle de l'ouverture de l'onglet
   *Notes* ; si la note est réécrite entre-temps depuis un autre onglet,

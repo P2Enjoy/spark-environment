@@ -8416,14 +8416,18 @@ vérification visuelle — en faire une unité ? », réponse : « oui ». C'est
 suite directe de la règle du DAT §28.7 : une unité qui touche l'écran ne se
 valide que dans la console branchée sur une VM à installation fraîche.
 
-- Spécification : **à écrire** (DAT §28.7, §51.5) **et à faire valider avant
-  le code**.
+- Spécification : `docs/DAT.md` **§51.6**, §28.7 — **validée le 2026-10-01**
+  (« oui »).
 - Ce que l'unité doit rendre possible : monter la VM du banc, la garder en
   vie tant qu'on vérifie, et y brancher la console par son chemin ordinaire —
   inventaire, tunnel SSH, connexion depuis l'accueil —, pour jouer les
   parcours et les captures contre elle, souris et clavier (`CLAUDE.md` §16).
   Une seule VM à la fois, sous le verrou des épreuves lourdes.
-- Débloque : la vérification visuelle de SPK-135 et de SPK-136.
+- Débloque : la vérification visuelle de SPK-135, SPK-136, SPK-139, SPK-140,
+  et la preuve de SPK-141 par l'écran.
+- Limite écrite d'avance (§51.6) : pas de terminal de cellule dans ce premier
+  incrément — les adresses `10.77.0.x` de la VM se confondent avec celles de
+  la Forge réelle dans le `known_hosts` du poste.
 
 ### [ ] SPK-138 · La pile de développement sans pilote factice
 
@@ -8469,6 +8473,22 @@ passe, aucune raison.
   (SPK-137). Observé en chemin, non traité : un retrait refusé en `502` a déjà
   retiré la route du registre — l'écran, qui ne relit pas après un refus,
   montre encore la ligne jusqu'au rechargement.
+
+### [ ] SPK-141 · Une route ne sort du registre qu'une fois Caddy confirmé
+
+**Constaté le 2026-10-01** en écrivant SPK-139 (rapport d'incohérences),
+**décidé le même jour** par le responsable : « on ne retire que si confirmé
+supprimé chez Caddy ».
+
+- Spécification : `docs/DAT.md` **§18.8** · manuel M7 (« Quand la Forge refuse
+  Retirer ou Réappliquer »).
+- Dépend de : SPK-09 (l'ingress), SPK-139 (le refus lu dans la ligne).
+- Portée : `DELETE /v1/ingress/{domain}` pose la configuration sans la route,
+  relit la configuration vivante, et ne retire la route du registre que si
+  Caddy ne la sert plus ; sinon `502` et la route reste ; journal `error` de la
+  tentative. Preuves d'API rouges sur le code d'avant ; validation sur la VM
+  (SPK-137) : Caddy arrêté, le retrait refusé et la route toujours là,
+  Caddy relancé, le retrait abouti.
 
 ### [~] SPK-140 · Un gabarit d'alerte refusé garde ce qu'on a tapé
 

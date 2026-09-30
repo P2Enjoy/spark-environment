@@ -2401,6 +2401,35 @@ pourquoi il n'a pas pu se faire ; pendant un relevé, aucun badge de l'ancien ne
 reste affiché. Les badges suivent le badge DNS sur la ligne de chaque route.
 Contrat visuel : `DESIGN_SYSTEM_APP.md` SPK-DS-34.
 
+### 18.8 Une route ne sort du registre qu'une fois Caddy confirmé (SPK-141)
+
+**Constaté le 2026-10-01** en écrivant SPK-139 : `DELETE /v1/ingress/{domain}`
+retirait la route du **registre**, puis appliquait la configuration ; si Caddy
+était injoignable, la réponse était un `502`, la route n'existait plus au
+registre, et Caddy pouvait la servir encore. Le registre et le proxy disaient
+deux choses différentes, et l'écran — qui ne relit pas après un refus — montrait
+une troisième.
+
+**Décision du responsable, le 2026-10-01** : « on ne retire que si confirmé
+supprimé chez Caddy ».
+
+- `sparkd` construit la configuration **sans** la route, la pose sur `POST
+  /load`, puis **relit** la configuration vivante (`GET /config/`) et vérifie
+  que le domaine n'y est plus servi ;
+- alors seulement la route sort du registre, dans une transaction, et
+  `ingress.withdraw` entre au journal ; les autres routes reçoivent leur
+  `applied_at`, puisque la configuration posée est la leur ;
+- si la pose échoue, si la relecture échoue, ou si le domaine y est encore
+  servi : **`502`, et la route reste au registre**, inchangée. Le refus nomme la
+  cause ; la tentative entre au journal en `error`. L'écran, qui ne relit pas
+  après un refus, montre alors la vérité : la route est là, et le refus dit
+  pourquoi elle y est encore (SPK-139).
+
+Ce que la décision ne couvre pas : la **suppression d'un Spark** emporte ses
+routes par cascade, puis réconcilie ; si Caddy est injoignable à ce moment, il
+sert encore une route vers une cellule qui n'existe plus, jusqu'à la
+réconciliation suivante — au démarrage de `sparkd` au plus tard (§18.1).
+
 ## 19. Instantanés et restauration
 
 Le §8.3 dit *pourquoi* les instantanés existent. Cette section dit ce que la
@@ -9223,14 +9252,50 @@ trait : un `200` trompeur, et un préflight qui ne voyait rien.
 **Ce que la machine du banc a appris en chemin.** Sa carte réseau est une
 `e1000e` : une carte `virtio` n'annonce aucun débit, et le relevé de topologie
 refuse — à dessein — une capacité réseau nulle (`inventory`, SPK-07) ; l'amorce
-échouait alors à sa recette finale, `/v1/forge/sync` en `503`. Une Forge sur une
-machine virtuelle à carte `virtio` ne s'installe donc pas, et le README le dit.
+échouait alors à sa recette finale, `/v1/forge/sync` en `503`. SPK-135 (§5.3 bis)
+l'installe désormais avec un débit **déclaré**, et le banc l'éprouve par
+`--carte virtio`.
 Et une Forge neuve n'a jamais relevé son catalogue d'images : le banc fait le
 geste de l'exploitant (`POST /v1/images/verify`) avant de créer son Spark.
 
 Ce que SPK-129 ne change pas : la reconnexion de la console reste un geste
 (§22.4.6), et un Spark dont la pile ne redémarre pas seule reste l'affaire de
 son locataire (§44.2 bis) — le diagnostic du §18.7 le montre.
+
+### 51.6 La console branchée sur la VM du banc (SPK-137)
+
+**Validé par le responsable le 2026-10-01.** La règle du §28.7 exige qu'une unité
+qui touche l'écran se vérifie dans la console branchée sur une VM à
+installation fraîche ; le banc démontait sa machine en sortant.
+
+- **`--garder`** : le banc joue ses verdicts, puis garde la machine, lance une
+  **console à part** branchée sur elle, imprime son adresse, et attend `Ctrl-C`
+  pour tout démonter. **`--epreuve <nom>`** fait de même, mais joue
+  `e2e/forge-vm/epreuves/<nom>.mjs` contre cette console au lieu d'attendre, puis
+  démonte. Le banc tient le verrou des épreuves lourdes (§29.8) du début à la
+  fin : une seule VM à la fois, et l'épreuve tourne **dans** son processus.
+- **La console à part** tourne depuis l'arbre de travail, sur son propre port,
+  avec un inventaire qui ne contient **que** la VM (`SPARK_CONSOLE_STATE` et
+  `SPARK_CONSOLE_PORT`, déjà documentées). La console d'exploitation, son
+  inventaire et ses ancres ne sont pas touchés : aucune épreuve ne peut viser la
+  Forge de production par erreur.
+- **L'accès SSH** : la VM reçoit les clés publiques du poste — celles que la
+  console emploie déjà —, et une **clé d'hôte fixe de banc**, créée une fois
+  dans `~/.cache/spark-environment/vm/` et posée par le cloud-init, sur un
+  **port SSH fixe** (argument nommé `--port-ssh`, `2222` par défaut). Le banc
+  inscrit une fois la ligne `[127.0.0.1]:<port>` de cette clé dans le
+  `known_hosts` du poste, et le dit parmi ses écarts. Sans cela, chaque machine
+  neuve serait refusée pour « clé d'hôte changée ».
+- **Tout se crée par la console**, depuis l'accueil, souris et clavier
+  (`CLAUDE.md` §16) : Spark, route, protection, secret. Les captures vont dans
+  `e2e/captures/`, et s'observent.
+
+**Limite connue, écrite d'avance** : le réseau privé d'une Forge est codé en
+dur, `10.77.0.0/24` (`forge_install`). Les cellules de la VM portent donc les
+mêmes adresses que celles de la Forge réelle, et le `known_hosts` du poste les
+confond. Une épreuve qui ouvre le **terminal d'une cellule** de la VM est hors
+de ce premier incrément ; purger ces entrées couperait l'accès aux cellules de
+production, et ne se fait pas.
 
 ### 5.3 Un refus d'Incus se lit — écrit le 2026-09-02
 

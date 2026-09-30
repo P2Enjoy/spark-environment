@@ -13505,3 +13505,18 @@ d'hôte à chaque machine.
    ceux de `e2e/forge-reelle/`, qui prennent le verrou, jouent le parcours et
    produisent les captures observées. Premiers servis : SPK-135, SPK-136,
    SPK-139, SPK-140.
+
+## 2026-10-01 · SPK-137 validée ; SPK-141 décidée ; deux phrases périmées retirées
+
+- **SPK-137** — la proposition du jour est validée (« oui ») et devient le DAT
+  §51.6. En l'écrivant, une limite est apparue : le réseau privé d'une Forge est
+  codé en dur (`10.77.0.0/24`), donc les cellules de la VM se confondent avec
+  celles de la Forge réelle dans le `known_hosts` du poste. Le terminal d'une
+  cellule de la VM sort du premier incrément ; les entrées de production ne se
+  purgent pas.
+- **Le retrait refusé en `502`** : « on ne retire que si confirmé supprimé chez
+  Caddy ». Unité SPK-141, DAT §18.8 : poser sans la route, relire la
+  configuration vivante, puis seulement retirer du registre.
+- **Deux phrases que SPK-135 avait rendues fausses**, et que son commit n'avait
+  pas corrigées : la limite « une Forge à carte `virtio` ne s'installe pas » du
+  README, et la phrase correspondante du DAT §51.5. Retirées.

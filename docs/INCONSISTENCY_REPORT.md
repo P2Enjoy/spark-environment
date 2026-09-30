@@ -28,8 +28,6 @@ comme si rien n'avait été retiré. Au rechargement, la route a disparu, alors
 que Caddy peut la servir encore. `DESIGN_SYSTEM.md` §6.8 : l'écran montre
 l'état **relu**.
 
-**Non résolu ici** : hors du périmètre arbitré de SPK-139, qui ne change que
-l'endroit où le refus s'affiche. À arbitrer par le responsable : relire l'état
-après un refus de ce geste, ou faire que le serveur ne retire la route qu'une
-fois Caddy à jour — ou dire autrement qu'elle est retirée du registre mais
-encore servie.
+**Arbitré le 2026-10-01** : « on ne retire que si confirmé supprimé chez
+Caddy » — unité SPK-141, DAT §18.8. L'entrée sort du rapport quand elle est
+livrée.
