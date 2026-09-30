@@ -345,7 +345,7 @@ issue, alors qu'**il connaît le débit** de la machine qu'il loue.
 - le relevé retient le débit **mesuré** dès qu'un port en annonce un, **même si
   un débit est déclaré** ; il ne retient le déclaré que lorsqu'aucun port n'en
   annonce ; sans l'un ni l'autre, il refuse, et le refus **nomme le réglage** ;
-- la source est gardée au registre, `host.network_source` — `measured` ou
+- la source est gardée au registre, `forge.network_source` — `measured` ou
   `declared` (migration 021, `docs/SCHEMA.md`) —, rendue par `/v1/forge` sous
   `network.source`, et
   l'écran de la Forge dit « déclaré » à côté de la capacité réseau. Une capacité
