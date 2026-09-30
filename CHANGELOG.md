@@ -289,6 +289,13 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-141 — une route ne sort du registre qu'une fois Caddy confirmé.**
+  Retirer une route l'effaçait du registre avant d'appliquer : Caddy
+  injoignable, la réponse était un `502`, la route avait disparu du registre et
+  Caddy pouvait la servir encore. `sparkd` pose désormais la configuration sans
+  elle, relit ce que Caddy sert, et ne l'efface qu'ensuite ; sinon `502`, la
+  route reste, et la tentative entre au journal en échec. DAT §18.8 ; manuel M7.
+  Validation sur VM à venir (SPK-137) ; **sur la Forge avec OP-33.**
 - **SPK-139 — le refus de « Retirer la route » et de « Réappliquer » s'affiche
   sous la route.** Ces deux gestes rangeaient leur refus dans la modale
   « Routes publiques », fermée à ce moment : un Spark protégé ou un Caddy

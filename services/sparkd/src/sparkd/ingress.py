@@ -10,6 +10,8 @@
       corrige, elle ne se refait pas) · §18.5 (l'écart reste visible)
 @spec docs/BACKLOG.md#SPK-128 · docs/DAT.md §18.2 (protocoles déclarés, route
       commune), §18.6 (l'ingress ne sert pas HTTP/3, et le dit)
+@spec docs/BACKLOG.md#SPK-141 · docs/DAT.md §18.8 (une route ne sort du registre
+      qu'une fois Caddy confirmé)
 
 On régénère la configuration entière, on ne la rapièce pas. Une configuration
 rapiécée diverge ; une configuration régénérée ne le peut pas.
@@ -147,6 +149,10 @@ def match(connection: sqlite3.Connection, domains: list[str]) -> dict:
 
 class IngressError(RuntimeError):
     """Route refusée, ou Caddy injoignable."""
+
+
+class RetraitNonConfirme(IngressError):
+    """Caddy n'a pas confirmé qu'il ne sert plus la route : elle reste (§18.8)."""
 
 
 @dataclass
@@ -360,15 +366,6 @@ def listing(connection: sqlite3.Connection) -> list[dict]:
     return routes
 
 
-def withdraw(connection: sqlite3.Connection, domain: str,
-             actor: str | None = None) -> None:
-    route = by_domain(connection, domain)
-    with transaction(connection):
-        connection.execute("DELETE FROM ingress_route WHERE id = ?", (route["id"],))
-        _audit(connection, actor, "ingress.withdraw", route["id"],
-               {"domain": route["domain"]}, "ok", f"{route['domain']} retiré.")
-
-
 #: SPK-102 · §44.2 quater : ce que CHAQUE handler fait subir à une requête.
 #:
 #: **Mesuré sur la Forge réelle le 2026-09-14**, avec le binaire qui y sert —
@@ -486,12 +483,15 @@ def comportement(connection: sqlite3.Connection) -> dict:
     }
 
 
-def build_config(connection: sqlite3.Connection) -> dict:
+def build_config(connection: sqlite3.Connection, exclure: str | None = None) -> dict:
     """Construit la configuration COMPLÈTE de Caddy depuis le registre.
 
     Seules les routes actives d'un Spark ayant une adresse sont émises : une
     route déclarée sur un Spark encore `pending` existe — on déclare avant de
     créer — mais rien ne peut la servir (docs/DAT.md §18.2).
+
+    `exclure` construit la configuration SANS une route encore au registre :
+    c'est celle qu'on pose avant de la retirer (SPK-141, §18.8).
     """
     # §18.6 : la route commune d'abord — sans filtre et non terminale, elle ne
     # sert rien et ne décide d'aucune préséance, elle pose un en-tête et passe.
@@ -499,7 +499,8 @@ def build_config(connection: sqlite3.Connection) -> dict:
     routes = [commune] if commune else []
     # §18.3 bis : Caddy retient la PREMIÈRE route qui correspond. L'ordre est
     # donc la règle de préséance elle-même, pas une commodité d'affichage.
-    servies = sorted(listing(connection), key=lambda r: specificity(r["domain"]))
+    servies = sorted((r for r in listing(connection) if r["domain"] != exclure),
+                     key=lambda r: specificity(r["domain"]))
     for route in servies:
         if not route["enabled"] or not route["ipv4_address"]:
             continue
@@ -519,7 +520,8 @@ def build_config(connection: sqlite3.Connection) -> dict:
 
     serveur: dict = {"listen": [":80", ":443"], "protocols": list(PROTOCOLES),
                      "routes": routes}
-    en_clair = [r["domain"] for r in listing(connection) if not r["tls"] and r["enabled"]]
+    en_clair = [r["domain"] for r in listing(connection)
+                if not r["tls"] and r["enabled"] and r["domain"] != exclure]
     if en_clair:
         # Une route en clair est explicitement soustraite à la gestion
         # automatique du TLS, sans quoi Caddy tenterait d'émettre un
@@ -529,6 +531,28 @@ def build_config(connection: sqlite3.Connection) -> dict:
     return {"apps": {"http": {"servers": {SERVER_NAME: serveur}}}}
 
 
+def _nb_servies(config: dict) -> int:
+    """Les routes SERVIES : la route terminale de refus n'en est pas une, et
+    l'annoncer fausserait le nombre que lit l'exploitant."""
+    return sum(1 for r in config["apps"]["http"]["servers"][SERVER_NAME]["routes"]
+               if "match" in r)
+
+
+def _dater_les_appliquees(connection: sqlite3.Connection, actor, nb: int) -> None:
+    """Après une pose RÉUSSIE : chaque route servie reçoit sa date (§18.5).
+
+    À appeler DANS une transaction, et sous `audit.as_runtime` : c'est un
+    événement du runtime (§36.4).
+    """
+    connection.execute(
+        "UPDATE ingress_route SET applied_at = ? WHERE enabled = 1"
+        " AND spark_id IN (SELECT id FROM spark WHERE ipv4_address IS NOT NULL)",
+        (_now(),),
+    )
+    _audit(connection, actor, "ingress.reconcile", None,
+           {"routes": nb}, "ok", f"{nb} route(s) appliquée(s).")
+
+
 def reconcile(connection: sqlite3.Connection, caddy, actor: str = "sparkd") -> dict:
     """Régénère et applique. C'est le mécanisme NORMAL, pas une réparation."""
     # §36.4 : c'est un ÉVÉNEMENT DU RUNTIME. Souvent déclenché par une
@@ -536,12 +560,7 @@ def reconcile(connection: sqlite3.Connection, caddy, actor: str = "sparkd") -> d
     # déclaration le journal ferait croire qu'une personne l'a réclamé.
     with audit.as_runtime(actor or "sparkd"):
         config = build_config(connection)
-        # On compte les routes SERVIES : la route terminale de refus n'en est pas
-        # une, et l'annoncer fausserait le nombre que lit l'exploitant.
-        nb = sum(
-            1 for r in config["apps"]["http"]["servers"][SERVER_NAME]["routes"]
-            if "match" in r
-        )
+        nb = _nb_servies(config)
         try:
             caddy.load(config)
         except IngressError as erreur:
@@ -550,11 +569,48 @@ def reconcile(connection: sqlite3.Connection, caddy, actor: str = "sparkd") -> d
                        {"routes": nb}, "error", str(erreur))
             raise
         with transaction(connection):
-            connection.execute(
-                "UPDATE ingress_route SET applied_at = ? WHERE enabled = 1"
-                " AND spark_id IN (SELECT id FROM spark WHERE ipv4_address IS NOT NULL)",
-                (_now(),),
-            )
-            _audit(connection, actor, "ingress.reconcile", None,
-                   {"routes": nb}, "ok", f"{nb} route(s) appliquée(s).")
+            _dater_les_appliquees(connection, actor, nb)
         return {"routes": nb, "config": config}
+
+
+def domaines_servis(config: dict) -> set[str]:
+    """Les noms qu'une configuration de Caddy sert, lus dans ses `match`."""
+    serveurs = (config or {}).get("apps", {}).get("http", {}).get("servers", {})
+    return {hote for serveur in serveurs.values()
+            for route in serveur.get("routes", []) for filtre in route.get("match", [])
+            for hote in filtre.get("host", [])}
+
+
+def retirer(connection: sqlite3.Connection, caddy, domain: str,
+            actor: str | None = None) -> None:
+    """Retire une route, une fois Caddy CONFIRMÉ (SPK-141, §18.8).
+
+    @spec docs/BACKLOG.md#SPK-141 · docs/DAT.md §18.8
+
+    L'ordre est la décision : poser la configuration SANS la route, RELIRE ce
+    que Caddy sert, et seulement alors la retirer du registre. Retirer d'abord
+    laissait, sur un Caddy injoignable, un registre sans la route et un proxy
+    qui la servait encore. Une pose rendue `200` ne suffit pas : on relit.
+    """
+    route = by_domain(connection, domain)
+    config = build_config(connection, exclure=route["domain"])
+    try:
+        caddy.load(config)
+        encore = route["domain"] in domaines_servis(caddy.current())
+        cause = (f"Caddy sert encore {route['domain']} après la pose : la route "
+                 "reste au registre.") if encore else None
+    except IngressError as erreur:
+        cause = (f"{route['domain']} n'est pas retiré : Caddy n'a pas confirmé "
+                 f"qu'il ne le sert plus ({erreur}). La route reste au registre.")
+    if cause:
+        with transaction(connection):
+            _audit(connection, actor, "ingress.withdraw", route["id"],
+                   {"domain": route["domain"]}, "error", cause)
+        raise RetraitNonConfirme(cause)
+    with transaction(connection):
+        connection.execute("DELETE FROM ingress_route WHERE id = ?", (route["id"],))
+        _audit(connection, actor, "ingress.withdraw", route["id"],
+               {"domain": route["domain"]}, "ok", f"{route['domain']} retiré.")
+        # Les routes qui restent sont celles que la pose vient de servir.
+        with audit.as_runtime(actor or "sparkd"):
+            _dater_les_appliquees(connection, actor, _nb_servies(config))

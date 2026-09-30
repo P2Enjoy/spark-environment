@@ -120,6 +120,30 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-33 · Retrait de route confirmé par Caddy, refus lus dans la ligne, saisie des alertes gardée (SPK-139 à SPK-141)
+
+```
+État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
+                SPK-139 à SPK-141 validés sur la VM du banc (SPK-137).
+Objectif      : `DELETE /v1/ingress/{domain}` ne retire la route du registre
+                qu'une fois Caddy confirmé (SPK-141, docs/DAT.md §18.8) ; la
+                console rend le refus de « Retirer la route » et de
+                « Réappliquer » dans la ligne (SPK-139), et garde la saisie des
+                alertes au refus (SPK-140). Aucune migration, aucune variable.
+Dépend de     : OP-32 (même chemin de mise à jour).
+Ordre         : 1. sauvegarder le registre (§2 bis) ;
+                2. mettre à jour sparkd (runbook A.2) ;
+                3. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : `/healthz` rend le commit déployé ; le préflight reste vert.
+                Le comportement se prouve sur la VM du banc, pas sur la Forge :
+                arrêter Caddy pour provoquer un refus n'appartient pas à cette
+                opération.
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console. Rien n'est écrit que le retour arrière aurait à défaire.
+Risques       : un retrait coûte désormais une lecture de la configuration
+                vivante de Caddy en plus de la pose.
+```
+
 ### OP-32 · Secrets reposés à chaque démarrage, UDP au préflight, débit déclaré, classes peintes (SPK-133 à SPK-136)
 
 ```

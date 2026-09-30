@@ -8474,22 +8474,6 @@ passe, aucune raison.
   retiré la route du registre — l'écran, qui ne relit pas après un refus,
   montre encore la ligne jusqu'au rechargement.
 
-### [ ] SPK-141 · Une route ne sort du registre qu'une fois Caddy confirmé
-
-**Constaté le 2026-10-01** en écrivant SPK-139 (rapport d'incohérences),
-**décidé le même jour** par le responsable : « on ne retire que si confirmé
-supprimé chez Caddy ».
-
-- Spécification : `docs/DAT.md` **§18.8** · manuel M7 (« Quand la Forge refuse
-  Retirer ou Réappliquer »).
-- Dépend de : SPK-09 (l'ingress), SPK-139 (le refus lu dans la ligne).
-- Portée : `DELETE /v1/ingress/{domain}` pose la configuration sans la route,
-  relit la configuration vivante, et ne retire la route du registre que si
-  Caddy ne la sert plus ; sinon `502` et la route reste ; journal `error` de la
-  tentative. Preuves d'API rouges sur le code d'avant ; validation sur la VM
-  (SPK-137) : Caddy arrêté, le retrait refusé et la route toujours là,
-  Caddy relancé, le retrait abouti.
-
 ### [~] SPK-140 · Un gabarit d'alerte refusé garde ce qu'on a tapé
 
 **Constaté le 2026-09-30** (capture de SPK-136), **arbitré le 2026-10-01** :
@@ -8512,6 +8496,28 @@ repeint avec la valeur relue au serveur — la saisie refusée disparaît.
   diagnostics. **Reste `[~]`** : voir le refus garder la saisie dans la console
   branchée sur une VM à installation fraîche (SPK-137).
 
+
+### [~] SPK-141 · Une route ne sort du registre qu'une fois Caddy confirmé
+
+**Constaté le 2026-10-01** en écrivant SPK-139 (rapport d'incohérences),
+**décidé le même jour** par le responsable : « on ne retire que si confirmé
+supprimé chez Caddy ».
+
+- Spécification : `docs/DAT.md` **§18.8** · manuel M7 (« Quand la Forge refuse
+  Retirer ou Réappliquer »).
+- Dépend de : SPK-09 (l'ingress), SPK-139 (le refus lu dans la ligne).
+- Portée : `DELETE /v1/ingress/{domain}` pose la configuration sans la route,
+  relit la configuration vivante, et ne retire la route du registre que si
+  Caddy ne la sert plus ; sinon `502` et la route reste ; journal `error` de la
+  tentative. Preuves d'API rouges sur le code d'avant ; validation sur la VM
+  (SPK-137) : Caddy arrêté, le retrait refusé et la route toujours là,
+  Caddy relancé, le retrait abouti.
+- **Corrigé le 2026-10-01, non validé sur VM.** `ingress.retirer` pose sans la
+  route, relit `GET /config/`, puis seulement retire ; l'ancien `withdraw`, qui
+  retirait sans confirmation, est supprimé. Preuves : sur le code d'avant, un
+  second retrait après un `502` rendait `404` — la route avait déjà disparu ;
+  vertes après, suite `sparkd` 1 604 sur 1 604 — des diagnostics. **Reste
+  `[~]`** : la validation sur la VM du banc (SPK-137), puis OP-33.
 ---
 
 ## Lot 6 — Réseau entre Sparks

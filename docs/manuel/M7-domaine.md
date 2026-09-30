@@ -259,6 +259,12 @@ donne. Deux refus se rencontrent :
   Caddy. Le badge **Caddy injoignable** le dit aussi ; c'est une affaire
   d'exploitation de la Forge, et *Réappliquer* réussira quand Caddy répondra.
 
+**Une route n'est retirée que lorsque Caddy a confirmé ne plus la servir.** La
+Forge pose d'abord la configuration sans elle, relit ce que le proxy sert, et
+seulement alors l'efface de son registre. Si le proxy ne répond pas, ou la sert
+encore, la route **reste** — à l'écran comme au registre — avec la raison sous
+elle : recommencez quand Caddy répond.
+
 > **Limite connue.** L'émission d'un certificat n'a pas encore été éprouvée de
 > bout en bout. La cause la plus fréquente de son échec — un domaine qui ne
 > résout pas — est levée depuis que la console pose le DNS, mais l'émission

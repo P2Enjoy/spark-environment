@@ -16,18 +16,3 @@ code ne touche ni la Forge ni la navigation.
 **Arbitré le 2026-10-01** : pas de correction à part — le parcours tourne sur la
 pile factice, qui ne valide plus rien (DAT §28.7). Il est absorbé par SPK-138 et
 rejoué contre la VM ; l'entrée sort du rapport à ce moment.
-
-## 2026-10-01 · Un retrait de route refusé en `502` a déjà retiré la route
-
-**Constaté** en écrivant SPK-139, en lisant `DELETE /v1/ingress/{domain}`
-(`services/sparkd/src/sparkd/app.py`) : la route est retirée du **registre**,
-puis l'application à Caddy échoue et la réponse est un `502` « Caddy
-injoignable ». La console, qui ne relit rien après un refus (`agir`, dans
-`apps/webui/src/app.js`), montre encore la route et le refus sous elle —
-comme si rien n'avait été retiré. Au rechargement, la route a disparu, alors
-que Caddy peut la servir encore. `DESIGN_SYSTEM.md` §6.8 : l'écran montre
-l'état **relu**.
-
-**Arbitré le 2026-10-01** : « on ne retire que si confirmé supprimé chez
-Caddy » — unité SPK-141, DAT §18.8. L'entrée sort du rapport quand elle est
-livrée.

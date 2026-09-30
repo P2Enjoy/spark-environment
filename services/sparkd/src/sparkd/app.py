@@ -2152,17 +2152,18 @@ def create_app(config: Config) -> FastAPI:
                 ).fetchone()
                 if cible is not None:
                     protection_service.ensure_writable(connection, cible["name"], "ingress")
-                ingress_service.withdraw(connection, domain)
-                if cible is not None:
-                    _rattraper_briefing(connection, service.by_name(connection, cible["name"]))
+                # SPK-141 · §18.8 : la route ne sort du registre qu'une fois
+                # Caddy CONFIRMÉ. Retirer d'abord laissait, sur un Caddy
+                # injoignable, un registre sans elle et un proxy qui la servait.
+                ingress_service.retirer(connection, app.state.caddy, domain)
+            except ingress_service.RetraitNonConfirme as erreur:
+                raise HTTPException(status_code=502, detail={
+                    "error": "caddy_unconfirmed", "message": str(erreur)}) from erreur
             except ingress_service.IngressError as erreur:
                 raise HTTPException(status_code=404, detail={
                     "error": "not_found", "message": str(erreur)}) from erreur
-            try:
-                _reconcile_ingress(connection)
-            except ingress_service.IngressError as erreur:
-                raise HTTPException(status_code=502, detail={
-                    "error": "caddy_unavailable", "message": str(erreur)}) from erreur
+            if cible is not None:
+                _rattraper_briefing(connection, service.by_name(connection, cible["name"]))
             return {"withdrawn": domain}
 
     # --- Ports publiés (SPK-49 · docs/DAT.md §39) ---------------------------

@@ -90,7 +90,7 @@ def test_le_domaine_libere_est_reutilisable(db):
     poser_spark(db, "S1", "crm")
     poser_spark(db, "S2", "boutique", "10.77.0.17")
     ingress.declare(db, "S1", "crm.example.com", 8080)
-    ingress.withdraw(db, "crm.example.com")
+    ingress.retirer(db, ingress.FakeCaddy(), "crm.example.com")
     assert ingress.declare(db, "S2", "crm.example.com", 9090)["target_port"] == 9090
 
 
@@ -187,7 +187,7 @@ def test_la_configuration_est_REGENEREE_pas_rapiecee(db):
     assert len(faux.config["apps"]["http"]["servers"]["spark"]["routes"]) == 4
     assert len(_servies(faux.config)) == 2
 
-    ingress.withdraw(db, "a.example.com")
+    ingress.retirer(db, ingress.FakeCaddy(), "a.example.com")
     ingress.reconcile(db, faux)
     hotes = [r["match"][0]["host"][0]
              for r in faux.config["apps"]["http"]["servers"]["spark"]["routes"] if "match" in r]
