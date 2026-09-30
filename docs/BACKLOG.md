@@ -8125,6 +8125,57 @@ tient lieu de preuve.
   proche, certificat absent) produite par `make captures`. **Reste `[~]`** :
   relu sur la Forge réelle seulement après OP-29.
 
+### [ ] SPK-131 · Une note proposée se relit en deux colonnes, comme une revue de code
+
+**Demandé par le responsable le 2026-09-30** : « lors des propositions de
+changement des fichiers INSTALL, CONTRIB, README, on devrait afficher un côte à
+côte comme GitHub, avec les différences, avant d'accepter ». Le §55.9 posait déjà
+que la relecture d'une note est « la comparaison des deux textes » ; l'écran ne
+montrait que la version proposée, et telle que le `.?` la porte — en-tête
+recopié compris, que l'acceptation retire.
+
+- Spécification : `docs/DAT.md` **§55.9.3**, §55.8 (le champ `replacement`),
+  §55.9 · `docs/DESIGN_SYSTEM.md` **§6.29** (règle générique : comparer deux
+  versions d'un texte avant d'accepter un remplacement) ·
+  `docs/DESIGN_SYSTEM_APP.md` SPK-DS-27 révisé · manuel M8 ·
+  `docs/PROD_MIGRATIONS.md` OP-30. **Écrite et committée avant le code.**
+- Dépend de : SPK-104 (les notes), SPK-105 (le canal `.?`).
+
+**Ce qui décide de l'unité** : l'écran montre ce que l'acceptation fera, ligne
+par ligne, avant qu'on la décide. La colonne de droite est le texte que
+l'acceptation écrirait, rendu par `sparkd` — jamais le fichier brut ;
+l'alignement est calculé par la console ; la couleur n'est jamais seule à dire
+ce qui change.
+
+**Portée, et découpage :**
+
+1. Documentation — DAT, design system, backlog, journal, OP-30 — *committée
+   avant le code* ;
+2. `sparkd` : `replacement` dans la lecture des propositions de note ; preuves —
+   un texte recopié avec l'en-tête du produit, un texte écrit sans ;
+3. console : la comparaison (alignement de Myers borné, appariement des lignes
+   d'un même bloc, mots changés, replis des lignes identiques), rendue en deux
+   colonnes et en une ; replis dépliés sans repeinture, et qui survivent à
+   elle ; les quatre états nommés ; repli sur le `.?` brut, dit, quand `sparkd`
+   ne rend pas `replacement` ; preuves d'unité et de composant ;
+4. seed : une proposition de README qui **modifie** une note écrite, recopiée
+   avec l'en-tête du produit comme le fait un agent — sans elle, l'écran ne
+   montre que des ajouts, et ni les lignes retirées, ni les mots changés, ni un
+   repli, ni le retrait de l'en-tête ne se voient ;
+5. E2E, captures, manuel : un parcours depuis l'accueil relit la comparaison,
+   déplie un repli, accepte, puis constate le registre et la cellule ; captures
+   à 1440 et 390 px observées ; manuel M8 et ses illustrations.
+
+- Aucune variable d'environnement, aucune migration, aucune route nouvelle.
+- Hors de la demande, consigné au §55.9.3 et non corrigé : l'acceptation ne porte
+  pas la révision comparée à gauche.
+- DoD : preuves d'unité de l'alignement (identiques, ajout, retrait,
+  remplacement, lignes vides, borne atteinte, mots changés) ; preuves de
+  composant (deux colonnes et une, signes et texte pour la synthèse vocale,
+  replis et leurs libellés, quatre états, échappement du HTML, repli dit sans
+  `replacement`) ; preuve `sparkd` du `replacement` ; parcours E2E ; captures
+  observées ; manuel M8, design system, DAT à jour ; `@spec` / `@verifies`.
+
 ---
 
 ## Lot 6 — Réseau entre Sparks

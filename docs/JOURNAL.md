@@ -13123,3 +13123,65 @@ commit.
 **Vérifications** : 22 preuves du diagnostic, route HTTP, seed, 11 preuves de
 composant, deux parcours E2E, captures observées. Suite de la console : 1 508
 sur 1 509, l'échec restant étant celui, antérieur, des classes de SPK-104.
+
+## 2026-09-30 · SPK-131 — une note proposée se relit en deux colonnes
+
+**La demande** : « lors des propositions de changement des fichiers INSTALL,
+CONTRIB, README, on devrait afficher un côte à côte comme GitHub, avec les
+différences, avant d'accepter ».
+
+**Ce que l'écran faisait, relu dans le code** (`spark-notes.js`) : la version
+proposée entière, dans un repli fermé « Lire la version proposée », au-dessus du
+champ qui porte le texte courant. Le §55.9 promettait pourtant « la comparaison
+des deux textes » : la spécification et l'écran divergeaient depuis SPK-105. Et
+le texte montré était le `.?` **brut** : la preuve
+`test_une_note_RECOPIEE_depuis_son_fichier_reel_perd_l_entete_du_produit` établit
+qu'un agent qui recopie `README.md` laisse l'en-tête du produit dans sa
+proposition, et que l'acceptation le retire. On relisait un texte qui n'était pas
+celui qu'on acceptait.
+
+**Options, et ce qui a été retenu :**
+
+- *Où retirer l'en-tête pour la comparaison* — dans la console, en recopiant
+  `notes.sans_entete`, ou dans `sparkd`. **`sparkd`**, par un champ
+  `replacement` : le retrait existe une fois, là où l'acceptation l'applique.
+  Deux implémentations divergeraient, et c'est la colonne de droite — celle qui
+  dit ce qu'on accepte — qui mentirait. Le schéma de la réponse est un objet
+  libre au contrat : aucune dérive.
+- *Une bibliothèque de diff ou un algorithme écrit ici* — la console est servie
+  telle quelle, sans build (`"build": "rien à compiler"`) ; une bibliothèque
+  demanderait de servir un paquet de `node_modules` à la page, pour une centaine
+  de lignes. **Myers, écrit ici**, borné, prouvé par ses tests.
+- *Où calculer* — dans la console : c'est une présentation, et le §55.8 garde le
+  serveur hors de la présentation.
+- *Sous 768 px* — le patron de la maison pour un tableau large est le
+  défilement horizontal annoncé (SPK-107). Pour une comparaison, il cacherait
+  l'une des deux versions : **une colonne**, la ligne retirée au-dessus de celle
+  qui la remplace — la vue « unifiée » de GitHub. Même contenu, autre
+  disposition.
+- *Replier les lignes identiques* — GitHub le fait, et un README de quarante
+  lignes où une seule change se lirait sinon en faisant défiler pour trouver la
+  ligne colorée. **Trois lignes de contexte**, un bouton qui compte et situe ce
+  qu'il cache, qui reste en place pour replier. Pas de repli pour moins de
+  quatre lignes.
+- *La comparaison dans un repli fermé, comme l'ancienne version proposée* —
+  non : c'est sur elle qu'on décide, et les boutons viennent après elle.
+- *Les mots changés* — une note est de la prose, un paragraphe tient souvent sur
+  une ligne : sans marque mot à mot, on cherche la différence dans deux lignes de
+  trois cents caractères. Retenu, par le même algorithme sur des mots.
+
+**Mesuré pour choisir les couleurs** : `--color-text-3` donne 4,12 sur
+`danger-soft` et 4,16 sur `success-soft`, sous l'AA ; `--color-text-2` donne
+6,44 et 6,50. Les numéros de ligne sont donc en `--color-text-2`.
+
+**Relevé en passant, et laissé en l'état** : l'acceptation d'une note ne porte
+pas la révision du texte comparé. Si la note est réécrite depuis un autre onglet
+entre la lecture et l'acceptation, celle-ci remplace une version qu'on n'a pas
+vue. Ce n'est pas nouveau — l'ancien écran avait le même défaut —, mais la
+comparaison le rend plus trompeur, puisqu'elle affirme ce qui change. Le
+corriger change l'API d'acceptation, ce que la demande ne porte pas : consigné
+au §55.9.3, et proposé au responsable.
+
+**Documents** : DAT §55.8 et §55.9.3, règle générique `DESIGN_SYSTEM.md` §6.29,
+SPK-DS-27 révisé, SPK-131, OP-30, compte du README corrigé (il datait d'avant
+SPK-128). Committés avant le code.

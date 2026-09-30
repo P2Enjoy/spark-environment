@@ -120,6 +120,40 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
+### OP-30 · Une note proposée se relit en deux colonnes : `sparkd` et la console (SPK-131)
+
+```
+État          : EN ATTENTE — SPK-131 est spécifié, pas encore livré. À jouer
+                sur instruction du responsable une fois l'unité sur `main` ; si
+                OP-27 à OP-29 ne sont pas encore jouées, dans la même mise à
+                jour : la build qui porte l'une porte les autres.
+Objectif      : `GET /v1/sparks/{nom}/suggestions` rend, pour les trois
+                notes, `replacement` — le texte que l'acceptation écrirait
+                (docs/DAT.md §55.8, §55.9.3) — et la console le compare au
+                texte actuel en deux colonnes. Lecture seule : aucune
+                migration, aucune variable, aucune route nouvelle, rien au
+                journal.
+Dépend de     : rien. Une console à jour devant une Forge qui ne l'est pas
+                compare le `.?` tel quel et le dit au-dessus de la
+                comparaison ; une console ancienne ignore le champ.
+Ordre         : 1. mettre à jour sparkd (runbook A.2) ;
+                2. relancer la console (`sparkui stop`, puis `sparkui`).
+Vérification  : par le parcours canonique, sur une cellule d'essai
+                (`essai-a`) : depuis son terminal, recopier
+                `/etc/spark/notes/README.md` dans `README.md.?` et en changer
+                une ligne ; puis l'accueil de la console, le Spark, l'onglet
+                Notes — la carte README.md porte le compte « 1 ligne retirée,
+                1 ajoutée », les deux colonnes, la ligne changée face à face,
+                et AUCUN en-tête « spark:note » dans la colonne de droite, ni
+                la mention d'une Forge qui ne rend pas le texte accepté.
+                « Refuser » vide le `.?` ; la note n'a pas changé.
+Retour arrière: réinstaller la build précédente (runbook A.2) et relancer la
+                console. Rien n'a été écrit que le retour arrière aurait à
+                défaire.
+Risques       : aucun connu — le champ est calculé à la lecture, par la
+                fonction que l'acceptation emploie déjà.
+```
+
 ### OP-29 · Le diagnostic en direct des routes : `sparkd` et la console (SPK-130)
 
 ```

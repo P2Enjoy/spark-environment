@@ -13449,6 +13449,13 @@ que la machine est cassée.
   l'empreinte de son contenu, et le **texte**, dépouillé de l'en-tête que le
   produit a posé.
 
+  Pour les trois notes, il rend **aussi `replacement`** : le texte que
+  l'acceptation écrirait, c'est-à-dire ce même texte privé, en plus, de
+  l'en-tête des **notes** (§54.7) qu'un agent y laisse quand il recopie le
+  fichier réel pour l'éditer. C'est ce texte-là que la console compare
+  (§55.9.3, SPK-131) : le retrait existe une seule fois, dans `sparkd`, là où
+  l'acceptation l'applique. Les natures à entrées n'ont pas ce champ.
+
   **C'est la console qui l'analyse, et non le serveur** — révisé avant
   implémentation. La grammaire du §43.10.1 existe déjà, **une seule fois**, dans
   `env-import.js`, avec ses numéros de ligne et ses refus ; et le §43.10.3 pose
@@ -13501,7 +13508,8 @@ existe, et elle porte son compte.
 L'écran d'acceptation **réemploie la relecture du §43.10.2** — une ligne, sa
 valeur, une case *secret* — plutôt que d'en inventer une seconde. C'est le même
 geste qu'un import collé ; seule l'origine du texte change, et l'écran le dit.
-Pour une note, la relecture est la comparaison des deux textes.
+Pour une note, la relecture est la comparaison des deux textes, **en deux
+colonnes, ligne à ligne, comme une revue de code** (§55.9.3).
 
 **L'UI ne surveille pas en tâche de fond.** La lecture a lieu à l'ouverture de la
 facette, et un bouton *Relire la cellule* la refait. Un sondage périodique
@@ -13583,6 +13591,102 @@ démentirait au premier clic — la leçon du §55.9.1.
 Cocher ou décocher ne change pas le compte du bouton : une ligne retenue sans TLS
 reste une ligne retenue. Le propriétaire qui veut réellement une route en clair
 la laisse décochée.
+
+#### 55.9.3 Une note proposée se relit en deux colonnes, comme une revue de code (SPK-131)
+
+Demandé par le responsable le 2026-09-30 : « lors des propositions de changement
+des fichiers INSTALL, CONTRIB, README, on devrait afficher un côte à côte comme
+GitHub, avec les différences, avant d'accepter ».
+
+**Le manque.** Le §55.9 posait déjà que, pour une note, « la relecture est la
+comparaison des deux textes ». L'écran ne comparait pas : il montrait la version
+proposée en entier, repliée au-dessus du champ qui porte le texte courant. Pour
+trouver ce qui change dans un README de quarante lignes où un agent a corrigé une
+adresse, il fallait relire les deux textes et faire la différence de tête — le
+geste qu'on saute, et qui fait accepter à l'aveugle. L'écran montrait aussi le
+`.?` **tel quel** : un agent qui recopie `README.md` pour l'éditer y laisse
+l'en-tête du produit (§54.7), que l'acceptation retire. Ce qu'on relisait n'était
+donc pas ce qu'on acceptait.
+
+**Ce qui est comparé.** À gauche, le texte que porte le registre — celui que
+l'acceptation remplacera —, avec sa révision. À droite, **le texte que
+l'acceptation écrirait** : le champ `replacement` de `GET /suggestions` (§55.8).
+La console ne retire aucun en-tête elle-même ; elle compare ce que `sparkd` dit
+qu'il écrira.
+
+Une Forge dont `sparkd` précède SPK-131 ne rend pas `replacement`. La console
+compare alors le `.?` tel quel, et **le dit** au-dessus de la comparaison : un
+en-tête recopié y apparaît comme ajouté, alors que l'acceptation le retirera.
+
+**Comment les deux textes s'alignent.** Ligne à ligne, par la plus longue
+sous-suite commune (algorithme de Myers), calculée dans la console : c'est une
+présentation, pas une analyse, et le §55.8 garde le serveur hors de la
+présentation. Dans un même bloc de changement, la *n*-ième ligne retirée fait
+face à la *n*-ième ligne ajoutée ; ce qui les distingue est marqué **mot à mot**.
+Le calcul est **borné à mille lignes de différence** : au-delà, l'écran montre le
+texte actuel retiré en entier et la version proposée ajoutée en entier, et le dit
+(voir plus bas). Une note fait au plus 64 Kio (§54.9) ; la borne ne sert qu'à ce
+qu'un texte entièrement réécrit n'immobilise pas l'onglet.
+
+**Ce que l'écran montre**, dans la carte de la note, **avant** les deux boutons
+qui tranchent — on relit, puis on décide :
+
+1. **le compte** : « 3 lignes retirées, 5 ajoutées, 31 identiques » ;
+2. **deux colonnes**, *Texte actuel · révision N* et *Version proposée*, chacune
+   avec ses numéros de ligne. Une ligne retirée porte un « − » et le fond du
+   refus, une ligne ajoutée un « + » et le fond du succès ; la synthèse vocale
+   entend « retirée » ou « ajoutée » ; les mots changés sont des `<del>` et des
+   `<ins>`. La couleur n'est jamais seule à dire ce qui change
+   (`DESIGN_SYSTEM.md` §1.5) ;
+3. **les lignes identiques se replient** : trois lignes de contexte autour de
+   chaque changement ; au-delà, un bouton compte et nomme ce qu'il cache —
+   « Afficher 12 lignes identiques (8 à 19) ». Il les rend sans quitter l'écran,
+   **reste en place** et devient « Masquer … » : le focus ne se perd pas
+   (§14.3). Un repli qui cacherait moins de quatre lignes n'est pas fait — il
+   coûterait plus qu'il ne cache. Ce qu'on a déplié **survit à la repeinture** :
+   accepter la note d'à côté ne le replie pas ;
+4. **les lignes longues se replient** dans leur colonne au lieu de défiler
+   (SPK-DS-18) : une note est de la prose, et un paragraphe tient souvent sur une
+   seule ligne ;
+5. **sous 768 px**, deux colonnes de vingt caractères ne se lisent pas, et un
+   défilement horizontal cacherait l'une des deux versions : la **même**
+   comparaison se rend **en une colonne**, chaque ligne retirée au-dessus de celle
+   qui la remplace. Le contenu est identique ; seule la disposition change.
+
+La comparaison n'est **pas** dans un repli fermé, contrairement à l'ancienne
+version proposée : c'est sur elle que la décision se prend. Le repli des lignes
+identiques la garde courte.
+
+**Quatre états se nomment** (`DESIGN_SYSTEM.md` §14.5, §14.6), au lieu d'un
+tableau qui les laisserait deviner :
+
+- la note n'a **jamais été écrite** : la colonne de gauche le dit, et tout le
+  texte proposé est ajouté ;
+- la version proposée est **identique** au texte actuel : aucune ligne ne change.
+  L'accepter n'écrit rien de nouveau — la révision avance et l'origine devient
+  « proposition acceptée » ; la refuser vide le `.?`. Les deux gestes restent
+  offerts ;
+- la version proposée est **vide** — l'agent n'a laissé que l'en-tête :
+  l'accepter effacerait le texte ;
+- les deux textes diffèrent **au-delà de la borne** : texte actuel retiré en
+  entier, version proposée ajoutée en entier. Ce n'est pas faux — c'est un
+  remplacement —, mais ce n'est plus le plus court, et l'écran ne le présente pas
+  comme tel.
+
+**Ce qui ne change pas** : les deux gestes et leurs libellés, l'empreinte relue
+(§55.5.2), la garde des secrets à l'acceptation (§54.6), le compte rendu qui
+survit à la proposition (SPK-DS-27), le champ de saisie de la note. La
+comparaison est une lecture, et n'écrit rien.
+
+**Ce que la comparaison ne garantit pas**, et qui la précède. La colonne de
+gauche est le texte relu à l'ouverture de la facette. L'acceptation ne porte pas
+la révision comparée : si la note a été réécrite entre-temps — depuis un autre
+onglet —, l'acceptation remplace cette version nouvelle sans l'avoir montrée.
+L'empreinte du §55.5.2 garde la colonne de droite ; rien ne garde celle de gauche.
+Le corriger demande de changer l'acceptation (une révision, et un `409`), ce que
+la demande ne porte pas : consigné ici, non corrigé en passant.
+
+Aucune route nouvelle, aucune migration, aucune variable d'environnement (§53).
 
 ### 55.10 Ce que cette unité ne fait pas
 

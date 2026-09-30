@@ -1108,7 +1108,8 @@ Trois conséquences, appliquées à la facette *Notes* :
 
 ### SPK-DS-27 · Une proposition se lit À CÔTÉ de ce qu'elle remplacerait
 
-**Date** : 2026-09-14 · SPK-105 · `DAT.md` §55.5, §55.9
+**Date** : 2026-09-14 · SPK-105 · `DAT.md` §55.5, §55.9 — révisé le 2026-09-30
+(SPK-131, §55.9.3)
 
 Le canal `.?` du §55 fait arriver à l'écran des textes venus de la **cellule**,
 que le propriétaire accepte ou refuse. Pour une note, la proposition est un
@@ -1116,15 +1117,37 @@ que le propriétaire accepte ou refuse. Pour une note, la proposition est un
 à l'aveugle.
 
 **La règle** : une proposition ne prend jamais la place de l'objet qu'elle vise.
-Les deux sont à l'écran en même temps — le texte courant dans son champ, la
-version proposée dans un bloc replié juste au-dessus —, et les boutons qui
-tranchent sont **dans** ce bloc, pas dans la barre d'actions de la carte.
+Les deux sont à l'écran en même temps, et les boutons qui tranchent sont **dans**
+le bloc de la proposition, pas dans la barre d'actions de la carte.
+
+**Pour une note, ce bloc est une comparaison en deux colonnes** — révisé le
+2026-09-30 (SPK-131, `DAT.md` §55.9.3, règle générique `DESIGN_SYSTEM.md`
+§6.29). Il montrait jusque-là la version proposée en entier, repliée au-dessus du
+champ qui porte le texte courant : pour trouver ce qui change, il fallait relire
+les deux et faire la différence de tête. Le responsable a demandé « un côte à
+côte comme GitHub, avec les différences, avant d'accepter ». Ce que la facette
+*Notes* en fait :
+
+- *Texte actuel · révision N* à gauche, *Version proposée* à droite, numérotés ;
+  les boutons *Accepter cette version* et *Refuser* **sous** la comparaison ;
+- le compte en tête — « 3 lignes retirées, 5 ajoutées, 31 identiques » ;
+- « − » sur fond `danger-soft`, « + » sur fond `success-soft`, les mots changés
+  en `<del>` et `<ins>` au texte `*-on-soft` ; les numéros de ligne en
+  `--color-text-2`, parce que `--color-text-3` ne tient pas l'AA sur les fonds
+  doux — calculé le 2026-09-30 : 4,12 sur `danger-soft`, 4,16 sur
+  `success-soft`, contre 6,44 et 6,50 pour `--color-text-2` ;
+- trois lignes de contexte, puis « Afficher N lignes identiques (a à b) » ;
+- une seule colonne sous 768 px ;
+- la colonne de droite est le `replacement` que rend `sparkd`, jamais le `.?`
+  brut : un agent qui recopie `README.md` y laisse l'en-tête du produit, que
+  l'acceptation retire. Une Forge qui ne le rend pas encore est **dite** au-dessus
+  de la comparaison.
 
 Trois choses que l'écran dit, parce qu'elles décident du geste :
 
 - **lire ne consomme pas.** « Tant que vous n'avez pas tranché, elle reste en
-  place — la lire ne l'efface pas. » Sans cette phrase, on hésite à ouvrir le
-  repli de peur de valider quelque chose ;
+  place — la lire ne l'efface pas. » Sans cette phrase, on hésite à ouvrir la
+  relecture de peur de valider quelque chose ;
 - **trancher retire du fichier de la cellule ce qui a été tranché**, et c'est
   ainsi que son auteur apprend qu'une décision a été prise. Le propriétaire doit
   le savoir : son geste a un effet de l'autre côté, sur quelqu'un qu'il ne voit
@@ -1135,8 +1158,9 @@ Trois choses que l'écran dit, parce qu'elles décident du geste :
   de secret dans une note — laisse la proposition intacte, et le compte rendu le
   dit, faute de quoi on croirait la proposition perdue.
 
-Le repli survit à la repeinture, comme celui du dossier (§14.3) : accepter la
-note d'à côté ne doit pas refermer ce qu'on était en train de comparer.
+Ce qu'on a ouvert survit à la repeinture, comme le repli du dossier (§14.3) :
+accepter la note d'à côté ne replie pas les lignes identiques qu'on venait de
+déplier, et ne referme pas la relecture ligne par ligne d'une variable.
 
 **Pour ce qui a des entrées — variables, secrets, routes —, la relecture est
 celle du lot collé** (SPK-DS-23) : une ligne, sa valeur, une case *Retenir*, et

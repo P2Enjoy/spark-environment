@@ -1422,6 +1422,59 @@ avec son propre engagement, donc sa propre modale.
 Le critère : plusieurs valeurs d’une **même** identité éditées d’un geste → §6.5 ;
 une section autonome parmi d’autres → §6.27.
 
+## 6.29 Comparer deux versions d’un texte avant d’accepter un remplacement
+
+Lorsqu’une interface demande d’accepter qu’un texte en **remplace** un autre, elle
+montre **la comparaison**, et non deux textes à comparer de tête. Relire deux
+versions entières pour y chercher ce qui change est le geste qu’on saute — et qui
+fait accepter à l’aveugle.
+
+**Ce qui est comparé est ce qui sera écrit.** Si le système transforme la version
+proposée avant de l’enregistrer — retrait d’un en-tête, normalisation des fins de
+ligne —, la comparaison porte sur le texte transformé, obtenu du système qui fait
+autorité (§1.2). Comparer la forme brute ferait relire autre chose que ce qu’on
+accepte.
+
+**Sur grand écran, deux colonnes alignées.** L’ancienne version à gauche, la
+nouvelle à droite, chacune titrée et numérotée ligne par ligne. Une ligne
+remplacée fait face à celle qui la remplace, et ce qui les distingue est marqué
+mot à mot. Les lignes longues se replient dans leur colonne plutôt que de
+défiler : les deux versions restent alignées et lisibles d’un regard.
+
+**Sous 768 px, une seule colonne.** Deux colonnes étroites ne se lisent plus, et un
+défilement horizontal cacherait l’une des deux versions — c’est-à-dire la moitié
+de la comparaison. La même comparaison se rend alors en une colonne, chaque ligne
+retirée au-dessus de celle qui la remplace. Le contenu ne change pas ; seule la
+disposition change (§8.1).
+
+**La couleur n’est jamais seule** (§1.5) :
+
+* chaque ligne retirée ou ajoutée porte un signe visible, « − » ou « + » ;
+* la synthèse vocale entend « retirée » ou « ajoutée » ;
+* les mots changés sont des éléments `del` et `ins`, qui gardent leur
+  soulignement et leur biffure.
+
+Fonds doux et textes `*-on-soft` suivent le §2.2 et le §14.1 : un contraste se
+mesure sur les couleurs rendues, numéros de ligne compris.
+
+**Les lignes identiques se replient au-delà d’un court contexte** — quelques
+lignes autour de chaque changement. Le repli est un bouton qui **compte** et
+**situe** ce qu’il cache (« Afficher 12 lignes identiques (8 à 19) »), porte
+`aria-expanded`, et **reste en place** une fois déplié pour permettre de replier :
+le focus ne se perd pas (§14.3). Un repli qui cacherait moins de lignes qu’il n’en
+occupe n’est pas fait. Ce qui a été déplié survit à une repeinture de la vue.
+
+**Le compte se lit en tête** : lignes retirées, ajoutées, identiques.
+
+**Les cas limites se nomment** (§14.5, §14.6) : une ancienne version qui n’existe
+pas encore, deux versions identiques, une nouvelle version vide, deux versions
+trop différentes pour être alignées dans la borne de calcul. Aucun ne se rend par
+un tableau muet.
+
+**La comparaison précède les gestes qui tranchent**, dans la même surface : on
+relit, puis on accepte ou on refuse. Elle n’est pas enfermée dans un repli fermé
+par défaut — c’est sur elle que la décision se prend.
+
 ---
 
 # 7. Interactions
