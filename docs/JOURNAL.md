@@ -13591,3 +13591,20 @@ redémarrer.
 **Vu en chemin** : la modale pré-remplit la mémoire arrondie au gibioctet et la
 renvoie — un Spark de 512 Mio en ressort à 1 Gio, sans qu'on ait touché à la
 mémoire. Consigné au rapport d'incohérences, à arbitrer.
+
+## 2026-10-01 · SPK-143 mesuré : CPU et mémoire peuvent porter les deux, par `raw.lxc`
+
+Mesure sur une cellule jetable de la VM du banc, consignée dans
+`docs/EXPLORATION_QUOTAS.md`. Première passe ratée par **le script**, pas par ce
+qu'il mesurait : `incus config set <c> raw.lxc 'clé = valeur'` — l'ancienne
+syntaxe — se trompe sur une valeur qui contient un `=`, et la troncature du
+message ne montrait que l'avertissement de syntaxe. Corrigé (`clé=valeur`),
+rejoué :
+
+- CPU : poids 50 et `cpu.max 50000 100000` ensemble, plafond tenu (0,5 CPU sous
+  deux boucles) ; sans plafond, la même cellule monte à 2 CPU ;
+- mémoire : `memory.low` 256 Mio et `memory.max` 512 Mio ensemble, plafond tenu
+  (tué à 700 Mio) ; le mode « souple » pose `memory.high`, et la cellule est
+  freinée jusqu'au blocage — ce n'est pas un débordement.
+
+Décision rendue au responsable, avec trois questions (fin du document).

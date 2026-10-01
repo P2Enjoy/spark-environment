@@ -8581,7 +8581,7 @@ checks de cohérence. »
   `rate 200Mbit`) ; la fiche montre les deux. Preuves `pytest` (13) et de
   composant : diagnostics. Captures observées. **Reste `[~]`** : OP-33.
 
-### [ ] SPK-143 · Mesurer sur la VM si le CPU et la mémoire peuvent porter une réservation ET un plafond
+### [x] SPK-143 · Mesurer sur la VM si le CPU et la mémoire peuvent porter une réservation ET un plafond
 
 **Décidé par le responsable le 2026-10-01** : « ok pour tester cpu et mémoire et
 disque on inspecte la faisabilité sur la VM locale puis on avisera », puis
@@ -8599,6 +8599,14 @@ pas ». Le disque sort donc du périmètre.
     `memory.high` / `memory.max`) : lesquels Incus pose, lesquels on peut poser,
     et ce que fait la cellule sous pression.
 - Aucun code produit, aucune migration.
+- **Mesuré le 2026-10-01** (`make forge-vm ARGS="--epreuve mesures-quotas"`),
+  consigné dans `docs/EXPLORATION_QUOTAS.md` : pour le CPU comme pour la
+  mémoire, une réservation (poids, plancher `memory.low`) et un plafond
+  (`cpu.max`, `memory.max`) **coexistent** sur une même cellule quand le second
+  réglage passe par `raw.lxc`, et le plafond tient sous charge ; le mode mémoire
+  « souple » d'Incus **freine** une cellule jusqu'au blocage au lieu de la
+  laisser déborder. Non mesurés : le poids sous contention, le plancher sous
+  pression de la Forge. **La décision revient au responsable.**
 ---
 
 ## Lot 6 — Réseau entre Sparks
