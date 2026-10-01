@@ -13562,3 +13562,15 @@ Le relevé du modèle (backlog SPK-142) ne trouve deux valeurs **indépendantes*
 que pour le réseau ; CPU et mémoire en ont deux notions, mais Incus ne les pose
 pas ensemble sans un nouveau mode à mesurer. Ce périmètre est soumis au
 responsable avant d'écrire la spécification.
+
+## 2026-10-01 · SPK-142 cadré : le réseau seul ; SPK-143 : mesurer CPU et mémoire
+
+Arbitrages du responsable sur le relevé de SPK-142 :
+
+- **réseau** : « ok » — réservation et plafond réglés séparément, avec contrôles
+  de cohérence ; SPK-142 porte le réseau seul ;
+- **CPU et mémoire** : « on inspecte la faisabilité sur la VM locale puis on
+  avisera » — unité SPK-143, une mesure consignée dans
+  `docs/EXPLORATION_QUOTAS.md`, puis décision ; pour la mémoire, « peut-être
+  cela pourrait servir mais je sais pas » ;
+- **disque** : « cela reste en dur » — un quota, rien de plus.

@@ -8554,8 +8554,11 @@ réservation et un burst max ? dans ce cas, je veux gérer les deux séparément
 si d'autres métriques ont un fonctionnement similaire je les veux aussi. Avec
 checks de cohérence. »
 
-- Spécification : **à écrire** (DAT §7.6, §49.2 ; SCHEMA §2 ; SPK-DS) — le
-  périmètre des autres ressources est soumis au responsable avant.
+- Spécification : **à écrire** (DAT §7.6, §49.2 ; SCHEMA §2 ; SPK-DS).
+- **Périmètre arbitré le 2026-10-01** : « ok pour réseau » — l'unité porte le
+  **réseau** seul. CPU et mémoire : leur faisabilité se mesure d'abord sur la VM
+  (SPK-143). Disque : « cela reste en dur » — un quota, sans réservation
+  distincte.
 - Relevé du modèle, pour décider de ce périmètre :
   - **réseau** — deux valeurs indépendantes : la réservation (admission) et le
     plafond (`limits.max`, seule valeur posée sur la carte). Création : l'API
@@ -8568,6 +8571,25 @@ checks de cohérence. »
   - **mémoire** — une seule valeur (`limits.memory`) et un mode, `hard` ou
     `soft` ; Incus n'offre pas de second seuil indépendant ;
   - **disque** — un quota, sans réservation distincte ni surengagement (§7.7).
+
+### [ ] SPK-143 · Mesurer sur la VM si le CPU et la mémoire peuvent porter une réservation ET un plafond
+
+**Décidé par le responsable le 2026-10-01** : « ok pour tester cpu et mémoire et
+disque on inspecte la faisabilité sur la VM locale puis on avisera », puis
+« disque cela reste en dur, mémoire peut-être cela pourrait servir mais je sais
+pas ». Le disque sort donc du périmètre.
+
+- Nature : **une mesure, pas une fonctionnalité.** Elle se joue sur la VM du
+  banc (SPK-137), se consigne dans `docs/EXPLORATION_QUOTAS.md`, et rend la main
+  au responsable, qui décide ensuite.
+- À mesurer, dans une cellule réelle :
+  - **CPU** — une réservation (poids sous contention) et un plafond (`cpu.max`)
+    peuvent-ils coexister sur une même cellule, par quels réglages Incus, et
+    l'ordonnanceur les respecte-t-il sous charge ?
+  - **mémoire** — un seuil garanti et un plafond distincts (`memory.low` /
+    `memory.high` / `memory.max`) : lesquels Incus pose, lesquels on peut poser,
+    et ce que fait la cellule sous pression.
+- Aucun code produit, aucune migration.
 ---
 
 ## Lot 6 — Réseau entre Sparks
