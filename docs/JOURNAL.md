@@ -13546,3 +13546,19 @@ plus). `--garder` éprouvé à part : console joignable pendant la garde, et
   d'incohérences sans être corrigés : l'aide du gabarit d'alerte qui nomme huit
   champs sur dix, et le panneau « Installer cette Forge » qui s'affiche sur une
   Forge installée, avec des accents graves bruts.
+
+## 2026-10-01 · Le `500` du débit réseau, et la décision : deux valeurs, réglées séparément
+
+**Le défaut**, signalé par une capture du responsable : la modale « Ressources »
+refusait « Le serveur a refusé ces quotas. » en montant le débit. Reproduit :
+`PATCH` à 100 Mbit/s sur un Spark créé à 10 Mbit/s → `500`. La modale écrivait
+`network_reservation_bps` sous le libellé « Plafond réseau », jamais
+`network_burst_bps` ; la contrainte `plafond ≥ réservation` levait une
+`IntegrityError` non rattrapée. Le registre n'a pas changé (transaction annulée).
+
+**Décision du responsable** : gérer réservation et plafond séparément, partout
+où une ressource a les deux, avec des contrôles de cohérence — unité SPK-142.
+Le relevé du modèle (backlog SPK-142) ne trouve deux valeurs **indépendantes**
+que pour le réseau ; CPU et mémoire en ont deux notions, mais Incus ne les pose
+pas ensemble sans un nouveau mode à mesurer. Ce périmètre est soumis au
+responsable avant d'écrire la spécification.

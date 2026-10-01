@@ -8541,6 +8541,33 @@ supprimé chez Caddy ».
   sur la page ; Caddy relancé, le retrait aboutit et Caddy ne la sert plus
   (configuration vivante relue) ; captures observées. **Reste `[~]`** : OP-33.
 
+
+### [ ] SPK-142 · Une réservation et un plafond se règlent séparément, avec leurs contrôles de cohérence
+
+**Constaté le 2026-10-01** (rapport d'incohérences) : monter le débit réseau
+d'un Spark échouait en `500` — la modale « Plafond réseau » écrivait la
+réservation, jamais le plafond, et la contrainte `plafond ≥ réservation` du
+registre levait une erreur que rien ne rattrapait.
+
+**Décidé par le responsable le même jour** : « pour le network on a une
+réservation et un burst max ? dans ce cas, je veux gérer les deux séparément, et
+si d'autres métriques ont un fonctionnement similaire je les veux aussi. Avec
+checks de cohérence. »
+
+- Spécification : **à écrire** (DAT §7.6, §49.2 ; SCHEMA §2 ; SPK-DS) — le
+  périmètre des autres ressources est soumis au responsable avant.
+- Relevé du modèle, pour décider de ce périmètre :
+  - **réseau** — deux valeurs indépendantes : la réservation (admission) et le
+    plafond (`limits.max`, seule valeur posée sur la carte). Création : l'API
+    accepte les deux, la console n'en envoie qu'une ; redimensionnement : la
+    réservation seule ;
+  - **CPU** — un mode porte soit une réservation (`shared`, burst illimité),
+    soit un plafond (`capped`) ; Incus n'exprime pas les deux à la fois par
+    `limits.cpu.allowance`. Les avoir ensemble serait un cinquième mode, à
+    mesurer ;
+  - **mémoire** — une seule valeur (`limits.memory`) et un mode, `hard` ou
+    `soft` ; Incus n'offre pas de second seuil indépendant ;
+  - **disque** — un quota, sans réservation distincte ni surengagement (§7.7).
 ---
 
 ## Lot 6 — Réseau entre Sparks

@@ -65,7 +65,6 @@ baissant), elle change la comptabilité mais **pas** le plafond appliqué — so
 libellé « Plafond réseau » ment ; et la création, elle, pose les deux à la même
 valeur (`network_bps`).
 
-**Non résolu ici** : à arbitrer par le responsable — la valeur de la modale
-fixe la réservation ET le plafond, comme à la création ; un refus nommé au
-lieu d'un `500` ; et la console qui dit le code reçu quand la Forge ne donne pas
-de raison.
+**Arbitré le 2026-10-01** : réservation et plafond se règlent **séparément**,
+avec des contrôles de cohérence — unité SPK-142. L'entrée sort du rapport quand
+elle est livrée.
