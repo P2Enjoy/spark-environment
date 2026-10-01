@@ -235,6 +235,9 @@ function renderRessources(spark, usage) {
       usage?.memory?.used_bytes != null ? ` — ${formatBytes(usage.memory.used_bytes)} utilisés` : ''}`, true],
     ['Disque', `${formatBytes(spark.storage_bytes)}${
       usage?.disk?.used_bytes != null ? ` — ${formatBytes(usage.disk.used_bytes)} utilisés` : ''}`, true],
+    // SPK-142 · SPK-DS-37 : les DEUX valeurs réseau, sous les libellés de la
+    // modale qui les règle.
+    ['Réservation réseau', formatBps(spark.network_reservation_bps), true],
     ['Plafond réseau', formatBps(spark.network_burst_bps), true],
   ])}
   <p class="note">Seul le plafond réseau est appliqué par le noyau.
@@ -462,8 +465,10 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE, contexte = {}) {
       ${quota('memory_gib', 'memory', 'memory', 'Mémoire', v.memory_gib, '', 'Gio')}
       ${quota('storage_gib', 'storage', 'storage', 'Disque', v.storage_gib,
               'pris en compte immédiatement', 'Gio')}
-      ${quota('network_mbit', 'network', 'network', 'Plafond réseau', v.network_mbps,
-              '', 'Mbit/s')}
+      ${quota('network_mbit', 'network', 'network', 'Réservation réseau', v.network_mbps,
+              'Comptée dans la capacité de la Forge ; posée nulle part.', 'Mbit/s')}
+      ${quota('burst_mbit', 'burst', 'burst', 'Plafond réseau', v.burst_mbps,
+              'Posé sur la carte du Spark : il ne le dépasse jamais.', 'Mbit/s')}
       <p class="note">Ce que vous retirez doit être libre : réduire la mémoire
       sous ce que la cellule emploie, ou le disque sous ce qu’il contient, sera
       refusé. <a href="#/manuel/M8">Manuel M8 — Exploiter au quotidien</a></p>`,
@@ -473,7 +478,7 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE, contexte = {}) {
 /** Valeurs de la modale des quotas. Vide tant qu'on ne l'a pas ouverte. */
 export const QUOTAS_VIDE = {
   open: false, busy: false, refusal: null,
-  values: { memory_gib: '', storage_gib: '', network_mbps: '',
+  values: { memory_gib: '', storage_gib: '', network_mbps: '', burst_mbps: '',
             cpu_mode: '', cpu_reservation: '', cpu_max: '', cpu_cores: '' },
 };
 

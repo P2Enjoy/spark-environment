@@ -270,7 +270,9 @@ const portHttp = await portLibre();
 executer('qemu-img', ['create', '-q', '-f', 'qcow2', '-F', 'qcow2', '-b', IMAGE,
                       join(travail, 'racine.qcow2'), '30G']);
 for (const d of ['d1', 'd2']) {
-  executer('qemu-img', ['create', '-q', '-f', 'qcow2', join(travail, `${d}.qcow2`), '8G']);
+  // 16 Go, creux : les épreuves créent leurs Sparks à côté du témoin (SPK-137),
+  // et un pool de 7 Gio refusait le troisième à l'admission.
+  executer('qemu-img', ['create', '-q', '-f', 'qcow2', join(travail, `${d}.qcow2`), '16G']);
 }
 const console_ = join(travail, 'console.log');
 qemu = spawn('qemu-system-x86_64', [

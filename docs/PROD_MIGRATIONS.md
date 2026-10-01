@@ -120,16 +120,19 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 
 ## 3. Opérations en attente
 
-### OP-33 · Retrait de route confirmé par Caddy, refus lus dans la ligne, saisie des alertes gardée (SPK-139 à SPK-141)
+### OP-33 · Retrait de route confirmé par Caddy, refus lus dans la ligne, saisie des alertes gardée, réseau en deux valeurs (SPK-139 à SPK-142)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable, une fois
-                SPK-139 à SPK-141 validés sur la VM du banc (SPK-137).
+État          : EN ATTENTE — à jouer sur instruction du responsable. SPK-139
+                à SPK-142 sont validés sur la VM du banc (SPK-137).
 Objectif      : `DELETE /v1/ingress/{domain}` ne retire la route du registre
                 qu'une fois Caddy confirmé (SPK-141, docs/DAT.md §18.8) ; la
                 console rend le refus de « Retirer la route » et de
                 « Réappliquer » dans la ligne (SPK-139), et garde la saisie des
-                alertes au refus (SPK-140). Aucune migration, aucune variable.
+                alertes au refus (SPK-140) ; la réservation et le plafond
+                réseau se règlent séparément, le plafond est posé sur `eth0`,
+                et une incohérence est un refus nommé au lieu d'un `500`
+                (SPK-142, §49.7). Aucune migration, aucune variable.
 Dépend de     : OP-32 (même chemin de mise à jour).
 Ordre         : 1. sauvegarder le registre (§2 bis) ;
                 2. mettre à jour sparkd (runbook A.2) ;

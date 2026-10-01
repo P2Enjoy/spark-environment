@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 · docs/DESIGN_SYSTEM_APP.md
+ *           SPK-DS-37 (deux champs réseau à la création ; la borne du plafond)
  * @verifies docs/BACKLOG.md#SPK-20 · docs/DAT.md §25 ·
  *           docs/DESIGN_SYSTEM.md §6.9, §7.1, §14.9
  * @verifies docs/BACKLOG.md#SPK-59 · docs/DESIGN_SYSTEM.md §6.9 bis ·
@@ -525,4 +527,29 @@ test('sans catalogue non amorçable, l’aide ne parle pas d’amorçage', () =>
   ]);
   assert.ok(!/pas amorçables du tout/.test(rendu));
   assert.ok(!/ne reçoivent pas Docker/.test(rendu));
+});
+
+
+// --- SPK-142 · SPK-DS-37 : la réservation et le plafond réseau, à la création ----
+
+test('la création porte la réservation PUIS le plafond réseau', () => {
+  const html = renderSparkCreate({ values: DEFAUTS });
+  const reservation = html.indexOf('Réservation réseau');
+  const plafond = html.indexOf('Plafond réseau');
+  assert.ok(reservation >= 0 && plafond > reservation);
+  assert.match(html, /name="burst_mbit"/);
+  assert.equal(DEFAUTS.burst_mbit, DEFAUTS.network_mbit, 'par défaut, le plafond vaut la réservation');
+});
+
+test('un plafond nul est une faute de FORME ; sa cohérence, c’est la Forge', () => {
+  assert.ok(validateShape({ ...DEFAUTS, name: 'crm', burst_mbit: 0 }).burst_mbit);
+  // Un plafond sous la réservation n'est PAS refusé ici : la Forge le prononce.
+  assert.equal(validateShape({ ...DEFAUTS, name: 'crm', network_mbit: 100, burst_mbit: 10 })
+    .burst_mbit, undefined);
+});
+
+test('le plafond se borne au LIEN, pas au pool surengagé', () => {
+  const contexte = { pools: { network: { capacity: 2e9, overcommit: 2 } } };
+  assert.equal(borneHaute('burst_mbit', contexte), 1000);
+  assert.equal(borneHaute('network_mbit', contexte), 2000);
 });

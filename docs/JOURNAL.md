@@ -13574,3 +13574,20 @@ Arbitrages du responsable sur le relevé de SPK-142 :
   `docs/EXPLORATION_QUOTAS.md`, puis décision ; pour la mémoire, « peut-être
   cela pourrait servir mais je sais pas » ;
 - **disque** : « cela reste en dur » — un quota, rien de plus.
+
+## 2026-10-01 · SPK-142 livré : la réservation et le plafond réseau, séparés
+
+**Ce qui est fait** (DAT §49.7, SPK-DS-37) : deux champs à la création et dans
+la modale, les deux valeurs sur la fiche ; trois contrôles de cohérence dans
+`sparkd`, refusés en `422 quota_incoherent` avec le champ en cause ; le plafond
+posé sur `eth0` par `update_device_config` — la pose des quotas ne touchait pas
+la carte ; la console dit le code reçu quand une réponse n'a pas de raison.
+
+**Vérifié sur la VM du banc**, par la console : le cas signalé — 10 Mbit/s,
+réservation montée seule à 100 — refusé en clair, rien d'écrit ; le plafond
+monté à 200, posé sur `eth0`, et la classe `htb` du noyau à `rate 200Mbit` sans
+redémarrer.
+
+**Vu en chemin** : la modale pré-remplit la mémoire arrondie au gibioctet et la
+renvoie — un Spark de 512 Mio en ressort à 1 Gio, sans qu'on ait touché à la
+mémoire. Consigné au rapport d'incohérences, à arbitrer.

@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 · docs/DESIGN_SYSTEM_APP.md
+ *           SPK-DS-37 (la réservation et le plafond réseau, deux champs)
  * @verifies docs/BACKLOG.md#SPK-19 · docs/DAT.md §24 ·
  *           docs/DESIGN_SYSTEM.md §6.4, §6.22, §6.23, §14.5, §14.9
  *
@@ -1246,4 +1248,33 @@ test('SPK-111 · la section Réseau liste ce que le Spark expose et ce qu’il p
   assert.ok(!/Aucun lien privé/.test(rendu));
   const rien = renderSparkDetail({ status: 'ready', spark, memberships: [], reseaux: [] });
   assert.match(rien, /Aucun lien privé : ce Spark n’expose rien dans un réseau/);
+});
+
+
+// --- SPK-142 · SPK-DS-37 : la réservation et le plafond réseau, séparés ---------
+
+const SPARK_RESEAU = { ...SPARK_LIBRE, network_reservation_bps: 10_000_000,
+                       network_burst_bps: 80_000_000 };
+
+test('la modale porte DEUX champs réseau : la réservation, puis le plafond', () => {
+  const html = renderQuotas(SPARK_RESEAU, {
+    ...QUOTAS_REMPLIS, values: { ...QUOTAS_REMPLIS.values, network_mbps: '10', burst_mbps: '80' },
+  }, CAPACITE);
+  const reservation = html.indexOf('Réservation réseau');
+  const plafond = html.indexOf('Plafond réseau');
+  assert.ok(reservation >= 0 && plafond > reservation, 'la réservation, puis le plafond');
+  assert.match(html, /id="quota-network"[^>]*name="network"[^>]*value="10"|name="network"[^>]*value="10"/);
+  assert.match(html, /id="quota-burst"/);
+  assert.match(html, /name="burst"[^>]*value="80"|value="80"[^>]*name="burst"/);
+  assert.match(html, /posée nulle part/);
+  assert.match(html, /Posé sur la carte du Spark/);
+});
+
+test('la fiche montre la réservation ET le plafond réseau', () => {
+  const html = renderSparkDetail({ status: 'ready', spark: SPARK_RESEAU });
+  const section = html.slice(html.indexOf('titre-ressources'), html.indexOf('data-ouvre="quotas"'));
+  assert.match(section, /Réservation réseau/);
+  assert.match(section, /Plafond réseau/);
+  assert.match(section, /10 Mbit\/s/);
+  assert.match(section, /80 Mbit\/s/);
 });

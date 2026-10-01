@@ -593,6 +593,15 @@ function brancher() {
         etat.creation.values[controle.name] =
           ['number', 'range'].includes(controle.type) ? Number(brut) : brut;
         if (controle.name === 'cpu_mode') { peindre(); return; }   // les champs suivent le mode
+        // SPK-142 · SPK-DS-37 : le plafond SUIT la réservation tant qu'on ne l'a
+        // pas réglé, et cesse de la suivre dès qu'on y touche.
+        if (controle.name === 'burst_mbit') etat.creation.plafondRegle = true;
+        const plafond = formulaire.querySelector('[name="burst_mbit"]');
+        if (controle.name === 'network_mbit' && !etat.creation.plafondRegle && plafond) {
+          plafond.value = brut;
+          etat.creation.values.burst_mbit = Number(brut);
+          rafraichirQuota(formulaire, plafond);
+        }
         rafraichirQuota(formulaire, controle);
       });
     }
@@ -1844,7 +1853,10 @@ function brancherPanneaux() {
     q.values = {
       memory_gib: String(Math.round(etat.spark.memory_reservation_bytes / 1024 ** 3)),
       storage_gib: String(Math.round(etat.spark.storage_bytes / 1024 ** 3)),
-      network_mbps: String(Math.round(etat.spark.network_burst_bps / 1e6)),
+      // SPK-142 · §49.7 : la réservation ET le plafond, chacun sous son nom. La
+      // modale pré-remplissait le plafond, puis l'envoyait comme réservation.
+      network_mbps: String(Math.round(etat.spark.network_reservation_bps / 1e6)),
+      burst_mbps: String(Math.round(etat.spark.network_burst_bps / 1e6)),
       // §49.2 : le mode CPU se redimensionne, et ses réglages DÉPENDENT de lui.
       // On les pré-remplit tous les trois : changer de mode puis revenir ne doit
       // pas avoir effacé ce qu'on n'a pas touché.
@@ -2384,12 +2396,12 @@ function noterSignature(reponse) {
 /** Du nom d'un champ de la modale vers sa clé d'état (SPK-57). Les unités font
  *  partie du nom d'état : « memory_gib » dit ce qu'on y met, « memory » non. */
 const CLES_QUOTA = {
-  memory: 'memory_gib', storage: 'storage_gib', network: 'network_mbps',
+  memory: 'memory_gib', storage: 'storage_gib', network: 'network_mbps', burst: 'burst_mbps',
 };
 
 /** Du nom du contrôle vers la définition visuelle partagée avec la création. */
 const NOMS_QUOTA = {
-  memory: 'memory_gib', storage: 'storage_gib', network: 'network_mbit',
+  memory: 'memory_gib', storage: 'storage_gib', network: 'network_mbit', burst: 'burst_mbit',
 };
 
 /**
@@ -2399,6 +2411,9 @@ const NOMS_QUOTA = {
  *       §49.3 (un refus de rétrécissement n'est pas un refus d'admission) ·
  *       docs/DESIGN_SYSTEM.md §6.27 (le refus s'affiche DANS la modale et
  *       n'efface aucune saisie), §1.3 (pas de succès simulé)
+ * @spec docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 (la réservation et le
+ *       plafond réseau, envoyés séparément ; le code reçu quand la Forge ne
+ *       donne pas de raison) · docs/DESIGN_SYSTEM_APP.md SPK-DS-37
  *
  * **Le refus reste dans la modale**, avec la saisie intacte : une modale qui se
  * refermerait sur un refus ferait perdre le travail ET cacherait la raison.
@@ -2518,6 +2533,9 @@ async function appliquerQuotas() {
     memory_reservation_bytes: Math.round(Number(q.values.memory_gib) * 1024 ** 3),
     storage_bytes: Math.round(Number(q.values.storage_gib) * 1024 ** 3),
     network_reservation_bps: Math.round(Number(q.values.network_mbps) * 1e6),
+    // SPK-142 · §49.7 : le plafond, à part. La cohérence des deux est prononcée
+    // par la Forge, et son refus s'affiche ici (SPK-DS-37).
+    network_burst_bps: Math.round(Number(q.values.burst_mbps) * 1e6),
   };
 
   const vu = await appel('PATCH', `/v1/sparks/${encodeURIComponent(etat.spark.name)}`, corps);
@@ -2527,8 +2545,10 @@ async function appliquerQuotas() {
     // Le runtime NOMME ses refus : « pas la place » et « ce que vous retirez est
     // utilisé » ne se disent pas pareil (§49.3). Les remplacer par un code HTTP
     // ferait deviner lequel des deux on a reçu.
+    // SPK-142 · §49.7 : une réponse sans raison lisible — un `500`, un relais
+    // muet — n'est pas un refus. On dit le code reçu, on n'invente pas de cause.
     q.refusal = vu.corps?.detail?.message ?? vu.corps?.message
-      ?? 'Le serveur a refusé ces quotas.';
+      ?? `La Forge a répondu ${vu.statut ?? '?'} sans donner de raison.`;
     return peindre();
   }
 
@@ -2550,7 +2570,7 @@ async function appel(methode, chemin, corps = null) {
       ...(corps ? { body: JSON.stringify(corps) } : {}) });
   let rendu = null;
   try { rendu = await reponse.json(); } catch { /* corps vide */ }
-  return { ok: reponse.ok, corps: rendu };
+  return { ok: reponse.ok, statut: reponse.status, corps: rendu };
 }
 
 /**
@@ -3272,6 +3292,8 @@ async function creer() {
     name: v.name, image: v.image, cpu_mode: v.cpu_mode,
     memory_bytes: Math.round(v.memory_gib * 1024 ** 3),
     network_bps: Math.round(v.network_mbit * 1e6),
+    // SPK-142 · §49.7 : le plafond, à part.
+    network_burst_bps: Math.round(v.burst_mbit * 1e6),
     storage_bytes: Math.round(v.storage_gib * 1024 ** 3),
     ...(['shared', 'shared-pinned'].includes(v.cpu_mode) ? { cpu_reservation: v.cpu_reservation } : {}),
     ...(v.cpu_mode === 'capped' ? { cpu_max: v.cpu_max } : {}),
@@ -3290,6 +3312,7 @@ async function creer() {
       return;
     }
     etat.creation.values = { ...DEFAUTS };
+    etat.creation.plafondRegle = false;
     etat.creation.submitting = false;
     location.hash = `#/sparks/${encodeURIComponent(rendu.name)}`;
   } catch (erreur) {

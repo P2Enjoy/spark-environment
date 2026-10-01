@@ -44,27 +44,19 @@ capture d'échec du parcours clavier instable (entrée ci-dessus).
 le responsable : le panneau n'apparaît que sur une destination qui ne porte pas
 `sparkd`, ou sa phrase dit ce qu'elle a relevé ; et le nom s'écrit en `<code>`.
 
-## 2026-10-01 · Monter le débit réseau d'un Spark échoue en `500`, sans raison affichée
+## 2026-10-01 · La modale « Ressources » arrondit la mémoire au gibioctet, et renvoie la valeur arrondie
 
-**Signalé par le responsable** (capture de la modale « Ressources » : « Le
-serveur a refusé ces quotas. ») et **reproduit** sur le doublon : un Spark créé
-à 10 Mbit/s, puis `PATCH /v1/sparks/{nom}` avec 100 Mbit/s → `500 Internal
-Server Error`, en texte brut.
+**Constaté** sur la capture `spk142-vm-reservation-et-plafond`, prise dans la
+console branchée sur la VM du banc : un Spark créé avec **512 Mio**, dont on n'a
+changé que le réseau, a **1 Gio** de mémoire après « Appliquer les quotas ». La
+modale pré-remplit la mémoire par `Math.round(octets / 1 Gio)`
+(`apps/webui/src/app.js`) — 0,5 devient 1 —, puis envoie la valeur affichée.
+Changer un seul réglage en modifie donc un autre, en silence ; un Spark à
+1,25 Gio redescendrait à 1 Gio, ou serait refusé pour rétrécissement.
+`DESIGN_SYSTEM.md` §6.9 bis : la valeur affichée est EXACTE sur la grille du
+curseur, dont le pas mémoire est 256 Mio.
 
-**Cause, lue dans la trace** : la modale « Plafond réseau » envoie
-`network_reservation_bps` — la valeur de **comptabilité** —, et
-`sparks.resize` ne touche jamais `network_burst_bps` — le **plafond**, seule
-valeur posée sur la carte (DAT §7.6, SCHEMA §2). Monter la réservation au-dessus
-du plafond viole la contrainte `network_burst_bps >= network_reservation_bps` ;
-l'`IntegrityError` n'est rattrapée nulle part, d'où le `500`, et la console,
-qui ne trouve aucun message dans un corps non JSON, dit « Le serveur a refusé
-ces quotas. ». La transaction est annulée : le registre n'a pas changé.
-
-Deux écarts de plus, qui viennent avec : quand la modale **réussit** (en
-baissant), elle change la comptabilité mais **pas** le plafond appliqué — son
-libellé « Plafond réseau » ment ; et la création, elle, pose les deux à la même
-valeur (`network_bps`).
-
-**Arbitré le 2026-10-01** : réservation et plafond se règlent **séparément**,
-avec des contrôles de cohérence — unité SPK-142. L'entrée sort du rapport quand
-elle est livrée.
+**Non résolu ici** : hors du périmètre arbitré de SPK-142. À arbitrer par le
+responsable : pré-remplir la valeur exacte, et n'envoyer que les réglages
+changés. D'ici là, sur un Spark dont la mémoire n'est pas un nombre entier de
+gibioctets, la modale ne doit pas être employée.

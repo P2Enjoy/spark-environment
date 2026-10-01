@@ -19,7 +19,7 @@ avancent d'un cran, `Origine` et `Fin` vont aux extrémités, `Page préc.` et
 `Page suiv.` se déplacent par bonds.
 
 Chaque quota a son propre pas, choisi sur ce que la valeur signifie : la
-**mémoire avance de 256 Mio**, le disque d'un gibioctet, le débit de 10 Mbit/s,
+**mémoire avance de 256 Mio**, le disque d'un gibioctet, le réseau de 10 Mbit/s,
 la réservation CPU — comme le plafond CPU — de **0,25 CPU**. La mémoire est plus
 fine que les autres parce que des Sparks utiles tiennent en 512 Mio : un pas d'un
 gibioctet aurait rendu cette valeur impossible à choisir. Le CPU, lui, avance par
@@ -44,7 +44,7 @@ de sens que si sa plage se parcourt à la main sans perdre la précision utile. 
 une machine dont le pool disque dépasse le millier de gibioctets, un curseur au
 gibioctet compterait plusieurs milliers de crans : impossible à viser, et un pas
 plus grossier rendrait un quota courant de 10 Gio inatteignable. Le disque s'y
-saisit donc au clavier, pendant que la mémoire et le débit restent des curseurs.
+saisit donc au clavier, pendant que la mémoire et le réseau restent des curseurs.
 La mémoire cède de la même façon au-delà d'une centaine de gibioctets de pool,
 puisqu'elle avance par pas de 256 Mio.
 
@@ -175,11 +175,25 @@ des journaux, du texte, du JSON — vous logez davantage que ce que vous avez
 demandé ; avec des données déjà compressées — images, archives, vidéos — vous
 obtenez exactement votre quota. Vous n'en obtenez jamais moins.
 
-## Le débit réseau
+## Le réseau : une réservation et un plafond
 
-Seul le **plafond** est appliqué par le noyau. La réservation réseau sert à la
-comptabilité : elle empêche de survendre le lien, elle ne garantit pas une bande
-passante.
+Deux champs, et ils ne disent pas la même chose :
+
+- la **réservation réseau** est comptée dans la capacité de la Forge : c'est elle
+  qui empêche de survendre le lien. Elle n'est posée nulle part, et ne garantit
+  donc pas une bande passante — le noyau n'offre pas de réservation de débit ;
+- le **plafond réseau** est posé sur la carte du Spark : le Spark ne le dépasse
+  jamais, et l'atteint quand le lien est libre.
+
+Tant que vous ne touchez pas au plafond, il **suit** la réservation : un Spark
+réservé à 100 Mbit/s est plafonné à 100 Mbit/s. Réglez-le plus haut pour qu'il
+profite du lien quand les autres ne s'en servent pas. Son curseur va jusqu'au
+débit de la Forge, et pas au-delà : un plafond plus haut que le lien ne
+limiterait rien.
+
+La Forge **refuse un plafond sous la réservation** — on ne peut pas garantir à un
+Spark plus que ce qu'il a le droit d'atteindre. Le refus chiffre l'écart, et
+votre saisie reste intacte.
 
 ## Lire un refus
 

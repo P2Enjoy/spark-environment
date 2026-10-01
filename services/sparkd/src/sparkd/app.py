@@ -3679,6 +3679,13 @@ def create_app(config: Config) -> FastAPI:
                         for m in refus.decision.shortfalls
                     ],
                 }) from refus
+            except service.QuotaIncoherent as refus:
+                # SPK-142 · §49.7 : deux valeurs qui se contredisent. 422 et non
+                # 409 : rien ne manque sur la Forge, c'est la demande qui ne
+                # tient pas debout — et le champ est NOMMÉ.
+                raise HTTPException(status_code=422, detail={
+                    "error": "quota_incoherent", "field": refus.champ,
+                    "message": str(refus)}) from refus
             except service.ShrinkRefused as refus:
                 raise HTTPException(status_code=409, detail={
                     "error": "shrink_refused",
@@ -3788,6 +3795,12 @@ def create_app(config: Config) -> FastAPI:
                 spark["incus_name"], devices["root"]["size"])
             app.state.incus.update_instance_config(
                 spark["incus_name"], traduit.config)
+            # SPK-142 · §49.7 : le plafond réseau vit sur le device `eth0`, pas
+            # dans la configuration de l'instance. Sans cette ligne, aucun
+            # redimensionnement n'atteignait la carte.
+            app.state.incus.update_device_config(
+                spark["incus_name"], "eth0",
+                {"limits.max": devices["eth0"]["limits.max"]})
         except (TranslationError, IncusError, KeyError) as erreur:
             return False, str(erreur)
         return True, None
@@ -3856,6 +3869,11 @@ def create_app(config: Config) -> FastAPI:
                 # comme un refus d'admission ordinaire.
                 raise HTTPException(status_code=409, detail={
                     "error": "image_refused", "message": str(erreur)}) from erreur
+            except service.QuotaIncoherent as refus:
+                # SPK-142 · §49.7 : la même réponse qu'au redimensionnement.
+                raise HTTPException(status_code=422, detail={
+                    "error": "quota_incoherent", "field": refus.champ,
+                    "message": str(refus)}) from refus
             except service.SparkError as erreur:
                 raise HTTPException(status_code=409, detail={
                     "error": "refused", "message": str(erreur)}) from erreur

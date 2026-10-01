@@ -298,6 +298,17 @@
   sur la Forge. **Inerte tant qu'OP-10 n'est pas joué.**
 
 ### Corrigé
+- **SPK-142 — la réservation et le plafond réseau se règlent séparément.**
+  Monter le débit d'un Spark finissait en `500` : la modale « Plafond réseau »
+  écrivait la réservation, jamais le plafond, et la contrainte
+  `plafond ≥ réservation` du registre levait une erreur que rien ne rattrapait —
+  la console disait « Le serveur a refusé ces quotas. ». Et rien n'atteignait la
+  carte. À la création comme dans la modale, deux champs : « Réservation
+  réseau », comptée dans la capacité de la Forge, et « Plafond réseau », posé
+  sur `eth0` et appliqué à chaud. La Forge refuse en clair un plafond sous la
+  réservation, au-delà de son débit, ou non entier ; la console dit le code
+  reçu quand une réponse n'a pas de raison. DAT §49.7 ; SPK-DS-37 ; manuels M5
+  et M8. Vérifié sur VM ; **sur la Forge avec OP-33.**
 - **SPK-141 — une route ne sort du registre qu'une fois Caddy confirmé.**
   Retirer une route l'effaçait du registre avant d'appliquer : Caddy
   injoignable, la réponse était un `502`, la route avait disparu du registre et

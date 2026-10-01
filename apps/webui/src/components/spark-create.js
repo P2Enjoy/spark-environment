@@ -10,6 +10,8 @@
  *       une liste alimentée par le catalogue),
  *       §25.2 (un refus n'efface pas la saisie), §25.3 (ce qui reste local) ·
  *       docs/DESIGN_SYSTEM.md §6.9, §6.12, §7.1, §14.9
+ * @spec docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-37 (la réservation et le plafond réseau, deux champs)
  *
  * Cet écran montre la capacité restante ; il ne décide jamais à la place de
  * `sparkd`. Le bouton n'est pas désactivé parce que l'estimation locale juge la
@@ -30,6 +32,9 @@ export const DEFAUTS = {
   name: '', image: 'images:debian/13', cpu_mode: 'shared',
   cpu_reservation: 0.5, cpu_max: 0.5, cpu_cores: 1,
   memory_gib: 2, storage_gib: 10, network_mbit: 100,
+  // SPK-142 · SPK-DS-37 : le plafond réseau. Il SUIT la réservation tant qu'on
+  // ne l'a pas réglé — le défaut reste un plafond égal à la réservation.
+  burst_mbit: 100,
 };
 
 /** Noms de ressources rendus en français. Une valeur technique brute ne doit
@@ -73,7 +78,8 @@ export function validateShape(valeurs) {
   if (['shared', 'shared-pinned'].includes(valeurs.cpu_mode) && !(valeurs.cpu_reservation > 0))
     erreurs.cpu_reservation = 'Ce mode demande une réservation.';
   for (const [champ, libelle] of [['memory_gib', 'La mémoire'], ['storage_gib', 'Le disque'],
-                                  ['network_mbit', 'Le débit']]) {
+                                  ['network_mbit', 'La réservation réseau'],
+                                  ['burst_mbit', 'Le plafond réseau']]) {
     if (!(valeurs[champ] > 0)) erreurs[champ] = `${libelle} doit être supérieur à zéro.`;
   }
   return erreurs;
@@ -176,6 +182,13 @@ export const QUOTAS = {
                      format: (v) => formatOctetsExact(v * GIO) },
   network_mbit:    { pas: 10, min: 10,
                      borne: (c) => (c.pools ? c.pools.network?.capacity / MBIT : null),
+                     format: (v) => formatBps(v * MBIT) },
+  // SPK-142 · DAT §49.7 : le plafond se borne au LIEN de la Forge, pas au pool
+  // — un pool surengagé dépasse le lien, et un plafond au-delà ne limite rien.
+  burst_mbit:      { pas: 10, min: 10,
+                     borne: (c) => (c.pools?.network
+                       ? c.pools.network.capacity / (c.pools.network.overcommit || 1) / MBIT
+                       : null),
                      format: (v) => formatBps(v * MBIT) },
 };
 
@@ -439,9 +452,12 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
                 valeur: v.memory_gib, erreur: errors.memory_gib })}
       ${champQuota('storage_gib', { libelle: 'Disque', unite: 'Gio', contexte,
                 valeur: v.storage_gib, erreur: errors.storage_gib })}
-      ${champQuota('network_mbit', { libelle: 'Débit', unite: 'Mbit/s', contexte,
-                aide: 'Sert à la comptabilité ; seul le plafond est appliqué par le noyau.',
+      ${champQuota('network_mbit', { libelle: 'Réservation réseau', unite: 'Mbit/s', contexte,
+                aide: 'Comptée dans la capacité de la Forge ; posée nulle part.',
                 valeur: v.network_mbit, erreur: errors.network_mbit })}
+      ${champQuota('burst_mbit', { libelle: 'Plafond réseau', unite: 'Mbit/s', contexte,
+                aide: 'Posé sur la carte du Spark : il ne le dépasse jamais.',
+                valeur: v.burst_mbit, erreur: errors.burst_mbit })}
       ${avertissement}
       ${refus}
       <p class="formulaire__actions">

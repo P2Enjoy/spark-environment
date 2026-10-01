@@ -2,6 +2,8 @@
 
 @spec docs/BACKLOG.md#SPK-09 · docs/DAT.md §14 (Cycle de vie), §14.2 (le registre
       s'écrit avant Incus), §7.7 (admission control) · docs/SCHEMA.md §4, §9
+@spec docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 (réservation et plafond réseau,
+      réglés séparément ; les trois contrôles de cohérence)
 
 C'est ici que les pièces se rejoignent : admission control, registre, traducteur
 et machine à états. Le module orchestre ; il ne réimplémente aucune de ces règles.
@@ -30,6 +32,52 @@ NAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 class SparkError(RuntimeError):
     """Demande refusée. Le message est destiné à l'exploitant."""
+
+
+class QuotaIncoherent(SparkError):
+    """Deux valeurs d'un quota qui se contredisent (SPK-142, §49.7).
+
+    Distinct d'`AdmissionRefused` : celui-ci dit « il n'y a pas la place », ce
+    refus dit « ce que vous demandez ne tient pas debout ». Il NOMME le champ
+    en cause, pour que l'écran le place.
+    """
+
+    def __init__(self, champ: str, message: str) -> None:
+        self.champ = champ
+        super().__init__(message)
+
+
+def _mbit(bps: int) -> str:
+    return f"{bps / 1_000_000:g} Mbit/s"
+
+
+def verifier_reseau(connection: sqlite3.Connection, reservation, plafond) -> None:
+    """Les trois contrôles de cohérence du réseau (SPK-142, DAT §49.7).
+
+    Prononcés AVANT toute écriture. Sans eux, la contrainte du registre
+    (`plafond ≥ réservation`) levait une erreur que rien ne rattrapait : un
+    `500`, et une console qui n'avait rien à dire.
+    """
+    for champ, valeur in (("network_reservation_bps", reservation),
+                          ("network_burst_bps", plafond)):
+        if isinstance(valeur, bool) or not isinstance(valeur, int) or valeur <= 0:
+            raise QuotaIncoherent(
+                champ, f"« {champ} » doit être un entier strictement positif, en "
+                f"bit/s ; reçu : {valeur!r}.")
+    if plafond < reservation:
+        raise QuotaIncoherent(
+            "network_burst_bps",
+            f"Le plafond réseau ({_mbit(plafond)}) est sous la réservation "
+            f"({_mbit(reservation)}) : un Spark ne peut pas se voir garantir plus "
+            "que ce qu'il a le droit d'atteindre. Relevez le plafond, ou baissez "
+            "la réservation.")
+    forge = connection.execute("SELECT network_total_bps FROM forge").fetchone()
+    capacite = forge["network_total_bps"] if forge else None
+    if capacite and plafond > capacite:
+        raise QuotaIncoherent(
+            "network_burst_bps",
+            f"Le plafond réseau ({_mbit(plafond)}) dépasse la capacité réseau de la "
+            f"Forge ({_mbit(capacite)}) : il ne limiterait rien.")
 
 
 class AdmissionRefused(SparkError):
@@ -115,6 +163,11 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = 
     docker = (images.capacites_de_alias(entree["alias"])["docker"]
               if spec.docker_enabled is None else bool(spec.docker_enabled))
 
+    # SPK-142 · §49.7 : un plafond absent vaut la réservation, comme avant ; un
+    # plafond donné se contrôle avant toute écriture.
+    plafond = spec.network_burst_bps if spec.network_burst_bps is not None else spec.network_bps
+    verifier_reseau(connection, spec.network_bps, plafond)
+
     demande = Request(
         cpu_mode=spec.cpu_mode,
         memory_bytes=spec.memory_bytes,
@@ -159,7 +212,7 @@ def create(connection: sqlite3.Connection, spec: SparkSpec, actor: str | None = 
                     spark_id, spec.name, spec.runtime, spec.image, spec.cpu_mode,
                     spec.cpu_reservation, spec.cpu_max, spec.cpu_cores, spec.cpu_priority,
                     spec.memory_bytes, spec.memory_enforce, 1 if spec.memory_swap else 0,
-                    spec.network_bps, spec.network_burst_bps or spec.network_bps,
+                    spec.network_bps, plafond,
                     spec.storage_bytes, spec.storage_io_priority,
                     1 if docker else 0, adresse, _now(), _now(),
                 ),
@@ -205,6 +258,9 @@ class ShrinkRefused(SparkError):
 CHAMPS_REDIMENSIONNABLES = (
     "cpu_mode", "cpu_reservation", "cpu_max", "cpu_cores",
     "memory_reservation_bytes", "network_reservation_bps", "storage_bytes",
+    # SPK-142 · §49.7 : le plafond réseau, seule valeur posée sur la carte, se
+    # règle à part de la réservation.
+    "network_burst_bps",
 )
 
 
@@ -254,6 +310,8 @@ def resize(connection: sqlite3.Connection, name: str, champs: dict,
         )
 
     vise = {**{c: spark[c] for c in CHAMPS_REDIMENSIONNABLES}, **champs}
+    # SPK-142 · §49.7 : la cohérence des deux valeurs réseau, avant tout le reste.
+    verifier_reseau(connection, vise["network_reservation_bps"], vise["network_burst_bps"])
 
     # §49.3 : les refus de RÉTRÉCISSEMENT, avant l'admission. Ils portent sur ce
     # que la cellule occupe, pas sur ce que la Forge a de libre.

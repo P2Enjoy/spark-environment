@@ -8542,7 +8542,7 @@ supprimé chez Caddy ».
   (configuration vivante relue) ; captures observées. **Reste `[~]`** : OP-33.
 
 
-### [ ] SPK-142 · Une réservation et un plafond se règlent séparément, avec leurs contrôles de cohérence
+### [~] SPK-142 · Une réservation et un plafond se règlent séparément, avec leurs contrôles de cohérence
 
 **Constaté le 2026-10-01** (rapport d'incohérences) : monter le débit réseau
 d'un Spark échouait en `500` — la modale « Plafond réseau » écrivait la
@@ -8573,6 +8573,13 @@ checks de cohérence. »
   - **mémoire** — une seule valeur (`limits.memory`) et un mode, `hard` ou
     `soft` ; Incus n'offre pas de second seuil indépendant ;
   - **disque** — un quota, sans réservation distincte ni surengagement (§7.7).
+- **Vérifié le 2026-10-01 sur VM à installation fraîche** (épreuve
+  `spk142-reseau`) : un Spark créé par la console à 10 Mbit/s — le plafond suit
+  la réservation ; la réservation montée seule à 100 Mbit/s est refusée en
+  clair, saisie gardée, rien d'écrit ; le plafond monté à 200 Mbit/s est
+  accepté, posé sur `eth0` et appliqué **à chaud** par le noyau (classe `htb`
+  `rate 200Mbit`) ; la fiche montre les deux. Preuves `pytest` (13) et de
+  composant : diagnostics. Captures observées. **Reste `[~]`** : OP-33.
 
 ### [ ] SPK-143 · Mesurer sur la VM si le CPU et la mémoire peuvent porter une réservation ET un plafond
 
