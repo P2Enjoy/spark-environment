@@ -8554,7 +8554,9 @@ réservation et un burst max ? dans ce cas, je veux gérer les deux séparément
 si d'autres métriques ont un fonctionnement similaire je les veux aussi. Avec
 checks de cohérence. »
 
-- Spécification : **à écrire** (DAT §7.6, §49.2 ; SCHEMA §2 ; SPK-DS).
+- Spécification : `docs/DAT.md` **§49.7** (§7.6, §15.4, §49.2) ·
+  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-37** · manuels M5 et M8. Aucune
+  migration : les deux colonnes et la contrainte existent (SCHEMA §2).
 - **Périmètre arbitré le 2026-10-01** : « ok pour réseau » — l'unité porte le
   **réseau** seul. CPU et mémoire : leur faisabilité se mesure d'abord sur la VM
   (SPK-143). Disque : « cela reste en dur » — un quota, sans réservation

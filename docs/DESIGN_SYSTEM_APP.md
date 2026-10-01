@@ -1520,6 +1520,31 @@ Preuves observées le 2026-09-30 : `e2e/captures/spk130-routes-diagnostic`,
 et, produite par `make captures` sans être versionnée, `spk130-etats-degrades`
 (route absente avec Réappliquer, autre cible, échéance proche, certificat absent).
 
+### SPK-DS-37 · Le réseau d'un Spark : deux champs, la réservation et le plafond
+
+**Date** : 2026-10-01 · SPK-142 · `DAT.md` §49.7, §7.6 · `DESIGN_SYSTEM.md`
+§6.9 bis (curseur ou saisie), §1.5 bis, §6.27, §14.6
+
+À la **création** et dans la modale **« Ressources »**, deux champs, dans cet
+ordre :
+
+| Champ | Ce qu'il porte | Bornes |
+|---|---|---|
+| « Réservation réseau » | `network_reservation_bps` (création : `network_bps`) | du minimum (10 Mbit/s) à ce que la Forge a de libre |
+| « Plafond réseau » | `network_burst_bps` | du minimum à la capacité réseau de la Forge |
+
+- l'aide de chacun tient en une ligne, et nomme ce qu'il fait — « comptée dans
+  la capacité de la Forge, posée nulle part » ; « posé sur la carte du Spark » ;
+  le pourquoi est au manuel (§1.5 bis) ;
+- à la création, le plafond **suit** la réservation tant qu'on ne l'a pas
+  touché, et cesse de la suivre dès qu'on le règle : la valeur par défaut reste
+  celle d'aujourd'hui, un plafond égal à la réservation ;
+- un plafond sous la réservation est **refusé par la Forge**, et le refus
+  s'affiche dans la modale, près du bouton d'engagement, sans effacer la saisie
+  (§6.27) ; l'écran ne le prononce pas à sa place ;
+- la fiche du Spark (*Infos → Ressources*) montre **les deux**, avec ces mêmes
+  libellés.
+
 ### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus

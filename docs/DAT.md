@@ -12432,6 +12432,47 @@ Docker plein reste plein après un agrandissement du jeu de données, et c'est a
 locataire d'en disposer. Elle ne promet rien non plus sur la **durée** d'un
 redimensionnement de disque, qui dépend du pool et non du produit.
 
+### 49.7 Le réseau : une réservation et un plafond, réglés séparément (SPK-142)
+
+**Constaté le 2026-10-01** : la modale « Ressources » écrivait la réservation
+sous le libellé « Plafond réseau », jamais le plafond ; monter le débit
+violait la contrainte `network_burst_bps ≥ network_reservation_bps` du registre
+et finissait en `500`. Et même en baissant, rien n'atteignait la carte : la pose
+des quotas (§49.2) ne touchait pas le device `eth0`, où vit `limits.max`.
+
+**Décision du responsable, le 2026-10-01** : les deux valeurs se règlent
+**séparément**, avec des contrôles de cohérence.
+
+| Valeur | Champ du registre | Ce qu'elle fait |
+|---|---|---|
+| **réservation** | `network_reservation_bps` | comptée par l'admission (§7.7) ; **posée nulle part** — le noyau n'offre pas de réservation de bande passante (§7.6, §15.4) |
+| **plafond** | `network_burst_bps` | `limits.max` sur le device `eth0` de la cellule : le débit que le Spark ne dépasse jamais, et qu'il peut atteindre quand le lien est libre |
+
+- **À la création**, `network_bps` porte la réservation et `network_burst_bps` le
+  plafond ; un plafond absent vaut la réservation, comme avant.
+- **Au redimensionnement**, `network_reservation_bps` et `network_burst_bps` se
+  modifient chacun, ou ensemble.
+- **Contrôles de cohérence**, prononcés par `sparkd` avant toute écriture, et
+  refusés en `422 quota_incoherent` avec le champ en cause et un message qui
+  chiffre l'écart — la console les affiche, elle ne les prononce pas :
+  1. le plafond est **au moins** la réservation ;
+  2. le plafond ne dépasse **pas la capacité réseau de la Forge**
+     (`forge.network_total_bps`) — au-delà, il ne limiterait rien ;
+  3. réservation et plafond sont des entiers **strictement positifs**.
+
+  Que la réservation tienne dans ce qui reste libre reste l'affaire de
+  l'admission (`409 admission_refused`, §49.1).
+- **Le plafond se pose sur la cellule** : redimensionner fusionne `limits.max`
+  dans le device `eth0` (`update_device_config`, §57.2), comme les clés
+  d'isolation. Le champ `applied` le couvre (§49.2) ; que la pose prenne **à
+  chaud** sur une cellule en marche se constate sur la VM du banc, pas se
+  suppose.
+- **Plus de `500`** sur ce geste : une incohérence est un refus nommé. Et quand
+  une réponse ne porte aucune raison lisible, la console dit le **code reçu**
+  plutôt qu'un refus qu'elle invente.
+
+Contrat d'écran : `DESIGN_SYSTEM_APP.md` SPK-DS-37.
+
 ## 50. Installer une Forge distante depuis la console (SPK-68)
 
 Une destination SSH et une Forge sont deux choses distinctes. Une machine peut
