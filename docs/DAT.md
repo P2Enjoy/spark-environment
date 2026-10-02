@@ -12326,6 +12326,28 @@ distingue « le quota est en vigueur » de « le quota est promis ». Les confon
 serait le pire des cas que la DoD de l'unité nomme : un quota changé au registre
 mais pas dans le noyau.
 
+### 49.2 bis La fenêtre envoie ce qu'on a changé, et rien d'autre (SPK-144)
+
+**Constaté le 2026-10-01** sur la VM du banc : un Spark de 512 Mio dont on ne
+changeait que le réseau en ressortait à 1 Gio. La fenêtre « Ressources »
+pré-remplissait la mémoire **arrondie au gibioctet**, puis envoyait **tous** les
+réglages, valeur arrondie comprise. **Arbitré le 2026-10-03** : « pré-remplir la
+valeur exacte et n'envoyer que les réglages modifiés ».
+
+- chaque champ est pré-rempli à sa valeur **exacte** — mémoire et disque en
+  gibioctets, réseau en Mbit/s, CPU tel quel ; une valeur hors de la grille du
+  curseur se montre dans une saisie numérique, sans être ramenée sur un cran
+  (`DESIGN_SYSTEM.md` §6.9 bis) ;
+- seuls les réglages **changés** partent dans `PATCH /v1/sparks/{nom}`. Le mode
+  CPU entraîne ses réglages : changer de mode, ou un réglage du mode, envoie le
+  mode et les réglages de ce mode (§49.2) ; ne pas y toucher n'envoie rien du
+  CPU ;
+- rien de changé : la requête part vide, et la Forge refuse « Aucun quota à
+  modifier. » — l'écran ne prétend pas avoir enregistré (§1.3).
+
+Un réglage qu'on n'a pas touché n'est donc jamais réécrit : c'est ce qui garantit
+qu'un arrondi d'affichage, quel qu'il soit, ne devienne jamais une valeur.
+
 ### 49.3 Rétrécir n'est pas agrandir
 
 Un agrandissement ne peut échouer que sur l'admission. Un rétrécissement a ses

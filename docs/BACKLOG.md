@@ -8616,7 +8616,8 @@ pas ». Le disque sort donc du périmètre.
 Spark de 512 Mio en ressortait à 1 Gio quand on ne changeait que le réseau : la
 modale arrondissait la mémoire au gibioctet, puis renvoyait la valeur arrondie.
 
-- Spécification : **à écrire** (DAT §49.2 ; SPK-DS) avant le code.
+- Spécification : `docs/DAT.md` **§49.2 bis** · `docs/DESIGN_SYSTEM.md` §6.9
+  bis (la valeur affichée est exacte) · manuel M8.
 - Portée : chaque champ est pré-rempli à sa valeur exacte, sur la grille de son
   curseur ; seuls les réglages que l'exploitant a changés partent ; preuve
   rouge sur le code d'avant ; vérification par la console sur la VM.
