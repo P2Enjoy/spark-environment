@@ -123,8 +123,15 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-33 · Retrait de route confirmé par Caddy, refus lus dans la ligne, saisie des alertes gardée, réseau en deux valeurs (SPK-139 à SPK-142)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable. SPK-139
-                à SPK-142 sont validés sur la VM du banc (SPK-137).
+État          : JOUÉE LE 2026-10-03, VÉRIFICATION INCOMPLÈTE — sur
+                instruction du responsable (« oui, maintenant »). Fait :
+                1. sauvegarde `/var/backups/sparkd/spark-20261002-231534.db`
+                (structure ok, journal 1 349 entrées, chaîne intacte) ;
+                2. runbook A.2 depuis `main`, préflight final 17 sur 17 ;
+                3. console relancée (`sparkui stop`, `sparkui`). **Non fait** :
+                la relecture de `/healthz` après la mise à jour — refusée à
+                l'agent par sa garde de permissions. Reste à constater par le
+                responsable avant de passer « APPLIQUÉ ».
 Objectif      : `DELETE /v1/ingress/{domain}` ne retire la route du registre
                 qu'une fois Caddy confirmé (SPK-141, docs/DAT.md §18.8) ; la
                 console rend le refus de « Retirer la route » et de
@@ -159,7 +166,8 @@ Risques       : un retrait coûte désormais une lecture de la configuration
                 `0.post1.dev880+gcc7d119fe`, schéma 20. **Non fait** : la
                 relecture de `/healthz`, `/readyz` et `/v1/forge` après la mise
                 à jour, et le `test -f` dans une cellule — refusés à l'agent
-                par sa garde de permissions ; l'étape 3 (relancer la console).
+                par sa garde de permissions. L'étape 3 (relancer la console)
+                est faite le 2026-10-03, avec OP-33.
                 Reste à constater par le responsable avant de passer
                 « APPLIQUÉ » et de déplacer la baseline.
 Objectif      : servir le veilleur des démarrages et le chemin « après
