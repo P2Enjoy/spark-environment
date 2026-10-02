@@ -27,9 +27,8 @@ gabarit, n'en nomme que huit — `version` et `actor_class` y manquent
 (`apps/webui/src/components/forge-alertes.js`). Le manuel M11 en nomme huit lui
 aussi.
 
-**Non résolu ici** : hors du périmètre de SPK-140. À arbitrer par le
-responsable : l'aide et le manuel nomment les dix champs, ou la Forge n'en
-offre que huit.
+**Arbitré le 2026-10-03** : corriger — SPK-147 — l'aide et M11 nomment les dix champs. L'entrée sort du rapport quand
+la correction est livrée.
 
 ## 2026-10-01 · Le panneau « Installer cette Forge » montre des accents graves bruts, sur une Forge installée
 
@@ -40,9 +39,8 @@ porter `sparkd` », et les accents graves s'affichent tels quels
 (`apps/webui/src/components/forge-installer.js`). C'est aussi la phrase de la
 capture d'échec du parcours clavier instable (entrée ci-dessus).
 
-**Non résolu ici** : hors du périmètre de SPK-135 et de SPK-137. À arbitrer par
-le responsable : le panneau n'apparaît que sur une destination qui ne porte pas
-`sparkd`, ou sa phrase dit ce qu'elle a relevé ; et le nom s'écrit en `<code>`.
+**Arbitré le 2026-10-03** : corriger — SPK-148 — le panneau se cache quand `sparkd` répond. L'entrée sort du rapport quand
+la correction est livrée.
 
 ## 2026-10-01 · La modale « Ressources » arrondit la mémoire au gibioctet, et renvoie la valeur arrondie
 
@@ -56,7 +54,7 @@ Changer un seul réglage en modifie donc un autre, en silence ; un Spark à
 `DESIGN_SYSTEM.md` §6.9 bis : la valeur affichée est EXACTE sur la grille du
 curseur, dont le pas mémoire est 256 Mio.
 
-**Non résolu ici** : hors du périmètre arbitré de SPK-142. À arbitrer par le
-responsable : pré-remplir la valeur exacte, et n'envoyer que les réglages
-changés. D'ici là, sur un Spark dont la mémoire n'est pas un nombre entier de
-gibioctets, la modale ne doit pas être employée.
+**Arbitré le 2026-10-03** : corriger — SPK-144 — valeur exacte, et seuls les réglages changés partent. D'ici là, la
+modale ne doit pas servir sur un Spark dont la mémoire n'est pas un nombre entier
+de gibioctets. L'entrée sort du rapport quand
+la correction est livrée.

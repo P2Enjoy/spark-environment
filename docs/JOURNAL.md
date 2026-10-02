@@ -13608,3 +13608,18 @@ rejoué :
   freinée jusqu'au blocage — ce n'est pas un débordement.
 
 Décision rendue au responsable, avec trois questions (fin du document).
+
+## 2026-10-03 · Sept arbitrages du responsable
+
+Posés par questions fermées, et tranchés :
+
+- l'arrondi de la mémoire dans « Ressources » : corriger — valeur exacte,
+  seuls les réglages changés partent (SPK-144) ;
+- CPU « réservation + plafond » : mesurer d'abord la concurrence (SPK-145) ;
+- mémoire : un seul plafond, pas de plancher garanti ;
+- OP-33 : la jouer maintenant ;
+- `memory_enforce=soft` : le retirer de l'API de création (SPK-146) ;
+- l'aide du gabarit d'alerte : nommer les dix champs, dans l'écran et M11
+  (SPK-147) ;
+- le panneau « Installer cette Forge » : le cacher quand `sparkd` répond
+  (SPK-148).

@@ -69,7 +69,14 @@ et le plafond s'applique.
 c'est quand la machine entière manque de mémoire que `memory.low` protège une
 cellule de la récupération ; il faudrait saturer la VM pour le voir.
 
-## 3. Ce que le responsable a à décider
+## 3. Ce que le responsable a décidé, le 2026-10-03
+
+1. **CPU** : « mesurer d'abord la concurrence » — SPK-145, avant toute décision
+   sur un mode « réservation + plafond ».
+2. **Mémoire** : « non, un seul plafond » — pas de plancher garanti.
+3. **`memory_enforce=soft`** : « le retirer de l'API » — SPK-146.
+
+## 4. Les questions telles qu'elles ont été posées
 
 1. **CPU** : un mode « réservation + plafond » est techniquement posable
    (`raw.lxc`), au prix d'un redémarrage pour changer le plafond et d'une clé

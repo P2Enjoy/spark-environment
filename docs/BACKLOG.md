@@ -8607,6 +8607,65 @@ pas ». Le disque sort donc du périmètre.
   « souple » d'Incus **freine** une cellule jusqu'au blocage au lieu de la
   laisser déborder. Non mesurés : le poids sous contention, le plancher sous
   pression de la Forge. **La décision revient au responsable.**
+
+### [ ] SPK-144 · La fenêtre « Ressources » pré-remplit les valeurs exactes et n'envoie que ce qui change
+
+**Constaté le 2026-10-01** sur la VM du banc (capture
+`spk142-vm-reservation-et-plafond`), **arbitré le 2026-10-03** : « oui, corriger
+— pré-remplir la valeur exacte et n'envoyer que les réglages modifiés ». Un
+Spark de 512 Mio en ressortait à 1 Gio quand on ne changeait que le réseau : la
+modale arrondissait la mémoire au gibioctet, puis renvoyait la valeur arrondie.
+
+- Spécification : **à écrire** (DAT §49.2 ; SPK-DS) avant le code.
+- Portée : chaque champ est pré-rempli à sa valeur exacte, sur la grille de son
+  curseur ; seuls les réglages que l'exploitant a changés partent ; preuve
+  rouge sur le code d'avant ; vérification par la console sur la VM.
+
+### [ ] SPK-145 · Mesurer si la réservation CPU garde son effet sous contention quand un plafond est posé
+
+**Arbitré le 2026-10-03** : avant de décider d'un mode CPU « réservation +
+plafond », « mesurer d'abord la concurrence ». SPK-143 a montré que les deux
+réglages coexistent et que le plafond tient ; il n'a pas montré que le poids
+garde son effet face à une autre cellule.
+
+- Nature : une mesure, sur la VM du banc, consignée dans
+  `docs/EXPLORATION_QUOTAS.md` ; puis décision du responsable.
+- À mesurer : deux cellules en concurrence sur les mêmes cœurs, l'une avec un
+  poids et un plafond, l'autre avec un poids seul ; la part de chacune, avec et
+  sans plafond.
+
+### [ ] SPK-146 · Le mode mémoire « souple » sort de l'API de création
+
+**Arbitré le 2026-10-03** : « le retirer de l'API ». Mesuré le 2026-10-01
+(SPK-143) : `memory_enforce=soft` pose `memory.high`, et une cellule qui le
+dépasse est freinée jusqu'au blocage — ce n'est pas un débordement.
+
+- Spécification : **à écrire** (DAT §7.6 ; SCHEMA §2) avant le code.
+- Portée : la création refuse `soft` en le nommant ; ce que deviennent les
+  Sparks existants qui le porteraient se relève d'abord au registre.
+
+### [ ] SPK-147 · L'aide du gabarit d'alerte et le manuel nomment les dix champs
+
+**Constaté le 2026-10-01** (capture `spk140-vm-refus-garde-la-saisie`),
+**arbitré le 2026-10-03** : « l'aide et M11 nomment les 10 ». La Forge accepte
+`version`, `ts`, `forge`, `action`, `actor`, `actor_class`, `target_type`,
+`target_id`, `result`, `message` ; l'aide de l'onglet Alertes et le manuel M11
+n'en nommaient que huit.
+
+- Spécification : DAT §47.3.1 · manuel M11.
+- Portée : l'écran et le manuel disent les dix ; la Forge ne change pas.
+
+### [ ] SPK-148 · Le panneau « Installer cette Forge » n'apparaît que sur une destination sans `sparkd`
+
+**Constaté le 2026-10-01** (capture `spk135-vm-forge-virtio`), **arbitré le
+2026-10-03** : « le cacher quand sparkd répond ». Sur une Forge installée, le
+panneau disait « peut accepter SSH sans encore porter `sparkd` », accents graves
+compris.
+
+- Spécification : DAT §50 · SPK-DS · manuel M2.
+- Portée : le panneau ne se rend que quand `sparkd` ne répond pas derrière le
+  tunnel ; le nom s'écrit en `<code>` ; preuve de composant rouge avant ;
+  vérification par la console sur la VM.
 ---
 
 ## Lot 6 — Réseau entre Sparks
