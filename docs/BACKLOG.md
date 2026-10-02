@@ -8653,8 +8653,10 @@ dépasse est freinée jusqu'au blocage — ce n'est pas un débordement.
 `target_id`, `result`, `message` ; l'aide de l'onglet Alertes et le manuel M11
 n'en nommaient que huit.
 
-- Spécification : DAT §47.3.1 · manuel M11.
-- Portée : l'écran et le manuel disent les dix ; la Forge ne change pas.
+- Spécification : `docs/DAT.md` §47.3.1 (« Les champs offerts ») · manuel M11.
+- Portée : l'écran et le manuel disent les dix ; la Forge ne change pas. En
+  écrivant la spécification, un paragraphe périmé du §47.3.1 — « ce n'est pas
+  encore le registre » — est remplacé : SPK-62 l'a rendu faux.
 
 ### [ ] SPK-148 · Le panneau « Installer cette Forge » n'apparaît que sur une destination sans `sparkd`
 

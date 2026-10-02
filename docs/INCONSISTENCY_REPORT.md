@@ -58,3 +58,15 @@ curseur, dont le pas mémoire est 256 Mio.
 modale ne doit pas servir sur un Spark dont la mémoire n'est pas un nombre entier
 de gibioctets. L'entrée sort du rapport quand
 la correction est livrée.
+
+## 2026-10-03 · Le DAT promet un rendu du gabarit d'alerte avant l'enregistrement ; l'écran n'en montre aucun
+
+**Constaté** en spécifiant SPK-147 : le DAT §47.3.1 dit « L'écran montre le
+rendu **avant** d'enregistrer, sur un événement d'exemple. Un gabarit qu'on ne
+peut pas voir rendu se vérifie le jour où il sert, c'est-à-dire trop tard. »
+L'onglet Alertes (`apps/webui/src/components/forge-alertes.js`) n'a aucun
+rendu : il enregistre, ou montre le refus d'un champ inconnu.
+
+**Non résolu ici** : hors du périmètre de SPK-147. À arbitrer par le
+responsable : construire l'aperçu du rendu sur un événement d'exemple, ou
+retirer la promesse du DAT.

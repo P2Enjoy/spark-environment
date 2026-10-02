@@ -1,4 +1,6 @@
 /**
+ * @verifies docs/BACKLOG.md#SPK-144 · docs/DAT.md §49.2 bis (valeurs exactes ;
+ *           seuls les réglages changés partent)
  * @verifies docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 · docs/DESIGN_SYSTEM_APP.md
  *           SPK-DS-37 (la réservation et le plafond réseau, deux champs)
  * @verifies docs/BACKLOG.md#SPK-19 · docs/DAT.md §24 ·
@@ -14,7 +16,7 @@ import assert from 'node:assert/strict';
 import {
   renderSparkDetail, renderCommands, renderDetailNotFound, renderProtection,
   renderAuteur, renderAmorcage, renderCleConsole, AMORCAGE_VIDE, COMMANDES,
-  renderQuotas, QUOTAS_VIDE,
+  renderQuotas, QUOTAS_VIDE, valeursDesQuotas, corpsDesQuotas,
 } from './spark-detail.js';
 
 const GIO = 1024 ** 3;
@@ -1277,4 +1279,46 @@ test('la fiche montre la réservation ET le plafond réseau', () => {
   assert.match(section, /Plafond réseau/);
   assert.match(section, /10 Mbit\/s/);
   assert.match(section, /80 Mbit\/s/);
+});
+
+
+// --- SPK-144 · §49.2 bis : des valeurs exactes, et seulement ce qui change -----
+
+const MIO = 1024 ** 2;
+const SPARK_512 = { name: 'petit', cpu_mode: 'shared', cpu_reservation: 0.5,
+                    cpu_max: null, cpu_cores: null,
+                    memory_reservation_bytes: 512 * MIO, storage_bytes: 2 * GIO,
+                    network_reservation_bps: 10_000_000, network_burst_bps: 10_000_000 };
+
+test('la fenêtre pré-remplit la mémoire EXACTE, pas arrondie au gibioctet', () => {
+  assert.equal(valeursDesQuotas(SPARK_512).memory_gib, '0.5');
+  assert.equal(valeursDesQuotas({ ...SPARK_512, memory_reservation_bytes: 1280 * MIO })
+    .memory_gib, '1.25');
+  assert.equal(valeursDesQuotas(SPARK_512).network_mbps, '10');
+});
+
+test('LE cas constaté : ne changer que le réseau n’envoie ni la mémoire, ni rien d’autre', () => {
+  const origine = valeursDesQuotas(SPARK_512);
+  const corps = corpsDesQuotas(origine, { ...origine, burst_mbps: '200' });
+  assert.deepEqual(corps, { network_burst_bps: 200_000_000 });
+});
+
+test('rien de changé : un corps VIDE, que la Forge refuse en le disant', () => {
+  const origine = valeursDesQuotas(SPARK_512);
+  assert.deepEqual(corpsDesQuotas(origine, { ...origine }), {});
+});
+
+test('un réglage CPU changé envoie le mode et ses seuls réglages', () => {
+  const origine = valeursDesQuotas(SPARK_512);
+  assert.deepEqual(corpsDesQuotas(origine, { ...origine, cpu_reservation: '0.75' }), {
+    cpu_mode: 'shared', cpu_reservation: 0.75, cpu_max: null, cpu_cores: null });
+  assert.deepEqual(corpsDesQuotas(origine, { ...origine, cpu_mode: 'capped', cpu_max: '1' }), {
+    cpu_mode: 'capped', cpu_max: 1, cpu_reservation: null, cpu_cores: null });
+});
+
+test('une mémoire hors grille, non touchée, n’est jamais réécrite', () => {
+  const bizarre = { ...SPARK_512, memory_reservation_bytes: 1_181_116_006 };
+  const origine = valeursDesQuotas(bizarre);
+  assert.equal(corpsDesQuotas(origine, { ...origine, network_mbps: '20' }).memory_reservation_bytes,
+               undefined);
 });

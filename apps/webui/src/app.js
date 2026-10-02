@@ -13,7 +13,8 @@
  */
 
 import { renderSparksView } from './components/sparks-view.js';
-import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE } from './components/spark-detail.js';
+import { renderSparkDetail, AMORCAGE_VIDE, QUOTAS_VIDE, valeursDesQuotas,
+  corpsDesQuotas } from './components/spark-detail.js';
 import { IDENTITE_VIDE } from './components/spark-identity.js';
 import { DOSSIER_VIDE, rebondDuServeur } from './components/spark-dossier.js';
 import { NOTES_VIDE } from './components/spark-notes.js';
@@ -1850,21 +1851,9 @@ function brancherPanneaux() {
     // Les valeurs viennent du Spark AFFICHÉ, jamais de champs vides : faire
     // ressaisir de mémoire ce qui est déjà à l'écran invite à se tromper d'ordre
     // de grandeur, et c'est précisément ce qu'un quota ne pardonne pas.
-    q.values = {
-      memory_gib: String(Math.round(etat.spark.memory_reservation_bytes / 1024 ** 3)),
-      storage_gib: String(Math.round(etat.spark.storage_bytes / 1024 ** 3)),
-      // SPK-142 · §49.7 : la réservation ET le plafond, chacun sous son nom. La
-      // modale pré-remplissait le plafond, puis l'envoyait comme réservation.
-      network_mbps: String(Math.round(etat.spark.network_reservation_bps / 1e6)),
-      burst_mbps: String(Math.round(etat.spark.network_burst_bps / 1e6)),
-      // §49.2 : le mode CPU se redimensionne, et ses réglages DÉPENDENT de lui.
-      // On les pré-remplit tous les trois : changer de mode puis revenir ne doit
-      // pas avoir effacé ce qu'on n'a pas touché.
-      cpu_mode: etat.spark.cpu_mode,
-      cpu_reservation: etat.spark.cpu_reservation ?? '',
-      cpu_max: etat.spark.cpu_max ?? '',
-      cpu_cores: etat.spark.cpu_cores ?? '',
-    };
+    // SPK-144 · §49.2 bis : EXACTES, et retenues pour n'envoyer que ce qui change.
+    q.values = valeursDesQuotas(etat.spark);
+    q.origine = { ...q.values };
     peindre();
     // Le focus entrant, `Échap` et la restitution du focus sont tenus par
     // `brancherModale` (§6.27).
@@ -2414,6 +2403,8 @@ const NOMS_QUOTA = {
  * @spec docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 (la réservation et le
  *       plafond réseau, envoyés séparément ; le code reçu quand la Forge ne
  *       donne pas de raison) · docs/DESIGN_SYSTEM_APP.md SPK-DS-37
+ * @spec docs/BACKLOG.md#SPK-144 · docs/DAT.md §49.2 bis (seuls les réglages
+ *       changés partent)
  *
  * **Le refus reste dans la modale**, avec la saisie intacte : une modale qui se
  * refermerait sur un refus ferait perdre le travail ET cacherait la raison.
@@ -2516,27 +2507,8 @@ async function appliquerQuotas() {
   q.refusal = null;
   peindre();
 
-  // §49.2 : on n'envoie QUE les réglages CPU du mode retenu. Envoyer les trois
-  // ferait porter au registre une réservation sur un Spark plafonné — une valeur
-  // que rien n'emploie, et que le prochain lecteur croirait vraie.
-  const mode = q.values.cpu_mode || etat.spark.cpu_mode;
-  const cpu = ['shared', 'shared-pinned'].includes(mode)
-      ? { cpu_reservation: Number(q.values.cpu_reservation), cpu_max: null,
-          cpu_cores: mode === 'shared-pinned' ? Number(q.values.cpu_cores) : null }
-    : mode === 'capped'
-      ? { cpu_max: Number(q.values.cpu_max), cpu_reservation: null, cpu_cores: null }
-    : { cpu_cores: Number(q.values.cpu_cores), cpu_reservation: null, cpu_max: null };
-
-  const corps = {
-    cpu_mode: mode,
-    ...cpu,
-    memory_reservation_bytes: Math.round(Number(q.values.memory_gib) * 1024 ** 3),
-    storage_bytes: Math.round(Number(q.values.storage_gib) * 1024 ** 3),
-    network_reservation_bps: Math.round(Number(q.values.network_mbps) * 1e6),
-    // SPK-142 · §49.7 : le plafond, à part. La cohérence des deux est prononcée
-    // par la Forge, et son refus s'affiche ici (SPK-DS-37).
-    network_burst_bps: Math.round(Number(q.values.burst_mbps) * 1e6),
-  };
+  // SPK-144 · §49.2 bis : les réglages CHANGÉS, et eux seuls (`corpsDesQuotas`).
+  const corps = corpsDesQuotas(q.origine ?? valeursDesQuotas(etat.spark), q.values);
 
   const vu = await appel('PATCH', `/v1/sparks/${encodeURIComponent(etat.spark.name)}`, corps);
   q.busy = false;

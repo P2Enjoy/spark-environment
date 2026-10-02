@@ -11911,23 +11911,15 @@ L'écran montre le rendu **avant** d'enregistrer, sur un événement d'exemple. 
 gabarit qu'on ne peut pas voir rendu se vérifie le jour où il sert, c'est-à-dire
 trop tard.
 
-**Où il vit AUJOURD'HUI, et pourquoi ce n'est pas encore le registre.** Le §47.3
-décide que la configuration du canal quitte les variables d'environnement pour le
-registre, avec l'onglet qui la rend visible et essayable. Ce déplacement n'est pas
-construit : l'URL vit encore dans `SPARKD_NOTIFY_URL`. Le gabarit vit donc
-**au même endroit qu'elle**, dans `SPARKD_NOTIFY_TEMPLATE`, pour que les deux se
-déplacent ENSEMBLE le jour où le registre les accueille. Les séparer maintenant
-créerait deux moitiés de configuration à deux endroits, et un déplacement en deux
-temps dont le premier casserait le second.
+**Où il vit.** Au registre, avec l'URL, posé depuis l'onglet Alertes (§47.3,
+§47.3.0 bis, SPK-62) : un gabarit qui nomme un champ inconnu est refusé à
+l'enregistrement. `SPARKD_NOTIFY_TEMPLATE` reste le repli d'une Forge dont la
+configuration n'a pas été reprise au registre ; chargé au démarrage, un gabarit
+fautif y **n'arme pas le canal**, qui se déclare *mal configuré* — l'écran le dit.
 
-**Ce que cela coûte, et il faut le dire :** sans registre, il n'existe pas
-d'instant d'« enregistrement » où refuser un gabarit fautif. La règle est donc
-appliquée au **chargement de la configuration**, c'est-à-dire avant tout envoi :
-un gabarit qui nomme un champ inconnu **n'arme pas le canal**. Le canal se déclare
-alors *mal configuré* — un troisième état, distinct de *muet* et de *en échec* —
-et l'écran le dit. L'intention de la règle est tenue : la panne ne se découvre
-pas le jour de l'incident. Ce qui manque est le rendu montré avant, qui suppose
-l'écran.
+**Les champs offerts** — les dix que le §47.4 publie, et que l'aide de l'onglet
+et le manuel M11 nomment tous (SPK-147) : `version`, `ts`, `forge`, `action`,
+`actor`, `actor_class`, `target_type`, `target_id`, `result`, `message`.
 
 **Le rendu est une substitution dans un texte JSON, et les valeurs y sont
 échappées.** Un gabarit est un document JSON où `{champ}` est remplacé par la

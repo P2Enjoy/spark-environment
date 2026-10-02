@@ -475,9 +475,89 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE, contexte = {}) {
   });
 }
 
+/**
+ * Les valeurs de départ de la fenêtre « Ressources » : EXACTES.
+ *
+ * @spec docs/BACKLOG.md#SPK-144 · docs/DAT.md §49.2 bis · docs/DESIGN_SYSTEM.md
+ *       §6.9 bis (la valeur affichée est exacte)
+ *
+ * La fenêtre arrondissait la mémoire au gibioctet — 512 Mio devenaient 1 —, et
+ * la valeur arrondie repartait. Trois décimales tiennent toute grille du
+ * produit ; une valeur hors grille reste ce qu'elle est, et elle n'est de toute
+ * façon jamais renvoyée si l'on n'y touche pas (`corpsDesQuotas`).
+ */
+export function valeursDesQuotas(spark) {
+  const exact = (valeur) => String(Number(Number(valeur).toFixed(3)));
+  return {
+    memory_gib: exact(spark.memory_reservation_bytes / 1024 ** 3),
+    storage_gib: exact(spark.storage_bytes / 1024 ** 3),
+    network_mbps: exact(spark.network_reservation_bps / 1e6),
+    burst_mbps: exact(spark.network_burst_bps / 1e6),
+    // §49.2 : le mode CPU se redimensionne, et ses réglages DÉPENDENT de lui.
+    // On les pré-remplit tous les trois : changer de mode puis revenir ne doit
+    // pas avoir effacé ce qu'on n'a pas touché.
+    cpu_mode: spark.cpu_mode,
+    cpu_reservation: spark.cpu_reservation ?? '',
+    cpu_max: spark.cpu_max ?? '',
+    cpu_cores: spark.cpu_cores ?? '',
+  };
+}
+
+/** Les réglages de CHAQUE mode CPU (§49.2). */
+const REGLAGES_DU_MODE = {
+  shared: ['cpu_reservation'], 'shared-pinned': ['cpu_reservation', 'cpu_cores'],
+  capped: ['cpu_max'], dedicated: ['cpu_cores'],
+};
+
+/**
+ * Le corps du `PATCH` : les réglages CHANGÉS, et eux seuls.
+ *
+ * @spec docs/BACKLOG.md#SPK-144 · docs/DAT.md §49.2 bis (seuls les réglages
+ *       changés partent ; le mode CPU entraîne les siens), §49.2 · §49.7
+ *
+ * Un réglage qu'on n'a pas touché n'est jamais réécrit : c'est ce qui empêche un
+ * arrondi d'affichage de devenir une valeur. Rien de changé rend un corps VIDE,
+ * que la Forge refuse en le disant (§1.3).
+ */
+export function corpsDesQuotas(origine, valeurs) {
+  const change = (cle) => String(valeurs[cle] ?? '') !== String(origine[cle] ?? '');
+  const corps = {};
+  if (change('memory_gib')) {
+    corps.memory_reservation_bytes = Math.round(Number(valeurs.memory_gib) * 1024 ** 3);
+  }
+  if (change('storage_gib')) {
+    corps.storage_bytes = Math.round(Number(valeurs.storage_gib) * 1024 ** 3);
+  }
+  if (change('network_mbps')) {
+    corps.network_reservation_bps = Math.round(Number(valeurs.network_mbps) * 1e6);
+  }
+  // SPK-142 · §49.7 : le plafond, à part. La cohérence des deux est prononcée
+  // par la Forge, et son refus s'affiche dans la fenêtre (SPK-DS-37).
+  if (change('burst_mbps')) {
+    corps.network_burst_bps = Math.round(Number(valeurs.burst_mbps) * 1e6);
+  }
+  // §49.2 : on n'envoie QUE les réglages CPU du mode retenu. Envoyer les trois
+  // ferait porter au registre une réservation sur un Spark plafonné — une valeur
+  // que rien n'emploie, et que le prochain lecteur croirait vraie.
+  const mode = valeurs.cpu_mode || origine.cpu_mode;
+  if (change('cpu_mode') || (REGLAGES_DU_MODE[mode] ?? []).some(change)) {
+    Object.assign(corps, { cpu_mode: mode },
+      ['shared', 'shared-pinned'].includes(mode)
+        ? { cpu_reservation: Number(valeurs.cpu_reservation), cpu_max: null,
+            cpu_cores: mode === 'shared-pinned' ? Number(valeurs.cpu_cores) : null }
+        : mode === 'capped'
+          ? { cpu_max: Number(valeurs.cpu_max), cpu_reservation: null, cpu_cores: null }
+          : { cpu_cores: Number(valeurs.cpu_cores), cpu_reservation: null, cpu_max: null });
+  }
+  return corps;
+}
+
 /** Valeurs de la modale des quotas. Vide tant qu'on ne l'a pas ouverte. */
 export const QUOTAS_VIDE = {
   open: false, busy: false, refusal: null,
+  // SPK-144 : ce que la fenêtre a montré à l'ouverture, pour n'envoyer que ce
+  // qui en diffère.
+  origine: null,
   values: { memory_gib: '', storage_gib: '', network_mbps: '', burst_mbps: '',
             cpu_mode: '', cpu_reservation: '', cpu_max: '', cpu_cores: '' },
 };
