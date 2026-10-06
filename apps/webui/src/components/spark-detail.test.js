@@ -809,8 +809,10 @@ test('le MODE CPU est modifiable, et dit qu’il est pris immédiatement', () =>
   // retour rend `max`, donc le burst.
   const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
   assert.match(html, /name="cpu_mode"/);
+  // Le CHAMP du mode, jusqu'à sa fin : une longueur fixe cassait dès qu'un
+  // libellé de mode s'allongeait (SPK-152).
   const bloc = html.slice(html.indexOf('quota-cpu_mode'));
-  assert.match(bloc.slice(0, 500), /pris en compte immédiatement/);
+  assert.match(bloc.slice(0, bloc.indexOf('</div>')), /pris en compte immédiatement/);
 });
 
 test('les champs CPU SUIVENT le mode retenu', () => {
@@ -843,14 +845,14 @@ test('sans mode SAISI, la modale part de celui du Spark', () => {
   assert.match(html, /name="cpu_max"/);
 });
 
-test('les quatre modes du produit sont proposés, et aucun autre', () => {
+test('les cinq modes du produit sont proposés, et aucun autre', () => {
   // §12.5 : la table vit à un seul endroit. Une copie locale finirait par
-  // proposer un mode que le runtime ne connaît pas.
+  // proposer un mode que le runtime ne connaît pas. SPK-152 : le cinquième.
   const html = renderQuotas(SPARK_LIBRE, { ...QUOTAS_VIDE, open: true });
-  for (const mode of ['shared', 'capped', 'dedicated', 'shared-pinned']) {
+  for (const mode of ['shared', 'capped', 'dedicated', 'shared-pinned', 'shared-capped']) {
     assert.match(html, new RegExp(`value="${mode}"`), mode);
   }
-  assert.equal((html.match(/<option /g) || []).length, 4);
+  assert.equal((html.match(/<option /g) || []).length, 5);
 });
 
 // --- SPK-76 · une famille non servie (docs/DAT.md §42.9.5, §42.9.7) --------

@@ -138,11 +138,12 @@ La confusion est facile parce que les deux se disent « images ». Ce ne sont pa
 les mêmes : l'une est le système d'exploitation de la cellule, l'autre est ce que
 vous y faites tourner.
 
-## Les quatre modes CPU
+## Les cinq modes CPU
 
 | Mode | Quand le choisir |
 |---|---|
 | **partagé** | le défaut, et le bon choix pour presque tout |
+| **partagé plafonné** | quand vous voulez une part garantie ET une limite : un service qui peut profiter d'une Forge libre, mais jamais au point de la monopoliser |
 | **plafonné** | quand vous voulez interdire le burst, par exemple pour un environnement de recette qui ne doit jamais gêner la production |
 | **dédié** | base de données, compilation, inférence — tout ce qui souffre du partage |
 | **épinglé partagé** | localité mémoire souhaitée, sans exclusivité |
@@ -160,6 +161,27 @@ arrive sur la machine (voir [M4](M4-pools.md)).
 En mode **plafonné**, à l'inverse, la valeur réglée est une limite réellement
 appliquée — et elle est provisionnée en entier, parce que vous pouvez la
 consommer en permanence.
+
+### Le mode partagé plafonné : une réservation et un plafond
+
+Ce mode porte **deux** valeurs. La **réservation** fonctionne comme en mode
+partagé : c'est votre part sous contention, et c'est elle seule que la Forge
+compte dans sa capacité. Le **plafond** borne le burst : sur une Forge vide, votre
+Spark monte jusqu'à lui, jamais au-delà. Mesuré : sous contention, la part d'un
+Spark vaut le plus petit de sa réservation et de son plafond, et le plafond
+n'efface pas la réservation.
+
+Trois refus, que la Forge prononce en nommant le champ :
+
+- un plafond **sous** la réservation — il promettrait ce qu'il interdit ;
+- un plafond **au-delà des cœurs** du pool partagé — il ne limiterait rien ;
+- un plafond qui ne tombe pas sur un multiple de 0,01 CPU — il ne se rend pas
+  exactement, et la Forge refuse plutôt que d'arrondir.
+
+Le plafond prend effet **au démarrage** du Spark : c'est le seul moyen de le
+poser sans qu'une autre opération l'efface en silence. Un Spark créé dans ce mode
+le porte dès son premier démarrage ; pour un plafond changé ensuite, voir
+[M8](M8-exploiter.md), *Le plafond CPU attend le démarrage*.
 
 ## Ce que « 10 Gio » de disque veut dire
 

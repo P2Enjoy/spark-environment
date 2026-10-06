@@ -638,6 +638,13 @@ function brancher() {
       lancer(commande);
     });
   }
+  // SPK-152 · SPK-DS-41 : « Redémarrer pour l'appliquer » est le geste
+  // « Redémarrer » lui-même. Le focus va ensuite au titre de la section, que la
+  // fiche relue repeint (§14.3) : le bouton n'y est plus quand le plafond tient.
+  racine.querySelector('[data-plafond-redemarrer]')?.addEventListener('click', async () => {
+    await lancer('restart');
+    racine.querySelector('#titre-ressources')?.focus();
+  });
   brancherPanneaux();
   brancherTerminal();
   brancherAmorcage();
@@ -3302,8 +3309,10 @@ async function creer() {
     // SPK-142 · §49.7 : le plafond, à part.
     network_burst_bps: Math.round(v.burst_mbit * 1e6),
     storage_bytes: Math.round(v.storage_gib * 1024 ** 3),
-    ...(['shared', 'shared-pinned'].includes(v.cpu_mode) ? { cpu_reservation: v.cpu_reservation } : {}),
-    ...(v.cpu_mode === 'capped' ? { cpu_max: v.cpu_max } : {}),
+    ...(['shared', 'shared-pinned', 'shared-capped'].includes(v.cpu_mode)
+      ? { cpu_reservation: v.cpu_reservation } : {}),
+    // SPK-152 · §7.2 quater : le plafond, en mode plafonné comme en partagé plafonné.
+    ...(['capped', 'shared-capped'].includes(v.cpu_mode) ? { cpu_max: v.cpu_max } : {}),
     ...(['dedicated', 'shared-pinned'].includes(v.cpu_mode) ? { cpu_cores: v.cpu_cores } : {}),
   };
   try {

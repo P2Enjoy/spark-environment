@@ -13984,3 +13984,21 @@ SPK-DS-41 ; OP-38).
   une redistribution de cœurs peut en effacer un : les deux se voient pareil.
 - **Le bouton** est le geste « Redémarrer » existant, et n'existe que là où
   celui-ci existe (Spark protégé ou en transition : pas de bouton).
+
+## 2026-10-06 · SPK-152 livré, vérifié sur la VM
+
+Épreuve `spk152-plafond` sur VM à installation fraîche, dans la console : VERT
+(21 verdicts). Mesures : plafond 0,75 → deux boucles occupées obtiennent 0,75
+CPU ; plafond monté à 1,25 → toujours 0,75 tant que la cellule n'a pas
+redémarré, 1,25 après « Redémarrer pour l'appliquer » ; une réservation reposée
+remet `cpu.max` à `max`, et la fiche le dit (« En vigueur : aucun plafond »).
+
+Les captures ont trouvé trois défauts que les tests ne voyaient pas : le
+libellé du mode coupé dans le sélecteur ; « 0.5 » dans un refus en français ;
+l'annonce rangée après les lignes réseau, juste au-dessus de la note « Seul le
+plafond réseau est appliqué par le noyau », qui se lisait alors comme une
+remarque sur le CPU. Corrigés, épreuve rejouée : VERT. En chemin, un défaut
+antérieur : un refus de création sans manque chiffré (`422`) n'affichait que
+« Le serveur a refusé cette création », sans raison.
+
+Reste OP-38, sur instruction du responsable.

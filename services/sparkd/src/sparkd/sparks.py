@@ -86,6 +86,11 @@ def verifier_reseau(connection: sqlite3.Connection, reservation, plafond) -> Non
             f"Forge ({_mbit(capacite)}) : il ne limiterait rien.")
 
 
+def _cpu(valeur: float) -> str:
+    """Une quantité de CPU écrite en français : « 0,5 CPU »."""
+    return f"{valeur:g}".replace(".", ",") + " CPU"
+
+
 def _cpu_positif(valeur) -> bool:
     return (isinstance(valeur, (int, float)) and not isinstance(valeur, bool)
             and valeur > 0)
@@ -113,7 +118,7 @@ def verifier_cpu(connection: sqlite3.Connection, mode, reservation, plafond,
     if plafond < reservation:
         raise QuotaIncoherent(
             "cpu_max",
-            f"Le plafond CPU ({plafond:g}) est sous la réservation ({reservation:g}) : "
+            f"Le plafond CPU ({_cpu(plafond)}) est sous la réservation ({_cpu(reservation)}) : "
             "un plafond sous le plancher promettrait ce qu'il interdit.")
     # Les cœurs PHYSIQUES du pool partagé (§7.7), ceux que ce Spark tient en
     # dédié compris : il les rend en changeant de mode.
@@ -121,12 +126,12 @@ def verifier_cpu(connection: sqlite3.Connection, mode, reservation, plafond,
     if coeurs and plafond > coeurs:
         raise QuotaIncoherent(
             "cpu_max",
-            f"Le plafond CPU ({plafond:g}) dépasse les {coeurs:g} cœurs du pool "
+            f"Le plafond CPU ({_cpu(plafond)}) dépasse les {coeurs:g} cœurs du pool "
             "partagé : au-delà, il ne limiterait rien.")
     if not plafond_rendu_exactement(plafond):
         raise QuotaIncoherent(
             "cpu_max",
-            f"Le plafond CPU {plafond:g} ne se rend pas en millisecondes entières "
+            f"Le plafond CPU ({_cpu(plafond)}) ne se rend pas en millisecondes entières "
             "sur 100 ms : choisissez un multiple de 0,01 CPU.")
 
 

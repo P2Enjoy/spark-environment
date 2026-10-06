@@ -8881,10 +8881,24 @@ un plafond n'efface pas la réservation) : « oui, le spécifier ».
   3. la console : création, modale « Ressources », fiche et annonce ;
   4. manuels, changelog, OP-38 ;
   5. épreuve sur la VM du banc, dans la peau de l'exploitant.
-- **Étapes 1 et 2 livrées le 2026-10-06** : moteur et migration `022`
-  (`test_migration_cles_suspendues`, `test_schema_partage_plafonne`), `sparkd`
-  (`test_partage_plafonne`) ; suite `sparkd` entière verte. Non vérifiées sur
-  la VM.
+- **Livré et vérifié le 2026-10-06 sur VM à installation fraîche** (épreuve
+  `spk152-plafond`, 21 verdicts verts, rejouée après corrections) : la Forge
+  fraîche sert le schéma 22 ; la création dans le mode, avec un refus nommé
+  (« Le plafond CPU (0,5 CPU) est sous la réservation (1 CPU) »), saisie
+  intacte ; au premier démarrage `cpu.max = 75000 100000` et deux boucles
+  occupées plafonnent à **0,75 CPU** ; un plafond monté à 1,25 n'est **pas**
+  appliqué à chaud et la fiche l'annonce ; « Redémarrer pour l'appliquer » le
+  pose (**1,25 CPU** mesurés), à la souris puis au clavier, focus au titre de
+  la section ; une réservation reposée remet `cpu.max` à `max`, et la fiche le
+  dit. Preuves : `test_migration_cles_suspendues`, `test_schema_partage_plafonne`,
+  `test_partage_plafonne`, `spark-partage-plafonne.test.js` ; suites `sparkd`
+  (1 681) et console (1 625) vertes ; captures observées, bureau et 390 px.
+- Trois défauts vus **en capture** et corrigés avant livraison : le libellé du
+  mode coupé dans le sélecteur de création (raccourci) ; le refus de la Forge
+  écrit « 0.5 » (désormais « 0,5 CPU ») ; l'annonce placée après le réseau, lue
+  avec la note réseau (déplacée sous les lignes CPU). Et un défaut antérieur :
+  un refus de création sans manque chiffré n'affichait pas sa raison.
+- **Reste `[~]`** : OP-38.
 - Ce qu'elle doit trancher : le nom du mode, ce que l'admission compte (la
   réservation, ou le plafond comme le mode `capped`), les contrôles de
   cohérence (plafond ≥ réservation, plafond ≤ cœurs partagés), le plafond posé

@@ -12,6 +12,8 @@
  *       docs/DESIGN_SYSTEM.md §6.9, §6.12, §7.1, §14.9
  * @spec docs/BACKLOG.md#SPK-142 · docs/DAT.md §49.7 · docs/DESIGN_SYSTEM_APP.md
  *       SPK-DS-37 (la réservation et le plafond réseau, deux champs)
+ * @spec docs/BACKLOG.md#SPK-152 · docs/DAT.md §7.2 quater · docs/DESIGN_SYSTEM_APP.md
+ *       SPK-DS-41 (le mode partagé plafonné : la réservation et le plafond CPU)
  *
  * Cet écran montre la capacité restante ; il ne décide jamais à la place de
  * `sparkd`. Le bouton n'est pas désactivé parce que l'estimation locale juge la
@@ -55,6 +57,7 @@ export function describeShortfall(manque) {
 
 export const MODES = {
   shared: 'Partagé — part du pool, burst autorisé',
+  'shared-capped': 'Partagé plafonné — réservation et plafond',
   capped: 'Plafonné — jamais au-delà du plafond',
   dedicated: 'Dédié — cœurs physiques exclusifs',
   'shared-pinned': 'Épinglé partagé — cœurs imposés, non exclusifs',
@@ -71,11 +74,12 @@ export function validateShape(valeurs) {
       ? 'Minuscules, chiffres et tirets, sans tiret aux extrémités.'
       : 'Requis pour créer un Spark.';
   }
-  if (valeurs.cpu_mode === 'capped' && !(valeurs.cpu_max > 0))
-    erreurs.cpu_max = 'Le mode plafonné demande un plafond.';
+  if (['capped', 'shared-capped'].includes(valeurs.cpu_mode) && !(valeurs.cpu_max > 0))
+    erreurs.cpu_max = 'Ce mode demande un plafond.';
   if (['dedicated', 'shared-pinned'].includes(valeurs.cpu_mode) && !(valeurs.cpu_cores >= 1))
     erreurs.cpu_cores = 'Ce mode demande au moins un cœur.';
-  if (['shared', 'shared-pinned'].includes(valeurs.cpu_mode) && !(valeurs.cpu_reservation > 0))
+  if (['shared', 'shared-pinned', 'shared-capped'].includes(valeurs.cpu_mode)
+      && !(valeurs.cpu_reservation > 0))
     erreurs.cpu_reservation = 'Ce mode demande une réservation.';
   for (const [champ, libelle] of [['memory_gib', 'La mémoire'], ['storage_gib', 'Le disque'],
                                   ['network_mbit', 'La réservation réseau'],
@@ -409,22 +413,30 @@ export function renderSparkCreate({ values = DEFAUTS, pools = null, errors = {},
          ${(refusal.shortfalls ?? []).length
            ? `<ul class="liste-simple">${refusal.shortfalls.map((s) =>
                `<li>${echapper(describeShortfall(s))}</li>`).join('')}</ul>`
-           : ''}
+           // SPK-152 · SPK-DS-41 : un refus de cohérence (`422`) porte sa raison
+           // et pas de manque ; ne montrer que « refusé » la cachait.
+           : refusal.message ? `<p>${echapper(refusal.message)}</p>` : ''}
        </div>`
     : '';
 
   const modeOptions = Object.entries(MODES).map(([cle, libelle]) =>
     `<option value="${cle}"${v.cpu_mode === cle ? ' selected' : ''}>${echapper(libelle)}</option>`).join('');
 
+  // SPK-DS-41 : en mode partagé plafonné, la réservation PUIS le plafond.
+  const plafonneEtPartage = v.cpu_mode === 'shared-capped';
   const champsCpu = [
-    ['shared', 'shared-pinned'].includes(v.cpu_mode)
+    ['shared', 'shared-pinned', 'shared-capped'].includes(v.cpu_mode)
       ? champQuota('cpu_reservation', { libelle: 'Réservation CPU', contexte,
-                aide: 'Droit d’ordonnancement sous contention, pas un plafond.',
+                aide: plafonneEtPartage
+                  ? 'Garantie sous contention, comptée dans la capacité.'
+                  : 'Droit d’ordonnancement sous contention, pas un plafond.',
                 valeur: v.cpu_reservation, erreur: errors.cpu_reservation })
       : '',
-    v.cpu_mode === 'capped'
+    ['capped', 'shared-capped'].includes(v.cpu_mode)
       ? champQuota('cpu_max', { libelle: 'Plafond CPU', contexte,
-                aide: 'Jamais dépassé. Pas de burst.',
+                aide: plafonneEtPartage
+                  ? 'Jamais dépassé — prend effet au démarrage.'
+                  : 'Jamais dépassé. Pas de burst.',
                 valeur: v.cpu_max, erreur: errors.cpu_max })
       : '',
     ['dedicated', 'shared-pinned'].includes(v.cpu_mode)

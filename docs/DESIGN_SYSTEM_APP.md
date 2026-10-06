@@ -1631,8 +1631,9 @@ Sous le champ « Gabarit du message » de l'onglet Alertes, un bouton secondaire
 
 **Saisie** — à la création et dans la modale « Ressources » :
 
-- le sélecteur de mode CPU propose « Partagé plafonné — une réservation, et
-  jamais au-delà du plafond », après « Partagé » ;
+- le sélecteur de mode CPU propose « Partagé plafonné — réservation et
+  plafond », après « Partagé » — un libellé plus long était coupé dans le
+  sélecteur de la création (vu en capture le 2026-10-06) ;
 - ce mode montre **deux** champs, dans cet ordre : « Réservation CPU » puis
   « Plafond CPU ». L'aide de chacun tient en une ligne : « garantie sous
   contention, comptée dans la capacité » ; « jamais dépassé — prend effet au
@@ -1644,19 +1645,24 @@ Sous le champ « Gabarit du message » de l'onglet Alertes, un bouton secondaire
 
 **Lecture** — *Infos → Ressources* :
 
-- la ligne CPU dit les deux valeurs : « 0,5 CPU réservé · plafond 1,5 CPU » ;
-- quand l'usage relu dit `pending` (§49.8), une ligne s'ajoute sous elle :
+- la ligne CPU dit les deux valeurs : « 0,50 CPU réservés · plafond 1,50 CPU »
+  — le format de toutes les valeurs CPU de la fiche ;
+- quand l'usage relu dit `pending` (§49.8), une ligne s'ajoute sous les lignes
+  CPU, avant la mémoire — placée après le réseau, elle se lisait avec la note
+  qui le concerne (vu en capture le 2026-10-06) :
   une pastille **neutre** « en attente du démarrage » — l'état est voulu par
-  qui vient de régler le plafond (§6.8) —, puis « Plafond de 1,5 CPU : prendra
+  qui vient de régler le plafond (§6.8) —, puis « Plafond de 1,50 CPU : prendra
   effet au prochain démarrage. En vigueur : aucun plafond. » (ou « En vigueur :
-  1 CPU »), en `role="status"`, puis le bouton compact **« Redémarrer pour
-  l'appliquer »** sur la même ligne ;
+  1,00 CPU » ; « Le plafond sera retiré au prochain démarrage. » quand le mode
+  n'en porte plus), en `role="status"`, puis le bouton compact **« Redémarrer
+  pour l'appliquer »** sur la même ligne ;
 - ce bouton est le geste « Redémarrer » de la barre de commandes, et il n'existe
   que là où celui-ci existe : un Spark protégé ou en transition n'en porte pas,
   et la barre de commandes dit déjà pourquoi (§1.4) ;
-- pendant le redémarrage, la ligne dit « Redémarrage… » ; elle ne disparaît que
-  sur l'usage **relu** `applied` (§1.3). Le focus va alors au titre de la
-  section Ressources (§14.3) ;
+- pendant le redémarrage, la fenêtre se recharge comme pour le geste de la
+  barre de commandes ; l'annonce ne disparaît que sur l'usage **relu**
+  `applied` (§1.3). Le focus va alors au titre de la section Ressources
+  (§14.3) ;
 - cellule en marche dont le cgroup n'a pas pu être relu, et qui porte un
   plafond : « Plafond en vigueur : non relevé » (§14.6) — ni « appliqué », ni
   « en attente ». Cellule arrêtée : rien de plus, le plafond s'appliquera à son

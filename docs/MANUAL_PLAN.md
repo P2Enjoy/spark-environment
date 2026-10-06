@@ -61,10 +61,12 @@ Unités : SPK-05, SPK-22.
 ## M5 · Créer un Spark
 
 Le formulaire, le choix de l'image dans le catalogue, l'aperçu d'admission, et la
-lecture d'un refus. Les quatre modes CPU expliqués par leur usage, pas par leur
+lecture d'un refus. Les cinq modes CPU expliqués par leur usage, pas par leur
 traduction technique :
 
 - partagé — le défaut, pour presque tout ;
+- partagé plafonné — une part garantie et une limite ; le plafond prend effet au
+  démarrage (SPK-152) ;
 - plafonné — quand on veut interdire le burst ;
 - dédié — bases de données, compilation, inférence ;
 - épinglé partagé — localité mémoire sans exclusivité.

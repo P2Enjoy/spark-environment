@@ -123,7 +123,8 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-38 · Le mode CPU « partagé plafonné » : migration 022, `sparkd` et la console (SPK-152)
 
 ```
-État          : EN ATTENTE — le code n'est pas encore livré.
+État          : EN ATTENTE — code livré et vérifié sur la VM du banc le
+                2026-10-06 ; à jouer sur instruction du responsable.
 Objectif      : servir le cinquième mode CPU (docs/DAT.md §7.2 quater) et le
                 plafond relu dans l'usage (§49.8). La migration
                 `022_mode_partage_plafonne` reconstruit la table `spark` pour

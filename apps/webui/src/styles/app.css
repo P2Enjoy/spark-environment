@@ -402,6 +402,14 @@ tbody tr:hover { background: var(--color-hover); }
 .bloc h3 { font-size: var(--text-compact); color: var(--color-text-2); }
 
 .definitions { margin: 0; display: grid; gap: var(--space-2); }
+/* SPK-152 · SPK-DS-41 — le plafond CPU qui attend le démarrage : la pastille, la
+   phrase et le geste sur une même ligne (DESIGN_SYSTEM.md §6.8), qui passe à la
+   ligne plutôt que de déborder (§8.1). */
+.plafond-attente {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.plafond-attente p { margin: 0; }
 .def { display: grid; grid-template-columns: 12rem 1fr; gap: var(--space-3); }
 .def dt { color: var(--color-text-2); font-size: var(--text-compact); }
 .def dd { margin: 0; }

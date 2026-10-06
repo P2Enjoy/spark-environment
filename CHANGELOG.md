@@ -3,16 +3,17 @@
 ## [Non publié]
 
 ### Ajouté
-- **SPK-152 — le mode CPU « partagé plafonné » : une réservation ET un plafond
-  (sparkd ; la console suit).** La réservation est garantie sous contention et
-  seule comptée par l'admission ; le plafond borne le burst, se pose par
-  `raw.lxc` et prend effet au démarrage de la cellule. L'usage relit le
-  `cpu.max` réel et publie `ceiling`, `ceiling_in_force`, `ceiling_status`.
-  Refus nommés en `422 quota_incoherent` (plafond sous la réservation, au-delà
-  des cœurs partagés, hors milliseconde). Migration **022**, qui reconstruit
-  `spark` clés étrangères suspendues — le moteur sait le faire sur demande. DAT
-  §7.2 quater, §7.7, §49.8 ; SCHEMA §4, §12.3 bis ; OP-38. **Non vérifié sur la
-  VM.**
+- **SPK-152 — le mode CPU « partagé plafonné » : une réservation ET un
+  plafond.** La réservation est garantie sous contention et seule comptée par
+  l'admission ; le plafond borne le burst, se pose par `raw.lxc` et prend effet
+  au démarrage de la cellule. La fiche annonce un plafond qui n'est pas encore
+  en vigueur — ou qu'Incus a effacé — et offre « Redémarrer pour l'appliquer ».
+  L'usage relit le `cpu.max` réel (`ceiling`, `ceiling_in_force`,
+  `ceiling_status`). Refus nommés en `422 quota_incoherent`, affichés à la
+  création comme dans la modale. Migration **022**, qui reconstruit `spark`
+  clés étrangères suspendues — le moteur sait le faire sur demande. DAT §7.2
+  quater, §7.7, §49.8 ; SCHEMA §4, §12.3 bis ; SPK-DS-41 ; manuels M5, M8.
+  Vérifié sur VM ; **sur la Forge avec OP-38.**
 - **SPK-151 — l'onglet Alertes montre le message tel qu'il partirait.** Le DAT
   le promettait, l'écran ne le faisait pas. Sous le gabarit, « Voir le message »
   rend, par la Forge et par le même chemin que l'envoi réel, le message sur un

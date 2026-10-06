@@ -11,6 +11,10 @@
  *       docs/DESIGN_SYSTEM.md §6.3, §6.4, §6.6, §6.22, §6.23, §14.9 ·
  *       docs/DAT.md §44.9.5 (le dossier de déploiement est une SECTION) ·
  *       docs/DESIGN_SYSTEM_APP.md
+ * @spec docs/BACKLOG.md#SPK-152 · docs/DAT.md §7.2 quater, §49.8 ·
+ *       docs/DESIGN_SYSTEM_APP.md SPK-DS-41 (le mode partagé plafonné : deux
+ *       champs, et un plafond qui attend le démarrage) — pour `ligneCpu`,
+ *       `renderPlafondEnAttente` et les réglages du mode dans la modale.
  *
  * Les commandes affichées viennent de `allowed_commands`, publié par le runtime.
  * Cet écran ne connaît pas la machine à états et ne doit pas la connaître.
@@ -210,19 +214,66 @@ function definitions(paires) {
   return lignes ? `<dl class="definitions">${lignes}</dl>` : '';
 }
 
+/** La ligne « Processeur » de la fiche : la grandeur que le mode promet. */
+export function ligneCpu(spark) {
+  if (spark.cpu_mode === 'capped') return `${formatCpu(spark.cpu_max)} CPU au plus`;
+  if (spark.cpu_mode === 'dedicated') {
+    return `${spark.cpu_cores} cœur${spark.cpu_cores > 1 ? 's' : ''} dédié${spark.cpu_cores > 1 ? 's' : ''}`;
+  }
+  // SPK-DS-41 : les DEUX valeurs du mode partagé plafonné, sur la même ligne.
+  if (spark.cpu_mode === 'shared-capped') {
+    return `${formatCpu(spark.cpu_reservation)} CPU réservés · plafond ${formatCpu(spark.cpu_max)} CPU`;
+  }
+  return `${formatCpu(spark.cpu_reservation)} CPU réservés`;
+}
+
+/**
+ * Le plafond CPU qui attend le démarrage (§49.8, SPK-DS-41).
+ *
+ * Rien tant que l'usage relu dit `applied`, ou qu'il n'y a pas d'usage — une
+ * cellule arrêtée appliquera son plafond à son démarrage. Le bouton EST le geste
+ * « Redémarrer » de la barre de commandes : il n'existe que là où celui-ci
+ * existe (§1.4), et la barre dit déjà pourquoi il manque.
+ */
+export function renderPlafondEnAttente(spark, usage) {
+  const cpu = usage?.cpu;
+  if (!cpu) return '';
+  if (cpu.ceiling_status === 'unread') {
+    // §14.6 : ni « appliqué », ni « en attente » — non relevé.
+    return cpu.ceiling == null ? ''
+      : '<p class="plafond-attente" role="status">Plafond en vigueur : non relevé.</p>';
+  }
+  if (cpu.ceiling_status !== 'pending') return '';
+  const enVigueur = cpu.ceiling_in_force == null
+    ? 'aucun plafond' : `${formatCpu(cpu.ceiling_in_force)} CPU`;
+  const phrase = cpu.ceiling == null
+    ? `Le plafond sera retiré au prochain démarrage. En vigueur : ${enVigueur}.`
+    : `Plafond de ${formatCpu(cpu.ceiling)} CPU : prendra effet au prochain démarrage. `
+      + `En vigueur : ${enVigueur}.`;
+  const geste = !spark.protected && !spark.transient
+    && (spark.allowed_commands ?? []).includes('restart')
+    ? '<button type="button" class="bouton bouton--compact" data-plafond-redemarrer>'
+      + 'Redémarrer pour l’appliquer</button>'
+    : '';
+  return `<div class="plafond-attente">
+    <span class="badge badge--neutral">en attente du démarrage</span>
+    <p role="status">${echapper(phrase)}</p>
+    ${geste}
+  </div>`;
+}
+
 function renderRessources(spark, usage) {
-  const cpu = spark.cpu_mode === 'capped'
-    ? `${formatCpu(spark.cpu_max)} CPU au plus`
-    : spark.cpu_mode === 'dedicated'
-      ? `${spark.cpu_cores} cœur${spark.cpu_cores > 1 ? 's' : ''} dédié${spark.cpu_cores > 1 ? 's' : ''}`
-      : `${formatCpu(spark.cpu_reservation)} CPU réservés`;
+  const cpu = ligneCpu(spark);
 
   const mesure = (valeur, absent) =>
     valeur === null || valeur === undefined ? absent : valeur;
+  // SPK-DS-41 : l'annonce vit SOUS les lignes CPU. Placée après le réseau, elle
+  // se lisait avec la note qui le concerne (vu en capture le 2026-10-06).
+  const annonce = renderPlafondEnAttente(spark, usage);
 
   return `
 <section class="carte bloc" aria-labelledby="titre-ressources">
-  <h2 id="titre-ressources">Ressources</h2>
+  <h2 id="titre-ressources" tabindex="-1">Ressources</h2>
   ${definitions([
     ['Processeur', cpu],
     ['Consommation CPU', mesure(
@@ -231,6 +282,9 @@ function renderRessources(spark, usage) {
       : spark.state === 'error' ? MEASURE.unavailable
       : spark.state === 'pending' ? MEASURE.declared
       : MEASURE.pending)],
+  ])}
+  ${annonce}
+  ${definitions([
     ['Mémoire', `${formatBytes(spark.memory_reservation_bytes)}${
       usage?.memory?.used_bytes != null ? ` — ${formatBytes(usage.memory.used_bytes)} utilisés` : ''}`, true],
     ['Disque', `${formatBytes(spark.storage_bytes)}${
@@ -435,15 +489,20 @@ export function renderQuotas(spark, ui = QUOTAS_VIDE, contexte = {}) {
     `<option value="${echapper(cle)}"${cle === mode ? ' selected' : ''}>${
       echapper(libelle)}</option>`).join('');
 
+  // SPK-DS-41 : le mode partagé plafonné montre ses DEUX champs, réservation
+  // puis plafond, chacun avec son aide d'une ligne.
+  const plafonneEtPartage = mode === 'shared-capped';
   const champsCpu = [
-    ['shared', 'shared-pinned'].includes(mode)
+    ['shared', 'shared-pinned', 'shared-capped'].includes(mode)
       ? quota('cpu_reservation', 'cpu_reservation', 'cpu_reservation',
-              'Réservation CPU', v.cpu_reservation,
-              'Droit d’ordonnancement sous contention, pas un plafond.')
+              'Réservation CPU', v.cpu_reservation, plafonneEtPartage
+                ? 'garantie sous contention, comptée dans la capacité'
+                : 'Droit d’ordonnancement sous contention, pas un plafond.')
       : '',
-    mode === 'capped'
-      ? quota('cpu_max', 'cpu_max', 'cpu_max', 'Plafond CPU', v.cpu_max,
-              'Jamais dépassé, pas de burst.')
+    ['capped', 'shared-capped'].includes(mode)
+      ? quota('cpu_max', 'cpu_max', 'cpu_max', 'Plafond CPU', v.cpu_max, plafonneEtPartage
+                ? 'jamais dépassé — prend effet au démarrage'
+                : 'Jamais dépassé, pas de burst.')
       : '',
     ['dedicated', 'shared-pinned'].includes(mode)
       ? quota('cpu_cores', 'cpu_cores', 'cpu_cores', 'Cœurs dédiés', v.cpu_cores,
@@ -507,6 +566,8 @@ export function valeursDesQuotas(spark) {
 const REGLAGES_DU_MODE = {
   shared: ['cpu_reservation'], 'shared-pinned': ['cpu_reservation', 'cpu_cores'],
   capped: ['cpu_max'], dedicated: ['cpu_cores'],
+  // SPK-152 · §7.2 quater : une réservation ET un plafond.
+  'shared-capped': ['cpu_reservation', 'cpu_max'],
 };
 
 /**
@@ -545,6 +606,9 @@ export function corpsDesQuotas(origine, valeurs) {
       ['shared', 'shared-pinned'].includes(mode)
         ? { cpu_reservation: Number(valeurs.cpu_reservation), cpu_max: null,
             cpu_cores: mode === 'shared-pinned' ? Number(valeurs.cpu_cores) : null }
+        : mode === 'shared-capped'
+          ? { cpu_reservation: Number(valeurs.cpu_reservation),
+              cpu_max: Number(valeurs.cpu_max), cpu_cores: null }
         : mode === 'capped'
           ? { cpu_max: Number(valeurs.cpu_max), cpu_reservation: null, cpu_cores: null }
           : { cpu_cores: Number(valeurs.cpu_cores), cpu_reservation: null, cpu_max: null });
