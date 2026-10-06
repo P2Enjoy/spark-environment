@@ -13874,3 +13874,42 @@ responsable.
 session, `commit-tree`, puis `update-ref` conditionnel). Ni l'index commun ni
 l'arbre de travail ne sont écrits pour construire le commit, et un chemin
 qu'une autre session a indexé est refusé.
+
+## 2026-10-06 · Propositions soumises : SPK-152 (mode CPU réservation + plafond) et SPK-138 (sans pilote factice)
+
+**Non validées** : soumises au responsable le 2026-10-06 ; rien n'est codé.
+
+**SPK-152 — un cinquième mode CPU, « partagé plafonné ».** Sur la mesure de
+SPK-145 (la part vaut le plus petit du poids et du plafond) :
+
+- `limits.cpu` = le cpuset partagé, `limits.cpu.allowance` = la réservation en
+  pourcentage (le poids, comme `shared`), et le plafond par une ligne
+  `lxc.cgroup2.cpu.max` ajoutée au `raw.lxc` que le produit pose déjà pour la
+  tranche (§32.1) — mesuré hors tranche : à reconfirmer sur une cellule du
+  produit ;
+- contrôles : plafond ≥ réservation, plafond ≤ capacité du pool partagé,
+  valeurs au pas de 0,25 CPU ;
+- une migration : la contrainte `CHECK` de `cpu_mode` (schéma 001) n'admet que
+  quatre modes ;
+- **à trancher** : ce que l'admission compte (la réservation, ou le plafond
+  comme `capped`) ; comment un nouveau plafond s'applique — `raw.lxc` ne prend
+  qu'au démarrage.
+
+**SPK-138 — la pile de développement sans pilote factice, par phases.**
+Aujourd'hui sur le factice : `make runDev` (`scripts/dev.sh`,
+`SPARKD_DRIVER=fake`), le seed (`sparkd.seed`, en processus, qui manipule le
+doublon), les 152 parcours de `e2e/parcours.test.mjs`, `make captures` et
+`make gestes` (un faux `sparkd`), `make manuel`.
+
+1. `make runDev` devient la VM du banc gardée (`forge-vm --garder`) et sa
+   console ; `scripts/dev.sh up` et sa pile factice sont retirés ;
+2. le seed devient un client de l'API de la VM, et ses « événements » —
+   cellule disparue, démarrage hors du produit — des gestes `incus` sur la VM ;
+3. les parcours migrent par lots en épreuves de la VM (`e2e/forge-vm/epreuves/`),
+   chaque parcours factice retiré quand son épreuve est verte ; le parcours
+   clavier instable (rapport d'incohérences) part avec ;
+4. captures et illustrations du manuel produites depuis la VM ;
+5. le pilote factice ne reste qu'aux preuves unitaires (`FakeIncus` en
+   processus) ; `SPARKD_DRIVER=fake` sort de la configuration du runtime.
+
+Coût assumé : une VM à monter (≈ 3 min 30) avant toute campagne.
