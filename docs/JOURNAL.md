@@ -13927,3 +13927,13 @@ doublon), les 152 parcours de `e2e/parcours.test.mjs`, `make captures` et
    processus) ; `SPARKD_DRIVER=fake` sort de la configuration du runtime.
 
 Coût assumé : une VM à monter (≈ 3 min 30) avant toute campagne.
+
+## 2026-10-06 · SPK-152 et SPK-138 arbitrés ; OP-37 à jouer
+
+- **SPK-152** : l'admission compte la **réservation** ; comment un nouveau
+  plafond prend effet se décide après une **mesure** — l'écriture directe du
+  `cpu.max` d'une cellule du produit, dans `spark.slice`, appliquée sans
+  redémarrer ?
+- **SPK-138** : la proposition par phases est **validée** ; la spécification
+  s'écrit au DAT §28, et la phase 1 commence — `make runDev` sur la VM du banc.
+- **OP-37** (SPK-151 en production) : la jouer maintenant.

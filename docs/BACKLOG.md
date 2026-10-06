@@ -8457,7 +8457,11 @@ réponse : « oui ».
   visait que la pile de développement.
 - Dépend de : SPK-137 (la VM qui remplace la pile factice).
 - **Arbitré le 2026-10-06** : « oui, la spécifier » — la spécification est
-  écrite et soumise au responsable avant tout code.
+  écrite et soumise au responsable avant tout code. Proposition soumise le même
+  jour (journal) et **validée : par phases** — 1. `make runDev` sur la VM du
+  banc gardée ; 2. le seed par l'API de la VM ; 3. les parcours migrés par lots
+  en épreuves de la VM ; 4. captures et manuel depuis la VM ; 5. le pilote
+  factice gardé aux seules preuves unitaires.
 - **Absorbe** (arbitré le 2026-10-01) le parcours « les trois degrés
   s'atteignent au clavier », rouge une fois sur deux campagnes sur la pile
   factice : il n'est pas corrigé à part, il est rejoué contre la VM quand la
@@ -8833,7 +8837,6 @@ environnements posés, et enregistrer les trois notes.
     Illustration `m8-dossier` reproduite ; preuves du manuel 7 sur 7.
   - **Reste `[~]`** : la vérification sur la VM du banc (§51.6) et OP-36.
 
-
 ### [~] SPK-151 · L'onglet Alertes montre le message tel qu'il partirait, avant d'enregistrer
 
 **Constaté le 2026-10-03** (rapport d'incohérences) : le DAT §47.3.1 promet que
@@ -8867,6 +8870,11 @@ un plafond n'efface pas la réservation) : « oui, le spécifier ».
   cohérence (plafond ≥ réservation, plafond ≤ cœurs partagés), le plafond posé
   par `raw.lxc` et le redémarrage qu'il demande pour changer — annoncé, jamais
   caché.
+- **Arbitré le 2026-10-06** sur la proposition (journal du même jour) :
+  l'admission compte **la réservation** ; avant de décider comment un nouveau
+  plafond prend effet, **mesurer** sur la VM si l'écrire en direct dans le
+  cgroup d'une cellule du produit — dans la tranche `spark.slice` — l'applique
+  sans redémarrer.
 
 ### [~] SPK-153 · La recette « site-web » ne pose le « www » que sur demande
 
