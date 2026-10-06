@@ -123,8 +123,13 @@ ce qui n'a pas encore été reversé (`docs/CONTINGENCE.md` §2.2).
 ### OP-37 · L'aperçu du message d'alerte : `sparkd` et la console (SPK-151)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable. SPK-151
-                est validé sur la VM du banc (SPK-137).
+État          : JOUÉE LE 2026-10-06, VÉRIFICATION INCOMPLÈTE — sur
+                instruction du responsable (« oui, maintenant »). Fait :
+                1. sauvegarde `/var/backups/sparkd/spark-20261006-114827.db`
+                (structure ok, journal 1 427 entrées, chaîne intacte) ;
+                2. runbook A.2 depuis `main` (6ebe664), préflight 17 sur 17 ;
+                3. console relancée. **Non fait** : la relecture de `/healthz`
+                — refusée à l'agent par sa garde de permissions.
 Objectif      : servir `POST /v1/notify/preview` (docs/DAT.md §47.3.1) et
                 relancer la console qui l'affiche sous le gabarit de l'onglet
                 Alertes. Un calcul : aucune migration, aucune variable, rien au
