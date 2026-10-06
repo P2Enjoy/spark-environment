@@ -8823,8 +8823,8 @@ l'écran montre le rendu du gabarit sur un événement d'exemple avant
 d'enregistrer ; l'onglet Alertes n'en montre aucun. **Arbitré le 2026-10-06** :
 « construire l'aperçu ».
 
-- Spécification : **à écrire** (DAT §47.3.1 ; SPK-DS ; manuel M11) avant le
-  code.
+- Spécification : `docs/DAT.md` **§47.3.1** (« L'aperçu ») ·
+  `docs/DESIGN_SYSTEM_APP.md` **SPK-DS-40** · manuel M11.
 - Portée : sous le gabarit, le message tel qu'il partirait, rendu par la Forge
   — le même rendu, le même filtre des secrets que l'envoi réel — sur un
   événement d'exemple, sans rien enregistrer ni rien envoyer ; un champ inconnu

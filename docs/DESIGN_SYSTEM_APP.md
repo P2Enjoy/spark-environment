@@ -1592,6 +1592,29 @@ case de 24 px, ligne de 40 px, le libellé étend la cible) :
   souris. L'aperçu ajoute ou retire les lignes, et la garde du SPK-DS-38 vaut
   pour cette saisie comme pour les autres.
 
+### SPK-DS-40 · L'aperçu du message d'alerte, sous son gabarit
+
+**Date** : 2026-10-06 · SPK-151 · `DAT.md` §47.3.1 · `DESIGN_SYSTEM.md` §6.13,
+§9.7, §14.3, §14.6
+
+Sous le champ « Gabarit du message » de l'onglet Alertes, un bouton secondaire
+**« Voir le message »**, puis la zone de l'aperçu :
+
+| Ce que la Forge rend | Ce que la zone montre |
+|---|---|
+| le message | « Sur un événement d'exemple — la levée d'une protection : » puis le message, dans un bloc à chasse fixe (`fragment technique bloc-cle`), lignes repliées |
+| un champ inconnu | `.avertissement` : « Champ inconnu : `x`. Ce gabarit serait refusé à l'enregistrement. » — pas un refus : rien n'a été tenté |
+| un message qui n'est pas du JSON | le message, et `.avertissement` : « Ce message n'est pas un document JSON : la plupart des services le refuseront. » |
+| un échec de la requête | `.refus` avec la raison |
+| la lecture en cours | « Calcul du message… », `aria-busy` |
+
+- la zone est une région `role="status"` : le message s'annonce sans voler le
+  focus, qui reste sur le bouton ;
+- elle se met à jour **seule**, sans repeindre le formulaire : un repeint
+  effacerait le mot de passe tapé, qui n'est jamais réécrit dans la page
+  (SPK-140) ;
+- l'aperçu porte sur le gabarit **tapé**, pas sur celui enregistré.
+
 ### SPK-DS-36 · Le refus d'un geste de ligne s'affiche dans la ligne
 
 **Date** : 2026-10-01 · SPK-139 · `DESIGN_SYSTEM.md` §7.1 (la raison du refus
