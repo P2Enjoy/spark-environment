@@ -12574,6 +12574,25 @@ diagnostic d'installation. Rendre `502` pour l'ouverture ou tenter aussitôt
 `/v1/forge` ferait apparaître dans la console navigateur deux pannes réseau là où
 le produit vient précisément de mesurer un accès SSH utilisable.
 
+### 50.1 bis Le panneau sur une Forge en service (SPK-148)
+
+**Constaté le 2026-10-01** sur la VM du banc : le panneau « Installer cette
+Forge » d'une Forge **installée** — tunnel ouvert, code à jour — disait « Cette
+destination peut accepter SSH sans encore porter `sparkd` », accents graves
+affichés tels quels. **Arbitré le 2026-10-06** : garder le diagnostic, sans la
+phrase. Le panneau reste le chemin de la conformité constatée d'une Forge en
+service (manuel M2) ; c'est sa phrase qui était fausse.
+
+| `sparkd` derrière le tunnel | Ce que le panneau dit sous son titre |
+|---|---|
+| répond | « Forge en service : le diagnostic relit sa conformité, sans rien écrire. » |
+| ne répond pas, ou erreur | « Cette destination peut accepter SSH sans encore porter `sparkd`. Le diagnostic distingue ces deux faits avant toute décision de stockage. » |
+| pas encore su (chargement) | aucune des deux : rien n'est affirmé avant le relevé |
+
+Le bouton « Diagnostiquer la Forge » reste dans les trois cas, et un diagnostic
+déjà relevé s'affiche à la place de la phrase, comme avant. Les noms techniques
+s'écrivent en `<code>`, jamais avec leurs accents graves.
+
 ### 50.2 Le diagnostic est un contrat fermé et en lecture seule
 
 L'hôte console exécute, par OpenSSH, un script **versionné et immuable** dont les

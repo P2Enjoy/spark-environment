@@ -8667,17 +8667,24 @@ n'en nommaient que huit.
   rouge sur l'aide d'avant (huit champs), verte après. **Reste `[~]`** : la voir
   dans la console branchée sur la VM.
 
-### [ ] SPK-148 · Le panneau « Installer cette Forge » n'apparaît que sur une destination sans `sparkd`
+### [ ] SPK-148 · Le panneau « Installer cette Forge » dit la vérité sur une Forge en service
 
 **Constaté le 2026-10-01** (capture `spk135-vm-forge-virtio`), **arbitré le
 2026-10-03** : « le cacher quand sparkd répond ». Sur une Forge installée, le
 panneau disait « peut accepter SSH sans encore porter `sparkd` », accents graves
 compris.
 
-- Spécification : DAT §50 · SPK-DS · manuel M2.
-- Portée : le panneau ne se rend que quand `sparkd` ne répond pas derrière le
-  tunnel ; le nom s'écrit en `<code>` ; preuve de composant rouge avant ;
-  vérification par la console sur la VM.
+- **Révisé le 2026-10-06** : le manuel M2 (« Lire la conformité constatée »)
+  fait de ce panneau le chemin du diagnostic d'une Forge EN SERVICE ; le cacher
+  aurait retiré ce geste. Question reposée au responsable : « garder le
+  diagnostic, sans la phrase ».
+- Spécification : `docs/DAT.md` **§50.1 bis** · manuel M2.
+- Portée : sur une Forge dont `sparkd` répond, le panneau garde son bouton et
+  dit « Forge en service : le diagnostic relit sa conformité, sans rien
+  écrire. » ; la phrase « sans encore porter `sparkd` » ne se rend que quand
+  `sparkd` ne répond pas ; rien n'est affirmé pendant le chargement ; noms en
+  `<code>` ; preuve de composant rouge avant ; vérification par la console sur
+  la VM.
 
 ### [~] SPK-149 · Une recette DNS écrit ce que son aperçu a montré, et accepte un sous-domaine à plusieurs niveaux
 

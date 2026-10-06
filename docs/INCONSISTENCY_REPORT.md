@@ -26,8 +26,8 @@ porter `sparkd` », et les accents graves s'affichent tels quels
 (`apps/webui/src/components/forge-installer.js`). C'est aussi la phrase de la
 capture d'échec du parcours clavier instable (entrée ci-dessus).
 
-**Arbitré le 2026-10-03** : corriger — SPK-148 — le panneau se cache quand `sparkd` répond. L'entrée sort du rapport quand
-la correction est livrée.
+**Arbitré le 2026-10-06** : garder le diagnostic, sans la phrase — SPK-148,
+DAT §50.1 bis. L'entrée sort du rapport quand la correction est livrée.
 
 ## 2026-10-01 · La modale « Ressources » arrondit la mémoire au gibioctet, et renvoie la valeur arrondie
 
