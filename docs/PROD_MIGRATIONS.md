@@ -179,7 +179,13 @@ Risques       : aucun sur les données. Le `BRIEFING.md` d'une cellule n'est
 ### OP-35 · La recette « Site web » ne pose le « www » que sur demande : la console (SPK-153)
 
 ```
-État          : EN ATTENTE — à jouer sur instruction du responsable.
+État          : JOUÉE LE 2026-10-06 AVEC OP-37, VÉRIFICATION INCOMPLÈTE —
+                la console d'exploitation (`make runProd`, port 5175) a été
+                relancée vers 11 h 48 UTC depuis `main` (6ebe664), qui porte
+                SPK-153 (2b12f05). Constaté en lecture seule : son
+                `GET /api/dns/recipes` sert le paramètre `www` de `site-web`,
+                case à cocher, sans valeur par défaut. **Non fait** : le
+                constat à l'écran ci-dessous, à faire par le responsable.
 Objectif      : la case « Poser aussi le « www » » de la recette `site-web`,
                 décochée par défaut (DAT §38.6.4). Le changement vit dans la
                 console seule : rien sur `sparkd`, aucune migration, aucune

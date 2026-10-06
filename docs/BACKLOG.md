@@ -8919,7 +8919,10 @@ route.
     capture à 390 px et corrigé dans le même changement : la description de la
     recette se coupait entre « www et » ; ses guillemets portent désormais des
     espaces insécables, et une preuve le garde.
-  - **Reste `[~]`** : OP-35, la console relancée sur le poste du responsable.
+  - OP-35 jouée avec OP-37 le 2026-10-06 : la console d'exploitation, relancée
+    depuis 6ebe664, sert la case `www` (constaté en lecture seule sur son
+    catalogue).
+  - **Reste `[~]`** : le constat à l'écran d'OP-35, par le responsable.
 ---
 
 ## Lot 6 — Réseau entre Sparks
